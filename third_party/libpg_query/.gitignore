@@ -1,0 +1,16 @@
+postgres/*
+postgres.tar.bz2
+
+*.o
+*.a
+
+examples/*
+!examples/*.c
+
+test/*
+!test/*.c
+!test/*.sql
+!test/*.expected.json
+
+tmp/*
+!tmp/.gitkeep
