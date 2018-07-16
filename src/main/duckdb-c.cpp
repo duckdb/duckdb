@@ -35,6 +35,9 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query,
                           duckdb_result *out) {
 	DuckDBConnection *conn = (DuckDBConnection *)connection;
 	DuckDBResult result = conn->Query(query);
+	if (!result.GetSuccess()) {
+		return DuckDBError;
+	}
 	*out = nullptr;
 	return DuckDBSuccess;
 }

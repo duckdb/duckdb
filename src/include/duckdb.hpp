@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <string>
+
 class DuckDB;
 class DuckDBConnection;
 class DuckDBResult;
@@ -18,4 +20,15 @@ class DuckDBConnection {
 	DuckDBResult Query(const char *query);
 };
 
-class DuckDBResult {};
+class DuckDBResult {
+  public:
+	DuckDBResult();
+	DuckDBResult(std::string error);
+
+	bool GetSuccess() const { return success; }
+	const std::string &GetErrorMessage() const { return error; }
+
+  private:
+	bool success;
+	std::string error;
+};

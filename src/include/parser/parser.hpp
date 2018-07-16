@@ -1,9 +1,26 @@
 
 #pragma once
 
+#include <string>
+#include <vector>
+
+#include "parser/statement/sql_statement.hpp"
+
 class Parser {
   public:
 	Parser();
 
-	void ParseQuery(const char *query);
+	bool ParseQuery(const char *query);
+
+	bool GetSuccess() const { return success; }
+	const std::string &GetErrorMessage() const { return message; }
+
+  private:
+	bool ParseList(List *tree);
+	std::unique_ptr<SQLStatement> ParseNode(Node *stmt);
+
+	bool success;
+	std::string message;
+
+	std::vector<std::unique_ptr<SQLStatement>> statements;
 };
