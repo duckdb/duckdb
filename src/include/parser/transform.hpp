@@ -17,5 +17,11 @@ std::unique_ptr<duckdb::AbstractExpression> TransformExpression(Node *node);
 std::unique_ptr<duckdb::AbstractExpression> TransformFuncCall(FuncCall *root);
 std::unique_ptr<duckdb::AbstractExpression> TransformFrom(List *root);
 
+bool TransformGroupBy(
+    List *group,
+    std::vector<std::unique_ptr<duckdb::AbstractExpression>> &result);
+bool TransformOrderBy(List *order, duckdb::OrderByDescription &result);
+
 bool TransformExpressionList(
-    List *list, std::vector<std::unique_ptr<duckdb::AbstractExpression>> &result);
+    List *list,
+    std::vector<std::unique_ptr<duckdb::AbstractExpression>> &result);

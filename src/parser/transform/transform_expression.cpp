@@ -3,13 +3,13 @@
 
 #include "parser/expression/aggregate_expression.hpp"
 #include "parser/expression/basetableref_expression.hpp"
-#include "parser/expression/conjunction_expression.hpp"
 #include "parser/expression/columnref_expression.hpp"
-#include "parser/expression/crossproduct_expression.hpp"
 #include "parser/expression/comparison_expression.hpp"
+#include "parser/expression/conjunction_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
-#include "parser/expression/join_expression.hpp"
+#include "parser/expression/crossproduct_expression.hpp"
 #include "parser/expression/function_expression.hpp"
+#include "parser/expression/join_expression.hpp"
 #include "parser/expression/operator_expression.hpp"
 #include "parser/expression/subquery_expression.hpp"
 
@@ -33,42 +33,49 @@ std::string TransformAlias(Alias *root) {
 unique_ptr<AbstractExpression> TransformBoolExpr(BoolExpr *root) {
 	unique_ptr<AbstractExpression> result;
 	for (auto node = root->args->head; node != nullptr; node = node->next) {
-		auto next = TransformExpression(reinterpret_cast<Node *>(node->data.ptr_value));
+		auto next =
+		    TransformExpression(reinterpret_cast<Node *>(node->data.ptr_value));
 
 		switch (root->boolop) {
-			case AND_EXPR: {
-				if (!result) {
-					result = move(next);
-				} else {
-					result = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(result), move(next));
-				}
-				break;
+		case AND_EXPR: {
+			if (!result) {
+				result = move(next);
+			} else {
+				result = make_unique<ConjunctionExpression>(
+				    ExpressionType::CONJUNCTION_AND, move(result), move(next));
 			}
-			case OR_EXPR: {
-				if (!result) {
-					result = move(next);
-				} else {
-					result = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, move(result), move(next));
-				}
-				break;
+			break;
+		}
+		case OR_EXPR: {
+			if (!result) {
+				result = move(next);
+			} else {
+				result = make_unique<ConjunctionExpression>(
+				    ExpressionType::CONJUNCTION_OR, move(result), move(next));
 			}
-			case NOT_EXPR: {
-				result = make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, TypeId::INVALID, move(next), nullptr);
-				break;
-			}
+			break;
+		}
+		case NOT_EXPR: {
+			result = make_unique<OperatorExpression>(
+			    ExpressionType::OPERATOR_NOT, TypeId::INVALID, move(next),
+			    nullptr);
+			break;
+		}
 		}
 	}
 	return result;
 }
 
-
 unique_ptr<AbstractExpression> TransformRangeVar(RangeVar *root) {
 	auto result = make_unique<BaseTableRefExpression>();
 
 	result->alias = TransformAlias(root->alias);
-	if (root->relname)     result->table_name = root->relname;
-	if (root->schemaname)  result->schema_name = root->schemaname;
-	if (root->catalogname) result->database_name = root->catalogname;
+	if (root->relname)
+		result->table_name = root->relname;
+	if (root->schemaname)
+		result->schema_name = root->schemaname;
+	if (root->catalogname)
+		result->database_name = root->catalogname;
 	return move(result);
 }
 
@@ -86,69 +93,80 @@ unique_ptr<AbstractExpression> TransformRangeSubselect(RangeSubselect *root) {
 unique_ptr<AbstractExpression> TransformJoin(JoinExpr *root) {
 	auto result = make_unique<JoinExpression>();
 	switch (root->jointype) {
-		case JOIN_INNER: {
-			result->type = duckdb::JoinType::INNER;
-			break;
-		}
-		case JOIN_LEFT: {
-			result->type = duckdb::JoinType::LEFT;
-			break;
-		}
-		case JOIN_FULL: {
-			result->type = duckdb::JoinType::OUTER;
-			break;
-		}
-		case JOIN_RIGHT: {
-			result->type = duckdb::JoinType::RIGHT;
-			break;
-		}
-		case JOIN_SEMI: {
-			result->type = duckdb::JoinType::SEMI;
-			break;
-		}
-		default: {
-			throw NotImplementedException("Join type %d not supported yet...\n", root->jointype);
-		}
+	case JOIN_INNER: {
+		result->type = duckdb::JoinType::INNER;
+		break;
+	}
+	case JOIN_LEFT: {
+		result->type = duckdb::JoinType::LEFT;
+		break;
+	}
+	case JOIN_FULL: {
+		result->type = duckdb::JoinType::OUTER;
+		break;
+	}
+	case JOIN_RIGHT: {
+		result->type = duckdb::JoinType::RIGHT;
+		break;
+	}
+	case JOIN_SEMI: {
+		result->type = duckdb::JoinType::SEMI;
+		break;
+	}
+	default: {
+		throw NotImplementedException("Join type %d not supported yet...\n",
+		                              root->jointype);
+	}
 	}
 
 	// Check the type of left arg and right arg before transform
 	if (root->larg->type == T_RangeVar) {
-		result->left = move(TransformRangeVar(reinterpret_cast<RangeVar *>(root->larg)));
+		result->left =
+		    move(TransformRangeVar(reinterpret_cast<RangeVar *>(root->larg)));
 	} else if (root->larg->type == T_RangeSubselect) {
-		result->left = move(TransformRangeSubselect(reinterpret_cast<RangeSubselect *>(root->larg)));
+		result->left = move(TransformRangeSubselect(
+		    reinterpret_cast<RangeSubselect *>(root->larg)));
 	} else if (root->larg->type == T_JoinExpr) {
-		result->left = move(TransformJoin(reinterpret_cast<JoinExpr *>(root->larg)));
+		result->left =
+		    move(TransformJoin(reinterpret_cast<JoinExpr *>(root->larg)));
 	} else {
-		throw NotImplementedException("Join arg type %d not supported yet...\n", root->larg->type);
+		throw NotImplementedException("Join arg type %d not supported yet...\n",
+		                              root->larg->type);
 	}
 
 	if (root->rarg->type == T_RangeVar) {
-		result->right = move(TransformRangeVar(reinterpret_cast<RangeVar *>(root->rarg)));
+		result->right =
+		    move(TransformRangeVar(reinterpret_cast<RangeVar *>(root->rarg)));
 	} else if (root->rarg->type == T_RangeSubselect) {
-		result->right = move(TransformRangeSubselect(reinterpret_cast<RangeSubselect *>(root->rarg)));
+		result->right = move(TransformRangeSubselect(
+		    reinterpret_cast<RangeSubselect *>(root->rarg)));
 	} else if (root->rarg->type == T_JoinExpr) {
-		result->right = move(TransformJoin(reinterpret_cast<JoinExpr *>(root->rarg)));
+		result->right =
+		    move(TransformJoin(reinterpret_cast<JoinExpr *>(root->rarg)));
 	} else {
-		throw NotImplementedException("Join arg type %d not supported yet...\n", root->larg->type);
+		throw NotImplementedException("Join arg type %d not supported yet...\n",
+		                              root->larg->type);
 	}
 
 	// transform the quals, depends on AExprTranform and BoolExprTransform
 	switch (root->quals->type) {
-		case T_A_Expr: {
-			result->condition = move(TransformAExpr(reinterpret_cast<A_Expr *>(root->quals)));
-			break;
-		}
-		case T_BoolExpr: {
-			result->condition = move(TransformBoolExpr(reinterpret_cast<BoolExpr *>(root->quals)));
-			break;
-		}
-		default: {
-			throw NotImplementedException("Join quals type %d not supported yet...\n", root->larg->type);
-		}
+	case T_A_Expr: {
+		result->condition =
+		    move(TransformAExpr(reinterpret_cast<A_Expr *>(root->quals)));
+		break;
+	}
+	case T_BoolExpr: {
+		result->condition =
+		    move(TransformBoolExpr(reinterpret_cast<BoolExpr *>(root->quals)));
+		break;
+	}
+	default: {
+		throw NotImplementedException(
+		    "Join quals type %d not supported yet...\n", root->larg->type);
+	}
 	}
 	return move(result);
 }
-
 
 unique_ptr<AbstractExpression> TransformFrom(List *root) {
 	if (!root) {
@@ -159,19 +177,22 @@ unique_ptr<AbstractExpression> TransformFrom(List *root) {
 		// Cross Product
 		auto result = make_unique<CrossProductExpression>();
 		for (auto node = root->head; node != nullptr; node = node->next) {
-			Node* n = reinterpret_cast<Node *>(node->data.ptr_value);
+			Node *n = reinterpret_cast<Node *>(node->data.ptr_value);
 			switch (n->type) {
-				case T_RangeVar: {
-					result->children.push_back(move(TransformRangeVar(reinterpret_cast<RangeVar *>(n))));
-					break;
-				}
-				case T_RangeSubselect: {
-					result->children.push_back(move(TransformRangeSubselect(reinterpret_cast<RangeSubselect *>(n))));
-					break;
-				}
-				default: {
-					throw NotImplementedException("From Type %d not supported yet...", n->type);
-				}
+			case T_RangeVar: {
+				result->children.push_back(
+				    move(TransformRangeVar(reinterpret_cast<RangeVar *>(n))));
+				break;
+			}
+			case T_RangeSubselect: {
+				result->children.push_back(move(TransformRangeSubselect(
+				    reinterpret_cast<RangeSubselect *>(n))));
+				break;
+			}
+			default: {
+				throw NotImplementedException(
+				    "From Type %d not supported yet...", n->type);
+			}
 			}
 		}
 		return move(result);
@@ -179,18 +200,19 @@ unique_ptr<AbstractExpression> TransformFrom(List *root) {
 
 	Node *n = reinterpret_cast<Node *>(root->head->data.ptr_value);
 	switch (n->type) {
-		case T_RangeVar: {
-			return TransformRangeVar(reinterpret_cast<RangeVar *>(n));
-		}
-		case T_JoinExpr: {
-			return TransformJoin(reinterpret_cast<JoinExpr *>(n));
-		}
-		case T_RangeSubselect: {
-			return TransformRangeSubselect(reinterpret_cast<RangeSubselect *>(n));
-		}
-		default: {
-			throw NotImplementedException("From Type %d not supported yet...", n->type);
-		}
+	case T_RangeVar: {
+		return TransformRangeVar(reinterpret_cast<RangeVar *>(n));
+	}
+	case T_JoinExpr: {
+		return TransformJoin(reinterpret_cast<JoinExpr *>(n));
+	}
+	case T_RangeSubselect: {
+		return TransformRangeSubselect(reinterpret_cast<RangeSubselect *>(n));
+	}
+	default: {
+		throw NotImplementedException("From Type %d not supported yet...",
+		                              n->type);
+	}
 	}
 }
 
@@ -245,7 +267,6 @@ unique_ptr<AbstractExpression> TransformAExpr(A_Expr *root) {
 		target_type = StringToExpressionType(std::string(name));
 	} else {
 		target_type = ExpressionType::COMPARE_DISTINCT_FROM;
-		;
 	}
 	if (target_type == ExpressionType::INVALID) {
 		return nullptr;

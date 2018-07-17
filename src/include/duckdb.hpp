@@ -5,32 +5,32 @@
 #include <string>
 
 namespace duckdb {
-	class DuckDB;
-	class DuckDBConnection;
-	class DuckDBResult;
+class DuckDB;
+class DuckDBConnection;
+class DuckDBResult;
 
-	class DuckDB {
-	  public:
-		DuckDB(const char *path);
-	};
+class DuckDB {
+  public:
+	DuckDB(const char *path);
+};
 
-	class DuckDBConnection {
-	  public:
-		DuckDBConnection(DuckDB &database);
+class DuckDBConnection {
+  public:
+	DuckDBConnection(DuckDB &database);
 
-		DuckDBResult Query(const char *query);
-	};
+	DuckDBResult Query(const char *query);
+};
 
-	class DuckDBResult {
-	  public:
-		DuckDBResult();
-		DuckDBResult(std::string error);
+class DuckDBResult {
+  public:
+	DuckDBResult();
+	DuckDBResult(std::string error);
 
-		bool GetSuccess() const { return success; }
-		const std::string &GetErrorMessage() const { return error; }
+	bool GetSuccess() const { return success; }
+	const std::string &GetErrorMessage() const { return error; }
 
-	  private:
-		bool success;
-		std::string error;
-	};
+  private:
+	bool success;
+	std::string error;
+};
 }

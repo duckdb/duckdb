@@ -10,22 +10,22 @@ struct Node;
 struct List;
 
 namespace duckdb {
-	class Parser {
-	  public:
-		Parser();
+class Parser {
+  public:
+	Parser();
 
-		bool ParseQuery(const char *query);
+	bool ParseQuery(const char *query);
 
-		bool GetSuccess() const { return success; }
-		const std::string &GetErrorMessage() const { return message; }
+	bool GetSuccess() const { return success; }
+	const std::string &GetErrorMessage() const { return message; }
 
-	  private:
-		bool ParseList(List *tree);
-		std::unique_ptr<SQLStatement> ParseNode(Node *stmt);
+  private:
+	bool ParseList(List *tree);
+	std::unique_ptr<SQLStatement> ParseNode(Node *stmt);
 
-		bool success;
-		std::string message;
+	bool success;
+	std::string message;
 
-		std::vector<std::unique_ptr<SQLStatement>> statements;
-	};
+	std::vector<std::unique_ptr<SQLStatement>> statements;
+};
 }
