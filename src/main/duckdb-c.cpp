@@ -2,13 +2,15 @@
 #include "duckdb.h"
 #include "duckdb.hpp"
 
-duckdb_state duckdb_open(char *path, duckdb *out) {
+using namespace duckdb;
+
+duckdb_state duckdb_open(char *path, duckdb_database *out) {
 	DuckDB *database = new DuckDB(path);
-	*out = (duckdb)database;
+	*out = (duckdb_database)database;
 	return DuckDBSuccess;
 }
 
-duckdb_state duckdb_close(duckdb database) {
+duckdb_state duckdb_close(duckdb_database database) {
 	if (database) {
 		DuckDB *db = (DuckDB *)database;
 		delete db;
@@ -16,7 +18,7 @@ duckdb_state duckdb_close(duckdb database) {
 	return DuckDBSuccess;
 }
 
-duckdb_state duckdb_connect(duckdb database, duckdb_connection *out) {
+duckdb_state duckdb_connect(duckdb_database database, duckdb_connection *out) {
 	DuckDB *db = (DuckDB *)database;
 	DuckDBConnection *connection = new DuckDBConnection(*db);
 	*out = (duckdb_connection)connection;

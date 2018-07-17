@@ -1,6 +1,7 @@
 
 #include "parser/transform.hpp"
 
+using namespace duckdb;
 using namespace std;
 
 unique_ptr<SelectStatement> TransformSelect(Node *node) {
@@ -12,6 +13,7 @@ unique_ptr<SelectStatement> TransformSelect(Node *node) {
 		if (!TransformExpressionList(stmt->targetList, result->select_list)) {
 			return nullptr;
 		}
+		result->from_table = TransformFrom(stmt->fromClause);
 
 		// try {
 		// 	auto select_list = TargetTransform(root->targetList);

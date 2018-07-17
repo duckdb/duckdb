@@ -6,21 +6,21 @@
 extern "C" {
 #endif
 
-typedef void *duckdb;
+typedef void *duckdb_database;
 typedef void *duckdb_connection;
 typedef void *duckdb_result;
 
 enum duckdb_state { DuckDBSuccess = 0, DuckDBError = 1 };
 
 duckdb_state duckdb_open(char *path,      /* Database filename (UTF-8) */
-                         duckdb *database /* OUT: DuckDB DB handle */
+                         duckdb_database *database /* OUT: DuckDB DB handle */
                          );
 
-duckdb_state duckdb_close(duckdb database /* Database to close */
+duckdb_state duckdb_close(duckdb_database database /* Database to close */
                           );
 
 duckdb_state
-duckdb_connect(duckdb database, /* Database to open connection to */
+duckdb_connect(duckdb_database database, /* Database to open connection to */
                duckdb_connection *connection /* OUT: Connection handle */
                );
 

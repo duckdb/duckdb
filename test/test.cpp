@@ -5,7 +5,7 @@
 #include "duckdb.h"
 
 int main() {
-	duckdb database;
+	duckdb_database database;
 	duckdb_connection connection;
 	duckdb_result result;
 

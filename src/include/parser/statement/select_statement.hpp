@@ -7,17 +7,20 @@
 
 #include "parser/expression/abstract_expression.hpp"
 
-class SelectStatement : public SQLStatement {
-  public:
-	SelectStatement()
-	    : SQLStatement(StatementType::SELECT), union_select(nullptr),
-	      select_distinct(false){};
-	virtual ~SelectStatement() {}
+namespace duckdb {
+	class SelectStatement : public SQLStatement {
+	  public:
+		SelectStatement()
+		    : SQLStatement(StatementType::SELECT), union_select(nullptr),
+		      select_distinct(false){};
+		virtual ~SelectStatement() {}
 
-	virtual std::string ToString() const;
+		virtual std::string ToString() const;
 
-	std::vector<std::unique_ptr<AbstractExpression>> select_list;
-	bool select_distinct;
+		std::vector<std::unique_ptr<AbstractExpression>> select_list;
+		std::unique_ptr<AbstractExpression> from_table;
+		bool select_distinct;
 
-	std::unique_ptr<SelectStatement> union_select;
-};
+		std::unique_ptr<SelectStatement> union_select;
+	};
+}

@@ -3,12 +3,14 @@
 
 #include <string>
 
-class Printable {
-  public:
-	virtual ~Printable(){};
+namespace duckdb {
+	class Printable {
+	  public:
+		virtual ~Printable(){};
 
-	/** @brief Get the info about the object. */
-	virtual std::string ToString() const = 0;
+		/** @brief Get the info about the object. */
+		virtual std::string ToString() const = 0;
 
-	void Print();
-};
+		void Print();
+	};
+}

@@ -4,9 +4,9 @@
 #include "parser/expression/abstract_expression.hpp"
 
 namespace duckdb {
-	class ComparisonExpression : public AbstractExpression {
+	class ConjunctionExpression : public AbstractExpression {
 	  public:
-		ComparisonExpression(ExpressionType type,
+		ConjunctionExpression(ExpressionType type,
 		                     std::unique_ptr<AbstractExpression> left,
 		                     std::unique_ptr<AbstractExpression> right)
 		    : AbstractExpression(type, TypeId::BOOLEAN, std::move(left),

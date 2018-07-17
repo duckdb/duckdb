@@ -6,21 +6,26 @@
 
 #include "parser/statement/sql_statement.hpp"
 
-class Parser {
-  public:
-	Parser();
+struct Node;
+struct List;
 
-	bool ParseQuery(const char *query);
+namespace duckdb {
+	class Parser {
+	  public:
+		Parser();
 
-	bool GetSuccess() const { return success; }
-	const std::string &GetErrorMessage() const { return message; }
+		bool ParseQuery(const char *query);
 
-  private:
-	bool ParseList(List *tree);
-	std::unique_ptr<SQLStatement> ParseNode(Node *stmt);
+		bool GetSuccess() const { return success; }
+		const std::string &GetErrorMessage() const { return message; }
 
-	bool success;
-	std::string message;
+	  private:
+		bool ParseList(List *tree);
+		std::unique_ptr<SQLStatement> ParseNode(Node *stmt);
 
-	std::vector<std::unique_ptr<SQLStatement>> statements;
-};
+		bool success;
+		std::string message;
+
+		std::vector<std::unique_ptr<SQLStatement>> statements;
+	};
+}

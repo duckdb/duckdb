@@ -10,16 +10,15 @@ std::unique_ptr<T> make_unique(Args &&... args) {
 	return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
 }
 
-struct List;
-struct Node;
+namespace duckdb {
+	class SQLStatement : public Printable {
+	  public:
+		SQLStatement(StatementType type) : stmt_type(type){};
+		virtual ~SQLStatement() {}
 
-class SQLStatement : public Printable {
-  public:
-	SQLStatement(StatementType type) : stmt_type(type){};
-	virtual ~SQLStatement() {}
+		StatementType GetType() const { return stmt_type; }
 
-	StatementType GetType() const { return stmt_type; }
-
-  private:
-	StatementType stmt_type;
-};
+	  private:
+		StatementType stmt_type;
+	};
+}

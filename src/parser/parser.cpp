@@ -8,6 +8,9 @@
 
 #include "parser/transform.hpp"
 
+using namespace duckdb;
+using namespace std;
+
 bool ParseList(Parser &parser, List *tree);
 SQLStatement *ParseNode(Node *node);
 
@@ -18,9 +21,9 @@ bool Parser::ParseQuery(const char *query) {
 	auto result = pg_query_parse(query);
 	if (result.error) {
 		this->success = false;
-		this->message = std::string(result.error->message) + "[" +
-		                std::to_string(result.error->lineno) + ":" +
-		                std::to_string(result.error->cursorpos) + "]";
+		this->message = string(result.error->message) + "[" +
+		                to_string(result.error->lineno) + ":" +
+		                to_string(result.error->cursorpos) + "]";
 		goto wrapup;
 	} else {
 		this->success = true;

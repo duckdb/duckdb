@@ -9,6 +9,8 @@
 #include <string.h>
 #include <string>
 
+using namespace duckdb;
+
 bool StringUtil::Contains(const std::string &haystack,
                           const std::string &needle) {
 	return (haystack.find(needle) != std::string::npos);

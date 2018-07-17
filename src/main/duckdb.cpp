@@ -3,6 +3,8 @@
 
 #include "parser/parser.hpp"
 
+using namespace duckdb;
+
 DuckDB::DuckDB(const char *path) {}
 
 DuckDBConnection::DuckDBConnection(DuckDB &database) {}
