@@ -30,6 +30,69 @@ std::string TransformAlias(Alias *root) {
 	return root->aliasname;
 }
 
+static TypeId TransformStringToTypeId(char *str) {
+	std::string lower_str = StringUtil::Lower(std::string(str));
+	// Transform column type
+	if (lower_str == "int" || lower_str == "int4") {
+		return TypeId::INTEGER;
+	} else if (lower_str == "varchar" || lower_str == "bpchar" ||
+	           lower_str == "text") {
+		return TypeId::VARCHAR;
+	} else if (lower_str == "int8") {
+		return TypeId::BIGINT;
+	} else if (lower_str == "int2") {
+		return TypeId::SMALLINT;
+	} else if (lower_str == "timestamp") {
+		return TypeId::TIMESTAMP;
+	} else if (lower_str == "bool") {
+		return TypeId::BOOLEAN;
+	} else if (lower_str == "double" || lower_str == "float8" ||
+	           lower_str == "real" || lower_str == "float4" ||
+	           lower_str == "numeric") {
+		return TypeId::DECIMAL;
+	} else if (lower_str == "tinyint") {
+		return TypeId::TINYINT;
+	} else if (lower_str == "varbinary") {
+		return TypeId::VARBINARY;
+	} else if (lower_str == "date") {
+		return TypeId::DATE;
+	} else {
+		throw NotImplementedException("DataType %s not supported yet...\n",
+		                              str);
+	}
+}
+
+unique_ptr<AbstractExpression> TransformTypeCast(TypeCast *root) {
+	if (!root) {
+		return nullptr;
+	}
+	switch (root->arg->type) {
+	case T_A_Const: { // cast a constant value
+		// get the original constant value
+		auto constant =
+		    TransformConstant(reinterpret_cast<A_Const *>(root->arg));
+		Value &source_value =
+		    reinterpret_cast<ConstantExpression *>(constant.get())->value;
+		// get the type to cast to
+		TypeName *type_name = root->typeName;
+		char *name =
+		    (reinterpret_cast<value *>(type_name->names->tail->data.ptr_value)
+		         ->val.str);
+		// perform the cast and substitute the expression
+		Value new_value = source_value.CastAs(TransformStringToTypeId(name));
+		throw NotImplementedException(
+		    "TypeCast Source of type %d not supported yet...\n",
+		    root->arg->type);
+
+		return make_unique<ConstantExpression>(new_value);
+	}
+	default:
+		throw NotImplementedException(
+		    "TypeCast Source of type %d not supported yet...\n",
+		    root->arg->type);
+	}
+}
+
 unique_ptr<AbstractExpression> TransformBoolExpr(BoolExpr *root) {
 	unique_ptr<AbstractExpression> result;
 	for (auto node = root->args->head; node != nullptr; node = node->next) {
@@ -255,6 +318,10 @@ unique_ptr<AbstractExpression> TransformValue(value val) {
 	}
 }
 
+unique_ptr<AbstractExpression> TransformConstant(A_Const *c) {
+	return TransformValue(c->val);
+}
+
 unique_ptr<AbstractExpression> TransformAExpr(A_Expr *root) {
 	if (!root) {
 		return nullptr;
@@ -337,17 +404,19 @@ unique_ptr<AbstractExpression> TransformExpression(Node *node) {
 	case T_ColumnRef:
 		return TransformColumnRef(reinterpret_cast<ColumnRef *>(node));
 	case T_A_Const:
-		return TransformValue(reinterpret_cast<A_Const *>(node)->val);
+		return TransformConstant(reinterpret_cast<A_Const *>(node));
 	case T_A_Expr:
 		return TransformAExpr(reinterpret_cast<A_Expr *>(node));
 	case T_FuncCall:
 		return TransformFuncCall(reinterpret_cast<FuncCall *>(node));
-	case T_ParamRef:
 	case T_BoolExpr:
+		return TransformBoolExpr(reinterpret_cast<BoolExpr *>(node));
+	case T_TypeCast:
+		return TransformTypeCast(reinterpret_cast<TypeCast *>(node));
+	case T_ParamRef:
 	case T_CaseExpr:
 	case T_SubLink:
 	case T_NullTest:
-	case T_TypeCast:
 	default:
 		throw NotImplementedException("Expr of type %d not implemented\n",
 		                              (int)node->type);

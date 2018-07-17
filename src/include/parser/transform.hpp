@@ -16,6 +16,7 @@ std::unique_ptr<duckdb::AbstractExpression> TransformAExpr(A_Expr *root);
 std::unique_ptr<duckdb::AbstractExpression> TransformExpression(Node *node);
 std::unique_ptr<duckdb::AbstractExpression> TransformFuncCall(FuncCall *root);
 std::unique_ptr<duckdb::AbstractExpression> TransformFrom(List *root);
+std::unique_ptr<duckdb::AbstractExpression> TransformConstant(A_Const *c);
 
 bool TransformGroupBy(
     List *group,

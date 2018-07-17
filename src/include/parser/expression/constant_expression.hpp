@@ -1,8 +1,8 @@
 
 #pragma once
 
+#include "common/value.hpp"
 #include "parser/expression/abstract_expression.hpp"
-#include "type/value.hpp"
 
 namespace duckdb {
 class ConstantExpression : public AbstractExpression {
@@ -15,10 +15,11 @@ class ConstantExpression : public AbstractExpression {
 	    : AbstractExpression(ExpressionType::VALUE_CONSTANT), value(val) {}
 	ConstantExpression(double val)
 	    : AbstractExpression(ExpressionType::VALUE_CONSTANT), value(val) {}
+	ConstantExpression(const Value &val)
+	    : AbstractExpression(ExpressionType::VALUE_CONSTANT), value(val) {}
 
 	virtual std::string ToString() const { return std::string(); }
 
-  private:
 	Value value;
 };
 }

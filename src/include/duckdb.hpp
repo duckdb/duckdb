@@ -4,6 +4,8 @@
 
 #include <string>
 
+#include "catalog/catalog.hpp"
+
 namespace duckdb {
 class DuckDB;
 class DuckDBConnection;
@@ -12,6 +14,8 @@ class DuckDBResult;
 class DuckDB {
   public:
 	DuckDB(const char *path);
+
+	Catalog catalog;
 };
 
 class DuckDBConnection {

@@ -5,7 +5,30 @@
 
 using namespace duckdb;
 
-DuckDB::DuckDB(const char *path) {}
+DuckDB::DuckDB(const char *path) {
+	// create a database
+	// for now we ignore the path and hardcode the lineitem table
+	// create the base catalog
+	catalog.CreateSchema(DEFAULT_SCHEMA);
+	std::vector<ColumnCatalogEntry> columns;
+	columns.push_back(ColumnCatalogEntry("l_orderkey", TypeId::INTEGER, true));
+	columns.push_back(ColumnCatalogEntry("l_partkey", TypeId::INTEGER, true));
+	columns.push_back(ColumnCatalogEntry("l_suppkey", TypeId::INTEGER, true));
+	columns.push_back(ColumnCatalogEntry("l_linenumber", TypeId::INTEGER, true));
+	columns.push_back(ColumnCatalogEntry("l_quantity", TypeId::INTEGER, true));
+	columns.push_back(ColumnCatalogEntry("l_extendedprice", TypeId::DECIMAL, true));
+	columns.push_back(ColumnCatalogEntry("l_discount", TypeId::DECIMAL, true));
+	columns.push_back(ColumnCatalogEntry("l_returnflag", TypeId::VARCHAR, true));
+	columns.push_back(ColumnCatalogEntry("l_linestatus", TypeId::VARCHAR, true));
+	columns.push_back(ColumnCatalogEntry("l_shipdate", TypeId::DATE, true));
+	columns.push_back(ColumnCatalogEntry("l_commitdate", TypeId::DATE, true));
+	columns.push_back(ColumnCatalogEntry("l_receiptdate", TypeId::DATE, true));
+	columns.push_back(ColumnCatalogEntry("l_shipinstruct", TypeId::VARCHAR, true));
+	columns.push_back(ColumnCatalogEntry("l_shipmode", TypeId::VARCHAR, true));
+	columns.push_back(ColumnCatalogEntry("l_comment", TypeId::VARCHAR, true));
+
+	catalog.CreateTable(DEFAULT_SCHEMA, "lineitem", columns);
+}
 
 DuckDBConnection::DuckDBConnection(DuckDB &database) {}
 

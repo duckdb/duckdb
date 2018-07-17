@@ -18,7 +18,9 @@ class Value : public Printable {
 		value_.data = new char[val.size() + 1];
 		memcpy(value_.data, val.c_str(), val.size());
 		value_.data[val.size()] = '\0';
+		len = val.size();
 	}
+	Value(const Value &other);
 	~Value() {
 		if ((type == TypeId::VARCHAR || type == TypeId::VARBINARY ||
 		     type == TypeId::ARRAY) &&
@@ -27,7 +29,11 @@ class Value : public Printable {
 		}
 	}
 
+	Value Copy() { return Value(*this); }
+
 	virtual std::string ToString() const { return std::string(); }
+
+	Value CastAs(TypeId new_type);
 
   private:
 	TypeId type;
@@ -45,9 +51,6 @@ class Value : public Printable {
 		char *data;
 	} value_;
 
-	union {
-		uint32_t len;
-		TypeId elem_type_id;
-	} size_;
+	uint32_t len;
 };
 }

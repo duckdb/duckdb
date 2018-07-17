@@ -56,13 +56,9 @@ unique_ptr<SelectStatement> TransformSelect(Node *node) {
 			return nullptr;
 		}
 		result->from_table = TransformFrom(stmt->fromClause);
-		if (!TransformGroupBy(stmt->groupClause, result->groupby.groups)) {
-			return nullptr;
-		}
+		TransformGroupBy(stmt->groupClause, result->groupby.groups);
 		result->groupby.having = TransformExpression(stmt->havingClause);
-		if (!TransformOrderBy(stmt->sortClause, result->orderby)) {
-			return nullptr;
-		}
+		TransformOrderBy(stmt->sortClause, result->orderby);
 		result->where_clause = TransformExpression(stmt->whereClause);
 		if (stmt->limitCount) {
 			result->limit.limit =

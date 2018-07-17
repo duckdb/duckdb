@@ -19,23 +19,24 @@ Parser::Parser() {}
 bool Parser::ParseQuery(const char *query) {
 	auto context = pg_query_parse_init();
 	auto result = pg_query_parse(query);
+
+	this->success = false;
 	if (result.error) {
-		this->success = false;
 		this->message = string(result.error->message) + "[" +
 		                to_string(result.error->lineno) + ":" +
 		                to_string(result.error->cursorpos) + "]";
 		goto wrapup;
-	} else {
-		this->success = true;
 	}
 	print_pg_parse_tree(result.tree);
 	try {
 		if (!ParseList(result.tree)) {
 			goto wrapup;
 		}
+		this->success = true;
 	} catch (Exception ex) {
-		this->message = ex.GetMessage().c_str();
-		this->success = false;
+		this->message = ex.GetMessage();
+	} catch (...) {
+		this->message = "UNHANDLED EXCEPTION TYPE THROWN IN PARSER!";
 	}
 wrapup:
 	pg_query_parse_finish(context);
