@@ -11,6 +11,8 @@ std::unique_ptr<T> make_unique(Args &&... args) {
 }
 
 namespace duckdb {
+class SelectStatement;
+
 class SQLStatement : public Printable {
   public:
 	SQLStatement(StatementType type) : stmt_type(type){};

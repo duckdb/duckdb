@@ -18,7 +18,8 @@ class ConstantExpression : public AbstractExpression {
 	ConstantExpression(const Value &val)
 	    : AbstractExpression(ExpressionType::VALUE_CONSTANT), value(val) {}
 
-	virtual std::string ToString() const { return std::string(); }
+	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual std::string ToString() const override { return std::string(); }
 
 	Value value;
 };

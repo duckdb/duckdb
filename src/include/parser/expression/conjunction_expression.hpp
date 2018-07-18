@@ -12,6 +12,7 @@ class ConjunctionExpression : public AbstractExpression {
 	    : AbstractExpression(type, TypeId::BOOLEAN, std::move(left),
 	                         std::move(right)) {}
 
-	virtual std::string ToString() const { return std::string(); }
+	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual std::string ToString() const override { return std::string(); }
 };
 }

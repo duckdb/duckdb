@@ -19,9 +19,9 @@ class ColumnRefExpression : public AbstractExpression {
 	const std::string &GetColumnName() const { return column_name; }
 	const std::string &GetTableName() const { return table_name; }
 
-	virtual std::string ToString() const { return std::string(); }
+	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual std::string ToString() const override { return std::string(); }
 
-  private:
 	std::string column_name;
 	std::string table_name;
 };

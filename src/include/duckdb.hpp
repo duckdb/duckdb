@@ -23,6 +23,9 @@ class DuckDBConnection {
 	DuckDBConnection(DuckDB &database);
 
 	DuckDBResult Query(const char *query);
+
+  private:
+	DuckDB &database;
 };
 
 class DuckDBResult {

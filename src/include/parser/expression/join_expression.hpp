@@ -8,7 +8,8 @@ class JoinExpression : public TableRefExpression {
   public:
 	JoinExpression() : TableRefExpression(TableReferenceType::JOIN) {}
 
-	virtual std::string ToString() const { return std::string(); }
+	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual std::string ToString() const override { return std::string(); }
 
 	std::unique_ptr<AbstractExpression> left;
 	std::unique_ptr<AbstractExpression> right;

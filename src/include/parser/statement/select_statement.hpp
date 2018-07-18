@@ -24,8 +24,8 @@ struct OrderByDescription {
 	std::vector<OrderByNode> orders;
 };
 struct LimitDescription {
-	int64_t limit;
-	int64_t offset;
+	int64_t limit = -1;
+	int64_t offset = -1;
 };
 
 class SelectStatement : public SQLStatement {
@@ -45,6 +45,11 @@ class SelectStatement : public SQLStatement {
 	GroupByDescription groupby;
 	OrderByDescription orderby;
 	LimitDescription limit;
+
+	bool HasLimit() { return limit.limit > 0; }
+	bool HasGroup() { return groupby.groups.size() > 0; }
+	bool HasHaving() { return groupby.having.get(); }
+	bool HasOrder() { return orderby.orders.size() > 0; }
 
 	std::unique_ptr<SelectStatement> union_select;
 };

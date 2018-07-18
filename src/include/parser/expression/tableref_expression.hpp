@@ -9,7 +9,8 @@ class TableRefExpression : public AbstractExpression {
 	TableRefExpression(TableReferenceType ref_type)
 	    : AbstractExpression(ExpressionType::TABLE_REF), ref_type(ref_type) {}
 
-	std::string alias;
+	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+
 	TableReferenceType ref_type;
 };
 }

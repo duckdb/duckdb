@@ -10,14 +10,13 @@ SchemaCatalogEntry::SchemaCatalogEntry(string name,
     : AbstractCatalogEntry(name, parent) {}
 
 void SchemaCatalogEntry::CreateTable(
-    const string &table_name,
-    const std::vector<ColumnCatalogEntry> &columns) {
+    const string &table_name, const std::vector<ColumnCatalogEntry> &columns) {
 	if (TableExists(table_name)) {
 		throw CatalogException("Table with name %s already exists!",
 		                       table_name.c_str());
 	}
 	auto table = make_shared<TableCatalogEntry>(table_name, shared_from_this());
-	for (auto& column : columns) {
+	for (auto &column : columns) {
 		table->AddColumn(column);
 	}
 	tables[table_name] = table;

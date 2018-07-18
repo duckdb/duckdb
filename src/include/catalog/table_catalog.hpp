@@ -14,8 +14,8 @@ class SchemaCatalogEntry;
 
 class TableCatalogEntry : public AbstractCatalogEntry {
   public:
-	TableCatalogEntry(
-	    std::string name, std::shared_ptr<AbstractCatalogEntry> parent);
+	TableCatalogEntry(std::string name,
+	                  std::shared_ptr<AbstractCatalogEntry> parent);
 
 	uint64_t size;
 	std::unordered_map<std::string, std::shared_ptr<ColumnCatalogEntry>>

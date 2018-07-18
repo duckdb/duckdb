@@ -9,6 +9,7 @@ class CrossProductExpression : public TableRefExpression {
 	CrossProductExpression()
 	    : TableRefExpression(TableReferenceType::CROSS_PRODUCT) {}
 
-	virtual std::string ToString() const { return std::string(); }
+	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual std::string ToString() const override { return std::string(); }
 };
 }

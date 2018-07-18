@@ -16,9 +16,8 @@ class SchemaCatalogEntry : public AbstractCatalogEntry {
 	SchemaCatalogEntry(std::string name,
 	                   std::shared_ptr<AbstractCatalogEntry> parent);
 
-	void CreateTable(
-	    const std::string &table_name,
-	    const std::vector<ColumnCatalogEntry> &columns);
+	void CreateTable(const std::string &table_name,
+	                 const std::vector<ColumnCatalogEntry> &columns);
 	bool TableExists(const std::string &table_name);
 	std::shared_ptr<TableCatalogEntry> GetTable(const std::string &table);
 

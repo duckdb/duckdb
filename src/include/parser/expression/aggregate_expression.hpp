@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include "common/exception.hpp"
+
 #include "parser/expression/abstract_expression.hpp"
 
 namespace duckdb {
@@ -40,7 +42,8 @@ class AggregateExpression : public AbstractExpression {
 		}
 	}
 
-	virtual std::string ToString() const { return std::string(); }
+	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual std::string ToString() const override { return std::string(); }
 
   private:
 	bool distinct;

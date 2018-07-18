@@ -18,9 +18,8 @@ void Catalog::CreateSchema(const string &schema_name) {
 	    make_shared<SchemaCatalogEntry>(schema_name, nullptr);
 }
 
-void Catalog::CreateTable(
-    const string &schema_name, const string &table_name,
-    const std::vector<ColumnCatalogEntry> &columns) {
+void Catalog::CreateTable(const string &schema_name, const string &table_name,
+                          const std::vector<ColumnCatalogEntry> &columns) {
 	if (!SchemaExists(schema_name)) {
 		throw CatalogException("Schema with name %s does not exist!",
 		                       schema_name.c_str());

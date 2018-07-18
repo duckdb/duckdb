@@ -9,7 +9,8 @@ class SubqueryExpression : public TableRefExpression {
   public:
 	SubqueryExpression() : TableRefExpression(TableReferenceType::SUBQUERY) {}
 
-	virtual std::string ToString() const { return std::string(); }
+	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual std::string ToString() const override { return std::string(); }
 
 	std::unique_ptr<SelectStatement> subquery;
 };

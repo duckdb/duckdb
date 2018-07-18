@@ -19,9 +19,8 @@ class Catalog : public AbstractCatalogEntry {
 	~Catalog();
 
 	void CreateSchema(const std::string &schema = DEFAULT_SCHEMA);
-	void CreateTable(
-	    const std::string &schema, const std::string &table,
-	    const std::vector<ColumnCatalogEntry> &columns);
+	void CreateTable(const std::string &schema, const std::string &table,
+	                 const std::vector<ColumnCatalogEntry> &columns);
 
 	bool SchemaExists(const std::string &name = DEFAULT_SCHEMA);
 	bool TableExists(const std::string &schema, const std::string &table);

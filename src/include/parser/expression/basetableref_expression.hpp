@@ -9,7 +9,8 @@ class BaseTableRefExpression : public TableRefExpression {
 	BaseTableRefExpression()
 	    : TableRefExpression(TableReferenceType::BASE_TABLE) {}
 
-	virtual std::string ToString() const { return std::string(); }
+	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual std::string ToString() const override { return std::string(); }
 
 	std::string database_name;
 	std::string schema_name;

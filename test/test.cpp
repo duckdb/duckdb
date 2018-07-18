@@ -19,17 +19,17 @@ int main() {
 		return 1;
 	}
 
-	if (duckdb_query(connection, "SELECT 42, 'hello';", &result) != DuckDBSuccess) {
+	if (duckdb_query(connection, "SELECT 42 AS r, 'hello';", &result) != DuckDBSuccess) {
 		fprintf(stderr, "Database query failed!\n");
 		return 1;
 	}
 
-	if (duckdb_query(connection, "SELECT id FROM tbl;", &result) != DuckDBSuccess) {
+	if (duckdb_query(connection, "SELECT * FROM lineitem;", &result) != DuckDBSuccess) {
 		fprintf(stderr, "Database query failed!\n");
 		return 1;
 	}
 
-	if (duckdb_query(connection, "SELECT id, id + 1 FROM tbl;", &result) != DuckDBSuccess) {
+	if (duckdb_query(connection, "SELECT l_orderkey, l_orderkey + 1 FROM lineitem;", &result) != DuckDBSuccess) {
 		fprintf(stderr, "Database query failed!\n");
 		return 1;
 	}

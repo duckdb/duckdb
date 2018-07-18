@@ -11,15 +11,11 @@ class TableCatalogEntry;
 
 class ColumnCatalogEntry : public AbstractCatalogEntry {
   public:
-	ColumnCatalogEntry(std::string name,
-	                   TypeId type,
-	                   bool is_not_null);
-	ColumnCatalogEntry(std::string name,
-	                   TypeId type,
-	                   bool is_not_null,
+	ColumnCatalogEntry(std::string name, TypeId type, bool is_not_null);
+	ColumnCatalogEntry(std::string name, TypeId type, bool is_not_null,
 	                   Value default_value);
-	ColumnCatalogEntry(const ColumnCatalogEntry& base,
-					   std::shared_ptr<AbstractCatalogEntry> parent);
+	ColumnCatalogEntry(const ColumnCatalogEntry &base,
+	                   std::shared_ptr<AbstractCatalogEntry> parent);
 
 	TypeId type;
 	bool is_not_null;

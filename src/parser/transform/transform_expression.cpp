@@ -286,13 +286,19 @@ unique_ptr<AbstractExpression> TransformColumnRef(ColumnRef *root) {
 		if (fields->length < 1 || fields->length > 2) {
 			throw ParserException("Unexpected field length");
 		}
-		string column_name = string(
-		    reinterpret_cast<value *>(fields->head->data.ptr_value)->val.str);
-		string table_name = fields->length == 1
-		                        ? string()
-		                        : string(reinterpret_cast<value *>(
-		                                     fields->head->next->data.ptr_value)
-		                                     ->val.str);
+		string column_name, table_name;
+		if (fields->length == 1) {
+			column_name =
+			    string(reinterpret_cast<value *>(fields->head->data.ptr_value)
+			               ->val.str);
+		} else {
+			table_name =
+			    string(reinterpret_cast<value *>(fields->head->data.ptr_value)
+			               ->val.str);
+			column_name = string(
+			    reinterpret_cast<value *>(fields->head->next->data.ptr_value)
+			        ->val.str);
+		}
 		return make_unique<ColumnRefExpression>(column_name, table_name);
 	}
 	case T_A_Star: {
@@ -430,9 +436,12 @@ bool TransformExpressionList(List *list,
 	}
 	for (auto node = list->head; node != nullptr; node = node->next) {
 		auto target = reinterpret_cast<ResTarget *>(node->data.ptr_value);
-		auto expr = TransformExpression(target->val);
 		if (!target) {
 			return false;
+		}
+		auto expr = TransformExpression(target->val);
+		if (target->name) {
+			expr->alias = std::string(target->name);
 		}
 		result.push_back(move(expr));
 	}

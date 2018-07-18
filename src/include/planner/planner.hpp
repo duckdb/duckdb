@@ -4,17 +4,14 @@
 #include <string>
 #include <vector>
 
+#include "catalog/catalog.hpp"
 #include "parser/statement/sql_statement.hpp"
 
-struct Node;
-struct List;
-
 namespace duckdb {
-class Parser {
-  public:
-	Parser();
 
-	bool ParseQuery(const char *query);
+class Planner {
+  public:
+	bool CreatePlan(Catalog &catalog, std::unique_ptr<SQLStatement> statement);
 
 	bool GetSuccess() const { return success; }
 	const std::string &GetErrorMessage() const { return message; }
@@ -22,10 +19,7 @@ class Parser {
 	bool success;
 	std::string message;
 
-	std::vector<std::unique_ptr<SQLStatement>> statements;
-
   private:
-	bool ParseList(List *tree);
-	std::unique_ptr<SQLStatement> ParseNode(Node *stmt);
+	void CreatePlan(Catalog &, SelectStatement &statement);
 };
 }

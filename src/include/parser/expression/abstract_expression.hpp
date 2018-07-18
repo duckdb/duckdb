@@ -1,8 +1,11 @@
 
 #pragma once
 
+#include <vector>
+
 #include "common/internal_types.hpp"
 #include "common/printable.hpp"
+#include "common/sql_node_visitor.hpp"
 
 namespace duckdb {
 class AbstractExpression : public Printable {
@@ -21,10 +24,19 @@ class AbstractExpression : public Printable {
 			children.push_back(move(right));
 	}
 
+	virtual void Accept(SQLNodeVisitor *) = 0;
+	virtual void AcceptChildren(SQLNodeVisitor *v) {
+		for (auto &child : children) {
+			child->Accept(v);
+		}
+	}
+
 	ExpressionType GetExpressionType() { return type; }
 
 	ExpressionType type;
 	TypeId return_type = TypeId::INVALID;
+
+	std::string alias;
 
 	std::vector<std::unique_ptr<AbstractExpression>> children;
 };
