@@ -16,14 +16,14 @@
 using namespace duckdb;
 using namespace std;
 
-static bool IsAggregateFunction(const std::string &fun_name) {
+static bool IsAggregateFunction(const string &fun_name) {
 	if (fun_name == "min" || fun_name == "max" || fun_name == "count" ||
 	    fun_name == "avg" || fun_name == "sum")
 		return true;
 	return false;
 }
 
-std::string TransformAlias(Alias *root) {
+string TransformAlias(Alias *root) {
 	if (!root) {
 		return "";
 	}
@@ -31,7 +31,7 @@ std::string TransformAlias(Alias *root) {
 }
 
 static TypeId TransformStringToTypeId(char *str) {
-	std::string lower_str = StringUtil::Lower(std::string(str));
+	string lower_str = StringUtil::Lower(string(str));
 	// Transform column type
 	if (lower_str == "int" || lower_str == "int4") {
 		return TypeId::INTEGER;
@@ -337,7 +337,7 @@ unique_ptr<AbstractExpression> TransformAExpr(A_Expr *root) {
 	const char *name =
 	    (reinterpret_cast<value *>(root->name->head->data.ptr_value))->val.str;
 	if ((root->kind) != AEXPR_DISTINCT) {
-		target_type = StringToExpressionType(std::string(name));
+		target_type = StringToExpressionType(string(name));
 	} else {
 		target_type = ExpressionType::COMPARE_DISTINCT_FROM;
 	}
@@ -362,7 +362,7 @@ unique_ptr<AbstractExpression> TransformAExpr(A_Expr *root) {
 }
 
 unique_ptr<AbstractExpression> TransformFuncCall(FuncCall *root) {
-	std::string fun_name = StringUtil::Lower(
+	string fun_name = StringUtil::Lower(
 	    (reinterpret_cast<value *>(root->funcname->head->data.ptr_value))
 	        ->val.str);
 
@@ -441,7 +441,7 @@ bool TransformExpressionList(List *list,
 		}
 		auto expr = TransformExpression(target->val);
 		if (target->name) {
-			expr->alias = std::string(target->name);
+			expr->alias = string(target->name);
 		}
 		result.push_back(move(expr));
 	}

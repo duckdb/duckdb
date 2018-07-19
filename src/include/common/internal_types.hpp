@@ -173,6 +173,9 @@ enum class ExpressionType {
 	CAST = 600
 };
 
+//===--------------------------------------------------------------------===//
+// Table Reference Types
+//===--------------------------------------------------------------------===//
 enum class TableReferenceType {
 	INVALID = 0,      // invalid table reference type
 	BASE_TABLE = 1,   // base table reference
@@ -181,6 +184,9 @@ enum class TableReferenceType {
 	CROSS_PRODUCT = 4 // out of cartesian product
 };
 
+//===--------------------------------------------------------------------===//
+// Join Types
+//===--------------------------------------------------------------------===//
 enum class JoinType {
 	INVALID = 0, // invalid join type
 	LEFT = 1,    // left
@@ -190,9 +196,93 @@ enum class JoinType {
 	SEMI = 5     // IN+Subquery is SEMI
 };
 
-enum class OrderType { INVALID = 0, ASCENDING = 1, DESCENDING = 2 };
+//===--------------------------------------------------------------------===//
+// ORDER BY Clause Types
+//===--------------------------------------------------------------------===//
+enum class OrderType {
+	INVALID = 0,
+	ASCENDING = 1,
+	DESCENDING = 2
+};
+
+//===--------------------------------------------------------------------===//
+// Logical Operator Types
+//===--------------------------------------------------------------------===//
+enum class LogicalOperatorType {
+	INVALID = 0,
+	LEAF = 1,
+	GET = 2,
+	EXTERNAL_FILE_GET = 3,
+	QUERY_DERIVED_GET = 4,
+	PROJECTION = 5,
+	FILTER = 6,
+	AGGREGATE_AND_GROUP_BY = 7,
+	DISTINCT = 8,
+	LIMIT = 9,
+	ORDER_BY = 10,
+	// -----------------------------
+	// Joins
+	// -----------------------------
+	MARK_JOIN = 100,
+	DEPENDENT_JOIN = 101,
+	SINGLE_JOIN = 102,
+	INNER_JOIN = 103,
+	LEFT_JOIN = 104,
+	RIGHT_JOIN = 105,
+	OUTER_JOIN = 106,
+	SEMI_JOIN = 107,
+	// -----------------------------
+	// Updates
+	// -----------------------------
+	INSERT = 200,
+	INSERT_SELECT = 201,
+	DELETE = 202,
+	UPDATE = 203,
+	EXPORT_EXTERNAL_FILE = 204
+};
+
+//===--------------------------------------------------------------------===//
+// Physical Operator Types
+//===--------------------------------------------------------------------===//
+enum class PhysicalOperatorType {
+	INVALID = 0,
+	LEAF = 1,
+	DUMMY_SCAN = 2,
+	SEQ_SCAN = 3,
+	INDEX_SCAN = 4,
+	EXTERNAL_FILE_SCAN = 5,
+	QUERY_DERIVED_SCAN = 6,
+	ORDER_BY = 7,
+	PHYSICAL_LIMIT = 8,
+	DISTINCT = 9,
+	AGGREGATE = 10,
+	HASH_GROUP_BY = 11,
+	SORT_GROUP_BY = 12,
+	// -----------------------------
+	// Joins
+	// -----------------------------
+	INNER_NL_JOIN = 100,
+	LEFT_NL_JOIN = 101,
+	RIGHT_NL_JOIN = 102,
+	OUTER_NL_JOIN = 103,
+	INNER_HASH_JOIN = 104,
+	LEFT_HASH_JOIN = 105,
+	RIGHT_HASH_JOIN = 106,
+	OUTER_HASH_JOIN = 107,
+	// -----------------------------
+	// Updates
+	// -----------------------------
+	INSERT = 200,
+	INSERT_SELECT = 201,
+	DELETE = 202,
+	UPDATE = 203,
+	EXPORT_EXTERNAL_FILE = 204
+};
 
 ExpressionType StringToExpressionType(const std::string &str);
 std::string TypeIdToString(TypeId type);
 TypeId StringToTypeId(const std::string &str);
+
+std::string LogicalOperatorToString(LogicalOperatorType type);
+
 }

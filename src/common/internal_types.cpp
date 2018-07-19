@@ -181,4 +181,35 @@ TypeId StringToTypeId(const std::string &str) {
 	}
 	return TypeId::INVALID;
 }
+
+std::string LogicalOperatorToString(LogicalOperatorType type) {
+	switch(type) {
+		case LogicalOperatorType::LEAF: return "LEAF";
+		case LogicalOperatorType::GET: return "GET";
+		case LogicalOperatorType::EXTERNAL_FILE_GET: return "EXTERNAL_FILE_GET";
+		case LogicalOperatorType::QUERY_DERIVED_GET: return "QUERY_DERIVED_GET";
+		case LogicalOperatorType::PROJECTION: return "PROJECTION";
+		case LogicalOperatorType::FILTER: return "FILTER";
+		case LogicalOperatorType::AGGREGATE_AND_GROUP_BY: return "AGGREGATE_AND_GROUP_BY";
+		case LogicalOperatorType::DISTINCT: return "DISTINCT";
+		case LogicalOperatorType::LIMIT: return "LIMIT";
+		case LogicalOperatorType::ORDER_BY: return "ORDER_BY";
+		case LogicalOperatorType::MARK_JOIN: return "MARK_JOIN";
+		case LogicalOperatorType::DEPENDENT_JOIN: return "DEPENDENT_JOIN";
+		case LogicalOperatorType::SINGLE_JOIN: return "SINGLE_JOIN";
+		case LogicalOperatorType::INNER_JOIN: return "INNER_JOIN";
+		case LogicalOperatorType::LEFT_JOIN: return "LEFT_JOIN";
+		case LogicalOperatorType::RIGHT_JOIN: return "RIGHT_JOIN";
+		case LogicalOperatorType::OUTER_JOIN: return "OUTER_JOIN";
+		case LogicalOperatorType::SEMI_JOIN: return "SEMI_JOIN";
+		case LogicalOperatorType::INSERT: return "INSERT";
+		case LogicalOperatorType::INSERT_SELECT: return "INSERT_SELECT";
+		case LogicalOperatorType::DELETE: return "DELETE";
+		case LogicalOperatorType::UPDATE: return "UPDATE";
+		case LogicalOperatorType::EXPORT_EXTERNAL_FILE: return "EXPORT_EXTERNAL_FILE";
+		default:
+			return "INVALID";
+	}
+}
+
 };

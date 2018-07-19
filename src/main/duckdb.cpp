@@ -60,7 +60,7 @@ DuckDBResult DuckDBConnection::Query(const char *query) {
 	// 	// for each of the statements, generate a physical query plan
 
 	// }
-	// now transform the parsed query into a physical query plan
+	// now logical query plan into a physical query plan
 
 	// finally execute the plan and return the result
 

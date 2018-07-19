@@ -31,6 +31,8 @@ class AbstractExpression : public Printable {
 		}
 	}
 
+	virtual bool IsAggregate();
+
 	ExpressionType GetExpressionType() { return type; }
 
 	ExpressionType type;

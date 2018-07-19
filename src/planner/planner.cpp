@@ -4,6 +4,9 @@
 #include "planner/binder.hpp"
 #include "planner/planner.hpp"
 
+#include "planner/logical/operators.hpp"
+#include "planner/logical/plangenerator.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -11,6 +14,11 @@ void Planner::CreatePlan(Catalog &catalog, SelectStatement &statement) {
 	// first bind the tables and columns to the catalog
 	Binder binder(catalog);
 	binder.Visit(statement);
+
+	// now create a logical query plan from the query
+	LogicalPlanGenerator logical_planner(catalog);
+	logical_planner.Visit(statement);
+	logical_planner.Print();
 }
 
 bool Planner::CreatePlan(Catalog &catalog, unique_ptr<SQLStatement> statement) {

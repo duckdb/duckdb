@@ -50,6 +50,7 @@ class SelectStatement : public SQLStatement {
 	bool HasGroup() { return groupby.groups.size() > 0; }
 	bool HasHaving() { return groupby.having.get(); }
 	bool HasOrder() { return orderby.orders.size() > 0; }
+	bool HasAggregation();
 
 	std::unique_ptr<SelectStatement> union_select;
 };
