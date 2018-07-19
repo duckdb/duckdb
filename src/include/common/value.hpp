@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include <memory.h>
+
 #include "common/internal_types.hpp"
 #include "common/printable.hpp"
 

@@ -5,9 +5,8 @@
 using namespace duckdb;
 using namespace std;
 
-TableCatalogEntry::TableCatalogEntry(string name,
-                                     shared_ptr<AbstractCatalogEntry> parent)
-    : AbstractCatalogEntry(name, parent), size(0) {}
+TableCatalogEntry::TableCatalogEntry(string name)
+    : AbstractCatalogEntry(name), size(0) {}
 
 void TableCatalogEntry::AddColumn(ColumnCatalogEntry entry) {
 	if (ColumnExists(entry.name)) {
@@ -15,7 +14,7 @@ void TableCatalogEntry::AddColumn(ColumnCatalogEntry entry) {
 		                       entry.name.c_str());
 	}
 	columns[entry.name] =
-	    make_shared<ColumnCatalogEntry>(entry, shared_from_this());
+	    make_shared<ColumnCatalogEntry>(entry);
 }
 
 bool TableCatalogEntry::ColumnExists(const string &name) {

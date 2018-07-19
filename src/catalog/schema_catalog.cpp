@@ -5,9 +5,9 @@
 using namespace duckdb;
 using namespace std;
 
-SchemaCatalogEntry::SchemaCatalogEntry(string name,
-                                       shared_ptr<AbstractCatalogEntry> parent)
-    : AbstractCatalogEntry(name, parent) {}
+
+SchemaCatalogEntry::SchemaCatalogEntry(string name)
+    : AbstractCatalogEntry(name) {}
 
 void SchemaCatalogEntry::CreateTable(
     const string &table_name, const std::vector<ColumnCatalogEntry> &columns) {
@@ -15,7 +15,7 @@ void SchemaCatalogEntry::CreateTable(
 		throw CatalogException("Table with name %s already exists!",
 		                       table_name.c_str());
 	}
-	auto table = make_shared<TableCatalogEntry>(table_name, shared_from_this());
+	auto table = make_shared<TableCatalogEntry>(table_name);
 	for (auto &column : columns) {
 		table->AddColumn(column);
 	}

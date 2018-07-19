@@ -15,7 +15,7 @@ void Catalog::CreateSchema(const string &schema_name) {
 		                       schema_name.c_str());
 	}
 	schemas[schema_name] =
-	    make_shared<SchemaCatalogEntry>(schema_name, nullptr);
+	    make_shared<SchemaCatalogEntry>(schema_name);
 }
 
 void Catalog::CreateTable(const string &schema_name, const string &table_name,

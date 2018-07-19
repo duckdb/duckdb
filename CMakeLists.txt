@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 2.8.7)
 project(DuckDB)
 
+
+find_package(Threads REQUIRED)
+
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_VERBOSE_MAKEFILE on)
 

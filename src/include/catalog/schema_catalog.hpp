@@ -13,8 +13,7 @@ class Catalog;
 
 class SchemaCatalogEntry : public AbstractCatalogEntry {
   public:
-	SchemaCatalogEntry(std::string name,
-	                   std::shared_ptr<AbstractCatalogEntry> parent);
+	SchemaCatalogEntry(std::string name);
 
 	void CreateTable(const std::string &table_name,
 	                 const std::vector<ColumnCatalogEntry> &columns);
