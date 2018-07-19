@@ -17,8 +17,8 @@ class TableCatalogEntry : public AbstractCatalogEntry {
 	TableCatalogEntry(std::string name);
 
 	uint64_t size;
-	std::unordered_map<std::string, std::shared_ptr<ColumnCatalogEntry>>
-	    columns;
+	std::vector<std::shared_ptr<ColumnCatalogEntry>> columns;
+	std::unordered_map<std::string, size_t> name_map;
 
 	void AddColumn(ColumnCatalogEntry entry);
 	bool ColumnExists(const std::string &name);

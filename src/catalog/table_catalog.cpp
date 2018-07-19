@@ -13,10 +13,10 @@ void TableCatalogEntry::AddColumn(ColumnCatalogEntry entry) {
 		throw CatalogException("Column with name %s already exists!",
 		                       entry.name.c_str());
 	}
-	columns[entry.name] =
-	    make_shared<ColumnCatalogEntry>(entry);
+	name_map[entry.name] = columns.size();
+	columns.push_back(make_shared<ColumnCatalogEntry>(entry));
 }
 
 bool TableCatalogEntry::ColumnExists(const string &name) {
-	return columns.find(name) != columns.end();
+	return name_map.find(name) != name_map.end();
 }

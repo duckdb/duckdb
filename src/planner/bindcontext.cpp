@@ -63,8 +63,7 @@ void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<AbstractExpress
 	for (auto &kv : regular_table_alias_map) {
 		auto table = kv.second;
 		string table_name = table->name;
-		for(auto &kv2 : table->columns) {
-			auto column = kv2.second;
+		for(auto& column : table->columns) {
 			string column_name = column->name;
 			new_select_list.push_back(make_unique<ColumnRefExpression>(column_name, table_name));
 		}
