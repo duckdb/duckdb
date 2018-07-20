@@ -7,13 +7,16 @@
 
 namespace duckdb {
 
+class Catalog;
+
 class AbstractCatalogEntry
     : public Printable {
   public:
-	AbstractCatalogEntry(std::string name) : name(name) {}
+	AbstractCatalogEntry(Catalog* catalog, std::string name) : catalog(catalog), name(name) {}
 
 	virtual ~AbstractCatalogEntry() {}
 
+	Catalog* catalog;
 	std::string name;
 };
 }

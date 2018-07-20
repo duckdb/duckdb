@@ -14,6 +14,8 @@ namespace duckdb {
 
 #define DEFAULT_SCHEMA ""
 
+class StorageManager;
+
 class Catalog : public AbstractCatalogEntry {
   public:
 	Catalog();
@@ -33,6 +35,8 @@ class Catalog : public AbstractCatalogEntry {
 
 	std::unordered_map<std::string, std::shared_ptr<SchemaCatalogEntry>>
 	    schemas;
+
+   std::unique_ptr<StorageManager> storage_manager;
 
 	virtual std::string ToString() const { return std::string(); }
 };

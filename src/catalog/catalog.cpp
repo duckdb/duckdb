@@ -2,10 +2,12 @@
 #include "catalog/catalog.hpp"
 #include "common/exception.hpp"
 
+#include "storage/storage_manager.hpp"
+
 using namespace duckdb;
 using namespace std;
 
-Catalog::Catalog() : AbstractCatalogEntry("catalog") {}
+Catalog::Catalog() : AbstractCatalogEntry(nullptr, "catalog"), storage_manager(make_unique<StorageManager>()) {}
 
 Catalog::~Catalog() {}
 
@@ -15,7 +17,7 @@ void Catalog::CreateSchema(const string &schema_name) {
 		                       schema_name.c_str());
 	}
 	schemas[schema_name] =
-	    make_shared<SchemaCatalogEntry>(schema_name);
+	    make_shared<SchemaCatalogEntry>(this, schema_name);
 }
 
 void Catalog::CreateTable(const string &schema_name, const string &table_name,
@@ -25,7 +27,9 @@ void Catalog::CreateTable(const string &schema_name, const string &table_name,
 		                       schema_name.c_str());
 	}
 	auto schema = GetSchema(schema_name);
-	schema->CreateTable(table_name, columns);
+	size_t oid = storage_manager->CreateTable();
+	schema->CreateTable(table_name, columns, oid);
+
 }
 
 bool Catalog::SchemaExists(const string &name) {

@@ -253,11 +253,12 @@ enum class PhysicalOperatorType {
 	EXTERNAL_FILE_SCAN = 5,
 	QUERY_DERIVED_SCAN = 6,
 	ORDER_BY = 7,
-	PHYSICAL_LIMIT = 8,
+	LIMIT = 8,
 	DISTINCT = 9,
 	AGGREGATE = 10,
 	HASH_GROUP_BY = 11,
 	SORT_GROUP_BY = 12,
+	FILTER = 13,
 	// -----------------------------
 	// Joins
 	// -----------------------------
@@ -280,9 +281,12 @@ enum class PhysicalOperatorType {
 };
 
 ExpressionType StringToExpressionType(const std::string &str);
+
 std::string TypeIdToString(TypeId type);
 TypeId StringToTypeId(const std::string &str);
+size_t GetTypeIdSize(TypeId type);
 
 std::string LogicalOperatorToString(LogicalOperatorType type);
+std::string PhysicalOperatorToString(PhysicalOperatorType type);
 
 }

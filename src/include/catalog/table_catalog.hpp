@@ -14,16 +14,14 @@ class SchemaCatalogEntry;
 
 class TableCatalogEntry : public AbstractCatalogEntry {
   public:
-	TableCatalogEntry(std::string name);
+	TableCatalogEntry(Catalog* catalog, std::string name, size_t oid);
 
-	uint64_t size;
+	size_t oid;
 	std::vector<std::shared_ptr<ColumnCatalogEntry>> columns;
 	std::unordered_map<std::string, size_t> name_map;
 
 	void AddColumn(ColumnCatalogEntry entry);
 	bool ColumnExists(const std::string &name);
-
-	std::weak_ptr<SchemaCatalogEntry> parent;
 
 	virtual std::string ToString() const { return std::string(); }
 };

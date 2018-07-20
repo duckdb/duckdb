@@ -16,6 +16,7 @@ class ColumnCatalogEntry : public AbstractCatalogEntry {
 	                   Value default_value);
 	ColumnCatalogEntry(const ColumnCatalogEntry &base);
 
+	size_t oid;
 	TypeId type;
 	bool is_not_null;
 	bool has_default;

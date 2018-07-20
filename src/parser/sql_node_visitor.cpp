@@ -1,5 +1,5 @@
 
-#include "common/sql_node_visitor.hpp"
+#include "parser/sql_node_visitor.hpp"
 
 #include "parser/expression/aggregate_expression.hpp"
 #include "parser/expression/basetableref_expression.hpp"

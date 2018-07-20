@@ -6,7 +6,8 @@
 
 #include "common/internal_types.hpp"
 #include "common/printable.hpp"
-#include "common/sql_node_visitor.hpp"
+
+#include "parser/sql_node_visitor.hpp"
 
 namespace duckdb {
 class AbstractExpression : public Printable {

@@ -3,6 +3,8 @@
 
 #include <string>
 
+#include "common/helper.hpp"
+
 namespace duckdb {
 class Printable {
   public:

@@ -4,9 +4,10 @@
 #include <string>
 #include <vector>
 
-#include "common/sql_node_visitor.hpp"
 
 #include "catalog/catalog.hpp"
+
+#include "parser/sql_node_visitor.hpp"
 #include "parser/statement/sql_statement.hpp"
 
 #include "planner/bindcontext.hpp"

@@ -2,10 +2,12 @@
 #include "common/internal_types.hpp"
 #include "common/string_util.hpp"
 
+using namespace std;
+
 namespace duckdb {
 
-ExpressionType StringToExpressionType(const std::string &str) {
-	std::string upper_str = StringUtil::Upper(str);
+ExpressionType StringToExpressionType(const string &str) {
+	string upper_str = StringUtil::Upper(str);
 	if (upper_str == "INVALID") {
 		return ExpressionType::INVALID;
 	} else if (upper_str == "OPERATOR_PLUS" || upper_str == "+") {
@@ -114,7 +116,7 @@ ExpressionType StringToExpressionType(const std::string &str) {
 // Value <--> String Utilities
 //===--------------------------------------------------------------------===//
 
-std::string TypeIdToString(TypeId type) {
+string TypeIdToString(TypeId type) {
 	switch (type) {
 	case TypeId::INVALID:
 		return "INVALID";
@@ -148,8 +150,8 @@ std::string TypeIdToString(TypeId type) {
 	return "INVALID";
 }
 
-TypeId StringToTypeId(const std::string &str) {
-	std::string upper_str = StringUtil::Upper(str);
+TypeId StringToTypeId(const string &str) {
+	string upper_str = StringUtil::Upper(str);
 	if (upper_str == "INVALID") {
 		return TypeId::INVALID;
 	} else if (upper_str == "PARAMETER_OFFSET") {
@@ -182,7 +184,41 @@ TypeId StringToTypeId(const std::string &str) {
 	return TypeId::INVALID;
 }
 
-std::string LogicalOperatorToString(LogicalOperatorType type) {
+
+size_t GetTypeIdSize(TypeId type) {
+	switch (type) {
+	case TypeId::PARAMETER_OFFSET:
+		return sizeof(uint64_t);
+	case TypeId::BOOLEAN:
+		return sizeof(bool);
+	case TypeId::TINYINT:
+		return sizeof(int8_t);
+	case TypeId::SMALLINT:
+		return sizeof(int16_t);
+	case TypeId::INTEGER:
+		return sizeof(int32_t);
+	case TypeId::BIGINT:
+		return sizeof(int64_t);
+	case TypeId::DECIMAL:
+		return sizeof(double);
+	case TypeId::TIMESTAMP:
+		return sizeof(int64_t);
+	case TypeId::DATE:
+		return sizeof(int32_t);
+	case TypeId::VARCHAR:
+		return sizeof(void*);
+	case TypeId::VARBINARY:
+		return sizeof(void*);
+	case TypeId::ARRAY:
+		return sizeof(void*);
+	case TypeId::UDT:
+		return sizeof(void*);
+	default:
+		return (size_t) -1;
+	}
+}
+
+string LogicalOperatorToString(LogicalOperatorType type) {
 	switch(type) {
 		case LogicalOperatorType::LEAF: return "LEAF";
 		case LogicalOperatorType::GET: return "GET";
@@ -207,6 +243,39 @@ std::string LogicalOperatorToString(LogicalOperatorType type) {
 		case LogicalOperatorType::DELETE: return "DELETE";
 		case LogicalOperatorType::UPDATE: return "UPDATE";
 		case LogicalOperatorType::EXPORT_EXTERNAL_FILE: return "EXPORT_EXTERNAL_FILE";
+		default:
+			return "INVALID";
+	}
+}
+
+string PhysicalOperatorToString(PhysicalOperatorType type) {
+	switch(type) {
+		case PhysicalOperatorType::LEAF: return "LEAF";
+		case PhysicalOperatorType::DUMMY_SCAN: return "DUMMY_SCAN";
+		case PhysicalOperatorType::SEQ_SCAN: return "SEQ_SCAN";
+		case PhysicalOperatorType::INDEX_SCAN: return "INDEX_SCAN";
+		case PhysicalOperatorType::EXTERNAL_FILE_SCAN: return "EXTERNAL_FILE_SCAN";
+		case PhysicalOperatorType::QUERY_DERIVED_SCAN: return "QUERY_DERIVED_SCAN";
+		case PhysicalOperatorType::ORDER_BY: return "ORDER_BY";
+		case PhysicalOperatorType::LIMIT: return "LIMIT";
+		case PhysicalOperatorType::DISTINCT: return "DISTINCT";
+		case PhysicalOperatorType::AGGREGATE: return "AGGREGATE";
+		case PhysicalOperatorType::HASH_GROUP_BY: return "HASH_GROUP_BY";
+		case PhysicalOperatorType::SORT_GROUP_BY: return "SORT_GROUP_BY";
+		case PhysicalOperatorType::FILTER: return "FILTER";
+		case PhysicalOperatorType::INNER_NL_JOIN: return "INNER_NL_JOIN";
+		case PhysicalOperatorType::LEFT_NL_JOIN: return "LEFT_NL_JOIN";
+		case PhysicalOperatorType::RIGHT_NL_JOIN: return "RIGHT_NL_JOIN";
+		case PhysicalOperatorType::OUTER_NL_JOIN: return "OUTER_NL_JOIN";
+		case PhysicalOperatorType::INNER_HASH_JOIN: return "INNER_HASH_JOIN";
+		case PhysicalOperatorType::LEFT_HASH_JOIN: return "LEFT_HASH_JOIN";
+		case PhysicalOperatorType::RIGHT_HASH_JOIN: return "RIGHT_HASH_JOIN";
+		case PhysicalOperatorType::OUTER_HASH_JOIN: return "OUTER_HASH_JOIN";
+		case PhysicalOperatorType::INSERT: return "INSERT";
+		case PhysicalOperatorType::INSERT_SELECT: return "INSERT_SELECT";
+		case PhysicalOperatorType::DELETE: return "DELETE";
+		case PhysicalOperatorType::UPDATE: return "UPDATE";
+		case PhysicalOperatorType::EXPORT_EXTERNAL_FILE: return "EXPORT_EXTERNAL_FILE";
 		default:
 			return "INVALID";
 	}

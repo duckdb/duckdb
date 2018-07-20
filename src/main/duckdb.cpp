@@ -1,6 +1,7 @@
 
 #include "duckdb.hpp"
 
+#include "execution/physicalplangenerator.hpp"
 #include "parser/parser.hpp"
 #include "planner/planner.hpp"
 
@@ -56,11 +57,19 @@ DuckDBResult DuckDBConnection::Query(const char *query) {
 		return DuckDBResult(planner.GetErrorMessage());
 	}
 
-	// for(auto& statement : parser.statements) {
-	// 	// for each of the statements, generate a physical query plan
+	// FIXME: optimize logical plan
 
-	// }
-	// now logical query plan into a physical query plan
+	PhysicalPlanGenerator physical_planner(database.catalog);
+	if (!physical_planner.CreatePlan(move(planner.plan))) {
+		fprintf(stderr, "Failed to create physical plan: %s\n",
+		        physical_planner.GetErrorMessage().c_str());
+		return DuckDBResult(physical_planner.GetErrorMessage());
+	}
+
+
+	// now convert logical query plan into a physical query plan
+
+
 
 	// finally execute the plan and return the result
 

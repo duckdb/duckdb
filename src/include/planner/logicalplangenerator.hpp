@@ -5,9 +5,10 @@
 
 #include "common/internal_types.hpp"
 #include "common/printable.hpp"
-#include "common/sql_node_visitor.hpp"
 
-#include "planner/logical/operators.hpp"
+#include "parser/sql_node_visitor.hpp"
+
+#include "planner/logicaloperator.hpp"
 
 namespace duckdb {
 class LogicalPlanGenerator : public SQLNodeVisitor {
@@ -23,9 +24,9 @@ class LogicalPlanGenerator : public SQLNodeVisitor {
 	void Print() {
 		root->Print();
 	}
-  private:
-	Catalog &catalog;
 	
 	std::unique_ptr<LogicalOperator> root;
+  private:
+	Catalog &catalog;
 };
 }

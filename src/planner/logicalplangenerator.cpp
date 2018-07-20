@@ -3,7 +3,15 @@
 #include "parser/expression/join_expression.hpp"
 #include "parser/expression/subquery_expression.hpp"
 
-#include "planner/logical/plangenerator.hpp"
+#include "planner/logicalplangenerator.hpp"
+
+#include "planner/logicalaggregate.hpp"
+#include "planner/logicaldistinct.hpp"
+#include "planner/logicalfilter.hpp"
+#include "planner/logicalget.hpp"
+#include "planner/logicallimit.hpp"
+#include "planner/logicaloperator.hpp"
+#include "planner/logicalorder.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -26,7 +34,7 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 	}
 
 	if (statement.HasAggregation()) {
-		auto aggregate = make_unique<LogicalAggregateAndGroupBy>();
+		auto aggregate = make_unique<LogicalAggregate>();
 		if (statement.HasGroup()) {
 			// have to add group by columns
 			aggregate->groups = move(statement.groupby.groups);

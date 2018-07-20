@@ -7,6 +7,8 @@
 #include "catalog/catalog.hpp"
 #include "parser/statement/sql_statement.hpp"
 
+#include "planner/logicaloperator.hpp"
+
 namespace duckdb {
 
 class Planner {
@@ -19,6 +21,8 @@ class Planner {
 	bool success;
 	std::string message;
 
+	std::unique_ptr<LogicalOperator> plan;
+	
   private:
 	void CreatePlan(Catalog &, SelectStatement &statement);
 };
