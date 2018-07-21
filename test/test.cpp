@@ -19,25 +19,30 @@ int main() {
 		return 1;
 	}
 
-	if (duckdb_query(connection, "SELECT 42 AS r, 'hello';", &result) != DuckDBSuccess) {
-		fprintf(stderr, "Database query failed!\n");
+	if (duckdb_query(connection, "SELECT 42;", &result) != DuckDBSuccess) {
 		return 1;
 	}
 
-	if (duckdb_query(connection, "SELECT * FROM lineitem;", &result) != DuckDBSuccess) {
-		fprintf(stderr, "Database query failed!\n");
+	if (duckdb_query(connection, "SELECT 42 + 1;", &result) != DuckDBSuccess) {
 		return 1;
 	}
 
-	if (duckdb_query(connection, "SELECT l_orderkey, l_orderkey + 1 FROM lineitem;", &result) != DuckDBSuccess) {
-		fprintf(stderr, "Database query failed!\n");
+	if (duckdb_query(connection, "SELECT 2 * (42 + 1);", &result) != DuckDBSuccess) {
 		return 1;
 	}
 
-	// TPC-H Query 1
-	if (duckdb_query(connection, "select l_returnflag, l_linestatus, sum(l_quantity) as sum_qty, sum(l_extendedprice) as sum_base_price, sum(l_extendedprice * (1 - l_discount)) as sum_disc_price, sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge, avg(l_quantity) as avg_qty, avg(l_extendedprice) as avg_price, avg(l_discount) as avg_disc, count(*) as count_order from lineitem where l_shipdate <= '1998-09-02' group by l_returnflag, l_linestatus order by l_returnflag, l_linestatus;", &result) != DuckDBSuccess) {
-		return 1;
-	}
+	// if (duckdb_query(connection, "SELECT * FROM lineitem;", &result) != DuckDBSuccess) {
+	// 	return 1;
+	// }
+
+	// if (duckdb_query(connection, "SELECT l_orderkey, l_orderkey + 1 FROM lineitem;", &result) != DuckDBSuccess) {
+	// 	return 1;
+	// }
+
+	// // TPC-H Query 1
+	// if (duckdb_query(connection, "select l_returnflag, l_linestatus, sum(l_quantity) as sum_qty, sum(l_extendedprice) as sum_base_price, sum(l_extendedprice * (1 - l_discount)) as sum_disc_price, sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge, avg(l_quantity) as avg_qty, avg(l_extendedprice) as avg_price, avg(l_discount) as avg_disc, count(*) as count_order from lineitem where l_shipdate <= '1998-09-02' group by l_returnflag, l_linestatus order by l_returnflag, l_linestatus;", &result) != DuckDBSuccess) {
+	// 	return 1;
+	// }
 
 	// TPC-H Query 2
 	// if (duckdb_query(connection, "select s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment from part, supplier, partsupp, nation, region where p_partkey = ps_partkey and s_suppkey = ps_suppkey and p_size = 15 and p_type like '%BRASS' and s_nationkey = n_nationkey and n_regionkey = r_regionkey and r_name = 'EUROPE' and ps_supplycost = ( select min(ps_supplycost) from partsupp, supplier, nation, region where p_partkey = ps_partkey and s_suppkey = ps_suppkey and s_nationkey = n_nationkey and n_regionkey = r_regionkey and r_name = 'EUROPE' ) order by s_acctbal desc, n_name, s_name, p_partkey limit 100;", &result) != DuckDBSuccess) {
