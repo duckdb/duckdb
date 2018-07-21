@@ -36,10 +36,12 @@ duckdb_state duckdb_disconnect(duckdb_connection connection) {
 duckdb_state duckdb_query(duckdb_connection connection, const char *query,
                           duckdb_result *out) {
 	DuckDBConnection *conn = (DuckDBConnection *)connection;
-	DuckDBResult result = conn->Query(query);
-	if (!result.GetSuccess()) {
+	auto result = conn->Query(query);
+	if (!result->GetSuccess()) {
+		result->Print();
 		return DuckDBError;
 	}
+	result->Print();
 	*out = nullptr;
 	return DuckDBSuccess;
 }

@@ -22,6 +22,7 @@ class TableCatalogEntry : public AbstractCatalogEntry {
 
 	void AddColumn(ColumnCatalogEntry entry);
 	bool ColumnExists(const std::string &name);
+	std::shared_ptr<ColumnCatalogEntry> GetColumn(const std::string &name);
 
 	virtual std::string ToString() const { return std::string(); }
 };

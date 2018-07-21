@@ -33,6 +33,12 @@ class AbstractExpression : public Printable {
 		}
 	}
 
+	virtual void ResolveType() {
+		for(auto& child : children) {
+			child->ResolveType();
+		}
+	}
+
 	virtual bool IsAggregate();
 
 	ExpressionType GetExpressionType() { return type; }

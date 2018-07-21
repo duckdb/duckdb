@@ -30,3 +30,11 @@ void TableCatalogEntry::AddColumn(ColumnCatalogEntry entry) {
 bool TableCatalogEntry::ColumnExists(const string &name) {
 	return name_map.find(name) != name_map.end();
 }
+
+shared_ptr<ColumnCatalogEntry> TableCatalogEntry::GetColumn(const std::string &name) {
+	if (!ColumnExists(name)) {
+		throw CatalogException("Column with name %s does not exist!",
+		                       name.c_str());
+	}
+	return columns[name_map[name]];
+}

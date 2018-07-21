@@ -7,7 +7,8 @@
 #include "catalog/catalog.hpp"
 #include "parser/statement/sql_statement.hpp"
 
-#include "planner/logicaloperator.hpp"
+#include "planner/bindcontext.hpp"
+#include "planner/logical_operator.hpp"
 
 namespace duckdb {
 
@@ -21,6 +22,7 @@ class Planner {
 	bool success;
 	std::string message;
 
+	std::unique_ptr<BindContext> context;
 	std::unique_ptr<LogicalOperator> plan;
 	
   private:

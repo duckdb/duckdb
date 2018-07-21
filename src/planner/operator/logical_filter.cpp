@@ -1,5 +1,5 @@
 
-#include "planner/logicalfilter.hpp"
+#include "planner/operator/logical_filter.hpp"
 
 using namespace duckdb;
 using namespace std;

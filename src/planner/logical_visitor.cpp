@@ -1,13 +1,13 @@
 
 #include "planner/logical_visitor.hpp"
 
-#include "planner/logicalaggregate.hpp"
-#include "planner/logicaldistinct.hpp"
-#include "planner/logicalfilter.hpp"
-#include "planner/logicalget.hpp"
-#include "planner/logicallimit.hpp"
-#include "planner/logicaloperator.hpp"
-#include "planner/logicalorder.hpp"
+#include "planner/operator/logical_aggregate.hpp"
+#include "planner/operator/logical_distinct.hpp"
+#include "planner/operator/logical_filter.hpp"
+#include "planner/operator/logical_get.hpp"
+#include "planner/operator/logical_limit.hpp"
+#include "planner/operator/logical_order.hpp"
+#include "planner/operator/logical_projection.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -28,5 +28,8 @@ void LogicalOperatorVisitor::Visit(LogicalLimit& op) {
 	op.AcceptChildren(this);
 }
 void LogicalOperatorVisitor::Visit(LogicalOrder& op) {
+	op.AcceptChildren(this);
+}
+void LogicalOperatorVisitor::Visit(LogicalProjection& op) {
 	op.AcceptChildren(this);
 }

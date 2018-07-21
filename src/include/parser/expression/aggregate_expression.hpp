@@ -42,6 +42,27 @@ class AggregateExpression : public AbstractExpression {
 		}
 	}
 
+	virtual void ResolveType() override {
+		AbstractExpression::ResolveType();
+	    switch (type) {
+	      // if count return an integer
+	      case ExpressionType::AGGREGATE_COUNT:
+	      case ExpressionType::AGGREGATE_COUNT_STAR:
+	        return_type = TypeId::INTEGER;
+	        break;
+	      // return the type of the base
+	      case ExpressionType::AGGREGATE_MAX:
+	      case ExpressionType::AGGREGATE_MIN:
+	      case ExpressionType::AGGREGATE_SUM:
+	        return_type = children[0]->return_type;
+	        break;
+	      case ExpressionType::AGGREGATE_AVG:
+	        return_type = TypeId::DECIMAL;
+	        break;
+	      default:
+	        break;
+	    }
+	}
 
 	virtual bool IsAggregate() override { return true; }
 

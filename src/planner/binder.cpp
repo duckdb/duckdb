@@ -12,7 +12,7 @@ using namespace duckdb;
 using namespace std;
 
 void Binder::Visit(SelectStatement &statement) {
-	context = make_shared<BindContext>();
+	context = make_unique<BindContext>();
 	// first we visit the FROM statement
 	// here we determine from where we can retrieve our columns (from which
 	// tables/subqueries)
@@ -45,6 +45,12 @@ void Binder::Visit(SelectStatement &statement) {
 		}
 		// regular statement, visit it and add it to the list
 		select_element->Accept(this);
+		select_element->ResolveType();
+
+		if (select_element->return_type == TypeId::INVALID) {
+			throw BinderException("Could not resolve type of projection element!");
+		}
+
 		new_select_list.push_back(move(select_element));
 	}
 	statement.select_list = move(new_select_list);
@@ -63,7 +69,8 @@ void Binder::Visit(ColumnRefExpression &expr) {
 		// no table name: find a table or subquery that contains this
 		expr.table_name = context->GetMatchingTable(expr.column_name);
 	}
-	context->BindColumn(expr.table_name, expr.column_name);
+	auto column = context->BindColumn(expr.table_name, expr.column_name);
+	expr.return_type = column->type;
 }
 
 void Binder::Visit(JoinExpression &expr) {

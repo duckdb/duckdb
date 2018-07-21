@@ -1,6 +1,7 @@
 
 #include "duckdb.hpp"
 
+#include "execution/executor.hpp"
 #include "execution/physicalplangenerator.hpp"
 #include "parser/parser.hpp"
 #include "planner/planner.hpp"
@@ -41,41 +42,56 @@ DuckDB::DuckDB(const char *path) {
 
 DuckDBConnection::DuckDBConnection(DuckDB &database) : database(database) {}
 
-DuckDBResult DuckDBConnection::Query(const char *query) {
+unique_ptr<DuckDBResult> DuckDBConnection::Query(const char *query) {
 	// parse the query and transform it into a set of statements
 	Parser parser;
 	if (!parser.ParseQuery(query)) {
 		fprintf(stderr, "Failure to parse: %s\n",
 		        parser.GetErrorMessage().c_str());
-		return DuckDBResult(parser.GetErrorMessage());
+		return make_unique<DuckDBResult>(parser.GetErrorMessage());
 	}
 
 	Planner planner;
 	if (!planner.CreatePlan(database.catalog, move(parser.statements.back()))) {
 		fprintf(stderr, "Failed to create plan: %s\n",
 		        planner.GetErrorMessage().c_str());
-		return DuckDBResult(planner.GetErrorMessage());
+		return make_unique<DuckDBResult>(planner.GetErrorMessage());
 	}
 
 	// FIXME: optimize logical plan
 
+	// now convert logical query plan into a physical query plan
 	PhysicalPlanGenerator physical_planner(database.catalog);
-	if (!physical_planner.CreatePlan(move(planner.plan))) {
+	if (!physical_planner.CreatePlan(move(planner.plan), move(planner.context))) {
 		fprintf(stderr, "Failed to create physical plan: %s\n",
 		        physical_planner.GetErrorMessage().c_str());
-		return DuckDBResult(physical_planner.GetErrorMessage());
+		return make_unique<DuckDBResult>(physical_planner.GetErrorMessage());
 	}
 
-
-	// now convert logical query plan into a physical query plan
-
-
-
 	// finally execute the plan and return the result
-
-	return DuckDBResult();
+	Executor executor;
+	return move(executor.Execute(move(physical_planner.plan)));
 }
 
 DuckDBResult::DuckDBResult() : success(true) {}
 
 DuckDBResult::DuckDBResult(std::string error) : success(false), error(error) {}
+
+void DuckDBResult::Print() {
+	if (success) {
+		for(size_t i = 0; i < data.colcount; i++) {
+			auto& vector = data.data[i];
+			printf("%s\t", TypeIdToString(vector->type).c_str());
+		}
+		printf(" [ %d ]\n", (int)data.count);
+		for(size_t i = 0; i < data.count; i++) {
+			for(size_t i = 0; i < data.colcount; i++) {
+				auto& vector = data.data[i];
+				printf("%s\t", vector->GetValue(i).ToString().c_str());
+			}
+			printf("\n");
+		}
+	} else {
+		printf("Query Error: %s\n", error.c_str());
+	}
+}

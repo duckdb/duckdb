@@ -1,4 +1,8 @@
 
+// The binder is responsible for binding tables and columns
+// to actual physical tables and columns in the catalog
+// In the process, it also resolves types of all expressions
+
 #pragma once
 
 #include <string>
@@ -25,9 +29,9 @@ class Binder : public SQLNodeVisitor {
 	void Visit(JoinExpression &expr);
 	void Visit(SubqueryExpression &expr);
 
-  private:
-	std::shared_ptr<BindContext> context;
+	std::unique_ptr<BindContext> context;
 
+  private:
 	Catalog &catalog;
 };
 }

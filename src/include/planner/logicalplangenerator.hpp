@@ -8,7 +8,7 @@
 
 #include "parser/sql_node_visitor.hpp"
 
-#include "planner/logicaloperator.hpp"
+#include "planner/logical_operator.hpp"
 
 namespace duckdb {
 class LogicalPlanGenerator : public SQLNodeVisitor {

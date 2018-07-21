@@ -2,20 +2,17 @@
 #include "execution/datachunk.hpp"
 
 #include "common/exception.hpp"
+#include "common/helper.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-DataChunk::DataChunk() : data(nullptr) { }
+DataChunk::DataChunk() : count(0), data(nullptr) { }
 
 
 DataChunk::~DataChunk() {
 	if (data) {
-		for(size_t i = 0; i < colcount; i++) {
-			free(data[i]);
-		}
-		free(data);
-		data = nullptr;
+		delete [] data;
 	}
 }
 
@@ -24,20 +21,36 @@ void DataChunk::Initialize(std::vector<TypeId>& types, size_t maximum_chunk_size
 	maximum_size = maximum_chunk_size;
 	count = 0;
 	colcount = types.size();
-	data = (void**) malloc(colcount * sizeof(void*));
-	if (!data) {
-		throw NullPointerException("malloc failure!");
-	}
-	size_t i = 0;
-	for(TypeId& id : types) {
-		data[i] = malloc(GetTypeIdSize(id) * maximum_size);
-		if (!data[i]) {
-			throw NullPointerException("malloc failure!");
-		}
-		i++;
+	data = new unique_ptr<Vector>[types.size()];
+	for(size_t i = 0; i < types.size(); i++) {
+		data[i] = make_unique<Vector>(types[i], maximum_size);
 	}
 }
 
 void DataChunk::Reset() {
 	count = 0;
+}
+
+void DataChunk::Clear() {
+	if (data) {
+		delete [] data;
+	}
+	data = nullptr;
+	colcount = 0;
+	count = 0;
+	maximum_size = 0;
+}
+
+void DataChunk::Append(DataChunk& other) {
+	if (count + other.count > maximum_size) {
+		// resize
+		maximum_size = maximum_size * 2;
+		for(size_t i = 0; i < colcount; i++) {
+			data[i]->Resize(maximum_size);
+		}
+	}
+	for(size_t i = 0; i < colcount; i++) {
+		data[i]->Append(*other.data[i].get());
+	}
+	count += other.count;
 }

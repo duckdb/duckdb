@@ -1,7 +1,7 @@
 
 #pragma once
 
-#include "planner/logicaloperator.hpp"
+#include "planner/logical_operator.hpp"
 
 namespace duckdb {
 

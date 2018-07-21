@@ -1,7 +1,7 @@
 
 #pragma once
 
-#include "execution/physicaloperator.hpp"
+#include "execution/physical_operator.hpp"
 
 #include "storage/data_table.hpp"
 
@@ -14,6 +14,7 @@ class PhysicalSeqScan : public PhysicalOperator {
 	DataTable* table;
 	std::vector<size_t> column_ids;
 
+	virtual void InitializeChunk(DataChunk& chunk) override;
 	virtual void GetChunk(DataChunk& chunk, PhysicalOperatorState* state) override;
 
 	virtual std::unique_ptr<PhysicalOperatorState> GetOperatorState() override;
@@ -21,7 +22,8 @@ class PhysicalSeqScan : public PhysicalOperator {
 
 class PhysicalSeqScanOperatorState : public PhysicalOperatorState {
   public:
-  	PhysicalSeqScanOperatorState(size_t current_offset) : current_offset(current_offset) { }
+  	PhysicalSeqScanOperatorState(size_t current_offset) : 
+  		PhysicalOperatorState(nullptr), current_offset(current_offset) { }
 
   	size_t current_offset;
 };

@@ -4,6 +4,9 @@
 #include <string>
 
 namespace duckdb {
+
+typedef size_t oid_t;
+
 //===--------------------------------------------------------------------===//
 // SQL Value Types
 //===--------------------------------------------------------------------===//
@@ -259,6 +262,7 @@ enum class PhysicalOperatorType {
 	HASH_GROUP_BY = 11,
 	SORT_GROUP_BY = 12,
 	FILTER = 13,
+	PROJECTION = 14,
 	// -----------------------------
 	// Joins
 	// -----------------------------

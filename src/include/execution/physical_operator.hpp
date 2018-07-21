@@ -14,10 +14,17 @@
 #include "parser/statement/select_statement.hpp"
 
 namespace duckdb {
+class PhysicalOperator;
+
 class PhysicalOperatorState {
   public:
-  	virtual ~PhysicalOperatorState();
+  	PhysicalOperatorState(PhysicalOperator* child);
+  	virtual ~PhysicalOperatorState() {}
+
+	DataChunk child_chunk;
+	std::unique_ptr<PhysicalOperatorState> child_state;
 };
+
 
 class PhysicalOperator : public Printable {
   public:
@@ -27,7 +34,7 @@ class PhysicalOperator : public Printable {
 
 	virtual std::string ToString() const override;
 
-	void InitializeChunk(DataChunk& chunk);
+	virtual void InitializeChunk(DataChunk& chunk) = 0;
 	virtual void GetChunk(DataChunk& chunk, PhysicalOperatorState* state) = 0;
 
 	virtual std::unique_ptr<PhysicalOperatorState> GetOperatorState() = 0;
@@ -61,14 +68,6 @@ class PhysicalOrderBy : public PhysicalOperator {
 
 	virtual void GetChunk(DataChunk& chunk, PhysicalOperatorState* state) override;
 };
-
-class PhysicalLimit : public PhysicalOperator {
- public:
-	PhysicalLimit() : PhysicalOperator(PhysicalOperatorType::LIMIT) {}
-
-	virtual void GetChunk(DataChunk& chunk, PhysicalOperatorState* state) override;
-};
-
 
 
 }

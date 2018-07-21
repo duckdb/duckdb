@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "catalog/catalog.hpp"
+#include "catalog/column_catalog.hpp"
 #include "catalog/table_catalog.hpp"
 #include "parser/statement/sql_statement.hpp"
 #include "parser/expression/abstract_expression.hpp"
@@ -17,7 +18,7 @@ class BindContext {
 	BindContext() {}
 
 	std::string GetMatchingTable(const std::string &column_name);
-	void BindColumn(const std::string &table_name,
+	std::shared_ptr<ColumnCatalogEntry> BindColumn(const std::string &table_name,
 	                const std::string column_name);
 
 	void GenerateAllColumnExpressions(std::vector<std::unique_ptr<AbstractExpression>>& new_select_list);
@@ -29,10 +30,12 @@ class BindContext {
 	bool HasAlias(const std::string &alias);
 
   private:
+  	std::unordered_map<std::string, std::vector<std::string>> bound_columns;
+
 	std::unordered_map<std::string, std::shared_ptr<TableCatalogEntry>>
 	    regular_table_alias_map;
 	std::unordered_map<std::string, SelectStatement *> subquery_alias_map;
 
-	std::shared_ptr<BindContext> child;
+	std::unique_ptr<BindContext> child;
 };
 }

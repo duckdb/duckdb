@@ -20,6 +20,7 @@ void Planner::CreatePlan(Catalog &catalog, SelectStatement &statement) {
 	logical_planner.Print();
 
 	this->plan = move(logical_planner.root);
+	this->context = move(binder.context);
 }
 
 bool Planner::CreatePlan(Catalog &catalog, unique_ptr<SQLStatement> statement) {

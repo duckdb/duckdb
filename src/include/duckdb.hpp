@@ -5,6 +5,7 @@
 #include <string>
 
 #include "catalog/catalog.hpp"
+#include "execution/datachunk.hpp"
 
 namespace duckdb {
 class DuckDB;
@@ -22,7 +23,7 @@ class DuckDBConnection {
   public:
 	DuckDBConnection(DuckDB &database);
 
-	DuckDBResult Query(const char *query);
+	std::unique_ptr<DuckDBResult> Query(const char *query);
 
   private:
 	DuckDB &database;
@@ -36,8 +37,14 @@ class DuckDBResult {
 	bool GetSuccess() const { return success; }
 	const std::string &GetErrorMessage() const { return error; }
 
-  private:
+	void Print();
+
+	DataChunk data;
+	
 	bool success;
 	std::string error;
+  private:
+  	DuckDBResult(const DuckDBResult&) = delete;
+
 };
 }

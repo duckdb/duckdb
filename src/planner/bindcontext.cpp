@@ -34,12 +34,13 @@ string BindContext::GetMatchingTable(const string &column_name) {
 	return result;
 }
 
-void BindContext::BindColumn(const std::string &table_name,
+shared_ptr<ColumnCatalogEntry> BindContext::BindColumn(const std::string &table_name,
                              const std::string column_name) {
 	if (!HasAlias(table_name)) {
 		throw BinderException("Referenced table \"%s\" not found!",
 		                      table_name.c_str());
 	}
+	std::shared_ptr<ColumnCatalogEntry> entry;
 
 	if (regular_table_alias_map.find(table_name) !=
 	    regular_table_alias_map.end()) {
@@ -50,10 +51,13 @@ void BindContext::BindColumn(const std::string &table_name,
 			    "Table \"%s\" does not have a column named \"%s\"",
 			    table_name.c_str(), column_name.c_str());
 		}
+		entry = table->GetColumn(column_name);
 	} else {
 		// subquery
 		throw BinderException("Subquery binding not implemented yet!");
 	}
+	bound_columns[table_name].push_back(column_name);
+	return entry;
 }
 
 void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<AbstractExpression>>& new_select_list) {

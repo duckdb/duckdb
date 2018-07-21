@@ -1,13 +1,8 @@
 
-#include "execution/physicaloperator.hpp"
+#include "execution/physical_operator.hpp"
 
 using namespace duckdb;
 using namespace std;
-
-void PhysicalOperator::InitializeChunk(DataChunk& chunk) {
-
-}
-
 
 string PhysicalOperator::ToString() const {
 	string result = PhysicalOperatorToString(type);
@@ -19,4 +14,11 @@ string PhysicalOperator::ToString() const {
 		result += " )";
 	}
 	return result;
+}
+
+PhysicalOperatorState::PhysicalOperatorState(PhysicalOperator* child) {
+	if (child) {
+		child->InitializeChunk(child_chunk);
+		child_state = child->GetOperatorState();
+	}
 }

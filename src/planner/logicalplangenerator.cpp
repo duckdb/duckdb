@@ -5,13 +5,13 @@
 
 #include "planner/logicalplangenerator.hpp"
 
-#include "planner/logicalaggregate.hpp"
-#include "planner/logicaldistinct.hpp"
-#include "planner/logicalfilter.hpp"
-#include "planner/logicalget.hpp"
-#include "planner/logicallimit.hpp"
-#include "planner/logicaloperator.hpp"
-#include "planner/logicalorder.hpp"
+#include "planner/operator/logical_aggregate.hpp"
+#include "planner/operator/logical_distinct.hpp"
+#include "planner/operator/logical_filter.hpp"
+#include "planner/operator/logical_get.hpp"
+#include "planner/operator/logical_limit.hpp"
+#include "planner/operator/logical_order.hpp"
+#include "planner/operator/logical_projection.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -21,7 +21,7 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 		// SELECT with FROM
 		statement.from_table->Accept(this);
 	} else {
-		// SELECT without FROM, add dummy GET
+		// SELECT without FROM, add empty GET
 		root = make_unique<LogicalGet>();
 	}
 
@@ -34,7 +34,7 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 	}
 
 	if (statement.HasAggregation()) {
-		auto aggregate = make_unique<LogicalAggregate>();
+		auto aggregate = make_unique<LogicalAggregate>(move(statement.select_list));
 		if (statement.HasGroup()) {
 			// have to add group by columns
 			aggregate->groups = move(statement.groupby.groups);
@@ -49,6 +49,10 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 			having->children.push_back(move(root));
 			root = move(having);
 		}
+	} else {
+		auto projection = make_unique<LogicalProjection>(move(statement.select_list));
+		projection->children.push_back(move(root));
+		root = move(projection);
 	}
 
 	if (statement.select_distinct) {

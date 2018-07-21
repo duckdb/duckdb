@@ -9,6 +9,7 @@ class LogicalFilter;
 class LogicalGet;
 class LogicalLimit;
 class LogicalOrder;
+class LogicalProjection;
 
 class LogicalOperatorVisitor {
   public:
@@ -20,5 +21,6 @@ class LogicalOperatorVisitor {
   	virtual void Visit(LogicalGet& filter);
   	virtual void Visit(LogicalLimit& filter);
   	virtual void Visit(LogicalOrder& filter);
+  	virtual void Visit(LogicalProjection& filter);
 };
 }
