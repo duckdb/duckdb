@@ -37,7 +37,10 @@ void ExpressionExecutor::Visit(BaseTableRefExpression &expr) {
 }
 
 void ExpressionExecutor::Visit(ColumnRefExpression &expr) {
-	throw NotImplementedException("XX");
+	if (expr.index == (size_t) -1) {
+		throw Exception("Column Reference not bound!");
+	}
+	chunk.data[expr.index]->Move(vector);
 }
 
 void ExpressionExecutor::Visit(ComparisonExpression &expr) {

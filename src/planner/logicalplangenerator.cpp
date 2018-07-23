@@ -78,7 +78,7 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 
 void LogicalPlanGenerator::Visit(BaseTableRefExpression &expr) {
 	auto table = catalog.GetTable(expr.schema_name, expr.table_name);
-	auto get_table = make_unique<LogicalGet>(table);
+	auto get_table = make_unique<LogicalGet>(table, expr.alias.empty() ? expr.table_name : expr.alias);
 	if (root)
 		get_table->children.push_back(move(root));
 	root = move(get_table);

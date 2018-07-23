@@ -45,7 +45,6 @@ void Vector::SetValue(size_t index, Value val){
 	}
 }
 
-
 Value Vector::GetValue(size_t index) {
 	if (index >= count) {
 		throw Exception("Out of bounds");

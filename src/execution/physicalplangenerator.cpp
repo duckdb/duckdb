@@ -57,6 +57,10 @@ void PhysicalPlanGenerator::Visit(LogicalGet &op) {
 	}
 
 	std::vector<size_t> column_ids;
+	// look in the context for this table which columns are required
+	for(auto& bound_column : context->bound_columns[op.alias]) {
+		column_ids.push_back(op.table->name_map[bound_column]);
+	}
 
 	auto scan = make_unique<PhysicalSeqScan>(op.table->storage, column_ids);
 	if (plan) {

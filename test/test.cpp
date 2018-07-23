@@ -31,6 +31,10 @@ int main() {
 		return 1;
 	}
 
+	if (duckdb_query(connection, "SELECT a,b FROM test;", &result) != DuckDBSuccess) {
+		return 1;
+	}
+
 	if (duckdb_query(connection, "SELECT * FROM lineitem;", &result) != DuckDBSuccess) {
 		return 1;
 	}

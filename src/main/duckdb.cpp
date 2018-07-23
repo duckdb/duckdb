@@ -61,9 +61,7 @@ DuckDB::DuckDB(const char *path) {
 	chunk.data[0]->SetValue(1, Value(12));
 	chunk.data[1]->SetValue(0, Value(21));
 	chunk.data[1]->SetValue(1, Value(22));
-
 	dtable->AddData(chunk);
-
 }
 
 DuckDBConnection::DuckDBConnection(DuckDB &database) : database(database) {}
@@ -111,10 +109,10 @@ void DuckDBResult::Print() {
 			printf("%s\t", TypeIdToString(vector->type).c_str());
 		}
 		printf(" [ %d ]\n", (int)data.count);
-		for (size_t i = 0; i < data.count; i++) {
+		for (size_t j = 0; j < data.count; j++) {
 			for (size_t i = 0; i < data.colcount; i++) {
 				auto &vector = data.data[i];
-				printf("%s\t", vector->GetValue(i).ToString().c_str());
+				printf("%s\t", vector->GetValue(j).ToString().c_str());
 			}
 			printf("\n");
 		}

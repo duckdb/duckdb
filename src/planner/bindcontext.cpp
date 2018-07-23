@@ -35,29 +35,30 @@ string BindContext::GetMatchingTable(const string &column_name) {
 }
 
 shared_ptr<ColumnCatalogEntry>
-BindContext::BindColumn(const std::string &table_name,
-                        const std::string column_name) {
-	if (!HasAlias(table_name)) {
+BindContext::BindColumn(ColumnRefExpression &expr) {
+	if (!HasAlias(expr.table_name)) {
 		throw BinderException("Referenced table \"%s\" not found!",
-		                      table_name.c_str());
+		                      expr.table_name.c_str());
 	}
 	std::shared_ptr<ColumnCatalogEntry> entry;
 
-	if (regular_table_alias_map.find(table_name) !=
+	if (regular_table_alias_map.find(expr.table_name) !=
 	    regular_table_alias_map.end()) {
 		// base table
-		auto table = regular_table_alias_map[table_name];
-		if (!table->ColumnExists(column_name)) {
+		auto table = regular_table_alias_map[expr.table_name];
+		if (!table->ColumnExists(expr.column_name)) {
 			throw BinderException(
 			    "Table \"%s\" does not have a column named \"%s\"",
-			    table_name.c_str(), column_name.c_str());
+			    expr.table_name.c_str(), expr.column_name.c_str());
 		}
-		entry = table->GetColumn(column_name);
+		entry = table->GetColumn(expr.column_name);
 	} else {
 		// subquery
 		throw BinderException("Subquery binding not implemented yet!");
 	}
-	bound_columns[table_name].push_back(column_name);
+	auto& column_list = bound_columns[expr.table_name];
+	expr.index = column_list.size();
+	column_list.push_back(expr.column_name);
 	return entry;
 }
 

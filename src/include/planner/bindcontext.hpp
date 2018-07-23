@@ -19,7 +19,7 @@ class BindContext {
 
 	std::string GetMatchingTable(const std::string &column_name);
 	std::shared_ptr<ColumnCatalogEntry>
-	BindColumn(const std::string &table_name, const std::string column_name);
+	BindColumn(ColumnRefExpression &expr);
 
 	void GenerateAllColumnExpressions(
 	    std::vector<std::unique_ptr<AbstractExpression>> &new_select_list);
@@ -30,9 +30,9 @@ class BindContext {
 
 	bool HasAlias(const std::string &alias);
 
-  private:
 	std::unordered_map<std::string, std::vector<std::string>> bound_columns;
 
+  private:
 	std::unordered_map<std::string, std::shared_ptr<TableCatalogEntry>>
 	    regular_table_alias_map;
 	std::unordered_map<std::string, SelectStatement *> subquery_alias_map;

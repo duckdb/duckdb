@@ -16,6 +16,7 @@ class DataColumn {
   	DataColumn(DataTable& table, ColumnCatalogEntry& column) : table(table), column(column) {}
 
   	void AddData(Vector& data);
+  	
   	DataTable& table;
   	ColumnCatalogEntry& column;
   	std::vector<std::unique_ptr<Vector>> data;

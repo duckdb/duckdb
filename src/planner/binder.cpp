@@ -74,7 +74,7 @@ void Binder::Visit(ColumnRefExpression &expr) {
 		// no table name: find a table or subquery that contains this
 		expr.table_name = context->GetMatchingTable(expr.column_name);
 	}
-	auto column = context->BindColumn(expr.table_name, expr.column_name);
+	auto column = context->BindColumn(expr);
 	expr.return_type = column->type;
 }
 
