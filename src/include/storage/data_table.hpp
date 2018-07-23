@@ -8,12 +8,12 @@
 namespace duckdb {
 class DataTable {
   public:
-  	DataTable() {}
+	DataTable() {}
 
-  	void AddColumn(TypeId type);
+	void AddColumn(TypeId type);
 
-  	size_t size;
+	size_t size;
 
-  	std::vector<std::unique_ptr<DataColumn>> columns;
+	std::vector<std::unique_ptr<DataColumn>> columns;
 };
 }

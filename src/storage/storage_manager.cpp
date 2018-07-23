@@ -10,6 +10,4 @@ size_t StorageManager::CreateTable() {
 	return oid;
 }
 
-DataTable* StorageManager::GetTable(size_t oid) {
-	return tables[oid].get();
-}
+DataTable *StorageManager::GetTable(size_t oid) { return tables[oid].get(); }

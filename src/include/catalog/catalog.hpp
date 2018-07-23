@@ -36,7 +36,7 @@ class Catalog : public AbstractCatalogEntry {
 	std::unordered_map<std::string, std::shared_ptr<SchemaCatalogEntry>>
 	    schemas;
 
-   std::unique_ptr<StorageManager> storage_manager;
+	std::unique_ptr<StorageManager> storage_manager;
 
 	virtual std::string ToString() const { return std::string(); }
 };

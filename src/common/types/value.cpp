@@ -1,6 +1,6 @@
 
 
-#include "common/value.hpp"
+#include "common/types/value.hpp"
 #include "common/exception.hpp"
 
 using namespace duckdb;
@@ -35,20 +35,20 @@ Value Value::CastAs(TypeId new_type) {
 }
 
 string Value::ToString() const {
-	switch(type) {
-		case TypeId::BOOLEAN:
-			return value_.boolean ? "True" : "False";
-		case TypeId::TINYINT:
-			return to_string(value_.tinyint);
-		case TypeId::SMALLINT:
-			return to_string(value_.smallint);
-		case TypeId::INTEGER:
-			return to_string(value_.integer);
-		case TypeId::BIGINT:
-			return to_string(value_.bigint);
-		case TypeId::DECIMAL:
-			return to_string(value_.decimal);
-		default:
-			throw NotImplementedException("Unimplemented printing");
+	switch (type) {
+	case TypeId::BOOLEAN:
+		return value_.boolean ? "True" : "False";
+	case TypeId::TINYINT:
+		return to_string(value_.tinyint);
+	case TypeId::SMALLINT:
+		return to_string(value_.smallint);
+	case TypeId::INTEGER:
+		return to_string(value_.integer);
+	case TypeId::BIGINT:
+		return to_string(value_.bigint);
+	case TypeId::DECIMAL:
+		return to_string(value_.decimal);
+	default:
+		throw NotImplementedException("Unimplemented printing");
 	}
 }

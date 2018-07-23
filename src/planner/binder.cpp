@@ -26,33 +26,38 @@ void Binder::Visit(SelectStatement &statement) {
 	if (statement.where_clause) {
 		statement.where_clause->Accept(this);
 	}
-	for(auto& group : statement.groupby.groups) {
+	for (auto &group : statement.groupby.groups) {
 		group->Accept(this);
 	}
 	if (statement.groupby.having) {
 		statement.groupby.having->Accept(this);
 	}
-	for(auto& order : statement.orderby.orders) {
+	for (auto &order : statement.orderby.orders) {
 		order.expression->Accept(this);
 	}
-	// we generate a new list of expressions because a * statement expands to multiple expressions
+	// we generate a new list of expressions because a * statement expands to
+	// multiple expressions
 	vector<unique_ptr<AbstractExpression>> new_select_list;
 	for (auto &select_element : statement.select_list) {
 		if (select_element->GetExpressionType() == ExpressionType::STAR) {
 			// * statement, expand to all columns from the FROM clause
 			context->GenerateAllColumnExpressions(new_select_list);
 			continue;
+		} else {
+			// regular statement, add it to the list
+			new_select_list.push_back(move(select_element));
 		}
-		// regular statement, visit it and add it to the list
+	}
+	for (auto &select_element : new_select_list) {
 		select_element->Accept(this);
 		select_element->ResolveType();
 
 		if (select_element->return_type == TypeId::INVALID) {
-			throw BinderException("Could not resolve type of projection element!");
+			throw BinderException(
+			    "Could not resolve type of projection element!");
 		}
-
-		new_select_list.push_back(move(select_element));
 	}
+
 	statement.select_list = move(new_select_list);
 }
 

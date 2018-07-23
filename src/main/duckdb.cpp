@@ -62,7 +62,8 @@ unique_ptr<DuckDBResult> DuckDBConnection::Query(const char *query) {
 
 	// now convert logical query plan into a physical query plan
 	PhysicalPlanGenerator physical_planner(database.catalog);
-	if (!physical_planner.CreatePlan(move(planner.plan), move(planner.context))) {
+	if (!physical_planner.CreatePlan(move(planner.plan),
+	                                 move(planner.context))) {
 		fprintf(stderr, "Failed to create physical plan: %s\n",
 		        physical_planner.GetErrorMessage().c_str());
 		return make_unique<DuckDBResult>(physical_planner.GetErrorMessage());
@@ -79,14 +80,14 @@ DuckDBResult::DuckDBResult(std::string error) : success(false), error(error) {}
 
 void DuckDBResult::Print() {
 	if (success) {
-		for(size_t i = 0; i < data.colcount; i++) {
-			auto& vector = data.data[i];
+		for (size_t i = 0; i < data.colcount; i++) {
+			auto &vector = data.data[i];
 			printf("%s\t", TypeIdToString(vector->type).c_str());
 		}
 		printf(" [ %d ]\n", (int)data.count);
-		for(size_t i = 0; i < data.count; i++) {
-			for(size_t i = 0; i < data.colcount; i++) {
-				auto& vector = data.data[i];
+		for (size_t i = 0; i < data.count; i++) {
+			for (size_t i = 0; i < data.colcount; i++) {
+				auto &vector = data.data[i];
 				printf("%s\t", vector->GetValue(i).ToString().c_str());
 			}
 			printf("\n");

@@ -13,7 +13,7 @@
 namespace duckdb {
 class LogicalPlanGenerator : public SQLNodeVisitor {
   public:
-  	LogicalPlanGenerator(Catalog &catalog) : catalog(catalog) {}
+	LogicalPlanGenerator(Catalog &catalog) : catalog(catalog) {}
 
 	void Visit(SelectStatement &statement);
 
@@ -21,11 +21,10 @@ class LogicalPlanGenerator : public SQLNodeVisitor {
 	void Visit(JoinExpression &expr);
 	void Visit(SubqueryExpression &expr);
 
-	void Print() {
-		root->Print();
-	}
-	
+	void Print() { root->Print(); }
+
 	std::unique_ptr<LogicalOperator> root;
+
   private:
 	Catalog &catalog;
 };

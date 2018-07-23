@@ -8,9 +8,9 @@
 namespace duckdb {
 class DataColumn {
   public:
-  	DataColumn(TypeId type) : data(nullptr), type(type) {}
+	DataColumn(TypeId type) : data(nullptr), type(type) {}
 
-  	void* data;
-  	TypeId type;
+	void *data;
+	TypeId type;
 };
 }

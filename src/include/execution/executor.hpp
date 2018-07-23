@@ -8,8 +8,7 @@
 namespace duckdb {
 
 class Executor {
- public:
- 	std::unique_ptr<DuckDBResult> Execute(std::unique_ptr<PhysicalOperator> op);
+  public:
+	std::unique_ptr<DuckDBResult> Execute(std::unique_ptr<PhysicalOperator> op);
 };
-
 }

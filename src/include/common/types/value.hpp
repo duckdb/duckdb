@@ -34,10 +34,10 @@ class Value : public Printable {
 	Value Copy() { return Value(*this); }
 
 	virtual std::string ToString() const;
-	
+
 	Value CastAs(TypeId new_type);
 
-//  private:
+	//  private:
 	TypeId type;
 	bool is_null;
 

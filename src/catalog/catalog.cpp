@@ -7,7 +7,9 @@
 using namespace duckdb;
 using namespace std;
 
-Catalog::Catalog() : AbstractCatalogEntry(nullptr, "catalog"), storage_manager(make_unique<StorageManager>()) {}
+Catalog::Catalog()
+    : AbstractCatalogEntry(nullptr, "catalog"),
+      storage_manager(make_unique<StorageManager>()) {}
 
 Catalog::~Catalog() {}
 
@@ -16,8 +18,7 @@ void Catalog::CreateSchema(const string &schema_name) {
 		throw CatalogException("Schema with name %s already exists!",
 		                       schema_name.c_str());
 	}
-	schemas[schema_name] =
-	    make_shared<SchemaCatalogEntry>(this, schema_name);
+	schemas[schema_name] = make_shared<SchemaCatalogEntry>(this, schema_name);
 }
 
 void Catalog::CreateTable(const string &schema_name, const string &table_name,
@@ -29,7 +30,6 @@ void Catalog::CreateTable(const string &schema_name, const string &table_name,
 	auto schema = GetSchema(schema_name);
 	size_t oid = storage_manager->CreateTable();
 	schema->CreateTable(table_name, columns, oid);
-
 }
 
 bool Catalog::SchemaExists(const string &name) {

@@ -20,9 +20,9 @@
 #include <iostream>
 #include <memory>
 #include <signal.h>
+#include <stdarg.h>
 #include <stdexcept>
 #include <string>
-#include <stdarg.h>
 
 #include "common/internal_types.hpp"
 #include "common/string_util.hpp"

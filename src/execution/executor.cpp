@@ -19,7 +19,7 @@ unique_ptr<DuckDBResult> Executor::Execute(unique_ptr<PhysicalOperator> plan) {
 		do {
 			plan->GetChunk(chunk, state.get());
 			result->data.Append(chunk);
-		} while(chunk.count > 0);
+		} while (chunk.count > 0);
 		result->success = true;
 	} catch (Exception ex) {
 		result->error = ex.GetMessage();

@@ -34,8 +34,9 @@ string BindContext::GetMatchingTable(const string &column_name) {
 	return result;
 }
 
-shared_ptr<ColumnCatalogEntry> BindContext::BindColumn(const std::string &table_name,
-                             const std::string column_name) {
+shared_ptr<ColumnCatalogEntry>
+BindContext::BindColumn(const std::string &table_name,
+                        const std::string column_name) {
 	if (!HasAlias(table_name)) {
 		throw BinderException("Referenced table \"%s\" not found!",
 		                      table_name.c_str());
@@ -60,16 +61,18 @@ shared_ptr<ColumnCatalogEntry> BindContext::BindColumn(const std::string &table_
 	return entry;
 }
 
-void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<AbstractExpression>>& new_select_list) {
+void BindContext::GenerateAllColumnExpressions(
+    vector<unique_ptr<AbstractExpression>> &new_select_list) {
 	if (regular_table_alias_map.size() == 0 && subquery_alias_map.size() == 0) {
 		throw BinderException("SELECT * expression without FROM clause!");
 	}
 	for (auto &kv : regular_table_alias_map) {
 		auto table = kv.second;
 		string table_name = table->name;
-		for(auto& column : table->columns) {
+		for (auto &column : table->columns) {
 			string column_name = column->name;
-			new_select_list.push_back(make_unique<ColumnRefExpression>(column_name, table_name));
+			new_select_list.push_back(
+			    make_unique<ColumnRefExpression>(column_name, table_name));
 		}
 	}
 	for (auto &kv : subquery_alias_map) {

@@ -4,13 +4,13 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalLimit::InitializeChunk(DataChunk& chunk) {
+void PhysicalLimit::InitializeChunk(DataChunk &chunk) {
 	// just copy the chunk data of the child
 	children[0]->InitializeChunk(chunk);
 }
 
-void PhysicalLimit::GetChunk(DataChunk& chunk, PhysicalOperatorState* state_) {
-	auto state = reinterpret_cast<PhysicalLimitOperatorState*>(state_);
+void PhysicalLimit::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
+	auto state = reinterpret_cast<PhysicalLimitOperatorState *>(state_);
 	chunk.Reset();
 
 	size_t max_element = limit + offset;
@@ -41,7 +41,7 @@ void PhysicalLimit::GetChunk(DataChunk& chunk, PhysicalOperatorState* state_) {
 			chunk.count = state->child_chunk.count;
 		}
 		// instead of copying we just change the pointer in the current chunk
-		for(size_t i = 0; i < chunk.colcount; i++) {
+		for (size_t i = 0; i < chunk.colcount; i++) {
 			chunk.data[i]->data = state->child_chunk.data[i]->data;
 			chunk.data[i]->owns_data = false;
 			chunk.data[i]->count = chunk.count;

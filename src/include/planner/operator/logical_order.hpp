@@ -6,13 +6,11 @@
 namespace duckdb {
 
 class LogicalOrder : public LogicalOperator {
- public:
- 	LogicalOrder() : 
- 		LogicalOperator(LogicalOperatorType::ORDER_BY) { }
+  public:
+	LogicalOrder() : LogicalOperator(LogicalOperatorType::ORDER_BY) {}
 
 	virtual void Accept(LogicalOperatorVisitor *v) override { v->Visit(*this); }
 
 	OrderByDescription description;
 };
-
 }

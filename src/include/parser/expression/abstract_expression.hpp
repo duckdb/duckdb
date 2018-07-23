@@ -34,7 +34,7 @@ class AbstractExpression : public Printable {
 	}
 
 	virtual void ResolveType() {
-		for(auto& child : children) {
+		for (auto &child : children) {
 			child->ResolveType();
 		}
 	}

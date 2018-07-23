@@ -15,5 +15,8 @@ main:
 test: main
 	build/test/test
 
+micro: main
+	build/test/microbenchmark
+
 format:
 	python format.py

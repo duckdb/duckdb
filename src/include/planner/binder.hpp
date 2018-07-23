@@ -8,7 +8,6 @@
 #include <string>
 #include <vector>
 
-
 #include "catalog/catalog.hpp"
 
 #include "parser/sql_node_visitor.hpp"

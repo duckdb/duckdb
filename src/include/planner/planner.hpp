@@ -24,7 +24,7 @@ class Planner {
 
 	std::unique_ptr<BindContext> context;
 	std::unique_ptr<LogicalOperator> plan;
-	
+
   private:
 	void CreatePlan(Catalog &, SelectStatement &statement);
 };

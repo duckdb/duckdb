@@ -13,8 +13,9 @@ class Catalog;
 
 class SchemaCatalogEntry : public AbstractCatalogEntry {
 	friend class Catalog;
+
   public:
-	SchemaCatalogEntry(Catalog* catalog, std::string name);
+	SchemaCatalogEntry(Catalog *catalog, std::string name);
 
 	bool TableExists(const std::string &table_name);
 	std::shared_ptr<TableCatalogEntry> GetTable(const std::string &table);
@@ -22,10 +23,10 @@ class SchemaCatalogEntry : public AbstractCatalogEntry {
 	std::unordered_map<std::string, std::shared_ptr<TableCatalogEntry>> tables;
 
 	virtual std::string ToString() const { return std::string(); }
+
   private:
 	void CreateTable(const std::string &table_name,
 	                 const std::vector<ColumnCatalogEntry> &columns,
 	                 size_t oid);
-
 };
 }

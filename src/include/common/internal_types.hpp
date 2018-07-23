@@ -202,11 +202,7 @@ enum class JoinType {
 //===--------------------------------------------------------------------===//
 // ORDER BY Clause Types
 //===--------------------------------------------------------------------===//
-enum class OrderType {
-	INVALID = 0,
-	ASCENDING = 1,
-	DESCENDING = 2
-};
+enum class OrderType { INVALID = 0, ASCENDING = 1, DESCENDING = 2 };
 
 //===--------------------------------------------------------------------===//
 // Logical Operator Types
@@ -292,5 +288,4 @@ size_t GetTypeIdSize(TypeId type);
 
 std::string LogicalOperatorToString(LogicalOperatorType type);
 std::string PhysicalOperatorToString(PhysicalOperatorType type);
-
 }

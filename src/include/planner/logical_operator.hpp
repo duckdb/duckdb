@@ -24,7 +24,7 @@ class LogicalOperator : public Printable {
 		std::string result = LogicalOperatorToString(type);
 		if (children.size() > 0) {
 			result += " ( ";
-			for (auto& child : children) {
+			for (auto &child : children) {
 				result += child->ToString();
 			}
 			result += " )";
@@ -40,7 +40,6 @@ class LogicalOperator : public Printable {
 	}
 
 	LogicalOperatorType type;
-  	std::vector<std::unique_ptr<LogicalOperator>> children;
+	std::vector<std::unique_ptr<LogicalOperator>> children;
 };
-
 }

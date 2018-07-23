@@ -6,7 +6,7 @@ using namespace std;
 
 bool AbstractExpression::IsAggregate() {
 	bool is_aggregate = false;
-	for(auto& child : children) {
+	for (auto &child : children) {
 		is_aggregate |= child->IsAggregate();
 	}
 	return is_aggregate;

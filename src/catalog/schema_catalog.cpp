@@ -5,12 +5,12 @@
 using namespace duckdb;
 using namespace std;
 
-
-SchemaCatalogEntry::SchemaCatalogEntry(Catalog* catalog, string name)
+SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name)
     : AbstractCatalogEntry(catalog, name) {}
 
 void SchemaCatalogEntry::CreateTable(
-    const string &table_name, const std::vector<ColumnCatalogEntry> &columns, size_t oid) {
+    const string &table_name, const std::vector<ColumnCatalogEntry> &columns,
+    size_t oid) {
 	if (TableExists(table_name)) {
 		throw CatalogException("Table with name %s already exists!",
 		                       table_name.c_str());

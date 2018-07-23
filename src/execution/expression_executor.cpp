@@ -19,7 +19,7 @@
 using namespace duckdb;
 using namespace std;
 
-void ExpressionExecutor::Execute(AbstractExpression* expr, Vector& result) {
+void ExpressionExecutor::Execute(AbstractExpression *expr, Vector &result) {
 	expr->Accept(this);
 
 	if (result.type != vector.type) {
@@ -71,7 +71,6 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 		expr.children[0]->Accept(this);
 		vector.Move(l);
 
-
 	} else if (expr.children.size() == 2) {
 		Vector l, r, result;
 		expr.children[0]->Accept(this);
@@ -81,21 +80,21 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 
 		vector.Resize(std::max(l.count, r.count));
 
-		switch(expr.type) {
-			case ExpressionType::OPERATOR_PLUS:
-				Vector::Add(l, r, vector);
-				break;
-			case ExpressionType::OPERATOR_MINUS:
-				Vector::Subtract(l, r, vector);
-				break;
-			case ExpressionType::OPERATOR_MULTIPLY:
-				Vector::Multiply(l, r, vector);
-				break;
-			case ExpressionType::OPERATOR_DIVIDE:
-				Vector::Divide(l, r, vector);
-				break;
-			default:
-				throw NotImplementedException("operator");
+		switch (expr.type) {
+		case ExpressionType::OPERATOR_PLUS:
+			Vector::Add(l, r, vector);
+			break;
+		case ExpressionType::OPERATOR_MINUS:
+			Vector::Subtract(l, r, vector);
+			break;
+		case ExpressionType::OPERATOR_MULTIPLY:
+			Vector::Multiply(l, r, vector);
+			break;
+		case ExpressionType::OPERATOR_DIVIDE:
+			Vector::Divide(l, r, vector);
+			break;
+		default:
+			throw NotImplementedException("operator");
 		}
 	} else {
 		throw NotImplementedException("operator");

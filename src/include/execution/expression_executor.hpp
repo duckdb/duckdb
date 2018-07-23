@@ -11,13 +11,12 @@
 
 #include "execution/datachunk.hpp"
 
-
 namespace duckdb {
 class ExpressionExecutor : public SQLNodeVisitor {
   public:
-  	ExpressionExecutor(DataChunk& chunk) : chunk(chunk) { }
+	ExpressionExecutor(DataChunk &chunk) : chunk(chunk) {}
 
-  	void Execute(AbstractExpression* expr, Vector& result);
+	void Execute(AbstractExpression *expr, Vector &result);
 
 	void Visit(AggregateExpression &expr);
 	void Visit(BaseTableRefExpression &expr);
@@ -31,9 +30,10 @@ class ExpressionExecutor : public SQLNodeVisitor {
 	void Visit(OperatorExpression &expr);
 	void Visit(SubqueryExpression &expr);
 	void Visit(TableRefExpression &expr);
-  private:
-  	DataChunk& chunk;
 
-  	Vector vector;
+  private:
+	DataChunk &chunk;
+
+	Vector vector;
 };
 }

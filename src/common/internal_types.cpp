@@ -1,5 +1,6 @@
 
 #include "common/internal_types.hpp"
+#include "common/exception.hpp"
 #include "common/string_util.hpp"
 
 using namespace std;
@@ -184,7 +185,6 @@ TypeId StringToTypeId(const string &str) {
 	return TypeId::INVALID;
 }
 
-
 size_t GetTypeIdSize(TypeId type) {
 	switch (type) {
 	case TypeId::PARAMETER_OFFSET:
@@ -206,79 +206,128 @@ size_t GetTypeIdSize(TypeId type) {
 	case TypeId::DATE:
 		return sizeof(int32_t);
 	case TypeId::VARCHAR:
-		return sizeof(void*);
+		return sizeof(void *);
 	case TypeId::VARBINARY:
-		return sizeof(void*);
+		return sizeof(void *);
 	case TypeId::ARRAY:
-		return sizeof(void*);
+		return sizeof(void *);
 	case TypeId::UDT:
-		return sizeof(void*);
+		return sizeof(void *);
 	default:
-		return (size_t) -1;
+		throw Exception("Invalid type ID size!");
+		return (size_t)-1;
 	}
 }
 
 string LogicalOperatorToString(LogicalOperatorType type) {
-	switch(type) {
-		case LogicalOperatorType::LEAF: return "LEAF";
-		case LogicalOperatorType::GET: return "GET";
-		case LogicalOperatorType::EXTERNAL_FILE_GET: return "EXTERNAL_FILE_GET";
-		case LogicalOperatorType::QUERY_DERIVED_GET: return "QUERY_DERIVED_GET";
-		case LogicalOperatorType::PROJECTION: return "PROJECTION";
-		case LogicalOperatorType::FILTER: return "FILTER";
-		case LogicalOperatorType::AGGREGATE_AND_GROUP_BY: return "AGGREGATE_AND_GROUP_BY";
-		case LogicalOperatorType::DISTINCT: return "DISTINCT";
-		case LogicalOperatorType::LIMIT: return "LIMIT";
-		case LogicalOperatorType::ORDER_BY: return "ORDER_BY";
-		case LogicalOperatorType::MARK_JOIN: return "MARK_JOIN";
-		case LogicalOperatorType::DEPENDENT_JOIN: return "DEPENDENT_JOIN";
-		case LogicalOperatorType::SINGLE_JOIN: return "SINGLE_JOIN";
-		case LogicalOperatorType::INNER_JOIN: return "INNER_JOIN";
-		case LogicalOperatorType::LEFT_JOIN: return "LEFT_JOIN";
-		case LogicalOperatorType::RIGHT_JOIN: return "RIGHT_JOIN";
-		case LogicalOperatorType::OUTER_JOIN: return "OUTER_JOIN";
-		case LogicalOperatorType::SEMI_JOIN: return "SEMI_JOIN";
-		case LogicalOperatorType::INSERT: return "INSERT";
-		case LogicalOperatorType::INSERT_SELECT: return "INSERT_SELECT";
-		case LogicalOperatorType::DELETE: return "DELETE";
-		case LogicalOperatorType::UPDATE: return "UPDATE";
-		case LogicalOperatorType::EXPORT_EXTERNAL_FILE: return "EXPORT_EXTERNAL_FILE";
-		default:
-			return "INVALID";
+	switch (type) {
+	case LogicalOperatorType::LEAF:
+		return "LEAF";
+	case LogicalOperatorType::GET:
+		return "GET";
+	case LogicalOperatorType::EXTERNAL_FILE_GET:
+		return "EXTERNAL_FILE_GET";
+	case LogicalOperatorType::QUERY_DERIVED_GET:
+		return "QUERY_DERIVED_GET";
+	case LogicalOperatorType::PROJECTION:
+		return "PROJECTION";
+	case LogicalOperatorType::FILTER:
+		return "FILTER";
+	case LogicalOperatorType::AGGREGATE_AND_GROUP_BY:
+		return "AGGREGATE_AND_GROUP_BY";
+	case LogicalOperatorType::DISTINCT:
+		return "DISTINCT";
+	case LogicalOperatorType::LIMIT:
+		return "LIMIT";
+	case LogicalOperatorType::ORDER_BY:
+		return "ORDER_BY";
+	case LogicalOperatorType::MARK_JOIN:
+		return "MARK_JOIN";
+	case LogicalOperatorType::DEPENDENT_JOIN:
+		return "DEPENDENT_JOIN";
+	case LogicalOperatorType::SINGLE_JOIN:
+		return "SINGLE_JOIN";
+	case LogicalOperatorType::INNER_JOIN:
+		return "INNER_JOIN";
+	case LogicalOperatorType::LEFT_JOIN:
+		return "LEFT_JOIN";
+	case LogicalOperatorType::RIGHT_JOIN:
+		return "RIGHT_JOIN";
+	case LogicalOperatorType::OUTER_JOIN:
+		return "OUTER_JOIN";
+	case LogicalOperatorType::SEMI_JOIN:
+		return "SEMI_JOIN";
+	case LogicalOperatorType::INSERT:
+		return "INSERT";
+	case LogicalOperatorType::INSERT_SELECT:
+		return "INSERT_SELECT";
+	case LogicalOperatorType::DELETE:
+		return "DELETE";
+	case LogicalOperatorType::UPDATE:
+		return "UPDATE";
+	case LogicalOperatorType::EXPORT_EXTERNAL_FILE:
+		return "EXPORT_EXTERNAL_FILE";
+	default:
+		return "INVALID";
 	}
 }
 
 string PhysicalOperatorToString(PhysicalOperatorType type) {
-	switch(type) {
-		case PhysicalOperatorType::LEAF: return "LEAF";
-		case PhysicalOperatorType::DUMMY_SCAN: return "DUMMY_SCAN";
-		case PhysicalOperatorType::SEQ_SCAN: return "SEQ_SCAN";
-		case PhysicalOperatorType::INDEX_SCAN: return "INDEX_SCAN";
-		case PhysicalOperatorType::EXTERNAL_FILE_SCAN: return "EXTERNAL_FILE_SCAN";
-		case PhysicalOperatorType::QUERY_DERIVED_SCAN: return "QUERY_DERIVED_SCAN";
-		case PhysicalOperatorType::ORDER_BY: return "ORDER_BY";
-		case PhysicalOperatorType::LIMIT: return "LIMIT";
-		case PhysicalOperatorType::DISTINCT: return "DISTINCT";
-		case PhysicalOperatorType::AGGREGATE: return "AGGREGATE";
-		case PhysicalOperatorType::HASH_GROUP_BY: return "HASH_GROUP_BY";
-		case PhysicalOperatorType::SORT_GROUP_BY: return "SORT_GROUP_BY";
-		case PhysicalOperatorType::FILTER: return "FILTER";
-		case PhysicalOperatorType::INNER_NL_JOIN: return "INNER_NL_JOIN";
-		case PhysicalOperatorType::LEFT_NL_JOIN: return "LEFT_NL_JOIN";
-		case PhysicalOperatorType::RIGHT_NL_JOIN: return "RIGHT_NL_JOIN";
-		case PhysicalOperatorType::OUTER_NL_JOIN: return "OUTER_NL_JOIN";
-		case PhysicalOperatorType::INNER_HASH_JOIN: return "INNER_HASH_JOIN";
-		case PhysicalOperatorType::LEFT_HASH_JOIN: return "LEFT_HASH_JOIN";
-		case PhysicalOperatorType::RIGHT_HASH_JOIN: return "RIGHT_HASH_JOIN";
-		case PhysicalOperatorType::OUTER_HASH_JOIN: return "OUTER_HASH_JOIN";
-		case PhysicalOperatorType::INSERT: return "INSERT";
-		case PhysicalOperatorType::INSERT_SELECT: return "INSERT_SELECT";
-		case PhysicalOperatorType::DELETE: return "DELETE";
-		case PhysicalOperatorType::UPDATE: return "UPDATE";
-		case PhysicalOperatorType::EXPORT_EXTERNAL_FILE: return "EXPORT_EXTERNAL_FILE";
-		default:
-			return "INVALID";
+	switch (type) {
+	case PhysicalOperatorType::LEAF:
+		return "LEAF";
+	case PhysicalOperatorType::DUMMY_SCAN:
+		return "DUMMY_SCAN";
+	case PhysicalOperatorType::SEQ_SCAN:
+		return "SEQ_SCAN";
+	case PhysicalOperatorType::INDEX_SCAN:
+		return "INDEX_SCAN";
+	case PhysicalOperatorType::EXTERNAL_FILE_SCAN:
+		return "EXTERNAL_FILE_SCAN";
+	case PhysicalOperatorType::QUERY_DERIVED_SCAN:
+		return "QUERY_DERIVED_SCAN";
+	case PhysicalOperatorType::ORDER_BY:
+		return "ORDER_BY";
+	case PhysicalOperatorType::LIMIT:
+		return "LIMIT";
+	case PhysicalOperatorType::DISTINCT:
+		return "DISTINCT";
+	case PhysicalOperatorType::AGGREGATE:
+		return "AGGREGATE";
+	case PhysicalOperatorType::HASH_GROUP_BY:
+		return "HASH_GROUP_BY";
+	case PhysicalOperatorType::SORT_GROUP_BY:
+		return "SORT_GROUP_BY";
+	case PhysicalOperatorType::FILTER:
+		return "FILTER";
+	case PhysicalOperatorType::INNER_NL_JOIN:
+		return "INNER_NL_JOIN";
+	case PhysicalOperatorType::LEFT_NL_JOIN:
+		return "LEFT_NL_JOIN";
+	case PhysicalOperatorType::RIGHT_NL_JOIN:
+		return "RIGHT_NL_JOIN";
+	case PhysicalOperatorType::OUTER_NL_JOIN:
+		return "OUTER_NL_JOIN";
+	case PhysicalOperatorType::INNER_HASH_JOIN:
+		return "INNER_HASH_JOIN";
+	case PhysicalOperatorType::LEFT_HASH_JOIN:
+		return "LEFT_HASH_JOIN";
+	case PhysicalOperatorType::RIGHT_HASH_JOIN:
+		return "RIGHT_HASH_JOIN";
+	case PhysicalOperatorType::OUTER_HASH_JOIN:
+		return "OUTER_HASH_JOIN";
+	case PhysicalOperatorType::INSERT:
+		return "INSERT";
+	case PhysicalOperatorType::INSERT_SELECT:
+		return "INSERT_SELECT";
+	case PhysicalOperatorType::DELETE:
+		return "DELETE";
+	case PhysicalOperatorType::UPDATE:
+		return "UPDATE";
+	case PhysicalOperatorType::EXPORT_EXTERNAL_FILE:
+		return "EXPORT_EXTERNAL_FILE";
+	default:
+		return "INVALID";
 	}
 }
-
 };

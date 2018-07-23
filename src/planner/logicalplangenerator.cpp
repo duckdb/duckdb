@@ -34,7 +34,8 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 	}
 
 	if (statement.HasAggregation()) {
-		auto aggregate = make_unique<LogicalAggregate>(move(statement.select_list));
+		auto aggregate =
+		    make_unique<LogicalAggregate>(move(statement.select_list));
 		if (statement.HasGroup()) {
 			// have to add group by columns
 			aggregate->groups = move(statement.groupby.groups);
@@ -45,12 +46,14 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 		if (statement.HasHaving()) {
 			statement.groupby.having->Accept(this);
 
-			auto having = make_unique<LogicalFilter>(move(statement.groupby.having));
+			auto having =
+			    make_unique<LogicalFilter>(move(statement.groupby.having));
 			having->children.push_back(move(root));
 			root = move(having);
 		}
 	} else {
-		auto projection = make_unique<LogicalProjection>(move(statement.select_list));
+		auto projection =
+		    make_unique<LogicalProjection>(move(statement.select_list));
 		projection->children.push_back(move(root));
 		root = move(projection);
 	}
@@ -66,7 +69,8 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 		root = move(order);
 	}
 	if (statement.HasLimit()) {
-		auto limit = make_unique<LogicalLimit>(statement.limit.limit, statement.limit.offset);
+		auto limit = make_unique<LogicalLimit>(statement.limit.limit,
+		                                       statement.limit.offset);
 		limit->children.push_back(move(root));
 		root = move(limit);
 	}
@@ -75,7 +79,8 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 void LogicalPlanGenerator::Visit(BaseTableRefExpression &expr) {
 	auto table = catalog.GetTable(expr.schema_name, expr.table_name);
 	auto get_table = make_unique<LogicalGet>(table);
-	if (root) get_table->children.push_back(move(root));
+	if (root)
+		get_table->children.push_back(move(root));
 	root = move(get_table);
 }
 

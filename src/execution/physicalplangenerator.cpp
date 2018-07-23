@@ -18,7 +18,8 @@
 using namespace duckdb;
 using namespace std;
 
-bool PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> logical, unique_ptr<BindContext> context) {
+bool PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> logical,
+                                       unique_ptr<BindContext> context) {
 	this->context = move(context);
 	this->success = false;
 	try {
@@ -35,19 +36,19 @@ bool PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> logical, uniq
 	return this->success;
 }
 
-void PhysicalPlanGenerator::Visit(LogicalAggregate& op) {
+void PhysicalPlanGenerator::Visit(LogicalAggregate &op) {
 	LogicalOperatorVisitor::Visit(op);
 }
 
-void PhysicalPlanGenerator::Visit(LogicalDistinct& op) {
+void PhysicalPlanGenerator::Visit(LogicalDistinct &op) {
 	LogicalOperatorVisitor::Visit(op);
 }
 
-void PhysicalPlanGenerator::Visit(LogicalFilter& op) {
+void PhysicalPlanGenerator::Visit(LogicalFilter &op) {
 	LogicalOperatorVisitor::Visit(op);
 }
 
-void PhysicalPlanGenerator::Visit(LogicalGet& op) {
+void PhysicalPlanGenerator::Visit(LogicalGet &op) {
 	LogicalOperatorVisitor::Visit(op);
 
 	if (!op.table) {
@@ -55,7 +56,7 @@ void PhysicalPlanGenerator::Visit(LogicalGet& op) {
 		return;
 	}
 
-	DataTable* table = catalog.storage_manager->GetTable(op.table->oid);
+	DataTable *table = catalog.storage_manager->GetTable(op.table->oid);
 
 	std::vector<size_t> column_ids;
 
@@ -66,7 +67,7 @@ void PhysicalPlanGenerator::Visit(LogicalGet& op) {
 	this->plan = move(scan);
 }
 
-void PhysicalPlanGenerator::Visit(LogicalLimit& op) {
+void PhysicalPlanGenerator::Visit(LogicalLimit &op) {
 	LogicalOperatorVisitor::Visit(op);
 
 	auto limit = make_unique<PhysicalLimit>(op.limit, op.offset);
@@ -77,11 +78,11 @@ void PhysicalPlanGenerator::Visit(LogicalLimit& op) {
 	this->plan = move(limit);
 }
 
-void PhysicalPlanGenerator::Visit(LogicalOrder& op) {
+void PhysicalPlanGenerator::Visit(LogicalOrder &op) {
 	LogicalOperatorVisitor::Visit(op);
 }
 
-void PhysicalPlanGenerator::Visit(LogicalProjection& op) {
+void PhysicalPlanGenerator::Visit(LogicalProjection &op) {
 	LogicalOperatorVisitor::Visit(op);
 
 	auto projection = make_unique<PhysicalProjection>(move(op.select_list));

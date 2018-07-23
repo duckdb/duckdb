@@ -40,11 +40,11 @@ class DuckDBResult {
 	void Print();
 
 	DataChunk data;
-	
+
 	bool success;
 	std::string error;
-  private:
-  	DuckDBResult(const DuckDBResult&) = delete;
 
+  private:
+	DuckDBResult(const DuckDBResult &) = delete;
 };
 }
