@@ -1,6 +1,9 @@
 
 #include "catalog/schema_catalog.hpp"
 #include "common/exception.hpp"
+#include "storage/storage_manager.hpp"
+#include "catalog/catalog.hpp"
+
 
 using namespace duckdb;
 using namespace std;
@@ -10,12 +13,14 @@ SchemaCatalogEntry::SchemaCatalogEntry(Catalog* catalog, string name)
     : AbstractCatalogEntry(catalog, name) {}
 
 void SchemaCatalogEntry::CreateTable(
-    const string &table_name, const std::vector<ColumnCatalogEntry> &columns, size_t oid) {
+    const string &table_name, const std::vector<ColumnCatalogEntry> &columns) {
 	if (TableExists(table_name)) {
 		throw CatalogException("Table with name %s already exists!",
 		                       table_name.c_str());
 	}
-	auto table = make_shared<TableCatalogEntry>(catalog, table_name, oid);
+	auto table = make_shared<TableCatalogEntry>(catalog, table_name);
+	catalog->storage_manager->CreateTable(*table.get());
+
 	for (auto &column : columns) {
 		table->AddColumn(column);
 	}

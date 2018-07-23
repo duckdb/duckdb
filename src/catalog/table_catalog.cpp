@@ -8,7 +8,7 @@
 using namespace duckdb;
 using namespace std;
 
-TableCatalogEntry::TableCatalogEntry(Catalog* catalog, string name, size_t oid)
+TableCatalogEntry::TableCatalogEntry(Catalog* catalog, string name)
     : AbstractCatalogEntry(catalog, name), oid(oid) {}
 
 void TableCatalogEntry::AddColumn(ColumnCatalogEntry entry) {
@@ -18,13 +18,14 @@ void TableCatalogEntry::AddColumn(ColumnCatalogEntry entry) {
 	}
 
 	auto table = catalog->storage_manager->GetTable(this->oid);
-	table->AddColumn(entry.type);
 
 	size_t oid = columns.size();
 	name_map[entry.name] = oid;
 	entry.oid = oid;
 	entry.catalog = this->catalog;
-	columns.push_back(make_shared<ColumnCatalogEntry>(entry));
+	auto column = make_shared<ColumnCatalogEntry>(entry);
+	columns.push_back(column);
+	table->AddColumn(*column.get());
 }
 
 bool TableCatalogEntry::ColumnExists(const string &name) {

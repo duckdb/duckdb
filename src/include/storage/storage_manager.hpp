@@ -11,10 +11,9 @@ namespace duckdb {
 
 class StorageManager {
   public:
-  	size_t CreateTable();
+  	void CreateTable(TableCatalogEntry& table);
 
   	DataTable* GetTable(size_t oid);
-
   	std::vector<std::unique_ptr<DataTable>> tables;
 };
 }

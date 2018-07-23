@@ -4,10 +4,10 @@
 using namespace duckdb;
 using namespace std;
 
-size_t StorageManager::CreateTable() {
+void StorageManager::CreateTable(TableCatalogEntry& table) {
 	size_t oid = tables.size();
-	tables.push_back(make_unique<DataTable>());
-	return oid;
+	tables.push_back(make_unique<DataTable>(*this, table));
+	table.oid = oid;
 }
 
 DataTable* StorageManager::GetTable(size_t oid) {

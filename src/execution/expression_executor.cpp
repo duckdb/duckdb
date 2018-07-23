@@ -37,7 +37,7 @@ void ExpressionExecutor::Visit(BaseTableRefExpression &expr) {
 }
 
 void ExpressionExecutor::Visit(ColumnRefExpression &expr) {
-	throw NotImplementedException("");
+	throw NotImplementedException("XX");
 }
 
 void ExpressionExecutor::Visit(ComparisonExpression &expr) {

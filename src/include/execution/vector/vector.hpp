@@ -22,6 +22,7 @@ class Vector {
 	~Vector();
 
 	Value GetValue(size_t index);
+	void SetValue(size_t index, Value val);
 
 	void Resize(oid_t max_elements);
 	void Append(Vector& other);

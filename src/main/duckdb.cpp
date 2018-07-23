@@ -3,6 +3,9 @@
 
 #include "execution/executor.hpp"
 #include "execution/physicalplangenerator.hpp"
+#include "storage/storage_manager.hpp"
+#include "execution/datachunk.hpp"
+
 #include "parser/parser.hpp"
 #include "planner/planner.hpp"
 
@@ -38,6 +41,29 @@ DuckDB::DuckDB(const char *path) {
 	columns.push_back(ColumnCatalogEntry("l_comment", TypeId::VARCHAR, true));
 
 	catalog.CreateTable(DEFAULT_SCHEMA, "lineitem", columns);
+
+	std::vector<ColumnCatalogEntry> columns2;
+	columns2.push_back(ColumnCatalogEntry("a", TypeId::INTEGER, true));
+	columns2.push_back(ColumnCatalogEntry("b", TypeId::INTEGER, true));
+
+
+	catalog.CreateTable(DEFAULT_SCHEMA, "test", columns2);
+
+	auto table = catalog.GetTable(DEFAULT_SCHEMA, "test");
+	auto dtable = catalog.storage_manager->GetTable(table->oid);
+
+	auto chunk = DataChunk();
+	auto v = vector<TypeId>{TypeId::INTEGER, TypeId::INTEGER};
+
+	chunk.Initialize(v, 2);
+	chunk.count = 2;
+	chunk.data[0]->SetValue(0, Value(11));
+	chunk.data[0]->SetValue(1, Value(12));
+	chunk.data[1]->SetValue(0, Value(21));
+	chunk.data[1]->SetValue(1, Value(22));
+
+	dtable->AddData(chunk);
+
 }
 
 DuckDBConnection::DuckDBConnection(DuckDB &database) : database(database) {}

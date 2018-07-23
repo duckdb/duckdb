@@ -14,7 +14,7 @@ class SchemaCatalogEntry;
 
 class TableCatalogEntry : public AbstractCatalogEntry {
   public:
-	TableCatalogEntry(Catalog* catalog, std::string name, size_t oid);
+	TableCatalogEntry(Catalog* catalog, std::string name);
 
 	size_t oid;
 	std::vector<std::shared_ptr<ColumnCatalogEntry>> columns;
