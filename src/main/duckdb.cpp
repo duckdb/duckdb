@@ -1,10 +1,10 @@
 
 #include "duckdb.hpp"
 
+#include "common/types/data_chunk.hpp"
 #include "execution/executor.hpp"
-#include "execution/physicalplangenerator.hpp"
+#include "execution/physical_plan_generator.hpp"
 #include "storage/storage_manager.hpp"
-#include "execution/datachunk.hpp"
 
 #include "parser/parser.hpp"
 #include "planner/planner.hpp"
@@ -45,7 +45,6 @@ DuckDB::DuckDB(const char *path) {
 	std::vector<ColumnCatalogEntry> columns2;
 	columns2.push_back(ColumnCatalogEntry("a", TypeId::INTEGER, true));
 	columns2.push_back(ColumnCatalogEntry("b", TypeId::INTEGER, true));
-
 
 	catalog.CreateTable(DEFAULT_SCHEMA, "test", columns2);
 
@@ -104,13 +103,13 @@ DuckDBResult::DuckDBResult(std::string error) : success(false), error(error) {}
 
 void DuckDBResult::Print() {
 	if (success) {
-		for (size_t i = 0; i < data.colcount; i++) {
+		for (size_t i = 0; i < data.column_count; i++) {
 			auto &vector = data.data[i];
 			printf("%s\t", TypeIdToString(vector->type).c_str());
 		}
 		printf(" [ %d ]\n", (int)data.count);
 		for (size_t j = 0; j < data.count; j++) {
-			for (size_t i = 0; i < data.colcount; i++) {
+			for (size_t i = 0; i < data.column_count; i++) {
 				auto &vector = data.data[i];
 				printf("%s\t", vector->GetValue(j).ToString().c_str());
 			}

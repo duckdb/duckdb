@@ -14,7 +14,8 @@ class Date {
 
 	static std::string Format(int32_t year, int32_t month, int32_t day);
 
-	static void Convert(int32_t date, int32_t& out_year, int32_t& out_month, int32_t& out_day);
+	static void Convert(int32_t date, int32_t &out_year, int32_t &out_month,
+	                    int32_t &out_day);
 	static int32_t FromDate(int32_t year, int32_t month, int32_t day);
 
 	static bool IsLeapYear(int32_t year);

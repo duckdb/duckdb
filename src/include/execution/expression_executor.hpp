@@ -9,7 +9,7 @@
 #include "parser/expression/abstract_expression.hpp"
 #include "parser/sql_node_visitor.hpp"
 
-#include "execution/datachunk.hpp"
+#include "common/types/data_chunk.hpp"
 
 namespace duckdb {
 class ExpressionExecutor : public SQLNodeVisitor {

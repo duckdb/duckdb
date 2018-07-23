@@ -15,9 +15,9 @@ class SchemaCatalogEntry;
 
 class TableCatalogEntry : public AbstractCatalogEntry {
   public:
-	TableCatalogEntry(Catalog* catalog, std::string name);
+	TableCatalogEntry(Catalog *catalog, std::string name);
 
-	DataTable* storage;
+	DataTable *storage;
 	std::vector<std::shared_ptr<ColumnCatalogEntry>> columns;
 	std::unordered_map<std::string, size_t> name_map;
 

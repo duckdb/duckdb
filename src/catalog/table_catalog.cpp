@@ -8,7 +8,7 @@
 using namespace duckdb;
 using namespace std;
 
-TableCatalogEntry::TableCatalogEntry(Catalog* catalog, string name)
+TableCatalogEntry::TableCatalogEntry(Catalog *catalog, string name)
     : AbstractCatalogEntry(catalog, name), storage(nullptr) {}
 
 void TableCatalogEntry::AddColumn(ColumnCatalogEntry entry) {

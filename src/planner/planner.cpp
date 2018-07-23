@@ -4,7 +4,7 @@
 #include "planner/binder.hpp"
 #include "planner/planner.hpp"
 
-#include "planner/logicalplangenerator.hpp"
+#include "planner/logical_plan_generator.hpp"
 
 using namespace duckdb;
 using namespace std;

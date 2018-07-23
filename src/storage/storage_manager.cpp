@@ -4,7 +4,7 @@
 using namespace duckdb;
 using namespace std;
 
-void StorageManager::CreateTable(TableCatalogEntry& table) {
+void StorageManager::CreateTable(TableCatalogEntry &table) {
 	auto storage = make_unique<DataTable>(*this, table);
 	tables.push_back(move(storage));
 	table.storage = tables.back().get();

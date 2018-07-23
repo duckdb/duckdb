@@ -18,8 +18,7 @@ class BindContext {
 	BindContext() {}
 
 	std::string GetMatchingTable(const std::string &column_name);
-	std::shared_ptr<ColumnCatalogEntry>
-	BindColumn(ColumnRefExpression &expr);
+	std::shared_ptr<ColumnCatalogEntry> BindColumn(ColumnRefExpression &expr);
 
 	void GenerateAllColumnExpressions(
 	    std::vector<std::unique_ptr<AbstractExpression>> &new_select_list);

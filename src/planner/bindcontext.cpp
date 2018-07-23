@@ -56,7 +56,7 @@ BindContext::BindColumn(ColumnRefExpression &expr) {
 		// subquery
 		throw BinderException("Subquery binding not implemented yet!");
 	}
-	auto& column_list = bound_columns[expr.table_name];
+	auto &column_list = bound_columns[expr.table_name];
 	expr.index = column_list.size();
 	column_list.push_back(expr.column_name);
 	return entry;

@@ -30,11 +30,6 @@ class Vector {
 	void Copy(Vector &other);
 	void Move(Vector &other);
 
-	static void Add(Vector &left, Vector &right, Vector &result);
-	static void Subtract(Vector &left, Vector &right, Vector &result);
-	static void Multiply(Vector &left, Vector &right, Vector &result);
-	static void Divide(Vector &left, Vector &right, Vector &result);
-
 	Vector(const Vector &) = delete;
 };
 }

@@ -3,7 +3,7 @@
 #include "parser/expression/join_expression.hpp"
 #include "parser/expression/subquery_expression.hpp"
 
-#include "planner/logicalplangenerator.hpp"
+#include "planner/logical_plan_generator.hpp"
 
 #include "planner/operator/logical_aggregate.hpp"
 #include "planner/operator/logical_distinct.hpp"
@@ -78,7 +78,8 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 
 void LogicalPlanGenerator::Visit(BaseTableRefExpression &expr) {
 	auto table = catalog.GetTable(expr.schema_name, expr.table_name);
-	auto get_table = make_unique<LogicalGet>(table, expr.alias.empty() ? expr.table_name : expr.alias);
+	auto get_table = make_unique<LogicalGet>(
+	    table, expr.alias.empty() ? expr.table_name : expr.alias);
 	if (root)
 		get_table->children.push_back(move(root));
 	root = move(get_table);

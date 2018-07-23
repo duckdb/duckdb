@@ -8,7 +8,7 @@
 #include "common/internal_types.hpp"
 #include "common/printable.hpp"
 
-#include "execution/datachunk.hpp"
+#include "common/types/data_chunk.hpp"
 
 #include "parser/expression/abstract_expression.hpp"
 #include "parser/statement/select_statement.hpp"

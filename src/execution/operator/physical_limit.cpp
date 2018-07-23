@@ -1,5 +1,5 @@
 
-#include "execution/operator/limit.hpp"
+#include "execution/operator/physical_limit.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -41,7 +41,7 @@ void PhysicalLimit::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 			chunk.count = state->child_chunk.count;
 		}
 		// instead of copying we just change the pointer in the current chunk
-		for (size_t i = 0; i < chunk.colcount; i++) {
+		for (size_t i = 0; i < chunk.column_count; i++) {
 			chunk.data[i]->data = state->child_chunk.data[i]->data;
 			chunk.data[i]->owns_data = false;
 			chunk.data[i]->count = chunk.count;

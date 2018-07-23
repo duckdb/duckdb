@@ -1,9 +1,8 @@
 
 #include "catalog/schema_catalog.hpp"
+#include "catalog/catalog.hpp"
 #include "common/exception.hpp"
 #include "storage/storage_manager.hpp"
-#include "catalog/catalog.hpp"
-
 
 using namespace duckdb;
 using namespace std;

@@ -42,7 +42,7 @@ void PhysicalProjection::GetChunk(DataChunk &chunk,
 		executor.Execute(expr.get(), *chunk.data[i]);
 	}
 	chunk.count = chunk.data[0]->count;
-	for (size_t i = 0; i < chunk.colcount; i++) {
+	for (size_t i = 0; i < chunk.column_count; i++) {
 		if (chunk.count != chunk.data[i]->count) {
 			throw Exception("Projection count mismatch!");
 		}

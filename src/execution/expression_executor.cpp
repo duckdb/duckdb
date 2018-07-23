@@ -1,5 +1,6 @@
 
 #include "execution/expression_executor.hpp"
+#include "execution/vector/vector_operations.hpp"
 
 #include "common/exception.hpp"
 
@@ -37,7 +38,7 @@ void ExpressionExecutor::Visit(BaseTableRefExpression &expr) {
 }
 
 void ExpressionExecutor::Visit(ColumnRefExpression &expr) {
-	if (expr.index == (size_t) -1) {
+	if (expr.index == (size_t)-1) {
 		throw Exception("Column Reference not bound!");
 	}
 	chunk.data[expr.index]->Move(vector);
@@ -85,16 +86,16 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 
 		switch (expr.type) {
 		case ExpressionType::OPERATOR_PLUS:
-			Vector::Add(l, r, vector);
+			VectorOperations::Add(l, r, vector);
 			break;
 		case ExpressionType::OPERATOR_MINUS:
-			Vector::Subtract(l, r, vector);
+			VectorOperations::Subtract(l, r, vector);
 			break;
 		case ExpressionType::OPERATOR_MULTIPLY:
-			Vector::Multiply(l, r, vector);
+			VectorOperations::Multiply(l, r, vector);
 			break;
 		case ExpressionType::OPERATOR_DIVIDE:
-			Vector::Divide(l, r, vector);
+			VectorOperations::Divide(l, r, vector);
 			break;
 		default:
 			throw NotImplementedException("operator");

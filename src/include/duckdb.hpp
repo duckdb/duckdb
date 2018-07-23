@@ -5,7 +5,7 @@
 #include <string>
 
 #include "catalog/catalog.hpp"
-#include "execution/datachunk.hpp"
+#include "common/types/data_chunk.hpp"
 
 namespace duckdb {
 class DuckDB;

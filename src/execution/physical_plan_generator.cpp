@@ -1,9 +1,9 @@
 
-#include "execution/physicalplangenerator.hpp"
+#include "execution/physical_plan_generator.hpp"
 
-#include "execution/operator/limit.hpp"
+#include "execution/operator/physical_limit.hpp"
 #include "execution/operator/physical_projection.hpp"
-#include "execution/operator/seqscan.hpp"
+#include "execution/operator/physical_seq_scan.hpp"
 
 #include "planner/operator/logical_aggregate.hpp"
 #include "planner/operator/logical_distinct.hpp"
@@ -58,7 +58,7 @@ void PhysicalPlanGenerator::Visit(LogicalGet &op) {
 
 	std::vector<size_t> column_ids;
 	// look in the context for this table which columns are required
-	for(auto& bound_column : context->bound_columns[op.alias]) {
+	for (auto &bound_column : context->bound_columns[op.alias]) {
 		column_ids.push_back(op.table->name_map[bound_column]);
 	}
 
