@@ -33,6 +33,19 @@ Vector::~Vector() {
 	}
 }
 
+void Vector::SetValue(size_t index, Value val){
+	Value newVal = val.CastAs(type);
+	switch(type) {
+		case TypeId::INTEGER:
+			((int*) data)[index] = newVal.value_.integer;
+			count++;
+			break;
+		default:
+			throw NotImplementedException("Unimplemented type for adding");
+	}
+}
+
+
 Value Vector::GetValue(size_t index) {
 	if (index >= count) {
 		throw Exception("Out of bounds");

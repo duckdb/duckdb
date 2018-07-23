@@ -28,8 +28,7 @@ void Catalog::CreateTable(const string &schema_name, const string &table_name,
 		                       schema_name.c_str());
 	}
 	auto schema = GetSchema(schema_name);
-	size_t oid = storage_manager->CreateTable();
-	schema->CreateTable(table_name, columns, oid);
+	schema->CreateTable(table_name, columns);
 }
 
 bool Catalog::SchemaExists(const string &name) {

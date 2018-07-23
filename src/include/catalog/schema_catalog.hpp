@@ -26,7 +26,6 @@ class SchemaCatalogEntry : public AbstractCatalogEntry {
 
   private:
 	void CreateTable(const std::string &table_name,
-	                 const std::vector<ColumnCatalogEntry> &columns,
-	                 size_t oid);
+	                 const std::vector<ColumnCatalogEntry> &columns);
 };
 }

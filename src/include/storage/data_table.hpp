@@ -4,16 +4,23 @@
 #include <vector>
 
 #include "storage/data_column.hpp"
+#include "execution/datachunk.hpp"
 
 namespace duckdb {
+class StorageManager;
+
 class DataTable {
   public:
-	DataTable() {}
+  	DataTable(StorageManager& storage, TableCatalogEntry& table):storage(storage), size(0), table(table) {
+  	}
 
-	void AddColumn(TypeId type);
+  	void AddColumn(ColumnCatalogEntry& column);
 
-	size_t size;
+  	void AddData(DataChunk& chunk);
 
-	std::vector<std::unique_ptr<DataColumn>> columns;
+  	size_t size;
+  	StorageManager& storage;
+  	std::vector<std::unique_ptr<DataColumn>> columns;
+  	TableCatalogEntry& table;
 };
 }

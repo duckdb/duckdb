@@ -8,23 +8,25 @@
 using namespace duckdb;
 using namespace std;
 
-TableCatalogEntry::TableCatalogEntry(Catalog *catalog, string name, size_t oid)
-    : AbstractCatalogEntry(catalog, name), oid(oid) {}
+TableCatalogEntry::TableCatalogEntry(Catalog* catalog, string name)
+    : AbstractCatalogEntry(catalog, name), storage(nullptr) {}
 
 void TableCatalogEntry::AddColumn(ColumnCatalogEntry entry) {
 	if (ColumnExists(entry.name)) {
 		throw CatalogException("Column with name %s already exists!",
 		                       entry.name.c_str());
 	}
-
-	auto table = catalog->storage_manager->GetTable(this->oid);
-	table->AddColumn(entry.type);
+	if (!storage) {
+		throw Exception("Storage of table has not been initialized!");
+	}
 
 	size_t oid = columns.size();
 	name_map[entry.name] = oid;
 	entry.oid = oid;
 	entry.catalog = this->catalog;
-	columns.push_back(make_shared<ColumnCatalogEntry>(entry));
+	auto column = make_shared<ColumnCatalogEntry>(entry);
+	columns.push_back(column);
+	storage->AddColumn(*column.get());
 }
 
 bool TableCatalogEntry::ColumnExists(const string &name) {

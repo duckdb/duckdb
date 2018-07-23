@@ -56,11 +56,9 @@ void PhysicalPlanGenerator::Visit(LogicalGet &op) {
 		return;
 	}
 
-	DataTable *table = catalog.storage_manager->GetTable(op.table->oid);
-
 	std::vector<size_t> column_ids;
 
-	auto scan = make_unique<PhysicalSeqScan>(table, column_ids);
+	auto scan = make_unique<PhysicalSeqScan>(op.table->storage, column_ids);
 	if (plan) {
 		throw Exception("Scan has to be the first node of a plan!");
 	}
