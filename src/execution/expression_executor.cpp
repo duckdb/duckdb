@@ -65,19 +65,23 @@ void ExpressionExecutor::Visit(ComparisonExpression &expr) {
 	vector.Resize(std::max(l.count, r.count), TypeId::BOOLEAN);
 	switch(expr.type) {
 	case ExpressionType::COMPARE_EQUAL:
-		VectorOperations::Compare(l, r, vector);
+		VectorOperations::Equals(l, r, vector);
 		break;
 	case ExpressionType::COMPARE_NOTEQUAL:
-		throw NotImplementedException("Unimplemented compare: COMPARE_NOTEQUAL");
+		VectorOperations::NotEquals(l, r, vector);
+		break;
 	case ExpressionType::COMPARE_LESSTHAN:
-		throw NotImplementedException("Unimplemented compare: COMPARE_LESSTHAN");
+		VectorOperations::LessThan(l, r, vector);
+		break;
 	case ExpressionType::COMPARE_GREATERTHAN:
 		VectorOperations::GreaterThan(l, r, vector);
 		break;
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		throw NotImplementedException("Unimplemented compare: COMPARE_LESSTHANOREQUALTO");
+		VectorOperations::LessThanEquals(l, r, vector);
+		break;
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		throw NotImplementedException("Unimplemented compare: COMPARE_GREATERTHANOREQUALTO");
+		VectorOperations::GreaterThanEquals(l, r, vector);
+		break;
 	case ExpressionType::COMPARE_LIKE:
 		throw NotImplementedException("Unimplemented compare: COMPARE_LIKE");
 	case ExpressionType::COMPARE_NOTLIKE:

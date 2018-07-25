@@ -5,242 +5,120 @@
 using namespace duckdb;
 using namespace std;
 
-// FIXME: find a better way to do this with templates
+// Basic loop body used by functions here
+// Does a type switch and selects a template based on the vector types
+#define VECTOR_LOOP_BODY(LOOP_FUNCTION) do {\
+	if (left.type != right.type) { \
+		throw NotImplementedException("Type cast not implemented here!"); \
+	} \
+	switch (left.type) { \
+	case TypeId::TINYINT: \
+		LOOP_FUNCTION<int8_t>(left, right, result); \
+		break; \
+	case TypeId::SMALLINT: \
+		LOOP_FUNCTION<int16_t>(left, right, result); \
+		break; \
+	case TypeId::INTEGER: \
+		LOOP_FUNCTION<int32_t>(left, right, result); \
+		break; \
+	case TypeId::BIGINT: \
+		LOOP_FUNCTION<int64_t>(left, right, result); \
+		break; \
+	case TypeId::DECIMAL: \
+		LOOP_FUNCTION<double>(left, right, result); \
+		break; \
+	default: \
+		throw NotImplementedException("Unimplemented type"); \
+	} \
+	result.count = left.count; \
+	} while (0)
 
-template <class T>
-void ADDITION_LOOP(Vector &left, Vector &right, Vector &result) {
-	T *ldata = (T *)left.data;
-	T *rdata = (T *)right.data;
-	T *result_data = (T *)result.data;
-	for (size_t i = 0; i < left.count; i++) {
-		result_data[i] = ldata[i] + rdata[i];
-	}
+// Actual generated loop function (using templates)
+// Has support for OP(vector, vector), OP(scalar, vector) and OP(vector, scalar)
+
+#define GENERIC_LOOP_FUNCTION(NAME, OPERATOR, RESTYPE) \
+template <class T> \
+void NAME##_LOOP(Vector &left, Vector &right, Vector &result) { \
+	T *ldata = (T *)left.data; \
+	T *rdata = (T *)right.data; \
+	RESTYPE *result_data = (RESTYPE *)result.data; \
+	if (left.count == right.count) { \
+		for (size_t i = 0; i < left.count; i++) { \
+			result_data[i] = ldata[i] OPERATOR rdata[i]; \
+		} \
+	} else if (left.count == 1) { \
+		for (size_t i = 0; i < right.count; i++) { \
+			result_data[i] = ldata[0] OPERATOR rdata[i]; \
+		} \
+	} else if (right.count == 1) { \
+		for (size_t i = 0; i < left.count; i++) { \
+			result_data[i] = ldata[i] OPERATOR rdata[0]; \
+		} \
+	} else { \
+		throw Exception("Vector lengths don't match"); \
+	} \
 }
 
+#define NUMERIC_LOOP_FUNCTION(NAME, OPERATOR) GENERIC_LOOP_FUNCTION(NAME, OPERATOR, T)
+#define BOOLEAN_LOOP_FUNCTION(NAME, OPERATOR) GENERIC_LOOP_FUNCTION(NAME, OPERATOR, bool)
+
+//===--------------------------------------------------------------------===//
+// Numeric Operations
+//===--------------------------------------------------------------------===//
+
+NUMERIC_LOOP_FUNCTION(ADDITION, +);
+NUMERIC_LOOP_FUNCTION(SUBTRACT, -);
+NUMERIC_LOOP_FUNCTION(MULTIPLY, *);
+NUMERIC_LOOP_FUNCTION(DIVIDE, /);
+
 void VectorOperations::Add(Vector &left, Vector &right, Vector &result) {
-	if (left.type != right.type) {
-		throw NotImplementedException("not implemented");
-	}
-	if (left.count == right.count) {
-		switch (left.type) {
-		case TypeId::TINYINT:
-			ADDITION_LOOP<int8_t>(left, right, result);
-			break;
-		case TypeId::SMALLINT:
-			ADDITION_LOOP<int16_t>(left, right, result);
-			break;
-		case TypeId::INTEGER:
-			ADDITION_LOOP<int32_t>(left, right, result);
-			break;
-		case TypeId::BIGINT:
-			ADDITION_LOOP<int64_t>(left, right, result);
-			break;
-		case TypeId::DECIMAL:
-			ADDITION_LOOP<double>(left, right, result);
-			break;
-		default:
-			throw NotImplementedException("Unimplemented type");
-		}
-		result.count = left.count;
-	} else {
-		throw Exception("Vector lengths don't match");
-	}
+	VECTOR_LOOP_BODY(ADDITION_LOOP);
 }
 
 void VectorOperations::Subtract(Vector &left, Vector &right, Vector &result) {
-	throw NotImplementedException("Unimplemented");
-}
-
-template <class T>
-void MULTIPLY_LOOP(Vector &left, Vector &right, Vector &result) {
-	T *ldata = (T *)left.data;
-	T *rdata = (T *)right.data;
-	T *result_data = (T *)result.data;
-	for (size_t i = 0; i < left.count; i++) {
-		result_data[i] = ldata[i] * rdata[i];
-	}
+	VECTOR_LOOP_BODY(SUBTRACT_LOOP);
 }
 
 void VectorOperations::Multiply(Vector &left, Vector &right, Vector &result) {
-	if (left.type != right.type) {
-		throw NotImplementedException("not implemented");
-	}
-	if (left.count == right.count) {
-		switch (left.type) {
-		case TypeId::TINYINT:
-			MULTIPLY_LOOP<int8_t>(left, right, result);
-			break;
-		case TypeId::SMALLINT:
-			MULTIPLY_LOOP<int16_t>(left, right, result);
-			break;
-		case TypeId::INTEGER:
-			MULTIPLY_LOOP<int32_t>(left, right, result);
-			break;
-		case TypeId::BIGINT:
-			MULTIPLY_LOOP<int64_t>(left, right, result);
-			break;
-		case TypeId::DECIMAL:
-			MULTIPLY_LOOP<double>(left, right, result);
-			break;
-		default:
-			throw NotImplementedException("Unimplemented type");
-		}
-		result.count = left.count;
-	} else {
-		throw Exception("Vector lengths don't match");
-	}
+	VECTOR_LOOP_BODY(MULTIPLY_LOOP);
 }
 
 void VectorOperations::Divide(Vector &left, Vector &right, Vector &result) {
-	throw NotImplementedException("Unimplemented");
+	VECTOR_LOOP_BODY(DIVIDE_LOOP);
 }
 
-template <class T>
-void COMPARE_LOOP(Vector &left, Vector &right, Vector &result) {
-	T *ldata = (T *)left.data;
-	T *rdata = (T *)right.data;
-	bool *result_data = (bool *)result.data;
-	for (size_t i = 0; i < left.count; i++) {
-		result_data[i] = ldata[i] == rdata[i];
-	}
+//===--------------------------------------------------------------------===//
+// Comparison Operations
+//===--------------------------------------------------------------------===//
+BOOLEAN_LOOP_FUNCTION(EQ, ==);
+BOOLEAN_LOOP_FUNCTION(NEQ, !=);
+BOOLEAN_LOOP_FUNCTION(GE, >);
+BOOLEAN_LOOP_FUNCTION(GEQ, >=);
+BOOLEAN_LOOP_FUNCTION(LE, <);
+BOOLEAN_LOOP_FUNCTION(LEQ, <=);
+
+void VectorOperations::Equals(Vector &left, Vector &right, Vector &result) {
+	VECTOR_LOOP_BODY(EQ_LOOP);
 }
 
-template <class T>
-void COMPARE_LOOP_CONSTANT(Vector &left, Vector &right, Vector &result) {
-	T *ldata = (T *)left.data;
-	T *rdata = (T *)right.data;
-	bool *result_data = (bool *)result.data;
-	for (size_t i = 0; i < left.count; i++) {
-		result_data[i] = ldata[i] == rdata[0];
-	}
-}
-
-
-void VectorOperations::Compare(Vector &left, Vector &right, Vector &result) {
-	if (left.type != right.type) {
-		throw NotImplementedException("not implemented");
-	}
-
-	if (left.count == right.count) {
-		switch (left.type) {
-		case TypeId::TINYINT:
-			COMPARE_LOOP<int8_t>(left, right, result);
-			break;
-		case TypeId::SMALLINT:
-			COMPARE_LOOP<int16_t>(left, right, result);
-			break;
-		case TypeId::INTEGER:
-			COMPARE_LOOP<int32_t>(left, right, result);
-			break;
-		case TypeId::BIGINT:
-			COMPARE_LOOP<int64_t>(left, right, result);
-			break;
-		case TypeId::DECIMAL:
-			COMPARE_LOOP<double>(left, right, result);
-			break;
-		default:
-			throw NotImplementedException("Unimplemented type");
-		}
-	} else if (right.count == 1) {
-		switch (left.type) {
-		case TypeId::TINYINT:
-			COMPARE_LOOP_CONSTANT<int8_t>(left, right, result);
-			break;
-		case TypeId::SMALLINT:
-			COMPARE_LOOP_CONSTANT<int16_t>(left, right, result);
-			break;
-		case TypeId::INTEGER:
-			COMPARE_LOOP_CONSTANT<int32_t>(left, right, result);
-			break;
-		case TypeId::BIGINT:
-			COMPARE_LOOP_CONSTANT<int64_t>(left, right, result);
-			break;
-		case TypeId::DECIMAL:
-			COMPARE_LOOP_CONSTANT<double>(left, right, result);
-			break;
-		default:
-			throw NotImplementedException("Unimplemented type");
-		}
-	} else if (left.count == 1) {
-		return Compare(right, left, result);
-	} else {
-		throw Exception("Vector lengths don't match");
-	}
-	result.count = left.count;
-}
-
-
-template <class T>
-void GREATER_THAN_LOOP(Vector &left, Vector &right, Vector &result) {
-	T *ldata = (T *)left.data;
-	T *rdata = (T *)right.data;
-	bool *result_data = (bool *)result.data;
-	for (size_t i = 0; i < left.count; i++) {
-		result_data[i] = ldata[i] > rdata[i];
-	}
-}
-
-template <class T>
-void GREATER_THAN_LOOP_CONSTANT(Vector &left, Vector &right, Vector &result) {
-	T *ldata = (T *)left.data;
-	T *rdata = (T *)right.data;
-	bool *result_data = (bool *)result.data;
-	for (size_t i = 0; i < left.count; i++) {
-		result_data[i] = ldata[i] > rdata[0];
-	}
+void VectorOperations::NotEquals(Vector &left, Vector &right, Vector &result) {
+	VECTOR_LOOP_BODY(NEQ_LOOP);
 }
 
 void VectorOperations::GreaterThan(Vector &left, Vector &right, Vector &result) {
-	if (left.type != right.type) {
-		throw NotImplementedException("not implemented");
-	}
+	VECTOR_LOOP_BODY(GE_LOOP);
+}
 
-	if (left.count == right.count) {
-		switch (left.type) {
-		case TypeId::TINYINT:
-			GREATER_THAN_LOOP<int8_t>(left, right, result);
-			break;
-		case TypeId::SMALLINT:
-			GREATER_THAN_LOOP<int16_t>(left, right, result);
-			break;
-		case TypeId::INTEGER:
-			GREATER_THAN_LOOP<int32_t>(left, right, result);
-			break;
-		case TypeId::BIGINT:
-			GREATER_THAN_LOOP<int64_t>(left, right, result);
-			break;
-		case TypeId::DECIMAL:
-			GREATER_THAN_LOOP<double>(left, right, result);
-			break;
-		default:
-			throw NotImplementedException("Unimplemented type");
-		}
-	} else if (right.count == 1) {
-		switch (left.type) {
-		case TypeId::TINYINT:
-			GREATER_THAN_LOOP_CONSTANT<int8_t>(left, right, result);
-			break;
-		case TypeId::SMALLINT:
-			GREATER_THAN_LOOP_CONSTANT<int16_t>(left, right, result);
-			break;
-		case TypeId::INTEGER:
-			GREATER_THAN_LOOP_CONSTANT<int32_t>(left, right, result);
-			break;
-		case TypeId::BIGINT:
-			GREATER_THAN_LOOP_CONSTANT<int64_t>(left, right, result);
-			break;
-		case TypeId::DECIMAL:
-			GREATER_THAN_LOOP_CONSTANT<double>(left, right, result);
-			break;
-		default:
-			throw NotImplementedException("Unimplemented type");
-		}
-	} else if (left.count == 1) {
-		return Compare(right, left, result);
-	} else {
-		throw Exception("Vector lengths don't match");
-	}
-	result.count = left.count;
+void VectorOperations::GreaterThanEquals(Vector &left, Vector &right, Vector &result) {
+	VECTOR_LOOP_BODY(GEQ_LOOP);
+}
+
+void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result) {
+	VECTOR_LOOP_BODY(LE_LOOP);
+}
+
+void VectorOperations::LessThanEquals(Vector &left, Vector &right, Vector &result) {
+	VECTOR_LOOP_BODY(LEQ_LOOP);
 }
 
 typedef bool(*binary_bool_op)(bool, bool);

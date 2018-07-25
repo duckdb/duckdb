@@ -31,9 +31,17 @@ class VectorOperations {
 	// Comparison Operations
 	//===--------------------------------------------------------------------===//
 	// A == B
-	static void Compare(Vector &left, Vector &right, Vector &result);
+	static void Equals(Vector &left, Vector &right, Vector &result);
+	// A != B
+	static void NotEquals(Vector &left, Vector &right, Vector &result);
 	// A > B
 	static void GreaterThan(Vector &left, Vector &right, Vector &result);
+	// A >= B
+	static void GreaterThanEquals(Vector &left, Vector &right, Vector &result);
+	// A < B
+	static void LessThan(Vector &left, Vector &right, Vector &result);
+	// A <= B
+	static void LessThanEquals(Vector &left, Vector &right, Vector &result);
 	
 
 	
