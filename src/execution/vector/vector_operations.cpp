@@ -7,60 +7,94 @@ using namespace std;
 
 // Basic loop body used by functions here
 // Does a type switch and selects a template based on the vector types
-#define VECTOR_LOOP_BODY(LOOP_FUNCTION) do {\
-	if (left.type != right.type) { \
-		throw NotImplementedException("Type cast not implemented here!"); \
-	} \
-	switch (left.type) { \
-	case TypeId::TINYINT: \
-		LOOP_FUNCTION<int8_t>(left, right, result); \
-		break; \
-	case TypeId::SMALLINT: \
-		LOOP_FUNCTION<int16_t>(left, right, result); \
-		break; \
-	case TypeId::INTEGER: \
-		LOOP_FUNCTION<int32_t>(left, right, result); \
-		break; \
-	case TypeId::BIGINT: \
-		LOOP_FUNCTION<int64_t>(left, right, result); \
-		break; \
-	case TypeId::DECIMAL: \
-		LOOP_FUNCTION<double>(left, right, result); \
-		break; \
-	default: \
-		throw NotImplementedException("Unimplemented type"); \
-	} \
-	result.count = left.count; \
+#define VECTOR_LOOP_BODY(LOOP_FUNCTION)                                        \
+	do {                                                                       \
+		if (left.type != right.type) {                                         \
+			throw NotImplementedException("Type cast not implemented here!");  \
+		}                                                                      \
+		switch (left.type) {                                                   \
+		case TypeId::TINYINT:                                                  \
+			LOOP_FUNCTION<int8_t>(left, right, result);                        \
+			break;                                                             \
+		case TypeId::SMALLINT:                                                 \
+			LOOP_FUNCTION<int16_t>(left, right, result);                       \
+			break;                                                             \
+		case TypeId::INTEGER:                                                  \
+			LOOP_FUNCTION<int32_t>(left, right, result);                       \
+			break;                                                             \
+		case TypeId::BIGINT:                                                   \
+			LOOP_FUNCTION<int64_t>(left, right, result);                       \
+			break;                                                             \
+		case TypeId::DECIMAL:                                                  \
+			LOOP_FUNCTION<double>(left, right, result);                        \
+			break;                                                             \
+		default:                                                               \
+			throw NotImplementedException("Unimplemented type");               \
+		}                                                                      \
+		result.count = max(left.count, right.count);                           \
 	} while (0)
 
 // Actual generated loop function (using templates)
 // Has support for OP(vector, vector), OP(scalar, vector) and OP(vector, scalar)
 
-#define GENERIC_LOOP_FUNCTION(NAME, OPERATOR, RESTYPE) \
-template <class T> \
-void NAME##_LOOP(Vector &left, Vector &right, Vector &result) { \
-	T *ldata = (T *)left.data; \
-	T *rdata = (T *)right.data; \
-	RESTYPE *result_data = (RESTYPE *)result.data; \
-	if (left.count == right.count) { \
-		for (size_t i = 0; i < left.count; i++) { \
-			result_data[i] = ldata[i] OPERATOR rdata[i]; \
-		} \
-	} else if (left.count == 1) { \
-		for (size_t i = 0; i < right.count; i++) { \
-			result_data[i] = ldata[0] OPERATOR rdata[i]; \
-		} \
-	} else if (right.count == 1) { \
-		for (size_t i = 0; i < left.count; i++) { \
-			result_data[i] = ldata[i] OPERATOR rdata[0]; \
-		} \
-	} else { \
-		throw Exception("Vector lengths don't match"); \
-	} \
-}
+#define GENERIC_LOOP_FUNCTION(NAME, OPERATOR, RESTYPE)                         \
+	template <class T>                                                         \
+	void NAME##_LOOP(Vector &left, Vector &right, Vector &result) {            \
+		T *ldata = (T *)left.data;                                             \
+		T *rdata = (T *)right.data;                                            \
+		RESTYPE *result_data = (RESTYPE *)result.data;                         \
+		if (left.count == right.count) {                                       \
+			if (left.sel_vector && right.sel_vector) {                         \
+				for (size_t i = 0; i < left.count; i++) {                      \
+					result_data[i] = ldata[left.sel_vector[i]] OPERATOR        \
+					    rdata[right.sel_vector[i]];                            \
+				}                                                              \
+			} else if (left.sel_vector) {                                      \
+				for (size_t i = 0; i < left.count; i++) {                      \
+					result_data[i] =                                           \
+					    ldata[left.sel_vector[i]] OPERATOR rdata[i];           \
+				}                                                              \
+			} else if (right.sel_vector) {                                     \
+				for (size_t i = 0; i < left.count; i++) {                      \
+					result_data[i] =                                           \
+					    ldata[i] OPERATOR rdata[right.sel_vector[i]];          \
+				}                                                              \
+			} else {                                                           \
+				for (size_t i = 0; i < left.count; i++) {                      \
+					result_data[i] = ldata[i] OPERATOR rdata[i];               \
+				}                                                              \
+			}                                                                  \
+		} else if (left.count == 1) {                                          \
+			if (right.sel_vector) {                                            \
+				for (size_t i = 0; i < right.count; i++) {                     \
+					result_data[i] =                                           \
+					    ldata[0] OPERATOR rdata[right.sel_vector[i]];          \
+				}                                                              \
+			} else {                                                           \
+				for (size_t i = 0; i < right.count; i++) {                     \
+					result_data[i] = ldata[0] OPERATOR rdata[i];               \
+				}                                                              \
+			}                                                                  \
+		} else if (right.count == 1) {                                         \
+			if (left.sel_vector) {                                             \
+				for (size_t i = 0; i < left.count; i++) {                      \
+					result_data[i] =                                           \
+					    ldata[left.sel_vector[i]] OPERATOR rdata[0];           \
+				}                                                              \
+			} else {                                                           \
+				for (size_t i = 0; i < left.count; i++) {                      \
+					result_data[i] = ldata[i] OPERATOR rdata[0];               \
+				}                                                              \
+			}                                                                  \
+		} else {                                                               \
+			throw Exception("Vector lengths don't match");                     \
+		}                                                                      \
+	}
 
-#define NUMERIC_LOOP_FUNCTION(NAME, OPERATOR) GENERIC_LOOP_FUNCTION(NAME, OPERATOR, T)
-#define BOOLEAN_LOOP_FUNCTION(NAME, OPERATOR) GENERIC_LOOP_FUNCTION(NAME, OPERATOR, bool)
+#define NUMERIC_LOOP_FUNCTION(NAME, OPERATOR)                                  \
+	GENERIC_LOOP_FUNCTION(NAME, OPERATOR, T)
+#define BOOLEAN_LOOP_FUNCTION(NAME, OPERATOR)                                  \
+	GENERIC_LOOP_FUNCTION(NAME, OPERATOR, bool)
 
 //===--------------------------------------------------------------------===//
 // Numeric Operations
@@ -105,11 +139,13 @@ void VectorOperations::NotEquals(Vector &left, Vector &right, Vector &result) {
 	VECTOR_LOOP_BODY(NEQ_LOOP);
 }
 
-void VectorOperations::GreaterThan(Vector &left, Vector &right, Vector &result) {
+void VectorOperations::GreaterThan(Vector &left, Vector &right,
+                                   Vector &result) {
 	VECTOR_LOOP_BODY(GE_LOOP);
 }
 
-void VectorOperations::GreaterThanEquals(Vector &left, Vector &right, Vector &result) {
+void VectorOperations::GreaterThanEquals(Vector &left, Vector &right,
+                                         Vector &result) {
 	VECTOR_LOOP_BODY(GEQ_LOOP);
 }
 
@@ -117,13 +153,14 @@ void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result) {
 	VECTOR_LOOP_BODY(LE_LOOP);
 }
 
-void VectorOperations::LessThanEquals(Vector &left, Vector &right, Vector &result) {
+void VectorOperations::LessThanEquals(Vector &left, Vector &right,
+                                      Vector &result) {
 	VECTOR_LOOP_BODY(LEQ_LOOP);
 }
 
-typedef bool(*binary_bool_op)(bool, bool);
+typedef bool (*binary_bool_op)(bool, bool);
 
-template<binary_bool_op op> 
+template <binary_bool_op op>
 void BOOLEAN_LOOP(Vector &left, Vector &right, Vector &result) {
 	bool *ldata = (bool *)left.data;
 	bool *rdata = (bool *)right.data;
@@ -154,14 +191,13 @@ void VectorOperations::Or(Vector &left, Vector &right, Vector &result) {
 
 	if (left.count == right.count) {
 		BOOLEAN_LOOP<boolean_or>(left, right, result);
+		result.count = left.count;
 	} else {
 		throw Exception("Vector lengths don't match");
 	}
 }
 
-
-template <class T>
-void COPY_LOOP(Vector &source, void* target) {
+template <class T> void COPY_LOOP(Vector &source, void *target) {
 	T *sdata = (T *)source.data;
 	T *result = (T *)target;
 	if (source.sel_vector) {
@@ -175,8 +211,9 @@ void COPY_LOOP(Vector &source, void* target) {
 	}
 }
 
-void VectorOperations::Copy(Vector& source, void* target) {
-	if (source.count == 0) return;
+void VectorOperations::Copy(Vector &source, void *target) {
+	if (source.count == 0)
+		return;
 	switch (source.type) {
 	case TypeId::TINYINT:
 		COPY_LOOP<int8_t>(source, target);

@@ -42,9 +42,7 @@ class VectorOperations {
 	static void LessThan(Vector &left, Vector &right, Vector &result);
 	// A <= B
 	static void LessThanEquals(Vector &left, Vector &right, Vector &result);
-	
 
-	
-	static void Copy(Vector& source, void* target);
+	static void Copy(Vector &source, void *target);
 };
 }

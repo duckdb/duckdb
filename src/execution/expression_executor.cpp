@@ -63,7 +63,7 @@ void ExpressionExecutor::Visit(ComparisonExpression &expr) {
 	expr.children[1]->Accept(this);
 	vector.Move(r);
 	vector.Resize(std::max(l.count, r.count), TypeId::BOOLEAN);
-	switch(expr.type) {
+	switch (expr.type) {
 	case ExpressionType::COMPARE_EQUAL:
 		VectorOperations::Equals(l, r, vector);
 		break;
@@ -89,14 +89,30 @@ void ExpressionExecutor::Visit(ComparisonExpression &expr) {
 	case ExpressionType::COMPARE_IN:
 		throw NotImplementedException("Unimplemented compare: COMPARE_IN");
 	case ExpressionType::COMPARE_DISTINCT_FROM:
-		throw NotImplementedException("Unimplemented compare: COMPARE_DISTINCT_FROM");
+		throw NotImplementedException(
+		    "Unimplemented compare: COMPARE_DISTINCT_FROM");
 	default:
-		throw NotImplementedException("Unknown result!");
+		throw NotImplementedException("Unknown comparison type!");
 	}
 }
 
 void ExpressionExecutor::Visit(ConjunctionExpression &expr) {
-	throw NotImplementedException("");
+	Vector l, r, result;
+	expr.children[0]->Accept(this);
+	vector.Move(l);
+	expr.children[1]->Accept(this);
+	vector.Move(r);
+	vector.Resize(std::max(l.count, r.count), TypeId::BOOLEAN);
+	switch (expr.type) {
+	case ExpressionType::CONJUNCTION_AND:
+		VectorOperations::And(l, r, vector);
+		break;
+	case ExpressionType::CONJUNCTION_OR:
+		VectorOperations::Or(l, r, vector);
+		break;
+	default:
+		throw NotImplementedException("Unknown conjunction type!");
+	}
 }
 
 void ExpressionExecutor::Visit(ConstantExpression &expr) {
@@ -122,6 +138,11 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 		expr.children[0]->Accept(this);
 		vector.Move(l);
 
+		switch (expr.type) {
+		default:
+			throw NotImplementedException(
+			    "Unsupported operator type with 1 child!");
+		}
 	} else if (expr.children.size() == 2) {
 		Vector l, r;
 		expr.children[0]->Accept(this);
@@ -145,7 +166,8 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 			VectorOperations::Divide(l, r, vector);
 			break;
 		default:
-			throw NotImplementedException("operator");
+			throw NotImplementedException(
+			    "Unsupported operator type with 2 children!");
 		}
 	} else {
 		throw NotImplementedException("operator");

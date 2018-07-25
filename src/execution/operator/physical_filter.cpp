@@ -32,10 +32,10 @@ void PhysicalFilter::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 		executor.Merge(expr.get(), result);
 	}
 	// now generate the selection vector
-	bool* matches = (bool*) result.data;
+	bool *matches = (bool *)result.data;
 	chunk.sel_vector = unique_ptr<sel_t[]>(new sel_t[result.count]);
 	size_t match_count = 0;
-	for(size_t i = 0; i < result.count; i++) {
+	for (size_t i = 0; i < result.count; i++) {
 		if (matches[i]) {
 			chunk.sel_vector[match_count++] = i;
 		}
@@ -44,7 +44,7 @@ void PhysicalFilter::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 		// everything matches! don't need a selection vector!
 		chunk.sel_vector.reset();
 	}
-	for(size_t i = 0; i < chunk.column_count; i++) {
+	for (size_t i = 0; i < chunk.column_count; i++) {
 		// create a reference to the vector of the child chunk
 		chunk.data[i]->Reference(*state->child_chunk.data[i].get());
 		// and assign the selection vector

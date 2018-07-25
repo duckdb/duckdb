@@ -110,7 +110,8 @@ void Vector::Resize(oid_t max_elements, TypeId new_type) {
 
 void Vector::Append(Vector &other) {
 	if (sel_vector) {
-		throw NotImplementedException("Cannot append to vector with selection vector");
+		throw NotImplementedException(
+		    "Cannot append to vector with selection vector");
 	}
 	if (other.type != type) {
 		throw NotImplementedException("FIXME cast");

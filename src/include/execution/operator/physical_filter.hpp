@@ -8,8 +8,7 @@ namespace duckdb {
 
 class PhysicalFilter : public PhysicalOperator {
   public:
-	PhysicalFilter(
-	    std::vector<std::unique_ptr<AbstractExpression>> select_list)
+	PhysicalFilter(std::vector<std::unique_ptr<AbstractExpression>> select_list)
 	    : PhysicalOperator(PhysicalOperatorType::FILTER),
 	      expressions(std::move(select_list)) {}
 
@@ -21,5 +20,4 @@ class PhysicalFilter : public PhysicalOperator {
 
 	std::vector<std::unique_ptr<AbstractExpression>> expressions;
 };
-
 }
