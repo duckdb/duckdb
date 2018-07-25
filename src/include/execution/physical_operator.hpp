@@ -42,14 +42,6 @@ class PhysicalOperator : public Printable {
 	std::vector<std::unique_ptr<PhysicalOperator>> children;
 };
 
-class PhysicalFilter : public PhysicalOperator {
-  public:
-	PhysicalFilter() : PhysicalOperator(PhysicalOperatorType::FILTER) {}
-
-	virtual void GetChunk(DataChunk &chunk,
-	                      PhysicalOperatorState *state) override;
-};
-
 class PhysicalAggregate : public PhysicalOperator {
   public:
 	PhysicalAggregate(PhysicalOperatorType type) : PhysicalOperator(type) {}

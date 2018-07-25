@@ -51,7 +51,7 @@ DuckDB::DuckDB(const char *path) {
 	auto table = catalog.GetTable(DEFAULT_SCHEMA, "test");
 	auto dtable = table->storage;
 
-	auto chunk = DataChunk();
+	DataChunk chunk;
 	auto v = vector<TypeId>{TypeId::INTEGER, TypeId::INTEGER};
 
 	chunk.Initialize(v, 2);

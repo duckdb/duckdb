@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-typedef uint16_t sel_t;
+typedef uint32_t sel_t;
 
 class Vector {
   public:
@@ -24,11 +24,12 @@ class Vector {
 	Value GetValue(size_t index);
 	void SetValue(size_t index, Value val);
 
-	void Resize(oid_t max_elements);
+	void Resize(oid_t max_elements, TypeId new_type = TypeId::INVALID);
 	void Append(Vector &other);
 
 	void Copy(Vector &other);
 	void Move(Vector &other);
+	void Reference(Vector &other);
 
 	Vector(const Vector &) = delete;
 };

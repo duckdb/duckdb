@@ -15,6 +15,7 @@ class DataChunk {
 	oid_t column_count;
 	std::unique_ptr<Vector> *data;
 	oid_t maximum_size;
+	std::unique_ptr<sel_t[]> sel_vector;
 
 	DataChunk();
 	~DataChunk();

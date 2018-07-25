@@ -2,6 +2,8 @@
 #include "common/types/vector.hpp"
 #include "common/exception.hpp"
 
+#include "execution/vector/vector_operations.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -59,6 +61,14 @@ Value Vector::GetValue(size_t index) {
 	}
 }
 
+void Vector::Reference(Vector &other) {
+	count = other.count;
+	data = other.data;
+	owns_data = false;
+	sel_vector = other.sel_vector;
+	type = other.type;
+}
+
 void Vector::Move(Vector &other) {
 	if (other.data && other.owns_data) {
 		delete[] other.data;
@@ -78,14 +88,17 @@ void Vector::Move(Vector &other) {
 
 void Vector::Copy(Vector &other) {
 	if (other.type != type) {
-		throw NotImplementedException("todo: cast");
+		throw NotImplementedException("FIXME cast");
 	}
 
 	memcpy(other.data, data, count * GetTypeIdSize(type));
 	other.count = count;
 }
 
-void Vector::Resize(oid_t max_elements) {
+void Vector::Resize(oid_t max_elements, TypeId new_type) {
+	if (new_type != TypeId::INVALID) {
+		type = new_type;
+	}
 	char *new_data = new char[max_elements * GetTypeIdSize(type)];
 	memcpy(new_data, data, count * GetTypeIdSize(type));
 	if (owns_data) {
@@ -96,13 +109,12 @@ void Vector::Resize(oid_t max_elements) {
 }
 
 void Vector::Append(Vector &other) {
-	if (sel_vector || other.sel_vector) {
-		throw NotImplementedException("fixme selvector");
+	if (sel_vector) {
+		throw NotImplementedException("Cannot append to vector with selection vector");
 	}
 	if (other.type != type) {
-		throw NotImplementedException("fixme cast");
+		throw NotImplementedException("FIXME cast");
 	}
-	memcpy(data + count * GetTypeIdSize(type), other.data,
-	       other.count * GetTypeIdSize(type));
+	VectorOperations::Copy(other, data + count * GetTypeIdSize(type));
 	count += other.count;
 }

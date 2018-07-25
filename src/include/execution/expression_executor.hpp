@@ -17,6 +17,7 @@ class ExpressionExecutor : public SQLNodeVisitor {
 	ExpressionExecutor(DataChunk &chunk) : chunk(chunk) {}
 
 	void Execute(AbstractExpression *expr, Vector &result);
+	void Merge(AbstractExpression *expr, Vector &result);
 
 	void Visit(AggregateExpression &expr);
 	void Visit(BaseTableRefExpression &expr);

@@ -29,6 +29,18 @@ void ExpressionExecutor::Execute(AbstractExpression *expr, Vector &result) {
 	vector.Move(result);
 }
 
+void ExpressionExecutor::Merge(AbstractExpression *expr, Vector &result) {
+	if (result.type != TypeId::BOOLEAN) {
+		throw NotImplementedException("Expected a boolean!");
+	}
+	expr->Accept(this);
+
+	if (vector.type != TypeId::BOOLEAN) {
+		throw NotImplementedException("Expected a boolean!");
+	}
+	VectorOperations::And(vector, result, result);
+}
+
 void ExpressionExecutor::Visit(AggregateExpression &expr) {
 	throw NotImplementedException("");
 }
@@ -41,11 +53,42 @@ void ExpressionExecutor::Visit(ColumnRefExpression &expr) {
 	if (expr.index == (size_t)-1) {
 		throw Exception("Column Reference not bound!");
 	}
-	chunk.data[expr.index]->Move(vector);
+	vector.Reference(*chunk.data[expr.index].get());
 }
 
 void ExpressionExecutor::Visit(ComparisonExpression &expr) {
-	throw NotImplementedException("");
+	Vector l, r, result;
+	expr.children[0]->Accept(this);
+	vector.Move(l);
+	expr.children[1]->Accept(this);
+	vector.Move(r);
+	vector.Resize(std::max(l.count, r.count), TypeId::BOOLEAN);
+	switch(expr.type) {
+	case ExpressionType::COMPARE_EQUAL:
+		VectorOperations::Compare(l, r, vector);
+		break;
+	case ExpressionType::COMPARE_NOTEQUAL:
+		throw NotImplementedException("Unimplemented compare: COMPARE_NOTEQUAL");
+	case ExpressionType::COMPARE_LESSTHAN:
+		throw NotImplementedException("Unimplemented compare: COMPARE_LESSTHAN");
+	case ExpressionType::COMPARE_GREATERTHAN:
+		VectorOperations::GreaterThan(l, r, vector);
+		break;
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		throw NotImplementedException("Unimplemented compare: COMPARE_LESSTHANOREQUALTO");
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		throw NotImplementedException("Unimplemented compare: COMPARE_GREATERTHANOREQUALTO");
+	case ExpressionType::COMPARE_LIKE:
+		throw NotImplementedException("Unimplemented compare: COMPARE_LIKE");
+	case ExpressionType::COMPARE_NOTLIKE:
+		throw NotImplementedException("Unimplemented compare: COMPARE_NOTLIKE");
+	case ExpressionType::COMPARE_IN:
+		throw NotImplementedException("Unimplemented compare: COMPARE_IN");
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+		throw NotImplementedException("Unimplemented compare: COMPARE_DISTINCT_FROM");
+	default:
+		throw NotImplementedException("Unknown result!");
+	}
 }
 
 void ExpressionExecutor::Visit(ConjunctionExpression &expr) {
@@ -76,7 +119,7 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 		vector.Move(l);
 
 	} else if (expr.children.size() == 2) {
-		Vector l, r, result;
+		Vector l, r;
 		expr.children[0]->Accept(this);
 		vector.Move(l);
 		expr.children[1]->Accept(this);

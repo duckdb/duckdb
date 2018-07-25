@@ -1,6 +1,7 @@
 
 #include "execution/physical_plan_generator.hpp"
 
+#include "execution/operator/physical_filter.hpp"
 #include "execution/operator/physical_limit.hpp"
 #include "execution/operator/physical_projection.hpp"
 #include "execution/operator/physical_seq_scan.hpp"
@@ -38,14 +39,26 @@ bool PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> logical,
 
 void PhysicalPlanGenerator::Visit(LogicalAggregate &op) {
 	LogicalOperatorVisitor::Visit(op);
+
+	throw NotImplementedException("physical plan generator");
 }
 
 void PhysicalPlanGenerator::Visit(LogicalDistinct &op) {
 	LogicalOperatorVisitor::Visit(op);
+
+	throw NotImplementedException("physical plan generator");
 }
 
 void PhysicalPlanGenerator::Visit(LogicalFilter &op) {
 	LogicalOperatorVisitor::Visit(op);
+
+	if (!plan) {
+		throw Exception("Filter cannot be the first node of a plan!");
+	}
+
+	auto filter = make_unique<PhysicalFilter>(move(op.expressions));
+	filter->children.push_back(move(plan));
+	this->plan = move(filter);
 }
 
 void PhysicalPlanGenerator::Visit(LogicalGet &op) {
@@ -74,7 +87,7 @@ void PhysicalPlanGenerator::Visit(LogicalLimit &op) {
 
 	auto limit = make_unique<PhysicalLimit>(op.limit, op.offset);
 	if (!plan) {
-		throw Exception("Limit cannot be the first of a plan!");
+		throw Exception("Limit cannot be the first node of a plan!");
 	}
 	limit->children.push_back(move(plan));
 	this->plan = move(limit);
@@ -82,6 +95,8 @@ void PhysicalPlanGenerator::Visit(LogicalLimit &op) {
 
 void PhysicalPlanGenerator::Visit(LogicalOrder &op) {
 	LogicalOperatorVisitor::Visit(op);
+
+	throw NotImplementedException("physical plan generator");
 }
 
 void PhysicalPlanGenerator::Visit(LogicalProjection &op) {

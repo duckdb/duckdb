@@ -39,6 +39,13 @@ int main() {
 		return 1;
 	}
 
+	if (duckdb_query(connection, "SELECT a + 2, b FROM test WHERE a = 11;", &result) != DuckDBSuccess) {
+		return 1;
+	}
+
+	if (duckdb_query(connection, "SELECT a + 2, b FROM test WHERE a = 11 AND b > 30;", &result) != DuckDBSuccess) {
+		return 1;
+	}
 	// if (duckdb_query(connection, "SELECT l_orderkey, l_orderkey + 1 FROM lineitem;", &result) != DuckDBSuccess) {
 	// 	return 1;
 	// }
