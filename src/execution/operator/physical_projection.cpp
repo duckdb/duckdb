@@ -6,7 +6,7 @@ using namespace duckdb;
 using namespace std;
 
 void PhysicalProjection::InitializeChunk(DataChunk &chunk) {
-	// just copy the chunk data of the child
+	// get the chunk types from the projection list
 	vector<TypeId> types;
 	for (auto &expr : select_list) {
 		types.push_back(expr->return_type);

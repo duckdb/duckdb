@@ -42,7 +42,36 @@ void ExpressionExecutor::Merge(AbstractExpression *expr, Vector &result) {
 }
 
 void ExpressionExecutor::Visit(AggregateExpression &expr) {
-	throw NotImplementedException("");
+	if (expr.type == ExpressionType::AGGREGATE_COUNT) {
+		// COUNT(*)
+		// Without FROM clause return "1", else return "count"
+		size_t count = chunk.column_count == 0 ? 1 : chunk.count;
+		Vector v(Value((int32_t)count));
+		v.Move(vector);
+		return;
+	} else if (expr.children.size() != 1) {
+		throw NotImplementedException("Aggregate expression without children!");
+	}
+	Vector child;
+	expr.children[0]->Accept(this);
+	vector.Move(child);
+	vector.Resize(1, expr.return_type);
+	switch (expr.type) {
+	case ExpressionType::AGGREGATE_SUM:
+		VectorOperations::Sum(child, vector);
+		break;
+	case ExpressionType::AGGREGATE_COUNT:
+		VectorOperations::Count(child, vector);
+		break;
+	case ExpressionType::AGGREGATE_AVG:
+		VectorOperations::Average(child, vector);
+		break;
+	case ExpressionType::AGGREGATE_COUNT_STAR:
+	case ExpressionType::AGGREGATE_MIN:
+	case ExpressionType::AGGREGATE_MAX:
+	default:
+		throw NotImplementedException("Unsupported aggregate type");
+	}
 }
 
 void ExpressionExecutor::Visit(BaseTableRefExpression &expr) {
@@ -57,7 +86,7 @@ void ExpressionExecutor::Visit(ColumnRefExpression &expr) {
 }
 
 void ExpressionExecutor::Visit(ComparisonExpression &expr) {
-	Vector l, r, result;
+	Vector l, r;
 	expr.children[0]->Accept(this);
 	vector.Move(l);
 	expr.children[1]->Accept(this);

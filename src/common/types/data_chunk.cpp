@@ -7,7 +7,7 @@
 using namespace duckdb;
 using namespace std;
 
-DataChunk::DataChunk() : count(0), data(nullptr) {}
+DataChunk::DataChunk() : count(0), column_count(0), maximum_size(0), data(nullptr) {}
 
 DataChunk::~DataChunk() {
 	if (data) {

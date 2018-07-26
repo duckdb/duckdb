@@ -388,7 +388,10 @@ unique_ptr<AbstractExpression> TransformFuncCall(FuncCall *root) {
 			return make_unique<AggregateExpression>(
 			    agg_fun_type, false, make_unique<ColumnRefExpression>());
 		} else {
-			if (root->args->length < 2) {
+			if (!root->args) {
+				throw NotImplementedException(
+				    "Aggregation over zero columns not supported!");
+			} else if (root->args->length < 2) {
 				auto child = TransformExpression(
 				    (Node *)root->args->head->data.ptr_value);
 				return make_unique<AggregateExpression>(

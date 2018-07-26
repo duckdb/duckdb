@@ -2,6 +2,7 @@
 #include "execution/physical_plan_generator.hpp"
 
 #include "execution/operator/physical_filter.hpp"
+#include "execution/operator/physical_hash_aggregate.hpp"
 #include "execution/operator/physical_limit.hpp"
 #include "execution/operator/physical_projection.hpp"
 #include "execution/operator/physical_seq_scan.hpp"
@@ -40,13 +41,30 @@ bool PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> logical,
 void PhysicalPlanGenerator::Visit(LogicalAggregate &op) {
 	LogicalOperatorVisitor::Visit(op);
 
-	throw NotImplementedException("physical plan generator");
+	if (op.groups.size() == 0) {
+		// no groups, just make a projection
+		auto projection = make_unique<PhysicalProjection>(move(op.select_list));
+		if (plan) {
+			projection->children.push_back(move(plan));
+		}
+		this->plan = move(projection);
+	} else {
+		// groups! create a GROUP BY aggregator
+		if (!plan) {
+			throw Exception("Cannot have GROUP BY without FROM clause!");
+		}
+
+		auto groupby = make_unique<PhysicalHashAggregate>(move(op.select_list),
+		                                                  move(op.groups));
+		groupby->children.push_back(move(plan));
+		this->plan = move(groupby);
+	}
 }
 
 void PhysicalPlanGenerator::Visit(LogicalDistinct &op) {
 	LogicalOperatorVisitor::Visit(op);
 
-	throw NotImplementedException("physical plan generator");
+	throw NotImplementedException("distinct clause");
 }
 
 void PhysicalPlanGenerator::Visit(LogicalFilter &op) {
@@ -96,7 +114,7 @@ void PhysicalPlanGenerator::Visit(LogicalLimit &op) {
 void PhysicalPlanGenerator::Visit(LogicalOrder &op) {
 	LogicalOperatorVisitor::Visit(op);
 
-	throw NotImplementedException("physical plan generator");
+	throw NotImplementedException("order");
 }
 
 void PhysicalPlanGenerator::Visit(LogicalProjection &op) {

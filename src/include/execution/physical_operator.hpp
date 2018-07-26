@@ -44,16 +44,15 @@ class PhysicalOperator : public Printable {
 
 class PhysicalAggregate : public PhysicalOperator {
   public:
-	PhysicalAggregate(PhysicalOperatorType type) : PhysicalOperator(type) {}
-};
+	PhysicalAggregate(
+	    PhysicalOperatorType type,
+	    std::vector<std::unique_ptr<AbstractExpression>> select_list,
+	    std::vector<std::unique_ptr<AbstractExpression>> groups)
+	    : PhysicalOperator(type), select_list(std::move(select_list)),
+	      groups(std::move(groups)) {}
 
-class PhysicalHashAggregate : public PhysicalAggregate {
-  public:
-	PhysicalHashAggregate()
-	    : PhysicalAggregate(PhysicalOperatorType::HASH_GROUP_BY) {}
-
-	virtual void GetChunk(DataChunk &chunk,
-	                      PhysicalOperatorState *state) override;
+	std::vector<std::unique_ptr<AbstractExpression>> select_list;
+	std::vector<std::unique_ptr<AbstractExpression>> groups;
 };
 
 class PhysicalOrderBy : public PhysicalOperator {

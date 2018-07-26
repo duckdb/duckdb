@@ -1,13 +1,38 @@
 
 #include "execution/vector/vector_operations.hpp"
 #include "common/exception.hpp"
+#include "common/types/hash.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 // Basic loop body used by functions here
 // Does a type switch and selects a template based on the vector types
-#define VECTOR_LOOP_BODY(LOOP_FUNCTION)                                        \
+
+#define VECTOR_LOOP_BODY_UNARY(LOOP_FUNCTION)                                  \
+	do {                                                                       \
+		switch (left.type) {                                                   \
+		case TypeId::TINYINT:                                                  \
+			LOOP_FUNCTION<int8_t>(left, result);                               \
+			break;                                                             \
+		case TypeId::SMALLINT:                                                 \
+			LOOP_FUNCTION<int16_t>(left, result);                              \
+			break;                                                             \
+		case TypeId::INTEGER:                                                  \
+			LOOP_FUNCTION<int32_t>(left, result);                              \
+			break;                                                             \
+		case TypeId::BIGINT:                                                   \
+			LOOP_FUNCTION<int64_t>(left, result);                              \
+			break;                                                             \
+		case TypeId::DECIMAL:                                                  \
+			LOOP_FUNCTION<double>(left, result);                               \
+			break;                                                             \
+		default:                                                               \
+			throw NotImplementedException("Unimplemented type");               \
+		}                                                                      \
+	} while (0)
+
+#define VECTOR_LOOP_BODY_BINARY(LOOP_FUNCTION)                                 \
 	do {                                                                       \
 		if (left.type != right.type) {                                         \
 			throw NotImplementedException("Type cast not implemented here!");  \
@@ -31,13 +56,45 @@ using namespace std;
 		default:                                                               \
 			throw NotImplementedException("Unimplemented type");               \
 		}                                                                      \
-		result.count = max(left.count, right.count);                           \
 	} while (0)
 
 // Actual generated loop function (using templates)
 // Has support for OP(vector, vector), OP(scalar, vector) and OP(vector, scalar)
 
-#define GENERIC_LOOP_FUNCTION(NAME, OPERATOR, RESTYPE)                         \
+#define NUMERIC_LOOP_FUNCTION_UNARY(NAME, OPERATOR)                            \
+	template <class T> void NAME##_LOOP(Vector &left, Vector &result) {        \
+		T *ldata = (T *)left.data;                                             \
+		T *result_data = (T *)result.data;                                     \
+		if (left.sel_vector) {                                                 \
+			for (size_t i = 0; i < left.count; i++) {                          \
+				result_data[i] = OPERATOR(ldata[left.sel_vector[i]]);          \
+			}                                                                  \
+		} else {                                                               \
+			for (size_t i = 0; i < left.count; i++) {                          \
+				result_data[i] = OPERATOR(ldata[i]);                           \
+			}                                                                  \
+		}                                                                      \
+		result.count = left.count;                                             \
+	}
+
+#define NUMERIC_FOLD_FUNCTION_UNARY(NAME, OPERATOR)                            \
+	template <class T> void NAME##_LOOP(Vector &left, Vector &result) {        \
+		T *ldata = (T *)left.data;                                             \
+		T *result_data = (T *)result.data;                                     \
+		result_data[0] = 0;                                                    \
+		if (left.sel_vector) {                                                 \
+			for (size_t i = 0; i < left.count; i++) {                          \
+				result_data[0] OPERATOR ldata[left.sel_vector[i]];             \
+			}                                                                  \
+		} else {                                                               \
+			for (size_t i = 0; i < left.count; i++) {                          \
+				result_data[0] OPERATOR ldata[i];                              \
+			}                                                                  \
+		}                                                                      \
+		result.count = 1;                                                      \
+	}
+
+#define GENERIC_LOOP_FUNCTION_BINARY(NAME, OPERATOR, RESTYPE)                  \
 	template <class T>                                                         \
 	void NAME##_LOOP(Vector &left, Vector &right, Vector &result) {            \
 		T *ldata = (T *)left.data;                                             \
@@ -64,6 +121,7 @@ using namespace std;
 					result_data[i] = ldata[i] OPERATOR rdata[i];               \
 				}                                                              \
 			}                                                                  \
+			result.count = left.count;                                         \
 		} else if (left.count == 1) {                                          \
 			if (right.sel_vector) {                                            \
 				for (size_t i = 0; i < right.count; i++) {                     \
@@ -75,6 +133,7 @@ using namespace std;
 					result_data[i] = ldata[0] OPERATOR rdata[i];               \
 				}                                                              \
 			}                                                                  \
+			result.count = right.count;                                        \
 		} else if (right.count == 1) {                                         \
 			if (left.sel_vector) {                                             \
 				for (size_t i = 0; i < left.count; i++) {                      \
@@ -86,91 +145,81 @@ using namespace std;
 					result_data[i] = ldata[i] OPERATOR rdata[0];               \
 				}                                                              \
 			}                                                                  \
+			result.count = left.count;                                         \
 		} else {                                                               \
 			throw Exception("Vector lengths don't match");                     \
 		}                                                                      \
 	}
 
-#define NUMERIC_LOOP_FUNCTION(NAME, OPERATOR)                                  \
-	GENERIC_LOOP_FUNCTION(NAME, OPERATOR, T)
-#define BOOLEAN_LOOP_FUNCTION(NAME, OPERATOR)                                  \
-	GENERIC_LOOP_FUNCTION(NAME, OPERATOR, bool)
+#define NUMERIC_LOOP_FUNCTION_BINARY(NAME, OPERATOR)                           \
+	GENERIC_LOOP_FUNCTION_BINARY(NAME, OPERATOR, T)
+#define BOOLEAN_LOOP_FUNCTION_BINARY(NAME, OPERATOR)                           \
+	GENERIC_LOOP_FUNCTION_BINARY(NAME, OPERATOR, bool)
 
 //===--------------------------------------------------------------------===//
 // Numeric Operations
 //===--------------------------------------------------------------------===//
 
-NUMERIC_LOOP_FUNCTION(ADDITION, +);
-NUMERIC_LOOP_FUNCTION(SUBTRACT, -);
-NUMERIC_LOOP_FUNCTION(MULTIPLY, *);
-NUMERIC_LOOP_FUNCTION(DIVIDE, /);
+NUMERIC_LOOP_FUNCTION_BINARY(ADDITION, +);
+NUMERIC_LOOP_FUNCTION_BINARY(SUBTRACT, -);
+NUMERIC_LOOP_FUNCTION_BINARY(MULTIPLY, *);
+NUMERIC_LOOP_FUNCTION_BINARY(DIVIDE, /);
 
 void VectorOperations::Add(Vector &left, Vector &right, Vector &result) {
-	VECTOR_LOOP_BODY(ADDITION_LOOP);
+	VECTOR_LOOP_BODY_BINARY(ADDITION_LOOP);
 }
 
 void VectorOperations::Subtract(Vector &left, Vector &right, Vector &result) {
-	VECTOR_LOOP_BODY(SUBTRACT_LOOP);
+	VECTOR_LOOP_BODY_BINARY(SUBTRACT_LOOP);
 }
 
 void VectorOperations::Multiply(Vector &left, Vector &right, Vector &result) {
-	VECTOR_LOOP_BODY(MULTIPLY_LOOP);
+	VECTOR_LOOP_BODY_BINARY(MULTIPLY_LOOP);
 }
 
 void VectorOperations::Divide(Vector &left, Vector &right, Vector &result) {
-	VECTOR_LOOP_BODY(DIVIDE_LOOP);
+	VECTOR_LOOP_BODY_BINARY(DIVIDE_LOOP);
 }
 
 //===--------------------------------------------------------------------===//
 // Comparison Operations
 //===--------------------------------------------------------------------===//
-BOOLEAN_LOOP_FUNCTION(EQ, ==);
-BOOLEAN_LOOP_FUNCTION(NEQ, !=);
-BOOLEAN_LOOP_FUNCTION(GE, >);
-BOOLEAN_LOOP_FUNCTION(GEQ, >=);
-BOOLEAN_LOOP_FUNCTION(LE, <);
-BOOLEAN_LOOP_FUNCTION(LEQ, <=);
+BOOLEAN_LOOP_FUNCTION_BINARY(EQ, ==);
+BOOLEAN_LOOP_FUNCTION_BINARY(NEQ, !=);
+BOOLEAN_LOOP_FUNCTION_BINARY(GE, >);
+BOOLEAN_LOOP_FUNCTION_BINARY(GEQ, >=);
+BOOLEAN_LOOP_FUNCTION_BINARY(LE, <);
+BOOLEAN_LOOP_FUNCTION_BINARY(LEQ, <=);
 
 void VectorOperations::Equals(Vector &left, Vector &right, Vector &result) {
-	VECTOR_LOOP_BODY(EQ_LOOP);
+	VECTOR_LOOP_BODY_BINARY(EQ_LOOP);
 }
 
 void VectorOperations::NotEquals(Vector &left, Vector &right, Vector &result) {
-	VECTOR_LOOP_BODY(NEQ_LOOP);
+	VECTOR_LOOP_BODY_BINARY(NEQ_LOOP);
 }
 
 void VectorOperations::GreaterThan(Vector &left, Vector &right,
                                    Vector &result) {
-	VECTOR_LOOP_BODY(GE_LOOP);
+	VECTOR_LOOP_BODY_BINARY(GE_LOOP);
 }
 
 void VectorOperations::GreaterThanEquals(Vector &left, Vector &right,
                                          Vector &result) {
-	VECTOR_LOOP_BODY(GEQ_LOOP);
+	VECTOR_LOOP_BODY_BINARY(GEQ_LOOP);
 }
 
 void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result) {
-	VECTOR_LOOP_BODY(LE_LOOP);
+	VECTOR_LOOP_BODY_BINARY(LE_LOOP);
 }
 
 void VectorOperations::LessThanEquals(Vector &left, Vector &right,
                                       Vector &result) {
-	VECTOR_LOOP_BODY(LEQ_LOOP);
+	VECTOR_LOOP_BODY_BINARY(LEQ_LOOP);
 }
 
-typedef bool (*binary_bool_op)(bool, bool);
-
-template <binary_bool_op op>
-void BOOLEAN_LOOP(Vector &left, Vector &right, Vector &result) {
-	bool *ldata = (bool *)left.data;
-	bool *rdata = (bool *)right.data;
-	bool *result_data = (bool *)result.data;
-	for (size_t i = 0; i < left.count; i++) {
-		result_data[i] = op(ldata[i], rdata[i]);
-	}
-}
-static inline bool boolean_and(bool a, bool b) { return a && b; }
-static inline bool boolean_or(bool a, bool b) { return a || b; }
+BOOLEAN_LOOP_FUNCTION_BINARY(AND, &&);
+BOOLEAN_LOOP_FUNCTION_BINARY(OR, &&);
 
 void VectorOperations::And(Vector &left, Vector &right, Vector &result) {
 	if (left.type != TypeId::BOOLEAN || right.type != TypeId::BOOLEAN) {
@@ -178,7 +227,7 @@ void VectorOperations::And(Vector &left, Vector &right, Vector &result) {
 	}
 
 	if (left.count == right.count) {
-		BOOLEAN_LOOP<boolean_and>(left, right, result);
+		AND_LOOP<bool>(left, right, result);
 	} else {
 		throw Exception("Vector lengths don't match");
 	}
@@ -190,13 +239,45 @@ void VectorOperations::Or(Vector &left, Vector &right, Vector &result) {
 	}
 
 	if (left.count == right.count) {
-		BOOLEAN_LOOP<boolean_or>(left, right, result);
-		result.count = left.count;
+		OR_LOOP<bool>(left, right, result);
 	} else {
 		throw Exception("Vector lengths don't match");
 	}
 }
 
+NUMERIC_FOLD_FUNCTION_UNARY(SUM, +=);
+
+void VectorOperations::Sum(Vector &left, Vector &result) {
+	VECTOR_LOOP_BODY_UNARY(SUM_LOOP);
+}
+
+void VectorOperations::Count(Vector &left, Vector &result) {
+	Vector count_vector(Value((int32_t)left.count));
+	VectorOperations::Add(result, count_vector, result);
+}
+
+void VectorOperations::Average(Vector &left, Vector &result) {
+	Vector count_vector(Value((int32_t)left.count));
+	VECTOR_LOOP_BODY_UNARY(SUM_LOOP);
+	VectorOperations::Divide(result, count_vector, result);
+}
+
+//===--------------------------------------------------------------------===//
+// Hash functions
+//===--------------------------------------------------------------------===//
+NUMERIC_LOOP_FUNCTION_UNARY(HASH, Hash);
+
+void VectorOperations::Hash(Vector &left, Vector &result) {
+	VECTOR_LOOP_BODY_UNARY(HASH_LOOP);
+}
+
+void VectorOperations::CombineHash(Vector &left, Vector& right, Vector &result) {
+	throw NotImplementedException("Combine hash! FIXME: xor");
+}
+
+//===--------------------------------------------------------------------===//
+// Helpers
+//===--------------------------------------------------------------------===//
 template <class T> void COPY_LOOP(Vector &source, void *target) {
 	T *sdata = (T *)source.data;
 	T *result = (T *)target;
@@ -234,3 +315,4 @@ void VectorOperations::Copy(Vector &source, void *target) {
 		throw NotImplementedException("Unimplemented type for copy");
 	}
 }
+

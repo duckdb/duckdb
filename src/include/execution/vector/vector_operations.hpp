@@ -43,6 +43,27 @@ class VectorOperations {
 	// A <= B
 	static void LessThanEquals(Vector &left, Vector &right, Vector &result);
 
+	//===--------------------------------------------------------------------===//
+	// Aggregates
+	//===--------------------------------------------------------------------===//
+	// SUM(A)
+	static void Sum(Vector &source, Vector &result);
+	// COUNT(A)
+	static void Count(Vector &source, Vector &result);
+	// AVG(A)
+	static void Average(Vector &source, Vector &result);
+
+	//===--------------------------------------------------------------------===//
+	// Hash functions
+	//===--------------------------------------------------------------------===//
+	// HASH(A)
+	static void Hash(Vector &source, Vector &result);
+	// COMBINE(A, HASH(B))
+	static void CombineHash(Vector &left, Vector& right, Vector &result);
+
+	//===--------------------------------------------------------------------===//
+	// Helpers
+	//===--------------------------------------------------------------------===//
 	static void Copy(Vector &source, void *target);
 };
 }
