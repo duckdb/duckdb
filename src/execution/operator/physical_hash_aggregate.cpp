@@ -25,7 +25,7 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 		return;
 	}
 
-	DataChunk& group_chunk = state->group_chunk;
+	DataChunk &group_chunk = state->group_chunk;
 	if (group_chunk.column_count == 0) {
 		// initialize group chunk
 		vector<TypeId> types;
@@ -50,11 +50,6 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 		}
 	}
 	throw NotImplementedException("group by");
-
-	
-
-
-
 
 	// children[0]->GetChunk(state->child_chunk, state->child_state.get());
 	// if (state->child_chunk.count == 0) {

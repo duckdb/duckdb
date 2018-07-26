@@ -59,7 +59,7 @@ class VectorOperations {
 	// HASH(A)
 	static void Hash(Vector &source, Vector &result);
 	// COMBINE(A, HASH(B))
-	static void CombineHash(Vector &left, Vector& right, Vector &result);
+	static void CombineHash(Vector &left, Vector &right, Vector &result);
 
 	//===--------------------------------------------------------------------===//
 	// Helpers
