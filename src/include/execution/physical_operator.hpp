@@ -27,7 +27,7 @@ class PhysicalOperatorState {
 
 class PhysicalOperator : public Printable {
   public:
-	PhysicalOperator(PhysicalOperatorType type) : type(type) {}
+	PhysicalOperator(PhysicalOperatorType type) : type(type) { }
 
 	PhysicalOperatorType GetOperatorType() { return type; }
 
@@ -40,19 +40,6 @@ class PhysicalOperator : public Printable {
 
 	PhysicalOperatorType type;
 	std::vector<std::unique_ptr<PhysicalOperator>> children;
-};
-
-class PhysicalAggregate : public PhysicalOperator {
-  public:
-	PhysicalAggregate(
-	    PhysicalOperatorType type,
-	    std::vector<std::unique_ptr<AbstractExpression>> select_list,
-	    std::vector<std::unique_ptr<AbstractExpression>> groups)
-	    : PhysicalOperator(type), select_list(std::move(select_list)),
-	      groups(std::move(groups)) {}
-
-	std::vector<std::unique_ptr<AbstractExpression>> select_list;
-	std::vector<std::unique_ptr<AbstractExpression>> groups;
 };
 
 class PhysicalOrderBy : public PhysicalOperator {

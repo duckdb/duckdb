@@ -59,9 +59,18 @@ int main() {
 		return 1;
 	}
 
+	if (duckdb_query(connection, "SELECT SUM(a), SUM(b), SUM(a) + SUM (b) FROM test;", &result) != DuckDBSuccess) {
+		return 1;
+	}
+
+	if (duckdb_query(connection, "SELECT SUM(a+2), SUM(a) + 2 * COUNT(*) FROM test;", &result) != DuckDBSuccess) {
+		return 1;
+	}
+
 	if (duckdb_query(connection, "SELECT SUM(a), COUNT(*) FROM test GROUP BY b;", &result) != DuckDBSuccess) {
 		return 1;
 	}
+
 	
 	// if (duckdb_query(connection, "SELECT l_orderkey, l_orderkey + 1 FROM lineitem;", &result) != DuckDBSuccess) {
 	// 	return 1;

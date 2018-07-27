@@ -27,7 +27,8 @@ bool Parser::ParseQuery(const char *query) {
 		                to_string(result.error->cursorpos) + "]";
 		goto wrapup;
 	}
-	print_pg_parse_tree(result.tree);
+
+	fprintf(stderr, "%s\n", query);
 	try {
 		if (!ParseList(result.tree)) {
 			goto wrapup;

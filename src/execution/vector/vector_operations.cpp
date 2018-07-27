@@ -2,6 +2,7 @@
 #include "execution/vector/vector_operations.hpp"
 #include "common/exception.hpp"
 #include "common/types/hash.hpp"
+#include "common/types/operators.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -247,32 +248,6 @@ void _fixed_return_binary_loop(Vector &left, Vector &right, Vector &result) {
 //===--------------------------------------------------------------------===//
 // Numeric Operations
 //===--------------------------------------------------------------------===//
-namespace operators {
-struct Addition {
-	template <class T> static inline T Operation(T left, T right) {
-		return left + right;
-	}
-};
-
-struct Subtraction {
-	template <class T> static inline T Operation(T left, T right) {
-		return left - right;
-	}
-};
-
-struct Multiplication {
-	template <class T> static inline T Operation(T left, T right) {
-		return left * right;
-	}
-};
-
-struct Division {
-	template <class T> static inline T Operation(T left, T right) {
-		return left / right;
-	}
-};
-}
-
 void VectorOperations::Add(Vector &left, Vector &right, Vector &result) {
 	_generic_binary_loop<operators::Addition>(left, right, result);
 }
@@ -292,44 +267,6 @@ void VectorOperations::Divide(Vector &left, Vector &right, Vector &result) {
 //===--------------------------------------------------------------------===//
 // Comparison Operations
 //===--------------------------------------------------------------------===//
-namespace operators {
-struct Equals {
-	template <class T> static inline bool Operation(T left, T right) {
-		return left == right;
-	}
-};
-
-struct NotEquals {
-	template <class T> static inline bool Operation(T left, T right) {
-		return left != right;
-	}
-};
-
-struct GreaterThan {
-	template <class T> static inline bool Operation(T left, T right) {
-		return left > right;
-	}
-};
-
-struct GreaterThanEquals {
-	template <class T> static inline bool Operation(T left, T right) {
-		return left >= right;
-	}
-};
-
-struct LessThan {
-	template <class T> static inline bool Operation(T left, T right) {
-		return left < right;
-	}
-};
-
-struct LessThanEquals {
-	template <class T> static inline bool Operation(T left, T right) {
-		return left <= right;
-	}
-};
-}
-
 void VectorOperations::Equals(Vector &left, Vector &right, Vector &result) {
 	_fixed_return_binary_loop<operators::Equals, bool>(left, right, result);
 }
@@ -358,19 +295,6 @@ void VectorOperations::LessThanEquals(Vector &left, Vector &right,
                                       Vector &result) {
 	_fixed_return_binary_loop<operators::LessThanEquals, bool>(left, right,
 	                                                           result);
-}
-
-namespace operators {
-struct And {
-	static inline bool Operation(bool left, bool right) {
-		return left && right;
-	}
-};
-struct Or {
-	static inline bool Operation(bool left, bool right) {
-		return left || right;
-	}
-};
 }
 
 void VectorOperations::And(Vector &left, Vector &right, Vector &result) {
@@ -412,6 +336,16 @@ void VectorOperations::Average(Vector &left, Vector &result) {
 	VectorOperations::Divide(result, count_vector, result);
 }
 
+void VectorOperations::Max(Vector &left, Vector &result) {
+	_generic_unary_fold_loop<operators::Max>(left, result);
+}
+
+void VectorOperations::Min(Vector &left, Vector &result) {
+	_generic_unary_fold_loop<operators::Min>(left, result);
+}
+
+
+
 //===--------------------------------------------------------------------===//
 // Hash functions
 //===--------------------------------------------------------------------===//
@@ -422,6 +356,11 @@ struct Hash {
 		return duckdb::Hash(left);
 	}
 };
+struct CombineHash {
+	static inline int32_t Operation(int32_t left, int32_t right) {
+		return left ^ right;
+	}
+};
 }
 
 void VectorOperations::Hash(Vector &left, Vector &result) {
@@ -430,7 +369,11 @@ void VectorOperations::Hash(Vector &left, Vector &result) {
 
 void VectorOperations::CombineHash(Vector &left, Vector &right,
                                    Vector &result) {
-	throw NotImplementedException("Combine hash! FIXME: xor");
+	if (left.type != TypeId::INTEGER) {
+		throw NotImplementedException("Left argument must be 32-bit integer hash");
+	}
+	VectorOperations::Hash(right, result);
+	_templated_binary_loop<int32_t, int32_t, operators::CombineHash>(left, result, result);
 }
 
 //===--------------------------------------------------------------------===//

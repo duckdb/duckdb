@@ -55,11 +55,13 @@ class AggregateExpression : public AbstractExpression {
 			break;
 		}
 	}
-
+	virtual void GetAggregates(std::vector<AggregateExpression*>& expressions) override;
 	virtual bool IsAggregate() override { return true; }
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
 	virtual std::string ToString() const override { return std::string(); }
+
+	size_t index;
 
   private:
 	bool distinct;

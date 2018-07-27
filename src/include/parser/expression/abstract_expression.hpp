@@ -10,6 +10,8 @@
 #include "parser/sql_node_visitor.hpp"
 
 namespace duckdb {
+class AggregateExpression;
+
 class AbstractExpression : public Printable {
   public:
 	AbstractExpression(ExpressionType type) : type(type) {}
@@ -39,6 +41,7 @@ class AbstractExpression : public Printable {
 		}
 	}
 
+	virtual void GetAggregates(std::vector<AggregateExpression*>& expressions);
 	virtual bool IsAggregate();
 
 	ExpressionType GetExpressionType() { return type; }

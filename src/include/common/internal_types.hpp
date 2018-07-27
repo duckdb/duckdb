@@ -259,6 +259,7 @@ enum class PhysicalOperatorType {
 	SORT_GROUP_BY = 12,
 	FILTER = 13,
 	PROJECTION = 14,
+	BASE_GROUP_BY = 15,
 	// -----------------------------
 	// Joins
 	// -----------------------------

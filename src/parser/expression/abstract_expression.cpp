@@ -11,3 +11,10 @@ bool AbstractExpression::IsAggregate() {
 	}
 	return is_aggregate;
 }
+
+
+void AbstractExpression::GetAggregates(std::vector<AggregateExpression*>& expressions) {
+	for (auto &child : children) {
+		child->GetAggregates(expressions);
+	}
+}

@@ -7,19 +7,22 @@
 using namespace duckdb;
 using namespace std;
 
-Vector::Vector(TypeId type, oid_t max_elements)
+Vector::Vector(TypeId type, oid_t max_elements, bool zero_data)
     : type(type), count(0), sel_vector(nullptr), data(nullptr),
-      owns_data(false) {
+      owns_data(false), max_elements(max_elements) {
 	if (max_elements > 0) {
 		if (type == TypeId::INVALID) {
 			throw Exception("Cannot create a vector of type INVALID!");
 		}
 		owns_data = true;
 		data = new char[max_elements * GetTypeIdSize(type)];
+		if (zero_data) {
+			memset(data, 0, max_elements * GetTypeIdSize(type));
+		}
 	}
 }
 
-Vector::Vector(Value value) : type(value.type), count(1), sel_vector(nullptr) {
+Vector::Vector(Value value) : type(value.type), count(1), sel_vector(nullptr), max_elements(1) {
 	owns_data = true;
 	data = new char[GetTypeIdSize(type)];
 	memcpy(data, &value.value_, GetTypeIdSize(type));
@@ -27,7 +30,7 @@ Vector::Vector(Value value) : type(value.type), count(1), sel_vector(nullptr) {
 
 Vector::Vector()
     : type(TypeId::INVALID), count(0), data(nullptr), owns_data(false),
-      sel_vector(nullptr) {}
+      sel_vector(nullptr), max_elements(0) {}
 
 Vector::~Vector() {
 	if (data && owns_data) {
@@ -96,9 +99,13 @@ void Vector::Copy(Vector &other) {
 }
 
 void Vector::Resize(oid_t max_elements, TypeId new_type) {
+	if (sel_vector) {
+		throw Exception("Cannot resize vector with selection vector!");
+	}
 	if (new_type != TypeId::INVALID) {
 		type = new_type;
 	}
+	this->max_elements = max_elements;
 	char *new_data = new char[max_elements * GetTypeIdSize(type)];
 	memcpy(new_data, data, count * GetTypeIdSize(type));
 	if (owns_data) {
@@ -109,6 +116,9 @@ void Vector::Resize(oid_t max_elements, TypeId new_type) {
 }
 
 void Vector::Append(Vector &other) {
+	if (count + other.count >= max_elements) {
+		throw Exception("Cannot append to vector: to full!");
+	}
 	if (sel_vector) {
 		throw NotImplementedException(
 		    "Cannot append to vector with selection vector");

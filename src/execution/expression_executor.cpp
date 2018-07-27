@@ -17,6 +17,8 @@
 #include "parser/expression/subquery_expression.hpp"
 #include "parser/expression/tableref_expression.hpp"
 
+#include "execution/operator/physical_aggregate.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -41,36 +43,71 @@ void ExpressionExecutor::Merge(AbstractExpression *expr, Vector &result) {
 	VectorOperations::And(vector, result, result);
 }
 
-void ExpressionExecutor::Visit(AggregateExpression &expr) {
+void ExpressionExecutor::Merge(AggregateExpression &expr, Value& result) {
+	if (result.type != expr.return_type) {
+		throw NotImplementedException("Aggregate type does not match value type!");
+	}
+
 	if (expr.type == ExpressionType::AGGREGATE_COUNT) {
 		// COUNT(*)
 		// Without FROM clause return "1", else return "count"
 		size_t count = chunk.column_count == 0 ? 1 : chunk.count;
-		Vector v(Value((int32_t)count));
-		v.Move(vector);
-		return;
-	} else if (expr.children.size() != 1) {
+		Value v = Value::NumericValue(result.type, count);
+		Value::Add(result, v, result);
+	} else if (expr.children.size() > 0) {
+		Vector child;
+		expr.children[0]->Accept(this);
+		vector.Move(child);
+		vector.Resize(1, expr.return_type);
+		switch (expr.type) {
+		case ExpressionType::AGGREGATE_SUM: {
+			VectorOperations::Sum(child, vector);
+			Value v = vector.GetValue(0);
+			Value::Add(result, v, result);
+			break;
+		}
+		case ExpressionType::AGGREGATE_COUNT: {
+			VectorOperations::Count(child, vector);
+			Value v = vector.GetValue(0);
+			Value::Add(result, v, result);
+			break;
+		}
+		case ExpressionType::AGGREGATE_AVG: {
+			VectorOperations::Sum(child, vector);
+			Value v = vector.GetValue(0);
+			Value::Add(result, v, result);
+			break;
+		}
+		case ExpressionType::AGGREGATE_MIN: {
+			VectorOperations::Min(child, vector);
+			Value v = vector.GetValue(0);
+			Value::Min(result, v, result);
+			break;
+		}
+		case ExpressionType::AGGREGATE_MAX: {
+			VectorOperations::Max(child, vector);
+			Value v = vector.GetValue(0);
+			Value::Max(result, v, result);
+			break;
+		}
+		default:
+			throw NotImplementedException("Unsupported aggregate type");
+		}
+	} else {
 		throw NotImplementedException("Aggregate expression without children!");
 	}
-	Vector child;
-	expr.children[0]->Accept(this);
-	vector.Move(child);
-	vector.Resize(1, expr.return_type);
-	switch (expr.type) {
-	case ExpressionType::AGGREGATE_SUM:
-		VectorOperations::Sum(child, vector);
-		break;
-	case ExpressionType::AGGREGATE_COUNT:
-		VectorOperations::Count(child, vector);
-		break;
-	case ExpressionType::AGGREGATE_AVG:
-		VectorOperations::Average(child, vector);
-		break;
-	case ExpressionType::AGGREGATE_COUNT_STAR:
-	case ExpressionType::AGGREGATE_MIN:
-	case ExpressionType::AGGREGATE_MAX:
-	default:
-		throw NotImplementedException("Unsupported aggregate type");
+}
+
+void ExpressionExecutor::Visit(AggregateExpression &expr) {
+	auto state = reinterpret_cast<PhysicalAggregateOperatorState *>(this->state);
+	if (!state) {
+		throw NotImplementedException("Aggregate node without aggregate state");
+	}
+	if (state->aggregates.size() == 0) {
+		throw NotImplementedException("Aggregate with group by");
+	} else {
+		Vector v(state->aggregates[expr.index]);
+		v.Move(vector);
 	}
 }
 

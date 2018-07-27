@@ -54,15 +54,20 @@ DuckDB::DuckDB(const char *path) {
 	DataChunk chunk;
 	auto v = vector<TypeId>{TypeId::INTEGER, TypeId::INTEGER};
 
-	chunk.Initialize(v, 3);
-	chunk.count = 3;
+	chunk.Initialize(v, 2);
+	chunk.count = 2;
 	chunk.data[0]->SetValue(0, Value(11));
 	chunk.data[0]->SetValue(1, Value(12));
-	chunk.data[0]->SetValue(2, Value(13));
 	chunk.data[1]->SetValue(0, Value(22));
 	chunk.data[1]->SetValue(1, Value(21));
-	chunk.data[1]->SetValue(2, Value(22));
 	dtable->AddData(chunk);
+
+	chunk.Initialize(v, 1);
+	chunk.count = 1;
+	chunk.data[0]->SetValue(0, Value(13));
+	chunk.data[1]->SetValue(0, Value(22));
+	dtable->AddData(chunk);
+
 }
 
 DuckDBConnection::DuckDBConnection(DuckDB &database) : database(database) {}
@@ -117,6 +122,7 @@ void DuckDBResult::Print() {
 			}
 			printf("\n");
 		}
+		printf("\n");
 	} else {
 		printf("Query Error: %s\n", error.c_str());
 	}

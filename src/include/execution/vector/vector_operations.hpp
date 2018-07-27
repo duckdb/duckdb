@@ -52,6 +52,10 @@ class VectorOperations {
 	static void Count(Vector &source, Vector &result);
 	// AVG(A)
 	static void Average(Vector &source, Vector &result);
+	// MAX(A)
+	static void Max(Vector &left, Vector &result);
+	// MIN(A)
+	static void Min(Vector &left, Vector &result);
 
 	//===--------------------------------------------------------------------===//
 	// Hash functions

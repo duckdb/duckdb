@@ -42,12 +42,18 @@ void PhysicalPlanGenerator::Visit(LogicalAggregate &op) {
 	LogicalOperatorVisitor::Visit(op);
 
 	if (op.groups.size() == 0) {
-		// no groups, just make a projection
-		auto projection = make_unique<PhysicalProjection>(move(op.select_list));
-		if (plan) {
-			projection->children.push_back(move(plan));
+		// no groups
+		if (!plan) {
+			// and no FROM clause, use a dummy aggregate
+			auto groupby = make_unique<PhysicalHashAggregate>(move(op.select_list));
+			this->plan = move(groupby);
+		} else {
+			// but there is a FROM clause
+			// special case: aggregate entire columns together
+			auto groupby = make_unique<PhysicalHashAggregate>(move(op.select_list));
+			groupby->children.push_back(move(plan));
+			this->plan = move(groupby);
 		}
-		this->plan = move(projection);
 	} else {
 		// groups! create a GROUP BY aggregator
 		if (!plan) {

@@ -10,8 +10,20 @@ namespace duckdb {
 class Value : public Printable {
   public:
 	Value() : type(TypeId::INTEGER), is_null(true) {}
+	Value(bool val) : type(TypeId::BOOLEAN), is_null(false) {
+		value_.boolean = val;
+	}
+	Value(int8_t val) : type(TypeId::TINYINT), is_null(false) {
+		value_.tinyint = val;
+	}
+	Value(int16_t val) : type(TypeId::SMALLINT), is_null(false) {
+		value_.smallint = val;
+	}
 	Value(int32_t val) : type(TypeId::INTEGER), is_null(false) {
 		value_.integer = val;
+	}
+	Value(int64_t val) : type(TypeId::BIGINT), is_null(false) {
+		value_.bigint = val;
 	}
 	Value(double val) : type(TypeId::INTEGER), is_null(false) {
 		value_.decimal = val;
@@ -31,11 +43,31 @@ class Value : public Printable {
 		}
 	}
 
+	static Value NumericValue(TypeId id, int64_t value);
+
 	Value Copy() { return Value(*this); }
 
 	virtual std::string ToString() const;
 
 	Value CastAs(TypeId new_type);
+
+	//===--------------------------------------------------------------------===//
+	// Numeric Operations
+	//===--------------------------------------------------------------------===//
+	// A + B
+	static void Add(Value &left, Value &right, Value &result);
+	// A - B
+	static void Subtract(Value &left, Value &right, Value &result);
+	// A * B
+	static void Multiply(Value &left, Value &right, Value &result);
+	// A / B
+	static void Divide(Value &left, Value &right, Value &result);
+	// MIN(A, B)
+	static void Min(Value &left, Value &right, Value &result);
+	// MAX(A, B)
+	static void Max(Value &left, Value &right, Value &result);
+
+
 
 	//  private:
 	TypeId type;

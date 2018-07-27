@@ -22,10 +22,11 @@ class Vector {
 	bool owns_data;
 	sel_t *sel_vector;
 	TypeId type;
+	size_t max_elements;
 
 	Vector();
 	Vector(Value value);
-	Vector(TypeId type, oid_t max_elements = 0);
+	Vector(TypeId type, oid_t max_elements = 0, bool zero_data = false);
 	~Vector();
 
 	Value GetValue(size_t index);

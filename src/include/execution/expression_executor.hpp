@@ -5,19 +5,22 @@
 
 #include "common/internal_types.hpp"
 #include "common/printable.hpp"
+#include "common/types/data_chunk.hpp"
 
 #include "parser/expression/abstract_expression.hpp"
 #include "parser/sql_node_visitor.hpp"
 
-#include "common/types/data_chunk.hpp"
+#include "execution/physical_operator.hpp"
 
 namespace duckdb {
 class ExpressionExecutor : public SQLNodeVisitor {
   public:
-	ExpressionExecutor(DataChunk &chunk) : chunk(chunk) {}
+	ExpressionExecutor(DataChunk &chunk, PhysicalOperatorState *state = nullptr) : 
+		chunk(chunk), state(state) { }
 
 	void Execute(AbstractExpression *expr, Vector &result);
 	void Merge(AbstractExpression *expr, Vector &result);
+	void Merge(AggregateExpression &expr, Value &v);
 
 	void Visit(AggregateExpression &expr);
 	void Visit(BaseTableRefExpression &expr);
@@ -34,6 +37,8 @@ class ExpressionExecutor : public SQLNodeVisitor {
 
   private:
 	DataChunk &chunk;
+
+	PhysicalOperatorState *state;
 
 	Vector vector;
 };

@@ -21,7 +21,8 @@ class DataChunk {
 	~DataChunk();
 
 	void Initialize(std::vector<TypeId> &types,
-	                size_t maximum_chunk_size = STANDARD_VECTOR_SIZE);
+	                size_t maximum_chunk_size = STANDARD_VECTOR_SIZE,
+	                bool zero_data = false);
 	void Append(DataChunk &other);
 	void Clear();
 
