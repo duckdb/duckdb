@@ -109,11 +109,11 @@ unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
 		}
 		state->group_chunk.Initialize(group_types);
 		for (auto &expr : aggregates) {
+			aggregate_kind.push_back(expr->type);
 			if (expr->children.size() > 0) {
 				auto& child = expr->children[0];
 				payload_types.push_back(child->return_type);
 				payload_width += GetTypeIdSize(child->return_type);
-				aggregate_kind.push_back(expr->type);
 			}
 		}
 		state->payload_chunk.Initialize(payload_types);

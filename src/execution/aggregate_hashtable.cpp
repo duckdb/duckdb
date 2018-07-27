@@ -46,6 +46,9 @@ void SuperLargeHashTable::Resize(size_t size) {
 }
 
 void SuperLargeHashTable::AddChunk(DataChunk& groups, DataChunk& payload) {
+	if (groups.count == 0) {
+		return;
+	}
 	// first create a hash of all the values
 	Vector hashes(TypeId::INTEGER, groups.count);
 	VectorOperations::Hash(*groups.data[0], hashes);
@@ -117,8 +120,12 @@ void SuperLargeHashTable::AddChunk(DataChunk& groups, DataChunk& payload) {
 
 	// now every cell has an entry
 	// update the aggregates
-	for(size_t j = 0; j < aggregate_types.size(); j++) {
-		switch(aggregate_types[j]) {
+	size_t j = 0;
+	for(size_t i = 0; i < aggregate_types.size(); i++) {
+		switch(aggregate_types[i]) {
+			case ExpressionType::AGGREGATE_COUNT_STAR:
+			case ExpressionType::AGGREGATE_COUNT:
+				continue;
 			case ExpressionType::AGGREGATE_SUM:
 			case ExpressionType::AGGREGATE_AVG:
 				// addition
@@ -132,11 +139,16 @@ void SuperLargeHashTable::AddChunk(DataChunk& groups, DataChunk& payload) {
 				// max
 				VectorOperations::Scatter::Max(*payload.data[j], ptr);
 				break;
+
 			default: 
 				throw NotImplementedException("Unimplemented aggregate type!");
 		}
 		VectorOperations::Add(addresses, GetTypeIdSize(payload.data[j]->type), addresses);
+		j++;
 	}
+	// update the counts in each bucket
+	Vector one(Value::NumericValue(TypeId::POINTER, 1));
+	VectorOperations::Scatter::Add(one, ptr, addresses.count);
 }
 
 
@@ -166,12 +178,27 @@ void SuperLargeHashTable::Scan(size_t& scan_position, DataChunk& result) {
 	for(size_t i = 0; i < aggregate_types.size(); i++) {
 		auto target = result.data[i].get();
 		target->count = entry;
+
+		if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_STAR ||
+			aggregate_types[i] == ExpressionType::AGGREGATE_COUNT) {
+			// we fetch the counts later
+			continue;
+		}
 		VectorOperations::Gather::Set(data_pointers, *target);
 		if (aggregate_types[i] == ExpressionType::AGGREGATE_AVG) {
 			throw NotImplementedException("Gather count and divide!");
 			//VectorOperations::Divide()
 		}
 		VectorOperations::Add(addresses, GetTypeIdSize(target->type), addresses);
+	}
+	for(size_t i = 0; i < aggregate_types.size(); i++) {
+		// now we can fetch the counts
+		if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_STAR ||
+			aggregate_types[i] == ExpressionType::AGGREGATE_COUNT) {
+			auto target = result.data[i].get();
+			target->count = entry;
+			VectorOperations::Gather::Set(data_pointers, *target);
+		}
 	}
 	result.count = entry;
 	scan_position = ptr - start;

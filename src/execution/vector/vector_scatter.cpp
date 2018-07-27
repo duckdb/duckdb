@@ -11,15 +11,21 @@ using namespace std;
 // Templated Looping Functions
 //===--------------------------------------------------------------------===//
 template <class T, class OP>
-void _scatter_templated_loop(Vector &source, T **destination) {
+void _scatter_templated_loop(Vector &source, T **destination, size_t count) {
 	T *ldata = (T *)source.data;
-	if (source.sel_vector) {
-		for (size_t i = 0; i < source.count; i++) {
-			destination[i][0] = OP::Operation(ldata[source.sel_vector[i]], destination[i][0]);
+	if (count == (size_t) -1) {
+		if (source.sel_vector) {
+			for (size_t i = 0; i < source.count; i++) {
+				destination[i][0] = OP::Operation(ldata[source.sel_vector[i]], destination[i][0]);
+			}
+		} else {
+			for (size_t i = 0; i < source.count; i++) {
+				destination[i][0] = OP::Operation(ldata[i], destination[i][0]);
+			}
 		}
 	} else {
-		for (size_t i = 0; i < source.count; i++) {
-			destination[i][0] = OP::Operation(ldata[i], destination[i][0]);
+		for (size_t i = 0; i < count; i++) {
+			destination[i][0] = OP::Operation(ldata[0], destination[i][0]);
 		}
 	}
 }
@@ -33,25 +39,25 @@ void _gather_templated_loop(T **source, Vector &result) {
 }
 
 template<class OP>
-static void _generic_scatter_loop(Vector& source, void **destination) {
+static void _generic_scatter_loop(Vector& source, void **destination, size_t count) {
 	switch (source.type) {
 	case TypeId::TINYINT:
-		_scatter_templated_loop<int8_t, OP>(source, (int8_t**) destination);
+		_scatter_templated_loop<int8_t, OP>(source, (int8_t**) destination, count);
 		break;
 	case TypeId::SMALLINT:
-		_scatter_templated_loop<int16_t, OP>(source, (int16_t**) destination);
+		_scatter_templated_loop<int16_t, OP>(source, (int16_t**) destination, count);
 		break;
 	case TypeId::INTEGER:
-		_scatter_templated_loop<int32_t, OP>(source, (int32_t**) destination);
+		_scatter_templated_loop<int32_t, OP>(source, (int32_t**) destination, count);
 		break;
 	case TypeId::BIGINT:
-		_scatter_templated_loop<int64_t, OP>(source, (int64_t**) destination);
+		_scatter_templated_loop<int64_t, OP>(source, (int64_t**) destination, count);
 		break;
 	case TypeId::DECIMAL:
-		_scatter_templated_loop<double, OP>(source, (double**) destination);
+		_scatter_templated_loop<double, OP>(source, (double**) destination, count);
 		break;
 	case TypeId::POINTER:
-		_scatter_templated_loop<uint64_t, OP>(source, (uint64_t**) destination);
+		_scatter_templated_loop<uint64_t, OP>(source, (uint64_t**) destination, count);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for scatter");
@@ -87,20 +93,20 @@ static void _generic_gather_loop(void **source, Vector& dest) {
 //===--------------------------------------------------------------------===//
 // Scatter methods
 //===--------------------------------------------------------------------===//
-void VectorOperations::Scatter::Set(Vector &source, void **dest) {
-	_generic_scatter_loop<operators::PickLeft>(source, dest);
+void VectorOperations::Scatter::Set(Vector &source, void **dest, size_t count) {
+	_generic_scatter_loop<operators::PickLeft>(source, dest, count);
 }
 
-void VectorOperations::Scatter::Add(Vector &source, void **dest) {
-	_generic_scatter_loop<operators::Addition>(source, dest);
+void VectorOperations::Scatter::Add(Vector &source, void **dest, size_t count) {
+	_generic_scatter_loop<operators::Addition>(source, dest, count);
 }
 
-void VectorOperations::Scatter::Max(Vector &source, void **dest) {
-	_generic_scatter_loop<operators::Max>(source, dest);
+void VectorOperations::Scatter::Max(Vector &source, void **dest, size_t count) {
+	_generic_scatter_loop<operators::Max>(source, dest, count);
 }
 
-void VectorOperations::Scatter::Min(Vector &source, void **dest) {
-	_generic_scatter_loop<operators::Min>(source, dest);
+void VectorOperations::Scatter::Min(Vector &source, void **dest, size_t count) {
+	_generic_scatter_loop<operators::Min>(source, dest, count);
 }
 
 void VectorOperations::Gather::Set(void **source, Vector &dest) {
