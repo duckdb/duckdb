@@ -30,8 +30,55 @@ Value Value::NumericValue(TypeId id, int64_t value) {
 		return Value((int64_t) value);
 	case TypeId::DECIMAL:
 		return Value((double) value);
+	case TypeId::POINTER:
+		return Value((uint64_t) value);
 	default:
 		throw Exception("TypeId is not numeric!");
+	}
+}
+
+
+
+string Value::ToString() const {
+	switch (type) {
+	case TypeId::BOOLEAN:
+		return value_.boolean ? "True" : "False";
+	case TypeId::TINYINT:
+		return to_string(value_.tinyint);
+	case TypeId::SMALLINT:
+		return to_string(value_.smallint);
+	case TypeId::INTEGER:
+		return to_string(value_.integer);
+	case TypeId::BIGINT:
+		return to_string(value_.bigint);
+	case TypeId::DECIMAL:
+		return to_string(value_.decimal);
+	case TypeId::POINTER:
+		return to_string(value_.pointer);
+	default:
+		throw NotImplementedException("Unimplemented printing");
+	}
+}
+
+template<class DST, class OP>
+static DST _cast(Value& v) {
+	switch(v.type) {
+		case TypeId::BOOLEAN:
+			return OP::template Operation<int8_t, DST>(v.value_.boolean);
+		case TypeId::TINYINT:
+			return OP::template Operation<int8_t, DST>(v.value_.tinyint);
+		case TypeId::SMALLINT:
+			return OP::template Operation<int16_t, DST>(v.value_.smallint);
+		case TypeId::INTEGER:
+			return OP::template Operation<int32_t, DST>(v.value_.integer);
+		case TypeId::BIGINT:
+			return OP::template Operation<int64_t, DST>(v.value_.bigint);
+		case TypeId::DECIMAL:
+			return OP::template Operation<double, DST>(v.value_.decimal);
+		case TypeId::POINTER:
+			return OP::template Operation<uint64_t, DST>(v.value_.pointer);
+		default:
+			throw NotImplementedException("Unimplemented type");
 	}
 }
 
@@ -48,26 +95,32 @@ Value Value::CastAs(TypeId new_type) {
 		return new_value;
 	}
 
-	throw NotImplementedException("Did not implement value cast yet!");
-}
-
-string Value::ToString() const {
-	switch (type) {
+	switch(new_value.type) {
 	case TypeId::BOOLEAN:
-		return value_.boolean ? "True" : "False";
+		new_value.value_.boolean = _cast<int8_t, operators::Cast>(*this);
+		break;
 	case TypeId::TINYINT:
-		return to_string(value_.tinyint);
+		new_value.value_.tinyint = _cast<int8_t, operators::Cast>(*this);
+		break;
 	case TypeId::SMALLINT:
-		return to_string(value_.smallint);
+		new_value.value_.smallint = _cast<int16_t, operators::Cast>(*this);
+		break;
 	case TypeId::INTEGER:
-		return to_string(value_.integer);
+		new_value.value_.integer = _cast<int32_t, operators::Cast>(*this);
+		break;
 	case TypeId::BIGINT:
-		return to_string(value_.bigint);
+		new_value.value_.bigint = _cast<int64_t, operators::Cast>(*this);
+		break;
 	case TypeId::DECIMAL:
-		return to_string(value_.decimal);
+		new_value.value_.decimal = _cast<double, operators::Cast>(*this);
+		break;
+	case TypeId::POINTER:
+		new_value.value_.pointer = _cast<uint64_t, operators::Cast>(*this);
+		break;
 	default:
-		throw NotImplementedException("Unimplemented printing");
+		throw NotImplementedException("Unimplemented type");
 	}
+	return new_value;
 }
 
 template<class OP>
@@ -94,6 +147,9 @@ static void _templated_binary_operation(Value &left, Value &right, Value &result
 	case TypeId::DECIMAL:
 		result.value_.decimal = OP::Operation(left.value_.decimal, right.value_.decimal);
 		break;
+	case TypeId::POINTER:
+		result.value_.pointer = OP::Operation(left.value_.pointer, right.value_.pointer);
+		break;
 	default:
 		throw NotImplementedException("Unimplemented type");
 	}
@@ -113,6 +169,10 @@ void Value::Multiply(Value &left, Value &right, Value &result) {
 
 void Value::Divide(Value &left, Value &right, Value &result) {
 	_templated_binary_operation<operators::Division>(left, right, result);
+}
+
+void Value::Modulo(Value &left, Value &right, Value &result) {
+	_templated_binary_operation<operators::Modulo>(left, right, result);
 }
 
 void Value::Min(Value &left, Value &right, Value &result) {

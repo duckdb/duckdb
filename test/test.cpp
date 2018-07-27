@@ -67,7 +67,7 @@ int main() {
 		return 1;
 	}
 
-	if (duckdb_query(connection, "SELECT SUM(a), COUNT(*) FROM test GROUP BY b;", &result) != DuckDBSuccess) {
+	if (duckdb_query(connection, "SELECT SUM(a) FROM test GROUP BY b;", &result) != DuckDBSuccess) {
 		return 1;
 	}
 

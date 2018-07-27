@@ -19,6 +19,7 @@ enum class TypeId {
 	INTEGER,
 	BIGINT,
 	DECIMAL,
+	POINTER,
 	TIMESTAMP,
 	DATE,
 	VARCHAR,

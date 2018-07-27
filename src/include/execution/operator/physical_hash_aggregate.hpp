@@ -3,6 +3,7 @@
 #pragma once
 
 #include "execution/operator/physical_aggregate.hpp"
+#include "execution/aggregate_hashtable.hpp"
 
 #include "storage/data_table.hpp"
 
@@ -22,15 +23,16 @@ class PhysicalHashAggregate : public PhysicalAggregate {
 	void GetChunk(DataChunk &chunk, PhysicalOperatorState *state) override;
 
 	std::unique_ptr<PhysicalOperatorState> GetOperatorState() override;
-
-	size_t tuple_size = 0;
 };
 
 class PhysicalHashAggregateOperatorState : public PhysicalAggregateOperatorState {
   public:
-	PhysicalHashAggregateOperatorState(PhysicalAggregate* parent, PhysicalOperator *child)
-	    : PhysicalAggregateOperatorState(parent, child) {}
+	PhysicalHashAggregateOperatorState(PhysicalAggregate *parent, PhysicalOperator *child)
+	    : PhysicalAggregateOperatorState(parent, child), ht_scan_position(0) {}
 
+	size_t ht_scan_position;
+	std::unique_ptr<SuperLargeHashTable> ht;
 	DataChunk group_chunk;
+	DataChunk payload_chunk;
 };
 }

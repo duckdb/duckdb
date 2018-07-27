@@ -135,6 +135,8 @@ string TypeIdToString(TypeId type) {
 		return "BIGINT";
 	case TypeId::DECIMAL:
 		return "DECIMAL";
+	case TypeId::POINTER:
+		return "POINTER";
 	case TypeId::TIMESTAMP:
 		return "TIMESTAMP";
 	case TypeId::DATE:
@@ -169,6 +171,8 @@ TypeId StringToTypeId(const string &str) {
 		return TypeId::BIGINT;
 	} else if (upper_str == "DECIMAL") {
 		return TypeId::DECIMAL;
+	} else if (upper_str == "POINTER") {
+		return TypeId::POINTER;
 	} else if (upper_str == "TIMESTAMP") {
 		return TypeId::TIMESTAMP;
 	} else if (upper_str == "DATE") {
@@ -201,6 +205,8 @@ size_t GetTypeIdSize(TypeId type) {
 		return sizeof(int64_t);
 	case TypeId::DECIMAL:
 		return sizeof(double);
+	case TypeId::POINTER:
+		return sizeof(uint64_t);
 	case TypeId::TIMESTAMP:
 		return sizeof(int64_t);
 	case TypeId::DATE:

@@ -44,8 +44,16 @@ void PhysicalAggregate::Initialize() {
 
 PhysicalAggregateOperatorState::PhysicalAggregateOperatorState(PhysicalAggregate* parent, PhysicalOperator *child)
     : PhysicalOperatorState(child), finished(false) {
-	aggregates.resize(parent->aggregates.size());
-	for(size_t i = 0; i < parent->aggregates.size(); i++) {
-		aggregates[i] = Value::NumericValue(parent->aggregates[i]->return_type, 0);
+	if (parent->groups.size() == 0) {
+		aggregates.resize(parent->aggregates.size());
+		for(size_t i = 0; i < parent->aggregates.size(); i++) {
+			aggregates[i] = Value::NumericValue(parent->aggregates[i]->return_type, 0);
+		}
+	} else {
+		vector<TypeId> aggregate_types;
+		for(size_t i = 0; i < parent->aggregates.size(); i++) {
+			aggregate_types.push_back(parent->aggregates[i]->return_type);
+		}
+		aggregate_chunk.Initialize(aggregate_types);
 	}
 }

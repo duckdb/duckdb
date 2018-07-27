@@ -18,6 +18,7 @@
 #include "parser/expression/tableref_expression.hpp"
 
 #include "execution/operator/physical_aggregate.hpp"
+#include "execution/operator/physical_hash_aggregate.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -104,7 +105,7 @@ void ExpressionExecutor::Visit(AggregateExpression &expr) {
 		throw NotImplementedException("Aggregate node without aggregate state");
 	}
 	if (state->aggregates.size() == 0) {
-		throw NotImplementedException("Aggregate with group by");
+		vector.Reference(*state->aggregate_chunk.data[expr.index].get());
 	} else {
 		Vector v(state->aggregates[expr.index]);
 		v.Move(vector);

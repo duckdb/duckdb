@@ -1,6 +1,11 @@
 
 #pragma once
 
+#include <algorithm>
+
+#include "common/exception.hpp"
+#include "common/types/hash.hpp"
+
 namespace operators {
 //===--------------------------------------------------------------------===//
 // Numeric Operations
@@ -26,6 +31,21 @@ struct Multiplication {
 struct Division {
 	template <class T> static inline T Operation(T left, T right) {
 		return left / right;
+	}
+};
+
+struct Modulo {
+	template <class T> static inline T Operation(T left, T right) {
+		return left % right;
+	}
+};
+
+template<> double Modulo::Operation(double left, double right);
+
+
+struct XOR {
+	template <class T> static inline T Operation(T left, T right) {
+		return left ^ right;
 	}
 };
 
@@ -91,6 +111,35 @@ struct Max {
 struct Min {
 	template <class T> static inline T Operation(T left, T right) {
 		return std::min(left, right);
+	}
+};
+
+struct PickLeft {
+	template <class T> static inline T Operation(T left, T right) {
+		return left;
+	}
+};
+
+struct Hash {
+	template <class T> static inline int32_t Operation(T left) {
+		return duckdb::Hash(left);
+	}
+};
+
+//===--------------------------------------------------------------------===//
+// Casts
+//===--------------------------------------------------------------------===//
+struct Cast {
+	template<class SRC, class DST>
+	static inline DST Operation(SRC left) {
+		return (DST) left;
+	}
+};
+
+struct NOP {
+	template<class T>
+	static inline T Operation(T left) {
+		return left;
 	}
 };
 

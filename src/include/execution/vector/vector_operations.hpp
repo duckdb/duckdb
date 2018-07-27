@@ -5,8 +5,9 @@
 
 namespace duckdb {
 
-class VectorOperations {
-  public:
+struct VectorOperations {
+  	typedef void (*vector_function)(Vector &left, Vector &right, Vector &result);
+
 	//===--------------------------------------------------------------------===//
 	// Numeric Operations
 	//===--------------------------------------------------------------------===//
@@ -18,6 +19,30 @@ class VectorOperations {
 	static void Multiply(Vector &left, Vector &right, Vector &result);
 	// A / B
 	static void Divide(Vector &left, Vector &right, Vector &result);
+	// A % B
+	static void Modulo(Vector &left, Vector &right, Vector &result);
+
+	// A + B
+	static void Add(Vector &left, int64_t right, Vector &result);
+	// A - B
+	static void Subtract(Vector &left, int64_t right, Vector &result);
+	// A * B
+	static void Multiply(Vector &left, int64_t right, Vector &result);
+	// A / B
+	static void Divide(Vector &left, int64_t right, Vector &result);
+	// A % B
+	static void Modulo(Vector &left, int64_t right, Vector &result);
+
+	// A + B
+	static void Add(int64_t left, Vector& right, Vector &result);
+	// A - B
+	static void Subtract(int64_t left, Vector& right, Vector &result);
+	// A * B
+	static void Multiply(int64_t left, Vector& right, Vector &result);
+	// A / B
+	static void Divide(int64_t left, Vector& right, Vector &result);
+	// A % B
+	static void Modulo(int64_t left, Vector& right, Vector &result);
 
 	//===--------------------------------------------------------------------===//
 	// Boolean Operations
@@ -58,6 +83,24 @@ class VectorOperations {
 	static void Min(Vector &left, Vector &result);
 
 	//===--------------------------------------------------------------------===//
+	// Scatter methods
+	//===--------------------------------------------------------------------===//
+	struct Scatter {
+		// dest[i] = source.data[i]
+		static void Set(Vector &source, void **dest);
+		// dest[i] = dest[i] + source.data[i]
+		static void Add(Vector &source, void **dest);
+		// dest[i] = max(dest[i], source.data[i])
+		static void Max(Vector &source, void **dest);
+		// dest[i] = min(dest[i], source.data[i])
+		static void Min(Vector &source, void **dest);
+	};
+	// make sure dest.count is set for gather methods!
+	struct Gather {
+		// dest.data[i] = ptr[i]
+		static void Set(void **source, Vector &dest);
+	};
+	//===--------------------------------------------------------------------===//
 	// Hash functions
 	//===--------------------------------------------------------------------===//
 	// HASH(A)
@@ -68,6 +111,9 @@ class VectorOperations {
 	//===--------------------------------------------------------------------===//
 	// Helpers
 	//===--------------------------------------------------------------------===//
+	// Copy the data from source to target, casting if the types don't match
+	static void Cast(Vector& source, Vector& result);
+	// Copy the data of <source> to the target location
 	static void Copy(Vector &source, void *target);
 };
 }

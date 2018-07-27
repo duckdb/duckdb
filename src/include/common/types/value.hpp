@@ -25,6 +25,9 @@ class Value : public Printable {
 	Value(int64_t val) : type(TypeId::BIGINT), is_null(false) {
 		value_.bigint = val;
 	}
+	Value(uint64_t val) : type(TypeId::POINTER), is_null(false) {
+		value_.pointer = val;
+	}
 	Value(double val) : type(TypeId::INTEGER), is_null(false) {
 		value_.decimal = val;
 	}
@@ -62,6 +65,8 @@ class Value : public Printable {
 	static void Multiply(Value &left, Value &right, Value &result);
 	// A / B
 	static void Divide(Value &left, Value &right, Value &result);
+	// A % B
+	static void Modulo(Value &left, Value &right, Value &result);
 	// MIN(A, B)
 	static void Min(Value &left, Value &right, Value &result);
 	// MAX(A, B)
@@ -80,8 +85,8 @@ class Value : public Printable {
 		int32_t integer;
 		int64_t bigint;
 		double decimal;
+		uint64_t pointer;
 		int32_t date;
-		uint64_t timestamp;
 		char *data;
 	} value_;
 
