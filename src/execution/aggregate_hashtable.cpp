@@ -159,12 +159,8 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	VectorOperations::Scatter::Add(one, ptr, addresses.count);
 }
 
-<<<<<<< HEAD
-
-void SuperLargeHashTable::Scan(size_t& scan_position, DataChunk& groups, DataChunk& result) {
-=======
-void SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &result) {
->>>>>>> 11b50762f086ca0383deff85bed24012278ef8f9
+void SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &groups,
+                               DataChunk &result) {
 	result.Reset();
 
 	uint8_t *ptr;
@@ -174,14 +170,9 @@ void SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &result) {
 		return;
 
 	Vector addresses(TypeId::POINTER, result.maximum_size);
-<<<<<<< HEAD
-	void **data_pointers = (void**) addresses.data;
-
-	// scan the table for full cells starting from the scan position
-=======
 	void **data_pointers = (void **)addresses.data;
 
->>>>>>> 11b50762f086ca0383deff85bed24012278ef8f9
+	// scan the table for full cells starting from the scan position
 	size_t entry = 0;
 	for (ptr = start; ptr < end && entry < result.maximum_size;
 	     ptr += tuple_size) {
@@ -194,29 +185,22 @@ void SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &result) {
 		return;
 	}
 	addresses.count = entry;
-<<<<<<< HEAD
 	// fetch the group columns
-	for(size_t i = 0; i < groups.column_count; i++) {
+	for (size_t i = 0; i < groups.column_count; i++) {
 		auto column = groups.data[i].get();
 		column->count = entry;
 		VectorOperations::Gather::Set(data_pointers, *column);
-		VectorOperations::Add(addresses, GetTypeIdSize(column->type), addresses);
+		VectorOperations::Add(addresses, GetTypeIdSize(column->type),
+		                      addresses);
 	}
-	for(size_t i = 0; i < aggregate_types.size(); i++) {
-=======
+
 	for (size_t i = 0; i < aggregate_types.size(); i++) {
->>>>>>> 11b50762f086ca0383deff85bed24012278ef8f9
 		auto target = result.data[i].get();
 		target->count = entry;
 
 		if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_STAR ||
-<<<<<<< HEAD
-			aggregate_types[i] == ExpressionType::AGGREGATE_COUNT) {
-			// we fetch the counts later because they are stored at the end
-=======
 		    aggregate_types[i] == ExpressionType::AGGREGATE_COUNT) {
-			// we fetch the counts later
->>>>>>> 11b50762f086ca0383deff85bed24012278ef8f9
+			// we fetch the counts later because they are stored at the end
 			continue;
 		}
 		VectorOperations::Gather::Set(data_pointers, *target);

@@ -63,6 +63,5 @@ PhysicalAggregateOperatorState::PhysicalAggregateOperatorState(
 			aggregate_types.push_back(expr->return_type);
 		}
 		aggregate_chunk.Initialize(aggregate_types);
-
 	}
 }

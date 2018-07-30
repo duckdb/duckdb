@@ -22,7 +22,7 @@ void DataChunk::Initialize(std::vector<TypeId> &types,
 	count = 0;
 	column_count = types.size();
 	size_t size = 0;
-	for(auto &type : types) {
+	for (auto &type : types) {
 		size += GetTypeIdSize(type) * maximum_size;
 	}
 	default_vector_data = new char[size];
@@ -31,7 +31,7 @@ void DataChunk::Initialize(std::vector<TypeId> &types,
 	}
 
 	char *ptr = default_vector_data;
-	data = new unique_ptr<Vector>[types.size()];
+	data = new unique_ptr<Vector>[ types.size() ];
 	for (size_t i = 0; i < types.size(); i++) {
 		data[i] = make_unique<Vector>(types[i], ptr, maximum_size);
 		ptr += GetTypeIdSize(types[i]) * maximum_size;

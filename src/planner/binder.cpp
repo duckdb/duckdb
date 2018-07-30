@@ -52,7 +52,8 @@ void Binder::Visit(SelectStatement &statement) {
 		}
 
 		if (!select_element->alias.empty()) {
-			context->AddExpression(select_element->alias, select_element.get(), i);
+			context->AddExpression(select_element->alias, select_element.get(),
+			                       i);
 		}
 	}
 	statement.select_list = move(new_select_list);
@@ -71,49 +72,64 @@ void Binder::Visit(SelectStatement &statement) {
 		for (size_t i = 0; i < statement.groupby.groups.size(); i++) {
 			auto &group = statement.groupby.groups[i];
 			if (group->type != ExpressionType::COLUMN_REF) {
-				throw BinderException("GROUP BY clause needs to be a column or alias reference.");
+				throw BinderException(
+				    "GROUP BY clause needs to be a column or alias reference.");
 			}
-			auto group_column = reinterpret_cast<ColumnRefExpression*>(group.get());
+			auto group_column =
+			    reinterpret_cast<ColumnRefExpression *>(group.get());
 			if (group_column->reference) {
 				// alias reference
 				// move the computation here from the SELECT clause
 				size_t select_index = group_column->index;
-				statement.groupby.groups[i] = move(statement.select_list[select_index]);
+				statement.groupby.groups[i] =
+				    move(statement.select_list[select_index]);
 				// and add a GROUP REF expression to the SELECT clause
-				statement.select_list[select_index] = make_unique<GroupRefExpression>(statement.groupby.groups[i]->return_type, i);
+				statement.select_list[select_index] =
+				    make_unique<GroupRefExpression>(
+				        statement.groupby.groups[i]->return_type, i);
 			}
 		}
 
 		// handle GROUP BY columns in the select clause
 		for (size_t i = 0; i < statement.select_list.size(); i++) {
 			auto &select = statement.select_list[i];
-			if (select->type == ExpressionType::GROUP_REF) continue;
-			if (select->IsAggregate()) continue;
+			if (select->type == ExpressionType::GROUP_REF)
+				continue;
+			if (select->IsAggregate())
+				continue;
 
-			// not an aggregate or existing GROUP REF, must point to a GROUP BY column
+			// not an aggregate or existing GROUP REF, must point to a GROUP BY
+			// column
 			if (select->type != ExpressionType::COLUMN_REF) {
 				// FIXME: this should be different
 				// Every ColumnRef should point to a group by column OR alias
-				throw Exception("SELECT with GROUP BY can only contain aggregates or references to group columns!");
+				throw Exception("SELECT with GROUP BY can only contain "
+				                "aggregates or references to group columns!");
 			}
-			auto select_column = reinterpret_cast<ColumnRefExpression*>(select.get());
+			auto select_column =
+			    reinterpret_cast<ColumnRefExpression *>(select.get());
 			if (select_column->reference) {
-				throw Exception("SELECT with GROUP BY can only contain aggregates or references to group columns!");
+				throw Exception("SELECT with GROUP BY can only contain "
+				                "aggregates or references to group columns!");
 			}
 			bool found_matching = false;
 			for (size_t j = 0; j < statement.groupby.groups.size(); j++) {
 				auto &group = statement.groupby.groups[j];
 				if (group->type == ExpressionType::COLUMN_REF) {
-					auto group_column = reinterpret_cast<ColumnRefExpression*>(group.get());
+					auto group_column =
+					    reinterpret_cast<ColumnRefExpression *>(group.get());
 					if (group_column->index == select_column->index) {
-						statement.select_list[i] = make_unique<GroupRefExpression>(statement.select_list[i]->return_type, j);
+						statement.select_list[i] =
+						    make_unique<GroupRefExpression>(
+						        statement.select_list[i]->return_type, j);
 						found_matching = true;
 						break;
 					}
 				}
 			}
 			if (!found_matching) {
-				throw Exception("SELECT with GROUP BY can only contain aggregates or references to group columns!");
+				throw Exception("SELECT with GROUP BY can only contain "
+				                "aggregates or references to group columns!");
 			}
 		}
 	}

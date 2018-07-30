@@ -22,8 +22,8 @@ Vector::Vector(TypeId type, oid_t max_elements, bool zero_data)
 	}
 }
 
-Vector::Vector(TypeId type, char *dataptr, size_t max_elements) : 
-	type(type), count(0), sel_vector(nullptr), data(dataptr),
+Vector::Vector(TypeId type, char *dataptr, size_t max_elements)
+    : type(type), count(0), sel_vector(nullptr), data(dataptr),
       owns_data(false), max_elements(max_elements) {
 	if (dataptr && type == TypeId::INVALID) {
 		throw Exception("Cannot create a vector of type INVALID!");
@@ -45,6 +45,17 @@ Vector::~Vector() {
 	if (data && owns_data) {
 		delete[] data;
 	}
+}
+
+void Vector::Reset() {
+	if (data && owns_data) {
+		delete[] data;
+	}
+	count = 0;
+	sel_vector = nullptr;
+	data = nullptr;
+	owns_data = false;
+	max_elements = 0;
 }
 
 void Vector::SetValue(size_t index, Value val) {

@@ -46,7 +46,7 @@ class AbstractExpression : public Printable {
 		children.push_back(std::move(child));
 	}
 
-	virtual void GetAggregates(std::vector<AggregateExpression*> &expressions);
+	virtual void GetAggregates(std::vector<AggregateExpression *> &expressions);
 	virtual bool IsAggregate();
 
 	ExpressionType GetExpressionType() { return type; }

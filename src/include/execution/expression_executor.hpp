@@ -18,6 +18,8 @@ class ExpressionExecutor : public SQLNodeVisitor {
 	ExpressionExecutor(DataChunk &chunk, PhysicalOperatorState *state = nullptr)
 	    : chunk(chunk), state(state) {}
 
+	void Reset();
+
 	void Execute(AbstractExpression *expr, Vector &result);
 	void Merge(AbstractExpression *expr, Vector &result);
 	void Merge(AggregateExpression &expr, Value &v);

@@ -18,7 +18,7 @@ class SuperLargeHashTable {
 
 	void Resize(size_t size);
 	void AddChunk(DataChunk &groups, DataChunk &payload);
-	void Scan(size_t &scan_position, DataChunk &result);
+	void Scan(size_t &scan_position, DataChunk &group, DataChunk &result);
 
   private:
 	std::vector<ExpressionType> aggregate_types;

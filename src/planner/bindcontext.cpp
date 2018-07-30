@@ -41,7 +41,8 @@ BindContext::BindColumn(ColumnRefExpression &expr) {
 	if (expr.table_name.empty()) {
 		auto entry = expression_alias_map.find(expr.column_name);
 		if (entry == expression_alias_map.end()) {
-			throw BinderException("Could not bind alias \"%s\"!", expr.column_name.c_str());
+			throw BinderException("Could not bind alias \"%s\"!",
+			                      expr.column_name.c_str());
 		}
 		expr.index = entry->second.first;
 		expr.reference = entry->second.second;
@@ -71,8 +72,8 @@ BindContext::BindColumn(ColumnRefExpression &expr) {
 
 	auto &column_list = bound_columns[expr.table_name];
 	// check if the entry already exists in the column list for the table
-	expr.index = (size_t) -1;
-	for(size_t i = 0; i < column_list.size(); i++) {
+	expr.index = (size_t)-1;
+	for (size_t i = 0; i < column_list.size(); i++) {
 		auto &column = column_list[i];
 		if (column == expr.column_name) {
 			expr.index = i;
@@ -116,8 +117,7 @@ void BindContext::AddBaseTable(const string &alias,
 	regular_table_alias_map[alias] = table_entry;
 }
 
-void BindContext::AddSubquery(const string &alias,
-                              SelectStatement *subquery) {
+void BindContext::AddSubquery(const string &alias, SelectStatement *subquery) {
 	if (HasAlias(alias)) {
 		throw BinderException("Duplicate alias \"%s\" in query!",
 		                      alias.c_str());
@@ -125,8 +125,10 @@ void BindContext::AddSubquery(const string &alias,
 	subquery_alias_map[alias] = subquery;
 }
 
-void BindContext::AddExpression(const string &alias, AbstractExpression *expression, size_t i) {
-	expression_alias_map[alias] = pair<size_t, AbstractExpression*>(i, expression);
+void BindContext::AddExpression(const string &alias,
+                                AbstractExpression *expression, size_t i) {
+	expression_alias_map[alias] =
+	    pair<size_t, AbstractExpression *>(i, expression);
 }
 
 bool BindContext::HasAlias(const string &alias) {

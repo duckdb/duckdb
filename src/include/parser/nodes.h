@@ -33,8 +33,8 @@ typedef enum NodeTag {
 	T_Invalid = 0,
 
 	/*
-	 * TAGS FOR EXECUTOR NODES (execnodes.h)
-	 */
+     * TAGS FOR EXECUTOR NODES (execnodes.h)
+     */
 	T_IndexInfo = 10,
 	T_ExprContext,
 	T_ProjectionInfo,
@@ -44,8 +44,8 @@ typedef enum NodeTag {
 	T_TupleTableSlot,
 
 	/*
-	 * TAGS FOR PLAN NODES (plannodes.h)
-	 */
+     * TAGS FOR PLAN NODES (plannodes.h)
+     */
 	T_Plan = 100,
 	T_Result,
 	T_ModifyTable,
@@ -89,10 +89,10 @@ typedef enum NodeTag {
 	T_PlanInvalItem,
 
 	/*
-	 * TAGS FOR PLAN STATE NODES (execnodes.h)
-	 *
-	 * These should correspond one-to-one with Plan node types.
-	 */
+     * TAGS FOR PLAN STATE NODES (execnodes.h)
+     *
+     * These should correspond one-to-one with Plan node types.
+     */
 	T_PlanState = 200,
 	T_ResultState,
 	T_ModifyTableState,
@@ -132,8 +132,8 @@ typedef enum NodeTag {
 	T_LimitState,
 
 	/*
-	 * TAGS FOR PRIMITIVE NODES (primnodes.h)
-	 */
+     * TAGS FOR PRIMITIVE NODES (primnodes.h)
+     */
 	T_Alias = 300,
 	T_RangeVar,
 	T_Expr,
@@ -185,11 +185,11 @@ typedef enum NodeTag {
 	T_IntoClause,
 
 	/*
-	 * TAGS FOR EXPRESSION STATE NODES (execnodes.h)
-	 *
-	 * These correspond (not always one-for-one) to primitive nodes derived
-	 * from Expr.
-	 */
+     * TAGS FOR EXPRESSION STATE NODES (execnodes.h)
+     *
+     * These correspond (not always one-for-one) to primitive nodes derived
+     * from Expr.
+     */
 	T_ExprState = 400,
 	T_GenericExprState,
 	T_WholeRowVarExprState,
@@ -220,8 +220,8 @@ typedef enum NodeTag {
 	T_DomainConstraintState,
 
 	/*
-	 * TAGS FOR PLANNER NODES (relation.h)
-	 */
+     * TAGS FOR PLANNER NODES (relation.h)
+     */
 	T_PlannerInfo = 500,
 	T_PlannerGlobal,
 	T_RelOptInfo,
@@ -255,14 +255,14 @@ typedef enum NodeTag {
 	T_PlannerParamItem,
 
 	/*
-	 * TAGS FOR MEMORY NODES (memnodes.h)
-	 */
+     * TAGS FOR MEMORY NODES (memnodes.h)
+     */
 	T_MemoryContext = 600,
 	T_AllocSetContext,
 
 	/*
-	 * TAGS FOR VALUE NODES (value.h)
-	 */
+     * TAGS FOR VALUE NODES (value.h)
+     */
 	T_Value = 650,
 	T_Integer,
 	T_Float,
@@ -271,15 +271,15 @@ typedef enum NodeTag {
 	T_Null,
 
 	/*
-	 * TAGS FOR LIST NODES (pg_list.h)
-	 */
+     * TAGS FOR LIST NODES (pg_list.h)
+     */
 	T_List,
 	T_IntList,
 	T_OidList,
 
 	/*
-	 * TAGS FOR STATEMENT NODES (mostly in parsenodes.h)
-	 */
+     * TAGS FOR STATEMENT NODES (mostly in parsenodes.h)
+     */
 	T_Query = 700,
 	T_PlannedStmt,
 	T_InsertStmt,
@@ -384,8 +384,8 @@ typedef enum NodeTag {
 	T_CreateTransformStmt,
 
 	/*
-	 * TAGS FOR PARSE TREE NODES (parsenodes.h)
-	 */
+     * TAGS FOR PARSE TREE NODES (parsenodes.h)
+     */
 	T_A_Expr = 900,
 	T_ColumnRef,
 	T_ParamRef,
@@ -431,8 +431,8 @@ typedef enum NodeTag {
 	T_RoleSpec,
 
 	/*
-	 * TAGS FOR REPLICATION GRAMMAR PARSE NODES (replnodes.h)
-	 */
+     * TAGS FOR REPLICATION GRAMMAR PARSE NODES (replnodes.h)
+     */
 	T_IdentifySystemCmd,
 	T_BaseBackupCmd,
 	T_CreateReplicationSlotCmd,
@@ -441,13 +441,13 @@ typedef enum NodeTag {
 	T_TimeLineHistoryCmd,
 
 	/*
-	 * TAGS FOR RANDOM OTHER STUFF
-	 *
-	 * These are objects that aren't part of parse/plan/execute node tree
-	 * structures, but we give them NodeTags anyway for identification
-	 * purposes (usually because they are involved in APIs where we want to
-	 * pass multiple object types through the same pointer).
-	 */
+     * TAGS FOR RANDOM OTHER STUFF
+     *
+     * These are objects that aren't part of parse/plan/execute node tree
+     * structures, but we give them NodeTags anyway for identification
+     * purposes (usually because they are involved in APIs where we want to
+     * pass multiple object types through the same pointer).
+     */
 	T_TriggerData = 950, /* in commands/trigger.h */
 	T_EventTriggerData,  /* in commands/event_trigger.h */
 	T_ReturnSetInfo,     /* in nodes/execnodes.h */
@@ -464,9 +464,7 @@ typedef enum NodeTag {
  * a variable to be of Node * (instead of void *) can also facilitate
  * debugging.
  */
-typedef struct Node {
-	NodeTag type;
-} Node;
+typedef struct Node { NodeTag type; } Node;
 
 typedef struct value {
 	NodeTag type; /* tag appropriately (eg. T_String) */
@@ -570,9 +568,9 @@ typedef enum CmdType {
 	CMD_INSERT, /* insert stmt */
 	CMD_DELETE,
 	CMD_UTILITY, /* cmds like create, destroy, copy, vacuum,
-	              * etc. */
+                  * etc. */
 	CMD_NOTHING  /* dummy command for instead nothing rules
-	              * with qual */
+                  * with qual */
 } CmdType;
 
 /*
@@ -587,36 +585,36 @@ typedef enum CmdType {
  */
 typedef enum JoinType {
 	/*
-	 * The canonical kinds of joins according to the SQL JOIN syntax. Only
-	 * these codes can appear in parser output (e.g., JoinExpr nodes).
-	 */
+     * The canonical kinds of joins according to the SQL JOIN syntax. Only
+     * these codes can appear in parser output (e.g., JoinExpr nodes).
+     */
 	JOIN_INNER, /* matching tuple pairs only */
 	JOIN_LEFT,  /* pairs + unmatched LHS tuples */
 	JOIN_FULL,  /* pairs + unmatched LHS + unmatched RHS */
 	JOIN_RIGHT, /* pairs + unmatched RHS tuples */
 
 	/*
-	 * Semijoins and anti-semijoins (as defined in relational theory) do not
-	 * appear in the SQL JOIN syntax, but there are standard idioms for
-	 * representing them (e.g., using EXISTS).  The planner recognizes these
-	 * cases and converts them to joins.  So the planner and executor must
-	 * support these codes.  NOTE: in JOIN_SEMI output, it is unspecified
-	 * which matching RHS row is joined to.  In JOIN_ANTI output, the row is
-	 * guaranteed to be null-extended.
-	 */
+     * Semijoins and anti-semijoins (as defined in relational theory) do not
+     * appear in the SQL JOIN syntax, but there are standard idioms for
+     * representing them (e.g., using EXISTS).  The planner recognizes these
+     * cases and converts them to joins.  So the planner and executor must
+     * support these codes.  NOTE: in JOIN_SEMI output, it is unspecified
+     * which matching RHS row is joined to.  In JOIN_ANTI output, the row is
+     * guaranteed to be null-extended.
+     */
 	JOIN_SEMI, /* 1 copy of each LHS row that has match(es) */
 	JOIN_ANTI, /* 1 copy of each LHS row that has no match */
 
 	/*
-	 * These codes are used internally in the planner, but are not supported
-	 * by the executor (nor, indeed, by most of the planner).
-	 */
+     * These codes are used internally in the planner, but are not supported
+     * by the executor (nor, indeed, by most of the planner).
+     */
 	JOIN_UNIQUE_OUTER, /* LHS path must be made unique */
 	JOIN_UNIQUE_INNER  /* RHS path must be made unique */
 
 	/*
-	 * We might need additional join types someday.
-	 */
+     * We might need additional join types someday.
+     */
 } JoinType;
 
 /*

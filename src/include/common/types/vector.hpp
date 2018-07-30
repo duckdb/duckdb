@@ -30,6 +30,8 @@ class Vector {
 	Vector(TypeId type, oid_t max_elements = 0, bool zero_data = false);
 	~Vector();
 
+	void Reset();
+
 	Value GetValue(size_t index);
 	void SetValue(size_t index, Value val);
 

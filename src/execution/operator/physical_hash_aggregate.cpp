@@ -77,7 +77,8 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 	if (groups.size() > 0) {
 		state->group_chunk.Reset();
 		state->aggregate_chunk.Reset();
-		state->ht->Scan(state->ht_scan_position, state->group_chunk, state->aggregate_chunk);
+		state->ht->Scan(state->ht_scan_position, state->group_chunk,
+		                state->aggregate_chunk);
 		if (state->aggregate_chunk.count == 0) {
 			return;
 		}
