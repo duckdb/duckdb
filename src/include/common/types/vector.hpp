@@ -26,6 +26,7 @@ class Vector {
 
 	Vector();
 	Vector(Value value);
+	Vector(TypeId type, char *dataptr = nullptr, size_t max_elements = 0);
 	Vector(TypeId type, oid_t max_elements = 0, bool zero_data = false);
 	~Vector();
 

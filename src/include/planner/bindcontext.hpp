@@ -26,12 +26,14 @@ class BindContext {
 	void AddBaseTable(const std::string &alias,
 	                  std::shared_ptr<TableCatalogEntry> table_entry);
 	void AddSubquery(const std::string &alias, SelectStatement *subquery);
+	void AddExpression(const std::string &alias, AbstractExpression *expression, size_t i);
 
 	bool HasAlias(const std::string &alias);
 
 	std::unordered_map<std::string, std::vector<std::string>> bound_columns;
 
   private:
+	std::unordered_map<std::string, std::pair<size_t, AbstractExpression*>> expression_alias_map;
 	std::unordered_map<std::string, std::shared_ptr<TableCatalogEntry>>
 	    regular_table_alias_map;
 	std::unordered_map<std::string, SelectStatement *> subquery_alias_map;

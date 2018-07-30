@@ -30,6 +30,7 @@ class ExpressionExecutor : public SQLNodeVisitor {
 	void Visit(ConstantExpression &expr);
 	void Visit(CrossProductExpression &expr);
 	void Visit(FunctionExpression &expr);
+	void Visit(GroupRefExpression &expr);
 	void Visit(JoinExpression &expr);
 	void Visit(OperatorExpression &expr);
 	void Visit(SubqueryExpression &expr);

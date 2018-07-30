@@ -11,7 +11,7 @@ class FunctionExpression : public AbstractExpression {
 	    std::vector<std::unique_ptr<AbstractExpression>> &children)
 	    : AbstractExpression(ExpressionType::FUNCTION), func_name(func_name) {
 		for (auto &child : children) {
-			this->children.push_back(std::move(child));
+			AddChild(std::move(child));
 		}
 	}
 

@@ -13,6 +13,7 @@ class ConjunctionExpression;
 class ConstantExpression;
 class CrossProductExpression;
 class FunctionExpression;
+class GroupRefExpression;
 class JoinExpression;
 class OperatorExpression;
 class SubqueryExpression;
@@ -32,6 +33,7 @@ class SQLNodeVisitor {
 	virtual void Visit(ConstantExpression &expr);
 	virtual void Visit(CrossProductExpression &expr);
 	virtual void Visit(FunctionExpression &expr);
+	virtual void Visit(GroupRefExpression &expr);
 	virtual void Visit(JoinExpression &expr);
 	virtual void Visit(OperatorExpression &expr);
 	virtual void Visit(SubqueryExpression &expr);

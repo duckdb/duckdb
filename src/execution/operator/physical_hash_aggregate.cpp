@@ -76,7 +76,9 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 	} while(state->child_chunk.count != 0);
 
 	if (groups.size() > 0) {
-		state->ht->Scan(state->ht_scan_position, state->aggregate_chunk);
+		state->group_chunk.Reset();
+		state->aggregate_chunk.Reset();
+		state->ht->Scan(state->ht_scan_position, state->group_chunk, state->aggregate_chunk);
 		if (state->aggregate_chunk.count == 0) {
 			return;
 		}
@@ -101,13 +103,11 @@ unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
 	auto state = make_unique<PhysicalHashAggregateOperatorState>(this, children.size() == 0 ? nullptr : children[0].get());
 	if (groups.size() > 0) {
 		size_t group_width = 0, payload_width = 0;
-		vector<TypeId> group_types, payload_types, aggregate_types;
+		vector<TypeId> payload_types, aggregate_types;
 		std::vector<ExpressionType> aggregate_kind;
 		for (auto &expr : groups) {
-			group_types.push_back(expr->return_type);
 			group_width += GetTypeIdSize(expr->return_type);
 		}
-		state->group_chunk.Initialize(group_types);
 		for (auto &expr : aggregates) {
 			aggregate_kind.push_back(expr->type);
 			if (expr->children.size() > 0) {

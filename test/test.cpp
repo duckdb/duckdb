@@ -47,34 +47,37 @@ int main() {
 		return 1;
 	}
 
-	if (duckdb_query(connection, "SELECT SUM(41), COUNT(*);", &result) != DuckDBSuccess) {
+	// if (duckdb_query(connection, "SELECT SUM(41), COUNT(*);", &result) != DuckDBSuccess) {
+	// 	return 1;
+	// }
+
+	// if (duckdb_query(connection, "SELECT SUM(a), COUNT(*) FROM test;", &result) != DuckDBSuccess) {
+	// 	return 1;
+	// }
+
+	// if (duckdb_query(connection, "SELECT SUM(a), COUNT(*) FROM test WHERE a = 11;", &result) != DuckDBSuccess) {
+	// 	return 1;
+	// }
+
+	// if (duckdb_query(connection, "SELECT SUM(a), SUM(b), SUM(a) + SUM (b) FROM test;", &result) != DuckDBSuccess) {
+	// 	return 1;
+	// }
+
+	// if (duckdb_query(connection, "SELECT SUM(a+2), SUM(a) + 2 * COUNT(*) FROM test;", &result) != DuckDBSuccess) {
+	// 	return 1;
+	// }
+
+	// if (duckdb_query(connection, "SELECT SUM(a), SUM(a+2) FROM test GROUP BY b;", &result) != DuckDBSuccess) {
+	// 	return 1;
+	// }
+
+	if (duckdb_query(connection, "SELECT b, b * 2, SUM(a), COUNT(*), SUM(a+2) FROM test GROUP BY b;", &result) != DuckDBSuccess) {
 		return 1;
 	}
 
-	if (duckdb_query(connection, "SELECT SUM(a), COUNT(*) FROM test;", &result) != DuckDBSuccess) {
+	if (duckdb_query(connection, "SELECT b % 2 AS f, SUM(a) FROM test GROUP BY f;", &result) != DuckDBSuccess) {
 		return 1;
 	}
-
-	if (duckdb_query(connection, "SELECT SUM(a), COUNT(*) FROM test WHERE a = 11;", &result) != DuckDBSuccess) {
-		return 1;
-	}
-
-	if (duckdb_query(connection, "SELECT SUM(a), SUM(b), SUM(a) + SUM (b) FROM test;", &result) != DuckDBSuccess) {
-		return 1;
-	}
-
-	if (duckdb_query(connection, "SELECT SUM(a+2), SUM(a) + 2 * COUNT(*) FROM test;", &result) != DuckDBSuccess) {
-		return 1;
-	}
-
-	if (duckdb_query(connection, "SELECT SUM(a), SUM(a+2) FROM test GROUP BY b;", &result) != DuckDBSuccess) {
-		return 1;
-	}
-
-	if (duckdb_query(connection, "SELECT SUM(a), COUNT(*), SUM(a+2) FROM test GROUP BY b;", &result) != DuckDBSuccess) {
-		return 1;
-	}
-
 	
 	// if (duckdb_query(connection, "SELECT l_orderkey, l_orderkey + 1 FROM lineitem;", &result) != DuckDBSuccess) {
 	// 	return 1;

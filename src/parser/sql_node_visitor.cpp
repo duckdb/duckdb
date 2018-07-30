@@ -9,6 +9,7 @@
 #include "parser/expression/constant_expression.hpp"
 #include "parser/expression/crossproduct_expression.hpp"
 #include "parser/expression/function_expression.hpp"
+#include "parser/expression/groupref_expression.hpp"
 #include "parser/expression/join_expression.hpp"
 #include "parser/expression/operator_expression.hpp"
 #include "parser/expression/subquery_expression.hpp"
@@ -41,6 +42,9 @@ void SQLNodeVisitor::Visit(CrossProductExpression &expr) {
 	expr.AcceptChildren(this);
 }
 void SQLNodeVisitor::Visit(FunctionExpression &expr) {
+	expr.AcceptChildren(this);
+}
+void SQLNodeVisitor::Visit(GroupRefExpression &expr) {
 	expr.AcceptChildren(this);
 }
 void SQLNodeVisitor::Visit(JoinExpression &expr) { expr.AcceptChildren(this); }

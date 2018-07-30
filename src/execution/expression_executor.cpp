@@ -12,6 +12,7 @@
 #include "parser/expression/constant_expression.hpp"
 #include "parser/expression/crossproduct_expression.hpp"
 #include "parser/expression/function_expression.hpp"
+#include "parser/expression/groupref_expression.hpp"
 #include "parser/expression/join_expression.hpp"
 #include "parser/expression/operator_expression.hpp"
 #include "parser/expression/subquery_expression.hpp"
@@ -195,6 +196,14 @@ void ExpressionExecutor::Visit(FunctionExpression &expr) {
 	throw NotImplementedException("");
 }
 
+void ExpressionExecutor::Visit(GroupRefExpression &expr) {
+	auto state = reinterpret_cast<PhysicalAggregateOperatorState *>(this->state);
+	if (!state) {
+		throw NotImplementedException("Aggregate node without aggregate state");
+	}
+	vector.Reference(*state->group_chunk.data[expr.group_index].get());
+}
+
 void ExpressionExecutor::Visit(JoinExpression &expr) {
 	throw NotImplementedException("");
 }
@@ -231,6 +240,9 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 			break;
 		case ExpressionType::OPERATOR_DIVIDE:
 			VectorOperations::Divide(l, r, vector);
+			break;
+		case ExpressionType::OPERATOR_MOD:
+			VectorOperations::Modulo(l, r, vector);
 			break;
 		default:
 			throw NotImplementedException(

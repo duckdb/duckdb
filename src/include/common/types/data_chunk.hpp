@@ -14,6 +14,7 @@ class DataChunk {
 	oid_t count;
 	oid_t column_count;
 	std::unique_ptr<Vector> *data;
+	char *default_vector_data;
 	oid_t maximum_size;
 	std::unique_ptr<sel_t[]> sel_vector;
 

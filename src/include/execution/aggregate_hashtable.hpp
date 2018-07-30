@@ -15,7 +15,7 @@ public:
 
 	void Resize(size_t size);
 	void AddChunk(DataChunk& groups, DataChunk& payload);
-	void Scan(size_t& scan_position, DataChunk& result);
+	void Scan(size_t& scan_position, DataChunk& groups, DataChunk& result);
 
 private:
 	std::vector<ExpressionType> aggregate_types;

@@ -3,6 +3,7 @@
 
 #include "parser/expression/basetableref_expression.hpp"
 #include "parser/expression/columnref_expression.hpp"
+#include "parser/expression/groupref_expression.hpp"
 #include "parser/expression/join_expression.hpp"
 #include "parser/expression/subquery_expression.hpp"
 
@@ -23,20 +24,12 @@ void Binder::Visit(SelectStatement &statement) {
 	// here we performing the binding of any mentioned column names
 	// back to the tables/subqueries found in the FROM statement
 	// (and throw an error if a mentioned column is not found)
-	if (statement.where_clause) {
-		statement.where_clause->Accept(this);
-	}
-	for (auto &group : statement.groupby.groups) {
-		group->Accept(this);
-	}
-	if (statement.groupby.having) {
-		statement.groupby.having->Accept(this);
-	}
-	for (auto &order : statement.orderby.orders) {
-		order.expression->Accept(this);
-	}
+
+	// first we visit the SELECT list
 	// we generate a new list of expressions because a * statement expands to
 	// multiple expressions
+	// note that we also gather aliases from the SELECT list
+	// because they might be used in the WHERE, GROUP BY or HAVING clauses
 	vector<unique_ptr<AbstractExpression>> new_select_list;
 	for (auto &select_element : statement.select_list) {
 		if (select_element->GetExpressionType() == ExpressionType::STAR) {
@@ -48,17 +41,89 @@ void Binder::Visit(SelectStatement &statement) {
 			new_select_list.push_back(move(select_element));
 		}
 	}
-	for (auto &select_element : new_select_list) {
+
+	for (size_t i = 0; i < new_select_list.size(); i++) {
+		auto &select_element = new_select_list[i];
 		select_element->Accept(this);
 		select_element->ResolveType();
-
 		if (select_element->return_type == TypeId::INVALID) {
 			throw BinderException(
 			    "Could not resolve type of projection element!");
 		}
+
+		if (!select_element->alias.empty()) {
+			context->AddExpression(select_element->alias, select_element.get(), i);
+		}
+	}
+	statement.select_list = move(new_select_list);
+
+	if (statement.where_clause) {
+		statement.where_clause->Accept(this);
 	}
 
-	statement.select_list = move(new_select_list);
+	if (statement.HasGroup()) {
+		// bind group columns
+		for (auto &group : statement.groupby.groups) {
+			group->Accept(this);
+		}
+
+		// handle aliases in the GROUP BY columns
+		for (size_t i = 0; i < statement.groupby.groups.size(); i++) {
+			auto &group = statement.groupby.groups[i];
+			if (group->type != ExpressionType::COLUMN_REF) {
+				throw BinderException("GROUP BY clause needs to be a column or alias reference.");
+			}
+			auto group_column = reinterpret_cast<ColumnRefExpression*>(group.get());
+			if (group_column->reference) {
+				// alias reference
+				// move the computation here from the SELECT clause
+				size_t select_index = group_column->index;
+				statement.groupby.groups[i] = move(statement.select_list[select_index]);
+				// and add a GROUP REF expression to the SELECT clause
+				statement.select_list[select_index] = make_unique<GroupRefExpression>(statement.groupby.groups[i]->return_type, i);
+			}
+		}
+
+		// handle GROUP BY columns in the select clause
+		for (size_t i = 0; i < statement.select_list.size(); i++) {
+			auto &select = statement.select_list[i];
+			if (select->type == ExpressionType::GROUP_REF) continue;
+			if (select->IsAggregate()) continue;
+
+			// not an aggregate or existing GROUP REF, must point to a GROUP BY column
+			if (select->type != ExpressionType::COLUMN_REF) {
+				// FIXME: this should be different
+				// Every ColumnRef should point to a group by column OR alias
+				throw Exception("SELECT with GROUP BY can only contain aggregates or references to group columns!");
+			}
+			auto select_column = reinterpret_cast<ColumnRefExpression*>(select.get());
+			if (select_column->reference) {
+				throw Exception("SELECT with GROUP BY can only contain aggregates or references to group columns!");
+			}
+			bool found_matching = false;
+			for (size_t j = 0; j < statement.groupby.groups.size(); j++) {
+				auto &group = statement.groupby.groups[j];
+				if (group->type == ExpressionType::COLUMN_REF) {
+					auto group_column = reinterpret_cast<ColumnRefExpression*>(group.get());
+					if (group_column->index == select_column->index) {
+						statement.select_list[i] = make_unique<GroupRefExpression>(statement.select_list[i]->return_type, j);
+						found_matching = true;
+						break;
+					}
+				}
+			}
+			if (!found_matching) {
+				throw Exception("SELECT with GROUP BY can only contain aggregates or references to group columns!");
+			}
+		}
+	}
+
+	if (statement.groupby.having) {
+		statement.groupby.having->Accept(this);
+	}
+	for (auto &order : statement.orderby.orders) {
+		order.expression->Accept(this);
+	}
 }
 
 void Binder::Visit(BaseTableRefExpression &expr) {
@@ -75,7 +140,6 @@ void Binder::Visit(ColumnRefExpression &expr) {
 		expr.table_name = context->GetMatchingTable(expr.column_name);
 	}
 	auto column = context->BindColumn(expr);
-	expr.return_type = column->type;
 }
 
 void Binder::Visit(JoinExpression &expr) {

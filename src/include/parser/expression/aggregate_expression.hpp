@@ -30,7 +30,7 @@ class AggregateExpression : public AbstractExpression {
 			throw Exception("Aggregate type not supported");
 		}
 		if (child) {
-			children.push_back(std::move(child));
+			AddChild(std::move(child));
 		}
 	}
 

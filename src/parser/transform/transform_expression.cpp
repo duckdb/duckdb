@@ -243,12 +243,12 @@ unique_ptr<AbstractExpression> TransformFrom(List *root) {
 			Node *n = reinterpret_cast<Node *>(node->data.ptr_value);
 			switch (n->type) {
 			case T_RangeVar: {
-				result->children.push_back(
+				result->AddChild(
 				    move(TransformRangeVar(reinterpret_cast<RangeVar *>(n))));
 				break;
 			}
 			case T_RangeSubselect: {
-				result->children.push_back(move(TransformRangeSubselect(
+				result->AddChild(move(TransformRangeSubselect(
 				    reinterpret_cast<RangeSubselect *>(n))));
 				break;
 			}

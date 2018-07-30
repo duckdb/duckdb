@@ -22,6 +22,14 @@ Vector::Vector(TypeId type, oid_t max_elements, bool zero_data)
 	}
 }
 
+Vector::Vector(TypeId type, char *dataptr, size_t max_elements) : 
+	type(type), count(0), sel_vector(nullptr), data(dataptr),
+      owns_data(false), max_elements(max_elements) {
+	if (dataptr && type == TypeId::INVALID) {
+		throw Exception("Cannot create a vector of type INVALID!");
+	}
+}
+
 Vector::Vector(Value value) : type(value.type), count(1), sel_vector(nullptr), max_elements(1) {
 	owns_data = true;
 	data = new char[GetTypeIdSize(type)];
@@ -65,6 +73,9 @@ Value Vector::GetValue(size_t index) {
 }
 
 void Vector::Reference(Vector &other) {
+	if (owns_data) {
+		throw Exception("Vector owns data, cannot create reference!");
+	}
 	count = other.count;
 	data = other.data;
 	owns_data = false;

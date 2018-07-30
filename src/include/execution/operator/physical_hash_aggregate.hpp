@@ -32,7 +32,6 @@ class PhysicalHashAggregateOperatorState : public PhysicalAggregateOperatorState
 
 	size_t ht_scan_position;
 	std::unique_ptr<SuperLargeHashTable> ht;
-	DataChunk group_chunk;
 	DataChunk payload_chunk;
 };
 }

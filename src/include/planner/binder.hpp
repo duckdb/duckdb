@@ -29,7 +29,6 @@ class Binder : public SQLNodeVisitor {
 	void Visit(SubqueryExpression &expr);
 
 	std::unique_ptr<BindContext> context;
-
   private:
 	Catalog &catalog;
 };

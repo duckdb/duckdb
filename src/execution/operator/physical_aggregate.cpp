@@ -50,10 +50,17 @@ PhysicalAggregateOperatorState::PhysicalAggregateOperatorState(PhysicalAggregate
 			aggregates[i] = Value::NumericValue(parent->aggregates[i]->return_type, 0);
 		}
 	} else {
-		vector<TypeId> aggregate_types;
-		for(size_t i = 0; i < parent->aggregates.size(); i++) {
-			aggregate_types.push_back(parent->aggregates[i]->return_type);
+		vector<TypeId> group_types, aggregate_types;
+
+		for (auto &expr : parent->groups) {
+			group_types.push_back(expr->return_type);
+		}
+		group_chunk.Initialize(group_types);
+
+		for (auto &expr : parent->aggregates) {
+			aggregate_types.push_back(expr->return_type);
 		}
 		aggregate_chunk.Initialize(aggregate_types);
+
 	}
 }

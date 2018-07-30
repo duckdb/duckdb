@@ -14,18 +14,18 @@ class AggregateExpression;
 
 class AbstractExpression : public Printable {
   public:
-	AbstractExpression(ExpressionType type) : type(type) {}
+	AbstractExpression(ExpressionType type) : type(type), parent(nullptr) {}
 	AbstractExpression(ExpressionType type, TypeId return_type)
-	    : type(type), return_type(return_type) {}
+	    : type(type), return_type(return_type), parent(nullptr) {}
 	AbstractExpression(ExpressionType type, TypeId return_type,
 	                   std::unique_ptr<AbstractExpression> left,
 	                   std::unique_ptr<AbstractExpression> right)
-	    : type(type), return_type(return_type) {
+	    : type(type), return_type(return_type), parent(nullptr) {
 		// Order of these is important!
 		if (left != nullptr)
-			children.push_back(move(left));
+			AddChild(std::move(left));
 		if (right != nullptr)
-			children.push_back(move(right));
+			AddChild(std::move(right));
 	}
 
 	virtual void Accept(SQLNodeVisitor *) = 0;
@@ -41,6 +41,11 @@ class AbstractExpression : public Printable {
 		}
 	}
 
+	void AddChild(std::unique_ptr<AbstractExpression> child) {
+		child->parent = this;
+		children.push_back(std::move(child));
+	}
+
 	virtual void GetAggregates(std::vector<AggregateExpression*>& expressions);
 	virtual bool IsAggregate();
 
@@ -51,6 +56,7 @@ class AbstractExpression : public Printable {
 
 	std::string alias;
 
+	AbstractExpression *parent;
 	std::vector<std::unique_ptr<AbstractExpression>> children;
 };
 }

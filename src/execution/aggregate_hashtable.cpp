@@ -152,7 +152,7 @@ void SuperLargeHashTable::AddChunk(DataChunk& groups, DataChunk& payload) {
 }
 
 
-void SuperLargeHashTable::Scan(size_t& scan_position, DataChunk& result) {
+void SuperLargeHashTable::Scan(size_t& scan_position, DataChunk& groups, DataChunk& result) {
 	result.Reset();
 
 	uint8_t *ptr;
@@ -163,25 +163,32 @@ void SuperLargeHashTable::Scan(size_t& scan_position, DataChunk& result) {
 	Vector addresses(TypeId::POINTER, result.maximum_size);
 	void **data_pointers = (void**) addresses.data;
 
-
+	// scan the table for full cells starting from the scan position
 	size_t entry = 0;
 	for(ptr = start; ptr < end && entry < result.maximum_size; ptr += tuple_size) {
 		if (*ptr == FULL_CELL) {
-			// entry
-			data_pointers[entry++] = ptr + FLAG_SIZE + group_width;
+			// found entry
+			data_pointers[entry++] = ptr + FLAG_SIZE;
 		}
 	}
 	if (entry == 0) {
 		return;
 	}
 	addresses.count = entry;
+	// fetch the group columns
+	for(size_t i = 0; i < groups.column_count; i++) {
+		auto column = groups.data[i].get();
+		column->count = entry;
+		VectorOperations::Gather::Set(data_pointers, *column);
+		VectorOperations::Add(addresses, GetTypeIdSize(column->type), addresses);
+	}
 	for(size_t i = 0; i < aggregate_types.size(); i++) {
 		auto target = result.data[i].get();
 		target->count = entry;
 
 		if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_STAR ||
 			aggregate_types[i] == ExpressionType::AGGREGATE_COUNT) {
-			// we fetch the counts later
+			// we fetch the counts later because they are stored at the end
 			continue;
 		}
 		VectorOperations::Gather::Set(data_pointers, *target);
@@ -200,6 +207,7 @@ void SuperLargeHashTable::Scan(size_t& scan_position, DataChunk& result) {
 			VectorOperations::Gather::Set(data_pointers, *target);
 		}
 	}
+	groups.count = entry;
 	result.count = entry;
 	scan_position = ptr - start;
 }
