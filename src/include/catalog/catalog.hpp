@@ -40,4 +40,4 @@ class Catalog : public AbstractCatalogEntry {
 
 	virtual std::string ToString() const { return std::string(); }
 };
-}
+} // namespace duckdb

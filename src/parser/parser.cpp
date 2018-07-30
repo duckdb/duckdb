@@ -61,6 +61,10 @@ std::unique_ptr<SQLStatement> Parser::ParseNode(Node *stmt) {
 	switch (stmt->type) {
 	case T_SelectStmt:
 		return TransformSelect(stmt);
+	case T_CreateStmt:
+		return TransformCreate(stmt);
+	case T_InsertStmt:
+		return TransformInsert(stmt);
 	default:
 		throw NotImplementedException("A_Expr not implemented!");
 	}

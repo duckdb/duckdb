@@ -28,4 +28,4 @@ class Parser {
 	bool ParseList(List *tree);
 	std::unique_ptr<SQLStatement> ParseNode(Node *stmt);
 };
-}
+} // namespace duckdb

@@ -85,8 +85,8 @@ class StringUtil {
 	static std::string Upper(const std::string &str);
 
 	/**
-   * Convert a string to its uppercase form
-   */
+	 * Convert a string to its uppercase form
+	 */
 	static std::string Lower(const std::string &str);
 
 	/**
@@ -126,4 +126,4 @@ class StringUtil {
 	 */
 	static std::string Strip(const std::string &str, char c);
 };
-}
+} // namespace duckdb

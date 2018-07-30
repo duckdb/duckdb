@@ -45,9 +45,10 @@ void ExpressionExecutor::Merge(AbstractExpression *expr, Vector &result) {
 	VectorOperations::And(vector, result, result);
 }
 
-void ExpressionExecutor::Merge(AggregateExpression &expr, Value& result) {
+void ExpressionExecutor::Merge(AggregateExpression &expr, Value &result) {
 	if (result.type != expr.return_type) {
-		throw NotImplementedException("Aggregate type does not match value type!");
+		throw NotImplementedException(
+		    "Aggregate type does not match value type!");
 	}
 
 	if (expr.type == ExpressionType::AGGREGATE_COUNT) {
@@ -101,7 +102,8 @@ void ExpressionExecutor::Merge(AggregateExpression &expr, Value& result) {
 }
 
 void ExpressionExecutor::Visit(AggregateExpression &expr) {
-	auto state = reinterpret_cast<PhysicalAggregateOperatorState *>(this->state);
+	auto state =
+	    reinterpret_cast<PhysicalAggregateOperatorState *>(this->state);
 	if (!state) {
 		throw NotImplementedException("Aggregate node without aggregate state");
 	}

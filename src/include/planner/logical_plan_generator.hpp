@@ -16,6 +16,7 @@ class LogicalPlanGenerator : public SQLNodeVisitor {
 	LogicalPlanGenerator(Catalog &catalog) : catalog(catalog) {}
 
 	void Visit(SelectStatement &statement);
+	void Visit(InsertStatement &statement);
 
 	void Visit(BaseTableRefExpression &expr);
 	void Visit(JoinExpression &expr);
@@ -28,4 +29,4 @@ class LogicalPlanGenerator : public SQLNodeVisitor {
   private:
 	Catalog &catalog;
 };
-}
+} // namespace duckdb

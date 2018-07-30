@@ -24,4 +24,4 @@ class DataTable {
 	std::vector<std::unique_ptr<DataColumn>> columns;
 	TableCatalogEntry &table;
 };
-}
+} // namespace duckdb

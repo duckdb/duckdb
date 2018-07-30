@@ -16,4 +16,4 @@ class LogicalLimit : public LogicalOperator {
 	int64_t limit;
 	int64_t offset;
 };
-}
+} // namespace duckdb

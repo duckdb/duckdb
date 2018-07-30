@@ -6,7 +6,8 @@
 namespace duckdb {
 
 struct VectorOperations {
-  	typedef void (*vector_function)(Vector &left, Vector &right, Vector &result);
+	typedef void (*vector_function)(Vector &left, Vector &right,
+	                                Vector &result);
 
 	//===--------------------------------------------------------------------===//
 	// Numeric Operations
@@ -34,15 +35,15 @@ struct VectorOperations {
 	static void Modulo(Vector &left, int64_t right, Vector &result);
 
 	// A + B
-	static void Add(int64_t left, Vector& right, Vector &result);
+	static void Add(int64_t left, Vector &right, Vector &result);
 	// A - B
-	static void Subtract(int64_t left, Vector& right, Vector &result);
+	static void Subtract(int64_t left, Vector &right, Vector &result);
 	// A * B
-	static void Multiply(int64_t left, Vector& right, Vector &result);
+	static void Multiply(int64_t left, Vector &right, Vector &result);
 	// A / B
-	static void Divide(int64_t left, Vector& right, Vector &result);
+	static void Divide(int64_t left, Vector &right, Vector &result);
 	// A % B
-	static void Modulo(int64_t left, Vector& right, Vector &result);
+	static void Modulo(int64_t left, Vector &right, Vector &result);
 
 	//===--------------------------------------------------------------------===//
 	// Boolean Operations
@@ -90,13 +91,13 @@ struct VectorOperations {
 		// otherwise only the first element of source is scattered [count] times
 
 		// dest[i] = source.data[i]
-		static void Set(Vector &source, void **dest, size_t count = (size_t) -1);
+		static void Set(Vector &source, void **dest, size_t count = (size_t)-1);
 		// dest[i] = dest[i] + source.data[i]
-		static void Add(Vector &source, void **dest, size_t count = (size_t) -1);
+		static void Add(Vector &source, void **dest, size_t count = (size_t)-1);
 		// dest[i] = max(dest[i], source.data[i])
-		static void Max(Vector &source, void **dest, size_t count = (size_t) -1);
+		static void Max(Vector &source, void **dest, size_t count = (size_t)-1);
 		// dest[i] = min(dest[i], source.data[i])
-		static void Min(Vector &source, void **dest, size_t count = (size_t) -1);
+		static void Min(Vector &source, void **dest, size_t count = (size_t)-1);
 
 		// dest[i] = dest[i] + source
 		static void Add(int64_t source, void **dest, size_t length);
@@ -118,8 +119,8 @@ struct VectorOperations {
 	// Helpers
 	//===--------------------------------------------------------------------===//
 	// Copy the data from source to target, casting if the types don't match
-	static void Cast(Vector& source, Vector& result);
+	static void Cast(Vector &source, Vector &result);
 	// Copy the data of <source> to the target location
 	static void Copy(Vector &source, void *target);
 };
-}
+} // namespace duckdb

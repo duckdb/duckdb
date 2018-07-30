@@ -30,6 +30,7 @@ class PhysicalPlanGenerator : public LogicalOperatorVisitor {
 	void Visit(LogicalLimit &op);
 	void Visit(LogicalOrder &op);
 	void Visit(LogicalProjection &op);
+	void Visit(LogicalInsert &op);
 
 	void Print() { plan->Print(); }
 
@@ -41,4 +42,4 @@ class PhysicalPlanGenerator : public LogicalOperatorVisitor {
   private:
 	Catalog &catalog;
 };
-}
+} // namespace duckdb

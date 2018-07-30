@@ -17,4 +17,4 @@ class LogicalAggregate : public LogicalOperator {
 	std::vector<std::unique_ptr<AbstractExpression>> select_list;
 	std::vector<std::unique_ptr<AbstractExpression>> groups;
 };
-}
+} // namespace duckdb

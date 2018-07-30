@@ -26,6 +26,6 @@ class Planner {
 	std::unique_ptr<LogicalOperator> plan;
 
   private:
-	void CreatePlan(Catalog &, SelectStatement &statement);
+	void CreatePlan(Catalog &, SQLStatement &statement);
 };
-}
+} // namespace duckdb

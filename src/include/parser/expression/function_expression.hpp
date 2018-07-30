@@ -22,4 +22,4 @@ class FunctionExpression : public AbstractExpression {
 	std::string func_name;
 	std::vector<TypeId> func_arg_types;
 };
-}
+} // namespace duckdb

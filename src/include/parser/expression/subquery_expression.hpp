@@ -14,4 +14,4 @@ class SubqueryExpression : public TableRefExpression {
 
 	std::unique_ptr<SelectStatement> subquery;
 };
-}
+} // namespace duckdb

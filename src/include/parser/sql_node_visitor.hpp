@@ -4,6 +4,8 @@
 namespace duckdb {
 
 class SelectStatement;
+class CreateStatement;
+class InsertStatement;
 
 class AggregateExpression;
 class BaseTableRefExpression;
@@ -24,6 +26,8 @@ class SQLNodeVisitor {
 	virtual ~SQLNodeVisitor(){};
 
 	virtual void Visit(SelectStatement &);
+	virtual void Visit(CreateStatement &){};
+	virtual void Visit(InsertStatement &){};
 
 	virtual void Visit(AggregateExpression &expr);
 	virtual void Visit(BaseTableRefExpression &expr);
@@ -39,4 +43,4 @@ class SQLNodeVisitor {
 	virtual void Visit(SubqueryExpression &expr);
 	virtual void Visit(TableRefExpression &expr);
 };
-}
+} // namespace duckdb

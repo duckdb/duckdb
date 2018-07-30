@@ -16,4 +16,4 @@ class LogicalProjection : public LogicalOperator {
 
 	std::vector<std::unique_ptr<AbstractExpression>> select_list;
 };
-}
+} // namespace duckdb

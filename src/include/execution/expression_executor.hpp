@@ -15,8 +15,8 @@
 namespace duckdb {
 class ExpressionExecutor : public SQLNodeVisitor {
   public:
-	ExpressionExecutor(DataChunk &chunk, PhysicalOperatorState *state = nullptr) : 
-		chunk(chunk), state(state) { }
+	ExpressionExecutor(DataChunk &chunk, PhysicalOperatorState *state = nullptr)
+	    : chunk(chunk), state(state) {}
 
 	void Execute(AbstractExpression *expr, Vector &result);
 	void Merge(AbstractExpression *expr, Vector &result);
@@ -43,4 +43,4 @@ class ExpressionExecutor : public SQLNodeVisitor {
 
 	Vector vector;
 };
-}
+} // namespace duckdb

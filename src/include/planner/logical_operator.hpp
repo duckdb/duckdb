@@ -42,4 +42,4 @@ class LogicalOperator : public Printable {
 	LogicalOperatorType type;
 	std::vector<std::unique_ptr<LogicalOperator>> children;
 };
-}
+} // namespace duckdb

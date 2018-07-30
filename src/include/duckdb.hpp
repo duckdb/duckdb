@@ -47,4 +47,4 @@ class DuckDBResult {
   private:
 	DuckDBResult(const DuckDBResult &) = delete;
 };
-}
+} // namespace duckdb

@@ -13,4 +13,4 @@ class TableRefExpression : public AbstractExpression {
 
 	TableReferenceType ref_type;
 };
-}
+} // namespace duckdb

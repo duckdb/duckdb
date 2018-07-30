@@ -16,4 +16,4 @@ class JoinExpression : public TableRefExpression {
 	std::unique_ptr<AbstractExpression> condition;
 	JoinType type;
 };
-}
+} // namespace duckdb

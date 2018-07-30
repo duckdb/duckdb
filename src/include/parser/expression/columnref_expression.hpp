@@ -35,4 +35,4 @@ class ColumnRefExpression : public AbstractExpression {
 	std::string column_name;
 	std::string table_name;
 };
-}
+} // namespace duckdb

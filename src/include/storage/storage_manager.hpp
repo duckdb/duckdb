@@ -15,4 +15,4 @@ class StorageManager {
 
 	std::vector<std::unique_ptr<DataTable>> tables;
 };
-}
+} // namespace duckdb

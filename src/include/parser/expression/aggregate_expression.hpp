@@ -55,7 +55,8 @@ class AggregateExpression : public AbstractExpression {
 			break;
 		}
 	}
-	virtual void GetAggregates(std::vector<AggregateExpression*>& expressions) override;
+	virtual void
+	GetAggregates(std::vector<AggregateExpression *> &expressions) override;
 	virtual bool IsAggregate() override { return true; }
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
@@ -66,4 +67,4 @@ class AggregateExpression : public AbstractExpression {
   private:
 	bool distinct;
 };
-}
+} // namespace duckdb

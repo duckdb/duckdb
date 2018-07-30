@@ -29,4 +29,4 @@ class DataChunk {
 
 	void Reset();
 };
-}
+} // namespace duckdb

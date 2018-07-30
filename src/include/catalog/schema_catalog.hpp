@@ -28,4 +28,4 @@ class SchemaCatalogEntry : public AbstractCatalogEntry {
 	void CreateTable(const std::string &table_name,
 	                 const std::vector<ColumnCatalogEntry> &columns);
 };
-}
+} // namespace duckdb

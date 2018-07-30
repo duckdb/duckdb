@@ -14,21 +14,20 @@ void PhysicalHashAggregate::InitializeChunk(DataChunk &chunk) {
 
 PhysicalHashAggregate::PhysicalHashAggregate(
     vector<unique_ptr<AbstractExpression>> expressions)
-    : PhysicalAggregate(move(expressions), PhysicalOperatorType::HASH_GROUP_BY) {
-    	Initialize();
+    : PhysicalAggregate(move(expressions),
+                        PhysicalOperatorType::HASH_GROUP_BY) {
+	Initialize();
 }
 
 PhysicalHashAggregate::PhysicalHashAggregate(
     vector<unique_ptr<AbstractExpression>> expressions,
     vector<unique_ptr<AbstractExpression>> groups)
-    : PhysicalAggregate(move(expressions), move(groups), PhysicalOperatorType::HASH_GROUP_BY) {
-    	Initialize();
-
+    : PhysicalAggregate(move(expressions), move(groups),
+                        PhysicalOperatorType::HASH_GROUP_BY) {
+	Initialize();
 }
 
-void PhysicalHashAggregate::Initialize() {
-
-}
+void PhysicalHashAggregate::Initialize() {}
 
 void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
                                      PhysicalOperatorState *state_) {
@@ -57,7 +56,7 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 				group_chunk.count = group_chunk.data[i]->count;
 			}
 			size_t i = 0;
-			for(auto &expr : aggregates) {
+			for (auto &expr : aggregates) {
 				if (expr->children.size() > 0) {
 					auto &child = expr->children[0];
 					executor.Execute(child.get(), *payload_chunk.data[i]);
@@ -69,11 +68,11 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 		} else {
 			// aggregation without groups
 			// merge into the fixed list of aggregates
-			for(size_t i = 0; i < aggregates.size(); i++) {
+			for (size_t i = 0; i < aggregates.size(); i++) {
 				executor.Merge(*aggregates[i], state->aggregates[i]);
 			}
 		}
-	} while(state->child_chunk.count != 0);
+	} while (state->child_chunk.count != 0);
 
 	if (groups.size() > 0) {
 		state->group_chunk.Reset();
@@ -100,7 +99,8 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
-	auto state = make_unique<PhysicalHashAggregateOperatorState>(this, children.size() == 0 ? nullptr : children[0].get());
+	auto state = make_unique<PhysicalHashAggregateOperatorState>(
+	    this, children.size() == 0 ? nullptr : children[0].get());
 	if (groups.size() > 0) {
 		size_t group_width = 0, payload_width = 0;
 		vector<TypeId> payload_types, aggregate_types;
@@ -111,14 +111,15 @@ unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
 		for (auto &expr : aggregates) {
 			aggregate_kind.push_back(expr->type);
 			if (expr->children.size() > 0) {
-				auto& child = expr->children[0];
+				auto &child = expr->children[0];
 				payload_types.push_back(child->return_type);
 				payload_width += GetTypeIdSize(child->return_type);
 			}
 		}
 		state->payload_chunk.Initialize(payload_types);
 
-		state->ht = make_unique<SuperLargeHashTable>(1024, group_width, payload_width, aggregate_kind);
+		state->ht = make_unique<SuperLargeHashTable>(
+		    1024, group_width, payload_width, aggregate_kind);
 	}
 	return move(state);
 }

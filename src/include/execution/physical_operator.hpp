@@ -21,13 +21,14 @@ class PhysicalOperatorState {
 	PhysicalOperatorState(PhysicalOperator *child);
 	virtual ~PhysicalOperatorState() {}
 
+	bool finished;
 	DataChunk child_chunk;
 	std::unique_ptr<PhysicalOperatorState> child_state;
 };
 
 class PhysicalOperator : public Printable {
   public:
-	PhysicalOperator(PhysicalOperatorType type) : type(type) { }
+	PhysicalOperator(PhysicalOperatorType type) : type(type) {}
 
 	PhysicalOperatorType GetOperatorType() { return type; }
 
@@ -49,4 +50,4 @@ class PhysicalOrderBy : public PhysicalOperator {
 	virtual void GetChunk(DataChunk &chunk,
 	                      PhysicalOperatorState *state) override;
 };
-}
+} // namespace duckdb

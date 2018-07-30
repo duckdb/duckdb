@@ -13,4 +13,4 @@ class LogicalOrder : public LogicalOperator {
 
 	OrderByDescription description;
 };
-}
+} // namespace duckdb

@@ -3,6 +3,7 @@
 
 #include "execution/operator/physical_filter.hpp"
 #include "execution/operator/physical_hash_aggregate.hpp"
+#include "execution/operator/physical_insert.hpp"
 #include "execution/operator/physical_limit.hpp"
 #include "execution/operator/physical_projection.hpp"
 #include "execution/operator/physical_seq_scan.hpp"
@@ -11,6 +12,7 @@
 #include "planner/operator/logical_distinct.hpp"
 #include "planner/operator/logical_filter.hpp"
 #include "planner/operator/logical_get.hpp"
+#include "planner/operator/logical_insert.hpp"
 #include "planner/operator/logical_limit.hpp"
 #include "planner/operator/logical_order.hpp"
 #include "planner/operator/logical_projection.hpp"
@@ -45,12 +47,14 @@ void PhysicalPlanGenerator::Visit(LogicalAggregate &op) {
 		// no groups
 		if (!plan) {
 			// and no FROM clause, use a dummy aggregate
-			auto groupby = make_unique<PhysicalHashAggregate>(move(op.select_list));
+			auto groupby =
+			    make_unique<PhysicalHashAggregate>(move(op.select_list));
 			this->plan = move(groupby);
 		} else {
 			// but there is a FROM clause
 			// special case: aggregate entire columns together
-			auto groupby = make_unique<PhysicalHashAggregate>(move(op.select_list));
+			auto groupby =
+			    make_unique<PhysicalHashAggregate>(move(op.select_list));
 			groupby->children.push_back(move(plan));
 			this->plan = move(groupby);
 		}
@@ -131,4 +135,14 @@ void PhysicalPlanGenerator::Visit(LogicalProjection &op) {
 		projection->children.push_back(move(plan));
 	}
 	this->plan = move(projection);
+}
+
+void PhysicalPlanGenerator::Visit(LogicalInsert &op) {
+	LogicalOperatorVisitor::Visit(op);
+
+	auto insertion = make_unique<PhysicalInsert>(op.table, move(op.value_list));
+	if (plan) {
+		throw Exception("Insert should be root node");
+	}
+	this->plan = move(insertion);
 }

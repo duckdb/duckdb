@@ -21,4 +21,4 @@ class DataColumn {
 	ColumnCatalogEntry &column;
 	std::vector<std::unique_ptr<Vector>> data;
 };
-}
+} // namespace duckdb

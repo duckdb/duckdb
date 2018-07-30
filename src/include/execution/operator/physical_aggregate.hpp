@@ -22,12 +22,13 @@ class PhysicalAggregate : public PhysicalOperator {
 
 	std::vector<std::unique_ptr<AbstractExpression>> select_list;
 	std::vector<std::unique_ptr<AbstractExpression>> groups;
-	std::vector<AggregateExpression*> aggregates;
+	std::vector<AggregateExpression *> aggregates;
 };
 
 class PhysicalAggregateOperatorState : public PhysicalOperatorState {
   public:
-	PhysicalAggregateOperatorState(PhysicalAggregate *parent, PhysicalOperator *child = nullptr);
+	PhysicalAggregateOperatorState(PhysicalAggregate *parent,
+	                               PhysicalOperator *child = nullptr);
 
 	bool finished;
 	std::vector<Value> aggregates;
@@ -35,4 +36,4 @@ class PhysicalAggregateOperatorState : public PhysicalOperatorState {
 	DataChunk aggregate_chunk;
 };
 
-}
+} // namespace duckdb

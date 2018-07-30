@@ -11,7 +11,7 @@ PhysicalAggregate::PhysicalAggregate(
     std::vector<std::unique_ptr<AbstractExpression>> select_list,
     PhysicalOperatorType type)
     : PhysicalOperator(type), select_list(std::move(select_list)) {
-      	Initialize();
+	Initialize();
 }
 
 PhysicalAggregate::PhysicalAggregate(
@@ -20,7 +20,7 @@ PhysicalAggregate::PhysicalAggregate(
     PhysicalOperatorType type)
     : PhysicalOperator(type), select_list(std::move(select_list)),
       groups(std::move(groups)) {
-      	Initialize();
+	Initialize();
 }
 
 void PhysicalAggregate::InitializeChunk(DataChunk &chunk) {
@@ -34,20 +34,22 @@ void PhysicalAggregate::InitializeChunk(DataChunk &chunk) {
 
 void PhysicalAggregate::Initialize() {
 	// get a list of all aggregates to be computed
-	for(auto &expr : select_list) {
+	for (auto &expr : select_list) {
 		expr->GetAggregates(aggregates);
 	}
-	for(size_t i = 0; i < aggregates.size(); i++) {
+	for (size_t i = 0; i < aggregates.size(); i++) {
 		aggregates[i]->index = i;
 	}
 }
 
-PhysicalAggregateOperatorState::PhysicalAggregateOperatorState(PhysicalAggregate* parent, PhysicalOperator *child)
+PhysicalAggregateOperatorState::PhysicalAggregateOperatorState(
+    PhysicalAggregate *parent, PhysicalOperator *child)
     : PhysicalOperatorState(child), finished(false) {
 	if (parent->groups.size() == 0) {
 		aggregates.resize(parent->aggregates.size());
-		for(size_t i = 0; i < parent->aggregates.size(); i++) {
-			aggregates[i] = Value::NumericValue(parent->aggregates[i]->return_type, 0);
+		for (size_t i = 0; i < parent->aggregates.size(); i++) {
+			aggregates[i] =
+			    Value::NumericValue(parent->aggregates[i]->return_type, 0);
 		}
 	} else {
 		vector<TypeId> group_types, aggregate_types;

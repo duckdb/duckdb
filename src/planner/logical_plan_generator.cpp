@@ -2,6 +2,7 @@
 #include "parser/expression/basetableref_expression.hpp"
 #include "parser/expression/join_expression.hpp"
 #include "parser/expression/subquery_expression.hpp"
+#include "parser/statement/insert_statement.hpp"
 
 #include "planner/logical_plan_generator.hpp"
 
@@ -9,6 +10,7 @@
 #include "planner/operator/logical_distinct.hpp"
 #include "planner/operator/logical_filter.hpp"
 #include "planner/operator/logical_get.hpp"
+#include "planner/operator/logical_insert.hpp"
 #include "planner/operator/logical_limit.hpp"
 #include "planner/operator/logical_order.hpp"
 #include "planner/operator/logical_projection.hpp"
@@ -91,4 +93,10 @@ void LogicalPlanGenerator::Visit(JoinExpression &expr) {
 
 void LogicalPlanGenerator::Visit(SubqueryExpression &expr) {
 	throw NotImplementedException("Subquery not implemented yet!");
+}
+
+void LogicalPlanGenerator::Visit(InsertStatement &statement) {
+	auto table = catalog.GetTable(statement.schema, statement.table);
+	auto insert = make_unique<LogicalInsert>(table, move(statement.values));
+	root = move(insert);
 }
