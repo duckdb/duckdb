@@ -40,8 +40,7 @@ struct Modulo {
 	}
 };
 
-template<> double Modulo::Operation(double left, double right);
-
+template <> double Modulo::Operation(double left, double right);
 
 struct XOR {
 	template <class T> static inline T Operation(T left, T right) {
@@ -130,17 +129,13 @@ struct Hash {
 // Casts
 //===--------------------------------------------------------------------===//
 struct Cast {
-	template<class SRC, class DST>
-	static inline DST Operation(SRC left) {
-		return (DST) left;
+	template <class SRC, class DST> static inline DST Operation(SRC left) {
+		return (DST)left;
 	}
 };
 
 struct NOP {
-	template<class T>
-	static inline T Operation(T left) {
-		return left;
-	}
+	template <class T> static inline T Operation(T left) { return left; }
 };
 
-}
+} // namespace operators

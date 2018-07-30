@@ -220,8 +220,9 @@ void VectorOperations::Modulo(Vector &left, Vector &right, Vector &result) {
 //===--------------------------------------------------------------------===//
 // Right-Hand Side Numeric Helpers
 //===--------------------------------------------------------------------===//
-template<VectorOperations::vector_function OP>
-static void _numeric_operator_right(Vector &left, int64_t right, Vector &result) {
+template <VectorOperations::vector_function OP>
+static void _numeric_operator_right(Vector &left, int64_t right,
+                                    Vector &result) {
 	Vector constant(Value::NumericValue(left.type, right));
 	OP(left, constant, result);
 }
@@ -246,33 +247,33 @@ void VectorOperations::Modulo(Vector &left, int64_t right, Vector &result) {
 	_numeric_operator_right<VectorOperations::Modulo>(left, right, result);
 }
 
-
 //===--------------------------------------------------------------------===//
 // Left-Hand Side Numeric Helpers
 //===--------------------------------------------------------------------===//
-template<VectorOperations::vector_function OP>
-static void _numeric_operator_left(int64_t left, Vector &right, Vector &result) {
+template <VectorOperations::vector_function OP>
+static void _numeric_operator_left(int64_t left, Vector &right,
+                                   Vector &result) {
 	Vector constant(Value::NumericValue(right.type, left));
 	OP(constant, right, result);
 }
 
-void VectorOperations::Add(int64_t left, Vector& right, Vector &result) {
+void VectorOperations::Add(int64_t left, Vector &right, Vector &result) {
 	_numeric_operator_left<VectorOperations::Add>(left, right, result);
 }
 
-void VectorOperations::Subtract(int64_t left, Vector& right, Vector &result) {
+void VectorOperations::Subtract(int64_t left, Vector &right, Vector &result) {
 	_numeric_operator_left<VectorOperations::Subtract>(left, right, result);
 }
 
-void VectorOperations::Multiply(int64_t left, Vector& right, Vector &result) {
+void VectorOperations::Multiply(int64_t left, Vector &right, Vector &result) {
 	_numeric_operator_left<VectorOperations::Multiply>(left, right, result);
 }
 
-void VectorOperations::Divide(int64_t left, Vector& right, Vector &result) {
+void VectorOperations::Divide(int64_t left, Vector &right, Vector &result) {
 	_numeric_operator_left<VectorOperations::Divide>(left, right, result);
 }
 
-void VectorOperations::Modulo(int64_t left, Vector& right, Vector &result) {
+void VectorOperations::Modulo(int64_t left, Vector &right, Vector &result) {
 	_numeric_operator_left<VectorOperations::Modulo>(left, right, result);
 }
 
@@ -344,8 +345,10 @@ void VectorOperations::Hash(Vector &left, Vector &result) {
 void VectorOperations::CombineHash(Vector &left, Vector &right,
                                    Vector &result) {
 	if (left.type != TypeId::INTEGER) {
-		throw NotImplementedException("Left argument must be 32-bit integer hash");
+		throw NotImplementedException(
+		    "Left argument must be 32-bit integer hash");
 	}
 	VectorOperations::Hash(right, result);
-	_templated_binary_loop<int32_t, int32_t, operators::XOR>(left, result, result);
+	_templated_binary_loop<int32_t, int32_t, operators::XOR>(left, result,
+	                                                         result);
 }

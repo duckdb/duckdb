@@ -19,4 +19,4 @@ class AbstractCatalogEntry : public Printable {
 	Catalog *catalog;
 	std::string name;
 };
-}
+} // namespace duckdb

@@ -33,4 +33,4 @@ class Binder : public SQLNodeVisitor {
   private:
 	Catalog &catalog;
 };
-}
+} // namespace duckdb

@@ -16,4 +16,4 @@ class BaseTableRefExpression : public TableRefExpression {
 	std::string schema_name;
 	std::string table_name;
 };
-}
+} // namespace duckdb

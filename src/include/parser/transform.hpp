@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include "parser/statement/create_statement.hpp"
+#include "parser/statement/insert_statement.hpp"
 #include "parser/statement/select_statement.hpp"
 
 #include "parser/parsenodes.h"
@@ -9,6 +11,8 @@
 #include "parser/pg_trigger.h"
 
 std::unique_ptr<duckdb::SelectStatement> TransformSelect(Node *node);
+std::unique_ptr<duckdb::CreateStatement> TransformCreate(Node *node);
+std::unique_ptr<duckdb::InsertStatement> TransformInsert(Node *node);
 
 std::unique_ptr<duckdb::AbstractExpression> TransformColumnRef(ColumnRef *root);
 std::unique_ptr<duckdb::AbstractExpression> TransformValue(value val);
@@ -17,6 +21,9 @@ std::unique_ptr<duckdb::AbstractExpression> TransformExpression(Node *node);
 std::unique_ptr<duckdb::AbstractExpression> TransformFuncCall(FuncCall *root);
 std::unique_ptr<duckdb::AbstractExpression> TransformFrom(List *root);
 std::unique_ptr<duckdb::AbstractExpression> TransformConstant(A_Const *c);
+std::unique_ptr<duckdb::AbstractExpression> TransformRangeVar(RangeVar *root);
+
+duckdb::TypeId TransformStringToTypeId(char *str);
 
 bool TransformGroupBy(
     List *group,
@@ -24,5 +31,9 @@ bool TransformGroupBy(
 bool TransformOrderBy(List *order, duckdb::OrderByDescription &result);
 
 bool TransformExpressionList(
+    List *list,
+    std::vector<std::unique_ptr<duckdb::AbstractExpression>> &result);
+
+bool TransformValueList(
     List *list,
     std::vector<std::unique_ptr<duckdb::AbstractExpression>> &result);

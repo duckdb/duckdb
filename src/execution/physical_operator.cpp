@@ -21,4 +21,5 @@ PhysicalOperatorState::PhysicalOperatorState(PhysicalOperator *child) {
 		child->InitializeChunk(child_chunk);
 		child_state = child->GetOperatorState();
 	}
+	finished = false;
 }

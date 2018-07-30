@@ -21,4 +21,4 @@ class Date {
 	static bool IsLeapYear(int32_t year);
 	static bool IsValidDay(int32_t year, int32_t month, int32_t day);
 };
-}
+} // namespace duckdb

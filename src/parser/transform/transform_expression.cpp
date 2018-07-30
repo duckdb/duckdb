@@ -30,13 +30,13 @@ string TransformAlias(Alias *root) {
 	return root->aliasname;
 }
 
-static TypeId TransformStringToTypeId(char *str) {
+TypeId TransformStringToTypeId(char *str) {
 	string lower_str = StringUtil::Lower(string(str));
 	// Transform column type
 	if (lower_str == "int" || lower_str == "int4") {
 		return TypeId::INTEGER;
 	} else if (lower_str == "varchar" || lower_str == "bpchar" ||
-	           lower_str == "text") {
+	           lower_str == "text" || lower_str == "string") {
 		return TypeId::VARCHAR;
 	} else if (lower_str == "int8") {
 		return TypeId::BIGINT;
@@ -447,6 +447,46 @@ bool TransformExpressionList(List *list,
 			expr->alias = string(target->name);
 		}
 		result.push_back(move(expr));
+	}
+	return true;
+}
+
+unique_ptr<AbstractExpression> TransformListValue(Expr *node) {
+	if (!node) {
+		return nullptr;
+	}
+
+	switch (node->type) {
+	case T_A_Const:
+		return TransformConstant((A_Const *)node);
+	case T_ParamRef:
+	case T_TypeCast:
+	case T_SetToDefault:
+
+	default:
+		throw NotImplementedException("Expr of type %d not implemented\n",
+		                              (int)node->type);
+	}
+}
+
+bool TransformValueList(List *list,
+                        vector<unique_ptr<AbstractExpression>> &result) {
+	if (!list) {
+		return false;
+	}
+	for (auto value_list = list->head; value_list != NULL;
+	     value_list = value_list->next) {
+		List *target = (List *)(value_list->data.ptr_value);
+
+		for (auto node = target->head; node != nullptr; node = node->next) {
+			auto val = reinterpret_cast<Expr *>(node->data.ptr_value);
+
+			if (!val) {
+				return false;
+			}
+			auto expr = TransformListValue(val);
+			result.push_back(move(expr));
+		}
 	}
 	return true;
 }

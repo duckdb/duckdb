@@ -11,4 +11,4 @@ class LogicalDistinct : public LogicalOperator {
 
 	virtual void Accept(LogicalOperatorVisitor *v) override { v->Visit(*this); }
 };
-}
+} // namespace duckdb

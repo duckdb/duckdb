@@ -36,6 +36,7 @@ class SelectStatement : public SQLStatement {
 	virtual ~SelectStatement() {}
 
 	virtual std::string ToString() const;
+	virtual void Accept(SQLNodeVisitor *v) { v->Visit(*this); }
 
 	std::vector<std::unique_ptr<AbstractExpression>> select_list;
 	std::unique_ptr<AbstractExpression> from_table;
@@ -54,4 +55,4 @@ class SelectStatement : public SQLStatement {
 
 	std::unique_ptr<SelectStatement> union_select;
 };
-}
+} // namespace duckdb

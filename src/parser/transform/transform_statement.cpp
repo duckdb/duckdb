@@ -1,4 +1,5 @@
 
+#include "catalog/column_catalog.hpp"
 #include "parser/transform.hpp"
 
 using namespace duckdb;
@@ -88,4 +89,60 @@ unique_ptr<SelectStatement> TransformSelect(Node *node) {
 	default:
 		throw NotImplementedException("A_Expr not implemented!");
 	}
+}
+
+unique_ptr<CreateStatement> TransformCreate(Node *node) {
+	CreateStmt *stmt = reinterpret_cast<CreateStmt *>(node);
+	assert(stmt);
+	auto result = make_unique<CreateStatement>();
+	if (stmt->inhRelations) {
+		throw NotImplementedException("inherited relations not implemented");
+	}
+	RangeVar *relation;
+	assert(stmt->relation);
+
+	if (stmt->relation->schemaname) {
+		result->schema = stmt->relation->schemaname;
+	}
+	result->table = stmt->relation->relname;
+	assert(stmt->tableElts);
+	ListCell *c;
+
+	for (c = stmt->tableElts->head; c != NULL; c = lnext(c)) {
+		ColumnDef *cdef = (ColumnDef *)c->data.ptr_value;
+		if (cdef->type != T_ColumnDef) {
+			throw NotImplementedException("Can only handle basic columns");
+		}
+		char *name = (reinterpret_cast<value *>(
+		                  cdef->typeName->names->tail->data.ptr_value)
+		                  ->val.str);
+		auto centry = ColumnCatalogEntry(
+		    cdef->colname, TransformStringToTypeId(name), cdef->is_not_null);
+		result->columns.push_back(centry);
+	}
+	return result;
+}
+
+unique_ptr<InsertStatement> TransformInsert(Node *node) {
+	InsertStmt *stmt = reinterpret_cast<InsertStmt *>(node);
+	assert(stmt);
+
+	auto select_stmt = reinterpret_cast<SelectStmt *>(stmt->selectStmt);
+	if (select_stmt->fromClause) {
+		throw NotImplementedException("Can only handle basic inserts");
+	}
+
+	auto result = make_unique<InsertStatement>();
+	assert(select_stmt->valuesLists);
+
+	if (!TransformValueList(select_stmt->valuesLists, result->values)) {
+		throw Exception("Failed to transform value list");
+	}
+
+	auto ref = TransformRangeVar(stmt->relation);
+	auto &table = *reinterpret_cast<BaseTableRefExpression *>(ref.get());
+	result->table = table.table_name;
+	result->schema = table.schema_name;
+
+	return result;
 }

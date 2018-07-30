@@ -15,4 +15,4 @@ class Printable {
 
 	void Print();
 };
-}
+} // namespace duckdb

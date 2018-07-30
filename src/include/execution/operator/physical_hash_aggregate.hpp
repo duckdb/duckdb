@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include "execution/operator/physical_aggregate.hpp"
 #include "execution/aggregate_hashtable.hpp"
+#include "execution/operator/physical_aggregate.hpp"
 
 #include "storage/data_table.hpp"
 
@@ -25,9 +25,11 @@ class PhysicalHashAggregate : public PhysicalAggregate {
 	std::unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 
-class PhysicalHashAggregateOperatorState : public PhysicalAggregateOperatorState {
+class PhysicalHashAggregateOperatorState
+    : public PhysicalAggregateOperatorState {
   public:
-	PhysicalHashAggregateOperatorState(PhysicalAggregate *parent, PhysicalOperator *child)
+	PhysicalHashAggregateOperatorState(PhysicalAggregate *parent,
+	                                   PhysicalOperator *child)
 	    : PhysicalAggregateOperatorState(parent, child), ht_scan_position(0) {}
 
 	size_t ht_scan_position;
@@ -35,4 +37,4 @@ class PhysicalHashAggregateOperatorState : public PhysicalAggregateOperatorState
 	DataChunk group_chunk;
 	DataChunk payload_chunk;
 };
-}
+} // namespace duckdb

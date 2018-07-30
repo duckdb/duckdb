@@ -17,4 +17,4 @@ class LogicalGet : public LogicalOperator {
 	std::shared_ptr<TableCatalogEntry> table;
 	std::string alias;
 };
-}
+} // namespace duckdb

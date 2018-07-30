@@ -38,4 +38,4 @@ class BindContext {
 
 	std::unique_ptr<BindContext> child;
 };
-}
+} // namespace duckdb

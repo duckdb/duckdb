@@ -17,12 +17,11 @@ DataChunk::~DataChunk() {
 }
 
 void DataChunk::Initialize(std::vector<TypeId> &types,
-                           size_t maximum_chunk_size,
-	                	   bool zero_data) {
+                           size_t maximum_chunk_size, bool zero_data) {
 	maximum_size = maximum_chunk_size;
 	count = 0;
 	column_count = types.size();
-	data = new unique_ptr<Vector>[ types.size() ];
+	data = new unique_ptr<Vector>[types.size()];
 	for (size_t i = 0; i < types.size(); i++) {
 		data[i] = make_unique<Vector>(types[i], maximum_size, zero_data);
 	}

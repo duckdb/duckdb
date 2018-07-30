@@ -290,4 +290,4 @@ size_t GetTypeIdSize(TypeId type);
 
 std::string LogicalOperatorToString(LogicalOperatorType type);
 std::string PhysicalOperatorToString(PhysicalOperatorType type);
-}
+} // namespace duckdb

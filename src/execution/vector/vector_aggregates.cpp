@@ -1,8 +1,8 @@
 
-#include "execution/vector/vector_operations.hpp"
 #include "common/exception.hpp"
 #include "common/types/hash.hpp"
 #include "common/types/operators.hpp"
+#include "execution/vector/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;

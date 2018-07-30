@@ -30,4 +30,4 @@ class PhysicalSeqScanOperatorState : public PhysicalOperatorState {
 
 	size_t current_offset;
 };
-}
+} // namespace duckdb

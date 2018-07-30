@@ -72,8 +72,6 @@ class Value : public Printable {
 	// MAX(A, B)
 	static void Max(Value &left, Value &right, Value &result);
 
-
-
 	//  private:
 	TypeId type;
 	bool is_null;
@@ -92,4 +90,4 @@ class Value : public Printable {
 
 	uint32_t len;
 };
-}
+} // namespace duckdb

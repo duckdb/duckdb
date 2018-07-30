@@ -19,6 +19,19 @@ int main() {
 		return 1;
 	}
 
+
+	if (duckdb_query(connection, "CREATE TABLE a (i integer, j integer);", &result) != DuckDBSuccess) {
+			return 1;
+		}
+
+	if (duckdb_query(connection, "INSERT INTO a VALUES (42, 84)", &result) != DuckDBSuccess) {
+		return 1;
+	}
+
+	if (duckdb_query(connection, "SELECT * FROM a", &result) != DuckDBSuccess) {
+		return 1;
+	}
+
 	if (duckdb_query(connection, "SELECT 42;", &result) != DuckDBSuccess) {
 		return 1;
 	}
@@ -31,13 +44,26 @@ int main() {
 		return 1;
 	}
 
+	if (duckdb_query(connection, "CREATE TABLE test (a INTEGER, b INTEGER)", &result) != DuckDBSuccess) {
+		return 1;
+	}
+
+	if (duckdb_query(connection, "INSERT INTO test VALUES (11, 22)", &result) != DuckDBSuccess) {
+		return 1;
+	}
+
+	if (duckdb_query(connection, "INSERT INTO test VALUES (12, 21)", &result) != DuckDBSuccess) {
+		return 1;
+	}
+
+	if (duckdb_query(connection, "INSERT INTO test VALUES (13, 22)", &result) != DuckDBSuccess) {
+		return 1;
+	}
+
 	if (duckdb_query(connection, "SELECT a,b FROM test;", &result) != DuckDBSuccess) {
 		return 1;
 	}
 
-	if (duckdb_query(connection, "SELECT * FROM lineitem;", &result) != DuckDBSuccess) {
-		return 1;
-	}
 
 	if (duckdb_query(connection, "SELECT a + 2, b FROM test WHERE a = 11;", &result) != DuckDBSuccess) {
 		return 1;

@@ -20,4 +20,4 @@ class PhysicalFilter : public PhysicalOperator {
 
 	std::vector<std::unique_ptr<AbstractExpression>> expressions;
 };
-}
+} // namespace duckdb

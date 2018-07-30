@@ -41,7 +41,7 @@ class AbstractExpression : public Printable {
 		}
 	}
 
-	virtual void GetAggregates(std::vector<AggregateExpression*>& expressions);
+	virtual void GetAggregates(std::vector<AggregateExpression *> &expressions);
 	virtual bool IsAggregate();
 
 	ExpressionType GetExpressionType() { return type; }
@@ -53,4 +53,4 @@ class AbstractExpression : public Printable {
 
 	std::vector<std::unique_ptr<AbstractExpression>> children;
 };
-}
+} // namespace duckdb

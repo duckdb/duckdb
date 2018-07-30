@@ -3,21 +3,24 @@
 #pragma once
 
 #include "common/internal_types.hpp"
-#include "common/types/vector.hpp"
 #include "common/types/data_chunk.hpp"
+#include "common/types/vector.hpp"
 
 namespace duckdb {
 
 class SuperLargeHashTable {
-public:
-	SuperLargeHashTable(size_t initial_capacity, size_t group_width, size_t payload_width, std::vector<ExpressionType> aggregate_types, bool parallel = false);
+  public:
+	SuperLargeHashTable(size_t initial_capacity, size_t group_width,
+	                    size_t payload_width,
+	                    std::vector<ExpressionType> aggregate_types,
+	                    bool parallel = false);
 	~SuperLargeHashTable();
 
 	void Resize(size_t size);
-	void AddChunk(DataChunk& groups, DataChunk& payload);
-	void Scan(size_t& scan_position, DataChunk& result);
+	void AddChunk(DataChunk &groups, DataChunk &payload);
+	void Scan(size_t &scan_position, DataChunk &result);
 
-private:
+  private:
 	std::vector<ExpressionType> aggregate_types;
 
 	size_t group_width;
@@ -36,4 +39,4 @@ private:
 	SuperLargeHashTable(const SuperLargeHashTable &) = delete;
 };
 
-}
+} // namespace duckdb

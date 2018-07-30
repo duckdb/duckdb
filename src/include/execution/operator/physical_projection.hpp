@@ -28,4 +28,4 @@ class PhysicalProjectionOperatorState : public PhysicalOperatorState {
 
 	bool executed;
 };
-}
+} // namespace duckdb

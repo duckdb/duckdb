@@ -4,7 +4,8 @@
 using namespace duckdb;
 using namespace std;
 
-void AggregateExpression::GetAggregates(std::vector<AggregateExpression*>& expressions) {
+void AggregateExpression::GetAggregates(
+    std::vector<AggregateExpression *> &expressions) {
 	size_t size = expressions.size();
 	AbstractExpression::GetAggregates(expressions);
 	if (size == expressions.size()) {
@@ -12,4 +13,3 @@ void AggregateExpression::GetAggregates(std::vector<AggregateExpression*>& expre
 		expressions.push_back(this);
 	}
 }
-

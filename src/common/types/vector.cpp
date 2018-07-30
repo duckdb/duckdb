@@ -22,7 +22,8 @@ Vector::Vector(TypeId type, oid_t max_elements, bool zero_data)
 	}
 }
 
-Vector::Vector(Value value) : type(value.type), count(1), sel_vector(nullptr), max_elements(1) {
+Vector::Vector(Value value)
+    : type(value.type), count(1), sel_vector(nullptr), max_elements(1) {
 	owns_data = true;
 	data = new char[GetTypeIdSize(type)];
 	memcpy(data, &value.value_, GetTypeIdSize(type));

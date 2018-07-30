@@ -27,4 +27,4 @@ class ConstantExpression : public AbstractExpression {
 
 	Value value;
 };
-}
+} // namespace duckdb

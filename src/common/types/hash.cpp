@@ -24,5 +24,4 @@ int32_t Hash(double val) { throw NotImplementedException(""); }
 int32_t Hash(std::string str) { throw NotImplementedException(""); }
 
 int32_t Hash(uint64_t integer) { throw NotImplementedException(""); }
-}
-
+} // namespace duckdb

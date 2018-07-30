@@ -336,4 +336,4 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "INVALID";
 	}
 }
-};
+}; // namespace duckdb

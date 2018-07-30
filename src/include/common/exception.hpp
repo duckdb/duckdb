@@ -542,4 +542,4 @@ class NullPointerException : public Exception {
 		FORMAT_CONSTRUCTOR(msg);
 	}
 };
-}
+} // namespace duckdb
