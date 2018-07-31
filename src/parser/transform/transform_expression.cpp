@@ -1,17 +1,7 @@
 
 #include "parser/transform.hpp"
 
-#include "parser/expression/aggregate_expression.hpp"
-#include "parser/expression/basetableref_expression.hpp"
-#include "parser/expression/columnref_expression.hpp"
-#include "parser/expression/comparison_expression.hpp"
-#include "parser/expression/conjunction_expression.hpp"
-#include "parser/expression/constant_expression.hpp"
-#include "parser/expression/crossproduct_expression.hpp"
-#include "parser/expression/function_expression.hpp"
-#include "parser/expression/join_expression.hpp"
-#include "parser/expression/operator_expression.hpp"
-#include "parser/expression/subquery_expression.hpp"
+#include "parser/expression/expression_list.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -66,30 +56,29 @@ unique_ptr<AbstractExpression> TransformTypeCast(TypeCast *root) {
 	if (!root) {
 		return nullptr;
 	}
-	switch (root->arg->type) {
-	case T_A_Const: { // cast a constant value
+	// get the type to cast to
+	TypeName *type_name = root->typeName;
+	char *name =
+	    (reinterpret_cast<value *>(type_name->names->tail->data.ptr_value)
+	         ->val.str);
+	TypeId target_type = TransformStringToTypeId(name);
+	 
+	if (root->arg->type == T_A_Const) {
+		// cast a constant value
 		// get the original constant value
 		auto constant =
 		    TransformConstant(reinterpret_cast<A_Const *>(root->arg));
 		Value &source_value =
 		    reinterpret_cast<ConstantExpression *>(constant.get())->value;
-		// get the type to cast to
-		TypeName *type_name = root->typeName;
-		char *name =
-		    (reinterpret_cast<value *>(type_name->names->tail->data.ptr_value)
-		         ->val.str);
 		// perform the cast and substitute the expression
-		Value new_value = source_value.CastAs(TransformStringToTypeId(name));
-		throw NotImplementedException(
-		    "TypeCast Source of type %d not supported yet...\n",
-		    root->arg->type);
+		Value new_value = source_value.CastAs(target_type);
 
 		return make_unique<ConstantExpression>(new_value);
-	}
-	default:
-		throw NotImplementedException(
-		    "TypeCast Source of type %d not supported yet...\n",
-		    root->arg->type);
+	} else {
+		// transform the expression node
+		auto expression = TransformExpression(root->arg);
+		// now create a cast operation
+		return make_unique<CastExpression>(target_type, move(expression));
 	}
 }
 

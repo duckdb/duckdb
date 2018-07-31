@@ -1,10 +1,9 @@
 
-#include "parser/expression/basetableref_expression.hpp"
-#include "parser/expression/join_expression.hpp"
-#include "parser/expression/subquery_expression.hpp"
+#include "planner/logical_plan_generator.hpp"
+
+#include "parser/expression/expression_list.hpp"
 #include "parser/statement/insert_statement.hpp"
 
-#include "planner/logical_plan_generator.hpp"
 
 #include "planner/operator/logical_aggregate.hpp"
 #include "planner/operator/logical_distinct.hpp"
@@ -19,6 +18,10 @@ using namespace duckdb;
 using namespace std;
 
 void LogicalPlanGenerator::Visit(SelectStatement &statement) {
+	for(auto &expr : statement.select_list) {
+		expr->Accept(this);
+	}
+
 	if (statement.from_table) {
 		// SELECT with FROM
 		statement.from_table->Accept(this);
@@ -78,6 +81,26 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 	}
 }
 
+static void cast_children_to_equal_types(AbstractExpression &expr) {
+	if (expr.children.size() == 2) {
+		TypeId left_type = expr.children[0]->return_type;
+		TypeId right_type = expr.children[1]->return_type;
+		if (left_type != right_type) {
+			// types don't match
+			// we have to add a cast
+			if (left_type < right_type) {
+				// add cast on left hand side
+				auto cast = make_unique<CastExpression>(right_type, move(expr.children[0]));
+				expr.children[0] = move(cast);
+			} else {
+				// add cast on right hand side
+				auto cast = make_unique<CastExpression>(left_type, move(expr.children[1]));
+				expr.children[1] = move(cast);
+			}
+		}
+	}
+}
+
 void LogicalPlanGenerator::Visit(BaseTableRefExpression &expr) {
 	auto table = catalog.GetTable(expr.schema_name, expr.table_name);
 	auto get_table = make_unique<LogicalGet>(
@@ -87,8 +110,23 @@ void LogicalPlanGenerator::Visit(BaseTableRefExpression &expr) {
 	root = move(get_table);
 }
 
+void LogicalPlanGenerator::Visit(ComparisonExpression &expr) {
+	SQLNodeVisitor::Visit(expr);
+	cast_children_to_equal_types(expr);
+}
+
+void LogicalPlanGenerator::Visit(ConjunctionExpression &expr) {
+	SQLNodeVisitor::Visit(expr);
+	cast_children_to_equal_types(expr);
+}
+
 void LogicalPlanGenerator::Visit(JoinExpression &expr) {
 	throw NotImplementedException("Joins not implemented yet!");
+}
+
+void LogicalPlanGenerator::Visit(OperatorExpression &expr) {
+	SQLNodeVisitor::Visit(expr);
+	cast_children_to_equal_types(expr);
 }
 
 void LogicalPlanGenerator::Visit(SubqueryExpression &expr) {

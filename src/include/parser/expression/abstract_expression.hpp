@@ -15,16 +15,14 @@ class AggregateExpression;
 class AbstractExpression : public Printable {
   public:
 	AbstractExpression(ExpressionType type) : type(type), parent(nullptr) {}
-	AbstractExpression(ExpressionType type, TypeId return_type)
-	    : type(type), return_type(return_type), parent(nullptr) {}
 	AbstractExpression(ExpressionType type, TypeId return_type,
-	                   std::unique_ptr<AbstractExpression> left,
-	                   std::unique_ptr<AbstractExpression> right)
+	                   std::unique_ptr<AbstractExpression> left = nullptr,
+	                   std::unique_ptr<AbstractExpression> right = nullptr)
 	    : type(type), return_type(return_type), parent(nullptr) {
 		// Order of these is important!
-		if (left != nullptr)
+		if (left)
 			AddChild(std::move(left));
-		if (right != nullptr)
+		if (right)
 			AddChild(std::move(right));
 	}
 

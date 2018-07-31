@@ -75,8 +75,18 @@ Value Vector::GetValue(size_t index) {
 		throw Exception("Out of bounds");
 	}
 	switch (type) {
+	case TypeId::BOOLEAN:
+		return Value(((bool *)data)[index]);
+	case TypeId::TINYINT:
+		return Value(((int8_t *)data)[index]);
+	case TypeId::SMALLINT:
+		return Value(((int16_t *)data)[index]);
 	case TypeId::INTEGER:
 		return Value(((int *)data)[index]);
+	case TypeId::BIGINT:
+		return Value(((int64_t *)data)[index]);
+	case TypeId::POINTER:
+		return Value(((uint64_t *)data)[index]);
 	case TypeId::DECIMAL:
 		return Value(((double *)data)[index]);
 	default:

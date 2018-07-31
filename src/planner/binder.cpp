@@ -1,11 +1,7 @@
 
 #include "planner/binder.hpp"
 
-#include "parser/expression/basetableref_expression.hpp"
-#include "parser/expression/columnref_expression.hpp"
-#include "parser/expression/groupref_expression.hpp"
-#include "parser/expression/join_expression.hpp"
-#include "parser/expression/subquery_expression.hpp"
+#include "parser/expression/expression_list.hpp"
 
 #include "parser/statement/select_statement.hpp"
 

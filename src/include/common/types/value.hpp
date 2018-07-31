@@ -28,7 +28,7 @@ class Value : public Printable {
 	Value(uint64_t val) : type(TypeId::POINTER), is_null(false) {
 		value_.pointer = val;
 	}
-	Value(double val) : type(TypeId::INTEGER), is_null(false) {
+	Value(double val) : type(TypeId::DECIMAL), is_null(false) {
 		value_.decimal = val;
 	}
 	Value(std::string val) : type(TypeId::VARCHAR), is_null(false) {

@@ -4,19 +4,7 @@
 
 #include "common/exception.hpp"
 
-#include "parser/expression/aggregate_expression.hpp"
-#include "parser/expression/basetableref_expression.hpp"
-#include "parser/expression/columnref_expression.hpp"
-#include "parser/expression/comparison_expression.hpp"
-#include "parser/expression/conjunction_expression.hpp"
-#include "parser/expression/constant_expression.hpp"
-#include "parser/expression/crossproduct_expression.hpp"
-#include "parser/expression/function_expression.hpp"
-#include "parser/expression/groupref_expression.hpp"
-#include "parser/expression/join_expression.hpp"
-#include "parser/expression/operator_expression.hpp"
-#include "parser/expression/subquery_expression.hpp"
-#include "parser/expression/tableref_expression.hpp"
+#include "parser/expression/expression_list.hpp"
 
 #include "execution/operator/physical_aggregate.hpp"
 #include "execution/operator/physical_hash_aggregate.hpp"
@@ -122,6 +110,16 @@ void ExpressionExecutor::Visit(AggregateExpression &expr) {
 
 void ExpressionExecutor::Visit(BaseTableRefExpression &expr) {
 	throw NotImplementedException("");
+}
+
+void ExpressionExecutor::Visit(CastExpression &expr) {
+	// resolve the child
+	Vector l;
+	expr.children[0]->Accept(this);
+	vector.Move(l);
+	// now cast it to the type specified by the cast expression
+	vector.Resize(l.count, expr.return_type);
+	VectorOperations::Cast(l, vector);
 }
 
 void ExpressionExecutor::Visit(ColumnRefExpression &expr) {

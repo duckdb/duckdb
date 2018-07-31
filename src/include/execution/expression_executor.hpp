@@ -26,6 +26,7 @@ class ExpressionExecutor : public SQLNodeVisitor {
 
 	void Visit(AggregateExpression &expr);
 	void Visit(BaseTableRefExpression &expr);
+	void Visit(CastExpression &expr);
 	void Visit(ColumnRefExpression &expr);
 	void Visit(ComparisonExpression &expr);
 	void Visit(ConjunctionExpression &expr);

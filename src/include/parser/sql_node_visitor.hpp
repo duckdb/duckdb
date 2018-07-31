@@ -9,6 +9,7 @@ class InsertStatement;
 
 class AggregateExpression;
 class BaseTableRefExpression;
+class CastExpression;
 class ColumnRefExpression;
 class ComparisonExpression;
 class ConjunctionExpression;
@@ -31,6 +32,7 @@ class SQLNodeVisitor {
 
 	virtual void Visit(AggregateExpression &expr);
 	virtual void Visit(BaseTableRefExpression &expr);
+	virtual void Visit(CastExpression &expr);
 	virtual void Visit(ColumnRefExpression &expr);
 	virtual void Visit(ComparisonExpression &expr);
 	virtual void Visit(ConjunctionExpression &expr);
