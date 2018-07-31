@@ -1,10 +1,10 @@
 
-#include "execution/operator/physical_seq_scan.hpp"
+#include "execution/operator/physical_table_scan.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-void PhysicalSeqScan::InitializeChunk(DataChunk &chunk) {
+void PhysicalTableScan::InitializeChunk(DataChunk &chunk) {
 	// just copy the chunk data of the child
 	vector<TypeId> types;
 	for (auto &column_id : column_ids) {
@@ -13,9 +13,9 @@ void PhysicalSeqScan::InitializeChunk(DataChunk &chunk) {
 	chunk.Initialize(types);
 }
 
-void PhysicalSeqScan::GetChunk(DataChunk &chunk,
+void PhysicalTableScan::GetChunk(DataChunk &chunk,
                                PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalSeqScanOperatorState *>(state_);
+	auto state = reinterpret_cast<PhysicalTableScanOperatorState *>(state_);
 	chunk.Reset();
 
 	if (column_ids.size() == 0)
@@ -34,6 +34,6 @@ void PhysicalSeqScan::GetChunk(DataChunk &chunk,
 	state->current_offset++;
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalSeqScan::GetOperatorState() {
-	return make_unique<PhysicalSeqScanOperatorState>(0);
+unique_ptr<PhysicalOperatorState> PhysicalTableScan::GetOperatorState() {
+	return make_unique<PhysicalTableScanOperatorState>(0);
 }

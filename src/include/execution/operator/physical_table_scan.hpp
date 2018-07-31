@@ -7,9 +7,9 @@
 
 namespace duckdb {
 
-class PhysicalSeqScan : public PhysicalOperator {
+class PhysicalTableScan : public PhysicalOperator {
   public:
-	PhysicalSeqScan(DataTable *table, std::vector<size_t> column_ids)
+	PhysicalTableScan(DataTable *table, std::vector<size_t> column_ids)
 	    : PhysicalOperator(PhysicalOperatorType::SEQ_SCAN), table(table),
 	      column_ids(column_ids) {}
 
@@ -23,9 +23,9 @@ class PhysicalSeqScan : public PhysicalOperator {
 	virtual std::unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 
-class PhysicalSeqScanOperatorState : public PhysicalOperatorState {
+class PhysicalTableScanOperatorState : public PhysicalOperatorState {
   public:
-	PhysicalSeqScanOperatorState(size_t current_offset)
+	PhysicalTableScanOperatorState(size_t current_offset)
 	    : PhysicalOperatorState(nullptr), current_offset(current_offset) {}
 
 	size_t current_offset;

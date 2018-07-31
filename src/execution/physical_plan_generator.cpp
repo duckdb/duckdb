@@ -7,7 +7,7 @@
 #include "execution/operator/physical_limit.hpp"
 #include "execution/operator/physical_order.hpp"
 #include "execution/operator/physical_projection.hpp"
-#include "execution/operator/physical_seq_scan.hpp"
+#include "execution/operator/physical_table_scan.hpp"
 
 #include "planner/operator/logical_aggregate.hpp"
 #include "planner/operator/logical_distinct.hpp"
@@ -104,7 +104,7 @@ void PhysicalPlanGenerator::Visit(LogicalGet &op) {
 		column_ids.push_back(op.table->name_map[bound_column]);
 	}
 
-	auto scan = make_unique<PhysicalSeqScan>(op.table->storage, column_ids);
+	auto scan = make_unique<PhysicalTableScan>(op.table->storage, column_ids);
 	if (plan) {
 		throw Exception("Scan has to be the first node of a plan!");
 	}
