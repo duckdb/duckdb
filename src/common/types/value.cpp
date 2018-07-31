@@ -160,6 +160,9 @@ static void _templated_binary_operation(Value &left, Value &right,
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// Numeric Operations
+//===--------------------------------------------------------------------===//
 void Value::Add(Value &left, Value &right, Value &result) {
 	_templated_binary_operation<operators::Addition>(left, right, result);
 }
@@ -186,4 +189,57 @@ void Value::Min(Value &left, Value &right, Value &result) {
 
 void Value::Max(Value &left, Value &right, Value &result) {
 	_templated_binary_operation<operators::Max>(left, right, result);
+}
+
+//===--------------------------------------------------------------------===//
+// Comparison Operations
+//===--------------------------------------------------------------------===//
+template <class OP>
+static bool _templated_boolean_operation(Value &left, Value &right) {
+	if (left.type != right.type) {
+		throw NotImplementedException("Not matching type not implemented!");
+	}
+	switch (left.type) {
+	case TypeId::BOOLEAN:
+		return OP::Operation(left.value_.boolean, right.value_.boolean);
+	case TypeId::TINYINT:
+		return OP::Operation(left.value_.tinyint, right.value_.tinyint);
+	case TypeId::SMALLINT:
+		return OP::Operation(left.value_.smallint, right.value_.smallint);
+	case TypeId::INTEGER:
+		return OP::Operation(left.value_.integer, right.value_.integer);
+	case TypeId::BIGINT:
+		return OP::Operation(left.value_.bigint, right.value_.bigint);
+	case TypeId::DECIMAL:
+		return OP::Operation(left.value_.decimal, right.value_.decimal);
+	case TypeId::POINTER:
+		return OP::Operation(left.value_.pointer, right.value_.pointer);
+	default:
+		throw NotImplementedException("Unimplemented type");
+	}
+}
+
+bool Value::Equals(Value &left, Value &right) {
+	return _templated_boolean_operation<operators::Equals>(left, right);
+}
+
+bool Value::NotEquals(Value &left, Value &right) {
+	return _templated_boolean_operation<operators::NotEquals>(left, right);
+}
+
+bool Value::GreaterThan(Value &left, Value &right) {
+	return _templated_boolean_operation<operators::GreaterThan>(left, right);
+}
+
+bool Value::GreaterThanEquals(Value &left, Value &right) {
+	return _templated_boolean_operation<operators::GreaterThanEquals>(left,
+	                                                                  right);
+}
+
+bool Value::LessThan(Value &left, Value &right) {
+	return _templated_boolean_operation<operators::LessThan>(left, right);
+}
+
+bool Value::LessThanEquals(Value &left, Value &right) {
+	return _templated_boolean_operation<operators::LessThanEquals>(left, right);
 }

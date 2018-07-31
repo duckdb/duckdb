@@ -36,7 +36,7 @@ int main() {
 	EXEC("SELECT a,b FROM test;");
 	EXEC("SELECT a + 2, b FROM test WHERE a = 11;");
 	EXEC("SELECT a + 2, b FROM test WHERE a = 12;");
-	
+
 	EXEC("SELECT SUM(41), COUNT(*);");
 	EXEC("SELECT SUM(a), COUNT(*) FROM test;");
 	EXEC("SELECT SUM(a), COUNT(*) FROM test WHERE a = 11;");
@@ -45,15 +45,20 @@ int main() {
 	EXEC("SELECT SUM(a), SUM(a+2) FROM test GROUP BY b;");
 	EXEC("SELECT b, SUM(a), COUNT(*), SUM(a+2) FROM test GROUP BY b;");
 	EXEC("SELECT b % 2 AS f, SUM(a) FROM test GROUP BY f;");
-	
-	// EXEC("SELECT l_orderkey, l_orderkey + 1 FROM lineitem;", &result) != DuckDBSuccess) {
-	// 	return 1;
-	// }
 
-	// // TPC-H Query 1
-	// EXEC("select l_returnflag, l_linestatus, sum(l_quantity) as sum_qty, sum(l_extendedprice) as sum_base_price, sum(l_extendedprice * (1 - l_discount)) as sum_disc_price, sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge, avg(l_quantity) as avg_qty, avg(l_extendedprice) as avg_price, avg(l_discount) as avg_disc, count(*) as count_order from lineitem where l_shipdate <= '1998-09-02' group by l_returnflag, l_linestatus order by l_returnflag, l_linestatus;", &result) != DuckDBSuccess) {
-	// 	return 1;
-	// }
+	EXEC("SELECT a, b FROM test ORDER BY a;");
+	EXEC("SELECT a, b FROM test ORDER BY a DESC;");
+	EXEC("SELECT a, b FROM test ORDER BY b;");
+	EXEC("SELECT a, b FROM test ORDER BY b DESC;");
+	EXEC("SELECT a, b FROM test ORDER BY b, a;");
+	EXEC("SELECT a, b FROM test ORDER BY b, a DESC;");
+
+	// TPC-H
+	EXEC("create table lineitem ( l_orderkey INTEGER NOT NULL, l_partkey INTEGER NOT NULL, l_suppkey INTEGER NOT NULL, l_linenumber INTEGER NOT NULL, l_quantity DECIMAL(15,2) NOT NULL, l_extendedprice DECIMAL(15,2) NOT NULL, l_discount DECIMAL(15,2) NOT NULL, l_tax DECIMAL(15,2) NOT NULL, l_returnflag CHAR(1) NOT NULL, l_linestatus CHAR(1) NOT NULL, l_shipdate DATE NOT NULL, l_commitdate DATE NOT NULL, l_receiptdate DATE NOT NULL, l_shipinstruct CHAR(25) NOT NULL, l_shipmode CHAR(10) NOT NULL, l_comment VARCHAR(44) NOT NULL);");
+
+	//TPC-H Q1
+	// EXEC("select l_returnflag, l_linestatus, sum(l_quantity) as sum_qty, sum(l_extendedprice) as sum_base_price, sum(l_extendedprice * (1 - l_discount)) as sum_disc_price, sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge, avg(l_quantity) as avg_qty, avg(l_extendedprice) as avg_price, avg(l_discount) as avg_disc, count(*) as count_order from lineitem where l_shipdate <= '1998-09-02' group by l_returnflag, l_linestatus order by l_returnflag, l_linestatus;");
+	
 
 	// TPC-H Query 2
 	// EXEC("select s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment from part, supplier, partsupp, nation, region where p_partkey = ps_partkey and s_suppkey = ps_suppkey and p_size = 15 and p_type like '%BRASS' and s_nationkey = n_nationkey and n_regionkey = r_regionkey and r_name = 'EUROPE' and ps_supplycost = ( select min(ps_supplycost) from partsupp, supplier, nation, region where p_partkey = ps_partkey and s_suppkey = ps_suppkey and s_nationkey = n_nationkey and n_regionkey = r_regionkey and r_name = 'EUROPE' ) order by s_acctbal desc, n_name, s_name, p_partkey limit 100;", &result) != DuckDBSuccess) {

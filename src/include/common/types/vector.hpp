@@ -11,7 +11,7 @@
 
 namespace duckdb {
 
-typedef uint32_t sel_t;
+typedef uint64_t sel_t;
 
 // sel_vector: An optional selection vector that indicates, from [data]
 // which elements actually belong to the vector

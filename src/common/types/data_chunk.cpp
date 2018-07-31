@@ -69,6 +69,9 @@ void DataChunk::Append(DataChunk &other) {
 	if (other.count == 0) {
 		return;
 	}
+	if (column_count != other.column_count) {
+		throw Exception("Column counts of appending chunk doesn't match!");
+	}
 	if (count + other.count > maximum_size) {
 		// resize
 		maximum_size = maximum_size * 2;

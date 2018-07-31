@@ -42,12 +42,4 @@ class PhysicalOperator : public Printable {
 	PhysicalOperatorType type;
 	std::vector<std::unique_ptr<PhysicalOperator>> children;
 };
-
-class PhysicalOrderBy : public PhysicalOperator {
-  public:
-	PhysicalOrderBy() : PhysicalOperator(PhysicalOperatorType::ORDER_BY) {}
-
-	virtual void GetChunk(DataChunk &chunk,
-	                      PhysicalOperatorState *state) override;
-};
 } // namespace duckdb

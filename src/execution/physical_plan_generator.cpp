@@ -5,6 +5,7 @@
 #include "execution/operator/physical_hash_aggregate.hpp"
 #include "execution/operator/physical_insert.hpp"
 #include "execution/operator/physical_limit.hpp"
+#include "execution/operator/physical_order.hpp"
 #include "execution/operator/physical_projection.hpp"
 #include "execution/operator/physical_seq_scan.hpp"
 
@@ -124,7 +125,13 @@ void PhysicalPlanGenerator::Visit(LogicalLimit &op) {
 void PhysicalPlanGenerator::Visit(LogicalOrder &op) {
 	LogicalOperatorVisitor::Visit(op);
 
-	throw NotImplementedException("order");
+	if (!plan) {
+		throw Exception("Order cannot be the first node of a plan!");
+	}
+
+	auto order = make_unique<PhysicalOrder>(move(op.description));
+	order->children.push_back(move(plan));
+	this->plan = move(order);
 }
 
 void PhysicalPlanGenerator::Visit(LogicalProjection &op) {

@@ -30,7 +30,6 @@ class PhysicalAggregateOperatorState : public PhysicalOperatorState {
 	PhysicalAggregateOperatorState(PhysicalAggregate *parent,
 	                               PhysicalOperator *child = nullptr);
 
-	bool finished;
 	std::vector<Value> aggregates;
 	DataChunk group_chunk;
 	DataChunk aggregate_chunk;

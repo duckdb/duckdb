@@ -36,7 +36,6 @@ void PhysicalProjection::GetChunk(DataChunk &chunk,
 
 	ExpressionExecutor executor(state->child_chunk);
 
-	size_t i = 0;
 	for (size_t i = 0; i < select_list.size(); i++) {
 		auto &expr = select_list[i];
 		executor.Execute(expr.get(), *chunk.data[i]);

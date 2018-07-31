@@ -58,15 +58,17 @@ template <class T> static void _cast_loop(Vector &source, Vector &result) {
 	}
 }
 
-template <class T> static void _copy_loop(Vector &left, void *target) {
+template <class T>
+static void _copy_loop(Vector &left, void *target, size_t element_count,
+                       size_t offset) {
 	T *ldata = (T *)left.data;
 	T *result_data = (T *)target;
 	if (left.sel_vector) {
-		for (size_t i = 0; i < left.count; i++) {
+		for (size_t i = offset; i < offset + element_count; i++) {
 			result_data[i] = ldata[left.sel_vector[i]];
 		}
 	} else {
-		for (size_t i = 0; i < left.count; i++) {
+		for (size_t i = offset; i < offset + element_count; i++) {
 			result_data[i] = ldata[i];
 		}
 	}
@@ -105,29 +107,43 @@ void VectorOperations::Cast(Vector &source, Vector &result) {
 	}
 }
 
-void VectorOperations::Copy(Vector &source, void *target) {
+void VectorOperations::Copy(Vector &source, void *target, size_t element_count,
+                            size_t offset) {
 	if (source.count == 0)
 		return;
+	if (element_count == 0) {
+		element_count = source.count;
+	}
+	assert(offset + element_count <= source.count);
+
 	switch (source.type) {
 	case TypeId::TINYINT:
-		_copy_loop<int8_t>(source, target);
+		_copy_loop<int8_t>(source, target, element_count, offset);
 		break;
 	case TypeId::SMALLINT:
-		_copy_loop<int16_t>(source, target);
+		_copy_loop<int16_t>(source, target, element_count, offset);
 		break;
 	case TypeId::INTEGER:
-		_copy_loop<int32_t>(source, target);
+		_copy_loop<int32_t>(source, target, element_count, offset);
 		break;
 	case TypeId::BIGINT:
-		_copy_loop<int64_t>(source, target);
+		_copy_loop<int64_t>(source, target, element_count, offset);
 		break;
 	case TypeId::DECIMAL:
-		_copy_loop<double>(source, target);
+		_copy_loop<double>(source, target, element_count, offset);
 		break;
 	case TypeId::POINTER:
-		_copy_loop<uint64_t>(source, target);
+		_copy_loop<uint64_t>(source, target, element_count, offset);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for copy");
 	}
+}
+
+void VectorOperations::Copy(Vector &source, Vector &target, size_t offset) {
+	if (source.type != target.type) {
+		throw NotImplementedException("Copy types don't match!");
+	}
+	target.count = std::min(source.count - offset, target.max_elements);
+	VectorOperations::Copy(source, target.data, target.count, offset);
 }

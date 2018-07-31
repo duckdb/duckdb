@@ -66,7 +66,7 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 		root = move(distinct);
 	}
 	if (statement.HasOrder()) {
-		auto order = make_unique<LogicalOrder>();
+		auto order = make_unique<LogicalOrder>(move(statement.orderby));
 		order->children.push_back(move(root));
 		root = move(order);
 	}

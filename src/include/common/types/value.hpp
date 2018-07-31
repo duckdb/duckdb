@@ -71,6 +71,21 @@ class Value : public Printable {
 	static void Min(Value &left, Value &right, Value &result);
 	// MAX(A, B)
 	static void Max(Value &left, Value &right, Value &result);
+	//===--------------------------------------------------------------------===//
+	// Comparison Operations
+	//===--------------------------------------------------------------------===//
+	// A == B
+	static bool Equals(Value &left, Value &right);
+	// A != B
+	static bool NotEquals(Value &left, Value &right);
+	// A > B
+	static bool GreaterThan(Value &left, Value &right);
+	// A >= B
+	static bool GreaterThanEquals(Value &left, Value &right);
+	// A < B
+	static bool LessThan(Value &left, Value &right);
+	// A <= B
+	static bool LessThanEquals(Value &left, Value &right);
 
 	//  private:
 	TypeId type;

@@ -121,6 +121,9 @@ struct VectorOperations {
 	// Copy the data from source to target, casting if the types don't match
 	static void Cast(Vector &source, Vector &result);
 	// Copy the data of <source> to the target location
-	static void Copy(Vector &source, void *target);
+	static void Copy(Vector &source, void *target, size_t element_count = 0,
+	                 size_t offset = 0);
+	// Copy the data of <source> to the target vector
+	static void Copy(Vector &source, Vector &target, size_t offset = 0);
 };
 } // namespace duckdb

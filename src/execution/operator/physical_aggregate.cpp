@@ -44,7 +44,7 @@ void PhysicalAggregate::Initialize() {
 
 PhysicalAggregateOperatorState::PhysicalAggregateOperatorState(
     PhysicalAggregate *parent, PhysicalOperator *child)
-    : PhysicalOperatorState(child), finished(false) {
+    : PhysicalOperatorState(child) {
 	if (parent->groups.size() == 0) {
 		aggregates.resize(parent->aggregates.size());
 		for (size_t i = 0; i < parent->aggregates.size(); i++) {

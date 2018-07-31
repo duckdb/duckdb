@@ -16,10 +16,10 @@ string PhysicalOperator::ToString() const {
 	return result;
 }
 
-PhysicalOperatorState::PhysicalOperatorState(PhysicalOperator *child) {
+PhysicalOperatorState::PhysicalOperatorState(PhysicalOperator *child)
+    : finished(false) {
 	if (child) {
 		child->InitializeChunk(child_chunk);
 		child_state = child->GetOperatorState();
 	}
-	finished = false;
 }
