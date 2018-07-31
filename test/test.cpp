@@ -53,6 +53,10 @@ int main() {
 	EXEC("SELECT a, b FROM test ORDER BY b, a;");
 	EXEC("SELECT a, b FROM test ORDER BY b, a DESC;");
 
+
+	EXEC("SELECT a, b FROM test ORDER BY b, a DESC LIMIT 1;");
+	EXEC("SELECT a, b FROM test ORDER BY b, a DESC LIMIT 1 OFFSET 1;");
+
 	// TPC-H
 	EXEC("create table lineitem ( l_orderkey INTEGER NOT NULL, l_partkey INTEGER NOT NULL, l_suppkey INTEGER NOT NULL, l_linenumber INTEGER NOT NULL, l_quantity DECIMAL(15,2) NOT NULL, l_extendedprice DECIMAL(15,2) NOT NULL, l_discount DECIMAL(15,2) NOT NULL, l_tax DECIMAL(15,2) NOT NULL, l_returnflag CHAR(1) NOT NULL, l_linestatus CHAR(1) NOT NULL, l_shipdate DATE NOT NULL, l_commitdate DATE NOT NULL, l_receiptdate DATE NOT NULL, l_shipinstruct CHAR(25) NOT NULL, l_shipmode CHAR(10) NOT NULL, l_comment VARCHAR(44) NOT NULL);");
 
