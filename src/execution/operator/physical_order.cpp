@@ -30,7 +30,7 @@ int compare_tuple(DataChunk &sort_by, OrderByDescription &desc, size_t left,
 	return 0;
 }
 
-static void _sort(DataChunk &sort_by, OrderByDescription &desc, sel_t *result) {
+static void insertion_sort(DataChunk &sort_by, OrderByDescription &desc, sel_t *result) {
 	// insertion sort
 	result[0] = 0;
 	for (size_t i = 1; i < sort_by.count; i++) {
@@ -43,6 +43,63 @@ static void _sort(DataChunk &sort_by, OrderByDescription &desc, sel_t *result) {
 		}
 	}
 }
+
+static int64_t _quicksort_initial(DataChunk &sort_by, OrderByDescription &desc, sel_t *result) {
+	// select pivot
+	int64_t pivot = 0;
+	int64_t low = 0, high = sort_by.count - 1;
+	// now insert elements
+	for(size_t i = 1; i < sort_by.count; i++) {
+		if (compare_tuple(sort_by, desc, i, pivot) <= 0) {
+			result[low++] = i;
+		} else {
+			result[high--] = i;
+		}
+	}
+	assert(low == high);
+	result[low] = pivot;
+	return low;
+}
+
+static void _quicksort_inplace(DataChunk &sort_by, OrderByDescription &desc, sel_t *result, int64_t left, int64_t right) {
+    if (left >= right) {
+        return;
+    }
+
+    int64_t middle = left + (right - left) / 2;
+    int64_t pivot = result[middle];
+    // move the mid point value to the front.
+    int64_t i = left + 1;
+    int64_t j = right;
+
+    std::swap(result[middle], result[left]);
+    while (i <= j) {
+        while(i <= j && compare_tuple(sort_by, desc, result[i], pivot) <= 0) {
+            i++;
+        }
+
+        while(i <= j && compare_tuple(sort_by, desc, result[j], pivot) > 0) {
+            j--;
+        }
+
+        if (i < j) {
+            std::swap(result[i], result[j]);
+        }
+    }
+    std::swap(result[i - 1], result[left]);
+    int64_t part = i - 1;
+
+    _quicksort_inplace(sort_by, desc, result, left, part - 1);
+    _quicksort_inplace(sort_by, desc, result, part + 1, right);
+}
+
+static void quicksort(DataChunk &sort_by, OrderByDescription &desc, sel_t *result) {
+	// quicksort
+	int64_t part = _quicksort_initial(sort_by, desc, result);
+	_quicksort_inplace(sort_by, desc, result, 0, part);
+	_quicksort_inplace(sort_by, desc, result, part + 1, sort_by.count - 1);
+}
+
 
 void PhysicalOrder::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOrderOperatorState *>(state_);
@@ -83,7 +140,7 @@ void PhysicalOrder::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 
 		// now perform the actual sort
 		big_data.sel_vector = unique_ptr<sel_t[]>(new sel_t[sort_chunk.count]);
-		_sort(sort_chunk, description, big_data.sel_vector.get());
+		quicksort(sort_chunk, description, big_data.sel_vector.get());
 
 		// now assign the selection vector to the children
 		for (size_t i = 0; i < big_data.column_count; i++) {
