@@ -69,7 +69,7 @@ static void _generic_scatter_loop(Vector &source, void **destination,
 		break;
 	case TypeId::DATE:
 		_scatter_templated_loop<date_t, OP>(source, (date_t **)destination,
-		                                      count);
+		                                    count);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for scatter");
@@ -101,7 +101,7 @@ static void _generic_gather_loop(void **source, Vector &dest) {
 		_gather_templated_loop<date_t, OP>((date_t **)source, dest);
 		break;
 	case TypeId::VARCHAR:
-		_gather_templated_loop<char*, OP>((char ***)source, dest);
+		_gather_templated_loop<char *, OP>((char ***)source, dest);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for gather");
@@ -130,4 +130,3 @@ void VectorOperations::Scatter::Min(Vector &source, void **dest, size_t count) {
 void VectorOperations::Gather::Set(void **source, Vector &dest) {
 	_generic_gather_loop<operators::PickLeft>(source, dest);
 }
-

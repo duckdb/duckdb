@@ -288,6 +288,7 @@ ExpressionType StringToExpressionType(const std::string &str);
 std::string TypeIdToString(TypeId type);
 TypeId StringToTypeId(const std::string &str);
 size_t GetTypeIdSize(TypeId type);
+static bool TypeIsConstantSize(TypeId type) { return type < TypeId::VARCHAR; }
 
 std::string LogicalOperatorToString(LogicalOperatorType type);
 std::string PhysicalOperatorToString(PhysicalOperatorType type);

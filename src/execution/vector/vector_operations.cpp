@@ -132,7 +132,7 @@ void _fixed_return_unary_loop(Vector &left, Vector &result) {
 		_templated_unary_loop<uint64_t, RES, OP>(left, result);
 		break;
 	case TypeId::VARCHAR:
-		_templated_unary_loop<char*, RES, OP>(left, result);
+		_templated_unary_loop<char *, RES, OP>(left, result);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type");

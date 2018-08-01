@@ -24,11 +24,7 @@ SuperLargeHashTable::SuperLargeHashTable(size_t initial_capacity,
 	Resize(initial_capacity);
 }
 
-SuperLargeHashTable::~SuperLargeHashTable() {
-	if (data) {
-		delete[] data;
-	}
-}
+SuperLargeHashTable::~SuperLargeHashTable() {}
 
 void SuperLargeHashTable::Resize(size_t size) {
 	if (size <= capacity) {
@@ -39,10 +35,8 @@ void SuperLargeHashTable::Resize(size_t size) {
 		throw NotImplementedException(
 		    "Resizing a filled HT not implemented yet!");
 	} else {
-		if (data) {
-			delete[] data;
-		}
 		data = new uint8_t[size * tuple_size];
+		owned_data = unique_ptr<uint8_t[]>(data);
 		for (size_t i = 0; i < size; i++) {
 			data[i * tuple_size] = EMPTY_CELL;
 		}
@@ -209,7 +203,7 @@ void SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &groups,
 		if (aggregate_types[i] == ExpressionType::AGGREGATE_AVG) {
 			// for the average we only have computed the sum
 			// so we need to divide by the count
-			// we do this in one instruction: loop over the data and 
+			// we do this in one instruction: loop over the data and
 			// first get the distance in the HT from this point to the count
 			size_t offset_to_count = payload_width - current_bytes;
 			// now fetch both the count and the sum and average them in one loop
@@ -235,15 +229,15 @@ void SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &groups,
 	scan_position = ptr - start;
 }
 
-
 //===--------------------------------------------------------------------===//
 // Compute the average
 //===--------------------------------------------------------------------===//
 template <class T>
-static void _gather_average_templated_loop(T **source, size_t offset, Vector &result) {
+static void _gather_average_templated_loop(T **source, size_t offset,
+                                           Vector &result) {
 	T *ldata = (T *)result.data;
 	for (size_t i = 0; i < result.count; i++) {
-		uint64_t count = ((uint64_t*)((uint64_t)source[i] + offset))[0];
+		uint64_t count = ((uint64_t *)((uint64_t)source[i] + offset))[0];
 		ldata[i] = source[i][0] / count;
 	}
 }
@@ -254,19 +248,23 @@ static void _average_gather_loop(void **source, size_t offset, Vector &dest) {
 		_gather_average_templated_loop<int8_t>((int8_t **)source, offset, dest);
 		break;
 	case TypeId::SMALLINT:
-		_gather_average_templated_loop<int16_t>((int16_t **)source, offset, dest);
+		_gather_average_templated_loop<int16_t>((int16_t **)source, offset,
+		                                        dest);
 		break;
 	case TypeId::INTEGER:
-		_gather_average_templated_loop<int32_t>((int32_t **)source, offset, dest);
+		_gather_average_templated_loop<int32_t>((int32_t **)source, offset,
+		                                        dest);
 		break;
 	case TypeId::BIGINT:
-		_gather_average_templated_loop<int64_t>((int64_t **)source, offset, dest);
+		_gather_average_templated_loop<int64_t>((int64_t **)source, offset,
+		                                        dest);
 		break;
 	case TypeId::DECIMAL:
 		_gather_average_templated_loop<double>((double **)source, offset, dest);
 		break;
 	case TypeId::POINTER:
-		_gather_average_templated_loop<uint64_t>((uint64_t **)source, offset, dest);
+		_gather_average_templated_loop<uint64_t>((uint64_t **)source, offset,
+		                                         dest);
 		break;
 	case TypeId::DATE:
 		_gather_average_templated_loop<date_t>((date_t **)source, offset, dest);
@@ -275,4 +273,3 @@ static void _average_gather_loop(void **source, size_t offset, Vector &dest) {
 		throw NotImplementedException("Unimplemented type for gather");
 	}
 }
-

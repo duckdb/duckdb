@@ -21,15 +21,15 @@ int32_t Hash(int64_t val) { throw NotImplementedException(""); }
 
 int32_t Hash(double val) { throw NotImplementedException(""); }
 
-int32_t Hash(char* str) {
-    int32_t hash = 5381;
-    int32_t c;
+int32_t Hash(char *str) {
+	int32_t hash = 5381;
+	int32_t c;
 
-    while (c = *str++) {
-        hash = ((hash << 5) + hash) + c;
-    }
+	while (c = *str++) {
+		hash = ((hash << 5) + hash) + c;
+	}
 
-    return hash;
+	return hash;
 }
 
 int32_t Hash(uint64_t integer) { throw NotImplementedException(""); }

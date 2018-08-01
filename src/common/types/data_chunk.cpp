@@ -10,11 +10,7 @@ using namespace std;
 DataChunk::DataChunk()
     : count(0), column_count(0), maximum_size(0), data(nullptr) {}
 
-DataChunk::~DataChunk() {
-	if (data) {
-		delete[] data;
-	}
-}
+DataChunk::~DataChunk() {}
 
 void DataChunk::Initialize(std::vector<TypeId> &types,
                            size_t maximum_chunk_size, bool zero_data) {
@@ -25,13 +21,15 @@ void DataChunk::Initialize(std::vector<TypeId> &types,
 	for (auto &type : types) {
 		size += GetTypeIdSize(type) * maximum_size;
 	}
-	default_vector_data = new char[size];
+
+	default_vector_data = unique_ptr<char[]>(new char[size]);
 	if (zero_data) {
-		memset(default_vector_data, 0, size);
+		memset(default_vector_data.get(), 0, size);
 	}
 
-	char *ptr = default_vector_data;
-	data = new unique_ptr<Vector>[ types.size() ];
+	char *ptr = default_vector_data.get();
+	data =
+	    unique_ptr<unique_ptr<Vector>[]>(new unique_ptr<Vector>[types.size()]);
 	for (size_t i = 0; i < types.size(); i++) {
 		data[i] = make_unique<Vector>(types[i], ptr, maximum_size);
 		ptr += GetTypeIdSize(types[i]) * maximum_size;
@@ -40,7 +38,7 @@ void DataChunk::Initialize(std::vector<TypeId> &types,
 
 void DataChunk::Reset() {
 	count = 0;
-	char *ptr = default_vector_data;
+	char *ptr = default_vector_data.get();
 	for (size_t i = 0; i < column_count; i++) {
 		data[i]->data = ptr;
 		data[i]->owns_data = false;
@@ -52,12 +50,6 @@ void DataChunk::Reset() {
 }
 
 void DataChunk::Clear() {
-	if (data) {
-		delete[] data;
-	}
-	if (default_vector_data) {
-		delete[] default_vector_data;
-	}
 	data = nullptr;
 	default_vector_data = nullptr;
 	column_count = 0;

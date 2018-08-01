@@ -36,6 +36,8 @@ class SuperLargeHashTable {
 	static constexpr int EMPTY_CELL = 0x00;
 	static constexpr int FULL_CELL = 0xFF;
 
+	std::unique_ptr<uint8_t[]> owned_data;
+
 	SuperLargeHashTable(const SuperLargeHashTable &) = delete;
 };
 

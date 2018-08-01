@@ -40,10 +40,15 @@ class Vector {
 
 	void Copy(Vector &other);
 	void Move(Vector &other);
+	void MoveOrCopy(Vector &other);
 	void Reference(Vector &other);
 
 	Vector(const Vector &) = delete;
+
   private:
-  	void Destroy();
+	void Destroy();
+
+	std::unique_ptr<char[]> owned_data;
+	std::unique_ptr<std::unique_ptr<char[]>[]> owned_strings;
 };
 } // namespace duckdb

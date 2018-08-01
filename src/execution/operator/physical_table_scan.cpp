@@ -14,7 +14,7 @@ void PhysicalTableScan::InitializeChunk(DataChunk &chunk) {
 }
 
 void PhysicalTableScan::GetChunk(DataChunk &chunk,
-                               PhysicalOperatorState *state_) {
+                                 PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalTableScanOperatorState *>(state_);
 	chunk.Reset();
 

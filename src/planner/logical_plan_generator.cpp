@@ -4,7 +4,6 @@
 #include "parser/expression/expression_list.hpp"
 #include "parser/statement/insert_statement.hpp"
 
-
 #include "planner/operator/logical_aggregate.hpp"
 #include "planner/operator/logical_distinct.hpp"
 #include "planner/operator/logical_filter.hpp"
@@ -18,7 +17,7 @@ using namespace duckdb;
 using namespace std;
 
 void LogicalPlanGenerator::Visit(SelectStatement &statement) {
-	for(auto &expr : statement.select_list) {
+	for (auto &expr : statement.select_list) {
 		expr->Accept(this);
 	}
 
@@ -90,11 +89,13 @@ static void cast_children_to_equal_types(AbstractExpression &expr) {
 			// we have to add a cast
 			if (left_type < right_type) {
 				// add cast on left hand side
-				auto cast = make_unique<CastExpression>(right_type, move(expr.children[0]));
+				auto cast = make_unique<CastExpression>(right_type,
+				                                        move(expr.children[0]));
 				expr.children[0] = move(cast);
 			} else {
 				// add cast on right hand side
-				auto cast = make_unique<CastExpression>(left_type, move(expr.children[1]));
+				auto cast = make_unique<CastExpression>(left_type,
+				                                        move(expr.children[1]));
 				expr.children[1] = move(cast);
 			}
 		}

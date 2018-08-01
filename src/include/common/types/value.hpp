@@ -33,20 +33,9 @@ class Value : public Printable {
 	Value(double val) : type(TypeId::DECIMAL), is_null(false) {
 		value_.decimal = val;
 	}
-	Value(std::string val) : type(TypeId::VARCHAR), is_null(false) {
-		value_.data = new char[val.size() + 1];
-		memcpy(value_.data, val.c_str(), val.size());
-		value_.data[val.size()] = '\0';
-		len = val.size();
-	}
+	Value(std::string val)
+	    : type(TypeId::VARCHAR), is_null(false), str_value(val) {}
 	Value(const Value &other);
-	~Value() {
-		if ((type == TypeId::VARCHAR || type == TypeId::VARBINARY ||
-		     type == TypeId::ARRAY) &&
-		    value_.data) {
-			delete[] value_.data;
-		}
-	}
 
 	static Value NumericValue(TypeId id, int64_t value);
 
@@ -102,9 +91,8 @@ class Value : public Printable {
 		double decimal;
 		uint64_t pointer;
 		date_t date;
-		char *data;
 	} value_;
 
-	uint32_t len;
+	std::string str_value;
 };
 } // namespace duckdb

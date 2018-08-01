@@ -62,7 +62,7 @@ unique_ptr<AbstractExpression> TransformTypeCast(TypeCast *root) {
 	    (reinterpret_cast<value *>(type_name->names->tail->data.ptr_value)
 	         ->val.str);
 	TypeId target_type = TransformStringToTypeId(name);
-	 
+
 	if (root->arg->type == T_A_Const) {
 		// cast a constant value
 		// get the original constant value

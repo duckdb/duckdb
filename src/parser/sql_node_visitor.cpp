@@ -14,9 +14,7 @@ void SQLNodeVisitor::Visit(AggregateExpression &expr) {
 void SQLNodeVisitor::Visit(BaseTableRefExpression &expr) {
 	expr.AcceptChildren(this);
 }
-void SQLNodeVisitor::Visit(CastExpression &expr) {
-	expr.AcceptChildren(this);
-}
+void SQLNodeVisitor::Visit(CastExpression &expr) { expr.AcceptChildren(this); }
 void SQLNodeVisitor::Visit(ColumnRefExpression &expr) {
 	expr.AcceptChildren(this);
 }

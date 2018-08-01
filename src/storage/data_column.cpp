@@ -14,5 +14,8 @@ void DataColumn::AddData(Vector &data) {
 		throw CatalogException("Mismatch in column type");
 	}
 	this->data.push_back(make_unique<Vector>());
-	data.Move(*this->data.back());
+	// base tables need to own the data
+	// if <data> owns the data we can take it
+	// otherwise we need to make a copy
+	data.MoveOrCopy(*this->data.back());
 }

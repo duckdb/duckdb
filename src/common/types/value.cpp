@@ -7,15 +7,8 @@ using namespace duckdb;
 using namespace std;
 
 Value::Value(const Value &other)
-    : type(other.type), is_null(other.is_null), len(other.len) {
-	if ((type == TypeId::VARCHAR || type == TypeId::VARBINARY ||
-	     type == TypeId::ARRAY) &&
-	    other.value_.data) {
-		value_.data = new char[len + 1];
-		memcpy(value_.data, other.value_.data, other.len + 1);
-	} else {
-		this->value_ = other.value_;
-	}
+    : type(other.type), is_null(other.is_null), str_value(other.str_value) {
+	this->value_ = other.value_;
 }
 
 Value Value::NumericValue(TypeId id, int64_t value) {
@@ -56,7 +49,7 @@ string Value::ToString() const {
 	case TypeId::DATE:
 		return Date::ToString(value_.date);
 	case TypeId::VARCHAR:
-		return string(value_.data);
+		return str_value;
 	default:
 		throw NotImplementedException("Unimplemented printing");
 	}
@@ -79,7 +72,7 @@ template <class DST, class OP> static DST _cast(Value &v) {
 	case TypeId::POINTER:
 		return OP::template Operation<uint64_t, DST>(v.value_.pointer);
 	case TypeId::VARCHAR:
-		return OP::template Operation<char*, DST>(v.value_.data);
+		return OP::template Operation<const char *, DST>(v.str_value.c_str());
 	case TypeId::DATE:
 		return operators::CastFromDate::Operation<date_t, DST>(v.value_.date);
 	default:
