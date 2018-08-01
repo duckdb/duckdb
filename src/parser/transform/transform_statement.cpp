@@ -1,5 +1,8 @@
 
+#include "common/assert.hpp"
+
 #include "catalog/column_catalog.hpp"
+
 #include "parser/transform.hpp"
 
 using namespace duckdb;

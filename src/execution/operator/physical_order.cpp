@@ -6,6 +6,8 @@
 
 #include "storage/data_table.hpp"
 
+#include "common/assert.hpp"
+
 using namespace duckdb;
 using namespace std;
 

@@ -1,4 +1,5 @@
 
+#include "common/assert.hpp"
 #include "common/exception.hpp"
 #include "common/types/hash.hpp"
 #include "common/types/operators.hpp"
