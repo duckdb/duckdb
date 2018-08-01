@@ -5,6 +5,7 @@
 
 #include "common/exception.hpp"
 #include "common/types/hash.hpp"
+#include "common/types/date.hpp"
 
 namespace operators {
 //===--------------------------------------------------------------------===//
@@ -133,6 +134,37 @@ struct Cast {
 		return (DST)left;
 	}
 };
+
+// string casts
+// string -> numeric
+template <> int8_t Cast::Operation(char* left);
+template <> int16_t Cast::Operation(char* left);
+template <> int Cast::Operation(char* left);
+template <> int64_t Cast::Operation(char* left);
+template <> uint64_t Cast::Operation(char* left);
+template <> double Cast::Operation(char* left);
+// numeric -> string
+template <> char* Cast::Operation(int8_t left);
+template <> char* Cast::Operation(int16_t left);
+template <> char* Cast::Operation(int left);
+template <> char* Cast::Operation(int64_t left);
+template <> char* Cast::Operation(uint64_t left);
+template <> char* Cast::Operation(double left);
+
+struct CastFromDate {
+	template <class SRC, class DST> static inline DST Operation(SRC left) {
+		throw duckdb::NotImplementedException("Cast from date could not be performed!");
+	}
+};
+struct CastToDate {
+	template <class SRC, class DST> static inline DST Operation(SRC left) {
+		throw duckdb::NotImplementedException("Cast to date could not be performed!");
+	}
+};
+
+template <> char* CastFromDate::Operation(duckdb::date_t left);
+template <> duckdb::date_t CastToDate::Operation(char* left);
+
 
 struct NOP {
 	template <class T> static inline T Operation(T left) { return left; }

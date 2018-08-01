@@ -35,6 +35,7 @@ Vector::Vector(Value value)
 	owns_data = true;
 	data = new char[GetTypeIdSize(type)];
 	memcpy(data, &value.value_, GetTypeIdSize(type));
+	value.value_.data = nullptr;
 }
 
 Vector::Vector()
@@ -42,15 +43,27 @@ Vector::Vector()
       sel_vector(nullptr), max_elements(0) {}
 
 Vector::~Vector() {
+	Destroy();
+}
+
+void Vector::Destroy() {
 	if (data && owns_data) {
+		if (type == TypeId::VARCHAR) {
+			char** dataptr = (char**) data;
+			for(size_t i = 0; i < count; i++) {
+				if (dataptr[i]) {
+					delete[] dataptr[i];
+				}
+			}
+		}
 		delete[] data;
+		data = nullptr;
+		owns_data = false;
 	}
 }
 
 void Vector::Reset() {
-	if (data && owns_data) {
-		delete[] data;
-	}
+	Destroy();
 	count = 0;
 	sel_vector = nullptr;
 	data = nullptr;
@@ -89,6 +102,8 @@ Value Vector::GetValue(size_t index) {
 		return Value(((uint64_t *)data)[index]);
 	case TypeId::DECIMAL:
 		return Value(((double *)data)[index]);
+	case TypeId::VARCHAR:
+		return Value(string(((char **)data)[index]));
 	default:
 		throw NotImplementedException("Unimplemented type for conversion");
 	}
@@ -106,9 +121,7 @@ void Vector::Reference(Vector &other) {
 }
 
 void Vector::Move(Vector &other) {
-	if (other.data && other.owns_data) {
-		delete[] other.data;
-	}
+	other.Destroy();
 
 	other.count = count;
 	other.data = data;
@@ -141,9 +154,7 @@ void Vector::Resize(oid_t max_elements, TypeId new_type) {
 	this->max_elements = max_elements;
 	char *new_data = new char[max_elements * GetTypeIdSize(type)];
 	memcpy(new_data, data, count * GetTypeIdSize(type));
-	if (owns_data) {
-		delete[] data;
-	}
+	Destroy();
 	owns_data = true;
 	data = new_data;
 }

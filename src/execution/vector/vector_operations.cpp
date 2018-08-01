@@ -131,6 +131,9 @@ void _fixed_return_unary_loop(Vector &left, Vector &result) {
 	case TypeId::POINTER:
 		_templated_unary_loop<uint64_t, RES, OP>(left, result);
 		break;
+	case TypeId::VARCHAR:
+		_templated_unary_loop<char*, RES, OP>(left, result);
+		break;
 	default:
 		throw NotImplementedException("Unimplemented type");
 	}
@@ -160,6 +163,9 @@ void _generic_binary_loop(Vector &left, Vector &right, Vector &result) {
 	case TypeId::POINTER:
 		_templated_binary_loop<uint64_t, uint64_t, OP>(left, right, result);
 		break;
+	case TypeId::DATE:
+		_templated_binary_loop<date_t, date_t, OP>(left, right, result);
+		break;
 	default:
 		throw NotImplementedException("Unimplemented type");
 	}
@@ -188,6 +194,9 @@ void _fixed_return_binary_loop(Vector &left, Vector &right, Vector &result) {
 		break;
 	case TypeId::POINTER:
 		_templated_binary_loop<uint64_t, RES, OP>(left, right, result);
+		break;
+	case TypeId::DATE:
+		_templated_binary_loop<date_t, RES, OP>(left, right, result);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type");

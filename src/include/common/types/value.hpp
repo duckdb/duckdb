@@ -6,6 +6,8 @@
 #include "common/internal_types.hpp"
 #include "common/printable.hpp"
 
+#include "common/types/date.hpp"
+
 namespace duckdb {
 class Value : public Printable {
   public:
@@ -99,7 +101,7 @@ class Value : public Printable {
 		int64_t bigint;
 		double decimal;
 		uint64_t pointer;
-		int32_t date;
+		date_t date;
 		char *data;
 	} value_;
 

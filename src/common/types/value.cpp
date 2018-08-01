@@ -53,6 +53,10 @@ string Value::ToString() const {
 		return to_string(value_.decimal);
 	case TypeId::POINTER:
 		return to_string(value_.pointer);
+	case TypeId::DATE:
+		return Date::ToString(value_.date);
+	case TypeId::VARCHAR:
+		return string(value_.data);
 	default:
 		throw NotImplementedException("Unimplemented printing");
 	}
@@ -74,6 +78,10 @@ template <class DST, class OP> static DST _cast(Value &v) {
 		return OP::template Operation<double, DST>(v.value_.decimal);
 	case TypeId::POINTER:
 		return OP::template Operation<uint64_t, DST>(v.value_.pointer);
+	case TypeId::VARCHAR:
+		return OP::template Operation<char*, DST>(v.value_.data);
+	case TypeId::DATE:
+		return operators::CastFromDate::Operation<date_t, DST>(v.value_.date);
 	default:
 		throw NotImplementedException("Unimplemented type");
 	}
@@ -113,6 +121,9 @@ Value Value::CastAs(TypeId new_type) {
 		break;
 	case TypeId::POINTER:
 		new_value.value_.pointer = _cast<uint64_t, operators::Cast>(*this);
+		break;
+	case TypeId::DATE:
+		new_value.value_.date = _cast<date_t, operators::CastToDate>(*this);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type");

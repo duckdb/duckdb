@@ -43,5 +43,7 @@ class Vector {
 	void Reference(Vector &other);
 
 	Vector(const Vector &) = delete;
+  private:
+  	void Destroy();
 };
 } // namespace duckdb

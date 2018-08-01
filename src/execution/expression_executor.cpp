@@ -19,9 +19,12 @@ void ExpressionExecutor::Execute(AbstractExpression *expr, Vector &result) {
 	expr->Accept(this);
 
 	if (result.type != vector.type) {
-		throw NotImplementedException("FIXME: cast");
+		// cast to the expected type
+		VectorOperations::Cast(vector, result);
+	} else {
+		// types match, only move the data
+		vector.Move(result);
 	}
-	vector.Move(result);
 }
 
 void ExpressionExecutor::Merge(AbstractExpression *expr, Vector &result) {

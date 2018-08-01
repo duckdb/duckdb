@@ -94,6 +94,7 @@ static void _quicksort_inplace(DataChunk &sort_by, OrderByDescription &desc, sel
 }
 
 static void quicksort(DataChunk &sort_by, OrderByDescription &desc, sel_t *result) {
+	if (sort_by.count == 0) return;
 	// quicksort
 	int64_t part = _quicksort_initial(sort_by, desc, result);
 	_quicksort_inplace(sort_by, desc, result, 0, part);

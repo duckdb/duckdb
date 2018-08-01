@@ -53,8 +53,16 @@ template <class T> static void _cast_loop(Vector &source, Vector &result) {
 		_templated_unary_loop_templated_function<uint64_t, T, operators::Cast>(
 		    source, result);
 		break;
+	case TypeId::VARCHAR:
+		_templated_unary_loop_templated_function<char*, T, operators::Cast>(
+		    source, result);
+		break;
+	case TypeId::DATE:
+		_templated_unary_loop_templated_function<date_t, T, operators::CastFromDate>(
+		    source, result);
+		break;
 	default:
-		throw NotImplementedException("Unimplemented type for copy");
+		throw NotImplementedException("Unimplemented type for cast");
 	}
 }
 
@@ -102,8 +110,18 @@ void VectorOperations::Cast(Vector &source, Vector &result) {
 	case TypeId::POINTER:
 		_cast_loop<uint64_t>(source, result);
 		break;
+	case TypeId::VARCHAR:
+		_cast_loop<char*>(source, result);
+		break;
+	case TypeId::DATE:
+		if (source.type == TypeId::VARCHAR) {
+			_templated_unary_loop_templated_function<char*, date_t, operators::CastToDate>(source, result);
+		} else {
+			throw NotImplementedException("Cannot cast type to date!");
+		}
+		break;
 	default:
-		throw NotImplementedException("Unimplemented type for copy");
+		throw NotImplementedException("Unimplemented type for cast");
 	}
 }
 
@@ -134,6 +152,12 @@ void VectorOperations::Copy(Vector &source, void *target, size_t element_count,
 		break;
 	case TypeId::POINTER:
 		_copy_loop<uint64_t>(source, target, element_count, offset);
+		break;
+	case TypeId::DATE:
+		_copy_loop<date_t>(source, target, element_count, offset);
+		break;
+	case TypeId::VARCHAR:
+		_copy_loop<char*>(source, target, element_count, offset);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for copy");

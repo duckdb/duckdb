@@ -244,7 +244,7 @@ static void _gather_average_templated_loop(T **source, size_t offset, Vector &re
 	T *ldata = (T *)result.data;
 	for (size_t i = 0; i < result.count; i++) {
 		uint64_t count = ((uint64_t*)((uint64_t)source[i] + offset))[0];
-		ldata[i] =source[i][0] / count;
+		ldata[i] = source[i][0] / count;
 	}
 }
 
