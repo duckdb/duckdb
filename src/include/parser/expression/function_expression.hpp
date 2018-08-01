@@ -1,9 +1,19 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// parser/expression/function_expression.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
 #include "parser/expression/abstract_expression.hpp"
 
 namespace duckdb {
+//! Represents a function call
 class FunctionExpression : public AbstractExpression {
   public:
 	FunctionExpression(

@@ -1,9 +1,19 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// parser/expression/conjunction_expression.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
 #include "parser/expression/abstract_expression.hpp"
 
 namespace duckdb {
+//! Represents a conjunction (AND/OR)
 class ConjunctionExpression : public AbstractExpression {
   public:
 	ConjunctionExpression(ExpressionType type,

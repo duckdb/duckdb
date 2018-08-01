@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// parser/expression/constant_expression.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -5,6 +14,7 @@
 #include "parser/expression/abstract_expression.hpp"
 
 namespace duckdb {
+//! Represents a constant value in the query
 class ConstantExpression : public AbstractExpression {
   public:
 	ConstantExpression()
@@ -25,6 +35,7 @@ class ConstantExpression : public AbstractExpression {
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
 	virtual std::string ToString() const override { return std::string(); }
 
+	//! The constant value referenced
 	Value value;
 };
 } // namespace duckdb

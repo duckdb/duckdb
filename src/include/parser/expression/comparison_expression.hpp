@@ -1,9 +1,20 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// parser/expression/comparison_expression.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
 #include "parser/expression/abstract_expression.hpp"
 
 namespace duckdb {
+//! Represents a boolean comparison (e.g. =, >=, <>). Always returns a boolean
+//! and has two children.
 class ComparisonExpression : public AbstractExpression {
   public:
 	ComparisonExpression(ExpressionType type,

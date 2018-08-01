@@ -17,15 +17,17 @@
 
 namespace duckdb {
 
-//! The Date class is a static class that holds helper functions for the Date type.
+//! The Date class is a static class that holds helper functions for the Date
+//! type.
 class Date {
   public:
-  	//! Convert a string in the format "YYYY-MM-DD" to a date object
+	//! Convert a string in the format "YYYY-MM-DD" to a date object
 	static date_t FromString(std::string str);
 	//! Convert a date object to a string in the format "YYYY-MM-DD"
 	static std::string ToString(date_t date);
 
-	//! Create a string "YYYY-MM-DD" from a specified (year, month, day) combination
+	//! Create a string "YYYY-MM-DD" from a specified (year, month, day)
+	//! combination
 	static std::string Format(int32_t year, int32_t month, int32_t day);
 
 	//! Extract the year, month and day from a given date object
@@ -36,7 +38,9 @@ class Date {
 
 	//! Returns true if (year) is a leap year, and false otherwise
 	static bool IsLeapYear(int32_t year);
-	//! Returns true if the specified (year, month, day) combination is a valid date
+
+	//! Returns true if the specified (year, month, day) combination is a valid
+	//! date
 	static bool IsValidDay(int32_t year, int32_t month, int32_t day);
 };
 } // namespace duckdb

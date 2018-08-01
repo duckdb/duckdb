@@ -15,7 +15,7 @@
 
 namespace duckdb {
 
-//!  Vector of values of a certain type.
+//!  Vector of values of a specified TypeId.
 /*!
   The vector class is the smallest unit of data used by the execution engine. It
   represents a chunk of values of a single type. A vector can either (1) own its

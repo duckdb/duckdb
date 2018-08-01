@@ -1,3 +1,14 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// parser/transform.hpp
+//
+// Author: Mark Raasveldt
+// Description: Transform functions take as input elements from the Postgres
+//              parse tree, and convert them into the internal representaton
+//              used by DuckDB.
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -5,35 +16,51 @@
 #include "parser/statement/insert_statement.hpp"
 #include "parser/statement/select_statement.hpp"
 
-#include "parser/parsenodes.h"
-#include "parser/pg_list.h"
-#include "parser/pg_query.h"
-#include "parser/pg_trigger.h"
+#include "parser/postgres/parsenodes.h"
+#include "parser/postgres/pg_list.h"
+#include "parser/postgres/pg_query.h"
+#include "parser/postgres/pg_trigger.h"
 
-std::unique_ptr<duckdb::SelectStatement> TransformSelect(Node *node);
-std::unique_ptr<duckdb::CreateStatement> TransformCreate(Node *node);
-std::unique_ptr<duckdb::InsertStatement> TransformInsert(Node *node);
+namespace duckdb {
 
-std::unique_ptr<duckdb::AbstractExpression> TransformColumnRef(ColumnRef *root);
-std::unique_ptr<duckdb::AbstractExpression> TransformValue(value val);
-std::unique_ptr<duckdb::AbstractExpression> TransformAExpr(A_Expr *root);
-std::unique_ptr<duckdb::AbstractExpression> TransformExpression(Node *node);
-std::unique_ptr<duckdb::AbstractExpression> TransformFuncCall(FuncCall *root);
-std::unique_ptr<duckdb::AbstractExpression> TransformFrom(List *root);
-std::unique_ptr<duckdb::AbstractExpression> TransformConstant(A_Const *c);
-std::unique_ptr<duckdb::AbstractExpression> TransformRangeVar(RangeVar *root);
+//! Transform a Postgres T_SelectStmt node into a SelectStatement
+std::unique_ptr<SelectStatement> TransformSelect(Node *node);
+//! Transform a Postgres T_CreateStmt node into a CreateStatement
+std::unique_ptr<CreateStatement> TransformCreate(Node *node);
+//! Transform a Postgres T_InsertStmt node into a InsertStatement
+std::unique_ptr<InsertStatement> TransformInsert(Node *node);
 
-duckdb::TypeId TransformStringToTypeId(char *str);
+//! Transform a Postgres column reference into an AbstractExpression
+std::unique_ptr<AbstractExpression> TransformColumnRef(ColumnRef *root);
+//! Transform a Postgres constant value into an AbstractExpression
+std::unique_ptr<AbstractExpression> TransformValue(value val);
+//! Transform a Postgres operator into an AbstractExpression
+std::unique_ptr<AbstractExpression> TransformAExpr(A_Expr *root);
+//! Transform a Postgres abstract expression into an AbstractExpression
+std::unique_ptr<AbstractExpression> TransformExpression(Node *node);
+//! Transform a Postgres function call into an AbstractExpression
+std::unique_ptr<AbstractExpression> TransformFuncCall(FuncCall *root);
+//! Transform a Postgres FROM clause into an AbstractExpression
+std::unique_ptr<AbstractExpression> TransformFrom(List *root);
+//! Transform a Postgres constant value into an AbstractExpression
+std::unique_ptr<AbstractExpression> TransformConstant(A_Const *c);
+//! Transform a Postgres table reference into an AbstractExpression
+std::unique_ptr<AbstractExpression> TransformRangeVar(RangeVar *root);
 
-bool TransformGroupBy(
-    List *group,
-    std::vector<std::unique_ptr<duckdb::AbstractExpression>> &result);
-bool TransformOrderBy(List *order, duckdb::OrderByDescription &result);
+//! Transform a Postgres TypeName string into a TypeId
+TypeId TransformStringToTypeId(char *str);
 
+//! Transform a Postgres GROUP BY expression into a list of AbstractExpression
+bool TransformGroupBy(List *group,
+                      std::vector<std::unique_ptr<AbstractExpression>> &result);
+//! Transform a Postgres ORDER BY expression into an OrderByDescription
+bool TransformOrderBy(List *order, OrderByDescription &result);
+
+//! Transform a Postgres SELECT clause into a list of AbstractExpression
 bool TransformExpressionList(
-    List *list,
-    std::vector<std::unique_ptr<duckdb::AbstractExpression>> &result);
+    List *list, std::vector<std::unique_ptr<AbstractExpression>> &result);
 
+//! Transform a Postgres Value List into a list of AbstractExpression
 bool TransformValueList(
-    List *list,
-    std::vector<std::unique_ptr<duckdb::AbstractExpression>> &result);
+    List *list, std::vector<std::unique_ptr<AbstractExpression>> &result);
+}

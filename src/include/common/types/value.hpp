@@ -19,11 +19,13 @@
 
 namespace duckdb {
 
-//! The Value object holds a single arbitrary value of any type that can be stored in the database.
+//! The Value object holds a single arbitrary value of any type that can be
+//! stored in the database.
 class Value : public Printable {
 	friend class Vector;
+
   public:
-  	//! Create an empty NULL value of the specified type
+	//! Create an empty NULL value of the specified type
 	Value(TypeId type = TypeId::INTEGER) : type(type), is_null(true) {}
 	//! Create a boolean value
 	Value(bool val) : type(TypeId::BOOLEAN), is_null(false) {
@@ -109,7 +111,7 @@ class Value : public Printable {
 	bool is_null;
 
   private:
-  	//! The value of the object, if it is of a constant size Type
+	//! The value of the object, if it is of a constant size Type
 	union Val {
 		int8_t boolean;
 		int8_t tinyint;
@@ -125,17 +127,15 @@ class Value : public Printable {
 	std::string str_value;
 
 	//! Templated helper function for casting
-	template <class DST, class OP>
-	static DST _cast(Value &v);
-	
+	template <class DST, class OP> static DST _cast(Value &v);
+
 	//! Templated helper function for binary operations
-  	template <class OP>
+	template <class OP>
 	static void _templated_binary_operation(Value &left, Value &right,
-                                        Value &result);
+	                                        Value &result);
 
 	//! Templated helper function for boolean operations
 	template <class OP>
 	static bool _templated_boolean_operation(Value &left, Value &right);
-
 };
 } // namespace duckdb

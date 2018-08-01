@@ -1,9 +1,19 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// parser/expression/operator_expression.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
 #include "parser/expression/abstract_expression.hpp"
 
 namespace duckdb {
+//! Represents a built-in operator expression
 class OperatorExpression : public AbstractExpression {
   public:
 	OperatorExpression(ExpressionType type, TypeId type_id = TypeId::INVALID)

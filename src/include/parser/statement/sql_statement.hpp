@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// parser/statement/sql_statement.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -9,6 +18,7 @@
 namespace duckdb {
 class SelectStatement;
 
+//! SQLStatement is the base class of any type of SQL statement.
 class SQLStatement : public Printable {
   public:
 	SQLStatement(StatementType type) : stmt_type(type){};

@@ -1,3 +1,13 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// parser/expression/expression_list.hpp
+//
+// Author: Mark Raasveldt
+// Description: This file contains a list of includes to include all
+//              expressions, as they are used in several places.
+//===----------------------------------------------------------------------===//
 
 #pragma once
 

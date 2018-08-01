@@ -1,4 +1,12 @@
-// C++ Interface to DuckDB
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// duckdb.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -12,6 +20,8 @@ class DuckDB;
 class DuckDBConnection;
 class DuckDBResult;
 
+//! The database object. This object holds the catalog and all the
+//! database-specific meta information.
 class DuckDB {
   public:
 	DuckDB(const char *path);
@@ -19,6 +29,8 @@ class DuckDB {
 	Catalog catalog;
 };
 
+//! A connection to a database. This represents a (client) connection that can
+//! be used to query the database.
 class DuckDBConnection {
   public:
 	DuckDBConnection(DuckDB &database);
@@ -29,6 +41,8 @@ class DuckDBConnection {
 	DuckDB &database;
 };
 
+//! The result object holds the result of a query. It can either hold an error
+//! message or a DataChunk that represents the return value of the column.
 class DuckDBResult {
   public:
 	DuckDBResult();

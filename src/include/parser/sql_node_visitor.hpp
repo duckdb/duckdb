@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// parser/sql_node_visitor.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -22,6 +31,10 @@ class OperatorExpression;
 class SubqueryExpression;
 class TableRefExpression;
 
+//! The SQLNodeVisitor is an abstract base class that implements the Visitor
+//! pattern on AbstractExpression and SQLStatement. It will visit nodes
+//! recursively and call the Visit expression corresponding to the expression
+//! visited.
 class SQLNodeVisitor {
   public:
 	virtual ~SQLNodeVisitor(){};

@@ -55,8 +55,7 @@ string Value::ToString() const {
 	}
 }
 
-template <class DST, class OP>
-DST Value::_cast(Value &v) {
+template <class DST, class OP> DST Value::_cast(Value &v) {
 	switch (v.type) {
 	case TypeId::BOOLEAN:
 		return OP::template Operation<int8_t, DST>(v.value_.boolean);

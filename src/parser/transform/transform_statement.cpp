@@ -5,8 +5,9 @@
 
 #include "parser/transform.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 bool TransformGroupBy(List *group,
                       vector<unique_ptr<AbstractExpression>> &result) {
@@ -148,4 +149,5 @@ unique_ptr<InsertStatement> TransformInsert(Node *node) {
 	result->schema = table.schema_name;
 
 	return result;
+}
 }

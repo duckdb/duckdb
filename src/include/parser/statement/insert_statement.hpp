@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// parser/statement/insert_statement.hpp
+//
+// Author: Hannes Mühleisen & Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -18,9 +27,12 @@ class InsertStatement : public SQLStatement {
 	virtual std::string ToString() const;
 	virtual void Accept(SQLNodeVisitor *v) { v->Visit(*this); }
 
+	//! List of values to insert
 	std::vector<std::unique_ptr<AbstractExpression>> values;
 
+	//! Table name to insert to
 	std::string table;
+	//! Schema name to insert to
 	std::string schema;
 };
 

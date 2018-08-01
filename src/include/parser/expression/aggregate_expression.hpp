@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// parser/expression/aggregate_expression.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -6,6 +15,7 @@
 #include "parser/expression/abstract_expression.hpp"
 
 namespace duckdb {
+//! The AggregateExpression represents an aggregate in the query
 class AggregateExpression : public AbstractExpression {
   public:
 	AggregateExpression(ExpressionType type, bool distinct,
@@ -13,6 +23,7 @@ class AggregateExpression : public AbstractExpression {
 	    : AbstractExpression(type) {
 		this->distinct = distinct;
 
+		// translate COUNT(*) into AGGREGATE_COUNT_STAR
 		if (type == ExpressionType::AGGREGATE_COUNT && child &&
 		    child->GetExpressionType() == ExpressionType::STAR) {
 			child = nullptr;
@@ -34,6 +45,7 @@ class AggregateExpression : public AbstractExpression {
 		}
 	}
 
+	//! Resolve the type of the aggregate
 	virtual void ResolveType() override {
 		AbstractExpression::ResolveType();
 		switch (type) {
@@ -65,6 +77,7 @@ class AggregateExpression : public AbstractExpression {
 	size_t index;
 
   private:
+	//! Whether or not the aggregate returns only distinct values (what?)
 	bool distinct;
 };
 } // namespace duckdb

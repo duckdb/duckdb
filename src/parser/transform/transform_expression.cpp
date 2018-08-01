@@ -3,8 +3,9 @@
 
 #include "parser/expression/expression_list.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 static bool IsAggregateFunction(const string &fun_name) {
 	if (fun_name == "min" || fun_name == "max" || fun_name == "count" ||
@@ -478,4 +479,5 @@ bool TransformValueList(List *list,
 		}
 	}
 	return true;
+}
 }

@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// parser/statement/create_statement.hpp
+//
+// Author: Hannes Mühleisen & Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -19,9 +28,12 @@ class CreateStatement : public SQLStatement {
 	virtual std::string ToString() const;
 	virtual void Accept(SQLNodeVisitor *v) { v->Visit(*this); }
 
+	//! Table name to insert to
 	std::string table;
+	//! Schema name to insert to
 	std::string schema;
 
+	//! List of columns of the table
 	std::vector<ColumnCatalogEntry> columns;
 };
 
