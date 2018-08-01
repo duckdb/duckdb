@@ -18,5 +18,10 @@ test: main
 micro: main
 	build/test/microbenchmark
 
+doxygen:
+	doxygen Doxyfile
+
+docs: doxygen
+
 format:
 	python format.py

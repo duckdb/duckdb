@@ -46,7 +46,7 @@ Vector::Vector(Value value)
 		assert(type == TypeId::VARCHAR);
 		auto string = new char[value.str_value.size() + 1];
 		strcpy(string, value.str_value.c_str());
-		auto string_list = new unique_ptr<char[]>[1];
+		auto string_list = new unique_ptr<char[]>[ 1 ];
 		string_list[0] = unique_ptr<char[]>(string);
 
 		owned_strings = unique_ptr<unique_ptr<char[]>[]>(string_list);
@@ -69,10 +69,6 @@ void Vector::Destroy() {
 	}
 	data = nullptr;
 	owns_data = false;
-}
-
-void Vector::Reset() {
-	Destroy();
 	count = 0;
 	sel_vector = nullptr;
 	max_elements = 0;
@@ -141,10 +137,7 @@ void Vector::Move(Vector &other) {
 	other.sel_vector = sel_vector;
 	other.type = type;
 
-	data = nullptr;
-	owns_data = false;
-	sel_vector = nullptr;
-	count = 0;
+	Destroy();
 }
 
 void Vector::MoveOrCopy(Vector &other) {

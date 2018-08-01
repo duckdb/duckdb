@@ -12,10 +12,10 @@
 using namespace duckdb;
 using namespace std;
 
-void ExpressionExecutor::Reset() { vector.Reset(); }
+void ExpressionExecutor::Reset() { vector.Destroy(); }
 
 void ExpressionExecutor::Execute(AbstractExpression *expr, Vector &result) {
-	vector.Reset();
+	vector.Destroy();
 	expr->Accept(this);
 
 	if (result.type != vector.type) {
@@ -28,7 +28,7 @@ void ExpressionExecutor::Execute(AbstractExpression *expr, Vector &result) {
 }
 
 void ExpressionExecutor::Merge(AbstractExpression *expr, Vector &result) {
-	vector.Reset();
+	vector.Destroy();
 	if (result.type != TypeId::BOOLEAN) {
 		throw NotImplementedException("Expected a boolean!");
 	}
@@ -41,7 +41,7 @@ void ExpressionExecutor::Merge(AbstractExpression *expr, Vector &result) {
 }
 
 void ExpressionExecutor::Merge(AggregateExpression &expr, Value &result) {
-	vector.Reset();
+	vector.Destroy();
 	if (result.type != expr.return_type) {
 		throw NotImplementedException(
 		    "Aggregate type does not match value type!");

@@ -28,8 +28,8 @@ void DataChunk::Initialize(std::vector<TypeId> &types,
 	}
 
 	char *ptr = default_vector_data.get();
-	data =
-	    unique_ptr<unique_ptr<Vector>[]>(new unique_ptr<Vector>[types.size()]);
+	data = unique_ptr<unique_ptr<Vector>[]>(
+	    new unique_ptr<Vector>[ types.size() ]);
 	for (size_t i = 0; i < types.size(); i++) {
 		data[i] = make_unique<Vector>(types[i], ptr, maximum_size);
 		ptr += GetTypeIdSize(types[i]) * maximum_size;

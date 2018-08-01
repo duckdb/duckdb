@@ -280,4 +280,7 @@ cmake_build
 cmake-build-debug
 cmake-build-release
 
+# Generated documentation
+docs
+
 
