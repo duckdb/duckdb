@@ -25,7 +25,7 @@ int32_t Hash(char *str) {
 	int32_t hash = 5381;
 	int32_t c;
 
-	while (c = *str++) {
+	while ((c = *str++)) {
 		hash = ((hash << 5) + hash) + c;
 	}
 
