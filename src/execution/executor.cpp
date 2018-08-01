@@ -27,7 +27,7 @@ unique_ptr<DuckDBResult> Executor::Execute(unique_ptr<PhysicalOperator> plan) {
 		result->error = "UNHANDLED EXCEPTION TYPE THROWN IN PLANNER!";
 	}
 	if (!result->success) {
-		result->data.Clear();
+		result->data.Destroy();
 	}
 	return move(result);
 }

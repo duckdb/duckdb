@@ -51,11 +51,12 @@ string Value::ToString() const {
 	case TypeId::VARCHAR:
 		return str_value;
 	default:
-		throw NotImplementedException("Unimplemented printing");
+		throw NotImplementedException("Unimplemented type for printing");
 	}
 }
 
-template <class DST, class OP> static DST _cast(Value &v) {
+template <class DST, class OP>
+DST Value::_cast(Value &v) {
 	switch (v.type) {
 	case TypeId::BOOLEAN:
 		return OP::template Operation<int8_t, DST>(v.value_.boolean);
@@ -76,7 +77,7 @@ template <class DST, class OP> static DST _cast(Value &v) {
 	case TypeId::DATE:
 		return operators::CastFromDate::Operation<date_t, DST>(v.value_.date);
 	default:
-		throw NotImplementedException("Unimplemented type");
+		throw NotImplementedException("Unimplemented type for casting");
 	}
 }
 
@@ -119,13 +120,13 @@ Value Value::CastAs(TypeId new_type) {
 		new_value.value_.date = _cast<date_t, operators::CastToDate>(*this);
 		break;
 	default:
-		throw NotImplementedException("Unimplemented type");
+		throw NotImplementedException("Unimplemented type for casting");
 	}
 	return new_value;
 }
 
 template <class OP>
-static void _templated_binary_operation(Value &left, Value &right,
+void Value::_templated_binary_operation(Value &left, Value &right,
                                         Value &result) {
 	if (left.type != right.type || left.type != result.type) {
 		throw NotImplementedException("Not matching type not implemented!");
@@ -199,7 +200,7 @@ void Value::Max(Value &left, Value &right, Value &result) {
 // Comparison Operations
 //===--------------------------------------------------------------------===//
 template <class OP>
-static bool _templated_boolean_operation(Value &left, Value &right) {
+bool Value::_templated_boolean_operation(Value &left, Value &right) {
 	if (left.type != right.type) {
 		throw NotImplementedException("Not matching type not implemented!");
 	}

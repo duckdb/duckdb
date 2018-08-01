@@ -21,7 +21,7 @@ int32_t Hash(int64_t val) { throw NotImplementedException(""); }
 
 int32_t Hash(double val) { throw NotImplementedException(""); }
 
-int32_t Hash(char *str) {
+int32_t Hash(const char *str) {
 	int32_t hash = 5381;
 	int32_t c;
 

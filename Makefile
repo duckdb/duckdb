@@ -1,7 +1,7 @@
 
 
 
-.PHONY: main clean all format test
+.PHONY: main clean all format test docs doxygen
 
 all: main
 
@@ -18,10 +18,11 @@ test: main
 micro: main
 	build/test/microbenchmark
 
-doxygen:
+docs:
 	doxygen Doxyfile
 
-docs: doxygen
-
+doxygen: docs
+	open docs/html/index.html
+	
 format:
 	python format.py

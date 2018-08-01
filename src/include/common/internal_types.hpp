@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// common/internal_types.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -5,6 +14,13 @@
 
 namespace duckdb {
 
+#define STANDARD_VECTOR_SIZE 1024
+
+//! Type used to represent dates
+typedef int32_t date_t;
+//! Type used for the selection vector
+typedef uint64_t sel_t;
+//! Type used for index accesses
 typedef size_t oid_t;
 
 //===--------------------------------------------------------------------===//

@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// vector.hpp
+// common/types/vector.hpp
 //
 // Author: Mark Raasveldt
 //
@@ -14,8 +14,6 @@
 #include "common/types/value.hpp"
 
 namespace duckdb {
-
-typedef uint64_t sel_t;
 
 //!  Vector of values of a certain type.
 /*!

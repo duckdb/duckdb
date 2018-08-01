@@ -12,25 +12,26 @@ DataChunk::DataChunk()
 
 DataChunk::~DataChunk() {}
 
-void DataChunk::Initialize(std::vector<TypeId> &types,
-                           size_t maximum_chunk_size, bool zero_data) {
+void DataChunk::Initialize(std::vector<TypeId> &types, oid_t maximum_chunk_size,
+                           bool zero_data) {
 	maximum_size = maximum_chunk_size;
 	count = 0;
 	column_count = types.size();
-	size_t size = 0;
+	oid_t size = 0;
 	for (auto &type : types) {
 		size += GetTypeIdSize(type) * maximum_size;
 	}
-
-	default_vector_data = unique_ptr<char[]>(new char[size]);
-	if (zero_data) {
-		memset(default_vector_data.get(), 0, size);
+	if (size > 0) {
+		owned_data = unique_ptr<char[]>(new char[size]);
+		if (zero_data) {
+			memset(owned_data.get(), 0, size);
+		}
 	}
 
-	char *ptr = default_vector_data.get();
+	char *ptr = owned_data.get();
 	data = unique_ptr<unique_ptr<Vector>[]>(
 	    new unique_ptr<Vector>[ types.size() ]);
-	for (size_t i = 0; i < types.size(); i++) {
+	for (oid_t i = 0; i < types.size(); i++) {
 		data[i] = make_unique<Vector>(types[i], ptr, maximum_size);
 		ptr += GetTypeIdSize(types[i]) * maximum_size;
 	}
@@ -38,8 +39,8 @@ void DataChunk::Initialize(std::vector<TypeId> &types,
 
 void DataChunk::Reset() {
 	count = 0;
-	char *ptr = default_vector_data.get();
-	for (size_t i = 0; i < column_count; i++) {
+	char *ptr = owned_data.get();
+	for (oid_t i = 0; i < column_count; i++) {
 		data[i]->data = ptr;
 		data[i]->owns_data = false;
 		data[i]->count = 0;
@@ -49,9 +50,9 @@ void DataChunk::Reset() {
 	sel_vector.reset();
 }
 
-void DataChunk::Clear() {
+void DataChunk::Destroy() {
 	data = nullptr;
-	default_vector_data = nullptr;
+	owned_data.reset();
 	column_count = 0;
 	count = 0;
 	maximum_size = 0;
@@ -67,11 +68,11 @@ void DataChunk::Append(DataChunk &other) {
 	if (count + other.count > maximum_size) {
 		// resize
 		maximum_size = maximum_size * 2;
-		for (size_t i = 0; i < column_count; i++) {
+		for (oid_t i = 0; i < column_count; i++) {
 			data[i]->Resize(maximum_size);
 		}
 	}
-	for (size_t i = 0; i < column_count; i++) {
+	for (oid_t i = 0; i < column_count; i++) {
 		data[i]->Append(*other.data[i].get());
 	}
 	count += other.count;
