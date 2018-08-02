@@ -50,7 +50,7 @@ typedef struct {
 typedef void *duckdb_database;
 typedef void *duckdb_connection;
 
-enum duckdb_state { DuckDBSuccess = 0, DuckDBError = 1 };
+typedef enum  { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
 
 duckdb_state duckdb_open(char *path, /* Database filename (UTF-8) */
                          duckdb_database *database /* OUT: DuckDB DB handle */

@@ -7,5 +7,5 @@ add_subdirectory(parser)
 add_subdirectory(planner)
 add_subdirectory(storage)
 
-add_library(duckdb STATIC ${ALL_OBJECT_FILES})
+add_library(duckdb SHARED ${ALL_OBJECT_FILES})
 target_link_libraries(duckdb pg_query Threads::Threads)

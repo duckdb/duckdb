@@ -165,6 +165,9 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query,
 		return DuckDBError;
 	}
 	// construct the C result from the C++ result
+	if (!out) {
+		return DuckDBSuccess;
+	}
 	out->row_count = result->count;
 	out->column_count = result->types.size();
 	out->columns =
