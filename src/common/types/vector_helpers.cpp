@@ -3,7 +3,7 @@
 #include "common/exception.hpp"
 #include "common/types/hash.hpp"
 #include "common/types/operators.hpp"
-#include "execution/vector/vector_operations.hpp"
+#include "common/types/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -173,6 +173,6 @@ void VectorOperations::Copy(Vector &source, Vector &target, size_t offset) {
 	if (source.type != target.type) {
 		throw NotImplementedException("Copy types don't match!");
 	}
-	target.count = std::min(source.count - offset, target.max_elements);
+	target.count = std::min(source.count - offset, target.maximum_size);
 	VectorOperations::Copy(source, target.data, target.count, offset);
 }

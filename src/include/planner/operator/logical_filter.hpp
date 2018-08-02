@@ -28,4 +28,5 @@ class LogicalFilter : public LogicalOperator {
   private:
 	void SplitPredicates(std::unique_ptr<AbstractExpression> expression);
 };
+
 } // namespace duckdb

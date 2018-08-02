@@ -1,7 +1,7 @@
 
 #include "execution/operator/physical_hash_aggregate.hpp"
+#include "common/types/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
-#include "execution/vector/vector_operations.hpp"
 
 #include "parser/expression/aggregate_expression.hpp"
 

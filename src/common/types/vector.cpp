@@ -3,31 +3,31 @@
 #include "common/assert.hpp"
 #include "common/exception.hpp"
 
-#include "execution/vector/vector_operations.hpp"
+#include "common/types/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-Vector::Vector(TypeId type, oid_t max_elements, bool zero_data)
+Vector::Vector(TypeId type, oid_t maximum_size, bool zero_data)
     : type(type), count(0), sel_vector(nullptr), data(nullptr),
-      owns_data(false), max_elements(max_elements) {
-	if (max_elements > 0) {
+      owns_data(false), maximum_size(maximum_size) {
+	if (maximum_size > 0) {
 		if (type == TypeId::INVALID) {
 			throw Exception("Cannot create a vector of type INVALID!");
 		}
 		owns_data = true;
 		owned_data =
-		    unique_ptr<char[]>(new char[max_elements * GetTypeIdSize(type)]);
+		    unique_ptr<char[]>(new char[maximum_size * GetTypeIdSize(type)]);
 		data = owned_data.get();
 		if (zero_data) {
-			memset(data, 0, max_elements * GetTypeIdSize(type));
+			memset(data, 0, maximum_size * GetTypeIdSize(type));
 		}
 	}
 }
 
-Vector::Vector(TypeId type, char *dataptr, size_t max_elements)
+Vector::Vector(TypeId type, char *dataptr, size_t maximum_size)
     : type(type), count(0), sel_vector(nullptr), data(dataptr),
-      owns_data(false), max_elements(max_elements) {
+      owns_data(false), maximum_size(maximum_size) {
 	if (dataptr && type == TypeId::INVALID) {
 		throw Exception("Cannot create a vector of type INVALID!");
 	}
@@ -35,7 +35,7 @@ Vector::Vector(TypeId type, char *dataptr, size_t max_elements)
 std::unique_ptr<std::unique_ptr<char[]>> owned_strings;
 
 Vector::Vector(Value value)
-    : type(value.type), count(1), sel_vector(nullptr), max_elements(1) {
+    : type(value.type), count(1), sel_vector(nullptr), maximum_size(1) {
 	owns_data = true;
 	owned_data = unique_ptr<char[]>(new char[GetTypeIdSize(type)]);
 	data = owned_data.get();
@@ -58,7 +58,7 @@ Vector::Vector(Value value)
 
 Vector::Vector()
     : type(TypeId::INVALID), count(0), data(nullptr), owns_data(false),
-      sel_vector(nullptr), max_elements(0) {}
+      sel_vector(nullptr), maximum_size(0) {}
 
 Vector::~Vector() { Destroy(); }
 
@@ -71,7 +71,7 @@ void Vector::Destroy() {
 	owns_data = false;
 	count = 0;
 	sel_vector = nullptr;
-	max_elements = 0;
+	maximum_size = 0;
 }
 
 void Vector::SetValue(size_t index, Value val) {
@@ -164,15 +164,15 @@ void Vector::Copy(Vector &other) {
 	other.count = count;
 }
 
-void Vector::Resize(oid_t max_elements, TypeId new_type) {
+void Vector::Resize(oid_t maximum_size, TypeId new_type) {
 	if (sel_vector) {
 		throw Exception("Cannot resize vector with selection vector!");
 	}
 	if (new_type != TypeId::INVALID) {
 		type = new_type;
 	}
-	this->max_elements = max_elements;
-	char *new_data = new char[max_elements * GetTypeIdSize(type)];
+	this->maximum_size = maximum_size;
+	char *new_data = new char[maximum_size * GetTypeIdSize(type)];
 	if (data) {
 		memcpy(new_data, data, count * GetTypeIdSize(type));
 	}
@@ -183,7 +183,7 @@ void Vector::Resize(oid_t max_elements, TypeId new_type) {
 }
 
 void Vector::Append(Vector &other) {
-	if (count + other.count >= max_elements) {
+	if (count + other.count >= maximum_size) {
 		throw Exception("Cannot append to vector: to full!");
 	}
 	if (sel_vector) {

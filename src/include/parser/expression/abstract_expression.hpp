@@ -111,4 +111,5 @@ class AbstractExpression : public Printable {
 	//! A list of children of the expression
 	std::vector<std::unique_ptr<AbstractExpression>> children;
 };
+
 } // namespace duckdb

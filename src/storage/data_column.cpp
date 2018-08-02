@@ -13,6 +13,13 @@ void DataColumn::AddData(Vector &data) {
 	if (data.type != column.type) {
 		throw CatalogException("Mismatch in column type");
 	}
+	if (this->data.size() > 0) {
+		auto &back = this->data.back();
+		if (back->count + data.count < back->maximum_size) {
+			back->Append(data);
+			return;
+		}
+	}
 	this->data.push_back(make_unique<Vector>());
 	// base tables need to own the data
 	// if <data> owns the data we can take it

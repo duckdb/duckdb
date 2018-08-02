@@ -1,7 +1,7 @@
 
 #include "execution/aggregate_hashtable.hpp"
 #include "common/exception.hpp"
-#include "execution/vector/vector_operations.hpp"
+#include "common/types/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -15,8 +15,8 @@ SuperLargeHashTable::SuperLargeHashTable(size_t initial_capacity,
       payload_width(payload_width), aggregate_types(aggregate_types),
       max_chain(0), parallel(parallel) {
 	// HT tuple layout is as follows:
-	// [LOCK][GROUPS][PAYLOAD][COUNT]
-	// [LOCK] is only added for parallel hashtables, and is LOCK_SIZE bytes
+	// [FLAG][GROUPS][PAYLOAD][COUNT]
+	// [FLAG] is the state of the tuple in memory
 	// [GROUPS] is the groups
 	// [PAYLOAD] is the payload (i.e. the aggregates)
 	// [COUNT] is an 8-byte count for each element
@@ -140,7 +140,6 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			// max
 			VectorOperations::Scatter::Max(*payload.data[j], ptr);
 			break;
-
 		default:
 			throw NotImplementedException("Unimplemented aggregate type!");
 		}
