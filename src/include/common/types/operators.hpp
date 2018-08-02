@@ -131,7 +131,7 @@ struct PickLeft {
 
 struct Hash {
 	template <class T> static inline int32_t Operation(T left) {
-		return duckdb::Hash(left);
+		return duckdb::Hash<T>(left);
 	}
 };
 
