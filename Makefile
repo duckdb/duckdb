@@ -26,3 +26,10 @@ doxygen: docs
 	
 format:
 	python format.py
+
+sqlite: main
+	./build/test/sqlite/sqllogictest --engine DuckDB --halt --verify test/sqlite/select1.test
+	./build/test/sqlite/sqllogictest --engine DuckDB --halt --verify test/sqlite/select2.test
+	./build/test/sqlite/sqllogictest --engine DuckDB --halt --verify test/sqlite/select3.test
+	./build/test/sqlite/sqllogictest --engine DuckDB --halt --verify test/sqlite/select4.test
+	./build/test/sqlite/sqllogictest --engine DuckDB --halt --verify test/sqlite/select5.test

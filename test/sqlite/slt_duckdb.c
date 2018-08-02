@@ -24,16 +24,16 @@ static int duckdbConnect(
 	(void) zParam;
 
 	duckdb_database database;
-	duckdb_connection connection;
+	duckdb_connection* connection =  malloc(sizeof(duckdb_connection));
 
 	if (duckdb_open(NULL, &database) != DuckDBSuccess) {
 		return 1;
 	}
 
-	if (duckdb_connect(database, &connection) != DuckDBSuccess) {
+	if (duckdb_connect(database, connection) != DuckDBSuccess) {
 		return 1;
 	}
-	*ppConn = (void*) &connection;
+	*ppConn = (void*) connection;
 	return 0;
 }
 
@@ -43,7 +43,7 @@ static int duckdbStatement(
   const char *zSql,           /* SQL statement to evaluate */
   int bQuiet                  /* True to suppress printing errors. */
 ){
-	fprintf(stderr, "QQ %s\n", zSql);
+	fprintf(stderr, "Quack: %s\n", zSql);
 	if (duckdb_query(*((duckdb_connection*)pConn), (char*) zSql, NULL) != DuckDBSuccess) {
 		return 1;
 	}
