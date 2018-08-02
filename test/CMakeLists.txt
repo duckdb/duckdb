@@ -3,6 +3,8 @@ include_directories(../third_party/catch)
 
 add_subdirectory(common)
 add_subdirectory(sql)
+add_subdirectory(sqlite)
+
 
 add_executable(test test.cpp)
 target_link_libraries(test duckdb)
