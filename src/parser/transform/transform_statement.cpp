@@ -136,6 +136,10 @@ unique_ptr<InsertStatement> TransformInsert(Node *node) {
 		throw NotImplementedException("Can only handle basic inserts");
 	}
 
+	if (stmt->cols) {
+		throw NotImplementedException("Can only handle basic inserts");
+	}
+
 	auto result = make_unique<InsertStatement>();
 	assert(select_stmt->valuesLists);
 
