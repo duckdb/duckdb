@@ -24,5 +24,6 @@ void DataColumn::AddData(Vector &data) {
 	// base tables need to own the data
 	// if <data> owns the data we can take it
 	// otherwise we need to make a copy
-	data.MoveOrCopy(*this->data.back());
+	data.Move(*this->data.back());
+	this->data.back()->ForceOwnership();
 }

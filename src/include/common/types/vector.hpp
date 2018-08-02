@@ -96,10 +96,10 @@ class Vector {
 	//! "other" will become equivalent to this vector, and this vector will be
 	//! turned into an empty vector.
 	void Move(Vector &other);
-	//! This method guarantees that the other vector will become an owning
-	//! vector. If this vector is an owning vector, it only moves the data.
-	//! Otherwise it will call Vector::Resize on other and copy the data over.
-	void MoveOrCopy(Vector &other);
+	//! This method guarantees that the vector becomes an owning vector
+	//! If the vector is already an owning vector, it does nothing
+	//! Otherwise, it copies the data to the vector
+	void ForceOwnership();
 	//! Causes this vector to reference the data held by the other vector.
 	void Reference(Vector &other);
 

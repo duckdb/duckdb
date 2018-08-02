@@ -55,23 +55,32 @@ unique_ptr<DuckDBResult> DuckDBConnection::Query(const char *query) {
 	return move(executor.Execute(move(physical_planner.plan)));
 }
 
-DuckDBResult::DuckDBResult() : success(true) {}
+DuckDBResult::DuckDBResult() : success(true), count(0) {}
 
-DuckDBResult::DuckDBResult(std::string error) : success(false), error(error) {}
+DuckDBResult::DuckDBResult(std::string error)
+    : success(false), error(error), count(0) {}
+
+void DuckDBResult::Initialize(DataChunk &chunk) {
+	count = 0;
+	for (auto i = 0; i < chunk.column_count; i++) {
+		types.push_back(chunk.data[i]->type);
+	}
+}
 
 void DuckDBResult::Print() {
 	if (success) {
-		for (size_t i = 0; i < data.column_count; i++) {
-			auto &vector = data.data[i];
-			printf("%s\t", TypeIdToString(vector->type).c_str());
+		for (auto &type : types) {
+			printf("%s\t", TypeIdToString(type).c_str());
 		}
-		printf(" [ %d ]\n", (int)data.count);
-		for (size_t j = 0; j < data.count; j++) {
-			for (size_t i = 0; i < data.column_count; i++) {
-				auto &vector = data.data[i];
-				printf("%s\t", vector->GetValue(j).ToString().c_str());
+		printf(" [ %zu ]\n", count);
+		for (auto &chunk : data) {
+			for (size_t j = 0; j < chunk->count; j++) {
+				for (size_t i = 0; i < chunk->column_count; i++) {
+					auto &vector = chunk->data[i];
+					printf("%s\t", vector->GetValue(j).ToString().c_str());
+				}
+				printf("\n");
 			}
-			printf("\n");
 		}
 		printf("\n");
 	} else {

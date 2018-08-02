@@ -1,5 +1,6 @@
 
 #include "common/types/data_chunk.hpp"
+#include "common/types/vector_operations.hpp"
 
 #include "common/exception.hpp"
 #include "common/helper.hpp"
@@ -56,6 +57,20 @@ void DataChunk::Destroy() {
 	column_count = 0;
 	count = 0;
 	maximum_size = 0;
+}
+
+void DataChunk::ForceOwnership() {
+	char *ptr = owned_data.get();
+	for (oid_t i = 0; i < column_count;
+	     ptr += GetTypeIdSize(data[i]->type) * maximum_size, i++) {
+		if (data[i]->owns_data)
+			continue;
+		if (data[i]->data == ptr)
+			continue;
+
+		VectorOperations::Copy(*data[i].get(), ptr);
+		data[i]->data = ptr;
+	}
 }
 
 void DataChunk::Append(DataChunk &other) {

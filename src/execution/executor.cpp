@@ -8,18 +8,27 @@ unique_ptr<DuckDBResult> Executor::Execute(unique_ptr<PhysicalOperator> plan) {
 	unique_ptr<DuckDBResult> result = make_unique<DuckDBResult>();
 
 	// the chunk and state are used to iterate over the input plan
-	DataChunk chunk;
 	auto state = plan->GetOperatorState();
-	plan->InitializeChunk(chunk);
 	// // result->data holds the concatenation of the output columns
-	plan->InitializeChunk(result->data);
 	result->success = false;
+	// initialize the result
+	DataChunk dummy_chunk;
+	plan->InitializeChunk(dummy_chunk);
+	result->Initialize(dummy_chunk);
+
 	try {
+		DataChunk chunk;
 		// loop until we have retrieved all data
-		do {
-			plan->GetChunk(chunk, state.get());
-			result->data.Append(chunk);
-		} while (chunk.count > 0);
+		while (true) {
+			auto chunk = make_unique<DataChunk>();
+			plan->InitializeChunk(*chunk.get());
+			plan->GetChunk(*chunk.get(), state.get());
+			if (chunk->count == 0)
+				break;
+			result->count += chunk->count;
+			chunk->ForceOwnership();
+			result->data.push_back(move(chunk));
+		}
 		result->success = true;
 	} catch (Exception ex) {
 		result->error = ex.GetMessage();
@@ -27,7 +36,7 @@ unique_ptr<DuckDBResult> Executor::Execute(unique_ptr<PhysicalOperator> plan) {
 		result->error = "UNHANDLED EXCEPTION TYPE THROWN IN PLANNER!";
 	}
 	if (!result->success) {
-		result->data.Destroy();
+		result->data.clear();
 	}
 	return move(result);
 }

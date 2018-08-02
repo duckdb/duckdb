@@ -27,7 +27,6 @@ bool Parser::ParseQuery(const char *query) {
 		goto wrapup;
 	}
 
-	fprintf(stderr, "%s\n", query);
 	try {
 		// if it succeeded, we transform the Postgres parse tree into a list of
 		// SQLStatements

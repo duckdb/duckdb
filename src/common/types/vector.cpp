@@ -140,16 +140,13 @@ void Vector::Move(Vector &other) {
 	Destroy();
 }
 
-void Vector::MoveOrCopy(Vector &other) {
-	if (owns_data) {
-		this->Move(other);
-	} else {
-		other.count = count;
-		other.sel_vector = sel_vector;
-		other.type = type;
-		other.Resize(this->count);
-		this->Copy(other);
-	}
+void Vector::ForceOwnership() {
+	if (owns_data)
+		return;
+
+	Vector other(type, count);
+	Copy(other);
+	other.Move(*this);
 }
 
 void Vector::Copy(Vector &other) {
@@ -170,6 +167,10 @@ void Vector::Resize(oid_t maximum_size, TypeId new_type) {
 	}
 	if (new_type != TypeId::INVALID) {
 		type = new_type;
+	}
+	if (maximum_size < count) {
+		throw Exception(
+		    "Cannot resize vector to smaller than current count!\n");
 	}
 	this->maximum_size = maximum_size;
 	char *new_data = new char[maximum_size * GetTypeIdSize(type)];
