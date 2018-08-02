@@ -78,6 +78,7 @@ class AbstractExpression : public Printable {
 	  Examples:
 
 	  (1) SELECT SUM(a) + SUM(b) FROM table; (Two aggregates, SUM(a) and SUM(b))
+
 	  (2) SELECT COUNT(SUM(a)) FROM table; (One aggregate, SUM(a))
 	*/
 	virtual void GetAggregates(std::vector<AggregateExpression *> &expressions);
@@ -86,6 +87,7 @@ class AbstractExpression : public Printable {
 	  Examples:
 
 	  (1) SUM(a) + 1 -- True
+
 	  (2) a + 1 -- False
 	*/
 	virtual bool IsAggregate();

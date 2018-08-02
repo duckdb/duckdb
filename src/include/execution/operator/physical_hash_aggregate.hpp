@@ -1,4 +1,12 @@
-
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// execution/physical_hash_aggregate.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -9,6 +17,8 @@
 
 namespace duckdb {
 
+//! PhysicalHashAggregate is an group-by and aggregate implementation that uses
+//! a hash table to perform the grouping
 class PhysicalHashAggregate : public PhysicalAggregate {
   public:
 	PhysicalHashAggregate(
@@ -32,8 +42,11 @@ class PhysicalHashAggregateOperatorState
 	                                   PhysicalOperator *child)
 	    : PhysicalAggregateOperatorState(parent, child), ht_scan_position(0) {}
 
+	//! The current position to scan the HT for output tuples
 	size_t ht_scan_position;
+	//! The HT
 	std::unique_ptr<SuperLargeHashTable> ht;
+	//! The payload chunk, only used while filling the HT
 	DataChunk payload_chunk;
 };
 } // namespace duckdb

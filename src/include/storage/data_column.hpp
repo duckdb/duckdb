@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// storage/data_column.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -10,6 +19,7 @@
 namespace duckdb {
 class DataTable;
 
+//! DataColumn represents a physical column on disk
 class DataColumn {
   public:
 	DataColumn(DataTable &table, ColumnCatalogEntry &column)
@@ -17,8 +27,11 @@ class DataColumn {
 
 	void AddData(Vector &data);
 
+	//! The physical table that this column belongs to
 	DataTable &table;
+	//! A reference to the column in the catalog
 	ColumnCatalogEntry &column;
+	//! The actual data of the column
 	std::vector<std::unique_ptr<Vector>> data;
 };
 } // namespace duckdb

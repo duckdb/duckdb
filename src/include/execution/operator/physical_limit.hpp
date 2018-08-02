@@ -1,4 +1,12 @@
-
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// execution/physical_limit.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -8,6 +16,7 @@
 
 namespace duckdb {
 
+//! PhyisicalLimit represents the LIMIT operator
 class PhysicalLimit : public PhysicalOperator {
   public:
 	PhysicalLimit(size_t limit, size_t offset)

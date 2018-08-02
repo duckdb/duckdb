@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// execution/vector/vector_operations.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -5,6 +14,9 @@
 
 namespace duckdb {
 
+// VectorOperations contains a set of operations that operate on sets of
+// vectors. In general, the operators must all have the same type, otherwise an
+// exception is thrown.
 struct VectorOperations {
 	typedef void (*vector_function)(Vector &left, Vector &right,
 	                                Vector &result);

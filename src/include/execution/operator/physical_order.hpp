@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// execution/physical_order.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -5,6 +14,8 @@
 
 namespace duckdb {
 
+//! Represents a physical ordering of the data. Note that this will not change
+//! the data but only add a selection vector.
 class PhysicalOrder : public PhysicalOperator {
   public:
 	PhysicalOrder(OrderByDescription description)

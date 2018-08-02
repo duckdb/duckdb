@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// execution/physical_plan_generator.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -13,6 +22,8 @@
 #include "planner/logical_visitor.hpp"
 
 namespace duckdb {
+//! The physical plan generator generates a physical execution plan from a
+//! logical query plan
 class PhysicalPlanGenerator : public LogicalOperatorVisitor {
   public:
 	PhysicalPlanGenerator(Catalog &catalog) : catalog(catalog) {}

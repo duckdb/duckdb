@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// planner/operator/logical_order.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -5,6 +14,7 @@
 
 namespace duckdb {
 
+//! LogicalOrder represents an ORDER BY clause, sorting the data
 class LogicalOrder : public LogicalOperator {
   public:
 	LogicalOrder(OrderByDescription description)

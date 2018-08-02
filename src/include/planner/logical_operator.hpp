@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// planner/logical_operator.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -14,6 +23,8 @@
 #include "planner/logical_visitor.hpp"
 
 namespace duckdb {
+//! LogicalOperator is the base class of the logical operators present in the
+//! logical query tree
 class LogicalOperator : public Printable {
   public:
 	LogicalOperator(LogicalOperatorType type) : type(type) {}
@@ -39,7 +50,9 @@ class LogicalOperator : public Printable {
 		}
 	}
 
+	//! The type of the logical operator
 	LogicalOperatorType type;
+	//! The set of children of the operator
 	std::vector<std::unique_ptr<LogicalOperator>> children;
 };
 } // namespace duckdb

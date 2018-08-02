@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// planner/planner.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -12,6 +21,8 @@
 
 namespace duckdb {
 
+//! The planner creates a logical query plan from the parsed SQL statements
+//! using the Binder and LogicalPlanGenerator.
 class Planner {
   public:
 	bool CreatePlan(Catalog &catalog, std::unique_ptr<SQLStatement> statement);

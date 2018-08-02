@@ -15,8 +15,7 @@ void PhysicalProjection::InitializeChunk(DataChunk &chunk) {
 }
 
 void PhysicalProjection::GetChunk(DataChunk &chunk,
-                                  PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalProjectionOperatorState *>(state_);
+                                  PhysicalOperatorState *state) {
 	chunk.Reset();
 
 	if (children.size() > 0) {
@@ -28,10 +27,10 @@ void PhysicalProjection::GetChunk(DataChunk &chunk,
 	} else {
 		// no FROM clause, set a simple marker to ensure the projection is only
 		// executed once
-		if (state->executed) {
+		if (state->finished) {
 			return;
 		}
-		state->executed = true;
+		state->finished = true;
 	}
 
 	ExpressionExecutor executor(state->child_chunk);
@@ -49,6 +48,6 @@ void PhysicalProjection::GetChunk(DataChunk &chunk,
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalProjection::GetOperatorState() {
-	return make_unique<PhysicalProjectionOperatorState>(
+	return make_unique<PhysicalOperatorState>(
 	    children.size() == 0 ? nullptr : children[0].get());
 }

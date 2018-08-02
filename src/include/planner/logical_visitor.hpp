@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// planner/logical_visitor.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -12,6 +21,8 @@ class LogicalOrder;
 class LogicalProjection;
 class LogicalInsert;
 
+//! The LogicalOperatorVisitor is an abstract base class that implements the
+//! Visitor pattern on LogicalOperator.
 class LogicalOperatorVisitor {
   public:
 	virtual ~LogicalOperatorVisitor(){};

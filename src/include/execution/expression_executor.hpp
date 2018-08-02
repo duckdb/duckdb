@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// execution/expression_executor.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -13,6 +22,14 @@
 #include "execution/physical_operator.hpp"
 
 namespace duckdb {
+
+//! ExpressionExecutor is responsible for executing an arbitrary
+//! AbstractExpression and returning a Vector
+/*!
+    ExpressionExecutor is responsible for executing an arbitrary
+   AbstractExpression and returning a Vector. It executes the expressions
+   recursively using a visitor pattern.
+*/
 class ExpressionExecutor : public SQLNodeVisitor {
   public:
 	ExpressionExecutor(DataChunk &chunk, PhysicalOperatorState *state = nullptr)
@@ -20,8 +37,13 @@ class ExpressionExecutor : public SQLNodeVisitor {
 
 	void Reset();
 
+	//! Execute a single abstract expression and store the result in result
 	void Execute(AbstractExpression *expr, Vector &result);
+	//! Execute the abstract expression, and "logical AND" the result together
+	//! with result
 	void Merge(AbstractExpression *expr, Vector &result);
+	//! Execute the given aggregate expression, and merge the result together
+	//! with v
 	void Merge(AggregateExpression &expr, Value &v);
 
 	void Visit(AggregateExpression &expr);
@@ -40,10 +62,15 @@ class ExpressionExecutor : public SQLNodeVisitor {
 	void Visit(TableRefExpression &expr);
 
   private:
+	//! The data chunk of the current physical operator, used to resolve e.g.
+	//! column references
 	DataChunk &chunk;
-
+	//! The operator state of the current physical operator, used to resolve
+	//! e.g. group-by HT lookups
 	PhysicalOperatorState *state;
 
+	//! Intermediate vector that is the result of the previously visited
+	//! expression
 	Vector vector;
 };
 } // namespace duckdb

@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// planner/logical_plan_generator.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -11,6 +20,8 @@
 #include "planner/logical_operator.hpp"
 
 namespace duckdb {
+//! The logical plan generator generates a logical query plan from a parsed SQL
+//! statement
 class LogicalPlanGenerator : public SQLNodeVisitor {
   public:
 	LogicalPlanGenerator(Catalog &catalog) : catalog(catalog) {}
@@ -27,9 +38,11 @@ class LogicalPlanGenerator : public SQLNodeVisitor {
 
 	void Print() { root->Print(); }
 
+	//! The resulting plan
 	std::unique_ptr<LogicalOperator> root;
 
   private:
+	//! A reference to the catalog
 	Catalog &catalog;
 };
 } // namespace duckdb

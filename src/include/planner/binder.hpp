@@ -1,7 +1,12 @@
-
-// The binder is responsible for binding tables and columns
-// to actual physical tables and columns in the catalog
-// In the process, it also resolves types of all expressions
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// planner/binder.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -17,6 +22,12 @@
 
 namespace duckdb {
 
+//! Bind the parsed query tree to the actual columns present in the catalog.
+/*!
+  The binder is responsible for binding tables and columns to actual physical
+  tables and columns in the catalog. In the process, it also resolves types of
+  all expressions.
+*/
 class Binder : public SQLNodeVisitor {
   public:
 	Binder(Catalog &catalog) : catalog(catalog) {}
@@ -28,6 +39,7 @@ class Binder : public SQLNodeVisitor {
 	void Visit(JoinExpression &expr);
 	void Visit(SubqueryExpression &expr);
 
+	//! The BindContext created and used by the Binder.
 	std::unique_ptr<BindContext> context;
 
   private:

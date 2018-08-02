@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// execution/physical_insert.hpp
+//
+// Author: Hannes Mühleisen & Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -5,6 +14,7 @@
 
 namespace duckdb {
 
+//! Physically insert a set of data into a table
 class PhysicalInsert : public PhysicalOperator {
   public:
 	PhysicalInsert(std::shared_ptr<TableCatalogEntry> table,

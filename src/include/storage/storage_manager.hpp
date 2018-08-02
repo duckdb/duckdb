@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// storage/storage_manager.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -9,10 +18,14 @@
 
 namespace duckdb {
 
+//! StorageManager is responsible for managing the physical storage of the
+//! database on disk
 class StorageManager {
   public:
+	//! Create a new table from a catalog entry
 	void CreateTable(TableCatalogEntry &table);
 
+	//! The set of tables managed by the storage engine
 	std::vector<std::unique_ptr<DataTable>> tables;
 };
 } // namespace duckdb

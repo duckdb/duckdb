@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// planner/operator/logical_projection.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -5,6 +14,7 @@
 
 namespace duckdb {
 
+//! LogicalProjection represents the projection list in a SELECT clause
 class LogicalProjection : public LogicalOperator {
   public:
 	LogicalProjection(
@@ -14,6 +24,7 @@ class LogicalProjection : public LogicalOperator {
 
 	virtual void Accept(LogicalOperatorVisitor *v) override { v->Visit(*this); }
 
+	//! The projection list
 	std::vector<std::unique_ptr<AbstractExpression>> select_list;
 };
 } // namespace duckdb

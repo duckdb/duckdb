@@ -35,7 +35,9 @@ namespace duckdb {
   }
 
   Selection vectors are used for two purposes:
+
   (1) Filtering data without requiring moving and copying data around
+
   (2) Ordering data
 */
 class Vector {

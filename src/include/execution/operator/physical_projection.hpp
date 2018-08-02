@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// execution/physical_projection.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -21,11 +30,4 @@ class PhysicalProjection : public PhysicalOperator {
 	std::vector<std::unique_ptr<AbstractExpression>> select_list;
 };
 
-class PhysicalProjectionOperatorState : public PhysicalOperatorState {
-  public:
-	PhysicalProjectionOperatorState(PhysicalOperator *child)
-	    : PhysicalOperatorState(child), executed(false) {}
-
-	bool executed;
-};
 } // namespace duckdb

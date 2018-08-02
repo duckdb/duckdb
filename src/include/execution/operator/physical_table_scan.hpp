@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// execution/physical_table_scan.hpp
+//
+// Author: Mark Raasveldt
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -7,6 +16,7 @@
 
 namespace duckdb {
 
+//! Represents a scan of a base table
 class PhysicalTableScan : public PhysicalOperator {
   public:
 	PhysicalTableScan(DataTable *table, std::vector<size_t> column_ids)
@@ -28,6 +38,7 @@ class PhysicalTableScanOperatorState : public PhysicalOperatorState {
 	PhysicalTableScanOperatorState(size_t current_offset)
 	    : PhysicalOperatorState(nullptr), current_offset(current_offset) {}
 
+	//! The current position in the scan
 	size_t current_offset;
 };
 } // namespace duckdb
