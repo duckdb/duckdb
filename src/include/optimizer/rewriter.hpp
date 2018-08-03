@@ -29,7 +29,7 @@ class ExpressionRewriter {
 	    : rules(std::move(rules)), match_order(match_order) {}
 	std::unique_ptr<AbstractExpression>
 	ApplyRules(std::unique_ptr<AbstractExpression> root);
-	bool MatchOperands(OptimizerNode &node, AbstractExpression &rel,
+	bool MatchOperands(OptimizerNode *node, AbstractExpression &rel,
 	                   std::vector<AbstractExpression *> &bindings);
 };
 

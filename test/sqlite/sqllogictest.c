@@ -722,9 +722,9 @@ int main(int argc, char **argv) {
 				}
 			} else {
 				/* In completion mode, first make sure we have output an ----
-				*line.
-				** Output such a line now if we have not already done so.
-				*/
+				 *line.
+				 ** Output such a line now if we have not already done so.
+				 */
 				if (strcmp(sScript.zLine, "----") != 0) {
 					printf("----\n");
 				}

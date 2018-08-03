@@ -19,19 +19,22 @@ namespace duckdb {
 
 enum class ChildPolicy { ANY, LEAF, SOME, UNORDERED };
 
-struct OptimizerNode {
+class OptimizerNode {
+  public:
 	ExpressionType root;
-	std::vector<OptimizerNode> children;
+	std::vector<std::unique_ptr<OptimizerNode>> children;
 	ChildPolicy child_policy;
 
 	OptimizerNode(ExpressionType root)
 	    : root(root), child_policy(ChildPolicy::UNORDERED) {}
 	OptimizerNode() : child_policy(ChildPolicy::ANY) {}
+	virtual bool Matches(AbstractExpression &rel) = 0;
+	virtual ~OptimizerNode() {}
 };
 
 class OptimizerRule {
   public:
-	OptimizerNode root;
+	std::unique_ptr<OptimizerNode> root;
 	virtual std::unique_ptr<AbstractExpression>
 	Apply(AbstractExpression &root,
 	      std::vector<AbstractExpression *> &bindings) = 0;

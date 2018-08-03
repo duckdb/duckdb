@@ -15,7 +15,7 @@ ExpressionRewriter::ApplyRules(unique_ptr<AbstractExpression> root) {
 			auto &vertex = *iterator;
 			for (auto &rule : rules) {
 				vector<AbstractExpression *> bindings;
-				bool match = MatchOperands(rule->root, vertex, bindings);
+				bool match = MatchOperands(rule->root.get(), vertex, bindings);
 				if (!match) {
 					continue;
 				}
@@ -40,29 +40,28 @@ ExpressionRewriter::ApplyRules(unique_ptr<AbstractExpression> root) {
 	return move(root);
 }
 
-bool ExpressionRewriter::MatchOperands(OptimizerNode &node,
+bool ExpressionRewriter::MatchOperands(OptimizerNode *node,
                                        AbstractExpression &rel,
                                        vector<AbstractExpression *> &bindings) {
 
-	// TODO: expand with classes, wildcards etc
-	if (node.root != rel.type) {
+	if (!node->Matches(rel)) {
 		return false;
 	}
 
 	bindings.push_back(&rel);
-	switch (node.child_policy) {
+	switch (node->child_policy) {
 	case ChildPolicy::ANY:
 		return true;
 	case ChildPolicy::UNORDERED: {
-		if (rel.children.size() < node.children.size()) {
+		if (rel.children.size() < node->children.size()) {
 			return false;
 		}
 		// For each operand, at least one child must match. If
 		// matchAnyChildren, usually there's just one operand.
 		for (auto &c : rel.children) {
 			bool match = false;
-			for (auto &co : node.children) {
-				match = MatchOperands(co, *c, bindings);
+			for (auto &co : node->children) {
+				match = MatchOperands(co.get(), *c, bindings);
 				if (match) {
 					break;
 				}
@@ -74,13 +73,13 @@ bool ExpressionRewriter::MatchOperands(OptimizerNode &node,
 		return true;
 	}
 	default: { // proceed along child ops and compare
-		int n = node.children.size();
+		int n = node->children.size();
 		if (rel.children.size() < n) {
 			return false;
 		}
 		for (size_t i = 0; i < n; i++) {
-			bool match =
-			    MatchOperands(node.children[i], *rel.children[i], bindings);
+			bool match = MatchOperands(node->children[i].get(),
+			                           *rel.children[i], bindings);
 			if (!match) {
 				return false;
 			}
