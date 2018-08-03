@@ -37,6 +37,10 @@ TEST_CASE("Test scalar queries", "[scalarquery]") {
 	REQUIRE(CHECK_NUMERIC(result, 0, 0, 3));
 	duckdb_destroy_result(result);
 
+	// Incorrect queries
+	REQUIRE(duckdb_query(connection, "SELECT 'hello", &result) != DuckDBSuccess);
+	REQUIRE(duckdb_query(connection, "SELECT cast('hello' AS INTEGER)", &result) != DuckDBSuccess);
+
 	REQUIRE(duckdb_disconnect(connection) == DuckDBSuccess);
 	REQUIRE(duckdb_close(database) == DuckDBSuccess);
 }
