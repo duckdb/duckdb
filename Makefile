@@ -21,8 +21,10 @@ opt:
 test: main
 	build/debug/test/test
 
-unit: main
+unittest: main
 	build/debug/test/unittest
+
+unit: unittest
 
 docs:
 	mkdir -p build

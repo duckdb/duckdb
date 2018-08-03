@@ -26,7 +26,7 @@ static int64_t get_numeric(duckdb_column column, duckdb_oid_t row) {
 
 static bool CHECK_NUMERIC(duckdb_result result, duckdb_oid_t row,
                           duckdb_oid_t column, int64_t value) {
-	if (result.column_count < column || result.row_count < row) {
+	if (result.column_count <= column || result.row_count <= row) {
 		// out of bounds
 		return false;
 	}
