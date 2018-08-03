@@ -4,7 +4,7 @@
 //
 // parser/parser.hpp
 //
-// Author: Mark Raasveldt
+// Author: Hannes Mühleisen & Mark Raasveldt
 //
 //===----------------------------------------------------------------------===//
 

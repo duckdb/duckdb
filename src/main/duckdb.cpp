@@ -5,6 +5,7 @@
 #include "execution/executor.hpp"
 #include "execution/physical_plan_generator.hpp"
 #include "storage/storage_manager.hpp"
+#include "optimizer/optimizer.hpp"
 
 #include "parser/parser.hpp"
 #include "planner/planner.hpp"
@@ -39,11 +40,17 @@ unique_ptr<DuckDBResult> DuckDBConnection::Query(const char *query) {
 		return make_unique<DuckDBResult>();
 	}
 
-	// FIXME: optimize logical plan
+	auto plan = move(planner.plan);
+
+	Optimizer optimizer;
+	plan = optimizer.Optimize(move(plan));
+	if (!plan) {
+		return make_unique<DuckDBResult>();
+	}
 
 	// now convert logical query plan into a physical query plan
 	PhysicalPlanGenerator physical_planner(database.catalog);
-	if (!physical_planner.CreatePlan(move(planner.plan),
+	if (!physical_planner.CreatePlan(move(plan),
 	                                 move(planner.context))) {
 		fprintf(stderr, "Failed to create physical plan: %s\n",
 		        physical_planner.GetErrorMessage().c_str());

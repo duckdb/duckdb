@@ -4,7 +4,7 @@
 //
 // parser/parser.hpp
 //
-// Author: Mark Raasveldt
+// Author: Hannes Mühleisen & Mark Raasveldt
 //
 //===----------------------------------------------------------------------===//
 
@@ -24,6 +24,7 @@ class ExpressionRewriter {
 	MatchOrder match_order;
 	std::vector<std::unique_ptr<OptimizerRule>> rules;
 
+	ExpressionRewriter() { }
 	ExpressionRewriter(std::vector<std::unique_ptr<OptimizerRule>> rules,
 	                   MatchOrder match_order)
 	    : rules(std::move(rules)), match_order(match_order) {}
