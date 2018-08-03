@@ -63,4 +63,4 @@ bool TransformExpressionList(
 //! Transform a Postgres Value List into a list of AbstractExpression
 bool TransformValueList(
     List *list, std::vector<std::unique_ptr<AbstractExpression>> &result);
-}
+} // namespace duckdb

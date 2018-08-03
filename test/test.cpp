@@ -37,6 +37,12 @@ int main() {
 	EXEC("SELECT 42 + 1;");
 	EXEC("SELECT 2 * (42 + 1), 33;");
 
+	EXEC("SELECT CAST (100 AS TINYINT) + CAST(100 AS TINYINT);");
+
+	//EXEC("SELECT 4/0;");
+
+
+
 	EXEC("CREATE TABLE a (i integer, j integer);");
 	EXEC("INSERT INTO a VALUES (42, 84)");
 	EXEC("SELECT * FROM a");

@@ -54,31 +54,31 @@ typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
 
 duckdb_state duckdb_open(char *path, /* Database filename (UTF-8) */
                          duckdb_database *database /* OUT: DuckDB DB handle */
-                         );
+);
 
 duckdb_state duckdb_close(duckdb_database database /* Database to close */
-                          );
+);
 
 duckdb_state
 duckdb_connect(duckdb_database database, /* Database to open connection to */
                duckdb_connection *connection /* OUT: Connection handle */
-               );
+);
 
 duckdb_state
 duckdb_disconnect(duckdb_connection connection /* Connection handle */
-                  );
+);
 
 duckdb_state
 duckdb_query(duckdb_connection connection, /* Connection to query */
              const char *query,            /* SQL query to execute */
              duckdb_result *result         /* OUT: query result */
-             );
+);
 
 void duckdb_print_result(duckdb_result result /* The result to print */
-                         );
+);
 
 void duckdb_destroy_result(duckdb_result result /* The result to destroy */
-                           );
+);
 
 #ifdef __cplusplus
 };

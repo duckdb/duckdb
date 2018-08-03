@@ -11,6 +11,7 @@
 #pragma once
 
 #include <memory>
+#include <stack>
 #include <vector>
 
 #include "common/internal_types.hpp"
@@ -25,14 +26,14 @@ class AggregateExpression;
 //!  AbstractExpression class is a base class that can represent any expression
 //!  part of a SQL statement.
 /*!
-  The AbstractExpression class is a base class that can represent any expression
-  part of a SQL statement. This is, for example, a column reference in a SELECT
-  clause, but also operators, aggregates or filters.
+ The AbstractExpression class is a base class that can represent any expression
+ part of a SQL statement. This is, for example, a column reference in a SELECT
+ clause, but also operators, aggregates or filters.
 
-  In the execution engine, an AbstractExpression always returns a single Vector
-  of the type specified by return_type. It can take an arbitrary amount of
-  Vectors as input (but in most cases the amount of input vectors is 0-2).
-*/
+ In the execution engine, an AbstractExpression always returns a single Vector
+ of the type specified by return_type. It can take an arbitrary amount of
+ Vectors as input (but in most cases the amount of input vectors is 0-2).
+ */
 class AbstractExpression : public Printable {
   public:
 	//! Create an AbstractExpression
@@ -80,24 +81,24 @@ class AbstractExpression : public Printable {
 	//! Return a list of the deepest aggregates that are present in the
 	//! AbstractExpression (if any).
 	/*!
-	  This function is used by the execution engine to figure out which
-	  aggregates/groupings have to be computed.
+	 This function is used by the execution engine to figure out which
+	 aggregates/groupings have to be computed.
 
-	  Examples:
+	 Examples:
 
-	  (1) SELECT SUM(a) + SUM(b) FROM table; (Two aggregates, SUM(a) and SUM(b))
+	 (1) SELECT SUM(a) + SUM(b) FROM table; (Two aggregates, SUM(a) and SUM(b))
 
-	  (2) SELECT COUNT(SUM(a)) FROM table; (One aggregate, SUM(a))
-	*/
+	 (2) SELECT COUNT(SUM(a)) FROM table; (One aggregate, SUM(a))
+	 */
 	virtual void GetAggregates(std::vector<AggregateExpression *> &expressions);
 	//! Returns true if this AbstractExpression is an aggregate or not.
 	/*!
-	  Examples:
+	 Examples:
 
-	  (1) SUM(a) + 1 -- True
+	 (1) SUM(a) + 1 -- True
 
-	  (2) a + 1 -- False
-	*/
+	 (2) a + 1 -- False
+	 */
 	virtual bool IsAggregate();
 
 	//! Returns the type of the expression
@@ -121,6 +122,66 @@ class AbstractExpression : public Printable {
 
 	//! A list of children of the expression
 	std::vector<std::unique_ptr<AbstractExpression>> children;
+
+	class iterator {
+	  public:
+		typedef iterator self_type;
+		typedef AbstractExpression value_type;
+		typedef AbstractExpression &reference;
+		typedef AbstractExpression *pointer;
+		typedef std::forward_iterator_tag iterator_category;
+		typedef int difference_type;
+		iterator(AbstractExpression &root, size_t index = 0) {
+			nodes.push(Node(root, index));
+		}
+
+		void Next() {
+			auto &child = nodes.top();
+			if (child.index < child.node.children.size()) {
+				nodes.push(Node(*child.node.children[child.index], 0));
+				child.index++;
+			} else {
+				if (nodes.size() > 1) {
+					nodes.pop();
+					Next();
+				}
+			}
+		}
+		self_type operator++() {
+			Next();
+			return *this;
+		}
+		self_type operator++(int junk) {
+			Next();
+			return *this;
+		}
+		reference operator*() { return nodes.top().node; }
+		pointer operator->() { return &nodes.top().node; }
+		bool operator==(const self_type &rhs) {
+			return nodes.size() == rhs.nodes.size() &&
+			       nodes.top().index == rhs.nodes.top().index;
+		}
+		bool operator!=(const self_type &rhs) { return !(*this == rhs); }
+		void replace(std::unique_ptr<AbstractExpression> new_vertex) {
+			nodes.pop();
+			auto &parent = nodes.top();
+			parent.index--;
+			parent.node.children[parent.index] = std::move(new_vertex);
+		}
+
+	  private:
+		struct Node {
+			AbstractExpression &node;
+			size_t index;
+			Node(AbstractExpression &node, size_t index)
+			    : node(node), index(index) {}
+		};
+		std::stack<Node> nodes;
+	};
+
+	iterator begin() { return iterator(*this); }
+
+	iterator end() { return iterator(*this, children.size()); }
 };
 
 } // namespace duckdb

@@ -13,16 +13,16 @@ template <> double Modulo::Operation(double left, double right) {
 }
 
 template <> int8_t Cast::Operation(const char *left) {
-	int64_t value = Cast::Operation<const char*, int64_t>(left);
+	int64_t value = Cast::Operation<const char *, int64_t>(left);
 	if (in_bounds<int8_t>(value))
-		return (int8_t) value;
+		return (int8_t)value;
 	throw std::out_of_range("Cannot convert to TINYINT");
 }
 
 template <> int16_t Cast::Operation(const char *left) {
-	int64_t value = Cast::Operation<const char*, int64_t>(left);
+	int64_t value = Cast::Operation<const char *, int64_t>(left);
 	if (in_bounds<int16_t>(value))
-		return (int16_t) value;
+		return (int16_t)value;
 	throw std::out_of_range("Cannot convert to SMALLINT");
 }
 

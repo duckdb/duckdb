@@ -46,7 +46,7 @@ Vector::Vector(Value value)
 		assert(type == TypeId::VARCHAR);
 		auto string = new char[value.str_value.size() + 1];
 		strcpy(string, value.str_value.c_str());
-		auto string_list = new unique_ptr<char[]>[ 1 ];
+		auto string_list = new unique_ptr<char[]>[1];
 		string_list[0] = unique_ptr<char[]>(string);
 
 		owned_strings = unique_ptr<unique_ptr<char[]>[]>(string_list);

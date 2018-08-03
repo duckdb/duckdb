@@ -12,9 +12,9 @@ ExpressionType StringToExpressionType(const string &str) {
 	if (upper_str == "INVALID") {
 		return ExpressionType::INVALID;
 	} else if (upper_str == "OPERATOR_PLUS" || upper_str == "+") {
-		return ExpressionType::OPERATOR_PLUS;
+		return ExpressionType::OPERATOR_ADD;
 	} else if (upper_str == "OPERATOR_MINUS" || upper_str == "-") {
-		return ExpressionType::OPERATOR_MINUS;
+		return ExpressionType::OPERATOR_SUBTRACT;
 	} else if (upper_str == "OPERATOR_MULTIPLY" || upper_str == "*") {
 		return ExpressionType::OPERATOR_MULTIPLY;
 	} else if (upper_str == "OPERATOR_DIVIDE" || upper_str == "/") {
