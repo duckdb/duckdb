@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <vector>
 
+#include "common/exception.hpp"
 #include "optimizer/rule.hpp"
 #include "parser/expression/constant_expression.hpp"
 
@@ -32,8 +33,9 @@ class ConstantFoldingRule : public OptimizerRule {
   public:
 	ConstantFoldingRule() {
 		root = std::unique_ptr<OptimizerNode>(new OptimizerNodeExpressionSet(
-		    {ExpressionType::OPERATOR_ADD,
-		     ExpressionType::OPERATOR_MINUS})); // TODO: more
+		    {ExpressionType::OPERATOR_ADD, ExpressionType::OPERATOR_SUBTRACT,
+		     ExpressionType::OPERATOR_MULTIPLY, ExpressionType::OPERATOR_DIVIDE,
+		     ExpressionType::OPERATOR_MOD})); // TODO: more?
 		root->children.push_back(std::unique_ptr<OptimizerNode>(
 		    new OptimizerNodeExpressionSet({ExpressionType::VALUE_CONSTANT})));
 		root->children.push_back(std::unique_ptr<OptimizerNode>(
@@ -54,7 +56,26 @@ class ConstantFoldingRule : public OptimizerRule {
 		    right->value.type != TypeId::INTEGER) {
 			return nullptr;
 		}
-		Value::Add(left->value, right->value, result);
+		switch (root.type) {
+		case ExpressionType::OPERATOR_ADD:
+			Value::Add(left->value, right->value, result);
+			break;
+		case ExpressionType::OPERATOR_SUBTRACT:
+			Value::Subtract(left->value, right->value, result);
+			break;
+		case ExpressionType::OPERATOR_MULTIPLY:
+			Value::Multiply(left->value, right->value, result);
+			break;
+		case ExpressionType::OPERATOR_DIVIDE:
+			Value::Divide(left->value, right->value, result);
+			break;
+		case ExpressionType::OPERATOR_MOD:
+			Value::Modulo(left->value, right->value, result);
+			break;
+		default:
+			throw Exception("Unsupported operator");
+		}
+
 		return make_unique<ConstantExpression>(result);
 	};
 };
