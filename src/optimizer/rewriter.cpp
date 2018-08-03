@@ -29,7 +29,7 @@ ExpressionRewriter::ApplyRules(unique_ptr<AbstractExpression> root) {
 
 				if (&vertex == root.get()) {
 					root = move(new_vertex);
-					iterator = root->begin();
+					return ApplyRules(move(root));
 				} else {
 					iterator.replace(move(new_vertex));
 				}
