@@ -19,16 +19,6 @@
 
 namespace duckdb {
 
-class OptimizerNodeExpressionSet : public OptimizerNode {
-  public:
-	std::vector<ExpressionType> types;
-	OptimizerNodeExpressionSet(std::vector<ExpressionType> types)
-	    : types(types) {}
-	virtual bool Matches(AbstractExpression &rel) {
-		return std::find(types.begin(), types.end(), rel.type) != types.end();
-	}
-};
-
 class ConstantFoldingRule : public OptimizerRule {
   public:
 	ConstantFoldingRule() {
@@ -37,9 +27,9 @@ class ConstantFoldingRule : public OptimizerRule {
 		     ExpressionType::OPERATOR_MULTIPLY, ExpressionType::OPERATOR_DIVIDE,
 		     ExpressionType::OPERATOR_MOD})); // TODO: more?
 		root->children.push_back(std::unique_ptr<OptimizerNode>(
-		    new OptimizerNodeExpressionSet({ExpressionType::VALUE_CONSTANT})));
+		    new OptimizerNodeExpression(ExpressionType::VALUE_CONSTANT)));
 		root->children.push_back(std::unique_ptr<OptimizerNode>(
-		    new OptimizerNodeExpressionSet({ExpressionType::VALUE_CONSTANT})));
+		    new OptimizerNodeExpression(ExpressionType::VALUE_CONSTANT)));
 		root->child_policy = ChildPolicy::UNORDERED;
 	}
 

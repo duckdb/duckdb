@@ -32,6 +32,23 @@ class OptimizerNode {
 	virtual ~OptimizerNode() {}
 };
 
+class OptimizerNodeExpressionSet : public OptimizerNode {
+  public:
+	std::vector<ExpressionType> types;
+	OptimizerNodeExpressionSet(std::vector<ExpressionType> types)
+	    : types(types) {}
+	virtual bool Matches(AbstractExpression &rel) {
+		return std::find(types.begin(), types.end(), rel.type) != types.end();
+	}
+};
+
+class OptimizerNodeExpression : public OptimizerNode {
+  public:
+	ExpressionType type;
+	OptimizerNodeExpression(ExpressionType type) : type(type) {}
+	virtual bool Matches(AbstractExpression &rel) { return rel.type == type; }
+};
+
 class OptimizerRule {
   public:
 	std::unique_ptr<OptimizerNode> root;
