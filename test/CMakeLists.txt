@@ -4,6 +4,7 @@ include_directories(../third_party/catch)
 add_subdirectory(common)
 add_subdirectory(sql)
 add_subdirectory(sqlite)
+add_subdirectory(optimizer)
 
 
 add_executable(test test.cpp)

@@ -154,4 +154,4 @@ unique_ptr<InsertStatement> TransformInsert(Node *node) {
 
 	return result;
 }
-}
+} // namespace duckdb

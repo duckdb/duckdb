@@ -42,10 +42,10 @@ class OperatorExpression : public AbstractExpression {
 	virtual void ResolveStatistics() override {
 		AbstractExpression::ResolveStatistics();
 		switch (type) {
-		case ExpressionType::OPERATOR_PLUS:
+		case ExpressionType::OPERATOR_ADD:
 			Statistics::Add(children[0]->stats, children[1]->stats, stats);
 			break;
-		case ExpressionType::OPERATOR_MINUS:
+		case ExpressionType::OPERATOR_SUBTRACT:
 			Statistics::Subtract(children[0]->stats, children[1]->stats, stats);
 			break;
 		case ExpressionType::OPERATOR_MULTIPLY:

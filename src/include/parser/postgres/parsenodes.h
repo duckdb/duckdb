@@ -38,7 +38,9 @@ typedef enum InhOption {
 
 typedef enum BoolExprType { AND_EXPR, OR_EXPR, NOT_EXPR } BoolExprType;
 
-typedef struct Expr { NodeTag type; } Expr;
+typedef struct Expr {
+	NodeTag type;
+} Expr;
 
 /*
  * SubLink
@@ -439,7 +441,7 @@ typedef struct CreateStmt {
 
 typedef enum ConstrType /* types of constraints */
 { CONSTR_NULL,          /* not standard SQL, but a lot of people
-                         * expect it */
+	                     * expect it */
   CONSTR_NOTNULL,
   CONSTR_DEFAULT,
   CONSTR_CHECK,

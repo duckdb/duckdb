@@ -81,9 +81,9 @@ enum class ExpressionType {
 	// -----------------------------
 
 	// left + right (both must be number. implicitly casted)
-	OPERATOR_PLUS = 1,
+	OPERATOR_ADD = 1,
 	// left - right (both must be number. implicitly casted)
-	OPERATOR_MINUS = 2,
+	OPERATOR_SUBTRACT = 2,
 	// left * right (both must be number. implicitly casted)
 	OPERATOR_MULTIPLY = 3,
 	// left / right (both must be number. implicitly casted)

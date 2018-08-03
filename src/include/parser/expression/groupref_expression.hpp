@@ -26,4 +26,4 @@ class GroupRefExpression : public AbstractExpression {
 	//! The index of the group this expression is referencing
 	size_t group_index;
 };
-}
+} // namespace duckdb

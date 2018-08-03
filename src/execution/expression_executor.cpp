@@ -234,10 +234,10 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 		vector.Resize(std::max(l.count, r.count));
 
 		switch (expr.type) {
-		case ExpressionType::OPERATOR_PLUS:
+		case ExpressionType::OPERATOR_ADD:
 			VectorOperations::Add(l, r, vector);
 			break;
-		case ExpressionType::OPERATOR_MINUS:
+		case ExpressionType::OPERATOR_SUBTRACT:
 			VectorOperations::Subtract(l, r, vector);
 			break;
 		case ExpressionType::OPERATOR_MULTIPLY:

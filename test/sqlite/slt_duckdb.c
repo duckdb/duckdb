@@ -14,17 +14,17 @@
 #endif
 
 static int duckdbConnect(
-  void *NotUsed,              /* Argument from DbEngine object.  Not used */
-  const char *zConnectStr,    /* Connection string */
-  void **ppConn,              /* Write completed connection here */
-  const char *zParam          /* Value of the -parameters command-line option */
-){
-	(void) NotUsed;
-	(void) zConnectStr;
-	(void) zParam;
+    void *NotUsed,           /* Argument from DbEngine object.  Not used */
+    const char *zConnectStr, /* Connection string */
+    void **ppConn,           /* Write completed connection here */
+    const char *zParam       /* Value of the -parameters command-line option */
+) {
+	(void)NotUsed;
+	(void)zConnectStr;
+	(void)zParam;
 
 	duckdb_database database;
-	duckdb_connection* connection =  malloc(sizeof(duckdb_connection));
+	duckdb_connection *connection = malloc(sizeof(duckdb_connection));
 
 	if (duckdb_open(NULL, &database) != DuckDBSuccess) {
 		return 1;
@@ -33,116 +33,120 @@ static int duckdbConnect(
 	if (duckdb_connect(database, connection) != DuckDBSuccess) {
 		return 1;
 	}
-	*ppConn = (void*) connection;
+	*ppConn = (void *)connection;
 	return 0;
 }
 
-
-static int duckdbStatement(
-  void *pConn,                /* Connection created by xConnect */
-  const char *zSql,           /* SQL statement to evaluate */
-  int bQuiet                  /* True to suppress printing errors. */
-){
+static int duckdbStatement(void *pConn, /* Connection created by xConnect */
+                           const char *zSql, /* SQL statement to evaluate */
+                           int bQuiet /* True to suppress printing errors. */
+) {
 	fprintf(stderr, "Quack: %s\n", zSql);
-	if (duckdb_query(*((duckdb_connection*)pConn), (char*) zSql, NULL) != DuckDBSuccess) {
+	if (duckdb_query(*((duckdb_connection *)pConn), (char *)zSql, NULL) !=
+	    DuckDBSuccess) {
 		return 1;
 	}
 	return 0;
 }
 
-static int duckdbQuery(
-  void *pConn,                /* Connection created by xConnect */
-  const char *zSql,           /* SQL statement to evaluate */
-  const char *zType,          /* One character for each column of result */
-  char ***pazResult,          /* RETURN:  Array of result values */
-  int *pnResult               /* RETURN:  Number of result values */
-){
+static int
+duckdbQuery(void *pConn,       /* Connection created by xConnect */
+            const char *zSql,  /* SQL statement to evaluate */
+            const char *zType, /* One character for each column of result */
+            char ***pazResult, /* RETURN:  Array of result values */
+            int *pnResult      /* RETURN:  Number of result values */
+) {
 
-	duckdb_connection p = *((duckdb_connection*)pConn);
+	duckdb_connection p = *((duckdb_connection *)pConn);
 	duckdb_result result;
 
 	size_t r, c;
-	(void) zType;
+	(void)zType;
 
-	if (duckdb_query(*((duckdb_connection*)pConn), (char*) zSql, &result) != DuckDBSuccess) {
+	if (duckdb_query(*((duckdb_connection *)pConn), (char *)zSql, &result) !=
+	    DuckDBSuccess) {
 		return 1;
 	}
 
-	*pazResult = malloc(sizeof(char*) * result.row_count * result.column_count);
-	if (!*pazResult ) {
+	*pazResult =
+	    malloc(sizeof(char *) * result.row_count * result.column_count);
+	if (!*pazResult) {
 		return 1;
 	}
-	for (r = 0; r <  result.row_count; r++) {
+	for (r = 0; r < result.row_count; r++) {
 		for (c = 0; c < result.column_count; c++) {
 			duckdb_column actual_column = result.columns[c];
-			char* buffer = malloc(BUFSIZ);
+			char *buffer = malloc(BUFSIZ);
 
-			switch(actual_column.type) {
+			switch (actual_column.type) {
 			case DUCKDB_TYPE_TINYINT: {
 				if (0) {
-					snprintf(buffer, BUFSIZ,  "%s", "NULL");
+					snprintf(buffer, BUFSIZ, "%s", "NULL");
 				} else {
-					snprintf(buffer, BUFSIZ,  "%d", (int)((int8_t*) actual_column.data)[r]);
+					snprintf(buffer, BUFSIZ, "%d",
+					         (int)((int8_t *)actual_column.data)[r]);
 				}
 				break;
 			}
 			case DUCKDB_TYPE_SMALLINT: {
 				if (0) {
-					snprintf(buffer, BUFSIZ,  "%s", "NULL");
+					snprintf(buffer, BUFSIZ, "%s", "NULL");
 				} else {
-					snprintf(buffer, BUFSIZ,  "%d", (int)((int16_t*) actual_column.data)[r]);
+					snprintf(buffer, BUFSIZ, "%d",
+					         (int)((int16_t *)actual_column.data)[r]);
 				}
 				break;
 			}
 			case DUCKDB_TYPE_INTEGER: {
 				if (0) {
-					snprintf(buffer, BUFSIZ,  "%s", "NULL");
+					snprintf(buffer, BUFSIZ, "%s", "NULL");
 				} else {
-					snprintf(buffer, BUFSIZ,  "%d", (int)((int32_t*) actual_column.data)[r]);
+					snprintf(buffer, BUFSIZ, "%d",
+					         (int)((int32_t *)actual_column.data)[r]);
 				}
 				break;
 			}
 			case DUCKDB_TYPE_BIGINT: {
 				if (0) {
-					snprintf(buffer, BUFSIZ,  "%s", "NULL");
+					snprintf(buffer, BUFSIZ, "%s", "NULL");
 				} else {
-					snprintf(buffer, BUFSIZ,  "%d", (int)((int64_t*) actual_column.data)[r]);
+					snprintf(buffer, BUFSIZ, "%d",
+					         (int)((int64_t *)actual_column.data)[r]);
 				}
 				break;
 			}
 			case DUCKDB_TYPE_DECIMAL: {
 				if (0) {
-					snprintf(buffer, BUFSIZ,  "%s", "NULL");
+					snprintf(buffer, BUFSIZ, "%s", "NULL");
 				} else {
-					snprintf(buffer, BUFSIZ,  "%lf", ((double*) actual_column.data)[r]);
+					snprintf(buffer, BUFSIZ, "%lf",
+					         ((double *)actual_column.data)[r]);
 				}
 				break;
 			}
 			case DUCKDB_TYPE_VARCHAR: {
-				char* str = ((char**) actual_column.data)[r];
-				snprintf(buffer, BUFSIZ, "%s", str ? (str == 0 ? "(empty)" : str) : "NULL");
+				char *str = ((char **)actual_column.data)[r];
+				snprintf(buffer, BUFSIZ, "%s",
+				         str ? (str == 0 ? "(empty)" : str) : "NULL");
 				break;
 			}
-			default: {
-				fprintf(stderr, "%s\n", "UNKNOWN");
+			default: { fprintf(stderr, "%s\n", "UNKNOWN"); }
 			}
-			}
-			(*pazResult)[r*result.row_count + c] = buffer;
+			(*pazResult)[r * result.row_count + c] = buffer;
 		}
 	}
-  *pnResult = result.column_count * result.row_count;
+	*pnResult = result.column_count * result.row_count;
 	duckdb_destroy_result(result);
 
-  return 0;
+	return 0;
 }
 
-static int duckdbFreeResults(
-  void *pConn,                /* Connection created by xConnect */
-  char **azResult,            /* The results to be freed */
-  int nResult                 /* Number of rows of result */
-){
+static int duckdbFreeResults(void *pConn, /* Connection created by xConnect */
+                             char **azResult, /* The results to be freed */
+                             int nResult      /* Number of rows of result */
+) {
 	int i;
-	(void) pConn;
+	(void)pConn;
 	if (!azResult) {
 		return 1;
 	}
@@ -152,46 +156,43 @@ static int duckdbFreeResults(
 		}
 	}
 	free(azResult);
-  return 0;
-}
-
-
-static int duckdbDisconnect(
-  void *pConn                 /* Connection created by xConnect */
-){
-	duckdb_connection conn = *((duckdb_connection*)pConn);
-	duckdb_disconnect(conn);
-	// TODO: shutdown
-//	monetdb_shutdown();
 	return 0;
 }
 
+static int duckdbDisconnect(void *pConn /* Connection created by xConnect */
+) {
+	duckdb_connection conn = *((duckdb_connection *)pConn);
+	duckdb_disconnect(conn);
+	// TODO: shutdown
+	//	monetdb_shutdown();
+	return 0;
+}
 
-static int duckdbGetEngineName(
-  void *pConn,                /* Connection created by xConnect */
-  const char **zName          /* SQL statement to evaluate */
-){
-  static char *zDmbsName = "DuckDB";
-  (void) pConn;
-  *zName = zDmbsName;
-  return 0;
+static int
+duckdbGetEngineName(void *pConn,       /* Connection created by xConnect */
+                    const char **zName /* SQL statement to evaluate */
+) {
+	static char *zDmbsName = "DuckDB";
+	(void)pConn;
+	*zName = zDmbsName;
+	return 0;
 }
 
 void registerDuckdb(void);
 
-void registerDuckdb(void){
-  /*
-  ** This is the object that defines the database engine interface.
-  */
-  static const DbEngine duckdbEngine = {
-     "DuckDB",             /* zName */
-     0,                    /* pAuxData */
-     duckdbConnect,        /* xConnect */
-	 duckdbGetEngineName,  /* xGetEngineName */
-	 duckdbStatement,      /* xStatement */
-	 duckdbQuery,          /* xQuery */
-	 duckdbFreeResults,    /* xFreeResults */
-	 duckdbDisconnect      /* xDisconnect */
-  };
-  sqllogictestRegisterEngine(&duckdbEngine);
+void registerDuckdb(void) {
+	/*
+	** This is the object that defines the database engine interface.
+	*/
+	static const DbEngine duckdbEngine = {
+	    "DuckDB",            /* zName */
+	    0,                   /* pAuxData */
+	    duckdbConnect,       /* xConnect */
+	    duckdbGetEngineName, /* xGetEngineName */
+	    duckdbStatement,     /* xStatement */
+	    duckdbQuery,         /* xQuery */
+	    duckdbFreeResults,   /* xFreeResults */
+	    duckdbDisconnect     /* xDisconnect */
+	};
+	sqllogictestRegisterEngine(&duckdbEngine);
 }
