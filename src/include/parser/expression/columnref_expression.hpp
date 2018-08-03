@@ -45,6 +45,7 @@ class ColumnRefExpression : public AbstractExpression {
 		}
 	}
 
+	//! Column index set by the binder, used to access data in the executor
 	size_t index;
 	//! A reference to the AbstractExpression this references, only used for
 	//! alias references

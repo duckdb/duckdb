@@ -35,6 +35,8 @@ class ConstantExpression : public AbstractExpression {
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
 	virtual std::string ToString() const override { return std::string(); }
 
+	virtual void ResolveStatistics() override { stats = Statistics(value); }
+
 	//! The constant value referenced
 	Value value;
 };

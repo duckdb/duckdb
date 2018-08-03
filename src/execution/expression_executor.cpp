@@ -60,32 +60,27 @@ void ExpressionExecutor::Merge(AggregateExpression &expr, Value &result) {
 		vector.Resize(1, expr.return_type);
 		switch (expr.type) {
 		case ExpressionType::AGGREGATE_SUM: {
-			VectorOperations::Sum(child, vector);
-			Value v = vector.GetValue(0);
+			Value v = VectorOperations::Sum(child);
 			Value::Add(result, v, result);
 			break;
 		}
 		case ExpressionType::AGGREGATE_COUNT: {
-			VectorOperations::Count(child, vector);
-			Value v = vector.GetValue(0);
+			Value v = VectorOperations::Count(child);
 			Value::Add(result, v, result);
 			break;
 		}
 		case ExpressionType::AGGREGATE_AVG: {
-			VectorOperations::Sum(child, vector);
-			Value v = vector.GetValue(0);
+			Value v = VectorOperations::Sum(child);
 			Value::Add(result, v, result);
 			break;
 		}
 		case ExpressionType::AGGREGATE_MIN: {
-			VectorOperations::Min(child, vector);
-			Value v = vector.GetValue(0);
+			Value v = VectorOperations::Min(child);
 			Value::Min(result, v, result);
 			break;
 		}
 		case ExpressionType::AGGREGATE_MAX: {
-			VectorOperations::Max(child, vector);
-			Value v = vector.GetValue(0);
+			Value v = VectorOperations::Max(child);
 			Value::Max(result, v, result);
 			break;
 		}
@@ -130,6 +125,7 @@ void ExpressionExecutor::Visit(ColumnRefExpression &expr) {
 		throw Exception("Column Reference not bound!");
 	}
 	vector.Reference(*chunk.data[expr.index].get());
+	expr.stats.Verify(vector);
 }
 
 void ExpressionExecutor::Visit(ComparisonExpression &expr) {
@@ -260,6 +256,7 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 	} else {
 		throw NotImplementedException("operator");
 	}
+	expr.stats.Verify(vector);
 }
 
 void ExpressionExecutor::Visit(SubqueryExpression &expr) {

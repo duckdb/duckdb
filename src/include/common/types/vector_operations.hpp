@@ -85,15 +85,15 @@ struct VectorOperations {
 	// Aggregates
 	//===--------------------------------------------------------------------===//
 	// SUM(A)
-	static void Sum(Vector &source, Vector &result);
+	static Value Sum(Vector &source);
 	// COUNT(A)
-	static void Count(Vector &source, Vector &result);
+	static Value Count(Vector &source);
 	// AVG(A)
-	static void Average(Vector &source, Vector &result);
+	static Value Average(Vector &source);
 	// MAX(A)
-	static void Max(Vector &left, Vector &result);
+	static Value Max(Vector &left);
 	// MIN(A)
-	static void Min(Vector &left, Vector &result);
+	static Value Min(Vector &left);
 
 	//===--------------------------------------------------------------------===//
 	// Scatter methods

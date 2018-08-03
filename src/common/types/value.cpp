@@ -130,6 +130,7 @@ void Value::_templated_binary_operation(Value &left, Value &right,
 	if (left.type != right.type || left.type != result.type) {
 		throw NotImplementedException("Not matching type not implemented!");
 	}
+	result.is_null = left.is_null || right.is_null;
 	switch (left.type) {
 	case TypeId::BOOLEAN:
 		result.value_.boolean =
@@ -218,6 +219,8 @@ bool Value::_templated_boolean_operation(Value &left, Value &right) {
 		return OP::Operation(left.value_.decimal, right.value_.decimal);
 	case TypeId::POINTER:
 		return OP::Operation(left.value_.pointer, right.value_.pointer);
+	case TypeId::DATE:
+		return OP::Operation(left.value_.date, right.value_.date);
 	default:
 		throw NotImplementedException("Unimplemented type");
 	}

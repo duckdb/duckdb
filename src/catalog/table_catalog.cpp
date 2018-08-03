@@ -41,3 +41,7 @@ TableCatalogEntry::GetColumn(const std::string &name) {
 	}
 	return columns[name_map[name]];
 }
+
+Statistics TableCatalogEntry::GetStatistics(oid_t oid) {
+	return storage->columns[oid]->stats;
+}

@@ -10,72 +10,83 @@ using namespace std;
 //===--------------------------------------------------------------------===//
 // Templated Looping Functions
 //===--------------------------------------------------------------------===//
-template <class T, class RES, class OP>
-void _templated_unary_fold(Vector &left, Vector &result) {
+template <class T, class OP>
+void _templated_unary_fold(Vector &left, T *result) {
 	T *ldata = (T *)left.data;
-	RES *result_data = (RES *)result.data;
-	result_data[0] = 0;
 	if (left.sel_vector) {
-		for (size_t i = 0; i < left.count; i++) {
-			result_data[0] =
-			    OP::Operation(result_data[0], ldata[left.sel_vector[i]]);
+		*result = ldata[left.sel_vector[0]];
+		for (size_t i = 1; i < left.count; i++) {
+			*result = OP::Operation(*result, ldata[left.sel_vector[i]]);
 		}
 	} else {
-		for (size_t i = 0; i < left.count; i++) {
-			result_data[0] = OP::Operation(result_data[0], ldata[i]);
+		*result = ldata[0];
+		for (size_t i = 1; i < left.count; i++) {
+			*result = OP::Operation(*result, ldata[i]);
 		}
 	}
-	result.count = 1;
 }
 
-template <class OP>
-void _generic_unary_fold_loop(Vector &left, Vector &result) {
+template <class OP> Value _generic_unary_fold_loop(Vector &left) {
+	Value result;
+	result.type = left.type;
+	if (left.count == 0) {
+		result.is_null = true;
+		return result;
+	}
+	result.is_null = false;
 	switch (left.type) {
 	case TypeId::TINYINT:
-		_templated_unary_fold<int8_t, int8_t, OP>(left, result);
+		_templated_unary_fold<int8_t, OP>(left, &result.value_.tinyint);
 		break;
 	case TypeId::SMALLINT:
-		_templated_unary_fold<int16_t, int16_t, OP>(left, result);
+		_templated_unary_fold<int16_t, OP>(left, &result.value_.smallint);
 		break;
 	case TypeId::INTEGER:
-		_templated_unary_fold<int32_t, int32_t, OP>(left, result);
+		_templated_unary_fold<int32_t, OP>(left, &result.value_.integer);
 		break;
 	case TypeId::BIGINT:
-		_templated_unary_fold<int64_t, int64_t, OP>(left, result);
+		_templated_unary_fold<int64_t, OP>(left, &result.value_.bigint);
 		break;
 	case TypeId::DECIMAL:
-		_templated_unary_fold<double, double, OP>(left, result);
+		_templated_unary_fold<double, OP>(left, &result.value_.decimal);
 		break;
 	case TypeId::POINTER:
-		_templated_unary_fold<uint64_t, uint64_t, OP>(left, result);
+		_templated_unary_fold<uint64_t, OP>(left, &result.value_.pointer);
 		break;
+	case TypeId::DATE:
+		_templated_unary_fold<date_t, OP>(left, &result.value_.date);
+		break;
+	case TypeId::VARCHAR:
+		return Value();
 	default:
 		throw NotImplementedException("Unimplemented type");
 	}
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
 // Aggregates
 //===--------------------------------------------------------------------===//
-void VectorOperations::Sum(Vector &left, Vector &result) {
-	_generic_unary_fold_loop<operators::Addition>(left, result);
+Value VectorOperations::Sum(Vector &left) {
+	return _generic_unary_fold_loop<operators::Addition>(left);
 }
 
-void VectorOperations::Count(Vector &left, Vector &result) {
-	Vector count_vector(Value((int32_t)left.count));
-	VectorOperations::Add(result, count_vector, result);
+Value VectorOperations::Count(Vector &left) {
+	return Value((int32_t)left.count);
 }
 
-void VectorOperations::Average(Vector &left, Vector &result) {
-	Vector count_vector(Value((int32_t)left.count));
-	VectorOperations::Sum(left, result);
-	VectorOperations::Divide(result, count_vector, result);
+Value VectorOperations::Average(Vector &left) {
+	Value result;
+	Value sum = VectorOperations::Sum(left);
+	Value count = VectorOperations::Count(left);
+	Value::Divide(sum, count, result);
+	return result;
 }
 
-void VectorOperations::Max(Vector &left, Vector &result) {
-	_generic_unary_fold_loop<operators::Max>(left, result);
+Value VectorOperations::Max(Vector &left) {
+	return _generic_unary_fold_loop<operators::Max>(left);
 }
 
-void VectorOperations::Min(Vector &left, Vector &result) {
-	_generic_unary_fold_loop<operators::Min>(left, result);
+Value VectorOperations::Min(Vector &left) {
+	return _generic_unary_fold_loop<operators::Min>(left);
 }

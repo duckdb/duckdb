@@ -15,6 +15,7 @@
 
 #include "common/internal_types.hpp"
 #include "common/printable.hpp"
+#include "common/types/statistics.hpp"
 
 #include "parser/sql_node_visitor.hpp"
 
@@ -62,6 +63,13 @@ class AbstractExpression : public Printable {
 		}
 	}
 
+	//! Resolves the statistics for this expression based on its children
+	virtual void ResolveStatistics() {
+		for (auto &child : children) {
+			child->ResolveStatistics();
+		}
+	}
+
 	//! Add a child node to the AbstractExpression. Note that the order of
 	//! adding children is important in most cases
 	void AddChild(std::unique_ptr<AbstractExpression> child) {
@@ -100,6 +108,9 @@ class AbstractExpression : public Printable {
 	//! Return type of the expression. This must be known in the execution
 	//! engine
 	TypeId return_type = TypeId::INVALID;
+
+	//! The statistics of the current expression in the plan
+	Statistics stats;
 
 	//! The alias of the expression, used in the SELECT clause (e.g. SELECT x +
 	//! 1 AS f)

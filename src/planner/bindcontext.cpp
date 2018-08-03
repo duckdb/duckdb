@@ -65,6 +65,7 @@ BindContext::BindColumn(ColumnRefExpression &expr) {
 			    expr.table_name.c_str(), expr.column_name.c_str());
 		}
 		entry = table->GetColumn(expr.column_name);
+		expr.stats = table->GetStatistics(entry->oid);
 	} else {
 		// subquery
 		throw BinderException("Subquery binding not implemented yet!");

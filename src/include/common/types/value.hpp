@@ -110,7 +110,6 @@ class Value : public Printable {
 	//! Whether or not the value is NULL
 	bool is_null;
 
-  private:
 	//! The value of the object, if it is of a constant size Type
 	union Val {
 		int8_t boolean;
@@ -126,6 +125,7 @@ class Value : public Printable {
 	//! The value of the object, if it is of a variable size Type
 	std::string str_value;
 
+  private:
 	//! Templated helper function for casting
 	template <class DST, class OP> static DST _cast(Value &v);
 
