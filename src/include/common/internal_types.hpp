@@ -11,6 +11,7 @@
 #pragma once
 
 #include <string>
+#include <math.h>
 
 namespace duckdb {
 
@@ -306,6 +307,29 @@ TypeId StringToTypeId(const std::string &str);
 size_t GetTypeIdSize(TypeId type);
 static bool TypeIsConstantSize(TypeId type) { return type < TypeId::VARCHAR; }
 static bool TypeIsNumeric(TypeId type) { return type >= TypeId::TINYINT && type <= TypeId::DATE; }
+
+template<class T>
+inline T NullValue() {
+	return std::numeric_limits<T>::min();
+}
+template<>
+inline double NullValue() {
+	return NAN;
+}
+template<>
+inline const char* NullValue() {
+	return nullptr;
+}
+
+template<class T>
+inline bool IsNullValue(T value) {
+	return value == NullValue<T>();
+}
+template<>
+inline bool IsNullValue(double value) {
+	return isnan(value);
+}
+
 
 std::string LogicalOperatorToString(LogicalOperatorType type);
 std::string PhysicalOperatorToString(PhysicalOperatorType type);

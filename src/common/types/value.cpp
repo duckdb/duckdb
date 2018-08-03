@@ -99,6 +99,9 @@ Value Value::NumericValue(TypeId id, int64_t value) {
 }
 
 string Value::ToString() const {
+	if (is_null) {
+		return "NULL";
+	}
 	switch (type) {
 	case TypeId::BOOLEAN:
 		return value_.boolean ? "True" : "False";

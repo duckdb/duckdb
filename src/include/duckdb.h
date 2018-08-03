@@ -74,6 +74,9 @@ duckdb_query(duckdb_connection connection, /* Connection to query */
              duckdb_result *result         /* OUT: query result */
 );
 
+//! Returns whether or not a specific value in a specific column is NULL
+int duckdb_value_is_null(duckdb_column column, duckdb_oid_t index);
+
 void duckdb_print_result(duckdb_result result /* The result to print */
 );
 

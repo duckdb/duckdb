@@ -28,31 +28,31 @@ class Value : public Printable {
 	//! Create an empty NULL value of the specified type
 	Value(TypeId type = TypeId::INTEGER) : type(type), is_null(true) {}
 	//! Create a boolean value
-	Value(bool val) : type(TypeId::BOOLEAN), is_null(false) {
+	Value(bool val) : type(TypeId::BOOLEAN), is_null(IsNullValue<bool>(val)) {
 		value_.boolean = val;
 	}
 	//! Create a TINYINT value
-	Value(int8_t val) : type(TypeId::TINYINT), is_null(false) {
+	Value(int8_t val) : type(TypeId::TINYINT), is_null(IsNullValue<int8_t>(val)) {
 		value_.tinyint = val;
 	}
 	//! Create a SMALLINT value
-	Value(int16_t val) : type(TypeId::SMALLINT), is_null(false) {
+	Value(int16_t val) : type(TypeId::SMALLINT), is_null(IsNullValue<int16_t>(val)) {
 		value_.smallint = val;
 	}
 	//! Create an INTEGER value
-	Value(int32_t val) : type(TypeId::INTEGER), is_null(false) {
+	Value(int32_t val) : type(TypeId::INTEGER), is_null(IsNullValue<int32_t>(val)) {
 		value_.integer = val;
 	}
 	//! Create a BIGINT value
-	Value(int64_t val) : type(TypeId::BIGINT), is_null(false) {
+	Value(int64_t val) : type(TypeId::BIGINT), is_null(IsNullValue<int64_t>(val)) {
 		value_.bigint = val;
 	}
 	//! Create an OID value
-	Value(uint64_t val) : type(TypeId::POINTER), is_null(false) {
+	Value(uint64_t val) : type(TypeId::POINTER), is_null(IsNullValue<uint64_t>(val)) {
 		value_.pointer = val;
 	}
 	//! Create a DOUBLE value
-	Value(double val) : type(TypeId::DECIMAL), is_null(false) {
+	Value(double val) : type(TypeId::DECIMAL), is_null(IsNullValue<double>(val)) {
 		value_.decimal = val;
 	}
 	//! Create a VARCHAR value

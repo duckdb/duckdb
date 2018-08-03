@@ -55,6 +55,37 @@ template <class OP> Value _generic_unary_fold_loop(Vector &left, Value &result) 
 	return result;
 }
 
+template <class RES, class OP> Value _fixed_return_unary_fold_loop(Vector &left, RES *result) {
+	switch (left.type) {
+	case TypeId::TINYINT:
+		_templated_unary_fold<int8_t, RES, OP>(left, result);
+		break;
+	case TypeId::SMALLINT:
+		_templated_unary_fold<int16_t, RES, OP>(left, result);
+		break;
+	case TypeId::INTEGER:
+		_templated_unary_fold<int32_t, RES, OP>(left, result);
+		break;
+	case TypeId::BIGINT:
+		_templated_unary_fold<int64_t, RES, OP>(left, result);
+		break;
+	case TypeId::DECIMAL:
+		_templated_unary_fold<double, RES, OP>(left, result);
+		break;
+	case TypeId::POINTER:
+		_templated_unary_fold<uint64_t, RES, OP>(left, result);
+		break;
+	case TypeId::DATE:
+		_templated_unary_fold<date_t, RES, OP>(left, result);
+		break;
+	case TypeId::VARCHAR:
+		return Value();
+	default:
+		throw NotImplementedException("Unimplemented type");
+	}
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // Aggregates
 //===--------------------------------------------------------------------===//
@@ -94,6 +125,11 @@ Value VectorOperations::Min(Vector &left) {
 	return _generic_unary_fold_loop<operators::Min>(left, result);
 }
 
+bool VectorOperations::HasNull(Vector &left) {
+	bool has_null = false;
+	_fixed_return_unary_fold_loop<bool, operators::NullCheck>(left, &has_null);
+	return has_null;
+}
 
 Value VectorOperations::MaximumStringLength(Vector &left) {
 	if (left.type != TypeId::VARCHAR) {

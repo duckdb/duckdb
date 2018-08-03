@@ -13,6 +13,7 @@
 #include <algorithm>
 
 #include "common/exception.hpp"
+#include "common/internal_types.hpp"
 #include "common/types/date.hpp"
 #include "common/types/hash.hpp"
 
@@ -40,6 +41,9 @@ struct Multiplication {
 
 struct Division {
 	template <class T> static inline T Operation(T left, T right) {
+		if (right == 0) {
+			return duckdb::NullValue<T>();
+		}
 		return left / right;
 	}
 };
@@ -135,6 +139,11 @@ struct Hash {
 	}
 };
 
+struct NullCheck {
+	template <class T> static inline bool Operation(bool left, T right) {
+		return left || duckdb::IsNullValue<T>(right);
+	}
+};
 struct MaximumStringLength {
 	static inline uint64_t Operation(uint64_t left, const char* str) {
 		return std::max(left, (uint64_t) strlen(str));

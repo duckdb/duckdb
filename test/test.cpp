@@ -39,7 +39,7 @@ int main() {
 
 	EXEC("SELECT CAST (100 AS TINYINT) + CAST(100 AS TINYINT);");
 
-	// EXEC("SELECT 4/0;");
+	EXEC("SELECT 4/0;");
 
 	EXEC("CREATE TABLE a (i integer, j integer);");
 	EXEC("INSERT INTO a VALUES (42, 84)");

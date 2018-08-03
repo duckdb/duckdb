@@ -137,6 +137,37 @@ static Value _duckdb_c_get_value(duckdb_column column, duckdb_oid_t index) {
 	}
 }
 
+
+int duckdb_value_is_null(duckdb_column column, duckdb_oid_t index) {
+	if (index >= column.count) {
+		return -1;
+	}
+
+	switch (column.type) {
+	case DUCKDB_TYPE_BOOLEAN:
+		return IsNullValue<bool>(get_value<bool>(column, index));
+	case DUCKDB_TYPE_TINYINT:
+		return IsNullValue<int8_t>(get_value<int8_t>(column, index));
+	case DUCKDB_TYPE_SMALLINT:
+		return IsNullValue<int16_t>(get_value<int16_t>(column, index));
+	case DUCKDB_TYPE_INTEGER:
+		return IsNullValue<int32_t>(get_value<int32_t>(column, index));
+	case DUCKDB_TYPE_BIGINT:
+		return IsNullValue<int64_t>(get_value<int64_t>(column, index));
+	case DUCKDB_TYPE_DECIMAL:
+		return IsNullValue<double>(get_value<double>(column, index));
+	case DUCKDB_TYPE_POINTER:
+		return IsNullValue<uint64_t>(get_value<uint64_t>(column, index));
+	case DUCKDB_TYPE_DATE:
+		return IsNullValue<date_t>(get_value<date_t>(column, index));
+	case DUCKDB_TYPE_VARCHAR:
+		return IsNullValue<const char*>(get_value<const char*>(column, index));
+	default:
+		throw std::runtime_error("Invalid value for C to C++ conversion!");
+	}
+	return 0;
+}
+
 void duckdb_print_result(duckdb_result result) {
 	// print the result
 	// first print the header

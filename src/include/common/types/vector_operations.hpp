@@ -94,6 +94,8 @@ struct VectorOperations {
 	static Value Max(Vector &left);
 	// MIN(A)
 	static Value Min(Vector &left);
+	// Returns whether or not a vector has a NULL value
+	static bool HasNull(Vector &left);
 	// Maximum string length of the vector, only works on string vectors!
 	static Value MaximumStringLength(Vector &left);
 
