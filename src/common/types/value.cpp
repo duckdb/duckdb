@@ -11,6 +11,72 @@ Value::Value(const Value &other)
 	this->value_ = other.value_;
 }
 
+
+Value Value::MinimumValue(TypeId type) {
+	Value result;
+	result.type = type;
+	result.is_null = false;
+	switch (type) {
+	case TypeId::TINYINT:
+		result.value_.tinyint = std::numeric_limits<int8_t>::min();
+		break;
+	case TypeId::SMALLINT:
+		result.value_.smallint = std::numeric_limits<int16_t>::min();
+		break;
+	case TypeId::INTEGER:
+		result.value_.integer = std::numeric_limits<int32_t>::min();
+		break;
+	case TypeId::BIGINT:
+		result.value_.bigint = std::numeric_limits<int64_t>::min();
+		break;
+	case TypeId::DECIMAL:
+		result.value_.decimal = std::numeric_limits<double>::min();
+		break;
+	case TypeId::DATE:
+		result.value_.date = std::numeric_limits<date_t>::min();
+		break;
+	case TypeId::POINTER:
+		result.value_.pointer = std::numeric_limits<uint64_t>::min();
+		break;
+	default:
+		throw Exception("TypeId is not numeric!");
+	}
+	return result;
+}
+
+Value Value::MaximumValue(TypeId type) {
+	Value result;
+	result.type = type;
+	result.is_null = false;
+	switch (type) {
+	case TypeId::TINYINT:
+		result.value_.tinyint = std::numeric_limits<int8_t>::max();
+		break;
+	case TypeId::SMALLINT:
+		result.value_.smallint = std::numeric_limits<int16_t>::max();
+		break;
+	case TypeId::INTEGER:
+		result.value_.integer = std::numeric_limits<int32_t>::max();
+		break;
+	case TypeId::BIGINT:
+		result.value_.bigint = std::numeric_limits<int64_t>::max();
+		break;
+	case TypeId::DECIMAL:
+		result.value_.decimal = std::numeric_limits<double>::max();
+		break;
+	case TypeId::DATE:
+		result.value_.date = std::numeric_limits<date_t>::max();
+		break;
+	case TypeId::POINTER:
+		result.value_.pointer = std::numeric_limits<uint64_t>::max();
+		break;
+	default:
+		throw Exception("TypeId is not numeric!");
+	}
+	return result;
+}
+
+
 Value Value::NumericValue(TypeId id, int64_t value) {
 	switch (id) {
 	case TypeId::TINYINT:
@@ -23,6 +89,8 @@ Value Value::NumericValue(TypeId id, int64_t value) {
 		return Value((int64_t)value);
 	case TypeId::DECIMAL:
 		return Value((double)value);
+	case TypeId::DATE:
+		return Value::Date((date_t)value);
 	case TypeId::POINTER:
 		return Value((uint64_t)value);
 	default:

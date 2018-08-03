@@ -10,51 +10,42 @@ using namespace std;
 //===--------------------------------------------------------------------===//
 // Templated Looping Functions
 //===--------------------------------------------------------------------===//
-template <class T, class OP>
-void _templated_unary_fold(Vector &left, T *result) {
+template <class T, class RES, class OP>
+void _templated_unary_fold(Vector &left, RES *result) {
 	T *ldata = (T *)left.data;
 	if (left.sel_vector) {
-		*result = ldata[left.sel_vector[0]];
-		for (size_t i = 1; i < left.count; i++) {
+		for (size_t i = 0; i < left.count; i++) {
 			*result = OP::Operation(*result, ldata[left.sel_vector[i]]);
 		}
 	} else {
-		*result = ldata[0];
-		for (size_t i = 1; i < left.count; i++) {
+		for (size_t i = 0; i < left.count; i++) {
 			*result = OP::Operation(*result, ldata[i]);
 		}
 	}
 }
 
-template <class OP> Value _generic_unary_fold_loop(Vector &left) {
-	Value result;
-	result.type = left.type;
-	if (left.count == 0) {
-		result.is_null = true;
-		return result;
-	}
-	result.is_null = false;
+template <class OP> Value _generic_unary_fold_loop(Vector &left, Value &result) {
 	switch (left.type) {
 	case TypeId::TINYINT:
-		_templated_unary_fold<int8_t, OP>(left, &result.value_.tinyint);
+		_templated_unary_fold<int8_t, int8_t, OP>(left, &result.value_.tinyint);
 		break;
 	case TypeId::SMALLINT:
-		_templated_unary_fold<int16_t, OP>(left, &result.value_.smallint);
+		_templated_unary_fold<int16_t, int16_t, OP>(left, &result.value_.smallint);
 		break;
 	case TypeId::INTEGER:
-		_templated_unary_fold<int32_t, OP>(left, &result.value_.integer);
+		_templated_unary_fold<int32_t, int32_t, OP>(left, &result.value_.integer);
 		break;
 	case TypeId::BIGINT:
-		_templated_unary_fold<int64_t, OP>(left, &result.value_.bigint);
+		_templated_unary_fold<int64_t, int64_t, OP>(left, &result.value_.bigint);
 		break;
 	case TypeId::DECIMAL:
-		_templated_unary_fold<double, OP>(left, &result.value_.decimal);
+		_templated_unary_fold<double, double, OP>(left, &result.value_.decimal);
 		break;
 	case TypeId::POINTER:
-		_templated_unary_fold<uint64_t, OP>(left, &result.value_.pointer);
+		_templated_unary_fold<uint64_t, uint64_t, OP>(left, &result.value_.pointer);
 		break;
 	case TypeId::DATE:
-		_templated_unary_fold<date_t, OP>(left, &result.value_.date);
+		_templated_unary_fold<date_t, date_t, OP>(left, &result.value_.date);
 		break;
 	case TypeId::VARCHAR:
 		return Value();
@@ -68,7 +59,11 @@ template <class OP> Value _generic_unary_fold_loop(Vector &left) {
 // Aggregates
 //===--------------------------------------------------------------------===//
 Value VectorOperations::Sum(Vector &left) {
-	return _generic_unary_fold_loop<operators::Addition>(left);
+	if (left.count == 0 || !TypeIsNumeric(left.type)) {
+		return Value();
+	}
+	Value result = Value::NumericValue(left.type, 0);
+	return _generic_unary_fold_loop<operators::Addition>(left, result);
 }
 
 Value VectorOperations::Count(Vector &left) {
@@ -84,9 +79,30 @@ Value VectorOperations::Average(Vector &left) {
 }
 
 Value VectorOperations::Max(Vector &left) {
-	return _generic_unary_fold_loop<operators::Max>(left);
+	if (left.count == 0 || !TypeIsNumeric(left.type)) {
+		return Value();
+	}
+	Value result = Value::MinimumValue(left.type);
+	return _generic_unary_fold_loop<operators::Max>(left, result);
 }
 
 Value VectorOperations::Min(Vector &left) {
-	return _generic_unary_fold_loop<operators::Min>(left);
+	if (left.count == 0 || !TypeIsNumeric(left.type)) {
+		return Value();
+	}
+	Value result = Value::MaximumValue(left.type);
+	return _generic_unary_fold_loop<operators::Min>(left, result);
+}
+
+
+Value VectorOperations::MaximumStringLength(Vector &left) {
+	if (left.type != TypeId::VARCHAR) {
+		throw Exception("String length can only be computed for char array columns!");
+	}
+	auto result = Value::NumericValue(TypeId::POINTER, 0);
+	if (left.count == 0) {
+		return result;
+	}
+	_templated_unary_fold<const char*, uint64_t, operators::MaximumStringLength>(left, &result.value_.pointer);
+	return result;
 }

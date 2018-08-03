@@ -37,7 +37,7 @@ class Statistics {
 	//! The maximum value of the column [numeric only]
 	Value max;
 	//! The maximum string length of a character column [VARCHAR only]
-	size_t maximum_string_length;
+	uint64_t maximum_string_length;
 	//! The type of the vector the statistics are for
 	TypeId type;
 

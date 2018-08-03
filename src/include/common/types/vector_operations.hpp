@@ -94,6 +94,8 @@ struct VectorOperations {
 	static Value Max(Vector &left);
 	// MIN(A)
 	static Value Min(Vector &left);
+	// Maximum string length of the vector, only works on string vectors!
+	static Value MaximumStringLength(Vector &left);
 
 	//===--------------------------------------------------------------------===//
 	// Scatter methods

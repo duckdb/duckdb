@@ -60,6 +60,18 @@ class Value : public Printable {
 	    : type(TypeId::VARCHAR), is_null(false), str_value(val) {}
 	Value(const Value &other);
 
+	//! Create the lowest possible value of a given type (numeric only)
+	static Value MinimumValue(TypeId type);
+	//! Create the highest possible value of a given type (numeric only)
+	static Value MaximumValue(TypeId type);
+	//! Create a Date Value from a specified date
+	static Value Date(date_t date) {
+		Value result;
+		result.type = TypeId::DATE;
+		result.value_.date = date;
+		result.is_null = false;
+		return result;
+	}
 	//! Create a Numeric value of the specified type with the specified value
 	static Value NumericValue(TypeId id, int64_t value);
 

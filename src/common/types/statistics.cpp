@@ -20,6 +20,12 @@ void Statistics::Verify(Vector &vector) {
 		Value actual_max = VectorOperations::Max(vector);
 		assert(Value::GreaterThanEquals(max, actual_max));
 	}
+	if (type == TypeId::VARCHAR) {
+		Value actual_max_strlen = VectorOperations::MaximumStringLength(vector);
+		Value stats_max_strlen = Value::NumericValue(actual_max_strlen.type, maximum_string_length);
+		assert(Value::LessThanEquals(actual_max_strlen, stats_max_strlen));
+	}
+
 }
 #endif
 
@@ -40,7 +46,8 @@ void Statistics::Update(Vector &new_vector) {
 		}
 	}
 	if (type == TypeId::VARCHAR) {
-
+		Value new_max_strlen = VectorOperations::MaximumStringLength(new_vector);
+		maximum_string_length = std::max(maximum_string_length, new_max_strlen.value_.pointer);
 	}
 }
 

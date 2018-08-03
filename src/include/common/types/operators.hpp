@@ -135,6 +135,13 @@ struct Hash {
 	}
 };
 
+struct MaximumStringLength {
+	static inline uint64_t Operation(uint64_t left, const char* str) {
+		return std::max(left, (uint64_t) strlen(str));
+	}
+};
+
+
 //===--------------------------------------------------------------------===//
 // Casts
 //===--------------------------------------------------------------------===//
