@@ -28,4 +28,5 @@ class StorageManager {
 	//! The set of tables managed by the storage engine
 	std::vector<std::unique_ptr<DataTable>> tables;
 };
+
 } // namespace duckdb

@@ -24,7 +24,7 @@ class DataTable;
 class DataColumn {
   public:
 	DataColumn(DataTable &table, ColumnCatalogEntry &column)
-	    : table(table), column(column) {}
+	    : table(table), column(column), stats(column.type) {}
 
 	void AddData(Vector &data);
 

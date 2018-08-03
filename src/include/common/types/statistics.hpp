@@ -20,25 +20,38 @@ class Vector;
 //! The Statistics object holds statistics relating to a Vector or column
 class Statistics {
   public:
-	Statistics() : has_stats(false), can_have_null(true) {}
+	Statistics() { Reset(); }
+	Statistics(TypeId type) : type(type) { Reset(); }
 	//! Initialize statistics for a vector with a single value
 	Statistics(Value value)
 	    : has_stats(true), can_have_null(value.is_null), min(value),
-	      max(value) {}
+	      max(value), type(value.type),
+	      maximum_string_length(value.type == TypeId::VARCHAR ? value.str_value.size() : 0) {}
 
+	//! Whether or not statistics are available for the given column
 	bool has_stats;
+	//! True if the vector can potentially contain NULL values
 	bool can_have_null;
+	//! The minimum value of the column [numeric only]
 	Value min;
+	//! The maximum value of the column [numeric only]
 	Value max;
+	//! The maximum string length of a character column [VARCHAR only]
+	size_t maximum_string_length;
+	//! The type of the vector the statistics are for
+	TypeId type;
 
 #ifdef DEBUG
-	//! DEBUG FUNCTION ONLY!
+	//! Verify that the statistics hold for a given vector. DEBUG FUNCTION ONLY!
 	void Verify(Vector &vector);
 #else
-	//! DEBUG FUNCTION ONLY!
+	//! Verify that the statistics hold for a given vector. DEBUG FUNCTION ONLY!
 	void Verify(Vector &vector) {}
 #endif
 
+	//! Update the statistics with a new vector that is appended to the dataset
+	void Update(Vector &vector);
+	//! Reset the statistics
 	void Reset();
 
 	//===--------------------------------------------------------------------===//

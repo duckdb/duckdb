@@ -14,16 +14,8 @@ void DataColumn::AddData(Vector &data) {
 		throw CatalogException("Mismatch in column type");
 	}
 	// update the statistics of the table
-	Value min = VectorOperations::Min(data);
-	Value max = VectorOperations::Max(data);
-	if (this->data.size() == 0) {
-		stats.has_stats = true;
-		stats.min = min;
-		stats.max = max;
-	} else {
-		Value::Min(min, stats.min, stats.min);
-		Value::Max(max, stats.max, stats.max);
-
+	stats.Update(data);
+	if (this->data.size() > 0) {
 		// check if this vector fits into the last vector of the column
 		// if it does, just append it
 		auto &back = this->data.back();

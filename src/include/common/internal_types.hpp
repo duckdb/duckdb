@@ -305,6 +305,7 @@ std::string TypeIdToString(TypeId type);
 TypeId StringToTypeId(const std::string &str);
 size_t GetTypeIdSize(TypeId type);
 static bool TypeIsConstantSize(TypeId type) { return type < TypeId::VARCHAR; }
+static bool TypeIsNumeric(TypeId type) { return type >= TypeId::TINYINT && type <= TypeId::DATE; }
 
 std::string LogicalOperatorToString(LogicalOperatorType type);
 std::string PhysicalOperatorToString(PhysicalOperatorType type);

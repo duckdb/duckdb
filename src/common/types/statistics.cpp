@@ -1,4 +1,5 @@
 
+#include "common/exception.hpp"
 #include "common/types/statistics.hpp"
 #include "common/types/vector.hpp"
 #include "common/types/vector_operations.hpp"
@@ -21,6 +22,35 @@ void Statistics::Verify(Vector &vector) {
 	}
 }
 #endif
+
+void Statistics::Update(Vector &new_vector) {
+	if (type != new_vector.type) {
+		throw Exception("Appended vector does not match statistics type!");
+	}
+	if (TypeIsNumeric(type)) {
+		Value new_min = VectorOperations::Min(new_vector);
+		Value new_max = VectorOperations::Max(new_vector);
+		if (!has_stats) {
+			has_stats = true;
+			min = new_min;
+			max = new_max;
+		} else {
+			Value::Min(min, new_min, min);
+			Value::Max(max, new_max, max);
+		}
+	}
+	if (type == TypeId::VARCHAR) {
+
+	}
+}
+
+void Statistics::Reset() {
+	has_stats = false;
+	can_have_null = true;
+	min = Value();
+	max = Value();
+	maximum_string_length = 0;
+}
 
 void Statistics::Add(Statistics &left, Statistics &right, Statistics &result) {
 	result.has_stats = left.has_stats && right.has_stats;
@@ -69,11 +99,4 @@ void Statistics::Modulo(Statistics &left, Statistics &right,
 		result.min = 0;
 		result.max = right.max;
 	}
-}
-
-void Statistics::Reset() {
-	has_stats = false;
-	can_have_null = true;
-	min = Value();
-	max = Value();
 }
