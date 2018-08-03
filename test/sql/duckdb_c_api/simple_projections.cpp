@@ -38,8 +38,12 @@ TEST_CASE("Test scalar queries", "[scalarquery]") {
 	duckdb_destroy_result(result);
 
 	// Incorrect queries
+	// unterminated string
 	REQUIRE(duckdb_query(connection, "SELECT 'hello", &result) != DuckDBSuccess);
+	// cast string to integer
+	// (should this fail or return 0? SQLite returns 0)
 	REQUIRE(duckdb_query(connection, "SELECT cast('hello' AS INTEGER)", &result) != DuckDBSuccess);
+
 
 	REQUIRE(duckdb_disconnect(connection) == DuckDBSuccess);
 	REQUIRE(duckdb_close(database) == DuckDBSuccess);
