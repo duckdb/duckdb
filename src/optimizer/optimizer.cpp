@@ -43,6 +43,16 @@ void Optimizer::Visit(LogicalFilter &child) {
 	RewriteList(child.expressions);
 }
 
+void Optimizer::Visit(LogicalOrder &order) {
+	auto &list = order.description.orders;
+	for(auto i = 0; i < list.size(); i++) {
+
+		auto new_element = rewriter.ApplyRules(move(list[i].expression));
+		new_element->ResolveStatistics();
+		list[i].expression = move(new_element);
+	}
+}
+
 void Optimizer::Visit(LogicalProjection &child) {
 	LogicalOperatorVisitor::Visit(child);
 	RewriteList(child.select_list);

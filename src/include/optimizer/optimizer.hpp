@@ -30,6 +30,7 @@ class Optimizer : public LogicalOperatorVisitor {
 
 	virtual void Visit(LogicalAggregate &aggregate);
 	virtual void Visit(LogicalFilter &filter);
+	virtual void Visit(LogicalOrder &order);
 	virtual void Visit(LogicalProjection &filter);
   private:
   	void RewriteList(std::vector<std::unique_ptr<AbstractExpression>>& list);

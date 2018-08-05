@@ -44,6 +44,9 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 		if (children.size() > 0) {
 			// resolve the child chunk if there is one
 			children[0]->GetChunk(state->child_chunk, state->child_state.get());
+			if (state->child_chunk.count == 0) {
+				break;
+			}
 		}
 
 		if (groups.size() > 0) {
@@ -72,7 +75,7 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 				executor.Merge(*aggregates[i], state->aggregates[i]);
 			}
 		}
-	} while (state->child_chunk.count != 0);
+	} while (state->child_chunk.count > 0);
 
 	if (groups.size() > 0) {
 		state->group_chunk.Reset();
@@ -80,6 +83,7 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 		state->ht->Scan(state->ht_scan_position, state->group_chunk,
 		                state->aggregate_chunk);
 		if (state->aggregate_chunk.count == 0) {
+			state->finished = true;
 			return;
 		}
 	} else {
