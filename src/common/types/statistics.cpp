@@ -12,6 +12,9 @@ void Statistics::Verify(Vector &vector) {
 	if (!has_stats || vector.count == 0)
 		return;
 
+	if (!can_have_null) {
+		assert(!VectorOperations::HasNull(vector));
+	}
 	if (!min.is_null) {
 		Value actual_min = VectorOperations::Min(vector);
 		assert(Value::LessThanEquals(min, actual_min));
@@ -32,6 +35,9 @@ void Statistics::Verify(Vector &vector) {
 void Statistics::Update(Vector &new_vector) {
 	if (type != new_vector.type) {
 		throw Exception("Appended vector does not match statistics type!");
+	}
+	if (!can_have_null) {
+		can_have_null = VectorOperations::HasNull(new_vector);
 	}
 	if (TypeIsNumeric(type)) {
 		Value new_min = VectorOperations::Min(new_vector);
