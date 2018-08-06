@@ -15,7 +15,6 @@
 
 #include <map>
 
-
 using namespace duckdb;
 using namespace std;
 
@@ -160,7 +159,8 @@ void LogicalPlanGenerator::Visit(InsertStatement &statement) {
 			if (insert_vals.count(col->name)) { // column value was specified
 				insert_val_list.push_back(move(insert_vals[col->name]));
 			} else {
-				insert_val_list.push_back(std::unique_ptr<AbstractExpression>(new ConstantExpression(col->default_value)));
+				insert_val_list.push_back(std::unique_ptr<AbstractExpression>(
+				    new ConstantExpression(col->default_value)));
 			}
 		}
 	}
