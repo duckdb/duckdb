@@ -82,6 +82,8 @@ class ConstantFoldingRule : public OptimizerRule {
 
 		Value zero = Value(0);
 		Value one = Value(1);
+		Value null = Value(1);
+		null.is_null = true;
 
 		// case: right is constant
 		if (right->type == ExpressionType::VALUE_CONSTANT) {
@@ -104,7 +106,7 @@ class ConstantFoldingRule : public OptimizerRule {
 					break;
 				case ExpressionType::OPERATOR_DIVIDE:
 					if (Value::Equals(right_val->value, zero)) {
-						return make_unique<ConstantExpression>(NullValue<bool>);
+						return make_unique<ConstantExpression>(null);
 					}
 					if (Value::Equals(right_val->value, one)) {
 						return move(root.children[0]);
@@ -112,7 +114,7 @@ class ConstantFoldingRule : public OptimizerRule {
 					break;
 				case ExpressionType::OPERATOR_MOD:
 					if (Value::Equals(right_val->value, zero)) {
-						return make_unique<ConstantExpression>(NullValue<bool>);
+						return make_unique<ConstantExpression>(null);
 					}
 					if (Value::Equals(right_val->value, one)) {
 						return make_unique<ConstantExpression>(zero);

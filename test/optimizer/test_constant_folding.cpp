@@ -125,4 +125,28 @@ TEST_CASE("Constant folding handles unknown expressions right", "[optimizer]") {
 	REQUIRE(result->children.size() == 0);
 }
 
-// MUL(WHATEV, SUB(10, 9)) -> 1 TODO
+// MUL(42, DIV(WHATEV, 0)) -> NULL
+TEST_CASE("Constant folding handles NULL propagation", "[optimizer]") {
+	vector<unique_ptr<OptimizerRule>> rules;
+	rules.push_back(unique_ptr<OptimizerRule>(new ConstantFoldingRule()));
+	auto rewriter = ExpressionRewriter(move(rules), MatchOrder::DEPTH_FIRST);
+
+	auto lr = make_unique<ConstantExpression>(Value(0));
+	auto ll = make_unique<ColumnRefExpression>("WHATEV");
+
+	unique_ptr<AbstractExpression> ir = make_unique<OperatorExpression>(
+	    ExpressionType::OPERATOR_DIVIDE, TypeId::INTEGER, move(ll), move(lr));
+	auto il = make_unique<ConstantExpression>(Value(42));
+
+	unique_ptr<AbstractExpression> root = make_unique<OperatorExpression>(
+	    ExpressionType::OPERATOR_MULTIPLY, TypeId::INTEGER, move(il), move(ir));
+
+	auto result = rewriter.ApplyRules(move(root));
+
+	REQUIRE(result->type == ExpressionType::VALUE_CONSTANT);
+
+	auto result_cast = reinterpret_cast<ConstantExpression *>(result.get());
+
+	REQUIRE(result_cast->value.is_null);
+	REQUIRE(result_cast->children.size() == 0);
+}
