@@ -48,7 +48,7 @@ int main() {
 	EXEC("CREATE TABLE test (a INTEGER, b INTEGER)");
 	EXEC("INSERT INTO test VALUES (11, 22)");
 	EXEC("INSERT INTO test VALUES (12, 21)");
-	EXEC("INSERT INTO test VALUES (13, 22)");
+	EXEC("INSERT INTO test (b, a) VALUES (22, 13)");
 	EXEC("SELECT a,b FROM test;");
 	EXEC("SELECT a + 2, b FROM test WHERE a = 11;");
 	EXEC("SELECT a + 2, b FROM test WHERE a = 12;");
