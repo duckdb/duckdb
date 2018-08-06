@@ -65,9 +65,9 @@ bool ExpressionRewriter::MatchOperands(OptimizerNode *node,
 				if (match) {
 					break;
 				}
-				if (!match) {
-					return false;
-				}
+			}
+			if (!match) {
+				return false;
 			}
 		}
 		return true;

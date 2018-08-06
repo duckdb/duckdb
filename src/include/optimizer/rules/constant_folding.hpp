@@ -26,12 +26,11 @@ class ConstantFoldingRule : public OptimizerRule {
 		root = std::unique_ptr<OptimizerNode>(new OptimizerNodeExpressionSet(
 		    {ExpressionType::OPERATOR_ADD, ExpressionType::OPERATOR_SUBTRACT,
 		     ExpressionType::OPERATOR_MULTIPLY, ExpressionType::OPERATOR_DIVIDE,
-		     ExpressionType::OPERATOR_MOD})); // TODO: add boolean ops?
+		     ExpressionType::OPERATOR_MOD}));
 		root->children.push_back(std::unique_ptr<OptimizerNode>(
 		    new OptimizerNodeExpression(ExpressionType::VALUE_CONSTANT)));
-		//		root->children.push_back(std::unique_ptr<OptimizerNode>(
-		//		    new
-		// OptimizerNodeExpression(ExpressionType::VALUE_CONSTANT)));
+		root->children.push_back(
+		    std::unique_ptr<OptimizerNode>(new OptimizerNodeAny()));
 		root->child_policy = ChildPolicy::UNORDERED;
 	}
 
@@ -48,7 +47,7 @@ class ConstantFoldingRule : public OptimizerRule {
 
 		// case: both constant, evaluate
 		if (left->type == ExpressionType::VALUE_CONSTANT &&
-		    left->type == ExpressionType::VALUE_CONSTANT) {
+		    right->type == ExpressionType::VALUE_CONSTANT) {
 			Value result;
 			auto left_val =
 			    reinterpret_cast<ConstantExpression *>(root.children[0].get());
@@ -86,10 +85,9 @@ class ConstantFoldingRule : public OptimizerRule {
 
 		// case: right is constant
 		if (right->type == ExpressionType::VALUE_CONSTANT) {
-			auto right_val =
-			    reinterpret_cast<ConstantExpression *>(right);
+			auto right_val = reinterpret_cast<ConstantExpression *>(right);
 			if (TypeIsNumeric(right_val->value.type)) {
-				switch(root.type) {
+				switch (root.type) {
 				case ExpressionType::OPERATOR_ADD:
 				case ExpressionType::OPERATOR_SUBTRACT:
 					if (Value::Equals(right_val->value, zero)) {
@@ -128,13 +126,12 @@ class ConstantFoldingRule : public OptimizerRule {
 
 		// case: right is constant
 		if (left->type == ExpressionType::VALUE_CONSTANT) {
-			auto left_val =
-				reinterpret_cast<ConstantExpression *>(left);
+			auto left_val = reinterpret_cast<ConstantExpression *>(left);
 			if (TypeIsNumeric(left_val->value.type)) {
-				switch(root.type) {
+				switch (root.type) {
 				case ExpressionType::OPERATOR_ADD:
 					if (Value::Equals(left_val->value, zero)) {
-						return move(root.children[0]);
+						return move(root.children[1]);
 					}
 					break;
 				case ExpressionType::OPERATOR_MULTIPLY:
@@ -142,7 +139,7 @@ class ConstantFoldingRule : public OptimizerRule {
 						return make_unique<ConstantExpression>(zero);
 					}
 					if (Value::Equals(left_val->value, one)) {
-						return move(root.children[0]);
+						return move(root.children[1]);
 					}
 					break;
 				case ExpressionType::OPERATOR_DIVIDE:
@@ -155,7 +152,6 @@ class ConstantFoldingRule : public OptimizerRule {
 				}
 			}
 		}
-
 
 		return nullptr;
 	};

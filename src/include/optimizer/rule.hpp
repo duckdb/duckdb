@@ -49,6 +49,11 @@ class OptimizerNodeExpression : public OptimizerNode {
 	virtual bool Matches(AbstractExpression &rel) { return rel.type == type; }
 };
 
+class OptimizerNodeAny : public OptimizerNode {
+  public:
+	virtual bool Matches(AbstractExpression &rel) { return true; }
+};
+
 class OptimizerRule {
   public:
 	std::unique_ptr<OptimizerNode> root;

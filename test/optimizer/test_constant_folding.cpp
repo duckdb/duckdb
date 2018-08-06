@@ -10,7 +10,7 @@
 using namespace duckdb;
 using namespace std;
 
-//ADD(42, 1) -> 43
+// ADD(42, 1) -> 43
 TEST_CASE("Constant folding does something", "[optimizer]") {
 
 	vector<unique_ptr<OptimizerRule>> rules;
@@ -58,7 +58,7 @@ TEST_CASE("Constant folding finishes in fixpoint", "[optimizer]") {
 	REQUIRE(result_cast->children.size() == 0);
 }
 
-// MUL (42, SUB(10, 9)) -> 42
+// MUL(42, SUB(10, 9)) -> 42
 TEST_CASE("Constant folding reduces complex expression", "[optimizer]") {
 
 	vector<unique_ptr<OptimizerRule>> rules;
@@ -83,3 +83,46 @@ TEST_CASE("Constant folding reduces complex expression", "[optimizer]") {
 	REQUIRE(result_cast->value.value_.integer == 42);
 	REQUIRE(result_cast->children.size() == 0);
 }
+
+// MUL(WHATEV, 0) -> 0
+TEST_CASE("Constant folding handles unknown expressions left", "[optimizer]") {
+
+	vector<unique_ptr<OptimizerRule>> rules;
+	rules.push_back(unique_ptr<OptimizerRule>(new ConstantFoldingRule()));
+	auto rewriter = ExpressionRewriter(move(rules), MatchOrder::DEPTH_FIRST);
+
+	auto lr = make_unique<ConstantExpression>(Value(0));
+	auto ll = make_unique<ColumnRefExpression>("WHATEV");
+
+	unique_ptr<AbstractExpression> root = make_unique<OperatorExpression>(
+	    ExpressionType::OPERATOR_MULTIPLY, TypeId::INTEGER, move(ll), move(lr));
+
+	auto result = rewriter.ApplyRules(move(root));
+
+	REQUIRE(result->type == ExpressionType::VALUE_CONSTANT);
+
+	auto result_cast = reinterpret_cast<ConstantExpression *>(result.get());
+
+	REQUIRE(result_cast->value.value_.integer == 0);
+	REQUIRE(result_cast->children.size() == 0);
+}
+
+// ADD(0, WHATEV) -> WHATEV
+TEST_CASE("Constant folding handles unknown expressions right", "[optimizer]") {
+
+	vector<unique_ptr<OptimizerRule>> rules;
+	rules.push_back(unique_ptr<OptimizerRule>(new ConstantFoldingRule()));
+	auto rewriter = ExpressionRewriter(move(rules), MatchOrder::DEPTH_FIRST);
+
+	auto ll = make_unique<ConstantExpression>(Value(0));
+	auto lr = make_unique<ColumnRefExpression>("WHATEV");
+
+	unique_ptr<AbstractExpression> root = make_unique<OperatorExpression>(
+	    ExpressionType::OPERATOR_ADD, TypeId::INTEGER, move(ll), move(lr));
+
+	auto result = rewriter.ApplyRules(move(root));
+	REQUIRE(result->type == ExpressionType::COLUMN_REF);
+	REQUIRE(result->children.size() == 0);
+}
+
+// MUL(WHATEV, SUB(10, 9)) -> 1 TODO
