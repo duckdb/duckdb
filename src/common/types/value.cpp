@@ -11,7 +11,6 @@ Value::Value(const Value &other)
 	this->value_ = other.value_;
 }
 
-
 Value Value::MinimumValue(TypeId type) {
 	Value result;
 	result.type = type;
@@ -75,7 +74,6 @@ Value Value::MaximumValue(TypeId type) {
 	}
 	return result;
 }
-
 
 Value Value::NumericValue(TypeId id, int64_t value) {
 	switch (id) {

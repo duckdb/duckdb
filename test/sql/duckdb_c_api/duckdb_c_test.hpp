@@ -24,8 +24,8 @@ static int64_t get_numeric(duckdb_column column, duckdb_oid_t row) {
 	}
 }
 
-static bool CHECK_NUMERIC_COLUMN(duckdb_result result,
-                          duckdb_oid_t column, std::vector<int64_t> values) {
+static bool CHECK_NUMERIC_COLUMN(duckdb_result result, duckdb_oid_t column,
+                                 std::vector<int64_t> values) {
 	if (result.column_count <= column) {
 		// out of bounds
 		return false;
@@ -38,7 +38,7 @@ static bool CHECK_NUMERIC_COLUMN(duckdb_result result,
 	if (values.size() != col.count) {
 		return false;
 	}
-	for(auto i = 0; i < values.size(); i++) {
+	for (auto i = 0; i < values.size(); i++) {
 		int64_t data_value = get_numeric(col, i);
 		if (data_value != values[i]) {
 			return false;

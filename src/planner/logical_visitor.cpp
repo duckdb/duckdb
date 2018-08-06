@@ -15,9 +15,7 @@ void LogicalOperatorVisitor::Visit(LogicalDistinct &op) {
 void LogicalOperatorVisitor::Visit(LogicalFilter &op) {
 	op.AcceptChildren(this);
 }
-void LogicalOperatorVisitor::Visit(LogicalGet &op) {
-	op.AcceptChildren(this);
-}
+void LogicalOperatorVisitor::Visit(LogicalGet &op) { op.AcceptChildren(this); }
 void LogicalOperatorVisitor::Visit(LogicalLimit &op) {
 	op.AcceptChildren(this);
 }

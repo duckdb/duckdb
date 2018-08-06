@@ -10,6 +10,7 @@
 using namespace duckdb;
 using namespace std;
 
+//ADD(42, 1) -> 43
 TEST_CASE("Constant folding does something", "[optimizer]") {
 
 	vector<unique_ptr<OptimizerRule>> rules;
@@ -31,6 +32,7 @@ TEST_CASE("Constant folding does something", "[optimizer]") {
 	REQUIRE(result_cast->children.size() == 0);
 }
 
+// ADD(ADD(42, 1), 10) -> 53
 TEST_CASE("Constant folding finishes in fixpoint", "[optimizer]") {
 
 	vector<unique_ptr<OptimizerRule>> rules;
@@ -53,5 +55,31 @@ TEST_CASE("Constant folding finishes in fixpoint", "[optimizer]") {
 	auto result_cast = reinterpret_cast<ConstantExpression *>(result.get());
 
 	REQUIRE(result_cast->value.value_.integer == 53);
+	REQUIRE(result_cast->children.size() == 0);
+}
+
+// MUL (42, SUB(10, 9)) -> 42
+TEST_CASE("Constant folding reduces complex expression", "[optimizer]") {
+
+	vector<unique_ptr<OptimizerRule>> rules;
+	rules.push_back(unique_ptr<OptimizerRule>(new ConstantFoldingRule()));
+	auto rewriter = ExpressionRewriter(move(rules), MatchOrder::DEPTH_FIRST);
+
+	auto ll = make_unique<ConstantExpression>(Value(10));
+	auto lr = make_unique<ConstantExpression>(Value(9));
+
+	unique_ptr<AbstractExpression> ir = make_unique<OperatorExpression>(
+	    ExpressionType::OPERATOR_SUBTRACT, TypeId::INTEGER, move(ll), move(lr));
+	auto il = make_unique<ConstantExpression>(Value(42));
+	unique_ptr<AbstractExpression> root = make_unique<OperatorExpression>(
+	    ExpressionType::OPERATOR_MULTIPLY, TypeId::INTEGER, move(il), move(ir));
+
+	auto result = rewriter.ApplyRules(move(root));
+
+	REQUIRE(result->type == ExpressionType::VALUE_CONSTANT);
+
+	auto result_cast = reinterpret_cast<ConstantExpression *>(result.get());
+
+	REQUIRE(result_cast->value.value_.integer == 42);
 	REQUIRE(result_cast->children.size() == 0);
 }

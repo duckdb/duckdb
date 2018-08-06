@@ -24,25 +24,30 @@ void _templated_unary_fold(Vector &left, RES *result) {
 	}
 }
 
-template <class OP> Value _generic_unary_fold_loop(Vector &left, Value &result) {
+template <class OP>
+Value _generic_unary_fold_loop(Vector &left, Value &result) {
 	switch (left.type) {
 	case TypeId::TINYINT:
 		_templated_unary_fold<int8_t, int8_t, OP>(left, &result.value_.tinyint);
 		break;
 	case TypeId::SMALLINT:
-		_templated_unary_fold<int16_t, int16_t, OP>(left, &result.value_.smallint);
+		_templated_unary_fold<int16_t, int16_t, OP>(left,
+		                                            &result.value_.smallint);
 		break;
 	case TypeId::INTEGER:
-		_templated_unary_fold<int32_t, int32_t, OP>(left, &result.value_.integer);
+		_templated_unary_fold<int32_t, int32_t, OP>(left,
+		                                            &result.value_.integer);
 		break;
 	case TypeId::BIGINT:
-		_templated_unary_fold<int64_t, int64_t, OP>(left, &result.value_.bigint);
+		_templated_unary_fold<int64_t, int64_t, OP>(left,
+		                                            &result.value_.bigint);
 		break;
 	case TypeId::DECIMAL:
 		_templated_unary_fold<double, double, OP>(left, &result.value_.decimal);
 		break;
 	case TypeId::POINTER:
-		_templated_unary_fold<uint64_t, uint64_t, OP>(left, &result.value_.pointer);
+		_templated_unary_fold<uint64_t, uint64_t, OP>(left,
+		                                              &result.value_.pointer);
 		break;
 	case TypeId::DATE:
 		_templated_unary_fold<date_t, date_t, OP>(left, &result.value_.date);
@@ -55,7 +60,8 @@ template <class OP> Value _generic_unary_fold_loop(Vector &left, Value &result) 
 	return result;
 }
 
-template <class RES, class OP> Value _fixed_return_unary_fold_loop(Vector &left, RES *result) {
+template <class RES, class OP>
+Value _fixed_return_unary_fold_loop(Vector &left, RES *result) {
 	switch (left.type) {
 	case TypeId::TINYINT:
 		_templated_unary_fold<int8_t, RES, OP>(left, result);
@@ -133,12 +139,15 @@ bool VectorOperations::HasNull(Vector &left) {
 
 Value VectorOperations::MaximumStringLength(Vector &left) {
 	if (left.type != TypeId::VARCHAR) {
-		throw Exception("String length can only be computed for char array columns!");
+		throw Exception(
+		    "String length can only be computed for char array columns!");
 	}
 	auto result = Value::NumericValue(TypeId::POINTER, 0);
 	if (left.count == 0) {
 		return result;
 	}
-	_templated_unary_fold<const char*, uint64_t, operators::MaximumStringLength>(left, &result.value_.pointer);
+	_templated_unary_fold<const char *, uint64_t,
+	                      operators::MaximumStringLength>(
+	    left, &result.value_.pointer);
 	return result;
 }
