@@ -196,7 +196,7 @@ Value Value::CastAs(TypeId new_type) {
 }
 
 template <class OP>
-void Value::_templated_binary_operation(Value &left, Value &right,
+void Value::_templated_binary_operation(const Value &left, const Value &right,
                                         Value &result) {
 	if (left.type != right.type || left.type != result.type) {
 		throw NotImplementedException("Not matching type not implemented!");
@@ -239,31 +239,31 @@ void Value::_templated_binary_operation(Value &left, Value &right,
 //===--------------------------------------------------------------------===//
 // Numeric Operations
 //===--------------------------------------------------------------------===//
-void Value::Add(Value &left, Value &right, Value &result) {
+void Value::Add(const Value &left, const Value &right, Value &result) {
 	_templated_binary_operation<operators::Addition>(left, right, result);
 }
 
-void Value::Subtract(Value &left, Value &right, Value &result) {
+void Value::Subtract(const Value &left, const Value &right, Value &result) {
 	_templated_binary_operation<operators::Subtraction>(left, right, result);
 }
 
-void Value::Multiply(Value &left, Value &right, Value &result) {
+void Value::Multiply(const Value &left, const Value &right, Value &result) {
 	_templated_binary_operation<operators::Multiplication>(left, right, result);
 }
 
-void Value::Divide(Value &left, Value &right, Value &result) {
+void Value::Divide(const Value &left, const Value &right, Value &result) {
 	_templated_binary_operation<operators::Division>(left, right, result);
 }
 
-void Value::Modulo(Value &left, Value &right, Value &result) {
+void Value::Modulo(const Value &left, const Value &right, Value &result) {
 	_templated_binary_operation<operators::Modulo>(left, right, result);
 }
 
-void Value::Min(Value &left, Value &right, Value &result) {
+void Value::Min(const Value &left, const Value &right, Value &result) {
 	_templated_binary_operation<operators::Min>(left, right, result);
 }
 
-void Value::Max(Value &left, Value &right, Value &result) {
+void Value::Max(const Value &left, const Value &right, Value &result) {
 	_templated_binary_operation<operators::Max>(left, right, result);
 }
 
@@ -271,7 +271,7 @@ void Value::Max(Value &left, Value &right, Value &result) {
 // Comparison Operations
 //===--------------------------------------------------------------------===//
 template <class OP>
-bool Value::_templated_boolean_operation(Value &left, Value &right) {
+bool Value::_templated_boolean_operation(const Value &left, const Value &right) {
 	if (left.type != right.type) {
 		throw NotImplementedException("Not matching type not implemented!");
 	}
@@ -297,27 +297,27 @@ bool Value::_templated_boolean_operation(Value &left, Value &right) {
 	}
 }
 
-bool Value::Equals(Value &left, Value &right) {
+bool Value::Equals(const Value &left, const Value &right) {
 	return _templated_boolean_operation<operators::Equals>(left, right);
 }
 
-bool Value::NotEquals(Value &left, Value &right) {
+bool Value::NotEquals(const Value &left, const Value &right) {
 	return _templated_boolean_operation<operators::NotEquals>(left, right);
 }
 
-bool Value::GreaterThan(Value &left, Value &right) {
+bool Value::GreaterThan(const Value &left, const Value &right) {
 	return _templated_boolean_operation<operators::GreaterThan>(left, right);
 }
 
-bool Value::GreaterThanEquals(Value &left, Value &right) {
+bool Value::GreaterThanEquals(const Value &left, const Value &right) {
 	return _templated_boolean_operation<operators::GreaterThanEquals>(left,
 	                                                                  right);
 }
 
-bool Value::LessThan(Value &left, Value &right) {
+bool Value::LessThan(const Value &left, const Value &right) {
 	return _templated_boolean_operation<operators::LessThan>(left, right);
 }
 
-bool Value::LessThanEquals(Value &left, Value &right) {
+bool Value::LessThanEquals(const Value &left, const Value &right) {
 	return _templated_boolean_operation<operators::LessThanEquals>(left, right);
 }

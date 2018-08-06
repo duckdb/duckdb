@@ -23,6 +23,17 @@ class GroupRefExpression : public AbstractExpression {
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
 	virtual std::string ToString() const override { return std::string(); }
 
+	virtual bool Equals(const AbstractExpression *other_) override {
+		if (!AbstractExpression::Equals(other_)) {
+			return false;
+		}
+		auto other = reinterpret_cast<const GroupRefExpression*>(other_);
+		if (!other) {
+			return false;
+		}
+		return group_index == other->group_index;
+	}
+
 	//! The index of the group this expression is referencing
 	size_t group_index;
 };

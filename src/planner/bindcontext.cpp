@@ -46,6 +46,7 @@ BindContext::BindColumn(ColumnRefExpression &expr) {
 		}
 		expr.index = entry->second.first;
 		expr.reference = entry->second.second;
+		expr.return_type = entry->second.second->return_type;
 		return nullptr;
 	}
 

@@ -32,6 +32,11 @@ class ColumnRefExpression : public AbstractExpression {
 	      column_name(column_name), table_name(table_name), index((size_t)-1),
 	      reference(nullptr) {}
 
+	ColumnRefExpression(TypeId type, size_t index)
+	    : AbstractExpression(ExpressionType::COLUMN_REF, type),
+	      column_name(""), table_name(""), index(index),
+	      reference(nullptr) {}
+
 	const std::string &GetColumnName() const { return column_name; }
 	const std::string &GetTableName() const { return table_name; }
 
@@ -43,6 +48,17 @@ class ColumnRefExpression : public AbstractExpression {
 		if (return_type == TypeId::INVALID) {
 			throw Exception("Type of ColumnRefExpression was not resolved!");
 		}
+	}
+
+	virtual bool Equals(const AbstractExpression *other_) override {
+		if (!AbstractExpression::Equals(other_)) {
+			return false;
+		}
+		auto other = reinterpret_cast<const ColumnRefExpression*>(other_);
+		if (!other) {
+			return false;
+		}
+		return column_name == other->column_name && table_name == other->table_name;
 	}
 
 	//! Column index set by the binder, used to access data in the executor

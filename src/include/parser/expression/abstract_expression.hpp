@@ -104,6 +104,25 @@ class AbstractExpression : public Printable {
 	//! Returns the type of the expression
 	ExpressionType GetExpressionType() { return type; }
 
+	virtual bool Equals(const AbstractExpression *other) {
+		if (this->type != other->type) {
+			return false;
+		}
+		if (children.size() != other->children.size()) {
+			return false;
+		}
+		for(size_t i = 0; i < children.size(); i++) {
+			if (!children[i]->Equals(other->children[i].get())) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	bool operator==(const AbstractExpression &rhs) {
+		return this->Equals(&rhs);
+	}
+
 	//! Type of the expression
 	ExpressionType type;
 	//! Return type of the expression. This must be known in the execution

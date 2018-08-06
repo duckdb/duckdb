@@ -88,34 +88,34 @@ class Value : public Printable {
 	// Numeric Operations
 	//===--------------------------------------------------------------------===//
 	// A + B
-	static void Add(Value &left, Value &right, Value &result);
+	static void Add(const Value &left, const Value &right, Value &result);
 	// A - B
-	static void Subtract(Value &left, Value &right, Value &result);
+	static void Subtract(const Value &left, const Value &right, Value &result);
 	// A * B
-	static void Multiply(Value &left, Value &right, Value &result);
+	static void Multiply(const Value &left, const Value &right, Value &result);
 	// A / B
-	static void Divide(Value &left, Value &right, Value &result);
+	static void Divide(const Value &left, const Value &right, Value &result);
 	// A % B
-	static void Modulo(Value &left, Value &right, Value &result);
+	static void Modulo(const Value &left, const Value &right, Value &result);
 	// MIN(A, B)
-	static void Min(Value &left, Value &right, Value &result);
+	static void Min(const Value &left, const Value &right, Value &result);
 	// MAX(A, B)
-	static void Max(Value &left, Value &right, Value &result);
+	static void Max(const Value &left, const Value &right, Value &result);
 	//===--------------------------------------------------------------------===//
 	// Comparison Operations
 	//===--------------------------------------------------------------------===//
 	// A == B
-	static bool Equals(Value &left, Value &right);
+	static bool Equals(const Value &left, const Value &right);
 	// A != B
-	static bool NotEquals(Value &left, Value &right);
+	static bool NotEquals(const Value &left, const Value &right);
 	// A > B
-	static bool GreaterThan(Value &left, Value &right);
+	static bool GreaterThan(const Value &left, const Value &right);
 	// A >= B
-	static bool GreaterThanEquals(Value &left, Value &right);
+	static bool GreaterThanEquals(const Value &left, const Value &right);
 	// A < B
-	static bool LessThan(Value &left, Value &right);
+	static bool LessThan(const Value &left, const Value &right);
 	// A <= B
-	static bool LessThanEquals(Value &left, Value &right);
+	static bool LessThanEquals(const Value &left, const Value &right);
 
 	//! The type of the value
 	TypeId type;
@@ -143,11 +143,11 @@ class Value : public Printable {
 
 	//! Templated helper function for binary operations
 	template <class OP>
-	static void _templated_binary_operation(Value &left, Value &right,
+	static void _templated_binary_operation(const Value &left, const Value &right,
 	                                        Value &result);
 
 	//! Templated helper function for boolean operations
 	template <class OP>
-	static bool _templated_boolean_operation(Value &left, Value &right);
+	static bool _templated_boolean_operation(const Value &left, const Value &right);
 };
 } // namespace duckdb

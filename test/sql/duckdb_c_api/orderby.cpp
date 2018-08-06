@@ -22,6 +22,11 @@ TEST_CASE("Test order by statements", "[orderby]") {
 	REQUIRE(duckdb_query(connection, "INSERT INTO test VALUES (12, 21)", NULL) == DuckDBSuccess);
 	REQUIRE(duckdb_query(connection, "INSERT INTO test VALUES (13, 22)", NULL) == DuckDBSuccess);
 
+	REQUIRE(duckdb_query(connection, "SELECT b FROM test ORDER BY a DESC;", &result) == DuckDBSuccess);
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {22, 21, 22}));
+	duckdb_destroy_result(result);
+
+
 	REQUIRE(duckdb_query(connection, "SELECT a, b FROM test ORDER BY a;", &result) == DuckDBSuccess);
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {11, 12, 13}));
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {22, 21, 22}));
@@ -72,16 +77,23 @@ TEST_CASE("Test order by statements", "[orderby]") {
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {11, 12}));
 	duckdb_destroy_result(result);
 
-	// REQUIRE(duckdb_query(connection, "SELECT b % 2 AS f, SUM(a) FROM test GROUP BY f ORDER BY f;", &result) == DuckDBSuccess);
-	// REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {0, 1}));
-	// REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {24, 12}));
-	// duckdb_destroy_result(result);
+	// order by expression
+	REQUIRE(duckdb_query(connection, "SELECT b % 2 AS f, SUM(a) FROM test GROUP BY f ORDER BY b % 2;", &result) == DuckDBSuccess);
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {0, 1}));
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {24, 12}));
+	duckdb_destroy_result(result);
 
+	// order by expression that is not in SELECT
+	REQUIRE(duckdb_query(connection, "SELECT b % 2 AS f, a FROM test ORDER BY b % 4;", &result) == DuckDBSuccess);
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {1, 0, 0}));
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {12, 11, 13}));
+	duckdb_destroy_result(result);
 
-	// REQUIRE(duckdb_query(connection, "SELECT b % 2 AS f, SUM(a) FROM test GROUP BY f ORDER BY b % 2;", &result) == DuckDBSuccess);
-	// REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {0, 1}));
-	// REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {24, 12}));
-	// duckdb_destroy_result(result);
+	// ORDER BY alias
+	REQUIRE(duckdb_query(connection, "SELECT b % 2 AS f, SUM(a) FROM test GROUP BY f ORDER BY f;", &result) == DuckDBSuccess);
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {0, 1}));
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {24, 12}));
+	duckdb_destroy_result(result);
 
 	REQUIRE(duckdb_disconnect(connection) == DuckDBSuccess);
 	REQUIRE(duckdb_close(database) == DuckDBSuccess);

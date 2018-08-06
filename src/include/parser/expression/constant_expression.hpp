@@ -37,6 +37,18 @@ class ConstantExpression : public AbstractExpression {
 
 	virtual void ResolveStatistics() override { stats = Statistics(value); }
 
+
+	virtual bool Equals(const AbstractExpression *other_) override {
+		if (!AbstractExpression::Equals(other_)) {
+			return false;
+		}
+		auto other = reinterpret_cast<const ConstantExpression*>(other_);
+		if (!other) {
+			return false;
+		}
+		return Value::Equals(value, other->value);
+	}
+
 	//! The constant value referenced
 	Value value;
 };
