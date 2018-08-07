@@ -358,21 +358,6 @@ void VectorOperations::Or(Vector &left, Vector &right, Vector &result) {
 	}
 }
 
-void VectorOperations::Case(Vector &check, Vector &res_true, Vector &res_false,
-                            Vector &result) {
-	if (check.count != res_true.count || check.count != res_false.count) {
-		throw Exception("Vector lengths don't match");
-	}
-	// TODO: this should probably use some templating
-	for (size_t i = 0; i < check.count; i++) {
-		if (check.GetValue(i).value_.boolean) {
-			result.SetValue(i, res_true.GetValue(i));
-		} else {
-			result.SetValue(i, res_false.GetValue(i));
-		}
-	}
-}
-
 //===--------------------------------------------------------------------===//
 // Hash functions
 //===--------------------------------------------------------------------===//

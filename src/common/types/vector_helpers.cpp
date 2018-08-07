@@ -115,6 +115,36 @@ static void _copy_loop(Vector &left, void *target, size_t element_count,
 	}
 }
 
+template <class T>
+static void _case_loop(Vector &check, Vector &res_true, Vector &res_false,
+                            Vector &result) {
+	bool *cond = (bool *)check.data;
+	T *true_data = (T *)res_true.data;
+	T *false_data = (T *)res_false.data;
+	T *res = (T *)result.data;
+	if (check.sel_vector) {
+		throw Exception("Selection vector in case check not supported");
+	}
+
+	if (res_true.sel_vector && res_false.sel_vector) {
+		for(size_t i = 0; i < check.count; i++) {
+			res[i] = cond[i] ? true_data[res_true.sel_vector[i]] : false_data[res_false.sel_vector[i]];
+		}
+	} else if (res_false.sel_vector) {
+		for(size_t i = 0; i < check.count; i++) {
+			res[i] = cond[i] ? true_data[i] : false_data[res_false.sel_vector[i]];
+		}
+	} else if (res_true.sel_vector) {
+		for(size_t i = 0; i < check.count; i++) {
+			res[i] = cond[i] ? true_data[res_true.sel_vector[i]] : false_data[i];
+		}
+	} else {
+		for(size_t i = 0; i < check.count; i++) {
+			res[i] = cond[i] ? true_data[i] : false_data[i];
+		}
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // Helper Functions
 //===--------------------------------------------------------------------===//
@@ -162,6 +192,9 @@ void VectorOperations::Cast(Vector &source, Vector &result) {
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// Copy data from vector
+//===--------------------------------------------------------------------===//
 void VectorOperations::Copy(Vector &source, void *target, size_t element_count,
                             size_t offset) {
 	if (source.count == 0)
@@ -207,4 +240,48 @@ void VectorOperations::Copy(Vector &source, Vector &target, size_t offset) {
 	}
 	target.count = std::min(source.count - offset, target.maximum_size);
 	VectorOperations::Copy(source, target.data, target.count, offset);
+}
+
+
+//===--------------------------------------------------------------------===//
+// Case statement (if, else, then)
+//===--------------------------------------------------------------------===//
+void VectorOperations::Case(Vector &check, Vector &res_true, Vector &res_false,
+                            Vector &result) {
+	if (check.count != res_true.count || check.count != res_false.count) {
+		throw Exception("Vector lengths don't match");
+	}
+	if (check.type != TypeId::BOOLEAN) {
+		throw Exception("Case check has to be a boolean vector!");
+	}
+
+	switch (result.type) {
+	case TypeId::TINYINT:
+		_case_loop<int8_t>(check, res_true, res_false, result);
+		break;
+	case TypeId::SMALLINT:
+		_case_loop<int16_t>(check, res_true, res_false, result);
+		break;
+	case TypeId::INTEGER:
+		_case_loop<int32_t>(check, res_true, res_false, result);
+		break;
+	case TypeId::BIGINT:
+		_case_loop<int64_t>(check, res_true, res_false, result);
+		break;
+	case TypeId::DECIMAL:
+		_case_loop<double>(check, res_true, res_false, result);
+		break;
+	case TypeId::POINTER:
+		_case_loop<uint64_t>(check, res_true, res_false, result);
+		break;
+	case TypeId::VARCHAR:
+		_case_loop<const char *>(check, res_true, res_false, result);
+		break;
+	case TypeId::DATE:
+		_case_loop<date_t>(check, res_true, res_false, result);
+		break;
+	default:
+		throw NotImplementedException("Unimplemented type for case expression");
+	}
+	result.count = check.count;
 }
