@@ -37,6 +37,7 @@ void PhysicalInsert::GetChunk(DataChunk &result_chunk,
 			throw Exception("Insert count mismatch!");
 		}
 	}
+	result_chunk.data[0]->count = 1;
 	result_chunk.data[0]->SetValue(
 	    0, Value::NumericValue(TypeId::INTEGER, insert_chunk.data[0]->count));
 

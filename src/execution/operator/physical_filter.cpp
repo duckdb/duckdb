@@ -21,7 +21,8 @@ void PhysicalFilter::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 		}
 
 		if (expressions.size() == 0) {
-			throw Exception("Attempting to execute a filter without expressions");
+			throw Exception(
+			    "Attempting to execute a filter without expressions");
 		}
 
 		Vector result(TypeId::BOOLEAN, state->child_chunk.count);
@@ -53,7 +54,7 @@ void PhysicalFilter::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 			chunk.data[i]->sel_vector = chunk.sel_vector.get();
 		}
 		chunk.count = match_count;
-	} while(chunk.count == 0);
+	} while (chunk.count == 0);
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalFilter::GetOperatorState() {

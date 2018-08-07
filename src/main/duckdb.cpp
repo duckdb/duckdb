@@ -4,8 +4,8 @@
 #include "common/types/data_chunk.hpp"
 #include "execution/executor.hpp"
 #include "execution/physical_plan_generator.hpp"
-#include "storage/storage_manager.hpp"
 #include "optimizer/optimizer.hpp"
+#include "storage/storage_manager.hpp"
 
 #include "parser/parser.hpp"
 #include "planner/planner.hpp"
@@ -50,8 +50,7 @@ unique_ptr<DuckDBResult> DuckDBConnection::Query(const char *query) {
 
 	// now convert logical query plan into a physical query plan
 	PhysicalPlanGenerator physical_planner(database.catalog);
-	if (!physical_planner.CreatePlan(move(plan),
-	                                 move(planner.context))) {
+	if (!physical_planner.CreatePlan(move(plan), move(planner.context))) {
 		fprintf(stderr, "Failed to create physical plan: %s\n",
 		        physical_planner.GetErrorMessage().c_str());
 		return make_unique<DuckDBResult>(physical_planner.GetErrorMessage());

@@ -26,54 +26,59 @@ void _templated_unary_loop(Vector &left, Vector &result) {
 	result.count = left.count;
 }
 
-template <class T, class RES, class OP>
-void _templated_binary_loop(Vector &left, Vector &right, Vector &result) {
+template <class T, class RES, class OP, class EXEC>
+void _templated_binary_loop_handling(Vector &left, Vector &right,
+                                     Vector &result) {
 	T *ldata = (T *)left.data;
 	T *rdata = (T *)right.data;
 	RES *result_data = (RES *)result.data;
+
 	if (left.count == right.count) {
 		if (left.sel_vector && right.sel_vector) {
 			for (size_t i = 0; i < left.count; i++) {
-				result_data[i] = OP::Operation(ldata[left.sel_vector[i]],
-				                               rdata[right.sel_vector[i]]);
+				result_data[i] = EXEC::template Operation<T, T, RES, OP>(
+				    ldata[left.sel_vector[i]], rdata[right.sel_vector[i]]);
 			}
 		} else if (left.sel_vector) {
 			for (size_t i = 0; i < left.count; i++) {
-				result_data[i] =
-				    OP::Operation(ldata[left.sel_vector[i]], rdata[i]);
+				result_data[i] = EXEC::template Operation<T, T, RES, OP>(
+				    ldata[left.sel_vector[i]], rdata[i]);
 			}
 		} else if (right.sel_vector) {
 			for (size_t i = 0; i < left.count; i++) {
-				result_data[i] =
-				    OP::Operation(ldata[i], rdata[right.sel_vector[i]]);
+				result_data[i] = EXEC::template Operation<T, T, RES, OP>(
+				    ldata[i], rdata[right.sel_vector[i]]);
 			}
 		} else {
 			for (size_t i = 0; i < left.count; i++) {
-				result_data[i] = OP::Operation(ldata[i], rdata[i]);
+				result_data[i] =
+				    EXEC::template Operation<T, T, RES, OP>(ldata[i], rdata[i]);
 			}
 		}
 		result.count = left.count;
 	} else if (left.count == 1) {
 		if (right.sel_vector) {
 			for (size_t i = 0; i < right.count; i++) {
-				result_data[i] =
-				    OP::Operation(ldata[0], rdata[right.sel_vector[i]]);
+				result_data[i] = EXEC::template Operation<T, T, RES, OP>(
+				    ldata[0], rdata[right.sel_vector[i]]);
 			}
 		} else {
 			for (size_t i = 0; i < right.count; i++) {
-				result_data[i] = OP::Operation(ldata[0], rdata[i]);
+				result_data[i] =
+				    EXEC::template Operation<T, T, RES, OP>(ldata[0], rdata[i]);
 			}
 		}
 		result.count = right.count;
 	} else if (right.count == 1) {
 		if (left.sel_vector) {
 			for (size_t i = 0; i < left.count; i++) {
-				result_data[i] =
-				    OP::Operation(ldata[left.sel_vector[i]], rdata[0]);
+				result_data[i] = EXEC::template Operation<T, T, RES, OP>(
+				    ldata[left.sel_vector[i]], rdata[0]);
 			}
 		} else {
 			for (size_t i = 0; i < left.count; i++) {
-				result_data[i] = OP::Operation(ldata[i], rdata[0]);
+				result_data[i] =
+				    EXEC::template Operation<T, T, RES, OP>(ldata[i], rdata[0]);
 			}
 		}
 		result.count = left.count;
@@ -82,34 +87,23 @@ void _templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 	}
 }
 
-//===--------------------------------------------------------------------===//
-// Type Switches
-//===--------------------------------------------------------------------===//
-template <class OP> void _generic_unary_loop(Vector &left, Vector &result) {
-	switch (left.type) {
-	case TypeId::TINYINT:
-		_templated_unary_loop<int8_t, int8_t, OP>(left, result);
-		break;
-	case TypeId::SMALLINT:
-		_templated_unary_loop<int16_t, int16_t, OP>(left, result);
-		break;
-	case TypeId::INTEGER:
-		_templated_unary_loop<int32_t, int32_t, OP>(left, result);
-		break;
-	case TypeId::BIGINT:
-		_templated_unary_loop<int64_t, int64_t, OP>(left, result);
-		break;
-	case TypeId::DECIMAL:
-		_templated_unary_loop<double, double, OP>(left, result);
-		break;
-	case TypeId::POINTER:
-		_templated_unary_loop<uint64_t, uint64_t, OP>(left, result);
-		break;
-	default:
-		throw NotImplementedException("Unimplemented type");
+template <class T, class RES, class OP>
+void _templated_binary_loop(Vector &left, Vector &right, Vector &result,
+                            bool can_have_null) {
+	if (can_have_null) {
+		_templated_binary_loop_handling<T, RES, OP,
+		                                operators::ExecuteWithNullHandling>(
+		    left, right, result);
+	} else {
+		_templated_binary_loop_handling<T, RES, OP,
+		                                operators::ExecuteWithoutNullHandling>(
+		    left, right, result);
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// Type Switches
+//===--------------------------------------------------------------------===//
 template <class OP, class RES>
 void _fixed_return_unary_loop(Vector &left, Vector &result) {
 	switch (left.type) {
@@ -140,31 +134,39 @@ void _fixed_return_unary_loop(Vector &left, Vector &result) {
 }
 
 template <class OP>
-void _generic_binary_loop(Vector &left, Vector &right, Vector &result) {
+void _generic_binary_loop(Vector &left, Vector &right, Vector &result,
+                          bool can_have_null) {
 	if (left.type != right.type) {
 		throw NotImplementedException("Type cast not implemented here!");
 	}
 	switch (left.type) {
 	case TypeId::TINYINT:
-		_templated_binary_loop<int8_t, int8_t, OP>(left, right, result);
+		_templated_binary_loop<int8_t, int8_t, OP>(left, right, result,
+		                                           can_have_null);
 		break;
 	case TypeId::SMALLINT:
-		_templated_binary_loop<int16_t, int16_t, OP>(left, right, result);
+		_templated_binary_loop<int16_t, int16_t, OP>(left, right, result,
+		                                             can_have_null);
 		break;
 	case TypeId::INTEGER:
-		_templated_binary_loop<int32_t, int32_t, OP>(left, right, result);
+		_templated_binary_loop<int32_t, int32_t, OP>(left, right, result,
+		                                             can_have_null);
 		break;
 	case TypeId::BIGINT:
-		_templated_binary_loop<int64_t, int64_t, OP>(left, right, result);
+		_templated_binary_loop<int64_t, int64_t, OP>(left, right, result,
+		                                             can_have_null);
 		break;
 	case TypeId::DECIMAL:
-		_templated_binary_loop<double, double, OP>(left, right, result);
+		_templated_binary_loop<double, double, OP>(left, right, result,
+		                                           can_have_null);
 		break;
 	case TypeId::POINTER:
-		_templated_binary_loop<uint64_t, uint64_t, OP>(left, right, result);
+		_templated_binary_loop<uint64_t, uint64_t, OP>(left, right, result,
+		                                               can_have_null);
 		break;
 	case TypeId::DATE:
-		_templated_binary_loop<date_t, date_t, OP>(left, right, result);
+		_templated_binary_loop<date_t, date_t, OP>(left, right, result,
+		                                           can_have_null);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type");
@@ -172,31 +174,39 @@ void _generic_binary_loop(Vector &left, Vector &right, Vector &result) {
 }
 
 template <class OP, class RES>
-void _fixed_return_binary_loop(Vector &left, Vector &right, Vector &result) {
+void _fixed_return_binary_loop(Vector &left, Vector &right, Vector &result,
+                               bool can_have_null) {
 	if (left.type != right.type) {
 		throw NotImplementedException("Type cast not implemented here!");
 	}
 	switch (left.type) {
 	case TypeId::TINYINT:
-		_templated_binary_loop<int8_t, RES, OP>(left, right, result);
+		_templated_binary_loop<int8_t, RES, OP>(left, right, result,
+		                                        can_have_null);
 		break;
 	case TypeId::SMALLINT:
-		_templated_binary_loop<int16_t, RES, OP>(left, right, result);
+		_templated_binary_loop<int16_t, RES, OP>(left, right, result,
+		                                         can_have_null);
 		break;
 	case TypeId::INTEGER:
-		_templated_binary_loop<int32_t, RES, OP>(left, right, result);
+		_templated_binary_loop<int32_t, RES, OP>(left, right, result,
+		                                         can_have_null);
 		break;
 	case TypeId::BIGINT:
-		_templated_binary_loop<int64_t, RES, OP>(left, right, result);
+		_templated_binary_loop<int64_t, RES, OP>(left, right, result,
+		                                         can_have_null);
 		break;
 	case TypeId::DECIMAL:
-		_templated_binary_loop<double, RES, OP>(left, right, result);
+		_templated_binary_loop<double, RES, OP>(left, right, result,
+		                                        can_have_null);
 		break;
 	case TypeId::POINTER:
-		_templated_binary_loop<uint64_t, RES, OP>(left, right, result);
+		_templated_binary_loop<uint64_t, RES, OP>(left, right, result,
+		                                          can_have_null);
 		break;
 	case TypeId::DATE:
-		_templated_binary_loop<date_t, RES, OP>(left, right, result);
+		_templated_binary_loop<date_t, RES, OP>(left, right, result,
+		                                        can_have_null);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type");
@@ -207,23 +217,23 @@ void _fixed_return_binary_loop(Vector &left, Vector &right, Vector &result) {
 // Numeric Operations
 //===--------------------------------------------------------------------===//
 void VectorOperations::Add(Vector &left, Vector &right, Vector &result) {
-	_generic_binary_loop<operators::Addition>(left, right, result);
+	_generic_binary_loop<operators::Addition>(left, right, result, true);
 }
 
 void VectorOperations::Subtract(Vector &left, Vector &right, Vector &result) {
-	_generic_binary_loop<operators::Subtraction>(left, right, result);
+	_generic_binary_loop<operators::Subtraction>(left, right, result, true);
 }
 
 void VectorOperations::Multiply(Vector &left, Vector &right, Vector &result) {
-	_generic_binary_loop<operators::Multiplication>(left, right, result);
+	_generic_binary_loop<operators::Multiplication>(left, right, result, true);
 }
 
 void VectorOperations::Divide(Vector &left, Vector &right, Vector &result) {
-	_generic_binary_loop<operators::Division>(left, right, result);
+	_generic_binary_loop<operators::Division>(left, right, result, true);
 }
 
 void VectorOperations::Modulo(Vector &left, Vector &right, Vector &result) {
-	_generic_binary_loop<operators::Modulo>(left, right, result);
+	_generic_binary_loop<operators::Modulo>(left, right, result, true);
 }
 
 //===--------------------------------------------------------------------===//
@@ -290,33 +300,36 @@ void VectorOperations::Modulo(int64_t left, Vector &right, Vector &result) {
 // Comparison Operations
 //===--------------------------------------------------------------------===//
 void VectorOperations::Equals(Vector &left, Vector &right, Vector &result) {
-	_fixed_return_binary_loop<operators::Equals, bool>(left, right, result);
+	_fixed_return_binary_loop<operators::Equals, bool>(left, right, result,
+	                                                   true);
 }
 
 void VectorOperations::NotEquals(Vector &left, Vector &right, Vector &result) {
-	_fixed_return_binary_loop<operators::NotEquals, bool>(left, right, result);
+	_fixed_return_binary_loop<operators::NotEquals, bool>(left, right, result,
+	                                                      true);
 }
 
 void VectorOperations::GreaterThan(Vector &left, Vector &right,
                                    Vector &result) {
-	_fixed_return_binary_loop<operators::GreaterThan, bool>(left, right,
-	                                                        result);
+	_fixed_return_binary_loop<operators::GreaterThan, bool>(left, right, result,
+	                                                        true);
 }
 
 void VectorOperations::GreaterThanEquals(Vector &left, Vector &right,
                                          Vector &result) {
 	_fixed_return_binary_loop<operators::GreaterThanEquals, bool>(left, right,
-	                                                              result);
+	                                                              result, true);
 }
 
 void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result) {
-	_fixed_return_binary_loop<operators::LessThan, bool>(left, right, result);
+	_fixed_return_binary_loop<operators::LessThan, bool>(left, right, result,
+	                                                     true);
 }
 
 void VectorOperations::LessThanEquals(Vector &left, Vector &right,
                                       Vector &result) {
 	_fixed_return_binary_loop<operators::LessThanEquals, bool>(left, right,
-	                                                           result);
+	                                                           result, true);
 }
 
 void VectorOperations::And(Vector &left, Vector &right, Vector &result) {
@@ -325,7 +338,8 @@ void VectorOperations::And(Vector &left, Vector &right, Vector &result) {
 	}
 
 	if (left.count == right.count) {
-		_templated_binary_loop<bool, bool, operators::And>(left, right, result);
+		_templated_binary_loop<bool, bool, operators::And>(left, right, result,
+		                                                   true);
 	} else {
 		throw Exception("Vector lengths don't match");
 	}
@@ -337,7 +351,8 @@ void VectorOperations::Or(Vector &left, Vector &right, Vector &result) {
 	}
 
 	if (left.count == right.count) {
-		_templated_binary_loop<bool, bool, operators::Or>(left, right, result);
+		_templated_binary_loop<bool, bool, operators::Or>(left, right, result,
+		                                                  true);
 	} else {
 		throw Exception("Vector lengths don't match");
 	}
@@ -359,5 +374,5 @@ void VectorOperations::CombineHash(Vector &left, Vector &right,
 	}
 	VectorOperations::Hash(right, result);
 	_templated_binary_loop<int32_t, int32_t, operators::XOR>(left, result,
-	                                                         result);
+	                                                         result, false);
 }

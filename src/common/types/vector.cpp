@@ -40,20 +40,13 @@ Vector::Vector(Value value)
 	owned_data = unique_ptr<char[]>(new char[GetTypeIdSize(type)]);
 	data = owned_data.get();
 
-	if (TypeIsConstantSize(type)) {
-		memcpy(data, &value.value_, GetTypeIdSize(type));
-	} else {
+	if (!TypeIsConstantSize(type)) {
 		assert(type == TypeId::VARCHAR);
-		auto string = new char[value.str_value.size() + 1];
-		strcpy(string, value.str_value.c_str());
 		auto string_list = new unique_ptr<char[]>[1];
-		string_list[0] = unique_ptr<char[]>(string);
-
 		owned_strings = unique_ptr<unique_ptr<char[]>[]>(string_list);
-
-		char **base_data = (char **)data;
-		base_data[0] = string;
 	}
+
+	SetValue(0, value);
 }
 
 Vector::Vector()
@@ -75,12 +68,50 @@ void Vector::Destroy() {
 }
 
 void Vector::SetValue(size_t index, Value val) {
+	if (index >= count) {
+		throw Exception("Out of range exception!");
+	}
 	Value newVal = val.CastAs(type);
 	switch (type) {
-	case TypeId::INTEGER:
-		((int *)data)[index] = newVal.value_.integer;
-		count++;
+	case TypeId::BOOLEAN:
+		((int8_t *)data)[index] =
+		    val.is_null ? NullValue<int8_t>() : newVal.value_.boolean;
 		break;
+	case TypeId::TINYINT:
+		((int8_t *)data)[index] =
+		    val.is_null ? NullValue<int8_t>() : newVal.value_.tinyint;
+		break;
+	case TypeId::SMALLINT:
+		((int16_t *)data)[index] =
+		    val.is_null ? NullValue<int16_t>() : newVal.value_.smallint;
+		break;
+	case TypeId::INTEGER:
+		((int32_t *)data)[index] =
+		    val.is_null ? NullValue<int32_t>() : newVal.value_.integer;
+		break;
+	case TypeId::BIGINT:
+		((int64_t *)data)[index] =
+		    val.is_null ? NullValue<int64_t>() : newVal.value_.bigint;
+		break;
+	case TypeId::DECIMAL:
+		((double *)data)[index] =
+		    val.is_null ? NullValue<double>() : newVal.value_.decimal;
+		break;
+	case TypeId::POINTER:
+		((uint64_t *)data)[index] =
+		    val.is_null ? NullValue<uint64_t>() : newVal.value_.pointer;
+		break;
+	case TypeId::DATE:
+		((date_t *)data)[index] =
+		    val.is_null ? NullValue<date_t>() : newVal.value_.date;
+		break;
+	case TypeId::VARCHAR: {
+		auto string = new char[newVal.str_value.size() + 1];
+		strcpy(string, newVal.str_value.c_str());
+		owned_strings[index] = unique_ptr<char[]>(string);
+		((char **)data)[index] = newVal.is_null ? NullValue<char *>() : string;
+		break;
+	}
 	default:
 		throw NotImplementedException("Unimplemented type for adding");
 	}

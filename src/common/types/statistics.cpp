@@ -1,6 +1,6 @@
 
-#include "common/exception.hpp"
 #include "common/types/statistics.hpp"
+#include "common/exception.hpp"
 #include "common/types/vector.hpp"
 #include "common/types/vector_operations.hpp"
 
@@ -25,10 +25,10 @@ void Statistics::Verify(Vector &vector) {
 	}
 	if (type == TypeId::VARCHAR) {
 		Value actual_max_strlen = VectorOperations::MaximumStringLength(vector);
-		Value stats_max_strlen = Value::NumericValue(actual_max_strlen.type, maximum_string_length);
+		Value stats_max_strlen =
+		    Value::NumericValue(actual_max_strlen.type, maximum_string_length);
 		assert(Value::LessThanEquals(actual_max_strlen, stats_max_strlen));
 	}
-
 }
 #endif
 
@@ -52,8 +52,10 @@ void Statistics::Update(Vector &new_vector) {
 		}
 	}
 	if (type == TypeId::VARCHAR) {
-		Value new_max_strlen = VectorOperations::MaximumStringLength(new_vector);
-		maximum_string_length = std::max(maximum_string_length, new_max_strlen.value_.pointer);
+		Value new_max_strlen =
+		    VectorOperations::MaximumStringLength(new_vector);
+		maximum_string_length =
+		    std::max(maximum_string_length, new_max_strlen.value_.pointer);
 	}
 }
 

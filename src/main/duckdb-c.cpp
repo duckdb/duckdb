@@ -137,7 +137,6 @@ static Value _duckdb_c_get_value(duckdb_column column, duckdb_oid_t index) {
 	}
 }
 
-
 int duckdb_value_is_null(duckdb_column column, duckdb_oid_t index) {
 	if (index >= column.count) {
 		return -1;
@@ -161,7 +160,8 @@ int duckdb_value_is_null(duckdb_column column, duckdb_oid_t index) {
 	case DUCKDB_TYPE_DATE:
 		return IsNullValue<date_t>(get_value<date_t>(column, index));
 	case DUCKDB_TYPE_VARCHAR:
-		return IsNullValue<const char*>(get_value<const char*>(column, index));
+		return IsNullValue<const char *>(
+		    get_value<const char *>(column, index));
 	default:
 		throw std::runtime_error("Invalid value for C to C++ conversion!");
 	}

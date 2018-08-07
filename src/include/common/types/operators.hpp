@@ -18,6 +18,43 @@
 #include "common/types/hash.hpp"
 
 namespace operators {
+
+struct ExecuteIgnoreNull {
+	template <class L, class R, class RES, class OP>
+	static inline RES Operation(L left, R right) {
+		if (duckdb::IsNullValue<L>(left)) {
+			return right;
+		}
+		if (duckdb::IsNullValue<R>(right)) {
+			return left;
+		}
+		return OP::Operation(left, right);
+	}
+};
+struct ExecuteIgnoreLeftNull {
+	template <class L, class R, class RES, class OP>
+	static inline RES Operation(L left, R right) {
+		if (duckdb::IsNullValue<L>(left)) {
+			return right;
+		}
+		return OP::Operation(left, right);
+	}
+};
+struct ExecuteWithNullHandling {
+	template <class L, class R, class RES, class OP>
+	static inline RES Operation(L left, R right) {
+		if (duckdb::IsNullValue<L>(left) || duckdb::IsNullValue<R>(right)) {
+			return duckdb::NullValue<RES>();
+		}
+		return OP::Operation(left, right);
+	}
+};
+struct ExecuteWithoutNullHandling {
+	template <class L, class R, class RES, class OP>
+	static inline RES Operation(L left, R right) {
+		return OP::Operation(left, right);
+	}
+};
 //===--------------------------------------------------------------------===//
 // Numeric Operations
 //===--------------------------------------------------------------------===//
@@ -133,6 +170,18 @@ struct PickLeft {
 	}
 };
 
+struct SetCount {
+	template <class T> static inline T Operation(T left, T right) {
+		return duckdb::IsNullValue(left) ? 0 : 1;
+	}
+};
+
+struct AddOne {
+	template <class T> static inline T Operation(T left, T right) {
+		return right + 1;
+	}
+};
+
 struct Hash {
 	template <class T> static inline int32_t Operation(T left) {
 		return duckdb::Hash<T>(left);
@@ -145,11 +194,10 @@ struct NullCheck {
 	}
 };
 struct MaximumStringLength {
-	static inline uint64_t Operation(uint64_t left, const char* str) {
-		return std::max(left, (uint64_t) strlen(str));
+	static inline uint64_t Operation(const char *str, uint64_t right) {
+		return std::max((uint64_t)strlen(str), right);
 	}
 };
-
 
 //===--------------------------------------------------------------------===//
 // Casts

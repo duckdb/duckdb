@@ -18,7 +18,8 @@ namespace duckdb {
 class ConstantExpression : public AbstractExpression {
   public:
 	ConstantExpression()
-	    : AbstractExpression(ExpressionType::VALUE_CONSTANT), value() {}
+	    : AbstractExpression(ExpressionType::VALUE_CONSTANT, TypeId::INTEGER),
+	      value() {}
 	ConstantExpression(std::string val)
 	    : AbstractExpression(ExpressionType::VALUE_CONSTANT, TypeId::VARCHAR),
 	      value(val) {}
@@ -37,12 +38,11 @@ class ConstantExpression : public AbstractExpression {
 
 	virtual void ResolveStatistics() override { stats = Statistics(value); }
 
-
 	virtual bool Equals(const AbstractExpression *other_) override {
 		if (!AbstractExpression::Equals(other_)) {
 			return false;
 		}
-		auto other = reinterpret_cast<const ConstantExpression*>(other_);
+		auto other = reinterpret_cast<const ConstantExpression *>(other_);
 		if (!other) {
 			return false;
 		}

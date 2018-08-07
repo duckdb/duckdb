@@ -71,8 +71,18 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 		} else {
 			// aggregation without groups
 			// merge into the fixed list of aggregates
-			for (size_t i = 0; i < aggregates.size(); i++) {
-				executor.Merge(*aggregates[i], state->aggregates[i]);
+
+			if (state->aggregates.size() == 0) {
+				// first run: just store the values
+				state->aggregates.resize(aggregates.size());
+				for (size_t i = 0; i < aggregates.size(); i++) {
+					state->aggregates[i] = executor.Execute(*aggregates[i]);
+				}
+			} else {
+				// subsequent runs: merge the aggregates
+				for (size_t i = 0; i < aggregates.size(); i++) {
+					executor.Merge(*aggregates[i], state->aggregates[i]);
+				}
 			}
 		}
 	} while (state->child_chunk.count > 0);

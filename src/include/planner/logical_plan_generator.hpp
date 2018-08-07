@@ -29,6 +29,7 @@ class LogicalPlanGenerator : public SQLNodeVisitor {
 	virtual void Visit(SelectStatement &statement) override;
 	virtual void Visit(InsertStatement &statement) override;
 
+	virtual void Visit(AggregateExpression &expr) override;
 	virtual void Visit(BaseTableRefExpression &expr) override;
 	virtual void Visit(ComparisonExpression &expr) override;
 	virtual void Visit(ConjunctionExpression &expr) override;

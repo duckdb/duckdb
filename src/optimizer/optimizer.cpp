@@ -8,18 +8,20 @@ using namespace duckdb;
 using namespace std;
 
 Optimizer::Optimizer() {
-	rewriter.rules.push_back(make_unique_base<OptimizerRule, ConstantFoldingRule>());
+	rewriter.rules.push_back(
+	    make_unique_base<OptimizerRule, ConstantFoldingRule>());
 }
 
-void Optimizer::RewriteList(vector<unique_ptr<AbstractExpression>>& list) {
-	for(auto i = 0; i < list.size(); i++) {
+void Optimizer::RewriteList(vector<unique_ptr<AbstractExpression>> &list) {
+	for (auto i = 0; i < list.size(); i++) {
 		auto new_element = rewriter.ApplyRules(move(list[i]));
 		new_element->ResolveStatistics();
 		list[i] = move(new_element);
 	}
 }
 
-unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan) {
+unique_ptr<LogicalOperator>
+Optimizer::Optimize(unique_ptr<LogicalOperator> plan) {
 	success = false;
 	try {
 		plan->Accept(this);
@@ -45,7 +47,7 @@ void Optimizer::Visit(LogicalFilter &child) {
 
 void Optimizer::Visit(LogicalOrder &order) {
 	auto &list = order.description.orders;
-	for(auto i = 0; i < list.size(); i++) {
+	for (auto i = 0; i < list.size(); i++) {
 
 		auto new_element = rewriter.ApplyRules(move(list[i].expression));
 		new_element->ResolveStatistics();

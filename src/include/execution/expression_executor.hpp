@@ -45,6 +45,8 @@ class ExpressionExecutor : public SQLNodeVisitor {
 	//! Execute the given aggregate expression, and merge the result together
 	//! with v
 	void Merge(AggregateExpression &expr, Value &v);
+	//! Execute the given aggregate expression for the current chunk
+	Value Execute(AggregateExpression &expr);
 
 	void Visit(AggregateExpression &expr);
 	void Visit(BaseTableRefExpression &expr);

@@ -103,17 +103,18 @@ struct VectorOperations {
 	// Scatter methods
 	//===--------------------------------------------------------------------===//
 	struct Scatter {
-		// if count == (size_t) -1, then source.count is used
-		// otherwise only the first element of source is scattered [count] times
-
 		// dest[i] = source.data[i]
-		static void Set(Vector &source, void **dest, size_t count = (size_t)-1);
+		static void Set(Vector &source, Vector &dest);
 		// dest[i] = dest[i] + source.data[i]
-		static void Add(Vector &source, void **dest, size_t count = (size_t)-1);
+		static void Add(Vector &source, Vector &dest);
 		// dest[i] = max(dest[i], source.data[i])
-		static void Max(Vector &source, void **dest, size_t count = (size_t)-1);
+		static void Max(Vector &source, Vector &dest);
 		// dest[i] = min(dest[i], source.data[i])
-		static void Min(Vector &source, void **dest, size_t count = (size_t)-1);
+		static void Min(Vector &source, Vector &dest);
+		// dest[i] = len(source.data[i])
+		static void SetCount(Vector &source, Vector &dest);
+		// dest[i] = dest[i] + 1
+		static void AddOne(Vector &source, Vector &dest);
 
 		// dest[i] = dest[i] + source
 		static void Add(int64_t source, void **dest, size_t length);
@@ -121,7 +122,7 @@ struct VectorOperations {
 	// make sure dest.count is set for gather methods!
 	struct Gather {
 		// dest.data[i] = ptr[i]
-		static void Set(void **source, Vector &dest);
+		static void Set(Vector &source, Vector &dest);
 	};
 	//===--------------------------------------------------------------------===//
 	// Hash functions

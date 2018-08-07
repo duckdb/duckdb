@@ -45,13 +45,7 @@ void PhysicalAggregate::Initialize() {
 PhysicalAggregateOperatorState::PhysicalAggregateOperatorState(
     PhysicalAggregate *parent, PhysicalOperator *child)
     : PhysicalOperatorState(child) {
-	if (parent->groups.size() == 0) {
-		aggregates.resize(parent->aggregates.size());
-		for (size_t i = 0; i < parent->aggregates.size(); i++) {
-			aggregates[i] =
-			    Value::NumericValue(parent->aggregates[i]->return_type, 0);
-		}
-	} else {
+	if (parent->groups.size() > 0) {
 		vector<TypeId> group_types, aggregate_types;
 
 		for (auto &expr : parent->groups) {

@@ -10,8 +10,8 @@
 
 #pragma once
 
-#include <string>
 #include <math.h>
+#include <string>
 
 namespace duckdb {
 
@@ -306,30 +306,32 @@ std::string TypeIdToString(TypeId type);
 TypeId StringToTypeId(const std::string &str);
 size_t GetTypeIdSize(TypeId type);
 static bool TypeIsConstantSize(TypeId type) { return type < TypeId::VARCHAR; }
-static bool TypeIsNumeric(TypeId type) { return type >= TypeId::TINYINT && type <= TypeId::DATE; }
+static bool TypeIsNumeric(TypeId type) {
+	return type >= TypeId::TINYINT && type <= TypeId::DATE;
+}
 
-template<class T>
-inline T NullValue() {
+template <class T> inline T NullValue() {
 	return std::numeric_limits<T>::min();
 }
-template<>
-inline double NullValue() {
-	return NAN;
+template <> inline double NullValue() { return NAN; }
+template <> inline char *NullValue() { return nullptr; }
+template <> inline const char *NullValue() { return nullptr; }
+template <> inline uint8_t NullValue() {
+	return std::numeric_limits<uint8_t>::max();
 }
-template<>
-inline const char* NullValue() {
-	return nullptr;
+template <> inline uint16_t NullValue() {
+	return std::numeric_limits<uint16_t>::max();
 }
-
-template<class T>
-inline bool IsNullValue(T value) {
+template <> inline uint32_t NullValue() {
+	return std::numeric_limits<uint32_t>::max();
+}
+template <> inline uint64_t NullValue() {
+	return std::numeric_limits<uint64_t>::max();
+}
+template <class T> inline bool IsNullValue(T value) {
 	return value == NullValue<T>();
 }
-template<>
-inline bool IsNullValue(double value) {
-	return isnan(value);
-}
-
+template <> inline bool IsNullValue(double value) { return isnan(value); }
 
 std::string LogicalOperatorToString(LogicalOperatorType type);
 std::string PhysicalOperatorToString(PhysicalOperatorType type);

@@ -27,7 +27,7 @@ class GroupRefExpression : public AbstractExpression {
 		if (!AbstractExpression::Equals(other_)) {
 			return false;
 		}
-		auto other = reinterpret_cast<const GroupRefExpression*>(other_);
+		auto other = reinterpret_cast<const GroupRefExpression *>(other_);
 		if (!other) {
 			return false;
 		}

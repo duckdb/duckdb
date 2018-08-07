@@ -24,10 +24,13 @@ class AggregateExpression : public AbstractExpression {
 		this->distinct = distinct;
 
 		// translate COUNT(*) into AGGREGATE_COUNT_STAR
-		if (type == ExpressionType::AGGREGATE_COUNT && child &&
-		    child->GetExpressionType() == ExpressionType::STAR) {
-			child = nullptr;
-			type = ExpressionType::AGGREGATE_COUNT_STAR;
+		if (type == ExpressionType::AGGREGATE_COUNT) {
+			if (!child) {
+				this->type = ExpressionType::AGGREGATE_COUNT_STAR;
+			} else if (child->GetExpressionType() == ExpressionType::STAR) {
+				child = nullptr;
+				this->type = ExpressionType::AGGREGATE_COUNT_STAR;
+			}
 		}
 		switch (type) {
 		case ExpressionType::AGGREGATE_COUNT:
@@ -52,7 +55,7 @@ class AggregateExpression : public AbstractExpression {
 		// if count return an integer
 		case ExpressionType::AGGREGATE_COUNT:
 		case ExpressionType::AGGREGATE_COUNT_STAR:
-			return_type = TypeId::INTEGER;
+			return_type = TypeId::BIGINT;
 			break;
 		// return the type of the base
 		case ExpressionType::AGGREGATE_MAX:

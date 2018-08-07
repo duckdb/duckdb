@@ -24,9 +24,10 @@ class Statistics {
 	Statistics(TypeId type) : type(type) { Reset(); }
 	//! Initialize statistics for a vector with a single value
 	Statistics(Value value)
-	    : has_stats(true), can_have_null(value.is_null), min(value),
-	      max(value), type(value.type),
-	      maximum_string_length(value.type == TypeId::VARCHAR ? value.str_value.size() : 0) {}
+	    : has_stats(true), can_have_null(value.is_null), min(value), max(value),
+	      type(value.type),
+	      maximum_string_length(
+	          value.type == TypeId::VARCHAR ? value.str_value.size() : 0) {}
 
 	//! Whether or not statistics are available for the given column
 	bool has_stats;

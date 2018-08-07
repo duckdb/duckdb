@@ -32,27 +32,33 @@ class Value : public Printable {
 		value_.boolean = val;
 	}
 	//! Create a TINYINT value
-	Value(int8_t val) : type(TypeId::TINYINT), is_null(IsNullValue<int8_t>(val)) {
+	Value(int8_t val)
+	    : type(TypeId::TINYINT), is_null(IsNullValue<int8_t>(val)) {
 		value_.tinyint = val;
 	}
 	//! Create a SMALLINT value
-	Value(int16_t val) : type(TypeId::SMALLINT), is_null(IsNullValue<int16_t>(val)) {
+	Value(int16_t val)
+	    : type(TypeId::SMALLINT), is_null(IsNullValue<int16_t>(val)) {
 		value_.smallint = val;
 	}
 	//! Create an INTEGER value
-	Value(int32_t val) : type(TypeId::INTEGER), is_null(IsNullValue<int32_t>(val)) {
+	Value(int32_t val)
+	    : type(TypeId::INTEGER), is_null(IsNullValue<int32_t>(val)) {
 		value_.integer = val;
 	}
 	//! Create a BIGINT value
-	Value(int64_t val) : type(TypeId::BIGINT), is_null(IsNullValue<int64_t>(val)) {
+	Value(int64_t val)
+	    : type(TypeId::BIGINT), is_null(IsNullValue<int64_t>(val)) {
 		value_.bigint = val;
 	}
 	//! Create an OID value
-	Value(uint64_t val) : type(TypeId::POINTER), is_null(IsNullValue<uint64_t>(val)) {
+	Value(uint64_t val)
+	    : type(TypeId::POINTER), is_null(IsNullValue<uint64_t>(val)) {
 		value_.pointer = val;
 	}
 	//! Create a DOUBLE value
-	Value(double val) : type(TypeId::DECIMAL), is_null(IsNullValue<double>(val)) {
+	Value(double val)
+	    : type(TypeId::DECIMAL), is_null(IsNullValue<double>(val)) {
 		value_.decimal = val;
 	}
 	//! Create a VARCHAR value
@@ -143,11 +149,13 @@ class Value : public Printable {
 
 	//! Templated helper function for binary operations
 	template <class OP>
-	static void _templated_binary_operation(const Value &left, const Value &right,
-	                                        Value &result);
+	static void _templated_binary_operation(const Value &left,
+	                                        const Value &right, Value &result,
+	                                        bool ignore_null);
 
 	//! Templated helper function for boolean operations
 	template <class OP>
-	static bool _templated_boolean_operation(const Value &left, const Value &right);
+	static bool _templated_boolean_operation(const Value &left,
+	                                         const Value &right);
 };
 } // namespace duckdb

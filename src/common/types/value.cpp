@@ -11,7 +11,6 @@ Value::Value(const Value &other)
 	this->value_ = other.value_;
 }
 
-
 Value Value::MinimumValue(TypeId type) {
 	Value result;
 	result.type = type;
@@ -75,7 +74,6 @@ Value Value::MaximumValue(TypeId type) {
 	}
 	return result;
 }
-
 
 Value Value::NumericValue(TypeId id, int64_t value) {
 	switch (id) {
@@ -197,11 +195,34 @@ Value Value::CastAs(TypeId new_type) {
 
 template <class OP>
 void Value::_templated_binary_operation(const Value &left, const Value &right,
-                                        Value &result) {
+                                        Value &result, bool ignore_null) {
 	if (left.type != right.type || left.type != result.type) {
 		throw NotImplementedException("Not matching type not implemented!");
 	}
-	result.is_null = left.is_null || right.is_null;
+	if (left.is_null || right.is_null) {
+		if (ignore_null) {
+			if (!right.is_null) {
+				result = right;
+				return;
+			} else {
+				result = left;
+				return;
+			}
+		}
+		result.is_null = true;
+		return;
+	}
+	if (ignore_null) {
+		if (left.is_null) {
+			result = right;
+			return;
+		} else if (right.is_null) {
+			result = left;
+			return;
+		}
+	} else {
+		result.is_null = left.is_null || right.is_null;
+	}
 	switch (left.type) {
 	case TypeId::BOOLEAN:
 		result.value_.boolean =
@@ -240,38 +261,43 @@ void Value::_templated_binary_operation(const Value &left, const Value &right,
 // Numeric Operations
 //===--------------------------------------------------------------------===//
 void Value::Add(const Value &left, const Value &right, Value &result) {
-	_templated_binary_operation<operators::Addition>(left, right, result);
+	_templated_binary_operation<operators::Addition>(left, right, result,
+	                                                 false);
 }
 
 void Value::Subtract(const Value &left, const Value &right, Value &result) {
-	_templated_binary_operation<operators::Subtraction>(left, right, result);
+	_templated_binary_operation<operators::Subtraction>(left, right, result,
+	                                                    false);
 }
 
 void Value::Multiply(const Value &left, const Value &right, Value &result) {
-	_templated_binary_operation<operators::Multiplication>(left, right, result);
+	_templated_binary_operation<operators::Multiplication>(left, right, result,
+	                                                       false);
 }
 
 void Value::Divide(const Value &left, const Value &right, Value &result) {
-	_templated_binary_operation<operators::Division>(left, right, result);
+	_templated_binary_operation<operators::Division>(left, right, result,
+	                                                 false);
 }
 
 void Value::Modulo(const Value &left, const Value &right, Value &result) {
-	_templated_binary_operation<operators::Modulo>(left, right, result);
+	_templated_binary_operation<operators::Modulo>(left, right, result, false);
 }
 
 void Value::Min(const Value &left, const Value &right, Value &result) {
-	_templated_binary_operation<operators::Min>(left, right, result);
+	_templated_binary_operation<operators::Min>(left, right, result, true);
 }
 
 void Value::Max(const Value &left, const Value &right, Value &result) {
-	_templated_binary_operation<operators::Max>(left, right, result);
+	_templated_binary_operation<operators::Max>(left, right, result, true);
 }
 
 //===--------------------------------------------------------------------===//
 // Comparison Operations
 //===--------------------------------------------------------------------===//
 template <class OP>
-bool Value::_templated_boolean_operation(const Value &left, const Value &right) {
+bool Value::_templated_boolean_operation(const Value &left,
+                                         const Value &right) {
 	if (left.type != right.type) {
 		throw NotImplementedException("Not matching type not implemented!");
 	}

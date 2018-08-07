@@ -111,7 +111,7 @@ class AbstractExpression : public Printable {
 		if (children.size() != other->children.size()) {
 			return false;
 		}
-		for(size_t i = 0; i < children.size(); i++) {
+		for (size_t i = 0; i < children.size(); i++) {
 			if (!children[i]->Equals(other->children[i].get())) {
 				return false;
 			}

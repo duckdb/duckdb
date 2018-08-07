@@ -40,55 +40,63 @@ void ExpressionExecutor::Merge(AbstractExpression *expr, Vector &result) {
 	VectorOperations::And(vector, result, result);
 }
 
-void ExpressionExecutor::Merge(AggregateExpression &expr, Value &result) {
+Value ExpressionExecutor::Execute(AggregateExpression &expr) {
 	vector.Destroy();
-	if (result.type != expr.return_type) {
-		throw NotImplementedException(
-		    "Aggregate type does not match value type!");
-	}
-
-	if (expr.type == ExpressionType::AGGREGATE_COUNT) {
+	if (expr.type == ExpressionType::AGGREGATE_COUNT_STAR) {
 		// COUNT(*)
 		// Without FROM clause return "1", else return "count"
 		size_t count = chunk.column_count == 0 ? 1 : chunk.count;
-		Value v = Value::NumericValue(result.type, count);
-		Value::Add(result, v, result);
+		return Value::NumericValue(expr.return_type, count);
 	} else if (expr.children.size() > 0) {
-		Vector child;
 		expr.children[0]->Accept(this);
-		vector.Move(child);
-		vector.Resize(1, expr.return_type);
 		switch (expr.type) {
 		case ExpressionType::AGGREGATE_SUM: {
-			Value v = VectorOperations::Sum(child);
-			Value::Add(result, v, result);
-			break;
+			return VectorOperations::Sum(vector);
 		}
 		case ExpressionType::AGGREGATE_COUNT: {
-			Value v = VectorOperations::Count(child);
-			Value::Add(result, v, result);
-			break;
+			return VectorOperations::Count(vector);
 		}
 		case ExpressionType::AGGREGATE_AVG: {
-			Value v = VectorOperations::Sum(child);
-			Value::Add(result, v, result);
-			break;
+			return VectorOperations::Sum(vector);
 		}
 		case ExpressionType::AGGREGATE_MIN: {
-			Value v = VectorOperations::Min(child);
-			Value::Min(result, v, result);
-			break;
+			return VectorOperations::Min(vector);
 		}
 		case ExpressionType::AGGREGATE_MAX: {
-			Value v = VectorOperations::Max(child);
-			Value::Max(result, v, result);
-			break;
+			return VectorOperations::Max(vector);
 		}
 		default:
 			throw NotImplementedException("Unsupported aggregate type");
 		}
 	} else {
 		throw NotImplementedException("Aggregate expression without children!");
+	}
+}
+
+void ExpressionExecutor::Merge(AggregateExpression &expr, Value &result) {
+	if (result.type != expr.return_type) {
+		throw NotImplementedException(
+		    "Aggregate type does not match value type!");
+	}
+	Value v = Execute(expr);
+	switch (expr.type) {
+	case ExpressionType::AGGREGATE_COUNT_STAR:
+	case ExpressionType::AGGREGATE_SUM:
+	case ExpressionType::AGGREGATE_COUNT:
+	case ExpressionType::AGGREGATE_AVG: {
+		Value::Add(result, v, result);
+		break;
+	}
+	case ExpressionType::AGGREGATE_MIN: {
+		Value::Min(result, v, result);
+		break;
+	}
+	case ExpressionType::AGGREGATE_MAX: {
+		Value::Max(result, v, result);
+		break;
+	}
+	default:
+		throw NotImplementedException("Unsupported aggregate type");
 	}
 }
 

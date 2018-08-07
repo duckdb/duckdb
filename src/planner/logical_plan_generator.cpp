@@ -102,6 +102,18 @@ static void cast_children_to_equal_types(AbstractExpression &expr) {
 	}
 }
 
+void LogicalPlanGenerator::Visit(AggregateExpression &expr) {
+	SQLNodeVisitor::Visit(expr);
+	// add cast if types don't match
+	for (size_t i = 0; i < expr.children.size(); i++) {
+		auto &child = expr.children[i];
+		if (child->return_type != expr.return_type) {
+			auto cast = make_unique<CastExpression>(expr.return_type,
+			                                        move(expr.children[i]));
+			expr.children[i] = move(cast);
+		}
+	}
+}
 void LogicalPlanGenerator::Visit(BaseTableRefExpression &expr) {
 	auto table = catalog.GetTable(expr.schema_name, expr.table_name);
 	auto get_table = make_unique<LogicalGet>(

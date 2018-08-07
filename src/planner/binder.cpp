@@ -59,30 +59,38 @@ void Binder::Visit(SelectStatement &statement) {
 	// for the ORDER BY statement, we have to project all the columns
 	// in the projection phase as well
 	// for each expression in the ORDER BY check if it is projected already
-	for(size_t i = 0; i < statement.orderby.orders.size(); i++) {
+	for (size_t i = 0; i < statement.orderby.orders.size(); i++) {
 		size_t j = 0;
 		TypeId type = TypeId::INVALID;
-		for(; j < new_select_list.size(); j++) {
+		for (; j < new_select_list.size(); j++) {
 			// check if the expression matches exactly
-			if (statement.orderby.orders[i].expression->Equals(new_select_list[j].get())) {
+			if (statement.orderby.orders[i].expression->Equals(
+			        new_select_list[j].get())) {
 				// in this case, we can just create a reference in the ORDER BY
 				break;
 			}
 			// if the ORDER BY is an alias reference, check if the alias matches
-			if (statement.orderby.orders[i].expression->type == ExpressionType::COLUMN_REF &&
-				reinterpret_cast<ColumnRefExpression*>(statement.orderby.orders[i].expression.get())->reference == new_select_list[j].get()) {
+			if (statement.orderby.orders[i].expression->type ==
+			        ExpressionType::COLUMN_REF &&
+			    reinterpret_cast<ColumnRefExpression *>(
+			        statement.orderby.orders[i].expression.get())
+			            ->reference == new_select_list[j].get()) {
 				break;
 			}
 		}
 		if (j == new_select_list.size()) {
-			// if we didn't find a matching projection clause, we add it to the projection list
-			new_select_list.push_back(move(statement.orderby.orders[i].expression));
+			// if we didn't find a matching projection clause, we add it to the
+			// projection list
+			new_select_list.push_back(
+			    move(statement.orderby.orders[i].expression));
 		}
 		type = new_select_list[j]->return_type;
 		if (type == TypeId::INVALID) {
-			throw Exception("Could not deduce return type of ORDER BY expression");
+			throw Exception(
+			    "Could not deduce return type of ORDER BY expression");
 		}
-		statement.orderby.orders[i].expression = make_unique<ColumnRefExpression>(type, j);
+		statement.orderby.orders[i].expression =
+		    make_unique<ColumnRefExpression>(type, j);
 	}
 	statement.select_list = move(new_select_list);
 
@@ -149,7 +157,8 @@ void Binder::Visit(SelectStatement &statement) {
 				} else {
 					if (group->type == ExpressionType::COLUMN_REF) {
 						auto group_column =
-						    reinterpret_cast<ColumnRefExpression *>(group.get());
+						    reinterpret_cast<ColumnRefExpression *>(
+						        group.get());
 						if (group_column->index == select_column->index) {
 							statement.select_list[i] =
 							    make_unique<GroupRefExpression>(
