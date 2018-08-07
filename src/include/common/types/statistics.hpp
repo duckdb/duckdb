@@ -29,6 +29,8 @@ class Statistics {
 	      maximum_string_length(
 	          value.type == TypeId::VARCHAR ? value.str_value.size() : 0) {}
 
+	bool CanHaveNull() { return !has_stats || can_have_null; }
+
 	//! Whether or not statistics are available for the given column
 	bool has_stats;
 	//! True if the vector can potentially contain NULL values

@@ -216,143 +216,177 @@ void _fixed_return_binary_loop(Vector &left, Vector &right, Vector &result,
 //===--------------------------------------------------------------------===//
 // Numeric Operations
 //===--------------------------------------------------------------------===//
-void VectorOperations::Add(Vector &left, Vector &right, Vector &result) {
-	_generic_binary_loop<operators::Addition>(left, right, result, true);
+void VectorOperations::Add(Vector &left, Vector &right, Vector &result,
+                           bool can_have_null) {
+	_generic_binary_loop<operators::Addition>(left, right, result,
+	                                          can_have_null);
 }
 
-void VectorOperations::Subtract(Vector &left, Vector &right, Vector &result) {
-	_generic_binary_loop<operators::Subtraction>(left, right, result, true);
+void VectorOperations::Subtract(Vector &left, Vector &right, Vector &result,
+                                bool can_have_null) {
+	_generic_binary_loop<operators::Subtraction>(left, right, result,
+	                                             can_have_null);
 }
 
-void VectorOperations::Multiply(Vector &left, Vector &right, Vector &result) {
-	_generic_binary_loop<operators::Multiplication>(left, right, result, true);
+void VectorOperations::Multiply(Vector &left, Vector &right, Vector &result,
+                                bool can_have_null) {
+	_generic_binary_loop<operators::Multiplication>(left, right, result,
+	                                                can_have_null);
 }
 
-void VectorOperations::Divide(Vector &left, Vector &right, Vector &result) {
-	_generic_binary_loop<operators::Division>(left, right, result, true);
+void VectorOperations::Divide(Vector &left, Vector &right, Vector &result,
+                              bool can_have_null) {
+	_generic_binary_loop<operators::Division>(left, right, result,
+	                                          can_have_null);
 }
 
-void VectorOperations::Modulo(Vector &left, Vector &right, Vector &result) {
-	_generic_binary_loop<operators::Modulo>(left, right, result, true);
+void VectorOperations::Modulo(Vector &left, Vector &right, Vector &result,
+                              bool can_have_null) {
+	_generic_binary_loop<operators::Modulo>(left, right, result, can_have_null);
 }
 
 //===--------------------------------------------------------------------===//
 // Right-Hand Side Numeric Helpers
 //===--------------------------------------------------------------------===//
 template <VectorOperations::vector_function OP>
-static void _numeric_operator_right(Vector &left, int64_t right,
-                                    Vector &result) {
+static void _numeric_operator_right(Vector &left, int64_t right, Vector &result,
+                                    bool can_have_null) {
 	Vector constant(Value::NumericValue(left.type, right));
-	OP(left, constant, result);
+	OP(left, constant, result, can_have_null);
 }
 
-void VectorOperations::Add(Vector &left, int64_t right, Vector &result) {
-	_numeric_operator_right<VectorOperations::Add>(left, right, result);
+void VectorOperations::Add(Vector &left, int64_t right, Vector &result,
+                           bool can_have_null) {
+	_numeric_operator_right<VectorOperations::Add>(left, right, result,
+	                                               can_have_null);
 }
 
-void VectorOperations::Subtract(Vector &left, int64_t right, Vector &result) {
-	_numeric_operator_right<VectorOperations::Subtract>(left, right, result);
+void VectorOperations::Subtract(Vector &left, int64_t right, Vector &result,
+                                bool can_have_null) {
+	_numeric_operator_right<VectorOperations::Subtract>(left, right, result,
+	                                                    can_have_null);
 }
 
-void VectorOperations::Multiply(Vector &left, int64_t right, Vector &result) {
-	_numeric_operator_right<VectorOperations::Multiply>(left, right, result);
+void VectorOperations::Multiply(Vector &left, int64_t right, Vector &result,
+                                bool can_have_null) {
+	_numeric_operator_right<VectorOperations::Multiply>(left, right, result,
+	                                                    can_have_null);
 }
 
-void VectorOperations::Divide(Vector &left, int64_t right, Vector &result) {
-	_numeric_operator_right<VectorOperations::Divide>(left, right, result);
+void VectorOperations::Divide(Vector &left, int64_t right, Vector &result,
+                              bool can_have_null) {
+	_numeric_operator_right<VectorOperations::Divide>(left, right, result,
+	                                                  can_have_null);
 }
 
-void VectorOperations::Modulo(Vector &left, int64_t right, Vector &result) {
-	_numeric_operator_right<VectorOperations::Modulo>(left, right, result);
+void VectorOperations::Modulo(Vector &left, int64_t right, Vector &result,
+                              bool can_have_null) {
+	_numeric_operator_right<VectorOperations::Modulo>(left, right, result,
+	                                                  can_have_null);
 }
 
 //===--------------------------------------------------------------------===//
 // Left-Hand Side Numeric Helpers
 //===--------------------------------------------------------------------===//
 template <VectorOperations::vector_function OP>
-static void _numeric_operator_left(int64_t left, Vector &right,
-                                   Vector &result) {
+static void _numeric_operator_left(int64_t left, Vector &right, Vector &result,
+                                   bool can_have_null) {
 	Vector constant(Value::NumericValue(right.type, left));
-	OP(constant, right, result);
+	OP(constant, right, result, can_have_null);
 }
 
-void VectorOperations::Add(int64_t left, Vector &right, Vector &result) {
-	_numeric_operator_left<VectorOperations::Add>(left, right, result);
+void VectorOperations::Add(int64_t left, Vector &right, Vector &result,
+                           bool can_have_null) {
+	_numeric_operator_left<VectorOperations::Add>(left, right, result,
+	                                              can_have_null);
 }
 
-void VectorOperations::Subtract(int64_t left, Vector &right, Vector &result) {
-	_numeric_operator_left<VectorOperations::Subtract>(left, right, result);
+void VectorOperations::Subtract(int64_t left, Vector &right, Vector &result,
+                                bool can_have_null) {
+	_numeric_operator_left<VectorOperations::Subtract>(left, right, result,
+	                                                   can_have_null);
 }
 
-void VectorOperations::Multiply(int64_t left, Vector &right, Vector &result) {
-	_numeric_operator_left<VectorOperations::Multiply>(left, right, result);
+void VectorOperations::Multiply(int64_t left, Vector &right, Vector &result,
+                                bool can_have_null) {
+	_numeric_operator_left<VectorOperations::Multiply>(left, right, result,
+	                                                   can_have_null);
 }
 
-void VectorOperations::Divide(int64_t left, Vector &right, Vector &result) {
-	_numeric_operator_left<VectorOperations::Divide>(left, right, result);
+void VectorOperations::Divide(int64_t left, Vector &right, Vector &result,
+                              bool can_have_null) {
+	_numeric_operator_left<VectorOperations::Divide>(left, right, result,
+	                                                 can_have_null);
 }
 
-void VectorOperations::Modulo(int64_t left, Vector &right, Vector &result) {
-	_numeric_operator_left<VectorOperations::Modulo>(left, right, result);
+void VectorOperations::Modulo(int64_t left, Vector &right, Vector &result,
+                              bool can_have_null) {
+	_numeric_operator_left<VectorOperations::Modulo>(left, right, result,
+	                                                 can_have_null);
 }
 
 //===--------------------------------------------------------------------===//
 // Comparison Operations
 //===--------------------------------------------------------------------===//
-void VectorOperations::Equals(Vector &left, Vector &right, Vector &result) {
+void VectorOperations::Equals(Vector &left, Vector &right, Vector &result,
+                              bool can_have_null) {
 	_fixed_return_binary_loop<operators::Equals, bool>(left, right, result,
-	                                                   true);
+	                                                   can_have_null);
 }
 
-void VectorOperations::NotEquals(Vector &left, Vector &right, Vector &result) {
+void VectorOperations::NotEquals(Vector &left, Vector &right, Vector &result,
+                                 bool can_have_null) {
 	_fixed_return_binary_loop<operators::NotEquals, bool>(left, right, result,
-	                                                      true);
+	                                                      can_have_null);
 }
 
-void VectorOperations::GreaterThan(Vector &left, Vector &right,
-                                   Vector &result) {
+void VectorOperations::GreaterThan(Vector &left, Vector &right, Vector &result,
+                                   bool can_have_null) {
 	_fixed_return_binary_loop<operators::GreaterThan, bool>(left, right, result,
-	                                                        true);
+	                                                        can_have_null);
 }
 
 void VectorOperations::GreaterThanEquals(Vector &left, Vector &right,
-                                         Vector &result) {
-	_fixed_return_binary_loop<operators::GreaterThanEquals, bool>(left, right,
-	                                                              result, true);
+                                         Vector &result, bool can_have_null) {
+	_fixed_return_binary_loop<operators::GreaterThanEquals, bool>(
+	    left, right, result, can_have_null);
 }
 
-void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result) {
+void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result,
+                                bool can_have_null) {
 	_fixed_return_binary_loop<operators::LessThan, bool>(left, right, result,
-	                                                     true);
+	                                                     can_have_null);
 }
 
 void VectorOperations::LessThanEquals(Vector &left, Vector &right,
-                                      Vector &result) {
-	_fixed_return_binary_loop<operators::LessThanEquals, bool>(left, right,
-	                                                           result, true);
+                                      Vector &result, bool can_have_null) {
+	_fixed_return_binary_loop<operators::LessThanEquals, bool>(
+	    left, right, result, can_have_null);
 }
 
-void VectorOperations::And(Vector &left, Vector &right, Vector &result) {
+void VectorOperations::And(Vector &left, Vector &right, Vector &result,
+                           bool can_have_null) {
 	if (left.type != TypeId::BOOLEAN || right.type != TypeId::BOOLEAN) {
 		throw NotImplementedException("FIXME cast");
 	}
 
 	if (left.count == right.count) {
 		_templated_binary_loop<bool, bool, operators::And>(left, right, result,
-		                                                   true);
+		                                                   can_have_null);
 	} else {
 		throw Exception("Vector lengths don't match");
 	}
 }
 
-void VectorOperations::Or(Vector &left, Vector &right, Vector &result) {
+void VectorOperations::Or(Vector &left, Vector &right, Vector &result,
+                          bool can_have_null) {
 	if (left.type != TypeId::BOOLEAN || right.type != TypeId::BOOLEAN) {
 		throw NotImplementedException("FIXME cast");
 	}
 
 	if (left.count == right.count) {
 		_templated_binary_loop<bool, bool, operators::Or>(left, right, result,
-		                                                  true);
+		                                                  can_have_null);
 	} else {
 		throw Exception("Vector lengths don't match");
 	}

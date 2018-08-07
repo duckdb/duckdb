@@ -189,8 +189,8 @@ struct Hash {
 };
 
 struct NullCheck {
-	template <class T> static inline bool Operation(bool left, T right) {
-		return left || duckdb::IsNullValue<T>(right);
+	template <class T> static inline bool Operation(T left, bool right) {
+		return duckdb::IsNullValue<T>(left) || right;
 	}
 };
 struct MaximumStringLength {

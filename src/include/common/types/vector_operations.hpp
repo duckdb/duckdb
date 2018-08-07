@@ -18,86 +18,109 @@ namespace duckdb {
 // vectors. In general, the operators must all have the same type, otherwise an
 // exception is thrown.
 struct VectorOperations {
-	typedef void (*vector_function)(Vector &left, Vector &right,
-	                                Vector &result);
+	typedef void (*vector_function)(Vector &left, Vector &right, Vector &result,
+	                                bool can_have_null);
 
 	//===--------------------------------------------------------------------===//
 	// Numeric Operations
 	//===--------------------------------------------------------------------===//
 	// A + B
-	static void Add(Vector &left, Vector &right, Vector &result);
+	static void Add(Vector &left, Vector &right, Vector &result,
+	                bool can_have_null = true);
 	// A - B
-	static void Subtract(Vector &left, Vector &right, Vector &result);
+	static void Subtract(Vector &left, Vector &right, Vector &result,
+	                     bool can_have_null = true);
 	// A * B
-	static void Multiply(Vector &left, Vector &right, Vector &result);
+	static void Multiply(Vector &left, Vector &right, Vector &result,
+	                     bool can_have_null = true);
 	// A / B
-	static void Divide(Vector &left, Vector &right, Vector &result);
+	static void Divide(Vector &left, Vector &right, Vector &result,
+	                   bool can_have_null = true);
 	// A % B
-	static void Modulo(Vector &left, Vector &right, Vector &result);
+	static void Modulo(Vector &left, Vector &right, Vector &result,
+	                   bool can_have_null = true);
 
 	// A + B
-	static void Add(Vector &left, int64_t right, Vector &result);
+	static void Add(Vector &left, int64_t right, Vector &result,
+	                bool can_have_null = true);
 	// A - B
-	static void Subtract(Vector &left, int64_t right, Vector &result);
+	static void Subtract(Vector &left, int64_t right, Vector &result,
+	                     bool can_have_null = true);
 	// A * B
-	static void Multiply(Vector &left, int64_t right, Vector &result);
+	static void Multiply(Vector &left, int64_t right, Vector &result,
+	                     bool can_have_null = true);
 	// A / B
-	static void Divide(Vector &left, int64_t right, Vector &result);
+	static void Divide(Vector &left, int64_t right, Vector &result,
+	                   bool can_have_null = true);
 	// A % B
-	static void Modulo(Vector &left, int64_t right, Vector &result);
+	static void Modulo(Vector &left, int64_t right, Vector &result,
+	                   bool can_have_null = true);
 
 	// A + B
-	static void Add(int64_t left, Vector &right, Vector &result);
+	static void Add(int64_t left, Vector &right, Vector &result,
+	                bool can_have_null = true);
 	// A - B
-	static void Subtract(int64_t left, Vector &right, Vector &result);
+	static void Subtract(int64_t left, Vector &right, Vector &result,
+	                     bool can_have_null = true);
 	// A * B
-	static void Multiply(int64_t left, Vector &right, Vector &result);
+	static void Multiply(int64_t left, Vector &right, Vector &result,
+	                     bool can_have_null = true);
 	// A / B
-	static void Divide(int64_t left, Vector &right, Vector &result);
+	static void Divide(int64_t left, Vector &right, Vector &result,
+	                   bool can_have_null = true);
 	// A % B
-	static void Modulo(int64_t left, Vector &right, Vector &result);
+	static void Modulo(int64_t left, Vector &right, Vector &result,
+	                   bool can_have_null = true);
 
 	//===--------------------------------------------------------------------===//
 	// Boolean Operations
 	//===--------------------------------------------------------------------===//
 	// A && B
-	static void And(Vector &left, Vector &right, Vector &result);
+	static void And(Vector &left, Vector &right, Vector &result,
+	                bool can_have_null = true);
 	// A || B
-	static void Or(Vector &left, Vector &right, Vector &result);
+	static void Or(Vector &left, Vector &right, Vector &result,
+	               bool can_have_null = true);
 
 	//===--------------------------------------------------------------------===//
 	// Comparison Operations
 	//===--------------------------------------------------------------------===//
 	// A == B
-	static void Equals(Vector &left, Vector &right, Vector &result);
+	static void Equals(Vector &left, Vector &right, Vector &result,
+	                   bool can_have_null = true);
 	// A != B
-	static void NotEquals(Vector &left, Vector &right, Vector &result);
+	static void NotEquals(Vector &left, Vector &right, Vector &result,
+	                      bool can_have_null = true);
 	// A > B
-	static void GreaterThan(Vector &left, Vector &right, Vector &result);
+	static void GreaterThan(Vector &left, Vector &right, Vector &result,
+	                        bool can_have_null = true);
 	// A >= B
-	static void GreaterThanEquals(Vector &left, Vector &right, Vector &result);
+	static void GreaterThanEquals(Vector &left, Vector &right, Vector &result,
+	                              bool can_have_null = true);
 	// A < B
-	static void LessThan(Vector &left, Vector &right, Vector &result);
+	static void LessThan(Vector &left, Vector &right, Vector &result,
+	                     bool can_have_null = true);
 	// A <= B
-	static void LessThanEquals(Vector &left, Vector &right, Vector &result);
+	static void LessThanEquals(Vector &left, Vector &right, Vector &result,
+	                           bool can_have_null = true);
 
 	//===--------------------------------------------------------------------===//
 	// Aggregates
 	//===--------------------------------------------------------------------===//
 	// SUM(A)
-	static Value Sum(Vector &source);
+	static Value Sum(Vector &source, bool can_have_null = true);
 	// COUNT(A)
-	static Value Count(Vector &source);
+	static Value Count(Vector &source, bool can_have_null = true);
 	// AVG(A)
-	static Value Average(Vector &source);
+	static Value Average(Vector &source, bool can_have_null = true);
 	// MAX(A)
-	static Value Max(Vector &left);
+	static Value Max(Vector &left, bool can_have_null = true);
 	// MIN(A)
-	static Value Min(Vector &left);
+	static Value Min(Vector &left, bool can_have_null = true);
 	// Returns whether or not a vector has a NULL value
-	static bool HasNull(Vector &left);
+	static bool HasNull(Vector &left, bool can_have_null = true);
 	// Maximum string length of the vector, only works on string vectors!
-	static Value MaximumStringLength(Vector &left);
+	static Value MaximumStringLength(Vector &left, bool can_have_null = true);
 
 	// CASE expressions, ternary op
 	static void Case(Vector &check, Vector &res_true, Vector &res_false,

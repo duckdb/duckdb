@@ -41,7 +41,8 @@ TEST_CASE("Test scalar queries", "[scalarquery]") {
 	REQUIRE(CHECK_NUMERIC(result, 0, 0, 3));
 	duckdb_destroy_result(result);
 
-	REQUIRE(duckdb_query(connection, "SELECT CASE WHEN 43 > 33 THEN 43 ELSE 33 END;",
+	REQUIRE(duckdb_query(connection,
+	                     "SELECT CASE WHEN 43 > 33 THEN 43 ELSE 33 END;",
 	                     &result) == DuckDBSuccess);
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {43}));
 	duckdb_destroy_result(result);

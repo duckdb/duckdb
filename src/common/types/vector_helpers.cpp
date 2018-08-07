@@ -117,7 +117,7 @@ static void _copy_loop(Vector &left, void *target, size_t element_count,
 
 template <class T>
 static void _case_loop(Vector &check, Vector &res_true, Vector &res_false,
-                            Vector &result) {
+                       Vector &result) {
 	bool *cond = (bool *)check.data;
 	T *true_data = (T *)res_true.data;
 	T *false_data = (T *)res_false.data;
@@ -127,19 +127,22 @@ static void _case_loop(Vector &check, Vector &res_true, Vector &res_false,
 	}
 
 	if (res_true.sel_vector && res_false.sel_vector) {
-		for(size_t i = 0; i < check.count; i++) {
-			res[i] = cond[i] ? true_data[res_true.sel_vector[i]] : false_data[res_false.sel_vector[i]];
+		for (size_t i = 0; i < check.count; i++) {
+			res[i] = cond[i] ? true_data[res_true.sel_vector[i]]
+			                 : false_data[res_false.sel_vector[i]];
 		}
 	} else if (res_false.sel_vector) {
-		for(size_t i = 0; i < check.count; i++) {
-			res[i] = cond[i] ? true_data[i] : false_data[res_false.sel_vector[i]];
+		for (size_t i = 0; i < check.count; i++) {
+			res[i] =
+			    cond[i] ? true_data[i] : false_data[res_false.sel_vector[i]];
 		}
 	} else if (res_true.sel_vector) {
-		for(size_t i = 0; i < check.count; i++) {
-			res[i] = cond[i] ? true_data[res_true.sel_vector[i]] : false_data[i];
+		for (size_t i = 0; i < check.count; i++) {
+			res[i] =
+			    cond[i] ? true_data[res_true.sel_vector[i]] : false_data[i];
 		}
 	} else {
-		for(size_t i = 0; i < check.count; i++) {
+		for (size_t i = 0; i < check.count; i++) {
 			res[i] = cond[i] ? true_data[i] : false_data[i];
 		}
 	}
@@ -241,7 +244,6 @@ void VectorOperations::Copy(Vector &source, Vector &target, size_t offset) {
 	target.count = std::min(source.count - offset, target.maximum_size);
 	VectorOperations::Copy(source, target.data, target.count, offset);
 }
-
 
 //===--------------------------------------------------------------------===//
 // Case statement (if, else, then)

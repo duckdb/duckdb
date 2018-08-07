@@ -43,7 +43,6 @@ void Statistics::Update(Vector &new_vector) {
 		Value new_min = VectorOperations::Min(new_vector);
 		Value new_max = VectorOperations::Max(new_vector);
 		if (!has_stats) {
-			has_stats = true;
 			min = new_min;
 			max = new_max;
 		} else {
@@ -57,11 +56,12 @@ void Statistics::Update(Vector &new_vector) {
 		maximum_string_length =
 		    std::max(maximum_string_length, new_max_strlen.value_.pointer);
 	}
+	has_stats = true;
 }
 
 void Statistics::Reset() {
 	has_stats = false;
-	can_have_null = true;
+	can_have_null = false;
 	min = Value();
 	max = Value();
 	maximum_string_length = 0;

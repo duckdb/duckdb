@@ -51,19 +51,19 @@ Value ExpressionExecutor::Execute(AggregateExpression &expr) {
 		expr.children[0]->Accept(this);
 		switch (expr.type) {
 		case ExpressionType::AGGREGATE_SUM: {
-			return VectorOperations::Sum(vector);
+			return VectorOperations::Sum(vector, expr.stats.CanHaveNull());
 		}
 		case ExpressionType::AGGREGATE_COUNT: {
-			return VectorOperations::Count(vector);
+			return VectorOperations::Count(vector, expr.stats.CanHaveNull());
 		}
 		case ExpressionType::AGGREGATE_AVG: {
-			return VectorOperations::Sum(vector);
+			return VectorOperations::Sum(vector, expr.stats.CanHaveNull());
 		}
 		case ExpressionType::AGGREGATE_MIN: {
-			return VectorOperations::Min(vector);
+			return VectorOperations::Min(vector, expr.stats.CanHaveNull());
 		}
 		case ExpressionType::AGGREGATE_MAX: {
-			return VectorOperations::Max(vector);
+			return VectorOperations::Max(vector, expr.stats.CanHaveNull());
 		}
 		default:
 			throw NotImplementedException("Unsupported aggregate type");
@@ -145,22 +145,24 @@ void ExpressionExecutor::Visit(ComparisonExpression &expr) {
 	vector.Resize(std::max(l.count, r.count), TypeId::BOOLEAN);
 	switch (expr.type) {
 	case ExpressionType::COMPARE_EQUAL:
-		VectorOperations::Equals(l, r, vector);
+		VectorOperations::Equals(l, r, vector, expr.stats.CanHaveNull());
 		break;
 	case ExpressionType::COMPARE_NOTEQUAL:
-		VectorOperations::NotEquals(l, r, vector);
+		VectorOperations::NotEquals(l, r, vector, expr.stats.CanHaveNull());
 		break;
 	case ExpressionType::COMPARE_LESSTHAN:
-		VectorOperations::LessThan(l, r, vector);
+		VectorOperations::LessThan(l, r, vector, expr.stats.CanHaveNull());
 		break;
 	case ExpressionType::COMPARE_GREATERTHAN:
-		VectorOperations::GreaterThan(l, r, vector);
+		VectorOperations::GreaterThan(l, r, vector, expr.stats.CanHaveNull());
 		break;
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		VectorOperations::LessThanEquals(l, r, vector);
+		VectorOperations::LessThanEquals(l, r, vector,
+		                                 expr.stats.CanHaveNull());
 		break;
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		VectorOperations::GreaterThanEquals(l, r, vector);
+		VectorOperations::GreaterThanEquals(l, r, vector,
+		                                    expr.stats.CanHaveNull());
 		break;
 	case ExpressionType::COMPARE_LIKE:
 		throw NotImplementedException("Unimplemented compare: COMPARE_LIKE");
@@ -185,10 +187,10 @@ void ExpressionExecutor::Visit(ConjunctionExpression &expr) {
 	vector.Resize(std::max(l.count, r.count), TypeId::BOOLEAN);
 	switch (expr.type) {
 	case ExpressionType::CONJUNCTION_AND:
-		VectorOperations::And(l, r, vector);
+		VectorOperations::And(l, r, vector, expr.stats.CanHaveNull());
 		break;
 	case ExpressionType::CONJUNCTION_OR:
-		VectorOperations::Or(l, r, vector);
+		VectorOperations::Or(l, r, vector, expr.stats.CanHaveNull());
 		break;
 	default:
 		throw NotImplementedException("Unknown conjunction type!");
@@ -243,19 +245,19 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 
 		switch (expr.type) {
 		case ExpressionType::OPERATOR_ADD:
-			VectorOperations::Add(l, r, vector);
+			VectorOperations::Add(l, r, vector, expr.stats.CanHaveNull());
 			break;
 		case ExpressionType::OPERATOR_SUBTRACT:
-			VectorOperations::Subtract(l, r, vector);
+			VectorOperations::Subtract(l, r, vector, expr.stats.CanHaveNull());
 			break;
 		case ExpressionType::OPERATOR_MULTIPLY:
-			VectorOperations::Multiply(l, r, vector);
+			VectorOperations::Multiply(l, r, vector, expr.stats.CanHaveNull());
 			break;
 		case ExpressionType::OPERATOR_DIVIDE:
-			VectorOperations::Divide(l, r, vector);
+			VectorOperations::Divide(l, r, vector, expr.stats.CanHaveNull());
 			break;
 		case ExpressionType::OPERATOR_MOD:
-			VectorOperations::Modulo(l, r, vector);
+			VectorOperations::Modulo(l, r, vector, expr.stats.CanHaveNull());
 			break;
 		default:
 			throw NotImplementedException(

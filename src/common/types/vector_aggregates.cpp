@@ -117,63 +117,66 @@ Value _fixed_return_unary_fold_loop(Vector &left, RES *result) {
 //===--------------------------------------------------------------------===//
 // Aggregates
 //===--------------------------------------------------------------------===//
-Value VectorOperations::Sum(Vector &left) {
+Value VectorOperations::Sum(Vector &left, bool can_have_null) {
 	if (left.count == 0 || !TypeIsNumeric(left.type)) {
 		return Value();
 	}
 	Value result = Value::NumericValue(left.type, 0);
-	_generic_unary_fold_loop<operators::Addition>(left, result, true);
+	_generic_unary_fold_loop<operators::Addition>(left, result, can_have_null);
 	// FIXME: null check?
 	return result;
 }
 
-Value VectorOperations::Count(Vector &left) {
+Value VectorOperations::Count(Vector &left, bool can_have_null) {
 	Value result = Value::NumericValue(left.type, 0);
-	_generic_unary_fold_loop<operators::AddOne>(left, result, true);
+	_generic_unary_fold_loop<operators::AddOne>(left, result, can_have_null);
 	// FIXME: null check?
 	return result;
 	// return Value((int32_t)left.count);
 }
 
-Value VectorOperations::Average(Vector &left) {
+Value VectorOperations::Average(Vector &left, bool can_have_null) {
 	Value result;
-	Value sum = VectorOperations::Sum(left);
-	Value count = VectorOperations::Count(left);
+	Value sum = VectorOperations::Sum(left, can_have_null);
+	Value count = VectorOperations::Count(left, can_have_null);
 	Value::Divide(sum, count, result);
 	return result;
 }
 
-Value VectorOperations::Max(Vector &left) {
+Value VectorOperations::Max(Vector &left, bool can_have_null) {
 	if (left.count == 0 || !TypeIsNumeric(left.type)) {
 		return Value();
 	}
 	Value minimum_value = Value::MinimumValue(left.type);
 	Value result = minimum_value;
-	_generic_unary_fold_loop<operators::Max>(left, result, true);
+	_generic_unary_fold_loop<operators::Max>(left, result, can_have_null);
 	result.is_null =
 	    Value::Equals(result, minimum_value); // check if any tuples qualified
 	return result;
 }
 
-Value VectorOperations::Min(Vector &left) {
+Value VectorOperations::Min(Vector &left, bool can_have_null) {
 	if (left.count == 0 || !TypeIsNumeric(left.type)) {
 		return Value();
 	}
 	Value maximum_value = Value::MaximumValue(left.type);
 	Value result = maximum_value;
-	_generic_unary_fold_loop<operators::Min>(left, result, true);
+	_generic_unary_fold_loop<operators::Min>(left, result, can_have_null);
 	result.is_null =
 	    Value::Equals(result, maximum_value); // check if any tuples qualified
 	return result;
 }
 
-bool VectorOperations::HasNull(Vector &left) {
+bool VectorOperations::HasNull(Vector &left, bool can_have_null) {
+	if (!can_have_null) {
+		return false;
+	}
 	bool has_null = false;
 	_fixed_return_unary_fold_loop<bool, operators::NullCheck>(left, &has_null);
 	return has_null;
 }
 
-Value VectorOperations::MaximumStringLength(Vector &left) {
+Value VectorOperations::MaximumStringLength(Vector &left, bool can_have_null) {
 	if (left.type != TypeId::VARCHAR) {
 		throw Exception(
 		    "String length can only be computed for char array columns!");
@@ -184,6 +187,6 @@ Value VectorOperations::MaximumStringLength(Vector &left) {
 	}
 	_templated_unary_fold<const char *, uint64_t,
 	                      operators::MaximumStringLength>(
-	    left, &result.value_.pointer, true);
+	    left, &result.value_.pointer, can_have_null);
 	return result;
 }

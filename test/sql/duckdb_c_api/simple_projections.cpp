@@ -67,8 +67,10 @@ TEST_CASE("Test simple projection statements", "[simpleprojection]") {
 	duckdb_destroy_result(result);
 
 	// case
-	REQUIRE(duckdb_query(connection, "SELECT CASE WHEN a > 11 THEN 43 ELSE 44 END FROM test;",
-	                     &result) == DuckDBSuccess);
+	REQUIRE(
+	    duckdb_query(connection,
+	                 "SELECT CASE WHEN a > 11 THEN 43 ELSE 44 END FROM test;",
+	                 &result) == DuckDBSuccess);
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {44, 43, 43}));
 	duckdb_destroy_result(result);
 
