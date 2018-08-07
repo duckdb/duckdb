@@ -259,6 +259,23 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 	expr.stats.Verify(vector);
 }
 
+void ExpressionExecutor::Visit(CaseExpression &expr) {
+	if (expr.children.size() != 3) {
+		throw Exception("Cast needs three child nodes");
+	}
+	Vector check, res_true, res_false;
+	expr.children[0]->Accept(this);
+	vector.Move(check);
+	// TODO: check statistics on check to avoid computing everything
+	expr.children[1]->Accept(this);
+	vector.Move(res_true);
+	expr.children[2]->Accept(this);
+	vector.Move(res_false);
+	vector.Resize(check.count);
+	VectorOperations::Case(check, res_true, res_false, vector);
+	expr.stats.Verify(vector);
+}
+
 void ExpressionExecutor::Visit(SubqueryExpression &expr) {
 	throw NotImplementedException("");
 }
