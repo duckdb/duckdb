@@ -20,7 +20,6 @@ class BaseTableRefExpression : public TableRefExpression {
 	    : TableRefExpression(TableReferenceType::BASE_TABLE) {}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
-	virtual std::string ToString() const override { return std::string(); }
 
 	//! Database name, not used
 	std::string database_name;
@@ -28,5 +27,9 @@ class BaseTableRefExpression : public TableRefExpression {
 	std::string schema_name;
 	//! Table name
 	std::string table_name;
+
+	virtual std::string ToString() const override {
+		return "GET(" + schema_name + "." + table_name + ")";
+	}
 };
 } // namespace duckdb

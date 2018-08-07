@@ -31,15 +31,23 @@ class LogicalOperator : public Printable {
 
 	LogicalOperatorType GetOperatorType() { return type; }
 
+	virtual std::string ParamsToString() const { return std::string(); }
+
 	virtual std::string ToString() const override {
 		std::string result = LogicalOperatorToString(type);
+		result += ParamsToString();
 		if (children.size() > 0) {
-			result += " ( ";
-			for (auto &child : children) {
+			result += "(";
+			for (size_t i = 0; i < children.size(); i++) {
+				auto &child = children[i];
 				result += child->ToString();
+				if (i < children.size() - 1) {
+					result += ", ";
+				}
 			}
-			result += " )";
+			result += ")";
 		}
+
 		return result;
 	}
 

@@ -20,6 +20,5 @@ class CrossProductExpression : public TableRefExpression {
 	    : TableRefExpression(TableReferenceType::CROSS_PRODUCT) {}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
-	virtual std::string ToString() const override { return std::string(); }
 };
 } // namespace duckdb

@@ -21,7 +21,6 @@ class GroupRefExpression : public AbstractExpression {
 	      group_index(group_index) {}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
-	virtual std::string ToString() const override { return std::string(); }
 
 	//! The index of the group this expression is referencing
 	size_t group_index;

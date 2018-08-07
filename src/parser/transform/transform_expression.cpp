@@ -402,26 +402,56 @@ unique_ptr<AbstractExpression> TransformCase(CaseExpr *root) {
 	// but we rewrite to CASE WHEN expression = value THEN result ... to only
 	// have to handle one case downstream.
 	auto arg = TransformExpression(reinterpret_cast<Node *>(root->arg));
-	// TODO: is this the most elegant way of returning this list?
-	unique_ptr<vector<unique_ptr<CaseClause>>> clauses =
-	    make_unique<vector<unique_ptr<CaseClause>>>();
+
+	unique_ptr<AbstractExpression> def_res;
+	if (root->defresult) {
+		def_res = move(
+		    TransformExpression(reinterpret_cast<Node *>(root->defresult)));
+	} else {
+		Value null = Value(1);
+		null.is_null = true;
+		def_res = unique_ptr<AbstractExpression>(new ConstantExpression(null));
+	}
+	// def_res will be the else part of the innermost case expression
+
+	// CASE WHEN e1 THEN r1 WHEN w2 THEN r2 ELSE r3 is rewritten to
+	// CASE WHEN e1 THEN r1 ELSE CASE WHEN e2 THEN r2 ELSE r3
+
+	auto exp_root = unique_ptr<AbstractExpression>(new CaseExpression());
+	AbstractExpression *cur_root = exp_root.get();
+	AbstractExpression *next_root = nullptr;
+
 	for (auto cell = root->args->head; cell != nullptr; cell = cell->next) {
 		CaseWhen *w = reinterpret_cast<CaseWhen *>(cell->data.ptr_value);
-		auto when_raw = TransformExpression(reinterpret_cast<Node *>(w->expr));
-		unique_ptr<AbstractExpression> when;
-		if (arg.get()) {
-			when = unique_ptr<AbstractExpression>(new ComparisonExpression(
-			    ExpressionType::COMPARE_EQUAL, move(arg), move(when_raw)));
-		} else {
-			when = move(when_raw);
-		}
-		auto result = TransformExpression(reinterpret_cast<Node *>(w->result));
-		clauses->push_back(make_unique<CaseClause>(move(when), move(result)));
-	}
-	auto defresult =
-	    TransformExpression(reinterpret_cast<Node *>(root->defresult));
 
-	return make_unique<CaseExpression>(move(clauses), move(defresult));
+		auto test_raw = TransformExpression(reinterpret_cast<Node *>(w->expr));
+		unique_ptr<AbstractExpression> test;
+		if (arg.get()) {
+			test = unique_ptr<AbstractExpression>(new ComparisonExpression(
+			    ExpressionType::COMPARE_EQUAL, move(arg), move(test_raw)));
+		} else {
+			test = move(test_raw);
+		}
+
+		auto res_true =
+		    TransformExpression(reinterpret_cast<Node *>(w->result));
+
+		unique_ptr<AbstractExpression> res_false;
+		if (cell->next == nullptr) {
+			res_false = move(def_res);
+		} else {
+			res_false = unique_ptr<AbstractExpression>(new CaseExpression());
+			next_root = res_false.get();
+		}
+
+		cur_root->AddChild(move(test));
+		cur_root->AddChild(move(res_true));
+		cur_root->AddChild(move(res_false));
+
+		cur_root = next_root;
+	}
+
+	return move(exp_root);
 }
 
 unique_ptr<AbstractExpression> TransformExpression(Node *node) {

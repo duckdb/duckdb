@@ -104,6 +104,26 @@ class AbstractExpression : public Printable {
 	//! Returns the type of the expression
 	ExpressionType GetExpressionType() { return type; }
 
+	virtual std::string GetExprName() const {
+		return ExpressionTypeToString(type);
+	}
+
+	virtual std::string ToString() const override {
+		std::string result = GetExprName();
+		if (children.size() > 0) {
+			result += "(";
+			for (size_t i = 0; i < children.size(); i++) {
+				auto &child = children[i];
+				result += child->ToString();
+				if (i < children.size() - 1) {
+					result += ", ";
+				}
+			}
+			result += ")";
+		}
+		return result;
+	}
+
 	//! Type of the expression
 	ExpressionType type;
 	//! Return type of the expression. This must be known in the execution

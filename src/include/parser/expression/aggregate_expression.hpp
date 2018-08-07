@@ -72,7 +72,6 @@ class AggregateExpression : public AbstractExpression {
 	virtual bool IsAggregate() override { return true; }
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
-	virtual std::string ToString() const override { return std::string(); }
 
 	size_t index;
 
