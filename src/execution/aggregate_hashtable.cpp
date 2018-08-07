@@ -131,14 +131,15 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	Vector one(Value::NumericValue(TypeId::BIGINT, 1));
 	size_t j = 0;
 	for (size_t i = 0; i < aggregate_types.size(); i++) {
+		if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_STAR) {
+			continue;
+		}
 		if (new_count > 0) {
 			payload.data[j]->sel_vector = addresses.sel_vector = new_entries;
 			payload.data[j]->count = addresses.count = new_count;
 			// for any entries for which a new entry was created, set the
 			// initial value
 			switch (aggregate_types[i]) {
-			case ExpressionType::AGGREGATE_COUNT_STAR:
-				continue;
 			case ExpressionType::AGGREGATE_COUNT:
 				VectorOperations::Scatter::SetCount(*payload.data[j],
 				                                    addresses);
@@ -160,8 +161,6 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			payload.data[j]->count = addresses.count = updated_count;
 
 			switch (aggregate_types[i]) {
-			case ExpressionType::AGGREGATE_COUNT_STAR:
-				continue;
 			case ExpressionType::AGGREGATE_COUNT:
 				VectorOperations::Scatter::AddOne(*payload.data[j], addresses);
 				break;
