@@ -62,6 +62,7 @@ class ExpressionExecutor : public SQLNodeVisitor {
 	void Visit(OperatorExpression &expr);
 	void Visit(SubqueryExpression &expr);
 	void Visit(TableRefExpression &expr);
+	void Visit(CaseExpression &expr);
 
   private:
 	//! The data chunk of the current physical operator, used to resolve e.g.

@@ -335,4 +335,6 @@ template <> inline bool IsNullValue(double value) { return isnan(value); }
 
 std::string LogicalOperatorToString(LogicalOperatorType type);
 std::string PhysicalOperatorToString(PhysicalOperatorType type);
+std::string ExpressionTypeToString(ExpressionType type);
+
 } // namespace duckdb

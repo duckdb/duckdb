@@ -336,4 +336,115 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "INVALID";
 	}
 }
+
+string ExpressionTypeToString(ExpressionType type) {
+	switch (type) {
+	case ExpressionType::INVALID:
+		return "INVALID";
+	case ExpressionType::OPERATOR_ADD:
+		return "ADD";
+	case ExpressionType::OPERATOR_SUBTRACT:
+		return "SUBTRACT";
+	case ExpressionType::OPERATOR_MULTIPLY:
+		return "MULTIPLY";
+	case ExpressionType::OPERATOR_DIVIDE:
+		return "DIVIDE";
+	case ExpressionType::OPERATOR_CONCAT:
+		return "CONCAT";
+	case ExpressionType::OPERATOR_MOD:
+		return "MOD";
+	case ExpressionType::OPERATOR_CAST:
+		return "CAST";
+	case ExpressionType::OPERATOR_NOT:
+		return "NOT";
+	case ExpressionType::OPERATOR_IS_NULL:
+		return "IS_NULL";
+	case ExpressionType::OPERATOR_IS_NOT_NULL:
+		return "IS_NOT_NULL";
+	case ExpressionType::OPERATOR_EXISTS:
+		return "EXISTS";
+	case ExpressionType::OPERATOR_UNARY_MINUS:
+		return "UNARY_MINUS";
+	case ExpressionType::COMPARE_EQUAL:
+		return "EQUAL";
+	case ExpressionType::COMPARE_NOTEQUAL:
+		return "NOTEQUAL";
+	case ExpressionType::COMPARE_LESSTHAN:
+		return "LESSTHAN";
+	case ExpressionType::COMPARE_GREATERTHAN:
+		return "GREATERTHAN";
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		return "LESSTHANOREQUALTO";
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		return "GREATERTHANOREQUALTO";
+	case ExpressionType::COMPARE_LIKE:
+		return "LIKE";
+	case ExpressionType::COMPARE_NOTLIKE:
+		return "NOTLIKE";
+	case ExpressionType::COMPARE_IN:
+		return "IN";
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+		return "DISTINCT_FROM";
+	case ExpressionType::CONJUNCTION_AND:
+		return "AND";
+	case ExpressionType::CONJUNCTION_OR:
+		return "OR";
+	case ExpressionType::VALUE_CONSTANT:
+		return "CONSTANT";
+	case ExpressionType::VALUE_PARAMETER:
+		return "PARAMETER";
+	case ExpressionType::VALUE_TUPLE:
+		return "TUPLE";
+	case ExpressionType::VALUE_TUPLE_ADDRESS:
+		return "TUPLE_ADDRESS";
+	case ExpressionType::VALUE_NULL:
+		return "NULL";
+	case ExpressionType::VALUE_VECTOR:
+		return "VECTOR";
+	case ExpressionType::VALUE_SCALAR:
+		return "SCALAR";
+	case ExpressionType::AGGREGATE_COUNT:
+		return "COUNT";
+	case ExpressionType::AGGREGATE_COUNT_STAR:
+		return "COUNT_STAR";
+	case ExpressionType::AGGREGATE_SUM:
+		return "SUM";
+	case ExpressionType::AGGREGATE_MIN:
+		return "MIN";
+	case ExpressionType::AGGREGATE_MAX:
+		return "MAX";
+	case ExpressionType::AGGREGATE_AVG:
+		return "AVG";
+	case ExpressionType::FUNCTION:
+		return "FUNCTION";
+	case ExpressionType::HASH_RANGE:
+		return "HASH_RANGE";
+	case ExpressionType::OPERATOR_CASE_EXPR:
+		return "CASE";
+	case ExpressionType::OPERATOR_NULLIF:
+		return "NULLIF";
+	case ExpressionType::OPERATOR_COALESCE:
+		return "COALESCE";
+	case ExpressionType::ROW_SUBQUERY:
+		return "SUBQUERY";
+	case ExpressionType::SELECT_SUBQUERY:
+		return "SUBQUERY";
+	case ExpressionType::STAR:
+		return "STAR";
+	case ExpressionType::PLACEHOLDER:
+		return "PLACEHOLDER";
+	case ExpressionType::COLUMN_REF:
+		return "COLUMN_REF";
+	case ExpressionType::FUNCTION_REF:
+		return "FUNCTION_REF";
+	case ExpressionType::TABLE_REF:
+		return "TABLE_REF";
+	case ExpressionType::GROUP_REF:
+		return "GROUP_REF";
+	case ExpressionType::CAST:
+		return "CAST";
+	default:
+		return "UKNOWN_EXP_" + std::to_string((int)type);
+	}
+}
 }; // namespace duckdb

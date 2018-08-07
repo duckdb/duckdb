@@ -21,7 +21,6 @@ class GroupRefExpression : public AbstractExpression {
 	      group_index(group_index) {}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
-	virtual std::string ToString() const override { return std::string(); }
 
 	virtual bool Equals(const AbstractExpression *other_) override {
 		if (!AbstractExpression::Equals(other_)) {

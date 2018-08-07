@@ -194,8 +194,8 @@ struct NullCheck {
 	}
 };
 struct MaximumStringLength {
-	static inline uint64_t Operation(const char *str, uint64_t right) {
-		return std::max((uint64_t)strlen(str), right);
+	static inline uint64_t Operation(uint64_t left, const char *str) {
+		return std::max(left, (uint64_t)strlen(str));
 	}
 };
 

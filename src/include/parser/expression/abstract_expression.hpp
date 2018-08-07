@@ -121,6 +121,25 @@ class AbstractExpression : public Printable {
 
 	bool operator==(const AbstractExpression &rhs) {
 		return this->Equals(&rhs);
+		
+	virtual std::string GetExprName() const {
+		return ExpressionTypeToString(type);
+	}
+
+	virtual std::string ToString() const override {
+		std::string result = GetExprName();
+		if (children.size() > 0) {
+			result += "(";
+			for (size_t i = 0; i < children.size(); i++) {
+				auto &child = children[i];
+				result += child->ToString();
+				if (i < children.size() - 1) {
+					result += ", ";
+				}
+			}
+			result += ")";
+		}
+		return result;
 	}
 
 	//! Type of the expression

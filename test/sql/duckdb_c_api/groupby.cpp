@@ -90,7 +90,6 @@ TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {24, 12}));
 	duckdb_destroy_result(result);
 
-	// FIXME: proper upcasting
 	// REQUIRE(duckdb_query(connection, "SELECT b, AVG(a) FROM test GROUP BY
 	// b;", &result) == DuckDBSuccess);
 

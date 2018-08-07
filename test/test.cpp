@@ -23,7 +23,7 @@ int main() {
 	duckdb_database database;
 	duckdb_connection connection;
 
-	if (duckdb_open(NULL, &database) != DuckDBSuccess) {
+	if (duckdb_open((char *)0, &database) != DuckDBSuccess) {
 		fprintf(stderr, "Database startup failed!\n");
 		return 1;
 	}
@@ -48,10 +48,13 @@ int main() {
 	EXEC("CREATE TABLE test (a INTEGER, b INTEGER)");
 	EXEC("INSERT INTO test VALUES (11, 22)");
 	EXEC("INSERT INTO test VALUES (12, 21)");
-	EXEC("INSERT INTO test VALUES (13, 22)");
+	EXEC("INSERT INTO test (b, a) VALUES (22, 13)");
 	EXEC("SELECT a,b FROM test;");
 	EXEC("SELECT a + 2, b FROM test WHERE a = 11;");
 	EXEC("SELECT a + 2, b FROM test WHERE a = 12;");
+
+	EXEC("SELECT CASE WHEN a > 11 THEN 42 WHEN a > 12 THEN 43 ELSE 44 END AS "
+	     "res from test");
 
 	EXEC("SELECT SUM(41), COUNT(*);");
 	EXEC("SELECT SUM(a), COUNT(*) FROM test;");

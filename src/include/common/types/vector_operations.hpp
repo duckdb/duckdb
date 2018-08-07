@@ -99,6 +99,10 @@ struct VectorOperations {
 	// Maximum string length of the vector, only works on string vectors!
 	static Value MaximumStringLength(Vector &left);
 
+	// CASE expressions, ternary op
+	static void Case(Vector &check, Vector &res_true, Vector &res_false,
+	                 Vector &result);
+
 	//===--------------------------------------------------------------------===//
 	// Scatter methods
 	//===--------------------------------------------------------------------===//

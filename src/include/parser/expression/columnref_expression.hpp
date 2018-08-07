@@ -40,7 +40,6 @@ class ColumnRefExpression : public AbstractExpression {
 	const std::string &GetTableName() const { return table_name; }
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
-	virtual std::string ToString() const override { return std::string(); }
 
 	virtual void ResolveType() override {
 		AbstractExpression::ResolveType();
@@ -70,5 +69,9 @@ class ColumnRefExpression : public AbstractExpression {
 	std::string column_name;
 	//! Table name of the column name that is referenced (optional)
 	std::string table_name;
+
+	virtual std::string ToString() const override {
+		return table_name + "." + column_name;
+	}
 };
 } // namespace duckdb

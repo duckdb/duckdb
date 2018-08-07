@@ -21,6 +21,5 @@ class CastExpression : public AbstractExpression {
 	                         std::move(child)) {}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
-	virtual std::string ToString() const override { return std::string(); }
 };
 } // namespace duckdb

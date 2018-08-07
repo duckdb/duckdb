@@ -62,6 +62,7 @@ duckdbQuery(void *pConn,       /* Connection created by xConnect */
 
 	size_t r, c;
 	(void)zType;
+	fprintf(stderr, "Quack: %s\n", zSql);
 
 	if (duckdb_query(*((duckdb_connection *)pConn), (char *)zSql, &result) !=
 	    DuckDBSuccess) {

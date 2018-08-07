@@ -13,6 +13,8 @@
 #include "planner/operator/logical_order.hpp"
 #include "planner/operator/logical_projection.hpp"
 
+#include <map>
+
 using namespace duckdb;
 using namespace std;
 
@@ -148,6 +150,33 @@ void LogicalPlanGenerator::Visit(SubqueryExpression &expr) {
 
 void LogicalPlanGenerator::Visit(InsertStatement &statement) {
 	auto table = catalog.GetTable(statement.schema, statement.table);
-	auto insert = make_unique<LogicalInsert>(table, move(statement.values));
+	std::vector<std::unique_ptr<AbstractExpression>> insert_val_list;
+
+	if (statement.columns.size() == 0) {
+		if (statement.values.size() != table->columns.size()) {
+			throw Exception("Not enough values for insert");
+		}
+		for (size_t i = 0; i < statement.values.size(); i++) {
+			insert_val_list.push_back(move(statement.values[i]));
+		}
+	} else {
+		if (statement.values.size() != statement.columns.size()) {
+			throw Exception("Column name/value mismatch");
+		}
+		map<std::string, unique_ptr<AbstractExpression>> insert_vals;
+		for (size_t i = 0; i < statement.values.size(); i++) {
+			insert_vals[statement.columns[i]] = move(statement.values[i]);
+		}
+		for (auto col : table->columns) {
+			if (insert_vals.count(col->name)) { // column value was specified
+				insert_val_list.push_back(move(insert_vals[col->name]));
+			} else {
+				insert_val_list.push_back(std::unique_ptr<AbstractExpression>(
+				    new ConstantExpression(col->default_value)));
+			}
+		}
+	}
+
+	auto insert = make_unique<LogicalInsert>(table, move(insert_val_list));
 	root = move(insert);
 }
