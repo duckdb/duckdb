@@ -121,7 +121,8 @@ class AbstractExpression : public Printable {
 
 	bool operator==(const AbstractExpression &rhs) {
 		return this->Equals(&rhs);
-		
+	}
+
 	virtual std::string GetExprName() const {
 		return ExpressionTypeToString(type);
 	}
