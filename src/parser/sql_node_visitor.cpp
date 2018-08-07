@@ -46,3 +46,4 @@ void SQLNodeVisitor::Visit(SubqueryExpression &expr) {
 void SQLNodeVisitor::Visit(TableRefExpression &expr) {
 	expr.AcceptChildren(this);
 }
+void SQLNodeVisitor::Visit(CaseExpression &expr) { expr.AcceptChildren(this); }

@@ -30,6 +30,7 @@ class JoinExpression;
 class OperatorExpression;
 class SubqueryExpression;
 class TableRefExpression;
+class CaseExpression;
 
 //! The SQLNodeVisitor is an abstract base class that implements the Visitor
 //! pattern on AbstractExpression and SQLStatement. It will visit nodes
@@ -57,5 +58,6 @@ class SQLNodeVisitor {
 	virtual void Visit(OperatorExpression &expr);
 	virtual void Visit(SubqueryExpression &expr);
 	virtual void Visit(TableRefExpression &expr);
+	virtual void Visit(CaseExpression &expr);
 };
 } // namespace duckdb

@@ -394,6 +394,36 @@ unique_ptr<AbstractExpression> TransformFuncCall(FuncCall *root) {
 	}
 }
 
+unique_ptr<AbstractExpression> TransformCase(CaseExpr *root) {
+	if (!root) {
+		return nullptr;
+	}
+	// CASE expression WHEN value THEN result [WHEN ...] ELSE result uses this,
+	// but we rewrite to CASE WHEN expression = value THEN result ... to only
+	// have to handle one case downstream.
+	auto arg = TransformExpression(reinterpret_cast<Node *>(root->arg));
+	// TODO: is this the most elegant way of returning this list?
+	unique_ptr<vector<unique_ptr<CaseClause>>> clauses =
+	    make_unique<vector<unique_ptr<CaseClause>>>();
+	for (auto cell = root->args->head; cell != nullptr; cell = cell->next) {
+		CaseWhen *w = reinterpret_cast<CaseWhen *>(cell->data.ptr_value);
+		auto when_raw = TransformExpression(reinterpret_cast<Node *>(w->expr));
+		unique_ptr<AbstractExpression> when;
+		if (arg.get()) {
+			when = unique_ptr<AbstractExpression>(new ComparisonExpression(
+			    ExpressionType::COMPARE_EQUAL, move(arg), move(when_raw)));
+		} else {
+			when = move(when_raw);
+		}
+		auto result = TransformExpression(reinterpret_cast<Node *>(w->result));
+		clauses->push_back(make_unique<CaseClause>(move(when), move(result)));
+	}
+	auto defresult =
+	    TransformExpression(reinterpret_cast<Node *>(root->defresult));
+
+	return make_unique<CaseExpression>(move(clauses), move(defresult));
+}
+
 unique_ptr<AbstractExpression> TransformExpression(Node *node) {
 	if (!node) {
 		return nullptr;
@@ -412,8 +442,9 @@ unique_ptr<AbstractExpression> TransformExpression(Node *node) {
 		return TransformBoolExpr(reinterpret_cast<BoolExpr *>(node));
 	case T_TypeCast:
 		return TransformTypeCast(reinterpret_cast<TypeCast *>(node));
-	case T_ParamRef:
 	case T_CaseExpr:
+		return TransformCase(reinterpret_cast<CaseExpr *>(node));
+	case T_ParamRef:
 	case T_SubLink:
 	case T_NullTest:
 	default:
