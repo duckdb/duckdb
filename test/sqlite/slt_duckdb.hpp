@@ -24,7 +24,8 @@ static int duckdbConnect(
 	(void)zParam;
 
 	duckdb_database database;
-	duckdb_connection *connection = malloc(sizeof(duckdb_connection));
+	duckdb_connection *connection =
+	    (duckdb_connection *)malloc(sizeof(duckdb_connection));
 
 	if (duckdb_open(NULL, &database) != DuckDBSuccess) {
 		return 1;
@@ -69,15 +70,15 @@ duckdbQuery(void *pConn,       /* Connection created by xConnect */
 		return 1;
 	}
 
-	*pazResult =
-	    malloc(sizeof(char *) * result.row_count * result.column_count);
+	*pazResult = (char **)malloc(sizeof(char *) * result.row_count *
+	                             result.column_count);
 	if (!*pazResult) {
 		return 1;
 	}
 	for (r = 0; r < result.row_count; r++) {
 		for (c = 0; c < result.column_count; c++) {
 			duckdb_column actual_column = result.columns[c];
-			char *buffer = malloc(BUFSIZ);
+			char *buffer = (char *)malloc(BUFSIZ);
 
 			switch (actual_column.type) {
 			case DUCKDB_TYPE_TINYINT: {
@@ -133,7 +134,7 @@ duckdbQuery(void *pConn,       /* Connection created by xConnect */
 			}
 			default: { fprintf(stderr, "%s\n", "UNKNOWN"); }
 			}
-			(*pazResult)[r * result.row_count + c] = buffer;
+			(*pazResult)[r * result.column_count + c] = buffer;
 		}
 	}
 	*pnResult = result.column_count * result.row_count;
@@ -173,9 +174,8 @@ static int
 duckdbGetEngineName(void *pConn,       /* Connection created by xConnect */
                     const char **zName /* SQL statement to evaluate */
 ) {
-	static char *zDmbsName = "DuckDB";
 	(void)pConn;
-	*zName = zDmbsName;
+	*zName = "DuckDB";
 	return 0;
 }
 
