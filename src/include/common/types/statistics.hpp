@@ -60,7 +60,6 @@ class Statistics {
 	//! Returns the minimal type that guarantees a value from not overflowing
 	TypeId MinimalType();
 
-
 	//===--------------------------------------------------------------------===//
 	// Numeric Operations
 	//===--------------------------------------------------------------------===//

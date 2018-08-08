@@ -28,24 +28,29 @@ TEST_CASE("Test handling of overflows in basic types", "[overflowhandling]") {
 	                     NULL) == DuckDBSuccess);
 
 	// proper upcasting of integer columns in AVG
-	REQUIRE(duckdb_query(connection, "SELECT b, AVG(a) FROM test GROUP BY b ORDER BY b;", &result) == DuckDBSuccess);
+	REQUIRE(duckdb_query(connection,
+	                     "SELECT b, AVG(a) FROM test GROUP BY b ORDER BY b;",
+	                     &result) == DuckDBSuccess);
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {21, 22}));
 	REQUIRE(CHECK_DECIMAL_COLUMN(result, 1, {12, 12.5}));
 	duckdb_destroy_result(result);
-	
 
 	// cast to bigger type if it will overflow
-	REQUIRE(duckdb_query(connection, "SELECT cast(200 AS TINYINT)", &result) == DuckDBSuccess);
+	REQUIRE(duckdb_query(connection, "SELECT cast(200 AS TINYINT)", &result) ==
+	        DuckDBSuccess);
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {200}));
 	duckdb_destroy_result(result);
 
 	// try to use the NULL value of a type
-	REQUIRE(duckdb_query(connection, "SELECT cast(-127 AS TINYINT)", &result) == DuckDBSuccess);
+	REQUIRE(duckdb_query(connection, "SELECT cast(-127 AS TINYINT)", &result) ==
+	        DuckDBSuccess);
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {-127}));
 	duckdb_destroy_result(result);
 
 	// promote on addition overflow
-	REQUIRE(duckdb_query(connection, "SELECT cast(100 AS TINYINT) + cast(100 AS TINYINT)", &result) == DuckDBSuccess);
+	REQUIRE(duckdb_query(connection,
+	                     "SELECT cast(100 AS TINYINT) + cast(100 AS TINYINT)",
+	                     &result) == DuckDBSuccess);
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {200}));
 	duckdb_destroy_result(result);
 
@@ -60,14 +65,15 @@ TEST_CASE("Test handling of overflows in basic types", "[overflowhandling]") {
 	REQUIRE(duckdb_query(connection, "INSERT INTO test2 VALUES (14, 60)",
 	                     NULL) == DuckDBSuccess);
 
-
 	// cast to bigger type if it will overflow
-	REQUIRE(duckdb_query(connection, "SELECT cast(a AS TINYINT) FROM test2", &result) == DuckDBSuccess);
+	REQUIRE(duckdb_query(connection, "SELECT cast(a AS TINYINT) FROM test2",
+	                     &result) == DuckDBSuccess);
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {200, 12, 14}));
 	duckdb_destroy_result(result);
 
 	// cast to bigger type if SUM overflows
-	REQUIRE(duckdb_query(connection, "SELECT SUM(b) FROM test2", &result) == DuckDBSuccess);
+	REQUIRE(duckdb_query(connection, "SELECT SUM(b) FROM test2", &result) ==
+	        DuckDBSuccess);
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {180}));
 	duckdb_destroy_result(result);
 	REQUIRE(duckdb_disconnect(connection) == DuckDBSuccess);

@@ -5,8 +5,7 @@
 
 #include <memory>
 
-template <class T>
-T get_numeric(duckdb_column column, duckdb_oid_t index) {
+template <class T> T get_numeric(duckdb_column column, duckdb_oid_t index) {
 	T *data = (T *)column.data;
 	return data[index];
 }
@@ -124,7 +123,7 @@ static bool CHECK_STRING(duckdb_result result, duckdb_oid_t row,
 }
 
 static bool CHECK_STRING_COLUMN(duckdb_result result, duckdb_oid_t column,
-                                 std::vector<std::string> values) {
+                                std::vector<std::string> values) {
 	if (result.column_count <= column) {
 		// out of bounds
 		return false;
@@ -144,4 +143,3 @@ static bool CHECK_STRING_COLUMN(duckdb_result result, duckdb_oid_t column,
 	}
 	return true;
 }
-

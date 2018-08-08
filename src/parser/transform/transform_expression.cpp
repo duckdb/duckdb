@@ -74,7 +74,8 @@ unique_ptr<AbstractExpression> TransformTypeCast(TypeCast *root) {
 
 		if (TypeIsIntegral(source_value.type) && TypeIsIntegral(target_type)) {
 			// properly handle numeric overflows
-			target_type = std::max(MinimalType(source_value.GetNumericValue()), target_type);
+			target_type = std::max(MinimalType(source_value.GetNumericValue()),
+			                       target_type);
 		}
 
 		// perform the cast and substitute the expression

@@ -448,10 +448,10 @@ string ExpressionTypeToString(ExpressionType type) {
 	}
 }
 
-
-// we offset the minimum value by 1 to account for the NULL value not being a valid value in the domain
+// we offset the minimum value by 1 to account for the NULL value not being a
+// valid value in the domain
 int64_t MinimumValue(TypeId type) {
-	switch(type) {
+	switch (type) {
 	case TypeId::TINYINT:
 		return std::numeric_limits<int8_t>::min() + 1;
 	case TypeId::SMALLINT:
@@ -472,7 +472,7 @@ int64_t MinimumValue(TypeId type) {
 }
 
 int64_t MaximumValue(TypeId type) {
-	switch(type) {
+	switch (type) {
 	case TypeId::TINYINT:
 		return std::numeric_limits<int8_t>::max();
 	case TypeId::SMALLINT:
@@ -492,15 +492,17 @@ int64_t MaximumValue(TypeId type) {
 	}
 }
 
-
 TypeId MinimalType(int64_t value) {
-	if (value >= MinimumValue(TypeId::TINYINT) && value <= MaximumValue(TypeId::TINYINT)) {
+	if (value >= MinimumValue(TypeId::TINYINT) &&
+	    value <= MaximumValue(TypeId::TINYINT)) {
 		return TypeId::TINYINT;
 	}
-	if (value >= MinimumValue(TypeId::SMALLINT) && value <= MaximumValue(TypeId::SMALLINT)) {
+	if (value >= MinimumValue(TypeId::SMALLINT) &&
+	    value <= MaximumValue(TypeId::SMALLINT)) {
 		return TypeId::SMALLINT;
 	}
-	if (value >= MinimumValue(TypeId::INTEGER) && value <= MaximumValue(TypeId::INTEGER)) {
+	if (value >= MinimumValue(TypeId::INTEGER) &&
+	    value <= MaximumValue(TypeId::INTEGER)) {
 		return TypeId::INTEGER;
 	}
 	return TypeId::BIGINT;

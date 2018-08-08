@@ -102,7 +102,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 				*entry = FULL_CELL;
 				memcpy(entry + FLAG_SIZE, group_data, group_width);
 				memset(entry + group_width + FLAG_SIZE, 0,
-				        payload_width + sizeof(uint64_t));
+				       payload_width + sizeof(uint64_t));
 				new_entries[new_count++] = i;
 				entries++;
 				break;

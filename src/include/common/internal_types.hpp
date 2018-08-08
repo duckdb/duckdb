@@ -342,7 +342,8 @@ template <> inline bool IsNullValue(double value) { return isnan(value); }
 int64_t MinimumValue(TypeId type);
 //! Returns the maximum value that can be stored in a given type
 int64_t MaximumValue(TypeId type);
-	//! Returns the minimal type that guarantees an integer value from not overflowing
+//! Returns the minimal type that guarantees an integer value from not
+//! overflowing
 TypeId MinimalType(int64_t value);
 
 std::string LogicalOperatorToString(LogicalOperatorType type);

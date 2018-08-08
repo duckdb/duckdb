@@ -61,15 +61,18 @@ class AggregateExpression : public AbstractExpression {
 			break;
 		case ExpressionType::AGGREGATE_MAX:
 			Statistics::Max(children[0]->stats, stats);
-			return_type = std::max(children[0]->return_type, stats.MinimalType());
+			return_type =
+			    std::max(children[0]->return_type, stats.MinimalType());
 			break;
 		case ExpressionType::AGGREGATE_MIN:
 			Statistics::Min(children[0]->stats, stats);
-			return_type = std::max(children[0]->return_type, stats.MinimalType());
+			return_type =
+			    std::max(children[0]->return_type, stats.MinimalType());
 			break;
 		case ExpressionType::AGGREGATE_SUM:
 			Statistics::Sum(children[0]->stats, stats);
-			return_type = std::max(children[0]->return_type, stats.MinimalType());
+			return_type =
+			    std::max(children[0]->return_type, stats.MinimalType());
 			break;
 		case ExpressionType::AGGREGATE_AVG:
 			Statistics::Average(children[0]->stats, stats);

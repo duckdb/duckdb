@@ -32,14 +32,16 @@ void Statistics::Verify(Vector &vector) {
 }
 #endif
 
-
-Statistics::Statistics(Value value) : has_stats(true), 
-	can_have_null(value.is_null), min(value), max(value), type(value.type), maximum_string_length(
-          value.type == TypeId::VARCHAR ? value.str_value.size() : 0), maximum_count(1) {
+Statistics::Statistics(Value value)
+    : has_stats(true), can_have_null(value.is_null), min(value), max(value),
+      type(value.type),
+      maximum_string_length(
+          value.type == TypeId::VARCHAR ? value.str_value.size() : 0),
+      maximum_count(1) {
 	if (TypeIsIntegral(value.type) && value.type != TypeId::BIGINT) {
 		// upcast to biggest integral type
 		max = min = value.CastAs(TypeId::BIGINT);
-	}	
+	}
 }
 
 void Statistics::Update(Vector &new_vector) {
@@ -93,7 +95,8 @@ bool Statistics::FitsInType(TypeId type) {
 	}
 	auto min_value = MinimumValue(type);
 	auto max_value = MaximumValue(type);
-	return min_value <= min.GetNumericValue() && max_value >= max.GetNumericValue();
+	return min_value <= min.GetNumericValue() &&
+	       max_value >= max.GetNumericValue();
 }
 
 TypeId Statistics::MinimalType() {
@@ -101,7 +104,8 @@ TypeId Statistics::MinimalType() {
 		return min.type;
 	}
 	assert(TypeIsIntegral(min.type) && TypeIsIntegral(max.type));
-	return std::max(duckdb::MinimalType(min.GetNumericValue()), duckdb::MinimalType(max.GetNumericValue()));
+	return std::max(duckdb::MinimalType(min.GetNumericValue()),
+	                duckdb::MinimalType(max.GetNumericValue()));
 }
 
 void Statistics::Add(Statistics &left, Statistics &right, Statistics &result) {
@@ -110,7 +114,8 @@ void Statistics::Add(Statistics &left, Statistics &right, Statistics &result) {
 		result.can_have_null = left.can_have_null || right.can_have_null;
 		Value::Add(left.min, right.min, result.min);
 		Value::Add(left.max, right.max, result.max);
-		result.maximum_count = std::max(left.maximum_count, right.maximum_count);
+		result.maximum_count =
+		    std::max(left.maximum_count, right.maximum_count);
 	}
 }
 
@@ -121,7 +126,8 @@ void Statistics::Subtract(Statistics &left, Statistics &right,
 		result.can_have_null = left.can_have_null || right.can_have_null;
 		Value::Subtract(left.min, right.max, result.min);
 		Value::Subtract(left.max, right.min, result.max);
-		result.maximum_count = std::max(left.maximum_count, right.maximum_count);
+		result.maximum_count =
+		    std::max(left.maximum_count, right.maximum_count);
 	}
 }
 
@@ -129,15 +135,16 @@ void Statistics::Multiply(Statistics &left, Statistics &right,
                           Statistics &result) {
 	result.has_stats = false;
 	// FIXME: multiply depends on the signed status of the min/max
-	// min * min could be the new maximum value, and min * max could be the new minimum value
-	
+	// min * min could be the new maximum value, and min * max could be the new
+	// minimum value
 
 	// result.has_stats = left.has_stats && right.has_stats;
 	// if (result.has_stats) {
 	// 	result.can_have_null = left.can_have_null || right.can_have_null;
 	// 	Value::Add(left.min, right.min, result.min);
 	// 	Value::Add(left.max, right.max, result.max);
-	// 	result.maximum_count = std::max(left.maximum_count, right.maximum_count);
+	// 	result.maximum_count = std::max(left.maximum_count,
+	// right.maximum_count);
 	// }
 }
 
@@ -145,15 +152,16 @@ void Statistics::Divide(Statistics &left, Statistics &right,
                         Statistics &result) {
 	result.has_stats = false;
 	// FIXME: divide is weird with doubles
-	// e.g. is MIN = -1 and MAX = 1, the new MAX could be 1 / 0.000000001 = big number
-	// with integers it's easier, esp unsigned
+	// e.g. is MIN = -1 and MAX = 1, the new MAX could be 1 / 0.000000001 = big
+	// number with integers it's easier, esp unsigned
 
 	// result.has_stats = left.has_stats && right.has_stats;
 	// if (result.has_stats) {
 	// 	result.can_have_null = left.can_have_null || right.can_have_null;
 	// 	Value::Add(left.min, right.min, result.min);
 	// 	Value::Add(left.max, right.max, result.max);
-	// 	result.maximum_count = std::max(left.maximum_count, right.maximum_count);
+	// 	result.maximum_count = std::max(left.maximum_count,
+	// right.maximum_count);
 	// }
 }
 
@@ -164,16 +172,17 @@ void Statistics::Modulo(Statistics &left, Statistics &right,
 		result.can_have_null = left.can_have_null || right.can_have_null;
 		result.min = 0;
 		result.max = right.max;
-		result.maximum_count = std::max(left.maximum_count, right.maximum_count);
+		result.maximum_count =
+		    std::max(left.maximum_count, right.maximum_count);
 	}
 }
-
 
 void Statistics::Sum(Statistics &source, Statistics &result) {
 	result.has_stats = source.has_stats;
 	if (result.has_stats) {
 		result.can_have_null = true;
-		Value count = Value::NumericValue(source.min.type, source.maximum_count);
+		Value count =
+		    Value::NumericValue(source.min.type, source.maximum_count);
 		Value::Multiply(source.min, count, result.min);
 		Value::Multiply(source.max, count, result.max);
 		result.maximum_count = 1;
@@ -192,15 +201,12 @@ void Statistics::Count(Statistics &source, Statistics &result) {
 
 void Statistics::Average(Statistics &source, Statistics &result) {
 	result.has_stats = false;
-
 }
 
 void Statistics::Max(Statistics &source, Statistics &result) {
 	result.has_stats = false;
-
 }
 
 void Statistics::Min(Statistics &source, Statistics &result) {
 	result.has_stats = false;
-
 }
