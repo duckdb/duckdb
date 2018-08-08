@@ -447,4 +447,63 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "UKNOWN_EXP_" + std::to_string((int)type);
 	}
 }
+
+
+// we offset the minimum value by 1 to account for the NULL value not being a valid value in the domain
+int64_t MinimumValue(TypeId type) {
+	switch(type) {
+	case TypeId::TINYINT:
+		return std::numeric_limits<int8_t>::min() + 1;
+	case TypeId::SMALLINT:
+		return std::numeric_limits<int16_t>::min() + 1;
+	case TypeId::INTEGER:
+		return std::numeric_limits<int32_t>::min() + 1;
+	case TypeId::DATE:
+		return std::numeric_limits<date_t>::min() + 1;
+	case TypeId::BIGINT:
+		return std::numeric_limits<int64_t>::min() + 1;
+	case TypeId::POINTER:
+		return std::numeric_limits<uint64_t>::min();
+	case TypeId::TIMESTAMP:
+		return std::numeric_limits<timestamp_t>::min() + 1;
+	default:
+		throw Exception("Non-integer type!");
+	}
+}
+
+int64_t MaximumValue(TypeId type) {
+	switch(type) {
+	case TypeId::TINYINT:
+		return std::numeric_limits<int8_t>::max();
+	case TypeId::SMALLINT:
+		return std::numeric_limits<int16_t>::max();
+	case TypeId::INTEGER:
+		return std::numeric_limits<int32_t>::max();
+	case TypeId::DATE:
+		return std::numeric_limits<date_t>::max();
+	case TypeId::BIGINT:
+		return std::numeric_limits<int64_t>::max();
+	case TypeId::POINTER:
+		return std::numeric_limits<int64_t>::max();
+	case TypeId::TIMESTAMP:
+		return std::numeric_limits<timestamp_t>::max();
+	default:
+		throw Exception("Non-integer type!");
+	}
+}
+
+
+TypeId MinimalType(int64_t value) {
+	if (value >= MinimumValue(TypeId::TINYINT) && value <= MaximumValue(TypeId::TINYINT)) {
+		return TypeId::TINYINT;
+	}
+	if (value >= MinimumValue(TypeId::SMALLINT) && value <= MaximumValue(TypeId::SMALLINT)) {
+		return TypeId::SMALLINT;
+	}
+	if (value >= MinimumValue(TypeId::INTEGER) && value <= MaximumValue(TypeId::INTEGER)) {
+		return TypeId::INTEGER;
+	}
+	return TypeId::BIGINT;
+}
+
 }; // namespace duckdb

@@ -80,7 +80,7 @@ TEST_CASE("Constant folding reduces complex expression", "[optimizer]") {
 
 	auto result_cast = reinterpret_cast<ConstantExpression *>(result.get());
 
-	REQUIRE(result_cast->value.value_.integer == 42);
+	REQUIRE(result_cast->value.GetNumericValue() == 42);
 	REQUIRE(result_cast->children.size() == 0);
 }
 
@@ -103,7 +103,7 @@ TEST_CASE("Constant folding handles unknown expressions left", "[optimizer]") {
 
 	auto result_cast = reinterpret_cast<ConstantExpression *>(result.get());
 
-	REQUIRE(result_cast->value.value_.integer == 0);
+	REQUIRE(result_cast->value.GetNumericValue() == 0);
 	REQUIRE(result_cast->children.size() == 0);
 }
 

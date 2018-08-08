@@ -74,10 +74,10 @@ Value ExpressionExecutor::Execute(AggregateExpression &expr) {
 }
 
 void ExpressionExecutor::Merge(AggregateExpression &expr, Value &result) {
-	if (result.type != expr.return_type) {
-		throw NotImplementedException(
-		    "Aggregate type does not match value type!");
-	}
+	// if (result.type != expr.return_type) {
+	// 	throw NotImplementedException(
+	// 	    "Aggregate type does not match value type!");
+	// }
 	Value v = Execute(expr);
 	switch (expr.type) {
 	case ExpressionType::AGGREGATE_COUNT_STAR:
@@ -122,6 +122,10 @@ void ExpressionExecutor::Visit(CastExpression &expr) {
 	// resolve the child
 	Vector l;
 	expr.children[0]->Accept(this);
+	if (vector.type == expr.return_type) {
+		// NOP cast
+		return;
+	}
 	vector.Move(l);
 	// now cast it to the type specified by the cast expression
 	vector.Resize(l.count, expr.return_type);

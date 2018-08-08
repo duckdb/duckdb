@@ -15,7 +15,6 @@ Optimizer::Optimizer() {
 void Optimizer::RewriteList(vector<unique_ptr<AbstractExpression>> &list) {
 	for (auto i = 0; i < list.size(); i++) {
 		auto new_element = rewriter.ApplyRules(move(list[i]));
-		new_element->ResolveStatistics();
 		list[i] = move(new_element);
 	}
 }
@@ -50,7 +49,6 @@ void Optimizer::Visit(LogicalOrder &order) {
 	for (auto i = 0; i < list.size(); i++) {
 
 		auto new_element = rewriter.ApplyRules(move(list[i].expression));
-		new_element->ResolveStatistics();
 		list[i].expression = move(new_element);
 	}
 }

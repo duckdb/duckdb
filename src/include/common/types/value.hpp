@@ -81,6 +81,8 @@ class Value : public Printable {
 	//! Create a Numeric value of the specified type with the specified value
 	static Value NumericValue(TypeId id, int64_t value);
 
+	int64_t GetNumericValue();
+
 	//! Return a copy of this value
 	Value Copy() { return Value(*this); }
 
@@ -88,7 +90,7 @@ class Value : public Printable {
 	virtual std::string ToString() const;
 
 	//! Cast this value to another type
-	Value CastAs(TypeId new_type);
+	Value CastAs(TypeId new_type) const;
 
 	//===--------------------------------------------------------------------===//
 	// Numeric Operations
@@ -138,6 +140,7 @@ class Value : public Printable {
 		double decimal;
 		uint64_t pointer;
 		date_t date;
+		timestamp_t timestamp;
 	} value_;
 
 	//! The value of the object, if it is of a variable size Type
@@ -145,7 +148,7 @@ class Value : public Printable {
 
   private:
 	//! Templated helper function for casting
-	template <class DST, class OP> static DST _cast(Value &v);
+	template <class DST, class OP> static DST _cast(const Value &v);
 
 	//! Templated helper function for binary operations
 	template <class OP>

@@ -19,6 +19,8 @@ namespace duckdb {
 
 //! Type used to represent dates
 typedef int32_t date_t;
+//! Type used to represent timestamps
+typedef int64_t timestamp_t;
 //! Type used for the selection vector
 typedef uint64_t sel_t;
 //! Type used for index accesses
@@ -34,11 +36,11 @@ enum class TypeId {
 	TINYINT,
 	SMALLINT,
 	INTEGER,
+	DATE,
 	BIGINT,
-	DECIMAL,
 	POINTER,
 	TIMESTAMP,
-	DATE,
+	DECIMAL,
 	VARCHAR,
 	VARBINARY,
 	ARRAY,
@@ -306,8 +308,11 @@ std::string TypeIdToString(TypeId type);
 TypeId StringToTypeId(const std::string &str);
 size_t GetTypeIdSize(TypeId type);
 static bool TypeIsConstantSize(TypeId type) { return type < TypeId::VARCHAR; }
+static bool TypeIsIntegral(TypeId type) {
+	return type >= TypeId::TINYINT && type <= TypeId::TIMESTAMP;
+}
 static bool TypeIsNumeric(TypeId type) {
-	return type >= TypeId::TINYINT && type <= TypeId::DATE;
+	return type >= TypeId::TINYINT && type <= TypeId::DECIMAL;
 }
 
 template <class T> inline T NullValue() {
@@ -332,6 +337,13 @@ template <class T> inline bool IsNullValue(T value) {
 	return value == NullValue<T>();
 }
 template <> inline bool IsNullValue(double value) { return isnan(value); }
+
+//! Returns the minimum value that can be stored in a given type
+int64_t MinimumValue(TypeId type);
+//! Returns the maximum value that can be stored in a given type
+int64_t MaximumValue(TypeId type);
+	//! Returns the minimal type that guarantees an integer value from not overflowing
+TypeId MinimalType(int64_t value);
 
 std::string LogicalOperatorToString(LogicalOperatorType type);
 std::string PhysicalOperatorToString(PhysicalOperatorType type);

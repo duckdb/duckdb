@@ -57,6 +57,37 @@ static bool CHECK_NUMERIC_COLUMN(duckdb_result result, duckdb_oid_t column,
 	return true;
 }
 
+#define NULL_DECIMAL NAN
+
+static bool CHECK_DECIMAL_COLUMN(duckdb_result result, duckdb_oid_t column,
+                                 std::vector<double> values) {
+	if (result.column_count <= column) {
+		// out of bounds
+		return false;
+	}
+	auto &col = result.columns[column];
+	if (col.type < DUCKDB_TYPE_TINYINT || col.type > DUCKDB_TYPE_BIGINT) {
+		// not numeric type
+		return false;
+	}
+	if (values.size() != col.count) {
+		return false;
+	}
+	for (auto i = 0; i < values.size(); i++) {
+		if (isnan(values[i])) {
+			if (!duckdb_value_is_null(col, i)) {
+				return false;
+			}
+		} else {
+			int64_t data_value = get_numeric(col, i);
+			if (std::abs(data_value - values[i]) <= std::numeric_limits<double>::epsilon()) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
 static bool CHECK_NUMERIC(duckdb_result result, duckdb_oid_t row,
                           duckdb_oid_t column, int64_t value) {
 	if (result.column_count <= column || result.row_count <= row) {

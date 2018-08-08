@@ -64,13 +64,6 @@ class AbstractExpression : public Printable {
 		}
 	}
 
-	//! Resolves the statistics for this expression based on its children
-	virtual void ResolveStatistics() {
-		for (auto &child : children) {
-			child->ResolveStatistics();
-		}
-	}
-
 	//! Add a child node to the AbstractExpression. Note that the order of
 	//! adding children is important in most cases
 	void AddChild(std::unique_ptr<AbstractExpression> child) {

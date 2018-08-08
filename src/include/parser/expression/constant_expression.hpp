@@ -35,7 +35,11 @@ class ConstantExpression : public AbstractExpression {
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
 
-	virtual void ResolveStatistics() override { stats = Statistics(value); }
+	//! Resolve the type of the aggregate
+	virtual void ResolveType() override {
+		AbstractExpression::ResolveType();
+		stats = Statistics(value);
+	}
 
 	virtual bool Equals(const AbstractExpression *other_) override {
 		if (!AbstractExpression::Equals(other_)) {

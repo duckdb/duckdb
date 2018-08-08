@@ -34,13 +34,6 @@ class OperatorExpression : public AbstractExpression {
 			return_type = TypeId::BOOLEAN;
 			return;
 		}
-		// other operators return the highest type of the children
-		return_type =
-		    std::max(children[0]->return_type, children[1]->return_type);
-	}
-
-	virtual void ResolveStatistics() override {
-		AbstractExpression::ResolveStatistics();
 		switch (type) {
 		case ExpressionType::OPERATOR_ADD:
 			Statistics::Add(children[0]->stats, children[1]->stats, stats);
@@ -59,6 +52,12 @@ class OperatorExpression : public AbstractExpression {
 			break;
 		default:
 			throw NotImplementedException("Unsupported operator type!");
+		}
+		// return the highest type of the children, unless we need to upcast to avoid overflow
+		return_type =
+		    std::max(children[0]->return_type, children[1]->return_type);
+		if (stats.FitsInType(return_type)) {
+			return_type = stats.MinimalType();
 		}
 	}
 

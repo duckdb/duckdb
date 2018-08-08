@@ -52,24 +52,34 @@ class AggregateExpression : public AbstractExpression {
 	virtual void ResolveType() override {
 		AbstractExpression::ResolveType();
 		switch (type) {
-		// if count return an integer
-		case ExpressionType::AGGREGATE_COUNT:
 		case ExpressionType::AGGREGATE_COUNT_STAR:
 			return_type = TypeId::BIGINT;
 			break;
-		// return the type of the base
+		case ExpressionType::AGGREGATE_COUNT:
+			Statistics::Count(children[0]->stats, stats);
+			return_type = TypeId::BIGINT;
+			break;
 		case ExpressionType::AGGREGATE_MAX:
+			Statistics::Max(children[0]->stats, stats);
+			return_type = std::max(children[0]->return_type, stats.MinimalType());
+			break;
 		case ExpressionType::AGGREGATE_MIN:
+			Statistics::Min(children[0]->stats, stats);
+			return_type = std::max(children[0]->return_type, stats.MinimalType());
+			break;
 		case ExpressionType::AGGREGATE_SUM:
-			return_type = children[0]->return_type;
+			Statistics::Sum(children[0]->stats, stats);
+			return_type = std::max(children[0]->return_type, stats.MinimalType());
 			break;
 		case ExpressionType::AGGREGATE_AVG:
+			Statistics::Average(children[0]->stats, stats);
 			return_type = TypeId::DECIMAL;
 			break;
 		default:
-			break;
+			throw NotImplementedException("Unsupported aggregate type!");
 		}
 	}
+
 	virtual void
 	GetAggregates(std::vector<AggregateExpression *> &expressions) override;
 	virtual bool IsAggregate() override { return true; }

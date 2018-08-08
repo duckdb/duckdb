@@ -71,6 +71,15 @@ unique_ptr<AbstractExpression> TransformTypeCast(TypeCast *root) {
 		    TransformConstant(reinterpret_cast<A_Const *>(root->arg));
 		Value &source_value =
 		    reinterpret_cast<ConstantExpression *>(constant.get())->value;
+
+		if (TypeIsNumeric(source_value.type) && TypeIsNumeric(target_type)) {
+			// properly handle numeric overflows
+			Statistics stats(source_value);
+			if (!stats.FitsInType(target_type)) {
+				target_type = stats.MinimalType();
+			}
+		}
+
 		// perform the cast and substitute the expression
 		Value new_value = source_value.CastAs(target_type);
 

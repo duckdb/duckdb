@@ -76,6 +76,7 @@ Value Value::MaximumValue(TypeId type) {
 }
 
 Value Value::NumericValue(TypeId id, int64_t value) {
+	assert(value + 1 >= duckdb::MinimumValue(id) && value <= duckdb::MaximumValue(id));
 	switch (id) {
 	case TypeId::TINYINT:
 		return Value((int8_t)value);
@@ -95,6 +96,29 @@ Value Value::NumericValue(TypeId id, int64_t value) {
 		throw Exception("TypeId is not numeric!");
 	}
 }
+
+int64_t Value::GetNumericValue() {
+	if (is_null) {
+		throw Exception("Cannot get numeric value fo NULL value.");
+	}
+	switch (type) {
+	case TypeId::TINYINT:
+		return value_.tinyint;
+	case TypeId::SMALLINT:
+		return value_.smallint;
+	case TypeId::INTEGER:
+		return value_.integer;
+	case TypeId::BIGINT:
+		return value_.bigint;
+	case TypeId::DATE:
+		return value_.date;
+	case TypeId::POINTER:
+		return value_.pointer;
+	default:
+		throw Exception("TypeId is not numeric!");
+	}
+}
+
 
 string Value::ToString() const {
 	if (is_null) {
@@ -124,7 +148,7 @@ string Value::ToString() const {
 	}
 }
 
-template <class DST, class OP> DST Value::_cast(Value &v) {
+template <class DST, class OP> DST Value::_cast(const Value &v) {
 	switch (v.type) {
 	case TypeId::BOOLEAN:
 		return OP::template Operation<int8_t, DST>(v.value_.boolean);
@@ -149,7 +173,7 @@ template <class DST, class OP> DST Value::_cast(Value &v) {
 	}
 }
 
-Value Value::CastAs(TypeId new_type) {
+Value Value::CastAs(TypeId new_type) const {
 	// check if we can just make a copy
 	if (new_type == this->type) {
 		return *this;
@@ -196,33 +220,38 @@ Value Value::CastAs(TypeId new_type) {
 template <class OP>
 void Value::_templated_binary_operation(const Value &left, const Value &right,
                                         Value &result, bool ignore_null) {
-	if (left.type != right.type || left.type != result.type) {
-		throw NotImplementedException("Not matching type not implemented!");
-	}
 	if (left.is_null || right.is_null) {
 		if (ignore_null) {
 			if (!right.is_null) {
 				result = right;
-				return;
 			} else {
 				result = left;
-				return;
 			}
+		} else {
+			result.type = std::max(left.type, right.type);
+			result.is_null = true;
 		}
-		result.is_null = true;
 		return;
 	}
-	if (ignore_null) {
-		if (left.is_null) {
-			result = right;
-			return;
-		} else if (right.is_null) {
-			result = left;
-			return;
+	result.is_null = false;
+	if (TypeIsIntegral(left.type) && TypeIsIntegral(right.type) && 
+			(left.type < TypeId::BIGINT || right.type < TypeId::BIGINT)) {
+		// upcast integer types if necessary
+		Value left_cast = left.CastAs(TypeId::BIGINT);
+		Value right_cast = right.CastAs(TypeId::BIGINT);
+		_templated_binary_operation<OP>(left_cast, right_cast, result, ignore_null);
+		if (result.is_null) {
+			result.type = std::max(left.type, right.type);
+		} else {
+			auto type = std::max(MinimalType(result.GetNumericValue()), std::max(left.type, right.type));
+			result = result.CastAs(type);
 		}
-	} else {
-		result.is_null = left.is_null || right.is_null;
+		return;
 	}
+	if (left.type != right.type) {
+		throw NotImplementedException("Not matching type not implemented!");
+	}
+	result.type = left.type;
 	switch (left.type) {
 	case TypeId::BOOLEAN:
 		result.value_.boolean =
@@ -299,6 +328,15 @@ template <class OP>
 bool Value::_templated_boolean_operation(const Value &left,
                                          const Value &right) {
 	if (left.type != right.type) {
+		if (TypeIsNumeric(left.type) && TypeIsNumeric(right.type)) {
+			if (left.type < right.type) {
+				Value left_cast = left.CastAs(right.type);
+				return _templated_boolean_operation<OP>(left_cast, right);
+			} else {
+				Value right_cast = right.CastAs(left.type);
+				return _templated_boolean_operation<OP>(left, right_cast);
+			}
+		}
 		throw NotImplementedException("Not matching type not implemented!");
 	}
 	switch (left.type) {
