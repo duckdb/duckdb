@@ -46,7 +46,6 @@ TEST_CASE("Test handling of overflows in basic types", "[overflowhandling]") {
 
 	// promote on addition overflow
 	REQUIRE(duckdb_query(connection, "SELECT cast(100 AS TINYINT) + cast(100 AS TINYINT)", &result) == DuckDBSuccess);
-	duckdb_print_result(result);
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {200}));
 	duckdb_destroy_result(result);
 

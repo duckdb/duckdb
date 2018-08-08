@@ -76,7 +76,7 @@ Value Value::MaximumValue(TypeId type) {
 }
 
 Value Value::NumericValue(TypeId id, int64_t value) {
-	assert(value + 1 >= duckdb::MinimumValue(id) && value <= duckdb::MaximumValue(id));
+	assert(!TypeIsIntegral(id) || value + 1 >= duckdb::MinimumValue(id) && value <= duckdb::MaximumValue(id));
 	switch (id) {
 	case TypeId::TINYINT:
 		return Value((int8_t)value);
@@ -246,6 +246,16 @@ void Value::_templated_binary_operation(const Value &left, const Value &right,
 			auto type = std::max(MinimalType(result.GetNumericValue()), std::max(left.type, right.type));
 			result = result.CastAs(type);
 		}
+		return;
+	}
+	if (TypeIsIntegral(left.type) && right.type == TypeId::DECIMAL) {
+		Value left_cast = left.CastAs(TypeId::DECIMAL);
+		_templated_binary_operation<OP>(left_cast, right, result, ignore_null);
+		return;
+	}
+	if (left.type == TypeId::DECIMAL && TypeIsIntegral(right.type)) {
+		Value right_cast = right.CastAs(TypeId::DECIMAL);
+		_templated_binary_operation<OP>(left, right_cast, result, ignore_null);
 		return;
 	}
 	if (left.type != right.type) {

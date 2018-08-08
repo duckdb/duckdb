@@ -36,9 +36,9 @@ enum class TypeId {
 	TINYINT,
 	SMALLINT,
 	INTEGER,
-	DATE,
 	BIGINT,
 	POINTER,
+	DATE,
 	TIMESTAMP,
 	DECIMAL,
 	VARCHAR,
@@ -309,7 +309,7 @@ TypeId StringToTypeId(const std::string &str);
 size_t GetTypeIdSize(TypeId type);
 static bool TypeIsConstantSize(TypeId type) { return type < TypeId::VARCHAR; }
 static bool TypeIsIntegral(TypeId type) {
-	return type >= TypeId::TINYINT && type <= TypeId::TIMESTAMP;
+	return type >= TypeId::TINYINT && type <= TypeId::BIGINT;
 }
 static bool TypeIsNumeric(TypeId type) {
 	return type >= TypeId::TINYINT && type <= TypeId::DECIMAL;
