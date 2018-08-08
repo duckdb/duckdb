@@ -30,7 +30,7 @@ TEST_CASE("Test handling of overflows in basic types", "[overflowhandling]") {
 	// proper upcasting of integer columns in AVG
 	REQUIRE(duckdb_query(connection, "SELECT b, AVG(a) FROM test GROUP BY b ORDER BY b;", &result) == DuckDBSuccess);
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {21, 22}));
-	REQUIRE(CHECK_DECIMAL_COLUMN(result, 0, {12, 12.5}));
+	REQUIRE(CHECK_DECIMAL_COLUMN(result, 1, {12, 12.5}));
 	duckdb_destroy_result(result);
 	
 

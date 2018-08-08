@@ -56,7 +56,7 @@ class OperatorExpression : public AbstractExpression {
 		// return the highest type of the children, unless we need to upcast to avoid overflow
 		return_type =
 		    std::max(children[0]->return_type, children[1]->return_type);
-		if (stats.FitsInType(return_type)) {
+		if (!stats.FitsInType(return_type)) {
 			return_type = stats.MinimalType();
 		}
 	}
