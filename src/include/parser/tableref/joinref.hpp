@@ -11,6 +11,8 @@
 #pragma once
 
 #include "parser/tableref/tableref.hpp"
+#include "parser/sql_node_visitor.hpp"
+#include "parser/expression/abstract_expression.hpp"
 
 namespace duckdb {
 //! Represents a JOIN between two expressions

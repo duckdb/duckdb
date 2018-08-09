@@ -11,6 +11,7 @@
 #pragma once
 
 #include "parser/tableref/tableref.hpp"
+#include "parser/sql_node_visitor.hpp"
 
 namespace duckdb {
 //! Represents a TableReference to a base table in the schema

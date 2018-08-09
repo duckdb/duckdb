@@ -11,6 +11,7 @@
 #pragma once
 
 #include "common/printable.hpp"
+#include "parser/sql_node_visitor.hpp"
 
 namespace duckdb {
 //! Represents a generic expression that returns a table.
