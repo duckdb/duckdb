@@ -459,13 +459,13 @@ TEST_CASE("Test SQLite Logic Test", "[sqlitelogic]") {
 					continue;
 
 				/* We are skipping this record.  But we observe that it is a
-				*query
-				** with a named hash value and we are in verify mode.  Even
-				*though
-				** we are going to skip the SQL evaluation, we might as well
-				*check
-				** the hash of the result.
-				*/
+				 *query
+				 ** with a named hash value and we are in verify mode.  Even
+				 *though
+				 ** we are going to skip the SQL evaluation, we might as well
+				 *check
+				 ** the hash of the result.
+				 */
 				while (!nextIsBlank(&sScript) && nextLine(&sScript) &&
 				       strcmp(sScript.zLine, "----") != 0) {
 					/* Skip over the SQL text */
@@ -549,8 +549,8 @@ TEST_CASE("Test SQLite Logic Test", "[sqlitelogic]") {
 				int c;
 
 				/* Verify that the type string consists of one or more
-				*characters
-				** from the set "TIR". */
+				 *characters
+				 ** from the set "TIR". */
 				for (k = 0; (c = sScript.azToken[1][k]) != 0; k++) {
 					if (c != 'T' && c != 'I' && c != 'R') {
 						fprintf(stderr,
@@ -571,9 +571,9 @@ TEST_CASE("Test SQLite Logic Test", "[sqlitelogic]") {
 				}
 
 				/* Extract the SQL from second and subsequent lines of the
-				*record
-				** until the first "----" line or until end of record.
-				*/
+				 *record
+				 ** until the first "----" line or until end of record.
+				 */
 				k = 0;
 				while (!nextIsBlank(&sScript) && nextLine(&sScript) &&
 				       sScript.zLine[0] && strcmp(sScript.zLine, "----") != 0) {
@@ -645,16 +645,16 @@ TEST_CASE("Test SQLite Logic Test", "[sqlitelogic]") {
 
 				if (verifyMode) {
 					/* In verify mode, first skip over the ---- line if we are
-					*still
-					** pointing at it. */
+					 *still
+					 ** pointing at it. */
 					if (strcmp(sScript.zLine, "----") == 0)
 						nextLine(&sScript);
 
 					/* Compare subsequent lines of the script against the
-					*results
-					** from the query.  Report an error if any differences are
-					*found.
-					*/
+					 *results
+					 ** from the query.  Report an error if any differences are
+					 *found.
+					 */
 					if (hashThreshold == 0 || nResult <= hashThreshold) {
 						for (i = 0; i < nResult && sScript.zLine[0];
 						     nextLine(&sScript), i++) {
@@ -722,12 +722,12 @@ TEST_CASE("Test SQLite Logic Test", "[sqlitelogic]") {
 				}
 			} else if (strcmp(sScript.azToken[0], "halt") == 0) {
 				/* Used for debugging.  Stop reading the test script and shut
-				*down.
-				** A "halt" record can be inserted in the middle of a test
-				*script in
-				** to run the script up to a particular point that is giving a
-				** faulty result, then terminate at that point for analysis.
-				*/
+				 *down.
+				 ** A "halt" record can be inserted in the middle of a test
+				 *script in
+				 ** to run the script up to a particular point that is giving a
+				 ** faulty result, then terminate at that point for analysis.
+				 */
 				fprintf(stdout, "%s:%d: halt\n", zScriptFile,
 				        sScript.startLine);
 				break;

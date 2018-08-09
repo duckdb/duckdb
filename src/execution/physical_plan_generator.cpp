@@ -2,6 +2,8 @@
 #include "execution/physical_plan_generator.hpp"
 
 #include "execution/operator/physical_list.hpp"
+#include "parser/expression/expression_list.hpp"
+
 #include "planner/operator/logical_list.hpp"
 
 #include "storage/storage_manager.hpp"
@@ -138,4 +140,11 @@ void PhysicalPlanGenerator::Visit(LogicalInsert &op) {
 		throw Exception("Insert should be root node");
 	}
 	this->plan = move(insertion);
+}
+
+void PhysicalPlanGenerator::Visit(SubqueryExpression &expr) {
+	auto old_plan = move(plan);
+	CreatePlan(move(expr.op), move(expr.context));
+	expr.plan = move(plan);
+	plan = move(old_plan);
 }

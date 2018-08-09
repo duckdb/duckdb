@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include "parser/sql_node_visitor.hpp"
+
 namespace duckdb {
 
 class LogicalAggregate;
@@ -23,7 +25,7 @@ class LogicalInsert;
 
 //! The LogicalOperatorVisitor is an abstract base class that implements the
 //! Visitor pattern on LogicalOperator.
-class LogicalOperatorVisitor {
+class LogicalOperatorVisitor : public SQLNodeVisitor {
   public:
 	virtual ~LogicalOperatorVisitor(){};
 

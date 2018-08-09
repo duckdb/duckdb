@@ -294,9 +294,23 @@ void ExpressionExecutor::Visit(CaseExpression &expr) {
 }
 
 void ExpressionExecutor::Visit(SubqueryExpression &expr) {
-	throw NotImplementedException("");
+	auto &plan = expr.plan;
+	auto state = plan->GetOperatorState();
+
+	DataChunk s_chunk;
+	plan->InitializeChunk(s_chunk);
+	plan->GetChunk(s_chunk, state.get());
+	vector.Resize(1);
+	vector.count = 1;
+	if (s_chunk.count == 0) {
+		vector.SetValue(0, Value());
+	} else {
+		assert(s_chunk.column_count > 0);
+		vector.SetValue(0, s_chunk.data[0]->GetValue(0));
+	}
+	expr.stats.Verify(vector);
 }
 
 void ExpressionExecutor::Visit(TableRefExpression &expr) {
-	throw NotImplementedException("");
+	throw NotImplementedException("TableRef");
 }

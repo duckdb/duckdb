@@ -145,7 +145,14 @@ void LogicalPlanGenerator::Visit(OperatorExpression &expr) {
 }
 
 void LogicalPlanGenerator::Visit(SubqueryExpression &expr) {
-	throw NotImplementedException("Subquery not implemented yet!");
+	auto old_root = move(root);
+	expr.subquery->Accept(this);
+	if (!root) {
+		throw Exception("Can't plan subquery");
+	}
+
+	expr.op = move(root);
+	root = move(old_root);
 }
 
 void LogicalPlanGenerator::Visit(InsertStatement &statement) {

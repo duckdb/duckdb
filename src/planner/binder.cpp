@@ -204,6 +204,9 @@ void Binder::Visit(JoinExpression &expr) {
 }
 
 void Binder::Visit(SubqueryExpression &expr) {
-	context->AddSubquery(expr.alias, expr.subquery.get());
-	throw NotImplementedException("Binding subqueries not implemented yet!");
+	auto old_context = move(context);
+	context = make_unique<BindContext>();
+	expr.subquery->Accept(this);
+	expr.context = move(context);
+	context = move(old_context);
 }
