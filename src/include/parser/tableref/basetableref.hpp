@@ -10,14 +10,13 @@
 
 #pragma once
 
-#include "parser/expression/tableref_expression.hpp"
+#include "parser/tableref/tableref.hpp"
 
 namespace duckdb {
 //! Represents a TableReference to a base table in the schema
-class BaseTableRefExpression : public TableRefExpression {
+class BaseTableRef : public TableRef {
   public:
-	BaseTableRefExpression()
-	    : TableRefExpression(TableReferenceType::BASE_TABLE) {}
+	BaseTableRef() : TableRef(TableReferenceType::BASE_TABLE) {}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
 

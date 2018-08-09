@@ -10,8 +10,8 @@
 
 #pragma once
 
-#include "parser/expression/tableref_expression.hpp"
 #include "parser/statement/select_statement.hpp"
+#include "parser/tableref/tableref.hpp"
 // FIXME: should not include this here!
 #include "execution/physical_operator.hpp"
 #include "planner/bindcontext.hpp"
@@ -20,10 +20,10 @@
 namespace duckdb {
 
 //! Represents a subquery
-class SubqueryExpression : public TableRefExpression {
+class SubqueryExpression : public AbstractExpression {
   public:
 	SubqueryExpression()
-	    : TableRefExpression(TableReferenceType::SUBQUERY), op(nullptr) {}
+	    : AbstractExpression(ExpressionType::SELECT_SUBQUERY) {}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
 

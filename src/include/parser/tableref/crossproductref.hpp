@@ -10,15 +10,19 @@
 
 #pragma once
 
-#include "parser/expression/tableref_expression.hpp"
+#include "parser/tableref/tableref.hpp"
 
 namespace duckdb {
 //! Represents a cross product
-class CrossProductExpression : public TableRefExpression {
+class CrossProductRef : public TableRef {
   public:
-	CrossProductExpression()
-	    : TableRefExpression(TableReferenceType::CROSS_PRODUCT) {}
+	CrossProductRef() : TableRef(TableReferenceType::CROSS_PRODUCT) {}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+
+	//! The left hand side of the cross product
+	std::unique_ptr<TableRef> left;
+	//! The right hand side of the cross product
+	std::unique_ptr<TableRef> right;
 };
 } // namespace duckdb

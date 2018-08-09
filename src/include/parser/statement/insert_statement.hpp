@@ -16,7 +16,6 @@
 #include "parser/statement/sql_statement.hpp"
 
 #include "parser/expression/abstract_expression.hpp"
-#include "parser/expression/basetableref_expression.hpp"
 
 namespace duckdb {
 

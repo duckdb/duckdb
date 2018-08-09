@@ -2,6 +2,7 @@
 #include "parser/transform.hpp"
 
 #include "parser/expression/expression_list.hpp"
+#include "parser/tableref/tableref_list.hpp"
 
 using namespace std;
 
@@ -126,8 +127,8 @@ unique_ptr<AbstractExpression> TransformBoolExpr(BoolExpr *root) {
 	return result;
 }
 
-unique_ptr<AbstractExpression> TransformRangeVar(RangeVar *root) {
-	auto result = make_unique<BaseTableRefExpression>();
+unique_ptr<TableRef> TransformRangeVar(RangeVar *root) {
+	auto result = make_unique<BaseTableRef>();
 
 	result->alias = TransformAlias(root->alias);
 	if (root->relname)
@@ -139,8 +140,8 @@ unique_ptr<AbstractExpression> TransformRangeVar(RangeVar *root) {
 	return move(result);
 }
 
-unique_ptr<AbstractExpression> TransformRangeSubselect(RangeSubselect *root) {
-	auto result = make_unique<SubqueryExpression>();
+unique_ptr<TableRef> TransformRangeSubselect(RangeSubselect *root) {
+	auto result = make_unique<SubqueryRef>();
 	result->alias = TransformAlias(root->alias);
 	result->subquery = move(TransformSelect(root->subquery));
 	if (!result->subquery) {
@@ -150,8 +151,8 @@ unique_ptr<AbstractExpression> TransformRangeSubselect(RangeSubselect *root) {
 	return move(result);
 }
 
-unique_ptr<AbstractExpression> TransformJoin(JoinExpr *root) {
-	auto result = make_unique<JoinExpression>();
+unique_ptr<TableRef> TransformJoin(JoinExpr *root) {
+	auto result = make_unique<JoinRef>();
 	switch (root->jointype) {
 	case JOIN_INNER: {
 		result->type = duckdb::JoinType::INNER;
@@ -228,31 +229,38 @@ unique_ptr<AbstractExpression> TransformJoin(JoinExpr *root) {
 	return move(result);
 }
 
-unique_ptr<AbstractExpression> TransformFrom(List *root) {
+unique_ptr<TableRef> TransformFrom(List *root) {
 	if (!root) {
 		return nullptr;
 	}
 
 	if (root->length > 1) {
 		// Cross Product
-		auto result = make_unique<CrossProductExpression>();
+		auto result = make_unique<CrossProductRef>();
 		for (auto node = root->head; node != nullptr; node = node->next) {
+			if (result->left) {
+				auto new_result = make_unique<CrossProductRef>();
+				new_result->right = move(result);
+				result = move(new_result);
+			}
+
 			Node *n = reinterpret_cast<Node *>(node->data.ptr_value);
 			switch (n->type) {
-			case T_RangeVar: {
-				result->AddChild(
-				    move(TransformRangeVar(reinterpret_cast<RangeVar *>(n))));
+			case T_RangeVar:
+				result->left =
+				    move(TransformRangeVar(reinterpret_cast<RangeVar *>(n)));
 				break;
-			}
-			case T_RangeSubselect: {
-				result->AddChild(move(TransformRangeSubselect(
-				    reinterpret_cast<RangeSubselect *>(n))));
+			case T_RangeSubselect:
+				result->left = move(TransformRangeSubselect(
+				    reinterpret_cast<RangeSubselect *>(n)));
 				break;
-			}
-			default: {
+			default:
 				throw NotImplementedException(
 				    "From Type %d not supported yet...", n->type);
 			}
+			if (!result->right) {
+				result->right = move(result->left);
+				result->left = nullptr;
 			}
 		}
 		return move(result);

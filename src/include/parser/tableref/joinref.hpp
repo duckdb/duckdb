@@ -10,20 +10,20 @@
 
 #pragma once
 
-#include "parser/expression/tableref_expression.hpp"
+#include "parser/tableref/tableref.hpp"
 
 namespace duckdb {
 //! Represents a JOIN between two expressions
-class JoinExpression : public TableRefExpression {
+class JoinRef : public TableRef {
   public:
-	JoinExpression() : TableRefExpression(TableReferenceType::JOIN) {}
+	JoinRef() : TableRef(TableReferenceType::JOIN) {}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
 
 	//! The left hand side of the join
-	std::unique_ptr<AbstractExpression> left;
+	std::unique_ptr<TableRef> left;
 	//! The right hand side of the join
-	std::unique_ptr<AbstractExpression> right;
+	std::unique_ptr<TableRef> right;
 	//! The join condition
 	std::unique_ptr<AbstractExpression> condition;
 	//! The join type

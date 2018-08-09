@@ -15,6 +15,7 @@
 #include "parser/statement/sql_statement.hpp"
 
 #include "parser/expression/abstract_expression.hpp"
+#include "parser/tableref/tableref.hpp"
 
 namespace duckdb {
 //! GROUP BY description
@@ -62,7 +63,7 @@ class SelectStatement : public SQLStatement {
 	//! The projection list
 	std::vector<std::unique_ptr<AbstractExpression>> select_list;
 	//! The FROM clause
-	std::unique_ptr<AbstractExpression> from_table;
+	std::unique_ptr<TableRef> from_table;
 	//! The WHERE clause
 	std::unique_ptr<AbstractExpression> where_clause;
 	//! DISTINCT or not

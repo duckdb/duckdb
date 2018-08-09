@@ -3,6 +3,7 @@
 
 #include "parser/expression/expression_list.hpp"
 #include "parser/statement/insert_statement.hpp"
+#include "parser/tableref/tableref_list.hpp"
 
 #include "planner/operator/logical_aggregate.hpp"
 #include "planner/operator/logical_distinct.hpp"
@@ -116,14 +117,6 @@ void LogicalPlanGenerator::Visit(AggregateExpression &expr) {
 		}
 	}
 }
-void LogicalPlanGenerator::Visit(BaseTableRefExpression &expr) {
-	auto table = catalog.GetTable(expr.schema_name, expr.table_name);
-	auto get_table = make_unique<LogicalGet>(
-	    table, expr.alias.empty() ? expr.table_name : expr.alias);
-	if (root)
-		get_table->children.push_back(move(root));
-	root = move(get_table);
-}
 
 void LogicalPlanGenerator::Visit(ComparisonExpression &expr) {
 	SQLNodeVisitor::Visit(expr);
@@ -133,10 +126,6 @@ void LogicalPlanGenerator::Visit(ComparisonExpression &expr) {
 void LogicalPlanGenerator::Visit(ConjunctionExpression &expr) {
 	SQLNodeVisitor::Visit(expr);
 	cast_children_to_equal_types(expr);
-}
-
-void LogicalPlanGenerator::Visit(JoinExpression &expr) {
-	throw NotImplementedException("Joins not implemented yet!");
 }
 
 void LogicalPlanGenerator::Visit(OperatorExpression &expr) {
@@ -153,6 +142,27 @@ void LogicalPlanGenerator::Visit(SubqueryExpression &expr) {
 
 	expr.op = move(root);
 	root = move(old_root);
+}
+
+void LogicalPlanGenerator::Visit(BaseTableRef &expr) {
+	auto table = catalog.GetTable(expr.schema_name, expr.table_name);
+	auto get_table = make_unique<LogicalGet>(
+	    table, expr.alias.empty() ? expr.table_name : expr.alias);
+	if (root)
+		get_table->children.push_back(move(root));
+	root = move(get_table);
+}
+
+void LogicalPlanGenerator::Visit(CrossProductRef &expr) {
+	throw NotImplementedException("Cross product not implemented yet!");
+}
+
+void LogicalPlanGenerator::Visit(JoinRef &expr) {
+	throw NotImplementedException("Joins not implemented yet!");
+}
+
+void LogicalPlanGenerator::Visit(SubqueryRef &expr) {
+	throw NotImplementedException("Joins not implemented yet!");
 }
 
 void LogicalPlanGenerator::Visit(InsertStatement &statement) {

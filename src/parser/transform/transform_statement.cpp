@@ -3,6 +3,7 @@
 
 #include "catalog/column_catalog.hpp"
 
+#include "parser/tableref/tableref_list.hpp"
 #include "parser/transform.hpp"
 
 using namespace std;
@@ -151,7 +152,7 @@ unique_ptr<InsertStatement> TransformInsert(Node *node) {
 	}
 
 	auto ref = TransformRangeVar(stmt->relation);
-	auto &table = *reinterpret_cast<BaseTableRefExpression *>(ref.get());
+	auto &table = *reinterpret_cast<BaseTableRef *>(ref.get());
 	result->table = table.table_name;
 	result->schema = table.schema_name;
 	return result;

@@ -114,10 +114,6 @@ void ExpressionExecutor::Visit(AggregateExpression &expr) {
 	}
 }
 
-void ExpressionExecutor::Visit(BaseTableRefExpression &expr) {
-	throw NotImplementedException("");
-}
-
 void ExpressionExecutor::Visit(CastExpression &expr) {
 	// resolve the child
 	Vector l;
@@ -209,10 +205,6 @@ void ExpressionExecutor::Visit(ConstantExpression &expr) {
 	v.Move(vector);
 }
 
-void ExpressionExecutor::Visit(CrossProductExpression &expr) {
-	throw NotImplementedException("");
-}
-
 void ExpressionExecutor::Visit(FunctionExpression &expr) {
 	throw NotImplementedException("");
 }
@@ -224,10 +216,6 @@ void ExpressionExecutor::Visit(GroupRefExpression &expr) {
 		throw NotImplementedException("Aggregate node without aggregate state");
 	}
 	vector.Reference(*state->group_chunk.data[expr.group_index].get());
-}
-
-void ExpressionExecutor::Visit(JoinExpression &expr) {
-	throw NotImplementedException("");
 }
 
 void ExpressionExecutor::Visit(OperatorExpression &expr) {
@@ -309,8 +297,4 @@ void ExpressionExecutor::Visit(SubqueryExpression &expr) {
 		vector.SetValue(0, s_chunk.data[0]->GetValue(0));
 	}
 	expr.stats.Verify(vector);
-}
-
-void ExpressionExecutor::Visit(TableRefExpression &expr) {
-	throw NotImplementedException("TableRef");
 }

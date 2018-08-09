@@ -41,11 +41,11 @@ std::unique_ptr<AbstractExpression> TransformExpression(Node *node);
 //! Transform a Postgres function call into an AbstractExpression
 std::unique_ptr<AbstractExpression> TransformFuncCall(FuncCall *root);
 //! Transform a Postgres FROM clause into an AbstractExpression
-std::unique_ptr<AbstractExpression> TransformFrom(List *root);
+std::unique_ptr<TableRef> TransformFrom(List *root);
 //! Transform a Postgres constant value into an AbstractExpression
 std::unique_ptr<AbstractExpression> TransformConstant(A_Const *c);
 //! Transform a Postgres table reference into an AbstractExpression
-std::unique_ptr<AbstractExpression> TransformRangeVar(RangeVar *root);
+std::unique_ptr<TableRef> TransformRangeVar(RangeVar *root);
 
 //! Transform a Postgres TypeName string into a TypeId
 TypeId TransformStringToTypeId(char *str);

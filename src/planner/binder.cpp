@@ -2,6 +2,7 @@
 #include "planner/binder.hpp"
 
 #include "parser/expression/expression_list.hpp"
+#include "parser/tableref/tableref_list.hpp"
 
 #include "parser/statement/select_statement.hpp"
 
@@ -181,12 +182,6 @@ void Binder::Visit(SelectStatement &statement) {
 	}
 }
 
-void Binder::Visit(BaseTableRefExpression &expr) {
-	auto table = catalog.GetTable(expr.schema_name, expr.table_name);
-	context->AddBaseTable(expr.alias.empty() ? expr.table_name : expr.alias,
-	                      table);
-}
-
 void Binder::Visit(ColumnRefExpression &expr) {
 	// individual column reference
 	// resolve to either a base table or a subquery expression
@@ -195,12 +190,6 @@ void Binder::Visit(ColumnRefExpression &expr) {
 		expr.table_name = context->GetMatchingTable(expr.column_name);
 	}
 	auto column = context->BindColumn(expr);
-}
-
-void Binder::Visit(JoinExpression &expr) {
-	expr.left->Accept(this);
-	expr.right->Accept(this);
-	expr.condition->Accept(this);
 }
 
 void Binder::Visit(SubqueryExpression &expr) {
@@ -215,4 +204,26 @@ void Binder::Visit(SubqueryExpression &expr) {
 	expr.return_type = expr.subquery->select_list[0]->return_type;
 	expr.context = move(context);
 	context = move(old_context);
+}
+
+void Binder::Visit(BaseTableRef &expr) {
+	auto table = catalog.GetTable(expr.schema_name, expr.table_name);
+	context->AddBaseTable(expr.alias.empty() ? expr.table_name : expr.alias,
+	                      table);
+}
+
+void Binder::Visit(CrossProductRef &expr) {
+	expr.left->Accept(this);
+	expr.right->Accept(this);
+}
+
+void Binder::Visit(JoinRef &expr) {
+	expr.left->Accept(this);
+	expr.right->Accept(this);
+	expr.condition->Accept(this);
+}
+
+void Binder::Visit(SubqueryRef &expr) {
+	context->AddSubquery(expr.alias, expr.subquery.get());
+	throw NotImplementedException("Binding subqueries not implemented yet!");
 }
