@@ -42,29 +42,35 @@ template <> double Cast::Operation(const char *left) {
 	return stod(left, NULL);
 }
 
+const char *str_to_cstr(string str) {
+	char *cstr = new char[str.length() + 1];
+	strcpy(cstr, str.c_str());
+	return cstr;
+}
+
 // numeric -> string
 template <> const char *Cast::Operation(int8_t left) {
-	throw NotImplementedException("String cast not implemented!");
+	return str_to_cstr(to_string(left));
 }
 
 template <> const char *Cast::Operation(int16_t left) {
-	throw NotImplementedException("String cast not implemented!");
+	return str_to_cstr(to_string(left));
 }
 
 template <> const char *Cast::Operation(int left) {
-	throw NotImplementedException("String cast not implemented!");
+	return str_to_cstr(to_string(left));
 }
 
 template <> const char *Cast::Operation(int64_t left) {
-	throw NotImplementedException("String cast not implemented!");
+	return str_to_cstr(to_string(left));
 }
 
 template <> const char *Cast::Operation(uint64_t left) {
-	throw NotImplementedException("String cast not implemented!");
+	return str_to_cstr(to_string(left));
 }
 
 template <> const char *Cast::Operation(double left) {
-	throw NotImplementedException("String cast not implemented!");
+	return str_to_cstr(to_string(left));
 }
 
 template <> char *CastFromDate::Operation(date_t left) {
