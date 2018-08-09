@@ -9,6 +9,8 @@ using namespace std;
 
 Optimizer::Optimizer() {
 	rewriter.rules.push_back(
+	    make_unique_base<OptimizerRule, ConstantCastRule>());
+	rewriter.rules.push_back(
 	    make_unique_base<OptimizerRule, ConstantFoldingRule>());
 }
 
