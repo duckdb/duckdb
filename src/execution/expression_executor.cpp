@@ -300,7 +300,7 @@ void ExpressionExecutor::Visit(SubqueryExpression &expr) {
 	DataChunk s_chunk;
 	plan->InitializeChunk(s_chunk);
 	plan->GetChunk(s_chunk, state.get());
-	vector.Resize(1);
+	vector.Resize(1, expr.return_type);
 	vector.count = 1;
 	if (s_chunk.count == 0) {
 		vector.SetValue(0, Value());

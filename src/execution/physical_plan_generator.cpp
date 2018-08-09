@@ -144,7 +144,9 @@ void PhysicalPlanGenerator::Visit(LogicalInsert &op) {
 
 void PhysicalPlanGenerator::Visit(SubqueryExpression &expr) {
 	auto old_plan = move(plan);
+	auto old_context = move(context);
 	CreatePlan(move(expr.op), move(expr.context));
 	expr.plan = move(plan);
 	plan = move(old_plan);
+	context = move(old_context);
 }

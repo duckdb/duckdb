@@ -205,8 +205,14 @@ void Binder::Visit(JoinExpression &expr) {
 
 void Binder::Visit(SubqueryExpression &expr) {
 	auto old_context = move(context);
-	context = make_unique<BindContext>();
 	expr.subquery->Accept(this);
+	if (expr.subquery->select_list.size() < 1) {
+		throw BinderException("Subquery has no projections");
+	}
+	if (expr.subquery->select_list[0]->return_type == TypeId::INVALID) {
+		throw BinderException("Subquery has no type");
+	}
+	expr.return_type = expr.subquery->select_list[0]->return_type;
 	expr.context = move(context);
 	context = move(old_context);
 }

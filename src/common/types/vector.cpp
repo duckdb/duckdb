@@ -203,12 +203,12 @@ void Vector::Resize(oid_t maximum_size, TypeId new_type) {
 		throw Exception(
 		    "Cannot resize vector to smaller than current count!\n");
 	}
-	this->maximum_size = maximum_size;
 	char *new_data = new char[maximum_size * GetTypeIdSize(type)];
 	if (data) {
 		memcpy(new_data, data, count * GetTypeIdSize(type));
 	}
 	Destroy();
+	this->maximum_size = maximum_size;
 	owns_data = true;
 	owned_data = unique_ptr<char[]>(new_data);
 	data = new_data;
