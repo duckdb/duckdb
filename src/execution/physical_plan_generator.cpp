@@ -8,12 +8,14 @@
 #include "execution/operator/physical_order.hpp"
 #include "execution/operator/physical_projection.hpp"
 #include "execution/operator/physical_table_scan.hpp"
+#include "execution/operator/physical_copy.hpp"
 
 #include "planner/operator/logical_aggregate.hpp"
 #include "planner/operator/logical_distinct.hpp"
 #include "planner/operator/logical_filter.hpp"
 #include "planner/operator/logical_get.hpp"
 #include "planner/operator/logical_insert.hpp"
+#include "planner/operator/logical_copy.hpp"
 #include "planner/operator/logical_limit.hpp"
 #include "planner/operator/logical_order.hpp"
 #include "planner/operator/logical_projection.hpp"
@@ -152,4 +154,14 @@ void PhysicalPlanGenerator::Visit(LogicalInsert &op) {
 		throw Exception("Insert should be root node");
 	}
 	this->plan = move(insertion);
+}
+
+void PhysicalPlanGenerator::Visit(LogicalCopy &op) {
+	LogicalOperatorVisitor::Visit(op);
+
+	auto copy = make_unique<PhysicalCopy>(op.table,move(op.file_path));
+	if (plan) {
+		throw Exception("Copy should be root node");
+	}
+	this->plan = move(copy);
 }

@@ -3,6 +3,7 @@
 
 #include "parser/expression/expression_list.hpp"
 #include "parser/statement/insert_statement.hpp"
+#include "parser/statement/copy_statement.hpp"
 
 #include "planner/operator/logical_aggregate.hpp"
 #include "planner/operator/logical_distinct.hpp"
@@ -12,6 +13,7 @@
 #include "planner/operator/logical_limit.hpp"
 #include "planner/operator/logical_order.hpp"
 #include "planner/operator/logical_projection.hpp"
+#include "planner/operator/logical_copy.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -138,4 +140,10 @@ void LogicalPlanGenerator::Visit(InsertStatement &statement) {
 	auto table = catalog.GetTable(statement.schema, statement.table);
 	auto insert = make_unique<LogicalInsert>(table, move(statement.values));
 	root = move(insert);
+}
+
+void LogicalPlanGenerator::Visit(CopyStatement &statement) {
+	auto table = catalog.GetTable(statement.schema, statement.table);
+	auto copy = make_unique<LogicalCopy>(table, move(statement.file_path));
+	root = move(copy);
 }

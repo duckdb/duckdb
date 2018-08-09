@@ -20,6 +20,7 @@ class LogicalLimit;
 class LogicalOrder;
 class LogicalProjection;
 class LogicalInsert;
+class LogicalCopy;
 
 //! The LogicalOperatorVisitor is an abstract base class that implements the
 //! Visitor pattern on LogicalOperator.
@@ -35,5 +36,7 @@ class LogicalOperatorVisitor {
 	virtual void Visit(LogicalOrder &filter);
 	virtual void Visit(LogicalProjection &filter);
 	virtual void Visit(LogicalInsert &insert);
+	virtual void Visit(LogicalCopy &copy);
+
 };
 } // namespace duckdb

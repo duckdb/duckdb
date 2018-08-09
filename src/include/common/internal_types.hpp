@@ -237,6 +237,7 @@ enum class LogicalOperatorType {
 	DISTINCT = 8,
 	LIMIT = 9,
 	ORDER_BY = 10,
+	COPY = 11,
 	// -----------------------------
 	// Joins
 	// -----------------------------
@@ -278,6 +279,7 @@ enum class PhysicalOperatorType {
 	FILTER = 13,
 	PROJECTION = 14,
 	BASE_GROUP_BY = 15,
+    COPY = 16,
 	// -----------------------------
 	// Joins
 	// -----------------------------

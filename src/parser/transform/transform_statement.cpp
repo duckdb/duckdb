@@ -150,4 +150,19 @@ unique_ptr<InsertStatement> TransformInsert(Node *node) {
 
 	return result;
 }
+
+unique_ptr<CopyStatement> TransformCopy(Node *node) {
+    CopyStmt * stmt = reinterpret_cast<CopyStmt *>(node);
+    assert(stmt);
+    auto result = make_unique<CopyStatement>();
+    auto ref = TransformRangeVar(stmt->relation);
+    auto &table = *reinterpret_cast<BaseTableRefExpression *>(ref.get());
+    result->table = table.table_name;
+    result->schema = table.schema_name;
+    result->file_path = stmt->filename;
+    result->delimiter = ',';
+	return result;
+}
+
+
 }
