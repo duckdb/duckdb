@@ -45,21 +45,20 @@ class ExpressionExecutor : public SQLNodeVisitor {
 	//! Execute the given aggregate expression, and merge the result together
 	//! with v
 	void Merge(AggregateExpression &expr, Value &v);
+	//! Execute the given aggregate expression for the current chunk
+	Value Execute(AggregateExpression &expr);
 
 	void Visit(AggregateExpression &expr);
-	void Visit(BaseTableRefExpression &expr);
+	void Visit(CaseExpression &expr);
 	void Visit(CastExpression &expr);
 	void Visit(ColumnRefExpression &expr);
 	void Visit(ComparisonExpression &expr);
 	void Visit(ConjunctionExpression &expr);
 	void Visit(ConstantExpression &expr);
-	void Visit(CrossProductExpression &expr);
 	void Visit(FunctionExpression &expr);
 	void Visit(GroupRefExpression &expr);
-	void Visit(JoinExpression &expr);
 	void Visit(OperatorExpression &expr);
 	void Visit(SubqueryExpression &expr);
-	void Visit(TableRefExpression &expr);
 
   private:
 	//! The data chunk of the current physical operator, used to resolve e.g.

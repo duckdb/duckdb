@@ -53,20 +53,20 @@ class Vector {
 	//! The type of the elements stored in the vector.
 	TypeId type;
 	//! The maximum amount of elements that can be stored in the vector.
-	size_t max_elements;
+	oid_t maximum_size;
 
 	Vector();
 	//! Create a vector of size one holding the passed on value
 	Vector(Value value);
 	//! Create a non-owning vector that references the specified data
-	Vector(TypeId type, char *dataptr = nullptr, size_t max_elements = 0);
-	//! Create an owning vector that holds at most max_elements entries.
+	Vector(TypeId type, char *dataptr = nullptr, size_t maximum_size = 0);
+	//! Create an owning vector that holds at most maximum_size entries.
 	/*!
-	    Create an owning vector that holds at most max_elements entries.
-	    If max_elements is equal to 0, the vector will be an empty vector.
+	    Create an owning vector that holds at most maximum_size entries.
+	    If maximum_size is equal to 0, the vector will be an empty vector.
 	    If zero_data is true, the allocated data will be zero-initialized.
 	*/
-	Vector(TypeId type, oid_t max_elements = 0, bool zero_data = false);
+	Vector(TypeId type, oid_t maximum_size = 0, bool zero_data = false);
 	~Vector();
 
 	//! Destroys the vector, deleting any owned data and resetting it to an
@@ -78,10 +78,10 @@ class Vector {
 	//! Sets the [index] element of the Vector to the specified Value
 	void SetValue(size_t index, Value val);
 
-	//! Resizes the vector to hold max_elements, and potentially typecasts the
+	//! Resizes the vector to hold maximum_size, and potentially typecasts the
 	//! elements as well. After the resize, the vector will become an owning
 	//! vector even if it was a non-owning vector before.
-	void Resize(oid_t max_elements, TypeId new_type = TypeId::INVALID);
+	void Resize(oid_t maximum_size, TypeId new_type = TypeId::INVALID);
 	//! Appends the other vector to this vector. This method will call
 	//! Vector::Resize if there is no room for the append, which will cause the
 	//! vector to become an owning vector.
@@ -96,10 +96,10 @@ class Vector {
 	//! "other" will become equivalent to this vector, and this vector will be
 	//! turned into an empty vector.
 	void Move(Vector &other);
-	//! This method guarantees that the other vector will become an owning
-	//! vector. If this vector is an owning vector, it only moves the data.
-	//! Otherwise it will call Vector::Resize on other and copy the data over.
-	void MoveOrCopy(Vector &other);
+	//! This method guarantees that the vector becomes an owning vector
+	//! If the vector is already an owning vector, it does nothing
+	//! Otherwise, it copies the data to the vector
+	void ForceOwnership();
 	//! Causes this vector to reference the data held by the other vector.
 	void Reference(Vector &other);
 

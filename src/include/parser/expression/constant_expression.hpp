@@ -18,7 +18,8 @@ namespace duckdb {
 class ConstantExpression : public AbstractExpression {
   public:
 	ConstantExpression()
-	    : AbstractExpression(ExpressionType::VALUE_CONSTANT), value() {}
+	    : AbstractExpression(ExpressionType::VALUE_CONSTANT, TypeId::INTEGER),
+	      value() {}
 	ConstantExpression(std::string val)
 	    : AbstractExpression(ExpressionType::VALUE_CONSTANT, TypeId::VARCHAR),
 	      value(val) {}
@@ -33,7 +34,24 @@ class ConstantExpression : public AbstractExpression {
 	      value(val) {}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
-	virtual std::string ToString() const override { return std::string(); }
+
+	//! Resolve the type of the aggregate
+	virtual void ResolveType() override {
+		AbstractExpression::ResolveType();
+		stats = Statistics(value);
+	}
+
+	virtual bool Equals(const AbstractExpression *other_) override {
+		if (!AbstractExpression::Equals(other_)) {
+			return false;
+		}
+		auto other = reinterpret_cast<const ConstantExpression *>(other_);
+		if (!other) {
+			return false;
+		}
+		return Value::Equals(value, other->value);
+	}
+	virtual std::string ToString() const override { return value.ToString(); }
 
 	//! The constant value referenced
 	Value value;

@@ -1,7 +1,7 @@
 
 #include "execution/operator/physical_hash_aggregate.hpp"
+#include "common/types/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
-#include "execution/vector/vector_operations.hpp"
 
 #include "parser/expression/aggregate_expression.hpp"
 
@@ -44,6 +44,9 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 		if (children.size() > 0) {
 			// resolve the child chunk if there is one
 			children[0]->GetChunk(state->child_chunk, state->child_state.get());
+			if (state->child_chunk.count == 0) {
+				break;
+			}
 		}
 
 		if (groups.size() > 0) {
@@ -68,11 +71,21 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 		} else {
 			// aggregation without groups
 			// merge into the fixed list of aggregates
-			for (size_t i = 0; i < aggregates.size(); i++) {
-				executor.Merge(*aggregates[i], state->aggregates[i]);
+
+			if (state->aggregates.size() == 0) {
+				// first run: just store the values
+				state->aggregates.resize(aggregates.size());
+				for (size_t i = 0; i < aggregates.size(); i++) {
+					state->aggregates[i] = executor.Execute(*aggregates[i]);
+				}
+			} else {
+				// subsequent runs: merge the aggregates
+				for (size_t i = 0; i < aggregates.size(); i++) {
+					executor.Merge(*aggregates[i], state->aggregates[i]);
+				}
 			}
 		}
-	} while (state->child_chunk.count != 0);
+	} while (state->child_chunk.count > 0);
 
 	if (groups.size() > 0) {
 		state->group_chunk.Reset();
@@ -80,6 +93,7 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 		state->ht->Scan(state->ht_scan_position, state->group_chunk,
 		                state->aggregate_chunk);
 		if (state->aggregate_chunk.count == 0) {
+			state->finished = true;
 			return;
 		}
 	} else {

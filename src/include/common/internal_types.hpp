@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include <math.h>
 #include <string>
 
 namespace duckdb {
@@ -18,6 +19,8 @@ namespace duckdb {
 
 //! Type used to represent dates
 typedef int32_t date_t;
+//! Type used to represent timestamps
+typedef int64_t timestamp_t;
 //! Type used for the selection vector
 typedef uint64_t sel_t;
 //! Type used for index accesses
@@ -34,10 +37,10 @@ enum class TypeId {
 	SMALLINT,
 	INTEGER,
 	BIGINT,
-	DECIMAL,
 	POINTER,
-	TIMESTAMP,
 	DATE,
+	TIMESTAMP,
+	DECIMAL,
 	VARCHAR,
 	VARBINARY,
 	ARRAY,
@@ -81,9 +84,9 @@ enum class ExpressionType {
 	// -----------------------------
 
 	// left + right (both must be number. implicitly casted)
-	OPERATOR_PLUS = 1,
+	OPERATOR_ADD = 1,
 	// left - right (both must be number. implicitly casted)
-	OPERATOR_MINUS = 2,
+	OPERATOR_SUBTRACT = 2,
 	// left * right (both must be number. implicitly casted)
 	OPERATOR_MULTIPLY = 3,
 	// left / right (both must be number. implicitly casted)
@@ -307,7 +310,46 @@ std::string TypeIdToString(TypeId type);
 TypeId StringToTypeId(const std::string &str);
 size_t GetTypeIdSize(TypeId type);
 static bool TypeIsConstantSize(TypeId type) { return type < TypeId::VARCHAR; }
+static bool TypeIsIntegral(TypeId type) {
+	return type >= TypeId::TINYINT && type <= TypeId::BIGINT;
+}
+static bool TypeIsNumeric(TypeId type) {
+	return type >= TypeId::TINYINT && type <= TypeId::DECIMAL;
+}
+
+template <class T> inline T NullValue() {
+	return std::numeric_limits<T>::min();
+}
+template <> inline double NullValue() { return NAN; }
+template <> inline char *NullValue() { return nullptr; }
+template <> inline const char *NullValue() { return nullptr; }
+template <> inline uint8_t NullValue() {
+	return std::numeric_limits<uint8_t>::max();
+}
+template <> inline uint16_t NullValue() {
+	return std::numeric_limits<uint16_t>::max();
+}
+template <> inline uint32_t NullValue() {
+	return std::numeric_limits<uint32_t>::max();
+}
+template <> inline uint64_t NullValue() {
+	return std::numeric_limits<uint64_t>::max();
+}
+template <class T> inline bool IsNullValue(T value) {
+	return value == NullValue<T>();
+}
+template <> inline bool IsNullValue(double value) { return isnan(value); }
+
+//! Returns the minimum value that can be stored in a given type
+int64_t MinimumValue(TypeId type);
+//! Returns the maximum value that can be stored in a given type
+int64_t MaximumValue(TypeId type);
+//! Returns the minimal type that guarantees an integer value from not
+//! overflowing
+TypeId MinimalType(int64_t value);
 
 std::string LogicalOperatorToString(LogicalOperatorType type);
 std::string PhysicalOperatorToString(PhysicalOperatorType type);
+std::string ExpressionTypeToString(ExpressionType type);
+
 } // namespace duckdb

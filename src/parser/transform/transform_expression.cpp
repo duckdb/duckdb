@@ -2,6 +2,7 @@
 #include "parser/transform.hpp"
 
 #include "parser/expression/expression_list.hpp"
+#include "parser/tableref/tableref_list.hpp"
 
 using namespace std;
 
@@ -71,6 +72,13 @@ unique_ptr<AbstractExpression> TransformTypeCast(TypeCast *root) {
 		    TransformConstant(reinterpret_cast<A_Const *>(root->arg));
 		Value &source_value =
 		    reinterpret_cast<ConstantExpression *>(constant.get())->value;
+
+		if (TypeIsIntegral(source_value.type) && TypeIsIntegral(target_type)) {
+			// properly handle numeric overflows
+			target_type = std::max(MinimalType(source_value.GetNumericValue()),
+			                       target_type);
+		}
+
 		// perform the cast and substitute the expression
 		Value new_value = source_value.CastAs(target_type);
 
@@ -119,8 +127,8 @@ unique_ptr<AbstractExpression> TransformBoolExpr(BoolExpr *root) {
 	return result;
 }
 
-unique_ptr<AbstractExpression> TransformRangeVar(RangeVar *root) {
-	auto result = make_unique<BaseTableRefExpression>();
+unique_ptr<TableRef> TransformRangeVar(RangeVar *root) {
+	auto result = make_unique<BaseTableRef>();
 
 	result->alias = TransformAlias(root->alias);
 	if (root->relname)
@@ -132,8 +140,8 @@ unique_ptr<AbstractExpression> TransformRangeVar(RangeVar *root) {
 	return move(result);
 }
 
-unique_ptr<AbstractExpression> TransformRangeSubselect(RangeSubselect *root) {
-	auto result = make_unique<SubqueryExpression>();
+unique_ptr<TableRef> TransformRangeSubselect(RangeSubselect *root) {
+	auto result = make_unique<SubqueryRef>();
 	result->alias = TransformAlias(root->alias);
 	result->subquery = move(TransformSelect(root->subquery));
 	if (!result->subquery) {
@@ -143,8 +151,8 @@ unique_ptr<AbstractExpression> TransformRangeSubselect(RangeSubselect *root) {
 	return move(result);
 }
 
-unique_ptr<AbstractExpression> TransformJoin(JoinExpr *root) {
-	auto result = make_unique<JoinExpression>();
+unique_ptr<TableRef> TransformJoin(JoinExpr *root) {
+	auto result = make_unique<JoinRef>();
 	switch (root->jointype) {
 	case JOIN_INNER: {
 		result->type = duckdb::JoinType::INNER;
@@ -221,31 +229,38 @@ unique_ptr<AbstractExpression> TransformJoin(JoinExpr *root) {
 	return move(result);
 }
 
-unique_ptr<AbstractExpression> TransformFrom(List *root) {
+unique_ptr<TableRef> TransformFrom(List *root) {
 	if (!root) {
 		return nullptr;
 	}
 
 	if (root->length > 1) {
 		// Cross Product
-		auto result = make_unique<CrossProductExpression>();
+		auto result = make_unique<CrossProductRef>();
 		for (auto node = root->head; node != nullptr; node = node->next) {
+			if (result->left) {
+				auto new_result = make_unique<CrossProductRef>();
+				new_result->right = move(result);
+				result = move(new_result);
+			}
+
 			Node *n = reinterpret_cast<Node *>(node->data.ptr_value);
 			switch (n->type) {
-			case T_RangeVar: {
-				result->AddChild(
-				    move(TransformRangeVar(reinterpret_cast<RangeVar *>(n))));
+			case T_RangeVar:
+				result->left =
+				    move(TransformRangeVar(reinterpret_cast<RangeVar *>(n)));
 				break;
-			}
-			case T_RangeSubselect: {
-				result->AddChild(move(TransformRangeSubselect(
-				    reinterpret_cast<RangeSubselect *>(n))));
+			case T_RangeSubselect:
+				result->left = move(TransformRangeSubselect(
+				    reinterpret_cast<RangeSubselect *>(n)));
 				break;
-			}
-			default: {
+			default:
 				throw NotImplementedException(
 				    "From Type %d not supported yet...", n->type);
 			}
+			if (!result->right) {
+				result->right = move(result->left);
+				result->left = nullptr;
 			}
 		}
 		return move(result);
@@ -394,6 +409,105 @@ unique_ptr<AbstractExpression> TransformFuncCall(FuncCall *root) {
 	}
 }
 
+unique_ptr<AbstractExpression> TransformCase(CaseExpr *root) {
+	if (!root) {
+		return nullptr;
+	}
+	// CASE expression WHEN value THEN result [WHEN ...] ELSE result uses this,
+	// but we rewrite to CASE WHEN expression = value THEN result ... to only
+	// have to handle one case downstream.
+	auto arg = TransformExpression(reinterpret_cast<Node *>(root->arg));
+
+	unique_ptr<AbstractExpression> def_res;
+	if (root->defresult) {
+		def_res = move(
+		    TransformExpression(reinterpret_cast<Node *>(root->defresult)));
+	} else {
+		Value null = Value(1);
+		null.is_null = true;
+		def_res = unique_ptr<AbstractExpression>(new ConstantExpression(null));
+	}
+	// def_res will be the else part of the innermost case expression
+
+	// CASE WHEN e1 THEN r1 WHEN w2 THEN r2 ELSE r3 is rewritten to
+	// CASE WHEN e1 THEN r1 ELSE CASE WHEN e2 THEN r2 ELSE r3
+
+	auto exp_root = unique_ptr<AbstractExpression>(new CaseExpression());
+	AbstractExpression *cur_root = exp_root.get();
+	AbstractExpression *next_root = nullptr;
+
+	for (auto cell = root->args->head; cell != nullptr; cell = cell->next) {
+		CaseWhen *w = reinterpret_cast<CaseWhen *>(cell->data.ptr_value);
+
+		auto test_raw = TransformExpression(reinterpret_cast<Node *>(w->expr));
+		unique_ptr<AbstractExpression> test;
+		if (arg.get()) {
+			test = unique_ptr<AbstractExpression>(new ComparisonExpression(
+			    ExpressionType::COMPARE_EQUAL, move(arg), move(test_raw)));
+		} else {
+			test = move(test_raw);
+		}
+
+		auto res_true =
+		    TransformExpression(reinterpret_cast<Node *>(w->result));
+
+		unique_ptr<AbstractExpression> res_false;
+		if (cell->next == nullptr) {
+			res_false = move(def_res);
+		} else {
+			res_false = unique_ptr<AbstractExpression>(new CaseExpression());
+			next_root = res_false.get();
+		}
+
+		cur_root->AddChild(move(test));
+		cur_root->AddChild(move(res_true));
+		cur_root->AddChild(move(res_false));
+
+		cur_root = next_root;
+	}
+
+	return move(exp_root);
+}
+
+unique_ptr<AbstractExpression> TransformSubquery(SubLink *root) {
+	if (!root) {
+		return nullptr;
+	}
+	auto result = make_unique<SubqueryExpression>();
+	result->subquery = move(TransformSelect(root->subselect));
+	if (!result->subquery) {
+		return nullptr;
+	}
+
+	switch (root->subLinkType) {
+	// TODO: add IN/EXISTS subqueries
+	//    case ANY_SUBLINK: {
+	//
+	//      auto col_expr = TransformExpression(root->testexpr);
+	//      expr = new
+	//      expression::ComparisonExpression(ExpressionType::COMPARE_IN,
+	//                                                  col_expr,
+	//                                                  subquery_expr);
+	//      break;
+	//    }
+	//    case EXISTS_SUBLINK: {
+	//      return new
+	//      expression::OperatorExpression(ExpressionType::OPERATOR_EXISTS,
+	//                                                type::TypeId::BOOLEAN,
+	//                                                subquery_expr,
+	//                                                nullptr);
+	//      break;
+	//    }
+	case EXPR_SUBLINK: {
+		return result;
+	}
+	default: {
+		throw NotImplementedException("Subquery of type %d not implemented\n",
+		                              (int)root->subLinkType);
+	}
+	}
+}
+
 unique_ptr<AbstractExpression> TransformExpression(Node *node) {
 	if (!node) {
 		return nullptr;
@@ -412,9 +526,12 @@ unique_ptr<AbstractExpression> TransformExpression(Node *node) {
 		return TransformBoolExpr(reinterpret_cast<BoolExpr *>(node));
 	case T_TypeCast:
 		return TransformTypeCast(reinterpret_cast<TypeCast *>(node));
-	case T_ParamRef:
 	case T_CaseExpr:
+		return TransformCase(reinterpret_cast<CaseExpr *>(node));
 	case T_SubLink:
+		return TransformSubquery(reinterpret_cast<SubLink *>(node));
+
+	case T_ParamRef:
 	case T_NullTest:
 	default:
 		throw NotImplementedException("Expr of type %d not implemented\n",
@@ -480,4 +597,4 @@ bool TransformValueList(List *list,
 	}
 	return true;
 }
-}
+} // namespace duckdb

@@ -21,23 +21,26 @@ void PhysicalCopy::GetChunk(DataChunk &result_chunk,
     for (auto &column : table->columns) {
         types.push_back(column->type);
     }
+    insert_chunk.Initialize(types);
     ifstream file (file_path);
     string value;
-    insert_chunk.Initialize(types);
     int count_tuples = 0;
+
     while (getline ( file, value ))
     {
+        insert_chunk.data[0]->count++;
+        insert_chunk.data[0]->SetValue(count_tuples, Value(value));
         count_tuples++;
-        insert_chunk.data[0]->SetValue(0, Value(value));
     }
 
-    insert_chunk.data[0]->count = count_tuples;
-    insert_chunk.count = count_tuples;
+    insert_chunk.count = insert_chunk.data[0]->count;
+
+    result_chunk.data[0]->count = 1;
+    result_chunk.data[0]->SetValue(
+            0, Value::NumericValue(TypeId::INTEGER, insert_chunk.data[0]->count));
 
     table->storage->AddData(insert_chunk);
 
-    result_chunk.data[0]->SetValue(
-            0, Value::NumericValue(TypeId::INTEGER, insert_chunk.data[0]->count));
     result_chunk.count = 1;
     state_->finished = true;
 

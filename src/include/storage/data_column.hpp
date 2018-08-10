@@ -14,6 +14,7 @@
 
 #include "catalog/table_catalog.hpp"
 #include "common/internal_types.hpp"
+#include "common/types/statistics.hpp"
 #include "common/types/vector.hpp"
 
 namespace duckdb {
@@ -23,7 +24,7 @@ class DataTable;
 class DataColumn {
   public:
 	DataColumn(DataTable &table, ColumnCatalogEntry &column)
-	    : table(table), column(column) {}
+	    : table(table), column(column), stats(column.type) {}
 
 	void AddData(Vector &data);
 
@@ -33,5 +34,7 @@ class DataColumn {
 	ColumnCatalogEntry &column;
 	//! The actual data of the column
 	std::vector<std::unique_ptr<Vector>> data;
+	//! Statistics about the column
+	Statistics stats;
 };
 } // namespace duckdb

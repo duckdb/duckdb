@@ -1,6 +1,6 @@
 
 #include "execution/expression_executor.hpp"
-#include "execution/vector/vector_operations.hpp"
+#include "common/types/vector_operations.hpp"
 
 #include "common/exception.hpp"
 
@@ -40,60 +40,63 @@ void ExpressionExecutor::Merge(AbstractExpression *expr, Vector &result) {
 	VectorOperations::And(vector, result, result);
 }
 
-void ExpressionExecutor::Merge(AggregateExpression &expr, Value &result) {
+Value ExpressionExecutor::Execute(AggregateExpression &expr) {
 	vector.Destroy();
-	if (result.type != expr.return_type) {
-		throw NotImplementedException(
-		    "Aggregate type does not match value type!");
-	}
-
-	if (expr.type == ExpressionType::AGGREGATE_COUNT) {
+	if (expr.type == ExpressionType::AGGREGATE_COUNT_STAR) {
 		// COUNT(*)
 		// Without FROM clause return "1", else return "count"
 		size_t count = chunk.column_count == 0 ? 1 : chunk.count;
-		Value v = Value::NumericValue(result.type, count);
-		Value::Add(result, v, result);
+		return Value::NumericValue(expr.return_type, count);
 	} else if (expr.children.size() > 0) {
-		Vector child;
 		expr.children[0]->Accept(this);
-		vector.Move(child);
-		vector.Resize(1, expr.return_type);
 		switch (expr.type) {
 		case ExpressionType::AGGREGATE_SUM: {
-			VectorOperations::Sum(child, vector);
-			Value v = vector.GetValue(0);
-			Value::Add(result, v, result);
-			break;
+			return VectorOperations::Sum(vector, expr.stats.CanHaveNull());
 		}
 		case ExpressionType::AGGREGATE_COUNT: {
-			VectorOperations::Count(child, vector);
-			Value v = vector.GetValue(0);
-			Value::Add(result, v, result);
-			break;
+			return VectorOperations::Count(vector, expr.stats.CanHaveNull());
 		}
 		case ExpressionType::AGGREGATE_AVG: {
-			VectorOperations::Sum(child, vector);
-			Value v = vector.GetValue(0);
-			Value::Add(result, v, result);
-			break;
+			return VectorOperations::Sum(vector, expr.stats.CanHaveNull());
 		}
 		case ExpressionType::AGGREGATE_MIN: {
-			VectorOperations::Min(child, vector);
-			Value v = vector.GetValue(0);
-			Value::Min(result, v, result);
-			break;
+			return VectorOperations::Min(vector, expr.stats.CanHaveNull());
 		}
 		case ExpressionType::AGGREGATE_MAX: {
-			VectorOperations::Max(child, vector);
-			Value v = vector.GetValue(0);
-			Value::Max(result, v, result);
-			break;
+			return VectorOperations::Max(vector, expr.stats.CanHaveNull());
 		}
 		default:
 			throw NotImplementedException("Unsupported aggregate type");
 		}
 	} else {
 		throw NotImplementedException("Aggregate expression without children!");
+	}
+}
+
+void ExpressionExecutor::Merge(AggregateExpression &expr, Value &result) {
+	// if (result.type != expr.return_type) {
+	// 	throw NotImplementedException(
+	// 	    "Aggregate type does not match value type!");
+	// }
+	Value v = Execute(expr);
+	switch (expr.type) {
+	case ExpressionType::AGGREGATE_COUNT_STAR:
+	case ExpressionType::AGGREGATE_SUM:
+	case ExpressionType::AGGREGATE_COUNT:
+	case ExpressionType::AGGREGATE_AVG: {
+		Value::Add(result, v, result);
+		break;
+	}
+	case ExpressionType::AGGREGATE_MIN: {
+		Value::Min(result, v, result);
+		break;
+	}
+	case ExpressionType::AGGREGATE_MAX: {
+		Value::Max(result, v, result);
+		break;
+	}
+	default:
+		throw NotImplementedException("Unsupported aggregate type");
 	}
 }
 
@@ -111,14 +114,14 @@ void ExpressionExecutor::Visit(AggregateExpression &expr) {
 	}
 }
 
-void ExpressionExecutor::Visit(BaseTableRefExpression &expr) {
-	throw NotImplementedException("");
-}
-
 void ExpressionExecutor::Visit(CastExpression &expr) {
 	// resolve the child
 	Vector l;
 	expr.children[0]->Accept(this);
+	if (vector.type == expr.return_type) {
+		// NOP cast
+		return;
+	}
 	vector.Move(l);
 	// now cast it to the type specified by the cast expression
 	vector.Resize(l.count, expr.return_type);
@@ -130,6 +133,7 @@ void ExpressionExecutor::Visit(ColumnRefExpression &expr) {
 		throw Exception("Column Reference not bound!");
 	}
 	vector.Reference(*chunk.data[expr.index].get());
+	expr.stats.Verify(vector);
 }
 
 void ExpressionExecutor::Visit(ComparisonExpression &expr) {
@@ -141,22 +145,24 @@ void ExpressionExecutor::Visit(ComparisonExpression &expr) {
 	vector.Resize(std::max(l.count, r.count), TypeId::BOOLEAN);
 	switch (expr.type) {
 	case ExpressionType::COMPARE_EQUAL:
-		VectorOperations::Equals(l, r, vector);
+		VectorOperations::Equals(l, r, vector, expr.stats.CanHaveNull());
 		break;
 	case ExpressionType::COMPARE_NOTEQUAL:
-		VectorOperations::NotEquals(l, r, vector);
+		VectorOperations::NotEquals(l, r, vector, expr.stats.CanHaveNull());
 		break;
 	case ExpressionType::COMPARE_LESSTHAN:
-		VectorOperations::LessThan(l, r, vector);
+		VectorOperations::LessThan(l, r, vector, expr.stats.CanHaveNull());
 		break;
 	case ExpressionType::COMPARE_GREATERTHAN:
-		VectorOperations::GreaterThan(l, r, vector);
+		VectorOperations::GreaterThan(l, r, vector, expr.stats.CanHaveNull());
 		break;
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		VectorOperations::LessThanEquals(l, r, vector);
+		VectorOperations::LessThanEquals(l, r, vector,
+		                                 expr.stats.CanHaveNull());
 		break;
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		VectorOperations::GreaterThanEquals(l, r, vector);
+		VectorOperations::GreaterThanEquals(l, r, vector,
+		                                    expr.stats.CanHaveNull());
 		break;
 	case ExpressionType::COMPARE_LIKE:
 		throw NotImplementedException("Unimplemented compare: COMPARE_LIKE");
@@ -173,6 +179,9 @@ void ExpressionExecutor::Visit(ComparisonExpression &expr) {
 }
 
 void ExpressionExecutor::Visit(ConjunctionExpression &expr) {
+	if (expr.children.size() != 2) {
+		throw Exception("Unsupported conjunction!");
+	}
 	Vector l, r, result;
 	expr.children[0]->Accept(this);
 	vector.Move(l);
@@ -181,10 +190,10 @@ void ExpressionExecutor::Visit(ConjunctionExpression &expr) {
 	vector.Resize(std::max(l.count, r.count), TypeId::BOOLEAN);
 	switch (expr.type) {
 	case ExpressionType::CONJUNCTION_AND:
-		VectorOperations::And(l, r, vector);
+		VectorOperations::And(l, r, vector, expr.stats.CanHaveNull());
 		break;
 	case ExpressionType::CONJUNCTION_OR:
-		VectorOperations::Or(l, r, vector);
+		VectorOperations::Or(l, r, vector, expr.stats.CanHaveNull());
 		break;
 	default:
 		throw NotImplementedException("Unknown conjunction type!");
@@ -194,10 +203,6 @@ void ExpressionExecutor::Visit(ConjunctionExpression &expr) {
 void ExpressionExecutor::Visit(ConstantExpression &expr) {
 	Vector v(expr.value);
 	v.Move(vector);
-}
-
-void ExpressionExecutor::Visit(CrossProductExpression &expr) {
-	throw NotImplementedException("");
 }
 
 void ExpressionExecutor::Visit(FunctionExpression &expr) {
@@ -211,10 +216,6 @@ void ExpressionExecutor::Visit(GroupRefExpression &expr) {
 		throw NotImplementedException("Aggregate node without aggregate state");
 	}
 	vector.Reference(*state->group_chunk.data[expr.group_index].get());
-}
-
-void ExpressionExecutor::Visit(JoinExpression &expr) {
-	throw NotImplementedException("");
 }
 
 void ExpressionExecutor::Visit(OperatorExpression &expr) {
@@ -238,20 +239,20 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 		vector.Resize(std::max(l.count, r.count));
 
 		switch (expr.type) {
-		case ExpressionType::OPERATOR_PLUS:
-			VectorOperations::Add(l, r, vector);
+		case ExpressionType::OPERATOR_ADD:
+			VectorOperations::Add(l, r, vector, expr.stats.CanHaveNull());
 			break;
-		case ExpressionType::OPERATOR_MINUS:
-			VectorOperations::Subtract(l, r, vector);
+		case ExpressionType::OPERATOR_SUBTRACT:
+			VectorOperations::Subtract(l, r, vector, expr.stats.CanHaveNull());
 			break;
 		case ExpressionType::OPERATOR_MULTIPLY:
-			VectorOperations::Multiply(l, r, vector);
+			VectorOperations::Multiply(l, r, vector, expr.stats.CanHaveNull());
 			break;
 		case ExpressionType::OPERATOR_DIVIDE:
-			VectorOperations::Divide(l, r, vector);
+			VectorOperations::Divide(l, r, vector, expr.stats.CanHaveNull());
 			break;
 		case ExpressionType::OPERATOR_MOD:
-			VectorOperations::Modulo(l, r, vector);
+			VectorOperations::Modulo(l, r, vector, expr.stats.CanHaveNull());
 			break;
 		default:
 			throw NotImplementedException(
@@ -260,12 +261,40 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 	} else {
 		throw NotImplementedException("operator");
 	}
+	expr.stats.Verify(vector);
+}
+
+void ExpressionExecutor::Visit(CaseExpression &expr) {
+	if (expr.children.size() != 3) {
+		throw Exception("Cast needs three child nodes");
+	}
+	Vector check, res_true, res_false;
+	expr.children[0]->Accept(this);
+	vector.Move(check);
+	// TODO: check statistics on check to avoid computing everything
+	expr.children[1]->Accept(this);
+	vector.Move(res_true);
+	expr.children[2]->Accept(this);
+	vector.Move(res_false);
+	vector.Resize(check.count);
+	VectorOperations::Case(check, res_true, res_false, vector);
+	expr.stats.Verify(vector);
 }
 
 void ExpressionExecutor::Visit(SubqueryExpression &expr) {
-	throw NotImplementedException("");
-}
+	auto &plan = expr.plan;
+	auto state = plan->GetOperatorState();
 
-void ExpressionExecutor::Visit(TableRefExpression &expr) {
-	throw NotImplementedException("");
+	DataChunk s_chunk;
+	plan->InitializeChunk(s_chunk);
+	plan->GetChunk(s_chunk, state.get());
+	vector.Resize(1, expr.return_type);
+	vector.count = 1;
+	if (s_chunk.count == 0) {
+		vector.SetValue(0, Value());
+	} else {
+		assert(s_chunk.column_count > 0);
+		vector.SetValue(0, s_chunk.data[0]->GetValue(0));
+	}
+	expr.stats.Verify(vector);
 }

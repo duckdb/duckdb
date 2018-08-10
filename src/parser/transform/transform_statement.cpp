@@ -3,6 +3,7 @@
 
 #include "catalog/column_catalog.hpp"
 
+#include "parser/tableref/tableref_list.hpp"
 #include "parser/transform.hpp"
 
 using namespace std;
@@ -139,15 +140,21 @@ unique_ptr<InsertStatement> TransformInsert(Node *node) {
 	auto result = make_unique<InsertStatement>();
 	assert(select_stmt->valuesLists);
 
+	if (stmt->cols) {
+		for (ListCell *c = stmt->cols->head; c != NULL; c = lnext(c)) {
+			ResTarget *target = (ResTarget *)(c->data.ptr_value);
+			result->columns.push_back(std::string(target->name));
+		}
+	}
+
 	if (!TransformValueList(select_stmt->valuesLists, result->values)) {
 		throw Exception("Failed to transform value list");
 	}
 
 	auto ref = TransformRangeVar(stmt->relation);
-	auto &table = *reinterpret_cast<BaseTableRefExpression *>(ref.get());
+	auto &table = *reinterpret_cast<BaseTableRef *>(ref.get());
 	result->table = table.table_name;
 	result->schema = table.schema_name;
-
 	return result;
 }
 
@@ -156,7 +163,7 @@ unique_ptr<CopyStatement> TransformCopy(Node *node) {
     assert(stmt);
     auto result = make_unique<CopyStatement>();
     auto ref = TransformRangeVar(stmt->relation);
-    auto &table = *reinterpret_cast<BaseTableRefExpression *>(ref.get());
+    auto &table = *reinterpret_cast<BaseTableRef *>(ref.get());
     result->table = table.table_name;
     result->schema = table.schema_name;
     result->file_path = stmt->filename;
@@ -165,4 +172,4 @@ unique_ptr<CopyStatement> TransformCopy(Node *node) {
 }
 
 
-}
+} // namespace duckdb

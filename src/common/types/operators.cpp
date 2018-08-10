@@ -12,41 +12,65 @@ template <> double Modulo::Operation(double left, double right) {
 	throw NotImplementedException("Modulo for double not implemented!");
 }
 
-template <> int8_t Cast::Operation(const char *left) { return atoi(left); }
+template <> int8_t Cast::Operation(const char *left) {
+	int64_t value = Cast::Operation<const char *, int64_t>(left);
+	if (in_bounds<int8_t>(value))
+		return (int8_t)value;
+	throw std::out_of_range("Cannot convert to TINYINT");
+}
 
-template <> int16_t Cast::Operation(const char *left) { return atoi(left); }
+template <> int16_t Cast::Operation(const char *left) {
+	int64_t value = Cast::Operation<const char *, int64_t>(left);
+	if (in_bounds<int16_t>(value))
+		return (int16_t)value;
+	throw std::out_of_range("Cannot convert to SMALLINT");
+}
 
-template <> int Cast::Operation(const char *left) { return atoi(left); }
+template <> int Cast::Operation(const char *left) {
+	return stoi(left, NULL, 10);
+}
 
-template <> int64_t Cast::Operation(const char *left) { return atoll(left); }
+template <> int64_t Cast::Operation(const char *left) {
+	return stoll(left, NULL, 10);
+}
 
-template <> uint64_t Cast::Operation(const char *left) { return atoll(left); }
+template <> uint64_t Cast::Operation(const char *left) {
+	return stoull(left, NULL, 10);
+}
 
-template <> double Cast::Operation(const char *left) { return atof(left); }
+template <> double Cast::Operation(const char *left) {
+	return stod(left, NULL);
+}
+
+const char *str_to_cstr(string str) {
+	char *cstr = new char[str.length() + 1];
+	strcpy(cstr, str.c_str());
+	return cstr;
+}
 
 // numeric -> string
 template <> const char *Cast::Operation(int8_t left) {
-	throw NotImplementedException("String cast not implemented!");
+	return str_to_cstr(to_string(left));
 }
 
 template <> const char *Cast::Operation(int16_t left) {
-	throw NotImplementedException("String cast not implemented!");
+	return str_to_cstr(to_string(left));
 }
 
 template <> const char *Cast::Operation(int left) {
-	throw NotImplementedException("String cast not implemented!");
+	return str_to_cstr(to_string(left));
 }
 
 template <> const char *Cast::Operation(int64_t left) {
-	throw NotImplementedException("String cast not implemented!");
+	return str_to_cstr(to_string(left));
 }
 
 template <> const char *Cast::Operation(uint64_t left) {
-	throw NotImplementedException("String cast not implemented!");
+	return str_to_cstr(to_string(left));
 }
 
 template <> const char *Cast::Operation(double left) {
-	throw NotImplementedException("String cast not implemented!");
+	return str_to_cstr(to_string(left));
 }
 
 template <> char *CastFromDate::Operation(date_t left) {

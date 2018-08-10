@@ -9,6 +9,8 @@
 #include "execution/operator/physical_projection.hpp"
 #include "execution/operator/physical_table_scan.hpp"
 #include "execution/operator/physical_copy.hpp"
+#include "execution/operator/physical_list.hpp"
+#include "parser/expression/expression_list.hpp"
 
 #include "planner/operator/logical_aggregate.hpp"
 #include "planner/operator/logical_distinct.hpp"
@@ -19,6 +21,7 @@
 #include "planner/operator/logical_limit.hpp"
 #include "planner/operator/logical_order.hpp"
 #include "planner/operator/logical_projection.hpp"
+#include "planner/operator/logical_list.hpp"
 
 #include "storage/storage_manager.hpp"
 
@@ -154,6 +157,15 @@ void PhysicalPlanGenerator::Visit(LogicalInsert &op) {
 		throw Exception("Insert should be root node");
 	}
 	this->plan = move(insertion);
+}
+
+void PhysicalPlanGenerator::Visit(SubqueryExpression &expr) {
+	auto old_plan = move(plan);
+	auto old_context = move(context);
+	CreatePlan(move(expr.op), move(expr.context));
+	expr.plan = move(plan);
+	plan = move(old_plan);
+	context = move(old_context);
 }
 
 void PhysicalPlanGenerator::Visit(LogicalCopy &op) {

@@ -71,6 +71,9 @@ class DataChunk {
 	//! Destroy all data and columns owned by this DataChunk
 	void Destroy();
 
+	//! Forces the DataChunk to use only data that it owns itself
+	void ForceOwnership();
+
 	//! Resets the DataChunk to its state right after the DataChunk::Initialize
 	//! function was called. This sets the count to 0, and resets each member
 	//! Vector to point back to the data owned by this DataChunk.

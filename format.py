@@ -22,3 +22,4 @@ def format_directory(directory):
 					break
 
 format_directory('src')
+format_directory('test')

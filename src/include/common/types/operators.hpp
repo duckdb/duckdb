@@ -13,10 +13,48 @@
 #include <algorithm>
 
 #include "common/exception.hpp"
+#include "common/internal_types.hpp"
 #include "common/types/date.hpp"
 #include "common/types/hash.hpp"
 
 namespace operators {
+
+struct ExecuteIgnoreNull {
+	template <class L, class R, class RES, class OP>
+	static inline RES Operation(L left, R right) {
+		if (duckdb::IsNullValue<L>(left)) {
+			return right;
+		}
+		if (duckdb::IsNullValue<R>(right)) {
+			return left;
+		}
+		return OP::Operation(left, right);
+	}
+};
+struct ExecuteIgnoreLeftNull {
+	template <class L, class R, class RES, class OP>
+	static inline RES Operation(L left, R right) {
+		if (duckdb::IsNullValue<L>(left)) {
+			return right;
+		}
+		return OP::Operation(left, right);
+	}
+};
+struct ExecuteWithNullHandling {
+	template <class L, class R, class RES, class OP>
+	static inline RES Operation(L left, R right) {
+		if (duckdb::IsNullValue<L>(left) || duckdb::IsNullValue<R>(right)) {
+			return duckdb::NullValue<RES>();
+		}
+		return OP::Operation(left, right);
+	}
+};
+struct ExecuteWithoutNullHandling {
+	template <class L, class R, class RES, class OP>
+	static inline RES Operation(L left, R right) {
+		return OP::Operation(left, right);
+	}
+};
 //===--------------------------------------------------------------------===//
 // Numeric Operations
 //===--------------------------------------------------------------------===//
@@ -40,6 +78,9 @@ struct Multiplication {
 
 struct Division {
 	template <class T> static inline T Operation(T left, T right) {
+		if (right == 0) {
+			return duckdb::NullValue<T>();
+		}
 		return left / right;
 	}
 };
@@ -129,9 +170,32 @@ struct PickLeft {
 	}
 };
 
+struct SetCount {
+	template <class T> static inline T Operation(T left, T right) {
+		return duckdb::IsNullValue(left) ? 0 : 1;
+	}
+};
+
+struct AddOne {
+	template <class T> static inline T Operation(T left, T right) {
+		return right + 1;
+	}
+};
+
 struct Hash {
 	template <class T> static inline int32_t Operation(T left) {
-		return duckdb::Hash(left);
+		return duckdb::Hash<T>(left);
+	}
+};
+
+struct NullCheck {
+	template <class T> static inline bool Operation(T left, bool right) {
+		return duckdb::IsNullValue<T>(left) || right;
+	}
+};
+struct MaximumStringLength {
+	static inline uint64_t Operation(const char *str, uint64_t right) {
+		return std::max((uint64_t)strlen(str), right);
 	}
 };
 

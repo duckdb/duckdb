@@ -44,6 +44,8 @@ class PhysicalPlanGenerator : public LogicalOperatorVisitor {
 	void Visit(LogicalInsert &op);
 	void Visit(LogicalCopy &op);
 
+	void Visit(SubqueryExpression &expr);
+
 	void Print() { plan->Print(); }
 
 	std::unique_ptr<PhysicalOperator> plan;

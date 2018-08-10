@@ -7,12 +7,6 @@
 // Author: Pedro Holanda
 //
 //===----------------------------------------------------------------------===//
-//#pragma once
-//
-//#include "parser/sql_statement.h"
-//#include "parser/table_ref.h"
-//#include "expression/constant_value_expression.h"
-//#include "common/sql_node_visitor.h"
 #pragma once
 
 #include <vector>
@@ -21,7 +15,6 @@
 #include "parser/statement/sql_statement.hpp"
 
 #include "parser/expression/abstract_expression.hpp"
-#include "parser/expression/basetableref_expression.hpp"
 
 namespace duckdb {
 

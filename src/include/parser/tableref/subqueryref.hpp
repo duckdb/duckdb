@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// parser/expression/tableref_expression.hpp
+// parser/expression/subquery_expression.hpp
 //
 // Author: Mark Raasveldt
 //
@@ -10,17 +10,17 @@
 
 #pragma once
 
-#include "parser/expression/abstract_expression.hpp"
+#include "parser/statement/select_statement.hpp"
+#include "parser/tableref/tableref.hpp"
 
 namespace duckdb {
-//! Represents a generic expression that returns a table.
-class TableRefExpression : public AbstractExpression {
+//! Represents a subquery
+class SubqueryRef : public TableRef {
   public:
-	TableRefExpression(TableReferenceType ref_type)
-	    : AbstractExpression(ExpressionType::TABLE_REF), ref_type(ref_type) {}
+	SubqueryRef() : TableRef(TableReferenceType::SUBQUERY) {}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
 
-	TableReferenceType ref_type;
+	std::unique_ptr<SelectStatement> subquery;
 };
 } // namespace duckdb

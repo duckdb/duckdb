@@ -2,6 +2,7 @@
 #include "planner/binder.hpp"
 
 #include "parser/expression/expression_list.hpp"
+#include "parser/tableref/tableref_list.hpp"
 
 #include "parser/statement/select_statement.hpp"
 
@@ -52,6 +53,46 @@ void Binder::Visit(SelectStatement &statement) {
 			                       i);
 		}
 	}
+	for (auto &order : statement.orderby.orders) {
+		order.expression->Accept(this);
+		order.expression->ResolveType();
+	}
+	// for the ORDER BY statement, we have to project all the columns
+	// in the projection phase as well
+	// for each expression in the ORDER BY check if it is projected already
+	for (size_t i = 0; i < statement.orderby.orders.size(); i++) {
+		size_t j = 0;
+		TypeId type = TypeId::INVALID;
+		for (; j < new_select_list.size(); j++) {
+			// check if the expression matches exactly
+			if (statement.orderby.orders[i].expression->Equals(
+			        new_select_list[j].get())) {
+				// in this case, we can just create a reference in the ORDER BY
+				break;
+			}
+			// if the ORDER BY is an alias reference, check if the alias matches
+			if (statement.orderby.orders[i].expression->type ==
+			        ExpressionType::COLUMN_REF &&
+			    reinterpret_cast<ColumnRefExpression *>(
+			        statement.orderby.orders[i].expression.get())
+			            ->reference == new_select_list[j].get()) {
+				break;
+			}
+		}
+		if (j == new_select_list.size()) {
+			// if we didn't find a matching projection clause, we add it to the
+			// projection list
+			new_select_list.push_back(
+			    move(statement.orderby.orders[i].expression));
+		}
+		type = new_select_list[j]->return_type;
+		if (type == TypeId::INVALID) {
+			throw Exception(
+			    "Could not deduce return type of ORDER BY expression");
+		}
+		statement.orderby.orders[i].expression =
+		    make_unique<ColumnRefExpression>(type, j);
+	}
 	statement.select_list = move(new_select_list);
 
 	if (statement.where_clause) {
@@ -97,29 +138,35 @@ void Binder::Visit(SelectStatement &statement) {
 			// not an aggregate or existing GROUP REF, must point to a GROUP BY
 			// column
 			if (select->type != ExpressionType::COLUMN_REF) {
-				// FIXME: this should be different
 				// Every ColumnRef should point to a group by column OR alias
 				throw Exception("SELECT with GROUP BY can only contain "
 				                "aggregates or references to group columns!");
 			}
 			auto select_column =
 			    reinterpret_cast<ColumnRefExpression *>(select.get());
-			if (select_column->reference) {
-				throw Exception("SELECT with GROUP BY can only contain "
-				                "aggregates or references to group columns!");
-			}
 			bool found_matching = false;
 			for (size_t j = 0; j < statement.groupby.groups.size(); j++) {
 				auto &group = statement.groupby.groups[j];
-				if (group->type == ExpressionType::COLUMN_REF) {
-					auto group_column =
-					    reinterpret_cast<ColumnRefExpression *>(group.get());
-					if (group_column->index == select_column->index) {
+				if (select_column->reference) {
+					if (select_column->reference == group.get()) {
+						found_matching = true;
 						statement.select_list[i] =
 						    make_unique<GroupRefExpression>(
 						        statement.select_list[i]->return_type, j);
-						found_matching = true;
 						break;
+					}
+				} else {
+					if (group->type == ExpressionType::COLUMN_REF) {
+						auto group_column =
+						    reinterpret_cast<ColumnRefExpression *>(
+						        group.get());
+						if (group_column->index == select_column->index) {
+							statement.select_list[i] =
+							    make_unique<GroupRefExpression>(
+							        statement.select_list[i]->return_type, j);
+							found_matching = true;
+							break;
+						}
 					}
 				}
 			}
@@ -133,15 +180,6 @@ void Binder::Visit(SelectStatement &statement) {
 	if (statement.groupby.having) {
 		statement.groupby.having->Accept(this);
 	}
-	for (auto &order : statement.orderby.orders) {
-		order.expression->Accept(this);
-	}
-}
-
-void Binder::Visit(BaseTableRefExpression &expr) {
-	auto table = catalog.GetTable(expr.schema_name, expr.table_name);
-	context->AddBaseTable(expr.alias.empty() ? expr.table_name : expr.alias,
-	                      table);
 }
 
 void Binder::Visit(ColumnRefExpression &expr) {
@@ -154,13 +192,38 @@ void Binder::Visit(ColumnRefExpression &expr) {
 	auto column = context->BindColumn(expr);
 }
 
-void Binder::Visit(JoinExpression &expr) {
+void Binder::Visit(SubqueryExpression &expr) {
+	auto old_context = move(context);
+	expr.subquery->Accept(this);
+	if (expr.subquery->select_list.size() < 1) {
+		throw BinderException("Subquery has no projections");
+	}
+	if (expr.subquery->select_list[0]->return_type == TypeId::INVALID) {
+		throw BinderException("Subquery has no type");
+	}
+	expr.return_type = expr.subquery->select_list[0]->return_type;
+	expr.context = move(context);
+	context = move(old_context);
+}
+
+void Binder::Visit(BaseTableRef &expr) {
+	auto table = catalog.GetTable(expr.schema_name, expr.table_name);
+	context->AddBaseTable(expr.alias.empty() ? expr.table_name : expr.alias,
+	                      table);
+}
+
+void Binder::Visit(CrossProductRef &expr) {
+	expr.left->Accept(this);
+	expr.right->Accept(this);
+}
+
+void Binder::Visit(JoinRef &expr) {
 	expr.left->Accept(this);
 	expr.right->Accept(this);
 	expr.condition->Accept(this);
 }
 
-void Binder::Visit(SubqueryExpression &expr) {
+void Binder::Visit(SubqueryRef &expr) {
 	context->AddSubquery(expr.alias, expr.subquery.get());
 	throw NotImplementedException("Binding subqueries not implemented yet!");
 }

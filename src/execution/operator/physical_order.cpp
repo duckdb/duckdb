@@ -2,7 +2,7 @@
 #include "execution/operator/physical_order.hpp"
 #include "execution/expression_executor.hpp"
 
-#include "execution/vector/vector_operations.hpp"
+#include "common/types/vector_operations.hpp"
 
 #include "storage/data_table.hpp"
 

@@ -1,5 +1,6 @@
 
 #include "common/types/data_chunk.hpp"
+#include "common/types/vector_operations.hpp"
 
 #include "common/exception.hpp"
 #include "common/helper.hpp"
@@ -29,8 +30,8 @@ void DataChunk::Initialize(std::vector<TypeId> &types, oid_t maximum_chunk_size,
 	}
 
 	char *ptr = owned_data.get();
-	data = unique_ptr<unique_ptr<Vector>[]>(
-	    new unique_ptr<Vector>[ types.size() ]);
+	data =
+	    unique_ptr<unique_ptr<Vector>[]>(new unique_ptr<Vector>[types.size()]);
 	for (oid_t i = 0; i < types.size(); i++) {
 		data[i] = make_unique<Vector>(types[i], ptr, maximum_size);
 		ptr += GetTypeIdSize(types[i]) * maximum_size;
@@ -58,12 +59,31 @@ void DataChunk::Destroy() {
 	maximum_size = 0;
 }
 
+void DataChunk::ForceOwnership() {
+	char *ptr = owned_data.get();
+	for (oid_t i = 0; i < column_count;
+	     ptr += GetTypeIdSize(data[i]->type) * maximum_size, i++) {
+		if (data[i]->owns_data)
+			continue;
+		if (data[i]->data == ptr)
+			continue;
+
+		VectorOperations::Copy(*data[i].get(), ptr);
+		data[i]->data = ptr;
+	}
+}
+
 void DataChunk::Append(DataChunk &other) {
 	if (other.count == 0) {
 		return;
 	}
 	if (column_count != other.column_count) {
 		throw Exception("Column counts of appending chunk doesn't match!");
+	}
+	for (oid_t i = 0; i < column_count; i++) {
+		if (other.data[i]->type != data[i]->type) {
+			throw Exception("Column types do not match!");
+		}
 	}
 	if (count + other.count > maximum_size) {
 		// resize

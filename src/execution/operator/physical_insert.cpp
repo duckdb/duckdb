@@ -21,9 +21,9 @@ void PhysicalInsert::GetChunk(DataChunk &result_chunk,
 	DataChunk insert_chunk;
 	vector<TypeId> types;
 	for (auto &column : table->columns) {
-		types.push_back(column->type);
-	}
-	insert_chunk.Initialize(types);
+        types.push_back(column->type);
+    }
+    insert_chunk.Initialize(types);
 	ExpressionExecutor executor(state_->child_chunk);
 
 	for (size_t i = 0; i < value_list.size(); i++) {
@@ -37,6 +37,7 @@ void PhysicalInsert::GetChunk(DataChunk &result_chunk,
 			throw Exception("Insert count mismatch!");
 		}
 	}
+	result_chunk.data[0]->count = 1;
 	result_chunk.data[0]->SetValue(
 	    0, Value::NumericValue(TypeId::INTEGER, insert_chunk.data[0]->count));
 

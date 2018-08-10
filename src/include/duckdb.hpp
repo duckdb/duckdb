@@ -51,9 +51,13 @@ class DuckDBResult {
 	bool GetSuccess() const { return success; }
 	const std::string &GetErrorMessage() const { return error; }
 
+	void Initialize(DataChunk &chunk);
+
 	void Print();
 
-	DataChunk data;
+	oid_t count;
+	std::vector<TypeId> types;
+	std::vector<std::unique_ptr<DataChunk>> data;
 
 	bool success;
 	std::string error;

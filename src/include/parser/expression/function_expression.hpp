@@ -26,7 +26,6 @@ class FunctionExpression : public AbstractExpression {
 	}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
-	virtual std::string ToString() const override { return std::string(); }
 
   private:
 	std::string func_name;

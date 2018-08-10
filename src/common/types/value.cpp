@@ -11,7 +11,73 @@ Value::Value(const Value &other)
 	this->value_ = other.value_;
 }
 
+Value Value::MinimumValue(TypeId type) {
+	Value result;
+	result.type = type;
+	result.is_null = false;
+	switch (type) {
+	case TypeId::TINYINT:
+		result.value_.tinyint = std::numeric_limits<int8_t>::min();
+		break;
+	case TypeId::SMALLINT:
+		result.value_.smallint = std::numeric_limits<int16_t>::min();
+		break;
+	case TypeId::INTEGER:
+		result.value_.integer = std::numeric_limits<int32_t>::min();
+		break;
+	case TypeId::BIGINT:
+		result.value_.bigint = std::numeric_limits<int64_t>::min();
+		break;
+	case TypeId::DECIMAL:
+		result.value_.decimal = std::numeric_limits<double>::min();
+		break;
+	case TypeId::DATE:
+		result.value_.date = std::numeric_limits<date_t>::min();
+		break;
+	case TypeId::POINTER:
+		result.value_.pointer = std::numeric_limits<uint64_t>::min();
+		break;
+	default:
+		throw Exception("TypeId is not numeric!");
+	}
+	return result;
+}
+
+Value Value::MaximumValue(TypeId type) {
+	Value result;
+	result.type = type;
+	result.is_null = false;
+	switch (type) {
+	case TypeId::TINYINT:
+		result.value_.tinyint = std::numeric_limits<int8_t>::max();
+		break;
+	case TypeId::SMALLINT:
+		result.value_.smallint = std::numeric_limits<int16_t>::max();
+		break;
+	case TypeId::INTEGER:
+		result.value_.integer = std::numeric_limits<int32_t>::max();
+		break;
+	case TypeId::BIGINT:
+		result.value_.bigint = std::numeric_limits<int64_t>::max();
+		break;
+	case TypeId::DECIMAL:
+		result.value_.decimal = std::numeric_limits<double>::max();
+		break;
+	case TypeId::DATE:
+		result.value_.date = std::numeric_limits<date_t>::max();
+		break;
+	case TypeId::POINTER:
+		result.value_.pointer = std::numeric_limits<uint64_t>::max();
+		break;
+	default:
+		throw Exception("TypeId is not numeric!");
+	}
+	return result;
+}
+
 Value Value::NumericValue(TypeId id, int64_t value) {
+	assert(!TypeIsIntegral(id) || value + 1 >= duckdb::MinimumValue(id) &&
+	                                  value <= duckdb::MaximumValue(id));
 	switch (id) {
 	case TypeId::TINYINT:
 		return Value((int8_t)value);
@@ -23,6 +89,8 @@ Value Value::NumericValue(TypeId id, int64_t value) {
 		return Value((int64_t)value);
 	case TypeId::DECIMAL:
 		return Value((double)value);
+	case TypeId::DATE:
+		return Value::Date((date_t)value);
 	case TypeId::POINTER:
 		return Value((uint64_t)value);
 	default:
@@ -30,7 +98,32 @@ Value Value::NumericValue(TypeId id, int64_t value) {
 	}
 }
 
+int64_t Value::GetNumericValue() {
+	if (is_null) {
+		throw Exception("Cannot get numeric value fo NULL value.");
+	}
+	switch (type) {
+	case TypeId::TINYINT:
+		return value_.tinyint;
+	case TypeId::SMALLINT:
+		return value_.smallint;
+	case TypeId::INTEGER:
+		return value_.integer;
+	case TypeId::BIGINT:
+		return value_.bigint;
+	case TypeId::DATE:
+		return value_.date;
+	case TypeId::POINTER:
+		return value_.pointer;
+	default:
+		throw Exception("TypeId is not numeric!");
+	}
+}
+
 string Value::ToString() const {
+	if (is_null) {
+		return "NULL";
+	}
 	switch (type) {
 	case TypeId::BOOLEAN:
 		return value_.boolean ? "True" : "False";
@@ -55,7 +148,7 @@ string Value::ToString() const {
 	}
 }
 
-template <class DST, class OP> DST Value::_cast(Value &v) {
+template <class DST, class OP> DST Value::_cast(const Value &v) {
 	switch (v.type) {
 	case TypeId::BOOLEAN:
 		return OP::template Operation<int8_t, DST>(v.value_.boolean);
@@ -72,7 +165,7 @@ template <class DST, class OP> DST Value::_cast(Value &v) {
 	case TypeId::POINTER:
 		return OP::template Operation<uint64_t, DST>(v.value_.pointer);
 	case TypeId::VARCHAR:
-		return OP::template Operation<const char *, DST>(v.str_value.c_str());
+		return OP::template Operation<const char*, DST>(v.str_value.c_str());
 	case TypeId::DATE:
 		return operators::CastFromDate::Operation<date_t, DST>(v.value_.date);
 	default:
@@ -80,7 +173,7 @@ template <class DST, class OP> DST Value::_cast(Value &v) {
 	}
 }
 
-Value Value::CastAs(TypeId new_type) {
+Value Value::CastAs(TypeId new_type) const {
 	// check if we can just make a copy
 	if (new_type == this->type) {
 		return *this;
@@ -118,6 +211,12 @@ Value Value::CastAs(TypeId new_type) {
 	case TypeId::DATE:
 		new_value.value_.date = _cast<date_t, operators::CastToDate>(*this);
 		break;
+	case TypeId::VARCHAR: {
+		auto cstr = _cast<const char*, operators::Cast>(*this);
+		new_value.str_value = string(cstr);
+		delete [] cstr;
+		break;
+	}
 	default:
 		throw NotImplementedException("Unimplemented type for casting");
 	}
@@ -125,11 +224,52 @@ Value Value::CastAs(TypeId new_type) {
 }
 
 template <class OP>
-void Value::_templated_binary_operation(Value &left, Value &right,
-                                        Value &result) {
-	if (left.type != right.type || left.type != result.type) {
+void Value::_templated_binary_operation(const Value &left, const Value &right,
+                                        Value &result, bool ignore_null) {
+	if (left.is_null || right.is_null) {
+		if (ignore_null) {
+			if (!right.is_null) {
+				result = right;
+			} else {
+				result = left;
+			}
+		} else {
+			result.type = std::max(left.type, right.type);
+			result.is_null = true;
+		}
+		return;
+	}
+	result.is_null = false;
+	if (TypeIsIntegral(left.type) && TypeIsIntegral(right.type) &&
+	    (left.type < TypeId::BIGINT || right.type < TypeId::BIGINT)) {
+		// upcast integer types if necessary
+		Value left_cast = left.CastAs(TypeId::BIGINT);
+		Value right_cast = right.CastAs(TypeId::BIGINT);
+		_templated_binary_operation<OP>(left_cast, right_cast, result,
+		                                ignore_null);
+		if (result.is_null) {
+			result.type = std::max(left.type, right.type);
+		} else {
+			auto type = std::max(MinimalType(result.GetNumericValue()),
+			                     std::max(left.type, right.type));
+			result = result.CastAs(type);
+		}
+		return;
+	}
+	if (TypeIsIntegral(left.type) && right.type == TypeId::DECIMAL) {
+		Value left_cast = left.CastAs(TypeId::DECIMAL);
+		_templated_binary_operation<OP>(left_cast, right, result, ignore_null);
+		return;
+	}
+	if (left.type == TypeId::DECIMAL && TypeIsIntegral(right.type)) {
+		Value right_cast = right.CastAs(TypeId::DECIMAL);
+		_templated_binary_operation<OP>(left, right_cast, result, ignore_null);
+		return;
+	}
+	if (left.type != right.type) {
 		throw NotImplementedException("Not matching type not implemented!");
 	}
+	result.type = left.type;
 	switch (left.type) {
 	case TypeId::BOOLEAN:
 		result.value_.boolean =
@@ -167,40 +307,54 @@ void Value::_templated_binary_operation(Value &left, Value &right,
 //===--------------------------------------------------------------------===//
 // Numeric Operations
 //===--------------------------------------------------------------------===//
-void Value::Add(Value &left, Value &right, Value &result) {
-	_templated_binary_operation<operators::Addition>(left, right, result);
+void Value::Add(const Value &left, const Value &right, Value &result) {
+	_templated_binary_operation<operators::Addition>(left, right, result,
+	                                                 false);
 }
 
-void Value::Subtract(Value &left, Value &right, Value &result) {
-	_templated_binary_operation<operators::Subtraction>(left, right, result);
+void Value::Subtract(const Value &left, const Value &right, Value &result) {
+	_templated_binary_operation<operators::Subtraction>(left, right, result,
+	                                                    false);
 }
 
-void Value::Multiply(Value &left, Value &right, Value &result) {
-	_templated_binary_operation<operators::Multiplication>(left, right, result);
+void Value::Multiply(const Value &left, const Value &right, Value &result) {
+	_templated_binary_operation<operators::Multiplication>(left, right, result,
+	                                                       false);
 }
 
-void Value::Divide(Value &left, Value &right, Value &result) {
-	_templated_binary_operation<operators::Division>(left, right, result);
+void Value::Divide(const Value &left, const Value &right, Value &result) {
+	_templated_binary_operation<operators::Division>(left, right, result,
+	                                                 false);
 }
 
-void Value::Modulo(Value &left, Value &right, Value &result) {
-	_templated_binary_operation<operators::Modulo>(left, right, result);
+void Value::Modulo(const Value &left, const Value &right, Value &result) {
+	_templated_binary_operation<operators::Modulo>(left, right, result, false);
 }
 
-void Value::Min(Value &left, Value &right, Value &result) {
-	_templated_binary_operation<operators::Min>(left, right, result);
+void Value::Min(const Value &left, const Value &right, Value &result) {
+	_templated_binary_operation<operators::Min>(left, right, result, true);
 }
 
-void Value::Max(Value &left, Value &right, Value &result) {
-	_templated_binary_operation<operators::Max>(left, right, result);
+void Value::Max(const Value &left, const Value &right, Value &result) {
+	_templated_binary_operation<operators::Max>(left, right, result, true);
 }
 
 //===--------------------------------------------------------------------===//
 // Comparison Operations
 //===--------------------------------------------------------------------===//
 template <class OP>
-bool Value::_templated_boolean_operation(Value &left, Value &right) {
+bool Value::_templated_boolean_operation(const Value &left,
+                                         const Value &right) {
 	if (left.type != right.type) {
+		if (TypeIsNumeric(left.type) && TypeIsNumeric(right.type)) {
+			if (left.type < right.type) {
+				Value left_cast = left.CastAs(right.type);
+				return _templated_boolean_operation<OP>(left_cast, right);
+			} else {
+				Value right_cast = right.CastAs(left.type);
+				return _templated_boolean_operation<OP>(left, right_cast);
+			}
+		}
 		throw NotImplementedException("Not matching type not implemented!");
 	}
 	switch (left.type) {
@@ -218,32 +372,34 @@ bool Value::_templated_boolean_operation(Value &left, Value &right) {
 		return OP::Operation(left.value_.decimal, right.value_.decimal);
 	case TypeId::POINTER:
 		return OP::Operation(left.value_.pointer, right.value_.pointer);
+	case TypeId::DATE:
+		return OP::Operation(left.value_.date, right.value_.date);
 	default:
 		throw NotImplementedException("Unimplemented type");
 	}
 }
 
-bool Value::Equals(Value &left, Value &right) {
+bool Value::Equals(const Value &left, const Value &right) {
 	return _templated_boolean_operation<operators::Equals>(left, right);
 }
 
-bool Value::NotEquals(Value &left, Value &right) {
+bool Value::NotEquals(const Value &left, const Value &right) {
 	return _templated_boolean_operation<operators::NotEquals>(left, right);
 }
 
-bool Value::GreaterThan(Value &left, Value &right) {
+bool Value::GreaterThan(const Value &left, const Value &right) {
 	return _templated_boolean_operation<operators::GreaterThan>(left, right);
 }
 
-bool Value::GreaterThanEquals(Value &left, Value &right) {
+bool Value::GreaterThanEquals(const Value &left, const Value &right) {
 	return _templated_boolean_operation<operators::GreaterThanEquals>(left,
 	                                                                  right);
 }
 
-bool Value::LessThan(Value &left, Value &right) {
+bool Value::LessThan(const Value &left, const Value &right) {
 	return _templated_boolean_operation<operators::LessThan>(left, right);
 }
 
-bool Value::LessThanEquals(Value &left, Value &right) {
+bool Value::LessThanEquals(const Value &left, const Value &right) {
 	return _templated_boolean_operation<operators::LessThanEquals>(left, right);
 }

@@ -266,39 +266,39 @@ PgQueryInternalPlpgsqlFuncAndError pg_query_raw_parse_plpgsql(CreateFunctionStmt
 	MemoryContext parse_context = CurrentMemoryContext;
 
 	char stderr_buffer[STDERR_BUFFER_LEN + 1] = {0};
-#ifndef DEBUG
-	int stderr_global;
-	int stderr_pipe[2];
-#endif
+// #ifndef DEBUG
+// 	int stderr_global;
+// 	int stderr_pipe[2];
+// #endif
 
-#ifndef DEBUG
-	// Setup pipe for stderr redirection
-	if (pipe(stderr_pipe) != 0) {
-		PgQueryError* error = malloc(sizeof(PgQueryError));
+// #ifndef DEBUG
+// 	// Setup pipe for stderr redirection
+// 	if (pipe(stderr_pipe) != 0) {
+// 		PgQueryError* error = malloc(sizeof(PgQueryError));
 
-		error->message = strdup("Failed to open pipe, too many open file descriptors")
+// 		error->message = strdup("Failed to open pipe, too many open file descriptors")
 
-		result.error = error;
+// 		result.error = error;
 
-		return result;
-	}
+// 		return result;
+// 	}
 
-	fcntl(stderr_pipe[0], F_SETFL, fcntl(stderr_pipe[0], F_GETFL) | O_NONBLOCK);
+// 	fcntl(stderr_pipe[0], F_SETFL, fcntl(stderr_pipe[0], F_GETFL) | O_NONBLOCK);
 
-	// Redirect stderr to the pipe
-	stderr_global = dup(STDERR_FILENO);
-	dup2(stderr_pipe[1], STDERR_FILENO);
-	close(stderr_pipe[1]);
-#endif
+// 	// Redirect stderr to the pipe
+// 	stderr_global = dup(STDERR_FILENO);
+// 	dup2(stderr_pipe[1], STDERR_FILENO);
+// 	close(stderr_pipe[1]);
+// #endif
 
 	PG_TRY();
 	{
     result.func = compile_create_function_stmt(stmt);
 
-#ifndef DEBUG
-		// Save stderr for result
-		read(stderr_pipe[0], stderr_buffer, STDERR_BUFFER_LEN);
-#endif
+// #ifndef DEBUG
+// 		// Save stderr for result
+// 		read(stderr_pipe[0], stderr_buffer, STDERR_BUFFER_LEN);
+// #endif
 
         if (strlen(stderr_buffer) > 0) {
             PgQueryError* error = malloc(sizeof(PgQueryError));
@@ -331,12 +331,12 @@ PgQueryInternalPlpgsqlFuncAndError pg_query_raw_parse_plpgsql(CreateFunctionStmt
 	}
 	PG_END_TRY();
 
-#ifndef DEBUG
-	// Restore stderr, close pipe
-	dup2(stderr_global, STDERR_FILENO);
-	close(stderr_pipe[0]);
-	close(stderr_global);
-#endif
+// #ifndef DEBUG
+// 	// Restore stderr, close pipe
+// 	dup2(stderr_global, STDERR_FILENO);
+// 	close(stderr_pipe[0]);
+// 	close(stderr_global);
+// #endif
 
 	return result;
 }

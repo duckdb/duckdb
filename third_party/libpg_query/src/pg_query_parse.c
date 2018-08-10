@@ -15,39 +15,39 @@ PgQueryInternalParsetreeAndError pg_query_raw_parse(const char* input)
 	MemoryContext parse_context = CurrentMemoryContext;
 
 	char stderr_buffer[STDERR_BUFFER_LEN + 1] = {0};
-#ifndef DEBUG
-	int stderr_global;
-	int stderr_pipe[2];
-#endif
+// #ifndef DEBUG
+// 	int stderr_global;
+// 	int stderr_pipe[2];
+// #endif
 
-#ifndef DEBUG
-	// Setup pipe for stderr redirection
-	if (pipe(stderr_pipe) != 0) {
-		PgQueryError* error = malloc(sizeof(PgQueryError));
+// #ifndef DEBUG
+// 	// Setup pipe for stderr redirection
+// 	if (pipe(stderr_pipe) != 0) {
+// 		PgQueryError* error = malloc(sizeof(PgQueryError));
 
-		error->message = strdup("Failed to open pipe, too many open file descriptors")
+// 		error->message = strdup("Failed to open pipe, too many open file descriptors");
 
-		result.error = error;
+// 		result.error = error;
 
-		return result;
-	}
+// 		return result;
+// 	}
 
-	fcntl(stderr_pipe[0], F_SETFL, fcntl(stderr_pipe[0], F_GETFL) | O_NONBLOCK);
+// 	fcntl(stderr_pipe[0], F_SETFL, fcntl(stderr_pipe[0], F_GETFL) | O_NONBLOCK);
 
-	// Redirect stderr to the pipe
-	stderr_global = dup(STDERR_FILENO);
-	dup2(stderr_pipe[1], STDERR_FILENO);
-	close(stderr_pipe[1]);
-#endif
+// 	// Redirect stderr to the pipe
+// 	stderr_global = dup(STDERR_FILENO);
+// 	dup2(stderr_pipe[1], STDERR_FILENO);
+// 	close(stderr_pipe[1]);
+// #endif
 
 	PG_TRY();
 	{
 		result.tree = raw_parser(input);
 
-#ifndef DEBUG
-		// Save stderr for result
-		read(stderr_pipe[0], stderr_buffer, STDERR_BUFFER_LEN);
-#endif
+// #ifndef DEBUG
+// 		// Save stderr for result
+// 		read(stderr_pipe[0], stderr_buffer, STDERR_BUFFER_LEN);
+// #endif
 
 		result.stderr_buffer = strdup(stderr_buffer);
 	}
@@ -73,12 +73,12 @@ PgQueryInternalParsetreeAndError pg_query_raw_parse(const char* input)
 	}
 	PG_END_TRY();
 
-#ifndef DEBUG
-	// Restore stderr, close pipe
-	dup2(stderr_global, STDERR_FILENO);
-	close(stderr_pipe[0]);
-	close(stderr_global);
-#endif
+// #ifndef DEBUG
+// 	// Restore stderr, close pipe
+// 	dup2(stderr_global, STDERR_FILENO);
+// 	close(stderr_pipe[0]);
+// 	close(stderr_global);
+// #endif
 
 	return result;
 }
