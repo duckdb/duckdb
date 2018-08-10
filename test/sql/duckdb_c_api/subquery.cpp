@@ -22,6 +22,11 @@ TEST_CASE("Test subqueries", "[subqueries]") {
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {42}));
 	duckdb_destroy_result(result);
 
+	REQUIRE(duckdb_query(connection, "SELECT (SELECT (SELECT 42))", &result) ==
+	        DuckDBSuccess);
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {42}));
+	duckdb_destroy_result(result);
+
 	REQUIRE(duckdb_query(connection,
 	                     "CREATE TABLE test (a INTEGER, b INTEGER);",
 	                     NULL) == DuckDBSuccess);

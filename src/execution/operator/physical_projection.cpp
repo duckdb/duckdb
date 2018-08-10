@@ -33,7 +33,7 @@ void PhysicalProjection::GetChunk(DataChunk &chunk,
 		state->finished = true;
 	}
 
-	ExpressionExecutor executor(state->child_chunk);
+	ExpressionExecutor executor(state);
 
 	for (size_t i = 0; i < select_list.size(); i++) {
 		auto &expr = select_list[i];
@@ -47,7 +47,8 @@ void PhysicalProjection::GetChunk(DataChunk &chunk,
 	}
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalProjection::GetOperatorState() {
+unique_ptr<PhysicalOperatorState>
+PhysicalProjection::GetOperatorState(ExpressionExecutor *parent_executor) {
 	return make_unique<PhysicalOperatorState>(
-	    children.size() == 0 ? nullptr : children[0].get());
+	    children.size() == 0 ? nullptr : children[0].get(), parent_executor);
 }

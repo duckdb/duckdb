@@ -79,6 +79,8 @@ class DataChunk {
 	//! Vector to point back to the data owned by this DataChunk.
 	void Reset();
 
+	std::vector<TypeId> GetTypes();
+
 	DataChunk(const DataChunk &) = delete;
 
   private:

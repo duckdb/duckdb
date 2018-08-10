@@ -45,7 +45,7 @@ Value ExpressionExecutor::Execute(AggregateExpression &expr) {
 	if (expr.type == ExpressionType::AGGREGATE_COUNT_STAR) {
 		// COUNT(*)
 		// Without FROM clause return "1", else return "count"
-		size_t count = chunk.column_count == 0 ? 1 : chunk.count;
+		size_t count = chunk->column_count == 0 ? 1 : chunk->count;
 		return Value::NumericValue(expr.return_type, count);
 	} else if (expr.children.size() > 0) {
 		expr.children[0]->Accept(this);
@@ -129,10 +129,20 @@ void ExpressionExecutor::Visit(CastExpression &expr) {
 }
 
 void ExpressionExecutor::Visit(ColumnRefExpression &expr) {
+	size_t cur_depth = expr.depth;
+	ExpressionExecutor *cur_exec = this;
+	while (cur_depth > 0) {
+		cur_exec = cur_exec->parent;
+		if (!cur_exec) {
+			throw Exception("Unable to find matching parent executor");
+		}
+		cur_depth--;
+	}
+
 	if (expr.index == (size_t)-1) {
 		throw Exception("Column Reference not bound!");
 	}
-	vector.Reference(*chunk.data[expr.index].get());
+	vector.Reference(*cur_exec->chunk->data[expr.index].get());
 	expr.stats.Verify(vector);
 }
 
@@ -283,18 +293,34 @@ void ExpressionExecutor::Visit(CaseExpression &expr) {
 
 void ExpressionExecutor::Visit(SubqueryExpression &expr) {
 	auto &plan = expr.plan;
-	auto state = plan->GetOperatorState();
+	auto state = plan->GetOperatorState(this);
 
-	DataChunk s_chunk;
-	plan->InitializeChunk(s_chunk);
-	plan->GetChunk(s_chunk, state.get());
-	vector.Resize(1, expr.return_type);
-	vector.count = 1;
-	if (s_chunk.count == 0) {
-		vector.SetValue(0, Value());
-	} else {
-		assert(s_chunk.column_count > 0);
-		vector.SetValue(0, s_chunk.data[0]->GetValue(0));
+	DataChunk *old_chunk = chunk;
+	DataChunk row_chunk;
+	chunk = &row_chunk;
+	auto types = old_chunk->GetTypes();
+	row_chunk.Initialize(types, 1, false);
+	row_chunk.count = 1;
+
+	vector.Resize(old_chunk->count, expr.return_type);
+	vector.count = old_chunk->count;
+	for (size_t c = 0; c < old_chunk->column_count; c++) {
+		row_chunk.data[c]->count = 1;
 	}
+	for (size_t r = 0; r < old_chunk->count; r++) {
+		for (size_t c = 0; c < old_chunk->column_count; c++) {
+			row_chunk.data[c]->SetValue(0, old_chunk->data[c]->GetValue(r));
+		}
+		DataChunk s_chunk;
+		plan->InitializeChunk(s_chunk);
+		plan->GetChunk(s_chunk, state.get());
+		if (s_chunk.count == 0) {
+			vector.SetValue(r, Value());
+		} else {
+			assert(s_chunk.column_count > 0);
+			vector.SetValue(r, s_chunk.data[0]->GetValue(0));
+		}
+	}
+	chunk = old_chunk;
 	expr.stats.Verify(vector);
 }

@@ -32,8 +32,11 @@ namespace duckdb {
 */
 class ExpressionExecutor : public SQLNodeVisitor {
   public:
-	ExpressionExecutor(DataChunk &chunk, PhysicalOperatorState *state = nullptr)
-	    : chunk(chunk), state(state) {}
+	ExpressionExecutor(PhysicalOperatorState *state)
+	    : chunk(&state->child_chunk), state(state), parent(state->parent) {}
+
+	ExpressionExecutor(DataChunk &child_chunk)
+	    : chunk(&child_chunk), state(nullptr), parent(nullptr) {}
 
 	void Reset();
 
@@ -63,7 +66,10 @@ class ExpressionExecutor : public SQLNodeVisitor {
   private:
 	//! The data chunk of the current physical operator, used to resolve e.g.
 	//! column references
-	DataChunk &chunk;
+	DataChunk *chunk;
+
+	ExpressionExecutor *parent;
+
 	//! The operator state of the current physical operator, used to resolve
 	//! e.g. group-by HT lookups
 	PhysicalOperatorState *state;

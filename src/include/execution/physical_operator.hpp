@@ -23,6 +23,8 @@
 #include "parser/statement/select_statement.hpp"
 
 namespace duckdb {
+class ExpressionExecutor;
+
 class PhysicalOperator;
 
 //! The current state/context of the operator. The PhysicalOperatorState is
@@ -31,7 +33,7 @@ class PhysicalOperator;
 //! data source is exhausted.
 class PhysicalOperatorState {
   public:
-	PhysicalOperatorState(PhysicalOperator *child);
+	PhysicalOperatorState(PhysicalOperator *child, ExpressionExecutor *parent);
 	virtual ~PhysicalOperatorState() {}
 
 	//! Flag indicating whether or not the operator is finished [note: not all
@@ -41,6 +43,8 @@ class PhysicalOperatorState {
 	DataChunk child_chunk;
 	//! State of the child of this operator
 	std::unique_ptr<PhysicalOperatorState> child_state;
+
+	ExpressionExecutor *parent;
 };
 
 //! PhysicalOperator is the base class of the physical operators present in the
@@ -69,7 +73,8 @@ class PhysicalOperator : public Printable {
 	virtual void GetChunk(DataChunk &chunk, PhysicalOperatorState *state) = 0;
 
 	//! Create a new empty instance of the operator state
-	virtual std::unique_ptr<PhysicalOperatorState> GetOperatorState() = 0;
+	virtual std::unique_ptr<PhysicalOperatorState>
+	GetOperatorState(ExpressionExecutor *executor) = 0;
 
 	//! The physical operator type
 	PhysicalOperatorType type;

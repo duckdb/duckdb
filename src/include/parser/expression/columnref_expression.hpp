@@ -60,8 +60,13 @@ class ColumnRefExpression : public AbstractExpression {
 		       table_name == other->table_name;
 	}
 
+	// FIXME: move these
 	//! Column index set by the binder, used to access data in the executor
 	size_t index;
+
+	//! Subquery recursion depth, needed for execution
+	size_t depth = 0;
+
 	//! A reference to the AbstractExpression this references, only used for
 	//! alias references
 	AbstractExpression *reference;

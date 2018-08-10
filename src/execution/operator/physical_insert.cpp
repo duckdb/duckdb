@@ -24,7 +24,7 @@ void PhysicalInsert::GetChunk(DataChunk &result_chunk,
 		types.push_back(column->type);
 	}
 	insert_chunk.Initialize(types);
-	ExpressionExecutor executor(state_->child_chunk);
+	ExpressionExecutor executor(state_);
 
 	for (size_t i = 0; i < value_list.size(); i++) {
 		auto &expr = value_list[i];
@@ -47,6 +47,7 @@ void PhysicalInsert::GetChunk(DataChunk &result_chunk,
 	state_->finished = true;
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalInsert::GetOperatorState() {
-	return make_unique<PhysicalOperatorState>(nullptr);
+unique_ptr<PhysicalOperatorState>
+PhysicalInsert::GetOperatorState(ExpressionExecutor *parent_executor) {
+	return make_unique<PhysicalOperatorState>(nullptr, parent_executor);
 }

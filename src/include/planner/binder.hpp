@@ -30,7 +30,8 @@ namespace duckdb {
 */
 class Binder : public SQLNodeVisitor {
   public:
-	Binder(Catalog &catalog) : catalog(catalog) {}
+	Binder(Catalog &catalog)
+	    : catalog(catalog), context(make_unique<BindContext>()) {}
 
 	void Visit(SelectStatement &statement);
 

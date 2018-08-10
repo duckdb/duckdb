@@ -27,7 +27,8 @@ class PhysicalFilter : public PhysicalOperator {
 	virtual void GetChunk(DataChunk &chunk,
 	                      PhysicalOperatorState *state) override;
 
-	virtual std::unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+	virtual std::unique_ptr<PhysicalOperatorState>
+	GetOperatorState(ExpressionExecutor *parent) override;
 
 	std::vector<std::unique_ptr<AbstractExpression>> expressions;
 };

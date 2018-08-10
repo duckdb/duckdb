@@ -58,6 +58,8 @@ void PhysicalLimit::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 	state->current_offset += state->child_chunk.count;
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalLimit::GetOperatorState() {
-	return make_unique<PhysicalLimitOperatorState>(children[0].get());
+unique_ptr<PhysicalOperatorState>
+PhysicalLimit::GetOperatorState(ExpressionExecutor *parent_executor) {
+	return make_unique<PhysicalLimitOperatorState>(children[0].get(), 0,
+	                                               parent_executor);
 }

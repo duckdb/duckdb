@@ -97,3 +97,11 @@ void DataChunk::Append(DataChunk &other) {
 	}
 	count += other.count;
 }
+
+vector<TypeId> DataChunk::GetTypes() {
+	vector<TypeId> types;
+	for (size_t i = 0; i < column_count; i++) {
+		types.push_back(data[i]->type);
+	}
+	return types;
+}

@@ -14,6 +14,7 @@ using namespace std;
 void Planner::CreatePlan(Catalog &catalog, SQLStatement &statement) {
 	// first bind the tables and columns to the catalog
 	Binder binder(catalog);
+
 	statement.Accept(&binder);
 
 	// now create a logical query plan from the query
