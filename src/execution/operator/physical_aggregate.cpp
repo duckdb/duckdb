@@ -23,13 +23,13 @@ PhysicalAggregate::PhysicalAggregate(
 	Initialize();
 }
 
-void PhysicalAggregate::InitializeChunk(DataChunk &chunk) {
+vector<TypeId> PhysicalAggregate::GetTypes() {
 	// get the chunk types from the projection list
 	vector<TypeId> types;
 	for (auto &expr : select_list) {
 		types.push_back(expr->return_type);
 	}
-	chunk.Initialize(types);
+	return types;
 }
 
 void PhysicalAggregate::Initialize() {

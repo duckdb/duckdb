@@ -22,11 +22,19 @@
 
 namespace duckdb {
 
+struct TableBinding {
+	std::shared_ptr<TableCatalogEntry> table;
+	size_t index;
+
+	TableBinding(std::shared_ptr<TableCatalogEntry> table, size_t index)
+	    : table(table), index(index) {}
+};
+
 //! The BindContext object keeps track of all the tables and columns that are
 //! encountered during the binding process.
 class BindContext {
   public:
-	BindContext() {}
+	BindContext() : bound_tables(0) {}
 
 	//! Given a column name, find the matching table it belongs to. Throws an
 	//! exception if no table has a column of the given name.
@@ -57,15 +65,14 @@ class BindContext {
 	std::unordered_map<std::string, std::vector<std::string>> bound_columns;
 
   private:
+	size_t bound_tables;
+
 	//! The set of expression aliases
 	std::unordered_map<std::string, std::pair<size_t, AbstractExpression *>>
 	    expression_alias_map;
 	//! The set of bound tables
-	std::unordered_map<std::string, std::shared_ptr<TableCatalogEntry>>
-	    regular_table_alias_map;
+	std::unordered_map<std::string, TableBinding> regular_table_alias_map;
 	//! The set of bound subqueries
 	std::unordered_map<std::string, SelectStatement *> subquery_alias_map;
-
-	std::unique_ptr<BindContext> child;
 };
 } // namespace duckdb

@@ -169,5 +169,7 @@ struct VectorOperations {
 	                 size_t offset = 0);
 	// Copy the data of <source> to the target vector
 	static void Copy(Vector &source, Vector &target, size_t offset = 0);
+	// Set all elements of the vector to the given constant value
+	static void Set(Vector &result, Value value);
 };
 } // namespace duckdb

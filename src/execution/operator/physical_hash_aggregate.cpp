@@ -8,10 +8,6 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalHashAggregate::InitializeChunk(DataChunk &chunk) {
-	PhysicalAggregate::InitializeChunk(chunk);
-}
-
 PhysicalHashAggregate::PhysicalHashAggregate(
     vector<unique_ptr<AbstractExpression>> expressions)
     : PhysicalAggregate(move(expressions),

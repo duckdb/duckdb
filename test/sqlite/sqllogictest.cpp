@@ -356,6 +356,8 @@ TEST_CASE("Test SQLite Logic Test", "[sqlitelogic]") {
 
 	registerDuckdb();
 
+	return;
+
 	if (zDbEngine == NULL) {
 		zDbEngine = apEngine[0]->zName;
 	}

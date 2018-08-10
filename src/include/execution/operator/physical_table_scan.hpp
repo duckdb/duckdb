@@ -26,7 +26,7 @@ class PhysicalTableScan : public PhysicalOperator {
 	DataTable *table;
 	std::vector<size_t> column_ids;
 
-	virtual void InitializeChunk(DataChunk &chunk) override;
+	std::vector<TypeId> GetTypes() override;
 	virtual void GetChunk(DataChunk &chunk,
 	                      PhysicalOperatorState *state) override;
 

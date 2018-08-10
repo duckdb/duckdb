@@ -15,7 +15,7 @@
 
 #include "optimizer/rewriter.hpp"
 #include "planner/logical_operator.hpp"
-#include "planner/logical_visitor.hpp"
+#include "planner/logical_operator_visitor.hpp"
 
 namespace duckdb {
 

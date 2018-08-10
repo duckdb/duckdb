@@ -391,6 +391,17 @@ void VectorOperations::Or(Vector &left, Vector &right, Vector &result,
 		throw Exception("Vector lengths don't match");
 	}
 }
+//===--------------------------------------------------------------------===//
+// Set all elements of a vector to the constant value
+//===--------------------------------------------------------------------===//
+void VectorOperations::Set(Vector &result, Value value) {
+	if (value.type != result.type) {
+		value = value.CastAs(result.type);
+	}
+
+	Vector left(value);
+	_generic_binary_loop<operators::PickLeft>(left, result, result, false);
+}
 
 //===--------------------------------------------------------------------===//
 // Hash functions

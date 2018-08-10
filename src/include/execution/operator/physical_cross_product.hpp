@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// execution/physical_limit.hpp
+// execution/physical_cross_product.hpp
 //
 // Author: Mark Raasveldt
 //
@@ -12,19 +12,12 @@
 
 #include "execution/physical_operator.hpp"
 
-#include "storage/data_table.hpp"
-
 namespace duckdb {
-
 //! PhyisicalLimit represents the LIMIT operator
-class PhysicalLimit : public PhysicalOperator {
+class PhysicalCrossProduct : public PhysicalOperator {
   public:
-	PhysicalLimit(size_t limit, size_t offset)
-	    : PhysicalOperator(PhysicalOperatorType::LIMIT), limit(limit),
-	      offset(offset) {}
-
-	size_t limit;
-	size_t offset;
+	PhysicalCrossProduct(std::unique_ptr<PhysicalOperator> left,
+	                     std::unique_ptr<PhysicalOperator> right);
 
 	std::vector<TypeId> GetTypes() override;
 	virtual void GetChunk(DataChunk &chunk,
@@ -33,12 +26,16 @@ class PhysicalLimit : public PhysicalOperator {
 	virtual std::unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 
-class PhysicalLimitOperatorState : public PhysicalOperatorState {
+class PhysicalCrossProductOperatorState : public PhysicalOperatorState {
   public:
-	PhysicalLimitOperatorState(PhysicalOperator *child,
-	                           size_t current_offset = 0)
-	    : PhysicalOperatorState(child), current_offset(current_offset) {}
+	PhysicalCrossProductOperatorState(PhysicalOperator *left,
+	                                  PhysicalOperator *right)
+	    : PhysicalOperatorState(left), left_position(0), right_chunk(0) {
+		assert(left && right);
+	}
 
-	size_t current_offset;
+	size_t left_position;
+	size_t right_chunk;
+	std::vector<std::unique_ptr<DataChunk>> right_chunks;
 };
 } // namespace duckdb

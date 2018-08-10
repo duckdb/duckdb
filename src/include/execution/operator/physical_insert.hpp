@@ -22,7 +22,7 @@ class PhysicalInsert : public PhysicalOperator {
 	    : PhysicalOperator(PhysicalOperatorType::INSERT),
 	      value_list(move(value_list)), table(table) {}
 
-	virtual void InitializeChunk(DataChunk &chunk) override;
+	std::vector<TypeId> GetTypes() override;
 	virtual void GetChunk(DataChunk &chunk,
 	                      PhysicalOperatorState *state) override;
 

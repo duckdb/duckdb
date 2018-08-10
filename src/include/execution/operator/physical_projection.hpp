@@ -21,7 +21,7 @@ class PhysicalProjection : public PhysicalOperator {
 	    : PhysicalOperator(PhysicalOperatorType::PROJECTION),
 	      select_list(move(select_list)) {}
 
-	virtual void InitializeChunk(DataChunk &chunk) override;
+	std::vector<TypeId> GetTypes() override;
 	virtual void GetChunk(DataChunk &chunk,
 	                      PhysicalOperatorState *state) override;
 

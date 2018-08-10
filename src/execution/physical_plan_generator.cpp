@@ -60,6 +60,20 @@ void PhysicalPlanGenerator::Visit(LogicalAggregate &op) {
 	}
 }
 
+void PhysicalPlanGenerator::Visit(LogicalCrossProduct &op) {
+	if (plan) {
+		throw Exception("Cross product should be the first node of a plan!");
+	}
+
+	assert(op.children.size() == 2);
+	op.children[0]->Accept(this);
+	auto left = move(plan);
+	op.children[1]->Accept(this);
+	auto right = move(plan);
+
+	plan = make_unique<PhysicalCrossProduct>(move(left), move(right));
+}
+
 void PhysicalPlanGenerator::Visit(LogicalDistinct &op) {
 	LogicalOperatorVisitor::Visit(op);
 

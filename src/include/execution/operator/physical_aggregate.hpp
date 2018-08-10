@@ -28,7 +28,7 @@ class PhysicalAggregate : public PhysicalOperator {
 
 	void Initialize();
 
-	void InitializeChunk(DataChunk &chunk) override;
+	std::vector<TypeId> GetTypes() override;
 
 	//! The projection list of the SELECT statement (that contains aggregates)
 	std::vector<std::unique_ptr<AbstractExpression>> select_list;

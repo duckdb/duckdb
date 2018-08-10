@@ -19,7 +19,7 @@
 
 #include "planner/bindcontext.hpp"
 #include "planner/logical_operator.hpp"
-#include "planner/logical_visitor.hpp"
+#include "planner/logical_operator_visitor.hpp"
 
 namespace duckdb {
 //! The physical plan generator generates a physical execution plan from a
@@ -35,6 +35,7 @@ class PhysicalPlanGenerator : public LogicalOperatorVisitor {
 	const std::string &GetErrorMessage() const { return message; }
 
 	void Visit(LogicalAggregate &op);
+	void Visit(LogicalCrossProduct &op);
 	void Visit(LogicalDistinct &op);
 	void Visit(LogicalFilter &op);
 	void Visit(LogicalGet &op);

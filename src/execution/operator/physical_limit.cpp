@@ -4,10 +4,7 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalLimit::InitializeChunk(DataChunk &chunk) {
-	// just copy the chunk data of the child
-	children[0]->InitializeChunk(chunk);
-}
+vector<TypeId> PhysicalLimit::GetTypes() { return children[0]->GetTypes(); }
 
 void PhysicalLimit::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalLimitOperatorState *>(state_);

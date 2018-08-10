@@ -251,6 +251,7 @@ enum class LogicalOperatorType {
 	RIGHT_JOIN = 105,
 	OUTER_JOIN = 106,
 	SEMI_JOIN = 107,
+	CROSS_PRODUCT = 108,
 	// -----------------------------
 	// Updates
 	// -----------------------------
@@ -292,6 +293,7 @@ enum class PhysicalOperatorType {
 	LEFT_HASH_JOIN = 105,
 	RIGHT_HASH_JOIN = 106,
 	OUTER_HASH_JOIN = 107,
+	CROSS_PRODUCT = 108,
 	// -----------------------------
 	// Updates
 	// -----------------------------

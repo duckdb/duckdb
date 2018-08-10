@@ -60,10 +60,15 @@ class PhysicalOperator : public Printable {
 
 	virtual std::string ToString() const override;
 
+	//! Return a vector of the types that will be returned by this operator
+	virtual std::vector<TypeId> GetTypes() = 0;
 	//! Initialize a given chunk to the types that will be returned by this
 	//! operator, this will prepare chunk for a call to GetChunk. This method
 	//! only has to be called once for any amount of calls to GetChunk.
-	virtual void InitializeChunk(DataChunk &chunk) = 0;
+	virtual void InitializeChunk(DataChunk &chunk) {
+		auto types = GetTypes();
+		chunk.Initialize(types);
+	}
 	//! Retrieves a chunk from this operator and stores it in the chunk
 	//! variable.
 	virtual void GetChunk(DataChunk &chunk, PhysicalOperatorState *state) = 0;

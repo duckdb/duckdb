@@ -22,7 +22,7 @@ class PhysicalOrder : public PhysicalOperator {
 	    : PhysicalOperator(PhysicalOperatorType::ORDER_BY),
 	      description(std::move(description)) {}
 
-	virtual void InitializeChunk(DataChunk &chunk) override;
+	std::vector<TypeId> GetTypes() override;
 	virtual void GetChunk(DataChunk &chunk,
 	                      PhysicalOperatorState *state) override;
 

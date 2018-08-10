@@ -5,14 +5,7 @@
 #include "parser/statement/insert_statement.hpp"
 #include "parser/tableref/tableref_list.hpp"
 
-#include "planner/operator/logical_aggregate.hpp"
-#include "planner/operator/logical_distinct.hpp"
-#include "planner/operator/logical_filter.hpp"
-#include "planner/operator/logical_get.hpp"
-#include "planner/operator/logical_insert.hpp"
-#include "planner/operator/logical_limit.hpp"
-#include "planner/operator/logical_order.hpp"
-#include "planner/operator/logical_projection.hpp"
+#include "planner/operator/logical_list.hpp"
 
 #include <map>
 
@@ -154,7 +147,23 @@ void LogicalPlanGenerator::Visit(BaseTableRef &expr) {
 }
 
 void LogicalPlanGenerator::Visit(CrossProductRef &expr) {
-	throw NotImplementedException("Cross product not implemented yet!");
+	auto cross_product = make_unique<LogicalCrossProduct>();
+
+	if (root) {
+		throw Exception("Cross product cannot have children!");
+	}
+
+	expr.left->Accept(this);
+	assert(root);
+	cross_product->children.push_back(move(root));
+	root = nullptr;
+
+	expr.right->Accept(this);
+	assert(root);
+	cross_product->children.push_back(move(root));
+	root = nullptr;
+
+	root = move(cross_product);
 }
 
 void LogicalPlanGenerator::Visit(JoinRef &expr) {

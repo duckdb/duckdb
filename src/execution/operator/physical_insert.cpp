@@ -6,10 +6,7 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalInsert::InitializeChunk(DataChunk &chunk) {
-	vector<TypeId> types = {TypeId::INTEGER};
-	chunk.Initialize(types);
-}
+vector<TypeId> PhysicalInsert::GetTypes() { return {TypeId::INTEGER}; }
 
 void PhysicalInsert::GetChunk(DataChunk &result_chunk,
                               PhysicalOperatorState *state_) {

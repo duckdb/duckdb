@@ -5,10 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalFilter::InitializeChunk(DataChunk &chunk) {
-	// just copy the chunk data of the child
-	children[0]->InitializeChunk(chunk);
-}
+vector<TypeId> PhysicalFilter::GetTypes() { return children[0]->GetTypes(); }
 
 void PhysicalFilter::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOperatorState *>(state_);
