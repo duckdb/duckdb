@@ -179,17 +179,26 @@ void PhysicalPlanGenerator::Visit(LogicalInsert &op) {
 }
 
 void PhysicalPlanGenerator::Visit(SubqueryExpression &expr) {
-	PhysicalPlanGenerator generator(catalog);
+	PhysicalPlanGenerator generator(catalog, this);
 	generator.CreatePlan(move(expr.op), move(expr.context));
 	expr.plan = move(generator.plan);
 }
 
 void PhysicalPlanGenerator::Visit(ColumnRefExpression &expr) {
-	if (expr.table_index == (size_t)-1 || expr.depth > 0) {
+	if (expr.table_index == (size_t)-1) {
 		return;
 	}
-	auto entry = table_index_map.find(expr.table_index);
-	if (entry == table_index_map.end()) {
+
+	// we have to check the upper table index map if this expression refers to a parent query
+	PhysicalPlanGenerator *generator = this;
+	auto depth = expr.depth;
+	while(depth > 0) {
+		generator = generator->parent;
+		assert(generator);
+		depth--;
+	}
+	auto entry = generator->table_index_map.find(expr.table_index);
+	if (entry == generator->table_index_map.end()) {
 		throw Exception("Could not bind to table of this index at this point "
 		                "in the query!");
 	}

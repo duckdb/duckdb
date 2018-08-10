@@ -37,13 +37,22 @@ TEST_CASE("Test basic joins of tables", "[joins]") {
 	REQUIRE(duckdb_query(connection, "INSERT INTO test2 VALUES (2, 30)",
 	                     NULL) == DuckDBSuccess);
 
-	// NULL selection
+	// simple cross product + join condition
 	REQUIRE(duckdb_query(
 	            connection,
 	            "SELECT a, test.b, c FROM test, test2 WHERE test.b = test2.b;",
 	            &result) == DuckDBSuccess);
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {11, 11, 12}));
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {1, 1, 2}));
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 2, {10, 20, 30}));
+	duckdb_destroy_result(result);
+
+	REQUIRE(duckdb_query(
+	            connection,
+	            "SELECT a, (SELECT test.a), c FROM test, test2 WHERE test.b = test2.b;",
+	            &result) == DuckDBSuccess);
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {11, 11, 12}));
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {11, 11, 12}));
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 2, {10, 20, 30}));
 	duckdb_destroy_result(result);
 
