@@ -80,6 +80,7 @@ TEST_CASE("Test subqueries", "[subqueries]") {
 	                     &result) == DuckDBSuccess);
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {11, 12, 13}));
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {22, 21, 22}));
+	duckdb_destroy_result(result);
 
 	REQUIRE(duckdb_query(connection,
 	                     "SELECT a, (SELECT CASE WHEN test.a=11 THEN 22 ELSE "
@@ -87,15 +88,22 @@ TEST_CASE("Test subqueries", "[subqueries]") {
 	                     &result) == DuckDBSuccess);
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {11, 12, 13}));
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {22, NULL_NUMERIC, NULL_NUMERIC}));
+	duckdb_destroy_result(result);
 
 	REQUIRE(duckdb_query(connection,
 	                     "SELECT a, (SELECT CASE WHEN test.a=11 THEN b ELSE "
 	                     "NULL END FROM test tsub) FROM test",
 	                     &result) == DuckDBSuccess);
-	duckdb_print_result(result);
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {11, 12, 13}));
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {22, NULL_NUMERIC, NULL_NUMERIC}));
+	duckdb_destroy_result(result);
 
+	REQUIRE(duckdb_query(connection,
+	                     "SELECT * from test where a=(SELECT MIN(a) FROM test "
+	                     "t WHERE t.b=test.b)",
+	                     &result) == DuckDBSuccess);
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {11, 12}));
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {22, 21}));
 	duckdb_destroy_result(result);
 
 	REQUIRE(duckdb_disconnect(connection) == DuckDBSuccess);
