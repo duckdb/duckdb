@@ -43,8 +43,9 @@ void PhysicalAggregate::Initialize() {
 }
 
 PhysicalAggregateOperatorState::PhysicalAggregateOperatorState(
-    PhysicalAggregate *parent, PhysicalOperator *child)
-    : PhysicalOperatorState(child) {
+    PhysicalAggregate *parent, PhysicalOperator *child,
+    ExpressionExecutor *parent_executor)
+    : PhysicalOperatorState(child, parent_executor) {
 	if (parent->groups.size() > 0) {
 		vector<TypeId> group_types, aggregate_types;
 

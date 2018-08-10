@@ -26,15 +26,17 @@ class PhysicalOrder : public PhysicalOperator {
 	virtual void GetChunk(DataChunk &chunk,
 	                      PhysicalOperatorState *state) override;
 
-	virtual std::unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+	virtual std::unique_ptr<PhysicalOperatorState>
+	GetOperatorState(ExpressionExecutor *parent_executor) override;
 
 	OrderByDescription description;
 };
 
 class PhysicalOrderOperatorState : public PhysicalOperatorState {
   public:
-	PhysicalOrderOperatorState(PhysicalOperator *child)
-	    : PhysicalOperatorState(child), position(0) {}
+	PhysicalOrderOperatorState(PhysicalOperator *child,
+	                           ExpressionExecutor *parent_executor)
+	    : PhysicalOperatorState(child, parent_executor), position(0) {}
 
 	size_t position;
 	DataChunk sorted_data;

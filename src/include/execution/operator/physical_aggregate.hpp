@@ -42,8 +42,9 @@ class PhysicalAggregate : public PhysicalOperator {
 //! The operator state of the aggregate
 class PhysicalAggregateOperatorState : public PhysicalOperatorState {
   public:
-	PhysicalAggregateOperatorState(PhysicalAggregate *parent,
-	                               PhysicalOperator *child = nullptr);
+	PhysicalAggregateOperatorState(
+	    PhysicalAggregate *parent, PhysicalOperator *child = nullptr,
+	    ExpressionExecutor *parent_executor = nullptr);
 
 	//! Aggregate values, used only for aggregates without GROUP BY
 	std::vector<Value> aggregates;

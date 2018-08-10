@@ -10,7 +10,6 @@ using namespace duckdb;
 using namespace std;
 
 void Binder::Visit(SelectStatement &statement) {
-	context = make_unique<BindContext>();
 	// first we visit the FROM statement
 	// here we determine from where we can retrieve our columns (from which
 	// tables/subqueries)
@@ -193,7 +192,11 @@ void Binder::Visit(ColumnRefExpression &expr) {
 }
 
 void Binder::Visit(SubqueryExpression &expr) {
+	assert(context);
 	auto old_context = move(context);
+	context = make_unique<BindContext>();
+	context->parent = old_context.get();
+
 	expr.subquery->Accept(this);
 	if (expr.subquery->select_list.size() < 1) {
 		throw BinderException("Subquery has no projections");

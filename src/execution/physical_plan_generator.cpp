@@ -96,7 +96,7 @@ void PhysicalPlanGenerator::Visit(LogicalGet &op) {
 	LogicalOperatorVisitor::Visit(op);
 
 	if (!op.table) {
-		// dummy GET operation, ignore it
+		this->plan = make_unique<PhysicalDummyScan>();
 		return;
 	}
 

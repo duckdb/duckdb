@@ -33,6 +33,7 @@ void PhysicalTableScan::GetChunk(DataChunk &chunk,
 	state->current_offset++;
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalTableScan::GetOperatorState() {
-	return make_unique<PhysicalTableScanOperatorState>(0);
+unique_ptr<PhysicalOperatorState>
+PhysicalTableScan::GetOperatorState(ExpressionExecutor *parent_executor) {
+	return make_unique<PhysicalTableScanOperatorState>(0, parent_executor);
 }

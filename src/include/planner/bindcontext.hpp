@@ -41,7 +41,8 @@ class BindContext {
 	std::string GetMatchingTable(const std::string &column_name);
 	//! Binds a column expression to the base table. Returns the column catalog
 	//! entry or throws an exception if the column could not be bound.
-	std::shared_ptr<ColumnCatalogEntry> BindColumn(ColumnRefExpression &expr);
+	std::shared_ptr<ColumnCatalogEntry> BindColumn(ColumnRefExpression &expr,
+	                                               size_t depth = 0);
 
 	//! Generate column expressions for all columns that are present in the
 	//! referenced tables. This is used to resolve the * expression in a
@@ -63,6 +64,8 @@ class BindContext {
 
 	//! The set of columns that are bound for each table/subquery alias
 	std::unordered_map<std::string, std::vector<std::string>> bound_columns;
+
+	BindContext *parent;
 
   private:
 	size_t bound_tables;

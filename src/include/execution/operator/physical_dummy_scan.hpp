@@ -2,9 +2,9 @@
 //
 //                         DuckDB
 //
-// execution/physical_insert.hpp
+// execution/physical_table_scan.hpp
 //
-// Author: Hannes Mühleisen & Mark Raasveldt
+// Author: Mark Raasveldt
 //
 //===----------------------------------------------------------------------===//
 
@@ -14,13 +14,9 @@
 
 namespace duckdb {
 
-//! Physically insert a set of data into a table
-class PhysicalInsert : public PhysicalOperator {
+class PhysicalDummyScan : public PhysicalOperator {
   public:
-	PhysicalInsert(std::shared_ptr<TableCatalogEntry> table,
-	               std::vector<std::unique_ptr<AbstractExpression>> value_list)
-	    : PhysicalOperator(PhysicalOperatorType::INSERT),
-	      value_list(move(value_list)), table(table) {}
+	PhysicalDummyScan() : PhysicalOperator(PhysicalOperatorType::DUMMY_SCAN) {}
 
 	std::vector<TypeId> GetTypes() override;
 	virtual void GetChunk(DataChunk &chunk,
@@ -28,9 +24,5 @@ class PhysicalInsert : public PhysicalOperator {
 
 	virtual std::unique_ptr<PhysicalOperatorState>
 	GetOperatorState(ExpressionExecutor *parent_executor) override;
-
-	std::vector<std::unique_ptr<AbstractExpression>> value_list;
-	std::shared_ptr<TableCatalogEntry> table;
 };
-
 } // namespace duckdb

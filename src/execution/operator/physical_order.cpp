@@ -164,6 +164,8 @@ void PhysicalOrder::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 	state->position += chunk.count;
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalOrder::GetOperatorState() {
-	return make_unique<PhysicalOrderOperatorState>(children[0].get());
+unique_ptr<PhysicalOperatorState>
+PhysicalOrder::GetOperatorState(ExpressionExecutor *parent_executor) {
+	return make_unique<PhysicalOrderOperatorState>(children[0].get(),
+	                                               parent_executor);
 }

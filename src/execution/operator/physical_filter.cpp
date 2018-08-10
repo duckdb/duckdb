@@ -23,7 +23,7 @@ void PhysicalFilter::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 		}
 
 		Vector result(TypeId::BOOLEAN, state->child_chunk.count);
-		ExpressionExecutor executor(state->child_chunk);
+		ExpressionExecutor executor(state);
 		executor.Execute(expressions[0].get(), result);
 		// AND together the remaining filters!
 		for (size_t i = 1; i < expressions.size(); i++) {
@@ -54,6 +54,7 @@ void PhysicalFilter::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 	} while (chunk.count == 0);
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalFilter::GetOperatorState() {
-	return make_unique<PhysicalOperatorState>(children[0].get());
+unique_ptr<PhysicalOperatorState>
+PhysicalFilter::GetOperatorState(ExpressionExecutor *parent) {
+	return make_unique<PhysicalOperatorState>(children[0].get(), parent);
 }

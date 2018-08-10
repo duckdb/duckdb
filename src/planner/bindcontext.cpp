@@ -20,7 +20,7 @@ string BindContext::GetMatchingTable(const string &column_name) {
 				    column_name.c_str(), result.c_str(), column_name.c_str(),
 				    table->name.c_str(), column_name.c_str());
 			}
-			result = table->name;
+			result = kv.first;
 		}
 	}
 	for (auto &kv : subquery_alias_map) {
@@ -29,6 +29,9 @@ string BindContext::GetMatchingTable(const string &column_name) {
 	}
 
 	if (result.empty()) {
+		if (parent) {
+			return parent->GetMatchingTable(column_name);
+		}
 		throw BinderException(
 		    "Referenced column \"%s\" not found in FROM clause!",
 		    column_name.c_str());
@@ -37,7 +40,7 @@ string BindContext::GetMatchingTable(const string &column_name) {
 }
 
 shared_ptr<ColumnCatalogEntry>
-BindContext::BindColumn(ColumnRefExpression &expr) {
+BindContext::BindColumn(ColumnRefExpression &expr, size_t depth) {
 	if (expr.table_name.empty()) {
 		auto entry = expression_alias_map.find(expr.column_name);
 		if (entry == expression_alias_map.end()) {
@@ -51,6 +54,9 @@ BindContext::BindColumn(ColumnRefExpression &expr) {
 	}
 
 	if (!HasAlias(expr.table_name)) {
+		if (parent) {
+			return parent->BindColumn(expr, ++depth);
+		}
 		throw BinderException("Referenced table \"%s\" not found!",
 		                      expr.table_name.c_str());
 	}
@@ -89,6 +95,7 @@ BindContext::BindColumn(ColumnRefExpression &expr) {
 		column_list.push_back(expr.column_name);
 	}
 	expr.table_index = table_index;
+	expr.depth = depth;
 	expr.return_type = entry->type;
 	return entry;
 }

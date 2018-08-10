@@ -27,7 +27,7 @@ void PhysicalCrossProduct::GetChunk(DataChunk &chunk,
 
 	// first we fully materialize the right child, if we haven't done that yet
 	if (state->right_chunks.size() == 0) {
-		auto right_state = children[1]->GetOperatorState();
+		auto right_state = children[1]->GetOperatorState(state->parent);
 		do {
 			auto new_chunk = make_unique<DataChunk>();
 			children[1]->InitializeChunk(*new_chunk.get());
@@ -87,7 +87,7 @@ void PhysicalCrossProduct::GetChunk(DataChunk &chunk,
 }
 
 std::unique_ptr<PhysicalOperatorState>
-PhysicalCrossProduct::GetOperatorState() {
+PhysicalCrossProduct::GetOperatorState(ExpressionExecutor *parent_executor) {
 	return make_unique<PhysicalCrossProductOperatorState>(children[0].get(),
-	                                                      children[1].get());
+	                                                      children[1].get(), parent_executor);
 }
