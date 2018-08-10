@@ -67,7 +67,7 @@ class BindContext {
 
 	BindContext *parent;
 
-  private:
+	// private:
 	size_t bound_tables;
 
 	//! The set of expression aliases

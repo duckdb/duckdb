@@ -66,10 +66,27 @@ void PhysicalPlanGenerator::Visit(LogicalCrossProduct &op) {
 	}
 
 	assert(op.children.size() == 2);
+
 	op.children[0]->Accept(this);
 	auto left = move(plan);
+	auto left_map = table_index_map;
+	table_index_map.clear();
+
 	op.children[1]->Accept(this);
 	auto right = move(plan);
+	auto right_map = table_index_map;
+	table_index_map.clear();
+
+	size_t left_columns = 0;
+	for (auto &entry : left_map) {
+		left_columns += entry.second.column_count;
+		table_index_map[entry.first] = entry.second;
+	}
+	for (auto &entry : right_map) {
+		table_index_map[entry.first] = {left_columns +
+		                                    entry.second.column_offset,
+		                                entry.second.column_count};
+	}
 
 	plan = make_unique<PhysicalCrossProduct>(move(left), move(right));
 }
@@ -105,6 +122,11 @@ void PhysicalPlanGenerator::Visit(LogicalGet &op) {
 	for (auto &bound_column : context->bound_columns[op.alias]) {
 		column_ids.push_back(op.table->name_map[bound_column]);
 	}
+
+	auto table_entry = context->regular_table_alias_map.find(op.alias);
+	assert(table_entry != context->regular_table_alias_map.end());
+	size_t table_index = table_entry->second.index;
+	table_index_map[table_index] = {0, column_ids.size()};
 
 	auto scan = make_unique<PhysicalTableScan>(op.table->storage, column_ids);
 	if (plan) {
@@ -157,10 +179,19 @@ void PhysicalPlanGenerator::Visit(LogicalInsert &op) {
 }
 
 void PhysicalPlanGenerator::Visit(SubqueryExpression &expr) {
-	auto old_plan = move(plan);
-	auto old_context = move(context);
-	CreatePlan(move(expr.op), move(expr.context));
-	expr.plan = move(plan);
-	plan = move(old_plan);
-	context = move(old_context);
+	PhysicalPlanGenerator generator(catalog);
+	generator.CreatePlan(move(expr.op), move(expr.context));
+	expr.plan = move(generator.plan);
+}
+
+void PhysicalPlanGenerator::Visit(ColumnRefExpression &expr) {
+	if (expr.table_index == (size_t)-1 || expr.depth > 0) {
+		return;
+	}
+	auto entry = table_index_map.find(expr.table_index);
+	if (entry == table_index_map.end()) {
+		throw Exception("Could not bind to table of this index at this point "
+		                "in the query!");
+	}
+	expr.index += entry->second.column_offset;
 }

@@ -4,9 +4,7 @@
 using namespace duckdb;
 using namespace std;
 
-vector<TypeId> PhysicalDummyScan::GetTypes() {
-	return {TypeId::INTEGER};
-}
+vector<TypeId> PhysicalDummyScan::GetTypes() { return {TypeId::INTEGER}; }
 
 void PhysicalDummyScan::GetChunk(DataChunk &chunk,
                                  PhysicalOperatorState *state) {

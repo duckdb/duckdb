@@ -55,6 +55,7 @@ void PhysicalCrossProduct::GetChunk(DataChunk &chunk,
 		if (state->child_chunk.count == 0) {
 			return;
 		}
+		state->left_position = 0;
 		state->right_chunk = 0;
 	}
 	auto &left_chunk = state->child_chunk;
@@ -88,6 +89,6 @@ void PhysicalCrossProduct::GetChunk(DataChunk &chunk,
 
 std::unique_ptr<PhysicalOperatorState>
 PhysicalCrossProduct::GetOperatorState(ExpressionExecutor *parent_executor) {
-	return make_unique<PhysicalCrossProductOperatorState>(children[0].get(),
-	                                                      children[1].get(), parent_executor);
+	return make_unique<PhysicalCrossProductOperatorState>(
+	    children[0].get(), children[1].get(), parent_executor);
 }

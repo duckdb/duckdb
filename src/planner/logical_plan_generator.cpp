@@ -127,14 +127,12 @@ void LogicalPlanGenerator::Visit(OperatorExpression &expr) {
 }
 
 void LogicalPlanGenerator::Visit(SubqueryExpression &expr) {
-	auto old_root = move(root);
-	expr.subquery->Accept(this);
-	if (!root) {
+	LogicalPlanGenerator generator(catalog);
+	expr.subquery->Accept(&generator);
+	if (!generator.root) {
 		throw Exception("Can't plan subquery");
 	}
-
-	expr.op = move(root);
-	root = move(old_root);
+	expr.op = move(generator.root);
 }
 
 void LogicalPlanGenerator::Visit(BaseTableRef &expr) {

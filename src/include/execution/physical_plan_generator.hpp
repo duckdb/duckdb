@@ -22,6 +22,12 @@
 #include "planner/logical_operator_visitor.hpp"
 
 namespace duckdb {
+
+struct TableColumnInformation {
+	size_t column_offset;
+	size_t column_count;
+};
+
 //! The physical plan generator generates a physical execution plan from a
 //! logical query plan
 class PhysicalPlanGenerator : public LogicalOperatorVisitor {
@@ -44,12 +50,14 @@ class PhysicalPlanGenerator : public LogicalOperatorVisitor {
 	void Visit(LogicalProjection &op);
 	void Visit(LogicalInsert &op);
 
+	void Visit(ColumnRefExpression &expr);
 	void Visit(SubqueryExpression &expr);
 
 	void Print() { plan->Print(); }
 
 	std::unique_ptr<PhysicalOperator> plan;
 	std::unique_ptr<BindContext> context;
+	std::unordered_map<size_t, TableColumnInformation> table_index_map;
 	bool success;
 	std::string message;
 

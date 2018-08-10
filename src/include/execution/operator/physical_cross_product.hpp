@@ -23,14 +23,17 @@ class PhysicalCrossProduct : public PhysicalOperator {
 	virtual void GetChunk(DataChunk &chunk,
 	                      PhysicalOperatorState *state) override;
 
-	virtual std::unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent_executor) override;
+	virtual std::unique_ptr<PhysicalOperatorState>
+	GetOperatorState(ExpressionExecutor *parent_executor) override;
 };
 
 class PhysicalCrossProductOperatorState : public PhysicalOperatorState {
   public:
 	PhysicalCrossProductOperatorState(PhysicalOperator *left,
-	                                  PhysicalOperator *right, ExpressionExecutor *parent_executor)
-	    : PhysicalOperatorState(left, parent_executor), left_position(0), right_chunk(0) {
+	                                  PhysicalOperator *right,
+	                                  ExpressionExecutor *parent_executor)
+	    : PhysicalOperatorState(left, parent_executor), left_position(0),
+	      right_chunk(0) {
 		assert(left && right);
 	}
 
