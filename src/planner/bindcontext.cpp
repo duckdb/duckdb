@@ -20,7 +20,7 @@ string BindContext::GetMatchingTable(const string &column_name) {
 				    column_name.c_str(), result.c_str(), column_name.c_str(),
 				    table->name.c_str(), column_name.c_str());
 			}
-			result = table->name;
+			result = kv.first;
 		}
 	}
 	for (auto &kv : subquery_alias_map) {
@@ -29,6 +29,9 @@ string BindContext::GetMatchingTable(const string &column_name) {
 	}
 
 	if (result.empty()) {
+		if (parent) {
+			return parent->GetMatchingTable(column_name);
+		}
 		throw BinderException(
 		    "Referenced column \"%s\" not found in FROM clause!",
 		    column_name.c_str());
