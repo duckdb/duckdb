@@ -1,9 +1,11 @@
 #include "execution/operator/physical_copy.hpp"
 #include "storage/data_table.hpp"
+#include "common/string_util.hpp"
 #include <fstream>
 
 using namespace duckdb;
 using namespace std;
+
 
 void PhysicalCopy::InitializeChunk(DataChunk &chunk) {
     vector<TypeId> types = {TypeId::INTEGER};
@@ -24,13 +26,15 @@ void PhysicalCopy::GetChunk(DataChunk &result_chunk,
     insert_chunk.Initialize(types);
     ifstream file (file_path);
     string value;
-    int count_tuples = 0;
-
+    int count_line = 0;
     while (getline ( file, value ))
     {
-        insert_chunk.data[0]->count++;
-        insert_chunk.data[0]->SetValue(count_tuples, Value(value));
-        count_tuples++;
+        std::vector<string> csv_line = StringUtil::Split(value,',');
+        for(size_t i = 0; i < csv_line.size(); ++i){
+            insert_chunk.data[i]->count++;
+            insert_chunk.data[i]->SetValue(count_line, csv_line[i]);
+        }
+        count_line++;
     }
 
     insert_chunk.count = insert_chunk.data[0]->count;

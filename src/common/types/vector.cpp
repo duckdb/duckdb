@@ -28,6 +28,11 @@ Vector::Vector(TypeId type, oid_t maximum_size, bool zero_data)
 Vector::Vector(TypeId type, char *dataptr, size_t maximum_size)
     : type(type), count(0), sel_vector(nullptr), data(dataptr),
       owns_data(false), maximum_size(maximum_size) {
+	if (!TypeIsConstantSize(type)) {
+		assert(type == TypeId::VARCHAR);
+		auto string_list = new unique_ptr<char[]>[maximum_size];
+		owned_strings = unique_ptr<unique_ptr<char[]>[]>(string_list);
+	}
 	if (dataptr && type == TypeId::INVALID) {
 		throw Exception("Cannot create a vector of type INVALID!");
 	}
@@ -184,12 +189,24 @@ void Vector::Copy(Vector &other) {
 	if (other.type != type) {
 		throw NotImplementedException("FIXME cast");
 	}
-	if (!TypeIsConstantSize(type)) {
-		throw NotImplementedException("Cannot copy varlength types yet!");
-	}
 
-	memcpy(other.data, data, count * GetTypeIdSize(type));
-	other.count = count;
+	if (!TypeIsConstantSize(type)) {
+        assert(type == TypeId::VARCHAR);
+        auto string_list = new unique_ptr<char[]>[count];
+        other.owned_strings = unique_ptr<unique_ptr<char[]>[]>(string_list);
+
+        char **dataptr = (char **)data;
+        char **result = (char **)other.data;
+        for(size_t i = 0; i < count; i++) {
+            char *new_string = new char[strlen(dataptr[i]) + 1];
+            strcpy(new_string, dataptr[i]);
+            other.owned_strings[i] = unique_ptr<char[]>(new_string);
+            result[i] = other.owned_strings[i].get();
+        }
+	} else {
+        memcpy(other.data, data, count * GetTypeIdSize(type));
+    }
+    other.count = count;
 }
 
 void Vector::Resize(oid_t maximum_size, TypeId new_type) {
