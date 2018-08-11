@@ -65,7 +65,7 @@ class BindContext {
 	//! The set of columns that are bound for each table/subquery alias
 	std::unordered_map<std::string, std::vector<std::string>> bound_columns;
 
-	BindContext *parent;
+	BindContext *parent = nullptr;
 
 	// private:
 	size_t bound_tables;

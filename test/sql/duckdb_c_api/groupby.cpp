@@ -38,6 +38,7 @@ TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
 	                     &result) == DuckDBSuccess);
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {36}));
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {3}));
+	// REQUIRE(CHECK_DECIMAL_COLUMN(result, 1, {12.0}));
 	duckdb_destroy_result(result);
 
 	REQUIRE(duckdb_query(connection,
