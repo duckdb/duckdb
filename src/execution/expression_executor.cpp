@@ -293,8 +293,6 @@ void ExpressionExecutor::Visit(CaseExpression &expr) {
 
 void ExpressionExecutor::Visit(SubqueryExpression &expr) {
 	auto &plan = expr.plan;
-	auto state = plan->GetOperatorState(this);
-
 	DataChunk *old_chunk = chunk;
 	DataChunk row_chunk;
 	chunk = &row_chunk;
@@ -311,6 +309,7 @@ void ExpressionExecutor::Visit(SubqueryExpression &expr) {
 		for (size_t c = 0; c < old_chunk->column_count; c++) {
 			row_chunk.data[c]->SetValue(0, old_chunk->data[c]->GetValue(r));
 		}
+		auto state = plan->GetOperatorState(this);
 		DataChunk s_chunk;
 		plan->InitializeChunk(s_chunk);
 		plan->GetChunk(s_chunk, state.get());
