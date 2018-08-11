@@ -105,3 +105,11 @@ vector<TypeId> DataChunk::GetTypes() {
 	}
 	return types;
 }
+
+string DataChunk::ToString() const {
+	string retval = "Chunk - [" + to_string(column_count) + " Columns]\n";
+	for (size_t i = 0; i < column_count; i++) {
+		retval += "- " + data[i]->ToString() + "\n";
+	}
+	return retval;
+}

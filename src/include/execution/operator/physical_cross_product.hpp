@@ -13,7 +13,7 @@
 #include "execution/physical_operator.hpp"
 
 namespace duckdb {
-//! PhyisicalLimit represents the LIMIT operator
+//! PhysicalCrossProduct represents a cross product between two tables
 class PhysicalCrossProduct : public PhysicalOperator {
   public:
 	PhysicalCrossProduct(std::unique_ptr<PhysicalOperator> left,

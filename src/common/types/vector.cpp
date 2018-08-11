@@ -32,7 +32,6 @@ Vector::Vector(TypeId type, char *dataptr, size_t maximum_size)
 		throw Exception("Cannot create a vector of type INVALID!");
 	}
 }
-std::unique_ptr<std::unique_ptr<char[]>> owned_strings;
 
 Vector::Vector(Value value)
     : type(value.type), count(1), sel_vector(nullptr), maximum_size(1) {
@@ -227,4 +226,34 @@ void Vector::Append(Vector &other) {
 	}
 	VectorOperations::Copy(other, data + count * GetTypeIdSize(type));
 	count += other.count;
+}
+
+void Vector::SetSelVector(sel_t *vector, size_t new_count) {
+	if (!vector) {
+		this->count = new_count;
+		return;
+	}
+	if (sel_vector) {
+		// already has a selection vector! we have to merge them
+		auto new_vector = new sel_t[new_count];
+		for (size_t i = 0; i < new_count; i++) {
+			assert(vector[i] < this->count);
+			new_vector[i] = sel_vector[vector[i]];
+		}
+		sel_vector = new_vector;
+		owned_sel_vector = unique_ptr<sel_t[]>(new_vector);
+	} else {
+		this->sel_vector = vector;
+		owned_sel_vector = nullptr;
+	}
+	this->count = new_count;
+}
+
+string Vector::ToString() const {
+	string retval = TypeIdToString(type) + ": " + to_string(count) + " = [ ";
+	for (size_t i = 0; i < count; i++) {
+		retval += GetValue(i).ToString() + (i == count - 1 ? "" : ", ");
+	}
+	retval += "]";
+	return retval;
 }

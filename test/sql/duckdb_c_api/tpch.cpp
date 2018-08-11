@@ -57,7 +57,6 @@ TEST_CASE("Test TPC-H Q1", "[tpch]") {
 	        "order "
 	        "by l_returnflag, l_linestatus;",
 	        &result) == DuckDBSuccess);
-	// duckdb_print_result(result);
 	REQUIRE(CHECK_STRING_COLUMN(result, 0, {"N"}));
 	REQUIRE(CHECK_STRING_COLUMN(result, 1, {"O"}));
 	REQUIRE(CHECK_DECIMAL_COLUMN(result, 2, {17.0}));
