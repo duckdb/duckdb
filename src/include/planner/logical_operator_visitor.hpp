@@ -19,6 +19,7 @@ class LogicalCrossProduct;
 class LogicalDistinct;
 class LogicalFilter;
 class LogicalGet;
+class LogicalJoin;
 class LogicalLimit;
 class LogicalOrder;
 class LogicalProjection;
@@ -35,6 +36,7 @@ class LogicalOperatorVisitor : public SQLNodeVisitor {
 	virtual void Visit(LogicalDistinct &op);
 	virtual void Visit(LogicalFilter &op);
 	virtual void Visit(LogicalGet &op);
+	virtual void Visit(LogicalJoin &op);
 	virtual void Visit(LogicalLimit &op);
 	virtual void Visit(LogicalOrder &op);
 	virtual void Visit(LogicalProjection &op);

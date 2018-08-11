@@ -104,15 +104,20 @@ class Vector : public Printable {
 	//! This method guarantees that the vector becomes an owning vector
 	//! If the vector is already an owning vector, it does nothing
 	//! Otherwise, it copies the data to the vector
-	void ForceOwnership();
+	void ForceOwnership(size_t minimum_capacity = 0);
 	//! Causes this vector to reference the data held by the other vector.
 	void Reference(Vector &other);
+
+	//! Converts this Vector to a printable string representation
+	std::string ToString() const;
 
 	Vector(const Vector &) = delete;
 
   private:
 	//! If the vector owns data, this is the unique_ptr holds the actual data.
 	std::unique_ptr<char[]> owned_data;
+	//! If the vector owns its selection vector, this is the unique_ptr holds it
+	std::unique_ptr<sel_t[]> owned_sel_vector;
 	//! If the vector owns a set of variable length entries, this unique_ptr
 	//! holds the variable length entries.
 	std::unique_ptr<std::unique_ptr<char[]>[]> owned_strings;

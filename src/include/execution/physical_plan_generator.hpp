@@ -32,7 +32,9 @@ struct TableColumnInformation {
 //! logical query plan
 class PhysicalPlanGenerator : public LogicalOperatorVisitor {
   public:
-	PhysicalPlanGenerator(Catalog &catalog, PhysicalPlanGenerator *parent = nullptr) : catalog(catalog), parent(parent) {}
+	PhysicalPlanGenerator(Catalog &catalog,
+	                      PhysicalPlanGenerator *parent = nullptr)
+	    : catalog(catalog), parent(parent) {}
 
 	bool CreatePlan(std::unique_ptr<LogicalOperator> logical,
 	                std::unique_ptr<BindContext> context);
@@ -45,6 +47,7 @@ class PhysicalPlanGenerator : public LogicalOperatorVisitor {
 	void Visit(LogicalDistinct &op);
 	void Visit(LogicalFilter &op);
 	void Visit(LogicalGet &op);
+	void Visit(LogicalJoin &op);
 	void Visit(LogicalLimit &op);
 	void Visit(LogicalOrder &op);
 	void Visit(LogicalProjection &op);

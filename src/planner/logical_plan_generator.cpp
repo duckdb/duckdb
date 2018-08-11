@@ -165,7 +165,25 @@ void LogicalPlanGenerator::Visit(CrossProductRef &expr) {
 }
 
 void LogicalPlanGenerator::Visit(JoinRef &expr) {
-	throw NotImplementedException("Joins not implemented yet!");
+	auto join = make_unique<LogicalJoin>(expr.type);
+
+	if (root) {
+		throw Exception("Cross product cannot have children!");
+	}
+
+	expr.left->Accept(this);
+	assert(root);
+	join->children.push_back(move(root));
+	root = nullptr;
+
+	expr.right->Accept(this);
+	assert(root);
+	join->children.push_back(move(root));
+	root = nullptr;
+
+	join->condition = move(expr.condition);
+
+	root = move(join);
 }
 
 void LogicalPlanGenerator::Visit(SubqueryRef &expr) {

@@ -135,6 +135,42 @@ void PhysicalPlanGenerator::Visit(LogicalGet &op) {
 	this->plan = move(scan);
 }
 
+void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
+	if (plan) {
+		throw Exception("Cross product should be the first node of a plan!");
+	}
+
+	// now visit the children
+	assert(op.children.size() == 2);
+
+	op.children[0]->Accept(this);
+	auto left = move(plan);
+	auto left_map = table_index_map;
+	table_index_map.clear();
+
+	op.children[1]->Accept(this);
+	auto right = move(plan);
+	auto right_map = table_index_map;
+	table_index_map.clear();
+
+	size_t left_columns = 0;
+	for (auto &entry : left_map) {
+		left_columns += entry.second.column_count;
+		table_index_map[entry.first] = entry.second;
+	}
+	for (auto &entry : right_map) {
+		table_index_map[entry.first] = {left_columns +
+		                                    entry.second.column_offset,
+		                                entry.second.column_count};
+	}
+
+	// now visit the child expressions to resolve column reference indices
+	op.condition->Accept(this);
+
+	plan = make_unique<PhysicalNestedLoopJoin>(move(left), move(right),
+	                                           move(op.condition), op.type);
+}
+
 void PhysicalPlanGenerator::Visit(LogicalLimit &op) {
 	LogicalOperatorVisitor::Visit(op);
 
@@ -189,10 +225,11 @@ void PhysicalPlanGenerator::Visit(ColumnRefExpression &expr) {
 		return;
 	}
 
-	// we have to check the upper table index map if this expression refers to a parent query
+	// we have to check the upper table index map if this expression refers to a
+	// parent query
 	PhysicalPlanGenerator *generator = this;
 	auto depth = expr.depth;
-	while(depth > 0) {
+	while (depth > 0) {
 		generator = generator->parent;
 		assert(generator);
 		depth--;

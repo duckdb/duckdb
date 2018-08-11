@@ -18,6 +18,17 @@ void ExpressionExecutor::Execute(AbstractExpression *expr, Vector &result) {
 	vector.Destroy();
 	expr->Accept(this);
 
+	if (chunk && scalar_executor) {
+		if (vector.count == 1 && chunk->count > 1) {
+			result.Resize(chunk->count);
+			// have to duplicate the constant value to match the rows in the
+			// other columns
+			VectorOperations::Set(result, vector.GetValue(0));
+		} else if (vector.count != chunk->count) {
+			throw Exception(
+			    "Computed vector length does not match expected length!");
+		}
+	}
 	if (result.type != vector.type) {
 		// cast to the expected type
 		VectorOperations::Cast(vector, result);
@@ -162,6 +173,9 @@ void ExpressionExecutor::Visit(ColumnRefExpression &expr) {
 
 	if (expr.index == (size_t)-1) {
 		throw Exception("Column Reference not bound!");
+	}
+	if (expr.index >= cur_exec->chunk->column_count) {
+		throw Exception("Column reference index out of range!");
 	}
 	vector.Reference(*cur_exec->chunk->data[expr.index].get());
 	expr.stats.Verify(vector);

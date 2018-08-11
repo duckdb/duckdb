@@ -18,19 +18,11 @@ void PhysicalProjection::GetChunk(DataChunk &chunk,
                                   PhysicalOperatorState *state) {
 	chunk.Reset();
 
-	if (children.size() > 0) {
-		// get the next chunk from the child, if there is a child
-		children[0]->GetChunk(state->child_chunk, state->child_state.get());
-		if (state->child_chunk.count == 0) {
-			return;
-		}
-	} else {
-		// no FROM clause, set a simple marker to ensure the projection is only
-		// executed once
-		if (state->finished) {
-			return;
-		}
-		state->finished = true;
+	assert(children.size() == 1);
+	// get the next chunk from the child
+	children[0]->GetChunk(state->child_chunk, state->child_state.get());
+	if (state->child_chunk.count == 0) {
+		return;
 	}
 
 	ExpressionExecutor executor(state);

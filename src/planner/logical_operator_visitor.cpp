@@ -27,6 +27,10 @@ void LogicalOperatorVisitor::Visit(LogicalFilter &op) {
 	}
 }
 void LogicalOperatorVisitor::Visit(LogicalGet &op) { op.AcceptChildren(this); }
+void LogicalOperatorVisitor::Visit(LogicalJoin &op) {
+	op.AcceptChildren(this);
+	op.condition->Accept(this);
+}
 void LogicalOperatorVisitor::Visit(LogicalLimit &op) {
 	op.AcceptChildren(this);
 }
