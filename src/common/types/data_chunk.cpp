@@ -63,13 +63,16 @@ void DataChunk::ForceOwnership() {
 	char *ptr = owned_data.get();
 	for (oid_t i = 0; i < column_count;
 	     ptr += GetTypeIdSize(data[i]->type) * maximum_size, i++) {
-		if (data[i]->owns_data)
-			continue;
-		if (data[i]->data == ptr)
-			continue;
+		if (data[i]->sel_vector) {
+			data[i]->ForceOwnership();
+		} else {
+			if (data[i]->owns_data)
+				continue;
+			if (data[i]->data == ptr)
+				continue;
 
-		VectorOperations::Copy(*data[i].get(), ptr);
-		data[i]->data = ptr;
+			data[i]->ForceOwnership();
+		}
 	}
 }
 

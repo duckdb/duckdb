@@ -22,6 +22,10 @@ Vector::Vector(TypeId type, oid_t maximum_size, bool zero_data)
 		if (zero_data) {
 			memset(data, 0, maximum_size * GetTypeIdSize(type));
 		}
+		if (type == TypeId::VARCHAR) {
+			auto string_list = new unique_ptr<char[]>[maximum_size];
+			owned_strings = unique_ptr<unique_ptr<char[]>[]>(string_list);
+		}
 	}
 }
 
@@ -70,6 +74,9 @@ void Vector::SetValue(size_t index, Value val) {
 	if (index >= count) {
 		throw Exception("Out of range exception!");
 	}
+	if (sel_vector) {
+		throw Exception("Cannot assign to vector with selection vector");
+	}
 	Value newVal = val.CastAs(type);
 	switch (type) {
 	case TypeId::BOOLEAN:
@@ -105,10 +112,15 @@ void Vector::SetValue(size_t index, Value val) {
 		    val.is_null ? NullValue<date_t>() : newVal.value_.date;
 		break;
 	case TypeId::VARCHAR: {
-		auto string = new char[newVal.str_value.size() + 1];
-		strcpy(string, newVal.str_value.c_str());
-		owned_strings[index] = unique_ptr<char[]>(string);
-		((char **)data)[index] = newVal.is_null ? NullValue<char *>() : string;
+		if (val.is_null) {
+			((char **)data)[index] = nullptr;
+		} else {
+			auto string = new char[newVal.str_value.size() + 1];
+			strcpy(string, newVal.str_value.c_str());
+			owned_strings[index] = unique_ptr<char[]>(string);
+			((char **)data)[index] =
+			    newVal.is_null ? NullValue<char *>() : string;
+		}
 		break;
 	}
 	default:
@@ -116,27 +128,32 @@ void Vector::SetValue(size_t index, Value val) {
 	}
 }
 
-Value Vector::GetValue(size_t index) {
+Value Vector::GetValue(size_t index) const {
 	if (index >= count) {
 		throw Exception("Out of bounds");
 	}
+	size_t entry = sel_vector ? sel_vector[index] : index;
 	switch (type) {
 	case TypeId::BOOLEAN:
-		return Value(((bool *)data)[index]);
+		return Value(((bool *)data)[entry]);
 	case TypeId::TINYINT:
-		return Value(((int8_t *)data)[index]);
+		return Value(((int8_t *)data)[entry]);
 	case TypeId::SMALLINT:
-		return Value(((int16_t *)data)[index]);
+		return Value(((int16_t *)data)[entry]);
 	case TypeId::INTEGER:
-		return Value(((int *)data)[index]);
+		return Value(((int *)data)[entry]);
 	case TypeId::BIGINT:
-		return Value(((int64_t *)data)[index]);
+		return Value(((int64_t *)data)[entry]);
 	case TypeId::POINTER:
-		return Value(((uint64_t *)data)[index]);
+		return Value(((uint64_t *)data)[entry]);
 	case TypeId::DECIMAL:
-		return Value(((double *)data)[index]);
-	case TypeId::VARCHAR:
-		return Value(string(((char **)data)[index]));
+		return Value(((double *)data)[entry]);
+	case TypeId::DATE:
+		return Value::Date(((date_t *)data)[entry]);
+	case TypeId::VARCHAR: {
+		char *str = ((char **)data)[entry];
+		return !str ? Value(TypeId::VARCHAR) : Value(string(str));
+	}
 	default:
 		throw NotImplementedException("Unimplemented type for conversion");
 	}
@@ -166,29 +183,38 @@ void Vector::Move(Vector &other) {
 	other.owns_data = owns_data;
 	other.sel_vector = sel_vector;
 	other.type = type;
+	other.maximum_size = maximum_size;
 
 	Destroy();
 }
 
-void Vector::ForceOwnership() {
-	if (owns_data)
+void Vector::ForceOwnership(size_t minimum_capacity) {
+	if (maximum_size >= minimum_capacity && owns_data)
 		return;
-
-	Vector other(type, count);
+	minimum_capacity = std::max(count, minimum_capacity);
+	Vector other(type, minimum_capacity);
 	Copy(other);
 	other.Move(*this);
 }
 
 void Vector::Copy(Vector &other) {
 	if (other.type != type) {
-		throw NotImplementedException("FIXME cast");
+		throw NotImplementedException(
+		    "Copying to vector of different type not supported!");
+	}
+	if (other.maximum_size < count) {
+		throw Exception("Cannot copy to target, not enough space!");
 	}
 	if (!TypeIsConstantSize(type)) {
-		throw NotImplementedException("Cannot copy varlength types yet!");
-	}
+		assert(type == TypeId::VARCHAR);
 
-	memcpy(other.data, data, count * GetTypeIdSize(type));
-	other.count = count;
+		other.count = count;
+		for (size_t i = 0; i < count; i++) {
+			other.SetValue(i, GetValue(i));
+		}
+	} else {
+		VectorOperations::Copy(*this, other);
+	}
 }
 
 void Vector::Resize(oid_t maximum_size, TypeId new_type) {
@@ -204,7 +230,10 @@ void Vector::Resize(oid_t maximum_size, TypeId new_type) {
 	}
 	char *new_data = new char[maximum_size * GetTypeIdSize(type)];
 	if (data) {
-		memcpy(new_data, data, count * GetTypeIdSize(type));
+		if (!TypeIsConstantSize(type)) {
+			throw NotImplementedException("Cannot copy varlength types yet!");
+		}
+		VectorOperations::Copy(*this, new_data);
 	}
 	Destroy();
 	this->maximum_size = maximum_size;
