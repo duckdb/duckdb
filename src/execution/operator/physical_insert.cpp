@@ -6,25 +6,32 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalInsert::InitializeChunk(DataChunk &chunk) {
-	vector<TypeId> types = {TypeId::INTEGER};
-	chunk.Initialize(types);
-}
+vector<TypeId> PhysicalInsert::GetTypes() { return {TypeId::INTEGER}; }
 
 void PhysicalInsert::GetChunk(DataChunk &result_chunk,
-                              PhysicalOperatorState *state_) {
+                              PhysicalOperatorState *state) {
 
 	result_chunk.Reset();
-	if (state_->finished) {
-		return;
+
+	if (children.size() > 0) {
+		// get the next chunk from the child
+		children[0]->GetChunk(state->child_chunk, state->child_state.get());
+		if (state->child_chunk.count == 0) {
+			return;
+		}
+	} else {
+		if (state->finished) {
+			return;
+		}
 	}
+
 	DataChunk insert_chunk;
 	vector<TypeId> types;
 	for (auto &column : table->columns) {
-        types.push_back(column->type);
-    }
-    insert_chunk.Initialize(types);
-	ExpressionExecutor executor(state_->child_chunk);
+		types.push_back(column->type);
+	}
+	insert_chunk.Initialize(types);
+	ExpressionExecutor executor(children.size() == 0 ? nullptr : state);
 
 	for (size_t i = 0; i < value_list.size(); i++) {
 		auto &expr = value_list[i];
@@ -44,9 +51,11 @@ void PhysicalInsert::GetChunk(DataChunk &result_chunk,
 	table->storage->AddData(insert_chunk);
 
 	result_chunk.count = 1;
-	state_->finished = true;
+
+	state->finished = true;
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalInsert::GetOperatorState() {
-	return make_unique<PhysicalOperatorState>(nullptr);
+unique_ptr<PhysicalOperatorState>
+PhysicalInsert::GetOperatorState(ExpressionExecutor *parent_executor) {
+	return make_unique<PhysicalOperatorState>(nullptr, parent_executor);
 }

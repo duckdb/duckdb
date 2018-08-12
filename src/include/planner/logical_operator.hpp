@@ -20,7 +20,7 @@
 #include "parser/expression/abstract_expression.hpp"
 #include "parser/statement/select_statement.hpp"
 
-#include "planner/logical_visitor.hpp"
+#include "planner/logical_operator_visitor.hpp"
 
 namespace duckdb {
 //! LogicalOperator is the base class of the logical operators present in the

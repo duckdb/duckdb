@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// execution/physical_projection.hpp
+// execution/physical_cross_product.hpp
 //
 // Author: Mark Raasveldt
 //
@@ -10,16 +10,17 @@
 
 #pragma once
 
+#include "execution/operator/physical_cross_product.hpp"
 #include "execution/physical_operator.hpp"
 
 namespace duckdb {
-
-class PhysicalProjection : public PhysicalOperator {
+//! PhysicalNestedLoopJoin represents a nested loop join between two tables
+class PhysicalNestedLoopJoin : public PhysicalOperator {
   public:
-	PhysicalProjection(
-	    std::vector<std::unique_ptr<AbstractExpression>> select_list)
-	    : PhysicalOperator(PhysicalOperatorType::PROJECTION),
-	      select_list(move(select_list)) {}
+	PhysicalNestedLoopJoin(std::unique_ptr<PhysicalOperator> left,
+	                       std::unique_ptr<PhysicalOperator> right,
+	                       std::unique_ptr<AbstractExpression> cond,
+	                       JoinType join_type);
 
 	std::vector<TypeId> GetTypes() override;
 	virtual void GetChunk(DataChunk &chunk,
@@ -28,7 +29,8 @@ class PhysicalProjection : public PhysicalOperator {
 	virtual std::unique_ptr<PhysicalOperatorState>
 	GetOperatorState(ExpressionExecutor *parent_executor) override;
 
-	std::vector<std::unique_ptr<AbstractExpression>> select_list;
+	PhysicalCrossProduct cross_product;
+	std::unique_ptr<AbstractExpression> condition;
+	JoinType type;
 };
-
 } // namespace duckdb

@@ -199,10 +199,6 @@ void Statistics::Count(Statistics &source, Statistics &result) {
 	}
 }
 
-void Statistics::Average(Statistics &source, Statistics &result) {
-	result.has_stats = false;
-}
-
 void Statistics::Max(Statistics &source, Statistics &result) {
 	result.has_stats = false;
 }

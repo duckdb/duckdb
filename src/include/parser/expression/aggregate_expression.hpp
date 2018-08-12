@@ -38,7 +38,6 @@ class AggregateExpression : public AbstractExpression {
 		case ExpressionType::AGGREGATE_SUM:
 		case ExpressionType::AGGREGATE_MIN:
 		case ExpressionType::AGGREGATE_MAX:
-		case ExpressionType::AGGREGATE_AVG:
 			break;
 		default:
 			throw Exception("Aggregate type not supported");
@@ -73,10 +72,6 @@ class AggregateExpression : public AbstractExpression {
 			Statistics::Sum(children[0]->stats, stats);
 			return_type =
 			    std::max(children[0]->return_type, stats.MinimalType());
-			break;
-		case ExpressionType::AGGREGATE_AVG:
-			Statistics::Average(children[0]->stats, stats);
-			return_type = TypeId::DECIMAL;
 			break;
 		default:
 			throw NotImplementedException("Unsupported aggregate type!");

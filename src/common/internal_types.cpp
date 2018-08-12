@@ -247,22 +247,10 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "LIMIT";
 	case LogicalOperatorType::ORDER_BY:
 		return "ORDER_BY";
-	case LogicalOperatorType::MARK_JOIN:
-		return "MARK_JOIN";
-	case LogicalOperatorType::DEPENDENT_JOIN:
-		return "DEPENDENT_JOIN";
-	case LogicalOperatorType::SINGLE_JOIN:
-		return "SINGLE_JOIN";
-	case LogicalOperatorType::INNER_JOIN:
-		return "INNER_JOIN";
-	case LogicalOperatorType::LEFT_JOIN:
-		return "LEFT_JOIN";
-	case LogicalOperatorType::RIGHT_JOIN:
-		return "RIGHT_JOIN";
-	case LogicalOperatorType::OUTER_JOIN:
-		return "OUTER_JOIN";
-	case LogicalOperatorType::SEMI_JOIN:
-		return "SEMI_JOIN";
+	case LogicalOperatorType::JOIN:
+		return "JOIN";
+	case LogicalOperatorType::CROSS_PRODUCT:
+		return "CROSS_PRODUCT";
 	case LogicalOperatorType::INSERT:
 		return "INSERT";
 	case LogicalOperatorType::INSERT_SELECT:
@@ -306,22 +294,10 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "SORT_GROUP_BY";
 	case PhysicalOperatorType::FILTER:
 		return "FILTER";
-	case PhysicalOperatorType::INNER_NL_JOIN:
-		return "INNER_NL_JOIN";
-	case PhysicalOperatorType::LEFT_NL_JOIN:
-		return "LEFT_NL_JOIN";
-	case PhysicalOperatorType::RIGHT_NL_JOIN:
-		return "RIGHT_NL_JOIN";
-	case PhysicalOperatorType::OUTER_NL_JOIN:
-		return "OUTER_NL_JOIN";
-	case PhysicalOperatorType::INNER_HASH_JOIN:
-		return "INNER_HASH_JOIN";
-	case PhysicalOperatorType::LEFT_HASH_JOIN:
-		return "LEFT_HASH_JOIN";
-	case PhysicalOperatorType::RIGHT_HASH_JOIN:
-		return "RIGHT_HASH_JOIN";
-	case PhysicalOperatorType::OUTER_HASH_JOIN:
-		return "OUTER_HASH_JOIN";
+	case PhysicalOperatorType::NESTED_LOOP_JOIN:
+		return "NESTED_LOOP_JOIN";
+	case PhysicalOperatorType::HASH_JOIN:
+		return "HASH_JOIN";
 	case PhysicalOperatorType::INSERT:
 		return "INSERT";
 	case PhysicalOperatorType::INSERT_SELECT:

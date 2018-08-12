@@ -5,35 +5,27 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalProjection::InitializeChunk(DataChunk &chunk) {
+vector<TypeId> PhysicalProjection::GetTypes() {
 	// get the chunk types from the projection list
 	vector<TypeId> types;
 	for (auto &expr : select_list) {
 		types.push_back(expr->return_type);
 	}
-	chunk.Initialize(types);
+	return types;
 }
 
 void PhysicalProjection::GetChunk(DataChunk &chunk,
                                   PhysicalOperatorState *state) {
 	chunk.Reset();
 
-	if (children.size() > 0) {
-		// get the next chunk from the child, if there is a child
-		children[0]->GetChunk(state->child_chunk, state->child_state.get());
-		if (state->child_chunk.count == 0) {
-			return;
-		}
-	} else {
-		// no FROM clause, set a simple marker to ensure the projection is only
-		// executed once
-		if (state->finished) {
-			return;
-		}
-		state->finished = true;
+	assert(children.size() == 1);
+	// get the next chunk from the child
+	children[0]->GetChunk(state->child_chunk, state->child_state.get());
+	if (state->child_chunk.count == 0) {
+		return;
 	}
 
-	ExpressionExecutor executor(state->child_chunk);
+	ExpressionExecutor executor(state);
 
 	for (size_t i = 0; i < select_list.size(); i++) {
 		auto &expr = select_list[i];
@@ -47,7 +39,8 @@ void PhysicalProjection::GetChunk(DataChunk &chunk,
 	}
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalProjection::GetOperatorState() {
+unique_ptr<PhysicalOperatorState>
+PhysicalProjection::GetOperatorState(ExpressionExecutor *parent_executor) {
 	return make_unique<PhysicalOperatorState>(
-	    children.size() == 0 ? nullptr : children[0].get());
+	    children.size() == 0 ? nullptr : children[0].get(), parent_executor);
 }

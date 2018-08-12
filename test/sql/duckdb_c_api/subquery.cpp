@@ -22,6 +22,11 @@ TEST_CASE("Test subqueries", "[subqueries]") {
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {42}));
 	duckdb_destroy_result(result);
 
+	REQUIRE(duckdb_query(connection, "SELECT (SELECT (SELECT 42))", &result) ==
+	        DuckDBSuccess);
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {42}));
+	duckdb_destroy_result(result);
+
 	REQUIRE(duckdb_query(connection,
 	                     "CREATE TABLE test (a INTEGER, b INTEGER);",
 	                     NULL) == DuckDBSuccess);
@@ -67,18 +72,40 @@ TEST_CASE("Test subqueries", "[subqueries]") {
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {1000, 214}));
 	duckdb_destroy_result(result);
 
+	// correlated subqueries
+
+	REQUIRE(duckdb_query(connection,
+	                     "SELECT a, (SELECT SUM(b) FROM test tsub WHERE "
+	                     "test.a=tsub.a) FROM test",
+	                     &result) == DuckDBSuccess);
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {11, 12, 13}));
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {22, 21, 22}));
+	duckdb_destroy_result(result);
+
+	REQUIRE(duckdb_query(connection,
+	                     "SELECT a, (SELECT CASE WHEN test.a=11 THEN 22 ELSE "
+	                     "NULL END) FROM test",
+	                     &result) == DuckDBSuccess);
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {11, 12, 13}));
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {22, NULL_NUMERIC, NULL_NUMERIC}));
+	duckdb_destroy_result(result);
+
+	REQUIRE(duckdb_query(connection,
+	                     "SELECT a, (SELECT CASE WHEN test.a=11 THEN b ELSE "
+	                     "NULL END FROM test tsub) FROM test",
+	                     &result) == DuckDBSuccess);
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {11, 12, 13}));
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {22, NULL_NUMERIC, NULL_NUMERIC}));
+	duckdb_destroy_result(result);
+
+	REQUIRE(duckdb_query(connection,
+	                     "SELECT * from test where a=(SELECT MIN(a) FROM test "
+	                     "t WHERE t.b=test.b)",
+	                     &result) == DuckDBSuccess);
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {11, 12}));
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {22, 21}));
+	duckdb_destroy_result(result);
+
 	REQUIRE(duckdb_disconnect(connection) == DuckDBSuccess);
 	REQUIRE(duckdb_close(database) == DuckDBSuccess);
 }
-
-//
-// EXEC("CREATE TABLE t1(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e "
-//     "INTEGER)");
-// EXEC("INSERT INTO t1(e,c,b,d,a) VALUES(103,102,100,101,104)");
-// EXEC("INSERT INTO t1(a,c,d,e,b) VALUES(107,106,108,109,105)");
-//
-////	EXEC("SELECT c-(SELECT sum(c) FROM t1) FROM t1");
-////	EXEC("SELECT (SELECT 42)");
-//
-// EXEC("SELECT CASE WHEN c>(SELECT avg(c) FROM t1) THEN a*2 ELSE b*10 END "
-//     "FROM t1 ORDER BY 1");

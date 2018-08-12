@@ -63,13 +63,16 @@ void DataChunk::ForceOwnership() {
 	char *ptr = owned_data.get();
 	for (oid_t i = 0; i < column_count;
 	     ptr += GetTypeIdSize(data[i]->type) * maximum_size, i++) {
-		if (data[i]->owns_data)
-			continue;
-		if (data[i]->data == ptr)
-			continue;
+		if (data[i]->sel_vector) {
+			data[i]->ForceOwnership();
+		} else {
+			if (data[i]->owns_data)
+				continue;
+			if (data[i]->data == ptr)
+				continue;
 
-		VectorOperations::Copy(*data[i].get(), ptr);
-		data[i]->data = ptr;
+			data[i]->ForceOwnership();
+		}
 	}
 }
 
@@ -96,4 +99,20 @@ void DataChunk::Append(DataChunk &other) {
 		data[i]->Append(*other.data[i].get());
 	}
 	count += other.count;
+}
+
+vector<TypeId> DataChunk::GetTypes() {
+	vector<TypeId> types;
+	for (size_t i = 0; i < column_count; i++) {
+		types.push_back(data[i]->type);
+	}
+	return types;
+}
+
+string DataChunk::ToString() const {
+	string retval = "Chunk - [" + to_string(column_count) + " Columns]\n";
+	for (size_t i = 0; i < column_count; i++) {
+		retval += "- " + data[i]->ToString() + "\n";
+	}
+	return retval;
 }

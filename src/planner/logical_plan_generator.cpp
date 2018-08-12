@@ -6,15 +6,7 @@
 #include "parser/statement/copy_statement.hpp"
 #include "parser/tableref/tableref_list.hpp"
 
-#include "planner/operator/logical_aggregate.hpp"
-#include "planner/operator/logical_distinct.hpp"
-#include "planner/operator/logical_filter.hpp"
-#include "planner/operator/logical_get.hpp"
-#include "planner/operator/logical_insert.hpp"
-#include "planner/operator/logical_limit.hpp"
-#include "planner/operator/logical_order.hpp"
-#include "planner/operator/logical_projection.hpp"
-#include "planner/operator/logical_copy.hpp"
+#include "planner/operator/logical_list.hpp"
 
 #include <map>
 
@@ -44,7 +36,7 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 
 	if (statement.HasAggregation()) {
 		auto aggregate =
-				make_unique<LogicalAggregate>(move(statement.select_list));
+		    make_unique<LogicalAggregate>(move(statement.select_list));
 		if (statement.HasGroup()) {
 			// have to add group by columns
 			aggregate->groups = move(statement.groupby.groups);
@@ -56,13 +48,13 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 			statement.groupby.having->Accept(this);
 
 			auto having =
-					make_unique<LogicalFilter>(move(statement.groupby.having));
+			    make_unique<LogicalFilter>(move(statement.groupby.having));
 			having->children.push_back(move(root));
 			root = move(having);
 		}
 	} else {
 		auto projection =
-				make_unique<LogicalProjection>(move(statement.select_list));
+		    make_unique<LogicalProjection>(move(statement.select_list));
 		projection->children.push_back(move(root));
 		root = move(projection);
 	}
@@ -79,7 +71,7 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 	}
 	if (statement.HasLimit()) {
 		auto limit = make_unique<LogicalLimit>(statement.limit.limit,
-											   statement.limit.offset);
+		                                       statement.limit.offset);
 		limit->children.push_back(move(root));
 		root = move(limit);
 	}
@@ -95,12 +87,12 @@ static void cast_children_to_equal_types(AbstractExpression &expr) {
 			if (left_type < right_type) {
 				// add cast on left hand side
 				auto cast = make_unique<CastExpression>(right_type,
-														move(expr.children[0]));
+				                                        move(expr.children[0]));
 				expr.children[0] = move(cast);
 			} else {
 				// add cast on right hand side
 				auto cast = make_unique<CastExpression>(left_type,
-														move(expr.children[1]));
+				                                        move(expr.children[1]));
 				expr.children[1] = move(cast);
 			}
 		}
@@ -114,7 +106,7 @@ void LogicalPlanGenerator::Visit(AggregateExpression &expr) {
 		auto &child = expr.children[i];
 		if (child->return_type != expr.return_type) {
 			auto cast = make_unique<CastExpression>(expr.return_type,
-													move(expr.children[i]));
+			                                        move(expr.children[i]));
 			expr.children[i] = move(cast);
 		}
 	}
@@ -136,31 +128,63 @@ void LogicalPlanGenerator::Visit(OperatorExpression &expr) {
 }
 
 void LogicalPlanGenerator::Visit(SubqueryExpression &expr) {
-	auto old_root = move(root);
-	expr.subquery->Accept(this);
-	if (!root) {
+	LogicalPlanGenerator generator(catalog);
+	expr.subquery->Accept(&generator);
+	if (!generator.root) {
 		throw Exception("Can't plan subquery");
 	}
-
-	expr.op = move(root);
-	root = move(old_root);
+	expr.op = move(generator.root);
 }
 
 void LogicalPlanGenerator::Visit(BaseTableRef &expr) {
 	auto table = catalog.GetTable(expr.schema_name, expr.table_name);
 	auto get_table = make_unique<LogicalGet>(
-			table, expr.alias.empty() ? expr.table_name : expr.alias);
+	    table, expr.alias.empty() ? expr.table_name : expr.alias);
 	if (root)
 		get_table->children.push_back(move(root));
 	root = move(get_table);
 }
 
 void LogicalPlanGenerator::Visit(CrossProductRef &expr) {
-	throw NotImplementedException("Cross product not implemented yet!");
+	auto cross_product = make_unique<LogicalCrossProduct>();
+
+	if (root) {
+		throw Exception("Cross product cannot have children!");
+	}
+
+	expr.left->Accept(this);
+	assert(root);
+	cross_product->children.push_back(move(root));
+	root = nullptr;
+
+	expr.right->Accept(this);
+	assert(root);
+	cross_product->children.push_back(move(root));
+	root = nullptr;
+
+	root = move(cross_product);
 }
 
 void LogicalPlanGenerator::Visit(JoinRef &expr) {
-	throw NotImplementedException("Joins not implemented yet!");
+	auto join = make_unique<LogicalJoin>(expr.type);
+
+	if (root) {
+		throw Exception("Cross product cannot have children!");
+	}
+
+	expr.left->Accept(this);
+	assert(root);
+	join->children.push_back(move(root));
+	root = nullptr;
+
+	expr.right->Accept(this);
+	assert(root);
+	join->children.push_back(move(root));
+	root = nullptr;
+
+	join->condition = move(expr.condition);
+
+	root = move(join);
 }
 
 void LogicalPlanGenerator::Visit(SubqueryRef &expr) {
@@ -191,7 +215,7 @@ void LogicalPlanGenerator::Visit(InsertStatement &statement) {
 				insert_val_list.push_back(move(insert_vals[col->name]));
 			} else {
 				insert_val_list.push_back(std::unique_ptr<AbstractExpression>(
-						new ConstantExpression(col->default_value)));
+				    new ConstantExpression(col->default_value)));
 			}
 		}
 	}

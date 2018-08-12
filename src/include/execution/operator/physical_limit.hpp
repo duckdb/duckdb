@@ -26,18 +26,21 @@ class PhysicalLimit : public PhysicalOperator {
 	size_t limit;
 	size_t offset;
 
-	virtual void InitializeChunk(DataChunk &chunk) override;
+	std::vector<TypeId> GetTypes() override;
 	virtual void GetChunk(DataChunk &chunk,
 	                      PhysicalOperatorState *state) override;
 
-	virtual std::unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+	virtual std::unique_ptr<PhysicalOperatorState>
+	GetOperatorState(ExpressionExecutor *parent_executor) override;
 };
 
 class PhysicalLimitOperatorState : public PhysicalOperatorState {
   public:
 	PhysicalLimitOperatorState(PhysicalOperator *child,
-	                           size_t current_offset = 0)
-	    : PhysicalOperatorState(child), current_offset(current_offset) {}
+	                           size_t current_offset = 0,
+	                           ExpressionExecutor *parent_executor = nullptr)
+	    : PhysicalOperatorState(child, parent_executor),
+	      current_offset(current_offset) {}
 
 	size_t current_offset;
 };

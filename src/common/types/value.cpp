@@ -165,7 +165,7 @@ template <class DST, class OP> DST Value::_cast(const Value &v) {
 	case TypeId::POINTER:
 		return OP::template Operation<uint64_t, DST>(v.value_.pointer);
 	case TypeId::VARCHAR:
-		return OP::template Operation<const char*, DST>(v.str_value.c_str());
+		return OP::template Operation<const char *, DST>(v.str_value.c_str());
 	case TypeId::DATE:
 		return operators::CastFromDate::Operation<date_t, DST>(v.value_.date);
 	default:
@@ -212,9 +212,9 @@ Value Value::CastAs(TypeId new_type) const {
 		new_value.value_.date = _cast<date_t, operators::CastToDate>(*this);
 		break;
 	case TypeId::VARCHAR: {
-		auto cstr = _cast<const char*, operators::Cast>(*this);
+		auto cstr = _cast<const char *, operators::Cast>(*this);
 		new_value.str_value = string(cstr);
-		delete [] cstr;
+		delete[] cstr;
 		break;
 	}
 	default:

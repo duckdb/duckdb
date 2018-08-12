@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// planner/logical_visitor.hpp
+// planner/logical_operator_visitor.hpp
 //
 // Author: Mark Raasveldt
 //
@@ -15,9 +15,11 @@
 namespace duckdb {
 
 class LogicalAggregate;
+class LogicalCrossProduct;
 class LogicalDistinct;
 class LogicalFilter;
 class LogicalGet;
+class LogicalJoin;
 class LogicalLimit;
 class LogicalOrder;
 class LogicalProjection;
@@ -30,15 +32,17 @@ class LogicalOperatorVisitor : public SQLNodeVisitor {
   public:
 	virtual ~LogicalOperatorVisitor(){};
 
-	virtual void Visit(LogicalAggregate &aggregate);
-	virtual void Visit(LogicalDistinct &aggregate);
-	virtual void Visit(LogicalFilter &filter);
-	virtual void Visit(LogicalGet &filter);
-	virtual void Visit(LogicalLimit &filter);
-	virtual void Visit(LogicalOrder &filter);
-	virtual void Visit(LogicalProjection &filter);
-	virtual void Visit(LogicalInsert &insert);
-	virtual void Visit(LogicalCopy &copy);
+	virtual void Visit(LogicalAggregate &op);
+	virtual void Visit(LogicalCrossProduct &op);
+	virtual void Visit(LogicalDistinct &op);
+	virtual void Visit(LogicalFilter &op);
+	virtual void Visit(LogicalGet &op);
+	virtual void Visit(LogicalJoin &op);
+	virtual void Visit(LogicalLimit &op);
+	virtual void Visit(LogicalOrder &op);
+	virtual void Visit(LogicalProjection &op);
+	virtual void Visit(LogicalInsert &op);
+    virtual void Visit(LogicalCopy &op);
 
 };
 } // namespace duckdb

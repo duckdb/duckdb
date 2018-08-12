@@ -6,6 +6,8 @@
 #include "parser/tableref/tableref_list.hpp"
 #include "parser/transform.hpp"
 
+#include "parser/expression/expression_list.hpp"
+
 using namespace std;
 
 namespace duckdb {
@@ -42,6 +44,17 @@ bool TransformOrderBy(List *order, OrderByDescription &result) {
 			else
 				throw NotImplementedException("Unimplemented order by type");
 			ordernode.expression = TransformExpression(target);
+			if (ordernode.expression->type == ExpressionType::VALUE_CONSTANT) {
+				auto constant = reinterpret_cast<ConstantExpression *>(
+				    ordernode.expression.get());
+				if (TypeIsIntegral(constant->value.type)) {
+					ordernode.expression = make_unique<ColumnRefExpression>(
+					    TypeId::INVALID, constant->value.GetNumericValue());
+				} else {
+					// order by non-integral constant, continue
+					continue;
+				}
+			}
 			result.orders.push_back(
 			    OrderByNode(ordernode.type, move(ordernode.expression)));
 		} else {

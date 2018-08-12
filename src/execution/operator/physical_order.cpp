@@ -11,10 +11,7 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalOrder::InitializeChunk(DataChunk &chunk) {
-	// just copy the chunk data of the child
-	children[0]->InitializeChunk(chunk);
-}
+vector<TypeId> PhysicalOrder::GetTypes() { return children[0]->GetTypes(); }
 
 int compare_tuple(DataChunk &sort_by, OrderByDescription &desc, size_t left,
                   size_t right) {
@@ -167,6 +164,8 @@ void PhysicalOrder::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 	state->position += chunk.count;
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalOrder::GetOperatorState() {
-	return make_unique<PhysicalOrderOperatorState>(children[0].get());
+unique_ptr<PhysicalOperatorState>
+PhysicalOrder::GetOperatorState(ExpressionExecutor *parent_executor) {
+	return make_unique<PhysicalOrderOperatorState>(children[0].get(),
+	                                               parent_executor);
 }

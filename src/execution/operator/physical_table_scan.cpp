@@ -4,13 +4,12 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalTableScan::InitializeChunk(DataChunk &chunk) {
-	// just copy the chunk data of the child
+vector<TypeId> PhysicalTableScan::GetTypes() {
 	vector<TypeId> types;
 	for (auto &column_id : column_ids) {
 		types.push_back(table->columns[column_id]->column.type);
 	}
-	chunk.Initialize(types);
+	return types;
 }
 
 void PhysicalTableScan::GetChunk(DataChunk &chunk,
@@ -34,6 +33,7 @@ void PhysicalTableScan::GetChunk(DataChunk &chunk,
 	state->current_offset++;
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalTableScan::GetOperatorState() {
-	return make_unique<PhysicalTableScanOperatorState>(0);
+unique_ptr<PhysicalOperatorState>
+PhysicalTableScan::GetOperatorState(ExpressionExecutor *parent_executor) {
+	return make_unique<PhysicalTableScanOperatorState>(0, parent_executor);
 }

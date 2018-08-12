@@ -10,7 +10,6 @@ using namespace duckdb;
 using namespace std;
 
 void Binder::Visit(SelectStatement &statement) {
-	context = make_unique<BindContext>();
 	// first we visit the FROM statement
 	// here we determine from where we can retrieve our columns (from which
 	// tables/subqueries)
@@ -55,6 +54,25 @@ void Binder::Visit(SelectStatement &statement) {
 	}
 	for (auto &order : statement.orderby.orders) {
 		order.expression->Accept(this);
+		if (order.expression->type == ExpressionType::COLUMN_REF) {
+			auto selection_ref =
+			    reinterpret_cast<ColumnRefExpression *>(order.expression.get());
+			if (selection_ref->column_name.empty()) {
+				// this ORDER BY expression refers to a column in the select
+				// clause by index e.g. ORDER BY 1 assign the type of the SELECT
+				// clause
+				if (selection_ref->index < 1 ||
+				    selection_ref->index > new_select_list.size()) {
+					throw BinderException(
+					    "ORDER term out of range - should be between 1 and %d",
+					    (int)new_select_list.size());
+				}
+				selection_ref->return_type =
+				    new_select_list[selection_ref->index - 1]->return_type;
+				selection_ref->reference =
+				    new_select_list[selection_ref->index - 1].get();
+			}
+		}
 		order.expression->ResolveType();
 	}
 	// for the ORDER BY statement, we have to project all the columns
@@ -183,6 +201,10 @@ void Binder::Visit(SelectStatement &statement) {
 }
 
 void Binder::Visit(ColumnRefExpression &expr) {
+	if (expr.column_name.empty()) {
+		// column expression should have been bound already
+		return;
+	}
 	// individual column reference
 	// resolve to either a base table or a subquery expression
 	if (expr.table_name.empty()) {
@@ -193,7 +215,11 @@ void Binder::Visit(ColumnRefExpression &expr) {
 }
 
 void Binder::Visit(SubqueryExpression &expr) {
+	assert(context);
 	auto old_context = move(context);
+	context = make_unique<BindContext>();
+	context->parent = old_context.get();
+
 	expr.subquery->Accept(this);
 	if (expr.subquery->select_list.size() < 1) {
 		throw BinderException("Subquery has no projections");

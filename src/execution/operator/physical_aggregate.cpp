@@ -23,13 +23,13 @@ PhysicalAggregate::PhysicalAggregate(
 	Initialize();
 }
 
-void PhysicalAggregate::InitializeChunk(DataChunk &chunk) {
+vector<TypeId> PhysicalAggregate::GetTypes() {
 	// get the chunk types from the projection list
 	vector<TypeId> types;
 	for (auto &expr : select_list) {
 		types.push_back(expr->return_type);
 	}
-	chunk.Initialize(types);
+	return types;
 }
 
 void PhysicalAggregate::Initialize() {
@@ -43,8 +43,9 @@ void PhysicalAggregate::Initialize() {
 }
 
 PhysicalAggregateOperatorState::PhysicalAggregateOperatorState(
-    PhysicalAggregate *parent, PhysicalOperator *child)
-    : PhysicalOperatorState(child) {
+    PhysicalAggregate *parent, PhysicalOperator *child,
+    ExpressionExecutor *parent_executor)
+    : PhysicalOperatorState(child, parent_executor) {
 	if (parent->groups.size() > 0) {
 		vector<TypeId> group_types, aggregate_types;
 

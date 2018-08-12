@@ -29,5 +29,5 @@ void DataColumn::AddData(Vector &data) {
 	// if <data> owns the data we can take it
 	// otherwise we need to make a copy
 	data.Move(*this->data.back());
-	this->data.back()->ForceOwnership();
+	this->data.back()->ForceOwnership(STANDARD_VECTOR_SIZE);
 }

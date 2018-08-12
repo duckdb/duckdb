@@ -26,17 +26,20 @@ class PhysicalTableScan : public PhysicalOperator {
 	DataTable *table;
 	std::vector<size_t> column_ids;
 
-	virtual void InitializeChunk(DataChunk &chunk) override;
+	std::vector<TypeId> GetTypes() override;
 	virtual void GetChunk(DataChunk &chunk,
 	                      PhysicalOperatorState *state) override;
 
-	virtual std::unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+	virtual std::unique_ptr<PhysicalOperatorState>
+	GetOperatorState(ExpressionExecutor *parent_executor) override;
 };
 
 class PhysicalTableScanOperatorState : public PhysicalOperatorState {
   public:
-	PhysicalTableScanOperatorState(size_t current_offset)
-	    : PhysicalOperatorState(nullptr), current_offset(current_offset) {}
+	PhysicalTableScanOperatorState(size_t current_offset,
+	                               ExpressionExecutor *parent_executor)
+	    : PhysicalOperatorState(nullptr, parent_executor),
+	      current_offset(current_offset) {}
 
 	//! The current position in the scan
 	size_t current_offset;

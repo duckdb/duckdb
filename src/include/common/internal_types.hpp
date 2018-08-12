@@ -244,14 +244,8 @@ enum class LogicalOperatorType {
 	// -----------------------------
 	// Joins
 	// -----------------------------
-	MARK_JOIN = 100,
-	DEPENDENT_JOIN = 101,
-	SINGLE_JOIN = 102,
-	INNER_JOIN = 103,
-	LEFT_JOIN = 104,
-	RIGHT_JOIN = 105,
-	OUTER_JOIN = 106,
-	SEMI_JOIN = 107,
+	JOIN = 100,
+	CROSS_PRODUCT = 101,
 	// -----------------------------
 	// Updates
 	// -----------------------------
@@ -286,14 +280,9 @@ enum class PhysicalOperatorType {
 	// -----------------------------
 	// Joins
 	// -----------------------------
-	INNER_NL_JOIN = 100,
-	LEFT_NL_JOIN = 101,
-	RIGHT_NL_JOIN = 102,
-	OUTER_NL_JOIN = 103,
-	INNER_HASH_JOIN = 104,
-	LEFT_HASH_JOIN = 105,
-	RIGHT_HASH_JOIN = 106,
-	OUTER_HASH_JOIN = 107,
+	NESTED_LOOP_JOIN = 100,
+	HASH_JOIN = 101,
+	CROSS_PRODUCT = 108,
 	// -----------------------------
 	// Updates
 	// -----------------------------

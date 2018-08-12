@@ -5,10 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalFilter::InitializeChunk(DataChunk &chunk) {
-	// just copy the chunk data of the child
-	children[0]->InitializeChunk(chunk);
-}
+vector<TypeId> PhysicalFilter::GetTypes() { return children[0]->GetTypes(); }
 
 void PhysicalFilter::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOperatorState *>(state_);
@@ -26,7 +23,7 @@ void PhysicalFilter::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 		}
 
 		Vector result(TypeId::BOOLEAN, state->child_chunk.count);
-		ExpressionExecutor executor(state->child_chunk);
+		ExpressionExecutor executor(state);
 		executor.Execute(expressions[0].get(), result);
 		// AND together the remaining filters!
 		for (size_t i = 1; i < expressions.size(); i++) {
@@ -50,13 +47,13 @@ void PhysicalFilter::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 			// create a reference to the vector of the child chunk
 			chunk.data[i]->Reference(*state->child_chunk.data[i].get());
 			// and assign the selection vector
-			chunk.data[i]->count = match_count;
-			chunk.data[i]->sel_vector = chunk.sel_vector.get();
+			chunk.data[i]->SetSelVector(chunk.sel_vector.get(), match_count);
 		}
 		chunk.count = match_count;
 	} while (chunk.count == 0);
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalFilter::GetOperatorState() {
-	return make_unique<PhysicalOperatorState>(children[0].get());
+unique_ptr<PhysicalOperatorState>
+PhysicalFilter::GetOperatorState(ExpressionExecutor *parent) {
+	return make_unique<PhysicalOperatorState>(children[0].get(), parent);
 }

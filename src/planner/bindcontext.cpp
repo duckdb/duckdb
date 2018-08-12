@@ -11,7 +11,7 @@ string BindContext::GetMatchingTable(const string &column_name) {
 	if (expression_alias_map.find(column_name) != expression_alias_map.end())
 		return string();
 	for (auto &kv : regular_table_alias_map) {
-		auto table = kv.second;
+		auto table = kv.second.table;
 		if (table->ColumnExists(column_name)) {
 			if (!result.empty()) {
 				throw BinderException(
@@ -20,7 +20,7 @@ string BindContext::GetMatchingTable(const string &column_name) {
 				    column_name.c_str(), result.c_str(), column_name.c_str(),
 				    table->name.c_str(), column_name.c_str());
 			}
-			result = table->name;
+			result = kv.first;
 		}
 	}
 	for (auto &kv : subquery_alias_map) {
@@ -29,6 +29,9 @@ string BindContext::GetMatchingTable(const string &column_name) {
 	}
 
 	if (result.empty()) {
+		if (parent) {
+			return parent->GetMatchingTable(column_name);
+		}
 		throw BinderException(
 		    "Referenced column \"%s\" not found in FROM clause!",
 		    column_name.c_str());
@@ -37,7 +40,7 @@ string BindContext::GetMatchingTable(const string &column_name) {
 }
 
 shared_ptr<ColumnCatalogEntry>
-BindContext::BindColumn(ColumnRefExpression &expr) {
+BindContext::BindColumn(ColumnRefExpression &expr, size_t depth) {
 	if (expr.table_name.empty()) {
 		auto entry = expression_alias_map.find(expr.column_name);
 		if (entry == expression_alias_map.end()) {
@@ -51,22 +54,27 @@ BindContext::BindColumn(ColumnRefExpression &expr) {
 	}
 
 	if (!HasAlias(expr.table_name)) {
+		if (parent) {
+			return parent->BindColumn(expr, ++depth);
+		}
 		throw BinderException("Referenced table \"%s\" not found!",
 		                      expr.table_name.c_str());
 	}
 	shared_ptr<ColumnCatalogEntry> entry;
 
-	if (regular_table_alias_map.find(expr.table_name) !=
-	    regular_table_alias_map.end()) {
+	size_t table_index = 0;
+	auto table_entry = regular_table_alias_map.find(expr.table_name);
+	if (table_entry != regular_table_alias_map.end()) {
 		// base table
-		auto table = regular_table_alias_map[expr.table_name];
-		if (!table->ColumnExists(expr.column_name)) {
+		auto &table = table_entry->second;
+		if (!table.table->ColumnExists(expr.column_name)) {
 			throw BinderException(
 			    "Table \"%s\" does not have a column named \"%s\"",
 			    expr.table_name.c_str(), expr.column_name.c_str());
 		}
-		entry = table->GetColumn(expr.column_name);
-		expr.stats = table->GetStatistics(entry->oid);
+		table_index = table.index;
+		entry = table.table->GetColumn(expr.column_name);
+		expr.stats = table.table->GetStatistics(entry->oid);
 	} else {
 		// subquery
 		throw BinderException("Subquery binding not implemented yet!");
@@ -86,6 +94,8 @@ BindContext::BindColumn(ColumnRefExpression &expr) {
 		expr.index = column_list.size();
 		column_list.push_back(expr.column_name);
 	}
+	expr.table_index = table_index;
+	expr.depth = depth;
 	expr.return_type = entry->type;
 	return entry;
 }
@@ -96,7 +106,7 @@ void BindContext::GenerateAllColumnExpressions(
 		throw BinderException("SELECT * expression without FROM clause!");
 	}
 	for (auto &kv : regular_table_alias_map) {
-		auto table = kv.second;
+		auto table = kv.second.table;
 		string table_name = table->name;
 		for (auto &column : table->columns) {
 			string column_name = column->name;
@@ -116,7 +126,8 @@ void BindContext::AddBaseTable(const string &alias,
 		throw BinderException("Duplicate alias \"%s\" in query!",
 		                      alias.c_str());
 	}
-	regular_table_alias_map[alias] = table_entry;
+	regular_table_alias_map.insert(
+	    make_pair(alias, TableBinding(table_entry, bound_tables++)));
 }
 
 void BindContext::AddSubquery(const string &alias, SelectStatement *subquery) {
@@ -124,13 +135,12 @@ void BindContext::AddSubquery(const string &alias, SelectStatement *subquery) {
 		throw BinderException("Duplicate alias \"%s\" in query!",
 		                      alias.c_str());
 	}
-	subquery_alias_map[alias] = subquery;
+	subquery_alias_map.insert(make_pair(alias, subquery));
 }
 
 void BindContext::AddExpression(const string &alias,
                                 AbstractExpression *expression, size_t i) {
-	expression_alias_map[alias] =
-	    pair<size_t, AbstractExpression *>(i, expression);
+	expression_alias_map[alias] = make_pair(i, expression);
 }
 
 bool BindContext::HasAlias(const string &alias) {

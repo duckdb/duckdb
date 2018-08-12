@@ -32,8 +32,16 @@ namespace duckdb {
 */
 class ExpressionExecutor : public SQLNodeVisitor {
   public:
-	ExpressionExecutor(DataChunk &chunk, PhysicalOperatorState *state = nullptr)
-	    : chunk(chunk), state(state) {}
+	ExpressionExecutor(PhysicalOperatorState *state,
+	                   bool scalar_executor = true)
+	    : chunk(state ? &state->child_chunk : nullptr), state(state),
+	      parent(state ? state->parent : nullptr),
+	      scalar_executor(scalar_executor) {}
+
+	ExpressionExecutor(DataChunk &child_chunk,
+	                   ExpressionExecutor *parent = nullptr)
+	    : chunk(&child_chunk), state(nullptr), parent(parent),
+	      scalar_executor(true) {}
 
 	void Reset();
 
@@ -61,9 +69,17 @@ class ExpressionExecutor : public SQLNodeVisitor {
 	void Visit(SubqueryExpression &expr);
 
   private:
+	//! Whether or not the ExpressionExecutor is a scalar executor (i.e. output
+	//! size = input size), this is true for e.g. expressions in the SELECT
+	//! clause without aggregations
+	bool scalar_executor;
 	//! The data chunk of the current physical operator, used to resolve e.g.
 	//! column references
-	DataChunk &chunk;
+	DataChunk *chunk;
+
+	//! The parent executor of this one, if any. Used for subquery evaluation.
+	ExpressionExecutor *parent;
+
 	//! The operator state of the current physical operator, used to resolve
 	//! e.g. group-by HT lookups
 	PhysicalOperatorState *state;

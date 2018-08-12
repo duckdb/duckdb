@@ -8,10 +8,6 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalHashAggregate::InitializeChunk(DataChunk &chunk) {
-	PhysicalAggregate::InitializeChunk(chunk);
-}
-
 PhysicalHashAggregate::PhysicalHashAggregate(
     vector<unique_ptr<AbstractExpression>> expressions)
     : PhysicalAggregate(move(expressions),
@@ -38,8 +34,6 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 		return;
 	}
 
-	ExpressionExecutor executor(state->child_chunk, state);
-
 	do {
 		if (children.size() > 0) {
 			// resolve the child chunk if there is one
@@ -49,6 +43,7 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 			}
 		}
 
+		ExpressionExecutor executor(state);
 		if (groups.size() > 0) {
 			// aggregation with groups
 			DataChunk &group_chunk = state->group_chunk;
@@ -101,6 +96,7 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 	}
 	// we finished the child chunk
 	// actually compute the final projection list now
+	ExpressionExecutor executor(state, false);
 	for (size_t i = 0; i < select_list.size(); i++) {
 		auto &expr = select_list[i];
 		executor.Execute(expr.get(), *chunk.data[i]);
@@ -113,9 +109,10 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 	}
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
+unique_ptr<PhysicalOperatorState>
+PhysicalHashAggregate::GetOperatorState(ExpressionExecutor *parent) {
 	auto state = make_unique<PhysicalHashAggregateOperatorState>(
-	    this, children.size() == 0 ? nullptr : children[0].get());
+	    this, children.size() == 0 ? nullptr : children[0].get(), parent);
 	if (groups.size() > 0) {
 		size_t group_width = 0, payload_width = 0;
 		vector<TypeId> payload_types, aggregate_types;

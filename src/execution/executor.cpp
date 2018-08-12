@@ -8,7 +8,7 @@ unique_ptr<DuckDBResult> Executor::Execute(unique_ptr<PhysicalOperator> plan) {
 	unique_ptr<DuckDBResult> result = make_unique<DuckDBResult>();
 
 	// the chunk and state are used to iterate over the input plan
-	auto state = plan->GetOperatorState();
+	auto state = plan->GetOperatorState(nullptr);
 	// // result->data holds the concatenation of the output columns
 	result->success = false;
 	// initialize the result

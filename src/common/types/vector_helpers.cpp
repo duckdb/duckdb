@@ -126,24 +126,36 @@ static void _case_loop(Vector &check, Vector &res_true, Vector &res_false,
 		throw Exception("Selection vector in case check not supported");
 	}
 
+	size_t check_mul = 1, res_true_mul = 1, res_false_mul = 1;
+	if (check.count == 1)
+		check_mul = 0;
+	if (res_true.count == 1)
+		res_true_mul = 0;
+	if (res_false.count == 1)
+		res_false_mul = 0;
+
 	if (res_true.sel_vector && res_false.sel_vector) {
-		for (size_t i = 0; i < check.count; i++) {
-			res[i] = cond[i] ? true_data[res_true.sel_vector[i]]
-			                 : false_data[res_false.sel_vector[i]];
+		for (size_t i = 0; i < result.count; i++) {
+			res[i] = cond[check_mul * i]
+			             ? true_data[res_true.sel_vector[res_true_mul * i]]
+			             : false_data[res_false.sel_vector[res_false_mul * i]];
 		}
 	} else if (res_false.sel_vector) {
-		for (size_t i = 0; i < check.count; i++) {
-			res[i] =
-			    cond[i] ? true_data[i] : false_data[res_false.sel_vector[i]];
+		for (size_t i = 0; i < result.count; i++) {
+			res[i] = cond[check_mul * i]
+			             ? true_data[res_true_mul * i]
+			             : false_data[res_false.sel_vector[res_false_mul * i]];
 		}
 	} else if (res_true.sel_vector) {
-		for (size_t i = 0; i < check.count; i++) {
-			res[i] =
-			    cond[i] ? true_data[res_true.sel_vector[i]] : false_data[i];
+		for (size_t i = 0; i < result.count; i++) {
+			res[i] = cond[check_mul * i]
+			             ? true_data[res_true.sel_vector[res_true_mul * i]]
+			             : false_data[res_false_mul * i];
 		}
 	} else {
-		for (size_t i = 0; i < check.count; i++) {
-			res[i] = cond[i] ? true_data[i] : false_data[i];
+		for (size_t i = 0; i < result.count; i++) {
+			res[i] = cond[check_mul * i] ? true_data[res_true_mul * i]
+			                             : false_data[res_false_mul * i];
 		}
 	}
 }
@@ -250,8 +262,10 @@ void VectorOperations::Copy(Vector &source, Vector &target, size_t offset) {
 //===--------------------------------------------------------------------===//
 void VectorOperations::Case(Vector &check, Vector &res_true, Vector &res_false,
                             Vector &result) {
-	if (check.count != res_true.count || check.count != res_false.count) {
-		throw Exception("Vector lengths don't match");
+	if ((check.count != 1 && check.count != result.count) ||
+	    (res_true.count != 1 && res_true.count != result.count) ||
+	    (res_false.count != 1 && res_false.count != result.count)) {
+		throw Exception("Vector lengths don't match in case!");
 	}
 	if (check.type != TypeId::BOOLEAN) {
 		throw Exception("Case check has to be a boolean vector!");

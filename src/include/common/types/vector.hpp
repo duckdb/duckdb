@@ -40,7 +40,9 @@ namespace duckdb {
 
   (2) Ordering data
 */
-class Vector {
+class Vector : public Printable {
+	friend class DataChunk;
+
   public:
 	//! The amount of elements in the vector.
 	oid_t count;
@@ -74,9 +76,12 @@ class Vector {
 	void Destroy();
 
 	//! Returns the [index] element of the Vector as a Value.
-	Value GetValue(size_t index);
+	Value GetValue(size_t index) const;
 	//! Sets the [index] element of the Vector to the specified Value
 	void SetValue(size_t index, Value val);
+
+	//! Sets the selection vector of the vector
+	void SetSelVector(sel_t *vector, size_t count);
 
 	//! Resizes the vector to hold maximum_size, and potentially typecasts the
 	//! elements as well. After the resize, the vector will become an owning
@@ -99,15 +104,20 @@ class Vector {
 	//! This method guarantees that the vector becomes an owning vector
 	//! If the vector is already an owning vector, it does nothing
 	//! Otherwise, it copies the data to the vector
-	void ForceOwnership();
+	void ForceOwnership(size_t minimum_capacity = 0);
 	//! Causes this vector to reference the data held by the other vector.
 	void Reference(Vector &other);
+
+	//! Converts this Vector to a printable string representation
+	std::string ToString() const;
 
 	Vector(const Vector &) = delete;
 
   private:
 	//! If the vector owns data, this is the unique_ptr holds the actual data.
 	std::unique_ptr<char[]> owned_data;
+	//! If the vector owns its selection vector, this is the unique_ptr holds it
+	std::unique_ptr<sel_t[]> owned_sel_vector;
 	//! If the vector owns a set of variable length entries, this unique_ptr
 	//! holds the variable length entries.
 	std::unique_ptr<std::unique_ptr<char[]>[]> owned_strings;

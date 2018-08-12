@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "common/internal_types.hpp"
+#include "common/printable.hpp"
 #include "common/types/vector.hpp"
 
 namespace duckdb {
@@ -35,7 +36,7 @@ namespace duckdb {
     In addition to holding the data of the vectors, the DataChunk also owns the
    selection vector that underlying vectors can point to.
 */
-class DataChunk {
+class DataChunk : public Printable {
   public:
 	//! The amount of elements in the chunk. Every vector holds this amount of
 	//! elements.
@@ -78,6 +79,12 @@ class DataChunk {
 	//! function was called. This sets the count to 0, and resets each member
 	//! Vector to point back to the data owned by this DataChunk.
 	void Reset();
+
+	//! Returns a list of types of the vectors of this data chunk
+	std::vector<TypeId> GetTypes();
+
+	//! Converts this DataChunk to a printable string representation
+	std::string ToString() const;
 
 	DataChunk(const DataChunk &) = delete;
 

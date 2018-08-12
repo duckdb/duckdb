@@ -50,6 +50,12 @@ TEST_CASE("Test order by statements", "[orderby]") {
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {21, 22, 22}));
 	duckdb_destroy_result(result);
 
+	REQUIRE(duckdb_query(connection, "SELECT a, b FROM test ORDER BY 2, 1;",
+	                     &result) == DuckDBSuccess);
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {12, 11, 13}));
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {21, 22, 22}));
+	duckdb_destroy_result(result);
+
 	REQUIRE(duckdb_query(connection,
 	                     "SELECT a, b FROM test ORDER BY b DESC, a;",
 	                     &result) == DuckDBSuccess);
@@ -81,6 +87,13 @@ TEST_CASE("Test order by statements", "[orderby]") {
 
 	REQUIRE(duckdb_query(connection,
 	                     "SELECT a, b FROM test WHERE a < 13 ORDER BY b;",
+	                     &result) == DuckDBSuccess);
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {12, 11}));
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {21, 22}));
+	duckdb_destroy_result(result);
+
+	REQUIRE(duckdb_query(connection,
+	                     "SELECT a, b FROM test WHERE a < 13 ORDER BY 2;",
 	                     &result) == DuckDBSuccess);
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {12, 11}));
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {21, 22}));
@@ -122,6 +135,14 @@ TEST_CASE("Test order by statements", "[orderby]") {
 	REQUIRE(duckdb_query(
 	            connection,
 	            "SELECT b % 2 AS f, SUM(a) FROM test GROUP BY f ORDER BY f;",
+	            &result) == DuckDBSuccess);
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {0, 1}));
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {24, 12}));
+	duckdb_destroy_result(result);
+
+	REQUIRE(duckdb_query(
+	            connection,
+	            "SELECT b % 2 AS f, SUM(a) FROM test GROUP BY f ORDER BY 1;",
 	            &result) == DuckDBSuccess);
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {0, 1}));
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {24, 12}));

@@ -18,6 +18,17 @@ void ExpressionExecutor::Execute(AbstractExpression *expr, Vector &result) {
 	vector.Destroy();
 	expr->Accept(this);
 
+	if (chunk && scalar_executor) {
+		if (vector.count == 1 && chunk->count > 1) {
+			result.Resize(chunk->count);
+			// have to duplicate the constant value to match the rows in the
+			// other columns
+			VectorOperations::Set(result, vector.GetValue(0));
+		} else if (vector.count != chunk->count) {
+			throw Exception(
+			    "Computed vector length does not match expected length!");
+		}
+	}
 	if (result.type != vector.type) {
 		// cast to the expected type
 		VectorOperations::Cast(vector, result);
@@ -45,7 +56,7 @@ Value ExpressionExecutor::Execute(AggregateExpression &expr) {
 	if (expr.type == ExpressionType::AGGREGATE_COUNT_STAR) {
 		// COUNT(*)
 		// Without FROM clause return "1", else return "count"
-		size_t count = chunk.column_count == 0 ? 1 : chunk.count;
+		size_t count = chunk->column_count == 0 ? 1 : chunk->count;
 		return Value::NumericValue(expr.return_type, count);
 	} else if (expr.children.size() > 0) {
 		expr.children[0]->Accept(this);
@@ -55,9 +66,6 @@ Value ExpressionExecutor::Execute(AggregateExpression &expr) {
 		}
 		case ExpressionType::AGGREGATE_COUNT: {
 			return VectorOperations::Count(vector, expr.stats.CanHaveNull());
-		}
-		case ExpressionType::AGGREGATE_AVG: {
-			return VectorOperations::Sum(vector, expr.stats.CanHaveNull());
 		}
 		case ExpressionType::AGGREGATE_MIN: {
 			return VectorOperations::Min(vector, expr.stats.CanHaveNull());
@@ -82,8 +90,7 @@ void ExpressionExecutor::Merge(AggregateExpression &expr, Value &result) {
 	switch (expr.type) {
 	case ExpressionType::AGGREGATE_COUNT_STAR:
 	case ExpressionType::AGGREGATE_SUM:
-	case ExpressionType::AGGREGATE_COUNT:
-	case ExpressionType::AGGREGATE_AVG: {
+	case ExpressionType::AGGREGATE_COUNT: {
 		Value::Add(result, v, result);
 		break;
 	}
@@ -114,6 +121,27 @@ void ExpressionExecutor::Visit(AggregateExpression &expr) {
 	}
 }
 
+void ExpressionExecutor::Visit(CaseExpression &expr) {
+	if (expr.children.size() != 3) {
+		throw Exception("Cast needs three child nodes");
+	}
+	Vector check, res_true, res_false;
+	expr.children[0]->Accept(this);
+	vector.Move(check);
+	expr.children[1]->Accept(this);
+	vector.Move(res_true);
+	expr.children[2]->Accept(this);
+	vector.Move(res_false);
+
+	size_t count = chunk
+	                   ? chunk->count
+	                   : max(max(check.count, res_true.count), res_false.count);
+	vector.Resize(count);
+	vector.count = count;
+	VectorOperations::Case(check, res_true, res_false, vector);
+	expr.stats.Verify(vector);
+}
+
 void ExpressionExecutor::Visit(CastExpression &expr) {
 	// resolve the child
 	Vector l;
@@ -129,10 +157,23 @@ void ExpressionExecutor::Visit(CastExpression &expr) {
 }
 
 void ExpressionExecutor::Visit(ColumnRefExpression &expr) {
+	size_t cur_depth = expr.depth;
+	ExpressionExecutor *cur_exec = this;
+	while (cur_depth > 0) {
+		cur_exec = cur_exec->parent;
+		if (!cur_exec) {
+			throw Exception("Unable to find matching parent executor");
+		}
+		cur_depth--;
+	}
+
 	if (expr.index == (size_t)-1) {
 		throw Exception("Column Reference not bound!");
 	}
-	vector.Reference(*chunk.data[expr.index].get());
+	if (expr.index >= cur_exec->chunk->column_count) {
+		throw Exception("Column reference index out of range!");
+	}
+	vector.Reference(*cur_exec->chunk->data[expr.index].get());
 	expr.stats.Verify(vector);
 }
 
@@ -264,37 +305,35 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 	expr.stats.Verify(vector);
 }
 
-void ExpressionExecutor::Visit(CaseExpression &expr) {
-	if (expr.children.size() != 3) {
-		throw Exception("Cast needs three child nodes");
-	}
-	Vector check, res_true, res_false;
-	expr.children[0]->Accept(this);
-	vector.Move(check);
-	// TODO: check statistics on check to avoid computing everything
-	expr.children[1]->Accept(this);
-	vector.Move(res_true);
-	expr.children[2]->Accept(this);
-	vector.Move(res_false);
-	vector.Resize(check.count);
-	VectorOperations::Case(check, res_true, res_false, vector);
-	expr.stats.Verify(vector);
-}
-
 void ExpressionExecutor::Visit(SubqueryExpression &expr) {
 	auto &plan = expr.plan;
-	auto state = plan->GetOperatorState();
+	DataChunk *old_chunk = chunk;
+	DataChunk row_chunk;
+	chunk = &row_chunk;
+	auto types = old_chunk->GetTypes();
+	row_chunk.Initialize(types, 1, false);
+	row_chunk.count = 1;
 
-	DataChunk s_chunk;
-	plan->InitializeChunk(s_chunk);
-	plan->GetChunk(s_chunk, state.get());
-	vector.Resize(1, expr.return_type);
-	vector.count = 1;
-	if (s_chunk.count == 0) {
-		vector.SetValue(0, Value());
-	} else {
-		assert(s_chunk.column_count > 0);
-		vector.SetValue(0, s_chunk.data[0]->GetValue(0));
+	vector.Resize(old_chunk->count, expr.return_type);
+	vector.count = old_chunk->count;
+	for (size_t c = 0; c < old_chunk->column_count; c++) {
+		row_chunk.data[c]->count = 1;
 	}
+	for (size_t r = 0; r < old_chunk->count; r++) {
+		for (size_t c = 0; c < old_chunk->column_count; c++) {
+			row_chunk.data[c]->SetValue(0, old_chunk->data[c]->GetValue(r));
+		}
+		auto state = plan->GetOperatorState(this);
+		DataChunk s_chunk;
+		plan->InitializeChunk(s_chunk);
+		plan->GetChunk(s_chunk, state.get());
+		if (s_chunk.count == 0) {
+			vector.SetValue(r, Value());
+		} else {
+			assert(s_chunk.column_count > 0);
+			vector.SetValue(r, s_chunk.data[0]->GetValue(0));
+		}
+	}
+	chunk = old_chunk;
 	expr.stats.Verify(vector);
 }
