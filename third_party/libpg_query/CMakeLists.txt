@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 2.8.7)
 
-# ---[ Peloton project
 project(pg_query CXX C)
 
 # this code imitates the Makefile in /third_party/libpg_query/

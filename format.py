@@ -23,3 +23,4 @@ def format_directory(directory):
 
 format_directory('src')
 format_directory('test')
+format_directory('third_party/dbgen')

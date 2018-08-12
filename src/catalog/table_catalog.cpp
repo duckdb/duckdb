@@ -45,3 +45,11 @@ TableCatalogEntry::GetColumn(const std::string &name) {
 Statistics TableCatalogEntry::GetStatistics(oid_t oid) {
 	return storage->columns[oid]->stats;
 }
+
+vector<TypeId> TableCatalogEntry::GetTypes() {
+	vector<TypeId> types;
+	for (auto &it : columns) {
+		types.push_back(it->type);
+	}
+	return types;
+}

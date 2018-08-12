@@ -71,7 +71,7 @@ enum class ExceptionType {
 
 class Exception : public std::runtime_error {
   public:
-	Exception(std::string message)
+	Exception(std::string message, ...)
 	    : std::runtime_error(message), type(ExceptionType::INVALID) {
 		exception_message_ = message;
 	}

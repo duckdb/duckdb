@@ -35,6 +35,10 @@ Vector::Vector(TypeId type, char *dataptr, size_t maximum_size)
 	if (dataptr && type == TypeId::INVALID) {
 		throw Exception("Cannot create a vector of type INVALID!");
 	}
+	if (type == TypeId::VARCHAR) {
+		auto string_list = new unique_ptr<char[]>[maximum_size];
+		owned_strings = unique_ptr<unique_ptr<char[]>[]>(string_list);
+	}
 }
 
 Vector::Vector(Value value)

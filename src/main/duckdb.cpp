@@ -21,10 +21,10 @@ DuckDB::DuckDB(const char *path) {
 
 DuckDBConnection::DuckDBConnection(DuckDB &database) : database(database) {}
 
-unique_ptr<DuckDBResult> DuckDBConnection::Query(const char *query) {
+unique_ptr<DuckDBResult> DuckDBConnection::Query(std::string query) {
 	// parse the query and transform it into a set of statements
 	Parser parser;
-	if (!parser.ParseQuery(query)) {
+	if (!parser.ParseQuery(query.c_str())) {
 		fprintf(stderr, "Failure to parse: %s\n",
 		        parser.GetErrorMessage().c_str());
 		return make_unique<DuckDBResult>(parser.GetErrorMessage());

@@ -291,6 +291,9 @@ void Value::_templated_binary_operation(const Value &left, const Value &right,
 		result.value_.bigint =
 		    OP::Operation(left.value_.bigint, right.value_.bigint);
 		break;
+	case TypeId::DATE:
+		result.value_.date = OP::Operation(left.value_.date, right.value_.date);
+		break;
 	case TypeId::DECIMAL:
 		result.value_.decimal =
 		    OP::Operation(left.value_.decimal, right.value_.decimal);

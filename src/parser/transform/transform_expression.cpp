@@ -402,17 +402,23 @@ unique_ptr<AbstractExpression> TransformFuncCall(FuncCall *root) {
 
 					// first create the SUM
 					auto sum = make_unique<AggregateExpression>(
-					    ExpressionType::AGGREGATE_SUM, root->agg_distinct, TransformExpression(
-					    (Node *)root->args->head->data.ptr_value));
+					    ExpressionType::AGGREGATE_SUM, root->agg_distinct,
+					    TransformExpression(
+					        (Node *)root->args->head->data.ptr_value));
 					// now create the count
 					auto count = make_unique<AggregateExpression>(
-					    ExpressionType::AGGREGATE_COUNT, root->agg_distinct, TransformExpression(
-					    (Node *)root->args->head->data.ptr_value));
+					    ExpressionType::AGGREGATE_COUNT, root->agg_distinct,
+					    TransformExpression(
+					        (Node *)root->args->head->data.ptr_value));
 					// cast both to decimal
-					auto sum_cast = make_unique<CastExpression>(TypeId::DECIMAL, move(sum));
-					auto count_cast = make_unique<CastExpression>(TypeId::DECIMAL, move(count));
+					auto sum_cast =
+					    make_unique<CastExpression>(TypeId::DECIMAL, move(sum));
+					auto count_cast = make_unique<CastExpression>(
+					    TypeId::DECIMAL, move(count));
 					// create the divide operator
-					return make_unique<OperatorExpression>(ExpressionType::OPERATOR_DIVIDE, TypeId::DECIMAL, move(sum_cast), move(count_cast));
+					return make_unique<OperatorExpression>(
+					    ExpressionType::OPERATOR_DIVIDE, TypeId::DECIMAL,
+					    move(sum_cast), move(count_cast));
 				} else {
 					auto child = TransformExpression(
 					    (Node *)root->args->head->data.ptr_value);

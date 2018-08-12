@@ -46,6 +46,8 @@ class TableCatalogEntry : public AbstractCatalogEntry {
 	//! Returns a reference to the column of the specified name. Throws an
 	//! exception if the column does not exist.
 	std::shared_ptr<ColumnCatalogEntry> GetColumn(const std::string &name);
+	//! Returns a list of types of the table
+	std::vector<TypeId> GetTypes();
 
 	virtual std::string ToString() const { return std::string(); }
 };

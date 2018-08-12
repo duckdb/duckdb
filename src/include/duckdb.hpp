@@ -35,7 +35,7 @@ class DuckDBConnection {
   public:
 	DuckDBConnection(DuckDB &database);
 
-	std::unique_ptr<DuckDBResult> Query(const char *query);
+	std::unique_ptr<DuckDBResult> Query(std::string query);
 
   private:
 	DuckDB &database;

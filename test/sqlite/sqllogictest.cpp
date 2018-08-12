@@ -356,11 +356,11 @@ TEST_CASE("Test SQLite Logic Test", "[sqlitelogic]") {
 
 	registerDuckdb();
 
-	return;
-
 	if (zDbEngine == NULL) {
 		zDbEngine = apEngine[0]->zName;
 	}
+
+	return;
 
 	/* Scan the command-line and process arguments
 	 */
