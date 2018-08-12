@@ -122,6 +122,12 @@ void PhysicalPlanGenerator::Visit(LogicalGet &op) {
 	for (auto &bound_column : context->bound_columns[op.alias]) {
 		column_ids.push_back(op.table->name_map[bound_column]);
 	}
+	if (column_ids.size() == 0) {
+		// no column ids selected
+		// the query is like SELECT COUNT(*) FROM table, or SELECT 42 FROM table
+		// return just the first column
+		column_ids.push_back(0);
+	}
 
 	auto table_entry = context->regular_table_alias_map.find(op.alias);
 	assert(table_entry != context->regular_table_alias_map.end());
