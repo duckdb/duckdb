@@ -304,6 +304,10 @@ enum class PhysicalOperatorType {
 	EXPORT_EXTERNAL_FILE = 204
 };
 
+enum class ExternalFileFormat {
+    CSV,
+};
+
 ExpressionType StringToExpressionType(const std::string &str);
 
 std::string TypeIdToString(TypeId type);
@@ -352,4 +356,5 @@ std::string LogicalOperatorToString(LogicalOperatorType type);
 std::string PhysicalOperatorToString(PhysicalOperatorType type);
 std::string ExpressionTypeToString(ExpressionType type);
 
+ExternalFileFormat StringToExternalFileFormat(const std::string &str);
 } // namespace duckdb

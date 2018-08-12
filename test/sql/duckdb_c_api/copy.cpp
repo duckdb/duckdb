@@ -1,7 +1,3 @@
-//
-// Created by Pedro Holanda on 10/08/2018.
-//
-
 
 #include "catch.hpp"
 
@@ -21,39 +17,24 @@ TEST_CASE("Test Copy statement", "[copystatement]") {
     REQUIRE(duckdb_open(NULL, &database) == DuckDBSuccess);
     REQUIRE(duckdb_connect(database, &connection) == DuckDBSuccess);
 
-    // Generate CSV file
-    ofstream csvfile("test.csv");
-    csvfile << "1,2.5,test" << endl ;
-
+    // Generate CSV file With ; as delimiter and complex strings
+    ofstream from_csv_file("test.csv");
+    for (int i = 0; i < 5000; i ++)
+        from_csv_file << rand()%100 << "," << rand()%100 << ",test" << endl;
+    from_csv_file.close();
     // Loading CSV into a Table
     REQUIRE(duckdb_query(connection,
-                         "CREATE TABLE test (a INTEGER, b DOUBLE,c VARCHAR(10));",
+                         "CREATE TABLE test (a INTEGER, b INTEGER,c VARCHAR(10));",
                          NULL) == DuckDBSuccess);
-    REQUIRE(duckdb_query(connection, "COPY test FROM 'test.csv'",
-                         NULL) == DuckDBSuccess);
-    REQUIRE(duckdb_query(connection,
-                         "SELECT * FROM test;",
+    REQUIRE(duckdb_query(connection, "COPY test FROM 'test.csv';",
                          &result) == DuckDBSuccess);
-
-    REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {1}));
-    REQUIRE(CHECK_DECIMAL_COLUMN(result, 1, {2.5}));
-    REQUIRE(CHECK_STRING_COLUMN(result, 2, {"test"}));
-    csvfile.close();
+    REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {5000}));
     duckdb_destroy_result(result);
 
-//    // Generate CSV file with different delimiter.
-//    ofstream csvfile2("test.csv");
-//    csvfile2 << "2;2.5;test" << endl ;
-//
-//    // Loading CSV into a Table defining delimiter.
-//
-//    REQUIRE(duckdb_query(connection, "COPY test FROM 'test.csv' DELIMITER ';'",
-//                         NULL) == DuckDBSuccess);
-//    REQUIRE(duckdb_query(connection,
-//                         "SELECT * FROM test where a = 2;",
-//                         &result) == DuckDBSuccess);
-
-//    Generate CSV from Table
+//  Creating CSV from table
+    REQUIRE(duckdb_query(connection, "COPY test to 'test2.csv';",
+                         &result) == DuckDBSuccess);
+    REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {5000}));
 
 
     REQUIRE(duckdb_disconnect(connection) == DuckDBSuccess);

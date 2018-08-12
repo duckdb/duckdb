@@ -30,6 +30,15 @@ namespace duckdb {
 
         std::string file_path;
 
-        char delimiter;
+        // File Format
+        ExternalFileFormat format = ExternalFileFormat::CSV;
+
+        // Copy: From CSV (True) To CSV (False)
+        bool is_from;
+
+
+        char delimiter = ',';
+        char quote = '"';
+        char escape = '"';
     };
 }  // namespace duckdb

@@ -1,7 +1,6 @@
 #include "execution/operator/physical_copy.hpp"
 #include "storage/data_table.hpp"
 #include "common/string_util.hpp"
-#include <fstream>
 
 using namespace duckdb;
 using namespace std;
@@ -24,30 +23,68 @@ void PhysicalCopy::GetChunk(DataChunk &result_chunk,
         types.push_back(column->type);
     }
     insert_chunk.Initialize(types);
-    ifstream file (file_path);
-    string value;
+
     int count_line = 0;
-    while (getline ( file, value ))
-    {
-        std::vector<string> csv_line = StringUtil::Split(value,',');
-        for(size_t i = 0; i < csv_line.size(); ++i){
-            insert_chunk.data[i]->count++;
-            insert_chunk.data[i]->SetValue(count_line, csv_line[i]);
+    int stored_chunks = 0;
+
+    if(is_from){
+        string value;
+        std::ifstream from_csv;
+        from_csv.open(file_path);
+        while (getline ( from_csv, value ))
+        {
+            if (count_line == insert_chunk.maximum_size){
+                insert_chunk.count = insert_chunk.data[0]->count;
+                table->storage->AddData(insert_chunk);
+                count_line = 0;
+                stored_chunks++;
+                insert_chunk.Reset();
+            }
+            std::vector<string> csv_line = StringUtil::Split(value,delimiter);
+            for(size_t i = 0; i < csv_line.size(); ++i){
+                insert_chunk.data[i]->count++;
+                insert_chunk.data[i]->SetValue(count_line, csv_line[i]);
+            }
+            count_line++;
         }
-        count_line++;
+        insert_chunk.count = insert_chunk.data[0]->count;
+        table->storage->AddData(insert_chunk);
+        from_csv.close();
     }
+    else {
+        std::ofstream to_csv;
+        to_csv.open(file_path);
+        size_t current_offset = 0;
+        while(current_offset < (table->storage->size+insert_chunk.maximum_size-1)/insert_chunk.maximum_size){
+            for (size_t chunk_id = 0; chunk_id < table->storage->columns.size(); ++chunk_id) {
+                auto  column = table->storage->columns[chunk_id].get();
+                auto &v = column->data[current_offset];
+                insert_chunk.data[chunk_id]->data = v->data;
+                insert_chunk.data[chunk_id]->owns_data = false;
+                insert_chunk.data[chunk_id]->count = v->count;
+            }
+            insert_chunk.count = insert_chunk.data[0]->count;
+            for (size_t chunk_tuple_id = 0; chunk_tuple_id < insert_chunk.count; chunk_tuple_id ++){
+                for (size_t column_id = 0; column_id< insert_chunk.column_count; column_id ++){
+                    if (column_id == 0)
+                        to_csv << insert_chunk.data[column_id]->GetValue(chunk_tuple_id).ToString();
+                    else
+                        to_csv << delimiter << insert_chunk.data[column_id]->GetValue(chunk_tuple_id).ToString();
+                }
+                to_csv << endl;
+                count_line++;
+            }
+            current_offset++;
+            insert_chunk.Reset();
+        }
+        to_csv.close();
 
-    insert_chunk.count = insert_chunk.data[0]->count;
-
-    result_chunk.data[0]->count = 1;
-    result_chunk.data[0]->SetValue(
-            0, Value::NumericValue(TypeId::INTEGER, insert_chunk.data[0]->count));
-
-    table->storage->AddData(insert_chunk);
-
-    result_chunk.count = 1;
-    state_->finished = true;
-
+    }
+        result_chunk.data[0]->count = 1;
+        result_chunk.data[0]->SetValue(
+                0, Value::NumericValue(TypeId::INTEGER, stored_chunks * result_chunk.data[0]->maximum_size + count_line));
+        result_chunk.count = 1;
+        state_->finished = true;
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalCopy::GetOperatorState() {

@@ -171,7 +171,7 @@ void PhysicalPlanGenerator::Visit(SubqueryExpression &expr) {
 void PhysicalPlanGenerator::Visit(LogicalCopy &op) {
 	LogicalOperatorVisitor::Visit(op);
 
-	auto copy = make_unique<PhysicalCopy>(op.table,move(op.file_path));
+	auto copy = make_unique<PhysicalCopy>(op.table,move(op.file_path),move(op.is_from),move(op.delimiter),move(op.quote),move(op.escape));
 	if (plan) {
 		throw Exception("Copy should be root node");
 	}

@@ -202,6 +202,6 @@ void LogicalPlanGenerator::Visit(InsertStatement &statement) {
 
 void LogicalPlanGenerator::Visit(CopyStatement &statement) {
 	auto table = catalog.GetTable(statement.schema, statement.table);
-	auto copy = make_unique<LogicalCopy>(table, move(statement.file_path));
+	auto copy = make_unique<LogicalCopy>(table, move(statement.file_path),move(statement.is_from),move(statement.delimiter),move(statement.quote),move(statement.escape));
 	root = move(copy);
 }

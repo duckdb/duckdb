@@ -33,13 +33,15 @@ int main() {
 		return 1;
 	}
 
-	EXEC("SELECT 42;");
-	EXEC("SELECT 42 + 1;");
-	EXEC("SELECT 2 * (42 + 1), 33;");
-    EXEC("CREATE TABLE tbl (a integer);");
-	EXEC("INSERT INTO tbl VALUES (6)");
+//	EXEC("SELECT 42;");
+//	EXEC("SELECT 42 + 1;");
+//	EXEC("SELECT 2 * (42 + 1), 33;");
+    EXEC("CREATE TABLE tbl (a integer, b integer);");
+//	EXEC("INSERT INTO tbl VALUES (1,3)");
+//	EXEC("INSERT INTO tbl VALUES (2,3)");
+    EXEC("COPY tbl from '/Users/holanda/Desktop/test.csv';");
 
-	EXEC("COPY tbl FROM '/Users/holanda/Desktop/test.csv';");
+	EXEC("COPY tbl to '/Users/holanda/Desktop/test2.csv';");
 	EXEC("SELECT * FROM tbl;");
 
 //	EXEC("SELECT CAST (100 AS TINYINT) + CAST(100 AS TINYINT);");
