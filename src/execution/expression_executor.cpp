@@ -67,9 +67,6 @@ Value ExpressionExecutor::Execute(AggregateExpression &expr) {
 		case ExpressionType::AGGREGATE_COUNT: {
 			return VectorOperations::Count(vector, expr.stats.CanHaveNull());
 		}
-		case ExpressionType::AGGREGATE_AVG: {
-			return VectorOperations::Sum(vector, expr.stats.CanHaveNull());
-		}
 		case ExpressionType::AGGREGATE_MIN: {
 			return VectorOperations::Min(vector, expr.stats.CanHaveNull());
 		}
@@ -93,8 +90,7 @@ void ExpressionExecutor::Merge(AggregateExpression &expr, Value &result) {
 	switch (expr.type) {
 	case ExpressionType::AGGREGATE_COUNT_STAR:
 	case ExpressionType::AGGREGATE_SUM:
-	case ExpressionType::AGGREGATE_COUNT:
-	case ExpressionType::AGGREGATE_AVG: {
+	case ExpressionType::AGGREGATE_COUNT: {
 		Value::Add(result, v, result);
 		break;
 	}
