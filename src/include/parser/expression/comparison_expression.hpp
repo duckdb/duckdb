@@ -19,7 +19,7 @@ class ComparisonExpression : public AbstractExpression {
   public:
 	ComparisonExpression(ExpressionType type,
 	                     std::unique_ptr<AbstractExpression> left,
-	                     std::unique_ptr<AbstractExpression> right)
+	                     std::unique_ptr<AbstractExpression> right = nullptr)
 	    : AbstractExpression(type, TypeId::BOOLEAN, std::move(left),
 	                         std::move(right)) {}
 

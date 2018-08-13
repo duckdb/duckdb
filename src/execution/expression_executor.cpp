@@ -319,11 +319,7 @@ void ExpressionExecutor::Visit(SubqueryExpression &expr) {
 	row_chunk.Initialize(types, 1, false);
 	row_chunk.count = 1;
 
-	if (!expr.exists) {
-		vector.Resize(old_chunk->count, expr.return_type);
-	} else {
-		vector.Resize(old_chunk->count, TypeId::BOOLEAN);
-	}
+	vector.Resize(old_chunk->count, expr.return_type);
 	vector.count = old_chunk->count;
 	for (size_t c = 0; c < old_chunk->column_count; c++) {
 		row_chunk.data[c]->count = 1;

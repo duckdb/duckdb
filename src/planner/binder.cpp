@@ -227,7 +227,7 @@ void Binder::Visit(SubqueryExpression &expr) {
 	if (expr.subquery->select_list[0]->return_type == TypeId::INVALID) {
 		throw BinderException("Subquery has no type");
 	}
-	expr.return_type = expr.subquery->select_list[0]->return_type;
+	expr.return_type = expr.exists ? TypeId::BOOLEAN : expr.subquery->select_list[0]->return_type;
 	expr.context = move(context);
 	context = move(old_context);
 }
