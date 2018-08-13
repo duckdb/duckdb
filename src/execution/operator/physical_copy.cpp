@@ -36,6 +36,11 @@ void PhysicalCopy::GetChunk(DataChunk &result_chunk,
 				insert_chunk.Reset();
 			}
 			std::vector<string> csv_line = StringUtil::Split(value, delimiter);
+			if (csv_line.size() != insert_chunk.column_count) {
+				throw Exception(
+				    "COPY TO column mismatch! Expected %zu columns, got %zu.",
+				    insert_chunk.column_count, csv_line.size());
+			}
 			for (size_t i = 0; i < csv_line.size(); ++i) {
 				insert_chunk.data[i]->count++;
 				insert_chunk.data[i]->SetValue(count_line, csv_line[i]);
@@ -86,9 +91,7 @@ void PhysicalCopy::GetChunk(DataChunk &result_chunk,
 	result_chunk.data[0]->count = 1;
 	result_chunk.data[0]->SetValue(
 	    0,
-	    Value::NumericValue(TypeId::INTEGER,
-	                        stored_chunks * result_chunk.data[0]->maximum_size +
-	                            count_line));
+	    Value::INTEGER(stored_chunks * result_chunk.data[0]->maximum_size + count_line));
 	result_chunk.count = 1;
 	state_->finished = true;
 }

@@ -5,6 +5,8 @@
 
 #include "storage/data_table.hpp"
 
+#include "tpch_constants.hpp"
+
 #define DECLARER /* EXTERN references get defined here */
 
 #include "dss.h"
@@ -39,8 +41,7 @@ struct tpch_append_information {
 
 void append_value(DataChunk &chunk, size_t index, size_t &column,
                   int32_t value) {
-	chunk.data[column++]->SetValue(index,
-	                               Value::NumericValue(TypeId::INTEGER, value));
+	chunk.data[column++]->SetValue(index, Value::INTEGER(value));
 }
 
 void append_string(DataChunk &chunk, size_t index, size_t &column,
@@ -54,7 +55,7 @@ void append_decimal(DataChunk &chunk, size_t index, size_t &column,
 }
 
 void append_date(DataChunk &chunk, size_t index, size_t &column, string value) {
-	chunk.data[column++]->SetValue(index, Value::Date(Date::FromString(value)));
+	chunk.data[column++]->SetValue(index, Value::DATE(Date::FromString(value)));
 }
 
 void append_char(DataChunk &chunk, size_t index, size_t &column, char value) {
@@ -356,21 +357,23 @@ string get_table_name(int num) {
 	}
 }
 
-void dbgen(double flt_scale, Catalog &catalog, string schema, string suffix) {
-	auto region_columns = vector<ColumnCatalogEntry>{
+static vector<ColumnCatalogEntry> RegionColumns() {
+	return vector<ColumnCatalogEntry>{
 	    ColumnCatalogEntry("r_regionkey", TypeId::INTEGER, false),
 	    ColumnCatalogEntry("r_name", TypeId::VARCHAR, false),
 	    ColumnCatalogEntry("r_comment", TypeId::VARCHAR, false)};
-	catalog.CreateTable(schema, "region" + suffix, region_columns);
+}
 
-	auto nation_columns = vector<ColumnCatalogEntry>{
+static vector<ColumnCatalogEntry> NationColumns() {
+	return vector<ColumnCatalogEntry>{
 	    ColumnCatalogEntry("n_nationkey", TypeId::INTEGER, false),
 	    ColumnCatalogEntry("n_name", TypeId::VARCHAR, false),
 	    ColumnCatalogEntry("n_regionkey", TypeId::INTEGER, false),
 	    ColumnCatalogEntry("n_comment", TypeId::VARCHAR, false)};
-	catalog.CreateTable(schema, "nation" + suffix, nation_columns);
+}
 
-	auto supplier_columns = vector<ColumnCatalogEntry>{
+static vector<ColumnCatalogEntry> SupplierColumns() {
+	return vector<ColumnCatalogEntry>{
 	    ColumnCatalogEntry("s_suppkey", TypeId::INTEGER, false),
 	    ColumnCatalogEntry("s_name", TypeId::VARCHAR, false),
 	    ColumnCatalogEntry("s_address", TypeId::VARCHAR, false),
@@ -378,9 +381,10 @@ void dbgen(double flt_scale, Catalog &catalog, string schema, string suffix) {
 	    ColumnCatalogEntry("s_phone", TypeId::VARCHAR, false),
 	    ColumnCatalogEntry("s_acctbal", TypeId::DECIMAL, false),
 	    ColumnCatalogEntry("s_comment", TypeId::VARCHAR, false)};
-	catalog.CreateTable(schema, "supplier" + suffix, supplier_columns);
+}
 
-	auto customer_columns = vector<ColumnCatalogEntry>{
+static vector<ColumnCatalogEntry> CustomerColumns() {
+	return vector<ColumnCatalogEntry>{
 	    ColumnCatalogEntry("c_custkey", TypeId::INTEGER, false),
 	    ColumnCatalogEntry("c_name", TypeId::VARCHAR, false),
 	    ColumnCatalogEntry("c_address", TypeId::VARCHAR, false),
@@ -389,9 +393,10 @@ void dbgen(double flt_scale, Catalog &catalog, string schema, string suffix) {
 	    ColumnCatalogEntry("c_acctbal", TypeId::DECIMAL, false),
 	    ColumnCatalogEntry("c_mktsegment", TypeId::VARCHAR, false),
 	    ColumnCatalogEntry("c_comment", TypeId::VARCHAR, false)};
-	catalog.CreateTable(schema, "customer" + suffix, customer_columns);
+}
 
-	auto part_columns = vector<ColumnCatalogEntry>{
+static vector<ColumnCatalogEntry> PartColumns() {
+	return vector<ColumnCatalogEntry>{
 	    ColumnCatalogEntry("p_partkey", TypeId::INTEGER, false),
 	    ColumnCatalogEntry("p_name", TypeId::VARCHAR, false),
 	    ColumnCatalogEntry("p_mfgr", TypeId::VARCHAR, false),
@@ -401,17 +406,19 @@ void dbgen(double flt_scale, Catalog &catalog, string schema, string suffix) {
 	    ColumnCatalogEntry("p_container", TypeId::VARCHAR, false),
 	    ColumnCatalogEntry("p_retailprice", TypeId::DECIMAL, false),
 	    ColumnCatalogEntry("p_comment", TypeId::VARCHAR, false)};
-	catalog.CreateTable(schema, "part" + suffix, part_columns);
+}
 
-	auto partsupp_columns = vector<ColumnCatalogEntry>{
+static vector<ColumnCatalogEntry> PartSuppColumns() {
+	return vector<ColumnCatalogEntry>{
 	    ColumnCatalogEntry("ps_partkey", TypeId::INTEGER, false),
 	    ColumnCatalogEntry("ps_suppkey", TypeId::INTEGER, false),
 	    ColumnCatalogEntry("ps_availqty", TypeId::INTEGER, false),
 	    ColumnCatalogEntry("ps_supplycost", TypeId::DECIMAL, false),
 	    ColumnCatalogEntry("ps_comment", TypeId::VARCHAR, false)};
-	catalog.CreateTable(schema, "partsupp" + suffix, partsupp_columns);
+}
 
-	auto orders_columns = vector<ColumnCatalogEntry>{
+static vector<ColumnCatalogEntry> OrdersColumns() {
+	return vector<ColumnCatalogEntry>{
 	    ColumnCatalogEntry("o_orderkey", TypeId::INTEGER, false),
 	    ColumnCatalogEntry("o_custkey", TypeId::INTEGER, false),
 	    ColumnCatalogEntry("o_orderstatus", TypeId::VARCHAR, false),
@@ -421,9 +428,10 @@ void dbgen(double flt_scale, Catalog &catalog, string schema, string suffix) {
 	    ColumnCatalogEntry("o_clerk", TypeId::VARCHAR, false),
 	    ColumnCatalogEntry("o_shippriority", TypeId::INTEGER, false),
 	    ColumnCatalogEntry("o_comment", TypeId::VARCHAR, false)};
-	catalog.CreateTable(schema, "orders" + suffix, orders_columns);
+}
 
-	auto lineitem_columns = vector<ColumnCatalogEntry>{
+static vector<ColumnCatalogEntry> LineitemColumns() {
+	return vector<ColumnCatalogEntry>{
 	    ColumnCatalogEntry("l_orderkey", TypeId::INTEGER, false),
 	    ColumnCatalogEntry("l_partkey", TypeId::INTEGER, false),
 	    ColumnCatalogEntry("l_suppkey", TypeId::INTEGER, false),
@@ -440,7 +448,17 @@ void dbgen(double flt_scale, Catalog &catalog, string schema, string suffix) {
 	    ColumnCatalogEntry("l_shipinstruct", TypeId::VARCHAR, false),
 	    ColumnCatalogEntry("l_shipmode", TypeId::VARCHAR, false),
 	    ColumnCatalogEntry("l_comment", TypeId::VARCHAR, false)};
-	catalog.CreateTable(schema, "lineitem" + suffix, lineitem_columns);
+}
+
+void dbgen(double flt_scale, Catalog &catalog, string schema, string suffix) {
+	catalog.CreateTable(schema, "region" + suffix, RegionColumns());
+	catalog.CreateTable(schema, "nation" + suffix, NationColumns());
+	catalog.CreateTable(schema, "supplier" + suffix, SupplierColumns());
+	catalog.CreateTable(schema, "customer" + suffix, CustomerColumns());
+	catalog.CreateTable(schema, "part" + suffix, PartColumns());
+	catalog.CreateTable(schema, "partsupp" + suffix, PartSuppColumns());
+	catalog.CreateTable(schema, "orders" + suffix, OrdersColumns());
+	catalog.CreateTable(schema, "lineitem" + suffix, LineitemColumns());
 
 	if (flt_scale == 0) {
 		// schema only
@@ -541,27 +559,83 @@ void dbgen(double flt_scale, Catalog &catalog, string schema, string suffix) {
 }
 
 string get_query(int query) {
-	switch (query) {
-	case 1:
-		return "select l_returnflag, l_linestatus, sum(l_quantity) as sum_qty, "
-		       "sum(l_extendedprice) as sum_base_price, sum(l_extendedprice * "
-		       "(1 "
-		       "- l_discount)) as sum_disc_price, sum(l_extendedprice * (1 - "
-		       "l_discount) * (1 + l_tax)) as sum_charge, avg(l_quantity) as "
-		       "avg_qty, avg(l_extendedprice) as avg_price, avg(l_discount) as "
-		       "avg_disc, count(*) as count_order"
-		       " from lineitem where l_shipdate <= "
-		       "cast('1998-09-02' as date) group by l_returnflag, l_linestatus "
-		       "order "
-		       "by l_returnflag, l_linestatus;";
-	default:
+	if (query <= 0 || query > TPCH_QUERIES_COUNT) {
 		throw Exception("Out of range TPC-H query number %d", query);
 	}
+	return TPCH_QUERIES[query - 1];
+}
+
+static bool compare_result(const char *csv, DataChunk &result,
+                           std::string &error_message) {
+	auto types = result.GetTypes();
+
+	std::istringstream f(csv);
+	std::string line;
+	size_t row = 0;
+	/// read and parse the header line
+	std::getline(f, line);
+	// check if the column length matches
+	auto split = StringUtil::Split(line, '|');
+	if (split.size() != types.size()) {
+		// column length is different
+		goto incorrect;
+	}
+	// now compare the actual data
+	while (std::getline(f, line)) {
+		if (result.count <= row) {
+			goto incorrect;
+		}
+		split = StringUtil::Split(line, '|');
+		if (split.size() != types.size()) {
+			// column length is different
+			goto incorrect;
+		}
+		// now compare the values
+		for (size_t i = 0; i < split.size(); i++) {
+			// first create a string value
+			Value value(split[i]);
+			// cast to the type of the column
+			try {
+				value = value.CastAs(types[i]);
+			} catch (...) {
+				goto incorrect;
+			}
+			// now perform a comparison
+			if (!Value::Equals(value, result.data[i]->GetValue(row))) {
+				goto incorrect;
+			}
+		}
+		row++;
+	}
+	if (result.count != row) {
+		goto incorrect;
+	}
+	return true;
+incorrect:
+	error_message = "Incorrect answer for query!\nProvided answer:\n" + result.ToString() + "\nExpected answer:\n" + string(csv) + "\n";
+	return false;
 }
 
 bool check_result(double sf, int query, DuckDBResult &result,
-                  bool print_errors) {
-	throw Exception("Out of range TPC-H query number %d", query);
+                  std::string &error_message) {
+	if (query <= 0 || query > TPCH_QUERIES_COUNT) {
+		throw Exception("Out of range TPC-H query number %d", query);
+	}
+	if (!result.GetSuccess()) {
+		error_message = result.GetErrorMessage();
+		return false;
+	}
+	const char *answer;
+	if (sf == 0.1) {
+		answer = TPCH_ANSWERS_SF0_1[query - 1];
+	} else if (sf == 1) {
+		answer = TPCH_ANSWERS_SF1[query - 1];
+	} else {
+		throw Exception("Don't have TPC-H answers for SF %llf!", sf);
+	}
+	DataChunk big_chunk;
+	result.GatherResult(big_chunk);
+	return compare_result(answer, big_chunk, error_message);
 }
 
 } // namespace tpch

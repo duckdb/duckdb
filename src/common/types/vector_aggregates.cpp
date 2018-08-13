@@ -82,7 +82,7 @@ void _generic_unary_fold_loop(Vector &left, Value &result, bool ignore_null) {
 }
 
 template <class RES, class OP>
-Value _fixed_return_unary_fold_loop(Vector &left, RES *result) {
+void _fixed_return_unary_fold_loop(Vector &left, RES *result) {
 	switch (left.type) {
 	case TypeId::TINYINT:
 		_templated_unary_fold<int8_t, RES, OP>(left, result, false);
@@ -111,7 +111,6 @@ Value _fixed_return_unary_fold_loop(Vector &left, RES *result) {
 	default:
 		throw NotImplementedException("Unimplemented type");
 	}
-	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -121,14 +120,14 @@ Value VectorOperations::Sum(Vector &left, bool can_have_null) {
 	if (left.count == 0 || !TypeIsNumeric(left.type)) {
 		return Value();
 	}
-	Value result = Value::NumericValue(left.type, 0);
+	Value result = Value::Numeric(left.type, 0);
 	_generic_unary_fold_loop<operators::Addition>(left, result, can_have_null);
 	// FIXME: null check?
 	return result;
 }
 
 Value VectorOperations::Count(Vector &left, bool can_have_null) {
-	Value result = Value::NumericValue(left.type, 0);
+	Value result = Value::Numeric(left.type, 0);
 	_generic_unary_fold_loop<operators::AddOne>(left, result, can_have_null);
 	// FIXME: null check?
 	return result;
@@ -181,7 +180,7 @@ Value VectorOperations::MaximumStringLength(Vector &left, bool can_have_null) {
 		throw Exception(
 		    "String length can only be computed for char array columns!");
 	}
-	auto result = Value::NumericValue(TypeId::POINTER, 0);
+	auto result = Value::POINTER(0);
 	if (left.count == 0) {
 		return result;
 	}

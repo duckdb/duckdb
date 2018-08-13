@@ -3,41 +3,51 @@
 
 #include "duckdb.hpp"
 
-static bool CHECK_COLUMN(std::unique_ptr<duckdb::DuckDBResult> &result,
-                         size_t column_number, std::vector<int64_t> values) {
+static void CHECK_COLUMN(std::unique_ptr<duckdb::DuckDBResult> &result,
+                         size_t column_number, std::vector<duckdb::Value> values) {
 	if (!result->GetSuccess()) {
 		fprintf(stderr, "Query failed with message: %s\n",
 		        result->GetErrorMessage().c_str());
-		return false;
+		FAIL(result->GetErrorMessage().c_str());
 	}
 	if (values.size() == 0) {
-		return result->data.size() == 0;
+		if (result->data.size() != 0) {
+			FAIL("Data size does not match value size!");
+		} else {
+			return;
+		}
 	}
 	if (result->data.size() == 0) {
-		return false;
+		FAIL("Data size does not match value size!");
 	}
 	if (column_number >= result->data[0]->column_count) {
-		return false;
+		FAIL("Column number out of range of result!");
 	}
 	size_t chunk_index = 0;
 	for (size_t i = 0; i < values.size();) {
 		if (chunk_index > result->data.size()) {
 			// ran out of chunks
-			return false;
+			FAIL("Data size does not match value size!");
 		}
 		// check this vector
 		auto &vector = result->data[chunk_index]->data[column_number];
 		if (i + vector->count > values.size()) {
 			// too many values in this vector
-			return false;
+			FAIL("Too many values in result!");
 		}
 		for (size_t j = 0; j < vector->count; j++) {
-			if (vector->GetValue(j).GetNumericValue() != values[i + j]) {
-				return false;
+			if (!duckdb::Value::Equals(vector->GetValue(j), values[i + j])) {
+				FAIL("Incorrect result! Got " + vector->GetValue(j).ToString() +
+				     " but expected " + values[i + j].ToString());
 			}
 		}
 		chunk_index++;
 		i += vector->count;
 	}
-	return true;
+}
+
+static void RESULT_NO_ERROR(std::unique_ptr<duckdb::DuckDBResult> &result) {
+	if (!result->GetSuccess()) {
+		FAIL(result->GetErrorMessage().c_str());
+	}
 }

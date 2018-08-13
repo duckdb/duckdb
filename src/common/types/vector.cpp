@@ -144,26 +144,22 @@ Value Vector::GetValue(size_t index) const {
 	}
 	size_t entry = sel_vector ? sel_vector[index] : index;
 	switch (type) {
-	case TypeId::BOOLEAN: {
-		int8_t rawval = ((int8_t *)data)[entry];
-		Value bval = Value((bool)rawval);
-		bval.is_null = rawval == NullValue<int8_t>();
-		return bval;
-	}
+	case TypeId::BOOLEAN:
+		return Value::BOOLEAN(((int8_t *)data)[entry]);
 	case TypeId::TINYINT:
-		return Value(((int8_t *)data)[entry]);
+		return Value::TINYINT(((int8_t *)data)[entry]);
 	case TypeId::SMALLINT:
-		return Value(((int16_t *)data)[entry]);
+		return Value::SMALLINT(((int16_t *)data)[entry]);
 	case TypeId::INTEGER:
-		return Value(((int32_t *)data)[entry]);
+		return Value::INTEGER(((int32_t *)data)[entry]);
 	case TypeId::BIGINT:
-		return Value(((int64_t *)data)[entry]);
+		return Value::BIGINT(((int64_t *)data)[entry]);
 	case TypeId::POINTER:
-		return Value(((uint64_t *)data)[entry]);
+		return Value::POINTER(((uint64_t *)data)[entry]);
 	case TypeId::DECIMAL:
 		return Value(((double *)data)[entry]);
 	case TypeId::DATE:
-		return Value::Date(((date_t *)data)[entry]);
+		return Value::DATE(((date_t *)data)[entry]);;
 	case TypeId::VARCHAR: {
 		char *str = ((char **)data)[entry];
 		return !str ? Value(TypeId::VARCHAR) : Value(string(str));
@@ -173,14 +169,20 @@ Value Vector::GetValue(size_t index) const {
 	}
 }
 
-void Vector::Reference(Vector &other) {
+void Vector::Reference(Vector &other, size_t offset, size_t max_count) {
 	if (owns_data) {
 		throw Exception("Vector owns data, cannot create reference!");
 	}
-	count = other.count;
-	data = other.data;
+
+	if (max_count == 0) {
+		// take the whole chunk
+		count = other.count - offset;
+	} else {
+		count = min(other.count - offset, max_count);
+	}
 	owns_data = false;
-	sel_vector = other.sel_vector;
+	data = other.data + offset * GetTypeIdSize(other.type);
+	sel_vector = other.sel_vector + offset;
 	type = other.type;
 }
 
@@ -222,7 +224,6 @@ void Vector::Copy(Vector &other) {
 	}
 	if (!TypeIsConstantSize(type)) {
 		assert(type == TypeId::VARCHAR);
-
 		other.count = count;
 		for (size_t i = 0; i < count; i++) {
 			other.SetValue(i, GetValue(i));
@@ -246,9 +247,17 @@ void Vector::Resize(oid_t maximum_size, TypeId new_type) {
 	char *new_data = new char[maximum_size * GetTypeIdSize(type)];
 	if (data) {
 		if (!TypeIsConstantSize(type)) {
-			throw NotImplementedException("Cannot copy varlength types yet!");
+			assert(type == TypeId::VARCHAR);
+			// we only need to copy the pointers on a resize
+			// since the original ownership should not change
+			const char **input_ptrs = (const char **)data;
+			const char **result_ptrs = (const char **)new_data;
+			for (size_t i = 0; i < count; i++) {
+				result_ptrs[i] = input_ptrs[i];
+			}
+		} else {
+			VectorOperations::Copy(*this, new_data);
 		}
-		VectorOperations::Copy(*this, new_data);
 	}
 	Destroy();
 	this->maximum_size = maximum_size;
@@ -268,8 +277,16 @@ void Vector::Append(Vector &other) {
 	if (other.type != type) {
 		throw NotImplementedException("FIXME cast");
 	}
-	VectorOperations::Copy(other, data + count * GetTypeIdSize(type));
+	size_t old_count = count;
 	count += other.count;
+	if (!TypeIsConstantSize(type)) {
+		assert(type == TypeId::VARCHAR);
+		for (size_t i = 0; i < other.count; i++) {
+			SetValue(old_count + i, other.GetValue(i));
+		}
+	} else {
+		VectorOperations::Copy(other, data + old_count * GetTypeIdSize(type));
+	}
 }
 
 void Vector::SetSelVector(sel_t *vector, size_t new_count) {

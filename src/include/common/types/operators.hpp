@@ -290,7 +290,7 @@ struct CastToDate {
 	}
 };
 
-template <> char *CastFromDate::Operation(duckdb::date_t left);
+template <> const char *CastFromDate::Operation(duckdb::date_t left);
 template <> duckdb::date_t CastToDate::Operation(const char *left);
 
 struct NOP {

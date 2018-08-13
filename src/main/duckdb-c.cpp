@@ -113,27 +113,22 @@ template <class T> T get_value(duckdb_column column, duckdb_oid_t index) {
 static Value _duckdb_c_get_value(duckdb_column column, duckdb_oid_t index) {
 	auto cpp_type = _convert_type_c_to_cpp(column.type);
 	switch (column.type) {
-	case DUCKDB_TYPE_BOOLEAN: {
-		int8_t rawval = get_value<int8_t>(column, index);
-		auto val = Value((bool)rawval);
-		val.is_null = rawval == NullValue<int8_t>();
-		return val;
-	}
+	case DUCKDB_TYPE_BOOLEAN:
+		return Value::BOOLEAN(get_value<int8_t>(column, index));
 	case DUCKDB_TYPE_TINYINT:
-		return Value::NumericValue(cpp_type, get_value<int8_t>(column, index));
+		return Value::TINYINT(get_value<int8_t>(column, index));
 	case DUCKDB_TYPE_SMALLINT:
-		return Value::NumericValue(cpp_type, get_value<int16_t>(column, index));
+		return Value::SMALLINT(get_value<int16_t>(column, index));
 	case DUCKDB_TYPE_INTEGER:
-		return Value::NumericValue(cpp_type, get_value<int32_t>(column, index));
+		return Value::INTEGER(get_value<int32_t>(column, index));
 	case DUCKDB_TYPE_BIGINT:
-		return Value::NumericValue(cpp_type, get_value<int64_t>(column, index));
+		return Value::BIGINT(get_value<int64_t>(column, index));
 	case DUCKDB_TYPE_DECIMAL:
 		return Value(get_value<double>(column, index));
 	case DUCKDB_TYPE_POINTER:
-		return Value::NumericValue(cpp_type,
-		                           get_value<uint64_t>(column, index));
+		return Value::POINTER(get_value<uint64_t>(column, index));
 	case DUCKDB_TYPE_DATE:
-		return Value::NumericValue(cpp_type, get_value<date_t>(column, index));
+		return Value::DATE(get_value<date_t>(column, index));
 	case DUCKDB_TYPE_VARCHAR:
 		return Value(std::string(get_value<char *>(column, index)));
 	default:

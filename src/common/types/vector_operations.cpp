@@ -288,7 +288,7 @@ void VectorOperations::Not(Vector &left, Vector &result) {
 template <VectorOperations::vector_function OP>
 static void _numeric_operator_right(Vector &left, int64_t right, Vector &result,
                                     bool can_have_null) {
-	Vector constant(Value::NumericValue(left.type, right));
+	Vector constant(Value::Numeric(left.type, right));
 	OP(left, constant, result, can_have_null);
 }
 
@@ -328,7 +328,7 @@ void VectorOperations::Modulo(Vector &left, int64_t right, Vector &result,
 template <VectorOperations::vector_function OP>
 static void _numeric_operator_left(int64_t left, Vector &right, Vector &result,
                                    bool can_have_null) {
-	Vector constant(Value::NumericValue(right.type, left));
+	Vector constant(Value::Numeric(right.type, left));
 	OP(constant, right, result, can_have_null);
 }
 

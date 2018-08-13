@@ -317,11 +317,11 @@ unique_ptr<AbstractExpression> TransformColumnRef(ColumnRef *root) {
 unique_ptr<AbstractExpression> TransformValue(value val) {
 	switch (val.type) {
 	case T_Integer:
-		return make_unique<ConstantExpression>((int32_t)val.val.ival);
+		return make_unique<ConstantExpression>(Value::INTEGER(val.val.ival));
 	case T_String:
-		return make_unique<ConstantExpression>(string(val.val.str));
+		return make_unique<ConstantExpression>(Value(string(val.val.str)));
 	case T_Float:
-		return make_unique<ConstantExpression>(stod(string(val.val.str)));
+		return make_unique<ConstantExpression>(Value(stod(string(val.val.str))));
 	case T_Null:
 		return make_unique<ConstantExpression>();
 	default:
@@ -484,9 +484,7 @@ unique_ptr<AbstractExpression> TransformCase(CaseExpr *root) {
 		def_res = move(
 		    TransformExpression(reinterpret_cast<Node *>(root->defresult)));
 	} else {
-		Value null = Value(1);
-		null.is_null = true;
-		def_res = unique_ptr<AbstractExpression>(new ConstantExpression(null));
+		def_res = unique_ptr<AbstractExpression>(new ConstantExpression(Value()));
 	}
 	// def_res will be the else part of the innermost case expression
 

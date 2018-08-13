@@ -212,6 +212,10 @@ void VectorOperations::Cast(Vector &source, Vector &result) {
 //===--------------------------------------------------------------------===//
 void VectorOperations::Copy(Vector &source, void *target, size_t element_count,
                             size_t offset) {
+	if (!TypeIsConstantSize(source.type)) {
+		throw Exception(
+		    "Cannot copy non-constant size data using this method!");
+	}
 	if (source.count == 0)
 		return;
 	if (element_count == 0) {
@@ -241,9 +245,6 @@ void VectorOperations::Copy(Vector &source, void *target, size_t element_count,
 		break;
 	case TypeId::DATE:
 		_copy_loop<date_t>(source, target, element_count, offset);
-		break;
-	case TypeId::VARCHAR:
-		_copy_loop<const char *>(source, target, element_count, offset);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for copy");

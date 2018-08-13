@@ -26,7 +26,7 @@ void Statistics::Verify(Vector &vector) {
 	if (type == TypeId::VARCHAR) {
 		Value actual_max_strlen = VectorOperations::MaximumStringLength(vector);
 		Value stats_max_strlen =
-		    Value::NumericValue(actual_max_strlen.type, maximum_string_length);
+		    Value::Numeric(actual_max_strlen.type, maximum_string_length);
 		assert(Value::LessThanEquals(actual_max_strlen, stats_max_strlen));
 	}
 }
@@ -169,8 +169,10 @@ void Statistics::Modulo(Statistics &left, Statistics &right,
                         Statistics &result) {
 	result.has_stats = left.has_stats && right.has_stats;
 	if (result.has_stats) {
+		result.type = left.type;
+		assert(result.type != TypeId::INVALID);
 		result.can_have_null = left.can_have_null || right.can_have_null;
-		result.min = 0;
+		result.min = Value::Numeric(right.max.type, 0);
 		result.max = right.max;
 		result.maximum_count =
 		    std::max(left.maximum_count, right.maximum_count);
@@ -182,7 +184,7 @@ void Statistics::Sum(Statistics &source, Statistics &result) {
 	if (result.has_stats) {
 		result.can_have_null = true;
 		Value count =
-		    Value::NumericValue(source.min.type, source.maximum_count);
+		    Value::Numeric(source.min.type, source.maximum_count);
 		Value::Multiply(source.min, count, result.min);
 		Value::Multiply(source.max, count, result.max);
 		result.maximum_count = 1;
@@ -193,8 +195,8 @@ void Statistics::Count(Statistics &source, Statistics &result) {
 	result.has_stats = source.has_stats;
 	if (result.has_stats) {
 		result.can_have_null = true;
-		result.min = Value::NumericValue(source.min.type, 0);
-		result.max = Value::NumericValue(source.min.type, source.maximum_count);
+		result.min = Value::Numeric(source.min.type, 0);
+		result.max = Value::Numeric(source.min.type, source.maximum_count);
 		result.maximum_count = 1;
 	}
 }

@@ -16,6 +16,9 @@ def format_directory(directory):
 		else:
 			for ext in extensions:
 				if f.endswith(ext):
+					# don't format TPC-H constants
+					if 'tpch_constants.hpp' in full_path:
+						continue
 					cmd = format_command.replace("${FILE}", full_path)
 					print(cmd)
 					os.system(cmd)

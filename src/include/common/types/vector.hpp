@@ -106,7 +106,7 @@ class Vector : public Printable {
 	//! Otherwise, it copies the data to the vector
 	void ForceOwnership(size_t minimum_capacity = 0);
 	//! Causes this vector to reference the data held by the other vector.
-	void Reference(Vector &other);
+	void Reference(Vector &other, size_t offset = 0, size_t max_count = 0);
 
 	//! Converts this Vector to a printable string representation
 	std::string ToString() const;

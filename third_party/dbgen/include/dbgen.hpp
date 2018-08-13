@@ -25,5 +25,5 @@ void dbgen(double sf, duckdb::Catalog &catalog,
 std::string get_query(int query);
 //! Checks if the result for the specified query number are correct
 bool check_result(double sf, int query, duckdb::DuckDBResult &result,
-                  bool print_errors = true);
+                  std::string &error_message);
 } // namespace tpch
