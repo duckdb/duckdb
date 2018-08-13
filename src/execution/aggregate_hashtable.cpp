@@ -143,7 +143,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 
 	// now every cell has an entry
 	// update the aggregates
-	Vector one(Value::NumericValue(TypeId::BIGINT, 1));
+	Vector one(Value::BIGINT(1));
 	size_t j = 0;
 	for (size_t i = 0; i < aggregate_types.size(); i++) {
 		if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_STAR) {

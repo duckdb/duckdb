@@ -4,7 +4,7 @@
 #include "duckdb.hpp"
 
 static void CHECK_COLUMN(std::unique_ptr<duckdb::DuckDBResult> &result,
-                         size_t column_number, std::vector<int64_t> values) {
+                         size_t column_number, std::vector<duckdb::Value> values) {
 	if (!result->GetSuccess()) {
 		fprintf(stderr, "Query failed with message: %s\n",
 		        result->GetErrorMessage().c_str());
@@ -36,9 +36,9 @@ static void CHECK_COLUMN(std::unique_ptr<duckdb::DuckDBResult> &result,
 			FAIL("Too many values in result!");
 		}
 		for (size_t j = 0; j < vector->count; j++) {
-			if (vector->GetValue(j).GetNumericValue() != values[i + j]) {
+			if (!duckdb::Value::Equals(vector->GetValue(j), values[i + j])) {
 				FAIL("Incorrect result! Got " + vector->GetValue(j).ToString() +
-				     " but expected " + std::to_string(values[i + j]));
+				     " but expected " + values[i + j].ToString());
 			}
 		}
 		chunk_index++;

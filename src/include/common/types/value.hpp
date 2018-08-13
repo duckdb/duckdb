@@ -26,41 +26,19 @@ class Value : public Printable {
 
   public:
 	//! Create an empty NULL value of the specified type
-	Value(TypeId type = TypeId::INTEGER) : type(type), is_null(true) {}
-	//! Create a boolean value
-	Value(bool val) : type(TypeId::BOOLEAN), is_null(IsNullValue<bool>(val)) {
-		value_.boolean = val;
-	}
-	//! Create a TINYINT value
-	Value(int8_t val)
-	    : type(TypeId::TINYINT), is_null(IsNullValue<int8_t>(val)) {
-		value_.tinyint = val;
-	}
-	//! Create a SMALLINT value
-	Value(int16_t val)
-	    : type(TypeId::SMALLINT), is_null(IsNullValue<int16_t>(val)) {
-		value_.smallint = val;
-	}
-	//! Create an INTEGER value
-	Value(int32_t val)
-	    : type(TypeId::INTEGER), is_null(IsNullValue<int32_t>(val)) {
-		value_.integer = val;
-	}
+	Value(TypeId type = TypeId::INTEGER) : type(type), is_null(true) { }
 	//! Create a BIGINT value
-	Value(int64_t val)
-	    : type(TypeId::BIGINT), is_null(IsNullValue<int64_t>(val)) {
-		value_.bigint = val;
-	}
-	//! Create an OID value
-	Value(uint64_t val)
-	    : type(TypeId::POINTER), is_null(IsNullValue<uint64_t>(val)) {
-		value_.pointer = val;
+	Value(int val)
+	    : type(TypeId::INTEGER), is_null(IsNullValue<int>(val)) {
+		value_.integer = val;
 	}
 	//! Create a DOUBLE value
 	Value(double val)
 	    : type(TypeId::DECIMAL), is_null(IsNullValue<double>(val)) {
 		value_.decimal = val;
 	}
+	//! Create a VARCHAR value
+	Value(const char* val) : Value(std::string(val)) { }
 	//! Create a VARCHAR value
 	Value(std::string val)
 	    : type(TypeId::VARCHAR), is_null(false), str_value(val) {}
@@ -70,16 +48,23 @@ class Value : public Printable {
 	static Value MinimumValue(TypeId type);
 	//! Create the highest possible value of a given type (numeric only)
 	static Value MaximumValue(TypeId type);
-	//! Create a Date Value from a specified date
-	static Value Date(date_t date) {
-		Value result;
-		result.type = TypeId::DATE;
-		result.value_.date = date;
-		result.is_null = false;
-		return result;
-	}
 	//! Create a Numeric value of the specified type with the specified value
-	static Value NumericValue(TypeId id, int64_t value);
+	static Value Numeric(TypeId id, int64_t value);
+
+	//! Create a tinyint Value from a specified value
+	static Value BOOLEAN(int8_t value);
+	//! Create a tinyint Value from a specified value
+	static Value TINYINT(int8_t value);
+	//! Create a smallint Value from a specified value
+	static Value SMALLINT(int16_t value);
+	//! Create an integer Value from a specified value
+	static Value INTEGER(int32_t value);
+	//! Create a bigint Value from a specified value
+	static Value BIGINT(int64_t value);
+	//! Create a pointer Value from a specified value
+	static Value POINTER(uint64_t value);
+	//! Create a Date Value from a specified value
+	static Value DATE(date_t value);
 
 	int64_t GetNumericValue();
 

@@ -41,8 +41,7 @@ struct tpch_append_information {
 
 void append_value(DataChunk &chunk, size_t index, size_t &column,
                   int32_t value) {
-	chunk.data[column++]->SetValue(index,
-	                               Value::NumericValue(TypeId::INTEGER, value));
+	chunk.data[column++]->SetValue(index, Value::INTEGER(value));
 }
 
 void append_string(DataChunk &chunk, size_t index, size_t &column,
@@ -56,7 +55,7 @@ void append_decimal(DataChunk &chunk, size_t index, size_t &column,
 }
 
 void append_date(DataChunk &chunk, size_t index, size_t &column, string value) {
-	chunk.data[column++]->SetValue(index, Value::Date(Date::FromString(value)));
+	chunk.data[column++]->SetValue(index, Value::DATE(Date::FromString(value)));
 }
 
 void append_char(DataChunk &chunk, size_t index, size_t &column, char value) {
@@ -626,7 +625,6 @@ bool check_result(double sf, int query, DuckDBResult &result,
 		error_message = result.GetErrorMessage();
 		return false;
 	}
-	return true;
 	const char *answer;
 	if (sf == 0.1) {
 		answer = TPCH_ANSWERS_SF0_1[query - 1];

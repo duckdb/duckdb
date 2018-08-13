@@ -75,27 +75,74 @@ Value Value::MaximumValue(TypeId type) {
 	return result;
 }
 
-Value Value::NumericValue(TypeId id, int64_t value) {
+Value Value::BOOLEAN(int8_t value) {
+	Value result(TypeId::TINYINT);
+	result.value_.boolean = value ? true : false;
+	result.is_null = IsNullValue<int8_t>(value);
+	return result;
+}
+
+Value Value::TINYINT(int8_t value) {
+	Value result(TypeId::TINYINT);
+	result.value_.tinyint = value;
+	result.is_null = IsNullValue<int8_t>(value);
+	return result;
+}
+Value Value::SMALLINT(int16_t value) {
+	Value result(TypeId::SMALLINT);
+	result.value_.smallint = value;
+	result.is_null = IsNullValue<int16_t>(value);
+	return result;
+}
+Value Value::INTEGER(int32_t value) {
+	Value result(TypeId::INTEGER);
+	result.value_.integer = value;
+	result.is_null = IsNullValue<int32_t>(value);
+	return result;
+}
+Value Value::BIGINT(int64_t value) {
+	Value result(TypeId::BIGINT);
+	result.value_.bigint = value;
+	result.is_null = IsNullValue<int64_t>(value);
+	return result;
+}
+Value Value::POINTER(uint64_t value) {
+	Value result(TypeId::POINTER);
+	result.value_.pointer = value;
+	result.is_null = IsNullValue<uint64_t>(value);
+	return result;
+}
+Value Value::DATE(date_t value) {
+	Value result(TypeId::DATE);
+	result.value_.date = value;
+	result.is_null = IsNullValue<date_t>(value);
+	return result;
+}
+
+Value Value::Numeric(TypeId id, int64_t value) {
 	assert(!TypeIsIntegral(id) || value + 1 >= duckdb::MinimumValue(id) &&
 	                                  value <= duckdb::MaximumValue(id));
+	Value val(id);
+	val.is_null = false;
 	switch (id) {
 	case TypeId::TINYINT:
-		return Value((int8_t)value);
+		return Value::TINYINT(value);
 	case TypeId::SMALLINT:
-		return Value((int16_t)value);
+		return Value::SMALLINT(value);
 	case TypeId::INTEGER:
-		return Value((int32_t)value);
+		return Value::INTEGER(value);
 	case TypeId::BIGINT:
-		return Value((int64_t)value);
+		return Value::BIGINT(value);
 	case TypeId::DECIMAL:
-		return Value((double)value);
+		return Value((double) value);
 	case TypeId::DATE:
-		return Value::Date((date_t)value);
+		return Value::DATE(value);
 	case TypeId::POINTER:
-		return Value((uint64_t)value);
+		return Value::POINTER(value);
 	default:
 		throw Exception("TypeId is not numeric!");
 	}
+	return val;
 }
 
 int64_t Value::GetNumericValue() {

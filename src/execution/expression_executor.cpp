@@ -57,7 +57,7 @@ Value ExpressionExecutor::Execute(AggregateExpression &expr) {
 		// COUNT(*)
 		// Without FROM clause return "1", else return "count"
 		size_t count = chunk->column_count == 0 ? 1 : chunk->count;
-		return Value::NumericValue(expr.return_type, count);
+		return Value::Numeric(expr.return_type, count);
 	} else if (expr.children.size() > 0) {
 		expr.children[0]->Accept(this);
 		switch (expr.type) {
@@ -336,7 +336,7 @@ void ExpressionExecutor::Visit(SubqueryExpression &expr) {
 				vector.SetValue(r, s_chunk.data[0]->GetValue(0));
 			}
 		} else {
-			vector.SetValue(r, Value(s_chunk.count != 0));
+			vector.SetValue(r, Value::BOOLEAN(s_chunk.count != 0));
 		}
 	}
 	chunk = old_chunk;

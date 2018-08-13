@@ -46,7 +46,7 @@ void PhysicalInsert::GetChunk(DataChunk &result_chunk,
 	}
 	result_chunk.data[0]->count = 1;
 	result_chunk.data[0]->SetValue(
-	    0, Value::NumericValue(TypeId::INTEGER, insert_chunk.data[0]->count));
+	    0, Value::INTEGER(insert_chunk.data[0]->count));
 
 	table->storage->AddData(insert_chunk);
 
