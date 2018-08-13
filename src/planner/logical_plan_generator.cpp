@@ -117,9 +117,20 @@ void LogicalPlanGenerator::Visit(ComparisonExpression &expr) {
 	cast_children_to_equal_types(expr);
 }
 
+// TODO: this is ugly, generify functionality
 void LogicalPlanGenerator::Visit(ConjunctionExpression &expr) {
 	SQLNodeVisitor::Visit(expr);
-	cast_children_to_equal_types(expr);
+
+	if (expr.children[0]->return_type != TypeId::BOOLEAN) {
+		auto cast = make_unique<CastExpression>(TypeId::BOOLEAN,
+		                                        move(expr.children[0]));
+		expr.children[0] = move(cast);
+	}
+	if (expr.children[1]->return_type != TypeId::BOOLEAN) {
+		auto cast = make_unique<CastExpression>(TypeId::BOOLEAN,
+		                                        move(expr.children[1]));
+		expr.children[1] = move(cast);
+	}
 }
 
 void LogicalPlanGenerator::Visit(OperatorExpression &expr) {

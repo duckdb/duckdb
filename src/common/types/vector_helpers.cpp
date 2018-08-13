@@ -224,6 +224,7 @@ void VectorOperations::Copy(Vector &source, void *target, size_t element_count,
 	assert(offset + element_count <= source.count);
 
 	switch (source.type) {
+	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
 		_copy_loop<int8_t>(source, target, element_count, offset);
 		break;

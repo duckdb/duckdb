@@ -34,6 +34,7 @@ class ConstantCastRule : public OptimizerRule {
 	std::unique_ptr<AbstractExpression>
 	Apply(AbstractExpression &root,
 	      std::vector<AbstractExpression *> &bindings) {
+
 		auto &cast_expr = (CastExpression &)root;
 		auto const_expr =
 		    reinterpret_cast<ConstantExpression *>(root.children[0].get());

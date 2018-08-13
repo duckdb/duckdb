@@ -143,7 +143,6 @@ int duckdb_value_is_null(duckdb_column column, duckdb_oid_t index) {
 
 	switch (column.type) {
 	case DUCKDB_TYPE_BOOLEAN:
-		return IsNullValue<bool>(get_value<bool>(column, index));
 	case DUCKDB_TYPE_TINYINT:
 		return IsNullValue<int8_t>(get_value<int8_t>(column, index));
 	case DUCKDB_TYPE_SMALLINT:

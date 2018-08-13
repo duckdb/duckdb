@@ -39,6 +39,8 @@ struct VectorOperations {
 	// A % B
 	static void Modulo(Vector &left, Vector &right, Vector &result,
 	                   bool can_have_null = true);
+	// ABS(A)
+	static void Abs(Vector &left, Vector &result);
 
 	// A + B
 	static void Add(Vector &left, int64_t right, Vector &result,

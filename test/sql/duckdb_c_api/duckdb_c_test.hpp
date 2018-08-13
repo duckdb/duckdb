@@ -12,6 +12,7 @@ template <class T> T get_numeric(duckdb_column column, duckdb_oid_t index) {
 
 static int64_t get_numeric(duckdb_column column, duckdb_oid_t row) {
 	switch (column.type) {
+	case DUCKDB_TYPE_BOOLEAN:
 	case DUCKDB_TYPE_TINYINT:
 		return get_numeric<int8_t>(column, row);
 	case DUCKDB_TYPE_SMALLINT:
@@ -34,7 +35,7 @@ static bool CHECK_NUMERIC_COLUMN(duckdb_result result, duckdb_oid_t column,
 		return false;
 	}
 	auto &col = result.columns[column];
-	if (col.type < DUCKDB_TYPE_TINYINT || col.type > DUCKDB_TYPE_BIGINT) {
+	if (col.type < DUCKDB_TYPE_BOOLEAN || col.type > DUCKDB_TYPE_BIGINT) {
 		// not numeric type
 		return false;
 	}
@@ -95,7 +96,7 @@ static bool CHECK_NUMERIC(duckdb_result result, duckdb_oid_t row,
 		return false;
 	}
 	auto &col = result.columns[column];
-	if (col.type < DUCKDB_TYPE_TINYINT || col.type > DUCKDB_TYPE_BIGINT) {
+	if (col.type < DUCKDB_TYPE_BOOLEAN || col.type > DUCKDB_TYPE_BIGINT) {
 		// not numeric type
 		return false;
 	}

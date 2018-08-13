@@ -28,8 +28,8 @@ class Value : public Printable {
 	//! Create an empty NULL value of the specified type
 	Value(TypeId type = TypeId::INTEGER) : type(type), is_null(true) { }
 	//! Create a BIGINT value
-	Value(int val)
-	    : type(TypeId::INTEGER), is_null(IsNullValue<int>(val)) {
+	Value(int32_t val)
+	    : type(TypeId::INTEGER), is_null(IsNullValue<int32_t>(val)) {
 		value_.integer = val;
 	}
 	//! Create a DOUBLE value
