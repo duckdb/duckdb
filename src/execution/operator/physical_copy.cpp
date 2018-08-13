@@ -1,11 +1,39 @@
 #include "execution/operator/physical_copy.hpp"
-#include "common/string_util.hpp"
 #include "storage/data_table.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 std::vector<TypeId> PhysicalCopy::GetTypes() { return {TypeId::INTEGER}; }
+
+vector<string> split (const string & str,  char delimiter, char quote){
+	vector<string> res;
+	size_t i = 0;
+	while (i != str.size()){
+        if (i!= str.size() && str[i] == quote ){
+            i++;
+            size_t j = i;
+            while (j != str.size() && str[j] != quote )
+                j++;
+            if (i!=j){
+                res.push_back(str.substr(i,j-i));
+                i=j;
+            }
+        }
+		else if (i!= str.size() && str[i] == delimiter )
+            i++;
+		size_t j = i;
+		while (j != str.size() && str[j] != delimiter )
+			j++;
+		if (i!=j){
+			res.push_back(str.substr(i,j-i));
+			i=j;
+		}
+
+	}
+	return res;
+
+}
 
 void PhysicalCopy::GetChunk(DataChunk &result_chunk,
                             PhysicalOperatorState *state_) {
@@ -35,7 +63,8 @@ void PhysicalCopy::GetChunk(DataChunk &result_chunk,
 				stored_chunks++;
 				insert_chunk.Reset();
 			}
-			std::vector<string> csv_line = StringUtil::Split(value, delimiter);
+			std::vector<string> csv_line = split(value, delimiter,quote);
+
 			if (csv_line.size() != insert_chunk.column_count) {
 				throw Exception(
 				    "COPY TO column mismatch! Expected %zu columns, got %zu.",
@@ -70,18 +99,28 @@ void PhysicalCopy::GetChunk(DataChunk &result_chunk,
 			     chunk_tuple_id++) {
 				for (size_t column_id = 0;
 				     column_id < insert_chunk.column_count; column_id++) {
-					if (column_id == 0)
-						to_csv << insert_chunk.data[column_id]
-						              ->GetValue(chunk_tuple_id)
-						              .ToString();
-					else
-						to_csv << delimiter
-						       << insert_chunk.data[column_id]
-						              ->GetValue(chunk_tuple_id)
-						              .ToString();
-				}
-				to_csv << endl;
-				count_line++;
+					if (column_id == 0){
+                        if (types[column_id] == TypeId::VARCHAR)
+                            to_csv << quote;
+                        to_csv << insert_chunk.data[column_id]
+                                ->GetValue(chunk_tuple_id)
+                                .ToString();
+                        if (types[column_id] == TypeId::VARCHAR)
+                            to_csv << quote;
+                    }
+					else{
+                        to_csv << delimiter;
+                        if (types[column_id] == TypeId::VARCHAR)
+                            to_csv << quote;
+                        to_csv <<  insert_chunk.data[column_id]
+                                       ->GetValue(chunk_tuple_id)
+                                       .ToString();
+                        if (types[column_id] == TypeId::VARCHAR)
+                            to_csv << quote;
+                    }
+                }
+                to_csv << endl;
+                count_line++;
 			}
 			current_offset++;
 			insert_chunk.Reset();

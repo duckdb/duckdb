@@ -15,13 +15,13 @@ TEST_CASE("[SLOW] Test TPC-H SF0.1", "[tpch]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 	// REQUIRE_NOTHROW(tpch::dbgen(sf, db.catalog));
-	// con.Query("COPY lineitem to 'lineitem.csv' DELIMITER '|'");
 	// return;
 
 	// // test the queries
 	tpch::dbgen(sf, db.catalog);
-	//result = con.Query("COPY lineitem FROM 'lineitem.csv' DELIMITER '|'");
-	//RESULT_NO_ERROR(result);
+//	con.Query("COPY lineitem to 'lineitem.csv'");
+//	result = con.Query("COPY lineitem FROM 'lineitem.csv'");
+
 	// // check if all the counts are correct
 	result = con.Query("SELECT COUNT(*) FROM orders");
 	CHECK_COLUMN(result, 0, {150000});
@@ -65,7 +65,7 @@ TEST_CASE("[SLOW] Test TPC-H SF0.1", "[tpch]") {
 	// CHECK_COLUMN(result, 0, {"A", "N", "R"});
 	// CHECK_COLUMN(result, 1, {3774107,7552776,3785339});
 	// CHECK_COLUMN(result, 2, {147788,295704,148293});
-	
+
 
 
 
