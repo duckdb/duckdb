@@ -398,8 +398,17 @@ void VectorOperations::And(Vector &left, Vector &right, Vector &result,
 	}
 
 	if (left.count == right.count) {
-		_templated_binary_loop<bool, bool, operators::And>(left, right, result,
-		                                                   can_have_null);
+		if (can_have_null) {
+			// null handling happens inside operator
+			_templated_binary_loop_handling<
+			    int8_t, int8_t, operators::AndNull,
+			    operators::ExecuteWithoutNullHandling>(left, right, result);
+		} else {
+			_templated_binary_loop_handling<
+			    bool, bool, operators::And,
+			    operators::ExecuteWithoutNullHandling>(left, right, result);
+		}
+
 	} else {
 		throw Exception("Vector lengths don't match");
 	}
@@ -412,8 +421,18 @@ void VectorOperations::Or(Vector &left, Vector &right, Vector &result,
 	}
 
 	if (left.count == right.count) {
-		_templated_binary_loop<bool, bool, operators::Or>(left, right, result,
-		                                                  can_have_null);
+
+		if (can_have_null) {
+			// null handling happens inside operator
+			_templated_binary_loop_handling<
+			    int8_t, int8_t, operators::OrNull,
+			    operators::ExecuteWithoutNullHandling>(left, right, result);
+		} else {
+			_templated_binary_loop_handling<
+			    bool, bool, operators::Or,
+			    operators::ExecuteWithoutNullHandling>(left, right, result);
+		}
+
 	} else {
 		throw Exception("Vector lengths don't match");
 	}

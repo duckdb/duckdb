@@ -147,8 +147,53 @@ struct And {
 		return left && right;
 	}
 };
+
+struct AndNull {
+	static inline int8_t Operation(int8_t left, int8_t right) {
+		if (duckdb::IsNullValue<int8_t>(left) &&
+		    duckdb::IsNullValue<int8_t>(right)) {
+			return duckdb::NullValue<int8_t>();
+		}
+		if (duckdb::IsNullValue<int8_t>(left) && !right) {
+			return 0;
+		}
+		if (duckdb::IsNullValue<int8_t>(left) && right) {
+			return duckdb::NullValue<int8_t>();
+		}
+		if (duckdb::IsNullValue<int8_t>(right) && !left) {
+			return 0;
+		}
+		if (duckdb::IsNullValue<int8_t>(right) && left) {
+			return duckdb::NullValue<int8_t>();
+		}
+		return left && right;
+	}
+};
+
 struct Or {
 	static inline bool Operation(bool left, bool right) {
+		return left || right;
+	}
+};
+
+struct OrNull {
+	static inline int8_t Operation(int8_t left, int8_t right) {
+		if (duckdb::IsNullValue<int8_t>(left) &&
+		    duckdb::IsNullValue<int8_t>(right)) {
+			return duckdb::NullValue<int8_t>();
+		}
+		if (duckdb::IsNullValue<int8_t>(left) && !right) {
+			return duckdb::NullValue<int8_t>();
+		}
+		if (duckdb::IsNullValue<int8_t>(left) && right) {
+			return 1;
+		}
+		if (duckdb::IsNullValue<int8_t>(right) && !left) {
+			return duckdb::NullValue<int8_t>();
+		}
+		if (duckdb::IsNullValue<int8_t>(right) && left) {
+			return 1;
+		}
 		return left || right;
 	}
 };

@@ -146,7 +146,7 @@ Value Vector::GetValue(size_t index) const {
 	switch (type) {
 	case TypeId::BOOLEAN: {
 		int8_t rawval = ((int8_t *)data)[entry];
-		Value bval = Value((bool) rawval);
+		Value bval = Value((bool)rawval);
 		bval.is_null = rawval == NullValue<int8_t>();
 		return bval;
 	}

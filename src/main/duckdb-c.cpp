@@ -115,7 +115,7 @@ static Value _duckdb_c_get_value(duckdb_column column, duckdb_oid_t index) {
 	switch (column.type) {
 	case DUCKDB_TYPE_BOOLEAN: {
 		int8_t rawval = get_value<int8_t>(column, index);
-		auto val = Value((bool) rawval);
+		auto val = Value((bool)rawval);
 		val.is_null = rawval == NullValue<int8_t>();
 		return val;
 	}
