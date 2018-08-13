@@ -75,6 +75,13 @@ TEST_CASE("Test simple projection statements", "[simpleprojection]") {
 
 	duckdb_destroy_result(result);
 
+	// boolean ops in presence of NULL
+	REQUIRE(duckdb_query(connection, "SELECT 0 AND 0, 0 AND 1, 1 AND 0",
+	                     &result) == DuckDBSuccess);
+	REQUIRE(CHECK_NUMERIC(result, 0, 0, 0));
+	REQUIRE(CHECK_NUMERIC(result, 0, 1, 0));
+	REQUIRE(CHECK_NUMERIC(result, 0, 2, 0));
+
 	// case
 	REQUIRE(
 	    duckdb_query(connection,
