@@ -180,10 +180,6 @@ void ExpressionExecutor::Visit(ColumnRefExpression &expr) {
 void ExpressionExecutor::Visit(ComparisonExpression &expr) {
 	Vector l, r;
 	expr.children[0]->Accept(this);
-
-	if (expr.type == ExpressionType::OPERATOR_EXISTS) {
-		return;
-	}
 	vector.Move(l);
 	expr.children[1]->Accept(this);
 	vector.Move(r);
@@ -268,9 +264,9 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 	if (expr.children.size() == 1) {
 		Vector l;
 		expr.children[0]->Accept(this);
-		vector.Move(l);
-
 		switch (expr.type) {
+		case ExpressionType::OPERATOR_EXISTS:
+			return;
 		default:
 			throw NotImplementedException(
 			    "Unsupported operator type with 1 child!");

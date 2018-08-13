@@ -39,6 +39,6 @@ TEST_CASE("[SLOW] Test TPC-H SF0.01", "[tpch]") {
 	// FIXME
 	REQUIRE_NOTHROW(result = con.Query("SELECT * FROM orders"));
 
-	//REQUIRE_NOTHROW(result = con.Query(tpch::get_query(1)));
-	//REQUIRE(tpch::check_result(sf, 1, *result.get()));
+	// REQUIRE_NOTHROW(result = con.Query(tpch::get_query(1)));
+	// REQUIRE(tpch::check_result(sf, 1, *result.get()));
 }
