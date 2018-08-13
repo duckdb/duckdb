@@ -7,9 +7,9 @@
 #include "planner/operator/logical_get.hpp"
 #include "planner/operator/logical_insert.hpp"
 #include "planner/operator/logical_limit.hpp"
+#include "planner/operator/logical_list.hpp"
 #include "planner/operator/logical_order.hpp"
 #include "planner/operator/logical_projection.hpp"
-#include "planner/operator/logical_list.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -60,6 +60,4 @@ void LogicalOperatorVisitor::Visit(LogicalInsert &op) {
 		exp->Accept(this);
 	}
 }
-void LogicalOperatorVisitor::Visit(LogicalCopy &op) {
-	op.AcceptChildren(this);
-}
+void LogicalOperatorVisitor::Visit(LogicalCopy &op) { op.AcceptChildren(this); }

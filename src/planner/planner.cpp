@@ -1,8 +1,8 @@
 
+#include "parser/statement/copy_statement.hpp"
 #include "parser/statement/create_statement.hpp"
 #include "parser/statement/insert_statement.hpp"
 #include "parser/statement/select_statement.hpp"
-#include "parser/statement/copy_statement.hpp"
 
 #include "planner/binder.hpp"
 #include "planner/planner.hpp"

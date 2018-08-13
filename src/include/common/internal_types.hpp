@@ -276,7 +276,7 @@ enum class PhysicalOperatorType {
 	FILTER = 13,
 	PROJECTION = 14,
 	BASE_GROUP_BY = 15,
-    COPY = 16,
+	COPY = 16,
 	// -----------------------------
 	// Joins
 	// -----------------------------
@@ -294,7 +294,7 @@ enum class PhysicalOperatorType {
 };
 
 enum class ExternalFileFormat {
-    CSV,
+	CSV,
 };
 
 ExpressionType StringToExpressionType(const std::string &str);

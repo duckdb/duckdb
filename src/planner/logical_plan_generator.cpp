@@ -2,8 +2,8 @@
 #include "planner/logical_plan_generator.hpp"
 
 #include "parser/expression/expression_list.hpp"
-#include "parser/statement/insert_statement.hpp"
 #include "parser/statement/copy_statement.hpp"
+#include "parser/statement/insert_statement.hpp"
 #include "parser/tableref/tableref_list.hpp"
 
 #include "planner/operator/logical_list.hpp"
@@ -226,6 +226,9 @@ void LogicalPlanGenerator::Visit(InsertStatement &statement) {
 
 void LogicalPlanGenerator::Visit(CopyStatement &statement) {
 	auto table = catalog.GetTable(statement.schema, statement.table);
-	auto copy = make_unique<LogicalCopy>(table, move(statement.file_path),move(statement.is_from),move(statement.delimiter),move(statement.quote),move(statement.escape));
+	auto copy = make_unique<LogicalCopy>(
+	    table, move(statement.file_path), move(statement.is_from),
+	    move(statement.delimiter), move(statement.quote),
+	    move(statement.escape));
 	root = move(copy);
 }

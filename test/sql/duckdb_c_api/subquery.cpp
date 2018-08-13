@@ -106,6 +106,15 @@ TEST_CASE("Test subqueries", "[subqueries]") {
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {22, 21}));
 	duckdb_destroy_result(result);
 
+	// exists / in / any subqueries
+	REQUIRE(duckdb_query(connection,
+	                     "SELECT * FROM test WHERE EXISTS (SELECT a FROM test "
+	                     "ts WHERE ts.a = test.a AND b>21)",
+	                     &result) == DuckDBSuccess);
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {11, 13}));
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {22, 22}));
+	duckdb_destroy_result(result);
+
 	REQUIRE(duckdb_disconnect(connection) == DuckDBSuccess);
 	REQUIRE(duckdb_close(database) == DuckDBSuccess);
 }

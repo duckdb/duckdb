@@ -172,37 +172,40 @@ unique_ptr<InsertStatement> TransformInsert(Node *node) {
 }
 
 unique_ptr<CopyStatement> TransformCopy(Node *node) {
-    static constexpr char kDelimiterTok[] = "delimiter";
-    static constexpr char kFormatTok[] = "format";
-    static constexpr char kQuoteTok[] = "quote";
-    static constexpr char kEscapeTok[] = "escape";
+	static constexpr char kDelimiterTok[] = "delimiter";
+	static constexpr char kFormatTok[] = "format";
+	static constexpr char kQuoteTok[] = "quote";
+	static constexpr char kEscapeTok[] = "escape";
 
-    CopyStmt * stmt = reinterpret_cast<CopyStmt *>(node);
-    assert(stmt);
-    auto result = make_unique<CopyStatement>();
-    auto ref = TransformRangeVar(stmt->relation);
-    auto &table = *reinterpret_cast<BaseTableRef *>(ref.get());
-    result->table = table.table_name;
-    result->schema = table.schema_name;
-    result->file_path = stmt->filename;
+	CopyStmt *stmt = reinterpret_cast<CopyStmt *>(node);
+	assert(stmt);
+	auto result = make_unique<CopyStatement>();
+	auto ref = TransformRangeVar(stmt->relation);
+	auto &table = *reinterpret_cast<BaseTableRef *>(ref.get());
+	result->table = table.table_name;
+	result->schema = table.schema_name;
+	result->file_path = stmt->filename;
 	result->is_from = stmt->is_from;
 
-    // Handle options
-	if (stmt->options){
+	// Handle options
+	if (stmt->options) {
 		ListCell *cell = nullptr;
 		for_each_cell(cell, stmt->options->head) {
 			auto *def_elem = reinterpret_cast<DefElem *>(cell->data.ptr_value);
 
 			// Check delimiter
-			if (strncmp(def_elem->defname, kDelimiterTok, sizeof(kDelimiterTok)) == 0) {
+			if (strncmp(def_elem->defname, kDelimiterTok,
+			            sizeof(kDelimiterTok)) == 0) {
 				auto *delimiter_val = reinterpret_cast<value *>(def_elem->arg);
 				result->delimiter = *delimiter_val->val.str;
 			}
 
 			// Check format
-			if (strncmp(def_elem->defname, kFormatTok, sizeof(kFormatTok)) == 0) {
+			if (strncmp(def_elem->defname, kFormatTok, sizeof(kFormatTok)) ==
+			    0) {
 				auto *format_val = reinterpret_cast<value *>(def_elem->arg);
-				result->format = StringToExternalFileFormat(format_val->val.str);
+				result->format =
+				    StringToExternalFileFormat(format_val->val.str);
 			}
 
 			// Check quote
@@ -212,7 +215,8 @@ unique_ptr<CopyStatement> TransformCopy(Node *node) {
 			}
 
 			// Check escape
-			if (strncmp(def_elem->defname, kEscapeTok, sizeof(kEscapeTok)) == 0) {
+			if (strncmp(def_elem->defname, kEscapeTok, sizeof(kEscapeTok)) ==
+			    0) {
 				auto *escape_val = reinterpret_cast<value *>(def_elem->arg);
 				result->escape = *escape_val->val.str;
 			}
@@ -221,6 +225,5 @@ unique_ptr<CopyStatement> TransformCopy(Node *node) {
 
 	return result;
 }
-
 
 } // namespace duckdb

@@ -180,10 +180,15 @@ void ExpressionExecutor::Visit(ColumnRefExpression &expr) {
 void ExpressionExecutor::Visit(ComparisonExpression &expr) {
 	Vector l, r;
 	expr.children[0]->Accept(this);
+
+	if (expr.type == ExpressionType::OPERATOR_EXISTS) {
+		return;
+	}
 	vector.Move(l);
 	expr.children[1]->Accept(this);
 	vector.Move(r);
 	vector.Resize(std::max(l.count, r.count), TypeId::BOOLEAN);
+
 	switch (expr.type) {
 	case ExpressionType::COMPARE_EQUAL:
 		VectorOperations::Equals(l, r, vector, expr.stats.CanHaveNull());
@@ -314,7 +319,11 @@ void ExpressionExecutor::Visit(SubqueryExpression &expr) {
 	row_chunk.Initialize(types, 1, false);
 	row_chunk.count = 1;
 
-	vector.Resize(old_chunk->count, expr.return_type);
+	if (!expr.exists) {
+		vector.Resize(old_chunk->count, expr.return_type);
+	} else {
+		vector.Resize(old_chunk->count, TypeId::BOOLEAN);
+	}
 	vector.count = old_chunk->count;
 	for (size_t c = 0; c < old_chunk->column_count; c++) {
 		row_chunk.data[c]->count = 1;
@@ -327,11 +336,15 @@ void ExpressionExecutor::Visit(SubqueryExpression &expr) {
 		DataChunk s_chunk;
 		plan->InitializeChunk(s_chunk);
 		plan->GetChunk(s_chunk, state.get());
-		if (s_chunk.count == 0) {
-			vector.SetValue(r, Value());
+		if (!expr.exists) {
+			if (s_chunk.count == 0) {
+				vector.SetValue(r, Value());
+			} else {
+				assert(s_chunk.column_count > 0);
+				vector.SetValue(r, s_chunk.data[0]->GetValue(0));
+			}
 		} else {
-			assert(s_chunk.column_count > 0);
-			vector.SetValue(r, s_chunk.data[0]->GetValue(0));
+			vector.SetValue(r, Value(s_chunk.count != 0));
 		}
 	}
 	chunk = old_chunk;

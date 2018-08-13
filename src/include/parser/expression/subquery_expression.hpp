@@ -31,5 +31,6 @@ class SubqueryExpression : public AbstractExpression {
 	std::unique_ptr<LogicalOperator> op;
 	std::unique_ptr<BindContext> context;
 	std::unique_ptr<PhysicalOperator> plan;
+	bool exists = false;
 };
 } // namespace duckdb

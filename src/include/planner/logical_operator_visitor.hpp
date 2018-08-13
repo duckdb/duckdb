@@ -42,7 +42,6 @@ class LogicalOperatorVisitor : public SQLNodeVisitor {
 	virtual void Visit(LogicalOrder &op);
 	virtual void Visit(LogicalProjection &op);
 	virtual void Visit(LogicalInsert &op);
-    virtual void Visit(LogicalCopy &op);
-
+	virtual void Visit(LogicalCopy &op);
 };
 } // namespace duckdb
