@@ -484,4 +484,13 @@ TypeId MinimalType(int64_t value) {
 	return TypeId::BIGINT;
 }
 
+ExternalFileFormat StringToExternalFileFormat(const std::string &str) {
+	auto upper = StringUtil::Upper(str);
+	if (upper == "CSV") {
+		return ExternalFileFormat::CSV;
+	}
+	throw ConversionException(StringUtil::Format(
+			"No ExternalFileFormat for input '%s'", upper.c_str()));
+}
+
 }; // namespace duckdb

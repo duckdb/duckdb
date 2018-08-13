@@ -2,6 +2,7 @@
 #include "parser/statement/create_statement.hpp"
 #include "parser/statement/insert_statement.hpp"
 #include "parser/statement/select_statement.hpp"
+#include "parser/statement/copy_statement.hpp"
 
 #include "planner/binder.hpp"
 #include "planner/planner.hpp"
@@ -31,6 +32,7 @@ bool Planner::CreatePlan(Catalog &catalog, unique_ptr<SQLStatement> statement) {
 	try {
 		switch (statement->GetType()) {
 		case StatementType::INSERT:
+		case StatementType::COPY:
 		case StatementType::SELECT:
 			CreatePlan(catalog, *statement.get());
 			this->success = true;
