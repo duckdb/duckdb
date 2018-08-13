@@ -113,8 +113,12 @@ template <class T> T get_value(duckdb_column column, duckdb_oid_t index) {
 static Value _duckdb_c_get_value(duckdb_column column, duckdb_oid_t index) {
 	auto cpp_type = _convert_type_c_to_cpp(column.type);
 	switch (column.type) {
-	case DUCKDB_TYPE_BOOLEAN:
-		return Value(get_value<bool>(column, index));
+	case DUCKDB_TYPE_BOOLEAN: {
+		int8_t rawval = get_value<int8_t>(column, index);
+		auto val = Value((bool) rawval);
+		val.is_null = rawval == NullValue<int8_t>();
+		return val;
+	}
 	case DUCKDB_TYPE_TINYINT:
 		return Value::NumericValue(cpp_type, get_value<int8_t>(column, index));
 	case DUCKDB_TYPE_SMALLINT:

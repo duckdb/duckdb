@@ -144,14 +144,18 @@ Value Vector::GetValue(size_t index) const {
 	}
 	size_t entry = sel_vector ? sel_vector[index] : index;
 	switch (type) {
-	case TypeId::BOOLEAN:
-		return Value(((bool *)data)[entry]);
+	case TypeId::BOOLEAN: {
+		int8_t rawval = ((int8_t *)data)[entry];
+		Value bval = Value((bool) rawval);
+		bval.is_null = rawval == NullValue<int8_t>();
+		return bval;
+	}
 	case TypeId::TINYINT:
 		return Value(((int8_t *)data)[entry]);
 	case TypeId::SMALLINT:
 		return Value(((int16_t *)data)[entry]);
 	case TypeId::INTEGER:
-		return Value(((int *)data)[entry]);
+		return Value(((int32_t *)data)[entry]);
 	case TypeId::BIGINT:
 		return Value(((int64_t *)data)[entry]);
 	case TypeId::POINTER:

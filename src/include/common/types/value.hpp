@@ -28,7 +28,7 @@ class Value : public Printable {
 	//! Create an empty NULL value of the specified type
 	Value(TypeId type = TypeId::INTEGER) : type(type), is_null(true) {}
 	//! Create a boolean value
-	Value(bool val) : type(TypeId::BOOLEAN), is_null(IsNullValue<int8_t>(val)) {
+	Value(bool val) : type(TypeId::BOOLEAN), is_null(false) {
 		value_.boolean = val;
 	}
 	//! Create a TINYINT value
