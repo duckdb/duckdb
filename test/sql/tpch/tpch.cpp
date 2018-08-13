@@ -36,8 +36,14 @@ TEST_CASE("[SLOW] Test TPC-H SF0.01", "[tpch]") {
 	REQUIRE_NOTHROW(result = con.Query("SELECT COUNT(*) FROM region"));
 	REQUIRE(CHECK_COLUMN(result, 0, {5}));
 
-	// FIXME
 	REQUIRE_NOTHROW(result = con.Query("SELECT * FROM orders"));
+	REQUIRE_NOTHROW(result = con.Query("SELECT * FROM lineitem"));
+	REQUIRE_NOTHROW(result = con.Query("SELECT * FROM part"));
+	REQUIRE_NOTHROW(result = con.Query("SELECT * FROM partsupp"));
+	REQUIRE_NOTHROW(result = con.Query("SELECT * FROM supplier"));
+	REQUIRE_NOTHROW(result = con.Query("SELECT * FROM customer"));
+	REQUIRE_NOTHROW(result = con.Query("SELECT * FROM nation"));
+	REQUIRE_NOTHROW(result = con.Query("SELECT * FROM region"));
 
 	//REQUIRE_NOTHROW(result = con.Query(tpch::get_query(1)));
 	//REQUIRE(tpch::check_result(sf, 1, *result.get()));
