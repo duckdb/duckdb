@@ -109,6 +109,10 @@ ExpressionType StringToExpressionType(const string &str) {
 		return ExpressionType::FUNCTION_REF;
 	} else if (upper_str == "CAST") {
 		return ExpressionType::CAST;
+	} else if (upper_str == "BETWEEN") {
+		return ExpressionType::COMPARE_BETWEEN;
+	} else if (upper_str == "NOT BETWEEN") {
+		return ExpressionType::COMPARE_NOT_BETWEEN;
 	}
 	return ExpressionType::INVALID;
 }

@@ -25,6 +25,24 @@ class LogicalFilter : public LogicalOperator {
 	//! filter
 	std::vector<std::unique_ptr<AbstractExpression>> expressions;
 
+	virtual std::string ParamsToString() const override {
+		std::string result = "";
+		// TODO: generify this somehow?
+		if (expressions.size() > 0) {
+			result += "[";
+			for (size_t i = 0; i < expressions.size(); i++) {
+				auto &child = expressions[i];
+				result += child->ToString();
+				if (i < expressions.size() - 1) {
+					result += ", ";
+				}
+			}
+			result += "]";
+		}
+
+		return result;
+	}
+
   private:
 	void SplitPredicates(std::unique_ptr<AbstractExpression> expression);
 };

@@ -95,6 +95,10 @@ struct Abs {
 	template <class T> static inline T Operation(T left) { return abs(left); }
 };
 
+struct Not {
+	static inline bool Operation(bool left) { return !left; }
+};
+
 template <> double Modulo::Operation(double left, double right);
 
 struct XOR {

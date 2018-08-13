@@ -272,13 +272,22 @@ void ExpressionExecutor::Visit(GroupRefExpression &expr) {
 
 void ExpressionExecutor::Visit(OperatorExpression &expr) {
 	if (expr.children.size() == 1) {
-		Vector l;
 		expr.children[0]->Accept(this);
 		switch (expr.type) {
 		case ExpressionType::OPERATOR_EXISTS:
 			// the subquery in the only child will already create the correct
 			// result
 			return;
+		case ExpressionType::OPERATOR_NOT: {
+			Vector l;
+
+			vector.Move(l);
+			vector.Resize(l.count);
+
+			VectorOperations::Not(l, vector);
+			expr.stats.Verify(vector);
+			return;
+		}
 		default:
 			throw NotImplementedException(
 			    "Unsupported operator type with 1 child!");
