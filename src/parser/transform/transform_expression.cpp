@@ -321,7 +321,8 @@ unique_ptr<AbstractExpression> TransformValue(value val) {
 	case T_String:
 		return make_unique<ConstantExpression>(Value(string(val.val.str)));
 	case T_Float:
-		return make_unique<ConstantExpression>(Value(stod(string(val.val.str))));
+		return make_unique<ConstantExpression>(
+		    Value(stod(string(val.val.str))));
 	case T_Null:
 		return make_unique<ConstantExpression>();
 	default:
@@ -347,7 +348,45 @@ unique_ptr<AbstractExpression> TransformAExpr(A_Expr *root) {
 		target_type = ExpressionType::COMPARE_DISTINCT_FROM;
 	}
 	if (target_type == ExpressionType::INVALID) {
-		return nullptr;
+		throw NotImplementedException("A_Expr transform not implemented %s.",
+		                              name);
+	}
+
+	// rewrite (NOT) X BETWEEN A AND B into (NOT) AND(GREATERTHANOREQUALTO(X,
+	// A), LESSTHANOREQUALTO(X, B))
+	// TODO: do we want to push this expression through? Think not...
+	// TODO: perhaps we want to extend TransformExpression to handle this, but
+	// then this is also a special case
+	if (target_type == ExpressionType::COMPARE_BETWEEN ||
+	    target_type == ExpressionType::COMPARE_NOT_BETWEEN) {
+		auto between_args = reinterpret_cast<List *>(root->rexpr);
+
+		if (between_args->length != 2 || !between_args->head->data.ptr_value ||
+		    !between_args->tail->data.ptr_value) {
+			throw Exception("(NOT) BETWEEN needs two args");
+		}
+
+		auto between_left = TransformExpression(
+		    reinterpret_cast<Node *>(between_args->head->data.ptr_value));
+		auto between_right = TransformExpression(
+		    reinterpret_cast<Node *>(between_args->tail->data.ptr_value));
+
+		auto compare_left = make_unique<ComparisonExpression>(
+		    ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+		    TransformExpression(root->lexpr), move(between_left));
+		auto compare_right = make_unique<ComparisonExpression>(
+		    ExpressionType::COMPARE_LESSTHANOREQUALTO,
+		    TransformExpression(root->lexpr), move(between_right));
+		auto compare_between = make_unique<ConjunctionExpression>(
+		    ExpressionType::CONJUNCTION_AND, move(compare_left),
+		    move(compare_right));
+		if (target_type == ExpressionType::COMPARE_BETWEEN) {
+			return move(compare_between);
+		} else {
+			return make_unique<OperatorExpression>(
+			    ExpressionType::OPERATOR_NOT, TypeId::BOOLEAN,
+			    move(compare_between), nullptr);
+		}
 	}
 
 	auto left_expr = TransformExpression(root->lexpr);
@@ -440,14 +479,14 @@ unique_ptr<AbstractExpression> TransformCase(CaseExpr *root) {
 	// CASE expression WHEN value THEN result [WHEN ...] ELSE result uses this,
 	// but we rewrite to CASE WHEN expression = value THEN result ... to only
 	// have to handle one case downstream.
-	auto arg = TransformExpression(reinterpret_cast<Node *>(root->arg));
 
 	unique_ptr<AbstractExpression> def_res;
 	if (root->defresult) {
 		def_res = move(
 		    TransformExpression(reinterpret_cast<Node *>(root->defresult)));
 	} else {
-		def_res = unique_ptr<AbstractExpression>(new ConstantExpression(Value()));
+		def_res =
+		    unique_ptr<AbstractExpression>(new ConstantExpression(Value()));
 	}
 	// def_res will be the else part of the innermost case expression
 
@@ -463,7 +502,10 @@ unique_ptr<AbstractExpression> TransformCase(CaseExpr *root) {
 
 		auto test_raw = TransformExpression(reinterpret_cast<Node *>(w->expr));
 		unique_ptr<AbstractExpression> test;
-		if (arg.get()) {
+		// TODO: how do we copy those things?
+		auto arg = TransformExpression(reinterpret_cast<Node *>(root->arg));
+
+		if (arg) {
 			test = unique_ptr<AbstractExpression>(new ComparisonExpression(
 			    ExpressionType::COMPARE_EQUAL, move(arg), move(test_raw)));
 		} else {
@@ -550,7 +592,6 @@ unique_ptr<AbstractExpression> TransformExpression(Node *node) {
 		return TransformCase(reinterpret_cast<CaseExpr *>(node));
 	case T_SubLink:
 		return TransformSubquery(reinterpret_cast<SubLink *>(node));
-
 	case T_ParamRef:
 	case T_NullTest:
 	default:

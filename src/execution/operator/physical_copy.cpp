@@ -129,8 +129,8 @@ void PhysicalCopy::GetChunk(DataChunk &result_chunk,
 	}
 	result_chunk.data[0]->count = 1;
 	result_chunk.data[0]->SetValue(
-	    0,
-	    Value::INTEGER(stored_chunks * result_chunk.data[0]->maximum_size + count_line));
+	    0, Value::INTEGER(stored_chunks * result_chunk.data[0]->maximum_size +
+	                      count_line));
 	result_chunk.count = 1;
 	state_->finished = true;
 }

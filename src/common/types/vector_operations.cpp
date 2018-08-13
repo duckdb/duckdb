@@ -107,6 +107,7 @@ void _templated_binary_loop(Vector &left, Vector &right, Vector &result,
 template <class OP, class RES>
 void _fixed_return_unary_loop(Vector &left, Vector &result) {
 	switch (left.type) {
+	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
 		_templated_unary_loop<int8_t, RES, OP>(left, result);
 		break;
@@ -270,6 +271,15 @@ void VectorOperations::Modulo(Vector &left, Vector &right, Vector &result,
 
 void VectorOperations::Abs(Vector &left, Vector &result) {
 	_same_return_unary_int_loop<operators::Abs>(left, result);
+}
+
+void VectorOperations::Not(Vector &left, Vector &result) {
+	if (left.type != TypeId::BOOLEAN) {
+		throw Exception("NOT() needs a boolean input");
+	}
+
+	// FIXME: what about NULLs here?
+	_fixed_return_unary_loop<operators::Not, bool>(left, result);
 }
 
 //===--------------------------------------------------------------------===//

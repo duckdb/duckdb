@@ -26,7 +26,7 @@ class Value : public Printable {
 
   public:
 	//! Create an empty NULL value of the specified type
-	Value(TypeId type = TypeId::INTEGER) : type(type), is_null(true) { }
+	Value(TypeId type = TypeId::INTEGER) : type(type), is_null(true) {}
 	//! Create a BIGINT value
 	Value(int32_t val)
 	    : type(TypeId::INTEGER), is_null(IsNullValue<int32_t>(val)) {
@@ -38,7 +38,7 @@ class Value : public Printable {
 		value_.decimal = val;
 	}
 	//! Create a VARCHAR value
-	Value(const char* val) : Value(std::string(val)) { }
+	Value(const char *val) : Value(std::string(val)) {}
 	//! Create a VARCHAR value
 	Value(std::string val)
 	    : type(TypeId::VARCHAR), is_null(false), str_value(val) {}

@@ -159,7 +159,8 @@ Value Vector::GetValue(size_t index) const {
 	case TypeId::DECIMAL:
 		return Value(((double *)data)[entry]);
 	case TypeId::DATE:
-		return Value::DATE(((date_t *)data)[entry]);;
+		return Value::DATE(((date_t *)data)[entry]);
+		;
 	case TypeId::VARCHAR: {
 		char *str = ((char **)data)[entry];
 		return !str ? Value(TypeId::VARCHAR) : Value(string(str));

@@ -131,6 +131,9 @@ enum class ExpressionType {
 	// IS DISTINCT FROM operator
 	COMPARE_DISTINCT_FROM = 20,
 
+	COMPARE_BETWEEN = 21,
+	COMPARE_NOT_BETWEEN = 22,
+
 	// -----------------------------
 	// Conjunction Operators
 	// -----------------------------
