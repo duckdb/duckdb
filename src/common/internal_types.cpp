@@ -490,7 +490,7 @@ ExternalFileFormat StringToExternalFileFormat(const std::string &str) {
 		return ExternalFileFormat::CSV;
 	}
 	throw ConversionException(StringUtil::Format(
-			"No ExternalFileFormat for input '%s'", upper.c_str()));
+	    "No ExternalFileFormat for input '%s'", upper.c_str()));
 }
 
 }; // namespace duckdb

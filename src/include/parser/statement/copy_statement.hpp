@@ -18,27 +18,26 @@
 
 namespace duckdb {
 
-    class CopyStatement : public SQLStatement {
-      public:
-        CopyStatement() : SQLStatement(StatementType::COPY){};
-        virtual ~CopyStatement() {}
-        virtual std::string ToString() const;
-        virtual void Accept(SQLNodeVisitor *v) { v->Visit(*this); }
+class CopyStatement : public SQLStatement {
+  public:
+	CopyStatement() : SQLStatement(StatementType::COPY){};
+	virtual ~CopyStatement() {}
+	virtual std::string ToString() const;
+	virtual void Accept(SQLNodeVisitor *v) { v->Visit(*this); }
 
-        std::string table;
-        std::string schema;
+	std::string table;
+	std::string schema;
 
-        std::string file_path;
+	std::string file_path;
 
-        // File Format
-        ExternalFileFormat format = ExternalFileFormat::CSV;
+	// File Format
+	ExternalFileFormat format = ExternalFileFormat::CSV;
 
-        // Copy: From CSV (True) To CSV (False)
-        bool is_from;
+	// Copy: From CSV (True) To CSV (False)
+	bool is_from;
 
-
-        char delimiter = ',';
-        char quote = '"';
-        char escape = '"';
-    };
-}  // namespace duckdb
+	char delimiter = ',';
+	char quote = '"';
+	char escape = '"';
+};
+} // namespace duckdb

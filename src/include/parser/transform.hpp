@@ -12,10 +12,10 @@
 
 #pragma once
 
+#include "parser/statement/copy_statement.hpp"
 #include "parser/statement/create_statement.hpp"
 #include "parser/statement/insert_statement.hpp"
 #include "parser/statement/select_statement.hpp"
-#include "parser/statement/copy_statement.hpp"
 
 #include "parser/postgres/parsenodes.h"
 #include "parser/postgres/pg_list.h"
