@@ -38,7 +38,7 @@ TEST_CASE("Test Copy statement", "[copystatement]") {
     duckdb_destroy_result(result);
 
 
-//  Creating CSV from table
+    //  Creating CSV from table
     REQUIRE(duckdb_query(connection, "COPY test to 'test2.csv';",
                          &result) == DuckDBSuccess);
     REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {5000}));

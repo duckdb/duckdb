@@ -3371,6 +3371,7 @@ namespace Catch {
         virtual std::string name() const = 0;
         virtual bool includeSuccessfulResults() const = 0;
         virtual bool shouldDebugBreak() const = 0;
+        virtual bool fastMode() const  = 0;
         virtual bool warnAboutMissingAssertions() const = 0;
         virtual bool warnAboutNoTests() const = 0;
         virtual int abortAfter() const = 0;
@@ -3412,6 +3413,7 @@ namespace Catch {
 
         bool showSuccessfulTests = false;
         bool shouldDebugBreak = false;
+        bool fastMode = false;
         bool noThrow = false;
         bool showHelp = false;
         bool showInvisibles = false;
@@ -3483,6 +3485,7 @@ namespace Catch {
         int abortAfter() const override;
         bool showInvisibles() const override;
         Verbosity verbosity() const override;
+        bool fastMode() const override { return m_data.fastMode; }
 
     private:
 
@@ -6681,6 +6684,9 @@ namespace Catch {
             | Opt( config.shouldDebugBreak )
                 ["-b"]["--break"]
                 ( "break into debugger on failure" )
+            | Opt( config.fastMode )
+                ["-f"]["--fast"]
+                ( "Enable fast testing mode (skip long running tests)" )
             | Opt( config.noThrow )
                 ["-e"]["--nothrow"]
                 ( "skip exception tests" )
@@ -9101,7 +9107,11 @@ namespace Catch {
 
     void RunContext::invokeActiveTestCase() {
         FatalConditionHandler fatalConditionHandler; // Handle signals
-        m_activeTestCase->invoke();
+        // skip slow tests in fast mode
+        bool slow_test = m_activeTestCase->name.find("[SLOW]") != std::string::npos;
+        if (!m_config->fastMode() || !slow_test) {
+            m_activeTestCase->invoke();
+        }
         fatalConditionHandler.reset();
     }
 
@@ -13050,7 +13060,6 @@ extern "C" int wmain (int argc, wchar_t * argv[], wchar_t * []) {
 // Standard C/C++ main entry point
 int main (int argc, char * argv[]) {
 #endif
-
     return Catch::Session().run( argc, argv );
 }
 
