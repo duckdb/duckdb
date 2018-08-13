@@ -497,33 +497,30 @@ unique_ptr<AbstractExpression> TransformSubquery(SubLink *root) {
 	if (!root) {
 		return nullptr;
 	}
-	auto result = make_unique<SubqueryExpression>();
-	result->subquery = move(TransformSelect(root->subselect));
-	if (!result->subquery) {
+	auto subquery_expr = make_unique<SubqueryExpression>();
+	subquery_expr->subquery = move(TransformSelect(root->subselect));
+	if (!subquery_expr->subquery) {
 		return nullptr;
 	}
 
 	switch (root->subLinkType) {
-	// TODO: add IN/EXISTS subqueries
-	//    case ANY_SUBLINK: {
-	//
-	//      auto col_expr = TransformExpression(root->testexpr);
-	//      expr = new
-	//      expression::ComparisonExpression(ExpressionType::COMPARE_IN,
-	//                                                  col_expr,
-	//                                                  subquery_expr);
-	//      break;
-	//    }
-	//    case EXISTS_SUBLINK: {
-	//      return new
-	//      expression::OperatorExpression(ExpressionType::OPERATOR_EXISTS,
-	//                                                type::TypeId::BOOLEAN,
-	//                                                subquery_expr,
-	//                                                nullptr);
-	//      break;
-	//    }
+		// TODO: add IN/EXISTS subqueries
+		//    case ANY_SUBLINK: {
+		//
+		//      auto col_expr = TransformExpression(root->testexpr);
+		//      expr = new
+		//      expression::ComparisonExpression(ExpressionType::COMPARE_IN,
+		//                                                  col_expr,
+		//                                                  subquery_expr);
+		//      break;
+		//    }
+	case EXISTS_SUBLINK: {
+		subquery_expr->exists = true;
+		return make_unique<ComparisonExpression>(
+		    ExpressionType::OPERATOR_EXISTS, move(subquery_expr), nullptr);
+	}
 	case EXPR_SUBLINK: {
-		return result;
+		return subquery_expr;
 	}
 	default: {
 		throw NotImplementedException("Subquery of type %d not implemented\n",
