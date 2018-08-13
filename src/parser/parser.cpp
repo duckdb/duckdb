@@ -65,6 +65,8 @@ unique_ptr<SQLStatement> Parser::TransformNode(Node *stmt) {
 		return TransformCreate(stmt);
 	case T_InsertStmt:
 		return TransformInsert(stmt);
+	case T_CopyStmt:
+		return TransformCopy(stmt);
 	default:
 		throw NotImplementedException("A_Expr not implemented!");
 	}

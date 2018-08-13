@@ -32,6 +32,11 @@ Vector::Vector(TypeId type, oid_t maximum_size, bool zero_data)
 Vector::Vector(TypeId type, char *dataptr, size_t maximum_size)
     : type(type), count(0), sel_vector(nullptr), data(dataptr),
       owns_data(false), maximum_size(maximum_size) {
+	if (!TypeIsConstantSize(type)) {
+		assert(type == TypeId::VARCHAR);
+		auto string_list = new unique_ptr<char[]>[maximum_size];
+		owned_strings = unique_ptr<unique_ptr<char[]>[]>(string_list);
+	}
 	if (dataptr && type == TypeId::INVALID) {
 		throw Exception("Cannot create a vector of type INVALID!");
 	}
@@ -40,6 +45,7 @@ Vector::Vector(TypeId type, char *dataptr, size_t maximum_size)
 		owned_strings = unique_ptr<unique_ptr<char[]>[]>(string_list);
 	}
 }
+std::unique_ptr<std::unique_ptr<char[]>> owned_strings;
 
 Vector::Vector(Value value)
     : type(value.type), count(1), sel_vector(nullptr), maximum_size(1) {

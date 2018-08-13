@@ -7,7 +7,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test TPC-H SF0.01", "[tpch]") {
+TEST_CASE("[SLOW] Test TPC-H SF0.01", "[tpch]") {
 	float sf = 0.01;
 
 	// generate the TPC-H data for SF 0.01

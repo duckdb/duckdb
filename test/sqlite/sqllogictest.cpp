@@ -328,7 +328,7 @@ static int checkValue(const char *zKey, const char *zHash) {
 ** This is the main routine.  This routine runs first.  It processes
 ** command-line arguments then runs the test.
 */
-TEST_CASE("Test SQLite Logic Test", "[sqlitelogic]") {
+TEST_CASE("[SLOW] Test SQLite Logic Test", "[sqlitelogic]") {
 	int verifyMode = 0;               /* True if in -verify mode */
 	int haltOnError = 0;              /* Stop on first error if true */
 	int enableTrace = 0;              /* Trace SQL statements if true */
@@ -359,8 +359,6 @@ TEST_CASE("Test SQLite Logic Test", "[sqlitelogic]") {
 	if (zDbEngine == NULL) {
 		zDbEngine = apEngine[0]->zName;
 	}
-
-	return;
 
 	/* Scan the command-line and process arguments
 	 */
