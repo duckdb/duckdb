@@ -157,8 +157,7 @@ void PhysicalOrder::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 	}
 
 	for (size_t i = 0; i < big_data.column_count; i++) {
-		VectorOperations::Copy(*big_data.data[i].get(), *chunk.data[i].get(),
-		                       state->position);
+		chunk.data[i]->Reference(*big_data.data[i].get(), state->position, STANDARD_VECTOR_SIZE);
 	}
 	chunk.count = chunk.data[0]->count;
 	state->position += chunk.count;

@@ -169,14 +169,20 @@ Value Vector::GetValue(size_t index) const {
 	}
 }
 
-void Vector::Reference(Vector &other) {
+void Vector::Reference(Vector &other, size_t offset, size_t max_count) {
 	if (owns_data) {
 		throw Exception("Vector owns data, cannot create reference!");
 	}
-	count = other.count;
-	data = other.data;
+
+	if (max_count == 0) {
+		// take the whole chunk
+		count = other.count - offset;
+	} else {
+		count = min(other.count - offset, max_count);
+	}
 	owns_data = false;
-	sel_vector = other.sel_vector;
+	data = other.data + offset * GetTypeIdSize(other.type);
+	sel_vector = other.sel_vector + offset;
 	type = other.type;
 }
 
