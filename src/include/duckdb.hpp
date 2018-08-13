@@ -59,6 +59,9 @@ class DuckDBResult {
 	std::vector<TypeId> types;
 	std::vector<std::unique_ptr<DataChunk>> data;
 
+	//! Concatenates the whole result into one single DataChunk
+	void GatherResult(DataChunk &result);
+
 	bool success;
 	std::string error;
 

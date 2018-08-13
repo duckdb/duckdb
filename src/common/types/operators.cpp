@@ -73,7 +73,7 @@ template <> const char *Cast::Operation(double left) {
 	return str_to_cstr(to_string(left));
 }
 
-template <> char *CastFromDate::Operation(date_t left) {
+template <> const char *CastFromDate::Operation(date_t left) {
 	auto conv = Date::ToString(left);
 	auto ret = new char[conv.size() + 1];
 	strcpy(ret, conv.c_str());

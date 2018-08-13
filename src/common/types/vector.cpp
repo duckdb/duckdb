@@ -244,9 +244,9 @@ void Vector::Resize(oid_t maximum_size, TypeId new_type) {
 			assert(type == TypeId::VARCHAR);
 			// we only need to copy the pointers on a resize
 			// since the original ownership should not change
-			const char **input_ptrs = (const char**) data;
-			const char **result_ptrs = (const char**) new_data;
-			for(size_t i = 0; i < count; i++) {
+			const char **input_ptrs = (const char **)data;
+			const char **result_ptrs = (const char **)new_data;
+			for (size_t i = 0; i < count; i++) {
 				result_ptrs[i] = input_ptrs[i];
 			}
 		} else {

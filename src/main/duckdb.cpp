@@ -73,6 +73,14 @@ void DuckDBResult::Initialize(DataChunk &chunk) {
 	}
 }
 
+void DuckDBResult::GatherResult(DataChunk &result) {
+	result.count = this->count;
+	result.Initialize(this->types);
+	for (size_t i = 0; i < this->data.size(); i++) {
+		result.Append(*this->data[i].get());
+	}
+}
+
 void DuckDBResult::Print() {
 	if (success) {
 		for (auto &type : types) {

@@ -8,43 +8,48 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("[SLOW] Test TPC-H SF0.01", "[tpch]") {
-	float sf = 0.01;
-
-	// generate the TPC-H data for SF 0.01
-	DuckDB db(nullptr);
-	REQUIRE_NOTHROW(tpch::dbgen(sf, db.catalog));
-
-	// test the queries
-	DuckDBConnection con(db);
-
-	// check if all the counts are correct
 	unique_ptr<DuckDBResult> result;
-	REQUIRE_NOTHROW(result = con.Query("SELECT COUNT(*) FROM orders"));
-	REQUIRE(CHECK_COLUMN(result, 0, {13500}));
-	REQUIRE_NOTHROW(result = con.Query("SELECT COUNT(*) FROM lineitem"));
-	REQUIRE(CHECK_COLUMN(result, 0, {54178}));
-	REQUIRE_NOTHROW(result = con.Query("SELECT COUNT(*) FROM part"));
-	REQUIRE(CHECK_COLUMN(result, 0, {1800}));
-	REQUIRE_NOTHROW(result = con.Query("SELECT COUNT(*) FROM partsupp"));
-	REQUIRE(CHECK_COLUMN(result, 0, {7200}));
-	REQUIRE_NOTHROW(result = con.Query("SELECT COUNT(*) FROM supplier"));
-	REQUIRE(CHECK_COLUMN(result, 0, {90}));
-	REQUIRE_NOTHROW(result = con.Query("SELECT COUNT(*) FROM customer"));
-	REQUIRE(CHECK_COLUMN(result, 0, {1350}));
-	REQUIRE_NOTHROW(result = con.Query("SELECT COUNT(*) FROM nation"));
-	REQUIRE(CHECK_COLUMN(result, 0, {25}));
-	REQUIRE_NOTHROW(result = con.Query("SELECT COUNT(*) FROM region"));
-	REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	double sf = 0.1;
 
-	REQUIRE_NOTHROW(result = con.Query("SELECT * FROM orders"));
-	REQUIRE_NOTHROW(result = con.Query("SELECT * FROM lineitem"));
-	REQUIRE_NOTHROW(result = con.Query("SELECT * FROM part"));
-	REQUIRE_NOTHROW(result = con.Query("SELECT * FROM partsupp"));
-	REQUIRE_NOTHROW(result = con.Query("SELECT * FROM supplier"));
-	REQUIRE_NOTHROW(result = con.Query("SELECT * FROM customer"));
-	REQUIRE_NOTHROW(result = con.Query("SELECT * FROM nation"));
-	REQUIRE_NOTHROW(result = con.Query("SELECT * FROM region"));
+	// generate the TPC-H data for SF 0.1
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+	// REQUIRE_NOTHROW(tpch::dbgen(sf, db.catalog));
+	// con.Query("COPY lineitem to 'lineitem.csv' DELIMITER '|'");
+	// return;
 
-	// REQUIRE_NOTHROW(result = con.Query(tpch::get_query(1)));
-	// REQUIRE(tpch::check_result(sf, 1, *result.get()));
+	// // test the queries
+	tpch::dbgen(0, db.catalog);
+	result = con.Query("COPY lineitem FROM 'lineitem.csv' DELIMITER '|'");
+	RESULT_NO_ERROR(result);
+	// // check if all the counts are correct
+	// result = con.Query("SELECT COUNT(*) FROM orders");
+	// REQUIRE(CHECK_COLUMN(result, 0, {135000}));
+	result = con.Query("SELECT COUNT(*) FROM lineitem");
+	CHECK_COLUMN(result, 0, {600501});
+	// result = con.Query("SELECT COUNT(*) FROM part");
+	// CHECK_COLUMN(result, 0, {18000});
+	// result = con.Query("SELECT COUNT(*) FROM partsupp");
+	// CHECK_COLUMN(result, 0, {72000});
+	// result = con.Query("SELECT COUNT(*) FROM supplier");
+	// CHECK_COLUMN(result, 0, {900});
+	// result = con.Query("SELECT COUNT(*) FROM customer");
+	// CHECK_COLUMN(result, 0, {13500});
+	// result = con.Query("SELECT COUNT(*) FROM nation");
+	// CHECK_COLUMN(result, 0, {25});
+	// result = con.Query("SELECT COUNT(*) FROM region");
+	// CHECK_COLUMN(result, 0, {5});
+
+	// result = con.Query("SELECT * FROM orders");
+	// result = con.Query("SELECT * FROM lineitem");
+	// result = con.Query("SELECT * FROM part");
+	// result = con.Query("SELECT * FROM partsupp");
+	// result = con.Query("SELECT * FROM supplier");
+	// result = con.Query("SELECT * FROM customer");
+	// result = con.Query("SELECT * FROM nation");
+	// result = con.Query("SELECT * FROM region");
+
+	result = con.Query(tpch::get_query(1));
+	RESULT_NO_ERROR(result);
+	REQUIRE(tpch::check_result(sf, 1, *result.get()));
 }

@@ -124,6 +124,11 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		// update the address pointer with the final position
 		ptr[i] = entry + FLAG_SIZE + group_width;
 		max_chain = max(chain, max_chain);
+
+		// resize at 50% capacity
+		if (entries > capacity / 2) {
+			Resize(capacity * 2);
+		}
 	}
 
 	// now every cell has an entry

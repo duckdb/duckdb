@@ -213,7 +213,8 @@ void VectorOperations::Cast(Vector &source, Vector &result) {
 void VectorOperations::Copy(Vector &source, void *target, size_t element_count,
                             size_t offset) {
 	if (!TypeIsConstantSize(source.type)) {
-		throw Exception("Cannot copy non-constant size data using this method!");
+		throw Exception(
+		    "Cannot copy non-constant size data using this method!");
 	}
 	if (source.count == 0)
 		return;
