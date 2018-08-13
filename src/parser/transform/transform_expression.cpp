@@ -321,7 +321,8 @@ unique_ptr<AbstractExpression> TransformValue(value val) {
 	case T_String:
 		return make_unique<ConstantExpression>(Value(string(val.val.str)));
 	case T_Float:
-		return make_unique<ConstantExpression>(Value(stod(string(val.val.str))));
+		return make_unique<ConstantExpression>(
+		    Value(stod(string(val.val.str))));
 	case T_Null:
 		return make_unique<ConstantExpression>();
 	default:
@@ -484,7 +485,8 @@ unique_ptr<AbstractExpression> TransformCase(CaseExpr *root) {
 		def_res = move(
 		    TransformExpression(reinterpret_cast<Node *>(root->defresult)));
 	} else {
-		def_res = unique_ptr<AbstractExpression>(new ConstantExpression(Value()));
+		def_res =
+		    unique_ptr<AbstractExpression>(new ConstantExpression(Value()));
 	}
 	// def_res will be the else part of the innermost case expression
 

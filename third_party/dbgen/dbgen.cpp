@@ -612,7 +612,9 @@ static bool compare_result(const char *csv, DataChunk &result,
 	}
 	return true;
 incorrect:
-	error_message = "Incorrect answer for query!\nProvided answer:\n" + result.ToString() + "\nExpected answer:\n" + string(csv) + "\n";
+	error_message = "Incorrect answer for query!\nProvided answer:\n" +
+	                result.ToString() + "\nExpected answer:\n" + string(csv) +
+	                "\n";
 	return false;
 }
 

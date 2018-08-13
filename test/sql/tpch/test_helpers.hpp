@@ -4,7 +4,8 @@
 #include "duckdb.hpp"
 
 static void CHECK_COLUMN(std::unique_ptr<duckdb::DuckDBResult> &result,
-                         size_t column_number, std::vector<duckdb::Value> values) {
+                         size_t column_number,
+                         std::vector<duckdb::Value> values) {
 	if (!result->GetSuccess()) {
 		fprintf(stderr, "Query failed with message: %s\n",
 		        result->GetErrorMessage().c_str());

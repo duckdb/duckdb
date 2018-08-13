@@ -183,8 +183,7 @@ void Statistics::Sum(Statistics &source, Statistics &result) {
 	result.has_stats = source.has_stats;
 	if (result.has_stats) {
 		result.can_have_null = true;
-		Value count =
-		    Value::Numeric(source.min.type, source.maximum_count);
+		Value count = Value::Numeric(source.min.type, source.maximum_count);
 		Value::Multiply(source.min, count, result.min);
 		Value::Multiply(source.max, count, result.max);
 		result.maximum_count = 1;

@@ -134,7 +134,7 @@ Value Value::Numeric(TypeId id, int64_t value) {
 	case TypeId::BIGINT:
 		return Value::BIGINT(value);
 	case TypeId::DECIMAL:
-		return Value((double) value);
+		return Value((double)value);
 	case TypeId::DATE:
 		return Value::DATE(value);
 	case TypeId::POINTER:
