@@ -134,6 +134,29 @@ void _fixed_return_unary_loop(Vector &left, Vector &result) {
 }
 
 template <class OP>
+void _same_return_unary_int_loop(Vector &left, Vector &result) {
+	switch (left.type) {
+	case TypeId::TINYINT:
+		_templated_unary_loop<int8_t, int8_t, OP>(left, result);
+		break;
+	case TypeId::SMALLINT:
+		_templated_unary_loop<int16_t, int16_t, OP>(left, result);
+		break;
+	case TypeId::INTEGER:
+		_templated_unary_loop<int32_t, int32_t, OP>(left, result);
+		break;
+	case TypeId::BIGINT:
+		_templated_unary_loop<int64_t, int64_t, OP>(left, result);
+		break;
+	case TypeId::DECIMAL:
+		_templated_unary_loop<double, double, OP>(left, result);
+		break;
+	default:
+		throw NotImplementedException("Unimplemented type");
+	}
+}
+
+template <class OP>
 void _generic_binary_loop(Vector &left, Vector &right, Vector &result,
                           bool can_have_null) {
 	if (left.type != right.type) {
@@ -243,6 +266,10 @@ void VectorOperations::Divide(Vector &left, Vector &right, Vector &result,
 void VectorOperations::Modulo(Vector &left, Vector &right, Vector &result,
                               bool can_have_null) {
 	_generic_binary_loop<operators::Modulo>(left, right, result, can_have_null);
+}
+
+void VectorOperations::Abs(Vector &left, Vector &result) {
+	_same_return_unary_int_loop<operators::Abs>(left, result);
 }
 
 //===--------------------------------------------------------------------===//

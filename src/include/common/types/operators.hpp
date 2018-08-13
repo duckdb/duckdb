@@ -91,6 +91,10 @@ struct Modulo {
 	}
 };
 
+struct Abs {
+	template <class T> static inline T Operation(T left) { return abs(left); }
+};
+
 template <> double Modulo::Operation(double left, double right);
 
 struct XOR {

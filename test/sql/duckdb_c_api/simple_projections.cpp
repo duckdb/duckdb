@@ -66,6 +66,15 @@ TEST_CASE("Test simple projection statements", "[simpleprojection]") {
 	REQUIRE(CHECK_NUMERIC(result, 0, 1, 21));
 	duckdb_destroy_result(result);
 
+	// abs
+	REQUIRE(duckdb_query(connection, "SELECT ABS(-1), ABS(1), ABS(NULL);",
+	                     &result) == DuckDBSuccess);
+	REQUIRE(CHECK_NUMERIC(result, 0, 0, 1));
+	REQUIRE(CHECK_NUMERIC(result, 0, 1, 1));
+	REQUIRE(CHECK_NUMERIC(result, 0, 2, NULL_NUMERIC));
+
+	duckdb_destroy_result(result);
+
 	// case
 	REQUIRE(
 	    duckdb_query(connection,

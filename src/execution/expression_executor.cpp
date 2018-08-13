@@ -248,7 +248,17 @@ void ExpressionExecutor::Visit(ConstantExpression &expr) {
 }
 
 void ExpressionExecutor::Visit(FunctionExpression &expr) {
-	throw NotImplementedException("");
+	if (expr.func_name == "abs") {
+		Vector l;
+		expr.children[0]->Accept(this);
+		vector.Move(l);
+		vector.Resize(l.count);
+		VectorOperations::Abs(l, vector);
+		expr.stats.Verify(vector);
+		return;
+	}
+
+	throw NotImplementedException("Function not implemented");
 }
 
 void ExpressionExecutor::Visit(GroupRefExpression &expr) {
@@ -266,6 +276,8 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 		expr.children[0]->Accept(this);
 		switch (expr.type) {
 		case ExpressionType::OPERATOR_EXISTS:
+			// the subquery in the only child will already create the correct
+			// result
 			return;
 		default:
 			throw NotImplementedException(
