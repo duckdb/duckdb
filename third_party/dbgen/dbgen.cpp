@@ -567,7 +567,7 @@ string get_query(int query) {
 }
 
 static bool compare_result(const char *csv, DataChunk &result,
-                           bool print_errors) {
+                           std::string &error_message) {
 	auto types = result.GetTypes();
 
 	std::istringstream f(csv);
@@ -613,24 +613,17 @@ static bool compare_result(const char *csv, DataChunk &result,
 	}
 	return true;
 incorrect:
-	if (print_errors) {
-		fprintf(stderr, "Incorrect answer for query!\n");
-		fprintf(stderr, "Provided answer:\n");
-		result.Print();
-		fprintf(stderr, "\nExpected answer:\n");
-		fprintf(stderr, csv);
-	}
+	error_message = "Incorrect answer for query!\nProvided answer:\n" + result.ToString() + "\nExpected answer:\n" + string(csv) + "\n";
 	return false;
 }
 
 bool check_result(double sf, int query, DuckDBResult &result,
-                  bool print_errors) {
+                  std::string &error_message) {
 	if (query <= 0 || query > TPCH_QUERIES_COUNT) {
 		throw Exception("Out of range TPC-H query number %d", query);
 	}
 	if (!result.GetSuccess()) {
-		fprintf(stderr, "Query failed with message: %s\n",
-		        result.GetMessage().c_str());
+		error_message = result.GetErrorMessage();
 		return false;
 	}
 	return true;
@@ -644,7 +637,7 @@ bool check_result(double sf, int query, DuckDBResult &result,
 	}
 	DataChunk big_chunk;
 	result.GatherResult(big_chunk);
-	return compare_result(answer, big_chunk, print_errors);
+	return compare_result(answer, big_chunk, error_message);
 }
 
 } // namespace tpch

@@ -51,5 +51,8 @@ TEST_CASE("[SLOW] Test TPC-H SF0.01", "[tpch]") {
 
 	result = con.Query(tpch::get_query(1));
 	RESULT_NO_ERROR(result);
-	REQUIRE(tpch::check_result(sf, 1, *result.get()));
+	string error_message;
+	if (!tpch::check_result(sf, 1, *result.get(), error_message)) {
+		FAIL(error_message);
+	}
 }

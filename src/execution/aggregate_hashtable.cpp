@@ -84,8 +84,18 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		size_t group_position = 0;
 		for (size_t grp = 0; grp < groups.column_count; grp++) {
 			size_t data_size = GetTypeIdSize(groups.data[grp]->type);
-			memcpy(group_data + group_position,
-			       groups.data[grp]->data + data_size * i, data_size);
+			if (groups.data[grp]->type == TypeId::VARCHAR) {
+				// inline strings
+				const char* str = ((const char**)groups.data[grp]->data)[i];
+				// strings > 8 characters we need to store a pointer and compare pointers
+				// FIXME: use statistics to figure this out per column
+				assert(strlen(str) <= 7);
+				memset(group_data + group_position, 0, data_size);
+				strcpy((char*) group_data + group_position, str);
+			} else {
+				memcpy(group_data + group_position,
+				       groups.data[grp]->data + data_size * i, data_size);
+			}
 			group_position += data_size;
 		}
 
@@ -225,7 +235,15 @@ void SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &groups,
 	for (size_t i = 0; i < groups.column_count; i++) {
 		auto column = groups.data[i].get();
 		column->count = entry;
-		VectorOperations::Gather::Set(addresses, *column);
+		if (column->type == TypeId::VARCHAR) {
+			const char **ptr = (const char **)addresses.data;
+			for(size_t i = 0; i < entry; i++) {
+				// fetch the string
+				column->SetValue(i, Value(string(ptr[i])));
+			}
+		} else {
+			VectorOperations::Gather::Set(addresses, *column);
+		}
 		VectorOperations::Add(addresses, GetTypeIdSize(column->type),
 		                      addresses);
 	}
