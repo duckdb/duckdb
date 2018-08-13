@@ -113,7 +113,7 @@ class Vector : public Printable {
 
 	Vector(const Vector &) = delete;
 
-  private:
+	// private:
 	//! If the vector owns data, this is the unique_ptr holds the actual data.
 	std::unique_ptr<char[]> owned_data;
 	//! If the vector owns its selection vector, this is the unique_ptr holds it

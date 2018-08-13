@@ -84,9 +84,13 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		size_t group_position = 0;
 		for (size_t grp = 0; grp < groups.column_count; grp++) {
 			size_t data_size = GetTypeIdSize(groups.data[grp]->type);
+			size_t group_entry = groups.data[grp]->sel_vector
+			                         ? groups.data[grp]->sel_vector[i]
+			                         : i;
 			if (groups.data[grp]->type == TypeId::VARCHAR) {
 				// inline strings
-				const char *str = ((const char **)groups.data[grp]->data)[i];
+				const char *str =
+				    ((const char **)groups.data[grp]->data)[group_entry];
 				// strings > 8 characters we need to store a pointer and compare
 				// pointers
 				// FIXME: use statistics to figure this out per column
@@ -95,7 +99,8 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 				strcpy((char *)group_data + group_position, str);
 			} else {
 				memcpy(group_data + group_position,
-				       groups.data[grp]->data + data_size * i, data_size);
+				       groups.data[grp]->data + data_size * group_entry,
+				       data_size);
 			}
 			group_position += data_size;
 		}
@@ -151,10 +156,16 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			continue;
 		}
 		if (new_count > 0) {
-			payload.data[j]->sel_vector = addresses.sel_vector = new_entries;
-			payload.data[j]->count = addresses.count = new_count;
 			// for any entries for which a new entry was created, set the
 			// initial value
+			// the payload might already have a selection vector
+			// first store a reference to the old selection vector
+			auto old_owned_sel_vector = move(payload.data[j]->owned_sel_vector);
+			auto old_sel_vector = payload.data[j]->sel_vector;
+			// now set the selection vector for the entries
+			payload.data[j]->SetSelVector(new_entries, new_count);
+			addresses.sel_vector = new_entries;
+			payload.data[j]->count = addresses.count = new_count;
 			switch (aggregate_types[i]) {
 			case ExpressionType::AGGREGATE_COUNT:
 				VectorOperations::Scatter::SetCount(*payload.data[j],
@@ -168,11 +179,17 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			default:
 				throw NotImplementedException("Unimplemented aggregate type!");
 			}
+			// restore the old selection vector
+			payload.data[j]->owned_sel_vector = move(old_owned_sel_vector);
+			payload.data[j]->sel_vector = old_sel_vector;
 		}
 		if (updated_count > 0) {
 			// for any entries for which a group was found, update the aggregate
-			payload.data[j]->sel_vector = addresses.sel_vector =
-			    updated_entries;
+			// store the old selection vector
+			auto old_owned_sel_vector = move(payload.data[j]->owned_sel_vector);
+			auto old_sel_vector = payload.data[j]->sel_vector;
+			payload.data[j]->SetSelVector(updated_entries, updated_count);
+			addresses.sel_vector = updated_entries;
 			payload.data[j]->count = addresses.count = updated_count;
 
 			switch (aggregate_types[i]) {
@@ -194,6 +211,10 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			default:
 				throw NotImplementedException("Unimplemented aggregate type!");
 			}
+
+			// restore the old selection vector
+			payload.data[j]->owned_sel_vector = move(old_owned_sel_vector);
+			payload.data[j]->sel_vector = old_sel_vector;
 		}
 		// move to the next aggregate chunk
 		addresses.sel_vector = nullptr;

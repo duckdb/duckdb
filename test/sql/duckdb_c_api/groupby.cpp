@@ -22,9 +22,9 @@ TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
 	                     NULL) == DuckDBSuccess);
 	REQUIRE(duckdb_query(connection, "INSERT INTO test VALUES (11, 22)",
 	                     NULL) == DuckDBSuccess);
-	REQUIRE(duckdb_query(connection, "INSERT INTO test VALUES (12, 21)",
-	                     NULL) == DuckDBSuccess);
 	REQUIRE(duckdb_query(connection, "INSERT INTO test VALUES (13, 22)",
+	                     NULL) == DuckDBSuccess);
+	REQUIRE(duckdb_query(connection, "INSERT INTO test VALUES (12, 21)",
 	                     NULL) == DuckDBSuccess);
 
 	// aggregations without group by statements
@@ -95,6 +95,18 @@ TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
 	                     &result) == DuckDBSuccess);
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {0, 1}));
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {24, 12}));
+	duckdb_destroy_result(result);
+
+	// group by with filter
+	REQUIRE(duckdb_query(connection,
+	                     "SELECT b, SUM(a), COUNT(*), SUM(a+2) FROM test WHERE "
+	                     "a <= 12 GROUP "
+	                     "BY b ORDER BY b;",
+	                     &result) == DuckDBSuccess);
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {21, 22}));
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {12, 11}));
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 2, {1, 1}));
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 3, {14, 13}));
 	duckdb_destroy_result(result);
 
 	// REQUIRE(duckdb_query(connection, "SELECT b, AVG(a) FROM test GROUP BY

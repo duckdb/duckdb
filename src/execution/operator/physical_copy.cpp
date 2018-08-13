@@ -6,33 +6,30 @@ using namespace std;
 
 std::vector<TypeId> PhysicalCopy::GetTypes() { return {TypeId::BIGINT}; }
 
-vector<string> split (const string & str,  char delimiter, char quote){
+vector<string> split(const string &str, char delimiter, char quote) {
 	vector<string> res;
 	size_t i = 0;
-	while (i != str.size()){
-        if (i!= str.size() && str[i] == quote ){
-            i++;
-            size_t j = i;
-            while (j != str.size() && str[j] != quote )
-                j++;
-            if (i!=j){
-                res.push_back(str.substr(i,j-i));
-                i=j;
-            }
-        }
-		else if (i!= str.size() && str[i] == delimiter )
-            i++;
+	while (i != str.size()) {
+		if (i != str.size() && str[i] == quote) {
+			i++;
+			size_t j = i;
+			while (j != str.size() && str[j] != quote)
+				j++;
+			if (i != j) {
+				res.push_back(str.substr(i, j - i));
+				i = j;
+			}
+		} else if (i != str.size() && str[i] == delimiter)
+			i++;
 		size_t j = i;
-		while (j != str.size() && str[j] != delimiter )
+		while (j != str.size() && str[j] != delimiter)
 			j++;
-		if (i!=j){
-			res.push_back(str.substr(i,j-i));
-			i=j;
+		if (i != j) {
+			res.push_back(str.substr(i, j - i));
+			i = j;
 		}
-
 	}
 	return res;
-
 }
 
 void PhysicalCopy::GetChunk(DataChunk &result_chunk,
@@ -60,7 +57,7 @@ void PhysicalCopy::GetChunk(DataChunk &result_chunk,
 				count_line = 0;
 				insert_chunk.Reset();
 			}
-			std::vector<string> csv_line = split(value, delimiter,quote);
+			std::vector<string> csv_line = split(value, delimiter, quote);
 
 			if (csv_line.size() != insert_chunk.column_count) {
 				throw Exception(
@@ -81,35 +78,32 @@ void PhysicalCopy::GetChunk(DataChunk &result_chunk,
 		to_csv.open(file_path);
 		size_t current_chunk = 0;
 		size_t chunk_count = table->storage->columns[0]->data.size();
-		while(current_chunk < chunk_count) {
+		while (current_chunk < chunk_count) {
 			for (size_t col = 0; col < insert_chunk.column_count; col++) {
 				auto column = table->storage->columns[col].get();
 				insert_chunk.data[col]->Reference(*column->data[current_chunk]);
 			}
 			insert_chunk.count = insert_chunk.data[0]->count;
-			for(size_t i = 0; i < insert_chunk.count; i++) {
+			for (size_t i = 0; i < insert_chunk.count; i++) {
 				for (size_t col = 0; col < insert_chunk.column_count; col++) {
 					if (col != 0) {
 						to_csv << delimiter;
 					}
-                    if (types[col] == TypeId::VARCHAR)
-                        to_csv << quote;
-                    to_csv << insert_chunk.data[col]
-                            ->GetValue(i)
-                            .ToString();
-                    if (types[col] == TypeId::VARCHAR)
-                        to_csv << quote;
+					if (types[col] == TypeId::VARCHAR)
+						to_csv << quote;
+					to_csv << insert_chunk.data[col]->GetValue(i).ToString();
+					if (types[col] == TypeId::VARCHAR)
+						to_csv << quote;
 				}
-                to_csv << endl;
-                count_line++;
+				to_csv << endl;
+				count_line++;
 			}
 			current_chunk++;
 		}
 		to_csv.close();
 	}
 	result_chunk.data[0]->count = 1;
-	result_chunk.data[0]->SetValue(
-	    0, Value::BIGINT(total + count_line));
+	result_chunk.data[0]->SetValue(0, Value::BIGINT(total + count_line));
 	result_chunk.count = 1;
 	state_->finished = true;
 }

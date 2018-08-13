@@ -601,8 +601,19 @@ static bool compare_result(const char *csv, DataChunk &result,
 				goto incorrect;
 			}
 			// now perform a comparison
-			if (!Value::Equals(value, result.data[i]->GetValue(row))) {
-				goto incorrect;
+			Value result_value = result.data[i]->GetValue(row);
+			if (value.type == TypeId::DECIMAL) {
+				// round to two decimals
+				string left = StringUtil::Format("%.2f", value.value_.decimal);
+				string right =
+				    StringUtil::Format("%.2f", result_value.value_.decimal);
+				if (left != right) {
+					goto incorrect;
+				}
+			} else {
+				if (!Value::Equals(value, result_value)) {
+					goto incorrect;
+				}
 			}
 		}
 		row++;

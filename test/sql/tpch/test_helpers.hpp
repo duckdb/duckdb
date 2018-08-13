@@ -33,6 +33,7 @@ static void CHECK_COLUMN(std::unique_ptr<duckdb::DuckDBResult> &result,
 		// check this vector
 		auto &vector = result->data[chunk_index]->data[column_number];
 		if (i + vector->count > values.size()) {
+			vector->Print();
 			// too many values in this vector
 			FAIL("Too many values in result!");
 		}
