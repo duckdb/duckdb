@@ -516,8 +516,9 @@ unique_ptr<AbstractExpression> TransformSubquery(SubLink *root) {
 		//    }
 	case EXISTS_SUBLINK: {
 		subquery_expr->exists = true;
-		return make_unique<ComparisonExpression>(
-		    ExpressionType::OPERATOR_EXISTS, move(subquery_expr));
+		return make_unique<OperatorExpression>(ExpressionType::OPERATOR_EXISTS,
+		                                       TypeId::BOOLEAN,
+		                                       move(subquery_expr));
 	}
 	case EXPR_SUBLINK: {
 		return subquery_expr;

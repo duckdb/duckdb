@@ -20,7 +20,7 @@ class OperatorExpression : public AbstractExpression {
 	    : AbstractExpression(type, type_id) {}
 	OperatorExpression(ExpressionType type, TypeId type_id,
 	                   std::unique_ptr<AbstractExpression> left,
-	                   std::unique_ptr<AbstractExpression> right)
+	                   std::unique_ptr<AbstractExpression> right = nullptr)
 	    : AbstractExpression(type, type_id, std::move(left), std::move(right)) {
 	}
 

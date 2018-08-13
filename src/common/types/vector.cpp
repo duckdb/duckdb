@@ -199,7 +199,8 @@ void Vector::Move(Vector &other) {
 }
 
 void Vector::ForceOwnership(size_t minimum_capacity) {
-	if (maximum_size >= minimum_capacity && owns_data && type != TypeId::VARCHAR)
+	if (maximum_size >= minimum_capacity && owns_data &&
+	    type != TypeId::VARCHAR)
 		return;
 	minimum_capacity = std::max(count, minimum_capacity);
 	Vector other(type, minimum_capacity);
