@@ -2,7 +2,7 @@
 #include "catch.hpp"
 #include "dbgen.hpp"
 
-#include "duckdb_cpp_test.hpp"
+#include "test_helpers.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -37,8 +37,8 @@ TEST_CASE("[SLOW] Test TPC-H SF0.01", "[tpch]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {5}));
 
 	// FIXME
-	// REQUIRE_NOTHROW(result = con.Query("SELECT * FROM orders"));
+	REQUIRE_NOTHROW(result = con.Query("SELECT * FROM orders"));
 
-	// REQUIRE_NOTHROW(result = con.Query(tpch::get_query(1)));
-	// REQUIRE(tpch::check_result(sf, 1, *result.get()));
+	//REQUIRE_NOTHROW(result = con.Query(tpch::get_query(1)));
+	//REQUIRE(tpch::check_result(sf, 1, *result.get()));
 }
