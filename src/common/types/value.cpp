@@ -377,6 +377,8 @@ bool Value::_templated_boolean_operation(const Value &left,
 		return OP::Operation(left.value_.pointer, right.value_.pointer);
 	case TypeId::DATE:
 		return OP::Operation(left.value_.date, right.value_.date);
+	case TypeId::VARCHAR:
+		return OP::Operation(left.str_value, right.str_value);
 	default:
 		throw NotImplementedException("Unimplemented type");
 	}
