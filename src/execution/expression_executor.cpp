@@ -299,7 +299,15 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 			vector.Move(l);
 			vector.Resize(l.count);
 
-			VectorOperations::Not(l, vector);
+			VectorOperations::Not(l, vector, expr.stats.CanHaveNull());
+			expr.stats.Verify(vector);
+			return;
+		}
+		case ExpressionType::OPERATOR_IS_NULL: {
+			Vector l;
+			vector.Move(l);
+			vector.Resize(l.count, TypeId::BOOLEAN);
+			VectorOperations::IsN(l, vector, expr.stats.CanHaveNull());
 			expr.stats.Verify(vector);
 			return;
 		}
@@ -307,8 +315,7 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 			Vector l;
 			vector.Move(l);
 			vector.Resize(l.count, TypeId::BOOLEAN);
-			// TODO, if !expr.stats.CanHaveNull() return TRUE
-			VectorOperations::NotNull(l, vector);
+			VectorOperations::NotN(l, vector, expr.stats.CanHaveNull());
 			expr.stats.Verify(vector);
 			return;
 		}

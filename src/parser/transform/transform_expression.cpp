@@ -377,6 +377,23 @@ unique_ptr<AbstractExpression> TransformCoalesce(A_Expr *root) {
 	return move(exp_root);
 }
 
+
+unique_ptr<AbstractExpression> TransformNullTest(NullTest *root) {
+	if (!root) {
+		return nullptr;
+	}
+	auto arg =
+	    TransformExpression(reinterpret_cast<Node *>(root->arg));
+	if(root->argisrow) {
+		throw NotImplementedException("IS NULL argisrow");
+	}
+	ExpressionType expr_type = (root->nulltesttype == IS_NULL) ? ExpressionType::OPERATOR_IS_NULL : ExpressionType::OPERATOR_IS_NOT_NULL ;
+
+	return unique_ptr<AbstractExpression>(
+	    new OperatorExpression(expr_type,
+	                           TypeId::BOOLEAN, move(arg)));
+}
+
 unique_ptr<AbstractExpression> TransformAExpr(A_Expr *root) {
 	if (!root) {
 		return nullptr;
@@ -637,9 +654,10 @@ unique_ptr<AbstractExpression> TransformExpression(Node *node) {
 		return TransformSubquery(reinterpret_cast<SubLink *>(node));
 	case T_CoalesceExpr:
 		return TransformCoalesce(reinterpret_cast<A_Expr *>(node));
+	case T_NullTest:
+		return TransformNullTest(reinterpret_cast<NullTest *>(node));
 
 	case T_ParamRef:
-	case T_NullTest:
 	default:
 		throw NotImplementedException("Expr of type %d not implemented\n",
 		                              (int)node->type);
