@@ -41,25 +41,25 @@ struct tpch_append_information {
 
 void append_value(DataChunk &chunk, size_t index, size_t &column,
                   int32_t value) {
-	chunk.data[column++]->SetValue(index, Value::INTEGER(value));
+	((int32_t *)chunk.data[column++].data)[index] = value;
 }
 
 void append_string(DataChunk &chunk, size_t index, size_t &column,
                    string value) {
-	chunk.data[column++]->SetValue(index, Value(value));
+	chunk.data[column++].SetValue(index, Value(value));
 }
 
 void append_decimal(DataChunk &chunk, size_t index, size_t &column,
                     int64_t value) {
-	chunk.data[column++]->SetValue(index, Value((double)value / 100.0));
+	((double *)chunk.data[column++].data)[index] = (double)value / 100.0;
 }
 
 void append_date(DataChunk &chunk, size_t index, size_t &column, string value) {
-	chunk.data[column++]->SetValue(index, Value::DATE(Date::FromString(value)));
+	chunk.data[column++].SetValue(index, Value::DATE(Date::FromString(value)));
 }
 
 void append_char(DataChunk &chunk, size_t index, size_t &column, char value) {
-	chunk.data[column++]->SetValue(index, Value(string(1, value)));
+	chunk.data[column++].SetValue(index, Value(string(1, value)));
 }
 
 static void append_to_append_info(tpch_append_information &info) {
@@ -76,7 +76,7 @@ static void append_to_append_info(tpch_append_information &info) {
 	}
 	chunk.count++;
 	for (size_t i = 0; i < chunk.column_count; i++) {
-		chunk.data[i]->count = chunk.count;
+		chunk.data[i].count = chunk.count;
 	}
 }
 
@@ -601,7 +601,7 @@ static bool compare_result(const char *csv, DataChunk &result,
 				goto incorrect;
 			}
 			// now perform a comparison
-			Value result_value = result.data[i]->GetValue(row);
+			Value result_value = result.data[i].GetValue(row);
 			if (value.type == TypeId::DECIMAL) {
 				// round to two decimals
 				string left = StringUtil::Format("%.2f", value.value_.decimal);

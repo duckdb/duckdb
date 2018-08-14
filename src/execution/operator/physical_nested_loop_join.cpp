@@ -56,7 +56,7 @@ void PhysicalNestedLoopJoin::GetChunk(DataChunk &chunk,
 		}
 		for (size_t i = 0; i < chunk.column_count; i++) {
 			// assign the selection vector
-			chunk.data[i]->SetSelVector(chunk.sel_vector.get(), match_count);
+			chunk.data[i].SetSelVector(chunk.sel_vector.get(), match_count);
 		}
 		chunk.count = match_count;
 	} while (chunk.count == 0);

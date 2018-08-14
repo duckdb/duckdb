@@ -29,11 +29,11 @@ void PhysicalLimit::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 			size_t start_position = offset - state->current_offset;
 			chunk.count = min(limit, state->child_chunk.count - start_position);
 			for (size_t i = 0; i < chunk.column_count; i++) {
-				chunk.data[i]->Reference(*state->child_chunk.data[i]);
-				chunk.data[i]->data =
-				    chunk.data[i]->data +
-				    GetTypeIdSize(chunk.data[i]->type) * start_position;
-				chunk.data[i]->count = chunk.count;
+				chunk.data[i].Reference(state->child_chunk.data[i]);
+				chunk.data[i].data =
+				    chunk.data[i].data +
+				    GetTypeIdSize(chunk.data[i].type) * start_position;
+				chunk.data[i].count = chunk.count;
 			}
 		}
 	} else {
@@ -47,8 +47,8 @@ void PhysicalLimit::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 		}
 		// instead of copying we just change the pointer in the current chunk
 		for (size_t i = 0; i < chunk.column_count; i++) {
-			chunk.data[i]->Reference(*state->child_chunk.data[i]);
-			chunk.data[i]->count = chunk.count;
+			chunk.data[i].Reference(state->child_chunk.data[i]);
+			chunk.data[i].count = chunk.count;
 		}
 	}
 

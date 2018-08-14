@@ -14,8 +14,8 @@ void PhysicalDummyScan::GetChunk(DataChunk &chunk,
 	}
 	state->finished = true;
 
-	chunk.data[0]->count = 1;
-	chunk.count = chunk.data[0]->count;
+	chunk.data[0].count = 1;
+	chunk.count = chunk.data[0].count;
 }
 
 unique_ptr<PhysicalOperatorState>

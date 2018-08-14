@@ -30,10 +30,19 @@ void DataChunk::Initialize(std::vector<TypeId> &types, oid_t maximum_chunk_size,
 	}
 
 	char *ptr = owned_data.get();
-	data =
-	    unique_ptr<unique_ptr<Vector>[]>(new unique_ptr<Vector>[types.size()]);
+	data = unique_ptr<Vector[]>(new Vector[types.size()]);
 	for (oid_t i = 0; i < types.size(); i++) {
-		data[i] = make_unique<Vector>(types[i], ptr, maximum_size);
+		data[i].type = types[i];
+		data[i].data = ptr;
+		data[i].maximum_size = maximum_size;
+		data[i].count = 0;
+		data[i].sel_vector = nullptr;
+		if (data[i].type == TypeId::VARCHAR) {
+			auto string_list = new unique_ptr<char[]>[maximum_size];
+			data[i].owned_strings =
+			    unique_ptr<unique_ptr<char[]>[]>(string_list);
+		}
+
 		ptr += GetTypeIdSize(types[i]) * maximum_size;
 	}
 }
@@ -42,11 +51,11 @@ void DataChunk::Reset() {
 	count = 0;
 	char *ptr = owned_data.get();
 	for (oid_t i = 0; i < column_count; i++) {
-		data[i]->data = ptr;
-		data[i]->owns_data = false;
-		data[i]->count = 0;
-		data[i]->sel_vector = nullptr;
-		ptr += GetTypeIdSize(data[i]->type) * maximum_size;
+		data[i].data = ptr;
+		data[i].owns_data = false;
+		data[i].count = 0;
+		data[i].sel_vector = nullptr;
+		ptr += GetTypeIdSize(data[i].type) * maximum_size;
 	}
 	sel_vector.reset();
 }
@@ -62,16 +71,16 @@ void DataChunk::Destroy() {
 void DataChunk::ForceOwnership() {
 	char *ptr = owned_data.get();
 	for (oid_t i = 0; i < column_count;
-	     ptr += GetTypeIdSize(data[i]->type) * maximum_size, i++) {
-		if (data[i]->sel_vector) {
-			data[i]->ForceOwnership();
+	     ptr += GetTypeIdSize(data[i].type) * maximum_size, i++) {
+		if (data[i].sel_vector) {
+			data[i].ForceOwnership();
 		} else {
-			if (data[i]->owns_data)
+			if (data[i].owns_data)
 				continue;
-			if (data[i]->data == ptr)
+			if (data[i].data == ptr)
 				continue;
 
-			data[i]->ForceOwnership();
+			data[i].ForceOwnership();
 		}
 	}
 }
@@ -84,7 +93,7 @@ void DataChunk::Append(DataChunk &other) {
 		throw Exception("Column counts of appending chunk doesn't match!");
 	}
 	for (oid_t i = 0; i < column_count; i++) {
-		if (other.data[i]->type != data[i]->type) {
+		if (other.data[i].type != data[i].type) {
 			throw Exception("Column types do not match!");
 		}
 	}
@@ -92,11 +101,11 @@ void DataChunk::Append(DataChunk &other) {
 		// resize
 		maximum_size = maximum_size * 2;
 		for (oid_t i = 0; i < column_count; i++) {
-			data[i]->Resize(maximum_size);
+			data[i].Resize(maximum_size);
 		}
 	}
 	for (oid_t i = 0; i < column_count; i++) {
-		data[i]->Append(*other.data[i].get());
+		data[i].Append(other.data[i]);
 	}
 	count += other.count;
 }
@@ -104,7 +113,7 @@ void DataChunk::Append(DataChunk &other) {
 vector<TypeId> DataChunk::GetTypes() {
 	vector<TypeId> types;
 	for (size_t i = 0; i < column_count; i++) {
-		types.push_back(data[i]->type);
+		types.push_back(data[i].type);
 	}
 	return types;
 }
@@ -112,7 +121,7 @@ vector<TypeId> DataChunk::GetTypes() {
 string DataChunk::ToString() const {
 	string retval = "Chunk - [" + to_string(column_count) + " Columns]\n";
 	for (size_t i = 0; i < column_count; i++) {
-		retval += "- " + data[i]->ToString() + "\n";
+		retval += "- " + data[i].ToString() + "\n";
 	}
 	return retval;
 }

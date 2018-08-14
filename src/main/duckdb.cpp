@@ -69,7 +69,7 @@ DuckDBResult::DuckDBResult(std::string error)
 void DuckDBResult::Initialize(DataChunk &chunk) {
 	count = 0;
 	for (auto i = 0; i < chunk.column_count; i++) {
-		types.push_back(chunk.data[i]->type);
+		types.push_back(chunk.data[i].type);
 	}
 }
 
@@ -91,7 +91,7 @@ void DuckDBResult::Print() {
 			for (size_t j = 0; j < chunk->count; j++) {
 				for (size_t i = 0; i < chunk->column_count; i++) {
 					auto &vector = chunk->data[i];
-					printf("%s\t", vector->GetValue(j).ToString().c_str());
+					printf("%s\t", vector.GetValue(j).ToString().c_str());
 				}
 				printf("\n");
 			}
