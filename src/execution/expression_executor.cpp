@@ -303,6 +303,15 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 			expr.stats.Verify(vector);
 			return;
 		}
+		case ExpressionType::OPERATOR_IS_NOT_NULL: {
+			Vector l;
+			vector.Move(l);
+			vector.Resize(l.count, TypeId::BOOLEAN);
+			// TODO, if !expr.stats.CanHaveNull() return TRUE
+			VectorOperations::NotNull(l, vector);
+			expr.stats.Verify(vector);
+			return;
+		}
 		default:
 			throw NotImplementedException(
 			    "Unsupported operator type with 1 child!");

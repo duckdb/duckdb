@@ -46,6 +46,9 @@ struct VectorOperations {
 	// NOT(A)
 	static void Not(Vector &left, Vector &result);
 
+	// NOT NULL(A)
+	static void NotNull(Vector &left, Vector &result);
+
 	// A + B
 	static void Add(Vector &left, int64_t right, Vector &result,
 	                bool can_have_null = true);

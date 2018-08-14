@@ -278,9 +278,11 @@ void VectorOperations::Not(Vector &left, Vector &result) {
 	if (left.type != TypeId::BOOLEAN) {
 		throw Exception("NOT() needs a boolean input");
 	}
+	_fixed_return_unary_loop<operators::Not, int8_t>(left, result);
+}
 
-	// FIXME: what about NULLs here?
-	_fixed_return_unary_loop<operators::Not, bool>(left, result);
+void VectorOperations::NotNull(Vector &left, Vector &result) {
+	_fixed_return_unary_loop<operators::NotNull, bool>(left, result);
 }
 
 //===--------------------------------------------------------------------===//

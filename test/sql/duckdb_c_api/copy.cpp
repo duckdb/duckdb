@@ -45,4 +45,8 @@ TEST_CASE("Test Copy statement", "[copystatement]") {
 
 	REQUIRE(duckdb_disconnect(connection) == DuckDBSuccess);
 	REQUIRE(duckdb_close(database) == DuckDBSuccess);
+
+	remove("test.csv");
+	remove("test2.csv");
+
 }
