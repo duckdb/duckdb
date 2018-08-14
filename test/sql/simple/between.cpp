@@ -1,6 +1,6 @@
 
-#include "catch.hpp"
 #include "../tpch/test_helpers.hpp"
+#include "catch.hpp"
 
 using namespace duckdb;
 using namespace std;

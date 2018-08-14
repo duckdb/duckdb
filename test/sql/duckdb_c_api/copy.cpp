@@ -48,5 +48,4 @@ TEST_CASE("Test Copy statement", "[copystatement]") {
 
 	remove("test.csv");
 	remove("test2.csv");
-
 }

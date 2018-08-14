@@ -42,7 +42,7 @@ static int duckdbStatement(void *pConn, /* Connection created by xConnect */
                            const char *zSql, /* SQL statement to evaluate */
                            int bQuiet /* True to suppress printing errors. */
 ) {
-	//fprintf(stderr, "Quack: %s\n", zSql);
+	// fprintf(stderr, "Quack: %s\n", zSql);
 	if (duckdb_query(*((duckdb_connection *)pConn), (char *)zSql, NULL) !=
 	    DuckDBSuccess) {
 		return 1;
@@ -63,7 +63,7 @@ duckdbQuery(void *pConn,       /* Connection created by xConnect */
 
 	size_t r, c;
 	(void)zType;
-	//fprintf(stderr, "Quack: %s\n", zSql);
+	// fprintf(stderr, "Quack: %s\n", zSql);
 
 	if (duckdb_query(*((duckdb_connection *)pConn), (char *)zSql, &result) !=
 	    DuckDBSuccess) {

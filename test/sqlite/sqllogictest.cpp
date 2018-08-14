@@ -377,13 +377,12 @@ TEST_CASE("Test SQLite Logic Test", "[sqlitelogic]") {
 	/*
 	** Read the entire script file contents into memory
 	*/
-//	vector<string> files = {
-//	    "test/sqlite/select1.test", "test/sqlite/select2.test",
-//	    "test/sqlite/select3.test", "test/sqlite/select4.test",
-//	    "test/sqlite/select5.test"};
+	//	vector<string> files = {
+	//	    "test/sqlite/select1.test", "test/sqlite/select2.test",
+	//	    "test/sqlite/select3.test", "test/sqlite/select4.test",
+	//	    "test/sqlite/select5.test"};
 
-	vector<string> files = {
-	    "test/sqlite/select1.test"};
+	vector<string> files = {"test/sqlite/select1.test"};
 	for (auto &script : files) {
 		zScriptFile = script.c_str();
 		in = fopen(zScriptFile, "rb");
