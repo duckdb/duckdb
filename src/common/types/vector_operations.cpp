@@ -205,6 +205,7 @@ void _fixed_return_binary_loop(Vector &left, Vector &right, Vector &result,
 		throw NotImplementedException("Type cast not implemented here!");
 	}
 	switch (left.type) {
+	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
 		_templated_binary_loop<int8_t, RES, OP>(left, right, result,
 		                                        can_have_null);
@@ -274,15 +275,25 @@ void VectorOperations::Abs(Vector &left, Vector &result) {
 	_same_return_unary_int_loop<operators::Abs>(left, result);
 }
 
-void VectorOperations::Not(Vector &left, Vector &result) {
+void VectorOperations::Not(Vector &left, Vector &result, bool can_have_null) {
 	if (left.type != TypeId::BOOLEAN) {
 		throw Exception("NOT() needs a boolean input");
 	}
-	_fixed_return_unary_loop<operators::Not, int8_t>(left, result);
+	if (can_have_null) {
+		_fixed_return_unary_loop<operators::NotNull, int8_t>(left, result);
+	} else {
+		_fixed_return_unary_loop<operators::Not, int8_t>(left, result);
+	}
 }
 
-void VectorOperations::NotNull(Vector &left, Vector &result) {
-	_fixed_return_unary_loop<operators::NotNull, bool>(left, result);
+void VectorOperations::NotN(Vector &left, Vector &result, bool can_have_null) {
+	// TODO if !can_have_null we can just return a constant true
+	_fixed_return_unary_loop<operators::NotN, int8_t>(left, result);
+}
+
+void VectorOperations::IsN(Vector &left, Vector &result, bool can_have_null) {
+	// TODO if !can_have_null we can just return a constant false
+	_fixed_return_unary_loop<operators::IsN, int8_t>(left, result);
 }
 
 //===--------------------------------------------------------------------===//
@@ -376,31 +387,31 @@ void VectorOperations::Equals(Vector &left, Vector &right, Vector &result,
 
 void VectorOperations::NotEquals(Vector &left, Vector &right, Vector &result,
                                  bool can_have_null) {
-	_fixed_return_binary_loop<operators::NotEquals, bool>(left, right, result,
-	                                                      can_have_null);
+	_fixed_return_binary_loop<operators::NotEquals, int8_t>(left, right, result,
+	                                                        can_have_null);
 }
 
 void VectorOperations::GreaterThan(Vector &left, Vector &right, Vector &result,
                                    bool can_have_null) {
-	_fixed_return_binary_loop<operators::GreaterThan, bool>(left, right, result,
-	                                                        can_have_null);
+	_fixed_return_binary_loop<operators::GreaterThan, int8_t>(
+	    left, right, result, can_have_null);
 }
 
 void VectorOperations::GreaterThanEquals(Vector &left, Vector &right,
                                          Vector &result, bool can_have_null) {
-	_fixed_return_binary_loop<operators::GreaterThanEquals, bool>(
+	_fixed_return_binary_loop<operators::GreaterThanEquals, int8_t>(
 	    left, right, result, can_have_null);
 }
 
 void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result,
                                 bool can_have_null) {
-	_fixed_return_binary_loop<operators::LessThan, bool>(left, right, result,
-	                                                     can_have_null);
+	_fixed_return_binary_loop<operators::LessThan, int8_t>(left, right, result,
+	                                                       can_have_null);
 }
 
 void VectorOperations::LessThanEquals(Vector &left, Vector &right,
                                       Vector &result, bool can_have_null) {
-	_fixed_return_binary_loop<operators::LessThanEquals, bool>(
+	_fixed_return_binary_loop<operators::LessThanEquals, int8_t>(
 	    left, right, result, can_have_null);
 }
 
@@ -409,19 +420,16 @@ void VectorOperations::And(Vector &left, Vector &right, Vector &result,
 	if (left.type != TypeId::BOOLEAN || right.type != TypeId::BOOLEAN) {
 		throw NotImplementedException("FIXME cast");
 	}
-
-	if (left.count == right.count) {
-		if (can_have_null) {
-			// null handling happens inside operator
-			_templated_binary_loop<
-			    int8_t, int8_t, operators::AndNull>(left, right, result, false);
-		} else {
-			_templated_binary_loop<
-			    bool, bool, operators::And>(left, right, result, false);
-		}
-
-	} else {
+	if (left.count != right.count) {
 		throw Exception("Vector lengths don't match");
+	}
+
+	if (can_have_null) {
+		_fixed_return_binary_loop<operators::AndNull, int8_t>(left, right,
+		                                                      result, false);
+	} else {
+		_fixed_return_binary_loop<operators::And, int8_t>(left, right, result,
+		                                                  false);
 	}
 }
 
@@ -431,21 +439,15 @@ void VectorOperations::Or(Vector &left, Vector &right, Vector &result,
 		throw NotImplementedException("FIXME cast");
 	}
 
-	if (left.count == right.count) {
-
-		if (can_have_null) {
-			// null handling happens inside operator
-			_templated_binary_loop_handling<
-			    int8_t, int8_t, operators::OrNull,
-			    operators::ExecuteWithoutNullHandling>(left, right, result);
-		} else {
-			_templated_binary_loop_handling<
-			    bool, bool, operators::Or,
-			    operators::ExecuteWithoutNullHandling>(left, right, result);
-		}
-
-	} else {
+	if (left.count != right.count) {
 		throw Exception("Vector lengths don't match");
+	}
+	if (can_have_null) {
+		_fixed_return_binary_loop<operators::OrNull, int8_t>(left, right,
+		                                                     result, false);
+	} else {
+		_fixed_return_binary_loop<operators::Or, int8_t>(left, right, result,
+		                                                 false);
 	}
 }
 //===--------------------------------------------------------------------===//

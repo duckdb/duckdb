@@ -44,10 +44,13 @@ struct VectorOperations {
 	static void Abs(Vector &left, Vector &result);
 
 	// NOT(A)
-	static void Not(Vector &left, Vector &result);
+	static void Not(Vector &left, Vector &result, bool can_have_null = true);
 
-	// NOT NULL(A)
-	static void NotNull(Vector &left, Vector &result);
+	// IS NOT NULL(A)
+	static void NotN(Vector &left, Vector &result, bool can_have_null = true);
+
+	// IS NULL (A)
+	static void IsN(Vector &left, Vector &result, bool can_have_null = true);
 
 	// A + B
 	static void Add(Vector &left, int64_t right, Vector &result,

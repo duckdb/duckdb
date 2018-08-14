@@ -100,6 +100,21 @@ struct Not {
 };
 
 struct NotNull {
+	template <class T> static inline int8_t Operation(T left) {
+		if (duckdb::IsNullValue<T>(left)) {
+			return duckdb::NullValue<int8_t>();
+		}
+		return !left;
+	}
+};
+
+struct NotN {
+	template <class T> static inline bool Operation(T left) {
+		return !duckdb::IsNullValue<T>(left);
+	}
+};
+
+struct IsN {
 	template <class T> static inline bool Operation(T left) {
 		return duckdb::IsNullValue<T>(left);
 	}
