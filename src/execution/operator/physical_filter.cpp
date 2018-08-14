@@ -45,9 +45,9 @@ void PhysicalFilter::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 		}
 		for (size_t i = 0; i < chunk.column_count; i++) {
 			// create a reference to the vector of the child chunk
-			chunk.data[i]->Reference(*state->child_chunk.data[i].get());
+			chunk.data[i].Reference(state->child_chunk.data[i]);
 			// and assign the selection vector
-			chunk.data[i]->SetSelVector(chunk.sel_vector.get(), match_count);
+			chunk.data[i].SetSelVector(chunk.sel_vector.get(), match_count);
 		}
 		chunk.count = match_count;
 	} while (chunk.count == 0);

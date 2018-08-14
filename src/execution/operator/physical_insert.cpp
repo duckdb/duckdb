@@ -35,18 +35,18 @@ void PhysicalInsert::GetChunk(DataChunk &result_chunk,
 
 	for (size_t i = 0; i < value_list.size(); i++) {
 		auto &expr = value_list[i];
-		executor.Execute(expr.get(), *insert_chunk.data[i]);
+		executor.Execute(expr.get(), insert_chunk.data[i]);
 	}
-	insert_chunk.count = insert_chunk.data[0]->count;
+	insert_chunk.count = insert_chunk.data[0].count;
 
 	for (size_t i = 0; i < insert_chunk.column_count; i++) {
-		if (insert_chunk.count != insert_chunk.data[i]->count) {
+		if (insert_chunk.count != insert_chunk.data[i].count) {
 			throw Exception("Insert count mismatch!");
 		}
 	}
-	result_chunk.data[0]->count = 1;
-	result_chunk.data[0]->SetValue(0,
-	                               Value::INTEGER(insert_chunk.data[0]->count));
+	result_chunk.data[0].count = 1;
+	result_chunk.data[0].SetValue(0,
+	                              Value::INTEGER(insert_chunk.data[0].count));
 
 	table->storage->AddData(insert_chunk);
 

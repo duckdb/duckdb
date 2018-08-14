@@ -32,19 +32,19 @@ static void CHECK_COLUMN(std::unique_ptr<duckdb::DuckDBResult> &result,
 		}
 		// check this vector
 		auto &vector = result->data[chunk_index]->data[column_number];
-		if (i + vector->count > values.size()) {
-			vector->Print();
+		if (i + vector.count > values.size()) {
+			vector.Print();
 			// too many values in this vector
 			FAIL("Too many values in result!");
 		}
-		for (size_t j = 0; j < vector->count; j++) {
-			if (!duckdb::Value::Equals(vector->GetValue(j), values[i + j])) {
-				FAIL("Incorrect result! Got " + vector->GetValue(j).ToString() +
+		for (size_t j = 0; j < vector.count; j++) {
+			if (!duckdb::Value::Equals(vector.GetValue(j), values[i + j])) {
+				FAIL("Incorrect result! Got " + vector.GetValue(j).ToString() +
 				     " but expected " + values[i + j].ToString());
 			}
 		}
 		chunk_index++;
-		i += vector->count;
+		i += vector.count;
 	}
 }
 

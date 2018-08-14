@@ -50,15 +50,15 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 			DataChunk &payload_chunk = state->payload_chunk;
 			for (size_t i = 0; i < groups.size(); i++) {
 				auto &expr = groups[i];
-				executor.Execute(expr.get(), *group_chunk.data[i]);
-				group_chunk.count = group_chunk.data[i]->count;
+				executor.Execute(expr.get(), group_chunk.data[i]);
+				group_chunk.count = group_chunk.data[i].count;
 			}
 			size_t i = 0;
 			for (auto &expr : aggregates) {
 				if (expr->children.size() > 0) {
 					auto &child = expr->children[0];
-					executor.Execute(child.get(), *payload_chunk.data[i]);
-					payload_chunk.count = payload_chunk.data[i]->count;
+					executor.Execute(child.get(), payload_chunk.data[i]);
+					payload_chunk.count = payload_chunk.data[i].count;
 					i++;
 				}
 			}
@@ -99,11 +99,11 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 	ExpressionExecutor executor(state, false);
 	for (size_t i = 0; i < select_list.size(); i++) {
 		auto &expr = select_list[i];
-		executor.Execute(expr.get(), *chunk.data[i]);
+		executor.Execute(expr.get(), chunk.data[i]);
 	}
-	chunk.count = chunk.data[0]->count;
+	chunk.count = chunk.data[0].count;
 	for (size_t i = 0; i < chunk.column_count; i++) {
-		if (chunk.count != chunk.data[i]->count) {
+		if (chunk.count != chunk.data[i].count) {
 			throw Exception("Projection count mismatch!");
 		}
 	}

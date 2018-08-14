@@ -222,7 +222,7 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query,
 			char *ptr = column.data;
 			for (auto &chunk : result->data) {
 				auto &vector = chunk->data[i];
-				VectorOperations::Copy(*vector, ptr);
+				VectorOperations::Copy(vector, ptr);
 				ptr += type_size * chunk->count;
 			}
 		} else {
@@ -233,7 +233,7 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query,
 				char **dataptr = (char **)column.data;
 				for (auto &chunk : result->data) {
 					auto &vector = chunk->data[i];
-					char **str_data = (char **)vector->data;
+					char **str_data = (char **)vector.data;
 					for (auto j = 0; j < chunk->count; j++) {
 						*dataptr = (char *)malloc(strlen(str_data[j]) + 1);
 						if (!*dataptr)

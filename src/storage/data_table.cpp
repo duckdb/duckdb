@@ -18,7 +18,7 @@ void DataTable::AddData(DataChunk &chunk) {
 		throw CatalogException("Mismatch in column count for append");
 	}
 	for (size_t i = 0; i < chunk.column_count; i++) {
-		columns[i]->AddData(*chunk.data[i].get());
+		columns[i]->AddData(chunk.data[i]);
 	}
 	size += chunk.count;
 }

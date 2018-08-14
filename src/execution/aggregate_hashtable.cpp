@@ -51,9 +51,9 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	}
 	// first create a hash of all the values
 	Vector hashes(TypeId::INTEGER, groups.count);
-	VectorOperations::Hash(*groups.data[0], hashes);
+	VectorOperations::Hash(groups.data[0], hashes);
 	for (size_t i = 1; i < groups.column_count; i++) {
-		VectorOperations::CombineHash(hashes, *groups.data[i], hashes);
+		VectorOperations::CombineHash(hashes, groups.data[i], hashes);
 	}
 
 	// list of addresses for the tuples
@@ -83,14 +83,14 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		// first copy the group data for this tuple into a local space
 		size_t group_position = 0;
 		for (size_t grp = 0; grp < groups.column_count; grp++) {
-			size_t data_size = GetTypeIdSize(groups.data[grp]->type);
-			size_t group_entry = groups.data[grp]->sel_vector
-			                         ? groups.data[grp]->sel_vector[i]
+			size_t data_size = GetTypeIdSize(groups.data[grp].type);
+			size_t group_entry = groups.data[grp].sel_vector
+			                         ? groups.data[grp].sel_vector[i]
 			                         : i;
-			if (groups.data[grp]->type == TypeId::VARCHAR) {
+			if (groups.data[grp].type == TypeId::VARCHAR) {
 				// inline strings
 				const char *str =
-				    ((const char **)groups.data[grp]->data)[group_entry];
+				    ((const char **)groups.data[grp].data)[group_entry];
 				// strings > 8 characters we need to store a pointer and compare
 				// pointers
 				// FIXME: use statistics to figure this out per column
@@ -99,7 +99,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 				strcpy((char *)group_data + group_position, str);
 			} else {
 				memcpy(group_data + group_position,
-				       groups.data[grp]->data + data_size * group_entry,
+				       groups.data[grp].data + data_size * group_entry,
 				       data_size);
 			}
 			group_position += data_size;
@@ -160,66 +160,67 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			// initial value
 			// the payload might already have a selection vector
 			// first store a reference to the old selection vector
-			auto old_owned_sel_vector = move(payload.data[j]->owned_sel_vector);
-			auto old_sel_vector = payload.data[j]->sel_vector;
+			auto old_owned_sel_vector = move(payload.data[j].owned_sel_vector);
+			auto old_sel_vector = payload.data[j].sel_vector;
 			// now set the selection vector for the entries
-			payload.data[j]->SetSelVector(new_entries, new_count);
+			payload.data[j].SetSelVector(new_entries, new_count);
 			addresses.sel_vector = new_entries;
-			payload.data[j]->count = addresses.count = new_count;
+			payload.data[j].count = addresses.count = new_count;
 			switch (aggregate_types[i]) {
 			case ExpressionType::AGGREGATE_COUNT:
-				VectorOperations::Scatter::SetCount(*payload.data[j],
-				                                    addresses);
+				VectorOperations::Scatter::SetCount(payload.data[j], addresses);
 				break;
 			case ExpressionType::AGGREGATE_SUM:
 			case ExpressionType::AGGREGATE_MIN:
 			case ExpressionType::AGGREGATE_MAX:
-				VectorOperations::Scatter::Set(*payload.data[j], addresses);
+				VectorOperations::Scatter::Set(payload.data[j], addresses);
 				break;
 			default:
 				throw NotImplementedException("Unimplemented aggregate type!");
 			}
 			// restore the old selection vector
-			payload.data[j]->owned_sel_vector = move(old_owned_sel_vector);
-			payload.data[j]->sel_vector = old_sel_vector;
+			payload.data[j].owned_sel_vector = move(old_owned_sel_vector);
+			payload.data[j].sel_vector = old_sel_vector;
+			payload.data[j].count = payload.count;
 		}
 		if (updated_count > 0) {
 			// for any entries for which a group was found, update the aggregate
 			// store the old selection vector
-			auto old_owned_sel_vector = move(payload.data[j]->owned_sel_vector);
-			auto old_sel_vector = payload.data[j]->sel_vector;
-			payload.data[j]->SetSelVector(updated_entries, updated_count);
+			auto old_owned_sel_vector = move(payload.data[j].owned_sel_vector);
+			auto old_sel_vector = payload.data[j].sel_vector;
+			payload.data[j].SetSelVector(updated_entries, updated_count);
 			addresses.sel_vector = updated_entries;
-			payload.data[j]->count = addresses.count = updated_count;
+			payload.data[j].count = addresses.count = updated_count;
 
 			switch (aggregate_types[i]) {
 			case ExpressionType::AGGREGATE_COUNT:
-				VectorOperations::Scatter::AddOne(*payload.data[j], addresses);
+				VectorOperations::Scatter::AddOne(payload.data[j], addresses);
 				break;
 			case ExpressionType::AGGREGATE_SUM:
 				// addition
-				VectorOperations::Scatter::Add(*payload.data[j], addresses);
+				VectorOperations::Scatter::Add(payload.data[j], addresses);
 				break;
 			case ExpressionType::AGGREGATE_MIN:
 				// min
-				VectorOperations::Scatter::Min(*payload.data[j], addresses);
+				VectorOperations::Scatter::Min(payload.data[j], addresses);
 				break;
 			case ExpressionType::AGGREGATE_MAX:
 				// max
-				VectorOperations::Scatter::Max(*payload.data[j], addresses);
+				VectorOperations::Scatter::Max(payload.data[j], addresses);
 				break;
 			default:
 				throw NotImplementedException("Unimplemented aggregate type!");
 			}
 
 			// restore the old selection vector
-			payload.data[j]->owned_sel_vector = move(old_owned_sel_vector);
-			payload.data[j]->sel_vector = old_sel_vector;
+			payload.data[j].owned_sel_vector = move(old_owned_sel_vector);
+			payload.data[j].sel_vector = old_sel_vector;
+			payload.data[j].count = payload.count;
 		}
 		// move to the next aggregate chunk
 		addresses.sel_vector = nullptr;
 		addresses.count = groups.count;
-		VectorOperations::Add(addresses, GetTypeIdSize(payload.data[j]->type),
+		VectorOperations::Add(addresses, GetTypeIdSize(payload.data[j].type),
 		                      addresses);
 		j++;
 	}
@@ -255,42 +256,40 @@ void SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &groups,
 	addresses.count = entry;
 	// fetch the group columns
 	for (size_t i = 0; i < groups.column_count; i++) {
-		auto column = groups.data[i].get();
-		column->count = entry;
-		if (column->type == TypeId::VARCHAR) {
+		auto &column = groups.data[i];
+		column.count = entry;
+		if (column.type == TypeId::VARCHAR) {
 			const char **ptr = (const char **)addresses.data;
 			for (size_t i = 0; i < entry; i++) {
 				// fetch the string
-				column->SetValue(i, Value(string(ptr[i])));
+				column.SetValue(i, Value(string(ptr[i])));
 			}
 		} else {
-			VectorOperations::Gather::Set(addresses, *column);
+			VectorOperations::Gather::Set(addresses, column);
 		}
-		VectorOperations::Add(addresses, GetTypeIdSize(column->type),
-		                      addresses);
+		VectorOperations::Add(addresses, GetTypeIdSize(column.type), addresses);
 	}
 
 	size_t current_bytes = 0;
 	for (size_t i = 0; i < aggregate_types.size(); i++) {
-		auto target = result.data[i].get();
-		target->count = entry;
+		auto &target = result.data[i];
+		target.count = entry;
 
 		if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_STAR) {
 			// we fetch the total counts later because they are stored at the
 			// end
 			continue;
 		}
-		VectorOperations::Gather::Set(addresses, *target);
-		VectorOperations::Add(addresses, GetTypeIdSize(target->type),
-		                      addresses);
-		current_bytes += GetTypeIdSize(target->type);
+		VectorOperations::Gather::Set(addresses, target);
+		VectorOperations::Add(addresses, GetTypeIdSize(target.type), addresses);
+		current_bytes += GetTypeIdSize(target.type);
 	}
 	for (size_t i = 0; i < aggregate_types.size(); i++) {
 		// now we can fetch the counts
 		if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_STAR) {
-			auto target = result.data[i].get();
-			target->count = entry;
-			VectorOperations::Gather::Set(addresses, *target);
+			auto &target = result.data[i];
+			target.count = entry;
+			VectorOperations::Gather::Set(addresses, target);
 		}
 	}
 	groups.count = entry;

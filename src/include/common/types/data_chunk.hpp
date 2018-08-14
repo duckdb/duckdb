@@ -44,7 +44,7 @@ class DataChunk : public Printable {
 	//! The amount of vectors that are part of this DataChunk.
 	oid_t column_count;
 	//! The vectors owned by the DataChunk.
-	std::unique_ptr<std::unique_ptr<Vector>[]> data;
+	std::unique_ptr<Vector[]> data;
 	//! The maximum amount of data that can be stored in each of the vectors
 	//! owned by the DataChunk.
 	oid_t maximum_size;
@@ -85,6 +85,8 @@ class DataChunk : public Printable {
 
 	//! Converts this DataChunk to a printable string representation
 	std::string ToString() const;
+
+	Vector &GetVector(size_t index) { return data[index]; }
 
 	DataChunk(const DataChunk &) = delete;
 

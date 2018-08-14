@@ -16,8 +16,8 @@ vector<TypeId> PhysicalOrder::GetTypes() { return children[0]->GetTypes(); }
 int compare_tuple(DataChunk &sort_by, OrderByDescription &desc, size_t left,
                   size_t right) {
 	for (size_t i = 0; i < desc.orders.size(); i++) {
-		Value left_value = sort_by.data[i]->GetValue(left);
-		Value right_value = sort_by.data[i]->GetValue(right);
+		Value left_value = sort_by.data[i].GetValue(left);
+		Value right_value = sort_by.data[i].GetValue(right);
 		if (Value::Equals(left_value, right_value)) {
 			continue;
 		}
@@ -133,9 +133,9 @@ void PhysicalOrder::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 		ExpressionExecutor executor(big_data);
 		for (size_t i = 0; i < description.orders.size(); i++) {
 			auto &expr = description.orders[i].expression;
-			executor.Execute(expr.get(), *sort_chunk.data[i]);
+			executor.Execute(expr.get(), sort_chunk.data[i]);
 		}
-		sort_chunk.count = sort_chunk.data[0]->count;
+		sort_chunk.count = sort_chunk.data[0].count;
 
 		if (sort_chunk.count != big_data.count) {
 			throw Exception("Cardinalities of ORDER BY columns and input "
@@ -148,7 +148,7 @@ void PhysicalOrder::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 
 		// now assign the selection vector to the children
 		for (size_t i = 0; i < big_data.column_count; i++) {
-			big_data.data[i]->sel_vector = big_data.sel_vector.get();
+			big_data.data[i].sel_vector = big_data.sel_vector.get();
 		}
 	}
 
@@ -157,10 +157,10 @@ void PhysicalOrder::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 	}
 
 	for (size_t i = 0; i < big_data.column_count; i++) {
-		chunk.data[i]->Reference(*big_data.data[i].get(), state->position,
-		                         STANDARD_VECTOR_SIZE);
+		chunk.data[i].Reference(big_data.data[i], state->position,
+		                        STANDARD_VECTOR_SIZE);
 	}
-	chunk.count = chunk.data[0]->count;
+	chunk.count = chunk.data[0].count;
 	state->position += chunk.count;
 }
 

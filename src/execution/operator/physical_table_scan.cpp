@@ -25,11 +25,9 @@ void PhysicalTableScan::GetChunk(DataChunk &chunk,
 		if (state->current_offset >= column->data.size())
 			return;
 		auto &v = column->data[state->current_offset];
-		chunk.data[i]->data = v->data;
-		chunk.data[i]->owns_data = false;
-		chunk.data[i]->count = v->count;
+		chunk.data[i].Reference(*v);
 	}
-	chunk.count = chunk.data[0]->count;
+	chunk.count = chunk.data[0].count;
 	state->current_offset++;
 }
 

@@ -115,8 +115,8 @@ void ExpressionExecutor::Visit(AggregateExpression &expr) {
 	}
 	if (state->aggregates.size() == 0) {
 		if (state->aggregate_chunk.column_count &&
-		    state->aggregate_chunk.data[expr.index]->count) {
-			vector.Reference(*state->aggregate_chunk.data[expr.index].get());
+		    state->aggregate_chunk.data[expr.index].count) {
+			vector.Reference(state->aggregate_chunk.data[expr.index]);
 		} else {
 			// the subquery scanned no rows, therefore the aggr is empty. return
 			// something reasonable depending on aggr type.
@@ -188,7 +188,7 @@ void ExpressionExecutor::Visit(ColumnRefExpression &expr) {
 	if (expr.index >= cur_exec->chunk->column_count) {
 		throw Exception("Column reference index out of range!");
 	}
-	vector.Reference(*cur_exec->chunk->data[expr.index].get());
+	vector.Reference(cur_exec->chunk->data[expr.index]);
 	expr.stats.Verify(vector);
 }
 
@@ -282,7 +282,7 @@ void ExpressionExecutor::Visit(GroupRefExpression &expr) {
 	if (!state) {
 		throw NotImplementedException("Aggregate node without aggregate state");
 	}
-	vector.Reference(*state->group_chunk.data[expr.group_index].get());
+	vector.Reference(state->group_chunk.data[expr.group_index]);
 }
 
 void ExpressionExecutor::Visit(OperatorExpression &expr) {
@@ -354,11 +354,11 @@ void ExpressionExecutor::Visit(SubqueryExpression &expr) {
 	vector.Resize(old_chunk->count, expr.return_type);
 	vector.count = old_chunk->count;
 	for (size_t c = 0; c < old_chunk->column_count; c++) {
-		row_chunk.data[c]->count = 1;
+		row_chunk.data[c].count = 1;
 	}
 	for (size_t r = 0; r < old_chunk->count; r++) {
 		for (size_t c = 0; c < old_chunk->column_count; c++) {
-			row_chunk.data[c]->SetValue(0, old_chunk->data[c]->GetValue(r));
+			row_chunk.data[c].SetValue(0, old_chunk->data[c].GetValue(r));
 		}
 		auto state = plan->GetOperatorState(this);
 		DataChunk s_chunk;
@@ -369,7 +369,7 @@ void ExpressionExecutor::Visit(SubqueryExpression &expr) {
 				vector.SetValue(r, Value());
 			} else {
 				assert(s_chunk.column_count > 0);
-				vector.SetValue(r, s_chunk.data[0]->GetValue(0));
+				vector.SetValue(r, s_chunk.data[0].GetValue(0));
 			}
 		} else {
 			vector.SetValue(r, Value::BOOLEAN(s_chunk.count != 0));

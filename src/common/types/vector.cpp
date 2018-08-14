@@ -45,7 +45,6 @@ Vector::Vector(TypeId type, char *dataptr, size_t maximum_size)
 		owned_strings = unique_ptr<unique_ptr<char[]>[]>(string_list);
 	}
 }
-std::unique_ptr<std::unique_ptr<char[]>> owned_strings;
 
 Vector::Vector(Value value)
     : type(value.type), count(1), sel_vector(nullptr), maximum_size(1) {
