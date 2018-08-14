@@ -328,7 +328,7 @@ static int checkValue(const char *zKey, const char *zHash) {
 ** This is the main routine.  This routine runs first.  It processes
 ** command-line arguments then runs the test.
 */
-TEST_CASE("[SLOW] Test SQLite Logic Test", "[sqlitelogic]") {
+TEST_CASE("Test SQLite Logic Test", "[sqlitelogic]") {
 	int verifyMode = 0;               /* True if in -verify mode */
 	int haltOnError = 0;              /* Stop on first error if true */
 	int enableTrace = 0;              /* Trace SQL statements if true */
@@ -377,10 +377,13 @@ TEST_CASE("[SLOW] Test SQLite Logic Test", "[sqlitelogic]") {
 	/*
 	** Read the entire script file contents into memory
 	*/
+//	vector<string> files = {
+//	    "test/sqlite/select1.test", "test/sqlite/select2.test",
+//	    "test/sqlite/select3.test", "test/sqlite/select4.test",
+//	    "test/sqlite/select5.test"};
+
 	vector<string> files = {
-	    "test/sqlite/select1.test", "test/sqlite/select2.test",
-	    "test/sqlite/select3.test", "test/sqlite/select4.test",
-	    "test/sqlite/select5.test"};
+	    "test/sqlite/select1.test"};
 	for (auto &script : files) {
 		zScriptFile = script.c_str();
 		in = fopen(zScriptFile, "rb");

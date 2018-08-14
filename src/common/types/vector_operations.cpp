@@ -164,6 +164,7 @@ void _generic_binary_loop(Vector &left, Vector &right, Vector &result,
 		throw NotImplementedException("Type cast not implemented here!");
 	}
 	switch (left.type) {
+	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
 		_templated_binary_loop<int8_t, int8_t, OP>(left, right, result,
 		                                           can_have_null);
