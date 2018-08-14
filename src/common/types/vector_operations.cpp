@@ -296,7 +296,6 @@ void VectorOperations::IsN(Vector &left, Vector &result, bool can_have_null) {
 	_fixed_return_unary_loop<operators::IsN, int8_t>(left, result);
 }
 
-
 //===--------------------------------------------------------------------===//
 // Right-Hand Side Numeric Helpers
 //===--------------------------------------------------------------------===//
@@ -389,13 +388,13 @@ void VectorOperations::Equals(Vector &left, Vector &right, Vector &result,
 void VectorOperations::NotEquals(Vector &left, Vector &right, Vector &result,
                                  bool can_have_null) {
 	_fixed_return_binary_loop<operators::NotEquals, int8_t>(left, right, result,
-	                                                      can_have_null);
+	                                                        can_have_null);
 }
 
 void VectorOperations::GreaterThan(Vector &left, Vector &right, Vector &result,
                                    bool can_have_null) {
-	_fixed_return_binary_loop<operators::GreaterThan, int8_t>(left, right, result,
-	                                                        can_have_null);
+	_fixed_return_binary_loop<operators::GreaterThan, int8_t>(
+	    left, right, result, can_have_null);
 }
 
 void VectorOperations::GreaterThanEquals(Vector &left, Vector &right,
@@ -407,7 +406,7 @@ void VectorOperations::GreaterThanEquals(Vector &left, Vector &right,
 void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result,
                                 bool can_have_null) {
 	_fixed_return_binary_loop<operators::LessThan, int8_t>(left, right, result,
-	                                                     can_have_null);
+	                                                       can_have_null);
 }
 
 void VectorOperations::LessThanEquals(Vector &left, Vector &right,
@@ -422,15 +421,15 @@ void VectorOperations::And(Vector &left, Vector &right, Vector &result,
 		throw NotImplementedException("FIXME cast");
 	}
 	if (left.count != right.count) {
-			throw Exception("Vector lengths don't match");
-		}
+		throw Exception("Vector lengths don't match");
+	}
 
 	if (can_have_null) {
-		_fixed_return_binary_loop<operators::AndNull, int8_t>(left, right, result,
-			                                                   false);
+		_fixed_return_binary_loop<operators::AndNull, int8_t>(left, right,
+		                                                      result, false);
 	} else {
 		_fixed_return_binary_loop<operators::And, int8_t>(left, right, result,
-													   false);
+		                                                  false);
 	}
 }
 
@@ -444,11 +443,11 @@ void VectorOperations::Or(Vector &left, Vector &right, Vector &result,
 		throw Exception("Vector lengths don't match");
 	}
 	if (can_have_null) {
-		_fixed_return_binary_loop<operators::OrNull, int8_t>(left, right, result,
-		                                                   false);
+		_fixed_return_binary_loop<operators::OrNull, int8_t>(left, right,
+		                                                     result, false);
 	} else {
 		_fixed_return_binary_loop<operators::Or, int8_t>(left, right, result,
-		                                               false);
+		                                                 false);
 	}
 }
 //===--------------------------------------------------------------------===//

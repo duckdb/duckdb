@@ -377,21 +377,20 @@ unique_ptr<AbstractExpression> TransformCoalesce(A_Expr *root) {
 	return move(exp_root);
 }
 
-
 unique_ptr<AbstractExpression> TransformNullTest(NullTest *root) {
 	if (!root) {
 		return nullptr;
 	}
-	auto arg =
-	    TransformExpression(reinterpret_cast<Node *>(root->arg));
-	if(root->argisrow) {
+	auto arg = TransformExpression(reinterpret_cast<Node *>(root->arg));
+	if (root->argisrow) {
 		throw NotImplementedException("IS NULL argisrow");
 	}
-	ExpressionType expr_type = (root->nulltesttype == IS_NULL) ? ExpressionType::OPERATOR_IS_NULL : ExpressionType::OPERATOR_IS_NOT_NULL ;
+	ExpressionType expr_type = (root->nulltesttype == IS_NULL)
+	                               ? ExpressionType::OPERATOR_IS_NULL
+	                               : ExpressionType::OPERATOR_IS_NOT_NULL;
 
 	return unique_ptr<AbstractExpression>(
-	    new OperatorExpression(expr_type,
-	                           TypeId::BOOLEAN, move(arg)));
+	    new OperatorExpression(expr_type, TypeId::BOOLEAN, move(arg)));
 }
 
 unique_ptr<AbstractExpression> TransformAExpr(A_Expr *root) {

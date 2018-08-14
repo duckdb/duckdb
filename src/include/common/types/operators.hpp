@@ -99,11 +99,10 @@ struct Not {
 	static inline bool Operation(bool left) { return !left; }
 };
 
-
 struct NotNull {
-	template <class T> static inline bool Operation(T left) {
+	template <class T> static inline int8_t Operation(T left) {
 		if (duckdb::IsNullValue<T>(left)) {
-			return duckdb::NullValue<T>();
+			return duckdb::NullValue<int8_t>();
 		}
 		return !left;
 	}
@@ -120,7 +119,6 @@ struct IsN {
 		return duckdb::IsNullValue<T>(left);
 	}
 };
-
 
 template <> double Modulo::Operation(double left, double right);
 
