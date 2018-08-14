@@ -82,7 +82,7 @@ duckdbQuery(void *pConn,       /* Connection created by xConnect */
 
 			switch (actual_column.type) {
 			case DUCKDB_TYPE_TINYINT: {
-				if (0) {
+				if (duckdb_value_is_null(actual_column, r)) {
 					snprintf(buffer, BUFSIZ, "%s", "NULL");
 				} else {
 					snprintf(buffer, BUFSIZ, "%d",
@@ -91,7 +91,7 @@ duckdbQuery(void *pConn,       /* Connection created by xConnect */
 				break;
 			}
 			case DUCKDB_TYPE_SMALLINT: {
-				if (0) {
+				if (duckdb_value_is_null(actual_column, r)) {
 					snprintf(buffer, BUFSIZ, "%s", "NULL");
 				} else {
 					snprintf(buffer, BUFSIZ, "%d",
@@ -100,7 +100,7 @@ duckdbQuery(void *pConn,       /* Connection created by xConnect */
 				break;
 			}
 			case DUCKDB_TYPE_INTEGER: {
-				if (0) {
+				if (duckdb_value_is_null(actual_column, r)) {
 					snprintf(buffer, BUFSIZ, "%s", "NULL");
 				} else {
 					snprintf(buffer, BUFSIZ, "%d",
@@ -109,7 +109,7 @@ duckdbQuery(void *pConn,       /* Connection created by xConnect */
 				break;
 			}
 			case DUCKDB_TYPE_BIGINT: {
-				if (0) {
+				if (duckdb_value_is_null(actual_column, r)) {
 					snprintf(buffer, BUFSIZ, "%s", "NULL");
 				} else {
 					snprintf(buffer, BUFSIZ, "%d",
@@ -118,7 +118,7 @@ duckdbQuery(void *pConn,       /* Connection created by xConnect */
 				break;
 			}
 			case DUCKDB_TYPE_DECIMAL: {
-				if (0) {
+				if (duckdb_value_is_null(actual_column, r)) {
 					snprintf(buffer, BUFSIZ, "%s", "NULL");
 				} else {
 					snprintf(buffer, BUFSIZ, "%lf",
