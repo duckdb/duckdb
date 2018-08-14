@@ -334,6 +334,45 @@ unique_ptr<AbstractExpression> TransformConstant(A_Const *c) {
 	return TransformValue(c->val);
 }
 
+
+// COALESCE(a,b,c) returns the first argument that is NOT NULL, so
+// rewrite into CASE(a IS NOT NULL, a, CASE(b IS NOT NULL, b, c))
+unique_ptr<AbstractExpression> TransformCoalesce(A_Expr *root) {
+	if (!root) {
+		return nullptr;
+	}
+	auto coalesce_args = reinterpret_cast<List *>(root->lexpr);
+	// TODO: this is somewhat duplicated from the CASE rewrite below, perhaps they can be merged
+	auto exp_root = unique_ptr<AbstractExpression>(new CaseExpression());
+	AbstractExpression *cur_root = exp_root.get();
+	AbstractExpression *next_root = nullptr;
+
+	for (auto cell = coalesce_args->head; cell && cell->next; cell = cell->next) {
+		// we need this twice
+		auto value_expr = TransformExpression(reinterpret_cast<Node *>(cell->data.ptr_value));
+		auto res_true = TransformExpression(reinterpret_cast<Node *>(cell->data.ptr_value));
+
+		auto test = unique_ptr<AbstractExpression>(new OperatorExpression(
+				ExpressionType::OPERATOR_IS_NOT_NULL, TypeId::BOOLEAN, move(value_expr)));
+
+		// the last argument does not need its own CASE because if we get there we might as well return it directly
+		unique_ptr<AbstractExpression> res_false;
+		if (cell->next->next == nullptr) {
+			res_false = TransformExpression(reinterpret_cast<Node *>(cell->next->data.ptr_value));
+		} else {
+			res_false = unique_ptr<AbstractExpression>(new CaseExpression());
+			next_root = res_false.get();
+		}
+
+		cur_root->AddChild(move(test));
+		cur_root->AddChild(move(res_true));
+		cur_root->AddChild(move(res_false));
+
+		cur_root = next_root;
+	}
+	return move(exp_root);
+}
+
 unique_ptr<AbstractExpression> TransformAExpr(A_Expr *root) {
 	if (!root) {
 		return nullptr;
@@ -592,6 +631,9 @@ unique_ptr<AbstractExpression> TransformExpression(Node *node) {
 		return TransformCase(reinterpret_cast<CaseExpr *>(node));
 	case T_SubLink:
 		return TransformSubquery(reinterpret_cast<SubLink *>(node));
+	case T_CoalesceExpr:
+		return TransformCoalesce(reinterpret_cast<A_Expr *>(node));
+
 	case T_ParamRef:
 	case T_NullTest:
 	default:
