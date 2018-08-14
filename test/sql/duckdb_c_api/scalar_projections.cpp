@@ -7,7 +7,7 @@
 
 using namespace std;
 
-TEST_CASE("Test scalar queries", "[scalarquery]") {
+TEST_CASE("Test scalar queries [C]", "[scalarquery]") {
 	duckdb_database database;
 	duckdb_connection connection;
 	duckdb_result result;

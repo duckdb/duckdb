@@ -413,13 +413,11 @@ void VectorOperations::And(Vector &left, Vector &right, Vector &result,
 	if (left.count == right.count) {
 		if (can_have_null) {
 			// null handling happens inside operator
-			_templated_binary_loop_handling<
-			    int8_t, int8_t, operators::AndNull,
-			    operators::ExecuteWithoutNullHandling>(left, right, result);
+			_templated_binary_loop<
+			    int8_t, int8_t, operators::AndNull>(left, right, result, false);
 		} else {
-			_templated_binary_loop_handling<
-			    bool, bool, operators::And,
-			    operators::ExecuteWithoutNullHandling>(left, right, result);
+			_templated_binary_loop<
+			    bool, bool, operators::And>(left, right, result, false);
 		}
 
 	} else {

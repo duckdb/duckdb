@@ -32,24 +32,23 @@ void PhysicalFilter::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 		}
 		// now generate the selection vector
 		bool *matches = (bool *)result.data;
-		chunk.sel_vector = unique_ptr<sel_t[]>(new sel_t[result.count]);
+		auto sel_vector = unique_ptr<sel_t[]>(new sel_t[result.count]);
 		size_t match_count = 0;
 		for (size_t i = 0; i < result.count; i++) {
 			if (matches[i]) {
-				chunk.sel_vector[match_count++] = i;
+				sel_vector[match_count++] = i;
 			}
 		}
 		if (match_count == result.count) {
 			// everything matches! don't need a selection vector!
-			chunk.sel_vector.reset();
+			sel_vector.reset();
 		}
 		for (size_t i = 0; i < chunk.column_count; i++) {
 			// create a reference to the vector of the child chunk
 			chunk.data[i].Reference(state->child_chunk.data[i]);
-			// and assign the selection vector
-			chunk.data[i].SetSelVector(chunk.sel_vector.get(), match_count);
 		}
-		chunk.count = match_count;
+		// assign the selection vector
+		chunk.SetSelVector(move(sel_vector), match_count);
 	} while (chunk.count == 0);
 }
 

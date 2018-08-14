@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include "catch.hpp"
+
 #include "duckdb.hpp"
 
 static void CHECK_COLUMN(std::unique_ptr<duckdb::DuckDBResult> &result,

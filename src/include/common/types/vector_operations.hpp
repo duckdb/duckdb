@@ -139,18 +139,18 @@ struct VectorOperations {
 	// Scatter methods
 	//===--------------------------------------------------------------------===//
 	struct Scatter {
-		// dest[i] = source.data[i]
-		static void Set(Vector &source, Vector &dest);
-		// dest[i] = dest[i] + source.data[i]
-		static void Add(Vector &source, Vector &dest);
-		// dest[i] = max(dest[i], source.data[i])
-		static void Max(Vector &source, Vector &dest);
-		// dest[i] = min(dest[i], source.data[i])
-		static void Min(Vector &source, Vector &dest);
-		// dest[i] = len(source.data[i])
-		static void SetCount(Vector &source, Vector &dest);
-		// dest[i] = dest[i] + 1
-		static void AddOne(Vector &source, Vector &dest);
+		// dest[i] = source.data[i] OR dest[i] = source.data[sel_vector[i]]
+		static void Set(Vector &source, Vector &dest, sel_t *sel_vector = nullptr);
+		// dest[i] += source.data[i] OR dest[i] += source.data[sel_vector[i]]
+		static void Add(Vector &source, Vector &dest, sel_t *sel_vector = nullptr);
+		// dest[i] = max(dest[i], source.data[i]) OR ...
+		static void Max(Vector &source, Vector &dest, sel_t *sel_vector = nullptr);
+		// dest[i] = min(dest[i], source.data[i]) OR ...
+		static void Min(Vector &source, Vector &dest, sel_t *sel_vector = nullptr);
+		// dest[i] = len(source.data[i]) OR ...
+		static void SetCount(Vector &source, Vector &dest, sel_t *sel_vector = nullptr);
+		// dest[i] = dest[i] + 1 OR ...
+		static void AddOne(Vector &source, Vector &dest, sel_t *sel_vector = nullptr);
 
 		// dest[i] = dest[i] + source
 		static void Add(int64_t source, void **dest, size_t length);
@@ -180,5 +180,7 @@ struct VectorOperations {
 	static void Copy(Vector &source, Vector &target, size_t offset = 0);
 	// Set all elements of the vector to the given constant value
 	static void Set(Vector &result, Value value);
+	//! For every value in result, set result[i] = left[sel_vector[i]]
+	static void ApplySelectionVector(Vector &left, Vector &result, sel_t *sel_vector);
 };
 } // namespace duckdb

@@ -303,3 +303,56 @@ void VectorOperations::Case(Vector &check, Vector &res_true, Vector &res_false,
 	}
 	result.count = check.count;
 }
+
+//===--------------------------------------------------------------------===//
+// Apply selection vector 
+//===--------------------------------------------------------------------===//
+template <class T>
+void _templated_apply_selection_vector(Vector &left, Vector &result, sel_t *sel_vector) {
+	T *ldata = (T *)left.data;
+	T *rdata = (T *)result.data;
+	if (left.sel_vector) {
+		for(size_t i = 0; i < result.count; i++) {
+			rdata[i] = ldata[left.sel_vector[sel_vector[i]]];
+		}
+	} else {
+		for(size_t i = 0; i < result.count; i++) {
+			rdata[i] = ldata[sel_vector[i]];
+		}
+	}
+}
+void VectorOperations::ApplySelectionVector(Vector &left, Vector &result, sel_t *sel_vector) {
+	if (left.type != result.type) {
+		throw Exception("Types of vectors do not match!");
+	}
+	switch (result.type) {
+	case TypeId::BOOLEAN:
+	case TypeId::TINYINT:
+		_templated_apply_selection_vector<int8_t>(left, result, sel_vector);
+		break;
+	case TypeId::SMALLINT:
+		_templated_apply_selection_vector<int16_t>(left, result, sel_vector);
+		break;
+	case TypeId::INTEGER:
+		_templated_apply_selection_vector<int32_t>(left, result, sel_vector);
+		break;
+	case TypeId::BIGINT:
+		_templated_apply_selection_vector<int64_t>(left, result, sel_vector);
+		break;
+	case TypeId::DECIMAL:
+		_templated_apply_selection_vector<double>(left, result, sel_vector);
+		break;
+	case TypeId::POINTER:
+		_templated_apply_selection_vector<uint64_t>(left, result, sel_vector);
+		break;
+	case TypeId::VARCHAR:
+		_templated_apply_selection_vector<const char*>(left, result, sel_vector);
+		break;
+	case TypeId::DATE:
+		_templated_apply_selection_vector<date_t>(left, result, sel_vector);
+		break;
+	default:
+		throw NotImplementedException("Unimplemented type for case expression");
+	}
+}
+

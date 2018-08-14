@@ -7,7 +7,7 @@
 
 using namespace std;
 
-TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
+TEST_CASE("Test aggregation/group by by statements [c-api]", "[aggregations]") {
 	duckdb_database database;
 	duckdb_connection connection;
 	duckdb_result result;

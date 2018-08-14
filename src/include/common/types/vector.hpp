@@ -80,9 +80,6 @@ class Vector : public Printable {
 	//! Sets the [index] element of the Vector to the specified Value
 	void SetValue(size_t index, Value val);
 
-	//! Sets the selection vector of the vector
-	void SetSelVector(sel_t *vector, size_t count);
-
 	//! Resizes the vector to hold maximum_size, and potentially typecasts the
 	//! elements as well. After the resize, the vector will become an owning
 	//! vector even if it was a non-owning vector before.
@@ -116,8 +113,6 @@ class Vector : public Printable {
 	// private:
 	//! If the vector owns data, this is the unique_ptr holds the actual data.
 	std::unique_ptr<char[]> owned_data;
-	//! If the vector owns its selection vector, this is the unique_ptr holds it
-	std::unique_ptr<sel_t[]> owned_sel_vector;
 	//! If the vector owns a set of variable length entries, this unique_ptr
 	//! holds the variable length entries.
 	std::unique_ptr<std::unique_ptr<char[]>[]> owned_strings;

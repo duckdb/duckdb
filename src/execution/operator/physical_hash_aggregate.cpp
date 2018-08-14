@@ -51,17 +51,19 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 			for (size_t i = 0; i < groups.size(); i++) {
 				auto &expr = groups[i];
 				executor.Execute(expr.get(), group_chunk.data[i]);
-				group_chunk.count = group_chunk.data[i].count;
 			}
-			size_t i = 0;
-			for (auto &expr : aggregates) {
-				if (expr->children.size() > 0) {
-					auto &child = expr->children[0];
-					executor.Execute(child.get(), payload_chunk.data[i]);
-					payload_chunk.count = payload_chunk.data[i].count;
-					i++;
+			if (payload_chunk.column_count > 0) {
+				size_t i = 0;
+				for (auto &expr : aggregates) {
+					if (expr->children.size() > 0) {
+						auto &child = expr->children[0];
+						executor.Execute(child.get(), payload_chunk.data[i++]);
+					}
 				}
+				payload_chunk.count = payload_chunk.data[0].count;
+
 			}
+			group_chunk.count = group_chunk.data[0].count;
 			state->ht->AddChunk(group_chunk, payload_chunk);
 		} else {
 			// aggregation without groups

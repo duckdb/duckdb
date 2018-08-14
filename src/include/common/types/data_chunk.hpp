@@ -72,6 +72,17 @@ class DataChunk : public Printable {
 	//! Destroy all data and columns owned by this DataChunk
 	void Destroy();
 
+	//! Merges the vector new_vector with an existing selection vector (i.e. result[i] = current_vector[new_vector[i]];)
+	static void MergeSelVector(sel_t *current_vector, sel_t *new_vector, sel_t * result, size_t new_count);
+
+	//! Sets the selection vector of the chunk
+	void SetSelVector(std::unique_ptr<sel_t[]> sel_vector, size_t new_count);
+
+	//! Returns true if all columns in the chunk have the same selection vector
+	bool HasConsistentSelVector();
+	//! Returns true if any vectors in the DataChunk have a selection vector
+	bool HasSelVector();
+
 	//! Forces the DataChunk to use only data that it owns itself
 	void ForceOwnership();
 

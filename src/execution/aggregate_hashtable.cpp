@@ -151,75 +151,62 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	// update the aggregates
 	Vector one(Value::BIGINT(1));
 	size_t j = 0;
+
+	// don't need to use selection vectors if they select everything anyway
+	auto new_sel = updated_count > 0 ? new_entries : nullptr;
+	auto updated_sel = new_count > 0 ? updated_entries : nullptr;
+
 	for (size_t i = 0; i < aggregate_types.size(); i++) {
 		if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_STAR) {
 			continue;
 		}
+		assert(payload.column_count > j);
 		if (new_count > 0) {
 			// for any entries for which a new entry was created, set the
 			// initial value
-			// the payload might already have a selection vector
-			// first store a reference to the old selection vector
-			auto old_owned_sel_vector = move(payload.data[j].owned_sel_vector);
-			auto old_sel_vector = payload.data[j].sel_vector;
-			// now set the selection vector for the entries
-			payload.data[j].SetSelVector(new_entries, new_count);
-			addresses.sel_vector = new_entries;
+			addresses.sel_vector = new_sel;
 			payload.data[j].count = addresses.count = new_count;
 			switch (aggregate_types[i]) {
 			case ExpressionType::AGGREGATE_COUNT:
-				VectorOperations::Scatter::SetCount(payload.data[j], addresses);
+				VectorOperations::Scatter::SetCount(payload.data[j], addresses, new_sel);
 				break;
 			case ExpressionType::AGGREGATE_SUM:
 			case ExpressionType::AGGREGATE_MIN:
 			case ExpressionType::AGGREGATE_MAX:
-				VectorOperations::Scatter::Set(payload.data[j], addresses);
+				VectorOperations::Scatter::Set(payload.data[j], addresses, new_sel);
 				break;
 			default:
 				throw NotImplementedException("Unimplemented aggregate type!");
 			}
-			// restore the old selection vector
-			payload.data[j].owned_sel_vector = move(old_owned_sel_vector);
-			payload.data[j].sel_vector = old_sel_vector;
-			payload.data[j].count = payload.count;
 		}
 		if (updated_count > 0) {
 			// for any entries for which a group was found, update the aggregate
 			// store the old selection vector
-			auto old_owned_sel_vector = move(payload.data[j].owned_sel_vector);
-			auto old_sel_vector = payload.data[j].sel_vector;
-			payload.data[j].SetSelVector(updated_entries, updated_count);
-			addresses.sel_vector = updated_entries;
+			addresses.sel_vector = updated_sel;
 			payload.data[j].count = addresses.count = updated_count;
-
 			switch (aggregate_types[i]) {
 			case ExpressionType::AGGREGATE_COUNT:
-				VectorOperations::Scatter::AddOne(payload.data[j], addresses);
+				VectorOperations::Scatter::AddOne(payload.data[j], addresses, updated_sel);
 				break;
 			case ExpressionType::AGGREGATE_SUM:
 				// addition
-				VectorOperations::Scatter::Add(payload.data[j], addresses);
+				VectorOperations::Scatter::Add(payload.data[j], addresses, updated_sel);
 				break;
 			case ExpressionType::AGGREGATE_MIN:
 				// min
-				VectorOperations::Scatter::Min(payload.data[j], addresses);
+				VectorOperations::Scatter::Min(payload.data[j], addresses, updated_sel);
 				break;
 			case ExpressionType::AGGREGATE_MAX:
 				// max
-				VectorOperations::Scatter::Max(payload.data[j], addresses);
+				VectorOperations::Scatter::Max(payload.data[j], addresses, updated_sel);
 				break;
 			default:
 				throw NotImplementedException("Unimplemented aggregate type!");
 			}
-
-			// restore the old selection vector
-			payload.data[j].owned_sel_vector = move(old_owned_sel_vector);
-			payload.data[j].sel_vector = old_sel_vector;
-			payload.data[j].count = payload.count;
 		}
 		// move to the next aggregate chunk
 		addresses.sel_vector = nullptr;
-		addresses.count = groups.count;
+		payload.data[j].count = addresses.count = groups.count;
 		VectorOperations::Add(addresses, GetTypeIdSize(payload.data[j].type),
 		                      addresses);
 		j++;
