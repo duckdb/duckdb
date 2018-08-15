@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// parser/parser.hpp
+// optimizer/expression_rules/constant_cast.hpp
 //
 // Author: Hannes Mühleisen & Mark Raasveldt
 //
@@ -15,19 +15,17 @@
 
 #include "common/exception.hpp"
 #include "common/internal_types.hpp"
-#include "optimizer/rule.hpp"
+#include "optimizer/expression_rule.hpp"
 #include "parser/expression/cast_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
 
 namespace duckdb {
 
-class ConstantCastRule : public OptimizerRule {
+class ConstantCastRule : public ExpressionRule {
   public:
 	ConstantCastRule() {
-		root = std::unique_ptr<OptimizerNode>(
-		    new OptimizerNodeExpression(ExpressionType::OPERATOR_CAST));
-		root->children.push_back(std::unique_ptr<OptimizerNode>(
-		    new OptimizerNodeExpression(ExpressionType::VALUE_CONSTANT)));
+		root = make_unique_base<ExpressionNode, ExpressionNodeType>(ExpressionType::OPERATOR_CAST);
+		root->children.push_back(make_unique_base<ExpressionNode, ExpressionNodeType>(ExpressionType::VALUE_CONSTANT));
 		root->child_policy = ChildPolicy::UNORDERED;
 	}
 

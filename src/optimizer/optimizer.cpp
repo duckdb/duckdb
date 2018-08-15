@@ -1,6 +1,7 @@
 
 #include "optimizer/optimizer.hpp"
-#include "optimizer/rules/rule_list.hpp"
+#include "optimizer/expression_rules/rule_list.hpp"
+#include "optimizer/logical_rules/rule_list.hpp"
 
 #include "planner/operator/logical_list.hpp"
 
@@ -9,9 +10,11 @@ using namespace std;
 
 Optimizer::Optimizer() {
 	rewriter.rules.push_back(
-	    make_unique_base<OptimizerRule, ConstantCastRule>());
+	    make_unique_base<ExpressionRule, ConstantCastRule>());
 	rewriter.rules.push_back(
-	    make_unique_base<OptimizerRule, ConstantFoldingRule>());
+	    make_unique_base<ExpressionRule, ConstantFoldingRule>());
+
+	logical_rewriter.rules.push_back(make_unique_base<LogicalRule, CrossProductRewrite>());
 }
 
 void Optimizer::RewriteList(vector<unique_ptr<AbstractExpression>> &list) {
@@ -25,7 +28,11 @@ unique_ptr<LogicalOperator>
 Optimizer::Optimize(unique_ptr<LogicalOperator> plan) {
 	success = false;
 	try {
+		// first we optimize all the expressions
 		plan->Accept(this);
+		// then we optimize the logical tree
+		plan = logical_rewriter.ApplyRules(move(plan));
+
 		success = true;
 		return move(plan);
 	} catch (Exception ex) {

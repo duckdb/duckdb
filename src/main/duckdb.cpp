@@ -44,6 +44,10 @@ unique_ptr<DuckDBResult> DuckDBConnection::Query(std::string query) {
 
 	Optimizer optimizer;
 	plan = optimizer.Optimize(move(plan));
+	if (!optimizer.GetSuccess()) {
+		// failed to optimize
+		return make_unique<DuckDBResult>(optimizer.GetErrorMessage());
+	}
 	if (!plan) {
 		return make_unique<DuckDBResult>();
 	}

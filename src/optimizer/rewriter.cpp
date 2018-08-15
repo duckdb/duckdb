@@ -4,8 +4,10 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<AbstractExpression>
-ExpressionRewriter::ApplyRules(unique_ptr<AbstractExpression> root) {
+namespace duckdb {
+template<class RULETYPE, class NODETYPE, class TREETYPE>
+unique_ptr<TREETYPE>
+Rewriter<RULETYPE, NODETYPE, TREETYPE>::ApplyRules(unique_ptr<TREETYPE> root) {
 	bool fixed_point;
 
 	do {
@@ -14,7 +16,7 @@ ExpressionRewriter::ApplyRules(unique_ptr<AbstractExpression> root) {
 		     iterator++) {
 			auto &vertex = *iterator;
 			for (auto &rule : rules) {
-				vector<AbstractExpression *> bindings;
+				vector<TREETYPE *> bindings;
 				bool match = MatchOperands(rule->root.get(), vertex, bindings);
 				if (!match) {
 					continue;
@@ -40,9 +42,10 @@ ExpressionRewriter::ApplyRules(unique_ptr<AbstractExpression> root) {
 	return move(root);
 }
 
-bool ExpressionRewriter::MatchOperands(OptimizerNode *node,
-                                       AbstractExpression &rel,
-                                       vector<AbstractExpression *> &bindings) {
+template<class RULETYPE, class NODETYPE, class TREETYPE>
+bool Rewriter<RULETYPE, NODETYPE, TREETYPE>::MatchOperands(NODETYPE *node,
+                                       TREETYPE &rel,
+                                       vector<TREETYPE *> &bindings) {
 
 	if (!node->Matches(rel)) {
 		return false;
@@ -87,4 +90,8 @@ bool ExpressionRewriter::MatchOperands(OptimizerNode *node,
 		return true;
 	}
 	}
+}
+
+template class Rewriter<ExpressionRule, ExpressionNode, AbstractExpression>;
+template class Rewriter<LogicalRule, LogicalNode, LogicalOperator>;
 }

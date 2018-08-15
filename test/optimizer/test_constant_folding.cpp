@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "optimizer/rewriter.hpp"
-#include "optimizer/rules/constant_folding.hpp"
+#include "optimizer/expression_rules/constant_folding.hpp"
 #include "parser/expression/expression_list.hpp"
 
 using namespace duckdb;
@@ -13,8 +13,8 @@ using namespace std;
 // ADD(42, 1) -> 43
 TEST_CASE("Constant folding does something", "[optimizer]") {
 
-	vector<unique_ptr<OptimizerRule>> rules;
-	rules.push_back(unique_ptr<OptimizerRule>(new ConstantFoldingRule()));
+	vector<unique_ptr<ExpressionRule>> rules;
+	rules.push_back(unique_ptr<ExpressionRule>(new ConstantFoldingRule()));
 	auto rewriter = ExpressionRewriter(move(rules), MatchOrder::DEPTH_FIRST);
 
 	auto left = make_unique<ConstantExpression>(Value::INTEGER(42));
@@ -35,8 +35,8 @@ TEST_CASE("Constant folding does something", "[optimizer]") {
 // ADD(ADD(42, 1), 10) -> 53
 TEST_CASE("Constant folding finishes in fixpoint", "[optimizer]") {
 
-	vector<unique_ptr<OptimizerRule>> rules;
-	rules.push_back(unique_ptr<OptimizerRule>(new ConstantFoldingRule()));
+	vector<unique_ptr<ExpressionRule>> rules;
+	rules.push_back(unique_ptr<ExpressionRule>(new ConstantFoldingRule()));
 	auto rewriter = ExpressionRewriter(move(rules), MatchOrder::DEPTH_FIRST);
 
 	auto ll = make_unique<ConstantExpression>(Value::INTEGER(42));
@@ -61,8 +61,8 @@ TEST_CASE("Constant folding finishes in fixpoint", "[optimizer]") {
 // MUL(42, SUB(10, 9)) -> 42
 TEST_CASE("Constant folding reduces complex expression", "[optimizer]") {
 
-	vector<unique_ptr<OptimizerRule>> rules;
-	rules.push_back(unique_ptr<OptimizerRule>(new ConstantFoldingRule()));
+	vector<unique_ptr<ExpressionRule>> rules;
+	rules.push_back(unique_ptr<ExpressionRule>(new ConstantFoldingRule()));
 	auto rewriter = ExpressionRewriter(move(rules), MatchOrder::DEPTH_FIRST);
 
 	auto ll = make_unique<ConstantExpression>(Value::INTEGER(10));
@@ -87,8 +87,8 @@ TEST_CASE("Constant folding reduces complex expression", "[optimizer]") {
 // MUL(WHATEV, 0) -> 0
 TEST_CASE("Constant folding handles unknown expressions left", "[optimizer]") {
 
-	vector<unique_ptr<OptimizerRule>> rules;
-	rules.push_back(unique_ptr<OptimizerRule>(new ConstantFoldingRule()));
+	vector<unique_ptr<ExpressionRule>> rules;
+	rules.push_back(unique_ptr<ExpressionRule>(new ConstantFoldingRule()));
 	auto rewriter = ExpressionRewriter(move(rules), MatchOrder::DEPTH_FIRST);
 
 	auto lr = make_unique<ConstantExpression>(Value::INTEGER(0));
@@ -110,8 +110,8 @@ TEST_CASE("Constant folding handles unknown expressions left", "[optimizer]") {
 // ADD(0, WHATEV) -> WHATEV
 TEST_CASE("Constant folding handles unknown expressions right", "[optimizer]") {
 
-	vector<unique_ptr<OptimizerRule>> rules;
-	rules.push_back(unique_ptr<OptimizerRule>(new ConstantFoldingRule()));
+	vector<unique_ptr<ExpressionRule>> rules;
+	rules.push_back(unique_ptr<ExpressionRule>(new ConstantFoldingRule()));
 	auto rewriter = ExpressionRewriter(move(rules), MatchOrder::DEPTH_FIRST);
 
 	auto ll = make_unique<ConstantExpression>(Value::INTEGER(0));
@@ -127,8 +127,8 @@ TEST_CASE("Constant folding handles unknown expressions right", "[optimizer]") {
 
 // MUL(42, DIV(WHATEV, 0)) -> NULL
 TEST_CASE("Constant folding handles NULL propagation", "[optimizer]") {
-	vector<unique_ptr<OptimizerRule>> rules;
-	rules.push_back(unique_ptr<OptimizerRule>(new ConstantFoldingRule()));
+	vector<unique_ptr<ExpressionRule>> rules;
+	rules.push_back(unique_ptr<ExpressionRule>(new ConstantFoldingRule()));
 	auto rewriter = ExpressionRewriter(move(rules), MatchOrder::DEPTH_FIRST);
 
 	auto lr = make_unique<ConstantExpression>(Value::INTEGER(0));

@@ -19,7 +19,7 @@ void Planner::CreatePlan(Catalog &catalog, SQLStatement &statement) {
 	statement.Accept(&binder);
 
 	// now create a logical query plan from the query
-	LogicalPlanGenerator logical_planner(catalog);
+	LogicalPlanGenerator logical_planner(catalog, *binder.context);
 	statement.Accept(&logical_planner);
 	// logical_planner.Print();
 

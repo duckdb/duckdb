@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// parser/parser.hpp
+// optimizer/rewriter.hpp
 //
 // Author: Hannes Mühleisen & Mark Raasveldt
 //
@@ -13,25 +13,29 @@
 #include <string>
 #include <vector>
 
-#include "optimizer/rule.hpp"
+#include "optimizer/expression_rule.hpp"
+#include "optimizer/logical_rule.hpp"
 
 namespace duckdb {
 
-enum class MatchOrder { ARBITRARY = 0, DEPTH_FIRST };
-
-class ExpressionRewriter {
+template<class RULETYPE, class NODETYPE, class TREETYPE>
+class Rewriter {
   public:
 	MatchOrder match_order;
-	std::vector<std::unique_ptr<OptimizerRule>> rules;
+	std::vector<std::unique_ptr<RULETYPE>> rules;
 
-	ExpressionRewriter() {}
-	ExpressionRewriter(std::vector<std::unique_ptr<OptimizerRule>> rules,
+	Rewriter() {}
+	Rewriter(std::vector<std::unique_ptr<RULETYPE>> rules,
 	                   MatchOrder match_order)
 	    : rules(std::move(rules)), match_order(match_order) {}
-	std::unique_ptr<AbstractExpression>
-	ApplyRules(std::unique_ptr<AbstractExpression> root);
-	bool MatchOperands(OptimizerNode *node, AbstractExpression &rel,
-	                   std::vector<AbstractExpression *> &bindings);
+
+	std::unique_ptr<TREETYPE>
+	ApplyRules(std::unique_ptr<TREETYPE> root);
+	
+	bool MatchOperands(NODETYPE *node, TREETYPE &rel,
+	                   std::vector<TREETYPE *> &bindings);
 };
+typedef Rewriter<ExpressionRule, ExpressionNode, AbstractExpression> ExpressionRewriter;
+typedef Rewriter<LogicalRule, LogicalNode, LogicalOperator> LogicalRewriter;
 
 } // namespace duckdb

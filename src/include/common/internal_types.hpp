@@ -299,6 +299,10 @@ enum class PhysicalOperatorType {
 	EXPORT_EXTERNAL_FILE = 204
 };
 
+enum class MatchOrder { ARBITRARY = 0, DEPTH_FIRST };
+enum class ChildPolicy { ANY, LEAF, SOME, UNORDERED };
+
+
 enum class ExternalFileFormat {
 	CSV,
 };

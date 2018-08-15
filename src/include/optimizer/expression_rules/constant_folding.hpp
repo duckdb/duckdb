@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// parser/parser.hpp
+// optimizer/expression_rules/constant_folding.hpp
 //
 // Author: Hannes Mühleisen & Mark Raasveldt
 //
@@ -15,22 +15,20 @@
 
 #include "common/exception.hpp"
 #include "common/internal_types.hpp"
-#include "optimizer/rule.hpp"
+#include "optimizer/expression_rule.hpp"
 #include "parser/expression/constant_expression.hpp"
 
 namespace duckdb {
 
-class ConstantFoldingRule : public OptimizerRule {
+class ConstantFoldingRule : public ExpressionRule {
   public:
 	ConstantFoldingRule() {
-		root = std::unique_ptr<OptimizerNode>(new OptimizerNodeExpressionSet(
+		root = std::unique_ptr<ExpressionNode>(new ExpressionNodeSet(
 		    {ExpressionType::OPERATOR_ADD, ExpressionType::OPERATOR_SUBTRACT,
 		     ExpressionType::OPERATOR_MULTIPLY, ExpressionType::OPERATOR_DIVIDE,
 		     ExpressionType::OPERATOR_MOD}));
-		root->children.push_back(std::unique_ptr<OptimizerNode>(
-		    new OptimizerNodeExpression(ExpressionType::VALUE_CONSTANT)));
-		root->children.push_back(
-		    std::unique_ptr<OptimizerNode>(new OptimizerNodeAny()));
+		root->children.push_back(make_unique_base<ExpressionNode, ExpressionNodeType>(ExpressionType::VALUE_CONSTANT));
+		root->children.push_back(make_unique_base<ExpressionNode, ExpressionNodeAny>());
 		root->child_policy = ChildPolicy::UNORDERED;
 	}
 

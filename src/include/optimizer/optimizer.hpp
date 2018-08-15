@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "optimizer/rewriter.hpp"
+
 #include "planner/logical_operator.hpp"
 #include "planner/logical_operator_visitor.hpp"
 
@@ -38,6 +39,7 @@ class Optimizer : public LogicalOperatorVisitor {
 	void RewriteList(std::vector<std::unique_ptr<AbstractExpression>> &list);
 
 	ExpressionRewriter rewriter;
+	LogicalRewriter logical_rewriter;
 
 	bool success;
 	std::string message;

@@ -145,7 +145,7 @@ void LogicalPlanGenerator::Visit(OperatorExpression &expr) {
 }
 
 void LogicalPlanGenerator::Visit(SubqueryExpression &expr) {
-	LogicalPlanGenerator generator(catalog);
+	LogicalPlanGenerator generator(catalog, *expr.context);
 	expr.subquery->Accept(&generator);
 	if (!generator.root) {
 		throw Exception("Can't plan subquery");
@@ -155,8 +155,13 @@ void LogicalPlanGenerator::Visit(SubqueryExpression &expr) {
 
 void LogicalPlanGenerator::Visit(BaseTableRef &expr) {
 	auto table = catalog.GetTable(expr.schema_name, expr.table_name);
+	auto alias = expr.alias.empty() ? expr.table_name : expr.alias;
+	// get the table index from the BindContext
+	auto table_entry = context.regular_table_alias_map.find(alias);
+	assert(table_entry != context.regular_table_alias_map.end());
+	auto index = table_entry->second.index;
 	auto get_table = make_unique<LogicalGet>(
-	    table, expr.alias.empty() ? expr.table_name : expr.alias);
+	    table, alias, index);
 	if (root)
 		get_table->children.push_back(move(root));
 	root = move(get_table);

@@ -17,6 +17,7 @@
 
 #include "parser/sql_node_visitor.hpp"
 
+#include "planner/bindcontext.hpp"
 #include "planner/logical_operator.hpp"
 
 namespace duckdb {
@@ -24,7 +25,7 @@ namespace duckdb {
 //! statement
 class LogicalPlanGenerator : public SQLNodeVisitor {
   public:
-	LogicalPlanGenerator(Catalog &catalog) : catalog(catalog) {}
+	LogicalPlanGenerator(Catalog &catalog, BindContext &context) : catalog(catalog), context(context) {}
 
 	virtual void Visit(SelectStatement &statement) override;
 	virtual void Visit(InsertStatement &statement) override;
@@ -49,5 +50,7 @@ class LogicalPlanGenerator : public SQLNodeVisitor {
   private:
 	//! A reference to the catalog
 	Catalog &catalog;
+	//! A reference to the current bind context
+	BindContext &context;
 };
 } // namespace duckdb
