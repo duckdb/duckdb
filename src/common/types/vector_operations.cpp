@@ -381,8 +381,8 @@ void VectorOperations::Modulo(int64_t left, Vector &right, Vector &result,
 //===--------------------------------------------------------------------===//
 void VectorOperations::Equals(Vector &left, Vector &right, Vector &result,
                               bool can_have_null) {
-	_fixed_return_binary_loop<operators::Equals, bool>(left, right, result,
-	                                                   can_have_null);
+	_fixed_return_binary_loop<operators::Equals, int8_t>(left, right, result,
+	                                                     can_have_null);
 }
 
 void VectorOperations::NotEquals(Vector &left, Vector &right, Vector &result,

@@ -135,7 +135,13 @@ void LogicalPlanGenerator::Visit(ConjunctionExpression &expr) {
 
 void LogicalPlanGenerator::Visit(OperatorExpression &expr) {
 	SQLNodeVisitor::Visit(expr);
-	cast_children_to_equal_types(expr);
+	if (expr.type == ExpressionType::OPERATOR_NOT) {
+		auto cast = make_unique<CastExpression>(TypeId::BOOLEAN,
+		                                        move(expr.children[0]));
+		expr.children[0] = move(cast);
+	} else {
+		cast_children_to_equal_types(expr);
+	}
 }
 
 void LogicalPlanGenerator::Visit(SubqueryExpression &expr) {
