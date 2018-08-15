@@ -1,0 +1,14 @@
+Q:SELECT 42;
+42
+Q:SELECT 43, 50;
+43|50
+Q:SELECT NULL, 43;
+|43
+Q:CREATE TABLE integers(i INTEGER);
+Q:INSERT INTO integers VALUES (3);
+Q:INSERT INTO integers VALUES (4);
+Q:INSERT INTO integers VALUES (5);
+Q:SELECT i, i * 2 FROM integers;
+3|6
+4|8
+5|10

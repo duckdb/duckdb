@@ -282,5 +282,5 @@ cmake-build-release
 
 # Generated documentation
 docs
-
+test/test.sql
 

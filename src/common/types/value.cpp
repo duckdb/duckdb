@@ -395,6 +395,9 @@ void Value::Max(const Value &left, const Value &right, Value &result) {
 template <class OP>
 bool Value::_templated_boolean_operation(const Value &left,
                                          const Value &right) {
+	if (left.is_null != right.is_null) {
+		return false;
+	}
 	if (left.type != right.type) {
 		if (TypeIsNumeric(left.type) && TypeIsNumeric(right.type)) {
 			if (left.type < right.type) {
@@ -432,6 +435,8 @@ bool Value::_templated_boolean_operation(const Value &left,
 }
 
 bool Value::Equals(const Value &left, const Value &right) {
+	if (left.is_null && right.is_null)
+		return true;
 	return _templated_boolean_operation<operators::Equals>(left, right);
 }
 

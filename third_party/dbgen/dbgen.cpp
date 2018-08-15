@@ -604,6 +604,8 @@ static bool parse_datachunk(const char *csv, DataChunk &result,
 		for (size_t i = 0; i < split.size(); i++) {
 			// first create a string value
 			Value value(split[i]);
+			value.is_null = split[i].empty();
+
 			// cast to the type of the column
 			try {
 				value = value.CastAs(result.data[i].type);
@@ -652,6 +654,8 @@ bool compare_result(const char *csv, DataChunk &result, bool has_header,
 		for (size_t i = 0; i < split.size(); i++) {
 			// first create a string value
 			Value value(split[i]);
+			value.is_null = split[i].empty();
+
 			// cast to the type of the column
 			try {
 				value = value.CastAs(types[i]);
