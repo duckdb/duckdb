@@ -574,139 +574,9 @@ string get_query(int query) {
 	return TPCH_QUERIES[query - 1];
 }
 
-static bool parse_datachunk(const char *csv, DataChunk &result,
-                            bool has_header) {
-	std::istringstream f(csv);
-	std::string line;
-
-	if (has_header) {
-		auto split = StringUtil::Split(line, '|');
-		if (split.size() != result.column_count) {
-			// column length is different
-			return false;
-		}
-	}
-	size_t row = 0;
-	while (std::getline(f, line)) {
-		auto split = StringUtil::Split(line, '|');
-		if (split.size() != result.column_count) {
-			// column length is different
-			return false;
-		}
-		if (row >= result.maximum_size) {
-			// chunk is full, but parsing so far was successful
-			// return the partially parsed chunk
-			// this function is used for printing, and we probably don't want to
-			// print >1000 rows anyway
-			return true;
-		}
-		// now compare the values
-		for (size_t i = 0; i < split.size(); i++) {
-			// first create a string value
-			Value value(split[i]);
-			value.is_null = split[i].empty();
-
-			// cast to the type of the column
-			try {
-				value = value.CastAs(result.data[i].type);
-			} catch (...) {
-				return false;
-			}
-			// now perform a comparison
-			result.data[i].count++;
-			result.data[i].SetValue(row, value);
-		}
-		result.count++;
-		row++;
-	}
-	return true;
-}
-
-bool compare_result(const char *csv, DataChunk &result, bool has_header,
-                    std::string &error_message) {
-	auto types = result.GetTypes();
-	DataChunk correct_result;
-
-	std::istringstream f(csv);
-	std::string line;
-	size_t row = 0;
-	/// read and parse the header line
-	if (has_header) {
-		std::getline(f, line);
-		// check if the column length matches
-		auto split = StringUtil::Split(line, '|');
-		if (split.size() != types.size()) {
-			// column length is different
-			goto incorrect;
-		}
-	}
-	// now compare the actual data
-	while (std::getline(f, line)) {
-		if (result.count <= row) {
-			goto incorrect;
-		}
-		auto split = StringUtil::Split(line, '|');
-		if (split.size() != types.size()) {
-			// column length is different
-			goto incorrect;
-		}
-		// now compare the values
-		for (size_t i = 0; i < split.size(); i++) {
-			// first create a string value
-			Value value(split[i]);
-			value.is_null = split[i].empty();
-
-			// cast to the type of the column
-			try {
-				value = value.CastAs(types[i]);
-			} catch (...) {
-				goto incorrect;
-			}
-			// now perform a comparison
-			Value result_value = result.data[i].GetValue(row);
-			if (value.type == TypeId::DECIMAL) {
-				// round to two decimals
-				string left = StringUtil::Format("%.2f", value.value_.decimal);
-				string right =
-				    StringUtil::Format("%.2f", result_value.value_.decimal);
-				if (left != right) {
-					goto incorrect;
-				}
-			} else {
-				if (!Value::Equals(value, result_value)) {
-					goto incorrect;
-				}
-			}
-		}
-		row++;
-	}
-	if (result.count != row) {
-		goto incorrect;
-	}
-	return true;
-incorrect:
-	correct_result.Initialize(types);
-	if (!parse_datachunk(csv, correct_result, has_header)) {
-		error_message = "Incorrect answer for query!\nProvided answer:\n" +
-		                result.ToString() +
-		                "\nExpected answer [could not parse]:\n" + string(csv) +
-		                "\n";
-	} else {
-		error_message = "Incorrect answer for query!\nProvided answer:\n" +
-		                result.ToString() + "\nExpected answer:\n" +
-		                correct_result.ToString() + "\n";
-	}
-	return false;
-}
-
-bool check_result(double sf, int query, DuckDBResult &result,
-                  std::string &error_message) {
+string get_answer(double sf, int query) {
 	if (query <= 0 || query > TPCH_QUERIES_COUNT) {
 		throw Exception("Out of range TPC-H query number %d", query);
-	}
-	if (!result.GetSuccess()) {
-		error_message = result.GetErrorMessage();
-		return false;
 	}
 	const char *answer;
 	if (sf == 0.1) {
@@ -716,9 +586,7 @@ bool check_result(double sf, int query, DuckDBResult &result,
 	} else {
 		throw Exception("Don't have TPC-H answers for SF %llf!", sf);
 	}
-	DataChunk big_chunk;
-	result.GatherResult(big_chunk);
-	return compare_result(answer, big_chunk, true, error_message);
+	return answer;
 }
 
 } // namespace tpch

@@ -1,12 +1,12 @@
 
-#include "dbgen.hpp"
 #include "duckdb.hpp"
+
+#include "test_helpers.hpp"
 
 #include <fstream>
 
 using namespace duckdb;
 using namespace std;
-using namespace tpch;
 
 bool file_exists(string file) {
 	ifstream f(file.c_str());

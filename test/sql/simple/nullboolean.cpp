@@ -1,4 +1,4 @@
-#include "../tpch/test_helpers.hpp"
+#include "test_helpers.hpp"
 #include "catch.hpp"
 
 using namespace duckdb;
@@ -57,6 +57,34 @@ TEST_CASE("Booleans and NULLs", "[sql]") {
 	CHECK_COLUMN(result, 1, {Value()});
 	CHECK_COLUMN(result, 2, {Value()});
 	CHECK_COLUMN(result, 3, {Value()});
+
+
+	con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
+	con.Query("INSERT INTO test VALUES (11, 22)");
+	con.Query("INSERT INTO test VALUES (NULL, 21)");
+	con.Query("INSERT INTO test VALUES (13, 22)");
+	con.Query("INSERT INTO test VALUES (12, NULL)");
+	con.Query("INSERT INTO test VALUES (16, NULL)");
+
+	result =
+	    con.Query("SELECT b, COUNT(a), SUM(a), MIN(a), MAX(a) FROM test GROUP BY b ORDER BY b");
+	CHECK_COLUMN(result, 0, { Value(), 21, 22 });
+	CHECK_COLUMN(result, 1, { 2, 0, 2 });
+	CHECK_COLUMN(result, 2, { 28, Value(), 24 });
+	CHECK_COLUMN(result, 3, { 12, Value(), 11 });
+	CHECK_COLUMN(result, 4, { 16, Value(), 13 });
+
+
+	// REQUIRE(duckdb_query(connection,
+	//                      "SELECT b, COUNT(a), SUM(a), MIN(a), MAX(a) FROM test "
+	//                      "GROUP BY b ORDER BY b",
+	//                      &result) == DuckDBSuccess);
+	// REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {NULL_NUMERIC, 21, 22}));
+	// REQUIRE(CHECK_NUMERIC_COLUMN(result, 1, {2, 0, 2}));
+	// REQUIRE(CHECK_NUMERIC_COLUMN(result, 2, {28, NULL_NUMERIC, 24}));
+	// REQUIRE(CHECK_NUMERIC_COLUMN(result, 3, {12, NULL_NUMERIC, 11}));
+	// REQUIRE(CHECK_NUMERIC_COLUMN(result, 4, {16, NULL_NUMERIC, 13}));
+	// duckdb_destroy_result(result);
 }
 
 // NOT

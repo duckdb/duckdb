@@ -1,5 +1,5 @@
 
-#include "../tpch/test_helpers.hpp"
+#include "test_helpers.hpp"
 #include "catch.hpp"
 
 using namespace duckdb;

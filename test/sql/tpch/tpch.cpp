@@ -2,6 +2,7 @@
 #include "catch.hpp"
 
 #include "test_helpers.hpp"
+#include "dbgen.hpp"
 
 #include <chrono>
 
@@ -71,15 +72,8 @@ TEST_CASE("[SLOW] Test TPC-H SF0.1", "[tpch]") {
 	CHECK_COLUMN(result, 2, {147790, 295765, 148301});
 
 	result = con.Query(tpch::get_query(1));
-	RESULT_NO_ERROR(result);
-	string error_message;
-	if (!tpch::check_result(sf, 1, *result.get(), error_message)) {
-		FAIL(error_message);
-	}
+	COMPARE_CSV(result, tpch::get_answer(sf, 1), true);
 
 	// result = con.Query(tpch::get_query(2));
-	// RESULT_NO_ERROR(result);
-	// if (!tpch::check_result(sf, 2, *result.get(), error_message)) {
-	// 	FAIL(error_message);
-	// }
+	// COMPARE_CSV(result, tpch::get_answer(sf, 2), true);
 }

@@ -1,6 +1,7 @@
 
 include_directories(../third_party/catch)
 include_directories(../third_party/dbgen/include)
+include_directories(include)
 
 add_subdirectory(common)
 add_subdirectory(sql)
