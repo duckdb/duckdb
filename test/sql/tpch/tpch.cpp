@@ -51,7 +51,7 @@ TEST_CASE("[SLOW] Test TPC-H SF0.1", "[tpch]") {
 	    "dep\n1|6731|732|2|36|58958.28|0.09|0.06|N|O|1996-04-12|1996-02-28|"
 	    "1996-04-20|TAKE BACK RETURN|MAIL|ly final dependencies: slyly bold "
 	    "\n1|15519|785|1|17|24386.67|0.04|0.02|N|O|1996-03-13|1996-02-12|1996-"
-	    "03-22|DELIVER IN PERSON|TRUCK|egular courts above the");
+	    "03-22|DELIVER IN PERSON|TRUCK|egular courts above the", false);
 
 	result = con.Query("SELECT SUM(l_quantity) FROM lineitem");
 	CHECK_COLUMN(result, 0, {15334802});
@@ -74,6 +74,6 @@ TEST_CASE("[SLOW] Test TPC-H SF0.1", "[tpch]") {
 	result = con.Query(tpch::get_query(1));
 	COMPARE_CSV(result, tpch::get_answer(sf, 1), true);
 
-	// result = con.Query(tpch::get_query(2));
-	// COMPARE_CSV(result, tpch::get_answer(sf, 2), true);
+	result = con.Query(tpch::get_query(6));
+	COMPARE_CSV(result, tpch::get_answer(sf, 6), true);
 }

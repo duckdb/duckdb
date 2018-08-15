@@ -191,20 +191,24 @@ incorrect:
 	return false;
 }
 
-static void COMPARE_CSV(std::unique_ptr<duckdb::DuckDBResult> &result,
+static std::string compare_csv(std::unique_ptr<duckdb::DuckDBResult> &result,
                         std::string csv, bool header = false) {
 	if (!result->GetSuccess()) {
 		fprintf(stderr, "Query failed with message: %s\n",
 		        result->GetErrorMessage().c_str());
-		FAIL(result->GetErrorMessage().c_str());
+		return result->GetErrorMessage().c_str();
 	}
 	duckdb::DataChunk big_chunk;
 	result->GatherResult(big_chunk);
 	std::string error;
 	if (!compare_result(csv, big_chunk, header, error)) {
-		FAIL(error);
+		return error;
 	}
+	return "";
 }
+
+#define COMPARE_CSV(result, csv, header) { auto res = compare_csv(result, csv, header); if (!res.empty()) FAIL(res); }
+
 }
 
 

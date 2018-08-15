@@ -66,9 +66,10 @@ void PhysicalCrossProduct::GetChunk(DataChunk &chunk,
 	chunk.count = right_chunk.count;
 	for (size_t i = 0; i < left_chunk.column_count; i++) {
 		// first duplicate the values of the left side using a selection vector
+		// we do this by copying the first value and using the ZERO vector as selection vector
 		chunk.data[i].count = chunk.count;
-		VectorOperations::Set(
-		    chunk.data[i], left_chunk.data[i].GetValue(state->left_position));
+		chunk.data[i].SetValue(0, left_chunk.data[i].GetValue(state->left_position));
+		chunk.data[i].sel_vector = ZERO_VECTOR;
 	}
 	for (size_t i = 0; i < right_chunk.column_count; i++) {
 		// now create a reference to the vectors of the right chunk

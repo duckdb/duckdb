@@ -26,6 +26,9 @@ typedef uint64_t sel_t;
 //! Type used for index accesses
 typedef size_t oid_t;
 
+//! Zero selection vector: completely filled with the value 0
+extern sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE];
+
 //===--------------------------------------------------------------------===//
 // SQL Value Types
 //===--------------------------------------------------------------------===//
