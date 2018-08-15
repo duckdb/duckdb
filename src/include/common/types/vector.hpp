@@ -80,6 +80,9 @@ class Vector : public Printable {
 	Value GetValue(size_t index) const;
 	//! Sets the [index] element of the Vector to the specified Value
 	void SetValue(size_t index, Value val);
+	//! Sets the value of the vector at the specified index to the specified
+	//! string Can only be used for VARCHAR vectors
+	void SetStringValue(size_t index, const char *value);
 
 	//! Resizes the vector to hold maximum_size, and potentially typecasts the
 	//! elements as well. After the resize, the vector will become an owning

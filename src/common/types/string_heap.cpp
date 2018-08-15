@@ -26,6 +26,6 @@ const char *StringHeap::AddString(const char *data) {
 	return AddString(data, strlen(data));
 }
 
-const char *StringHeap::AddString(std::string data) {
+const char *StringHeap::AddString(const std::string &data) {
 	return AddString(data.c_str(), data.size());
 }

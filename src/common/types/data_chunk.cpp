@@ -50,6 +50,8 @@ void DataChunk::Reset() {
 		data[i].owns_data = false;
 		data[i].count = 0;
 		data[i].sel_vector = nullptr;
+		data[i].owned_data = nullptr;
+		data[i].string_heap = nullptr;
 		ptr += GetTypeIdSize(data[i].type) * maximum_size;
 	}
 	sel_vector.reset();

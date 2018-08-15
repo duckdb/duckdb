@@ -45,8 +45,8 @@ void append_value(DataChunk &chunk, size_t index, size_t &column,
 }
 
 void append_string(DataChunk &chunk, size_t index, size_t &column,
-                   string value) {
-	chunk.data[column++].SetValue(index, Value(value));
+                   const char *value) {
+	chunk.data[column++].SetStringValue(index, value);
 }
 
 void append_decimal(DataChunk &chunk, size_t index, size_t &column,
@@ -55,24 +55,33 @@ void append_decimal(DataChunk &chunk, size_t index, size_t &column,
 }
 
 void append_date(DataChunk &chunk, size_t index, size_t &column, string value) {
-	chunk.data[column++].SetValue(index, Value::DATE(Date::FromString(value)));
+	((date_t *)chunk.data[column++].data)[index] = Date::FromString(value);
 }
 
 void append_char(DataChunk &chunk, size_t index, size_t &column, char value) {
-	chunk.data[column++].SetValue(index, Value(string(1, value)));
+	char val[2];
+	val[0] = value;
+	val[1] = '\0';
+	append_string(chunk, index, column, val);
 }
 
 static void append_to_append_info(tpch_append_information &info) {
 	auto &chunk = info.chunk;
 	auto &table = info.table;
-	if (chunk.maximum_size >= chunk.count) {
+	if (chunk.count >= chunk.maximum_size) {
 		// have to make a new chunk, initialize it
 		if (chunk.count > 0) {
 			// flush the chunk
 			table->storage->AddData(chunk);
 		}
-		auto types = table->GetTypes();
-		chunk.Initialize(types);
+		if (chunk.column_count == 0) {
+			// initalize the chunk
+			auto types = table->GetTypes();
+			chunk.Initialize(types);
+		} else {
+			// only have to reset the chunk
+			chunk.Reset();
+		}
 	}
 	chunk.count++;
 	for (size_t i = 0; i < chunk.column_count; i++) {
@@ -99,13 +108,13 @@ static void append_order(order_t *o, tpch_append_information *info) {
 	// o_orderdate
 	append_date(chunk, index, column, o->odate);
 	// o_orderpriority
-	append_string(chunk, index, column, string(o->opriority));
+	append_string(chunk, index, column, o->opriority);
 	// o_clerk
-	append_string(chunk, index, column, string(o->clerk));
+	append_string(chunk, index, column, o->clerk);
 	// o_shippriority
 	append_value(chunk, index, column, o->spriority);
 	// o_comment
-	append_string(chunk, index, column, string(o->comment));
+	append_string(chunk, index, column, o->comment);
 }
 
 static void append_line(order_t *o, tpch_append_information *info) {
@@ -145,11 +154,11 @@ static void append_line(order_t *o, tpch_append_information *info) {
 		// l_receiptdate
 		append_date(chunk, index, column, o->l[i].rdate);
 		// l_shipinstruct
-		append_string(chunk, index, column, string(o->l[i].shipinstruct));
+		append_string(chunk, index, column, o->l[i].shipinstruct);
 		// l_shipmode
-		append_string(chunk, index, column, string(o->l[i].shipmode));
+		append_string(chunk, index, column, o->l[i].shipmode);
 		// l_comment
-		append_string(chunk, index, column, string(o->l[i].comment));
+		append_string(chunk, index, column, o->l[i].comment);
 	}
 }
 
@@ -565,27 +574,76 @@ string get_query(int query) {
 	return TPCH_QUERIES[query - 1];
 }
 
-static bool compare_result(const char *csv, DataChunk &result,
-                           std::string &error_message) {
+static bool parse_datachunk(const char *csv, DataChunk &result,
+                            bool has_header) {
+	std::istringstream f(csv);
+	std::string line;
+
+	if (has_header) {
+		auto split = StringUtil::Split(line, '|');
+		if (split.size() != result.column_count) {
+			// column length is different
+			return false;
+		}
+	}
+	size_t row = 0;
+	while (std::getline(f, line)) {
+		auto split = StringUtil::Split(line, '|');
+		if (split.size() != result.column_count) {
+			// column length is different
+			return false;
+		}
+		if (row >= result.maximum_size) {
+			// chunk is full, but parsing so far was successful
+			// return the partially parsed chunk
+			// this function is used for printing, and we probably don't want to
+			// print >1000 rows anyway
+			return true;
+		}
+		// now compare the values
+		for (size_t i = 0; i < split.size(); i++) {
+			// first create a string value
+			Value value(split[i]);
+			// cast to the type of the column
+			try {
+				value = value.CastAs(result.data[i].type);
+			} catch (...) {
+				return false;
+			}
+			// now perform a comparison
+			result.data[i].count++;
+			result.data[i].SetValue(row, value);
+		}
+		result.count++;
+		row++;
+	}
+	return true;
+}
+
+bool compare_result(const char *csv, DataChunk &result, bool has_header,
+                    std::string &error_message) {
 	auto types = result.GetTypes();
+	DataChunk correct_result;
 
 	std::istringstream f(csv);
 	std::string line;
 	size_t row = 0;
 	/// read and parse the header line
-	std::getline(f, line);
-	// check if the column length matches
-	auto split = StringUtil::Split(line, '|');
-	if (split.size() != types.size()) {
-		// column length is different
-		goto incorrect;
+	if (has_header) {
+		std::getline(f, line);
+		// check if the column length matches
+		auto split = StringUtil::Split(line, '|');
+		if (split.size() != types.size()) {
+			// column length is different
+			goto incorrect;
+		}
 	}
 	// now compare the actual data
 	while (std::getline(f, line)) {
 		if (result.count <= row) {
 			goto incorrect;
 		}
-		split = StringUtil::Split(line, '|');
+		auto split = StringUtil::Split(line, '|');
 		if (split.size() != types.size()) {
 			// column length is different
 			goto incorrect;
@@ -623,9 +681,17 @@ static bool compare_result(const char *csv, DataChunk &result,
 	}
 	return true;
 incorrect:
-	error_message = "Incorrect answer for query!\nProvided answer:\n" +
-	                result.ToString() + "\nExpected answer:\n" + string(csv) +
-	                "\n";
+	correct_result.Initialize(types);
+	if (!parse_datachunk(csv, correct_result, has_header)) {
+		error_message = "Incorrect answer for query!\nProvided answer:\n" +
+		                result.ToString() +
+		                "\nExpected answer [could not parse]:\n" + string(csv) +
+		                "\n";
+	} else {
+		error_message = "Incorrect answer for query!\nProvided answer:\n" +
+		                result.ToString() + "\nExpected answer:\n" +
+		                correct_result.ToString() + "\n";
+	}
 	return false;
 }
 
@@ -648,7 +714,7 @@ bool check_result(double sf, int query, DuckDBResult &result,
 	}
 	DataChunk big_chunk;
 	result.GatherResult(big_chunk);
-	return compare_result(answer, big_chunk, error_message);
+	return compare_result(answer, big_chunk, true, error_message);
 }
 
 } // namespace tpch

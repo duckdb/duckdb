@@ -103,19 +103,32 @@ void Vector::SetValue(size_t index, Value val) {
 		break;
 	case TypeId::VARCHAR: {
 		if (val.is_null) {
-			((char **)data)[index] = nullptr;
+			((const char **)data)[index] = nullptr;
 		} else {
 			if (!string_heap) {
 				string_heap = make_unique<StringHeap>();
 			}
 			((const char **)data)[index] =
-			    newVal.is_null ? NullValue<char *>()
-			                   : string_heap->AddString(newVal.str_value);
+			    string_heap->AddString(newVal.str_value);
 		}
 		break;
 	}
 	default:
 		throw NotImplementedException("Unimplemented type for adding");
+	}
+}
+
+void Vector::SetStringValue(size_t index, const char *value) {
+	if (type != TypeId::VARCHAR) {
+		throw Exception("Can only set string value of VARCHAR vectors!");
+	}
+	if (value) {
+		if (!string_heap) {
+			string_heap = make_unique<StringHeap>();
+		}
+		((const char **)data)[index] = string_heap->AddString(value);
+	} else {
+		((const char **)data)[index] = nullptr;
 	}
 }
 
@@ -190,6 +203,7 @@ void Vector::ForceOwnership(size_t minimum_capacity) {
 	if (maximum_size >= minimum_capacity && owns_data &&
 	    type != TypeId::VARCHAR)
 		return;
+
 	minimum_capacity = std::max(count, minimum_capacity);
 	Vector other(type, minimum_capacity);
 	Copy(other);
@@ -207,8 +221,13 @@ void Vector::Copy(Vector &other) {
 	if (!TypeIsConstantSize(type)) {
 		assert(type == TypeId::VARCHAR);
 		other.count = count;
+		const char **source = (const char **)data;
+		const char **target = (const char **)other.data;
+		other.string_heap = make_unique<StringHeap>();
+
 		for (size_t i = 0; i < count; i++) {
-			other.SetValue(i, GetValue(i));
+			const char *str = sel_vector ? source[sel_vector[i]] : source[i];
+			target[i] = str ? other.string_heap->AddString(str) : nullptr;
 		}
 	} else {
 		VectorOperations::Copy(*this, other);
@@ -263,8 +282,16 @@ void Vector::Append(Vector &other) {
 	count += other.count;
 	if (!TypeIsConstantSize(type)) {
 		assert(type == TypeId::VARCHAR);
+		const char **source = (const char **)other.data;
+		const char **target = (const char **)data;
+		if (!string_heap) {
+			string_heap = make_unique<StringHeap>();
+		}
+
 		for (size_t i = 0; i < other.count; i++) {
-			SetValue(old_count + i, other.GetValue(i));
+			const char *str =
+			    other.sel_vector ? source[other.sel_vector[i]] : source[i];
+			target[old_count + i] = str ? string_heap->AddString(str) : nullptr;
 		}
 	} else {
 		VectorOperations::Copy(other, data + old_count * GetTypeIdSize(type));

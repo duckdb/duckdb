@@ -220,6 +220,171 @@ done:
 	return (--res);
 }
 
+static char *gen_text(char *dest, int sd, distribution *s) {
+	long i = 0;
+	DSS_HUGE j;
+
+	RANDOM(j, 1, s->list[s->count - 1].weight, sd);
+	while (s->list[i].weight < j)
+		i++;
+	char *src = s->list[i].text;
+	int ind = 0;
+	while (src[ind]) {
+		dest[ind] = src[ind];
+		ind++;
+	}
+	dest[ind] = ' ';
+	return dest + ind + 1;
+}
+
+#define NOUN_MAX_WEIGHT 340
+#define ADJECTIVES_MAX_WEIGHT 289
+#define ADVERBS_MAX_WEIGHT 262
+#define AUXILLARIES_MAX_WEIGHT 18
+#define VERBS_MAX_WEIGHT 174
+#define PREPOSITIONS_MAX_WEIGHT 456
+
+static char *noun_index[NOUN_MAX_WEIGHT + 1];
+static char *adjectives_index[ADJECTIVES_MAX_WEIGHT + 1];
+static char *adverbs_index[ADVERBS_MAX_WEIGHT + 1];
+static char *auxillaries_index[AUXILLARIES_MAX_WEIGHT + 1];
+static char *verbs_index[VERBS_MAX_WEIGHT + 1];
+static char *prepositions_index[PREPOSITIONS_MAX_WEIGHT + 1];
+
+// generate a lookup table for weight -> str
+static void gen_index(char **index, distribution *s) {
+	for (size_t w = 0; w <= s->list[s->count - 1].weight; w++) {
+		long i = 0;
+		while (s->list[i].weight < w)
+			i++;
+		index[w] = s->list[i].text;
+	}
+}
+
+static char *gen_text_index(char *dest, int sd, char **index, distribution *s) {
+	long i = 0;
+	DSS_HUGE j;
+
+	RANDOM(j, 1, s->list[s->count - 1].weight, sd);
+	char *src = index[j];
+	int ind = 0;
+	while (src[ind]) {
+		dest[ind] = src[ind];
+		ind++;
+	}
+	dest[ind] = ' ';
+	return dest + ind + 1;
+}
+
+static char *gen_vp(char *dest, int sd) {
+	DSS_HUGE j;
+	RANDOM(j, 1, vp.list[vp.count - 1].weight, sd);
+	int index = 0;
+	index += vp.list[0].weight < j;
+	index += vp.list[1].weight < j;
+	index += vp.list[2].weight < j;
+
+	if (index == 0) {
+		dest = gen_text_index(dest, sd, verbs_index, &verbs);
+	} else if (index == 1) {
+		dest = gen_text_index(dest, sd, auxillaries_index, &auxillaries);
+		dest = gen_text_index(dest, sd, verbs_index, &verbs);
+	} else if (index == 2) {
+		dest = gen_text_index(dest, sd, verbs_index, &verbs);
+		dest = gen_text_index(dest, sd, adverbs_index, &adverbs);
+	} else {
+		dest = gen_text_index(dest, sd, auxillaries_index, &auxillaries);
+		dest = gen_text_index(dest, sd, verbs_index, &verbs);
+		dest = gen_text_index(dest, sd, adverbs_index, &adverbs);
+	}
+	return dest;
+}
+
+static char *gen_np(char *dest, int sd) {
+	DSS_HUGE j;
+	RANDOM(j, 1, np.list[np.count - 1].weight, sd);
+	int index = 0;
+	index += np.list[0].weight < j;
+	index += np.list[1].weight < j;
+	index += np.list[2].weight < j;
+
+	if (index == 0) {
+		dest = gen_text_index(dest, sd, noun_index, &nouns);
+	} else if (index == 1) {
+		dest = gen_text_index(dest, sd, adjectives_index, &adjectives);
+		dest = gen_text_index(dest, sd, noun_index, &nouns);
+	} else if (index == 2) {
+		dest = gen_text_index(dest, sd, adjectives_index, &adjectives);
+		dest[-1] = ',';
+		*(dest++) = ' ';
+		dest = gen_text_index(dest, sd, adjectives_index, &adjectives);
+		dest = gen_text_index(dest, sd, noun_index, &nouns);
+	} else {
+		dest = gen_text_index(dest, sd, adverbs_index, &adverbs);
+		dest = gen_text_index(dest, sd, adjectives_index, &adjectives);
+		dest = gen_text_index(dest, sd, noun_index, &nouns);
+	}
+	return dest;
+}
+
+static char *gen_preposition(char *dest, int sd) {
+	dest = gen_text_index(dest, sd, prepositions_index, &prepositions);
+	*(dest++) = 't';
+	*(dest++) = 'h';
+	*(dest++) = 'e';
+	*(dest++) = ' ';
+	return gen_np(dest, sd);
+}
+
+static char *gen_terminator(char *dest, int sd) {
+	dest = gen_text(--dest, sd, &terminators);
+	return dest - 1;
+}
+
+static char *gen_sentence(char *dest, int sd) {
+	const char *cptr;
+	int i;
+
+	DSS_HUGE j;
+	RANDOM(j, 1, grammar.list[grammar.count - 1].weight, sd);
+	int index = 0;
+	index += grammar.list[0].weight < j;
+	index += grammar.list[1].weight < j;
+	index += grammar.list[2].weight < j;
+	index += grammar.list[3].weight < j;
+	cptr = grammar.list[index].text;
+
+	if (index == 0) {
+		dest = gen_np(dest, sd);
+		dest = gen_vp(dest, sd);
+		dest = gen_terminator(dest, sd);
+	} else if (index == 1) {
+		dest = gen_np(dest, sd);
+		dest = gen_vp(dest, sd);
+		dest = gen_preposition(dest, sd);
+		dest = gen_terminator(dest, sd);
+	} else if (index == 2) {
+		dest = gen_np(dest, sd);
+		dest = gen_vp(dest, sd);
+		dest = gen_np(dest, sd);
+		dest = gen_terminator(dest, sd);
+	} else if (index == 3) {
+		dest = gen_np(dest, sd);
+		dest = gen_preposition(dest, sd);
+		dest = gen_vp(dest, sd);
+		dest = gen_np(dest, sd);
+		dest = gen_terminator(dest, sd);
+	} else {
+		dest = gen_np(dest, sd);
+		dest = gen_preposition(dest, sd);
+		dest = gen_vp(dest, sd);
+		dest = gen_preposition(dest, sd);
+		dest = gen_terminator(dest, sd);
+	}
+	*dest = ' ';
+	return dest + 1;
+}
+
 /*
  * dbg_text() --
  *		produce ELIZA-like text of random, bounded length, truncating the last
@@ -228,44 +393,25 @@ done:
 void dbg_text(char *tgt, int min, int max, int sd) {
 	DSS_HUGE hgLength = 0, hgOffset, wordlen = 0, s_len, needed;
 	char sentence[MAX_SENT_LEN + 1], *cp;
-	static char szTextPool[TEXT_POOL_SIZE + 1];
+	static char szTextPool[TEXT_POOL_SIZE + 1 + 100];
 	static int bInit = 0;
-	int nLifeNoise = 0;
 
 	if (!bInit) {
-		cp = &szTextPool[0];
-		if (verbose > 0)
-			fprintf(stderr, "\nPreloading text ... ");
+		gen_index(noun_index, &nouns);
+		gen_index(adjectives_index, &adjectives);
+		gen_index(adverbs_index, &adverbs);
+		gen_index(auxillaries_index, &auxillaries);
+		gen_index(verbs_index, &verbs);
+		gen_index(prepositions_index, &prepositions);
 
-		while (wordlen < TEXT_POOL_SIZE) {
-			if ((verbose > 0) && (wordlen > nLifeNoise)) {
-				nLifeNoise += 200000;
-				fprintf(stderr, "%3.0f%%\b\b\b\b",
-				        (100.0 * wordlen) / TEXT_POOL_SIZE);
-			}
-
-			s_len = txt_sentence(sentence, 5);
-			if (s_len < 0)
-				INTERNAL_ERROR("Bad sentence formation");
-			needed = TEXT_POOL_SIZE - wordlen;
-			if (needed >= (s_len + 1)) /* need the entire sentence */
-			{
-				strcpy(cp, sentence);
-				cp += s_len;
-				wordlen += s_len + 1;
-				*(cp++) = ' ';
-			} else /* chop the new sentence off to match the length target */
-			{
-				sentence[needed] = '\0';
-				strcpy(cp, sentence);
-				wordlen += needed;
-				cp += needed;
-			}
+		char *ptr = szTextPool;
+		char *endptr = szTextPool + TEXT_POOL_SIZE + 1;
+		while (ptr < endptr) {
+			ptr = gen_sentence(ptr, 5);
 		}
-		*cp = '\0';
+		szTextPool[TEXT_POOL_SIZE] = '\0';
+
 		bInit = 1;
-		if (verbose > 0)
-			fprintf(stderr, "\n");
 	}
 
 	RANDOM(hgOffset, 0, TEXT_POOL_SIZE - max, sd);

@@ -28,7 +28,7 @@ class StringHeap {
 	//! Add a string to the string heap, returns a pointer to the string
 	const char *AddString(const char *data);
 	//! Add a string to the string heap, returns a pointer to the string
-	const char *AddString(std::string data);
+	const char *AddString(const std::string &data);
 
   private:
 	struct StringChunk {

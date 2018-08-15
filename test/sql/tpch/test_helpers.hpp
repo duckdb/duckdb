@@ -3,6 +3,7 @@
 
 #include "catch.hpp"
 
+#include "dbgen.hpp"
 #include "duckdb.hpp"
 
 static void CHECK_COLUMN(std::unique_ptr<duckdb::DuckDBResult> &result,
@@ -53,5 +54,20 @@ static void CHECK_COLUMN(std::unique_ptr<duckdb::DuckDBResult> &result,
 static void RESULT_NO_ERROR(std::unique_ptr<duckdb::DuckDBResult> &result) {
 	if (!result->GetSuccess()) {
 		FAIL(result->GetErrorMessage().c_str());
+	}
+}
+
+static void COMPARE_CSV(std::unique_ptr<duckdb::DuckDBResult> &result,
+                        const char *csv, bool header = false) {
+	if (!result->GetSuccess()) {
+		fprintf(stderr, "Query failed with message: %s\n",
+		        result->GetErrorMessage().c_str());
+		FAIL(result->GetErrorMessage().c_str());
+	}
+	duckdb::DataChunk big_chunk;
+	result->GatherResult(big_chunk);
+	std::string error;
+	if (!tpch::compare_result(csv, big_chunk, header, error)) {
+		FAIL(error);
 	}
 }
