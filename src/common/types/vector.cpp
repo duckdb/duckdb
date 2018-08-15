@@ -22,27 +22,14 @@ Vector::Vector(TypeId type, oid_t maximum_size, bool zero_data)
 		if (zero_data) {
 			memset(data, 0, maximum_size * GetTypeIdSize(type));
 		}
-		if (type == TypeId::VARCHAR) {
-			auto string_list = new unique_ptr<char[]>[maximum_size];
-			owned_strings = unique_ptr<unique_ptr<char[]>[]>(string_list);
-		}
 	}
 }
 
 Vector::Vector(TypeId type, char *dataptr, size_t maximum_size)
     : type(type), count(0), sel_vector(nullptr), data(dataptr),
       owns_data(false), maximum_size(maximum_size) {
-	if (!TypeIsConstantSize(type)) {
-		assert(type == TypeId::VARCHAR);
-		auto string_list = new unique_ptr<char[]>[maximum_size];
-		owned_strings = unique_ptr<unique_ptr<char[]>[]>(string_list);
-	}
 	if (dataptr && type == TypeId::INVALID) {
 		throw Exception("Cannot create a vector of type INVALID!");
-	}
-	if (type == TypeId::VARCHAR) {
-		auto string_list = new unique_ptr<char[]>[maximum_size];
-		owned_strings = unique_ptr<unique_ptr<char[]>[]>(string_list);
 	}
 }
 
@@ -51,12 +38,6 @@ Vector::Vector(Value value)
 	owns_data = true;
 	owned_data = unique_ptr<char[]>(new char[GetTypeIdSize(type)]);
 	data = owned_data.get();
-
-	if (!TypeIsConstantSize(type)) {
-		assert(type == TypeId::VARCHAR);
-		auto string_list = new unique_ptr<char[]>[1];
-		owned_strings = unique_ptr<unique_ptr<char[]>[]>(string_list);
-	}
 
 	SetValue(0, value);
 }
@@ -70,7 +51,7 @@ Vector::~Vector() { Destroy(); }
 void Vector::Destroy() {
 	if (data && owns_data) {
 		owned_data.reset();
-		owned_strings.reset();
+		string_heap.reset();
 	}
 	data = nullptr;
 	owns_data = false;
@@ -124,11 +105,12 @@ void Vector::SetValue(size_t index, Value val) {
 		if (val.is_null) {
 			((char **)data)[index] = nullptr;
 		} else {
-			auto string = new char[newVal.str_value.size() + 1];
-			strcpy(string, newVal.str_value.c_str());
-			owned_strings[index] = unique_ptr<char[]>(string);
-			((char **)data)[index] =
-			    newVal.is_null ? NullValue<char *>() : string;
+			if (!string_heap) {
+				string_heap = make_unique<StringHeap>();
+			}
+			((const char **)data)[index] =
+			    newVal.is_null ? NullValue<char *>()
+			                   : string_heap->AddString(newVal.str_value);
 		}
 		break;
 	}
@@ -191,7 +173,7 @@ void Vector::Move(Vector &other) {
 
 	if (owns_data) {
 		other.owned_data = move(owned_data);
-		other.owned_strings = move(owned_strings);
+		other.string_heap = move(string_heap);
 	}
 
 	other.count = count;

@@ -61,7 +61,6 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 					}
 				}
 				payload_chunk.count = payload_chunk.data[0].count;
-
 			}
 			group_chunk.count = group_chunk.data[0].count;
 			state->ht->AddChunk(group_chunk, payload_chunk);

@@ -72,8 +72,10 @@ class DataChunk : public Printable {
 	//! Destroy all data and columns owned by this DataChunk
 	void Destroy();
 
-	//! Merges the vector new_vector with an existing selection vector (i.e. result[i] = current_vector[new_vector[i]];)
-	static void MergeSelVector(sel_t *current_vector, sel_t *new_vector, sel_t * result, size_t new_count);
+	//! Merges the vector new_vector with an existing selection vector (i.e.
+	//! result[i] = current_vector[new_vector[i]];)
+	static void MergeSelVector(sel_t *current_vector, sel_t *new_vector,
+	                           sel_t *result, size_t new_count);
 
 	//! Sets the selection vector of the chunk
 	void SetSelVector(std::unique_ptr<sel_t[]> sel_vector, size_t new_count);

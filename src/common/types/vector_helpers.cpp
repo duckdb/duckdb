@@ -305,23 +305,25 @@ void VectorOperations::Case(Vector &check, Vector &res_true, Vector &res_false,
 }
 
 //===--------------------------------------------------------------------===//
-// Apply selection vector 
+// Apply selection vector
 //===--------------------------------------------------------------------===//
 template <class T>
-void _templated_apply_selection_vector(Vector &left, Vector &result, sel_t *sel_vector) {
+void _templated_apply_selection_vector(Vector &left, Vector &result,
+                                       sel_t *sel_vector) {
 	T *ldata = (T *)left.data;
 	T *rdata = (T *)result.data;
 	if (left.sel_vector) {
-		for(size_t i = 0; i < result.count; i++) {
+		for (size_t i = 0; i < result.count; i++) {
 			rdata[i] = ldata[left.sel_vector[sel_vector[i]]];
 		}
 	} else {
-		for(size_t i = 0; i < result.count; i++) {
+		for (size_t i = 0; i < result.count; i++) {
 			rdata[i] = ldata[sel_vector[i]];
 		}
 	}
 }
-void VectorOperations::ApplySelectionVector(Vector &left, Vector &result, sel_t *sel_vector) {
+void VectorOperations::ApplySelectionVector(Vector &left, Vector &result,
+                                            sel_t *sel_vector) {
 	if (left.type != result.type) {
 		throw Exception("Types of vectors do not match!");
 	}
@@ -346,7 +348,8 @@ void VectorOperations::ApplySelectionVector(Vector &left, Vector &result, sel_t 
 		_templated_apply_selection_vector<uint64_t>(left, result, sel_vector);
 		break;
 	case TypeId::VARCHAR:
-		_templated_apply_selection_vector<const char*>(left, result, sel_vector);
+		_templated_apply_selection_vector<const char *>(left, result,
+		                                                sel_vector);
 		break;
 	case TypeId::DATE:
 		_templated_apply_selection_vector<date_t>(left, result, sel_vector);
@@ -355,4 +358,3 @@ void VectorOperations::ApplySelectionVector(Vector &left, Vector &result, sel_t 
 		throw NotImplementedException("Unimplemented type for case expression");
 	}
 }
-

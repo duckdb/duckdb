@@ -168,12 +168,14 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			payload.data[j].count = addresses.count = new_count;
 			switch (aggregate_types[i]) {
 			case ExpressionType::AGGREGATE_COUNT:
-				VectorOperations::Scatter::SetCount(payload.data[j], addresses, new_sel);
+				VectorOperations::Scatter::SetCount(payload.data[j], addresses,
+				                                    new_sel);
 				break;
 			case ExpressionType::AGGREGATE_SUM:
 			case ExpressionType::AGGREGATE_MIN:
 			case ExpressionType::AGGREGATE_MAX:
-				VectorOperations::Scatter::Set(payload.data[j], addresses, new_sel);
+				VectorOperations::Scatter::Set(payload.data[j], addresses,
+				                               new_sel);
 				break;
 			default:
 				throw NotImplementedException("Unimplemented aggregate type!");
@@ -186,19 +188,23 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			payload.data[j].count = addresses.count = updated_count;
 			switch (aggregate_types[i]) {
 			case ExpressionType::AGGREGATE_COUNT:
-				VectorOperations::Scatter::AddOne(payload.data[j], addresses, updated_sel);
+				VectorOperations::Scatter::AddOne(payload.data[j], addresses,
+				                                  updated_sel);
 				break;
 			case ExpressionType::AGGREGATE_SUM:
 				// addition
-				VectorOperations::Scatter::Add(payload.data[j], addresses, updated_sel);
+				VectorOperations::Scatter::Add(payload.data[j], addresses,
+				                               updated_sel);
 				break;
 			case ExpressionType::AGGREGATE_MIN:
 				// min
-				VectorOperations::Scatter::Min(payload.data[j], addresses, updated_sel);
+				VectorOperations::Scatter::Min(payload.data[j], addresses,
+				                               updated_sel);
 				break;
 			case ExpressionType::AGGREGATE_MAX:
 				// max
-				VectorOperations::Scatter::Max(payload.data[j], addresses, updated_sel);
+				VectorOperations::Scatter::Max(payload.data[j], addresses,
+				                               updated_sel);
 				break;
 			default:
 				throw NotImplementedException("Unimplemented aggregate type!");

@@ -11,6 +11,7 @@
 #pragma once
 
 #include "common/internal_types.hpp"
+#include "common/types/string_heap.hpp"
 #include "common/types/value.hpp"
 
 namespace duckdb {
@@ -110,11 +111,10 @@ class Vector : public Printable {
 
 	Vector(const Vector &) = delete;
 
-	// private:
+  private:
 	//! If the vector owns data, this is the unique_ptr holds the actual data.
 	std::unique_ptr<char[]> owned_data;
-	//! If the vector owns a set of variable length entries, this unique_ptr
-	//! holds the variable length entries.
-	std::unique_ptr<std::unique_ptr<char[]>[]> owned_strings;
+	//! If the vector owns a StringHeap, this is the unique_ptr that holds it
+	std::unique_ptr<StringHeap> string_heap;
 };
 } // namespace duckdb

@@ -37,11 +37,6 @@ void DataChunk::Initialize(std::vector<TypeId> &types, oid_t maximum_chunk_size,
 		data[i].maximum_size = maximum_size;
 		data[i].count = 0;
 		data[i].sel_vector = nullptr;
-		if (data[i].type == TypeId::VARCHAR) {
-			auto string_list = new unique_ptr<char[]>[maximum_size];
-			data[i].owned_strings =
-			    unique_ptr<unique_ptr<char[]>[]>(string_list);
-		}
 
 		ptr += GetTypeIdSize(types[i]) * maximum_size;
 	}
@@ -111,9 +106,10 @@ void DataChunk::Append(DataChunk &other) {
 }
 
 bool DataChunk::HasConsistentSelVector() {
-	if (column_count == 0) return true;
+	if (column_count == 0)
+		return true;
 	sel_t *v = sel_vector.get();
-	for(size_t i = 0; i < column_count; i++) {
+	for (size_t i = 0; i < column_count; i++) {
 		if (data[i].sel_vector != v) {
 			return false;
 		}
@@ -122,8 +118,9 @@ bool DataChunk::HasConsistentSelVector() {
 }
 
 bool DataChunk::HasSelVector() {
-	if (column_count == 0) return true;
-	for(size_t i = 0; i < column_count; i++) {
+	if (column_count == 0)
+		return true;
+	for (size_t i = 0; i < column_count; i++) {
 		if (data[i].sel_vector) {
 			return true;
 		}
@@ -131,7 +128,8 @@ bool DataChunk::HasSelVector() {
 	return false;
 }
 
-void DataChunk::MergeSelVector(sel_t *current_vector, sel_t *new_vector, sel_t * result, size_t new_count) {
+void DataChunk::MergeSelVector(sel_t *current_vector, sel_t *new_vector,
+                               sel_t *result, size_t new_count) {
 	for (size_t i = 0; i < new_count; i++) {
 		result[i] = current_vector[new_vector[i]];
 	}
@@ -144,20 +142,22 @@ void DataChunk::SetSelVector(unique_ptr<sel_t[]> new_vector, size_t new_count) {
 		// check if any of the columns in the chunk have a selection vector
 		if (HasSelVector()) {
 			if (HasConsistentSelVector()) {
-				// all columns in the DataChunk point towards the same selection vector
-				// merge with the current selection vector
-				for(size_t i = 0; i < new_count; i++) {
+				// all columns in the DataChunk point towards the same selection
+				// vector merge with the current selection vector
+				for (size_t i = 0; i < new_count; i++) {
 					assert(new_vector[i] < this->count);
 				}
-				DataChunk::MergeSelVector(sel_vector.get(), new_vector.get(), new_vector.get(), new_count);
+				DataChunk::MergeSelVector(sel_vector.get(), new_vector.get(),
+				                          new_vector.get(), new_count);
 				sel_vector = move(new_vector);
 			} else {
 				// columns point towards different selection vectors!
 				// just give up and apply the selection vectors
-				for(size_t i = 0; i < column_count; i++) {
+				for (size_t i = 0; i < column_count; i++) {
 					Vector result(data[i].type, new_count);
 					result.count = new_count;
-					VectorOperations::ApplySelectionVector(data[i], result, new_vector.get());
+					VectorOperations::ApplySelectionVector(data[i], result,
+					                                       new_vector.get());
 					result.Move(data[i]);
 				}
 				sel_vector = nullptr;
@@ -168,12 +168,11 @@ void DataChunk::SetSelVector(unique_ptr<sel_t[]> new_vector, size_t new_count) {
 		}
 	}
 	// add a reference to all child nodes
-	for(size_t i = 0; i < column_count; i++) {
+	for (size_t i = 0; i < column_count; i++) {
 		data[i].count = new_count;
 		data[i].sel_vector = sel_vector.get();
 	}
 	this->count = new_count;
-
 }
 
 vector<TypeId> DataChunk::GetTypes() {

@@ -4,6 +4,8 @@
 
 #include "test_helpers.hpp"
 
+#include <chrono>
+
 using namespace duckdb;
 using namespace std;
 
@@ -14,17 +16,9 @@ TEST_CASE("[SLOW] Test TPC-H SF0.1", "[tpch]") {
 	// generate the TPC-H data for SF 0.1
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
-	// REQUIRE_NOTHROW(tpch::dbgen(sf, db.catalog));
-	// con.Query("COPY lineitem to 'lineitem.csv' DELIMITER '|'");
-	// return;
-
-	// // test the queries
 	tpch::dbgen(sf, db.catalog);
-	// result = con.Query("COPY lineitem TO 'lineitem.csv' DELIMITER '|'");
-	// CHECK_COLUMN(result, 0, {600572});
 
-	// RESULT_NO_ERROR(result);
-	// // check if all the counts are correct
+	// check if all the counts are correct
 	result = con.Query("SELECT COUNT(*) FROM orders");
 	CHECK_COLUMN(result, 0, {150000});
 	result = con.Query("SELECT COUNT(*) FROM lineitem");
@@ -41,16 +35,6 @@ TEST_CASE("[SLOW] Test TPC-H SF0.1", "[tpch]") {
 	CHECK_COLUMN(result, 0, {25});
 	result = con.Query("SELECT COUNT(*) FROM region");
 	CHECK_COLUMN(result, 0, {5});
-
-	// FIXME: checks?
-	result = con.Query("SELECT * FROM orders");
-	result = con.Query("SELECT * FROM lineitem");
-	result = con.Query("SELECT * FROM part");
-	result = con.Query("SELECT * FROM partsupp");
-	result = con.Query("SELECT * FROM supplier");
-	result = con.Query("SELECT * FROM customer");
-	result = con.Query("SELECT * FROM nation");
-	result = con.Query("SELECT * FROM region");
 
 	result = con.Query("SELECT SUM(l_quantity) FROM lineitem");
 	CHECK_COLUMN(result, 0, {15334802});
@@ -76,4 +60,10 @@ TEST_CASE("[SLOW] Test TPC-H SF0.1", "[tpch]") {
 	if (!tpch::check_result(sf, 1, *result.get(), error_message)) {
 		FAIL(error_message);
 	}
+
+	// result = con.Query(tpch::get_query(2));
+	// RESULT_NO_ERROR(result);
+	// if (!tpch::check_result(sf, 2, *result.get(), error_message)) {
+	// 	FAIL(error_message);
+	// }
 }

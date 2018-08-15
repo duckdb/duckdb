@@ -1,7 +1,6 @@
 
-#include "catch.hpp"
 #include "../tpch/test_helpers.hpp"
-
+#include "catch.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -41,13 +40,14 @@ TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
 	CHECK_COLUMN(result, 1, {42});
 
 	// aggregations with group by
-	result = con.Query("SELECT b, SUM(a), SUM(a+2) FROM test GROUP BY b ORDER BY b;");
+	result = con.Query(
+	    "SELECT b, SUM(a), SUM(a+2) FROM test GROUP BY b ORDER BY b;");
 	CHECK_COLUMN(result, 0, {21, 22});
 	CHECK_COLUMN(result, 1, {12, 24});
 	CHECK_COLUMN(result, 2, {14, 28});
 
 	result = con.Query("SELECT b, SUM(a), COUNT(*), SUM(a+2) FROM test GROUP "
-	                     "BY b ORDER BY b;");
+	                   "BY b ORDER BY b;");
 	CHECK_COLUMN(result, 0, {21, 22});
 	CHECK_COLUMN(result, 1, {12, 24});
 	CHECK_COLUMN(result, 2, {1, 2});
@@ -60,8 +60,8 @@ TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
 
 	// group by with filter
 	result = con.Query("SELECT b, SUM(a), COUNT(*), SUM(a+2) FROM test WHERE "
-	                     "a <= 12 GROUP "
-	                     "BY b ORDER BY b;");
+	                   "a <= 12 GROUP "
+	                   "BY b ORDER BY b;");
 	CHECK_COLUMN(result, 0, {21, 22});
 	CHECK_COLUMN(result, 1, {12, 11});
 	CHECK_COLUMN(result, 2, {1, 1});
@@ -73,11 +73,10 @@ TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
 
 	// group by with filter and multiple values per groups
 	result = con.Query("SELECT b, SUM(a), COUNT(*), SUM(a+2) FROM test WHERE "
-	                     "a <= 12 GROUP "
-	                     "BY b ORDER BY b;");
+	                   "a <= 12 GROUP "
+	                   "BY b ORDER BY b;");
 	CHECK_COLUMN(result, 0, {21, 22});
-	CHECK_COLUMN(result, 1, {12*4, 11});
+	CHECK_COLUMN(result, 1, {12 * 4, 11});
 	CHECK_COLUMN(result, 2, {4, 1});
-	CHECK_COLUMN(result, 3, {12*4+2*4, 13});
-
+	CHECK_COLUMN(result, 3, {12 * 4 + 2 * 4, 13});
 }

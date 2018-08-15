@@ -11,7 +11,8 @@ using namespace std;
 // Templated Looping Functions
 //===--------------------------------------------------------------------===//
 template <class T, class OP, class EXEC>
-void _scatter_templated_loop_handling(Vector &source, Vector &dest, sel_t *sel_vector) {
+void _scatter_templated_loop_handling(Vector &source, Vector &dest,
+                                      sel_t *sel_vector) {
 	T *ldata = (T *)source.data;
 	T **destination = (T **)dest.data;
 	if (source.count == dest.count) {
@@ -36,7 +37,8 @@ void _scatter_templated_loop_handling(Vector &source, Vector &dest, sel_t *sel_v
 				for (size_t i = 0; i < source.count; i++) {
 					destination[dest.sel_vector[i]][0] =
 					    EXEC::template Operation<T, T, T, OP>(
-					        ldata[sel_vector[i]], destination[dest.sel_vector[i]][0]);
+					        ldata[sel_vector[i]],
+					        destination[dest.sel_vector[i]][0]);
 				}
 			} else {
 				for (size_t i = 0; i < source.count; i++) {
@@ -49,7 +51,8 @@ void _scatter_templated_loop_handling(Vector &source, Vector &dest, sel_t *sel_v
 			if (sel_vector) {
 				for (size_t i = 0; i < source.count; i++) {
 					destination[i][0] = EXEC::template Operation<T, T, T, OP>(
-					    ldata[source.sel_vector[sel_vector[i]]], destination[i][0]);
+					    ldata[source.sel_vector[sel_vector[i]]],
+					    destination[i][0]);
 				}
 			} else {
 				for (size_t i = 0; i < source.count; i++) {
@@ -81,7 +84,8 @@ void _scatter_templated_loop_handling(Vector &source, Vector &dest, sel_t *sel_v
 	}
 }
 template <class T, class OP>
-void _scatter_templated_loop(Vector &source, Vector &dest, sel_t *sel_vector, bool ignore_nulls) {
+void _scatter_templated_loop(Vector &source, Vector &dest, sel_t *sel_vector,
+                             bool ignore_nulls) {
 	if (ignore_nulls) {
 		_scatter_templated_loop_handling<T, OP, operators::ExecuteIgnoreNull>(
 		    source, dest, sel_vector);
@@ -103,31 +107,38 @@ void _gather_templated_loop(Vector &src, Vector &result) {
 
 template <class OP>
 static void _generic_scatter_loop(Vector &source, Vector &dest,
-								  sel_t *sel_vector, bool ignore_nulls) {
+                                  sel_t *sel_vector, bool ignore_nulls) {
 	if (dest.type != TypeId::POINTER) {
 		throw Exception("Cannot scatter to non-pointer type!");
 	}
 	switch (source.type) {
 	case TypeId::TINYINT:
-		_scatter_templated_loop<int8_t, OP>(source, dest, sel_vector, ignore_nulls);
+		_scatter_templated_loop<int8_t, OP>(source, dest, sel_vector,
+		                                    ignore_nulls);
 		break;
 	case TypeId::SMALLINT:
-		_scatter_templated_loop<int16_t, OP>(source, dest, sel_vector, ignore_nulls);
+		_scatter_templated_loop<int16_t, OP>(source, dest, sel_vector,
+		                                     ignore_nulls);
 		break;
 	case TypeId::INTEGER:
-		_scatter_templated_loop<int32_t, OP>(source, dest, sel_vector, ignore_nulls);
+		_scatter_templated_loop<int32_t, OP>(source, dest, sel_vector,
+		                                     ignore_nulls);
 		break;
 	case TypeId::BIGINT:
-		_scatter_templated_loop<int64_t, OP>(source, dest, sel_vector, ignore_nulls);
+		_scatter_templated_loop<int64_t, OP>(source, dest, sel_vector,
+		                                     ignore_nulls);
 		break;
 	case TypeId::DECIMAL:
-		_scatter_templated_loop<double, OP>(source, dest, sel_vector, ignore_nulls);
+		_scatter_templated_loop<double, OP>(source, dest, sel_vector,
+		                                    ignore_nulls);
 		break;
 	case TypeId::POINTER:
-		_scatter_templated_loop<uint64_t, OP>(source, dest, sel_vector, ignore_nulls);
+		_scatter_templated_loop<uint64_t, OP>(source, dest, sel_vector,
+		                                      ignore_nulls);
 		break;
 	case TypeId::DATE:
-		_scatter_templated_loop<date_t, OP>(source, dest, sel_vector, ignore_nulls);
+		_scatter_templated_loop<date_t, OP>(source, dest, sel_vector,
+		                                    ignore_nulls);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for scatter");
@@ -172,27 +183,33 @@ static void _generic_gather_loop(Vector &source, Vector &dest) {
 //===--------------------------------------------------------------------===//
 // Scatter methods
 //===--------------------------------------------------------------------===//
-void VectorOperations::Scatter::Set(Vector &source, Vector &dest, sel_t *sel_vector) {
+void VectorOperations::Scatter::Set(Vector &source, Vector &dest,
+                                    sel_t *sel_vector) {
 	_generic_scatter_loop<operators::PickLeft>(source, dest, sel_vector, false);
 }
 
-void VectorOperations::Scatter::Add(Vector &source, Vector &dest, sel_t *sel_vector) {
+void VectorOperations::Scatter::Add(Vector &source, Vector &dest,
+                                    sel_t *sel_vector) {
 	_generic_scatter_loop<operators::Addition>(source, dest, sel_vector, true);
 }
 
-void VectorOperations::Scatter::Max(Vector &source, Vector &dest, sel_t *sel_vector) {
+void VectorOperations::Scatter::Max(Vector &source, Vector &dest,
+                                    sel_t *sel_vector) {
 	_generic_scatter_loop<operators::Max>(source, dest, sel_vector, true);
 }
 
-void VectorOperations::Scatter::Min(Vector &source, Vector &dest, sel_t *sel_vector) {
+void VectorOperations::Scatter::Min(Vector &source, Vector &dest,
+                                    sel_t *sel_vector) {
 	_generic_scatter_loop<operators::Min>(source, dest, sel_vector, true);
 }
 
-void VectorOperations::Scatter::SetCount(Vector &source, Vector &dest, sel_t *sel_vector) {
+void VectorOperations::Scatter::SetCount(Vector &source, Vector &dest,
+                                         sel_t *sel_vector) {
 	_generic_scatter_loop<operators::SetCount>(source, dest, sel_vector, false);
 }
 
-void VectorOperations::Scatter::AddOne(Vector &source, Vector &dest, sel_t *sel_vector) {
+void VectorOperations::Scatter::AddOne(Vector &source, Vector &dest,
+                                       sel_t *sel_vector) {
 	_generic_scatter_loop<operators::AddOne>(source, dest, sel_vector, true);
 }
 
