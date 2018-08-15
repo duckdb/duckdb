@@ -40,6 +40,10 @@ static void CHECK_COLUMN(std::unique_ptr<duckdb::DuckDBResult> &result,
 			FAIL("Too many values in result!");
 		}
 		for (size_t j = 0; j < vector.count; j++) {
+			// NULL <> NULL, hence special handling
+			if (vector.GetValue(j).is_null && values[i + j].is_null) {
+				continue;
+			}
 			if (!duckdb::Value::Equals(vector.GetValue(j), values[i + j])) {
 				FAIL("Incorrect result! Got " + vector.GetValue(j).ToString() +
 				     " but expected " + values[i + j].ToString());

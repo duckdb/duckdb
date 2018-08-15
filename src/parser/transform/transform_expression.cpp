@@ -118,7 +118,7 @@ unique_ptr<AbstractExpression> TransformBoolExpr(BoolExpr *root) {
 		}
 		case NOT_EXPR: {
 			result = make_unique<OperatorExpression>(
-			    ExpressionType::OPERATOR_NOT, TypeId::INVALID, move(next),
+			    ExpressionType::OPERATOR_NOT, TypeId::BOOLEAN, move(next),
 			    nullptr);
 			break;
 		}
