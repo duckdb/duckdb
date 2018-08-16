@@ -34,6 +34,8 @@ class Binder : public SQLNodeVisitor {
 	    : catalog(catalog), context(make_unique<BindContext>()) {}
 
 	void Visit(SelectStatement &statement);
+	void Visit(CopyStatement &stmt);
+
 
 	void Visit(ColumnRefExpression &expr);
 	void Visit(SubqueryExpression &expr);

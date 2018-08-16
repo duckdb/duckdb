@@ -43,9 +43,16 @@ TEST_CASE("Test Copy statement", "[copystatement]") {
 	        DuckDBSuccess);
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {5000}));
 
+	//  Creating CSV from Query
+	REQUIRE(duckdb_query(connection, "COPY (select a,b from test where a < 4000) to 'test3.csv';", &result) ==
+			DuckDBSuccess);
+	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {4000}));
+
 	REQUIRE(duckdb_disconnect(connection) == DuckDBSuccess);
 	REQUIRE(duckdb_close(database) == DuckDBSuccess);
 
 	remove("test.csv");
 	remove("test2.csv");
+	remove("test3.csv");
+
 }

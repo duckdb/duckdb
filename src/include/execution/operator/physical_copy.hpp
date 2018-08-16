@@ -25,6 +25,11 @@ class PhysicalCopy : public PhysicalOperator {
 	      file_path(file_path), is_from(is_from), delimiter(delimiter),
 	      quote(quote), escape(escape) {}
 
+	PhysicalCopy(std::string file_path, bool is_from, char delimiter,
+				 char quote, char escape)
+			: PhysicalOperator(PhysicalOperatorType::COPY),
+			  file_path(file_path), is_from(is_from), delimiter(delimiter),
+			  quote(quote), escape(escape) {}
 	std::vector<TypeId> GetTypes() override;
 	virtual void GetChunk(DataChunk &chunk,
 	                      PhysicalOperatorState *state) override;

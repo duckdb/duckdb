@@ -247,10 +247,21 @@ void LogicalPlanGenerator::Visit(InsertStatement &statement) {
 }
 
 void LogicalPlanGenerator::Visit(CopyStatement &statement) {
-	auto table = catalog.GetTable(statement.schema, statement.table);
-	auto copy = make_unique<LogicalCopy>(
-	    table, move(statement.file_path), move(statement.is_from),
-	    move(statement.delimiter), move(statement.quote),
-	    move(statement.escape));
-	root = move(copy);
+    if (statement.table[0] != '\0'){
+        auto table = catalog.GetTable(statement.schema, statement.table);
+        auto copy = make_unique<LogicalCopy>(
+                table, move(statement.file_path), move(statement.is_from),
+                move(statement.delimiter), move(statement.quote),
+                move(statement.escape));
+        root = move(copy);
+    }
+    else{
+        auto copy = make_unique<LogicalCopy>(move(statement.file_path), move(statement.is_from),
+                move(statement.delimiter), move(statement.quote),
+                move(statement.escape));
+        statement.select_stmt->Accept(this);
+        copy->children.push_back(move(root));
+        root = move(copy);
+    }
+
 }

@@ -1,4 +1,5 @@
 
+#include <parser/statement/copy_statement.hpp>
 #include "planner/binder.hpp"
 
 #include "parser/expression/expression_list.hpp"
@@ -198,6 +199,11 @@ void Binder::Visit(SelectStatement &statement) {
 	if (statement.groupby.having) {
 		statement.groupby.having->Accept(this);
 	}
+}
+
+void Binder::Visit(CopyStatement &stmt) {
+	if (stmt.select_stmt)
+		stmt.select_stmt->Accept(this);
 }
 
 void Binder::Visit(ColumnRefExpression &expr) {

@@ -268,11 +268,19 @@ void PhysicalPlanGenerator::Visit(ColumnRefExpression &expr) {
 void PhysicalPlanGenerator::Visit(LogicalCopy &op) {
 	LogicalOperatorVisitor::Visit(op);
 
-	auto copy = make_unique<PhysicalCopy>(op.table, move(op.file_path),
-	                                      move(op.is_from), move(op.delimiter),
-	                                      move(op.quote), move(op.escape));
+
 	if (plan) {
-		throw Exception("Copy should be root node");
+		auto copy = make_unique<PhysicalCopy>(move(op.file_path),
+											  move(op.is_from), move(op.delimiter),
+											  move(op.quote), move(op.escape));
+		copy->children.push_back(move(plan));
+        this->plan = move(copy);
 	}
-	this->plan = move(copy);
+	else{
+		auto copy = make_unique<PhysicalCopy>(op.table, move(op.file_path),
+											  move(op.is_from), move(op.delimiter),
+											  move(op.quote), move(op.escape));
+        this->plan = move(copy);
+	}
+
 }

@@ -180,10 +180,15 @@ unique_ptr<CopyStatement> TransformCopy(Node *node) {
 	CopyStmt *stmt = reinterpret_cast<CopyStmt *>(node);
 	assert(stmt);
 	auto result = make_unique<CopyStatement>();
-	auto ref = TransformRangeVar(stmt->relation);
-	auto &table = *reinterpret_cast<BaseTableRef *>(ref.get());
-	result->table = table.table_name;
-	result->schema = table.schema_name;
+	if (stmt->relation) {
+		auto ref = TransformRangeVar(stmt->relation);
+		auto &table = *reinterpret_cast<BaseTableRef *>(ref.get());
+		result->table = table.table_name;
+	}
+	 else {
+		result->select_stmt = TransformSelect(stmt->query);
+	}
+
 	result->file_path = stmt->filename;
 	result->is_from = stmt->is_from;
 
