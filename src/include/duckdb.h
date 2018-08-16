@@ -10,11 +10,11 @@
 
 #pragma once
 
+#include <stdlib.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-typedef unsigned long long duckdb_oid_t;
 
 typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_INVALID = 0,
@@ -37,13 +37,13 @@ typedef enum DUCKDB_TYPE {
 typedef struct {
 	duckdb_type type;
 	char *data;
-	duckdb_oid_t count;
+	size_t count;
 	char *name;
 } duckdb_column;
 
 typedef struct {
-	duckdb_oid_t row_count;
-	duckdb_oid_t column_count;
+	size_t row_count;
+	size_t column_count;
 	duckdb_column *columns;
 } duckdb_result;
 
@@ -75,7 +75,7 @@ duckdb_query(duckdb_connection connection, /* Connection to query */
 );
 
 //! Returns whether or not a specific value in a specific column is NULL
-int duckdb_value_is_null(duckdb_column column, duckdb_oid_t index);
+int duckdb_value_is_null(duckdb_column column, size_t index);
 
 void duckdb_print_result(duckdb_result result /* The result to print */
 );

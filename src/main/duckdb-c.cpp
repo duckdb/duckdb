@@ -105,12 +105,12 @@ static TypeId _convert_type_c_to_cpp(duckdb_type type) {
 	}
 }
 
-template <class T> T get_value(duckdb_column column, duckdb_oid_t index) {
+template <class T> T get_value(duckdb_column column, size_t index) {
 	T *data = (T *)column.data;
 	return data[index];
 }
 
-static Value _duckdb_c_get_value(duckdb_column column, duckdb_oid_t index) {
+static Value _duckdb_c_get_value(duckdb_column column, size_t index) {
 	auto cpp_type = _convert_type_c_to_cpp(column.type);
 	switch (column.type) {
 	case DUCKDB_TYPE_BOOLEAN:
@@ -136,7 +136,7 @@ static Value _duckdb_c_get_value(duckdb_column column, duckdb_oid_t index) {
 	}
 }
 
-int duckdb_value_is_null(duckdb_column column, duckdb_oid_t index) {
+int duckdb_value_is_null(duckdb_column column, size_t index) {
 	if (index >= column.count) {
 		return -1;
 	}

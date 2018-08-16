@@ -13,12 +13,12 @@ DataChunk::DataChunk()
 
 DataChunk::~DataChunk() {}
 
-void DataChunk::Initialize(std::vector<TypeId> &types, oid_t maximum_chunk_size,
+void DataChunk::Initialize(std::vector<TypeId> &types, size_t maximum_chunk_size,
                            bool zero_data) {
 	maximum_size = maximum_chunk_size;
 	count = 0;
 	column_count = types.size();
-	oid_t size = 0;
+	size_t size = 0;
 	for (auto &type : types) {
 		size += GetTypeIdSize(type) * maximum_size;
 	}
@@ -31,7 +31,7 @@ void DataChunk::Initialize(std::vector<TypeId> &types, oid_t maximum_chunk_size,
 
 	char *ptr = owned_data.get();
 	data = unique_ptr<Vector[]>(new Vector[types.size()]);
-	for (oid_t i = 0; i < types.size(); i++) {
+	for (size_t i = 0; i < types.size(); i++) {
 		data[i].type = types[i];
 		data[i].data = ptr;
 		data[i].maximum_size = maximum_size;
@@ -45,7 +45,7 @@ void DataChunk::Initialize(std::vector<TypeId> &types, oid_t maximum_chunk_size,
 void DataChunk::Reset() {
 	count = 0;
 	char *ptr = owned_data.get();
-	for (oid_t i = 0; i < column_count; i++) {
+	for (size_t i = 0; i < column_count; i++) {
 		data[i].data = ptr;
 		data[i].owns_data = false;
 		data[i].count = 0;
@@ -67,7 +67,7 @@ void DataChunk::Destroy() {
 
 void DataChunk::ForceOwnership() {
 	char *ptr = owned_data.get();
-	for (oid_t i = 0; i < column_count;
+	for (size_t i = 0; i < column_count;
 	     ptr += GetTypeIdSize(data[i].type) * maximum_size, i++) {
 		if (data[i].sel_vector) {
 			data[i].ForceOwnership();
@@ -89,7 +89,7 @@ void DataChunk::Append(DataChunk &other) {
 	if (column_count != other.column_count) {
 		throw Exception("Column counts of appending chunk doesn't match!");
 	}
-	for (oid_t i = 0; i < column_count; i++) {
+	for (size_t i = 0; i < column_count; i++) {
 		if (other.data[i].type != data[i].type) {
 			throw Exception("Column types do not match!");
 		}
@@ -97,11 +97,11 @@ void DataChunk::Append(DataChunk &other) {
 	if (count + other.count > maximum_size) {
 		// resize
 		maximum_size = maximum_size * 2;
-		for (oid_t i = 0; i < column_count; i++) {
+		for (size_t i = 0; i < column_count; i++) {
 			data[i].Resize(maximum_size);
 		}
 	}
-	for (oid_t i = 0; i < column_count; i++) {
+	for (size_t i = 0; i < column_count; i++) {
 		data[i].Append(other.data[i]);
 	}
 	count += other.count;

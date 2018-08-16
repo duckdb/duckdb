@@ -46,7 +46,7 @@ class Vector : public Printable {
 
   public:
 	//! The amount of elements in the vector.
-	oid_t count;
+	size_t count;
 	//! A pointer to the data.
 	char *data;
 	//! A flag indicating whether or not the vector owns its data.
@@ -56,7 +56,7 @@ class Vector : public Printable {
 	//! The type of the elements stored in the vector.
 	TypeId type;
 	//! The maximum amount of elements that can be stored in the vector.
-	oid_t maximum_size;
+	size_t maximum_size;
 
 	Vector();
 	//! Create a vector of size one holding the passed on value
@@ -69,7 +69,7 @@ class Vector : public Printable {
 	    If maximum_size is equal to 0, the vector will be an empty vector.
 	    If zero_data is true, the allocated data will be zero-initialized.
 	*/
-	Vector(TypeId type, oid_t maximum_size = 0, bool zero_data = false);
+	Vector(TypeId type, size_t maximum_size = 0, bool zero_data = false);
 	~Vector();
 
 	//! Destroys the vector, deleting any owned data and resetting it to an
@@ -87,7 +87,7 @@ class Vector : public Printable {
 	//! Resizes the vector to hold maximum_size, and potentially typecasts the
 	//! elements as well. After the resize, the vector will become an owning
 	//! vector even if it was a non-owning vector before.
-	void Resize(oid_t maximum_size, TypeId new_type = TypeId::INVALID);
+	void Resize(size_t maximum_size, TypeId new_type = TypeId::INVALID);
 	//! Appends the other vector to this vector. This method will call
 	//! Vector::Resize if there is no room for the append, which will cause the
 	//! vector to become an owning vector.

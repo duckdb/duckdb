@@ -55,7 +55,7 @@ class DuckDBResult {
 
 	void Print();
 
-	oid_t count;
+	size_t count;
 	std::vector<TypeId> types;
 	std::vector<std::unique_ptr<DataChunk>> data;
 

@@ -42,7 +42,7 @@ class TableCatalogEntry : public AbstractCatalogEntry {
 	bool ColumnExists(const std::string &name);
 	//! Returns the statistics of the oid-th column. Throws an exception if the
 	//! access is out of range.
-	Statistics GetStatistics(oid_t oid);
+	Statistics GetStatistics(size_t oid);
 	//! Returns a reference to the column of the specified name. Throws an
 	//! exception if the column does not exist.
 	std::shared_ptr<ColumnCatalogEntry> GetColumn(const std::string &name);

@@ -40,14 +40,14 @@ class DataChunk : public Printable {
   public:
 	//! The amount of elements in the chunk. Every vector holds this amount of
 	//! elements.
-	oid_t count;
+	size_t count;
 	//! The amount of vectors that are part of this DataChunk.
-	oid_t column_count;
+	size_t column_count;
 	//! The vectors owned by the DataChunk.
 	std::unique_ptr<Vector[]> data;
 	//! The maximum amount of data that can be stored in each of the vectors
 	//! owned by the DataChunk.
-	oid_t maximum_size;
+	size_t maximum_size;
 	//! The (optional) selection vector of the DataChunk. Each of the member
 	//! vectors reference this selection vector.
 	std::unique_ptr<sel_t[]> sel_vector;
@@ -62,7 +62,7 @@ class DataChunk : public Printable {
 	//! the DataChunk.
 	//! If zero_data is set to true, the data is zero-initialized.
 	void Initialize(std::vector<TypeId> &types,
-	                oid_t maximum_chunk_size = STANDARD_VECTOR_SIZE,
+	                size_t maximum_chunk_size = STANDARD_VECTOR_SIZE,
 	                bool zero_data = false);
 	//! Append the other DataChunk to this one. The column count and types of
 	//! the two DataChunks have to match exactly. Can potentially cause

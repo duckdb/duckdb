@@ -8,7 +8,7 @@
 using namespace duckdb;
 using namespace std;
 
-Vector::Vector(TypeId type, oid_t maximum_size, bool zero_data)
+Vector::Vector(TypeId type, size_t maximum_size, bool zero_data)
     : type(type), count(0), sel_vector(nullptr), data(nullptr),
       owns_data(false), maximum_size(maximum_size) {
 	if (maximum_size > 0) {
@@ -234,7 +234,7 @@ void Vector::Copy(Vector &other) {
 	}
 }
 
-void Vector::Resize(oid_t maximum_size, TypeId new_type) {
+void Vector::Resize(size_t maximum_size, TypeId new_type) {
 	if (sel_vector) {
 		throw Exception("Cannot resize vector with selection vector!");
 	}
