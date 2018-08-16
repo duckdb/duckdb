@@ -8,29 +8,12 @@
 using namespace duckdb;
 using namespace std;
 
-bool file_exists(string file) {
-	ifstream f(file.c_str());
-	return f.good();
-}
-
-void copy_file(string input, string output) {
-	std::ifstream src(input, std::ios::binary);
-	std::ofstream dst(output, std::ios::binary);
-
-	dst << src.rdbuf();
-}
-
 int main() {
 	unique_ptr<DuckDBResult> result = nullptr;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 
-	string input_file = "test/test.sql";
-	if (!file_exists(input_file)) {
-		// copy from the .in file
-		copy_file("test/test.sql.in", input_file);
-	}
-
+	string input_file = "test/test.sql.in";
 	ifstream infile(input_file);
 	string line;
 	size_t linenr = 0;
