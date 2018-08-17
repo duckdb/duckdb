@@ -13,8 +13,8 @@ DataChunk::DataChunk()
 
 DataChunk::~DataChunk() {}
 
-void DataChunk::Initialize(std::vector<TypeId> &types, size_t maximum_chunk_size,
-                           bool zero_data) {
+void DataChunk::Initialize(std::vector<TypeId> &types,
+                           size_t maximum_chunk_size, bool zero_data) {
 	maximum_size = maximum_chunk_size;
 	count = 0;
 	column_count = types.size();

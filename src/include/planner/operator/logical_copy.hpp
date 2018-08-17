@@ -21,11 +21,11 @@ class LogicalCopy : public LogicalOperator {
 	    : LogicalOperator(LogicalOperatorType::COPY), table(table),
 	      file_path(file_path), is_from(is_from), delimiter(delimiter),
 	      quote(quote), escape(escape) {}
-	LogicalCopy(std::string file_path,
-				bool is_from, char delimiter, char quote, char escape)
-			: LogicalOperator(LogicalOperatorType::COPY),
-			  file_path(file_path), is_from(is_from), delimiter(delimiter),
-			  quote(quote), escape(escape) {}
+	LogicalCopy(std::string file_path, bool is_from, char delimiter, char quote,
+	            char escape)
+	    : LogicalOperator(LogicalOperatorType::COPY), file_path(file_path),
+	      is_from(is_from), delimiter(delimiter), quote(quote), escape(escape) {
+	}
 
 	virtual void Accept(LogicalOperatorVisitor *v) override { v->Visit(*this); }
 

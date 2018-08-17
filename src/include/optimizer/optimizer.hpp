@@ -20,7 +20,7 @@
 
 namespace duckdb {
 
-class Optimizer : public LogicalOperatorVisitor {
+class Optimizer {
   public:
 	Optimizer();
 
@@ -30,16 +30,7 @@ class Optimizer : public LogicalOperatorVisitor {
 	bool GetSuccess() const { return success; }
 	const std::string &GetErrorMessage() const { return message; }
 
-	virtual void Visit(LogicalAggregate &aggregate);
-	virtual void Visit(LogicalFilter &filter);
-	virtual void Visit(LogicalOrder &order);
-	virtual void Visit(LogicalProjection &filter);
-
-  private:
-	void RewriteList(std::vector<std::unique_ptr<AbstractExpression>> &list);
-
-	ExpressionRewriter rewriter;
-	LogicalRewriter logical_rewriter;
+	Rewriter rewriter;
 
 	bool success;
 	std::string message;

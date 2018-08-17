@@ -154,66 +154,6 @@ class AbstractExpression : public Printable {
 
 	//! A list of children of the expression
 	std::vector<std::unique_ptr<AbstractExpression>> children;
-
-	class iterator {
-	  public:
-		typedef iterator self_type;
-		typedef AbstractExpression value_type;
-		typedef AbstractExpression &reference;
-		typedef AbstractExpression *pointer;
-		typedef std::forward_iterator_tag iterator_category;
-		typedef int difference_type;
-		iterator(AbstractExpression &root, size_t index = 0) {
-			nodes.push(Node(root, index));
-		}
-
-		void Next() {
-			auto &child = nodes.top();
-			if (child.index < child.node.children.size()) {
-				nodes.push(Node(*child.node.children[child.index], 0));
-				child.index++;
-			} else {
-				if (nodes.size() > 1) {
-					nodes.pop();
-					Next();
-				}
-			}
-		}
-		self_type operator++() {
-			Next();
-			return *this;
-		}
-		self_type operator++(int junk) {
-			Next();
-			return *this;
-		}
-		reference operator*() { return nodes.top().node; }
-		pointer operator->() { return &nodes.top().node; }
-		bool operator==(const self_type &rhs) {
-			return nodes.size() == rhs.nodes.size() &&
-			       nodes.top().index == rhs.nodes.top().index;
-		}
-		bool operator!=(const self_type &rhs) { return !(*this == rhs); }
-		void replace(std::unique_ptr<AbstractExpression> new_vertex) {
-			nodes.pop();
-			auto &parent = nodes.top();
-			parent.index--;
-			parent.node.children[parent.index] = std::move(new_vertex);
-		}
-
-	  private:
-		struct Node {
-			AbstractExpression &node;
-			size_t index;
-			Node(AbstractExpression &node, size_t index)
-			    : node(node), index(index) {}
-		};
-		std::stack<Node> nodes;
-	};
-
-	iterator begin() { return iterator(*this); }
-
-	iterator end() { return iterator(*this, children.size()); }
 };
 
 } // namespace duckdb

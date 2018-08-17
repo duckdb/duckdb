@@ -89,8 +89,8 @@ static bool CHECK_DECIMAL_COLUMN(duckdb_result result, size_t column,
 	return true;
 }
 
-static bool CHECK_NUMERIC(duckdb_result result, size_t row,
-                          size_t column, int64_t value) {
+static bool CHECK_NUMERIC(duckdb_result result, size_t row, size_t column,
+                          int64_t value) {
 	if (result.column_count <= column || result.row_count <= row) {
 		// out of bounds
 		return false;
@@ -108,8 +108,8 @@ static bool CHECK_NUMERIC(duckdb_result result, size_t row,
 	}
 }
 
-static bool CHECK_STRING(duckdb_result result, size_t row,
-                         size_t column, std::string value) {
+static bool CHECK_STRING(duckdb_result result, size_t row, size_t column,
+                         std::string value) {
 	if (result.column_count < column || result.row_count < row) {
 		// out of bounds
 		return false;

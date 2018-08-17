@@ -25,7 +25,8 @@ namespace duckdb {
 //! statement
 class LogicalPlanGenerator : public SQLNodeVisitor {
   public:
-	LogicalPlanGenerator(Catalog &catalog, BindContext &context) : catalog(catalog), context(context) {}
+	LogicalPlanGenerator(Catalog &catalog, BindContext &context)
+	    : catalog(catalog), context(context) {}
 
 	virtual void Visit(SelectStatement &statement) override;
 	virtual void Visit(InsertStatement &statement) override;

@@ -384,6 +384,12 @@ class NotImplementedException : public Exception {
 	}
 };
 
+class OutOfRangeException : public Exception {
+  public:
+	OutOfRangeException()
+	    : Exception(ExceptionType::NOT_IMPLEMENTED, "Out of range") {}
+};
+
 class ExpressionException : public Exception {
 	ExpressionException() = delete;
 

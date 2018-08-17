@@ -54,13 +54,13 @@ void PhysicalPlanGenerator::Visit(LogicalAggregate &op) {
 		if (!plan) {
 			// and no FROM clause, use a dummy aggregate
 			auto groupby =
-			    make_unique<PhysicalHashAggregate>(move(op.select_list));
+			    make_unique<PhysicalHashAggregate>(move(op.expressions));
 			this->plan = move(groupby);
 		} else {
 			// but there is a FROM clause
 			// special case: aggregate entire columns together
 			auto groupby =
-			    make_unique<PhysicalHashAggregate>(move(op.select_list));
+			    make_unique<PhysicalHashAggregate>(move(op.expressions));
 			groupby->children.push_back(move(plan));
 			this->plan = move(groupby);
 		}
@@ -70,7 +70,7 @@ void PhysicalPlanGenerator::Visit(LogicalAggregate &op) {
 			throw Exception("Cannot have GROUP BY without FROM clause!");
 		}
 
-		auto groupby = make_unique<PhysicalHashAggregate>(move(op.select_list),
+		auto groupby = make_unique<PhysicalHashAggregate>(move(op.expressions),
 		                                                  move(op.groups));
 		groupby->children.push_back(move(plan));
 		this->plan = move(groupby);
@@ -188,10 +188,10 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 	}
 
 	// now visit the child expressions to resolve column reference indices
-	op.condition->Accept(this);
+	op.expressions[0]->Accept(this);
 
-	plan = make_unique<PhysicalNestedLoopJoin>(move(left), move(right),
-	                                           move(op.condition), op.type);
+	plan = make_unique<PhysicalNestedLoopJoin>(
+	    move(left), move(right), move(op.expressions[0]), op.type);
 }
 
 void PhysicalPlanGenerator::Visit(LogicalLimit &op) {
@@ -220,7 +220,7 @@ void PhysicalPlanGenerator::Visit(LogicalOrder &op) {
 void PhysicalPlanGenerator::Visit(LogicalProjection &op) {
 	LogicalOperatorVisitor::Visit(op);
 
-	auto projection = make_unique<PhysicalProjection>(move(op.select_list));
+	auto projection = make_unique<PhysicalProjection>(move(op.expressions));
 	if (plan) {
 		projection->children.push_back(move(plan));
 	}
@@ -230,7 +230,8 @@ void PhysicalPlanGenerator::Visit(LogicalProjection &op) {
 void PhysicalPlanGenerator::Visit(LogicalInsert &op) {
 	LogicalOperatorVisitor::Visit(op);
 
-	auto insertion = make_unique<PhysicalInsert>(op.table, move(op.value_list));
+	auto insertion =
+	    make_unique<PhysicalInsert>(op.table, move(op.expressions));
 	if (plan) {
 		throw Exception("Insert should be root node");
 	}
@@ -268,19 +269,16 @@ void PhysicalPlanGenerator::Visit(ColumnRefExpression &expr) {
 void PhysicalPlanGenerator::Visit(LogicalCopy &op) {
 	LogicalOperatorVisitor::Visit(op);
 
-
 	if (plan) {
-		auto copy = make_unique<PhysicalCopy>(move(op.file_path),
-											  move(op.is_from), move(op.delimiter),
-											  move(op.quote), move(op.escape));
+		auto copy = make_unique<PhysicalCopy>(
+		    move(op.file_path), move(op.is_from), move(op.delimiter),
+		    move(op.quote), move(op.escape));
 		copy->children.push_back(move(plan));
-        this->plan = move(copy);
+		this->plan = move(copy);
+	} else {
+		auto copy = make_unique<PhysicalCopy>(
+		    op.table, move(op.file_path), move(op.is_from), move(op.delimiter),
+		    move(op.quote), move(op.escape));
+		this->plan = move(copy);
 	}
-	else{
-		auto copy = make_unique<PhysicalCopy>(op.table, move(op.file_path),
-											  move(op.is_from), move(op.delimiter),
-											  move(op.quote), move(op.escape));
-        this->plan = move(copy);
-	}
-
 }

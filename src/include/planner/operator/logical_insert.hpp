@@ -19,13 +19,11 @@ class LogicalInsert : public LogicalOperator {
   public:
 	LogicalInsert(std::shared_ptr<TableCatalogEntry> table,
 	              std::vector<std::unique_ptr<AbstractExpression>> value_list)
-	    : LogicalOperator(LogicalOperatorType::INSERT),
-	      value_list(move(value_list)), table(table) {}
+	    : LogicalOperator(LogicalOperatorType::INSERT, std::move(value_list)),
+	      table(table) {}
 
 	virtual void Accept(LogicalOperatorVisitor *v) override { v->Visit(*this); }
 
-	//! The set of values to insert into the table
-	std::vector<std::unique_ptr<AbstractExpression>> value_list;
 	//! The base table to insert into
 	std::shared_ptr<TableCatalogEntry> table;
 };

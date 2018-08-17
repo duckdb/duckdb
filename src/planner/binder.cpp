@@ -1,6 +1,6 @@
 
-#include <parser/statement/copy_statement.hpp>
 #include "planner/binder.hpp"
+#include <parser/statement/copy_statement.hpp>
 
 #include "parser/expression/expression_list.hpp"
 #include "parser/tableref/tableref_list.hpp"

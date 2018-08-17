@@ -22,7 +22,6 @@ class LogicalJoin : public LogicalOperator {
 
 	virtual void Accept(LogicalOperatorVisitor *v) override { v->Visit(*this); }
 
-	std::unique_ptr<AbstractExpression> condition;
 	JoinType type;
 };
 } // namespace duckdb

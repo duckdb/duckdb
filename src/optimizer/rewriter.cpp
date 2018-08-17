@@ -1,40 +1,53 @@
 #include "optimizer/rewriter.hpp"
+#include "optimizer/rule.hpp"
+
 #include "common/exception.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 namespace duckdb {
-template<class RULETYPE, class NODETYPE, class TREETYPE>
-unique_ptr<TREETYPE>
-Rewriter<RULETYPE, NODETYPE, TREETYPE>::ApplyRules(unique_ptr<TREETYPE> root) {
+unique_ptr<LogicalOperator>
+Rewriter::ApplyRules(unique_ptr<LogicalOperator> root) {
 	bool fixed_point;
 
 	do {
 		fixed_point = true;
-		for (auto iterator = root->begin(); iterator != root->end();
-		     iterator++) {
+		AbstractOperator op(root.get());
+		for (auto iterator = op.begin(); iterator != op.end(); iterator++) {
 			auto &vertex = *iterator;
 			for (auto &rule : rules) {
-				vector<TREETYPE *> bindings;
+				vector<AbstractOperator *> bindings;
 				bool match = MatchOperands(rule->root.get(), vertex, bindings);
 				if (!match) {
 					continue;
 				}
 
-				auto new_vertex = rule->Apply(vertex, bindings);
-				if (!new_vertex) { // rule returns input vertex if it does not
-					               // apply
-					continue;
-				}
-				fixed_point = false;
+				if (vertex.type == AbstractOperatorType::LOGICAL_OPERATOR) {
+					auto new_vertex = rule->Apply(*vertex.value.op, bindings);
+					if (!new_vertex) {
+						continue;
+					}
 
-				if (&vertex == root.get()) {
-					root = move(new_vertex);
-					return ApplyRules(move(root));
-				} else {
+					if (vertex.value.op == root.get()) {
+						// the node is the root of the plan, restart with the
+						// new root
+						return ApplyRules(move(new_vertex));
+					} else {
+						// node is not the root, replace it in the iterator
+						iterator.replace(move(new_vertex));
+					}
+
+				} else { // AbstractOperatorType::ABSTRACT_EXPRESSION
+					auto new_vertex = rule->Apply(*vertex.value.expr, bindings);
+					if (!new_vertex) {
+						continue;
+					}
+
+					// abstract expressions cannot be the root of the plan
 					iterator.replace(move(new_vertex));
 				}
+				fixed_point = false;
 				break;
 			}
 		}
@@ -42,29 +55,28 @@ Rewriter<RULETYPE, NODETYPE, TREETYPE>::ApplyRules(unique_ptr<TREETYPE> root) {
 	return move(root);
 }
 
-template<class RULETYPE, class NODETYPE, class TREETYPE>
-bool Rewriter<RULETYPE, NODETYPE, TREETYPE>::MatchOperands(NODETYPE *node,
-                                       TREETYPE &rel,
-                                       vector<TREETYPE *> &bindings) {
+bool Rewriter::MatchOperands(AbstractRuleNode *node, AbstractOperator &rel,
+                             vector<AbstractOperator *> &bindings) {
 
 	if (!node->Matches(rel)) {
 		return false;
 	}
+	auto children = rel.GetAllChildren();
 
 	bindings.push_back(&rel);
 	switch (node->child_policy) {
 	case ChildPolicy::ANY:
 		return true;
 	case ChildPolicy::UNORDERED: {
-		if (rel.children.size() < node->children.size()) {
+		if (children.size() < node->children.size()) {
 			return false;
 		}
 		// For each operand, at least one child must match. If
 		// matchAnyChildren, usually there's just one operand.
-		for (auto &c : rel.children) {
+		for (auto &c : children) {
 			bool match = false;
 			for (auto &co : node->children) {
-				match = MatchOperands(co.get(), *c, bindings);
+				match = MatchOperands(co.get(), c, bindings);
 				if (match) {
 					break;
 				}
@@ -77,12 +89,12 @@ bool Rewriter<RULETYPE, NODETYPE, TREETYPE>::MatchOperands(NODETYPE *node,
 	}
 	default: { // proceed along child ops and compare
 		int n = node->children.size();
-		if (rel.children.size() < n) {
+		if (children.size() < n) {
 			return false;
 		}
 		for (size_t i = 0; i < n; i++) {
-			bool match = MatchOperands(node->children[i].get(),
-			                           *rel.children[i], bindings);
+			bool match =
+			    MatchOperands(node->children[i].get(), children[i], bindings);
 			if (!match) {
 				return false;
 			}
@@ -92,6 +104,4 @@ bool Rewriter<RULETYPE, NODETYPE, TREETYPE>::MatchOperands(NODETYPE *node,
 	}
 }
 
-template class Rewriter<ExpressionRule, ExpressionNode, AbstractExpression>;
-template class Rewriter<LogicalRule, LogicalNode, LogicalOperator>;
-}
+} // namespace duckdb

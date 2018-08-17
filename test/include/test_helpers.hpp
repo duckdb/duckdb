@@ -2,8 +2,8 @@
 #pragma once
 
 #include "catch.hpp"
-#include "duckdb.hpp"
 #include "common/string_util.hpp"
+#include "duckdb.hpp"
 
 namespace duckdb {
 static void CHECK_COLUMN(std::unique_ptr<duckdb::DuckDBResult> &result,
@@ -112,7 +112,7 @@ static bool parse_datachunk(std::string csv, DataChunk &result,
 //! Compares the result of a pipe-delimited CSV with the given DataChunk
 //! Returns true if they are equal, and stores an error_message otherwise
 static bool compare_result(std::string csv, DataChunk &result, bool has_header,
-                    std::string &error_message) {
+                           std::string &error_message) {
 	auto types = result.GetTypes();
 	DataChunk correct_result;
 
@@ -160,7 +160,8 @@ static bool compare_result(std::string csv, DataChunk &result, bool has_header,
 			if (value.type == TypeId::DECIMAL) {
 				// round to two decimals
 				auto left = StringUtil::Format("%.2f", value.value_.decimal);
-				auto right = StringUtil::Format("%.2f", result_value.value_.decimal);
+				auto right =
+				    StringUtil::Format("%.2f", result_value.value_.decimal);
 				if (left != right) {
 					goto incorrect;
 				}
@@ -181,8 +182,8 @@ incorrect:
 	if (!parse_datachunk(csv, correct_result, has_header)) {
 		error_message = "Incorrect answer for query!\nProvided answer:\n" +
 		                result.ToString() +
-		                "\nExpected answer [could not parse]:\n" + std::string(csv) +
-		                "\n";
+		                "\nExpected answer [could not parse]:\n" +
+		                std::string(csv) + "\n";
 	} else {
 		error_message = "Incorrect answer for query!\nProvided answer:\n" +
 		                result.ToString() + "\nExpected answer:\n" +
@@ -192,7 +193,7 @@ incorrect:
 }
 
 static std::string compare_csv(std::unique_ptr<duckdb::DuckDBResult> &result,
-                        std::string csv, bool header = false) {
+                               std::string csv, bool header = false) {
 	if (!result->GetSuccess()) {
 		fprintf(stderr, "Query failed with message: %s\n",
 		        result->GetErrorMessage().c_str());
@@ -207,8 +208,11 @@ static std::string compare_csv(std::unique_ptr<duckdb::DuckDBResult> &result,
 	return "";
 }
 
-#define COMPARE_CSV(result, csv, header) { auto res = compare_csv(result, csv, header); if (!res.empty()) FAIL(res); }
+#define COMPARE_CSV(result, csv, header)                                       \
+	{                                                                          \
+		auto res = compare_csv(result, csv, header);                           \
+		if (!res.empty())                                                      \
+			FAIL(res);                                                         \
+	}
 
-}
-
-
+} // namespace duckdb

@@ -15,26 +15,28 @@
 
 #include "common/exception.hpp"
 #include "common/internal_types.hpp"
-#include "optimizer/expression_rule.hpp"
+#include "optimizer/rule.hpp"
 #include "parser/expression/constant_expression.hpp"
 
 namespace duckdb {
 
-class ConstantFoldingRule : public ExpressionRule {
+class ConstantFoldingRule : public Rule {
   public:
 	ConstantFoldingRule() {
-		root = std::unique_ptr<ExpressionNode>(new ExpressionNodeSet(
+		root = std::unique_ptr<AbstractRuleNode>(new ExpressionNodeSet(
 		    {ExpressionType::OPERATOR_ADD, ExpressionType::OPERATOR_SUBTRACT,
 		     ExpressionType::OPERATOR_MULTIPLY, ExpressionType::OPERATOR_DIVIDE,
 		     ExpressionType::OPERATOR_MOD}));
-		root->children.push_back(make_unique_base<ExpressionNode, ExpressionNodeType>(ExpressionType::VALUE_CONSTANT));
-		root->children.push_back(make_unique_base<ExpressionNode, ExpressionNodeAny>());
+		root->children.push_back(
+		    make_unique_base<AbstractRuleNode, ExpressionNodeType>(
+		        ExpressionType::VALUE_CONSTANT));
+		root->children.push_back(
+		    make_unique_base<AbstractRuleNode, ExpressionNodeAny>());
 		root->child_policy = ChildPolicy::UNORDERED;
 	}
 
 	std::unique_ptr<AbstractExpression>
-	Apply(AbstractExpression &root,
-	      std::vector<AbstractExpression *> &bindings) {
+	Apply(AbstractExpression &root, std::vector<AbstractOperator *> &bindings) {
 		Value result;
 
 		// TODO: add bolean ops

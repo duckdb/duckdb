@@ -160,8 +160,7 @@ void LogicalPlanGenerator::Visit(BaseTableRef &expr) {
 	auto table_entry = context.regular_table_alias_map.find(alias);
 	assert(table_entry != context.regular_table_alias_map.end());
 	auto index = table_entry->second.index;
-	auto get_table = make_unique<LogicalGet>(
-	    table, alias, index);
+	auto get_table = make_unique<LogicalGet>(table, alias, index);
 	if (root)
 		get_table->children.push_back(move(root));
 	root = move(get_table);
@@ -204,7 +203,7 @@ void LogicalPlanGenerator::Visit(JoinRef &expr) {
 	join->children.push_back(move(root));
 	root = nullptr;
 
-	join->condition = move(expr.condition);
+	join->expressions.push_back(move(expr.condition));
 
 	root = move(join);
 }
@@ -247,21 +246,20 @@ void LogicalPlanGenerator::Visit(InsertStatement &statement) {
 }
 
 void LogicalPlanGenerator::Visit(CopyStatement &statement) {
-    if (statement.table[0] != '\0'){
-        auto table = catalog.GetTable(statement.schema, statement.table);
-        auto copy = make_unique<LogicalCopy>(
-                table, move(statement.file_path), move(statement.is_from),
-                move(statement.delimiter), move(statement.quote),
-                move(statement.escape));
-        root = move(copy);
-    }
-    else{
-        auto copy = make_unique<LogicalCopy>(move(statement.file_path), move(statement.is_from),
-                move(statement.delimiter), move(statement.quote),
-                move(statement.escape));
-        statement.select_stmt->Accept(this);
-        copy->children.push_back(move(root));
-        root = move(copy);
-    }
-
+	if (statement.table[0] != '\0') {
+		auto table = catalog.GetTable(statement.schema, statement.table);
+		auto copy = make_unique<LogicalCopy>(
+		    table, move(statement.file_path), move(statement.is_from),
+		    move(statement.delimiter), move(statement.quote),
+		    move(statement.escape));
+		root = move(copy);
+	} else {
+		auto copy = make_unique<LogicalCopy>(
+		    move(statement.file_path), move(statement.is_from),
+		    move(statement.delimiter), move(statement.quote),
+		    move(statement.escape));
+		statement.select_stmt->Accept(this);
+		copy->children.push_back(move(root));
+		root = move(copy);
+	}
 }

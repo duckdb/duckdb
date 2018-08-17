@@ -16,7 +16,7 @@ using namespace std;
 
 void LogicalOperatorVisitor::Visit(LogicalAggregate &op) {
 	op.AcceptChildren(this);
-	for (auto &exp : op.select_list) {
+	for (auto &exp : op.expressions) {
 		exp->Accept(this);
 	}
 }
@@ -37,7 +37,7 @@ void LogicalOperatorVisitor::Visit(LogicalFilter &op) {
 void LogicalOperatorVisitor::Visit(LogicalGet &op) { op.AcceptChildren(this); }
 void LogicalOperatorVisitor::Visit(LogicalJoin &op) {
 	op.AcceptChildren(this);
-	op.condition->Accept(this);
+	op.expressions[0]->Accept(this);
 }
 void LogicalOperatorVisitor::Visit(LogicalLimit &op) {
 	op.AcceptChildren(this);
@@ -50,13 +50,13 @@ void LogicalOperatorVisitor::Visit(LogicalOrder &op) {
 }
 void LogicalOperatorVisitor::Visit(LogicalProjection &op) {
 	op.AcceptChildren(this);
-	for (auto &exp : op.select_list) {
+	for (auto &exp : op.expressions) {
 		exp->Accept(this);
 	}
 }
 void LogicalOperatorVisitor::Visit(LogicalInsert &op) {
 	op.AcceptChildren(this);
-	for (auto &exp : op.value_list) {
+	for (auto &exp : op.expressions) {
 		exp->Accept(this);
 	}
 }

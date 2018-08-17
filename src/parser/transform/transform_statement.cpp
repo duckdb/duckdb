@@ -184,8 +184,7 @@ unique_ptr<CopyStatement> TransformCopy(Node *node) {
 		auto ref = TransformRangeVar(stmt->relation);
 		auto &table = *reinterpret_cast<BaseTableRef *>(ref.get());
 		result->table = table.table_name;
-	}
-	 else {
+	} else {
 		result->select_stmt = TransformSelect(stmt->query);
 	}
 

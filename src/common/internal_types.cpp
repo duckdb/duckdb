@@ -7,7 +7,7 @@ using namespace std;
 
 namespace duckdb {
 
-sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE] = { 0 };
+sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE] = {0};
 
 ExpressionType StringToExpressionType(const string &str) {
 	string upper_str = StringUtil::Upper(str);
