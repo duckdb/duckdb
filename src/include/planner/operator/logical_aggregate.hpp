@@ -54,5 +54,22 @@ class LogicalAggregate : public LogicalOperator {
 			expressions[index] = std::move(expr);
 		}
 	}
+
+	virtual std::string ParamsToString() const override {
+		std::string result = LogicalOperator::ParamsToString();
+		if (groups.size() > 0) {
+			result += "[";
+			for (size_t i = 0; i < groups.size(); i++) {
+				auto &child = groups[i];
+				result += child->ToString();
+				if (i < groups.size() - 1) {
+					result += ", ";
+				}
+			}
+			result += "]";
+		}
+
+		return result;
+	}
 };
 } // namespace duckdb

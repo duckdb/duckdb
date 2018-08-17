@@ -31,9 +31,14 @@ class ColumnRefExpression : public AbstractExpression {
 	      column_name(column_name), table_name(table_name), reference(nullptr) {
 	}
 
-	ColumnRefExpression(TypeId type, size_t index)
+	ColumnRefExpression(TypeId type, size_t table_index, size_t col_index)
 	    : AbstractExpression(ExpressionType::COLUMN_REF, type), column_name(""),
-	      table_name(""), index(index), reference(nullptr) {}
+	      table_name(""), index(col_index), table_index(table_index),
+	      reference(nullptr) {}
+
+	ColumnRefExpression(TypeId type, size_t col_index)
+	    : AbstractExpression(ExpressionType::COLUMN_REF, type), column_name(""),
+	      table_name(""), index(col_index), reference(nullptr) {}
 
 	const std::string &GetColumnName() const { return column_name; }
 	const std::string &GetTableName() const { return table_name; }

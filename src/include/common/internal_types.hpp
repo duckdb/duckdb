@@ -298,7 +298,7 @@ enum class PhysicalOperatorType {
 };
 
 enum class MatchOrder { ARBITRARY = 0, DEPTH_FIRST };
-enum class ChildPolicy { ANY, LEAF, SOME, UNORDERED };
+enum class ChildPolicy { ANY, LEAF, SOME, UNORDERED, ORDERED };
 
 enum class ExternalFileFormat {
 	CSV,

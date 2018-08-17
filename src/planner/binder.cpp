@@ -222,11 +222,13 @@ void Binder::Visit(ColumnRefExpression &expr) {
 
 void Binder::Visit(SubqueryExpression &expr) {
 	assert(context);
-	auto old_context = move(context);
-	context = make_unique<BindContext>();
-	context->parent = old_context.get();
 
-	expr.subquery->Accept(this);
+	Binder binder(catalog);
+	binder.context = make_unique<BindContext>();
+	;
+	binder.context->parent = context.get();
+
+	expr.subquery->Accept(&binder);
 	if (expr.subquery->select_list.size() < 1) {
 		throw BinderException("Subquery has no projections");
 	}
@@ -235,8 +237,8 @@ void Binder::Visit(SubqueryExpression &expr) {
 	}
 	expr.return_type = expr.exists ? TypeId::BOOLEAN
 	                               : expr.subquery->select_list[0]->return_type;
-	expr.context = move(context);
-	context = move(old_context);
+	expr.context = move(binder.context);
+	expr.is_correlated = expr.context->max_depth > 0;
 }
 
 void Binder::Visit(BaseTableRef &expr) {

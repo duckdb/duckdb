@@ -33,7 +33,7 @@ class ConstantCastRule : public Rule {
 	}
 
 	std::unique_ptr<AbstractExpression>
-	Apply(AbstractExpression &root, std::vector<AbstractOperator *> &bindings) {
+	Apply(AbstractExpression &root, std::vector<AbstractOperator> &bindings) {
 
 		auto &cast_expr = (CastExpression &)root;
 		auto const_expr =

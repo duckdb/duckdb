@@ -35,7 +35,7 @@ TEST_CASE("Constant folding does something", "[optimizer]") {
 	auto left = make_unique<ConstantExpression>(Value::INTEGER(42));
 	auto right = make_unique<ConstantExpression>(Value::INTEGER(1));
 
-	unique_ptr<AbstractExpression> root = make_unique<OperatorExpression>(
+	auto root = make_unique_base<AbstractExpression, OperatorExpression>(
 	    ExpressionType::OPERATOR_ADD, TypeId::INTEGER, move(left), move(right));
 
 	auto result = ApplyExprRule(rewriter, move(root));

@@ -36,7 +36,7 @@ class ConstantFoldingRule : public Rule {
 	}
 
 	std::unique_ptr<AbstractExpression>
-	Apply(AbstractExpression &root, std::vector<AbstractOperator *> &bindings) {
+	Apply(AbstractExpression &root, std::vector<AbstractOperator> &bindings) {
 		Value result;
 
 		// TODO: add bolean ops

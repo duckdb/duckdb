@@ -32,5 +32,14 @@ class SubqueryExpression : public AbstractExpression {
 	std::unique_ptr<BindContext> context;
 	std::unique_ptr<PhysicalOperator> plan;
 	bool exists = false;
+	bool is_correlated = false;
+
+	virtual std::string ToString() const override {
+		std::string result = GetExprName();
+		if (op) {
+			result += "(" + op->ToString() + ")";
+		}
+		return result;
+	}
 };
 } // namespace duckdb

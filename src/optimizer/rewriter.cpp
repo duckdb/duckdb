@@ -16,8 +16,9 @@ Rewriter::ApplyRules(unique_ptr<LogicalOperator> root) {
 		AbstractOperator op(root.get());
 		for (auto iterator = op.begin(); iterator != op.end(); iterator++) {
 			auto &vertex = *iterator;
+
 			for (auto &rule : rules) {
-				vector<AbstractOperator *> bindings;
+				vector<AbstractOperator> bindings;
 				bool match = MatchOperands(rule->root.get(), vertex, bindings);
 				if (!match) {
 					continue;
@@ -55,18 +56,19 @@ Rewriter::ApplyRules(unique_ptr<LogicalOperator> root) {
 	return move(root);
 }
 
-bool Rewriter::MatchOperands(AbstractRuleNode *node, AbstractOperator &rel,
-                             vector<AbstractOperator *> &bindings) {
+bool Rewriter::MatchOperands(AbstractRuleNode *node, AbstractOperator rel,
+                             vector<AbstractOperator> &bindings) {
 
 	if (!node->Matches(rel)) {
 		return false;
 	}
 	auto children = rel.GetAllChildren();
 
-	bindings.push_back(&rel);
+	vector<AbstractOperator> current_bindings = {rel};
+
 	switch (node->child_policy) {
 	case ChildPolicy::ANY:
-		return true;
+		break;
 	case ChildPolicy::UNORDERED: {
 		if (children.size() < node->children.size()) {
 			return false;
@@ -76,7 +78,7 @@ bool Rewriter::MatchOperands(AbstractRuleNode *node, AbstractOperator &rel,
 		for (auto &c : children) {
 			bool match = false;
 			for (auto &co : node->children) {
-				match = MatchOperands(co.get(), c, bindings);
+				match = MatchOperands(co.get(), c, current_bindings);
 				if (match) {
 					break;
 				}
@@ -85,23 +87,49 @@ bool Rewriter::MatchOperands(AbstractRuleNode *node, AbstractOperator &rel,
 				return false;
 			}
 		}
-		return true;
+		break;
 	}
-	default: { // proceed along child ops and compare
+	case ChildPolicy::ORDERED: { // proceed along child ops and compare
 		int n = node->children.size();
 		if (children.size() < n) {
 			return false;
 		}
 		for (size_t i = 0; i < n; i++) {
-			bool match =
-			    MatchOperands(node->children[i].get(), children[i], bindings);
+			bool match = MatchOperands(node->children[i].get(), children[i],
+			                           current_bindings);
 			if (!match) {
 				return false;
 			}
 		}
-		return true;
+		break;
 	}
+	case ChildPolicy::SOME: {
+		int n = node->children.size();
+		if (children.size() < n) {
+			return false;
+		}
+		for (auto &co : node->children) {
+			bool match = false;
+			for (auto &c : children) {
+				match = MatchOperands(co.get(), c, current_bindings);
+				if (match) {
+					break;
+				}
+			}
+			if (!match) {
+				return false;
+			}
+		}
+		break;
 	}
+
+	default:
+		throw NotImplementedException("Unsupported Child Policy");
+	}
+
+	bindings.insert(bindings.end(), current_bindings.begin(),
+	                current_bindings.end());
+	return true;
 }
 
 } // namespace duckdb

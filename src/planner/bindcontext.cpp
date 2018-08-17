@@ -55,7 +55,9 @@ BindContext::BindColumn(ColumnRefExpression &expr, size_t depth) {
 
 	if (!HasAlias(expr.table_name)) {
 		if (parent) {
-			return parent->BindColumn(expr, ++depth);
+			auto result = parent->BindColumn(expr, ++depth);
+			max_depth = max(expr.depth, max_depth);
+			return result;
 		}
 		throw BinderException("Referenced table \"%s\" not found!",
 		                      expr.table_name.c_str());

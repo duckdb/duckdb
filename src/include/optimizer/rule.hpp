@@ -13,7 +13,8 @@
 #include <string>
 #include <vector>
 
-#include "parser/expression/abstract_expression.hpp"
+#include "parser/expression/expression_list.hpp"
+
 #include "planner/logical_operator.hpp"
 
 #include "common/exception.hpp"
@@ -208,6 +209,17 @@ class ExpressionNodeType : public AbstractRuleNode {
 	}
 };
 
+class ColumnRefNodeDepth : public ExpressionNodeType {
+  public:
+	size_t depth;
+	ColumnRefNodeDepth(size_t depth)
+	    : depth(depth), ExpressionNodeType(ExpressionType::COLUMN_REF) {}
+	virtual bool Matches(AbstractOperator &rel) {
+		return ExpressionNodeType::Matches(rel) &&
+		       ((ColumnRefExpression *)rel.value.expr)->depth == depth;
+	}
+};
+
 class ExpressionNodeAny : public AbstractRuleNode {
   public:
 	virtual bool Matches(AbstractOperator &rel) {
@@ -247,11 +259,11 @@ class Rule {
   public:
 	std::unique_ptr<AbstractRuleNode> root;
 	virtual std::unique_ptr<AbstractExpression>
-	Apply(AbstractExpression &root, std::vector<AbstractOperator *> &bindings) {
+	Apply(AbstractExpression &root, std::vector<AbstractOperator> &bindings) {
 		throw NotImplementedException("Apply AbstractExpression");
 	};
 	virtual std::unique_ptr<LogicalOperator>
-	Apply(LogicalOperator &root, std::vector<AbstractOperator *> &bindings) {
+	Apply(LogicalOperator &root, std::vector<AbstractOperator> &bindings) {
 		throw NotImplementedException("Apply LogicalOperator");
 	};
 	virtual ~Rule() {}

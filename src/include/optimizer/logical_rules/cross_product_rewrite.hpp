@@ -33,7 +33,7 @@ class CrossProductRewrite : public Rule {
 	}
 
 	std::unique_ptr<LogicalOperator>
-	Apply(LogicalOperator &root, std::vector<AbstractOperator *> &bindings) {
+	Apply(LogicalOperator &root, std::vector<AbstractOperator> &bindings) {
 		auto &filter = (LogicalFilter &)root;
 		auto &cross_product =
 		    *reinterpret_cast<LogicalCrossProduct *>(root.children[0].get());

@@ -29,8 +29,8 @@ class Rewriter {
 	std::unique_ptr<LogicalOperator>
 	ApplyRules(std::unique_ptr<LogicalOperator> root);
 
-	bool MatchOperands(AbstractRuleNode *node, AbstractOperator &rel,
-	                   std::vector<AbstractOperator *> &bindings);
+	static bool MatchOperands(AbstractRuleNode *node, AbstractOperator rel,
+	                          std::vector<AbstractOperator> &bindings);
 };
 
 } // namespace duckdb

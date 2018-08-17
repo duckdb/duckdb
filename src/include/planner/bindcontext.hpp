@@ -69,6 +69,7 @@ class BindContext {
 
 	// private:
 	size_t bound_tables;
+	size_t max_depth = 0;
 
 	//! The set of expression aliases
 	std::unordered_map<std::string, std::pair<size_t, AbstractExpression *>>
