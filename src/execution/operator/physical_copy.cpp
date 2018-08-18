@@ -42,74 +42,40 @@ void PhysicalCopy::GetChunk(DataChunk &result_chunk,
 	int64_t total = 0;
 
 	if (table) {
+		assert(is_from);
 		DataChunk insert_chunk;
 		auto types = table->GetTypes();
 		insert_chunk.Initialize(types);
-		if (is_from) {
-			string value;
-			std::ifstream from_csv;
-			from_csv.open(file_path);
-			while (getline(from_csv, value)) {
-				if (count_line == insert_chunk.maximum_size) {
-					insert_chunk.count = insert_chunk.data[0].count;
-					table->storage->AddData(insert_chunk);
-					total += count_line;
-					count_line = 0;
-					insert_chunk.Reset();
-				}
-				std::vector<string> csv_line = split(value, delimiter, quote);
 
-				if (csv_line.size() != insert_chunk.column_count) {
-					throw Exception("COPY TO column mismatch! Expected %zu "
-					                "columns, got %zu.",
-					                insert_chunk.column_count, csv_line.size());
-				}
-				for (size_t i = 0; i < csv_line.size(); ++i) {
-					insert_chunk.data[i].count++;
-					insert_chunk.data[i].SetValue(count_line, csv_line[i]);
-				}
-				count_line++;
-			}
-			insert_chunk.count = insert_chunk.data[0].count;
-			table->storage->AddData(insert_chunk);
-			from_csv.close();
-		} else {
-			std::ofstream to_csv;
-			to_csv.open(file_path);
-			size_t current_chunk = 0;
-			size_t chunk_count = table->storage->columns[0]->data.size();
-			while (current_chunk < chunk_count) {
-				for (size_t col = 0; col < insert_chunk.column_count; col++) {
-					auto column = table->storage->columns[col].get();
-					insert_chunk.data[col].Reference(
-					    *column->data[current_chunk].get());
-				}
+		string value;
+		std::ifstream from_csv;
+		from_csv.open(file_path);
+		while (getline(from_csv, value)) {
+			if (count_line == insert_chunk.maximum_size) {
 				insert_chunk.count = insert_chunk.data[0].count;
-				for (size_t i = 0; i < insert_chunk.count; i++) {
-					for (size_t col = 0; col < insert_chunk.column_count;
-					     col++) {
-						if (col != 0) {
-							to_csv << delimiter;
-						}
-						if (types[col] == TypeId::VARCHAR)
-							to_csv << quote;
-						to_csv << insert_chunk.data[col].GetValue(i).ToString();
-						if (types[col] == TypeId::VARCHAR)
-							to_csv << quote;
-					}
-					to_csv << endl;
-					count_line++;
-				}
-				current_chunk++;
+				table->storage->AddData(insert_chunk);
+				total += count_line;
+				count_line = 0;
+				insert_chunk.Reset();
 			}
-			to_csv.close();
+			vector<string> csv_line = split(value, delimiter, quote);
+
+			if (csv_line.size() != insert_chunk.column_count) {
+				throw Exception("COPY TO column mismatch! Expected %zu "
+				                "columns, got %zu.",
+				                insert_chunk.column_count, csv_line.size());
+			}
+			for (size_t i = 0; i < csv_line.size(); ++i) {
+				insert_chunk.data[i].count++;
+				insert_chunk.data[i].SetValue(count_line, csv_line[i]);
+			}
+			count_line++;
 		}
-		result_chunk.data[0].count = 1;
-		result_chunk.data[0].SetValue(0, Value::BIGINT(total + count_line));
-		result_chunk.count = 1;
-		state->finished = true;
+		insert_chunk.count = insert_chunk.data[0].count;
+		table->storage->AddData(insert_chunk);
+		from_csv.close();
 	} else {
-		std::ofstream to_csv;
+		ofstream to_csv;
 		to_csv.open(file_path);
 		children[0]->GetChunk(state->child_chunk, state->child_state.get());
 		while (state->child_chunk.count != 0) {
@@ -133,10 +99,6 @@ void PhysicalCopy::GetChunk(DataChunk &result_chunk,
 		}
 
 		to_csv.close();
-		//		total+=count_line;
-		//        result_chunk.data[0].count = 1;
-		//        result_chunk.data[0].SetValue(0, Value::BIGINT(total));
-		//        result_chunk.count = 1;
 	}
 	result_chunk.data[0].count = 1;
 	result_chunk.data[0].SetValue(0, Value::BIGINT(total + count_line));

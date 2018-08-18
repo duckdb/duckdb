@@ -172,24 +172,35 @@ unique_ptr<InsertStatement> TransformInsert(Node *node) {
 }
 
 unique_ptr<CopyStatement> TransformCopy(Node *node) {
-	static constexpr char kDelimiterTok[] = "delimiter";
-	static constexpr char kFormatTok[] = "format";
-	static constexpr char kQuoteTok[] = "quote";
-	static constexpr char kEscapeTok[] = "escape";
+	const string kDelimiterTok = "delimiter";
+	const string kFormatTok = "format";
+	const string kQuoteTok = "quote";
+	const string kEscapeTok = "escape";
 
 	CopyStmt *stmt = reinterpret_cast<CopyStmt *>(node);
 	assert(stmt);
 	auto result = make_unique<CopyStatement>();
+	result->file_path = stmt->filename;
+	result->is_from = stmt->is_from;
+
 	if (stmt->relation) {
 		auto ref = TransformRangeVar(stmt->relation);
-		auto &table = *reinterpret_cast<BaseTableRef *>(ref.get());
-		result->table = table.table_name;
+		if (result->is_from) {
+			// copy file into table
+			auto &table = *reinterpret_cast<BaseTableRef *>(ref.get());
+			result->table = table.table_name;
+			result->schema = table.schema_name;
+		} else {
+			// copy table into file, generate SELECT * FROM table;
+			auto statement = make_unique<SelectStatement>();
+			statement->from_table = move(ref);
+			statement->select_list.push_back(make_unique<ColumnRefExpression>());
+			result->select_stmt = move(statement);
+		}
 	} else {
 		result->select_stmt = TransformSelect(stmt->query);
 	}
 
-	result->file_path = stmt->filename;
-	result->is_from = stmt->is_from;
 
 	// Handle options
 	if (stmt->options) {
@@ -198,29 +209,26 @@ unique_ptr<CopyStatement> TransformCopy(Node *node) {
 			auto *def_elem = reinterpret_cast<DefElem *>(cell->data.ptr_value);
 
 			// Check delimiter
-			if (strncmp(def_elem->defname, kDelimiterTok,
-			            sizeof(kDelimiterTok)) == 0) {
+			if (def_elem->defname == kDelimiterTok) {
 				auto *delimiter_val = reinterpret_cast<value *>(def_elem->arg);
 				result->delimiter = *delimiter_val->val.str;
 			}
 
 			// Check format
-			if (strncmp(def_elem->defname, kFormatTok, sizeof(kFormatTok)) ==
-			    0) {
+			if (def_elem->defname == kFormatTok) {
 				auto *format_val = reinterpret_cast<value *>(def_elem->arg);
 				result->format =
 				    StringToExternalFileFormat(format_val->val.str);
 			}
 
 			// Check quote
-			if (strncmp(def_elem->defname, kQuoteTok, sizeof(kQuoteTok)) == 0) {
+			if (def_elem->defname == kQuoteTok) {
 				auto *quote_val = reinterpret_cast<value *>(def_elem->arg);
 				result->quote = *quote_val->val.str;
 			}
 
 			// Check escape
-			if (strncmp(def_elem->defname, kEscapeTok, sizeof(kEscapeTok)) ==
-			    0) {
+			if (def_elem->defname == kEscapeTok) {
 				auto *escape_val = reinterpret_cast<value *>(def_elem->arg);
 				result->escape = *escape_val->val.str;
 			}

@@ -14,6 +14,9 @@ void DataTable::AddColumn(ColumnCatalogEntry &column) {
 }
 
 void DataTable::AddData(DataChunk &chunk) {
+	if (chunk.count == 0) {
+		return;
+	}
 	if (chunk.column_count != columns.size()) {
 		throw CatalogException("Mismatch in column count for append");
 	}
