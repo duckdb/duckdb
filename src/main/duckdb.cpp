@@ -54,7 +54,7 @@ unique_ptr<DuckDBResult> DuckDBConnection::Query(std::string query) {
 
 	// now convert logical query plan into a physical query plan
 	PhysicalPlanGenerator physical_planner(database.catalog);
-	if (!physical_planner.CreatePlan(move(plan), move(planner.context))) {
+	if (!physical_planner.CreatePlan(move(plan))) {
 		fprintf(stderr, "Failed to create physical plan: %s\n",
 		        physical_planner.GetErrorMessage().c_str());
 		return make_unique<DuckDBResult>(physical_planner.GetErrorMessage());

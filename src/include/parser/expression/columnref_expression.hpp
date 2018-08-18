@@ -13,6 +13,20 @@
 #include "parser/expression/abstract_expression.hpp"
 
 namespace duckdb {
+
+struct ColumnBinding {
+	size_t table_index;
+	size_t column_index;
+
+	ColumnBinding() : table_index((size_t) -1), column_index((size_t) -1) {}
+	ColumnBinding(size_t table, size_t column) : 
+		table_index(table), column_index(column) {}
+
+	bool operator==(const ColumnBinding &rhs) {
+		return table_index == rhs.table_index && column_index == rhs.column_index;
+	}
+};
+
 //! Represents a reference to a column from either the FROM clause or from an
 //! alias
 class ColumnRefExpression : public AbstractExpression {
@@ -31,14 +45,14 @@ class ColumnRefExpression : public AbstractExpression {
 	      column_name(column_name), table_name(table_name), reference(nullptr) {
 	}
 
-	ColumnRefExpression(TypeId type, size_t table_index, size_t col_index)
+	ColumnRefExpression(TypeId type, ColumnBinding binding)
 	    : AbstractExpression(ExpressionType::COLUMN_REF, type), column_name(""),
-	      table_name(""), index(col_index), table_index(table_index),
+	      table_name(""), binding(binding),
 	      reference(nullptr) {}
 
-	ColumnRefExpression(TypeId type, size_t col_index)
+	ColumnRefExpression(TypeId type, size_t index)
 	    : AbstractExpression(ExpressionType::COLUMN_REF, type), column_name(""),
-	      table_name(""), index(col_index), reference(nullptr) {}
+	      table_name(""), index(index), reference(nullptr) {}
 
 	const std::string &GetColumnName() const { return column_name; }
 	const std::string &GetTableName() const { return table_name; }
@@ -65,8 +79,11 @@ class ColumnRefExpression : public AbstractExpression {
 	}
 
 	// FIXME: move these
+
 	//! Column index set by the binder, used to access data in the executor
-	size_t table_index = (size_t)-1;
+	ColumnBinding binding;
+
+	//! Index used to access data in the chunks, set by the ColumnBindingResolver
 	size_t index = (size_t)-1;
 
 	//! Subquery recursion depth, needed for execution
@@ -81,7 +98,10 @@ class ColumnRefExpression : public AbstractExpression {
 	std::string table_name;
 
 	virtual std::string ToString() const override {
-		return table_name + "." + column_name;
+		auto str = table_name.empty() ? std::to_string(binding.table_index) : table_name;
+		str += ".";
+		str += column_name.empty() ? std::to_string(binding.column_index) : column_name;
+		return str;
 	}
 };
 } // namespace duckdb

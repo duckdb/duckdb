@@ -543,6 +543,7 @@ TEST_CASE("[SLOW] Test SQLite Logic Test", "[sqlitelogic]") {
 				}
 
 				/* Report an error if the results do not match expectation */
+				REQUIRE(!rc);
 				if (rc) {
 					fprintf(stderr, "%s:%d: statement error\n", zScriptFile,
 					        sScript.startLine);
@@ -662,6 +663,7 @@ TEST_CASE("[SLOW] Test SQLite Logic Test", "[sqlitelogic]") {
 					if (hashThreshold == 0 || nResult <= hashThreshold) {
 						for (i = 0; i < nResult && sScript.zLine[0];
 						     nextLine(&sScript), i++) {
+							REQUIRE(strcmp(sScript.zLine, azResult[i]) == 0);
 							if (strcmp(sScript.zLine, azResult[i]) != 0) {
 								fprintf(stdout, "%s:%d: wrong result\n",
 								        zScriptFile, sScript.nLine);
@@ -670,6 +672,7 @@ TEST_CASE("[SLOW] Test SQLite Logic Test", "[sqlitelogic]") {
 							}
 						}
 					} else {
+						REQUIRE(strcmp(sScript.zLine, zHash) == 0);
 						if (strcmp(sScript.zLine, zHash) != 0) {
 							fprintf(stderr, "%s:%d: wrong result hash\n",
 							        zScriptFile, sScript.nLine);

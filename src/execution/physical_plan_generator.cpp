@@ -1,38 +1,23 @@
 
 #include "execution/physical_plan_generator.hpp"
+#include "execution/column_binding_resolver.hpp"
 
-#include "execution/operator/physical_copy.hpp"
-#include "execution/operator/physical_filter.hpp"
-#include "execution/operator/physical_hash_aggregate.hpp"
-#include "execution/operator/physical_insert.hpp"
-#include "execution/operator/physical_limit.hpp"
 #include "execution/operator/physical_list.hpp"
-#include "execution/operator/physical_order.hpp"
-#include "execution/operator/physical_projection.hpp"
-#include "execution/operator/physical_table_scan.hpp"
 #include "parser/expression/expression_list.hpp"
-
-#include "planner/operator/logical_aggregate.hpp"
-#include "planner/operator/logical_copy.hpp"
-#include "planner/operator/logical_distinct.hpp"
-#include "planner/operator/logical_filter.hpp"
-#include "planner/operator/logical_get.hpp"
-#include "planner/operator/logical_insert.hpp"
-#include "planner/operator/logical_limit.hpp"
 #include "planner/operator/logical_list.hpp"
-#include "planner/operator/logical_order.hpp"
-#include "planner/operator/logical_projection.hpp"
 
 #include "storage/storage_manager.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-bool PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> logical,
-                                       unique_ptr<BindContext> context) {
-	this->context = move(context);
+bool PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> logical) {
 	this->success = false;
 	try {
+		// first resolve column references
+		ColumnBindingResolver resolver;
+		logical->Accept(&resolver);
+		// then create the physical plan
 		logical->Accept(this);
 		if (!this->plan) {
 			throw Exception("Unknown error in physical plan generation");
@@ -86,24 +71,8 @@ void PhysicalPlanGenerator::Visit(LogicalCrossProduct &op) {
 
 	op.children[0]->Accept(this);
 	auto left = move(plan);
-	auto left_map = table_index_map;
-	table_index_map.clear();
-
 	op.children[1]->Accept(this);
 	auto right = move(plan);
-	auto right_map = table_index_map;
-	table_index_map.clear();
-
-	size_t left_columns = 0;
-	for (auto &entry : left_map) {
-		left_columns += entry.second.column_count;
-		table_index_map[entry.first] = entry.second;
-	}
-	for (auto &entry : right_map) {
-		table_index_map[entry.first] = {left_columns +
-		                                    entry.second.column_offset,
-		                                entry.second.column_count};
-	}
 
 	plan = make_unique<PhysicalCrossProduct>(move(left), move(right));
 }
@@ -134,24 +103,7 @@ void PhysicalPlanGenerator::Visit(LogicalGet &op) {
 		return;
 	}
 
-	std::vector<size_t> column_ids;
-	// look in the context for this table which columns are required
-	for (auto &bound_column : context->bound_columns[op.alias]) {
-		column_ids.push_back(op.table->name_map[bound_column]);
-	}
-	if (column_ids.size() == 0) {
-		// no column ids selected
-		// the query is like SELECT COUNT(*) FROM table, or SELECT 42 FROM table
-		// return just the first column
-		column_ids.push_back(0);
-	}
-
-	auto table_entry = context->regular_table_alias_map.find(op.alias);
-	assert(table_entry != context->regular_table_alias_map.end());
-	size_t table_index = table_entry->second.index;
-	table_index_map[table_index] = {0, column_ids.size()};
-
-	auto scan = make_unique<PhysicalTableScan>(op.table->storage, column_ids);
+	auto scan = make_unique<PhysicalTableScan>(op.table->storage, op.column_ids);
 	if (plan) {
 		throw Exception("Scan has to be the first node of a plan!");
 	}
@@ -168,30 +120,16 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 
 	op.children[0]->Accept(this);
 	auto left = move(plan);
-	auto left_map = table_index_map;
-	table_index_map.clear();
-
 	op.children[1]->Accept(this);
 	auto right = move(plan);
-	auto right_map = table_index_map;
-	table_index_map.clear();
 
-	size_t left_columns = 0;
-	for (auto &entry : left_map) {
-		left_columns += entry.second.column_count;
-		table_index_map[entry.first] = entry.second;
+	for(auto &cond : op.conditions) {
+		cond.left->Accept(this);
+		cond.right->Accept(this);
 	}
-	for (auto &entry : right_map) {
-		table_index_map[entry.first] = {left_columns +
-		                                    entry.second.column_offset,
-		                                entry.second.column_count};
-	}
-
-	// now visit the child expressions to resolve column reference indices
-	op.expressions[0]->Accept(this);
 
 	plan = make_unique<PhysicalNestedLoopJoin>(
-	    move(left), move(right), move(op.expressions[0]), op.type);
+	    move(left), move(right), move(op.conditions), op.type);
 }
 
 void PhysicalPlanGenerator::Visit(LogicalLimit &op) {
@@ -240,30 +178,8 @@ void PhysicalPlanGenerator::Visit(LogicalInsert &op) {
 
 void PhysicalPlanGenerator::Visit(SubqueryExpression &expr) {
 	PhysicalPlanGenerator generator(catalog, this);
-	generator.CreatePlan(move(expr.op), move(expr.context));
+	generator.CreatePlan(move(expr.op));
 	expr.plan = move(generator.plan);
-}
-
-void PhysicalPlanGenerator::Visit(ColumnRefExpression &expr) {
-	if (expr.table_index == (size_t)-1) {
-		return;
-	}
-
-	// we have to check the upper table index map if this expression refers to a
-	// parent query
-	PhysicalPlanGenerator *generator = this;
-	auto depth = expr.depth;
-	while (depth > 0) {
-		generator = generator->parent;
-		assert(generator);
-		depth--;
-	}
-	auto entry = generator->table_index_map.find(expr.table_index);
-	if (entry == generator->table_index_map.end()) {
-		throw Exception("Could not bind to table of this index at this point "
-		                "in the query!");
-	}
-	expr.index += entry->second.column_offset;
 }
 
 void PhysicalPlanGenerator::Visit(LogicalCopy &op) {

@@ -13,7 +13,7 @@ int main() {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 
-	string input_file = "test/test.sql.in";
+	string input_file = "test/test.sql";
 	ifstream infile(input_file);
 	string line;
 	size_t linenr = 0;

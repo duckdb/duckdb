@@ -84,19 +84,19 @@ BindContext::BindColumn(ColumnRefExpression &expr, size_t depth) {
 
 	auto &column_list = bound_columns[expr.table_name];
 	// check if the entry already exists in the column list for the table
-	expr.index = (size_t)-1;
+	expr.binding.column_index = column_list.size();
 	for (size_t i = 0; i < column_list.size(); i++) {
 		auto &column = column_list[i];
 		if (column == expr.column_name) {
-			expr.index = i;
+			expr.binding.column_index = i;
 			break;
 		}
 	}
-	if (expr.index == (size_t)-1) {
-		expr.index = column_list.size();
+	if (expr.binding.column_index == column_list.size()) {
+		// column binding not found: add it to the list of bindings
 		column_list.push_back(expr.column_name);
 	}
-	expr.table_index = table_index;
+	expr.binding.table_index = table_index;
 	expr.depth = depth;
 	expr.return_type = entry->type;
 	return entry;
@@ -129,7 +129,7 @@ void BindContext::AddBaseTable(const string &alias,
 		                      alias.c_str());
 	}
 	regular_table_alias_map.insert(
-	    make_pair(alias, TableBinding(table_entry, bound_tables++)));
+	    make_pair(alias, TableBinding(table_entry, GenerateTableIndex())));
 }
 
 void BindContext::AddSubquery(const string &alias, SelectStatement *subquery) {
@@ -149,4 +149,19 @@ bool BindContext::HasAlias(const string &alias) {
 	return regular_table_alias_map.find(alias) !=
 	           regular_table_alias_map.end() ||
 	       subquery_alias_map.find(alias) != subquery_alias_map.end();
+}
+
+size_t BindContext::GetTableIndex(const std::string &alias) {
+	auto table_entry = regular_table_alias_map.find(alias);
+	if (table_entry == regular_table_alias_map.end()) {
+		throw Exception("Could not find table alias binding!");
+	}
+	return table_entry->second.index;
+}
+
+size_t BindContext::GenerateTableIndex() {
+	if (parent) {
+		return parent->GenerateTableIndex();
+	}
+	return bound_tables++;
 }

@@ -34,7 +34,7 @@ struct TableBinding {
 //! encountered during the binding process.
 class BindContext {
   public:
-	BindContext() : bound_tables(0) {}
+	BindContext() : bound_tables(0), max_depth(0) {}
 
 	//! Given a column name, find the matching table it belongs to. Throws an
 	//! exception if no table has a column of the given name.
@@ -61,15 +61,22 @@ class BindContext {
 
 	//! Returns true if the table/subquery alias exists, false otherwise.
 	bool HasAlias(const std::string &alias);
+	//! Gets the table index of a given table alias. Throws an exception if the alias was not found.
+	size_t GetTableIndex(const std::string &alias);
+	//! Returns the maximum depth of column references in the current context
+	size_t GetMaxDepth() { return max_depth; }
+
 
 	//! The set of columns that are bound for each table/subquery alias
 	std::unordered_map<std::string, std::vector<std::string>> bound_columns;
 
 	BindContext *parent = nullptr;
 
-	// private:
+private:
+	size_t GenerateTableIndex();
+	
 	size_t bound_tables;
-	size_t max_depth = 0;
+	size_t max_depth;
 
 	//! The set of expression aliases
 	std::unordered_map<std::string, std::pair<size_t, AbstractExpression *>>

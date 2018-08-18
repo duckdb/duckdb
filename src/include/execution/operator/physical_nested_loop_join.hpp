@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// execution/physical_cross_product.hpp
+// execution/physical_nested_loop_join.hpp
 //
 // Author: Mark Raasveldt
 //
@@ -10,16 +10,18 @@
 
 #pragma once
 
-#include "execution/operator/physical_cross_product.hpp"
 #include "execution/physical_operator.hpp"
 
+#include "planner/operator/logical_join.hpp"
+
 namespace duckdb {
+
 //! PhysicalNestedLoopJoin represents a nested loop join between two tables
 class PhysicalNestedLoopJoin : public PhysicalOperator {
   public:
 	PhysicalNestedLoopJoin(std::unique_ptr<PhysicalOperator> left,
 	                       std::unique_ptr<PhysicalOperator> right,
-	                       std::unique_ptr<AbstractExpression> cond,
+	                       std::vector<JoinCondition> cond,
 	                       JoinType join_type);
 
 	std::vector<TypeId> GetTypes() override;
@@ -29,8 +31,24 @@ class PhysicalNestedLoopJoin : public PhysicalOperator {
 	virtual std::unique_ptr<PhysicalOperatorState>
 	GetOperatorState(ExpressionExecutor *parent_executor) override;
 
-	PhysicalCrossProduct cross_product;
-	std::unique_ptr<AbstractExpression> condition;
+	std::vector<JoinCondition> conditions;
 	JoinType type;
+};
+
+class PhysicalNestedLoopJoinOperatorState : public PhysicalOperatorState {
+  public:
+	PhysicalNestedLoopJoinOperatorState(PhysicalOperator *left,
+	                                  PhysicalOperator *right,
+	                                  ExpressionExecutor *parent_executor)
+	    : PhysicalOperatorState(left, parent_executor), left_position(0),
+	      right_chunk(0) {
+		assert(left && right);
+	}
+
+	size_t left_position;
+	size_t right_chunk;
+	DataChunk left_join_condition;
+	DataChunk right_join_condition;
+	std::vector<std::unique_ptr<DataChunk>> right_chunks;
 };
 } // namespace duckdb

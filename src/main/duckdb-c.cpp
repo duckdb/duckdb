@@ -174,7 +174,7 @@ void duckdb_print_result(duckdb_result result) {
 		       TypeIdToString(_convert_type_c_to_cpp(result.columns[i].type))
 		           .c_str());
 	}
-	printf(" [ %llu ]\n", result.row_count);
+	printf(" [ %zu ]\n", result.row_count);
 	for (size_t j = 0; j < result.row_count; j++) {
 		for (size_t i = 0; i < result.column_count; i++) {
 			Value v = _duckdb_c_get_value(result.columns[i], j);

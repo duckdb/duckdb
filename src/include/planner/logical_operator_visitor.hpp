@@ -21,6 +21,7 @@ class LogicalFilter;
 class LogicalGet;
 class LogicalJoin;
 class LogicalLimit;
+class LogicalOperator;
 class LogicalOrder;
 class LogicalProjection;
 class LogicalInsert;
@@ -31,6 +32,8 @@ class LogicalCopy;
 class LogicalOperatorVisitor : public SQLNodeVisitor {
   public:
 	virtual ~LogicalOperatorVisitor(){};
+
+	virtual	void VisitOperator(LogicalOperator &op);
 
 	virtual void Visit(LogicalAggregate &op);
 	virtual void Visit(LogicalCrossProduct &op);

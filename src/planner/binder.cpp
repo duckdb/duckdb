@@ -179,7 +179,7 @@ void Binder::Visit(SelectStatement &statement) {
 						auto group_column =
 						    reinterpret_cast<ColumnRefExpression *>(
 						        group.get());
-						if (group_column->index == select_column->index) {
+						if (group_column->binding == select_column->binding) {
 							statement.select_list[i] =
 							    make_unique<GroupRefExpression>(
 							        statement.select_list[i]->return_type, j);
@@ -238,7 +238,7 @@ void Binder::Visit(SubqueryExpression &expr) {
 	expr.return_type = expr.exists ? TypeId::BOOLEAN
 	                               : expr.subquery->select_list[0]->return_type;
 	expr.context = move(binder.context);
-	expr.is_correlated = expr.context->max_depth > 0;
+	expr.is_correlated = expr.context->GetMaxDepth() > 0;
 }
 
 void Binder::Visit(BaseTableRef &expr) {

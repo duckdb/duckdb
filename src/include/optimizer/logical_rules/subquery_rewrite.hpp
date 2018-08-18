@@ -109,12 +109,10 @@ class SubqueryRewritingRule : public Rule {
 
 		auto comp_left =
 		    make_unique_base<AbstractExpression, ColumnRefExpression>(
-		        sq_colref_inner->return_type, sq_colref_inner->table_index,
-		        sq_colref_inner->index);
+		        sq_colref_inner->return_type, sq_colref_inner->binding);
 		auto comp_right =
 		    make_unique_base<AbstractExpression, ColumnRefExpression>(
-		        sq_colref_outer->return_type, sq_colref_outer->table_index,
-		        sq_colref_outer->index);
+		        sq_colref_outer->return_type, sq_colref_outer->binding);
 
 		auto aggr = (LogicalAggregate *)subquery->op.get();
 

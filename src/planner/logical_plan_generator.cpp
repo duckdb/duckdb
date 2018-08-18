@@ -30,7 +30,7 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 		statement.where_clause->Accept(this);
 
 		auto filter = make_unique<LogicalFilter>(move(statement.where_clause));
-		filter->children.push_back(move(root));
+		filter->AddChild(move(root));
 		root = move(filter);
 	}
 
@@ -41,7 +41,7 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 			// have to add group by columns
 			aggregate->groups = move(statement.groupby.groups);
 		}
-		aggregate->children.push_back(move(root));
+		aggregate->AddChild(move(root));
 		root = move(aggregate);
 
 		if (statement.HasHaving()) {
@@ -49,30 +49,30 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 
 			auto having =
 			    make_unique<LogicalFilter>(move(statement.groupby.having));
-			having->children.push_back(move(root));
+			having->AddChild(move(root));
 			root = move(having);
 		}
 	} else {
 		auto projection =
 		    make_unique<LogicalProjection>(move(statement.select_list));
-		projection->children.push_back(move(root));
+		projection->AddChild(move(root));
 		root = move(projection);
 	}
 
 	if (statement.select_distinct) {
 		auto distinct = make_unique<LogicalDistinct>();
-		distinct->children.push_back(move(root));
+		distinct->AddChild(move(root));
 		root = move(distinct);
 	}
 	if (statement.HasOrder()) {
 		auto order = make_unique<LogicalOrder>(move(statement.orderby));
-		order->children.push_back(move(root));
+		order->AddChild(move(root));
 		root = move(order);
 	}
 	if (statement.HasLimit()) {
 		auto limit = make_unique<LogicalLimit>(statement.limit.limit,
 		                                       statement.limit.offset);
-		limit->children.push_back(move(root));
+		limit->AddChild(move(root));
 		root = move(limit);
 	}
 }
@@ -156,13 +156,24 @@ void LogicalPlanGenerator::Visit(SubqueryExpression &expr) {
 void LogicalPlanGenerator::Visit(BaseTableRef &expr) {
 	auto table = catalog.GetTable(expr.schema_name, expr.table_name);
 	auto alias = expr.alias.empty() ? expr.table_name : expr.alias;
-	// get the table index from the BindContext
-	auto table_entry = context.regular_table_alias_map.find(alias);
-	assert(table_entry != context.regular_table_alias_map.end());
-	auto index = table_entry->second.index;
-	auto get_table = make_unique<LogicalGet>(table, alias, index);
+
+	auto index = context.GetTableIndex(alias);
+	
+	std::vector<size_t> column_ids;
+	// look in the context for this table which columns are required
+	for (auto &bound_column : context.bound_columns[alias]) {
+		column_ids.push_back(table->name_map[bound_column]);
+	}
+	if (column_ids.size() == 0) {
+		// no column ids selected
+		// the query is like SELECT COUNT(*) FROM table, or SELECT 42 FROM table
+		// return just the first column
+		column_ids.push_back(0);
+	}
+
+	auto get_table = make_unique<LogicalGet>(table, alias, index, column_ids);
 	if (root)
-		get_table->children.push_back(move(root));
+		get_table->AddChild(move(root));
 	root = move(get_table);
 }
 
@@ -175,12 +186,12 @@ void LogicalPlanGenerator::Visit(CrossProductRef &expr) {
 
 	expr.left->Accept(this);
 	assert(root);
-	cross_product->children.push_back(move(root));
+	cross_product->AddChild(move(root));
 	root = nullptr;
 
 	expr.right->Accept(this);
 	assert(root);
-	cross_product->children.push_back(move(root));
+	cross_product->AddChild(move(root));
 	root = nullptr;
 
 	root = move(cross_product);
@@ -195,15 +206,15 @@ void LogicalPlanGenerator::Visit(JoinRef &expr) {
 
 	expr.left->Accept(this);
 	assert(root);
-	join->children.push_back(move(root));
+	join->AddChild(move(root));
 	root = nullptr;
 
 	expr.right->Accept(this);
 	assert(root);
-	join->children.push_back(move(root));
+	join->AddChild(move(root));
 	root = nullptr;
 
-	join->expressions.push_back(move(expr.condition));
+	join->SetJoinCondition(move(expr.condition));
 
 	root = move(join);
 }
@@ -259,7 +270,7 @@ void LogicalPlanGenerator::Visit(CopyStatement &statement) {
 		    move(statement.delimiter), move(statement.quote),
 		    move(statement.escape));
 		statement.select_stmt->Accept(this);
-		copy->children.push_back(move(root));
+		copy->AddChild(move(root));
 		root = move(copy);
 	}
 }

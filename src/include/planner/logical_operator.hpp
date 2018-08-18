@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include <unordered_set>
 #include <vector>
 
 #include "catalog/catalog.hpp"
@@ -78,11 +79,18 @@ class LogicalOperator : public Printable {
 		}
 	}
 
+	void AddChild(std::unique_ptr<LogicalOperator> child) {
+		referenced_tables.insert(child->referenced_tables.begin(), child->referenced_tables.end());
+		children.push_back(move(child));
+	}
+
 	//! The type of the logical operator
 	LogicalOperatorType type;
+	//! The set of tables that is accessible from this operator
+	std::unordered_set<size_t> referenced_tables;
 	//! The set of children of the operator
 	std::vector<std::unique_ptr<LogicalOperator>> children;
-
+	//! The set of expressions contained within the operator, if any
 	std::vector<std::unique_ptr<AbstractExpression>> expressions;
 
 	virtual size_t ExpressionCount() { return expressions.size(); }
