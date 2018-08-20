@@ -244,30 +244,31 @@ unique_ptr<TableRef> TransformFrom(List *root) {
 	if (root->length > 1) {
 		// Cross Product
 		auto result = make_unique<CrossProductRef>();
+		CrossProductRef *cur_root = result.get();
 		for (auto node = root->head; node != nullptr; node = node->next) {
-			if (result->left) {
-				auto new_result = make_unique<CrossProductRef>();
-				new_result->right = move(result);
-				result = move(new_result);
-			}
-
+			unique_ptr<TableRef> next;
 			Node *n = reinterpret_cast<Node *>(node->data.ptr_value);
 			switch (n->type) {
 			case T_RangeVar:
-				result->left =
-				    move(TransformRangeVar(reinterpret_cast<RangeVar *>(n)));
+				next = move(TransformRangeVar(reinterpret_cast<RangeVar *>(n)));
 				break;
 			case T_RangeSubselect:
-				result->left = move(TransformRangeSubselect(
+				next = move(TransformRangeSubselect(
 				    reinterpret_cast<RangeSubselect *>(n)));
 				break;
 			default:
 				throw NotImplementedException(
 				    "From Type %d not supported yet...", n->type);
 			}
-			if (!result->right) {
-				result->right = move(result->left);
-				result->left = nullptr;
+			if (!cur_root->left) {
+				cur_root->left = move(next);
+			} else if (!cur_root->right) {
+				cur_root->right = move(next);
+			} else {
+				auto old_res = move(result);
+				result = make_unique<CrossProductRef>();
+				result->left = move(old_res);
+				cur_root = result.get();
 			}
 		}
 		return move(result);

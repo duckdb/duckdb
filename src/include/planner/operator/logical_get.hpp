@@ -33,5 +33,15 @@ class LogicalGet : public LogicalOperator {
 	//! The table index in the current bind context
 	size_t table_index;
 	std::vector<size_t> column_ids;
+
+	virtual std::string ParamsToString() const override {
+		if (!table) {
+			return "";
+		}
+		if (table->name == alias) {
+			return "(" + alias + ")";
+		}
+		return "(" + table->name + " -> " + alias + ")";
+	}
 };
 } // namespace duckdb

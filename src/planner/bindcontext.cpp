@@ -107,11 +107,11 @@ void BindContext::GenerateAllColumnExpressions(
 	if (regular_table_alias_map.size() == 0 && subquery_alias_map.size() == 0) {
 		throw BinderException("SELECT * expression without FROM clause!");
 	}
-	for (auto &kv : regular_table_alias_map) {
-		auto table = kv.second.table;
-		string table_name = kv.first;
-		for (auto &column : table->columns) {
+	for (auto table_name : regular_table_alias_list) {
+		auto &table = regular_table_alias_map.find(table_name)->second;
+		for (auto &column : table.table->columns) {
 			string column_name = column->name;
+			printf("%s.%s\n", table_name.c_str(), column_name.c_str());
 			new_select_list.push_back(
 			    make_unique<ColumnRefExpression>(column_name, table_name));
 		}
@@ -130,6 +130,7 @@ void BindContext::AddBaseTable(const string &alias,
 	}
 	regular_table_alias_map.insert(
 	    make_pair(alias, TableBinding(table_entry, GenerateTableIndex())));
+	regular_table_alias_list.push_back(alias);
 }
 
 void BindContext::AddSubquery(const string &alias, SelectStatement *subquery) {
