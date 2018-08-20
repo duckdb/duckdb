@@ -10,8 +10,9 @@
 
 #pragma once
 
+#include <map>
 #include <string>
-#include <unordered_map>
+
 #include <vector>
 
 #include "catalog/catalog.hpp"
@@ -81,9 +82,9 @@ class BindContext {
 	//! The set of expression aliases
 	std::unordered_map<std::string, std::pair<size_t, AbstractExpression *>>
 	    expression_alias_map;
-	//! The set of bound tables
-	std::unordered_map<std::string, TableBinding> regular_table_alias_map;
+	//! The set of bound tables, ordered map because order matters for SELECT *
+	std::map<std::string, TableBinding> regular_table_alias_map;
 	//! The set of bound subqueries
-	std::unordered_map<std::string, SelectStatement *> subquery_alias_map;
+	std::map<std::string, SelectStatement *> subquery_alias_map;
 };
 } // namespace duckdb
