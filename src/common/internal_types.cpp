@@ -300,10 +300,18 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "SORT_GROUP_BY";
 	case PhysicalOperatorType::FILTER:
 		return "FILTER";
+	case PhysicalOperatorType::PROJECTION:
+		return "PROJECTION";
+	case PhysicalOperatorType::BASE_GROUP_BY:
+		return "BASE_GROUP_BY";
+	case PhysicalOperatorType::COPY:
+		return "COPY";
 	case PhysicalOperatorType::NESTED_LOOP_JOIN:
 		return "NESTED_LOOP_JOIN";
 	case PhysicalOperatorType::HASH_JOIN:
 		return "HASH_JOIN";
+	case PhysicalOperatorType::CROSS_PRODUCT:
+		return "CROSS_PRODUCT";
 	case PhysicalOperatorType::INSERT:
 		return "INSERT";
 	case PhysicalOperatorType::INSERT_SELECT:

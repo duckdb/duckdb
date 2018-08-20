@@ -77,10 +77,32 @@ void PhysicalPlanGenerator::Visit(LogicalCrossProduct &op) {
 	plan = make_unique<PhysicalCrossProduct>(move(left), move(right));
 }
 
+// rewrite SELECT DISTINCT a, b, c FROM ... into SELECT a, b, c FROM .. GROUP BY
+// a, b, c
 void PhysicalPlanGenerator::Visit(LogicalDistinct &op) {
-	LogicalOperatorVisitor::Visit(op);
 
-	throw NotImplementedException("distinct clause");
+	assert(op.children.size() == 1);
+	assert(op.children[0]->type == LogicalOperatorType::PROJECTION);
+
+	auto proj = reinterpret_cast<LogicalProjection *>(op.children[0].get());
+
+	vector<unique_ptr<AbstractExpression>> expressions;
+	vector<unique_ptr<AbstractExpression>> groups;
+	for (size_t i = 0; i < proj->expressions.size(); i++) {
+		AbstractExpression *proj_ele = proj->expressions[i].get();
+		expressions.push_back(
+		    move(make_unique_base<AbstractExpression, GroupRefExpression>(
+		        proj_ele->return_type, i)));
+		groups.push_back(
+		    move(make_unique_base<AbstractExpression, ColumnRefExpression>(
+		        proj_ele->return_type, i)));
+	}
+
+	auto groupby =
+	    make_unique<PhysicalHashAggregate>(move(expressions), move(groups));
+	op.children[0]->Accept(this);
+	groupby->children.push_back(move(plan));
+	plan = move(groupby);
 }
 
 void PhysicalPlanGenerator::Visit(LogicalFilter &op) {
