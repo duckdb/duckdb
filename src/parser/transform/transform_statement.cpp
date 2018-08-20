@@ -194,13 +194,13 @@ unique_ptr<CopyStatement> TransformCopy(Node *node) {
 			// copy table into file, generate SELECT * FROM table;
 			auto statement = make_unique<SelectStatement>();
 			statement->from_table = move(ref);
-			statement->select_list.push_back(make_unique<ColumnRefExpression>());
+			statement->select_list.push_back(
+			    make_unique<ColumnRefExpression>());
 			result->select_stmt = move(statement);
 		}
 	} else {
 		result->select_stmt = TransformSelect(stmt->query);
 	}
-
 
 	// Handle options
 	if (stmt->options) {

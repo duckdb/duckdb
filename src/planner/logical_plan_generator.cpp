@@ -158,7 +158,7 @@ void LogicalPlanGenerator::Visit(BaseTableRef &expr) {
 	auto alias = expr.alias.empty() ? expr.table_name : expr.alias;
 
 	auto index = context.GetTableIndex(alias);
-	
+
 	std::vector<size_t> column_ids;
 	// look in the context for this table which columns are required
 	for (auto &bound_column : context.bound_columns[alias]) {

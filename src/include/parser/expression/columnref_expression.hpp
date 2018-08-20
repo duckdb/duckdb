@@ -18,12 +18,13 @@ struct ColumnBinding {
 	size_t table_index;
 	size_t column_index;
 
-	ColumnBinding() : table_index((size_t) -1), column_index((size_t) -1) {}
-	ColumnBinding(size_t table, size_t column) : 
-		table_index(table), column_index(column) {}
+	ColumnBinding() : table_index((size_t)-1), column_index((size_t)-1) {}
+	ColumnBinding(size_t table, size_t column)
+	    : table_index(table), column_index(column) {}
 
 	bool operator==(const ColumnBinding &rhs) {
-		return table_index == rhs.table_index && column_index == rhs.column_index;
+		return table_index == rhs.table_index &&
+		       column_index == rhs.column_index;
 	}
 };
 
@@ -47,8 +48,7 @@ class ColumnRefExpression : public AbstractExpression {
 
 	ColumnRefExpression(TypeId type, ColumnBinding binding)
 	    : AbstractExpression(ExpressionType::COLUMN_REF, type), column_name(""),
-	      table_name(""), binding(binding),
-	      reference(nullptr) {}
+	      table_name(""), binding(binding), reference(nullptr) {}
 
 	ColumnRefExpression(TypeId type, size_t index)
 	    : AbstractExpression(ExpressionType::COLUMN_REF, type), column_name(""),
@@ -83,7 +83,8 @@ class ColumnRefExpression : public AbstractExpression {
 	//! Column index set by the binder, used to access data in the executor
 	ColumnBinding binding;
 
-	//! Index used to access data in the chunks, set by the ColumnBindingResolver
+	//! Index used to access data in the chunks, set by the
+	//! ColumnBindingResolver
 	size_t index = (size_t)-1;
 
 	//! Subquery recursion depth, needed for execution
@@ -98,9 +99,11 @@ class ColumnRefExpression : public AbstractExpression {
 	std::string table_name;
 
 	virtual std::string ToString() const override {
-		auto str = table_name.empty() ? std::to_string(binding.table_index) : table_name;
+		auto str = table_name.empty() ? std::to_string(binding.table_index)
+		                              : table_name;
 		str += ".";
-		str += column_name.empty() ? std::to_string(binding.column_index) : column_name;
+		str += column_name.empty() ? std::to_string(binding.column_index)
+		                           : column_name;
 		return str;
 	}
 };

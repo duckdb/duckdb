@@ -111,7 +111,8 @@ class ConstantFoldingRule : public Rule {
 					}
 					break;
 				case ExpressionType::OPERATOR_MOD:
-					if (Value::Equals(right_val->value, zero)) { // X % 0 == NULL
+					if (Value::Equals(right_val->value,
+					                  zero)) { // X % 0 == NULL
 						return make_unique<ConstantExpression>(Value());
 					}
 					if (Value::Equals(right_val->value, one)) {

@@ -1,13 +1,17 @@
 #include "execution/column_binding_resolver.hpp"
-#include "planner/operator/logical_list.hpp"
 #include "parser/expression/expression_list.hpp"
+#include "planner/operator/logical_list.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-void ColumnBindingResolver::AppendTables(std::vector<BoundTable>& right_tables) {
-	size_t offset = bound_tables.size() == 0 ? 0 : bound_tables.back().column_offset + bound_tables.back().column_count;
-	for(auto table : right_tables) {
+void ColumnBindingResolver::AppendTables(
+    std::vector<BoundTable> &right_tables) {
+	size_t offset = bound_tables.size() == 0
+	                    ? 0
+	                    : bound_tables.back().column_offset +
+	                          bound_tables.back().column_count;
+	for (auto table : right_tables) {
 		table.column_offset += offset;
 		bound_tables.push_back(table);
 	}
@@ -34,15 +38,17 @@ void ColumnBindingResolver::Visit(LogicalGet &op) {
 	BoundTable binding;
 	binding.table_index = op.table_index;
 	binding.column_count = op.column_ids.size();
-	binding.column_offset = bound_tables.size() == 0 ? 0 : bound_tables.back().column_offset + bound_tables.back().column_count;
+	binding.column_offset = bound_tables.size() == 0
+	                            ? 0
+	                            : bound_tables.back().column_offset +
+	                                  bound_tables.back().column_count;
 	bound_tables.push_back(binding);
 }
-
 
 void ColumnBindingResolver::Visit(LogicalJoin &op) {
 	// resolve the column indices of the left side
 	op.children[0]->Accept(this);
-	for(auto &cond : op.conditions) {
+	for (auto &cond : op.conditions) {
 		cond.left->Accept(this);
 	}
 	// store the added tables
@@ -51,7 +57,7 @@ void ColumnBindingResolver::Visit(LogicalJoin &op) {
 
 	// now resolve the column indices of the right side
 	op.children[1]->Accept(this);
-	for(auto &cond : op.conditions) {
+	for (auto &cond : op.conditions) {
 		cond.right->Accept(this);
 	}
 	auto right_tables = bound_tables;
@@ -62,16 +68,18 @@ void ColumnBindingResolver::Visit(LogicalJoin &op) {
 }
 
 void ColumnBindingResolver::Visit(ColumnRefExpression &expr) {
-	if (expr.index != (size_t) -1 || expr.reference || expr.depth != current_depth) {
-		// not a base table reference OR should not be resolved by the current resolver
+	if (expr.index != (size_t)-1 || expr.reference ||
+	    expr.depth != current_depth) {
+		// not a base table reference OR should not be resolved by the current
+		// resolver
 		return;
 	}
-	for(auto &binding : bound_tables) {
+	for (auto &binding : bound_tables) {
 		if (binding.table_index == expr.binding.table_index) {
 			expr.index = binding.column_offset + expr.binding.column_index;
 		}
 	}
-	assert(expr.index != (size_t) -1);
+	assert(expr.index != (size_t)-1);
 }
 
 void ColumnBindingResolver::Visit(SubqueryExpression &expr) {

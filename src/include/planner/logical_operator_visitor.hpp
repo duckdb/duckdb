@@ -33,7 +33,7 @@ class LogicalOperatorVisitor : public SQLNodeVisitor {
   public:
 	virtual ~LogicalOperatorVisitor(){};
 
-	virtual	void VisitOperator(LogicalOperator &op);
+	virtual void VisitOperator(LogicalOperator &op);
 
 	virtual void Visit(LogicalAggregate &op);
 	virtual void Visit(LogicalCrossProduct &op);

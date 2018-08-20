@@ -80,7 +80,8 @@ class LogicalOperator : public Printable {
 	}
 
 	void AddChild(std::unique_ptr<LogicalOperator> child) {
-		referenced_tables.insert(child->referenced_tables.begin(), child->referenced_tables.end());
+		referenced_tables.insert(child->referenced_tables.begin(),
+		                         child->referenced_tables.end());
 		children.push_back(move(child));
 	}
 

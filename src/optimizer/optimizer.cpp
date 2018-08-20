@@ -13,7 +13,7 @@ Optimizer::Optimizer() : success(false) {
 	rewriter.rules.push_back(make_unique_base<Rule, ConstantFoldingRule>());
 	rewriter.rules.push_back(make_unique_base<Rule, CrossProductRewrite>());
 	//	rewriter.rules.push_back(make_unique_base<Rule,
-	//SubqueryRewritingRule>());
+	// SubqueryRewritingRule>());
 }
 
 unique_ptr<LogicalOperator>
