@@ -209,6 +209,13 @@ unique_ptr<TableRef> TransformJoin(JoinExpr *root) {
 		                              root->larg->type);
 	}
 
+	if (!root->quals) { // CROSS JOIN
+		auto cross = make_unique<CrossProductRef>();
+		cross->left = move(result->left);
+		cross->right = move(result->right);
+		return move(cross);
+	}
+
 	// transform the quals, depends on AExprTranform and BoolExprTransform
 	switch (root->quals->type) {
 	case T_A_Expr: {
