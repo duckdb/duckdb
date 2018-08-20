@@ -109,7 +109,7 @@ void BindContext::GenerateAllColumnExpressions(
 	}
 	for (auto &kv : regular_table_alias_map) {
 		auto table = kv.second.table;
-		string table_name = table->name;
+		string table_name = kv.first;
 		for (auto &column : table->columns) {
 			string column_name = column->name;
 			new_select_list.push_back(
