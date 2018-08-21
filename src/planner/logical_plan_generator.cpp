@@ -60,9 +60,31 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 	}
 
 	if (statement.select_distinct) {
-		auto distinct = make_unique<LogicalDistinct>();
-		distinct->AddChild(move(root));
-		root = move(distinct);
+		if (root->type != LogicalOperatorType::PROJECTION &&
+		    root->type != LogicalOperatorType::AGGREGATE_AND_GROUP_BY) {
+			throw Exception("DISTINCT can only apply to projection or group");
+		}
+
+		vector<unique_ptr<AbstractExpression>> expressions;
+		vector<unique_ptr<AbstractExpression>> groups;
+
+		for (size_t i = 0; i < root->expressions.size(); i++) {
+			AbstractExpression *proj_ele = root->expressions[i].get();
+			auto group_ref =
+			    make_unique_base<AbstractExpression, GroupRefExpression>(
+			        proj_ele->return_type, i);
+			group_ref->alias = proj_ele->alias;
+			expressions.push_back(move(group_ref));
+			groups.push_back(
+			    move(make_unique_base<AbstractExpression, ColumnRefExpression>(
+			        proj_ele->return_type, i)));
+		}
+		// this aggregate is superflous if all grouping columns are in aggr
+		// below
+		auto aggregate = make_unique<LogicalAggregate>(move(expressions));
+		aggregate->groups = move(groups);
+		aggregate->AddChild(move(root));
+		root = move(aggregate);
 	}
 	if (statement.HasOrder()) {
 		auto order = make_unique<LogicalOrder>(move(statement.orderby));

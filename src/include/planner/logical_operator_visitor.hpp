@@ -34,10 +34,8 @@ class LogicalOperatorVisitor : public SQLNodeVisitor {
 	virtual ~LogicalOperatorVisitor(){};
 
 	virtual void VisitOperator(LogicalOperator &op);
-
 	virtual void Visit(LogicalAggregate &op);
 	virtual void Visit(LogicalCrossProduct &op);
-	virtual void Visit(LogicalDistinct &op);
 	virtual void Visit(LogicalFilter &op);
 	virtual void Visit(LogicalGet &op);
 	virtual void Visit(LogicalJoin &op);
