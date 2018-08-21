@@ -20,7 +20,7 @@ class PhysicalCopy : public PhysicalOperator {
   public:
 	PhysicalCopy(std::shared_ptr<TableCatalogEntry> table,
 	             std::string file_path, bool is_from, char delimiter,
-	             char quote, char escape,std::vector<std::string> select_list)
+	             char quote, char escape, std::vector<std::string> select_list)
 	    : PhysicalOperator(PhysicalOperatorType::COPY), table(table),
 	      file_path(file_path), is_from(is_from), delimiter(delimiter),
 	      quote(quote), escape(escape), select_list(select_list) {}
@@ -41,8 +41,6 @@ class PhysicalCopy : public PhysicalOperator {
 	std::string file_path;
 	bool is_from;
 	std::vector<std::string> select_list;
-
-
 
 	char delimiter = ',';
 	char quote = '"';

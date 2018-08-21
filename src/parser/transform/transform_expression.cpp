@@ -458,6 +458,18 @@ unique_ptr<AbstractExpression> TransformAExpr(A_Expr *root) {
 
 	auto left_expr = TransformExpression(root->lexpr);
 	auto right_expr = TransformExpression(root->rexpr);
+	if (!left_expr) {
+		switch (target_type) {
+		case ExpressionType::OPERATOR_ADD:
+			return move(right_expr);
+		case ExpressionType::OPERATOR_SUBTRACT:
+			target_type = ExpressionType::OPERATOR_MULTIPLY;
+			left_expr = make_unique<ConstantExpression>(Value(1));
+			break;
+		default:
+			throw Exception("Unknown unary operator");
+		}
+	}
 
 	int type_id = static_cast<int>(target_type);
 	if (type_id <= 6) {

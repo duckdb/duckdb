@@ -183,14 +183,14 @@ unique_ptr<CopyStatement> TransformCopy(Node *node) {
 	result->file_path = stmt->filename;
 	result->is_from = stmt->is_from;
 
-    if(stmt->attlist){
-        for (auto n = stmt->attlist->head; n != nullptr; n = n->next) {
-            auto target = reinterpret_cast<ResTarget *>(n->data.ptr_value);
-            if (target->name) {
-                result->select_list.push_back(string(target->name));
-            }
-        }
-    }
+	if (stmt->attlist) {
+		for (auto n = stmt->attlist->head; n != nullptr; n = n->next) {
+			auto target = reinterpret_cast<ResTarget *>(n->data.ptr_value);
+			if (target->name) {
+				result->select_list.push_back(string(target->name));
+			}
+		}
+	}
 
 	if (stmt->relation) {
 		auto ref = TransformRangeVar(stmt->relation);
@@ -203,15 +203,15 @@ unique_ptr<CopyStatement> TransformCopy(Node *node) {
 			// copy table into file, generate SELECT * FROM table;
 			auto statement = make_unique<SelectStatement>();
 			statement->from_table = move(ref);
-            if(stmt->attlist){
-                for (size_t i = 0; i <result->select_list.size(); i ++ )
-                    statement->select_list.push_back(
-                            make_unique<ColumnRefExpression>(result->select_list[i]));
-            }
-            else{
-                statement->select_list.push_back(
-                        make_unique<ColumnRefExpression>());
-            }
+			if (stmt->attlist) {
+				for (size_t i = 0; i < result->select_list.size(); i++)
+					statement->select_list.push_back(
+					    make_unique<ColumnRefExpression>(
+					        result->select_list[i]));
+			} else {
+				statement->select_list.push_back(
+				    make_unique<ColumnRefExpression>());
+			}
 			result->select_stmt = move(statement);
 		}
 	} else {
