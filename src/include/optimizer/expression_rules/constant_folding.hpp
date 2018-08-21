@@ -80,9 +80,9 @@ class ConstantFoldingRule : public Rule {
 			return nullptr;
 		}
 
-		Value zero = Value::BIGINT(0).CastAs(root.return_type);
-		Value one = Value::BIGINT(1).CastAs(root.return_type);
-		Value null = Value(root.return_type);
+		Value zero = Value::BIGINT(0);
+		Value one = Value::BIGINT(1);
+		Value null = Value();
 
 		// case: right is constant
 		if (right->type == ExpressionType::VALUE_CONSTANT) {
