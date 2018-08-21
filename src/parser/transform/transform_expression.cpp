@@ -257,6 +257,9 @@ unique_ptr<TableRef> TransformFrom(List *root) {
 				next = move(TransformRangeSubselect(
 				    reinterpret_cast<RangeSubselect *>(n)));
 				break;
+			case T_JoinExpr:
+				next = move(TransformJoin(reinterpret_cast<JoinExpr *>(n)));
+				break;
 			default:
 				throw NotImplementedException(
 				    "From Type %d not supported yet...", n->type);
@@ -466,7 +469,7 @@ unique_ptr<AbstractExpression> TransformAExpr(A_Expr *root) {
 			return move(right_expr);
 		case ExpressionType::OPERATOR_SUBTRACT:
 			target_type = ExpressionType::OPERATOR_MULTIPLY;
-			left_expr = make_unique<ConstantExpression>(Value(1));
+			left_expr = make_unique<ConstantExpression>(Value(-1));
 			break;
 		default:
 			throw Exception("Unknown unary operator");
