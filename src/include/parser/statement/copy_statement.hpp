@@ -33,9 +33,8 @@ class CopyStatement : public SQLStatement {
 
 	std::string file_path;
 
-    // List of Columns that will be copied from/to.
+	// List of Columns that will be copied from/to.
 	std::vector<std::string> select_list;
-
 
 	// File Format
 	ExternalFileFormat format = ExternalFileFormat::CSV;

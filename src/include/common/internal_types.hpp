@@ -106,7 +106,6 @@ enum class ExpressionType {
 	OPERATOR_IS_NOT_NULL = 22,
 	// exists test.
 	OPERATOR_EXISTS = 18,
-	OPERATOR_UNARY_MINUS = 60,
 
 	// -----------------------------
 	// Comparison Operators

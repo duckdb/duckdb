@@ -111,7 +111,6 @@ void BindContext::GenerateAllColumnExpressions(
 		auto &table = regular_table_alias_map.find(table_name)->second;
 		for (auto &column : table.table->columns) {
 			string column_name = column->name;
-			printf("%s.%s\n", table_name.c_str(), column_name.c_str());
 			new_select_list.push_back(
 			    make_unique<ColumnRefExpression>(column_name, table_name));
 		}

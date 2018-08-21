@@ -33,8 +33,6 @@ ExpressionType StringToExpressionType(const string &str) {
 		return ExpressionType::OPERATOR_IS_NULL;
 	} else if (upper_str == "OPERATOR_EXISTS") {
 		return ExpressionType::OPERATOR_EXISTS;
-	} else if (upper_str == "OPERATOR_UNARY_MINUS") {
-		return ExpressionType::OPERATOR_UNARY_MINUS;
 	} else if (upper_str == "COMPARE_EQUAL" || upper_str == "=") {
 		return ExpressionType::COMPARE_EQUAL;
 	} else if (upper_str == "COMPARE_NOTEQUAL" || upper_str == "!=" ||
@@ -349,8 +347,6 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "IS_NOT_NULL";
 	case ExpressionType::OPERATOR_EXISTS:
 		return "EXISTS";
-	case ExpressionType::OPERATOR_UNARY_MINUS:
-		return "UNARY_MINUS";
 	case ExpressionType::COMPARE_EQUAL:
 		return "EQUAL";
 	case ExpressionType::COMPARE_NOTEQUAL:
