@@ -2906,6 +2906,37 @@ static char *cmdline_option_value(int argc, char **argv, int i) {
 	return argv[i];
 }
 
+static void process_rc(
+    ShellState *p,                /* Configuration data */
+    const char *sqliterc_override /* Name of config file. NULL to use default */
+) {
+	char *home_dir = NULL;
+	const char *sqliterc = sqliterc_override;
+	char *zBuf = 0;
+	FILE *in = NULL;
+
+	if (sqliterc == NULL) {
+		home_dir = find_home_dir(0);
+		if (home_dir == 0) {
+			raw_printf(stderr, "-- warning: cannot find home directory;"
+			                   " cannot read ~/.duckdbrc\n");
+			return;
+		}
+		sqlite3_initialize();
+		zBuf = sqlite3_mprintf("%s/.duckdbrc", home_dir);
+		sqliterc = zBuf;
+	}
+	in = fopen(sqliterc, "rb");
+	if (in) {
+		if (stdin_is_interactive) {
+			utf8_printf(stderr, "-- Loading resources from %s\n", sqliterc);
+		}
+		process_input(p, in);
+		fclose(in);
+	}
+	sqlite3_free(zBuf);
+}
+
 int main(int argc, char **argv) {
 	char *zErrMsg = 0;
 	ShellState data;
@@ -2985,6 +3016,8 @@ int main(int argc, char **argv) {
 	if (access(data.zDbFilename, 0) == 0) {
 		open_db(&data, 0);
 	}
+
+	process_rc(&data, zInitFile);
 
 	/* Make a second pass through the command-line argument and set
 	 ** options.  This second pass is delayed until after the initialization
