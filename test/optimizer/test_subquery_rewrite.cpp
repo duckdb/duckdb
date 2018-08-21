@@ -42,7 +42,7 @@ TEST_CASE("Subquery rewriting", "[subquery_rewrite]") {
 	Rewriter rewriter;
 	rewriter.rules.push_back(make_unique_base<Rule, SubqueryRewritingRule>());
 
-	//cout << planner.plan->ToString() + "\n";
+	// cout << planner.plan->ToString() + "\n";
 	auto plan = rewriter.ApplyRules(move(planner.plan));
-	//cout << plan->ToString() + "\n";
+	// cout << plan->ToString() + "\n";
 };

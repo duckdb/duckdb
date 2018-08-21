@@ -35,7 +35,8 @@ class LogicalJoin : public LogicalOperator {
 
 	std::vector<JoinCondition> conditions;
 	JoinType type;
+
   private:
-  	JoinSide GetJoinSide(std::unique_ptr<AbstractExpression>& expr);
+	JoinSide GetJoinSide(std::unique_ptr<AbstractExpression> &expr);
 };
 } // namespace duckdb

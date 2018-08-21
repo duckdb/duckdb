@@ -55,7 +55,7 @@ class DuckDBResult {
 
 	size_t column_count() { return collection.types.size(); }
 	size_t size() { return collection.count; }
-	std::vector<TypeId>& types() { return collection.types; }
+	std::vector<TypeId> &types() { return collection.types; }
 
 	ChunkCollection collection;
 

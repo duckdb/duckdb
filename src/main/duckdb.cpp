@@ -34,7 +34,8 @@ unique_ptr<DuckDBResult> DuckDBConnection::Query(std::string query) {
 		}
 
 		Planner planner;
-		if (!planner.CreatePlan(database.catalog, move(parser.statements.back()))) {
+		if (!planner.CreatePlan(database.catalog,
+		                        move(parser.statements.back()))) {
 			fprintf(stderr, "Failed to create plan: %s\n",
 			        planner.GetErrorMessage().c_str());
 			return make_unique<DuckDBResult>(planner.GetErrorMessage());
@@ -60,7 +61,8 @@ unique_ptr<DuckDBResult> DuckDBConnection::Query(std::string query) {
 		if (!physical_planner.CreatePlan(move(plan))) {
 			fprintf(stderr, "Failed to create physical plan: %s\n",
 			        physical_planner.GetErrorMessage().c_str());
-			return make_unique<DuckDBResult>(physical_planner.GetErrorMessage());
+			return make_unique<DuckDBResult>(
+			    physical_planner.GetErrorMessage());
 		}
 
 		// finally execute the plan and return the result
@@ -77,8 +79,7 @@ unique_ptr<DuckDBResult> DuckDBConnection::Query(std::string query) {
 
 DuckDBResult::DuckDBResult() : success(true) {}
 
-DuckDBResult::DuckDBResult(std::string error)
-    : success(false), error(error) {}
+DuckDBResult::DuckDBResult(std::string error) : success(false), error(error) {}
 
 void DuckDBResult::Print() {
 	if (success) {
@@ -86,7 +87,7 @@ void DuckDBResult::Print() {
 			printf("%s\t", TypeIdToString(type).c_str());
 		}
 		printf(" [ %zu ]\n", size());
-		for(size_t j = 0; j < size(); j++) {
+		for (size_t j = 0; j < size(); j++) {
 			for (size_t i = 0; i < column_count(); i++) {
 				printf("%s\t", collection.GetValue(i, j).ToString().c_str());
 			}

@@ -54,15 +54,11 @@ struct Modulo {
 };
 
 struct Abs {
-	template <class T> static inline T Operation(T left) {
-		return abs(left);
-	}
+	template <class T> static inline T Operation(T left) { return abs(left); }
 };
 
 struct Not {
-	static inline bool Operation(bool left) {
-		return !left;
-	}
+	static inline bool Operation(bool left) { return !left; }
 };
 
 template <> double Modulo::Operation(double left, double right);
@@ -146,15 +142,11 @@ struct PickLeft {
 };
 
 struct ConstantZero {
-	template <class T> static inline T Operation(T left, T right) {
-		return 0;
-	}
+	template <class T> static inline T Operation(T left, T right) { return 0; }
 };
 
 struct ConstantOne {
-	template <class T> static inline T Operation(T left, T right) {
-		return 1;
-	}
+	template <class T> static inline T Operation(T left, T right) { return 1; }
 };
 
 struct AddOne {

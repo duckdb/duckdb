@@ -11,12 +11,10 @@
 using namespace duckdb;
 using namespace std;
 
-vector<TypeId> PhysicalOrder::GetTypes() {
-	return children[0]->GetTypes();
-}
+vector<TypeId> PhysicalOrder::GetTypes() { return children[0]->GetTypes(); }
 
-int compare_tuple(ChunkCollection &sort_by, OrderByDescription &desc, size_t left,
-                  size_t right) {
+int compare_tuple(ChunkCollection &sort_by, OrderByDescription &desc,
+                  size_t left, size_t right) {
 	for (size_t i = 0; i < desc.orders.size(); i++) {
 		Value left_value = sort_by.GetValue(i, left);
 		Value right_value = sort_by.GetValue(i, right);
@@ -46,8 +44,8 @@ static void insertion_sort(ChunkCollection &sort_by, OrderByDescription &desc,
 	}
 }
 
-static int64_t _quicksort_initial(ChunkCollection &sort_by, OrderByDescription &desc,
-                                  uint64_t *result) {
+static int64_t _quicksort_initial(ChunkCollection &sort_by,
+                                  OrderByDescription &desc, uint64_t *result) {
 	// select pivot
 	int64_t pivot = 0;
 	int64_t low = 0, high = sort_by.count - 1;
@@ -64,8 +62,9 @@ static int64_t _quicksort_initial(ChunkCollection &sort_by, OrderByDescription &
 	return low;
 }
 
-static void _quicksort_inplace(ChunkCollection &sort_by, OrderByDescription &desc,
-                               uint64_t *result, int64_t left, int64_t right) {
+static void _quicksort_inplace(ChunkCollection &sort_by,
+                               OrderByDescription &desc, uint64_t *result,
+                               int64_t left, int64_t right) {
 	if (left >= right) {
 		return;
 	}
@@ -128,7 +127,7 @@ void PhysicalOrder::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 		}
 
 		ChunkCollection sort_collection;
-		for(size_t i = 0; i < big_data.chunks.size(); i++) {
+		for (size_t i = 0; i < big_data.chunks.size(); i++) {
 			DataChunk sort_chunk;
 			sort_chunk.Initialize(sort_types);
 
@@ -140,14 +139,15 @@ void PhysicalOrder::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 			sort_chunk.count = sort_chunk.data[0].count;
 			sort_collection.Append(sort_chunk);
 		}
-		
+
 		if (sort_collection.count != big_data.count) {
 			throw Exception("Cardinalities of ORDER BY columns and input "
 			                "columns don't match [?]");
 		}
 
 		// now perform the actual sort
-		state->sorted_vector = unique_ptr<uint64_t[]>(new uint64_t[sort_collection.count]);
+		state->sorted_vector =
+		    unique_ptr<uint64_t[]>(new uint64_t[sort_collection.count]);
 		quicksort(sort_collection, description, state->sorted_vector.get());
 	}
 
@@ -155,11 +155,13 @@ void PhysicalOrder::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 		return;
 	}
 
-	size_t remaining_data = min((size_t) STANDARD_VECTOR_SIZE, big_data.count - state->position);
+	size_t remaining_data =
+	    min((size_t)STANDARD_VECTOR_SIZE, big_data.count - state->position);
 	for (size_t i = 0; i < big_data.column_count(); i++) {
 		chunk.data[i].count = remaining_data;
-		for(size_t j = 0; j < remaining_data; j++) {
-			chunk.data[i].SetValue(j, big_data.GetValue(i, state->sorted_vector[j]));
+		for (size_t j = 0; j < remaining_data; j++) {
+			chunk.data[i].SetValue(
+			    j, big_data.GetValue(i, state->sorted_vector[j]));
 		}
 	}
 	chunk.count = remaining_data;

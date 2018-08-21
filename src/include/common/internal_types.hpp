@@ -10,9 +10,9 @@
 
 #pragma once
 
+#include <bitset>
 #include <math.h>
 #include <string>
-#include <bitset>
 
 namespace duckdb {
 
@@ -320,18 +320,17 @@ static bool TypeIsNumeric(TypeId type) {
 	return type >= TypeId::TINYINT && type <= TypeId::DECIMAL;
 }
 
-//! This is no longer used in regular vectors, however, hash tables use this value to store a NULL
-template<class T> inline T NullValue() {
+//! This is no longer used in regular vectors, however, hash tables use this
+//! value to store a NULL
+template <class T> inline T NullValue() {
 	return std::numeric_limits<T>::min();
 }
 template <> inline double NullValue() { return NAN; }
 
-template<class T> inline bool IsNullValue(T value) {
+template <class T> inline bool IsNullValue(T value) {
 	return value == NullValue<T>();
 }
-template<> inline bool IsNullValue(double value) {
-	return isnan(value);
-}
+template <> inline bool IsNullValue(double value) { return isnan(value); }
 
 //! Returns the minimum value that can be stored in a given type
 int64_t MinimumValue(TypeId type);

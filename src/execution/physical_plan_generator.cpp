@@ -103,7 +103,8 @@ void PhysicalPlanGenerator::Visit(LogicalGet &op) {
 		return;
 	}
 
-	auto scan = make_unique<PhysicalTableScan>(op.table->storage, op.column_ids);
+	auto scan =
+	    make_unique<PhysicalTableScan>(op.table->storage, op.column_ids);
 	if (plan) {
 		throw Exception("Scan has to be the first node of a plan!");
 	}
@@ -123,13 +124,13 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 	op.children[1]->Accept(this);
 	auto right = move(plan);
 
-	for(auto &cond : op.conditions) {
+	for (auto &cond : op.conditions) {
 		cond.left->Accept(this);
 		cond.right->Accept(this);
 	}
 
-	plan = make_unique<PhysicalNestedLoopJoin>(
-	    move(left), move(right), move(op.conditions), op.type);
+	plan = make_unique<PhysicalNestedLoopJoin>(move(left), move(right),
+	                                           move(op.conditions), op.type);
 }
 
 void PhysicalPlanGenerator::Visit(LogicalLimit &op) {

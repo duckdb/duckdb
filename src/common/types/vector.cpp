@@ -24,21 +24,16 @@ Vector::Vector(TypeId type, char *dataptr)
 	}
 }
 
-Vector::Vector(Value value)
-    : Vector(value.type, true) {
+Vector::Vector(Value value) : Vector(value.type, true) {
 	count = 1;
 	SetValue(0, value);
 }
 
 Vector::Vector()
     : type(TypeId::INVALID), count(0), data(nullptr), owns_data(false),
-      sel_vector(nullptr) {
+      sel_vector(nullptr) {}
 
-}
-
-Vector::~Vector() {
-	Destroy();
-}
+Vector::~Vector() { Destroy(); }
 
 void Vector::Initialize(TypeId new_type, bool zero_data) {
 	if (new_type != TypeId::INVALID) {
@@ -46,8 +41,8 @@ void Vector::Initialize(TypeId new_type, bool zero_data) {
 	}
 	string_heap.reset();
 	owns_data = true;
-	owned_data =
-	    unique_ptr<char[]>(new char[STANDARD_VECTOR_SIZE * GetTypeIdSize(type)]);
+	owned_data = unique_ptr<char[]>(
+	    new char[STANDARD_VECTOR_SIZE * GetTypeIdSize(type)]);
 	data = owned_data.get();
 	if (zero_data) {
 		memset(data, 0, STANDARD_VECTOR_SIZE * GetTypeIdSize(type));
@@ -77,36 +72,28 @@ void Vector::SetValue(size_t index_, Value val) {
 	size_t index = sel_vector ? sel_vector[index_] : index_;
 	switch (type) {
 	case TypeId::BOOLEAN:
-		((int8_t *)data)[index] =
-		    val.is_null ? 0 : newVal.value_.boolean;
+		((int8_t *)data)[index] = val.is_null ? 0 : newVal.value_.boolean;
 		break;
 	case TypeId::TINYINT:
-		((int8_t *)data)[index] =
-		    val.is_null ? 0 : newVal.value_.tinyint;
+		((int8_t *)data)[index] = val.is_null ? 0 : newVal.value_.tinyint;
 		break;
 	case TypeId::SMALLINT:
-		((int16_t *)data)[index] =
-		    val.is_null ? 0 : newVal.value_.smallint;
+		((int16_t *)data)[index] = val.is_null ? 0 : newVal.value_.smallint;
 		break;
 	case TypeId::INTEGER:
-		((int32_t *)data)[index] =
-		    val.is_null ? 0 : newVal.value_.integer;
+		((int32_t *)data)[index] = val.is_null ? 0 : newVal.value_.integer;
 		break;
 	case TypeId::BIGINT:
-		((int64_t *)data)[index] =
-		    val.is_null ? 0 : newVal.value_.bigint;
+		((int64_t *)data)[index] = val.is_null ? 0 : newVal.value_.bigint;
 		break;
 	case TypeId::DECIMAL:
-		((double *)data)[index] =
-		    val.is_null ? 0 : newVal.value_.decimal;
+		((double *)data)[index] = val.is_null ? 0 : newVal.value_.decimal;
 		break;
 	case TypeId::POINTER:
-		((uint64_t *)data)[index] =
-		    val.is_null ? 0 : newVal.value_.pointer;
+		((uint64_t *)data)[index] = val.is_null ? 0 : newVal.value_.pointer;
 		break;
 	case TypeId::DATE:
-		((date_t *)data)[index] =
-		    val.is_null ? 0 : newVal.value_.date;
+		((date_t *)data)[index] = val.is_null ? 0 : newVal.value_.date;
 		break;
 	case TypeId::VARCHAR: {
 		if (val.is_null) {
@@ -276,7 +263,7 @@ void Vector::Append(Vector &other) {
 		nullmask |= other.nullmask << old_count;
 	} else {
 		// have to merge NULL mask
-		for(size_t i = 0; i < other.count; i++) {
+		for (size_t i = 0; i < other.count; i++) {
 			nullmask[old_count + i] = other.nullmask[other.sel_vector[i]];
 		}
 	}

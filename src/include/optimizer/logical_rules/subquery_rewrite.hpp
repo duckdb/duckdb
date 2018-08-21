@@ -47,7 +47,7 @@ class SubqueryRewritingRule : public Rule {
 		auto *equal = (ComparisonExpression *)bindings[1].value.expr;
 		auto *subquery = (SubqueryExpression *)bindings[2].value.expr;
 
-		//subquery->op->Print();
+		// subquery->op->Print();
 
 		// step 1: check if there is a correlation in the subquery
 		if (!subquery->is_correlated) {
@@ -60,12 +60,12 @@ class SubqueryRewritingRule : public Rule {
 		}
 
 		// step 3: find correlation
-		//subquery->op->Print();
+		// subquery->op->Print();
 
 		ColumnRefExpression *corcol = nullptr;
 
 		//	static bool MatchOperands(AbstractRuleNode *node, AbstractOperator
-		//rel,
+		// rel,
 		//      std::vector<AbstractOperator> &bindings);
 
 		auto sq_colref_local =
@@ -91,7 +91,7 @@ class SubqueryRewritingRule : public Rule {
 		// TODO use the matcher for this
 		auto aop = AbstractOperator(subquery->op.get());
 		for (auto it = aop.begin(); it != aop.end(); it++) {
-			//it->Print();
+			// it->Print();
 			if (Rewriter::MatchOperands(sq_root.get(), *it, sq_bindings)) {
 				break;
 			}
@@ -133,7 +133,7 @@ class SubqueryRewritingRule : public Rule {
 		// FIXME this assumes only one child
 		sq_filter->expressions.clear();
 
-		//subquery->op->Print();
+		// subquery->op->Print();
 
 		assert(filter->children.size() == 1);
 
@@ -148,7 +148,7 @@ class SubqueryRewritingRule : public Rule {
 		join->expressions.push_back(move(comp));
 
 		filter->children[0] = move(join);
-		//filter->Print();
+		// filter->Print();
 
 		return nullptr;
 

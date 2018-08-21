@@ -18,7 +18,8 @@ namespace duckdb {
 // vectors. In general, the operators must all have the same type, otherwise an
 // exception is thrown.
 struct VectorOperations {
-	typedef void (*vector_function)(Vector &left, Vector &right, Vector &result);
+	typedef void (*vector_function)(Vector &left, Vector &right,
+	                                Vector &result);
 
 	//===--------------------------------------------------------------------===//
 	// Numeric Operations
@@ -148,7 +149,8 @@ struct VectorOperations {
 	// Copy the data from source to target, casting if the types don't match
 	static void Cast(Vector &source, Vector &result);
 	// Copy the data of <source> to the target location
-	static void Copy(Vector &source, void *target, size_t offset = 0, size_t element_count = 0);
+	static void Copy(Vector &source, void *target, size_t offset = 0,
+	                 size_t element_count = 0);
 	// Copy the data of <source> to the target vector
 	static void Copy(Vector &source, Vector &target, size_t offset = 0);
 	// Set all elements of the vector to the given constant value

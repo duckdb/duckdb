@@ -29,8 +29,7 @@ void _templated_unary_loop_templated_function(Vector &left, Vector &result) {
 	result.count = left.count;
 }
 
-template <class T>
-static void _cast_loop(Vector &source, Vector &result) {
+template <class T> static void _cast_loop(Vector &source, Vector &result) {
 	switch (source.type) {
 	case TypeId::TINYINT:
 		_templated_unary_loop_templated_function<int8_t, T, operators::Cast>(
@@ -58,8 +57,8 @@ static void _cast_loop(Vector &source, Vector &result) {
 		break;
 	case TypeId::VARCHAR:
 		_templated_unary_loop_templated_function<const char *, T,
-		                                         operators::Cast>(
-		    source, result);
+		                                         operators::Cast>(source,
+		                                                          result);
 		break;
 	case TypeId::DATE:
 		_templated_unary_loop_templated_function<date_t, T,
@@ -72,7 +71,8 @@ static void _cast_loop(Vector &source, Vector &result) {
 }
 
 template <class T>
-static void _copy_loop(Vector &left, void *target, size_t offset, size_t element_count) {
+static void _copy_loop(Vector &left, void *target, size_t offset,
+                       size_t element_count) {
 	T *ldata = (T *)left.data;
 	T *result_data = (T *)target;
 	if (left.sel_vector) {
@@ -96,15 +96,18 @@ static void _case_loop(Vector &check, Vector &res_true, Vector &res_false,
 	// it might be the case that not everything has a selection vector
 	// as constants do not need a selection vector
 	// check if we are using a selection vector
-	bool use_sel_vector = check.sel_vector || res_true.sel_vector || res_false.sel_vector;
+	bool use_sel_vector =
+	    check.sel_vector || res_true.sel_vector || res_false.sel_vector;
 	if (use_sel_vector) {
 		// if we are, set it in the result
-		result.sel_vector = check.sel_vector ? check.sel_vector : 
-							(res_true.sel_vector ? res_true.sel_vector : res_false.sel_vector);
-
+		result.sel_vector = check.sel_vector
+		                        ? check.sel_vector
+		                        : (res_true.sel_vector ? res_true.sel_vector
+		                                               : res_false.sel_vector);
 	}
 	// now check for constants
-	// we handle constants by multiplying the index access by 0 to avoid 2^3 branches in the code
+	// we handle constants by multiplying the index access by 0 to avoid 2^3
+	// branches in the code
 	size_t check_mul = 1, res_true_mul = 1, res_false_mul = 1;
 	if (check.count == 1 && !check.sel_vector) {
 		check_mul = 0;
@@ -131,13 +134,12 @@ static void _case_loop(Vector &check, Vector &res_true, Vector &res_false,
 			size_t false_index = res_false.sel_vector[res_false_mul * i];
 
 			bool branch = (cond[check_index] && !check.nullmask[check_index]);
-			res[result.sel_vector[i]] = branch
-			             ? true_data[true_index]
-			             : false_data[false_index];
+			res[result.sel_vector[i]] =
+			    branch ? true_data[true_index] : false_data[false_index];
 
-			result.nullmask[result.sel_vector[i]] = branch
-						 ? res_true.nullmask[true_index]
-						 : res_false.nullmask[false_index];
+			result.nullmask[result.sel_vector[i]] =
+			    branch ? res_true.nullmask[true_index]
+			           : res_false.nullmask[false_index];
 		}
 	} else {
 		for (size_t i = 0; i < result.count; i++) {
@@ -146,13 +148,10 @@ static void _case_loop(Vector &check, Vector &res_true, Vector &res_false,
 			size_t false_index = res_false_mul * i;
 
 			bool branch = (cond[check_index] && !check.nullmask[check_index]);
-			res[i] = branch
-			             ? true_data[true_index]
-			             : false_data[false_index];
+			res[i] = branch ? true_data[true_index] : false_data[false_index];
 
-			result.nullmask[i] = branch
-						 ? res_true.nullmask[true_index]
-						 : res_false.nullmask[false_index];
+			result.nullmask[i] = branch ? res_true.nullmask[true_index]
+			                            : res_false.nullmask[false_index];
 		}
 	}
 }
@@ -206,7 +205,8 @@ void VectorOperations::Cast(Vector &source, Vector &result) {
 //===--------------------------------------------------------------------===//
 // Copy data from vector
 //===--------------------------------------------------------------------===//
-void VectorOperations::Copy(Vector &source, void *target, size_t offset, size_t element_count) {
+void VectorOperations::Copy(Vector &source, void *target, size_t offset,
+                            size_t element_count) {
 	if (!TypeIsConstantSize(source.type)) {
 		throw Exception(
 		    "Cannot copy non-constant size data using this method!");
@@ -253,7 +253,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, size_t offset) {
 	assert(offset < source.count);
 	target.count = source.count - offset;
 	if (source.sel_vector) {
-		for(size_t i = 0; i < target.count; i++) {
+		for (size_t i = 0; i < target.count; i++) {
 			target.nullmask[i] = source.nullmask[source.sel_vector[offset + i]];
 		}
 	} else {

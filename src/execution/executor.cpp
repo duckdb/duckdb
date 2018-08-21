@@ -16,6 +16,6 @@ ChunkCollection Executor::Execute(unique_ptr<PhysicalOperator> plan) {
 		plan->InitializeChunk(*chunk.get());
 		plan->GetChunk(*chunk, state.get());
 		result.Append(*chunk);
-	} while(chunk->count > 0);
+	} while (chunk->count > 0);
 	return move(result);
 }

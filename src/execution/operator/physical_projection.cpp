@@ -33,7 +33,7 @@ void PhysicalProjection::GetChunk(DataChunk &chunk,
 	}
 	chunk.sel_vector = state->child_chunk.sel_vector;
 	chunk.count = chunk.data[0].count;
-	
+
 	chunk.Verify();
 }
 

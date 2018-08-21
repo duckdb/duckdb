@@ -23,10 +23,12 @@ struct BoundTable {
 	size_t column_offset;
 };
 
-//! The ColumnBindingResolver resolves ColumnBindings into base tables (table_index, column_index) into physical indices into the DataChunks that are used within the execution engine
+//! The ColumnBindingResolver resolves ColumnBindings into base tables
+//! (table_index, column_index) into physical indices into the DataChunks that
+//! are used within the execution engine
 class ColumnBindingResolver : public LogicalOperatorVisitor {
   public:
-  	ColumnBindingResolver() : current_depth(0) { }
+	ColumnBindingResolver() : current_depth(0) {}
 
 	void Visit(LogicalCrossProduct &op);
 	void Visit(LogicalGet &op);
@@ -37,8 +39,9 @@ class ColumnBindingResolver : public LogicalOperatorVisitor {
 
 	std::vector<BoundTable> bound_tables;
 	size_t current_depth;
+
   private:
-  	//! Append a list of tables to the current set of bound tables
-  	void AppendTables(std::vector<BoundTable>& right_tables);
+	//! Append a list of tables to the current set of bound tables
+	void AppendTables(std::vector<BoundTable> &right_tables);
 };
 } // namespace duckdb

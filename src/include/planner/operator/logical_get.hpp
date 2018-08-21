@@ -22,8 +22,8 @@ class LogicalGet : public LogicalOperator {
 	           size_t table_index, std::vector<size_t> column_ids)
 	    : LogicalOperator(LogicalOperatorType::GET), table(table), alias(alias),
 	      table_index(table_index), column_ids(column_ids) {
-      	referenced_tables.insert(table_index);
-      }
+		referenced_tables.insert(table_index);
+	}
 
 	virtual void Accept(LogicalOperatorVisitor *v) override { v->Visit(*this); }
 

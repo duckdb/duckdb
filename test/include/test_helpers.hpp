@@ -34,7 +34,8 @@ static void CHECK_COLUMN(std::unique_ptr<duckdb::DuckDBResult> &result,
 			FAIL("Data size does not match value size!");
 		}
 		// check this vector
-		auto &vector = result->collection.chunks[chunk_index]->data[column_number];
+		auto &vector =
+		    result->collection.chunks[chunk_index]->data[column_number];
 		if (i + vector.count > values.size()) {
 			vector.Print();
 			// too many values in this vector
@@ -114,8 +115,8 @@ static bool parse_datachunk(std::string csv, DataChunk &result,
 
 //! Compares the result of a pipe-delimited CSV with the given DataChunk
 //! Returns true if they are equal, and stores an error_message otherwise
-static bool compare_result(std::string csv, ChunkCollection &collection, bool has_header,
-                           std::string &error_message) {
+static bool compare_result(std::string csv, ChunkCollection &collection,
+                           bool has_header, std::string &error_message) {
 	auto types = collection.types;
 	DataChunk correct_result;
 

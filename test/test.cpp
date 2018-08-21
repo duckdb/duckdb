@@ -56,7 +56,8 @@ int main() {
 	}
 	// final comparison
 	if (!csv.empty() && result) {
-		if (!compare_result(csv.c_str(), result->collection, false, error_message)) {
+		if (!compare_result(csv.c_str(), result->collection, false,
+		                    error_message)) {
 			fprintf(stderr, "Failed at query on line %zu: %s\n", queryline,
 			        error_message.c_str());
 			return 1;

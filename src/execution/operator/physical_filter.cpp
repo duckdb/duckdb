@@ -37,7 +37,7 @@ void PhysicalFilter::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 			// create a reference to the vector of the child chunk
 			chunk.data[i].Reference(state->child_chunk.data[i]);
 		}
-		
+
 		chunk.SetSelectionVector(result);
 
 	} while (chunk.count == 0);

@@ -380,7 +380,7 @@ void Value::Divide(const Value &left, const Value &right, Value &result) {
 		result.is_null = true;
 	} else {
 		_templated_binary_operation<operators::Division>(left, right, result,
-	                                                 false);
+		                                                 false);
 	}
 }
 

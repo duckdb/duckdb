@@ -26,7 +26,8 @@ namespace duckdb {
 */
 class SuperLargeHashTable {
   public:
-	SuperLargeHashTable(size_t initial_capacity, std::vector<TypeId> group_types,
+	SuperLargeHashTable(size_t initial_capacity,
+	                    std::vector<TypeId> group_types,
 	                    std::vector<TypeId> payload_types,
 	                    std::vector<ExpressionType> aggregate_types,
 	                    bool parallel = false);

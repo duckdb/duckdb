@@ -16,7 +16,8 @@ void _templated_unary_loop(Vector &left, Vector &result) {
 	RES *result_data = (RES *)result.data;
 	if (left.sel_vector) {
 		for (size_t i = 0; i < left.count; i++) {
-			result_data[left.sel_vector[i]] = OP::Operation(ldata[left.sel_vector[i]]);
+			result_data[left.sel_vector[i]] =
+			    OP::Operation(ldata[left.sel_vector[i]]);
 		}
 	} else {
 		for (size_t i = 0; i < left.count; i++) {
@@ -39,18 +40,18 @@ void _templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 			// left side is constant NULL, set everything to NULL
 			result.nullmask.set();
 		} else {
-			// left side is normal constant, use right nullmask and do computation
+			// left side is normal constant, use right nullmask and do
+			// computation
 			T constant = ldata[0];
 			result.nullmask = right.nullmask;
 			if (right.sel_vector) {
 				for (size_t i = 0; i < right.count; i++) {
-					result_data[right.sel_vector[i]] = OP::Operation(
-					    constant, rdata[right.sel_vector[i]]);
+					result_data[right.sel_vector[i]] =
+					    OP::Operation(constant, rdata[right.sel_vector[i]]);
 				}
 			} else {
 				for (size_t i = 0; i < right.count; i++) {
-					result_data[i] =
-					    OP::Operation(constant, rdata[i]);
+					result_data[i] = OP::Operation(constant, rdata[i]);
 				}
 			}
 		}
@@ -61,18 +62,18 @@ void _templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 			// right side is constant NULL, set everything to NULL
 			result.nullmask.set();
 		} else {
-			// right side is normal constant, use left nullmask and do computation
+			// right side is normal constant, use left nullmask and do
+			// computation
 			T constant = rdata[0];
 			result.nullmask = left.nullmask;
 			if (left.sel_vector) {
 				for (size_t i = 0; i < left.count; i++) {
-					result_data[left.sel_vector[i]] = OP::Operation(
-					    ldata[left.sel_vector[i]], constant);
+					result_data[left.sel_vector[i]] =
+					    OP::Operation(ldata[left.sel_vector[i]], constant);
 				}
 			} else {
 				for (size_t i = 0; i < left.count; i++) {
-					result_data[i] =
-					    OP::Operation(ldata[i], constant);
+					result_data[i] = OP::Operation(ldata[i], constant);
 				}
 			}
 		}
@@ -84,13 +85,13 @@ void _templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 			assert(right.sel_vector);
 			for (size_t i = 0; i < left.count; i++) {
 				assert(left.sel_vector[i] == right.sel_vector[i]);
-				result_data[left.sel_vector[i]] = OP::Operation(ldata[left.sel_vector[i]], rdata[left.sel_vector[i]]);
+				result_data[left.sel_vector[i]] = OP::Operation(
+				    ldata[left.sel_vector[i]], rdata[left.sel_vector[i]]);
 			}
 		} else {
 			assert(!right.sel_vector);
 			for (size_t i = 0; i < left.count; i++) {
-				result_data[i] =
-				    OP::Operation(ldata[i], rdata[i]);
+				result_data[i] = OP::Operation(ldata[i], rdata[i]);
 			}
 		}
 		result.sel_vector = left.sel_vector;
@@ -133,8 +134,7 @@ void _fixed_return_unary_loop(Vector &left, Vector &result) {
 	}
 }
 
-template <class OP>
-void _generic_unary_loop(Vector &left, Vector &result) {
+template <class OP> void _generic_unary_loop(Vector &left, Vector &result) {
 	switch (left.type) {
 	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
@@ -259,30 +259,29 @@ void VectorOperations::Not(Vector &left, Vector &result) {
 	_generic_unary_loop<operators::Not>(left, result);
 }
 
-
 //===--------------------------------------------------------------------===//
 // Is NULL/Is Not NULL
 //===--------------------------------------------------------------------===//
-template<bool INVERSE>
-void _is_null_loop(Vector &left, Vector &result) {
+template <bool INVERSE> void _is_null_loop(Vector &left, Vector &result) {
 	if (result.type != TypeId::BOOLEAN) {
 		throw Exception("IS (NOT) NULL returns a boolean!");
 	}
-	bool *res = (bool*) result.data;
+	bool *res = (bool *)result.data;
 	result.nullmask.reset();
 	if (left.sel_vector) {
-		for(size_t i = 0; i < left.count; i++) {
-			res[left.sel_vector[i]] = INVERSE ? !left.nullmask[left.sel_vector[i]] : left.nullmask[left.sel_vector[i]];
+		for (size_t i = 0; i < left.count; i++) {
+			res[left.sel_vector[i]] = INVERSE
+			                              ? !left.nullmask[left.sel_vector[i]]
+			                              : left.nullmask[left.sel_vector[i]];
 		}
 	} else {
-		for(size_t i = 0; i < left.count; i++) {
+		for (size_t i = 0; i < left.count; i++) {
 			res[i] = INVERSE ? !left.nullmask[i] : left.nullmask[i];
 		}
 	}
 	result.sel_vector = left.sel_vector;
 	result.count = left.count;
 }
-
 
 void VectorOperations::IsNotNull(Vector &left, Vector &result) {
 	_is_null_loop<true>(left, result);
@@ -296,7 +295,8 @@ void VectorOperations::IsNull(Vector &left, Vector &result) {
 // Right-Hand Side Numeric Helpers
 //===--------------------------------------------------------------------===//
 template <VectorOperations::vector_function OP>
-static void _numeric_operator_right(Vector &left, int64_t right, Vector &result) {
+static void _numeric_operator_right(Vector &left, int64_t right,
+                                    Vector &result) {
 	Vector constant(Value::Numeric(left.type, right));
 	OP(left, constant, result);
 }
@@ -325,7 +325,8 @@ void VectorOperations::Modulo(Vector &left, int64_t right, Vector &result) {
 // Left-Hand Side Numeric Helpers
 //===--------------------------------------------------------------------===//
 template <VectorOperations::vector_function OP>
-static void _numeric_operator_left(int64_t left, Vector &right, Vector &result) {
+static void _numeric_operator_left(int64_t left, Vector &right,
+                                   Vector &result) {
 	Vector constant(Value::Numeric(right.type, left));
 	OP(constant, right, result);
 }
@@ -358,18 +359,20 @@ void VectorOperations::Equals(Vector &left, Vector &right, Vector &result) {
 }
 
 void VectorOperations::NotEquals(Vector &left, Vector &right, Vector &result) {
-	_fixed_return_binary_loop<operators::NotEquals, int8_t>(left, right, result);
+	_fixed_return_binary_loop<operators::NotEquals, int8_t>(left, right,
+	                                                        result);
 }
 
-void VectorOperations::GreaterThan(Vector &left, Vector &right, Vector &result) {
-	_fixed_return_binary_loop<operators::GreaterThan, int8_t>(
-	    left, right, result);
+void VectorOperations::GreaterThan(Vector &left, Vector &right,
+                                   Vector &result) {
+	_fixed_return_binary_loop<operators::GreaterThan, int8_t>(left, right,
+	                                                          result);
 }
 
 void VectorOperations::GreaterThanEquals(Vector &left, Vector &right,
                                          Vector &result) {
-	_fixed_return_binary_loop<operators::GreaterThanEquals, int8_t>(
-	    left, right, result);
+	_fixed_return_binary_loop<operators::GreaterThanEquals, int8_t>(left, right,
+	                                                                result);
 }
 
 void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result) {
@@ -378,10 +381,9 @@ void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result) {
 
 void VectorOperations::LessThanEquals(Vector &left, Vector &right,
                                       Vector &result) {
-	_fixed_return_binary_loop<operators::LessThanEquals, int8_t>(
-	    left, right, result);
+	_fixed_return_binary_loop<operators::LessThanEquals, int8_t>(left, right,
+	                                                             result);
 }
-
 
 //===--------------------------------------------------------------------===//
 // AND/OR
@@ -399,13 +401,16 @@ void _templated_bool_nullmask_op(Vector &left, Vector &right, Vector &result) {
 				size_t index = left.sel_vector[i];
 				assert(left.sel_vector[i] == right.sel_vector[i]);
 				result_data[index] = OP::Operation(ldata[index], rdata[index]);
-				result.nullmask[index] = NULLOP::Operation(ldata[index], rdata[index], left.nullmask[index], right.nullmask[index]);
+				result.nullmask[index] = NULLOP::Operation(
+				    ldata[index], rdata[index], left.nullmask[index],
+				    right.nullmask[index]);
 			}
 		} else {
 			assert(!right.sel_vector);
 			for (size_t i = 0; i < left.count; i++) {
 				result_data[i] = OP::Operation(ldata[i], rdata[i]);
-				result.nullmask[i] = NULLOP::Operation(ldata[i], rdata[i], left.nullmask[i], right.nullmask[i]);
+				result.nullmask[i] = NULLOP::Operation(
+				    ldata[i], rdata[i], left.nullmask[i], right.nullmask[i]);
 			}
 		}
 		result.sel_vector = left.sel_vector;
@@ -417,13 +422,14 @@ void _templated_bool_nullmask_op(Vector &left, Vector &right, Vector &result) {
 			for (size_t i = 0; i < right.count; i++) {
 				size_t index = right.sel_vector[i];
 				result_data[index] = OP::Operation(constant, rdata[index]);
-				result.nullmask[index] = NULLOP::Operation(constant, rdata[i], left_null, right.nullmask[index]);
+				result.nullmask[index] = NULLOP::Operation(
+				    constant, rdata[i], left_null, right.nullmask[index]);
 			}
 		} else {
 			for (size_t i = 0; i < right.count; i++) {
-				result_data[i] =
-				    OP::Operation(constant, rdata[i]);
-				result.nullmask[i] = NULLOP::Operation(constant, rdata[i], left_null, right.nullmask[i]);
+				result_data[i] = OP::Operation(constant, rdata[i]);
+				result.nullmask[i] = NULLOP::Operation(
+				    constant, rdata[i], left_null, right.nullmask[i]);
 			}
 		}
 		result.sel_vector = right.sel_vector;
@@ -449,7 +455,7 @@ NULL  AND TRUE   = NULL
 NULL  AND FALSE  = FALSE
 NULL  AND NULL   = NULL
 
-Basically: 
+Basically:
 - Only true if both are true
 - False if either is false (regardless of NULLs)
 - NULL otherwise
@@ -457,11 +463,12 @@ Basically:
 
 namespace operators {
 struct AndMask {
-	static inline bool Operation(bool left, bool right, bool left_null, bool right_null) {
+	static inline bool Operation(bool left, bool right, bool left_null,
+	                             bool right_null) {
 		return (left_null && (right_null || right)) || (right_null && left);
 	}
 };
-}
+} // namespace operators
 
 void VectorOperations::And(Vector &left, Vector &right, Vector &result) {
 	if (left.type != TypeId::BOOLEAN || right.type != TypeId::BOOLEAN) {
@@ -471,7 +478,8 @@ void VectorOperations::And(Vector &left, Vector &right, Vector &result) {
 		throw Exception("Vector lengths don't match");
 	}
 
-	_templated_bool_nullmask_op<operators::And, operators::AndMask>(left, right, result);
+	_templated_bool_nullmask_op<operators::And, operators::AndMask>(left, right,
+	                                                                result);
 }
 
 /*
@@ -488,18 +496,19 @@ NULL  OR TRUE  = TRUE
 NULL  OR FALSE = NULL
 NULL  OR NULL  = NULL
 
-Basically: 
+Basically:
 - Only false if both are false
 - True if either is true (regardless of NULLs)
 - NULL otherwise
 */
 namespace operators {
 struct OrMask {
-	static inline bool Operation(bool left, bool right, bool left_null, bool right_null) {
+	static inline bool Operation(bool left, bool right, bool left_null,
+	                             bool right_null) {
 		return (left_null && (right_null || !right)) || (right_null && !left);
 	}
 };
-}
+} // namespace operators
 void VectorOperations::Or(Vector &left, Vector &right, Vector &result) {
 	if (left.type != TypeId::BOOLEAN || right.type != TypeId::BOOLEAN) {
 		throw NotImplementedException("FIXME cast");
@@ -509,7 +518,8 @@ void VectorOperations::Or(Vector &left, Vector &right, Vector &result) {
 		throw Exception("Vector lengths don't match");
 	}
 
-	_templated_bool_nullmask_op<operators::Or, operators::OrMask>(left, right, result);
+	_templated_bool_nullmask_op<operators::Or, operators::OrMask>(left, right,
+	                                                              result);
 }
 //===--------------------------------------------------------------------===//
 // Set all elements of a vector to the constant value

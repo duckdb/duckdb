@@ -190,7 +190,7 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query,
 		column.count = result->size();
 		column.name = NULL; // FIXME: don't support names yet
 		column.data = (char *)malloc(type_size * result->size());
-		column.nullmask = (bool*) malloc(sizeof(bool) * result->size());
+		column.nullmask = (bool *)malloc(sizeof(bool) * result->size());
 		if (!column.data || !column.nullmask)
 			goto mallocfail;
 
@@ -230,7 +230,7 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query,
 		// set the nullmask
 		for (auto &chunk : result->collection.chunks) {
 			auto &vector = chunk->data[i];
-			for(size_t i = 0; i < vector.count; i++) {
+			for (size_t i = 0; i < vector.count; i++) {
 				column.nullmask[index + i] = vector.ValueIsNull(i);
 			}
 			index += vector.count;

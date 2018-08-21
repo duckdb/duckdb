@@ -11,8 +11,8 @@ SuperLargeHashTable::SuperLargeHashTable(size_t initial_capacity,
                                          vector<TypeId> payload_types,
                                          vector<ExpressionType> aggregate_types,
                                          bool parallel)
-    : entries(0), capacity(0), data(nullptr), group_width(0),
-      payload_width(0), group_types(group_types), payload_types(payload_types),
+    : entries(0), capacity(0), data(nullptr), group_width(0), payload_width(0),
+      group_types(group_types), payload_types(payload_types),
       aggregate_types(aggregate_types), max_chain(0), parallel(parallel) {
 	// HT tuple layout is as follows:
 	// [FLAG][NULLMASK][GROUPS][PAYLOAD][COUNT]
@@ -20,12 +20,12 @@ SuperLargeHashTable::SuperLargeHashTable(size_t initial_capacity,
 	// [GROUPS] is the groups
 	// [PAYLOAD] is the payload (i.e. the aggregates)
 	// [COUNT] is an 8-byte count for each element
-    for(auto type : group_types) {
-    	group_width += GetTypeIdSize(type);
-    }
-    for(auto type : payload_types) {
-    	payload_width += GetTypeIdSize(type);
-    }
+	for (auto type : group_types) {
+		group_width += GetTypeIdSize(type);
+	}
+	for (auto type : payload_types) {
+		payload_width += GetTypeIdSize(type);
+	}
 	tuple_size = FLAG_SIZE + (group_width + payload_width + sizeof(int64_t));
 	Resize(initial_capacity);
 }
@@ -51,37 +51,34 @@ void SuperLargeHashTable::Resize(size_t size) {
 	}
 }
 
-
 //! Writes NullValue<T> value of a specific type to a memory address
 static void SetNullValue(uint8_t *ptr, TypeId type) {
-	switch(type) {
-		case TypeId::TINYINT:
-			*((int8_t*) ptr) = NullValue<int8_t>();
-			break;
-		case TypeId::SMALLINT:
-			*((int16_t*) ptr) = NullValue<int16_t>();
-			break;
-		case TypeId::INTEGER:
-			*((int32_t*) ptr) = NullValue<int32_t>();
-			break;
-		case TypeId::DATE:
-			*((date_t*) ptr) = NullValue<date_t>();
-			break;
-		case TypeId::BIGINT:
-			*((int64_t*) ptr) = NullValue<int64_t>();
-			break;
-		case TypeId::TIMESTAMP:
-			*((timestamp_t*) ptr) = NullValue<timestamp_t>();
-			break;
-		case TypeId::DECIMAL:
-			*((double*) ptr) = NullValue<double>();
-			break;
-		default:
-			throw Exception("Non-integer type in HT initialization!");
+	switch (type) {
+	case TypeId::TINYINT:
+		*((int8_t *)ptr) = NullValue<int8_t>();
+		break;
+	case TypeId::SMALLINT:
+		*((int16_t *)ptr) = NullValue<int16_t>();
+		break;
+	case TypeId::INTEGER:
+		*((int32_t *)ptr) = NullValue<int32_t>();
+		break;
+	case TypeId::DATE:
+		*((date_t *)ptr) = NullValue<date_t>();
+		break;
+	case TypeId::BIGINT:
+		*((int64_t *)ptr) = NullValue<int64_t>();
+		break;
+	case TypeId::TIMESTAMP:
+		*((timestamp_t *)ptr) = NullValue<timestamp_t>();
+		break;
+	case TypeId::DECIMAL:
+		*((double *)ptr) = NullValue<double>();
+		break;
+	default:
+		throw Exception("Non-integer type in HT initialization!");
 	}
 }
-
-				
 
 void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	if (groups.count == 0) {
@@ -137,7 +134,8 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 				strcpy((char *)group_data + group_position, str);
 			} else {
 				if (groups.data[grp].nullmask[group_entry]) {
-					SetNullValue(group_data + group_position, groups.data[grp].type);
+					SetNullValue(group_data + group_position,
+					             groups.data[grp].type);
 				} else {
 					memcpy(group_data + group_position,
 					       groups.data[grp].data + data_size * group_entry,
@@ -162,8 +160,9 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 				memcpy(entry + FLAG_SIZE, group_data, group_width);
 				// initialize the aggragetes to the NULL value
 				auto location = entry + group_width + FLAG_SIZE;
-				for(size_t i = 0; i < payload_types.size(); i++) {
-					// counts are zero initialized, all other aggregates NULL initialized
+				for (size_t i = 0; i < payload_types.size(); i++) {
+					// counts are zero initialized, all other aggregates NULL
+					// initialized
 					auto type = payload_types[i];
 					if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT) {
 						memset(location, 0, GetTypeIdSize(type));
@@ -172,7 +171,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 					}
 					location += GetTypeIdSize(type);
 				}
-				*((int64_t*)location) = 0;
+				*((int64_t *)location) = 0;
 				entries++;
 				break;
 			}

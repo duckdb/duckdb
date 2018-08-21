@@ -19,7 +19,8 @@ void ExpressionExecutor::Execute(AbstractExpression *expr, Vector &result) {
 	expr->Accept(this);
 
 	if (chunk && scalar_executor) {
-		if (vector.count == 1 && (chunk->count > 1 || vector.sel_vector != chunk->sel_vector)) {
+		if (vector.count == 1 &&
+		    (chunk->count > 1 || vector.sel_vector != chunk->sel_vector)) {
 			// have to duplicate the constant value to match the rows in the
 			// other columns
 			result.count = chunk->count;
@@ -30,7 +31,7 @@ void ExpressionExecutor::Execute(AbstractExpression *expr, Vector &result) {
 			throw Exception(
 			    "Computed vector length does not match expected length!");
 		}
-		// the expression executor guarantees that 
+		// the expression executor guarantees that
 		assert(vector.sel_vector == chunk->sel_vector);
 	}
 	if (result.type != vector.type) {

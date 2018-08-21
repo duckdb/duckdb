@@ -66,7 +66,7 @@ void DataChunk::Copy(DataChunk &other, size_t offset) {
 	assert(column_count == other.column_count);
 	other.sel_vector = nullptr;
 
-	for(size_t i = 0; i < column_count; i++) {
+	for (size_t i = 0; i < column_count; i++) {
 		data[i].Copy(other.data[i], offset);
 	}
 	other.count = other.data[0].count;
@@ -81,12 +81,12 @@ void DataChunk::Move(DataChunk &other) {
 		other.sel_vector = sel_vector;
 		if (sel_vector == owned_sel_vector) {
 			// copy the owned selection vector
-			memcpy(other.owned_sel_vector, owned_sel_vector, STANDARD_VECTOR_SIZE * sizeof(sel_t));
+			memcpy(other.owned_sel_vector, owned_sel_vector,
+			       STANDARD_VECTOR_SIZE * sizeof(sel_t));
 		}
 	}
 	Destroy();
 }
-
 
 void DataChunk::Flatten() {
 	if (!sel_vector) {
@@ -137,9 +137,10 @@ void DataChunk::MergeSelVector(sel_t *current_vector, sel_t *new_vector,
 
 void DataChunk::SetSelectionVector(Vector &matches) {
 	if (matches.type != TypeId::BOOLEAN) {
-		throw Exception("Can only set selection vector using a boolean vector!");
+		throw Exception(
+		    "Can only set selection vector using a boolean vector!");
 	}
-	bool *match_data = (bool*) matches.data;
+	bool *match_data = (bool *)matches.data;
 	size_t match_count = 0;
 	if (sel_vector) {
 		assert(matches.sel_vector);
@@ -163,7 +164,7 @@ void DataChunk::SetSelectionVector(Vector &matches) {
 		}
 	}
 	count = match_count;
-	for(size_t i = 0; i < column_count; i++) {
+	for (size_t i = 0; i < column_count; i++) {
 		data[i].count = this->count;
 		data[i].sel_vector = sel_vector;
 	}

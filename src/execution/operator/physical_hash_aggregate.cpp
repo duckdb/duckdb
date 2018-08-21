@@ -63,7 +63,8 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 				payload_chunk.count = payload_chunk.data[0].count;
 			}
 			group_chunk.count = group_chunk.data[0].count;
-			group_chunk.sel_vector = payload_chunk.sel_vector = state->child_chunk.sel_vector;
+			group_chunk.sel_vector = payload_chunk.sel_vector =
+			    state->child_chunk.sel_vector;
 
 			group_chunk.Verify();
 			payload_chunk.Verify();
@@ -107,7 +108,7 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 		executor.Execute(expr.get(), chunk.data[i]);
 	}
 	chunk.count = chunk.data[0].count;
-	
+
 	chunk.Verify();
 }
 

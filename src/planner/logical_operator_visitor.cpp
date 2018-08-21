@@ -16,7 +16,6 @@ using namespace std;
 
 void LogicalOperatorVisitor::VisitOperator(LogicalOperator &op) {
 	op.AcceptChildren(this);
-
 }
 
 void LogicalOperatorVisitor::Visit(LogicalAggregate &op) {
@@ -33,9 +32,7 @@ void LogicalOperatorVisitor::Visit(LogicalCrossProduct &op) {
 	VisitOperator(op);
 }
 
-void LogicalOperatorVisitor::Visit(LogicalDistinct &op) {
-	VisitOperator(op);
-}
+void LogicalOperatorVisitor::Visit(LogicalDistinct &op) { VisitOperator(op); }
 
 void LogicalOperatorVisitor::Visit(LogicalFilter &op) {
 	VisitOperator(op);
@@ -44,21 +41,17 @@ void LogicalOperatorVisitor::Visit(LogicalFilter &op) {
 	}
 }
 
-void LogicalOperatorVisitor::Visit(LogicalGet &op) {
-	VisitOperator(op);
-}
+void LogicalOperatorVisitor::Visit(LogicalGet &op) { VisitOperator(op); }
 
 void LogicalOperatorVisitor::Visit(LogicalJoin &op) {
-	for(auto &cond : op.conditions) {
+	for (auto &cond : op.conditions) {
 		cond.left->Accept(this);
 		cond.right->Accept(this);
 	}
 	VisitOperator(op);
 }
 
-void LogicalOperatorVisitor::Visit(LogicalLimit &op) {
-	VisitOperator(op);
-}
+void LogicalOperatorVisitor::Visit(LogicalLimit &op) { VisitOperator(op); }
 
 void LogicalOperatorVisitor::Visit(LogicalOrder &op) {
 	VisitOperator(op);
@@ -81,6 +74,4 @@ void LogicalOperatorVisitor::Visit(LogicalInsert &op) {
 	}
 }
 
-void LogicalOperatorVisitor::Visit(LogicalCopy &op) {
-	VisitOperator(op);
-}
+void LogicalOperatorVisitor::Visit(LogicalCopy &op) { VisitOperator(op); }

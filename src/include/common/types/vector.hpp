@@ -56,7 +56,7 @@ class Vector : public Printable {
 	//! The type of the elements stored in the vector.
 	TypeId type;
 	//! The null mask of the vector, if the Vector has any NULL values
-  	std::bitset<STANDARD_VECTOR_SIZE> nullmask;
+	std::bitset<STANDARD_VECTOR_SIZE> nullmask;
 
 	Vector();
 	//! Create a vector of size one holding the passed on value
@@ -98,7 +98,8 @@ class Vector : public Printable {
 	//! string Can only be used for VARCHAR vectors
 	void SetStringValue(size_t index, const char *value);
 
-	//! Creates the data of this vector with the specified type. Any data that is currently in the vector is destroyed.
+	//! Creates the data of this vector with the specified type. Any data that
+	//! is currently in the vector is destroyed.
 	void Initialize(TypeId new_type, bool zero_data = false);
 	//! Casts the vector to the specified type
 	void Cast(TypeId new_type = TypeId::INVALID);

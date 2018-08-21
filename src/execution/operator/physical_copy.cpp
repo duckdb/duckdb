@@ -32,8 +32,7 @@ vector<string> split(const string &str, char delimiter, char quote) {
 	return res;
 }
 
-void PhysicalCopy::GetChunk(DataChunk &chunk,
-                            PhysicalOperatorState *state) {
+void PhysicalCopy::GetChunk(DataChunk &chunk, PhysicalOperatorState *state) {
 	chunk.Reset();
 	if (state->finished) {
 		return;

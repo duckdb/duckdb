@@ -28,13 +28,11 @@ class Value : public Printable {
 	//! Create an empty NULL value of the specified type
 	Value(TypeId type = TypeId::INTEGER) : type(type), is_null(true) {}
 	//! Create a BIGINT value
-	Value(int32_t val)
-	    : type(TypeId::INTEGER), is_null(false) {
+	Value(int32_t val) : type(TypeId::INTEGER), is_null(false) {
 		value_.integer = val;
 	}
 	//! Create a DOUBLE value
-	Value(double val)
-	    : type(TypeId::DECIMAL), is_null(false) {
+	Value(double val) : type(TypeId::DECIMAL), is_null(false) {
 		value_.decimal = val;
 	}
 	//! Create a VARCHAR value

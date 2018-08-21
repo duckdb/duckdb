@@ -8,8 +8,7 @@ using namespace std;
 
 vector<TypeId> PhysicalInsert::GetTypes() { return {TypeId::INTEGER}; }
 
-void PhysicalInsert::GetChunk(DataChunk &chunk,
-                              PhysicalOperatorState *state) {
+void PhysicalInsert::GetChunk(DataChunk &chunk, PhysicalOperatorState *state) {
 
 	chunk.Reset();
 
@@ -45,15 +44,14 @@ void PhysicalInsert::GetChunk(DataChunk &chunk,
 		}
 	}
 	chunk.data[0].count = 1;
-	chunk.data[0].SetValue(0,
-	                              Value::INTEGER(insert_chunk.data[0].count));
+	chunk.data[0].SetValue(0, Value::INTEGER(insert_chunk.data[0].count));
 
 	table->storage->AddData(insert_chunk);
 
 	chunk.count = 1;
 
 	state->finished = true;
-	
+
 	chunk.Verify();
 }
 

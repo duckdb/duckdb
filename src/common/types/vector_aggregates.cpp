@@ -16,8 +16,7 @@ void _templated_unary_fold(Vector &left, RES *result) {
 	if (left.sel_vector) {
 		for (size_t i = 0; i < left.count; i++) {
 			if (!left.nullmask[left.sel_vector[i]]) {
-				*result = OP::Operation(
-				    ldata[left.sel_vector[i]], *result);
+				*result = OP::Operation(ldata[left.sel_vector[i]], *result);
 			}
 		}
 	} else {
@@ -34,35 +33,35 @@ void _templated_unary_fold_single_type(Vector &left, T *result) {
 	_templated_unary_fold<T, T, OP>(left, result);
 }
 
-template <class OP>
-void _generic_unary_fold_loop(Vector &left, Value &result) {
+template <class OP> void _generic_unary_fold_loop(Vector &left, Value &result) {
 	switch (left.type) {
 	case TypeId::TINYINT:
-		_templated_unary_fold_single_type<int8_t, OP>(
-		    left, &result.value_.tinyint);
+		_templated_unary_fold_single_type<int8_t, OP>(left,
+		                                              &result.value_.tinyint);
 		break;
 	case TypeId::SMALLINT:
-		_templated_unary_fold_single_type<int16_t, OP>(
-		    left, &result.value_.smallint);
+		_templated_unary_fold_single_type<int16_t, OP>(left,
+		                                               &result.value_.smallint);
 		break;
 	case TypeId::INTEGER:
-		_templated_unary_fold_single_type<int32_t, OP>(
-		    left, &result.value_.integer);
+		_templated_unary_fold_single_type<int32_t, OP>(left,
+		                                               &result.value_.integer);
 		break;
 	case TypeId::BIGINT:
-		_templated_unary_fold_single_type<int64_t, OP>(
-		    left, &result.value_.bigint);
+		_templated_unary_fold_single_type<int64_t, OP>(left,
+		                                               &result.value_.bigint);
 		break;
 	case TypeId::DECIMAL:
-		_templated_unary_fold_single_type<double, OP>(
-		    left, &result.value_.decimal);
+		_templated_unary_fold_single_type<double, OP>(left,
+		                                              &result.value_.decimal);
 		break;
 	case TypeId::POINTER:
-		_templated_unary_fold_single_type<uint64_t, OP>(
-		    left, &result.value_.pointer);
+		_templated_unary_fold_single_type<uint64_t, OP>(left,
+		                                                &result.value_.pointer);
 		break;
 	case TypeId::DATE:
-		_templated_unary_fold_single_type<date_t, OP>(left, &result.value_.date);
+		_templated_unary_fold_single_type<date_t, OP>(left,
+		                                              &result.value_.date);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type");
@@ -143,9 +142,7 @@ Value VectorOperations::Min(Vector &left) {
 	return result;
 }
 
-bool VectorOperations::HasNull(Vector &left) {
-	return left.nullmask.any();
-}
+bool VectorOperations::HasNull(Vector &left) { return left.nullmask.any(); }
 
 Value VectorOperations::MaximumStringLength(Vector &left) {
 	if (left.type != TypeId::VARCHAR) {

@@ -61,20 +61,20 @@ class BindContext {
 
 	//! Returns true if the table/subquery alias exists, false otherwise.
 	bool HasAlias(const std::string &alias);
-	//! Gets the table index of a given table alias. Throws an exception if the alias was not found.
+	//! Gets the table index of a given table alias. Throws an exception if the
+	//! alias was not found.
 	size_t GetTableIndex(const std::string &alias);
 	//! Returns the maximum depth of column references in the current context
 	size_t GetMaxDepth() { return max_depth; }
-
 
 	//! The set of columns that are bound for each table/subquery alias
 	std::unordered_map<std::string, std::vector<std::string>> bound_columns;
 
 	BindContext *parent = nullptr;
 
-private:
+  private:
 	size_t GenerateTableIndex();
-	
+
 	size_t bound_tables;
 	size_t max_depth;
 

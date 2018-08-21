@@ -23,8 +23,7 @@ class PhysicalNestedLoopJoin : public PhysicalOperator {
   public:
 	PhysicalNestedLoopJoin(std::unique_ptr<PhysicalOperator> left,
 	                       std::unique_ptr<PhysicalOperator> right,
-	                       std::vector<JoinCondition> cond,
-	                       JoinType join_type);
+	                       std::vector<JoinCondition> cond, JoinType join_type);
 
 	std::vector<TypeId> GetTypes() override;
 	virtual void GetChunk(DataChunk &chunk,
@@ -40,8 +39,8 @@ class PhysicalNestedLoopJoin : public PhysicalOperator {
 class PhysicalNestedLoopJoinOperatorState : public PhysicalOperatorState {
   public:
 	PhysicalNestedLoopJoinOperatorState(PhysicalOperator *left,
-	                                  PhysicalOperator *right,
-	                                  ExpressionExecutor *parent_executor)
+	                                    PhysicalOperator *right,
+	                                    ExpressionExecutor *parent_executor)
 	    : PhysicalOperatorState(left, parent_executor), left_position(0),
 	      right_chunk(0) {
 		assert(left && right);

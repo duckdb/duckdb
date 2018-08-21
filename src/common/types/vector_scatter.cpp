@@ -24,9 +24,8 @@ void _scatter_templated_loop(Vector &source, Vector &dest) {
 		if (dest.sel_vector) {
 			for (size_t i = 0; i < dest.count; i++) {
 				if (!IsNullValue<T>(destination[dest.sel_vector[i]][0])) {
-					destination[dest.sel_vector[i]][0] =
-					    OP::Operation(
-					        constant, destination[dest.sel_vector[i]][0]);
+					destination[dest.sel_vector[i]][0] = OP::Operation(
+					    constant, destination[dest.sel_vector[i]][0]);
 				} else {
 					destination[dest.sel_vector[i]][0] = constant;
 				}
@@ -34,8 +33,8 @@ void _scatter_templated_loop(Vector &source, Vector &dest) {
 		} else {
 			for (size_t i = 0; i < dest.count; i++) {
 				if (!IsNullValue<T>(destination[i][0])) {
-					destination[i][0] = OP::Operation(
-					    constant, destination[i][0]);
+					destination[i][0] =
+					    OP::Operation(constant, destination[i][0]);
 				} else {
 					destination[i][0] = constant;
 				}
@@ -51,9 +50,7 @@ void _scatter_templated_loop(Vector &source, Vector &dest) {
 				if (!source.nullmask[index]) {
 					if (!IsNullValue<T>(destination[index][0])) {
 						destination[index][0] =
-						    OP::Operation(
-						        ldata[index],
-						        destination[index][0]);
+						    OP::Operation(ldata[index], destination[index][0]);
 					} else {
 						destination[index][0] = ldata[index];
 					}
@@ -63,8 +60,8 @@ void _scatter_templated_loop(Vector &source, Vector &dest) {
 			for (size_t i = 0; i < source.count; i++) {
 				if (!source.nullmask[i]) {
 					if (!IsNullValue<T>(destination[i][0])) {
-						destination[i][0] = OP::Operation(
-						    ldata[i], destination[i][0]);
+						destination[i][0] =
+						    OP::Operation(ldata[i], destination[i][0]);
 					} else {
 						destination[i][0] = ldata[i];
 					}
