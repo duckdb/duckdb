@@ -12,6 +12,7 @@
 
 #include <math.h>
 #include <string>
+#include <bitset>
 
 namespace duckdb {
 
@@ -22,10 +23,12 @@ typedef int32_t date_t;
 //! Type used to represent timestamps
 typedef int64_t timestamp_t;
 //! Type used for the selection vector
-typedef uint64_t sel_t;
+typedef uint16_t sel_t;
 
-//! Zero selection vector: completely filled with the value 0
+//! Zero selection vector: completely filled with the value 0 [READ ONLY]
 extern sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE];
+//! Zero NULL mask: filled with the value 0 [READ ONLY]
+extern std::bitset<STANDARD_VECTOR_SIZE> ZERO_MASK;
 
 //===--------------------------------------------------------------------===//
 // SQL Value Types
@@ -317,28 +320,18 @@ static bool TypeIsNumeric(TypeId type) {
 	return type >= TypeId::TINYINT && type <= TypeId::DECIMAL;
 }
 
-template <class T> inline T NullValue() {
+//! This is no longer used in regular vectors, however, hash tables use this value to store a NULL
+template<class T> inline T NullValue() {
 	return std::numeric_limits<T>::min();
 }
 template <> inline double NullValue() { return NAN; }
-template <> inline char *NullValue() { return nullptr; }
-template <> inline const char *NullValue() { return nullptr; }
-template <> inline uint8_t NullValue() {
-	return std::numeric_limits<uint8_t>::max();
-}
-template <> inline uint16_t NullValue() {
-	return std::numeric_limits<uint16_t>::max();
-}
-template <> inline uint32_t NullValue() {
-	return std::numeric_limits<uint32_t>::max();
-}
-template <> inline uint64_t NullValue() {
-	return std::numeric_limits<uint64_t>::max();
-}
-template <class T> inline bool IsNullValue(T value) {
+
+template<class T> inline bool IsNullValue(T value) {
 	return value == NullValue<T>();
 }
-template <> inline bool IsNullValue(double value) { return isnan(value); }
+template<> inline bool IsNullValue(double value) {
+	return isnan(value);
+}
 
 //! Returns the minimum value that can be stored in a given type
 int64_t MinimumValue(TypeId type);

@@ -55,21 +55,21 @@ class Vector : public Printable {
 	sel_t *sel_vector;
 	//! The type of the elements stored in the vector.
 	TypeId type;
-	//! The maximum amount of elements that can be stored in the vector.
-	size_t maximum_size;
+	//! The null mask of the vector, if the Vector has any NULL values
+  	std::bitset<STANDARD_VECTOR_SIZE> nullmask;
 
 	Vector();
 	//! Create a vector of size one holding the passed on value
 	Vector(Value value);
 	//! Create a non-owning vector that references the specified data
-	Vector(TypeId type, char *dataptr = nullptr, size_t maximum_size = 0);
+	Vector(TypeId type, char *dataptr);
 	//! Create an owning vector that holds at most maximum_size entries.
 	/*!
-	    Create an owning vector that holds at most maximum_size entries.
-	    If maximum_size is equal to 0, the vector will be an empty vector.
+	    Create a new vector
+	    If create_data is true, the vector will be an owning empty vector.
 	    If zero_data is true, the allocated data will be zero-initialized.
 	*/
-	Vector(TypeId type, size_t maximum_size = 0, bool zero_data = false);
+	Vector(TypeId type, bool create_data = false, bool zero_data = false);
 	~Vector();
 
 	//! Destroys the vector, deleting any owned data and resetting it to an
@@ -80,34 +80,46 @@ class Vector : public Printable {
 	Value GetValue(size_t index) const;
 	//! Sets the [index] element of the Vector to the specified Value
 	void SetValue(size_t index, Value val);
+	//! Returns whether or not the value at the specified position is NULL
+	inline bool ValueIsNull(size_t index) const {
+		return nullmask[sel_vector ? sel_vector[index] : index];
+	}
+	//! Sets the value at the specified index to NULL
+	inline void SetNull(size_t index, bool null) {
+		nullmask[sel_vector ? sel_vector[index] : index] = null;
+	}
+	//! Create a string heap for the vector, if it doesn't have one yet
+	void CreateStringHeap() {
+		if (!string_heap) {
+			string_heap = make_unique<StringHeap>();
+		}
+	}
 	//! Sets the value of the vector at the specified index to the specified
 	//! string Can only be used for VARCHAR vectors
 	void SetStringValue(size_t index, const char *value);
 
-	//! Resizes the vector to hold maximum_size, and potentially typecasts the
-	//! elements as well. After the resize, the vector will become an owning
-	//! vector even if it was a non-owning vector before.
-	void Resize(size_t maximum_size, TypeId new_type = TypeId::INVALID);
+	//! Creates the data of this vector with the specified type. Any data that is currently in the vector is destroyed.
+	void Initialize(TypeId new_type, bool zero_data = false);
+	//! Casts the vector to the specified type
+	void Cast(TypeId new_type = TypeId::INVALID);
 	//! Appends the other vector to this vector. This method will call
 	//! Vector::Resize if there is no room for the append, which will cause the
 	//! vector to become an owning vector.
 	void Append(Vector &other);
-
-	//! Copies the data from this vector to another vector. Note that this
-	//! method will not call Vector::Resize and does not change ownership
-	//! properties. If other does not have enough space to hold the data this
-	//! method will throw an Exception.
-	void Copy(Vector &other);
+	//! Copies the data from this vector to another vector.
+	void Copy(Vector &other, size_t offset = 0);
 	//! Moves the data from this vector to the other vector. Effectively,
 	//! "other" will become equivalent to this vector, and this vector will be
 	//! turned into an empty vector.
 	void Move(Vector &other);
+	//! Flattens the vector, removing any selection vector
+	void Flatten();
 	//! This method guarantees that the vector becomes an owning vector
 	//! If the vector is already an owning vector, it does nothing
-	//! Otherwise, it copies the data to the vector
-	void ForceOwnership(size_t minimum_capacity = 0);
+	//! Otherwise, it copies the data
+	void ForceOwnership();
 	//! Causes this vector to reference the data held by the other vector.
-	void Reference(Vector &other, size_t offset = 0, size_t max_count = 0);
+	void Reference(Vector &other);
 
 	//! Converts this Vector to a printable string representation
 	std::string ToString() const;

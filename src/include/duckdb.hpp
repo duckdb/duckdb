@@ -13,7 +13,7 @@
 #include <string>
 
 #include "catalog/catalog.hpp"
-#include "common/types/data_chunk.hpp"
+#include "common/types/chunk_collection.hpp"
 
 namespace duckdb {
 class DuckDB;
@@ -51,16 +51,13 @@ class DuckDBResult {
 	bool GetSuccess() const { return success; }
 	const std::string &GetErrorMessage() const { return error; }
 
-	void Initialize(DataChunk &chunk);
-
 	void Print();
 
-	size_t count;
-	std::vector<TypeId> types;
-	std::vector<std::unique_ptr<DataChunk>> data;
+	size_t column_count() { return collection.types.size(); }
+	size_t size() { return collection.count; }
+	std::vector<TypeId>& types() { return collection.types; }
 
-	//! Concatenates the whole result into one single DataChunk
-	void GatherResult(DataChunk &result);
+	ChunkCollection collection;
 
 	bool success;
 	std::string error;

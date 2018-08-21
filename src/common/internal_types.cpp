@@ -8,6 +8,8 @@ using namespace std;
 namespace duckdb {
 
 sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE] = {0};
+std::bitset<STANDARD_VECTOR_SIZE> ZERO_MASK = std::bitset<STANDARD_VECTOR_SIZE>(0);
+
 
 ExpressionType StringToExpressionType(const string &str) {
 	string upper_str = StringUtil::Upper(str);
@@ -430,8 +432,7 @@ string ExpressionTypeToString(ExpressionType type) {
 	}
 }
 
-// we offset the minimum value by 1 to account for the NULL value not being a
-// valid value in the domain
+// we offset the minimum value by 1 to account for the NULL value in the hashtables
 int64_t MinimumValue(TypeId type) {
 	switch (type) {
 	case TypeId::TINYINT:
@@ -445,7 +446,7 @@ int64_t MinimumValue(TypeId type) {
 	case TypeId::BIGINT:
 		return std::numeric_limits<int64_t>::min() + 1;
 	case TypeId::POINTER:
-		return std::numeric_limits<uint64_t>::min();
+		return std::numeric_limits<uint64_t>::min() + 1;
 	case TypeId::TIMESTAMP:
 		return std::numeric_limits<timestamp_t>::min() + 1;
 	default:

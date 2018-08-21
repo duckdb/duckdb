@@ -63,6 +63,10 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 				payload_chunk.count = payload_chunk.data[0].count;
 			}
 			group_chunk.count = group_chunk.data[0].count;
+			group_chunk.sel_vector = payload_chunk.sel_vector = state->child_chunk.sel_vector;
+
+			group_chunk.Verify();
+			payload_chunk.Verify();
 			state->ht->AddChunk(group_chunk, payload_chunk);
 		} else {
 			// aggregation without groups
@@ -103,11 +107,8 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 		executor.Execute(expr.get(), chunk.data[i]);
 	}
 	chunk.count = chunk.data[0].count;
-	for (size_t i = 0; i < chunk.column_count; i++) {
-		if (chunk.count != chunk.data[i].count) {
-			throw Exception("Projection count mismatch!");
-		}
-	}
+	
+	chunk.Verify();
 }
 
 unique_ptr<PhysicalOperatorState>
@@ -115,24 +116,23 @@ PhysicalHashAggregate::GetOperatorState(ExpressionExecutor *parent) {
 	auto state = make_unique<PhysicalHashAggregateOperatorState>(
 	    this, children.size() == 0 ? nullptr : children[0].get(), parent);
 	if (groups.size() > 0) {
-		size_t group_width = 0, payload_width = 0;
-		vector<TypeId> payload_types, aggregate_types;
+		size_t payload_width = 0;
+		vector<TypeId> group_types, payload_types;
 		std::vector<ExpressionType> aggregate_kind;
 		for (auto &expr : groups) {
-			group_width += GetTypeIdSize(expr->return_type);
+			group_types.push_back(expr->return_type);
 		}
 		for (auto &expr : aggregates) {
 			aggregate_kind.push_back(expr->type);
 			if (expr->children.size() > 0) {
 				auto &child = expr->children[0];
 				payload_types.push_back(child->return_type);
-				payload_width += GetTypeIdSize(child->return_type);
 			}
 		}
 		state->payload_chunk.Initialize(payload_types);
 
 		state->ht = make_unique<SuperLargeHashTable>(
-		    1024, group_width, payload_width, aggregate_kind);
+		    1024, group_types, payload_types, aggregate_kind);
 	}
 	return move(state);
 }

@@ -84,6 +84,7 @@ void Statistics::Reset() {
 	min = Value();
 	max = Value();
 	maximum_string_length = 0;
+	maximum_count = 0;
 }
 
 bool Statistics::FitsInType(TypeId type) {

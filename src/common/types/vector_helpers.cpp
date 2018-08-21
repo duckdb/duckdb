@@ -11,88 +11,60 @@ using namespace std;
 //===--------------------------------------------------------------------===//
 // Templated Looping Functions
 //===--------------------------------------------------------------------===//
-struct ExecuteWithNullHandling {
-	template <class T, class RES, class OP>
-	static inline RES Operation(T left) {
-		if (duckdb::IsNullValue<T>(left)) {
-			return duckdb::NullValue<RES>();
-		}
-		return OP::template Operation<T, RES>(left);
-	}
-};
-struct ExecuteWithoutNullHandling {
-	template <class T, class RES, class OP>
-	static inline RES Operation(T left) {
-		return OP::template Operation<T, RES>(left);
-	}
-};
-
-template <class T, class RES, class OP, class EXEC>
-void _templated_unary_loop_templated_function_handling(Vector &left,
-                                                       Vector &result) {
+template <class T, class RES, class OP>
+void _templated_unary_loop_templated_function(Vector &left, Vector &result) {
 	T *ldata = (T *)left.data;
 	RES *result_data = (RES *)result.data;
 	if (left.sel_vector) {
 		for (size_t i = 0; i < left.count; i++) {
-			result_data[i] =
-			    EXEC::template Operation<T, RES, OP>(ldata[left.sel_vector[i]]);
+			result_data[left.sel_vector[i]] =
+			    OP::template Operation<T, RES>(ldata[left.sel_vector[i]]);
 		}
 	} else {
 		for (size_t i = 0; i < left.count; i++) {
-			result_data[i] = EXEC::template Operation<T, RES, OP>(ldata[i]);
+			result_data[i] = OP::template Operation<T, RES>(ldata[i]);
 		}
 	}
+	result.sel_vector = left.sel_vector;
 	result.count = left.count;
 }
 
-template <class T, class RES, class OP>
-void _templated_unary_loop_templated_function(Vector &left, Vector &result,
-                                              bool can_have_nulls) {
-	if (can_have_nulls) {
-		_templated_unary_loop_templated_function_handling<
-		    T, RES, OP, ExecuteWithNullHandling>(left, result);
-	} else {
-		_templated_unary_loop_templated_function_handling<
-		    T, RES, OP, ExecuteWithoutNullHandling>(left, result);
-	}
-}
-
 template <class T>
-static void _cast_loop(Vector &source, Vector &result, bool can_have_nulls) {
+static void _cast_loop(Vector &source, Vector &result) {
 	switch (source.type) {
 	case TypeId::TINYINT:
 		_templated_unary_loop_templated_function<int8_t, T, operators::Cast>(
-		    source, result, can_have_nulls);
+		    source, result);
 		break;
 	case TypeId::SMALLINT:
 		_templated_unary_loop_templated_function<int16_t, T, operators::Cast>(
-		    source, result, can_have_nulls);
+		    source, result);
 		break;
 	case TypeId::INTEGER:
 		_templated_unary_loop_templated_function<int32_t, T, operators::Cast>(
-		    source, result, can_have_nulls);
+		    source, result);
 		break;
 	case TypeId::BIGINT:
 		_templated_unary_loop_templated_function<int64_t, T, operators::Cast>(
-		    source, result, can_have_nulls);
+		    source, result);
 		break;
 	case TypeId::DECIMAL:
 		_templated_unary_loop_templated_function<double, T, operators::Cast>(
-		    source, result, can_have_nulls);
+		    source, result);
 		break;
 	case TypeId::POINTER:
 		_templated_unary_loop_templated_function<uint64_t, T, operators::Cast>(
-		    source, result, can_have_nulls);
+		    source, result);
 		break;
 	case TypeId::VARCHAR:
 		_templated_unary_loop_templated_function<const char *, T,
 		                                         operators::Cast>(
-		    source, result, can_have_nulls);
+		    source, result);
 		break;
 	case TypeId::DATE:
 		_templated_unary_loop_templated_function<date_t, T,
 		                                         operators::CastFromDate>(
-		    source, result, can_have_nulls);
+		    source, result);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for cast");
@@ -100,17 +72,16 @@ static void _cast_loop(Vector &source, Vector &result, bool can_have_nulls) {
 }
 
 template <class T>
-static void _copy_loop(Vector &left, void *target, size_t element_count,
-                       size_t offset) {
+static void _copy_loop(Vector &left, void *target, size_t offset, size_t element_count) {
 	T *ldata = (T *)left.data;
 	T *result_data = (T *)target;
 	if (left.sel_vector) {
-		for (size_t i = offset; i < offset + element_count; i++) {
-			result_data[i] = ldata[left.sel_vector[i]];
+		for (size_t i = 0; i < element_count; i++) {
+			result_data[i] = ldata[left.sel_vector[offset + i]];
 		}
 	} else {
-		for (size_t i = offset; i < offset + element_count; i++) {
-			result_data[i] = ldata[i];
+		for (size_t i = 0; i < element_count; i++) {
+			result_data[i] = ldata[offset + i];
 		}
 	}
 }
@@ -122,40 +93,66 @@ static void _case_loop(Vector &check, Vector &res_true, Vector &res_false,
 	T *true_data = (T *)res_true.data;
 	T *false_data = (T *)res_false.data;
 	T *res = (T *)result.data;
-	if (check.sel_vector) {
-		throw Exception("Selection vector in case check not supported");
+	// it might be the case that not everything has a selection vector
+	// as constants do not need a selection vector
+	// check if we are using a selection vector
+	bool use_sel_vector = check.sel_vector || res_true.sel_vector || res_false.sel_vector;
+	if (use_sel_vector) {
+		// if we are, set it in the result
+		result.sel_vector = check.sel_vector ? check.sel_vector : 
+							(res_true.sel_vector ? res_true.sel_vector : res_false.sel_vector);
+
 	}
-
+	// now check for constants
+	// we handle constants by multiplying the index access by 0 to avoid 2^3 branches in the code
 	size_t check_mul = 1, res_true_mul = 1, res_false_mul = 1;
-	if (check.count == 1)
+	if (check.count == 1 && !check.sel_vector) {
 		check_mul = 0;
-	if (res_true.count == 1)
+		// set a mock selection vector of [0] if we are using a selection vector
+		check.sel_vector = use_sel_vector ? ZERO_VECTOR : nullptr;
+	}
+	// handle for res_true constant
+	if (res_true.count == 1 && !res_true.sel_vector) {
 		res_true_mul = 0;
-	if (res_false.count == 1)
+		res_true.sel_vector = use_sel_vector ? ZERO_VECTOR : nullptr;
+	}
+	// handle res_false constant
+	if (res_false.count == 1 && !res_false.sel_vector) {
 		res_false_mul = 0;
+		res_false.sel_vector = use_sel_vector ? ZERO_VECTOR : nullptr;
+	}
+	if (use_sel_vector) {
+		assert(res_true.sel_vector);
+		assert(res_false.sel_vector);
+		assert(check.sel_vector);
+		for (size_t i = 0; i < result.count; i++) {
+			size_t check_index = check.sel_vector[check_mul * i];
+			size_t true_index = res_true.sel_vector[res_true_mul * i];
+			size_t false_index = res_false.sel_vector[res_false_mul * i];
 
-	if (res_true.sel_vector && res_false.sel_vector) {
-		for (size_t i = 0; i < result.count; i++) {
-			res[i] = cond[check_mul * i]
-			             ? true_data[res_true.sel_vector[res_true_mul * i]]
-			             : false_data[res_false.sel_vector[res_false_mul * i]];
-		}
-	} else if (res_false.sel_vector) {
-		for (size_t i = 0; i < result.count; i++) {
-			res[i] = cond[check_mul * i]
-			             ? true_data[res_true_mul * i]
-			             : false_data[res_false.sel_vector[res_false_mul * i]];
-		}
-	} else if (res_true.sel_vector) {
-		for (size_t i = 0; i < result.count; i++) {
-			res[i] = cond[check_mul * i]
-			             ? true_data[res_true.sel_vector[res_true_mul * i]]
-			             : false_data[res_false_mul * i];
+			bool branch = (cond[check_index] && !check.nullmask[check_index]);
+			res[result.sel_vector[i]] = branch
+			             ? true_data[true_index]
+			             : false_data[false_index];
+
+			result.nullmask[result.sel_vector[i]] = branch
+						 ? res_true.nullmask[true_index]
+						 : res_false.nullmask[false_index];
 		}
 	} else {
 		for (size_t i = 0; i < result.count; i++) {
-			res[i] = cond[check_mul * i] ? true_data[res_true_mul * i]
-			                             : false_data[res_false_mul * i];
+			size_t check_index = check_mul * i;
+			size_t true_index = res_true_mul * i;
+			size_t false_index = res_false_mul * i;
+
+			bool branch = (cond[check_index] && !check.nullmask[check_index]);
+			res[i] = branch
+			             ? true_data[true_index]
+			             : false_data[false_index];
+
+			result.nullmask[i] = branch
+						 ? res_true.nullmask[true_index]
+						 : res_false.nullmask[false_index];
 		}
 	}
 }
@@ -169,35 +166,34 @@ void VectorOperations::Cast(Vector &source, Vector &result) {
 		throw NotImplementedException("Cast between equal types");
 	}
 
-	bool can_have_nulls = true;
-
+	result.nullmask = source.nullmask;
 	switch (result.type) {
 	case TypeId::TINYINT:
-		_cast_loop<int8_t>(source, result, can_have_nulls);
+		_cast_loop<int8_t>(source, result);
 		break;
 	case TypeId::SMALLINT:
-		_cast_loop<int16_t>(source, result, can_have_nulls);
+		_cast_loop<int16_t>(source, result);
 		break;
 	case TypeId::INTEGER:
-		_cast_loop<int32_t>(source, result, can_have_nulls);
+		_cast_loop<int32_t>(source, result);
 		break;
 	case TypeId::BIGINT:
-		_cast_loop<int64_t>(source, result, can_have_nulls);
+		_cast_loop<int64_t>(source, result);
 		break;
 	case TypeId::DECIMAL:
-		_cast_loop<double>(source, result, can_have_nulls);
+		_cast_loop<double>(source, result);
 		break;
 	case TypeId::POINTER:
-		_cast_loop<uint64_t>(source, result, can_have_nulls);
+		_cast_loop<uint64_t>(source, result);
 		break;
 	case TypeId::VARCHAR:
-		_cast_loop<const char *>(source, result, can_have_nulls);
+		_cast_loop<const char *>(source, result);
 		break;
 	case TypeId::DATE:
 		if (source.type == TypeId::VARCHAR) {
 			_templated_unary_loop_templated_function<const char *, date_t,
 			                                         operators::CastToDate>(
-			    source, result, can_have_nulls);
+			    source, result);
 		} else {
 			throw NotImplementedException("Cannot cast type to date!");
 		}
@@ -210,8 +206,7 @@ void VectorOperations::Cast(Vector &source, Vector &result) {
 //===--------------------------------------------------------------------===//
 // Copy data from vector
 //===--------------------------------------------------------------------===//
-void VectorOperations::Copy(Vector &source, void *target, size_t element_count,
-                            size_t offset) {
+void VectorOperations::Copy(Vector &source, void *target, size_t offset, size_t element_count) {
 	if (!TypeIsConstantSize(source.type)) {
 		throw Exception(
 		    "Cannot copy non-constant size data using this method!");
@@ -226,25 +221,25 @@ void VectorOperations::Copy(Vector &source, void *target, size_t element_count,
 	switch (source.type) {
 	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
-		_copy_loop<int8_t>(source, target, element_count, offset);
+		_copy_loop<int8_t>(source, target, offset, element_count);
 		break;
 	case TypeId::SMALLINT:
-		_copy_loop<int16_t>(source, target, element_count, offset);
+		_copy_loop<int16_t>(source, target, offset, element_count);
 		break;
 	case TypeId::INTEGER:
-		_copy_loop<int32_t>(source, target, element_count, offset);
+		_copy_loop<int32_t>(source, target, offset, element_count);
 		break;
 	case TypeId::BIGINT:
-		_copy_loop<int64_t>(source, target, element_count, offset);
+		_copy_loop<int64_t>(source, target, offset, element_count);
 		break;
 	case TypeId::DECIMAL:
-		_copy_loop<double>(source, target, element_count, offset);
+		_copy_loop<double>(source, target, offset, element_count);
 		break;
 	case TypeId::POINTER:
-		_copy_loop<uint64_t>(source, target, element_count, offset);
+		_copy_loop<uint64_t>(source, target, offset, element_count);
 		break;
 	case TypeId::DATE:
-		_copy_loop<date_t>(source, target, element_count, offset);
+		_copy_loop<date_t>(source, target, offset, element_count);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for copy");
@@ -255,8 +250,16 @@ void VectorOperations::Copy(Vector &source, Vector &target, size_t offset) {
 	if (source.type != target.type) {
 		throw NotImplementedException("Copy types don't match!");
 	}
-	target.count = std::min(source.count - offset, target.maximum_size);
-	VectorOperations::Copy(source, target.data, target.count, offset);
+	assert(offset < source.count);
+	target.count = source.count - offset;
+	if (source.sel_vector) {
+		for(size_t i = 0; i < target.count; i++) {
+			target.nullmask[i] = source.nullmask[source.sel_vector[offset + i]];
+		}
+	} else {
+		target.nullmask = source.nullmask << offset;
+	}
+	VectorOperations::Copy(source, target.data, offset, target.count);
 }
 
 //===--------------------------------------------------------------------===//
@@ -271,6 +274,9 @@ void VectorOperations::Case(Vector &check, Vector &res_true, Vector &res_false,
 	}
 	if (check.type != TypeId::BOOLEAN) {
 		throw Exception("Case check has to be a boolean vector!");
+	}
+	if (result.type != res_true.type || result.type != res_false.type) {
+		throw Exception("Case types have to match!");
 	}
 
 	switch (result.type) {

@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "common/types/chunk_collection.hpp"
 #include "execution/physical_operator.hpp"
 
 namespace duckdb {
@@ -39,6 +40,7 @@ class PhysicalOrderOperatorState : public PhysicalOperatorState {
 	    : PhysicalOperatorState(child, parent_executor), position(0) {}
 
 	size_t position;
-	DataChunk sorted_data;
+	ChunkCollection sorted_data;
+	std::unique_ptr<uint64_t[]> sorted_vector;
 };
 } // namespace duckdb

@@ -7,19 +7,25 @@ using namespace duckdb;
 using namespace std;
 
 SuperLargeHashTable::SuperLargeHashTable(size_t initial_capacity,
-                                         size_t group_width,
-                                         size_t payload_width,
+                                         vector<TypeId> group_types,
+                                         vector<TypeId> payload_types,
                                          vector<ExpressionType> aggregate_types,
                                          bool parallel)
-    : entries(0), capacity(0), data(nullptr), group_width(group_width),
-      payload_width(payload_width), aggregate_types(aggregate_types),
-      max_chain(0), parallel(parallel) {
+    : entries(0), capacity(0), data(nullptr), group_width(0),
+      payload_width(0), group_types(group_types), payload_types(payload_types),
+      aggregate_types(aggregate_types), max_chain(0), parallel(parallel) {
 	// HT tuple layout is as follows:
-	// [FLAG][GROUPS][PAYLOAD][COUNT]
+	// [FLAG][NULLMASK][GROUPS][PAYLOAD][COUNT]
 	// [FLAG] is the state of the tuple in memory
 	// [GROUPS] is the groups
 	// [PAYLOAD] is the payload (i.e. the aggregates)
 	// [COUNT] is an 8-byte count for each element
+    for(auto type : group_types) {
+    	group_width += GetTypeIdSize(type);
+    }
+    for(auto type : payload_types) {
+    	payload_width += GetTypeIdSize(type);
+    }
 	tuple_size = FLAG_SIZE + (group_width + payload_width + sizeof(int64_t));
 	Resize(initial_capacity);
 }
@@ -45,21 +51,55 @@ void SuperLargeHashTable::Resize(size_t size) {
 	}
 }
 
+
+//! Writes NullValue<T> value of a specific type to a memory address
+static void SetNullValue(uint8_t *ptr, TypeId type) {
+	switch(type) {
+		case TypeId::TINYINT:
+			*((int8_t*) ptr) = NullValue<int8_t>();
+			break;
+		case TypeId::SMALLINT:
+			*((int16_t*) ptr) = NullValue<int16_t>();
+			break;
+		case TypeId::INTEGER:
+			*((int32_t*) ptr) = NullValue<int32_t>();
+			break;
+		case TypeId::DATE:
+			*((date_t*) ptr) = NullValue<date_t>();
+			break;
+		case TypeId::BIGINT:
+			*((int64_t*) ptr) = NullValue<int64_t>();
+			break;
+		case TypeId::TIMESTAMP:
+			*((timestamp_t*) ptr) = NullValue<timestamp_t>();
+			break;
+		case TypeId::DECIMAL:
+			*((double*) ptr) = NullValue<double>();
+			break;
+		default:
+			throw Exception("Non-integer type in HT initialization!");
+	}
+}
+
+				
+
 void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	if (groups.count == 0) {
 		return;
 	}
 	// first create a hash of all the values
-	Vector hashes(TypeId::INTEGER, groups.count);
+	Vector hashes(TypeId::INTEGER, true);
 	VectorOperations::Hash(groups.data[0], hashes);
 	for (size_t i = 1; i < groups.column_count; i++) {
 		VectorOperations::CombineHash(hashes, groups.data[i], hashes);
 	}
 
+	assert(hashes.sel_vector == groups.sel_vector);
 	// list of addresses for the tuples
-	Vector addresses(TypeId::POINTER, groups.count);
+	Vector addresses(TypeId::POINTER, true);
 	// first cast from the hash type to the address type
 	VectorOperations::Cast(hashes, addresses);
+	assert(addresses.sel_vector == groups.sel_vector);
 	// now compute the entry in the table based on the hash using a modulo
 	VectorOperations::Modulo(addresses, capacity, addresses);
 	// get the physical address of the tuple
@@ -67,15 +107,13 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	VectorOperations::Multiply(addresses, tuple_size, addresses);
 	VectorOperations::Add(addresses, (uint64_t)data, addresses);
 
+	assert(addresses.sel_vector == groups.sel_vector);
 	if (parallel) {
 		throw NotImplementedException("Parallel HT not implemented");
 	}
 
 	// now we actually access the base table
 	uint8_t group_data[group_width];
-	sel_t new_entries[addresses.count];
-	sel_t updated_entries[addresses.count];
-
 	size_t new_count = 0, updated_count = 0;
 
 	void **ptr = (void **)addresses.data;
@@ -98,15 +136,20 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 				memset(group_data + group_position, 0, data_size);
 				strcpy((char *)group_data + group_position, str);
 			} else {
-				memcpy(group_data + group_position,
-				       groups.data[grp].data + data_size * group_entry,
-				       data_size);
+				if (groups.data[grp].nullmask[group_entry]) {
+					SetNullValue(group_data + group_position, groups.data[grp].type);
+				} else {
+					memcpy(group_data + group_position,
+					       groups.data[grp].data + data_size * group_entry,
+					       data_size);
+				}
 			}
 			group_position += data_size;
 		}
 
 		// place this tuple in the hash table
-		uint8_t *entry = (uint8_t *)ptr[i];
+		size_t index = addresses.sel_vector ? addresses.sel_vector[i] : i;
+		uint8_t *entry = (uint8_t *)ptr[index];
 
 		size_t chain = 0;
 		do {
@@ -117,19 +160,28 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 				// entry
 				*entry = FULL_CELL;
 				memcpy(entry + FLAG_SIZE, group_data, group_width);
-				memset(entry + group_width + FLAG_SIZE, 0,
-				       payload_width + sizeof(uint64_t));
-				new_entries[new_count++] = i;
+				// initialize the aggragetes to the NULL value
+				auto location = entry + group_width + FLAG_SIZE;
+				for(size_t i = 0; i < payload_types.size(); i++) {
+					// counts are zero initialized, all other aggregates NULL initialized
+					auto type = payload_types[i];
+					if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT) {
+						memset(location, 0, GetTypeIdSize(type));
+					} else {
+						SetNullValue(location, type);
+					}
+					location += GetTypeIdSize(type);
+				}
+				*((int64_t*)location) = 0;
 				entries++;
 				break;
 			}
 			if (memcmp(group_data, entry + FLAG_SIZE, group_width) == 0) {
 				// cell has the current group, just point to this cell
-				updated_entries[updated_count++] = i;
 				break;
 			}
 
-			// collision: move to then next location
+			// collision: move to the next location
 			chain++;
 			entry += tuple_size;
 			if (entry > data + tuple_size * capacity) {
@@ -138,7 +190,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		} while (true);
 
 		// update the address pointer with the final position
-		ptr[i] = entry + FLAG_SIZE + group_width;
+		ptr[index] = entry + FLAG_SIZE + group_width;
 		max_chain = max(chain, max_chain);
 
 		// resize at 50% capacity
@@ -152,67 +204,32 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	Vector one(Value::BIGINT(1));
 	size_t j = 0;
 
-	// don't need to use selection vectors if they select everything anyway
-	auto new_sel = updated_count > 0 ? new_entries : nullptr;
-	auto updated_sel = new_count > 0 ? updated_entries : nullptr;
-
 	for (size_t i = 0; i < aggregate_types.size(); i++) {
 		if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_STAR) {
 			continue;
 		}
 		assert(payload.column_count > j);
-		if (new_count > 0) {
-			// for any entries for which a new entry was created, set the
-			// initial value
-			addresses.sel_vector = new_sel;
-			payload.data[j].count = addresses.count = new_count;
-			switch (aggregate_types[i]) {
-			case ExpressionType::AGGREGATE_COUNT:
-				VectorOperations::Scatter::SetCount(payload.data[j], addresses,
-				                                    new_sel);
-				break;
-			case ExpressionType::AGGREGATE_SUM:
-			case ExpressionType::AGGREGATE_MIN:
-			case ExpressionType::AGGREGATE_MAX:
-				VectorOperations::Scatter::Set(payload.data[j], addresses,
-				                               new_sel);
-				break;
-			default:
-				throw NotImplementedException("Unimplemented aggregate type!");
-			}
+		// for any entries for which a group was found, update the aggregate
+		switch (aggregate_types[i]) {
+		case ExpressionType::AGGREGATE_COUNT:
+			VectorOperations::Scatter::AddOne(payload.data[j], addresses);
+			break;
+		case ExpressionType::AGGREGATE_SUM:
+			// addition
+			VectorOperations::Scatter::Add(payload.data[j], addresses);
+			break;
+		case ExpressionType::AGGREGATE_MIN:
+			// min
+			VectorOperations::Scatter::Min(payload.data[j], addresses);
+			break;
+		case ExpressionType::AGGREGATE_MAX:
+			// max
+			VectorOperations::Scatter::Max(payload.data[j], addresses);
+			break;
+		default:
+			throw NotImplementedException("Unimplemented aggregate type!");
 		}
-		if (updated_count > 0) {
-			// for any entries for which a group was found, update the aggregate
-			// store the old selection vector
-			addresses.sel_vector = updated_sel;
-			payload.data[j].count = addresses.count = updated_count;
-			switch (aggregate_types[i]) {
-			case ExpressionType::AGGREGATE_COUNT:
-				VectorOperations::Scatter::AddOne(payload.data[j], addresses,
-				                                  updated_sel);
-				break;
-			case ExpressionType::AGGREGATE_SUM:
-				// addition
-				VectorOperations::Scatter::Add(payload.data[j], addresses,
-				                               updated_sel);
-				break;
-			case ExpressionType::AGGREGATE_MIN:
-				// min
-				VectorOperations::Scatter::Min(payload.data[j], addresses,
-				                               updated_sel);
-				break;
-			case ExpressionType::AGGREGATE_MAX:
-				// max
-				VectorOperations::Scatter::Max(payload.data[j], addresses,
-				                               updated_sel);
-				break;
-			default:
-				throw NotImplementedException("Unimplemented aggregate type!");
-			}
-		}
-		// move to the next aggregate chunk
-		addresses.sel_vector = nullptr;
-		payload.data[j].count = addresses.count = groups.count;
+		// move to the next aggregate
 		VectorOperations::Add(addresses, GetTypeIdSize(payload.data[j].type),
 		                      addresses);
 		j++;
@@ -231,12 +248,12 @@ void SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &groups,
 	if (start >= end)
 		return;
 
-	Vector addresses(TypeId::POINTER, result.maximum_size);
+	Vector addresses(TypeId::POINTER, true);
 	void **data_pointers = (void **)addresses.data;
 
 	// scan the table for full cells starting from the scan position
 	size_t entry = 0;
-	for (ptr = start; ptr < end && entry < result.maximum_size;
+	for (ptr = start; ptr < end && entry < STANDARD_VECTOR_SIZE;
 	     ptr += tuple_size) {
 		if (*ptr == FULL_CELL) {
 			// found entry

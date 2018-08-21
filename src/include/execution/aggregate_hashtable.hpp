@@ -26,8 +26,8 @@ namespace duckdb {
 */
 class SuperLargeHashTable {
   public:
-	SuperLargeHashTable(size_t initial_capacity, size_t group_width,
-	                    size_t payload_width,
+	SuperLargeHashTable(size_t initial_capacity, std::vector<TypeId> group_types,
+	                    std::vector<TypeId> payload_types,
 	                    std::vector<ExpressionType> aggregate_types,
 	                    bool parallel = false);
 	~SuperLargeHashTable();
@@ -46,6 +46,10 @@ class SuperLargeHashTable {
 	//! The aggregate types to be computed
 	std::vector<ExpressionType> aggregate_types;
 
+	//! The types of the group columns stored in the hashtable
+	std::vector<TypeId> group_types;
+	//! The types of the payload columns stored in the hashtable
+	std::vector<TypeId> payload_types;
 	//! The size of the groups in bytes
 	size_t group_width;
 	//! The size of the payload (aggregations) in bytes

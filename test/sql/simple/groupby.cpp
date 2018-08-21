@@ -41,10 +41,11 @@ TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
 
 	// aggregations with group by
 	result = con.Query(
-	    "SELECT b, SUM(a), SUM(a+2) FROM test GROUP BY b ORDER BY b;");
+	    "SELECT b, SUM(a), SUM(a+2), AVG(a) FROM test GROUP BY b ORDER BY b;");
 	CHECK_COLUMN(result, 0, {21, 22});
 	CHECK_COLUMN(result, 1, {12, 24});
 	CHECK_COLUMN(result, 2, {14, 28});
+	CHECK_COLUMN(result, 3, {12, 12});
 
 	result = con.Query("SELECT b, SUM(a), COUNT(*), SUM(a+2) FROM test GROUP "
 	                   "BY b ORDER BY b;");

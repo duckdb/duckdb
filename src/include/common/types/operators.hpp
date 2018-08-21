@@ -19,42 +19,6 @@
 
 namespace operators {
 
-struct ExecuteIgnoreNull {
-	template <class L, class R, class RES, class OP>
-	static inline RES Operation(L left, R right) {
-		if (duckdb::IsNullValue<L>(left)) {
-			return right;
-		}
-		if (duckdb::IsNullValue<R>(right)) {
-			return left;
-		}
-		return OP::Operation(left, right);
-	}
-};
-struct ExecuteIgnoreLeftNull {
-	template <class L, class R, class RES, class OP>
-	static inline RES Operation(L left, R right) {
-		if (duckdb::IsNullValue<L>(left)) {
-			return right;
-		}
-		return OP::Operation(left, right);
-	}
-};
-struct ExecuteWithNullHandling {
-	template <class L, class R, class RES, class OP>
-	static inline RES Operation(L left, R right) {
-		if (duckdb::IsNullValue<L>(left) || duckdb::IsNullValue<R>(right)) {
-			return duckdb::NullValue<RES>();
-		}
-		return OP::Operation(left, right);
-	}
-};
-struct ExecuteWithoutNullHandling {
-	template <class L, class R, class RES, class OP>
-	static inline RES Operation(L left, R right) {
-		return OP::Operation(left, right);
-	}
-};
 //===--------------------------------------------------------------------===//
 // Numeric Operations
 //===--------------------------------------------------------------------===//
@@ -78,9 +42,7 @@ struct Multiplication {
 
 struct Division {
 	template <class T> static inline T Operation(T left, T right) {
-		if (right == 0) {
-			return duckdb::NullValue<T>();
-		}
+		assert(right != 0); // this should be handled above this point
 		return left / right;
 	}
 };
@@ -92,31 +54,14 @@ struct Modulo {
 };
 
 struct Abs {
-	template <class T> static inline T Operation(T left) { return abs(left); }
+	template <class T> static inline T Operation(T left) {
+		return abs(left);
+	}
 };
 
 struct Not {
-	static inline bool Operation(bool left) { return !left; }
-};
-
-struct NotNull {
-	template <class T> static inline int8_t Operation(T left) {
-		if (duckdb::IsNullValue<T>(left)) {
-			return duckdb::NullValue<int8_t>();
-		}
+	static inline bool Operation(bool left) {
 		return !left;
-	}
-};
-
-struct NotN {
-	template <class T> static inline bool Operation(T left) {
-		return !duckdb::IsNullValue<T>(left);
-	}
-};
-
-struct IsN {
-	template <class T> static inline bool Operation(T left) {
-		return duckdb::IsNullValue<T>(left);
 	}
 };
 
@@ -173,52 +118,8 @@ struct And {
 	}
 };
 
-struct AndNull {
-	static inline int8_t Operation(int8_t left, int8_t right) {
-		if (duckdb::IsNullValue<int8_t>(left) &&
-		    duckdb::IsNullValue<int8_t>(right)) {
-			return duckdb::NullValue<int8_t>();
-		}
-		if (duckdb::IsNullValue<int8_t>(left) && !right) {
-			return 0;
-		}
-		if (duckdb::IsNullValue<int8_t>(left) && right) {
-			return duckdb::NullValue<int8_t>();
-		}
-		if (duckdb::IsNullValue<int8_t>(right) && !left) {
-			return 0;
-		}
-		if (duckdb::IsNullValue<int8_t>(right) && left) {
-			return duckdb::NullValue<int8_t>();
-		}
-		return left && right;
-	}
-};
-
 struct Or {
 	static inline bool Operation(bool left, bool right) {
-		return left || right;
-	}
-};
-
-struct OrNull {
-	static inline int8_t Operation(int8_t left, int8_t right) {
-		if (duckdb::IsNullValue<int8_t>(left) &&
-		    duckdb::IsNullValue<int8_t>(right)) {
-			return duckdb::NullValue<int8_t>();
-		}
-		if (duckdb::IsNullValue<int8_t>(left) && !right) {
-			return duckdb::NullValue<int8_t>();
-		}
-		if (duckdb::IsNullValue<int8_t>(left) && right) {
-			return 1;
-		}
-		if (duckdb::IsNullValue<int8_t>(right) && !left) {
-			return duckdb::NullValue<int8_t>();
-		}
-		if (duckdb::IsNullValue<int8_t>(right) && left) {
-			return 1;
-		}
 		return left || right;
 	}
 };
@@ -244,9 +145,15 @@ struct PickLeft {
 	}
 };
 
-struct SetCount {
+struct ConstantZero {
 	template <class T> static inline T Operation(T left, T right) {
-		return duckdb::IsNullValue(left) ? 0 : 1;
+		return 0;
+	}
+};
+
+struct ConstantOne {
+	template <class T> static inline T Operation(T left, T right) {
+		return 1;
 	}
 };
 
@@ -262,11 +169,6 @@ struct Hash {
 	}
 };
 
-struct NullCheck {
-	template <class T> static inline bool Operation(T left, bool right) {
-		return duckdb::IsNullValue<T>(left) || right;
-	}
-};
 struct MaximumStringLength {
 	static inline uint64_t Operation(const char *str, uint64_t right) {
 		return std::max((uint64_t)strlen(str), right);

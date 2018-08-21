@@ -19,15 +19,19 @@ void ExpressionExecutor::Execute(AbstractExpression *expr, Vector &result) {
 	expr->Accept(this);
 
 	if (chunk && scalar_executor) {
-		if (vector.count == 1 && chunk->count > 1) {
-			result.Resize(chunk->count);
+		if (vector.count == 1 && (chunk->count > 1 || vector.sel_vector != chunk->sel_vector)) {
 			// have to duplicate the constant value to match the rows in the
 			// other columns
+			result.count = chunk->count;
+			result.sel_vector = chunk->sel_vector;
 			VectorOperations::Set(result, vector.GetValue(0));
+			result.Move(vector);
 		} else if (vector.count != chunk->count) {
 			throw Exception(
 			    "Computed vector length does not match expected length!");
 		}
+		// the expression executor guarantees that 
+		assert(vector.sel_vector == chunk->sel_vector);
 	}
 	if (result.type != vector.type) {
 		// cast to the expected type
@@ -62,16 +66,16 @@ Value ExpressionExecutor::Execute(AggregateExpression &expr) {
 		expr.children[0]->Accept(this);
 		switch (expr.type) {
 		case ExpressionType::AGGREGATE_SUM: {
-			return VectorOperations::Sum(vector, expr.stats.CanHaveNull());
+			return VectorOperations::Sum(vector);
 		}
 		case ExpressionType::AGGREGATE_COUNT: {
-			return VectorOperations::Count(vector, expr.stats.CanHaveNull());
+			return VectorOperations::Count(vector);
 		}
 		case ExpressionType::AGGREGATE_MIN: {
-			return VectorOperations::Min(vector, expr.stats.CanHaveNull());
+			return VectorOperations::Min(vector);
 		}
 		case ExpressionType::AGGREGATE_MAX: {
-			return VectorOperations::Max(vector, expr.stats.CanHaveNull());
+			return VectorOperations::Max(vector);
 		}
 		default:
 			throw NotImplementedException("Unsupported aggregate type");
@@ -148,10 +152,8 @@ void ExpressionExecutor::Visit(CaseExpression &expr) {
 	expr.children[2]->Accept(this);
 	vector.Move(res_false);
 
-	size_t count = chunk
-	                   ? chunk->count
-	                   : max(max(check.count, res_true.count), res_false.count);
-	vector.Resize(count);
+	size_t count = max(max(check.count, res_true.count), res_false.count);
+	vector.Initialize(res_true.type);
 	vector.count = count;
 	VectorOperations::Case(check, res_true, res_false, vector);
 	expr.stats.Verify(vector);
@@ -167,7 +169,7 @@ void ExpressionExecutor::Visit(CastExpression &expr) {
 	}
 	vector.Move(l);
 	// now cast it to the type specified by the cast expression
-	vector.Resize(l.count, expr.return_type);
+	vector.Initialize(expr.return_type);
 	VectorOperations::Cast(l, vector);
 }
 
@@ -198,28 +200,26 @@ void ExpressionExecutor::Visit(ComparisonExpression &expr) {
 	vector.Move(l);
 	expr.children[1]->Accept(this);
 	vector.Move(r);
-	vector.Resize(std::max(l.count, r.count), TypeId::BOOLEAN);
+	vector.Initialize(TypeId::BOOLEAN);
 
 	switch (expr.type) {
 	case ExpressionType::COMPARE_EQUAL:
-		VectorOperations::Equals(l, r, vector, expr.stats.CanHaveNull());
+		VectorOperations::Equals(l, r, vector);
 		break;
 	case ExpressionType::COMPARE_NOTEQUAL:
-		VectorOperations::NotEquals(l, r, vector, expr.stats.CanHaveNull());
+		VectorOperations::NotEquals(l, r, vector);
 		break;
 	case ExpressionType::COMPARE_LESSTHAN:
-		VectorOperations::LessThan(l, r, vector, expr.stats.CanHaveNull());
+		VectorOperations::LessThan(l, r, vector);
 		break;
 	case ExpressionType::COMPARE_GREATERTHAN:
-		VectorOperations::GreaterThan(l, r, vector, expr.stats.CanHaveNull());
+		VectorOperations::GreaterThan(l, r, vector);
 		break;
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		VectorOperations::LessThanEquals(l, r, vector,
-		                                 expr.stats.CanHaveNull());
+		VectorOperations::LessThanEquals(l, r, vector);
 		break;
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		VectorOperations::GreaterThanEquals(l, r, vector,
-		                                    expr.stats.CanHaveNull());
+		VectorOperations::GreaterThanEquals(l, r, vector);
 		break;
 	case ExpressionType::COMPARE_LIKE:
 		throw NotImplementedException("Unimplemented compare: COMPARE_LIKE");
@@ -244,13 +244,13 @@ void ExpressionExecutor::Visit(ConjunctionExpression &expr) {
 	vector.Move(l);
 	expr.children[1]->Accept(this);
 	vector.Move(r);
-	vector.Resize(std::max(l.count, r.count), TypeId::BOOLEAN);
+	vector.Initialize(TypeId::BOOLEAN);
 	switch (expr.type) {
 	case ExpressionType::CONJUNCTION_AND:
-		VectorOperations::And(l, r, vector, expr.stats.CanHaveNull());
+		VectorOperations::And(l, r, vector);
 		break;
 	case ExpressionType::CONJUNCTION_OR:
-		VectorOperations::Or(l, r, vector, expr.stats.CanHaveNull());
+		VectorOperations::Or(l, r, vector);
 		break;
 	default:
 		throw NotImplementedException("Unknown conjunction type!");
@@ -267,7 +267,7 @@ void ExpressionExecutor::Visit(FunctionExpression &expr) {
 		Vector l;
 		expr.children[0]->Accept(this);
 		vector.Move(l);
-		vector.Resize(l.count);
+		vector.Initialize(l.type);
 		VectorOperations::Abs(l, vector);
 		expr.stats.Verify(vector);
 		return;
@@ -292,32 +292,29 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 		case ExpressionType::OPERATOR_EXISTS:
 			// the subquery in the only child will already create the correct
 			// result
-			return;
+			break;
 		case ExpressionType::OPERATOR_NOT: {
 			Vector l;
 
 			vector.Move(l);
-			vector.Resize(l.count);
+			vector.Initialize(l.type);
 
-			VectorOperations::Not(l, vector, expr.stats.CanHaveNull());
-			expr.stats.Verify(vector);
-			return;
+			VectorOperations::Not(l, vector);
+			break;
 		}
 		case ExpressionType::OPERATOR_IS_NULL: {
 			Vector l;
 			vector.Move(l);
-			vector.Resize(l.count, TypeId::BOOLEAN);
-			VectorOperations::IsN(l, vector, expr.stats.CanHaveNull());
-			expr.stats.Verify(vector);
-			return;
+			vector.Initialize(TypeId::BOOLEAN);
+			VectorOperations::IsNull(l, vector);
+			break;
 		}
 		case ExpressionType::OPERATOR_IS_NOT_NULL: {
 			Vector l;
 			vector.Move(l);
-			vector.Resize(l.count, TypeId::BOOLEAN);
-			VectorOperations::NotN(l, vector, expr.stats.CanHaveNull());
-			expr.stats.Verify(vector);
-			return;
+			vector.Initialize(TypeId::BOOLEAN);
+			VectorOperations::IsNotNull(l, vector);
+			break;
 		}
 		default:
 			throw NotImplementedException(
@@ -330,23 +327,23 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 		expr.children[1]->Accept(this);
 		vector.Move(r);
 
-		vector.Resize(std::max(l.count, r.count));
+		vector.Initialize(l.type);
 
 		switch (expr.type) {
 		case ExpressionType::OPERATOR_ADD:
-			VectorOperations::Add(l, r, vector, expr.stats.CanHaveNull());
+			VectorOperations::Add(l, r, vector);
 			break;
 		case ExpressionType::OPERATOR_SUBTRACT:
-			VectorOperations::Subtract(l, r, vector, expr.stats.CanHaveNull());
+			VectorOperations::Subtract(l, r, vector);
 			break;
 		case ExpressionType::OPERATOR_MULTIPLY:
-			VectorOperations::Multiply(l, r, vector, expr.stats.CanHaveNull());
+			VectorOperations::Multiply(l, r, vector);
 			break;
 		case ExpressionType::OPERATOR_DIVIDE:
-			VectorOperations::Divide(l, r, vector, expr.stats.CanHaveNull());
+			VectorOperations::Divide(l, r, vector);
 			break;
 		case ExpressionType::OPERATOR_MOD:
-			VectorOperations::Modulo(l, r, vector, expr.stats.CanHaveNull());
+			VectorOperations::Modulo(l, r, vector);
 			break;
 		default:
 			throw NotImplementedException(
@@ -364,14 +361,16 @@ void ExpressionExecutor::Visit(SubqueryExpression &expr) {
 	DataChunk row_chunk;
 	chunk = &row_chunk;
 	auto types = old_chunk->GetTypes();
-	row_chunk.Initialize(types, 1, false);
+	row_chunk.Initialize(types, true);
 	row_chunk.count = 1;
 
-	vector.Resize(old_chunk->count, expr.return_type);
+	vector.Initialize(expr.return_type);
 	vector.count = old_chunk->count;
+	vector.sel_vector = old_chunk->sel_vector;
 	for (size_t c = 0; c < old_chunk->column_count; c++) {
 		row_chunk.data[c].count = 1;
 	}
+
 	for (size_t r = 0; r < old_chunk->count; r++) {
 		for (size_t c = 0; c < old_chunk->column_count; c++) {
 			row_chunk.data[c].SetValue(0, old_chunk->data[c].GetValue(r));
@@ -392,5 +391,6 @@ void ExpressionExecutor::Visit(SubqueryExpression &expr) {
 		}
 	}
 	chunk = old_chunk;
+
 	expr.stats.Verify(vector);
 }

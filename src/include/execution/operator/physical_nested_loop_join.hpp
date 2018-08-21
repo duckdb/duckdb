@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include "common/types/chunk_collection.hpp"
+
 #include "execution/physical_operator.hpp"
 
 #include "planner/operator/logical_join.hpp"
@@ -49,6 +51,6 @@ class PhysicalNestedLoopJoinOperatorState : public PhysicalOperatorState {
 	size_t right_chunk;
 	DataChunk left_join_condition;
 	DataChunk right_join_condition;
-	std::vector<std::unique_ptr<DataChunk>> right_chunks;
+	ChunkCollection right_chunks;
 };
 } // namespace duckdb

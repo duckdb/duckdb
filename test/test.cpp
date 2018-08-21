@@ -35,9 +35,7 @@ int main() {
 			if (line.substr(0, 2) == "Q:") {
 				// query, compare previous results
 				if (!csv.empty()) {
-					DataChunk big_chunk;
-					result->GatherResult(big_chunk);
-					if (!compare_result(csv.c_str(), big_chunk, false,
+					if (!compare_result(csv.c_str(), result->collection, false,
 					                    error_message)) {
 						fprintf(stderr, "Failed at query on line %zu: %s\n",
 						        queryline, error_message.c_str());
@@ -58,9 +56,7 @@ int main() {
 	}
 	// final comparison
 	if (!csv.empty() && result) {
-		DataChunk big_chunk;
-		result->GatherResult(big_chunk);
-		if (!compare_result(csv.c_str(), big_chunk, false, error_message)) {
+		if (!compare_result(csv.c_str(), result->collection, false, error_message)) {
 			fprintf(stderr, "Failed at query on line %zu: %s\n", queryline,
 			        error_message.c_str());
 			return 1;

@@ -10,9 +10,9 @@
 
 #pragma once
 
-#include "execution/physical_operator.hpp"
+#include "common/types/chunk_collection.hpp"
 
-#include "duckdb.hpp"
+#include "execution/physical_operator.hpp"
 
 namespace duckdb {
 
@@ -21,6 +21,6 @@ namespace duckdb {
 class Executor {
   public:
 	//! Execute the specified physical operator plan
-	std::unique_ptr<DuckDBResult> Execute(std::unique_ptr<PhysicalOperator> op);
+	ChunkCollection Execute(std::unique_ptr<PhysicalOperator> op);
 };
 } // namespace duckdb

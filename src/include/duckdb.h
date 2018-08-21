@@ -39,6 +39,7 @@ typedef struct {
 	char *data;
 	size_t count;
 	char *name;
+	bool *nullmask;
 } duckdb_column;
 
 typedef struct {

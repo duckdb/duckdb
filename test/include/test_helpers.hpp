@@ -15,26 +15,26 @@ static void CHECK_COLUMN(std::unique_ptr<duckdb::DuckDBResult> &result,
 		FAIL(result->GetErrorMessage().c_str());
 	}
 	if (values.size() == 0) {
-		if (result->data.size() != 0) {
+		if (result->size() != 0) {
 			FAIL("Data size does not match value size!");
 		} else {
 			return;
 		}
 	}
-	if (result->data.size() == 0) {
+	if (result->size() == 0) {
 		FAIL("Data size does not match value size!");
 	}
-	if (column_number >= result->data[0]->column_count) {
+	if (column_number >= result->column_count()) {
 		FAIL("Column number out of range of result!");
 	}
 	size_t chunk_index = 0;
 	for (size_t i = 0; i < values.size();) {
-		if (chunk_index > result->data.size()) {
+		if (chunk_index > result->size()) {
 			// ran out of chunks
 			FAIL("Data size does not match value size!");
 		}
 		// check this vector
-		auto &vector = result->data[chunk_index]->data[column_number];
+		auto &vector = result->collection.chunks[chunk_index]->data[column_number];
 		if (i + vector.count > values.size()) {
 			vector.Print();
 			// too many values in this vector
@@ -76,11 +76,14 @@ static bool parse_datachunk(std::string csv, DataChunk &result,
 	size_t row = 0;
 	while (std::getline(f, line)) {
 		auto split = StringUtil::Split(line, '|');
+		if (line.back() == '|') {
+			split.push_back("");
+		}
 		if (split.size() != result.column_count) {
 			// column length is different
 			return false;
 		}
-		if (row >= result.maximum_size) {
+		if (row >= STANDARD_VECTOR_SIZE) {
 			// chunk is full, but parsing so far was successful
 			// return the partially parsed chunk
 			// this function is used for printing, and we probably don't want to
@@ -111,9 +114,9 @@ static bool parse_datachunk(std::string csv, DataChunk &result,
 
 //! Compares the result of a pipe-delimited CSV with the given DataChunk
 //! Returns true if they are equal, and stores an error_message otherwise
-static bool compare_result(std::string csv, DataChunk &result, bool has_header,
+static bool compare_result(std::string csv, ChunkCollection &collection, bool has_header,
                            std::string &error_message) {
-	auto types = result.GetTypes();
+	auto types = collection.types;
 	DataChunk correct_result;
 
 	std::istringstream f(csv);
@@ -124,6 +127,9 @@ static bool compare_result(std::string csv, DataChunk &result, bool has_header,
 		std::getline(f, line);
 		// check if the column length matches
 		auto split = StringUtil::Split(line, '|');
+		if (line.back() == '|') {
+			split.push_back("");
+		}
 		if (split.size() != types.size()) {
 			// column length is different
 			goto incorrect;
@@ -131,10 +137,13 @@ static bool compare_result(std::string csv, DataChunk &result, bool has_header,
 	}
 	// now compare the actual data
 	while (std::getline(f, line)) {
-		if (result.count <= row) {
+		if (collection.count <= row) {
 			goto incorrect;
 		}
 		auto split = StringUtil::Split(line, '|');
+		if (line.back() == '|') {
+			split.push_back("");
+		}
 		if (split.size() != types.size()) {
 			// column length is different
 			goto incorrect;
@@ -152,7 +161,7 @@ static bool compare_result(std::string csv, DataChunk &result, bool has_header,
 				goto incorrect;
 			}
 			// now perform a comparison
-			Value result_value = result.data[i].GetValue(row);
+			Value result_value = collection.GetValue(i, row);
 			if (result_value.is_null && value.is_null) {
 				// NULL = NULL in checking code
 				continue;
@@ -173,7 +182,7 @@ static bool compare_result(std::string csv, DataChunk &result, bool has_header,
 		}
 		row++;
 	}
-	if (result.count != row) {
+	if (collection.count != row) {
 		goto incorrect;
 	}
 	return true;
@@ -181,12 +190,12 @@ incorrect:
 	correct_result.Initialize(types);
 	if (!parse_datachunk(csv, correct_result, has_header)) {
 		error_message = "Incorrect answer for query!\nProvided answer:\n" +
-		                result.ToString() +
+		                collection.ToString() +
 		                "\nExpected answer [could not parse]:\n" +
 		                std::string(csv) + "\n";
 	} else {
 		error_message = "Incorrect answer for query!\nProvided answer:\n" +
-		                result.ToString() + "\nExpected answer:\n" +
+		                collection.ToString() + "\nExpected answer:\n" +
 		                correct_result.ToString() + "\n";
 	}
 	return false;
@@ -199,10 +208,8 @@ static std::string compare_csv(std::unique_ptr<duckdb::DuckDBResult> &result,
 		        result->GetErrorMessage().c_str());
 		return result->GetErrorMessage().c_str();
 	}
-	duckdb::DataChunk big_chunk;
-	result->GatherResult(big_chunk);
 	std::string error;
-	if (!compare_result(csv, big_chunk, header, error)) {
+	if (!compare_result(csv, result->collection, header, error)) {
 		return error;
 	}
 	return "";

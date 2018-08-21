@@ -32,13 +32,12 @@ class PhysicalCrossProductOperatorState : public PhysicalOperatorState {
 	PhysicalCrossProductOperatorState(PhysicalOperator *left,
 	                                  PhysicalOperator *right,
 	                                  ExpressionExecutor *parent_executor)
-	    : PhysicalOperatorState(left, parent_executor), left_position(0),
-	      right_chunk(0) {
+	    : PhysicalOperatorState(left, parent_executor), left_position(0) {
 		assert(left && right);
 	}
 
 	size_t left_position;
-	size_t right_chunk;
-	std::vector<std::unique_ptr<DataChunk>> right_chunks;
+	DataChunk right_chunk;
+	std::unique_ptr<PhysicalOperatorState> right_state;
 };
 } // namespace duckdb

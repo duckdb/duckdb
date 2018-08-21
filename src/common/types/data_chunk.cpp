@@ -9,18 +9,16 @@ using namespace duckdb;
 using namespace std;
 
 DataChunk::DataChunk()
-    : count(0), column_count(0), maximum_size(0), data(nullptr) {}
+    : count(0), column_count(0), data(nullptr), sel_vector(nullptr) {}
 
 DataChunk::~DataChunk() {}
 
-void DataChunk::Initialize(std::vector<TypeId> &types,
-                           size_t maximum_chunk_size, bool zero_data) {
-	maximum_size = maximum_chunk_size;
+void DataChunk::Initialize(std::vector<TypeId> &types, bool zero_data) {
 	count = 0;
 	column_count = types.size();
 	size_t size = 0;
 	for (auto &type : types) {
-		size += GetTypeIdSize(type) * maximum_size;
+		size += GetTypeIdSize(type) * STANDARD_VECTOR_SIZE;
 	}
 	if (size > 0) {
 		owned_data = unique_ptr<char[]>(new char[size]);
@@ -34,11 +32,10 @@ void DataChunk::Initialize(std::vector<TypeId> &types,
 	for (size_t i = 0; i < types.size(); i++) {
 		data[i].type = types[i];
 		data[i].data = ptr;
-		data[i].maximum_size = maximum_size;
 		data[i].count = 0;
 		data[i].sel_vector = nullptr;
 
-		ptr += GetTypeIdSize(types[i]) * maximum_size;
+		ptr += GetTypeIdSize(types[i]) * STANDARD_VECTOR_SIZE;
 	}
 }
 
@@ -52,34 +49,62 @@ void DataChunk::Reset() {
 		data[i].sel_vector = nullptr;
 		data[i].owned_data = nullptr;
 		data[i].string_heap = nullptr;
-		ptr += GetTypeIdSize(data[i].type) * maximum_size;
+		ptr += GetTypeIdSize(data[i].type) * STANDARD_VECTOR_SIZE;
 	}
-	sel_vector.reset();
+	sel_vector = nullptr;
 }
 
 void DataChunk::Destroy() {
 	data = nullptr;
 	owned_data.reset();
+	sel_vector = nullptr;
 	column_count = 0;
 	count = 0;
-	maximum_size = 0;
+}
+
+void DataChunk::Copy(DataChunk &other, size_t offset) {
+	assert(column_count == other.column_count);
+	other.sel_vector = nullptr;
+
+	for(size_t i = 0; i < column_count; i++) {
+		data[i].Copy(other.data[i], offset);
+	}
+	other.count = other.data[0].count;
+}
+
+void DataChunk::Move(DataChunk &other) {
+	other.column_count = column_count;
+	other.count = count;
+	other.data = move(data);
+	other.owned_data = move(owned_data);
+	if (sel_vector) {
+		other.sel_vector = sel_vector;
+		if (sel_vector == owned_sel_vector) {
+			// copy the owned selection vector
+			memcpy(other.owned_sel_vector, owned_sel_vector, STANDARD_VECTOR_SIZE * sizeof(sel_t));
+		}
+	}
+	Destroy();
+}
+
+
+void DataChunk::Flatten() {
+	if (!sel_vector) {
+		return;
+	}
+
+	for (size_t i = 0; i < column_count; i++) {
+		data[i].Flatten();
+	}
+	sel_vector = nullptr;
 }
 
 void DataChunk::ForceOwnership() {
-	char *ptr = owned_data.get();
-	for (size_t i = 0; i < column_count;
-	     ptr += GetTypeIdSize(data[i].type) * maximum_size, i++) {
-		if (data[i].sel_vector) {
-			data[i].ForceOwnership();
-		} else {
-			if (data[i].owns_data)
-				continue;
-			if (data[i].data == ptr)
-				continue;
-
-			data[i].ForceOwnership();
-		}
+	for (size_t i = 0; i < column_count; i++) {
+		data[i].ForceOwnership();
 	}
+	sel_vector = nullptr;
+	owned_data.reset();
 }
 
 void DataChunk::Append(DataChunk &other) {
@@ -94,40 +119,13 @@ void DataChunk::Append(DataChunk &other) {
 			throw Exception("Column types do not match!");
 		}
 	}
-	if (count + other.count > maximum_size) {
-		// resize
-		maximum_size = maximum_size * 2;
-		for (size_t i = 0; i < column_count; i++) {
-			data[i].Resize(maximum_size);
-		}
+	if (count + other.count > STANDARD_VECTOR_SIZE) {
+		throw Exception("Count of chunk cannot exceed STANDARD_VECTOR_SIZE!");
 	}
 	for (size_t i = 0; i < column_count; i++) {
 		data[i].Append(other.data[i]);
 	}
 	count += other.count;
-}
-
-bool DataChunk::HasConsistentSelVector() {
-	if (column_count == 0)
-		return true;
-	sel_t *v = sel_vector.get();
-	for (size_t i = 0; i < column_count; i++) {
-		if (data[i].sel_vector != v) {
-			return false;
-		}
-	}
-	return true;
-}
-
-bool DataChunk::HasSelVector() {
-	if (column_count == 0)
-		return true;
-	for (size_t i = 0; i < column_count; i++) {
-		if (data[i].sel_vector) {
-			return true;
-		}
-	}
-	return false;
 }
 
 void DataChunk::MergeSelVector(sel_t *current_vector, sel_t *new_vector,
@@ -137,44 +135,38 @@ void DataChunk::MergeSelVector(sel_t *current_vector, sel_t *new_vector,
 	}
 }
 
-void DataChunk::SetSelVector(unique_ptr<sel_t[]> new_vector, size_t new_count) {
-	if (!new_vector) {
-		sel_vector = nullptr;
-	} else {
-		// check if any of the columns in the chunk have a selection vector
-		if (HasSelVector()) {
-			if (HasConsistentSelVector()) {
-				// all columns in the DataChunk point towards the same selection
-				// vector merge with the current selection vector
-				for (size_t i = 0; i < new_count; i++) {
-					assert(new_vector[i] < this->count);
-				}
-				DataChunk::MergeSelVector(sel_vector.get(), new_vector.get(),
-				                          new_vector.get(), new_count);
-				sel_vector = move(new_vector);
-			} else {
-				// columns point towards different selection vectors!
-				// just give up and apply the selection vectors
-				for (size_t i = 0; i < column_count; i++) {
-					Vector result(data[i].type, new_count);
-					result.count = new_count;
-					VectorOperations::ApplySelectionVector(data[i], result,
-					                                       new_vector.get());
-					result.Move(data[i]);
-				}
-				sel_vector = nullptr;
+void DataChunk::SetSelectionVector(Vector &matches) {
+	if (matches.type != TypeId::BOOLEAN) {
+		throw Exception("Can only set selection vector using a boolean vector!");
+	}
+	bool *match_data = (bool*) matches.data;
+	size_t match_count = 0;
+	if (sel_vector) {
+		assert(matches.sel_vector);
+		// existing selection vector: have to merge the selection vector
+		for (size_t i = 0; i < matches.count; i++) {
+			if (match_data[sel_vector[i]] && !matches.nullmask[sel_vector[i]]) {
+				owned_sel_vector[match_count++] = sel_vector[i];
 			}
-		} else {
-			// no selection vector, just assign the new one
-			sel_vector = move(new_vector);
+		}
+		sel_vector = owned_sel_vector;
+	} else {
+		// no selection vector yet: can just set the selection vector
+		for (size_t i = 0; i < matches.count; i++) {
+			if (match_data[i] && !matches.nullmask[i]) {
+				owned_sel_vector[match_count++] = i;
+			}
+		}
+		if (match_count < matches.count) {
+			// we only have to set the selection vector if tuples were filtered
+			sel_vector = owned_sel_vector;
 		}
 	}
-	// add a reference to all child nodes
-	for (size_t i = 0; i < column_count; i++) {
-		data[i].count = new_count;
-		data[i].sel_vector = sel_vector.get();
+	count = match_count;
+	for(size_t i = 0; i < column_count; i++) {
+		data[i].count = this->count;
+		data[i].sel_vector = sel_vector;
 	}
-	this->count = new_count;
 }
 
 vector<TypeId> DataChunk::GetTypes() {
@@ -192,3 +184,17 @@ string DataChunk::ToString() const {
 	}
 	return retval;
 }
+
+#ifdef DEBUG
+void DataChunk::Verify() {
+	// verify that all vectors in this chunk have the chunk selection vector
+	sel_t *v = sel_vector;
+	for (size_t i = 0; i < column_count; i++) {
+		assert(data[i].sel_vector == v);
+	}
+	// verify that all vectors in the chunk have the same count
+	for (size_t i = 0; i < column_count; i++) {
+		assert(count == data[i].count);
+	}
+}
+#endif

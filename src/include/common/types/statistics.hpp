@@ -83,8 +83,6 @@ class Statistics {
 	static void Sum(Statistics &source, Statistics &result);
 	// COUNT(A)
 	static void Count(Statistics &source, Statistics &result);
-	// AVG(A)
-	static void Average(Statistics &source, Statistics &result);
 	// MAX(A)
 	static void Max(Statistics &source, Statistics &result);
 	// MIN(A)

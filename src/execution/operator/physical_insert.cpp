@@ -8,10 +8,10 @@ using namespace std;
 
 vector<TypeId> PhysicalInsert::GetTypes() { return {TypeId::INTEGER}; }
 
-void PhysicalInsert::GetChunk(DataChunk &result_chunk,
+void PhysicalInsert::GetChunk(DataChunk &chunk,
                               PhysicalOperatorState *state) {
 
-	result_chunk.Reset();
+	chunk.Reset();
 
 	if (children.size() > 0) {
 		// get the next chunk from the child
@@ -44,15 +44,17 @@ void PhysicalInsert::GetChunk(DataChunk &result_chunk,
 			throw Exception("Insert count mismatch!");
 		}
 	}
-	result_chunk.data[0].count = 1;
-	result_chunk.data[0].SetValue(0,
+	chunk.data[0].count = 1;
+	chunk.data[0].SetValue(0,
 	                              Value::INTEGER(insert_chunk.data[0].count));
 
 	table->storage->AddData(insert_chunk);
 
-	result_chunk.count = 1;
+	chunk.count = 1;
 
 	state->finished = true;
+	
+	chunk.Verify();
 }
 
 unique_ptr<PhysicalOperatorState>

@@ -68,20 +68,15 @@ void append_char(DataChunk &chunk, size_t index, size_t &column, char value) {
 static void append_to_append_info(tpch_append_information &info) {
 	auto &chunk = info.chunk;
 	auto &table = info.table;
-	if (chunk.count >= chunk.maximum_size) {
-		// have to make a new chunk, initialize it
-		if (chunk.count > 0) {
-			// flush the chunk
-			table->storage->AddData(chunk);
-		}
-		if (chunk.column_count == 0) {
-			// initalize the chunk
-			auto types = table->GetTypes();
-			chunk.Initialize(types);
-		} else {
-			// only have to reset the chunk
-			chunk.Reset();
-		}
+	if (chunk.column_count == 0) {
+		// initalize the chunk
+		auto types = table->GetTypes();
+		chunk.Initialize(types);
+	} else if (chunk.count >= STANDARD_VECTOR_SIZE) {
+		// flush the chunk
+		table->storage->AddData(chunk);
+		// have to reset the chunk
+		chunk.Reset();
 	}
 	chunk.count++;
 	for (size_t i = 0; i < chunk.column_count; i++) {

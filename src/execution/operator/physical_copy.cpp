@@ -32,9 +32,9 @@ vector<string> split(const string &str, char delimiter, char quote) {
 	return res;
 }
 
-void PhysicalCopy::GetChunk(DataChunk &result_chunk,
+void PhysicalCopy::GetChunk(DataChunk &chunk,
                             PhysicalOperatorState *state) {
-	result_chunk.Reset();
+	chunk.Reset();
 	if (state->finished) {
 		return;
 	}
@@ -51,7 +51,7 @@ void PhysicalCopy::GetChunk(DataChunk &result_chunk,
 		std::ifstream from_csv;
 		from_csv.open(file_path);
 		while (getline(from_csv, value)) {
-			if (count_line == insert_chunk.maximum_size) {
+			if (count_line == STANDARD_VECTOR_SIZE) {
 				insert_chunk.count = insert_chunk.data[0].count;
 				table->storage->AddData(insert_chunk);
 				total += count_line;
@@ -100,10 +100,13 @@ void PhysicalCopy::GetChunk(DataChunk &result_chunk,
 
 		to_csv.close();
 	}
-	result_chunk.data[0].count = 1;
-	result_chunk.data[0].SetValue(0, Value::BIGINT(total + count_line));
-	result_chunk.count = 1;
+	chunk.data[0].count = 1;
+	chunk.data[0].SetValue(0, Value::BIGINT(total + count_line));
+	chunk.count = 1;
+
 	state->finished = true;
+
+	chunk.Verify();
 }
 
 unique_ptr<PhysicalOperatorState>

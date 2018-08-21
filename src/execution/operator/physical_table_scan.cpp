@@ -29,6 +29,8 @@ void PhysicalTableScan::GetChunk(DataChunk &chunk,
 	}
 	chunk.count = chunk.data[0].count;
 	state->current_offset++;
+
+	chunk.Verify();
 }
 
 unique_ptr<PhysicalOperatorState>

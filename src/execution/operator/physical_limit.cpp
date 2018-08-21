@@ -53,6 +53,8 @@ void PhysicalLimit::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 	}
 
 	state->current_offset += state->child_chunk.count;
+
+	chunk.Verify();
 }
 
 unique_ptr<PhysicalOperatorState>

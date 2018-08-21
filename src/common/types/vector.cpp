@@ -8,45 +8,51 @@
 using namespace duckdb;
 using namespace std;
 
-Vector::Vector(TypeId type, size_t maximum_size, bool zero_data)
+Vector::Vector(TypeId type, bool create_data, bool zero_data)
     : type(type), count(0), sel_vector(nullptr), data(nullptr),
-      owns_data(false), maximum_size(maximum_size) {
-	if (maximum_size > 0) {
-		if (type == TypeId::INVALID) {
-			throw Exception("Cannot create a vector of type INVALID!");
-		}
-		owns_data = true;
-		owned_data =
-		    unique_ptr<char[]>(new char[maximum_size * GetTypeIdSize(type)]);
-		data = owned_data.get();
-		if (zero_data) {
-			memset(data, 0, maximum_size * GetTypeIdSize(type));
-		}
+      owns_data(false) {
+	if (create_data) {
+		Initialize(type, zero_data);
 	}
 }
 
-Vector::Vector(TypeId type, char *dataptr, size_t maximum_size)
+Vector::Vector(TypeId type, char *dataptr)
     : type(type), count(0), sel_vector(nullptr), data(dataptr),
-      owns_data(false), maximum_size(maximum_size) {
+      owns_data(false) {
 	if (dataptr && type == TypeId::INVALID) {
 		throw Exception("Cannot create a vector of type INVALID!");
 	}
 }
 
 Vector::Vector(Value value)
-    : type(value.type), count(1), sel_vector(nullptr), maximum_size(1) {
-	owns_data = true;
-	owned_data = unique_ptr<char[]>(new char[GetTypeIdSize(type)]);
-	data = owned_data.get();
-
+    : Vector(value.type, true) {
+	count = 1;
 	SetValue(0, value);
 }
 
 Vector::Vector()
     : type(TypeId::INVALID), count(0), data(nullptr), owns_data(false),
-      sel_vector(nullptr), maximum_size(0) {}
+      sel_vector(nullptr) {
 
-Vector::~Vector() { Destroy(); }
+}
+
+Vector::~Vector() {
+	Destroy();
+}
+
+void Vector::Initialize(TypeId new_type, bool zero_data) {
+	if (new_type != TypeId::INVALID) {
+		type = new_type;
+	}
+	string_heap.reset();
+	owns_data = true;
+	owned_data =
+	    unique_ptr<char[]>(new char[STANDARD_VECTOR_SIZE * GetTypeIdSize(type)]);
+	data = owned_data.get();
+	if (zero_data) {
+		memset(data, 0, STANDARD_VECTOR_SIZE * GetTypeIdSize(type));
+	}
+}
 
 void Vector::Destroy() {
 	if (data && owns_data) {
@@ -57,57 +63,56 @@ void Vector::Destroy() {
 	owns_data = false;
 	count = 0;
 	sel_vector = nullptr;
-	maximum_size = 0;
+	nullmask.reset();
 }
 
-void Vector::SetValue(size_t index, Value val) {
-	if (index >= count) {
+void Vector::SetValue(size_t index_, Value val) {
+	if (index_ >= count) {
 		throw Exception("Out of range exception!");
 	}
-	if (sel_vector) {
-		throw Exception("Cannot assign to vector with selection vector");
-	}
 	Value newVal = val.CastAs(type);
+
+	// set the NULL bit in the null mask
+	SetNull(index_, newVal.is_null);
+	size_t index = sel_vector ? sel_vector[index_] : index_;
 	switch (type) {
 	case TypeId::BOOLEAN:
 		((int8_t *)data)[index] =
-		    val.is_null ? NullValue<int8_t>() : newVal.value_.boolean;
+		    val.is_null ? 0 : newVal.value_.boolean;
 		break;
 	case TypeId::TINYINT:
 		((int8_t *)data)[index] =
-		    val.is_null ? NullValue<int8_t>() : newVal.value_.tinyint;
+		    val.is_null ? 0 : newVal.value_.tinyint;
 		break;
 	case TypeId::SMALLINT:
 		((int16_t *)data)[index] =
-		    val.is_null ? NullValue<int16_t>() : newVal.value_.smallint;
+		    val.is_null ? 0 : newVal.value_.smallint;
 		break;
 	case TypeId::INTEGER:
 		((int32_t *)data)[index] =
-		    val.is_null ? NullValue<int32_t>() : newVal.value_.integer;
+		    val.is_null ? 0 : newVal.value_.integer;
 		break;
 	case TypeId::BIGINT:
 		((int64_t *)data)[index] =
-		    val.is_null ? NullValue<int64_t>() : newVal.value_.bigint;
+		    val.is_null ? 0 : newVal.value_.bigint;
 		break;
 	case TypeId::DECIMAL:
 		((double *)data)[index] =
-		    val.is_null ? NullValue<double>() : newVal.value_.decimal;
+		    val.is_null ? 0 : newVal.value_.decimal;
 		break;
 	case TypeId::POINTER:
 		((uint64_t *)data)[index] =
-		    val.is_null ? NullValue<uint64_t>() : newVal.value_.pointer;
+		    val.is_null ? 0 : newVal.value_.pointer;
 		break;
 	case TypeId::DATE:
 		((date_t *)data)[index] =
-		    val.is_null ? NullValue<date_t>() : newVal.value_.date;
+		    val.is_null ? 0 : newVal.value_.date;
 		break;
 	case TypeId::VARCHAR: {
 		if (val.is_null) {
 			((const char **)data)[index] = nullptr;
 		} else {
-			if (!string_heap) {
-				string_heap = make_unique<StringHeap>();
-			}
+			CreateStringHeap();
 			((const char **)data)[index] =
 			    string_heap->AddString(newVal.str_value);
 		}
@@ -122,10 +127,9 @@ void Vector::SetStringValue(size_t index, const char *value) {
 	if (type != TypeId::VARCHAR) {
 		throw Exception("Can only set string value of VARCHAR vectors!");
 	}
+	SetNull(index, value ? false : true);
 	if (value) {
-		if (!string_heap) {
-			string_heap = make_unique<StringHeap>();
-		}
+		CreateStringHeap();
 		((const char **)data)[index] = string_heap->AddString(value);
 	} else {
 		((const char **)data)[index] = nullptr;
@@ -135,6 +139,9 @@ void Vector::SetStringValue(size_t index, const char *value) {
 Value Vector::GetValue(size_t index) const {
 	if (index >= count) {
 		throw Exception("Out of bounds");
+	}
+	if (ValueIsNull(index)) {
+		return Value(type);
 	}
 	size_t entry = sel_vector ? sel_vector[index] : index;
 	switch (type) {
@@ -164,21 +171,17 @@ Value Vector::GetValue(size_t index) const {
 	}
 }
 
-void Vector::Reference(Vector &other, size_t offset, size_t max_count) {
+void Vector::Reference(Vector &other) {
 	if (owns_data) {
 		throw Exception("Vector owns data, cannot create reference!");
 	}
 
-	if (max_count == 0) {
-		// take the whole chunk
-		count = other.count - offset;
-	} else {
-		count = min(other.count - offset, max_count);
-	}
+	count = other.count;
 	owns_data = false;
-	data = other.data + offset * GetTypeIdSize(other.type);
-	sel_vector = other.sel_vector + offset;
+	data = other.data;
+	sel_vector = other.sel_vector;
 	type = other.type;
+	nullmask = other.nullmask;
 }
 
 void Vector::Move(Vector &other) {
@@ -194,30 +197,38 @@ void Vector::Move(Vector &other) {
 	other.owns_data = owns_data;
 	other.sel_vector = sel_vector;
 	other.type = type;
-	other.maximum_size = maximum_size;
+	other.nullmask = nullmask;
 
 	Destroy();
 }
 
-void Vector::ForceOwnership(size_t minimum_capacity) {
-	if (maximum_size >= minimum_capacity && owns_data &&
-	    type != TypeId::VARCHAR)
+void Vector::Flatten() {
+	if (!sel_vector) {
 		return;
-
-	minimum_capacity = std::max(count, minimum_capacity);
-	Vector other(type, minimum_capacity);
-	Copy(other);
+	}
+	Vector other(type, true);
+	this->Copy(other);
 	other.Move(*this);
 }
 
-void Vector::Copy(Vector &other) {
+void Vector::ForceOwnership() {
+	if (owns_data && !sel_vector && type != TypeId::VARCHAR)
+		return;
+
+	Vector other(type, true);
+	this->Copy(other);
+	other.Move(*this);
+}
+
+void Vector::Copy(Vector &other, size_t offset) {
 	if (other.type != type) {
 		throw NotImplementedException(
 		    "Copying to vector of different type not supported!");
 	}
-	if (other.maximum_size < count) {
-		throw Exception("Cannot copy to target, not enough space!");
+	if (other.sel_vector) {
+		throw Exception("Cannot copy to vector with sel_vector!");
 	}
+
 	if (!TypeIsConstantSize(type)) {
 		assert(type == TypeId::VARCHAR);
 		other.count = count;
@@ -225,52 +236,29 @@ void Vector::Copy(Vector &other) {
 		const char **target = (const char **)other.data;
 		other.string_heap = make_unique<StringHeap>();
 
-		for (size_t i = 0; i < count; i++) {
+		for (size_t i = offset; i < count; i++) {
 			const char *str = sel_vector ? source[sel_vector[i]] : source[i];
 			target[i] = str ? other.string_heap->AddString(str) : nullptr;
 		}
 	} else {
-		VectorOperations::Copy(*this, other);
+		VectorOperations::Copy(*this, other, offset);
 	}
 }
 
-void Vector::Resize(size_t maximum_size, TypeId new_type) {
-	if (sel_vector) {
-		throw Exception("Cannot resize vector with selection vector!");
+void Vector::Cast(TypeId new_type) {
+	if (new_type == TypeId::INVALID) {
+		throw Exception("Cannot create a vector of type invalid!");
 	}
-	if (new_type != TypeId::INVALID) {
-		type = new_type;
+	if (type == new_type) {
+		return;
 	}
-	if (maximum_size < count) {
-		throw Exception(
-		    "Cannot resize vector to smaller than current count!\n");
-	}
-	char *new_data = new char[maximum_size * GetTypeIdSize(type)];
-	if (data) {
-		if (!TypeIsConstantSize(type)) {
-			assert(type == TypeId::VARCHAR);
-			// we only need to copy the pointers on a resize
-			// since the original ownership should not change
-			const char **input_ptrs = (const char **)data;
-			const char **result_ptrs = (const char **)new_data;
-			for (size_t i = 0; i < count; i++) {
-				result_ptrs[i] = input_ptrs[i];
-			}
-		} else {
-			VectorOperations::Copy(*this, new_data);
-		}
-	}
-	Destroy();
-	this->maximum_size = maximum_size;
-	owns_data = true;
-	owned_data = unique_ptr<char[]>(new_data);
-	data = new_data;
+	type = new_type;
+	Vector new_vector(new_type, true);
+	VectorOperations::Cast(*this, new_vector);
+	new_vector.Move(*this);
 }
 
 void Vector::Append(Vector &other) {
-	if (count + other.count >= maximum_size) {
-		throw Exception("Cannot append to vector: to full!");
-	}
 	if (sel_vector) {
 		throw NotImplementedException(
 		    "Cannot append to vector with selection vector");
@@ -278,16 +266,25 @@ void Vector::Append(Vector &other) {
 	if (other.type != type) {
 		throw NotImplementedException("FIXME cast");
 	}
+	if (count + other.count >= STANDARD_VECTOR_SIZE) {
+		throw Exception("Cannot append to vector: vector is full!");
+	}
 	size_t old_count = count;
 	count += other.count;
+	if (!other.sel_vector) {
+		// we can simply shift the NULL mask and OR it
+		nullmask |= other.nullmask << old_count;
+	} else {
+		// have to merge NULL mask
+		for(size_t i = 0; i < other.count; i++) {
+			nullmask[old_count + i] = other.nullmask[other.sel_vector[i]];
+		}
+	}
 	if (!TypeIsConstantSize(type)) {
 		assert(type == TypeId::VARCHAR);
 		const char **source = (const char **)other.data;
 		const char **target = (const char **)data;
-		if (!string_heap) {
-			string_heap = make_unique<StringHeap>();
-		}
-
+		CreateStringHeap();
 		for (size_t i = 0; i < other.count; i++) {
 			const char *str =
 			    other.sel_vector ? source[other.sel_vector[i]] : source[i];

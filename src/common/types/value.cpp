@@ -78,49 +78,49 @@ Value Value::MaximumValue(TypeId type) {
 Value Value::BOOLEAN(int8_t value) {
 	Value result(TypeId::TINYINT);
 	result.value_.boolean = value ? true : false;
-	result.is_null = IsNullValue<int8_t>(value);
+	result.is_null = false;
 	return result;
 }
 
 Value Value::TINYINT(int8_t value) {
 	Value result(TypeId::TINYINT);
 	result.value_.tinyint = value;
-	result.is_null = IsNullValue<int8_t>(value);
+	result.is_null = false;
 	return result;
 }
 Value Value::SMALLINT(int16_t value) {
 	Value result(TypeId::SMALLINT);
 	result.value_.smallint = value;
-	result.is_null = IsNullValue<int16_t>(value);
+	result.is_null = false;
 	return result;
 }
 Value Value::INTEGER(int32_t value) {
 	Value result(TypeId::INTEGER);
 	result.value_.integer = value;
-	result.is_null = IsNullValue<int32_t>(value);
+	result.is_null = false;
 	return result;
 }
 Value Value::BIGINT(int64_t value) {
 	Value result(TypeId::BIGINT);
 	result.value_.bigint = value;
-	result.is_null = IsNullValue<int64_t>(value);
+	result.is_null = false;
 	return result;
 }
 Value Value::POINTER(uint64_t value) {
 	Value result(TypeId::POINTER);
 	result.value_.pointer = value;
-	result.is_null = IsNullValue<uint64_t>(value);
+	result.is_null = false;
 	return result;
 }
 Value Value::DATE(date_t value) {
 	Value result(TypeId::DATE);
 	result.value_.date = value;
-	result.is_null = IsNullValue<date_t>(value);
+	result.is_null = false;
 	return result;
 }
 
 Value Value::Numeric(TypeId id, int64_t value) {
-	assert(!TypeIsIntegral(id) || value + 1 >= duckdb::MinimumValue(id) &&
+	assert(!TypeIsIntegral(id) || value >= duckdb::MinimumValue(id) &&
 	                                  value <= duckdb::MaximumValue(id));
 	Value val(id);
 	val.is_null = false;
@@ -373,8 +373,15 @@ void Value::Multiply(const Value &left, const Value &right, Value &result) {
 }
 
 void Value::Divide(const Value &left, const Value &right, Value &result) {
-	_templated_binary_operation<operators::Division>(left, right, result,
+	Value zero = Value::Numeric(right.type, 0);
+	if (Value::Equals(right, zero)) {
+		// special case: divide by zero
+		result.type = std::max(left.type, right.type);
+		result.is_null = true;
+	} else {
+		_templated_binary_operation<operators::Division>(left, right, result,
 	                                                 false);
+	}
 }
 
 void Value::Modulo(const Value &left, const Value &right, Value &result) {

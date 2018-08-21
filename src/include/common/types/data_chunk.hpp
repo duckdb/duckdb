@@ -45,15 +45,20 @@ class DataChunk : public Printable {
 	size_t column_count;
 	//! The vectors owned by the DataChunk.
 	std::unique_ptr<Vector[]> data;
-	//! The maximum amount of data that can be stored in each of the vectors
-	//! owned by the DataChunk.
-	size_t maximum_size;
 	//! The (optional) selection vector of the DataChunk. Each of the member
 	//! vectors reference this selection vector.
-	std::unique_ptr<sel_t[]> sel_vector;
+	sel_t *sel_vector;
 
 	DataChunk();
 	~DataChunk();
+
+#ifdef DEBUG
+	//! Verify that the DataChunk is in a consistent, not corrupt state. DEBUG FUNCTION ONLY!
+	void Verify();
+#else
+	//! Verify that the DataChunk is in a consistent, not corrupt state. DEBUG FUNCTION ONLY!
+	void Verify() {}
+#endif
 
 	//! Initializes the DataChunk with the specified types to an empty DataChunk
 	//! that holds at most maximum_chunk_size elements.
@@ -62,30 +67,31 @@ class DataChunk : public Printable {
 	//! the DataChunk.
 	//! If zero_data is set to true, the data is zero-initialized.
 	void Initialize(std::vector<TypeId> &types,
-	                size_t maximum_chunk_size = STANDARD_VECTOR_SIZE,
 	                bool zero_data = false);
 	//! Append the other DataChunk to this one. The column count and types of
-	//! the two DataChunks have to match exactly. Can potentially cause
-	//! Vector::Resize on the underlying vectors, which causes them to become
-	//! owning vectors.
+	//! the two DataChunks have to match exactly. Throws an exception if there is not enough space in the chunk.
 	void Append(DataChunk &other);
 	//! Destroy all data and columns owned by this DataChunk
 	void Destroy();
+
+	//! Move the data of this chunk to the other chunk
+	void Move(DataChunk &other);
 
 	//! Merges the vector new_vector with an existing selection vector (i.e.
 	//! result[i] = current_vector[new_vector[i]];)
 	static void MergeSelVector(sel_t *current_vector, sel_t *new_vector,
 	                           sel_t *result, size_t new_count);
 
-	//! Sets the selection vector of the chunk
-	void SetSelVector(std::unique_ptr<sel_t[]> sel_vector, size_t new_count);
+	//! Filters elements from the vector based on a boolean vector. [True] is included, [False] and [NULL] excluded.
+	void SetSelectionVector(Vector &matches);
 
-	//! Returns true if all columns in the chunk have the same selection vector
-	bool HasConsistentSelVector();
-	//! Returns true if any vectors in the DataChunk have a selection vector
-	bool HasSelVector();
+	//! Copies the data from this vector to another vector.
+	void Copy(DataChunk &other, size_t offset = 0);
+	
+	//! Removes the selection vector from the chunk
+	void Flatten();
 
-	//! Forces the DataChunk to use only data that it owns itself
+	//! Forces the Vectors of the DataChunk to own their own data
 	void ForceOwnership();
 
 	//! Resets the DataChunk to its state right after the DataChunk::Initialize
@@ -107,5 +113,7 @@ class DataChunk : public Printable {
 	//! The data owned by this DataChunk. This data is typically referenced by
 	//! the member vectors.
 	std::unique_ptr<char[]> owned_data;
+	//! The selection vector of a chunk, if it owns it
+	sel_t owned_sel_vector[STANDARD_VECTOR_SIZE];
 };
 } // namespace duckdb

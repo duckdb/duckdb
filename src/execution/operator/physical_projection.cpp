@@ -31,12 +31,10 @@ void PhysicalProjection::GetChunk(DataChunk &chunk,
 		auto &expr = select_list[i];
 		executor.Execute(expr.get(), chunk.data[i]);
 	}
+	chunk.sel_vector = state->child_chunk.sel_vector;
 	chunk.count = chunk.data[0].count;
-	for (size_t i = 0; i < chunk.column_count; i++) {
-		if (chunk.count != chunk.data[i].count) {
-			throw Exception("Projection count mismatch!");
-		}
-	}
+	
+	chunk.Verify();
 }
 
 unique_ptr<PhysicalOperatorState>

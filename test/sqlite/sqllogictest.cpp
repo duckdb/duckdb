@@ -672,7 +672,6 @@ TEST_CASE("[SLOW] Test SQLite Logic Test", "[sqlitelogic]") {
 							}
 						}
 					} else {
-						REQUIRE(strcmp(sScript.zLine, zHash) == 0);
 						if (strcmp(sScript.zLine, zHash) != 0) {
 							fprintf(stderr, "%s:%d: wrong result hash\n",
 							        zScriptFile, sScript.nLine);

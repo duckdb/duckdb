@@ -137,33 +137,7 @@ static Value _duckdb_c_get_value(duckdb_column column, size_t index) {
 }
 
 int duckdb_value_is_null(duckdb_column column, size_t index) {
-	if (index >= column.count) {
-		return -1;
-	}
-
-	switch (column.type) {
-	case DUCKDB_TYPE_BOOLEAN:
-	case DUCKDB_TYPE_TINYINT:
-		return IsNullValue<int8_t>(get_value<int8_t>(column, index));
-	case DUCKDB_TYPE_SMALLINT:
-		return IsNullValue<int16_t>(get_value<int16_t>(column, index));
-	case DUCKDB_TYPE_INTEGER:
-		return IsNullValue<int32_t>(get_value<int32_t>(column, index));
-	case DUCKDB_TYPE_BIGINT:
-		return IsNullValue<int64_t>(get_value<int64_t>(column, index));
-	case DUCKDB_TYPE_DECIMAL:
-		return IsNullValue<double>(get_value<double>(column, index));
-	case DUCKDB_TYPE_POINTER:
-		return IsNullValue<uint64_t>(get_value<uint64_t>(column, index));
-	case DUCKDB_TYPE_DATE:
-		return IsNullValue<date_t>(get_value<date_t>(column, index));
-	case DUCKDB_TYPE_VARCHAR:
-		return IsNullValue<const char *>(
-		    get_value<const char *>(column, index));
-	default:
-		throw std::runtime_error("Invalid value for C to C++ conversion!");
-	}
-	return 0;
+	return column.nullmask[index];
 }
 
 void duckdb_print_result(duckdb_result result) {
@@ -197,8 +171,8 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query,
 	if (!out) {
 		return DuckDBSuccess;
 	}
-	out->row_count = result->count;
-	out->column_count = result->types.size();
+	out->row_count = result->size();
+	out->column_count = result->column_count();
 	out->columns =
 	    (duckdb_column *)malloc(out->column_count * sizeof(duckdb_column));
 	if (!out->columns)
@@ -206,32 +180,35 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query,
 	memset(out->columns, 0, out->column_count * sizeof(duckdb_column));
 
 	for (auto i = 0; i < out->column_count; i++) {
-		auto type = result->types[i];
+		auto &types = result->types();
+
+		auto type = types[i];
 		auto type_size = GetTypeIdSize(type);
 		auto &column = out->columns[i];
 
 		column.type = _convert_type_cpp_to_c(type);
-		column.count = result->count;
+		column.count = result->size();
 		column.name = NULL; // FIXME: don't support names yet
-		column.data = (char *)malloc(type_size * result->count);
-		if (!column.data)
+		column.data = (char *)malloc(type_size * result->size());
+		column.nullmask = (bool*) malloc(sizeof(bool) * result->size());
+		if (!column.data || !column.nullmask)
 			goto mallocfail;
 
 		// copy the data
 		if (TypeIsConstantSize(type)) {
 			char *ptr = column.data;
-			for (auto &chunk : result->data) {
+			for (auto &chunk : result->collection.chunks) {
 				auto &vector = chunk->data[i];
 				VectorOperations::Copy(vector, ptr);
 				ptr += type_size * chunk->count;
 			}
 		} else {
 			// NULL initialize: we are going to do mallocs
-			memset(column.data, 0, type_size * result->count);
+			memset(column.data, 0, type_size * result->size());
 
-			if (result->types[i] == TypeId::VARCHAR) {
+			if (types[i] == TypeId::VARCHAR) {
 				char **dataptr = (char **)column.data;
-				for (auto &chunk : result->data) {
+				for (auto &chunk : result->collection.chunks) {
 					auto &vector = chunk->data[i];
 					char **str_data = (char **)vector.data;
 					for (auto j = 0; j < chunk->count; j++) {
@@ -248,6 +225,15 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query,
 				    "Copy of non-string varlength values not supported yet!\n");
 				goto mallocfail;
 			}
+		}
+		size_t index = 0;
+		// set the nullmask
+		for (auto &chunk : result->collection.chunks) {
+			auto &vector = chunk->data[i];
+			for(size_t i = 0; i < vector.count; i++) {
+				column.nullmask[index + i] = vector.ValueIsNull(i);
+			}
+			index += vector.count;
 		}
 	}
 	return DuckDBSuccess;
