@@ -268,6 +268,7 @@ unique_ptr<TableRef> TransformFrom(List *root) {
 				auto old_res = move(result);
 				result = make_unique<CrossProductRef>();
 				result->left = move(old_res);
+				result->right = move(next);
 				cur_root = result.get();
 			}
 		}
