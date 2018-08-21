@@ -3107,9 +3107,9 @@ int main(int argc, char **argv) {
 			char *zHome;
 			char *zHistory = 0;
 			int nHistory;
-			printf("DuckDB version %s %.19s\n" /*extra-version-info*/
+			printf("DuckDB %.19s\n" /*extra-version-info*/
 			       "Enter \".help\" for usage hints.\n",
-			       sqlite3_libversion(), sqlite3_sourceid());
+			       GIT_COMMIT_HASH);
 			if (warnInmemoryDb) {
 				printf("Connected to a ");
 				printBold("transient in-memory database. \n");
