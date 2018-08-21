@@ -109,7 +109,6 @@ enum class ExpressionType {
 	OPERATOR_IS_NOT_NULL = 22,
 	// exists test.
 	OPERATOR_EXISTS = 18,
-	OPERATOR_UNARY_MINUS = 60,
 
 	// -----------------------------
 	// Comparison Operators
@@ -244,7 +243,6 @@ enum class LogicalOperatorType {
 	PROJECTION = 5,
 	FILTER = 6,
 	AGGREGATE_AND_GROUP_BY = 7,
-	DISTINCT = 8,
 	LIMIT = 9,
 	ORDER_BY = 10,
 	COPY = 11,
@@ -276,7 +274,6 @@ enum class PhysicalOperatorType {
 	QUERY_DERIVED_SCAN = 6,
 	ORDER_BY = 7,
 	LIMIT = 8,
-	DISTINCT = 9,
 	AGGREGATE = 10,
 	HASH_GROUP_BY = 11,
 	SORT_GROUP_BY = 12,

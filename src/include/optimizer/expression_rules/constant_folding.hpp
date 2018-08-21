@@ -82,6 +82,7 @@ class ConstantFoldingRule : public Rule {
 
 		Value zero = Value::BIGINT(0);
 		Value one = Value::BIGINT(1);
+		Value null = Value();
 
 		// case: right is constant
 		if (right->type == ExpressionType::VALUE_CONSTANT) {
@@ -104,7 +105,7 @@ class ConstantFoldingRule : public Rule {
 					break;
 				case ExpressionType::OPERATOR_DIVIDE:
 					if (Value::Equals(right_val->value, zero)) { // X / 0 = NULL
-						return make_unique<ConstantExpression>(Value());
+						return make_unique<ConstantExpression>(null);
 					}
 					if (Value::Equals(right_val->value, one)) { // X / 1 == X
 						return move(root.children[0]);
@@ -113,7 +114,7 @@ class ConstantFoldingRule : public Rule {
 				case ExpressionType::OPERATOR_MOD:
 					if (Value::Equals(right_val->value,
 					                  zero)) { // X % 0 == NULL
-						return make_unique<ConstantExpression>(Value());
+						return make_unique<ConstantExpression>(null);
 					}
 					if (Value::Equals(right_val->value, one)) {
 						return make_unique<ConstantExpression>(zero);
@@ -125,7 +126,7 @@ class ConstantFoldingRule : public Rule {
 			}
 		}
 
-		// case: right is constant
+		// case: left is constant
 		if (left->type == ExpressionType::VALUE_CONSTANT) {
 			auto left_val = reinterpret_cast<ConstantExpression *>(left);
 			if (TypeIsNumeric(left_val->value.type)) {

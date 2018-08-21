@@ -147,7 +147,7 @@ Value Value::Numeric(TypeId id, int64_t value) {
 
 int64_t Value::GetNumericValue() {
 	if (is_null) {
-		throw Exception("Cannot get numeric value fo NULL value.");
+		throw Exception("Cannot get numeric value from NULL.");
 	}
 	switch (type) {
 	case TypeId::TINYINT:

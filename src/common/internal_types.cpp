@@ -35,8 +35,6 @@ ExpressionType StringToExpressionType(const string &str) {
 		return ExpressionType::OPERATOR_IS_NULL;
 	} else if (upper_str == "OPERATOR_EXISTS") {
 		return ExpressionType::OPERATOR_EXISTS;
-	} else if (upper_str == "OPERATOR_UNARY_MINUS") {
-		return ExpressionType::OPERATOR_UNARY_MINUS;
 	} else if (upper_str == "COMPARE_EQUAL" || upper_str == "=") {
 		return ExpressionType::COMPARE_EQUAL;
 	} else if (upper_str == "COMPARE_NOTEQUAL" || upper_str == "!=" ||
@@ -249,8 +247,6 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "FILTER";
 	case LogicalOperatorType::AGGREGATE_AND_GROUP_BY:
 		return "AGGREGATE_AND_GROUP_BY";
-	case LogicalOperatorType::DISTINCT:
-		return "DISTINCT";
 	case LogicalOperatorType::LIMIT:
 		return "LIMIT";
 	case LogicalOperatorType::ORDER_BY:
@@ -292,8 +288,6 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "ORDER_BY";
 	case PhysicalOperatorType::LIMIT:
 		return "LIMIT";
-	case PhysicalOperatorType::DISTINCT:
-		return "DISTINCT";
 	case PhysicalOperatorType::AGGREGATE:
 		return "AGGREGATE";
 	case PhysicalOperatorType::HASH_GROUP_BY:
@@ -302,10 +296,18 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "SORT_GROUP_BY";
 	case PhysicalOperatorType::FILTER:
 		return "FILTER";
+	case PhysicalOperatorType::PROJECTION:
+		return "PROJECTION";
+	case PhysicalOperatorType::BASE_GROUP_BY:
+		return "BASE_GROUP_BY";
+	case PhysicalOperatorType::COPY:
+		return "COPY";
 	case PhysicalOperatorType::NESTED_LOOP_JOIN:
 		return "NESTED_LOOP_JOIN";
 	case PhysicalOperatorType::HASH_JOIN:
 		return "HASH_JOIN";
+	case PhysicalOperatorType::CROSS_PRODUCT:
+		return "CROSS_PRODUCT";
 	case PhysicalOperatorType::INSERT:
 		return "INSERT";
 	case PhysicalOperatorType::INSERT_SELECT:
@@ -347,8 +349,6 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "IS_NOT_NULL";
 	case ExpressionType::OPERATOR_EXISTS:
 		return "EXISTS";
-	case ExpressionType::OPERATOR_UNARY_MINUS:
-		return "UNARY_MINUS";
 	case ExpressionType::COMPARE_EQUAL:
 		return "EQUAL";
 	case ExpressionType::COMPARE_NOTEQUAL:

@@ -73,7 +73,8 @@ unique_ptr<AbstractExpression> TransformTypeCast(TypeCast *root) {
 		Value &source_value =
 		    reinterpret_cast<ConstantExpression *>(constant.get())->value;
 
-		if (TypeIsIntegral(source_value.type) && TypeIsIntegral(target_type)) {
+		if (!source_value.is_null && TypeIsIntegral(source_value.type) &&
+		    TypeIsIntegral(target_type)) {
 			// properly handle numeric overflows
 			target_type = std::max(MinimalType(source_value.GetNumericValue()),
 			                       target_type);
@@ -209,6 +210,13 @@ unique_ptr<TableRef> TransformJoin(JoinExpr *root) {
 		                              root->larg->type);
 	}
 
+	if (!root->quals) { // CROSS JOIN
+		auto cross = make_unique<CrossProductRef>();
+		cross->left = move(result->left);
+		cross->right = move(result->right);
+		return move(cross);
+	}
+
 	// transform the quals, depends on AExprTranform and BoolExprTransform
 	switch (root->quals->type) {
 	case T_A_Expr: {
@@ -237,30 +245,35 @@ unique_ptr<TableRef> TransformFrom(List *root) {
 	if (root->length > 1) {
 		// Cross Product
 		auto result = make_unique<CrossProductRef>();
+		CrossProductRef *cur_root = result.get();
 		for (auto node = root->head; node != nullptr; node = node->next) {
-			if (result->left) {
-				auto new_result = make_unique<CrossProductRef>();
-				new_result->right = move(result);
-				result = move(new_result);
-			}
-
+			unique_ptr<TableRef> next;
 			Node *n = reinterpret_cast<Node *>(node->data.ptr_value);
 			switch (n->type) {
 			case T_RangeVar:
-				result->left =
-				    move(TransformRangeVar(reinterpret_cast<RangeVar *>(n)));
+				next = move(TransformRangeVar(reinterpret_cast<RangeVar *>(n)));
 				break;
 			case T_RangeSubselect:
-				result->left = move(TransformRangeSubselect(
+				next = move(TransformRangeSubselect(
 				    reinterpret_cast<RangeSubselect *>(n)));
+				break;
+			case T_JoinExpr:
+				next = move(TransformJoin(reinterpret_cast<JoinExpr *>(n)));
 				break;
 			default:
 				throw NotImplementedException(
 				    "From Type %d not supported yet...", n->type);
 			}
-			if (!result->right) {
-				result->right = move(result->left);
-				result->left = nullptr;
+			if (!cur_root->left) {
+				cur_root->left = move(next);
+			} else if (!cur_root->right) {
+				cur_root->right = move(next);
+			} else {
+				auto old_res = move(result);
+				result = make_unique<CrossProductRef>();
+				result->left = move(old_res);
+				result->right = move(next);
+				cur_root = result.get();
 			}
 		}
 		return move(result);
@@ -450,6 +463,18 @@ unique_ptr<AbstractExpression> TransformAExpr(A_Expr *root) {
 
 	auto left_expr = TransformExpression(root->lexpr);
 	auto right_expr = TransformExpression(root->rexpr);
+	if (!left_expr) {
+		switch (target_type) {
+		case ExpressionType::OPERATOR_ADD:
+			return move(right_expr);
+		case ExpressionType::OPERATOR_SUBTRACT:
+			target_type = ExpressionType::OPERATOR_MULTIPLY;
+			left_expr = make_unique<ConstantExpression>(Value(-1));
+			break;
+		default:
+			throw Exception("Unknown unary operator");
+		}
+	}
 
 	int type_id = static_cast<int>(target_type);
 	if (type_id <= 6) {

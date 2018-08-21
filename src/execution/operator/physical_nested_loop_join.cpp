@@ -84,7 +84,6 @@ void PhysicalNestedLoopJoin::GetChunk(DataChunk &chunk,
 
 		auto &left_chunk = state->child_chunk;
 		auto &right_chunk = *state->right_chunks.chunks[state->right_chunk];
-		assert(right_chunk.count <= STANDARD_VECTOR_SIZE);
 
 		// join the current row of the left relation with the current chunk
 		// from the right relation

@@ -17,10 +17,11 @@ namespace duckdb {
 class LogicalCopy : public LogicalOperator {
   public:
 	LogicalCopy(std::shared_ptr<TableCatalogEntry> table, std::string file_path,
-	            bool is_from, char delimiter, char quote, char escape)
+	            bool is_from, char delimiter, char quote, char escape,
+	            std::vector<std::string> select_list)
 	    : LogicalOperator(LogicalOperatorType::COPY), table(table),
 	      file_path(file_path), is_from(is_from), delimiter(delimiter),
-	      quote(quote), escape(escape) {}
+	      quote(quote), escape(escape), select_list(select_list) {}
 	LogicalCopy(std::string file_path, bool is_from, char delimiter, char quote,
 	            char escape)
 	    : LogicalOperator(LogicalOperatorType::COPY), file_path(file_path),
@@ -32,6 +33,8 @@ class LogicalCopy : public LogicalOperator {
 	std::shared_ptr<TableCatalogEntry> table;
 
 	std::string file_path;
+
+	std::vector<std::string> select_list;
 
 	bool is_from;
 

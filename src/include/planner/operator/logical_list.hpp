@@ -2,7 +2,6 @@
 #include "planner/operator/logical_aggregate.hpp"
 #include "planner/operator/logical_copy.hpp"
 #include "planner/operator/logical_cross_product.hpp"
-#include "planner/operator/logical_distinct.hpp"
 #include "planner/operator/logical_filter.hpp"
 #include "planner/operator/logical_get.hpp"
 #include "planner/operator/logical_insert.hpp"
