@@ -51,21 +51,17 @@ TEST_CASE("Test Copy statement", "[copystatement]") {
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {4000}));
 
 	// Exporting selected columns from a table to a CSV.
-	REQUIRE(duckdb_query(
-			connection,
-			"COPY test(a,c) to 'test4.csv';",
-			&result) == DuckDBSuccess);
+	REQUIRE(duckdb_query(connection, "COPY test(a,c) to 'test4.csv';",
+	                     &result) == DuckDBSuccess);
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {5000}));
 
 	// Importing CSV to Selected Columns
 	REQUIRE(
-			duckdb_query(connection,
-						 "CREATE TABLE test2 (a INTEGER, b INTEGER,c VARCHAR(10));",
-						 NULL) == DuckDBSuccess);
-	REQUIRE(duckdb_query(
-			connection,
-			"COPY test2(a,c) from 'test4.csv';",
-			&result) == DuckDBSuccess);
+	    duckdb_query(connection,
+	                 "CREATE TABLE test2 (a INTEGER, b INTEGER,c VARCHAR(10));",
+	                 NULL) == DuckDBSuccess);
+	REQUIRE(duckdb_query(connection, "COPY test2(a,c) from 'test4.csv';",
+	                     &result) == DuckDBSuccess);
 
 	REQUIRE(duckdb_disconnect(connection) == DuckDBSuccess);
 	REQUIRE(duckdb_close(database) == DuckDBSuccess);
@@ -74,5 +70,4 @@ TEST_CASE("Test Copy statement", "[copystatement]") {
 	remove("test2.csv");
 	remove("test3.csv");
 	remove("test4.csv");
-
 }

@@ -6,7 +6,7 @@
 #include <string.h>
 
 // TODO:
-#define SOURCE_ID __DATE__" "__TIME__
+#define SOURCE_ID __DATE__ " "__TIME__
 #define LIB_VERSION "0.01"
 
 #define NOT_IMPLEMENTED(func_decl)                                             \

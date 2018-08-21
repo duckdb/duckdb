@@ -78,7 +78,7 @@ duckdb_query(duckdb_connection connection, /* Connection to query */
 int duckdb_value_is_null(duckdb_column column, size_t index);
 
 const char *duckdb_get_value_str(duckdb_column column,
-								 size_t index /* Row index */
+                                 size_t index /* Row index */
 );
 
 void duckdb_print_result(duckdb_result result /* The result to print */
