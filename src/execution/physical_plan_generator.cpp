@@ -217,7 +217,7 @@ void PhysicalPlanGenerator::Visit(LogicalCopy &op) {
 	} else {
 		auto copy = make_unique<PhysicalCopy>(
 		    op.table, move(op.file_path), move(op.is_from), move(op.delimiter),
-		    move(op.quote), move(op.escape));
+		    move(op.quote), move(op.escape),move(op.select_list));
 		this->plan = move(copy);
 	}
 }

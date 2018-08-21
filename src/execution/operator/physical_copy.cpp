@@ -46,7 +46,11 @@ void PhysicalCopy::GetChunk(DataChunk &result_chunk,
 		DataChunk insert_chunk;
 		auto types = table->GetTypes();
 		insert_chunk.Initialize(types);
-
+		std::vector<size_t> select_list_oid;
+        for (size_t i = 0; i < select_list.size(); i ++){
+            auto column = table->GetColumn(select_list[i]);
+			select_list_oid.push_back(column->oid);
+        }
 		string value;
 		std::ifstream from_csv;
 		from_csv.open(file_path);
@@ -60,15 +64,29 @@ void PhysicalCopy::GetChunk(DataChunk &result_chunk,
 			}
 			vector<string> csv_line = split(value, delimiter, quote);
 
-			if (csv_line.size() != insert_chunk.column_count) {
-				throw Exception("COPY TO column mismatch! Expected %zu "
-				                "columns, got %zu.",
-				                insert_chunk.column_count, csv_line.size());
-			}
-			for (size_t i = 0; i < csv_line.size(); ++i) {
-				insert_chunk.data[i].count++;
-				insert_chunk.data[i].SetValue(count_line, csv_line[i]);
-			}
+            if(select_list.size()){
+                for (size_t i = 0; i < table->columns.size(); ++i){
+                    if(!(std::find(select_list_oid.begin(), select_list_oid.end(), i) != select_list_oid.end())) {
+                        insert_chunk.data[i].count++;
+                        insert_chunk.data[i].SetValue(count_line, Value());
+                    }
+                }
+                for (size_t i = 0; i < csv_line.size(); ++i) {
+                    insert_chunk.data[select_list_oid[i]].count++;
+                    insert_chunk.data[select_list_oid[i]].SetValue(count_line, csv_line[i]);
+                }
+            }
+            else{
+                for (size_t i = 0; i < csv_line.size(); ++i) {
+                    insert_chunk.data[i].count++;
+                    insert_chunk.data[i].SetValue(count_line, csv_line[i]);
+                }
+                for (size_t i = csv_line.size(); i <table->columns.size();  ++i){
+                    insert_chunk.data[i].count++;
+                    insert_chunk.data[i].SetValue(count_line,  Value());
+                }
+            }
+
 			count_line++;
 		}
 		insert_chunk.count = insert_chunk.data[0].count;
