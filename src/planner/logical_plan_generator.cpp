@@ -284,7 +284,7 @@ void LogicalPlanGenerator::Visit(CopyStatement &statement) {
 		auto copy = make_unique<LogicalCopy>(
 		    table, move(statement.file_path), move(statement.is_from),
 		    move(statement.delimiter), move(statement.quote),
-		    move(statement.escape));
+		    move(statement.escape), move(statement.select_list));
 		root = move(copy);
 	} else {
 		auto copy = make_unique<LogicalCopy>(
