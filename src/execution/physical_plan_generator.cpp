@@ -172,7 +172,7 @@ void PhysicalPlanGenerator::Visit(LogicalInsert &op) {
 }
 
 void PhysicalPlanGenerator::Visit(SubqueryExpression &expr) {
-	PhysicalPlanGenerator generator(catalog, this);
+	PhysicalPlanGenerator generator(context, this);
 	generator.CreatePlan(move(expr.op));
 	expr.plan = move(generator.plan);
 }

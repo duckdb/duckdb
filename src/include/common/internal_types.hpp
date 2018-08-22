@@ -300,8 +300,13 @@ enum class PhysicalOperatorType {
 enum class MatchOrder { ARBITRARY = 0, DEPTH_FIRST };
 enum class ChildPolicy { ANY, LEAF, SOME, UNORDERED, ORDERED };
 
-enum class ExternalFileFormat {
-	CSV,
+enum class ExternalFileFormat { INVALID = 0, CSV = 1 };
+
+enum class TransactionType {
+	INVALID = 0,
+	BEGIN_TRANSACTION = 1,
+	COMMIT = 2,
+	ROLLBACK = 3
 };
 
 ExpressionType StringToExpressionType(const std::string &str);

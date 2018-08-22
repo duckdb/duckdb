@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-#include "catalog/catalog.hpp"
+#include "catalog/client_context.hpp"
 
 #include "parser/sql_node_visitor.hpp"
 #include "parser/statement/sql_statement.hpp"
@@ -30,8 +30,8 @@ namespace duckdb {
 */
 class Binder : public SQLNodeVisitor {
   public:
-	Binder(Catalog &catalog)
-	    : catalog(catalog), context(make_unique<BindContext>()) {}
+	Binder(ClientContext &context)
+	    : context(context), bind_context(make_unique<BindContext>()) {}
 
 	void Visit(SelectStatement &statement);
 	void Visit(CopyStatement &stmt);
@@ -44,9 +44,9 @@ class Binder : public SQLNodeVisitor {
 	void Visit(JoinRef &expr);
 	void Visit(SubqueryRef &expr);
 	//! The BindContext created and used by the Binder.
-	std::unique_ptr<BindContext> context;
+	std::unique_ptr<BindContext> bind_context;
 
   private:
-	Catalog &catalog;
+	ClientContext &context;
 };
 } // namespace duckdb

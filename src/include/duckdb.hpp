@@ -12,7 +12,8 @@
 
 #include <string>
 
-#include "catalog/catalog.hpp"
+#include "catalog/client_context.hpp"
+
 #include "common/types/chunk_collection.hpp"
 
 namespace duckdb {
@@ -34,11 +35,15 @@ class DuckDB {
 class DuckDBConnection {
   public:
 	DuckDBConnection(DuckDB &database);
+	~DuckDBConnection();
 
 	std::unique_ptr<DuckDBResult> Query(std::string query);
 
+	ClientContext context;
+
   private:
 	DuckDB &database;
+	TransactionContext transaction;
 };
 
 //! The result object holds the result of a query. It can either hold an error

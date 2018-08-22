@@ -3,6 +3,8 @@
 
 #include <vector>
 
+#include "catalog/client_context.hpp"
+
 #include "optimizer/rewriter.hpp"
 #include "parser/parser.hpp"
 #include "planner/planner.hpp"
@@ -32,7 +34,7 @@ TEST_CASE("Subquery rewriting", "[subquery_rewrite]") {
 	}
 
 	Planner planner;
-	if (!planner.CreatePlan(db.catalog, move(parser.statements.back()))) {
+	if (!planner.CreatePlan(con.context, move(parser.statements.back()))) {
 		FAIL(planner.GetErrorMessage());
 	}
 	if (!planner.plan) {

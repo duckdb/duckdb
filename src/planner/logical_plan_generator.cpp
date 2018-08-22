@@ -167,7 +167,7 @@ void LogicalPlanGenerator::Visit(OperatorExpression &expr) {
 }
 
 void LogicalPlanGenerator::Visit(SubqueryExpression &expr) {
-	LogicalPlanGenerator generator(catalog, *expr.context);
+	LogicalPlanGenerator generator(context, *expr.context);
 	expr.subquery->Accept(&generator);
 	if (!generator.root) {
 		throw Exception("Can't plan subquery");
@@ -176,14 +176,14 @@ void LogicalPlanGenerator::Visit(SubqueryExpression &expr) {
 }
 
 void LogicalPlanGenerator::Visit(BaseTableRef &expr) {
-	auto table = catalog.GetTable(expr.schema_name, expr.table_name);
+	auto table = context.catalog.GetTable(expr.schema_name, expr.table_name);
 	auto alias = expr.alias.empty() ? expr.table_name : expr.alias;
 
-	auto index = context.GetTableIndex(alias);
+	auto index = bind_context.GetTableIndex(alias);
 
 	std::vector<size_t> column_ids;
 	// look in the context for this table which columns are required
-	for (auto &bound_column : context.bound_columns[alias]) {
+	for (auto &bound_column : bind_context.bound_columns[alias]) {
 		column_ids.push_back(table->name_map[bound_column]);
 	}
 	if (column_ids.size() == 0) {
@@ -246,7 +246,7 @@ void LogicalPlanGenerator::Visit(SubqueryRef &expr) {
 }
 
 void LogicalPlanGenerator::Visit(InsertStatement &statement) {
-	auto table = catalog.GetTable(statement.schema, statement.table);
+	auto table = context.catalog.GetTable(statement.schema, statement.table);
 	std::vector<std::unique_ptr<AbstractExpression>> insert_val_list;
 
 	if (statement.columns.size() == 0) {
@@ -280,7 +280,8 @@ void LogicalPlanGenerator::Visit(InsertStatement &statement) {
 
 void LogicalPlanGenerator::Visit(CopyStatement &statement) {
 	if (statement.table[0] != '\0') {
-		auto table = catalog.GetTable(statement.schema, statement.table);
+		auto table =
+		    context.catalog.GetTable(statement.schema, statement.table);
 		auto copy = make_unique<LogicalCopy>(
 		    table, move(statement.file_path), move(statement.is_from),
 		    move(statement.delimiter), move(statement.quote),

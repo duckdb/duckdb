@@ -254,4 +254,21 @@ unique_ptr<CopyStatement> TransformCopy(Node *node) {
 	return result;
 }
 
+unique_ptr<TransactionStatement> TransformTransaction(Node *node) {
+	TransactionStmt *stmt = reinterpret_cast<TransactionStmt *>(node);
+	assert(stmt);
+	switch (stmt->kind) {
+	case TRANS_STMT_BEGIN:
+		return make_unique<TransactionStatement>(
+		    TransactionType::BEGIN_TRANSACTION);
+	case TRANS_STMT_COMMIT:
+		return make_unique<TransactionStatement>(TransactionType::COMMIT);
+	case TRANS_STMT_ROLLBACK:
+		return make_unique<TransactionStatement>(TransactionType::ROLLBACK);
+	default:
+		throw NotImplementedException("Transaction type %d not implemented yet",
+		                              stmt->kind);
+	}
+}
+
 } // namespace duckdb

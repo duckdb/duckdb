@@ -19,7 +19,12 @@ DuckDB::DuckDB(const char *path) {
 	catalog.CreateSchema(DEFAULT_SCHEMA);
 }
 
-DuckDBConnection::DuckDBConnection(DuckDB &database) : database(database) {}
+DuckDBConnection::DuckDBConnection(DuckDB &database)
+    : database(database), context(database.catalog, transaction) {}
+
+DuckDBConnection::~DuckDBConnection() {
+	// FIXME: rollback active transaction
+}
 
 unique_ptr<DuckDBResult> DuckDBConnection::Query(std::string query) {
 	auto result = make_unique<DuckDBResult>();
@@ -34,8 +39,7 @@ unique_ptr<DuckDBResult> DuckDBConnection::Query(std::string query) {
 		}
 
 		Planner planner;
-		if (!planner.CreatePlan(database.catalog,
-		                        move(parser.statements.back()))) {
+		if (!planner.CreatePlan(context, move(parser.statements.back()))) {
 			fprintf(stderr, "Failed to create plan: %s\n",
 			        planner.GetErrorMessage().c_str());
 			return make_unique<DuckDBResult>(planner.GetErrorMessage());
@@ -57,7 +61,7 @@ unique_ptr<DuckDBResult> DuckDBConnection::Query(std::string query) {
 		}
 
 		// now convert logical query plan into a physical query plan
-		PhysicalPlanGenerator physical_planner(database.catalog);
+		PhysicalPlanGenerator physical_planner(context);
 		if (!physical_planner.CreatePlan(move(plan))) {
 			fprintf(stderr, "Failed to create physical plan: %s\n",
 			        physical_planner.GetErrorMessage().c_str());

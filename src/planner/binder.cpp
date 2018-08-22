@@ -31,7 +31,7 @@ void Binder::Visit(SelectStatement &statement) {
 	for (auto &select_element : statement.select_list) {
 		if (select_element->GetExpressionType() == ExpressionType::STAR) {
 			// * statement, expand to all columns from the FROM clause
-			context->GenerateAllColumnExpressions(new_select_list);
+			bind_context->GenerateAllColumnExpressions(new_select_list);
 			continue;
 		} else {
 			// regular statement, add it to the list
@@ -49,8 +49,8 @@ void Binder::Visit(SelectStatement &statement) {
 		}
 
 		if (!select_element->alias.empty()) {
-			context->AddExpression(select_element->alias, select_element.get(),
-			                       i);
+			bind_context->AddExpression(select_element->alias,
+			                            select_element.get(), i);
 		}
 	}
 	for (auto &order : statement.orderby.orders) {
@@ -215,18 +215,17 @@ void Binder::Visit(ColumnRefExpression &expr) {
 	// resolve to either a base table or a subquery expression
 	if (expr.table_name.empty()) {
 		// no table name: find a table or subquery that contains this
-		expr.table_name = context->GetMatchingTable(expr.column_name);
+		expr.table_name = bind_context->GetMatchingTable(expr.column_name);
 	}
-	auto column = context->BindColumn(expr);
+	auto column = bind_context->BindColumn(expr);
 }
 
 void Binder::Visit(SubqueryExpression &expr) {
-	assert(context);
+	assert(bind_context);
 
-	Binder binder(catalog);
-	binder.context = make_unique<BindContext>();
-	;
-	binder.context->parent = context.get();
+	Binder binder(context);
+	binder.bind_context = make_unique<BindContext>();
+	binder.bind_context->parent = bind_context.get();
 
 	expr.subquery->Accept(&binder);
 	if (expr.subquery->select_list.size() < 1) {
@@ -237,14 +236,14 @@ void Binder::Visit(SubqueryExpression &expr) {
 	}
 	expr.return_type = expr.exists ? TypeId::BOOLEAN
 	                               : expr.subquery->select_list[0]->return_type;
-	expr.context = move(binder.context);
+	expr.context = move(binder.bind_context);
 	expr.is_correlated = expr.context->GetMaxDepth() > 0;
 }
 
 void Binder::Visit(BaseTableRef &expr) {
-	auto table = catalog.GetTable(expr.schema_name, expr.table_name);
-	context->AddBaseTable(expr.alias.empty() ? expr.table_name : expr.alias,
-	                      table);
+	auto table = context.catalog.GetTable(expr.schema_name, expr.table_name);
+	bind_context->AddBaseTable(
+	    expr.alias.empty() ? expr.table_name : expr.alias, table);
 }
 
 void Binder::Visit(CrossProductRef &expr) {
@@ -259,6 +258,6 @@ void Binder::Visit(JoinRef &expr) {
 }
 
 void Binder::Visit(SubqueryRef &expr) {
-	context->AddSubquery(expr.alias, expr.subquery.get());
+	bind_context->AddSubquery(expr.alias, expr.subquery.get());
 	throw NotImplementedException("Binding subqueries not implemented yet!");
 }

@@ -16,6 +16,7 @@ class SelectStatement;
 class CreateStatement;
 class InsertStatement;
 class CopyStatement;
+class TransactionStatement;
 
 class AggregateExpression;
 class CastExpression;
@@ -46,6 +47,7 @@ class SQLNodeVisitor {
 	virtual void Visit(CreateStatement &){};
 	virtual void Visit(InsertStatement &){};
 	virtual void Visit(CopyStatement &){};
+	virtual void Visit(TransactionStatement &){};
 
 	virtual void Visit(AggregateExpression &expr);
 	virtual void Visit(CaseExpression &expr);

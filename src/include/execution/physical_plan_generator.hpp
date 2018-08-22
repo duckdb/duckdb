@@ -15,6 +15,8 @@
 #include "common/internal_types.hpp"
 #include "common/printable.hpp"
 
+#include "catalog/client_context.hpp"
+
 #include "execution/physical_operator.hpp"
 
 #include "planner/bindcontext.hpp"
@@ -27,9 +29,9 @@ namespace duckdb {
 //! logical query plan
 class PhysicalPlanGenerator : public LogicalOperatorVisitor {
   public:
-	PhysicalPlanGenerator(Catalog &catalog,
+	PhysicalPlanGenerator(ClientContext &context,
 	                      PhysicalPlanGenerator *parent = nullptr)
-	    : catalog(catalog), parent(parent) {}
+	    : context(context), parent(parent) {}
 
 	bool CreatePlan(std::unique_ptr<LogicalOperator> logical);
 
@@ -60,6 +62,6 @@ class PhysicalPlanGenerator : public LogicalOperatorVisitor {
 	std::string message;
 
   private:
-	Catalog &catalog;
+	ClientContext &context;
 };
 } // namespace duckdb

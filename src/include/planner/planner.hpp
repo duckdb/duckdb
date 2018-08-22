@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-#include "catalog/catalog.hpp"
+#include "catalog/client_context.hpp"
 #include "parser/statement/sql_statement.hpp"
 
 #include "planner/bindcontext.hpp"
@@ -25,7 +25,8 @@ namespace duckdb {
 //! using the Binder and LogicalPlanGenerator.
 class Planner {
   public:
-	bool CreatePlan(Catalog &catalog, std::unique_ptr<SQLStatement> statement);
+	bool CreatePlan(ClientContext &catalog,
+	                std::unique_ptr<SQLStatement> statement);
 
 	bool GetSuccess() const { return success; }
 	const std::string &GetErrorMessage() const { return message; }
@@ -37,6 +38,6 @@ class Planner {
 	std::unique_ptr<LogicalOperator> plan;
 
   private:
-	void CreatePlan(Catalog &, SQLStatement &statement);
+	void CreatePlan(ClientContext &, SQLStatement &statement);
 };
 } // namespace duckdb

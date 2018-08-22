@@ -3,6 +3,7 @@
 #include "parser/statement/create_statement.hpp"
 #include "parser/statement/insert_statement.hpp"
 #include "parser/statement/select_statement.hpp"
+#include "parser/statement/transaction_statement.hpp"
 
 #include "planner/binder.hpp"
 #include "planner/planner.hpp"
@@ -12,41 +13,48 @@
 using namespace duckdb;
 using namespace std;
 
-void Planner::CreatePlan(Catalog &catalog, SQLStatement &statement) {
+void Planner::CreatePlan(ClientContext &context, SQLStatement &statement) {
 	// first bind the tables and columns to the catalog
-	Binder binder(catalog);
+	Binder binder(context);
 
 	statement.Accept(&binder);
 
 	// now create a logical query plan from the query
-	LogicalPlanGenerator logical_planner(catalog, *binder.context);
+	LogicalPlanGenerator logical_planner(context, *binder.bind_context);
 	statement.Accept(&logical_planner);
 	// logical_planner.Print();
 
 	this->plan = move(logical_planner.root);
-	this->context = move(binder.context);
+	this->context = move(binder.bind_context);
 }
 
-bool Planner::CreatePlan(Catalog &catalog, unique_ptr<SQLStatement> statement) {
+bool Planner::CreatePlan(ClientContext &context,
+                         unique_ptr<SQLStatement> statement) {
 	this->success = false;
 	try {
 		switch (statement->GetType()) {
 		case StatementType::INSERT:
 		case StatementType::COPY:
 		case StatementType::SELECT:
-			CreatePlan(catalog, *statement.get());
+			CreatePlan(context, *statement.get());
 			this->success = true;
 			break;
 		case StatementType::CREATE: {
-			auto &cstmt = *reinterpret_cast<CreateStatement *>(statement.get());
+			auto &stmt = *reinterpret_cast<CreateStatement *>(statement.get());
 			// TODO: create actual plan
 
-			if (catalog.TableExists(cstmt.schema, cstmt.table)) {
+			if (context.catalog.TableExists(stmt.schema, stmt.table)) {
 				throw BinderException("Table %s already exists in schema %s ",
-				                      cstmt.table.c_str(),
-				                      cstmt.schema.c_str());
+				                      stmt.table.c_str(), stmt.schema.c_str());
 			}
-			catalog.CreateTable(cstmt.schema, cstmt.table, cstmt.columns);
+			context.catalog.CreateTable(stmt.schema, stmt.table, stmt.columns);
+			this->success = true;
+			break;
+		}
+		case StatementType::TRANSACTION: {
+			auto &stmt =
+			    *reinterpret_cast<TransactionStatement *>(statement.get());
+			throw Exception("Transactions not supported yet!");
 			this->success = true;
 			break;
 		}
