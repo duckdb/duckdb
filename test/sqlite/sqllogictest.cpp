@@ -663,13 +663,18 @@ TEST_CASE("[SLOW] Test SQLite Logic Test", "[sqlitelogic]") {
 					if (hashThreshold == 0 || nResult <= hashThreshold) {
 						for (i = 0; i < nResult && sScript.zLine[0];
 						     nextLine(&sScript), i++) {
-							REQUIRE(strcmp(sScript.zLine, azResult[i]) == 0);
 							if (strcmp(sScript.zLine, azResult[i]) != 0) {
 								fprintf(stdout, "%s:%d: wrong result\n",
 								        zScriptFile, sScript.nLine);
+
+								fprintf(stdout, "%s <> %s\n", sScript.zLine,
+								        azResult[i]);
 								REQUIRE(false);
 								break;
 							}
+							// we check this already but this inflates the test
+							// case count as desired
+							REQUIRE(strcmp(sScript.zLine, azResult[i]) == 0);
 						}
 					} else {
 						if (strcmp(sScript.zLine, zHash) != 0) {

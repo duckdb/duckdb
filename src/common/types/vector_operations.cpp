@@ -523,9 +523,6 @@ void VectorOperations::And(Vector &left, Vector &right, Vector &result) {
 	if (left.type != TypeId::BOOLEAN || right.type != TypeId::BOOLEAN) {
 		throw NotImplementedException("FIXME cast");
 	}
-	if (left.count != right.count) {
-		throw Exception("Vector lengths don't match");
-	}
 
 	_templated_bool_nullmask_op<operators::And, operators::AndMask>(left, right,
 	                                                                result);
@@ -561,10 +558,6 @@ struct OrMask {
 void VectorOperations::Or(Vector &left, Vector &right, Vector &result) {
 	if (left.type != TypeId::BOOLEAN || right.type != TypeId::BOOLEAN) {
 		throw NotImplementedException("FIXME cast");
-	}
-
-	if (left.count != right.count) {
-		throw Exception("Vector lengths don't match");
 	}
 
 	_templated_bool_nullmask_op<operators::Or, operators::OrMask>(left, right,
