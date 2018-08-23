@@ -121,8 +121,20 @@ duckdbQuery(void *pConn,       /* Connection created by xConnect */
 				if (duckdb_value_is_null(actual_column, r)) {
 					snprintf(buffer, BUFSIZ, "%s", "NULL");
 				} else {
-					snprintf(buffer, BUFSIZ, "%lf",
-					         ((double *)actual_column.data)[r]);
+					int n = snprintf(buffer, BUFSIZ, "%.3f",
+					                 ((double *)actual_column.data)[r]);
+					// remove trailing zeroes and pointless .
+					for (n--; n > 0; n--) {
+						if (buffer[n] == '0') {
+							buffer[n] = '\0';
+							continue;
+						}
+						if (buffer[n] == '.') {
+							buffer[n] = '\0';
+							break;
+						}
+						break;
+					}
 				}
 				break;
 			}

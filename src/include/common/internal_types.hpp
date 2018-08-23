@@ -327,12 +327,12 @@ static bool TypeIsNumeric(TypeId type) {
 template <class T> inline T NullValue() {
 	return std::numeric_limits<T>::min();
 }
-template <> inline double NullValue() { return NAN; }
+// template <> inline double NullValue() { return NAN; }
 
 template <class T> inline bool IsNullValue(T value) {
 	return value == NullValue<T>();
 }
-template <> inline bool IsNullValue(double value) { return isnan(value); }
+// template <> inline bool IsNullValue(double value) { return isnan(value); }
 
 //! Returns the minimum value that can be stored in a given type
 int64_t MinimumValue(TypeId type);
