@@ -257,6 +257,9 @@ const char *sqlite3_column_name(sqlite3_stmt *pStmt, int N) {
 const unsigned char *sqlite3_column_text(sqlite3_stmt *pStmt, int iCol) {
 	if (iCol >= pStmt->result.column_count)
 		return NULL;
+	if (duckdb_value_is_null(pStmt->result.columns[iCol], pStmt->curr_row)) {
+		return NULL;
+	}
 	return (unsigned char *)duckdb_get_value_str(pStmt->result.columns[iCol],
 	                                             pStmt->curr_row);
 }

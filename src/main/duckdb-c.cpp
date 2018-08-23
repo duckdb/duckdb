@@ -159,8 +159,12 @@ void duckdb_print_result(duckdb_result result) {
 	printf(" [ %zu ]\n", result.row_count);
 	for (size_t j = 0; j < result.row_count; j++) {
 		for (size_t i = 0; i < result.column_count; i++) {
-			Value v = _duckdb_c_get_value(result.columns[i], j);
-			printf("%s\t", v.ToString().c_str());
+			if (duckdb_value_is_null(result.columns[i], j)) {
+				printf("NULL\t");
+			} else {
+				Value v = _duckdb_c_get_value(result.columns[i], j);
+				printf("%s\t", v.ToString().c_str());
+			}
 		}
 		printf("\n");
 	}
