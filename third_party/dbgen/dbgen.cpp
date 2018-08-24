@@ -35,7 +35,7 @@ tdef tdefs[] = {
 namespace tpch {
 
 struct tpch_append_information {
-	shared_ptr<TableCatalogEntry> table;
+	TableCatalogEntry *table;
 	DataChunk chunk;
 };
 
@@ -361,108 +361,118 @@ string get_table_name(int num) {
 	}
 }
 
-static vector<ColumnCatalogEntry> RegionColumns() {
-	return vector<ColumnCatalogEntry>{
-	    ColumnCatalogEntry("r_regionkey", TypeId::INTEGER, false),
-	    ColumnCatalogEntry("r_name", TypeId::VARCHAR, false),
-	    ColumnCatalogEntry("r_comment", TypeId::VARCHAR, false)};
+static vector<ColumnDefinition> RegionColumns() {
+	return vector<ColumnDefinition>{
+	    ColumnDefinition("r_regionkey", TypeId::INTEGER, false),
+	    ColumnDefinition("r_name", TypeId::VARCHAR, false),
+	    ColumnDefinition("r_comment", TypeId::VARCHAR, false)};
 }
 
-static vector<ColumnCatalogEntry> NationColumns() {
-	return vector<ColumnCatalogEntry>{
-	    ColumnCatalogEntry("n_nationkey", TypeId::INTEGER, false),
-	    ColumnCatalogEntry("n_name", TypeId::VARCHAR, false),
-	    ColumnCatalogEntry("n_regionkey", TypeId::INTEGER, false),
-	    ColumnCatalogEntry("n_comment", TypeId::VARCHAR, false)};
+static vector<ColumnDefinition> NationColumns() {
+	return vector<ColumnDefinition>{
+	    ColumnDefinition("n_nationkey", TypeId::INTEGER, false),
+	    ColumnDefinition("n_name", TypeId::VARCHAR, false),
+	    ColumnDefinition("n_regionkey", TypeId::INTEGER, false),
+	    ColumnDefinition("n_comment", TypeId::VARCHAR, false)};
 }
 
-static vector<ColumnCatalogEntry> SupplierColumns() {
-	return vector<ColumnCatalogEntry>{
-	    ColumnCatalogEntry("s_suppkey", TypeId::INTEGER, false),
-	    ColumnCatalogEntry("s_name", TypeId::VARCHAR, false),
-	    ColumnCatalogEntry("s_address", TypeId::VARCHAR, false),
-	    ColumnCatalogEntry("s_nationkey", TypeId::INTEGER, false),
-	    ColumnCatalogEntry("s_phone", TypeId::VARCHAR, false),
-	    ColumnCatalogEntry("s_acctbal", TypeId::DECIMAL, false),
-	    ColumnCatalogEntry("s_comment", TypeId::VARCHAR, false)};
+static vector<ColumnDefinition> SupplierColumns() {
+	return vector<ColumnDefinition>{
+	    ColumnDefinition("s_suppkey", TypeId::INTEGER, false),
+	    ColumnDefinition("s_name", TypeId::VARCHAR, false),
+	    ColumnDefinition("s_address", TypeId::VARCHAR, false),
+	    ColumnDefinition("s_nationkey", TypeId::INTEGER, false),
+	    ColumnDefinition("s_phone", TypeId::VARCHAR, false),
+	    ColumnDefinition("s_acctbal", TypeId::DECIMAL, false),
+	    ColumnDefinition("s_comment", TypeId::VARCHAR, false)};
 }
 
-static vector<ColumnCatalogEntry> CustomerColumns() {
-	return vector<ColumnCatalogEntry>{
-	    ColumnCatalogEntry("c_custkey", TypeId::INTEGER, false),
-	    ColumnCatalogEntry("c_name", TypeId::VARCHAR, false),
-	    ColumnCatalogEntry("c_address", TypeId::VARCHAR, false),
-	    ColumnCatalogEntry("c_nationkey", TypeId::INTEGER, false),
-	    ColumnCatalogEntry("c_phone", TypeId::VARCHAR, false),
-	    ColumnCatalogEntry("c_acctbal", TypeId::DECIMAL, false),
-	    ColumnCatalogEntry("c_mktsegment", TypeId::VARCHAR, false),
-	    ColumnCatalogEntry("c_comment", TypeId::VARCHAR, false)};
+static vector<ColumnDefinition> CustomerColumns() {
+	return vector<ColumnDefinition>{
+	    ColumnDefinition("c_custkey", TypeId::INTEGER, false),
+	    ColumnDefinition("c_name", TypeId::VARCHAR, false),
+	    ColumnDefinition("c_address", TypeId::VARCHAR, false),
+	    ColumnDefinition("c_nationkey", TypeId::INTEGER, false),
+	    ColumnDefinition("c_phone", TypeId::VARCHAR, false),
+	    ColumnDefinition("c_acctbal", TypeId::DECIMAL, false),
+	    ColumnDefinition("c_mktsegment", TypeId::VARCHAR, false),
+	    ColumnDefinition("c_comment", TypeId::VARCHAR, false)};
 }
 
-static vector<ColumnCatalogEntry> PartColumns() {
-	return vector<ColumnCatalogEntry>{
-	    ColumnCatalogEntry("p_partkey", TypeId::INTEGER, false),
-	    ColumnCatalogEntry("p_name", TypeId::VARCHAR, false),
-	    ColumnCatalogEntry("p_mfgr", TypeId::VARCHAR, false),
-	    ColumnCatalogEntry("p_brand", TypeId::VARCHAR, false),
-	    ColumnCatalogEntry("p_type", TypeId::VARCHAR, false),
-	    ColumnCatalogEntry("p_size", TypeId::INTEGER, false),
-	    ColumnCatalogEntry("p_container", TypeId::VARCHAR, false),
-	    ColumnCatalogEntry("p_retailprice", TypeId::DECIMAL, false),
-	    ColumnCatalogEntry("p_comment", TypeId::VARCHAR, false)};
+static vector<ColumnDefinition> PartColumns() {
+	return vector<ColumnDefinition>{
+	    ColumnDefinition("p_partkey", TypeId::INTEGER, false),
+	    ColumnDefinition("p_name", TypeId::VARCHAR, false),
+	    ColumnDefinition("p_mfgr", TypeId::VARCHAR, false),
+	    ColumnDefinition("p_brand", TypeId::VARCHAR, false),
+	    ColumnDefinition("p_type", TypeId::VARCHAR, false),
+	    ColumnDefinition("p_size", TypeId::INTEGER, false),
+	    ColumnDefinition("p_container", TypeId::VARCHAR, false),
+	    ColumnDefinition("p_retailprice", TypeId::DECIMAL, false),
+	    ColumnDefinition("p_comment", TypeId::VARCHAR, false)};
 }
 
-static vector<ColumnCatalogEntry> PartSuppColumns() {
-	return vector<ColumnCatalogEntry>{
-	    ColumnCatalogEntry("ps_partkey", TypeId::INTEGER, false),
-	    ColumnCatalogEntry("ps_suppkey", TypeId::INTEGER, false),
-	    ColumnCatalogEntry("ps_availqty", TypeId::INTEGER, false),
-	    ColumnCatalogEntry("ps_supplycost", TypeId::DECIMAL, false),
-	    ColumnCatalogEntry("ps_comment", TypeId::VARCHAR, false)};
+static vector<ColumnDefinition> PartSuppColumns() {
+	return vector<ColumnDefinition>{
+	    ColumnDefinition("ps_partkey", TypeId::INTEGER, false),
+	    ColumnDefinition("ps_suppkey", TypeId::INTEGER, false),
+	    ColumnDefinition("ps_availqty", TypeId::INTEGER, false),
+	    ColumnDefinition("ps_supplycost", TypeId::DECIMAL, false),
+	    ColumnDefinition("ps_comment", TypeId::VARCHAR, false)};
 }
 
-static vector<ColumnCatalogEntry> OrdersColumns() {
-	return vector<ColumnCatalogEntry>{
-	    ColumnCatalogEntry("o_orderkey", TypeId::INTEGER, false),
-	    ColumnCatalogEntry("o_custkey", TypeId::INTEGER, false),
-	    ColumnCatalogEntry("o_orderstatus", TypeId::VARCHAR, false),
-	    ColumnCatalogEntry("o_totalprice", TypeId::DECIMAL, false),
-	    ColumnCatalogEntry("o_orderdate", TypeId::DATE, false),
-	    ColumnCatalogEntry("o_orderpriority", TypeId::VARCHAR, false),
-	    ColumnCatalogEntry("o_clerk", TypeId::VARCHAR, false),
-	    ColumnCatalogEntry("o_shippriority", TypeId::INTEGER, false),
-	    ColumnCatalogEntry("o_comment", TypeId::VARCHAR, false)};
+static vector<ColumnDefinition> OrdersColumns() {
+	return vector<ColumnDefinition>{
+	    ColumnDefinition("o_orderkey", TypeId::INTEGER, false),
+	    ColumnDefinition("o_custkey", TypeId::INTEGER, false),
+	    ColumnDefinition("o_orderstatus", TypeId::VARCHAR, false),
+	    ColumnDefinition("o_totalprice", TypeId::DECIMAL, false),
+	    ColumnDefinition("o_orderdate", TypeId::DATE, false),
+	    ColumnDefinition("o_orderpriority", TypeId::VARCHAR, false),
+	    ColumnDefinition("o_clerk", TypeId::VARCHAR, false),
+	    ColumnDefinition("o_shippriority", TypeId::INTEGER, false),
+	    ColumnDefinition("o_comment", TypeId::VARCHAR, false)};
 }
 
-static vector<ColumnCatalogEntry> LineitemColumns() {
-	return vector<ColumnCatalogEntry>{
-	    ColumnCatalogEntry("l_orderkey", TypeId::INTEGER, false),
-	    ColumnCatalogEntry("l_partkey", TypeId::INTEGER, false),
-	    ColumnCatalogEntry("l_suppkey", TypeId::INTEGER, false),
-	    ColumnCatalogEntry("l_linenumber", TypeId::INTEGER, false),
-	    ColumnCatalogEntry("l_quantity", TypeId::INTEGER, false),
-	    ColumnCatalogEntry("l_extendedprice", TypeId::DECIMAL, false),
-	    ColumnCatalogEntry("l_discount", TypeId::DECIMAL, false),
-	    ColumnCatalogEntry("l_tax", TypeId::DECIMAL, false),
-	    ColumnCatalogEntry("l_returnflag", TypeId::VARCHAR, false),
-	    ColumnCatalogEntry("l_linestatus", TypeId::VARCHAR, false),
-	    ColumnCatalogEntry("l_shipdate", TypeId::DATE, false),
-	    ColumnCatalogEntry("l_commitdate", TypeId::DATE, false),
-	    ColumnCatalogEntry("l_receiptdate", TypeId::DATE, false),
-	    ColumnCatalogEntry("l_shipinstruct", TypeId::VARCHAR, false),
-	    ColumnCatalogEntry("l_shipmode", TypeId::VARCHAR, false),
-	    ColumnCatalogEntry("l_comment", TypeId::VARCHAR, false)};
+static vector<ColumnDefinition> LineitemColumns() {
+	return vector<ColumnDefinition>{
+	    ColumnDefinition("l_orderkey", TypeId::INTEGER, false),
+	    ColumnDefinition("l_partkey", TypeId::INTEGER, false),
+	    ColumnDefinition("l_suppkey", TypeId::INTEGER, false),
+	    ColumnDefinition("l_linenumber", TypeId::INTEGER, false),
+	    ColumnDefinition("l_quantity", TypeId::INTEGER, false),
+	    ColumnDefinition("l_extendedprice", TypeId::DECIMAL, false),
+	    ColumnDefinition("l_discount", TypeId::DECIMAL, false),
+	    ColumnDefinition("l_tax", TypeId::DECIMAL, false),
+	    ColumnDefinition("l_returnflag", TypeId::VARCHAR, false),
+	    ColumnDefinition("l_linestatus", TypeId::VARCHAR, false),
+	    ColumnDefinition("l_shipdate", TypeId::DATE, false),
+	    ColumnDefinition("l_commitdate", TypeId::DATE, false),
+	    ColumnDefinition("l_receiptdate", TypeId::DATE, false),
+	    ColumnDefinition("l_shipinstruct", TypeId::VARCHAR, false),
+	    ColumnDefinition("l_shipmode", TypeId::VARCHAR, false),
+	    ColumnDefinition("l_comment", TypeId::VARCHAR, false)};
 }
 
-void dbgen(double flt_scale, Catalog &catalog, string schema, string suffix) {
-	catalog.CreateTable(schema, "region" + suffix, RegionColumns());
-	catalog.CreateTable(schema, "nation" + suffix, NationColumns());
-	catalog.CreateTable(schema, "supplier" + suffix, SupplierColumns());
-	catalog.CreateTable(schema, "customer" + suffix, CustomerColumns());
-	catalog.CreateTable(schema, "part" + suffix, PartColumns());
-	catalog.CreateTable(schema, "partsupp" + suffix, PartSuppColumns());
-	catalog.CreateTable(schema, "orders" + suffix, OrdersColumns());
-	catalog.CreateTable(schema, "lineitem" + suffix, LineitemColumns());
+void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
+	auto transaction = db.transaction_manager.StartTransaction();
+
+	db.catalog.CreateTable(*transaction, schema, "region" + suffix,
+	                       RegionColumns());
+	db.catalog.CreateTable(*transaction, schema, "nation" + suffix,
+	                       NationColumns());
+	db.catalog.CreateTable(*transaction, schema, "supplier" + suffix,
+	                       SupplierColumns());
+	db.catalog.CreateTable(*transaction, schema, "customer" + suffix,
+	                       CustomerColumns());
+	db.catalog.CreateTable(*transaction, schema, "part" + suffix,
+	                       PartColumns());
+	db.catalog.CreateTable(*transaction, schema, "partsupp" + suffix,
+	                       PartSuppColumns());
+	db.catalog.CreateTable(*transaction, schema, "orders" + suffix,
+	                       OrdersColumns());
+	db.catalog.CreateTable(*transaction, schema, "lineitem" + suffix,
+	                       LineitemColumns());
 
 	if (flt_scale == 0) {
 		// schema only
@@ -535,7 +545,8 @@ void dbgen(double flt_scale, Catalog &catalog, string schema, string suffix) {
 	for (size_t i = PART; i <= REGION; i++) {
 		auto tname = get_table_name(i);
 		if (!tname.empty()) {
-			append_info[i].table = catalog.GetTable(schema, tname + suffix);
+			append_info[i].table =
+			    db.catalog.GetTable(*transaction, schema, tname + suffix);
 		}
 	}
 
@@ -560,6 +571,8 @@ void dbgen(double flt_scale, Catalog &catalog, string schema, string suffix) {
 	}
 
 	cleanup_dists();
+
+	db.transaction_manager.CommitTransaction(transaction);
 }
 
 string get_query(int query) {

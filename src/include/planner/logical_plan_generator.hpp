@@ -15,7 +15,7 @@
 #include "common/internal_types.hpp"
 #include "common/printable.hpp"
 
-#include "catalog/client_context.hpp"
+#include "main/client_context.hpp"
 
 #include "parser/sql_node_visitor.hpp"
 

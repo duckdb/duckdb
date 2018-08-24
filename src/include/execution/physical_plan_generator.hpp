@@ -15,9 +15,9 @@
 #include "common/internal_types.hpp"
 #include "common/printable.hpp"
 
-#include "catalog/client_context.hpp"
-
 #include "execution/physical_operator.hpp"
+
+#include "main/client_context.hpp"
 
 #include "planner/bindcontext.hpp"
 #include "planner/logical_operator.hpp"

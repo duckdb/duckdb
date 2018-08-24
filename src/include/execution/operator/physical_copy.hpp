@@ -18,9 +18,9 @@ namespace duckdb {
 //! Physically copy file into a table
 class PhysicalCopy : public PhysicalOperator {
   public:
-	PhysicalCopy(std::shared_ptr<TableCatalogEntry> table,
-	             std::string file_path, bool is_from, char delimiter,
-	             char quote, char escape, std::vector<std::string> select_list)
+	PhysicalCopy(TableCatalogEntry *table, std::string file_path, bool is_from,
+	             char delimiter, char quote, char escape,
+	             std::vector<std::string> select_list)
 	    : PhysicalOperator(PhysicalOperatorType::COPY), table(table),
 	      file_path(file_path), is_from(is_from), delimiter(delimiter),
 	      quote(quote), escape(escape), select_list(select_list) {}
@@ -28,8 +28,8 @@ class PhysicalCopy : public PhysicalOperator {
 	PhysicalCopy(std::string file_path, bool is_from, char delimiter,
 	             char quote, char escape)
 	    : PhysicalOperator(PhysicalOperatorType::COPY), file_path(file_path),
-	      is_from(is_from), delimiter(delimiter), quote(quote), escape(escape) {
-	}
+	      is_from(is_from), delimiter(delimiter), quote(quote), escape(escape),
+	      table(nullptr) {}
 	std::vector<TypeId> GetTypes() override;
 	virtual void GetChunk(DataChunk &chunk,
 	                      PhysicalOperatorState *state) override;
@@ -37,7 +37,7 @@ class PhysicalCopy : public PhysicalOperator {
 	virtual std::unique_ptr<PhysicalOperatorState>
 	GetOperatorState(ExpressionExecutor *executor) override;
 
-	std::shared_ptr<TableCatalogEntry> table;
+	TableCatalogEntry *table;
 	std::string file_path;
 	bool is_from;
 	std::vector<std::string> select_list;

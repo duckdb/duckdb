@@ -1,7 +1,7 @@
 
 #include "common/assert.hpp"
 
-#include "catalog/column_catalog.hpp"
+#include "catalog/column_definition.hpp"
 
 #include "parser/tableref/tableref_list.hpp"
 #include "parser/transform.hpp"
@@ -134,7 +134,7 @@ unique_ptr<CreateStatement> TransformCreate(Node *node) {
 		char *name = (reinterpret_cast<value *>(
 		                  cdef->typeName->names->tail->data.ptr_value)
 		                  ->val.str);
-		auto centry = ColumnCatalogEntry(
+		auto centry = ColumnDefinition(
 		    cdef->colname, TransformStringToTypeId(name), cdef->is_not_null);
 		result->columns.push_back(centry);
 	}

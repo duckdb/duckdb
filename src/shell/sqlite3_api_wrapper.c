@@ -245,6 +245,8 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 	case DUCKDB_TYPE_DATE:
 	case DUCKDB_TYPE_VARCHAR:
 		return SQLITE_BLOB;
+	default:
+		return 0;
 	}
 	return 0;
 }

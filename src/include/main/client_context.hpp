@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// catalog/client_context.hpp
+// main/client_context.hpp
 //
 // Author: Mark Raasveldt
 //
@@ -10,8 +10,8 @@
 
 #pragma once
 
-#include "catalog/catalog.hpp"
-#include "storage/transaction_context.hpp"
+#include "main/database.hpp"
+#include "transaction/transaction_context.hpp"
 
 namespace duckdb {
 
@@ -19,12 +19,14 @@ namespace duckdb {
 //! during execution
 class ClientContext {
   public:
-	ClientContext(Catalog &catalog, TransactionContext &transaction)
-	    : catalog(catalog), transaction(transaction) {}
+	ClientContext(DuckDB &database)
+	    : db(database), transaction(database.transaction_manager) {}
 
-	//! The catalog that this client is connected to
-	Catalog &catalog;
+	Transaction &ActiveTransaction() { return transaction.ActiveTransaction(); }
+
+	//! The database that this client is connected to
+	DuckDB &db;
 	//! Data for the currently running transaction
-	TransactionContext &transaction;
+	TransactionContext transaction;
 };
 } // namespace duckdb

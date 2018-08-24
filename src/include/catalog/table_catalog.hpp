@@ -15,7 +15,7 @@
 #include <vector>
 
 #include "catalog/abstract_catalog.hpp"
-#include "catalog/column_catalog.hpp"
+#include "catalog/column_definition.hpp"
 
 #include "common/types/statistics.hpp"
 
@@ -32,12 +32,12 @@ class TableCatalogEntry : public AbstractCatalogEntry {
 	//! A reference to the underlying storage unit used for this table
 	DataTable *storage;
 	//! A list of columns that are part of this table
-	std::vector<std::shared_ptr<ColumnCatalogEntry>> columns;
+	std::vector<std::unique_ptr<ColumnDefinition>> columns;
 	//! A map of column name to column index
 	std::unordered_map<std::string, size_t> name_map;
 
 	//! Adds a column to this table
-	void AddColumn(ColumnCatalogEntry entry);
+	void AddColumn(ColumnDefinition entry);
 	//! Returns whether or not a column with the given name exists
 	bool ColumnExists(const std::string &name);
 	//! Returns the statistics of the oid-th column. Throws an exception if the
@@ -45,10 +45,8 @@ class TableCatalogEntry : public AbstractCatalogEntry {
 	Statistics GetStatistics(size_t oid);
 	//! Returns a reference to the column of the specified name. Throws an
 	//! exception if the column does not exist.
-	std::shared_ptr<ColumnCatalogEntry> GetColumn(const std::string &name);
+	ColumnDefinition *GetColumn(const std::string &name);
 	//! Returns a list of types of the table
 	std::vector<TypeId> GetTypes();
-
-	virtual std::string ToString() const { return std::string(); }
 };
 } // namespace duckdb

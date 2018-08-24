@@ -2,7 +2,6 @@
 #include "catalog/schema_catalog.hpp"
 #include "catalog/catalog.hpp"
 #include "common/exception.hpp"
-#include "storage/storage_manager.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -11,27 +10,33 @@ SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name)
     : AbstractCatalogEntry(catalog, name) {}
 
 void SchemaCatalogEntry::CreateTable(
-    const string &table_name, const std::vector<ColumnCatalogEntry> &columns) {
-	if (TableExists(table_name)) {
+    Transaction &transaction, const string &table_name,
+    const std::vector<ColumnDefinition> &columns) {
+
+	auto table = new TableCatalogEntry(catalog, table_name);
+	auto table_entry = unique_ptr<AbstractCatalogEntry>(table);
+	if (!tables.CreateEntry(transaction, table_name, move(table_entry))) {
 		throw CatalogException("Table with name %s already exists!",
 		                       table_name.c_str());
 	}
-	auto table = make_shared<TableCatalogEntry>(catalog, table_name);
-	catalog->storage_manager->CreateTable(*table.get());
+
+	catalog->storage.CreateTable(*table);
 	for (auto &column : columns) {
 		table->AddColumn(column);
 	}
-	tables[table_name] = table;
 }
 
-bool SchemaCatalogEntry::TableExists(const string &table_name) {
-	return tables.find(table_name) != tables.end();
+bool SchemaCatalogEntry::TableExists(Transaction &transaction,
+                                     const string &table_name) {
+	return tables.EntryExists(transaction, table_name);
 }
 
-shared_ptr<TableCatalogEntry> SchemaCatalogEntry::GetTable(const string &name) {
-	if (!TableExists(name)) {
+TableCatalogEntry *SchemaCatalogEntry::GetTable(Transaction &transaction,
+                                                const string &table_name) {
+	auto entry = tables.GetEntry(transaction, table_name);
+	if (!entry) {
 		throw CatalogException("Table with name %s does not exist!",
-		                       name.c_str());
+		                       table_name.c_str());
 	}
-	return tables[name];
+	return (TableCatalogEntry *)entry;
 }

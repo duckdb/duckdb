@@ -1,47 +1,32 @@
 
-#include "duckdb.hpp"
+#include "main/connection.hpp"
 
-#include "common/types/data_chunk.hpp"
 #include "execution/executor.hpp"
 #include "execution/physical_plan_generator.hpp"
 #include "optimizer/optimizer.hpp"
-#include "storage/storage_manager.hpp"
-
 #include "parser/parser.hpp"
 #include "planner/planner.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-DuckDB::DuckDB(const char *path) {
-	// create a database
-	// create the base catalog
-	catalog.CreateSchema(DEFAULT_SCHEMA);
-}
-
 DuckDBConnection::DuckDBConnection(DuckDB &database)
-    : database(database), context(database.catalog, transaction) {}
+    : db(database), context(database) {}
 
-DuckDBConnection::~DuckDBConnection() {
-	// FIXME: rollback active transaction
-}
+DuckDBConnection::~DuckDBConnection() {}
 
-unique_ptr<DuckDBResult> DuckDBConnection::Query(std::string query) {
+unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(std::string query) {
 	auto result = make_unique<DuckDBResult>();
 	result->success = false;
 	try {
 		// parse the query and transform it into a set of statements
 		Parser parser;
 		if (!parser.ParseQuery(query.c_str())) {
-			fprintf(stderr, "Failure to parse: %s\n",
-			        parser.GetErrorMessage().c_str());
 			return make_unique<DuckDBResult>(parser.GetErrorMessage());
 		}
 
 		Planner planner;
 		if (!planner.CreatePlan(context, move(parser.statements.back()))) {
-			fprintf(stderr, "Failed to create plan: %s\n",
-			        planner.GetErrorMessage().c_str());
 			return make_unique<DuckDBResult>(planner.GetErrorMessage());
 		}
 		if (!planner.plan) {
@@ -63,8 +48,6 @@ unique_ptr<DuckDBResult> DuckDBConnection::Query(std::string query) {
 		// now convert logical query plan into a physical query plan
 		PhysicalPlanGenerator physical_planner(context);
 		if (!physical_planner.CreatePlan(move(plan))) {
-			fprintf(stderr, "Failed to create physical plan: %s\n",
-			        physical_planner.GetErrorMessage().c_str());
 			return make_unique<DuckDBResult>(
 			    physical_planner.GetErrorMessage());
 		}
@@ -81,24 +64,20 @@ unique_ptr<DuckDBResult> DuckDBConnection::Query(std::string query) {
 	return move(result);
 }
 
-DuckDBResult::DuckDBResult() : success(true) {}
-
-DuckDBResult::DuckDBResult(std::string error) : success(false), error(error) {}
-
-void DuckDBResult::Print() {
-	if (success) {
-		for (auto &type : types()) {
-			printf("%s\t", TypeIdToString(type).c_str());
-		}
-		printf(" [ %zu ]\n", size());
-		for (size_t j = 0; j < size(); j++) {
-			for (size_t i = 0; i < column_count(); i++) {
-				printf("%s\t", collection.GetValue(i, j).ToString().c_str());
-			}
-			printf("\n");
-		}
-		printf("\n");
-	} else {
-		printf("Query Error: %s\n", error.c_str());
+unique_ptr<DuckDBResult> DuckDBConnection::Query(std::string query) {
+	if (context.transaction.IsAutoCommit()) {
+		context.transaction.BeginTransaction();
 	}
+
+	auto result = GetQueryResult(query);
+
+	if (context.transaction.IsAutoCommit() &&
+	    context.transaction.HasActiveTransaction()) {
+		if (result->GetSuccess()) {
+			context.transaction.Commit();
+		} else {
+			context.transaction.Rollback();
+		}
+	}
+	return move(result);
 }

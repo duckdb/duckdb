@@ -13,7 +13,8 @@
 #include <string>
 #include <vector>
 
-#include "catalog/client_context.hpp"
+#include "main/client_context.hpp"
+
 #include "parser/statement/sql_statement.hpp"
 
 #include "planner/bindcontext.hpp"

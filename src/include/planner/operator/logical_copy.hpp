@@ -16,8 +16,8 @@ namespace duckdb {
 
 class LogicalCopy : public LogicalOperator {
   public:
-	LogicalCopy(std::shared_ptr<TableCatalogEntry> table, std::string file_path,
-	            bool is_from, char delimiter, char quote, char escape,
+	LogicalCopy(TableCatalogEntry *table, std::string file_path, bool is_from,
+	            char delimiter, char quote, char escape,
 	            std::vector<std::string> select_list)
 	    : LogicalOperator(LogicalOperatorType::COPY), table(table),
 	      file_path(file_path), is_from(is_from), delimiter(delimiter),
@@ -30,7 +30,7 @@ class LogicalCopy : public LogicalOperator {
 
 	virtual void Accept(LogicalOperatorVisitor *v) override { v->Visit(*this); }
 
-	std::shared_ptr<TableCatalogEntry> table;
+	TableCatalogEntry *table;
 
 	std::string file_path;
 

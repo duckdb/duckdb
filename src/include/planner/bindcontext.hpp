@@ -16,7 +16,7 @@
 #include <vector>
 
 #include "catalog/catalog.hpp"
-#include "catalog/column_catalog.hpp"
+#include "catalog/column_definition.hpp"
 #include "catalog/table_catalog.hpp"
 #include "parser/expression/abstract_expression.hpp"
 #include "parser/statement/sql_statement.hpp"
@@ -24,10 +24,10 @@
 namespace duckdb {
 
 struct TableBinding {
-	std::shared_ptr<TableCatalogEntry> table;
+	TableCatalogEntry *table;
 	size_t index;
 
-	TableBinding(std::shared_ptr<TableCatalogEntry> table, size_t index)
+	TableBinding(TableCatalogEntry *table, size_t index)
 	    : table(table), index(index) {}
 };
 
@@ -42,8 +42,7 @@ class BindContext {
 	std::string GetMatchingTable(const std::string &column_name);
 	//! Binds a column expression to the base table. Returns the column catalog
 	//! entry or throws an exception if the column could not be bound.
-	std::shared_ptr<ColumnCatalogEntry> BindColumn(ColumnRefExpression &expr,
-	                                               size_t depth = 0);
+	ColumnDefinition *BindColumn(ColumnRefExpression &expr, size_t depth = 0);
 
 	//! Generate column expressions for all columns that are present in the
 	//! referenced tables. This is used to resolve the * expression in a
@@ -52,8 +51,7 @@ class BindContext {
 	    std::vector<std::unique_ptr<AbstractExpression>> &new_select_list);
 
 	//! Adds a base table with the given alias to the BindContext.
-	void AddBaseTable(const std::string &alias,
-	                  std::shared_ptr<TableCatalogEntry> table_entry);
+	void AddBaseTable(const std::string &alias, TableCatalogEntry *table_entry);
 	//! Adds a subquery with a given alias to the BindContext.
 	void AddSubquery(const std::string &alias, SelectStatement *subquery);
 	//! Adds an expression that has an alias to the BindContext

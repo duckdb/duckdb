@@ -16,7 +16,7 @@ TEST_CASE("[SLOW] Test TPC-H SF0.1", "[tpch]") {
 	// generate the TPC-H data for SF 0.1
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
-	tpch::dbgen(sf, db.catalog);
+	tpch::dbgen(sf, db);
 
 	// check if all the counts are correct
 	result = con.Query("SELECT COUNT(*) FROM orders");

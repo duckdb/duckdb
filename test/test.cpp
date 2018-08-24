@@ -15,6 +15,11 @@ int main() {
 
 	string input_file = "test/test.sql";
 	ifstream infile(input_file);
+	if (!infile.good()) {
+		fprintf(stderr, "Cannot find file test/test.sql! Copy a template from "
+		                "test/test.sql.in\n");
+		exit(1);
+	}
 	string line;
 	size_t linenr = 0;
 	size_t queryline = 0;
@@ -24,7 +29,12 @@ int main() {
 		linenr++;
 		if (line.substr(0, 2) == "Q:") {
 			// query
+			fprintf(stderr, "%s\n", line.c_str());
 			result = con.Query(line.substr(2));
+			if (!result->GetSuccess()) {
+				fprintf(stderr, "Query failed with answer: %s\n",
+				        result->GetErrorMessage().c_str());
+			}
 			queryline = linenr;
 		} else {
 			continue;
@@ -43,6 +53,7 @@ int main() {
 					}
 				}
 				// run the query
+				fprintf(stderr, "%s\n", line.c_str());
 				result = con.Query(line.substr(2));
 				queryline = linenr;
 				csv = "";

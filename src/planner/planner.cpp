@@ -42,19 +42,55 @@ bool Planner::CreatePlan(ClientContext &context,
 		case StatementType::CREATE: {
 			auto &stmt = *reinterpret_cast<CreateStatement *>(statement.get());
 			// TODO: create actual plan
-
-			if (context.catalog.TableExists(stmt.schema, stmt.table)) {
-				throw BinderException("Table %s already exists in schema %s ",
-				                      stmt.table.c_str(), stmt.schema.c_str());
-			}
-			context.catalog.CreateTable(stmt.schema, stmt.table, stmt.columns);
+			context.db.catalog.CreateTable(context.ActiveTransaction(),
+			                               stmt.schema, stmt.table,
+			                               stmt.columns);
 			this->success = true;
 			break;
 		}
 		case StatementType::TRANSACTION: {
 			auto &stmt =
 			    *reinterpret_cast<TransactionStatement *>(statement.get());
-			throw Exception("Transactions not supported yet!");
+			// TODO: create actual plan
+			switch (stmt.type) {
+			case TransactionType::BEGIN_TRANSACTION: {
+				if (context.transaction.IsAutoCommit()) {
+					// start the active transaction
+					// if autocommit is active, we have already called
+					// BeginTransaction by setting autocommit to false we
+					// prevent it from being closed after this query, hence
+					// preserving the transaction context for the next query
+					context.transaction.SetAutoCommit(false);
+				} else {
+					throw Exception(
+					    "cannot start a transaction within a transaction");
+				}
+				break;
+			}
+			case TransactionType::COMMIT: {
+				if (context.transaction.IsAutoCommit()) {
+					throw Exception("cannot commit - no transaction is active");
+				} else {
+					// explicitly commit the current transaction
+					context.transaction.Commit();
+					context.transaction.SetAutoCommit(true);
+				}
+				break;
+			}
+			case TransactionType::ROLLBACK: {
+				if (context.transaction.IsAutoCommit()) {
+					throw Exception(
+					    "cannot rollback - no transaction is active");
+				} else {
+					// explicitly rollback the current transaction
+					context.transaction.Rollback();
+					context.transaction.SetAutoCommit(true);
+				}
+				break;
+			}
+			default:
+				throw Exception("Unrecognized transaction type!");
+			}
 			this->success = true;
 			break;
 		}

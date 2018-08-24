@@ -9,7 +9,7 @@
 using namespace duckdb;
 using namespace std;
 
-void DataTable::AddColumn(ColumnCatalogEntry &column) {
+void DataTable::AddColumn(ColumnDefinition &column) {
 	columns.push_back(make_unique<DataColumn>(*this, column));
 }
 

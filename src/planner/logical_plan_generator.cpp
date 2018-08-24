@@ -176,7 +176,8 @@ void LogicalPlanGenerator::Visit(SubqueryExpression &expr) {
 }
 
 void LogicalPlanGenerator::Visit(BaseTableRef &expr) {
-	auto table = context.catalog.GetTable(expr.schema_name, expr.table_name);
+	auto table = context.db.catalog.GetTable(context.ActiveTransaction(),
+	                                         expr.schema_name, expr.table_name);
 	auto alias = expr.alias.empty() ? expr.table_name : expr.alias;
 
 	auto index = bind_context.GetTableIndex(alias);
@@ -246,7 +247,8 @@ void LogicalPlanGenerator::Visit(SubqueryRef &expr) {
 }
 
 void LogicalPlanGenerator::Visit(InsertStatement &statement) {
-	auto table = context.catalog.GetTable(statement.schema, statement.table);
+	auto table = context.db.catalog.GetTable(context.ActiveTransaction(),
+	                                         statement.schema, statement.table);
 	std::vector<std::unique_ptr<AbstractExpression>> insert_val_list;
 
 	if (statement.columns.size() == 0) {
@@ -264,7 +266,7 @@ void LogicalPlanGenerator::Visit(InsertStatement &statement) {
 		for (size_t i = 0; i < statement.values.size(); i++) {
 			insert_vals[statement.columns[i]] = move(statement.values[i]);
 		}
-		for (auto col : table->columns) {
+		for (auto &col : table->columns) {
 			if (insert_vals.count(col->name)) { // column value was specified
 				insert_val_list.push_back(move(insert_vals[col->name]));
 			} else {
@@ -280,8 +282,8 @@ void LogicalPlanGenerator::Visit(InsertStatement &statement) {
 
 void LogicalPlanGenerator::Visit(CopyStatement &statement) {
 	if (statement.table[0] != '\0') {
-		auto table =
-		    context.catalog.GetTable(statement.schema, statement.table);
+		auto table = context.db.catalog.GetTable(
+		    context.ActiveTransaction(), statement.schema, statement.table);
 		auto copy = make_unique<LogicalCopy>(
 		    table, move(statement.file_path), move(statement.is_from),
 		    move(statement.delimiter), move(statement.quote),

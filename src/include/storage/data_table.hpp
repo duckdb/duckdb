@@ -15,6 +15,7 @@
 #include "common/types/data_chunk.hpp"
 
 #include "storage/data_column.hpp"
+#include "transaction/transaction.hpp"
 
 namespace duckdb {
 class StorageManager;
@@ -25,13 +26,16 @@ class DataTable {
 	DataTable(StorageManager &storage, TableCatalogEntry &table)
 	    : storage(storage), size(0), table(table) {}
 
-	//! Add a new column to the table, filling it with its default value if the
-	//! table is not empty
-	void AddColumn(ColumnCatalogEntry &column);
-
-	//! Append a DataChunk to the table. Throws an exception if the columns
-	//! don't match the tables' columns.
+	void AddColumn(ColumnDefinition &column);
 	void AddData(DataChunk &chunk);
+
+	// //! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
+	// from offset and store them in result. Offset is incremented with how many
+	// elements were returned. void Scan(Transaction& transaction, DataChunk
+	// &result, size_t &offset);
+	// //! Append a DataChunk to the table. Throws an exception if the columns
+	// //! don't match the tables' columns.
+	// void Append(Transaction& transaction, DataChunk &chunk);
 
 	//! The amount of entries in the table
 	size_t size;

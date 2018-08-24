@@ -17,7 +17,7 @@ namespace duckdb {
 //! Physically insert a set of data into a table
 class PhysicalInsert : public PhysicalOperator {
   public:
-	PhysicalInsert(std::shared_ptr<TableCatalogEntry> table,
+	PhysicalInsert(TableCatalogEntry *table,
 	               std::vector<std::unique_ptr<AbstractExpression>> value_list)
 	    : PhysicalOperator(PhysicalOperatorType::INSERT),
 	      value_list(move(value_list)), table(table) {}
@@ -30,7 +30,7 @@ class PhysicalInsert : public PhysicalOperator {
 	GetOperatorState(ExpressionExecutor *parent_executor) override;
 
 	std::vector<std::unique_ptr<AbstractExpression>> value_list;
-	std::shared_ptr<TableCatalogEntry> table;
+	TableCatalogEntry *table;
 };
 
 } // namespace duckdb

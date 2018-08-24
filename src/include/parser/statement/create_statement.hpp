@@ -34,7 +34,7 @@ class CreateStatement : public SQLStatement {
 	std::string schema;
 
 	//! List of columns of the table
-	std::vector<ColumnCatalogEntry> columns;
+	std::vector<ColumnDefinition> columns;
 };
 
 } // namespace duckdb

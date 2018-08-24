@@ -3,7 +3,7 @@
 
 #include <vector>
 
-#include "catalog/client_context.hpp"
+#include "main/client_context.hpp"
 
 #include "optimizer/rewriter.hpp"
 #include "parser/parser.hpp"
@@ -21,6 +21,7 @@ using namespace std;
 TEST_CASE("Subquery rewriting", "[subquery_rewrite]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	con.Query("BEGIN TRANSACTION");
 	con.Query("CREATE TABLE t1 (a INTEGER, b INTEGER)");
 	con.Query("INSERT INTO t1 VALUES (1, 10)");
 	con.Query("INSERT INTO t1 VALUES (2, 20)");

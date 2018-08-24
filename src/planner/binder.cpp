@@ -241,7 +241,8 @@ void Binder::Visit(SubqueryExpression &expr) {
 }
 
 void Binder::Visit(BaseTableRef &expr) {
-	auto table = context.catalog.GetTable(expr.schema_name, expr.table_name);
+	auto table = context.db.catalog.GetTable(context.ActiveTransaction(),
+	                                         expr.schema_name, expr.table_name);
 	bind_context->AddBaseTable(
 	    expr.alias.empty() ? expr.table_name : expr.alias, table);
 }

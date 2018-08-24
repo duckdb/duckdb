@@ -11,7 +11,7 @@ using namespace std;
 TableCatalogEntry::TableCatalogEntry(Catalog *catalog, string name)
     : AbstractCatalogEntry(catalog, name), storage(nullptr) {}
 
-void TableCatalogEntry::AddColumn(ColumnCatalogEntry entry) {
+void TableCatalogEntry::AddColumn(ColumnDefinition entry) {
 	if (ColumnExists(entry.name)) {
 		throw CatalogException("Column with name %s already exists!",
 		                       entry.name.c_str());
@@ -23,23 +23,21 @@ void TableCatalogEntry::AddColumn(ColumnCatalogEntry entry) {
 	size_t oid = columns.size();
 	name_map[entry.name] = oid;
 	entry.oid = oid;
-	entry.catalog = this->catalog;
-	auto column = make_shared<ColumnCatalogEntry>(entry);
-	columns.push_back(column);
-	storage->AddColumn(*column.get());
+	auto column = make_unique<ColumnDefinition>(entry);
+	storage->AddColumn(*column);
+	columns.push_back(move(column));
 }
 
 bool TableCatalogEntry::ColumnExists(const string &name) {
 	return name_map.find(name) != name_map.end();
 }
 
-shared_ptr<ColumnCatalogEntry>
-TableCatalogEntry::GetColumn(const std::string &name) {
+ColumnDefinition *TableCatalogEntry::GetColumn(const std::string &name) {
 	if (!ColumnExists(name)) {
 		throw CatalogException("Column with name %s does not exist!",
 		                       name.c_str());
 	}
-	return columns[name_map[name]];
+	return columns[name_map[name]].get();
 }
 
 Statistics TableCatalogEntry::GetStatistics(size_t oid) {

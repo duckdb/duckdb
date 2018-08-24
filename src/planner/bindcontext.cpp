@@ -39,8 +39,8 @@ string BindContext::GetMatchingTable(const string &column_name) {
 	return result;
 }
 
-shared_ptr<ColumnCatalogEntry>
-BindContext::BindColumn(ColumnRefExpression &expr, size_t depth) {
+ColumnDefinition *BindContext::BindColumn(ColumnRefExpression &expr,
+                                          size_t depth) {
 	if (expr.table_name.empty()) {
 		auto entry = expression_alias_map.find(expr.column_name);
 		if (entry == expression_alias_map.end()) {
@@ -62,7 +62,7 @@ BindContext::BindColumn(ColumnRefExpression &expr, size_t depth) {
 		throw BinderException("Referenced table \"%s\" not found!",
 		                      expr.table_name.c_str());
 	}
-	shared_ptr<ColumnCatalogEntry> entry;
+	ColumnDefinition *entry;
 
 	size_t table_index = 0;
 	auto table_entry = regular_table_alias_map.find(expr.table_name);
@@ -122,7 +122,7 @@ void BindContext::GenerateAllColumnExpressions(
 }
 
 void BindContext::AddBaseTable(const string &alias,
-                               shared_ptr<TableCatalogEntry> table_entry) {
+                               TableCatalogEntry *table_entry) {
 	if (HasAlias(alias)) {
 		throw BinderException("Duplicate alias \"%s\" in query!",
 		                      alias.c_str());

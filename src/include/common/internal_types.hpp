@@ -24,6 +24,10 @@ typedef int32_t date_t;
 typedef int64_t timestamp_t;
 //! Type used for the selection vector
 typedef uint16_t sel_t;
+//! Type used for transaction timestamps
+//! FIXME: this should be a 128-bit integer
+//! With 64-bit, the database only supports up to 2^32 transactions
+typedef uint64_t transaction_t;
 
 //! Zero selection vector: completely filled with the value 0 [READ ONLY]
 extern sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE];
