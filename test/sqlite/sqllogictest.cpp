@@ -378,14 +378,20 @@ TEST_CASE("[SLOW] Test SQLite Logic Test", "[sqlitelogic]") {
 	** Read the entire script file contents into memory
 	*/
 
-	vector<string> files = {"third_party/sqllogictest/test/select1.test",
-	                        "third_party/sqllogictest/test/select2.test",
-	                        "third_party/sqllogictest/test/select3.test"};
+	vector<string> files = {
+	    "third_party/sqllogictest/test/select1.test",
+	    "third_party/sqllogictest/test/select2.test",
+	    "third_party/sqllogictest/test/select3.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_0.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_1.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_2.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_3.test"};
 	for (auto &script : files) {
 		zScriptFile = script.c_str();
 		in = fopen(zScriptFile, "rb");
 		if (!in) {
-			FAIL("Could not find test script '" + script + "'. Perhaps run `make sqlite`. ");
+			FAIL("Could not find test script '" + script +
+			     "'. Perhaps run `make sqlite`. ");
 		}
 		REQUIRE(in);
 		fseek(in, 0L, SEEK_END);
@@ -397,6 +403,9 @@ TEST_CASE("[SLOW] Test SQLite Logic Test", "[sqlitelogic]") {
 		fclose(in);
 		REQUIRE(nGot >= nScript);
 		zScript[nGot] = 0;
+
+		// zap hash table as result labels are only valid within one test file
+		memset(aHash, 0, sizeof(aHash));
 
 		/* Initialize the sScript structure so that the cursor will be pointing
 		** to the start of the first line in the file after nextLine() is called
