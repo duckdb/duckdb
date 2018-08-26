@@ -284,3 +284,5 @@ cmake-build-release
 docs
 test/test.sql
 
+# SQLite logic tests
+third_party/sqllogictest

@@ -377,17 +377,16 @@ TEST_CASE("[SLOW] Test SQLite Logic Test", "[sqlitelogic]") {
 	/*
 	** Read the entire script file contents into memory
 	*/
-	//	vector<string> files = {
-	//	    "test/sqlite/select1.test", "test/sqlite/select2.test",
-	//	    "test/sqlite/select3.test", "test/sqlite/select4.test",
-	//	    "test/sqlite/select5.test"};
 
-	vector<string> files = {"test/sqlite/select1.test",
-	                        "test/sqlite/select2.test",
-	                        "test/sqlite/select3.test"};
+	vector<string> files = {"third_party/sqllogictest/test/select1.test",
+	                        "third_party/sqllogictest/test/select2.test",
+	                        "third_party/sqllogictest/test/select3.test"};
 	for (auto &script : files) {
 		zScriptFile = script.c_str();
 		in = fopen(zScriptFile, "rb");
+		if (!in) {
+			FAIL("Could not find test script '" + script + "'. Perhaps run `make sqlite`. ");
+		}
 		REQUIRE(in);
 		fseek(in, 0L, SEEK_END);
 		nScript = ftell(in);

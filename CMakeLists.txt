@@ -5,7 +5,7 @@ project(DuckDB)
 find_package(Threads REQUIRED)
 
 set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_VERBOSE_MAKEFILE on)
+set(CMAKE_VERBOSE_MAKEFILE off)
 
 
 set(CMAKE_CXX_FLAGS_DEFAULT "-O0 -g")
