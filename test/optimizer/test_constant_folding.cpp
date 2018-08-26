@@ -109,6 +109,7 @@ TEST_CASE("Constant folding handles unknown expressions left", "[optimizer]") {
 
 	auto lr = make_unique<ConstantExpression>(Value::INTEGER(0));
 	auto ll = make_unique<ColumnRefExpression>("WHATEV");
+	ll->return_type = TypeId::BIGINT;
 
 	unique_ptr<AbstractExpression> root = make_unique<OperatorExpression>(
 	    ExpressionType::OPERATOR_MULTIPLY, TypeId::INTEGER, move(ll), move(lr));
@@ -132,6 +133,7 @@ TEST_CASE("Constant folding handles unknown expressions right", "[optimizer]") {
 
 	auto ll = make_unique<ConstantExpression>(Value::INTEGER(0));
 	auto lr = make_unique<ColumnRefExpression>("WHATEV");
+	lr->return_type = TypeId::BIGINT;
 
 	unique_ptr<AbstractExpression> root = make_unique<OperatorExpression>(
 	    ExpressionType::OPERATOR_ADD, TypeId::INTEGER, move(ll), move(lr));
@@ -150,6 +152,7 @@ TEST_CASE("Constant folding handles NULL propagation", "[optimizer]") {
 
 	auto lr = make_unique<ConstantExpression>(Value::INTEGER(0));
 	auto ll = make_unique<ColumnRefExpression>("WHATEV");
+	ll->return_type = TypeId::BIGINT;
 
 	unique_ptr<AbstractExpression> ir = make_unique<OperatorExpression>(
 	    ExpressionType::OPERATOR_DIVIDE, TypeId::INTEGER, move(ll), move(lr));

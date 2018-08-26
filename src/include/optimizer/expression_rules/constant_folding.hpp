@@ -97,7 +97,8 @@ class ConstantFoldingRule : public Rule {
 					break;
 				case ExpressionType::OPERATOR_MULTIPLY:
 					if (Value::Equals(right_val->value, zero)) {
-						return make_unique<ConstantExpression>(zero);
+						return make_unique<ConstantExpression>(
+						    zero.CastAs(left->return_type));
 					}
 					if (Value::Equals(right_val->value, one)) {
 						return move(root.children[0]);
@@ -117,7 +118,8 @@ class ConstantFoldingRule : public Rule {
 						return make_unique<ConstantExpression>(null);
 					}
 					if (Value::Equals(right_val->value, one)) {
-						return make_unique<ConstantExpression>(zero);
+						return make_unique<ConstantExpression>(
+						    zero.CastAs(left->return_type));
 					}
 					break;
 				default:
@@ -138,7 +140,8 @@ class ConstantFoldingRule : public Rule {
 					break;
 				case ExpressionType::OPERATOR_MULTIPLY:
 					if (Value::Equals(left_val->value, zero)) { // X * 0 == 0
-						return make_unique<ConstantExpression>(zero);
+						return make_unique<ConstantExpression>(
+						    zero.CastAs(right->return_type));
 					}
 					if (Value::Equals(left_val->value, one)) { // X * 1 = X
 						return move(root.children[1]);
@@ -146,7 +149,8 @@ class ConstantFoldingRule : public Rule {
 					break;
 				case ExpressionType::OPERATOR_DIVIDE: // 0 / X == 0
 					if (Value::Equals(left_val->value, zero)) {
-						return make_unique<ConstantExpression>(zero);
+						return make_unique<ConstantExpression>(
+						    zero.CastAs(right->return_type));
 					}
 					break;
 				case ExpressionType::OPERATOR_MOD:
