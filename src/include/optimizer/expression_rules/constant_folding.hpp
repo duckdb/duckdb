@@ -88,10 +88,11 @@ class ConstantFoldingRule : public Rule {
 		//		// case: right is constant
 		//		if (right->type == ExpressionType::VALUE_CONSTANT) {
 		//			auto right_val = reinterpret_cast<ConstantExpression
-		//*>(right); 			if (TypeIsNumeric(right_val->value.type)) { 				switch
-		//(root.type) { 				case ExpressionType::OPERATOR_ADD: 				case
-		//ExpressionType::OPERATOR_SUBTRACT: 					if (Value::Equals(right_val->value,
-		//zero)) { 						return move(root.children[0]);
+		//*>(right); 			if (TypeIsNumeric(right_val->value.type)) {
+		//switch (root.type) { 				case ExpressionType::OPERATOR_ADD:
+		//case ExpressionType::OPERATOR_SUBTRACT: 					if
+		// (Value::Equals(right_val->value,
+		// zero)) { 						return move(root.children[0]);
 		//					}
 		//					break;
 		//				case ExpressionType::OPERATOR_MULTIPLY:
@@ -104,11 +105,12 @@ class ConstantFoldingRule : public Rule {
 		//					}
 		//					break;
 		//				case ExpressionType::OPERATOR_DIVIDE:
-		//					if (Value::Equals(right_val->value, zero)) { // X / 0 =
-		//NULL 						return make_unique<ConstantExpression>(null);
+		//					if (Value::Equals(right_val->value, zero)) { // X / 0
+		//= NULL 						return
+		// make_unique<ConstantExpression>(null);
 		//					}
-		//					if (Value::Equals(right_val->value, one)) { // X / 1 ==
-		//X 						return move(root.children[0]);
+		//					if (Value::Equals(right_val->value, one)) { // X / 1
+		//== X 						return move(root.children[0]);
 		//					}
 		//					break;
 		//				case ExpressionType::OPERATOR_MOD:
@@ -130,19 +132,20 @@ class ConstantFoldingRule : public Rule {
 		//		// case: left is constant
 		//		if (left->type == ExpressionType::VALUE_CONSTANT) {
 		//			auto left_val = reinterpret_cast<ConstantExpression
-		//*>(left); 			if (TypeIsNumeric(left_val->value.type)) { 				switch
-		//(root.type) { 				case ExpressionType::OPERATOR_ADD: // X + 0 == X 					if
-		//(Value::Equals(left_val->value, zero)) { 						return
-		//move(root.children[1]);
+		//*>(left); 			if (TypeIsNumeric(left_val->value.type)) {
+		//switch
+		//(root.type) { 				case ExpressionType::OPERATOR_ADD: // X + 0 == X
+		//if (Value::Equals(left_val->value, zero)) { return
+		// move(root.children[1]);
 		//					}
 		//					break;
 		//				case ExpressionType::OPERATOR_MULTIPLY:
-		//					if (Value::Equals(left_val->value, zero)) { // X * 0 ==
-		//0 						return make_unique<ConstantExpression>(
+		//					if (Value::Equals(left_val->value, zero)) { // X * 0
+		//== 0 						return make_unique<ConstantExpression>(
 		//						    zero.CastAs(right->return_type));
 		//					}
-		//					if (Value::Equals(left_val->value, one)) { // X * 1 =
-		//X 						return move(root.children[1]);
+		//					if (Value::Equals(left_val->value, one)) { // X * 1
+		//= X 						return move(root.children[1]);
 		//					}
 		//					break;
 		//				case ExpressionType::OPERATOR_DIVIDE: // 0 / X == 0
