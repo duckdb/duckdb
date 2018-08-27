@@ -270,6 +270,9 @@ void duckdb_destroy_result(duckdb_result result) {
 			if (column.data) {
 				free(column.data);
 			}
+			if (column.nullmask) {
+				free(column.nullmask);
+			}
 		}
 
 		free(result.columns);

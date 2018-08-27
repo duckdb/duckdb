@@ -13,6 +13,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <mutex>
 
 #include "common/internal_types.hpp"
 
