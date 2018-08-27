@@ -36,8 +36,6 @@ std::unique_ptr<InsertStatement> TransformInsert(Node *node);
 std::unique_ptr<CopyStatement> TransformCopy(Node *node);
 //! Transform a Postgres T_TransactionStmt node into a TransactionStatement
 std::unique_ptr<TransactionStatement> TransformTransaction(Node *node);
-//! Transform a Postgres EXPLAIN node into a ExplainStatement
-std::unique_ptr<ExplainStatement> TransformExplain(Node *node);
 //! Transform a Postgres column reference into an AbstractExpression
 std::unique_ptr<AbstractExpression> TransformColumnRef(ColumnRef *root);
 //! Transform a Postgres constant value into an AbstractExpression
