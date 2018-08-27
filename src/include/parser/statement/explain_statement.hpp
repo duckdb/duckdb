@@ -28,7 +28,7 @@ class ExplainStatement : public SQLStatement {
 	virtual ~ExplainStatement() {}
 
 	virtual std::string ToString() const { return "Explain"; }
-	virtual void Accept(SQLNodeVisitor *v) { }
+	virtual void Accept(SQLNodeVisitor *v) {}
 };
 
 } // namespace duckdb
