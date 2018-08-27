@@ -193,3 +193,13 @@ void PhysicalPlanGenerator::Visit(LogicalCopy &op) {
 		this->plan = move(copy);
 	}
 }
+
+void PhysicalPlanGenerator::Visit(LogicalExplain &op) {
+	LogicalOperatorVisitor::Visit(op);
+
+	if (plan) {
+		op.physical_plan = plan->ToString();
+	}
+	//	cout << "LP" + op.logical_plan_unopt + "\n";
+	//	cout << "PP" + op.physical_plan + "\n";
+}

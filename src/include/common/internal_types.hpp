@@ -258,7 +258,9 @@ enum class LogicalOperatorType {
 	INSERT_SELECT = 201,
 	DELETE = 202,
 	UPDATE = 203,
-	EXPORT_EXTERNAL_FILE = 204
+	EXPORT_EXTERNAL_FILE = 204,
+
+	EXPLAIN = 300
 };
 
 //===--------------------------------------------------------------------===//

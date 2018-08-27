@@ -2,6 +2,7 @@
 #include "common/assert.hpp"
 
 #include "catalog/column_catalog.hpp"
+#include "parser/parser.hpp"
 
 #include "parser/tableref/tableref_list.hpp"
 #include "parser/transform.hpp"

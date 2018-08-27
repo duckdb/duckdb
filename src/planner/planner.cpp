@@ -1,11 +1,13 @@
 
 #include "parser/statement/copy_statement.hpp"
 #include "parser/statement/create_statement.hpp"
+#include "parser/statement/explain_statement.hpp"
 #include "parser/statement/insert_statement.hpp"
 #include "parser/statement/select_statement.hpp"
 #include "parser/statement/transaction_statement.hpp"
 
 #include "planner/binder.hpp"
+#include "planner/operator/logical_explain.hpp"
 #include "planner/planner.hpp"
 
 #include "planner/logical_plan_generator.hpp"
@@ -58,11 +60,23 @@ bool Planner::CreatePlan(ClientContext &context,
 			this->success = true;
 			break;
 		}
+		case StatementType::EXPLAIN: {
+			auto &stmt = *reinterpret_cast<ExplainStatement *>(statement.get());
+			auto parse_tree = stmt.stmt->ToString();
+			CreatePlan(context, move(stmt.stmt));
+			auto logical_plan_unopt = plan->ToString();
+			auto explain = make_unique<LogicalExplain>(move(plan));
+			explain->parse_tree = parse_tree;
+			explain->logical_plan_unopt = logical_plan_unopt;
+			plan = move(explain);
+			this->success = true;
+			break;
+		}
 		default:
 			this->message = StringUtil::Format(
 			    "Statement of type %d not implemented!", statement->GetType());
 		}
-	} catch (Exception ex) {
+	} catch (Exception &ex) {
 		this->message = ex.GetMessage();
 	} catch (...) {
 		this->message = "UNHANDLED EXCEPTION TYPE THROWN IN PLANNER!";

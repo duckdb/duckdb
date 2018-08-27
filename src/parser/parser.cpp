@@ -4,14 +4,12 @@
 #include "parser/postgres/pg_query.h"
 #include "parser/postgres/pg_trigger.h"
 
-#include <stdio.h>
-
 #include "parser/transform.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-Parser::Parser() {}
+Parser::Parser() : success(false) {}
 
 bool Parser::ParseQuery(const char *query) {
 	// first we use the postgres parser to parse the query
@@ -34,7 +32,7 @@ bool Parser::ParseQuery(const char *query) {
 			goto wrapup;
 		}
 		this->success = true;
-	} catch (Exception ex) {
+	} catch (Exception &ex) {
 		this->message = ex.GetMessage();
 	} catch (...) {
 		this->message = "UNHANDLED EXCEPTION TYPE THROWN IN PARSER!";
@@ -69,6 +67,11 @@ unique_ptr<SQLStatement> Parser::TransformNode(Node *stmt) {
 		return TransformCopy(stmt);
 	case T_TransactionStmt:
 		return TransformTransaction(stmt);
+	case T_ExplainStmt: {
+		ExplainStmt *explain_stmt = reinterpret_cast<ExplainStmt *>(stmt);
+		return make_unique<ExplainStatement>(
+		    move(TransformNode(explain_stmt->query)));
+	}
 	default:
 		throw NotImplementedException("A_Expr not implemented!");
 	}

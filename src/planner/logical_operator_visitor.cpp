@@ -65,3 +65,7 @@ void LogicalOperatorVisitor::Visit(LogicalInsert &op) {
 }
 
 void LogicalOperatorVisitor::Visit(LogicalCopy &op) { VisitOperator(op); }
+
+void LogicalOperatorVisitor::Visit(LogicalExplain &op) {
+	op.logical_plan->Accept(this);
+}
