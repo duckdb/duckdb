@@ -20,8 +20,8 @@ JoinSide LogicalJoin::GetJoinSide(std::unique_ptr<AbstractExpression> &expr) {
 		}
 	} else {
 		JoinSide join_side = JoinSide::NONE;
-		for (auto &child : children) {
-			auto child_side = GetJoinSide(expr);
+		for (auto &child : expr->children) {
+			auto child_side = GetJoinSide(child);
 			if (child_side != join_side) {
 				join_side =
 				    join_side == JoinSide::NONE ? child_side : JoinSide::BOTH;
