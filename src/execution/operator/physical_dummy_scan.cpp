@@ -13,9 +13,12 @@ void PhysicalDummyScan::GetChunk(DataChunk &chunk,
 		return;
 	}
 	state->finished = true;
-
-	chunk.data[0].count = 1;
-	chunk.count = chunk.data[0].count;
+	if (this->chunk.column_count > 0) {
+		this->chunk.Move(chunk);
+	} else {
+		chunk.data[0].count = 1;
+		chunk.count = chunk.data[0].count;
+	}
 }
 
 unique_ptr<PhysicalOperatorState>

@@ -18,6 +18,9 @@ class PhysicalDummyScan : public PhysicalOperator {
   public:
 	PhysicalDummyScan() : PhysicalOperator(PhysicalOperatorType::DUMMY_SCAN) {}
 
+	// we can hard-code some data into this scan if req
+	DataChunk chunk;
+
 	std::vector<TypeId> GetTypes() override;
 	virtual void GetChunk(DataChunk &chunk,
 	                      PhysicalOperatorState *state) override;
