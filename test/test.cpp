@@ -1,7 +1,7 @@
 
 #include "duckdb.hpp"
 
-#include "test_helpers.hpp"
+#include "compare_result.hpp"
 
 #include <fstream>
 
