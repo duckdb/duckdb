@@ -295,8 +295,9 @@ void VectorOperations::Divide(Vector &left, Vector &right, Vector &result) {
 
 	Vector zero;
 	zero.Initialize(right.type, 0);
-	zero.count = right.count;
+	zero.count = 1;
 	VectorOperations::Set(zero, Value(0));
+	zero.sel_vector = right.sel_vector;
 
 	Vector is_zero;
 	is_zero.Initialize(TypeId::BOOLEAN);
@@ -307,10 +308,11 @@ void VectorOperations::Divide(Vector &left, Vector &right, Vector &result) {
 	Vector right_fix;
 	right_fix.Initialize(right.type, false);
 	right_fix.count = right.count;
+	right_fix.sel_vector = right.sel_vector;
 
 	Vector one_but_null;
 	one_but_null.Initialize(right.type, 0);
-	one_but_null.count = right.count;
+	one_but_null.count = 1;
 	VectorOperations::Set(one_but_null, Value(1));
 	one_but_null.nullmask.reset().flip(); // all NULLs
 
