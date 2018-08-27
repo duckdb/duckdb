@@ -40,6 +40,7 @@ void SuperLargeHashTable::Resize(size_t size) {
 	if (entries > 0) {
 		DataChunk groups;
 		DataChunk payload;
+		size_t position = 0;
 
 		groups.Initialize(group_types, false);
 		payload.Initialize(payload_types, false);
@@ -47,7 +48,6 @@ void SuperLargeHashTable::Resize(size_t size) {
 		auto new_table = make_unique<SuperLargeHashTable>(
 		    size, group_types, payload_types, aggregate_types, parallel);
 		do {
-			size_t position = 0;
 			groups.Reset();
 			payload.Reset();
 			this->Scan(position, groups, payload);

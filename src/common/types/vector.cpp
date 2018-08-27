@@ -253,7 +253,7 @@ void Vector::Append(Vector &other) {
 	if (other.type != type) {
 		throw NotImplementedException("FIXME cast");
 	}
-	if (count + other.count >= STANDARD_VECTOR_SIZE) {
+	if (count + other.count > STANDARD_VECTOR_SIZE) {
 		throw Exception("Cannot append to vector: vector is full!");
 	}
 	size_t old_count = count;

@@ -36,10 +36,16 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 			// copy <added_data> elements to the last chunk
 			size_t old_count = new_chunk.count;
 			new_chunk.count = added_data;
+			for (size_t c = 0; c < new_chunk.column_count; c++) {
+				new_chunk.data[c].count = added_data;
+			}
 			last_chunk.Append(new_chunk);
 			remaining_data -= added_data;
 			// reset the chunk to the old data
 			new_chunk.count = old_count;
+			for (size_t c = 0; c < new_chunk.column_count; c++) {
+				new_chunk.data[c].count = old_count;
+			}
 			offset = added_data;
 		}
 	}
