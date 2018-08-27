@@ -290,7 +290,33 @@ void VectorOperations::Multiply(Vector &left, Vector &right, Vector &result) {
 }
 
 void VectorOperations::Divide(Vector &left, Vector &right, Vector &result) {
-	_generic_binary_loop<operators::Division>(left, right, result);
+	// set 0 in right side to 1 and as NULL so we get a NULL result and don't
+	// trip the exception
+
+	Vector zero;
+	zero.Initialize(right.type, 0);
+	zero.count = right.count;
+	VectorOperations::Set(zero, Value(0));
+
+	Vector is_zero;
+	is_zero.Initialize(TypeId::BOOLEAN);
+	zero.count = right.count;
+
+	VectorOperations::Equals(right, zero, is_zero);
+
+	Vector right_fix;
+	right_fix.Initialize(right.type, false);
+	right_fix.count = right.count;
+
+	Vector one_but_null;
+	one_but_null.Initialize(right.type, 0);
+	one_but_null.count = right.count;
+	VectorOperations::Set(one_but_null, Value(1));
+	one_but_null.nullmask.reset().flip(); // all NULLs
+
+	VectorOperations::Case(is_zero, one_but_null, right, right_fix);
+
+	_generic_binary_loop<operators::Division>(left, right_fix, result);
 }
 
 void VectorOperations::Modulo(Vector &left, Vector &right, Vector &result) {

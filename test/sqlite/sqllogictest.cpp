@@ -403,7 +403,10 @@ TEST_CASE("[SLOW] Test SQLite Logic Test", "[sqlitelogic]") {
 	    "third_party/sqllogictest/test/random/select/slt_good_18.test",
 	    "third_party/sqllogictest/test/random/select/slt_good_19.test",
 	    "third_party/sqllogictest/test/random/select/slt_good_20.test",
-	    "third_party/sqllogictest/test/random/select/slt_good_21.test"};
+	    "third_party/sqllogictest/test/random/select/slt_good_21.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_23.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_24.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_25.test"};
 
 	for (auto &script : files) {
 		zScriptFile = script.c_str();
