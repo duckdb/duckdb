@@ -99,6 +99,9 @@ class ColumnRefExpression : public AbstractExpression {
 	std::string table_name;
 
 	virtual std::string ToString() const override {
+		if (index != (size_t)-1) {
+			return "#" + std::to_string(index);
+		}
 		auto str = table_name.empty() ? std::to_string(binding.table_index)
 		                              : table_name;
 		str += ".";

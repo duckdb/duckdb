@@ -287,6 +287,44 @@ void ExpressionExecutor::Visit(GroupRefExpression &expr) {
 }
 
 void ExpressionExecutor::Visit(OperatorExpression &expr) {
+	// IN has n children
+	if (expr.type == ExpressionType::COMPARE_IN) {
+		if (expr.children.size() < 2) {
+			throw Exception("IN needs at least two children");
+		}
+		Vector l, comp_res;
+		// eval left side
+		expr.children[0]->Accept(this);
+		vector.Move(l);
+
+		// init result to false
+		Vector result;
+		result.Initialize(TypeId::BOOLEAN);
+		result.count = l.count;
+		for (size_t i = 0; i < l.count; i++) {
+			result.SetValue(i, Value(false));
+		}
+
+		// init comparision result once
+		comp_res.Initialize(TypeId::BOOLEAN);
+		comp_res.count = l.count;
+
+		// for every child, or result of comparision with left to overall result
+		for (size_t child = 1; child < expr.children.size(); child++) {
+			expr.children[child]->Accept(this);
+			VectorOperations::Equals(l, vector, comp_res);
+			vector.Destroy();
+			VectorOperations::Or(result, comp_res, result);
+			// early abort
+			if (Value::Equals(VectorOperations::Min(result), Value(true)) &&
+			    Value::Equals(VectorOperations::Max(result), Value(true))) {
+				break;
+			}
+		}
+		result.Move(vector);
+		expr.stats.Verify(vector);
+		return;
+	}
 	if (expr.children.size() == 1) {
 		expr.children[0]->Accept(this);
 		switch (expr.type) {

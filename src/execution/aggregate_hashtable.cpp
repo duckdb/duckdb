@@ -34,12 +34,33 @@ SuperLargeHashTable::~SuperLargeHashTable() {}
 
 void SuperLargeHashTable::Resize(size_t size) {
 	if (size <= capacity) {
-		throw NotImplementedException("Cannot downsize!");
+		throw Exception("Cannot downsize a hash table!");
 	}
 
 	if (entries > 0) {
-		throw NotImplementedException(
-		    "Resizing a filled HT not implemented yet!");
+		DataChunk groups;
+		DataChunk payload;
+		size_t position = 0;
+
+		groups.Initialize(group_types, false);
+		payload.Initialize(payload_types, false);
+
+		auto new_table = make_unique<SuperLargeHashTable>(
+		    size, group_types, payload_types, aggregate_types, parallel);
+		do {
+			groups.Reset();
+			payload.Reset();
+			this->Scan(position, groups, payload);
+			new_table->AddChunk(groups, payload);
+		} while (groups.count > 0);
+
+		assert(this->entries == new_table->entries);
+
+		this->data = move(new_table->data);
+		this->owned_data = move(new_table->owned_data);
+		this->capacity = new_table->capacity;
+		this->max_chain = new_table->max_chain;
+
 	} else {
 		data = new uint8_t[size * tuple_size];
 		owned_data = unique_ptr<uint8_t[]>(data);
@@ -84,6 +105,15 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	if (groups.count == 0) {
 		return;
 	}
+
+	// resize at 50% capacity, also need to fit the entire vector
+	if (entries > capacity / 2 || capacity - entries <= STANDARD_VECTOR_SIZE) {
+		Resize(capacity * 2);
+	}
+
+	// we need to be able to fit at least one vector of data
+	assert(capacity - entries > STANDARD_VECTOR_SIZE);
+
 	// first create a hash of all the values
 	Vector hashes(TypeId::INTEGER, true);
 	VectorOperations::Hash(groups.data[0], hashes);
@@ -191,11 +221,6 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		// update the address pointer with the final position
 		ptr[index] = entry + FLAG_SIZE + group_width;
 		max_chain = max(chain, max_chain);
-
-		// resize at 50% capacity
-		if (entries > capacity / 2) {
-			Resize(capacity * 2);
-		}
 	}
 
 	// now every cell has an entry

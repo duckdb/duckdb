@@ -1,5 +1,6 @@
 #include "execution/operator/physical_copy.hpp"
 #include "storage/data_table.hpp"
+#include <algorithm>
 
 using namespace duckdb;
 using namespace std;

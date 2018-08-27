@@ -64,4 +64,76 @@ TEST_CASE("Complex Expressions", "[sql]") {
 
 	result = con.Query("SELECT ABS(b) FROM exprtest");
 	CHECK_COLUMN(result, 0, {10, 100, 1, 1});
+
+	// IN
+
+	con.Query("CREATE TABLE intest (a INTEGER, b INTEGER, c INTEGER)");
+
+	con.Query("INSERT INTO intest VALUES (42, 42, 42);");
+	con.Query("INSERT INTO intest VALUES (43, 42, 42);");
+	con.Query("INSERT INTO intest VALUES (44, 41, 44);");
+
+	result = con.Query("SELECT * FROM intest WHERE a IN (42, 43)");
+	CHECK_COLUMN(result, 0, {42, 43});
+	CHECK_COLUMN(result, 1, {42, 42});
+	CHECK_COLUMN(result, 2, {42, 42});
+
+	result = con.Query("SELECT a IN (42, 43) FROM intest ");
+	CHECK_COLUMN(result, 0, {1, 1, 0});
+
+	result = con.Query("SELECT * FROM intest WHERE a IN (86, 103, 162)");
+	CHECK_COLUMN(result, 0, {});
+	CHECK_COLUMN(result, 1, {});
+	CHECK_COLUMN(result, 2, {});
+
+	result =
+	    con.Query("SELECT * FROM intest WHERE a IN (NULL, NULL, NULL, NULL)");
+	CHECK_COLUMN(result, 0, {});
+	CHECK_COLUMN(result, 1, {});
+	CHECK_COLUMN(result, 2, {});
+
+	result = con.Query("SELECT * FROM intest WHERE a IN (b)");
+	CHECK_COLUMN(result, 0, {42});
+	CHECK_COLUMN(result, 1, {42});
+	CHECK_COLUMN(result, 2, {42});
+
+	result = con.Query("SELECT * FROM intest WHERE a IN (b, c)");
+	CHECK_COLUMN(result, 0, {42, 44});
+	CHECK_COLUMN(result, 1, {42, 41});
+	CHECK_COLUMN(result, 2, {42, 44});
+
+	result = con.Query("SELECT * FROM intest WHERE a IN (43, b)");
+	CHECK_COLUMN(result, 0, {42, 43});
+	CHECK_COLUMN(result, 1, {42, 42});
+	CHECK_COLUMN(result, 2, {42, 42});
+
+	result = con.Query("SELECT * FROM intest WHERE a NOT IN (42, 43)");
+	CHECK_COLUMN(result, 0, {44});
+	CHECK_COLUMN(result, 1, {41});
+	CHECK_COLUMN(result, 2, {44});
+
+	result = con.Query("SELECT * FROM intest WHERE a NOT IN (86, 103, 162)");
+	CHECK_COLUMN(result, 0, {42, 43, 44});
+	CHECK_COLUMN(result, 1, {42, 42, 41});
+	CHECK_COLUMN(result, 2, {42, 42, 44});
+
+	result = con.Query("SELECT * FROM intest WHERE a NOT IN (NULL, NULL)");
+	CHECK_COLUMN(result, 0, {});
+	CHECK_COLUMN(result, 1, {});
+	CHECK_COLUMN(result, 2, {});
+
+	result = con.Query("SELECT * FROM intest WHERE a NOT IN (b)");
+	CHECK_COLUMN(result, 0, {43, 44});
+	CHECK_COLUMN(result, 1, {42, 41});
+	CHECK_COLUMN(result, 2, {42, 44});
+
+	result = con.Query("SELECT * FROM intest WHERE a NOT IN (b, c)");
+	CHECK_COLUMN(result, 0, {43});
+	CHECK_COLUMN(result, 1, {42});
+	CHECK_COLUMN(result, 2, {42});
+
+	result = con.Query("SELECT * FROM intest WHERE a NOT IN (43, b)");
+	CHECK_COLUMN(result, 0, {44});
+	CHECK_COLUMN(result, 1, {41});
+	CHECK_COLUMN(result, 2, {44});
 }

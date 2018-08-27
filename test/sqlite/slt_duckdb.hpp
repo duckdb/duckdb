@@ -121,8 +121,9 @@ duckdbQuery(void *pConn,       /* Connection created by xConnect */
 				if (duckdb_value_is_null(actual_column, r)) {
 					snprintf(buffer, BUFSIZ, "%s", "NULL");
 				} else {
-					snprintf(buffer, BUFSIZ, "%lf",
-					         ((double *)actual_column.data)[r]);
+					// cast to INT seems to be the trick here
+					int n = snprintf(buffer, BUFSIZ, "%d",
+					                 (int)((double *)actual_column.data)[r]);
 				}
 				break;
 			}

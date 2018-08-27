@@ -25,6 +25,18 @@ void PhysicalCrossProduct::GetChunk(DataChunk &chunk,
 	auto state = reinterpret_cast<PhysicalCrossProductOperatorState *>(state_);
 	chunk.Reset();
 
+	if (state->right_state &&
+	    state->left_position >= state->child_chunk.count) {
+		// ran out of this chunk
+		// move to the next chunk on the right side
+		state->left_position = 0;
+		children[1]->GetChunk(state->right_chunk, state->right_state.get());
+		if (state->right_chunk.count == 0) {
+			// ran out of chunks on the right side
+			// move to the next left chunk and start over on the right hand side
+			state->right_state = nullptr;
+		}
+	}
 	if (!state->right_state) {
 		// no right state: initialize right and left chunks
 		// left chunk
@@ -60,18 +72,6 @@ void PhysicalCrossProduct::GetChunk(DataChunk &chunk,
 
 	// for the next iteration, move to the next position on the left side
 	state->left_position++;
-	if (state->left_position >= state->child_chunk.count) {
-		// ran out of this chunk
-		// move to the next chunk on the right side
-		state->left_position = 0;
-		children[1]->GetChunk(state->right_chunk, state->right_state.get());
-		if (state->right_chunk.count == 0) {
-			// ran out of chunks on the right side
-			// move to the next left chunk and start over on the right hand side
-			state->right_state = nullptr;
-		}
-	}
-
 	chunk.Verify();
 }
 

@@ -30,7 +30,8 @@ class OperatorExpression : public AbstractExpression {
 		if (type == ExpressionType::OPERATOR_NOT ||
 		    type == ExpressionType::OPERATOR_IS_NULL ||
 		    type == ExpressionType::OPERATOR_IS_NOT_NULL ||
-		    type == ExpressionType::OPERATOR_EXISTS) {
+		    type == ExpressionType::OPERATOR_EXISTS ||
+		    type == ExpressionType::COMPARE_IN) {
 			return_type = TypeId::BOOLEAN;
 			return;
 		}

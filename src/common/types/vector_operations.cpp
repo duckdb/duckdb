@@ -30,6 +30,25 @@ void _templated_unary_loop(Vector &left, Vector &result) {
 }
 
 template <class T, class RES, class OP>
+void _templated_unary_loop_null(Vector &left, Vector &result) {
+	T *ldata = (T *)left.data;
+	RES *result_data = (RES *)result.data;
+	if (left.sel_vector) {
+		for (size_t i = 0; i < left.count; i++) {
+			result_data[left.sel_vector[i]] = OP::Operation(
+			    ldata[left.sel_vector[i]], left.nullmask[left.sel_vector[i]]);
+		}
+	} else {
+		for (size_t i = 0; i < left.count; i++) {
+			result_data[i] = OP::Operation(ldata[i], left.nullmask[i]);
+		}
+	}
+	result.nullmask.reset();
+	result.sel_vector = left.sel_vector;
+	result.count = left.count;
+}
+
+template <class T, class RES, class OP>
 void _templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 	T *ldata = (T *)left.data;
 	T *rdata = (T *)right.data;
@@ -128,6 +147,36 @@ void _fixed_return_unary_loop(Vector &left, Vector &result) {
 		break;
 	case TypeId::VARCHAR:
 		_templated_unary_loop<char *, RES, OP>(left, result);
+		break;
+	default:
+		throw NotImplementedException("Unimplemented type");
+	}
+}
+
+template <class OP, class RES>
+void _fixed_return_unary_loop_null(Vector &left, Vector &result) {
+	switch (left.type) {
+	case TypeId::BOOLEAN:
+	case TypeId::TINYINT:
+		_templated_unary_loop_null<int8_t, RES, OP>(left, result);
+		break;
+	case TypeId::SMALLINT:
+		_templated_unary_loop_null<int16_t, RES, OP>(left, result);
+		break;
+	case TypeId::INTEGER:
+		_templated_unary_loop_null<int32_t, RES, OP>(left, result);
+		break;
+	case TypeId::BIGINT:
+		_templated_unary_loop_null<int64_t, RES, OP>(left, result);
+		break;
+	case TypeId::DECIMAL:
+		_templated_unary_loop_null<double, RES, OP>(left, result);
+		break;
+	case TypeId::POINTER:
+		_templated_unary_loop_null<uint64_t, RES, OP>(left, result);
+		break;
+	case TypeId::VARCHAR:
+		_templated_unary_loop_null<char *, RES, OP>(left, result);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type");
@@ -241,7 +290,35 @@ void VectorOperations::Multiply(Vector &left, Vector &right, Vector &result) {
 }
 
 void VectorOperations::Divide(Vector &left, Vector &right, Vector &result) {
-	_generic_binary_loop<operators::Division>(left, right, result);
+	// set 0 in right side to 1 and as NULL so we get a NULL result and don't
+	// trip the exception
+
+	Vector zero;
+	zero.Initialize(right.type, 0);
+	zero.count = 1;
+	VectorOperations::Set(zero, Value(0));
+	zero.sel_vector = right.sel_vector;
+
+	Vector is_zero;
+	is_zero.Initialize(TypeId::BOOLEAN);
+	zero.count = right.count;
+
+	VectorOperations::Equals(right, zero, is_zero);
+
+	Vector right_fix;
+	right_fix.Initialize(right.type, false);
+	right_fix.count = right.count;
+	right_fix.sel_vector = right.sel_vector;
+
+	Vector one_but_null;
+	one_but_null.Initialize(right.type, 0);
+	one_but_null.count = 1;
+	VectorOperations::Set(one_but_null, Value(1));
+	one_but_null.nullmask.reset().flip(); // all NULLs
+
+	VectorOperations::Case(is_zero, one_but_null, right, right_fix);
+
+	_generic_binary_loop<operators::Division>(left, right_fix, result);
 }
 
 void VectorOperations::Modulo(Vector &left, Vector &right, Vector &result) {
@@ -474,9 +551,6 @@ void VectorOperations::And(Vector &left, Vector &right, Vector &result) {
 	if (left.type != TypeId::BOOLEAN || right.type != TypeId::BOOLEAN) {
 		throw NotImplementedException("FIXME cast");
 	}
-	if (left.count != right.count) {
-		throw Exception("Vector lengths don't match");
-	}
 
 	_templated_bool_nullmask_op<operators::And, operators::AndMask>(left, right,
 	                                                                result);
@@ -514,10 +588,6 @@ void VectorOperations::Or(Vector &left, Vector &right, Vector &result) {
 		throw NotImplementedException("FIXME cast");
 	}
 
-	if (left.count != right.count) {
-		throw Exception("Vector lengths don't match");
-	}
-
 	_templated_bool_nullmask_op<operators::Or, operators::OrMask>(left, right,
 	                                                              result);
 }
@@ -545,7 +615,7 @@ void VectorOperations::Set(Vector &result, Value value) {
 //===--------------------------------------------------------------------===//
 
 void VectorOperations::Hash(Vector &left, Vector &result) {
-	_fixed_return_unary_loop<operators::Hash, int32_t>(left, result);
+	_fixed_return_unary_loop_null<operators::Hash, int32_t>(left, result);
 }
 
 void VectorOperations::CombineHash(Vector &left, Vector &right,

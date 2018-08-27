@@ -8,8 +8,7 @@ using namespace std;
 
 string BindContext::GetMatchingTable(const string &column_name) {
 	string result;
-	if (expression_alias_map.find(column_name) != expression_alias_map.end())
-		return string();
+
 	for (auto &kv : regular_table_alias_map) {
 		auto table = kv.second.table;
 		if (table->ColumnExists(column_name)) {
@@ -23,10 +22,15 @@ string BindContext::GetMatchingTable(const string &column_name) {
 			result = kv.first;
 		}
 	}
+
 	for (auto &kv : subquery_alias_map) {
 		auto subquery = kv.second;
 		throw BinderException("Subquery binding not implemented yet!");
 	}
+
+	if (result.empty() &&
+	    expression_alias_map.find(column_name) != expression_alias_map.end())
+		return result; // empty result, will be bound to alias
 
 	if (result.empty()) {
 		if (parent) {

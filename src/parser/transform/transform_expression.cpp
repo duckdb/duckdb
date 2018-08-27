@@ -410,23 +410,43 @@ unique_ptr<AbstractExpression> TransformAExpr(A_Expr *root) {
 	if (!root) {
 		return nullptr;
 	}
-	unique_ptr<AbstractExpression> result = nullptr;
 	ExpressionType target_type;
-	const char *name =
-	    (reinterpret_cast<value *>(root->name->head->data.ptr_value))->val.str;
-	if ((root->kind) != AEXPR_DISTINCT) {
-		target_type = StringToExpressionType(string(name));
-	} else {
+	auto name = string(
+	    (reinterpret_cast<value *>(root->name->head->data.ptr_value))->val.str);
+
+	switch (root->kind) {
+	case AEXPR_DISTINCT:
 		target_type = ExpressionType::COMPARE_DISTINCT_FROM;
+		break;
+	case AEXPR_IN:
+		target_type = ExpressionType::COMPARE_IN;
+		break;
+	default: {
+		target_type = StringToExpressionType(name);
+		if (target_type == ExpressionType::INVALID) {
+			throw NotImplementedException(
+			    "A_Expr transform not implemented %s.", name.c_str());
+		}
 	}
-	if (target_type == ExpressionType::INVALID) {
-		throw NotImplementedException("A_Expr transform not implemented %s.",
-		                              name);
+	}
+
+	if (target_type == ExpressionType::COMPARE_IN) {
+		auto left_expr = TransformExpression(root->lexpr);
+		auto result = make_unique<OperatorExpression>(
+		    ExpressionType::COMPARE_IN, TypeId::BOOLEAN, move(left_expr));
+		TransformExpressionList((List *)root->rexpr, result->children);
+		// this looks very odd, but seems to be the way to find out its NOT IN
+		if (name == "<>") {
+			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT,
+			                                       TypeId::BOOLEAN,
+			                                       move(result), nullptr);
+		} else {
+			return move(result);
+		}
 	}
 
 	// rewrite (NOT) X BETWEEN A AND B into (NOT) AND(GREATERTHANOREQUALTO(X,
 	// A), LESSTHANOREQUALTO(X, B))
-	// TODO: do we want to push this expression through? Think not...
 	// TODO: perhaps we want to extend TransformExpression to handle this, but
 	// then this is also a special case
 	if (target_type == ExpressionType::COMPARE_BETWEEN ||
@@ -476,6 +496,7 @@ unique_ptr<AbstractExpression> TransformAExpr(A_Expr *root) {
 		}
 	}
 
+	unique_ptr<AbstractExpression> result = nullptr;
 	int type_id = static_cast<int>(target_type);
 	if (type_id <= 6) {
 		result = make_unique<OperatorExpression>(
@@ -654,6 +675,20 @@ unique_ptr<AbstractExpression> TransformSubquery(SubLink *root) {
 	}
 }
 
+unique_ptr<AbstractExpression> TransformResTarget(ResTarget *root) {
+	if (!root) {
+		return nullptr;
+	}
+	auto expr = TransformExpression(root->val);
+	if (!expr) {
+		return nullptr;
+	}
+	if (root->name) {
+		expr->alias = string(root->name);
+	}
+	return expr;
+}
+
 unique_ptr<AbstractExpression> TransformExpression(Node *node) {
 	if (!node) {
 		return nullptr;
@@ -680,7 +715,8 @@ unique_ptr<AbstractExpression> TransformExpression(Node *node) {
 		return TransformCoalesce(reinterpret_cast<A_Expr *>(node));
 	case T_NullTest:
 		return TransformNullTest(reinterpret_cast<NullTest *>(node));
-
+	case T_ResTarget:
+		return TransformResTarget(reinterpret_cast<ResTarget *>(node));
 	case T_ParamRef:
 	default:
 		throw NotImplementedException("Expr of type %d not implemented\n",
@@ -694,13 +730,13 @@ bool TransformExpressionList(List *list,
 		return false;
 	}
 	for (auto node = list->head; node != nullptr; node = node->next) {
-		auto target = reinterpret_cast<ResTarget *>(node->data.ptr_value);
+		auto target = reinterpret_cast<Node *>(node->data.ptr_value);
 		if (!target) {
 			return false;
 		}
-		auto expr = TransformExpression(target->val);
-		if (target->name) {
-			expr->alias = string(target->name);
+		auto expr = TransformExpression(target);
+		if (!expr) {
+			return false;
 		}
 		result.push_back(move(expr));
 	}

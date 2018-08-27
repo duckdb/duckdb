@@ -10,10 +10,10 @@
 
 #pragma once
 
+#include "parser/expression/expression_list.hpp"
+#include <algorithm>
 #include <string>
 #include <vector>
-
-#include "parser/expression/expression_list.hpp"
 
 #include "planner/logical_operator.hpp"
 

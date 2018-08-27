@@ -156,7 +156,9 @@ struct AddOne {
 };
 
 struct Hash {
-	template <class T> static inline int32_t Operation(T left) {
+	template <class T> static inline int32_t Operation(T left, bool is_null) {
+		if (is_null)
+			return duckdb::Hash<T>(duckdb::NullValue<T>());
 		return duckdb::Hash<T>(left);
 	}
 };

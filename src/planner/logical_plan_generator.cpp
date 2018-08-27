@@ -100,23 +100,21 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 }
 
 static void cast_children_to_equal_types(AbstractExpression &expr) {
-	if (expr.children.size() == 2) {
-		TypeId left_type = expr.children[0]->return_type;
-		TypeId right_type = expr.children[1]->return_type;
-		if (left_type != right_type) {
-			// types don't match
-			// we have to add a cast
-			if (left_type < right_type) {
-				// add cast on left hand side
-				auto cast = make_unique<CastExpression>(right_type,
-				                                        move(expr.children[0]));
-				expr.children[0] = move(cast);
-			} else {
-				// add cast on right hand side
-				auto cast = make_unique<CastExpression>(left_type,
-				                                        move(expr.children[1]));
-				expr.children[1] = move(cast);
-			}
+	// first figure out the widest type
+	TypeId max_type = TypeId::INVALID;
+	for (size_t child_idx = 0; child_idx < expr.children.size(); child_idx++) {
+		TypeId child_type = expr.children[child_idx]->return_type;
+		if (child_type > max_type) {
+			max_type = child_type;
+		}
+	}
+	// now add casts where appropriate
+	for (size_t child_idx = 0; child_idx < expr.children.size(); child_idx++) {
+		TypeId child_type = expr.children[child_idx]->return_type;
+		if (child_type != max_type) {
+			auto cast = make_unique<CastExpression>(
+			    max_type, move(expr.children[child_idx]));
+			expr.children[child_idx] = move(cast);
 		}
 	}
 }
@@ -157,7 +155,8 @@ void LogicalPlanGenerator::Visit(ConjunctionExpression &expr) {
 
 void LogicalPlanGenerator::Visit(OperatorExpression &expr) {
 	SQLNodeVisitor::Visit(expr);
-	if (expr.type == ExpressionType::OPERATOR_NOT) {
+	if (expr.type == ExpressionType::OPERATOR_NOT &&
+	    expr.children[0]->return_type != TypeId::BOOLEAN) {
 		auto cast = make_unique<CastExpression>(TypeId::BOOLEAN,
 		                                        move(expr.children[0]));
 		expr.children[0] = move(cast);

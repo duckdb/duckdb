@@ -40,5 +40,8 @@ doxygen: docs
 format:
 	python format.py
 
-sqlite: main
+third_party/sqllogictest:
+	git clone --depth=1 https://github.com/cwida/sqllogictest.git third_party/sqllogictest
+
+sqlite: main | third_party/sqllogictest
 	./build/debug/test/unittest "[sqlitelogic]"

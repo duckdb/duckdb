@@ -14,6 +14,7 @@
 
 #include "parser/statement/copy_statement.hpp"
 #include "parser/statement/create_statement.hpp"
+#include "parser/statement/explain_statement.hpp"
 #include "parser/statement/insert_statement.hpp"
 #include "parser/statement/select_statement.hpp"
 #include "parser/statement/transaction_statement.hpp"

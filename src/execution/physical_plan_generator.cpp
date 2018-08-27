@@ -193,3 +193,42 @@ void PhysicalPlanGenerator::Visit(LogicalCopy &op) {
 		this->plan = move(copy);
 	}
 }
+
+void PhysicalPlanGenerator::Visit(LogicalExplain &op) {
+	auto logical_plan_opt = op.children[0]->ToString();
+	LogicalOperatorVisitor::Visit(op);
+
+	if (plan) {
+		op.physical_plan = plan->ToString();
+	}
+
+	// Construct a dummy plan that just returns the plan strings
+	auto scan = make_unique<PhysicalDummyScan>();
+
+	vector<TypeId> types = {TypeId::VARCHAR, TypeId::VARCHAR};
+	scan->chunk.Initialize(types, false);
+	scan->chunk.count = 3;
+
+	scan->chunk.data[0].count = 3;
+	scan->chunk.data[0].SetStringValue(0, "logical_plan");
+	scan->chunk.data[0].SetStringValue(1, "logical_opt");
+	scan->chunk.data[0].SetStringValue(2, "physical_plan");
+
+	scan->chunk.data[1].count = 3;
+	scan->chunk.data[1].SetStringValue(0, op.logical_plan_unopt.c_str());
+	scan->chunk.data[1].SetStringValue(1, logical_plan_opt.c_str());
+	scan->chunk.data[1].SetStringValue(2, op.physical_plan.c_str());
+
+	scan->chunk.Verify();
+
+	std::vector<std::unique_ptr<AbstractExpression>> select_list;
+	select_list.push_back(make_unique<ColumnRefExpression>(TypeId::VARCHAR, 0));
+	select_list.push_back(make_unique<ColumnRefExpression>(TypeId::VARCHAR, 1));
+
+	select_list[0]->alias = "explain_key";
+	select_list[1]->alias = "explain_value";
+
+	auto projection = make_unique<PhysicalProjection>(move(select_list));
+	projection->children.push_back(move(scan));
+	this->plan = move(projection);
+}

@@ -377,17 +377,53 @@ TEST_CASE("[SLOW] Test SQLite Logic Test", "[sqlitelogic]") {
 	/*
 	** Read the entire script file contents into memory
 	*/
-	//	vector<string> files = {
-	//	    "test/sqlite/select1.test", "test/sqlite/select2.test",
-	//	    "test/sqlite/select3.test", "test/sqlite/select4.test",
-	//	    "test/sqlite/select5.test"};
 
-	vector<string> files = {"test/sqlite/select1.test",
-	                        "test/sqlite/select2.test",
-	                        "test/sqlite/select3.test"};
+	vector<string> files = {
+	    "third_party/sqllogictest/test/select1.test",
+	    "third_party/sqllogictest/test/select2.test",
+	    "third_party/sqllogictest/test/select3.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_0.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_1.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_2.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_3.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_4.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_5.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_6.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_7.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_8.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_9.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_10.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_11.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_12.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_13.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_14.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_15.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_16.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_17.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_18.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_19.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_20.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_21.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_23.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_24.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_25.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_26.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_27.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_28.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_29.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_30.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_31.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_32.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_33.test"};
+
 	for (auto &script : files) {
 		zScriptFile = script.c_str();
 		in = fopen(zScriptFile, "rb");
+		if (!in) {
+			FAIL("Could not find test script '" + script +
+			     "'. Perhaps run `make sqlite`. ");
+		}
+		printf("%s\n", script.c_str());
 		REQUIRE(in);
 		fseek(in, 0L, SEEK_END);
 		nScript = ftell(in);
@@ -398,6 +434,9 @@ TEST_CASE("[SLOW] Test SQLite Logic Test", "[sqlitelogic]") {
 		fclose(in);
 		REQUIRE(nGot >= nScript);
 		zScript[nGot] = 0;
+
+		// zap hash table as result labels are only valid within one test file
+		memset(aHash, 0, sizeof(aHash));
 
 		/* Initialize the sScript structure so that the cursor will be pointing
 		** to the start of the first line in the file after nextLine() is called
@@ -663,13 +702,18 @@ TEST_CASE("[SLOW] Test SQLite Logic Test", "[sqlitelogic]") {
 					if (hashThreshold == 0 || nResult <= hashThreshold) {
 						for (i = 0; i < nResult && sScript.zLine[0];
 						     nextLine(&sScript), i++) {
-							REQUIRE(strcmp(sScript.zLine, azResult[i]) == 0);
 							if (strcmp(sScript.zLine, azResult[i]) != 0) {
 								fprintf(stdout, "%s:%d: wrong result\n",
 								        zScriptFile, sScript.nLine);
+
+								fprintf(stdout, "%s <> %s\n", sScript.zLine,
+								        azResult[i]);
 								REQUIRE(false);
 								break;
 							}
+							// we check this already but this inflates the test
+							// case count as desired
+							REQUIRE(strcmp(sScript.zLine, azResult[i]) == 0);
 						}
 					} else {
 						if (strcmp(sScript.zLine, zHash) != 0) {

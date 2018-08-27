@@ -11,6 +11,8 @@
 #pragma once
 
 #include <bitset>
+#include <cassert>
+#include <limits>
 #include <math.h>
 #include <string>
 
@@ -262,7 +264,9 @@ enum class LogicalOperatorType {
 	INSERT_SELECT = 201,
 	DELETE = 202,
 	UPDATE = 203,
-	EXPORT_EXTERNAL_FILE = 204
+	EXPORT_EXTERNAL_FILE = 204,
+
+	EXPLAIN = 300
 };
 
 //===--------------------------------------------------------------------===//
@@ -331,12 +335,12 @@ static bool TypeIsNumeric(TypeId type) {
 template <class T> inline T NullValue() {
 	return std::numeric_limits<T>::min();
 }
-template <> inline double NullValue() { return NAN; }
+// template <> inline double NullValue() { return NAN; }
 
 template <class T> inline bool IsNullValue(T value) {
 	return value == NullValue<T>();
 }
-template <> inline bool IsNullValue(double value) { return isnan(value); }
+// template <> inline bool IsNullValue(double value) { return isnan(value); }
 
 //! Returns the minimum value that can be stored in a given type
 int64_t MinimumValue(TypeId type);

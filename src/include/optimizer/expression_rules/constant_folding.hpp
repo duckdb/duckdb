@@ -40,10 +40,10 @@ class ConstantFoldingRule : public Rule {
 		Value result;
 
 		// TODO: add bolean ops
-		// TODO: fix bindings, they could be used here
 
 		auto left = root.children[0].get();
 		auto right = root.children[1].get();
+		Value null = Value();
 
 		// case: both constant, evaluate
 		if (left->type == ExpressionType::VALUE_CONSTANT &&
@@ -80,84 +80,8 @@ class ConstantFoldingRule : public Rule {
 			return nullptr;
 		}
 
-		Value zero = Value::BIGINT(0);
-		Value one = Value::BIGINT(1);
-		Value null = Value();
-
-		// case: right is constant
-		if (right->type == ExpressionType::VALUE_CONSTANT) {
-			auto right_val = reinterpret_cast<ConstantExpression *>(right);
-			if (TypeIsNumeric(right_val->value.type)) {
-				switch (root.type) {
-				case ExpressionType::OPERATOR_ADD:
-				case ExpressionType::OPERATOR_SUBTRACT:
-					if (Value::Equals(right_val->value, zero)) {
-						return move(root.children[0]);
-					}
-					break;
-				case ExpressionType::OPERATOR_MULTIPLY:
-					if (Value::Equals(right_val->value, zero)) {
-						return make_unique<ConstantExpression>(zero);
-					}
-					if (Value::Equals(right_val->value, one)) {
-						return move(root.children[0]);
-					}
-					break;
-				case ExpressionType::OPERATOR_DIVIDE:
-					if (Value::Equals(right_val->value, zero)) { // X / 0 = NULL
-						return make_unique<ConstantExpression>(null);
-					}
-					if (Value::Equals(right_val->value, one)) { // X / 1 == X
-						return move(root.children[0]);
-					}
-					break;
-				case ExpressionType::OPERATOR_MOD:
-					if (Value::Equals(right_val->value,
-					                  zero)) { // X % 0 == NULL
-						return make_unique<ConstantExpression>(null);
-					}
-					if (Value::Equals(right_val->value, one)) {
-						return make_unique<ConstantExpression>(zero);
-					}
-					break;
-				default:
-					throw Exception("Unsupported operator");
-				}
-			}
-		}
-
-		// case: left is constant
-		if (left->type == ExpressionType::VALUE_CONSTANT) {
-			auto left_val = reinterpret_cast<ConstantExpression *>(left);
-			if (TypeIsNumeric(left_val->value.type)) {
-				switch (root.type) {
-				case ExpressionType::OPERATOR_ADD: // X + 0 == X
-					if (Value::Equals(left_val->value, zero)) {
-						return move(root.children[1]);
-					}
-					break;
-				case ExpressionType::OPERATOR_MULTIPLY:
-					if (Value::Equals(left_val->value, zero)) { // X * 0 == 0
-						return make_unique<ConstantExpression>(zero);
-					}
-					if (Value::Equals(left_val->value, one)) { // X * 1 = X
-						return move(root.children[1]);
-					}
-					break;
-				case ExpressionType::OPERATOR_DIVIDE: // 0 / X == 0
-					if (Value::Equals(left_val->value, zero)) {
-						return make_unique<ConstantExpression>(zero);
-					}
-					break;
-				case ExpressionType::OPERATOR_MOD:
-				case ExpressionType::OPERATOR_SUBTRACT:
-					break;
-				default:
-					throw Exception("Unsupported operator");
-				}
-			}
-		}
-
+		// FIXME:  folding unknown subtrees produces incorrect results with
+		// NULLs.
 		return nullptr;
 	};
 };
