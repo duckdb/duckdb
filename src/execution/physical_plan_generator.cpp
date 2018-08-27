@@ -219,6 +219,8 @@ void PhysicalPlanGenerator::Visit(LogicalExplain &op) {
 	scan->chunk.data[1].SetStringValue(1, logical_plan_opt.c_str());
 	scan->chunk.data[1].SetStringValue(2, op.physical_plan.c_str());
 
+	scan->chunk.Verify();
+
 	std::vector<std::unique_ptr<AbstractExpression>> select_list;
 	select_list.push_back(make_unique<ColumnRefExpression>(TypeId::VARCHAR, 0));
 	select_list.push_back(make_unique<ColumnRefExpression>(TypeId::VARCHAR, 1));
