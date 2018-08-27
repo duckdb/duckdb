@@ -2,7 +2,7 @@
 #pragma once
 
 #include "duckdb.h"
-
+#include <cmath>
 #include <memory>
 
 template <class T> T get_numeric(duckdb_column column, size_t index) {
@@ -74,7 +74,7 @@ static bool CHECK_DECIMAL_COLUMN(duckdb_result result, size_t column,
 		return false;
 	}
 	for (auto i = 0; i < values.size(); i++) {
-		if (isnan(values[i])) {
+		if (std::isnan(values[i])) {
 			if (!duckdb_value_is_null(col, i)) {
 				return false;
 			}
