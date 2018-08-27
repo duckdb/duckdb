@@ -389,7 +389,21 @@ TEST_CASE("[SLOW] Test SQLite Logic Test", "[sqlitelogic]") {
 	    "third_party/sqllogictest/test/random/select/slt_good_4.test",
 	    "third_party/sqllogictest/test/random/select/slt_good_5.test",
 	    "third_party/sqllogictest/test/random/select/slt_good_6.test",
-	    "third_party/sqllogictest/test/random/select/slt_good_7.test"};
+	    "third_party/sqllogictest/test/random/select/slt_good_7.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_8.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_9.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_10.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_11.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_12.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_13.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_14.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_15.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_16.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_17.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_18.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_19.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_20.test",
+	    "third_party/sqllogictest/test/random/select/slt_good_21.test"};
 
 	for (auto &script : files) {
 		zScriptFile = script.c_str();
