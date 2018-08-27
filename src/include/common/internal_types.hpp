@@ -13,6 +13,8 @@
 #include <bitset>
 #include <math.h>
 #include <string>
+#include <limits>
+#include <cassert>
 
 namespace duckdb {
 

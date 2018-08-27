@@ -662,6 +662,8 @@ static const char *modeDescr[] = {
 #define SEP_Unit "\x1F"
 #define SEP_Record "\x1E"
 
+
+
 /*
 ** A callback for the sqlite3_log() interface.
 */
@@ -1719,7 +1721,6 @@ struct ImportCtx {
 static void import_append_char(ImportCtx *p, int c) {
 	if (p->n + 1 >= p->nAlloc) {
 		p->nAlloc += p->nAlloc + 100;
-
 		p->z = realloc(p->z, p->nAlloc);
 		if (p->z == 0) {
 			raw_printf(stderr, "out of memory\n");
