@@ -65,8 +65,6 @@ static void RESULT_NO_ERROR(std::unique_ptr<duckdb::DuckDBResult> &result) {
 	}
 }
 
-
-
 static std::string compare_csv(std::unique_ptr<duckdb::DuckDBResult> &result,
                                std::string csv, bool header = false) {
 	if (!result->GetSuccess()) {

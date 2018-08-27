@@ -1,7 +1,7 @@
 
+#include "common/types/vector_operations.hpp"
 #include "duckdb.h"
 #include "duckdb.hpp"
-#include "common/types/vector_operations.hpp"
 #include <cstring>
 
 using namespace duckdb;

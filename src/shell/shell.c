@@ -662,8 +662,6 @@ static const char *modeDescr[] = {
 #define SEP_Unit "\x1F"
 #define SEP_Record "\x1E"
 
-
-
 /*
 ** A callback for the sqlite3_log() interface.
 */
@@ -674,7 +672,6 @@ static void shellLog(void *pArg, int iErrCode, const char *zMsg) {
 	utf8_printf(p->pLog, "(%d) %s\n", iErrCode, zMsg);
 	fflush(p->pLog);
 }
-
 
 /*
 ** Save or restore the current output mode

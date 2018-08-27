@@ -11,10 +11,10 @@
 #pragma once
 
 #include <bitset>
+#include <cassert>
+#include <limits>
 #include <math.h>
 #include <string>
-#include <limits>
-#include <cassert>
 
 namespace duckdb {
 

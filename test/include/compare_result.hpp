@@ -4,7 +4,6 @@
 
 namespace duckdb {
 
-
 static bool parse_datachunk(std::string csv, DataChunk &result,
                             bool has_header) {
 	std::istringstream f(csv);
@@ -55,7 +54,6 @@ static bool parse_datachunk(std::string csv, DataChunk &result,
 	}
 	return true;
 }
-
 
 //! Compares the result of a pipe-delimited CSV with the given DataChunk
 //! Returns true if they are equal, and stores an error_message otherwise
@@ -145,4 +143,4 @@ incorrect:
 	}
 	return false;
 }
-}
+} // namespace duckdb
