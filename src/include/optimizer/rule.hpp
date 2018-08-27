@@ -12,7 +12,7 @@
 
 #include <string>
 #include <vector>
-
+#include <algorithm>
 #include "parser/expression/expression_list.hpp"
 
 #include "planner/logical_operator.hpp"

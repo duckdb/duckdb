@@ -662,6 +662,8 @@ static const char *modeDescr[] = {
 #define SEP_Unit "\x1F"
 #define SEP_Record "\x1E"
 
+
+
 /*
 ** A callback for the sqlite3_log() interface.
 */
@@ -673,19 +675,6 @@ static void shellLog(void *pArg, int iErrCode, const char *zMsg) {
 	fflush(p->pLog);
 }
 
-/*
-** SQL function:  shell_putsnl(X)
-**
-** Write the text X to the screen (or whatever output is being directed)
-** adding a newline at the end, and then return X.
-*/
-static void shellPutsFunc(sqlite3_context *pCtx, int nVal,
-                          sqlite3_value **apVal) {
-	ShellState *p = (ShellState *)sqlite3_user_data(pCtx);
-	(void)nVal;
-	utf8_printf(p->out, "%s\n", sqlite3_value_text(apVal[0]));
-	sqlite3_result_value(pCtx, apVal[0]);
-}
 
 /*
 ** Save or restore the current output mode
@@ -1732,7 +1721,7 @@ struct ImportCtx {
 static void import_append_char(ImportCtx *p, int c) {
 	if (p->n + 1 >= p->nAlloc) {
 		p->nAlloc += p->nAlloc + 100;
-		p->z = sqlite3_realloc64(p->z, p->nAlloc);
+		p->z = realloc(p->z, p->nAlloc);
 		if (p->z == 0) {
 			raw_printf(stderr, "out of memory\n");
 			exit(1);
