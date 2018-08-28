@@ -143,6 +143,37 @@ unique_ptr<CreateStatement> TransformCreate(Node *node) {
 	return result;
 }
 
+unique_ptr<DropStatement> TransformDrop(Node *node) {
+	DropStmt *stmt = reinterpret_cast<DropStmt *>(node);
+	assert(stmt);
+	auto result = make_unique<DropStatement>();
+	if (stmt->objects->length != 1) {
+		throw NotImplementedException("Can only drop one object at a time");
+	}
+
+	switch (stmt->removeType) {
+	case OBJECT_TABLE: {
+		auto table_list =
+		    reinterpret_cast<List *>(stmt->objects->head->data.ptr_value);
+		if (table_list->length == 2) {
+			result->schema =
+			    reinterpret_cast<value *>(table_list->head->data.ptr_value)
+			        ->val.str;
+			result->table = reinterpret_cast<value *>(
+			                    table_list->head->next->data.ptr_value)
+			                    ->val.str;
+		} else {
+			result->table =
+			    reinterpret_cast<value *>(table_list->head->data.ptr_value)
+			        ->val.str;
+		}
+	} break;
+	default:
+		throw NotImplementedException("Cannot drop this type yet");
+	}
+	return result;
+}
+
 unique_ptr<InsertStatement> TransformInsert(Node *node) {
 	InsertStmt *stmt = reinterpret_cast<InsertStmt *>(node);
 	assert(stmt);

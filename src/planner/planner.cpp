@@ -1,6 +1,7 @@
 
 #include "parser/statement/copy_statement.hpp"
 #include "parser/statement/create_statement.hpp"
+#include "parser/statement/drop_statement.hpp"
 #include "parser/statement/explain_statement.hpp"
 #include "parser/statement/insert_statement.hpp"
 #include "parser/statement/select_statement.hpp"
@@ -47,6 +48,14 @@ bool Planner::CreatePlan(ClientContext &context,
 			context.db.catalog.CreateTable(context.ActiveTransaction(),
 			                               stmt.schema, stmt.table,
 			                               stmt.columns);
+			this->success = true;
+			break;
+		}
+		case StatementType::DROP: {
+			auto &stmt = *reinterpret_cast<DropStatement *>(statement.get());
+			// TODO: create actual plan
+			context.db.catalog.DropTable(context.ActiveTransaction(),
+			                             stmt.schema, stmt.table);
 			this->success = true;
 			break;
 		}

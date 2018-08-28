@@ -14,6 +14,7 @@
 
 #include "parser/statement/copy_statement.hpp"
 #include "parser/statement/create_statement.hpp"
+#include "parser/statement/drop_statement.hpp"
 #include "parser/statement/explain_statement.hpp"
 #include "parser/statement/insert_statement.hpp"
 #include "parser/statement/select_statement.hpp"
@@ -30,6 +31,8 @@ namespace duckdb {
 std::unique_ptr<SelectStatement> TransformSelect(Node *node);
 //! Transform a Postgres T_CreateStmt node into a CreateStatement
 std::unique_ptr<CreateStatement> TransformCreate(Node *node);
+//! Transform a Postgres T_DropStmt node into a DropStatement
+std::unique_ptr<DropStatement> TransformDrop(Node *node);
 //! Transform a Postgres T_InsertStmt node into a InsertStatement
 std::unique_ptr<InsertStatement> TransformInsert(Node *node);
 //! Transform a Postgres T_CopyStmt node into a CopyStatement

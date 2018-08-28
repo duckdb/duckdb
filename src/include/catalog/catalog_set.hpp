@@ -11,9 +11,9 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
-#include <mutex>
 
 #include "common/internal_types.hpp"
 
@@ -30,6 +30,8 @@ class CatalogSet {
 	//! successful.
 	bool CreateEntry(Transaction &transaction, const std::string &name,
 	                 std::unique_ptr<AbstractCatalogEntry> value);
+
+	bool DropEntry(Transaction &transaction, const std::string &name);
 	//! Returns whether or not an entry exists
 	bool EntryExists(Transaction &transaction, const std::string &name);
 	//! Returns the entry with the specified name
