@@ -54,6 +54,22 @@ TEST_CASE("Simple table creation transaction tests", "[transactions]") {
 	REQUIRE(result->GetSuccess());
 	result = con_two.Query("SELECT * FROM integers");
 	REQUIRE(result->GetSuccess());
+
+	// serialize conflict
+
+	// start transactions
+	result = con_one.Query("BEGIN TRANSACTION");
+	REQUIRE(result->GetSuccess());
+	result = con_two.Query("BEGIN TRANSACTION");
+	REQUIRE(result->GetSuccess());
+
+	// create a table on connection one
+	result = con_one.Query("CREATE TABLE integers2(i INTEGER)");
+	REQUIRE(result->GetSuccess());
+
+	// create a table on connection two with the same name
+	result = con_one.Query("CREATE TABLE integers2(i INTEGER)");
+	REQUIRE(!result->GetSuccess());
 }
 
 TEST_CASE("Stacked schema changes", "[transactions]") {

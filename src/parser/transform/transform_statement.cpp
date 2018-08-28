@@ -38,12 +38,13 @@ bool TransformOrderBy(List *order, OrderByDescription &result) {
 			SortBy *sort = reinterpret_cast<SortBy *>(temp);
 			Node *target = sort->node;
 			if (sort->sortby_dir == SORTBY_ASC ||
-			    sort->sortby_dir == SORTBY_DEFAULT)
+			    sort->sortby_dir == SORTBY_DEFAULT) {
 				ordernode.type = OrderType::ASCENDING;
-			else if (sort->sortby_dir == SORTBY_DESC)
+			} else if (sort->sortby_dir == SORTBY_DESC) {
 				ordernode.type = OrderType::DESCENDING;
-			else
+			} else {
 				throw NotImplementedException("Unimplemented order by type");
+			}
 			ordernode.expression = TransformExpression(target);
 			if (ordernode.expression->type == ExpressionType::VALUE_CONSTANT) {
 				auto constant = reinterpret_cast<ConstantExpression *>(

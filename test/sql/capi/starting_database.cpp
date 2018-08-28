@@ -3,7 +3,7 @@
 
 #include <vector>
 
-#include "duckdb_c_test.hpp"
+#include "capi_helpers.hpp"
 
 using namespace std;
 
