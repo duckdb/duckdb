@@ -28,14 +28,10 @@ void SchemaCatalogEntry::CreateTable(
 
 void SchemaCatalogEntry::DropTable(Transaction &transaction,
                                    const string &table_name) {
-
-	auto table = GetTable(transaction, table_name);
-
+	GetTable(transaction, table_name);
 	if (!tables.DropEntry(transaction, table_name)) {
-		throw CatalogException("Table with name %s could not be removed!",
-		                       table_name.c_str());
+		// TODO: do we care if its already marked as deleted?
 	}
-	// catalog->storage.DropTable(*table);
 }
 
 bool SchemaCatalogEntry::TableExists(Transaction &transaction,

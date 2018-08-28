@@ -2,6 +2,7 @@
 #include "catalog/catalog_set.hpp"
 
 #include "common/exception.hpp"
+
 #include "transaction/transaction_manager.hpp"
 
 using namespace duckdb;
@@ -28,7 +29,8 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name,
 	} else {
 		// if it does, we have to check version numbers
 		AbstractCatalogEntry &current = *entry->second;
-		if (current.timestamp >= TRANSACTION_ID_START) {
+		if (current.timestamp >= TRANSACTION_ID_START &&
+		    current.timestamp != transaction.transaction_id) {
 			// current version has been written to by a currently active
 			// transaction
 			throw TransactionException("Catalog write-write conflict!");
@@ -53,8 +55,39 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name,
 }
 
 bool CatalogSet::DropEntry(Transaction &transaction, const string &name) {
-	// FIXME implement
-	return false;
+	lock_guard<mutex> lock(catalog_lock);
+	// we can only delete a table that exists
+	auto entry = data.find(name);
+	assert(entry != data.end());
+
+	AbstractCatalogEntry &current = *entry->second;
+	if (current.timestamp >= TRANSACTION_ID_START &&
+	    current.timestamp != transaction.transaction_id) {
+		// current version has been written to by a currently active
+		// transaction
+		throw TransactionException("Catalog write-write conflict!");
+	}
+	// there is a current version that has been committed
+	// this is equivalent to what we are trying to do, so fine
+	if (current.deleted) {
+		return true;
+	}
+
+	auto value = make_unique<AbstractCatalogEntry>(current.catalog, name);
+
+	// create a new entry and replace the currently stored one
+	// set the timestamp to the timestamp of the current transaction
+	// and point it at the dummy node
+	value->timestamp = transaction.transaction_id;
+	value->child = move(data[name]);
+	value->child->parent = value.get();
+	value->set = this;
+	value->deleted = true;
+
+	// push the old entry in the undo buffer for this transaction
+	transaction.PushCatalogEntry(value->child.get());
+	data[name] = move(value);
+	return true;
 }
 
 bool CatalogSet::EntryExists(Transaction &transaction, const string &name) {
@@ -118,7 +151,11 @@ void CatalogSet::Undo(AbstractCatalogEntry *entry) {
 	auto &parent = entry->parent;
 	if (parent->parent) {
 		// if entry->parent has a parent, just set the child pointer
+		// FIXME this fees the entry of parent->parent-child but its still in
+		// the undo buffer :/
+
 		parent->parent->child = move(parent->child);
+
 	} else {
 		// otherwise we need to update the base entry tables
 		auto &name = entry->name;

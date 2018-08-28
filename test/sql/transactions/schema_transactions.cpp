@@ -55,3 +55,38 @@ TEST_CASE("Simple table creation transaction tests", "[transactions]") {
 	result = con_two.Query("SELECT * FROM integers");
 	REQUIRE(result->GetSuccess());
 }
+
+TEST_CASE("Stacked schema changes", "[transactions]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	// create two connections
+	DuckDBConnection con(db);
+
+	con.Query("CREATE TABLE a(i INTEGER)");
+	con.Query("INSERT INTO a VALUES (44)");
+	result = con.Query("SELECT i FROM a");
+	CHECK_COLUMN(result, 0, {44});
+
+	// FIXME this crashes
+	//	con.Query("BEGIN TRANSACTION");
+	//	con.Query("DROP TABLE a");
+	//	con.Query("CREATE TABLE a(i INTEGER)");
+	//	con.Query("INSERT INTO a VALUES (45)");
+	//	result = con.Query("SELECT i FROM a");
+	//	CHECK_COLUMN(result, 0, {45});
+	//	result = con.Query("ROLLBACK");
+
+	result = con.Query("SELECT i FROM a");
+	CHECK_COLUMN(result, 0, {44});
+
+	con.Query("BEGIN TRANSACTION");
+	con.Query("DROP TABLE a");
+	con.Query("CREATE TABLE a(i INTEGER)");
+	con.Query("INSERT INTO a VALUES (46)");
+	result = con.Query("SELECT i FROM a");
+	CHECK_COLUMN(result, 0, {46});
+	result = con.Query("COMMIT");
+
+	result = con.Query("SELECT i FROM a");
+	CHECK_COLUMN(result, 0, {46});
+}
