@@ -21,19 +21,22 @@ TEST_CASE("Test basic joins of tables", "[joins]") {
 	result = con.Query("INSERT INTO test2 VALUES (2, 30)");
 
 	// simple cross product + join condition
-	result = con.Query("SELECT a, test.b, c FROM test, test2 WHERE test.b = test2.b;");
+	result = con.Query(
+	    "SELECT a, test.b, c FROM test, test2 WHERE test.b = test2.b;");
 	CHECK_COLUMN(result, 0, {11, 11, 12});
 	CHECK_COLUMN(result, 1, {1, 1, 2});
 	CHECK_COLUMN(result, 2, {10, 20, 30});
 
 	// use join columns in subquery
-	result = con.Query("SELECT a, (SELECT test.a), c FROM test, test2 WHERE test.b = test2.b;");
+	result = con.Query("SELECT a, (SELECT test.a), c FROM test, test2 WHERE "
+	                   "test.b = test2.b;");
 	CHECK_COLUMN(result, 0, {11, 11, 12});
 	CHECK_COLUMN(result, 1, {11, 11, 12});
 	CHECK_COLUMN(result, 2, {10, 20, 30});
 
 	// explicit join
-	result = con.Query("SELECT a, test.b, c FROM test INNER JOIN test2 ON test.b = test2.b;");
+	result = con.Query(
+	    "SELECT a, test.b, c FROM test INNER JOIN test2 ON test.b = test2.b;");
 	CHECK_COLUMN(result, 0, {11, 11, 12});
 	CHECK_COLUMN(result, 1, {1, 1, 2});
 	CHECK_COLUMN(result, 2, {10, 20, 30});

@@ -40,7 +40,7 @@ TEST_CASE("Test handling of overflows in basic types", "[overflowhandling]") {
 	// cast to bigger type if it will overflow
 	result = con.Query("SELECT cast(a AS TINYINT) FROM test2");
 	CHECK_COLUMN(result, 0, {200, 12, 14});
-	
+
 	// cast to bigger type if SUM overflows
 	result = con.Query("SELECT SUM(b) FROM test2");
 	CHECK_COLUMN(result, 0, {180});

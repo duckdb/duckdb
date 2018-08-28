@@ -53,7 +53,8 @@ TEST_CASE("Test NULL handling of basic types", "[nullhandling]") {
 	CHECK_COLUMN(result, 2, {3});
 
 	// with GROUP BY as well
-	result = con.Query("SELECT b, COUNT(a), SUM(a), MIN(a), MAX(a) FROM test GROUP BY b ORDER BY b");
+	result = con.Query("SELECT b, COUNT(a), SUM(a), MIN(a), MAX(a) FROM test "
+	                   "GROUP BY b ORDER BY b");
 	CHECK_COLUMN(result, 0, {21, 22});
 	CHECK_COLUMN(result, 1, {0, 2});
 	CHECK_COLUMN(result, 2, {Value(), 24});
@@ -64,7 +65,8 @@ TEST_CASE("Test NULL handling of basic types", "[nullhandling]") {
 	result = con.Query("INSERT INTO test VALUES (12, NULL)");
 	result = con.Query("INSERT INTO test VALUES (16, NULL)");
 
-	result = con.Query("SELECT b, COUNT(a), SUM(a), MIN(a), MAX(a) FROM test GROUP BY b ORDER BY b");
+	result = con.Query("SELECT b, COUNT(a), SUM(a), MIN(a), MAX(a) FROM test "
+	                   "GROUP BY b ORDER BY b");
 	CHECK_COLUMN(result, 0, {Value(), 21, 22});
 	CHECK_COLUMN(result, 1, {2, 0, 2});
 	CHECK_COLUMN(result, 2, {28, Value(), 24});
@@ -75,12 +77,11 @@ TEST_CASE("Test NULL handling of basic types", "[nullhandling]") {
 	result = con.Query("INSERT INTO test VALUES (NULL, NULL)");
 	result = con.Query("INSERT INTO test VALUES (NULL, 22)");
 
-	result = con.Query("SELECT b, COUNT(a), SUM(a), MIN(a), MAX(a) FROM test GROUP BY b ORDER BY b");
+	result = con.Query("SELECT b, COUNT(a), SUM(a), MIN(a), MAX(a) FROM test "
+	                   "GROUP BY b ORDER BY b");
 	CHECK_COLUMN(result, 0, {Value(), 21, 22});
 	CHECK_COLUMN(result, 1, {2, 0, 2});
 	CHECK_COLUMN(result, 2, {28, Value(), 24});
 	CHECK_COLUMN(result, 3, {12, Value(), 11});
 	CHECK_COLUMN(result, 4, {16, Value(), 13});
-
-
 }

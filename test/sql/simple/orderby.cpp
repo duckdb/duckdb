@@ -51,7 +51,8 @@ TEST_CASE("Test ORDER BY keyword", "[order]") {
 	CHECK_COLUMN(result, 1, {21});
 
 	// Offset
-	result = con.Query("SELECT a, b FROM test ORDER BY b, a DESC LIMIT 1 OFFSET 1;");
+	result =
+	    con.Query("SELECT a, b FROM test ORDER BY b, a DESC LIMIT 1 OFFSET 1;");
 	CHECK_COLUMN(result, 0, {13});
 	CHECK_COLUMN(result, 1, {22});
 
@@ -72,7 +73,8 @@ TEST_CASE("Test ORDER BY keyword", "[order]") {
 	CHECK_COLUMN(result, 1, {11, 12});
 
 	// order by expression
-	result = con.Query("SELECT b % 2 AS f, SUM(a) FROM test GROUP BY f ORDER BY b % 2;");
+	result = con.Query(
+	    "SELECT b % 2 AS f, SUM(a) FROM test GROUP BY f ORDER BY b % 2;");
 	CHECK_COLUMN(result, 0, {0, 1});
 	CHECK_COLUMN(result, 1, {24, 12});
 
@@ -82,11 +84,13 @@ TEST_CASE("Test ORDER BY keyword", "[order]") {
 	CHECK_COLUMN(result, 1, {12, 11, 13});
 
 	// ORDER BY alias
-	result = con.Query("SELECT b % 2 AS f, SUM(a) FROM test GROUP BY f ORDER BY f;");
+	result =
+	    con.Query("SELECT b % 2 AS f, SUM(a) FROM test GROUP BY f ORDER BY f;");
 	CHECK_COLUMN(result, 0, {0, 1});
 	CHECK_COLUMN(result, 1, {24, 12});
-	
-	result = con.Query("SELECT b % 2 AS f, SUM(a) FROM test GROUP BY f ORDER BY 1;");
+
+	result =
+	    con.Query("SELECT b % 2 AS f, SUM(a) FROM test GROUP BY f ORDER BY 1;");
 	CHECK_COLUMN(result, 0, {0, 1});
 	CHECK_COLUMN(result, 1, {24, 12});
 }

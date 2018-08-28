@@ -25,11 +25,10 @@ TEST_CASE("Test scalar queries [C]", "[scalarquery]") {
 
 	result = con.Query("SELECT cast('3' AS INTEGER)");
 	CHECK_COLUMN(result, 0, {3});
-	
+
 	result = con.Query("SELECT cast(3 AS VARCHAR)");
 	CHECK_COLUMN(result, 0, {"3"});
-	
+
 	result = con.Query("SELECT CASE WHEN 43 > 33 THEN 43 ELSE 33 END;");
 	CHECK_COLUMN(result, 0, {43});
-
 }
