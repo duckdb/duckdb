@@ -36,6 +36,9 @@ class Catalog {
 	                 const std::string &table,
 	                 const std::vector<ColumnDefinition> &columns);
 
+	void DropTable(Transaction &transaction, const std::string &schema,
+	               const std::string &table);
+
 	//! Returns true if the schema exists, and false otherwise.
 	bool SchemaExists(Transaction &transaction,
 	                  const std::string &name = DEFAULT_SCHEMA);

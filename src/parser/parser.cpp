@@ -61,6 +61,8 @@ unique_ptr<SQLStatement> Parser::TransformNode(Node *stmt) {
 		return TransformSelect(stmt);
 	case T_CreateStmt:
 		return TransformCreate(stmt);
+	case T_DropStmt:
+		return TransformDrop(stmt);
 	case T_InsertStmt:
 		return TransformInsert(stmt);
 	case T_CopyStmt:

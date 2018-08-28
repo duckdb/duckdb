@@ -26,6 +26,18 @@ void SchemaCatalogEntry::CreateTable(
 	}
 }
 
+void SchemaCatalogEntry::DropTable(Transaction &transaction,
+                                   const string &table_name) {
+
+	auto table = GetTable(transaction, table_name);
+
+	if (!tables.DropEntry(transaction, table_name)) {
+		throw CatalogException("Table with name %s could not be removed!",
+		                       table_name.c_str());
+	}
+	// catalog->storage.DropTable(*table);
+}
+
 bool SchemaCatalogEntry::TableExists(Transaction &transaction,
                                      const string &table_name) {
 	return tables.EntryExists(transaction, table_name);

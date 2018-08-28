@@ -25,6 +25,9 @@ class StorageManager {
 	//! Create a new table from a catalog entry
 	void CreateTable(TableCatalogEntry &table);
 
+	//! Create a new table from a catalog entry
+	void DropTable(TableCatalogEntry &table);
+
 	//! The set of tables managed by the storage engine
 	std::vector<std::unique_ptr<DataTable>> tables;
 };

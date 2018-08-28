@@ -38,6 +38,8 @@ class SchemaCatalogEntry : public AbstractCatalogEntry {
 	void CreateTable(Transaction &transaction, const std::string &table_name,
 	                 const std::vector<ColumnDefinition> &columns);
 
+	void DropTable(Transaction &transaction, const std::string &table_name);
+
   private:
 	//! The catalog set holding the tables
 	CatalogSet tables;

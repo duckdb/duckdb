@@ -52,6 +52,11 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name,
 	return true;
 }
 
+bool CatalogSet::DropEntry(Transaction &transaction, const string &name) {
+	// FIXME implement
+	return false;
+}
+
 bool CatalogSet::EntryExists(Transaction &transaction, const string &name) {
 	lock_guard<mutex> lock(catalog_lock);
 
