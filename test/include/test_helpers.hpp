@@ -19,6 +19,7 @@ static void CHECK_COLUMN(std::unique_ptr<duckdb::DuckDBResult> &result,
 	}
 	if (values.size() == 0) {
 		if (result->size() != 0) {
+			result->Print();
 			FAIL("Data size does not match value size!");
 		} else {
 			return;

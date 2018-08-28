@@ -147,18 +147,19 @@ AbstractCatalogEntry *CatalogSet::GetEntry(Transaction &transaction,
 void CatalogSet::Undo(AbstractCatalogEntry *entry) {
 	lock_guard<mutex> lock(catalog_lock);
 
-	// we have to place (entry) as (entry->parent) again
-	auto &parent = entry->parent;
-	if (parent->parent) {
-		// if entry->parent has a parent, just set the child pointer
-		// FIXME this fees the entry of parent->parent-child but its still in
-		// the undo buffer :/
+	// entry has to be restored
+	// and entry->parent has to be removed ("rolled back")
 
-		parent->parent->child = move(parent->child);
-
+	// i.e. we have to place (entry) as (entry->parent) again
+	auto &to_be_removed_node = entry->parent;
+	if (to_be_removed_node->parent) {
+		// if the to be removed node has a parent, set the child pointer to the to be restored node
+		to_be_removed_node->parent->child = move(to_be_removed_node->child);
+		entry->parent = to_be_removed_node->parent;
 	} else {
 		// otherwise we need to update the base entry tables
 		auto &name = entry->name;
-		data[name] = move(parent->child);
+		data[name] = move(to_be_removed_node->child);
+		entry->parent = nullptr;
 	}
 }

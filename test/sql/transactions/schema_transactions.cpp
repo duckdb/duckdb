@@ -83,14 +83,13 @@ TEST_CASE("Stacked schema changes", "[transactions]") {
 	result = con.Query("SELECT i FROM a");
 	CHECK_COLUMN(result, 0, {44});
 
-	// FIXME this crashes
-	//	con.Query("BEGIN TRANSACTION");
-	//	con.Query("DROP TABLE a");
-	//	con.Query("CREATE TABLE a(i INTEGER)");
-	//	con.Query("INSERT INTO a VALUES (45)");
-	//	result = con.Query("SELECT i FROM a");
-	//	CHECK_COLUMN(result, 0, {45});
-	//	result = con.Query("ROLLBACK");
+	con.Query("BEGIN TRANSACTION");
+	con.Query("DROP TABLE a");
+	con.Query("CREATE TABLE a(i INTEGER)");
+	con.Query("INSERT INTO a VALUES (45)");
+	result = con.Query("SELECT i FROM a");
+	CHECK_COLUMN(result, 0, {45});
+	con.Query("ROLLBACK");
 
 	result = con.Query("SELECT i FROM a");
 	CHECK_COLUMN(result, 0, {44});
