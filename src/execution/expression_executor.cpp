@@ -314,7 +314,10 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 			expr.children[child]->Accept(this);
 			VectorOperations::Equals(l, vector, comp_res);
 			vector.Destroy();
-			VectorOperations::Or(result, comp_res, result);
+			Vector temp_result;
+			temp_result.Initialize(TypeId::BOOLEAN);
+			result.Copy(temp_result);
+			VectorOperations::Or(temp_result, comp_res, result);
 			// early abort
 			if (Value::Equals(VectorOperations::Min(result), Value(true)) &&
 			    Value::Equals(VectorOperations::Max(result), Value(true))) {
