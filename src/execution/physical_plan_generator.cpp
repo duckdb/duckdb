@@ -98,7 +98,7 @@ void PhysicalPlanGenerator::Visit(LogicalGet &op) {
 	}
 
 	auto scan =
-	    make_unique<PhysicalTableScan>(op.table->storage, op.column_ids);
+	    make_unique<PhysicalTableScan>(*op.table->storage, op.column_ids);
 	if (plan) {
 		throw Exception("Scan has to be the first node of a plan!");
 	}

@@ -54,7 +54,7 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(std::string query) {
 
 		// finally execute the plan and return the result
 		Executor executor;
-		result->collection = executor.Execute(move(physical_planner.plan));
+		result->collection = executor.Execute(context, move(physical_planner.plan));
 		result->success = true;
 	} catch (Exception ex) {
 		result->error = ex.GetMessage();

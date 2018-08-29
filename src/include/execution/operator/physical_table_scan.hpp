@@ -19,15 +19,15 @@ namespace duckdb {
 //! Represents a scan of a base table
 class PhysicalTableScan : public PhysicalOperator {
   public:
-	PhysicalTableScan(DataTable *table, std::vector<size_t> column_ids)
+	PhysicalTableScan(DataTable &table, std::vector<size_t> column_ids)
 	    : PhysicalOperator(PhysicalOperatorType::SEQ_SCAN), table(table),
 	      column_ids(column_ids) {}
 
-	DataTable *table;
+	DataTable &table;
 	std::vector<size_t> column_ids;
 
 	std::vector<TypeId> GetTypes() override;
-	virtual void GetChunk(DataChunk &chunk,
+	virtual void GetChunk(ClientContext &context, DataChunk &chunk,
 	                      PhysicalOperatorState *state) override;
 
 	virtual std::unique_ptr<PhysicalOperatorState>

@@ -6,7 +6,7 @@ using namespace std;
 
 vector<TypeId> PhysicalLimit::GetTypes() { return children[0]->GetTypes(); }
 
-void PhysicalLimit::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalLimit::GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalLimitOperatorState *>(state_);
 	chunk.Reset();
 
@@ -16,7 +16,7 @@ void PhysicalLimit::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 	}
 
 	// get the next chunk from the child
-	children[0]->GetChunk(state->child_chunk, state->child_state.get());
+	children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 	if (state->child_chunk.count == 0) {
 		return;
 	}

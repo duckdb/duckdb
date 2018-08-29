@@ -14,18 +14,18 @@ vector<TypeId> PhysicalProjection::GetTypes() {
 	return types;
 }
 
-void PhysicalProjection::GetChunk(DataChunk &chunk,
+void PhysicalProjection::GetChunk(ClientContext &context, DataChunk &chunk,
                                   PhysicalOperatorState *state) {
 	chunk.Reset();
 
 	assert(children.size() == 1);
 	// get the next chunk from the child
-	children[0]->GetChunk(state->child_chunk, state->child_state.get());
+	children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 	if (state->child_chunk.count == 0) {
 		return;
 	}
 
-	ExpressionExecutor executor(state);
+	ExpressionExecutor executor(state, context);
 
 	for (size_t i = 0; i < select_list.size(); i++) {
 		auto &expr = select_list[i];

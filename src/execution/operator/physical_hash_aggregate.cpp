@@ -25,7 +25,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(
 
 void PhysicalHashAggregate::Initialize() {}
 
-void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
+void PhysicalHashAggregate::GetChunk(ClientContext &context, DataChunk &chunk,
                                      PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalHashAggregateOperatorState *>(state_);
 	chunk.Reset();
@@ -37,13 +37,13 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 	do {
 		if (children.size() > 0) {
 			// resolve the child chunk if there is one
-			children[0]->GetChunk(state->child_chunk, state->child_state.get());
+			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 			if (state->child_chunk.count == 0) {
 				break;
 			}
 		}
 
-		ExpressionExecutor executor(state);
+		ExpressionExecutor executor(state, context);
 		if (groups.size() > 0) {
 			// aggregation with groups
 			DataChunk &group_chunk = state->group_chunk;
@@ -102,7 +102,7 @@ void PhysicalHashAggregate::GetChunk(DataChunk &chunk,
 	}
 	// we finished the child chunk
 	// actually compute the final projection list now
-	ExpressionExecutor executor(state, false);
+	ExpressionExecutor executor(state, context, false);
 	for (size_t i = 0; i < select_list.size(); i++) {
 		auto &expr = select_list[i];
 		executor.Execute(expr.get(), chunk.data[i]);

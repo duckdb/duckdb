@@ -7,12 +7,12 @@ using namespace std;
 
 vector<TypeId> PhysicalFilter::GetTypes() { return children[0]->GetTypes(); }
 
-void PhysicalFilter::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalFilter::GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOperatorState *>(state_);
 	chunk.Reset();
 
 	do {
-		children[0]->GetChunk(state->child_chunk, state->child_state.get());
+		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 		if (state->child_chunk.count == 0) {
 			return;
 		}
@@ -23,7 +23,7 @@ void PhysicalFilter::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 		}
 
 		Vector result(TypeId::BOOLEAN, state->child_chunk.count);
-		ExpressionExecutor executor(state);
+		ExpressionExecutor executor(state, context);
 		executor.Execute(expressions[0].get(), result);
 		// AND together the remaining filters!
 		for (size_t i = 1; i < expressions.size(); i++) {

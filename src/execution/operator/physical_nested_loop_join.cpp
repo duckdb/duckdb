@@ -23,7 +23,7 @@ vector<TypeId> PhysicalNestedLoopJoin::GetTypes() {
 	return types;
 }
 
-void PhysicalNestedLoopJoin::GetChunk(DataChunk &chunk,
+void PhysicalNestedLoopJoin::GetChunk(ClientContext &context, DataChunk &chunk,
                                       PhysicalOperatorState *state_) {
 	auto state =
 	    reinterpret_cast<PhysicalNestedLoopJoinOperatorState *>(state_);
@@ -41,7 +41,7 @@ void PhysicalNestedLoopJoin::GetChunk(DataChunk &chunk,
 		DataChunk new_chunk;
 		new_chunk.Initialize(types);
 		do {
-			children[1]->GetChunk(new_chunk, right_state.get());
+			children[1]->GetChunk(context, new_chunk, right_state.get());
 			state->right_chunks.Append(new_chunk);
 		} while (new_chunk.count > 0);
 
@@ -64,7 +64,7 @@ void PhysicalNestedLoopJoin::GetChunk(DataChunk &chunk,
 		// first check if we have to fetch a new chunk from the left child
 		if (state->left_position >= state->child_chunk.count) {
 			// if we have exhausted the current left chunk, fetch a new one
-			children[0]->GetChunk(state->child_chunk, state->child_state.get());
+			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 			if (state->child_chunk.count == 0) {
 				return;
 			}
@@ -73,7 +73,7 @@ void PhysicalNestedLoopJoin::GetChunk(DataChunk &chunk,
 
 			// resolve the left join condition for the current chunk
 			state->left_join_condition.Reset();
-			ExpressionExecutor executor(state->child_chunk);
+			ExpressionExecutor executor(state->child_chunk, context);
 			for (size_t i = 0; i < conditions.size(); i++) {
 				executor.Execute(conditions[i].left.get(),
 				                 state->left_join_condition.data[i]);
@@ -88,7 +88,7 @@ void PhysicalNestedLoopJoin::GetChunk(DataChunk &chunk,
 		// join the current row of the left relation with the current chunk
 		// from the right relation
 		state->right_join_condition.Reset();
-		ExpressionExecutor executor(right_chunk);
+		ExpressionExecutor executor(right_chunk, context);
 		Vector final_result;
 		for (size_t i = 0; i < conditions.size(); i++) {
 			Vector &right_match = state->right_join_condition.data[i];

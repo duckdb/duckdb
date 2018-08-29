@@ -5,14 +5,11 @@ using namespace duckdb;
 using namespace std;
 
 vector<TypeId> PhysicalTableScan::GetTypes() {
-	vector<TypeId> types;
-	for (auto &column_id : column_ids) {
-		types.push_back(table->columns[column_id]->column.type);
-	}
-	return types;
+	return table.GetTypes(column_ids);
 }
 
-void PhysicalTableScan::GetChunk(DataChunk &chunk,
+void PhysicalTableScan::GetChunk(ClientContext &context,
+                                 DataChunk &chunk,
                                  PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalTableScanOperatorState *>(state_);
 	chunk.Reset();
@@ -20,15 +17,7 @@ void PhysicalTableScan::GetChunk(DataChunk &chunk,
 	if (column_ids.size() == 0)
 		return;
 
-	for (size_t i = 0; i < column_ids.size(); i++) {
-		auto *column = table->columns[column_ids[i]].get();
-		if (state->current_offset >= column->data.size())
-			return;
-		auto &v = column->data[state->current_offset];
-		chunk.data[i].Reference(*v);
-	}
-	chunk.count = chunk.data[0].count;
-	state->current_offset++;
+	table.Scan(context.ActiveTransaction(), chunk, column_ids, state->current_offset);
 
 	chunk.Verify();
 }

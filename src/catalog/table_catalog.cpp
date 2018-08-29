@@ -8,24 +8,22 @@
 using namespace duckdb;
 using namespace std;
 
-TableCatalogEntry::TableCatalogEntry(Catalog *catalog, string name)
-    : AbstractCatalogEntry(catalog, name), storage(nullptr) {}
+TableCatalogEntry::TableCatalogEntry(Catalog *catalog, string name, const std::vector<ColumnDefinition> &table_columns)
+    : AbstractCatalogEntry(catalog, name) {
+    storage = make_unique<DataTable>(catalog->storage, *this);
+	for(auto entry : table_columns) {
+		if (ColumnExists(entry.name)) {
+			throw CatalogException("Column with name %s already exists!",
+			                       entry.name.c_str());
+		}
 
-void TableCatalogEntry::AddColumn(ColumnDefinition entry) {
-	if (ColumnExists(entry.name)) {
-		throw CatalogException("Column with name %s already exists!",
-		                       entry.name.c_str());
+		size_t oid = columns.size();
+		name_map[entry.name] = oid;
+		entry.oid = oid;
+		auto column = make_unique<ColumnDefinition>(entry);
+		storage->AddColumn(*column);
+		columns.push_back(move(column));
 	}
-	if (!storage) {
-		throw Exception("Storage of table has not been initialized!");
-	}
-
-	size_t oid = columns.size();
-	name_map[entry.name] = oid;
-	entry.oid = oid;
-	auto column = make_unique<ColumnDefinition>(entry);
-	storage->AddColumn(*column);
-	columns.push_back(move(column));
 }
 
 bool TableCatalogEntry::ColumnExists(const string &name) {
@@ -41,7 +39,7 @@ ColumnDefinition *TableCatalogEntry::GetColumn(const std::string &name) {
 }
 
 Statistics TableCatalogEntry::GetStatistics(size_t oid) {
-	return storage->columns[oid]->stats;
+	return storage->GetStatistics(oid);
 }
 
 vector<TypeId> TableCatalogEntry::GetTypes() {

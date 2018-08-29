@@ -22,14 +22,14 @@ namespace duckdb {
 //! database on disk
 class StorageManager {
   public:
-	//! Create a new table from a catalog entry
-	void CreateTable(TableCatalogEntry &table);
+	// //! Create a new table from a catalog entry
+	// void CreateTable(TableCatalogEntry &table);
 
-	//! Create a new table from a catalog entry
-	void DropTable(TableCatalogEntry &table);
+	// //! Create a new table from a catalog entry
+	// void DropTable(TableCatalogEntry &table);
 
 	//! The set of tables managed by the storage engine
-	std::vector<std::unique_ptr<DataTable>> tables;
+	// std::vector<std::unique_ptr<DataTable>> tables;
 };
 
 } // namespace duckdb

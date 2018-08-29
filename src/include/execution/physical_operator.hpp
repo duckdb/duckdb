@@ -19,6 +19,8 @@
 
 #include "common/types/data_chunk.hpp"
 
+#include "main/client_context.hpp"
+
 #include "parser/expression/abstract_expression.hpp"
 #include "parser/statement/select_statement.hpp"
 
@@ -75,7 +77,7 @@ class PhysicalOperator : public Printable {
 	}
 	//! Retrieves a chunk from this operator and stores it in the chunk
 	//! variable.
-	virtual void GetChunk(DataChunk &chunk, PhysicalOperatorState *state) = 0;
+	virtual void GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) = 0;
 
 	//! Create a new empty instance of the operator state
 	virtual std::unique_ptr<PhysicalOperatorState>

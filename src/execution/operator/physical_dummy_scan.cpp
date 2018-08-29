@@ -6,7 +6,7 @@ using namespace std;
 
 vector<TypeId> PhysicalDummyScan::GetTypes() { return {TypeId::INTEGER}; }
 
-void PhysicalDummyScan::GetChunk(DataChunk &chunk,
+void PhysicalDummyScan::GetChunk(ClientContext &context, DataChunk &chunk,
                                  PhysicalOperatorState *state) {
 	chunk.Reset();
 	if (state->finished) {

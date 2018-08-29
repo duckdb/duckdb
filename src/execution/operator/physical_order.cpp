@@ -106,7 +106,7 @@ static void quicksort(ChunkCollection &sort_by, OrderByDescription &desc,
 	_quicksort_inplace(sort_by, desc, result, part + 1, sort_by.count - 1);
 }
 
-void PhysicalOrder::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalOrder::GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOrderOperatorState *>(state_);
 	chunk.Reset();
 
@@ -114,7 +114,7 @@ void PhysicalOrder::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 	if (state->position == 0) {
 		// first concatenate all the data of the child chunks
 		do {
-			children[0]->GetChunk(state->child_chunk, state->child_state.get());
+			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 			big_data.Append(state->child_chunk);
 		} while (state->child_chunk.count != 0);
 
@@ -131,7 +131,7 @@ void PhysicalOrder::GetChunk(DataChunk &chunk, PhysicalOperatorState *state_) {
 			DataChunk sort_chunk;
 			sort_chunk.Initialize(sort_types);
 
-			ExpressionExecutor executor(*big_data.chunks[i]);
+			ExpressionExecutor executor(*big_data.chunks[i], context);
 			for (size_t i = 0; i < description.orders.size(); i++) {
 				auto &expr = description.orders[i].expression;
 				executor.Execute(expr.get(), sort_chunk.data[i]);

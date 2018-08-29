@@ -16,6 +16,8 @@
 #include "common/printable.hpp"
 #include "common/types/data_chunk.hpp"
 
+#include "main/client_context.hpp"
+
 #include "parser/expression/abstract_expression.hpp"
 #include "parser/sql_node_visitor.hpp"
 
@@ -33,14 +35,16 @@ namespace duckdb {
 class ExpressionExecutor : public SQLNodeVisitor {
   public:
 	ExpressionExecutor(PhysicalOperatorState *state,
+					   ClientContext &context,
 	                   bool scalar_executor = true)
-	    : chunk(state ? &state->child_chunk : nullptr), state(state),
+	    : context(context), chunk(state ? &state->child_chunk : nullptr), state(state),
 	      parent(state ? state->parent : nullptr),
 	      scalar_executor(scalar_executor) {}
 
 	ExpressionExecutor(DataChunk &child_chunk,
+		               ClientContext &context,
 	                   ExpressionExecutor *parent = nullptr)
-	    : chunk(&child_chunk), state(nullptr), parent(parent),
+	    : context(context), chunk(&child_chunk), state(nullptr), parent(parent),
 	      scalar_executor(true) {}
 
 	void Reset();
@@ -69,6 +73,8 @@ class ExpressionExecutor : public SQLNodeVisitor {
 	void Visit(SubqueryExpression &expr);
 
   private:
+  	ClientContext &context;
+
 	//! Whether or not the ExpressionExecutor is a scalar executor (i.e. output
 	//! size = input size), this is true for e.g. expressions in the SELECT
 	//! clause without aggregations

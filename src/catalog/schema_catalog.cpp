@@ -13,16 +13,11 @@ void SchemaCatalogEntry::CreateTable(
     Transaction &transaction, const string &table_name,
     const std::vector<ColumnDefinition> &columns) {
 
-	auto table = new TableCatalogEntry(catalog, table_name);
+	auto table = new TableCatalogEntry(catalog, table_name, columns);
 	auto table_entry = unique_ptr<AbstractCatalogEntry>(table);
 	if (!tables.CreateEntry(transaction, table_name, move(table_entry))) {
 		throw CatalogException("Table with name %s already exists!",
 		                       table_name.c_str());
-	}
-
-	catalog->storage.CreateTable(*table);
-	for (auto &column : columns) {
-		table->AddColumn(column);
 	}
 }
 

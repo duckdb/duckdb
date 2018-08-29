@@ -29,7 +29,7 @@ class PhysicalHashAggregate : public PhysicalAggregate {
 
 	void Initialize();
 
-	void GetChunk(DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
 	std::unique_ptr<PhysicalOperatorState>
 	GetOperatorState(ExpressionExecutor *parent) override;

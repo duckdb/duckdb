@@ -418,7 +418,7 @@ void ExpressionExecutor::Visit(SubqueryExpression &expr) {
 		auto state = plan->GetOperatorState(this);
 		DataChunk s_chunk;
 		plan->InitializeChunk(s_chunk);
-		plan->GetChunk(s_chunk, state.get());
+		plan->GetChunk(context, s_chunk, state.get());
 		if (!expr.exists) {
 			if (s_chunk.count == 0) {
 				vector.SetValue(r, Value());
