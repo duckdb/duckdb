@@ -439,26 +439,43 @@ bool Value::_templated_boolean_operation(const Value &left,
 }
 
 bool Value::Equals(const Value &left, const Value &right) {
+	if (left.is_null && right.is_null) {
+		return true;
+	}
 	return _templated_boolean_operation<operators::Equals>(left, right);
 }
 
 bool Value::NotEquals(const Value &left, const Value &right) {
-	return _templated_boolean_operation<operators::NotEquals>(left, right);
+	return !Value::Equals(left, right);
 }
 
 bool Value::GreaterThan(const Value &left, const Value &right) {
+	if (left.is_null && right.is_null) {
+		return false;
+	} else if (right.is_null) {
+		return true;
+	} else if (left.is_null) {
+		return false;
+	}
 	return _templated_boolean_operation<operators::GreaterThan>(left, right);
 }
 
 bool Value::GreaterThanEquals(const Value &left, const Value &right) {
+	if (left.is_null && right.is_null) {
+		return true;
+	} else if (right.is_null) {
+		return true;
+	} else if (left.is_null) {
+		return false;
+	}
 	return _templated_boolean_operation<operators::GreaterThanEquals>(left,
 	                                                                  right);
 }
 
 bool Value::LessThan(const Value &left, const Value &right) {
-	return _templated_boolean_operation<operators::LessThan>(left, right);
+	return Value::GreaterThan(right, left);
 }
 
 bool Value::LessThanEquals(const Value &left, const Value &right) {
-	return _templated_boolean_operation<operators::LessThanEquals>(left, right);
+	return Value::GreaterThanEquals(right, left);
 }

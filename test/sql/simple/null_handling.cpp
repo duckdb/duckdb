@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test NULL handling of basic types", "[nullhandling]") {
+TEST_CASE("Test scalar NULL handling", "[nullhandling]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
@@ -21,6 +21,12 @@ TEST_CASE("Test NULL handling of basic types", "[nullhandling]") {
 	// division by zero
 	result = con.Query("SELECT 4 / 0");
 	CHECK_COLUMN(result, 0, {Value()});
+}
+
+TEST_CASE("Test simple NULL handling", "[nullhandling]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
 
 	// multiple insertions
 	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
@@ -39,6 +45,18 @@ TEST_CASE("Test NULL handling of basic types", "[nullhandling]") {
 	// NULL addition results in NULL
 	result = con.Query("SELECT a + b FROM test");
 	CHECK_COLUMN(result, 0, {33, Value(), 35});
+}
+
+TEST_CASE("Test NULL handling in aggregations", "[nullhandling]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	// multiple insertions
+	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
+	result = con.Query("INSERT INTO test VALUES (11, 22)");
+	result = con.Query("INSERT INTO test VALUES (NULL, 21)");
+	result = con.Query("INSERT INTO test VALUES (13, 22)");
 
 	// aggregations should ignore NULLs
 	result = con.Query("SELECT SUM(a), MIN(a), MAX(a) FROM test");
