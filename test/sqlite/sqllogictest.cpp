@@ -423,7 +423,7 @@ TEST_CASE("[SLOW] Test SQLite Logic Test", "[sqlitelogic]") {
 			FAIL("Could not find test script '" + script +
 			     "'. Perhaps run `make sqlite`. ");
 		}
-		printf("%s\n", script.c_str());
+		fprintf(stderr, "%s\n", script.c_str());
 		REQUIRE(in);
 		fseek(in, 0L, SEEK_END);
 		nScript = ftell(in);
