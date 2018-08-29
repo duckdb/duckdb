@@ -301,9 +301,7 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 		Vector result;
 		result.Initialize(TypeId::BOOLEAN);
 		result.count = l.count;
-		for (size_t i = 0; i < l.count; i++) {
-			result.SetValue(i, Value(false));
-		}
+		VectorOperations::Set(result, Value(false));
 
 		// init comparision result once
 		comp_res.Initialize(TypeId::BOOLEAN);
