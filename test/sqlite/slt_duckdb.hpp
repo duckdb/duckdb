@@ -13,6 +13,8 @@
 #define LLFMT "%I64d"
 #endif
 
+static duckdb_database database;
+
 static int duckdbConnect(
     void *NotUsed,           /* Argument from DbEngine object.  Not used */
     const char *zConnectStr, /* Connection string */
@@ -23,18 +25,16 @@ static int duckdbConnect(
 	(void)zConnectStr;
 	(void)zParam;
 
-	duckdb_database database;
-	duckdb_connection *connection =
-	    (duckdb_connection *)malloc(sizeof(duckdb_connection));
+	duckdb_connection conn;
 
 	if (duckdb_open(NULL, &database) != DuckDBSuccess) {
 		return 1;
 	}
 
-	if (duckdb_connect(database, connection) != DuckDBSuccess) {
+	if (duckdb_connect(database, &conn) != DuckDBSuccess) {
 		return 1;
 	}
-	*ppConn = (void *)connection;
+	*ppConn = (void *)conn;
 	return 0;
 }
 
@@ -43,7 +43,7 @@ static int duckdbStatement(void *pConn, /* Connection created by xConnect */
                            int bQuiet /* True to suppress printing errors. */
 ) {
 	// fprintf(stderr, "Quack: %s\n", zSql);
-	if (duckdb_query(*((duckdb_connection *)pConn), (char *)zSql, NULL) !=
+	if (duckdb_query((duckdb_connection)pConn, (char *)zSql, NULL) !=
 	    DuckDBSuccess) {
 		return 1;
 	}
@@ -65,7 +65,7 @@ duckdbQuery(void *pConn,       /* Connection created by xConnect */
 	(void)zType;
 	// fprintf(stderr, "Quack: %s\n", zSql);
 
-	if (duckdb_query(*((duckdb_connection *)pConn), (char *)zSql, &result) !=
+	if (duckdb_query((duckdb_connection)pConn, (char *)zSql, &result) !=
 	    DuckDBSuccess) {
 		return 1;
 	}
@@ -164,10 +164,8 @@ static int duckdbFreeResults(void *pConn, /* Connection created by xConnect */
 
 static int duckdbDisconnect(void *pConn /* Connection created by xConnect */
 ) {
-	duckdb_connection conn = *((duckdb_connection *)pConn);
-	duckdb_disconnect(conn);
-	// TODO: shutdown
-	//	monetdb_shutdown();
+	duckdb_disconnect((duckdb_connection)pConn);
+	duckdb_close(database);
 	return 0;
 }
 
