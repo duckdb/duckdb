@@ -86,6 +86,7 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 		aggregate->AddChild(move(root));
 		root = move(aggregate);
 	}
+
 	if (statement.HasOrder()) {
 		auto order = make_unique<LogicalOrder>(move(statement.orderby));
 		order->AddChild(move(root));
@@ -96,6 +97,16 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 		                                       statement.limit.offset);
 		limit->AddChild(move(root));
 		root = move(limit);
+	}
+
+	if (statement.union_select) {
+		auto top_select = move(root);
+		statement.union_select->Accept(this);
+		// TODO: LIMIT/ORDER BY with UNION? How does that work?
+		auto bottom_select = move(root);
+		auto union_op =
+		    make_unique<LogicalUnion>(move(top_select), move(bottom_select));
+		root = move(union_op);
 	}
 }
 

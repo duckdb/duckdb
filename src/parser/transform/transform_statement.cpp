@@ -101,11 +101,14 @@ unique_ptr<SelectStatement> TransformSelect(Node *node) {
 		if (!right) {
 			return nullptr;
 		}
-		result->union_select = move(right);
+		if (stmt->op == SETOP_UNION) {
+			result->union_select = move(right);
+		} else if (stmt->op == SETOP_EXCEPT) {
+			result->except_select = move(right);
+		}
 		return result;
 	}
 	case SETOP_INTERSECT:
-	case SETOP_EXCEPT:
 	default:
 		throw NotImplementedException("A_Expr not implemented!");
 	}

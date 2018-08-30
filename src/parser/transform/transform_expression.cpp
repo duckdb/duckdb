@@ -649,22 +649,19 @@ unique_ptr<AbstractExpression> TransformSubquery(SubLink *root) {
 	}
 
 	switch (root->subLinkType) {
-		// TODO: add IN/EXISTS subqueries
-		//    case ANY_SUBLINK: {
-		//
-		//      auto col_expr = TransformExpression(root->testexpr);
-		//      expr = new
-		//      expression::ComparisonExpression(ExpressionType::COMPARE_IN,
-		//                                                  col_expr,
-		//                                                  subquery_expr);
-		//      break;
-		//    }
 	case EXISTS_SUBLINK: {
 		subquery_expr->exists = true;
 		return make_unique<OperatorExpression>(ExpressionType::OPERATOR_EXISTS,
 		                                       TypeId::BOOLEAN,
 		                                       move(subquery_expr));
 	}
+		//	case ANY_SUBLINK: {
+		//		return
+		// make_unique<OperatorExpression>(ExpressionType::COMPARE_IN,
+		//				                                       TypeId::BOOLEAN,
+		// TransformExpression(root->testexpr),
+		// move(subquery_expr));
+		//	}
 	case EXPR_SUBLINK: {
 		return subquery_expr;
 	}

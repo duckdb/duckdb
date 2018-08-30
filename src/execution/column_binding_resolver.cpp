@@ -33,6 +33,23 @@ void ColumnBindingResolver::Visit(LogicalCrossProduct &op) {
 	AppendTables(right_tables);
 }
 
+// FIXME: is this correct for the UNION?
+void ColumnBindingResolver::Visit(LogicalUnion &op) {
+	// resolve the column indices of the left side
+	op.children[0]->Accept(this);
+	// store the added tables
+	auto left_tables = bound_tables;
+	bound_tables.clear();
+
+	// now resolve the column indices of the right side
+	op.children[1]->Accept(this);
+	auto right_tables = bound_tables;
+
+	// now merge the two together
+	bound_tables = left_tables;
+	AppendTables(right_tables);
+}
+
 void ColumnBindingResolver::Visit(LogicalGet &op) {
 	LogicalOperatorVisitor::Visit(op);
 	BoundTable binding;
