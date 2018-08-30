@@ -26,8 +26,7 @@ void DataTable::AddData(DataChunk &chunk) {
 	size += chunk.count;
 }
 
-
-vector<TypeId> DataTable::GetTypes(const vector<size_t>& column_ids) {
+vector<TypeId> DataTable::GetTypes(const vector<size_t> &column_ids) {
 	vector<TypeId> types;
 	for (auto &column_id : column_ids) {
 		types.push_back(columns[column_id]->column.type);
@@ -35,7 +34,8 @@ vector<TypeId> DataTable::GetTypes(const vector<size_t>& column_ids) {
 	return types;
 }
 
-void DataTable::Scan(Transaction &transaction, DataChunk &result, const vector<size_t>& column_ids, size_t &offset) {
+void DataTable::Scan(Transaction &transaction, DataChunk &result,
+                     const vector<size_t> &column_ids, size_t &offset) {
 	for (size_t i = 0; i < column_ids.size(); i++) {
 		auto *column = columns[column_ids[i]].get();
 		if (offset >= column->data.size())

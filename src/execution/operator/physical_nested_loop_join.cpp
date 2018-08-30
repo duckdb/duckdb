@@ -64,7 +64,8 @@ void PhysicalNestedLoopJoin::GetChunk(ClientContext &context, DataChunk &chunk,
 		// first check if we have to fetch a new chunk from the left child
 		if (state->left_position >= state->child_chunk.count) {
 			// if we have exhausted the current left chunk, fetch a new one
-			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+			children[0]->GetChunk(context, state->child_chunk,
+			                      state->child_state.get());
 			if (state->child_chunk.count == 0) {
 				return;
 			}

@@ -20,7 +20,8 @@ void PhysicalProjection::GetChunk(ClientContext &context, DataChunk &chunk,
 
 	assert(children.size() == 1);
 	// get the next chunk from the child
-	children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+	children[0]->GetChunk(context, state->child_chunk,
+	                      state->child_state.get());
 	if (state->child_chunk.count == 0) {
 		return;
 	}

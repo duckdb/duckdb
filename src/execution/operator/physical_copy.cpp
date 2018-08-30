@@ -33,7 +33,8 @@ vector<string> split(const string &str, char delimiter, char quote) {
 	return res;
 }
 
-void PhysicalCopy::GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalCopy::GetChunk(ClientContext &context, DataChunk &chunk,
+                            PhysicalOperatorState *state) {
 	chunk.Reset();
 	if (state->finished) {
 		return;
@@ -98,7 +99,8 @@ void PhysicalCopy::GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOp
 	} else {
 		ofstream to_csv;
 		to_csv.open(file_path);
-		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+		children[0]->GetChunk(context, state->child_chunk,
+		                      state->child_state.get());
 		while (state->child_chunk.count != 0) {
 			for (size_t i = 0; i < state->child_chunk.count; i++) {
 				for (size_t col = 0; col < state->child_chunk.column_count;
@@ -116,7 +118,8 @@ void PhysicalCopy::GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOp
 				to_csv << endl;
 				count_line++;
 			}
-			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+			children[0]->GetChunk(context, state->child_chunk,
+			                      state->child_state.get());
 		}
 
 		to_csv.close();

@@ -8,13 +8,15 @@ using namespace std;
 
 vector<TypeId> PhysicalInsert::GetTypes() { return {TypeId::INTEGER}; }
 
-void PhysicalInsert::GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalInsert::GetChunk(ClientContext &context, DataChunk &chunk,
+                              PhysicalOperatorState *state) {
 
 	chunk.Reset();
 
 	if (children.size() > 0) {
 		// get the next chunk from the child
-		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+		children[0]->GetChunk(context, state->child_chunk,
+		                      state->child_state.get());
 		if (state->child_chunk.count == 0) {
 			return;
 		}
@@ -30,7 +32,8 @@ void PhysicalInsert::GetChunk(ClientContext &context, DataChunk &chunk, Physical
 		types.push_back(column->type);
 	}
 	insert_chunk.Initialize(types);
-	ExpressionExecutor executor(children.size() == 0 ? nullptr : state, context);
+	ExpressionExecutor executor(children.size() == 0 ? nullptr : state,
+	                            context);
 
 	for (size_t i = 0; i < value_list.size(); i++) {
 		auto &expr = value_list[i];

@@ -715,6 +715,7 @@ unique_ptr<AbstractExpression> TransformExpression(Node *node) {
 	case T_ResTarget:
 		return TransformResTarget(reinterpret_cast<ResTarget *>(node));
 	case T_ParamRef:
+
 	default:
 		throw NotImplementedException("Expr of type %d not implemented\n",
 		                              (int)node->type);

@@ -92,6 +92,7 @@ unique_ptr<SelectStatement> TransformSelect(Node *node) {
 		}
 		return result;
 	}
+	case SETOP_EXCEPT:
 	case SETOP_UNION: {
 		auto result = TransformSelect((Node *)stmt->larg);
 		if (!result) {

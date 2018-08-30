@@ -34,15 +34,13 @@ namespace duckdb {
 */
 class ExpressionExecutor : public SQLNodeVisitor {
   public:
-	ExpressionExecutor(PhysicalOperatorState *state,
-					   ClientContext &context,
+	ExpressionExecutor(PhysicalOperatorState *state, ClientContext &context,
 	                   bool scalar_executor = true)
-	    : context(context), chunk(state ? &state->child_chunk : nullptr), state(state),
-	      parent(state ? state->parent : nullptr),
+	    : context(context), chunk(state ? &state->child_chunk : nullptr),
+	      state(state), parent(state ? state->parent : nullptr),
 	      scalar_executor(scalar_executor) {}
 
-	ExpressionExecutor(DataChunk &child_chunk,
-		               ClientContext &context,
+	ExpressionExecutor(DataChunk &child_chunk, ClientContext &context,
 	                   ExpressionExecutor *parent = nullptr)
 	    : context(context), chunk(&child_chunk), state(nullptr), parent(parent),
 	      scalar_executor(true) {}
@@ -73,7 +71,7 @@ class ExpressionExecutor : public SQLNodeVisitor {
 	void Visit(SubqueryExpression &expr);
 
   private:
-  	ClientContext &context;
+	ClientContext &context;
 
 	//! Whether or not the ExpressionExecutor is a scalar executor (i.e. output
 	//! size = input size), this is true for e.g. expressions in the SELECT

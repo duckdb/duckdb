@@ -58,7 +58,7 @@ void UndoBuffer::Commit(transaction_t commit_id) {
 }
 
 void UndoBuffer::Rollback() {
-	for(size_t i = entries.size(); i > 0; i--) {
+	for (size_t i = entries.size(); i > 0; i--) {
 		auto &entry = entries[i - 1];
 		if (entry.type == UndoFlags::CATALOG_ENTRY) {
 			// set the commit timestamp of the catalog entry to the given id

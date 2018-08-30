@@ -153,7 +153,8 @@ void CatalogSet::Undo(AbstractCatalogEntry *entry) {
 	// i.e. we have to place (entry) as (entry->parent) again
 	auto &to_be_removed_node = entry->parent;
 	if (to_be_removed_node->parent) {
-		// if the to be removed node has a parent, set the child pointer to the to be restored node
+		// if the to be removed node has a parent, set the child pointer to the
+		// to be restored node
 		to_be_removed_node->parent->child = move(to_be_removed_node->child);
 		entry->parent = to_be_removed_node->parent;
 	} else {
