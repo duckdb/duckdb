@@ -17,6 +17,16 @@ TEST_CASE("Test UNION/EXCEPT/INTERSECT", "[union]") {
 	CHECK_COLUMN(result, 0, {1, 2});
 	CHECK_COLUMN(result, 1, {"a", "b"});
 
+
+	result = con.Query("SELECT 1, 'a' UNION SELECT 2, 'b' UNION SELECT 3, 'c'");
+	CHECK_COLUMN(result, 0, {1, 2, 3});
+	CHECK_COLUMN(result, 1, {"a", "b", "c"});
+
+	result = con.Query("SELECT 1, 'a' UNION SELECT 2, 'b' UNION SELECT 3, 'c' UNION SELECT 4, 'd'");
+	CHECK_COLUMN(result, 0, {1, 2, 3, 4 });
+	CHECK_COLUMN(result, 1, {"a", "b", "c", "d"});
+
+
 	// create tables
 	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
 	result = con.Query("INSERT INTO test VALUES (11, 1)");

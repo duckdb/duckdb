@@ -92,23 +92,28 @@ unique_ptr<SelectStatement> TransformSelect(Node *node) {
 		}
 		return result;
 	}
-	case SETOP_EXCEPT:
 	case SETOP_UNION: {
-		auto result = TransformSelect((Node *)stmt->larg);
-		if (!result) {
+		auto top = TransformSelect((Node *)stmt->larg);
+		if (!top) {
 			return nullptr;
 		}
-		auto right = TransformSelect((Node *)stmt->rarg);
-		if (!right) {
+		auto bottom = TransformSelect((Node *)stmt->rarg);
+		if (!bottom) {
 			return nullptr;
 		}
-		if (stmt->op == SETOP_UNION) {
-			result->union_select = move(right);
-		} else if (stmt->op == SETOP_EXCEPT) {
-			result->except_select = move(right);
+		SelectStatement *top_ptr = top.get();
+		// top may already have a union_select
+		// we need to find the rightmost union child in the top chain and add
+		// bottom there
+		while (top_ptr->union_select) {
+			top_ptr = top_ptr->union_select.get();
 		}
-		return result;
+		assert(top_ptr);
+
+		top_ptr->union_select = move(bottom);
+		return top;
 	}
+	case SETOP_EXCEPT:
 	case SETOP_INTERSECT:
 	default:
 		throw NotImplementedException("A_Expr not implemented!");
