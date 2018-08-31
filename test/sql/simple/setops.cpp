@@ -10,32 +10,55 @@ TEST_CASE("Test UNION/EXCEPT/INTERSECT", "[union]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 
-	result = con.Query("SELECT 1 UNION SELECT 2");
+	result = con.Query("SELECT 1 UNION ALL SELECT 2");
 	CHECK_COLUMN(result, 0, {1, 2});
 
-	result = con.Query("SELECT 1, 'a' UNION SELECT 2, 'b'");
+	result = con.Query("SELECT 1, 'a' UNION ALL SELECT 2, 'b'");
 	CHECK_COLUMN(result, 0, {1, 2});
 	CHECK_COLUMN(result, 1, {"a", "b"});
 
-
-	result = con.Query("SELECT 1, 'a' UNION SELECT 2, 'b' UNION SELECT 3, 'c'");
+	result = con.Query(
+	    "SELECT 1, 'a' UNION ALL SELECT 2, 'b' UNION ALL SELECT 3, 'c'");
 	CHECK_COLUMN(result, 0, {1, 2, 3});
 	CHECK_COLUMN(result, 1, {"a", "b", "c"});
 
-	result = con.Query("SELECT 1, 'a' UNION SELECT 2, 'b' UNION SELECT 3, 'c' UNION SELECT 4, 'd'");
-	CHECK_COLUMN(result, 0, {1, 2, 3, 4 });
+	result = con.Query("SELECT 1, 'a' UNION ALL SELECT 2, 'b' UNION ALL SELECT "
+	                   "3, 'c' UNION ALL SELECT 4, 'd'");
+	CHECK_COLUMN(result, 0, {1, 2, 3, 4});
 	CHECK_COLUMN(result, 1, {"a", "b", "c", "d"});
-
 
 	// create tables
 	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
 	result = con.Query("INSERT INTO test VALUES (11, 1)");
-	result = con.Query("INSERT INTO test VALUES (12, 2)");
-	result = con.Query("INSERT INTO test VALUES (13, 3)");
+	result = con.Query("INSERT INTO test VALUES (12, 1)");
+	result = con.Query("INSERT INTO test VALUES (13, 2)");
 
-	// simple cross product + join condition
+	// UNION ALL, no unique results
 	result = con.Query("SELECT a FROM test WHERE a < 13 UNION ALL SELECT a "
 	                   "FROM test WHERE a = 13");
-
 	CHECK_COLUMN(result, 0, {11, 12, 13});
+
+	result = con.Query("SELECT b FROM test WHERE a < 13 UNION ALL SELECT b "
+	                   "FROM test WHERE a > 11");
+	CHECK_COLUMN(result, 0, {1, 1, 1, 2});
+
+	// only UNION, distinct results
+
+	result = con.Query("SELECT 1 UNION SELECT 1");
+	CHECK_COLUMN(result, 0, {1});
+
+	result = con.Query("SELECT 1, 'a' UNION SELECT 2, 'b' UNION SELECT 3, 'c' "
+	                   "UNION SELECT 1, 'a'");
+	CHECK_COLUMN(result, 0, {1, 2, 3});
+	CHECK_COLUMN(result, 1, {"a", "b", "c"});
+
+	result = con.Query("SELECT b FROM test WHERE a < 13 UNION  SELECT b FROM "
+	                   "test WHERE a > 11");
+	CHECK_COLUMN(result, 0, {1, 2});
+
+	// mixed fun
+	result = con.Query("SELECT 1, 'a' UNION ALL SELECT 1, 'a' UNION SELECT 2, "
+	                   "'b' UNION SELECT 1, 'a'");
+	CHECK_COLUMN(result, 0, {1, 1, 2});
+	CHECK_COLUMN(result, 1, {"a", "a", "b"});
 }

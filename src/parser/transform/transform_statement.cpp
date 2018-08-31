@@ -111,6 +111,7 @@ unique_ptr<SelectStatement> TransformSelect(Node *node) {
 		assert(top_ptr);
 
 		top_ptr->union_select = move(bottom);
+		top_ptr->select_distinct = !stmt->all;
 		return top;
 	}
 	case SETOP_EXCEPT:

@@ -13,6 +13,12 @@
 using namespace duckdb;
 using namespace std;
 
+static bool has_select_list(LogicalOperatorType type) {
+	return type == LogicalOperatorType::PROJECTION ||
+	       type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY ||
+	       type == LogicalOperatorType::UNION;
+}
+
 void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 	for (auto &expr : statement.select_list) {
 		expr->Accept(this);
@@ -59,10 +65,37 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 		root = move(projection);
 	}
 
+	if (statement.union_select) {
+		auto top_select = move(root);
+		statement.union_select->Accept(this);
+		// TODO: LIMIT/ORDER BY with UNION? How does that work?
+		auto bottom_select = move(root);
+		if (!has_select_list(top_select->type) ||
+		    !has_select_list(bottom_select->type)) {
+			throw Exception(
+			    "UNION can only apply to projection, union or group");
+		}
+
+		vector<unique_ptr<AbstractExpression>> expressions;
+		for (size_t i = 0; i < top_select->expressions.size(); i++) {
+			AbstractExpression *proj_ele = top_select->expressions[i].get();
+			auto ele_ref =
+			    make_unique_base<AbstractExpression, ColumnRefExpression>(
+			        proj_ele->return_type, i);
+			ele_ref->alias = proj_ele->alias;
+			expressions.push_back(move(ele_ref));
+		}
+
+		auto union_op =
+		    make_unique<LogicalUnion>(move(top_select), move(bottom_select));
+		union_op->expressions = move(expressions);
+		root = move(union_op);
+	}
+
 	if (statement.select_distinct) {
-		if (root->type != LogicalOperatorType::PROJECTION &&
-		    root->type != LogicalOperatorType::AGGREGATE_AND_GROUP_BY) {
-			throw Exception("DISTINCT can only apply to projection or group");
+		if (!has_select_list(root->type)) {
+			throw Exception(
+			    "DISTINCT can only apply to projection, union or group");
 		}
 
 		vector<unique_ptr<AbstractExpression>> expressions;
@@ -97,16 +130,6 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 		                                       statement.limit.offset);
 		limit->AddChild(move(root));
 		root = move(limit);
-	}
-
-	if (statement.union_select) {
-		auto top_select = move(root);
-		statement.union_select->Accept(this);
-		// TODO: LIMIT/ORDER BY with UNION? How does that work?
-		auto bottom_select = move(root);
-		auto union_op =
-		    make_unique<LogicalUnion>(move(top_select), move(bottom_select));
-		root = move(union_op);
 	}
 }
 
