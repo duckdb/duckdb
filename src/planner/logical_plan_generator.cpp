@@ -75,13 +75,37 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 			throw Exception(
 			    "UNION can only apply to projection, union or group");
 		}
+		if (top_select->expressions.size() !=
+		    bottom_select->expressions.size()) {
+			throw Exception("UNION can only concatenate expressions with the "
+			                "same number of result column");
+		}
 
 		vector<unique_ptr<AbstractExpression>> expressions;
 		for (size_t i = 0; i < top_select->expressions.size(); i++) {
 			AbstractExpression *proj_ele = top_select->expressions[i].get();
+
+			TypeId union_expr_type = TypeId::INVALID;
+			auto top_expr_type = proj_ele->return_type;
+			auto bottom_expr_type = bottom_select->expressions[i]->return_type;
+			union_expr_type = top_expr_type;
+			if (bottom_expr_type > union_expr_type) {
+				union_expr_type = bottom_expr_type;
+			}
+			if (top_expr_type != union_expr_type) {
+				auto cast = make_unique<CastExpression>(
+				    union_expr_type, move(top_select->expressions[i]));
+				top_select->expressions[i] = move(cast);
+			}
+			if (bottom_expr_type != union_expr_type) {
+				auto cast = make_unique<CastExpression>(
+				    union_expr_type, move(bottom_select->expressions[i]));
+				bottom_select->expressions[i] = move(cast);
+			}
+
 			auto ele_ref =
 			    make_unique_base<AbstractExpression, ColumnRefExpression>(
-			        proj_ele->return_type, i);
+			        union_expr_type, i);
 			ele_ref->alias = proj_ele->alias;
 			expressions.push_back(move(ele_ref));
 		}
@@ -89,6 +113,7 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 		auto union_op =
 		    make_unique<LogicalUnion>(move(top_select), move(bottom_select));
 		union_op->expressions = move(expressions);
+
 		root = move(union_op);
 	}
 

@@ -42,6 +42,13 @@ TEST_CASE("Test UNION/EXCEPT/INTERSECT", "[union]") {
 	                   "FROM test WHERE a > 11");
 	CHECK_COLUMN(result, 0, {1, 1, 1, 2});
 
+	// mixing types, should upcast
+	result = con.Query("SELECT 1 UNION ALL SELECT 'asdf'");
+	CHECK_COLUMN(result, 0, {"1", "asdf"});
+
+	result = con.Query("SELECT NULL UNION ALL SELECT 'asdf'");
+	CHECK_COLUMN(result, 0, {Value(), "asdf"});
+
 	// only UNION, distinct results
 
 	result = con.Query("SELECT 1 UNION SELECT 1");

@@ -242,7 +242,6 @@ void PhysicalPlanGenerator::Visit(LogicalUnion &op) {
 	auto bottom = move(plan);
 
 	if (top->GetTypes() != bottom->GetTypes()) {
-		// FIXME: add CASTS?
 		throw Exception("Type mismatch for UNION");
 	}
 	plan = make_unique<PhysicalUnion>(move(top), move(bottom));
