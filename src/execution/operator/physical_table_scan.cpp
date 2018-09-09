@@ -8,8 +8,7 @@ vector<TypeId> PhysicalTableScan::GetTypes() {
 	return table.GetTypes(column_ids);
 }
 
-void PhysicalTableScan::GetChunk(ClientContext &context,
-                                 DataChunk &chunk,
+void PhysicalTableScan::GetChunk(ClientContext &context, DataChunk &chunk,
                                  PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalTableScanOperatorState *>(state_);
 	chunk.Reset();

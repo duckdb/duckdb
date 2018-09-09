@@ -66,7 +66,6 @@ static void RESULT_NO_ERROR(std::unique_ptr<duckdb::DuckDBResult> &result) {
 		FAIL(result->GetErrorMessage().c_str());
 	}
 	REQUIRE(true); // this is so the tests actually contain assertions
-
 }
 
 static std::string compare_csv(std::unique_ptr<duckdb::DuckDBResult> &result,

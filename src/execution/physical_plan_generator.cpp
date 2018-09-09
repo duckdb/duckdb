@@ -232,3 +232,17 @@ void PhysicalPlanGenerator::Visit(LogicalExplain &op) {
 	projection->children.push_back(move(scan));
 	this->plan = move(projection);
 }
+
+void PhysicalPlanGenerator::Visit(LogicalUnion &op) {
+	assert(op.children.size() == 2);
+
+	op.children[0]->Accept(this);
+	auto top = move(plan);
+	op.children[1]->Accept(this);
+	auto bottom = move(plan);
+
+	if (top->GetTypes() != bottom->GetTypes()) {
+		throw Exception("Type mismatch for UNION");
+	}
+	plan = make_unique<PhysicalUnion>(move(top), move(bottom));
+}

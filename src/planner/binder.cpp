@@ -199,6 +199,12 @@ void Binder::Visit(SelectStatement &statement) {
 	if (statement.groupby.having) {
 		statement.groupby.having->Accept(this);
 	}
+	// the union has a completely independent binder
+	if (statement.union_select) {
+		Binder binder(context);
+		binder.bind_context = make_unique<BindContext>();
+		statement.union_select->Accept(&binder);
+	}
 }
 
 void Binder::Visit(CopyStatement &stmt) {

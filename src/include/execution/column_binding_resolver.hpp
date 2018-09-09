@@ -30,6 +30,7 @@ class ColumnBindingResolver : public LogicalOperatorVisitor {
   public:
 	ColumnBindingResolver() : current_depth(0) {}
 
+	void Visit(LogicalUnion &op);
 	void Visit(LogicalCrossProduct &op);
 	void Visit(LogicalGet &op);
 	void Visit(LogicalJoin &op);

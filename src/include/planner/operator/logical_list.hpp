@@ -10,3 +10,4 @@
 #include "planner/operator/logical_limit.hpp"
 #include "planner/operator/logical_order.hpp"
 #include "planner/operator/logical_projection.hpp"
+#include "planner/operator/logical_union.hpp"

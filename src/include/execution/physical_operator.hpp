@@ -77,7 +77,8 @@ class PhysicalOperator : public Printable {
 	}
 	//! Retrieves a chunk from this operator and stores it in the chunk
 	//! variable.
-	virtual void GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) = 0;
+	virtual void GetChunk(ClientContext &context, DataChunk &chunk,
+	                      PhysicalOperatorState *state) = 0;
 
 	//! Create a new empty instance of the operator state
 	virtual std::unique_ptr<PhysicalOperatorState>

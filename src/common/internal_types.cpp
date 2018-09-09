@@ -255,6 +255,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "JOIN";
 	case LogicalOperatorType::CROSS_PRODUCT:
 		return "CROSS_PRODUCT";
+	case LogicalOperatorType::UNION:
+		return "UNION";
 	case LogicalOperatorType::INSERT:
 		return "INSERT";
 	case LogicalOperatorType::INSERT_SELECT:
@@ -308,6 +310,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "HASH_JOIN";
 	case PhysicalOperatorType::CROSS_PRODUCT:
 		return "CROSS_PRODUCT";
+	case PhysicalOperatorType::UNION:
+		return "UNION";
 	case PhysicalOperatorType::INSERT:
 		return "INSERT";
 	case PhysicalOperatorType::INSERT_SELECT:

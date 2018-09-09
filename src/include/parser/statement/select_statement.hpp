@@ -88,5 +88,6 @@ class SelectStatement : public SQLStatement {
 	bool HasAggregation();
 
 	std::unique_ptr<SelectStatement> union_select;
+	std::unique_ptr<SelectStatement> except_select;
 };
 } // namespace duckdb

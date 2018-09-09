@@ -30,7 +30,8 @@ void PhysicalCrossProduct::GetChunk(ClientContext &context, DataChunk &chunk,
 		// ran out of this chunk
 		// move to the next chunk on the right side
 		state->left_position = 0;
-		children[1]->GetChunk(context, state->right_chunk, state->right_state.get());
+		children[1]->GetChunk(context, state->right_chunk,
+		                      state->right_state.get());
 		if (state->right_chunk.count == 0) {
 			// ran out of chunks on the right side
 			// move to the next left chunk and start over on the right hand side
@@ -40,7 +41,8 @@ void PhysicalCrossProduct::GetChunk(ClientContext &context, DataChunk &chunk,
 	if (!state->right_state) {
 		// no right state: initialize right and left chunks
 		// left chunk
-		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+		children[0]->GetChunk(context, state->child_chunk,
+		                      state->child_state.get());
 		if (state->child_chunk.count == 0) {
 			return;
 		}
@@ -48,7 +50,8 @@ void PhysicalCrossProduct::GetChunk(ClientContext &context, DataChunk &chunk,
 		// right chunk: start over from beginning
 		children[1]->InitializeChunk(state->right_chunk);
 		state->right_state = children[1]->GetOperatorState(state->parent);
-		children[1]->GetChunk(context, state->right_chunk, state->right_state.get());
+		children[1]->GetChunk(context, state->right_chunk,
+		                      state->right_state.get());
 	}
 
 	auto &left_chunk = state->child_chunk;

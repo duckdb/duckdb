@@ -37,7 +37,8 @@ void PhysicalHashAggregate::GetChunk(ClientContext &context, DataChunk &chunk,
 	do {
 		if (children.size() > 0) {
 			// resolve the child chunk if there is one
-			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+			children[0]->GetChunk(context, state->child_chunk,
+			                      state->child_state.get());
 			if (state->child_chunk.count == 0) {
 				break;
 			}

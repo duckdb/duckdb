@@ -49,8 +49,9 @@ class DataTable {
 		return statistics[oid];
 	}
 
-	std::vector<TypeId> GetTypes(const std::vector<size_t>& column_ids);
-private:
+	std::vector<TypeId> GetTypes(const std::vector<size_t> &column_ids);
+
+  private:
 	//! The amount of entries in the table
 	size_t count;
 	//! A reference to the base storage manager

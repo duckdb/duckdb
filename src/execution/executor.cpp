@@ -4,7 +4,8 @@
 using namespace duckdb;
 using namespace std;
 
-ChunkCollection Executor::Execute(ClientContext &context, unique_ptr<PhysicalOperator> plan) {
+ChunkCollection Executor::Execute(ClientContext &context,
+                                  unique_ptr<PhysicalOperator> plan) {
 	ChunkCollection result;
 	// the chunk and state are used to iterate over the input plan
 	auto state = plan->GetOperatorState(nullptr);

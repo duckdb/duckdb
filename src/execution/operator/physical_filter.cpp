@@ -7,12 +7,14 @@ using namespace std;
 
 vector<TypeId> PhysicalFilter::GetTypes() { return children[0]->GetTypes(); }
 
-void PhysicalFilter::GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalFilter::GetChunk(ClientContext &context, DataChunk &chunk,
+                              PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOperatorState *>(state_);
 	chunk.Reset();
 
 	do {
-		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+		children[0]->GetChunk(context, state->child_chunk,
+		                      state->child_state.get());
 		if (state->child_chunk.count == 0) {
 			return;
 		}
