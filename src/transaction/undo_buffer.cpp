@@ -6,6 +6,8 @@
 #include "catalog/abstract_catalog.hpp"
 #include "catalog/catalog_set.hpp"
 
+#include "storage/storage_chunk.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -35,6 +37,19 @@ UndoBuffer::~UndoBuffer() {
 			// destroy the backed up entry: it is no longer required
 			assert(catalog_entry->parent);
 			catalog_entry->parent->child = nullptr;
+		} else if (entry.type == UndoFlags::TUPLE_ENTRY) {
+			// undo this entry
+			auto info = *((VersionInformation**) entry.data.get());
+			if (info->chunk) {
+				// parent refers to a storage chunk
+				info->chunk->Cleanup(info);
+			} else {
+				// parent refers to another entry in UndoBuffer
+				// simply remove this entry from the list 
+				auto parent = info->prev.pointer;
+				parent->next = info->next;
+				parent->next->prev.pointer = parent;
+			}
 		} else {
 			throw Exception("UndoBuffer - don't know how to garbage collect "
 			                "this type yet!");
@@ -50,6 +65,10 @@ void UndoBuffer::Commit(transaction_t commit_id) {
 			    *((AbstractCatalogEntry **)entry.data.get());
 			assert(catalog_entry->parent);
 			catalog_entry->parent->timestamp = commit_id;
+		} else if (entry.type == UndoFlags::TUPLE_ENTRY) {
+			// set the commit timestamp of the entry
+			auto info = *((VersionInformation**) entry.data.get());
+			info->version_number = commit_id;
 		} else {
 			throw Exception(
 			    "UndoBuffer - don't know how to commit this type yet!");
@@ -61,11 +80,25 @@ void UndoBuffer::Rollback() {
 	for(size_t i = entries.size(); i > 0; i--) {
 		auto &entry = entries[i - 1];
 		if (entry.type == UndoFlags::CATALOG_ENTRY) {
-			// set the commit timestamp of the catalog entry to the given id
+			// undo this catalog entry
 			AbstractCatalogEntry *catalog_entry =
 			    *((AbstractCatalogEntry **)entry.data.get());
 			assert(catalog_entry->set);
 			catalog_entry->set->Undo(catalog_entry);
+		} else if (entry.type == UndoFlags::TUPLE_ENTRY) {
+			// undo this entry
+			auto info = *((VersionInformation**) entry.data.get());
+			if (info->chunk) {
+				// parent refers to a storage chunk
+				// have to move information back into chunk
+				info->chunk->Undo(info);
+			} else {
+				// parent refers to another entry in UndoBuffer
+				// simply remove this entry from the list 
+				auto parent = info->prev.pointer;
+				parent->next = info->next;
+				parent->next->prev.pointer = parent;
+			}
 		} else {
 			throw Exception(
 			    "UndoBuffer - don't know how to rollback this type yet!");

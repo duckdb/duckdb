@@ -42,7 +42,7 @@ class BindContext {
 	std::string GetMatchingTable(const std::string &column_name);
 	//! Binds a column expression to the base table. Returns the column catalog
 	//! entry or throws an exception if the column could not be bound.
-	ColumnDefinition *BindColumn(ColumnRefExpression &expr, size_t depth = 0);
+	ColumnDefinition* BindColumn(ColumnRefExpression &expr, size_t depth = 0);
 
 	//! Generate column expressions for all columns that are present in the
 	//! referenced tables. This is used to resolve the * expression in a

@@ -27,7 +27,7 @@ void PhysicalInsert::GetChunk(ClientContext &context, DataChunk &chunk, Physical
 	DataChunk insert_chunk;
 	vector<TypeId> types;
 	for (auto &column : table->columns) {
-		types.push_back(column->type);
+		types.push_back(column.type);
 	}
 	insert_chunk.Initialize(types);
 	ExpressionExecutor executor(children.size() == 0 ? nullptr : state, context);
@@ -46,7 +46,7 @@ void PhysicalInsert::GetChunk(ClientContext &context, DataChunk &chunk, Physical
 	chunk.data[0].count = 1;
 	chunk.data[0].SetValue(0, Value::INTEGER(insert_chunk.data[0].count));
 
-	table->storage->AddData(insert_chunk);
+	table->storage->Append(context.ActiveTransaction(), insert_chunk);
 
 	chunk.count = 1;
 

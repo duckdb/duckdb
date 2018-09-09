@@ -266,11 +266,11 @@ void LogicalPlanGenerator::Visit(InsertStatement &statement) {
 			insert_vals[statement.columns[i]] = move(statement.values[i]);
 		}
 		for (auto &col : table->columns) {
-			if (insert_vals.count(col->name)) { // column value was specified
-				insert_val_list.push_back(move(insert_vals[col->name]));
+			if (insert_vals.count(col.name)) { // column value was specified
+				insert_val_list.push_back(move(insert_vals[col.name]));
 			} else {
 				insert_val_list.push_back(std::unique_ptr<AbstractExpression>(
-				    new ConstantExpression(col->default_value)));
+				    new ConstantExpression(col.default_value)));
 			}
 		}
 	}

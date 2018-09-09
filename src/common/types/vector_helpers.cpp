@@ -87,6 +87,51 @@ static void _copy_loop(Vector &left, void *target, size_t offset,
 }
 
 template <class T>
+static void _copy_loop_set_null(Vector &left, void *target, size_t offset,
+                       size_t element_count) {
+	T *ldata = (T *)left.data;
+	T *result_data = (T *)target;
+	if (left.sel_vector) {
+		for (size_t i = 0; i < element_count; i++) {
+			if (left.nullmask[left.sel_vector[offset + i]]) {
+				result_data[i] = NullValue<T>();
+			} else {
+				result_data[i] = ldata[left.sel_vector[offset + i]];
+			}
+		}
+	} else {
+		for (size_t i = 0; i < element_count; i++) {
+			if (left.nullmask[offset + i]) {
+				result_data[i] = NullValue<T>();
+			} else {
+				result_data[i] = ldata[offset + i];
+			}
+		}
+	}
+}
+
+template <class T>
+static void _copy_loop_check_null(Vector &left, Vector &right) {
+	T *ldata = (T *)left.data;
+	T *rdata = (T *)right.data;
+	if (left.sel_vector) {
+		for (size_t i = 0; i < left.count; i++) {
+			rdata[i] = ldata[left.sel_vector[i]];
+			if (IsNullValue<T>(rdata[i])) {
+				right.nullmask[i] = true;
+			}
+		}
+	} else {
+		for (size_t i = 0; i < left.count; i++) {
+			rdata[i] = ldata[i];
+			if (IsNullValue<T>(rdata[i])) {
+				right.nullmask[i] = true;
+			}
+		}
+	}
+	right.count = left.count;
+}
+template <class T>
 static void _case_loop(Vector &check, Vector &res_true, Vector &res_false,
                        Vector &result) {
 	bool *cond = (bool *)check.data;
@@ -240,6 +285,81 @@ void VectorOperations::Copy(Vector &source, void *target, size_t offset,
 		break;
 	case TypeId::DATE:
 		_copy_loop<date_t>(source, target, offset, element_count);
+		break;
+	default:
+		throw NotImplementedException("Unimplemented type for copy");
+	}
+}
+
+void VectorOperations::CopyNull(Vector &source, void *target, size_t offset,
+                 size_t element_count) {
+	if (source.count == 0)
+		return;
+	if (element_count == 0) {
+		element_count = source.count;
+	}
+	assert(offset + element_count <= source.count);
+
+	switch (source.type) {
+	case TypeId::BOOLEAN:
+	case TypeId::TINYINT:
+		_copy_loop_set_null<int8_t>(source, target, offset, element_count);
+		break;
+	case TypeId::SMALLINT:
+		_copy_loop_set_null<int16_t>(source, target, offset, element_count);
+		break;
+	case TypeId::INTEGER:
+		_copy_loop_set_null<int32_t>(source, target, offset, element_count);
+		break;
+	case TypeId::BIGINT:
+		_copy_loop_set_null<int64_t>(source, target, offset, element_count);
+		break;
+	case TypeId::DECIMAL:
+		_copy_loop_set_null<double>(source, target, offset, element_count);
+		break;
+	case TypeId::POINTER:
+		_copy_loop_set_null<uint64_t>(source, target, offset, element_count);
+		break;
+	case TypeId::DATE:
+		_copy_loop_set_null<date_t>(source, target, offset, element_count);
+		break;
+	case TypeId::VARCHAR:
+		_copy_loop_set_null<const char*>(source, target, offset, element_count);
+		break;
+	default:
+		throw NotImplementedException("Unimplemented type for copy");
+	}
+}
+
+void VectorOperations::CopyNull(Vector &source, Vector &target) {
+	if (source.count == 0)
+		return;
+
+	switch (source.type) {
+	case TypeId::BOOLEAN:
+	case TypeId::TINYINT:
+		_copy_loop_check_null<int8_t>(source, target);
+		break;
+	case TypeId::SMALLINT:
+		_copy_loop_check_null<int16_t>(source, target);
+		break;
+	case TypeId::INTEGER:
+		_copy_loop_check_null<int32_t>(source, target);
+		break;
+	case TypeId::BIGINT:
+		_copy_loop_check_null<int64_t>(source, target);
+		break;
+	case TypeId::DECIMAL:
+		_copy_loop_check_null<double>(source, target);
+		break;
+	case TypeId::POINTER:
+		_copy_loop_check_null<uint64_t>(source, target);
+		break;
+	case TypeId::DATE:
+		_copy_loop_check_null<date_t>(source, target);
+		break;
+	case TypeId::VARCHAR:
+		_copy_loop_check_null<const char*>(source, target);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for copy");

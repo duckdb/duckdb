@@ -48,7 +48,7 @@ void DataChunk::Reset() {
 		data[i].count = 0;
 		data[i].sel_vector = nullptr;
 		data[i].owned_data = nullptr;
-		data[i].string_heap = nullptr;
+		data[i].string_heap.Destroy();
 		ptr += GetTypeIdSize(data[i].type) * STANDARD_VECTOR_SIZE;
 	}
 	sel_vector = nullptr;

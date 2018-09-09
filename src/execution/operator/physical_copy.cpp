@@ -49,7 +49,7 @@ void PhysicalCopy::GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOp
 		std::vector<size_t> select_list_oid;
 		for (size_t i = 0; i < select_list.size(); i++) {
 			auto column = table->GetColumn(select_list[i]);
-			select_list_oid.push_back(column->oid);
+			select_list_oid.push_back(column.oid);
 		}
 		string value;
 		std::ifstream from_csv;
@@ -57,7 +57,7 @@ void PhysicalCopy::GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOp
 		while (getline(from_csv, value)) {
 			if (count_line == STANDARD_VECTOR_SIZE) {
 				insert_chunk.count = insert_chunk.data[0].count;
-				table->storage->AddData(insert_chunk);
+				table->storage->Append(context.ActiveTransaction(), insert_chunk);
 				total += count_line;
 				count_line = 0;
 				insert_chunk.Reset();
@@ -93,7 +93,7 @@ void PhysicalCopy::GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOp
 			count_line++;
 		}
 		insert_chunk.count = insert_chunk.data[0].count;
-		table->storage->AddData(insert_chunk);
+		table->storage->Append(context.ActiveTransaction(), insert_chunk);
 		from_csv.close();
 	} else {
 		ofstream to_csv;

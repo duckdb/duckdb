@@ -31,7 +31,6 @@ void PhysicalFilter::GetChunk(ClientContext &context, DataChunk &chunk, Physical
 			executor.Merge(expr.get(), result);
 		}
 		// now generate the selection vector
-		// first set NULLs to value
 		chunk.sel_vector = state->child_chunk.sel_vector;
 		for (size_t i = 0; i < chunk.column_count; i++) {
 			// create a reference to the vector of the child chunk

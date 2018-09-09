@@ -39,7 +39,7 @@ void Vector::Initialize(TypeId new_type, bool zero_data) {
 	if (new_type != TypeId::INVALID) {
 		type = new_type;
 	}
-	string_heap.reset();
+	string_heap.Destroy();
 	owns_data = true;
 	owned_data = unique_ptr<char[]>(
 	    new char[STANDARD_VECTOR_SIZE * GetTypeIdSize(type)]);
@@ -52,7 +52,7 @@ void Vector::Initialize(TypeId new_type, bool zero_data) {
 void Vector::Destroy() {
 	if (data && owns_data) {
 		owned_data.reset();
-		string_heap.reset();
+		string_heap.Destroy();
 	}
 	data = nullptr;
 	owns_data = false;
@@ -99,9 +99,8 @@ void Vector::SetValue(size_t index_, Value val) {
 		if (val.is_null) {
 			((const char **)data)[index] = nullptr;
 		} else {
-			CreateStringHeap();
 			((const char **)data)[index] =
-			    string_heap->AddString(newVal.str_value);
+			    string_heap.AddString(newVal.str_value);
 		}
 		break;
 	}
@@ -116,8 +115,7 @@ void Vector::SetStringValue(size_t index, const char *value) {
 	}
 	SetNull(index, value ? false : true);
 	if (value) {
-		CreateStringHeap();
-		((const char **)data)[index] = string_heap->AddString(value);
+		((const char **)data)[index] = string_heap.AddString(value);
 	} else {
 		((const char **)data)[index] = nullptr;
 	}
@@ -176,7 +174,7 @@ void Vector::Move(Vector &other) {
 
 	if (owns_data) {
 		other.owned_data = move(owned_data);
-		other.string_heap = move(string_heap);
+		string_heap.Move(other.string_heap);
 	}
 
 	other.count = count;
@@ -221,15 +219,25 @@ void Vector::Copy(Vector &other, size_t offset) {
 		other.count = count;
 		const char **source = (const char **)data;
 		const char **target = (const char **)other.data;
-		other.string_heap = make_unique<StringHeap>();
-
 		for (size_t i = offset; i < count; i++) {
 			const char *str = sel_vector ? source[sel_vector[i]] : source[i];
-			target[i] = str ? other.string_heap->AddString(str) : nullptr;
+			target[i] = str ? other.string_heap.AddString(str) : nullptr;
 		}
 	} else {
 		VectorOperations::Copy(*this, other, offset);
 	}
+}
+
+void Vector::CopyNull(Vector &other) {
+	if (other.type != type) {
+		throw NotImplementedException(
+		    "Copying to vector of different type not supported!");
+	}
+	if (other.sel_vector) {
+		throw Exception("Cannot copy to vector with sel_vector!");
+	}
+
+	VectorOperations::CopyNull(*this, other);
 }
 
 void Vector::Cast(TypeId new_type) {
@@ -271,11 +279,10 @@ void Vector::Append(Vector &other) {
 		assert(type == TypeId::VARCHAR);
 		const char **source = (const char **)other.data;
 		const char **target = (const char **)data;
-		CreateStringHeap();
 		for (size_t i = 0; i < other.count; i++) {
 			const char *str =
 			    other.sel_vector ? source[other.sel_vector[i]] : source[i];
-			target[old_count + i] = str ? string_heap->AddString(str) : nullptr;
+			target[old_count + i] = str ? string_heap.AddString(str) : nullptr;
 		}
 	} else {
 		VectorOperations::Copy(other, data + old_count * GetTypeIdSize(type));

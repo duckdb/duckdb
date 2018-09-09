@@ -37,6 +37,7 @@ namespace tpch {
 struct tpch_append_information {
 	TableCatalogEntry *table;
 	DataChunk chunk;
+	Transaction *transaction;
 };
 
 void append_value(DataChunk &chunk, size_t index, size_t &column,
@@ -74,7 +75,7 @@ static void append_to_append_info(tpch_append_information &info) {
 		chunk.Initialize(types);
 	} else if (chunk.count >= STANDARD_VECTOR_SIZE) {
 		// flush the chunk
-		table->storage->AddData(chunk);
+		table->storage->Append(*info.transaction, chunk);
 		// have to reset the chunk
 		chunk.Reset();
 	}
@@ -548,6 +549,7 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 			append_info[i].table =
 			    db.catalog.GetTable(*transaction, schema, tname + suffix);
 		}
+		append_info[i].transaction = transaction;
 	}
 
 	for (i = PART; i <= REGION; i++) {
@@ -565,7 +567,7 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	for (size_t i = PART; i <= REGION; i++) {
 		if (append_info[i].table) {
 			if (append_info[i].chunk.count > 0) {
-				append_info[i].table->storage->AddData(append_info[i].chunk);
+				append_info[i].table->storage->Append(*append_info[i].transaction, append_info[i].chunk);
 			}
 		}
 	}

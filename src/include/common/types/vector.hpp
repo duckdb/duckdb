@@ -63,7 +63,7 @@ class Vector : public Printable {
 	Vector(Value value);
 	//! Create a non-owning vector that references the specified data
 	Vector(TypeId type, char *dataptr);
-	//! Create an owning vector that holds at most maximum_size entries.
+	//! Create an owning vector that holds at most STANDARD_VECTOR_SIZE entries.
 	/*!
 	    Create a new vector
 	    If create_data is true, the vector will be an owning empty vector.
@@ -88,14 +88,8 @@ class Vector : public Printable {
 	inline void SetNull(size_t index, bool null) {
 		nullmask[sel_vector ? sel_vector[index] : index] = null;
 	}
-	//! Create a string heap for the vector, if it doesn't have one yet
-	void CreateStringHeap() {
-		if (!string_heap) {
-			string_heap = make_unique<StringHeap>();
-		}
-	}
 	//! Sets the value of the vector at the specified index to the specified
-	//! string Can only be used for VARCHAR vectors
+	//! string. Can only be used for VARCHAR vectors
 	void SetStringValue(size_t index, const char *value);
 
 	//! Creates the data of this vector with the specified type. Any data that
@@ -109,6 +103,8 @@ class Vector : public Printable {
 	void Append(Vector &other);
 	//! Copies the data from this vector to another vector.
 	void Copy(Vector &other, size_t offset = 0);
+	//! Copies the data from this vector to another vector, setting values of NullValue<T> in the nullmask
+	void CopyNull(Vector &other);
 	//! Moves the data from this vector to the other vector. Effectively,
 	//! "other" will become equivalent to this vector, and this vector will be
 	//! turned into an empty vector.
@@ -127,10 +123,10 @@ class Vector : public Printable {
 
 	Vector(const Vector &) = delete;
 
+	//! The stringheap of the vector
+	StringHeap string_heap;
   private:
 	//! If the vector owns data, this is the unique_ptr holds the actual data.
 	std::unique_ptr<char[]> owned_data;
-	//! If the vector owns a StringHeap, this is the unique_ptr that holds it
-	std::unique_ptr<StringHeap> string_heap;
 };
 } // namespace duckdb

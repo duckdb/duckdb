@@ -36,12 +36,13 @@ class PhysicalTableScan : public PhysicalOperator {
 
 class PhysicalTableScanOperatorState : public PhysicalOperatorState {
   public:
-	PhysicalTableScanOperatorState(size_t current_offset,
+	PhysicalTableScanOperatorState(DataTable &table,
 	                               ExpressionExecutor *parent_executor)
-	    : PhysicalOperatorState(nullptr, parent_executor),
-	      current_offset(current_offset) {}
+	    : PhysicalOperatorState(nullptr, parent_executor) {
+	    	table.InitializeScan(scan_offset);
+	    }
 
 	//! The current position in the scan
-	size_t current_offset;
+	ScanStructure scan_offset;
 };
 } // namespace duckdb

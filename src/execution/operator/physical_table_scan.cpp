@@ -17,12 +17,12 @@ void PhysicalTableScan::GetChunk(ClientContext &context,
 	if (column_ids.size() == 0)
 		return;
 
-	table.Scan(context.ActiveTransaction(), chunk, column_ids, state->current_offset);
+	table.Scan(context.ActiveTransaction(), chunk, column_ids, state->scan_offset);
 
 	chunk.Verify();
 }
 
 unique_ptr<PhysicalOperatorState>
 PhysicalTableScan::GetOperatorState(ExpressionExecutor *parent_executor) {
-	return make_unique<PhysicalTableScanOperatorState>(0, parent_executor);
+	return make_unique<PhysicalTableScanOperatorState>(table, parent_executor);
 }

@@ -10,11 +10,26 @@
 
 #pragma once
 
+#include "common/types/data_chunk.hpp"
+
 #include "transaction/undo_buffer.hpp"
 
 namespace duckdb {
 
 class AbstractCatalogEntry;
+class DataTable;
+class StorageChunk;
+
+struct VersionInformation {
+	StorageChunk *chunk;
+	union {
+		size_t entry;
+		VersionInformation *pointer;
+	} prev;
+	std::shared_ptr<VersionInformation> next;
+	transaction_t version_number;
+	void *tuple_data;
+};
 
 //! The transaction object holds information about a currently running or past
 //! transaction
@@ -25,13 +40,14 @@ class Transaction {
 	}
 
 	void PushCatalogEntry(AbstractCatalogEntry *entry);
+	//! Create deleted entries in the 
+	void PushDeletedEntries(size_t offset, size_t count, StorageChunk *storage, std::shared_ptr<VersionInformation> version_pointers[]);
 
-	void Commit(transaction_t commit_id) {
-		this->commit_id = commit_id;
-		undo_buffer.Commit(commit_id);
+	void Commit(transaction_t commit_id);
+
+	void Rollback() {
+		undo_buffer.Rollback();
 	}
-
-	void Rollback() { undo_buffer.Rollback(); }
 
 	//! The start timestamp of this transaction
 	transaction_t start_time;
@@ -41,6 +57,8 @@ class Transaction {
 	transaction_t commit_id;
 
   private:
+  	void* PushTuple(size_t data_size);
+
 	//! The undo buffer is used to store old versions of rows that are updated
 	//! or deleted
 	UndoBuffer undo_buffer;

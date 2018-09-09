@@ -153,6 +153,12 @@ struct VectorOperations {
 	                 size_t element_count = 0);
 	// Copy the data of <source> to the target vector
 	static void Copy(Vector &source, Vector &target, size_t offset = 0);
+	// Copy the data of <source> to the target location, setting null values to NullValue<T>
+	static void CopyNull(Vector &source, void *target, size_t offset = 0,
+	                 size_t element_count = 0);
+	// Copy the data of <source> to the target vector, setting the nullmask for any NullValue<T> of source 
+	static void CopyNull(Vector &source, Vector &target);
+
 	// Set all elements of the vector to the given constant value
 	static void Set(Vector &result, Value value);
 	//! For every value in result, set result[i] = left[sel_vector[i]]

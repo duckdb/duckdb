@@ -19,6 +19,7 @@
 namespace duckdb {
 
 #define STANDARD_VECTOR_SIZE 1024
+#define STORAGE_CHUNK_SIZE 10240
 
 //! Type used to represent dates
 typedef int32_t date_t;
