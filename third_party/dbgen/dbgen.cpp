@@ -567,7 +567,8 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	for (size_t i = PART; i <= REGION; i++) {
 		if (append_info[i].table) {
 			if (append_info[i].chunk.count > 0) {
-				append_info[i].table->storage->Append(*append_info[i].transaction, append_info[i].chunk);
+				append_info[i].table->storage->Append(
+				    *append_info[i].transaction, append_info[i].chunk);
 			}
 		}
 	}

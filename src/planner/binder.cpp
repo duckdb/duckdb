@@ -1,10 +1,11 @@
 
 #include "planner/binder.hpp"
-#include <parser/statement/copy_statement.hpp>
 
 #include "parser/expression/expression_list.hpp"
 #include "parser/tableref/tableref_list.hpp"
 
+#include "parser/statement/copy_statement.hpp"
+#include "parser/statement/delete_statement.hpp"
 #include "parser/statement/select_statement.hpp"
 
 using namespace duckdb;
@@ -208,8 +209,16 @@ void Binder::Visit(SelectStatement &statement) {
 }
 
 void Binder::Visit(CopyStatement &stmt) {
-	if (stmt.select_stmt)
+	if (stmt.select_stmt) {
 		stmt.select_stmt->Accept(this);
+	}
+}
+
+void Binder::Visit(DeleteStatement &stmt) {
+	// visit the table reference
+	stmt.table->Accept(this);
+	// project any addiitonal columns required for the condition
+	stmt.condition->Accept(this);
 }
 
 void Binder::Visit(ColumnRefExpression &expr) {

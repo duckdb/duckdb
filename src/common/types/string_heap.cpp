@@ -6,15 +6,13 @@ using namespace std;
 
 #define MINIMUM_HEAP_SIZE 4096
 
-StringHeap::StringHeap() : tail(nullptr) {
-
-}
+StringHeap::StringHeap() : tail(nullptr) {}
 
 const char *StringHeap::AddString(const char *data, size_t len) {
-	if (!chunk ||
-	    chunk->current_position + len >= chunk->maximum_size) {
+	if (!chunk || chunk->current_position + len >= chunk->maximum_size) {
 		// have to make a new entry
-		auto new_chunk = make_unique<StringChunk>(std::max(len + 1, (size_t)MINIMUM_HEAP_SIZE));
+		auto new_chunk = make_unique<StringChunk>(
+		    std::max(len + 1, (size_t)MINIMUM_HEAP_SIZE));
 		new_chunk->prev = move(chunk);
 		chunk = move(new_chunk);
 		if (!tail) {

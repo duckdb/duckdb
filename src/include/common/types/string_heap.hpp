@@ -33,7 +33,6 @@ class StringHeap {
 		tail = nullptr;
 	}
 
-
 	//! Add a string to the string heap, returns a pointer to the string
 	const char *AddString(const char *data, size_t len);
 	//! Add a string to the string heap, returns a pointer to the string
@@ -42,6 +41,7 @@ class StringHeap {
 	const char *AddString(const std::string &data);
 	//! Add all strings from a different string heap to this string heap
 	void MergeHeap(StringHeap &heap);
+
   private:
 	struct StringChunk {
 		StringChunk(size_t size) : current_position(0), maximum_size(size) {

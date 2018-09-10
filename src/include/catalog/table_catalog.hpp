@@ -35,7 +35,7 @@ class TableCatalogEntry : public AbstractCatalogEntry {
 	//! A list of columns that are part of this table
 	std::vector<ColumnDefinition> columns;
 	//! A map of column name to column index
-	std::unordered_map<std::string, size_t> name_map;
+	std::unordered_map<std::string, column_t> name_map;
 
 	//! Adds a column to this table
 	// void AddColumn(ColumnDefinition entry);
@@ -43,10 +43,10 @@ class TableCatalogEntry : public AbstractCatalogEntry {
 	bool ColumnExists(const std::string &name);
 	//! Returns the statistics of the oid-th column. Throws an exception if the
 	//! access is out of range.
-	Statistics& GetStatistics(size_t oid);
+	Statistics &GetStatistics(column_t oid);
 	//! Returns a reference to the column of the specified name. Throws an
 	//! exception if the column does not exist.
-	ColumnDefinition& GetColumn(const std::string &name);
+	ColumnDefinition &GetColumn(const std::string &name);
 	//! Returns a list of types of the table
 	std::vector<TypeId> GetTypes();
 };

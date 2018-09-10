@@ -77,6 +77,18 @@ void PhysicalPlanGenerator::Visit(LogicalCrossProduct &op) {
 	plan = make_unique<PhysicalCrossProduct>(move(left), move(right));
 }
 
+void PhysicalPlanGenerator::Visit(LogicalDelete &op) {
+	LogicalOperatorVisitor::Visit(op);
+
+	if (!plan) {
+		throw Exception("Delete node cannot be the first node of a plan!");
+	}
+
+	auto del = make_unique<PhysicalDelete>(*op.table->storage);
+	del->children.push_back(move(plan));
+	this->plan = move(del);
+}
+
 void PhysicalPlanGenerator::Visit(LogicalFilter &op) {
 	LogicalOperatorVisitor::Visit(op);
 

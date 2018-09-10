@@ -78,7 +78,6 @@ TEST_CASE("Stacked schema changes", "[transactions]") {
 	// create two connections
 	DuckDBConnection con(db);
 
-
 	con.Query("CREATE TABLE a(i INTEGER)");
 	con.Query("INSERT INTO a VALUES (44)");
 	result = con.Query("SELECT i FROM a");

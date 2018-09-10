@@ -43,7 +43,7 @@ string BindContext::GetMatchingTable(const string &column_name) {
 	return result;
 }
 
-ColumnDefinition* BindContext::BindColumn(ColumnRefExpression &expr,
+ColumnDefinition *BindContext::BindColumn(ColumnRefExpression &expr,
                                           size_t depth) {
 	if (expr.table_name.empty()) {
 		auto entry = expression_alias_map.find(expr.column_name);
@@ -66,7 +66,7 @@ ColumnDefinition* BindContext::BindColumn(ColumnRefExpression &expr,
 		throw BinderException("Referenced table \"%s\" not found!",
 		                      expr.table_name.c_str());
 	}
-	ColumnDefinition* entry;
+	ColumnDefinition *entry;
 
 	size_t table_index = 0;
 	auto table_entry = regular_table_alias_map.find(expr.table_name);

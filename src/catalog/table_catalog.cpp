@@ -18,19 +18,19 @@ TableCatalogEntry::TableCatalogEntry(
 			                       entry.name.c_str());
 		}
 
-		size_t oid = columns.size();
+		column_t oid = columns.size();
 		name_map[entry.name] = oid;
 		entry.oid = oid;
 		columns.push_back(entry);
 	}
-    storage = make_unique<DataTable>(catalog->storage, *this);
+	storage = make_unique<DataTable>(catalog->storage, *this);
 }
 
 bool TableCatalogEntry::ColumnExists(const string &name) {
 	return name_map.find(name) != name_map.end();
 }
 
-ColumnDefinition& TableCatalogEntry::GetColumn(const std::string &name) {
+ColumnDefinition &TableCatalogEntry::GetColumn(const std::string &name) {
 	if (!ColumnExists(name)) {
 		throw CatalogException("Column with name %s does not exist!",
 		                       name.c_str());
@@ -38,7 +38,7 @@ ColumnDefinition& TableCatalogEntry::GetColumn(const std::string &name) {
 	return columns[name_map[name]];
 }
 
-Statistics& TableCatalogEntry::GetStatistics(size_t oid) {
+Statistics &TableCatalogEntry::GetStatistics(column_t oid) {
 	return storage->GetStatistics(oid);
 }
 

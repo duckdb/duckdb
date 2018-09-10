@@ -88,7 +88,7 @@ static void _copy_loop(Vector &left, void *target, size_t offset,
 
 template <class T>
 static void _copy_loop_set_null(Vector &left, void *target, size_t offset,
-                       size_t element_count) {
+                                size_t element_count) {
 	T *ldata = (T *)left.data;
 	T *result_data = (T *)target;
 	if (left.sel_vector) {
@@ -111,25 +111,25 @@ static void _copy_loop_set_null(Vector &left, void *target, size_t offset,
 }
 
 template <class T>
-static void _copy_loop_check_null(Vector &left, Vector &right) {
+static void _append_loop_check_null(Vector &left, Vector &right) {
 	T *ldata = (T *)left.data;
 	T *rdata = (T *)right.data;
 	if (left.sel_vector) {
 		for (size_t i = 0; i < left.count; i++) {
-			rdata[i] = ldata[left.sel_vector[i]];
-			if (IsNullValue<T>(rdata[i])) {
-				right.nullmask[i] = true;
+			rdata[right.count + i] = ldata[left.sel_vector[i]];
+			if (IsNullValue<T>(rdata[right.count + i])) {
+				right.nullmask[right.count + i] = true;
 			}
 		}
 	} else {
 		for (size_t i = 0; i < left.count; i++) {
-			rdata[i] = ldata[i];
-			if (IsNullValue<T>(rdata[i])) {
-				right.nullmask[i] = true;
+			rdata[right.count + i] = ldata[i];
+			if (IsNullValue<T>(rdata[right.count + i])) {
+				right.nullmask[right.count + i] = true;
 			}
 		}
 	}
-	right.count = left.count;
+	right.count += left.count;
 }
 template <class T>
 static void _case_loop(Vector &check, Vector &res_true, Vector &res_false,
@@ -292,7 +292,7 @@ void VectorOperations::Copy(Vector &source, void *target, size_t offset,
 }
 
 void VectorOperations::CopyNull(Vector &source, void *target, size_t offset,
-                 size_t element_count) {
+                                size_t element_count) {
 	if (source.count == 0)
 		return;
 	if (element_count == 0) {
@@ -324,42 +324,47 @@ void VectorOperations::CopyNull(Vector &source, void *target, size_t offset,
 		_copy_loop_set_null<date_t>(source, target, offset, element_count);
 		break;
 	case TypeId::VARCHAR:
-		_copy_loop_set_null<const char*>(source, target, offset, element_count);
+		_copy_loop_set_null<const char *>(source, target, offset,
+		                                  element_count);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for copy");
 	}
 }
 
-void VectorOperations::CopyNull(Vector &source, Vector &target) {
+void VectorOperations::AppendNull(Vector &source, Vector &target) {
 	if (source.count == 0)
 		return;
+
+	if (source.count + target.count > STANDARD_VECTOR_SIZE) {
+		throw Exception("Trying to append past STANDARD_VECTOR_SIZE!");
+	}
 
 	switch (source.type) {
 	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
-		_copy_loop_check_null<int8_t>(source, target);
+		_append_loop_check_null<int8_t>(source, target);
 		break;
 	case TypeId::SMALLINT:
-		_copy_loop_check_null<int16_t>(source, target);
+		_append_loop_check_null<int16_t>(source, target);
 		break;
 	case TypeId::INTEGER:
-		_copy_loop_check_null<int32_t>(source, target);
+		_append_loop_check_null<int32_t>(source, target);
 		break;
 	case TypeId::BIGINT:
-		_copy_loop_check_null<int64_t>(source, target);
+		_append_loop_check_null<int64_t>(source, target);
 		break;
 	case TypeId::DECIMAL:
-		_copy_loop_check_null<double>(source, target);
+		_append_loop_check_null<double>(source, target);
 		break;
 	case TypeId::POINTER:
-		_copy_loop_check_null<uint64_t>(source, target);
+		_append_loop_check_null<uint64_t>(source, target);
 		break;
 	case TypeId::DATE:
-		_copy_loop_check_null<date_t>(source, target);
+		_append_loop_check_null<date_t>(source, target);
 		break;
 	case TypeId::VARCHAR:
-		_copy_loop_check_null<const char*>(source, target);
+		_append_loop_check_null<const char *>(source, target);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for copy");

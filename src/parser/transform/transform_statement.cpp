@@ -314,4 +314,17 @@ unique_ptr<TransactionStatement> TransformTransaction(Node *node) {
 	}
 }
 
+unique_ptr<DeleteStatement> TransformDelete(Node *node) {
+	DeleteStmt *stmt = reinterpret_cast<DeleteStmt *>(node);
+	assert(stmt);
+	auto result = make_unique<DeleteStatement>();
+
+	result->condition = TransformExpression(stmt->whereClause);
+	result->table = TransformRangeVar(stmt->relation);
+	if (result->table->ref_type != TableReferenceType::BASE_TABLE) {
+		throw Exception("Can only delete from base tables!");
+	}
+	return move(result);
+}
+
 } // namespace duckdb

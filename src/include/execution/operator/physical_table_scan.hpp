@@ -19,12 +19,12 @@ namespace duckdb {
 //! Represents a scan of a base table
 class PhysicalTableScan : public PhysicalOperator {
   public:
-	PhysicalTableScan(DataTable &table, std::vector<size_t> column_ids)
+	PhysicalTableScan(DataTable &table, std::vector<column_t> column_ids)
 	    : PhysicalOperator(PhysicalOperatorType::SEQ_SCAN), table(table),
 	      column_ids(column_ids) {}
 
 	DataTable &table;
-	std::vector<size_t> column_ids;
+	std::vector<column_t> column_ids;
 
 	std::vector<TypeId> GetTypes() override;
 	virtual void GetChunk(ClientContext &context, DataChunk &chunk,
@@ -39,8 +39,8 @@ class PhysicalTableScanOperatorState : public PhysicalOperatorState {
 	PhysicalTableScanOperatorState(DataTable &table,
 	                               ExpressionExecutor *parent_executor)
 	    : PhysicalOperatorState(nullptr, parent_executor) {
-	    	table.InitializeScan(scan_offset);
-	    }
+		table.InitializeScan(scan_offset);
+	}
 
 	//! The current position in the scan
 	ScanStructure scan_offset;

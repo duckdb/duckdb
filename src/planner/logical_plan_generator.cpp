@@ -3,6 +3,7 @@
 
 #include "parser/expression/expression_list.hpp"
 #include "parser/statement/copy_statement.hpp"
+#include "parser/statement/delete_statement.hpp"
 #include "parser/statement/insert_statement.hpp"
 #include "parser/tableref/tableref_list.hpp"
 
@@ -17,6 +18,28 @@ static bool has_select_list(LogicalOperatorType type) {
 	return type == LogicalOperatorType::PROJECTION ||
 	       type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY ||
 	       type == LogicalOperatorType::UNION;
+}
+
+void LogicalPlanGenerator::Visit(DeleteStatement &statement) {
+	// we require row ids for the deletion
+	require_row_id = true;
+	// create the table scan
+	statement.table->Accept(this);
+	if (!root || root->type != LogicalOperatorType::GET) {
+		throw Exception("Cannot create delete node without table scan!");
+	}
+	auto get = (LogicalGet *)root.get();
+	// create the filter (if any)
+	if (statement.condition) {
+		statement.condition->Accept(this);
+		auto filter = make_unique<LogicalFilter>(move(statement.condition));
+		filter->AddChild(move(root));
+		root = move(filter);
+	}
+	// create the delete node
+	auto del = make_unique<LogicalDelete>(get->table);
+	del->AddChild(move(root));
+	root = move(del);
 }
 
 void LogicalPlanGenerator::Visit(SelectStatement &statement) {
@@ -240,21 +263,22 @@ void LogicalPlanGenerator::Visit(BaseTableRef &expr) {
 
 	auto index = bind_context.GetTableIndex(alias);
 
-	std::vector<size_t> column_ids;
+	std::vector<column_t> column_ids;
 	// look in the context for this table which columns are required
 	for (auto &bound_column : bind_context.bound_columns[alias]) {
 		column_ids.push_back(table->name_map[bound_column]);
 	}
-	if (column_ids.size() == 0) {
+	if (require_row_id || column_ids.size() == 0) {
 		// no column ids selected
 		// the query is like SELECT COUNT(*) FROM table, or SELECT 42 FROM table
-		// return just the first column
-		column_ids.push_back(0);
+		// return just the row id
+		column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	}
 
 	auto get_table = make_unique<LogicalGet>(table, alias, index, column_ids);
-	if (root)
+	if (root) {
 		get_table->AddChild(move(root));
+	}
 	root = move(get_table);
 }
 

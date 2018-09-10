@@ -35,7 +35,7 @@ class UndoBuffer {
 
 	//! Reserve space for an entry of the specified type and length in the undo
 	//! buffer
-	const uint8_t *CreateEntry(UndoFlags type, size_t len);
+	uint8_t *CreateEntry(UndoFlags type, size_t len);
 
 	//! Commit the changes made in the UndoBuffer: should be called on commit
 	void Commit(transaction_t commit_id);

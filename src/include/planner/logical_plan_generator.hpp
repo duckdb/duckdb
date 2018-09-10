@@ -28,22 +28,23 @@ namespace duckdb {
 class LogicalPlanGenerator : public SQLNodeVisitor {
   public:
 	LogicalPlanGenerator(ClientContext &context, BindContext &bind_context)
-	    : context(context), bind_context(bind_context) {}
+	    : context(context), bind_context(bind_context), require_row_id(false) {}
 
-	virtual void Visit(SelectStatement &statement) override;
-	virtual void Visit(InsertStatement &statement) override;
-	virtual void Visit(CopyStatement &statement) override;
+	void Visit(SelectStatement &statement);
+	void Visit(InsertStatement &statement);
+	void Visit(CopyStatement &statement);
+	void Visit(DeleteStatement &statement);
 
-	virtual void Visit(AggregateExpression &expr) override;
-	virtual void Visit(ComparisonExpression &expr) override;
-	virtual void Visit(ConjunctionExpression &expr) override;
-	virtual void Visit(OperatorExpression &expr) override;
-	virtual void Visit(SubqueryExpression &expr) override;
+	void Visit(AggregateExpression &expr);
+	void Visit(ComparisonExpression &expr);
+	void Visit(ConjunctionExpression &expr);
+	void Visit(OperatorExpression &expr);
+	void Visit(SubqueryExpression &expr);
 
-	virtual void Visit(BaseTableRef &expr) override;
-	virtual void Visit(CrossProductRef &expr) override;
-	virtual void Visit(JoinRef &expr) override;
-	virtual void Visit(SubqueryRef &expr) override;
+	void Visit(BaseTableRef &expr);
+	void Visit(CrossProductRef &expr);
+	void Visit(JoinRef &expr);
+	void Visit(SubqueryRef &expr);
 
 	void Print() { root->Print(); }
 
@@ -51,6 +52,8 @@ class LogicalPlanGenerator : public SQLNodeVisitor {
 	std::unique_ptr<LogicalOperator> root;
 
   private:
+	//! Whether or not we require row ids to be projected
+	bool require_row_id = false;
 	//! A reference to the catalog
 	ClientContext &context;
 	//! A reference to the current bind context

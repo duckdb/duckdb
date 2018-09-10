@@ -39,17 +39,31 @@ class DataTable {
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	// from offset and store them in result. Offset is incremented with how many
 	// elements were returned.
-	void Scan(Transaction &transaction, DataChunk &result, const std::vector<size_t>& column_ids, ScanStructure &structure);
+	void Scan(Transaction &transaction, DataChunk &result,
+	          const std::vector<column_t> &column_ids,
+	          ScanStructure &structure);
 	//! Append a DataChunk to the table. Throws an exception if the columns
 	// don't match the tables' columns.
 	void Append(Transaction &transaction, DataChunk &chunk);
+	//! Delete the entries with the specified row identifier from the table
+	void Delete(Transaction &transaction, Vector &row_ids);
 
 	//! Get statistics of the specified column
-	Statistics& GetStatistics(size_t oid) {
+	Statistics &GetStatistics(column_t oid) {
+		if (oid == COLUMN_IDENTIFIER_ROW_ID) {
+			return rowid_statistics;
+		}
 		return statistics[oid];
 	}
 
-	std::vector<TypeId> GetTypes(const std::vector<size_t> &column_ids);
+	std::vector<TypeId> GetTypes(const std::vector<column_t> &column_ids);
+
+	//! Total per-tuple size of the table
+	size_t tuple_size;
+	//! Accumulative per-tuple size
+	std::vector<size_t> accumulative_tuple_size;
+	//! A reference to the catalog table entry
+	TableCatalogEntry &table;
 
   private:
 	//! The amount of entries in the table
@@ -60,11 +74,11 @@ class DataTable {
 	std::unique_ptr<StorageChunk> chunk_list;
 	//! A reference to the last entry in the chunk list
 	StorageChunk *tail_chunk;
+	//! Row ID statistics
+	Statistics rowid_statistics;
 	//! The statistics of each of the columns
 	std::unique_ptr<Statistics[]> statistics;
 	//! Locks used for updating the statistics
 	std::unique_ptr<std::mutex[]> statistics_locks;
-	//! A reference to the catalog table entry
-	TableCatalogEntry &table;
 };
 } // namespace duckdb

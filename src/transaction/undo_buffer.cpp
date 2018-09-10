@@ -11,7 +11,7 @@
 using namespace duckdb;
 using namespace std;
 
-const uint8_t *UndoBuffer::CreateEntry(UndoFlags type, size_t len) {
+uint8_t *UndoBuffer::CreateEntry(UndoFlags type, size_t len) {
 	UndoEntry entry;
 	entry.type = type;
 	entry.length = len;
@@ -39,13 +39,13 @@ UndoBuffer::~UndoBuffer() {
 			catalog_entry->parent->child = nullptr;
 		} else if (entry.type == UndoFlags::TUPLE_ENTRY) {
 			// undo this entry
-			auto info = *((VersionInformation**) entry.data.get());
+			auto info = *((VersionInformation **)entry.data.get());
 			if (info->chunk) {
 				// parent refers to a storage chunk
 				info->chunk->Cleanup(info);
 			} else {
 				// parent refers to another entry in UndoBuffer
-				// simply remove this entry from the list 
+				// simply remove this entry from the list
 				auto parent = info->prev.pointer;
 				parent->next = info->next;
 				parent->next->prev.pointer = parent;
@@ -67,7 +67,7 @@ void UndoBuffer::Commit(transaction_t commit_id) {
 			catalog_entry->parent->timestamp = commit_id;
 		} else if (entry.type == UndoFlags::TUPLE_ENTRY) {
 			// set the commit timestamp of the entry
-			auto info = *((VersionInformation**) entry.data.get());
+			auto info = *((VersionInformation **)entry.data.get());
 			info->version_number = commit_id;
 		} else {
 			throw Exception(
@@ -87,14 +87,14 @@ void UndoBuffer::Rollback() {
 			catalog_entry->set->Undo(catalog_entry);
 		} else if (entry.type == UndoFlags::TUPLE_ENTRY) {
 			// undo this entry
-			auto info = *((VersionInformation**) entry.data.get());
+			auto info = *((VersionInformation **)entry.data.get());
 			if (info->chunk) {
 				// parent refers to a storage chunk
 				// have to move information back into chunk
 				info->chunk->Undo(info);
 			} else {
 				// parent refers to another entry in UndoBuffer
-				// simply remove this entry from the list 
+				// simply remove this entry from the list
 				auto parent = info->prev.pointer;
 				parent->next = info->next;
 				parent->next->prev.pointer = parent;

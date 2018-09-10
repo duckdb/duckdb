@@ -86,8 +86,8 @@ int sqlite3_prepare_v2(
 		err(1, NULL);
 
 	/* Init sql statement */
-	pStmt->zSql[size-1] = '\0';
-	strncpy(pStmt->zSql, zSql, size-1);
+	pStmt->zSql[size - 1] = '\0';
+	strncpy(pStmt->zSql, zSql, size - 1);
 	pStmt->lenSql = size - 1;
 
 	/* Execute the query */

@@ -28,7 +28,7 @@ struct VersionInformation {
 	} prev;
 	std::shared_ptr<VersionInformation> next;
 	transaction_t version_number;
-	void *tuple_data;
+	uint8_t *tuple_data;
 };
 
 //! The transaction object holds information about a currently running or past
@@ -40,14 +40,17 @@ class Transaction {
 	}
 
 	void PushCatalogEntry(AbstractCatalogEntry *entry);
-	//! Create deleted entries in the 
-	void PushDeletedEntries(size_t offset, size_t count, StorageChunk *storage, std::shared_ptr<VersionInformation> version_pointers[]);
+	//! Create deleted entries in the undo buffer
+	void
+	PushDeletedEntries(size_t offset, size_t count, StorageChunk *storage,
+	                   std::shared_ptr<VersionInformation> version_pointers[]);
+	//! Push an old tuple version in the undo buffer
+	void PushTuple(size_t offset, StorageChunk *storage);
 
+	//! Commit the current transaction with the given commit identifier
 	void Commit(transaction_t commit_id);
 
-	void Rollback() {
-		undo_buffer.Rollback();
-	}
+	void Rollback() { undo_buffer.Rollback(); }
 
 	//! The start timestamp of this transaction
 	transaction_t start_time;
@@ -57,7 +60,7 @@ class Transaction {
 	transaction_t commit_id;
 
   private:
-  	void* PushTuple(size_t data_size);
+	uint8_t *PushTuple(size_t data_size);
 
 	//! The undo buffer is used to store old versions of rows that are updated
 	//! or deleted

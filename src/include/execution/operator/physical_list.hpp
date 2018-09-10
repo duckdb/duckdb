@@ -1,6 +1,7 @@
 
 #include "execution/operator/physical_copy.hpp"
 #include "execution/operator/physical_cross_product.hpp"
+#include "execution/operator/physical_delete.hpp"
 #include "execution/operator/physical_dummy_scan.hpp"
 #include "execution/operator/physical_filter.hpp"
 #include "execution/operator/physical_hash_aggregate.hpp"

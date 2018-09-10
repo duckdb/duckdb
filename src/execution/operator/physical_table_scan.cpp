@@ -16,7 +16,8 @@ void PhysicalTableScan::GetChunk(ClientContext &context, DataChunk &chunk,
 	if (column_ids.size() == 0)
 		return;
 
-	table.Scan(context.ActiveTransaction(), chunk, column_ids, state->scan_offset);
+	table.Scan(context.ActiveTransaction(), chunk, column_ids,
+	           state->scan_offset);
 
 	chunk.Verify();
 }

@@ -144,6 +144,11 @@ struct VectorOperations {
 	static void CombineHash(Vector &left, Vector &right, Vector &result);
 
 	//===--------------------------------------------------------------------===//
+	// Generate functions
+	//===--------------------------------------------------------------------===//
+	static void GenerateSequence(Vector &source, int64_t start = 0,
+	                             int64_t increment = 1);
+	//===--------------------------------------------------------------------===//
 	// Helpers
 	//===--------------------------------------------------------------------===//
 	// Copy the data from source to target, casting if the types don't match
@@ -153,11 +158,13 @@ struct VectorOperations {
 	                 size_t element_count = 0);
 	// Copy the data of <source> to the target vector
 	static void Copy(Vector &source, Vector &target, size_t offset = 0);
-	// Copy the data of <source> to the target location, setting null values to NullValue<T>
+	// Copy the data of <source> to the target location, setting null values to
+	// NullValue<T>
 	static void CopyNull(Vector &source, void *target, size_t offset = 0,
-	                 size_t element_count = 0);
-	// Copy the data of <source> to the target vector, setting the nullmask for any NullValue<T> of source 
-	static void CopyNull(Vector &source, Vector &target);
+	                     size_t element_count = 0);
+	// Appends the data of <source> to the target vector, setting the nullmask
+	// for any NullValue<T> of source
+	static void AppendNull(Vector &source, Vector &target);
 
 	// Set all elements of the vector to the given constant value
 	static void Set(Vector &result, Value value);

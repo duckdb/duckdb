@@ -97,15 +97,12 @@ class Vector : public Printable {
 	void Initialize(TypeId new_type, bool zero_data = false);
 	//! Casts the vector to the specified type
 	void Cast(TypeId new_type = TypeId::INVALID);
-	//! Appends the other vector to this vector. This method will call
-	//! Vector::Resize if there is no room for the append, which will cause the
-	//! vector to become an owning vector.
+	//! Appends the other vector to this vector.
 	void Append(Vector &other);
 	//! Copies the data from this vector to another vector.
-	void Copy(Vector &other, size_t offset = 0);
-	//! Copies the data from this vector to another vector, setting values of NullValue<T> in the nullmask
-	void CopyNull(Vector &other);
-	//! Moves the data from this vector to the other vector. Effectively,
+	void Copy(Vector &other,
+	          size_t offset = 0); //! Moves the data from this vector to the
+	                              //! other vector. Effectively,
 	//! "other" will become equivalent to this vector, and this vector will be
 	//! turned into an empty vector.
 	void Move(Vector &other);
@@ -125,6 +122,7 @@ class Vector : public Printable {
 
 	//! The stringheap of the vector
 	StringHeap string_heap;
+
   private:
 	//! If the vector owns data, this is the unique_ptr holds the actual data.
 	std::unique_ptr<char[]> owned_data;

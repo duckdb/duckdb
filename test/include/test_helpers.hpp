@@ -9,6 +9,9 @@
 #include "duckdb.hpp"
 
 namespace duckdb {
+
+#define REQUIRE_NO_FAIL(result) REQUIRE((result)->GetSuccess())
+
 static void CHECK_COLUMN(std::unique_ptr<duckdb::DuckDBResult> &result,
                          size_t column_number,
                          std::vector<duckdb::Value> values) {

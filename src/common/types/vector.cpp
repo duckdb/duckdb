@@ -228,18 +228,6 @@ void Vector::Copy(Vector &other, size_t offset) {
 	}
 }
 
-void Vector::CopyNull(Vector &other) {
-	if (other.type != type) {
-		throw NotImplementedException(
-		    "Copying to vector of different type not supported!");
-	}
-	if (other.sel_vector) {
-		throw Exception("Cannot copy to vector with sel_vector!");
-	}
-
-	VectorOperations::CopyNull(*this, other);
-}
-
 void Vector::Cast(TypeId new_type) {
 	if (new_type == TypeId::INVALID) {
 		throw Exception("Cannot create a vector of type invalid!");
@@ -259,7 +247,8 @@ void Vector::Append(Vector &other) {
 		    "Cannot append to vector with selection vector");
 	}
 	if (other.type != type) {
-		throw NotImplementedException("FIXME cast");
+		throw NotImplementedException(
+		    "Can only append vectors of similar types");
 	}
 	if (count + other.count > STANDARD_VECTOR_SIZE) {
 		throw Exception("Cannot append to vector: vector is full!");
