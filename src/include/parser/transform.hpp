@@ -20,6 +20,7 @@
 #include "parser/statement/insert_statement.hpp"
 #include "parser/statement/select_statement.hpp"
 #include "parser/statement/transaction_statement.hpp"
+#include "parser/statement/update_statement.hpp"
 
 #include "parser/postgres/parsenodes.h"
 #include "parser/postgres/pg_list.h"
@@ -42,6 +43,8 @@ std::unique_ptr<CopyStatement> TransformCopy(Node *node);
 std::unique_ptr<TransactionStatement> TransformTransaction(Node *node);
 //! Transform a Postgres T_DeleteStatement node into a DeleteStatement
 std::unique_ptr<DeleteStatement> TransformDelete(Node *node);
+//! Transform a Postgres T_UpdateStmt node into a UpdateStatement
+std::unique_ptr<UpdateStatement> TransformUpdate(Node *node);
 //! Transform a Postgres column reference into an AbstractExpression
 std::unique_ptr<AbstractExpression> TransformColumnRef(ColumnRef *root);
 //! Transform a Postgres constant value into an AbstractExpression

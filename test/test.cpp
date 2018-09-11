@@ -55,6 +55,10 @@ int main() {
 				// run the query
 				fprintf(stderr, "%s\n", line.c_str());
 				result = con.Query(line.substr(2));
+				if (!result->GetSuccess()) {
+					fprintf(stderr, "Query failed with answer: %s\n",
+					        result->GetErrorMessage().c_str());
+				}
 				queryline = linenr;
 				csv = "";
 			} else if (line.empty() && csv.empty()) {

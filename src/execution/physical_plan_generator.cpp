@@ -89,6 +89,19 @@ void PhysicalPlanGenerator::Visit(LogicalDelete &op) {
 	this->plan = move(del);
 }
 
+void PhysicalPlanGenerator::Visit(LogicalUpdate &op) {
+	LogicalOperatorVisitor::Visit(op);
+
+	if (!plan) {
+		throw Exception("Update node cannot be the first node of a plan!");
+	}
+
+	auto update = make_unique<PhysicalUpdate>(*op.table->storage, op.columns,
+	                                          move(op.expressions));
+	update->children.push_back(move(plan));
+	this->plan = move(update);
+}
+
 void PhysicalPlanGenerator::Visit(LogicalFilter &op) {
 	LogicalOperatorVisitor::Visit(op);
 
