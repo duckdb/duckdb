@@ -69,7 +69,6 @@ unique_ptr<DuckDBResult> DuckDBConnection::Query(std::string query) {
 	if (context.transaction.IsAutoCommit()) {
 		context.transaction.BeginTransaction();
 	}
-
 	auto result = GetQueryResult(query);
 
 	if (context.transaction.IsAutoCommit() &&

@@ -8,22 +8,24 @@
 using namespace duckdb;
 using namespace std;
 
-JoinSide LogicalJoin::GetJoinSide(std::unique_ptr<AbstractExpression> &expr) {
+JoinSide LogicalJoin::GetJoinSide(LogicalOperator *op,
+                                  std::unique_ptr<AbstractExpression> &expr) {
 	if (expr->type == ExpressionType::COLUMN_REF) {
 		auto colref = (ColumnRefExpression *)expr.get();
-		if (children[0]->referenced_tables.find(colref->binding.table_index) !=
-		    children[0]->referenced_tables.end()) {
+		if (op->children[0]->referenced_tables.find(
+		        colref->binding.table_index) !=
+		    op->children[0]->referenced_tables.end()) {
 			return JoinSide::LEFT;
 		} else {
-			assert(children[1]->referenced_tables.find(
+			assert(op->children[1]->referenced_tables.find(
 			           colref->binding.table_index) !=
-			       children[1]->referenced_tables.end());
+			       op->children[1]->referenced_tables.end());
 			return JoinSide::RIGHT;
 		}
 	} else {
 		JoinSide join_side = JoinSide::NONE;
 		for (auto &child : expr->children) {
-			auto child_side = GetJoinSide(child);
+			auto child_side = LogicalJoin::GetJoinSide(op, child);
 			if (child_side != join_side) {
 				join_side =
 				    join_side == JoinSide::NONE ? child_side : JoinSide::BOTH;
@@ -49,8 +51,10 @@ void LogicalJoin::SetJoinCondition(
 		// figure out which side belongs to the left and which side belongs to
 		// the right
 		assert(condition->children.size() == 2);
-		size_t left_side = GetJoinSide(condition->children[0]);
-		size_t right_side = GetJoinSide(condition->children[1]);
+		size_t left_side =
+		    LogicalJoin::GetJoinSide(this, condition->children[0]);
+		size_t right_side =
+		    LogicalJoin::GetJoinSide(this, condition->children[1]);
 
 		JoinCondition join_condition;
 		join_condition.comparison = condition->GetExpressionType();

@@ -457,7 +457,7 @@ TEST_CASE("[SLOW] Test SQLite Logic Test", "[sqlitelogic]") {
 	    "third_party/sqllogictest/test/random/select/slt_good_68.test",
 	    "third_party/sqllogictest/test/random/select/slt_good_69.test",
 	    //"third_party/sqllogictest/test/random/select/slt_good_70.test", // ON
-	    //NOT BETWEEN ...
+	    // NOT BETWEEN ...
 	    "third_party/sqllogictest/test/random/select/slt_good_71.test",
 	    "third_party/sqllogictest/test/random/select/slt_good_72.test",
 	    "third_party/sqllogictest/test/random/select/slt_good_73.test",
