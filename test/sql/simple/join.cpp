@@ -40,4 +40,12 @@ TEST_CASE("Test basic joins of tables", "[joins]") {
 	CHECK_COLUMN(result, 0, {11, 11, 12});
 	CHECK_COLUMN(result, 1, {1, 1, 2});
 	CHECK_COLUMN(result, 2, {10, 20, 30});
+
+	// explicit join with condition the wrong way around
+	result = con.Query(
+	    "SELECT a, test.b, c FROM test INNER JOIN test2 ON test2.b = test.b;");
+	CHECK_COLUMN(result, 0, {11, 11, 12});
+	CHECK_COLUMN(result, 1, {1, 1, 2});
+	CHECK_COLUMN(result, 2, {10, 20, 30});
+
 }

@@ -57,7 +57,7 @@ void LogicalJoin::SetJoinCondition(
 			join_condition.left = move(condition->children[0]);
 			join_condition.right = move(condition->children[1]);
 		} else if (left_side == JoinSide::RIGHT &&
-		           left_side == JoinSide::LEFT) {
+		           right_side == JoinSide::LEFT) {
 			// left is right right is left
 			join_condition.left = move(condition->children[1]);
 			join_condition.right = move(condition->children[0]);
