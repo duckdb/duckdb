@@ -320,8 +320,15 @@ void LogicalPlanGenerator::Visit(JoinRef &expr) {
 	root = nullptr;
 
 	join->SetJoinCondition(move(expr.condition));
-
-	root = move(join);
+	if (join->conditions.size() > 0) {
+		root = move(join);
+	} else { // the conditions were not comparisions between left on right,
+		     // cross product
+		auto cp = make_unique<LogicalCrossProduct>();
+		cp->AddChild(move(join->children[0]));
+		cp->AddChild(move(join->children[1]));
+		root = move(cp);
+	}
 }
 
 void LogicalPlanGenerator::Visit(SubqueryRef &expr) {

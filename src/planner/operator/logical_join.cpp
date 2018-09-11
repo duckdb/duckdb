@@ -1,6 +1,8 @@
 
 
 #include "planner/operator/logical_join.hpp"
+#include "planner/operator/logical_filter.hpp"
+
 #include "parser/expression/expression_list.hpp"
 
 using namespace duckdb;
@@ -62,9 +64,21 @@ void LogicalJoin::SetJoinCondition(
 			join_condition.left = move(condition->children[1]);
 			join_condition.right = move(condition->children[0]);
 		} else {
-			throw Exception("FIXME: Join condition is not comparison between "
-			                "left and right sides");
+			// create filters for non-comparision conditions
+			auto filter = make_unique<LogicalFilter>(move(condition));
+			if (left_side == JoinSide::LEFT || right_side == JoinSide::LEFT) {
+				filter->AddChild(move(children[0]));
+				children[0] = move(filter);
+			} else {
+				// if neither side is part of the join we push to right side as
+				// well because whatever
+				filter->AddChild(move(children[1]));
+				children[1] = move(filter);
+			}
+			return;
 		}
+
+		// TODO what if there are no conditions?
 		conditions.push_back(move(join_condition));
 	}
 }

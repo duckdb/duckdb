@@ -375,7 +375,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, size_t offset) {
 	if (source.type != target.type) {
 		throw NotImplementedException("Copy types don't match!");
 	}
-	assert(offset < source.count);
+	assert(offset <= source.count);
 	target.count = source.count - offset;
 	if (source.sel_vector) {
 		for (size_t i = 0; i < target.count; i++) {
