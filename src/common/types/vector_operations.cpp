@@ -606,7 +606,15 @@ void VectorOperations::Set(Vector &result, Value value) {
 		// set all values in the nullmask to 0
 		result.nullmask.reset();
 		Vector left(value);
-		_generic_binary_loop<operators::PickLeft>(left, result, result);
+		if (left.type < TypeId::VARCHAR) {
+			_generic_binary_loop<operators::PickLeft>(left, result, result);
+		} else if (left.type == TypeId::VARCHAR) {
+			for (size_t i = 0; i < result.count; i++) {
+				result.SetValue(i, value);
+			}
+		} else {
+			throw NotImplementedException("Unimplemented type for Set");
+		}
 	}
 }
 
