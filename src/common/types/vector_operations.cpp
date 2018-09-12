@@ -432,34 +432,86 @@ void VectorOperations::Modulo(int64_t left, Vector &right, Vector &result) {
 // Comparison Operations
 //===--------------------------------------------------------------------===//
 void VectorOperations::Equals(Vector &left, Vector &right, Vector &result) {
-	_fixed_return_binary_loop<operators::Equals, int8_t>(left, right, result);
+	if (left.type == TypeId::VARCHAR) {
+		if (right.type != TypeId::VARCHAR) {
+			throw Exception("Can't compare different types");
+		}
+		_templated_binary_loop<char *, int8_t, operators::EqualsVarchar>(
+		    left, right, result);
+	} else {
+		_fixed_return_binary_loop<operators::Equals, int8_t>(left, right,
+		                                                     result);
+	}
 }
 
 void VectorOperations::NotEquals(Vector &left, Vector &right, Vector &result) {
-	_fixed_return_binary_loop<operators::NotEquals, int8_t>(left, right,
-	                                                        result);
+	if (left.type == TypeId::VARCHAR) {
+		if (right.type != TypeId::VARCHAR) {
+			throw Exception("Can't compare different types");
+		}
+		_templated_binary_loop<char *, int8_t, operators::NotEqualsVarchar>(
+		    left, right, result);
+	} else {
+		_fixed_return_binary_loop<operators::NotEquals, int8_t>(left, right,
+		                                                        result);
+	}
 }
 
 void VectorOperations::GreaterThan(Vector &left, Vector &right,
                                    Vector &result) {
-	_fixed_return_binary_loop<operators::GreaterThan, int8_t>(left, right,
-	                                                          result);
+	if (left.type == TypeId::VARCHAR) {
+		if (right.type != TypeId::VARCHAR) {
+			throw Exception("Can't compare different types");
+		}
+		_templated_binary_loop<char *, int8_t, operators::GreaterThanVarchar>(
+		    left, right, result);
+	} else {
+		_fixed_return_binary_loop<operators::GreaterThan, int8_t>(left, right,
+		                                                          result);
+	}
 }
 
 void VectorOperations::GreaterThanEquals(Vector &left, Vector &right,
                                          Vector &result) {
-	_fixed_return_binary_loop<operators::GreaterThanEquals, int8_t>(left, right,
-	                                                                result);
+	if (left.type == TypeId::VARCHAR) {
+		if (right.type != TypeId::VARCHAR) {
+			throw Exception("Can't compare different types");
+		}
+		_templated_binary_loop<char *, int8_t,
+		                       operators::GreaterThanEqualsVarchar>(left, right,
+		                                                            result);
+	} else {
+		_fixed_return_binary_loop<operators::GreaterThanEquals, int8_t>(
+		    left, right, result);
+	}
 }
 
 void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result) {
-	_fixed_return_binary_loop<operators::LessThan, int8_t>(left, right, result);
+	if (left.type == TypeId::VARCHAR) {
+		if (right.type != TypeId::VARCHAR) {
+			throw Exception("Can't compare different types");
+		}
+		_templated_binary_loop<char *, int8_t, operators::LessThanVarchar>(
+		    left, right, result);
+	} else {
+		_fixed_return_binary_loop<operators::LessThan, int8_t>(left, right,
+		                                                       result);
+	}
 }
 
 void VectorOperations::LessThanEquals(Vector &left, Vector &right,
                                       Vector &result) {
-	_fixed_return_binary_loop<operators::LessThanEquals, int8_t>(left, right,
-	                                                             result);
+	if (left.type == TypeId::VARCHAR) {
+		if (right.type != TypeId::VARCHAR) {
+			throw Exception("Can't compare different types");
+		}
+		_templated_binary_loop<char *, int8_t,
+		                       operators::LessThanEqualsVarchar>(left, right,
+		                                                         result);
+	} else {
+		_fixed_return_binary_loop<operators::LessThanEquals, int8_t>(
+		    left, right, result);
+	}
 }
 
 //===--------------------------------------------------------------------===//

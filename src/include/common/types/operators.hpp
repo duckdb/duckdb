@@ -120,6 +120,47 @@ struct Or {
 	}
 };
 
+// NULLs are passed in these as well but the result is ignored. So just return 0
+struct EqualsVarchar {
+	static inline bool Operation(char *left, char *right) {
+		return (left && right) ? strcmp(left, right) == 0 : false;
+	}
+};
+
+struct NotEqualsVarchar {
+	static inline bool Operation(char *left, char *right) {
+		return (left && right) ? strcmp(left, right) != 0 : false;
+	}
+};
+
+struct LessThanVarchar {
+	static inline bool Operation(char *left, char *right) {
+		return (left && right) ? strcmp(left, right) < 0 : false;
+
+	}
+};
+
+struct LessThanEqualsVarchar {
+	static inline bool Operation(char *left, char *right) {
+		return (left && right) ? strcmp(left, right) <= 0 : false;
+
+	}
+};
+
+struct GreaterThanVarchar {
+	static inline bool Operation(char *left, char *right) {
+		return (left && right) ? strcmp(left, right) > 0 : false;
+
+	}
+};
+
+struct GreaterThanEqualsVarchar {
+	static inline bool Operation(char *left, char *right) {
+		return (left && right) ? strcmp(left, right) >= 0 : false;
+
+	}
+};
+
 //===--------------------------------------------------------------------===//
 // Aggregation Operations
 //===--------------------------------------------------------------------===//

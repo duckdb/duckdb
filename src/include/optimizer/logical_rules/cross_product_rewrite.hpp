@@ -129,9 +129,6 @@ class CrossProductRewrite : public Rule {
 		for (auto &ex : new_expressions) {
 			filter.expressions.push_back(move(ex));
 		}
-
-		// TODO: find all filter children that are also crossprods and try with
-		// the filter and them, too
 		if (filter.expressions.size() > 0) {
 			return nullptr;
 		} else {

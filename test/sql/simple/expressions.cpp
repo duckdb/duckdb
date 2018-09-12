@@ -136,4 +136,31 @@ TEST_CASE("Complex Expressions", "[sql]") {
 	CHECK_COLUMN(result, 0, {44});
 	CHECK_COLUMN(result, 1, {41});
 	CHECK_COLUMN(result, 2, {44});
+
+	con.Query("CREATE TABLE strtest (a INTEGER, b VARCHAR)");
+	con.Query("INSERT INTO strtest VALUES (1, 'a')");
+	con.Query("INSERT INTO strtest VALUES (2, 'h')");
+	con.Query("INSERT INTO strtest VALUES (3, 'd')");
+	con.Query("INSERT INTO strtest VALUES (4, NULL)");
+
+	result = con.Query("SELECT a FROM strtest WHERE b = 'a'");
+	CHECK_COLUMN(result, 0, {1});
+
+	result = con.Query("SELECT a FROM strtest WHERE b <> 'a'");
+	CHECK_COLUMN(result, 0, {2,3});
+
+	result = con.Query("SELECT a FROM strtest WHERE b < 'h'");
+	CHECK_COLUMN(result, 0, {1, 3});
+
+	result = con.Query("SELECT a FROM strtest WHERE b <= 'h'");
+	CHECK_COLUMN(result, 0, {1, 2, 3});
+
+	result = con.Query("SELECT a FROM strtest WHERE b > 'h'");
+	CHECK_COLUMN(result, 0, {});
+
+	result = con.Query("SELECT a FROM strtest WHERE b >= 'h'");
+	CHECK_COLUMN(result, 0, {2});
+
+
+
 }
