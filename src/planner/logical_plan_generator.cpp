@@ -2,9 +2,12 @@
 #include "planner/logical_plan_generator.hpp"
 
 #include "parser/expression/expression_list.hpp"
+
 #include "parser/statement/copy_statement.hpp"
 #include "parser/statement/delete_statement.hpp"
 #include "parser/statement/insert_statement.hpp"
+#include "parser/statement/update_statement.hpp"
+
 #include "parser/tableref/tableref_list.hpp"
 
 #include "planner/operator/logical_list.hpp"
@@ -18,6 +21,40 @@ static bool has_select_list(LogicalOperatorType type) {
 	return type == LogicalOperatorType::PROJECTION ||
 	       type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY ||
 	       type == LogicalOperatorType::UNION;
+}
+
+void LogicalPlanGenerator::Visit(UpdateStatement &statement) {
+	// we require row ids for the deletion
+	require_row_id = true;
+	// create the table scan
+	statement.table->Accept(this);
+	if (!root || root->type != LogicalOperatorType::GET) {
+		throw Exception("Cannot create update node without table scan!");
+	}
+	auto get = (LogicalGet *)root.get();
+	// create the filter (if any)
+	if (statement.condition) {
+		statement.condition->Accept(this);
+		auto filter = make_unique<LogicalFilter>(move(statement.condition));
+		filter->AddChild(move(root));
+		root = move(filter);
+	}
+	// scan the table for the referenced columns in the update clause
+	auto &table = get->table;
+	vector<column_t> column_ids;
+	for (auto &colname : statement.columns) {
+		if (!table->ColumnExists(colname)) {
+			throw BinderException(
+			    "Referenced update column %s not found in table!",
+			    colname.c_str());
+		}
+		column_ids.push_back(table->GetColumn(colname).oid);
+	}
+	// create the update node
+	auto update = make_unique<LogicalUpdate>(table, column_ids,
+	                                         move(statement.expressions));
+	update->AddChild(move(root));
+	root = move(update);
 }
 
 void LogicalPlanGenerator::Visit(DeleteStatement &statement) {

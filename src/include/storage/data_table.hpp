@@ -47,6 +47,9 @@ class DataTable {
 	void Append(Transaction &transaction, DataChunk &chunk);
 	//! Delete the entries with the specified row identifier from the table
 	void Delete(Transaction &transaction, Vector &row_ids);
+	//! Update the entries with the specified row identifier from the table
+	void Update(Transaction &transaction, Vector &row_ids,
+	            std::vector<column_t> &column_ids, DataChunk &data);
 
 	//! Get statistics of the specified column
 	Statistics &GetStatistics(column_t oid) {

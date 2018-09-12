@@ -7,6 +7,7 @@
 #include "parser/statement/copy_statement.hpp"
 #include "parser/statement/delete_statement.hpp"
 #include "parser/statement/select_statement.hpp"
+#include "parser/statement/update_statement.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -217,8 +218,18 @@ void Binder::Visit(CopyStatement &stmt) {
 void Binder::Visit(DeleteStatement &stmt) {
 	// visit the table reference
 	stmt.table->Accept(this);
-	// project any addiitonal columns required for the condition
+	// project any additional columns required for the condition
 	stmt.condition->Accept(this);
+}
+
+void Binder::Visit(UpdateStatement &stmt) {
+	// visit the table reference
+	stmt.table->Accept(this);
+	// project any additional columns required for the condition/expressions
+	stmt.condition->Accept(this);
+	for (auto &expression : stmt.expressions) {
+		expression->Accept(this);
+	}
 }
 
 void Binder::Visit(ColumnRefExpression &expr) {

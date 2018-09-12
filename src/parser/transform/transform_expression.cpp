@@ -780,4 +780,5 @@ bool TransformValueList(List *list,
 	}
 	return true;
 }
+
 } // namespace duckdb

@@ -180,6 +180,79 @@ void DataTable::Delete(Transaction &transaction, Vector &row_identifiers) {
 	throw Exception("Row identifiers for deletion out of bounds!");
 }
 
+void DataTable::Update(Transaction &transaction, Vector &row_identifiers,
+                       std::vector<column_t> &column_ids, DataChunk &updates) {
+	if (row_identifiers.type != TypeId::POINTER) {
+		throw Exception("Row identifiers must be POINTER type!");
+	}
+	if (row_identifiers.count == 0) {
+		return;
+	}
+	auto ids = (uint64_t *)row_identifiers.data;
+	auto sel_vector = row_identifiers.sel_vector;
+	auto first_id = sel_vector ? ids[sel_vector[0]] : ids[0];
+	// first find the chunk the row ids belong to
+	auto chunk = chunk_list.get();
+	while (chunk) {
+		if (first_id >= chunk->start &&
+		    first_id < chunk->start + chunk->count) {
+			// found the correct chunk
+			// get an exclusive lock on the chunk
+			chunk->GetExclusiveLock();
+			// now delete the entries
+			for (size_t i = 0; i < row_identifiers.count; i++) {
+				auto id =
+				    (sel_vector ? ids[sel_vector[i]] : ids[i]) - chunk->start;
+				// assert that all ids in the vector belong to the same chunk
+				assert(id >= chunk->start && id < chunk->start + chunk->count);
+				// check for conflicts
+				auto version = chunk->version_pointers[id];
+				if (version) {
+					if (version->version_number >= TRANSACTION_ID_START &&
+					    version->version_number != transaction.transaction_id) {
+						throw TransactionException("Conflict on tuple update!");
+					}
+				}
+				// no conflict, move the current tuple data into the undo buffer
+				transaction.PushTuple(id, chunk);
+			}
+			// now update the columns in the base table
+			for (size_t j = 0; j < column_ids.size(); j++) {
+				auto column_id = column_ids[j];
+				auto size = GetTypeIdSize(updates.data[j].type);
+				auto base_data = chunk->columns[column_id].data;
+				if (updates.data[j].sel_vector) {
+					for (size_t i = 0; i < row_identifiers.count; i++) {
+						auto id = (sel_vector ? ids[sel_vector[i]] : ids[i]) -
+						          chunk->start;
+						auto dataptr = base_data + id * size;
+						memcpy(dataptr,
+						       updates.data[j].data +
+						           updates.data[j].sel_vector[i] * size,
+						       size);
+					}
+				} else {
+					for (size_t i = 0; i < row_identifiers.count; i++) {
+						auto id = (sel_vector ? ids[sel_vector[i]] : ids[i]) -
+						          chunk->start;
+						auto dataptr = base_data + id * size;
+						memcpy(dataptr, updates.data[j].data + i * size, size);
+					}
+				}
+				chunk->string_heap.MergeHeap(updates.data[j].string_heap);
+
+				// update the statistics with the new data
+				lock_guard<mutex> stats_lock(statistics_locks[column_id]);
+				statistics[column_id].Update(updates.data[j]);
+			}
+			chunk->ReleaseExclusiveLock();
+			return;
+		}
+		chunk = chunk->next.get();
+	}
+	throw Exception("Row identifiers for update out of bounds!");
+}
+
 void DataTable::Scan(Transaction &transaction, DataChunk &result,
                      const vector<column_t> &column_ids,
                      ScanStructure &structure) {

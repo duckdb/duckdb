@@ -29,6 +29,7 @@ class LogicalInsert;
 class LogicalCopy;
 class LogicalExplain;
 class LogicalUnion;
+class LogicalUpdate;
 
 //! The LogicalOperatorVisitor is an abstract base class that implements the
 //! Visitor pattern on LogicalOperator.
@@ -51,5 +52,6 @@ class LogicalOperatorVisitor : public SQLNodeVisitor {
 	virtual void Visit(LogicalCopy &op);
 	virtual void Visit(LogicalExplain &op);
 	virtual void Visit(LogicalUnion &op);
+	virtual void Visit(LogicalUpdate &op);
 };
 } // namespace duckdb

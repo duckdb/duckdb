@@ -34,6 +34,7 @@ class LogicalPlanGenerator : public SQLNodeVisitor {
 	void Visit(InsertStatement &statement);
 	void Visit(CopyStatement &statement);
 	void Visit(DeleteStatement &statement);
+	void Visit(UpdateStatement &statement);
 
 	void Visit(AggregateExpression &expr);
 	void Visit(ComparisonExpression &expr);
