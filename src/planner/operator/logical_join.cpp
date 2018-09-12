@@ -17,10 +17,13 @@ JoinSide LogicalJoin::GetJoinSide(LogicalOperator *op,
 		    op->children[0]->referenced_tables.end()) {
 			return JoinSide::LEFT;
 		} else {
-			assert(op->children[1]->referenced_tables.find(
-			           colref->binding.table_index) !=
-			       op->children[1]->referenced_tables.end());
-			return JoinSide::RIGHT;
+			if (op->children[1]->referenced_tables.find(
+			        colref->binding.table_index) !=
+			    op->children[1]->referenced_tables.end()) {
+				return JoinSide::RIGHT;
+			} else {
+				return JoinSide::NONE;
+			}
 		}
 	} else {
 		JoinSide join_side = JoinSide::NONE;

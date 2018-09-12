@@ -62,6 +62,7 @@ INSTANTIATE_VECTOR(std::vector<std::unique_ptr<AbstractRuleNode>>);
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<DataChunk>>);
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<SQLStatement>>);
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<PhysicalOperator>>);
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<LogicalOperator>>);
 template class std::vector<StorageVector>;
 template class std::vector<TypeId>;
 template class std::vector<Value>;
