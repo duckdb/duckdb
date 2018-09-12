@@ -82,9 +82,9 @@ class PhysicalOperator : public Printable {
 	void GetChunk(ClientContext &context, DataChunk &chunk,
 	              PhysicalOperatorState *state) {
 
-		context.profiler.StartOperator(type);
+		context.profiler.StartOperator(this);
 		_GetChunk(context, chunk, state);
-		context.profiler.EndOperator();
+		context.profiler.EndOperator(chunk);
 
 		chunk.Verify();
 	}

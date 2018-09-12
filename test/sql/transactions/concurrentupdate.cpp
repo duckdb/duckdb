@@ -53,7 +53,7 @@ static void read_total_balance(DuckDB *db) {
 	}
 }
 
-TEST_CASE("Concurrent update", "[transactions]") {
+TEST_CASE("[SLOW] Concurrent update", "[transactions]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);

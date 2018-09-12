@@ -178,6 +178,9 @@ void _fixed_return_unary_loop_null(Vector &left, Vector &result) {
 	case TypeId::VARCHAR:
 		_templated_unary_loop_null<char *, RES, OP>(left, result);
 		break;
+	case TypeId::DATE:
+		_templated_unary_loop_null<date_t, RES, OP>(left, result);
+		break;
 	default:
 		throw NotImplementedException("Unimplemented type");
 	}

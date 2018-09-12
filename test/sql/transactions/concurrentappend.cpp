@@ -72,7 +72,7 @@ static void insert_random_elements(DuckDB *db) {
 	con.Query("COMMIT;");
 }
 
-TEST_CASE("Concurrent append", "[transactions]") {
+TEST_CASE("[SLOW] Concurrent append", "[transactions]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);

@@ -27,6 +27,10 @@ class DuckDBConnection {
 		return context.profiler.ToString();
 	}
 
+	void EnableProfiling() { context.profiler.Enable(); }
+
+	void DisableProfiling() { context.profiler.Disable(); }
+
 	//! Queries the database using the transaction context of this connection
 	std::unique_ptr<DuckDBResult> Query(std::string query);
 

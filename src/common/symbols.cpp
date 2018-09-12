@@ -7,6 +7,7 @@
 #include "execution/aggregate_hashtable.hpp"
 #include "execution/column_binding_resolver.hpp"
 #include "execution/physical_operator.hpp"
+#include "main/query_profiler.hpp"
 #include "main/result.hpp"
 #include "optimizer/rule.hpp"
 #include "planner/logical_operator.hpp"
@@ -71,6 +72,9 @@ template class std::atomic<size_t>;
 template class std::bitset<STANDARD_VECTOR_SIZE>;
 template class std::bitset<STORAGE_CHUNK_SIZE>;
 template class std::shared_ptr<VersionInformation>;
+template class std::unordered_map<PhysicalOperator *,
+                                  QueryProfiler::TreeNode *>;
+template class std::stack<PhysicalOperator *>;
 
 // template class std::unordered_map<std::string,
 // std::unique_ptr<AbstractCatalogEntry>>;

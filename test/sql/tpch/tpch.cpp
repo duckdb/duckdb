@@ -19,6 +19,8 @@ TEST_CASE("[SLOW] Test TPC-H SF0.1", "[tpch]") {
 	DuckDBConnection con(db);
 	tpch::dbgen(sf, db);
 
+	// con.EnableProfiling();
+
 	// check if all the counts are correct
 	result = con.Query("SELECT COUNT(*) FROM orders");
 	CHECK_COLUMN(result, 0, {150000});
@@ -73,11 +75,12 @@ TEST_CASE("[SLOW] Test TPC-H SF0.1", "[tpch]") {
 	CHECK_COLUMN(result, 1, {3774200, 7554554, 3785523});
 	CHECK_COLUMN(result, 2, {147790, 295765, 148301});
 
-	// result = con.Query(tpch::get_query(1));
-	// std::cout << con.GetProfilingInformation() << "\n";
-
 	result = con.Query(tpch::get_query(1));
 	COMPARE_CSV(result, tpch::get_answer(sf, 1), true);
+	// std::cout << con.GetProfilingInformation() << "\n";
+
+	// result = con.Query(tpch::get_query(3));
+	// COMPARE_CSV(result, tpch::get_answer(sf, 3), true);
 	// std::cout << con.GetProfilingInformation() << "\n";
 
 	result = con.Query(tpch::get_query(6));

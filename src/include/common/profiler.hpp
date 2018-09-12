@@ -20,19 +20,32 @@ namespace duckdb {
 class Profiler {
   public:
 	//! Starts the timer
-	void Start() { start = std::chrono::system_clock::now(); }
+	void Start() {
+		finished = false;
+		start = Tick();
+	}
 	//! Finishes timing
-	void End() { end = std::chrono::system_clock::now(); }
+	void End() {
+		end = Tick();
+		finished = true;
+	}
 
-	//! Returns the elapsed time in seconds
+	//! Returns the elapsed time in seconds. If End() has been called, returns
+	//! the total elapsed time. Otherwise returns how far along the timer is
+	//! right now.
 	double Elapsed() const {
-		return std::chrono::duration_cast<std::chrono::duration<double>>(end -
+		auto _end = finished ? end : Tick();
+		return std::chrono::duration_cast<std::chrono::duration<double>>(_end -
 		                                                                 start)
 		    .count();
 	}
 
   private:
+	std::chrono::time_point<std::chrono::system_clock> Tick() const {
+		return std::chrono::system_clock::now();
+	}
 	std::chrono::time_point<std::chrono::system_clock> start;
 	std::chrono::time_point<std::chrono::system_clock> end;
+	bool finished = false;
 };
 } // namespace duckdb
