@@ -147,7 +147,7 @@ TEST_CASE("Complex Expressions", "[sql]") {
 	CHECK_COLUMN(result, 0, {1});
 
 	result = con.Query("SELECT a FROM strtest WHERE b <> 'a'");
-	CHECK_COLUMN(result, 0, {2,3});
+	CHECK_COLUMN(result, 0, {2, 3});
 
 	result = con.Query("SELECT a FROM strtest WHERE b < 'h'");
 	CHECK_COLUMN(result, 0, {1, 3});
@@ -160,7 +160,4 @@ TEST_CASE("Complex Expressions", "[sql]") {
 
 	result = con.Query("SELECT a FROM strtest WHERE b >= 'h'");
 	CHECK_COLUMN(result, 0, {2});
-
-
-
 }

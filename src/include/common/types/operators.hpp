@@ -136,28 +136,24 @@ struct NotEqualsVarchar {
 struct LessThanVarchar {
 	static inline bool Operation(char *left, char *right) {
 		return (left && right) ? strcmp(left, right) < 0 : false;
-
 	}
 };
 
 struct LessThanEqualsVarchar {
 	static inline bool Operation(char *left, char *right) {
 		return (left && right) ? strcmp(left, right) <= 0 : false;
-
 	}
 };
 
 struct GreaterThanVarchar {
 	static inline bool Operation(char *left, char *right) {
 		return (left && right) ? strcmp(left, right) > 0 : false;
-
 	}
 };
 
 struct GreaterThanEqualsVarchar {
 	static inline bool Operation(char *left, char *right) {
 		return (left && right) ? strcmp(left, right) >= 0 : false;
-
 	}
 };
 
