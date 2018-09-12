@@ -33,8 +33,8 @@ vector<string> split(const string &str, char delimiter, char quote) {
 	return res;
 }
 
-void PhysicalCopy::GetChunk(ClientContext &context, DataChunk &chunk,
-                            PhysicalOperatorState *state) {
+void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk,
+                             PhysicalOperatorState *state) {
 	chunk.Reset();
 	if (state->finished) {
 		return;
@@ -130,8 +130,6 @@ void PhysicalCopy::GetChunk(ClientContext &context, DataChunk &chunk,
 	chunk.count = 1;
 
 	state->finished = true;
-
-	chunk.Verify();
 }
 
 unique_ptr<PhysicalOperatorState>

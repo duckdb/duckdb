@@ -7,8 +7,8 @@ using namespace std;
 
 vector<TypeId> PhysicalFilter::GetTypes() { return children[0]->GetTypes(); }
 
-void PhysicalFilter::GetChunk(ClientContext &context, DataChunk &chunk,
-                              PhysicalOperatorState *state_) {
+void PhysicalFilter::_GetChunk(ClientContext &context, DataChunk &chunk,
+                               PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOperatorState *>(state_);
 	chunk.Reset();
 
@@ -42,8 +42,6 @@ void PhysicalFilter::GetChunk(ClientContext &context, DataChunk &chunk,
 		chunk.SetSelectionVector(result);
 
 	} while (chunk.count == 0);
-
-	chunk.Verify();
 }
 
 unique_ptr<PhysicalOperatorState>

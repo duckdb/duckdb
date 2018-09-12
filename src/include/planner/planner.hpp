@@ -13,14 +13,13 @@
 #include <string>
 #include <vector>
 
-#include "main/client_context.hpp"
-
 #include "parser/statement/sql_statement.hpp"
 
 #include "planner/bindcontext.hpp"
 #include "planner/logical_operator.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 //! The planner creates a logical query plan from the parsed SQL statements
 //! using the Binder and LogicalPlanGenerator.

@@ -4,6 +4,8 @@
 
 #include "common/exception.hpp"
 
+#include "main/client_context.hpp"
+
 #include "parser/expression/expression_list.hpp"
 
 #include "execution/operator/physical_aggregate.hpp"

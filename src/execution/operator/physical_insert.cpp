@@ -8,8 +8,8 @@ using namespace std;
 
 vector<TypeId> PhysicalInsert::GetTypes() { return {TypeId::INTEGER}; }
 
-void PhysicalInsert::GetChunk(ClientContext &context, DataChunk &chunk,
-                              PhysicalOperatorState *state) {
+void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk,
+                               PhysicalOperatorState *state) {
 
 	chunk.Reset();
 
@@ -54,8 +54,6 @@ void PhysicalInsert::GetChunk(ClientContext &context, DataChunk &chunk,
 	chunk.count = 1;
 
 	state->finished = true;
-
-	chunk.Verify();
 }
 
 unique_ptr<PhysicalOperatorState>

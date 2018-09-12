@@ -18,6 +18,8 @@ DuckDBConnection::~DuckDBConnection() {}
 unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(std::string query) {
 	auto result = make_unique<DuckDBResult>();
 	result->success = false;
+
+	context.profiler.StartQuery(query);
 	try {
 		// parse the query and transform it into a set of statements
 		Parser parser;
@@ -62,6 +64,7 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(std::string query) {
 	} catch (...) {
 		result->error = "UNHANDLED EXCEPTION TYPE THROWN IN PLANNER!";
 	}
+	context.profiler.EndQuery();
 	return move(result);
 }
 

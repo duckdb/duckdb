@@ -125,5 +125,20 @@ class StringUtil {
 	 * @return A new string with no occurrences of the provided character
 	 */
 	static std::string Strip(const std::string &str, char c);
+
+	static std::string Replace(std::string source, const std::string &from,
+	                           const std::string &to) {
+		if (from.empty())
+			return source;
+		;
+		size_t start_pos = 0;
+		while ((start_pos = source.find(from, start_pos)) !=
+		       std::string::npos) {
+			source.replace(start_pos, from.length(), to);
+			start_pos += to.length(); // In case 'to' contains 'from', like
+			                          // replacing 'x' with 'yx'
+		}
+		return source;
+	}
 };
 } // namespace duckdb

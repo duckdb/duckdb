@@ -106,8 +106,8 @@ static void quicksort(ChunkCollection &sort_by, OrderByDescription &desc,
 	_quicksort_inplace(sort_by, desc, result, part + 1, sort_by.count - 1);
 }
 
-void PhysicalOrder::GetChunk(ClientContext &context, DataChunk &chunk,
-                             PhysicalOperatorState *state_) {
+void PhysicalOrder::_GetChunk(ClientContext &context, DataChunk &chunk,
+                              PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOrderOperatorState *>(state_);
 	chunk.Reset();
 
@@ -168,8 +168,6 @@ void PhysicalOrder::GetChunk(ClientContext &context, DataChunk &chunk,
 	}
 	chunk.count = remaining_data;
 	state->position += STANDARD_VECTOR_SIZE;
-
-	chunk.Verify();
 }
 
 unique_ptr<PhysicalOperatorState>

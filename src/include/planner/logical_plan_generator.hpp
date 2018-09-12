@@ -15,14 +15,14 @@
 #include "common/internal_types.hpp"
 #include "common/printable.hpp"
 
-#include "main/client_context.hpp"
-
 #include "parser/sql_node_visitor.hpp"
 
 #include "planner/bindcontext.hpp"
 #include "planner/logical_operator.hpp"
 
 namespace duckdb {
+class ClientContext;
+
 //! The logical plan generator generates a logical query plan from a parsed SQL
 //! statement
 class LogicalPlanGenerator : public SQLNodeVisitor {

@@ -1,4 +1,6 @@
 
+#include "main/client_context.hpp"
+
 #include "parser/statement/copy_statement.hpp"
 #include "parser/statement/create_statement.hpp"
 #include "parser/statement/drop_statement.hpp"

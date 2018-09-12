@@ -17,13 +17,12 @@
 
 #include "execution/physical_operator.hpp"
 
-#include "main/client_context.hpp"
-
 #include "planner/bindcontext.hpp"
 #include "planner/logical_operator.hpp"
 #include "planner/logical_operator_visitor.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 //! The physical plan generator generates a physical execution plan from a
 //! logical query plan

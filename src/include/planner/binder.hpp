@@ -13,14 +13,13 @@
 #include <string>
 #include <vector>
 
-#include "main/client_context.hpp"
-
 #include "parser/sql_node_visitor.hpp"
 #include "parser/statement/sql_statement.hpp"
 
 #include "planner/bindcontext.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 //! Bind the parsed query tree to the actual columns present in the catalog.
 /*!
