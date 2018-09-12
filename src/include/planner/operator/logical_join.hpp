@@ -35,8 +35,28 @@ class LogicalJoin : public LogicalOperator {
 
 	std::vector<JoinCondition> conditions;
 	JoinType type;
+	static JoinSide GetJoinSide(LogicalOperator *op,
+	                            std::unique_ptr<AbstractExpression> &expr);
+
+	virtual std::string ParamsToString() const override {
+		std::string result = "";
+		if (conditions.size() > 0) {
+			result += "[";
+			for (size_t i = 0; i < conditions.size(); i++) {
+				auto &cond = conditions[i];
+				result += ExpressionTypeToString(cond.comparison) + "(" +
+				          cond.left->ToString() + ", " +
+				          cond.right->ToString() + ")";
+				if (i < conditions.size() - 1) {
+					result += ", ";
+				}
+			}
+			result += "]";
+		}
+
+		return result;
+	}
 
   private:
-	JoinSide GetJoinSide(std::unique_ptr<AbstractExpression> &expr);
 };
 } // namespace duckdb

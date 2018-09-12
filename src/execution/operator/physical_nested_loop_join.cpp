@@ -61,6 +61,7 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 	// we have to perform the nested loop join
 
 	do {
+		chunk.Reset();
 		// first check if we have to fetch a new chunk from the left child
 		if (state->left_position >= state->child_chunk.count) {
 			// if we have exhausted the current left chunk, fetch a new one
