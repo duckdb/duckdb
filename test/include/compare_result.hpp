@@ -115,7 +115,12 @@ static bool compare_result(std::string csv, ChunkCollection &collection,
 				auto right =
 				    StringUtil::Format("%.2f", result_value.value_.decimal);
 				if (left != right) {
-					goto incorrect;
+					double ldecimal = value.value_.decimal;
+					double rdecimal = result_value.value_.decimal;
+					if (ldecimal < 0.999 * rdecimal ||
+					    ldecimal > 1.001 * rdecimal) {
+						goto incorrect;
+					}
 				}
 			} else {
 				if (!Value::Equals(value, result_value)) {

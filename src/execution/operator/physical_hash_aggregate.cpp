@@ -25,8 +25,8 @@ PhysicalHashAggregate::PhysicalHashAggregate(
 
 void PhysicalHashAggregate::Initialize() {}
 
-void PhysicalHashAggregate::GetChunk(ClientContext &context, DataChunk &chunk,
-                                     PhysicalOperatorState *state_) {
+void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk,
+                                      PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalHashAggregateOperatorState *>(state_);
 	chunk.Reset();
 
@@ -109,8 +109,6 @@ void PhysicalHashAggregate::GetChunk(ClientContext &context, DataChunk &chunk,
 		executor.Execute(expr.get(), chunk.data[i]);
 	}
 	chunk.count = chunk.data[0].count;
-
-	chunk.Verify();
 }
 
 unique_ptr<PhysicalOperatorState>

@@ -10,13 +10,13 @@
 
 #pragma once
 
+#include <chrono>
 #include <vector>
 
 #include "catalog/catalog.hpp"
 
 #include "common/internal_types.hpp"
 #include "common/printable.hpp"
-
 #include "common/types/data_chunk.hpp"
 
 #include "main/client_context.hpp"
@@ -26,7 +26,6 @@
 
 namespace duckdb {
 class ExpressionExecutor;
-
 class PhysicalOperator;
 
 //! The current state/context of the operator. The PhysicalOperatorState is
@@ -77,8 +76,18 @@ class PhysicalOperator : public Printable {
 	}
 	//! Retrieves a chunk from this operator and stores it in the chunk
 	//! variable.
-	virtual void GetChunk(ClientContext &context, DataChunk &chunk,
-	                      PhysicalOperatorState *state) = 0;
+	virtual void _GetChunk(ClientContext &context, DataChunk &chunk,
+	                       PhysicalOperatorState *state) = 0;
+
+	void GetChunk(ClientContext &context, DataChunk &chunk,
+	              PhysicalOperatorState *state) {
+
+		context.profiler.StartOperator(type);
+		_GetChunk(context, chunk, state);
+		context.profiler.EndOperator();
+
+		chunk.Verify();
+	}
 
 	//! Create a new empty instance of the operator state
 	virtual std::unique_ptr<PhysicalOperatorState>

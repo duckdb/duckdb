@@ -8,8 +8,8 @@ using namespace std;
 
 vector<TypeId> PhysicalUpdate::GetTypes() { return {TypeId::BIGINT}; }
 
-void PhysicalUpdate::GetChunk(ClientContext &context, DataChunk &chunk,
-                              PhysicalOperatorState *state) {
+void PhysicalUpdate::_GetChunk(ClientContext &context, DataChunk &chunk,
+                               PhysicalOperatorState *state) {
 
 	chunk.Reset();
 

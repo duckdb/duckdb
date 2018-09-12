@@ -22,8 +22,8 @@ class PhysicalDummyScan : public PhysicalOperator {
 	DataChunk chunk;
 
 	std::vector<TypeId> GetTypes() override;
-	virtual void GetChunk(ClientContext &context, DataChunk &chunk,
-	                      PhysicalOperatorState *state) override;
+	virtual void _GetChunk(ClientContext &context, DataChunk &chunk,
+	                       PhysicalOperatorState *state) override;
 
 	virtual std::unique_ptr<PhysicalOperatorState>
 	GetOperatorState(ExpressionExecutor *parent_executor) override;

@@ -16,14 +16,14 @@
 #include "common/printable.hpp"
 #include "common/types/data_chunk.hpp"
 
-#include "main/client_context.hpp"
-
 #include "parser/expression/abstract_expression.hpp"
 #include "parser/sql_node_visitor.hpp"
 
 #include "execution/physical_operator.hpp"
 
 namespace duckdb {
+
+class ClientContext;
 
 //! ExpressionExecutor is responsible for executing an arbitrary
 //! AbstractExpression and returning a Vector

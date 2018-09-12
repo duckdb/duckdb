@@ -14,8 +14,8 @@ vector<TypeId> PhysicalProjection::GetTypes() {
 	return types;
 }
 
-void PhysicalProjection::GetChunk(ClientContext &context, DataChunk &chunk,
-                                  PhysicalOperatorState *state) {
+void PhysicalProjection::_GetChunk(ClientContext &context, DataChunk &chunk,
+                                   PhysicalOperatorState *state) {
 	chunk.Reset();
 
 	assert(children.size() == 1);

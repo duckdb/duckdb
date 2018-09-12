@@ -23,8 +23,8 @@ vector<TypeId> PhysicalNestedLoopJoin::GetTypes() {
 	return types;
 }
 
-void PhysicalNestedLoopJoin::GetChunk(ClientContext &context, DataChunk &chunk,
-                                      PhysicalOperatorState *state_) {
+void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
+                                       PhysicalOperatorState *state_) {
 	auto state =
 	    reinterpret_cast<PhysicalNestedLoopJoinOperatorState *>(state_);
 	chunk.Reset();

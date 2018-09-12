@@ -8,8 +8,8 @@ using namespace std;
 
 vector<TypeId> PhysicalDelete::GetTypes() { return {TypeId::BIGINT}; }
 
-void PhysicalDelete::GetChunk(ClientContext &context, DataChunk &chunk,
-                              PhysicalOperatorState *state) {
+void PhysicalDelete::_GetChunk(ClientContext &context, DataChunk &chunk,
+                               PhysicalOperatorState *state) {
 
 	chunk.Reset();
 
@@ -37,8 +37,6 @@ void PhysicalDelete::GetChunk(ClientContext &context, DataChunk &chunk,
 	chunk.count = 1;
 
 	state->finished = true;
-
-	chunk.Verify();
 }
 
 unique_ptr<PhysicalOperatorState>

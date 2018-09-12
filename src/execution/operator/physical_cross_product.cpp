@@ -20,8 +20,8 @@ vector<TypeId> PhysicalCrossProduct::GetTypes() {
 	return left;
 }
 
-void PhysicalCrossProduct::GetChunk(ClientContext &context, DataChunk &chunk,
-                                    PhysicalOperatorState *state_) {
+void PhysicalCrossProduct::_GetChunk(ClientContext &context, DataChunk &chunk,
+                                     PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalCrossProductOperatorState *>(state_);
 	chunk.Reset();
 
@@ -75,7 +75,6 @@ void PhysicalCrossProduct::GetChunk(ClientContext &context, DataChunk &chunk,
 
 	// for the next iteration, move to the next position on the left side
 	state->left_position++;
-	chunk.Verify();
 }
 
 std::unique_ptr<PhysicalOperatorState>
