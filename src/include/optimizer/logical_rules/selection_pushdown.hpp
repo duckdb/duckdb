@@ -8,6 +8,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+// TODO: possibly merge into cross product rewrite, lots of overlap?
+
 #pragma once
 
 #include <algorithm>
@@ -19,18 +21,34 @@
 #include "parser/expression/cast_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
 #include "planner/operator/logical_filter.hpp"
-#include "planner/operator/logical_join.hpp"
 
 namespace duckdb {
+//
+
+static bool CheckEval(LogicalOperator *op, AbstractExpression *expr) {
+	if (expr->type == ExpressionType::COLUMN_REF) {
+		auto colref = (ColumnRefExpression *)expr;
+		if (op->referenced_tables.find(colref->binding.table_index) !=
+		    op->referenced_tables.end()) {
+			return true;
+		}
+		return false;
+	} else {
+		bool can_eval = true;
+		for (auto &child : expr->children) {
+			bool child_can_eval = CheckEval(op, child.get());
+			if (!child_can_eval) {
+				can_eval = false;
+				break;
+			}
+		}
+		return can_eval;
+	}
+	return false;
+}
 
 static std::unique_ptr<AbstractExpression>
-RewriteCP(std::unique_ptr<AbstractExpression> expr, LogicalOperator *op);
-
-// TODO, this passing ex back and forth is kind of annoying. better ideas?
-// we start with op being the parent filter which contains a crossprod or join
-// which in turn contain other crossprods or joins
-static std::unique_ptr<AbstractExpression>
-RewriteCP(std::unique_ptr<AbstractExpression> expr, LogicalOperator *op) {
+RewritePushdown(std::unique_ptr<AbstractExpression> expr, LogicalOperator *op) {
 	assert(op);
 	assert(expr->children.size() == 2);
 
@@ -40,7 +58,7 @@ RewriteCP(std::unique_ptr<AbstractExpression> expr, LogicalOperator *op) {
 		// try to see if child ops are interested in this join condition?
 		if (op->children[i]->type == LogicalOperatorType::CROSS_PRODUCT ||
 		    op->children[i]->type == LogicalOperatorType::JOIN) {
-			expr = move(RewriteCP(move(expr), op->children[i].get()));
+			expr = move(RewritePushdown(move(expr), op->children[i].get()));
 			if (!expr) {
 				moved = true;
 			}
@@ -55,27 +73,31 @@ RewriteCP(std::unique_ptr<AbstractExpression> expr, LogicalOperator *op) {
 		}
 
 		// no? well lets try ourselves then
-		// NB: 'children' mean different things for op and expr
-		JoinSide left_side =
-		    LogicalJoin::GetJoinSide(op->children[i].get(), expr->children[0]);
-		JoinSide right_side =
-		    LogicalJoin::GetJoinSide(op->children[i].get(), expr->children[1]);
 
-		if ((left_side == JoinSide::LEFT && right_side == JoinSide::RIGHT) ||
-		    (left_side == JoinSide::RIGHT && right_side == JoinSide::LEFT)) {
-			// if crossprod is still not a join, convert
-			if (op->children[i]->type == LogicalOperatorType::CROSS_PRODUCT) {
-				auto join = make_unique<LogicalJoin>(JoinType::INNER);
-				join->AddChild(move(op->children[i]->children[0]));
-				join->AddChild(move(op->children[i]->children[1]));
-				op->children[i] = move(join);
+		ssize_t push_index = -1;
+		// if both are from the left or both are from the right or
+		// are some constant comparision of one side, push selection
+		if (CheckEval(op->children[i]->children[0].get(), expr.get())) {
+			push_index = 0;
+		}
+
+		if (CheckEval(op->children[i]->children[1].get(), expr.get())) {
+			push_index = 1;
+		}
+		if (push_index > -1) {
+			// if the child is not yet a filter, make it one
+			if (op->children[i]->children[push_index]->type !=
+			    LogicalOperatorType::FILTER) {
+				auto filter = make_unique<LogicalFilter>();
+				filter->AddChild(move(op->children[i]->children[push_index]));
+				op->children[i]->children[push_index] = move(filter);
 			}
-			assert(op->children[i]->type == LogicalOperatorType::JOIN);
-
-			auto join_op =
-			    reinterpret_cast<LogicalJoin *>(op->children[i].get());
-			// push condition into join and remove from filter
-			join_op->SetJoinCondition(move(expr));
+			assert(op->children[i]->children[push_index]->type ==
+			       LogicalOperatorType::FILTER);
+			// push filter cond
+			auto filter_op = reinterpret_cast<LogicalFilter *>(
+			    op->children[i]->children[push_index].get());
+			filter_op->expressions.push_back(move(expr));
 			moved = true;
 		}
 	}
@@ -87,19 +109,12 @@ RewriteCP(std::unique_ptr<AbstractExpression> expr, LogicalOperator *op) {
 	}
 }
 
-// TODO: this rule would be simplified by a matcher of filter ... any chain of
-// children of type crossprod or join ... crosprod then we could apply multiple
-// times instead of this mess
-
-class CrossProductRewrite : public Rule {
+class SelectionPushdownRule : public Rule {
   public:
-	CrossProductRewrite() {
+	SelectionPushdownRule() {
 		root = make_unique_base<AbstractRuleNode, LogicalNodeType>(
 		    LogicalOperatorType::FILTER);
-		root->children.push_back(
-		    make_unique_base<AbstractRuleNode, LogicalNodeType>(
-		        LogicalOperatorType::CROSS_PRODUCT));
-		root->child_policy = ChildPolicy::SOME;
+		root->child_policy = ChildPolicy::ANY;
 	}
 
 	std::unique_ptr<LogicalOperator>
@@ -117,7 +132,7 @@ class CrossProductRewrite : public Rule {
 			    expr->type >= ExpressionType::COMPARE_EQUAL &&
 			    expr->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
 
-				auto ex_again = RewriteCP(move(expr), &root);
+				auto ex_again = RewritePushdown(move(expr), &root);
 				if (ex_again) {
 					new_expressions.push_back(move(ex_again));
 				}

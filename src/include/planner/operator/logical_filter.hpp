@@ -18,6 +18,7 @@ namespace duckdb {
 class LogicalFilter : public LogicalOperator {
   public:
 	LogicalFilter(std::unique_ptr<AbstractExpression> expression);
+	LogicalFilter();
 
 	virtual void Accept(LogicalOperatorVisitor *v) override { v->Visit(*this); }
 
