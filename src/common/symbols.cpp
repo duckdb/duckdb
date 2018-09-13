@@ -73,7 +73,6 @@ template class std::vector<Value>;
 template class std::atomic<size_t>;
 template class std::bitset<STANDARD_VECTOR_SIZE>;
 template class std::bitset<STORAGE_CHUNK_SIZE>;
-template class std::shared_ptr<VersionInformation>;
 template class std::unordered_map<PhysicalOperator *,
                                   QueryProfiler::TreeNode *>;
 template class std::stack<PhysicalOperator *>;

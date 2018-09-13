@@ -52,26 +52,6 @@ static void read_total_balance(DuckDB *db) {
 	}
 }
 
-// static void read_initial_table(DuckDB *db) {
-// 	REQUIRE(db);
-// 	DuckDBConnection con(*db);
-// 	con.Query("BEGIN TRANSACTION");
-// 	auto initial_result = con.Query("SELECT * FROM accounts ORDER BY id");
-// 	std::vector<duckdb::Value> columns[2];
-// 	for(size_t j = 0; j < 2; j++) {
-// 		for(size_t i = 0; i < initial_result->collection.count; i++) {
-// 			columns[j].push_back(initial_result->collection.GetValue(j, i));
-// 		}
-// 	}
-// 	while (!finished_updating) {
-// 		// the table should remain the same regardless of updates
-// 		auto new_result = con.Query("SELECT * FROM accounts ORDER BY id");
-// 		CHECK_COLUMN(new_result, 0, columns[0]);
-// 		CHECK_COLUMN(new_result, 1, columns[1]);
-// 	}
-// 	con.Query("COMMIT");
-// }
-
 TEST_CASE("[SLOW] Concurrent update", "[updates]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
@@ -164,7 +144,10 @@ static void write_random_numbers_to_account(DuckDB *db, size_t nr) {
 		REQUIRE_NO_FAIL(con.Query("UPDATE accounts SET money = money + " +
 		                          to_string(i) +
 		                          " WHERE id = " + to_string(nr)));
-		REQUIRE_NO_FAIL(con.Query("COMMIT"));
+		// we test both commit and rollback
+		// the result of both should be the same since the updates have a
+		// net-zero effect
+		REQUIRE_NO_FAIL(con.Query(nr % 2 == 0 ? "COMMIT" : "ROLLBACK"));
 	}
 	finished_threads++;
 	if (finished_threads == TOTAL_ACCOUNTS) {

@@ -92,42 +92,69 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) {
 	}
 	assert(t_index != active_transactions.size());
 	auto current_transaction = move(active_transactions[t_index]);
-	// add the current transaction to the set of old transactions
-	old_transactions.push_back(move(current_transaction));
+	if (transaction->commit_id != 0) {
+		// the transaction was committed, add it to the list of recently
+		// committed transactions
+		recently_committed_transactions.push_back(move(current_transaction));
+	} else {
+		// the transaction was aborted, but we might still need its information
+		// add it to the set of transactions awaiting GC
+		current_transaction->highest_active_query = current_query_number;
+		old_transactions.push_back(move(current_transaction));
+	}
 	// remove the transaction from the set of currently active transactions
 	active_transactions.erase(active_transactions.begin() + t_index);
-	// now traverse the recently_committed transactions to see if we can remove
-	// any
-	size_t deleted_index = (size_t)-1;
-	for (size_t i = 0; i < old_transactions.size(); i++) {
+	// traverse the recently_committed transactions to see if we can remove any
+	size_t i = 0;
+	for (; i < recently_committed_transactions.size(); i++) {
+		assert(recently_committed_transactions[i]);
+		if (recently_committed_transactions[i]->commit_id < lowest_start_time) {
+			// changes made BEFORE this transaction are no longer relevant
+			// we can cleanup the undo buffer
+
+			// HOWEVER: any currently running QUERY can still be using
+			// the version information after the cleanup!
+
+			// if we remove the UndoBuffer immediately, we have a race
+			// condition
+
+			// we can only safely do the actual memory cleanup when all the
+			// currently active queries have finished running! (actually,
+			// when all the currently active scans have finished running...)
+			recently_committed_transactions[i]->Cleanup();
+			// store the current highest active query
+			recently_committed_transactions[i]->highest_active_query =
+			    current_query_number;
+			// move it to the list of transactions awaiting GC
+			old_transactions.push_back(
+			    move(recently_committed_transactions[i]));
+		} else {
+			// recently_committed_transactions is ordered on commit_id
+			// implicitly thus if the current one is bigger than
+			// lowest_start_time any subsequent ones are also bigger
+			break;
+		}
+	}
+	if (i > 0) {
+		// we garbage collected transactions: remove them from the list
+		recently_committed_transactions.erase(
+		    recently_committed_transactions.begin(),
+		    recently_committed_transactions.begin() + i);
+	}
+	// check if we can free the memory of any old transactions
+	i = active_transactions.size() == 0 ? old_transactions.size() : 0;
+	for (; i < old_transactions.size(); i++) {
 		assert(old_transactions[i]);
-		if (old_transactions[i]->highest_active_query == 0) {
-			if (old_transactions[i]->commit_id < lowest_start_time) {
-				// changes made BEFORE this transaction are no longer relevant
-				// we can cleanup the undo buffer
-
-				// HOWEVER: any currently running QUERY can still be using
-				// the version information after the cleanup!
-
-				// if we remove the UndoBuffer immediately, we have a race
-				// condition
-
-				// we can only safely do the actual memory cleanup when all the
-				// currently active queries have finished running! (actually,
-				// when all the currently active scans have finished running...)
-				old_transactions[i]->Cleanup();
-				// store the current highest active query
-				old_transactions[i]->highest_active_query =
-				    current_query_number;
-			}
+		assert(old_transactions[i]->highest_active_query > 0);
+		if (old_transactions[i]->highest_active_query >= lowest_active_query) {
+			// there is still a query running that could be using
+			// this transactions' data
+			break;
 		}
-		if (old_transactions[i]->highest_active_query > 0 &&
-		    (active_transactions.size() == 0 ||
-		     old_transactions[i]->highest_active_query < lowest_active_query)) {
-			// no transaction could possibly be using this transactions' data
-			// anymore we can safely garbage collect it
-			old_transactions.erase(old_transactions.begin() + i);
-			i--;
-		}
+	}
+	if (i > 0) {
+		// we garbage collected transactions: remove them from the list
+		old_transactions.erase(old_transactions.begin(),
+		                       old_transactions.begin() + i);
 	}
 }

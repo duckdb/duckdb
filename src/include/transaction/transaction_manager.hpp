@@ -44,8 +44,9 @@ class TransactionManager {
 	transaction_t current_transaction_id;
 	//! Set of currently running transactions
 	std::vector<std::unique_ptr<Transaction>> active_transactions;
-	//! Set of recently committed transactions, whose UndoBuffers are necessary
-	//! for active transactions
+	//! Set of recently committed transactions
+	std::vector<std::unique_ptr<Transaction>> recently_committed_transactions;
+	//! Transactions awaiting GC
 	std::vector<std::unique_ptr<Transaction>> old_transactions;
 	//! The lock used for transaction operations
 	std::mutex transaction_lock;
