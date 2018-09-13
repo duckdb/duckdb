@@ -1,14 +1,13 @@
 cmake_minimum_required(VERSION 2.8.7)
 project(DuckDB)
 
-
 find_package(Threads REQUIRED)
+
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_VERBOSE_MAKEFILE off)
-
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-
+set(CMAKE_MACOSX_RPATH 1)
 
 set(CMAKE_CXX_FLAGS_DEFAULT "-O0 -g")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -fsanitize=address -DDEBUG")
