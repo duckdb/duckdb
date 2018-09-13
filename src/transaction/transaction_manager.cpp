@@ -1,4 +1,5 @@
 
+#include "common/exception.hpp"
 #include "common/helper.hpp"
 
 #include "transaction/transaction_manager.hpp"
@@ -8,7 +9,9 @@ using namespace std;
 
 namespace duckdb {
 transaction_t TRANSACTION_ID_START = 4294967296ULL; // 2^32
-}
+transaction_t MAXIMUM_QUERY_ID =
+    std::numeric_limits<transaction_t>::max(); // 2^64
+} // namespace duckdb
 
 TransactionManager::TransactionManager() {
 	// start timestamp starts at zero
@@ -18,11 +21,18 @@ TransactionManager::TransactionManager() {
 	// if transaction_id < start_timestamp for any set of active transactions
 	// uncommited data could be read by
 	current_transaction_id = TRANSACTION_ID_START;
+	// the current active query id
+	current_query_number = 1;
 }
 
 Transaction *TransactionManager::StartTransaction() {
 	// obtain the transaction lock during this function
 	lock_guard<mutex> lock(transaction_lock);
+
+	if (current_start_timestamp >= TRANSACTION_ID_START) {
+		throw Exception("Cannot start more transactions, ran out of "
+		                "transaction identifiers!");
+	}
 
 	// obtain the start time and transaction ID of this transaction
 	transaction_t start_time = current_start_timestamp++;
@@ -67,39 +77,57 @@ void TransactionManager::RollbackTransaction(Transaction *transaction) {
 void TransactionManager::RemoveTransaction(Transaction *transaction) {
 	// remove the transaction from the list of active transactions
 	size_t t_index = active_transactions.size();
-	// check for the lowest start time in the list of transactions
+	// check for the lowest and highest start time in the list of transactions
 	transaction_t lowest_start_time = TRANSACTION_ID_START;
+	transaction_t lowest_active_query = MAXIMUM_QUERY_ID;
 	for (size_t i = 0; i < active_transactions.size(); i++) {
 		if (active_transactions[i].get() == transaction) {
 			t_index = i;
-		} else if (active_transactions[i]->start_time < lowest_start_time) {
-			lowest_start_time = active_transactions[i]->start_time;
+		} else {
+			lowest_start_time =
+			    std::min(lowest_start_time, active_transactions[i]->start_time);
+			lowest_active_query = std::min(
+			    lowest_active_query, active_transactions[i]->active_query);
 		}
 	}
 	assert(t_index != active_transactions.size());
 	auto current_transaction = move(active_transactions[t_index]);
-	if (transaction->commit_id != 0) {
-		// if the transaction was committed, add it to the recently commited
-		// transactions
-		recently_committed_transactions.push_back(move(current_transaction));
-	}
+	// add the current transaction to the set of old transactions
+	old_transactions.push_back(move(current_transaction));
+	// remove the transaction from the set of currently active transactions
 	active_transactions.erase(active_transactions.begin() + t_index);
 	// now traverse the recently_committed transactions to see if we can remove
 	// any
 	size_t deleted_index = (size_t)-1;
-	for (size_t i = 0; i < recently_committed_transactions.size(); i++) {
-		if (recently_committed_transactions[i] &&
-		    recently_committed_transactions[i]->commit_id < lowest_start_time) {
-			// changes made BEFORE this transaction are no longer relevant
-			// we can garbage collect this transaction
-			recently_committed_transactions[i] = nullptr;
-			deleted_index = i;
+	for (size_t i = 0; i < old_transactions.size(); i++) {
+		assert(old_transactions[i]);
+		if (old_transactions[i]->highest_active_query == 0) {
+			if (old_transactions[i]->commit_id < lowest_start_time) {
+				// changes made BEFORE this transaction are no longer relevant
+				// we can cleanup the undo buffer
+
+				// HOWEVER: any currently running QUERY can still be using
+				// the version information after the cleanup!
+
+				// if we remove the UndoBuffer immediately, we have a race
+				// condition
+
+				// we can only safely do the actual memory cleanup when all the
+				// currently active queries have finished running! (actually,
+				// when all the currently active scans have finished running...)
+				old_transactions[i]->Cleanup();
+				// store the current highest active query
+				old_transactions[i]->highest_active_query =
+				    current_query_number;
+			}
 		}
-	}
-	if (deleted_index != (size_t)-1) {
-		// we could garbage collect transactions: remove them from the list
-		recently_committed_transactions.erase(
-		    recently_committed_transactions.begin(),
-		    recently_committed_transactions.begin() + deleted_index);
+		if (old_transactions[i]->highest_active_query > 0 &&
+		    (active_transactions.size() == 0 ||
+		     old_transactions[i]->highest_active_query < lowest_active_query)) {
+			// no transaction could possibly be using this transactions' data
+			// anymore we can safely garbage collect it
+			old_transactions.erase(old_transactions.begin() + i);
+			i--;
+		}
 	}
 }

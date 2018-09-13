@@ -16,6 +16,9 @@
 
 namespace duckdb {
 
+extern transaction_t TRANSACTION_ID_START;
+extern transaction_t MAXIMUM_QUERY_ID;
+
 class AbstractCatalogEntry;
 class DataTable;
 class StorageChunk;
@@ -26,7 +29,7 @@ struct VersionInformation {
 		size_t entry;
 		VersionInformation *pointer;
 	} prev;
-	std::shared_ptr<VersionInformation> next;
+	VersionInformation *next;
 	transaction_t version_number;
 	uint8_t *tuple_data;
 };
@@ -36,21 +39,22 @@ struct VersionInformation {
 class Transaction {
   public:
 	Transaction(transaction_t start_time, transaction_t transaction_id)
-	    : start_time(start_time), transaction_id(transaction_id), commit_id(0) {
-	}
+	    : start_time(start_time), transaction_id(transaction_id), commit_id(0),
+	      highest_active_query(0), active_query(MAXIMUM_QUERY_ID) {}
 
 	void PushCatalogEntry(AbstractCatalogEntry *entry);
 	//! Create deleted entries in the undo buffer
-	void
-	PushDeletedEntries(size_t offset, size_t count, StorageChunk *storage,
-	                   std::shared_ptr<VersionInformation> version_pointers[]);
+	void PushDeletedEntries(size_t offset, size_t count, StorageChunk *storage,
+	                        VersionInformation *version_pointers[]);
 	//! Push an old tuple version in the undo buffer
 	void PushTuple(size_t offset, StorageChunk *storage);
 
 	//! Commit the current transaction with the given commit identifier
 	void Commit(transaction_t commit_id);
-
+	//! Rollback
 	void Rollback() { undo_buffer.Rollback(); }
+	//! Cleanup the undo buffer
+	void Cleanup() { undo_buffer.Cleanup(); }
 
 	//! The start timestamp of this transaction
 	transaction_t start_time;
@@ -58,6 +62,11 @@ class Transaction {
 	transaction_t transaction_id;
 	//! The commit id of this transaction, if it has successfully been committed
 	transaction_t commit_id;
+	//! Highest active query when the transaction finished, used for cleaning up
+	transaction_t highest_active_query;
+	//! The current active query for the transaction. Set to MAXIMUM_QUERY_ID if
+	//! no query is active.
+	transaction_t active_query;
 
   private:
 	uint8_t *PushTuple(size_t data_size);

@@ -17,7 +17,12 @@
 
 namespace duckdb {
 
-enum class UndoFlags { INVALID = 0, CATALOG_ENTRY = 1, TUPLE_ENTRY = 2 };
+enum class UndoFlags {
+	INVALID = 0,
+	EMPTY_ENTRY = 1,
+	CATALOG_ENTRY = 2,
+	TUPLE_ENTRY = 3
+};
 
 struct UndoEntry {
 	UndoFlags type;
@@ -31,12 +36,13 @@ struct UndoEntry {
 class UndoBuffer {
   public:
 	UndoBuffer() {}
-	~UndoBuffer();
 
 	//! Reserve space for an entry of the specified type and length in the undo
 	//! buffer
 	uint8_t *CreateEntry(UndoFlags type, size_t len);
 
+	//! Cleanup the undo buffer
+	void Cleanup();
 	//! Commit the changes made in the UndoBuffer: should be called on commit
 	void Commit(transaction_t commit_id);
 	//! Rollback the changes made in this UndoBuffer: should be called on

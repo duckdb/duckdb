@@ -72,14 +72,19 @@ unique_ptr<DuckDBResult> DuckDBConnection::Query(std::string query) {
 	if (context.transaction.IsAutoCommit()) {
 		context.transaction.BeginTransaction();
 	}
+
+	context.ActiveTransaction().active_query =
+	    context.db.transaction_manager.GetQueryNumber();
 	auto result = GetQueryResult(query);
 
-	if (context.transaction.IsAutoCommit() &&
-	    context.transaction.HasActiveTransaction()) {
-		if (result->GetSuccess()) {
-			context.transaction.Commit();
-		} else {
-			context.transaction.Rollback();
+	if (context.transaction.HasActiveTransaction()) {
+		context.ActiveTransaction().active_query = MAXIMUM_QUERY_ID;
+		if (context.transaction.IsAutoCommit()) {
+			if (result->GetSuccess()) {
+				context.transaction.Commit();
+			} else {
+				context.transaction.Rollback();
+			}
 		}
 	}
 	return move(result);

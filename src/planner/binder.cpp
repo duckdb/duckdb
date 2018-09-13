@@ -229,6 +229,11 @@ void Binder::Visit(UpdateStatement &stmt) {
 	stmt.condition->Accept(this);
 	for (auto &expression : stmt.expressions) {
 		expression->Accept(this);
+		expression->ResolveType();
+		if (expression->return_type == TypeId::INVALID) {
+			throw BinderException(
+			    "Could not resolve type of projection element!");
+		}
 	}
 }
 

@@ -271,7 +271,7 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result,
 		for (size_t i = 0; i < end; i++) {
 			version_entries[version_count] = regular_entries[regular_count] = i;
 			bool has_version =
-			    current_chunk->version_pointers[structure.offset + i].get();
+			    current_chunk->version_pointers[structure.offset + i];
 			bool is_deleted = current_chunk->deleted[structure.offset + i];
 			version_count += has_version;
 			regular_count += !(is_deleted || has_version);
@@ -288,8 +288,9 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result,
 				auto version =
 				    current_chunk->version_pointers[structure.offset +
 				                                    version_entries[i]];
-				if (version->version_number == transaction.transaction_id ||
-				    version->version_number < transaction.start_time) {
+				if (!version ||
+				    (version->version_number == transaction.transaction_id ||
+				     version->version_number < transaction.start_time)) {
 					// use the data in the original table
 					if (!current_chunk
 					         ->deleted[structure.offset + version_entries[i]]) {
@@ -298,21 +299,21 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result,
 				} else {
 					// follow the version pointers
 					while (true) {
-						if (!version->next) {
+						auto next = version->next;
+						if (!next) {
 							// use this version: no predecessor
 							break;
 						}
-						if (version->next->version_number ==
+						if (next->version_number ==
 						    transaction.transaction_id) {
 							// use this version: it was created by us
 							break;
 						}
-						if (version->next->version_number <
-						    transaction.start_time) {
+						if (next->version_number < transaction.start_time) {
 							// use this version: it was committed by us
 							break;
 						}
-						version = version->next;
+						version = next;
 					}
 					if (!version->tuple_data) {
 						continue;

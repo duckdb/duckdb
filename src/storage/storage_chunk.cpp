@@ -31,11 +31,15 @@ StorageChunk::StorageChunk(DataTable &_table, size_t start)
 void StorageChunk::Cleanup(VersionInformation *info) {
 	size_t entry = info->prev.entry;
 	version_pointers[entry] = info->next;
+	if (version_pointers[entry]) {
+		version_pointers[entry]->prev.entry = entry;
+		version_pointers[entry]->chunk = this;
+	}
 }
 
 void StorageChunk::Undo(VersionInformation *info) {
 	size_t entry = info->prev.entry;
-	assert(version_pointers[entry].get() == info);
+	assert(version_pointers[entry] == info);
 	if (!info->tuple_data) {
 		deleted[entry] = true;
 	} else {
@@ -52,4 +56,8 @@ void StorageChunk::Undo(VersionInformation *info) {
 		}
 	}
 	version_pointers[entry] = info->next;
+	if (version_pointers[entry]) {
+		version_pointers[entry]->prev.entry = entry;
+		version_pointers[entry]->chunk = this;
+	}
 }

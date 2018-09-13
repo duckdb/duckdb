@@ -21,7 +21,7 @@ uint8_t *UndoBuffer::CreateEntry(UndoFlags type, size_t len) {
 	return dataptr;
 }
 
-UndoBuffer::~UndoBuffer() {
+void UndoBuffer::Cleanup() {
 	// garbage collect everything in the Undo Chunk
 	// this should only happen if
 	//  (1) the transaction this UndoBuffer belongs to has successfully
@@ -36,10 +36,10 @@ UndoBuffer::~UndoBuffer() {
 			    *((AbstractCatalogEntry **)entry.data.get());
 			// destroy the backed up entry: it is no longer required
 			assert(catalog_entry->parent);
-			catalog_entry->parent->child = nullptr;
+			catalog_entry->parent->child = move(catalog_entry->child);
 		} else if (entry.type == UndoFlags::TUPLE_ENTRY) {
 			// undo this entry
-			auto info = *((VersionInformation **)entry.data.get());
+			auto info = (VersionInformation *)entry.data.get();
 			if (info->chunk) {
 				// parent refers to a storage chunk
 				info->chunk->Cleanup(info);
@@ -48,11 +48,16 @@ UndoBuffer::~UndoBuffer() {
 				// simply remove this entry from the list
 				auto parent = info->prev.pointer;
 				parent->next = info->next;
-				parent->next->prev.pointer = parent;
+				if (parent->next) {
+					parent->next->prev.pointer = parent;
+				}
 			}
+		} else if (entry.type == UndoFlags::EMPTY_ENTRY) {
+			// skip
+			continue;
 		} else {
 			throw Exception("UndoBuffer - don't know how to garbage collect "
-			                "this type yet!");
+			                "this type!");
 		}
 	}
 }
@@ -67,11 +72,10 @@ void UndoBuffer::Commit(transaction_t commit_id) {
 			catalog_entry->parent->timestamp = commit_id;
 		} else if (entry.type == UndoFlags::TUPLE_ENTRY) {
 			// set the commit timestamp of the entry
-			auto info = *((VersionInformation **)entry.data.get());
+			auto info = (VersionInformation *)entry.data.get();
 			info->version_number = commit_id;
 		} else {
-			throw Exception(
-			    "UndoBuffer - don't know how to commit this type yet!");
+			throw Exception("UndoBuffer - don't know how to commit this type!");
 		}
 	}
 }
@@ -87,7 +91,7 @@ void UndoBuffer::Rollback() {
 			catalog_entry->set->Undo(catalog_entry);
 		} else if (entry.type == UndoFlags::TUPLE_ENTRY) {
 			// undo this entry
-			auto info = *((VersionInformation **)entry.data.get());
+			auto info = (VersionInformation *)entry.data.get();
 			if (info->chunk) {
 				// parent refers to a storage chunk
 				// have to move information back into chunk
@@ -97,12 +101,14 @@ void UndoBuffer::Rollback() {
 				// simply remove this entry from the list
 				auto parent = info->prev.pointer;
 				parent->next = info->next;
-				parent->next->prev.pointer = parent;
+				if (parent->next) {
+					parent->next->prev.pointer = parent;
+				}
 			}
 		} else {
 			throw Exception(
-			    "UndoBuffer - don't know how to rollback this type yet!");
+			    "UndoBuffer - don't know how to rollback this type!");
 		}
+		entry.type = UndoFlags::EMPTY_ENTRY;
 	}
-	entries.clear();
 }
