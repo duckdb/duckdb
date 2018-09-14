@@ -75,8 +75,11 @@ void LogicalOperatorVisitor::Visit(LogicalProjection &op) {
 
 void LogicalOperatorVisitor::Visit(LogicalInsert &op) {
 	VisitOperator(op);
-	for (auto &exp : op.expressions) {
-		exp->Accept(this);
+
+	for (auto &list : op.insert_values) {
+		for (auto &exp : list) {
+			exp->Accept(this);
+		}
 	}
 }
 

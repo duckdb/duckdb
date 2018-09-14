@@ -30,9 +30,8 @@ TEST_CASE("Test simple NULL handling", "[nullhandling]") {
 
 	// multiple insertions
 	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
-	result = con.Query("INSERT INTO test VALUES (11, 22)");
-	result = con.Query("INSERT INTO test VALUES (NULL, 21)");
-	result = con.Query("INSERT INTO test VALUES (13, 22)");
+	result =
+	    con.Query("INSERT INTO test VALUES (11, 22), (NULL, 21), (13, 22)");
 
 	// NULL selection
 	result = con.Query("SELECT a FROM test");
@@ -54,9 +53,8 @@ TEST_CASE("Test NULL handling in aggregations", "[nullhandling]") {
 
 	// multiple insertions
 	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
-	result = con.Query("INSERT INTO test VALUES (11, 22)");
-	result = con.Query("INSERT INTO test VALUES (NULL, 21)");
-	result = con.Query("INSERT INTO test VALUES (13, 22)");
+	result =
+	    con.Query("INSERT INTO test VALUES (11, 22), (NULL, 21), (13, 22)");
 
 	// aggregations should ignore NULLs
 	result = con.Query("SELECT SUM(a), MIN(a), MAX(a) FROM test");
@@ -80,8 +78,7 @@ TEST_CASE("Test NULL handling in aggregations", "[nullhandling]") {
 	CHECK_COLUMN(result, 4, {Value(), 13});
 
 	// GROUP BY null value
-	result = con.Query("INSERT INTO test VALUES (12, NULL)");
-	result = con.Query("INSERT INTO test VALUES (16, NULL)");
+	result = con.Query("INSERT INTO test VALUES (12, NULL), (16, NULL)");
 
 	result = con.Query("SELECT b, COUNT(a), SUM(a), MIN(a), MAX(a) FROM test "
 	                   "GROUP BY b ORDER BY b");
@@ -92,8 +89,7 @@ TEST_CASE("Test NULL handling in aggregations", "[nullhandling]") {
 	CHECK_COLUMN(result, 4, {16, Value(), 13});
 
 	// NULL values should be ignored entirely in the aggregation
-	result = con.Query("INSERT INTO test VALUES (NULL, NULL)");
-	result = con.Query("INSERT INTO test VALUES (NULL, 22)");
+	result = con.Query("INSERT INTO test VALUES (NULL, NULL), (NULL, 22)");
 
 	result = con.Query("SELECT b, COUNT(a), SUM(a), MIN(a), MAX(a) FROM test "
 	                   "GROUP BY b ORDER BY b");

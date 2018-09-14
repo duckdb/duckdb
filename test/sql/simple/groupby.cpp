@@ -10,9 +10,7 @@ TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 	con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
-	con.Query("INSERT INTO test VALUES (11, 22)");
-	con.Query("INSERT INTO test VALUES (13, 22)");
-	con.Query("INSERT INTO test VALUES (12, 21)");
+	con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)");
 
 	result = con.Query("SELECT SUM(41), COUNT(*);");
 	CHECK_COLUMN(result, 0, {41});
@@ -68,9 +66,7 @@ TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
 	CHECK_COLUMN(result, 2, {1, 1});
 	CHECK_COLUMN(result, 3, {14, 13});
 
-	con.Query("INSERT INTO test VALUES (12, 21)");
-	con.Query("INSERT INTO test VALUES (12, 21)");
-	con.Query("INSERT INTO test VALUES (12, 21)");
+	con.Query("INSERT INTO test VALUES (12, 21), (12, 21), (12, 21)");
 
 	// group by with filter and multiple values per groups
 	result = con.Query("SELECT b, SUM(a), COUNT(*), SUM(a+2) FROM test WHERE "

@@ -11,9 +11,7 @@ TEST_CASE("Test handling of overflows in basic types", "[overflowhandling]") {
 	DuckDBConnection con(db);
 
 	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
-	result = con.Query("INSERT INTO test VALUES (11, 22)");
-	result = con.Query("INSERT INTO test VALUES (12, 21)");
-	result = con.Query("INSERT INTO test VALUES (14, 22)");
+	result = con.Query("INSERT INTO test VALUES (11, 22), (12, 21), (14, 22)");
 
 	// proper upcasting of integer columns in AVG
 	result = con.Query("SELECT b, AVG(a) FROM test GROUP BY b ORDER BY b;");
@@ -33,9 +31,8 @@ TEST_CASE("Test handling of overflows in basic types", "[overflowhandling]") {
 
 	// also with tables
 	result = con.Query("CREATE TABLE test2 (a INTEGER, b TINYINT);");
-	result = con.Query("INSERT INTO test2 VALUES (200, 60)");
-	result = con.Query("INSERT INTO test2 VALUES (12, 60)");
-	result = con.Query("INSERT INTO test2 VALUES (14, 60)");
+	result =
+	    con.Query("INSERT INTO test2 VALUES (200, 60), (12, 60), (14, 60)");
 
 	// cast to bigger type if it will overflow
 	result = con.Query("SELECT cast(a AS TINYINT) FROM test2");

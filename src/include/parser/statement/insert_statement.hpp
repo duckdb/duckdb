@@ -27,7 +27,7 @@ class InsertStatement : public SQLStatement {
 	virtual void Accept(SQLNodeVisitor *v) { v->Visit(*this); }
 
 	//! List of values to insert
-	std::vector<std::unique_ptr<AbstractExpression>> values;
+	std::vector<std::vector<std::unique_ptr<AbstractExpression>>> values;
 
 	//! Column names to insert into
 	std::vector<std::string> columns;

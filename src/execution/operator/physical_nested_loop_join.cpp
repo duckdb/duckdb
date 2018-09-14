@@ -127,7 +127,7 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 				                                    intermediate);
 				break;
 			default:
-				throw Exception(
+				throw NotImplementedException(
 				    "Unsupported join comparison expression %s",
 				    ExpressionTypeToString(conditions[i].comparison).c_str());
 			}

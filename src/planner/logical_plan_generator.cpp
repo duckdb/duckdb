@@ -375,35 +375,61 @@ void LogicalPlanGenerator::Visit(SubqueryRef &expr) {
 void LogicalPlanGenerator::Visit(InsertStatement &statement) {
 	auto table = context.db.catalog.GetTable(context.ActiveTransaction(),
 	                                         statement.schema, statement.table);
-	std::vector<std::unique_ptr<AbstractExpression>> insert_val_list;
 
 	if (statement.columns.size() == 0) {
-		if (statement.values.size() != table->columns.size()) {
-			throw Exception("Not enough values for insert");
+		if (statement.values[0].size() != table->columns.size()) {
+			throw SyntaxException(
+			    "table %s has %d columns but %d values were supplied",
+			    table->name.c_str(), table->columns.size(),
+			    statement.values[0].size());
 		}
-		for (size_t i = 0; i < statement.values.size(); i++) {
-			insert_val_list.push_back(move(statement.values[i]));
-		}
+		auto insert = make_unique<LogicalInsert>(table, move(statement.values));
+		root = move(insert);
 	} else {
-		if (statement.values.size() != statement.columns.size()) {
-			throw Exception("Column name/value mismatch");
+		vector<vector<unique_ptr<AbstractExpression>>> insert_values;
+		if (statement.values[0].size() != statement.columns.size()) {
+			throw SyntaxException(
+			    "Column name/value mismatch: %d values for %d columns",
+			    statement.values[0].size(), statement.columns.size());
 		}
-		map<std::string, unique_ptr<AbstractExpression>> insert_vals;
-		for (size_t i = 0; i < statement.values.size(); i++) {
-			insert_vals[statement.columns[i]] = move(statement.values[i]);
+
+		// create a map of value list index -> column index based
+		map<std::string, int> column_name_map;
+		for (size_t i = 0; i < statement.columns.size(); i++) {
+			column_name_map[statement.columns[i]] = i;
 		}
-		for (auto &col : table->columns) {
-			if (insert_vals.count(col.name)) { // column value was specified
-				insert_val_list.push_back(move(insert_vals[col.name]));
+		int column_index_map[table->columns.size()];
+		for (size_t i = 0; i < table->columns.size(); i++) {
+			auto &col = table->columns[i];
+			auto entry = column_name_map.find(col.name);
+			if (entry == column_name_map.end()) {
+				// column not specified, set index to -1
+				column_index_map[i] = -1;
 			} else {
-				insert_val_list.push_back(std::unique_ptr<AbstractExpression>(
-				    new ConstantExpression(col.default_value)));
+				// column was specified, set to the index
+				column_index_map[i] = entry->second;
 			}
 		}
+		// now insert the actual entries into the insert list
+		for (auto &list : statement.values) {
+			vector<unique_ptr<AbstractExpression>> values;
+			for (size_t i = 0; i < table->columns.size(); i++) {
+				auto &col = table->columns[i];
+				if (column_index_map[i] < 0) {
+					// column was not specified, use the default value
+					values.push_back(make_unique_base<AbstractExpression,
+					                                  ConstantExpression>(
+					    col.default_value));
+				} else {
+					// column was specified, fetch the value
+					values.push_back(move(list[column_index_map[i]]));
+				}
+			}
+			insert_values.push_back(move(values));
+		}
+		auto insert = make_unique<LogicalInsert>(table, move(insert_values));
+		root = move(insert);
 	}
-
-	auto insert = make_unique<LogicalInsert>(table, move(insert_val_list));
-	root = move(insert);
 }
 
 void LogicalPlanGenerator::Visit(CopyStatement &statement) {

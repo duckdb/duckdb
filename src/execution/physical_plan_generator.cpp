@@ -189,7 +189,7 @@ void PhysicalPlanGenerator::Visit(LogicalInsert &op) {
 	LogicalOperatorVisitor::Visit(op);
 
 	auto insertion =
-	    make_unique<PhysicalInsert>(op.table, move(op.expressions));
+	    make_unique<PhysicalInsert>(op.table, move(op.insert_values));
 	if (plan) {
 		throw Exception("Insert should be root node");
 	}

@@ -580,14 +580,14 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 
 string get_query(int query) {
 	if (query <= 0 || query > TPCH_QUERIES_COUNT) {
-		throw Exception("Out of range TPC-H query number %d", query);
+		throw SyntaxException("Out of range TPC-H query number %d", query);
 	}
 	return TPCH_QUERIES[query - 1];
 }
 
 string get_answer(double sf, int query) {
 	if (query <= 0 || query > TPCH_QUERIES_COUNT) {
-		throw Exception("Out of range TPC-H query number %d", query);
+		throw SyntaxException("Out of range TPC-H query number %d", query);
 	}
 	const char *answer;
 	if (sf == 0.1) {
@@ -595,7 +595,8 @@ string get_answer(double sf, int query) {
 	} else if (sf == 1) {
 		answer = TPCH_ANSWERS_SF1[query - 1];
 	} else {
-		throw Exception("Don't have TPC-H answers for SF %llf!", sf);
+		throw NotImplementedException("Don't have TPC-H answers for SF %llf!",
+		                              sf);
 	}
 	return answer;
 }

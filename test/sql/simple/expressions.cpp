@@ -9,10 +9,8 @@ TEST_CASE("Complex Expressions", "[sql]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 	con.Query("CREATE TABLE exprtest (a INTEGER, b INTEGER)");
-	con.Query("INSERT INTO exprtest VALUES (42, 10)");
-	con.Query("INSERT INTO exprtest VALUES (43, 100)");
-	con.Query("INSERT INTO exprtest VALUES (NULL, 1)");
-	con.Query("INSERT INTO exprtest VALUES (45, -1)");
+	con.Query(
+	    "INSERT INTO exprtest VALUES (42, 10), (43, 100), (NULL, 1), (45, -1)");
 
 	result = con.Query("SELECT * FROM exprtest");
 	CHECK_COLUMN(result, 0, {42, 43, Value(), 45});
@@ -69,9 +67,8 @@ TEST_CASE("Complex Expressions", "[sql]") {
 
 	con.Query("CREATE TABLE intest (a INTEGER, b INTEGER, c INTEGER)");
 
-	con.Query("INSERT INTO intest VALUES (42, 42, 42);");
-	con.Query("INSERT INTO intest VALUES (43, 42, 42);");
-	con.Query("INSERT INTO intest VALUES (44, 41, 44);");
+	con.Query(
+	    "INSERT INTO intest VALUES (42, 42, 42), (43, 42, 42), (44, 41, 44);");
 
 	result = con.Query("SELECT * FROM intest WHERE a IN (42, 43)");
 	CHECK_COLUMN(result, 0, {42, 43});
@@ -138,9 +135,7 @@ TEST_CASE("Complex Expressions", "[sql]") {
 	CHECK_COLUMN(result, 2, {44});
 
 	con.Query("CREATE TABLE strtest (a INTEGER, b VARCHAR)");
-	con.Query("INSERT INTO strtest VALUES (1, 'a')");
-	con.Query("INSERT INTO strtest VALUES (2, 'h')");
-	con.Query("INSERT INTO strtest VALUES (3, 'd')");
+	con.Query("INSERT INTO strtest VALUES (1, 'a'), (2, 'h'), (3, 'd')");
 	// FIXME: this leads to leaking, presumably because NULL entries get cast
 	// but then ignored
 	con.Query("INSERT INTO strtest VALUES (4, NULL)");

@@ -11,9 +11,7 @@ TEST_CASE("Test ORDER BY keyword", "[order]") {
 	DuckDBConnection con(db);
 
 	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
-	result = con.Query("INSERT INTO test VALUES (11, 22)");
-	result = con.Query("INSERT INTO test VALUES (12, 21)");
-	result = con.Query("INSERT INTO test VALUES (13, 22)");
+	result = con.Query("INSERT INTO test VALUES (11, 22), (12, 21), (13, 22)");
 
 	// simple ORDER BY
 	result = con.Query("SELECT b FROM test ORDER BY a DESC;");

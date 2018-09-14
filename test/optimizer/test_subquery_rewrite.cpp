@@ -23,10 +23,7 @@ TEST_CASE("Subquery rewriting", "[subquery_rewrite]") {
 	DuckDBConnection con(db);
 	con.Query("BEGIN TRANSACTION");
 	con.Query("CREATE TABLE t1 (a INTEGER, b INTEGER)");
-	con.Query("INSERT INTO t1 VALUES (1, 10)");
-	con.Query("INSERT INTO t1 VALUES (2, 20)");
-	con.Query("INSERT INTO t1 VALUES (3, 30)");
-	con.Query("INSERT INTO t1 VALUES (3, 42)");
+	con.Query("INSERT INTO t1 VALUES (1, 10), (2, 20), (3, 30), (3, 42)");
 
 	Parser parser;
 	if (!parser.ParseQuery("SELECT t1.a, t1.b FROM t1 WHERE b = (SELECT MIN(b) "

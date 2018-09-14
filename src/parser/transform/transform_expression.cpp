@@ -759,26 +759,4 @@ unique_ptr<AbstractExpression> TransformListValue(Expr *node) {
 	}
 }
 
-bool TransformValueList(List *list,
-                        vector<unique_ptr<AbstractExpression>> &result) {
-	if (!list) {
-		return false;
-	}
-	for (auto value_list = list->head; value_list != NULL;
-	     value_list = value_list->next) {
-		List *target = (List *)(value_list->data.ptr_value);
-
-		for (auto node = target->head; node != nullptr; node = node->next) {
-			auto val = reinterpret_cast<Expr *>(node->data.ptr_value);
-
-			if (!val) {
-				return false;
-			}
-			auto expr = TransformListValue(val);
-			result.push_back(move(expr));
-		}
-	}
-	return true;
-}
-
 } // namespace duckdb

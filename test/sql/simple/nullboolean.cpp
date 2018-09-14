@@ -59,11 +59,8 @@ TEST_CASE("Booleans and NULLs", "[sql]") {
 	CHECK_COLUMN(result, 3, {Value()});
 
 	con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
-	con.Query("INSERT INTO test VALUES (11, 22)");
-	con.Query("INSERT INTO test VALUES (NULL, 21)");
-	con.Query("INSERT INTO test VALUES (13, 22)");
-	con.Query("INSERT INTO test VALUES (12, NULL)");
-	con.Query("INSERT INTO test VALUES (16, NULL)");
+	con.Query("INSERT INTO test VALUES (11, 22), (NULL, 21), (13, 22), (12, "
+	          "NULL), (16, NULL)");
 
 	result = con.Query("SELECT b, COUNT(a), SUM(a), MIN(a), MAX(a) FROM test "
 	                   "GROUP BY b ORDER BY b");

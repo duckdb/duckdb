@@ -12,14 +12,10 @@ TEST_CASE("Test basic joins of tables", "[joins]") {
 
 	// create tables
 	con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
-	con.Query("INSERT INTO test VALUES (11, 1)");
-	con.Query("INSERT INTO test VALUES (12, 2)");
-	con.Query("INSERT INTO test VALUES (13, 3)");
+	con.Query("INSERT INTO test VALUES (11, 1), (12, 2), (13, 3)");
 
 	con.Query("CREATE TABLE test2 (b INTEGER, c INTEGER);");
-	con.Query("INSERT INTO test2 VALUES (1, 10)");
-	con.Query("INSERT INTO test2 VALUES (1, 20)");
-	con.Query("INSERT INTO test2 VALUES (2, 30)");
+	con.Query("INSERT INTO test2 VALUES (1, 10), (1, 20), (2, 30)");
 
 	SECTION("simple cross product + join condition") {
 		result = con.Query(

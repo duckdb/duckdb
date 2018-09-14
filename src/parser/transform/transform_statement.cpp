@@ -203,8 +203,24 @@ unique_ptr<InsertStatement> TransformInsert(Node *node) {
 		}
 	}
 
-	if (!TransformValueList(select_stmt->valuesLists, result->values)) {
-		throw Exception("Failed to transform value list");
+	// transform the insert list
+	auto list = select_stmt->valuesLists;
+	size_t list_size = 0;
+	for (auto value_list = list->head; value_list != NULL;
+	     value_list = value_list->next) {
+		List *target = (List *)(value_list->data.ptr_value);
+
+		vector<unique_ptr<AbstractExpression>> insert_values;
+		if (!TransformExpressionList(target, insert_values)) {
+			throw Exception("Could not parse expression list!");
+		}
+		if (result->values.size() > 0) {
+			if (result->values[0].size() != insert_values.size()) {
+				throw Exception(
+				    "Insert VALUES lists must all be the same length");
+			}
+		}
+		result->values.push_back(move(insert_values));
 	}
 
 	auto ref = TransformRangeVar(stmt->relation);

@@ -29,9 +29,7 @@ TEST_CASE("Test UNION/EXCEPT/INTERSECT", "[union]") {
 
 	// create tables
 	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
-	result = con.Query("INSERT INTO test VALUES (11, 1)");
-	result = con.Query("INSERT INTO test VALUES (12, 1)");
-	result = con.Query("INSERT INTO test VALUES (13, 2)");
+	result = con.Query("INSERT INTO test VALUES (11, 1), (12, 1), (13, 2)");
 
 	// UNION ALL, no unique results
 	result = con.Query("SELECT a FROM test WHERE a < 13 UNION ALL SELECT a "

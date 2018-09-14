@@ -10,10 +10,7 @@ TEST_CASE("Test DISTINCT keyword", "[distinct]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 	con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
-	con.Query("INSERT INTO test VALUES (11, 22)");
-	con.Query("INSERT INTO test VALUES (13, 22)");
-	con.Query("INSERT INTO test VALUES (11, 21)");
-	con.Query("INSERT INTO test VALUES (11, 22)");
+	con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (11, 21), (11, 22)");
 
 	result = con.Query("SELECT DISTINCT * FROM test ORDER BY a, b");
 	CHECK_COLUMN(result, 0, {11, 11, 13});
