@@ -75,9 +75,15 @@ TEST_CASE("[SLOW] Test TPC-H SF0.1", "[tpch]") {
 	CHECK_COLUMN(result, 1, {3774200, 7554554, 3785523});
 	CHECK_COLUMN(result, 2, {147790, 295765, 148301});
 
+	// this would really hurt without pushdown
+	result = con.Query("SELECT count(*) FROM lineitem JOIN orders ON lineitem.l_orderkey=orders.o_orderkey WHERE o_orderstatus='X' AND l_tax > 50");
+	CHECK_COLUMN(result, 0, {0});
+
 	result = con.Query(tpch::get_query(1));
 	COMPARE_CSV(result, tpch::get_answer(sf, 1), true);
 	// std::cout << con.GetProfilingInformation() << "\n";
+
+
 
 	// result = con.Query(tpch::get_query(3));
 	// COMPARE_CSV(result, tpch::get_answer(sf, 3), true);

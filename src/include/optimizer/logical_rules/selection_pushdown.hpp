@@ -50,7 +50,6 @@ static bool CheckEval(LogicalOperator *op, AbstractExpression *expr) {
 static std::unique_ptr<AbstractExpression>
 RewritePushdown(std::unique_ptr<AbstractExpression> expr, LogicalOperator *op) {
 	assert(op);
-	assert(expr->children.size() == 2);
 
 	bool moved = false;
 
@@ -127,17 +126,9 @@ class SelectionPushdownRule : public Rule {
 		for (size_t i = 0; i < filter.expressions.size(); i++) {
 			auto &expr = filter.expressions[i];
 
-			// only consider comparisions a=b or the like
-			if (expr->children.size() == 2 &&
-			    expr->type >= ExpressionType::COMPARE_EQUAL &&
-			    expr->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
-
-				auto ex_again = RewritePushdown(move(expr), &root);
-				if (ex_again) {
-					new_expressions.push_back(move(ex_again));
-				}
-			} else {
-				new_expressions.push_back(move(expr));
+			auto ex_again = RewritePushdown(move(expr), &root);
+			if (ex_again) {
+				new_expressions.push_back(move(ex_again));
 			}
 		}
 		filter.expressions.clear();
