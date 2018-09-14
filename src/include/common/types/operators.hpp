@@ -11,6 +11,7 @@
 #pragma once
 
 #include <algorithm>
+#include <string>
 
 #include "common/exception.hpp"
 #include "common/internal_types.hpp"
@@ -230,6 +231,13 @@ template <> const char *Cast::Operation(int left);
 template <> const char *Cast::Operation(int64_t left);
 template <> const char *Cast::Operation(uint64_t left);
 template <> const char *Cast::Operation(double left);
+// numeric -> std::string
+template <> std::string Cast::Operation(int8_t left);
+template <> std::string Cast::Operation(int16_t left);
+template <> std::string Cast::Operation(int left);
+template <> std::string Cast::Operation(int64_t left);
+template <> std::string Cast::Operation(uint64_t left);
+template <> std::string Cast::Operation(double left);
 
 struct CastFromDate {
 	template <class SRC, class DST> static inline DST Operation(SRC left) {

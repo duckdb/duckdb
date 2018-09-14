@@ -55,11 +55,24 @@ template <class T> static void _cast_loop(Vector &source, Vector &result) {
 		_templated_unary_loop_templated_function<uint64_t, T, operators::Cast>(
 		    source, result);
 		break;
-	case TypeId::VARCHAR:
-		_templated_unary_loop_templated_function<const char *, T,
-		                                         operators::Cast>(source,
-		                                                          result);
+	case TypeId::VARCHAR: {
+		auto ldata = (T *)source.data;
+		auto result_data = (const char **)result.data;
+
+		for (size_t i = 0; i < source.count; i++) {
+			size_t index = source.sel_vector ? source.sel_vector[i] : i;
+			if (source.nullmask[index]) {
+				result_data[index] = nullptr;
+			} else {
+				auto str = operators::Cast::template Operation<T, std::string>(
+				    ldata[index]);
+				result_data[index] = result.string_heap.AddString(str);
+			}
+		}
+		result.sel_vector = source.sel_vector;
+		result.count = source.count;
 		break;
+	}
 	case TypeId::DATE:
 		_templated_unary_loop_templated_function<date_t, T,
 		                                         operators::CastFromDate>(

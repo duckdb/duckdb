@@ -143,7 +143,7 @@ TEST_CASE("Complex Expressions", "[sql]") {
 	con.Query("INSERT INTO strtest VALUES (3, 'd')");
 	// FIXME: this leads to leaking, presumably because NULL entries get cast
 	// but then ignored
-	//con.Query("INSERT INTO strtest VALUES (4, NULL)");
+	con.Query("INSERT INTO strtest VALUES (4, NULL)");
 
 	result = con.Query("SELECT a FROM strtest WHERE b = 'a'");
 	CHECK_COLUMN(result, 0, {1});
