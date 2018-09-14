@@ -87,6 +87,10 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 		auto &left_chunk = state->child_chunk;
 		auto &right_chunk = *state->right_chunks.chunks[state->right_chunk];
 
+		// sanity check, this went wrong before
+		left_chunk.Verify();
+		right_chunk.Verify();
+
 		// join the current row of the left relation with the current chunk
 		// from the right relation
 		state->right_join_condition.Reset();

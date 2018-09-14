@@ -216,11 +216,12 @@ void Vector::Copy(Vector &other, size_t offset) {
 
 	if (!TypeIsConstantSize(type)) {
 		assert(type == TypeId::VARCHAR);
-		other.count = count;
+		other.count = count - offset;
 		const char **source = (const char **)data;
 		const char **target = (const char **)other.data;
-		for (size_t i = offset; i < count; i++) {
-			const char *str = sel_vector ? source[sel_vector[i]] : source[i];
+		for (size_t i = 0; i < other.count; i++) {
+			const char *str = sel_vector ? source[sel_vector[i + offset]]
+			                             : source[i + offset];
 			target[i] = str ? other.string_heap.AddString(str) : nullptr;
 		}
 	} else {
