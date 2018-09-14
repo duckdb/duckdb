@@ -44,4 +44,7 @@ TEST_CASE("Test simple projection statements", "[simpleprojection]") {
 	// casts
 	result = con.Query("SELECT cast(a AS VARCHAR) FROM test;");
 	CHECK_COLUMN(result, 0, {"11", "12", "13"});
+
+	result = con.Query("SELECT cast(cast(a AS VARCHAR) as INTEGER) FROM test;");
+	CHECK_COLUMN(result, 0, {11, 12, 13});
 }

@@ -11,52 +11,48 @@ using namespace std;
 //===--------------------------------------------------------------------===//
 // Templated Looping Functions
 //===--------------------------------------------------------------------===//
-template <class T, class RES, class OP>
-void _templated_unary_loop_templated_function(Vector &left, Vector &result) {
-	T *ldata = (T *)left.data;
-	RES *result_data = (RES *)result.data;
+template <class SRC, class DST, class OP>
+void _templated_cast_loop(Vector &left, Vector &result) {
+	SRC *ldata = (SRC *)left.data;
+	DST *result_data = (DST *)result.data;
 	if (left.sel_vector) {
 		for (size_t i = 0; i < left.count; i++) {
 			result_data[left.sel_vector[i]] =
-			    OP::template Operation<T, RES>(ldata[left.sel_vector[i]]);
+			    OP::template Operation<SRC, DST>(ldata[left.sel_vector[i]]);
 		}
 	} else {
 		for (size_t i = 0; i < left.count; i++) {
-			result_data[i] = OP::template Operation<T, RES>(ldata[i]);
+			result_data[i] = OP::template Operation<SRC, DST>(ldata[i]);
 		}
 	}
 	result.sel_vector = left.sel_vector;
 	result.count = left.count;
 }
 
-template <class T> static void _cast_loop(Vector &source, Vector &result) {
-	switch (source.type) {
+template <class SRC> static void _cast_loop(Vector &source, Vector &result) {
+	switch (result.type) {
 	case TypeId::TINYINT:
-		_templated_unary_loop_templated_function<int8_t, T, operators::Cast>(
-		    source, result);
+		_templated_cast_loop<SRC, int8_t, operators::Cast>(source, result);
 		break;
 	case TypeId::SMALLINT:
-		_templated_unary_loop_templated_function<int16_t, T, operators::Cast>(
-		    source, result);
+		_templated_cast_loop<SRC, int16_t, operators::Cast>(source, result);
 		break;
 	case TypeId::INTEGER:
-		_templated_unary_loop_templated_function<int32_t, T, operators::Cast>(
-		    source, result);
+		_templated_cast_loop<SRC, int32_t, operators::Cast>(source, result);
 		break;
 	case TypeId::BIGINT:
-		_templated_unary_loop_templated_function<int64_t, T, operators::Cast>(
-		    source, result);
+		_templated_cast_loop<SRC, int64_t, operators::Cast>(source, result);
 		break;
 	case TypeId::DECIMAL:
-		_templated_unary_loop_templated_function<double, T, operators::Cast>(
-		    source, result);
+		_templated_cast_loop<SRC, double, operators::Cast>(source, result);
 		break;
 	case TypeId::POINTER:
-		_templated_unary_loop_templated_function<uint64_t, T, operators::Cast>(
-		    source, result);
+		_templated_cast_loop<SRC, uint64_t, operators::Cast>(source, result);
 		break;
 	case TypeId::VARCHAR: {
-		auto ldata = (T *)source.data;
+		// result is VARCHAR
+		// we have to place the resulting strings in the string heap
+		auto ldata = (SRC *)source.data;
 		auto result_data = (const char **)result.data;
 
 		for (size_t i = 0; i < source.count; i++) {
@@ -64,8 +60,9 @@ template <class T> static void _cast_loop(Vector &source, Vector &result) {
 			if (source.nullmask[index]) {
 				result_data[index] = nullptr;
 			} else {
-				auto str = operators::Cast::template Operation<T, std::string>(
-				    ldata[index]);
+				auto str =
+				    operators::Cast::template Operation<SRC, std::string>(
+				        ldata[index]);
 				result_data[index] = result.string_heap.AddString(str);
 			}
 		}
@@ -74,9 +71,8 @@ template <class T> static void _cast_loop(Vector &source, Vector &result) {
 		break;
 	}
 	case TypeId::DATE:
-		_templated_unary_loop_templated_function<date_t, T,
-		                                         operators::CastFromDate>(
-		    source, result);
+		_templated_cast_loop<SRC, date_t, operators::CastToDate>(source,
+		                                                         result);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for cast");
@@ -224,7 +220,8 @@ void VectorOperations::Cast(Vector &source, Vector &result) {
 	}
 
 	result.nullmask = source.nullmask;
-	switch (result.type) {
+	// first switch on source type
+	switch (source.type) {
 	case TypeId::TINYINT:
 		_cast_loop<int8_t>(source, result);
 		break;
@@ -247,12 +244,11 @@ void VectorOperations::Cast(Vector &source, Vector &result) {
 		_cast_loop<const char *>(source, result);
 		break;
 	case TypeId::DATE:
-		if (source.type == TypeId::VARCHAR) {
-			_templated_unary_loop_templated_function<const char *, date_t,
-			                                         operators::CastToDate>(
+		if (result.type == TypeId::VARCHAR) {
+			_templated_cast_loop<date_t, const char *, operators::CastFromDate>(
 			    source, result);
 		} else {
-			throw NotImplementedException("Cannot cast type to date!");
+			throw NotImplementedException("Cannot cast type from date!");
 		}
 		break;
 	default:
