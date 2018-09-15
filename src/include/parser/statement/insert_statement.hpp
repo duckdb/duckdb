@@ -13,7 +13,7 @@
 #include <vector>
 
 #include "catalog/catalog.hpp"
-#include "parser/statement/sql_statement.hpp"
+#include "parser/statement/select_statement.hpp"
 
 #include "parser/expression/abstract_expression.hpp"
 
@@ -25,6 +25,9 @@ class InsertStatement : public SQLStatement {
 	virtual ~InsertStatement() {}
 	virtual std::string ToString() const;
 	virtual void Accept(SQLNodeVisitor *v) { v->Visit(*this); }
+
+	//! The select statement to insert from
+	std::unique_ptr<SelectStatement> select_statement;
 
 	//! List of values to insert
 	std::vector<std::vector<std::unique_ptr<AbstractExpression>>> values;

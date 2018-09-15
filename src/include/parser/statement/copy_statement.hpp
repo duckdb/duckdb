@@ -29,7 +29,7 @@ class CopyStatement : public SQLStatement {
 	std::string schema;
 
 	// The SQL statement used instead of a table when copying data out to a file
-	std::unique_ptr<SQLStatement> select_stmt;
+	std::unique_ptr<SQLStatement> select_statement;
 
 	std::string file_path;
 

@@ -375,59 +375,53 @@ void LogicalPlanGenerator::Visit(SubqueryRef &expr) {
 void LogicalPlanGenerator::Visit(InsertStatement &statement) {
 	auto table = context.db.catalog.GetTable(context.ActiveTransaction(),
 	                                         statement.schema, statement.table);
+	auto insert = make_unique<LogicalInsert>(table);
 
-	if (statement.columns.size() == 0) {
-		if (statement.values[0].size() != table->columns.size()) {
-			throw SyntaxException(
-			    "table %s has %d columns but %d values were supplied",
-			    table->name.c_str(), table->columns.size(),
-			    statement.values[0].size());
-		}
-		auto insert = make_unique<LogicalInsert>(table, move(statement.values));
-		root = move(insert);
-	} else {
-		vector<vector<unique_ptr<AbstractExpression>>> insert_values;
-		if (statement.values[0].size() != statement.columns.size()) {
-			throw SyntaxException(
-			    "Column name/value mismatch: %d values for %d columns",
-			    statement.values[0].size(), statement.columns.size());
-		}
+	if (statement.columns.size() > 0) {
+		// column list specified
 
 		// create a map of value list index -> column index based
 		map<std::string, int> column_name_map;
 		for (size_t i = 0; i < statement.columns.size(); i++) {
 			column_name_map[statement.columns[i]] = i;
 		}
-		int column_index_map[table->columns.size()];
 		for (size_t i = 0; i < table->columns.size(); i++) {
 			auto &col = table->columns[i];
 			auto entry = column_name_map.find(col.name);
 			if (entry == column_name_map.end()) {
 				// column not specified, set index to -1
-				column_index_map[i] = -1;
+				insert->column_index_map.push_back(-1);
 			} else {
 				// column was specified, set to the index
-				column_index_map[i] = entry->second;
+				insert->column_index_map.push_back(entry->second);
 			}
 		}
-		// now insert the actual entries into the insert list
-		for (auto &list : statement.values) {
-			vector<unique_ptr<AbstractExpression>> values;
-			for (size_t i = 0; i < table->columns.size(); i++) {
-				auto &col = table->columns[i];
-				if (column_index_map[i] < 0) {
-					// column was not specified, use the default value
-					values.push_back(make_unique_base<AbstractExpression,
-					                                  ConstantExpression>(
-					    col.default_value));
-				} else {
-					// column was specified, fetch the value
-					values.push_back(move(list[column_index_map[i]]));
-				}
+	}
+
+	if (statement.select_statement) {
+		// insert from select statement
+		statement.select_statement->Accept(this);
+		assert(root);
+		insert->AddChild(move(root));
+		root = move(insert);
+	} else {
+		// insert from constants
+		// check if the correct amount of constants are supplied
+		if (statement.columns.size() == 0) {
+			if (statement.values[0].size() != table->columns.size()) {
+				throw SyntaxException(
+				    "table %s has %d columns but %d values were supplied",
+				    table->name.c_str(), table->columns.size(),
+				    statement.values[0].size());
 			}
-			insert_values.push_back(move(values));
+		} else {
+			if (statement.values[0].size() != statement.columns.size()) {
+				throw SyntaxException(
+				    "Column name/value mismatch: %d values for %d columns",
+				    statement.values[0].size(), statement.columns.size());
+			}
 		}
-		auto insert = make_unique<LogicalInsert>(table, move(insert_values));
+		insert->insert_values = move(statement.values);
 		root = move(insert);
 	}
 }
@@ -446,7 +440,8 @@ void LogicalPlanGenerator::Visit(CopyStatement &statement) {
 		    move(statement.file_path), move(statement.is_from),
 		    move(statement.delimiter), move(statement.quote),
 		    move(statement.escape));
-		statement.select_stmt->Accept(this);
+		statement.select_statement->Accept(this);
+		assert(root);
 		copy->AddChild(move(root));
 		root = move(copy);
 	}

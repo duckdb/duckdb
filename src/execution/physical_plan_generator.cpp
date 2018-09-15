@@ -188,10 +188,10 @@ void PhysicalPlanGenerator::Visit(LogicalProjection &op) {
 void PhysicalPlanGenerator::Visit(LogicalInsert &op) {
 	LogicalOperatorVisitor::Visit(op);
 
-	auto insertion =
-	    make_unique<PhysicalInsert>(op.table, move(op.insert_values));
+	auto insertion = make_unique<PhysicalInsert>(
+	    op.table, move(op.insert_values), op.column_index_map);
 	if (plan) {
-		throw Exception("Insert should be root node");
+		insertion->children.push_back(move(plan));
 	}
 	this->plan = move(insertion);
 }

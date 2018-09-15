@@ -33,6 +33,7 @@ class Binder : public SQLNodeVisitor {
 	    : context(context), bind_context(make_unique<BindContext>()) {}
 
 	void Visit(SelectStatement &statement);
+	void Visit(InsertStatement &stmt);
 	void Visit(CopyStatement &stmt);
 	void Visit(DeleteStatement &stmt);
 	void Visit(UpdateStatement &stmt);

@@ -57,6 +57,8 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk) {
 		throw CatalogException("Mismatch in column count for append");
 	}
 
+	chunk.Verify();
+
 	auto last_chunk = tail_chunk;
 	do {
 		last_chunk->GetExclusiveLock();

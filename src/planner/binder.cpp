@@ -6,6 +6,7 @@
 
 #include "parser/statement/copy_statement.hpp"
 #include "parser/statement/delete_statement.hpp"
+#include "parser/statement/insert_statement.hpp"
 #include "parser/statement/select_statement.hpp"
 #include "parser/statement/update_statement.hpp"
 
@@ -209,9 +210,15 @@ void Binder::Visit(SelectStatement &statement) {
 	}
 }
 
+void Binder::Visit(InsertStatement &stmt) {
+	if (stmt.select_statement) {
+		stmt.select_statement->Accept(this);
+	}
+}
+
 void Binder::Visit(CopyStatement &stmt) {
-	if (stmt.select_stmt) {
-		stmt.select_stmt->Accept(this);
+	if (stmt.select_statement) {
+		stmt.select_statement->Accept(this);
 	}
 }
 

@@ -188,14 +188,9 @@ unique_ptr<InsertStatement> TransformInsert(Node *node) {
 	InsertStmt *stmt = reinterpret_cast<InsertStmt *>(node);
 	assert(stmt);
 
-	auto select_stmt = reinterpret_cast<SelectStmt *>(stmt->selectStmt);
-	if (select_stmt->fromClause) {
-		throw NotImplementedException("Can only handle basic inserts");
-	}
-
 	auto result = make_unique<InsertStatement>();
-	assert(select_stmt->valuesLists);
 
+	// first check if there are any columns specified
 	if (stmt->cols) {
 		for (ListCell *c = stmt->cols->head; c != NULL; c = lnext(c)) {
 			ResTarget *target = (ResTarget *)(c->data.ptr_value);
@@ -203,24 +198,33 @@ unique_ptr<InsertStatement> TransformInsert(Node *node) {
 		}
 	}
 
-	// transform the insert list
-	auto list = select_stmt->valuesLists;
-	size_t list_size = 0;
-	for (auto value_list = list->head; value_list != NULL;
-	     value_list = value_list->next) {
-		List *target = (List *)(value_list->data.ptr_value);
+	auto select_stmt = reinterpret_cast<SelectStmt *>(stmt->selectStmt);
+	if (select_stmt->fromClause) {
+		// insert from select statement
+		result->select_statement = TransformSelect(stmt->selectStmt);
+	} else {
+		// simple set of values
+		assert(select_stmt->valuesLists);
 
-		vector<unique_ptr<AbstractExpression>> insert_values;
-		if (!TransformExpressionList(target, insert_values)) {
-			throw Exception("Could not parse expression list!");
-		}
-		if (result->values.size() > 0) {
-			if (result->values[0].size() != insert_values.size()) {
-				throw Exception(
-				    "Insert VALUES lists must all be the same length");
+		// transform the insert list
+		auto list = select_stmt->valuesLists;
+		size_t list_size = 0;
+		for (auto value_list = list->head; value_list != NULL;
+		     value_list = value_list->next) {
+			List *target = (List *)(value_list->data.ptr_value);
+
+			vector<unique_ptr<AbstractExpression>> insert_values;
+			if (!TransformExpressionList(target, insert_values)) {
+				throw Exception("Could not parse expression list!");
 			}
+			if (result->values.size() > 0) {
+				if (result->values[0].size() != insert_values.size()) {
+					throw Exception(
+					    "Insert VALUES lists must all be the same length");
+				}
+			}
+			result->values.push_back(move(insert_values));
 		}
-		result->values.push_back(move(insert_values));
 	}
 
 	auto ref = TransformRangeVar(stmt->relation);
@@ -271,10 +275,10 @@ unique_ptr<CopyStatement> TransformCopy(Node *node) {
 				statement->select_list.push_back(
 				    make_unique<ColumnRefExpression>());
 			}
-			result->select_stmt = move(statement);
+			result->select_statement = move(statement);
 		}
 	} else {
-		result->select_stmt = TransformSelect(stmt->query);
+		result->select_statement = TransformSelect(stmt->query);
 	}
 
 	// Handle options

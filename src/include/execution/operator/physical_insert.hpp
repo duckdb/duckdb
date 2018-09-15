@@ -19,9 +19,11 @@ class PhysicalInsert : public PhysicalOperator {
   public:
 	PhysicalInsert(TableCatalogEntry *table,
 	               std::vector<std::vector<std::unique_ptr<AbstractExpression>>>
-	                   insert_values)
+	                   insert_values,
+	               std::vector<int> column_index_map)
 	    : PhysicalOperator(PhysicalOperatorType::INSERT),
-	      insert_values(move(insert_values)), table(table) {}
+	      insert_values(move(insert_values)), table(table),
+	      column_index_map(column_index_map) {}
 
 	std::vector<TypeId> GetTypes() override;
 	virtual void _GetChunk(ClientContext &context, DataChunk &chunk,
@@ -30,6 +32,7 @@ class PhysicalInsert : public PhysicalOperator {
 	virtual std::unique_ptr<PhysicalOperatorState>
 	GetOperatorState(ExpressionExecutor *parent_executor) override;
 
+	std::vector<int> column_index_map;
 	std::vector<std::vector<std::unique_ptr<AbstractExpression>>> insert_values;
 	TableCatalogEntry *table;
 };

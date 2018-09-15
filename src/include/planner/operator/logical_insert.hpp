@@ -17,13 +17,11 @@ namespace duckdb {
 //! LogicalInsert represents an insertion of data into a base table
 class LogicalInsert : public LogicalOperator {
   public:
-	LogicalInsert(TableCatalogEntry *table,
-	              std::vector<std::vector<std::unique_ptr<AbstractExpression>>>
-	                  insert_values)
-	    : LogicalOperator(LogicalOperatorType::INSERT),
-	      insert_values(move(insert_values)), table(table) {}
+	LogicalInsert(TableCatalogEntry *table)
+	    : LogicalOperator(LogicalOperatorType::INSERT), table(table) {}
 
 	std::vector<std::vector<std::unique_ptr<AbstractExpression>>> insert_values;
+	std::vector<int> column_index_map;
 
 	virtual void Accept(LogicalOperatorVisitor *v) override { v->Visit(*this); }
 
