@@ -26,6 +26,9 @@ void SQLNodeVisitor::Visit(ConjunctionExpression &expr) {
 void SQLNodeVisitor::Visit(ConstantExpression &expr) {
 	expr.AcceptChildren(this);
 }
+void SQLNodeVisitor::Visit(DefaultExpression &expr) {
+	expr.AcceptChildren(this);
+}
 void SQLNodeVisitor::Visit(FunctionExpression &expr) {
 	expr.AcceptChildren(this);
 }

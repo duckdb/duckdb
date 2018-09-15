@@ -714,6 +714,8 @@ unique_ptr<AbstractExpression> TransformExpression(Node *node) {
 		return TransformNullTest(reinterpret_cast<NullTest *>(node));
 	case T_ResTarget:
 		return TransformResTarget(reinterpret_cast<ResTarget *>(node));
+	case T_SetToDefault:
+		return make_unique<DefaultExpression>();
 	case T_ParamRef:
 
 	default:

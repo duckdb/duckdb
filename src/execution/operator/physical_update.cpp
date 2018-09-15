@@ -1,6 +1,8 @@
 #include "execution/operator/physical_update.hpp"
 #include "execution/expression_executor.hpp"
 
+#include "common/types/vector_operations.hpp"
+
 #include "storage/data_table.hpp"
 
 using namespace duckdb;
@@ -38,7 +40,15 @@ void PhysicalUpdate::_GetChunk(ClientContext &context, DataChunk &chunk,
 		ExpressionExecutor executor(state->child_chunk, context);
 		for (size_t i = 0; i < expressions.size(); i++) {
 			auto &expr = expressions[i];
-			executor.Execute(expr.get(), update_chunk.data[i]);
+			if (expr->type == ExpressionType::VALUE_DEFAULT) {
+				// resolve the default type
+				auto &column = table.table.columns[columns[i]];
+				update_chunk.data[i].count = state->child_chunk.count;
+				VectorOperations::Set(update_chunk.data[i],
+				                      column.default_value);
+			} else {
+				executor.Execute(expr.get(), update_chunk.data[i]);
+			}
 		}
 		table.Update(context.ActiveTransaction(), row_ids, columns,
 		             update_chunk);

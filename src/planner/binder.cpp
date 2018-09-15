@@ -236,6 +236,12 @@ void Binder::Visit(UpdateStatement &stmt) {
 	stmt.condition->Accept(this);
 	for (auto &expression : stmt.expressions) {
 		expression->Accept(this);
+		if (expression->type == ExpressionType::VALUE_DEFAULT) {
+			// we resolve the type of the DEFAULT expression in the
+			// LogicalPlanGenerator because that is where we resolve the
+			// to-be-updated column
+			continue;
+		}
 		expression->ResolveType();
 		if (expression->return_type == TypeId::INVALID) {
 			throw BinderException(

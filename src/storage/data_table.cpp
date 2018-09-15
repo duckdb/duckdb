@@ -223,14 +223,27 @@ void DataTable::Update(Transaction &transaction, Vector &row_identifiers,
 				auto column_id = column_ids[j];
 				auto size = GetTypeIdSize(updates.data[j].type);
 				auto base_data = chunk->columns[column_id].data;
-				if (updates.data[j].sel_vector) {
+
+				Vector *update_vector = &updates.data[j];
+				Vector null_vector;
+				if (update_vector->nullmask.any()) {
+					// has NULL values in the nullmask
+					// copy them to a temporary vector
+					null_vector.Initialize(update_vector->type, false);
+					null_vector.count = update_vector->count;
+					VectorOperations::CopyNull(*update_vector,
+					                           null_vector.data);
+					update_vector = &null_vector;
+				}
+
+				if (update_vector->sel_vector) {
 					for (size_t i = 0; i < row_identifiers.count; i++) {
 						auto id = (sel_vector ? ids[sel_vector[i]] : ids[i]) -
 						          chunk->start;
 						auto dataptr = base_data + id * size;
 						memcpy(dataptr,
-						       updates.data[j].data +
-						           updates.data[j].sel_vector[i] * size,
+						       update_vector->data +
+						           update_vector->sel_vector[i] * size,
 						       size);
 					}
 				} else {
@@ -238,10 +251,10 @@ void DataTable::Update(Transaction &transaction, Vector &row_identifiers,
 						auto id = (sel_vector ? ids[sel_vector[i]] : ids[i]) -
 						          chunk->start;
 						auto dataptr = base_data + id * size;
-						memcpy(dataptr, updates.data[j].data + i * size, size);
+						memcpy(dataptr, update_vector->data + i * size, size);
 					}
 				}
-				chunk->string_heap.MergeHeap(updates.data[j].string_heap);
+				chunk->string_heap.MergeHeap(update_vector->string_heap);
 
 				// update the statistics with the new data
 				lock_guard<mutex> stats_lock(statistics_locks[column_id]);

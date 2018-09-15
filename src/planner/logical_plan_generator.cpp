@@ -42,13 +42,20 @@ void LogicalPlanGenerator::Visit(UpdateStatement &statement) {
 	// scan the table for the referenced columns in the update clause
 	auto &table = get->table;
 	vector<column_t> column_ids;
-	for (auto &colname : statement.columns) {
+	for (size_t i = 0; i < statement.columns.size(); i++) {
+		auto &colname = statement.columns[i];
+
 		if (!table->ColumnExists(colname)) {
 			throw BinderException(
 			    "Referenced update column %s not found in table!",
 			    colname.c_str());
 		}
-		column_ids.push_back(table->GetColumn(colname).oid);
+		auto &column = table->GetColumn(colname);
+		column_ids.push_back(column.oid);
+		if (statement.expressions[i]->type == ExpressionType::VALUE_DEFAULT) {
+			// resolve the type of the DEFAULT expression
+			statement.expressions[i]->return_type = column.type;
+		}
 	}
 	// create the update node
 	auto update = make_unique<LogicalUpdate>(table, column_ids,

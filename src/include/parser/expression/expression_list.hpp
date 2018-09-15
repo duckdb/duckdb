@@ -18,6 +18,7 @@
 #include "parser/expression/comparison_expression.hpp"
 #include "parser/expression/conjunction_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
+#include "parser/expression/default_expression.hpp"
 #include "parser/expression/function_expression.hpp"
 #include "parser/expression/groupref_expression.hpp"
 #include "parser/expression/operator_expression.hpp"

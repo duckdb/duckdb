@@ -165,6 +165,7 @@ enum class ExpressionType {
 	VALUE_NULL = 44,
 	VALUE_VECTOR = 45,
 	VALUE_SCALAR = 46,
+	VALUE_DEFAULT = 47,
 
 	// -----------------------------
 	// Aggregates

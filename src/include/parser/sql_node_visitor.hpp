@@ -27,6 +27,7 @@ class ColumnRefExpression;
 class ComparisonExpression;
 class ConjunctionExpression;
 class ConstantExpression;
+class DefaultExpression;
 class FunctionExpression;
 class GroupRefExpression;
 class OperatorExpression;
@@ -62,6 +63,7 @@ class SQLNodeVisitor {
 	virtual void Visit(ComparisonExpression &expr);
 	virtual void Visit(ConjunctionExpression &expr);
 	virtual void Visit(ConstantExpression &expr);
+	virtual void Visit(DefaultExpression &expr);
 	virtual void Visit(FunctionExpression &expr);
 	virtual void Visit(GroupRefExpression &expr);
 	virtual void Visit(OperatorExpression &expr);
