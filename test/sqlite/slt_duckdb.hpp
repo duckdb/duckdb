@@ -84,6 +84,7 @@ duckdbQuery(void *pConn,       /* Connection created by xConnect */
 			char *buffer = (char *)malloc(BUFSIZ);
 
 			switch (actual_column.type) {
+			case DUCKDB_TYPE_BOOLEAN:
 			case DUCKDB_TYPE_TINYINT: {
 				if (duckdb_value_is_null(actual_column, r)) {
 					snprintf(buffer, BUFSIZ, "%s", "NULL");

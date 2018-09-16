@@ -655,13 +655,11 @@ unique_ptr<AbstractExpression> TransformSubquery(SubLink *root) {
 		                                       TypeId::BOOLEAN,
 		                                       move(subquery_expr));
 	}
-		//	case ANY_SUBLINK: {
-		//		return
-		// make_unique<OperatorExpression>(ExpressionType::COMPARE_IN,
-		//				                                       TypeId::BOOLEAN,
-		// TransformExpression(root->testexpr),
-		// move(subquery_expr));
-		//	}
+	case ANY_SUBLINK: {
+		return make_unique<OperatorExpression>(
+		    ExpressionType::COMPARE_IN, TypeId::BOOLEAN,
+		    TransformExpression(root->testexpr), move(subquery_expr));
+	}
 	case EXPR_SUBLINK: {
 		return subquery_expr;
 	}
