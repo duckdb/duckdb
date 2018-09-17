@@ -19,11 +19,14 @@
 
 namespace duckdb {
 
+enum class SubqueryType { INVALID = 0, DEFAULT = 1, EXISTS = 2, IN = 3 };
+
 //! Represents a subquery
 class SubqueryExpression : public AbstractExpression {
   public:
 	SubqueryExpression()
-	    : AbstractExpression(ExpressionType::SELECT_SUBQUERY) {}
+	    : AbstractExpression(ExpressionType::SELECT_SUBQUERY),
+	      type(SubqueryType::DEFAULT) {}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
 
@@ -31,7 +34,7 @@ class SubqueryExpression : public AbstractExpression {
 	std::unique_ptr<LogicalOperator> op;
 	std::unique_ptr<BindContext> context;
 	std::unique_ptr<PhysicalOperator> plan;
-	bool exists = false;
+	SubqueryType type;
 	bool is_correlated = false;
 
 	virtual std::string ToString() const override {

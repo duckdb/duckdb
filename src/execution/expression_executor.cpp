@@ -294,7 +294,7 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 		if (expr.children.size() < 2) {
 			throw Exception("IN needs at least two children");
 		}
-		Vector l, comp_res;
+		Vector l;
 		// eval left side
 		expr.children[0]->Accept(this);
 		vector.Move(l);
@@ -305,23 +305,74 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 		result.count = l.count;
 		VectorOperations::Set(result, Value(false));
 
-		// init comparision result once
-		comp_res.Initialize(TypeId::BOOLEAN);
-		comp_res.count = l.count;
+		// FIXME this is very similar to the visit method of subqueries,
+		// could/should be merged
+		if (expr.children[1]->type == ExpressionType::SELECT_SUBQUERY) {
+			assert(expr.children.size() == 2);
 
-		// for every child, or result of comparision with left to overall result
-		for (size_t child = 1; child < expr.children.size(); child++) {
-			expr.children[child]->Accept(this);
-			VectorOperations::Equals(l, vector, comp_res);
-			vector.Destroy();
-			Vector temp_result;
-			temp_result.Initialize(TypeId::BOOLEAN);
-			result.Copy(temp_result);
-			VectorOperations::Or(temp_result, comp_res, result);
-			// early abort
-			if (Value::Equals(VectorOperations::Min(result), Value(true)) &&
-			    Value::Equals(VectorOperations::Max(result), Value(true))) {
-				break;
+			auto subquery =
+			    reinterpret_cast<SubqueryExpression *>(expr.children[1].get());
+			assert(subquery->type == SubqueryType::IN);
+
+			DataChunk *old_chunk = chunk;
+			DataChunk row_chunk;
+			chunk = &row_chunk;
+			auto types = old_chunk->GetTypes();
+			auto &plan = subquery->plan;
+
+			// row chunk is used to handle correlated subqueries
+			row_chunk.Initialize(types, true);
+			row_chunk.count = 1;
+
+			for (size_t c = 0; c < old_chunk->column_count; c++) {
+				row_chunk.data[c].count = 1;
+			}
+
+			for (size_t r = 0; r < old_chunk->count; r++) {
+				for (size_t c = 0; c < old_chunk->column_count; c++) {
+					row_chunk.data[c].SetValue(0,
+					                           old_chunk->data[c].GetValue(r));
+				}
+				auto state = plan->GetOperatorState(this);
+				DataChunk s_chunk;
+				plan->InitializeChunk(s_chunk);
+				plan->GetChunk(context, s_chunk, state.get());
+
+				// easy case, subquery yields no result, so result is false
+				if (s_chunk.count == 0) {
+					result.SetValue(r, Value(false));
+					continue;
+				}
+				assert(s_chunk.column_count > 0);
+				// direct comparision
+				result.SetValue(
+				    r, Value::Equals(l.GetValue(r),
+				                     s_chunk.GetVector(0).GetValue(r)));
+			}
+			chunk = old_chunk;
+
+		} else { // in rhs is list of constants
+			Vector comp_res;
+
+			// init comparision result once
+			comp_res.Initialize(TypeId::BOOLEAN);
+			comp_res.count = l.count;
+
+			// for every child, or result of comparision with left to overall
+			// result
+			for (size_t child = 1; child < expr.children.size(); child++) {
+				expr.children[child]->Accept(this);
+				VectorOperations::Equals(l, vector, comp_res);
+				vector.Destroy();
+				Vector temp_result;
+				temp_result.Initialize(TypeId::BOOLEAN);
+				result.Copy(temp_result);
+				VectorOperations::Or(temp_result, comp_res, result);
+				// early abort
+				if (Value::Equals(VectorOperations::Min(result), Value(true)) &&
+				    Value::Equals(VectorOperations::Max(result), Value(true))) {
+					break;
+				}
 			}
 		}
 		result.Move(vector);
@@ -421,15 +472,23 @@ void ExpressionExecutor::Visit(SubqueryExpression &expr) {
 		DataChunk s_chunk;
 		plan->InitializeChunk(s_chunk);
 		plan->GetChunk(context, s_chunk, state.get());
-		if (!expr.exists) {
+
+		switch (expr.type) {
+		case SubqueryType::DEFAULT:
 			if (s_chunk.count == 0) {
 				vector.SetValue(r, Value());
 			} else {
 				assert(s_chunk.column_count > 0);
 				vector.SetValue(r, s_chunk.data[0].GetValue(0));
 			}
-		} else {
+			break;
+
+		case SubqueryType::IN: // in case is handled separately above
+		case SubqueryType::EXISTS:
 			vector.SetValue(r, Value::BOOLEAN(s_chunk.count != 0));
+			break;
+		default:
+			throw NotImplementedException("Subquery type not implemented");
 		}
 	}
 	chunk = old_chunk;
