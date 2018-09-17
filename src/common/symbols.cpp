@@ -37,6 +37,7 @@ template class std::unique_ptr<uint64_t[]>;
 template class std::unique_ptr<uint8_t[]>;
 template class std::unique_ptr<Vector[]>;
 template class std::unique_ptr<DataChunk>;
+template class std::unique_ptr<Statistics[]>;
 
 #define INSTANTIATE_VECTOR(VECTOR_DEFINITION)                                  \
 	template VECTOR_DEFINITION::size_type VECTOR_DEFINITION::size() const;     \

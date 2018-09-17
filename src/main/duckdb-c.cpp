@@ -222,12 +222,16 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query,
 				char **dataptr = (char **)column.data;
 				for (auto &chunk : result->collection.chunks) {
 					auto &vector = chunk->data[i];
-					char **str_data = (char **)vector.data;
+					const char **str_data = (const char **)vector.data;
 					for (auto j = 0; j < chunk->count; j++) {
-						*dataptr = (char *)malloc(strlen(str_data[j]) + 1);
+						const char *strptr = str_data[j];
+						if (!str_data[j]) {
+							strptr = "NULL";
+						}
+						*dataptr = (char *)malloc(strlen(strptr) + 1);
 						if (!*dataptr)
 							goto mallocfail;
-						strcpy(*dataptr, str_data[j]);
+						strcpy(*dataptr, strptr);
 						dataptr++;
 					}
 				}

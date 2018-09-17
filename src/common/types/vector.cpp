@@ -223,6 +223,13 @@ void Vector::Copy(Vector &other, size_t offset) {
 			const char *str = sel_vector ? source[sel_vector[i + offset]]
 			                             : source[i + offset];
 			target[i] = str ? other.string_heap.AddString(str) : nullptr;
+			if (sel_vector) {
+				for (size_t i = 0; i < count; i++) {
+					other.nullmask[i] = nullmask[sel_vector[offset + i]];
+				}
+			} else {
+				other.nullmask = nullmask << offset;
+			}
 		}
 	} else {
 		VectorOperations::Copy(*this, other, offset);

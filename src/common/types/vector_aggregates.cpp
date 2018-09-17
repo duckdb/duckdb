@@ -35,6 +35,7 @@ void _templated_unary_fold_single_type(Vector &left, T *result) {
 
 template <class OP> void _generic_unary_fold_loop(Vector &left, Value &result) {
 	switch (left.type) {
+	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
 		_templated_unary_fold_single_type<int8_t, OP>(left,
 		                                              &result.value_.tinyint);
@@ -139,6 +140,19 @@ Value VectorOperations::Min(Vector &left) {
 	_generic_unary_fold_loop<operators::Min>(left, result);
 	result.is_null =
 	    Value::Equals(result, maximum_value); // check if any tuples qualified
+	return result;
+}
+
+Value VectorOperations::AnyTrue(Vector &left) {
+	if (left.type != TypeId::BOOLEAN) {
+		throw Exception("AnyTrue can only be computed for boolean columns!");
+	}
+	if (left.count == 0) {
+		return Value(false);
+	}
+
+	Value result = Value(false);
+	_generic_unary_fold_loop<operators::AnyTrue>(left, result);
 	return result;
 }
 
