@@ -289,6 +289,7 @@ void ExpressionExecutor::Visit(GroupRefExpression &expr) {
 }
 
 void ExpressionExecutor::Visit(OperatorExpression &expr) {
+	// special handling for special snowflake 'IN'
 	// IN has n children
 	if (expr.type == ExpressionType::COMPARE_IN) {
 		if (expr.children.size() < 2) {
@@ -344,10 +345,27 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 					continue;
 				}
 				assert(s_chunk.column_count > 0);
-				// direct comparision
-				result.SetValue(
-				    r, Value::Equals(l.GetValue(r),
-				                     s_chunk.GetVector(0).GetValue(r)));
+				Value res = Value(false);
+				Vector lval_vec(l.GetValue(r));
+				Vector &rval_vec = s_chunk.GetVector(0);
+				Vector comp_res;
+				comp_res.Initialize(TypeId::BOOLEAN);
+				comp_res.count = rval_vec.count;
+				// if there is any true in comp_res the IN returns true
+				VectorOperations::Equals(lval_vec, rval_vec, comp_res);
+				// if we find any match, IN is true
+				if (Value::Equals(VectorOperations::AnyTrue(comp_res),
+				                  Value(true))) {
+					result.SetValue(r, Value(true));
+				} else {
+					// if not, but there are some NULLs in the rhs, its a NULL
+					if (comp_res.nullmask.any()) {
+						result.SetValue(r, Value());
+						// otherwise no
+					} else {
+						result.SetValue(r, Value(false));
+					}
+				}
 			}
 			chunk = old_chunk;
 
