@@ -331,6 +331,7 @@ unique_ptr<AbstractExpression> TransformValue(value val) {
 	switch (val.type) {
 	case T_Integer:
 		return make_unique<ConstantExpression>(Value::INTEGER(val.val.ival));
+	case T_BitString: // FIXME: this should actually convert to BLOB
 	case T_String:
 		return make_unique<ConstantExpression>(Value(string(val.val.str)));
 	case T_Float:
