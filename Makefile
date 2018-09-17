@@ -44,4 +44,5 @@ third_party/sqllogictest:
 	git clone --depth=1 https://github.com/cwida/sqllogictest.git third_party/sqllogictest
 
 sqlite: main | third_party/sqllogictest
+	git --git-dir third_party/sqllogictest/.git pull
 	./build/debug/test/unittest "[sqlitelogic]"

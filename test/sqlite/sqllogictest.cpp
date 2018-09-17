@@ -379,6 +379,7 @@ TEST_CASE("[SLOW] Test SQLite Logic Test", "[sqlitelogic]") {
 	*/
 
 	vector<string> files = {
+
 	    "third_party/sqllogictest/test/select1.test",
 	    "third_party/sqllogictest/test/select2.test",
 	    "third_party/sqllogictest/test/select3.test",
@@ -386,6 +387,7 @@ TEST_CASE("[SLOW] Test SQLite Logic Test", "[sqlitelogic]") {
 	    // not there yet 	    "third_party/sqllogictest/test/select5.test", //
 	    // Cross product with strings
 	    "third_party/sqllogictest/test/evidence/in1.test",
+	    "third_party/sqllogictest/test/evidence/in2.test",
 	    "third_party/sqllogictest/test/random/select/slt_good_0.test",
 	    "third_party/sqllogictest/test/random/select/slt_good_1.test",
 	    "third_party/sqllogictest/test/random/select/slt_good_2.test",

@@ -329,6 +329,17 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 				row_chunk.data[c].count = 1;
 			}
 
+			// l could be scalar, make sure we have the same counts everywhere
+			if (l.count != old_chunk->count) {
+				l.count = old_chunk->count;
+				// replicate
+				VectorOperations::Set(l, l.GetValue(0));
+				result.count = old_chunk->count;
+			}
+
+			assert(l.count == old_chunk->count);
+			assert(result.count == old_chunk->count);
+
 			for (size_t r = 0; r < old_chunk->count; r++) {
 				for (size_t c = 0; c < old_chunk->column_count; c++) {
 					row_chunk.data[c].SetValue(0,
@@ -344,7 +355,10 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 					result.SetValue(r, Value(false));
 					continue;
 				}
-				assert(s_chunk.column_count > 0);
+				if (s_chunk.column_count != 1) {
+					throw Exception("IN subquery needs to return exactly one column");
+				}
+				assert(s_chunk.column_count == 1);
 				Value res = Value(false);
 				Vector lval_vec(l.GetValue(r));
 				Vector &rval_vec = s_chunk.GetVector(0);
