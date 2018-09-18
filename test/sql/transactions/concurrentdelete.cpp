@@ -165,7 +165,7 @@ static void _delete_elements(DuckDB *db, size_t threadnr) {
 	con.Query("COMMIT;");
 }
 
-TEST_CASE("[SLOW] Concurrent delete", "[transactions]") {
+TEST_CASE("Concurrent delete", "[transactions][.]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);

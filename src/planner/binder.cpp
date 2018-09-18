@@ -233,7 +233,9 @@ void Binder::Visit(UpdateStatement &stmt) {
 	// visit the table reference
 	stmt.table->Accept(this);
 	// project any additional columns required for the condition/expressions
-	stmt.condition->Accept(this);
+	if (stmt.condition) {
+		stmt.condition->Accept(this);
+	}
 	for (auto &expression : stmt.expressions) {
 		expression->Accept(this);
 		if (expression->type == ExpressionType::VALUE_DEFAULT) {

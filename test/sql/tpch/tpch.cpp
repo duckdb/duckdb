@@ -10,7 +10,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("[SLOW] Test TPC-H SF0.1", "[tpch]") {
+TEST_CASE("Test TPC-H SF0.1", "[tpch][.]") {
 	unique_ptr<DuckDBResult> result;
 	double sf = 0.1;
 

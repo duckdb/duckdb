@@ -22,12 +22,12 @@ test: main
 	build/debug/test/test
 
 unittest: main
-	build/debug/test/unittest --fast
+	build/debug/test/unittest
 
 unit: unittest
 
 allunit:main
-	build/debug/test/unittest
+	build/debug/test/unittest "*"
 
 docs:
 	mkdir -p build

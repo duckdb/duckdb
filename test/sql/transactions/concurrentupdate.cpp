@@ -52,7 +52,7 @@ static void read_total_balance(DuckDB *db) {
 	}
 }
 
-TEST_CASE("[SLOW] Concurrent update", "[updates]") {
+TEST_CASE("Concurrent update", "[updates][.]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
@@ -155,7 +155,7 @@ static void write_random_numbers_to_account(DuckDB *db, size_t nr) {
 	}
 }
 
-TEST_CASE("[SLOW] Multiple concurrent updaters", "[updates]") {
+TEST_CASE("Multiple concurrent updaters", "[updates][.]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);

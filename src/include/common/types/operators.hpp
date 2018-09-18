@@ -43,7 +43,9 @@ struct Multiplication {
 
 struct Division {
 	template <class T> static inline T Operation(T left, T right) {
-		assert(right != 0); // this should be handled above this point
+		if (right == 0) {
+			throw duckdb::Exception("Division by 0");
+		}
 		return left / right;
 	}
 };

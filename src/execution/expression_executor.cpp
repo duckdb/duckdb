@@ -356,7 +356,8 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 					continue;
 				}
 				if (s_chunk.column_count != 1) {
-					throw Exception("IN subquery needs to return exactly one column");
+					throw Exception(
+					    "IN subquery needs to return exactly one column");
 				}
 				assert(s_chunk.column_count == 1);
 				Value res = Value(false);
