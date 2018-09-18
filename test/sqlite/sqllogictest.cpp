@@ -657,10 +657,10 @@ static void execute_file(string script) {
 					for (i = 0; i < nResult && sScript.zLine[0];
 					     nextLine(&sScript), i++) {
 						if (strcmp(sScript.zLine, azResult[i]) != 0) {
-							fprintf(stdout, "%s:%d: wrong result\n",
+							fprintf(stderr, "%s:%d: wrong result\n",
 							        zScriptFile, sScript.nLine);
 
-							fprintf(stdout, "%s <> %s\n", sScript.zLine,
+							fprintf(stderr, "%s <> %s\n", sScript.zLine,
 							        azResult[i]);
 							IFAIL();
 						}
@@ -730,7 +730,7 @@ static void execute_file(string script) {
 			 ** to run the script up to a particular point that is giving a
 			 ** faulty result, then terminate at that point for analysis.
 			 */
-			fprintf(stdout, "%s:%d: halt\n", zScriptFile, sScript.startLine);
+			fprintf(stderr, "%s:%d: halt\n", zScriptFile, sScript.startLine);
 			break;
 		} else {
 			/* An unrecognized record type is an error */

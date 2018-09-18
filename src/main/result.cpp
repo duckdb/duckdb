@@ -22,6 +22,6 @@ void DuckDBResult::Print() {
 		}
 		printf("\n");
 	} else {
-		printf("Query Error: %s\n", error.c_str());
+		fprintf(stderr, "Query Error: %s\n", error.c_str());
 	}
 }
