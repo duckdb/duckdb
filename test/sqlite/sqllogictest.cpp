@@ -327,6 +327,16 @@ static int checkValue(const char *zKey, const char *zHash) {
 	return 0;
 }
 
+#define IFAIL()                                                                \
+	{                                                                          \
+		if (zScript)                                                           \
+			free(zScript);                                                     \
+		if (pConn)                                                             \
+			pEngine->xDisconnect(pConn);                                       \
+		REQUIRE(false);                                                        \
+		return;                                                                \
+	}
+
 static void execute_file(string script) {
 	int verifyMode = 1;               /* True if in -verify mode */
 	int haltOnError = 0;              /* Stop on first error if true */
@@ -383,7 +393,7 @@ static void execute_file(string script) {
 	REQUIRE(nScript > 0);
 	zScript = (char *)malloc(nScript + 1);
 	if (!zScript) {
-		REQUIRE(false);
+		IFAIL();
 	}
 	fseek(in, 0L, SEEK_SET);
 	nGot = fread(zScript, 1, nScript, in);
@@ -406,11 +416,6 @@ static void execute_file(string script) {
 	/* Open the database engine under test
 	 */
 	rc = pEngine->xConnect(pEngine->pAuxData, zConnection, &pConn, zParam);
-	REQUIRE(rc == 0);
-
-	/* Get the "real" db name
-	 */
-	rc = pEngine->xGetEngineName(pConn, &zDbEngine);
 	REQUIRE(rc == 0);
 
 	/* Loop over all records in the file */
@@ -488,7 +493,7 @@ static void execute_file(string script) {
 				        "%s:%d: labeled result [%s] does not agree with "
 				        "previous values\n",
 				        zScriptFile, sScript.startLine, sScript.azToken[3]);
-				REQUIRE(false);
+				IFAIL();
 			}
 			continue;
 		}
@@ -532,16 +537,14 @@ static void execute_file(string script) {
 				fprintf(stderr,
 				        "%s:%d: statement argument should be 'ok' or 'error'\n",
 				        zScriptFile, sScript.startLine);
-				REQUIRE(false);
-				rc = 0;
+				IFAIL();
 			}
 
 			/* Report an error if the results do not match expectation */
-			REQUIRE(!rc);
 			if (rc) {
 				fprintf(stderr, "%s:%d: statement error\n", zScriptFile,
 				        sScript.startLine);
-				REQUIRE(false);
+				IFAIL();
 			}
 		} else if (strcmp(sScript.azToken[0], "query") == 0) {
 			int k = 0;
@@ -565,8 +568,7 @@ static void execute_file(string script) {
 			if (k <= 0) {
 				fprintf(stderr, "%s:%d: missing type string\n", zScriptFile,
 				        sScript.startLine);
-				REQUIRE(false);
-				break;
+				IFAIL();
 			}
 
 			/* Extract the SQL from second and subsequent lines of the
@@ -595,8 +597,7 @@ static void execute_file(string script) {
 				fprintf(stderr, "%s:%d: query failed\n", zScriptFile,
 				        sScript.startLine);
 				pEngine->xFreeResults(pConn, azResult, nResult);
-				REQUIRE(false);
-				continue;
+				IFAIL();
 			}
 
 			/* Do any required sorting of query results */
@@ -615,7 +616,7 @@ static void execute_file(string script) {
 			} else {
 				fprintf(stderr, "%s:%d: unknown sort method: '%s'\n",
 				        zScriptFile, sScript.startLine, sScript.azToken[2]);
-				REQUIRE(false);
+				IFAIL();
 			}
 
 			/* Hash the results if we are over the hash threshold or if we
@@ -636,7 +637,7 @@ static void execute_file(string script) {
 					        "%s:%d: labeled result [%s] does not agree with "
 					        "previous values\n",
 					        zScriptFile, sScript.startLine, sScript.azToken[3]);
-					REQUIRE(false);
+					IFAIL();
 				}
 			}
 
@@ -661,8 +662,7 @@ static void execute_file(string script) {
 
 							fprintf(stdout, "%s <> %s\n", sScript.zLine,
 							        azResult[i]);
-							REQUIRE(false);
-							break;
+							IFAIL();
 						}
 						// we check this already but this inflates the test
 						// case count as desired
@@ -672,7 +672,7 @@ static void execute_file(string script) {
 					if (strcmp(sScript.zLine, zHash) != 0) {
 						fprintf(stderr, "%s:%d: wrong result hash\n",
 						        zScriptFile, sScript.nLine);
-						REQUIRE(false);
+						IFAIL();
 					}
 				}
 			} else {
@@ -736,16 +736,15 @@ static void execute_file(string script) {
 			/* An unrecognized record type is an error */
 			fprintf(stderr, "%s:%d: unknown record type: '%s'\n", zScriptFile,
 			        sScript.startLine, sScript.azToken[0]);
-			REQUIRE(false);
-			break;
+			IFAIL();
 		}
 	}
 
 	/* Shutdown the database connection.
 	 */
 	rc = pEngine->xDisconnect(pConn);
-	REQUIRE(rc == 0);
 	free(zScript);
+	REQUIRE(rc);
 }
 
 // code below traverses the test directory and makes individual test cases out
