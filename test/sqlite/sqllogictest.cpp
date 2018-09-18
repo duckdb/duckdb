@@ -380,12 +380,15 @@ static void execute_file(string script) {
 	REQUIRE(in);
 	fseek(in, 0L, SEEK_END);
 	nScript = ftell(in);
+	REQUIRE(nScript > 0);
 	zScript = (char *)malloc(nScript + 1);
-	REQUIRE(zScript);
+	if (!zScript) {
+		REQUIRE(false);
+	}
 	fseek(in, 0L, SEEK_SET);
 	nGot = fread(zScript, 1, nScript, in);
 	fclose(in);
-	REQUIRE(nGot >= nScript);
+	REQUIRE(nGot <= nScript);
 	zScript[nGot] = 0;
 
 	// zap hash table as result labels are only valid within one test file
@@ -778,19 +781,19 @@ static void testRunner() {
 struct AutoRegTests {
 	AutoRegTests() {
 		vector<string> excludes = {
-		    "test/select4.test",                 // EXCEPT etc.
-		    "test/select5.test",                 // joins too slow
-		    "test/index",                        // no index yet
-		    "random/aggregates",                 // too many diffs to SQLite
-		    "random/expr",                       // ditto
-		    "random/groupby/",                   // ditto
-		    "random/select/slt_good_70.test",    // join on not between
-		    "evidence/slt_lang_replace.test",    // feature not supported
-		    "evidence/slt_lang_createview.test", // ditto
-		    "evidence/slt_lang_dropview.test"
-		    "evidence/slt_lang_reindex.test",       // ditto
-		    "evidence/slt_lang_createtrigger.test", // ditto
-		    "evidence/slt_lang_droptrigger.test",
+		    "test/select4.test",                    // EXCEPT etc.
+		    "test/select5.test",                    // joins too slow
+		    "test/index",                           // no index yet
+		    "random/aggregates",                    // too many diffs to SQLite
+		    "random/expr",                          // ditto
+		    "random/groupby/",                      // ditto
+		    "random/select/slt_good_70.test",       // join on not between
+		    "evidence/slt_lang_replace.test",       // feature not supported
+		    "evidence/slt_lang_createview.test",    // "
+		    "evidence/slt_lang_dropview.test",      // "
+		    "evidence/slt_lang_reindex.test",       // "
+		    "evidence/slt_lang_createtrigger.test", // "
+		    "evidence/slt_lang_droptrigger.test",   // "
 		};
 		listFiles("third_party/sqllogictest/test/",
 		          [excludes](const std::string &path) {
