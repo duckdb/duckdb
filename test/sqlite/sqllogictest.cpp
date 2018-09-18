@@ -742,9 +742,8 @@ static void execute_file(string script) {
 
 	/* Shutdown the database connection.
 	 */
-	rc = pEngine->xDisconnect(pConn);
+	pEngine->xDisconnect(pConn);
 	free(zScript);
-	REQUIRE(rc);
 }
 
 // code below traverses the test directory and makes individual test cases out
@@ -791,8 +790,10 @@ struct AutoRegTests {
 		    "evidence/slt_lang_createview.test",    // "
 		    "evidence/slt_lang_dropview.test",      // "
 		    "evidence/slt_lang_reindex.test",       // "
+		    "evidence/slt_lang_dropindex.test",     // "
 		    "evidence/slt_lang_createtrigger.test", // "
 		    "evidence/slt_lang_droptrigger.test",   // "
+		    "evidence/slt_lang_droptable.test",     // DROP TABLE IF EXISTS not supported
 		};
 		listFiles("third_party/sqllogictest/test/",
 		          [excludes](const std::string &path) {
