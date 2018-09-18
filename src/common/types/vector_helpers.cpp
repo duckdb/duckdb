@@ -222,6 +222,7 @@ void VectorOperations::Cast(Vector &source, Vector &result) {
 	result.nullmask = source.nullmask;
 	// first switch on source type
 	switch (source.type) {
+	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
 		_cast_loop<int8_t>(source, result);
 		break;

@@ -419,19 +419,7 @@ unique_ptr<AbstractExpression> TransformAExpr(A_Expr *root) {
 	case AEXPR_DISTINCT:
 		target_type = ExpressionType::COMPARE_DISTINCT_FROM;
 		break;
-	case AEXPR_IN:
-		target_type = ExpressionType::COMPARE_IN;
-		break;
-	default: {
-		target_type = StringToExpressionType(name);
-		if (target_type == ExpressionType::INVALID) {
-			throw NotImplementedException(
-			    "A_Expr transform not implemented %s.", name.c_str());
-		}
-	}
-	}
-
-	if (target_type == ExpressionType::COMPARE_IN) {
+	case AEXPR_IN: {
 		auto left_expr = TransformExpression(root->lexpr);
 		auto result = make_unique<OperatorExpression>(
 		    ExpressionType::COMPARE_IN, TypeId::BOOLEAN, move(left_expr));
@@ -444,14 +432,25 @@ unique_ptr<AbstractExpression> TransformAExpr(A_Expr *root) {
 		} else {
 			return move(result);
 		}
-	}
-
+	} break;
+	// rewrite NULLIF(a, b) into CASE WHEN a=b THEN NULL ELSE a END
+	case AEXPR_NULLIF: {
+		auto case_expr = unique_ptr<AbstractExpression>(new CaseExpression());
+		auto test_expr = unique_ptr<AbstractExpression>(
+		    new ComparisonExpression(ExpressionType::COMPARE_EQUAL,
+		                             move(TransformExpression(root->lexpr)),
+		                             move(TransformExpression(root->rexpr))));
+		case_expr->AddChild(move(test_expr));
+		auto null_expr =
+		    unique_ptr<AbstractExpression>(new ConstantExpression(Value()));
+		case_expr->AddChild(move(null_expr));
+		case_expr->AddChild(move(TransformExpression(root->lexpr)));
+		return move(case_expr);
+	} break;
 	// rewrite (NOT) X BETWEEN A AND B into (NOT) AND(GREATERTHANOREQUALTO(X,
 	// A), LESSTHANOREQUALTO(X, B))
-	// TODO: perhaps we want to extend TransformExpression to handle this, but
-	// then this is also a special case
-	if (target_type == ExpressionType::COMPARE_BETWEEN ||
-	    target_type == ExpressionType::COMPARE_NOT_BETWEEN) {
+	case AEXPR_BETWEEN:
+	case AEXPR_NOT_BETWEEN: {
 		auto between_args = reinterpret_cast<List *>(root->rexpr);
 
 		if (between_args->length != 2 || !between_args->head->data.ptr_value ||
@@ -473,15 +472,24 @@ unique_ptr<AbstractExpression> TransformAExpr(A_Expr *root) {
 		auto compare_between = make_unique<ConjunctionExpression>(
 		    ExpressionType::CONJUNCTION_AND, move(compare_left),
 		    move(compare_right));
-		if (target_type == ExpressionType::COMPARE_BETWEEN) {
+		if (root->kind == AEXPR_BETWEEN) {
 			return move(compare_between);
 		} else {
 			return make_unique<OperatorExpression>(
 			    ExpressionType::OPERATOR_NOT, TypeId::BOOLEAN,
 			    move(compare_between), nullptr);
 		}
+	} break;
+	default: {
+		target_type = StringToExpressionType(name);
+		if (target_type == ExpressionType::INVALID) {
+			throw NotImplementedException(
+			    "A_Expr transform not implemented %s.", name.c_str());
+		}
+	}
 	}
 
+	// continuing default case
 	auto left_expr = TransformExpression(root->lexpr);
 	auto right_expr = TransformExpression(root->rexpr);
 	if (!left_expr) {
