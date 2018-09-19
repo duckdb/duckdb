@@ -226,24 +226,10 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		max_chain = max(chain, max_chain);
 	}
 
-	size_t payload_length = 0;
-	// find the pointers to the counts because we need them for the FIRST
-	// implementation
-	// TODO: Suggests improvement: store the counts at the beginning of the
-	// addresses?
-	size_t j = 0;
-
-	for (size_t i = 0; i < aggregate_types.size(); i++) {
-		if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_STAR) {
-			continue;
-		}
-		payload_length += GetTypeIdSize(payload.data[j++].type);
-	}
-
 	// now every cell has an entry
 	// update the aggregates
 	Vector one(Value::BIGINT(1));
-	j = 0;
+	size_t j = 0;
 
 	for (size_t i = 0; i < aggregate_types.size(); i++) {
 		if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_STAR) {
