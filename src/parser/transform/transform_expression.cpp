@@ -10,7 +10,7 @@ namespace duckdb {
 
 static bool IsAggregateFunction(const string &fun_name) {
 	if (fun_name == "min" || fun_name == "max" || fun_name == "count" ||
-	    fun_name == "avg" || fun_name == "sum")
+	    fun_name == "avg" || fun_name == "sum" || fun_name == "first")
 		return true;
 	return false;
 }

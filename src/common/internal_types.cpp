@@ -87,6 +87,8 @@ ExpressionType StringToExpressionType(const string &str) {
 		return ExpressionType::AGGREGATE_MAX;
 	} else if (upper_str == "AGGREGATE_AVG") {
 		return ExpressionType::AGGREGATE_AVG;
+	} else if (upper_str == "AGGREGATE_FIRST") {
+		return ExpressionType::AGGREGATE_FIRST;
 	} else if (upper_str == "FUNCTION") {
 		return ExpressionType::FUNCTION;
 	} else if (upper_str == "HASH_RANGE") {
@@ -403,6 +405,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "MAX";
 	case ExpressionType::AGGREGATE_AVG:
 		return "AVG";
+	case ExpressionType::AGGREGATE_FIRST:
+		return "FIRST";
 	case ExpressionType::FUNCTION:
 		return "FUNCTION";
 	case ExpressionType::HASH_RANGE:

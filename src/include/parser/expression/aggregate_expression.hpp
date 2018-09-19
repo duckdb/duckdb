@@ -20,7 +20,7 @@ class AggregateExpression : public AbstractExpression {
   public:
 	AggregateExpression(ExpressionType type, bool distinct,
 	                    std::unique_ptr<AbstractExpression> child)
-	    : AbstractExpression(type) {
+	    : AbstractExpression(type), index(0) {
 		this->distinct = distinct;
 
 		// translate COUNT(*) into AGGREGATE_COUNT_STAR
@@ -38,6 +38,8 @@ class AggregateExpression : public AbstractExpression {
 		case ExpressionType::AGGREGATE_SUM:
 		case ExpressionType::AGGREGATE_MIN:
 		case ExpressionType::AGGREGATE_MAX:
+		case ExpressionType::AGGREGATE_FIRST:
+
 			break;
 		default:
 			throw Exception("Aggregate type not supported");
@@ -72,6 +74,9 @@ class AggregateExpression : public AbstractExpression {
 			Statistics::Sum(children[0]->stats, stats);
 			return_type =
 			    std::max(children[0]->return_type, stats.MinimalType());
+			break;
+		case ExpressionType::AGGREGATE_FIRST:
+			return_type = children[0]->return_type;
 			break;
 		default:
 			throw NotImplementedException("Unsupported aggregate type!");

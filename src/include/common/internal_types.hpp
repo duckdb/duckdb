@@ -176,6 +176,7 @@ enum class ExpressionType {
 	AGGREGATE_MIN = 53,
 	AGGREGATE_MAX = 54,
 	AGGREGATE_AVG = 55,
+	AGGREGATE_FIRST = 56,
 
 	// -----------------------------
 	// Functions

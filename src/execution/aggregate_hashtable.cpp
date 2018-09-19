@@ -3,6 +3,8 @@
 #include "common/exception.hpp"
 #include "common/types/vector_operations.hpp"
 
+#include <map>
+
 using namespace duckdb;
 using namespace std;
 
@@ -201,6 +203,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 					}
 					location += GetTypeIdSize(type);
 				}
+				// set the count
 				*((int64_t *)location) = 0;
 				entries++;
 				break;
@@ -223,10 +226,24 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		max_chain = max(chain, max_chain);
 	}
 
+	size_t payload_length = 0;
+	// find the pointers to the counts because we need them for the FIRST
+	// implementation
+	// TODO: Suggests improvement: store the counts at the beginning of the
+	// addresses?
+	size_t j = 0;
+
+	for (size_t i = 0; i < aggregate_types.size(); i++) {
+		if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_STAR) {
+			continue;
+		}
+		payload_length += GetTypeIdSize(payload.data[j++].type);
+	}
+
 	// now every cell has an entry
 	// update the aggregates
 	Vector one(Value::BIGINT(1));
-	size_t j = 0;
+	j = 0;
 
 	for (size_t i = 0; i < aggregate_types.size(); i++) {
 		if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_STAR) {
@@ -250,6 +267,44 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			// max
 			VectorOperations::Scatter::Max(payload.data[j], addresses);
 			break;
+		case ExpressionType::AGGREGATE_FIRST: {
+			// we only want to scatter payload to addresses if addresses had
+			// never been set before thus, if count for a group is zero, set.
+			// otherwise don't.
+			Vector count_addr;
+			count_addr.Initialize(addresses.type);
+			addresses.Copy(count_addr);
+			VectorOperations::Add(count_addr, payload_length, count_addr);
+
+			// quite ugly this, a map in a hash table
+			// TODO: is there a vectorized/better way to do this?
+			// problem is that multiple addr in one chunk can point to same
+			// group
+
+			std::map<int64_t *, uint8_t> addr_set;
+			Vector scatter_addr;
+			scatter_addr.Initialize(TypeId::POINTER);
+
+			Vector scatter_payload;
+			scatter_payload.Initialize(payload.data[j].type);
+
+			for (size_t addr_idx = 0; addr_idx < addresses.count; addr_idx++) {
+				assert(addr_idx < payload.data[j].count);
+
+				int64_t *count_ptr =
+				    (int64_t *)((void **)count_addr.data)[addr_idx];
+				if (*count_ptr == 0 &&
+				    addr_set.find(count_ptr) == addr_set.end()) {
+					scatter_addr.SetValue(scatter_addr.count++,
+					                      addresses.GetValue(addr_idx));
+					scatter_payload.SetValue(
+					    scatter_payload.count++,
+					    payload.data[j].GetValue(addr_idx));
+					addr_set[count_ptr] = true;
+				}
+			}
+			VectorOperations::Scatter::Set(scatter_payload, scatter_addr);
+		} break;
 		default:
 			throw NotImplementedException("Unimplemented aggregate type!");
 		}
@@ -304,7 +359,6 @@ void SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &groups,
 		VectorOperations::Add(addresses, GetTypeIdSize(column.type), addresses);
 	}
 
-	size_t current_bytes = 0;
 	for (size_t i = 0; i < aggregate_types.size(); i++) {
 		auto &target = result.data[i];
 		target.count = entry;
@@ -316,7 +370,6 @@ void SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &groups,
 		}
 		VectorOperations::Gather::Set(addresses, target);
 		VectorOperations::Add(addresses, GetTypeIdSize(target.type), addresses);
-		current_bytes += GetTypeIdSize(target.type);
 	}
 	for (size_t i = 0; i < aggregate_types.size(); i++) {
 		// now we can fetch the counts

@@ -80,6 +80,13 @@ Value ExpressionExecutor::Execute(AggregateExpression &expr) {
 		case ExpressionType::AGGREGATE_MAX: {
 			return VectorOperations::Max(vector);
 		}
+		case ExpressionType::AGGREGATE_FIRST: {
+			if (vector.count > 0) {
+				return vector.GetValue(0).CastAs(expr.return_type);
+			} else {
+				return Value().CastAs(expr.return_type);
+			}
+		}
 		default:
 			throw NotImplementedException("Unsupported aggregate type");
 		}
@@ -109,6 +116,9 @@ void ExpressionExecutor::Merge(AggregateExpression &expr, Value &result) {
 		Value::Max(result, v, result);
 		break;
 	}
+	// we don't have to merge since the first chunk already set the result
+	case ExpressionType::AGGREGATE_FIRST:
+		break;
 	default:
 		throw NotImplementedException("Unsupported aggregate type");
 	}
