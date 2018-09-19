@@ -128,7 +128,8 @@ struct VectorOperations {
 		static void Min(Vector &source, Vector &dest);
 		// dest[i] = dest[i] + 1
 		static void AddOne(Vector &source, Vector &dest);
-
+		//! dest[i] = dest[i]
+		static void SetFirst(Vector &source, Vector &dest);
 		// dest[i] = dest[i] + source
 		static void Add(int64_t source, void **dest, size_t length);
 	};

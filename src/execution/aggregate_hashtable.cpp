@@ -267,44 +267,10 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			// max
 			VectorOperations::Scatter::Max(payload.data[j], addresses);
 			break;
-		case ExpressionType::AGGREGATE_FIRST: {
-			// we only want to scatter payload to addresses if addresses had
-			// never been set before thus, if count for a group is zero, set.
-			// otherwise don't.
-			Vector count_addr;
-			count_addr.Initialize(addresses.type);
-			addresses.Copy(count_addr);
-			VectorOperations::Add(count_addr, payload_length, count_addr);
-
-			// quite ugly this, a map in a hash table
-			// TODO: is there a vectorized/better way to do this?
-			// problem is that multiple addr in one chunk can point to same
-			// group
-
-			std::map<int64_t *, uint8_t> addr_set;
-			Vector scatter_addr;
-			scatter_addr.Initialize(TypeId::POINTER);
-
-			Vector scatter_payload;
-			scatter_payload.Initialize(payload.data[j].type);
-
-			for (size_t addr_idx = 0; addr_idx < addresses.count; addr_idx++) {
-				assert(addr_idx < payload.data[j].count);
-
-				int64_t *count_ptr =
-				    (int64_t *)((void **)count_addr.data)[addr_idx];
-				if (*count_ptr == 0 &&
-				    addr_set.find(count_ptr) == addr_set.end()) {
-					scatter_addr.SetValue(scatter_addr.count++,
-					                      addresses.GetValue(addr_idx));
-					scatter_payload.SetValue(
-					    scatter_payload.count++,
-					    payload.data[j].GetValue(addr_idx));
-					addr_set[count_ptr] = true;
-				}
-			}
-			VectorOperations::Scatter::Set(scatter_payload, scatter_addr);
-		} break;
+		case ExpressionType::AGGREGATE_FIRST:
+			// first
+			VectorOperations::Scatter::SetFirst(payload.data[j], addresses);
+			break;
 		default:
 			throw NotImplementedException("Unimplemented aggregate type!");
 		}

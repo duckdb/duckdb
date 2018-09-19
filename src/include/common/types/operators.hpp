@@ -181,6 +181,12 @@ struct PickLeft {
 	}
 };
 
+struct PickRight {
+	template <class T> static inline T Operation(T left, T right) {
+		return right;
+	}
+};
+
 struct ConstantZero {
 	template <class T> static inline T Operation(T left, T right) { return 0; }
 };

@@ -50,7 +50,6 @@ class DataChunk : public Printable {
 	sel_t *sel_vector;
 
 	DataChunk();
-	~DataChunk();
 
 #ifdef DEBUG
 	//! Verify that the DataChunk is in a consistent, not corrupt state. DEBUG

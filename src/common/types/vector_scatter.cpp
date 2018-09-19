@@ -179,3 +179,7 @@ void VectorOperations::Scatter::AddOne(Vector &source, Vector &dest) {
 void VectorOperations::Gather::Set(Vector &source, Vector &dest) {
 	_generic_gather_loop<operators::PickLeft>(source, dest);
 }
+
+void VectorOperations::Scatter::SetFirst(Vector &source, Vector &dest) {
+	_generic_scatter_loop<operators::PickRight>(source, dest);
+}
