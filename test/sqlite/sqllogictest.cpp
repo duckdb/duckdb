@@ -67,7 +67,6 @@ struct Script {
 // stub because not used
 void sqllogictestRegisterEngine(const DbEngine *p) {}
 
-
 /*
 ** Advance the cursor to the start of the next non-comment line of the
 ** script.  Make p->zLine point to the start of the line.  Make p->len
@@ -301,7 +300,6 @@ static int checkValue(const char *zKey, const char *zHash) {
 	}
 
 static void execute_file(string script) {
-	int verifyMode = 1;               /* True if in -verify mode */
 	int haltOnError = 0;              /* Stop on first error if true */
 	int enableTrace = 0;              /* Trace SQL statements if true */
 	const char *zScriptFile = 0;      /* Input script filename */
@@ -312,7 +310,7 @@ static void execute_file(string script) {
 	char *zScript;                    /* Content of the script */
 	long nScript;                     /* Size of the script in bytes */
 	long nGot;                        /* Number of bytes read */
-	void *pConn;                      /* Connection to the database engine */
+	void *pConn = nullptr;            /* Connection to the database engine */
 	int rc;                           /* Result code from subroutine call */
 	int nErr = 0;                     /* Number of errors */
 	int nCmd = 0;                     /* Number of SQL statements processed */
@@ -374,7 +372,7 @@ static void execute_file(string script) {
 	sScript.zScript = zScript;
 	sScript.zLine = zScript;
 	sScript.iEnd = nScript;
-	sScript.copyFlag = !verifyMode;
+	sScript.copyFlag = 0;
 
 	/* Open the database engine under test
 	 */
@@ -418,8 +416,6 @@ static void execute_file(string script) {
 		if (bSkip) {
 			int n;
 			nSkipped++;
-			if (!verifyMode)
-				continue;
 			if (strcmp(sScript.azToken[0], "query") != 0)
 				continue;
 			if (sScript.azToken[3][0] == 0)
@@ -604,67 +600,38 @@ static void execute_file(string script) {
 				}
 			}
 
-			if (verifyMode) {
-				/* In verify mode, first skip over the ---- line if we are
-				 *still
-				 ** pointing at it. */
-				if (strcmp(sScript.zLine, "----") == 0)
-					nextLine(&sScript);
+			/* In verify mode, first skip over the ---- line if we are
+			 *still
+			 ** pointing at it. */
+			if (strcmp(sScript.zLine, "----") == 0)
+				nextLine(&sScript);
 
-				/* Compare subsequent lines of the script against the
-				 *results
-				 ** from the query.  Report an error if any differences are
-				 *found.
-				 */
-				if (hashThreshold == 0 || nResult <= hashThreshold) {
-					for (i = 0; i < nResult && sScript.zLine[0];
-					     nextLine(&sScript), i++) {
-						if (strcmp(sScript.zLine, azResult[i]) != 0) {
-							fprintf(stderr, "%s:%d: wrong result\n",
-							        zScriptFile, sScript.nLine);
+			/* Compare subsequent lines of the script against the
+			 *results
+			 ** from the query.  Report an error if any differences are
+			 *found.
+			 */
+			if (hashThreshold == 0 || nResult <= hashThreshold) {
+				for (i = 0; i < nResult && sScript.zLine[0];
+				     nextLine(&sScript), i++) {
+					if (strcmp(sScript.zLine, azResult[i]) != 0) {
+						fprintf(stderr, "%s:%d: wrong result\n", zScriptFile,
+						        sScript.nLine);
 
-							fprintf(stderr, "%s <> %s\n", sScript.zLine,
-							        azResult[i]);
-							IFAIL();
-						}
-						// we check this already but this inflates the test
-						// case count as desired
-						REQUIRE(strcmp(sScript.zLine, azResult[i]) == 0);
-					}
-				} else {
-					if (strcmp(sScript.zLine, zHash) != 0) {
-						fprintf(stderr, "%s:%d: wrong result hash\n",
-						        zScriptFile, sScript.nLine);
+						fprintf(stderr, "%s <> %s\n", sScript.zLine,
+						        azResult[i]);
 						IFAIL();
 					}
+					// we check this already but this inflates the test
+					// case count as desired
+					REQUIRE(strcmp(sScript.zLine, azResult[i]) == 0);
 				}
 			} else {
-				/* In completion mode, first make sure we have output an
-				 *---- line.
-				 ** Output such a line now if we have not already done so.
-				 */
-				if (strcmp(sScript.zLine, "----") != 0) {
-					printf("----\n");
+				if (strcmp(sScript.zLine, zHash) != 0) {
+					fprintf(stderr, "%s:%d: wrong result hash\n", zScriptFile,
+					        sScript.nLine);
+					IFAIL();
 				}
-
-				/* Output the results obtained by running the query
-				 */
-				if (hashThreshold == 0 || nResult <= hashThreshold) {
-					for (i = 0; i < nResult; i++) {
-						printf("%s\n", azResult[i]);
-					}
-				} else {
-					printf("%s\n", zHash);
-				}
-				printf("\n");
-
-				/* Skip over any existing results.  They will be ignored.
-				 */
-				sScript.copyFlag = 0;
-				while (sScript.zLine[0] != 0 && sScript.iCur < sScript.iEnd) {
-					nextLine(&sScript);
-				}
-				sScript.copyFlag = 1;
 			}
 
 			/* Free the query results */
