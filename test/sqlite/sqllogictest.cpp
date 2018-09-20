@@ -48,47 +48,6 @@ using namespace std;
 #define DEFAULT_HASH_THRESHOLD 8
 
 /*
-** An array of registered database engines
-*/
-static int nEngine = 0;
-static const DbEngine **apEngine = 0;
-
-/*
-** Register a new database engine.
-*/
-void sqllogictestRegisterEngine(const DbEngine *p) {
-	nEngine++;
-	apEngine =
-	    (const DbEngine **)realloc(apEngine, nEngine * sizeof(apEngine[0]));
-	if (apEngine == 0) {
-		fprintf(stderr, "out of memory at %s:%d\n", __FILE__, __LINE__);
-		exit(1);
-	}
-	apEngine[nEngine - 1] = (DbEngine *)p;
-}
-
-/*
-** Print a usage comment and die
-*/
-// static void usage(const char *argv0) {
-// 	fprintf(stdout, "Usage: %s [options] script\n", argv0);
-// 	fprintf(
-// 	    stdout,
-// 	    "Options:\n"
-// 	    "  --connection STR       The connection string\n"
-// 	    "  --engine DBENGINE      The engine name (ex: SQLite, ODBC3)\n"
-// 	    "  --halt                 Stop when first error is seen\n"
-// 	    "  --ht NUM               Check results by hash if numbe of lines > "
-// 	    "NUM\n"
-// 	    "  --odbc STR             Shorthand for \"--engine ODBC3 --connection "
-// 	    "STR\"\n"
-// 	    "  --parameters TXT       Extra parameters to the connection string\n"
-// 	    "  --trace                Enable tracing of SQL to standard output\n"
-// 	    "  --verify               Use \"verify MODE\"\n");
-// 	exit(1);
-// }
-
-/*
 ** A structure to keep track of the state of scanning the input script.
 */
 typedef struct Script Script;
@@ -104,6 +63,10 @@ struct Script {
 	int copyFlag;         /* If true, copy lines to output as they are read */
 	char azToken[4][200]; /* tokenization of a line */
 };
+
+// stub because not used
+void sqllogictestRegisterEngine(const DbEngine *p) {}
+
 
 /*
 ** Advance the cursor to the start of the next non-comment line of the
@@ -779,10 +742,10 @@ static void testRunner() {
 struct AutoRegTests {
 	AutoRegTests() {
 		vector<string> excludes = {
-		    "test/select4.test",                    // EXCEPT etc.
-		    "test/select5.test",                    // joins too slow
-		    "test/index",                           // no index yet
-		    "random/aggregates",                    // too many diffs to SQLite
+		    "test/select4.test", // EXCEPT etc.
+		    "test/select5.test", // joins too slow
+		    "test/index",        // no index yet
+		    "random/aggregates", // too many diffs to SQLite, but TODO
 		    "random/expr",                          // ditto
 		    "random/groupby/",                      // ditto
 		    "random/select/slt_good_70.test",       // join on not between
@@ -793,7 +756,8 @@ struct AutoRegTests {
 		    "evidence/slt_lang_dropindex.test",     // "
 		    "evidence/slt_lang_createtrigger.test", // "
 		    "evidence/slt_lang_droptrigger.test",   // "
-		    "evidence/slt_lang_droptable.test",     // DROP TABLE IF EXISTS not supported
+		    "evidence/slt_lang_droptable.test",     // DROP TABLE IF EXISTS not
+		                                            // supported
 		};
 		listFiles("third_party/sqllogictest/test/",
 		          [excludes](const std::string &path) {

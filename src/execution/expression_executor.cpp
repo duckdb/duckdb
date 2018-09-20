@@ -140,9 +140,9 @@ void ExpressionExecutor::Visit(AggregateExpression &expr) {
 			Value val;
 			if (expr.type == ExpressionType::AGGREGATE_COUNT ||
 			    expr.type == ExpressionType::AGGREGATE_COUNT_STAR) {
-				val = Value(0); // ZERO
+				val = Value(0).CastAs(expr.return_type); // ZERO
 			} else {
-				val = Value(); // NULL
+				val = Value().CastAs(expr.return_type); // NULL
 			}
 			Vector v(val);
 			v.Move(vector);

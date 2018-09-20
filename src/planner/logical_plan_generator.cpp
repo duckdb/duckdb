@@ -110,6 +110,19 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 	if (statement.HasAggregation()) {
 		auto aggregate =
 		    make_unique<LogicalAggregate>(move(statement.select_list));
+
+		// the all-controversial feature
+		// rewrite non-aggregates into aggregates using FIRST
+		for (size_t i = 0; i < aggregate->expressions.size(); i++) {
+			if (!aggregate->expressions[i]->IsAggregate()) {
+				auto first = make_unique<AggregateExpression>(
+				    ExpressionType::AGGREGATE_FIRST, false,
+				    move(aggregate->expressions[i]));
+				first->ResolveType();
+				aggregate->expressions[i] = move(first);
+			}
+		}
+
 		if (statement.HasGroup()) {
 			// have to add group by columns
 			aggregate->groups = move(statement.groupby.groups);
