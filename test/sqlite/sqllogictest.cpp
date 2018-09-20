@@ -713,8 +713,8 @@ struct AutoRegTests {
 		    "test/select5.test", // joins too slow
 		    "test/index",        // no index yet
 		    "random/aggregates", // too many diffs to SQLite, but TODO
-		    "random/expr",                          // ditto
-		    "random/groupby/",                      // ditto
+		    "random/expr",       // ditto
+		    "random/groupby/",   // ditto
 		    "random/select/slt_good_70.test",       // join on not between
 		    "evidence/slt_lang_replace.test",       // feature not supported
 		    "evidence/slt_lang_createview.test",    // "

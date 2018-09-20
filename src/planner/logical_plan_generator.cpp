@@ -111,10 +111,16 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 		auto aggregate =
 		    make_unique<LogicalAggregate>(move(statement.select_list));
 
+		if (statement.HasGroup()) {
+			// have to add group by columns
+			aggregate->groups = move(statement.groupby.groups);
+		}
+
 		// the all-controversial feature
 		// rewrite non-aggregates into aggregates using FIRST
 		for (size_t i = 0; i < aggregate->expressions.size(); i++) {
-			if (!aggregate->expressions[i]->IsAggregate()) {
+			if (!aggregate->expressions[i]->IsAggregate() &&
+			    aggregate->expressions[i]->type != ExpressionType::GROUP_REF) {
 				auto first = make_unique<AggregateExpression>(
 				    ExpressionType::AGGREGATE_FIRST, false,
 				    move(aggregate->expressions[i]));
@@ -123,10 +129,6 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 			}
 		}
 
-		if (statement.HasGroup()) {
-			// have to add group by columns
-			aggregate->groups = move(statement.groupby.groups);
-		}
 		aggregate->AddChild(move(root));
 		root = move(aggregate);
 

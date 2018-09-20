@@ -67,6 +67,10 @@ Value ExpressionExecutor::Execute(AggregateExpression &expr) {
 		return Value::Numeric(expr.return_type, count);
 	} else if (expr.children.size() > 0) {
 		expr.children[0]->Accept(this);
+		if (vector.count == 1 && vector.count < chunk->count) {
+			vector.count = chunk->count;
+			VectorOperations::Set(vector, vector.GetValue(0));
+		}
 		switch (expr.type) {
 		case ExpressionType::AGGREGATE_SUM: {
 			return VectorOperations::Sum(vector);
@@ -124,6 +128,20 @@ void ExpressionExecutor::Merge(AggregateExpression &expr, Value &result) {
 	}
 }
 
+static bool IsScalarAggr(AbstractExpression *expr) {
+	if (expr->type == ExpressionType::COLUMN_REF ||
+	    expr->type == ExpressionType::GROUP_REF ||
+	    expr->type == ExpressionType::AGGREGATE_COUNT_STAR) {
+		return false;
+	}
+	for (auto &child : expr->children) {
+		if (!IsScalarAggr(child.get())) {
+			return false;
+		}
+	}
+	return true;
+}
+
 void ExpressionExecutor::Visit(AggregateExpression &expr) {
 	auto state =
 	    reinterpret_cast<PhysicalAggregateOperatorState *>(this->state);
@@ -135,6 +153,10 @@ void ExpressionExecutor::Visit(AggregateExpression &expr) {
 		    state->aggregate_chunk.data[expr.index].count) {
 			vector.Reference(state->aggregate_chunk.data[expr.index]);
 		} else {
+			if (IsScalarAggr(&expr)) {
+				ExpressionExecutor::Execute(expr);
+				return;
+			}
 			// the subquery scanned no rows, therefore the aggr is empty. return
 			// something reasonable depending on aggr type.
 			Value val;
