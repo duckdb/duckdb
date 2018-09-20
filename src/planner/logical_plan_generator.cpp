@@ -116,18 +116,18 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 			aggregate->groups = move(statement.groupby.groups);
 		}
 
-		// the all-controversial feature
-		// rewrite non-aggregates into aggregates using FIRST
-		for (size_t i = 0; i < aggregate->expressions.size(); i++) {
-			if (!aggregate->expressions[i]->IsAggregate() &&
-			    aggregate->expressions[i]->type != ExpressionType::GROUP_REF) {
-				auto first = make_unique<AggregateExpression>(
-				    ExpressionType::AGGREGATE_FIRST, false,
-				    move(aggregate->expressions[i]));
-				first->ResolveType();
-				aggregate->expressions[i] = move(first);
-			}
-		}
+//		// the all-controversial feature
+//		// rewrite non-aggregates into aggregates using FIRST
+//		for (size_t i = 0; i < aggregate->expressions.size(); i++) {
+//			if (!aggregate->expressions[i]->IsAggregate() &&
+//			    aggregate->expressions[i]->type != ExpressionType::GROUP_REF) { // FIXME this will fail when math is applied to group refs!
+//				auto first = make_unique<AggregateExpression>(
+//				    ExpressionType::AGGREGATE_FIRST, false,
+//				    move(aggregate->expressions[i]));
+//				first->ResolveType();
+//				aggregate->expressions[i] = move(first);
+//			}
+//		}
 
 		aggregate->AddChild(move(root));
 		root = move(aggregate);
