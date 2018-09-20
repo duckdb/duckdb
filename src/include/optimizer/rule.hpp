@@ -172,8 +172,8 @@ class AbstractOperatorIterator {
 		      expr_index(expr_index) {}
 
 		Node(AbstractExpression *expr, size_t expr_index)
-		    : node(AbstractOperator(expr)), expr_index(expr_index),
-		      op_index(0) {}
+		    : node(AbstractOperator(expr)), op_index(0),
+		      expr_index(expr_index) {}
 	};
 	std::stack<Node> nodes;
 };
@@ -213,7 +213,7 @@ class ColumnRefNodeDepth : public ExpressionNodeType {
   public:
 	size_t depth;
 	ColumnRefNodeDepth(size_t depth)
-	    : depth(depth), ExpressionNodeType(ExpressionType::COLUMN_REF) {}
+	    : ExpressionNodeType(ExpressionType::COLUMN_REF), depth(depth) {}
 	virtual bool Matches(AbstractOperator &rel) {
 		return ExpressionNodeType::Matches(rel) &&
 		       ((ColumnRefExpression *)rel.value.expr)->depth == depth;

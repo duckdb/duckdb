@@ -65,7 +65,7 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(std::string query) {
 		result->error = "UNHANDLED EXCEPTION TYPE THROWN IN PLANNER!";
 	}
 	context.profiler.EndQuery();
-	return move(result);
+	return result;
 }
 
 unique_ptr<DuckDBResult> DuckDBConnection::Query(std::string query) {
@@ -87,5 +87,5 @@ unique_ptr<DuckDBResult> DuckDBConnection::Query(std::string query) {
 			}
 		}
 	}
-	return move(result);
+	return result;
 }

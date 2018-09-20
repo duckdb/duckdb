@@ -201,8 +201,8 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 			group_ref->alias = proj_ele->alias;
 			expressions.push_back(move(group_ref));
 			groups.push_back(
-			    move(make_unique_base<AbstractExpression, ColumnRefExpression>(
-			        proj_ele->return_type, i)));
+			    make_unique_base<AbstractExpression, ColumnRefExpression>(
+			        proj_ele->return_type, i));
 		}
 		// this aggregate is superflous if all grouping columns are in aggr
 		// below

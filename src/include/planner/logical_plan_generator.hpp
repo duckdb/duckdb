@@ -28,7 +28,7 @@ class ClientContext;
 class LogicalPlanGenerator : public SQLNodeVisitor {
   public:
 	LogicalPlanGenerator(ClientContext &context, BindContext &bind_context)
-	    : context(context), bind_context(bind_context), require_row_id(false) {}
+	    : require_row_id(false), context(context), bind_context(bind_context) {}
 
 	void Visit(SelectStatement &statement);
 	void Visit(InsertStatement &statement);

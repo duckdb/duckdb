@@ -14,7 +14,7 @@ using namespace duckdb;
 using namespace std;
 
 DataTable::DataTable(StorageManager &storage, TableCatalogEntry &table)
-    : storage(storage), count(0), table(table) {
+    : table(table), count(0), storage(storage) {
 	size_t accumulative_size = 0;
 	for (size_t i = 0; i < table.columns.size(); i++) {
 		accumulative_tuple_size.push_back(accumulative_size);

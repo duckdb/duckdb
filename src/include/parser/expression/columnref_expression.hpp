@@ -37,22 +37,22 @@ class ColumnRefExpression : public AbstractExpression {
 	    : AbstractExpression(ExpressionType::STAR), reference(nullptr) {}
 	//! Only specify the column name, the table name will be derived later
 	ColumnRefExpression(std::string column_name)
-	    : AbstractExpression(ExpressionType::COLUMN_REF),
-	      column_name(column_name), reference(nullptr) {}
+	    : AbstractExpression(ExpressionType::COLUMN_REF), reference(nullptr),
+	      column_name(column_name) {}
 
 	//! Specify both the column and table name
 	ColumnRefExpression(std::string column_name, std::string table_name)
-	    : AbstractExpression(ExpressionType::COLUMN_REF),
-	      column_name(column_name), table_name(table_name), reference(nullptr) {
-	}
+	    : AbstractExpression(ExpressionType::COLUMN_REF), reference(nullptr),
+	      column_name(column_name), table_name(table_name) {}
 
 	ColumnRefExpression(TypeId type, ColumnBinding binding)
-	    : AbstractExpression(ExpressionType::COLUMN_REF, type), column_name(""),
-	      table_name(""), binding(binding), reference(nullptr) {}
+	    : AbstractExpression(ExpressionType::COLUMN_REF, type),
+	      binding(binding), reference(nullptr), column_name(""),
+	      table_name("") {}
 
 	ColumnRefExpression(TypeId type, size_t index)
-	    : AbstractExpression(ExpressionType::COLUMN_REF, type), column_name(""),
-	      table_name(""), index(index), reference(nullptr) {}
+	    : AbstractExpression(ExpressionType::COLUMN_REF, type), index(index),
+	      reference(nullptr), column_name(""), table_name("") {}
 
 	const std::string &GetColumnName() const { return column_name; }
 	const std::string &GetTableName() const { return table_name; }

@@ -13,9 +13,9 @@ SuperLargeHashTable::SuperLargeHashTable(size_t initial_capacity,
                                          vector<TypeId> payload_types,
                                          vector<ExpressionType> aggregate_types,
                                          bool parallel)
-    : entries(0), capacity(0), data(nullptr), group_width(0), payload_width(0),
-      group_types(group_types), payload_types(payload_types),
-      aggregate_types(aggregate_types), max_chain(0), parallel(parallel) {
+    : aggregate_types(aggregate_types), group_types(group_types),
+      payload_types(payload_types), group_width(0), payload_width(0),
+      capacity(0), entries(0), data(nullptr), max_chain(0), parallel(parallel) {
 	// HT tuple layout is as follows:
 	// [FLAG][NULLMASK][GROUPS][PAYLOAD][COUNT]
 	// [FLAG] is the state of the tuple in memory
@@ -143,7 +143,6 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 
 	// now we actually access the base table
 	uint8_t group_data[group_width];
-	size_t new_count = 0, updated_count = 0;
 
 	void **ptr = (void **)addresses.data;
 	for (size_t i = 0; i < addresses.count; i++) {

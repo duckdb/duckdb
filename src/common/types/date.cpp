@@ -78,7 +78,7 @@ static inline void number_to_date(int32_t n, int32_t &year, int32_t &month,
 }
 
 static inline int32_t date_to_number(int32_t year, int32_t month, int32_t day) {
-	int32_t n;
+	int32_t n = 0;
 	if (DATE(day, month, year)) {
 		if (year < 0)
 			year++;

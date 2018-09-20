@@ -30,7 +30,7 @@ class PhysicalPlanGenerator : public LogicalOperatorVisitor {
   public:
 	PhysicalPlanGenerator(ClientContext &context,
 	                      PhysicalPlanGenerator *parent = nullptr)
-	    : context(context), parent(parent) {}
+	    : parent(parent), context(context) {}
 
 	bool CreatePlan(std::unique_ptr<LogicalOperator> logical);
 

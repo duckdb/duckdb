@@ -263,7 +263,7 @@ void Binder::Visit(ColumnRefExpression &expr) {
 		// no table name: find a table or subquery that contains this
 		expr.table_name = bind_context->GetMatchingTable(expr.column_name);
 	}
-	auto column = bind_context->BindColumn(expr);
+	bind_context->BindColumn(expr);
 }
 
 void Binder::Visit(SubqueryExpression &expr) {

@@ -24,7 +24,7 @@ class Rewriter {
 
 	Rewriter() {}
 	Rewriter(std::vector<std::unique_ptr<Rule>> rules, MatchOrder match_order)
-	    : rules(std::move(rules)), match_order(match_order) {}
+	    : match_order(match_order), rules(std::move(rules)) {}
 
 	std::unique_ptr<LogicalOperator>
 	ApplyRules(std::unique_ptr<LogicalOperator> root);

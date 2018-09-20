@@ -22,8 +22,8 @@ class PhysicalInsert : public PhysicalOperator {
 	                   insert_values,
 	               std::vector<int> column_index_map)
 	    : PhysicalOperator(PhysicalOperatorType::INSERT),
-	      insert_values(move(insert_values)), table(table),
-	      column_index_map(column_index_map) {}
+	      column_index_map(column_index_map),
+	      insert_values(move(insert_values)), table(table) {}
 
 	std::vector<TypeId> GetTypes() override;
 	virtual void _GetChunk(ClientContext &context, DataChunk &chunk,

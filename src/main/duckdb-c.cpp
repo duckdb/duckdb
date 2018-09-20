@@ -111,7 +111,6 @@ template <class T> T get_value(duckdb_column column, size_t index) {
 }
 
 static Value _duckdb_c_get_value(duckdb_column column, size_t index) {
-	auto cpp_type = _convert_type_c_to_cpp(column.type);
 	switch (column.type) {
 	case DUCKDB_TYPE_BOOLEAN:
 		return Value::BOOLEAN(get_value<int8_t>(column, index));

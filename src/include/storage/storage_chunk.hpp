@@ -29,7 +29,8 @@ struct StorageVector {
 	char *data;
 };
 
-struct StorageChunk {
+class StorageChunk {
+  public:
 	StorageChunk(DataTable &table, size_t start);
 
 	DataTable &table;

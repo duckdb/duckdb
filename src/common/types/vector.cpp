@@ -9,16 +9,16 @@ using namespace duckdb;
 using namespace std;
 
 Vector::Vector(TypeId type, bool create_data, bool zero_data)
-    : type(type), count(0), sel_vector(nullptr), data(nullptr),
-      owns_data(false) {
+    : type(type), count(0), data(nullptr), owns_data(false),
+      sel_vector(nullptr) {
 	if (create_data) {
 		Initialize(type, zero_data);
 	}
 }
 
 Vector::Vector(TypeId type, char *dataptr)
-    : type(type), count(0), sel_vector(nullptr), data(dataptr),
-      owns_data(false) {
+    : type(type), count(0), data(dataptr), owns_data(false),
+      sel_vector(nullptr) {
 	if (dataptr && type == TypeId::INVALID) {
 		throw Exception("Cannot create a vector of type INVALID!");
 	}

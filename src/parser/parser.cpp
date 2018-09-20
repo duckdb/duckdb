@@ -76,7 +76,7 @@ unique_ptr<SQLStatement> Parser::TransformNode(Node *stmt) {
 	case T_ExplainStmt: {
 		ExplainStmt *explain_stmt = reinterpret_cast<ExplainStmt *>(stmt);
 		return make_unique<ExplainStatement>(
-		    move(TransformNode(explain_stmt->query)));
+		    TransformNode(explain_stmt->query));
 	}
 	default:
 		throw NotImplementedException("A_Expr not implemented!");

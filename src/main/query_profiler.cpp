@@ -103,7 +103,7 @@ QueryProfiler::CreateTree(PhysicalOperator *root, size_t depth) {
 		auto child_node = CreateTree(child.get(), depth + 1);
 		node->children.push_back(move(child_node));
 	}
-	return move(node);
+	return node;
 }
 
 constexpr int TREE_RENDER_HEIGHT = 5;

@@ -34,10 +34,10 @@ void Statistics::Verify(Vector &vector) {
 
 Statistics::Statistics(Value value)
     : has_stats(true), can_have_null(value.is_null), min(value), max(value),
-      type(value.type),
+
       maximum_string_length(
           value.type == TypeId::VARCHAR ? value.str_value.size() : 0),
-      maximum_count(1) {
+      type(value.type), maximum_count(1) {
 	if (TypeIsIntegral(value.type) && value.type != TypeId::BIGINT) {
 		// upcast to biggest integral type
 		max = min = value.CastAs(TypeId::BIGINT);

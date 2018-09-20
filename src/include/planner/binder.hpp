@@ -30,7 +30,7 @@ class ClientContext;
 class Binder : public SQLNodeVisitor {
   public:
 	Binder(ClientContext &context)
-	    : context(context), bind_context(make_unique<BindContext>()) {}
+	    : bind_context(make_unique<BindContext>()), context(context) {}
 
 	void Visit(SelectStatement &statement);
 	void Visit(InsertStatement &stmt);

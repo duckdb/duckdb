@@ -36,5 +36,6 @@ class ColumnDefinition {
 	Value default_value;
 
 	virtual std::string ToString() const { return std::string(); }
+	virtual ~ColumnDefinition(){};
 };
 } // namespace duckdb
