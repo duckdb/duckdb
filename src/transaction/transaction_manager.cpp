@@ -2,6 +2,9 @@
 #include "common/exception.hpp"
 #include "common/helper.hpp"
 
+#include "storage/storage_manager.hpp"
+
+#include "transaction/transaction.hpp"
 #include "transaction/transaction_manager.hpp"
 
 using namespace duckdb;
@@ -13,7 +16,8 @@ transaction_t MAXIMUM_QUERY_ID =
     std::numeric_limits<transaction_t>::max(); // 2^64
 } // namespace duckdb
 
-TransactionManager::TransactionManager() {
+TransactionManager::TransactionManager(StorageManager &storage)
+    : storage(storage) {
 	// start timestamp starts at zero
 	current_start_timestamp = 0;
 	// transaction ID starts very high:
@@ -55,7 +59,7 @@ void TransactionManager::CommitTransaction(Transaction *transaction) {
 	transaction_t commit_id = current_start_timestamp++;
 
 	// commit the UndoBuffer of the transaction
-	transaction->Commit(commit_id);
+	transaction->Commit(storage.GetWriteAheadLog(), commit_id);
 
 	// remove the transaction id from the list of active transactions
 	// potentially resulting in garbage collection

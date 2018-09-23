@@ -793,7 +793,8 @@ struct AutoRegTests {
 		    "evidence/slt_lang_dropindex.test",     // "
 		    "evidence/slt_lang_createtrigger.test", // "
 		    "evidence/slt_lang_droptrigger.test",   // "
-		    "evidence/slt_lang_droptable.test",     // DROP TABLE IF EXISTS not supported
+		    "evidence/slt_lang_droptable.test",     // DROP TABLE IF EXISTS not
+		                                            // supported
 		};
 		listFiles("third_party/sqllogictest/test/",
 		          [excludes](const std::string &path) {

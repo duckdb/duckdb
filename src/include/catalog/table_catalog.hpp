@@ -27,9 +27,12 @@ class SchemaCatalogEntry;
 //! A table catalog entry
 class TableCatalogEntry : public AbstractCatalogEntry {
   public:
-	TableCatalogEntry(Catalog *catalog, std::string name,
+	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
+	                  std::string name,
 	                  const std::vector<ColumnDefinition> &columns);
 
+	//! The schema the table belongs to
+	SchemaCatalogEntry *schema;
 	//! A reference to the underlying storage unit used for this table
 	std::unique_ptr<DataTable> storage;
 	//! A list of columns that are part of this table

@@ -60,7 +60,8 @@ enum class ExceptionType {
 	BINDER = 24,           // binder related
 	NETWORK = 25,          // network related
 	OPTIMIZER = 26,        // optimizer related
-	NULL_POINTER = 27      // nullptr exception
+	NULL_POINTER = 27,     // nullptr exception
+	IO = 28                // IO exception
 };
 
 #define FORMAT_CONSTRUCTOR(msg)                                                \
@@ -144,6 +145,8 @@ class Exception : public std::runtime_error {
 			return "Optimizer";
 		case ExceptionType::NULL_POINTER:
 			return "NullPointer";
+		case ExceptionType::IO:
+			return "IO";
 		default:
 			return "Unknown";
 		}
@@ -548,4 +551,14 @@ class NullPointerException : public Exception {
 		FORMAT_CONSTRUCTOR(msg);
 	}
 };
+
+class IOException : public Exception {
+	IOException() = delete;
+
+  public:
+	IOException(std::string msg, ...) : Exception(ExceptionType::IO, msg) {
+		FORMAT_CONSTRUCTOR(msg);
+	}
+};
+
 } // namespace duckdb

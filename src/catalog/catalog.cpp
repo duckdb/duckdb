@@ -7,6 +7,8 @@
 using namespace duckdb;
 using namespace std;
 
+Catalog::Catalog(StorageManager &storage) : storage(storage) {}
+
 void Catalog::CreateSchema(Transaction &transaction,
                            const std::string &schema_name) {
 	auto entry = make_unique_base<AbstractCatalogEntry, SchemaCatalogEntry>(

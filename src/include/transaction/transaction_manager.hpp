@@ -14,15 +14,16 @@
 #include <memory>
 #include <mutex>
 
-#include "transaction/transaction.hpp"
-
 namespace duckdb {
+
+class StorageManager;
+class Transaction;
 
 //! The Transaction Manager is responsible for creating and managing
 //! transactions
 class TransactionManager {
   public:
-	TransactionManager();
+	TransactionManager(StorageManager &storage);
 	//! Start a new transaction
 	Transaction *StartTransaction();
 	//! Commit the given transaction
@@ -50,6 +51,8 @@ class TransactionManager {
 	std::vector<std::unique_ptr<Transaction>> old_transactions;
 	//! The lock used for transaction operations
 	std::mutex transaction_lock;
+	//! The storage manager
+	StorageManager &storage;
 };
 
 } // namespace duckdb

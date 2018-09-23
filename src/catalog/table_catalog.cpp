@@ -9,9 +9,9 @@ using namespace duckdb;
 using namespace std;
 
 TableCatalogEntry::TableCatalogEntry(
-    Catalog *catalog, string name,
+    Catalog *catalog, SchemaCatalogEntry *schema, string name,
     const std::vector<ColumnDefinition> &table_columns)
-    : AbstractCatalogEntry(catalog, name) {
+    : AbstractCatalogEntry(CatalogType::TABLE, catalog, name), schema(schema) {
 	for (auto entry : table_columns) {
 		if (ColumnExists(entry.name)) {
 			throw CatalogException("Column with name %s already exists!",

@@ -10,18 +10,18 @@
 
 #pragma once
 
-#include "main/database.hpp"
 #include "main/query_profiler.hpp"
 
 #include "transaction/transaction_context.hpp"
 
 namespace duckdb {
+class DuckDB;
+
 //! The ClientContext holds information relevant to the current client session
 //! during execution
 class ClientContext {
   public:
-	ClientContext(DuckDB &database)
-	    : db(database), transaction(database.transaction_manager) {}
+	ClientContext(DuckDB &database);
 
 	Transaction &ActiveTransaction() { return transaction.ActiveTransaction(); }
 

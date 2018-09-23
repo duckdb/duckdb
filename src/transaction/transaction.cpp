@@ -70,7 +70,7 @@ uint8_t *Transaction::PushTuple(size_t data_size) {
 	                               sizeof(VersionInformation) + data_size);
 }
 
-void Transaction::Commit(transaction_t commit_id) {
+void Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) {
 	this->commit_id = commit_id;
-	undo_buffer.Commit(commit_id);
+	undo_buffer.Commit(log, commit_id);
 }

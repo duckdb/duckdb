@@ -4,6 +4,8 @@
 #include "common/types/chunk_collection.hpp"
 #include "common/types/vector_operations.hpp"
 
+#include "main/client_context.hpp"
+
 #include "storage/data_table.hpp"
 
 using namespace duckdb;

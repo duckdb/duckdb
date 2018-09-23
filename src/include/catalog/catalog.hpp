@@ -15,16 +15,16 @@
 #include "catalog/schema_catalog.hpp"
 #include "catalog/table_catalog.hpp"
 
-#include "storage/storage_manager.hpp"
-
 namespace duckdb {
+
+class StorageManager;
 
 #define DEFAULT_SCHEMA ""
 
 //! The Catalog object represents the catalog of the database.
 class Catalog {
   public:
-	Catalog(StorageManager &storage) : storage(storage) {}
+	Catalog(StorageManager &storage);
 
 	//! Creates a schema in the catalog. Throws an exception if it already
 	//! exists.

@@ -1,6 +1,8 @@
 
 #include "execution/physical_operator.hpp"
 
+#include "main/client_context.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -28,4 +30,14 @@ PhysicalOperatorState::PhysicalOperatorState(
 		child->InitializeChunk(child_chunk);
 		child_state = child->GetOperatorState(parent_executor);
 	}
+}
+
+void PhysicalOperator::GetChunk(ClientContext &context, DataChunk &chunk,
+                                PhysicalOperatorState *state) {
+
+	context.profiler.StartOperator(this);
+	_GetChunk(context, chunk, state);
+	context.profiler.EndOperator(chunk);
+
+	chunk.Verify();
 }

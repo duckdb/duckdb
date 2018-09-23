@@ -22,6 +22,7 @@ extern transaction_t MAXIMUM_QUERY_ID;
 class AbstractCatalogEntry;
 class DataTable;
 class StorageChunk;
+class WriteAheadLog;
 
 struct VersionInformation {
 	StorageChunk *chunk;
@@ -50,7 +51,7 @@ class Transaction {
 	void PushTuple(size_t offset, StorageChunk *storage);
 
 	//! Commit the current transaction with the given commit identifier
-	void Commit(transaction_t commit_id);
+	void Commit(WriteAheadLog *log, transaction_t commit_id);
 	//! Rollback
 	void Rollback() { undo_buffer.Rollback(); }
 	//! Cleanup the undo buffer

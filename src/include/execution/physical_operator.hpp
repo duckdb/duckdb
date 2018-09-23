@@ -19,12 +19,11 @@
 #include "common/printable.hpp"
 #include "common/types/data_chunk.hpp"
 
-#include "main/client_context.hpp"
-
 #include "parser/expression/abstract_expression.hpp"
 #include "parser/statement/select_statement.hpp"
 
 namespace duckdb {
+class ClientContext;
 class ExpressionExecutor;
 class PhysicalOperator;
 
@@ -80,14 +79,7 @@ class PhysicalOperator : public Printable {
 	                       PhysicalOperatorState *state) = 0;
 
 	void GetChunk(ClientContext &context, DataChunk &chunk,
-	              PhysicalOperatorState *state) {
-
-		context.profiler.StartOperator(this);
-		_GetChunk(context, chunk, state);
-		context.profiler.EndOperator(chunk);
-
-		chunk.Verify();
-	}
+	              PhysicalOperatorState *state);
 
 	//! Create a new empty instance of the operator state
 	virtual std::unique_ptr<PhysicalOperatorState>

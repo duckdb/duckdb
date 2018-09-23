@@ -10,6 +10,9 @@
 #include "parser/statement/select_statement.hpp"
 #include "parser/statement/update_statement.hpp"
 
+#include "main/client_context.hpp"
+#include "main/database.hpp"
+
 using namespace duckdb;
 using namespace std;
 

@@ -7,6 +7,7 @@
 #include "catalog/catalog_set.hpp"
 
 #include "storage/storage_chunk.hpp"
+#include "storage/write_ahead_log.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -62,7 +63,44 @@ void UndoBuffer::Cleanup() {
 	}
 }
 
-void UndoBuffer::Commit(transaction_t commit_id) {
+static void WriteCatalogEntry(WriteAheadLog *log, AbstractCatalogEntry *entry) {
+	if (!log) {
+		return;
+	}
+	// look at the type of the parent entry
+	auto parent = entry->parent;
+	switch (parent->type) {
+	case CatalogType::TABLE: {
+		auto table = (TableCatalogEntry *)parent;
+		if (parent->deleted) {
+			log->WriteDropTable(table);
+		} else {
+			log->WriteCreateTable(table);
+		}
+		break;
+	}
+	case CatalogType::SCHEMA: {
+		auto schema = (SchemaCatalogEntry *)parent;
+		if (parent->deleted) {
+			log->WriteDropSchema(schema);
+		} else {
+			log->WriteCreateSchema(schema);
+		}
+		break;
+	}
+	default:
+		throw Exception(
+		    "UndoBuffer - don't know how to write this entry to the WAL");
+	}
+}
+
+static void WriteTuple(WriteAheadLog *log, VersionInformation *entry) {
+	if (!log) {
+		return;
+	}
+}
+
+void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) {
 	for (auto &entry : entries) {
 		if (entry.type == UndoFlags::CATALOG_ENTRY) {
 			// set the commit timestamp of the catalog entry to the given id
@@ -70,13 +108,23 @@ void UndoBuffer::Commit(transaction_t commit_id) {
 			    *((AbstractCatalogEntry **)entry.data.get());
 			assert(catalog_entry->parent);
 			catalog_entry->parent->timestamp = commit_id;
+
+			// push the catalog update to the WAL
+			WriteCatalogEntry(log, catalog_entry);
 		} else if (entry.type == UndoFlags::TUPLE_ENTRY) {
 			// set the commit timestamp of the entry
 			auto info = (VersionInformation *)entry.data.get();
 			info->version_number = commit_id;
+
+			// push the tuple update to the WAL
+			WriteTuple(log, info);
 		} else {
 			throw Exception("UndoBuffer - don't know how to commit this type!");
 		}
+	}
+	if (log) {
+		// flush the WAL
+		log->Flush();
 	}
 }
 

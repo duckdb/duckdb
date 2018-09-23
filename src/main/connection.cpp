@@ -79,12 +79,21 @@ unique_ptr<DuckDBResult> DuckDBConnection::Query(std::string query) {
 
 	if (context.transaction.HasActiveTransaction()) {
 		context.ActiveTransaction().active_query = MAXIMUM_QUERY_ID;
-		if (context.transaction.IsAutoCommit()) {
-			if (result->GetSuccess()) {
-				context.transaction.Commit();
-			} else {
-				context.transaction.Rollback();
+		try {
+			if (context.transaction.IsAutoCommit()) {
+				if (result->GetSuccess()) {
+					context.transaction.Commit();
+				} else {
+					context.transaction.Rollback();
+				}
 			}
+		} catch (Exception ex) {
+			result->success = false;
+			result->error = ex.GetMessage();
+		} catch (...) {
+			result->success = false;
+			result->error =
+			    "UNHANDLED EXCEPTION TYPE THROWN IN TRANSACTION COMMIT!";
 		}
 	}
 	return move(result);

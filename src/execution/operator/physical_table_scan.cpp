@@ -1,6 +1,8 @@
 
 #include "execution/operator/physical_table_scan.hpp"
 
+#include "main/client_context.hpp"
+
 using namespace duckdb;
 using namespace std;
 

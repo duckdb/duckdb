@@ -1,5 +1,6 @@
 
 #include "main/client_context.hpp"
+#include "main/database.hpp"
 
 #include "parser/statement/copy_statement.hpp"
 #include "parser/statement/create_statement.hpp"

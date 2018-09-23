@@ -33,7 +33,7 @@ struct StorageChunk {
 	StorageChunk(DataTable &table, size_t start);
 
 	DataTable &table;
-	std::bitset<STORAGE_CHUNK_SIZE> deleted;
+	bool deleted[STORAGE_CHUNK_SIZE] = {0};
 	VersionInformation *version_pointers[STORAGE_CHUNK_SIZE] = {nullptr};
 	std::vector<StorageVector> columns;
 	size_t count;

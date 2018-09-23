@@ -20,8 +20,8 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name,
 		// first create a dummy deleted entry for this entry
 		// so transactions started before the commit of this transaction don't
 		// see it yet
-		auto dummy_node =
-		    make_unique<AbstractCatalogEntry>(value->catalog, name);
+		auto dummy_node = make_unique<AbstractCatalogEntry>(
+		    CatalogType::INVALID, value->catalog, name);
 		dummy_node->timestamp = 0;
 		dummy_node->deleted = true;
 		dummy_node->set = this;
@@ -73,7 +73,8 @@ bool CatalogSet::DropEntry(Transaction &transaction, const string &name) {
 		return true;
 	}
 
-	auto value = make_unique<AbstractCatalogEntry>(current.catalog, name);
+	auto value =
+	    make_unique<AbstractCatalogEntry>(current.type, current.catalog, name);
 
 	// create a new entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction

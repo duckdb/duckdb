@@ -5,10 +5,8 @@ using namespace duckdb;
 using namespace std;
 
 DuckDB::DuckDB(const char *path)
-    : storage(), catalog(storage), transaction_manager() {
-	// create a database
-	// create the base catalog
-	auto transaction = transaction_manager.StartTransaction();
-	catalog.CreateSchema(*transaction, DEFAULT_SCHEMA);
-	transaction_manager.CommitTransaction(transaction);
+    : storage(path ? std::string(path) : std::string()), catalog(storage),
+      transaction_manager(storage) {
+	// initialize the database
+	storage.Initialize(transaction_manager, catalog);
 }

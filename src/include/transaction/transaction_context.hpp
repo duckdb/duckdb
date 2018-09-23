@@ -10,10 +10,10 @@
 
 #pragma once
 
-#include "transaction/transaction.hpp"
-#include "transaction/transaction_manager.hpp"
-
 namespace duckdb {
+
+class Transaction;
+class TransactionManager;
 
 //! The transaction context keeps track of all the information relating to the
 //! current transaction

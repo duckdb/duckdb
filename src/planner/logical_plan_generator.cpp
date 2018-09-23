@@ -12,6 +12,9 @@
 
 #include "planner/operator/logical_list.hpp"
 
+#include "main/client_context.hpp"
+#include "main/database.hpp"
+
 #include <map>
 
 using namespace duckdb;

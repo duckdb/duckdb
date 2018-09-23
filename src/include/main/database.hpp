@@ -20,7 +20,7 @@ namespace duckdb {
 //! database-specific meta information.
 class DuckDB {
   public:
-	DuckDB(const char *path);
+	DuckDB(const char *path = nullptr);
 
 	StorageManager storage;
 	Catalog catalog;

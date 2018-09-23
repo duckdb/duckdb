@@ -1,7 +1,9 @@
 
 #include "common/exception.hpp"
 
+#include "transaction/transaction.hpp"
 #include "transaction/transaction_context.hpp"
+#include "transaction/transaction_manager.hpp"
 
 using namespace duckdb;
 using namespace std;
