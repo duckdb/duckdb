@@ -548,14 +548,23 @@ unique_ptr<AbstractExpression> TransformFuncCall(FuncCall *root) {
 				throw NotImplementedException(
 				    "Aggregation over zero columns not supported!");
 			} else if (root->args->length < 2) {
+
+				auto avg_expr = TransformExpression(
+				    (Node *)root->args->head->data.ptr_value);
+
+				// if a is a scalar expression, just ditch aggr
+				if (agg_fun_type != ExpressionType::AGGREGATE_COUNT &&
+				    avg_expr->IsScalar()) {
+					return avg_expr;
+				}
+
 				if (agg_fun_type == ExpressionType::AGGREGATE_AVG) {
 					// rewrite AVG(a) to SUM(a) / COUNT(a)
 
 					// first create the SUM
 					auto sum = make_unique<AggregateExpression>(
 					    ExpressionType::AGGREGATE_SUM, root->agg_distinct,
-					    TransformExpression(
-					        (Node *)root->args->head->data.ptr_value));
+					    move(avg_expr));
 					// now create the count
 					auto count = make_unique<AggregateExpression>(
 					    ExpressionType::AGGREGATE_COUNT, root->agg_distinct,

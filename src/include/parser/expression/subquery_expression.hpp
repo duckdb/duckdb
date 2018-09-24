@@ -44,5 +44,6 @@ class SubqueryExpression : public AbstractExpression {
 		}
 		return result;
 	}
+	virtual bool IsScalar() override { return false; }
 };
 } // namespace duckdb

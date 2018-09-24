@@ -109,5 +109,7 @@ class ColumnRefExpression : public AbstractExpression {
 		                           : column_name;
 		return str;
 	}
+
+	virtual bool IsScalar() override { return false; }
 };
 } // namespace duckdb
