@@ -715,38 +715,6 @@ struct AutoRegTests {
 		    "random/aggregates", // too many diffs to SQLite, but TODO
 		    "random/groupby/",   // ditto
 		    "random/select/slt_good_70.test", // join on not between
-		    "random/expr/slt_good_0.test",
-		    "random/expr/slt_good_100.test", // casting issues for all in
-		                                     // random/expr
-		    "random/expr/slt_good_103.test",
-		    "random/expr/slt_good_109.test",
-		    "random/expr/slt_good_11.test",
-		    "random/expr/slt_good_110.test",
-		    "random/expr/slt_good_113.test",
-		    "random/expr/slt_good_115.test",
-		    "random/expr/slt_good_12.test",
-		    "random/expr/slt_good_15.test",
-		    "random/expr/slt_good_17.test",
-		    "random/expr/slt_good_25.test",
-		    "random/expr/slt_good_27.test",
-		    "random/expr/slt_good_31.test",
-		    "random/expr/slt_good_40.test",
-		    "random/expr/slt_good_42.test",
-		    "random/expr/slt_good_47.test",
-		    "random/expr/slt_good_48.test",
-		    "random/expr/slt_good_50.test",
-		    "random/expr/slt_good_51.test",
-		    "random/expr/slt_good_59.test",
-		    "random/expr/slt_good_60.test",
-		    "random/expr/slt_good_62.test",
-		    "random/expr/slt_good_64.test",
-		    "random/expr/slt_good_68.test",
-		    "random/expr/slt_good_72.test",
-		    "random/expr/slt_good_78.test",
-		    "random/expr/slt_good_8.test",
-		    "random/expr/slt_good_81.test",
-		    "random/expr/slt_good_94.test",
-		    "random/expr/slt_good_97.test",
 		    "evidence/slt_lang_replace.test",       // feature not supported
 		    "evidence/slt_lang_createview.test",    // "
 		    "evidence/slt_lang_dropview.test",      // "
