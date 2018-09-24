@@ -119,6 +119,7 @@ void Binder::Visit(SelectStatement &statement) {
 
 	if (statement.where_clause) {
 		statement.where_clause->Accept(this);
+		statement.where_clause->ResolveType();
 	}
 
 	if (statement.HasGroup()) {
