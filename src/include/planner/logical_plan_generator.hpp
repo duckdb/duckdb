@@ -38,6 +38,7 @@ class LogicalPlanGenerator : public SQLNodeVisitor {
 
 	void Visit(AggregateExpression &expr);
 	void Visit(ComparisonExpression &expr);
+	void Visit(CaseExpression &expr);
 	void Visit(ConjunctionExpression &expr);
 	void Visit(OperatorExpression &expr);
 	void Visit(SubqueryExpression &expr);

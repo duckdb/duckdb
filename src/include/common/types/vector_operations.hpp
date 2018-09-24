@@ -109,6 +109,8 @@ struct VectorOperations {
 	static Value MaximumStringLength(Vector &left);
 	// Check if any value is true in a bool vector
 	static Value AnyTrue(Vector &left);
+	// Check if all values are true in a bool vector
+	static Value AllTrue(Vector &left);
 
 	// CASE expressions, ternary op
 	static void Case(Vector &check, Vector &res_true, Vector &res_false,

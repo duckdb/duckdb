@@ -295,6 +295,7 @@ void VectorOperations::Multiply(Vector &left, Vector &right, Vector &result) {
 void VectorOperations::Divide(Vector &left, Vector &right, Vector &result) {
 	// set 0 in right side to 1 and as NULL so we get a NULL result and don't
 	// trip the exception
+	// also set payload values that are already set to NULL to 1 for same reason
 
 	Vector zero;
 	zero.Initialize(right.type, 0);
@@ -306,7 +307,17 @@ void VectorOperations::Divide(Vector &left, Vector &right, Vector &result) {
 	is_zero.Initialize(TypeId::BOOLEAN);
 	zero.count = right.count;
 
+	Vector is_null;
+	is_null.Initialize(TypeId::BOOLEAN);
+	is_null.count = right.count;
+
+	Vector needs_fix;
+	needs_fix.Initialize(TypeId::BOOLEAN);
+	needs_fix.count = right.count;
+
 	VectorOperations::Equals(right, zero, is_zero);
+	VectorOperations::IsNull(right, is_null);
+	VectorOperations::Or(is_zero, is_null, needs_fix);
 
 	Vector right_fix;
 	right_fix.Initialize(right.type, false);
@@ -319,7 +330,7 @@ void VectorOperations::Divide(Vector &left, Vector &right, Vector &result) {
 	VectorOperations::Set(one_but_null, Value(1));
 	one_but_null.nullmask.reset().flip(); // all NULLs
 
-	VectorOperations::Case(is_zero, one_but_null, right, right_fix);
+	VectorOperations::Case(needs_fix, one_but_null, right, right_fix);
 
 	_generic_binary_loop<operators::Division>(left, right_fix, result);
 }
