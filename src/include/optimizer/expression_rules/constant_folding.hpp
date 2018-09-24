@@ -74,8 +74,10 @@ class ConstantFoldingRule : public Rule {
 				default:
 					throw Exception("Unsupported operator");
 				}
-				// FIXME: this could hide an overflow, but breaks the plan if we don't
-				return make_unique<ConstantExpression>(result.CastAs(root.return_type));
+				// FIXME: this could hide an overflow, but breaks the plan if we
+				// don't
+				return make_unique<ConstantExpression>(
+				    result.CastAs(root.return_type));
 			}
 			return nullptr;
 		}
