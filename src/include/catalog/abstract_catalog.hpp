@@ -22,8 +22,8 @@ class CatalogSet;
 class AbstractCatalogEntry {
   public:
 	AbstractCatalogEntry(CatalogType type, Catalog *catalog, std::string name)
-	    : type(type), catalog(catalog), name(name), deleted(false),
-	      parent(nullptr), set(nullptr) {}
+	    : type(type), catalog(catalog), set(nullptr), name(name), 
+	      deleted(false), parent(nullptr) {}
 
 	virtual ~AbstractCatalogEntry() {}
 

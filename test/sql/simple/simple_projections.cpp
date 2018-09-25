@@ -15,11 +15,11 @@ TEST_CASE("Test simple projection statements", "[simpleprojection]") {
 
 	// insertion: 1 affected row
 	result = con.Query("INSERT INTO a VALUES (42, 84);");
-	CHECK_COLUMN(result, 0, {1});
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
 	result = con.Query("SELECT * FROM a;");
-	CHECK_COLUMN(result, 0, {42});
-	CHECK_COLUMN(result, 1, {84});
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	REQUIRE(CHECK_COLUMN(result, 1, {84}));
 
 	// multiple insertions
 	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
@@ -27,22 +27,22 @@ TEST_CASE("Test simple projection statements", "[simpleprojection]") {
 
 	// multiple projections
 	result = con.Query("SELECT a, b FROM test;");
-	CHECK_COLUMN(result, 0, {11, 12, 13});
-	CHECK_COLUMN(result, 1, {22, 21, 22});
+	REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
+	REQUIRE(CHECK_COLUMN(result, 1, {22, 21, 22}));
 
 	// basic expressions and filters
 	result = con.Query("SELECT a + 2, b FROM test WHERE a = 11;");
-	CHECK_COLUMN(result, 0, {13});
-	CHECK_COLUMN(result, 1, {22});
+	REQUIRE(CHECK_COLUMN(result, 0, {13}));
+	REQUIRE(CHECK_COLUMN(result, 1, {22}));
 
 	result = con.Query("SELECT a + 2, b FROM test WHERE a = 12;");
-	CHECK_COLUMN(result, 0, {14});
-	CHECK_COLUMN(result, 1, {21});
+	REQUIRE(CHECK_COLUMN(result, 0, {14}));
+	REQUIRE(CHECK_COLUMN(result, 1, {21}));
 
 	// casts
 	result = con.Query("SELECT cast(a AS VARCHAR) FROM test;");
-	CHECK_COLUMN(result, 0, {"11", "12", "13"});
+	REQUIRE(CHECK_COLUMN(result, 0, {"11", "12", "13"}));
 
 	result = con.Query("SELECT cast(cast(a AS VARCHAR) as INTEGER) FROM test;");
-	CHECK_COLUMN(result, 0, {11, 12, 13});
+	REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
 }

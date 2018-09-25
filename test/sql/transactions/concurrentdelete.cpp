@@ -29,15 +29,15 @@ TEST_CASE("Single thread delete", "[transactions]") {
 
 	// check the sum
 	result = con.Query("SELECT SUM(i) FROM integers");
-	CHECK_COLUMN(result, 0, {sum});
+	REQUIRE(CHECK_COLUMN(result, 0, {sum}));
 
 	// simple delete, we should delete INSERT_ELEMENTS elements
 	result = con.Query("DELETE FROM integers WHERE i=2");
-	CHECK_COLUMN(result, 0, {INSERT_ELEMENTS});
+	REQUIRE(CHECK_COLUMN(result, 0, {INSERT_ELEMENTS}));
 
 	// check sum again
 	result = con.Query("SELECT SUM(i) FROM integers");
-	CHECK_COLUMN(result, 0, {sum - 2 * INSERT_ELEMENTS});
+	REQUIRE(CHECK_COLUMN(result, 0, {sum - 2 * INSERT_ELEMENTS}));
 }
 
 TEST_CASE("Sequential delete", "[transactions]") {
@@ -119,22 +119,22 @@ TEST_CASE("Rollback delete", "[transactions]") {
 
 	// check the sum
 	result = con.Query("SELECT SUM(i) FROM integers");
-	CHECK_COLUMN(result, 0, {sum});
+	REQUIRE(CHECK_COLUMN(result, 0, {sum}));
 
 	// simple delete
 	result = con.Query("DELETE FROM integers WHERE i=2");
-	CHECK_COLUMN(result, 0, {100});
+	REQUIRE(CHECK_COLUMN(result, 0, {100}));
 
 	// check sum again
 	result = con.Query("SELECT SUM(i) FROM integers");
-	CHECK_COLUMN(result, 0, {sum - 2 * INSERT_ELEMENTS});
+	REQUIRE(CHECK_COLUMN(result, 0, {sum - 2 * INSERT_ELEMENTS}));
 
 	// rollback transaction
 	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
 
 	// check the sum again
 	result = con.Query("SELECT SUM(i) FROM integers");
-	CHECK_COLUMN(result, 0, {sum});
+	REQUIRE(CHECK_COLUMN(result, 0, {sum}));
 }
 
 static volatile std::atomic<int> finished_threads;

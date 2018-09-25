@@ -30,15 +30,15 @@ TEST_CASE("Single thread update", "[transactions]") {
 
 	// check the sum
 	result = con.Query("SELECT SUM(i) FROM integers");
-	CHECK_COLUMN(result, 0, {sum});
+	REQUIRE(CHECK_COLUMN(result, 0, {sum}));
 
 	// simple update, we should update INSERT_ELEMENTS elements
 	result = con.Query("UPDATE integers SET i=4 WHERE i=2");
-	CHECK_COLUMN(result, 0, {TOTAL_ACCOUNTS});
+	REQUIRE(CHECK_COLUMN(result, 0, {TOTAL_ACCOUNTS}));
 
 	// check updated sum
 	result = con.Query("SELECT SUM(i) FROM integers");
-	CHECK_COLUMN(result, 0, {sum + 2 * TOTAL_ACCOUNTS});
+	REQUIRE(CHECK_COLUMN(result, 0, {sum + 2 * TOTAL_ACCOUNTS}));
 }
 
 static volatile bool finished_updating = false;
@@ -48,7 +48,7 @@ static void read_total_balance(DuckDB *db) {
 	while (!finished_updating) {
 		// the total balance should remain constant regardless of updates
 		auto result = con.Query("SELECT SUM(money) FROM accounts");
-		CHECK_COLUMN(result, 0, {TOTAL_ACCOUNTS * MONEY_PER_ACCOUNT});
+		REQUIRE(CHECK_COLUMN(result, 0, {TOTAL_ACCOUNTS * MONEY_PER_ACCOUNT}));
 	}
 }
 

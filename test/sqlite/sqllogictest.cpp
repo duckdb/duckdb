@@ -381,13 +381,13 @@ static void execute_file(string script) {
 
 	/* Loop over all records in the file */
 	while ((nErr == 0 || !haltOnError) && findStartOfNextRecord(&sScript)) {
-		int bSkip = 0; /* True if we should skip the current record. */
+		int bSkip = false; /* True if we should skip the current record. */
 
 		/* Tokenizer the first line of the record.  This also records the
 		** line number of the first record in sScript.startLine */
 		tokenizeLine(&sScript);
 
-		bSkip = 0;
+		bSkip = false;
 		while (strcmp(sScript.azToken[0], "skipif") == 0 ||
 		       strcmp(sScript.azToken[0], "onlyif") == 0) {
 			int bMatch;
@@ -405,10 +405,10 @@ static void execute_file(string script) {
 			bMatch = stricmp(sScript.azToken[1], zDbEngine) == 0;
 			if (sScript.azToken[0][0] == 's') {
 				if (bMatch)
-					bSkip = -1;
+					bSkip = true;
 			} else {
 				if (!bMatch)
-					bSkip = -1;
+					bSkip = true;
 			}
 			nextLine(&sScript);
 			tokenizeLine(&sScript);

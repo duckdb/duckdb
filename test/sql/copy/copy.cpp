@@ -22,24 +22,24 @@ TEST_CASE("Test Copy statement", "[copystatement]") {
 	result =
 	    con.Query("CREATE TABLE test (a INTEGER, b INTEGER,c VARCHAR(10));");
 	result = con.Query("COPY test FROM 'test.csv';");
-	CHECK_COLUMN(result, 0, {5000});
+	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 
 	result = con.Query("SELECT COUNT(a), SUM(a) FROM test;");
-	CHECK_COLUMN(result, 0, {5000});
-	CHECK_COLUMN(result, 1, {12497500});
+	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
+	REQUIRE(CHECK_COLUMN(result, 1, {12497500}));
 
 	//  Creating CSV from table
 	result = con.Query("COPY test to 'test2.csv';");
-	CHECK_COLUMN(result, 0, {5000});
+	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 
 	//  Creating CSV from Query
 	result =
 	    con.Query("COPY (select a,b from test where a < 4000) to 'test3.csv';");
-	CHECK_COLUMN(result, 0, {4000});
+	REQUIRE(CHECK_COLUMN(result, 0, {4000}));
 
 	// Exporting selected columns from a table to a CSV.
 	result = con.Query("COPY test(a,c) to 'test4.csv';");
-	CHECK_COLUMN(result, 0, {5000});
+	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 
 	// Importing CSV to Selected Columns
 	result =

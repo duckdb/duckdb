@@ -14,5 +14,5 @@ TEST_CASE("Test case statement", "[case]") {
 
 	result =
 	    con.Query("SELECT CASE WHEN test.a=11 THEN b ELSE NULL END FROM test");
-	CHECK_COLUMN(result, 0, {22, Value(), Value()});
+	REQUIRE(CHECK_COLUMN(result, 0, {22, Value(), Value()}));
 }

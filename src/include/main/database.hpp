@@ -21,6 +21,7 @@ namespace duckdb {
 class DuckDB {
   public:
 	DuckDB(const char *path = nullptr);
+	DuckDB(const std::string& path) : DuckDB(path.c_str()) { }
 
 	StorageManager storage;
 	Catalog catalog;

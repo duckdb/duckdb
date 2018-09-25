@@ -23,21 +23,21 @@ TEST_CASE("Test TPC-H SF0.1", "[tpch][.]") {
 
 	// check if all the counts are correct
 	result = con.Query("SELECT COUNT(*) FROM orders");
-	CHECK_COLUMN(result, 0, {150000});
+	REQUIRE(CHECK_COLUMN(result, 0, {150000}));
 	result = con.Query("SELECT COUNT(*) FROM lineitem");
-	CHECK_COLUMN(result, 0, {600572});
+	REQUIRE(CHECK_COLUMN(result, 0, {600572}));
 	result = con.Query("SELECT COUNT(*) FROM part");
-	CHECK_COLUMN(result, 0, {20000});
+	REQUIRE(CHECK_COLUMN(result, 0, {20000}));
 	result = con.Query("SELECT COUNT(*) FROM partsupp");
-	CHECK_COLUMN(result, 0, {80000});
+	REQUIRE(CHECK_COLUMN(result, 0, {80000}));
 	result = con.Query("SELECT COUNT(*) FROM supplier");
-	CHECK_COLUMN(result, 0, {1000});
+	REQUIRE(CHECK_COLUMN(result, 0, {1000}));
 	result = con.Query("SELECT COUNT(*) FROM customer");
-	CHECK_COLUMN(result, 0, {15000});
+	REQUIRE(CHECK_COLUMN(result, 0, {15000}));
 	result = con.Query("SELECT COUNT(*) FROM nation");
-	CHECK_COLUMN(result, 0, {25});
+	REQUIRE(CHECK_COLUMN(result, 0, {25}));
 	result = con.Query("SELECT COUNT(*) FROM region");
-	CHECK_COLUMN(result, 0, {5});
+	REQUIRE(CHECK_COLUMN(result, 0, {5}));
 
 	result = con.Query(
 	    "SELECT * FROM lineitem WHERE l_orderkey <= 1 ORDER BY l_partkey;");
@@ -58,28 +58,28 @@ TEST_CASE("Test TPC-H SF0.1", "[tpch][.]") {
 	    false);
 
 	result = con.Query("SELECT SUM(l_quantity) FROM lineitem");
-	CHECK_COLUMN(result, 0, {15334802});
+	REQUIRE(CHECK_COLUMN(result, 0, {15334802}));
 	result = con.Query("SELECT l_quantity % 5 AS f, COUNT(*) FROM lineitem "
 	                   "GROUP BY f ORDER BY f;");
-	CHECK_COLUMN(result, 0, {0, 1, 2, 3, 4});
-	CHECK_COLUMN(result, 1, {119525, 120331, 120426, 119986, 120304});
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2, 3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {119525, 120331, 120426, 119986, 120304}));
 	result = con.Query("SELECT l_returnflag, SUM(l_quantity), COUNT(*) FROM "
 	                   "lineitem GROUP BY l_returnflag;");
-	CHECK_COLUMN(result, 0, {"A", "N", "R"});
-	CHECK_COLUMN(result, 1, {3774200, 7775079, 3785523});
-	CHECK_COLUMN(result, 2, {147790, 304481, 148301});
+	REQUIRE(CHECK_COLUMN(result, 0, {"A", "N", "R"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3774200, 7775079, 3785523}));
+	REQUIRE(CHECK_COLUMN(result, 2, {147790, 304481, 148301}));
 	result = con.Query(
 	    "SELECT l_returnflag, SUM(l_quantity), COUNT(*) FROM lineitem WHERE "
 	    "l_shipdate <= cast('1998-09-02' as date) GROUP BY l_returnflag;");
-	CHECK_COLUMN(result, 0, {"A", "N", "R"});
-	CHECK_COLUMN(result, 1, {3774200, 7554554, 3785523});
-	CHECK_COLUMN(result, 2, {147790, 295765, 148301});
+	REQUIRE(CHECK_COLUMN(result, 0, {"A", "N", "R"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3774200, 7554554, 3785523}));
+	REQUIRE(CHECK_COLUMN(result, 2, {147790, 295765, 148301}));
 
 	// this would really hurt without pushdown
 	result = con.Query("SELECT count(*) FROM lineitem JOIN orders ON "
 	                   "lineitem.l_orderkey=orders.o_orderkey WHERE "
 	                   "o_orderstatus='X' AND l_tax > 50");
-	CHECK_COLUMN(result, 0, {0});
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 
 	result = con.Query(tpch::get_query(1));
 	COMPARE_CSV(result, tpch::get_answer(sf, 1), true);

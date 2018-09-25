@@ -61,7 +61,7 @@ struct WALEntryData {
 class WriteAheadLog {
   public:
 	WriteAheadLog(DuckDB &database)
-	    : initialized(false), wal_file(nullptr), database(database) {}
+	    : initialized(false), database(database), wal_file(nullptr) {}
 	~WriteAheadLog();
 
 	bool IsInitialized() { return initialized; }
