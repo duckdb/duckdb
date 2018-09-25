@@ -186,6 +186,8 @@ void Statistics::Sum(Statistics &source, Statistics &result) {
 		result.can_have_null = true;
 		Value count = Value::Numeric(source.min.type, source.maximum_count);
 		Value::Multiply(source.min, count, result.min);
+		Value::Min(result.min, source.min,
+		           result.min); // groups do not need to have count entries
 		Value::Multiply(source.max, count, result.max);
 		result.maximum_count = 1;
 	}

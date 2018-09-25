@@ -712,8 +712,8 @@ struct AutoRegTests {
 		    "test/select4.test", // EXCEPT etc.
 		    "test/select5.test", // joins too slow
 		    "test/index",        // no index yet
-		    //  "random/aggregates", // too many diffs to SQLite, but TODO
-		    "random/groupby/",                // ditto
+		    "random/aggregates", // too many diffs to SQLite, but TODO
+		    "random/groupby/",   // ditto
 		    "random/select/slt_good_70.test", // join on not between
 		    "random/expr/slt_good_10.test",   // these all fail because the AVG
 		                                      // decimal rewrite

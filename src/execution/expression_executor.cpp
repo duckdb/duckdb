@@ -153,26 +153,29 @@ void ExpressionExecutor::Visit(AggregateExpression &expr) {
 		    state->aggregate_chunk.data[expr.index].count) {
 			vector.Reference(state->aggregate_chunk.data[expr.index]);
 		} else {
-			if (IsScalarAggr(&expr)) {
+			if (IsScalarAggr(&expr)) { // even if we do not scan rows, we can
+				                       // still have a result e.g. MAX(42)
 				ExpressionExecutor::Execute(expr);
-				return;
-			}
-			// the subquery scanned no rows, therefore the aggr is empty. return
-			// something reasonable depending on aggr type.
-			Value val;
-			if (expr.type == ExpressionType::AGGREGATE_COUNT ||
-			    expr.type == ExpressionType::AGGREGATE_COUNT_STAR) {
-				val = Value(0).CastAs(expr.return_type); // ZERO
 			} else {
-				val = Value().CastAs(expr.return_type); // NULL
+				// the subquery scanned no rows, therefore the aggr is empty.
+				// return something reasonable depending on aggr type.
+				Value val;
+				if (expr.type == ExpressionType::AGGREGATE_COUNT ||
+				    expr.type == ExpressionType::AGGREGATE_COUNT_STAR) {
+					val = Value(0).CastAs(expr.return_type); // ZERO
+				} else {
+					val = Value().CastAs(expr.return_type); // NULL
+				}
+
+				Vector v(val);
+				v.Move(vector);
 			}
-			Vector v(val);
-			v.Move(vector);
 		}
 	} else {
 		Vector v(state->aggregates[expr.index]);
 		v.Move(vector);
 	}
+	expr.stats.Verify(vector);
 }
 
 void ExpressionExecutor::Visit(CaseExpression &expr) {
@@ -206,6 +209,7 @@ void ExpressionExecutor::Visit(CastExpression &expr) {
 	// now cast it to the type specified by the cast expression
 	vector.Initialize(expr.return_type);
 	VectorOperations::Cast(l, vector);
+	expr.stats.Verify(vector);
 }
 
 void ExpressionExecutor::Visit(ColumnRefExpression &expr) {
@@ -268,6 +272,7 @@ void ExpressionExecutor::Visit(ComparisonExpression &expr) {
 	default:
 		throw NotImplementedException("Unknown comparison type!");
 	}
+	expr.stats.Verify(vector);
 }
 
 void ExpressionExecutor::Visit(ConjunctionExpression &expr) {
@@ -290,11 +295,13 @@ void ExpressionExecutor::Visit(ConjunctionExpression &expr) {
 	default:
 		throw NotImplementedException("Unknown conjunction type!");
 	}
+	expr.stats.Verify(vector);
 }
 
 void ExpressionExecutor::Visit(ConstantExpression &expr) {
 	Vector v(expr.value);
 	v.Move(vector);
+	expr.stats.Verify(vector);
 }
 
 void ExpressionExecutor::Visit(FunctionExpression &expr) {
@@ -318,6 +325,7 @@ void ExpressionExecutor::Visit(GroupRefExpression &expr) {
 		throw NotImplementedException("Aggregate node without aggregate state");
 	}
 	vector.Reference(state->group_chunk.data[expr.group_index]);
+	expr.stats.Verify(vector);
 }
 
 void ExpressionExecutor::Visit(OperatorExpression &expr) {
@@ -557,6 +565,5 @@ void ExpressionExecutor::Visit(SubqueryExpression &expr) {
 		}
 	}
 	chunk = old_chunk;
-
 	expr.stats.Verify(vector);
 }
