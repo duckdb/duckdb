@@ -1,5 +1,6 @@
 
 #include "main/connection.hpp"
+#include "main/database.hpp"
 
 #include "execution/executor.hpp"
 #include "execution/physical_plan_generator.hpp"
@@ -15,7 +16,8 @@ DuckDBConnection::DuckDBConnection(DuckDB &database)
 
 DuckDBConnection::~DuckDBConnection() {}
 
-unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(std::string query) {
+unique_ptr<DuckDBResult>
+DuckDBConnection::GetQueryResult(ClientContext &context, std::string query) {
 	auto result = make_unique<DuckDBResult>();
 	result->success = false;
 
@@ -27,8 +29,21 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(std::string query) {
 			return make_unique<DuckDBResult>(parser.GetErrorMessage());
 		}
 
+		if (parser.statements.size() > 1) {
+			throw Exception(
+			    "More than one statement per query not supported yet!");
+		}
+
+		auto &statement = parser.statements.back();
+		if (statement->type == StatementType::UPDATE ||
+		    statement->type == StatementType::DELETE) {
+			// log query in UNDO buffer so it can be saved in the WAL on commit
+			auto &transaction = context.transaction.ActiveTransaction();
+			transaction.PushQuery(query);
+		}
+
 		Planner planner;
-		if (!planner.CreatePlan(context, move(parser.statements.back()))) {
+		if (!planner.CreatePlan(context, move(statement))) {
 			return make_unique<DuckDBResult>(planner.GetErrorMessage());
 		}
 		if (!planner.plan) {
@@ -66,6 +81,10 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(std::string query) {
 	}
 	context.profiler.EndQuery();
 	return move(result);
+}
+
+unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(std::string query) {
+	return GetQueryResult(context, query);
 }
 
 unique_ptr<DuckDBResult> DuckDBConnection::Query(std::string query) {

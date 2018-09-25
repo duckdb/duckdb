@@ -117,7 +117,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	assert(capacity - entries > STANDARD_VECTOR_SIZE);
 
 	// first create a hash of all the values
-	Vector hashes(TypeId::INTEGER, true);
+	Vector hashes(TypeId::INTEGER, true, false);
 	VectorOperations::Hash(groups.data[0], hashes);
 	for (size_t i = 1; i < groups.column_count; i++) {
 		VectorOperations::CombineHash(hashes, groups.data[i], hashes);
@@ -125,7 +125,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 
 	assert(hashes.sel_vector == groups.sel_vector);
 	// list of addresses for the tuples
-	Vector addresses(TypeId::POINTER, true);
+	Vector addresses(TypeId::POINTER, true, false);
 	// first cast from the hash type to the address type
 	VectorOperations::Cast(hashes, addresses);
 	assert(addresses.sel_vector == groups.sel_vector);
@@ -293,7 +293,7 @@ void SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &groups,
 	if (start >= end)
 		return;
 
-	Vector addresses(TypeId::POINTER, true);
+	Vector addresses(TypeId::POINTER, true, false);
 	void **data_pointers = (void **)addresses.data;
 
 	// scan the table for full cells starting from the scan position

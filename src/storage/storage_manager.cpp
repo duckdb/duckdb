@@ -4,6 +4,8 @@
 #include "common/exception.hpp"
 #include "common/file_system.hpp"
 
+#include "main/database.hpp"
+
 #include "storage/storage_manager.hpp"
 
 #include "transaction/transaction_manager.hpp"
@@ -11,26 +13,25 @@
 using namespace duckdb;
 using namespace std;
 
-StorageManager::StorageManager(std::string path) : path(path), wal() {}
+StorageManager::StorageManager(DuckDB &database, std::string path)
+    : path(path), database(database), wal(database) {}
 
-void StorageManager::Initialize(TransactionManager &transaction_manager,
-                                Catalog &catalog) {
+void StorageManager::Initialize() {
 	bool in_memory = path.empty();
 
 	// first initialize the base system catalogs
 	// these are never written to the WAL
-	auto transaction = transaction_manager.StartTransaction();
-	catalog.CreateSchema(*transaction, DEFAULT_SCHEMA);
-	transaction_manager.CommitTransaction(transaction);
+	auto transaction = database.transaction_manager.StartTransaction();
+	database.catalog.CreateSchema(*transaction, DEFAULT_SCHEMA);
+	database.transaction_manager.CommitTransaction(transaction);
 
 	if (!in_memory) {
 		// create or load the database from disk, if not in-memory mode
-		LoadDatabase(transaction_manager, catalog, path);
+		LoadDatabase(path);
 	}
 }
 
-void StorageManager::LoadDatabase(TransactionManager &transaction_manager,
-                                  Catalog &catalog, std::string &path) {
+void StorageManager::LoadDatabase(std::string &path) {
 	// first check if the database exists
 	auto wal_path = JoinPath(path, WAL_FILE);
 	if (!DirectoryExists(path)) {
@@ -44,7 +45,7 @@ void StorageManager::LoadDatabase(TransactionManager &transaction_manager,
 			    "Database directory exists, but could not find WAL file!");
 		}
 		// replay the WAL
-		wal.Replay(transaction_manager, catalog, wal_path);
+		wal.Replay(wal_path);
 	}
 	// initialize the WAL file
 	wal.Initialize(wal_path);

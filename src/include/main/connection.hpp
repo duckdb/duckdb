@@ -11,10 +11,11 @@
 #pragma once
 
 #include "main/client_context.hpp"
-#include "main/database.hpp"
 #include "main/result.hpp"
 
 namespace duckdb {
+
+class DuckDB;
 
 //! A connection to a database. This represents a (client) connection that can
 //! be used to query the database.
@@ -30,6 +31,9 @@ class DuckDBConnection {
 	void EnableProfiling() { context.profiler.Enable(); }
 
 	void DisableProfiling() { context.profiler.Disable(); }
+
+	static std::unique_ptr<DuckDBResult> GetQueryResult(ClientContext &context,
+	                                                    std::string query);
 
 	//! Queries the database using the transaction context of this connection
 	std::unique_ptr<DuckDBResult> Query(std::string query);

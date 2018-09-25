@@ -2,6 +2,7 @@
 add_subdirectory(capi)
 add_subdirectory(copy)
 add_subdirectory(simple)
+add_subdirectory(storage)
 add_subdirectory(tpch)
 add_subdirectory(transactions)
 

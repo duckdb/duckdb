@@ -49,6 +49,9 @@ class Transaction {
 	                        VersionInformation *version_pointers[]);
 	//! Push an old tuple version in the undo buffer
 	void PushTuple(size_t offset, StorageChunk *storage);
+	//! Push a query into the undo buffer, this will be written to the WAL for
+	//! redo purposes
+	void PushQuery(std::string query);
 
 	//! Commit the current transaction with the given commit identifier
 	void Commit(WriteAheadLog *log, transaction_t commit_id);

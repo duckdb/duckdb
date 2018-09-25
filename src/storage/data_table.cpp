@@ -373,7 +373,7 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result,
 				if (column_ids[j] == COLUMN_IDENTIFIER_ROW_ID) {
 					// generate the row identifiers
 					// first generate a sequence of identifiers
-					Vector source(TypeId::POINTER, true);
+					Vector source(TypeId::POINTER, true, false);
 					source.count = STANDARD_VECTOR_SIZE;
 					VectorOperations::GenerateSequence(
 					    source, current_chunk->start + structure.offset);

@@ -20,26 +20,28 @@
 namespace duckdb {
 
 class Catalog;
+class DuckDB;
 class TransactionManager;
 
 //! StorageManager is responsible for managing the physical storage of the
 //! database on disk
 class StorageManager {
   public:
-	StorageManager(std::string path);
+	StorageManager(DuckDB &database, std::string path);
 	//! Initialize a database or load an existing database from the given path
-	void Initialize(TransactionManager &transaction_manager, Catalog &catalog);
+	void Initialize();
 	//! Get the WAL of the StorageManager, returns nullptr if in-memory
 	WriteAheadLog *GetWriteAheadLog() {
 		return wal.IsInitialized() ? &wal : nullptr;
 	}
 
   private:
-	void LoadDatabase(TransactionManager &transaction_manager, Catalog &catalog,
-	                  std::string &path);
+	void LoadDatabase(std::string &path);
 
 	//! The path of the database
 	std::string path;
+	//! The database this storagemanager belongs to
+	DuckDB &database;
 	//! The WriteAheadLog of the storage manager
 	WriteAheadLog wal;
 };

@@ -38,7 +38,7 @@ bool Planner::CreatePlan(ClientContext &context,
                          unique_ptr<SQLStatement> statement) {
 	this->success = false;
 	try {
-		switch (statement->GetType()) {
+		switch (statement->type) {
 		case StatementType::INSERT:
 		case StatementType::COPY:
 		case StatementType::SELECT:
@@ -124,7 +124,7 @@ bool Planner::CreatePlan(ClientContext &context,
 		}
 		default:
 			this->message = StringUtil::Format(
-			    "Statement of type %d not implemented!", statement->GetType());
+			    "Statement of type %d not implemented!", statement->type);
 		}
 	} catch (Exception &ex) {
 		this->message = ex.GetMessage();

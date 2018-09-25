@@ -21,14 +21,11 @@ class SelectStatement;
 //! SQLStatement is the base class of any type of SQL statement.
 class SQLStatement : public Printable {
   public:
-	SQLStatement(StatementType type) : stmt_type(type){};
+	SQLStatement(StatementType type) : type(type){};
 	virtual ~SQLStatement() {}
-
-	StatementType GetType() const { return stmt_type; }
 
 	virtual void Accept(SQLNodeVisitor *) = 0;
 
-  private:
-	StatementType stmt_type;
+	StatementType type;
 };
 } // namespace duckdb

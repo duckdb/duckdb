@@ -24,7 +24,7 @@ Vector::Vector(TypeId type, char *dataptr)
 	}
 }
 
-Vector::Vector(Value value) : Vector(value.type, true) {
+Vector::Vector(Value value) : Vector(value.type, true, false) {
 	count = 1;
 	SetValue(0, value);
 }
@@ -191,7 +191,7 @@ void Vector::Flatten() {
 	if (!sel_vector) {
 		return;
 	}
-	Vector other(type, true);
+	Vector other(type, true, false);
 	this->Copy(other);
 	other.Move(*this);
 }
@@ -200,7 +200,7 @@ void Vector::ForceOwnership() {
 	if (owns_data && !sel_vector && type != TypeId::VARCHAR)
 		return;
 
-	Vector other(type, true);
+	Vector other(type, true, false);
 	this->Copy(other);
 	other.Move(*this);
 }
@@ -244,7 +244,7 @@ void Vector::Cast(TypeId new_type) {
 		return;
 	}
 	type = new_type;
-	Vector new_vector(new_type, true);
+	Vector new_vector(new_type, true, false);
 	VectorOperations::Cast(*this, new_vector);
 	new_vector.Move(*this);
 }

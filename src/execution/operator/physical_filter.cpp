@@ -24,7 +24,7 @@ void PhysicalFilter::_GetChunk(ClientContext &context, DataChunk &chunk,
 			    "Attempting to execute a filter without expressions");
 		}
 
-		Vector result(TypeId::BOOLEAN, state->child_chunk.count);
+		Vector result(TypeId::BOOLEAN, true, false);
 		ExpressionExecutor executor(state, context);
 		executor.Execute(expressions[0].get(), result);
 		// AND together the remaining filters!

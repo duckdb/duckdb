@@ -23,7 +23,8 @@ enum class UndoFlags {
 	INVALID = 0,
 	EMPTY_ENTRY = 1,
 	CATALOG_ENTRY = 2,
-	TUPLE_ENTRY = 3
+	TUPLE_ENTRY = 3,
+	QUERY = 4
 };
 
 struct UndoEntry {

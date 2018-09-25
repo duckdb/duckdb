@@ -5,9 +5,14 @@
 
 #include "catalog/abstract_catalog.hpp"
 #include "catalog/catalog_set.hpp"
+#include "catalog/schema_catalog.hpp"
+#include "catalog/table_catalog.hpp"
 
+#include "storage/data_table.hpp"
 #include "storage/storage_chunk.hpp"
 #include "storage/write_ahead_log.hpp"
+
+#include <unordered_map>
 
 using namespace duckdb;
 using namespace std;
@@ -53,12 +58,9 @@ void UndoBuffer::Cleanup() {
 					parent->next->prev.pointer = parent;
 				}
 			}
-		} else if (entry.type == UndoFlags::EMPTY_ENTRY) {
-			// skip
-			continue;
 		} else {
-			throw Exception("UndoBuffer - don't know how to garbage collect "
-			                "this type!");
+			assert(entry.type == UndoFlags::EMPTY_ENTRY ||
+			       entry.type == UndoFlags::QUERY);
 		}
 	}
 }
@@ -94,13 +96,69 @@ static void WriteCatalogEntry(WriteAheadLog *log, AbstractCatalogEntry *entry) {
 	}
 }
 
-static void WriteTuple(WriteAheadLog *log, VersionInformation *entry) {
+static void
+WriteTuple(WriteAheadLog *log, VersionInformation *entry,
+           unordered_map<DataTable *, unique_ptr<DataChunk>> &appends) {
 	if (!log) {
 		return;
+	}
+	// we only insert tuples of insertions into the WAL
+	// for deletions and updates we instead write the queries
+	if (entry->tuple_data) {
+		return;
+	}
+	// get the data for the insertion
+	if (entry->chunk) {
+		// fetch the data from the base rows
+		auto storage = entry->chunk;
+		auto id = entry->prev.entry;
+
+		DataChunk *chunk = nullptr;
+		DataTable *dtable = &entry->chunk->table;
+		// first lookup the chunk to which we will append this entry to
+		auto entry = appends.find(dtable);
+		if (entry != appends.end()) {
+			// entry exists, check if we need to flush it
+			chunk = entry->second.get();
+			if (chunk->count == STANDARD_VECTOR_SIZE) {
+				// entry is full: flush to WAL
+				auto &schema_name = dtable->table.schema->name;
+				auto &table_name = dtable->table.name;
+				log->WriteInsert(schema_name, table_name, *chunk);
+				chunk->Reset();
+			}
+		} else {
+			// entry does not exist: need to make a new entry
+			auto types = dtable->table.GetTypes();
+			auto new_chunk = make_unique<DataChunk>();
+			chunk = new_chunk.get();
+			chunk->Initialize(types);
+			appends.insert(make_pair(dtable, move(new_chunk)));
+		}
+
+		// append the tuple to the current chunk
+		for (size_t i = 0; i < chunk->column_count; i++) {
+			auto type = chunk->data[i].type;
+			size_t value_size = GetTypeIdSize(type);
+			void *storage_pointer = storage->columns[i].data + value_size * id;
+			memcpy(chunk->data[i].data + value_size * chunk->count,
+			       storage_pointer, value_size);
+			chunk->data[i].count++;
+		}
+		chunk->count++;
+	} else {
+		// insert was updated or deleted after insertion in the same
+		// transaction!
+		// FIXME: in case of update we need to handle this case! in case of
+		// deletion we don't need to!
+		assert(0);
+		auto prev = entry->prev.pointer;
 	}
 }
 
 void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) {
+	// the list of appends committed by this transaction for each table
+	unordered_map<DataTable *, unique_ptr<DataChunk>> appends;
 	for (auto &entry : entries) {
 		if (entry.type == UndoFlags::CATALOG_ENTRY) {
 			// set the commit timestamp of the catalog entry to the given id
@@ -117,10 +175,23 @@ void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) {
 			info->version_number = commit_id;
 
 			// push the tuple update to the WAL
-			WriteTuple(log, info);
+			WriteTuple(log, info, appends);
+		} else if (entry.type == UndoFlags::QUERY) {
+			string query = string((char *)entry.data.get());
+			if (log) {
+				log->WriteQuery(query);
+			}
 		} else {
 			throw Exception("UndoBuffer - don't know how to commit this type!");
 		}
+	}
+	// write appends that were not flushed yet
+	for (auto &entry : appends) {
+		auto dtable = entry.first;
+		auto chunk = entry.second.get();
+		auto &schema_name = dtable->table.schema->name;
+		auto &table_name = dtable->table.name;
+		log->WriteInsert(schema_name, table_name, *chunk);
 	}
 	if (log) {
 		// flush the WAL
@@ -154,8 +225,8 @@ void UndoBuffer::Rollback() {
 				}
 			}
 		} else {
-			throw Exception(
-			    "UndoBuffer - don't know how to rollback this type!");
+			assert(entry.type == UndoFlags::EMPTY_ENTRY ||
+			       entry.type == UndoFlags::QUERY);
 		}
 		entry.type = UndoFlags::EMPTY_ENTRY;
 	}

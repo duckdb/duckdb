@@ -65,6 +65,12 @@ void Transaction::PushTuple(size_t offset, StorageChunk *storage) {
 	}
 }
 
+void Transaction::PushQuery(string query) {
+	char *blob =
+	    (char *)undo_buffer.CreateEntry(UndoFlags::QUERY, query.size() + 1);
+	strcpy(blob, query.c_str());
+}
+
 uint8_t *Transaction::PushTuple(size_t data_size) {
 	return undo_buffer.CreateEntry(UndoFlags::TUPLE_ENTRY,
 	                               sizeof(VersionInformation) + data_size);

@@ -69,7 +69,7 @@ class Vector : public Printable {
 	    If create_data is true, the vector will be an owning empty vector.
 	    If zero_data is true, the allocated data will be zero-initialized.
 	*/
-	Vector(TypeId type, bool create_data = false, bool zero_data = false);
+	Vector(TypeId type, bool create_data, bool zero_data);
 	~Vector();
 
 	//! Destroys the vector, deleting any owned data and resetting it to an

@@ -101,6 +101,12 @@ class DataChunk : public Printable {
 	//! Vector to point back to the data owned by this DataChunk.
 	void Reset();
 
+	//! Serializes a DataChunk to a stand-alone binary blob
+	std::unique_ptr<uint8_t[]> Serialize(size_t &size);
+	//! Deserializes a blob back into a DataChunk, returns false if
+	//! deserialization is not possible
+	bool Deserialize(uint8_t *dataptr, size_t size);
+
 	//! Returns a list of types of the vectors of this data chunk
 	std::vector<TypeId> GetTypes();
 
