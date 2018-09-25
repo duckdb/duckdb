@@ -22,14 +22,14 @@ class PhysicalCopy : public PhysicalOperator {
 	             char delimiter, char quote, char escape,
 	             std::vector<std::string> select_list)
 	    : PhysicalOperator(PhysicalOperatorType::COPY), table(table),
-	      file_path(file_path), is_from(is_from), delimiter(delimiter),
-	      quote(quote), escape(escape), select_list(select_list) {}
+	      file_path(file_path), is_from(is_from), select_list(select_list),
+	      delimiter(delimiter), quote(quote), escape(escape) {}
 
 	PhysicalCopy(std::string file_path, bool is_from, char delimiter,
 	             char quote, char escape)
-	    : PhysicalOperator(PhysicalOperatorType::COPY), file_path(file_path),
-	      is_from(is_from), delimiter(delimiter), quote(quote), escape(escape),
-	      table(nullptr) {}
+	    : PhysicalOperator(PhysicalOperatorType::COPY), table(nullptr),
+	      file_path(file_path), is_from(is_from), delimiter(delimiter),
+	      quote(quote), escape(escape) {}
 	std::vector<TypeId> GetTypes() override;
 	virtual void _GetChunk(ClientContext &context, DataChunk &chunk,
 	                       PhysicalOperatorState *state) override;

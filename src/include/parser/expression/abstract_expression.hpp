@@ -94,6 +94,10 @@ class AbstractExpression : public Printable {
 	 */
 	virtual bool IsAggregate();
 
+	// returns true if expression does not contain a group ref or col ref or
+	// parameter
+	virtual bool IsScalar();
+
 	//! Returns the type of the expression
 	ExpressionType GetExpressionType() { return type; }
 

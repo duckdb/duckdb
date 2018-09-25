@@ -26,7 +26,7 @@ class ConstantExpression : public AbstractExpression {
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
 
-	//! Resolve the type of the aggregate
+	//! Resolve the type of the constant
 	virtual void ResolveType() override {
 		AbstractExpression::ResolveType();
 		stats = Statistics(value);

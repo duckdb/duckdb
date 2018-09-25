@@ -116,7 +116,6 @@ PhysicalHashAggregate::GetOperatorState(ExpressionExecutor *parent) {
 	auto state = make_unique<PhysicalHashAggregateOperatorState>(
 	    this, children.size() == 0 ? nullptr : children[0].get(), parent);
 	if (groups.size() > 0) {
-		size_t payload_width = 0;
 		vector<TypeId> group_types, payload_types;
 		std::vector<ExpressionType> aggregate_kind;
 		for (auto &expr : groups) {

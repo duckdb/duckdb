@@ -29,21 +29,6 @@ int compare_tuple(ChunkCollection &sort_by, OrderByDescription &desc,
 	return 0;
 }
 
-static void insertion_sort(ChunkCollection &sort_by, OrderByDescription &desc,
-                           uint64_t *result) {
-	// insertion sort
-	result[0] = 0;
-	for (size_t i = 1; i < sort_by.count; i++) {
-		result[i] = i;
-		for (size_t j = i; j > 0; j--) {
-			if (compare_tuple(sort_by, desc, result[j - 1], i) < 0) {
-				break;
-			}
-			swap(result[j], result[j - 1]);
-		}
-	}
-}
-
 static int64_t _quicksort_initial(ChunkCollection &sort_by,
                                   OrderByDescription &desc, uint64_t *result) {
 	// select pivot

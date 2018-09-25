@@ -122,6 +122,7 @@ void Binder::Visit(SelectStatement &statement) {
 
 	if (statement.where_clause) {
 		statement.where_clause->Accept(this);
+		statement.where_clause->ResolveType();
 	}
 
 	if (statement.HasGroup()) {
@@ -266,7 +267,7 @@ void Binder::Visit(ColumnRefExpression &expr) {
 		// no table name: find a table or subquery that contains this
 		expr.table_name = bind_context->GetMatchingTable(expr.column_name);
 	}
-	auto column = bind_context->BindColumn(expr);
+	bind_context->BindColumn(expr);
 }
 
 void Binder::Visit(SubqueryExpression &expr) {

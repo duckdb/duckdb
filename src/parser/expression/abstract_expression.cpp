@@ -12,6 +12,14 @@ bool AbstractExpression::IsAggregate() {
 	return is_aggregate;
 }
 
+bool AbstractExpression::IsScalar() {
+	bool is_scalar = true;
+	for (auto &child : children) {
+		is_scalar &= child->IsScalar();
+	}
+	return is_scalar;
+}
+
 void AbstractExpression::GetAggregates(
     std::vector<AggregateExpression *> &expressions) {
 	for (auto &child : children) {

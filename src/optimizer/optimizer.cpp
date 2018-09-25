@@ -25,7 +25,7 @@ Optimizer::Optimize(unique_ptr<LogicalOperator> plan) {
 		// then we optimize the logical tree
 		plan = rewriter.ApplyRules(move(plan));
 		success = true;
-		return move(plan);
+		return plan;
 	} catch (Exception ex) {
 		this->message = ex.GetMessage();
 	} catch (...) {

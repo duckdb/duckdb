@@ -13,7 +13,7 @@ using namespace duckdb;
 using namespace std;
 
 StorageChunk::StorageChunk(DataTable &_table, size_t start)
-    : table(_table), read_count(0), count(0), start(start) {
+    : table(_table), count(0), start(start), read_count(0) {
 	auto &table_columns = table.table.columns;
 	columns.resize(table_columns.size());
 	size_t tuple_size = 0;

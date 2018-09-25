@@ -44,7 +44,7 @@ class SubqueryRewritingRule : public Rule {
 	Apply(LogicalOperator &op_root, std::vector<AbstractOperator> &bindings) {
 
 		auto *filter = (LogicalFilter *)bindings[0].value.op;
-		auto *equal = (ComparisonExpression *)bindings[1].value.expr;
+		//		auto *equal = (ComparisonExpression *)bindings[1].value.expr;
 		auto *subquery = (SubqueryExpression *)bindings[2].value.expr;
 
 		// subquery->op->Print();
@@ -61,8 +61,6 @@ class SubqueryRewritingRule : public Rule {
 
 		// step 3: find correlation
 		// subquery->op->Print();
-
-		ColumnRefExpression *corcol = nullptr;
 
 		//	static bool MatchOperands(AbstractRuleNode *node, AbstractOperator
 		// rel,

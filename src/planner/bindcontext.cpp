@@ -25,6 +25,7 @@ string BindContext::GetMatchingTable(const string &column_name) {
 
 	for (auto &kv : subquery_alias_map) {
 		auto subquery = kv.second;
+		(void)subquery;
 		throw BinderException("Subquery binding not implemented yet!");
 	}
 
@@ -120,6 +121,7 @@ void BindContext::GenerateAllColumnExpressions(
 	}
 	for (auto &kv : subquery_alias_map) {
 		auto subquery = kv.second;
+		(void)subquery;
 		throw BinderException("Subquery binding not implemented yet!");
 	}
 }

@@ -48,47 +48,6 @@ using namespace std;
 #define DEFAULT_HASH_THRESHOLD 8
 
 /*
-** An array of registered database engines
-*/
-static int nEngine = 0;
-static const DbEngine **apEngine = 0;
-
-/*
-** Register a new database engine.
-*/
-void sqllogictestRegisterEngine(const DbEngine *p) {
-	nEngine++;
-	apEngine =
-	    (const DbEngine **)realloc(apEngine, nEngine * sizeof(apEngine[0]));
-	if (apEngine == 0) {
-		fprintf(stderr, "out of memory at %s:%d\n", __FILE__, __LINE__);
-		exit(1);
-	}
-	apEngine[nEngine - 1] = (DbEngine *)p;
-}
-
-/*
-** Print a usage comment and die
-*/
-// static void usage(const char *argv0) {
-// 	fprintf(stdout, "Usage: %s [options] script\n", argv0);
-// 	fprintf(
-// 	    stdout,
-// 	    "Options:\n"
-// 	    "  --connection STR       The connection string\n"
-// 	    "  --engine DBENGINE      The engine name (ex: SQLite, ODBC3)\n"
-// 	    "  --halt                 Stop when first error is seen\n"
-// 	    "  --ht NUM               Check results by hash if numbe of lines > "
-// 	    "NUM\n"
-// 	    "  --odbc STR             Shorthand for \"--engine ODBC3 --connection "
-// 	    "STR\"\n"
-// 	    "  --parameters TXT       Extra parameters to the connection string\n"
-// 	    "  --trace                Enable tracing of SQL to standard output\n"
-// 	    "  --verify               Use \"verify MODE\"\n");
-// 	exit(1);
-// }
-
-/*
 ** A structure to keep track of the state of scanning the input script.
 */
 typedef struct Script Script;
@@ -104,6 +63,9 @@ struct Script {
 	int copyFlag;         /* If true, copy lines to output as they are read */
 	char azToken[4][200]; /* tokenization of a line */
 };
+
+// stub because not used
+void sqllogictestRegisterEngine(const DbEngine *p) {}
 
 /*
 ** Advance the cursor to the start of the next non-comment line of the
@@ -338,7 +300,6 @@ static int checkValue(const char *zKey, const char *zHash) {
 	}
 
 static void execute_file(string script) {
-	int verifyMode = 1;               /* True if in -verify mode */
 	int haltOnError = 0;              /* Stop on first error if true */
 	int enableTrace = 0;              /* Trace SQL statements if true */
 	const char *zScriptFile = 0;      /* Input script filename */
@@ -349,7 +310,7 @@ static void execute_file(string script) {
 	char *zScript;                    /* Content of the script */
 	long nScript;                     /* Size of the script in bytes */
 	long nGot;                        /* Number of bytes read */
-	void *pConn;                      /* Connection to the database engine */
+	void *pConn = nullptr;            /* Connection to the database engine */
 	int rc;                           /* Result code from subroutine call */
 	int nErr = 0;                     /* Number of errors */
 	int nCmd = 0;                     /* Number of SQL statements processed */
@@ -411,7 +372,7 @@ static void execute_file(string script) {
 	sScript.zScript = zScript;
 	sScript.zLine = zScript;
 	sScript.iEnd = nScript;
-	sScript.copyFlag = !verifyMode;
+	sScript.copyFlag = 0;
 
 	/* Open the database engine under test
 	 */
@@ -455,8 +416,6 @@ static void execute_file(string script) {
 		if (bSkip) {
 			int n;
 			nSkipped++;
-			if (!verifyMode)
-				continue;
 			if (strcmp(sScript.azToken[0], "query") != 0)
 				continue;
 			if (sScript.azToken[3][0] == 0)
@@ -641,67 +600,38 @@ static void execute_file(string script) {
 				}
 			}
 
-			if (verifyMode) {
-				/* In verify mode, first skip over the ---- line if we are
-				 *still
-				 ** pointing at it. */
-				if (strcmp(sScript.zLine, "----") == 0)
-					nextLine(&sScript);
+			/* In verify mode, first skip over the ---- line if we are
+			 *still
+			 ** pointing at it. */
+			if (strcmp(sScript.zLine, "----") == 0)
+				nextLine(&sScript);
 
-				/* Compare subsequent lines of the script against the
-				 *results
-				 ** from the query.  Report an error if any differences are
-				 *found.
-				 */
-				if (hashThreshold == 0 || nResult <= hashThreshold) {
-					for (i = 0; i < nResult && sScript.zLine[0];
-					     nextLine(&sScript), i++) {
-						if (strcmp(sScript.zLine, azResult[i]) != 0) {
-							fprintf(stderr, "%s:%d: wrong result\n",
-							        zScriptFile, sScript.nLine);
+			/* Compare subsequent lines of the script against the
+			 *results
+			 ** from the query.  Report an error if any differences are
+			 *found.
+			 */
+			if (hashThreshold == 0 || nResult <= hashThreshold) {
+				for (i = 0; i < nResult && sScript.zLine[0];
+				     nextLine(&sScript), i++) {
+					if (strcmp(sScript.zLine, azResult[i]) != 0) {
+						fprintf(stderr, "%s:%d: wrong result\n", zScriptFile,
+						        sScript.nLine);
 
-							fprintf(stderr, "%s <> %s\n", sScript.zLine,
-							        azResult[i]);
-							IFAIL();
-						}
-						// we check this already but this inflates the test
-						// case count as desired
-						REQUIRE(strcmp(sScript.zLine, azResult[i]) == 0);
-					}
-				} else {
-					if (strcmp(sScript.zLine, zHash) != 0) {
-						fprintf(stderr, "%s:%d: wrong result hash\n",
-						        zScriptFile, sScript.nLine);
+						fprintf(stderr, "%s <> %s\n", sScript.zLine,
+						        azResult[i]);
 						IFAIL();
 					}
+					// we check this already but this inflates the test
+					// case count as desired
+					REQUIRE(strcmp(sScript.zLine, azResult[i]) == 0);
 				}
 			} else {
-				/* In completion mode, first make sure we have output an
-				 *---- line.
-				 ** Output such a line now if we have not already done so.
-				 */
-				if (strcmp(sScript.zLine, "----") != 0) {
-					printf("----\n");
+				if (strcmp(sScript.zLine, zHash) != 0) {
+					fprintf(stderr, "%s:%d: wrong result hash\n", zScriptFile,
+					        sScript.nLine);
+					IFAIL();
 				}
-
-				/* Output the results obtained by running the query
-				 */
-				if (hashThreshold == 0 || nResult <= hashThreshold) {
-					for (i = 0; i < nResult; i++) {
-						printf("%s\n", azResult[i]);
-					}
-				} else {
-					printf("%s\n", zHash);
-				}
-				printf("\n");
-
-				/* Skip over any existing results.  They will be ignored.
-				 */
-				sScript.copyFlag = 0;
-				while (sScript.zLine[0] != 0 && sScript.iCur < sScript.iEnd) {
-					nextLine(&sScript);
-				}
-				sScript.copyFlag = 1;
 			}
 
 			/* Free the query results */
@@ -779,13 +709,41 @@ static void testRunner() {
 struct AutoRegTests {
 	AutoRegTests() {
 		vector<string> excludes = {
-		    "test/select4.test",                    // EXCEPT etc.
-		    "test/select5.test",                    // joins too slow
-		    "test/index",                           // no index yet
-		    "random/aggregates",                    // too many diffs to SQLite
-		    "random/expr",                          // ditto
-		    "random/groupby/",                      // ditto
-		    "random/select/slt_good_70.test",       // join on not between
+		    "test/select4.test", // EXCEPT etc.
+		    "test/select5.test", // joins too slow
+		    "test/index",        // no index yet
+		    "random/aggregates", // too many diffs to SQLite, but TODO
+		    "random/groupby/",   // ditto
+		    "random/select/slt_good_70.test", // join on not between
+		    "random/expr/slt_good_10.test",   // these all fail because the AVG
+		                                      // decimal rewrite
+		    "random/expr/slt_good_102.test", "random/expr/slt_good_107.test",
+		    "random/expr/slt_good_108.test", "random/expr/slt_good_109.test",
+		    "random/expr/slt_good_111.test", "random/expr/slt_good_112.test",
+		    "random/expr/slt_good_113.test", "random/expr/slt_good_115.test",
+		    "random/expr/slt_good_116.test", "random/expr/slt_good_117.test",
+		    "random/expr/slt_good_13.test", "random/expr/slt_good_15.test",
+		    "random/expr/slt_good_16.test", "random/expr/slt_good_17.test",
+		    "random/expr/slt_good_19.test", "random/expr/slt_good_21.test",
+		    "random/expr/slt_good_22.test", "random/expr/slt_good_24.test",
+		    "random/expr/slt_good_28.test", "random/expr/slt_good_29.test",
+		    "random/expr/slt_good_3.test", "random/expr/slt_good_30.test",
+		    "random/expr/slt_good_34.test", "random/expr/slt_good_38.test",
+		    "random/expr/slt_good_4.test", "random/expr/slt_good_41.test",
+		    "random/expr/slt_good_44.test", "random/expr/slt_good_45.test",
+		    "random/expr/slt_good_49.test", "random/expr/slt_good_52.test",
+		    "random/expr/slt_good_53.test", "random/expr/slt_good_55.test",
+		    "random/expr/slt_good_59.test", "random/expr/slt_good_6.test",
+		    "random/expr/slt_good_60.test", "random/expr/slt_good_63.test",
+		    "random/expr/slt_good_64.test", "random/expr/slt_good_67.test",
+		    "random/expr/slt_good_69.test", "random/expr/slt_good_7.test",
+		    "random/expr/slt_good_71.test", "random/expr/slt_good_72.test",
+		    "random/expr/slt_good_8.test", "random/expr/slt_good_80.test",
+		    "random/expr/slt_good_82.test", "random/expr/slt_good_85.test",
+		    "random/expr/slt_good_9.test", "random/expr/slt_good_90.test",
+		    "random/expr/slt_good_91.test", "random/expr/slt_good_94.test",
+		    "random/expr/slt_good_95.test", "random/expr/slt_good_96.test",
+		    "random/expr/slt_good_99.test",
 		    "evidence/slt_lang_replace.test",       // feature not supported
 		    "evidence/slt_lang_createview.test",    // "
 		    "evidence/slt_lang_dropview.test",      // "

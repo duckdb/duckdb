@@ -53,8 +53,8 @@ struct LimitDescription {
 class SelectStatement : public SQLStatement {
   public:
 	SelectStatement()
-	    : SQLStatement(StatementType::SELECT), union_select(nullptr),
-	      select_distinct(false){};
+	    : SQLStatement(StatementType::SELECT), select_distinct(false),
+	      union_select(nullptr){};
 	virtual ~SelectStatement() {}
 
 	virtual std::string ToString() const;

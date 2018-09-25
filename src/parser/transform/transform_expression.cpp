@@ -144,7 +144,7 @@ unique_ptr<TableRef> TransformRangeVar(RangeVar *root) {
 unique_ptr<TableRef> TransformRangeSubselect(RangeSubselect *root) {
 	auto result = make_unique<SubqueryRef>();
 	result->alias = TransformAlias(root->alias);
-	result->subquery = move(TransformSelect(root->subquery));
+	result->subquery = TransformSelect(root->subquery);
 	if (!result->subquery) {
 		return nullptr;
 	}
@@ -184,13 +184,12 @@ unique_ptr<TableRef> TransformJoin(JoinExpr *root) {
 	// Check the type of left arg and right arg before transform
 	if (root->larg->type == T_RangeVar) {
 		result->left =
-		    move(TransformRangeVar(reinterpret_cast<RangeVar *>(root->larg)));
+		    TransformRangeVar(reinterpret_cast<RangeVar *>(root->larg));
 	} else if (root->larg->type == T_RangeSubselect) {
-		result->left = move(TransformRangeSubselect(
-		    reinterpret_cast<RangeSubselect *>(root->larg)));
+		result->left = TransformRangeSubselect(
+		    reinterpret_cast<RangeSubselect *>(root->larg));
 	} else if (root->larg->type == T_JoinExpr) {
-		result->left =
-		    move(TransformJoin(reinterpret_cast<JoinExpr *>(root->larg)));
+		result->left = TransformJoin(reinterpret_cast<JoinExpr *>(root->larg));
 	} else {
 		throw NotImplementedException("Join arg type %d not supported yet...\n",
 		                              root->larg->type);
@@ -198,13 +197,12 @@ unique_ptr<TableRef> TransformJoin(JoinExpr *root) {
 
 	if (root->rarg->type == T_RangeVar) {
 		result->right =
-		    move(TransformRangeVar(reinterpret_cast<RangeVar *>(root->rarg)));
+		    TransformRangeVar(reinterpret_cast<RangeVar *>(root->rarg));
 	} else if (root->rarg->type == T_RangeSubselect) {
-		result->right = move(TransformRangeSubselect(
-		    reinterpret_cast<RangeSubselect *>(root->rarg)));
+		result->right = TransformRangeSubselect(
+		    reinterpret_cast<RangeSubselect *>(root->rarg));
 	} else if (root->rarg->type == T_JoinExpr) {
-		result->right =
-		    move(TransformJoin(reinterpret_cast<JoinExpr *>(root->rarg)));
+		result->right = TransformJoin(reinterpret_cast<JoinExpr *>(root->rarg));
 	} else {
 		throw NotImplementedException("Join arg type %d not supported yet...\n",
 		                              root->larg->type);
@@ -221,12 +219,12 @@ unique_ptr<TableRef> TransformJoin(JoinExpr *root) {
 	switch (root->quals->type) {
 	case T_A_Expr: {
 		result->condition =
-		    move(TransformAExpr(reinterpret_cast<A_Expr *>(root->quals)));
+		    TransformAExpr(reinterpret_cast<A_Expr *>(root->quals));
 		break;
 	}
 	case T_BoolExpr: {
 		result->condition =
-		    move(TransformBoolExpr(reinterpret_cast<BoolExpr *>(root->quals)));
+		    TransformBoolExpr(reinterpret_cast<BoolExpr *>(root->quals));
 		break;
 	}
 	default: {
@@ -251,14 +249,14 @@ unique_ptr<TableRef> TransformFrom(List *root) {
 			Node *n = reinterpret_cast<Node *>(node->data.ptr_value);
 			switch (n->type) {
 			case T_RangeVar:
-				next = move(TransformRangeVar(reinterpret_cast<RangeVar *>(n)));
+				next = TransformRangeVar(reinterpret_cast<RangeVar *>(n));
 				break;
 			case T_RangeSubselect:
-				next = move(TransformRangeSubselect(
-				    reinterpret_cast<RangeSubselect *>(n)));
+				next = TransformRangeSubselect(
+				    reinterpret_cast<RangeSubselect *>(n));
 				break;
 			case T_JoinExpr:
-				next = move(TransformJoin(reinterpret_cast<JoinExpr *>(n)));
+				next = TransformJoin(reinterpret_cast<JoinExpr *>(n));
 				break;
 			default:
 				throw NotImplementedException(
@@ -388,7 +386,7 @@ unique_ptr<AbstractExpression> TransformCoalesce(A_Expr *root) {
 		cur_root->AddChild(move(res_false));
 		cur_root = next_root;
 	}
-	return move(exp_root);
+	return exp_root;
 }
 
 unique_ptr<AbstractExpression> TransformNullTest(NullTest *root) {
@@ -436,16 +434,16 @@ unique_ptr<AbstractExpression> TransformAExpr(A_Expr *root) {
 	// rewrite NULLIF(a, b) into CASE WHEN a=b THEN NULL ELSE a END
 	case AEXPR_NULLIF: {
 		auto case_expr = unique_ptr<AbstractExpression>(new CaseExpression());
-		auto test_expr = unique_ptr<AbstractExpression>(
-		    new ComparisonExpression(ExpressionType::COMPARE_EQUAL,
-		                             move(TransformExpression(root->lexpr)),
-		                             move(TransformExpression(root->rexpr))));
+		auto test_expr =
+		    unique_ptr<AbstractExpression>(new ComparisonExpression(
+		        ExpressionType::COMPARE_EQUAL, TransformExpression(root->lexpr),
+		        TransformExpression(root->rexpr)));
 		case_expr->AddChild(move(test_expr));
 		auto null_expr =
 		    unique_ptr<AbstractExpression>(new ConstantExpression(Value()));
 		case_expr->AddChild(move(null_expr));
-		case_expr->AddChild(move(TransformExpression(root->lexpr)));
-		return move(case_expr);
+		case_expr->AddChild(TransformExpression(root->lexpr));
+		return case_expr;
 	} break;
 	// rewrite (NOT) X BETWEEN A AND B into (NOT) AND(GREATERTHANOREQUALTO(X,
 	// A), LESSTHANOREQUALTO(X, B))
@@ -495,7 +493,7 @@ unique_ptr<AbstractExpression> TransformAExpr(A_Expr *root) {
 	if (!left_expr) {
 		switch (target_type) {
 		case ExpressionType::OPERATOR_ADD:
-			return move(right_expr);
+			return right_expr;
 		case ExpressionType::OPERATOR_SUBTRACT:
 			target_type = ExpressionType::OPERATOR_MULTIPLY;
 			left_expr = make_unique<ConstantExpression>(Value(-1));
@@ -550,9 +548,9 @@ unique_ptr<AbstractExpression> TransformFuncCall(FuncCall *root) {
 				throw NotImplementedException(
 				    "Aggregation over zero columns not supported!");
 			} else if (root->args->length < 2) {
+
 				if (agg_fun_type == ExpressionType::AGGREGATE_AVG) {
 					// rewrite AVG(a) to SUM(a) / COUNT(a)
-
 					// first create the SUM
 					auto sum = make_unique<AggregateExpression>(
 					    ExpressionType::AGGREGATE_SUM, root->agg_distinct,
@@ -596,8 +594,8 @@ unique_ptr<AbstractExpression> TransformCase(CaseExpr *root) {
 
 	unique_ptr<AbstractExpression> def_res;
 	if (root->defresult) {
-		def_res = move(
-		    TransformExpression(reinterpret_cast<Node *>(root->defresult)));
+		def_res =
+		    TransformExpression(reinterpret_cast<Node *>(root->defresult));
 	} else {
 		def_res =
 		    unique_ptr<AbstractExpression>(new ConstantExpression(Value()));
@@ -644,7 +642,7 @@ unique_ptr<AbstractExpression> TransformCase(CaseExpr *root) {
 		cur_root = next_root;
 	}
 
-	return move(exp_root);
+	return exp_root;
 }
 
 unique_ptr<AbstractExpression> TransformSubquery(SubLink *root) {
@@ -652,7 +650,7 @@ unique_ptr<AbstractExpression> TransformSubquery(SubLink *root) {
 		return nullptr;
 	}
 	auto subquery_expr = make_unique<SubqueryExpression>();
-	subquery_expr->subquery = move(TransformSelect(root->subselect));
+	subquery_expr->subquery = TransformSelect(root->subselect);
 	if (!subquery_expr->subquery) {
 		return nullptr;
 	}

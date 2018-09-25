@@ -158,6 +158,8 @@ int64_t Value::GetNumericValue() {
 		return value_.integer;
 	case TypeId::BIGINT:
 		return value_.bigint;
+	case TypeId::DECIMAL:
+		return value_.decimal;
 	case TypeId::DATE:
 		return value_.date;
 	case TypeId::POINTER:

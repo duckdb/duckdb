@@ -57,7 +57,11 @@ class AggregateExpression : public AbstractExpression {
 			return_type = TypeId::BIGINT;
 			break;
 		case ExpressionType::AGGREGATE_COUNT:
-			Statistics::Count(children[0]->stats, stats);
+			if (children[0]->IsScalar()) {
+				stats.has_stats = false;
+			} else {
+				Statistics::Count(children[0]->stats, stats);
+			}
 			return_type = TypeId::BIGINT;
 			break;
 		case ExpressionType::AGGREGATE_MAX:
@@ -71,9 +75,26 @@ class AggregateExpression : public AbstractExpression {
 			    std::max(children[0]->return_type, stats.MinimalType());
 			break;
 		case ExpressionType::AGGREGATE_SUM:
-			Statistics::Sum(children[0]->stats, stats);
-			return_type =
-			    std::max(children[0]->return_type, stats.MinimalType());
+			if (children[0]->IsScalar()) {
+				stats.has_stats = false;
+				switch (children[0]->return_type) {
+				case TypeId::BOOLEAN:
+				case TypeId::TINYINT:
+				case TypeId::SMALLINT:
+				case TypeId::INTEGER:
+				case TypeId::BIGINT:
+					return_type = TypeId::BIGINT;
+					break;
+				default:
+					return_type = children[0]->return_type;
+				}
+			} else {
+				Statistics::Count(children[0]->stats, stats);
+				Statistics::Sum(children[0]->stats, stats);
+				return_type =
+				    std::max(children[0]->return_type, stats.MinimalType());
+			}
+
 			break;
 		case ExpressionType::AGGREGATE_FIRST:
 			return_type = children[0]->return_type;

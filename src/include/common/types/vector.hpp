@@ -45,6 +45,8 @@ class Vector : public Printable {
 	friend class DataChunk;
 
   public:
+	//! The type of the elements stored in the vector.
+	TypeId type;
 	//! The amount of elements in the vector.
 	size_t count;
 	//! A pointer to the data.
@@ -53,8 +55,6 @@ class Vector : public Printable {
 	bool owns_data;
 	//! The selection vector of the vector.
 	sel_t *sel_vector;
-	//! The type of the elements stored in the vector.
-	TypeId type;
 	//! The null mask of the vector, if the Vector has any NULL values
 	std::bitset<STANDARD_VECTOR_SIZE> nullmask;
 

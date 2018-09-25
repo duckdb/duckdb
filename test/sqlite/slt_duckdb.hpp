@@ -61,13 +61,12 @@ duckdbQuery(void *pConn,       /* Connection created by xConnect */
             int *pnResult      /* RETURN:  Number of result values */
 ) {
 
-	duckdb_connection p = *((duckdb_connection *)pConn);
 	duckdb_result result;
 
 	size_t r, c;
 	(void)zType;
 	// fprintf(stderr, "Quack: %s\n", zSql);
-
+	assert(pConn);
 	if (duckdb_query((duckdb_connection)pConn, (char *)zSql, &result) !=
 	    DuckDBSuccess) {
 		return 1;
@@ -126,8 +125,8 @@ duckdbQuery(void *pConn,       /* Connection created by xConnect */
 					snprintf(buffer, BUFSIZ, "%s", "NULL");
 				} else {
 					// cast to INT seems to be the trick here
-					int n = snprintf(buffer, BUFSIZ, "%d",
-					                 (int)((double *)actual_column.data)[r]);
+					snprintf(buffer, BUFSIZ, "%d",
+					         (int)((double *)actual_column.data)[r]);
 				}
 				break;
 			}

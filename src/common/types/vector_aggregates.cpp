@@ -108,8 +108,19 @@ Value VectorOperations::Sum(Vector &left) {
 	if (left.count == 0 || !TypeIsNumeric(left.type)) {
 		return Value();
 	}
+
 	Value result = Value::Numeric(left.type, 0);
-	_generic_unary_fold_loop<operators::Addition>(left, result);
+
+	// check if all are NULL, because then the result is NULL and not 0
+	Vector is_null;
+	is_null.Initialize(TypeId::BOOLEAN);
+	VectorOperations::IsNull(left, is_null);
+
+	if (Value::Equals(VectorOperations::AllTrue(is_null), Value(true))) {
+		result.is_null = true;
+	} else {
+		_generic_unary_fold_loop<operators::Addition>(left, result);
+	}
 	return result;
 }
 
@@ -153,6 +164,19 @@ Value VectorOperations::AnyTrue(Vector &left) {
 
 	Value result = Value(false);
 	_generic_unary_fold_loop<operators::AnyTrue>(left, result);
+	return result;
+}
+
+Value VectorOperations::AllTrue(Vector &left) {
+	if (left.type != TypeId::BOOLEAN) {
+		throw Exception("AnyTrue can only be computed for boolean columns!");
+	}
+	if (left.count == 0) {
+		return Value(false);
+	}
+
+	Value result = Value(true);
+	_generic_unary_fold_loop<operators::AllTrue>(left, result);
 	return result;
 }
 

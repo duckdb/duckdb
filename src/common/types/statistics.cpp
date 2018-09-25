@@ -34,10 +34,10 @@ void Statistics::Verify(Vector &vector) {
 
 Statistics::Statistics(Value value)
     : has_stats(true), can_have_null(value.is_null), min(value), max(value),
-      type(value.type),
+
       maximum_string_length(
           value.type == TypeId::VARCHAR ? value.str_value.size() : 0),
-      maximum_count(1) {
+      type(value.type), maximum_count(1) {
 	if (TypeIsIntegral(value.type) && value.type != TypeId::BIGINT) {
 		// upcast to biggest integral type
 		max = min = value.CastAs(TypeId::BIGINT);
@@ -186,6 +186,8 @@ void Statistics::Sum(Statistics &source, Statistics &result) {
 		result.can_have_null = true;
 		Value count = Value::Numeric(source.min.type, source.maximum_count);
 		Value::Multiply(source.min, count, result.min);
+		Value::Min(result.min, source.min,
+		           result.min); // groups do not need to have count entries
 		Value::Multiply(source.max, count, result.max);
 		result.maximum_count = 1;
 	}

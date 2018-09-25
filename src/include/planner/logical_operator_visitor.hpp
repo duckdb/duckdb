@@ -38,6 +38,7 @@ class LogicalOperatorVisitor : public SQLNodeVisitor {
 	virtual ~LogicalOperatorVisitor(){};
 
 	virtual void VisitOperator(LogicalOperator &op);
+	using SQLNodeVisitor::Visit;
 
 	virtual void Visit(LogicalAggregate &op);
 	virtual void Visit(LogicalCrossProduct &op);

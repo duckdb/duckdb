@@ -28,6 +28,11 @@ class CastExpression : public AbstractExpression {
 		}
 	}
 
+	virtual std::string ToString() const override {
+		return "CAST[" + TypeIdToString(return_type) + "](" +
+		       children[0]->ToString() + ")";
+	}
+
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
 };
 } // namespace duckdb

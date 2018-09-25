@@ -57,7 +57,7 @@ RewritePushdown(std::unique_ptr<AbstractExpression> expr, LogicalOperator *op) {
 		// try to see if child ops are interested in this join condition?
 		if (op->children[i]->type == LogicalOperatorType::CROSS_PRODUCT ||
 		    op->children[i]->type == LogicalOperatorType::JOIN) {
-			expr = move(RewritePushdown(move(expr), op->children[i].get()));
+			expr = RewritePushdown(move(expr), op->children[i].get());
 			if (!expr) {
 				moved = true;
 			}
@@ -102,7 +102,7 @@ RewritePushdown(std::unique_ptr<AbstractExpression> expr, LogicalOperator *op) {
 	}
 
 	if (!moved) {
-		return move(expr);
+		return expr;
 	} else {
 		return nullptr;
 	}

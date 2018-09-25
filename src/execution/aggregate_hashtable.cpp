@@ -13,9 +13,9 @@ SuperLargeHashTable::SuperLargeHashTable(size_t initial_capacity,
                                          vector<TypeId> payload_types,
                                          vector<ExpressionType> aggregate_types,
                                          bool parallel)
-    : entries(0), capacity(0), data(nullptr), group_width(0), payload_width(0),
-      group_types(group_types), payload_types(payload_types),
-      aggregate_types(aggregate_types), max_chain(0), parallel(parallel) {
+    : aggregate_types(aggregate_types), group_types(group_types),
+      payload_types(payload_types), group_width(0), payload_width(0),
+      capacity(0), entries(0), data(nullptr), max_chain(0), parallel(parallel) {
 	// HT tuple layout is as follows:
 	// [FLAG][NULLMASK][GROUPS][PAYLOAD][COUNT]
 	// [FLAG] is the state of the tuple in memory
@@ -143,7 +143,6 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 
 	// now we actually access the base table
 	uint8_t group_data[group_width];
-	size_t new_count = 0, updated_count = 0;
 
 	void **ptr = (void **)addresses.data;
 	for (size_t i = 0; i < addresses.count; i++) {
@@ -226,24 +225,10 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		max_chain = max(chain, max_chain);
 	}
 
-	size_t payload_length = 0;
-	// find the pointers to the counts because we need them for the FIRST
-	// implementation
-	// TODO: Suggests improvement: store the counts at the beginning of the
-	// addresses?
-	size_t j = 0;
-
-	for (size_t i = 0; i < aggregate_types.size(); i++) {
-		if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_STAR) {
-			continue;
-		}
-		payload_length += GetTypeIdSize(payload.data[j++].type);
-	}
-
 	// now every cell has an entry
 	// update the aggregates
 	Vector one(Value::BIGINT(1));
-	j = 0;
+	size_t j = 0;
 
 	for (size_t i = 0; i < aggregate_types.size(); i++) {
 		if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_STAR) {

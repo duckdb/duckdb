@@ -128,7 +128,6 @@ unique_ptr<CreateStatement> TransformCreate(Node *node) {
 	if (stmt->inhRelations) {
 		throw NotImplementedException("inherited relations not implemented");
 	}
-	RangeVar *relation;
 	assert(stmt->relation);
 
 	if (stmt->relation->schemaname) {
@@ -208,7 +207,6 @@ unique_ptr<InsertStatement> TransformInsert(Node *node) {
 
 		// transform the insert list
 		auto list = select_stmt->valuesLists;
-		size_t list_size = 0;
 		for (auto value_list = list->head; value_list != NULL;
 		     value_list = value_list->next) {
 			List *target = (List *)(value_list->data.ptr_value);
@@ -344,7 +342,7 @@ unique_ptr<DeleteStatement> TransformDelete(Node *node) {
 	if (result->table->ref_type != TableReferenceType::BASE_TABLE) {
 		throw Exception("Can only delete from base tables!");
 	}
-	return move(result);
+	return result;
 }
 
 unique_ptr<UpdateStatement> TransformUpdate(Node *node) {

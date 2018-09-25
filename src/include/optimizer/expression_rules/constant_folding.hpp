@@ -43,7 +43,6 @@ class ConstantFoldingRule : public Rule {
 
 		auto left = root.children[0].get();
 		auto right = root.children[1].get();
-		Value null = Value();
 
 		// case: both constant, evaluate
 		if (left->type == ExpressionType::VALUE_CONSTANT &&
@@ -75,7 +74,10 @@ class ConstantFoldingRule : public Rule {
 				default:
 					throw Exception("Unsupported operator");
 				}
-				return make_unique<ConstantExpression>(result);
+				// FIXME: this could hide an overflow, but breaks the plan if we
+				// don't
+				return make_unique<ConstantExpression>(
+				    result.CastAs(root.return_type));
 			}
 			return nullptr;
 		}

@@ -53,7 +53,7 @@ Rewriter::ApplyRules(unique_ptr<LogicalOperator> root) {
 			}
 		}
 	} while (!fixed_point);
-	return move(root);
+	return root;
 }
 
 bool Rewriter::MatchOperands(AbstractRuleNode *node, AbstractOperator rel,

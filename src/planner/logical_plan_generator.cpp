@@ -113,10 +113,25 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 	if (statement.HasAggregation()) {
 		auto aggregate =
 		    make_unique<LogicalAggregate>(move(statement.select_list));
+
 		if (statement.HasGroup()) {
 			// have to add group by columns
 			aggregate->groups = move(statement.groupby.groups);
 		}
+
+//		// the all-controversial feature
+//		// rewrite non-aggregates into aggregates using FIRST
+//		for (size_t i = 0; i < aggregate->expressions.size(); i++) {
+//			if (!aggregate->expressions[i]->IsAggregate() &&
+//			    aggregate->expressions[i]->type != ExpressionType::GROUP_REF) { // FIXME this will fail when math is applied to group refs!
+//				auto first = make_unique<AggregateExpression>(
+//				    ExpressionType::AGGREGATE_FIRST, false,
+//				    move(aggregate->expressions[i]));
+//				first->ResolveType();
+//				aggregate->expressions[i] = move(first);
+//			}
+//		}
+
 		aggregate->AddChild(move(root));
 		root = move(aggregate);
 
@@ -204,8 +219,8 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 			group_ref->alias = proj_ele->alias;
 			expressions.push_back(move(group_ref));
 			groups.push_back(
-			    move(make_unique_base<AbstractExpression, ColumnRefExpression>(
-			        proj_ele->return_type, i)));
+			    make_unique_base<AbstractExpression, ColumnRefExpression>(
+			        proj_ele->return_type, i));
 		}
 		// this aggregate is superflous if all grouping columns are in aggr
 		// below
@@ -228,17 +243,20 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 	}
 }
 
-static void cast_children_to_equal_types(AbstractExpression &expr) {
+static void cast_children_to_equal_types(AbstractExpression &expr,
+                                         size_t start_idx = 0) {
 	// first figure out the widest type
 	TypeId max_type = TypeId::INVALID;
-	for (size_t child_idx = 0; child_idx < expr.children.size(); child_idx++) {
+	for (size_t child_idx = start_idx; child_idx < expr.children.size();
+	     child_idx++) {
 		TypeId child_type = expr.children[child_idx]->return_type;
 		if (child_type > max_type) {
 			max_type = child_type;
 		}
 	}
 	// now add casts where appropriate
-	for (size_t child_idx = 0; child_idx < expr.children.size(); child_idx++) {
+	for (size_t child_idx = start_idx; child_idx < expr.children.size();
+	     child_idx++) {
 		TypeId child_type = expr.children[child_idx]->return_type;
 		if (child_type != max_type) {
 			auto cast = make_unique<CastExpression>(
@@ -259,6 +277,19 @@ void LogicalPlanGenerator::Visit(AggregateExpression &expr) {
 			expr.children[i] = move(cast);
 		}
 	}
+}
+
+void LogicalPlanGenerator::Visit(CaseExpression &expr) {
+	SQLNodeVisitor::Visit(expr);
+	assert(expr.children.size() == 3);
+	// check needs to be bool
+	if (expr.children[0]->return_type != TypeId::BOOLEAN) {
+		auto cast = make_unique<CastExpression>(TypeId::BOOLEAN,
+		                                        move(expr.children[0]));
+		expr.children[0] = move(cast);
+	}
+	// others need same type
+	cast_children_to_equal_types(expr, 1);
 }
 
 void LogicalPlanGenerator::Visit(ComparisonExpression &expr) {

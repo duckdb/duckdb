@@ -509,4 +509,12 @@ ExternalFileFormat StringToExternalFileFormat(const std::string &str) {
 	    "No ExternalFileFormat for input '%s'", upper.c_str()));
 }
 
+bool TypeIsConstantSize(TypeId type) { return type < TypeId::VARCHAR; }
+bool TypeIsIntegral(TypeId type) {
+	return type >= TypeId::TINYINT && type <= TypeId::BIGINT;
+}
+bool TypeIsNumeric(TypeId type) {
+	return type >= TypeId::TINYINT && type <= TypeId::DECIMAL;
+}
+
 }; // namespace duckdb

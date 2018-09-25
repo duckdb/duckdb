@@ -33,6 +33,8 @@ class GroupRefExpression : public AbstractExpression {
 		return group_index == other->group_index;
 	}
 
+	virtual bool IsScalar() override { return false; }
+
 	//! The index of the group this expression is referencing
 	size_t group_index;
 };
