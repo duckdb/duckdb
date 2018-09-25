@@ -25,7 +25,7 @@ string TransformAlias(Alias *root) {
 TypeId TransformStringToTypeId(char *str) {
 	string lower_str = StringUtil::Lower(string(str));
 	// Transform column type
-	if (lower_str == "int" || lower_str == "int4") {
+	if (lower_str == "int" || lower_str == "int4" || lower_str == "signed") {
 		return TypeId::INTEGER;
 	} else if (lower_str == "varchar" || lower_str == "bpchar" ||
 	           lower_str == "text" || lower_str == "string") {
