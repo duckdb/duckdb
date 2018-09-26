@@ -6,29 +6,28 @@ using namespace std;
 namespace duckdb {
 
 bool CHECK_COLUMN(unique_ptr<duckdb::DuckDBResult> &result,
-                         size_t column_number,
-                         vector<duckdb::Value> values) {
+                  size_t column_number, vector<duckdb::Value> values) {
 	if (!result->GetSuccess()) {
 		fprintf(stderr, "Query failed with message: %s\n",
 		        result->GetErrorMessage().c_str());
-		//FAIL(result->GetErrorMessage().c_str());
+		// FAIL(result->GetErrorMessage().c_str());
 		return false;
 	}
 	if (values.size() == 0) {
 		if (result->size() != 0) {
 			result->Print();
-			//FAIL("Data size does not match value size!");
+			// FAIL("Data size does not match value size!");
 			return false;
 		} else {
 			return true;
 		}
 	}
 	if (result->size() == 0) {
-		//FAIL("Data size does not match value size!");
+		// FAIL("Data size does not match value size!");
 		return false;
 	}
 	if (column_number >= result->column_count()) {
-		//FAIL("Column number out of range of result!");
+		// FAIL("Column number out of range of result!");
 		return false;
 	}
 	size_t chunk_index = 0;
@@ -36,7 +35,7 @@ bool CHECK_COLUMN(unique_ptr<duckdb::DuckDBResult> &result,
 		if (chunk_index > result->size()) {
 			// ran out of chunks
 			return false;
-			//FAIL("Data size does not match value size!");
+			// FAIL("Data size does not match value size!");
 		}
 		// check this vector
 		auto &vector =
@@ -44,7 +43,7 @@ bool CHECK_COLUMN(unique_ptr<duckdb::DuckDBResult> &result,
 		if (i + vector.count > values.size()) {
 			vector.Print();
 			// too many values in this vector
-			//FAIL("Too many values in result!");
+			// FAIL("Too many values in result!");
 			return false;
 		}
 		for (size_t j = 0; j < vector.count; j++) {
@@ -53,7 +52,8 @@ bool CHECK_COLUMN(unique_ptr<duckdb::DuckDBResult> &result,
 				continue;
 			}
 			if (!Value::Equals(vector.GetValue(j), values[i + j])) {
-				// FAIL("Incorrect result! Got " + vector.GetValue(j).ToString() +
+				// FAIL("Incorrect result! Got " + vector.GetValue(j).ToString()
+				// +
 				//      " but expected " + values[i + j].ToString());
 				return false;
 			}
@@ -64,8 +64,8 @@ bool CHECK_COLUMN(unique_ptr<duckdb::DuckDBResult> &result,
 	return true;
 }
 
-string compare_csv(unique_ptr<duckdb::DuckDBResult> &result,
-                               string csv, bool header) {
+string compare_csv(unique_ptr<duckdb::DuckDBResult> &result, string csv,
+                   bool header) {
 	if (!result->GetSuccess()) {
 		fprintf(stderr, "Query failed with message: %s\n",
 		        result->GetErrorMessage().c_str());
@@ -78,9 +78,7 @@ string compare_csv(unique_ptr<duckdb::DuckDBResult> &result,
 	return "";
 }
 
-
-bool parse_datachunk(string csv, DataChunk &result,
-                            bool has_header) {
+bool parse_datachunk(string csv, DataChunk &result, bool has_header) {
 	istringstream f(csv);
 	string line;
 
@@ -132,8 +130,8 @@ bool parse_datachunk(string csv, DataChunk &result,
 
 //! Compares the result of a pipe-delimited CSV with the given DataChunk
 //! Returns true if they are equal, and stores an error_message otherwise
-bool compare_result(string csv, ChunkCollection &collection,
-                           bool has_header, string &error_message) {
+bool compare_result(string csv, ChunkCollection &collection, bool has_header,
+                    string &error_message) {
 	auto types = collection.types;
 	DataChunk correct_result;
 
@@ -214,8 +212,8 @@ incorrect:
 	if (!parse_datachunk(csv, correct_result, has_header)) {
 		error_message = "Incorrect answer for query!\nProvided answer:\n" +
 		                collection.ToString() +
-		                "\nExpected answer [could not parse]:\n" +
-		                string(csv) + "\n";
+		                "\nExpected answer [could not parse]:\n" + string(csv) +
+		                "\n";
 	} else {
 		error_message = "Incorrect answer for query!\nProvided answer:\n" +
 		                collection.ToString() + "\nExpected answer:\n" +
@@ -223,4 +221,4 @@ incorrect:
 	}
 	return false;
 }
-}
+} // namespace duckdb

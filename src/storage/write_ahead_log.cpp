@@ -75,14 +75,20 @@ void WriteAheadLog::Replay(string &path) {
 		// read the entry
 		if (entry.type == WALEntry::WAL_FLUSH) {
 			// flush
+			bool failed = false;
 			context.transaction.BeginTransaction();
 			for (auto &stored_entry : stored_entries) {
 				if (!ReplayEntry(context, database, stored_entry.entry,
 				                 stored_entry.data.get())) {
 					// failed to replay entry in log
 					context.transaction.Rollback();
+					failed = true;
 					break;
 				}
+			}
+			if (failed) {
+				// failed to replay entry: stop replaying the WAL
+				break;
 			}
 			stored_entries.clear();
 			context.transaction.Commit();

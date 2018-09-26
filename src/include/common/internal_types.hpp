@@ -355,12 +355,29 @@ bool TypeIsNumeric(TypeId type);
 template <class T> inline T NullValue() {
 	return std::numeric_limits<T>::min();
 }
-// template <> inline double NullValue() { return NAN; }
+
+constexpr const char str_nil[2] = {'\200', '\0'};
+
+template <> inline const char *NullValue() {
+	assert(str_nil[0] == '\200' && str_nil[1] == '\0');
+	return str_nil;
+}
+
+template <> inline char *NullValue() {
+	return (char *)NullValue<const char *>();
+}
 
 template <class T> inline bool IsNullValue(T value) {
 	return value == NullValue<T>();
 }
-// template <> inline bool IsNullValue(double value) { return isnan(value); }
+
+template <> inline bool IsNullValue(const char *value) {
+	return !value || strcmp(value, NullValue<const char *>()) == 0;
+}
+
+template <> inline bool IsNullValue(char *value) {
+	return IsNullValue<const char *>(value);
+}
 
 //! Returns the minimum value that can be stored in a given type
 int64_t MinimumValue(TypeId type);

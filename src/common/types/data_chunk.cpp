@@ -236,11 +236,13 @@ std::unique_ptr<uint8_t[]> DataChunk::Serialize(size_t &size) {
 			assert(type == TypeId::VARCHAR);
 			// strings are inlined into the blob
 			// we use null-padding to store them
-			char **strings = (char **)data[i].data;
+			const char **strings = (const char **)data[i].data;
 			for (size_t j = 0; j < count; j++) {
 				auto target = (char *)ptr;
-				strcpy(target, strings[j]);
-				ptr += strlen(strings[j]) + 1;
+				auto source =
+				    strings[j] ? strings[j] : NullValue<const char *>();
+				strcpy(target, source);
+				ptr += strlen(source) + 1;
 			}
 		}
 	}
@@ -296,8 +298,13 @@ bool DataChunk::Deserialize(uint8_t *ptr, size_t size) {
 				}
 				// now add the string to the StringHeap of the vector
 				// and write the pointer into the vector
-				strings[j] =
-				    data[i].string_heap.AddString((char *)ptr, end - ptr);
+				if (IsNullValue<const char *>((const char *)ptr)) {
+					strings[j] = nullptr;
+					data[i].nullmask[j] = true;
+				} else {
+					strings[j] =
+					    data[i].string_heap.AddString((char *)ptr, end - ptr);
+				}
 				ptr = end + 1;
 			}
 		}
