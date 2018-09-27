@@ -1,5 +1,8 @@
 
 
+// this file is used to instantiate symbols for LLDB so e.g.
+// std::vector and std::unique_ptr can be accessed from the debugger
+
 #ifdef DEBUG
 
 #include "catalog/catalog.hpp"

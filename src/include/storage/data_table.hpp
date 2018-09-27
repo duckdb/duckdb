@@ -68,11 +68,9 @@ class DataTable {
 	//! A reference to the catalog table entry
 	TableCatalogEntry &table;
 
-  private:
-	//! The amount of entries in the table
-	size_t count;
 	//! A reference to the base storage manager
 	StorageManager &storage;
+  private:
 	//! The stored data of the table
 	std::unique_ptr<StorageChunk> chunk_list;
 	//! A reference to the last entry in the chunk list
