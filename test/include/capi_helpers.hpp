@@ -12,8 +12,8 @@ T get_numeric(duckdb_column column, size_t index);
 
 int64_t get_numeric(duckdb_column column, size_t row);
 
-#define NULL_NUMERIC std::numeric_limits<int64_t>::min()
-#define NULL_DECIMAL NAN
+extern int64_t NULL_NUMERIC;
+extern double NULL_DECIMAL;
 
 bool CHECK_NUMERIC_COLUMN(duckdb_result result, size_t column,
                                  std::vector<int64_t> values);

@@ -1,7 +1,13 @@
 
 #include "capi_helpers.hpp"
+#include <limits>
 
 using namespace std;
+
+
+int64_t NULL_NUMERIC = std::numeric_limits<int64_t>::min();
+double NULL_DECIMAL = NAN;
+
 
 template <class T> T get_numeric(duckdb_column column, size_t index) {
 	T *data = (T *)column.data;
