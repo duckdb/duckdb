@@ -97,6 +97,24 @@ static void WriteCatalogEntry(WriteAheadLog *log, AbstractCatalogEntry *entry) {
 }
 
 static void
+FlushAppends(WriteAheadLog *log,
+             unordered_map<DataTable *, unique_ptr<DataChunk>> &appends) {
+	// write appends that were not flushed yet
+	assert(log);
+	if (appends.size() == 0) {
+		return;
+	}
+	for (auto &entry : appends) {
+		auto dtable = entry.first;
+		auto chunk = entry.second.get();
+		auto &schema_name = dtable->table.schema->name;
+		auto &table_name = dtable->table.name;
+		log->WriteInsert(schema_name, table_name, *chunk);
+	}
+	appends.clear();
+}
+
+static void
 WriteTuple(WriteAheadLog *log, VersionInformation *entry,
            unordered_map<DataTable *, unique_ptr<DataChunk>> &appends) {
 	if (!log) {
@@ -108,34 +126,47 @@ WriteTuple(WriteAheadLog *log, VersionInformation *entry,
 		return;
 	}
 	// get the data for the insertion
+	StorageChunk *storage = nullptr;
+	DataChunk *chunk = nullptr;
 	if (entry->chunk) {
+		// versioninfo refers to data inside StorageChunk
 		// fetch the data from the base rows
-		auto storage = entry->chunk;
-		auto id = entry->prev.entry;
-
-		DataChunk *chunk = nullptr;
-		DataTable *dtable = &entry->chunk->table;
-		// first lookup the chunk to which we will append this entry to
-		auto entry = appends.find(dtable);
-		if (entry != appends.end()) {
-			// entry exists, check if we need to flush it
-			chunk = entry->second.get();
-			if (chunk->count == STANDARD_VECTOR_SIZE) {
-				// entry is full: flush to WAL
-				auto &schema_name = dtable->table.schema->name;
-				auto &table_name = dtable->table.name;
-				log->WriteInsert(schema_name, table_name, *chunk);
-				chunk->Reset();
-			}
-		} else {
-			// entry does not exist: need to make a new entry
-			auto types = dtable->table.GetTypes();
-			auto new_chunk = make_unique<DataChunk>();
-			chunk = new_chunk.get();
-			chunk->Initialize(types);
-			appends.insert(make_pair(dtable, move(new_chunk)));
+		storage = entry->chunk;
+	} else {
+		// insertion was updated or deleted after insertion in the same
+		// transaction iterate back to the chunk to find the StorageChunk
+		auto prev = entry->prev.pointer;
+		while (!prev->chunk) {
+			assert(entry->prev.pointer);
+			prev = prev->prev.pointer;
 		}
+		storage = prev->chunk;
+	}
 
+	DataTable *dtable = &storage->table;
+	// first lookup the chunk to which we will append this entry to
+	auto append_entry = appends.find(dtable);
+	if (append_entry != appends.end()) {
+		// entry exists, check if we need to flush it
+		chunk = append_entry->second.get();
+		if (chunk->count == STANDARD_VECTOR_SIZE) {
+			// entry is full: flush to WAL
+			auto &schema_name = dtable->table.schema->name;
+			auto &table_name = dtable->table.name;
+			log->WriteInsert(schema_name, table_name, *chunk);
+			chunk->Reset();
+		}
+	} else {
+		// entry does not exist: need to make a new entry
+		auto types = dtable->table.GetTypes();
+		auto new_chunk = make_unique<DataChunk>();
+		chunk = new_chunk.get();
+		chunk->Initialize(types);
+		appends.insert(make_pair(dtable, move(new_chunk)));
+	}
+
+	if (entry->chunk) {
+		auto id = entry->prev.entry;
 		// append the tuple to the current chunk
 		for (size_t i = 0; i < chunk->column_count; i++) {
 			auto type = chunk->data[i].type;
@@ -147,12 +178,18 @@ WriteTuple(WriteAheadLog *log, VersionInformation *entry,
 		}
 		chunk->count++;
 	} else {
-		// insert was updated or deleted after insertion in the same
-		// transaction!
-		// FIXME: in case of update we need to handle this case! in case of
-		// deletion we don't need to!
-		assert(0);
-		auto prev = entry->prev.pointer;
+		assert(entry->prev.pointer->tuple_data);
+		auto tuple_data = entry->prev.pointer->tuple_data;
+		// append the tuple to the current chunk
+		for (size_t i = 0; i < chunk->column_count; i++) {
+			auto type = chunk->data[i].type;
+			size_t value_size = GetTypeIdSize(type);
+			memcpy(chunk->data[i].data + value_size * chunk->count, tuple_data,
+			       value_size);
+			tuple_data += value_size;
+			chunk->data[i].count++;
+		}
+		chunk->count++;
 	}
 }
 
@@ -179,21 +216,17 @@ void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) {
 		} else if (entry.type == UndoFlags::QUERY) {
 			string query = string((char *)entry.data.get());
 			if (log) {
+				// before we write a query we write any scheduled appends
+				// as the queries can reference previously appended data
+				FlushAppends(log, appends);
 				log->WriteQuery(query);
 			}
 		} else {
 			throw Exception("UndoBuffer - don't know how to commit this type!");
 		}
 	}
-	// write appends that were not flushed yet
-	for (auto &entry : appends) {
-		auto dtable = entry.first;
-		auto chunk = entry.second.get();
-		auto &schema_name = dtable->table.schema->name;
-		auto &table_name = dtable->table.name;
-		log->WriteInsert(schema_name, table_name, *chunk);
-	}
 	if (log) {
+		FlushAppends(log, appends);
 		// flush the WAL
 		log->Flush();
 	}

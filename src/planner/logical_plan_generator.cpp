@@ -124,11 +124,10 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 		//		for (size_t i = 0; i < aggregate->expressions.size(); i++) {
 		//			if (!aggregate->expressions[i]->IsAggregate() &&
 		//			    aggregate->expressions[i]->type !=
-		//ExpressionType::GROUP_REF) { // FIXME this will fail when math is
-		//applied to group refs! 				auto first = make_unique<AggregateExpression>(
-		//				    ExpressionType::AGGREGATE_FIRST, false,
-		//				    move(aggregate->expressions[i]));
-		//				first->ResolveType();
+		// ExpressionType::GROUP_REF) { // FIXME this will fail when math is
+		// applied to group refs! 				auto first =
+		// make_unique<AggregateExpression>( 				    ExpressionType::AGGREGATE_FIRST,
+		//false, 				    move(aggregate->expressions[i])); 				first->ResolveType();
 		//				aggregate->expressions[i] = move(first);
 		//			}
 		//		}

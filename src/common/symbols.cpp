@@ -71,6 +71,7 @@ INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Transaction>>);
 template class std::vector<StorageVector>;
 template class std::vector<TypeId>;
 template class std::vector<Value>;
+INSTANTIATE_VECTOR(std::vector<WALEntryData>);
 
 template struct std::atomic<size_t>;
 template class std::bitset<STANDARD_VECTOR_SIZE>;

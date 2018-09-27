@@ -206,6 +206,9 @@ void WriteAheadLog::WriteDropSchema(SchemaCatalogEntry *entry) {
 
 void WriteAheadLog::WriteInsert(std::string &schema, std::string &table,
                                 DataChunk &chunk) {
+	if (chunk.count == 0) {
+		return;
+	}
 	chunk.Verify();
 	if (chunk.sel_vector) {
 		throw Exception("Cannot insert into WAL from chunk with SEL vector");
