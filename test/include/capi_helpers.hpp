@@ -42,7 +42,7 @@ static bool CHECK_NUMERIC_COLUMN(duckdb_result result, size_t column,
 	if (values.size() != col.count) {
 		return false;
 	}
-	for (auto i = 0; i < values.size(); i++) {
+	for (size_t i = 0; i < values.size(); i++) {
 		if (values[i] == NULL_NUMERIC) {
 			if (!duckdb_value_is_null(col, i)) {
 				return false;
@@ -73,7 +73,7 @@ static bool CHECK_DECIMAL_COLUMN(duckdb_result result, size_t column,
 	if (values.size() != col.count) {
 		return false;
 	}
-	for (auto i = 0; i < values.size(); i++) {
+	for (size_t i = 0; i < values.size(); i++) {
 		if (std::isnan(values[i])) {
 			if (!duckdb_value_is_null(col, i)) {
 				return false;
@@ -137,7 +137,7 @@ static bool CHECK_STRING_COLUMN(duckdb_result result, size_t column,
 	if (values.size() != col.count) {
 		return false;
 	}
-	for (auto i = 0; i < values.size(); i++) {
+	for (size_t i = 0; i < values.size(); i++) {
 		if (!CHECK_STRING(result, i, column, values[i])) {
 			return false;
 		}

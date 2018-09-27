@@ -15,6 +15,7 @@
 #include <limits>
 #include <math.h>
 #include <string>
+#include <cstring>
 
 namespace duckdb {
 
@@ -35,7 +36,7 @@ typedef uint64_t transaction_t;
 //! Type used for column identifiers
 typedef size_t column_t;
 //! Special value used to signify the ROW ID of
-constexpr column_t COLUMN_IDENTIFIER_ROW_ID = (column_t)-1;
+extern column_t COLUMN_IDENTIFIER_ROW_ID;
 
 //! Zero selection vector: completely filled with the value 0 [READ ONLY]
 extern sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE];
