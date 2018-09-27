@@ -4,10 +4,8 @@
 
 using namespace std;
 
-
 int64_t NULL_NUMERIC = std::numeric_limits<int64_t>::min();
 double NULL_DECIMAL = NAN;
-
 
 template <class T> T get_numeric(duckdb_column column, size_t index) {
 	T *data = (T *)column.data;
@@ -31,7 +29,7 @@ int64_t get_numeric(duckdb_column column, size_t row) {
 }
 
 bool CHECK_NUMERIC_COLUMN(duckdb_result result, size_t column,
-                                 vector<int64_t> values) {
+                          vector<int64_t> values) {
 	if (result.column_count <= column) {
 		// out of bounds
 		return false;
@@ -60,7 +58,7 @@ bool CHECK_NUMERIC_COLUMN(duckdb_result result, size_t column,
 }
 
 bool CHECK_DECIMAL_COLUMN(duckdb_result result, size_t column,
-                                 vector<double> values) {
+                          vector<double> values) {
 	if (result.column_count <= column) {
 		// out of bounds
 		return false;
@@ -90,7 +88,7 @@ bool CHECK_DECIMAL_COLUMN(duckdb_result result, size_t column,
 }
 
 bool CHECK_NUMERIC(duckdb_result result, size_t row, size_t column,
-                          int64_t value) {
+                   int64_t value) {
 	if (result.column_count <= column || result.row_count <= row) {
 		// out of bounds
 		return false;
@@ -109,7 +107,7 @@ bool CHECK_NUMERIC(duckdb_result result, size_t row, size_t column,
 }
 
 bool CHECK_STRING(duckdb_result result, size_t row, size_t column,
-                         string value) {
+                  string value) {
 	if (result.column_count < column || result.row_count < row) {
 		// out of bounds
 		return false;
@@ -124,7 +122,7 @@ bool CHECK_STRING(duckdb_result result, size_t row, size_t column,
 }
 
 bool CHECK_STRING_COLUMN(duckdb_result result, size_t column,
-                                vector<string> values) {
+                         vector<string> values) {
 	if (result.column_count <= column) {
 		// out of bounds
 		return false;

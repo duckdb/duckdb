@@ -12,10 +12,10 @@
 
 #include <bitset>
 #include <cassert>
+#include <cstring>
 #include <limits>
 #include <math.h>
 #include <string>
-#include <cstring>
 
 namespace duckdb {
 

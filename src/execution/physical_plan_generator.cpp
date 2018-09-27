@@ -23,7 +23,7 @@ bool PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> logical) {
 			throw Exception("Unknown error in physical plan generation");
 		}
 		this->success = true;
-	} catch (Exception ex) {
+	} catch (Exception &ex) {
 		this->message = ex.GetMessage();
 	} catch (...) {
 		this->message = "UNHANDLED EXCEPTION TYPE THROWN IN PLANNER!";

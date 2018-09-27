@@ -106,11 +106,11 @@ QueryProfiler::CreateTree(PhysicalOperator *root, size_t depth) {
 	return node;
 }
 
-constexpr int TREE_RENDER_HEIGHT = 5;
-constexpr int TREE_RENDER_WIDTH = 20;
+constexpr size_t TREE_RENDER_HEIGHT = 5;
+constexpr size_t TREE_RENDER_WIDTH = 20;
 
 static std::string DrawPadded(std::string text, int remaining_width) {
-	if (text.size() > remaining_width) {
+	if (text.size() > (size_t)remaining_width) {
 		text = text.substr(0, remaining_width);
 	}
 	int right_padding = (remaining_width - text.size()) / 2;

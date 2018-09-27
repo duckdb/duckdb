@@ -26,7 +26,7 @@ Optimizer::Optimize(unique_ptr<LogicalOperator> plan) {
 		plan = rewriter.ApplyRules(move(plan));
 		success = true;
 		return plan;
-	} catch (Exception ex) {
+	} catch (Exception &ex) {
 		this->message = ex.GetMessage();
 	} catch (...) {
 		this->message = "UNHANDLED EXCEPTION TYPE THROWN IN PLANNER!";

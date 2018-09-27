@@ -144,8 +144,6 @@ _fingerprintList(FingerprintContext *ctx, const List *node, const void *parent, 
 				subCtxArr[subCtxCount] = subCtx;
 				subCtxCount += 1;
 			}
-
-			lnext(lc);
 		}
 
 		pg_qsort(subCtxArr, subCtxCount, sizeof(FingerprintContext*), compareFingerprintContext);
@@ -159,8 +157,6 @@ _fingerprintList(FingerprintContext *ctx, const List *node, const void *parent, 
 		foreach(lc, node)
 		{
 			_fingerprintNode(ctx, lfirst(lc), parent, field_name, depth + 1);
-
-			lnext(lc);
 		}
 	}
 }

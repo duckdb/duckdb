@@ -74,7 +74,7 @@ DuckDBConnection::GetQueryResult(ClientContext &context, std::string query) {
 		result->collection =
 		    executor.Execute(context, move(physical_planner.plan));
 		result->success = true;
-	} catch (Exception ex) {
+	} catch (Exception &ex) {
 		result->error = ex.GetMessage();
 	} catch (...) {
 		result->error = "UNHANDLED EXCEPTION TYPE THROWN IN PLANNER!";
@@ -106,7 +106,7 @@ unique_ptr<DuckDBResult> DuckDBConnection::Query(std::string query) {
 					context.transaction.Rollback();
 				}
 			}
-		} catch (Exception ex) {
+		} catch (Exception &ex) {
 			result->success = false;
 			result->error = ex.GetMessage();
 		} catch (...) {

@@ -9,7 +9,6 @@
 #include <nodes/parsenodes.h>
 #include <nodes/nodeFuncs.h>
 
-#define _GNU_SOURCE // Necessary to get asprintf (which is a GNU extension)
 #include <stdio.h>
 
 typedef struct {
@@ -419,12 +418,13 @@ PgQueryPlpgsqlParseResult pg_query_parse_plpgsql(const char* input)
 
     	if (func_and_error.func != NULL) {
     		char *func_json;
-            char *new_out;
+    		size_t new_bufsiz = strlen(result.plpgsql_funcs) + strlen(func_json) + 3;
+            char *new_out = malloc(new_bufsiz);
 
     		func_json = plpgsqlToJSON(func_and_error.func);
             plpgsql_free_function_memory(func_and_error.func);
 
-            asprintf(&new_out, "%s%s,\n", result.plpgsql_funcs, func_json);
+            snprintf(new_out, new_bufsiz, "%s%s,\n", result.plpgsql_funcs, func_json);
             free(result.plpgsql_funcs);
             result.plpgsql_funcs = new_out;
 

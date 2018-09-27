@@ -190,7 +190,7 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query,
 		goto mallocfail;
 	memset(out->columns, 0, out->column_count * sizeof(duckdb_column));
 
-	for (auto i = 0; i < out->column_count; i++) {
+	for (size_t i = 0; i < out->column_count; i++) {
 		auto &types = result->types();
 
 		auto type = types[i];
@@ -222,7 +222,7 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query,
 				for (auto &chunk : result->collection.chunks) {
 					auto &vector = chunk->data[i];
 					const char **str_data = (const char **)vector.data;
-					for (auto j = 0; j < chunk->count; j++) {
+					for (size_t j = 0; j < chunk->count; j++) {
 						const char *strptr = str_data[j];
 						if (!str_data[j]) {
 							strptr = "NULL";
@@ -259,7 +259,7 @@ mallocfail:
 
 void duckdb_destroy_result(duckdb_result result) {
 	if (result.columns) {
-		for (auto i = 0; i < result.column_count; i++) {
+		for (size_t i = 0; i < result.column_count; i++) {
 			auto &column = result.columns[i];
 			if (column.type >= DUCKDB_TYPE_VARCHAR) {
 				// variable length size: delete individual elements

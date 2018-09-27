@@ -120,8 +120,8 @@ Value Value::DATE(date_t value) {
 }
 
 Value Value::Numeric(TypeId id, int64_t value) {
-	assert(!TypeIsIntegral(id) || value >= duckdb::MinimumValue(id) &&
-	                                  value <= duckdb::MaximumValue(id));
+	assert(!TypeIsIntegral(id) || (value >= duckdb::MinimumValue(id) &&
+	                               value <= duckdb::MaximumValue(id)));
 	Value val(id);
 	val.is_null = false;
 	switch (id) {

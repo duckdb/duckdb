@@ -183,10 +183,12 @@ void Binder::Visit(SelectStatement &statement) {
 							auto group_column =
 							    reinterpret_cast<ColumnRefExpression *>(
 							        group.get());
-							if (group_column->binding == select_column->binding) {
+							if (group_column->binding ==
+							    select_column->binding) {
 								statement.select_list[i] =
 								    make_unique<GroupRefExpression>(
-								        statement.select_list[i]->return_type, j);
+								        statement.select_list[i]->return_type,
+								        j);
 								found_matching = true;
 								break;
 							}
@@ -202,7 +204,8 @@ void Binder::Visit(SelectStatement &statement) {
 			// not a group by column or aggregate
 			// create a FIRST aggregate around this aggregate
 			statement.select_list[i] = make_unique<AggregateExpression>(
-				ExpressionType::AGGREGATE_FIRST, false, move(statement.select_list[i]));
+			    ExpressionType::AGGREGATE_FIRST, false,
+			    move(statement.select_list[i]));
 			statement.select_list[i]->ResolveType();
 			// throw Exception("SELECT with GROUP BY can only contain "
 			//                 "aggregates or references to group columns!");

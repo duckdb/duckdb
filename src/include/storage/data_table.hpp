@@ -70,6 +70,7 @@ class DataTable {
 
 	//! A reference to the base storage manager
 	StorageManager &storage;
+
   private:
 	//! The stored data of the table
 	std::unique_ptr<StorageChunk> chunk_list;
