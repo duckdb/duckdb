@@ -119,19 +119,6 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 			aggregate->groups = move(statement.groupby.groups);
 		}
 
-		//		// the all-controversial feature
-		//		// rewrite non-aggregates into aggregates using FIRST
-		//		for (size_t i = 0; i < aggregate->expressions.size(); i++) {
-		//			if (!aggregate->expressions[i]->IsAggregate() &&
-		//			    aggregate->expressions[i]->type !=
-		// ExpressionType::GROUP_REF) { // FIXME this will fail when math is
-		// applied to group refs! 				auto first =
-		// make_unique<AggregateExpression>( 				    ExpressionType::AGGREGATE_FIRST,
-		//false, 				    move(aggregate->expressions[i])); 				first->ResolveType();
-		//				aggregate->expressions[i] = move(first);
-		//			}
-		//		}
-
 		aggregate->AddChild(move(root));
 		root = move(aggregate);
 
@@ -419,9 +406,9 @@ void LogicalPlanGenerator::Visit(InsertStatement &statement) {
 	auto insert = make_unique<LogicalInsert>(table);
 
 	if (statement.columns.size() > 0) {
-		// column list specified
+		// insertion statement specifies column list
 
-		// create a map of value list index -> column index based
+		// create a mapping of (list index) -> (column index)
 		map<std::string, int> column_name_map;
 		for (size_t i = 0; i < statement.columns.size(); i++) {
 			column_name_map[statement.columns[i]] = i;
@@ -441,6 +428,7 @@ void LogicalPlanGenerator::Visit(InsertStatement &statement) {
 
 	if (statement.select_statement) {
 		// insert from select statement
+		// parse select statement and add to logical plan
 		statement.select_statement->Accept(this);
 		assert(root);
 		insert->AddChild(move(root));

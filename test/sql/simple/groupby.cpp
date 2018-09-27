@@ -76,4 +76,20 @@ TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {12 * 4, 11}));
 	REQUIRE(CHECK_COLUMN(result, 2, {4, 1}));
 	REQUIRE(CHECK_COLUMN(result, 3, {12 * 4 + 2 * 4, 13}));
+
+
+	// group by with filter and multiple values per groups
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (3, 4), (3, 4), (2, 4);"));
+
+	// use GROUP BY column in math operator
+	result = con.Query("SELECT i, i + 10 FROM integers GROUP BY i ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {12, 13}));
+
+	// using non-group column and non-aggregate should translate to the FIRST() aggregate
+	result = con.Query("SELECT i, SUM(j), j FROM integers GROUP BY i ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {4, 8}));
+	REQUIRE(CHECK_COLUMN(result, 2, {4, 4}));
 }
