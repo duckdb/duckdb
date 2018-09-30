@@ -229,7 +229,7 @@ size_t GetTypeIdSize(TypeId type) {
 	case TypeId::UDT:
 		return sizeof(void *);
 	default:
-		throw Exception("Invalid type ID size!");
+		throw OutOfRangeException("Invalid type ID size!");
 		return (size_t)-1;
 	}
 }
@@ -460,7 +460,7 @@ int64_t MinimumValue(TypeId type) {
 	case TypeId::TIMESTAMP:
 		return std::numeric_limits<timestamp_t>::min() + 1;
 	default:
-		throw Exception("Non-integer type!");
+		throw InvalidTypeException(type, "MinimumValue requires integral type");
 	}
 }
 
@@ -481,7 +481,7 @@ int64_t MaximumValue(TypeId type) {
 	case TypeId::TIMESTAMP:
 		return std::numeric_limits<timestamp_t>::max();
 	default:
-		throw Exception("Non-integer type!");
+		throw InvalidTypeException(type, "MaximumValue requires integral type");
 	}
 }
 
@@ -506,8 +506,8 @@ ExternalFileFormat StringToExternalFileFormat(const std::string &str) {
 	if (upper == "CSV") {
 		return ExternalFileFormat::CSV;
 	}
-	throw ConversionException(StringUtil::Format(
-	    "No ExternalFileFormat for input '%s'", upper.c_str()));
+	throw ConversionException("No ExternalFileFormat for input '%s'",
+	                          upper.c_str());
 }
 
 bool TypeIsConstantSize(TypeId type) { return type < TypeId::VARCHAR; }

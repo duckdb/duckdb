@@ -98,7 +98,8 @@ class LogicalOperator : public Printable {
 
 	virtual AbstractExpression *GetExpression(size_t index) {
 		if (index >= ExpressionCount()) {
-			throw OutOfRangeException();
+			throw OutOfRangeException(
+			    "GetExpression(): Expression index out of range!");
 		}
 		return expressions[index].get();
 	}
@@ -106,7 +107,8 @@ class LogicalOperator : public Printable {
 	virtual void SetExpression(size_t index,
 	                           std::unique_ptr<AbstractExpression> expr) {
 		if (index >= ExpressionCount()) {
-			throw OutOfRangeException();
+			throw OutOfRangeException(
+			    "SetExpression(): Expression index out of range!");
 		}
 		expressions[index] = std::move(expr);
 	}

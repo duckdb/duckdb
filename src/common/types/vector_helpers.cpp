@@ -263,8 +263,9 @@ void VectorOperations::Cast(Vector &source, Vector &result) {
 void VectorOperations::Copy(Vector &source, void *target, size_t offset,
                             size_t element_count) {
 	if (!TypeIsConstantSize(source.type)) {
-		throw Exception(
-		    "Cannot copy non-constant size data using this method!");
+		throw InvalidTypeException(
+		    source.type,
+		    "Cannot copy non-constant size types using this method!");
 	}
 	if (source.count == 0)
 		return;
@@ -408,10 +409,14 @@ void VectorOperations::Case(Vector &check, Vector &res_true, Vector &res_false,
 		throw Exception("Vector lengths don't match in case!");
 	}
 	if (check.type != TypeId::BOOLEAN) {
-		throw Exception("Case check has to be a boolean vector!");
+		throw InvalidTypeException(check.type,
+		                           "Case check has to be a boolean vector!");
 	}
 	if (result.type != res_true.type || result.type != res_false.type) {
-		throw Exception("Case types have to match!");
+		throw TypeMismatchException(
+		    result.type,
+		    (result.type != res_true.type ? res_true.type : res_false.type),
+		    "Case types have to match!");
 	}
 
 	switch (result.type) {
@@ -466,7 +471,8 @@ void _templated_apply_selection_vector(Vector &left, Vector &result,
 void VectorOperations::ApplySelectionVector(Vector &left, Vector &result,
                                             sel_t *sel_vector) {
 	if (left.type != result.type) {
-		throw Exception("Types of vectors do not match!");
+		throw TypeMismatchException(left.type, result.type,
+		                            "Types of vectors do not match!");
 	}
 	switch (result.type) {
 	case TypeId::BOOLEAN:

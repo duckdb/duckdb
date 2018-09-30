@@ -12,14 +12,15 @@ TransactionContext::~TransactionContext() {}
 
 void TransactionContext::BeginTransaction() {
 	if (current_transaction) {
-		throw Exception("Transaction is already running!");
+		throw TransactionException("Transaction is already running!");
 	}
 	current_transaction = transaction_manager.StartTransaction();
 }
 
 void TransactionContext::Commit() {
 	if (!current_transaction) {
-		throw Exception("No transaction is currently active - cannot commit!");
+		throw TransactionException(
+		    "No transaction is currently active - cannot commit!");
 	}
 	transaction_manager.CommitTransaction(current_transaction);
 	current_transaction = nullptr;
@@ -27,7 +28,7 @@ void TransactionContext::Commit() {
 
 void TransactionContext::Rollback() {
 	if (!current_transaction) {
-		throw Exception(
+		throw TransactionException(
 		    "No transaction is currently active - cannot rollback!");
 	}
 	transaction_manager.RollbackTransaction(current_transaction);

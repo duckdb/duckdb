@@ -72,7 +72,7 @@ class ConstantFoldingRule : public Rule {
 					Value::Modulo(left_val->value, right_val->value, result);
 					break;
 				default:
-					throw Exception("Unsupported operator");
+					throw NotImplementedException("Unsupported operator");
 				}
 				// FIXME: this could hide an overflow, but breaks the plan if we
 				// don't

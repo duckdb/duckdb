@@ -38,7 +38,7 @@ Value Value::MinimumValue(TypeId type) {
 		result.value_.pointer = std::numeric_limits<uint64_t>::min();
 		break;
 	default:
-		throw Exception("TypeId is not numeric!");
+		throw InvalidTypeException(type, "MinimumValue requires numeric type");
 	}
 	return result;
 }
@@ -70,7 +70,7 @@ Value Value::MaximumValue(TypeId type) {
 		result.value_.pointer = std::numeric_limits<uint64_t>::max();
 		break;
 	default:
-		throw Exception("TypeId is not numeric!");
+		throw InvalidTypeException(type, "MaximumValue requires numeric type");
 	}
 	return result;
 }
@@ -119,12 +119,12 @@ Value Value::DATE(date_t value) {
 	return result;
 }
 
-Value Value::Numeric(TypeId id, int64_t value) {
-	assert(!TypeIsIntegral(id) || (value >= duckdb::MinimumValue(id) &&
-	                               value <= duckdb::MaximumValue(id)));
-	Value val(id);
+Value Value::Numeric(TypeId type, int64_t value) {
+	assert(!TypeIsIntegral(type) || (value >= duckdb::MinimumValue(type) &&
+	                                 value <= duckdb::MaximumValue(type)));
+	Value val(type);
 	val.is_null = false;
-	switch (id) {
+	switch (type) {
 	case TypeId::TINYINT:
 		return Value::TINYINT(value);
 	case TypeId::SMALLINT:
@@ -140,14 +140,14 @@ Value Value::Numeric(TypeId id, int64_t value) {
 	case TypeId::POINTER:
 		return Value::POINTER(value);
 	default:
-		throw Exception("TypeId is not numeric!");
+		throw InvalidTypeException(type, "Numeric requires numeric type");
 	}
 	return val;
 }
 
 int64_t Value::GetNumericValue() {
 	if (is_null) {
-		throw Exception("Cannot get numeric value from NULL.");
+		throw ConversionException("Cannot convert NULL Value to numeric value");
 	}
 	switch (type) {
 	case TypeId::TINYINT:
@@ -165,7 +165,8 @@ int64_t Value::GetNumericValue() {
 	case TypeId::POINTER:
 		return value_.pointer;
 	default:
-		throw Exception("TypeId is not numeric!");
+		throw InvalidTypeException(type,
+		                           "GetNumericValue requires numeric type");
 	}
 }
 
@@ -316,7 +317,9 @@ void Value::_templated_binary_operation(const Value &left, const Value &right,
 		return;
 	}
 	if (left.type != right.type) {
-		throw NotImplementedException("Not matching type not implemented!");
+		throw TypeMismatchException(
+		    left.type, right.type,
+		    "Cannot perform binary operation on these two types");
 	}
 	result.type = left.type;
 	switch (left.type) {
@@ -414,7 +417,9 @@ bool Value::_templated_boolean_operation(const Value &left,
 				return _templated_boolean_operation<OP>(left, right_cast);
 			}
 		}
-		throw NotImplementedException("Not matching type not implemented!");
+		throw TypeMismatchException(
+		    left.type, right.type,
+		    "Cannot perform boolean operation on these two types");
 	}
 	switch (left.type) {
 	case TypeId::BOOLEAN:

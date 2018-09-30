@@ -42,7 +42,7 @@ class AggregateExpression : public AbstractExpression {
 
 			break;
 		default:
-			throw Exception("Aggregate type not supported");
+			throw NotImplementedException("Aggregate type not supported");
 		}
 		if (child) {
 			AddChild(std::move(child));

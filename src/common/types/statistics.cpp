@@ -46,7 +46,9 @@ Statistics::Statistics(Value value)
 
 void Statistics::Update(Vector &new_vector) {
 	if (type != new_vector.type) {
-		throw Exception("Appended vector does not match statistics type!");
+		throw TypeMismatchException(
+		    type, new_vector.type,
+		    "Appended vector does not match statistics type!");
 	}
 	if (!can_have_null) {
 		can_have_null = VectorOperations::HasNull(new_vector);

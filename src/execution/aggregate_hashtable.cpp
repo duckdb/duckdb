@@ -99,7 +99,8 @@ static void SetNullValue(uint8_t *ptr, TypeId type) {
 		*((double *)ptr) = NullValue<double>();
 		break;
 	default:
-		throw Exception("Non-integer type in HT initialization!");
+		throw InvalidTypeException(type,
+		                           "Non-integer type in HT initialization!");
 	}
 }
 

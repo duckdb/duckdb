@@ -24,7 +24,8 @@ void _templated_generate_data(Vector &result, T start, T increment) {
 void VectorOperations::GenerateSequence(Vector &result, int64_t start,
                                         int64_t increment) {
 	if (!TypeIsNumeric(result.type)) {
-		throw Exception("Can only generate sequences for numeric values!");
+		throw InvalidTypeException(
+		    result.type, "Can only generate sequences for numeric values!");
 	}
 
 	switch (result.type) {

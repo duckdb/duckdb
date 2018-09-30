@@ -137,7 +137,8 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk) {
 
 void DataTable::Delete(Transaction &transaction, Vector &row_identifiers) {
 	if (row_identifiers.type != TypeId::POINTER) {
-		throw Exception("Row identifiers must be POINTER type!");
+		throw InvalidTypeException(row_identifiers.type,
+		                           "Row identifiers must be POINTER type!");
 	}
 	if (row_identifiers.count == 0) {
 		return;
@@ -179,13 +180,14 @@ void DataTable::Delete(Transaction &transaction, Vector &row_identifiers) {
 		}
 		chunk = chunk->next.get();
 	}
-	throw Exception("Row identifiers for deletion out of bounds!");
+	throw OutOfRangeException("Row identifiers for deletion out of bounds!");
 }
 
 void DataTable::Update(Transaction &transaction, Vector &row_identifiers,
                        std::vector<column_t> &column_ids, DataChunk &updates) {
 	if (row_identifiers.type != TypeId::POINTER) {
-		throw Exception("Row identifiers must be POINTER type!");
+		throw InvalidTypeException(row_identifiers.type,
+		                           "Row identifiers must be POINTER type!");
 	}
 	if (row_identifiers.count == 0) {
 		return;
@@ -265,7 +267,7 @@ void DataTable::Update(Transaction &transaction, Vector &row_identifiers,
 		}
 		chunk = chunk->next.get();
 	}
-	throw Exception("Row identifiers for update out of bounds!");
+	throw NotImplementedException("Row identifiers for update out of bounds!");
 }
 
 void DataTable::Scan(Transaction &transaction, DataChunk &result,

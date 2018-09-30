@@ -91,7 +91,7 @@ static void WriteCatalogEntry(WriteAheadLog *log, AbstractCatalogEntry *entry) {
 		break;
 	}
 	default:
-		throw Exception(
+		throw NotImplementedException(
 		    "UndoBuffer - don't know how to write this entry to the WAL");
 	}
 }
@@ -222,7 +222,8 @@ void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) {
 				log->WriteQuery(query);
 			}
 		} else {
-			throw Exception("UndoBuffer - don't know how to commit this type!");
+			throw NotImplementedException(
+			    "UndoBuffer - don't know how to commit this type!");
 		}
 	}
 	if (log) {

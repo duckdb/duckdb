@@ -89,7 +89,8 @@ void _gather_templated_loop(Vector &src, Vector &result) {
 template <class OP>
 static void _generic_scatter_loop(Vector &source, Vector &dest) {
 	if (dest.type != TypeId::POINTER) {
-		throw Exception("Cannot scatter to non-pointer type!");
+		throw InvalidTypeException(dest.type,
+		                           "Cannot scatter to non-pointer type!");
 	}
 	switch (source.type) {
 	case TypeId::TINYINT:
@@ -121,7 +122,8 @@ static void _generic_scatter_loop(Vector &source, Vector &dest) {
 template <class OP>
 static void _generic_gather_loop(Vector &source, Vector &dest) {
 	if (source.type != TypeId::POINTER) {
-		throw Exception("Cannot gather from non-pointer type!");
+		throw InvalidTypeException(source.type,
+		                           "Cannot gather from non-pointer type!");
 	}
 	switch (dest.type) {
 	case TypeId::TINYINT:

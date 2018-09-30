@@ -345,7 +345,7 @@ void VectorOperations::Abs(Vector &left, Vector &result) {
 
 void VectorOperations::Not(Vector &left, Vector &result) {
 	if (left.type != TypeId::BOOLEAN) {
-		throw Exception("NOT() needs a boolean input");
+		throw InvalidTypeException(left.type, "NOT() needs a boolean input");
 	}
 	_generic_unary_loop<operators::Not>(left, result);
 }
@@ -355,7 +355,8 @@ void VectorOperations::Not(Vector &left, Vector &result) {
 //===--------------------------------------------------------------------===//
 template <bool INVERSE> void _is_null_loop(Vector &left, Vector &result) {
 	if (result.type != TypeId::BOOLEAN) {
-		throw Exception("IS (NOT) NULL returns a boolean!");
+		throw InvalidTypeException(result.type,
+		                           "IS (NOT) NULL returns a boolean!");
 	}
 	bool *res = (bool *)result.data;
 	result.nullmask.reset();
@@ -448,7 +449,8 @@ void VectorOperations::Modulo(int64_t left, Vector &right, Vector &result) {
 void VectorOperations::Equals(Vector &left, Vector &right, Vector &result) {
 	if (left.type == TypeId::VARCHAR) {
 		if (right.type != TypeId::VARCHAR) {
-			throw Exception("Can't compare different types");
+			throw TypeMismatchException(left.type, right.type,
+			                            "Can't compare different types");
 		}
 		_templated_binary_loop<char *, int8_t, operators::EqualsVarchar>(
 		    left, right, result);
@@ -461,7 +463,8 @@ void VectorOperations::Equals(Vector &left, Vector &right, Vector &result) {
 void VectorOperations::NotEquals(Vector &left, Vector &right, Vector &result) {
 	if (left.type == TypeId::VARCHAR) {
 		if (right.type != TypeId::VARCHAR) {
-			throw Exception("Can't compare different types");
+			throw TypeMismatchException(left.type, right.type,
+			                            "Can't compare different types");
 		}
 		_templated_binary_loop<char *, int8_t, operators::NotEqualsVarchar>(
 		    left, right, result);
@@ -475,7 +478,8 @@ void VectorOperations::GreaterThan(Vector &left, Vector &right,
                                    Vector &result) {
 	if (left.type == TypeId::VARCHAR) {
 		if (right.type != TypeId::VARCHAR) {
-			throw Exception("Can't compare different types");
+			throw TypeMismatchException(left.type, right.type,
+			                            "Can't compare different types");
 		}
 		_templated_binary_loop<char *, int8_t, operators::GreaterThanVarchar>(
 		    left, right, result);
@@ -489,7 +493,8 @@ void VectorOperations::GreaterThanEquals(Vector &left, Vector &right,
                                          Vector &result) {
 	if (left.type == TypeId::VARCHAR) {
 		if (right.type != TypeId::VARCHAR) {
-			throw Exception("Can't compare different types");
+			throw TypeMismatchException(left.type, right.type,
+			                            "Can't compare different types");
 		}
 		_templated_binary_loop<char *, int8_t,
 		                       operators::GreaterThanEqualsVarchar>(left, right,
@@ -503,7 +508,8 @@ void VectorOperations::GreaterThanEquals(Vector &left, Vector &right,
 void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result) {
 	if (left.type == TypeId::VARCHAR) {
 		if (right.type != TypeId::VARCHAR) {
-			throw Exception("Can't compare different types");
+			throw TypeMismatchException(left.type, right.type,
+			                            "Can't compare different types");
 		}
 		_templated_binary_loop<char *, int8_t, operators::LessThanVarchar>(
 		    left, right, result);
@@ -517,7 +523,8 @@ void VectorOperations::LessThanEquals(Vector &left, Vector &right,
                                       Vector &result) {
 	if (left.type == TypeId::VARCHAR) {
 		if (right.type != TypeId::VARCHAR) {
-			throw Exception("Can't compare different types");
+			throw TypeMismatchException(left.type, right.type,
+			                            "Can't compare different types");
 		}
 		_templated_binary_loop<char *, int8_t,
 		                       operators::LessThanEqualsVarchar>(left, right,

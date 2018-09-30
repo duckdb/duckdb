@@ -30,7 +30,7 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 	chunk.Reset();
 
 	if (type != JoinType::INNER) {
-		throw Exception("Only inner joins supported for now!");
+		throw NotImplementedException("Only inner joins supported for now!");
 	}
 
 	// first we fully materialize the right child, if we haven't done that yet

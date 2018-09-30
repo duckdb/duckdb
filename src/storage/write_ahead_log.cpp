@@ -65,7 +65,7 @@ static bool ReplayEntry(ClientContext &context, DuckDB &database,
 void WriteAheadLog::Replay(string &path) {
 	auto wal_file = fopen(path.c_str(), "r");
 	if (!wal_file) {
-		throw Exception("WAL could not be opened for reading");
+		throw IOException("WAL could not be opened for reading");
 	}
 	ClientContext context(database);
 
@@ -211,7 +211,8 @@ void WriteAheadLog::WriteInsert(std::string &schema, std::string &table,
 	}
 	chunk.Verify();
 	if (chunk.sel_vector) {
-		throw Exception("Cannot insert into WAL from chunk with SEL vector");
+		throw NotImplementedException(
+		    "Cannot insert into WAL from chunk with SEL vector");
 	}
 	size_t size = 0;
 	size += WriteSize(schema);

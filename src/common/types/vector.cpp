@@ -20,7 +20,8 @@ Vector::Vector(TypeId type, char *dataptr)
     : type(type), count(0), data(dataptr), owns_data(false),
       sel_vector(nullptr) {
 	if (dataptr && type == TypeId::INVALID) {
-		throw Exception("Cannot create a vector of type INVALID!");
+		throw InvalidTypeException(type,
+		                           "Cannot create a vector of type INVALID!");
 	}
 }
 
@@ -63,7 +64,7 @@ void Vector::Destroy() {
 
 void Vector::SetValue(size_t index_, Value val) {
 	if (index_ >= count) {
-		throw Exception("Out of range exception!");
+		throw OutOfRangeException("SetValue() out of range!");
 	}
 	Value newVal = val.CastAs(type);
 
@@ -111,7 +112,8 @@ void Vector::SetValue(size_t index_, Value val) {
 
 void Vector::SetStringValue(size_t index, const char *value) {
 	if (type != TypeId::VARCHAR) {
-		throw Exception("Can only set string value of VARCHAR vectors!");
+		throw InvalidTypeException(
+		    type, "Can only set string value of VARCHAR vectors!");
 	}
 	SetNull(index, value ? false : true);
 	if (value) {
@@ -123,7 +125,7 @@ void Vector::SetStringValue(size_t index, const char *value) {
 
 Value Vector::GetValue(size_t index) const {
 	if (index >= count) {
-		throw Exception("Out of bounds");
+		throw OutOfRangeException("GetValue() out of range");
 	}
 	if (ValueIsNull(index)) {
 		return Value(type);
@@ -157,9 +159,7 @@ Value Vector::GetValue(size_t index) const {
 }
 
 void Vector::Reference(Vector &other) {
-	if (owns_data) {
-		throw Exception("Vector owns data, cannot create reference!");
-	}
+	assert(!owns_data);
 
 	count = other.count;
 	owns_data = false;
@@ -207,11 +207,13 @@ void Vector::ForceOwnership() {
 
 void Vector::Copy(Vector &other, size_t offset) {
 	if (other.type != type) {
-		throw NotImplementedException(
-		    "Copying to vector of different type not supported!");
+		throw TypeMismatchException(type, other.type,
+		                            "Copying to vector of different type not "
+		                            "supported! Call Cast instead!");
 	}
 	if (other.sel_vector) {
-		throw Exception("Cannot copy to vector with sel_vector!");
+		throw NotImplementedException(
+		    "Copy to vector with sel_vector not supported!");
 	}
 
 	if (!TypeIsConstantSize(type)) {
@@ -238,7 +240,8 @@ void Vector::Copy(Vector &other, size_t offset) {
 
 void Vector::Cast(TypeId new_type) {
 	if (new_type == TypeId::INVALID) {
-		throw Exception("Cannot create a vector of type invalid!");
+		throw InvalidTypeException(new_type,
+		                           "Cannot create a vector of type invalid!");
 	}
 	if (type == new_type) {
 		return;
@@ -252,14 +255,14 @@ void Vector::Cast(TypeId new_type) {
 void Vector::Append(Vector &other) {
 	if (sel_vector) {
 		throw NotImplementedException(
-		    "Cannot append to vector with selection vector");
+		    "Append to vector with selection vector not supported!");
 	}
 	if (other.type != type) {
-		throw NotImplementedException(
-		    "Can only append vectors of similar types");
+		throw TypeMismatchException(type, other.type,
+		                            "Can only append vectors of similar types");
 	}
 	if (count + other.count > STANDARD_VECTOR_SIZE) {
-		throw Exception("Cannot append to vector: vector is full!");
+		throw OutOfRangeException("Cannot append to vector: vector is full!");
 	}
 	size_t old_count = count;
 	count += other.count;

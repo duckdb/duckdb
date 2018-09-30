@@ -34,7 +34,8 @@ class LogicalAggregate : public LogicalOperator {
 
 	virtual AbstractExpression *GetExpression(size_t index) override {
 		if (index >= ExpressionCount()) {
-			throw OutOfRangeException();
+			throw OutOfRangeException(
+			    "GetExpression(): Expression index out of range!");
 		}
 		if (index >= expressions.size()) {
 			return groups[index - expressions.size()].get();
@@ -46,7 +47,8 @@ class LogicalAggregate : public LogicalOperator {
 	SetExpression(size_t index,
 	              std::unique_ptr<AbstractExpression> expr) override {
 		if (index >= ExpressionCount()) {
-			throw OutOfRangeException();
+			throw OutOfRangeException(
+			    "SetExpression(): Expression index out of range!");
 		}
 		if (index >= expressions.size()) {
 			groups[index - expressions.size()] = std::move(expr);

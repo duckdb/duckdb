@@ -78,14 +78,15 @@ bool Planner::CreatePlan(ClientContext &context,
 					// preserving the transaction context for the next query
 					context.transaction.SetAutoCommit(false);
 				} else {
-					throw Exception(
+					throw TransactionException(
 					    "cannot start a transaction within a transaction");
 				}
 				break;
 			}
 			case TransactionType::COMMIT: {
 				if (context.transaction.IsAutoCommit()) {
-					throw Exception("cannot commit - no transaction is active");
+					throw TransactionException(
+					    "cannot commit - no transaction is active");
 				} else {
 					// explicitly commit the current transaction
 					context.transaction.Commit();
@@ -95,7 +96,7 @@ bool Planner::CreatePlan(ClientContext &context,
 			}
 			case TransactionType::ROLLBACK: {
 				if (context.transaction.IsAutoCommit()) {
-					throw Exception(
+					throw TransactionException(
 					    "cannot rollback - no transaction is active");
 				} else {
 					// explicitly rollback the current transaction
@@ -105,7 +106,7 @@ bool Planner::CreatePlan(ClientContext &context,
 				break;
 			}
 			default:
-				throw Exception("Unrecognized transaction type!");
+				throw NotImplementedException("Unrecognized transaction type!");
 			}
 			this->success = true;
 			break;

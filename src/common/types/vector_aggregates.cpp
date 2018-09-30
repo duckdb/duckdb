@@ -156,7 +156,8 @@ Value VectorOperations::Min(Vector &left) {
 
 Value VectorOperations::AnyTrue(Vector &left) {
 	if (left.type != TypeId::BOOLEAN) {
-		throw Exception("AnyTrue can only be computed for boolean columns!");
+		throw InvalidTypeException(
+		    left.type, "AnyTrue can only be computed for boolean columns!");
 	}
 	if (left.count == 0) {
 		return Value(false);
@@ -169,7 +170,8 @@ Value VectorOperations::AnyTrue(Vector &left) {
 
 Value VectorOperations::AllTrue(Vector &left) {
 	if (left.type != TypeId::BOOLEAN) {
-		throw Exception("AnyTrue can only be computed for boolean columns!");
+		throw InvalidTypeException(
+		    left.type, "AllTrue can only be computed for boolean columns!");
 	}
 	if (left.count == 0) {
 		return Value(false);
@@ -184,7 +186,8 @@ bool VectorOperations::HasNull(Vector &left) { return left.nullmask.any(); }
 
 Value VectorOperations::MaximumStringLength(Vector &left) {
 	if (left.type != TypeId::VARCHAR) {
-		throw Exception(
+		throw InvalidTypeException(
+		    left.type,
 		    "String length can only be computed for char array columns!");
 	}
 	auto result = Value::POINTER(0);

@@ -42,10 +42,10 @@ void CreateDirectory(const string &directory) {
 	if (stat(directory.c_str(), &st) != 0) {
 		/* Directory does not exist. EEXIST for race condition */
 		if (mkdir(directory.c_str(), 0755) != 0 && errno != EEXIST) {
-			throw Exception("Failed create directory!");
+			throw IOException("Failed create directory!");
 		}
 	} else if (!S_ISDIR(st.st_mode)) {
-		throw Exception("Could not create directory!");
+		throw IOException("Could not create directory!");
 	}
 }
 

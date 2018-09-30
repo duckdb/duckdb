@@ -33,35 +33,35 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 
 enum class ExceptionType {
-	INVALID = 0,           // invalid type
-	OUT_OF_RANGE = 1,      // value out of range error
-	CONVERSION = 2,        // conversion/casting error
-	UNKNOWN_TYPE = 3,      // unknown type
-	DECIMAL = 4,           // decimal related
-	MISMATCH_TYPE = 5,     // type mismatch
-	DIVIDE_BY_ZERO = 6,    // divide by 0
-	OBJECT_SIZE = 7,       // object size exceeded
-	INCOMPATIBLE_TYPE = 8, // incompatible for operation
-	SERIALIZATION = 9,     // serialization
-	TRANSACTION = 10,      // transaction management
-	NOT_IMPLEMENTED = 11,  // method not implemented
-	EXPRESSION = 12,       // expression parsing
-	CATALOG = 13,          // catalog related
-	PARSER = 14,           // parser related
-	PLANNER = 15,          // planner related
-	SCHEDULER = 16,        // scheduler related
-	EXECUTOR = 17,         // executor related
-	CONSTRAINT = 18,       // constraint related
-	INDEX = 19,            // index related
-	STAT = 20,             // stat related
-	CONNECTION = 21,       // connection related
-	SYNTAX = 22,           // syntax related
-	SETTINGS = 23,         // settings related
-	BINDER = 24,           // binder related
-	NETWORK = 25,          // network related
-	OPTIMIZER = 26,        // optimizer related
-	NULL_POINTER = 27,     // nullptr exception
-	IO = 28                // IO exception
+	INVALID = 0,          // invalid type
+	OUT_OF_RANGE = 1,     // value out of range error
+	CONVERSION = 2,       // conversion/casting error
+	UNKNOWN_TYPE = 3,     // unknown type
+	DECIMAL = 4,          // decimal related
+	MISMATCH_TYPE = 5,    // type mismatch
+	DIVIDE_BY_ZERO = 6,   // divide by 0
+	OBJECT_SIZE = 7,      // object size exceeded
+	INVALID_TYPE = 8,     // incompatible for operation
+	SERIALIZATION = 9,    // serialization
+	TRANSACTION = 10,     // transaction management
+	NOT_IMPLEMENTED = 11, // method not implemented
+	EXPRESSION = 12,      // expression parsing
+	CATALOG = 13,         // catalog related
+	PARSER = 14,          // parser related
+	PLANNER = 15,         // planner related
+	SCHEDULER = 16,       // scheduler related
+	EXECUTOR = 17,        // executor related
+	CONSTRAINT = 18,      // constraint related
+	INDEX = 19,           // index related
+	STAT = 20,            // stat related
+	CONNECTION = 21,      // connection related
+	SYNTAX = 22,          // syntax related
+	SETTINGS = 23,        // settings related
+	BINDER = 24,          // binder related
+	NETWORK = 25,         // network related
+	OPTIMIZER = 26,       // optimizer related
+	NULL_POINTER = 27,    // nullptr exception
+	IO = 28,              // IO exception
 };
 
 #define FORMAT_CONSTRUCTOR(msg)                                                \
@@ -109,8 +109,8 @@ class Exception : public std::runtime_error {
 			return "Divide by Zero";
 		case ExceptionType::OBJECT_SIZE:
 			return "Object Size";
-		case ExceptionType::INCOMPATIBLE_TYPE:
-			return "Incompatible type";
+		case ExceptionType::INVALID_TYPE:
+			return "Invalid type";
 		case ExceptionType::SERIALIZATION:
 			return "Serialization";
 		case ExceptionType::TRANSACTION:
@@ -288,85 +288,24 @@ class ConversionException : public Exception {
 	}
 };
 
-class UnknownTypeException : public Exception {
-	UnknownTypeException() = delete;
+class InvalidTypeException : public Exception {
+	InvalidTypeException() = delete;
 
   public:
-	UnknownTypeException(int type, std::string msg, ...)
-	    : Exception(ExceptionType::UNKNOWN_TYPE,
-	                "unknown type " + std::to_string(type) + msg) {
-		FORMAT_CONSTRUCTOR(msg);
-	}
-};
-
-class DecimalException : public Exception {
-	DecimalException() = delete;
-
-  public:
-	DecimalException(std::string msg, ...)
-	    : Exception(ExceptionType::DECIMAL, msg) {
-		FORMAT_CONSTRUCTOR(msg);
-	}
+	InvalidTypeException(TypeId type, std::string msg)
+	    : Exception(ExceptionType::INVALID_TYPE,
+	                "Invalid Type [" + TypeIdToString(type) + "]: " + msg) {}
 };
 
 class TypeMismatchException : public Exception {
 	TypeMismatchException() = delete;
 
   public:
-	TypeMismatchException(std::string msg, const TypeId type_1,
-	                      const TypeId type_2)
+	TypeMismatchException(const TypeId type_1, const TypeId type_2,
+	                      std::string msg)
 	    : Exception(ExceptionType::MISMATCH_TYPE,
 	                "Type " + TypeIdToString(type_1) + " does not match with " +
 	                    TypeIdToString(type_2) + msg) {}
-};
-
-class NumericValueOutOfRangeException : public Exception {
-	NumericValueOutOfRangeException() = delete;
-
-  public:
-	// internal flags
-	static const int TYPE_UNDERFLOW = 1;
-	static const int TYPE_OVERFLOW = 2;
-
-	NumericValueOutOfRangeException(std::string msg, int type)
-	    : Exception(ExceptionType::OUT_OF_RANGE,
-	                msg + " " + std::to_string(type)) {}
-};
-
-class DivideByZeroException : public Exception {
-	DivideByZeroException() = delete;
-
-  public:
-	DivideByZeroException(std::string msg, ...)
-	    : Exception(ExceptionType::DIVIDE_BY_ZERO, msg) {
-		FORMAT_CONSTRUCTOR(msg);
-	}
-};
-
-class ObjectSizeException : public Exception {
-	ObjectSizeException() = delete;
-
-  public:
-	ObjectSizeException(std::string msg)
-	    : Exception(ExceptionType::OBJECT_SIZE, msg) {}
-};
-
-class IncompatibleTypeException : public Exception {
-	IncompatibleTypeException() = delete;
-
-  public:
-	IncompatibleTypeException(int type, std::string msg)
-	    : Exception(ExceptionType::INCOMPATIBLE_TYPE,
-	                "Incompatible type " +
-	                    TypeIdToString(static_cast<TypeId>(type)) + msg) {}
-};
-
-class SerializationException : public Exception {
-	SerializationException() = delete;
-
-  public:
-	SerializationException(std::string msg)
-	    : Exception(ExceptionType::SERIALIZATION, msg) {}
 };
 
 class TransactionException : public Exception {
@@ -388,17 +327,11 @@ class NotImplementedException : public Exception {
 };
 
 class OutOfRangeException : public Exception {
-  public:
-	OutOfRangeException()
-	    : Exception(ExceptionType::NOT_IMPLEMENTED, "Out of range") {}
-};
-
-class ExpressionException : public Exception {
-	ExpressionException() = delete;
+	OutOfRangeException() = delete;
 
   public:
-	ExpressionException(std::string msg, ...)
-	    : Exception(ExceptionType::EXPRESSION, msg) {
+	OutOfRangeException(std::string msg, ...)
+	    : Exception(ExceptionType::OUT_OF_RANGE, msg) {
 		FORMAT_CONSTRUCTOR(msg);
 	}
 };
@@ -423,36 +356,6 @@ class ParserException : public Exception {
 	}
 };
 
-class PlannerException : public Exception {
-	PlannerException() = delete;
-
-  public:
-	PlannerException(std::string msg, ...)
-	    : Exception(ExceptionType::PLANNER, msg) {
-		FORMAT_CONSTRUCTOR(msg);
-	}
-};
-
-class SchedulerException : public Exception {
-	SchedulerException() = delete;
-
-  public:
-	SchedulerException(std::string msg, ...)
-	    : Exception(ExceptionType::SCHEDULER, msg) {
-		FORMAT_CONSTRUCTOR(msg);
-	}
-};
-
-class ExecutorException : public Exception {
-	ExecutorException() = delete;
-
-  public:
-	ExecutorException(std::string msg, ...)
-	    : Exception(ExceptionType::EXECUTOR, msg) {
-		FORMAT_CONSTRUCTOR(msg);
-	}
-};
-
 class SyntaxException : public Exception {
 	SyntaxException() = delete;
 
@@ -473,81 +376,12 @@ class ConstraintException : public Exception {
 	}
 };
 
-class IndexException : public Exception {
-	IndexException() = delete;
-
-  public:
-	IndexException(std::string msg, ...)
-	    : Exception(ExceptionType::INDEX, msg) {
-		FORMAT_CONSTRUCTOR(msg);
-	}
-};
-
-class StatException : public Exception {
-	StatException() = delete;
-
-  public:
-	StatException(std::string msg, ...) : Exception(ExceptionType::STAT, msg) {
-		FORMAT_CONSTRUCTOR(msg);
-	}
-};
-
-class ConnectionException : public Exception {
-	ConnectionException() = delete;
-
-  public:
-	ConnectionException(std::string msg, ...)
-	    : Exception(ExceptionType::CONNECTION, msg) {
-		FORMAT_CONSTRUCTOR(msg);
-	}
-};
-
-class NetworkProcessException : public Exception {
-	NetworkProcessException() = delete;
-
-  public:
-	NetworkProcessException(std::string msg, ...)
-	    : Exception(ExceptionType::NETWORK, msg) {
-		FORMAT_CONSTRUCTOR(msg);
-	}
-};
-
-class SettingsException : public Exception {
-	SettingsException() = delete;
-
-  public:
-	SettingsException(std::string msg, ...)
-	    : Exception(ExceptionType::SETTINGS, msg) {
-		FORMAT_CONSTRUCTOR(msg);
-	}
-};
-
 class BinderException : public Exception {
 	BinderException() = delete;
 
   public:
 	BinderException(std::string msg, ...)
 	    : Exception(ExceptionType::BINDER, msg) {
-		FORMAT_CONSTRUCTOR(msg);
-	}
-};
-
-class OptimizerException : public Exception {
-	OptimizerException() = delete;
-
-  public:
-	OptimizerException(std::string msg, ...)
-	    : Exception(ExceptionType::OPTIMIZER, msg) {
-		FORMAT_CONSTRUCTOR(msg);
-	}
-};
-
-class NullPointerException : public Exception {
-	NullPointerException() = delete;
-
-  public:
-	NullPointerException(std::string msg, ...)
-	    : Exception(ExceptionType::NULL_POINTER, msg) {
 		FORMAT_CONSTRUCTOR(msg);
 	}
 };

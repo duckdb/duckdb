@@ -41,7 +41,7 @@ void StorageManager::LoadDatabase(std::string &path) {
 		// directory already exists
 		// verify that it is an existing database
 		if (!FileExists(wal_path)) {
-			throw Exception(
+			throw IOException(
 			    "Database directory exists, but could not find WAL file!");
 		}
 		// replay the WAL
