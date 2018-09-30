@@ -1,7 +1,7 @@
 
 #include "planner/logical_operator_visitor.hpp"
 
-#include "planner/operator/logical_list.hpp"
+#include "planner/operator/list.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,7 +1,7 @@
 
 #include "planner/logical_plan_generator.hpp"
 
-#include "parser/expression/expression_list.hpp"
+#include "parser/expression/list.hpp"
 
 #include "parser/statement/copy_statement.hpp"
 #include "parser/statement/delete_statement.hpp"
@@ -10,7 +10,7 @@
 
 #include "parser/tableref/tableref_list.hpp"
 
-#include "planner/operator/logical_list.hpp"
+#include "planner/operator/list.hpp"
 
 #include "main/client_context.hpp"
 #include "main/database.hpp"

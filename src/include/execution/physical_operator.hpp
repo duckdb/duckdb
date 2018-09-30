@@ -19,7 +19,7 @@
 #include "common/printable.hpp"
 #include "common/types/data_chunk.hpp"
 
-#include "parser/expression/abstract_expression.hpp"
+#include "parser/abstract_expression.hpp"
 #include "parser/statement/select_statement.hpp"
 
 namespace duckdb {

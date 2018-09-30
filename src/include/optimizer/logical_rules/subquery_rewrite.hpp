@@ -16,8 +16,8 @@
 #include "common/exception.hpp"
 #include "common/internal_types.hpp"
 #include "optimizer/rule.hpp"
-#include "parser/expression/expression_list.hpp"
-#include "planner/operator/logical_list.hpp"
+#include "parser/expression/list.hpp"
+#include "planner/operator/list.hpp"
 
 namespace duckdb {
 

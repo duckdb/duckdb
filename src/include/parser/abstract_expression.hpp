@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// parser/expression/abstract_expression.hpp
+// parser/abstract_expression.hpp
 //
 // Author: Mark Raasveldt
 //

@@ -18,8 +18,8 @@
 #include "catalog/catalog.hpp"
 #include "catalog/column_definition.hpp"
 #include "catalog/table_catalog.hpp"
-#include "parser/expression/abstract_expression.hpp"
-#include "parser/statement/sql_statement.hpp"
+#include "parser/abstract_expression.hpp"
+#include "parser/sql_statement.hpp"
 
 namespace duckdb {
 

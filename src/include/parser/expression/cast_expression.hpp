@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include "parser/expression/abstract_expression.hpp"
+#include "parser/abstract_expression.hpp"
 
 namespace duckdb {
 //! Represents a type cast from one type to another type

@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include "parser/expression/abstract_expression.hpp"
+#include "parser/abstract_expression.hpp"
 #include "parser/sql_node_visitor.hpp"
 #include "parser/tableref/tableref.hpp"
 

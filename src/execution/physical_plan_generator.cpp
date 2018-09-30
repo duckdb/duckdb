@@ -2,9 +2,9 @@
 #include "execution/physical_plan_generator.hpp"
 #include "execution/column_binding_resolver.hpp"
 
-#include "execution/operator/physical_list.hpp"
-#include "parser/expression/expression_list.hpp"
-#include "planner/operator/logical_list.hpp"
+#include "execution/operator/list.hpp"
+#include "parser/expression/list.hpp"
+#include "planner/operator/list.hpp"
 
 #include "storage/storage_manager.hpp"
 

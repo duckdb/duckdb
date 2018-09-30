@@ -1,14 +1,10 @@
 
 #include "planner/binder.hpp"
 
-#include "parser/expression/expression_list.hpp"
+#include "parser/expression/list.hpp"
 #include "parser/tableref/tableref_list.hpp"
 
-#include "parser/statement/copy_statement.hpp"
-#include "parser/statement/delete_statement.hpp"
-#include "parser/statement/insert_statement.hpp"
-#include "parser/statement/select_statement.hpp"
-#include "parser/statement/update_statement.hpp"
+#include "parser/statement/list.hpp"
 
 #include "main/client_context.hpp"
 #include "main/database.hpp"

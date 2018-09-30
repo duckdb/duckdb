@@ -6,7 +6,7 @@
 
 #include "main/client_context.hpp"
 
-#include "parser/expression/expression_list.hpp"
+#include "parser/expression/list.hpp"
 
 #include "execution/operator/physical_aggregate.hpp"
 #include "execution/operator/physical_hash_aggregate.hpp"

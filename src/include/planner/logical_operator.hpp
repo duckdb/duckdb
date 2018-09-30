@@ -18,7 +18,7 @@
 #include "common/internal_types.hpp"
 #include "common/printable.hpp"
 
-#include "parser/expression/abstract_expression.hpp"
+#include "parser/abstract_expression.hpp"
 #include "parser/statement/select_statement.hpp"
 
 #include "planner/logical_operator_visitor.hpp"

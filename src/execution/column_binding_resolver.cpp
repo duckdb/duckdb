@@ -1,6 +1,6 @@
 #include "execution/column_binding_resolver.hpp"
-#include "parser/expression/expression_list.hpp"
-#include "planner/operator/logical_list.hpp"
+#include "parser/expression/list.hpp"
+#include "planner/operator/list.hpp"
 
 using namespace duckdb;
 using namespace std;

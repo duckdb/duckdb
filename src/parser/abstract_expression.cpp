@@ -1,5 +1,5 @@
 
-#include "parser/expression/abstract_expression.hpp"
+#include "parser/abstract_expression.hpp"
 
 using namespace duckdb;
 using namespace std;

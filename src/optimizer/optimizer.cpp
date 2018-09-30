@@ -3,7 +3,7 @@
 #include "optimizer/expression_rules/rule_list.hpp"
 #include "optimizer/logical_rules/rule_list.hpp"
 
-#include "planner/operator/logical_list.hpp"
+#include "planner/operator/list.hpp"
 
 using namespace duckdb;
 using namespace std;

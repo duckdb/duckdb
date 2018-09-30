@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-#include "parser/statement/sql_statement.hpp"
+#include "parser/sql_statement.hpp"
 
 struct Node;
 struct List;

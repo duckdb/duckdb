@@ -3,7 +3,7 @@
 #include "planner/operator/logical_join.hpp"
 #include "planner/operator/logical_filter.hpp"
 
-#include "parser/expression/expression_list.hpp"
+#include "parser/expression/list.hpp"
 
 using namespace duckdb;
 using namespace std;

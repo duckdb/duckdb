@@ -14,7 +14,7 @@
 #include <vector>
 
 #include "parser/sql_node_visitor.hpp"
-#include "parser/statement/sql_statement.hpp"
+#include "parser/sql_statement.hpp"
 
 #include "planner/bindcontext.hpp"
 

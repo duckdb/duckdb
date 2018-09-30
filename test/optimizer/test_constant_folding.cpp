@@ -5,7 +5,7 @@
 
 #include "optimizer/expression_rules/rule_list.hpp"
 #include "optimizer/rewriter.hpp"
-#include "parser/expression/expression_list.hpp"
+#include "parser/expression/list.hpp"
 #include "planner/operator/logical_projection.hpp"
 
 #include "common/helper.hpp"

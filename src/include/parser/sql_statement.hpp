@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// parser/statement/sql_statement.hpp
+// parser/sql_statement.hpp
 //
 // Author: Mark Raasveldt
 //

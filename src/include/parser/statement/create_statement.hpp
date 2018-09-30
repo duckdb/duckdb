@@ -13,9 +13,9 @@
 #include <vector>
 
 #include "catalog/catalog.hpp"
-#include "parser/statement/sql_statement.hpp"
+#include "parser/sql_statement.hpp"
 
-#include "parser/expression/abstract_expression.hpp"
+#include "parser/abstract_expression.hpp"
 
 namespace duckdb {
 
