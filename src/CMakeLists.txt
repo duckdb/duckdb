@@ -8,7 +8,6 @@ add_subdirectory(planner)
 add_subdirectory(storage)
 add_subdirectory(optimizer)
 add_subdirectory(transaction)
-add_subdirectory(shell)
 
 add_library(duckdb SHARED ${ALL_OBJECT_FILES})
 target_link_libraries(duckdb pg_query Threads::Threads)

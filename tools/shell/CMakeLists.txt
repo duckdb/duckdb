@@ -21,12 +21,11 @@ execute_process(
 )
 
 configure_file (
-        "./shell_config.h.in"
-        "${CMAKE_BINARY_DIR}/src/shell/shell_config.h"
+        "include/shell_config.h.in"
+        "${CMAKE_BINARY_DIR}/tools/shell/include/shell_config.h"
 )
-include_directories(${CMAKE_BINARY_DIR}/src/shell)
+include_directories(include)
+include_directories(${CMAKE_BINARY_DIR}/tools/shell/include)
 
-#add_library(duckdb_shell OBJECT ${SHELL_SRC_FILES})
-set(SHELL_OBJECT_FILES ${SHELL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_shell>)
-add_executable(shell ${SHELL_SRC_FILES} ${ALL_OBJECT_FILES})
-target_link_libraries(shell ${LINE_LIB} pg_query Threads::Threads)
+add_executable(shell shell.c)
+target_link_libraries(shell ${LINE_LIB} sqlite3_api_wrapper)
