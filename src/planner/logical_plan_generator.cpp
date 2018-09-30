@@ -153,9 +153,9 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 			                "same number of result column");
 		}
 
-		vector<unique_ptr<AbstractExpression>> expressions;
+		vector<unique_ptr<Expression>> expressions;
 		for (size_t i = 0; i < top_select->expressions.size(); i++) {
-			AbstractExpression *proj_ele = top_select->expressions[i].get();
+			Expression *proj_ele = top_select->expressions[i].get();
 
 			TypeId union_expr_type = TypeId::INVALID;
 			auto top_expr_type = proj_ele->return_type;
@@ -175,9 +175,8 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 				bottom_select->expressions[i] = move(cast);
 			}
 
-			auto ele_ref =
-			    make_unique_base<AbstractExpression, ColumnRefExpression>(
-			        union_expr_type, i);
+			auto ele_ref = make_unique_base<Expression, ColumnRefExpression>(
+			    union_expr_type, i);
 			ele_ref->alias = proj_ele->alias;
 			expressions.push_back(move(ele_ref));
 		}
@@ -195,19 +194,17 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 			    "DISTINCT can only apply to projection, union or group");
 		}
 
-		vector<unique_ptr<AbstractExpression>> expressions;
-		vector<unique_ptr<AbstractExpression>> groups;
+		vector<unique_ptr<Expression>> expressions;
+		vector<unique_ptr<Expression>> groups;
 
 		for (size_t i = 0; i < root->expressions.size(); i++) {
-			AbstractExpression *proj_ele = root->expressions[i].get();
-			auto group_ref =
-			    make_unique_base<AbstractExpression, GroupRefExpression>(
-			        proj_ele->return_type, i);
+			Expression *proj_ele = root->expressions[i].get();
+			auto group_ref = make_unique_base<Expression, GroupRefExpression>(
+			    proj_ele->return_type, i);
 			group_ref->alias = proj_ele->alias;
 			expressions.push_back(move(group_ref));
-			groups.push_back(
-			    make_unique_base<AbstractExpression, ColumnRefExpression>(
-			        proj_ele->return_type, i));
+			groups.push_back(make_unique_base<Expression, ColumnRefExpression>(
+			    proj_ele->return_type, i));
 		}
 		// this aggregate is superflous if all grouping columns are in aggr
 		// below
@@ -230,7 +227,7 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 	}
 }
 
-static void cast_children_to_equal_types(AbstractExpression &expr,
+static void cast_children_to_equal_types(Expression &expr,
                                          size_t start_idx = 0) {
 	// first figure out the widest type
 	TypeId max_type = TypeId::INVALID;

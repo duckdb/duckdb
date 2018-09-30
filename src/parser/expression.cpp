@@ -1,10 +1,10 @@
 
-#include "parser/abstract_expression.hpp"
+#include "parser/expression.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-bool AbstractExpression::IsAggregate() {
+bool Expression::IsAggregate() {
 	bool is_aggregate = false;
 	for (auto &child : children) {
 		is_aggregate |= child->IsAggregate();
@@ -12,7 +12,7 @@ bool AbstractExpression::IsAggregate() {
 	return is_aggregate;
 }
 
-bool AbstractExpression::IsScalar() {
+bool Expression::IsScalar() {
 	bool is_scalar = true;
 	for (auto &child : children) {
 		is_scalar &= child->IsScalar();
@@ -20,7 +20,7 @@ bool AbstractExpression::IsScalar() {
 	return is_scalar;
 }
 
-void AbstractExpression::GetAggregates(
+void Expression::GetAggregates(
     std::vector<AggregateExpression *> &expressions) {
 	for (auto &child : children) {
 		child->GetAggregates(expressions);

@@ -9,7 +9,7 @@ using namespace duckdb;
 using namespace std;
 
 JoinSide LogicalJoin::GetJoinSide(LogicalOperator *op,
-                                  std::unique_ptr<AbstractExpression> &expr) {
+                                  std::unique_ptr<Expression> &expr) {
 	if (expr->type == ExpressionType::COLUMN_REF) {
 		auto colref = (ColumnRefExpression *)expr.get();
 		if (op->children[0]->referenced_tables.find(
@@ -92,8 +92,7 @@ static ExpressionType FlipComparisionExpression(ExpressionType type) {
 	return flipped_type;
 }
 
-void LogicalJoin::SetJoinCondition(
-    std::unique_ptr<AbstractExpression> condition) {
+void LogicalJoin::SetJoinCondition(std::unique_ptr<Expression> condition) {
 	assert(children.size() == 2);
 	if (condition->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		// traverse down the expression tree along conjunction

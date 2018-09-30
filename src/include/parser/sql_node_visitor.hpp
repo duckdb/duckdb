@@ -40,7 +40,7 @@ class JoinRef;
 class SubqueryRef;
 class TableRef;
 //! The SQLNodeVisitor is an abstract base class that implements the Visitor
-//! pattern on AbstractExpression and SQLStatement. It will visit nodes
+//! pattern on Expression and SQLStatement. It will visit nodes
 //! recursively and call the Visit expression corresponding to the expression
 //! visited.
 class SQLNodeVisitor {

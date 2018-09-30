@@ -19,7 +19,7 @@ namespace duckdb {
 //! adds a selection vector to the chunk.
 class PhysicalFilter : public PhysicalOperator {
   public:
-	PhysicalFilter(std::vector<std::unique_ptr<AbstractExpression>> select_list)
+	PhysicalFilter(std::vector<std::unique_ptr<Expression>> select_list)
 	    : PhysicalOperator(PhysicalOperatorType::FILTER),
 	      expressions(std::move(select_list)) {}
 
@@ -30,6 +30,6 @@ class PhysicalFilter : public PhysicalOperator {
 	virtual std::unique_ptr<PhysicalOperatorState>
 	GetOperatorState(ExpressionExecutor *parent) override;
 
-	std::vector<std::unique_ptr<AbstractExpression>> expressions;
+	std::vector<std::unique_ptr<Expression>> expressions;
 };
 } // namespace duckdb

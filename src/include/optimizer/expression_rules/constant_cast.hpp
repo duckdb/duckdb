@@ -32,8 +32,8 @@ class ConstantCastRule : public Rule {
 		root->child_policy = ChildPolicy::UNORDERED;
 	}
 
-	std::unique_ptr<AbstractExpression>
-	Apply(AbstractExpression &root, std::vector<AbstractOperator> &bindings) {
+	std::unique_ptr<Expression> Apply(Expression &root,
+	                                  std::vector<AbstractOperator> &bindings) {
 
 		auto &cast_expr = (CastExpression &)root;
 		auto const_expr =

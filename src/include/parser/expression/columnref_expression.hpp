@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include "parser/abstract_expression.hpp"
+#include "parser/expression.hpp"
 
 namespace duckdb {
 
@@ -30,28 +30,27 @@ struct ColumnBinding {
 
 //! Represents a reference to a column from either the FROM clause or from an
 //! alias
-class ColumnRefExpression : public AbstractExpression {
+class ColumnRefExpression : public Expression {
   public:
 	//! STAR expression in SELECT clause
 	ColumnRefExpression()
-	    : AbstractExpression(ExpressionType::STAR), reference(nullptr) {}
+	    : Expression(ExpressionType::STAR), reference(nullptr) {}
 	//! Only specify the column name, the table name will be derived later
 	ColumnRefExpression(std::string column_name)
-	    : AbstractExpression(ExpressionType::COLUMN_REF), reference(nullptr),
+	    : Expression(ExpressionType::COLUMN_REF), reference(nullptr),
 	      column_name(column_name) {}
 
 	//! Specify both the column and table name
 	ColumnRefExpression(std::string column_name, std::string table_name)
-	    : AbstractExpression(ExpressionType::COLUMN_REF), reference(nullptr),
+	    : Expression(ExpressionType::COLUMN_REF), reference(nullptr),
 	      column_name(column_name), table_name(table_name) {}
 
 	ColumnRefExpression(TypeId type, ColumnBinding binding)
-	    : AbstractExpression(ExpressionType::COLUMN_REF, type),
-	      binding(binding), reference(nullptr), column_name(""),
-	      table_name("") {}
+	    : Expression(ExpressionType::COLUMN_REF, type), binding(binding),
+	      reference(nullptr), column_name(""), table_name("") {}
 
 	ColumnRefExpression(TypeId type, size_t index)
-	    : AbstractExpression(ExpressionType::COLUMN_REF, type), index(index),
+	    : Expression(ExpressionType::COLUMN_REF, type), index(index),
 	      reference(nullptr), column_name(""), table_name("") {}
 
 	const std::string &GetColumnName() const { return column_name; }
@@ -60,14 +59,14 @@ class ColumnRefExpression : public AbstractExpression {
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
 
 	virtual void ResolveType() override {
-		AbstractExpression::ResolveType();
+		Expression::ResolveType();
 		if (return_type == TypeId::INVALID) {
 			throw Exception("Type of ColumnRefExpression was not resolved!");
 		}
 	}
 
-	virtual bool Equals(const AbstractExpression *other_) override {
-		if (!AbstractExpression::Equals(other_)) {
+	virtual bool Equals(const Expression *other_) override {
+		if (!Expression::Equals(other_)) {
 			return false;
 		}
 		auto other = reinterpret_cast<const ColumnRefExpression *>(other_);
@@ -90,9 +89,9 @@ class ColumnRefExpression : public AbstractExpression {
 	//! Subquery recursion depth, needed for execution
 	size_t depth = 0;
 
-	//! A reference to the AbstractExpression this references, only used for
+	//! A reference to the Expression this references, only used for
 	//! alias references
-	AbstractExpression *reference;
+	Expression *reference;
 	//! Column name that is referenced
 	std::string column_name;
 	//! Table name of the column name that is referenced (optional)

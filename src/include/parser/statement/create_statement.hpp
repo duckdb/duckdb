@@ -15,7 +15,7 @@
 #include "catalog/catalog.hpp"
 #include "parser/sql_statement.hpp"
 
-#include "parser/abstract_expression.hpp"
+#include "parser/expression.hpp"
 
 namespace duckdb {
 

@@ -29,7 +29,7 @@ void Binder::Visit(SelectStatement &statement) {
 	// multiple expressions
 	// note that we also gather aliases from the SELECT list
 	// because they might be used in the WHERE, GROUP BY or HAVING clauses
-	vector<unique_ptr<AbstractExpression>> new_select_list;
+	vector<unique_ptr<Expression>> new_select_list;
 	for (auto &select_element : statement.select_list) {
 		if (select_element->GetExpressionType() == ExpressionType::STAR) {
 			// * statement, expand to all columns from the FROM clause

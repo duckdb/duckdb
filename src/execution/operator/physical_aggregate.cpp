@@ -8,16 +8,15 @@ using namespace duckdb;
 using namespace std;
 
 PhysicalAggregate::PhysicalAggregate(
-    std::vector<std::unique_ptr<AbstractExpression>> select_list,
+    std::vector<std::unique_ptr<Expression>> select_list,
     PhysicalOperatorType type)
     : PhysicalOperator(type), select_list(std::move(select_list)) {
 	Initialize();
 }
 
 PhysicalAggregate::PhysicalAggregate(
-    std::vector<std::unique_ptr<AbstractExpression>> select_list,
-    std::vector<std::unique_ptr<AbstractExpression>> groups,
-    PhysicalOperatorType type)
+    std::vector<std::unique_ptr<Expression>> select_list,
+    std::vector<std::unique_ptr<Expression>> groups, PhysicalOperatorType type)
     : PhysicalOperator(type), select_list(std::move(select_list)),
       groups(std::move(groups)) {
 	Initialize();

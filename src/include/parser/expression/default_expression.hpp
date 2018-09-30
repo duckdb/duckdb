@@ -11,13 +11,13 @@
 #pragma once
 
 #include "common/types/value.hpp"
-#include "parser/abstract_expression.hpp"
+#include "parser/expression.hpp"
 
 namespace duckdb {
 //! Represents the default value of a column
-class DefaultExpression : public AbstractExpression {
+class DefaultExpression : public Expression {
   public:
-	DefaultExpression() : AbstractExpression(ExpressionType::VALUE_DEFAULT) {}
+	DefaultExpression() : Expression(ExpressionType::VALUE_DEFAULT) {}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
 

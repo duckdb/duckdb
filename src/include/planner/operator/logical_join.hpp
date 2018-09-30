@@ -15,8 +15,8 @@
 namespace duckdb {
 
 struct JoinCondition {
-	std::unique_ptr<AbstractExpression> left;
-	std::unique_ptr<AbstractExpression> right;
+	std::unique_ptr<Expression> left;
+	std::unique_ptr<Expression> right;
 	ExpressionType comparison;
 };
 
@@ -31,12 +31,12 @@ class LogicalJoin : public LogicalOperator {
 	virtual void Accept(LogicalOperatorVisitor *v) override { v->Visit(*this); }
 
 	//! Creates the join condition for this node from the given expression
-	void SetJoinCondition(std::unique_ptr<AbstractExpression> condition);
+	void SetJoinCondition(std::unique_ptr<Expression> condition);
 
 	std::vector<JoinCondition> conditions;
 	JoinType type;
 	static JoinSide GetJoinSide(LogicalOperator *op,
-	                            std::unique_ptr<AbstractExpression> &expr);
+	                            std::unique_ptr<Expression> &expr);
 
 	virtual std::string ParamsToString() const override {
 		std::string result = "";

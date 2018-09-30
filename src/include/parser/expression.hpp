@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// parser/abstract_expression.hpp
+// parser/expression.hpp
 //
 // Author: Mark Raasveldt
 //
@@ -23,26 +23,26 @@
 namespace duckdb {
 class AggregateExpression;
 
-//!  AbstractExpression class is a base class that can represent any expression
+//!  Expression class is a base class that can represent any expression
 //!  part of a SQL statement.
 /*!
- The AbstractExpression class is a base class that can represent any expression
+ The Expression class is a base class that can represent any expression
  part of a SQL statement. This is, for example, a column reference in a SELECT
  clause, but also operators, aggregates or filters.
 
- In the execution engine, an AbstractExpression always returns a single Vector
+ In the execution engine, an Expression always returns a single Vector
  of the type specified by return_type. It can take an arbitrary amount of
  Vectors as input (but in most cases the amount of input vectors is 0-2).
  */
-class AbstractExpression : public Printable {
+class Expression : public Printable {
   public:
-	//! Create an AbstractExpression
-	AbstractExpression(ExpressionType type) : type(type), parent(nullptr) {}
-	//! Create an AbstractExpression with zero, one or two children with the
+	//! Create an Expression
+	Expression(ExpressionType type) : type(type), parent(nullptr) {}
+	//! Create an Expression with zero, one or two children with the
 	//! specified return type
-	AbstractExpression(ExpressionType type, TypeId return_type,
-	                   std::unique_ptr<AbstractExpression> left = nullptr,
-	                   std::unique_ptr<AbstractExpression> right = nullptr)
+	Expression(ExpressionType type, TypeId return_type,
+	           std::unique_ptr<Expression> left = nullptr,
+	           std::unique_ptr<Expression> right = nullptr)
 	    : type(type), return_type(return_type), parent(nullptr) {
 		if (left)
 			AddChild(std::move(left));
@@ -64,15 +64,15 @@ class AbstractExpression : public Printable {
 		}
 	}
 
-	//! Add a child node to the AbstractExpression. Note that the order of
+	//! Add a child node to the Expression. Note that the order of
 	//! adding children is important in most cases
-	void AddChild(std::unique_ptr<AbstractExpression> child) {
+	void AddChild(std::unique_ptr<Expression> child) {
 		child->parent = this;
 		children.push_back(std::move(child));
 	}
 
 	//! Return a list of the deepest aggregates that are present in the
-	//! AbstractExpression (if any).
+	//! Expression (if any).
 	/*!
 	 This function is used by the execution engine to figure out which
 	 aggregates/groupings have to be computed.
@@ -84,7 +84,7 @@ class AbstractExpression : public Printable {
 	 (2) SELECT COUNT(SUM(a)) FROM table; (One aggregate, SUM(a))
 	 */
 	virtual void GetAggregates(std::vector<AggregateExpression *> &expressions);
-	//! Returns true if this AbstractExpression is an aggregate or not.
+	//! Returns true if this Expression is an aggregate or not.
 	/*!
 	 Examples:
 
@@ -101,7 +101,7 @@ class AbstractExpression : public Printable {
 	//! Returns the type of the expression
 	ExpressionType GetExpressionType() { return type; }
 
-	virtual bool Equals(const AbstractExpression *other) {
+	virtual bool Equals(const Expression *other) {
 		if (this->type != other->type) {
 			return false;
 		}
@@ -116,9 +116,7 @@ class AbstractExpression : public Printable {
 		return true;
 	}
 
-	bool operator==(const AbstractExpression &rhs) {
-		return this->Equals(&rhs);
-	}
+	bool operator==(const Expression &rhs) { return this->Equals(&rhs); }
 
 	virtual std::string GetExprName() const {
 		return ExpressionTypeToString(type);
@@ -154,10 +152,10 @@ class AbstractExpression : public Printable {
 	std::string alias;
 
 	//! The parent node of the expression, if any
-	AbstractExpression *parent;
+	Expression *parent;
 
 	//! A list of children of the expression
-	std::vector<std::unique_ptr<AbstractExpression>> children;
+	std::vector<std::unique_ptr<Expression>> children;
 };
 
 } // namespace duckdb

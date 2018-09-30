@@ -18,7 +18,7 @@ namespace duckdb {
 class PhysicalUpdate : public PhysicalOperator {
   public:
 	PhysicalUpdate(DataTable &table, std::vector<column_t> columns,
-	               std::vector<std::unique_ptr<AbstractExpression>> expressions)
+	               std::vector<std::unique_ptr<Expression>> expressions)
 	    : PhysicalOperator(PhysicalOperatorType::UPDATE), table(table),
 	      columns(columns), expressions(std::move(expressions)) {}
 
@@ -31,7 +31,7 @@ class PhysicalUpdate : public PhysicalOperator {
 
 	DataTable &table;
 	std::vector<column_t> columns;
-	std::vector<std::unique_ptr<AbstractExpression>> expressions;
+	std::vector<std::unique_ptr<Expression>> expressions;
 };
 
 } // namespace duckdb

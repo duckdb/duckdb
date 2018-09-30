@@ -15,7 +15,7 @@
 #include "catalog/catalog.hpp"
 #include "parser/statement/select_statement.hpp"
 
-#include "parser/abstract_expression.hpp"
+#include "parser/expression.hpp"
 
 namespace duckdb {
 
@@ -30,7 +30,7 @@ class InsertStatement : public SQLStatement {
 	std::unique_ptr<SelectStatement> select_statement;
 
 	//! List of values to insert
-	std::vector<std::vector<std::unique_ptr<AbstractExpression>>> values;
+	std::vector<std::vector<std::unique_ptr<Expression>>> values;
 
 	//! Column names to insert into
 	std::vector<std::string> columns;

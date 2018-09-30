@@ -4,7 +4,7 @@
 DuckDB does not require additional libraries to be installed. Hence, only GCC (`g++`) or clang and [CMake](https://cmake.org) need to be installed to build. To run all tests, a `git` installation is also required. 
 Clone the repository, then run `make` to compile the sources into a debug version. Use `make opt` to create a release build, which is *critical to get best performance*. Once compilation is done, you may run `make unit` to verify that your version works properly. You should now have several artifacts in the `build/debug` or `build/release` directory:
 * A shared library, `src/libduckdb.[so|dylib|dll]`. This is the database-as-a-library file and contains everything required to run DuckDB
-* A shell based on the `sqlite3` command line utility, in `src/shell/shell`. 
+* A shell based on the `sqlite3` command line utility, in `tools/shell/shell`. 
 * Various test drivers in the `test` folder.
 
 ## Standing on the Shoulders of Giants

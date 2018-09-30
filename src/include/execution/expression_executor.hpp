@@ -16,7 +16,7 @@
 #include "common/printable.hpp"
 #include "common/types/data_chunk.hpp"
 
-#include "parser/abstract_expression.hpp"
+#include "parser/expression.hpp"
 #include "parser/sql_node_visitor.hpp"
 
 #include "execution/physical_operator.hpp"
@@ -26,10 +26,10 @@ namespace duckdb {
 class ClientContext;
 
 //! ExpressionExecutor is responsible for executing an arbitrary
-//! AbstractExpression and returning a Vector
+//! Expression and returning a Vector
 /*!
     ExpressionExecutor is responsible for executing an arbitrary
-   AbstractExpression and returning a Vector. It executes the expressions
+   Expression and returning a Vector. It executes the expressions
    recursively using a visitor pattern.
 */
 class ExpressionExecutor : public SQLNodeVisitor {
@@ -48,10 +48,10 @@ class ExpressionExecutor : public SQLNodeVisitor {
 	void Reset();
 
 	//! Execute a single abstract expression and store the result in result
-	void Execute(AbstractExpression *expr, Vector &result);
+	void Execute(Expression *expr, Vector &result);
 	//! Execute the abstract expression, and "logical AND" the result together
 	//! with result
-	void Merge(AbstractExpression *expr, Vector &result);
+	void Merge(Expression *expr, Vector &result);
 	//! Execute the given aggregate expression, and merge the result together
 	//! with v
 	void Merge(AggregateExpression &expr, Value &v);

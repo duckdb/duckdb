@@ -25,7 +25,7 @@
 namespace duckdb {
 //
 
-static bool CheckEval(LogicalOperator *op, AbstractExpression *expr) {
+static bool CheckEval(LogicalOperator *op, Expression *expr) {
 	if (expr->type == ExpressionType::COLUMN_REF) {
 		auto colref = (ColumnRefExpression *)expr;
 		if (op->referenced_tables.find(colref->binding.table_index) !=
@@ -47,8 +47,8 @@ static bool CheckEval(LogicalOperator *op, AbstractExpression *expr) {
 	return false;
 }
 
-static std::unique_ptr<AbstractExpression>
-RewritePushdown(std::unique_ptr<AbstractExpression> expr, LogicalOperator *op) {
+static std::unique_ptr<Expression>
+RewritePushdown(std::unique_ptr<Expression> expr, LogicalOperator *op) {
 	assert(op);
 
 	bool moved = false;
@@ -121,7 +121,7 @@ class SelectionPushdownRule : public Rule {
 		auto &filter = (LogicalFilter &)root;
 		assert(filter.children.size() == 1);
 		// for each filter condition, check if they can be a join condition
-		std::vector<std::unique_ptr<AbstractExpression>> new_expressions;
+		std::vector<std::unique_ptr<Expression>> new_expressions;
 
 		for (size_t i = 0; i < filter.expressions.size(); i++) {
 			auto &expr = filter.expressions[i];

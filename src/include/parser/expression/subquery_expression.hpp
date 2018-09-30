@@ -22,10 +22,10 @@ namespace duckdb {
 enum class SubqueryType { INVALID = 0, DEFAULT = 1, EXISTS = 2, IN = 3 };
 
 //! Represents a subquery
-class SubqueryExpression : public AbstractExpression {
+class SubqueryExpression : public Expression {
   public:
 	SubqueryExpression()
-	    : AbstractExpression(ExpressionType::SELECT_SUBQUERY),
+	    : Expression(ExpressionType::SELECT_SUBQUERY),
 	      type(SubqueryType::DEFAULT) {}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }

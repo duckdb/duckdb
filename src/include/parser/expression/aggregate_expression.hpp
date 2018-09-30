@@ -12,15 +12,15 @@
 
 #include "common/exception.hpp"
 
-#include "parser/abstract_expression.hpp"
+#include "parser/expression.hpp"
 
 namespace duckdb {
 //! The AggregateExpression represents an aggregate in the query
-class AggregateExpression : public AbstractExpression {
+class AggregateExpression : public Expression {
   public:
 	AggregateExpression(ExpressionType type, bool distinct,
-	                    std::unique_ptr<AbstractExpression> child)
-	    : AbstractExpression(type), index(0) {
+	                    std::unique_ptr<Expression> child)
+	    : Expression(type), index(0) {
 		this->distinct = distinct;
 
 		// translate COUNT(*) into AGGREGATE_COUNT_STAR
@@ -51,7 +51,7 @@ class AggregateExpression : public AbstractExpression {
 
 	//! Resolve the type of the aggregate
 	virtual void ResolveType() override {
-		AbstractExpression::ResolveType();
+		Expression::ResolveType();
 		switch (type) {
 		case ExpressionType::AGGREGATE_COUNT_STAR:
 			return_type = TypeId::BIGINT;

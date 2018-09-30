@@ -16,7 +16,7 @@ using namespace std;
 
 void ExpressionExecutor::Reset() { vector.Destroy(); }
 
-void ExpressionExecutor::Execute(AbstractExpression *expr, Vector &result) {
+void ExpressionExecutor::Execute(Expression *expr, Vector &result) {
 	vector.Destroy();
 	expr->Accept(this);
 
@@ -45,7 +45,7 @@ void ExpressionExecutor::Execute(AbstractExpression *expr, Vector &result) {
 	}
 }
 
-void ExpressionExecutor::Merge(AbstractExpression *expr, Vector &result) {
+void ExpressionExecutor::Merge(Expression *expr, Vector &result) {
 	vector.Destroy();
 	if (result.type != TypeId::BOOLEAN) {
 		throw NotImplementedException("Expected a boolean!");
@@ -128,7 +128,7 @@ void ExpressionExecutor::Merge(AggregateExpression &expr, Value &result) {
 	}
 }
 
-static bool IsScalarAggr(AbstractExpression *expr) {
+static bool IsScalarAggr(Expression *expr) {
 	if (expr->type == ExpressionType::COLUMN_REF ||
 	    expr->type == ExpressionType::GROUP_REF ||
 	    expr->type == ExpressionType::AGGREGATE_COUNT_STAR) {

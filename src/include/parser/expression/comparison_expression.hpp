@@ -10,18 +10,17 @@
 
 #pragma once
 
-#include "parser/abstract_expression.hpp"
+#include "parser/expression.hpp"
 
 namespace duckdb {
 //! Represents a boolean comparison (e.g. =, >=, <>). Always returns a boolean
 //! and has two children.
-class ComparisonExpression : public AbstractExpression {
+class ComparisonExpression : public Expression {
   public:
-	ComparisonExpression(ExpressionType type,
-	                     std::unique_ptr<AbstractExpression> left,
-	                     std::unique_ptr<AbstractExpression> right)
-	    : AbstractExpression(type, TypeId::BOOLEAN, std::move(left),
-	                         std::move(right)) {}
+	ComparisonExpression(ExpressionType type, std::unique_ptr<Expression> left,
+	                     std::unique_ptr<Expression> right)
+	    : Expression(type, TypeId::BOOLEAN, std::move(left), std::move(right)) {
+	}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
 };

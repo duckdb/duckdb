@@ -108,7 +108,7 @@ ColumnDefinition *BindContext::BindColumn(ColumnRefExpression &expr,
 }
 
 void BindContext::GenerateAllColumnExpressions(
-    vector<unique_ptr<AbstractExpression>> &new_select_list) {
+    vector<unique_ptr<Expression>> &new_select_list) {
 	if (regular_table_alias_map.size() == 0 && subquery_alias_map.size() == 0) {
 		throw BinderException("SELECT * expression without FROM clause!");
 	}
@@ -145,8 +145,8 @@ void BindContext::AddSubquery(const string &alias, SelectStatement *subquery) {
 	subquery_alias_map.insert(make_pair(alias, subquery));
 }
 
-void BindContext::AddExpression(const string &alias,
-                                AbstractExpression *expression, size_t i) {
+void BindContext::AddExpression(const string &alias, Expression *expression,
+                                size_t i) {
 	expression_alias_map[alias] = make_pair(i, expression);
 }
 

@@ -23,14 +23,14 @@
 
 namespace duckdb {
 
-static std::unique_ptr<AbstractExpression>
-RewriteCP(std::unique_ptr<AbstractExpression> expr, LogicalOperator *op);
+static std::unique_ptr<Expression> RewriteCP(std::unique_ptr<Expression> expr,
+                                             LogicalOperator *op);
 
 // TODO, this passing ex back and forth is kind of annoying. better ideas?
 // we start with op being the parent filter which contains a crossprod or join
 // which in turn contain other crossprods or joins
-static std::unique_ptr<AbstractExpression>
-RewriteCP(std::unique_ptr<AbstractExpression> expr, LogicalOperator *op) {
+static std::unique_ptr<Expression> RewriteCP(std::unique_ptr<Expression> expr,
+                                             LogicalOperator *op) {
 	assert(op);
 	assert(expr->children.size() == 2);
 
@@ -107,7 +107,7 @@ class CrossProductRewrite : public Rule {
 		auto &filter = (LogicalFilter &)root;
 		assert(filter.children.size() == 1);
 		// for each filter condition, check if they can be a join condition
-		std::vector<std::unique_ptr<AbstractExpression>> new_expressions;
+		std::vector<std::unique_ptr<Expression>> new_expressions;
 
 		for (size_t i = 0; i < filter.expressions.size(); i++) {
 			auto &expr = filter.expressions[i];

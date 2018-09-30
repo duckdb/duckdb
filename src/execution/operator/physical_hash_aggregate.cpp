@@ -9,15 +9,15 @@ using namespace duckdb;
 using namespace std;
 
 PhysicalHashAggregate::PhysicalHashAggregate(
-    vector<unique_ptr<AbstractExpression>> expressions)
+    vector<unique_ptr<Expression>> expressions)
     : PhysicalAggregate(move(expressions),
                         PhysicalOperatorType::HASH_GROUP_BY) {
 	Initialize();
 }
 
 PhysicalHashAggregate::PhysicalHashAggregate(
-    vector<unique_ptr<AbstractExpression>> expressions,
-    vector<unique_ptr<AbstractExpression>> groups)
+    vector<unique_ptr<Expression>> expressions,
+    vector<unique_ptr<Expression>> groups)
     : PhysicalAggregate(move(expressions), move(groups),
                         PhysicalOperatorType::HASH_GROUP_BY) {
 	Initialize();

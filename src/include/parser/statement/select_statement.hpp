@@ -14,26 +14,26 @@
 
 #include "parser/sql_statement.hpp"
 
-#include "parser/abstract_expression.hpp"
+#include "parser/expression.hpp"
 #include "parser/tableref/tableref.hpp"
 
 namespace duckdb {
 //! GROUP BY description
 struct GroupByDescription {
 	//! List of groups
-	std::vector<std::unique_ptr<AbstractExpression>> groups;
+	std::vector<std::unique_ptr<Expression>> groups;
 	//! HAVING clause
-	std::unique_ptr<AbstractExpression> having;
+	std::unique_ptr<Expression> having;
 };
 //! Single node in ORDER BY statement
 struct OrderByNode {
 	//! Sort order, ASC or DESC
 	OrderType type;
 	//! Expression to order by
-	std::unique_ptr<AbstractExpression> expression;
+	std::unique_ptr<Expression> expression;
 
 	OrderByNode() {}
-	OrderByNode(OrderType type, std::unique_ptr<AbstractExpression> expression)
+	OrderByNode(OrderType type, std::unique_ptr<Expression> expression)
 	    : type(type), expression(std::move(expression)) {}
 };
 //! ORDER BY description
@@ -61,11 +61,11 @@ class SelectStatement : public SQLStatement {
 	virtual void Accept(SQLNodeVisitor *v) { v->Visit(*this); }
 
 	//! The projection list
-	std::vector<std::unique_ptr<AbstractExpression>> select_list;
+	std::vector<std::unique_ptr<Expression>> select_list;
 	//! The FROM clause
 	std::unique_ptr<TableRef> from_table;
 	//! The WHERE clause
-	std::unique_ptr<AbstractExpression> where_clause;
+	std::unique_ptr<Expression> where_clause;
 	//! DISTINCT or not
 	bool select_distinct;
 

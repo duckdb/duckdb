@@ -18,7 +18,7 @@
 #include "catalog/catalog.hpp"
 #include "catalog/column_definition.hpp"
 #include "catalog/table_catalog.hpp"
-#include "parser/abstract_expression.hpp"
+#include "parser/expression.hpp"
 #include "parser/sql_statement.hpp"
 
 namespace duckdb {
@@ -48,14 +48,14 @@ class BindContext {
 	//! referenced tables. This is used to resolve the * expression in a
 	//! selection list.
 	void GenerateAllColumnExpressions(
-	    std::vector<std::unique_ptr<AbstractExpression>> &new_select_list);
+	    std::vector<std::unique_ptr<Expression>> &new_select_list);
 
 	//! Adds a base table with the given alias to the BindContext.
 	void AddBaseTable(const std::string &alias, TableCatalogEntry *table_entry);
 	//! Adds a subquery with a given alias to the BindContext.
 	void AddSubquery(const std::string &alias, SelectStatement *subquery);
 	//! Adds an expression that has an alias to the BindContext
-	void AddExpression(const std::string &alias, AbstractExpression *expression,
+	void AddExpression(const std::string &alias, Expression *expression,
 	                   size_t i);
 
 	//! Returns true if the table/subquery alias exists, false otherwise.
@@ -78,7 +78,7 @@ class BindContext {
 	size_t max_depth;
 
 	//! The set of expression aliases
-	std::unordered_map<std::string, std::pair<size_t, AbstractExpression *>>
+	std::unordered_map<std::string, std::pair<size_t, Expression *>>
 	    expression_alias_map;
 	//! The set of bound tables, ordered map because order matters for SELECT *
 	std::unordered_map<std::string, TableBinding> regular_table_alias_map;

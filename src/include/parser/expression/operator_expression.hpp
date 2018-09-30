@@ -10,22 +10,21 @@
 
 #pragma once
 
-#include "parser/abstract_expression.hpp"
+#include "parser/expression.hpp"
 
 namespace duckdb {
 //! Represents a built-in operator expression
-class OperatorExpression : public AbstractExpression {
+class OperatorExpression : public Expression {
   public:
 	OperatorExpression(ExpressionType type, TypeId type_id = TypeId::INVALID)
-	    : AbstractExpression(type, type_id) {}
+	    : Expression(type, type_id) {}
 	OperatorExpression(ExpressionType type, TypeId type_id,
-	                   std::unique_ptr<AbstractExpression> left,
-	                   std::unique_ptr<AbstractExpression> right = nullptr)
-	    : AbstractExpression(type, type_id, std::move(left), std::move(right)) {
-	}
+	                   std::unique_ptr<Expression> left,
+	                   std::unique_ptr<Expression> right = nullptr)
+	    : Expression(type, type_id, std::move(left), std::move(right)) {}
 
 	virtual void ResolveType() override {
-		AbstractExpression::ResolveType();
+		Expression::ResolveType();
 		// logical operators return a bool
 		if (type == ExpressionType::OPERATOR_NOT ||
 		    type == ExpressionType::OPERATOR_IS_NULL ||

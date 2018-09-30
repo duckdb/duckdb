@@ -17,13 +17,13 @@ namespace duckdb {
 //! LogicalFilter represents a filter operation (e.g. WHERE or HAVING clause)
 class LogicalFilter : public LogicalOperator {
   public:
-	LogicalFilter(std::unique_ptr<AbstractExpression> expression);
+	LogicalFilter(std::unique_ptr<Expression> expression);
 	LogicalFilter();
 
 	virtual void Accept(LogicalOperatorVisitor *v) override { v->Visit(*this); }
 
   private:
-	void SplitPredicates(std::unique_ptr<AbstractExpression> expression);
+	void SplitPredicates(std::unique_ptr<Expression> expression);
 };
 
 } // namespace duckdb

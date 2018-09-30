@@ -54,7 +54,7 @@ TypeId TransformStringToTypeId(char *str) {
 	}
 }
 
-unique_ptr<AbstractExpression> TransformTypeCast(TypeCast *root) {
+unique_ptr<Expression> TransformTypeCast(TypeCast *root) {
 	if (!root) {
 		return nullptr;
 	}
@@ -92,8 +92,8 @@ unique_ptr<AbstractExpression> TransformTypeCast(TypeCast *root) {
 	}
 }
 
-unique_ptr<AbstractExpression> TransformBoolExpr(BoolExpr *root) {
-	unique_ptr<AbstractExpression> result;
+unique_ptr<Expression> TransformBoolExpr(BoolExpr *root) {
+	unique_ptr<Expression> result;
 	for (auto node = root->args->head; node != nullptr; node = node->next) {
 		auto next =
 		    TransformExpression(reinterpret_cast<Node *>(node->data.ptr_value));
@@ -295,7 +295,7 @@ unique_ptr<TableRef> TransformFrom(List *root) {
 	}
 }
 
-unique_ptr<AbstractExpression> TransformColumnRef(ColumnRef *root) {
+unique_ptr<Expression> TransformColumnRef(ColumnRef *root) {
 	List *fields = root->fields;
 	switch ((reinterpret_cast<Node *>(fields->head->data.ptr_value))->type) {
 	case T_String: {
@@ -325,7 +325,7 @@ unique_ptr<AbstractExpression> TransformColumnRef(ColumnRef *root) {
 	}
 }
 
-unique_ptr<AbstractExpression> TransformValue(value val) {
+unique_ptr<Expression> TransformValue(value val) {
 	switch (val.type) {
 	case T_Integer:
 		return make_unique<ConstantExpression>(Value::INTEGER(val.val.ival));
@@ -342,22 +342,22 @@ unique_ptr<AbstractExpression> TransformValue(value val) {
 	}
 }
 
-unique_ptr<AbstractExpression> TransformConstant(A_Const *c) {
+unique_ptr<Expression> TransformConstant(A_Const *c) {
 	return TransformValue(c->val);
 }
 
 // COALESCE(a,b,c) returns the first argument that is NOT NULL, so
 // rewrite into CASE(a IS NOT NULL, a, CASE(b IS NOT NULL, b, c))
-unique_ptr<AbstractExpression> TransformCoalesce(A_Expr *root) {
+unique_ptr<Expression> TransformCoalesce(A_Expr *root) {
 	if (!root) {
 		return nullptr;
 	}
 	auto coalesce_args = reinterpret_cast<List *>(root->lexpr);
 	// TODO: this is somewhat duplicated from the CASE rewrite below, perhaps
 	// they can be merged
-	auto exp_root = unique_ptr<AbstractExpression>(new CaseExpression());
-	AbstractExpression *cur_root = exp_root.get();
-	AbstractExpression *next_root = nullptr;
+	auto exp_root = unique_ptr<Expression>(new CaseExpression());
+	Expression *cur_root = exp_root.get();
+	Expression *next_root = nullptr;
 
 	for (auto cell = coalesce_args->head; cell && cell->next;
 	     cell = cell->next) {
@@ -367,18 +367,18 @@ unique_ptr<AbstractExpression> TransformCoalesce(A_Expr *root) {
 		auto res_true =
 		    TransformExpression(reinterpret_cast<Node *>(cell->data.ptr_value));
 
-		auto test = unique_ptr<AbstractExpression>(
+		auto test = unique_ptr<Expression>(
 		    new OperatorExpression(ExpressionType::OPERATOR_IS_NOT_NULL,
 		                           TypeId::BOOLEAN, move(value_expr)));
 
 		// the last argument does not need its own CASE because if we get there
 		// we might as well return it directly
-		unique_ptr<AbstractExpression> res_false;
+		unique_ptr<Expression> res_false;
 		if (cell->next->next == nullptr) {
 			res_false = TransformExpression(
 			    reinterpret_cast<Node *>(cell->next->data.ptr_value));
 		} else {
-			res_false = unique_ptr<AbstractExpression>(new CaseExpression());
+			res_false = unique_ptr<Expression>(new CaseExpression());
 			next_root = res_false.get();
 		}
 		cur_root->AddChild(move(test));
@@ -389,7 +389,7 @@ unique_ptr<AbstractExpression> TransformCoalesce(A_Expr *root) {
 	return exp_root;
 }
 
-unique_ptr<AbstractExpression> TransformNullTest(NullTest *root) {
+unique_ptr<Expression> TransformNullTest(NullTest *root) {
 	if (!root) {
 		return nullptr;
 	}
@@ -401,11 +401,11 @@ unique_ptr<AbstractExpression> TransformNullTest(NullTest *root) {
 	                               ? ExpressionType::OPERATOR_IS_NULL
 	                               : ExpressionType::OPERATOR_IS_NOT_NULL;
 
-	return unique_ptr<AbstractExpression>(
+	return unique_ptr<Expression>(
 	    new OperatorExpression(expr_type, TypeId::BOOLEAN, move(arg)));
 }
 
-unique_ptr<AbstractExpression> TransformAExpr(A_Expr *root) {
+unique_ptr<Expression> TransformAExpr(A_Expr *root) {
 	if (!root) {
 		return nullptr;
 	}
@@ -433,14 +433,13 @@ unique_ptr<AbstractExpression> TransformAExpr(A_Expr *root) {
 	} break;
 	// rewrite NULLIF(a, b) into CASE WHEN a=b THEN NULL ELSE a END
 	case AEXPR_NULLIF: {
-		auto case_expr = unique_ptr<AbstractExpression>(new CaseExpression());
-		auto test_expr =
-		    unique_ptr<AbstractExpression>(new ComparisonExpression(
-		        ExpressionType::COMPARE_EQUAL, TransformExpression(root->lexpr),
-		        TransformExpression(root->rexpr)));
+		auto case_expr = unique_ptr<Expression>(new CaseExpression());
+		auto test_expr = unique_ptr<Expression>(new ComparisonExpression(
+		    ExpressionType::COMPARE_EQUAL, TransformExpression(root->lexpr),
+		    TransformExpression(root->rexpr)));
 		case_expr->AddChild(move(test_expr));
 		auto null_expr =
-		    unique_ptr<AbstractExpression>(new ConstantExpression(Value()));
+		    unique_ptr<Expression>(new ConstantExpression(Value()));
 		case_expr->AddChild(move(null_expr));
 		case_expr->AddChild(TransformExpression(root->lexpr));
 		return case_expr;
@@ -503,7 +502,7 @@ unique_ptr<AbstractExpression> TransformAExpr(A_Expr *root) {
 		}
 	}
 
-	unique_ptr<AbstractExpression> result = nullptr;
+	unique_ptr<Expression> result = nullptr;
 	int type_id = static_cast<int>(target_type);
 	if (type_id <= 6) {
 		result = make_unique<OperatorExpression>(
@@ -517,7 +516,7 @@ unique_ptr<AbstractExpression> TransformAExpr(A_Expr *root) {
 	return result;
 }
 
-unique_ptr<AbstractExpression> TransformFuncCall(FuncCall *root) {
+unique_ptr<Expression> TransformFuncCall(FuncCall *root) {
 	string fun_name = StringUtil::Lower(
 	    (reinterpret_cast<value *>(root->funcname->head->data.ptr_value))
 	        ->val.str);
@@ -527,7 +526,7 @@ unique_ptr<AbstractExpression> TransformFuncCall(FuncCall *root) {
 		fun_name =
 		    (reinterpret_cast<value *>(root->funcname->tail->data.ptr_value))
 		        ->val.str;
-		vector<unique_ptr<AbstractExpression>> children;
+		vector<unique_ptr<Expression>> children;
 		if (root->args != nullptr) {
 			for (auto node = root->args->head; node != nullptr;
 			     node = node->next) {
@@ -584,7 +583,7 @@ unique_ptr<AbstractExpression> TransformFuncCall(FuncCall *root) {
 	}
 }
 
-unique_ptr<AbstractExpression> TransformCase(CaseExpr *root) {
+unique_ptr<Expression> TransformCase(CaseExpr *root) {
 	if (!root) {
 		return nullptr;
 	}
@@ -592,33 +591,32 @@ unique_ptr<AbstractExpression> TransformCase(CaseExpr *root) {
 	// but we rewrite to CASE WHEN expression = value THEN result ... to only
 	// have to handle one case downstream.
 
-	unique_ptr<AbstractExpression> def_res;
+	unique_ptr<Expression> def_res;
 	if (root->defresult) {
 		def_res =
 		    TransformExpression(reinterpret_cast<Node *>(root->defresult));
 	} else {
-		def_res =
-		    unique_ptr<AbstractExpression>(new ConstantExpression(Value()));
+		def_res = unique_ptr<Expression>(new ConstantExpression(Value()));
 	}
 	// def_res will be the else part of the innermost case expression
 
 	// CASE WHEN e1 THEN r1 WHEN w2 THEN r2 ELSE r3 is rewritten to
 	// CASE WHEN e1 THEN r1 ELSE CASE WHEN e2 THEN r2 ELSE r3
 
-	auto exp_root = unique_ptr<AbstractExpression>(new CaseExpression());
-	AbstractExpression *cur_root = exp_root.get();
-	AbstractExpression *next_root = nullptr;
+	auto exp_root = unique_ptr<Expression>(new CaseExpression());
+	Expression *cur_root = exp_root.get();
+	Expression *next_root = nullptr;
 
 	for (auto cell = root->args->head; cell != nullptr; cell = cell->next) {
 		CaseWhen *w = reinterpret_cast<CaseWhen *>(cell->data.ptr_value);
 
 		auto test_raw = TransformExpression(reinterpret_cast<Node *>(w->expr));
-		unique_ptr<AbstractExpression> test;
+		unique_ptr<Expression> test;
 		// TODO: how do we copy those things?
 		auto arg = TransformExpression(reinterpret_cast<Node *>(root->arg));
 
 		if (arg) {
-			test = unique_ptr<AbstractExpression>(new ComparisonExpression(
+			test = unique_ptr<Expression>(new ComparisonExpression(
 			    ExpressionType::COMPARE_EQUAL, move(arg), move(test_raw)));
 		} else {
 			test = move(test_raw);
@@ -627,11 +625,11 @@ unique_ptr<AbstractExpression> TransformCase(CaseExpr *root) {
 		auto res_true =
 		    TransformExpression(reinterpret_cast<Node *>(w->result));
 
-		unique_ptr<AbstractExpression> res_false;
+		unique_ptr<Expression> res_false;
 		if (cell->next == nullptr) {
 			res_false = move(def_res);
 		} else {
-			res_false = unique_ptr<AbstractExpression>(new CaseExpression());
+			res_false = unique_ptr<Expression>(new CaseExpression());
 			next_root = res_false.get();
 		}
 
@@ -645,7 +643,7 @@ unique_ptr<AbstractExpression> TransformCase(CaseExpr *root) {
 	return exp_root;
 }
 
-unique_ptr<AbstractExpression> TransformSubquery(SubLink *root) {
+unique_ptr<Expression> TransformSubquery(SubLink *root) {
 	if (!root) {
 		return nullptr;
 	}
@@ -678,7 +676,7 @@ unique_ptr<AbstractExpression> TransformSubquery(SubLink *root) {
 	}
 }
 
-unique_ptr<AbstractExpression> TransformResTarget(ResTarget *root) {
+unique_ptr<Expression> TransformResTarget(ResTarget *root) {
 	if (!root) {
 		return nullptr;
 	}
@@ -692,7 +690,7 @@ unique_ptr<AbstractExpression> TransformResTarget(ResTarget *root) {
 	return expr;
 }
 
-unique_ptr<AbstractExpression> TransformExpression(Node *node) {
+unique_ptr<Expression> TransformExpression(Node *node) {
 	if (!node) {
 		return nullptr;
 	}
@@ -731,7 +729,7 @@ unique_ptr<AbstractExpression> TransformExpression(Node *node) {
 }
 
 bool TransformExpressionList(List *list,
-                             vector<unique_ptr<AbstractExpression>> &result) {
+                             vector<unique_ptr<Expression>> &result) {
 	if (!list) {
 		return false;
 	}
@@ -749,7 +747,7 @@ bool TransformExpressionList(List *list,
 	return true;
 }
 
-unique_ptr<AbstractExpression> TransformListValue(Expr *node) {
+unique_ptr<Expression> TransformListValue(Expr *node) {
 	if (!node) {
 		return nullptr;
 	}

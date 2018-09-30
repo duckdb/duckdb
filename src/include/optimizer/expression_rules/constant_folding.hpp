@@ -35,8 +35,8 @@ class ConstantFoldingRule : public Rule {
 		root->child_policy = ChildPolicy::UNORDERED;
 	}
 
-	std::unique_ptr<AbstractExpression>
-	Apply(AbstractExpression &root, std::vector<AbstractOperator> &bindings) {
+	std::unique_ptr<Expression> Apply(Expression &root,
+	                                  std::vector<AbstractOperator> &bindings) {
 		Value result;
 
 		// TODO: add bolean ops

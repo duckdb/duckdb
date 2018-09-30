@@ -13,7 +13,7 @@
 
 #include "parser/sql_statement.hpp"
 
-#include "parser/abstract_expression.hpp"
+#include "parser/expression.hpp"
 
 namespace duckdb {
 
@@ -24,7 +24,7 @@ class DeleteStatement : public SQLStatement {
 	virtual std::string ToString() const { return "Delete"; }
 	virtual void Accept(SQLNodeVisitor *v) { v->Visit(*this); }
 
-	std::unique_ptr<AbstractExpression> condition;
+	std::unique_ptr<Expression> condition;
 	std::unique_ptr<TableRef> table;
 };
 } // namespace duckdb

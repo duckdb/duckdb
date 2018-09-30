@@ -13,8 +13,7 @@ using namespace std;
 
 namespace duckdb {
 
-bool TransformGroupBy(List *group,
-                      vector<unique_ptr<AbstractExpression>> &result) {
+bool TransformGroupBy(List *group, vector<unique_ptr<Expression>> &result) {
 	if (!group) {
 		return false;
 	}
@@ -211,7 +210,7 @@ unique_ptr<InsertStatement> TransformInsert(Node *node) {
 		     value_list = value_list->next) {
 			List *target = (List *)(value_list->data.ptr_value);
 
-			vector<unique_ptr<AbstractExpression>> insert_values;
+			vector<unique_ptr<Expression>> insert_values;
 			if (!TransformExpressionList(target, insert_values)) {
 				throw Exception("Could not parse expression list!");
 			}

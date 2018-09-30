@@ -16,8 +16,7 @@ namespace duckdb {
 
 class PhysicalProjection : public PhysicalOperator {
   public:
-	PhysicalProjection(
-	    std::vector<std::unique_ptr<AbstractExpression>> select_list)
+	PhysicalProjection(std::vector<std::unique_ptr<Expression>> select_list)
 	    : PhysicalOperator(PhysicalOperatorType::PROJECTION),
 	      select_list(move(select_list)) {}
 
@@ -28,7 +27,7 @@ class PhysicalProjection : public PhysicalOperator {
 	virtual std::unique_ptr<PhysicalOperatorState>
 	GetOperatorState(ExpressionExecutor *parent_executor) override;
 
-	std::vector<std::unique_ptr<AbstractExpression>> select_list;
+	std::vector<std::unique_ptr<Expression>> select_list;
 };
 
 } // namespace duckdb

@@ -11,29 +11,28 @@
 #pragma once
 
 #include "common/types/value.hpp"
-#include "parser/abstract_expression.hpp"
+#include "parser/expression.hpp"
 
 namespace duckdb {
 //! Represents a constant value in the query
-class ConstantExpression : public AbstractExpression {
+class ConstantExpression : public Expression {
   public:
 	ConstantExpression()
-	    : AbstractExpression(ExpressionType::VALUE_CONSTANT, TypeId::INTEGER),
-	      value() {}
+	    : Expression(ExpressionType::VALUE_CONSTANT, TypeId::INTEGER), value() {
+	}
 	ConstantExpression(Value val)
-	    : AbstractExpression(ExpressionType::VALUE_CONSTANT, val.type),
-	      value(val) {}
+	    : Expression(ExpressionType::VALUE_CONSTANT, val.type), value(val) {}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
 
 	//! Resolve the type of the constant
 	virtual void ResolveType() override {
-		AbstractExpression::ResolveType();
+		Expression::ResolveType();
 		stats = Statistics(value);
 	}
 
-	virtual bool Equals(const AbstractExpression *other_) override {
-		if (!AbstractExpression::Equals(other_)) {
+	virtual bool Equals(const Expression *other_) override {
+		if (!Expression::Equals(other_)) {
 			return false;
 		}
 		auto other = reinterpret_cast<const ConstantExpression *>(other_);

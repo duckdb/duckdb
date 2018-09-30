@@ -17,10 +17,10 @@ namespace duckdb {
 //! Physically insert a set of data into a table
 class PhysicalInsert : public PhysicalOperator {
   public:
-	PhysicalInsert(TableCatalogEntry *table,
-	               std::vector<std::vector<std::unique_ptr<AbstractExpression>>>
-	                   insert_values,
-	               std::vector<int> column_index_map)
+	PhysicalInsert(
+	    TableCatalogEntry *table,
+	    std::vector<std::vector<std::unique_ptr<Expression>>> insert_values,
+	    std::vector<int> column_index_map)
 	    : PhysicalOperator(PhysicalOperatorType::INSERT),
 	      column_index_map(column_index_map),
 	      insert_values(move(insert_values)), table(table) {}
@@ -33,7 +33,7 @@ class PhysicalInsert : public PhysicalOperator {
 	GetOperatorState(ExpressionExecutor *parent_executor) override;
 
 	std::vector<int> column_index_map;
-	std::vector<std::vector<std::unique_ptr<AbstractExpression>>> insert_values;
+	std::vector<std::vector<std::unique_ptr<Expression>>> insert_values;
 	TableCatalogEntry *table;
 };
 

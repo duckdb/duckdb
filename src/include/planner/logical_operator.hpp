@@ -18,7 +18,7 @@
 #include "common/internal_types.hpp"
 #include "common/printable.hpp"
 
-#include "parser/abstract_expression.hpp"
+#include "parser/expression.hpp"
 #include "parser/statement/select_statement.hpp"
 
 #include "planner/logical_operator_visitor.hpp"
@@ -30,9 +30,8 @@ class LogicalOperator : public Printable {
   public:
 	LogicalOperator(LogicalOperatorType type) : type(type) {}
 
-	LogicalOperator(
-	    LogicalOperatorType type,
-	    std::vector<std::unique_ptr<AbstractExpression>> expressions)
+	LogicalOperator(LogicalOperatorType type,
+	                std::vector<std::unique_ptr<Expression>> expressions)
 	    : type(type), expressions(std::move(expressions)) {}
 
 	LogicalOperatorType GetOperatorType() { return type; }
@@ -92,11 +91,11 @@ class LogicalOperator : public Printable {
 	//! The set of children of the operator
 	std::vector<std::unique_ptr<LogicalOperator>> children;
 	//! The set of expressions contained within the operator, if any
-	std::vector<std::unique_ptr<AbstractExpression>> expressions;
+	std::vector<std::unique_ptr<Expression>> expressions;
 
 	virtual size_t ExpressionCount() { return expressions.size(); }
 
-	virtual AbstractExpression *GetExpression(size_t index) {
+	virtual Expression *GetExpression(size_t index) {
 		if (index >= ExpressionCount()) {
 			throw OutOfRangeException(
 			    "GetExpression(): Expression index out of range!");
@@ -104,8 +103,7 @@ class LogicalOperator : public Printable {
 		return expressions[index].get();
 	}
 
-	virtual void SetExpression(size_t index,
-	                           std::unique_ptr<AbstractExpression> expr) {
+	virtual void SetExpression(size_t index, std::unique_ptr<Expression> expr) {
 		if (index >= ExpressionCount()) {
 			throw OutOfRangeException(
 			    "SetExpression(): Expression index out of range!");

@@ -37,34 +37,34 @@ std::unique_ptr<TransactionStatement> TransformTransaction(Node *node);
 std::unique_ptr<DeleteStatement> TransformDelete(Node *node);
 //! Transform a Postgres T_UpdateStmt node into a UpdateStatement
 std::unique_ptr<UpdateStatement> TransformUpdate(Node *node);
-//! Transform a Postgres column reference into an AbstractExpression
-std::unique_ptr<AbstractExpression> TransformColumnRef(ColumnRef *root);
-//! Transform a Postgres constant value into an AbstractExpression
-std::unique_ptr<AbstractExpression> TransformValue(value val);
-//! Transform a Postgres operator into an AbstractExpression
-std::unique_ptr<AbstractExpression> TransformAExpr(A_Expr *root);
-//! Transform a Postgres abstract expression into an AbstractExpression
-std::unique_ptr<AbstractExpression> TransformExpression(Node *node);
-//! Transform a Postgres function call into an AbstractExpression
-std::unique_ptr<AbstractExpression> TransformFuncCall(FuncCall *root);
-//! Transform a Postgres FROM clause into an AbstractExpression
+//! Transform a Postgres column reference into an Expression
+std::unique_ptr<Expression> TransformColumnRef(ColumnRef *root);
+//! Transform a Postgres constant value into an Expression
+std::unique_ptr<Expression> TransformValue(value val);
+//! Transform a Postgres operator into an Expression
+std::unique_ptr<Expression> TransformAExpr(A_Expr *root);
+//! Transform a Postgres abstract expression into an Expression
+std::unique_ptr<Expression> TransformExpression(Node *node);
+//! Transform a Postgres function call into an Expression
+std::unique_ptr<Expression> TransformFuncCall(FuncCall *root);
+//! Transform a Postgres FROM clause into an Expression
 std::unique_ptr<TableRef> TransformFrom(List *root);
-//! Transform a Postgres constant value into an AbstractExpression
-std::unique_ptr<AbstractExpression> TransformConstant(A_Const *c);
-//! Transform a Postgres table reference into an AbstractExpression
+//! Transform a Postgres constant value into an Expression
+std::unique_ptr<Expression> TransformConstant(A_Const *c);
+//! Transform a Postgres table reference into an Expression
 std::unique_ptr<TableRef> TransformRangeVar(RangeVar *root);
 
 //! Transform a Postgres TypeName string into a TypeId
 TypeId TransformStringToTypeId(char *str);
 
-//! Transform a Postgres GROUP BY expression into a list of AbstractExpression
+//! Transform a Postgres GROUP BY expression into a list of Expression
 bool TransformGroupBy(List *group,
-                      std::vector<std::unique_ptr<AbstractExpression>> &result);
+                      std::vector<std::unique_ptr<Expression>> &result);
 //! Transform a Postgres ORDER BY expression into an OrderByDescription
 bool TransformOrderBy(List *order, OrderByDescription &result);
 
-//! Transform a Postgres SELECT clause into a list of AbstractExpression
-bool TransformExpressionList(
-    List *list, std::vector<std::unique_ptr<AbstractExpression>> &result);
+//! Transform a Postgres SELECT clause into a list of Expression
+bool TransformExpressionList(List *list,
+                             std::vector<std::unique_ptr<Expression>> &result);
 
 } // namespace duckdb

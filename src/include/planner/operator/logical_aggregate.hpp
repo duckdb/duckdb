@@ -18,21 +18,20 @@ namespace duckdb {
 //! operator.
 class LogicalAggregate : public LogicalOperator {
   public:
-	LogicalAggregate(
-	    std::vector<std::unique_ptr<AbstractExpression>> select_list)
+	LogicalAggregate(std::vector<std::unique_ptr<Expression>> select_list)
 	    : LogicalOperator(LogicalOperatorType::AGGREGATE_AND_GROUP_BY,
 	                      std::move(select_list)) {}
 
 	virtual void Accept(LogicalOperatorVisitor *v) override { v->Visit(*this); }
 
 	//! The set of groups (optional).
-	std::vector<std::unique_ptr<AbstractExpression>> groups;
+	std::vector<std::unique_ptr<Expression>> groups;
 
 	virtual size_t ExpressionCount() override {
 		return expressions.size() + groups.size();
 	}
 
-	virtual AbstractExpression *GetExpression(size_t index) override {
+	virtual Expression *GetExpression(size_t index) override {
 		if (index >= ExpressionCount()) {
 			throw OutOfRangeException(
 			    "GetExpression(): Expression index out of range!");
@@ -43,9 +42,8 @@ class LogicalAggregate : public LogicalOperator {
 		return expressions[index].get();
 	}
 
-	virtual void
-	SetExpression(size_t index,
-	              std::unique_ptr<AbstractExpression> expr) override {
+	virtual void SetExpression(size_t index,
+	                           std::unique_ptr<Expression> expr) override {
 		if (index >= ExpressionCount()) {
 			throw OutOfRangeException(
 			    "SetExpression(): Expression index out of range!");

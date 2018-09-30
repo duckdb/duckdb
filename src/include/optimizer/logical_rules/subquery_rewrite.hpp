@@ -105,12 +105,10 @@ class SubqueryRewritingRule : public Rule {
 		auto *sq_colref_outer =
 		    (ColumnRefExpression *)sq_bindings[3].value.expr;
 
-		auto comp_left =
-		    make_unique_base<AbstractExpression, ColumnRefExpression>(
-		        sq_colref_inner->return_type, sq_colref_inner->binding);
-		auto comp_right =
-		    make_unique_base<AbstractExpression, ColumnRefExpression>(
-		        sq_colref_outer->return_type, sq_colref_outer->binding);
+		auto comp_left = make_unique_base<Expression, ColumnRefExpression>(
+		    sq_colref_inner->return_type, sq_colref_inner->binding);
+		auto comp_right = make_unique_base<Expression, ColumnRefExpression>(
+		    sq_colref_outer->return_type, sq_colref_outer->binding);
 
 		auto aggr = (LogicalAggregate *)subquery->op.get();
 
@@ -124,7 +122,7 @@ class SubqueryRewritingRule : public Rule {
 
 		// install a as both projection and grouping col in subquery
 		aggr->expressions.push_back(
-		    make_unique_base<AbstractExpression, GroupRefExpression>(
+		    make_unique_base<Expression, GroupRefExpression>(
 		        colref_inner->return_type, aggr->groups.size()));
 		aggr->groups.push_back(move(colref_inner));
 
@@ -141,7 +139,7 @@ class SubqueryRewritingRule : public Rule {
 		join->children.push_back(move(filter->children[0]));
 		join->children.push_back(move(subquery->op));
 
-		auto comp = make_unique_base<AbstractExpression, ComparisonExpression>(
+		auto comp = make_unique_base<Expression, ComparisonExpression>(
 		    ExpressionType::COMPARE_EQUAL, move(comp_left), move(comp_right));
 		join->expressions.push_back(move(comp));
 

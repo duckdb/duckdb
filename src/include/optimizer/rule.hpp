@@ -33,14 +33,14 @@ class AbstractOperator : public Printable {
 	AbstractOperatorType type;
 	union {
 		LogicalOperator *op;
-		AbstractExpression *expr;
+		Expression *expr;
 	} value;
 	AbstractOperator(LogicalOperator *op)
 	    : type(AbstractOperatorType::LOGICAL_OPERATOR) {
 		value.op = op;
 	}
 
-	AbstractOperator(AbstractExpression *expr)
+	AbstractOperator(Expression *expr)
 	    : type(AbstractOperatorType::ABSTRACT_EXPRESSION) {
 		value.expr = expr;
 	}
@@ -108,7 +108,7 @@ class AbstractOperatorIterator {
 			}
 
 		} else { // AbstractOperatorType::ABSTRACT_EXPRESSION
-			AbstractExpression *expr = child.node.value.expr;
+			Expression *expr = child.node.value.expr;
 			if (child.expr_index < expr->children.size()) {
 				nodes.push(Node(expr->children[child.expr_index].get(), 0));
 				child.expr_index++;
@@ -145,7 +145,7 @@ class AbstractOperatorIterator {
 		parent.node.value.op->children[parent.op_index] = std::move(new_op);
 	}
 
-	void replace(std::unique_ptr<AbstractExpression> new_exp) {
+	void replace(std::unique_ptr<Expression> new_exp) {
 		assert(nodes.top().node.type ==
 		       AbstractOperatorType::ABSTRACT_EXPRESSION);
 		nodes.pop();
@@ -171,7 +171,7 @@ class AbstractOperatorIterator {
 		    : node(AbstractOperator(op)), op_index(op_index),
 		      expr_index(expr_index) {}
 
-		Node(AbstractExpression *expr, size_t expr_index)
+		Node(Expression *expr, size_t expr_index)
 		    : node(AbstractOperator(expr)), op_index(0),
 		      expr_index(expr_index) {}
 	};
@@ -258,9 +258,9 @@ class LogicalNodeAny : public AbstractRuleNode {
 class Rule {
   public:
 	std::unique_ptr<AbstractRuleNode> root;
-	virtual std::unique_ptr<AbstractExpression>
-	Apply(AbstractExpression &root, std::vector<AbstractOperator> &bindings) {
-		throw NotImplementedException("Apply AbstractExpression");
+	virtual std::unique_ptr<Expression>
+	Apply(Expression &root, std::vector<AbstractOperator> &bindings) {
+		throw NotImplementedException("Apply Expression");
 	};
 	virtual std::unique_ptr<LogicalOperator>
 	Apply(LogicalOperator &root, std::vector<AbstractOperator> &bindings) {

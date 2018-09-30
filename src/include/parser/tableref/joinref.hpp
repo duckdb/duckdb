@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include "parser/abstract_expression.hpp"
+#include "parser/expression.hpp"
 #include "parser/sql_node_visitor.hpp"
 #include "parser/tableref/tableref.hpp"
 
@@ -27,7 +27,7 @@ class JoinRef : public TableRef {
 	//! The right hand side of the join
 	std::unique_ptr<TableRef> right;
 	//! The join condition
-	std::unique_ptr<AbstractExpression> condition;
+	std::unique_ptr<Expression> condition;
 	//! The join type
 	JoinType type;
 };

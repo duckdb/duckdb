@@ -21,7 +21,7 @@ using namespace duckdb;
 using namespace std;
 
 template class std::unique_ptr<AbstractCatalogEntry>;
-template class std::unique_ptr<AbstractExpression>;
+template class std::unique_ptr<Expression>;
 template class std::unique_ptr<AbstractRuleNode>;
 template class std::unique_ptr<BindContext>;
 template class std::unique_ptr<char[]>;
@@ -64,7 +64,7 @@ INSTANTIATE_VECTOR(std::vector<OrderByNode>);
 template class std::vector<size_t>;
 template class std::vector<Statistics>;
 template class std::vector<std::string>;
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<AbstractExpression>>)
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Expression>>)
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<AbstractRuleNode>>);
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<DataChunk>>);
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<SQLStatement>>);
@@ -87,8 +87,7 @@ template class std::stack<PhysicalOperator *>;
 // std::unique_ptr<AbstractCatalogEntry>>;
 template class std::unordered_map<std::string, size_t>;
 template class std::unordered_map<std::string, std::vector<std::string>>;
-template class std::unordered_map<std::string,
-                                  std::pair<size_t, AbstractExpression *>>;
+template class std::unordered_map<std::string, std::pair<size_t, Expression *>>;
 // template class std::unordered_map<std::string, TableBinding>;
 template class std::unordered_map<std::string, SelectStatement *>;
 
