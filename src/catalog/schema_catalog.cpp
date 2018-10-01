@@ -1,6 +1,7 @@
 
 #include "catalog/schema_catalog.hpp"
 #include "catalog/catalog.hpp"
+
 #include "common/exception.hpp"
 
 using namespace duckdb;

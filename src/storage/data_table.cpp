@@ -5,6 +5,10 @@
 #include "common/helper.hpp"
 #include "common/types/vector_operations.hpp"
 
+#include "execution/expression_executor.hpp"
+
+#include "main/client_context.hpp"
+
 #include "catalog/table_catalog.hpp"
 
 #include "transaction/transaction.hpp"
@@ -51,16 +55,7 @@ void DataTable::InitializeScan(ScanStructure &structure) {
 	structure.offset = 0;
 }
 
-void DataTable::Append(Transaction &transaction, DataChunk &chunk) {
-	if (chunk.count == 0) {
-		return;
-	}
-	if (chunk.column_count != table.columns.size()) {
-		throw CatalogException("Mismatch in column count for append");
-	}
-
-	chunk.Verify();
-
+void DataTable::VerifyConstraints(ClientContext &context, DataChunk &chunk) {
 	for (auto &constraint : table.constraints) {
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
@@ -73,10 +68,50 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk) {
 			}
 			break;
 		}
+		case ConstraintType::CHECK: {
+			auto &check =
+			    *reinterpret_cast<CheckConstraint *>(constraint.get());
+			ExpressionExecutor executor(chunk, context);
+
+			Vector result(TypeId::INTEGER, true, false);
+			try {
+				executor.Execute(check.expression.get(), result);
+			} catch (Exception ex) {
+				throw ConstraintException(
+				    "CHECK constraint failed: %s (Error: %s)",
+				    table.name.c_str(), ex.GetMessage().c_str());
+			} catch (...) {
+				throw ConstraintException(
+				    "CHECK constraint failed: %s (Unknown Error)",
+				    table.name.c_str());
+			}
+
+			int *dataptr = (int *)result.data;
+			for (size_t i = 0; i < result.count; i++) {
+				size_t index = result.sel_vector ? result.sel_vector[i] : i;
+				if (!result.nullmask[index] && dataptr[index] == 0) {
+					throw ConstraintException("CHECK constraint failed: %s",
+					                          table.name.c_str());
+				}
+			}
+			break;
+		}
 		default:
 			throw NotImplementedException("Constraint type not implemented!");
 		}
 	}
+}
+
+void DataTable::Append(ClientContext &context, DataChunk &chunk) {
+	if (chunk.count == 0) {
+		return;
+	}
+	if (chunk.column_count != table.columns.size()) {
+		throw CatalogException("Mismatch in column count for append");
+	}
+
+	chunk.Verify();
+	VerifyConstraints(context, chunk);
 
 	auto last_chunk = tail_chunk;
 	do {
@@ -102,6 +137,8 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk) {
 	for (size_t i = 0; i < table.columns.size(); i++) {
 		last_chunk->string_heap.MergeHeap(chunk.data[i].string_heap);
 	}
+
+	Transaction &transaction = context.ActiveTransaction();
 
 	// first copy as much as can fit into the current chunk
 	size_t current_count =
@@ -154,7 +191,7 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk) {
 	last_chunk->ReleaseExclusiveLock();
 }
 
-void DataTable::Delete(Transaction &transaction, Vector &row_identifiers) {
+void DataTable::Delete(ClientContext &context, Vector &row_identifiers) {
 	if (row_identifiers.type != TypeId::POINTER) {
 		throw InvalidTypeException(row_identifiers.type,
 		                           "Row identifiers must be POINTER type!");
@@ -162,6 +199,8 @@ void DataTable::Delete(Transaction &transaction, Vector &row_identifiers) {
 	if (row_identifiers.count == 0) {
 		return;
 	}
+	Transaction &transaction = context.ActiveTransaction();
+
 	auto ids = (uint64_t *)row_identifiers.data;
 	auto sel_vector = row_identifiers.sel_vector;
 	auto first_id = sel_vector ? ids[sel_vector[0]] : ids[0];
@@ -202,7 +241,7 @@ void DataTable::Delete(Transaction &transaction, Vector &row_identifiers) {
 	throw OutOfRangeException("Row identifiers for deletion out of bounds!");
 }
 
-void DataTable::Update(Transaction &transaction, Vector &row_identifiers,
+void DataTable::Update(ClientContext &context, Vector &row_identifiers,
                        std::vector<column_t> &column_ids, DataChunk &updates) {
 	if (row_identifiers.type != TypeId::POINTER) {
 		throw InvalidTypeException(row_identifiers.type,
@@ -212,22 +251,9 @@ void DataTable::Update(Transaction &transaction, Vector &row_identifiers,
 		return;
 	}
 
-	for (auto &constraint : table.constraints) {
-		switch (constraint->type) {
-		case ConstraintType::NOT_NULL: {
-			auto &not_null =
-			    *reinterpret_cast<NotNullConstraint *>(constraint.get());
-			if (VectorOperations::HasNull(updates.data[not_null.index])) {
-				throw ConstraintException(
-				    "NOT NULL constraint failed: %s.%s", table.name.c_str(),
-				    table.columns[not_null.index].name.c_str());
-			}
-			break;
-		}
-		default:
-			throw NotImplementedException("Constraint type not implemented!");
-		}
-	}
+	VerifyConstraints(context, updates);
+
+	Transaction &transaction = context.ActiveTransaction();
 
 	auto ids = (uint64_t *)row_identifiers.data;
 	auto sel_vector = row_identifiers.sel_vector;

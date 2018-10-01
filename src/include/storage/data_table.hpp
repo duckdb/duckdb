@@ -20,6 +20,7 @@
 #include "storage/storage_chunk.hpp"
 
 namespace duckdb {
+class ClientContext;
 class ColumnDefinition;
 class StorageManager;
 class TableCatalogEntry;
@@ -44,12 +45,14 @@ class DataTable {
 	          ScanStructure &structure);
 	//! Append a DataChunk to the table. Throws an exception if the columns
 	// don't match the tables' columns.
-	void Append(Transaction &transaction, DataChunk &chunk);
+	void Append(ClientContext &context, DataChunk &chunk);
 	//! Delete the entries with the specified row identifier from the table
-	void Delete(Transaction &transaction, Vector &row_ids);
+	void Delete(ClientContext &context, Vector &row_ids);
 	//! Update the entries with the specified row identifier from the table
-	void Update(Transaction &transaction, Vector &row_ids,
+	void Update(ClientContext &context, Vector &row_ids,
 	            std::vector<column_t> &column_ids, DataChunk &data);
+
+	void VerifyConstraints(ClientContext &context, DataChunk &new_chunk);
 
 	//! Get statistics of the specified column
 	Statistics &GetStatistics(column_t oid) {

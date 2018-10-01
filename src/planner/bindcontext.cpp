@@ -8,6 +8,10 @@ using namespace std;
 
 string BindContext::GetMatchingTable(const string &column_name) {
 	string result;
+	if (dummy_table) {
+		// bind to dummy table
+		return "";
+	}
 
 	for (auto &kv : regular_table_alias_map) {
 		auto table = kv.second.table;
@@ -46,6 +50,18 @@ string BindContext::GetMatchingTable(const string &column_name) {
 
 ColumnDefinition *BindContext::BindColumn(ColumnRefExpression &expr,
                                           size_t depth) {
+	if (dummy_table) {
+		// bind to the dummy table if present
+		auto entry = dummy_table->bound_columns.find(expr.column_name);
+		if (entry == dummy_table->bound_columns.end()) {
+			throw BinderException("Referenced column \"%s\" not found table!",
+			                      expr.column_name.c_str());
+		}
+		expr.index = entry->second->oid;
+		expr.return_type = entry->second->type;
+		return entry->second;
+	}
+
 	if (expr.table_name.empty()) {
 		auto entry = expression_alias_map.find(expr.column_name);
 		if (entry == expression_alias_map.end()) {
@@ -135,6 +151,14 @@ void BindContext::AddBaseTable(const string &alias,
 	regular_table_alias_map.insert(
 	    make_pair(alias, TableBinding(table_entry, GenerateTableIndex())));
 	regular_table_alias_list.push_back(alias);
+}
+
+void BindContext::AddDummyTable(std::vector<ColumnDefinition> &columns) {
+	// initialize the OIDs of the column definitions
+	for (size_t i = 0; i < columns.size(); i++) {
+		columns[i].oid = i;
+	}
+	dummy_table = make_unique<DummyTableBinding>(columns);
 }
 
 void BindContext::AddSubquery(const string &alias, SelectStatement *subquery) {

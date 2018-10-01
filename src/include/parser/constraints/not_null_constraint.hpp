@@ -20,6 +20,8 @@ class NotNullConstraint : public Constraint {
 	    : Constraint(ConstraintType::NOT_NULL), index(index){};
 	virtual ~NotNullConstraint() {}
 
+	virtual void Accept(SQLNodeVisitor *v) { v->Visit(*this); }
+
 	virtual std::string ToString() const { return "NOT NULL Constraint"; }
 
 	//! Column index this constraint pertains to

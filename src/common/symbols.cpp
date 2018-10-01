@@ -13,6 +13,7 @@
 #include "main/query_profiler.hpp"
 #include "main/result.hpp"
 #include "optimizer/rule.hpp"
+#include "parser/constraint.hpp"
 #include "planner/logical_operator.hpp"
 #include "planner/operator/logical_join.hpp"
 #include "storage/data_table.hpp"
@@ -41,6 +42,7 @@ template class std::unique_ptr<uint8_t[]>;
 template class std::unique_ptr<Vector[]>;
 template class std::unique_ptr<DataChunk>;
 template class std::unique_ptr<Statistics[]>;
+template class std::unique_ptr<Constraint>;
 
 #define INSTANTIATE_VECTOR(VECTOR_DEFINITION)                                  \
 	template VECTOR_DEFINITION::size_type VECTOR_DEFINITION::size() const;     \

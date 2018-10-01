@@ -102,6 +102,17 @@ void PhysicalPlanGenerator::Visit(LogicalUpdate &op) {
 	this->plan = move(update);
 }
 
+void PhysicalPlanGenerator::Visit(LogicalCreate &op) {
+	LogicalOperatorVisitor::Visit(op);
+
+	if (plan) {
+		throw Exception("CREATE node must be first node of the plan!");
+	}
+
+	this->plan = make_unique<PhysicalCreate>(op.schema, op.table, op.columns,
+	                                         move(op.constraints));
+}
+
 void PhysicalPlanGenerator::Visit(LogicalFilter &op) {
 	LogicalOperatorVisitor::Visit(op);
 

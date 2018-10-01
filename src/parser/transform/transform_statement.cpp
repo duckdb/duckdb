@@ -21,11 +21,23 @@ unique_ptr<duckdb::Constraint> TransformConstraint(ListCell *cell,
 	switch (constraint->contype) {
 	case CONSTR_NOTNULL:
 		return make_unique<duckdb::NotNullConstraint>(index);
+	case CONSTR_CHECK: {
+		auto expression = duckdb::TransformExpression(constraint->raw_expr);
+		if (expression->HasSubquery()) {
+			throw duckdb::ParserException(
+			    "subqueries prohibited in CHECK constraints");
+		}
+		if (expression->IsAggregate()) {
+			throw duckdb::ParserException(
+			    "aggregates prohibited in CHECK constraints");
+		}
+		return make_unique<duckdb::CheckConstraint>(
+		    duckdb::TransformExpression(constraint->raw_expr));
+	}
 	case CONSTR_PRIMARY:
 	case CONSTR_UNIQUE:
 	case CONSTR_FOREIGN:
 	case CONSTR_DEFAULT:
-	case CONSTR_CHECK:
 	default:
 		throw duckdb::NotImplementedException("Constraint not implemented!");
 	}
@@ -240,11 +252,11 @@ unique_ptr<InsertStatement> TransformInsert(Node *node) {
 
 			vector<unique_ptr<Expression>> insert_values;
 			if (!TransformExpressionList(target, insert_values)) {
-				throw Exception("Could not parse expression list!");
+				throw ParserException("Could not parse expression list!");
 			}
 			if (result->values.size() > 0) {
 				if (result->values[0].size() != insert_values.size()) {
-					throw Exception(
+					throw ParserException(
 					    "Insert VALUES lists must all be the same length");
 				}
 			}

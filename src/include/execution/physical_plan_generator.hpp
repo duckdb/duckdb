@@ -38,6 +38,7 @@ class PhysicalPlanGenerator : public LogicalOperatorVisitor {
 	const std::string &GetErrorMessage() const { return message; }
 
 	void Visit(LogicalAggregate &op);
+	void Visit(LogicalCreate &op);
 	void Visit(LogicalCrossProduct &op);
 	void Visit(LogicalDelete &op);
 	void Visit(LogicalDistinct &op);

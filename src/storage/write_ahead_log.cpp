@@ -257,7 +257,7 @@ bool ReplayDropSchema(Transaction &transaction, Catalog &catalog,
                       uint8_t *dataptr, uint8_t *endptr);
 bool ReplayCreateSchema(Transaction &transaction, Catalog &catalog,
                         uint8_t *dataptr, uint8_t *endptr);
-bool ReplayInsert(Transaction &transaction, Catalog &catalog, uint8_t *dataptr,
+bool ReplayInsert(ClientContext &context, Catalog &catalog, uint8_t *dataptr,
                   uint8_t *endptr);
 bool ReplayQuery(ClientContext &context, uint8_t *dataptr, uint8_t *endptr);
 
@@ -278,8 +278,7 @@ bool ReplayEntry(ClientContext &context, DuckDB &database, WALEntry entry,
 		return ReplayCreateSchema(context.ActiveTransaction(), database.catalog,
 		                          dataptr, endptr);
 	case WALEntry::INSERT_TUPLE:
-		return ReplayInsert(context.ActiveTransaction(), database.catalog,
-		                    dataptr, endptr);
+		return ReplayInsert(context, database.catalog, dataptr, endptr);
 	case WALEntry::QUERY:
 		return ReplayQuery(context, dataptr, endptr);
 	default:
@@ -356,7 +355,7 @@ bool ReplayDropSchema(Transaction &transaction, Catalog &catalog,
 	throw NotImplementedException("Did not implement DROP SCHEMA yet!");
 }
 
-bool ReplayInsert(Transaction &transaction, Catalog &catalog, uint8_t *dataptr,
+bool ReplayInsert(ClientContext &context, Catalog &catalog, uint8_t *dataptr,
                   uint8_t *endptr) {
 	bool failed = false;
 	auto schema_name = Read<std::string>(dataptr, endptr, failed);
@@ -367,11 +366,13 @@ bool ReplayInsert(Transaction &transaction, Catalog &catalog, uint8_t *dataptr,
 		return false;
 	}
 
+	Transaction &transaction = context.ActiveTransaction();
+
 	// try {
 	// first find the table
 	auto table = catalog.GetTable(transaction, schema_name, table_name);
 	// now append to the chunk
-	table->storage->Append(transaction, chunk);
+	table->storage->Append(context, chunk);
 	// } catch(...) {
 	// 	return false;
 	// }

@@ -23,6 +23,16 @@
 
 namespace duckdb {
 
+struct DummyTableBinding {
+	std::unordered_map<std::string, ColumnDefinition *> bound_columns;
+
+	DummyTableBinding(std::vector<ColumnDefinition> &columns) {
+		for (auto &it : columns) {
+			bound_columns[it.name] = &it;
+		}
+	}
+};
+
 struct TableBinding {
 	TableCatalogEntry *table;
 	size_t index;
@@ -52,6 +62,8 @@ class BindContext {
 
 	//! Adds a base table with the given alias to the BindContext.
 	void AddBaseTable(const std::string &alias, TableCatalogEntry *table_entry);
+	//! Adds a dummy table with the given set of columns to the BindContext.
+	void AddDummyTable(std::vector<ColumnDefinition> &columns);
 	//! Adds a subquery with a given alias to the BindContext.
 	void AddSubquery(const std::string &alias, SelectStatement *subquery);
 	//! Adds an expression that has an alias to the BindContext
@@ -82,9 +94,10 @@ class BindContext {
 	    expression_alias_map;
 	//! The set of bound tables, ordered map because order matters for SELECT *
 	std::unordered_map<std::string, TableBinding> regular_table_alias_map;
-
+	//! The set of regular table aliases
 	std::vector<std::string> regular_table_alias_list;
-
+	//! Dummy table binding
+	std::unique_ptr<DummyTableBinding> dummy_table;
 	//! The set of bound subqueries
 	std::unordered_map<std::string, SelectStatement *> subquery_alias_map;
 };

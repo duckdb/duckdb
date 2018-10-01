@@ -83,6 +83,11 @@ void LogicalOperatorVisitor::Visit(LogicalInsert &op) {
 	}
 }
 
+void LogicalOperatorVisitor::Visit(LogicalCreate &op) {
+	VisitOperator(op);
+	// FIXME: visit expressions in constraints
+}
+
 void LogicalOperatorVisitor::Visit(LogicalCopy &op) { VisitOperator(op); }
 
 void LogicalOperatorVisitor::Visit(LogicalExplain &op) { VisitOperator(op); }

@@ -3,6 +3,8 @@
 #include "common/exception.hpp"
 #include "dbgen_gunk.hpp"
 
+#include "main/client_context.hpp"
+
 #include "storage/data_table.hpp"
 
 #include "tpch_constants.hpp"
@@ -37,7 +39,7 @@ namespace tpch {
 struct tpch_append_information {
 	TableCatalogEntry *table;
 	DataChunk chunk;
-	Transaction *transaction;
+	ClientContext *context;
 };
 
 void append_value(DataChunk &chunk, size_t index, size_t &column,
@@ -75,7 +77,7 @@ static void append_to_append_info(tpch_append_information &info) {
 		chunk.Initialize(types);
 	} else if (chunk.count >= STANDARD_VECTOR_SIZE) {
 		// flush the chunk
-		table->storage->Append(*info.transaction, chunk);
+		table->storage->Append(*info.context, chunk);
 		// have to reset the chunk
 		chunk.Reset();
 	}
@@ -456,23 +458,25 @@ static vector<ColumnDefinition> LineitemColumns() {
 }
 
 void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
-	auto transaction = db.transaction_manager.StartTransaction();
+	ClientContext context(db);
+	context.transaction.BeginTransaction();
 
-	db.catalog.CreateTable(*transaction, schema, "region" + suffix,
+	auto &transaction = context.ActiveTransaction();
+
+	db.catalog.CreateTable(transaction, schema, "region" + suffix,
 	                       RegionColumns());
-	db.catalog.CreateTable(*transaction, schema, "nation" + suffix,
+	db.catalog.CreateTable(transaction, schema, "nation" + suffix,
 	                       NationColumns());
-	db.catalog.CreateTable(*transaction, schema, "supplier" + suffix,
+	db.catalog.CreateTable(transaction, schema, "supplier" + suffix,
 	                       SupplierColumns());
-	db.catalog.CreateTable(*transaction, schema, "customer" + suffix,
+	db.catalog.CreateTable(transaction, schema, "customer" + suffix,
 	                       CustomerColumns());
-	db.catalog.CreateTable(*transaction, schema, "part" + suffix,
-	                       PartColumns());
-	db.catalog.CreateTable(*transaction, schema, "partsupp" + suffix,
+	db.catalog.CreateTable(transaction, schema, "part" + suffix, PartColumns());
+	db.catalog.CreateTable(transaction, schema, "partsupp" + suffix,
 	                       PartSuppColumns());
-	db.catalog.CreateTable(*transaction, schema, "orders" + suffix,
+	db.catalog.CreateTable(transaction, schema, "orders" + suffix,
 	                       OrdersColumns());
-	db.catalog.CreateTable(*transaction, schema, "lineitem" + suffix,
+	db.catalog.CreateTable(transaction, schema, "lineitem" + suffix,
 	                       LineitemColumns());
 
 	if (flt_scale == 0) {
@@ -547,9 +551,9 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 		auto tname = get_table_name(i);
 		if (!tname.empty()) {
 			append_info[i].table =
-			    db.catalog.GetTable(*transaction, schema, tname + suffix);
+			    db.catalog.GetTable(transaction, schema, tname + suffix);
 		}
-		append_info[i].transaction = transaction;
+		append_info[i].context = &context;
 	}
 
 	for (i = PART; i <= REGION; i++) {
@@ -567,15 +571,14 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	for (size_t i = PART; i <= REGION; i++) {
 		if (append_info[i].table) {
 			if (append_info[i].chunk.count > 0) {
-				append_info[i].table->storage->Append(
-				    *append_info[i].transaction, append_info[i].chunk);
+				append_info[i].table->storage->Append(*append_info[i].context,
+				                                      append_info[i].chunk);
 			}
 		}
 	}
 
 	cleanup_dists();
-
-	db.transaction_manager.CommitTransaction(transaction);
+	context.transaction.Commit();
 }
 
 string get_query(int query) {

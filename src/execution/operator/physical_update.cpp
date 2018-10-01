@@ -52,8 +52,7 @@ void PhysicalUpdate::_GetChunk(ClientContext &context, DataChunk &chunk,
 				executor.Execute(expr.get(), update_chunk.data[i]);
 			}
 		}
-		table.Update(context.ActiveTransaction(), row_ids, columns,
-		             update_chunk);
+		table.Update(context, row_ids, columns, update_chunk);
 		updated_count += state->child_chunk.count;
 	}
 

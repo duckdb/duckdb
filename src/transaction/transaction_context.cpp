@@ -8,7 +8,14 @@
 using namespace duckdb;
 using namespace std;
 
-TransactionContext::~TransactionContext() {}
+TransactionContext::~TransactionContext() {
+	if (current_transaction) {
+		try {
+			Rollback();
+		} catch (...) {
+		}
+	}
+}
 
 void TransactionContext::BeginTransaction() {
 	if (current_transaction) {

@@ -94,6 +94,9 @@ class Expression : public Printable {
 	 */
 	virtual bool IsAggregate();
 
+	//! Returns true if the query contains a subquery
+	virtual bool HasSubquery();
+
 	// returns true if expression does not contain a group ref or col ref or
 	// parameter
 	virtual bool IsScalar();

@@ -1,10 +1,10 @@
 
 #include "planner/binder.hpp"
 
+#include "parser/constraints/list.hpp"
 #include "parser/expression/list.hpp"
-#include "parser/tableref/tableref_list.hpp"
-
 #include "parser/statement/list.hpp"
+#include "parser/tableref/tableref_list.hpp"
 
 #include "main/client_context.hpp"
 #include "main/database.hpp"
@@ -258,6 +258,29 @@ void Binder::Visit(UpdateStatement &stmt) {
 			throw BinderException(
 			    "Could not resolve type of projection element!");
 		}
+	}
+}
+
+void Binder::Visit(CreateStatement &stmt) {
+	// bind any constraints
+	// first create a fake table
+	bind_context->AddDummyTable(stmt.columns);
+	for (auto &it : stmt.constraints) {
+		it->Accept(this);
+	}
+}
+
+void Binder::Visit(CheckConstraint &constraint) {
+	SQLNodeVisitor::Visit(constraint);
+
+	constraint.expression->ResolveType();
+	if (constraint.expression->return_type == TypeId::INVALID) {
+		throw BinderException("Could not resolve type of constraint!");
+	}
+	// the CHECK constraint should always return an INTEGER value
+	if (constraint.expression->return_type != TypeId::INTEGER) {
+		constraint.expression = make_unique<CastExpression>(
+		    TypeId::INTEGER, move(constraint.expression));
 	}
 }
 

@@ -34,6 +34,9 @@ class OperatorExpression;
 class SubqueryExpression;
 class CaseExpression;
 
+class NotNullConstraint;
+class CheckConstraint;
+
 class BaseTableRef;
 class CrossProductRef;
 class JoinRef;
@@ -68,6 +71,9 @@ class SQLNodeVisitor {
 	virtual void Visit(GroupRefExpression &expr);
 	virtual void Visit(OperatorExpression &expr);
 	virtual void Visit(SubqueryExpression &expr);
+
+	virtual void Visit(NotNullConstraint &expr);
+	virtual void Visit(CheckConstraint &expr);
 
 	virtual void Visit(BaseTableRef &expr);
 	virtual void Visit(CrossProductRef &expr);

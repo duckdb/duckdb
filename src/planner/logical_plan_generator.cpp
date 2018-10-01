@@ -2,11 +2,7 @@
 #include "planner/logical_plan_generator.hpp"
 
 #include "parser/expression/list.hpp"
-
-#include "parser/statement/copy_statement.hpp"
-#include "parser/statement/delete_statement.hpp"
-#include "parser/statement/insert_statement.hpp"
-#include "parser/statement/update_statement.hpp"
+#include "parser/statement/list.hpp"
 
 #include "parser/tableref/tableref_list.hpp"
 
@@ -24,6 +20,19 @@ static bool has_select_list(LogicalOperatorType type) {
 	return type == LogicalOperatorType::PROJECTION ||
 	       type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY ||
 	       type == LogicalOperatorType::UNION;
+}
+
+void LogicalPlanGenerator::Visit(CreateStatement &statement) {
+	if (root) {
+		throw Exception("CREATE TABLE from SELECT not supported yet!");
+	}
+	// bind the schema
+	auto schema = context.db.catalog.GetSchema(context.ActiveTransaction(),
+	                                           statement.schema);
+	// create the logical operator
+	root =
+	    make_unique<LogicalCreate>(schema, statement.table, statement.columns,
+	                               move(statement.constraints));
 }
 
 void LogicalPlanGenerator::Visit(UpdateStatement &statement) {

@@ -29,6 +29,7 @@ class SchemaCatalogEntry;
 //! A table catalog entry
 class TableCatalogEntry : public AbstractCatalogEntry {
   public:
+	//! Create a real TableCatalogEntry and initialize storage for it
 	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
 	                  std::string name,
 	                  const std::vector<ColumnDefinition> &columns,

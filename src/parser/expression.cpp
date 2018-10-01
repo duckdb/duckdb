@@ -26,3 +26,12 @@ void Expression::GetAggregates(
 		child->GetAggregates(expressions);
 	}
 }
+
+bool Expression::HasSubquery() {
+	for (auto &child : children) {
+		if (child->HasSubquery()) {
+			return true;
+		}
+	}
+	return false;
+}

@@ -229,8 +229,9 @@ enum class ExpressionType {
 // Constraint Types
 //===--------------------------------------------------------------------===//
 enum class ConstraintType {
-	INVALID = 0, // invalid constraint type
-	NOT_NULL = 1 // NOT NULL constraint
+	INVALID = 0,  // invalid constraint type
+	NOT_NULL = 1, // NOT NULL constraint
+	CHECK = 2     // CHECK constraint
 };
 
 //===--------------------------------------------------------------------===//
@@ -294,6 +295,7 @@ enum class LogicalOperatorType {
 	DELETE = 202,
 	UPDATE = 203,
 	EXPORT_EXTERNAL_FILE = 204,
+	CREATE = 205,
 
 	EXPLAIN = 300
 };
@@ -337,7 +339,8 @@ enum class PhysicalOperatorType {
 	INSERT_SELECT = 201,
 	DELETE = 202,
 	UPDATE = 203,
-	EXPORT_EXTERNAL_FILE = 204
+	EXPORT_EXTERNAL_FILE = 204,
+	CREATE = 205
 };
 
 enum class MatchOrder { ARBITRARY = 0, DEPTH_FIRST };

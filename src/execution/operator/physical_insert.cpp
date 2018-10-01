@@ -65,11 +65,10 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk,
 				}
 				insert_chunk.count = chunk.count;
 
-				table->storage->Append(context.ActiveTransaction(),
-				                       insert_chunk);
+				table->storage->Append(context, insert_chunk);
 			} else {
 				// no columns specified, just append directly
-				table->storage->Append(context.ActiveTransaction(), chunk);
+				table->storage->Append(context, chunk);
 			}
 			insert_count += chunk.count;
 		}
@@ -118,15 +117,14 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk,
 			insert_chunk.count++;
 			if (insert_chunk.count == STANDARD_VECTOR_SIZE) {
 				// flush the chunk if it is full
-				table->storage->Append(context.ActiveTransaction(),
-				                       insert_chunk);
+				table->storage->Append(context, insert_chunk);
 				insert_count += insert_chunk.count;
 				insert_chunk.Reset();
 			}
 		}
 		if (insert_chunk.count > 0) {
 			// append any remaining elements to the table
-			table->storage->Append(context.ActiveTransaction(), insert_chunk);
+			table->storage->Append(context, insert_chunk);
 			insert_count += insert_chunk.count;
 		}
 	}

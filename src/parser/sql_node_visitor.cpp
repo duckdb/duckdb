@@ -1,6 +1,7 @@
 
 #include "parser/sql_node_visitor.hpp"
 
+#include "parser/constraints/list.hpp"
 #include "parser/expression/list.hpp"
 #include "parser/tableref/tableref_list.hpp"
 
@@ -40,6 +41,12 @@ void SQLNodeVisitor::Visit(OperatorExpression &expr) {
 }
 void SQLNodeVisitor::Visit(SubqueryExpression &expr) {
 	expr.AcceptChildren(this);
+}
+
+void SQLNodeVisitor::Visit(NotNullConstraint &con) {}
+
+void SQLNodeVisitor::Visit(CheckConstraint &con) {
+	con.expression->Accept(this);
 }
 
 void SQLNodeVisitor::Visit(BaseTableRef &expr) {}
