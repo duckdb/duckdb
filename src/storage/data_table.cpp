@@ -10,6 +10,8 @@
 #include "transaction/transaction.hpp"
 #include "transaction/transaction_manager.hpp"
 
+#include "parser/constraints/list.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -58,6 +60,23 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk) {
 	}
 
 	chunk.Verify();
+
+	for (auto &constraint : table.constraints) {
+		switch (constraint->type) {
+		case ConstraintType::NOT_NULL: {
+			auto &not_null =
+			    *reinterpret_cast<NotNullConstraint *>(constraint.get());
+			if (VectorOperations::HasNull(chunk.data[not_null.index])) {
+				throw ConstraintException(
+				    "NOT NULL constraint failed: %s.%s", table.name.c_str(),
+				    table.columns[not_null.index].name.c_str());
+			}
+			break;
+		}
+		default:
+			throw NotImplementedException("Constraint type not implemented!");
+		}
+	}
 
 	auto last_chunk = tail_chunk;
 	do {
@@ -192,6 +211,24 @@ void DataTable::Update(Transaction &transaction, Vector &row_identifiers,
 	if (row_identifiers.count == 0) {
 		return;
 	}
+
+	for (auto &constraint : table.constraints) {
+		switch (constraint->type) {
+		case ConstraintType::NOT_NULL: {
+			auto &not_null =
+			    *reinterpret_cast<NotNullConstraint *>(constraint.get());
+			if (VectorOperations::HasNull(updates.data[not_null.index])) {
+				throw ConstraintException(
+				    "NOT NULL constraint failed: %s.%s", table.name.c_str(),
+				    table.columns[not_null.index].name.c_str());
+			}
+			break;
+		}
+		default:
+			throw NotImplementedException("Constraint type not implemented!");
+		}
+	}
+
 	auto ids = (uint64_t *)row_identifiers.data;
 	auto sel_vector = row_identifiers.sel_vector;
 	auto first_id = sel_vector ? ids[sel_vector[0]] : ids[0];

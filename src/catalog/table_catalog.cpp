@@ -10,8 +10,10 @@ using namespace std;
 
 TableCatalogEntry::TableCatalogEntry(
     Catalog *catalog, SchemaCatalogEntry *schema, string name,
-    const std::vector<ColumnDefinition> &table_columns)
-    : AbstractCatalogEntry(CatalogType::TABLE, catalog, name), schema(schema) {
+    const std::vector<ColumnDefinition> &table_columns,
+    std::vector<std::unique_ptr<Constraint>> &constraints)
+    : AbstractCatalogEntry(CatalogType::TABLE, catalog, name), schema(schema),
+      constraints(move(constraints)) {
 	for (auto entry : table_columns) {
 		if (ColumnExists(entry.name)) {
 			throw CatalogException("Column with name %s already exists!",

@@ -13,6 +13,7 @@
 namespace duckdb {
 
 #define REQUIRE_NO_FAIL(result) REQUIRE((result)->GetSuccess())
+#define REQUIRE_FAIL(result) REQUIRE(!(result)->GetSuccess())
 
 #define COMPARE_CSV(result, csv, header)                                       \
 	{                                                                          \

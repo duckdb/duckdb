@@ -46,7 +46,7 @@ bool Planner::CreatePlan(ClientContext &context,
 			// TODO: create actual plan
 			context.db.catalog.CreateTable(context.ActiveTransaction(),
 			                               stmt.schema, stmt.table,
-			                               stmt.columns);
+			                               stmt.columns, stmt.constraints);
 			this->success = true;
 			break;
 		}

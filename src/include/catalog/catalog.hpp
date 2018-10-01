@@ -19,8 +19,6 @@ namespace duckdb {
 
 class StorageManager;
 
-#define DEFAULT_SCHEMA ""
-
 //! The Catalog object represents the catalog of the database.
 class Catalog {
   public:
@@ -34,7 +32,14 @@ class Catalog {
 	//! columns. Throws an exception if it already exists.
 	void CreateTable(Transaction &transaction, const std::string &schema,
 	                 const std::string &table,
-	                 const std::vector<ColumnDefinition> &columns);
+	                 const std::vector<ColumnDefinition> &columns,
+	                 std::vector<std::unique_ptr<Constraint>> &constraints);
+	void CreateTable(Transaction &transaction, const std::string &schema,
+	                 const std::string &table,
+	                 const std::vector<ColumnDefinition> &columns) {
+		std::vector<std::unique_ptr<Constraint>> constraints;
+		CreateTable(transaction, schema, table, columns, constraints);
+	}
 
 	void DropTable(Transaction &transaction, const std::string &schema,
 	               const std::string &table);

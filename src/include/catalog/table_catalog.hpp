@@ -19,6 +19,8 @@
 
 #include "common/types/statistics.hpp"
 
+#include "parser/constraint.hpp"
+
 namespace duckdb {
 
 class DataTable;
@@ -29,7 +31,8 @@ class TableCatalogEntry : public AbstractCatalogEntry {
   public:
 	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
 	                  std::string name,
-	                  const std::vector<ColumnDefinition> &columns);
+	                  const std::vector<ColumnDefinition> &columns,
+	                  std::vector<std::unique_ptr<Constraint>> &constraints);
 
 	//! The schema the table belongs to
 	SchemaCatalogEntry *schema;
@@ -37,6 +40,8 @@ class TableCatalogEntry : public AbstractCatalogEntry {
 	std::unique_ptr<DataTable> storage;
 	//! A list of columns that are part of this table
 	std::vector<ColumnDefinition> columns;
+	//! A list of constraints that are part of this table
+	std::vector<std::unique_ptr<Constraint>> constraints;
 	//! A map of column name to column index
 	std::unordered_map<std::string, column_t> name_map;
 

@@ -12,7 +12,6 @@
 
 #include <vector>
 
-#include "catalog/catalog.hpp"
 #include "parser/statement/select_statement.hpp"
 
 #include "parser/expression.hpp"

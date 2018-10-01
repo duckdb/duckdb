@@ -11,7 +11,6 @@
 
 #include <vector>
 
-#include "catalog/catalog.hpp"
 #include "parser/sql_statement.hpp"
 
 #include "parser/expression.hpp"

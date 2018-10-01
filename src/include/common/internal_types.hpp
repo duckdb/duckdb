@@ -19,6 +19,8 @@
 
 namespace duckdb {
 
+#define DEFAULT_SCHEMA ""
+
 #define STANDARD_VECTOR_SIZE 1024
 #define STORAGE_CHUNK_SIZE 10240
 
@@ -221,6 +223,14 @@ enum class ExpressionType {
 	// Miscellaneous
 	// -----------------------------
 	CAST = 600
+};
+
+//===--------------------------------------------------------------------===//
+// Constraint Types
+//===--------------------------------------------------------------------===//
+enum class ConstraintType {
+	INVALID = 0, // invalid constraint type
+	NOT_NULL = 1 // NOT NULL constraint
 };
 
 //===--------------------------------------------------------------------===//

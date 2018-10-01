@@ -12,9 +12,11 @@
 
 #include <vector>
 
-#include "catalog/catalog.hpp"
+#include "catalog/column_definition.hpp"
+
 #include "parser/sql_statement.hpp"
 
+#include "parser/constraint.hpp"
 #include "parser/expression.hpp"
 
 namespace duckdb {
@@ -32,9 +34,10 @@ class CreateStatement : public SQLStatement {
 	std::string table;
 	//! Schema name to insert to
 	std::string schema;
-
 	//! List of columns of the table
 	std::vector<ColumnDefinition> columns;
+	//! List of constraints on the table
+	std::vector<std::unique_ptr<Constraint>> constraints;
 };
 
 } // namespace duckdb

@@ -44,11 +44,12 @@ bool Catalog::TableExists(Transaction &transaction,
 	return schema->TableExists(transaction, table_name);
 }
 
-void Catalog::CreateTable(Transaction &transaction, const string &schema_name,
-                          const string &table_name,
-                          const std::vector<ColumnDefinition> &columns) {
+void Catalog::CreateTable(
+    Transaction &transaction, const string &schema_name,
+    const string &table_name, const std::vector<ColumnDefinition> &columns,
+    std::vector<std::unique_ptr<Constraint>> &constraints) {
 	auto schema = GetSchema(transaction, schema_name);
-	schema->CreateTable(transaction, table_name, columns);
+	schema->CreateTable(transaction, table_name, columns, constraints);
 }
 
 void Catalog::DropTable(Transaction &transaction, const string &schema_name,

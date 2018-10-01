@@ -308,8 +308,10 @@ bool ReplayCreateTable(Transaction &transaction, Catalog &catalog,
 		}
 		columns.push_back(ColumnDefinition(column_name, column_type, false));
 	}
+	std::vector<std::unique_ptr<Constraint>> constraints;
 	try {
-		catalog.CreateTable(transaction, schema_name, table_name, columns);
+		catalog.CreateTable(transaction, schema_name, table_name, columns,
+		                    constraints);
 	} catch (...) {
 		return false;
 	}

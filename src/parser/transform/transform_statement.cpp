@@ -2,14 +2,34 @@
 #include "common/assert.hpp"
 
 #include "catalog/column_definition.hpp"
-#include "parser/parser.hpp"
 
+#include "parser/parser.hpp"
 #include "parser/tableref/tableref_list.hpp"
 #include "parser/transform.hpp"
 
+#include "parser/constraint.hpp"
+
+#include "parser/constraints/list.hpp"
 #include "parser/expression/list.hpp"
 
 using namespace std;
+
+unique_ptr<duckdb::Constraint> TransformConstraint(ListCell *cell,
+                                                   size_t index) {
+	auto constraint = reinterpret_cast<Constraint *>(cell->data.ptr_value);
+	assert(constraint);
+	switch (constraint->contype) {
+	case CONSTR_NOTNULL:
+		return make_unique<duckdb::NotNullConstraint>(index);
+	case CONSTR_PRIMARY:
+	case CONSTR_UNIQUE:
+	case CONSTR_FOREIGN:
+	case CONSTR_DEFAULT:
+	case CONSTR_CHECK:
+	default:
+		throw duckdb::NotImplementedException("Constraint not implemented!");
+	}
+}
 
 namespace duckdb {
 
@@ -144,8 +164,16 @@ unique_ptr<CreateStatement> TransformCreate(Node *node) {
 		char *name = (reinterpret_cast<value *>(
 		                  cdef->typeName->names->tail->data.ptr_value)
 		                  ->val.str);
-		auto centry = ColumnDefinition(
-		    cdef->colname, TransformStringToTypeId(name), cdef->is_not_null);
+		auto centry =
+		    ColumnDefinition(cdef->colname, TransformStringToTypeId(name));
+
+		if (cdef->constraints) {
+			for (auto constraint = cdef->constraints->head;
+			     constraint != nullptr; constraint = constraint->next) {
+				result->constraints.push_back(
+				    TransformConstraint(constraint, result->columns.size()));
+			}
+		}
 		result->columns.push_back(centry);
 	}
 	return result;

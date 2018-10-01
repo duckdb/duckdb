@@ -11,9 +11,11 @@ SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name)
 
 void SchemaCatalogEntry::CreateTable(
     Transaction &transaction, const string &table_name,
-    const std::vector<ColumnDefinition> &columns) {
+    const std::vector<ColumnDefinition> &columns,
+    std::vector<std::unique_ptr<Constraint>> &constraints) {
 
-	auto table = new TableCatalogEntry(catalog, this, table_name, columns);
+	auto table =
+	    new TableCatalogEntry(catalog, this, table_name, columns, constraints);
 	auto table_entry = unique_ptr<AbstractCatalogEntry>(table);
 	if (!tables.CreateEntry(transaction, table_name, move(table_entry))) {
 		throw CatalogException("Table with name %s already exists!",

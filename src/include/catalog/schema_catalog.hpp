@@ -22,6 +22,7 @@
 namespace duckdb {
 
 class Catalog;
+class Constraint;
 
 //! A schema in the catalog
 class SchemaCatalogEntry : public AbstractCatalogEntry {
@@ -36,7 +37,8 @@ class SchemaCatalogEntry : public AbstractCatalogEntry {
 	                            const std::string &table);
 	//! Creates a table with the given name in the schema
 	void CreateTable(Transaction &transaction, const std::string &table_name,
-	                 const std::vector<ColumnDefinition> &columns);
+	                 const std::vector<ColumnDefinition> &columns,
+	                 std::vector<std::unique_ptr<Constraint>> &constraints);
 
 	void DropTable(Transaction &transaction, const std::string &table_name);
 
