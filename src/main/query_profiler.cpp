@@ -125,8 +125,8 @@ size_t QueryProfiler::RenderTreeRecursive(QueryProfiler::TreeNode &node,
 	size_t width = base_render_x;
 	// render this node
 	// first add any padding to render at this location
-	int start_depth = node.depth * TREE_RENDER_HEIGHT;
-	int start_position = width * TREE_RENDER_WIDTH;
+	size_t start_depth = node.depth * TREE_RENDER_HEIGHT;
+	size_t start_position = width * TREE_RENDER_WIDTH;
 	for (size_t i = 0; i < TREE_RENDER_HEIGHT; i++) {
 		if (render[start_depth + i].size() > start_position) {
 			// something has already been rendered here!

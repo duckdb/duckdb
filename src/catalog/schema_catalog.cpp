@@ -6,6 +6,8 @@
 
 #include "parser/constraints/list.hpp"
 
+#include <algorithm>
+
 using namespace duckdb;
 using namespace std;
 

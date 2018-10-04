@@ -104,7 +104,7 @@ bool Rewriter::MatchOperands(AbstractRuleNode *node, AbstractOperator rel,
 		break;
 	}
 	case ChildPolicy::SOME: {
-		int n = node->children.size();
+		auto n = node->children.size();
 		if (children.size() < n) {
 			return false;
 		}

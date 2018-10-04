@@ -76,7 +76,7 @@ void DataTable::VerifyConstraints(ClientContext &context, DataChunk &chunk) {
 			Vector result(TypeId::INTEGER, true, false);
 			try {
 				executor.Execute(check.expression.get(), result);
-			} catch (Exception ex) {
+			} catch (Exception &ex) {
 				throw ConstraintException(
 				    "CHECK constraint failed: %s (Error: %s)",
 				    table.name.c_str(), ex.GetMessage().c_str());
@@ -156,7 +156,7 @@ void DataTable::Append(ClientContext &context, DataChunk &chunk) {
 				break;
 			}
 		}
-	} catch (Exception ex) {
+	} catch (Exception &ex) {
 		// constraint violated
 		last_chunk->ReleaseExclusiveLock();
 		throw ex;
@@ -261,7 +261,7 @@ void DataTable::Delete(ClientContext &context, Vector &row_identifiers) {
 						break;
 					}
 				}
-			} catch (Exception ex) {
+			} catch (Exception &ex) {
 				// constraint violated
 				chunk->ReleaseExclusiveLock();
 				throw ex;
@@ -335,7 +335,7 @@ void DataTable::Update(ClientContext &context, Vector &row_identifiers,
 						break;
 					}
 				}
-			} catch (Exception ex) {
+			} catch (Exception &ex) {
 				// constraint violated
 				chunk->ReleaseExclusiveLock();
 				throw ex;
