@@ -1,10 +1,9 @@
 
 #include "parser/parser.hpp"
-#include "parser/postgres/pg_list.h"
-#include "parser/postgres/pg_query.h"
-#include "parser/postgres/pg_trigger.h"
 
 #include "parser/transform.hpp"
+
+using namespace postgres;
 
 using namespace duckdb;
 using namespace std;

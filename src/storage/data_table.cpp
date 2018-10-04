@@ -96,6 +96,13 @@ void DataTable::VerifyConstraints(ClientContext &context, DataChunk &chunk) {
 			}
 			break;
 		}
+		case ConstraintType::PRIMARY_KEY:
+		case ConstraintType::FOREIGN_KEY:
+		case ConstraintType::UNIQUE:
+			// we check these constraint later
+			// as these checks rely on the data currently stored in the table
+			// instead of just on the to-be-inserted chunk
+			break;
 		default:
 			throw NotImplementedException("Constraint type not implemented!");
 		}
@@ -126,6 +133,34 @@ void DataTable::Append(ClientContext &context, DataChunk &chunk) {
 
 	// we have an exclusive lock on the last chunk
 	// now we can append the elements
+
+	// first we handle any PRIMARY KEY and UNIQUE constraints
+	try {
+		for (auto &constraint : table.constraints) {
+			switch (constraint->type) {
+			case ConstraintType::PRIMARY_KEY: {
+				auto &primary =
+				    *reinterpret_cast<PrimaryKeyConstraint *>(constraint.get());
+				primary.index.Append(chunk,
+				                     last_chunk->start + last_chunk->count);
+				break;
+			}
+			case ConstraintType::UNIQUE: {
+				auto &unique =
+				    *reinterpret_cast<UniqueConstraint *>(constraint.get());
+				unique.index.Append(chunk,
+				                    last_chunk->start + last_chunk->count);
+				break;
+			}
+			default:
+				break;
+			}
+		}
+	} catch (Exception ex) {
+		// constraint violated
+		last_chunk->ReleaseExclusiveLock();
+		throw ex;
+	}
 
 	// update the statistics with the new data
 	for (size_t i = 0; i < table.columns.size(); i++) {
@@ -199,6 +234,7 @@ void DataTable::Delete(ClientContext &context, Vector &row_identifiers) {
 	if (row_identifiers.count == 0) {
 		return;
 	}
+
 	Transaction &transaction = context.ActiveTransaction();
 
 	auto ids = (uint64_t *)row_identifiers.data;
@@ -212,6 +248,25 @@ void DataTable::Delete(ClientContext &context, Vector &row_identifiers) {
 			// found the correct chunk
 			// get an exclusive lock on the chunk
 			chunk->GetExclusiveLock();
+
+			try {
+				for (auto &constraint : table.constraints) {
+					switch (constraint->type) {
+					case ConstraintType::PRIMARY_KEY:
+					case ConstraintType::UNIQUE:
+						throw NotImplementedException(
+						    "Don't support DELETE on column with PRIMARY KEY "
+						    "yet");
+					default:
+						break;
+					}
+				}
+			} catch (Exception ex) {
+				// constraint violated
+				chunk->ReleaseExclusiveLock();
+				throw ex;
+			}
+
 			// now delete the entries
 			for (size_t i = 0; i < row_identifiers.count; i++) {
 				auto id =
@@ -261,11 +316,31 @@ void DataTable::Update(ClientContext &context, Vector &row_identifiers,
 	// first find the chunk the row ids belong to
 	auto chunk = chunk_list.get();
 	while (chunk) {
+		// FIXME: this does not need to be a scan of chunks
 		if (first_id >= chunk->start &&
 		    first_id < chunk->start + chunk->count) {
 			// found the correct chunk
 			// get an exclusive lock on the chunk
 			chunk->GetExclusiveLock();
+
+			try {
+				for (auto &constraint : table.constraints) {
+					switch (constraint->type) {
+					case ConstraintType::PRIMARY_KEY:
+					case ConstraintType::UNIQUE:
+						throw NotImplementedException(
+						    "Don't support UPDATE on column with PRIMARY KEY "
+						    "yet");
+					default:
+						break;
+					}
+				}
+			} catch (Exception ex) {
+				// constraint violated
+				chunk->ReleaseExclusiveLock();
+				throw ex;
+			}
+
 			// now delete the entries
 			for (size_t i = 0; i < row_identifiers.count; i++) {
 				auto id =

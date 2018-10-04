@@ -52,8 +52,6 @@ class DataTable {
 	void Update(ClientContext &context, Vector &row_ids,
 	            std::vector<column_t> &column_ids, DataChunk &data);
 
-	void VerifyConstraints(ClientContext &context, DataChunk &new_chunk);
-
 	//! Get statistics of the specified column
 	Statistics &GetStatistics(column_t oid) {
 		if (oid == COLUMN_IDENTIFIER_ROW_ID) {
@@ -75,6 +73,8 @@ class DataTable {
 	StorageManager &storage;
 
   private:
+	//! Verify whether or not a new chunk violates any constraints
+	void VerifyConstraints(ClientContext &context, DataChunk &new_chunk);
 	//! The stored data of the table
 	std::unique_ptr<StorageChunk> chunk_list;
 	//! A reference to the last entry in the chunk list

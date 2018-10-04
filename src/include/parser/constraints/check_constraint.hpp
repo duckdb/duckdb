@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include "common/string_util.hpp"
+
 #include "parser/constraint.hpp"
 #include "parser/expression.hpp"
 

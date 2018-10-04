@@ -12,38 +12,67 @@
 #include "parser/constraints/list.hpp"
 #include "parser/expression/list.hpp"
 
+#include <algorithm>
+
 using namespace std;
 
-unique_ptr<duckdb::Constraint> TransformConstraint(ListCell *cell,
-                                                   size_t index) {
-	auto constraint = reinterpret_cast<Constraint *>(cell->data.ptr_value);
-	assert(constraint);
+namespace duckdb {
+
+unique_ptr<Constraint> TransformConstraint(postgres::ListCell *cell) {
+	auto constraint =
+	    reinterpret_cast<postgres::Constraint *>(cell->data.ptr_value);
 	switch (constraint->contype) {
-	case CONSTR_NOTNULL:
-		return make_unique<duckdb::NotNullConstraint>(index);
-	case CONSTR_CHECK: {
-		auto expression = duckdb::TransformExpression(constraint->raw_expr);
-		if (expression->HasSubquery()) {
-			throw duckdb::ParserException(
-			    "subqueries prohibited in CHECK constraints");
+	case postgres::CONSTR_UNIQUE:
+	case postgres::CONSTR_PRIMARY: {
+		auto type = constraint->contype == postgres::CONSTR_PRIMARY
+		                ? ConstraintType::PRIMARY_KEY
+		                : ConstraintType::UNIQUE;
+		vector<string> columns;
+		for (auto kc = constraint->keys->head; kc; kc = kc->next) {
+			columns.push_back(
+			    string(reinterpret_cast<postgres::value *>(kc->data.ptr_value)
+			               ->val.str));
 		}
-		if (expression->IsAggregate()) {
-			throw duckdb::ParserException(
-			    "aggregates prohibited in CHECK constraints");
-		}
-		return make_unique<duckdb::CheckConstraint>(
-		    duckdb::TransformExpression(constraint->raw_expr));
+		return make_unique<ParsedConstraint>(type, columns);
 	}
-	case CONSTR_PRIMARY:
-	case CONSTR_UNIQUE:
-	case CONSTR_FOREIGN:
-	case CONSTR_DEFAULT:
 	default:
-		throw duckdb::NotImplementedException("Constraint not implemented!");
+		throw NotImplementedException("Constraint type not handled yet!");
 	}
 }
 
-namespace duckdb {
+unique_ptr<Constraint> TransformConstraint(postgres::ListCell *cell,
+                                           ColumnDefinition column,
+                                           size_t index) {
+	auto constraint =
+	    reinterpret_cast<postgres::Constraint *>(cell->data.ptr_value);
+	assert(constraint);
+	switch (constraint->contype) {
+	case postgres::CONSTR_NOTNULL:
+		return make_unique<NotNullConstraint>(index);
+	case postgres::CONSTR_CHECK: {
+		auto expression = TransformExpression(constraint->raw_expr);
+		if (expression->HasSubquery()) {
+			throw ParserException("subqueries prohibited in CHECK constraints");
+		}
+		if (expression->IsAggregate()) {
+			throw ParserException("aggregates prohibited in CHECK constraints");
+		}
+		return make_unique<CheckConstraint>(
+		    TransformExpression(constraint->raw_expr));
+	}
+	case postgres::CONSTR_PRIMARY:
+		return make_unique<ParsedConstraint>(ConstraintType::PRIMARY_KEY,
+		                                     index);
+	case postgres::CONSTR_UNIQUE:
+		return make_unique<ParsedConstraint>(ConstraintType::UNIQUE, index);
+	case postgres::CONSTR_FOREIGN:
+	case postgres::CONSTR_DEFAULT:
+	default:
+		throw NotImplementedException("Constraint not implemented!");
+	}
+}
+
+using namespace postgres;
 
 bool TransformGroupBy(List *group, vector<unique_ptr<Expression>> &result) {
 	if (!group) {
@@ -152,45 +181,6 @@ unique_ptr<SelectStatement> TransformSelect(Node *node) {
 	}
 }
 
-unique_ptr<CreateStatement> TransformCreate(Node *node) {
-	CreateStmt *stmt = reinterpret_cast<CreateStmt *>(node);
-	assert(stmt);
-	auto result = make_unique<CreateStatement>();
-	if (stmt->inhRelations) {
-		throw NotImplementedException("inherited relations not implemented");
-	}
-	assert(stmt->relation);
-
-	if (stmt->relation->schemaname) {
-		result->schema = stmt->relation->schemaname;
-	}
-	result->table = stmt->relation->relname;
-	assert(stmt->tableElts);
-	ListCell *c;
-
-	for (c = stmt->tableElts->head; c != NULL; c = lnext(c)) {
-		ColumnDef *cdef = (ColumnDef *)c->data.ptr_value;
-		if (cdef->type != T_ColumnDef) {
-			throw NotImplementedException("Can only handle basic columns");
-		}
-		char *name = (reinterpret_cast<value *>(
-		                  cdef->typeName->names->tail->data.ptr_value)
-		                  ->val.str);
-		auto centry =
-		    ColumnDefinition(cdef->colname, TransformStringToTypeId(name));
-
-		if (cdef->constraints) {
-			for (auto constraint = cdef->constraints->head;
-			     constraint != nullptr; constraint = constraint->next) {
-				result->constraints.push_back(
-				    TransformConstraint(constraint, result->columns.size()));
-			}
-		}
-		result->columns.push_back(centry);
-	}
-	return result;
-}
-
 unique_ptr<DropStatement> TransformDrop(Node *node) {
 	DropStmt *stmt = reinterpret_cast<DropStmt *>(node);
 	assert(stmt);
@@ -268,6 +258,53 @@ unique_ptr<InsertStatement> TransformInsert(Node *node) {
 	auto &table = *reinterpret_cast<BaseTableRef *>(ref.get());
 	result->table = table.table_name;
 	result->schema = table.schema_name;
+	return result;
+}
+
+unique_ptr<CreateStatement> TransformCreate(Node *node) {
+	auto stmt = reinterpret_cast<CreateStmt *>(node);
+	assert(stmt);
+	auto result = make_unique<CreateStatement>();
+	if (stmt->inhRelations) {
+		throw NotImplementedException("inherited relations not implemented");
+	}
+	assert(stmt->relation);
+
+	if (stmt->relation->schemaname) {
+		result->schema = stmt->relation->schemaname;
+	}
+	result->table = stmt->relation->relname;
+	assert(stmt->tableElts);
+
+	for (auto c = stmt->tableElts->head; c != NULL; c = lnext(c)) {
+		auto node = reinterpret_cast<Node *>(c->data.ptr_value);
+		switch (node->type) {
+		case T_ColumnDef: {
+			auto cdef = (ColumnDef *)c->data.ptr_value;
+			char *name = (reinterpret_cast<value *>(
+			                  cdef->typeName->names->tail->data.ptr_value)
+			                  ->val.str);
+			auto centry =
+			    ColumnDefinition(cdef->colname, TransformStringToTypeId(name));
+
+			if (cdef->constraints) {
+				for (auto constr = cdef->constraints->head; constr != nullptr;
+				     constr = constr->next) {
+					result->constraints.push_back(TransformConstraint(
+					    constr, centry, result->columns.size()));
+				}
+			}
+			result->columns.push_back(centry);
+			break;
+		}
+		case T_Constraint: {
+			result->constraints.push_back(TransformConstraint(c));
+			break;
+		}
+		default:
+			throw NotImplementedException("ColumnDef type not handled yet");
+		}
+	}
 	return result;
 }
 

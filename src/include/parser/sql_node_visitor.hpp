@@ -36,6 +36,7 @@ class CaseExpression;
 
 class NotNullConstraint;
 class CheckConstraint;
+class ParsedConstraint;
 
 class BaseTableRef;
 class CrossProductRef;
@@ -74,6 +75,7 @@ class SQLNodeVisitor {
 
 	virtual void Visit(NotNullConstraint &expr);
 	virtual void Visit(CheckConstraint &expr);
+	virtual void Visit(ParsedConstraint &expr);
 
 	virtual void Visit(BaseTableRef &expr);
 	virtual void Visit(CrossProductRef &expr);

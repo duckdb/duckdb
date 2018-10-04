@@ -32,8 +32,7 @@ class TableCatalogEntry : public AbstractCatalogEntry {
 	//! Create a real TableCatalogEntry and initialize storage for it
 	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
 	                  std::string name,
-	                  const std::vector<ColumnDefinition> &columns,
-	                  std::vector<std::unique_ptr<Constraint>> &constraints);
+	                  const std::vector<ColumnDefinition> &columns);
 
 	//! The schema the table belongs to
 	SchemaCatalogEntry *schema;

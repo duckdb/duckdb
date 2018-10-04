@@ -23,7 +23,7 @@ class Constraint : public Printable {
 	Constraint(ConstraintType type) : type(type){};
 	virtual ~Constraint() {}
 
-	virtual void Accept(SQLNodeVisitor *) = 0;
+	virtual void Accept(SQLNodeVisitor *) {}
 
 	ConstraintType type;
 };

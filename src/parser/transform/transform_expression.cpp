@@ -4,6 +4,7 @@
 #include "parser/expression/list.hpp"
 #include "parser/tableref/tableref_list.hpp"
 
+using namespace postgres;
 using namespace std;
 
 namespace duckdb {

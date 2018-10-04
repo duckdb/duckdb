@@ -43,11 +43,11 @@ void SQLNodeVisitor::Visit(SubqueryExpression &expr) {
 	expr.AcceptChildren(this);
 }
 
-void SQLNodeVisitor::Visit(NotNullConstraint &con) {}
-
 void SQLNodeVisitor::Visit(CheckConstraint &con) {
 	con.expression->Accept(this);
 }
+void SQLNodeVisitor::Visit(NotNullConstraint &con) {}
+void SQLNodeVisitor::Visit(ParsedConstraint &con) {}
 
 void SQLNodeVisitor::Visit(BaseTableRef &expr) {}
 
