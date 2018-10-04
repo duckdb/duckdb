@@ -55,6 +55,21 @@ void DataTable::InitializeScan(ScanStructure &structure) {
 	structure.offset = 0;
 }
 
+StorageChunk *DataTable::GetChunk(size_t row_number) {
+	// FIXME: this could be O(1) in amount of chunks
+	// the loop is not necessary because every chunk besides the last
+	// has exactly STORAGE_CHUNK_SIZE elements
+	StorageChunk *chunk = chunk_list.get();
+	while (chunk) {
+		if (row_number >= chunk->start &&
+		    row_number < chunk->start + chunk->count) {
+			return chunk;
+		}
+		chunk = chunk->next.get();
+	}
+	return nullptr;
+}
+
 void DataTable::VerifyConstraints(ClientContext &context, DataChunk &chunk) {
 	for (auto &constraint : table.constraints) {
 		switch (constraint->type) {
@@ -135,31 +150,11 @@ void DataTable::Append(ClientContext &context, DataChunk &chunk) {
 	// now we can append the elements
 
 	// first we handle any PRIMARY KEY and UNIQUE constraints
-	try {
-		for (auto &constraint : table.constraints) {
-			switch (constraint->type) {
-			case ConstraintType::PRIMARY_KEY: {
-				auto &primary =
-				    *reinterpret_cast<PrimaryKeyConstraint *>(constraint.get());
-				primary.index.Append(chunk,
-				                     last_chunk->start + last_chunk->count);
-				break;
-			}
-			case ConstraintType::UNIQUE: {
-				auto &unique =
-				    *reinterpret_cast<UniqueConstraint *>(constraint.get());
-				unique.index.Append(chunk,
-				                    last_chunk->start + last_chunk->count);
-				break;
-			}
-			default:
-				break;
-			}
-		}
-	} catch (Exception &ex) {
-		// constraint violated
+	auto error = UniqueIndex::Append(indexes, chunk,
+	                                 last_chunk->start + last_chunk->count);
+	if (!error.empty()) {
 		last_chunk->ReleaseExclusiveLock();
-		throw ex;
+		throw ConstraintException(error);
 	}
 
 	// update the statistics with the new data
@@ -241,59 +236,41 @@ void DataTable::Delete(ClientContext &context, Vector &row_identifiers) {
 	auto sel_vector = row_identifiers.sel_vector;
 	auto first_id = sel_vector ? ids[sel_vector[0]] : ids[0];
 	// first find the chunk the row ids belong to
-	auto chunk = chunk_list.get();
-	while (chunk) {
-		if (first_id >= chunk->start &&
-		    first_id < chunk->start + chunk->count) {
-			// found the correct chunk
-			// get an exclusive lock on the chunk
-			chunk->GetExclusiveLock();
-
-			try {
-				for (auto &constraint : table.constraints) {
-					switch (constraint->type) {
-					case ConstraintType::PRIMARY_KEY:
-					case ConstraintType::UNIQUE:
-						throw NotImplementedException(
-						    "Don't support DELETE on column with PRIMARY KEY "
-						    "yet");
-					default:
-						break;
-					}
-				}
-			} catch (Exception &ex) {
-				// constraint violated
-				chunk->ReleaseExclusiveLock();
-				throw ex;
-			}
-
-			// now delete the entries
-			for (size_t i = 0; i < row_identifiers.count; i++) {
-				auto id =
-				    (sel_vector ? ids[sel_vector[i]] : ids[i]) - chunk->start;
-				// assert that all ids in the vector belong to the same storage
-				// chunk
-				assert(id >= chunk->start && id < chunk->start + chunk->count);
-				// check for conflicts
-				auto version = chunk->version_pointers[id];
-				if (version) {
-					if (version->version_number >= TRANSACTION_ID_START &&
-					    version->version_number != transaction.transaction_id) {
-						throw TransactionException(
-						    "Conflict on tuple deletion!");
-					}
-				}
-				// no conflict, move the current tuple data into the undo buffer
-				transaction.PushTuple(id, chunk);
-				// and set the deleted flag
-				chunk->deleted[id] = true;
-			}
-			chunk->ReleaseExclusiveLock();
-			return;
-		}
-		chunk = chunk->next.get();
+	auto chunk = GetChunk(first_id);
+	if (!chunk) {
+		throw OutOfRangeException(
+		    "Row identifiers for deletion out of bounds!");
 	}
-	throw OutOfRangeException("Row identifiers for deletion out of bounds!");
+
+	if (indexes.size() > 0) {
+		throw NotImplementedException(
+		    "Don't support DELETE on column with PRIMARY KEY "
+		    "yet");
+	}
+
+	// get an exclusive lock on the chunk
+	chunk->GetExclusiveLock();
+
+	// now delete the entries
+	for (size_t i = 0; i < row_identifiers.count; i++) {
+		auto id = (sel_vector ? ids[sel_vector[i]] : ids[i]) - chunk->start;
+		// assert that all ids in the vector belong to the same storage
+		// chunk
+		assert(id >= chunk->start && id < chunk->start + chunk->count);
+		// check for conflicts
+		auto version = chunk->version_pointers[id];
+		if (version) {
+			if (version->version_number >= TRANSACTION_ID_START &&
+			    version->version_number != transaction.transaction_id) {
+				throw TransactionException("Conflict on tuple deletion!");
+			}
+		}
+		// no conflict, move the current tuple data into the undo buffer
+		transaction.PushTuple(id, chunk);
+		// and set the deleted flag
+		chunk->deleted[id] = true;
+	}
+	chunk->ReleaseExclusiveLock();
 }
 
 void DataTable::Update(ClientContext &context, Vector &row_identifiers,
@@ -314,98 +291,78 @@ void DataTable::Update(ClientContext &context, Vector &row_identifiers,
 	auto sel_vector = row_identifiers.sel_vector;
 	auto first_id = sel_vector ? ids[sel_vector[0]] : ids[0];
 	// first find the chunk the row ids belong to
-	auto chunk = chunk_list.get();
-	while (chunk) {
-		// FIXME: this does not need to be a scan of chunks
-		if (first_id >= chunk->start &&
-		    first_id < chunk->start + chunk->count) {
-			// found the correct chunk
-			// get an exclusive lock on the chunk
-			chunk->GetExclusiveLock();
+	auto chunk = GetChunk(first_id);
+	if (!chunk) {
+		throw OutOfRangeException("Row identifiers for update out of bounds!");
+	}
 
-			try {
-				for (auto &constraint : table.constraints) {
-					switch (constraint->type) {
-					case ConstraintType::PRIMARY_KEY:
-					case ConstraintType::UNIQUE:
-						throw NotImplementedException(
-						    "Don't support UPDATE on column with PRIMARY KEY "
-						    "yet");
-					default:
-						break;
-					}
-				}
-			} catch (Exception &ex) {
-				// constraint violated
-				chunk->ReleaseExclusiveLock();
-				throw ex;
+	if (indexes.size() > 0) {
+		throw NotImplementedException(
+		    "Don't support UPDATE on column with PRIMARY KEY "
+		    "yet");
+	}
+
+	// get an exclusive lock on the chunk
+	chunk->GetExclusiveLock();
+
+	// now delete the entries
+	for (size_t i = 0; i < row_identifiers.count; i++) {
+		auto id = (sel_vector ? ids[sel_vector[i]] : ids[i]) - chunk->start;
+		// assert that all ids in the vector belong to the same chunk
+		assert(id >= chunk->start && id < chunk->start + chunk->count);
+		// check for conflicts
+		auto version = chunk->version_pointers[id];
+		if (version) {
+			if (version->version_number >= TRANSACTION_ID_START &&
+			    version->version_number != transaction.transaction_id) {
+				throw TransactionException("Conflict on tuple update!");
 			}
+		}
+		// no conflict, move the current tuple data into the undo buffer
+		transaction.PushTuple(id, chunk);
+	}
+	// now update the columns in the base table
+	for (size_t j = 0; j < column_ids.size(); j++) {
+		auto column_id = column_ids[j];
+		auto size = GetTypeIdSize(updates.data[j].type);
+		auto base_data = chunk->columns[column_id].data;
 
-			// now delete the entries
+		Vector *update_vector = &updates.data[j];
+		Vector null_vector;
+		if (update_vector->nullmask.any()) {
+			// has NULL values in the nullmask
+			// copy them to a temporary vector
+			null_vector.Initialize(update_vector->type, false);
+			null_vector.count = update_vector->count;
+			VectorOperations::CopyNull(*update_vector, null_vector.data);
+			update_vector = &null_vector;
+		}
+
+		if (update_vector->sel_vector) {
 			for (size_t i = 0; i < row_identifiers.count; i++) {
 				auto id =
 				    (sel_vector ? ids[sel_vector[i]] : ids[i]) - chunk->start;
-				// assert that all ids in the vector belong to the same chunk
-				assert(id >= chunk->start && id < chunk->start + chunk->count);
-				// check for conflicts
-				auto version = chunk->version_pointers[id];
-				if (version) {
-					if (version->version_number >= TRANSACTION_ID_START &&
-					    version->version_number != transaction.transaction_id) {
-						throw TransactionException("Conflict on tuple update!");
-					}
-				}
-				// no conflict, move the current tuple data into the undo buffer
-				transaction.PushTuple(id, chunk);
+				auto dataptr = base_data + id * size;
+				memcpy(dataptr,
+				       update_vector->data +
+				           update_vector->sel_vector[i] * size,
+				       size);
 			}
-			// now update the columns in the base table
-			for (size_t j = 0; j < column_ids.size(); j++) {
-				auto column_id = column_ids[j];
-				auto size = GetTypeIdSize(updates.data[j].type);
-				auto base_data = chunk->columns[column_id].data;
-
-				Vector *update_vector = &updates.data[j];
-				Vector null_vector;
-				if (update_vector->nullmask.any()) {
-					// has NULL values in the nullmask
-					// copy them to a temporary vector
-					null_vector.Initialize(update_vector->type, false);
-					null_vector.count = update_vector->count;
-					VectorOperations::CopyNull(*update_vector,
-					                           null_vector.data);
-					update_vector = &null_vector;
-				}
-
-				if (update_vector->sel_vector) {
-					for (size_t i = 0; i < row_identifiers.count; i++) {
-						auto id = (sel_vector ? ids[sel_vector[i]] : ids[i]) -
-						          chunk->start;
-						auto dataptr = base_data + id * size;
-						memcpy(dataptr,
-						       update_vector->data +
-						           update_vector->sel_vector[i] * size,
-						       size);
-					}
-				} else {
-					for (size_t i = 0; i < row_identifiers.count; i++) {
-						auto id = (sel_vector ? ids[sel_vector[i]] : ids[i]) -
-						          chunk->start;
-						auto dataptr = base_data + id * size;
-						memcpy(dataptr, update_vector->data + i * size, size);
-					}
-				}
-				chunk->string_heap.MergeHeap(update_vector->string_heap);
-
-				// update the statistics with the new data
-				lock_guard<mutex> stats_lock(statistics_locks[column_id]);
-				statistics[column_id].Update(updates.data[j]);
+		} else {
+			for (size_t i = 0; i < row_identifiers.count; i++) {
+				auto id =
+				    (sel_vector ? ids[sel_vector[i]] : ids[i]) - chunk->start;
+				auto dataptr = base_data + id * size;
+				memcpy(dataptr, update_vector->data + i * size, size);
 			}
-			chunk->ReleaseExclusiveLock();
-			return;
 		}
-		chunk = chunk->next.get();
+		chunk->string_heap.MergeHeap(update_vector->string_heap);
+
+		// update the statistics with the new data
+		lock_guard<mutex> stats_lock(statistics_locks[column_id]);
+		statistics[column_id].Update(updates.data[j]);
 	}
-	throw NotImplementedException("Row identifiers for update out of bounds!");
+	chunk->ReleaseExclusiveLock();
 }
 
 void DataTable::Scan(Transaction &transaction, DataChunk &result,

@@ -9,12 +9,12 @@ using namespace std;
 UniqueIndex::UniqueIndex(std::vector<TypeId> types, std::vector<size_t> keys,
                          bool allow_nulls)
     : types(types), keys(keys), allow_nulls(allow_nulls) {
-	for (size_t key : keys) {
-		assert(key < types.size());
-		auto type = types[key];
+	assert(types.size() == keys.size());
+	for (size_t i = 0; i < keys.size(); i++) {
+		auto type = types[i];
 		if (!TypeIsConstantSize(type)) {
 			assert(type == TypeId::VARCHAR);
-			variable_columns.push_back(key);
+			variable_columns.push_back(keys[i]);
 		} else {
 			base_size += GetTypeIdSize(type);
 		}
@@ -113,79 +113,121 @@ void UniqueIndex::RemoveEntry(UniqueIndexNode *entry) {
 	}
 }
 
-void UniqueIndex::Append(DataChunk &chunk, size_t row_identifier_start) {
-	size_t key_size[STANDARD_VECTOR_SIZE];
-	unique_ptr<uint8_t[]> key_data[STANDARD_VECTOR_SIZE];
-	bool has_null[STANDARD_VECTOR_SIZE];
+string UniqueIndex::Append(vector<unique_ptr<UniqueIndex>> &indexes,
+                           DataChunk &chunk, size_t row_identifier_start) {
+	if (indexes.size() == 0) {
+		return string();
+	}
 
-	for (size_t i = 0; i < chunk.count; i++) {
-		size_t index = chunk.sel_vector ? chunk.sel_vector[i] : i;
-		key_size[i] = base_size;
-		for (auto &key : variable_columns) {
-			assert(chunk.data[key].type == TypeId::VARCHAR);
-			char **string_data = (char **)chunk.data[key].data;
-			key_size[i] +=
-			    string_data[index] ? strlen(string_data[index]) + 1 : 0;
-		}
-		key_data[i] = unique_ptr<uint8_t[]>(new uint8_t[key_size[i]]);
-		has_null[i] = false;
+	UniqueIndexNode *added_nodes[indexes.size()][STANDARD_VECTOR_SIZE];
 
-		// copy the data
-		char *tuple_data = (char *)key_data[i].get();
-		for (size_t key : keys) {
-			if (chunk.data[key].nullmask[i]) {
-				if (allow_nulls) {
-					// any key that has a NULL value we can skip placing in
-					// the index entirely because NULL values are always <>
-					// to NULL values, any key with a NULL value can ALWAYS
-					// be placed inside the index
-					key_data[i].reset();
-					has_null[i] = true;
-					break;
+	string error;
+	bool success = true;
+	size_t current_index = 0;
+	// insert the entries in each of the unique indexes
+	for (current_index = 0; current_index < indexes.size(); current_index++) {
+		auto &index = *indexes[current_index];
+
+		size_t key_size[STANDARD_VECTOR_SIZE];
+		unique_ptr<uint8_t[]> key_data[STANDARD_VECTOR_SIZE];
+		bool has_null[STANDARD_VECTOR_SIZE];
+
+		for (size_t i = 0; i < chunk.count; i++) {
+			size_t entry = chunk.sel_vector ? chunk.sel_vector[i] : i;
+			key_size[i] = index.base_size;
+			for (auto &key : index.variable_columns) {
+				assert(chunk.data[key].type == TypeId::VARCHAR);
+				char **string_data = (char **)chunk.data[key].data;
+				key_size[i] +=
+				    string_data[entry] ? strlen(string_data[entry]) + 1 : 0;
+			}
+			key_data[i] = unique_ptr<uint8_t[]>(new uint8_t[key_size[i]]);
+			has_null[i] = false;
+
+			// copy the data
+			char *tuple_data = (char *)key_data[i].get();
+			for (size_t j = 0; j < index.keys.size(); j++) {
+				auto key = index.keys[j];
+				assert(index.types[j] == chunk.data[key].type);
+				if (chunk.data[key].nullmask[i]) {
+					if (index.allow_nulls) {
+						// any key that has a NULL value we can skip placing in
+						// the index entirely because NULL values are always <>
+						// to NULL values, any key with a NULL value can ALWAYS
+						// be placed inside the index
+						key_data[i].reset();
+						has_null[i] = true;
+						break;
+					} else {
+						// if NULLs are not allowed, throw an exception
+						error =
+						    "PRIMARY KEY column cannot contain NULL values!";
+						success = false;
+						break;
+					}
+				}
+				if (TypeIsConstantSize(index.types[j])) {
+					auto data_size = GetTypeIdSize(index.types[j]);
+					memcpy(tuple_data, chunk.data[key].data + data_size * entry,
+					       data_size);
+					tuple_data += data_size;
 				} else {
-					// if NULLs are not allowed, throw an exception
-					throw ConstraintException(
-					    "PRIMARY KEY column cannot contain NULL values!");
+					const char **string_data =
+					    (const char **)chunk.data[key].data;
+					strcpy(tuple_data, string_data[entry]);
+					tuple_data += strlen(string_data[entry]) + 1;
 				}
 			}
-			if (TypeIsConstantSize(types[key])) {
-				auto data_size = GetTypeIdSize(types[key]);
-				memcpy(tuple_data, chunk.data[key].data + data_size * index,
-				       data_size);
-				tuple_data += data_size;
-			} else {
-				const char **string_data = (const char **)chunk.data[key].data;
-				strcpy(tuple_data, string_data[index]);
-				tuple_data += strlen(string_data[index]) + 1;
+			if (!success) {
+				break;
 			}
 		}
-	}
-
-	UniqueIndexNode *added_nodes[STANDARD_VECTOR_SIZE];
-
-	lock_guard<mutex> guard(index_lock);
-	for (size_t i = 0; i < chunk.count; i++) {
-		if (has_null[i]) {
-			// skip entries with NULL values
-			added_nodes[i] = nullptr;
-			continue;
+		if (!success) {
+			break;
 		}
 
-		auto entry =
-		    AddEntry(key_size[i], move(key_data[i]), row_identifier_start + i);
-		if (!entry) {
-			// could not add entry: constraint violation
-			// clean up previously added keys
-			for (size_t j = i; j > 0; j--) {
+		lock_guard<mutex> guard(index.index_lock);
+		// now actually add the entries to this index
+		for (size_t i = 0; i < chunk.count; i++) {
+			if (has_null[i]) {
+				// skip entries with NULL values
+				added_nodes[current_index][i] = nullptr;
+				continue;
+			}
+
+			auto entry = index.AddEntry(key_size[i], move(key_data[i]),
+			                            row_identifier_start + i);
+			if (!entry) {
+				// could not add entry: constraint violation
+				error =
+				    "PRIMARY KEY or UNIQUE constraint violated: duplicated key";
+				// remove all added entries from this index
+				for (size_t j = i; j > 0; j--) {
+					if (added_nodes[current_index][j - 1]) {
+						index.RemoveEntry(added_nodes[current_index][j - 1]);
+					}
+				}
+				// break out of the loop
+				success = false;
+				break;
+			}
+			added_nodes[current_index][i] = entry;
+		}
+		if (!success) {
+			break;
+		}
+	}
+	if (current_index != indexes.size()) {
+		// something went wrong! we have to revert all the additions
+		for (size_t k = current_index; k > 0; k--) {
+			auto &index = *indexes[k - 1];
+			for (size_t j = chunk.count; j > 0; j--) {
 				if (added_nodes[j - 1]) {
-					RemoveEntry(added_nodes[j - 1]);
+					index.RemoveEntry(added_nodes[k - 1][j - 1]);
 				}
 			}
-
-			// now throw an exception
-			throw ConstraintException(
-			    "PRIMARY KEY or UNIQUE constraint violated: duplicated key");
 		}
-		added_nodes[i] = entry;
+		return error;
 	}
+	return string();
 }

@@ -18,6 +18,7 @@
 #include "common/types/statistics.hpp"
 
 #include "storage/storage_chunk.hpp"
+#include "storage/unique_index.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -71,6 +72,11 @@ class DataTable {
 
 	//! A reference to the base storage manager
 	StorageManager &storage;
+
+	StorageChunk *GetChunk(size_t row_number);
+
+	//! Unique indexes
+	std::vector<std::unique_ptr<UniqueIndex>> indexes;
 
   private:
 	//! Verify whether or not a new chunk violates any constraints

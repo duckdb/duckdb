@@ -15,8 +15,8 @@
 namespace duckdb {
 
 //! The ParsedConstraint represents either a UNIQUE or PRIMARY KEY constraint
-//! that is not fully resolved yet When added to a table in the catalog, it will
-//! be transformed to a proper PRIMARY KEY or UNIQUE constraint
+//! that is not fully resolved yet. When added to a table in the catalog, it
+//! will be transformed to a proper PRIMARY KEY or UNIQUE constraint
 class ParsedConstraint : public Constraint {
   public:
 	ParsedConstraint(ConstraintType type, size_t index)

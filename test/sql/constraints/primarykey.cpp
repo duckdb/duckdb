@@ -43,7 +43,8 @@ TEST_CASE("Single PRIMARY KEY constraint", "[constraints]") {
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (7, 8);"));
 	// insert from second connection fails because of potential conflict
 	// (this test is a bit strange, because it tests current behavior more than
-	// correct behavior) (for example, in postgres this would just hang forever)
+	//  correct behavior; in postgres for example this would hang forever
+	//  while waiting for the other transaction to finish)
 	REQUIRE_FAIL(con2.Query("INSERT INTO integers VALUES (7, 33);"));
 
 	REQUIRE_NO_FAIL(con.Query("COMMIT"));
@@ -76,3 +77,21 @@ TEST_CASE("Multiple PRIMARY KEY constraint", "[constraints]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {3, 3, 6}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "world", "bla"}));
 }
+
+// TEST_CASE("PRIMARY KEY and transactions", "[constraints]") {
+// 	unique_ptr<DuckDBResult> result;
+// 	DuckDB db(nullptr);
+// 	DuckDBConnection con(db);
+
+// 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY)"));
+
+// 	// rollback
+// 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+// 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1);"));
+// 	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+
+// 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1);"));
+
+// 	result = con.Query("SELECT * FROM integers");
+// 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+// }

@@ -40,7 +40,10 @@ class UniqueIndex {
 	UniqueIndex(std::vector<TypeId> types, std::vector<size_t> keys,
 	            bool allow_nulls);
 
-	void Append(DataChunk &chunk, size_t row_identifier_start);
+	static std::string
+	Append(std::vector<std::unique_ptr<UniqueIndex>> &indexes, DataChunk &chunk,
+	       size_t row_identifier_start);
+
 	// void Delete(DataChunk &chunk);
 	// void Update(DataChunk &chunk);
 
