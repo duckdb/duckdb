@@ -150,8 +150,9 @@ void DataTable::Append(ClientContext &context, DataChunk &chunk) {
 	// now we can append the elements
 
 	// first we handle any PRIMARY KEY and UNIQUE constraints
-	auto error = UniqueIndex::Append(indexes, chunk,
-	                                 last_chunk->start + last_chunk->count);
+	auto error =
+	    UniqueIndex::Append(context.ActiveTransaction(), indexes, chunk,
+	                        last_chunk->start + last_chunk->count);
 	if (!error.empty()) {
 		last_chunk->ReleaseExclusiveLock();
 		throw ConstraintException(error);

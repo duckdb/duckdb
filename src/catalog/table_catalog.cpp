@@ -76,7 +76,7 @@ TableCatalogEntry::TableCatalogEntry(
 			}
 			// initialize the index with the parsed data
 			storage->indexes.push_back(
-			    make_unique<UniqueIndex>(types, keys, allow_null));
+			    make_unique<UniqueIndex>(*storage, types, keys, allow_null));
 		} else {
 			constraints.push_back(move(constraint));
 		}

@@ -34,6 +34,8 @@ struct ScanStructure {
 
 //! DataTable represents a physical table on disk
 class DataTable {
+	friend class UniqueIndex;
+
   public:
 	DataTable(StorageManager &storage, TableCatalogEntry &table);
 

@@ -1,14 +1,17 @@
 
+#include "common/exception.hpp"
+
+#include "storage/data_table.hpp"
 #include "storage/unique_index.hpp"
 
-#include "common/exception.hpp"
+#include "transaction/transaction.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-UniqueIndex::UniqueIndex(std::vector<TypeId> types, std::vector<size_t> keys,
-                         bool allow_nulls)
-    : types(types), keys(keys), allow_nulls(allow_nulls) {
+UniqueIndex::UniqueIndex(DataTable &table, std::vector<TypeId> types,
+                         std::vector<size_t> keys, bool allow_nulls)
+    : table(table), types(types), keys(keys), allow_nulls(allow_nulls) {
 	assert(types.size() == keys.size());
 	for (size_t i = 0; i < keys.size(); i++) {
 		auto type = types[i];
@@ -21,7 +24,7 @@ UniqueIndex::UniqueIndex(std::vector<TypeId> types, std::vector<size_t> keys,
 	}
 }
 
-UniqueIndexNode *UniqueIndex::AddEntry(size_t size,
+UniqueIndexNode *UniqueIndex::AddEntry(Transaction &transaction, size_t size,
                                        std::unique_ptr<uint8_t[]> data,
                                        size_t row_identifier) {
 	auto new_node =
@@ -41,8 +44,71 @@ UniqueIndexNode *UniqueIndex::AddEntry(size_t size,
 		cmp = memcmp(entry->key_data.get(), new_node->key_data.get(), min_size);
 
 		if (cmp == 0 && size == entry->size) {
-			// node is equivalent: return nullptr
-			return nullptr;
+			// node is potentially equivalent
+			// check the base table for the actual version
+			auto chunk = table.GetChunk(entry->row_identifier);
+			auto offset = entry->row_identifier - chunk->start;
+			// whenever we call the AddEntry method we need a lock
+			// on the last StorageChunk to guarantee that
+			// the row identifiers are correct
+			// for this reason locking it again here will cause a
+			// deadlock. We only need to lock chunks that are not the last
+			if (chunk != table.tail_chunk) {
+				chunk->GetSharedLock();
+			}
+			bool conflict = true;
+			auto version = chunk->version_pointers[offset];
+			// if (version) {
+			// 	// first check if we need to use the base table entry
+			// 	// compare to base table version
+			// 	if (chunk->deleted[offset]) {
+			// 		conflict = false;
+			// 	} else {
+			// 		assert(0);
+			// 		// do actual comparison
+			// 	}
+
+			// 	if (!conflict && !(version->version_number ==
+			// transaction.transaction_id  || 	     version->version_number <
+			// transaction.start_time)) {
+			// 		// we don't have to use the base table version, keep going
+			// 		// until we reach the version that belongs to this entry
+			// 		while(true) {
+			// 			if (!version->tuple_data) {
+			// 				// our entry was deleted, no conflict
+			// 				conflict = false;
+			// 			} else {
+			// 				assert(0);
+			// 				if (conflict) {
+			// 					break;
+			// 				}
+			// 			}
+
+			// 			auto next = version->next;
+			// 			if (!next) {
+			// 				// use this version: no predecessor
+			// 				break;
+			// 			}
+			// 			if (next->version_number ==
+			// 			    transaction.transaction_id) {
+			// 				// use this version: it was created by us
+			// 				break;
+			// 			}
+			// 			if (next->version_number < transaction.start_time) {
+			// 				// use this version: it was committed by us
+			// 				break;
+			// 			}
+			// 			version = next;
+			// 		}
+			// 	}
+			// }
+
+			if (conflict) {
+				if (chunk != table.tail_chunk) {
+					chunk->ReleaseSharedLock();
+				}
+				return nullptr;
+			}
 		}
 
 		prev = entry;
@@ -113,7 +179,8 @@ void UniqueIndex::RemoveEntry(UniqueIndexNode *entry) {
 	}
 }
 
-string UniqueIndex::Append(vector<unique_ptr<UniqueIndex>> &indexes,
+string UniqueIndex::Append(Transaction &transaction,
+                           vector<unique_ptr<UniqueIndex>> &indexes,
                            DataChunk &chunk, size_t row_identifier_start) {
 	if (indexes.size() == 0) {
 		return string();
@@ -195,8 +262,9 @@ string UniqueIndex::Append(vector<unique_ptr<UniqueIndex>> &indexes,
 				continue;
 			}
 
-			auto entry = index.AddEntry(key_size[i], move(key_data[i]),
-			                            row_identifier_start + i);
+			auto entry =
+			    index.AddEntry(transaction, key_size[i], move(key_data[i]),
+			                   row_identifier_start + i);
 			if (!entry) {
 				// could not add entry: constraint violation
 				error =

@@ -17,6 +17,9 @@
 
 namespace duckdb {
 
+class DataTable;
+class Transaction;
+
 struct UniqueIndexNode {
 	size_t size;
 	size_t row_identifier;
@@ -37,21 +40,24 @@ struct UniqueIndexNode {
 //! UNIQUE constraints.
 class UniqueIndex {
   public:
-	UniqueIndex(std::vector<TypeId> types, std::vector<size_t> keys,
-	            bool allow_nulls);
+	UniqueIndex(DataTable &table, std::vector<TypeId> types,
+	            std::vector<size_t> keys, bool allow_nulls);
 
 	static std::string
-	Append(std::vector<std::unique_ptr<UniqueIndex>> &indexes, DataChunk &chunk,
+	Append(Transaction &transaction,
+	       std::vector<std::unique_ptr<UniqueIndex>> &indexes, DataChunk &chunk,
 	       size_t row_identifier_start);
 
 	// void Delete(DataChunk &chunk);
 	// void Update(DataChunk &chunk);
 
   private:
-	UniqueIndexNode *AddEntry(size_t size, std::unique_ptr<uint8_t[]> data,
+	UniqueIndexNode *AddEntry(Transaction &transaction, size_t size,
+	                          std::unique_ptr<uint8_t[]> data,
 	                          size_t row_identifier);
 	void RemoveEntry(UniqueIndexNode *entry);
 
+	DataTable &table;
 	//! Types of the UniqueIndex
 	std::vector<TypeId> types;
 	//! The set of keys that must be collectively unique

@@ -98,6 +98,9 @@ static void SetNullValue(uint8_t *ptr, TypeId type) {
 	case TypeId::DECIMAL:
 		*((double *)ptr) = NullValue<double>();
 		break;
+	case TypeId::VARCHAR:
+		*((const char **)ptr) = NullValue<const char *>();
+		break;
 	default:
 		throw InvalidTypeException(type,
 		                           "Non-integer type in HT initialization!");
