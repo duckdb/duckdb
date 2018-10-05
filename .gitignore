@@ -286,3 +286,5 @@ test/test.sql
 
 # SQLite logic tests
 third_party/sqllogictest
+# Format timer
+.last_format
