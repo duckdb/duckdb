@@ -32,7 +32,7 @@ bool CHECK_COLUMN(unique_ptr<duckdb::DuckDBResult> &result,
 	}
 	size_t chunk_index = 0;
 	for (size_t i = 0; i < values.size();) {
-		if (chunk_index > result->size()) {
+		if (chunk_index >= result->size()) {
 			// ran out of chunks
 			return false;
 			// FAIL("Data size does not match value size!");

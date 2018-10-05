@@ -95,3 +95,16 @@ TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {4, 8}));
 	REQUIRE(CHECK_COLUMN(result, 2, {4, 4}));
 }
+
+TEST_CASE("GROUP BY large strings", "[aggregations]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR, b INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('helloworld', 22), "
+	                          "('thisisalongstring', 22), ('helloworld', 21)"));
+
+	result = con.Query("SELECT a, SUM(b) FROM test GROUP BY a ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"helloworld", "thisisalongstring"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {43, 22}));
+}

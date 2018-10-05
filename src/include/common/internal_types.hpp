@@ -397,6 +397,9 @@ template <> inline bool IsNullValue(char *value) {
 	return IsNullValue<const char *>(value);
 }
 
+//! Writes NullValue<T> value of a specific type to a memory address
+void SetNullValue(uint8_t *ptr, TypeId type);
+
 //! Returns the minimum value that can be stored in a given type
 int64_t MinimumValue(TypeId type);
 //! Returns the maximum value that can be stored in a given type

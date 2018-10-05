@@ -70,6 +70,10 @@ void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk,
 			group_chunk.Verify();
 			payload_chunk.Verify();
 			state->ht->AddChunk(group_chunk, payload_chunk);
+			for (size_t i = 0; i < state->child_chunk.column_count; i++) {
+				state->ht->string_heap.MergeHeap(
+				    state->child_chunk.data[i].string_heap);
+			}
 		} else {
 			// aggregation without groups
 			// merge into the fixed list of aggregates

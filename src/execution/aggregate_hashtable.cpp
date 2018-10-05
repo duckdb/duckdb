@@ -13,8 +13,8 @@ SuperLargeHashTable::SuperLargeHashTable(size_t initial_capacity,
                                          vector<TypeId> payload_types,
                                          vector<ExpressionType> aggregate_types,
                                          bool parallel)
-    : aggregate_types(aggregate_types), group_types(group_types),
-      payload_types(payload_types), group_width(0), payload_width(0),
+    : group_serializer(group_types, false), aggregate_types(aggregate_types),
+      group_types(group_types), payload_types(payload_types), payload_width(0),
       capacity(0), entries(0), data(nullptr), max_chain(0), parallel(parallel) {
 	// HT tuple layout is as follows:
 	// [FLAG][NULLMASK][GROUPS][PAYLOAD][COUNT]
@@ -22,13 +22,11 @@ SuperLargeHashTable::SuperLargeHashTable(size_t initial_capacity,
 	// [GROUPS] is the groups
 	// [PAYLOAD] is the payload (i.e. the aggregates)
 	// [COUNT] is an 8-byte count for each element
-	for (auto type : group_types) {
-		group_width += GetTypeIdSize(type);
-	}
 	for (auto type : payload_types) {
 		payload_width += GetTypeIdSize(type);
 	}
-	tuple_size = FLAG_SIZE + (group_width + payload_width + sizeof(int64_t));
+	tuple_size = FLAG_SIZE + (group_serializer.TupleSize() + payload_width +
+	                          sizeof(int64_t));
 	Resize(initial_capacity);
 }
 
@@ -74,39 +72,6 @@ void SuperLargeHashTable::Resize(size_t size) {
 	}
 }
 
-//! Writes NullValue<T> value of a specific type to a memory address
-static void SetNullValue(uint8_t *ptr, TypeId type) {
-	switch (type) {
-	case TypeId::TINYINT:
-		*((int8_t *)ptr) = NullValue<int8_t>();
-		break;
-	case TypeId::SMALLINT:
-		*((int16_t *)ptr) = NullValue<int16_t>();
-		break;
-	case TypeId::INTEGER:
-		*((int32_t *)ptr) = NullValue<int32_t>();
-		break;
-	case TypeId::DATE:
-		*((date_t *)ptr) = NullValue<date_t>();
-		break;
-	case TypeId::BIGINT:
-		*((int64_t *)ptr) = NullValue<int64_t>();
-		break;
-	case TypeId::TIMESTAMP:
-		*((timestamp_t *)ptr) = NullValue<timestamp_t>();
-		break;
-	case TypeId::DECIMAL:
-		*((double *)ptr) = NullValue<double>();
-		break;
-	case TypeId::VARCHAR:
-		*((const char **)ptr) = NullValue<const char *>();
-		break;
-	default:
-		throw InvalidTypeException(type,
-		                           "Non-integer type in HT initialization!");
-	}
-}
-
 void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	if (groups.count == 0) {
 		return;
@@ -145,44 +110,26 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		throw NotImplementedException("Parallel HT not implemented");
 	}
 
+	auto group_width = group_serializer.TupleSize();
+
+	// serialize the elements from the group to a tuple-wide format
+	uint8_t group_data[STANDARD_VECTOR_SIZE][group_serializer.TupleSize()];
+	uint8_t *group_elements[STANDARD_VECTOR_SIZE];
+	for (size_t i = 0; i < groups.count; i++) {
+		group_elements[i] = group_data[i];
+	}
+	group_serializer.Serialize(groups, group_elements);
+	// move the string heap of any of the vectors
+	for (size_t i = 0; i < groups.column_count; i++) {
+		string_heap.MergeHeap(groups.data[i].string_heap);
+	}
+
 	// now we actually access the base table
-	uint8_t group_data[group_width];
-
-	void **ptr = (void **)addresses.data;
+	auto ptr = (uint8_t **)addresses.data;
 	for (size_t i = 0; i < addresses.count; i++) {
-		// first copy the group data for this tuple into a local space
-		size_t group_position = 0;
-		for (size_t grp = 0; grp < groups.column_count; grp++) {
-			size_t data_size = GetTypeIdSize(groups.data[grp].type);
-			size_t group_entry = groups.data[grp].sel_vector
-			                         ? groups.data[grp].sel_vector[i]
-			                         : i;
-			if (groups.data[grp].type == TypeId::VARCHAR) {
-				// inline strings
-				const char *str =
-				    ((const char **)groups.data[grp].data)[group_entry];
-				// strings > 8 characters we need to store a pointer and compare
-				// pointers
-				// FIXME: use statistics to figure this out per column
-				assert(strlen(str) <= 7);
-				memset(group_data + group_position, 0, data_size);
-				strcpy((char *)group_data + group_position, str);
-			} else {
-				if (groups.data[grp].nullmask[group_entry]) {
-					SetNullValue(group_data + group_position,
-					             groups.data[grp].type);
-				} else {
-					memcpy(group_data + group_position,
-					       groups.data[grp].data + data_size * group_entry,
-					       data_size);
-				}
-			}
-			group_position += data_size;
-		}
-
 		// place this tuple in the hash table
 		size_t index = addresses.sel_vector ? addresses.sel_vector[i] : i;
-		uint8_t *entry = (uint8_t *)ptr[index];
+		auto entry = ptr[index];
 
 		size_t chain = 0;
 		do {
@@ -192,7 +139,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 				// cell is empty; zero initialize the aggregates and add an
 				// entry
 				*entry = FULL_CELL;
-				memcpy(entry + FLAG_SIZE, group_data, group_width);
+				memcpy(entry + FLAG_SIZE, group_elements[i], group_width);
 				// initialize the aggragetes to the NULL value
 				auto location = entry + group_width + FLAG_SIZE;
 				for (size_t i = 0; i < payload_types.size(); i++) {
@@ -211,7 +158,8 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 				entries++;
 				break;
 			}
-			if (memcmp(group_data, entry + FLAG_SIZE, group_width) == 0) {
+			if (group_serializer.Compare(group_elements[i],
+			                             entry + FLAG_SIZE) == 0) {
 				// cell has the current group, just point to this cell
 				break;
 			}
@@ -302,15 +250,7 @@ void SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &groups,
 	for (size_t i = 0; i < groups.column_count; i++) {
 		auto &column = groups.data[i];
 		column.count = entry;
-		if (column.type == TypeId::VARCHAR) {
-			const char **ptr = (const char **)addresses.data;
-			for (size_t i = 0; i < entry; i++) {
-				// fetch the string
-				column.SetValue(i, Value(string(ptr[i])));
-			}
-		} else {
-			VectorOperations::Gather::Set(addresses, column);
-		}
+		VectorOperations::Gather::Set(addresses, column);
 		VectorOperations::Add(addresses, GetTypeIdSize(column.type), addresses);
 	}
 

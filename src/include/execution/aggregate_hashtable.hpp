@@ -12,6 +12,7 @@
 
 #include "common/internal_types.hpp"
 #include "common/types/data_chunk.hpp"
+#include "common/types/tuple.hpp"
 #include "common/types/vector.hpp"
 
 namespace duckdb {
@@ -43,7 +44,12 @@ class SuperLargeHashTable {
 	//! chunks are filled. scan_position will be updated by this function.
 	void Scan(size_t &scan_position, DataChunk &group, DataChunk &result);
 
+	//! The stringheap of the AggregateHashTable
+	StringHeap string_heap;
+
   private:
+	TupleSerializer group_serializer;
+
 	//! The aggregate types to be computed
 	std::vector<ExpressionType> aggregate_types;
 
@@ -51,8 +57,6 @@ class SuperLargeHashTable {
 	std::vector<TypeId> group_types;
 	//! The types of the payload columns stored in the hashtable
 	std::vector<TypeId> payload_types;
-	//! The size of the groups in bytes
-	size_t group_width;
 	//! The size of the payload (aggregations) in bytes
 	size_t payload_width;
 	//! The total tuple size
@@ -78,7 +82,6 @@ class SuperLargeHashTable {
 
 	SuperLargeHashTable(const SuperLargeHashTable &) = delete;
 
-  private:
 	//! unique_ptr to indicate the ownership
 	std::unique_ptr<uint8_t[]> owned_data;
 };
