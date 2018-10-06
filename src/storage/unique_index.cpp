@@ -11,24 +11,12 @@ using namespace std;
 
 UniqueIndex::UniqueIndex(DataTable &table, std::vector<TypeId> types,
                          std::vector<size_t> keys, bool allow_nulls)
-    : table(table), types(types), keys(keys), allow_nulls(allow_nulls) {
-	assert(types.size() == keys.size());
-	for (size_t i = 0; i < keys.size(); i++) {
-		auto type = types[i];
-		if (!TypeIsConstantSize(type)) {
-			assert(type == TypeId::VARCHAR);
-			variable_columns.push_back(keys[i]);
-		} else {
-			base_size += GetTypeIdSize(type);
-		}
-	}
-}
+    : serializer(types, false, keys), table(table), types(types), keys(keys),
+      allow_nulls(allow_nulls) {}
 
-UniqueIndexNode *UniqueIndex::AddEntry(Transaction &transaction, size_t size,
-                                       std::unique_ptr<uint8_t[]> data,
+UniqueIndexNode *UniqueIndex::AddEntry(Transaction &transaction, Tuple tuple,
                                        size_t row_identifier) {
-	auto new_node =
-	    make_unique<UniqueIndexNode>(size, move(data), row_identifier);
+	auto new_node = make_unique<UniqueIndexNode>(move(tuple), row_identifier);
 	if (!root) {
 		// no root, make this entry the root
 		root = move(new_node);
@@ -38,12 +26,15 @@ UniqueIndexNode *UniqueIndex::AddEntry(Transaction &transaction, size_t size,
 	int cmp = 0;
 	// traverse the tree
 	while (entry) {
-		auto min_size = std::min(size, entry->size);
+		//		auto min_size = std::min(new_node->tuple.size,
+		//entry->tuple.size);
 
 		// compare the new entry to the current entry
-		cmp = memcmp(entry->key_data.get(), new_node->key_data.get(), min_size);
+		cmp = serializer.Compare(entry->tuple, new_node->tuple);
+		// memcmp(entry->tuple.data.get(), new_node->tuple.data.get(),
+		// min_size);
 
-		if (cmp == 0 && size == entry->size) {
+		if (cmp == 0) {
 			// node is potentially equivalent
 			// check the base table for the actual version
 			auto chunk = table.GetChunk(entry->row_identifier);
@@ -57,7 +48,7 @@ UniqueIndexNode *UniqueIndex::AddEntry(Transaction &transaction, size_t size,
 				chunk->GetSharedLock();
 			}
 			bool conflict = true;
-			auto version = chunk->version_pointers[offset];
+			// auto version = chunk->version_pointers[offset];
 			// if (version) {
 			// 	// first check if we need to use the base table entry
 			// 	// compare to base table version
@@ -195,80 +186,89 @@ string UniqueIndex::Append(Transaction &transaction,
 	for (current_index = 0; current_index < indexes.size(); current_index++) {
 		auto &index = *indexes[current_index];
 
-		size_t key_size[STANDARD_VECTOR_SIZE];
-		unique_ptr<uint8_t[]> key_data[STANDARD_VECTOR_SIZE];
-		bool has_null[STANDARD_VECTOR_SIZE];
+		Tuple tuples[STANDARD_VECTOR_SIZE];
+		bool has_null[STANDARD_VECTOR_SIZE] = {0};
 
-		for (size_t i = 0; i < chunk.count; i++) {
-			size_t entry = chunk.sel_vector ? chunk.sel_vector[i] : i;
-			key_size[i] = index.base_size;
-			for (auto &key : index.variable_columns) {
-				assert(chunk.data[key].type == TypeId::VARCHAR);
-				char **string_data = (char **)chunk.data[key].data;
-				key_size[i] +=
-				    string_data[entry] ? strlen(string_data[entry]) + 1 : 0;
-			}
-			key_data[i] = unique_ptr<uint8_t[]>(new uint8_t[key_size[i]]);
-			has_null[i] = false;
+		index.serializer.Serialize(chunk, tuples, has_null);
 
-			// copy the data
-			char *tuple_data = (char *)key_data[i].get();
-			for (size_t j = 0; j < index.keys.size(); j++) {
-				auto key = index.keys[j];
-				assert(index.types[j] == chunk.data[key].type);
-				if (chunk.data[key].nullmask[i]) {
-					if (index.allow_nulls) {
-						// any key that has a NULL value we can skip placing in
-						// the index entirely because NULL values are always <>
-						// to NULL values, any key with a NULL value can ALWAYS
-						// be placed inside the index
-						key_data[i].reset();
-						has_null[i] = true;
-						break;
-					} else {
-						// if NULLs are not allowed, throw an exception
-						error =
-						    "PRIMARY KEY column cannot contain NULL values!";
-						success = false;
-						break;
-					}
-				}
-				if (TypeIsConstantSize(index.types[j])) {
-					auto data_size = GetTypeIdSize(index.types[j]);
-					memcpy(tuple_data, chunk.data[key].data + data_size * entry,
-					       data_size);
-					tuple_data += data_size;
-				} else {
-					const char **string_data =
-					    (const char **)chunk.data[key].data;
-					strcpy(tuple_data, string_data[entry]);
-					tuple_data += strlen(string_data[entry]) + 1;
-				}
-			}
-			if (!success) {
-				break;
-			}
-		}
-		if (!success) {
-			break;
-		}
+		// for (size_t i = 0; i < chunk.count; i++) {
+		// 	size_t entry = chunk.sel_vector ? chunk.sel_vector[i] : i;
+		// 	key_size[i] = index.base_size;
+		// 	for (auto &key : index.variable_columns) {
+		// 		assert(chunk.data[key].type == TypeId::VARCHAR);
+		// 		char **string_data = (char **)chunk.data[key].data;
+		// 		key_size[i] +=
+		// 		    string_data[entry] ? strlen(string_data[entry]) + 1 : 0;
+		// 	}
+		// 	key_data[i] = unique_ptr<uint8_t[]>(new uint8_t[key_size[i]]);
+		// 	has_null[i] = false;
+
+		// 	// copy the data
+		// 	char *tuple_data = (char *)key_data[i].get();
+		// 	for (size_t j = 0; j < index.keys.size(); j++) {
+		// 		auto key = index.keys[j];
+		// 		assert(index.types[j] == chunk.data[key].type);
+		// 		if (chunk.data[key].nullmask[i]) {
+		// 			if (index.allow_nulls) {
+		// 				// any key that has a NULL value we can skip placing in
+		// 				// the index entirely because NULL values are always <>
+		// 				// to NULL values, any key with a NULL value can ALWAYS
+		// 				// be placed inside the index
+		// 				key_data[i].reset();
+		// 				has_null[i] = true;
+		// 				break;
+		// 			} else {
+		// 				// if NULLs are not allowed, throw an exception
+		// 				error =
+		// 				    "PRIMARY KEY column cannot contain NULL values!";
+		// 				success = false;
+		// 				break;
+		// 			}
+		// 		}
+		// 		if (TypeIsConstantSize(index.types[j])) {
+		// 			auto data_size = GetTypeIdSize(index.types[j]);
+		// 			memcpy(tuple_data, chunk.data[key].data + data_size * entry,
+		// 			       data_size);
+		// 			tuple_data += data_size;
+		// 		} else {
+		// 			const char **string_data =
+		// 			    (const char **)chunk.data[key].data;
+		// 			strcpy(tuple_data, string_data[entry]);
+		// 			tuple_data += strlen(string_data[entry]) + 1;
+		// 		}
+		// 	}
+		// 	if (!success) {
+		// 		break;
+		// 	}
+		// }
+		// if (!success) {
+		// 	break;
+		// }
 
 		lock_guard<mutex> guard(index.index_lock);
 		// now actually add the entries to this index
 		for (size_t i = 0; i < chunk.count; i++) {
+			UniqueIndexNode *entry = nullptr;
 			if (has_null[i]) {
-				// skip entries with NULL values
-				added_nodes[current_index][i] = nullptr;
-				continue;
+				if (index.allow_nulls) {
+					// skip entries with NULL values
+					added_nodes[current_index][i] = nullptr;
+					continue;
+				} else {
+					// if NULLs are not allowed, throw an exception
+					error = "PRIMARY KEY column cannot contain NULL values!";
+				}
+			} else {
+				entry = index.AddEntry(transaction, move(tuples[i]),
+				                       row_identifier_start + i);
+				if (!entry) {
+					// could not add entry: constraint violation
+					error = "PRIMARY KEY or UNIQUE constraint violated: "
+					        "duplicated key";
+				}
 			}
 
-			auto entry =
-			    index.AddEntry(transaction, key_size[i], move(key_data[i]),
-			                   row_identifier_start + i);
 			if (!entry) {
-				// could not add entry: constraint violation
-				error =
-				    "PRIMARY KEY or UNIQUE constraint violated: duplicated key";
 				// remove all added entries from this index
 				for (size_t j = i; j > 0; j--) {
 					if (added_nodes[current_index][j - 1]) {

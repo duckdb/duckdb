@@ -282,9 +282,12 @@ cmake-build-release
 
 # Generated documentation
 docs
+
+# tests
 test/test.sql
 
 # SQLite logic tests
+test/evidence/
 third_party/sqllogictest
 # Format timer
 .last_format

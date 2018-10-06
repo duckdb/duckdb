@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "common/types/data_chunk.hpp"
+#include "common/types/tuple.hpp"
 
 namespace duckdb {
 
@@ -21,17 +22,15 @@ class DataTable;
 class Transaction;
 
 struct UniqueIndexNode {
-	size_t size;
+	Tuple tuple;
 	size_t row_identifier;
-	std::unique_ptr<uint8_t[]> key_data;
 
 	UniqueIndexNode *parent;
 	std::unique_ptr<UniqueIndexNode> left;
 	std::unique_ptr<UniqueIndexNode> right;
 
-	UniqueIndexNode(size_t size, std::unique_ptr<uint8_t[]> key_data,
-	                size_t row_identifier)
-	    : size(size), row_identifier(row_identifier), key_data(move(key_data)),
+	UniqueIndexNode(Tuple tuple, size_t row_identifier)
+	    : tuple(std::move(tuple)), row_identifier(row_identifier),
 	      parent(nullptr) {}
 };
 
@@ -52,20 +51,18 @@ class UniqueIndex {
 	// void Update(DataChunk &chunk);
 
   private:
-	UniqueIndexNode *AddEntry(Transaction &transaction, size_t size,
-	                          std::unique_ptr<uint8_t[]> data,
+	UniqueIndexNode *AddEntry(Transaction &transaction, Tuple tuple,
 	                          size_t row_identifier);
 	void RemoveEntry(UniqueIndexNode *entry);
 
+	//! The tuple serializer
+	TupleSerializer serializer;
+	//! A reference to the table this Unique constraint relates to
 	DataTable &table;
 	//! Types of the UniqueIndex
 	std::vector<TypeId> types;
 	//! The set of keys that must be collectively unique
 	std::vector<size_t> keys;
-	//! Base size of tuples
-	size_t base_size = 0;
-	//! Set of variable-length columns included in the key (if any)
-	std::vector<size_t> variable_columns;
 	//! Lock on the index
 	std::mutex index_lock;
 	//! Whether or not NULL values are allowed by the constraint (false for
