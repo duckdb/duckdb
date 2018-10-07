@@ -78,20 +78,20 @@ TEST_CASE("Multiple PRIMARY KEY constraint", "[constraints]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "world", "bla"}));
 }
 
-// TEST_CASE("PRIMARY KEY and transactions", "[constraints]") {
-// 	unique_ptr<DuckDBResult> result;
-// 	DuckDB db(nullptr);
-// 	DuckDBConnection con(db);
+TEST_CASE("PRIMARY KEY and transactions", "[constraints]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
 
-// 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY)"));
 
-// 	// rollback
-// 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-// 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1);"));
-// 	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+	// rollback
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1);"));
+	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
 
-// 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1);"));
 
-// 	result = con.Query("SELECT * FROM integers");
-// 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
-// }
+	result = con.Query("SELECT * FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+}

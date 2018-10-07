@@ -23,6 +23,8 @@ struct Tuple {
 };
 
 class TupleSerializer {
+	friend class TupleComparer;
+
   public:
 	TupleSerializer(const std::vector<TypeId> &types, bool inline_varlength,
 	                std::vector<size_t> columns = {});
@@ -79,6 +81,27 @@ class TupleSerializer {
 	bool has_variable_columns;
 	//! Whether or not variable length columns should be inlined
 	bool inline_varlength;
+};
+
+//! Compare tuples created through different TupleSerializers
+class TupleComparer {
+  public:
+	//! Create a tuple comparer that compares tuples created with the left
+	//! serializer to tuples created with the right serializer. The columns of
+	//! the left serializer must be a subset of the columns of the right
+	//! serializer.
+	TupleComparer(TupleSerializer &left, TupleSerializer &right);
+	//! Use the TupleComparer to compare two tuples from the {left,right}
+	//! serializer with each other
+	int Compare(const uint8_t *left, const uint8_t *right);
+
+  private:
+	//! Left tuple serializer
+	TupleSerializer &left;
+	//! The left offsets used for comparison
+	std::vector<size_t> left_offsets;
+	//! The right offsets used for comparison
+	std::vector<size_t> right_offsets;
 };
 
 } // namespace duckdb

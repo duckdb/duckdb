@@ -99,6 +99,7 @@ void TupleSerializer::Serialize(DataChunk &chunk, uint8_t *targets[],
 
 void TupleSerializer::Serialize(std::vector<char *> &column_data, size_t offset,
                                 uint8_t *target) {
+	assert(!inline_varlength);
 	for (size_t i = 0; i < columns.size(); i++) {
 		auto source = column_data[columns[i]] + type_sizes[i] * offset;
 		memcpy(target, source, type_sizes[i]);
@@ -108,6 +109,7 @@ void TupleSerializer::Serialize(std::vector<char *> &column_data, size_t offset,
 
 void TupleSerializer::Deserialize(std::vector<char *> &column_data,
                                   size_t offset, uint8_t *target) {
+	assert(!inline_varlength);
 	for (size_t i = 0; i < columns.size(); i++) {
 		auto source = column_data[columns[i]] + type_sizes[i] * offset;
 		memcpy(source, target, type_sizes[i]);
@@ -221,4 +223,57 @@ int TupleSerializer::Compare(const uint8_t *a, const uint8_t *b) {
 		}
 		return cmp;
 	}
+}
+
+TupleComparer::TupleComparer(TupleSerializer &left, TupleSerializer &right)
+    : left(left) {
+	assert(left.columns.size() <= right.columns.size());
+	// compute the offsets
+	left_offsets.resize(left.columns.size());
+	right_offsets.resize(left.columns.size());
+
+	size_t left_offset = 0;
+	for (size_t i = 0; i < left.columns.size(); i++) {
+		left_offsets[i] = left_offset;
+		right_offsets[i] = (size_t)-1;
+
+		size_t right_offset = 0;
+		for (size_t j = 0; j < right.columns.size(); j++) {
+			if (left.columns[i] == right.columns[j]) {
+				assert(left.types[i] == right.types[j]);
+
+				// found it!
+				right_offsets[i] = right_offset;
+				break;
+			}
+			right_offset += right.type_sizes[j];
+		}
+		// assert that we found the column
+		left_offset += left.type_sizes[i];
+		assert(right_offsets[i] != (size_t)-1);
+	}
+}
+
+int TupleComparer::Compare(const uint8_t *left_data,
+                           const uint8_t *right_data) {
+	int cmp;
+	for (size_t i = 0; i < left_offsets.size(); i++) {
+		auto left_element = left_data + left_offsets[i];
+		auto right_element = right_data + right_offsets[i];
+
+		if (left.is_variable[i]) {
+			// string comparison
+			assert(left.types[i] == TypeId::VARCHAR);
+			auto left_string = *((char **)left_element);
+			auto right_string = *((char **)right_element);
+			cmp = strcmp(left_string, right_string);
+		} else {
+			cmp = memcmp(left_element, right_element, left.type_sizes[i]);
+		}
+
+		if (cmp != 0) {
+			return cmp;
+		}
+	}
+	return 0;
 }

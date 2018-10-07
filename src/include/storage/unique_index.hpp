@@ -57,6 +57,9 @@ class UniqueIndex {
 
 	//! The tuple serializer
 	TupleSerializer serializer;
+	//! The comparer used to compare tuples stored in the index to tuples of the
+	//! base table
+	TupleComparer comparer;
 	//! A reference to the table this Unique constraint relates to
 	DataTable &table;
 	//! Types of the UniqueIndex

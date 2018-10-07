@@ -11,8 +11,8 @@ using namespace std;
 
 UniqueIndex::UniqueIndex(DataTable &table, std::vector<TypeId> types,
                          std::vector<size_t> keys, bool allow_nulls)
-    : serializer(types, false, keys), table(table), types(types), keys(keys),
-      allow_nulls(allow_nulls) {}
+    : serializer(types, false, keys), comparer(serializer, table.serializer),
+      table(table), types(types), keys(keys), allow_nulls(allow_nulls) {}
 
 UniqueIndexNode *UniqueIndex::AddEntry(Transaction &transaction, Tuple tuple,
                                        size_t row_identifier) {
@@ -27,13 +27,10 @@ UniqueIndexNode *UniqueIndex::AddEntry(Transaction &transaction, Tuple tuple,
 	// traverse the tree
 	while (entry) {
 		//		auto min_size = std::min(new_node->tuple.size,
-		//entry->tuple.size);
+		// entry->tuple.size);
 
 		// compare the new entry to the current entry
 		cmp = serializer.Compare(entry->tuple, new_node->tuple);
-		// memcmp(entry->tuple.data.get(), new_node->tuple.data.get(),
-		// min_size);
-
 		if (cmp == 0) {
 			// node is potentially equivalent
 			// check the base table for the actual version
@@ -48,51 +45,60 @@ UniqueIndexNode *UniqueIndex::AddEntry(Transaction &transaction, Tuple tuple,
 				chunk->GetSharedLock();
 			}
 			bool conflict = true;
-			// auto version = chunk->version_pointers[offset];
-			// if (version) {
-			// 	// first check if we need to use the base table entry
-			// 	// compare to base table version
-			// 	if (chunk->deleted[offset]) {
-			// 		conflict = false;
-			// 	} else {
-			// 		assert(0);
-			// 		// do actual comparison
-			// 	}
 
-			// 	if (!conflict && !(version->version_number ==
-			// transaction.transaction_id  || 	     version->version_number <
-			// transaction.start_time)) {
-			// 		// we don't have to use the base table version, keep going
-			// 		// until we reach the version that belongs to this entry
-			// 		while(true) {
-			// 			if (!version->tuple_data) {
-			// 				// our entry was deleted, no conflict
-			// 				conflict = false;
-			// 			} else {
-			// 				assert(0);
-			// 				if (conflict) {
-			// 					break;
-			// 				}
-			// 			}
+			// compare to base table version to verify there is a conflict
+			if (chunk->deleted[offset]) {
+				conflict = false;
+			} else {
+				// first serialize to tuple
+				uint8_t tuple_data[chunk->table.serializer.TupleSize()];
+				chunk->table.serializer.Serialize(chunk->columns, offset,
+				                                  tuple_data);
+				// now compare them
+				// we use the TupleComparer because the tuple is serialized from
+				// the base table
+				conflict = comparer.Compare(new_node->tuple.data.get(),
+				                            tuple_data) == 0;
+			}
 
-			// 			auto next = version->next;
-			// 			if (!next) {
-			// 				// use this version: no predecessor
-			// 				break;
-			// 			}
-			// 			if (next->version_number ==
-			// 			    transaction.transaction_id) {
-			// 				// use this version: it was created by us
-			// 				break;
-			// 			}
-			// 			if (next->version_number < transaction.start_time) {
-			// 				// use this version: it was committed by us
-			// 				break;
-			// 			}
-			// 			version = next;
-			// 		}
-			// 	}
-			// }
+			// check the version number if there was no conflict
+			auto version = chunk->version_pointers[offset];
+			if (version && !conflict) {
+				if (!(version->version_number == transaction.transaction_id ||
+				      version->version_number < transaction.start_time)) {
+					// we don't have to use the base table version, keep going
+					// until we reach the version that belongs to this entry
+					while (true) {
+						if (!version->tuple_data) {
+							// our entry was deleted, no conflict
+							conflict = false;
+						} else {
+							conflict =
+							    comparer.Compare(new_node->tuple.data.get(),
+							                     version->tuple_data) == 0;
+							if (conflict) {
+								break;
+							}
+						}
+
+						auto next = version->next;
+						if (!next) {
+							// use this version: no predecessor
+							break;
+						}
+						if (next->version_number ==
+						    transaction.transaction_id) {
+							// use this version: it was created by us
+							break;
+						}
+						if (next->version_number < transaction.start_time) {
+							// use this version: it was committed by us
+							break;
+						}
+						version = next;
+					}
+				}
+			}
 
 			if (conflict) {
 				if (chunk != table.tail_chunk) {
