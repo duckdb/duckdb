@@ -23,7 +23,7 @@ StorageChunk::StorageChunk(DataTable &_table, size_t start)
 	owned_data = unique_ptr<char[]>(new char[tuple_size * STORAGE_CHUNK_SIZE]);
 	char *dataptr = owned_data.get();
 	for (size_t i = 0; i < table_columns.size(); i++) {
-		columns[i].data = dataptr;
+		columns[i] = dataptr;
 		dataptr += GetTypeIdSize(table_columns[i].type) * STORAGE_CHUNK_SIZE;
 	}
 }
@@ -46,14 +46,7 @@ void StorageChunk::Undo(VersionInformation *info) {
 		// move data back to the original chunk
 		deleted[entry] = false;
 		auto tuple_data = info->tuple_data;
-		for (size_t i = 0; i < columns.size(); i++) {
-			auto value_size = GetTypeIdSize(table.table.columns[i].type);
-			auto storage_pointer = columns[i].data + value_size * entry;
-
-			memcpy(storage_pointer, tuple_data, value_size);
-
-			tuple_data += value_size;
-		}
+		table.serializer.Deserialize(columns, entry, tuple_data);
 	}
 	version_pointers[entry] = info->next;
 	if (version_pointers[entry]) {

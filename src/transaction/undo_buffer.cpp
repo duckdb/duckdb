@@ -171,7 +171,7 @@ WriteTuple(WriteAheadLog *log, VersionInformation *entry,
 		for (size_t i = 0; i < chunk->column_count; i++) {
 			auto type = chunk->data[i].type;
 			size_t value_size = GetTypeIdSize(type);
-			void *storage_pointer = storage->columns[i].data + value_size * id;
+			void *storage_pointer = storage->columns[i] + value_size * id;
 			memcpy(chunk->data[i].data + value_size * chunk->count,
 			       storage_pointer, value_size);
 			chunk->data[i].count++;

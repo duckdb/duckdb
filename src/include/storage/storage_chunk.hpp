@@ -23,12 +23,6 @@ class StorageManager;
 
 struct VersionInformation;
 
-struct StorageVector {
-	StorageVector() : data(nullptr) {}
-
-	char *data;
-};
-
 class StorageChunk {
   public:
 	StorageChunk(DataTable &table, size_t start);
@@ -36,7 +30,7 @@ class StorageChunk {
 	DataTable &table;
 	bool deleted[STORAGE_CHUNK_SIZE] = {0};
 	VersionInformation *version_pointers[STORAGE_CHUNK_SIZE] = {nullptr};
-	std::vector<StorageVector> columns;
+	std::vector<char *> columns;
 	size_t count;
 	size_t start;
 

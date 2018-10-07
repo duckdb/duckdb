@@ -33,6 +33,12 @@ class TupleSerializer {
 	//! Serialize a DataChunk to a set of memory locations
 	void Serialize(DataChunk &chunk, uint8_t *targets[],
 	               bool *has_null = nullptr);
+	//! Serializes a tuple from a set of columns to a single memory location
+	void Serialize(std::vector<char *> &columns, size_t offset,
+	               uint8_t *target);
+	//! Deserialize a tuple from a single memory location to a set of columns
+	void Deserialize(std::vector<char *> &columns, size_t offset,
+	                 uint8_t *target);
 
 	//! Returns the constant per-tuple size (only if the size is constant)
 	inline size_t TupleSize() {

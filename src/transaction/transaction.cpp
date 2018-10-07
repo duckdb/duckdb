@@ -55,14 +55,7 @@ void Transaction::PushTuple(size_t offset, StorageChunk *storage) {
 	}
 
 	// now fill in the tuple data
-	for (size_t i = 0; i < storage->columns.size(); i++) {
-		size_t value_size = GetTypeIdSize(storage->table.table.columns[i].type);
-		void *storage_pointer = storage->columns[i].data + value_size * offset;
-
-		memcpy(tuple_data, storage_pointer, value_size);
-
-		tuple_data += value_size;
-	}
+	storage->table.serializer.Serialize(storage->columns, offset, tuple_data);
 }
 
 void Transaction::PushQuery(string query) {

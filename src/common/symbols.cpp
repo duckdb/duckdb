@@ -73,7 +73,6 @@ INSTANTIATE_VECTOR(std::vector<std::unique_ptr<SQLStatement>>);
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<PhysicalOperator>>);
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<LogicalOperator>>);
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Transaction>>);
-template class std::vector<StorageVector>;
 template class std::vector<TypeId>;
 template class std::vector<Value>;
 INSTANTIATE_VECTOR(std::vector<WALEntryData>);

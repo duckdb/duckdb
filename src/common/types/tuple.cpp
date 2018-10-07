@@ -97,6 +97,24 @@ void TupleSerializer::Serialize(DataChunk &chunk, uint8_t *targets[],
 	}
 }
 
+void TupleSerializer::Serialize(std::vector<char *> &column_data, size_t offset,
+                                uint8_t *target) {
+	for (size_t i = 0; i < columns.size(); i++) {
+		auto source = column_data[columns[i]] + type_sizes[i] * offset;
+		memcpy(target, source, type_sizes[i]);
+		target += type_sizes[i];
+	}
+}
+
+void TupleSerializer::Deserialize(std::vector<char *> &column_data,
+                                  size_t offset, uint8_t *target) {
+	for (size_t i = 0; i < columns.size(); i++) {
+		auto source = column_data[columns[i]] + type_sizes[i] * offset;
+		memcpy(source, target, type_sizes[i]);
+		target += type_sizes[i];
+	}
+}
+
 static void SerializeValue(uint8_t *target_data, Vector &col, size_t index,
                            size_t result_index, size_t type_size,
                            bool *has_null) {

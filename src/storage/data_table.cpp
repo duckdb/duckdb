@@ -20,7 +20,7 @@ using namespace duckdb;
 using namespace std;
 
 DataTable::DataTable(StorageManager &storage, TableCatalogEntry &table)
-    : table(table), storage(storage) {
+    : table(table), serializer(table.GetTypes(), false), storage(storage) {
 	size_t accumulative_size = 0;
 	for (size_t i = 0; i < table.columns.size(); i++) {
 		accumulative_tuple_size.push_back(accumulative_size);
@@ -184,7 +184,7 @@ void DataTable::Append(ClientContext &context, DataChunk &chunk) {
 		// now insert the elements into the vector
 		for (size_t i = 0; i < chunk.column_count; i++) {
 			char *target =
-			    last_chunk->columns[i].data +
+			    last_chunk->columns[i] +
 			    last_chunk->count * GetTypeIdSize(table.columns[i].type);
 			VectorOperations::CopyNull(chunk.data[i], target, 0, current_count);
 		}
@@ -211,7 +211,7 @@ void DataTable::Append(ClientContext &context, DataChunk &chunk) {
 		                               new_chunk_pointer->version_pointers);
 		// now insert the elements into the vector
 		for (size_t i = 0; i < chunk.column_count; i++) {
-			char *target = new_chunk_pointer->columns[i].data;
+			char *target = new_chunk_pointer->columns[i];
 			VectorOperations::CopyNull(chunk.data[i], target, current_count,
 			                           remainder);
 		}
@@ -326,7 +326,7 @@ void DataTable::Update(ClientContext &context, Vector &row_identifiers,
 	for (size_t j = 0; j < column_ids.size(); j++) {
 		auto column_id = column_ids[j];
 		auto size = GetTypeIdSize(updates.data[j].type);
-		auto base_data = chunk->columns[column_id].data;
+		auto base_data = chunk->columns[column_id];
 
 		Vector *update_vector = &updates.data[j];
 		Vector null_vector;
@@ -484,7 +484,7 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result,
 					// normal column
 					// grab the data from the source using a selection vector
 					char *dataptr =
-					    current_chunk->columns[column_ids[j]].data +
+					    current_chunk->columns[column_ids[j]] +
 					    GetTypeIdSize(result.data[j].type) * structure.offset;
 					Vector source(result.data[j].type, dataptr);
 					source.sel_vector = regular_entries;

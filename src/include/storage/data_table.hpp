@@ -16,6 +16,7 @@
 
 #include "common/types/data_chunk.hpp"
 #include "common/types/statistics.hpp"
+#include "common/types/tuple.hpp"
 
 #include "storage/storage_chunk.hpp"
 #include "storage/unique_index.hpp"
@@ -72,6 +73,8 @@ class DataTable {
 	//! A reference to the catalog table entry
 	TableCatalogEntry &table;
 
+	//! Tuple serializer for this table
+	TupleSerializer serializer;
 	//! A reference to the base storage manager
 	StorageManager &storage;
 
