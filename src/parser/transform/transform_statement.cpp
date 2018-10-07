@@ -396,6 +396,7 @@ unique_ptr<TransactionStatement> TransformTransaction(Node *node) {
 	assert(stmt);
 	switch (stmt->kind) {
 	case TRANS_STMT_BEGIN:
+	case TRANS_STMT_START:
 		return make_unique<TransactionStatement>(
 		    TransactionType::BEGIN_TRANSACTION);
 	case TRANS_STMT_COMMIT:
