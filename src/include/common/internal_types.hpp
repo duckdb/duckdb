@@ -45,6 +45,11 @@ extern sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE];
 //! Zero NULL mask: filled with the value 0 [READ ONLY]
 extern std::bitset<STANDARD_VECTOR_SIZE> ZERO_MASK;
 
+struct BinaryData {
+	std::unique_ptr<uint8_t[]> data;
+	size_t size;
+};
+
 //===--------------------------------------------------------------------===//
 // SQL Value Types
 //===--------------------------------------------------------------------===//

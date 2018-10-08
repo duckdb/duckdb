@@ -4,6 +4,7 @@
 
 #include "common/exception.hpp"
 #include "common/helper.hpp"
+#include "common/serializer.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -188,91 +189,47 @@ string DataChunk::ToString() const {
 	return retval;
 }
 
-std::unique_ptr<uint8_t[]> DataChunk::Serialize(size_t &size) {
-	size = 0;
-	// count
-	size += sizeof(sel_t);
-	// column count
-	size += sizeof(uint64_t);
-	// then the types of the column
-	size += sizeof(int) * column_count;
-	// then the actual data of the column
-	for (size_t i = 0; i < column_count; i++) {
-		auto type = data[i].type;
-		if (TypeIsConstantSize(type)) {
-			// constant size type: write count * size
-			size += GetTypeIdSize(type) * count;
-		} else {
-			assert(type == TypeId::VARCHAR);
-			// strings are inlined into the blob
-			// measure size of each string
-			char **strings = (char **)data[i].data;
-			for (size_t j = 0; j < count; j++) {
-				size += strlen(strings[j]) + 1;
-			}
-		}
-	}
-	// now allocate memory and write
-	auto result = unique_ptr<uint8_t[]>(new uint8_t[size]);
-	auto ptr = result.get();
-
+void DataChunk::Serialize(Serializer &serializer) {
 	// write the count
-	*((sel_t *)ptr) = count;
-	ptr += sizeof(sel_t);
-
-	// write the column count
-	*((uint64_t *)ptr) = column_count;
-	ptr += sizeof(uint64_t);
-
+	serializer.Write<sel_t>(count);
+	serializer.Write<uint64_t>(column_count);
 	for (size_t i = 0; i < column_count; i++) {
 		// write the types
-		*((int *)ptr) = (int)data[i].type;
-		ptr += sizeof(int);
+		serializer.Write<int>((int)data[i].type);
 	}
 	// write the data
 	for (size_t i = 0; i < column_count; i++) {
 		auto type = data[i].type;
 		if (TypeIsConstantSize(type)) {
+			auto ptr = serializer.ManualWrite(GetTypeIdSize(type) * count);
 			// constant size type: simple memcpy
 			VectorOperations::CopyNull(data[i], ptr);
-			ptr += GetTypeIdSize(type) * count;
 		} else {
 			assert(type == TypeId::VARCHAR);
 			// strings are inlined into the blob
 			// we use null-padding to store them
 			const char **strings = (const char **)data[i].data;
 			for (size_t j = 0; j < count; j++) {
-				auto target = (char *)ptr;
 				auto source =
 				    strings[j] ? strings[j] : NullValue<const char *>();
-				strcpy(target, source);
-				ptr += strlen(source) + 1;
+				serializer.WriteString(source);
 			}
 		}
 	}
-	return result;
 }
 
-bool DataChunk::Deserialize(uint8_t *ptr, size_t size) {
-	auto endptr = ptr + size;
-	if (ptr + sizeof(sel_t) + sizeof(uint64_t) > endptr) {
-		return false;
-	}
-	// first read the meta information
-	auto rows = *((sel_t *)ptr);
-	ptr += sizeof(sel_t);
+bool DataChunk::Deserialize(Deserializer &source) {
+	bool failed = false;
 
-	column_count = *((uint64_t *)ptr);
-	ptr += sizeof(uint64_t);
+	auto rows = source.Read<sel_t>(failed);
+	column_count = source.Read<uint64_t>(failed);
 
-	// now read the types
-	if (ptr + sizeof(int) * column_count > endptr) {
-		return false;
-	}
 	std::vector<TypeId> types;
 	for (size_t i = 0; i < column_count; i++) {
-		types.push_back((TypeId) * ((int *)ptr));
-		ptr += sizeof(int);
+		types.push_back((TypeId)source.Read<int>(failed));
+		if (failed) {
+			return false;
+		}
 	}
 	Initialize(types);
 	// now load the column data
@@ -280,43 +237,37 @@ bool DataChunk::Deserialize(uint8_t *ptr, size_t size) {
 		auto type = data[i].type;
 		if (TypeIsConstantSize(type)) {
 			// constant size type: simple memcpy
-			auto data_to_copy = GetTypeIdSize(type) * rows;
-			if (ptr + data_to_copy > endptr) {
+			auto column_size = GetTypeIdSize(type) * rows;
+			auto ptr = source.ReadData(column_size);
+			if (!ptr) {
 				return false;
 			}
 			Vector v(data[i].type, (char *)ptr);
 			v.count = rows;
 			VectorOperations::AppendNull(v, data[i]);
-			ptr += data_to_copy;
 		} else {
 			const char **strings = (const char **)data[i].data;
 			for (size_t j = 0; j < rows; j++) {
 				// read the strings
-				auto end = ptr;
-				// scan to find the end of the string
-				while (end <= endptr && *end) {
-					end++;
-				}
-				if (end > endptr) {
+				auto str = source.Read<string>(failed);
+				if (failed) {
 					return false;
 				}
 				// now add the string to the StringHeap of the vector
 				// and write the pointer into the vector
-				if (IsNullValue<const char *>((const char *)ptr)) {
+				if (IsNullValue<const char *>((const char *)str.c_str())) {
 					strings[j] = nullptr;
 					data[i].nullmask[j] = true;
 				} else {
-					strings[j] =
-					    data[i].string_heap.AddString((char *)ptr, end - ptr);
+					strings[j] = data[i].string_heap.AddString(str);
 				}
-				ptr = end + 1;
 			}
 		}
 		data[i].count = rows;
 	}
 	count = rows;
 	Verify();
-	return true;
+	return !failed;
 }
 
 #ifdef DEBUG

@@ -26,5 +26,11 @@ class Constraint : public Printable {
 	virtual void Accept(SQLNodeVisitor *) {}
 
 	ConstraintType type;
+
+	//! Serializes a Constraint to a stand-alone binary blob
+	std::unique_ptr<uint8_t[]> Serialize(size_t &size);
+	//! Deserializes a blob back into a Constraint
+	static std::unique_ptr<Constraint> Deserialize(uint8_t *dataptr,
+	                                               size_t size);
 };
 } // namespace duckdb

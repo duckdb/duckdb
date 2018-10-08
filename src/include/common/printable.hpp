@@ -16,6 +16,9 @@
 
 namespace duckdb {
 
+class Deserializer;
+class Serializer;
+
 //! Printable is an abstract class that represents an object that can be
 //! converted to a string for logging and debugging purposes.
 class Printable {

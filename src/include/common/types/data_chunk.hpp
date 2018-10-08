@@ -102,10 +102,10 @@ class DataChunk : public Printable {
 	void Reset();
 
 	//! Serializes a DataChunk to a stand-alone binary blob
-	std::unique_ptr<uint8_t[]> Serialize(size_t &size);
+	void Serialize(Serializer &serializer);
 	//! Deserializes a blob back into a DataChunk, returns false if
 	//! deserialization is not possible
-	bool Deserialize(uint8_t *dataptr, size_t size);
+	bool Deserialize(Deserializer &source);
 
 	//! Returns a list of types of the vectors of this data chunk
 	std::vector<TypeId> GetTypes();

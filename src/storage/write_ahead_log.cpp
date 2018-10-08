@@ -12,6 +12,7 @@
 #include "transaction/transaction_manager.hpp"
 
 #include "common/file_system.hpp"
+#include "common/serializer.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -23,34 +24,8 @@ WriteAheadLog::~WriteAheadLog() {
 }
 
 //===--------------------------------------------------------------------===//
-// Read Helper Functions
+// Read Helper Function
 //===--------------------------------------------------------------------===//
-template <class T>
-static T Read(uint8_t *&dataptr, uint8_t *endptr, bool &fail);
-template <> string Read(uint8_t *&dataptr, uint8_t *endptr, bool &fail);
-
-template <class T>
-static T Read(uint8_t *&dataptr, uint8_t *endptr, bool &fail) {
-	if (dataptr + sizeof(T) >= endptr) {
-		fail = true;
-		return (T)0;
-	}
-	T value = *((T *)dataptr);
-	dataptr += sizeof(T);
-	return value;
-}
-
-template <> string Read(uint8_t *&dataptr, uint8_t *endptr, bool &fail) {
-	auto size = Read<uint32_t>(dataptr, endptr, fail);
-	if (dataptr + size >= endptr) {
-		fail = true;
-		return string();
-	}
-	auto value = string((char *)dataptr, size);
-	dataptr += size;
-	return value;
-}
-
 static bool ReadEntry(WALEntry &entry, FILE *wal_file) {
 	return fread(&entry.type, sizeof(wal_type_t), 1, wal_file) == 1 &&
 	       fread(&entry.size, sizeof(uint32_t), 1, wal_file) == 1;
@@ -60,7 +35,7 @@ static bool ReadEntry(WALEntry &entry, FILE *wal_file) {
 // Replay & Initialize Log
 //===--------------------------------------------------------------------===//
 static bool ReplayEntry(ClientContext &context, DuckDB &database,
-                        WALEntry entry, uint8_t *dataptr);
+                        WALEntry entry, Deserializer &source);
 
 void WriteAheadLog::Replay(string &path) {
 	auto wal_file = fopen(path.c_str(), "r");
@@ -78,8 +53,11 @@ void WriteAheadLog::Replay(string &path) {
 			bool failed = false;
 			context.transaction.BeginTransaction();
 			for (auto &stored_entry : stored_entries) {
+				Deserializer deserializer(stored_entry.data.get(),
+				                          stored_entry.entry.size);
+
 				if (!ReplayEntry(context, database, stored_entry.entry,
-				                 stored_entry.data.get())) {
+				                 deserializer)) {
 					// failed to replay entry in log
 					context.transaction.Rollback();
 					failed = true;
@@ -172,6 +150,11 @@ void WriteAheadLog::WriteCreateTable(TableCatalogEntry *entry) {
 		WriteString(column.name, size);
 		Write<TypeId>(column.type, size);
 	}
+	// Write<uint32_t>(entry->constraints.size(), size);
+	// for (auto &constraint : entry->constraints) {
+
+	// }
+
 	assert(size == 0);
 }
 
@@ -217,15 +200,17 @@ void WriteAheadLog::WriteInsert(std::string &schema, std::string &table,
 	size_t size = 0;
 	size += WriteSize(schema);
 	size += WriteSize(table);
+
+	Serializer serializer;
 	// serialize the chunk
-	size_t data_size = 0;
-	auto data = chunk.Serialize(data_size);
-	size += data_size;
+	chunk.Serialize(serializer);
+	auto blob = serializer.GetData();
+	size += blob.size;
 	// now write the entry
 	WriteEntry(WALEntry::INSERT_TUPLE, size);
 	WriteString(schema, size);
 	WriteString(table, size);
-	WriteData(data.get(), data_size, size);
+	WriteData(blob.data.get(), blob.size, size);
 
 	assert(size == 0);
 }
@@ -250,37 +235,36 @@ void WriteAheadLog::Flush() {
 // Replay Entries
 //===--------------------------------------------------------------------===//
 bool ReplayDropTable(Transaction &transaction, Catalog &catalog,
-                     uint8_t *dataptr, uint8_t *endptr);
+                     Deserializer &source);
 bool ReplayCreateTable(Transaction &transaction, Catalog &catalog,
-                       uint8_t *dataptr, uint8_t *endptr);
+                       Deserializer &source);
 bool ReplayDropSchema(Transaction &transaction, Catalog &catalog,
-                      uint8_t *dataptr, uint8_t *endptr);
+                      Deserializer &source);
 bool ReplayCreateSchema(Transaction &transaction, Catalog &catalog,
-                        uint8_t *dataptr, uint8_t *endptr);
-bool ReplayInsert(ClientContext &context, Catalog &catalog, uint8_t *dataptr,
-                  uint8_t *endptr);
-bool ReplayQuery(ClientContext &context, uint8_t *dataptr, uint8_t *endptr);
+                        Deserializer &source);
+bool ReplayInsert(ClientContext &context, Catalog &catalog,
+                  Deserializer &source);
+bool ReplayQuery(ClientContext &context, Deserializer &source);
 
 bool ReplayEntry(ClientContext &context, DuckDB &database, WALEntry entry,
-                 uint8_t *dataptr) {
-	uint8_t *endptr = dataptr + entry.size + 1;
+                 Deserializer &source) {
 	switch (entry.type) {
 	case WALEntry::DROP_TABLE:
 		return ReplayDropTable(context.ActiveTransaction(), database.catalog,
-		                       dataptr, endptr);
+		                       source);
 	case WALEntry::CREATE_TABLE:
 		return ReplayCreateTable(context.ActiveTransaction(), database.catalog,
-		                         dataptr, endptr);
+		                         source);
 	case WALEntry::DROP_SCHEMA:
 		return ReplayDropSchema(context.ActiveTransaction(), database.catalog,
-		                        dataptr, endptr);
+		                        source);
 	case WALEntry::CREATE_SCHEMA:
 		return ReplayCreateSchema(context.ActiveTransaction(), database.catalog,
-		                          dataptr, endptr);
+		                          source);
 	case WALEntry::INSERT_TUPLE:
-		return ReplayInsert(context, database.catalog, dataptr, endptr);
+		return ReplayInsert(context, database.catalog, source);
 	case WALEntry::QUERY:
-		return ReplayQuery(context, dataptr, endptr);
+		return ReplayQuery(context, source);
 	default:
 		// unrecognized WAL entry type
 		return false;
@@ -289,19 +273,19 @@ bool ReplayEntry(ClientContext &context, DuckDB &database, WALEntry entry,
 }
 
 bool ReplayCreateTable(Transaction &transaction, Catalog &catalog,
-                       uint8_t *dataptr, uint8_t *endptr) {
+                       Deserializer &source) {
 	bool failed = false;
-	auto schema_name = Read<std::string>(dataptr, endptr, failed);
-	auto table_name = Read<std::string>(dataptr, endptr, failed);
-	auto column_count = Read<uint32_t>(dataptr, endptr, failed);
+	auto schema_name = source.Read<string>(failed);
+	auto table_name = source.Read<string>(failed);
+	auto column_count = source.Read<uint32_t>(failed);
 	if (failed) {
 		return false;
 	}
 
 	std::vector<ColumnDefinition> columns;
 	for (size_t i = 0; i < column_count; i++) {
-		auto column_name = Read<std::string>(dataptr, endptr, failed);
-		auto column_type = Read<TypeId>(dataptr, endptr, failed);
+		auto column_name = source.Read<string>(failed);
+		auto column_type = source.Read<TypeId>(failed);
 		if (failed) {
 			return false;
 		}
@@ -318,10 +302,10 @@ bool ReplayCreateTable(Transaction &transaction, Catalog &catalog,
 }
 
 bool ReplayDropTable(Transaction &transaction, Catalog &catalog,
-                     uint8_t *dataptr, uint8_t *endptr) {
+                     Deserializer &source) {
 	bool failed = false;
-	auto schema_name = Read<std::string>(dataptr, endptr, failed);
-	auto table_name = Read<std::string>(dataptr, endptr, failed);
+	auto schema_name = source.Read<string>(failed);
+	auto table_name = source.Read<string>(failed);
 	if (failed) {
 		return false;
 	}
@@ -335,9 +319,9 @@ bool ReplayDropTable(Transaction &transaction, Catalog &catalog,
 }
 
 bool ReplayCreateSchema(Transaction &transaction, Catalog &catalog,
-                        uint8_t *dataptr, uint8_t *endptr) {
+                        Deserializer &source) {
 	bool failed = false;
-	auto schema_name = Read<std::string>(dataptr, endptr, failed);
+	auto schema_name = source.Read<string>(failed);
 	if (failed) {
 		return false;
 	}
@@ -351,17 +335,18 @@ bool ReplayCreateSchema(Transaction &transaction, Catalog &catalog,
 }
 
 bool ReplayDropSchema(Transaction &transaction, Catalog &catalog,
-                      uint8_t *dataptr, uint8_t *endptr) {
+                      Deserializer &source) {
 	throw NotImplementedException("Did not implement DROP SCHEMA yet!");
 }
 
-bool ReplayInsert(ClientContext &context, Catalog &catalog, uint8_t *dataptr,
-                  uint8_t *endptr) {
+bool ReplayInsert(ClientContext &context, Catalog &catalog,
+                  Deserializer &source) {
 	bool failed = false;
-	auto schema_name = Read<std::string>(dataptr, endptr, failed);
-	auto table_name = Read<std::string>(dataptr, endptr, failed);
+	auto schema_name = source.Read<string>(failed);
+	auto table_name = source.Read<string>(failed);
 	DataChunk chunk;
-	failed |= !chunk.Deserialize(dataptr, endptr - dataptr);
+
+	failed |= !chunk.Deserialize(source);
 	if (failed) {
 		return false;
 	}
@@ -379,10 +364,10 @@ bool ReplayInsert(ClientContext &context, Catalog &catalog, uint8_t *dataptr,
 	return true;
 }
 
-bool ReplayQuery(ClientContext &context, uint8_t *dataptr, uint8_t *endptr) {
+bool ReplayQuery(ClientContext &context, Deserializer &source) {
 	// read the query
 	bool failed = false;
-	auto query = Read<std::string>(dataptr, endptr, failed);
+	auto query = source.Read<string>(failed);
 	if (failed) {
 		return false;
 	}
