@@ -26,9 +26,6 @@ UniqueIndexNode *UniqueIndex::AddEntry(Transaction &transaction, Tuple tuple,
 	int cmp = 0;
 	// traverse the tree
 	while (entry) {
-		//		auto min_size = std::min(new_node->tuple.size,
-		// entry->tuple.size);
-
 		// compare the new entry to the current entry
 		cmp = serializer.Compare(entry->tuple, new_node->tuple);
 		if (cmp == 0) {
@@ -196,60 +193,6 @@ string UniqueIndex::Append(Transaction &transaction,
 		bool has_null[STANDARD_VECTOR_SIZE] = {0};
 
 		index.serializer.Serialize(chunk, tuples, has_null);
-
-		// for (size_t i = 0; i < chunk.count; i++) {
-		// 	size_t entry = chunk.sel_vector ? chunk.sel_vector[i] : i;
-		// 	key_size[i] = index.base_size;
-		// 	for (auto &key : index.variable_columns) {
-		// 		assert(chunk.data[key].type == TypeId::VARCHAR);
-		// 		char **string_data = (char **)chunk.data[key].data;
-		// 		key_size[i] +=
-		// 		    string_data[entry] ? strlen(string_data[entry]) + 1 : 0;
-		// 	}
-		// 	key_data[i] = unique_ptr<uint8_t[]>(new uint8_t[key_size[i]]);
-		// 	has_null[i] = false;
-
-		// 	// copy the data
-		// 	char *tuple_data = (char *)key_data[i].get();
-		// 	for (size_t j = 0; j < index.keys.size(); j++) {
-		// 		auto key = index.keys[j];
-		// 		assert(index.types[j] == chunk.data[key].type);
-		// 		if (chunk.data[key].nullmask[i]) {
-		// 			if (index.allow_nulls) {
-		// 				// any key that has a NULL value we can skip placing in
-		// 				// the index entirely because NULL values are always <>
-		// 				// to NULL values, any key with a NULL value can ALWAYS
-		// 				// be placed inside the index
-		// 				key_data[i].reset();
-		// 				has_null[i] = true;
-		// 				break;
-		// 			} else {
-		// 				// if NULLs are not allowed, throw an exception
-		// 				error =
-		// 				    "PRIMARY KEY column cannot contain NULL values!";
-		// 				success = false;
-		// 				break;
-		// 			}
-		// 		}
-		// 		if (TypeIsConstantSize(index.types[j])) {
-		// 			auto data_size = GetTypeIdSize(index.types[j]);
-		// 			memcpy(tuple_data, chunk.data[key].data + data_size * entry,
-		// 			       data_size);
-		// 			tuple_data += data_size;
-		// 		} else {
-		// 			const char **string_data =
-		// 			    (const char **)chunk.data[key].data;
-		// 			strcpy(tuple_data, string_data[entry]);
-		// 			tuple_data += strlen(string_data[entry]) + 1;
-		// 		}
-		// 	}
-		// 	if (!success) {
-		// 		break;
-		// 	}
-		// }
-		// if (!success) {
-		// 	break;
-		// }
 
 		lock_guard<mutex> guard(index.index_lock);
 		// now actually add the entries to this index

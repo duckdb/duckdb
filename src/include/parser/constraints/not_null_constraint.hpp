@@ -24,6 +24,11 @@ class NotNullConstraint : public Constraint {
 
 	virtual std::string ToString() const { return "NOT NULL Constraint"; }
 
+	//! Serialize to a stand-alone binary blob
+	virtual void Serialize(Serializer &serializer);
+	//! Deserializes a NotNullConstraint
+	static std::unique_ptr<Constraint> Deserialize(Deserializer &source);
+
 	//! Column index this constraint pertains to
 	size_t index;
 };

@@ -28,9 +28,9 @@ class Constraint : public Printable {
 	ConstraintType type;
 
 	//! Serializes a Constraint to a stand-alone binary blob
-	std::unique_ptr<uint8_t[]> Serialize(size_t &size);
-	//! Deserializes a blob back into a Constraint
-	static std::unique_ptr<Constraint> Deserialize(uint8_t *dataptr,
-	                                               size_t size);
+	virtual void Serialize(Serializer &serializer);
+	//! Deserializes a blob back into a Constraint, returns NULL if
+	//! deserialization is not possible
+	static std::unique_ptr<Constraint> Deserialize(Deserializer &source);
 };
 } // namespace duckdb

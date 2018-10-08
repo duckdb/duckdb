@@ -98,140 +98,6 @@ void WriteAheadLog::Initialize(std::string &path) {
 }
 
 //===--------------------------------------------------------------------===//
-// Write Helper Functions
-//===--------------------------------------------------------------------===//
-template <class T> size_t WriteAheadLog::WriteSize() { return sizeof(T); }
-
-size_t WriteAheadLog::WriteSize(string &val) {
-	return val.size() + WriteSize<uint32_t>();
-}
-
-template <class T> void WriteAheadLog::Write(T val, size_t &sz) {
-	sz -= WriteSize<T>();
-	if (fwrite(&val, WriteSize<T>(), 1, wal_file) != 1) {
-		throw IOException("WAL - Failed to write (%s)!", strerror(errno));
-	}
-}
-
-void WriteAheadLog::WriteString(string &val, size_t &sz) {
-	Write<uint32_t>(val.size(), sz);
-	if (val.size() > 0) {
-		sz -= val.size();
-		if (fwrite(val.c_str(), val.size(), 1, wal_file) != 1) {
-			throw IOException("WAL - Failed to write (%s)!", strerror(errno));
-		}
-	}
-}
-
-void WriteAheadLog::WriteData(uint8_t *dataptr, size_t data_size, size_t &sz) {
-	sz -= data_size;
-	if (fwrite(dataptr, data_size, 1, wal_file) != 1) {
-		throw IOException("WAL - Failed to write (%s)!", strerror(errno));
-	}
-}
-
-//===--------------------------------------------------------------------===//
-// Write Entries
-//===--------------------------------------------------------------------===//
-void WriteAheadLog::WriteCreateTable(TableCatalogEntry *entry) {
-	size_t size = 0;
-	size += WriteSize(entry->schema->name);
-	size += WriteSize(entry->name);
-	size += WriteSize<uint32_t>(); // column count
-	for (auto &column : entry->columns) {
-		size += WriteSize(column.name);
-		size += WriteSize<TypeId>();
-	}
-	WriteEntry(WALEntry::CREATE_TABLE, size);
-	WriteString(entry->schema->name, size);
-	WriteString(entry->name, size);
-	Write<uint32_t>(entry->columns.size(), size);
-	for (auto &column : entry->columns) {
-		WriteString(column.name, size);
-		Write<TypeId>(column.type, size);
-	}
-	// Write<uint32_t>(entry->constraints.size(), size);
-	// for (auto &constraint : entry->constraints) {
-
-	// }
-
-	assert(size == 0);
-}
-
-void WriteAheadLog::WriteDropTable(TableCatalogEntry *entry) {
-	size_t size = 0;
-	size += WriteSize(entry->schema->name);
-	size += WriteSize(entry->name);
-	WriteEntry(WALEntry::DROP_TABLE, size);
-	WriteString(entry->schema->name, size);
-	WriteString(entry->name, size);
-
-	assert(size == 0);
-}
-
-void WriteAheadLog::WriteCreateSchema(SchemaCatalogEntry *entry) {
-	size_t size = 0;
-	size += WriteSize(entry->name);
-	WriteEntry(WALEntry::CREATE_SCHEMA, size);
-	WriteString(entry->name, size);
-
-	assert(size == 0);
-}
-
-void WriteAheadLog::WriteDropSchema(SchemaCatalogEntry *entry) {
-	size_t size = 0;
-	size += WriteSize(entry->name);
-	WriteEntry(WALEntry::DROP_SCHEMA, size);
-	WriteString(entry->name, size);
-
-	assert(size == 0);
-}
-
-void WriteAheadLog::WriteInsert(std::string &schema, std::string &table,
-                                DataChunk &chunk) {
-	if (chunk.count == 0) {
-		return;
-	}
-	chunk.Verify();
-	if (chunk.sel_vector) {
-		throw NotImplementedException(
-		    "Cannot insert into WAL from chunk with SEL vector");
-	}
-	size_t size = 0;
-	size += WriteSize(schema);
-	size += WriteSize(table);
-
-	Serializer serializer;
-	// serialize the chunk
-	chunk.Serialize(serializer);
-	auto blob = serializer.GetData();
-	size += blob.size;
-	// now write the entry
-	WriteEntry(WALEntry::INSERT_TUPLE, size);
-	WriteString(schema, size);
-	WriteString(table, size);
-	WriteData(blob.data.get(), blob.size, size);
-
-	assert(size == 0);
-}
-
-void WriteAheadLog::WriteQuery(std::string &query) {
-	size_t size = 0;
-	size += WriteSize(query);
-	WriteEntry(WALEntry::QUERY, size);
-	WriteString(query, size);
-
-	assert(size == 0);
-}
-
-void WriteAheadLog::Flush() {
-	WriteEntry(WALEntry::WAL_FLUSH, 0);
-	// flushes all changes made to the WAL to disk
-	fflush(wal_file);
-	FileSync(wal_file);
-}
-
-//===--------------------------------------------------------------------===//
 // Replay Entries
 //===--------------------------------------------------------------------===//
 bool ReplayDropTable(Transaction &transaction, Catalog &catalog,
@@ -272,6 +138,55 @@ bool ReplayEntry(ClientContext &context, DuckDB &database, WALEntry entry,
 	return false;
 }
 
+//===--------------------------------------------------------------------===//
+// Write Helper Functions
+//===--------------------------------------------------------------------===//
+template <class T> void WriteAheadLog::Write(T val) {
+	if (fwrite(&val, sizeof(T), 1, wal_file) != 1) {
+		throw IOException("WAL - Failed to write (%s)!", strerror(errno));
+	}
+}
+
+void WriteAheadLog::WriteData(uint8_t *dataptr, size_t data_size) {
+	if (data_size == 0) {
+		return;
+	}
+	if (fwrite(dataptr, data_size, 1, wal_file) != 1) {
+		throw IOException("WAL - Failed to write (%s)!", strerror(errno));
+	}
+}
+
+void WriteAheadLog::WriteEntry(wal_type_t type, Serializer &serializer) {
+	auto blob = serializer.GetData();
+
+	Write<wal_type_t>(type);
+	Write<uint32_t>(blob.size);
+	WriteData(blob.data.get(), blob.size);
+}
+
+//===--------------------------------------------------------------------===//
+// Write Entries
+//===--------------------------------------------------------------------===//
+//===--------------------------------------------------------------------===//
+// CREATE TABLE
+//===--------------------------------------------------------------------===//
+void WriteAheadLog::WriteCreateTable(TableCatalogEntry *entry) {
+	Serializer serializer;
+	serializer.WriteString(entry->schema->name);
+	serializer.WriteString(entry->name);
+	serializer.Write<uint32_t>(entry->columns.size());
+	for (auto &column : entry->columns) {
+		serializer.WriteString(column.name);
+		serializer.Write<int>((int)column.type);
+	}
+	serializer.Write<uint32_t>(entry->constraints.size());
+	for (auto &constraint : entry->constraints) {
+		constraint->Serialize(serializer);
+	}
+
+	WriteEntry(WALEntry::CREATE_TABLE, serializer);
+}
+
 bool ReplayCreateTable(Transaction &transaction, Catalog &catalog,
                        Deserializer &source) {
 	bool failed = false;
@@ -282,16 +197,29 @@ bool ReplayCreateTable(Transaction &transaction, Catalog &catalog,
 		return false;
 	}
 
-	std::vector<ColumnDefinition> columns;
+	vector<ColumnDefinition> columns;
 	for (size_t i = 0; i < column_count; i++) {
 		auto column_name = source.Read<string>(failed);
-		auto column_type = source.Read<TypeId>(failed);
+		auto column_type = (TypeId)source.Read<int>(failed);
 		if (failed) {
 			return false;
 		}
 		columns.push_back(ColumnDefinition(column_name, column_type, false));
 	}
-	std::vector<std::unique_ptr<Constraint>> constraints;
+	auto constraint_count = source.Read<uint32_t>(failed);
+	if (failed) {
+		return false;
+	}
+
+	vector<unique_ptr<Constraint>> constraints;
+	for (size_t i = 0; i < constraint_count; i++) {
+		auto constraint = Constraint::Deserialize(source);
+		if (!constraint) {
+			return false;
+		}
+		constraints.push_back(move(constraint));
+	}
+
 	try {
 		catalog.CreateTable(transaction, schema_name, table_name, columns,
 		                    constraints);
@@ -299,6 +227,17 @@ bool ReplayCreateTable(Transaction &transaction, Catalog &catalog,
 		return false;
 	}
 	return true;
+}
+
+//===--------------------------------------------------------------------===//
+// DROP TABLE
+//===--------------------------------------------------------------------===//
+void WriteAheadLog::WriteDropTable(TableCatalogEntry *entry) {
+	Serializer serializer;
+	serializer.WriteString(entry->schema->name);
+	serializer.WriteString(entry->name);
+
+	WriteEntry(WALEntry::DROP_TABLE, serializer);
 }
 
 bool ReplayDropTable(Transaction &transaction, Catalog &catalog,
@@ -318,6 +257,16 @@ bool ReplayDropTable(Transaction &transaction, Catalog &catalog,
 	return true;
 }
 
+//===--------------------------------------------------------------------===//
+// CREATE SCHEMA
+//===--------------------------------------------------------------------===//
+void WriteAheadLog::WriteCreateSchema(SchemaCatalogEntry *entry) {
+	Serializer serializer;
+	serializer.WriteString(entry->name);
+
+	WriteEntry(WALEntry::CREATE_SCHEMA, serializer);
+}
+
 bool ReplayCreateSchema(Transaction &transaction, Catalog &catalog,
                         Deserializer &source) {
 	bool failed = false;
@@ -334,9 +283,41 @@ bool ReplayCreateSchema(Transaction &transaction, Catalog &catalog,
 	return true;
 }
 
+//===--------------------------------------------------------------------===//
+// DROP SCHEMA
+//===--------------------------------------------------------------------===//
+void WriteAheadLog::WriteDropSchema(SchemaCatalogEntry *entry) {
+	Serializer serializer;
+	serializer.WriteString(entry->name);
+
+	WriteEntry(WALEntry::DROP_SCHEMA, serializer);
+}
+
 bool ReplayDropSchema(Transaction &transaction, Catalog &catalog,
                       Deserializer &source) {
 	throw NotImplementedException("Did not implement DROP SCHEMA yet!");
+}
+
+//===--------------------------------------------------------------------===//
+// INSERT
+//===--------------------------------------------------------------------===//
+void WriteAheadLog::WriteInsert(std::string &schema, std::string &table,
+                                DataChunk &chunk) {
+	if (chunk.count == 0) {
+		return;
+	}
+	chunk.Verify();
+	if (chunk.sel_vector) {
+		throw NotImplementedException(
+		    "Cannot insert into WAL from chunk with SEL vector");
+	}
+
+	Serializer serializer;
+	serializer.WriteString(schema);
+	serializer.WriteString(table);
+	chunk.Serialize(serializer);
+
+	WriteEntry(WALEntry::INSERT_TUPLE, serializer);
 }
 
 bool ReplayInsert(ClientContext &context, Catalog &catalog,
@@ -353,15 +334,25 @@ bool ReplayInsert(ClientContext &context, Catalog &catalog,
 
 	Transaction &transaction = context.ActiveTransaction();
 
-	// try {
-	// first find the table
-	auto table = catalog.GetTable(transaction, schema_name, table_name);
-	// now append to the chunk
-	table->storage->Append(context, chunk);
-	// } catch(...) {
-	// 	return false;
-	// }
+	try {
+		// first find the table
+		auto table = catalog.GetTable(transaction, schema_name, table_name);
+		// now append to the chunk
+		table->storage->Append(context, chunk);
+	} catch (...) {
+		return false;
+	}
 	return true;
+}
+
+//===--------------------------------------------------------------------===//
+// QUERY
+//===--------------------------------------------------------------------===//
+void WriteAheadLog::WriteQuery(std::string &query) {
+	Serializer serializer;
+	serializer.WriteString(query);
+
+	WriteEntry(WALEntry::QUERY, serializer);
 }
 
 bool ReplayQuery(ClientContext &context, Deserializer &source) {
@@ -374,4 +365,16 @@ bool ReplayQuery(ClientContext &context, Deserializer &source) {
 
 	auto result = DuckDBConnection::GetQueryResult(context, query);
 	return result->GetSuccess();
+}
+
+//===--------------------------------------------------------------------===//
+// FLUSH
+//===--------------------------------------------------------------------===//
+void WriteAheadLog::Flush() {
+	// write an empty entry
+	Write<wal_type_t>(WALEntry::WAL_FLUSH);
+	Write<uint32_t>(0);
+	// flushes all changes made to the WAL to disk
+	fflush(wal_file);
+	FileSync(wal_file);
 }

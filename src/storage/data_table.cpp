@@ -111,6 +111,8 @@ void DataTable::VerifyConstraints(ClientContext &context, DataChunk &chunk) {
 			}
 			break;
 		}
+		case ConstraintType::DUMMY:
+			break;
 		case ConstraintType::PRIMARY_KEY:
 		case ConstraintType::FOREIGN_KEY:
 		case ConstraintType::UNIQUE:

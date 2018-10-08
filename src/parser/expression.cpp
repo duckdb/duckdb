@@ -1,4 +1,6 @@
 
+#include "common/serializer.hpp"
+
 #include "parser/expression.hpp"
 
 using namespace duckdb;
@@ -34,4 +36,36 @@ bool Expression::HasSubquery() {
 		}
 	}
 	return false;
+}
+
+void Expression::Serialize(Serializer &serializer) {
+	serializer.Write<int>((int)type);
+	serializer.Write<int>((int)return_type);
+	serializer.Write<uint32_t>(children.size());
+	for (auto &children : children) {
+		children->Serialize(serializer);
+	}
+}
+
+unique_ptr<Expression> Expression::Deserialize(Deserializer &source) {
+	bool failed = false;
+	auto type = (ExpressionType)source.Read<int>(failed);
+	auto return_type = (TypeId)source.Read<int>(failed);
+	auto children_count = source.Read<uint32_t>(failed);
+	if (failed) {
+		return nullptr;
+	}
+	// deserialize the children
+	vector<unique_ptr<Expression>> expressions;
+	for (size_t i = 0; i < children_count; i++) {
+		auto expression = Expression::Deserialize(source);
+		if (!expression) {
+			return nullptr;
+		}
+		expressions.push_back(move(expression));
+	}
+	switch (type) {
+	default:
+		return nullptr;
+	}
 }

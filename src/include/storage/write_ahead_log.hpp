@@ -83,26 +83,15 @@ class WriteAheadLog {
 	void Flush();
 
   private:
-	template <class T> size_t WriteSize();
-	size_t WriteSize(std::string &val);
+	template <class T> void Write(T val);
+	void WriteData(uint8_t *dataptr, size_t data_size);
 
-	template <class T> void Write(T val, size_t &sz);
-	void WriteString(std::string &val, size_t &sz);
-
-	void WriteEntry(wal_type_t type, uint32_t size) {
-		size_t sz = sizeof(WALEntry);
-		Write<wal_type_t>(type, sz);
-		Write<uint32_t>(size, sz);
-	}
-	void WriteEntry(WALEntry entry) { WriteEntry(entry.type, entry.size); }
-	void WriteData(uint8_t *dataptr, size_t data_size, size_t &sz);
+	void WriteEntry(wal_type_t type, Serializer &serializer);
 
 	bool initialized;
 
 	DuckDB &database;
 	FILE *wal_file;
 };
-
-template <> void WriteAheadLog::Write(std::string &val, size_t &sz);
 
 } // namespace duckdb

@@ -12,6 +12,8 @@
 
 #include "parser/constraint.hpp"
 
+#include <vector>
+
 namespace duckdb {
 
 //! The ParsedConstraint represents either a UNIQUE or PRIMARY KEY constraint
@@ -28,7 +30,12 @@ class ParsedConstraint : public Constraint {
 
 	virtual void Accept(SQLNodeVisitor *v) { v->Visit(*this); }
 
-	virtual std::string ToString() const { return "PRIMARY KEY Constraint"; }
+	virtual std::string ToString() const { return "Dummy Constraint"; }
+
+	//! Serialize to a stand-alone binary blob
+	virtual void Serialize(Serializer &serializer);
+	//! Deserializes a ParsedConstraint
+	static std::unique_ptr<Constraint> Deserialize(Deserializer &source);
 
 	ConstraintType ctype;
 	size_t index;

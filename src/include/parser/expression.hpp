@@ -141,6 +141,11 @@ class Expression : public Printable {
 		return result;
 	}
 
+	//! Serializes an Expression to a stand-alone binary blob
+	virtual void Serialize(Serializer &serializer);
+	//! Deserializes a blob back into an Expression
+	static std::unique_ptr<Expression> Deserialize(Deserializer &source);
+
 	//! Type of the expression
 	ExpressionType type;
 	//! Return type of the expression. This must be known in the execution

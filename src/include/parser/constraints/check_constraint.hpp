@@ -31,6 +31,11 @@ class CheckConstraint : public Constraint {
 		return StringUtil::Format("CHECK(%s)", expression->ToString().c_str());
 	}
 
+	//! Serialize to a stand-alone binary blob
+	virtual void Serialize(Serializer &serializer);
+	//! Deserializes a CheckConstraint
+	static std::unique_ptr<Constraint> Deserialize(Deserializer &source);
+
 	std::unique_ptr<Expression> expression;
 };
 
