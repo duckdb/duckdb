@@ -73,11 +73,10 @@ static void WriteCatalogEntry(WriteAheadLog *log, AbstractCatalogEntry *entry) {
 	auto parent = entry->parent;
 	switch (parent->type) {
 	case CatalogType::TABLE: {
-		auto table = (TableCatalogEntry *)parent;
 		if (parent->deleted) {
-			log->WriteDropTable(table);
+			log->WriteDropTable((TableCatalogEntry *)parent->child.get());
 		} else {
-			log->WriteCreateTable(table);
+			log->WriteCreateTable((TableCatalogEntry *)parent);
 		}
 		break;
 	}

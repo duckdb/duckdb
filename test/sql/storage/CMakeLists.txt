@@ -1,3 +1,3 @@
 
-add_library(test_sql_storage OBJECT shutdown.cpp storage.cpp)
+add_library(test_sql_storage OBJECT droptable.cpp shutdown.cpp storage.cpp)
 set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_sql_storage> PARENT_SCOPE)
