@@ -24,7 +24,7 @@ TEST_CASE("Create and drop a table over different runs", "[storage]") {
 		REQUIRE_NO_FAIL(
 		    con.Query("INSERT INTO test VALUES (11, 22), (13, 22);"));
 		REQUIRE_NO_FAIL(con.Query("DROP TABLE test"));
-		
+
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
 		REQUIRE_NO_FAIL(
 		    con.Query("INSERT INTO test VALUES (11, 22), (13, 22);"));
@@ -37,4 +37,3 @@ TEST_CASE("Create and drop a table over different runs", "[storage]") {
 	}
 	RemoveDirectory(storage_database);
 }
-

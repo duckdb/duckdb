@@ -182,6 +182,21 @@ Value VectorOperations::AllTrue(Vector &left) {
 	return result;
 }
 
+bool VectorOperations::Contains(Vector &vector, Value &value) {
+	if (vector.count == 0) {
+		return false;
+	}
+	// first perform a comparison using Equals
+	// then return TRUE if any of the comparisons are true
+	// FIXME: this can be done more efficiently in one loop
+	Vector right(value.CastAs(vector.type));
+	Vector comparison_result(TypeId::BOOLEAN, true, false);
+	VectorOperations::Equals(vector, right, comparison_result);
+	auto result = VectorOperations::AnyTrue(comparison_result);
+	assert(result.type == TypeId::BOOLEAN);
+	return result.value_.boolean;
+}
+
 bool VectorOperations::HasNull(Vector &left) { return left.nullmask.any(); }
 
 Value VectorOperations::MaximumStringLength(Vector &left) {

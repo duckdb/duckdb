@@ -17,7 +17,7 @@ TEST_CASE("Test many columns", "[create][.]") {
 	ostringstream ss;
 	// many columns
 	ss << "CREATE TABLE integers(";
-	for(size_t i = 0; i < COLUMN_COUNT; i++) {
+	for (size_t i = 0; i < COLUMN_COUNT; i++) {
 		ss << "i" + to_string(i) + " INTEGER, ";
 	}
 	ss << "j INTEGER);";
@@ -27,7 +27,8 @@ TEST_CASE("Test many columns", "[create][.]") {
 	// big insert
 	REQUIRE_NO_FAIL(con.Query(query));
 
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers (i0, j) VALUES (2, 3), (3, 4), (5, 6)"));
+	REQUIRE_NO_FAIL(con.Query(
+	    "INSERT INTO integers (i0, j) VALUES (2, 3), (3, 4), (5, 6)"));
 
 	result = con.Query("SELECT i0, j, i1 FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 5}));

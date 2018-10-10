@@ -116,6 +116,9 @@ struct VectorOperations {
 	static void Case(Vector &check, Vector &res_true, Vector &res_false,
 	                 Vector &result);
 
+	// Returns true if the vector contains an instance of Value
+	static bool Contains(Vector &vector, Value &value);
+
 	//===--------------------------------------------------------------------===//
 	// Scatter methods
 	//===--------------------------------------------------------------------===//
@@ -176,5 +179,50 @@ struct VectorOperations {
 	//! For every value in result, set result[i] = left[sel_vector[i]]
 	static void ApplySelectionVector(Vector &left, Vector &result,
 	                                 sel_t *sel_vector);
+	//===--------------------------------------------------------------------===//
+	// Exec
+	//===--------------------------------------------------------------------===//
+	template <typename T> static void Exec(Vector &vector, T &&fun) {
+		size_t i = 0;
+		if (vector.sel_vector) {
+			//#pragma GCC ivdep
+			for (; i + 8 < vector.count; i += 8) {
+				fun(vector.sel_vector[i + 0]);
+				fun(vector.sel_vector[i + 1]);
+				fun(vector.sel_vector[i + 2]);
+				fun(vector.sel_vector[i + 3]);
+				fun(vector.sel_vector[i + 4]);
+				fun(vector.sel_vector[i + 5]);
+				fun(vector.sel_vector[i + 6]);
+				fun(vector.sel_vector[i + 7]);
+			}
+
+			//#pragma GCC ivdep
+			for (; i < vector.count; i++) {
+				fun(vector.sel_vector[i]);
+			}
+		} else {
+			for (; i + 8 < vector.count; i += 8) {
+				fun(i + 0);
+				fun(i + 1);
+				fun(i + 2);
+				fun(i + 3);
+				fun(i + 4);
+				fun(i + 5);
+				fun(i + 6);
+				fun(i + 7);
+			}
+			//#pragma GCC ivdep
+			for (size_t i = 0; i < vector.count; i++) {
+				fun(i);
+			}
+		}
+	}
+
+	template <typename T, typename LAMBDA>
+	static void ExecType(Vector &vector, LAMBDA &&fun) {
+		auto data = (T *)vector.data;
+		VectorOperations::Exec(vector, [&](size_t i) { fun(data[i]); });
+	}
 };
 } // namespace duckdb

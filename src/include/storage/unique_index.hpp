@@ -11,6 +11,7 @@
 #pragma once
 
 #include <mutex>
+#include <unordered_set>
 #include <vector>
 
 #include "common/types/data_chunk.hpp"
@@ -47,12 +48,20 @@ class UniqueIndex {
 	       std::vector<std::unique_ptr<UniqueIndex>> &indexes, DataChunk &chunk,
 	       size_t row_identifier_start);
 
-	// void Delete(DataChunk &chunk);
-	// void Update(DataChunk &chunk);
+	static std::string
+	Update(Transaction &transaction, StorageChunk *storage,
+	       std::vector<std::unique_ptr<UniqueIndex>> &indexes,
+	       std::vector<column_t> &column_ids, DataChunk &update_chunk,
+	       Vector &row_identifiers);
 
   private:
+	std::string AddEntries(Transaction &transaction,
+	                       UniqueIndexNode *added_nodes[], Tuple tuples[],
+	                       bool has_null[], Vector &row_identifiers,
+	                       std::unordered_set<size_t> &ignored_identifiers);
 	UniqueIndexNode *AddEntry(Transaction &transaction, Tuple tuple,
-	                          size_t row_identifier);
+	                          size_t row_identifier,
+	                          std::unordered_set<size_t> &ignored_identifiers);
 	void RemoveEntry(UniqueIndexNode *entry);
 
 	//! The tuple serializer

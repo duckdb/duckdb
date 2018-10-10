@@ -117,6 +117,73 @@ void TupleSerializer::Deserialize(std::vector<char *> &column_data,
 	}
 }
 
+void TupleSerializer::Serialize(vector<char *> &column_data,
+                                Vector &index_vector, uint8_t *targets[]) {
+	uint64_t *indices = (uint64_t *)index_vector.data;
+	size_t offset = 0;
+	for (size_t i = 0; i < columns.size(); i++) {
+		for (size_t j = 0; j < index_vector.count; j++) {
+			auto index = index_vector.sel_vector
+			                 ? indices[index_vector.sel_vector[j]]
+			                 : indices[j];
+			auto source = column_data[columns[i]] + type_sizes[i] * index;
+			memcpy(targets[j] + offset, source, type_sizes[i]);
+		}
+		offset += type_sizes[i];
+	}
+}
+
+void TupleSerializer::SerializeUpdate(vector<char *> &column_data,
+                                      vector<column_t> &affected_columns,
+                                      DataChunk &update_chunk,
+                                      Vector &index_vector, size_t index_offset,
+                                      Tuple targets[], bool *has_null) {
+	uint64_t *indices = (uint64_t *)index_vector.data;
+	assert(index_vector.count == update_chunk.count);
+	assert(!inline_varlength);
+
+	// first initialize the tuples
+	for (size_t i = 0; i < index_vector.count; i++) {
+		targets[i].size = base_size;
+		targets[i].data = unique_ptr<uint8_t[]>(new uint8_t[targets[i].size]);
+	}
+
+	// now copy the data to the tuples
+	size_t offset = 0;
+	for (size_t i = 0; i < columns.size(); i++) {
+		auto column = columns[i];
+		auto update_column = affected_columns[i];
+		if (update_column == (column_t)-1) {
+			// fetch from base column
+			for (size_t j = 0; j < index_vector.count; j++) {
+				auto index = (index_vector.sel_vector
+				                  ? indices[index_vector.sel_vector[j]]
+				                  : indices[j]) -
+				             index_offset;
+				auto source = column_data[column] + type_sizes[i] * index;
+				memcpy(targets[j].data.get() + offset, source, type_sizes[i]);
+				if (has_null && IsNullValue((uint8_t *)source, types[i])) {
+					has_null[j] = true;
+				}
+			}
+		} else {
+			// fetch from update column
+			auto baseptr = update_chunk.data[update_column].data;
+			for (size_t j = 0; j < index_vector.count; j++) {
+				auto index =
+				    update_chunk.sel_vector ? update_chunk.sel_vector[j] : j;
+				auto source = baseptr + type_sizes[i] * index;
+				memcpy(targets[j].data.get() + offset, source, type_sizes[i]);
+				if (has_null &&
+				    update_chunk.data[update_column].nullmask[index]) {
+					has_null[j] = true;
+				}
+			}
+		}
+		offset += type_sizes[i];
+	}
+}
+
 static void SerializeValue(uint8_t *target_data, Vector &col, size_t index,
                            size_t result_index, size_t type_size,
                            bool *has_null) {

@@ -245,12 +245,6 @@ void DataTable::Delete(ClientContext &context, Vector &row_identifiers) {
 		    "Row identifiers for deletion out of bounds!");
 	}
 
-	if (indexes.size() > 0) {
-		throw NotImplementedException(
-		    "Don't support DELETE on column with PRIMARY KEY "
-		    "yet");
-	}
-
 	// get an exclusive lock on the chunk
 	chunk->GetExclusiveLock();
 
@@ -300,16 +294,21 @@ void DataTable::Update(ClientContext &context, Vector &row_identifiers,
 		throw OutOfRangeException("Row identifiers for update out of bounds!");
 	}
 
-	if (indexes.size() > 0) {
-		throw NotImplementedException(
-		    "Don't support UPDATE on column with PRIMARY KEY "
-		    "yet");
-	}
-
 	// get an exclusive lock on the chunk
 	chunk->GetExclusiveLock();
 
-	// now delete the entries
+	// first we handle any PRIMARY KEY and UNIQUE constraints
+	if (indexes.size() > 0) {
+		auto error =
+		    UniqueIndex::Update(context.ActiveTransaction(), chunk, indexes,
+		                        column_ids, updates, row_identifiers);
+		if (!error.empty()) {
+			chunk->ReleaseExclusiveLock();
+			throw ConstraintException(error);
+		}
+	}
+
+	// now update the entries
 	for (size_t i = 0; i < row_identifiers.count; i++) {
 		auto id = (sel_vector ? ids[sel_vector[i]] : ids[i]) - chunk->start;
 		// assert that all ids in the vector belong to the same chunk

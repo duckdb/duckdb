@@ -25,7 +25,7 @@ class Serializer {
 		if (blob.size + new_element_size >= maximum_size) {
 			do {
 				maximum_size *= 2;
-			} while(blob.size + new_element_size > maximum_size);
+			} while (blob.size + new_element_size > maximum_size);
 			auto new_data = new uint8_t[maximum_size];
 			memcpy(new_data, data, blob.size);
 			data = new_data;

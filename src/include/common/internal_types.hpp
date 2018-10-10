@@ -402,6 +402,9 @@ template <> inline bool IsNullValue(char *value) {
 	return IsNullValue<const char *>(value);
 }
 
+//! Compares a specific memory region against the types NULL value
+bool IsNullValue(uint8_t *ptr, TypeId type);
+
 //! Writes NullValue<T> value of a specific type to a memory address
 void SetNullValue(uint8_t *ptr, TypeId type);
 

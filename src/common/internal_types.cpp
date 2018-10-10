@@ -518,6 +518,12 @@ bool TypeIsNumeric(TypeId type) {
 	return type >= TypeId::TINYINT && type <= TypeId::DECIMAL;
 }
 
+bool IsNullValue(uint8_t *ptr, TypeId type) {
+	uint8_t data[100];
+	SetNullValue(data, type);
+	return memcmp(ptr, data, GetTypeIdSize(type)) == 0;
+}
+
 //! Writes NullValue<T> value of a specific type to a memory address
 void SetNullValue(uint8_t *ptr, TypeId type) {
 	switch (type) {

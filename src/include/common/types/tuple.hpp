@@ -41,6 +41,18 @@ class TupleSerializer {
 	//! Deserialize a tuple from a single memory location to a set of columns
 	void Deserialize(std::vector<char *> &columns, size_t offset,
 	                 uint8_t *target);
+	//! Serializes a set of tuples (specified by the indices vector) to a set of
+	//! memory location. Targets[] should have enough spaces to hold
+	//! indices.count tuples
+	void Serialize(std::vector<char *> &columns, Vector &indices,
+	               uint8_t *targets[]);
+	//! Serializes a set of tuples with updates. The base tuples are specified
+	//! by the index vector, the updated values are specified by update_chunk.
+	//! affected_columns signifies
+	void SerializeUpdate(std::vector<char *> &column_data,
+	                     std::vector<column_t> &affected_columns,
+	                     DataChunk &update_chunk, Vector &index_vector,
+	                     size_t index_offset, Tuple targets[], bool *has_null);
 
 	//! Returns the constant per-tuple size (only if the size is constant)
 	inline size_t TupleSize() {

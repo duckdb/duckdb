@@ -5,13 +5,6 @@
 using namespace duckdb;
 using namespace std;
 
-static void PrintBoundTables(std::vector<BoundTable> &tables) {
-	fprintf(stderr, "<<Bound Tables>>\n");
-	for(auto &table : tables) {
-		fprintf(stderr, "{Index: %zu, ColCount: %zu, Offset: %zu}\n", table.table_index, table.column_count, table.column_offset);
-	}
-}
-
 void ColumnBindingResolver::AppendTables(
     std::vector<BoundTable> &right_tables) {
 	size_t offset = bound_tables.size() == 0
@@ -88,7 +81,7 @@ void ColumnBindingResolver::Visit(LogicalJoin &op) {
 		cond.right->Accept(this);
 	}
 	auto right_tables = bound_tables;
-	
+
 	// now merge the two together
 	bound_tables = left_tables;
 	AppendTables(right_tables);
