@@ -277,11 +277,12 @@ void DataTable::Delete(ClientContext &context, Vector &row_identifiers) {
 }
 
 void DataTable::Update(ClientContext &context, Vector &row_identifiers,
-                       std::vector<column_t> &column_ids, DataChunk &updates) {
+                       vector<column_t> &column_ids, DataChunk &updates) {
 	if (row_identifiers.type != TypeId::POINTER) {
 		throw InvalidTypeException(row_identifiers.type,
 		                           "Row identifiers must be POINTER type!");
 	}
+	updates.Verify();
 	if (row_identifiers.count == 0) {
 		return;
 	}

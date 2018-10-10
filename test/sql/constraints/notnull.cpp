@@ -34,4 +34,9 @@ TEST_CASE("NOT NULL constraint", "[constraints]") {
 
 	result = con.Query("SELECT * FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {3, 4, 4, 5}));
+
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=4 WHERE i>4"));
+	
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 4, 4, 4}));
 }
