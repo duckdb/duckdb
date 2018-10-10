@@ -317,7 +317,7 @@ string UniqueIndex::Update(Transaction &transaction, StorageChunk *storage,
 			auto entry =
 			    find(updated_columns.begin(), updated_columns.end(), column);
 			if (entry != updated_columns.end()) {
-				affected_columns.push_back(*entry);
+				affected_columns.push_back(entry - updated_columns.begin());
 				index_affected = true;
 			} else {
 				affected_columns.push_back((column_t)-1);

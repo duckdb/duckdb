@@ -95,3 +95,124 @@ TEST_CASE("PRIMARY KEY and transactions", "[constraints]") {
 	result = con.Query("SELECT * FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
+
+TEST_CASE("PRIMARY KEY and update/delete", "[constraints]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	// create a table
+	REQUIRE_NO_FAIL(
+	    con.Query("CREATE TABLE test (a INTEGER PRIMARY KEY, b INTEGER);"));
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO test VALUES (11, 1), (12, 2), (13, 3)"));
+	// this update affects a non-primary key column, should just work
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET b=4;"));
+	//! Set every key one higher, should also work without conflicts
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=a+1;"));
+	//! Set only the first key higher, should work as this introduces a
+	//! duplicate key!
+	REQUIRE_FAIL(con.Query("UPDATE test SET a=a+1 WHERE a<=12;"));
+	//! Set all keys to 4, results in a conflict!
+	REQUIRE_FAIL(con.Query("UPDATE test SET a=4;"));
+
+	result = con.Query("SELECT * FROM test;");
+	REQUIRE(CHECK_COLUMN(result, 0, {12, 13, 14}));
+	REQUIRE(CHECK_COLUMN(result, 1, {4, 4, 4}));
+
+	// delete and insert the same value should just work
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM test WHERE a=12"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (12, 4);"));
+
+	// insert a duplicate should fail
+	REQUIRE_FAIL(con.Query("INSERT INTO test VALUES (12, 4);"));
+
+	// update one key
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=4 WHERE a=12;"));
+
+	result = con.Query("SELECT * FROM test ORDER BY a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {4, 13, 14}));
+	REQUIRE(CHECK_COLUMN(result, 1, {4, 4, 4}));
+
+	// set a column to NULL should fail
+	REQUIRE_FAIL(con.Query("UPDATE test SET a=NULL WHERE a=13;"));
+}
+
+TEST_CASE("PRIMARY KEY and update/delete on multiple columns",
+          "[constraints]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	// create a table
+	REQUIRE_NO_FAIL(con.Query(
+	    "CREATE TABLE test (a INTEGER, b VARCHAR, PRIMARY KEY(a, b));"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 'hello'), (12, "
+	                          "'world'), (13, 'blablabla')"));
+	// update one of the columns, should work as it does not introduce
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET b='hello';"));
+	//! Set every key one higher, should also work without conflicts
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=a+1;"));
+	//! Set only the first key higher, should work as this introduces a
+	//! duplicate key!
+	REQUIRE_FAIL(con.Query("UPDATE test SET a=a+1 WHERE a<=12;"));
+	//! Set all keys to 4, results in a conflict!
+	REQUIRE_FAIL(con.Query("UPDATE test SET a=4;"));
+
+	result = con.Query("SELECT * FROM test;");
+	REQUIRE(CHECK_COLUMN(result, 0, {12, 13, 14}));
+	REQUIRE(CHECK_COLUMN(result, 1,
+	                     {Value("hello"), Value("hello"), Value("hello")}));
+
+	// delete and insert the same value should just work
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM test WHERE a=12"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (12, 'hello');"));
+
+	// insert a duplicate should fail
+	REQUIRE_FAIL(con.Query("INSERT INTO test VALUES (12, 'hello');"));
+
+	// update one key
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=4 WHERE a=12;"));
+
+	result = con.Query("SELECT * FROM test ORDER BY a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {4, 13, 14}));
+	REQUIRE(CHECK_COLUMN(result, 1,
+	                     {Value("hello"), Value("hello"), Value("hello")}));
+
+	// set a column to NULL should fail
+	REQUIRE_FAIL(con.Query("UPDATE test SET b=NULL WHERE a=13;"));
+}
+
+TEST_CASE("PRIMARY KEY and update/delete in the same transaction",
+          "[constraints]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY)"));
+
+	// rollback
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1);"));
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=33;"));
+	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+
+	// insert the same values again
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (33);"));
+
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 33}));
+
+	// update and then insert
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1);"));
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=33;"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1);"));
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 33}));
+}

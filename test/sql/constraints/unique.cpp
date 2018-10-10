@@ -23,8 +23,26 @@ TEST_CASE("Single UNIQUE constraint", "[constraints]") {
 	// insert a duplicate value as part of a chain of values, this should fail
 	REQUIRE_FAIL(con.Query("INSERT INTO integers VALUES (6, 6), (3, 4);"));
 
+	// unique constraints accept NULL values, unlike PRIMARY KEY columns
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO integers VALUES (NULL, 3), (NULL, 3)"));
+
+	// but if we try to replace them like this it's going to fail
+	REQUIRE_FAIL(con.Query("UPDATE integers SET i=77 WHERE i IS NULL"));
+
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3, 3, 5, 4}));
+
 	// multiple constraints: PRIMARY KEY and UNIQUE
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+}
+
+TEST_CASE("Multiple constraints", "[constraints]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
 	REQUIRE_NO_FAIL(con.Query(
 	    "CREATE TABLE integers(i INTEGER PRIMARY KEY, j INTEGER UNIQUE)"));
 
