@@ -12,17 +12,15 @@ using namespace std;
 SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name)
     : AbstractCatalogEntry(CatalogType::SCHEMA, catalog, name) {}
 
-void SchemaCatalogEntry::CreateTable(
-    Transaction &transaction, const string &table_name,
-    const std::vector<ColumnDefinition> &columns,
-    std::vector<std::unique_ptr<Constraint>> &constraints) {
-
-	auto table =
-	    new TableCatalogEntry(catalog, this, table_name, columns, constraints);
+void SchemaCatalogEntry::CreateTable(Transaction &transaction,
+                                     CreateTableInformation *info) {
+	auto table = new TableCatalogEntry(catalog, this, info);
 	auto table_entry = unique_ptr<AbstractCatalogEntry>(table);
-	if (!tables.CreateEntry(transaction, table_name, move(table_entry))) {
-		throw CatalogException("Table with name %s already exists!",
-		                       table_name.c_str());
+	if (!tables.CreateEntry(transaction, info->table, move(table_entry))) {
+		if (!info->if_not_exists) {
+			throw CatalogException("Table with name %s already exists!",
+			                       info->table.c_str());
+		}
 	}
 }
 

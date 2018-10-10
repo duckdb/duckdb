@@ -38,7 +38,7 @@ bool Planner::CreatePlan(ClientContext &context,
 		case StatementType::SELECT:
 		case StatementType::DELETE:
 		case StatementType::UPDATE:
-		case StatementType::CREATE:
+		case StatementType::CREATE_TABLE:
 			CreatePlan(context, *statement.get());
 			this->success = true;
 			break;

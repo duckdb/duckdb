@@ -30,17 +30,7 @@ class Catalog {
 	                  const std::string &schema = DEFAULT_SCHEMA);
 	//! Creates a table in the specified schema with the specified set of
 	//! columns. Throws an exception if it already exists.
-	void CreateTable(Transaction &transaction, const std::string &schema,
-	                 const std::string &table,
-	                 const std::vector<ColumnDefinition> &columns,
-	                 std::vector<std::unique_ptr<Constraint>> &constraints);
-	void CreateTable(Transaction &transaction, const std::string &schema,
-	                 const std::string &table,
-	                 const std::vector<ColumnDefinition> &columns) {
-		std::vector<std::unique_ptr<Constraint>> constraints;
-		CreateTable(transaction, schema, table, columns, constraints);
-	}
-
+	void CreateTable(Transaction &transaction, CreateTableInformation *info);
 	void DropTable(Transaction &transaction, const std::string &schema,
 	               const std::string &table);
 

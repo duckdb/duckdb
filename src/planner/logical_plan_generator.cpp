@@ -22,17 +22,15 @@ static bool has_select_list(LogicalOperatorType type) {
 	       type == LogicalOperatorType::UNION;
 }
 
-void LogicalPlanGenerator::Visit(CreateStatement &statement) {
+void LogicalPlanGenerator::Visit(CreateTableStatement &statement) {
 	if (root) {
 		throw Exception("CREATE TABLE from SELECT not supported yet!");
 	}
 	// bind the schema
 	auto schema = context.db.catalog.GetSchema(context.ActiveTransaction(),
-	                                           statement.schema);
+	                                           statement.info->schema);
 	// create the logical operator
-	root =
-	    make_unique<LogicalCreate>(schema, statement.table, statement.columns,
-	                               move(statement.constraints));
+	root = make_unique<LogicalCreate>(schema, move(statement.info));
 }
 
 void LogicalPlanGenerator::Visit(UpdateStatement &statement) {

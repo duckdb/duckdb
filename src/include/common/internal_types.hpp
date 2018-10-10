@@ -85,7 +85,7 @@ enum class StatementType {
 	INSERT = 3,        // insert statement type
 	UPDATE = 4,        // update statement type
 	DELETE = 5,        // delete statement type
-	CREATE = 6,        // create statement type
+	CREATE_TABLE = 6,  // create statement type
 	DROP = 7,          // drop statement type
 	PREPARE = 8,       // prepare statement type
 	EXECUTE = 9,       // execute statement type

@@ -36,9 +36,7 @@ class SchemaCatalogEntry : public AbstractCatalogEntry {
 	TableCatalogEntry *GetTable(Transaction &transaction,
 	                            const std::string &table);
 	//! Creates a table with the given name in the schema
-	void CreateTable(Transaction &transaction, const std::string &table_name,
-	                 const std::vector<ColumnDefinition> &columns,
-	                 std::vector<std::unique_ptr<Constraint>> &constraints);
+	void CreateTable(Transaction &transaction, CreateTableInformation *info);
 
 	void DropTable(Transaction &transaction, const std::string &table_name);
 

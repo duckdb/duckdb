@@ -261,11 +261,11 @@ void Binder::Visit(UpdateStatement &stmt) {
 	}
 }
 
-void Binder::Visit(CreateStatement &stmt) {
+void Binder::Visit(CreateTableStatement &stmt) {
 	// bind any constraints
 	// first create a fake table
-	bind_context->AddDummyTable(stmt.columns);
-	for (auto &it : stmt.constraints) {
+	bind_context->AddDummyTable(stmt.info->columns);
+	for (auto &it : stmt.info->constraints) {
 		it->Accept(this);
 	}
 }

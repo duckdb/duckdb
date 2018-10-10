@@ -20,6 +20,7 @@
 #include "common/types/statistics.hpp"
 
 #include "parser/constraint.hpp"
+#include "parser/parsed_data.hpp"
 
 namespace duckdb {
 
@@ -31,9 +32,7 @@ class TableCatalogEntry : public AbstractCatalogEntry {
   public:
 	//! Create a real TableCatalogEntry and initialize storage for it
 	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
-	                  std::string name,
-	                  const std::vector<ColumnDefinition> &columns,
-	                  std::vector<std::unique_ptr<Constraint>> &constraints);
+	                  CreateTableInformation *info);
 
 	//! The schema the table belongs to
 	SchemaCatalogEntry *schema;

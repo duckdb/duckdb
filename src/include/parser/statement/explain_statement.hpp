@@ -2,9 +2,9 @@
 //
 //                         DuckDB
 //
-// parser/statement/create_statement.hpp
+// parser/statement/explain_statement.hpp
 //
-// Author: Hannes Mühleisen & Mark Raasveldt
+// Author: Hannes Mühleisen
 //
 //===----------------------------------------------------------------------===//
 

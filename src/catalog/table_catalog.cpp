@@ -10,12 +10,12 @@
 using namespace duckdb;
 using namespace std;
 
-TableCatalogEntry::TableCatalogEntry(
-    Catalog *catalog, SchemaCatalogEntry *schema, string name,
-    const vector<ColumnDefinition> &table_columns,
-    vector<unique_ptr<Constraint>> &parsed_constraints)
-    : AbstractCatalogEntry(CatalogType::TABLE, catalog, name), schema(schema) {
-	for (auto entry : table_columns) {
+TableCatalogEntry::TableCatalogEntry(Catalog *catalog,
+                                     SchemaCatalogEntry *schema,
+                                     CreateTableInformation *info)
+    : AbstractCatalogEntry(CatalogType::TABLE, catalog, info->table),
+      schema(schema) {
+	for (auto entry : info->columns) {
 		if (ColumnExists(entry.name)) {
 			throw CatalogException("Column with name %s already exists!",
 			                       entry.name.c_str());
@@ -31,7 +31,7 @@ TableCatalogEntry::TableCatalogEntry(
 	// resolve the constraints
 	// we have to parse the DUMMY constraints and initialize the indices
 	bool has_primary_key = false;
-	for (auto &constraint : parsed_constraints) {
+	for (auto &constraint : info->constraints) {
 		if (constraint->type == ConstraintType::DUMMY) {
 			// have to resolve columns
 			auto c = (ParsedConstraint *)constraint.get();

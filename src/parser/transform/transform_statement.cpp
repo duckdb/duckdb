@@ -261,19 +261,22 @@ unique_ptr<InsertStatement> TransformInsert(Node *node) {
 	return result;
 }
 
-unique_ptr<CreateStatement> TransformCreate(Node *node) {
+unique_ptr<CreateTableStatement> TransformCreate(Node *node) {
 	auto stmt = reinterpret_cast<CreateStmt *>(node);
 	assert(stmt);
-	auto result = make_unique<CreateStatement>();
+	auto result = make_unique<CreateTableStatement>();
+	auto &info = *result->info.get();
+
 	if (stmt->inhRelations) {
 		throw NotImplementedException("inherited relations not implemented");
 	}
 	assert(stmt->relation);
 
 	if (stmt->relation->schemaname) {
-		result->schema = stmt->relation->schemaname;
+		info.schema = stmt->relation->schemaname;
 	}
-	result->table = stmt->relation->relname;
+	info.table = stmt->relation->relname;
+	info.if_not_exists = stmt->if_not_exists;
 	assert(stmt->tableElts);
 
 	for (auto c = stmt->tableElts->head; c != NULL; c = lnext(c)) {
@@ -290,15 +293,15 @@ unique_ptr<CreateStatement> TransformCreate(Node *node) {
 			if (cdef->constraints) {
 				for (auto constr = cdef->constraints->head; constr != nullptr;
 				     constr = constr->next) {
-					result->constraints.push_back(TransformConstraint(
-					    constr, centry, result->columns.size()));
+					info.constraints.push_back(TransformConstraint(
+					    constr, centry, info.columns.size()));
 				}
 			}
-			result->columns.push_back(centry);
+			info.columns.push_back(centry);
 			break;
 		}
 		case T_Constraint: {
-			result->constraints.push_back(TransformConstraint(c));
+			info.constraints.push_back(TransformConstraint(c));
 			break;
 		}
 		default:

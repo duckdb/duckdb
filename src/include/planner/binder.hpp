@@ -37,7 +37,7 @@ class Binder : public SQLNodeVisitor {
 	void Visit(CopyStatement &stmt);
 	void Visit(DeleteStatement &stmt);
 	void Visit(UpdateStatement &stmt);
-	void Visit(CreateStatement &stmt);
+	void Visit(CreateTableStatement &stmt);
 
 	void Visit(CheckConstraint &constraint);
 

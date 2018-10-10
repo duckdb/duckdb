@@ -190,39 +190,39 @@ void WriteAheadLog::WriteCreateTable(TableCatalogEntry *entry) {
 bool ReplayCreateTable(Transaction &transaction, Catalog &catalog,
                        Deserializer &source) {
 	bool failed = false;
-	auto schema_name = source.Read<string>(failed);
-	auto table_name = source.Read<string>(failed);
+	CreateTableInformation info;
+
+	info.schema = source.Read<string>(failed);
+	info.table = source.Read<string>(failed);
 	auto column_count = source.Read<uint32_t>(failed);
 	if (failed) {
 		return false;
 	}
 
-	vector<ColumnDefinition> columns;
 	for (size_t i = 0; i < column_count; i++) {
 		auto column_name = source.Read<string>(failed);
 		auto column_type = (TypeId)source.Read<int>(failed);
 		if (failed) {
 			return false;
 		}
-		columns.push_back(ColumnDefinition(column_name, column_type, false));
+		info.columns.push_back(
+		    ColumnDefinition(column_name, column_type, false));
 	}
 	auto constraint_count = source.Read<uint32_t>(failed);
 	if (failed) {
 		return false;
 	}
 
-	vector<unique_ptr<Constraint>> constraints;
 	for (size_t i = 0; i < constraint_count; i++) {
 		auto constraint = Constraint::Deserialize(source);
 		if (!constraint) {
 			return false;
 		}
-		constraints.push_back(move(constraint));
+		info.constraints.push_back(move(constraint));
 	}
 
 	try {
-		catalog.CreateTable(transaction, schema_name, table_name, columns,
-		                    constraints);
+		catalog.CreateTable(transaction, &info);
 	} catch (...) {
 		return false;
 	}

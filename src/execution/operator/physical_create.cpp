@@ -30,8 +30,7 @@ void PhysicalCreate::_GetChunk(ClientContext &context, DataChunk &chunk,
 		throw NotImplementedException(
 		    "CREATE TABLE from SELECT not supported yet");
 	} else {
-		schema->CreateTable(context.ActiveTransaction(), table, columns,
-		                    constraints);
+		schema->CreateTable(context.ActiveTransaction(), info.get());
 	}
 
 	chunk.data[0].count = 1;

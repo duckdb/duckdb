@@ -1,6 +1,6 @@
 
 #include "parser/statement/copy_statement.hpp"
-#include "parser/statement/create_statement.hpp"
+#include "parser/statement/create_table_statement.hpp"
 #include "parser/statement/delete_statement.hpp"
 #include "parser/statement/drop_statement.hpp"
 #include "parser/statement/explain_statement.hpp"

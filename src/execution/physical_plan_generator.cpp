@@ -109,8 +109,7 @@ void PhysicalPlanGenerator::Visit(LogicalCreate &op) {
 		throw Exception("CREATE node must be first node of the plan!");
 	}
 
-	this->plan = make_unique<PhysicalCreate>(op.schema, op.table, op.columns,
-	                                         move(op.constraints));
+	this->plan = make_unique<PhysicalCreate>(op.schema, move(op.info));
 }
 
 void PhysicalPlanGenerator::Visit(LogicalFilter &op) {
