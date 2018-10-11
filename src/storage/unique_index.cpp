@@ -7,6 +7,8 @@
 
 #include "transaction/transaction.hpp"
 
+#include <algorithm>
+
 using namespace duckdb;
 using namespace std;
 
