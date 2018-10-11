@@ -8,7 +8,7 @@ Clone the repository, then run `make` to compile the sources into a debug versio
 * Various test drivers in the `test` folder.
 
 ## Standing on the Shoulders of Giants
-DuckDB is implemented in C++ 11, should compile with GCC and clang, uses CMake to build and [Catch2](https://github.com/catchorg/Catch2) for testing. In addition, we use [Jenkins](https://jenkins.io) as a CI platform. DuckDB uses some components from without various Open-Source databases and draws inspiration from scientific publications. Here is an overview:
+DuckDB is implemented in C++ 11, should compile with GCC and clang, uses CMake to build and [Catch2](https://github.com/catchorg/Catch2) for testing. In addition, we use [Jenkins](https://jenkins.io) as a CI platform. DuckDB uses some components from various Open-Source databases and draws inspiration from scientific publications. Here is an overview:
 
 * Parser: We use the PostgreSQL parser that was [repackaged as a stand-alone library](https://github.com/lfittl/libpg_query). The translation to our own parse tree is inspired by [Peloton](https://pelotondb.io), as is the parse tree structure itself.
 * Shell: We have adapted the [SQLite shell](https://sqlite.org/cli.html) to work with DuckDB.
