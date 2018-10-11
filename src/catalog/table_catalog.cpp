@@ -7,6 +7,8 @@
 
 #include "storage/storage_manager.hpp"
 
+#include <algorithm>
+
 using namespace duckdb;
 using namespace std;
 

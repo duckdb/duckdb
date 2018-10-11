@@ -16,6 +16,7 @@
 #include <limits>
 #include <math.h>
 #include <string>
+#include <memory>
 
 namespace duckdb {
 
