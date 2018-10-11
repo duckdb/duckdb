@@ -468,6 +468,8 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	                                SupplierColumns());
 	CreateTableInformation customer(schema, "customer" + suffix,
 	                                CustomerColumns());
+	CreateTableInformation nation(schema, "nation" + suffix,
+	                                NationColumns());
 	CreateTableInformation part(schema, "part" + suffix, PartColumns());
 	CreateTableInformation partsupp(schema, "partsupp" + suffix,
 	                                PartSuppColumns());
@@ -478,6 +480,7 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	db.catalog.CreateTable(transaction, &region);
 	db.catalog.CreateTable(transaction, &supplier);
 	db.catalog.CreateTable(transaction, &customer);
+	db.catalog.CreateTable(transaction, &nation);
 	db.catalog.CreateTable(transaction, &part);
 	db.catalog.CreateTable(transaction, &partsupp);
 	db.catalog.CreateTable(transaction, &orders);
