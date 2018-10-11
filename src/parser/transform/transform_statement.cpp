@@ -181,10 +181,10 @@ unique_ptr<SelectStatement> TransformSelect(Node *node) {
 	}
 }
 
-unique_ptr<DropStatement> TransformDrop(Node *node) {
+unique_ptr<DropTableStatement> TransformDrop(Node *node) {
 	DropStmt *stmt = reinterpret_cast<DropStmt *>(node);
 	assert(stmt);
-	auto result = make_unique<DropStatement>();
+	auto result = make_unique<DropTableStatement>();
 	if (stmt->objects->length != 1) {
 		throw NotImplementedException("Can only drop one object at a time");
 	}
@@ -194,17 +194,18 @@ unique_ptr<DropStatement> TransformDrop(Node *node) {
 		auto table_list =
 		    reinterpret_cast<List *>(stmt->objects->head->data.ptr_value);
 		if (table_list->length == 2) {
-			result->schema =
+			result->info->schema =
 			    reinterpret_cast<value *>(table_list->head->data.ptr_value)
 			        ->val.str;
-			result->table = reinterpret_cast<value *>(
-			                    table_list->head->next->data.ptr_value)
-			                    ->val.str;
+			result->info->table = reinterpret_cast<value *>(
+			                          table_list->head->next->data.ptr_value)
+			                          ->val.str;
 		} else {
-			result->table =
+			result->info->table =
 			    reinterpret_cast<value *>(table_list->head->data.ptr_value)
 			        ->val.str;
 		}
+		result->info->if_exists = stmt->missing_ok;
 	} break;
 	default:
 		throw NotImplementedException("Cannot drop this type yet");

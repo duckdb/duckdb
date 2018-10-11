@@ -31,8 +31,7 @@ class Catalog {
 	//! Creates a table in the specified schema with the specified set of
 	//! columns. Throws an exception if it already exists.
 	void CreateTable(Transaction &transaction, CreateTableInformation *info);
-	void DropTable(Transaction &transaction, const std::string &schema,
-	               const std::string &table);
+	void DropTable(Transaction &transaction, DropTableInformation *info);
 
 	//! Returns true if the schema exists, and false otherwise.
 	bool SchemaExists(Transaction &transaction,

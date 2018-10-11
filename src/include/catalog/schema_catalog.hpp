@@ -37,8 +37,7 @@ class SchemaCatalogEntry : public AbstractCatalogEntry {
 	                            const std::string &table);
 	//! Creates a table with the given name in the schema
 	void CreateTable(Transaction &transaction, CreateTableInformation *info);
-
-	void DropTable(Transaction &transaction, const std::string &table_name);
+	void DropTable(Transaction &transaction, DropTableInformation *info);
 
   private:
 	//! The catalog set holding the tables

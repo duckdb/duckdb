@@ -463,21 +463,25 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 
 	auto &transaction = context.ActiveTransaction();
 
-	db.catalog.CreateTable(transaction, schema, "region" + suffix,
-	                       RegionColumns());
-	db.catalog.CreateTable(transaction, schema, "nation" + suffix,
-	                       NationColumns());
-	db.catalog.CreateTable(transaction, schema, "supplier" + suffix,
-	                       SupplierColumns());
-	db.catalog.CreateTable(transaction, schema, "customer" + suffix,
-	                       CustomerColumns());
-	db.catalog.CreateTable(transaction, schema, "part" + suffix, PartColumns());
-	db.catalog.CreateTable(transaction, schema, "partsupp" + suffix,
-	                       PartSuppColumns());
-	db.catalog.CreateTable(transaction, schema, "orders" + suffix,
-	                       OrdersColumns());
-	db.catalog.CreateTable(transaction, schema, "lineitem" + suffix,
-	                       LineitemColumns());
+	CreateTableInformation region(schema, "region" + suffix, RegionColumns());
+	CreateTableInformation supplier(schema, "supplier" + suffix,
+	                                SupplierColumns());
+	CreateTableInformation customer(schema, "customer" + suffix,
+	                                CustomerColumns());
+	CreateTableInformation part(schema, "part" + suffix, PartColumns());
+	CreateTableInformation partsupp(schema, "partsupp" + suffix,
+	                                PartSuppColumns());
+	CreateTableInformation orders(schema, "orders" + suffix, OrdersColumns());
+	CreateTableInformation lineitem(schema, "lineitem" + suffix,
+	                                LineitemColumns());
+
+	db.catalog.CreateTable(transaction, &region);
+	db.catalog.CreateTable(transaction, &supplier);
+	db.catalog.CreateTable(transaction, &customer);
+	db.catalog.CreateTable(transaction, &part);
+	db.catalog.CreateTable(transaction, &partsupp);
+	db.catalog.CreateTable(transaction, &orders);
+	db.catalog.CreateTable(transaction, &lineitem);
 
 	if (flt_scale == 0) {
 		// schema only

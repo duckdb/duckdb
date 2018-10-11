@@ -18,17 +18,19 @@ void SchemaCatalogEntry::CreateTable(Transaction &transaction,
 	auto table_entry = unique_ptr<AbstractCatalogEntry>(table);
 	if (!tables.CreateEntry(transaction, info->table, move(table_entry))) {
 		if (!info->if_not_exists) {
-			throw CatalogException("Table with name %s already exists!",
+			throw CatalogException("Table with name \"%s\" already exists!",
 			                       info->table.c_str());
 		}
 	}
 }
 
 void SchemaCatalogEntry::DropTable(Transaction &transaction,
-                                   const string &table_name) {
-	GetTable(transaction, table_name);
-	if (!tables.DropEntry(transaction, table_name)) {
-		// TODO: do we care if its already marked as deleted?
+                                   DropTableInformation *info) {
+	if (!tables.DropEntry(transaction, info->table)) {
+		if (!info->if_exists) {
+			throw CatalogException("Table with name \"%s\" does not exist!",
+			                       info->table.c_str());
+		}
 	}
 }
 

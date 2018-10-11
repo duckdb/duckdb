@@ -50,10 +50,9 @@ void Catalog::CreateTable(Transaction &transaction,
 	schema->CreateTable(transaction, info);
 }
 
-void Catalog::DropTable(Transaction &transaction, const string &schema_name,
-                        const string &table_name) {
-	auto schema = GetSchema(transaction, schema_name);
-	schema->DropTable(transaction, table_name);
+void Catalog::DropTable(Transaction &transaction, DropTableInformation *info) {
+	auto schema = GetSchema(transaction, info->schema);
+	schema->DropTable(transaction, info);
 }
 
 TableCatalogEntry *Catalog::GetTable(Transaction &transaction,

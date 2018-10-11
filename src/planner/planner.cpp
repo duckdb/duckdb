@@ -42,11 +42,12 @@ bool Planner::CreatePlan(ClientContext &context,
 			CreatePlan(context, *statement.get());
 			this->success = true;
 			break;
-		case StatementType::DROP: {
-			auto &stmt = *reinterpret_cast<DropStatement *>(statement.get());
+		case StatementType::DROP_TABLE: {
+			auto &stmt =
+			    *reinterpret_cast<DropTableStatement *>(statement.get());
 			// TODO: create actual plan
 			context.db.catalog.DropTable(context.ActiveTransaction(),
-			                             stmt.schema, stmt.table);
+			                             stmt.info.get());
 			this->success = true;
 			break;
 		}

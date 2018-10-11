@@ -58,7 +58,9 @@ bool CatalogSet::DropEntry(Transaction &transaction, const string &name) {
 	lock_guard<mutex> lock(catalog_lock);
 	// we can only delete a table that exists
 	auto entry = data.find(name);
-	assert(entry != data.end());
+	if (entry == data.end()) {
+		return false;
+	}
 
 	AbstractCatalogEntry &current = *entry->second;
 	if (current.timestamp >= TRANSACTION_ID_START &&
@@ -68,9 +70,10 @@ bool CatalogSet::DropEntry(Transaction &transaction, const string &name) {
 		throw TransactionException("Catalog write-write conflict!");
 	}
 	// there is a current version that has been committed
-	// this is equivalent to what we are trying to do, so fine
 	if (current.deleted) {
-		return true;
+		// if the table was already deleted, it now does not exist anymore
+		// so we return that we could not find it
+		return false;
 	}
 
 	auto value =

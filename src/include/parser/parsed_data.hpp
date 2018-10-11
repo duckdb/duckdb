@@ -36,4 +36,15 @@ struct CreateTableInformation {
 	}
 };
 
+struct DropTableInformation {
+	//! Schema name to drop from
+	std::string schema;
+	//! Table name to drop
+	std::string table;
+	//! Ignore if the entry does not exist instead of failing
+	bool if_exists = false;
+
+	DropTableInformation() : schema(DEFAULT_SCHEMA), if_exists(false) {}
+};
+
 } // namespace duckdb

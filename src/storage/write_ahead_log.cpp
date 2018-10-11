@@ -243,14 +243,16 @@ void WriteAheadLog::WriteDropTable(TableCatalogEntry *entry) {
 bool ReplayDropTable(Transaction &transaction, Catalog &catalog,
                      Deserializer &source) {
 	bool failed = false;
-	auto schema_name = source.Read<string>(failed);
-	auto table_name = source.Read<string>(failed);
+	DropTableInformation info;
+
+	info.schema = source.Read<string>(failed);
+	info.table = source.Read<string>(failed);
 	if (failed) {
 		return false;
 	}
 
 	try {
-		catalog.DropTable(transaction, schema_name, table_name);
+		catalog.DropTable(transaction, &info);
 	} catch (...) {
 		return false;
 	}
