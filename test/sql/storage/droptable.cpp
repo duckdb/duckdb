@@ -8,7 +8,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Create and drop a table over different runs", "[storage]") {
+TEST_CASE("Create and drop a schema+table over different runs", "[storage]") {
 	unique_ptr<DuckDBResult> result;
 	auto storage_database = JoinPath(TESTING_DIRECTORY_NAME, "storage_test");
 
@@ -20,20 +20,26 @@ TEST_CASE("Create and drop a table over different runs", "[storage]") {
 		// create a database and insert values
 		DuckDB db(storage_database);
 		DuckDBConnection con(db);
-		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA test;"));
 		REQUIRE_NO_FAIL(
-		    con.Query("INSERT INTO test VALUES (11, 22), (13, 22);"));
-		REQUIRE_NO_FAIL(con.Query("DROP TABLE test"));
+		    con.Query("CREATE TABLE test.test (a INTEGER, b INTEGER);"));
+		REQUIRE_NO_FAIL(
+		    con.Query("INSERT INTO test.test VALUES (11, 22), (13, 22);"));
+		REQUIRE_NO_FAIL(con.Query("DROP TABLE test.test"));
+		REQUIRE_NO_FAIL(con.Query("DROP SCHEMA test"));
 
-		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA test;"));
 		REQUIRE_NO_FAIL(
-		    con.Query("INSERT INTO test VALUES (11, 22), (13, 22);"));
+		    con.Query("CREATE TABLE test.test (a INTEGER, b INTEGER);"));
+		REQUIRE_NO_FAIL(
+		    con.Query("INSERT INTO test.test VALUES (11, 22), (13, 22);"));
 	}
 	// reload the database from disk
 	{
 		DuckDB db(storage_database);
 		DuckDBConnection con(db);
-		REQUIRE_NO_FAIL(con.Query("DROP TABLE test"));
+		REQUIRE_NO_FAIL(con.Query("DROP TABLE test.test"));
+		REQUIRE_NO_FAIL(con.Query("DROP SCHEMA test"));
 	}
 	RemoveDirectory(storage_database);
 }
