@@ -87,6 +87,8 @@ enum class ExpressionType : uint8_t {
 
 	// left + right (both must be number. implicitly casted)
 	OPERATOR_ADD = 1,
+	// start of binary add
+	BINOP_BOUNDARY_START = OPERATOR_ADD,
 	// left - right (both must be number. implicitly casted)
 	OPERATOR_SUBTRACT = 2,
 	// left * right (both must be number. implicitly casted)
@@ -97,6 +99,8 @@ enum class ExpressionType : uint8_t {
 	OPERATOR_CONCAT = 5,
 	// left % right (both must be integer)
 	OPERATOR_MOD = 6,
+	// binary arithmetic operator boundary, used for quick comparisons
+	BINOP_BOUNDARY_END = OPERATOR_MOD,
 	// explicitly cast left as right (right is integer in ValueType enum)
 	OPERATOR_CAST = 7,
 	// logical not operator
@@ -113,6 +117,8 @@ enum class ExpressionType : uint8_t {
 	// -----------------------------
 	// equal operator between left and right
 	COMPARE_EQUAL = 25,
+	// compare initial boundary
+	COMPARE_BOUNDARY_START = COMPARE_EQUAL,
 	// inequal operator between left and right
 	COMPARE_NOTEQUAL = 26,
 	// less than operator between left and right
@@ -131,6 +137,8 @@ enum class ExpressionType : uint8_t {
 	COMPARE_IN = 33,
 	// IS DISTINCT FROM operator
 	COMPARE_DISTINCT_FROM = 34,
+	// compare final boundary
+	COMPARE_BOUNDARY_END = COMPARE_DISTINCT_FROM,
 
 	COMPARE_BETWEEN = 35,
 	COMPARE_NOT_BETWEEN = 36,

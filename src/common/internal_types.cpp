@@ -92,8 +92,6 @@ ExpressionType StringToExpressionType(const string &str) {
 		return ExpressionType::AGGREGATE_FIRST;
 	} else if (upper_str == "FUNCTION") {
 		return ExpressionType::FUNCTION;
-	} else if (upper_str == "HASH_RANGE") {
-		return ExpressionType::HASH_RANGE;
 	} else if (upper_str == "OPERATOR_CASE_EXPR") {
 		return ExpressionType::OPERATOR_CASE_EXPR;
 	} else if (upper_str == "OPERATOR_NULLIF") {
@@ -410,8 +408,6 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "FIRST";
 	case ExpressionType::FUNCTION:
 		return "FUNCTION";
-	case ExpressionType::HASH_RANGE:
-		return "HASH_RANGE";
 	case ExpressionType::OPERATOR_CASE_EXPR:
 		return "CASE";
 	case ExpressionType::OPERATOR_NULLIF:
