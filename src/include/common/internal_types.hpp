@@ -54,56 +54,28 @@ struct BinaryData {
 //===--------------------------------------------------------------------===//
 // SQL Value Types
 //===--------------------------------------------------------------------===//
-enum class TypeId {
+enum class TypeId : uint8_t {
 	INVALID = 0,
-	PARAMETER_OFFSET,
-	BOOLEAN,
-	TINYINT,
-	SMALLINT,
-	INTEGER,
-	BIGINT,
-	POINTER,
-	DATE,
-	TIMESTAMP,
-	DECIMAL,
-	VARCHAR,
-	VARBINARY,
-	ARRAY,
-	UDT
-};
-
-//===--------------------------------------------------------------------===//
-// Catalog Types
-//===--------------------------------------------------------------------===//
-enum class CatalogType { INVALID = 0, TABLE = 1, SCHEMA = 2 };
-
-//===--------------------------------------------------------------------===//
-// Statement Types
-//===--------------------------------------------------------------------===//
-enum class StatementType {
-	INVALID = 0,       // invalid statement type
-	SELECT = 1,        // select statement type
-	INSERT = 3,        // insert statement type
-	UPDATE = 4,        // update statement type
-	DELETE = 5,        // delete statement type
-	CREATE_TABLE = 6,  // create table statement type
-	DROP_TABLE = 7,    // drop table statement type
-	PREPARE = 8,       // prepare statement type
-	EXECUTE = 9,       // execute statement type
-	RENAME = 11,       // rename statement type
-	ALTER = 12,        // alter statement type
-	TRANSACTION = 13,  // transaction statement type,
-	COPY = 14,         // copy type
-	ANALYZE = 15,      // analyze type
-	VARIABLE_SET = 16, // variable set statement type
-	CREATE_FUNC = 17,  // create func statement type
-	EXPLAIN = 18       // explain statement type
+	PARAMETER_OFFSET = 1,
+	BOOLEAN = 2,
+	TINYINT = 3,
+	SMALLINT = 4,
+	INTEGER = 5,
+	BIGINT = 6,
+	POINTER = 7,
+	DATE = 8,
+	TIMESTAMP = 9,
+	DECIMAL = 10,
+	VARCHAR = 11,
+	VARBINARY = 12,
+	ARRAY = 13,
+	UDT = 14
 };
 
 //===--------------------------------------------------------------------===//
 // Predicate Expression Operation Types
 //===--------------------------------------------------------------------===//
-enum class ExpressionType {
+enum class ExpressionType : uint8_t {
 	INVALID = 0,
 
 	// -----------------------------
@@ -130,111 +102,106 @@ enum class ExpressionType {
 	// logical not operator
 	OPERATOR_NOT = 8,
 	// is null operator
-	OPERATOR_IS_NULL = 21,
+	OPERATOR_IS_NULL = 9,
 	// is not null operator
-	OPERATOR_IS_NOT_NULL = 22,
+	OPERATOR_IS_NOT_NULL = 10,
 	// exists test.
-	OPERATOR_EXISTS = 18,
+	OPERATOR_EXISTS = 11,
 
 	// -----------------------------
 	// Comparison Operators
 	// -----------------------------
 	// equal operator between left and right
-	COMPARE_EQUAL = 10,
+	COMPARE_EQUAL = 25,
 	// inequal operator between left and right
-	COMPARE_NOTEQUAL = 11,
+	COMPARE_NOTEQUAL = 26,
 	// less than operator between left and right
-	COMPARE_LESSTHAN = 12,
+	COMPARE_LESSTHAN = 27,
 	// greater than operator between left and right
-	COMPARE_GREATERTHAN = 13,
+	COMPARE_GREATERTHAN = 28,
 	// less than equal operator between left and right
-	COMPARE_LESSTHANOREQUALTO = 14,
+	COMPARE_LESSTHANOREQUALTO = 29,
 	// greater than equal operator between left and right
-	COMPARE_GREATERTHANOREQUALTO = 15,
+	COMPARE_GREATERTHANOREQUALTO = 30,
 	// LIKE operator (left LIKE right). Both children must be string.
-	COMPARE_LIKE = 16,
+	COMPARE_LIKE = 31,
 	// NOT LIKE operator (left NOT LIKE right). Both children must be string.
-	COMPARE_NOTLIKE = 17,
+	COMPARE_NOTLIKE = 32,
 	// IN operator [left IN (right1, right2, ...)]
-	COMPARE_IN = 19,
+	COMPARE_IN = 33,
 	// IS DISTINCT FROM operator
-	COMPARE_DISTINCT_FROM = 20,
+	COMPARE_DISTINCT_FROM = 34,
 
-	COMPARE_BETWEEN = 21,
-	COMPARE_NOT_BETWEEN = 22,
+	COMPARE_BETWEEN = 35,
+	COMPARE_NOT_BETWEEN = 36,
 
 	// -----------------------------
 	// Conjunction Operators
 	// -----------------------------
-	CONJUNCTION_AND = 30,
-	CONJUNCTION_OR = 31,
+	CONJUNCTION_AND = 50,
+	CONJUNCTION_OR = 51,
 
 	// -----------------------------
 	// Values
 	// -----------------------------
-	VALUE_CONSTANT = 40,
-	VALUE_PARAMETER = 41,
-	VALUE_TUPLE = 42,
-	VALUE_TUPLE_ADDRESS = 43,
-	VALUE_NULL = 44,
-	VALUE_VECTOR = 45,
-	VALUE_SCALAR = 46,
-	VALUE_DEFAULT = 47,
+	VALUE_CONSTANT = 75,
+	VALUE_PARAMETER = 76,
+	VALUE_TUPLE = 77,
+	VALUE_TUPLE_ADDRESS = 78,
+	VALUE_NULL = 79,
+	VALUE_VECTOR = 80,
+	VALUE_SCALAR = 81,
+	VALUE_DEFAULT = 82,
 
 	// -----------------------------
 	// Aggregates
 	// -----------------------------
-	AGGREGATE_COUNT = 50,
-	AGGREGATE_COUNT_STAR = 51,
-	AGGREGATE_SUM = 52,
-	AGGREGATE_MIN = 53,
-	AGGREGATE_MAX = 54,
-	AGGREGATE_AVG = 55,
-	AGGREGATE_FIRST = 56,
+	AGGREGATE_COUNT = 100,
+	AGGREGATE_COUNT_STAR = 101,
+	AGGREGATE_SUM = 102,
+	AGGREGATE_MIN = 103,
+	AGGREGATE_MAX = 104,
+	AGGREGATE_AVG = 105,
+	AGGREGATE_FIRST = 106,
 
 	// -----------------------------
 	// Functions
 	// -----------------------------
-	FUNCTION = 100,
-
-	// -----------------------------
-	// Internals added for Elastic
-	// -----------------------------
-	HASH_RANGE = 200,
+	FUNCTION = 125,
 
 	// -----------------------------
 	// Operators
 	// -----------------------------
-	OPERATOR_CASE_EXPR = 302,
-	OPERATOR_NULLIF = 304,
-	OPERATOR_COALESCE = 305,
+	OPERATOR_CASE_EXPR = 150,
+	OPERATOR_NULLIF = 151,
+	OPERATOR_COALESCE = 152,
 
 	// -----------------------------
 	// Subquery IN/EXISTS
 	// -----------------------------
-	ROW_SUBQUERY = 400,
-	SELECT_SUBQUERY = 401,
+	ROW_SUBQUERY = 175,
+	SELECT_SUBQUERY = 176,
 
 	// -----------------------------
 	// Parser
 	// -----------------------------
-	STAR = 500,
-	PLACEHOLDER = 501,
-	COLUMN_REF = 502,
-	FUNCTION_REF = 503,
-	TABLE_REF = 504,
-	GROUP_REF = 505,
+	STAR = 200,
+	PLACEHOLDER = 201,
+	COLUMN_REF = 202,
+	FUNCTION_REF = 203,
+	TABLE_REF = 204,
+	GROUP_REF = 205,
 
 	// -----------------------------
 	// Miscellaneous
 	// -----------------------------
-	CAST = 600
+	CAST = 225
 };
 
 //===--------------------------------------------------------------------===//
 // Constraint Types
 //===--------------------------------------------------------------------===//
-enum class ConstraintType {
+enum class ConstraintType : uint8_t {
 	INVALID = 0,     // invalid constraint type
 	NOT_NULL = 1,    // NOT NULL constraint
 	CHECK = 2,       // CHECK constraint
@@ -245,124 +212,198 @@ enum class ConstraintType {
 };
 
 //===--------------------------------------------------------------------===//
+// Catalog Types
+//===--------------------------------------------------------------------===//
+enum class CatalogType : uint8_t {
+	INVALID,
+	TABLE,
+	SCHEMA
+};
+
+//===--------------------------------------------------------------------===//
+// Statement Types
+//===--------------------------------------------------------------------===//
+enum class StatementType : uint8_t {
+	INVALID,       // invalid statement type
+	SELECT,        // select statement type
+	INSERT,        // insert statement type
+	UPDATE,        // update statement type
+	DELETE,        // delete statement type
+	PREPARE,       // prepare statement type
+	EXECUTE,       // execute statement type
+	RENAME,        // rename statement type
+	ALTER,         // alter statement type
+	TRANSACTION,   // transaction statement type,
+	COPY,          // copy type
+	ANALYZE,       // analyze type
+	VARIABLE_SET,  // variable set statement type
+	CREATE_FUNC,   // create func statement type
+	EXPLAIN,       // explain statement type
+
+	// -----------------------------
+	// Create Types
+	// -----------------------------
+	CREATE_TABLE,  // create table statement type
+	CREATE_SCHEMA, // create schema statement type
+
+	// -----------------------------
+	// Drop Types
+	// -----------------------------
+	DROP_TABLE,    // drop table statement type
+	DROP_SCHEMA,   // drop table statement type
+
+};
+
+//===--------------------------------------------------------------------===//
 // Table Reference Types
 //===--------------------------------------------------------------------===//
-enum class TableReferenceType {
-	INVALID = 0,      // invalid table reference type
-	BASE_TABLE = 1,   // base table reference
-	SUBQUERY = 2,     // output of a subquery
-	JOIN = 3,         // output of join
-	CROSS_PRODUCT = 4 // out of cartesian product
+enum class TableReferenceType : uint8_t {
+	INVALID,      // invalid table reference type
+	BASE_TABLE,   // base table reference
+	SUBQUERY,     // output of a subquery
+	JOIN,         // output of join
+	CROSS_PRODUCT // out of cartesian product
 };
 
 //===--------------------------------------------------------------------===//
 // Join Types
 //===--------------------------------------------------------------------===//
-enum class JoinType {
-	INVALID = 0, // invalid join type
-	LEFT = 1,    // left
-	RIGHT = 2,   // right
-	INNER = 3,   // inner
-	OUTER = 4,   // outer
-	SEMI = 5     // IN+Subquery is SEMI
+enum class JoinType : uint8_t {
+	INVALID, // invalid join type
+	LEFT,    // left
+	RIGHT,   // right
+	INNER,   // inner
+	OUTER,   // outer
+	SEMI     // IN+Subquery is SEMI
 };
 
 //===--------------------------------------------------------------------===//
 // ORDER BY Clause Types
 //===--------------------------------------------------------------------===//
-enum class OrderType { INVALID = 0, ASCENDING = 1, DESCENDING = 2 };
+enum class OrderType : uint8_t {
+	INVALID,
+	ASCENDING,
+	DESCENDING
+};
 
 //===--------------------------------------------------------------------===//
 // Logical Operator Types
 //===--------------------------------------------------------------------===//
-enum class LogicalOperatorType {
-	INVALID = 0,
-	LEAF = 1,
-	GET = 2,
-	EXTERNAL_FILE_GET = 3,
-	QUERY_DERIVED_GET = 4,
-	PROJECTION = 5,
-	FILTER = 6,
-	AGGREGATE_AND_GROUP_BY = 7,
-	LIMIT = 9,
-	ORDER_BY = 10,
-	COPY = 11,
+enum class LogicalOperatorType : uint8_t {
+	INVALID,
+	LEAF,
+	GET,
+	EXTERNAL_FILE_GET,
+	QUERY_DERIVED_GET,
+	PROJECTION,
+	FILTER,
+	AGGREGATE_AND_GROUP_BY,
+	LIMIT,
+	ORDER_BY,
+	COPY,
 	// -----------------------------
 	// Joins
 	// -----------------------------
-	JOIN = 100,
-	CROSS_PRODUCT = 101,
+	JOIN,
+	CROSS_PRODUCT,
 	// -----------------------------
 	// SetOps
 	// -----------------------------
-	UNION = 150,
+	UNION,
 
 	// -----------------------------
 	// Updates
 	// -----------------------------
-	INSERT = 200,
-	INSERT_SELECT = 201,
-	DELETE = 202,
-	UPDATE = 203,
-	EXPORT_EXTERNAL_FILE = 204,
-	CREATE = 205,
+	INSERT,
+	INSERT_SELECT,
+	DELETE,
+	UPDATE,
+	EXPORT_EXTERNAL_FILE,
+	CREATE,
 
-	EXPLAIN = 300
+	// -----------------------------
+	// Explain
+	// -----------------------------
+	EXPLAIN
 };
 
 //===--------------------------------------------------------------------===//
 // Physical Operator Types
 //===--------------------------------------------------------------------===//
-enum class PhysicalOperatorType {
-	INVALID = 0,
-	LEAF = 1,
-	DUMMY_SCAN = 2,
-	SEQ_SCAN = 3,
-	INDEX_SCAN = 4,
-	EXTERNAL_FILE_SCAN = 5,
-	QUERY_DERIVED_SCAN = 6,
-	ORDER_BY = 7,
-	LIMIT = 8,
-	AGGREGATE = 10,
-	HASH_GROUP_BY = 11,
-	SORT_GROUP_BY = 12,
-	FILTER = 13,
-	PROJECTION = 14,
-	BASE_GROUP_BY = 15,
-	COPY = 16,
+enum class PhysicalOperatorType : uint8_t {
+	INVALID,
+	LEAF,
+	DUMMY_SCAN,
+	SEQ_SCAN,
+	INDEX_SCAN,
+	EXTERNAL_FILE_SCAN,
+	QUERY_DERIVED_SCAN,
+	ORDER_BY,
+	LIMIT,
+	AGGREGATE,
+	HASH_GROUP_BY,
+	SORT_GROUP_BY,
+	FILTER,
+	PROJECTION,
+	BASE_GROUP_BY,
+	COPY,
 	// -----------------------------
 	// Joins
 	// -----------------------------
-	NESTED_LOOP_JOIN = 100,
-	HASH_JOIN = 101,
-	CROSS_PRODUCT = 108,
+	NESTED_LOOP_JOIN,
+	HASH_JOIN,
+	CROSS_PRODUCT,
 
 	// -----------------------------
 	// SetOps
 	// -----------------------------
-	UNION = 150,
+	UNION,
 
 	// -----------------------------
 	// Updates
 	// -----------------------------
-	INSERT = 200,
-	INSERT_SELECT = 201,
-	DELETE = 202,
-	UPDATE = 203,
-	EXPORT_EXTERNAL_FILE = 204,
-	CREATE = 205
+	INSERT,
+	INSERT_SELECT,
+	DELETE,
+	UPDATE,
+	EXPORT_EXTERNAL_FILE,
+	CREATE
 };
 
-enum class MatchOrder { ARBITRARY = 0, DEPTH_FIRST };
-enum class ChildPolicy { ANY, LEAF, SOME, UNORDERED, ORDERED };
+//===--------------------------------------------------------------------===//
+// Match Order
+//===--------------------------------------------------------------------===//
+enum class MatchOrder : uint8_t {
+	ARBITRARY,
+	DEPTH_FIRST
+};
+//===--------------------------------------------------------------------===//
+// Child Match Policy
+//===--------------------------------------------------------------------===//
+enum class ChildPolicy : uint8_t {
+	ANY,
+	LEAF,
+	SOME,
+	UNORDERED,
+	ORDERED
+};
 
-enum class ExternalFileFormat { INVALID = 0, CSV = 1 };
+//===--------------------------------------------------------------------===//
+// External File Format Types
+//===--------------------------------------------------------------------===//
+enum class ExternalFileFormat : uint8_t {
+	INVALID,
+	CSV
+};
 
-enum class TransactionType {
-	INVALID = 0,
-	BEGIN_TRANSACTION = 1,
-	COMMIT = 2,
-	ROLLBACK = 3
+//===--------------------------------------------------------------------===//
+// Transaction Operation Types
+//===--------------------------------------------------------------------===//
+enum class TransactionType : uint8_t {
+	INVALID,
+	BEGIN_TRANSACTION,
+	COMMIT,
+	ROLLBACK
 };
 
 ExpressionType StringToExpressionType(const std::string &str);
