@@ -42,9 +42,22 @@ bool Planner::CreatePlan(ClientContext &context,
 			CreatePlan(context, *statement.get());
 			this->success = true;
 			break;
+		case StatementType::CREATE_SCHEMA: {
+			auto &stmt = *((CreateSchemaStatement *)statement.get());
+			context.db.catalog.CreateSchema(context.ActiveTransaction(),
+			                                stmt.info.get());
+			this->success = true;
+			break;
+		}
+		case StatementType::DROP_SCHEMA: {
+			auto &stmt = *((DropSchemaStatement *)statement.get());
+			context.db.catalog.DropSchema(context.ActiveTransaction(),
+			                              stmt.info.get());
+			this->success = true;
+			break;
+		}
 		case StatementType::DROP_TABLE: {
-			auto &stmt =
-			    *reinterpret_cast<DropTableStatement *>(statement.get());
+			auto &stmt = *((DropTableStatement *)statement.get());
 			// TODO: create actual plan
 			context.db.catalog.DropTable(context.ActiveTransaction(),
 			                             stmt.info.get());
@@ -52,8 +65,7 @@ bool Planner::CreatePlan(ClientContext &context,
 			break;
 		}
 		case StatementType::TRANSACTION: {
-			auto &stmt =
-			    *reinterpret_cast<TransactionStatement *>(statement.get());
+			auto &stmt = *((TransactionStatement *)statement.get());
 			// TODO: create actual plan
 			switch (stmt.type) {
 			case TransactionType::BEGIN_TRANSACTION: {

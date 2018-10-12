@@ -17,6 +17,7 @@ namespace duckdb {
 
 class Catalog;
 class CatalogSet;
+class Transaction;
 
 //! Abstract base class of an entry in the catalog
 class AbstractCatalogEntry {
@@ -26,6 +27,11 @@ class AbstractCatalogEntry {
 	      deleted(false), parent(nullptr) {}
 
 	virtual ~AbstractCatalogEntry() {}
+
+	//! Returns true if other objects depend on this object
+	virtual bool HasDependents(Transaction &transaction) { return false; }
+	//! Function that drops all dependents (used for Cascade)
+	virtual void DropDependents(Transaction &transaction) {}
 
 	//! The type of this catalog entry
 	CatalogType type;

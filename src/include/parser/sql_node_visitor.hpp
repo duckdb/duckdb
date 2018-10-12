@@ -14,6 +14,8 @@ namespace duckdb {
 
 class SelectStatement;
 class CreateTableStatement;
+class CreateSchemaStatement;
+class DropSchemaStatement;
 class DropTableStatement;
 class InsertStatement;
 class CopyStatement;
@@ -52,7 +54,9 @@ class SQLNodeVisitor {
 	virtual ~SQLNodeVisitor(){};
 
 	virtual void Visit(SelectStatement &);
+	virtual void Visit(CreateSchemaStatement &){};
 	virtual void Visit(CreateTableStatement &){};
+	virtual void Visit(DropSchemaStatement &){};
 	virtual void Visit(DropTableStatement &){};
 	virtual void Visit(InsertStatement &){};
 	virtual void Visit(CopyStatement &){};

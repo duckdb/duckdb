@@ -31,7 +31,8 @@ class CatalogSet {
 	bool CreateEntry(Transaction &transaction, const std::string &name,
 	                 std::unique_ptr<AbstractCatalogEntry> value);
 
-	bool DropEntry(Transaction &transaction, const std::string &name);
+	bool DropEntry(Transaction &transaction, const std::string &name,
+	               bool cascade);
 	//! Returns whether or not an entry exists
 	bool EntryExists(Transaction &transaction, const std::string &name);
 	//! Returns the entry with the specified name
@@ -42,7 +43,17 @@ class CatalogSet {
 	//! entry
 	void Undo(AbstractCatalogEntry *entry);
 
+	//! Drops all entries
+	void DropAllEntries(Transaction &transaction);
+	//! Returns true if the catalog set is empty for the transaction, false
+	//! otherwise
+	bool IsEmpty(Transaction &transaction);
+
   private:
+	//! Drops an entry from the catalog set; must hold the catalog_lock to
+	//! safely call this
+	bool DropEntry(Transaction &transaction, AbstractCatalogEntry &entry,
+	               bool cascade);
 	//! The catalog lock is used to make changes to the data
 	std::mutex catalog_lock;
 	//! The set of entries present in the CatalogSet.

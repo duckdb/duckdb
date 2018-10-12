@@ -26,7 +26,7 @@ void SchemaCatalogEntry::CreateTable(Transaction &transaction,
 
 void SchemaCatalogEntry::DropTable(Transaction &transaction,
                                    DropTableInformation *info) {
-	if (!tables.DropEntry(transaction, info->table)) {
+	if (!tables.DropEntry(transaction, info->table, info->cascade)) {
 		if (!info->if_exists) {
 			throw CatalogException("Table with name \"%s\" does not exist!",
 			                       info->table.c_str());
@@ -47,4 +47,12 @@ TableCatalogEntry *SchemaCatalogEntry::GetTable(Transaction &transaction,
 		                       table_name.c_str());
 	}
 	return (TableCatalogEntry *)entry;
+}
+
+bool SchemaCatalogEntry::HasDependents(Transaction &transaction) {
+	return !tables.IsEmpty(transaction);
+}
+
+void SchemaCatalogEntry::DropDependents(Transaction &transaction) {
+	tables.DropAllEntries(transaction);
 }

@@ -69,26 +69,25 @@ static void WriteCatalogEntry(WriteAheadLog *log, AbstractCatalogEntry *entry) {
 	if (!log) {
 		return;
 	}
+
 	// look at the type of the parent entry
 	auto parent = entry->parent;
 	switch (parent->type) {
-	case CatalogType::TABLE: {
-		if (parent->deleted) {
-			log->WriteDropTable((TableCatalogEntry *)parent->child.get());
+	case CatalogType::TABLE:
+		log->WriteCreateTable((TableCatalogEntry *)parent);
+		break;
+	case CatalogType::SCHEMA:
+		log->WriteCreateSchema((SchemaCatalogEntry *)parent);
+		break;
+	case CatalogType::DELETED_ENTRY:
+		if (entry->type == CatalogType::TABLE) {
+			log->WriteDropTable((TableCatalogEntry *)entry);
+		} else if (entry->type == CatalogType::SCHEMA) {
+			log->WriteDropSchema((SchemaCatalogEntry *)entry);
 		} else {
-			log->WriteCreateTable((TableCatalogEntry *)parent);
+			throw NotImplementedException("Don't know how to drop this type!");
 		}
 		break;
-	}
-	case CatalogType::SCHEMA: {
-		auto schema = (SchemaCatalogEntry *)parent;
-		if (parent->deleted) {
-			log->WriteDropSchema(schema);
-		} else {
-			log->WriteCreateSchema(schema);
-		}
-		break;
-	}
 	default:
 		throw NotImplementedException(
 		    "UndoBuffer - don't know how to write this entry to the WAL");

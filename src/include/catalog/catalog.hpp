@@ -24,13 +24,13 @@ class Catalog {
   public:
 	Catalog(StorageManager &storage);
 
-	//! Creates a schema in the catalog. Throws an exception if it already
-	//! exists.
-	void CreateSchema(Transaction &transaction,
-	                  const std::string &schema = DEFAULT_SCHEMA);
-	//! Creates a table in the specified schema with the specified set of
-	//! columns. Throws an exception if it already exists.
+	//! Creates a schema in the catalog.
+	void CreateSchema(Transaction &transaction, CreateSchemaInformation *info);
+	//! Drops a schema in the catalog.
+	void DropSchema(Transaction &transaction, DropSchemaInformation *info);
+	//! Creates a table in the catalog.
 	void CreateTable(Transaction &transaction, CreateTableInformation *info);
+	//! Drops a table from the catalog.
 	void DropTable(Transaction &transaction, DropTableInformation *info);
 
 	//! Returns true if the schema exists, and false otherwise.

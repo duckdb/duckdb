@@ -505,14 +505,15 @@ unique_ptr<Expression> TransformAExpr(A_Expr *root) {
 
 	unique_ptr<Expression> result = nullptr;
 	int type_id = static_cast<int>(target_type);
-	if (type_id >= static_cast<int>(ExpressionType::BINOP_BOUNDARY_START) && 
-		type_id <= static_cast<int>(ExpressionType::BINOP_BOUNDARY_END)) {
+	if (type_id >= static_cast<int>(ExpressionType::BINOP_BOUNDARY_START) &&
+	    type_id <= static_cast<int>(ExpressionType::BINOP_BOUNDARY_END)) {
 		// binary operator
 		result = make_unique<OperatorExpression>(
 		    target_type, TypeId::INVALID, move(left_expr), move(right_expr));
-	} else if (
-		type_id >= static_cast<int>(ExpressionType::COMPARE_BOUNDARY_START) && 
-		type_id <= static_cast<int>(ExpressionType::COMPARE_BOUNDARY_END)) {
+	} else if (type_id >=
+	               static_cast<int>(ExpressionType::COMPARE_BOUNDARY_START) &&
+	           type_id <=
+	               static_cast<int>(ExpressionType::COMPARE_BOUNDARY_END)) {
 		result = make_unique<ComparisonExpression>(target_type, move(left_expr),
 		                                           move(right_expr));
 	} else {

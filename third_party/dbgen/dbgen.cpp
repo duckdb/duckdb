@@ -468,8 +468,7 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	                                SupplierColumns());
 	CreateTableInformation customer(schema, "customer" + suffix,
 	                                CustomerColumns());
-	CreateTableInformation nation(schema, "nation" + suffix,
-	                                NationColumns());
+	CreateTableInformation nation(schema, "nation" + suffix, NationColumns());
 	CreateTableInformation part(schema, "part" + suffix, PartColumns());
 	CreateTableInformation partsupp(schema, "partsupp" + suffix,
 	                                PartSuppColumns());

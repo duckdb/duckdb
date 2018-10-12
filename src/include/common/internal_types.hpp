@@ -15,8 +15,8 @@
 #include <cstring>
 #include <limits>
 #include <math.h>
-#include <string>
 #include <memory>
+#include <string>
 
 namespace duckdb {
 
@@ -223,30 +223,31 @@ enum class ConstraintType : uint8_t {
 // Catalog Types
 //===--------------------------------------------------------------------===//
 enum class CatalogType : uint8_t {
-	INVALID,
-	TABLE,
-	SCHEMA
+	INVALID = 0,
+	TABLE = 1,
+	SCHEMA = 2,
+	DELETED_ENTRY = 10
 };
 
 //===--------------------------------------------------------------------===//
 // Statement Types
 //===--------------------------------------------------------------------===//
 enum class StatementType : uint8_t {
-	INVALID,       // invalid statement type
-	SELECT,        // select statement type
-	INSERT,        // insert statement type
-	UPDATE,        // update statement type
-	DELETE,        // delete statement type
-	PREPARE,       // prepare statement type
-	EXECUTE,       // execute statement type
-	RENAME,        // rename statement type
-	ALTER,         // alter statement type
-	TRANSACTION,   // transaction statement type,
-	COPY,          // copy type
-	ANALYZE,       // analyze type
-	VARIABLE_SET,  // variable set statement type
-	CREATE_FUNC,   // create func statement type
-	EXPLAIN,       // explain statement type
+	INVALID,      // invalid statement type
+	SELECT,       // select statement type
+	INSERT,       // insert statement type
+	UPDATE,       // update statement type
+	DELETE,       // delete statement type
+	PREPARE,      // prepare statement type
+	EXECUTE,      // execute statement type
+	RENAME,       // rename statement type
+	ALTER,        // alter statement type
+	TRANSACTION,  // transaction statement type,
+	COPY,         // copy type
+	ANALYZE,      // analyze type
+	VARIABLE_SET, // variable set statement type
+	CREATE_FUNC,  // create func statement type
+	EXPLAIN,      // explain statement type
 
 	// -----------------------------
 	// Create Types
@@ -257,8 +258,8 @@ enum class StatementType : uint8_t {
 	// -----------------------------
 	// Drop Types
 	// -----------------------------
-	DROP_TABLE,    // drop table statement type
-	DROP_SCHEMA,   // drop table statement type
+	DROP_TABLE,  // drop table statement type
+	DROP_SCHEMA, // drop table statement type
 
 };
 
@@ -288,11 +289,7 @@ enum class JoinType : uint8_t {
 //===--------------------------------------------------------------------===//
 // ORDER BY Clause Types
 //===--------------------------------------------------------------------===//
-enum class OrderType : uint8_t {
-	INVALID,
-	ASCENDING,
-	DESCENDING
-};
+enum class OrderType : uint8_t { INVALID, ASCENDING, DESCENDING };
 
 //===--------------------------------------------------------------------===//
 // Logical Operator Types
@@ -381,28 +378,16 @@ enum class PhysicalOperatorType : uint8_t {
 //===--------------------------------------------------------------------===//
 // Match Order
 //===--------------------------------------------------------------------===//
-enum class MatchOrder : uint8_t {
-	ARBITRARY,
-	DEPTH_FIRST
-};
+enum class MatchOrder : uint8_t { ARBITRARY, DEPTH_FIRST };
 //===--------------------------------------------------------------------===//
 // Child Match Policy
 //===--------------------------------------------------------------------===//
-enum class ChildPolicy : uint8_t {
-	ANY,
-	LEAF,
-	SOME,
-	UNORDERED,
-	ORDERED
-};
+enum class ChildPolicy : uint8_t { ANY, LEAF, SOME, UNORDERED, ORDERED };
 
 //===--------------------------------------------------------------------===//
 // External File Format Types
 //===--------------------------------------------------------------------===//
-enum class ExternalFileFormat : uint8_t {
-	INVALID,
-	CSV
-};
+enum class ExternalFileFormat : uint8_t { INVALID, CSV };
 
 //===--------------------------------------------------------------------===//
 // Transaction Operation Types

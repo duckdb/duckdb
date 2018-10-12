@@ -54,15 +54,8 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name,
 	return true;
 }
 
-bool CatalogSet::DropEntry(Transaction &transaction, const string &name) {
-	lock_guard<mutex> lock(catalog_lock);
-	// we can only delete a table that exists
-	auto entry = data.find(name);
-	if (entry == data.end()) {
-		return false;
-	}
-
-	AbstractCatalogEntry &current = *entry->second;
+bool CatalogSet::DropEntry(Transaction &transaction,
+                           AbstractCatalogEntry &current, bool cascade) {
 	if (current.timestamp >= TRANSACTION_ID_START &&
 	    current.timestamp != transaction.transaction_id) {
 		// current version has been written to by a currently active
@@ -76,22 +69,63 @@ bool CatalogSet::DropEntry(Transaction &transaction, const string &name) {
 		return false;
 	}
 
-	auto value =
-	    make_unique<AbstractCatalogEntry>(current.type, current.catalog, name);
+	if (cascade) {
+		current.DropDependents(transaction);
+	} else {
+		if (current.HasDependents(transaction)) {
+			throw CatalogException(
+			    "Cannot drop entry \"%s\" because there are entries that "
+			    "depend on it. Use DROP...CASCADE to drop all dependents.",
+			    current.name.c_str());
+		}
+	}
+
+	auto value = make_unique<AbstractCatalogEntry>(
+	    CatalogType::DELETED_ENTRY, current.catalog, current.name);
 
 	// create a new entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction
 	// and point it at the dummy node
 	value->timestamp = transaction.transaction_id;
-	value->child = move(data[name]);
+	value->child = move(data[current.name]);
 	value->child->parent = value.get();
 	value->set = this;
 	value->deleted = true;
 
 	// push the old entry in the undo buffer for this transaction
 	transaction.PushCatalogEntry(value->child.get());
-	data[name] = move(value);
+	data[current.name] = move(value);
 	return true;
+}
+
+bool CatalogSet::DropEntry(Transaction &transaction, const string &name,
+                           bool cascade) {
+	lock_guard<mutex> lock(catalog_lock);
+	// we can only delete a table that exists
+	auto entry = data.find(name);
+	if (entry == data.end()) {
+		return false;
+	}
+
+	return DropEntry(transaction, *entry->second, cascade);
+}
+
+static AbstractCatalogEntry *
+GetEntryForTransaction(Transaction &transaction,
+                       AbstractCatalogEntry *current) {
+	while (current->child) {
+		if (current->timestamp == transaction.transaction_id) {
+			// we created this version
+			break;
+		}
+		if (current->timestamp < transaction.start_time) {
+			// this version was commited before we started the transaction
+			break;
+		}
+		current = current->child.get();
+		assert(current);
+	}
+	return current;
 }
 
 bool CatalogSet::EntryExists(Transaction &transaction, const string &name) {
@@ -104,19 +138,9 @@ bool CatalogSet::EntryExists(Transaction &transaction, const string &name) {
 		return false;
 	}
 	// if it does, we have to check version numbers
-	AbstractCatalogEntry *current = data[name].get();
-	while (current->child) {
-		if (current->timestamp == transaction.transaction_id) {
-			// we created this version
-			break;
-		}
-		if (current->timestamp < transaction.start_time) {
-			// this version was commited before we started the transaction
-			break;
-		}
-		current = current->child.get();
-		assert(current);
-	}
+	AbstractCatalogEntry *current =
+	    GetEntryForTransaction(transaction, data[name].get());
+
 	return !current->deleted;
 }
 
@@ -129,19 +153,8 @@ AbstractCatalogEntry *CatalogSet::GetEntry(Transaction &transaction,
 		return nullptr;
 	}
 	// if it does, we have to check version numbers
-	AbstractCatalogEntry *current = data[name].get();
-	while (current->child) {
-		if (current->timestamp == transaction.transaction_id) {
-			// we created this version
-			break;
-		}
-		if (current->timestamp < transaction.start_time) {
-			// this version was commited before we started the transaction
-			break;
-		}
-		current = current->child.get();
-		assert(current);
-	}
+	AbstractCatalogEntry *current =
+	    GetEntryForTransaction(transaction, data[name].get());
 	if (current->deleted) {
 		return nullptr;
 	}
@@ -167,4 +180,24 @@ void CatalogSet::Undo(AbstractCatalogEntry *entry) {
 		data[name] = move(to_be_removed_node->child);
 		entry->parent = nullptr;
 	}
+}
+
+void CatalogSet::DropAllEntries(Transaction &transaction) {
+	lock_guard<mutex> lock(catalog_lock);
+
+	for (auto &entry : data) {
+		DropEntry(transaction, *entry.second, true);
+	}
+}
+
+bool CatalogSet::IsEmpty(Transaction &transaction) {
+	lock_guard<mutex> lock(catalog_lock);
+
+	for (auto &entry : data) {
+		auto current = GetEntryForTransaction(transaction, entry.second.get());
+		if (!current->deleted) {
+			return false;
+		}
+	}
+	return true;
 }

@@ -43,8 +43,33 @@ struct DropTableInformation {
 	std::string table;
 	//! Ignore if the entry does not exist instead of failing
 	bool if_exists = false;
+	//! Cascade drop (drop all dependents instead of throwing an error if there
+	//! are any)
+	bool cascade = false;
 
-	DropTableInformation() : schema(DEFAULT_SCHEMA), if_exists(false) {}
+	DropTableInformation()
+	    : schema(DEFAULT_SCHEMA), if_exists(false), cascade(false) {}
+};
+
+struct CreateSchemaInformation {
+	//! Schema name to create
+	std::string schema;
+	//! Ignore if the entry already exists, instead of failing
+	bool if_not_exists = false;
+
+	CreateSchemaInformation() : if_not_exists(false) {}
+};
+
+struct DropSchemaInformation {
+	//! Schema name to drop
+	std::string schema;
+	//! Ignore if the entry does not exist instead of failing
+	bool if_exists = false;
+	//! Cascade drop (drop all dependents instead of throwing an error if there
+	//! are any)
+	bool cascade = false;
+
+	DropSchemaInformation() : if_exists(false), cascade(false) {}
 };
 
 } // namespace duckdb

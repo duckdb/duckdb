@@ -37,7 +37,13 @@ class SchemaCatalogEntry : public AbstractCatalogEntry {
 	                            const std::string &table);
 	//! Creates a table with the given name in the schema
 	void CreateTable(Transaction &transaction, CreateTableInformation *info);
+	//! Drops a table with the given name
 	void DropTable(Transaction &transaction, DropTableInformation *info);
+
+	//! Returns true if other objects depend on this object
+	virtual bool HasDependents(Transaction &transaction);
+	//! Function that drops all dependents (used for Cascade)
+	virtual void DropDependents(Transaction &transaction);
 
   private:
 	//! The catalog set holding the tables

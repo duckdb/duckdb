@@ -10,12 +10,24 @@ using namespace std;
 Catalog::Catalog(StorageManager &storage) : storage(storage) {}
 
 void Catalog::CreateSchema(Transaction &transaction,
-                           const std::string &schema_name) {
+                           CreateSchemaInformation *info) {
 	auto entry = make_unique_base<AbstractCatalogEntry, SchemaCatalogEntry>(
-	    this, schema_name);
-	if (!schemas.CreateEntry(transaction, schema_name, move(entry))) {
-		throw CatalogException("Schema with name %s already exists!",
-		                       schema_name.c_str());
+	    this, info->schema);
+	if (!schemas.CreateEntry(transaction, info->schema, move(entry))) {
+		if (!info->if_not_exists) {
+			throw CatalogException("Schema with name %s already exists!",
+			                       info->schema.c_str());
+		}
+	}
+}
+
+void Catalog::DropSchema(Transaction &transaction,
+                         DropSchemaInformation *info) {
+	if (!schemas.DropEntry(transaction, info->schema, info->cascade)) {
+		if (!info->if_exists) {
+			throw CatalogException("Schema with name \"%s\" does not exist!",
+			                       info->schema.c_str());
+		}
 	}
 }
 

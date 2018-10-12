@@ -10,8 +10,6 @@
 
 #pragma once
 
-#include <vector>
-
 #include "catalog/column_definition.hpp"
 
 #include "parser/parsed_data.hpp"

@@ -181,36 +181,59 @@ unique_ptr<SelectStatement> TransformSelect(Node *node) {
 	}
 }
 
-unique_ptr<DropTableStatement> TransformDrop(Node *node) {
+static unique_ptr<DropTableStatement> TransformDropTable(DropStmt *stmt) {
+	auto result = make_unique<DropTableStatement>();
+	auto &info = *result->info.get();
+
+	info.cascade = stmt->behavior == DropBehavior::DROP_CASCADE;
+	auto table_list =
+	    reinterpret_cast<List *>(stmt->objects->head->data.ptr_value);
+	if (table_list->length == 2) {
+		info.schema =
+		    reinterpret_cast<value *>(table_list->head->data.ptr_value)
+		        ->val.str;
+		info.table =
+		    reinterpret_cast<value *>(table_list->head->next->data.ptr_value)
+		        ->val.str;
+	} else {
+		info.table = reinterpret_cast<value *>(table_list->head->data.ptr_value)
+		                 ->val.str;
+	}
+	info.if_exists = stmt->missing_ok;
+	return result;
+}
+
+static unique_ptr<DropSchemaStatement> TransformDropSchema(DropStmt *stmt) {
+	auto result = make_unique<DropSchemaStatement>();
+	auto &info = *result->info.get();
+
+	info.cascade = stmt->behavior == DropBehavior::DROP_CASCADE;
+	info.if_exists = stmt->missing_ok;
+	for (auto cell = stmt->objects->head; cell != nullptr; cell = cell->next) {
+		auto table_list = reinterpret_cast<List *>(cell->data.ptr_value);
+		auto schema_value =
+		    reinterpret_cast<value *>(table_list->head->data.ptr_value);
+		info.schema = schema_value->val.str;
+		break;
+	}
+	return result;
+}
+
+unique_ptr<SQLStatement> TransformDrop(Node *node) {
 	DropStmt *stmt = reinterpret_cast<DropStmt *>(node);
 	assert(stmt);
-	auto result = make_unique<DropTableStatement>();
 	if (stmt->objects->length != 1) {
 		throw NotImplementedException("Can only drop one object at a time");
 	}
 
 	switch (stmt->removeType) {
-	case OBJECT_TABLE: {
-		auto table_list =
-		    reinterpret_cast<List *>(stmt->objects->head->data.ptr_value);
-		if (table_list->length == 2) {
-			result->info->schema =
-			    reinterpret_cast<value *>(table_list->head->data.ptr_value)
-			        ->val.str;
-			result->info->table = reinterpret_cast<value *>(
-			                          table_list->head->next->data.ptr_value)
-			                          ->val.str;
-		} else {
-			result->info->table =
-			    reinterpret_cast<value *>(table_list->head->data.ptr_value)
-			        ->val.str;
-		}
-		result->info->if_exists = stmt->missing_ok;
-	} break;
+	case OBJECT_TABLE:
+		return TransformDropTable(stmt);
+	case OBJECT_SCHEMA:
+		return TransformDropSchema(stmt);
 	default:
 		throw NotImplementedException("Cannot drop this type yet");
 	}
-	return result;
 }
 
 unique_ptr<InsertStatement> TransformInsert(Node *node) {
@@ -262,7 +285,7 @@ unique_ptr<InsertStatement> TransformInsert(Node *node) {
 	return result;
 }
 
-unique_ptr<CreateTableStatement> TransformCreate(Node *node) {
+unique_ptr<CreateTableStatement> TransformCreateTable(Node *node) {
 	auto stmt = reinterpret_cast<CreateStmt *>(node);
 	assert(stmt);
 	auto result = make_unique<CreateTableStatement>();
@@ -309,6 +332,43 @@ unique_ptr<CreateTableStatement> TransformCreate(Node *node) {
 			throw NotImplementedException("ColumnDef type not handled yet");
 		}
 	}
+	return result;
+}
+
+unique_ptr<CreateSchemaStatement> TransformCreateSchema(Node *node) {
+	auto stmt = reinterpret_cast<CreateSchemaStmt *>(node);
+	assert(stmt);
+	auto result = make_unique<CreateSchemaStatement>();
+	auto &info = *result->info.get();
+
+	assert(stmt->schemaname);
+	info.schema = stmt->schemaname;
+	info.if_not_exists = stmt->if_not_exists;
+
+	if (stmt->authrole) {
+		auto authrole = reinterpret_cast<Node *>(stmt->authrole);
+		switch (authrole->type) {
+		case T_RoleSpec:
+		default:
+			throw NotImplementedException("Authrole not implemented yet!");
+		}
+	}
+
+	if (stmt->schemaElts) {
+		// schema elements
+		for (auto cell = stmt->schemaElts->head; cell != nullptr;
+		     cell = cell->next) {
+			auto node = reinterpret_cast<Node *>(cell->data.ptr_value);
+			switch (node->type) {
+			case T_CreateStmt:
+			case T_ViewStmt:
+			default:
+				throw NotImplementedException(
+				    "Schema element not supported yet!");
+			}
+		}
+	}
+
 	return result;
 }
 

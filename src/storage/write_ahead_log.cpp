@@ -272,13 +272,14 @@ void WriteAheadLog::WriteCreateSchema(SchemaCatalogEntry *entry) {
 bool ReplayCreateSchema(Transaction &transaction, Catalog &catalog,
                         Deserializer &source) {
 	bool failed = false;
-	auto schema_name = source.Read<string>(failed);
+	CreateSchemaInformation info;
+	info.schema = source.Read<string>(failed);
 	if (failed) {
 		return false;
 	}
 
 	try {
-		catalog.CreateSchema(transaction, schema_name);
+		catalog.CreateSchema(transaction, &info);
 	} catch (...) {
 		return false;
 	}
@@ -297,7 +298,20 @@ void WriteAheadLog::WriteDropSchema(SchemaCatalogEntry *entry) {
 
 bool ReplayDropSchema(Transaction &transaction, Catalog &catalog,
                       Deserializer &source) {
-	throw NotImplementedException("Did not implement DROP SCHEMA yet!");
+	bool failed = false;
+	DropSchemaInformation info;
+
+	info.schema = source.Read<string>(failed);
+	if (failed) {
+		return false;
+	}
+
+	try {
+		catalog.DropSchema(transaction, &info);
+	} catch (...) {
+		return false;
+	}
+	return true;
 }
 
 //===--------------------------------------------------------------------===//

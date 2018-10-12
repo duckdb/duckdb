@@ -22,7 +22,12 @@ void StorageManager::Initialize() {
 	// first initialize the base system catalogs
 	// these are never written to the WAL
 	auto transaction = database.transaction_manager.StartTransaction();
-	database.catalog.CreateSchema(*transaction, DEFAULT_SCHEMA);
+
+	// create the default schema
+	CreateSchemaInformation info;
+	info.schema = DEFAULT_SCHEMA;
+
+	database.catalog.CreateSchema(*transaction, &info);
 	database.transaction_manager.CommitTransaction(transaction);
 
 	if (!in_memory) {
