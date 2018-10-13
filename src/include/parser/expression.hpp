@@ -141,6 +141,8 @@ class Expression : public Printable {
 		return result;
 	}
 
+	virtual ExpressionClass GetExpressionClass() = 0;
+
 	//! Serializes an Expression to a stand-alone binary blob
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes a blob back into an Expression
@@ -163,6 +165,13 @@ class Expression : public Printable {
 	Expression *parent;
 
 	//! A list of children of the expression
+	std::vector<std::unique_ptr<Expression>> children;
+};
+
+//! Expression deserialize information
+struct ExpressionDeserializeInformation {
+	ExpressionType type;
+	TypeId return_type;
 	std::vector<std::unique_ptr<Expression>> children;
 };
 

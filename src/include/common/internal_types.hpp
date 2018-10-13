@@ -207,6 +207,27 @@ enum class ExpressionType : uint8_t {
 };
 
 //===--------------------------------------------------------------------===//
+// Expression Class
+//===--------------------------------------------------------------------===//
+enum class ExpressionClass : uint8_t {
+	INVALID = 0,
+	AGGREGATE = 1,
+	ALIAS_REF = 2,
+	CASE = 3,
+	CAST = 4,
+	COLUMN_REF = 5,
+	COMPARISON = 6,
+	CONJUNCTION = 7,
+	CONSTANT = 8,
+	DEFAULT = 9,
+	FUNCTION = 10,
+	GROUP_REF = 11,
+	OPERATOR = 12,
+	STAR = 13,
+	SUBQUERY = 14
+};
+
+//===--------------------------------------------------------------------===//
 // Constraint Types
 //===--------------------------------------------------------------------===//
 enum class ConstraintType : uint8_t {

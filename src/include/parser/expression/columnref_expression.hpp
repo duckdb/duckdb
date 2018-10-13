@@ -57,25 +57,19 @@ class ColumnRefExpression : public Expression {
 	const std::string &GetTableName() const { return table_name; }
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
-
-	virtual void ResolveType() override {
-		Expression::ResolveType();
-		if (return_type == TypeId::INVALID) {
-			throw Exception("Type of ColumnRefExpression was not resolved!");
-		}
+	virtual ExpressionClass GetExpressionClass() override {
+		return ExpressionClass::COLUMN_REF;
 	}
 
-	virtual bool Equals(const Expression *other_) override {
-		if (!Expression::Equals(other_)) {
-			return false;
-		}
-		auto other = reinterpret_cast<const ColumnRefExpression *>(other_);
-		if (!other) {
-			return false;
-		}
-		return column_name == other->column_name &&
-		       table_name == other->table_name;
-	}
+	//! Serializes an Expression to a stand-alone binary blob
+	virtual void Serialize(Serializer &serializer) override;
+	//! Deserializes a blob back into an ConstantExpression
+	static std::unique_ptr<Expression>
+	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);
+
+	virtual void ResolveType() override;
+
+	virtual bool Equals(const Expression *other_) override;
 
 	// FIXME: move these
 
@@ -97,17 +91,7 @@ class ColumnRefExpression : public Expression {
 	//! Table name of the column name that is referenced (optional)
 	std::string table_name;
 
-	virtual std::string ToString() const override {
-		if (index != (size_t)-1) {
-			return "#" + std::to_string(index);
-		}
-		auto str = table_name.empty() ? std::to_string(binding.table_index)
-		                              : table_name;
-		str += ".";
-		str += column_name.empty() ? std::to_string(binding.column_index)
-		                           : column_name;
-		return str;
-	}
+	virtual std::string ToString() const override;
 
 	virtual bool IsScalar() override { return false; }
 };

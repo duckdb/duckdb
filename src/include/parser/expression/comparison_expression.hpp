@@ -23,5 +23,8 @@ class ComparisonExpression : public Expression {
 	}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual ExpressionClass GetExpressionClass() override {
+		return ExpressionClass::COMPARISON;
+	}
 };
 } // namespace duckdb

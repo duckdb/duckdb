@@ -129,6 +129,11 @@ class Value : public Printable {
 	//! The value of the object, if it is of a variable size Type
 	std::string str_value;
 
+	//! Serializes a Value to a stand-alone binary blob
+	void Serialize(Serializer &serializer);
+	//! Deserializes a Value from a blob
+	static Value Deserialize(Deserializer &source);
+
   private:
 	//! Templated helper function for casting
 	template <class DST, class OP> static DST _cast(const Value &v);

@@ -29,6 +29,9 @@ class SubqueryExpression : public Expression {
 	      type(SubqueryType::DEFAULT) {}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual ExpressionClass GetExpressionClass() override {
+		return ExpressionClass::SUBQUERY;
+	}
 
 	std::unique_ptr<SelectStatement> subquery;
 	std::unique_ptr<LogicalOperator> op;

@@ -1,6 +1,7 @@
 
 #include "common/types/value.hpp"
 #include "common/exception.hpp"
+#include "common/serializer.hpp"
 #include "common/types/operators.hpp"
 
 using namespace duckdb;
@@ -485,4 +486,100 @@ bool Value::LessThan(const Value &left, const Value &right) {
 
 bool Value::LessThanEquals(const Value &left, const Value &right) {
 	return Value::GreaterThanEquals(right, left);
+}
+
+void Value::Serialize(Serializer &serializer) {
+	serializer.Write<TypeId>(type);
+	serializer.Write<bool>(is_null);
+	if (!is_null) {
+		switch (type) {
+		case TypeId::BOOLEAN:
+			serializer.Write<int8_t>(value_.boolean);
+			break;
+		case TypeId::TINYINT:
+			serializer.Write<int8_t>(value_.tinyint);
+			break;
+		case TypeId::SMALLINT:
+			serializer.Write<int16_t>(value_.smallint);
+			break;
+		case TypeId::INTEGER:
+			serializer.Write<int32_t>(value_.integer);
+			break;
+		case TypeId::BIGINT:
+			serializer.Write<int64_t>(value_.bigint);
+			break;
+		case TypeId::DECIMAL:
+			serializer.Write<double>(value_.decimal);
+			break;
+		case TypeId::POINTER:
+			serializer.Write<uint64_t>(value_.pointer);
+			break;
+		case TypeId::DATE:
+			serializer.Write<date_t>(value_.date);
+			break;
+		case TypeId::TIMESTAMP:
+			serializer.Write<timestamp_t>(value_.timestamp);
+			break;
+		case TypeId::VARCHAR:
+			serializer.WriteString(str_value);
+			break;
+		default:
+			throw NotImplementedException(
+			    "Value type not implemented for serialization!");
+		}
+	}
+}
+
+Value Value::Deserialize(Deserializer &source) {
+	bool failed = false;
+
+	auto type = source.Read<TypeId>(failed);
+	auto is_null = source.Read<bool>(failed);
+	if (failed) {
+		return Value();
+	}
+	Value new_value = Value(type);
+	if (is_null) {
+		return new_value;
+	}
+	new_value.is_null = false;
+	switch (type) {
+	case TypeId::BOOLEAN:
+		new_value.value_.boolean = source.Read<int8_t>(failed);
+		break;
+	case TypeId::TINYINT:
+		new_value.value_.tinyint = source.Read<int8_t>(failed);
+		break;
+	case TypeId::SMALLINT:
+		new_value.value_.smallint = source.Read<int16_t>(failed);
+		break;
+	case TypeId::INTEGER:
+		new_value.value_.integer = source.Read<int32_t>(failed);
+		break;
+	case TypeId::BIGINT:
+		new_value.value_.bigint = source.Read<int64_t>(failed);
+		break;
+	case TypeId::DECIMAL:
+		new_value.value_.decimal = source.Read<double>(failed);
+		break;
+	case TypeId::POINTER:
+		new_value.value_.pointer = source.Read<uint64_t>(failed);
+		break;
+	case TypeId::DATE:
+		new_value.value_.date = source.Read<date_t>(failed);
+		break;
+	case TypeId::TIMESTAMP:
+		new_value.value_.timestamp = source.Read<timestamp_t>(failed);
+		break;
+	case TypeId::VARCHAR:
+		new_value.str_value = source.Read<string>(failed);
+		break;
+	default:
+		throw NotImplementedException(
+		    "Value type not implemented for deserialization");
+	}
+	if (failed) {
+		return Value();
+	}
+	return new_value;
 }

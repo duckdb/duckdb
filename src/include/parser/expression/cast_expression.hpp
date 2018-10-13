@@ -33,5 +33,8 @@ class CastExpression : public Expression {
 	}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual ExpressionClass GetExpressionClass() override {
+		return ExpressionClass::CAST;
+	}
 };
 } // namespace duckdb

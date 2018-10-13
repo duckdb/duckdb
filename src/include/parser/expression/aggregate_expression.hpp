@@ -109,6 +109,9 @@ class AggregateExpression : public Expression {
 	virtual bool IsAggregate() override { return true; }
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual ExpressionClass GetExpressionClass() override {
+		return ExpressionClass::AGGREGATE;
+	}
 
 	size_t index;
 

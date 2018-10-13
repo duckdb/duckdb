@@ -2,6 +2,7 @@
 #include "common/serializer.hpp"
 
 #include "parser/expression.hpp"
+#include "parser/expression/list.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -39,8 +40,9 @@ bool Expression::HasSubquery() {
 }
 
 void Expression::Serialize(Serializer &serializer) {
-	serializer.Write<int>((int)type);
-	serializer.Write<int>((int)return_type);
+	serializer.Write<ExpressionClass>(GetExpressionClass());
+	serializer.Write<ExpressionType>(type);
+	serializer.Write<TypeId>(return_type);
 	serializer.Write<uint32_t>(children.size());
 	for (auto &children : children) {
 		children->Serialize(serializer);
@@ -49,22 +51,29 @@ void Expression::Serialize(Serializer &serializer) {
 
 unique_ptr<Expression> Expression::Deserialize(Deserializer &source) {
 	bool failed = false;
-	auto type = (ExpressionType)source.Read<int>(failed);
-	auto return_type = (TypeId)source.Read<int>(failed);
+	ExpressionDeserializeInformation info;
+	auto expression_class = source.Read<ExpressionClass>(failed);
+	info.type = source.Read<ExpressionType>(failed);
+	info.return_type = source.Read<TypeId>(failed);
 	auto children_count = source.Read<uint32_t>(failed);
 	if (failed) {
 		return nullptr;
 	}
 	// deserialize the children
-	vector<unique_ptr<Expression>> expressions;
 	for (size_t i = 0; i < children_count; i++) {
 		auto expression = Expression::Deserialize(source);
 		if (!expression) {
 			return nullptr;
 		}
-		expressions.push_back(move(expression));
+		info.children.push_back(move(expression));
 	}
-	switch (type) {
+	switch (expression_class) {
+	case ExpressionClass::OPERATOR:
+		return OperatorExpression::Deserialize(&info, source);
+	case ExpressionClass::CONSTANT:
+		return ConstantExpression::Deserialize(&info, source);
+	case ExpressionClass::COLUMN_REF:
+		return ColumnRefExpression::Deserialize(&info, source);
 	default:
 		return nullptr;
 	}

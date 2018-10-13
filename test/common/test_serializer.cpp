@@ -1,6 +1,8 @@
 
 #include "catch.hpp"
 
+#include "expression_helper.hpp"
+
 #include "common/serializer.hpp"
 #include "common/types/data_chunk.hpp"
 
@@ -53,4 +55,63 @@ TEST_CASE("Data Chunk serialization", "[serializer]") {
 	REQUIRE(other_chunk.data[1].count == 2);
 	REQUIRE(Value::Equals(other_chunk.data[1].GetValue(0), c));
 	REQUIRE(Value::Equals(other_chunk.data[1].GetValue(1), d));
+}
+
+TEST_CASE("Value serialization", "[serializer]") {
+	Value a = Value::BOOLEAN(12);
+	Value b = Value::TINYINT(12);
+	Value c = Value::SMALLINT(12);
+	Value d = Value::INTEGER(12);
+	Value e = Value::BIGINT(12);
+	Value f = Value::POINTER(12);
+	Value g = Value::DATE(12);
+	Value h = Value();
+	Value i = Value("hello world");
+
+	Serializer serializer(4);
+	a.Serialize(serializer);
+	b.Serialize(serializer);
+	c.Serialize(serializer);
+	d.Serialize(serializer);
+	e.Serialize(serializer);
+	f.Serialize(serializer);
+	g.Serialize(serializer);
+	h.Serialize(serializer);
+	i.Serialize(serializer);
+
+	auto data = serializer.GetData();
+	Deserializer source(data.data.get(), data.size);
+
+	Value a1 = Value::Deserialize(source);
+	REQUIRE(Value::Equals(a, a1));
+	Value b1 = Value::Deserialize(source);
+	REQUIRE(Value::Equals(b, b1));
+	Value c1 = Value::Deserialize(source);
+	REQUIRE(Value::Equals(c, c1));
+	Value d1 = Value::Deserialize(source);
+	REQUIRE(Value::Equals(d, d1));
+	Value e1 = Value::Deserialize(source);
+	REQUIRE(Value::Equals(e, e1));
+	Value f1 = Value::Deserialize(source);
+	REQUIRE(Value::Equals(f, f1));
+	Value g1 = Value::Deserialize(source);
+	REQUIRE(Value::Equals(g, g1));
+	Value h1 = Value::Deserialize(source);
+	REQUIRE(Value::Equals(h, h1));
+	Value i1 = Value::Deserialize(source);
+	REQUIRE(Value::Equals(i, i1));
+}
+
+TEST_CASE("Expression serializer", "[serializer]") {
+	auto expression = ParseExpression("a + 2");
+	REQUIRE(expression.get());
+
+	Serializer serializer;
+	expression->Serialize(serializer);
+
+	auto data = serializer.GetData();
+	Deserializer source(data.data.get(), data.size);
+	auto deserialized_expression = Expression::Deserialize(source);
+	REQUIRE(deserialized_expression.get());
+	REQUIRE(expression->Equals(deserialized_expression.get()));
 }

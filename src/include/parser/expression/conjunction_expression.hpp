@@ -22,5 +22,8 @@ class ConjunctionExpression : public Expression {
 	}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual ExpressionClass GetExpressionClass() override {
+		return ExpressionClass::CONJUNCTION;
+	}
 };
 } // namespace duckdb

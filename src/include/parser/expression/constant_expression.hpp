@@ -24,23 +24,20 @@ class ConstantExpression : public Expression {
 	    : Expression(ExpressionType::VALUE_CONSTANT, val.type), value(val) {}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual ExpressionClass GetExpressionClass() override {
+		return ExpressionClass::CONSTANT;
+	}
+
+	//! Serializes an Expression to a stand-alone binary blob
+	virtual void Serialize(Serializer &serializer) override;
+	//! Deserializes a blob back into an ConstantExpression
+	static std::unique_ptr<Expression>
+	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);
 
 	//! Resolve the type of the constant
-	virtual void ResolveType() override {
-		Expression::ResolveType();
-		stats = Statistics(value);
-	}
+	virtual void ResolveType() override;
 
-	virtual bool Equals(const Expression *other_) override {
-		if (!Expression::Equals(other_)) {
-			return false;
-		}
-		auto other = reinterpret_cast<const ConstantExpression *>(other_);
-		if (!other) {
-			return false;
-		}
-		return Value::Equals(value, other->value);
-	}
+	virtual bool Equals(const Expression *other_) override;
 	virtual std::string ToString() const override { return value.ToString(); }
 
 	//! The constant value referenced

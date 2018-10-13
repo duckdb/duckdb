@@ -20,6 +20,9 @@ class DefaultExpression : public Expression {
 	DefaultExpression() : Expression(ExpressionType::VALUE_DEFAULT) {}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual ExpressionClass GetExpressionClass() override {
+		return ExpressionClass::DEFAULT;
+	}
 
 	virtual std::string ToString() const override { return "Default"; }
 };

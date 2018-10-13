@@ -11,6 +11,9 @@ class CaseExpression : public Expression {
 	CaseExpression() : Expression(ExpressionType::OPERATOR_CASE_EXPR) {}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual ExpressionClass GetExpressionClass() override {
+		return ExpressionClass::CASE;
+	}
 
 	virtual void ResolveType() override {
 		Expression::ResolveType();

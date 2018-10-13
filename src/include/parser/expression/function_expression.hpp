@@ -33,6 +33,10 @@ class FunctionExpression : public Expression {
 	}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual ExpressionClass GetExpressionClass() override {
+		return ExpressionClass::FUNCTION;
+	}
+
 	std::string func_name;
 
   private:

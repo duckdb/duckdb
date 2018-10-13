@@ -21,6 +21,9 @@ class GroupRefExpression : public Expression {
 	      group_index(group_index) {}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual ExpressionClass GetExpressionClass() override {
+		return ExpressionClass::GROUP_REF;
+	}
 
 	virtual bool Equals(const Expression *other_) override {
 		if (!Expression::Equals(other_)) {
