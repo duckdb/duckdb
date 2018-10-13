@@ -23,3 +23,4 @@
 #include "parser/expression/groupref_expression.hpp"
 #include "parser/expression/operator_expression.hpp"
 #include "parser/expression/subquery_expression.hpp"
+#include "parser/expression/star_expression.hpp"

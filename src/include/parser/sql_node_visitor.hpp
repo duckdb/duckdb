@@ -12,18 +12,19 @@
 
 namespace duckdb {
 
-class SelectStatement;
-class CreateTableStatement;
+class CopyStatement;
 class CreateSchemaStatement;
+class CreateTableStatement;
+class DeleteStatement;
 class DropSchemaStatement;
 class DropTableStatement;
 class InsertStatement;
-class CopyStatement;
+class SelectStatement;
 class TransactionStatement;
-class DeleteStatement;
 class UpdateStatement;
 
 class AggregateExpression;
+class CaseExpression;
 class CastExpression;
 class ColumnRefExpression;
 class ComparisonExpression;
@@ -33,8 +34,8 @@ class DefaultExpression;
 class FunctionExpression;
 class GroupRefExpression;
 class OperatorExpression;
+class StarExpression;
 class SubqueryExpression;
-class CaseExpression;
 
 class NotNullConstraint;
 class CheckConstraint;
@@ -53,15 +54,15 @@ class SQLNodeVisitor {
   public:
 	virtual ~SQLNodeVisitor(){};
 
-	virtual void Visit(SelectStatement &);
+	virtual void Visit(CopyStatement &){};
 	virtual void Visit(CreateSchemaStatement &){};
 	virtual void Visit(CreateTableStatement &){};
+	virtual void Visit(DeleteStatement &){};
 	virtual void Visit(DropSchemaStatement &){};
 	virtual void Visit(DropTableStatement &){};
 	virtual void Visit(InsertStatement &){};
-	virtual void Visit(CopyStatement &){};
+	virtual void Visit(SelectStatement &);
 	virtual void Visit(TransactionStatement &){};
-	virtual void Visit(DeleteStatement &){};
 	virtual void Visit(UpdateStatement &){};
 
 	virtual void Visit(AggregateExpression &expr);
@@ -75,6 +76,7 @@ class SQLNodeVisitor {
 	virtual void Visit(FunctionExpression &expr);
 	virtual void Visit(GroupRefExpression &expr);
 	virtual void Visit(OperatorExpression &expr);
+	virtual void Visit(StarExpression &expr);
 	virtual void Visit(SubqueryExpression &expr);
 
 	virtual void Visit(NotNullConstraint &expr);

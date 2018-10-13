@@ -411,7 +411,7 @@ unique_ptr<CopyStatement> TransformCopy(Node *node) {
 					        result->select_list[i]));
 			} else {
 				statement->select_list.push_back(
-				    make_unique<ColumnRefExpression>());
+				    make_unique<StarExpression>());
 			}
 			result->select_statement = move(statement);
 		}

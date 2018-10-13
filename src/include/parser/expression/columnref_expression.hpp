@@ -32,9 +32,6 @@ struct ColumnBinding {
 //! alias
 class ColumnRefExpression : public Expression {
   public:
-	//! STAR expression in SELECT clause
-	ColumnRefExpression()
-	    : Expression(ExpressionType::STAR), reference(nullptr) {}
 	//! Only specify the column name, the table name will be derived later
 	ColumnRefExpression(std::string column_name)
 	    : Expression(ExpressionType::COLUMN_REF), reference(nullptr),

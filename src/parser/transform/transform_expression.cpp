@@ -319,7 +319,7 @@ unique_ptr<Expression> TransformColumnRef(ColumnRef *root) {
 		return make_unique<ColumnRefExpression>(column_name, table_name);
 	}
 	case T_A_Star: {
-		return make_unique<ColumnRefExpression>();
+		return make_unique<StarExpression>();
 	}
 	default:
 		throw NotImplementedException("ColumnRef not implemented!");
@@ -547,7 +547,7 @@ unique_ptr<Expression> TransformFuncCall(FuncCall *root) {
 		auto agg_fun_type = StringToExpressionType("AGGREGATE_" + fun_name);
 		if (root->agg_star) {
 			return make_unique<AggregateExpression>(
-			    agg_fun_type, false, make_unique<ColumnRefExpression>());
+			    agg_fun_type, false, make_unique<StarExpression>());
 		} else {
 			if (!root->args) {
 				throw NotImplementedException(
