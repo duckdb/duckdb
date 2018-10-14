@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// catalog/column_definition.hpp
+// parser/column_definition.hpp
 //
 // Author: Mark Raasveldt
 //
@@ -18,8 +18,11 @@ namespace duckdb {
 //! A column of a table.
 class ColumnDefinition {
   public:
-	ColumnDefinition(std::string name, TypeId type);
-	ColumnDefinition(std::string name, TypeId type, Value default_value);
+	ColumnDefinition(std::string name, TypeId type)
+	    : name(name), type(type), has_default(false) {}
+	ColumnDefinition(std::string name, TypeId type, Value default_value)
+	    : name(name), type(type), has_default(true),
+	      default_value(default_value) {}
 
 	//! The name of the entry
 	std::string name;
@@ -31,8 +34,5 @@ class ColumnDefinition {
 	bool has_default;
 	//! The default value of the column (if any)
 	Value default_value;
-
-	virtual std::string ToString() const { return std::string(); }
-	virtual ~ColumnDefinition(){};
 };
 } // namespace duckdb

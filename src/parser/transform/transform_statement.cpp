@@ -1,7 +1,7 @@
 
 #include "common/assert.hpp"
 
-#include "catalog/column_definition.hpp"
+#include "parser/column_definition.hpp"
 
 #include "parser/parser.hpp"
 #include "parser/tableref/tableref_list.hpp"
@@ -410,8 +410,7 @@ unique_ptr<CopyStatement> TransformCopy(Node *node) {
 					    make_unique<ColumnRefExpression>(
 					        result->select_list[i]));
 			} else {
-				statement->select_list.push_back(
-				    make_unique<StarExpression>());
+				statement->select_list.push_back(make_unique<StarExpression>());
 			}
 			result->select_statement = move(statement);
 		}

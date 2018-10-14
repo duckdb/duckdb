@@ -170,11 +170,11 @@ std::string StringUtil::VFormat(const std::string fmt_str, va_list args) {
 	va_copy(args_copy, args);
 
 	// first get the amount of characters we need
-	const auto n = vsnprintf(nullptr, 0, fmt_str.c_str(), args) + 1 ;
+	const auto n = vsnprintf(nullptr, 0, fmt_str.c_str(), args) + 1;
 
 	// now allocate the string and do the actual printing
 	formatted.reset(new char[n]);
-	(void) vsnprintf(&formatted[0], n, fmt_str.c_str(), args_copy);
+	(void)vsnprintf(&formatted[0], n, fmt_str.c_str(), args_copy);
 	return std::string(formatted.get());
 }
 

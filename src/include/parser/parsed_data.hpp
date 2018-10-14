@@ -12,7 +12,7 @@
 
 #include "common/internal_types.hpp"
 
-#include "catalog/column_definition.hpp"
+#include "parser/column_definition.hpp"
 
 namespace duckdb {
 class Constraint;

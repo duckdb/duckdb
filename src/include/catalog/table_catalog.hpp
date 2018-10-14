@@ -15,7 +15,7 @@
 #include <vector>
 
 #include "catalog/abstract_catalog.hpp"
-#include "catalog/column_definition.hpp"
+#include "parser/column_definition.hpp"
 
 #include "common/types/statistics.hpp"
 

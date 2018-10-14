@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include "catalog/column_definition.hpp"
+#include "parser/column_definition.hpp"
 
 #include "parser/parsed_data.hpp"
 #include "parser/sql_statement.hpp"

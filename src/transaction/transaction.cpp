@@ -1,8 +1,8 @@
 
 #include "common/exception.hpp"
 
-#include "catalog/column_definition.hpp"
 #include "catalog/table_catalog.hpp"
+#include "parser/column_definition.hpp"
 
 #include "storage/data_table.hpp"
 

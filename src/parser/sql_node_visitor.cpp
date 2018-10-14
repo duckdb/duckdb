@@ -42,10 +42,7 @@ void SQLNodeVisitor::Visit(OperatorExpression &expr) {
 void SQLNodeVisitor::Visit(SubqueryExpression &expr) {
 	expr.AcceptChildren(this);
 }
-void SQLNodeVisitor::Visit(StarExpression &expr) {
-	expr.AcceptChildren(this);
-}
-
+void SQLNodeVisitor::Visit(StarExpression &expr) { expr.AcceptChildren(this); }
 
 void SQLNodeVisitor::Visit(CheckConstraint &con) {
 	con.expression->Accept(this);
