@@ -17,6 +17,7 @@
 #include "common/internal_types.hpp"
 #include "common/types/date.hpp"
 #include "common/types/hash.hpp"
+#include "common/types/null_value.hpp"
 
 namespace operators {
 

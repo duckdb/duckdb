@@ -10,14 +10,15 @@
 
 #pragma once
 
-#include "parser/expression/list.hpp"
 #include <algorithm>
 #include <string>
 #include <vector>
 
-#include "planner/logical_operator.hpp"
-
 #include "common/exception.hpp"
+
+#include "parser/expression/list.hpp"
+
+#include "planner/logical_operator.hpp"
 
 namespace duckdb {
 

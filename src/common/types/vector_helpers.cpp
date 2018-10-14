@@ -2,6 +2,7 @@
 #include "common/assert.hpp"
 #include "common/exception.hpp"
 #include "common/types/hash.hpp"
+#include "common/types/null_value.hpp"
 #include "common/types/operators.hpp"
 #include "common/types/vector_operations.hpp"
 

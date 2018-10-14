@@ -1,5 +1,7 @@
 
 #include "common/types/tuple.hpp"
+#include "common/types/null_value.hpp"
+
 #include "common/exception.hpp"
 
 using namespace duckdb;
