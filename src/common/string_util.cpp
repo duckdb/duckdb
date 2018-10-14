@@ -149,7 +149,7 @@ std::string StringUtil::Format(const std::string fmt_str, ...) {
 
 	while (1) {
 		// Wrap the plain char array into the unique_ptr
-		formatted.reset(new char[n]);
+		formatted.reset(new char[n + 1]);
 		strcpy(&formatted[0], fmt_str.c_str());
 		va_start(ap, fmt_str);
 		final_n = vsnprintf(&formatted[0], n, fmt_str.c_str(), ap);
@@ -162,22 +162,19 @@ std::string StringUtil::Format(const std::string fmt_str, ...) {
 	return std::string(formatted.get());
 }
 
-std::string StringUtil::VFormat(const std::string fmt_str, va_list ap) {
-	// Reserve two times as much as the length of the fmt_str
-	int final_n, n = ((int)fmt_str.size()) * 2;
-	std::string str;
-	std::unique_ptr<char[]> formatted;
+std::string StringUtil::VFormat(const std::string fmt_str, va_list args) {
+	va_list args_copy;
 
-	while (1) {
-		// Wrap the plain char array into the unique_ptr
-		formatted.reset(new char[n]);
-		strcpy(&formatted[0], fmt_str.c_str());
-		final_n = vsnprintf(&formatted[0], n, fmt_str.c_str(), ap);
-		if (final_n < 0 || final_n >= n)
-			n += abs(final_n - n + 1);
-		else
-			break;
-	}
+	std::unique_ptr<char[]> formatted;
+	// make a copy of the args as we can only use it once
+	va_copy(args_copy, args);
+
+	// first get the amount of characters we need
+	const auto n = vsnprintf(nullptr, 0, fmt_str.c_str(), args) + 1 ;
+
+	// now allocate the string and do the actual printing
+	formatted.reset(new char[n]);
+	(void) vsnprintf(&formatted[0], n, fmt_str.c_str(), args_copy);
 	return std::string(formatted.get());
 }
 
