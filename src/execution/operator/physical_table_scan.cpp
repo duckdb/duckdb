@@ -6,6 +6,14 @@
 using namespace duckdb;
 using namespace std;
 
+vector<string> PhysicalTableScan::GetNames() {
+	vector<string> names;
+	for (auto &column : table.table.columns) {
+		names.push_back(column.name);
+	}
+	return names;
+}
+
 vector<TypeId> PhysicalTableScan::GetTypes() {
 	return table.GetTypes(column_ids);
 }

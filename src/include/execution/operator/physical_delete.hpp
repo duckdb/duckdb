@@ -20,7 +20,9 @@ class PhysicalDelete : public PhysicalOperator {
 	PhysicalDelete(DataTable &table)
 	    : PhysicalOperator(PhysicalOperatorType::DELETE), table(table) {}
 
+	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;
+
 	virtual void _GetChunk(ClientContext &context, DataChunk &chunk,
 	                       PhysicalOperatorState *state) override;
 

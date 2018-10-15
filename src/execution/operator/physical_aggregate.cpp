@@ -22,6 +22,14 @@ PhysicalAggregate::PhysicalAggregate(
 	Initialize();
 }
 
+vector<string> PhysicalAggregate::GetNames() {
+	vector<string> names;
+	for (auto &exp : select_list) {
+		names.push_back(exp->GetName());
+	}
+	return names;
+}
+
 vector<TypeId> PhysicalAggregate::GetTypes() {
 	// get the chunk types from the projection list
 	vector<TypeId> types;

@@ -26,7 +26,9 @@ class PhysicalLimit : public PhysicalOperator {
 	size_t limit;
 	size_t offset;
 
+	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;
+
 	virtual void _GetChunk(ClientContext &context, DataChunk &chunk,
 	                       PhysicalOperatorState *state) override;
 

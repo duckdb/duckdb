@@ -13,6 +13,13 @@ PhysicalCrossProduct::PhysicalCrossProduct(
 	children.push_back(move(right));
 }
 
+vector<string> PhysicalCrossProduct::GetNames() {
+	auto left = children[0]->GetNames();
+	auto right = children[1]->GetNames();
+	left.insert(left.end(), right.begin(), right.end());
+	return left;
+}
+
 vector<TypeId> PhysicalCrossProduct::GetTypes() {
 	auto left = children[0]->GetTypes();
 	auto right = children[1]->GetTypes();

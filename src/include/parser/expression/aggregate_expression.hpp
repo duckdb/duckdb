@@ -113,6 +113,27 @@ class AggregateExpression : public Expression {
 		return ExpressionClass::AGGREGATE;
 	}
 
+	virtual std::string GetName() override {
+		if (!alias.empty()) {
+			return alias;
+		}
+		switch (type) {
+		case ExpressionType::AGGREGATE_COUNT:
+		case ExpressionType::AGGREGATE_COUNT_STAR:
+			return "COUNT";
+		case ExpressionType::AGGREGATE_SUM:
+			return "SUM";
+		case ExpressionType::AGGREGATE_MIN:
+			return "MIN";
+		case ExpressionType::AGGREGATE_MAX:
+			return "MAX";
+		case ExpressionType::AGGREGATE_FIRST:
+			return "FIRST";
+		default:
+			return "UNKNOWN";
+		}
+	}
+
 	size_t index;
 
   private:

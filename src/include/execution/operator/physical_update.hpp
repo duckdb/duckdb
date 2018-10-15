@@ -22,7 +22,9 @@ class PhysicalUpdate : public PhysicalOperator {
 	    : PhysicalOperator(PhysicalOperatorType::UPDATE), table(table),
 	      columns(columns), expressions(std::move(expressions)) {}
 
+	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;
+
 	virtual void _GetChunk(ClientContext &context, DataChunk &chunk,
 	                       PhysicalOperatorState *state) override;
 

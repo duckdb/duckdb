@@ -30,7 +30,10 @@ class PhysicalCopy : public PhysicalOperator {
 	    : PhysicalOperator(PhysicalOperatorType::COPY), table(nullptr),
 	      file_path(file_path), is_from(is_from), delimiter(delimiter),
 	      quote(quote), escape(escape) {}
+
+	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;
+
 	virtual void _GetChunk(ClientContext &context, DataChunk &chunk,
 	                       PhysicalOperatorState *state) override;
 

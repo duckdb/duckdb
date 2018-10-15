@@ -71,6 +71,7 @@ DuckDBConnection::GetQueryResult(ClientContext &context, std::string query) {
 
 		// finally execute the plan and return the result
 		Executor executor;
+		result->names = physical_planner.plan->GetNames();
 		result->collection =
 		    executor.Execute(context, move(physical_planner.plan));
 		result->success = true;

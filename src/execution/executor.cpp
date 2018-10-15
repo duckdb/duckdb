@@ -10,6 +10,8 @@ ChunkCollection Executor::Execute(ClientContext &context,
 	// the chunk and state are used to iterate over the input plan
 	auto state = plan->GetOperatorState(nullptr);
 
+	result.types = plan->GetTypes();
+
 	// loop until we have retrieved all data
 	unique_ptr<DataChunk> chunk;
 	do {

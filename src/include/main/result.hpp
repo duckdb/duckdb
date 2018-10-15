@@ -30,6 +30,7 @@ class DuckDBResult {
 	size_t size() { return collection.count; }
 	std::vector<TypeId> &types() { return collection.types; }
 
+	std::vector<std::string> names;
 	ChunkCollection collection;
 
 	bool success;

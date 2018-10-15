@@ -5,6 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
+vector<string> PhysicalFilter::GetNames() { return children[0]->GetNames(); }
 vector<TypeId> PhysicalFilter::GetTypes() { return children[0]->GetTypes(); }
 
 void PhysicalFilter::_GetChunk(ClientContext &context, DataChunk &chunk,

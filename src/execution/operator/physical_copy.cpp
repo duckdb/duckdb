@@ -10,7 +10,8 @@
 using namespace duckdb;
 using namespace std;
 
-std::vector<TypeId> PhysicalCopy::GetTypes() { return {TypeId::BIGINT}; }
+vector<string> PhysicalCopy::GetNames() { return {"Count"}; }
+vector<TypeId> PhysicalCopy::GetTypes() { return {TypeId::BIGINT}; }
 
 vector<string> split(const string &str, char delimiter, char quote) {
 	vector<string> res;

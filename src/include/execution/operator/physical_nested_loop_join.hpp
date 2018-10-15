@@ -25,7 +25,9 @@ class PhysicalNestedLoopJoin : public PhysicalOperator {
 	                       std::unique_ptr<PhysicalOperator> right,
 	                       std::vector<JoinCondition> cond, JoinType join_type);
 
+	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;
+
 	virtual void _GetChunk(ClientContext &context, DataChunk &chunk,
 	                       PhysicalOperatorState *state) override;
 

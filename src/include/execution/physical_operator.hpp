@@ -64,6 +64,9 @@ class PhysicalOperator : public Printable {
 
 	virtual std::string ToString() const override;
 
+	//! Return a vector of the column names that will be returned by this
+	//! operator
+	virtual std::vector<std::string> GetNames() = 0;
 	//! Return a vector of the types that will be returned by this operator
 	virtual std::vector<TypeId> GetTypes() = 0;
 	//! Initialize a given chunk to the types that will be returned by this

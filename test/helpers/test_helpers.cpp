@@ -13,6 +13,10 @@ bool CHECK_COLUMN(unique_ptr<duckdb::DuckDBResult> &result,
 		// FAIL(result->GetErrorMessage().c_str());
 		return false;
 	}
+	if (!(result->names.size() == result->collection.types.size())) {
+		// column names do not match
+		return false;
+	}
 	if (values.size() == 0) {
 		if (result->size() != 0) {
 			result->Print();

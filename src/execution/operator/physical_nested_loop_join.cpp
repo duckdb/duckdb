@@ -16,6 +16,13 @@ PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(
 	children.push_back(move(right));
 }
 
+vector<string> PhysicalNestedLoopJoin::GetNames() {
+	auto left = children[0]->GetNames();
+	auto right = children[1]->GetNames();
+	left.insert(left.end(), right.begin(), right.end());
+	return left;
+}
+
 vector<TypeId> PhysicalNestedLoopJoin::GetTypes() {
 	auto types = children[0]->GetTypes();
 	auto right_types = children[1]->GetTypes();

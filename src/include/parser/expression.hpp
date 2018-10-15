@@ -140,6 +140,7 @@ class Expression : public Printable {
 		return result;
 	}
 
+	virtual std::string GetName() { return !alias.empty() ? alias : "Unknown"; }
 	virtual ExpressionClass GetExpressionClass() = 0;
 
 	//! Serializes an Expression to a stand-alone binary blob

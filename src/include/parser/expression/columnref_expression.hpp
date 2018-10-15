@@ -54,6 +54,10 @@ class ColumnRefExpression : public Expression {
 	const std::string &GetTableName() const { return table_name; }
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+
+	virtual std::string GetName() override {
+		return !alias.empty() ? alias : column_name;
+	}
 	virtual ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::COLUMN_REF;
 	}
