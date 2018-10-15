@@ -1,3 +1,3 @@
 
-add_library(test_sql_simple OBJECT case.cpp column_names.cpp distinct.cpp expressions.cpp groupby.cpp inserts.cpp join.cpp manycolumns.cpp null_handling.cpp nullboolean.cpp orderby.cpp overflow_handling.cpp scalar_projections.cpp simple_projections.cpp subquery.cpp setops.cpp)
+add_library(test_sql_simple OBJECT case.cpp column_names.cpp distinct.cpp expressions.cpp groupby.cpp inserts.cpp join.cpp manycolumns.cpp null_handling.cpp nullboolean.cpp orderby.cpp overflow_handling.cpp scalar_projections.cpp simple_projections.cpp subquery.cpp setops.cpp table_subquery.cpp)
 set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_sql_simple> PARENT_SCOPE)

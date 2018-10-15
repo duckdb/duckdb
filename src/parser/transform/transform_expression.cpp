@@ -143,13 +143,12 @@ unique_ptr<TableRef> TransformRangeVar(RangeVar *root) {
 }
 
 unique_ptr<TableRef> TransformRangeSubselect(RangeSubselect *root) {
-	auto result = make_unique<SubqueryRef>();
-	result->alias = TransformAlias(root->alias);
-	result->subquery = TransformSelect(root->subquery);
-	if (!result->subquery) {
+	auto subquery = TransformSelect(root->subquery);
+	if (!subquery) {
 		return nullptr;
 	}
-
+	auto result = make_unique<SubqueryRef>(move(subquery));
+	result->alias = TransformAlias(root->alias);
 	return move(result);
 }
 

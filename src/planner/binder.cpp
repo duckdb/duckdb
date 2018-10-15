@@ -302,7 +302,6 @@ void Binder::Visit(SubqueryExpression &expr) {
 	assert(bind_context);
 
 	Binder binder(context);
-	binder.bind_context = make_unique<BindContext>();
 	binder.bind_context->parent = bind_context.get();
 
 	expr.subquery->Accept(&binder);
@@ -338,6 +337,9 @@ void Binder::Visit(JoinRef &expr) {
 }
 
 void Binder::Visit(SubqueryRef &expr) {
+	Binder binder(context);
+	expr.subquery->Accept(&binder);
+	expr.context = move(binder.bind_context);
+
 	bind_context->AddSubquery(expr.alias, expr.subquery.get());
-	throw NotImplementedException("Binding subqueries not implemented yet!");
 }

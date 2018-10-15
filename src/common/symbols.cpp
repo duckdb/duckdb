@@ -43,6 +43,7 @@ template class std::unique_ptr<Vector[]>;
 template class std::unique_ptr<DataChunk>;
 template class std::unique_ptr<Statistics[]>;
 template class std::unique_ptr<Constraint>;
+template class std::unique_ptr<SelectStatement>;
 
 #define INSTANTIATE_VECTOR(VECTOR_DEFINITION)                                  \
 	template VECTOR_DEFINITION::size_type VECTOR_DEFINITION::size() const;     \

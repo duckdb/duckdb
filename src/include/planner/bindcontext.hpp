@@ -12,7 +12,6 @@
 
 #include <string>
 #include <unordered_map>
-
 #include <vector>
 
 #include "catalog/catalog.hpp"
@@ -20,6 +19,7 @@
 #include "parser/column_definition.hpp"
 #include "parser/expression.hpp"
 #include "parser/sql_statement.hpp"
+#include "parser/statement/select_statement.hpp"
 
 namespace duckdb {
 
@@ -41,6 +41,24 @@ struct TableBinding {
 	    : table(table), index(index) {}
 };
 
+struct SubqueryBinding {
+	SelectStatement *subquery;
+	size_t index;
+	//! Column names of the subquery
+	std::vector<std::string> names;
+	//! Name -> index for the names
+	std::unordered_map<std::string, size_t> name_map;
+
+	SubqueryBinding(SelectStatement *subquery_, size_t index)
+	    : subquery(subquery_), index(index) {
+		for (auto &entry : subquery->select_list) {
+			auto name = entry->GetName();
+			name_map[name] = names.size();
+			names.push_back(name);
+		}
+	}
+};
+
 //! The BindContext object keeps track of all the tables and columns that are
 //! encountered during the binding process.
 class BindContext {
@@ -52,7 +70,7 @@ class BindContext {
 	std::string GetMatchingTable(const std::string &column_name);
 	//! Binds a column expression to the base table. Returns the column catalog
 	//! entry or throws an exception if the column could not be bound.
-	ColumnDefinition *BindColumn(ColumnRefExpression &expr, size_t depth = 0);
+	void BindColumn(ColumnRefExpression &expr, size_t depth = 0);
 
 	//! Generate column expressions for all columns that are present in the
 	//! referenced tables. This is used to resolve the * expression in a
@@ -75,6 +93,8 @@ class BindContext {
 	//! Gets the table index of a given table alias. Throws an exception if the
 	//! alias was not found.
 	size_t GetTableIndex(const std::string &alias);
+	//! Gets the table index of a given subquery
+	size_t GetSubqueryIndex(const std::string &alias);
 	//! Returns the maximum depth of column references in the current context
 	size_t GetMaxDepth() { return max_depth; }
 
@@ -92,13 +112,13 @@ class BindContext {
 	//! The set of expression aliases
 	std::unordered_map<std::string, std::pair<size_t, Expression *>>
 	    expression_alias_map;
-	//! The set of bound tables, ordered map because order matters for SELECT *
+	//! The set of bound tables
 	std::unordered_map<std::string, TableBinding> regular_table_alias_map;
 	//! The set of regular table aliases
 	std::vector<std::string> regular_table_alias_list;
 	//! Dummy table binding
 	std::unique_ptr<DummyTableBinding> dummy_table;
 	//! The set of bound subqueries
-	std::unordered_map<std::string, SelectStatement *> subquery_alias_map;
+	std::unordered_map<std::string, SubqueryBinding> subquery_alias_map;
 };
 } // namespace duckdb

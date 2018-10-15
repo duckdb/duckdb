@@ -401,7 +401,21 @@ void LogicalPlanGenerator::Visit(JoinRef &expr) {
 }
 
 void LogicalPlanGenerator::Visit(SubqueryRef &expr) {
-	throw NotImplementedException("Joins not implemented yet!");
+	LogicalPlanGenerator generator(context, *expr.context);
+
+	size_t column_count = expr.subquery->select_list.size();
+	expr.subquery->Accept(&generator);
+
+	auto index = bind_context.GetSubqueryIndex(expr.alias);
+
+	if (root) {
+		throw Exception("Subquery cannot have children");
+	}
+	root = make_unique<LogicalSubquery>(index, column_count);
+	// this intentionally does a push_back directly instead of using AddChild
+	// because the Subquery is stand-alone, we do not copy the referenced_tables
+	// of the children
+	root->children.push_back(move(generator.root));
 }
 
 void LogicalPlanGenerator::Visit(InsertStatement &statement) {

@@ -327,6 +327,7 @@ enum class LogicalOperatorType : uint8_t {
 	LIMIT,
 	ORDER_BY,
 	COPY,
+	SUBQUERY,
 	// -----------------------------
 	// Joins
 	// -----------------------------

@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// parser/expression/subquery_expression.hpp
+// parser/tableref/subqueryref.hpp
 //
 // Author: Mark Raasveldt
 //
@@ -12,15 +12,19 @@
 
 #include "parser/statement/select_statement.hpp"
 #include "parser/tableref/tableref.hpp"
+#include "planner/bindcontext.hpp"
 
 namespace duckdb {
 //! Represents a subquery
 class SubqueryRef : public TableRef {
   public:
-	SubqueryRef() : TableRef(TableReferenceType::SUBQUERY) {}
+	SubqueryRef(std::unique_ptr<SelectStatement> subquery);
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
 
+	//! The subquery
 	std::unique_ptr<SelectStatement> subquery;
+	// Bindcontext, FIXME
+	std::unique_ptr<BindContext> context;
 };
 } // namespace duckdb

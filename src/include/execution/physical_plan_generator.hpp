@@ -37,24 +37,23 @@ class PhysicalPlanGenerator : public LogicalOperatorVisitor {
 	bool GetSuccess() const { return success; }
 	const std::string &GetErrorMessage() const { return message; }
 
-	void Visit(LogicalAggregate &op);
-	void Visit(LogicalCreate &op);
-	void Visit(LogicalCrossProduct &op);
-	void Visit(LogicalDelete &op);
-	void Visit(LogicalDistinct &op);
-	void Visit(LogicalFilter &op);
-	void Visit(LogicalGet &op);
-	void Visit(LogicalJoin &op);
-	void Visit(LogicalLimit &op);
-	void Visit(LogicalOrder &op);
-	void Visit(LogicalProjection &op);
-	void Visit(LogicalInsert &op);
-	void Visit(LogicalCopy &op);
-	void Visit(LogicalExplain &op);
-	void Visit(LogicalUnion &op);
-	void Visit(LogicalUpdate &op);
+	virtual void Visit(LogicalAggregate &op);
+	virtual void Visit(LogicalCreate &op);
+	virtual void Visit(LogicalCrossProduct &op);
+	virtual void Visit(LogicalDelete &op);
+	virtual void Visit(LogicalFilter &op);
+	virtual void Visit(LogicalGet &op);
+	virtual void Visit(LogicalJoin &op);
+	virtual void Visit(LogicalLimit &op);
+	virtual void Visit(LogicalOrder &op);
+	virtual void Visit(LogicalProjection &op);
+	virtual void Visit(LogicalInsert &op);
+	virtual void Visit(LogicalCopy &op);
+	virtual void Visit(LogicalExplain &op);
+	virtual void Visit(LogicalUnion &op);
+	virtual void Visit(LogicalUpdate &op);
 
-	void Visit(SubqueryExpression &expr);
+	virtual void Visit(SubqueryExpression &expr);
 
 	void Print() { plan->Print(); }
 

@@ -18,7 +18,6 @@ class LogicalAggregate;
 class LogicalCreate;
 class LogicalCrossProduct;
 class LogicalDelete;
-class LogicalDistinct;
 class LogicalFilter;
 class LogicalGet;
 class LogicalJoin;
@@ -30,6 +29,7 @@ class LogicalInsert;
 class LogicalCopy;
 class LogicalExplain;
 class LogicalUnion;
+class LogicalSubquery;
 class LogicalUpdate;
 
 //! The LogicalOperatorVisitor is an abstract base class that implements the
@@ -53,6 +53,7 @@ class LogicalOperatorVisitor : public SQLNodeVisitor {
 	virtual void Visit(LogicalProjection &op);
 	virtual void Visit(LogicalInsert &op);
 	virtual void Visit(LogicalCopy &op);
+	virtual void Visit(LogicalSubquery &op);
 	virtual void Visit(LogicalExplain &op);
 	virtual void Visit(LogicalUnion &op);
 	virtual void Visit(LogicalUpdate &op);

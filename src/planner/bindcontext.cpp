@@ -28,9 +28,18 @@ string BindContext::GetMatchingTable(const string &column_name) {
 	}
 
 	for (auto &kv : subquery_alias_map) {
-		auto subquery = kv.second;
-		(void)subquery;
-		throw BinderException("Subquery binding not implemented yet!");
+		auto &subquery = kv.second;
+		auto entry = subquery.name_map.find(column_name);
+		if (entry != subquery.name_map.end()) {
+			if (!result.empty()) {
+				throw BinderException(
+				    "Ambiguous reference to column name\"%s\" (use: \"%s.%s\" "
+				    "or \"%s.%s\")",
+				    column_name.c_str(), result.c_str(), column_name.c_str(),
+				    kv.first.c_str(), column_name.c_str());
+			}
+			result = kv.first;
+		}
 	}
 
 	if (result.empty() &&
@@ -48,8 +57,7 @@ string BindContext::GetMatchingTable(const string &column_name) {
 	return result;
 }
 
-ColumnDefinition *BindContext::BindColumn(ColumnRefExpression &expr,
-                                          size_t depth) {
+void BindContext::BindColumn(ColumnRefExpression &expr, size_t depth) {
 	if (dummy_table) {
 		// bind to the dummy table if present
 		auto entry = dummy_table->bound_columns.find(expr.column_name);
@@ -59,7 +67,7 @@ ColumnDefinition *BindContext::BindColumn(ColumnRefExpression &expr,
 		}
 		expr.index = entry->second->oid;
 		expr.return_type = entry->second->type;
-		return entry->second;
+		return;
 	}
 
 	if (expr.table_name.empty()) {
@@ -71,20 +79,22 @@ ColumnDefinition *BindContext::BindColumn(ColumnRefExpression &expr,
 		expr.index = entry->second.first;
 		expr.reference = entry->second.second;
 		expr.return_type = entry->second.second->return_type;
-		return nullptr;
+		return;
 	}
 
 	if (!HasAlias(expr.table_name)) {
+		// alias not found in this BindContext
+		// if there is a parent BindContext look there
 		if (parent) {
-			auto result = parent->BindColumn(expr, ++depth);
+			parent->BindColumn(expr, ++depth);
 			max_depth = max(expr.depth, max_depth);
-			return result;
+			return;
 		}
 		throw BinderException("Referenced table \"%s\" not found!",
 		                      expr.table_name.c_str());
 	}
-	ColumnDefinition *entry;
 
+	// alias was found: first check the bound tables
 	size_t table_index = 0;
 	auto table_entry = regular_table_alias_map.find(expr.table_name);
 	if (table_entry != regular_table_alias_map.end()) {
@@ -96,31 +106,46 @@ ColumnDefinition *BindContext::BindColumn(ColumnRefExpression &expr,
 			    expr.table_name.c_str(), expr.column_name.c_str());
 		}
 		table_index = table.index;
-		entry = &table.table->GetColumn(expr.column_name);
+		auto entry = &table.table->GetColumn(expr.column_name);
 		expr.stats = table.table->GetStatistics(entry->oid);
-	} else {
-		// subquery
-		throw BinderException("Subquery binding not implemented yet!");
-	}
-
-	auto &column_list = bound_columns[expr.table_name];
-	// check if the entry already exists in the column list for the table
-	expr.binding.column_index = column_list.size();
-	for (size_t i = 0; i < column_list.size(); i++) {
-		auto &column = column_list[i];
-		if (column == expr.column_name) {
-			expr.binding.column_index = i;
-			break;
+		auto &column_list = bound_columns[expr.table_name];
+		// check if the entry already exists in the column list for the table
+		expr.binding.column_index = column_list.size();
+		for (size_t i = 0; i < column_list.size(); i++) {
+			auto &column = column_list[i];
+			if (column == expr.column_name) {
+				expr.binding.column_index = i;
+				break;
+			}
 		}
+		if (expr.binding.column_index == column_list.size()) {
+			// column binding not found: add it to the list of bindings
+			column_list.push_back(expr.column_name);
+		}
+		expr.binding.table_index = table_index;
+		expr.depth = depth;
+		expr.return_type = entry->type;
+	} else {
+		// if it was not found in one of the bound tables
+		// check the bound subqueries
+		auto subquery_entry = subquery_alias_map.find(expr.table_name);
+		assert(subquery_entry != subquery_alias_map.end());
+
+		auto &subquery = subquery_entry->second;
+		auto column_entry = subquery.name_map.find(expr.column_name);
+		if (column_entry == subquery.name_map.end()) {
+			throw BinderException(
+			    "Subquery \"%s\" does not have a column named \"%s\"",
+			    subquery_entry->first.c_str(), expr.column_name.c_str());
+		}
+
+		expr.binding.table_index = subquery.index;
+		expr.binding.column_index = column_entry->second;
+		expr.depth = depth;
+		assert(column_entry->second < subquery.subquery->select_list.size());
+		expr.return_type =
+		    subquery.subquery->select_list[column_entry->second]->return_type;
 	}
-	if (expr.binding.column_index == column_list.size()) {
-		// column binding not found: add it to the list of bindings
-		column_list.push_back(expr.column_name);
-	}
-	expr.binding.table_index = table_index;
-	expr.depth = depth;
-	expr.return_type = entry->type;
-	return entry;
 }
 
 void BindContext::GenerateAllColumnExpressions(
@@ -137,8 +162,10 @@ void BindContext::GenerateAllColumnExpressions(
 	}
 	for (auto &kv : subquery_alias_map) {
 		auto subquery = kv.second;
-		(void)subquery;
-		throw BinderException("Subquery binding not implemented yet!");
+		for (auto &name : subquery.names) {
+			new_select_list.push_back(
+			    make_unique<ColumnRefExpression>(name, kv.first));
+		}
 	}
 }
 
@@ -166,7 +193,8 @@ void BindContext::AddSubquery(const string &alias, SelectStatement *subquery) {
 		throw BinderException("Duplicate alias \"%s\" in query!",
 		                      alias.c_str());
 	}
-	subquery_alias_map.insert(make_pair(alias, subquery));
+	subquery_alias_map.insert(
+	    make_pair(alias, SubqueryBinding(subquery, GenerateTableIndex())));
 }
 
 void BindContext::AddExpression(const string &alias, Expression *expression,
@@ -186,6 +214,14 @@ size_t BindContext::GetTableIndex(const std::string &alias) {
 		throw Exception("Could not find table alias binding!");
 	}
 	return table_entry->second.index;
+}
+
+size_t BindContext::GetSubqueryIndex(const std::string &alias) {
+	auto subquery_entry = subquery_alias_map.find(alias);
+	if (subquery_entry == subquery_alias_map.end()) {
+		throw Exception("Could not find table alias binding!");
+	}
+	return subquery_entry->second.index;
 }
 
 size_t BindContext::GenerateTableIndex() {
