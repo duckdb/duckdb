@@ -103,15 +103,33 @@ TEST_CASE("Value serialization", "[serializer]") {
 }
 
 TEST_CASE("Expression serializer", "[serializer]") {
-	auto expression = ParseExpression("a + 2");
-	REQUIRE(expression.get());
+	{
+		auto expression = ParseExpression("a + 2");
+		REQUIRE(expression.get());
 
-	Serializer serializer;
-	expression->Serialize(serializer);
+		Serializer serializer;
+		expression->Serialize(serializer);
 
-	auto data = serializer.GetData();
-	Deserializer source(data.data.get(), data.size);
-	auto deserialized_expression = Expression::Deserialize(source);
-	REQUIRE(deserialized_expression.get());
-	REQUIRE(expression->Equals(deserialized_expression.get()));
+		auto data = serializer.GetData();
+		Deserializer source(data.data.get(), data.size);
+		auto deserialized_expression = Expression::Deserialize(source);
+		REQUIRE(deserialized_expression.get());
+		REQUIRE(expression->Equals(deserialized_expression.get()));
+	}
+
+	{
+		auto expression =
+		    ParseExpression("cast(a >= 2 as integer) OR CASE WHEN a >= b THEN "
+		                    "a >= 5 ELSE a >= 7 END");
+		REQUIRE(expression.get());
+
+		Serializer serializer;
+		expression->Serialize(serializer);
+
+		auto data = serializer.GetData();
+		Deserializer source(data.data.get(), data.size);
+		auto deserialized_expression = Expression::Deserialize(source);
+		REQUIRE(deserialized_expression.get());
+		REQUIRE(expression->Equals(deserialized_expression.get()));
+	}
 }

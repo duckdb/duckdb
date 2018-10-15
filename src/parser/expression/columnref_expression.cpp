@@ -14,6 +14,7 @@ void ColumnRefExpression::Serialize(Serializer &serializer) {
 	assert(!column_name.empty());
 	serializer.WriteString(table_name);
 	serializer.WriteString(column_name);
+	serializer.Write<size_t>(index);
 }
 
 unique_ptr<Expression>
@@ -22,12 +23,13 @@ ColumnRefExpression::Deserialize(ExpressionDeserializeInformation *info,
 	bool failed = false;
 	auto table_name = source.Read<string>(failed);
 	auto column_name = source.Read<string>(failed);
+	auto index = source.Read<size_t>(failed);
 	if (failed) {
 		return nullptr;
 	}
 
-	auto expression = make_unique_base<Expression, ColumnRefExpression>(
-	    column_name, table_name);
+	auto expression = make_unique<ColumnRefExpression>(column_name, table_name);
+	expression->index = index;
 	expression->children = move(info->children);
 	return expression;
 }

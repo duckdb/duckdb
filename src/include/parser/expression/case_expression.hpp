@@ -15,10 +15,10 @@ class CaseExpression : public Expression {
 		return ExpressionClass::CASE;
 	}
 
-	virtual void ResolveType() override {
-		Expression::ResolveType();
-		return_type =
-		    std::max(children[1]->return_type, children[2]->return_type);
-	}
+	//! Deserializes a blob back into an CaseExpression
+	static std::unique_ptr<Expression>
+	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);
+
+	virtual void ResolveType() override;
 };
 } // namespace duckdb

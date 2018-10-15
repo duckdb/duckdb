@@ -26,5 +26,9 @@ class ComparisonExpression : public Expression {
 	virtual ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::COMPARISON;
 	}
+
+	//! Deserializes a blob back into an OperatorExpression
+	static std::unique_ptr<Expression>
+	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);
 };
 } // namespace duckdb

@@ -74,6 +74,14 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &source) {
 		return ConstantExpression::Deserialize(&info, source);
 	case ExpressionClass::COLUMN_REF:
 		return ColumnRefExpression::Deserialize(&info, source);
+	case ExpressionClass::CASE:
+		return CaseExpression::Deserialize(&info, source);
+	case ExpressionClass::CAST:
+		return CastExpression::Deserialize(&info, source);
+	case ExpressionClass::COMPARISON:
+		return ComparisonExpression::Deserialize(&info, source);
+	case ExpressionClass::CONJUNCTION:
+		return ConjunctionExpression::Deserialize(&info, source);
 	default:
 		return nullptr;
 	}

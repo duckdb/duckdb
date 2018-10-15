@@ -421,6 +421,7 @@ void VectorOperations::Case(Vector &check, Vector &res_true, Vector &res_false,
 	}
 
 	switch (result.type) {
+	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
 		_case_loop<int8_t>(check, res_true, res_false, result);
 		break;

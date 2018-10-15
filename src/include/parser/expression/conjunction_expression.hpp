@@ -25,5 +25,9 @@ class ConjunctionExpression : public Expression {
 	virtual ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::CONJUNCTION;
 	}
+
+	//! Deserializes a blob back into a ConjunctionExpression
+	static std::unique_ptr<Expression>
+	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);
 };
 } // namespace duckdb

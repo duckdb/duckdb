@@ -27,6 +27,10 @@ class CastExpression : public Expression {
 		}
 	}
 
+	//! Deserializes a blob back into an CastExpression
+	static std::unique_ptr<Expression>
+	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);
+
 	virtual std::string ToString() const override {
 		return "CAST[" + TypeIdToString(return_type) + "](" +
 		       children[0]->ToString() + ")";
