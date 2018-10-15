@@ -153,18 +153,29 @@ void BindContext::GenerateAllColumnExpressions(
 	if (regular_table_alias_map.size() == 0 && subquery_alias_map.size() == 0) {
 		throw BinderException("SELECT * expression without FROM clause!");
 	}
-	for (auto table_name : regular_table_alias_list) {
-		auto &table = regular_table_alias_map.find(table_name)->second;
-		for (auto &column : table.table->columns) {
-			new_select_list.push_back(
-			    make_unique<ColumnRefExpression>(column.name, table_name));
-		}
-	}
-	for (auto &kv : subquery_alias_map) {
-		auto subquery = kv.second;
-		for (auto &name : subquery.names) {
-			new_select_list.push_back(
-			    make_unique<ColumnRefExpression>(name, kv.first));
+
+	// we have to bind the tables and subqueries in order of table_index
+	for (auto &alias : alias_list) {
+		auto &name = alias.first;
+		auto &is_subquery = alias.second;
+		if (is_subquery) {
+			// subquery
+			auto entry = subquery_alias_map.find(name);
+			assert(entry != subquery_alias_map.end());
+			auto &subquery = entry->second;
+			for (auto &column_name : subquery.names) {
+				new_select_list.push_back(make_unique<ColumnRefExpression>(
+				    column_name, entry->first));
+			}
+		} else {
+			// table
+			auto entry = regular_table_alias_map.find(name);
+			assert(entry != regular_table_alias_map.end());
+			auto &table = entry->second;
+			for (auto &column : table.table->columns) {
+				new_select_list.push_back(
+				    make_unique<ColumnRefExpression>(column.name, name));
+			}
 		}
 	}
 }
@@ -177,7 +188,7 @@ void BindContext::AddBaseTable(const string &alias,
 	}
 	regular_table_alias_map.insert(
 	    make_pair(alias, TableBinding(table_entry, GenerateTableIndex())));
-	regular_table_alias_list.push_back(alias);
+	alias_list.push_back(make_pair(alias, false));
 }
 
 void BindContext::AddDummyTable(std::vector<ColumnDefinition> &columns) {
@@ -195,6 +206,7 @@ void BindContext::AddSubquery(const string &alias, SelectStatement *subquery) {
 	}
 	subquery_alias_map.insert(
 	    make_pair(alias, SubqueryBinding(subquery, GenerateTableIndex())));
+	alias_list.push_back(make_pair(alias, true));
 }
 
 void BindContext::AddExpression(const string &alias, Expression *expression,

@@ -32,13 +32,14 @@ TEST_CASE("Table subquery", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {4, 5}));
 	REQUIRE(CHECK_COLUMN(result, 3, {4, 5}));
 
-	// // check that * is in the correct order
-	// result = con.Query("SELECT * FROM (SELECT i, j FROM test) AS a, (SELECT
-	// i+1 AS r,j FROM test) AS b, test WHERE a.i=b.r AND test.j=a.i;");
-	// REQUIRE(CHECK_COLUMN(result, 0, {4, 5}));
-	// REQUIRE(CHECK_COLUMN(result, 1, {5, 6}));
-	// REQUIRE(CHECK_COLUMN(result, 2, {4, 5}));
-	// REQUIRE(CHECK_COLUMN(result, 3, {4, 5}));
-	// REQUIRE(CHECK_COLUMN(result, 4, {3, 4}));
-	// REQUIRE(CHECK_COLUMN(result, 5, {4, 5}));
+	// check that * is in the correct order
+	result = con.Query(
+	    "SELECT * FROM (SELECT i, j FROM test) AS a, (SELECT "
+	    "i+1 AS r,j FROM test) AS b, test WHERE a.i=b.r AND test.j=a.i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {4, 5}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5, 6}));
+	REQUIRE(CHECK_COLUMN(result, 2, {4, 5}));
+	REQUIRE(CHECK_COLUMN(result, 3, {4, 5}));
+	REQUIRE(CHECK_COLUMN(result, 4, {3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 5, {4, 5}));
 }

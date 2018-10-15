@@ -114,8 +114,9 @@ class BindContext {
 	    expression_alias_map;
 	//! The set of bound tables
 	std::unordered_map<std::string, TableBinding> regular_table_alias_map;
-	//! The set of regular table aliases
-	std::vector<std::string> regular_table_alias_list;
+	//! The list of aliases in insertion order with true if subquery, false if
+	//! table
+	std::vector<std::pair<std::string, bool>> alias_list;
 	//! Dummy table binding
 	std::unique_ptr<DummyTableBinding> dummy_table;
 	//! The set of bound subqueries
