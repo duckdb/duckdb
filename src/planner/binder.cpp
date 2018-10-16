@@ -169,10 +169,12 @@ void Binder::Visit(SelectStatement &statement) {
 					if (select_column->reference) {
 						if (select_column->reference == group.get()) {
 							// group reference!
+							auto group_ref = make_unique<GroupRefExpression>(
+							    statement.select_list[i]->return_type, j);
+							group_ref->alias =
+							    string(select_column->column_name);
+							statement.select_list[i] = move(group_ref);
 							found_matching = true;
-							statement.select_list[i] =
-							    make_unique<GroupRefExpression>(
-							        statement.select_list[i]->return_type, j);
 							break;
 						}
 					} else {
@@ -182,10 +184,13 @@ void Binder::Visit(SelectStatement &statement) {
 							        group.get());
 							if (group_column->binding ==
 							    select_column->binding) {
-								statement.select_list[i] =
+								auto group_ref =
 								    make_unique<GroupRefExpression>(
 								        statement.select_list[i]->return_type,
 								        j);
+								group_ref->alias =
+								    string(select_column->column_name);
+								statement.select_list[i] = move(group_ref);
 								found_matching = true;
 								break;
 							}
