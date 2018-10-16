@@ -26,6 +26,8 @@ class ConjunctionExpression : public Expression {
 		return ExpressionClass::CONJUNCTION;
 	}
 
+	virtual std::unique_ptr<Expression> Copy() override;
+
 	//! Deserializes a blob back into a ConjunctionExpression
 	static std::unique_ptr<Expression>
 	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);

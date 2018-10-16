@@ -27,6 +27,8 @@ class ComparisonExpression : public Expression {
 		return ExpressionClass::COMPARISON;
 	}
 
+	virtual std::unique_ptr<Expression> Copy() override;
+
 	//! Deserializes a blob back into an OperatorExpression
 	static std::unique_ptr<Expression>
 	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);

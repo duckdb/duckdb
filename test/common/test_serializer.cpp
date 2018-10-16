@@ -104,6 +104,7 @@ TEST_CASE("Value serialization", "[serializer]") {
 
 TEST_CASE("Expression serializer", "[serializer]") {
 	{
+		// operator, columnref, constant
 		auto expression = ParseExpression("a + 2");
 		REQUIRE(expression.get());
 
@@ -118,6 +119,7 @@ TEST_CASE("Expression serializer", "[serializer]") {
 	}
 
 	{
+		// case, columnref, comparison, cast, conjunction
 		auto expression =
 		    ParseExpression("cast(a >= 2 as integer) OR CASE WHEN a >= b THEN "
 		                    "a >= 5 ELSE a >= 7 END");

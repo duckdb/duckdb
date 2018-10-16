@@ -19,26 +19,35 @@
 
 namespace duckdb {
 
-enum class SubqueryType { INVALID = 0, DEFAULT = 1, EXISTS = 2, IN = 3 };
-
 //! Represents a subquery
 class SubqueryExpression : public Expression {
   public:
 	SubqueryExpression()
 	    : Expression(ExpressionType::SELECT_SUBQUERY),
-	      type(SubqueryType::DEFAULT) {}
+	      subquery_type(SubqueryType::DEFAULT) {}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
 	virtual ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::SUBQUERY;
 	}
 
-	std::unique_ptr<SelectStatement> subquery;
+	virtual std::unique_ptr<Expression> Copy() override;
+
+	//! Serializes an Expression to a stand-alone binary blob
+	virtual void Serialize(Serializer &serializer) override;
+	//! Deserializes a blob back into an ConstantExpression
+	static std::unique_ptr<Expression>
+	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);
+
+	// FIXME: move these, not related to parser but to execution!
 	std::unique_ptr<LogicalOperator> op;
 	std::unique_ptr<BindContext> context;
 	std::unique_ptr<PhysicalOperator> plan;
-	SubqueryType type;
 	bool is_correlated = false;
+	// FIXME
+
+	std::unique_ptr<SelectStatement> subquery;
+	SubqueryType subquery_type;
 
 	virtual std::string ToString() const override {
 		std::string result = GetExprName();

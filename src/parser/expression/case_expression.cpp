@@ -11,6 +11,13 @@ void CaseExpression::ResolveType() {
 	return_type = std::max(children[1]->return_type, children[2]->return_type);
 }
 
+unique_ptr<Expression> CaseExpression::Copy() {
+	auto copy = make_unique<CaseExpression>();
+	copy->CopyProperties(*this);
+	copy->CopyChildren(*this);
+	return copy;
+}
+
 unique_ptr<Expression>
 CaseExpression::Deserialize(ExpressionDeserializeInformation *info,
                             Deserializer &source) {

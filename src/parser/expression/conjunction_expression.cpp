@@ -6,6 +6,14 @@
 using namespace duckdb;
 using namespace std;
 
+unique_ptr<Expression> ConjunctionExpression::Copy() {
+	assert(children.size() == 2);
+	auto copy = make_unique<ConjunctionExpression>(type, children[0]->Copy(),
+	                                               children[1]->Copy());
+	copy->CopyProperties(*this);
+	return copy;
+}
+
 unique_ptr<Expression>
 ConjunctionExpression::Deserialize(ExpressionDeserializeInformation *info,
                                    Deserializer &source) {

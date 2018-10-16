@@ -44,12 +44,18 @@ void OperatorExpression::ResolveType() {
 	}
 }
 
-//! Deserializes a blob back into an Expression
+unique_ptr<Expression> OperatorExpression::Copy() {
+	auto copy = make_unique<OperatorExpression>(type, return_type);
+	copy->CopyProperties(*this);
+	copy->CopyChildren(*this);
+	return copy;
+}
+
 unique_ptr<Expression>
 OperatorExpression::Deserialize(ExpressionDeserializeInformation *info,
                                 Deserializer &source) {
-	auto expression = make_unique_base<Expression, OperatorExpression>(
-	    info->type, info->return_type);
+	auto expression =
+	    make_unique<OperatorExpression>(info->type, info->return_type);
 	expression->children = move(info->children);
 	return expression;
 }

@@ -353,7 +353,7 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 
 			auto subquery =
 			    reinterpret_cast<SubqueryExpression *>(expr.children[1].get());
-			assert(subquery->type == SubqueryType::IN);
+			assert(subquery->subquery_type == SubqueryType::IN);
 
 			DataChunk *old_chunk = chunk;
 			DataChunk row_chunk;
@@ -546,7 +546,7 @@ void ExpressionExecutor::Visit(SubqueryExpression &expr) {
 		plan->InitializeChunk(s_chunk);
 		plan->GetChunk(context, s_chunk, state.get());
 
-		switch (expr.type) {
+		switch (expr.subquery_type) {
 		case SubqueryType::DEFAULT:
 			if (s_chunk.count == 0) {
 				vector.SetValue(r, Value());

@@ -1,3 +1,13 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// parser/expression/case_expression.hpp
+//
+// Author: Hannes Mühleisen
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "parser/expression.hpp"
@@ -14,6 +24,8 @@ class CaseExpression : public Expression {
 	virtual ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::CASE;
 	}
+
+	virtual std::unique_ptr<Expression> Copy() override;
 
 	//! Deserializes a blob back into an CaseExpression
 	static std::unique_ptr<Expression>

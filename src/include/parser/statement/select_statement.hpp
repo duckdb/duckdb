@@ -76,6 +76,14 @@ class SelectStatement : public SQLStatement {
 	//! Limit Description
 	LimitDescription limit;
 
+	std::unique_ptr<SelectStatement> Copy();
+
+	//! Serializes a SelectStatement to a stand-alone binary blob
+	void Serialize(Serializer &serializer);
+	//! Deserializes a blob back into a SelectStatement, returns nullptr if
+	//! deserialization is not possible
+	static std::unique_ptr<SelectStatement> Deserialize(Deserializer &source);
+
 	//! Whether or not the query has a LIMIT clause
 	bool HasLimit() { return limit.limit >= 0; }
 	//! Whether or not the query has a GROUP BY clause

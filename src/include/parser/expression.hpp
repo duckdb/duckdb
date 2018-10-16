@@ -143,6 +143,9 @@ class Expression : public Printable {
 	virtual std::string GetName() { return !alias.empty() ? alias : "Unknown"; }
 	virtual ExpressionClass GetExpressionClass() = 0;
 
+	//! Create a copy of this expression
+	virtual std::unique_ptr<Expression> Copy() = 0;
+
 	//! Serializes an Expression to a stand-alone binary blob
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes a blob back into an Expression
@@ -163,6 +166,22 @@ class Expression : public Printable {
 
 	//! A list of children of the expression
 	std::vector<std::unique_ptr<Expression>> children;
+
+  protected:
+	//! Copy base Expression properties from another expression to this one,
+	//! used in Copy method
+	void CopyProperties(Expression &other) {
+		type = other.type;
+		return_type = other.return_type;
+		stats = other.stats;
+		alias = other.alias;
+	}
+	void CopyChildren(Expression &other) {
+		for (auto &child : other.children) {
+			assert(child);
+			children.push_back(child->Copy());
+		}
+	}
 };
 
 //! Expression deserialize information

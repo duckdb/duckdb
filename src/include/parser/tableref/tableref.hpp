@@ -21,6 +21,8 @@ class TableRef : public Printable {
 
 	virtual void Accept(SQLNodeVisitor *v) = 0;
 
+	virtual std::unique_ptr<TableRef> Copy() = 0;
+
 	//! Convert the object to a string
 	virtual std::string ToString() const { return std::string(); }
 

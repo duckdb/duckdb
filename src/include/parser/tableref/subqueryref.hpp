@@ -22,6 +22,12 @@ class SubqueryRef : public TableRef {
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
 
+	virtual std::unique_ptr<TableRef> Copy() override {
+		auto copy = make_unique<SubqueryRef>(subquery->Copy());
+		copy->alias = alias;
+		return copy;
+	}
+
 	//! The subquery
 	std::unique_ptr<SelectStatement> subquery;
 	// Bindcontext, FIXME

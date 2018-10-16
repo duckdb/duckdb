@@ -20,6 +20,8 @@ namespace duckdb {
 //! The Serialize class contains helper functions for serializing objects to
 //! binary data
 class Serializer {
+	friend class Deserializer;
+
   private:
 	inline void PotentialResize(size_t new_element_size) {
 		if (blob.size + new_element_size >= maximum_size) {
@@ -90,6 +92,8 @@ class Serializer {
 //! object
 class Deserializer {
   public:
+	Deserializer(Serializer &serializer)
+	    : Deserializer(serializer.data, serializer.blob.size) {}
 	Deserializer(uint8_t *ptr, size_t data);
 
 	template <class T> T Read(bool &failed) {

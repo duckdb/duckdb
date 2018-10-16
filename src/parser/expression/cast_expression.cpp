@@ -6,6 +6,13 @@
 using namespace duckdb;
 using namespace std;
 
+unique_ptr<Expression> CastExpression::Copy() {
+	assert(children.size() == 1);
+	auto copy = make_unique<CastExpression>(return_type, children[0]->Copy());
+	copy->CopyProperties(*this);
+	return copy;
+}
+
 unique_ptr<Expression>
 CastExpression::Deserialize(ExpressionDeserializeInformation *info,
                             Deserializer &source) {

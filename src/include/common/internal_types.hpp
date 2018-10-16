@@ -251,6 +251,16 @@ enum class CatalogType : uint8_t {
 };
 
 //===--------------------------------------------------------------------===//
+// Subquery Types
+//===--------------------------------------------------------------------===//
+enum class SubqueryType : uint8_t {
+	INVALID = 0,
+	DEFAULT = 1,
+	EXISTS = 2,
+	IN = 3
+};
+
+//===--------------------------------------------------------------------===//
 // Statement Types
 //===--------------------------------------------------------------------===//
 enum class StatementType : uint8_t {
@@ -288,29 +298,29 @@ enum class StatementType : uint8_t {
 // Table Reference Types
 //===--------------------------------------------------------------------===//
 enum class TableReferenceType : uint8_t {
-	INVALID,      // invalid table reference type
-	BASE_TABLE,   // base table reference
-	SUBQUERY,     // output of a subquery
-	JOIN,         // output of join
-	CROSS_PRODUCT // out of cartesian product
+	INVALID = 0,      // invalid table reference type
+	BASE_TABLE = 1,   // base table reference
+	SUBQUERY = 2,     // output of a subquery
+	JOIN = 3,         // output of join
+	CROSS_PRODUCT = 4 // out of cartesian product
 };
 
 //===--------------------------------------------------------------------===//
 // Join Types
 //===--------------------------------------------------------------------===//
 enum class JoinType : uint8_t {
-	INVALID, // invalid join type
-	LEFT,    // left
-	RIGHT,   // right
-	INNER,   // inner
-	OUTER,   // outer
-	SEMI     // IN+Subquery is SEMI
+	INVALID = 0, // invalid join type
+	LEFT = 1,    // left
+	RIGHT = 2,   // right
+	INNER = 3,   // inner
+	OUTER = 4,   // outer
+	SEMI = 5     // IN+Subquery is SEMI
 };
 
 //===--------------------------------------------------------------------===//
 // ORDER BY Clause Types
 //===--------------------------------------------------------------------===//
-enum class OrderType : uint8_t { INVALID, ASCENDING, DESCENDING };
+enum class OrderType : uint8_t { INVALID = 0, ASCENDING = 1, DESCENDING = 2 };
 
 //===--------------------------------------------------------------------===//
 // Logical Operator Types

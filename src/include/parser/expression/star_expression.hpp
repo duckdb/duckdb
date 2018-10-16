@@ -24,6 +24,12 @@ class StarExpression : public Expression {
 		return ExpressionClass::STAR;
 	}
 
+	virtual std::unique_ptr<Expression> Copy() override;
+
+	//! Deserializes a blob back into a StarExpression
+	static std::unique_ptr<Expression>
+	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);
+
 	virtual std::string ToString() const override { return "*"; }
 };
 } // namespace duckdb

@@ -22,6 +22,16 @@ class JoinRef : public TableRef {
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
 
+	virtual std::unique_ptr<TableRef> Copy() override {
+		auto copy = make_unique<JoinRef>();
+		copy->left = left->Copy();
+		copy->right = right->Copy();
+		copy->condition = condition->Copy();
+		copy->type = type;
+		copy->alias = alias;
+		return copy;
+	}
+
 	//! The left hand side of the join
 	std::unique_ptr<TableRef> left;
 	//! The right hand side of the join

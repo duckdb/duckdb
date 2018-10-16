@@ -43,6 +43,7 @@ void Expression::Serialize(Serializer &serializer) {
 	serializer.Write<ExpressionClass>(GetExpressionClass());
 	serializer.Write<ExpressionType>(type);
 	serializer.Write<TypeId>(return_type);
+	serializer.WriteString(alias);
 	serializer.Write<uint32_t>(children.size());
 	for (auto &children : children) {
 		children->Serialize(serializer);
@@ -55,6 +56,7 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &source) {
 	auto expression_class = source.Read<ExpressionClass>(failed);
 	info.type = source.Read<ExpressionType>(failed);
 	info.return_type = source.Read<TypeId>(failed);
+	auto alias = source.Read<string>(failed);
 	auto children_count = source.Read<uint32_t>(failed);
 	if (failed) {
 		return nullptr;
@@ -67,22 +69,53 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &source) {
 		}
 		info.children.push_back(move(expression));
 	}
+	unique_ptr<Expression> result;
 	switch (expression_class) {
-	case ExpressionClass::OPERATOR:
-		return OperatorExpression::Deserialize(&info, source);
-	case ExpressionClass::CONSTANT:
-		return ConstantExpression::Deserialize(&info, source);
-	case ExpressionClass::COLUMN_REF:
-		return ColumnRefExpression::Deserialize(&info, source);
+	case ExpressionClass::AGGREGATE:
+		result = AggregateExpression::Deserialize(&info, source);
+		break;
 	case ExpressionClass::CASE:
-		return CaseExpression::Deserialize(&info, source);
+		result = CaseExpression::Deserialize(&info, source);
+		break;
 	case ExpressionClass::CAST:
-		return CastExpression::Deserialize(&info, source);
+		result = CastExpression::Deserialize(&info, source);
+		break;
+	case ExpressionClass::COLUMN_REF:
+		result = ColumnRefExpression::Deserialize(&info, source);
+		break;
 	case ExpressionClass::COMPARISON:
-		return ComparisonExpression::Deserialize(&info, source);
+		result = ComparisonExpression::Deserialize(&info, source);
+		break;
 	case ExpressionClass::CONJUNCTION:
-		return ConjunctionExpression::Deserialize(&info, source);
+		result = ConjunctionExpression::Deserialize(&info, source);
+		break;
+	case ExpressionClass::CONSTANT:
+		result = ConstantExpression::Deserialize(&info, source);
+		break;
+	case ExpressionClass::DEFAULT:
+		result = DefaultExpression::Deserialize(&info, source);
+		break;
+	case ExpressionClass::FUNCTION:
+		result = FunctionExpression::Deserialize(&info, source);
+		break;
+	case ExpressionClass::OPERATOR:
+		result = OperatorExpression::Deserialize(&info, source);
+		break;
+	case ExpressionClass::STAR:
+		result = StarExpression::Deserialize(&info, source);
+		break;
+	case ExpressionClass::SUBQUERY:
+		result = SubqueryExpression::Deserialize(&info, source);
+		break;
 	default:
+		assert(0);
 		return nullptr;
 	}
+	if (!result) {
+		assert(0);
+		return nullptr;
+	}
+	result->return_type = info.return_type;
+	result->alias = alias;
+	return result;
 }

@@ -7,11 +7,23 @@
 using namespace duckdb;
 using namespace std;
 
+unique_ptr<Expression> ColumnRefExpression::Copy() {
+	// should not make a copy with a reference because reference is not owned
+	// we cannot make a copy of reference along with it -> might result in
+	// original reference being freed
+	assert(!reference);
+
+	auto copy = make_unique<ColumnRefExpression>(column_name, table_name);
+	copy->CopyProperties(*this);
+	copy->binding = binding;
+	copy->index = index;
+	copy->reference = reference;
+	return copy;
+}
+
 void ColumnRefExpression::Serialize(Serializer &serializer) {
 	Expression::Serialize(serializer);
-	assert(type == ExpressionType::COLUMN_REF);
 	assert(!reference);
-	assert(!column_name.empty());
 	serializer.WriteString(table_name);
 	serializer.WriteString(column_name);
 	serializer.Write<size_t>(index);

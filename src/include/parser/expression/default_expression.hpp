@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include "common/types/value.hpp"
 #include "parser/expression.hpp"
 
 namespace duckdb {
@@ -23,6 +22,12 @@ class DefaultExpression : public Expression {
 	virtual ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::DEFAULT;
 	}
+
+	virtual std::unique_ptr<Expression> Copy() override;
+
+	//! Deserializes a blob back into an DefaultExpression
+	static std::unique_ptr<Expression>
+	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);
 
 	virtual std::string ToString() const override { return "Default"; }
 };

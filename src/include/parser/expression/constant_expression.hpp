@@ -28,6 +28,8 @@ class ConstantExpression : public Expression {
 		return ExpressionClass::CONSTANT;
 	}
 
+	virtual std::unique_ptr<Expression> Copy() override;
+
 	//! Serializes an Expression to a stand-alone binary blob
 	virtual void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into an ConstantExpression

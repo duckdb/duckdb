@@ -4,7 +4,7 @@
 //
 // parser/statement/drop_table_statement.hpp
 //
-// Author: Hannes Muehleisen
+// Author: Hannes Mühleisen
 //
 //===----------------------------------------------------------------------===//
 #pragma once

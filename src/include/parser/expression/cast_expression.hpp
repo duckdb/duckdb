@@ -27,6 +27,8 @@ class CastExpression : public Expression {
 		}
 	}
 
+	virtual std::unique_ptr<Expression> Copy() override;
+
 	//! Deserializes a blob back into an CastExpression
 	static std::unique_ptr<Expression>
 	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);

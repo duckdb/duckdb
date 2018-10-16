@@ -10,6 +10,8 @@
 
 #include "planner/logical_plan_generator.hpp"
 
+#include "common/serializer.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -33,13 +35,13 @@ bool Planner::CreatePlan(ClientContext &context,
 	this->success = false;
 	try {
 		switch (statement->type) {
+		case StatementType::SELECT:
 		case StatementType::INSERT:
 		case StatementType::COPY:
-		case StatementType::SELECT:
 		case StatementType::DELETE:
 		case StatementType::UPDATE:
 		case StatementType::CREATE_TABLE:
-			CreatePlan(context, *statement.get());
+			CreatePlan(context, *statement);
 			this->success = true;
 			break;
 		case StatementType::CREATE_SCHEMA: {

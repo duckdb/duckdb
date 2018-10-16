@@ -21,6 +21,15 @@ class BaseTableRef : public TableRef {
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
 
+	virtual std::unique_ptr<TableRef> Copy() override {
+		auto copy = make_unique<BaseTableRef>();
+		copy->database_name = database_name;
+		copy->schema_name = schema_name;
+		copy->table_name = table_name;
+		copy->alias = alias;
+		return copy;
+	}
+
 	//! Database name, not used
 	std::string database_name;
 	//! Schema name

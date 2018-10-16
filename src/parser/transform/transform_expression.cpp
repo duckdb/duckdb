@@ -660,13 +660,13 @@ unique_ptr<Expression> TransformSubquery(SubLink *root) {
 
 	switch (root->subLinkType) {
 	case EXISTS_SUBLINK: {
-		subquery_expr->type = SubqueryType::EXISTS;
+		subquery_expr->subquery_type = SubqueryType::EXISTS;
 		return make_unique<OperatorExpression>(ExpressionType::OPERATOR_EXISTS,
 		                                       TypeId::BOOLEAN,
 		                                       move(subquery_expr));
 	}
 	case ANY_SUBLINK: {
-		subquery_expr->type = SubqueryType::IN;
+		subquery_expr->subquery_type = SubqueryType::IN;
 		return make_unique<OperatorExpression>(
 		    ExpressionType::COMPARE_IN, TypeId::BOOLEAN,
 		    TransformExpression(root->testexpr), move(subquery_expr));
