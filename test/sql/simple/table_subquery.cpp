@@ -53,3 +53,40 @@ TEST_CASE("Table subquery", "[subquery]") {
 	    "select sum(x) from (select i+1 as x from test group by x) sq;");
 	REQUIRE(CHECK_COLUMN(result, 0, {15}));
 }
+
+TEST_CASE("Nested table subquery", "[subquery]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	con.Query("CREATE TABLE test (i INTEGER, j INTEGER)");
+	con.Query("INSERT INTO test VALUES (3, 4), (4, 5), (5, 6);");
+
+	result = con.Query(
+	    "SELECT * FROM (SELECT i, j FROM (SELECT j AS i, i AS j FROM (SELECT j "
+	    "AS i, i AS j FROM test) AS a) AS a) AS a, (SELECT i+1 AS r,j FROM "
+	    "test) AS b, test WHERE a.i=b.r AND test.j=a.i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {4, 5}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5, 6}));
+	REQUIRE(CHECK_COLUMN(result, 2, {4, 5}));
+	REQUIRE(CHECK_COLUMN(result, 3, {4, 5}));
+	REQUIRE(CHECK_COLUMN(result, 4, {3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 5, {4, 5}));
+
+	const int NESTING_LEVELS = 100;
+
+	// 100 nesting levels
+	string query = "SELECT i FROM ";
+	for (size_t i = 0; i < NESTING_LEVELS; i++) {
+		query += "(SELECT i + 1 AS i FROM ";
+	}
+	query += "test";
+	for (size_t i = 0; i < NESTING_LEVELS; i++) {
+		query += ") AS a";
+	}
+	query += ";";
+	result = con.Query(query.c_str());
+	REQUIRE(CHECK_COLUMN(
+	    result, 0,
+	    {3 + NESTING_LEVELS, 4 + NESTING_LEVELS, 5 + NESTING_LEVELS}));
+}
