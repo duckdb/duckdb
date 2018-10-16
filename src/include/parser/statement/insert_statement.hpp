@@ -22,8 +22,16 @@ class InsertStatement : public SQLStatement {
   public:
 	InsertStatement() : SQLStatement(StatementType::INSERT){};
 	virtual ~InsertStatement() {}
+
 	virtual std::string ToString() const;
 	virtual void Accept(SQLNodeVisitor *v) { v->Visit(*this); }
+
+	virtual bool Equals(const SQLStatement *other_) {
+		if (!SQLStatement::Equals(other_)) {
+			return false;
+		}
+		throw NotImplementedException("Equality not implemented!");
+	}
 
 	//! The select statement to insert from
 	std::unique_ptr<SelectStatement> select_statement;

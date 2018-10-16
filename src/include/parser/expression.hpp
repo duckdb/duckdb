@@ -104,6 +104,9 @@ class Expression : public Printable {
 	ExpressionType GetExpressionType() { return type; }
 
 	virtual bool Equals(const Expression *other) {
+		if (!other) {
+			return false;
+		}
 		if (this->type != other->type) {
 			return false;
 		}

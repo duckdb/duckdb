@@ -21,6 +21,15 @@ class JoinRef : public TableRef {
 	JoinRef() : TableRef(TableReferenceType::JOIN) {}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual bool Equals(const TableRef *other_) override {
+		if (!TableRef::Equals(other_)) {
+			return false;
+		}
+		auto other = (JoinRef *)other_;
+		return left->Equals(other->left.get()) &&
+		       right->Equals(other->right.get()) &&
+		       condition->Equals(other->condition.get()) && type == other->type;
+	}
 
 	virtual std::unique_ptr<TableRef> Copy() override;
 

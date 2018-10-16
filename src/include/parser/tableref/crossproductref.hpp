@@ -20,6 +20,14 @@ class CrossProductRef : public TableRef {
 	CrossProductRef() : TableRef(TableReferenceType::CROSS_PRODUCT) {}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual bool Equals(const TableRef *other_) override {
+		if (!TableRef::Equals(other_)) {
+			return false;
+		}
+		auto other = (CrossProductRef *)other_;
+		return left->Equals(other->left.get()) &&
+		       right->Equals(other->right.get());
+	}
 
 	virtual std::unique_ptr<TableRef> Copy() override;
 

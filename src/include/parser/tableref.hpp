@@ -22,6 +22,9 @@ class TableRef : public Printable {
 	TableRef(TableReferenceType type) : type(type) {}
 
 	virtual void Accept(SQLNodeVisitor *v) = 0;
+	virtual bool Equals(const TableRef *other) {
+		return other && type == other->type && alias == other->alias;
+	}
 
 	virtual std::unique_ptr<TableRef> Copy() = 0;
 

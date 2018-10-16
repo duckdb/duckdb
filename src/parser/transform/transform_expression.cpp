@@ -137,8 +137,6 @@ unique_ptr<TableRef> TransformRangeVar(RangeVar *root) {
 		result->table_name = root->relname;
 	if (root->schemaname)
 		result->schema_name = root->schemaname;
-	if (root->catalogname)
-		result->database_name = root->catalogname;
 	return move(result);
 }
 

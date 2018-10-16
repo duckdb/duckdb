@@ -24,6 +24,13 @@ class CopyStatement : public SQLStatement {
 	virtual std::string ToString() const;
 	virtual void Accept(SQLNodeVisitor *v) { v->Visit(*this); }
 
+	virtual bool Equals(const SQLStatement *other_) {
+		if (!SQLStatement::Equals(other_)) {
+			return false;
+		}
+		throw NotImplementedException("Equality not implemented!");
+	}
+
 	std::string table;
 	std::string schema;
 

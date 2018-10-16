@@ -60,6 +60,8 @@ class SelectStatement : public SQLStatement {
 	virtual std::string ToString() const;
 	virtual void Accept(SQLNodeVisitor *v) { v->Visit(*this); }
 
+	virtual bool Equals(const SQLStatement *other);
+
 	//! The projection list
 	std::vector<std::unique_ptr<Expression>> select_list;
 	//! The FROM clause

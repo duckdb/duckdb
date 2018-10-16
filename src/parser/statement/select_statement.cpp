@@ -156,3 +156,73 @@ bool SelectStatement::HasAggregation() {
 	}
 	return false;
 }
+
+bool SelectStatement::Equals(const SQLStatement *other_) {
+	if (!SQLStatement::Equals(other_)) {
+		return false;
+	}
+	auto other = (SelectStatement *)other_;
+
+	// first check counts of all lists and such
+	if (select_list.size() != other->select_list.size() ||
+	    select_distinct != other->select_distinct ||
+	    orderby.orders.size() != other->orderby.orders.size() ||
+	    groupby.groups.size() != other->groupby.groups.size() ||
+	    limit.limit != other->limit.limit ||
+	    limit.offset != other->limit.offset) {
+		return false;
+	}
+	// SELECT
+	for (size_t i = 0; i < select_list.size(); i++) {
+		if (!select_list[i]->Equals(other->select_list[i].get())) {
+			return false;
+		}
+	}
+	// FROM
+	if (from_table) {
+		// we have a FROM clause, compare to the other one
+		if (!from_table->Equals(other->from_table.get())) {
+			return false;
+		}
+	} else if (other->from_table) {
+		// we don't have a FROM clause, if the other statement has one they are
+		// not equal
+		return false;
+	}
+	// WHERE
+	if (where_clause) {
+		// we have a WHERE clause, compare to the other one
+		if (!where_clause->Equals(other->where_clause.get())) {
+			return false;
+		}
+	} else if (other->where_clause) {
+		// we don't have a WHERE clause, if the other statement has one they are
+		// not equal
+		return false;
+	}
+	// GROUP BY
+	for (size_t i = 0; i < groupby.groups.size(); i++) {
+		if (!groupby.groups[i]->Equals(other->groupby.groups[i].get())) {
+			return false;
+		}
+	}
+	// HAVING
+	if (groupby.having) {
+		if (!groupby.having->Equals(other->groupby.having.get())) {
+			return false;
+		}
+	} else if (other->groupby.having) {
+		return false;
+	}
+
+	// ORDERS
+	for (size_t i = 0; i < orderby.orders.size(); i++) {
+		if (orderby.orders[i].type != orderby.orders[i].type ||
+		    !orderby.orders[i].expression->Equals(
+		        other->orderby.orders[i].expression.get())) {
+			return false;
+		}
+	}
+
+	return true;
+}

@@ -27,6 +27,13 @@ class CreateTableStatement : public SQLStatement {
 	virtual std::string ToString() const { return "CREATE TABLE"; }
 	virtual void Accept(SQLNodeVisitor *v) { v->Visit(*this); }
 
+	virtual bool Equals(const SQLStatement *other_) {
+		if (!SQLStatement::Equals(other_)) {
+			return false;
+		}
+		throw NotImplementedException("Equality not implemented!");
+	}
+
 	std::unique_ptr<CreateTableInformation> info;
 };
 

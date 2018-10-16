@@ -20,6 +20,14 @@ class BaseTableRef : public TableRef {
 	BaseTableRef() : TableRef(TableReferenceType::BASE_TABLE) {}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual bool Equals(const TableRef *other_) override {
+		if (!TableRef::Equals(other_)) {
+			return false;
+		}
+		auto other = (BaseTableRef *)other_;
+		return other->schema_name == schema_name &&
+		       other->table_name == table_name;
+	}
 
 	virtual std::unique_ptr<TableRef> Copy() override;
 
@@ -32,8 +40,6 @@ class BaseTableRef : public TableRef {
 		return "GET(" + schema_name + "." + table_name + ")";
 	}
 
-	//! Database name, not used
-	std::string database_name;
 	//! Schema name
 	std::string schema_name;
 	//! Table name

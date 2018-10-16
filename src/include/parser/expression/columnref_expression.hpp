@@ -72,7 +72,7 @@ class ColumnRefExpression : public Expression {
 
 	virtual void ResolveType() override;
 
-	virtual bool Equals(const Expression *other_) override;
+	virtual bool Equals(const Expression *other) override;
 
 	// FIXME: move these
 

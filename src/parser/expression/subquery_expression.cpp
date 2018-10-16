@@ -39,3 +39,15 @@ SubqueryExpression::Deserialize(ExpressionDeserializeInformation *info,
 	expression->subquery = move(subquery);
 	return expression;
 }
+
+bool SubqueryExpression::Equals(const Expression *other_) {
+	if (!Expression::Equals(other_)) {
+		return false;
+	}
+	auto other = reinterpret_cast<const SubqueryExpression *>(other_);
+	if (!other) {
+		return false;
+	}
+	return subquery_type == other->subquery_type &&
+	       subquery->Equals(other->subquery.get());
+}

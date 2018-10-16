@@ -39,6 +39,8 @@ class SubqueryExpression : public Expression {
 	static std::unique_ptr<Expression>
 	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);
 
+	virtual bool Equals(const Expression *other) override;
+
 	// FIXME: move these, not related to parser but to execution!
 	std::unique_ptr<LogicalOperator> op;
 	std::unique_ptr<BindContext> context;

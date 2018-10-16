@@ -29,6 +29,13 @@ class ExplainStatement : public SQLStatement {
 
 	virtual std::string ToString() const { return "Explain"; }
 	virtual void Accept(SQLNodeVisitor *v) {}
+
+	virtual bool Equals(const SQLStatement *other_) {
+		if (!SQLStatement::Equals(other_)) {
+			return false;
+		}
+		throw NotImplementedException("Equality not implemented!");
+	}
 };
 
 } // namespace duckdb

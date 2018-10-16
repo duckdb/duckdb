@@ -25,6 +25,13 @@ class CreateSchemaStatement : public SQLStatement {
 	virtual std::string ToString() const { return "CREATE SCHEMA"; }
 	virtual void Accept(SQLNodeVisitor *v) { v->Visit(*this); }
 
+	virtual bool Equals(const SQLStatement *other_) {
+		if (!SQLStatement::Equals(other_)) {
+			return false;
+		}
+		throw NotImplementedException("Equality not implemented!");
+	}
+
 	std::unique_ptr<CreateSchemaInformation> info;
 };
 
