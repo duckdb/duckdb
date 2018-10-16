@@ -252,6 +252,10 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "LIMIT";
 	case LogicalOperatorType::ORDER_BY:
 		return "ORDER_BY";
+	case LogicalOperatorType::COPY:
+		return "COPY";
+	case LogicalOperatorType::SUBQUERY:
+		return "SUBQUERY";
 	case LogicalOperatorType::JOIN:
 		return "JOIN";
 	case LogicalOperatorType::CROSS_PRODUCT:
