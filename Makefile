@@ -46,3 +46,6 @@ third_party/sqllogictest:
 sqlite: main | third_party/sqllogictest
 	git --git-dir third_party/sqllogictest/.git pull
 	./build/debug/test/unittest "[sqlitelogic]"
+
+sqlsmith: main
+	./build/debug/third_party/sqlsmith/sqlsmith --sqlite=sqlsmith_test_db

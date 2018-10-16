@@ -172,10 +172,17 @@ void duckdb_print_result(duckdb_result result) {
 
 duckdb_state duckdb_query(duckdb_connection connection, const char *query,
                           duckdb_result *out) {
+	if (out) {
+		memset(out, 0, sizeof(duckdb_result));
+	}
 	DuckDBConnection *conn = (DuckDBConnection *)connection;
 	auto result = conn->Query(query);
 	if (!result->GetSuccess()) {
-		result->Print();
+		if (out) {
+			auto error = result->GetErrorMessage();
+			out->error_message = (char *)malloc(error.size() + 1);
+			strcpy(out->error_message, error.c_str());
+		}
 		return DuckDBError;
 	}
 	// construct the C result from the C++ result
@@ -279,5 +286,8 @@ void duckdb_destroy_result(duckdb_result result) {
 		}
 
 		free(result.columns);
+	}
+	if (result.error_message) {
+		free(result.error_message);
 	}
 }

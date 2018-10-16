@@ -92,10 +92,10 @@ int sqlite3_prepare_v2(
 
 	/* Execute the query */
 	pStmt->curr_row = -1;
-	if (duckdb_query(db->pCon, pStmt->zSql, &pStmt->result) != DuckDBSuccess)
-		return SQLITE_ERROR;
-
 	*ppStmt = pStmt;
+	if (duckdb_query(db->pCon, pStmt->zSql, &pStmt->result) != DuckDBSuccess) {
+		return SQLITE_ERROR;
+	}
 	return SQLITE_OK;
 }
 
@@ -133,6 +133,10 @@ int sqlite3_exec(sqlite3 *db,      /* The database on which the SQL executes */
 		pStmt = 0;
 		rc = sqlite3_prepare_v2(db, zSql, -1, &pStmt, &zLeftover);
 		if (rc != SQLITE_OK) {
+			if (pStmt) {
+				*pzErrMsg = pStmt->result.error_message;
+				pStmt->result.error_message = 0;
+			}
 			continue;
 		}
 		if (!pStmt) {
@@ -204,6 +208,12 @@ exec_out:
 	if (pStmt)
 		sqlite3_finalize(pStmt);
 	free(azCols);
+	if (rc != SQLITE_OK && !*pzErrMsg) {
+		// error but no error message set
+		static const char *unknown_error = "Unknown error in DuckDB!";
+		*pzErrMsg = sqlite3_malloc64(strlen(unknown_error) + 1);
+		strcpy(*pzErrMsg, unknown_error);
+	}
 
 	return rc;
 }

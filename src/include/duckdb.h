@@ -47,6 +47,7 @@ typedef struct {
 	size_t row_count;
 	size_t column_count;
 	duckdb_column *columns;
+	char *error_message;
 } duckdb_result;
 
 typedef void *duckdb_database;
