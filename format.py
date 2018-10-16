@@ -3,8 +3,8 @@
 import os, time
 
 last_format_file = '.last_format'
-format_command = 'clang-format -i -style=file "${FILE}"'
-extensions = ['.cpp', '.c', '.hpp', '.h']
+format_command = 'clang-format -i -sort-includes=${SORT_INCLUDES} -style=file "${FILE}"'
+extensions = ['.cpp', '.c', '.hpp', '.h', '.cc', '.hh']
 
 # get the last time this command was run, if ever
 
@@ -24,7 +24,7 @@ if last_format_time > 0:
 
 time.ctime(os.path.getmtime('tools/sqlite3_api_wrapper/include/sqlite3.h'))
 
-def format_directory(directory):
+def format_directory(directory, sort_includes=True):
 	directory_printed = False
 	files = os.listdir(directory)
 	for f in files:
@@ -41,7 +41,7 @@ def format_directory(directory):
 						if not directory_printed:
 							print(directory)
 							directory_printed = True
-						cmd = format_command.replace("${FILE}", full_path)
+						cmd = format_command.replace("${FILE}", full_path).replace("${SORT_INCLUDES}", "1" if sort_includes else "0")
 						print(cmd)
 						os.system(cmd)
 					break
@@ -49,6 +49,7 @@ def format_directory(directory):
 format_directory('src')
 format_directory('test')
 format_directory('third_party/dbgen')
+format_directory('third_party/sqlsmith', False)
 format_directory('tools')
 
 # write the last modified time
