@@ -11,7 +11,7 @@
 #pragma once
 
 #include "parser/statement/select_statement.hpp"
-#include "parser/tableref/tableref.hpp"
+#include "parser/tableref.hpp"
 // FIXME: should not include this here!
 #include "execution/physical_operator.hpp"
 #include "planner/bindcontext.hpp"

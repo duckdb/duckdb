@@ -11,7 +11,7 @@
 #pragma once
 
 #include "parser/statement/select_statement.hpp"
-#include "parser/tableref/tableref.hpp"
+#include "parser/tableref.hpp"
 #include "planner/bindcontext.hpp"
 
 namespace duckdb {
@@ -22,11 +22,12 @@ class SubqueryRef : public TableRef {
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
 
-	virtual std::unique_ptr<TableRef> Copy() override {
-		auto copy = make_unique<SubqueryRef>(subquery->Copy());
-		copy->alias = alias;
-		return copy;
-	}
+	virtual std::unique_ptr<TableRef> Copy() override;
+
+	//! Serializes a blob into a SubqueryRef
+	virtual void Serialize(Serializer &serializer) override;
+	//! Deserializes a blob back into a SubqueryRef
+	static std::unique_ptr<TableRef> Deserialize(Deserializer &source);
 
 	//! The subquery
 	std::unique_ptr<SelectStatement> subquery;

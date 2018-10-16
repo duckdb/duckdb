@@ -4,7 +4,7 @@
 #include "parser/column_definition.hpp"
 
 #include "parser/parser.hpp"
-#include "parser/tableref/tableref_list.hpp"
+#include "parser/tableref/list.hpp"
 #include "parser/transform.hpp"
 
 #include "parser/constraint.hpp"
@@ -479,7 +479,7 @@ unique_ptr<DeleteStatement> TransformDelete(Node *node) {
 
 	result->condition = TransformExpression(stmt->whereClause);
 	result->table = TransformRangeVar(stmt->relation);
-	if (result->table->ref_type != TableReferenceType::BASE_TABLE) {
+	if (result->table->type != TableReferenceType::BASE_TABLE) {
 		throw Exception("Can only delete from base tables!");
 	}
 	return result;

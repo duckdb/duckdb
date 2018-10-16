@@ -4,7 +4,7 @@
 #include "parser/constraints/list.hpp"
 #include "parser/expression/list.hpp"
 #include "parser/statement/list.hpp"
-#include "parser/tableref/tableref_list.hpp"
+#include "parser/tableref/list.hpp"
 
 #include "main/client_context.hpp"
 #include "main/database.hpp"

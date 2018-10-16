@@ -15,7 +15,7 @@
 #include "parser/sql_statement.hpp"
 
 #include "parser/expression.hpp"
-#include "parser/tableref/tableref.hpp"
+#include "parser/tableref.hpp"
 
 namespace duckdb {
 //! GROUP BY description

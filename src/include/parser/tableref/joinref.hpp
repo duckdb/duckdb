@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// parser/expression/join_expression.hpp
+// parser/tableref/joinref.hpp
 //
 // Author: Mark Raasveldt
 //
@@ -12,7 +12,7 @@
 
 #include "parser/expression.hpp"
 #include "parser/sql_node_visitor.hpp"
-#include "parser/tableref/tableref.hpp"
+#include "parser/tableref.hpp"
 
 namespace duckdb {
 //! Represents a JOIN between two expressions
@@ -22,15 +22,12 @@ class JoinRef : public TableRef {
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
 
-	virtual std::unique_ptr<TableRef> Copy() override {
-		auto copy = make_unique<JoinRef>();
-		copy->left = left->Copy();
-		copy->right = right->Copy();
-		copy->condition = condition->Copy();
-		copy->type = type;
-		copy->alias = alias;
-		return copy;
-	}
+	virtual std::unique_ptr<TableRef> Copy() override;
+
+	//! Serializes a blob into a JoinRef
+	virtual void Serialize(Serializer &serializer) override;
+	//! Deserializes a blob back into a JoinRef
+	static std::unique_ptr<TableRef> Deserialize(Deserializer &source);
 
 	//! The left hand side of the join
 	std::unique_ptr<TableRef> left;

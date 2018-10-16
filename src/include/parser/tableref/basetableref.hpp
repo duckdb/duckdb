@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// parser/expression/basetableref_expression.hpp
+// parser/tableref/basetableref.hpp
 //
 // Author: Mark Raasveldt
 //
@@ -11,7 +11,7 @@
 #pragma once
 
 #include "parser/sql_node_visitor.hpp"
-#include "parser/tableref/tableref.hpp"
+#include "parser/tableref.hpp"
 
 namespace duckdb {
 //! Represents a TableReference to a base table in the schema
@@ -21,13 +21,15 @@ class BaseTableRef : public TableRef {
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
 
-	virtual std::unique_ptr<TableRef> Copy() override {
-		auto copy = make_unique<BaseTableRef>();
-		copy->database_name = database_name;
-		copy->schema_name = schema_name;
-		copy->table_name = table_name;
-		copy->alias = alias;
-		return copy;
+	virtual std::unique_ptr<TableRef> Copy() override;
+
+	//! Serializes a blob into a BaseTableRef
+	virtual void Serialize(Serializer &serializer) override;
+	//! Deserializes a blob back into a BaseTableRef
+	static std::unique_ptr<TableRef> Deserialize(Deserializer &source);
+
+	virtual std::string ToString() const override {
+		return "GET(" + schema_name + "." + table_name + ")";
 	}
 
 	//! Database name, not used
@@ -36,9 +38,5 @@ class BaseTableRef : public TableRef {
 	std::string schema_name;
 	//! Table name
 	std::string table_name;
-
-	virtual std::string ToString() const override {
-		return "GET(" + schema_name + "." + table_name + ")";
-	}
 };
 } // namespace duckdb

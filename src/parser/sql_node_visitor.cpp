@@ -3,7 +3,7 @@
 
 #include "parser/constraints/list.hpp"
 #include "parser/expression/list.hpp"
-#include "parser/tableref/tableref_list.hpp"
+#include "parser/tableref/list.hpp"
 
 using namespace duckdb;
 using namespace std;

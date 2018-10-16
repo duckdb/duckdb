@@ -4,7 +4,7 @@
 #include "parser/expression/list.hpp"
 #include "parser/statement/list.hpp"
 
-#include "parser/tableref/tableref_list.hpp"
+#include "parser/tableref/list.hpp"
 
 #include "planner/operator/list.hpp"
 
