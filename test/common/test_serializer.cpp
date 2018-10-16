@@ -140,4 +140,47 @@ TEST_CASE("Expression serializer", "[serializer]") {
 		REQUIRE(deserialized_expression.get());
 		REQUIRE(expression->Equals(deserialized_expression.get()));
 	}
+	{
+		// subquery, function, aggregate, case, negation
+		auto expression =
+		    ParseExpression("(SELECT 42) + abs(a) - COUNT(*) + + 33 - (CASE "
+		                    "WHEN NOT 0 THEN 33 ELSE 22 END)");
+		REQUIRE(expression.get());
+
+		Serializer serializer;
+		expression->Serialize(serializer);
+
+		auto data = serializer.GetData();
+		Deserializer source(data.data.get(), data.size);
+		unique_ptr<Expression> deserialized_expression;
+		REQUIRE_NOTHROW(deserialized_expression =
+		                    Expression::Deserialize(source));
+		REQUIRE(deserialized_expression.get());
+		REQUIRE(expression->Equals(deserialized_expression.get()));
+	}
+	{
+		// subtle differences should result in different results
+		auto expression =
+		    ParseExpression("(SELECT 42) + abs(a) - COUNT(*) + + 33 - (CASE "
+		                    "WHEN NOT 0 THEN 33 ELSE 22 END)");
+		auto expression2 =
+		    ParseExpression("(SELECT 43) + abs(a) - COUNT(*) + + 33 - (CASE "
+		                    "WHEN NOT 0 THEN 33 ELSE 22 END)");
+		REQUIRE(expression.get());
+		REQUIRE(expression2.get());
+
+		Serializer serializer;
+		expression->Serialize(serializer);
+		expression2->Serialize(serializer);
+
+		auto data = serializer.GetData();
+		Deserializer source(data.data.get(), data.size);
+		unique_ptr<Expression> deserialized, deserialized2;
+		REQUIRE_NOTHROW(deserialized = Expression::Deserialize(source));
+		REQUIRE_NOTHROW(deserialized2 = Expression::Deserialize(source));
+		REQUIRE(deserialized.get());
+		REQUIRE(expression->Equals(deserialized.get()));
+		REQUIRE(expression2->Equals(deserialized2.get()));
+		REQUIRE(!deserialized->Equals(deserialized2.get()));
+	}
 }
