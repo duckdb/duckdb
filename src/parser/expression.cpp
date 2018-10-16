@@ -51,22 +51,15 @@ void Expression::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<Expression> Expression::Deserialize(Deserializer &source) {
-	bool failed = false;
 	ExpressionDeserializeInformation info;
-	auto expression_class = source.Read<ExpressionClass>(failed);
-	info.type = source.Read<ExpressionType>(failed);
-	info.return_type = source.Read<TypeId>(failed);
-	auto alias = source.Read<string>(failed);
-	auto children_count = source.Read<uint32_t>(failed);
-	if (failed) {
-		return nullptr;
-	}
+	auto expression_class = source.Read<ExpressionClass>();
+	info.type = source.Read<ExpressionType>();
+	info.return_type = source.Read<TypeId>();
+	auto alias = source.Read<string>();
+	auto children_count = source.Read<uint32_t>();
 	// deserialize the children
 	for (size_t i = 0; i < children_count; i++) {
 		auto expression = Expression::Deserialize(source);
-		if (!expression) {
-			return nullptr;
-		}
 		info.children.push_back(move(expression));
 	}
 	unique_ptr<Expression> result;
@@ -108,12 +101,8 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &source) {
 		result = SubqueryExpression::Deserialize(&info, source);
 		break;
 	default:
-		assert(0);
-		return nullptr;
-	}
-	if (!result) {
-		assert(0);
-		return nullptr;
+		throw SerializationException(
+		    "Unsupported type for aggregation deserialization!");
 	}
 	result->return_type = info.return_type;
 	result->alias = alias;

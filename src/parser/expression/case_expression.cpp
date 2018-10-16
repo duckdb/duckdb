@@ -23,7 +23,7 @@ CaseExpression::Deserialize(ExpressionDeserializeInformation *info,
                             Deserializer &source) {
 	if (info->children.size() != 3) {
 		// CASE requires three children
-		return nullptr;
+		throw SerializationException("CASE requires three children!");
 	}
 	auto expression = make_unique<CaseExpression>();
 	expression->return_type = info->return_type;

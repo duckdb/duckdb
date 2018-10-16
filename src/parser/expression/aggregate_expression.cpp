@@ -120,12 +120,13 @@ void AggregateExpression::Serialize(Serializer &serializer) {
 unique_ptr<Expression>
 AggregateExpression::Deserialize(ExpressionDeserializeInformation *info,
                                  Deserializer &source) {
-	bool failed = false;
-	auto distinct = source.Read<bool>(failed);
+	auto distinct = source.Read<bool>();
 
-	if (failed || info->children.size() > 1) {
-		return nullptr;
+	if (info->children.size() > 1) {
+		throw SerializationException(
+		    "More than one child for aggregate expression!");
 	}
+
 	auto child = info->children.size() == 0 ? nullptr : move(info->children[0]);
 	return make_unique<AggregateExpression>(info->type, distinct, move(child));
 }

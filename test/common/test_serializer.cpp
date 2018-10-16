@@ -16,10 +16,8 @@ TEST_CASE("Basic serializer test", "[serializer]") {
 	auto data = serializer.GetData();
 
 	Deserializer source(data.data.get(), data.size);
-	bool failed = false;
-	REQUIRE(source.Read<sel_t>(failed) == 33);
-	REQUIRE(source.Read<uint64_t>(failed) == 42);
-	REQUIRE(!failed);
+	REQUIRE_NOTHROW(source.Read<sel_t>() == 33);
+	REQUIRE_NOTHROW(source.Read<uint64_t>() == 42);
 }
 
 TEST_CASE("Data Chunk serialization", "[serializer]") {
@@ -46,7 +44,7 @@ TEST_CASE("Data Chunk serialization", "[serializer]") {
 	Deserializer source(data.data.get(), data.size);
 
 	DataChunk other_chunk;
-	REQUIRE(other_chunk.Deserialize(source));
+	REQUIRE_NOTHROW(other_chunk.Deserialize(source));
 	REQUIRE(other_chunk.count == 2);
 	REQUIRE(other_chunk.column_count == 2);
 	REQUIRE(other_chunk.data[0].count == 2);
@@ -82,24 +80,28 @@ TEST_CASE("Value serialization", "[serializer]") {
 	auto data = serializer.GetData();
 	Deserializer source(data.data.get(), data.size);
 
-	Value a1 = Value::Deserialize(source);
+	Value a1, b1, c1, d1, e1, f1, g1, h1, i1, j1;
+
+	REQUIRE_NOTHROW(a1 = Value::Deserialize(source));
 	REQUIRE(Value::Equals(a, a1));
-	Value b1 = Value::Deserialize(source);
+	REQUIRE_NOTHROW(b1 = Value::Deserialize(source));
 	REQUIRE(Value::Equals(b, b1));
-	Value c1 = Value::Deserialize(source);
+	REQUIRE_NOTHROW(c1 = Value::Deserialize(source));
 	REQUIRE(Value::Equals(c, c1));
-	Value d1 = Value::Deserialize(source);
+	REQUIRE_NOTHROW(d1 = Value::Deserialize(source));
 	REQUIRE(Value::Equals(d, d1));
-	Value e1 = Value::Deserialize(source);
+	REQUIRE_NOTHROW(e1 = Value::Deserialize(source));
 	REQUIRE(Value::Equals(e, e1));
-	Value f1 = Value::Deserialize(source);
+	REQUIRE_NOTHROW(f1 = Value::Deserialize(source));
 	REQUIRE(Value::Equals(f, f1));
-	Value g1 = Value::Deserialize(source);
+	REQUIRE_NOTHROW(g1 = Value::Deserialize(source));
 	REQUIRE(Value::Equals(g, g1));
-	Value h1 = Value::Deserialize(source);
+	REQUIRE_NOTHROW(h1 = Value::Deserialize(source));
 	REQUIRE(Value::Equals(h, h1));
-	Value i1 = Value::Deserialize(source);
+	REQUIRE_NOTHROW(i1 = Value::Deserialize(source));
 	REQUIRE(Value::Equals(i, i1));
+	// try to deserialize too much, should throw a serialization exception
+	REQUIRE_THROWS(j1 = Value::Deserialize(source));
 }
 
 TEST_CASE("Expression serializer", "[serializer]") {
@@ -113,7 +115,9 @@ TEST_CASE("Expression serializer", "[serializer]") {
 
 		auto data = serializer.GetData();
 		Deserializer source(data.data.get(), data.size);
-		auto deserialized_expression = Expression::Deserialize(source);
+		unique_ptr<Expression> deserialized_expression;
+		REQUIRE_NOTHROW(deserialized_expression =
+		                    Expression::Deserialize(source));
 		REQUIRE(deserialized_expression.get());
 		REQUIRE(expression->Equals(deserialized_expression.get()));
 	}
@@ -130,7 +134,9 @@ TEST_CASE("Expression serializer", "[serializer]") {
 
 		auto data = serializer.GetData();
 		Deserializer source(data.data.get(), data.size);
-		auto deserialized_expression = Expression::Deserialize(source);
+		unique_ptr<Expression> deserialized_expression;
+		REQUIRE_NOTHROW(deserialized_expression =
+		                    Expression::Deserialize(source));
 		REQUIRE(deserialized_expression.get());
 		REQUIRE(expression->Equals(deserialized_expression.get()));
 	}

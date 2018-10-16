@@ -76,6 +76,7 @@ class SelectStatement : public SQLStatement {
 	//! Limit Description
 	LimitDescription limit;
 
+	//! Create a copy of this SelectStatement
 	std::unique_ptr<SelectStatement> Copy();
 
 	//! Serializes a SelectStatement to a stand-alone binary blob

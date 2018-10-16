@@ -12,10 +12,6 @@ void NotNullConstraint::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<Constraint> NotNullConstraint::Deserialize(Deserializer &source) {
-	bool failed = false;
-	auto index = source.Read<size_t>(failed);
-	if (failed) {
-		return nullptr;
-	}
+	auto index = source.Read<size_t>();
 	return make_unique_base<Constraint, NotNullConstraint>(index);
 }

@@ -12,11 +12,7 @@ void Constraint::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<Constraint> Constraint::Deserialize(Deserializer &source) {
-	bool failed = false;
-	auto type = (ConstraintType)source.Read<int>(failed);
-	if (failed) {
-		return nullptr;
-	}
+	auto type = (ConstraintType)source.Read<int>();
 	switch (type) {
 	case ConstraintType::NOT_NULL:
 		return NotNullConstraint::Deserialize(source);

@@ -395,4 +395,14 @@ class IOException : public Exception {
 	}
 };
 
+class SerializationException : public Exception {
+	SerializationException() = delete;
+
+  public:
+	SerializationException(std::string msg, ...)
+	    : Exception(ExceptionType::SERIALIZATION, msg) {
+		FORMAT_CONSTRUCTOR(msg);
+	}
+};
+
 } // namespace duckdb

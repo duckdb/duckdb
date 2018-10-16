@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "common/exception.hpp"
 #include "common/helper.hpp"
 #include "common/internal_types.hpp"
 
@@ -96,21 +97,22 @@ class Deserializer {
 	    : Deserializer(serializer.data, serializer.blob.size) {}
 	Deserializer(uint8_t *ptr, size_t data);
 
-	template <class T> T Read(bool &failed) {
+	// Read an element of class T [sizeof(T)] from the stream. [CAN THROW:
+	// SerializationException]
+	template <class T> T Read() {
 		if (ptr + sizeof(T) > endptr) {
-			failed = true;
-			return T();
+			throw SerializationException("Failed to deserialize object");
 		}
 		T value = *((T *)ptr);
 		ptr += sizeof(T);
 		return value;
 	}
 
-	//! Returns <data_size> elements into a pointer. Returns a nullptr if it was
-	//! not possible to read <data_size> elements.
+	//! Returns <data_size> elements into a pointer. [CAN THROW:
+	//! SerializationException]
 	uint8_t *ReadData(size_t data_size) {
 		if (ptr + data_size > endptr) {
-			return nullptr;
+			throw SerializationException("Failed to deserialize object");
 		}
 		auto dataptr = ptr;
 		ptr += data_size;
@@ -122,6 +124,6 @@ class Deserializer {
 	uint8_t *endptr;
 };
 
-template <> std::string Deserializer::Read(bool &failed);
+template <> std::string Deserializer::Read();
 
 } // namespace duckdb

@@ -103,9 +103,9 @@ class DataChunk : public Printable {
 
 	//! Serializes a DataChunk to a stand-alone binary blob
 	void Serialize(Serializer &serializer);
-	//! Deserializes a blob back into a DataChunk, returns false if
-	//! deserialization is not possible
-	bool Deserialize(Deserializer &source);
+	//! Deserializes a blob back into a DataChunk [CAN THROW:
+	//! SerializationException]
+	void Deserialize(Deserializer &source);
 
 	//! Returns a list of types of the vectors of this data chunk
 	std::vector<TypeId> GetTypes();

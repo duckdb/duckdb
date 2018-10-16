@@ -219,18 +219,13 @@ void DataChunk::Serialize(Serializer &serializer) {
 	}
 }
 
-bool DataChunk::Deserialize(Deserializer &source) {
-	bool failed = false;
-
-	auto rows = source.Read<sel_t>(failed);
-	column_count = source.Read<uint64_t>(failed);
+void DataChunk::Deserialize(Deserializer &source) {
+	auto rows = source.Read<sel_t>();
+	column_count = source.Read<uint64_t>();
 
 	std::vector<TypeId> types;
 	for (size_t i = 0; i < column_count; i++) {
-		types.push_back((TypeId)source.Read<int>(failed));
-		if (failed) {
-			return false;
-		}
+		types.push_back((TypeId)source.Read<int>());
 	}
 	Initialize(types);
 	// now load the column data
@@ -240,9 +235,6 @@ bool DataChunk::Deserialize(Deserializer &source) {
 			// constant size type: simple memcpy
 			auto column_size = GetTypeIdSize(type) * rows;
 			auto ptr = source.ReadData(column_size);
-			if (!ptr) {
-				return false;
-			}
 			Vector v(data[i].type, (char *)ptr);
 			v.count = rows;
 			VectorOperations::AppendNull(v, data[i]);
@@ -250,10 +242,7 @@ bool DataChunk::Deserialize(Deserializer &source) {
 			const char **strings = (const char **)data[i].data;
 			for (size_t j = 0; j < rows; j++) {
 				// read the strings
-				auto str = source.Read<string>(failed);
-				if (failed) {
-					return false;
-				}
+				auto str = source.Read<string>();
 				// now add the string to the StringHeap of the vector
 				// and write the pointer into the vector
 				if (IsNullValue<const char *>((const char *)str.c_str())) {
@@ -268,7 +257,6 @@ bool DataChunk::Deserialize(Deserializer &source) {
 	}
 	count = rows;
 	Verify();
-	return !failed;
 }
 
 #ifdef DEBUG

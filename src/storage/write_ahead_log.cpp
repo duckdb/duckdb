@@ -189,43 +189,30 @@ void WriteAheadLog::WriteCreateTable(TableCatalogEntry *entry) {
 
 bool ReplayCreateTable(Transaction &transaction, Catalog &catalog,
                        Deserializer &source) {
-	bool failed = false;
 	CreateTableInformation info;
 
-	info.schema = source.Read<string>(failed);
-	info.table = source.Read<string>(failed);
-	auto column_count = source.Read<uint32_t>(failed);
-	if (failed) {
-		return false;
-	}
+	info.schema = source.Read<string>();
+	info.table = source.Read<string>();
+	auto column_count = source.Read<uint32_t>();
 
 	for (size_t i = 0; i < column_count; i++) {
-		auto column_name = source.Read<string>(failed);
-		auto column_type = (TypeId)source.Read<int>(failed);
-		if (failed) {
-			return false;
-		}
+		auto column_name = source.Read<string>();
+		auto column_type = (TypeId)source.Read<int>();
 		info.columns.push_back(
 		    ColumnDefinition(column_name, column_type, false));
 	}
-	auto constraint_count = source.Read<uint32_t>(failed);
-	if (failed) {
-		return false;
-	}
+	auto constraint_count = source.Read<uint32_t>();
 
 	for (size_t i = 0; i < constraint_count; i++) {
 		auto constraint = Constraint::Deserialize(source);
-		if (!constraint) {
-			return false;
-		}
 		info.constraints.push_back(move(constraint));
 	}
 
-	try {
-		catalog.CreateTable(transaction, &info);
-	} catch (...) {
-		return false;
-	}
+	// try {
+	catalog.CreateTable(transaction, &info);
+	// catch(...) {
+	//	return false
+	//}
 	return true;
 }
 
@@ -242,20 +229,16 @@ void WriteAheadLog::WriteDropTable(TableCatalogEntry *entry) {
 
 bool ReplayDropTable(Transaction &transaction, Catalog &catalog,
                      Deserializer &source) {
-	bool failed = false;
 	DropTableInformation info;
 
-	info.schema = source.Read<string>(failed);
-	info.table = source.Read<string>(failed);
-	if (failed) {
-		return false;
-	}
+	info.schema = source.Read<string>();
+	info.table = source.Read<string>();
 
-	try {
-		catalog.DropTable(transaction, &info);
-	} catch (...) {
-		return false;
-	}
+	// try {
+	catalog.DropTable(transaction, &info);
+	// } catch (...) {
+	// 	return false;
+	// }
 	return true;
 }
 
@@ -271,18 +254,14 @@ void WriteAheadLog::WriteCreateSchema(SchemaCatalogEntry *entry) {
 
 bool ReplayCreateSchema(Transaction &transaction, Catalog &catalog,
                         Deserializer &source) {
-	bool failed = false;
 	CreateSchemaInformation info;
-	info.schema = source.Read<string>(failed);
-	if (failed) {
-		return false;
-	}
+	info.schema = source.Read<string>();
 
-	try {
-		catalog.CreateSchema(transaction, &info);
-	} catch (...) {
-		return false;
-	}
+	// try {
+	catalog.CreateSchema(transaction, &info);
+	// } catch (...) {
+	// 	return false;
+	// }
 	return true;
 }
 
@@ -298,19 +277,15 @@ void WriteAheadLog::WriteDropSchema(SchemaCatalogEntry *entry) {
 
 bool ReplayDropSchema(Transaction &transaction, Catalog &catalog,
                       Deserializer &source) {
-	bool failed = false;
 	DropSchemaInformation info;
 
-	info.schema = source.Read<string>(failed);
-	if (failed) {
-		return false;
-	}
+	info.schema = source.Read<string>();
 
-	try {
-		catalog.DropSchema(transaction, &info);
-	} catch (...) {
-		return false;
-	}
+	// try {
+	catalog.DropSchema(transaction, &info);
+	// } catch (...) {
+	// 	return false;
+	// }
 	return true;
 }
 
@@ -338,15 +313,11 @@ void WriteAheadLog::WriteInsert(std::string &schema, std::string &table,
 
 bool ReplayInsert(ClientContext &context, Catalog &catalog,
                   Deserializer &source) {
-	bool failed = false;
-	auto schema_name = source.Read<string>(failed);
-	auto table_name = source.Read<string>(failed);
+	auto schema_name = source.Read<string>();
+	auto table_name = source.Read<string>();
 	DataChunk chunk;
 
-	failed |= !chunk.Deserialize(source);
-	if (failed) {
-		return false;
-	}
+	chunk.Deserialize(source);
 
 	Transaction &transaction = context.ActiveTransaction();
 
@@ -373,11 +344,7 @@ void WriteAheadLog::WriteQuery(std::string &query) {
 
 bool ReplayQuery(ClientContext &context, Deserializer &source) {
 	// read the query
-	bool failed = false;
-	auto query = source.Read<string>(failed);
-	if (failed) {
-		return false;
-	}
+	auto query = source.Read<string>();
 
 	auto result = DuckDBConnection::GetQueryResult(context, query);
 	return result->GetSuccess();

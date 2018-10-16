@@ -21,11 +21,10 @@ Serializer::Serializer(uint8_t *data) : maximum_size((size_t)-1), data(data) {
 Deserializer::Deserializer(uint8_t *ptr, size_t data)
     : ptr(ptr), endptr(ptr + data) {}
 
-template <> string Deserializer::Read(bool &failed) {
-	auto size = Read<uint32_t>(failed);
+template <> string Deserializer::Read() {
+	auto size = Read<uint32_t>();
 	if (ptr + size > endptr) {
-		failed = true;
-		return string();
+		throw SerializationException("Failed to deserialize object");
 	}
 	auto value = string((char *)ptr, size);
 	ptr += size;

@@ -14,12 +14,8 @@ void TableRef::Serialize(Serializer &serializer) {
 
 //! Deserializes a blob back into an TableRef
 unique_ptr<TableRef> TableRef::Deserialize(Deserializer &source) {
-	bool failed = false;
-	auto type = source.Read<TableReferenceType>(failed);
-	auto alias = source.Read<string>(failed);
-	if (failed) {
-		return nullptr;
-	}
+	auto type = source.Read<TableReferenceType>();
+	auto alias = source.Read<string>();
 	unique_ptr<TableRef> result;
 	switch (type) {
 	case TableReferenceType::BASE_TABLE:
@@ -35,9 +31,6 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &source) {
 		result = SubqueryRef::Deserialize(source);
 		break;
 	case TableReferenceType::INVALID:
-		return nullptr;
-	}
-	if (!result) {
 		return nullptr;
 	}
 	result->alias = alias;

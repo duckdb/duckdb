@@ -32,17 +32,16 @@ void ColumnRefExpression::Serialize(Serializer &serializer) {
 unique_ptr<Expression>
 ColumnRefExpression::Deserialize(ExpressionDeserializeInformation *info,
                                  Deserializer &source) {
-	bool failed = false;
-	auto table_name = source.Read<string>(failed);
-	auto column_name = source.Read<string>(failed);
-	auto index = source.Read<size_t>(failed);
-	if (failed) {
-		return nullptr;
+	auto table_name = source.Read<string>();
+	auto column_name = source.Read<string>();
+	auto index = source.Read<size_t>();
+
+	if (info->children.size() > 0) {
+		throw SerializationException("ColumnRef cannot have children!");
 	}
 
 	auto expression = make_unique<ColumnRefExpression>(column_name, table_name);
 	expression->index = index;
-	expression->children = move(info->children);
 	return expression;
 }
 

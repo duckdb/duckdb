@@ -531,13 +531,8 @@ void Value::Serialize(Serializer &serializer) {
 }
 
 Value Value::Deserialize(Deserializer &source) {
-	bool failed = false;
-
-	auto type = source.Read<TypeId>(failed);
-	auto is_null = source.Read<bool>(failed);
-	if (failed) {
-		return Value();
-	}
+	auto type = source.Read<TypeId>();
+	auto is_null = source.Read<bool>();
 	Value new_value = Value(type);
 	if (is_null) {
 		return new_value;
@@ -545,41 +540,38 @@ Value Value::Deserialize(Deserializer &source) {
 	new_value.is_null = false;
 	switch (type) {
 	case TypeId::BOOLEAN:
-		new_value.value_.boolean = source.Read<int8_t>(failed);
+		new_value.value_.boolean = source.Read<int8_t>();
 		break;
 	case TypeId::TINYINT:
-		new_value.value_.tinyint = source.Read<int8_t>(failed);
+		new_value.value_.tinyint = source.Read<int8_t>();
 		break;
 	case TypeId::SMALLINT:
-		new_value.value_.smallint = source.Read<int16_t>(failed);
+		new_value.value_.smallint = source.Read<int16_t>();
 		break;
 	case TypeId::INTEGER:
-		new_value.value_.integer = source.Read<int32_t>(failed);
+		new_value.value_.integer = source.Read<int32_t>();
 		break;
 	case TypeId::BIGINT:
-		new_value.value_.bigint = source.Read<int64_t>(failed);
+		new_value.value_.bigint = source.Read<int64_t>();
 		break;
 	case TypeId::DECIMAL:
-		new_value.value_.decimal = source.Read<double>(failed);
+		new_value.value_.decimal = source.Read<double>();
 		break;
 	case TypeId::POINTER:
-		new_value.value_.pointer = source.Read<uint64_t>(failed);
+		new_value.value_.pointer = source.Read<uint64_t>();
 		break;
 	case TypeId::DATE:
-		new_value.value_.date = source.Read<date_t>(failed);
+		new_value.value_.date = source.Read<date_t>();
 		break;
 	case TypeId::TIMESTAMP:
-		new_value.value_.timestamp = source.Read<timestamp_t>(failed);
+		new_value.value_.timestamp = source.Read<timestamp_t>();
 		break;
 	case TypeId::VARCHAR:
-		new_value.str_value = source.Read<string>(failed);
+		new_value.str_value = source.Read<string>();
 		break;
 	default:
 		throw NotImplementedException(
 		    "Value type not implemented for deserialization");
-	}
-	if (failed) {
-		return Value();
 	}
 	return new_value;
 }

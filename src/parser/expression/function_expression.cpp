@@ -41,10 +41,6 @@ void FunctionExpression::Serialize(Serializer &serializer) {
 unique_ptr<Expression>
 FunctionExpression::Deserialize(ExpressionDeserializeInformation *info,
                                 Deserializer &source) {
-	bool failed = false;
-	auto func_name = source.Read<string>(failed);
-	if (failed) {
-		return nullptr;
-	}
+	auto func_name = source.Read<string>();
 	return make_unique<FunctionExpression>(func_name, info->children);
 }

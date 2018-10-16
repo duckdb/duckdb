@@ -17,7 +17,7 @@ unique_ptr<Expression>
 DefaultExpression::Deserialize(ExpressionDeserializeInformation *info,
                                Deserializer &source) {
 	if (info->children.size() > 0) {
-		return nullptr;
+		throw SerializationException("Default cannot have children!");
 	}
 	return make_unique<DefaultExpression>();
 }

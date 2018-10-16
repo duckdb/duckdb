@@ -21,9 +21,12 @@ void ConstantExpression::Serialize(Serializer &serializer) {
 unique_ptr<Expression>
 ConstantExpression::Deserialize(ExpressionDeserializeInformation *info,
                                 Deserializer &source) {
+	if (info->children.size() > 0) {
+		throw SerializationException("Constant cannot have children!");
+	}
+
 	Value value = Value::Deserialize(source);
 	auto expression = make_unique_base<Expression, ConstantExpression>(value);
-	expression->children = move(info->children);
 	return expression;
 }
 

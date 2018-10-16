@@ -15,16 +15,12 @@ void BaseTableRef::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<TableRef> BaseTableRef::Deserialize(Deserializer &source) {
-	bool failed = false;
 	auto result = make_unique<BaseTableRef>();
 
-	result->database_name = source.Read<string>(failed);
-	result->schema_name = source.Read<string>(failed);
-	result->table_name = source.Read<string>(failed);
+	result->database_name = source.Read<string>();
+	result->schema_name = source.Read<string>();
+	result->table_name = source.Read<string>();
 
-	if (failed) {
-		return nullptr;
-	}
 	return result;
 }
 

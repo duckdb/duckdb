@@ -26,17 +26,12 @@ void JoinRef::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<TableRef> JoinRef::Deserialize(Deserializer &source) {
-	bool failed = false;
 	auto result = make_unique<JoinRef>();
 
 	result->left = TableRef::Deserialize(source);
 	result->right = TableRef::Deserialize(source);
 	result->condition = Expression::Deserialize(source);
-	result->type = source.Read<JoinType>(failed);
-
-	if (!result->left || !result->right || !result->condition || failed) {
-		return nullptr;
-	}
+	result->type = source.Read<JoinType>();
 
 	return result;
 }

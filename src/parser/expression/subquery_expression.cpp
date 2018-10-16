@@ -28,12 +28,12 @@ void SubqueryExpression::Serialize(Serializer &serializer) {
 unique_ptr<Expression>
 SubqueryExpression::Deserialize(ExpressionDeserializeInformation *info,
                                 Deserializer &source) {
-	bool failed = false;
-	auto subquery_type = source.Read<SubqueryType>(failed);
+	auto subquery_type = source.Read<SubqueryType>();
 	auto subquery = SelectStatement::Deserialize(source);
-	if (failed || !subquery || info->children.size() > 0) {
-		return nullptr;
+	if (info->children.size() > 0) {
+		throw SerializationException("Subquery cannot have children!");
 	}
+
 	auto expression = make_unique<SubqueryExpression>();
 	expression->subquery_type = subquery_type;
 	expression->subquery = move(subquery);

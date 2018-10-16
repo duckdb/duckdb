@@ -17,9 +17,10 @@ unique_ptr<Expression> ConjunctionExpression::Copy() {
 unique_ptr<Expression>
 ConjunctionExpression::Deserialize(ExpressionDeserializeInformation *info,
                                    Deserializer &source) {
-	if (info->children.size() < 2) {
-		return nullptr;
+	if (info->children.size() != 2) {
+		throw SerializationException("Conjunction needs two children!");
 	}
+
 	return make_unique_base<Expression, ConjunctionExpression>(
 	    info->type, move(info->children[0]), move(info->children[1]));
 }

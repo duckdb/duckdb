@@ -89,106 +89,57 @@ void SelectStatement::Serialize(Serializer &serializer) {
 
 unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &source) {
 	auto statement = make_unique<SelectStatement>();
-	bool failed = false;
-
 	// select_list
-	auto select_count = source.Read<uint32_t>(failed);
-	if (failed) {
-		return nullptr;
-	}
+	auto select_count = source.Read<uint32_t>();
 	for (size_t i = 0; i < select_count; i++) {
 		auto child = Expression::Deserialize(source);
-		if (!child) {
-			return nullptr;
-		}
 		statement->select_list.push_back(move(child));
 	}
 	// from clause
-	auto has_from_clause = source.Read<bool>(failed);
-	if (failed) {
-		return nullptr;
-	}
+	auto has_from_clause = source.Read<bool>();
 	if (has_from_clause) {
 		statement->from_table = TableRef::Deserialize(source);
 	}
 
 	// where_clause
-	auto has_where_clause = source.Read<bool>(failed);
-	if (failed) {
-		return nullptr;
-	}
+	auto has_where_clause = source.Read<bool>();
 	if (has_where_clause) {
 		statement->where_clause = Expression::Deserialize(source);
-		if (!statement->where_clause) {
-			return nullptr;
-		}
 	}
 	// select_distinct
-	statement->select_distinct = source.Read<bool>(failed);
+	statement->select_distinct = source.Read<bool>();
 	// group by
-	auto group_count = source.Read<uint32_t>(failed);
-	if (failed) {
-		return nullptr;
-	}
+	auto group_count = source.Read<uint32_t>();
 	for (size_t i = 0; i < group_count; i++) {
 		auto child = Expression::Deserialize(source);
-		if (!child) {
-			return nullptr;
-		}
 		statement->groupby.groups.push_back(move(child));
 	}
 	// having
-	auto has_having_clause = source.Read<bool>(failed);
-	if (failed) {
-		return nullptr;
-	}
+	auto has_having_clause = source.Read<bool>();
 	if (has_having_clause) {
 		statement->groupby.having = Expression::Deserialize(source);
-		if (!statement->groupby.having) {
-			return nullptr;
-		}
 	}
 	// order by
-	auto order_count = source.Read<uint32_t>(failed);
-	if (failed) {
-		return nullptr;
-	}
+	auto order_count = source.Read<uint32_t>();
 	for (size_t i = 0; i < order_count; i++) {
-		auto order_type = source.Read<OrderType>(failed);
+		auto order_type = source.Read<OrderType>();
 		auto expression = Expression::Deserialize(source);
-		if (failed || !expression) {
-			return nullptr;
-		}
 		statement->orderby.orders.push_back(
 		    OrderByNode(order_type, move(expression)));
 	}
 
 	// limit
-	statement->limit.limit = source.Read<int64_t>(failed);
-	statement->limit.offset = source.Read<int64_t>(failed);
-	if (failed) {
-		return nullptr;
-	}
+	statement->limit.limit = source.Read<int64_t>();
+	statement->limit.offset = source.Read<int64_t>();
+
 	// union, except
-	auto has_union_select = source.Read<bool>(failed);
-	if (failed) {
-		return nullptr;
-	}
+	auto has_union_select = source.Read<bool>();
 	if (has_union_select) {
 		statement->union_select = SelectStatement::Deserialize(source);
-		if (!statement->union_select) {
-			return nullptr;
-		}
 	}
-	auto has_except_select = source.Read<bool>(failed);
-	if (failed) {
-		return nullptr;
-	}
+	auto has_except_select = source.Read<bool>();
 	if (has_except_select) {
 		statement->except_select = SelectStatement::Deserialize(source);
-		if (!statement->except_select) {
-			return nullptr;
-		}
 	}
 
 	return statement;
