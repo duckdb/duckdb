@@ -143,9 +143,10 @@ void Binder::Visit(SelectStatement &statement) {
 				statement.groupby.groups[i] =
 				    move(statement.select_list[select_index]);
 				// and add a GROUP REF expression to the SELECT clause
-				statement.select_list[select_index] =
-				    make_unique<GroupRefExpression>(
-				        statement.groupby.groups[i]->return_type, i);
+				auto group_ref = make_unique<GroupRefExpression>(
+				    statement.groupby.groups[i]->return_type, i);
+				group_ref->alias = string(group_column->column_name);
+				statement.select_list[select_index] = move(group_ref);
 			}
 		}
 

@@ -42,4 +42,10 @@ TEST_CASE("Table subquery", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {4, 5}));
 	REQUIRE(CHECK_COLUMN(result, 4, {3, 4}));
 	REQUIRE(CHECK_COLUMN(result, 5, {4, 5}));
+
+	// subquery aliases are visible
+
+	result = con.Query(
+	    "select sum(x) from (select i+1 as x from test group by x) sq;");
+	REQUIRE(CHECK_COLUMN(result, 0, {15}));
 }
