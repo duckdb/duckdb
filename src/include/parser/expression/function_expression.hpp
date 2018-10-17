@@ -16,8 +16,11 @@ namespace duckdb {
 //! Represents a function call
 class FunctionExpression : public Expression {
   public:
-	FunctionExpression(std::string func_name,
+	FunctionExpression(std::string schema_name, std::string function_name,
 	                   std::vector<std::unique_ptr<Expression>> &children);
+	FunctionExpression(std::string function_name,
+	                   std::vector<std::unique_ptr<Expression>> &children)
+	    : FunctionExpression(DEFAULT_SCHEMA, function_name, children) {}
 
 	virtual void ResolveType() override;
 
@@ -34,6 +37,9 @@ class FunctionExpression : public Expression {
 	static std::unique_ptr<Expression>
 	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);
 
-	std::string func_name;
+	//! Schema of the function
+	std::string schema;
+	//! Function name
+	std::string function_name;
 };
 } // namespace duckdb

@@ -305,7 +305,7 @@ void ExpressionExecutor::Visit(ConstantExpression &expr) {
 }
 
 void ExpressionExecutor::Visit(FunctionExpression &expr) {
-	if (expr.func_name == "abs") {
+	if (expr.function_name == "abs") {
 		Vector l;
 		expr.children[0]->Accept(this);
 		vector.Move(l);

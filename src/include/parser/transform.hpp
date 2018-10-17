@@ -54,6 +54,8 @@ std::unique_ptr<Expression> TransformAExpr(postgres::A_Expr *root);
 std::unique_ptr<Expression> TransformExpression(postgres::Node *node);
 //! Transform a Postgres function call into an Expression
 std::unique_ptr<Expression> TransformFuncCall(postgres::FuncCall *root);
+//! Transform a Postgres node into a TableRef
+std::unique_ptr<TableRef> TransformTableRefNode(postgres::Node *node);
 //! Transform a Postgres FROM clause into an Expression
 std::unique_ptr<TableRef> TransformFrom(postgres::List *root);
 //! Transform a Postgres constant value into an Expression

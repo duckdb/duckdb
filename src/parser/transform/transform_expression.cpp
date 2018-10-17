@@ -210,31 +210,8 @@ unique_ptr<TableRef> TransformJoin(JoinExpr *root) {
 	}
 
 	// Check the type of left arg and right arg before transform
-	if (root->larg->type == T_RangeVar) {
-		result->left =
-		    TransformRangeVar(reinterpret_cast<RangeVar *>(root->larg));
-	} else if (root->larg->type == T_RangeSubselect) {
-		result->left = TransformRangeSubselect(
-		    reinterpret_cast<RangeSubselect *>(root->larg));
-	} else if (root->larg->type == T_JoinExpr) {
-		result->left = TransformJoin(reinterpret_cast<JoinExpr *>(root->larg));
-	} else {
-		throw NotImplementedException("Join arg type %d not supported yet...\n",
-		                              root->larg->type);
-	}
-
-	if (root->rarg->type == T_RangeVar) {
-		result->right =
-		    TransformRangeVar(reinterpret_cast<RangeVar *>(root->rarg));
-	} else if (root->rarg->type == T_RangeSubselect) {
-		result->right = TransformRangeSubselect(
-		    reinterpret_cast<RangeSubselect *>(root->rarg));
-	} else if (root->rarg->type == T_JoinExpr) {
-		result->right = TransformJoin(reinterpret_cast<JoinExpr *>(root->rarg));
-	} else {
-		throw NotImplementedException("Join arg type %d not supported yet...\n",
-		                              root->larg->type);
-	}
+	result->left = TransformTableRefNode(root->larg);
+	result->right = TransformTableRefNode(root->rarg);
 
 	if (!root->quals) { // CROSS JOIN
 		auto cross = make_unique<CrossProductRef>();
@@ -263,6 +240,22 @@ unique_ptr<TableRef> TransformJoin(JoinExpr *root) {
 	return move(result);
 }
 
+unique_ptr<TableRef> TransformTableRefNode(Node *n) {
+	switch (n->type) {
+	case T_RangeVar:
+		return TransformRangeVar(reinterpret_cast<RangeVar *>(n));
+	case T_JoinExpr:
+		return TransformJoin(reinterpret_cast<JoinExpr *>(n));
+	case T_RangeSubselect:
+		return TransformRangeSubselect(reinterpret_cast<RangeSubselect *>(n));
+	case T_RangeFunction:
+		return TransformRangeFunction(reinterpret_cast<RangeFunction *>(n));
+	default:
+		throw NotImplementedException("From Type %d not supported yet...",
+		                              n->type);
+	}
+}
+
 unique_ptr<TableRef> TransformFrom(List *root) {
 	if (!root) {
 		return nullptr;
@@ -273,23 +266,8 @@ unique_ptr<TableRef> TransformFrom(List *root) {
 		auto result = make_unique<CrossProductRef>();
 		CrossProductRef *cur_root = result.get();
 		for (auto node = root->head; node != nullptr; node = node->next) {
-			unique_ptr<TableRef> next;
 			Node *n = reinterpret_cast<Node *>(node->data.ptr_value);
-			switch (n->type) {
-			case T_RangeVar:
-				next = TransformRangeVar(reinterpret_cast<RangeVar *>(n));
-				break;
-			case T_RangeSubselect:
-				next = TransformRangeSubselect(
-				    reinterpret_cast<RangeSubselect *>(n));
-				break;
-			case T_JoinExpr:
-				next = TransformJoin(reinterpret_cast<JoinExpr *>(n));
-				break;
-			default:
-				throw NotImplementedException(
-				    "From Type %d not supported yet...", n->type);
-			}
+			unique_ptr<TableRef> next = TransformTableRefNode(n);
 			if (!cur_root->left) {
 				cur_root->left = move(next);
 			} else if (!cur_root->right) {
@@ -306,20 +284,7 @@ unique_ptr<TableRef> TransformFrom(List *root) {
 	}
 
 	Node *n = reinterpret_cast<Node *>(root->head->data.ptr_value);
-	switch (n->type) {
-	case T_RangeVar:
-		return TransformRangeVar(reinterpret_cast<RangeVar *>(n));
-	case T_JoinExpr:
-		return TransformJoin(reinterpret_cast<JoinExpr *>(n));
-	case T_RangeSubselect:
-		return TransformRangeSubselect(reinterpret_cast<RangeSubselect *>(n));
-	case T_RangeFunction:
-		return TransformRangeFunction(reinterpret_cast<RangeFunction *>(n));
-	default: {
-		throw NotImplementedException("From Type %d not supported yet...",
-		                              n->type);
-	}
-	}
+	return TransformTableRefNode(n);
 }
 
 unique_ptr<Expression> TransformColumnRef(ColumnRef *root) {
@@ -549,15 +514,24 @@ unique_ptr<Expression> TransformAExpr(A_Expr *root) {
 }
 
 unique_ptr<Expression> TransformFuncCall(FuncCall *root) {
-	string fun_name = StringUtil::Lower(
-	    (reinterpret_cast<value *>(root->funcname->head->data.ptr_value))
-	        ->val.str);
-
-	if (!IsAggregateFunction(fun_name)) {
-		// Normal functions (i.e. built-in functions or UDFs)
-		fun_name =
-		    (reinterpret_cast<value *>(root->funcname->tail->data.ptr_value))
+	auto name = root->funcname;
+	string schema, function_name;
+	if (name->length == 2) {
+		// schema + name
+		schema = reinterpret_cast<value *>(name->head->data.ptr_value)->val.str;
+		function_name =
+		    reinterpret_cast<value *>(name->head->next->data.ptr_value)
 		        ->val.str;
+	} else {
+		// unqualified name
+		schema = DEFAULT_SCHEMA;
+		function_name =
+		    reinterpret_cast<value *>(name->head->data.ptr_value)->val.str;
+	}
+
+	auto lowercase_name = StringUtil::Lower(function_name);
+	if (!IsAggregateFunction(lowercase_name)) {
+		// Normal functions (i.e. built-in functions or UDFs)
 		vector<unique_ptr<Expression>> children;
 		if (root->args != nullptr) {
 			for (auto node = root->args->head; node != nullptr;
@@ -567,10 +541,12 @@ unique_ptr<Expression> TransformFuncCall(FuncCall *root) {
 				children.push_back(move(child_expr));
 			}
 		}
-		return make_unique<FunctionExpression>(fun_name.c_str(), children);
+		return make_unique<FunctionExpression>(schema, function_name.c_str(),
+		                                       children);
 	} else {
 		// Aggregate function
-		auto agg_fun_type = StringToExpressionType("AGGREGATE_" + fun_name);
+		auto agg_fun_type =
+		    StringToExpressionType("AGGREGATE_" + function_name);
 		if (root->agg_star) {
 			return make_unique<AggregateExpression>(
 			    agg_fun_type, false, make_unique<StarExpression>());

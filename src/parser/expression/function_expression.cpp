@@ -7,10 +7,11 @@
 using namespace duckdb;
 using namespace std;
 
-FunctionExpression::FunctionExpression(std::string func_name,
+FunctionExpression::FunctionExpression(std::string schema,
+                                       std::string function_name,
                                        vector<unique_ptr<Expression>> &children)
-    : Expression(ExpressionType::FUNCTION),
-      func_name(StringUtil::Lower(func_name)) {
+    : Expression(ExpressionType::FUNCTION), schema(schema),
+      function_name(StringUtil::Lower(function_name)) {
 	for (auto &child : children) {
 		AddChild(move(child));
 	}
@@ -18,7 +19,7 @@ FunctionExpression::FunctionExpression(std::string func_name,
 
 void FunctionExpression::ResolveType() {
 	Expression::ResolveType();
-	if (func_name == "abs") {
+	if (function_name == "abs") {
 		return_type = children[0]->return_type;
 	}
 }
@@ -28,19 +29,19 @@ unique_ptr<Expression> FunctionExpression::Copy() {
 	for (auto &child : children) {
 		copy_children.push_back(child->Copy());
 	}
-	auto copy = make_unique<FunctionExpression>(func_name, copy_children);
+	auto copy = make_unique<FunctionExpression>(function_name, copy_children);
 	copy->CopyProperties(*this);
 	return copy;
 }
 
 void FunctionExpression::Serialize(Serializer &serializer) {
 	Expression::Serialize(serializer);
-	serializer.WriteString(func_name);
+	serializer.WriteString(function_name);
 }
 
 unique_ptr<Expression>
 FunctionExpression::Deserialize(ExpressionDeserializeInformation *info,
                                 Deserializer &source) {
-	auto func_name = source.Read<string>();
-	return make_unique<FunctionExpression>(func_name, info->children);
+	auto function_name = source.Read<string>();
+	return make_unique<FunctionExpression>(function_name, info->children);
 }
