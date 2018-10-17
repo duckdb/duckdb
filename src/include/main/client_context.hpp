@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include "common/allocator.hpp"
+
 #include "main/query_profiler.hpp"
 
 #include "transaction/transaction_context.hpp"
@@ -25,6 +27,8 @@ class ClientContext {
 
 	Transaction &ActiveTransaction() { return transaction.ActiveTransaction(); }
 
+	//! The allocator that holds any allocations made in the Query Context
+	Allocator allocator;
 	//! Query profiler
 	QueryProfiler profiler;
 	//! The database that this client is connected to

@@ -2,6 +2,8 @@
 #include "catalog/catalog.hpp"
 #include "common/exception.hpp"
 
+#include "parser/expression/function_expression.hpp"
+
 #include "storage/storage_manager.hpp"
 
 using namespace duckdb;
@@ -72,4 +74,17 @@ TableCatalogEntry *Catalog::GetTable(Transaction &transaction,
                                      const string &table_name) {
 	auto schema = GetSchema(transaction, schema_name);
 	return schema->GetTable(transaction, table_name);
+}
+
+void Catalog::CreateTableFunction(Transaction &transaction,
+                                  CreateTableFunctionInformation *info) {
+	auto schema = GetSchema(transaction, info->schema);
+	schema->CreateTableFunction(transaction, info);
+}
+
+TableFunctionCatalogEntry *
+Catalog::GetTableFunction(Transaction &transaction,
+                          FunctionExpression *expression) {
+	auto schema = GetSchema(transaction, expression->schema);
+	return schema->GetTableFunction(transaction, expression);
 }

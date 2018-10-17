@@ -14,6 +14,8 @@
 #include <unordered_map>
 
 #include "catalog/catalog_entry/table_catalog_entry.hpp"
+#include "catalog/catalog_entry/table_function_catalog_entry.hpp"
+
 #include "catalog/catalog_entry.hpp"
 #include "catalog/catalog_set.hpp"
 
@@ -40,6 +42,16 @@ class SchemaCatalogEntry : public CatalogEntry {
 	//! Drops a table with the given name
 	void DropTable(Transaction &transaction, DropTableInformation *info);
 
+	//! Gets a table function matching the given function expression
+	TableFunctionCatalogEntry *GetTableFunction(Transaction &transaction,
+	                                            FunctionExpression *expression);
+	//! Create a table function within the given schema
+	void CreateTableFunction(Transaction &transaction,
+	                         CreateTableFunctionInformation *info);
+	//! Drops a table function within the given schema
+	void DropTableFunction(Transaction &transaction,
+	                       DropTableFunctionInformation *info);
+
 	//! Returns true if other objects depend on this object
 	virtual bool HasDependents(Transaction &transaction);
 	//! Function that drops all dependents (used for Cascade)
@@ -48,5 +60,7 @@ class SchemaCatalogEntry : public CatalogEntry {
   private:
 	//! The catalog set holding the tables
 	CatalogSet tables;
+	//! The catalog set holding the table functions
+	CatalogSet table_functions;
 };
 } // namespace duckdb

@@ -1,0 +1,3 @@
+
+add_library(duckdb_table_function OBJECT pragma_table_info.cpp)
+set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_table_function> PARENT_SCOPE)

@@ -45,8 +45,6 @@ class TableCatalogEntry : public CatalogEntry {
 	//! A map of column name to column index
 	std::unordered_map<std::string, column_t> name_map;
 
-	//! Adds a column to this table
-	// void AddColumn(ColumnDefinition entry);
 	//! Returns whether or not a column with the given name exists
 	bool ColumnExists(const std::string &name);
 	//! Returns the statistics of the oid-th column. Throws an exception if the

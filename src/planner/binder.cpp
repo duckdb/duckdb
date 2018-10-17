@@ -270,7 +270,7 @@ void Binder::Visit(UpdateStatement &stmt) {
 void Binder::Visit(CreateTableStatement &stmt) {
 	// bind any constraints
 	// first create a fake table
-	bind_context->AddDummyTable(stmt.info->columns);
+	bind_context->AddDummyTable(stmt.info->table, stmt.info->columns);
 	for (auto &it : stmt.info->constraints) {
 		it->Accept(this);
 	}
@@ -298,8 +298,8 @@ void Binder::Visit(ColumnRefExpression &expr) {
 	// individual column reference
 	// resolve to either a base table or a subquery expression
 	if (expr.table_name.empty()) {
-		// no table name: find a table or subquery that contains this
-		expr.table_name = bind_context->GetMatchingTable(expr.column_name);
+		// no table name: find a binding that contains this
+		expr.table_name = bind_context->GetMatchingBinding(expr.column_name);
 	}
 	bind_context->BindColumn(expr);
 }
@@ -351,7 +351,10 @@ void Binder::Visit(SubqueryRef &expr) {
 }
 
 void Binder::Visit(TableFunction &expr) {
-	// auto &function_definition = *((FunctionExpression*) expr.expression.get());
-	// auto function = context.db.catalog.GetTableFunction(function_definition);
-	// bind_context->AddTableFunction(expr.alias.empty() ? function_definition.name : expr.alias, function);
+	auto function_definition = (FunctionExpression *)expr.function.get();
+	auto function = context.db.catalog.GetTableFunction(
+	    context.ActiveTransaction(), function_definition);
+	bind_context->AddTableFunction(
+	    expr.alias.empty() ? function_definition->function_name : expr.alias,
+	    function);
 }

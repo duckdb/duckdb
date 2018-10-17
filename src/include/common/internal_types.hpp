@@ -247,6 +247,7 @@ enum class CatalogType : uint8_t {
 	INVALID = 0,
 	TABLE = 1,
 	SCHEMA = 2,
+	TABLE_FUNCTION = 3,
 	DELETED_ENTRY = 10
 };
 

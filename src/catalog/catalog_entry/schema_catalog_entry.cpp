@@ -1,8 +1,10 @@
 
-#include "catalog/catalog.hpp"
 #include "catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "catalog/catalog.hpp"
 
 #include "common/exception.hpp"
+
+#include "parser/expression/function_expression.hpp"
 
 #include <algorithm>
 
@@ -14,9 +16,9 @@ SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name)
 
 void SchemaCatalogEntry::CreateTable(Transaction &transaction,
                                      CreateTableInformation *info) {
-	auto table = new TableCatalogEntry(catalog, this, info);
-	auto table_entry = unique_ptr<CatalogEntry>(table);
-	if (!tables.CreateEntry(transaction, info->table, move(table_entry))) {
+	auto table =
+	    make_unique_base<CatalogEntry, TableCatalogEntry>(catalog, this, info);
+	if (!tables.CreateEntry(transaction, info->table, move(table))) {
 		if (!info->if_not_exists) {
 			throw CatalogException("Table with name \"%s\" already exists!",
 			                       info->table.c_str());
@@ -49,10 +51,71 @@ TableCatalogEntry *SchemaCatalogEntry::GetTable(Transaction &transaction,
 	return (TableCatalogEntry *)entry;
 }
 
+TableFunctionCatalogEntry *
+SchemaCatalogEntry::GetTableFunction(Transaction &transaction,
+                                     FunctionExpression *expression) {
+	auto entry =
+	    table_functions.GetEntry(transaction, expression->function_name);
+	if (!entry) {
+		throw CatalogException("Table Function with name %s does not exist!",
+		                       expression->function_name.c_str());
+	}
+	auto function_entry = (TableFunctionCatalogEntry *)entry;
+	// check if the argument lengths match
+	if (expression->children.size() != function_entry->arguments.size()) {
+		throw CatalogException(
+		    "Function with name %s exists, but argument length does not match! "
+		    "Expected %d arguments but got %d.",
+		    expression->function_name.c_str(),
+		    (int)function_entry->arguments.size(),
+		    (int)expression->children.size());
+	}
+	return function_entry;
+}
+
+void SchemaCatalogEntry::CreateTableFunction(
+    Transaction &transaction, CreateTableFunctionInformation *info) {
+	auto table_function =
+	    make_unique_base<CatalogEntry, TableFunctionCatalogEntry>(catalog, this,
+	                                                              info);
+	if (!table_functions.CreateEntry(transaction, info->name,
+	                                 move(table_function))) {
+		if (!info->or_replace) {
+			throw CatalogException(
+			    "Table function with name \"%s\" already exists!",
+			    info->name.c_str());
+		} else {
+			// function already exists: replace it
+			if (!table_functions.DropEntry(transaction, info->name, false)) {
+				throw CatalogException("CREATE OR REPLACE was specified, but "
+				                       "function could not be dropped!");
+			}
+			if (!table_functions.CreateEntry(transaction, info->name,
+			                                 move(table_function))) {
+				throw CatalogException(
+				    "Error in recreating function in CREATE OR REPLACE");
+			}
+		}
+	}
+}
+
+void SchemaCatalogEntry::DropTableFunction(Transaction &transaction,
+                                           DropTableFunctionInformation *info) {
+	if (!table_functions.DropEntry(transaction, info->name, info->cascade)) {
+		if (!info->if_exists) {
+			throw CatalogException(
+			    "Table function with name \"%s\" does not exist!",
+			    info->name.c_str());
+		}
+	}
+}
+
 bool SchemaCatalogEntry::HasDependents(Transaction &transaction) {
-	return !tables.IsEmpty(transaction);
+	return !tables.IsEmpty(transaction) ||
+	       !table_functions.IsEmpty(transaction);
 }
 
 void SchemaCatalogEntry::DropDependents(Transaction &transaction) {
 	tables.DropAllEntries(transaction);
+	table_functions.DropAllEntries(transaction);
 }

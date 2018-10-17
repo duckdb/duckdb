@@ -3,8 +3,8 @@
 
 #include "common/exception.hpp"
 
-#include "catalog/catalog_entry/list.hpp"
 #include "catalog/catalog_entry.hpp"
+#include "catalog/catalog_entry/list.hpp"
 #include "catalog/catalog_set.hpp"
 
 #include "storage/data_table.hpp"

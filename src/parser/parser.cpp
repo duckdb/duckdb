@@ -114,7 +114,7 @@ bool Parser::ParsePragma(std::string &query) {
 			throw ParserException(
 			    "Invalid PRAGMA table_info: expected table name");
 		}
-		ParseQuery("SELECT * FROM " + query.substr(keyword_start));
+		ParseQuery("SELECT * FROM pragma_" + query.substr(keyword_start));
 	} else {
 		throw ParserException("Unrecognized PRAGMA keyword: %s",
 		                      keyword.c_str());

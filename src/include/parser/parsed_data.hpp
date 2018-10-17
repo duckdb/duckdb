@@ -12,6 +12,8 @@
 
 #include "common/internal_types.hpp"
 
+#include "function/function.hpp"
+
 #include "parser/column_definition.hpp"
 
 namespace duckdb {
@@ -70,6 +72,43 @@ struct DropSchemaInformation {
 	bool cascade = false;
 
 	DropSchemaInformation() : if_exists(false), cascade(false) {}
+};
+
+struct CreateTableFunctionInformation {
+	//! Schema name
+	std::string schema;
+	//! Function name
+	std::string name;
+	//! Replace function if it already exists instead of failing
+	bool or_replace = false;
+	//! List of return columns
+	std::vector<ColumnDefinition> return_values;
+	//! Input arguments
+	std::vector<TypeId> arguments;
+	//! Initialize function pointer
+	table_function_init_t init;
+	//! The function pointer
+	table_function_t function;
+	//! Final function pointer
+	table_function_final_t final;
+
+	CreateTableFunctionInformation()
+	    : schema(DEFAULT_SCHEMA), or_replace(false) {}
+};
+
+struct DropTableFunctionInformation {
+	//! Schema name to drop from
+	std::string schema;
+	//! Table function name to drop
+	std::string name;
+	//! Ignore if the entry does not exist instead of failing
+	bool if_exists = false;
+	//! Cascade drop (drop all dependents instead of throwing an error if there
+	//! are any)
+	bool cascade = false;
+
+	DropTableFunctionInformation()
+	    : schema(DEFAULT_SCHEMA), if_exists(false), cascade(false) {}
 };
 
 } // namespace duckdb

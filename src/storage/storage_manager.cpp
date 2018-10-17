@@ -4,6 +4,8 @@
 #include "common/exception.hpp"
 #include "common/file_system.hpp"
 
+#include "function/function.hpp"
+
 #include "main/database.hpp"
 
 #include "storage/storage_manager.hpp"
@@ -26,8 +28,12 @@ void StorageManager::Initialize() {
 	// create the default schema
 	CreateSchemaInformation info;
 	info.schema = DEFAULT_SCHEMA;
-
 	database.catalog.CreateSchema(*transaction, &info);
+
+	// initialize default functions
+	BuiltinFunctions::Initialize(*transaction, database.catalog);
+
+	// commit transactions
 	database.transaction_manager.CommitTransaction(transaction);
 
 	if (!in_memory) {

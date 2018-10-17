@@ -330,7 +330,7 @@ void LogicalPlanGenerator::Visit(BaseTableRef &expr) {
 	                                         expr.schema_name, expr.table_name);
 	auto alias = expr.alias.empty() ? expr.table_name : expr.alias;
 
-	auto index = bind_context.GetTableIndex(alias);
+	auto index = bind_context.GetBindingIndex(alias);
 
 	std::vector<column_t> column_ids;
 	// look in the context for this table which columns are required
@@ -406,7 +406,7 @@ void LogicalPlanGenerator::Visit(SubqueryRef &expr) {
 	size_t column_count = expr.subquery->select_list.size();
 	expr.subquery->Accept(&generator);
 
-	auto index = bind_context.GetSubqueryIndex(expr.alias);
+	auto index = bind_context.GetBindingIndex(expr.alias);
 
 	if (root) {
 		throw Exception("Subquery cannot have children");

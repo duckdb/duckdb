@@ -81,6 +81,8 @@ DuckDBConnection::GetQueryResult(ClientContext &context, std::string query) {
 		result->error = "UNHANDLED EXCEPTION TYPE THROWN IN PLANNER!";
 	}
 	context.profiler.EndQuery();
+	// destroy any data held in the query allocator
+	context.allocator.Destroy();
 	return result;
 }
 
