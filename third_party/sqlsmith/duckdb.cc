@@ -54,8 +54,8 @@ extern "C" int column_callback(void *arg, int argc, char **argv,
 
 sqlite_connection::sqlite_connection(std::string &conninfo) {
 	// assert(sqlite3_libversion_number() == SQLITE_VERSION_NUMBER);
-	// assert(strcmp(sqlite3_sourceid(), SQLITE_SOURCE_ID) == 0);
-	// assert(strcmp(sqlite3_libversion(), SQLITE_VERSION) == 0);
+	assert(strcmp(sqlite3_sourceid(), SQLITE_SOURCE_ID) == 0);
+	assert(strcmp(sqlite3_libversion(), SQLITE_VERSION) == 0);
 	rc = sqlite3_open(conninfo.c_str(), &db);
 	if (rc) {
 		throw std::runtime_error(sqlite3_errmsg(db));

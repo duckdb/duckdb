@@ -33,7 +33,7 @@ class Parser {
 	//! whether or not the parsing was successful. If the parsing was
 	//! successful, the parsed statements will be stored in the statements
 	//! variable.
-	bool ParseQuery(const char *query);
+	bool ParseQuery(std::string query);
 
 	//! Returns whether or not the parsing was successful.
 	bool GetSuccess() const { return success; }
@@ -52,5 +52,8 @@ class Parser {
 	bool TransformList(postgres::List *tree);
 	//! Transform a single Postgres parse node into a SQL Statement.
 	std::unique_ptr<SQLStatement> TransformNode(postgres::Node *stmt);
+	//! Attempts to parse a PRAGMA statement, returns true if successfully
+	//! parsed
+	bool ParsePragma(std::string &query);
 };
 } // namespace duckdb

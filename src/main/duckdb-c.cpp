@@ -183,6 +183,7 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query,
 			out->error_message = (char *)malloc(error.size() + 1);
 			strcpy(out->error_message, error.c_str());
 		}
+		result->Print();
 		return DuckDBError;
 	}
 	// construct the C result from the C++ result
