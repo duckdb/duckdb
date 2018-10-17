@@ -206,10 +206,14 @@ void PhysicalPlanGenerator::Visit(LogicalInsert &op) {
 	this->plan = move(insertion);
 }
 
-void PhysicalPlanGenerator::Visit(SubqueryExpression &expr) {
-	PhysicalPlanGenerator generator(context, this);
-	generator.CreatePlan(move(expr.op));
-	expr.plan = move(generator.plan);
+void PhysicalPlanGenerator::Visit(LogicalTableFunction &op) {
+	LogicalOperatorVisitor::Visit(op);
+
+	if (plan) {
+		throw Exception("Table function has to be first node of the plan!");
+	}
+	this->plan =
+	    make_unique<PhysicalTableFunction>(op.function, move(op.function_call));
 }
 
 void PhysicalPlanGenerator::Visit(LogicalCopy &op) {
@@ -280,4 +284,10 @@ void PhysicalPlanGenerator::Visit(LogicalUnion &op) {
 		throw Exception("Type mismatch for UNION");
 	}
 	plan = make_unique<PhysicalUnion>(move(top), move(bottom));
+}
+
+void PhysicalPlanGenerator::Visit(SubqueryExpression &expr) {
+	PhysicalPlanGenerator generator(context, this);
+	generator.CreatePlan(move(expr.op));
+	expr.plan = move(generator.plan);
 }

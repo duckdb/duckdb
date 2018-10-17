@@ -340,6 +340,7 @@ enum class LogicalOperatorType : uint8_t {
 	ORDER_BY,
 	COPY,
 	SUBQUERY,
+	TABLE_FUNCTION,
 	// -----------------------------
 	// Joins
 	// -----------------------------
@@ -386,6 +387,7 @@ enum class PhysicalOperatorType : uint8_t {
 	PROJECTION,
 	BASE_GROUP_BY,
 	COPY,
+	TABLE_FUNCTION,
 	// -----------------------------
 	// Joins
 	// -----------------------------

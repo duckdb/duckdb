@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// execution/physical_hash_aggregate.hpp
+// execution/operator/physical_hash_aggregate.hpp
 //
 // Author: Mark Raasveldt
 //

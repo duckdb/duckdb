@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// execution/physical_table_scan.hpp
+// execution/operator/physical_table_scan.hpp
 //
 // Author: Mark Raasveldt
 //

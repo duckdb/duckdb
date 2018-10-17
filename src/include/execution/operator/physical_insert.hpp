@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// execution/physical_insert.hpp
+// execution/operator/physical_insert.hpp
 //
 // Author: Hannes Mühleisen & Mark Raasveldt
 //

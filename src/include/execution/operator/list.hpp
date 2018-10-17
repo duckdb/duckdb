@@ -11,6 +11,7 @@
 #include "execution/operator/physical_nested_loop_join.hpp"
 #include "execution/operator/physical_order.hpp"
 #include "execution/operator/physical_projection.hpp"
+#include "execution/operator/physical_table_function.hpp"
 #include "execution/operator/physical_table_scan.hpp"
 #include "execution/operator/physical_union.hpp"
 #include "execution/operator/physical_update.hpp"

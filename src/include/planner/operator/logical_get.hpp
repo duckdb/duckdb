@@ -18,9 +18,9 @@ namespace duckdb {
 class LogicalGet : public LogicalOperator {
   public:
 	LogicalGet() : LogicalOperator(LogicalOperatorType::GET), table(nullptr) {}
-	LogicalGet(TableCatalogEntry *table, std::string alias, size_t table_index,
+	LogicalGet(TableCatalogEntry *table, size_t table_index,
 	           std::vector<column_t> column_ids)
-	    : LogicalOperator(LogicalOperatorType::GET), table(table), alias(alias),
+	    : LogicalOperator(LogicalOperatorType::GET), table(table),
 	      table_index(table_index), column_ids(column_ids) {
 		referenced_tables.insert(table_index);
 	}
@@ -29,19 +29,16 @@ class LogicalGet : public LogicalOperator {
 
 	//! The base table to retrieve data from
 	TableCatalogEntry *table;
-	std::string alias;
 	//! The table index in the current bind context
 	size_t table_index;
+	//! Bound column IDs
 	std::vector<column_t> column_ids;
 
 	virtual std::string ParamsToString() const override {
 		if (!table) {
 			return "";
 		}
-		if (table->name == alias) {
-			return "(" + alias + ")";
-		}
-		return "(" + table->name + " -> " + alias + ")";
+		return "(" + table->name + ")";
 	}
 };
 } // namespace duckdb

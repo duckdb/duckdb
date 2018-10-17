@@ -26,6 +26,10 @@ void LogicalOperatorVisitor::Visit(LogicalCrossProduct &op) {
 
 void LogicalOperatorVisitor::Visit(LogicalSubquery &op) { VisitOperator(op); }
 
+void LogicalOperatorVisitor::Visit(LogicalTableFunction &op) {
+	VisitOperator(op);
+}
+
 void LogicalOperatorVisitor::Visit(LogicalDelete &op) {
 	VisitOperator(op);
 	for (auto &exp : op.expressions) {

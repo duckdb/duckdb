@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// execution/physical_limit.hpp
+// execution/operator/physical_limit.hpp
 //
 // Author: Mark Raasveldt
 //

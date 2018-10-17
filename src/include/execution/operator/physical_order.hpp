@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// execution/physical_order.hpp
+// execution/operator/physical_order.hpp
 //
 // Author: Mark Raasveldt
 //

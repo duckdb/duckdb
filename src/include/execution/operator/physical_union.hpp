@@ -1,3 +1,13 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// execution/operator/physical_union.hpp
+//
+// Author: Hannes Mühleisen
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "execution/physical_operator.hpp"

@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// execution/physical_cross_product.hpp
+// execution/operator/physical_cross_product.hpp
 //
 // Author: Mark Raasveldt
 //

@@ -13,5 +13,6 @@
 #include "planner/operator/logical_order.hpp"
 #include "planner/operator/logical_projection.hpp"
 #include "planner/operator/logical_subquery.hpp"
+#include "planner/operator/logical_table_function.hpp"
 #include "planner/operator/logical_union.hpp"
 #include "planner/operator/logical_update.hpp"

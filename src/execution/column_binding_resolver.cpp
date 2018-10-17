@@ -80,6 +80,17 @@ void ColumnBindingResolver::Visit(LogicalSubquery &op) {
 	bound_tables.push_back(binding);
 }
 
+void ColumnBindingResolver::Visit(LogicalTableFunction &op) {
+	BoundTable binding;
+	binding.table_index = op.table_index;
+	binding.column_count = op.function->return_values.size();
+	binding.column_offset = bound_tables.size() == 0
+	                            ? 0
+	                            : bound_tables.back().column_offset +
+	                                  bound_tables.back().column_count;
+	bound_tables.push_back(binding);
+}
+
 void ColumnBindingResolver::Visit(LogicalJoin &op) {
 	// resolve the column indices of the left side
 	op.children[0]->Accept(this);

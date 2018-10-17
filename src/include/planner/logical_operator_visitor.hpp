@@ -31,6 +31,7 @@ class LogicalExplain;
 class LogicalUnion;
 class LogicalSubquery;
 class LogicalUpdate;
+class LogicalTableFunction;
 
 //! The LogicalOperatorVisitor is an abstract base class that implements the
 //! Visitor pattern on LogicalOperator.
@@ -57,5 +58,6 @@ class LogicalOperatorVisitor : public SQLNodeVisitor {
 	virtual void Visit(LogicalExplain &op);
 	virtual void Visit(LogicalUnion &op);
 	virtual void Visit(LogicalUpdate &op);
+	virtual void Visit(LogicalTableFunction &op);
 };
 } // namespace duckdb

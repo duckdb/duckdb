@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// execution/physical_nested_loop_join.hpp
+// execution/operator/physical_nested_loop_join.hpp
 //
 // Author: Mark Raasveldt
 //

@@ -326,6 +326,7 @@ void LogicalPlanGenerator::Visit(SubqueryExpression &expr) {
 }
 
 void LogicalPlanGenerator::Visit(BaseTableRef &expr) {
+	// FIXME: catalog access should only happen once in binder
 	auto table = context.db.catalog.GetTable(context.ActiveTransaction(),
 	                                         expr.schema_name, expr.table_name);
 	auto alias = expr.alias.empty() ? expr.table_name : expr.alias;
@@ -344,7 +345,7 @@ void LogicalPlanGenerator::Visit(BaseTableRef &expr) {
 		column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	}
 
-	auto get_table = make_unique<LogicalGet>(table, alias, index, column_ids);
+	auto get_table = make_unique<LogicalGet>(table, index, column_ids);
 	if (root) {
 		get_table->AddChild(move(root));
 	}
@@ -401,6 +402,8 @@ void LogicalPlanGenerator::Visit(JoinRef &expr) {
 }
 
 void LogicalPlanGenerator::Visit(SubqueryRef &expr) {
+	// generate the logical plan for the subquery
+	// this happens separately from the current LogicalPlan generation
 	LogicalPlanGenerator generator(context, *expr.context);
 
 	size_t column_count = expr.subquery->select_list.size();
@@ -419,7 +422,19 @@ void LogicalPlanGenerator::Visit(SubqueryRef &expr) {
 }
 
 void LogicalPlanGenerator::Visit(TableFunction &expr) {
-	throw NotImplementedException("Cannot plan TableFunction yet!");
+	// FIXME: catalog access should only happen once in binder
+	auto function_definition = (FunctionExpression *)expr.function.get();
+	auto function = context.db.catalog.GetTableFunction(
+	    context.ActiveTransaction(), function_definition);
+
+	auto index = bind_context.GetBindingIndex(
+	    expr.alias.empty() ? function_definition->function_name : expr.alias);
+
+	if (root) {
+		throw Exception("Table function cannot have children");
+	}
+	root =
+	    make_unique<LogicalTableFunction>(function, index, move(expr.function));
 }
 
 void LogicalPlanGenerator::Visit(InsertStatement &statement) {

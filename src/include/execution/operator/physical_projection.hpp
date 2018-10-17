@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// execution/physical_projection.hpp
+// execution/operator/physical_projection.hpp
 //
 // Author: Mark Raasveldt
 //

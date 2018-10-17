@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// execution/operation/physical_copy.hpp
+// execution/operator/physical_copy.hpp
 //
 // Author: Pedro Holanda
 //

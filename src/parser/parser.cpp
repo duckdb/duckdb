@@ -93,6 +93,8 @@ bool Parser::ParsePragma(std::string &query) {
 		throw ParserException("Invalid PRAGMA: PRAGMA without keyword");
 	}
 
+	string keyword = query.substr(keyword_start, pos - keyword_start);
+
 	while (isspace(query_cstr[pos]))
 		pos++;
 
@@ -108,7 +110,6 @@ bool Parser::ParsePragma(std::string &query) {
 		type = PragmaType::NOTHING;
 	}
 
-	string keyword = query.substr(keyword_start, pos - keyword_start);
 	if (keyword == "table_info") {
 		if (type != PragmaType::CALL) {
 			throw ParserException(

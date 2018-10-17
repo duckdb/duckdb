@@ -36,6 +36,7 @@ class ColumnBindingResolver : public LogicalOperatorVisitor {
 	void Visit(LogicalGet &op);
 	void Visit(LogicalJoin &op);
 	void Visit(LogicalSubquery &op);
+	void Visit(LogicalTableFunction &op);
 
 	void Visit(ColumnRefExpression &expr);
 	void Visit(SubqueryExpression &expr);
