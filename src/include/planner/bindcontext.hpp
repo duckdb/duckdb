@@ -34,6 +34,7 @@ enum class BindingType : uint8_t {
 
 struct Binding {
 	Binding(BindingType type, size_t index) : type(type), index(index) {}
+	virtual ~Binding() {}
 
 	BindingType type;
 	size_t index;
@@ -48,6 +49,7 @@ struct DummyTableBinding : public Binding {
 			bound_columns[it.name] = &it;
 		}
 	}
+	virtual ~DummyTableBinding() {}
 };
 
 struct TableBinding : public Binding {
@@ -55,6 +57,7 @@ struct TableBinding : public Binding {
 
 	TableBinding(TableCatalogEntry *table, size_t index)
 	    : Binding(BindingType::TABLE, index), table(table) {}
+	virtual ~TableBinding() {}
 };
 
 struct SubqueryBinding : public Binding {
@@ -72,6 +75,7 @@ struct SubqueryBinding : public Binding {
 			names.push_back(name);
 		}
 	}
+	virtual ~SubqueryBinding() {}
 };
 
 struct TableFunctionBinding : public Binding {
