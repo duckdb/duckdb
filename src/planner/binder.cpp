@@ -349,3 +349,7 @@ void Binder::Visit(SubqueryRef &expr) {
 
 	bind_context->AddSubquery(expr.alias, expr.subquery.get());
 }
+
+void Binder::Visit(TableFunction &expr) {
+	throw NotImplementedException("Cannot bind TableFunction yet!");
+}

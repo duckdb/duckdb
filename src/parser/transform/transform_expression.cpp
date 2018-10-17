@@ -150,6 +150,36 @@ unique_ptr<TableRef> TransformRangeSubselect(RangeSubselect *root) {
 	return move(result);
 }
 
+unique_ptr<TableRef> TransformRangeFunction(RangeFunction *root) {
+	if (root->lateral) {
+		throw NotImplementedException("LATERAL not implemented");
+	}
+	if (root->ordinality) {
+		throw NotImplementedException("WITH ORDINALITY not implemented");
+	}
+	if (root->is_rowsfrom) {
+		throw NotImplementedException("ROWS FROM() not implemented");
+	}
+	if (root->functions->length != 1) {
+		throw NotImplementedException("Need exactly one function");
+	}
+	auto function_sublist = (List *)root->functions->head->data.ptr_value;
+	assert(function_sublist->length == 2);
+	auto call_tree = (Node *)function_sublist->head->data.ptr_value;
+	auto coldef = function_sublist->head->next->data.ptr_value;
+
+	assert(call_tree->type == T_FuncCall);
+	if (coldef) {
+		throw NotImplementedException(
+		    "Explicit column definition not supported yet");
+	}
+	// transform the function call
+	auto result = make_unique<TableFunction>();
+	result->function = TransformFuncCall((FuncCall *)call_tree);
+	result->alias = TransformAlias(root->alias);
+	return result;
+}
+
 unique_ptr<TableRef> TransformJoin(JoinExpr *root) {
 	auto result = make_unique<JoinRef>();
 	switch (root->jointype) {
@@ -277,15 +307,14 @@ unique_ptr<TableRef> TransformFrom(List *root) {
 
 	Node *n = reinterpret_cast<Node *>(root->head->data.ptr_value);
 	switch (n->type) {
-	case T_RangeVar: {
+	case T_RangeVar:
 		return TransformRangeVar(reinterpret_cast<RangeVar *>(n));
-	}
-	case T_JoinExpr: {
+	case T_JoinExpr:
 		return TransformJoin(reinterpret_cast<JoinExpr *>(n));
-	}
-	case T_RangeSubselect: {
+	case T_RangeSubselect:
 		return TransformRangeSubselect(reinterpret_cast<RangeSubselect *>(n));
-	}
+	case T_RangeFunction:
+		return TransformRangeFunction(reinterpret_cast<RangeFunction *>(n));
 	default: {
 		throw NotImplementedException("From Type %d not supported yet...",
 		                              n->type);

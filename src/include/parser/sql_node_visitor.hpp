@@ -46,6 +46,7 @@ class CrossProductRef;
 class JoinRef;
 class SubqueryRef;
 class TableRef;
+class TableFunction;
 //! The SQLNodeVisitor is an abstract base class that implements the Visitor
 //! pattern on Expression and SQLStatement. It will visit nodes
 //! recursively and call the Visit expression corresponding to the expression
@@ -87,5 +88,6 @@ class SQLNodeVisitor {
 	virtual void Visit(CrossProductRef &expr);
 	virtual void Visit(JoinRef &expr);
 	virtual void Visit(SubqueryRef &expr);
+	virtual void Visit(TableFunction &expr);
 };
 } // namespace duckdb

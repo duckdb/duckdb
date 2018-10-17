@@ -48,6 +48,8 @@ class Binder : public SQLNodeVisitor {
 	void Visit(CrossProductRef &expr);
 	void Visit(JoinRef &expr);
 	void Visit(SubqueryRef &expr);
+	void Visit(TableFunction &expr);
+
 	//! The BindContext created and used by the Binder.
 	std::unique_ptr<BindContext> bind_context;
 

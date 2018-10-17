@@ -48,6 +48,7 @@ class LogicalPlanGenerator : public SQLNodeVisitor {
 	void Visit(CrossProductRef &expr);
 	void Visit(JoinRef &expr);
 	void Visit(SubqueryRef &expr);
+	void Visit(TableFunction &expr);
 
 	void Print() { root->Print(); }
 

@@ -418,6 +418,10 @@ void LogicalPlanGenerator::Visit(SubqueryRef &expr) {
 	root->children.push_back(move(generator.root));
 }
 
+void LogicalPlanGenerator::Visit(TableFunction &expr) {
+	throw NotImplementedException("Cannot plan TableFunction yet!");
+}
+
 void LogicalPlanGenerator::Visit(InsertStatement &statement) {
 	auto table = context.db.catalog.GetTable(context.ActiveTransaction(),
 	                                         statement.schema, statement.table);

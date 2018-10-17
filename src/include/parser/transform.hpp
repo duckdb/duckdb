@@ -60,6 +60,8 @@ std::unique_ptr<TableRef> TransformFrom(postgres::List *root);
 std::unique_ptr<Expression> TransformConstant(postgres::A_Const *c);
 //! Transform a Postgres table reference into an Expression
 std::unique_ptr<TableRef> TransformRangeVar(postgres::RangeVar *root);
+//! Transform a Postgres table-producing function into a TableRef
+std::unique_ptr<TableRef> TransformRangeFunction(postgres::RangeFunction *root);
 
 //! Transform a Postgres TypeName string into a TypeId
 TypeId TransformStringToTypeId(char *str);

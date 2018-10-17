@@ -63,3 +63,4 @@ void SQLNodeVisitor::Visit(JoinRef &expr) {
 }
 
 void SQLNodeVisitor::Visit(SubqueryRef &expr) {}
+void SQLNodeVisitor::Visit(TableFunction &expr) {}

@@ -195,6 +195,17 @@ typedef struct RangeSubselect {
 	Alias *alias;   /* table alias & optional column aliases */
 } RangeSubselect;
 
+typedef struct RangeFunction {
+	NodeTag type;
+	bool lateral;     /* does it have LATERAL prefix? */
+	bool ordinality;  /* does it have WITH ORDINALITY suffix? */
+	bool is_rowsfrom; /* is result of ROWS FROM() syntax? */
+	List *functions;  /* per-function information, see above */
+	Alias *alias;     /* table alias & optional column aliases */
+	List *coldeflist; /* list of ColumnDef nodes to describe result
+	                   * of function returning RECORD */
+} RangeFunction;
+
 typedef struct RangeVar {
 	NodeTag type;
 	char *catalogname;   /* the catalog (database) name, or NULL */

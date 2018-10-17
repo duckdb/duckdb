@@ -129,7 +129,7 @@ schema_sqlite::schema_sqlite(std::string &conninfo, bool no_catalog)
 		register_operator(o);                                                  \
 	} while (0)
 
-	BINOP(||, TEXT);
+	// BINOP(||, TEXT);
 	BINOP(*, INTEGER);
 	BINOP(/, INTEGER);
 
@@ -261,7 +261,7 @@ schema_sqlite::schema_sqlite(std::string &conninfo, bool no_catalog)
 }
 
 dut_sqlite::dut_sqlite(std::string &conninfo) : sqlite_connection(conninfo) {
-	//q("PRAGMA main.auto_vacuum = 2");
+	// q("PRAGMA main.auto_vacuum = 2");
 }
 
 extern "C" int dut_callback(void *arg, int argc, char **argv,
