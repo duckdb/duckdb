@@ -9,7 +9,7 @@ using namespace duckdb;
 using namespace std;
 
 bool CatalogSet::CreateEntry(Transaction &transaction, const string &name,
-                             unique_ptr<AbstractCatalogEntry> value) {
+                             unique_ptr<CatalogEntry> value) {
 	lock_guard<mutex> lock(catalog_lock);
 
 	// first check if the entry exists in the unordered set
@@ -20,15 +20,15 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name,
 		// first create a dummy deleted entry for this entry
 		// so transactions started before the commit of this transaction don't
 		// see it yet
-		auto dummy_node = make_unique<AbstractCatalogEntry>(
-		    CatalogType::INVALID, value->catalog, name);
+		auto dummy_node = make_unique<CatalogEntry>(CatalogType::INVALID,
+		                                            value->catalog, name);
 		dummy_node->timestamp = 0;
 		dummy_node->deleted = true;
 		dummy_node->set = this;
 		data[name] = move(dummy_node);
 	} else {
 		// if it does, we have to check version numbers
-		AbstractCatalogEntry &current = *entry->second;
+		CatalogEntry &current = *entry->second;
 		if (current.timestamp >= TRANSACTION_ID_START &&
 		    current.timestamp != transaction.transaction_id) {
 			// current version has been written to by a currently active
@@ -54,8 +54,8 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name,
 	return true;
 }
 
-bool CatalogSet::DropEntry(Transaction &transaction,
-                           AbstractCatalogEntry &current, bool cascade) {
+bool CatalogSet::DropEntry(Transaction &transaction, CatalogEntry &current,
+                           bool cascade) {
 	if (current.timestamp >= TRANSACTION_ID_START &&
 	    current.timestamp != transaction.transaction_id) {
 		// current version has been written to by a currently active
@@ -80,8 +80,8 @@ bool CatalogSet::DropEntry(Transaction &transaction,
 		}
 	}
 
-	auto value = make_unique<AbstractCatalogEntry>(
-	    CatalogType::DELETED_ENTRY, current.catalog, current.name);
+	auto value = make_unique<CatalogEntry>(CatalogType::DELETED_ENTRY,
+	                                       current.catalog, current.name);
 
 	// create a new entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction
@@ -110,9 +110,8 @@ bool CatalogSet::DropEntry(Transaction &transaction, const string &name,
 	return DropEntry(transaction, *entry->second, cascade);
 }
 
-static AbstractCatalogEntry *
-GetEntryForTransaction(Transaction &transaction,
-                       AbstractCatalogEntry *current) {
+static CatalogEntry *GetEntryForTransaction(Transaction &transaction,
+                                            CatalogEntry *current) {
 	while (current->child) {
 		if (current->timestamp == transaction.transaction_id) {
 			// we created this version
@@ -138,14 +137,14 @@ bool CatalogSet::EntryExists(Transaction &transaction, const string &name) {
 		return false;
 	}
 	// if it does, we have to check version numbers
-	AbstractCatalogEntry *current =
+	CatalogEntry *current =
 	    GetEntryForTransaction(transaction, data[name].get());
 
 	return !current->deleted;
 }
 
-AbstractCatalogEntry *CatalogSet::GetEntry(Transaction &transaction,
-                                           const string &name) {
+CatalogEntry *CatalogSet::GetEntry(Transaction &transaction,
+                                   const string &name) {
 	lock_guard<mutex> lock(catalog_lock);
 
 	auto entry = data.find(name);
@@ -153,7 +152,7 @@ AbstractCatalogEntry *CatalogSet::GetEntry(Transaction &transaction,
 		return nullptr;
 	}
 	// if it does, we have to check version numbers
-	AbstractCatalogEntry *current =
+	CatalogEntry *current =
 	    GetEntryForTransaction(transaction, data[name].get());
 	if (current->deleted) {
 		return nullptr;
@@ -161,7 +160,7 @@ AbstractCatalogEntry *CatalogSet::GetEntry(Transaction &transaction,
 	return current;
 }
 
-void CatalogSet::Undo(AbstractCatalogEntry *entry) {
+void CatalogSet::Undo(CatalogEntry *entry) {
 	lock_guard<mutex> lock(catalog_lock);
 
 	// entry has to be restored

@@ -9,7 +9,7 @@
 
 #include "main/client_context.hpp"
 
-#include "catalog/table_catalog.hpp"
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 
 #include "transaction/transaction.hpp"
 #include "transaction/transaction_manager.hpp"

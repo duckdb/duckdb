@@ -1,6 +1,6 @@
 
-#include "catalog/schema_catalog.hpp"
 #include "catalog/catalog.hpp"
+#include "catalog/catalog_entry/schema_catalog_entry.hpp"
 
 #include "common/exception.hpp"
 
@@ -10,12 +10,12 @@ using namespace duckdb;
 using namespace std;
 
 SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name)
-    : AbstractCatalogEntry(CatalogType::SCHEMA, catalog, name) {}
+    : CatalogEntry(CatalogType::SCHEMA, catalog, name) {}
 
 void SchemaCatalogEntry::CreateTable(Transaction &transaction,
                                      CreateTableInformation *info) {
 	auto table = new TableCatalogEntry(catalog, this, info);
-	auto table_entry = unique_ptr<AbstractCatalogEntry>(table);
+	auto table_entry = unique_ptr<CatalogEntry>(table);
 	if (!tables.CreateEntry(transaction, info->table, move(table_entry))) {
 		if (!info->if_not_exists) {
 			throw CatalogException("Table with name \"%s\" already exists!",

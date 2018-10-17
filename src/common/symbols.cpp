@@ -21,7 +21,7 @@
 using namespace duckdb;
 using namespace std;
 
-template class std::unique_ptr<AbstractCatalogEntry>;
+template class std::unique_ptr<CatalogEntry>;
 template class std::unique_ptr<Expression>;
 template class std::unique_ptr<AbstractRuleNode>;
 template class std::unique_ptr<BindContext>;
@@ -86,7 +86,7 @@ template class std::unordered_map<PhysicalOperator *,
 template class std::stack<PhysicalOperator *>;
 
 // template class std::unordered_map<std::string,
-// std::unique_ptr<AbstractCatalogEntry>>;
+// std::unique_ptr<CatalogEntry>>;
 template class std::unordered_map<std::string, size_t>;
 template class std::unordered_map<std::string, std::vector<std::string>>;
 template class std::unordered_map<std::string, std::pair<size_t, Expression *>>;

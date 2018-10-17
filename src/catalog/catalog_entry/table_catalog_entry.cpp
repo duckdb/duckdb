@@ -1,6 +1,6 @@
 
-#include "catalog/table_catalog.hpp"
 #include "catalog/catalog.hpp"
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "common/exception.hpp"
 
 #include "parser/constraints/list.hpp"
@@ -15,8 +15,7 @@ using namespace std;
 TableCatalogEntry::TableCatalogEntry(Catalog *catalog,
                                      SchemaCatalogEntry *schema,
                                      CreateTableInformation *info)
-    : AbstractCatalogEntry(CatalogType::TABLE, catalog, info->table),
-      schema(schema) {
+    : CatalogEntry(CatalogType::TABLE, catalog, info->table), schema(schema) {
 	for (auto entry : info->columns) {
 		if (ColumnExists(entry.name)) {
 			throw CatalogException("Column with name %s already exists!",

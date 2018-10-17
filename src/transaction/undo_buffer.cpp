@@ -3,10 +3,9 @@
 
 #include "common/exception.hpp"
 
-#include "catalog/abstract_catalog.hpp"
+#include "catalog/catalog_entry/list.hpp"
+#include "catalog/catalog_entry.hpp"
 #include "catalog/catalog_set.hpp"
-#include "catalog/schema_catalog.hpp"
-#include "catalog/table_catalog.hpp"
 
 #include "storage/data_table.hpp"
 #include "storage/storage_chunk.hpp"
@@ -38,8 +37,7 @@ void UndoBuffer::Cleanup() {
 	//  transaction
 	for (auto &entry : entries) {
 		if (entry.type == UndoFlags::CATALOG_ENTRY) {
-			AbstractCatalogEntry *catalog_entry =
-			    *((AbstractCatalogEntry **)entry.data.get());
+			CatalogEntry *catalog_entry = *((CatalogEntry **)entry.data.get());
 			// destroy the backed up entry: it is no longer required
 			assert(catalog_entry->parent);
 			catalog_entry->parent->child = move(catalog_entry->child);
@@ -65,7 +63,7 @@ void UndoBuffer::Cleanup() {
 	}
 }
 
-static void WriteCatalogEntry(WriteAheadLog *log, AbstractCatalogEntry *entry) {
+static void WriteCatalogEntry(WriteAheadLog *log, CatalogEntry *entry) {
 	if (!log) {
 		return;
 	}
@@ -197,8 +195,7 @@ void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) {
 	for (auto &entry : entries) {
 		if (entry.type == UndoFlags::CATALOG_ENTRY) {
 			// set the commit timestamp of the catalog entry to the given id
-			AbstractCatalogEntry *catalog_entry =
-			    *((AbstractCatalogEntry **)entry.data.get());
+			CatalogEntry *catalog_entry = *((CatalogEntry **)entry.data.get());
 			assert(catalog_entry->parent);
 			catalog_entry->parent->timestamp = commit_id;
 
@@ -236,8 +233,7 @@ void UndoBuffer::Rollback() {
 		auto &entry = entries[i - 1];
 		if (entry.type == UndoFlags::CATALOG_ENTRY) {
 			// undo this catalog entry
-			AbstractCatalogEntry *catalog_entry =
-			    *((AbstractCatalogEntry **)entry.data.get());
+			CatalogEntry *catalog_entry = *((CatalogEntry **)entry.data.get());
 			assert(catalog_entry->set);
 			catalog_entry->set->Undo(catalog_entry);
 		} else if (entry.type == UndoFlags::TUPLE_ENTRY) {

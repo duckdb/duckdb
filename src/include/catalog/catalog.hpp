@@ -10,10 +10,10 @@
 
 #pragma once
 
-#include "catalog/abstract_catalog.hpp"
+#include "catalog/catalog_entry.hpp"
 #include "catalog/catalog_set.hpp"
-#include "catalog/schema_catalog.hpp"
-#include "catalog/table_catalog.hpp"
+
+#include "catalog/catalog_entry/list.hpp"
 
 namespace duckdb {
 

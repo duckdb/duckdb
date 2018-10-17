@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// catalog/schema_catalog.hpp
+// catalog/catalog_entry/schema_catalog_entry.hpp
 //
 // Author: Mark Raasveldt
 //
@@ -13,9 +13,9 @@
 #include <string>
 #include <unordered_map>
 
-#include "catalog/abstract_catalog.hpp"
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
+#include "catalog/catalog_entry.hpp"
 #include "catalog/catalog_set.hpp"
-#include "catalog/table_catalog.hpp"
 
 #include "transaction/transaction.hpp"
 
@@ -25,7 +25,7 @@ class Catalog;
 class Constraint;
 
 //! A schema in the catalog
-class SchemaCatalogEntry : public AbstractCatalogEntry {
+class SchemaCatalogEntry : public CatalogEntry {
   public:
 	SchemaCatalogEntry(Catalog *catalog, std::string name);
 

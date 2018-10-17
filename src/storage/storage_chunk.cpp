@@ -5,7 +5,7 @@
 #include "common/helper.hpp"
 #include "common/types/vector_operations.hpp"
 
-#include "catalog/table_catalog.hpp"
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 
 #include "transaction/transaction.hpp"
 

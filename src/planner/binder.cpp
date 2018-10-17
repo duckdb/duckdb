@@ -351,10 +351,7 @@ void Binder::Visit(SubqueryRef &expr) {
 }
 
 void Binder::Visit(TableFunction &expr) {
-	// auto &function_definition = *((FunctionExpression*)
-	// expr.expression.get()); auto function =
-	// context.db.catalog.GetTableFunction(function_definition);
-	// bind_context->AddTableFunction(expr.alias.empty() ?
-	// function_definition.name : expr.alias, function);
-	throw NotImplementedException("Bind table function");
+	// auto &function_definition = *((FunctionExpression*) expr.expression.get());
+	// auto function = context.db.catalog.GetTableFunction(function_definition);
+	// bind_context->AddTableFunction(expr.alias.empty() ? function_definition.name : expr.alias, function);
 }

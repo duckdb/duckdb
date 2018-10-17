@@ -19,7 +19,7 @@ namespace duckdb {
 extern transaction_t TRANSACTION_ID_START;
 extern transaction_t MAXIMUM_QUERY_ID;
 
-class AbstractCatalogEntry;
+class CatalogEntry;
 class DataTable;
 class StorageChunk;
 class WriteAheadLog;
@@ -43,7 +43,7 @@ class Transaction {
 	    : start_time(start_time), transaction_id(transaction_id), commit_id(0),
 	      highest_active_query(0), active_query(MAXIMUM_QUERY_ID) {}
 
-	void PushCatalogEntry(AbstractCatalogEntry *entry);
+	void PushCatalogEntry(CatalogEntry *entry);
 	//! Create deleted entries in the undo buffer
 	void PushDeletedEntries(size_t offset, size_t count, StorageChunk *storage,
 	                        VersionInformation *version_pointers[]);

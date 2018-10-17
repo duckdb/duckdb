@@ -14,7 +14,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "catalog/abstract_catalog.hpp"
+#include "catalog/catalog_entry.hpp"
 #include "parser/column_definition.hpp"
 
 #include "parser/constraint.hpp"
@@ -26,7 +26,7 @@ class DataTable;
 class SchemaCatalogEntry;
 
 //! A table catalog entry
-class ViewCatalogEntry : public AbstractCatalogEntry {
+class ViewCatalogEntry : public CatalogEntry {
   public:
 	//! Create a real TableCatalogEntry and initialize storage for it
 	ViewCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,

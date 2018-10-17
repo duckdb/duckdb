@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// catalog/table_catalog.hpp
+// catalog/catalog_entry/table_catalog_entry.hpp
 //
 // Author: Mark Raasveldt
 //
@@ -14,7 +14,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "catalog/abstract_catalog.hpp"
+#include "catalog/catalog_entry.hpp"
 #include "parser/column_definition.hpp"
 
 #include "common/types/statistics.hpp"
@@ -28,7 +28,7 @@ class DataTable;
 class SchemaCatalogEntry;
 
 //! A table catalog entry
-class TableCatalogEntry : public AbstractCatalogEntry {
+class TableCatalogEntry : public CatalogEntry {
   public:
 	//! Create a real TableCatalogEntry and initialize storage for it
 	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,

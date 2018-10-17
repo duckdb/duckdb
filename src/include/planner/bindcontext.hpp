@@ -15,7 +15,7 @@
 #include <vector>
 
 #include "catalog/catalog.hpp"
-#include "catalog/table_catalog.hpp"
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "parser/column_definition.hpp"
 #include "parser/expression.hpp"
 #include "parser/sql_statement.hpp"

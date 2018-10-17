@@ -17,7 +17,7 @@
 
 #include "common/internal_types.hpp"
 
-#include "catalog/abstract_catalog.hpp"
+#include "catalog/catalog_entry.hpp"
 
 #include "transaction/transaction.hpp"
 
@@ -29,19 +29,18 @@ class CatalogSet {
 	//! Create an entry in the catalog set. Returns whether or not it was
 	//! successful.
 	bool CreateEntry(Transaction &transaction, const std::string &name,
-	                 std::unique_ptr<AbstractCatalogEntry> value);
+	                 std::unique_ptr<CatalogEntry> value);
 
 	bool DropEntry(Transaction &transaction, const std::string &name,
 	               bool cascade);
 	//! Returns whether or not an entry exists
 	bool EntryExists(Transaction &transaction, const std::string &name);
 	//! Returns the entry with the specified name
-	AbstractCatalogEntry *GetEntry(Transaction &transaction,
-	                               const std::string &name);
+	CatalogEntry *GetEntry(Transaction &transaction, const std::string &name);
 
 	//! Rollback <entry> to be the currently valid entry for a certain catalog
 	//! entry
-	void Undo(AbstractCatalogEntry *entry);
+	void Undo(CatalogEntry *entry);
 
 	//! Drops all entries
 	void DropAllEntries(Transaction &transaction);
@@ -52,12 +51,11 @@ class CatalogSet {
   private:
 	//! Drops an entry from the catalog set; must hold the catalog_lock to
 	//! safely call this
-	bool DropEntry(Transaction &transaction, AbstractCatalogEntry &entry,
-	               bool cascade);
+	bool DropEntry(Transaction &transaction, CatalogEntry &entry, bool cascade);
 	//! The catalog lock is used to make changes to the data
 	std::mutex catalog_lock;
 	//! The set of entries present in the CatalogSet.
-	std::unordered_map<std::string, std::unique_ptr<AbstractCatalogEntry>> data;
+	std::unordered_map<std::string, std::unique_ptr<CatalogEntry>> data;
 };
 
 } // namespace duckdb

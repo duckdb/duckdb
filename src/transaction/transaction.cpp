@@ -1,7 +1,7 @@
 
 #include "common/exception.hpp"
 
-#include "catalog/table_catalog.hpp"
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "parser/column_definition.hpp"
 
 #include "storage/data_table.hpp"
@@ -11,11 +11,10 @@
 using namespace duckdb;
 using namespace std;
 
-void Transaction::PushCatalogEntry(AbstractCatalogEntry *entry) {
+void Transaction::PushCatalogEntry(CatalogEntry *entry) {
 	// store only the pointer to the catalog entry
-	AbstractCatalogEntry **blob =
-	    (AbstractCatalogEntry **)undo_buffer.CreateEntry(
-	        UndoFlags::CATALOG_ENTRY, sizeof(AbstractCatalogEntry *));
+	CatalogEntry **blob = (CatalogEntry **)undo_buffer.CreateEntry(
+	    UndoFlags::CATALOG_ENTRY, sizeof(CatalogEntry *));
 	*blob = entry;
 }
 

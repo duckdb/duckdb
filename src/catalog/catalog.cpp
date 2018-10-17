@@ -11,8 +11,8 @@ Catalog::Catalog(StorageManager &storage) : storage(storage) {}
 
 void Catalog::CreateSchema(Transaction &transaction,
                            CreateSchemaInformation *info) {
-	auto entry = make_unique_base<AbstractCatalogEntry, SchemaCatalogEntry>(
-	    this, info->schema);
+	auto entry =
+	    make_unique_base<CatalogEntry, SchemaCatalogEntry>(this, info->schema);
 	if (!schemas.CreateEntry(transaction, info->schema, move(entry))) {
 		if (!info->if_not_exists) {
 			throw CatalogException("Schema with name %s already exists!",

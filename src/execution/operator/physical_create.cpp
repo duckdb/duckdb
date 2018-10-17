@@ -2,7 +2,7 @@
 #include "execution/operator/physical_create.hpp"
 #include "execution/expression_executor.hpp"
 
-#include "catalog/schema_catalog.hpp"
+#include "catalog/catalog_entry/schema_catalog_entry.hpp"
 
 #include "main/client_context.hpp"
 

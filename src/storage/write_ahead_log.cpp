@@ -2,7 +2,7 @@
 #include "storage/write_ahead_log.hpp"
 
 #include "catalog/catalog.hpp"
-#include "catalog/schema_catalog.hpp"
+#include "catalog/catalog_entry/schema_catalog_entry.hpp"
 
 #include "main/client_context.hpp"
 #include "main/connection.hpp"

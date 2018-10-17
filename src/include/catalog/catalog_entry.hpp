@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// catalog/abstract_catalog.hpp
+// catalog/catalog_entry.hpp
 //
 // Author: Mark Raasveldt
 //
@@ -20,13 +20,13 @@ class CatalogSet;
 class Transaction;
 
 //! Abstract base class of an entry in the catalog
-class AbstractCatalogEntry {
+class CatalogEntry {
   public:
-	AbstractCatalogEntry(CatalogType type, Catalog *catalog, std::string name)
+	CatalogEntry(CatalogType type, Catalog *catalog, std::string name)
 	    : type(type), catalog(catalog), set(nullptr), name(name),
 	      deleted(false), parent(nullptr) {}
 
-	virtual ~AbstractCatalogEntry() {}
+	virtual ~CatalogEntry() {}
 
 	//! Returns true if other objects depend on this object
 	virtual bool HasDependents(Transaction &transaction) { return false; }
@@ -46,8 +46,8 @@ class AbstractCatalogEntry {
 	//! Timestamp at which the catalog entry was created
 	transaction_t timestamp;
 	//! Child entry
-	std::unique_ptr<AbstractCatalogEntry> child;
+	std::unique_ptr<CatalogEntry> child;
 	//! Parent entry (the node that owns this node)
-	AbstractCatalogEntry *parent;
+	CatalogEntry *parent;
 };
 } // namespace duckdb
