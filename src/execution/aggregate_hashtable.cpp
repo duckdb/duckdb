@@ -134,6 +134,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		// place this tuple in the hash table
 		size_t index = addresses.sel_vector ? addresses.sel_vector[i] : i;
 		auto entry = ptr[index];
+		assert(entry >= data && entry < data + capacity * tuple_size);
 
 		size_t chain = 0;
 		do {
@@ -171,7 +172,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			// collision: move to the next location
 			chain++;
 			entry += tuple_size;
-			if (entry > data + tuple_size * capacity) {
+			if (entry >= data + tuple_size * capacity) {
 				entry = data;
 			}
 		} while (true);
