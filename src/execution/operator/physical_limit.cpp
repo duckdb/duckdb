@@ -38,6 +38,7 @@ void PhysicalLimit::_GetChunk(ClientContext &context, DataChunk &chunk,
 				    GetTypeIdSize(chunk.data[i].type) * start_position;
 				chunk.data[i].count = chunk.count;
 			}
+			chunk.sel_vector = move(state->child_chunk.sel_vector);
 		}
 	} else {
 		// have to copy either the entire chunk or part of it
@@ -53,6 +54,7 @@ void PhysicalLimit::_GetChunk(ClientContext &context, DataChunk &chunk,
 			chunk.data[i].Reference(state->child_chunk.data[i]);
 			chunk.data[i].count = chunk.count;
 		}
+		chunk.sel_vector = move(state->child_chunk.sel_vector);
 	}
 
 	state->current_offset += state->child_chunk.count;
