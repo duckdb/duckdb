@@ -99,14 +99,6 @@ void DataChunk::Flatten() {
 	sel_vector = nullptr;
 }
 
-void DataChunk::ForceOwnership() {
-	for (size_t i = 0; i < column_count; i++) {
-		data[i].ForceOwnership();
-	}
-	sel_vector = nullptr;
-	owned_data.reset();
-}
-
 void DataChunk::Append(DataChunk &other) {
 	if (other.count == 0) {
 		return;

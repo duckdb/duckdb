@@ -108,10 +108,6 @@ class Vector : public Printable {
 	void Move(Vector &other);
 	//! Flattens the vector, removing any selection vector
 	void Flatten();
-	//! This method guarantees that the vector becomes an owning vector
-	//! If the vector is already an owning vector, it does nothing
-	//! Otherwise, it copies the data
-	void ForceOwnership();
 	//! Causes this vector to reference the data held by the other vector.
 	void Reference(Vector &other);
 

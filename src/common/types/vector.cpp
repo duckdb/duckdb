@@ -196,15 +196,6 @@ void Vector::Flatten() {
 	other.Move(*this);
 }
 
-void Vector::ForceOwnership() {
-	if (owns_data && !sel_vector && type != TypeId::VARCHAR)
-		return;
-
-	Vector other(type, true, false);
-	this->Copy(other);
-	other.Move(*this);
-}
-
 void Vector::Copy(Vector &other, size_t offset) {
 	if (other.type != type) {
 		throw TypeMismatchException(type, other.type,

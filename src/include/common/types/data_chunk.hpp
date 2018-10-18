@@ -93,9 +93,6 @@ class DataChunk : public Printable {
 	//! Removes the selection vector from the chunk
 	void Flatten();
 
-	//! Forces the Vectors of the DataChunk to own their own data
-	void ForceOwnership();
-
 	//! Resets the DataChunk to its state right after the DataChunk::Initialize
 	//! function was called. This sets the count to 0, and resets each member
 	//! Vector to point back to the data owned by this DataChunk.
