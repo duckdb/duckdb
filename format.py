@@ -3,9 +3,19 @@
 import os, time
 
 last_format_file = '.last_format'
-format_command = 'clang-format -i -sort-includes=${SORT_INCLUDES} -style=file "${FILE}"'
-extensions = ['.cpp', '.c', '.hpp', '.h', '.cc', '.hh']
+cpp_format_command = 'clang-format -i -sort-includes=${SORT_INCLUDES} -style=file "${FILE}"'
+sql_format_command = 'pg_format "${FILE}" -o "${FILE}.out" && mv "${FILE}.out" "${FILE}"'
+extensions = ['.cpp', '.c', '.hpp', '.h', '.cc', '.hh', '.sql']
 
+format_commands = {
+	'.cpp': cpp_format_command,
+	'.c': cpp_format_command,
+	'.hpp': cpp_format_command,
+	'.h': cpp_format_command,
+	'.hh': cpp_format_command,
+	'.cc': cpp_format_command,
+	'.sql': sql_format_command,
+}
 # get the last time this command was run, if ever
 
 last_format_time = 0
@@ -38,6 +48,7 @@ def format_directory(directory, sort_includes=True):
 			for ext in extensions:
 				if f.endswith(ext):
 					if os.path.getmtime(full_path) > last_format_time:
+						format_command = format_commands[ext]
 						if not directory_printed:
 							print(directory)
 							directory_printed = True
