@@ -16,16 +16,9 @@ template <class SRC, class DST, class OP>
 void _templated_cast_loop(Vector &left, Vector &result) {
 	SRC *ldata = (SRC *)left.data;
 	DST *result_data = (DST *)result.data;
-	if (left.sel_vector) {
-		for (size_t i = 0; i < left.count; i++) {
-			result_data[left.sel_vector[i]] =
-			    OP::template Operation<SRC, DST>(ldata[left.sel_vector[i]]);
-		}
-	} else {
-		for (size_t i = 0; i < left.count; i++) {
-			result_data[i] = OP::template Operation<SRC, DST>(ldata[i]);
-		}
-	}
+	VectorOperations::Exec(left, [&](size_t i) {
+		result_data[i] = OP::template Operation<SRC, DST>(ldata[i]);
+	});
 	result.sel_vector = left.sel_vector;
 	result.count = left.count;
 }
@@ -55,18 +48,16 @@ template <class SRC> static void _cast_loop(Vector &source, Vector &result) {
 		// we have to place the resulting strings in the string heap
 		auto ldata = (SRC *)source.data;
 		auto result_data = (const char **)result.data;
-
-		for (size_t i = 0; i < source.count; i++) {
-			size_t index = source.sel_vector ? source.sel_vector[i] : i;
-			if (source.nullmask[index]) {
-				result_data[index] = nullptr;
+		VectorOperations::Exec(source, [&](size_t i) {
+			if (source.nullmask[i]) {
+				result_data[i] = nullptr;
 			} else {
 				auto str =
 				    operators::Cast::template Operation<SRC, std::string>(
-				        ldata[index]);
-				result_data[index] = result.string_heap.AddString(str);
+				        ldata[i]);
+				result_data[i] = result.string_heap.AddString(str);
 			}
-		}
+		});
 		result.sel_vector = source.sel_vector;
 		result.count = source.count;
 		break;

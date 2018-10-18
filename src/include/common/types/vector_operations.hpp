@@ -213,7 +213,7 @@ struct VectorOperations {
 				fun(i + 7);
 			}
 			//#pragma GCC ivdep
-			for (size_t i = 0; i < vector.count; i++) {
+			for (; i < vector.count; i++) {
 				fun(i);
 			}
 		}

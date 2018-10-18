@@ -49,7 +49,7 @@ void SuperLargeHashTable::Resize(size_t size) {
 		auto new_table = make_unique<SuperLargeHashTable>(
 		    size, group_types, payload_types, aggregate_types, parallel);
 
-		while(true) {
+		while (true) {
 			groups.Reset();
 			payload.Reset();
 			this->Scan(position, groups, payload);

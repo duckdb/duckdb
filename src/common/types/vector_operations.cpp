@@ -14,16 +14,8 @@ template <class T, class RES, class OP>
 void _templated_unary_loop(Vector &left, Vector &result) {
 	T *ldata = (T *)left.data;
 	RES *result_data = (RES *)result.data;
-	if (left.sel_vector) {
-		for (size_t i = 0; i < left.count; i++) {
-			result_data[left.sel_vector[i]] =
-			    OP::Operation(ldata[left.sel_vector[i]]);
-		}
-	} else {
-		for (size_t i = 0; i < left.count; i++) {
-			result_data[i] = OP::Operation(ldata[i]);
-		}
-	}
+	VectorOperations::Exec(
+	    left, [&](size_t i) { result_data[i] = OP::Operation(ldata[i]); });
 	result.nullmask = left.nullmask;
 	result.sel_vector = left.sel_vector;
 	result.count = left.count;
@@ -33,16 +25,9 @@ template <class T, class RES, class OP>
 void _templated_unary_loop_null(Vector &left, Vector &result) {
 	T *ldata = (T *)left.data;
 	RES *result_data = (RES *)result.data;
-	if (left.sel_vector) {
-		for (size_t i = 0; i < left.count; i++) {
-			result_data[left.sel_vector[i]] = OP::Operation(
-			    ldata[left.sel_vector[i]], left.nullmask[left.sel_vector[i]]);
-		}
-	} else {
-		for (size_t i = 0; i < left.count; i++) {
-			result_data[i] = OP::Operation(ldata[i], left.nullmask[i]);
-		}
-	}
+	VectorOperations::Exec(left, [&](size_t i) {
+		result_data[i] = OP::Operation(ldata[i], left.nullmask[i]);
+	});
 	result.nullmask.reset();
 	result.sel_vector = left.sel_vector;
 	result.count = left.count;
@@ -63,16 +48,9 @@ void _templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 			// computation
 			T constant = ldata[0];
 			result.nullmask = right.nullmask;
-			if (right.sel_vector) {
-				for (size_t i = 0; i < right.count; i++) {
-					result_data[right.sel_vector[i]] =
-					    OP::Operation(constant, rdata[right.sel_vector[i]]);
-				}
-			} else {
-				for (size_t i = 0; i < right.count; i++) {
-					result_data[i] = OP::Operation(constant, rdata[i]);
-				}
-			}
+			VectorOperations::Exec(right, [&](size_t i) {
+				result_data[i] = OP::Operation(constant, rdata[i]);
+			});
 		}
 		result.sel_vector = right.sel_vector;
 		result.count = right.count;
@@ -85,34 +63,19 @@ void _templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 			// computation
 			T constant = rdata[0];
 			result.nullmask = left.nullmask;
-			if (left.sel_vector) {
-				for (size_t i = 0; i < left.count; i++) {
-					result_data[left.sel_vector[i]] =
-					    OP::Operation(ldata[left.sel_vector[i]], constant);
-				}
-			} else {
-				for (size_t i = 0; i < left.count; i++) {
-					result_data[i] = OP::Operation(ldata[i], constant);
-				}
-			}
+			VectorOperations::Exec(left, [&](size_t i) {
+				result_data[i] = OP::Operation(ldata[i], constant);
+			});
 		}
 		result.sel_vector = left.sel_vector;
 		result.count = left.count;
 	} else if (left.count == right.count) {
+		// OR nullmasks together
 		result.nullmask = left.nullmask | right.nullmask;
-		if (left.sel_vector) {
-			assert(right.sel_vector);
-			for (size_t i = 0; i < left.count; i++) {
-				assert(left.sel_vector[i] == right.sel_vector[i]);
-				result_data[left.sel_vector[i]] = OP::Operation(
-				    ldata[left.sel_vector[i]], rdata[left.sel_vector[i]]);
-			}
-		} else {
-			assert(!right.sel_vector);
-			for (size_t i = 0; i < left.count; i++) {
-				result_data[i] = OP::Operation(ldata[i], rdata[i]);
-			}
-		}
+		assert(left.sel_vector == right.sel_vector);
+		VectorOperations::Exec(left, [&](size_t i) {
+			result_data[i] = OP::Operation(ldata[i], rdata[i]);
+		});
 		result.sel_vector = left.sel_vector;
 		result.count = left.count;
 	} else {
