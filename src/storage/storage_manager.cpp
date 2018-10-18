@@ -19,7 +19,7 @@ StorageManager::StorageManager(DuckDB &database, std::string path)
     : path(path), database(database), wal(database) {}
 
 void StorageManager::Initialize() {
-	bool in_memory = path.empty();
+	bool in_memory = path.empty() || path == ":memory:";
 
 	// first initialize the base system catalogs
 	// these are never written to the WAL

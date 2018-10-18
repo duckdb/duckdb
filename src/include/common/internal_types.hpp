@@ -20,7 +20,7 @@
 
 namespace duckdb {
 
-#define DEFAULT_SCHEMA ""
+#define DEFAULT_SCHEMA "main"
 
 #define STANDARD_VECTOR_SIZE 1024
 #define STORAGE_CHUNK_SIZE 10240
