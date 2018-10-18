@@ -253,7 +253,7 @@ void DataTable::Delete(ClientContext &context, Vector &row_identifiers) {
 		auto id = (sel_vector ? ids[sel_vector[i]] : ids[i]) - chunk->start;
 		// assert that all ids in the vector belong to the same storage
 		// chunk
-		assert(id >= chunk->start && id < chunk->start + chunk->count);
+		assert(id >= 0 && id < chunk->count);
 		// check for conflicts
 		auto version = chunk->version_pointers[id];
 		if (version) {
