@@ -10,6 +10,9 @@ using namespace std;
 
 JoinSide LogicalJoin::GetJoinSide(LogicalOperator *op,
                                   std::unique_ptr<Expression> &expr) {
+	if (expr->type == ExpressionType::SELECT_SUBQUERY) {
+		return JoinSide::BOTH;
+	}
 	if (expr->type == ExpressionType::COLUMN_REF) {
 		auto colref = (ColumnRefExpression *)expr.get();
 		if (op->children[0]->referenced_tables.find(

@@ -123,6 +123,7 @@ void ColumnBindingResolver::Visit(ColumnRefExpression &expr) {
 	for (auto &binding : bound_tables) {
 		if (binding.table_index == expr.binding.table_index) {
 			expr.index = binding.column_offset + expr.binding.column_index;
+			assert(expr.binding.column_index < binding.column_count);
 			break;
 		}
 	}

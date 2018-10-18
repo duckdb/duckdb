@@ -20,12 +20,16 @@
 #include "optimizer/rule.hpp"
 #include "parser/expression/cast_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
+#include "planner/logical_operator_visitor.hpp"
 #include "planner/operator/logical_filter.hpp"
 
 namespace duckdb {
-//
 
 static bool CheckEval(LogicalOperator *op, Expression *expr) {
+	if (expr->type == ExpressionType::SELECT_SUBQUERY) {
+		// don't push down subqueries
+		return false;
+	}
 	if (expr->type == ExpressionType::COLUMN_REF) {
 		auto colref = (ColumnRefExpression *)expr;
 		if (op->referenced_tables.find(colref->binding.table_index) !=
@@ -74,6 +78,7 @@ RewritePushdown(std::unique_ptr<Expression> expr, LogicalOperator *op) {
 		// no? well lets try ourselves then
 
 		ssize_t push_index = -1;
+
 		// if both are from the left or both are from the right or
 		// are some constant comparision of one side, push selection
 		if (CheckEval(op->children[i]->children[0].get(), expr.get())) {
