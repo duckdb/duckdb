@@ -39,4 +39,8 @@ void StringHeap::MergeHeap(StringHeap &other) {
 	}
 	other.tail->prev = move(chunk);
 	this->chunk = move(other.chunk);
+	if (!tail) {
+		tail = this->chunk.get();
+	}
+	other.tail = nullptr;
 }

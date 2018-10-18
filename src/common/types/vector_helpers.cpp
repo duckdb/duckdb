@@ -139,6 +139,7 @@ static void _case_loop(Vector &check, Vector &res_true, Vector &res_false,
 	T *true_data = (T *)res_true.data;
 	T *false_data = (T *)res_false.data;
 	T *res = (T *)result.data;
+
 	// it might be the case that not everything has a selection vector
 	// as constants do not need a selection vector
 	// check if we are using a selection vector
@@ -155,21 +156,22 @@ static void _case_loop(Vector &check, Vector &res_true, Vector &res_false,
 	// we handle constants by multiplying the index access by 0 to avoid 2^3
 	// branches in the code
 	size_t check_mul = 1, res_true_mul = 1, res_false_mul = 1;
-	if (check.count == 1 && !check.sel_vector) {
+	if (check.IsConstant()) {
 		check_mul = 0;
 		// set a mock selection vector of [0] if we are using a selection vector
 		check.sel_vector = use_sel_vector ? ZERO_VECTOR : nullptr;
 	}
 	// handle for res_true constant
-	if (res_true.count == 1 && !res_true.sel_vector) {
+	if (res_true.IsConstant()) {
 		res_true_mul = 0;
 		res_true.sel_vector = use_sel_vector ? ZERO_VECTOR : nullptr;
 	}
 	// handle res_false constant
-	if (res_false.count == 1 && !res_false.sel_vector) {
+	if (res_false.IsConstant()) {
 		res_false_mul = 0;
 		res_false.sel_vector = use_sel_vector ? ZERO_VECTOR : nullptr;
 	}
+
 	if (use_sel_vector) {
 		assert(res_true.sel_vector);
 		assert(res_false.sel_vector);
@@ -188,6 +190,9 @@ static void _case_loop(Vector &check, Vector &res_true, Vector &res_false,
 			           : res_false.nullmask[false_index];
 		}
 	} else {
+		assert(!res_true.sel_vector);
+		assert(!res_false.sel_vector);
+		assert(!check.sel_vector);
 		for (size_t i = 0; i < result.count; i++) {
 			size_t check_index = check_mul * i;
 			size_t true_index = res_true_mul * i;
@@ -395,9 +400,10 @@ void VectorOperations::Copy(Vector &source, Vector &target, size_t offset) {
 //===--------------------------------------------------------------------===//
 void VectorOperations::Case(Vector &check, Vector &res_true, Vector &res_false,
                             Vector &result) {
-	if ((check.count != 1 && check.count != result.count) ||
-	    (res_true.count != 1 && res_true.count != result.count) ||
-	    (res_false.count != 1 && res_false.count != result.count)) {
+	result.count = max(max(check.count, res_false.count), res_true.count);
+	if ((!check.IsConstant() && check.count != result.count) ||
+	    (!res_true.IsConstant() && res_true.count != result.count) ||
+	    (!res_false.IsConstant() && res_false.count != result.count)) {
 		throw Exception("Vector lengths don't match in case!");
 	}
 	if (check.type != TypeId::BOOLEAN) {
@@ -432,6 +438,8 @@ void VectorOperations::Case(Vector &check, Vector &res_true, Vector &res_false,
 		_case_loop<uint64_t>(check, res_true, res_false, result);
 		break;
 	case TypeId::VARCHAR:
+		result.string_heap.MergeHeap(res_true.string_heap);
+		result.string_heap.MergeHeap(res_false.string_heap);
 		_case_loop<const char *>(check, res_true, res_false, result);
 		break;
 	case TypeId::DATE:

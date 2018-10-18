@@ -16,3 +16,12 @@ TEST_CASE("Test case statement", "[case]") {
 	    con.Query("SELECT CASE WHEN test.a=11 THEN b ELSE NULL END FROM test");
 	REQUIRE(CHECK_COLUMN(result, 0, {22, Value(), Value()}));
 }
+
+TEST_CASE("Test NULL IF statement", "[case]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+	// NULL IF
+	result = con.Query("SELECT NULLIF(NULLIF ('hello', 'world'), 'blabla');");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value("hello")}));
+}

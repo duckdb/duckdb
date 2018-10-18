@@ -202,6 +202,7 @@ struct VectorOperations {
 				fun(vector.sel_vector[i]);
 			}
 		} else {
+			//#pragma GCC ivdep
 			for (; i + 8 < vector.count; i += 8) {
 				fun(i + 0);
 				fun(i + 1);

@@ -190,9 +190,7 @@ void ExpressionExecutor::Visit(CaseExpression &expr) {
 	expr.children[2]->Accept(this);
 	vector.Move(res_false);
 
-	size_t count = max(max(check.count, res_true.count), res_false.count);
 	vector.Initialize(res_true.type);
-	vector.count = count;
 	VectorOperations::Case(check, res_true, res_false, vector);
 	expr.stats.Verify(vector);
 }

@@ -114,6 +114,10 @@ class Vector : public Printable {
 	//! Converts this Vector to a printable string representation
 	std::string ToString() const;
 
+	//! Returns true the vector holds only a single constant value and does not
+	//! have a selection vector
+	bool IsConstant() { return count == 1 && !sel_vector; }
+
 	Vector(const Vector &) = delete;
 
 	//! The stringheap of the vector

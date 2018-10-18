@@ -39,7 +39,7 @@ void _templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 	T *rdata = (T *)right.data;
 	RES *result_data = (RES *)result.data;
 
-	if (left.count == 1 && !left.sel_vector) {
+	if (left.IsConstant()) {
 		if (left.nullmask[0]) {
 			// left side is constant NULL, set everything to NULL
 			result.nullmask.set();
@@ -54,7 +54,7 @@ void _templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 		}
 		result.sel_vector = right.sel_vector;
 		result.count = right.count;
-	} else if (right.count == 1 && !right.sel_vector) {
+	} else if (right.IsConstant()) {
 		if (right.nullmask[0]) {
 			// right side is constant NULL, set everything to NULL
 			result.nullmask.set();
