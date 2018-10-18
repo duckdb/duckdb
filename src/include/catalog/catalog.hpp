@@ -61,7 +61,6 @@ class Catalog {
 	//! Reference to the storage manager
 	StorageManager &storage;
 
-  private:
 	//! The catalog set holding the schemas
 	CatalogSet schemas;
 };

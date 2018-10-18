@@ -24,4 +24,5 @@ static void AddTableFunction(Transaction &transaction, Catalog &catalog) {
 
 void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 	AddTableFunction<function::PragmaTableInfo>(transaction, catalog);
+	AddTableFunction<function::SQLiteMaster>(transaction, catalog);
 }

@@ -110,8 +110,8 @@ bool CatalogSet::DropEntry(Transaction &transaction, const string &name,
 	return DropEntry(transaction, *entry->second, cascade);
 }
 
-static CatalogEntry *GetEntryForTransaction(Transaction &transaction,
-                                            CatalogEntry *current) {
+CatalogEntry *CatalogSet::GetEntryForTransaction(Transaction &transaction,
+                                                 CatalogEntry *current) {
 	while (current->child) {
 		if (current->timestamp == transaction.transaction_id) {
 			// we created this version

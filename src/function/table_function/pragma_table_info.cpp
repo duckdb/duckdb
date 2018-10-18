@@ -27,7 +27,7 @@ void pragma_table_info_init(ClientContext &context, void **dataptr) {
 
 void pragma_table_info(ClientContext &context, DataChunk &input,
                        DataChunk &output, void **dataptr) {
-	PragmaTableFunctionData &data = *((PragmaTableFunctionData *)(*dataptr));
+	auto &data = *((PragmaTableFunctionData *)(*dataptr));
 	if (!data.entry) {
 		// first call: load the entry from the catalog
 		if (input.count != 1) {

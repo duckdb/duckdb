@@ -57,7 +57,6 @@ class SchemaCatalogEntry : public CatalogEntry {
 	//! Function that drops all dependents (used for Cascade)
 	virtual void DropDependents(Transaction &transaction);
 
-  private:
 	//! The catalog set holding the tables
 	CatalogSet tables;
 	//! The catalog set holding the table functions
