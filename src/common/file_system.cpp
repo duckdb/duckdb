@@ -3,10 +3,10 @@
 #include "common/exception.hpp"
 #include "common/string_util.hpp"
 
+#include <dirent.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <dirent.h>
 
 using namespace std;
 
@@ -55,18 +55,18 @@ void RemoveDirectory(const string &directory) {
 	system(command.c_str());
 }
 
-bool ListFiles(const string &directory, function<void (string)> callback) {
+bool ListFiles(const string &directory, function<void(string)> callback) {
 	DIR *dir;
 	struct dirent *ent;
-	if ((dir = opendir (directory.c_str())) != NULL) {
+	if ((dir = opendir(directory.c_str())) != NULL) {
 		/* print all the files and directories within directory */
-		while ((ent = readdir (dir)) != NULL) {
+		while ((ent = readdir(dir)) != NULL) {
 			string name = string(ent->d_name);
 			if (!name.empty() && name[0] != '.') {
 				callback(name);
 			}
 		}
-		closedir (dir);
+		closedir(dir);
 	} else {
 		return false;
 	}

@@ -1,1 +1,68 @@
-insert into main.region values ( 31, case when ((((6 is NULL) or (19 is not NULL)) or ((47 is NULL) and (((66 is not NULL) or (EXISTS ( select ref_0.r_name as c0 from main.region as ref_0 where 1))) and (EXISTS ( select ref_1.p_mfgr as c0, ref_1.p_mfgr as c1, ref_1.p_type as c2, (select p_size from main.part limit 1 offset 1) as c3 from main.part as ref_1 where 1 limit 117))))) and (19 is not NULL)) and (((EXISTS ( select ref_2.r_comment as c0, ref_2.r_comment as c1, subq_0.c1 as c2, ref_2.r_name as c3, subq_0.c3 as c4, ref_2.r_regionkey as c5, ref_2.r_name as c6 from main.region as ref_2, lateral (select ref_3.s_phone as c0, ref_3.s_comment as c1, ref_2.r_comment as c2, ref_3.s_suppkey as c3 from main.supplier as ref_3 where ((1) and (ref_3.s_nationkey is NULL)) or (ref_2.r_regionkey is NULL) limit 94) as subq_0 where subq_0.c3 is NULL)) or (((1) or (((1) or ((93 is NULL) and (1))) or (((31 is not NULL) and (0)) or (EXISTS ( select ref_4.c_comment as c0, ref_4.c_nationkey as c1, ref_4.c_acctbal as c2, ref_4.c_name as c3, ref_4.c_phone as c4, ref_4.c_phone as c5, ref_4.c_name as c6 from main.customer as ref_4 where 0 limit 93))))) and ((((select ps_suppkey from main.partsupp limit 1 offset 2) is NULL) and (40 is not NULL)) or (97 is NULL)))) or (61 is not NULL)) then cast(null as VARCHAR) else cast(null as VARCHAR) end , default) 
+INSERT INTO main.region
+    VALUES (31, CASE WHEN ((((6 IS NULL)
+                        OR (19 IS NOT NULL))
+                    OR ((47 IS NULL)
+                        AND (((66 IS NOT NULL)
+                                OR (EXISTS (
+                                        SELECT
+                                            ref_0.r_name AS c0
+                                        FROM
+                                            main.region AS ref_0
+                                        WHERE
+                                            1)))
+                                AND (EXISTS (
+                                        SELECT
+                                            ref_1.p_mfgr AS c0, ref_1.p_mfgr AS c1, ref_1.p_type AS c2, (
+                                                SELECT
+                                                    p_size
+                                                FROM
+                                                    main.part
+                                                LIMIT 1 offset 1) AS c3
+                                        FROM
+                                            main.part AS ref_1
+                                        WHERE
+                                            1
+                                        LIMIT 117)))))
+                    AND (19 IS NOT NULL))
+                AND (((EXISTS (
+                                SELECT
+                                    ref_2.r_comment AS c0, ref_2.r_comment AS c1, subq_0.c1 AS c2, ref_2.r_name AS c3, subq_0.c3 AS c4, ref_2.r_regionkey AS c5, ref_2.r_name AS c6
+                                FROM
+                                    main.region AS ref_2, LATERAL (
+                                        SELECT
+                                            ref_3.s_phone AS c0, ref_3.s_comment AS c1, ref_2.r_comment AS c2, ref_3.s_suppkey AS c3
+                                        FROM
+                                            main.supplier AS ref_3
+                                        WHERE ((1)
+                                            AND (ref_3.s_nationkey IS NULL))
+                                        OR (ref_2.r_regionkey IS NULL)
+                                    LIMIT 94) AS subq_0
+                            WHERE
+                                subq_0.c3 IS NULL))
+                        OR (((1)
+                                OR (((1)
+                                        OR ((93 IS NULL)
+                                            AND (1)))
+                                    OR (((31 IS NOT NULL)
+                                            AND (0))
+                                        OR (EXISTS (
+                                                SELECT
+                                                    ref_4.c_comment AS c0, ref_4.c_nationkey AS c1, ref_4.c_acctbal AS c2, ref_4.c_name AS c3, ref_4.c_phone AS c4, ref_4.c_phone AS c5, ref_4.c_name AS c6
+                                                FROM
+                                                    main.customer AS ref_4
+                                                WHERE 0
+                                            LIMIT 93)))))
+                        AND ((((
+                                        SELECT
+                                            ps_suppkey
+                                        FROM
+                                            main.partsupp
+                                        LIMIT 1 offset 2)
+                                    IS NULL)
+                                AND (40 IS NOT NULL))
+                            OR (97 IS NULL))))
+                OR (61 IS NOT NULL)) THEN
+            CAST(NULL AS VARCHAR)
+        ELSE
+            CAST(NULL AS VARCHAR)
+        END, DEFAULT)

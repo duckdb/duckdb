@@ -1,1 +1,8 @@
-update main.customer set c_phone = cast(null as VARCHAR) returning main.customer.c_address as c0, main.customer.c_address as c1, main.customer.c_comment as c2 
+UPDATE
+    main.customer
+SET
+    c_phone = CAST(NULL AS VARCHAR)
+RETURNING
+    main.customer.c_address AS c0,
+    main.customer.c_address AS c1,
+    main.customer.c_comment AS c2

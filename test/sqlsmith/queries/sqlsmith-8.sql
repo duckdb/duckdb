@@ -1,1 +1,52 @@
-insert into main.orders values ( 87, cast(coalesce(84, case when 58 is not NULL then 82 else 82 end ) as INTEGER), case when ((91 is NULL) or ((((1) and (31 is not NULL)) or (EXISTS ( select subq_0.c0 as c0 from main.lineitem as ref_0, lateral (select ref_0.l_linestatus as c0, ref_0.l_discount as c1, ref_1.n_name as c2, ref_0.l_shipmode as c3 from main.nation as ref_1 where 0 limit 135) as subq_0 where ((1) and (subq_0.c0 is not NULL)) or (ref_0.l_commitdate is NULL)))) and (((((7 is not NULL) or (((19 is not NULL) or (EXISTS ( select ref_2.c_name as c0, ref_2.c_address as c1 from main.customer as ref_2 where (0) or (EXISTS ( select ref_3.s_phone as c0, ref_3.s_comment as c1, ref_2.c_address as c2 from main.supplier as ref_3 where ref_2.c_nationkey is not NULL)) limit 160))) and (0))) or (0)) and (1)) and (1)))) and ((22 is NULL) or (84 is not NULL)) then cast(null as VARCHAR) else cast(null as VARCHAR) end , cast(null as DECIMAL), case when 1 is not NULL then cast(null as DATE) else cast(null as DATE) end , default, default, 60, default) 
+INSERT INTO main.orders
+    VALUES (87, CAST(coalesce(84, CASE WHEN 58 IS NOT NULL THEN
+                    82
+                ELSE
+                    82
+                END) AS INTEGER), CASE WHEN ((91 IS NULL)
+                OR ((((1)
+                            AND (31 IS NOT NULL))
+                        OR (EXISTS (
+                                SELECT
+                                    subq_0.c0 AS c0
+                                FROM
+                                    main.lineitem AS ref_0, LATERAL (
+                                        SELECT
+                                            ref_0.l_linestatus AS c0, ref_0.l_discount AS c1, ref_1.n_name AS c2, ref_0.l_shipmode AS c3
+                                        FROM
+                                            main.nation AS ref_1
+                                        WHERE 0
+                                    LIMIT 135) AS subq_0
+                            WHERE ((1)
+                                AND (subq_0.c0 IS NOT NULL))
+                            OR (ref_0.l_commitdate IS NULL))))
+                AND (((((7 IS NOT NULL)
+                                OR (((19 IS NOT NULL)
+                                        OR (EXISTS (
+                                                SELECT
+                                                    ref_2.c_name AS c0, ref_2.c_address AS c1
+                                                FROM
+                                                    main.customer AS ref_2
+                                                WHERE (0)
+                                                OR (EXISTS (
+                                                        SELECT
+                                                            ref_3.s_phone AS c0, ref_3.s_comment AS c1, ref_2.c_address AS c2
+                                                        FROM
+                                                            main.supplier AS ref_3
+                                                        WHERE
+                                                            ref_2.c_nationkey IS NOT NULL))
+                                                LIMIT 160)))
+                                    AND (0)))
+                            OR (0))
+                        AND (1))
+                    AND (1))))
+        AND ((22 IS NULL)
+            OR (84 IS NOT NULL)) THEN
+        CAST(NULL AS VARCHAR)
+    ELSE
+        CAST(NULL AS VARCHAR)
+    END, CAST(NULL AS DECIMAL), CASE WHEN 1 IS NOT NULL THEN
+        CAST(NULL AS DATE)
+    ELSE
+        CAST(NULL AS DATE)
+    END, DEFAULT, DEFAULT, 60, DEFAULT)

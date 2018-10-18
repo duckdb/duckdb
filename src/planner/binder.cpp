@@ -230,8 +230,8 @@ void Binder::Visit(InsertStatement &statement) {
 		statement.select_statement->Accept(this);
 	}
 	// visit the expressions
-	for(auto &expression_list : statement.values) {
-		for(auto &expression : expression_list) {
+	for (auto &expression_list : statement.values) {
+		for (auto &expression : expression_list) {
 			expression->Accept(this);
 		}
 	}

@@ -21,7 +21,8 @@ void CreateDirectory(const std::string &directory);
 //! Recursively remove a directory and all files in it
 void RemoveDirectory(const std::string &directory);
 //! List files in a directory, invoking the callback method for each one
-bool ListFiles(const std::string &directory, std::function<void (std::string)> callback);
+bool ListFiles(const std::string &directory,
+               std::function<void(std::string)> callback);
 //! Sets the current working directory
 void SetWorkingDirectory(const std::string &directory);
 //! Gets the current working directory

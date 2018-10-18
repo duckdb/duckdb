@@ -1,1 +1,232 @@
-WITH jennifer_0 AS (select (select s_address from main.supplier limit 1 offset 6) as c0 from main.region as sample_0 tablesample bernoulli (0.7) right join main.customer as ref_0 on (sample_0.r_comment is NULL) inner join main.part as sample_1 tablesample bernoulli (6) inner join (select 68 as c0, ref_1.l_partkey as c1, sample_2.c_address as c2, ref_1.l_commitdate as c3, ref_1.l_suppkey as c4, sample_2.c_phone as c5, sample_2.c_custkey as c6 from main.customer as sample_2 tablesample system (2.9) right join main.lineitem as ref_1 on (EXISTS ( select ref_1.l_comment as c0, sample_2.c_phone as c1, ref_1.l_tax as c2, ref_1.l_shipdate as c3, 52 as c4 from main.customer as sample_3 tablesample bernoulli (2.3) where (sample_3.c_nationkey is not NULL) or (ref_1.l_comment is not NULL) limit 150)) where ref_1.l_suppkey is NULL limit 142) as subq_0 on ((sample_1.p_mfgr is not NULL) and (0)) on (EXISTS ( select 47 as c0, ref_0.c_nationkey as c1, ref_0.c_address as c2, ref_0.c_address as c3 from main.supplier as ref_2 where EXISTS ( select subq_0.c5 as c0, sample_1.p_type as c1, (select c_custkey from main.customer limit 1 offset 6) as c2, ref_2.s_name as c3, (select s_phone from main.supplier limit 1 offset 16) as c4, ref_0.c_comment as c5, (select n_name from main.nation limit 1 offset 2) as c6 from main.partsupp as sample_4 tablesample system (4.3) where (((1) or (subq_0.c4 is not NULL)) or (80 is NULL)) and (ref_2.s_suppkey is not NULL)) limit 136)) where (1) and (0) limit 59), jennifer_1 AS (select subq_5.c10 as c0, subq_1.c0 as c1 from (select ref_3.o_clerk as c0 from main.orders as ref_3 left join main.customer as sample_5 tablesample bernoulli (8.5) on ((sample_5.c_comment is NULL) or (0)) inner join main.orders as sample_6 tablesample system (5.9) inner join main.nation as ref_4 on ((1) or ((ref_4.n_name is NULL) or (1))) on ((sample_5.c_nationkey is not NULL) and (ref_4.n_name is NULL)) where ref_3.o_clerk is not NULL limit 92) as subq_1, lateral (select subq_1.c0 as c0, sample_7.p_size as c1 from main.part as sample_7 tablesample bernoulli (8.5) inner join main.supplier as ref_5 on ((sample_7.p_retailprice is NULL) and (ref_5.s_phone is NULL)) where 1 limit 121) as subq_2, lateral (select subq_1.c0 as c0, 46 as c1, (select o_shippriority from main.orders limit 1 offset 4) as c2, subq_1.c0 as c3, (select n_comment from main.nation limit 1 offset 61) as c4, subq_2.c0 as c5, subq_4.c3 as c6, subq_2.c1 as c7, subq_2.c1 as c8, subq_4.c4 as c9, subq_1.c0 as c10 from (select subq_2.c1 as c0, (select l_returnflag from main.lineitem limit 1 offset 2) as c1, subq_1.c0 as c2, ref_6.c_address as c3, ref_6.c_comment as c4 from main.customer as ref_6, lateral (select subq_1.c0 as c0, subq_2.c1 as c1, ref_7.s_phone as c2, subq_1.c0 as c3, ref_7.s_suppkey as c4, (select s_suppkey from main.supplier limit 1 offset 2) as c5, subq_1.c0 as c6, subq_1.c0 as c7, ref_7.s_phone as c8, subq_2.c1 as c9, subq_1.c0 as c10, ref_6.c_nationkey as c11 from main.supplier as ref_7 where 1) as subq_3 where ((EXISTS ( select ref_8.r_regionkey as c0, subq_2.c0 as c1, subq_2.c1 as c2, ref_6.c_comment as c3, ref_6.c_mktsegment as c4, ref_6.c_custkey as c5 from main.region as ref_8 where subq_1.c0 is not NULL)) and (EXISTS ( select ref_6.c_address as c0, subq_1.c0 as c1, sample_8.r_name as c2, (select n_regionkey from main.nation limit 1 offset 6) as c3, subq_3.c9 as c4, subq_1.c0 as c5, ref_6.c_nationkey as c6, sample_8.r_regionkey as c7, 31 as c8, sample_8.r_name as c9 from main.region as sample_8 tablesample system (2.6) where 0 limit 71))) or ((((EXISTS ( select ref_9.s_name as c0, subq_2.c0 as c1, ref_9.s_address as c2 from main.supplier as ref_9 where 0 limit 158)) or (subq_2.c0 is NULL)) and (ref_6.c_comment is not NULL)) and (ref_6.c_custkey is NULL)) limit 63) as subq_4 where (1) and ((subq_2.c1 is NULL) and ((select c_address from main.customer limit 1 offset 2) is NULL)) limit 115) as subq_5 where (0) and (0) limit 159) select subq_6.c0 as c0 from (select ref_10.s_nationkey as c0 from main.supplier as ref_10 inner join main.supplier as ref_11 on (ref_10.s_nationkey = ref_11.s_suppkey ) where 1 limit 153) as subq_6 where 1 limit 59 
+WITH jennifer_0 AS (
+    SELECT
+        (
+            SELECT
+                s_address
+            FROM
+                main.supplier
+            LIMIT 1 offset 6) AS c0
+    FROM
+        main.region AS sample_0 TABLESAMPLE BERNOULLI (0.7)
+        RIGHT JOIN main.customer AS ref_0 ON (sample_0.r_comment IS NULL)
+        INNER JOIN main.part AS sample_1 TABLESAMPLE BERNOULLI (6)
+        INNER JOIN (
+            SELECT
+                68 AS c0,
+                ref_1.l_partkey AS c1,
+                sample_2.c_address AS c2,
+                ref_1.l_commitdate AS c3,
+                ref_1.l_suppkey AS c4,
+                sample_2.c_phone AS c5,
+                sample_2.c_custkey AS c6
+            FROM
+                main.customer AS sample_2 TABLESAMPLE SYSTEM (2.9)
+                RIGHT JOIN main.lineitem AS ref_1 ON (EXISTS (
+                        SELECT
+                            ref_1.l_comment AS c0,
+                            sample_2.c_phone AS c1,
+                            ref_1.l_tax AS c2,
+                            ref_1.l_shipdate AS c3,
+                            52 AS c4
+                        FROM
+                            main.customer AS sample_3 TABLESAMPLE BERNOULLI (2.3)
+                        WHERE (sample_3.c_nationkey IS NOT NULL)
+                        OR (ref_1.l_comment IS NOT NULL)
+                    LIMIT 150))
+        WHERE
+            ref_1.l_suppkey IS NULL
+        LIMIT 142) AS subq_0 ON ((sample_1.p_mfgr IS NOT NULL)
+        AND (0))
+    ON (EXISTS (
+            SELECT
+                47 AS c0,
+                ref_0.c_nationkey AS c1,
+                ref_0.c_address AS c2,
+                ref_0.c_address AS c3
+            FROM
+                main.supplier AS ref_2
+            WHERE
+                EXISTS (
+                    SELECT
+                        subq_0.c5 AS c0, sample_1.p_type AS c1, (
+                            SELECT
+                                c_custkey
+                            FROM
+                                main.customer
+                            LIMIT 1 offset 6) AS c2,
+                        ref_2.s_name AS c3, (
+                            SELECT
+                                s_phone
+                            FROM
+                                main.supplier
+                            LIMIT 1 offset 16) AS c4,
+                        ref_0.c_comment AS c5, (
+                            SELECT
+                                n_name
+                            FROM
+                                main.nation
+                            LIMIT 1 offset 2) AS c6
+                    FROM
+                        main.partsupp AS sample_4 TABLESAMPLE SYSTEM (4.3)
+                    WHERE (((1)
+                            OR (subq_0.c4 IS NOT NULL))
+                        OR (80 IS NULL))
+                    AND (ref_2.s_suppkey IS NOT NULL))
+            LIMIT 136))
+WHERE (1)
+AND (0)
+LIMIT 59),
+jennifer_1 AS (
+    SELECT
+        subq_5.c10 AS c0,
+        subq_1.c0 AS c1
+    FROM (
+        SELECT
+            ref_3.o_clerk AS c0
+        FROM
+            main.orders AS ref_3
+        LEFT JOIN main.customer AS sample_5 TABLESAMPLE BERNOULLI (8.5)
+        ON ((sample_5.c_comment IS NULL)
+                OR (0))
+            INNER JOIN main.orders AS sample_6 TABLESAMPLE SYSTEM (5.9)
+            INNER JOIN main.nation AS ref_4 ON ((1)
+                    OR ((ref_4.n_name IS NULL)
+                        OR (1)))
+                ON ((sample_5.c_nationkey IS NOT NULL)
+                    AND (ref_4.n_name IS NULL))
+            WHERE
+                ref_3.o_clerk IS NOT NULL
+            LIMIT 92) AS subq_1,
+        LATERAL (
+            SELECT
+                subq_1.c0 AS c0,
+                sample_7.p_size AS c1
+            FROM
+                main.part AS sample_7 TABLESAMPLE BERNOULLI (8.5)
+                INNER JOIN main.supplier AS ref_5 ON ((sample_7.p_retailprice IS NULL)
+                        AND (ref_5.s_phone IS NULL))
+                WHERE
+                    1
+                LIMIT 121) AS subq_2,
+            LATERAL (
+                SELECT
+                    subq_1.c0 AS c0,
+                    46 AS c1, (
+                        SELECT
+                            o_shippriority
+                        FROM
+                            main.orders
+                        LIMIT 1 offset 4) AS c2,
+                    subq_1.c0 AS c3, (
+                        SELECT
+                            n_comment
+                        FROM
+                            main.nation
+                        LIMIT 1 offset 61) AS c4,
+                    subq_2.c0 AS c5,
+                    subq_4.c3 AS c6,
+                    subq_2.c1 AS c7,
+                    subq_2.c1 AS c8,
+                    subq_4.c4 AS c9,
+                    subq_1.c0 AS c10
+                FROM (
+                    SELECT
+                        subq_2.c1 AS c0, (
+                            SELECT
+                                l_returnflag
+                            FROM
+                                main.lineitem
+                            LIMIT 1 offset 2) AS c1,
+                        subq_1.c0 AS c2,
+                        ref_6.c_address AS c3,
+                        ref_6.c_comment AS c4
+                    FROM
+                        main.customer AS ref_6,
+                        LATERAL (
+                            SELECT
+                                subq_1.c0 AS c0,
+                                subq_2.c1 AS c1,
+                                ref_7.s_phone AS c2,
+                                subq_1.c0 AS c3,
+                                ref_7.s_suppkey AS c4, (
+                                    SELECT
+                                        s_suppkey
+                                    FROM
+                                        main.supplier
+                                    LIMIT 1 offset 2) AS c5,
+                                subq_1.c0 AS c6,
+                                subq_1.c0 AS c7,
+                                ref_7.s_phone AS c8,
+                                subq_2.c1 AS c9,
+                                subq_1.c0 AS c10,
+                                ref_6.c_nationkey AS c11
+                            FROM
+                                main.supplier AS ref_7
+                            WHERE
+                                1) AS subq_3
+                        WHERE ((EXISTS (
+                                    SELECT
+                                        ref_8.r_regionkey AS c0, subq_2.c0 AS c1, subq_2.c1 AS c2, ref_6.c_comment AS c3, ref_6.c_mktsegment AS c4, ref_6.c_custkey AS c5
+                                    FROM
+                                        main.region AS ref_8
+                                    WHERE
+                                        subq_1.c0 IS NOT NULL))
+                                AND (EXISTS (
+                                        SELECT
+                                            ref_6.c_address AS c0, subq_1.c0 AS c1, sample_8.r_name AS c2, (
+                                                SELECT
+                                                    n_regionkey
+                                                FROM
+                                                    main.nation
+                                                LIMIT 1 offset 6) AS c3,
+                                            subq_3.c9 AS c4,
+                                            subq_1.c0 AS c5,
+                                            ref_6.c_nationkey AS c6,
+                                            sample_8.r_regionkey AS c7,
+                                            31 AS c8,
+                                            sample_8.r_name AS c9
+                                        FROM
+                                            main.region AS sample_8 TABLESAMPLE SYSTEM (2.6)
+                                        WHERE 0
+                                    LIMIT 71)))
+                        OR ((((EXISTS (
+                                            SELECT
+                                                ref_9.s_name AS c0,
+                                                subq_2.c0 AS c1,
+                                                ref_9.s_address AS c2
+                                            FROM
+                                                main.supplier AS ref_9
+                                            WHERE 0
+                                        LIMIT 158))
+                                OR (subq_2.c0 IS NULL))
+                            AND (ref_6.c_comment IS NOT NULL))
+                        AND (ref_6.c_custkey IS NULL))
+                LIMIT 63) AS subq_4
+        WHERE (1)
+        AND ((subq_2.c1 IS NULL)
+            AND ((
+                    SELECT
+                        c_address
+                    FROM
+                        main.customer
+                    LIMIT 1 offset 2)
+                IS NULL))
+    LIMIT 115) AS subq_5
+WHERE (0)
+AND (0)
+LIMIT 159
+)
+SELECT
+    subq_6.c0 AS c0
+FROM (
+    SELECT
+        ref_10.s_nationkey AS c0
+    FROM
+        main.supplier AS ref_10
+    INNER JOIN main.supplier AS ref_11 ON (ref_10.s_nationkey = ref_11.s_suppkey)
+WHERE
+    1
+LIMIT 153) AS subq_6
+WHERE
+    1
+LIMIT 59

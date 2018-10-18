@@ -1,1 +1,23 @@
-insert into main.supplier values ( cast(coalesce(case when (20 is NULL) and (((EXISTS ( select ref_0.s_phone as c0, ref_0.s_phone as c1, ref_0.s_name as c2, ref_0.s_phone as c3, ref_0.s_nationkey as c4, ref_0.s_nationkey as c5, ref_0.s_acctbal as c6, ref_0.s_comment as c7 from main.supplier as ref_0 where ((select r_name from main.region limit 1 offset 5) is not NULL) and (0))) and (77 is not NULL)) and ((26 is not NULL) and (((((0) and (29 is not NULL)) and (41 is not NULL)) and (1)) and (41 is not NULL)))) then 63 else 63 end , 68) as INTEGER), default, cast(null as VARCHAR), 100, default, default, default) 
+INSERT INTO main.supplier
+    VALUES (CAST(coalesce(
+                CASE WHEN (20 IS NULL)
+                    AND (((EXISTS (
+                                    SELECT
+                                        ref_0.s_phone AS c0, ref_0.s_phone AS c1, ref_0.s_name AS c2, ref_0.s_phone AS c3, ref_0.s_nationkey AS c4, ref_0.s_nationkey AS c5, ref_0.s_acctbal AS c6, ref_0.s_comment AS c7 FROM main.supplier AS ref_0
+                                    WHERE ((
+                                            SELECT
+                                                r_name FROM main.region
+                                            LIMIT 1 offset 5)
+                                        IS NOT NULL)
+                                    AND (0)))
+                            AND (77 IS NOT NULL))
+                        AND ((26 IS NOT NULL)
+                            AND (((((0)
+                                            AND (29 IS NOT NULL))
+                                        AND (41 IS NOT NULL))
+                                    AND (1))
+                                AND (41 IS NOT NULL)))) THEN
+                    63
+                ELSE
+                    63
+                END, 68) AS INTEGER), DEFAULT, CAST(NULL AS VARCHAR), 100, DEFAULT, DEFAULT, DEFAULT)

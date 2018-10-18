@@ -1,1 +1,117 @@
-insert into main.orders values ( 26, 54, cast(coalesce(case when 77 is not NULL then cast(null as VARCHAR) else cast(null as VARCHAR) end , cast(null as VARCHAR)) as VARCHAR), case when ((50 is NULL) or ((0) or (((((0) or (0)) or (1)) or (1)) or ((33 is NULL) and ((((((EXISTS ( select ref_0.p_comment as c0, ref_0.p_name as c1, (select n_comment from main.nation limit 1 offset 6) as c2, ref_0.p_partkey as c3, ref_0.p_partkey as c4, (select ps_availqty from main.partsupp limit 1 offset 3) as c5, ref_0.p_mfgr as c6, ref_0.p_brand as c7, ref_0.p_size as c8, ref_0.p_name as c9, ref_0.p_size as c10, ref_0.p_brand as c11, ref_0.p_partkey as c12, 22 as c13, ref_0.p_brand as c14, ref_0.p_container as c15, ref_0.p_brand as c16, ref_0.p_name as c17, ref_0.p_container as c18, ref_0.p_comment as c19, ref_0.p_partkey as c20, ref_0.p_container as c21, ref_0.p_brand as c22, ref_0.p_mfgr as c23, ref_0.p_size as c24, ref_0.p_type as c25, ref_0.p_type as c26, ref_0.p_brand as c27 from main.part as ref_0 where (select c_custkey from main.customer limit 1 offset 5) is not NULL limit 86)) and (81 is not NULL)) and (90 is NULL)) and (1)) and ((35 is NULL) or (0))) or (EXISTS ( select ref_1.ps_supplycost as c0, ref_1.ps_availqty as c1, ref_1.ps_suppkey as c2, ref_1.ps_comment as c3, ref_1.ps_supplycost as c4, ref_1.ps_partkey as c5, ref_1.ps_suppkey as c6, ref_1.ps_availqty as c7, ref_1.ps_supplycost as c8, ref_1.ps_partkey as c9, ref_1.ps_partkey as c10 from main.partsupp as ref_1 where (ref_1.ps_suppkey is NULL) or ((EXISTS ( select subq_0.c1 as c0, subq_0.c0 as c1, ref_2.o_shippriority as c2, (select r_regionkey from main.region limit 1 offset 1) as c3, subq_0.c2 as c4, ref_2.o_custkey as c5, subq_0.c1 as c6, subq_0.c2 as c7, ref_2.o_orderpriority as c8, 62 as c9 from main.orders as ref_2, lateral (select ref_1.ps_supplycost as c0, ref_1.ps_suppkey as c1, ref_3.s_comment as c2 from main.supplier as ref_3 where 0 limit 83) as subq_0 where (0) and (1) limit 99)) or (0)) limit 81))))))) or ((0) or (((1) and (1)) or ((EXISTS ( select subq_1.c1 as c0, ref_4.l_receiptdate as c1, subq_1.c0 as c2, (select r_name from main.region limit 1 offset 1) as c3, subq_1.c0 as c4 from main.lineitem as ref_4, lateral (select ref_5.p_partkey as c0, ref_4.l_shipdate as c1 from main.part as ref_5 where (((((0) or (1)) or (ref_4.l_discount is not NULL)) or (1)) and ((ref_5.p_size is NULL) and (EXISTS ( select ref_4.l_quantity as c0 from main.supplier as ref_6 where 1 limit 41)))) and (ref_5.p_size is not NULL) limit 73) as subq_1 where EXISTS ( select ref_7.n_regionkey as c0, ref_7.n_name as c1, 67 as c2 from main.nation as ref_7 where subq_1.c0 is not NULL))) and (1 is not NULL)))) then cast(null as DECIMAL) else cast(null as DECIMAL) end , default, cast(null as VARCHAR), default, 97, case when 1 then cast(null as VARCHAR) else cast(null as VARCHAR) end ) 
+INSERT INTO main.orders
+    VALUES (26, 54, CAST(coalesce(
+                CASE WHEN 77 IS NOT NULL THEN
+                    CAST(NULL AS VARCHAR)
+                ELSE
+                    CAST(NULL AS VARCHAR)
+                END, CAST(NULL AS VARCHAR)) AS VARCHAR), CASE WHEN ((50 IS NULL)
+                OR ((0)
+                    OR (((((0)
+                                    OR (0))
+                                OR (1))
+                            OR (1))
+                        OR ((33 IS NULL)
+                            AND ((((((EXISTS (
+                                                        SELECT
+                                                            ref_0.p_comment AS c0, ref_0.p_name AS c1, (
+                                                                SELECT
+                                                                    n_comment
+                                                                FROM
+                                                                    main.nation
+                                                                LIMIT 1 offset 6) AS c2, ref_0.p_partkey AS c3, ref_0.p_partkey AS c4, (
+                                                                SELECT
+                                                                    ps_availqty
+                                                                FROM
+                                                                    main.partsupp
+                                                                LIMIT 1 offset 3) AS c5, ref_0.p_mfgr AS c6, ref_0.p_brand AS c7, ref_0.p_size AS c8, ref_0.p_name AS c9, ref_0.p_size AS c10, ref_0.p_brand AS c11, ref_0.p_partkey AS c12, 22 AS c13, ref_0.p_brand AS c14, ref_0.p_container AS c15, ref_0.p_brand AS c16, ref_0.p_name AS c17, ref_0.p_container AS c18, ref_0.p_comment AS c19, ref_0.p_partkey AS c20, ref_0.p_container AS c21, ref_0.p_brand AS c22, ref_0.p_mfgr AS c23, ref_0.p_size AS c24, ref_0.p_type AS c25, ref_0.p_type AS c26, ref_0.p_brand AS c27
+                                                        FROM
+                                                            main.part AS ref_0
+                                                        WHERE (
+                                                            SELECT
+                                                                c_custkey
+                                                            FROM
+                                                                main.customer
+                                                            LIMIT 1 offset 5)
+                                                        IS NOT NULL
+                                                    LIMIT 86))
+                                            AND (81 IS NOT NULL))
+                                        AND (90 IS NULL))
+                                    AND (1))
+                                AND ((35 IS NULL)
+                                    OR (0)))
+                            OR (EXISTS (
+                                    SELECT
+                                        ref_1.ps_supplycost AS c0, ref_1.ps_availqty AS c1, ref_1.ps_suppkey AS c2, ref_1.ps_comment AS c3, ref_1.ps_supplycost AS c4, ref_1.ps_partkey AS c5, ref_1.ps_suppkey AS c6, ref_1.ps_availqty AS c7, ref_1.ps_supplycost AS c8, ref_1.ps_partkey AS c9, ref_1.ps_partkey AS c10
+                                    FROM
+                                        main.partsupp AS ref_1
+                                    WHERE (ref_1.ps_suppkey IS NULL)
+                                    OR ((EXISTS (
+                                                SELECT
+                                                    subq_0.c1 AS c0, subq_0.c0 AS c1, ref_2.o_shippriority AS c2, (
+                                                        SELECT
+                                                            r_regionkey
+                                                        FROM
+                                                            main.region
+                                                        LIMIT 1 offset 1) AS c3, subq_0.c2 AS c4, ref_2.o_custkey AS c5, subq_0.c1 AS c6, subq_0.c2 AS c7, ref_2.o_orderpriority AS c8, 62 AS c9
+                                                FROM
+                                                    main.orders AS ref_2, LATERAL (
+                                                        SELECT
+                                                            ref_1.ps_supplycost AS c0, ref_1.ps_suppkey AS c1, ref_3.s_comment AS c2
+                                                        FROM
+                                                            main.supplier AS ref_3
+                                                        WHERE 0
+                                                    LIMIT 83) AS subq_0
+                                            WHERE (0)
+                                            AND (1)
+                                        LIMIT 99))
+                                OR (0))
+                        LIMIT 81)))))))
+OR ((0)
+    OR (((1)
+            AND (1))
+        OR ((EXISTS (
+                    SELECT
+                        subq_1.c1 AS c0, ref_4.l_receiptdate AS c1, subq_1.c0 AS c2, (
+                            SELECT
+                                r_name
+                            FROM
+                                main.region
+                            LIMIT 1 offset 1) AS c3, subq_1.c0 AS c4
+                    FROM
+                        main.lineitem AS ref_4, LATERAL (
+                            SELECT
+                                ref_5.p_partkey AS c0, ref_4.l_shipdate AS c1
+                            FROM
+                                main.part AS ref_5
+                            WHERE (((((0)
+                                            OR (1))
+                                        OR (ref_4.l_discount IS NOT NULL))
+                                    OR (1))
+                                AND ((ref_5.p_size IS NULL)
+                                    AND (EXISTS (
+                                            SELECT
+                                                ref_4.l_quantity AS c0
+                                            FROM
+                                                main.supplier AS ref_6
+                                            WHERE
+                                                1
+                                            LIMIT 41))))
+                            AND (ref_5.p_size IS NOT NULL)
+                        LIMIT 73) AS subq_1
+                WHERE
+                    EXISTS (
+                        SELECT
+                            ref_7.n_regionkey AS c0, ref_7.n_name AS c1, 67 AS c2
+                        FROM
+                            main.nation AS ref_7
+                        WHERE
+                            subq_1.c0 IS NOT NULL)))
+                AND (1 IS NOT NULL)))) THEN
+    CAST(NULL AS DECIMAL)
+ELSE
+    CAST(NULL AS DECIMAL)
+END, DEFAULT, CAST(NULL AS VARCHAR), DEFAULT, 97, CASE WHEN 1 THEN
+    CAST(NULL AS VARCHAR)
+ELSE
+    CAST(NULL AS VARCHAR)
+END)

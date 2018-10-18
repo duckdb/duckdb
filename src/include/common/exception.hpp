@@ -408,11 +408,10 @@ class SerializationException : public Exception {
 	}
 };
 
-
 class InterruptException : public Exception {
   public:
-	InterruptException() : Exception(ExceptionType::INTERRUPT, "Interrupted!") {
-	}
+	InterruptException()
+	    : Exception(ExceptionType::INTERRUPT, "Interrupted!") {}
 };
 
 } // namespace duckdb

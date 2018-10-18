@@ -29,9 +29,7 @@ class DuckDBConnection {
 	}
 
 	//! Interrupt execution of the current query
-	void Interrupt() {
-		context.Interrupt();
-	}
+	void Interrupt() { context.Interrupt(); }
 
 	void EnableProfiling() { context.profiler.Enable(); }
 

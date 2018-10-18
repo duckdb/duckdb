@@ -1,1 +1,190 @@
-select subq_1.c1 as c0, subq_1.c0 as c1, subq_1.c1 as c2, subq_1.c1 as c3, subq_1.c0 as c4, subq_1.c0 as c5, case when ((EXISTS ( select 86 as c0 from main.supplier as ref_6 where (0) or (0) limit 102)) or ((subq_1.c0 is NULL) or (subq_1.c0 is not NULL))) or ((EXISTS ( select ref_8.l_linenumber as c0, (select o_custkey from main.orders limit 1 offset 4) as c1, ref_7.p_mfgr as c2, subq_1.c0 as c3, subq_1.c0 as c4, ref_7.p_container as c5, ref_8.l_receiptdate as c6, ref_7.p_brand as c7, ref_7.p_container as c8, ref_7.p_type as c9, subq_1.c2 as c10, ref_7.p_mfgr as c11, ref_7.p_brand as c12, ref_8.l_linenumber as c13, ref_8.l_receiptdate as c14, subq_1.c0 as c15, subq_1.c1 as c16, subq_1.c2 as c17, ref_7.p_container as c18, subq_1.c2 as c19, subq_1.c1 as c20, ref_7.p_mfgr as c21, ref_7.p_partkey as c22 from main.part as ref_7 right join main.lineitem as ref_8 on (ref_7.p_size = ref_8.l_orderkey ) where ref_8.l_linenumber is not NULL)) and (EXISTS ( select subq_1.c0 as c0, 1 as c1, subq_1.c0 as c2, subq_1.c2 as c3, subq_1.c1 as c4, ref_9.r_name as c5, subq_1.c0 as c6, ref_9.r_comment as c7, subq_1.c2 as c8, ref_9.r_comment as c9, ref_9.r_comment as c10, ref_9.r_regionkey as c11, ref_9.r_name as c12, ref_9.r_comment as c13, ref_9.r_name as c14 from main.region as ref_9 where ref_9.r_regionkey is NULL))) then (select c_address from main.customer limit 1 offset 2) else (select c_address from main.customer limit 1 offset 2) end as c6, subq_1.c1 as c7, subq_1.c0 as c8, subq_1.c1 as c9, subq_1.c2 as c10, subq_1.c0 as c11 from (select subq_0.c26 as c0, subq_0.c7 as c1, subq_0.c21 as c2 from (select ref_0.s_suppkey as c0, ref_0.s_nationkey as c1, ref_0.s_acctbal as c2, ref_0.s_phone as c3, ref_0.s_phone as c4, ref_0.s_phone as c5, ref_0.s_name as c6, ref_0.s_address as c7, 38 as c8, ref_0.s_nationkey as c9, ref_0.s_name as c10, ref_0.s_nationkey as c11, ref_0.s_phone as c12, ref_0.s_name as c13, ref_0.s_acctbal as c14, ref_0.s_phone as c15, ref_0.s_name as c16, ref_0.s_acctbal as c17, ref_0.s_comment as c18, ref_0.s_address as c19, ref_0.s_comment as c20, ref_0.s_address as c21, ref_0.s_comment as c22, ref_0.s_comment as c23, ref_0.s_name as c24, ref_0.s_suppkey as c25, ref_0.s_address as c26, ref_0.s_phone as c27, ref_0.s_name as c28, ref_0.s_name as c29, ref_0.s_address as c30, ref_0.s_address as c31, ref_0.s_nationkey as c32, ref_0.s_comment as c33 from main.supplier as ref_0 where (select r_regionkey from main.region limit 1 offset 1) is not NULL limit 106) as subq_0 right join main.part as ref_1 on (subq_0.c13 = ref_1.p_name ) where ((0) and ((EXISTS ( select subq_0.c31 as c0, ref_1.p_type as c1 from main.nation as ref_2 where EXISTS ( select ref_1.p_name as c0, ref_3.o_orderkey as c1, ref_2.n_comment as c2, subq_0.c3 as c3 from main.orders as ref_3 where (0) and (((0) and ((ref_3.o_orderdate is NULL) and ((select n_nationkey from main.nation limit 1 offset 6) is not NULL))) or (1))) limit 65)) or ((subq_0.c16 is not NULL) and (1)))) or (EXISTS ( select ref_1.p_comment as c0, subq_0.c26 as c1, ref_1.p_retailprice as c2, ref_4.o_comment as c3, subq_0.c9 as c4, subq_0.c3 as c5 from main.orders as ref_4 where ((0) and (0)) or ((0) and ((1) and (EXISTS ( select ref_4.o_clerk as c0, ref_4.o_shippriority as c1, ref_5.o_custkey as c2, ref_5.o_orderpriority as c3 from main.orders as ref_5 where (ref_5.o_orderkey is not NULL) or (1) limit 128)))))) limit 26) as subq_1 where (subq_1.c0 is not NULL) and ((0) or ((0) or (EXISTS ( select subq_1.c2 as c0, ref_10.l_tax as c1, ref_10.l_shipmode as c2 from main.lineitem as ref_10 where 1 limit 128)))) limit 53 
+SELECT
+    subq_1.c1 AS c0,
+    subq_1.c0 AS c1,
+    subq_1.c1 AS c2,
+    subq_1.c1 AS c3,
+    subq_1.c0 AS c4,
+    subq_1.c0 AS c5,
+    CASE WHEN ((EXISTS (
+                    SELECT
+                        86 AS c0
+                    FROM
+                        main.supplier AS ref_6
+                    WHERE (0)
+                    OR (0)
+                LIMIT 102))
+        OR ((subq_1.c0 IS NULL)
+            OR (subq_1.c0 IS NOT NULL)))
+    OR ((EXISTS (
+                SELECT
+                    ref_8.l_linenumber AS c0, (
+                        SELECT
+                            o_custkey
+                        FROM
+                            main.orders
+                        LIMIT 1 offset 4) AS c1,
+                    ref_7.p_mfgr AS c2,
+                    subq_1.c0 AS c3,
+                    subq_1.c0 AS c4,
+                    ref_7.p_container AS c5,
+                    ref_8.l_receiptdate AS c6,
+                    ref_7.p_brand AS c7,
+                    ref_7.p_container AS c8,
+                    ref_7.p_type AS c9,
+                    subq_1.c2 AS c10,
+                    ref_7.p_mfgr AS c11,
+                    ref_7.p_brand AS c12,
+                    ref_8.l_linenumber AS c13,
+                    ref_8.l_receiptdate AS c14,
+                    subq_1.c0 AS c15,
+                    subq_1.c1 AS c16,
+                    subq_1.c2 AS c17,
+                    ref_7.p_container AS c18,
+                    subq_1.c2 AS c19,
+                    subq_1.c1 AS c20,
+                    ref_7.p_mfgr AS c21,
+                    ref_7.p_partkey AS c22
+                FROM
+                    main.part AS ref_7
+                RIGHT JOIN main.lineitem AS ref_8 ON (ref_7.p_size = ref_8.l_orderkey)
+            WHERE
+                ref_8.l_linenumber IS NOT NULL))
+        AND (EXISTS (
+                SELECT
+                    subq_1.c0 AS c0, 1 AS c1, subq_1.c0 AS c2, subq_1.c2 AS c3, subq_1.c1 AS c4, ref_9.r_name AS c5, subq_1.c0 AS c6, ref_9.r_comment AS c7, subq_1.c2 AS c8, ref_9.r_comment AS c9, ref_9.r_comment AS c10, ref_9.r_regionkey AS c11, ref_9.r_name AS c12, ref_9.r_comment AS c13, ref_9.r_name AS c14
+                FROM
+                    main.region AS ref_9
+                WHERE
+                    ref_9.r_regionkey IS NULL))) THEN
+        (
+            SELECT
+                c_address
+            FROM
+                main.customer
+            LIMIT 1 offset 2)
+    ELSE
+        (
+            SELECT
+                c_address
+            FROM
+                main.customer
+            LIMIT 1 offset 2)
+    END AS c6,
+    subq_1.c1 AS c7,
+    subq_1.c0 AS c8,
+    subq_1.c1 AS c9,
+    subq_1.c2 AS c10,
+    subq_1.c0 AS c11
+FROM (
+    SELECT
+        subq_0.c26 AS c0,
+        subq_0.c7 AS c1,
+        subq_0.c21 AS c2
+    FROM (
+        SELECT
+            ref_0.s_suppkey AS c0,
+            ref_0.s_nationkey AS c1,
+            ref_0.s_acctbal AS c2,
+            ref_0.s_phone AS c3,
+            ref_0.s_phone AS c4,
+            ref_0.s_phone AS c5,
+            ref_0.s_name AS c6,
+            ref_0.s_address AS c7,
+            38 AS c8,
+            ref_0.s_nationkey AS c9,
+            ref_0.s_name AS c10,
+            ref_0.s_nationkey AS c11,
+            ref_0.s_phone AS c12,
+            ref_0.s_name AS c13,
+            ref_0.s_acctbal AS c14,
+            ref_0.s_phone AS c15,
+            ref_0.s_name AS c16,
+            ref_0.s_acctbal AS c17,
+            ref_0.s_comment AS c18,
+            ref_0.s_address AS c19,
+            ref_0.s_comment AS c20,
+            ref_0.s_address AS c21,
+            ref_0.s_comment AS c22,
+            ref_0.s_comment AS c23,
+            ref_0.s_name AS c24,
+            ref_0.s_suppkey AS c25,
+            ref_0.s_address AS c26,
+            ref_0.s_phone AS c27,
+            ref_0.s_name AS c28,
+            ref_0.s_name AS c29,
+            ref_0.s_address AS c30,
+            ref_0.s_address AS c31,
+            ref_0.s_nationkey AS c32,
+            ref_0.s_comment AS c33
+        FROM
+            main.supplier AS ref_0
+        WHERE (
+            SELECT
+                r_regionkey
+            FROM
+                main.region
+            LIMIT 1 offset 1)
+        IS NOT NULL
+    LIMIT 106) AS subq_0
+    RIGHT JOIN main.part AS ref_1 ON (subq_0.c13 = ref_1.p_name)
+WHERE ((0)
+    AND ((EXISTS (
+                SELECT
+                    subq_0.c31 AS c0, ref_1.p_type AS c1
+                FROM
+                    main.nation AS ref_2
+                WHERE
+                    EXISTS (
+                        SELECT
+                            ref_1.p_name AS c0, ref_3.o_orderkey AS c1, ref_2.n_comment AS c2, subq_0.c3 AS c3
+                        FROM
+                            main.orders AS ref_3
+                        WHERE (0)
+                        AND (((0)
+                                AND ((ref_3.o_orderdate IS NULL)
+                                    AND ((
+                                            SELECT
+                                                n_nationkey
+                                            FROM
+                                                main.nation
+                                            LIMIT 1 offset 6)
+                                        IS NOT NULL)))
+                            OR (1)))
+                LIMIT 65))
+        OR ((subq_0.c16 IS NOT NULL)
+            AND (1))))
+OR (EXISTS (
+        SELECT
+            ref_1.p_comment AS c0,
+            subq_0.c26 AS c1,
+            ref_1.p_retailprice AS c2,
+            ref_4.o_comment AS c3,
+            subq_0.c9 AS c4,
+            subq_0.c3 AS c5
+        FROM
+            main.orders AS ref_4
+        WHERE ((0)
+            AND (0))
+        OR ((0)
+            AND ((1)
+                AND (EXISTS (
+                        SELECT
+                            ref_4.o_clerk AS c0, ref_4.o_shippriority AS c1, ref_5.o_custkey AS c2, ref_5.o_orderpriority AS c3
+                        FROM
+                            main.orders AS ref_5
+                        WHERE (ref_5.o_orderkey IS NOT NULL)
+                        OR (1)
+                    LIMIT 128))))))
+LIMIT 26) AS subq_1
+WHERE (subq_1.c0 IS NOT NULL)
+AND ((0)
+    OR ((0)
+        OR (EXISTS (
+                SELECT
+                    subq_1.c2 AS c0, ref_10.l_tax AS c1, ref_10.l_shipmode AS c2
+                FROM
+                    main.lineitem AS ref_10
+                WHERE
+                    1
+                LIMIT 128))))
+LIMIT 53

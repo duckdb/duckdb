@@ -181,7 +181,6 @@ int main(int argc, char *argv[]) {
 					out_file << s.str() << endl;
 					out_file.close();
 
-
 					/* Try to execute it */
 					try {
 						dut->test(s.str());

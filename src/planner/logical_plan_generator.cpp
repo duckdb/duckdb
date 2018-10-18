@@ -474,8 +474,8 @@ void LogicalPlanGenerator::Visit(InsertStatement &statement) {
 		root = move(insert);
 	} else {
 		// first visit the expressions
-		for(auto &expression_list : statement.values) {
-			for(auto &expression : expression_list) {
+		for (auto &expression_list : statement.values) {
+			for (auto &expression : expression_list) {
 				expression->Accept(this);
 			}
 		}

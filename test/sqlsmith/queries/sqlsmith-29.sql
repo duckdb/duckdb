@@ -1,1 +1,59 @@
-select subq_1.c2 as c0, subq_1.c1 as c1 from (select ref_0.l_tax as c0, subq_0.c4 as c1, ref_0.l_extendedprice as c2 from main.lineitem as ref_0 left join (select ref_1.n_regionkey as c0, ref_1.n_comment as c1, ref_1.n_name as c2, 90 as c3, ref_1.n_regionkey as c4, ref_1.n_name as c5, ref_1.n_name as c6, (select o_comment from main.orders limit 1 offset 6) as c7 from main.nation as ref_1 where EXISTS ( select ref_2.s_address as c0, ref_2.s_phone as c1, 92 as c2, ref_1.n_comment as c3 from main.supplier as ref_2 where ref_1.n_comment is NULL limit 86)) as subq_0 on ((EXISTS ( select ref_0.l_commitdate as c0 from main.lineitem as ref_3 where ref_3.l_suppkey is NULL limit 159)) or (subq_0.c0 is NULL)) where EXISTS ( select ref_0.l_comment as c0 from main.lineitem as ref_4 where ((ref_0.l_commitdate is NULL) or (subq_0.c3 is NULL)) and (1) limit 134) limit 111) as subq_1 where ((subq_1.c0 is not NULL) or (subq_1.c0 is not NULL)) or ((1) and (subq_1.c2 is not NULL)) limit 99 
+SELECT
+    subq_1.c2 AS c0,
+    subq_1.c1 AS c1
+FROM (
+    SELECT
+        ref_0.l_tax AS c0,
+        subq_0.c4 AS c1,
+        ref_0.l_extendedprice AS c2
+    FROM
+        main.lineitem AS ref_0
+    LEFT JOIN (
+        SELECT
+            ref_1.n_regionkey AS c0,
+            ref_1.n_comment AS c1,
+            ref_1.n_name AS c2,
+            90 AS c3,
+            ref_1.n_regionkey AS c4,
+            ref_1.n_name AS c5,
+            ref_1.n_name AS c6, (
+                SELECT
+                    o_comment
+                FROM
+                    main.orders
+                LIMIT 1 offset 6) AS c7
+        FROM
+            main.nation AS ref_1
+        WHERE
+            EXISTS (
+                SELECT
+                    ref_2.s_address AS c0, ref_2.s_phone AS c1, 92 AS c2, ref_1.n_comment AS c3
+                FROM
+                    main.supplier AS ref_2
+                WHERE
+                    ref_1.n_comment IS NULL
+                LIMIT 86)) AS subq_0 ON ((EXISTS (
+                    SELECT
+                        ref_0.l_commitdate AS c0
+                    FROM
+                        main.lineitem AS ref_3
+                    WHERE
+                        ref_3.l_suppkey IS NULL
+                    LIMIT 159))
+            OR (subq_0.c0 IS NULL))
+    WHERE
+        EXISTS (
+            SELECT
+                ref_0.l_comment AS c0
+            FROM
+                main.lineitem AS ref_4
+            WHERE ((ref_0.l_commitdate IS NULL)
+                OR (subq_0.c3 IS NULL))
+            AND (1)
+        LIMIT 134)
+LIMIT 111) AS subq_1
+WHERE ((subq_1.c0 IS NOT NULL)
+    OR (subq_1.c0 IS NOT NULL))
+OR ((1)
+    AND (subq_1.c2 IS NOT NULL))
+LIMIT 99

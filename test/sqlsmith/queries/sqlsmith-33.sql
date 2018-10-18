@@ -1,1 +1,31 @@
-insert into main.lineitem values ( 1, 51, case when 0 then 86 else 86 end , case when (64 is NULL) and ((select p_type from main.part limit 1 offset 1) is NULL) then 89 else 89 end , cast(coalesce(29, 70) as INTEGER), cast(null as DECIMAL), cast(nullif(cast(null as DECIMAL), cast(null as DECIMAL)) as DECIMAL), default, default, default, case when (select l_shipmode from main.lineitem limit 1 offset 4) is NULL then cast(null as DATE) else cast(null as DATE) end , cast(null as DATE), cast(coalesce(cast(null as DATE), case when 50 is not NULL then cast(null as DATE) else cast(null as DATE) end ) as DATE), cast(null as VARCHAR), cast(null as VARCHAR), default) 
+INSERT INTO main.lineitem
+    VALUES (1, 51, CASE WHEN 0 THEN
+            86
+        ELSE
+            86
+        END, CASE WHEN (64 IS NULL)
+            AND ((
+                    SELECT
+                        p_type
+                    FROM
+                        main.part
+                    LIMIT 1 offset 1)
+                IS NULL) THEN
+            89
+        ELSE
+            89
+        END, CAST(coalesce(29, 70) AS INTEGER), CAST(NULL AS DECIMAL), CAST(nullif (CAST(NULL AS DECIMAL), CAST(NULL AS DECIMAL)) AS DECIMAL), DEFAULT, DEFAULT, DEFAULT, CASE WHEN (
+                SELECT
+                    l_shipmode
+                FROM
+                    main.lineitem
+                LIMIT 1 offset 4)
+            IS NULL THEN
+            CAST(NULL AS DATE)
+        ELSE
+            CAST(NULL AS DATE)
+        END, CAST(NULL AS DATE), CAST(coalesce(CAST(NULL AS DATE), CASE WHEN 50 IS NOT NULL THEN
+                    CAST(NULL AS DATE)
+                ELSE
+                    CAST(NULL AS DATE)
+                END) AS DATE), CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR), DEFAULT)

@@ -1,1 +1,24 @@
-insert into main.nation values ( case when ((1) and ((((((1) or (((21 is NULL) or ((select ps_suppkey from main.partsupp limit 1 offset 4) is not NULL)) or (53 is NULL))) or (0)) and (99 is NULL)) and (63 is not NULL)) or ((16 is NULL) and (92 is not NULL)))) and ((0) or (1)) then 23 else 23 end , cast(null as VARCHAR), 22, default) 
+INSERT INTO main.nation
+    VALUES (
+        CASE WHEN ((1)
+                AND ((((((1)
+                                    OR (((21 IS NULL)
+                                            OR ((
+                                                    SELECT
+                                                        ps_suppkey
+                                                    FROM
+                                                        main.partsupp
+                                                    LIMIT 1 offset 4)
+                                                IS NOT NULL))
+                                        OR (53 IS NULL)))
+                                OR (0))
+                            AND (99 IS NULL))
+                        AND (63 IS NOT NULL))
+                    OR ((16 IS NULL)
+                        AND (92 IS NOT NULL))))
+            AND ((0)
+                OR (1)) THEN
+            23
+        ELSE
+            23
+        END, CAST(NULL AS VARCHAR), 22, DEFAULT)

@@ -1,1 +1,13 @@
-insert into main.partsupp values ( 32, case when ((select c_name from main.customer limit 1 offset 5) is not NULL) or (71 is not NULL) then 83 else 83 end , 52, cast(null as DECIMAL), default) 
+INSERT INTO main.partsupp
+    VALUES (32, CASE WHEN ((
+                    SELECT
+                        c_name
+                    FROM
+                        main.customer
+                    LIMIT 1 offset 5)
+                IS NOT NULL)
+            OR (71 IS NOT NULL) THEN
+            83
+        ELSE
+            83
+        END, 52, CAST(NULL AS DECIMAL), DEFAULT)

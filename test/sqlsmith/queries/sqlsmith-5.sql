@@ -1,1 +1,25 @@
-insert into main.part values ( 3, cast(null as VARCHAR), case when (((1) or ((EXISTS ( select (select ps_partkey from main.partsupp limit 1 offset 2) as c0 from main.lineitem as ref_0 where (1) and ((ref_0.l_discount is not NULL) and (ref_0.l_orderkey is NULL)))) and (((1) and (36 is NULL)) and (1)))) and ((48 is not NULL) and (1))) and (98 is NULL) then cast(null as VARCHAR) else cast(null as VARCHAR) end , cast(null as VARCHAR), cast(nullif(cast(null as VARCHAR), cast(null as VARCHAR)) as VARCHAR), 64, cast(coalesce(cast(null as VARCHAR), cast(null as VARCHAR)) as VARCHAR), cast(nullif(cast(null as DECIMAL), cast(null as DECIMAL)) as DECIMAL), default) 
+INSERT INTO main.part
+    VALUES (3, CAST(NULL AS VARCHAR), CASE WHEN (((1)
+                    OR ((EXISTS (
+                                SELECT
+                                    (
+                                        SELECT
+                                            ps_partkey
+                                        FROM
+                                            main.partsupp
+                                        LIMIT 1 offset 2) AS c0
+                                FROM
+                                    main.lineitem AS ref_0
+                                WHERE (1)
+                                AND ((ref_0.l_discount IS NOT NULL)
+                                    AND (ref_0.l_orderkey IS NULL))))
+                        AND (((1)
+                                AND (36 IS NULL))
+                            AND (1))))
+                AND ((48 IS NOT NULL)
+                    AND (1)))
+            AND (98 IS NULL) THEN
+            CAST(NULL AS VARCHAR)
+        ELSE
+            CAST(NULL AS VARCHAR)
+        END, CAST(NULL AS VARCHAR), CAST(nullif (CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR)) AS VARCHAR), 64, CAST(coalesce(CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR)) AS VARCHAR), CAST(nullif (CAST(NULL AS DECIMAL), CAST(NULL AS DECIMAL)) AS DECIMAL), DEFAULT)

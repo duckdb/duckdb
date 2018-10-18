@@ -27,10 +27,8 @@ class ClientContext {
 
 	Transaction &ActiveTransaction() { return transaction.ActiveTransaction(); }
 
-	void Interrupt() {
-		interrupted = true;
-	}
-	
+	void Interrupt() { interrupted = true; }
+
 	//! The allocator that holds any allocations made in the Query Context
 	Allocator allocator;
 	//! Query profiler

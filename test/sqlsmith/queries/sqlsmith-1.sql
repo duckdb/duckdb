@@ -1,1 +1,199 @@
-select subq_0.c2 as c0 from (select ref_4.n_nationkey as c0, ref_4.n_regionkey as c1, ref_4.n_nationkey as c2, ref_4.n_name as c3, ref_0.s_address as c4, ref_4.n_name as c5, ref_4.n_name as c6, ref_0.s_address as c7 from main.supplier as ref_0 inner join main.nation as ref_1 on ((((0) and ((ref_0.s_phone is NULL) and (ref_0.s_nationkey is NULL))) or (EXISTS ( select ref_0.s_address as c0, ref_1.n_regionkey as c1, ref_2.p_name as c2, ref_0.s_address as c3, ref_2.p_comment as c4, ref_2.p_mfgr as c5, ref_2.p_type as c6, ref_0.s_comment as c7, 79 as c8, ref_1.n_name as c9, (select c_acctbal from main.customer limit 1 offset 1) as c10, ref_2.p_mfgr as c11, ref_0.s_acctbal as c12, ref_0.s_nationkey as c13 from main.part as ref_2 where EXISTS ( select 25 as c0, ref_3.n_comment as c1 from main.nation as ref_3 where 1) limit 161))) or (((ref_1.n_regionkey is NULL) or (ref_0.s_nationkey is NULL)) or (ref_1.n_comment is not NULL))) right join main.nation as ref_4 on (((ref_0.s_acctbal is NULL) or ((ref_4.n_regionkey is NULL) or (((ref_1.n_nationkey is not NULL) or ((1) and (((((1) or (0)) and (ref_0.s_address is NULL)) and (1)) or (1)))) or (0)))) and ((1) and ((ref_4.n_nationkey is NULL) and ((select r_comment from main.region limit 1 offset 37) is NULL)))) where (((EXISTS ( select ref_5.o_orderkey as c0, ref_0.s_address as c1 from main.orders as ref_5 where ((0) and (1)) or ((((((1) or (EXISTS ( select ref_4.n_name as c0, ref_4.n_regionkey as c1 from main.lineitem as ref_6 where EXISTS ( select ref_6.l_receiptdate as c0, ref_1.n_regionkey as c1 from main.supplier as ref_7 where EXISTS ( select ref_7.s_comment as c0, ref_7.s_nationkey as c1, ref_6.l_shipdate as c2, ref_8.s_suppkey as c3 from main.supplier as ref_8 where ref_5.o_clerk is NULL) limit 82) limit 112))) or (1)) and (0)) or (((EXISTS ( select 82 as c0, ref_4.n_comment as c1, ref_1.n_name as c2, ref_5.o_totalprice as c3, ref_0.s_nationkey as c4, ref_4.n_name as c5, ref_4.n_name as c6, ref_5.o_orderpriority as c7, ref_5.o_orderstatus as c8, (select r_regionkey from main.region limit 1 offset 6) as c9 from main.part as ref_9 where (EXISTS ( select ref_10.c_phone as c0, ref_5.o_orderkey as c1, (select o_comment from main.orders limit 1 offset 1) as c2, ref_5.o_shippriority as c3, ref_10.c_address as c4, ref_9.p_type as c5, ref_1.n_regionkey as c6, ref_10.c_address as c7 from main.customer as ref_10 where ref_1.n_regionkey is not NULL limit 173)) or (1) limit 105)) or (EXISTS ( select 46 as c0, ref_0.s_acctbal as c1 from main.nation as ref_11 where EXISTS ( select ref_0.s_name as c0 from main.region as ref_12 where ref_1.n_name is NULL limit 49) limit 96))) or ((0) or (ref_5.o_comment is NULL)))) or (1)))) or (EXISTS ( select ref_1.n_regionkey as c0, ref_0.s_nationkey as c1, ref_1.n_regionkey as c2 from main.nation as ref_13 where 0 limit 134))) and (1)) and (EXISTS ( select ref_1.n_name as c0, ref_14.o_totalprice as c1 from main.orders as ref_14 where (EXISTS ( select ref_0.s_phone as c0, ref_14.o_clerk as c1, ref_15.ps_availqty as c2, ref_0.s_acctbal as c3, ref_0.s_suppkey as c4, ref_15.ps_supplycost as c5, ref_0.s_name as c6, ref_1.n_comment as c7, ref_14.o_orderpriority as c8, ref_4.n_comment as c9, ref_14.o_clerk as c10, ref_14.o_custkey as c11, 7 as c12 from main.partsupp as ref_15 where ((((0) and (0)) and (ref_15.ps_suppkey is NULL)) and (1)) and (1))) and (ref_14.o_shippriority is not NULL) limit 106)) limit 105) as subq_0 right join main.customer as ref_16 on ((((0) and (1)) or (((1) and (0)) and (ref_16.c_acctbal is NULL))) and ((subq_0.c6 is NULL) or ((ref_16.c_address is NULL) or ((0) or (1))))) where 1 limit 153 
+SELECT
+    subq_0.c2 AS c0
+FROM (
+    SELECT
+        ref_4.n_nationkey AS c0,
+        ref_4.n_regionkey AS c1,
+        ref_4.n_nationkey AS c2,
+        ref_4.n_name AS c3,
+        ref_0.s_address AS c4,
+        ref_4.n_name AS c5,
+        ref_4.n_name AS c6,
+        ref_0.s_address AS c7
+    FROM
+        main.supplier AS ref_0
+    INNER JOIN main.nation AS ref_1 ON ((((0)
+                    AND ((ref_0.s_phone IS NULL)
+                        AND (ref_0.s_nationkey IS NULL)))
+                OR (EXISTS (
+                        SELECT
+                            ref_0.s_address AS c0,
+                            ref_1.n_regionkey AS c1,
+                            ref_2.p_name AS c2,
+                            ref_0.s_address AS c3,
+                            ref_2.p_comment AS c4,
+                            ref_2.p_mfgr AS c5,
+                            ref_2.p_type AS c6,
+                            ref_0.s_comment AS c7,
+                            79 AS c8,
+                            ref_1.n_name AS c9, (
+                                SELECT
+                                    c_acctbal
+                                FROM
+                                    main.customer
+                                LIMIT 1 offset 1) AS c10,
+                            ref_2.p_mfgr AS c11,
+                            ref_0.s_acctbal AS c12,
+                            ref_0.s_nationkey AS c13
+                        FROM
+                            main.part AS ref_2
+                        WHERE
+                            EXISTS (
+                                SELECT
+                                    25 AS c0, ref_3.n_comment AS c1
+                                FROM
+                                    main.nation AS ref_3
+                                WHERE
+                                    1)
+                            LIMIT 161)))
+                OR (((ref_1.n_regionkey IS NULL)
+                        OR (ref_0.s_nationkey IS NULL))
+                    OR (ref_1.n_comment IS NOT NULL)))
+            RIGHT JOIN main.nation AS ref_4 ON (((ref_0.s_acctbal IS NULL)
+                        OR ((ref_4.n_regionkey IS NULL)
+                            OR (((ref_1.n_nationkey IS NOT NULL)
+                                    OR ((1)
+                                        AND (((((1)
+                                                        OR (0))
+                                                    AND (ref_0.s_address IS NULL))
+                                                AND (1))
+                                            OR (1))))
+                                OR (0))))
+                    AND ((1)
+                        AND ((ref_4.n_nationkey IS NULL)
+                            AND ((
+                                    SELECT
+                                        r_comment
+                                    FROM
+                                        main.region
+                                    LIMIT 1 offset 37)
+                                IS NULL))))
+            WHERE (((EXISTS (
+                            SELECT
+                                ref_5.o_orderkey AS c0, ref_0.s_address AS c1
+                            FROM
+                                main.orders AS ref_5
+                            WHERE ((0)
+                                AND (1))
+                            OR ((((((1)
+                                                OR (EXISTS (
+                                                        SELECT
+                                                            ref_4.n_name AS c0, ref_4.n_regionkey AS c1
+                                                        FROM
+                                                            main.lineitem AS ref_6
+                                                        WHERE
+                                                            EXISTS (
+                                                                SELECT
+                                                                    ref_6.l_receiptdate AS c0, ref_1.n_regionkey AS c1
+                                                                FROM
+                                                                    main.supplier AS ref_7
+                                                                WHERE
+                                                                    EXISTS (
+                                                                        SELECT
+                                                                            ref_7.s_comment AS c0, ref_7.s_nationkey AS c1, ref_6.l_shipdate AS c2, ref_8.s_suppkey AS c3
+                                                                        FROM
+                                                                            main.supplier AS ref_8
+                                                                        WHERE
+                                                                            ref_5.o_clerk IS NULL)
+                                                                    LIMIT 82)
+                                                            LIMIT 112)))
+                                                OR (1))
+                                            AND (0))
+                                        OR (((EXISTS (
+                                                        SELECT
+                                                            82 AS c0,
+                                                            ref_4.n_comment AS c1,
+                                                            ref_1.n_name AS c2,
+                                                            ref_5.o_totalprice AS c3,
+                                                            ref_0.s_nationkey AS c4,
+                                                            ref_4.n_name AS c5,
+                                                            ref_4.n_name AS c6,
+                                                            ref_5.o_orderpriority AS c7,
+                                                            ref_5.o_orderstatus AS c8, (
+                                                                SELECT
+                                                                    r_regionkey
+                                                                FROM
+                                                                    main.region
+                                                                LIMIT 1 offset 6) AS c9
+                                                        FROM
+                                                            main.part AS ref_9
+                                                        WHERE (EXISTS (
+                                                                SELECT
+                                                                    ref_10.c_phone AS c0, ref_5.o_orderkey AS c1, (
+                                                                        SELECT
+                                                                            o_comment
+                                                                        FROM
+                                                                            main.orders
+                                                                        LIMIT 1 offset 1) AS c2,
+                                                                    ref_5.o_shippriority AS c3,
+                                                                    ref_10.c_address AS c4,
+                                                                    ref_9.p_type AS c5,
+                                                                    ref_1.n_regionkey AS c6,
+                                                                    ref_10.c_address AS c7
+                                                                FROM
+                                                                    main.customer AS ref_10
+                                                                WHERE
+                                                                    ref_1.n_regionkey IS NOT NULL
+                                                                LIMIT 173))
+                                                        OR (1)
+                                                    LIMIT 105))
+                                            OR (EXISTS (
+                                                    SELECT
+                                                        46 AS c0,
+                                                        ref_0.s_acctbal AS c1
+                                                    FROM
+                                                        main.nation AS ref_11
+                                                    WHERE
+                                                        EXISTS (
+                                                            SELECT
+                                                                ref_0.s_name AS c0
+                                                            FROM
+                                                                main.region AS ref_12
+                                                            WHERE
+                                                                ref_1.n_name IS NULL
+                                                            LIMIT 49)
+                                                    LIMIT 96)))
+                                        OR ((0)
+                                            OR (ref_5.o_comment IS NULL))))
+                                OR (1))))
+                    OR (EXISTS (
+                            SELECT
+                                ref_1.n_regionkey AS c0,
+                                ref_0.s_nationkey AS c1,
+                                ref_1.n_regionkey AS c2
+                            FROM
+                                main.nation AS ref_13
+                            WHERE 0
+                        LIMIT 134)))
+            AND (1))
+        AND (EXISTS (
+                SELECT
+                    ref_1.n_name AS c0,
+                    ref_14.o_totalprice AS c1
+                FROM
+                    main.orders AS ref_14
+                WHERE (EXISTS (
+                        SELECT
+                            ref_0.s_phone AS c0, ref_14.o_clerk AS c1, ref_15.ps_availqty AS c2, ref_0.s_acctbal AS c3, ref_0.s_suppkey AS c4, ref_15.ps_supplycost AS c5, ref_0.s_name AS c6, ref_1.n_comment AS c7, ref_14.o_orderpriority AS c8, ref_4.n_comment AS c9, ref_14.o_clerk AS c10, ref_14.o_custkey AS c11, 7 AS c12
+                        FROM
+                            main.partsupp AS ref_15
+                        WHERE ((((0)
+                                    AND (0))
+                                AND (ref_15.ps_suppkey IS NULL))
+                            AND (1))
+                        AND (1)))
+                AND (ref_14.o_shippriority IS NOT NULL)
+            LIMIT 106))
+LIMIT 105) AS subq_0
+    RIGHT JOIN main.customer AS ref_16 ON ((((0)
+                    AND (1))
+                OR (((1)
+                        AND (0))
+                    AND (ref_16.c_acctbal IS NULL)))
+            AND ((subq_0.c6 IS NULL)
+                OR ((ref_16.c_address IS NULL)
+                    OR ((0)
+                        OR (1)))))
+    WHERE
+        1
+    LIMIT 153

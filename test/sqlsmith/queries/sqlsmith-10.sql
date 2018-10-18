@@ -1,1 +1,57 @@
-select subq_1.c1 as c0, subq_1.c1 as c1, subq_1.c1 as c2 from (select subq_0.c5 as c0, subq_0.c7 as c1, subq_0.c4 as c2 from (select 80 as c0, ref_2.c_custkey as c1, ref_1.n_nationkey as c2, ref_2.c_acctbal as c3, 30 as c4, ref_2.c_nationkey as c5, ref_2.c_phone as c6, ref_0.s_comment as c7 from main.supplier as ref_0 right join main.nation as ref_1 on (ref_0.s_phone = ref_1.n_name ) inner join main.customer as ref_2 on ((ref_0.s_name is not NULL) or (0)) where ((EXISTS ( select ref_2.c_acctbal as c0, ref_3.c_address as c1, ref_0.s_phone as c2 from main.customer as ref_3 where ref_1.n_nationkey is NULL limit 115)) and ((select ps_availqty from main.partsupp limit 1 offset 5) is not NULL)) or (ref_1.n_regionkey is not NULL) limit 67) as subq_0 where subq_0.c7 is not NULL) as subq_1 where ((subq_1.c0 is NULL) or (((EXISTS ( select ref_4.p_container as c0 from main.part as ref_4 where subq_1.c1 is NULL limit 109)) or (63 is NULL)) or (1))) and ((1) and (subq_1.c1 is NULL)) limit 166 
+SELECT
+    subq_1.c1 AS c0,
+    subq_1.c1 AS c1,
+    subq_1.c1 AS c2
+FROM (
+    SELECT
+        subq_0.c5 AS c0,
+        subq_0.c7 AS c1,
+        subq_0.c4 AS c2
+    FROM (
+        SELECT
+            80 AS c0,
+            ref_2.c_custkey AS c1,
+            ref_1.n_nationkey AS c2,
+            ref_2.c_acctbal AS c3,
+            30 AS c4,
+            ref_2.c_nationkey AS c5,
+            ref_2.c_phone AS c6,
+            ref_0.s_comment AS c7
+        FROM
+            main.supplier AS ref_0
+        RIGHT JOIN main.nation AS ref_1 ON (ref_0.s_phone = ref_1.n_name)
+        INNER JOIN main.customer AS ref_2 ON ((ref_0.s_name IS NOT NULL)
+                OR (0))
+        WHERE ((EXISTS (
+                    SELECT
+                        ref_2.c_acctbal AS c0, ref_3.c_address AS c1, ref_0.s_phone AS c2
+                    FROM
+                        main.customer AS ref_3
+                    WHERE
+                        ref_1.n_nationkey IS NULL
+                    LIMIT 115))
+            AND ((
+                    SELECT
+                        ps_availqty
+                    FROM
+                        main.partsupp
+                    LIMIT 1 offset 5)
+                IS NOT NULL))
+        OR (ref_1.n_regionkey IS NOT NULL)
+    LIMIT 67) AS subq_0
+WHERE
+    subq_0.c7 IS NOT NULL) AS subq_1
+WHERE ((subq_1.c0 IS NULL)
+    OR (((EXISTS (
+                    SELECT
+                        ref_4.p_container AS c0
+                    FROM
+                        main.part AS ref_4
+                    WHERE
+                        subq_1.c1 IS NULL
+                    LIMIT 109))
+            OR (63 IS NULL))
+        OR (1)))
+AND ((1)
+    AND (subq_1.c1 IS NULL))
+LIMIT 166

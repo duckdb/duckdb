@@ -215,9 +215,9 @@ volatile bool is_active = false;
 // timeout is 10ms * TIMEOUT_TICKS
 #define TIMEOUT_TICKS 50
 
-void sleep_thread(DuckDBConnection* connection) {
-	for(size_t i = 0; i < TIMEOUT_TICKS && is_active; i++) {
-    	std::this_thread::sleep_for(std::chrono::milliseconds(10));
+void sleep_thread(DuckDBConnection *connection) {
+	for (size_t i = 0; i < TIMEOUT_TICKS && is_active; i++) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 	}
 	if (is_active) {
 		connection->Interrupt();

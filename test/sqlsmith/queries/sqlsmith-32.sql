@@ -1,1 +1,41 @@
-insert into main.customer values ( case when EXISTS ( select subq_0.c7 as c0, subq_0.c4 as c1, subq_0.c5 as c2, subq_0.c3 as c3 from (select ref_0.l_discount as c0, ref_0.l_orderkey as c1, ref_0.l_partkey as c2, (select r_comment from main.region limit 1 offset 3) as c3, ref_0.l_discount as c4, ref_0.l_linenumber as c5, ref_0.l_quantity as c6, ref_0.l_shipinstruct as c7, ref_0.l_tax as c8 from main.lineitem as ref_0 where (((ref_0.l_linestatus is NULL) and (1)) and (ref_0.l_commitdate is not NULL)) and ((1) or (EXISTS ( select ref_0.l_suppkey as c0, ref_1.r_comment as c1, ref_0.l_returnflag as c2 from main.region as ref_1 where (EXISTS ( select ref_2.o_custkey as c0, ref_2.o_orderpriority as c1, ref_1.r_regionkey as c2, 7 as c3 from main.orders as ref_2 where 0 limit 145)) or (1) limit 140))) limit 170) as subq_0 where subq_0.c8 is NULL limit 144) then 10 else 10 end , cast(coalesce(cast(null as VARCHAR), cast(null as VARCHAR)) as VARCHAR), cast(null as VARCHAR), cast(coalesce(50, 95) as INTEGER), cast(null as VARCHAR), cast(null as DECIMAL), cast(null as VARCHAR), default) 
+INSERT INTO main.customer
+    VALUES (
+        CASE WHEN EXISTS (
+                SELECT
+                    subq_0.c7 AS c0, subq_0.c4 AS c1, subq_0.c5 AS c2, subq_0.c3 AS c3
+                FROM (
+                    SELECT
+                        ref_0.l_discount AS c0, ref_0.l_orderkey AS c1, ref_0.l_partkey AS c2, (
+                            SELECT
+                                r_comment
+                            FROM
+                                main.region
+                            LIMIT 1 offset 3) AS c3, ref_0.l_discount AS c4, ref_0.l_linenumber AS c5, ref_0.l_quantity AS c6, ref_0.l_shipinstruct AS c7, ref_0.l_tax AS c8
+                    FROM
+                        main.lineitem AS ref_0
+                    WHERE (((ref_0.l_linestatus IS NULL)
+                            AND (1))
+                        AND (ref_0.l_commitdate IS NOT NULL))
+                    AND ((1)
+                        OR (EXISTS (
+                                SELECT
+                                    ref_0.l_suppkey AS c0, ref_1.r_comment AS c1, ref_0.l_returnflag AS c2
+                                FROM
+                                    main.region AS ref_1
+                                WHERE (EXISTS (
+                                        SELECT
+                                            ref_2.o_custkey AS c0, ref_2.o_orderpriority AS c1, ref_1.r_regionkey AS c2, 7 AS c3
+                                        FROM
+                                            main.orders AS ref_2
+                                        WHERE 0
+                                    LIMIT 145))
+                            OR (1)
+                        LIMIT 140)))
+        LIMIT 170) AS subq_0
+WHERE
+    subq_0.c8 IS NULL
+LIMIT 144) THEN
+10
+ELSE
+    10
+END, CAST(coalesce(CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR)) AS VARCHAR), CAST(NULL AS VARCHAR), CAST(coalesce(50, 95) AS INTEGER), CAST(NULL AS VARCHAR), CAST(NULL AS DECIMAL), CAST(NULL AS VARCHAR), DEFAULT)
