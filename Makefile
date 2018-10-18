@@ -48,4 +48,4 @@ sqlite: main | third_party/sqllogictest
 	./build/debug/test/unittest "[sqlitelogic]"
 
 sqlsmith: main
-	./build/debug/third_party/sqlsmith/sqlsmith --sqlite=sqlsmith_test_db
+	./build/debug/third_party/sqlsmith/sqlsmith --duckdb=:memory:

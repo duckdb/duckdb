@@ -487,6 +487,7 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 
 	if (flt_scale == 0) {
 		// schema only
+		context.transaction.Commit();
 		return;
 	}
 

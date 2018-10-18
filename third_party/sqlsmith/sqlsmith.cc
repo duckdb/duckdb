@@ -44,7 +44,7 @@ extern "C" void cerr_log_handler(int) {
 
 int main(int argc, char *argv[]) {
 	map<string, string> options;
-	regex optregex("--(help|verbose|target|sqlite|monetdb|version|dump-"
+	regex optregex("--(help|verbose|target|duckdb|monetdb|version|dump-"
 	               "all-graphs|dump-all-queries|seed|dry-run|max-queries|rng-"
 	               "state|exclude-catalog)(?:=((?:.|\n)*))?");
 
@@ -60,7 +60,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	if (options.count("help")) {
-		cerr << "    --sqlite=URI         SQLite database to send queries to"
+		cerr << "    --duckdb=URI         SQLite database to send queries to"
 		     << endl
 		     << "    --seed=int           seed RNG with specified int instead "
 		        "of PID"
@@ -91,9 +91,9 @@ int main(int argc, char *argv[]) {
 
 	try {
 		shared_ptr<schema> schema;
-		if (options.count("sqlite")) {
-			schema = make_shared<schema_sqlite>(
-			    options["sqlite"], options.count("exclude-catalog"));
+		if (options.count("duckdb")) {
+			schema = make_shared<schema_duckdb>(
+			    options["duckdb"], options.count("exclude-catalog"));
 		} else {
 			cerr << "No DuckDB database specified!" << endl;
 			return 1;
@@ -144,12 +144,14 @@ int main(int argc, char *argv[]) {
 
 		shared_ptr<dut_base> dut;
 
-		if (options.count("sqlite")) {
-			dut = make_shared<dut_sqlite>(options["sqlite"]);
+		if (options.count("duckdb")) {
+			dut = make_shared<dut_duckdb>(options["duckdb"]);
 		} else {
 			cerr << "No DuckDB database specified!" << endl;
 			return 1;
 		}
+
+		cerr << "Running queries..." << endl;
 
 		while (1) /* Loop to recover connection loss */
 		{
@@ -176,6 +178,7 @@ int main(int argc, char *argv[]) {
 					/* Try to execute it */
 					try {
 						dut->test(s.str());
+						cerr << s.str() << endl;
 						for (auto l : loggers)
 							l->executed(*gen);
 					} catch (const dut::failure &e) {

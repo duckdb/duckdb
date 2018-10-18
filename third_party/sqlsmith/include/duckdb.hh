@@ -1,34 +1,31 @@
 /// @file
-/// @brief schema and dut classes for SQLite 3
+/// @brief schema and dut classes for DuckDB
 
-#ifndef SQLITE_HH
-#define SQLITE_HH
+#ifndef DUCKDB_HH
+#define DUCKDB_HH
 
-extern "C" {
-#include <sqlite3.h>
-}
+#include "duckdb.hpp"
 
 #include "dut.hh"
 #include "relmodel.hh"
 #include "schema.hh"
 
-struct sqlite_connection {
-	sqlite3 *db;
+struct duckdb_connection {
+	std::unique_ptr<duckdb::DuckDB> database;
+	std::unique_ptr<duckdb::DuckDBConnection> connection;
 	char *zErrMsg = 0;
 	int rc;
 	void q(const char *query);
-	sqlite_connection(std::string &conninfo);
-	~sqlite_connection();
+	duckdb_connection(std::string &conninfo);
 };
 
-struct schema_sqlite : schema, sqlite_connection {
-	schema_sqlite(std::string &conninfo, bool no_catalog);
+struct schema_duckdb : schema, duckdb_connection {
+	schema_duckdb(std::string &conninfo, bool no_catalog);
 	virtual std::string quote_name(const std::string &id) { return id; }
 };
 
-struct dut_sqlite : dut_base, sqlite_connection {
+struct dut_duckdb : dut_base, duckdb_connection {
 	virtual void test(const std::string &stmt);
-	dut_sqlite(std::string &conninfo);
+	dut_duckdb(std::string &conninfo);
 };
-
 #endif
