@@ -225,9 +225,15 @@ void Binder::Visit(SelectStatement &statement) {
 	}
 }
 
-void Binder::Visit(InsertStatement &stmt) {
-	if (stmt.select_statement) {
-		stmt.select_statement->Accept(this);
+void Binder::Visit(InsertStatement &statement) {
+	if (statement.select_statement) {
+		statement.select_statement->Accept(this);
+	}
+	// visit the expressions
+	for(auto &expression_list : statement.values) {
+		for(auto &expression : expression_list) {
+			expression->Accept(this);
+		}
 	}
 }
 

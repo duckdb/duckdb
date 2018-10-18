@@ -323,6 +323,7 @@ void LogicalPlanGenerator::Visit(SubqueryExpression &expr) {
 		throw Exception("Can't plan subquery");
 	}
 	expr.op = move(generator.root);
+	assert(expr.op);
 }
 
 void LogicalPlanGenerator::Visit(BaseTableRef &expr) {
@@ -373,6 +374,7 @@ void LogicalPlanGenerator::Visit(CrossProductRef &expr) {
 }
 
 void LogicalPlanGenerator::Visit(JoinRef &expr) {
+	expr.condition->Accept(this);
 	auto join = make_unique<LogicalJoin>(expr.type);
 
 	if (root) {
@@ -471,6 +473,12 @@ void LogicalPlanGenerator::Visit(InsertStatement &statement) {
 		insert->AddChild(move(root));
 		root = move(insert);
 	} else {
+		// first visit the expressions
+		for(auto &expression_list : statement.values) {
+			for(auto &expression : expression_list) {
+				expression->Accept(this);
+			}
+		}
 		// insert from constants
 		// check if the correct amount of constants are supplied
 		if (statement.columns.size() == 0) {
