@@ -1,0 +1,1 @@
+select subq_1.c0 as c0, subq_1.c0 as c1, subq_1.c0 as c2, 43 as c3, subq_1.c0 as c4, (select l_linestatus from main.lineitem limit 1 offset 100) as c5, subq_1.c0 as c6, subq_1.c0 as c7 from (select distinct subq_0.c0 as c0 from (select ref_0.c_phone as c0 from main.customer as ref_0 where 1) as subq_0 where subq_0.c0 is not NULL) as subq_1 where 1 

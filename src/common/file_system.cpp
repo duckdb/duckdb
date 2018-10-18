@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <dirent.h>
 
 using namespace std;
 
@@ -52,6 +53,24 @@ void CreateDirectory(const string &directory) {
 void RemoveDirectory(const string &directory) {
 	auto command = "rm -r " + StringUtil::Replace(directory, " ", "\\ ");
 	system(command.c_str());
+}
+
+bool ListFiles(const string &directory, function<void (string)> callback) {
+	DIR *dir;
+	struct dirent *ent;
+	if ((dir = opendir (directory.c_str())) != NULL) {
+		/* print all the files and directories within directory */
+		while ((ent = readdir (dir)) != NULL) {
+			string name = string(ent->d_name);
+			if (!name.empty() && name[0] != '.') {
+				callback(name);
+			}
+		}
+		closedir (dir);
+	} else {
+		return false;
+	}
+	return true;
 }
 
 void SetWorkingDirectory(const string &directory) { chdir(directory.c_str()); }

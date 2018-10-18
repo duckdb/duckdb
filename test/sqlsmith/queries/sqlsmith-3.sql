@@ -1,0 +1,1 @@
+select subq_0.c0 as c0, 30 as c1, subq_0.c2 as c2 from (select (select s_acctbal from main.supplier limit 1 offset 4) as c0, ref_0.p_comment as c1, ref_0.p_brand as c2, ref_0.p_brand as c3, ref_0.p_container as c4, ref_0.p_partkey as c5, ref_0.p_brand as c6, ref_0.p_type as c7 from main.part as ref_0 where ref_0.p_type is NULL limit 85) as subq_0 where 1 limit 89 

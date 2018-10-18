@@ -1,0 +1,1 @@
+insert into main.nation values ( case when ((1) and ((((((1) or (((21 is NULL) or ((select ps_suppkey from main.partsupp limit 1 offset 4) is not NULL)) or (53 is NULL))) or (0)) and (99 is NULL)) and (63 is not NULL)) or ((16 is NULL) and (92 is not NULL)))) and ((0) or (1)) then 23 else 23 end , cast(null as VARCHAR), 22, default) 

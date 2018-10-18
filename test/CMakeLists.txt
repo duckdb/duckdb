@@ -7,6 +7,7 @@ add_subdirectory(common)
 add_subdirectory(helpers)
 add_subdirectory(sql)
 add_subdirectory(sqlite)
+add_subdirectory(sqlsmith)
 add_subdirectory(optimizer)
 
 add_executable(test test.cpp helpers/test_helpers.cpp)
