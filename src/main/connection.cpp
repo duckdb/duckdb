@@ -22,6 +22,7 @@ DuckDBConnection::GetQueryResult(ClientContext &context, std::string query) {
 	result->success = false;
 
 	context.profiler.StartQuery(query);
+	context.interrupted = false;
 	try {
 		// parse the query and transform it into a set of statements
 		Parser parser;

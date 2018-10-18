@@ -62,6 +62,7 @@ enum class ExceptionType {
 	OPTIMIZER = 26,       // optimizer related
 	NULL_POINTER = 27,    // nullptr exception
 	IO = 28,              // IO exception
+	INTERRUPT = 29        // interrupt
 };
 
 #define FORMAT_CONSTRUCTOR(msg)                                                \
@@ -147,6 +148,8 @@ class Exception : public std::runtime_error {
 			return "NullPointer";
 		case ExceptionType::IO:
 			return "IO";
+		case ExceptionType::INTERRUPT:
+			return "INTERRUPT";
 		default:
 			return "Unknown";
 		}
@@ -402,6 +405,13 @@ class SerializationException : public Exception {
 	SerializationException(std::string msg, ...)
 	    : Exception(ExceptionType::SERIALIZATION, msg) {
 		FORMAT_CONSTRUCTOR(msg);
+	}
+};
+
+
+class InterruptException : public Exception {
+  public:
+	InterruptException() : Exception(ExceptionType::INTERRUPT, "Interrupted!") {
 	}
 };
 

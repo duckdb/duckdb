@@ -35,6 +35,10 @@ PhysicalOperatorState::PhysicalOperatorState(
 void PhysicalOperator::GetChunk(ClientContext &context, DataChunk &chunk,
                                 PhysicalOperatorState *state) {
 
+	if (context.interrupted) {
+		throw InterruptException();
+	}
+
 	context.profiler.StartOperator(this);
 	_GetChunk(context, chunk, state);
 	context.profiler.EndOperator(chunk);

@@ -5,6 +5,8 @@
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
+#include <thread>
+#include <chrono>
 
 #include <regex>
 
@@ -209,8 +211,26 @@ dut_duckdb::dut_duckdb(std::string &conninfo) : duckdb_connection(conninfo) {
 	// q("PRAGMA main.auto_vacuum = 2");
 }
 
+volatile bool is_active = false;
+// timeout is 10ms * TIMEOUT_TICKS
+#define TIMEOUT_TICKS 50
+
+void sleep_thread(DuckDBConnection* connection) {
+	for(size_t i = 0; i < TIMEOUT_TICKS && is_active; i++) {
+    	std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+	if (is_active) {
+		connection->Interrupt();
+	}
+}
+
 void dut_duckdb::test(const std::string &stmt) {
+	is_active = true;
+	thread interrupt_thread(sleep_thread, connection.get());
 	auto result = connection->Query(stmt);
+	is_active = false;
+	interrupt_thread.join();
+
 	if (!result->GetSuccess()) {
 		auto error = result->GetErrorMessage().c_str();
 		try {

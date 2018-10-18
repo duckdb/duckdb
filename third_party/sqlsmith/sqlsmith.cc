@@ -175,10 +175,16 @@ int main(int argc, char *argv[]) {
 					ostringstream s;
 					gen->out(s);
 
+					// first write the query to the log file
+					ofstream out_file;
+					out_file.open("sqlsmith.log");
+					out_file << s.str() << endl;
+					out_file.close();
+
+
 					/* Try to execute it */
 					try {
 						dut->test(s.str());
-						cerr << s.str() << endl;
 						for (auto l : loggers)
 							l->executed(*gen);
 					} catch (const dut::failure &e) {

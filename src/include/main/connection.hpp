@@ -28,6 +28,11 @@ class DuckDBConnection {
 		return context.profiler.ToString();
 	}
 
+	//! Interrupt execution of the current query
+	void Interrupt() {
+		context.Interrupt();
+	}
+
 	void EnableProfiling() { context.profiler.Enable(); }
 
 	void DisableProfiling() { context.profiler.Disable(); }

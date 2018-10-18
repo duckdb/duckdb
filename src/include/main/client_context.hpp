@@ -27,6 +27,10 @@ class ClientContext {
 
 	Transaction &ActiveTransaction() { return transaction.ActiveTransaction(); }
 
+	void Interrupt() {
+		interrupted = true;
+	}
+	
 	//! The allocator that holds any allocations made in the Query Context
 	Allocator allocator;
 	//! Query profiler
@@ -35,5 +39,7 @@ class ClientContext {
 	DuckDB &db;
 	//! Data for the currently running transaction
 	TransactionContext transaction;
+	//! Whether or not the query is interrupted
+	bool interrupted;
 };
 } // namespace duckdb
