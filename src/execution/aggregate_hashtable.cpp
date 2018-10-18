@@ -48,12 +48,16 @@ void SuperLargeHashTable::Resize(size_t size) {
 
 		auto new_table = make_unique<SuperLargeHashTable>(
 		    size, group_types, payload_types, aggregate_types, parallel);
-		do {
+
+		while(true) {
 			groups.Reset();
 			payload.Reset();
 			this->Scan(position, groups, payload);
+			if (groups.count == 0) {
+				break;
+			}
 			new_table->AddChunk(groups, payload);
-		} while (groups.count > 0);
+		}
 
 		assert(this->entries == new_table->entries);
 
@@ -61,7 +65,6 @@ void SuperLargeHashTable::Resize(size_t size) {
 		this->owned_data = move(new_table->owned_data);
 		this->capacity = new_table->capacity;
 		this->max_chain = new_table->max_chain;
-
 	} else {
 		data = new uint8_t[size * tuple_size];
 		owned_data = unique_ptr<uint8_t[]>(data);
@@ -226,7 +229,7 @@ void SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &groups,
 	result.Reset();
 
 	uint8_t *ptr;
-	uint8_t *start = data + scan_position * tuple_size;
+	uint8_t *start = data + scan_position;
 	uint8_t *end = data + capacity * tuple_size;
 	if (start >= end)
 		return;

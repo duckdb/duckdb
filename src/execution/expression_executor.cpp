@@ -525,21 +525,24 @@ void ExpressionExecutor::Visit(SubqueryExpression &expr) {
 	auto &plan = expr.plan;
 	DataChunk *old_chunk = chunk;
 	DataChunk row_chunk;
-	chunk = &row_chunk;
-	auto types = old_chunk->GetTypes();
-	row_chunk.Initialize(types, true);
-	row_chunk.count = 1;
-
-	vector.Initialize(expr.return_type);
-	vector.count = old_chunk->count;
-	vector.sel_vector = old_chunk->sel_vector;
-	for (size_t c = 0; c < old_chunk->column_count; c++) {
-		row_chunk.data[c].count = 1;
-	}
-
-	for (size_t r = 0; r < old_chunk->count; r++) {
+	if (old_chunk) {
+		chunk = &row_chunk;
+		auto types = old_chunk->GetTypes();
+		row_chunk.Initialize(types, true);
+		row_chunk.count = 1;
 		for (size_t c = 0; c < old_chunk->column_count; c++) {
-			row_chunk.data[c].SetValue(0, old_chunk->data[c].GetValue(r));
+			row_chunk.data[c].count = 1;
+		}
+	}
+	vector.Initialize(expr.return_type);
+	vector.count = old_chunk ? old_chunk->count : 1;
+	vector.sel_vector = old_chunk ? old_chunk->sel_vector : nullptr;
+
+	for (size_t r = 0; r < vector.count; r++) {
+		if (old_chunk) {
+			for (size_t c = 0; c < row_chunk.column_count; c++) {
+				row_chunk.data[c].SetValue(0, old_chunk->data[c].GetValue(r));
+			}
 		}
 		auto state = plan->GetOperatorState(this);
 		DataChunk s_chunk;
