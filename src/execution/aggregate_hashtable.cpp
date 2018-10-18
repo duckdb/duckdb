@@ -280,5 +280,5 @@ void SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &groups,
 	}
 	groups.count = entry;
 	result.count = entry;
-	scan_position = ptr - start;
+	scan_position = ptr - data;
 }
