@@ -15,6 +15,7 @@ bool CHECK_COLUMN(unique_ptr<duckdb::DuckDBResult> &result,
 	}
 	if (!(result->names.size() == result->collection.types.size())) {
 		// column names do not match
+		result->Print();
 		return false;
 	}
 	if (values.size() == 0) {
@@ -28,16 +29,19 @@ bool CHECK_COLUMN(unique_ptr<duckdb::DuckDBResult> &result,
 	}
 	if (result->size() == 0) {
 		// FAIL("Data size does not match value size!");
+		result->Print();
 		return false;
 	}
 	if (column_number >= result->column_count()) {
 		// FAIL("Column number out of range of result!");
+		result->Print();
 		return false;
 	}
 	size_t chunk_index = 0;
 	for (size_t i = 0; i < values.size();) {
 		if (chunk_index >= result->size()) {
 			// ran out of chunks
+			result->Print();
 			return false;
 			// FAIL("Data size does not match value size!");
 		}
@@ -45,9 +49,9 @@ bool CHECK_COLUMN(unique_ptr<duckdb::DuckDBResult> &result,
 		auto &vector =
 		    result->collection.chunks[chunk_index]->data[column_number];
 		if (i + vector.count > values.size()) {
-			vector.Print();
 			// too many values in this vector
 			// FAIL("Too many values in result!");
+			result->Print();
 			return false;
 		}
 		for (size_t j = 0; j < vector.count; j++) {
@@ -59,6 +63,7 @@ bool CHECK_COLUMN(unique_ptr<duckdb::DuckDBResult> &result,
 				// FAIL("Incorrect result! Got " + vector.GetValue(j).ToString()
 				// +
 				//      " but expected " + values[i + j].ToString());
+				result->Print();
 				return false;
 			}
 		}

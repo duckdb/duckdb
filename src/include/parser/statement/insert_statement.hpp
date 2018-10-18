@@ -20,7 +20,8 @@ namespace duckdb {
 
 class InsertStatement : public SQLStatement {
   public:
-	InsertStatement() : SQLStatement(StatementType::INSERT), schema(DEFAULT_SCHEMA){ };
+	InsertStatement()
+	    : SQLStatement(StatementType::INSERT), schema(DEFAULT_SCHEMA){};
 	virtual ~InsertStatement() {}
 
 	virtual std::string ToString() const;

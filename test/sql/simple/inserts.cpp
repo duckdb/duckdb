@@ -108,11 +108,14 @@ TEST_CASE("Test insert into statements", "[simpleinserts]") {
 
 	result = con.Query("INSERT INTO integers VALUES (3, 4), (4, 3);");
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+	// insert into with default
+	result = con.Query("INSERT INTO integers VALUES (DEFAULT, 4);");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
 	result = con.Query("INSERT INTO integers (i) SELECT j FROM integers;");
-	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 
 	result = con.Query("SELECT * FROM integers");
-	REQUIRE(CHECK_COLUMN(result, 0, {3, 4, 4, 3}));
-	REQUIRE(CHECK_COLUMN(result, 1, {4, 3, Value(), Value()}));
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 4, Value(), 4, 3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {4, 3, 4, Value(), Value(), Value()}));
 }

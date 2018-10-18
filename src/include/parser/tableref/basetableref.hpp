@@ -17,7 +17,9 @@ namespace duckdb {
 //! Represents a TableReference to a base table in the schema
 class BaseTableRef : public TableRef {
   public:
-	BaseTableRef() : TableRef(TableReferenceType::BASE_TABLE), schema_name(DEFAULT_SCHEMA) {}
+	BaseTableRef()
+	    : TableRef(TableReferenceType::BASE_TABLE),
+	      schema_name(DEFAULT_SCHEMA) {}
 
 	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
 	virtual bool Equals(const TableRef *other_) override {

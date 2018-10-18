@@ -109,7 +109,13 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk,
 				for (size_t i = 0; i < list.size(); i++) {
 					// execute the expressions to get the values
 					auto &expr = list[i];
-					executor.Execute(expr.get(), temp_chunk.data[i]);
+					if (expr->type == ExpressionType::VALUE_DEFAULT) {
+						temp_chunk.data[i].count = 1;
+						temp_chunk.data[i].SetValue(
+						    0, table->columns[i].default_value);
+					} else {
+						executor.Execute(expr.get(), temp_chunk.data[i]);
+					}
 					assert(temp_chunk.data[i].count == 1);
 					// append to the insert chunk
 					insert_chunk.data[i].Append(temp_chunk.data[i]);
