@@ -9,7 +9,7 @@ using namespace duckdb;
 using namespace std;
 
 Vector::Vector(TypeId type, bool create_data, bool zero_data)
-    : type(type), count(0), data(nullptr), owns_data(false),
+    : type(type), count(0), data(nullptr),
       sel_vector(nullptr) {
 	if (create_data) {
 		Initialize(type, zero_data);
@@ -17,7 +17,7 @@ Vector::Vector(TypeId type, bool create_data, bool zero_data)
 }
 
 Vector::Vector(TypeId type, char *dataptr)
-    : type(type), count(0), data(dataptr), owns_data(false),
+    : type(type), count(0), data(dataptr),
       sel_vector(nullptr) {
 	if (dataptr && type == TypeId::INVALID) {
 		throw InvalidTypeException(type,
@@ -31,7 +31,7 @@ Vector::Vector(Value value) : Vector(value.type, true, false) {
 }
 
 Vector::Vector()
-    : type(TypeId::INVALID), count(0), data(nullptr), owns_data(false),
+    : type(TypeId::INVALID), count(0), data(nullptr),
       sel_vector(nullptr) {}
 
 Vector::~Vector() { Destroy(); }
@@ -41,7 +41,6 @@ void Vector::Initialize(TypeId new_type, bool zero_data) {
 		type = new_type;
 	}
 	string_heap.Destroy();
-	owns_data = true;
 	owned_data = unique_ptr<char[]>(
 	    new char[STANDARD_VECTOR_SIZE * GetTypeIdSize(type)]);
 	data = owned_data.get();
@@ -51,12 +50,9 @@ void Vector::Initialize(TypeId new_type, bool zero_data) {
 }
 
 void Vector::Destroy() {
-	if (data && owns_data) {
-		owned_data.reset();
-		string_heap.Destroy();
-	}
+	owned_data.reset();
+	string_heap.Destroy();
 	data = nullptr;
-	owns_data = false;
 	count = 0;
 	sel_vector = nullptr;
 	nullmask.reset();
@@ -159,10 +155,9 @@ Value Vector::GetValue(size_t index) const {
 }
 
 void Vector::Reference(Vector &other) {
-	assert(!owns_data);
+	assert(!owned_data);
 
 	count = other.count;
-	owns_data = false;
 	data = other.data;
 	sel_vector = other.sel_vector;
 	type = other.type;
@@ -172,14 +167,10 @@ void Vector::Reference(Vector &other) {
 void Vector::Move(Vector &other) {
 	other.Destroy();
 
-	if (owns_data) {
-		other.owned_data = move(owned_data);
-		string_heap.Move(other.string_heap);
-	}
-
+	other.owned_data = move(owned_data);
+	string_heap.Move(other.string_heap);
 	other.count = count;
 	other.data = data;
-	other.owns_data = owns_data;
 	other.sel_vector = sel_vector;
 	other.type = type;
 	other.nullmask = nullmask;

@@ -51,8 +51,6 @@ class Vector : public Printable {
 	size_t count;
 	//! A pointer to the data.
 	char *data;
-	//! A flag indicating whether or not the vector owns its data.
-	bool owns_data;
 	//! The selection vector of the vector.
 	sel_t *sel_vector;
 	//! The null mask of the vector, if the Vector has any NULL values
@@ -71,6 +69,9 @@ class Vector : public Printable {
 	*/
 	Vector(TypeId type, bool create_data, bool zero_data);
 	~Vector();
+	// implicit copying of Vectors is not allowed
+	Vector(const Vector &) = delete;
+
 
 	//! Destroys the vector, deleting any owned data and resetting it to an
 	//! empty vector of the specified type.
@@ -117,8 +118,6 @@ class Vector : public Printable {
 	//! Returns true the vector holds only a single constant value and does not
 	//! have a selection vector
 	bool IsConstant() { return count == 1 && !sel_vector; }
-
-	Vector(const Vector &) = delete;
 
 	//! The stringheap of the vector
 	StringHeap string_heap;

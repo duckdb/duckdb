@@ -44,7 +44,6 @@ void DataChunk::Reset() {
 	char *ptr = owned_data.get();
 	for (size_t i = 0; i < column_count; i++) {
 		data[i].data = ptr;
-		data[i].owns_data = false;
 		data[i].count = 0;
 		data[i].sel_vector = nullptr;
 		data[i].owned_data = nullptr;
