@@ -624,9 +624,11 @@ void VectorOperations::Set(Vector &result, Value value) {
 		if (left.type < TypeId::VARCHAR) {
 			_generic_binary_loop<operators::PickLeft>(left, result, result);
 		} else if (left.type == TypeId::VARCHAR) {
-			for (size_t i = 0; i < result.count; i++) {
-				result.SetValue(i, value);
-			}
+			auto str = result.string_heap.AddString(value.str_value);
+			const char **dataptr = (const char**) result.data;
+			VectorOperations::Exec(result, [&](size_t i) {
+				dataptr[i] = str;
+			});
 		} else {
 			throw NotImplementedException("Unimplemented type for Set");
 		}
