@@ -24,4 +24,17 @@ TEST_CASE("Test NULL IF statement", "[case]") {
 	// NULL IF
 	result = con.Query("SELECT NULLIF(NULLIF ('hello', 'world'), 'blabla');");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value("hello")}));
+
+	// NULL IF with subquery
+	con.Query("CREATE TABLE test (a STRING);");
+	con.Query("INSERT INTO test VALUES ('hello'), ('world'), ('test')");
+
+	con.Query("CREATE TABLE test2 (a STRING, b STRING);");
+	con.Query("INSERT INTO test2 VALUES ('blabla', 'b'), ('blabla2', 'c'), "
+	          "('blabla3', 'd')");
+
+	REQUIRE_NO_FAIL(result =
+	                    con.Query("SELECT NULLIF(NULLIF ((SELECT a FROM test "
+	                              "LIMIT 1 offset 1), a), b) FROM test2"));
+	result->Print();
 }

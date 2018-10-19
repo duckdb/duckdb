@@ -11,8 +11,7 @@ TEST_CASE("Test string UPDATE", "[update]") {
 	DuckDBConnection con(db);
 
 	// create a table
-	REQUIRE_NO_FAIL(con.Query(
-	    "CREATE TABLE test (a INTEGER, b VARCHAR);"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 'hello'), (12, "
 	                          "'world'), (13, 'blablabla')"));
 

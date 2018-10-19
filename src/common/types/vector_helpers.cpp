@@ -132,7 +132,8 @@ static void _append_loop_check_null(Vector &left, Vector &right) {
 	}
 	right.count += left.count;
 }
-template <class T>
+
+template <class T, class OP>
 static void _case_loop(Vector &check, Vector &res_true, Vector &res_false,
                        Vector &result) {
 	bool *cond = (bool *)check.data;
@@ -182,12 +183,14 @@ static void _case_loop(Vector &check, Vector &res_true, Vector &res_false,
 			size_t false_index = res_false.sel_vector[res_false_mul * i];
 
 			bool branch = (cond[check_index] && !check.nullmask[check_index]);
-			res[result.sel_vector[i]] =
-			    branch ? true_data[true_index] : false_data[false_index];
-
-			result.nullmask[result.sel_vector[i]] =
-			    branch ? res_true.nullmask[true_index]
-			           : res_false.nullmask[false_index];
+			bool is_null = branch ? res_true.nullmask[true_index]
+			                      : res_false.nullmask[false_index];
+			result.nullmask[result.sel_vector[i]] = is_null;
+			if (!is_null) {
+				res[result.sel_vector[i]] =
+				    OP::Operation(result, branch, true_data[true_index],
+				                  false_data[false_index]);
+			}
 		}
 	} else {
 		assert(!res_true.sel_vector);
@@ -199,10 +202,13 @@ static void _case_loop(Vector &check, Vector &res_true, Vector &res_false,
 			size_t false_index = res_false_mul * i;
 
 			bool branch = (cond[check_index] && !check.nullmask[check_index]);
-			res[i] = branch ? true_data[true_index] : false_data[false_index];
-
-			result.nullmask[i] = branch ? res_true.nullmask[true_index]
-			                            : res_false.nullmask[false_index];
+			bool is_null = branch ? res_true.nullmask[true_index]
+			                      : res_false.nullmask[false_index];
+			result.nullmask[i] = is_null;
+			if (!is_null) {
+				res[i] = OP::Operation(result, branch, true_data[true_index],
+				                       false_data[false_index]);
+			}
 		}
 	}
 }
@@ -398,6 +404,24 @@ void VectorOperations::Copy(Vector &source, Vector &target, size_t offset) {
 //===--------------------------------------------------------------------===//
 // Case statement (if, else, then)
 //===--------------------------------------------------------------------===//
+struct RegularCase {
+	template <class T>
+	static inline T Operation(Vector &result, bool condition, T left, T right) {
+		return condition ? left : right;
+	}
+};
+
+struct StringCase {
+	static inline const char *Operation(Vector &result, bool condition,
+	                                    const char *left, const char *right) {
+		if (condition) {
+			return left ? result.string_heap.AddString(left) : nullptr;
+		} else {
+			return right ? result.string_heap.AddString(right) : nullptr;
+		}
+	}
+};
+
 void VectorOperations::Case(Vector &check, Vector &res_true, Vector &res_false,
                             Vector &result) {
 	result.count = max(max(check.count, res_false.count), res_true.count);
@@ -420,30 +444,29 @@ void VectorOperations::Case(Vector &check, Vector &res_true, Vector &res_false,
 	switch (result.type) {
 	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
-		_case_loop<int8_t>(check, res_true, res_false, result);
+		_case_loop<int8_t, RegularCase>(check, res_true, res_false, result);
 		break;
 	case TypeId::SMALLINT:
-		_case_loop<int16_t>(check, res_true, res_false, result);
+		_case_loop<int16_t, RegularCase>(check, res_true, res_false, result);
 		break;
 	case TypeId::INTEGER:
-		_case_loop<int32_t>(check, res_true, res_false, result);
+		_case_loop<int32_t, RegularCase>(check, res_true, res_false, result);
 		break;
 	case TypeId::BIGINT:
-		_case_loop<int64_t>(check, res_true, res_false, result);
+		_case_loop<int64_t, RegularCase>(check, res_true, res_false, result);
 		break;
 	case TypeId::DECIMAL:
-		_case_loop<double>(check, res_true, res_false, result);
+		_case_loop<double, RegularCase>(check, res_true, res_false, result);
 		break;
 	case TypeId::POINTER:
-		_case_loop<uint64_t>(check, res_true, res_false, result);
+		_case_loop<uint64_t, RegularCase>(check, res_true, res_false, result);
 		break;
 	case TypeId::VARCHAR:
-		result.string_heap.MergeHeap(res_true.string_heap);
-		result.string_heap.MergeHeap(res_false.string_heap);
-		_case_loop<const char *>(check, res_true, res_false, result);
+		_case_loop<const char *, StringCase>(check, res_true, res_false,
+		                                     result);
 		break;
 	case TypeId::DATE:
-		_case_loop<date_t>(check, res_true, res_false, result);
+		_case_loop<date_t, RegularCase>(check, res_true, res_false, result);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for case expression");

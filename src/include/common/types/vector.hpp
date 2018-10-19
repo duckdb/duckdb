@@ -72,7 +72,6 @@ class Vector : public Printable {
 	// implicit copying of Vectors is not allowed
 	Vector(const Vector &) = delete;
 
-
 	//! Destroys the vector, deleting any owned data and resetting it to an
 	//! empty vector of the specified type.
 	void Destroy();
