@@ -525,8 +525,7 @@ void _templated_bool_nullmask_op(Vector &left, Vector &right, Vector &result) {
 		VectorOperations::Exec(left, [&](size_t i) {
 			result_data[i] = OP::Operation(ldata[i], rdata[i]);
 			result.nullmask[i] = NULLOP::Operation(
-			    ldata[i], rdata[i], left.nullmask[i],
-			    right.nullmask[i]);
+			    ldata[i], rdata[i], left.nullmask[i], right.nullmask[i]);
 		});
 		result.sel_vector = left.sel_vector;
 		result.count = left.count;

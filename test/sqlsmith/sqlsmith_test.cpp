@@ -21,7 +21,6 @@ TEST_CASE("Test crashing SQLSmith queries", "[sqlsmith][.]") {
 	tpch::dbgen(0.1, db);
 	auto query_directory =
 	    JoinPath(GetWorkingDirectory(), "test/sqlsmith/queries");
-
 	ListFiles(query_directory, [&](string file_name) {
 		fprintf(stderr, "%s\n", file_name.c_str());
 		auto fname = JoinPath(query_directory, file_name);

@@ -36,5 +36,6 @@ TEST_CASE("Test NULL IF statement", "[case]") {
 	REQUIRE_NO_FAIL(result =
 	                    con.Query("SELECT NULLIF(NULLIF ((SELECT a FROM test "
 	                              "LIMIT 1 offset 1), a), b) FROM test2"));
-	REQUIRE(CHECK_COLUMN(result, 0, {Value("world"), Value("world"), Value("world")}));
+	REQUIRE(CHECK_COLUMN(result, 0,
+	                     {Value("world"), Value("world"), Value("world")}));
 }
