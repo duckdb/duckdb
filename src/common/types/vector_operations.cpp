@@ -507,49 +507,29 @@ void _templated_bool_nullmask_op(Vector &left, Vector &right, Vector &result) {
 	bool *rdata = (bool *)right.data;
 	bool *result_data = (bool *)result.data;
 
-	if (left.count == right.count) {
-		if (left.sel_vector) {
-			assert(right.sel_vector);
-			for (size_t i = 0; i < left.count; i++) {
-				size_t index = left.sel_vector[i];
-				assert(left.sel_vector[i] == right.sel_vector[i]);
-				result_data[index] = OP::Operation(ldata[index], rdata[index]);
-				result.nullmask[index] = NULLOP::Operation(
-				    ldata[index], rdata[index], left.nullmask[index],
-				    right.nullmask[index]);
-			}
-		} else {
-			assert(!right.sel_vector);
-			for (size_t i = 0; i < left.count; i++) {
-				result_data[i] = OP::Operation(ldata[i], rdata[i]);
-				result.nullmask[i] = NULLOP::Operation(
-				    ldata[i], rdata[i], left.nullmask[i], right.nullmask[i]);
-			}
-		}
-		result.sel_vector = left.sel_vector;
-		result.count = left.count;
-	} else if (left.count == 1 && !left.sel_vector) {
+	if (left.IsConstant()) {
 		bool left_null = left.nullmask[0];
 		bool constant = ldata[0];
-		if (right.sel_vector) {
-			for (size_t i = 0; i < right.count; i++) {
-				size_t index = right.sel_vector[i];
-				result_data[index] = OP::Operation(constant, rdata[index]);
-				result.nullmask[index] = NULLOP::Operation(
-				    constant, rdata[i], left_null, right.nullmask[index]);
-			}
-		} else {
-			for (size_t i = 0; i < right.count; i++) {
-				result_data[i] = OP::Operation(constant, rdata[i]);
-				result.nullmask[i] = NULLOP::Operation(
-				    constant, rdata[i], left_null, right.nullmask[i]);
-			}
-		}
+		VectorOperations::Exec(right, [&](size_t i) {
+			result_data[i] = OP::Operation(constant, rdata[i]);
+			result.nullmask[i] = NULLOP::Operation(
+			    constant, rdata[i], left_null, right.nullmask[i]);
+		});
 		result.sel_vector = right.sel_vector;
 		result.count = right.count;
-	} else if (right.count == 1) {
+	} else if (right.IsConstant()) {
 		// AND/OR operations are commutative
 		_templated_bool_nullmask_op<OP, NULLOP>(right, left, result);
+	} else if (left.count == right.count) {
+		assert(left.sel_vector == right.sel_vector);
+		VectorOperations::Exec(left, [&](size_t i) {
+			result_data[i] = OP::Operation(ldata[i], rdata[i]);
+			result.nullmask[i] = NULLOP::Operation(
+			    ldata[i], rdata[i], left.nullmask[i],
+			    right.nullmask[i]);
+		});
+		result.sel_vector = left.sel_vector;
+		result.count = left.count;
 	} else {
 		throw Exception("Vector lengths don't match");
 	}
