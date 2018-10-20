@@ -13,62 +13,36 @@ using namespace std;
 //===--------------------------------------------------------------------===//
 template <class T, class OP>
 void _scatter_templated_loop(Vector &source, Vector &dest) {
-	T *ldata = (T *)source.data;
-	T **destination = (T **)dest.data;
-	if (source.count == 1 && !source.sel_vector) {
+	auto ldata = (T *)source.data;
+	auto destination = (T **)dest.data;
+	if (source.IsConstant()) {
 		// special case: source is a constant
 		if (source.nullmask[0]) {
 			return;
 		}
 
-		T constant = ldata[0];
-		if (dest.sel_vector) {
-			for (size_t i = 0; i < dest.count; i++) {
-				if (!IsNullValue<T>(destination[dest.sel_vector[i]][0])) {
-					destination[dest.sel_vector[i]][0] = OP::Operation(
-					    constant, destination[dest.sel_vector[i]][0]);
-				} else {
-					destination[dest.sel_vector[i]][0] = constant;
-				}
+		auto constant = ldata[0];
+		VectorOperations::Exec(dest, [&](size_t i, size_t k) {
+			if (!IsNullValue<T>(destination[i][0])) {
+				destination[i][0] = OP::Operation(
+				    constant, destination[i][0]);
+			} else {
+				destination[i][0] = constant;
 			}
-		} else {
-			for (size_t i = 0; i < dest.count; i++) {
-				if (!IsNullValue<T>(destination[i][0])) {
-					destination[i][0] =
-					    OP::Operation(constant, destination[i][0]);
-				} else {
-					destination[i][0] = constant;
-				}
-			}
-		}
+		});
 	} else if (source.count == dest.count) {
 		// source and dest are equal-length vectors
-		if (dest.sel_vector) {
-			assert(source.sel_vector);
-			for (size_t i = 0; i < source.count; i++) {
-				assert(dest.sel_vector[i] == source.sel_vector[i]);
-				size_t index = dest.sel_vector[i];
-				if (!source.nullmask[index]) {
-					if (!IsNullValue<T>(destination[index][0])) {
-						destination[index][0] =
-						    OP::Operation(ldata[index], destination[index][0]);
-					} else {
-						destination[index][0] = ldata[index];
-					}
+		assert(dest.sel_vector == source.sel_vector);
+		VectorOperations::Exec(dest, [&](size_t i, size_t k) {
+			if (!source.nullmask[i]) {
+				if (!IsNullValue<T>(destination[i][0])) {
+					destination[i][0] =
+					    OP::Operation(ldata[i], destination[i][0]);
+				} else {
+					destination[i][0] = ldata[i];
 				}
 			}
-		} else {
-			for (size_t i = 0; i < source.count; i++) {
-				if (!source.nullmask[i]) {
-					if (!IsNullValue<T>(destination[i][0])) {
-						destination[i][0] =
-						    OP::Operation(ldata[i], destination[i][0]);
-					} else {
-						destination[i][0] = ldata[i];
-					}
-				}
-			}
-		}
+		});
 	} else {
 		throw Exception("Could not scatter to all destination spots!");
 	}

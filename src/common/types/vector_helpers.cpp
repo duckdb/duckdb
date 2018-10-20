@@ -418,8 +418,8 @@ void VectorOperations::Case(Vector &check, Vector &res_true, Vector &res_false,
 template <class T>
 void _templated_apply_selection_vector(Vector &left, Vector &result,
                                        sel_t *sel_vector) {
-	T *ldata = (T *)left.data;
-	T *rdata = (T *)result.data;
+	auto ldata = (T *)left.data;
+	auto rdata = (T *)result.data;
 	if (left.sel_vector) {
 		for (size_t i = 0; i < result.count; i++) {
 			rdata[i] = ldata[left.sel_vector[sel_vector[i]]];

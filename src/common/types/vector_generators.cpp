@@ -10,12 +10,12 @@ using namespace std;
 
 template <class T>
 void _templated_generate_data(Vector &result, T start, T increment) {
-	T *ldata = (T *)result.data;
+	auto ldata = (T *)result.data;
 	T value = start;
-	for (size_t i = 0; i < result.count; i++) {
+	VectorOperations::Exec(result, [&](size_t i, size_t k) {
 		ldata[i] = value;
 		value += increment;
-	}
+	});
 }
 
 //===--------------------------------------------------------------------===//

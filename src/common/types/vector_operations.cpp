@@ -12,8 +12,8 @@ using namespace std;
 //===--------------------------------------------------------------------===//
 template <class T, class RES, class OP>
 void _templated_unary_loop(Vector &left, Vector &result) {
-	T *ldata = (T *)left.data;
-	RES *result_data = (RES *)result.data;
+	auto ldata = (T *)left.data;
+	auto result_data = (RES *)result.data;
 	VectorOperations::Exec(left, [&](size_t i, size_t k) {
 		result_data[i] = OP::Operation(ldata[i]);
 	});
@@ -24,8 +24,8 @@ void _templated_unary_loop(Vector &left, Vector &result) {
 
 template <class T, class RES, class OP>
 void _templated_unary_loop_null(Vector &left, Vector &result) {
-	T *ldata = (T *)left.data;
-	RES *result_data = (RES *)result.data;
+	auto ldata = (T *)left.data;
+	auto result_data = (RES *)result.data;
 	VectorOperations::Exec(left, [&](size_t i, size_t k) {
 		result_data[i] = OP::Operation(ldata[i], left.nullmask[i]);
 	});
@@ -36,9 +36,9 @@ void _templated_unary_loop_null(Vector &left, Vector &result) {
 
 template <class T, class RES, class OP>
 void _templated_binary_loop(Vector &left, Vector &right, Vector &result) {
-	T *ldata = (T *)left.data;
-	T *rdata = (T *)right.data;
-	RES *result_data = (RES *)result.data;
+	auto ldata = (T *)left.data;
+	auto rdata = (T *)right.data;
+	auto result_data = (RES *)result.data;
 
 	if (left.IsConstant()) {
 		if (left.nullmask[0]) {
@@ -322,7 +322,7 @@ template <bool INVERSE> void _is_null_loop(Vector &left, Vector &result) {
 		throw InvalidTypeException(result.type,
 		                           "IS (NOT) NULL returns a boolean!");
 	}
-	bool *res = (bool *)result.data;
+	auto res = (bool *)result.data;
 	result.nullmask.reset();
 	if (left.sel_vector) {
 		for (size_t i = 0; i < left.count; i++) {
