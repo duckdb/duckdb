@@ -16,7 +16,7 @@ template <class SRC, class DST, class OP>
 void _templated_cast_loop(Vector &left, Vector &result) {
 	SRC *ldata = (SRC *)left.data;
 	DST *result_data = (DST *)result.data;
-	VectorOperations::Exec(left, [&](size_t i) {
+	VectorOperations::Exec(left, [&](size_t i, size_t k) {
 		result_data[i] = OP::template Operation<SRC, DST>(ldata[i]);
 	});
 	result.sel_vector = left.sel_vector;
@@ -48,7 +48,7 @@ template <class SRC> static void _cast_loop(Vector &source, Vector &result) {
 		// we have to place the resulting strings in the string heap
 		auto ldata = (SRC *)source.data;
 		auto result_data = (const char **)result.data;
-		VectorOperations::Exec(source, [&](size_t i) {
+		VectorOperations::Exec(source, [&](size_t i, size_t k) {
 			if (source.nullmask[i]) {
 				result_data[i] = nullptr;
 			} else {

@@ -13,7 +13,7 @@ using namespace std;
 template <class T, class RES, class OP>
 void _templated_unary_fold(Vector &left, RES *result) {
 	T *ldata = (T *)left.data;
-	VectorOperations::Exec(left, [&](size_t i) {
+	VectorOperations::Exec(left, [&](size_t i, size_t k) {
 		if (!left.nullmask[i]) {
 			*result = OP::Operation(ldata[i], *result);
 		}

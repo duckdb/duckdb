@@ -14,8 +14,9 @@ template <class T, class RES, class OP>
 void _templated_unary_loop(Vector &left, Vector &result) {
 	T *ldata = (T *)left.data;
 	RES *result_data = (RES *)result.data;
-	VectorOperations::Exec(
-	    left, [&](size_t i) { result_data[i] = OP::Operation(ldata[i]); });
+	VectorOperations::Exec(left, [&](size_t i, size_t k) {
+		result_data[i] = OP::Operation(ldata[i]);
+	});
 	result.nullmask = left.nullmask;
 	result.sel_vector = left.sel_vector;
 	result.count = left.count;
@@ -25,7 +26,7 @@ template <class T, class RES, class OP>
 void _templated_unary_loop_null(Vector &left, Vector &result) {
 	T *ldata = (T *)left.data;
 	RES *result_data = (RES *)result.data;
-	VectorOperations::Exec(left, [&](size_t i) {
+	VectorOperations::Exec(left, [&](size_t i, size_t k) {
 		result_data[i] = OP::Operation(ldata[i], left.nullmask[i]);
 	});
 	result.nullmask.reset();
@@ -48,7 +49,7 @@ void _templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 			// computation
 			T constant = ldata[0];
 			result.nullmask = right.nullmask;
-			VectorOperations::Exec(right, [&](size_t i) {
+			VectorOperations::Exec(right, [&](size_t i, size_t k) {
 				result_data[i] = OP::Operation(constant, rdata[i]);
 			});
 		}
@@ -63,7 +64,7 @@ void _templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 			// computation
 			T constant = rdata[0];
 			result.nullmask = left.nullmask;
-			VectorOperations::Exec(left, [&](size_t i) {
+			VectorOperations::Exec(left, [&](size_t i, size_t k) {
 				result_data[i] = OP::Operation(ldata[i], constant);
 			});
 		}
@@ -73,7 +74,7 @@ void _templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 		// OR nullmasks together
 		result.nullmask = left.nullmask | right.nullmask;
 		assert(left.sel_vector == right.sel_vector);
-		VectorOperations::Exec(left, [&](size_t i) {
+		VectorOperations::Exec(left, [&](size_t i, size_t k) {
 			result_data[i] = OP::Operation(ldata[i], rdata[i]);
 		});
 		result.sel_vector = left.sel_vector;
@@ -510,7 +511,7 @@ void _templated_bool_nullmask_op(Vector &left, Vector &right, Vector &result) {
 	if (left.IsConstant()) {
 		bool left_null = left.nullmask[0];
 		bool constant = ldata[0];
-		VectorOperations::Exec(right, [&](size_t i) {
+		VectorOperations::Exec(right, [&](size_t i, size_t k) {
 			result_data[i] = OP::Operation(constant, rdata[i]);
 			result.nullmask[i] = NULLOP::Operation(
 			    constant, rdata[i], left_null, right.nullmask[i]);
@@ -522,7 +523,7 @@ void _templated_bool_nullmask_op(Vector &left, Vector &right, Vector &result) {
 		_templated_bool_nullmask_op<OP, NULLOP>(right, left, result);
 	} else if (left.count == right.count) {
 		assert(left.sel_vector == right.sel_vector);
-		VectorOperations::Exec(left, [&](size_t i) {
+		VectorOperations::Exec(left, [&](size_t i, size_t k) {
 			result_data[i] = OP::Operation(ldata[i], rdata[i]);
 			result.nullmask[i] = NULLOP::Operation(
 			    ldata[i], rdata[i], left.nullmask[i], right.nullmask[i]);
@@ -626,7 +627,7 @@ void VectorOperations::Set(Vector &result, Value value) {
 		} else if (left.type == TypeId::VARCHAR) {
 			auto str = result.string_heap.AddString(value.str_value);
 			const char **dataptr = (const char**) result.data;
-			VectorOperations::Exec(result, [&](size_t i) {
+			VectorOperations::Exec(result, [&](size_t i, size_t k) {
 				dataptr[i] = str;
 			});
 		} else {

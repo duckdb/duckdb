@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include <functional>
+
 #include "common/types/vector.hpp"
 
 namespace duckdb {
@@ -182,48 +184,53 @@ struct VectorOperations {
 	//===--------------------------------------------------------------------===//
 	// Exec
 	//===--------------------------------------------------------------------===//
-	template <typename T> static void Exec(Vector &vector, T &&fun) {
-		size_t i = 0;
+	static void Exec(Vector &vector, std::function<void(size_t i, size_t k)> fun, size_t offset = 0, size_t count = 0) {
+		size_t i = offset;
+		if (count == 0) {
+			count = vector.count;
+		} else {
+			count += offset;
+		}
 		if (vector.sel_vector) {
 			//#pragma GCC ivdep
-			for (; i + 8 < vector.count; i += 8) {
-				fun(vector.sel_vector[i + 0]);
-				fun(vector.sel_vector[i + 1]);
-				fun(vector.sel_vector[i + 2]);
-				fun(vector.sel_vector[i + 3]);
-				fun(vector.sel_vector[i + 4]);
-				fun(vector.sel_vector[i + 5]);
-				fun(vector.sel_vector[i + 6]);
-				fun(vector.sel_vector[i + 7]);
+			for (; i + 8 < count; i += 8) {
+				fun(vector.sel_vector[i + 0], i);
+				fun(vector.sel_vector[i + 1], i);
+				fun(vector.sel_vector[i + 2], i);
+				fun(vector.sel_vector[i + 3], i);
+				fun(vector.sel_vector[i + 4], i);
+				fun(vector.sel_vector[i + 5], i);
+				fun(vector.sel_vector[i + 6], i);
+				fun(vector.sel_vector[i + 7], i);
 			}
 
 			//#pragma GCC ivdep
-			for (; i < vector.count; i++) {
-				fun(vector.sel_vector[i]);
+			for (; i < count; i++) {
+				fun(vector.sel_vector[i], i);
 			}
 		} else {
 			//#pragma GCC ivdep
-			for (; i + 8 < vector.count; i += 8) {
-				fun(i + 0);
-				fun(i + 1);
-				fun(i + 2);
-				fun(i + 3);
-				fun(i + 4);
-				fun(i + 5);
-				fun(i + 6);
-				fun(i + 7);
+			for (; i + 8 < count; i += 8) {
+				fun(i + 0, i);
+				fun(i + 1, i);
+				fun(i + 2, i);
+				fun(i + 3, i);
+				fun(i + 4, i);
+				fun(i + 5, i);
+				fun(i + 6, i);
+				fun(i + 7, i);
 			}
 			//#pragma GCC ivdep
-			for (; i < vector.count; i++) {
-				fun(i);
+			for (; i < count; i++) {
+				fun(i, i);
 			}
 		}
 	}
 
-	template <typename T, typename LAMBDA>
-	static void ExecType(Vector &vector, LAMBDA &&fun) {
+	template <typename T>
+	static void ExecType(Vector &vector, std::function<void(T& value, size_t i, size_t k)> fun, size_t offset = 0, size_t limit = 0) {
 		auto data = (T *)vector.data;
-		VectorOperations::Exec(vector, [&](size_t i) { fun(data[i]); });
+		VectorOperations::Exec(vector, [&](size_t i, size_t k) { fun(data[i], i, k); }, offset, limit);
 	}
 };
 } // namespace duckdb

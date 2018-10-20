@@ -249,8 +249,8 @@ void DataTable::Delete(ClientContext &context, Vector &row_identifiers) {
 	chunk->GetExclusiveLock();
 
 	// now delete the entries
-	for (size_t i = 0; i < row_identifiers.count; i++) {
-		auto id = (sel_vector ? ids[sel_vector[i]] : ids[i]) - chunk->start;
+	VectorOperations::Exec(row_identifiers, [&](size_t i, size_t k) {
+		auto id = ids[i] - chunk->start;
 		// assert that all ids in the vector belong to the same storage
 		// chunk
 		assert(id >= 0 && id < chunk->count);
@@ -266,7 +266,7 @@ void DataTable::Delete(ClientContext &context, Vector &row_identifiers) {
 		transaction.PushTuple(id, chunk);
 		// and set the deleted flag
 		chunk->deleted[id] = true;
-	}
+	});
 	chunk->ReleaseExclusiveLock();
 }
 
@@ -309,8 +309,8 @@ void DataTable::Update(ClientContext &context, Vector &row_identifiers,
 	}
 
 	// now update the entries
-	for (size_t i = 0; i < row_identifiers.count; i++) {
-		auto id = (sel_vector ? ids[sel_vector[i]] : ids[i]) - chunk->start;
+	VectorOperations::Exec(row_identifiers, [&](size_t i, size_t k) {
+		auto id = ids[i] - chunk->start;
 		// assert that all ids in the vector belong to the same chunk
 		assert(id >= 0 && id < chunk->count);
 		// check for conflicts
@@ -323,7 +323,8 @@ void DataTable::Update(ClientContext &context, Vector &row_identifiers,
 		}
 		// no conflict, move the current tuple data into the undo buffer
 		transaction.PushTuple(id, chunk);
-	}
+	});
+
 	// now update the columns in the base table
 	for (size_t j = 0; j < column_ids.size(); j++) {
 		auto column_id = column_ids[j];
@@ -341,24 +342,13 @@ void DataTable::Update(ClientContext &context, Vector &row_identifiers,
 			update_vector = &null_vector;
 		}
 
-		if (update_vector->sel_vector) {
-			for (size_t i = 0; i < row_identifiers.count; i++) {
-				auto id =
-				    (sel_vector ? ids[sel_vector[i]] : ids[i]) - chunk->start;
-				auto dataptr = base_data + id * size;
-				memcpy(dataptr,
-				       update_vector->data +
-				           update_vector->sel_vector[i] * size,
-				       size);
-			}
-		} else {
-			for (size_t i = 0; i < row_identifiers.count; i++) {
-				auto id =
-				    (sel_vector ? ids[sel_vector[i]] : ids[i]) - chunk->start;
-				auto dataptr = base_data + id * size;
-				memcpy(dataptr, update_vector->data + i * size, size);
-			}
-		}
+		VectorOperations::Exec(row_identifiers, [&](size_t i, size_t k) {
+			auto id = ids[i] - chunk->start;
+			auto dataptr = base_data + id * size;
+			auto update_index = update_vector->sel_vector ? update_vector->sel_vector[k] : k;
+			memcpy(dataptr, update_vector->data + update_index * size, size);
+		});
+
 		chunk->string_heap.MergeHeap(update_vector->string_heap);
 
 		// update the statistics with the new data

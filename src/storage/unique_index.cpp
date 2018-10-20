@@ -302,7 +302,7 @@ string UniqueIndex::Update(Transaction &transaction, StorageChunk *storage,
 	size_t added_nodes_count[indexes.size()];
 	unordered_set<size_t> ignored_entries;
 
-	VectorOperations::ExecType<uint64_t>(row_identifiers, [&](uint64_t &entry) {
+	VectorOperations::ExecType<uint64_t>(row_identifiers, [&](uint64_t &entry, size_t i, size_t k) {
 		ignored_entries.insert(entry);
 	});
 
