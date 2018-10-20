@@ -76,15 +76,9 @@ static void _copy_loop(Vector &left, void *target, size_t offset,
                        size_t element_count) {
 	T *ldata = (T *)left.data;
 	T *result_data = (T *)target;
-	if (left.sel_vector) {
-		for (size_t i = 0; i < element_count; i++) {
-			result_data[i] = ldata[left.sel_vector[offset + i]];
-		}
-	} else {
-		for (size_t i = 0; i < element_count; i++) {
-			result_data[i] = ldata[offset + i];
-		}
-	}
+	VectorOperations::Exec(left, [&](size_t i, size_t k) {
+		result_data[k - offset] = ldata[i];
+	}, offset, element_count);
 }
 
 template <class T>
@@ -92,125 +86,69 @@ static void _copy_loop_set_null(Vector &left, void *target, size_t offset,
                                 size_t element_count) {
 	T *ldata = (T *)left.data;
 	T *result_data = (T *)target;
-	if (left.sel_vector) {
-		for (size_t i = 0; i < element_count; i++) {
-			if (left.nullmask[left.sel_vector[offset + i]]) {
-				result_data[i] = NullValue<T>();
-			} else {
-				result_data[i] = ldata[left.sel_vector[offset + i]];
-			}
+	VectorOperations::Exec(left, [&](size_t i, size_t k) {
+		if (left.nullmask[i]) {
+			result_data[k - offset] = NullValue<T>();
+		} else {
+			result_data[k - offset] = ldata[i];
 		}
-	} else {
-		for (size_t i = 0; i < element_count; i++) {
-			if (left.nullmask[offset + i]) {
-				result_data[i] = NullValue<T>();
-			} else {
-				result_data[i] = ldata[offset + i];
-			}
-		}
-	}
+	}, offset, element_count);
 }
 
 template <class T>
 static void _append_loop_check_null(Vector &left, Vector &right) {
 	T *ldata = (T *)left.data;
 	T *rdata = (T *)right.data;
-	if (left.sel_vector) {
-		for (size_t i = 0; i < left.count; i++) {
-			rdata[right.count + i] = ldata[left.sel_vector[i]];
-			if (IsNullValue<T>(rdata[right.count + i])) {
-				right.nullmask[right.count + i] = true;
-			}
+	VectorOperations::Exec(left, [&](size_t i, size_t k) {
+		rdata[right.count + k] = ldata[i];
+		if (IsNullValue<T>(rdata[right.count + k])) {
+			right.nullmask[right.count + k] = true;
 		}
-	} else {
-		for (size_t i = 0; i < left.count; i++) {
-			rdata[right.count + i] = ldata[i];
-			if (IsNullValue<T>(rdata[right.count + i])) {
-				right.nullmask[right.count + i] = true;
-			}
-		}
-	}
+	});
 	right.count += left.count;
 }
 
 template <class T, class OP>
 static void _case_loop(Vector &check, Vector &res_true, Vector &res_false,
                        Vector &result) {
-	bool *cond = (bool *)check.data;
-	T *true_data = (T *)res_true.data;
-	T *false_data = (T *)res_false.data;
-	T *res = (T *)result.data;
+	auto cond = (bool *)check.data;
+	auto true_data = (T *)res_true.data;
+	auto false_data = (T *)res_false.data;
+	auto res = (T *)result.data;
+ 	// it might be the case that not everything has a selection vector
+ 	// as constants do not need a selection vector
+ 	// check if we are using a selection vector
+ 	if (check.sel_vector) {
+ 		result.sel_vector = check.sel_vector;
+ 	} else if (res_true.sel_vector) {
+ 		result.sel_vector = res_true.sel_vector;
+ 	} else if (res_false.sel_vector) {
+ 		result.sel_vector = res_false.sel_vector;
+ 	} else {
+ 		result.sel_vector = nullptr;
+ 	}
 
-	// it might be the case that not everything has a selection vector
-	// as constants do not need a selection vector
-	// check if we are using a selection vector
-	bool use_sel_vector =
-	    check.sel_vector || res_true.sel_vector || res_false.sel_vector;
-	if (use_sel_vector) {
-		// if we are, set it in the result
-		result.sel_vector = check.sel_vector
-		                        ? check.sel_vector
-		                        : (res_true.sel_vector ? res_true.sel_vector
-		                                               : res_false.sel_vector);
-	}
 	// now check for constants
 	// we handle constants by multiplying the index access by 0 to avoid 2^3
 	// branches in the code
-	size_t check_mul = 1, res_true_mul = 1, res_false_mul = 1;
-	if (check.IsConstant()) {
-		check_mul = 0;
-		// set a mock selection vector of [0] if we are using a selection vector
-		check.sel_vector = use_sel_vector ? ZERO_VECTOR : nullptr;
-	}
-	// handle for res_true constant
-	if (res_true.IsConstant()) {
-		res_true_mul = 0;
-		res_true.sel_vector = use_sel_vector ? ZERO_VECTOR : nullptr;
-	}
-	// handle res_false constant
-	if (res_false.IsConstant()) {
-		res_false_mul = 0;
-		res_false.sel_vector = use_sel_vector ? ZERO_VECTOR : nullptr;
-	}
-
-	if (use_sel_vector) {
-		assert(res_true.sel_vector);
-		assert(res_false.sel_vector);
-		assert(check.sel_vector);
-		for (size_t i = 0; i < result.count; i++) {
-			size_t check_index = check.sel_vector[check_mul * i];
-			size_t true_index = res_true.sel_vector[res_true_mul * i];
-			size_t false_index = res_false.sel_vector[res_false_mul * i];
-
-			bool branch = (cond[check_index] && !check.nullmask[check_index]);
-			bool is_null = branch ? res_true.nullmask[true_index]
-			                      : res_false.nullmask[false_index];
-			result.nullmask[result.sel_vector[i]] = is_null;
-			if (!is_null) {
-				res[result.sel_vector[i]] =
-				    OP::Operation(result, branch, true_data[true_index],
-				                  false_data[false_index]);
-			}
+	size_t check_mul = check.IsConstant() ? 0 : 1,
+		   res_true_mul = res_true.IsConstant() ? 0 : 1,
+		   res_false_mul = res_false.IsConstant() ? 0 : 1;
+ 
+	VectorOperations::Exec(result, [&](size_t i, size_t k) {
+		size_t check_index = check.sel_vector ? i : k * check_mul;
+		size_t true_index = res_true.sel_vector ? i : k * res_true_mul;
+		size_t false_index = res_false.sel_vector ? i : k * res_false_mul;
+		bool branch = (cond[check_index] && !check.nullmask[check_index]);
+		bool is_null = branch ? res_true.nullmask[true_index]
+		                      : res_false.nullmask[false_index];
+		result.nullmask[i] = is_null;
+		if (!is_null) {
+			res[i] =
+			    OP::Operation(result, branch, true_data[true_index],
+			                  false_data[false_index]);
 		}
-	} else {
-		assert(!res_true.sel_vector);
-		assert(!res_false.sel_vector);
-		assert(!check.sel_vector);
-		for (size_t i = 0; i < result.count; i++) {
-			size_t check_index = check_mul * i;
-			size_t true_index = res_true_mul * i;
-			size_t false_index = res_false_mul * i;
-
-			bool branch = (cond[check_index] && !check.nullmask[check_index]);
-			bool is_null = branch ? res_true.nullmask[true_index]
-			                      : res_false.nullmask[false_index];
-			result.nullmask[i] = is_null;
-			if (!is_null) {
-				res[i] = OP::Operation(result, branch, true_data[true_index],
-				                       false_data[false_index]);
-			}
-		}
-	}
+	});
 }
 
 //===--------------------------------------------------------------------===//

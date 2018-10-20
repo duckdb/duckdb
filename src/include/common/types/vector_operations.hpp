@@ -194,14 +194,14 @@ struct VectorOperations {
 		if (vector.sel_vector) {
 			//#pragma GCC ivdep
 			for (; i + 8 < count; i += 8) {
-				fun(vector.sel_vector[i + 0], i);
-				fun(vector.sel_vector[i + 1], i);
-				fun(vector.sel_vector[i + 2], i);
-				fun(vector.sel_vector[i + 3], i);
-				fun(vector.sel_vector[i + 4], i);
-				fun(vector.sel_vector[i + 5], i);
-				fun(vector.sel_vector[i + 6], i);
-				fun(vector.sel_vector[i + 7], i);
+				fun(vector.sel_vector[i + 0], i + 0);
+				fun(vector.sel_vector[i + 1], i + 1);
+				fun(vector.sel_vector[i + 2], i + 2);
+				fun(vector.sel_vector[i + 3], i + 3);
+				fun(vector.sel_vector[i + 4], i + 4);
+				fun(vector.sel_vector[i + 5], i + 5);
+				fun(vector.sel_vector[i + 6], i + 6);
+				fun(vector.sel_vector[i + 7], i + 7);
 			}
 
 			//#pragma GCC ivdep
@@ -211,14 +211,14 @@ struct VectorOperations {
 		} else {
 			//#pragma GCC ivdep
 			for (; i + 8 < count; i += 8) {
-				fun(i + 0, i);
-				fun(i + 1, i);
-				fun(i + 2, i);
-				fun(i + 3, i);
-				fun(i + 4, i);
-				fun(i + 5, i);
-				fun(i + 6, i);
-				fun(i + 7, i);
+				fun(i + 0, i + 0);
+				fun(i + 1, i + 1);
+				fun(i + 2, i + 2);
+				fun(i + 3, i + 3);
+				fun(i + 4, i + 4);
+				fun(i + 5, i + 5);
+				fun(i + 6, i + 6);
+				fun(i + 7, i + 7);
 			}
 			//#pragma GCC ivdep
 			for (; i < count; i++) {
