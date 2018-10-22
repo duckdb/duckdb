@@ -94,6 +94,9 @@ class Statistics {
 	static void Max(Statistics &source, Statistics &result);
 	// MIN(A)
 	static void Min(Statistics &source, Statistics &result);
+
+	//! Cast statistics from one type to another
+	static void Cast(Statistics &source, Statistics &result);
 };
 
 } // namespace duckdb

@@ -69,7 +69,8 @@ void LogicalPlanGenerator::Visit(UpdateStatement &statement) {
 			// check if we have to create a cast
 			if (statement.expressions[i]->return_type != column.type) {
 				// differing types, create a cast
-				statement.expressions[i] = make_unique<CastExpression>(column.type, move(statement.expressions[i]));
+				statement.expressions[i] = make_unique<CastExpression>(
+				    column.type, move(statement.expressions[i]));
 			}
 		}
 	}
