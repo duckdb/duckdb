@@ -18,7 +18,8 @@ class PhysicalProjection : public PhysicalOperator {
   public:
 	PhysicalProjection(std::vector<std::unique_ptr<Expression>> select_list)
 	    : PhysicalOperator(PhysicalOperatorType::PROJECTION),
-	      select_list(move(select_list)) {}
+	      select_list(move(select_list)) {
+	}
 
 	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;

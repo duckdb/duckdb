@@ -6,7 +6,8 @@ using namespace std;
 
 #define MINIMUM_HEAP_SIZE 4096
 
-StringHeap::StringHeap() : tail(nullptr) {}
+StringHeap::StringHeap() : tail(nullptr) {
+}
 
 const char *StringHeap::AddString(const char *data, size_t len) {
 	if (!chunk || chunk->current_position + len >= chunk->maximum_size) {

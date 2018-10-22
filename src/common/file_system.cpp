@@ -73,16 +73,22 @@ bool ListFiles(const string &directory, function<void(string)> callback) {
 	return true;
 }
 
-void SetWorkingDirectory(const string &directory) { chdir(directory.c_str()); }
+void SetWorkingDirectory(const string &directory) {
+	chdir(directory.c_str());
+}
 
-string PathSeparator() { return "/"; }
+string PathSeparator() {
+	return "/";
+}
 
 string JoinPath(const string &a, const string &b) {
 	// FIXME: sanitize paths
 	return a + PathSeparator() + b;
 }
 
-void FileSync(FILE *file) { fsync(fileno(file)); }
+void FileSync(FILE *file) {
+	fsync(fileno(file));
+}
 
 #include <stdio.h> /* defines FILENAME_MAX */
 #ifdef WINDOWS

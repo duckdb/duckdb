@@ -21,7 +21,8 @@ class PhysicalTableScan : public PhysicalOperator {
   public:
 	PhysicalTableScan(DataTable &table, std::vector<column_t> column_ids)
 	    : PhysicalOperator(PhysicalOperatorType::SEQ_SCAN), table(table),
-	      column_ids(column_ids) {}
+	      column_ids(column_ids) {
+	}
 
 	DataTable &table;
 	std::vector<column_t> column_ids;

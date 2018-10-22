@@ -21,7 +21,8 @@ struct sqltype {
 	string name;
 	static map<string, struct sqltype *> typemap;
 	static struct sqltype *get(string s);
-	sqltype(string n) : name(n) {}
+	sqltype(string n) : name(n) {
+	}
 
 	/** This function is used to model postgres-style pseudotypes.
 	    A generic type is consistent with a more concrete type.
@@ -37,28 +38,42 @@ struct sqltype {
 struct column {
 	string name;
 	sqltype *type;
-	column(string name) : name(name) {}
-	column(string name, sqltype *t) : name(name), type(t) { assert(t); }
+	column(string name) : name(name) {
+	}
+	column(string name, sqltype *t) : name(name), type(t) {
+		assert(t);
+	}
 };
 
 struct relation {
 	vector<column> cols;
-	virtual ~relation() {}
-	virtual vector<column> &columns() { return cols; }
+	virtual ~relation() {
+	}
+	virtual vector<column> &columns() {
+		return cols;
+	}
 };
 
 struct named_relation : relation {
 	string name;
-	virtual string ident() { return name; }
-	virtual ~named_relation() {}
-	named_relation(string n) : name(n) {}
+	virtual string ident() {
+		return name;
+	}
+	virtual ~named_relation() {
+	}
+	named_relation(string n) : name(n) {
+	}
 };
 
 struct aliased_relation : named_relation {
 	relation *rel;
-	virtual ~aliased_relation() {}
-	aliased_relation(string n, relation *r) : named_relation(n), rel(r) {}
-	virtual vector<column> &columns() { return rel->columns(); }
+	virtual ~aliased_relation() {
+	}
+	aliased_relation(string n, relation *r) : named_relation(n), rel(r) {
+	}
+	virtual vector<column> &columns() {
+		return rel->columns();
+	}
 };
 
 struct table : named_relation {
@@ -68,8 +83,11 @@ struct table : named_relation {
 	vector<string> constraints;
 	table(string name, string schema, bool insertable, bool base_table)
 	    : named_relation(name), schema(schema), is_insertable(insertable),
-	      is_base_table(base_table) {}
-	virtual string ident() { return schema + "." + name; }
+	      is_base_table(base_table) {
+	}
+	virtual string ident() {
+		return schema + "." + name;
+	}
 	virtual ~table(){};
 };
 
@@ -117,8 +135,10 @@ struct op {
 	sqltype *right;
 	sqltype *result;
 	op(string n, sqltype *l, sqltype *r, sqltype *res)
-	    : name(n), left(l), right(r), result(res) {}
-	op() {}
+	    : name(n), left(l), right(r), result(res) {
+	}
+	op() {
+	}
 };
 
 struct routine {
@@ -133,7 +153,8 @@ struct routine {
 	      name(name) {
 		assert(data_type);
 	}
-	virtual ~routine() {}
+	virtual ~routine() {
+	}
 	virtual string ident() {
 		if (schema.size())
 			return schema + "." + name;

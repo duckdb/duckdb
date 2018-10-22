@@ -13,7 +13,8 @@ namespace duckdb {
 namespace function {
 
 struct PragmaTableFunctionData {
-	PragmaTableFunctionData() : entry(nullptr), offset(0) {}
+	PragmaTableFunctionData() : entry(nullptr), offset(0) {
+	}
 
 	TableCatalogEntry *entry;
 	size_t offset;

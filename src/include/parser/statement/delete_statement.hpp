@@ -19,11 +19,17 @@ namespace duckdb {
 
 class DeleteStatement : public SQLStatement {
   public:
-	DeleteStatement() : SQLStatement(StatementType::DELETE) {}
-	virtual ~DeleteStatement() {}
+	DeleteStatement() : SQLStatement(StatementType::DELETE) {
+	}
+	virtual ~DeleteStatement() {
+	}
 
-	virtual std::string ToString() const { return "Delete"; }
-	virtual void Accept(SQLNodeVisitor *v) { v->Visit(*this); }
+	virtual std::string ToString() const {
+		return "Delete";
+	}
+	virtual void Accept(SQLNodeVisitor *v) {
+		v->Visit(*this);
+	}
 
 	virtual bool Equals(const SQLStatement *other_) {
 		if (!SQLStatement::Equals(other_)) {

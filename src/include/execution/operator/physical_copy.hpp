@@ -23,13 +23,15 @@ class PhysicalCopy : public PhysicalOperator {
 	             std::vector<std::string> select_list)
 	    : PhysicalOperator(PhysicalOperatorType::COPY), table(table),
 	      file_path(file_path), is_from(is_from), select_list(select_list),
-	      delimiter(delimiter), quote(quote), escape(escape) {}
+	      delimiter(delimiter), quote(quote), escape(escape) {
+	}
 
 	PhysicalCopy(std::string file_path, bool is_from, char delimiter,
 	             char quote, char escape)
 	    : PhysicalOperator(PhysicalOperatorType::COPY), table(nullptr),
 	      file_path(file_path), is_from(is_from), delimiter(delimiter),
-	      quote(quote), escape(escape) {}
+	      quote(quote), escape(escape) {
+	}
 
 	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;

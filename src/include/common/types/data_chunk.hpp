@@ -58,7 +58,8 @@ class DataChunk : public Printable {
 #else
 	//! Verify that the DataChunk is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
-	void Verify() {}
+	void Verify() {
+	}
 #endif
 
 	//! Initializes the DataChunk with the specified types to an empty DataChunk
@@ -110,7 +111,9 @@ class DataChunk : public Printable {
 	//! Converts this DataChunk to a printable string representation
 	std::string ToString() const;
 
-	Vector &GetVector(size_t index) { return data[index]; }
+	Vector &GetVector(size_t index) {
+		return data[index];
+	}
 
 	DataChunk(const DataChunk &) = delete;
 

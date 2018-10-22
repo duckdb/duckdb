@@ -6,4 +6,5 @@ using namespace duckdb;
 using namespace std;
 
 ClientContext::ClientContext(DuckDB &database)
-    : db(database), transaction(database.transaction_manager) {}
+    : db(database), transaction(database.transaction_manager) {
+}

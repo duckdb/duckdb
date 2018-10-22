@@ -41,7 +41,8 @@ class Transaction {
   public:
 	Transaction(transaction_t start_time, transaction_t transaction_id)
 	    : start_time(start_time), transaction_id(transaction_id), commit_id(0),
-	      highest_active_query(0), active_query(MAXIMUM_QUERY_ID) {}
+	      highest_active_query(0), active_query(MAXIMUM_QUERY_ID) {
+	}
 
 	void PushCatalogEntry(CatalogEntry *entry);
 	//! Create deleted entries in the undo buffer
@@ -56,9 +57,13 @@ class Transaction {
 	//! Commit the current transaction with the given commit identifier
 	void Commit(WriteAheadLog *log, transaction_t commit_id);
 	//! Rollback
-	void Rollback() { undo_buffer.Rollback(); }
+	void Rollback() {
+		undo_buffer.Rollback();
+	}
 	//! Cleanup the undo buffer
-	void Cleanup() { undo_buffer.Cleanup(); }
+	void Cleanup() {
+		undo_buffer.Cleanup();
+	}
 
 	//! The start timestamp of this transaction
 	transaction_t start_time;

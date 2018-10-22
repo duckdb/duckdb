@@ -21,7 +21,8 @@ class PhysicalCreate : public PhysicalOperator {
 	PhysicalCreate(SchemaCatalogEntry *schema,
 	               std::unique_ptr<CreateTableInformation> info)
 	    : PhysicalOperator(PhysicalOperatorType::CREATE), schema(schema),
-	      info(move(info)) {}
+	      info(move(info)) {
+	}
 
 	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;

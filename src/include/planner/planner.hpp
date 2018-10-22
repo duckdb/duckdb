@@ -28,8 +28,12 @@ class Planner {
 	bool CreatePlan(ClientContext &catalog,
 	                std::unique_ptr<SQLStatement> statement);
 
-	bool GetSuccess() const { return success; }
-	const std::string &GetErrorMessage() const { return message; }
+	bool GetSuccess() const {
+		return success;
+	}
+	const std::string &GetErrorMessage() const {
+		return message;
+	}
 
 	bool success;
 	std::string message;

@@ -21,14 +21,24 @@ class DuckDBResult {
 	DuckDBResult();
 	DuckDBResult(std::string error);
 
-	bool GetSuccess() const { return success; }
-	const std::string &GetErrorMessage() const { return error; }
+	bool GetSuccess() const {
+		return success;
+	}
+	const std::string &GetErrorMessage() const {
+		return error;
+	}
 
 	void Print();
 
-	size_t column_count() { return collection.types.size(); }
-	size_t size() { return collection.count; }
-	std::vector<TypeId> &types() { return collection.types; }
+	size_t column_count() {
+		return collection.types.size();
+	}
+	size_t size() {
+		return collection.count;
+	}
+	std::vector<TypeId> &types() {
+		return collection.types;
+	}
 
 	std::vector<std::string> names;
 	ChunkCollection collection;

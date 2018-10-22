@@ -20,7 +20,8 @@ class PhysicalUpdate : public PhysicalOperator {
 	PhysicalUpdate(DataTable &table, std::vector<column_t> columns,
 	               std::vector<std::unique_ptr<Expression>> expressions)
 	    : PhysicalOperator(PhysicalOperatorType::UPDATE), table(table),
-	      columns(columns), expressions(std::move(expressions)) {}
+	      columns(columns), expressions(std::move(expressions)) {
+	}
 
 	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;

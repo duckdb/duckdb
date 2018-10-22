@@ -13,7 +13,8 @@ namespace duckdb {
 namespace function {
 
 struct SQLiteMasterData {
-	SQLiteMasterData() : initialized(false), offset(0) {}
+	SQLiteMasterData() : initialized(false), offset(0) {
+	}
 
 	bool initialized;
 	vector<CatalogEntry *> entries;

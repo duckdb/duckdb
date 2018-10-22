@@ -22,7 +22,8 @@ class SelectStatement;
 class SQLStatement : public Printable {
   public:
 	SQLStatement(StatementType type) : type(type){};
-	virtual ~SQLStatement() {}
+	virtual ~SQLStatement() {
+	}
 
 	virtual void Accept(SQLNodeVisitor *) = 0;
 	virtual bool Equals(const SQLStatement *other) {

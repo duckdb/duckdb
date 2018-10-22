@@ -116,7 +116,9 @@ class Vector : public Printable {
 
 	//! Returns true the vector holds only a single constant value and does not
 	//! have a selection vector
-	bool IsConstant() { return count == 1 && !sel_vector; }
+	bool IsConstant() {
+		return count == 1 && !sel_vector;
+	}
 
 #ifdef DEBUG
 	//! Verify that the Vector is in a consistent, not corrupt state. DEBUG
@@ -125,7 +127,8 @@ class Vector : public Printable {
 #else
 	//! Verify that the Vector is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
-	void Verify() {}
+	void Verify() {
+	}
 #endif
 
 	//! The stringheap of the vector

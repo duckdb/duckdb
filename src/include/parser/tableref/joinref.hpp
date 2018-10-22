@@ -18,9 +18,12 @@ namespace duckdb {
 //! Represents a JOIN between two expressions
 class JoinRef : public TableRef {
   public:
-	JoinRef() : TableRef(TableReferenceType::JOIN) {}
+	JoinRef() : TableRef(TableReferenceType::JOIN) {
+	}
 
-	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual void Accept(SQLNodeVisitor *v) override {
+		v->Visit(*this);
+	}
 	virtual bool Equals(const TableRef *other_) override {
 		if (!TableRef::Equals(other_)) {
 			return false;

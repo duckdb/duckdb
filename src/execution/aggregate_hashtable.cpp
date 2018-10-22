@@ -31,7 +31,8 @@ SuperLargeHashTable::SuperLargeHashTable(size_t initial_capacity,
 	Resize(initial_capacity);
 }
 
-SuperLargeHashTable::~SuperLargeHashTable() {}
+SuperLargeHashTable::~SuperLargeHashTable() {
+}
 
 void SuperLargeHashTable::Resize(size_t size) {
 	if (size <= capacity) {

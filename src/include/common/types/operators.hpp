@@ -58,13 +58,17 @@ struct Modulo {
 };
 
 struct Abs {
-	template <class T> static inline T Operation(T left) { return abs(left); }
+	template <class T> static inline T Operation(T left) {
+		return abs(left);
+	}
 };
 
 template <> uint64_t Abs::Operation(uint64_t left);
 
 struct Not {
-	static inline bool Operation(bool left) { return !left; }
+	static inline bool Operation(bool left) {
+		return !left;
+	}
 };
 
 template <> double Modulo::Operation(double left, double right);
@@ -191,11 +195,15 @@ struct PickRight {
 };
 
 struct ConstantZero {
-	template <class T> static inline T Operation(T left, T right) { return 0; }
+	template <class T> static inline T Operation(T left, T right) {
+		return 0;
+	}
 };
 
 struct ConstantOne {
-	template <class T> static inline T Operation(T left, T right) { return 1; }
+	template <class T> static inline T Operation(T left, T right) {
+		return 1;
+	}
 };
 
 struct AddOne {
@@ -279,7 +287,9 @@ template <> const char *CastFromDate::Operation(duckdb::date_t left);
 template <> duckdb::date_t CastToDate::Operation(const char *left);
 
 struct NOP {
-	template <class T> static inline T Operation(T left) { return left; }
+	template <class T> static inline T Operation(T left) {
+		return left;
+	}
 };
 
 } // namespace operators

@@ -32,9 +32,11 @@ struct OrderByNode {
 	//! Expression to order by
 	std::unique_ptr<Expression> expression;
 
-	OrderByNode() {}
+	OrderByNode() {
+	}
 	OrderByNode(OrderType type, std::unique_ptr<Expression> expression)
-	    : type(type), expression(std::move(expression)) {}
+	    : type(type), expression(std::move(expression)) {
+	}
 };
 //! ORDER BY description
 struct OrderByDescription {
@@ -55,10 +57,13 @@ class SelectStatement : public SQLStatement {
 	SelectStatement()
 	    : SQLStatement(StatementType::SELECT), select_distinct(false),
 	      union_select(nullptr){};
-	virtual ~SelectStatement() {}
+	virtual ~SelectStatement() {
+	}
 
 	virtual std::string ToString() const;
-	virtual void Accept(SQLNodeVisitor *v) { v->Visit(*this); }
+	virtual void Accept(SQLNodeVisitor *v) {
+		v->Visit(*this);
+	}
 
 	virtual bool Equals(const SQLStatement *other);
 
@@ -88,13 +93,21 @@ class SelectStatement : public SQLStatement {
 	static std::unique_ptr<SelectStatement> Deserialize(Deserializer &source);
 
 	//! Whether or not the query has a LIMIT clause
-	bool HasLimit() { return limit.limit >= 0; }
+	bool HasLimit() {
+		return limit.limit >= 0;
+	}
 	//! Whether or not the query has a GROUP BY clause
-	bool HasGroup() { return groupby.groups.size() > 0; }
+	bool HasGroup() {
+		return groupby.groups.size() > 0;
+	}
 	//! Whether or not the query has a HAVING clause
-	bool HasHaving() { return groupby.having.get(); }
+	bool HasHaving() {
+		return groupby.having.get();
+	}
 	//! Whether or not the query has an ORDER BY clause
-	bool HasOrder() { return orderby.orders.size() > 0; }
+	bool HasOrder() {
+		return orderby.orders.size() > 0;
+	}
 	//! Whether or not the query has an AGGREGATION
 	bool HasAggregation();
 

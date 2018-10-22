@@ -33,6 +33,8 @@ class LogicalTableFunction : public LogicalOperator {
 	//! The table index of the table-producing function
 	size_t table_index;
 
-	virtual void Accept(LogicalOperatorVisitor *v) override { v->Visit(*this); }
+	virtual void Accept(LogicalOperatorVisitor *v) override {
+		v->Visit(*this);
+	}
 };
 } // namespace duckdb

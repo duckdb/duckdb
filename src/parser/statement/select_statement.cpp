@@ -7,7 +7,9 @@
 using namespace duckdb;
 using namespace std;
 
-string SelectStatement::ToString() const { return "Select"; }
+string SelectStatement::ToString() const {
+	return "Select";
+}
 
 unique_ptr<SelectStatement> SelectStatement::Copy() {
 	auto statement = make_unique<SelectStatement>();

@@ -5,4 +5,6 @@
 using namespace duckdb;
 using namespace std;
 
-string InsertStatement::ToString() const { return "Insert"; }
+string InsertStatement::ToString() const {
+	return "Insert";
+}

@@ -20,10 +20,15 @@ class CreateSchemaStatement : public SQLStatement {
 	CreateSchemaStatement()
 	    : SQLStatement(StatementType::CREATE_SCHEMA),
 	      info(make_unique<CreateSchemaInformation>()){};
-	virtual ~CreateSchemaStatement() {}
+	virtual ~CreateSchemaStatement() {
+	}
 
-	virtual std::string ToString() const { return "CREATE SCHEMA"; }
-	virtual void Accept(SQLNodeVisitor *v) { v->Visit(*this); }
+	virtual std::string ToString() const {
+		return "CREATE SCHEMA";
+	}
+	virtual void Accept(SQLNodeVisitor *v) {
+		v->Visit(*this);
+	}
 
 	virtual bool Equals(const SQLStatement *other_) {
 		if (!SQLStatement::Equals(other_)) {

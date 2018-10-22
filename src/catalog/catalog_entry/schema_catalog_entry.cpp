@@ -12,7 +12,8 @@ using namespace duckdb;
 using namespace std;
 
 SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name)
-    : CatalogEntry(CatalogType::SCHEMA, catalog, name) {}
+    : CatalogEntry(CatalogType::SCHEMA, catalog, name) {
+}
 
 void SchemaCatalogEntry::CreateTable(Transaction &transaction,
                                      CreateTableInformation *info) {

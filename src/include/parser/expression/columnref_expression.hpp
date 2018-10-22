@@ -18,9 +18,11 @@ struct ColumnBinding {
 	size_t table_index;
 	size_t column_index;
 
-	ColumnBinding() : table_index((size_t)-1), column_index((size_t)-1) {}
+	ColumnBinding() : table_index((size_t)-1), column_index((size_t)-1) {
+	}
 	ColumnBinding(size_t table, size_t column)
-	    : table_index(table), column_index(column) {}
+	    : table_index(table), column_index(column) {
+	}
 
 	bool operator==(const ColumnBinding &rhs) {
 		return table_index == rhs.table_index &&
@@ -35,25 +37,35 @@ class ColumnRefExpression : public Expression {
 	//! Only specify the column name, the table name will be derived later
 	ColumnRefExpression(std::string column_name)
 	    : Expression(ExpressionType::COLUMN_REF), reference(nullptr),
-	      column_name(column_name) {}
+	      column_name(column_name) {
+	}
 
 	//! Specify both the column and table name
 	ColumnRefExpression(std::string column_name, std::string table_name)
 	    : Expression(ExpressionType::COLUMN_REF), reference(nullptr),
-	      column_name(column_name), table_name(table_name) {}
+	      column_name(column_name), table_name(table_name) {
+	}
 
 	ColumnRefExpression(TypeId type, ColumnBinding binding)
 	    : Expression(ExpressionType::COLUMN_REF, type), binding(binding),
-	      reference(nullptr), column_name(""), table_name("") {}
+	      reference(nullptr), column_name(""), table_name("") {
+	}
 
 	ColumnRefExpression(TypeId type, size_t index)
 	    : Expression(ExpressionType::COLUMN_REF, type), index(index),
-	      reference(nullptr), column_name(""), table_name("") {}
+	      reference(nullptr), column_name(""), table_name("") {
+	}
 
-	const std::string &GetColumnName() const { return column_name; }
-	const std::string &GetTableName() const { return table_name; }
+	const std::string &GetColumnName() const {
+		return column_name;
+	}
+	const std::string &GetTableName() const {
+		return table_name;
+	}
 
-	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual void Accept(SQLNodeVisitor *v) override {
+		v->Visit(*this);
+	}
 
 	virtual std::string GetName() override {
 		return !alias.empty() ? alias : column_name;
@@ -96,6 +108,8 @@ class ColumnRefExpression : public Expression {
 
 	virtual std::string ToString() const override;
 
-	virtual bool IsScalar() override { return false; }
+	virtual bool IsScalar() override {
+		return false;
+	}
 };
 } // namespace duckdb

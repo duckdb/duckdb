@@ -20,11 +20,14 @@ class FunctionExpression : public Expression {
 	                   std::vector<std::unique_ptr<Expression>> &children);
 	FunctionExpression(std::string function_name,
 	                   std::vector<std::unique_ptr<Expression>> &children)
-	    : FunctionExpression(DEFAULT_SCHEMA, function_name, children) {}
+	    : FunctionExpression(DEFAULT_SCHEMA, function_name, children) {
+	}
 
 	virtual void ResolveType() override;
 
-	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual void Accept(SQLNodeVisitor *v) override {
+		v->Visit(*this);
+	}
 	virtual ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::FUNCTION;
 	}

@@ -11,7 +11,8 @@ static map<const char *, long> limited;
 static map<const char *, long> failed;
 
 impedance_visitor::impedance_visitor(map<const char *, long> &occured)
-    : _occured(occured) {}
+    : _occured(occured) {
+}
 
 void impedance_visitor::visit(struct prod *p) {
 	found[typeid(*p).name()] = true;
@@ -75,10 +76,16 @@ void report(std::ostream &out) {
 	out << "]}" << endl;
 }
 
-void retry(const char *p) { retries[p]++; }
+void retry(const char *p) {
+	retries[p]++;
+}
 
-void limit(const char *p) { limited[p]++; }
+void limit(const char *p) {
+	limited[p]++;
+}
 
-void fail(const char *p) { failed[p]++; }
+void fail(const char *p) {
+	failed[p]++;
+}
 
 } // namespace impedance

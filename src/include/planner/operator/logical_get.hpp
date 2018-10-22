@@ -17,7 +17,8 @@ namespace duckdb {
 //! LogicalGet represents a scan operation from a data source
 class LogicalGet : public LogicalOperator {
   public:
-	LogicalGet() : LogicalOperator(LogicalOperatorType::GET), table(nullptr) {}
+	LogicalGet() : LogicalOperator(LogicalOperatorType::GET), table(nullptr) {
+	}
 	LogicalGet(TableCatalogEntry *table, size_t table_index,
 	           std::vector<column_t> column_ids)
 	    : LogicalOperator(LogicalOperatorType::GET), table(table),
@@ -25,7 +26,9 @@ class LogicalGet : public LogicalOperator {
 		referenced_tables.insert(table_index);
 	}
 
-	virtual void Accept(LogicalOperatorVisitor *v) override { v->Visit(*this); }
+	virtual void Accept(LogicalOperatorVisitor *v) override {
+		v->Visit(*this);
+	}
 
 	//! The base table to retrieve data from
 	TableCatalogEntry *table;

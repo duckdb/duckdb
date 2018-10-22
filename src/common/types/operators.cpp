@@ -9,7 +9,9 @@ using namespace std;
 
 namespace operators {
 
-template <> uint64_t Abs::Operation(uint64_t left) { return left; }
+template <> uint64_t Abs::Operation(uint64_t left) {
+	return left;
+}
 
 template <> double Modulo::Operation(double left, double right) {
 	throw NotImplementedException("Modulo for double not implemented!");
@@ -52,13 +54,17 @@ const char *str_to_cstr(string str) {
 }
 
 // numeric -> string
-template <> std::string Cast::Operation(int8_t left) { return to_string(left); }
+template <> std::string Cast::Operation(int8_t left) {
+	return to_string(left);
+}
 
 template <> std::string Cast::Operation(int16_t left) {
 	return to_string(left);
 }
 
-template <> std::string Cast::Operation(int left) { return to_string(left); }
+template <> std::string Cast::Operation(int left) {
+	return to_string(left);
+}
 
 template <> std::string Cast::Operation(int64_t left) {
 	return to_string(left);
@@ -68,7 +74,9 @@ template <> std::string Cast::Operation(uint64_t left) {
 	return to_string(left);
 }
 
-template <> std::string Cast::Operation(double left) { return to_string(left); }
+template <> std::string Cast::Operation(double left) {
+	return to_string(left);
+}
 
 template <> const char *Cast::Operation(int8_t left) {
 	return str_to_cstr(to_string(left));

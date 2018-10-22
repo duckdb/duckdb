@@ -19,9 +19,12 @@ class LogicalCreate : public LogicalOperator {
 	LogicalCreate(SchemaCatalogEntry *schema,
 	              std::unique_ptr<CreateTableInformation> info)
 	    : LogicalOperator(LogicalOperatorType::CREATE), schema(schema),
-	      info(move(info)) {}
+	      info(move(info)) {
+	}
 
-	virtual void Accept(LogicalOperatorVisitor *v) override { v->Visit(*this); }
+	virtual void Accept(LogicalOperatorVisitor *v) override {
+		v->Visit(*this);
+	}
 
 	//! Schema to insert to
 	SchemaCatalogEntry *schema;

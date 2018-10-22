@@ -21,7 +21,9 @@ class ConjunctionExpression : public Expression {
 	    : Expression(type, TypeId::BOOLEAN, std::move(left), std::move(right)) {
 	}
 
-	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual void Accept(SQLNodeVisitor *v) override {
+		v->Visit(*this);
+	}
 	virtual ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::CONJUNCTION;
 	}

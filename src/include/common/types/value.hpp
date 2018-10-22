@@ -26,7 +26,8 @@ class Value : public Printable {
 
   public:
 	//! Create an empty NULL value of the specified type
-	Value(TypeId type = TypeId::INTEGER) : type(type), is_null(true) {}
+	Value(TypeId type = TypeId::INTEGER) : type(type), is_null(true) {
+	}
 	//! Create a BIGINT value
 	Value(int32_t val) : type(TypeId::INTEGER), is_null(false) {
 		value_.integer = val;
@@ -36,10 +37,12 @@ class Value : public Printable {
 		value_.decimal = val;
 	}
 	//! Create a VARCHAR value
-	Value(const char *val) : Value(val ? std::string(val) : std::string()) {}
+	Value(const char *val) : Value(val ? std::string(val) : std::string()) {
+	}
 	//! Create a VARCHAR value
 	Value(std::string val)
-	    : type(TypeId::VARCHAR), is_null(false), str_value(val) {}
+	    : type(TypeId::VARCHAR), is_null(false), str_value(val) {
+	}
 	Value(const Value &other);
 
 	//! Create the lowest possible value of a given type (numeric only)
@@ -67,7 +70,9 @@ class Value : public Printable {
 	int64_t GetNumericValue();
 
 	//! Return a copy of this value
-	Value Copy() { return Value(*this); }
+	Value Copy() {
+		return Value(*this);
+	}
 
 	//! Convert this value to a string
 	virtual std::string ToString() const;

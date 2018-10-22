@@ -24,4 +24,5 @@ LogicalFilter::LogicalFilter(unique_ptr<Expression> expression)
 	SplitPredicates(move(expression));
 }
 
-LogicalFilter::LogicalFilter() : LogicalOperator(LogicalOperatorType::FILTER) {}
+LogicalFilter::LogicalFilter() : LogicalOperator(LogicalOperatorType::FILTER) {
+}

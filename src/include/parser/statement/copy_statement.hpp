@@ -20,9 +20,12 @@ namespace duckdb {
 class CopyStatement : public SQLStatement {
   public:
 	CopyStatement() : SQLStatement(StatementType::COPY){};
-	virtual ~CopyStatement() {}
+	virtual ~CopyStatement() {
+	}
 	virtual std::string ToString() const;
-	virtual void Accept(SQLNodeVisitor *v) { v->Visit(*this); }
+	virtual void Accept(SQLNodeVisitor *v) {
+		v->Visit(*this);
+	}
 
 	virtual bool Equals(const SQLStatement *other_) {
 		if (!SQLStatement::Equals(other_)) {

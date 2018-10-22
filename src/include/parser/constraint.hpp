@@ -21,9 +21,11 @@ namespace duckdb {
 class Constraint : public Printable {
   public:
 	Constraint(ConstraintType type) : type(type){};
-	virtual ~Constraint() {}
+	virtual ~Constraint() {
+	}
 
-	virtual void Accept(SQLNodeVisitor *) {}
+	virtual void Accept(SQLNodeVisitor *) {
+	}
 
 	ConstraintType type;
 

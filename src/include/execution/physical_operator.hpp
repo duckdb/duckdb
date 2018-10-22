@@ -34,7 +34,8 @@ class PhysicalOperator;
 class PhysicalOperatorState {
   public:
 	PhysicalOperatorState(PhysicalOperator *child, ExpressionExecutor *parent);
-	virtual ~PhysicalOperatorState() {}
+	virtual ~PhysicalOperatorState() {
+	}
 
 	//! Flag indicating whether or not the operator is finished [note: not all
 	//! operators use this flag]
@@ -58,9 +59,12 @@ class PhysicalOperatorState {
 */
 class PhysicalOperator : public Printable {
   public:
-	PhysicalOperator(PhysicalOperatorType type) : type(type) {}
+	PhysicalOperator(PhysicalOperatorType type) : type(type) {
+	}
 
-	PhysicalOperatorType GetOperatorType() { return type; }
+	PhysicalOperatorType GetOperatorType() {
+		return type;
+	}
 
 	virtual std::string ToString() const override;
 

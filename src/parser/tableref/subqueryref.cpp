@@ -7,7 +7,8 @@ using namespace duckdb;
 using namespace std;
 
 SubqueryRef::SubqueryRef(unique_ptr<SelectStatement> subquery_)
-    : TableRef(TableReferenceType::SUBQUERY), subquery(move(subquery_)) {}
+    : TableRef(TableReferenceType::SUBQUERY), subquery(move(subquery_)) {
+}
 
 unique_ptr<TableRef> SubqueryRef::Copy() {
 	assert(!context);

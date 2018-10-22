@@ -25,7 +25,8 @@ namespace duckdb {
 */
 class ChunkCollection : public Printable {
   public:
-	ChunkCollection() : count(0) {}
+	ChunkCollection() : count(0) {
+	}
 
 	//! The total amount of elements in the collection
 	size_t count;
@@ -35,7 +36,9 @@ class ChunkCollection : public Printable {
 	std::vector<TypeId> types;
 
 	//! The amount of columns in the ChunkCollection
-	size_t column_count() { return types.size(); }
+	size_t column_count() {
+		return types.size();
+	}
 
 	//! Append a new DataChunk directly to this ChunkCollection
 	void Append(DataChunk &new_chunk);

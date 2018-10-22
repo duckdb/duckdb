@@ -83,9 +83,13 @@ STATIC_IF_INLINE ListCell *list_head(const List *l) {
 	return l ? l->head : NULL;
 }
 
-STATIC_IF_INLINE ListCell *list_tail(List *l) { return l ? l->tail : NULL; }
+STATIC_IF_INLINE ListCell *list_tail(List *l) {
+	return l ? l->tail : NULL;
+}
 
-STATIC_IF_INLINE int list_length(const List *l) { return l ? l->length : 0; }
+STATIC_IF_INLINE int list_length(const List *l) {
+	return l ? l->length : 0;
+}
 #endif /*-- PG_USE_INLINE || PG_LIST_INCLUDE_DEFINITIONS */
 
 /*

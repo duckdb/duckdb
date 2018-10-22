@@ -80,7 +80,9 @@ class Serializer {
 		return dataptr;
 	}
 	//! Retrieves the data after the writing has been completed
-	BinaryData GetData() { return std::move(blob); }
+	BinaryData GetData() {
+		return std::move(blob);
+	}
 
   private:
 	size_t maximum_size;
@@ -94,7 +96,8 @@ class Serializer {
 class Deserializer {
   public:
 	Deserializer(Serializer &serializer)
-	    : Deserializer(serializer.data, serializer.blob.size) {}
+	    : Deserializer(serializer.data, serializer.blob.size) {
+	}
 	Deserializer(uint8_t *ptr, size_t data);
 
 	// Read an element of class T [sizeof(T)] from the stream. [CAN THROW:

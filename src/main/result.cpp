@@ -4,9 +4,11 @@
 using namespace duckdb;
 using namespace std;
 
-DuckDBResult::DuckDBResult() : success(true) {}
+DuckDBResult::DuckDBResult() : success(true) {
+}
 
-DuckDBResult::DuckDBResult(std::string error) : success(false), error(error) {}
+DuckDBResult::DuckDBResult(std::string error) : success(false), error(error) {
+}
 
 void DuckDBResult::Print() {
 	if (success) {

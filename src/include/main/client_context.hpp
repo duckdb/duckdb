@@ -25,9 +25,13 @@ class ClientContext {
   public:
 	ClientContext(DuckDB &database);
 
-	Transaction &ActiveTransaction() { return transaction.ActiveTransaction(); }
+	Transaction &ActiveTransaction() {
+		return transaction.ActiveTransaction();
+	}
 
-	void Interrupt() { interrupted = true; }
+	void Interrupt() {
+		interrupted = true;
+	}
 
 	//! The allocator that holds any allocations made in the Query Context
 	Allocator allocator;

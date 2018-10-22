@@ -277,7 +277,9 @@ const unsigned char *sqlite3_column_text(sqlite3_stmt *pStmt, int iCol) {
 	                                             pStmt->curr_row);
 }
 
-int sqlite3_initialize(void) { return SQLITE_OK; }
+int sqlite3_initialize(void) {
+	return SQLITE_OK;
+}
 
 int sqlite3_finalize(sqlite3_stmt *pStmt) {
 	duckdb_destroy_result(pStmt->result);
@@ -294,8 +296,12 @@ int sqlite3_stricmp(const char *s1, const char *s2) {
 	return tolower(*s1) < tolower(*s2) ? -1 : 1;
 }
 
-void *sqlite3_malloc64(sqlite3_uint64 n) { return malloc(n); }
-void sqlite3_free(void *pVoid) { free(pVoid); }
+void *sqlite3_malloc64(sqlite3_uint64 n) {
+	return malloc(n);
+}
+void sqlite3_free(void *pVoid) {
+	free(pVoid);
+}
 
 // TODO: test
 /* Printf into a newly allocated buffer */
@@ -329,16 +335,26 @@ char *sqlite3_snprintf(int size, char *str, const char *fmt, ...) {
 }
 
 // TODO: stub
-int sqlite3_config(int i, ...) { return SQLITE_OK; }
+int sqlite3_config(int i, ...) {
+	return SQLITE_OK;
+}
 
 // TODO: stub
-int sqlite3_errcode(sqlite3 *db) { return SQLITE_OK; }
+int sqlite3_errcode(sqlite3 *db) {
+	return SQLITE_OK;
+}
 
 // TODO: stub
-const char *sqlite3_errmsg(sqlite3 *db) { return "Unknown error"; }
+const char *sqlite3_errmsg(sqlite3 *db) {
+	return "Unknown error";
+}
 
 // TODO: stub
 void sqlite3_interrupt(sqlite3 *db){};
 
-const char *sqlite3_libversion(void) { return LIB_VERSION; }
-const char *sqlite3_sourceid(void) { return SOURCE_ID; }
+const char *sqlite3_libversion(void) {
+	return LIB_VERSION;
+}
+const char *sqlite3_sourceid(void) {
+	return SOURCE_ID;
+}

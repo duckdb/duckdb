@@ -25,10 +25,16 @@ class PragmaTableInfo {
 	static table_function_init_t GetInitFunction() {
 		return pragma_table_info_init;
 	}
-	static table_function_t GetFunction() { return pragma_table_info; }
-	static table_function_final_t GetFinalFunction() { return nullptr; }
+	static table_function_t GetFunction() {
+		return pragma_table_info;
+	}
+	static table_function_final_t GetFinalFunction() {
+		return nullptr;
+	}
 
-	static const char *GetName() { return "pragma_table_info"; }
+	static const char *GetName() {
+		return "pragma_table_info";
+	}
 
 	static void GetArguments(std::vector<TypeId> &arguments) {
 		arguments.push_back(TypeId::VARCHAR);

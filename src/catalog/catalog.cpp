@@ -9,7 +9,8 @@
 using namespace duckdb;
 using namespace std;
 
-Catalog::Catalog(StorageManager &storage) : storage(storage) {}
+Catalog::Catalog(StorageManager &storage) : storage(storage) {
+}
 
 void Catalog::CreateSchema(Transaction &transaction,
                            CreateSchemaInformation *info) {

@@ -19,8 +19,11 @@ class LogicalProjection : public LogicalOperator {
   public:
 	LogicalProjection(std::vector<std::unique_ptr<Expression>> select_list)
 	    : LogicalOperator(LogicalOperatorType::PROJECTION,
-	                      std::move(select_list)) {}
+	                      std::move(select_list)) {
+	}
 
-	virtual void Accept(LogicalOperatorVisitor *v) override { v->Visit(*this); }
+	virtual void Accept(LogicalOperatorVisitor *v) override {
+		v->Visit(*this);
+	}
 };
 } // namespace duckdb

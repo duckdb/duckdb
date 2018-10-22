@@ -18,9 +18,12 @@ class CaseExpression : public Expression {
   public:
 	// this expression has 3 children, the test and the result if the test
 	// evaluates to 1 and the result if it does not
-	CaseExpression() : Expression(ExpressionType::OPERATOR_CASE_EXPR) {}
+	CaseExpression() : Expression(ExpressionType::OPERATOR_CASE_EXPR) {
+	}
 
-	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual void Accept(SQLNodeVisitor *v) override {
+		v->Visit(*this);
+	}
 	virtual ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::CASE;
 	}

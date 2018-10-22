@@ -19,7 +19,8 @@ namespace duckdb {
 //! Represents a generic expression that returns a table.
 class TableRef : public Printable {
   public:
-	TableRef(TableReferenceType type) : type(type) {}
+	TableRef(TableReferenceType type) : type(type) {
+	}
 
 	virtual void Accept(SQLNodeVisitor *v) = 0;
 	virtual bool Equals(const TableRef *other) {
@@ -34,7 +35,9 @@ class TableRef : public Printable {
 	static std::unique_ptr<TableRef> Deserialize(Deserializer &source);
 
 	//! Convert the object to a string
-	virtual std::string ToString() const { return std::string(); }
+	virtual std::string ToString() const {
+		return std::string();
+	}
 
 	TableReferenceType type;
 	std::string alias;

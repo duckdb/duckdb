@@ -38,7 +38,8 @@ struct UndoEntry {
 //! transactions accessing them)
 class UndoBuffer {
   public:
-	UndoBuffer() {}
+	UndoBuffer() {
+	}
 
 	//! Reserve space for an entry of the specified type and length in the undo
 	//! buffer

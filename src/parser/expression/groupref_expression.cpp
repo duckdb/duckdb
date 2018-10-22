@@ -8,7 +8,8 @@ using namespace std;
 
 GroupRefExpression::GroupRefExpression(TypeId return_type, size_t group_index)
     : Expression(ExpressionType::GROUP_REF, return_type),
-      group_index(group_index) {}
+      group_index(group_index) {
+}
 
 unique_ptr<Expression> GroupRefExpression::Copy() {
 	assert(children.size() == 0);

@@ -4,8 +4,12 @@
 using namespace duckdb;
 using namespace std;
 
-vector<string> PhysicalLimit::GetNames() { return children[0]->GetNames(); }
-vector<TypeId> PhysicalLimit::GetTypes() { return children[0]->GetTypes(); }
+vector<string> PhysicalLimit::GetNames() {
+	return children[0]->GetNames();
+}
+vector<TypeId> PhysicalLimit::GetTypes() {
+	return children[0]->GetTypes();
+}
 
 void PhysicalLimit::_GetChunk(ClientContext &context, DataChunk &chunk,
                               PhysicalOperatorState *state_) {

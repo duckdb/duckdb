@@ -90,7 +90,9 @@ class Exception : public std::runtime_error {
 	}
 
   public:
-	std::string GetMessage() { return exception_message_; }
+	std::string GetMessage() {
+		return exception_message_;
+	}
 
 	std::string ExceptionTypeToString(ExceptionType type) {
 		switch (type) {
@@ -248,7 +250,8 @@ class CastException : public Exception {
 	CastException(const TypeId origType, const TypeId newType)
 	    : Exception(ExceptionType::CONVERSION,
 	                "Type " + TypeIdToString(origType) + " can't be cast as " +
-	                    TypeIdToString(newType)) {}
+	                    TypeIdToString(newType)) {
+	}
 };
 
 class ValueOutOfRangeException : public Exception {
@@ -263,7 +266,8 @@ class ValueOutOfRangeException : public Exception {
 	              std::to_string((intmax_t)value) +
 	              " can't be cast as %s because the value is out of range "
 	              "for the destination type " +
-	              TypeIdToString(newType)) {}
+	              TypeIdToString(newType)) {
+	}
 
 	ValueOutOfRangeException(const double value, const TypeId origType,
 	                         const TypeId newType)
@@ -273,7 +277,8 @@ class ValueOutOfRangeException : public Exception {
 	              std::to_string(value) +
 	              " can't be cast as %s because the value is out of range "
 	              "for the destination type " +
-	              TypeIdToString(newType)) {}
+	              TypeIdToString(newType)) {
+	}
 	ValueOutOfRangeException(const TypeId varType, const size_t length)
 	    : Exception(ExceptionType::OUT_OF_RANGE,
 	                "The value is too long to fit into type " +
@@ -297,7 +302,8 @@ class InvalidTypeException : public Exception {
   public:
 	InvalidTypeException(TypeId type, std::string msg)
 	    : Exception(ExceptionType::INVALID_TYPE,
-	                "Invalid Type [" + TypeIdToString(type) + "]: " + msg) {}
+	                "Invalid Type [" + TypeIdToString(type) + "]: " + msg) {
+	}
 };
 
 class TypeMismatchException : public Exception {
@@ -308,7 +314,8 @@ class TypeMismatchException : public Exception {
 	                      std::string msg)
 	    : Exception(ExceptionType::MISMATCH_TYPE,
 	                "Type " + TypeIdToString(type_1) + " does not match with " +
-	                    TypeIdToString(type_2) + msg) {}
+	                    TypeIdToString(type_2) + msg) {
+	}
 };
 
 class TransactionException : public Exception {
@@ -316,7 +323,8 @@ class TransactionException : public Exception {
 
   public:
 	TransactionException(std::string msg)
-	    : Exception(ExceptionType::TRANSACTION, msg) {}
+	    : Exception(ExceptionType::TRANSACTION, msg) {
+	}
 };
 
 class NotImplementedException : public Exception {
@@ -410,8 +418,8 @@ class SerializationException : public Exception {
 
 class InterruptException : public Exception {
   public:
-	InterruptException()
-	    : Exception(ExceptionType::INTERRUPT, "Interrupted!") {}
+	InterruptException() : Exception(ExceptionType::INTERRUPT, "Interrupted!") {
+	}
 };
 
 } // namespace duckdb

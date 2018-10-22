@@ -12,9 +12,11 @@ using namespace duckdb;
 using namespace std;
 
 DuckDBConnection::DuckDBConnection(DuckDB &database)
-    : db(database), context(database) {}
+    : db(database), context(database) {
+}
 
-DuckDBConnection::~DuckDBConnection() {}
+DuckDBConnection::~DuckDBConnection() {
+}
 
 unique_ptr<DuckDBResult>
 DuckDBConnection::GetQueryResult(ClientContext &context, std::string query) {

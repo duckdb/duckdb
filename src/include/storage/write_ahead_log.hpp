@@ -61,10 +61,13 @@ struct WALEntryData {
 class WriteAheadLog {
   public:
 	WriteAheadLog(DuckDB &database)
-	    : initialized(false), database(database), wal_file(nullptr) {}
+	    : initialized(false), database(database), wal_file(nullptr) {
+	}
 	~WriteAheadLog();
 
-	bool IsInitialized() { return initialized; }
+	bool IsInitialized() {
+		return initialized;
+	}
 
 	//! Replay the WAL
 	void Replay(std::string &path);

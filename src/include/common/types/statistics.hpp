@@ -20,12 +20,18 @@ class Vector;
 //! The Statistics object holds statistics relating to a Vector or column
 class Statistics {
   public:
-	Statistics() { Reset(); }
-	Statistics(TypeId type) : type(type) { Reset(); }
+	Statistics() {
+		Reset();
+	}
+	Statistics(TypeId type) : type(type) {
+		Reset();
+	}
 	//! Initialize statistics for a vector with a single value
 	Statistics(Value value);
 
-	bool CanHaveNull() { return !has_stats || can_have_null; }
+	bool CanHaveNull() {
+		return !has_stats || can_have_null;
+	}
 
 	//! Whether or not statistics are available for the given column
 	bool has_stats;
@@ -47,7 +53,8 @@ class Statistics {
 	void Verify(Vector &vector);
 #else
 	//! Verify that the statistics hold for a given vector. DEBUG FUNCTION ONLY!
-	void Verify(Vector &vector) {}
+	void Verify(Vector &vector) {
+	}
 #endif
 
 	//! Update the statistics with a new vector that is appended to the dataset

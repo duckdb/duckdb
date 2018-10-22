@@ -2192,7 +2192,9 @@ static int line_is_command_terminator(const char *zLine) {
 ** user-friendly, but it does seem to work.
 */
 #ifdef SQLITE_OMIT_COMPLETE
-int sqlite3_complete(const char *zSql) { return 1; }
+int sqlite3_complete(const char *zSql) {
+	return 1;
+}
 #endif
 
 /*
@@ -2437,7 +2439,9 @@ static void main_init(ShellState *data) {
 /*
 ** Output text to the console in a font that attracts extra attention.
 */
-static void printBold(const char *zText) { printf("\033[1m%s\033[0m", zText); }
+static void printBold(const char *zText) {
+	printf("\033[1m%s\033[0m", zText);
+}
 
 /*
 ** Get the argument to an --option.  Throw an error and die if no argument

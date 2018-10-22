@@ -37,7 +37,8 @@ class AggregateExpression;
 class Expression : public Printable {
   public:
 	//! Create an Expression
-	Expression(ExpressionType type) : type(type) {}
+	Expression(ExpressionType type) : type(type) {
+	}
 	//! Create an Expression with zero, one or two children with the
 	//! specified return type
 	Expression(ExpressionType type, TypeId return_type,
@@ -101,7 +102,9 @@ class Expression : public Printable {
 	virtual bool IsScalar();
 
 	//! Returns the type of the expression
-	ExpressionType GetExpressionType() { return type; }
+	ExpressionType GetExpressionType() {
+		return type;
+	}
 
 	virtual bool Equals(const Expression *other) {
 		if (!other) {
@@ -121,7 +124,9 @@ class Expression : public Printable {
 		return true;
 	}
 
-	bool operator==(const Expression &rhs) { return this->Equals(&rhs); }
+	bool operator==(const Expression &rhs) {
+		return this->Equals(&rhs);
+	}
 
 	virtual std::string GetExprName() const {
 		return ExpressionTypeToString(type);
@@ -143,7 +148,9 @@ class Expression : public Printable {
 		return result;
 	}
 
-	virtual std::string GetName() { return !alias.empty() ? alias : "Unknown"; }
+	virtual std::string GetName() {
+		return !alias.empty() ? alias : "Unknown";
+	}
 	virtual ExpressionClass GetExpressionClass() = 0;
 
 	//! Create a copy of this expression

@@ -17,9 +17,12 @@ namespace duckdb {
 class LogicalDelete : public LogicalOperator {
   public:
 	LogicalDelete(TableCatalogEntry *table)
-	    : LogicalOperator(LogicalOperatorType::DELETE), table(table) {}
+	    : LogicalOperator(LogicalOperatorType::DELETE), table(table) {
+	}
 
-	virtual void Accept(LogicalOperatorVisitor *v) override { v->Visit(*this); }
+	virtual void Accept(LogicalOperatorVisitor *v) override {
+		v->Visit(*this);
+	}
 
 	TableCatalogEntry *table;
 };

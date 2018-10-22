@@ -82,7 +82,8 @@ table_subquery::table_subquery(prod *p, bool lateral)
 	refs.push_back(make_shared<aliased_relation>(alias, aliased_rel));
 }
 
-table_subquery::~table_subquery() {}
+table_subquery::~table_subquery() {
+}
 
 void table_subquery::accept(prod_visitor *v) {
 	query->accept(v);
@@ -129,7 +130,9 @@ retry:
 	}
 }
 
-void simple_join_cond::out(std::ostream &out) { out << condition; }
+void simple_join_cond::out(std::ostream &out) {
+	out << condition;
+}
 
 expr_join_cond::expr_join_cond(prod *p, table_ref &lhs, table_ref &rhs)
     : join_cond(p, lhs, rhs), joinscope(p->scope) {
@@ -141,7 +144,9 @@ expr_join_cond::expr_join_cond(prod *p, table_ref &lhs, table_ref &rhs)
 	search = bool_expr::factory(this);
 }
 
-void expr_join_cond::out(std::ostream &out) { out << *search; }
+void expr_join_cond::out(std::ostream &out) {
+	out << *search;
+}
 
 joined_table::joined_table(prod *p) : table_ref(p) {
 	lhs = table_ref::factory(this);

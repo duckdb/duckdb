@@ -10,9 +10,13 @@ template <> int32_t Hash(uint64_t val) {
 	return murmurhash64((uint32_t *)&val);
 }
 
-template <> int32_t Hash(int64_t val) { return murmurhash64((uint32_t *)&val); }
+template <> int32_t Hash(int64_t val) {
+	return murmurhash64((uint32_t *)&val);
+}
 
-template <> int32_t Hash(double val) { return murmurhash64((uint32_t *)&val); }
+template <> int32_t Hash(double val) {
+	return murmurhash64((uint32_t *)&val);
+}
 
 template <> int32_t Hash(const char *str) {
 	uint32_t hash = 5381;
@@ -25,6 +29,8 @@ template <> int32_t Hash(const char *str) {
 	return hash;
 }
 
-template <> int32_t Hash(char *val) { return Hash<const char *>(val); }
+template <> int32_t Hash(char *val) {
+	return Hash<const char *>(val);
+}
 
 } // namespace duckdb

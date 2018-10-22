@@ -8,7 +8,8 @@ using namespace postgres;
 using namespace duckdb;
 using namespace std;
 
-Parser::Parser() : success(false) {}
+Parser::Parser() : success(false) {
+}
 
 bool Parser::ParseQuery(std::string query) {
 	void *context = nullptr;

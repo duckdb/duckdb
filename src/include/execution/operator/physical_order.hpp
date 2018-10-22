@@ -21,7 +21,8 @@ class PhysicalOrder : public PhysicalOperator {
   public:
 	PhysicalOrder(OrderByDescription description)
 	    : PhysicalOperator(PhysicalOperatorType::ORDER_BY),
-	      description(std::move(description)) {}
+	      description(std::move(description)) {
+	}
 
 	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;
@@ -39,7 +40,8 @@ class PhysicalOrderOperatorState : public PhysicalOperatorState {
   public:
 	PhysicalOrderOperatorState(PhysicalOperator *child,
 	                           ExpressionExecutor *parent_executor)
-	    : PhysicalOperatorState(child, parent_executor), position(0) {}
+	    : PhysicalOperatorState(child, parent_executor), position(0) {
+	}
 
 	size_t position;
 	ChunkCollection sorted_data;

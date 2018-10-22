@@ -65,7 +65,8 @@ struct Script {
 };
 
 // stub because not used
-void sqllogictestRegisterEngine(const DbEngine *p) {}
+void sqllogictestRegisterEngine(const DbEngine *p) {
+}
 
 /*
 ** Advance the cursor to the start of the next non-comment line of the

@@ -19,10 +19,15 @@ class DropSchemaStatement : public SQLStatement {
 	DropSchemaStatement()
 	    : SQLStatement(StatementType::DROP_SCHEMA),
 	      info(make_unique<DropSchemaInformation>()){};
-	virtual ~DropSchemaStatement() {}
+	virtual ~DropSchemaStatement() {
+	}
 
-	virtual std::string ToString() const { return "DROP SCHEMA"; }
-	virtual void Accept(SQLNodeVisitor *v) { v->Visit(*this); }
+	virtual std::string ToString() const {
+		return "DROP SCHEMA";
+	}
+	virtual void Accept(SQLNodeVisitor *v) {
+		v->Visit(*this);
+	}
 
 	virtual bool Equals(const SQLStatement *other_) {
 		if (!SQLStatement::Equals(other_)) {

@@ -19,9 +19,12 @@ class LogicalLimit : public LogicalOperator {
   public:
 	LogicalLimit(int64_t limit, int64_t offset)
 	    : LogicalOperator(LogicalOperatorType::LIMIT), limit(limit),
-	      offset(offset) {}
+	      offset(offset) {
+	}
 
-	virtual void Accept(LogicalOperatorVisitor *v) override { v->Visit(*this); }
+	virtual void Accept(LogicalOperatorVisitor *v) override {
+		v->Visit(*this);
+	}
 
 	//! The maximum amount of elements to emit
 	int64_t limit;

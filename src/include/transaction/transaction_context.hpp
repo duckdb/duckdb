@@ -21,7 +21,8 @@ class TransactionContext {
   public:
 	TransactionContext(TransactionManager &transaction_manager)
 	    : transaction_manager(transaction_manager), auto_commit(true),
-	      current_transaction(nullptr) {}
+	      current_transaction(nullptr) {
+	}
 	~TransactionContext();
 
 	Transaction &ActiveTransaction() {
@@ -29,15 +30,21 @@ class TransactionContext {
 		return *current_transaction;
 	}
 
-	bool HasActiveTransaction() { return !!current_transaction; }
+	bool HasActiveTransaction() {
+		return !!current_transaction;
+	}
 
 	void RecordQuery(std::string query);
 	void BeginTransaction();
 	void Commit();
 	void Rollback();
 
-	void SetAutoCommit(bool value) { auto_commit = value; }
-	bool IsAutoCommit() { return auto_commit; }
+	void SetAutoCommit(bool value) {
+		auto_commit = value;
+	}
+	bool IsAutoCommit() {
+		return auto_commit;
+	}
 
   private:
 	TransactionManager &transaction_manager;

@@ -16,7 +16,8 @@ namespace duckdb {
 
 class PhysicalDummyScan : public PhysicalOperator {
   public:
-	PhysicalDummyScan() : PhysicalOperator(PhysicalOperatorType::DUMMY_SCAN) {}
+	PhysicalDummyScan() : PhysicalOperator(PhysicalOperatorType::DUMMY_SCAN) {
+	}
 
 	// we can hard-code some data into this scan if req
 	DataChunk chunk;

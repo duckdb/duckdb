@@ -20,7 +20,9 @@ class SubqueryRef : public TableRef {
   public:
 	SubqueryRef(std::unique_ptr<SelectStatement> subquery);
 
-	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual void Accept(SQLNodeVisitor *v) override {
+		v->Visit(*this);
+	}
 	virtual bool Equals(const TableRef *other_) override {
 		if (!TableRef::Equals(other_)) {
 			return false;

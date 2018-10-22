@@ -15,7 +15,8 @@ using namespace std;
 UniqueIndex::UniqueIndex(DataTable &table, std::vector<TypeId> types,
                          std::vector<size_t> keys, bool allow_nulls)
     : serializer(types, false, keys), comparer(serializer, table.serializer),
-      table(table), types(types), keys(keys), allow_nulls(allow_nulls) {}
+      table(table), types(types), keys(keys), allow_nulls(allow_nulls) {
+}
 
 UniqueIndexNode *
 UniqueIndex::AddEntry(Transaction &transaction, Tuple tuple,

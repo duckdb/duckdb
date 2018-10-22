@@ -38,12 +38,14 @@ class ExpressionExecutor : public SQLNodeVisitor {
 	                   bool scalar_executor = true)
 	    : context(context), scalar_executor(scalar_executor),
 	      chunk(state ? &state->child_chunk : nullptr),
-	      parent(state ? state->parent : nullptr), state(state) {}
+	      parent(state ? state->parent : nullptr), state(state) {
+	}
 
 	ExpressionExecutor(DataChunk &child_chunk, ClientContext &context,
 	                   ExpressionExecutor *parent = nullptr)
 	    : context(context), scalar_executor(true), chunk(&child_chunk),
-	      parent(parent), state(nullptr) {}
+	      parent(parent), state(nullptr) {
+	}
 
 	void Reset();
 

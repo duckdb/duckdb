@@ -26,9 +26,13 @@ class AggregateExpression : public Expression {
 
 	virtual void
 	GetAggregates(std::vector<AggregateExpression *> &expressions) override;
-	virtual bool IsAggregate() override { return true; }
+	virtual bool IsAggregate() override {
+		return true;
+	}
 
-	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual void Accept(SQLNodeVisitor *v) override {
+		v->Visit(*this);
+	}
 	virtual ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::AGGREGATE;
 	}

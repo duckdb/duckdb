@@ -45,7 +45,9 @@ void graphml_dumper::visit(struct prod *p) {
 	o << endl;
 }
 
-graphml_dumper::~graphml_dumper() { o << "</graph></graphml>" << endl; }
+graphml_dumper::~graphml_dumper() {
+	o << "</graph></graphml>" << endl;
+}
 
 void ast_logger::generated(prod &query) {
 	string filename("");

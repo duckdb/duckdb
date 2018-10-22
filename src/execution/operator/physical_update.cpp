@@ -10,8 +10,12 @@
 using namespace duckdb;
 using namespace std;
 
-vector<string> PhysicalUpdate::GetNames() { return {"Count"}; }
-vector<TypeId> PhysicalUpdate::GetTypes() { return {TypeId::BIGINT}; }
+vector<string> PhysicalUpdate::GetNames() {
+	return {"Count"};
+}
+vector<TypeId> PhysicalUpdate::GetTypes() {
+	return {TypeId::BIGINT};
+}
 
 void PhysicalUpdate::_GetChunk(ClientContext &context, DataChunk &chunk,
                                PhysicalOperatorState *state) {

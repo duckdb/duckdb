@@ -17,9 +17,12 @@ namespace duckdb {
 //! Represents a Table producing function
 class TableFunction : public TableRef {
   public:
-	TableFunction() : TableRef(TableReferenceType::TABLE_FUNCTION) {}
+	TableFunction() : TableRef(TableReferenceType::TABLE_FUNCTION) {
+	}
 
-	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual void Accept(SQLNodeVisitor *v) override {
+		v->Visit(*this);
+	}
 	virtual bool Equals(const TableRef *other_) override {
 		if (!TableRef::Equals(other_)) {
 			return false;

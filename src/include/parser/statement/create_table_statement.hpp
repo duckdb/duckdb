@@ -22,10 +22,15 @@ class CreateTableStatement : public SQLStatement {
 	CreateTableStatement()
 	    : SQLStatement(StatementType::CREATE_TABLE),
 	      info(make_unique<CreateTableInformation>()){};
-	virtual ~CreateTableStatement() {}
+	virtual ~CreateTableStatement() {
+	}
 
-	virtual std::string ToString() const { return "CREATE TABLE"; }
-	virtual void Accept(SQLNodeVisitor *v) { v->Visit(*this); }
+	virtual std::string ToString() const {
+		return "CREATE TABLE";
+	}
+	virtual void Accept(SQLNodeVisitor *v) {
+		v->Visit(*this);
+	}
 
 	virtual bool Equals(const SQLStatement *other_) {
 		if (!SQLStatement::Equals(other_)) {

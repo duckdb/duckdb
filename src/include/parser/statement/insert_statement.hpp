@@ -22,10 +22,13 @@ class InsertStatement : public SQLStatement {
   public:
 	InsertStatement()
 	    : SQLStatement(StatementType::INSERT), schema(DEFAULT_SCHEMA){};
-	virtual ~InsertStatement() {}
+	virtual ~InsertStatement() {
+	}
 
 	virtual std::string ToString() const;
-	virtual void Accept(SQLNodeVisitor *v) { v->Visit(*this); }
+	virtual void Accept(SQLNodeVisitor *v) {
+		v->Visit(*this);
+	}
 
 	virtual bool Equals(const SQLStatement *other_) {
 		if (!SQLStatement::Equals(other_)) {

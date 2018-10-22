@@ -25,10 +25,16 @@ class SQLiteMaster {
 	static table_function_init_t GetInitFunction() {
 		return sqlite_master_init;
 	}
-	static table_function_t GetFunction() { return sqlite_master; }
-	static table_function_final_t GetFinalFunction() { return nullptr; }
+	static table_function_t GetFunction() {
+		return sqlite_master;
+	}
+	static table_function_final_t GetFinalFunction() {
+		return nullptr;
+	}
 
-	static const char *GetName() { return "sqlite_master"; }
+	static const char *GetName() {
+		return "sqlite_master";
+	}
 
 	static void GetArguments(std::vector<TypeId> &arguments) {
 		// no arguments

@@ -19,9 +19,12 @@ class LogicalUpdate : public LogicalOperator {
 	LogicalUpdate(TableCatalogEntry *table, std::vector<column_t> columns,
 	              std::vector<std::unique_ptr<Expression>> expressions)
 	    : LogicalOperator(LogicalOperatorType::UPDATE, std::move(expressions)),
-	      table(table), columns(columns) {}
+	      table(table), columns(columns) {
+	}
 
-	virtual void Accept(LogicalOperatorVisitor *v) override { v->Visit(*this); }
+	virtual void Accept(LogicalOperatorVisitor *v) override {
+		v->Visit(*this);
+	}
 
 	TableCatalogEntry *table;
 	std::vector<column_t> columns;

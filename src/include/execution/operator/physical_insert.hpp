@@ -23,7 +23,8 @@ class PhysicalInsert : public PhysicalOperator {
 	    std::vector<int> column_index_map)
 	    : PhysicalOperator(PhysicalOperatorType::INSERT),
 	      column_index_map(column_index_map),
-	      insert_values(move(insert_values)), table(table) {}
+	      insert_values(move(insert_values)), table(table) {
+	}
 
 	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;

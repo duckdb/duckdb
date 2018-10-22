@@ -29,7 +29,9 @@ namespace duckdb {
 //! either
 class Allocator {
   public:
-	void Destroy() { chunk = nullptr; }
+	void Destroy() {
+		chunk = nullptr;
+	}
 
 	template <class T, typename... Args> T *make(Args &&... args) {
 		// get space to allocate the object

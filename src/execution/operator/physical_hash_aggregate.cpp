@@ -23,7 +23,8 @@ PhysicalHashAggregate::PhysicalHashAggregate(
 	Initialize();
 }
 
-void PhysicalHashAggregate::Initialize() {}
+void PhysicalHashAggregate::Initialize() {
+}
 
 void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk,
                                       PhysicalOperatorState *state_) {

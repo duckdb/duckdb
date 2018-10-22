@@ -36,7 +36,9 @@ inline int32_t murmurhash64(uint32_t *vals) {
 	return left ^ right;
 }
 
-template <class T> int32_t Hash(T value) { return murmurhash32(value); }
+template <class T> int32_t Hash(T value) {
+	return murmurhash32(value);
+}
 
 template <> int32_t Hash(uint64_t val);
 template <> int32_t Hash(int64_t val);

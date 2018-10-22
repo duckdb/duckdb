@@ -17,7 +17,8 @@ namespace duckdb {
 class CastExpression : public Expression {
   public:
 	CastExpression(TypeId target, std::unique_ptr<Expression> child)
-	    : Expression(ExpressionType::OPERATOR_CAST, target, std::move(child)) {}
+	    : Expression(ExpressionType::OPERATOR_CAST, target, std::move(child)) {
+	}
 
 	virtual void ResolveType() override {
 		Expression::ResolveType();
@@ -38,7 +39,9 @@ class CastExpression : public Expression {
 		       children[0]->ToString() + ")";
 	}
 
-	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual void Accept(SQLNodeVisitor *v) override {
+		v->Visit(*this);
+	}
 	virtual ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::CAST;
 	}

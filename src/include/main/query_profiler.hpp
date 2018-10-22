@@ -29,7 +29,8 @@ class QueryProfiler : public Printable {
 		double time = 0;
 		size_t elements = 0;
 
-		TimingInformation() : time(0), elements(0) {}
+		TimingInformation() : time(0), elements(0) {
+		}
 	};
 	struct TreeNode {
 		std::string name;
@@ -49,11 +50,16 @@ class QueryProfiler : public Printable {
 	static std::string RenderTree(TreeNode &node);
 
   public:
-	QueryProfiler() : enabled(false) {}
+	QueryProfiler() : enabled(false) {
+	}
 
-	void Enable() { enabled = true; }
+	void Enable() {
+		enabled = true;
+	}
 
-	void Disable() { enabled = false; }
+	void Disable() {
+		enabled = false;
+	}
 
 	void StartQuery(std::string query);
 	void EndQuery();

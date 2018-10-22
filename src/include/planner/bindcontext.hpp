@@ -33,8 +33,10 @@ enum class BindingType : uint8_t {
 };
 
 struct Binding {
-	Binding(BindingType type, size_t index) : type(type), index(index) {}
-	virtual ~Binding() {}
+	Binding(BindingType type, size_t index) : type(type), index(index) {
+	}
+	virtual ~Binding() {
+	}
 
 	BindingType type;
 	size_t index;
@@ -49,15 +51,18 @@ struct DummyTableBinding : public Binding {
 			bound_columns[it.name] = &it;
 		}
 	}
-	virtual ~DummyTableBinding() {}
+	virtual ~DummyTableBinding() {
+	}
 };
 
 struct TableBinding : public Binding {
 	TableCatalogEntry *table;
 
 	TableBinding(TableCatalogEntry *table, size_t index)
-	    : Binding(BindingType::TABLE, index), table(table) {}
-	virtual ~TableBinding() {}
+	    : Binding(BindingType::TABLE, index), table(table) {
+	}
+	virtual ~TableBinding() {
+	}
 };
 
 struct SubqueryBinding : public Binding {
@@ -75,21 +80,24 @@ struct SubqueryBinding : public Binding {
 			names.push_back(name);
 		}
 	}
-	virtual ~SubqueryBinding() {}
+	virtual ~SubqueryBinding() {
+	}
 };
 
 struct TableFunctionBinding : public Binding {
 	TableFunctionCatalogEntry *function;
 
 	TableFunctionBinding(TableFunctionCatalogEntry *function, size_t index)
-	    : Binding(BindingType::TABLE_FUNCTION, index), function(function) {}
+	    : Binding(BindingType::TABLE_FUNCTION, index), function(function) {
+	}
 };
 
 //! The BindContext object keeps track of all the tables and columns that are
 //! encountered during the binding process.
 class BindContext {
   public:
-	BindContext() : bound_tables(0), max_depth(0) {}
+	BindContext() : bound_tables(0), max_depth(0) {
+	}
 
 	//! Given a column name, find the matching table it belongs to. Throws an
 	//! exception if no table has a column of the given name.
@@ -124,7 +132,9 @@ class BindContext {
 	//! alias was not found.
 	size_t GetBindingIndex(const std::string &alias);
 	//! Returns the maximum depth of column references in the current context
-	size_t GetMaxDepth() { return max_depth; }
+	size_t GetMaxDepth() {
+		return max_depth;
+	}
 
 	//! The set of columns that are bound for each table/subquery alias
 	std::unordered_map<std::string, std::vector<std::string>> bound_columns;

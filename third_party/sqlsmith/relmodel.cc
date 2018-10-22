@@ -9,4 +9,6 @@ sqltype *sqltype::get(string n) {
 		return typemap[n] = new sqltype(n);
 }
 
-bool sqltype::consistent(struct sqltype *rvalue) { return this == rvalue; }
+bool sqltype::consistent(struct sqltype *rvalue) {
+	return this == rvalue;
+}

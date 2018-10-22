@@ -21,7 +21,8 @@ class PhysicalFilter : public PhysicalOperator {
   public:
 	PhysicalFilter(std::vector<std::unique_ptr<Expression>> select_list)
 	    : PhysicalOperator(PhysicalOperatorType::FILTER),
-	      expressions(std::move(select_list)) {}
+	      expressions(std::move(select_list)) {
+	}
 
 	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;

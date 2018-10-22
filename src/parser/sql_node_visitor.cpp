@@ -8,13 +8,18 @@
 using namespace duckdb;
 using namespace std;
 
-void SQLNodeVisitor::Visit(SelectStatement &statement) {}
+void SQLNodeVisitor::Visit(SelectStatement &statement) {
+}
 
 void SQLNodeVisitor::Visit(AggregateExpression &expr) {
 	expr.AcceptChildren(this);
 }
-void SQLNodeVisitor::Visit(CaseExpression &expr) { expr.AcceptChildren(this); }
-void SQLNodeVisitor::Visit(CastExpression &expr) { expr.AcceptChildren(this); }
+void SQLNodeVisitor::Visit(CaseExpression &expr) {
+	expr.AcceptChildren(this);
+}
+void SQLNodeVisitor::Visit(CastExpression &expr) {
+	expr.AcceptChildren(this);
+}
 void SQLNodeVisitor::Visit(ColumnRefExpression &expr) {
 	expr.AcceptChildren(this);
 }
@@ -42,15 +47,20 @@ void SQLNodeVisitor::Visit(OperatorExpression &expr) {
 void SQLNodeVisitor::Visit(SubqueryExpression &expr) {
 	expr.AcceptChildren(this);
 }
-void SQLNodeVisitor::Visit(StarExpression &expr) { expr.AcceptChildren(this); }
+void SQLNodeVisitor::Visit(StarExpression &expr) {
+	expr.AcceptChildren(this);
+}
 
 void SQLNodeVisitor::Visit(CheckConstraint &con) {
 	con.expression->Accept(this);
 }
-void SQLNodeVisitor::Visit(NotNullConstraint &con) {}
-void SQLNodeVisitor::Visit(ParsedConstraint &con) {}
+void SQLNodeVisitor::Visit(NotNullConstraint &con) {
+}
+void SQLNodeVisitor::Visit(ParsedConstraint &con) {
+}
 
-void SQLNodeVisitor::Visit(BaseTableRef &expr) {}
+void SQLNodeVisitor::Visit(BaseTableRef &expr) {
+}
 
 void SQLNodeVisitor::Visit(CrossProductRef &expr) {
 	expr.left->Accept(this);
@@ -62,5 +72,7 @@ void SQLNodeVisitor::Visit(JoinRef &expr) {
 	expr.right->Accept(this);
 }
 
-void SQLNodeVisitor::Visit(SubqueryRef &expr) {}
-void SQLNodeVisitor::Visit(TableFunction &expr) {}
+void SQLNodeVisitor::Visit(SubqueryRef &expr) {
+}
+void SQLNodeVisitor::Visit(TableFunction &expr) {
+}

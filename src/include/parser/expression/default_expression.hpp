@@ -16,9 +16,12 @@ namespace duckdb {
 //! Represents the default value of a column
 class DefaultExpression : public Expression {
   public:
-	DefaultExpression() : Expression(ExpressionType::VALUE_DEFAULT) {}
+	DefaultExpression() : Expression(ExpressionType::VALUE_DEFAULT) {
+	}
 
-	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual void Accept(SQLNodeVisitor *v) override {
+		v->Visit(*this);
+	}
 	virtual ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::DEFAULT;
 	}
@@ -29,6 +32,8 @@ class DefaultExpression : public Expression {
 	static std::unique_ptr<Expression>
 	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);
 
-	virtual std::string ToString() const override { return "Default"; }
+	virtual std::string ToString() const override {
+		return "Default";
+	}
 };
 } // namespace duckdb

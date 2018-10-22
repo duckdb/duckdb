@@ -18,7 +18,8 @@ namespace duckdb {
 class PhysicalDelete : public PhysicalOperator {
   public:
 	PhysicalDelete(DataTable &table)
-	    : PhysicalOperator(PhysicalOperatorType::DELETE), table(table) {}
+	    : PhysicalOperator(PhysicalOperatorType::DELETE), table(table) {
+	}
 
 	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;

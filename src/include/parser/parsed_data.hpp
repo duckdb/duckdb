@@ -31,7 +31,8 @@ struct CreateTableInformation {
 	//! Ignore if the entry already exists, instead of failing
 	bool if_not_exists = false;
 
-	CreateTableInformation() : schema(DEFAULT_SCHEMA), if_not_exists(false) {}
+	CreateTableInformation() : schema(DEFAULT_SCHEMA), if_not_exists(false) {
+	}
 	CreateTableInformation(std::string schema, std::string table,
 	                       std::vector<ColumnDefinition> columns)
 	    : schema(schema), table(table), columns(columns), if_not_exists(false) {
@@ -50,7 +51,8 @@ struct DropTableInformation {
 	bool cascade = false;
 
 	DropTableInformation()
-	    : schema(DEFAULT_SCHEMA), if_exists(false), cascade(false) {}
+	    : schema(DEFAULT_SCHEMA), if_exists(false), cascade(false) {
+	}
 };
 
 struct CreateSchemaInformation {
@@ -59,7 +61,8 @@ struct CreateSchemaInformation {
 	//! Ignore if the entry already exists, instead of failing
 	bool if_not_exists = false;
 
-	CreateSchemaInformation() : if_not_exists(false) {}
+	CreateSchemaInformation() : if_not_exists(false) {
+	}
 };
 
 struct DropSchemaInformation {
@@ -71,7 +74,8 @@ struct DropSchemaInformation {
 	//! are any)
 	bool cascade = false;
 
-	DropSchemaInformation() : if_exists(false), cascade(false) {}
+	DropSchemaInformation() : if_exists(false), cascade(false) {
+	}
 };
 
 struct CreateTableFunctionInformation {
@@ -93,7 +97,8 @@ struct CreateTableFunctionInformation {
 	table_function_final_t final;
 
 	CreateTableFunctionInformation()
-	    : schema(DEFAULT_SCHEMA), or_replace(false) {}
+	    : schema(DEFAULT_SCHEMA), or_replace(false) {
+	}
 };
 
 struct DropTableFunctionInformation {
@@ -108,7 +113,8 @@ struct DropTableFunctionInformation {
 	bool cascade = false;
 
 	DropTableFunctionInformation()
-	    : schema(DEFAULT_SCHEMA), if_exists(false), cascade(false) {}
+	    : schema(DEFAULT_SCHEMA), if_exists(false), cascade(false) {
+	}
 };
 
 } // namespace duckdb

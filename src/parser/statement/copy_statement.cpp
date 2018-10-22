@@ -5,4 +5,6 @@
 using namespace duckdb;
 using namespace std;
 
-string CopyStatement::ToString() const { return "Copy"; }
+string CopyStatement::ToString() const {
+	return "Copy";
+}

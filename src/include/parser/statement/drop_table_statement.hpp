@@ -19,10 +19,15 @@ class DropTableStatement : public SQLStatement {
 	DropTableStatement()
 	    : SQLStatement(StatementType::DROP_TABLE),
 	      info(make_unique<DropTableInformation>()){};
-	virtual ~DropTableStatement() {}
+	virtual ~DropTableStatement() {
+	}
 
-	virtual std::string ToString() const { return "DROP TABLE"; }
-	virtual void Accept(SQLNodeVisitor *v) { v->Visit(*this); }
+	virtual std::string ToString() const {
+		return "DROP TABLE";
+	}
+	virtual void Accept(SQLNodeVisitor *v) {
+		v->Visit(*this);
+	}
 
 	virtual bool Equals(const SQLStatement *other_) {
 		if (!SQLStatement::Equals(other_)) {

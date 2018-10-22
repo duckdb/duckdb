@@ -21,10 +21,15 @@ class TransactionStatement : public SQLStatement {
   public:
 	TransactionStatement(TransactionType type)
 	    : SQLStatement(StatementType::TRANSACTION), type(type){};
-	virtual ~TransactionStatement() {}
+	virtual ~TransactionStatement() {
+	}
 
-	virtual std::string ToString() const { return "Transaction"; }
-	virtual void Accept(SQLNodeVisitor *v) { v->Visit(*this); }
+	virtual std::string ToString() const {
+		return "Transaction";
+	}
+	virtual void Accept(SQLNodeVisitor *v) {
+		v->Visit(*this);
+	}
 
 	virtual bool Equals(const SQLStatement *other_) {
 		if (!SQLStatement::Equals(other_)) {

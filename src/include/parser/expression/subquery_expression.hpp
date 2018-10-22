@@ -24,9 +24,12 @@ class SubqueryExpression : public Expression {
   public:
 	SubqueryExpression()
 	    : Expression(ExpressionType::SELECT_SUBQUERY),
-	      subquery_type(SubqueryType::DEFAULT) {}
+	      subquery_type(SubqueryType::DEFAULT) {
+	}
 
-	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual void Accept(SQLNodeVisitor *v) override {
+		v->Visit(*this);
+	}
 	virtual ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::SUBQUERY;
 	}
@@ -59,8 +62,12 @@ class SubqueryExpression : public Expression {
 		return result;
 	}
 
-	virtual bool HasSubquery() override { return true; }
+	virtual bool HasSubquery() override {
+		return true;
+	}
 
-	virtual bool IsScalar() override { return false; }
+	virtual bool IsScalar() override {
+		return false;
+	}
 };
 } // namespace duckdb

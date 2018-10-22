@@ -31,7 +31,9 @@ class TransactionManager {
 	//! Rollback the given transaction
 	void RollbackTransaction(Transaction *transaction);
 
-	transaction_t GetQueryNumber() { return current_query_number++; }
+	transaction_t GetQueryNumber() {
+		return current_query_number++;
+	}
 
   private:
 	//! Remove the given transaction from the list of active transactions

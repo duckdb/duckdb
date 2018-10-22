@@ -6,7 +6,8 @@ using namespace std;
 
 Serializer::Serializer(size_t maximum_size)
     : Serializer(unique_ptr<uint8_t[]>(new uint8_t[maximum_size]),
-                 maximum_size) {}
+                 maximum_size) {
+}
 
 Serializer::Serializer(unique_ptr<uint8_t[]> data, size_t size)
     : maximum_size(size), data(data.get()) {
@@ -19,7 +20,8 @@ Serializer::Serializer(uint8_t *data) : maximum_size((size_t)-1), data(data) {
 }
 
 Deserializer::Deserializer(uint8_t *ptr, size_t data)
-    : ptr(ptr), endptr(ptr + data) {}
+    : ptr(ptr), endptr(ptr + data) {
+}
 
 template <> string Deserializer::Read() {
 	auto size = Read<uint32_t>();

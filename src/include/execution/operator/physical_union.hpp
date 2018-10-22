@@ -30,7 +30,8 @@ class PhysicalUnion : public PhysicalOperator {
 class PhysicalUnionOperatorState : public PhysicalOperatorState {
   public:
 	PhysicalUnionOperatorState(ExpressionExecutor *parent_executor)
-	    : PhysicalOperatorState(nullptr, parent_executor), top_done(false) {}
+	    : PhysicalOperatorState(nullptr, parent_executor), top_done(false) {
+	}
 	std::unique_ptr<PhysicalOperatorState> top_state;
 	std::unique_ptr<PhysicalOperatorState> bottom_state;
 	bool top_done = false;

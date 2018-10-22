@@ -10,7 +10,8 @@
 /// Base class for walking the AST
 struct prod_visitor {
 	virtual void visit(struct prod *p) = 0;
-	virtual ~prod_visitor() {}
+	virtual ~prod_visitor() {
+	}
 };
 
 /// Base class for AST nodes
@@ -29,7 +30,8 @@ struct prod {
 	/// the Parent prod.
 	long retry_limit = 100;
 	prod(prod *parent);
-	virtual ~prod() {}
+	virtual ~prod() {
+	}
 	/// Newline and indent according to tree level.
 	virtual void indent(std::ostream &out);
 	/// Emit SQL for this production.
@@ -39,7 +41,9 @@ struct prod {
 	virtual void match();
 	/// Visitor pattern for walking the AST.  Make sure you visit all
 	/// child production when deriving classes.
-	virtual void accept(prod_visitor *v) { v->visit(this); }
+	virtual void accept(prod_visitor *v) {
+		v->visit(this);
+	}
 	/// Report a "failed to generate" error.
 	virtual void fail(const char *reason);
 	/// Increase the retry count and throw an exception when retry_limit

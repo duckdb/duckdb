@@ -41,7 +41,8 @@ class PhysicalHashAggregateOperatorState
 	                                   PhysicalOperator *child,
 	                                   ExpressionExecutor *parent_executor)
 	    : PhysicalAggregateOperatorState(parent, child, parent_executor),
-	      ht_scan_position(0) {}
+	      ht_scan_position(0) {
+	}
 
 	//! The current position to scan the HT for output tuples
 	size_t ht_scan_position;

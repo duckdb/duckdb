@@ -28,13 +28,17 @@ namespace duckdb {
 //! logical query tree
 class LogicalOperator : public Printable {
   public:
-	LogicalOperator(LogicalOperatorType type) : type(type) {}
+	LogicalOperator(LogicalOperatorType type) : type(type) {
+	}
 
 	LogicalOperator(LogicalOperatorType type,
 	                std::vector<std::unique_ptr<Expression>> expressions)
-	    : type(type), expressions(std::move(expressions)) {}
+	    : type(type), expressions(std::move(expressions)) {
+	}
 
-	LogicalOperatorType GetOperatorType() { return type; }
+	LogicalOperatorType GetOperatorType() {
+		return type;
+	}
 
 	virtual std::string ParamsToString() const {
 		std::string result = "";
@@ -93,7 +97,9 @@ class LogicalOperator : public Printable {
 	//! The set of expressions contained within the operator, if any
 	std::vector<std::unique_ptr<Expression>> expressions;
 
-	virtual size_t ExpressionCount() { return expressions.size(); }
+	virtual size_t ExpressionCount() {
+		return expressions.size();
+	}
 
 	virtual Expression *GetExpression(size_t index) {
 		if (index >= ExpressionCount()) {

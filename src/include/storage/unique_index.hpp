@@ -32,7 +32,8 @@ struct UniqueIndexNode {
 
 	UniqueIndexNode(Tuple tuple, size_t row_identifier)
 	    : tuple(std::move(tuple)), row_identifier(row_identifier),
-	      parent(nullptr) {}
+	      parent(nullptr) {
+	}
 };
 
 //! The unique index is used to lookup whether or not multiple values have the

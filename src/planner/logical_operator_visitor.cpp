@@ -24,7 +24,9 @@ void LogicalOperatorVisitor::Visit(LogicalCrossProduct &op) {
 	VisitOperator(op);
 }
 
-void LogicalOperatorVisitor::Visit(LogicalSubquery &op) { VisitOperator(op); }
+void LogicalOperatorVisitor::Visit(LogicalSubquery &op) {
+	VisitOperator(op);
+}
 
 void LogicalOperatorVisitor::Visit(LogicalTableFunction &op) {
 	VisitOperator(op);
@@ -44,7 +46,9 @@ void LogicalOperatorVisitor::Visit(LogicalUpdate &op) {
 	}
 }
 
-void LogicalOperatorVisitor::Visit(LogicalUnion &op) { VisitOperator(op); }
+void LogicalOperatorVisitor::Visit(LogicalUnion &op) {
+	VisitOperator(op);
+}
 
 void LogicalOperatorVisitor::Visit(LogicalFilter &op) {
 	VisitOperator(op);
@@ -53,7 +57,9 @@ void LogicalOperatorVisitor::Visit(LogicalFilter &op) {
 	}
 }
 
-void LogicalOperatorVisitor::Visit(LogicalGet &op) { VisitOperator(op); }
+void LogicalOperatorVisitor::Visit(LogicalGet &op) {
+	VisitOperator(op);
+}
 
 void LogicalOperatorVisitor::Visit(LogicalJoin &op) {
 	for (auto &cond : op.conditions) {
@@ -63,7 +69,9 @@ void LogicalOperatorVisitor::Visit(LogicalJoin &op) {
 	VisitOperator(op);
 }
 
-void LogicalOperatorVisitor::Visit(LogicalLimit &op) { VisitOperator(op); }
+void LogicalOperatorVisitor::Visit(LogicalLimit &op) {
+	VisitOperator(op);
+}
 
 void LogicalOperatorVisitor::Visit(LogicalOrder &op) {
 	VisitOperator(op);
@@ -94,6 +102,10 @@ void LogicalOperatorVisitor::Visit(LogicalCreate &op) {
 	// FIXME: visit expressions in constraints
 }
 
-void LogicalOperatorVisitor::Visit(LogicalCopy &op) { VisitOperator(op); }
+void LogicalOperatorVisitor::Visit(LogicalCopy &op) {
+	VisitOperator(op);
+}
 
-void LogicalOperatorVisitor::Visit(LogicalExplain &op) { VisitOperator(op); }
+void LogicalOperatorVisitor::Visit(LogicalExplain &op) {
+	VisitOperator(op);
+}

@@ -25,10 +25,14 @@ class ExplainStatement : public SQLStatement {
 	    : SQLStatement(StatementType::EXPLAIN), stmt(move(stmt)){};
 	std::unique_ptr<SQLStatement> stmt;
 
-	virtual ~ExplainStatement() {}
+	virtual ~ExplainStatement() {
+	}
 
-	virtual std::string ToString() const { return "Explain"; }
-	virtual void Accept(SQLNodeVisitor *v) {}
+	virtual std::string ToString() const {
+		return "Explain";
+	}
+	virtual void Accept(SQLNodeVisitor *v) {
+	}
 
 	virtual bool Equals(const SQLStatement *other_) {
 		if (!SQLStatement::Equals(other_)) {

@@ -20,7 +20,9 @@ class LogicalFilter : public LogicalOperator {
 	LogicalFilter(std::unique_ptr<Expression> expression);
 	LogicalFilter();
 
-	virtual void Accept(LogicalOperatorVisitor *v) override { v->Visit(*this); }
+	virtual void Accept(LogicalOperatorVisitor *v) override {
+		v->Visit(*this);
+	}
 
   private:
 	void SplitPredicates(std::unique_ptr<Expression> expression);

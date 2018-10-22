@@ -59,8 +59,12 @@ struct schema {
 		typekey t(o.left, o.right, o.result);
 		index.insert(std::pair<typekey, op>(t, o));
 	}
-	virtual void register_routine(routine &r) { routines.push_back(r); }
-	virtual void register_aggregate(routine &r) { aggregates.push_back(r); }
+	virtual void register_routine(routine &r) {
+		routines.push_back(r);
+	}
+	virtual void register_aggregate(routine &r) {
+		aggregates.push_back(r);
+	}
 	virtual op_iterator find_operator(sqltype *left, sqltype *right,
 	                                  sqltype *res) {
 		typekey t(left, right, res);
@@ -70,8 +74,10 @@ struct schema {
 		else
 			return random_pick<>(cons.first, cons.second);
 	}
-	schema() {}
-	virtual ~schema() {}
+	schema() {
+	}
+	virtual ~schema() {
+	}
 	void generate_indexes();
 };
 

@@ -36,10 +36,14 @@ class Parser {
 	bool ParseQuery(std::string query);
 
 	//! Returns whether or not the parsing was successful.
-	bool GetSuccess() const { return success; }
+	bool GetSuccess() const {
+		return success;
+	}
 	//! If the parsing was unsuccessful, returns the error message that was
 	//! generated.
-	const std::string &GetErrorMessage() const { return message; }
+	const std::string &GetErrorMessage() const {
+		return message;
+	}
 
 	bool success;
 	std::string message;

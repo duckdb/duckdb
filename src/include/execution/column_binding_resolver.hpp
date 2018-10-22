@@ -28,7 +28,8 @@ struct BoundTable {
 //! are used within the execution engine
 class ColumnBindingResolver : public LogicalOperatorVisitor {
   public:
-	ColumnBindingResolver() : current_depth(0) {}
+	ColumnBindingResolver() : current_depth(0) {
+	}
 	using LogicalOperatorVisitor::Visit;
 
 	void Visit(LogicalUnion &op);

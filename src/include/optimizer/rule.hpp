@@ -128,14 +128,20 @@ class AbstractOperatorIterator {
 		Next();
 		return *this;
 	}
-	reference operator*() { return nodes.top().node; }
-	pointer operator->() { return &nodes.top().node; }
+	reference operator*() {
+		return nodes.top().node;
+	}
+	pointer operator->() {
+		return &nodes.top().node;
+	}
 	bool operator==(const self_type &rhs) {
 		return nodes.size() == rhs.nodes.size() &&
 		       nodes.top().op_index == rhs.nodes.top().op_index &&
 		       nodes.top().expr_index == rhs.nodes.top().expr_index;
 	}
-	bool operator!=(const self_type &rhs) { return !(*this == rhs); }
+	bool operator!=(const self_type &rhs) {
+		return !(*this == rhs);
+	}
 
 	void replace(std::unique_ptr<LogicalOperator> new_op) {
 		assert(nodes.top().node.type == AbstractOperatorType::LOGICAL_OPERATOR);
@@ -170,11 +176,13 @@ class AbstractOperatorIterator {
 
 		Node(LogicalOperator *op, size_t op_index, size_t expr_index)
 		    : node(AbstractOperator(op)), op_index(op_index),
-		      expr_index(expr_index) {}
+		      expr_index(expr_index) {
+		}
 
 		Node(Expression *expr, size_t expr_index)
 		    : node(AbstractOperator(expr)), op_index(0),
-		      expr_index(expr_index) {}
+		      expr_index(expr_index) {
+		}
 	};
 	std::stack<Node> nodes;
 };
@@ -184,15 +192,18 @@ class AbstractRuleNode {
 	std::vector<std::unique_ptr<AbstractRuleNode>> children;
 	ChildPolicy child_policy;
 
-	AbstractRuleNode() : child_policy(ChildPolicy::ANY) {}
+	AbstractRuleNode() : child_policy(ChildPolicy::ANY) {
+	}
 	virtual bool Matches(AbstractOperator &rel) = 0;
-	virtual ~AbstractRuleNode() {}
+	virtual ~AbstractRuleNode() {
+	}
 };
 
 class ExpressionNodeSet : public AbstractRuleNode {
   public:
 	std::vector<ExpressionType> types;
-	ExpressionNodeSet(std::vector<ExpressionType> types) : types(types) {}
+	ExpressionNodeSet(std::vector<ExpressionType> types) : types(types) {
+	}
 	virtual bool Matches(AbstractOperator &rel) {
 		return rel.type == AbstractOperatorType::ABSTRACT_EXPRESSION &&
 		       std::find(types.begin(), types.end(), rel.value.expr->type) !=
@@ -203,7 +214,8 @@ class ExpressionNodeSet : public AbstractRuleNode {
 class ExpressionNodeType : public AbstractRuleNode {
   public:
 	ExpressionType type;
-	ExpressionNodeType(ExpressionType type) : type(type) {}
+	ExpressionNodeType(ExpressionType type) : type(type) {
+	}
 	virtual bool Matches(AbstractOperator &rel) {
 		return rel.type == AbstractOperatorType::ABSTRACT_EXPRESSION &&
 		       rel.value.expr->type == type;
@@ -214,7 +226,8 @@ class ColumnRefNodeDepth : public ExpressionNodeType {
   public:
 	size_t depth;
 	ColumnRefNodeDepth(size_t depth)
-	    : ExpressionNodeType(ExpressionType::COLUMN_REF), depth(depth) {}
+	    : ExpressionNodeType(ExpressionType::COLUMN_REF), depth(depth) {
+	}
 	virtual bool Matches(AbstractOperator &rel) {
 		return ExpressionNodeType::Matches(rel) &&
 		       ((ColumnRefExpression *)rel.value.expr)->depth == depth;
@@ -231,7 +244,8 @@ class ExpressionNodeAny : public AbstractRuleNode {
 class LogicalNodeSet : public AbstractRuleNode {
   public:
 	std::vector<LogicalOperatorType> types;
-	LogicalNodeSet(std::vector<LogicalOperatorType> types) : types(types) {}
+	LogicalNodeSet(std::vector<LogicalOperatorType> types) : types(types) {
+	}
 	virtual bool Matches(AbstractOperator &rel) {
 		return rel.type == AbstractOperatorType::LOGICAL_OPERATOR &&
 		       std::find(types.begin(), types.end(), rel.value.op->type) !=
@@ -242,7 +256,8 @@ class LogicalNodeSet : public AbstractRuleNode {
 class LogicalNodeType : public AbstractRuleNode {
   public:
 	LogicalOperatorType type;
-	LogicalNodeType(LogicalOperatorType type) : type(type) {}
+	LogicalNodeType(LogicalOperatorType type) : type(type) {
+	}
 	virtual bool Matches(AbstractOperator &rel) {
 		return rel.type == AbstractOperatorType::LOGICAL_OPERATOR &&
 		       rel.value.op->type == type;
@@ -267,7 +282,8 @@ class Rule {
 	Apply(LogicalOperator &root, std::vector<AbstractOperator> &bindings) {
 		throw NotImplementedException("Apply LogicalOperator");
 	};
-	virtual ~Rule() {}
+	virtual ~Rule() {
+	}
 };
 
 } // namespace duckdb

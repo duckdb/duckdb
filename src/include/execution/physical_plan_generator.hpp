@@ -30,13 +30,18 @@ class PhysicalPlanGenerator : public LogicalOperatorVisitor {
   public:
 	PhysicalPlanGenerator(ClientContext &context,
 	                      PhysicalPlanGenerator *parent = nullptr)
-	    : parent(parent), context(context) {}
+	    : parent(parent), context(context) {
+	}
 	using LogicalOperatorVisitor::Visit;
 
 	bool CreatePlan(std::unique_ptr<LogicalOperator> logical);
 
-	bool GetSuccess() const { return success; }
-	const std::string &GetErrorMessage() const { return message; }
+	bool GetSuccess() const {
+		return success;
+	}
+	const std::string &GetErrorMessage() const {
+		return message;
+	}
 
 	virtual void Visit(LogicalAggregate &op);
 	virtual void Visit(LogicalCreate &op);
@@ -57,7 +62,9 @@ class PhysicalPlanGenerator : public LogicalOperatorVisitor {
 
 	virtual void Visit(SubqueryExpression &expr);
 
-	void Print() { plan->Print(); }
+	void Print() {
+		plan->Print();
+	}
 
 	std::unique_ptr<PhysicalOperator> plan;
 

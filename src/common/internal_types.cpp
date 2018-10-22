@@ -509,7 +509,9 @@ ExternalFileFormat StringToExternalFileFormat(const std::string &str) {
 	                          upper.c_str());
 }
 
-bool TypeIsConstantSize(TypeId type) { return type < TypeId::VARCHAR; }
+bool TypeIsConstantSize(TypeId type) {
+	return type < TypeId::VARCHAR;
+}
 bool TypeIsIntegral(TypeId type) {
 	return type >= TypeId::TINYINT && type <= TypeId::BIGINT;
 }

@@ -22,7 +22,8 @@ class PhysicalTableFunction : public PhysicalOperator {
 	PhysicalTableFunction(TableFunctionCatalogEntry *function,
 	                      std::unique_ptr<Expression> function_call)
 	    : PhysicalOperator(PhysicalOperatorType::TABLE_FUNCTION),
-	      function(function), function_call(std::move(function_call)) {}
+	      function(function), function_call(std::move(function_call)) {
+	}
 
 	//! Function to exit
 	TableFunctionCatalogEntry *function;
@@ -43,7 +44,8 @@ class PhysicalTableFunctionOperatorState : public PhysicalOperatorState {
   public:
 	PhysicalTableFunctionOperatorState(ExpressionExecutor *parent_executor)
 	    : PhysicalOperatorState(nullptr, parent_executor),
-	      function_data(nullptr), initialized(false) {}
+	      function_data(nullptr), initialized(false) {
+	}
 
 	void *function_data;
 	bool initialized;

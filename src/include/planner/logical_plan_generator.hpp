@@ -28,7 +28,8 @@ class ClientContext;
 class LogicalPlanGenerator : public SQLNodeVisitor {
   public:
 	LogicalPlanGenerator(ClientContext &context, BindContext &bind_context)
-	    : require_row_id(false), context(context), bind_context(bind_context) {}
+	    : require_row_id(false), context(context), bind_context(bind_context) {
+	}
 
 	void Visit(SelectStatement &statement);
 	void Visit(InsertStatement &statement);
@@ -50,7 +51,9 @@ class LogicalPlanGenerator : public SQLNodeVisitor {
 	void Visit(SubqueryRef &expr);
 	void Visit(TableFunction &expr);
 
-	void Print() { root->Print(); }
+	void Print() {
+		root->Print();
+	}
 
 	//! The resulting plan
 	std::unique_ptr<LogicalOperator> root;

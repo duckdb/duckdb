@@ -29,11 +29,17 @@ class DuckDBConnection {
 	}
 
 	//! Interrupt execution of the current query
-	void Interrupt() { context.Interrupt(); }
+	void Interrupt() {
+		context.Interrupt();
+	}
 
-	void EnableProfiling() { context.profiler.Enable(); }
+	void EnableProfiling() {
+		context.profiler.Enable();
+	}
 
-	void DisableProfiling() { context.profiler.Disable(); }
+	void DisableProfiling() {
+		context.profiler.Disable();
+	}
 
 	static std::unique_ptr<DuckDBResult> GetQueryResult(ClientContext &context,
 	                                                    std::string query);

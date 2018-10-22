@@ -17,9 +17,12 @@ namespace duckdb {
 //! Represents a cross product
 class CrossProductRef : public TableRef {
   public:
-	CrossProductRef() : TableRef(TableReferenceType::CROSS_PRODUCT) {}
+	CrossProductRef() : TableRef(TableReferenceType::CROSS_PRODUCT) {
+	}
 
-	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual void Accept(SQLNodeVisitor *v) override {
+		v->Visit(*this);
+	}
 	virtual bool Equals(const TableRef *other_) override {
 		if (!TableRef::Equals(other_)) {
 			return false;

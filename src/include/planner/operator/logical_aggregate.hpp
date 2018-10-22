@@ -20,9 +20,12 @@ class LogicalAggregate : public LogicalOperator {
   public:
 	LogicalAggregate(std::vector<std::unique_ptr<Expression>> select_list)
 	    : LogicalOperator(LogicalOperatorType::AGGREGATE_AND_GROUP_BY,
-	                      std::move(select_list)) {}
+	                      std::move(select_list)) {
+	}
 
-	virtual void Accept(LogicalOperatorVisitor *v) override { v->Visit(*this); }
+	virtual void Accept(LogicalOperatorVisitor *v) override {
+		v->Visit(*this);
+	}
 
 	//! The set of groups (optional).
 	std::vector<std::unique_ptr<Expression>> groups;

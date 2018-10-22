@@ -24,14 +24,19 @@ class CatalogEntry {
   public:
 	CatalogEntry(CatalogType type, Catalog *catalog, std::string name)
 	    : type(type), catalog(catalog), set(nullptr), name(name),
-	      deleted(false), parent(nullptr) {}
+	      deleted(false), parent(nullptr) {
+	}
 
-	virtual ~CatalogEntry() {}
+	virtual ~CatalogEntry() {
+	}
 
 	//! Returns true if other objects depend on this object
-	virtual bool HasDependents(Transaction &transaction) { return false; }
+	virtual bool HasDependents(Transaction &transaction) {
+		return false;
+	}
 	//! Function that drops all dependents (used for Cascade)
-	virtual void DropDependents(Transaction &transaction) {}
+	virtual void DropDependents(Transaction &transaction) {
+	}
 
 	//! The type of this catalog entry
 	CatalogType type;

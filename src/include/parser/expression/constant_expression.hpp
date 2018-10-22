@@ -21,9 +21,12 @@ class ConstantExpression : public Expression {
 	    : Expression(ExpressionType::VALUE_CONSTANT, TypeId::INTEGER), value() {
 	}
 	ConstantExpression(Value val)
-	    : Expression(ExpressionType::VALUE_CONSTANT, val.type), value(val) {}
+	    : Expression(ExpressionType::VALUE_CONSTANT, val.type), value(val) {
+	}
 
-	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual void Accept(SQLNodeVisitor *v) override {
+		v->Visit(*this);
+	}
 	virtual ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::CONSTANT;
 	}
@@ -40,7 +43,9 @@ class ConstantExpression : public Expression {
 	virtual void ResolveType() override;
 
 	virtual bool Equals(const Expression *other_) override;
-	virtual std::string ToString() const override { return value.ToString(); }
+	virtual std::string ToString() const override {
+		return value.ToString();
+	}
 
 	//! The constant value referenced
 	Value value;

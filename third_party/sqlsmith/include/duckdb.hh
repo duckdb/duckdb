@@ -21,7 +21,9 @@ struct duckdb_connection {
 
 struct schema_duckdb : schema, duckdb_connection {
 	schema_duckdb(std::string &conninfo, bool no_catalog);
-	virtual std::string quote_name(const std::string &id) { return id; }
+	virtual std::string quote_name(const std::string &id) {
+		return id;
+	}
 };
 
 struct dut_duckdb : dut_base, duckdb_connection {

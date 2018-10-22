@@ -47,7 +47,9 @@ class StorageChunk {
 	}
 
 	//! Release an exclusive lock on the chunk
-	void ReleaseExclusiveLock() { exclusive_lock.unlock(); }
+	void ReleaseExclusiveLock() {
+		exclusive_lock.unlock();
+	}
 
 	//! Get a shared lock on the chunk
 	void GetSharedLock() {
@@ -57,7 +59,9 @@ class StorageChunk {
 	}
 
 	//! Release a shared lock on the chunk
-	void ReleaseSharedLock() { read_count--; }
+	void ReleaseSharedLock() {
+		read_count--;
+	}
 
 	std::unique_ptr<StorageChunk> next;
 	StringHeap string_heap;

@@ -19,10 +19,12 @@ namespace duckdb {
 class ColumnDefinition {
   public:
 	ColumnDefinition(std::string name, TypeId type)
-	    : name(name), type(type), has_default(false) {}
+	    : name(name), type(type), has_default(false) {
+	}
 	ColumnDefinition(std::string name, TypeId type, Value default_value)
 	    : name(name), type(type), has_default(true),
-	      default_value(default_value) {}
+	      default_value(default_value) {
+	}
 
 	//! The name of the entry
 	std::string name;

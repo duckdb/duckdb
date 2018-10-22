@@ -14,7 +14,9 @@
 using namespace duckdb;
 using namespace std;
 
-void ExpressionExecutor::Reset() { vector.Destroy(); }
+void ExpressionExecutor::Reset() {
+	vector.Destroy();
+}
 
 void ExpressionExecutor::Execute(DataChunk &result,
                                  std::function<Expression *(size_t i)> callback,

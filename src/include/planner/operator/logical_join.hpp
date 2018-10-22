@@ -26,9 +26,12 @@ enum JoinSide { NONE, LEFT, RIGHT, BOTH };
 class LogicalJoin : public LogicalOperator {
   public:
 	LogicalJoin(JoinType type)
-	    : LogicalOperator(LogicalOperatorType::JOIN), type(type) {}
+	    : LogicalOperator(LogicalOperatorType::JOIN), type(type) {
+	}
 
-	virtual void Accept(LogicalOperatorVisitor *v) override { v->Visit(*this); }
+	virtual void Accept(LogicalOperatorVisitor *v) override {
+		v->Visit(*this);
+	}
 
 	//! Creates the join condition for this node from the given expression
 	void SetJoinCondition(std::unique_ptr<Expression> condition);

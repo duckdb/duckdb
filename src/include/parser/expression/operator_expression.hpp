@@ -17,15 +17,19 @@ namespace duckdb {
 class OperatorExpression : public Expression {
   public:
 	OperatorExpression(ExpressionType type, TypeId type_id = TypeId::INVALID)
-	    : Expression(type, type_id) {}
+	    : Expression(type, type_id) {
+	}
 	OperatorExpression(ExpressionType type, TypeId type_id,
 	                   std::unique_ptr<Expression> left,
 	                   std::unique_ptr<Expression> right = nullptr)
-	    : Expression(type, type_id, std::move(left), std::move(right)) {}
+	    : Expression(type, type_id, std::move(left), std::move(right)) {
+	}
 
 	virtual void ResolveType() override;
 
-	virtual void Accept(SQLNodeVisitor *v) override { v->Visit(*this); }
+	virtual void Accept(SQLNodeVisitor *v) override {
+		v->Visit(*this);
+	}
 	virtual ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::OPERATOR;
 	}

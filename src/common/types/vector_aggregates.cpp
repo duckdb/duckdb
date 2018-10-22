@@ -189,7 +189,9 @@ bool VectorOperations::Contains(Vector &vector, Value &value) {
 	return result.value_.boolean;
 }
 
-bool VectorOperations::HasNull(Vector &left) { return left.nullmask.any(); }
+bool VectorOperations::HasNull(Vector &left) {
+	return left.nullmask.any();
+}
 
 Value VectorOperations::MaximumStringLength(Vector &left) {
 	if (left.type != TypeId::VARCHAR) {

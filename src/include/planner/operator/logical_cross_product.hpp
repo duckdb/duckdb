@@ -18,8 +18,11 @@ namespace duckdb {
 class LogicalCrossProduct : public LogicalOperator {
   public:
 	LogicalCrossProduct()
-	    : LogicalOperator(LogicalOperatorType::CROSS_PRODUCT) {}
+	    : LogicalOperator(LogicalOperatorType::CROSS_PRODUCT) {
+	}
 
-	virtual void Accept(LogicalOperatorVisitor *v) override { v->Visit(*this); }
+	virtual void Accept(LogicalOperatorVisitor *v) override {
+		v->Visit(*this);
+	}
 };
 } // namespace duckdb

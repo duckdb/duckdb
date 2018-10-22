@@ -11,7 +11,8 @@ using namespace duckdb;
 using namespace std;
 
 DataChunk::DataChunk()
-    : count(0), column_count(0), data(nullptr), sel_vector(nullptr) {}
+    : count(0), column_count(0), data(nullptr), sel_vector(nullptr) {
+}
 
 void DataChunk::Initialize(std::vector<TypeId> &types, bool zero_data) {
 	count = 0;
