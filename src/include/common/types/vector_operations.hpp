@@ -184,7 +184,9 @@ struct VectorOperations {
 	//===--------------------------------------------------------------------===//
 	// Exec
 	//===--------------------------------------------------------------------===//
-	static void Exec(Vector &vector, std::function<void(size_t i, size_t k)> fun, size_t offset = 0, size_t count = 0) {
+	static void Exec(Vector &vector,
+	                 std::function<void(size_t i, size_t k)> fun,
+	                 size_t offset = 0, size_t count = 0) {
 		size_t i = offset;
 		if (count == 0) {
 			count = vector.count;
@@ -228,9 +230,13 @@ struct VectorOperations {
 	}
 
 	template <typename T>
-	static void ExecType(Vector &vector, std::function<void(T& value, size_t i, size_t k)> fun, size_t offset = 0, size_t limit = 0) {
+	static void ExecType(Vector &vector,
+	                     std::function<void(T &value, size_t i, size_t k)> fun,
+	                     size_t offset = 0, size_t limit = 0) {
 		auto data = (T *)vector.data;
-		VectorOperations::Exec(vector, [&](size_t i, size_t k) { fun(data[i], i, k); }, offset, limit);
+		VectorOperations::Exec(vector,
+		                       [&](size_t i, size_t k) { fun(data[i], i, k); },
+		                       offset, limit);
 	}
 };
 } // namespace duckdb

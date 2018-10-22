@@ -345,7 +345,8 @@ void DataTable::Update(ClientContext &context, Vector &row_identifiers,
 		VectorOperations::Exec(row_identifiers, [&](size_t i, size_t k) {
 			auto id = ids[i] - chunk->start;
 			auto dataptr = base_data + id * size;
-			auto update_index = update_vector->sel_vector ? update_vector->sel_vector[k] : k;
+			auto update_index =
+			    update_vector->sel_vector ? update_vector->sel_vector[k] : k;
 			memcpy(dataptr, update_vector->data + update_index * size, size);
 		});
 

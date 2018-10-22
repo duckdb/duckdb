@@ -203,7 +203,6 @@ void Vector::Copy(Vector &other, size_t offset) {
 		for (size_t i = 0; i < other.count; i++) {
 			const char *str = sel_vector ? source[sel_vector[i + offset]]
 			                             : source[i + offset];
-			target[i] = str ? other.string_heap.AddString(str) : nullptr;
 			if (sel_vector) {
 				for (size_t i = 0; i < count; i++) {
 					other.nullmask[i] = nullmask[sel_vector[offset + i]];
@@ -211,6 +210,12 @@ void Vector::Copy(Vector &other, size_t offset) {
 			} else {
 				other.nullmask = nullmask << offset;
 			}
+			// if NULL, we don't have to do anything, since str is likely to be
+			// junk or nullptr
+			if (other.nullmask[i]) {
+				continue;
+			}
+			target[i] = str ? other.string_heap.AddString(str) : nullptr;
 		}
 	} else {
 		VectorOperations::Copy(*this, other, offset);
@@ -261,6 +266,11 @@ void Vector::Append(Vector &other) {
 		for (size_t i = 0; i < other.count; i++) {
 			const char *str =
 			    other.sel_vector ? source[other.sel_vector[i]] : source[i];
+			// if NULL, we don't have to do anything, since str is likely to be
+			// junk or nullptr
+			if (nullmask[old_count + i]) {
+				continue;
+			}
 			target[old_count + i] = str ? string_heap.AddString(str) : nullptr;
 		}
 	} else {
