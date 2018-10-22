@@ -256,6 +256,7 @@ void DataChunk::Verify() {
 	sel_t *v = sel_vector;
 	for (size_t i = 0; i < column_count; i++) {
 		assert(data[i].sel_vector == v);
+		data[i].Verify();
 	}
 	// verify that all vectors in the chunk have the same count
 	for (size_t i = 0; i < column_count; i++) {

@@ -276,3 +276,16 @@ string Vector::ToString() const {
 	retval += "]";
 	return retval;
 }
+
+void Vector::Verify() {
+	if (type == TypeId::VARCHAR) {
+		// we just touch all the strings and let the sanitizer figure out if any
+		// of them are deallocated/corrupt
+		VectorOperations::ExecType<const char *>(
+		    *this, [&](const char *string, size_t i, size_t k) {
+			    if (string) {
+				    strlen(string);
+			    }
+		    });
+	}
+}

@@ -118,6 +118,16 @@ class Vector : public Printable {
 	//! have a selection vector
 	bool IsConstant() { return count == 1 && !sel_vector; }
 
+#ifdef DEBUG
+	//! Verify that the Vector is in a consistent, not corrupt state. DEBUG
+	//! FUNCTION ONLY!
+	void Verify();
+#else
+	//! Verify that the Vector is in a consistent, not corrupt state. DEBUG
+	//! FUNCTION ONLY!
+	void Verify() {}
+#endif
+
 	//! The stringheap of the vector
 	StringHeap string_heap;
 
