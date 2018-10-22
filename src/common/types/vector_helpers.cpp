@@ -99,8 +99,8 @@ static void _copy_loop_set_null(Vector &left, void *target, size_t offset,
 
 template <class T>
 static void _append_loop_check_null(Vector &left, Vector &right) {
-	T *ldata = (T *)left.data;
-	T *rdata = (T *)right.data;
+	auto ldata = (T *)left.data;
+	auto rdata = (T *)right.data;
 	VectorOperations::Exec(left, [&](size_t i, size_t k) {
 		rdata[right.count + k] = ldata[i];
 		if (IsNullValue<T>(rdata[right.count + k])) {
