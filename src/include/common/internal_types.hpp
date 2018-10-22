@@ -35,6 +35,8 @@ typedef uint16_t sel_t;
 //! FIXME: this should be a 128-bit integer
 //! With 64-bit, the database only supports up to 2^32 transactions
 typedef uint64_t transaction_t;
+//! Type used for nullmasks
+typedef std::bitset<STANDARD_VECTOR_SIZE> nullmask_t;
 
 //! Type used for column identifiers
 typedef size_t column_t;
@@ -44,7 +46,7 @@ extern column_t COLUMN_IDENTIFIER_ROW_ID;
 //! Zero selection vector: completely filled with the value 0 [READ ONLY]
 extern sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE];
 //! Zero NULL mask: filled with the value 0 [READ ONLY]
-extern std::bitset<STANDARD_VECTOR_SIZE> ZERO_MASK;
+extern nullmask_t ZERO_MASK;
 
 struct BinaryData {
 	std::unique_ptr<uint8_t[]> data;

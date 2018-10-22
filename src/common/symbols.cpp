@@ -76,6 +76,7 @@ INSTANTIATE_VECTOR(std::vector<std::unique_ptr<LogicalOperator>>);
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Transaction>>);
 template class std::vector<TypeId>;
 template class std::vector<Value>;
+template class std::vector<int>;
 INSTANTIATE_VECTOR(std::vector<WALEntryData>);
 
 template struct std::atomic<size_t>;

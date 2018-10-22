@@ -61,6 +61,8 @@ struct Abs {
 	template <class T> static inline T Operation(T left) { return abs(left); }
 };
 
+template <> uint64_t Abs::Operation(uint64_t left);
+
 struct Not {
 	static inline bool Operation(bool left) { return !left; }
 };
@@ -127,37 +129,37 @@ struct Or {
 // NULLs are passed in these as well but the result is ignored. So just return 0
 struct EqualsVarchar {
 	static inline bool Operation(char *left, char *right) {
-		return (left && right) ? strcmp(left, right) == 0 : false;
+		return strcmp(left, right) == 0;
 	}
 };
 
 struct NotEqualsVarchar {
 	static inline bool Operation(char *left, char *right) {
-		return (left && right) ? strcmp(left, right) != 0 : false;
+		return strcmp(left, right) != 0;
 	}
 };
 
 struct LessThanVarchar {
 	static inline bool Operation(char *left, char *right) {
-		return (left && right) ? strcmp(left, right) < 0 : false;
+		return strcmp(left, right) < 0;
 	}
 };
 
 struct LessThanEqualsVarchar {
 	static inline bool Operation(char *left, char *right) {
-		return (left && right) ? strcmp(left, right) <= 0 : false;
+		return strcmp(left, right) <= 0;
 	}
 };
 
 struct GreaterThanVarchar {
 	static inline bool Operation(char *left, char *right) {
-		return (left && right) ? strcmp(left, right) > 0 : false;
+		return strcmp(left, right) > 0;
 	}
 };
 
 struct GreaterThanEqualsVarchar {
 	static inline bool Operation(char *left, char *right) {
-		return (left && right) ? strcmp(left, right) >= 0 : false;
+		return strcmp(left, right) >= 0;
 	}
 };
 
@@ -224,9 +226,6 @@ struct AllTrue {
 
 struct MaximumStringLength {
 	static inline uint64_t Operation(const char *str, uint64_t right) {
-		if (!str) {
-			return right;
-		}
 		return std::max((uint64_t)strlen(str), right);
 	}
 };

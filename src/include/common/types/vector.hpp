@@ -54,7 +54,7 @@ class Vector : public Printable {
 	//! The selection vector of the vector.
 	sel_t *sel_vector;
 	//! The null mask of the vector, if the Vector has any NULL values
-	std::bitset<STANDARD_VECTOR_SIZE> nullmask;
+	nullmask_t nullmask;
 
 	Vector();
 	//! Create a vector of size one holding the passed on value

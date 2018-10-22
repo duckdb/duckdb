@@ -66,31 +66,31 @@ void Vector::SetValue(size_t index_, Value val) {
 	size_t index = sel_vector ? sel_vector[index_] : index_;
 	switch (type) {
 	case TypeId::BOOLEAN:
-		((int8_t *)data)[index] = val.is_null ? 0 : newVal.value_.boolean;
+		((int8_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.boolean;
 		break;
 	case TypeId::TINYINT:
-		((int8_t *)data)[index] = val.is_null ? 0 : newVal.value_.tinyint;
+		((int8_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.tinyint;
 		break;
 	case TypeId::SMALLINT:
-		((int16_t *)data)[index] = val.is_null ? 0 : newVal.value_.smallint;
+		((int16_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.smallint;
 		break;
 	case TypeId::INTEGER:
-		((int32_t *)data)[index] = val.is_null ? 0 : newVal.value_.integer;
+		((int32_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.integer;
 		break;
 	case TypeId::BIGINT:
-		((int64_t *)data)[index] = val.is_null ? 0 : newVal.value_.bigint;
+		((int64_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.bigint;
 		break;
 	case TypeId::DECIMAL:
-		((double *)data)[index] = val.is_null ? 0 : newVal.value_.decimal;
+		((double *)data)[index] = newVal.is_null ? 0 : newVal.value_.decimal;
 		break;
 	case TypeId::POINTER:
-		((uint64_t *)data)[index] = val.is_null ? 0 : newVal.value_.pointer;
+		((uint64_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.pointer;
 		break;
 	case TypeId::DATE:
-		((date_t *)data)[index] = val.is_null ? 0 : newVal.value_.date;
+		((date_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.date;
 		break;
 	case TypeId::VARCHAR: {
-		if (val.is_null) {
+		if (newVal.is_null) {
 			((const char **)data)[index] = nullptr;
 		} else {
 			((const char **)data)[index] =
@@ -200,14 +200,17 @@ void Vector::Copy(Vector &other, size_t offset) {
 		other.count = count - offset;
 		auto source = (const char **)data;
 		auto target = (const char **)other.data;
-		VectorOperations::Exec(other, [&](size_t i, size_t k) {
-			if (nullmask[i]) {
-				other.nullmask[k - offset] = true;
-				target[k - offset] = nullptr;
-			} else {
-				target[k - offset] = other.string_heap.AddString(source[i]);
-			}
-		}, offset);
+		VectorOperations::Exec(
+		    other,
+		    [&](size_t i, size_t k) {
+			    if (nullmask[i]) {
+				    other.nullmask[k - offset] = true;
+				    target[k - offset] = nullptr;
+			    } else {
+				    target[k - offset] = other.string_heap.AddString(source[i]);
+			    }
+		    },
+		    offset);
 	} else {
 		VectorOperations::Copy(*this, other, offset);
 	}

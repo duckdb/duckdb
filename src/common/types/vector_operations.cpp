@@ -14,10 +14,10 @@ template <class T, class RES, class OP>
 void _templated_unary_loop(Vector &left, Vector &result) {
 	auto ldata = (T *)left.data;
 	auto result_data = (RES *)result.data;
+	result.nullmask = left.nullmask;
 	VectorOperations::Exec(left, [&](size_t i, size_t k) {
 		result_data[i] = OP::Operation(ldata[i]);
 	});
-	result.nullmask = left.nullmask;
 	result.sel_vector = left.sel_vector;
 	result.count = left.count;
 }
@@ -26,15 +26,15 @@ template <class T, class RES, class OP>
 void _templated_unary_loop_null(Vector &left, Vector &result) {
 	auto ldata = (T *)left.data;
 	auto result_data = (RES *)result.data;
+	result.nullmask.reset();
 	VectorOperations::Exec(left, [&](size_t i, size_t k) {
 		result_data[i] = OP::Operation(ldata[i], left.nullmask[i]);
 	});
-	result.nullmask.reset();
 	result.sel_vector = left.sel_vector;
 	result.count = left.count;
 }
 
-template <class T, class RES, class OP>
+template <class T, class RES, class OP, bool IGNORENULL>
 void _templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 	auto ldata = (T *)left.data;
 	auto rdata = (T *)right.data;
@@ -50,7 +50,9 @@ void _templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 			T constant = ldata[0];
 			result.nullmask = right.nullmask;
 			VectorOperations::Exec(right, [&](size_t i, size_t k) {
-				result_data[i] = OP::Operation(constant, rdata[i]);
+				if (!IGNORENULL || !right.nullmask[i]) {
+					result_data[i] = OP::Operation(constant, rdata[i]);
+				}
 			});
 		}
 		result.sel_vector = right.sel_vector;
@@ -65,7 +67,9 @@ void _templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 			T constant = rdata[0];
 			result.nullmask = left.nullmask;
 			VectorOperations::Exec(left, [&](size_t i, size_t k) {
-				result_data[i] = OP::Operation(ldata[i], constant);
+				if (!IGNORENULL || !right.nullmask[i]) {
+					result_data[i] = OP::Operation(ldata[i], constant);
+				}
 			});
 		}
 		result.sel_vector = left.sel_vector;
@@ -75,7 +79,9 @@ void _templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 		result.nullmask = left.nullmask | right.nullmask;
 		assert(left.sel_vector == right.sel_vector);
 		VectorOperations::Exec(left, [&](size_t i, size_t k) {
-			result_data[i] = OP::Operation(ldata[i], rdata[i]);
+			if (!IGNORENULL || !right.nullmask[i]) {
+				result_data[i] = OP::Operation(ldata[i], rdata[i]);
+			}
 		});
 		result.sel_vector = left.sel_vector;
 		result.count = left.count;
@@ -168,6 +174,12 @@ template <class OP> void _generic_unary_loop(Vector &left, Vector &result) {
 	case TypeId::DECIMAL:
 		_templated_unary_loop<double, double, OP>(left, result);
 		break;
+	case TypeId::POINTER:
+		_templated_unary_loop<uint64_t, uint64_t, OP>(left, result);
+		break;
+	case TypeId::DATE:
+		_templated_unary_loop<date_t, date_t, OP>(left, result);
+		break;
 	default:
 		throw NotImplementedException("Unimplemented type");
 	}
@@ -182,25 +194,29 @@ void _generic_binary_loop(Vector &left, Vector &right, Vector &result) {
 	switch (left.type) {
 	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
-		_templated_binary_loop<int8_t, int8_t, OP>(left, right, result);
+		_templated_binary_loop<int8_t, int8_t, OP, false>(left, right, result);
 		break;
 	case TypeId::SMALLINT:
-		_templated_binary_loop<int16_t, int16_t, OP>(left, right, result);
+		_templated_binary_loop<int16_t, int16_t, OP, false>(left, right,
+		                                                    result);
 		break;
 	case TypeId::INTEGER:
-		_templated_binary_loop<int32_t, int32_t, OP>(left, right, result);
+		_templated_binary_loop<int32_t, int32_t, OP, false>(left, right,
+		                                                    result);
 		break;
 	case TypeId::BIGINT:
-		_templated_binary_loop<int64_t, int64_t, OP>(left, right, result);
+		_templated_binary_loop<int64_t, int64_t, OP, false>(left, right,
+		                                                    result);
 		break;
 	case TypeId::DECIMAL:
-		_templated_binary_loop<double, double, OP>(left, right, result);
+		_templated_binary_loop<double, double, OP, false>(left, right, result);
 		break;
 	case TypeId::POINTER:
-		_templated_binary_loop<uint64_t, uint64_t, OP>(left, right, result);
+		_templated_binary_loop<uint64_t, uint64_t, OP, false>(left, right,
+		                                                      result);
 		break;
 	case TypeId::DATE:
-		_templated_binary_loop<date_t, date_t, OP>(left, right, result);
+		_templated_binary_loop<date_t, date_t, OP, false>(left, right, result);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type");
@@ -216,25 +232,25 @@ void _fixed_return_binary_loop(Vector &left, Vector &right, Vector &result) {
 	switch (left.type) {
 	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
-		_templated_binary_loop<int8_t, RES, OP>(left, right, result);
+		_templated_binary_loop<int8_t, RES, OP, false>(left, right, result);
 		break;
 	case TypeId::SMALLINT:
-		_templated_binary_loop<int16_t, RES, OP>(left, right, result);
+		_templated_binary_loop<int16_t, RES, OP, false>(left, right, result);
 		break;
 	case TypeId::INTEGER:
-		_templated_binary_loop<int32_t, RES, OP>(left, right, result);
+		_templated_binary_loop<int32_t, RES, OP, false>(left, right, result);
 		break;
 	case TypeId::BIGINT:
-		_templated_binary_loop<int64_t, RES, OP>(left, right, result);
+		_templated_binary_loop<int64_t, RES, OP, false>(left, right, result);
 		break;
 	case TypeId::DECIMAL:
-		_templated_binary_loop<double, RES, OP>(left, right, result);
+		_templated_binary_loop<double, RES, OP, false>(left, right, result);
 		break;
 	case TypeId::POINTER:
-		_templated_binary_loop<uint64_t, RES, OP>(left, right, result);
+		_templated_binary_loop<uint64_t, RES, OP, false>(left, right, result);
 		break;
 	case TypeId::DATE:
-		_templated_binary_loop<date_t, RES, OP>(left, right, result);
+		_templated_binary_loop<date_t, RES, OP, false>(left, right, result);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type");
@@ -416,7 +432,7 @@ void VectorOperations::Equals(Vector &left, Vector &right, Vector &result) {
 			throw TypeMismatchException(left.type, right.type,
 			                            "Can't compare different types");
 		}
-		_templated_binary_loop<char *, int8_t, operators::EqualsVarchar>(
+		_templated_binary_loop<char *, int8_t, operators::EqualsVarchar, true>(
 		    left, right, result);
 	} else {
 		_fixed_return_binary_loop<operators::Equals, int8_t>(left, right,
@@ -430,8 +446,8 @@ void VectorOperations::NotEquals(Vector &left, Vector &right, Vector &result) {
 			throw TypeMismatchException(left.type, right.type,
 			                            "Can't compare different types");
 		}
-		_templated_binary_loop<char *, int8_t, operators::NotEqualsVarchar>(
-		    left, right, result);
+		_templated_binary_loop<char *, int8_t, operators::NotEqualsVarchar,
+		                       true>(left, right, result);
 	} else {
 		_fixed_return_binary_loop<operators::NotEquals, int8_t>(left, right,
 		                                                        result);
@@ -445,8 +461,8 @@ void VectorOperations::GreaterThan(Vector &left, Vector &right,
 			throw TypeMismatchException(left.type, right.type,
 			                            "Can't compare different types");
 		}
-		_templated_binary_loop<char *, int8_t, operators::GreaterThanVarchar>(
-		    left, right, result);
+		_templated_binary_loop<char *, int8_t, operators::GreaterThanVarchar,
+		                       true>(left, right, result);
 	} else {
 		_fixed_return_binary_loop<operators::GreaterThan, int8_t>(left, right,
 		                                                          result);
@@ -461,8 +477,8 @@ void VectorOperations::GreaterThanEquals(Vector &left, Vector &right,
 			                            "Can't compare different types");
 		}
 		_templated_binary_loop<char *, int8_t,
-		                       operators::GreaterThanEqualsVarchar>(left, right,
-		                                                            result);
+		                       operators::GreaterThanEqualsVarchar, true>(
+		    left, right, result);
 	} else {
 		_fixed_return_binary_loop<operators::GreaterThanEquals, int8_t>(
 		    left, right, result);
@@ -475,8 +491,8 @@ void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result) {
 			throw TypeMismatchException(left.type, right.type,
 			                            "Can't compare different types");
 		}
-		_templated_binary_loop<char *, int8_t, operators::LessThanVarchar>(
-		    left, right, result);
+		_templated_binary_loop<char *, int8_t, operators::LessThanVarchar,
+		                       true>(left, right, result);
 	} else {
 		_fixed_return_binary_loop<operators::LessThan, int8_t>(left, right,
 		                                                       result);
@@ -490,9 +506,8 @@ void VectorOperations::LessThanEquals(Vector &left, Vector &right,
 			throw TypeMismatchException(left.type, right.type,
 			                            "Can't compare different types");
 		}
-		_templated_binary_loop<char *, int8_t,
-		                       operators::LessThanEqualsVarchar>(left, right,
-		                                                         result);
+		_templated_binary_loop<char *, int8_t, operators::LessThanEqualsVarchar,
+		                       true>(left, right, result);
 	} else {
 		_fixed_return_binary_loop<operators::LessThanEquals, int8_t>(
 		    left, right, result);
@@ -650,6 +665,6 @@ void VectorOperations::CombineHash(Vector &left, Vector &right,
 		    "Left argument must be 32-bit integer hash");
 	}
 	VectorOperations::Hash(right, result);
-	_templated_binary_loop<int32_t, int32_t, operators::XOR>(left, result,
-	                                                         result);
+	_templated_binary_loop<int32_t, int32_t, operators::XOR, false>(
+	    left, result, result);
 }

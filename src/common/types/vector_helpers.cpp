@@ -13,14 +13,14 @@ using namespace std;
 // Templated Looping Functions
 //===--------------------------------------------------------------------===//
 template <class SRC, class DST, class OP>
-void _templated_cast_loop(Vector &left, Vector &result) {
-	SRC *ldata = (SRC *)left.data;
-	DST *result_data = (DST *)result.data;
-	VectorOperations::Exec(left, [&](size_t i, size_t k) {
+void _templated_cast_loop(Vector &source, Vector &result) {
+	auto ldata = (SRC *)source.data;
+	auto result_data = (DST *)result.data;
+	VectorOperations::Exec(source, [&](size_t i, size_t k) {
 		result_data[i] = OP::template Operation<SRC, DST>(ldata[i]);
 	});
-	result.sel_vector = left.sel_vector;
-	result.count = left.count;
+	result.sel_vector = source.sel_vector;
+	result.count = source.count;
 }
 
 template <class SRC> static void _cast_loop(Vector &source, Vector &result) {
@@ -74,8 +74,8 @@ template <class SRC> static void _cast_loop(Vector &source, Vector &result) {
 template <class T>
 static void _copy_loop(Vector &left, void *target, size_t offset,
                        size_t element_count) {
-	T *ldata = (T *)left.data;
-	T *result_data = (T *)target;
+	auto ldata = (T *)left.data;
+	auto result_data = (T *)target;
 	VectorOperations::Exec(
 	    left, [&](size_t i, size_t k) { result_data[k - offset] = ldata[i]; },
 	    offset, element_count);
@@ -84,8 +84,8 @@ static void _copy_loop(Vector &left, void *target, size_t offset,
 template <class T>
 static void _copy_loop_set_null(Vector &left, void *target, size_t offset,
                                 size_t element_count) {
-	T *ldata = (T *)left.data;
-	T *result_data = (T *)target;
+	auto ldata = (T *)left.data;
+	auto result_data = (T *)target;
 	VectorOperations::Exec(left,
 	                       [&](size_t i, size_t k) {
 		                       if (left.nullmask[i]) {
@@ -142,13 +142,10 @@ static void _case_loop(Vector &check, Vector &res_true, Vector &res_false,
 		size_t true_index = res_true.sel_vector ? i : k * res_true_mul;
 		size_t false_index = res_false.sel_vector ? i : k * res_false_mul;
 		bool branch = (cond[check_index] && !check.nullmask[check_index]);
-		bool is_null = branch ? res_true.nullmask[true_index]
-		                      : res_false.nullmask[false_index];
-		result.nullmask[i] = is_null;
-		if (!is_null) {
-			res[i] = OP::Operation(result, branch, true_data[true_index],
-			                       false_data[false_index]);
-		}
+		result.nullmask[i] = branch ? res_true.nullmask[true_index]
+		                            : res_false.nullmask[false_index];
+		res[i] = OP::Operation(result, branch, true_data[true_index],
+		                       false_data[false_index], i);
 	});
 }
 
@@ -345,18 +342,21 @@ void VectorOperations::Copy(Vector &source, Vector &target, size_t offset) {
 //===--------------------------------------------------------------------===//
 struct RegularCase {
 	template <class T>
-	static inline T Operation(Vector &result, bool condition, T left, T right) {
+	static inline T Operation(Vector &result, bool condition, T left, T right,
+	                          size_t i) {
 		return condition ? left : right;
 	}
 };
 
 struct StringCase {
 	static inline const char *Operation(Vector &result, bool condition,
-	                                    const char *left, const char *right) {
-		if (condition) {
-			return left ? result.string_heap.AddString(left) : nullptr;
+	                                    const char *left, const char *right,
+	                                    size_t i) {
+		if (!result.nullmask[i]) {
+			return condition ? result.string_heap.AddString(left)
+			                 : result.string_heap.AddString(right);
 		} else {
-			return right ? result.string_heap.AddString(right) : nullptr;
+			return nullptr;
 		}
 	}
 };

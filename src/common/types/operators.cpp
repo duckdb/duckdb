@@ -8,6 +8,9 @@ using namespace duckdb;
 using namespace std;
 
 namespace operators {
+
+template <> uint64_t Abs::Operation(uint64_t left) { return left; }
+
 template <> double Modulo::Operation(double left, double right) {
 	throw NotImplementedException("Modulo for double not implemented!");
 }
