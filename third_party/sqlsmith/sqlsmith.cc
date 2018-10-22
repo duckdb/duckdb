@@ -153,6 +153,8 @@ int main(int argc, char *argv[]) {
 
 		cerr << "Running queries..." << endl;
 
+		ofstream complete_log;
+		complete_log.open("sqlsmith.complete.log");
 		while (1) /* Loop to recover connection loss */
 		{
 			try {
@@ -175,7 +177,12 @@ int main(int argc, char *argv[]) {
 					ostringstream s;
 					gen->out(s);
 
-					// first write the query to the log file
+					// write the query to the complete log that has all the
+					// queries
+					complete_log << s.str() << endl;
+					complete_log.flush();
+
+					// write the last-executed query to a separate log file
 					ofstream out_file;
 					out_file.open("sqlsmith.log");
 					out_file << s.str() << endl;
