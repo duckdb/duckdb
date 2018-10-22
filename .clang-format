@@ -4,3 +4,4 @@ IndentWidth: 4
 UseTab: ForIndentation
 DerivePointerAlignment: false
 PointerAlignment: Right
+AllowShortFunctionsOnASingleLine: false

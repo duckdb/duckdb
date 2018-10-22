@@ -29,5 +29,8 @@ TEST_CASE("Test crashing SQLSmith queries", "[sqlsmith][.]") {
 		string query((istreambuf_iterator<char>(t)),
 		             istreambuf_iterator<char>());
 		con.Query(query.c_str());
+		// we don't know whether the query fails or not and we don't know the
+		// correct result we just don't want it to crash
+		REQUIRE(1 == 1);
 	});
 }

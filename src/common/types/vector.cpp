@@ -29,9 +29,12 @@ Vector::Vector(Value value) : Vector(value.type, true, false) {
 }
 
 Vector::Vector()
-    : type(TypeId::INVALID), count(0), data(nullptr), sel_vector(nullptr) {}
+    : type(TypeId::INVALID), count(0), data(nullptr), sel_vector(nullptr) {
+}
 
-Vector::~Vector() { Destroy(); }
+Vector::~Vector() {
+	Destroy();
+}
 
 void Vector::Initialize(TypeId new_type, bool zero_data) {
 	if (new_type != TypeId::INVALID) {
@@ -201,7 +204,7 @@ void Vector::Copy(Vector &other, size_t offset) {
 		auto source = (const char **)data;
 		auto target = (const char **)other.data;
 		VectorOperations::Exec(
-		    other,
+		    *this,
 		    [&](size_t i, size_t k) {
 			    if (nullmask[i]) {
 				    other.nullmask[k - offset] = true;
@@ -285,7 +288,8 @@ void Vector::Verify() {
 		VectorOperations::ExecType<const char *>(
 		    *this, [&](const char *string, size_t i, size_t k) {
 			    if (!nullmask[i]) {
-				    strlen(string);
+				    assert(string);
+				    assert(strlen(string) != (size_t)-1);
 			    }
 		    });
 	}
