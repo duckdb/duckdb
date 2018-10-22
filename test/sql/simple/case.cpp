@@ -39,10 +39,17 @@ TEST_CASE("Test NULL IF statement", "[case]") {
 	                     {Value("world"), Value("world"), Value("world")}));
 
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE test;"));
+}
+
+TEST_CASE("NULL IF with strings", "[case]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
 	REQUIRE_NO_FAIL(
 	    con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)"));
 
-	// result = con.Query("SELECT NULLIF(CAST(a AS VARCHAR), 11) FROM test;");
-	// REQUIRE(CHECK_COLUMN(result, 0, {Value(11), Value(13), Value(12)}));
+	result = con.Query("SELECT NULLIF(CAST(a AS VARCHAR), 11) FROM test;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value("13"), Value("12")}));
 }

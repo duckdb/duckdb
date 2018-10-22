@@ -30,6 +30,7 @@ void ExpressionExecutor::Execute(DataChunk &result,
 		}
 		result.sel_vector = result.data[i].sel_vector;
 		result.count = result.data[i].count;
+		result.heap.MergeHeap(result.data[i].string_heap);
 	}
 }
 

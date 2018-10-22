@@ -170,6 +170,7 @@ void DataTable::Append(ClientContext &context, DataChunk &chunk) {
 	for (size_t i = 0; i < table.columns.size(); i++) {
 		last_chunk->string_heap.MergeHeap(chunk.data[i].string_heap);
 	}
+	last_chunk->string_heap.MergeHeap(chunk.heap);
 
 	Transaction &transaction = context.ActiveTransaction();
 
@@ -356,6 +357,7 @@ void DataTable::Update(ClientContext &context, Vector &row_identifiers,
 		lock_guard<mutex> stats_lock(statistics_locks[column_id]);
 		statistics[column_id].Update(updates.data[j]);
 	}
+	chunk->string_heap.MergeHeap(updates.heap);
 	chunk->ReleaseExclusiveLock();
 }
 

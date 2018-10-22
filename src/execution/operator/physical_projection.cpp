@@ -36,8 +36,6 @@ void PhysicalProjection::_GetChunk(ClientContext &context, DataChunk &chunk,
 
 	ExpressionExecutor executor(state, context);
 	executor.Execute(select_list, chunk);
-
-	chunk.Verify();
 }
 
 unique_ptr<PhysicalOperatorState>

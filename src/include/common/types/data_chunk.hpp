@@ -114,6 +114,8 @@ class DataChunk : public Printable {
 
 	DataChunk(const DataChunk &) = delete;
 
+	// strings owned by the chunk
+	StringHeap heap;
   private:
 	//! The data owned by this DataChunk. This data is typically referenced by
 	//! the member vectors.

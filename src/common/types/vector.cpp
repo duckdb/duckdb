@@ -198,20 +198,16 @@ void Vector::Copy(Vector &other, size_t offset) {
 	if (!TypeIsConstantSize(type)) {
 		assert(type == TypeId::VARCHAR);
 		other.count = count - offset;
-		const char **source = (const char **)data;
-		const char **target = (const char **)other.data;
-		for (size_t i = 0; i < other.count; i++) {
-			const char *str = sel_vector ? source[sel_vector[i + offset]]
-			                             : source[i + offset];
-			target[i] = str ? other.string_heap.AddString(str) : nullptr;
-			if (sel_vector) {
-				for (size_t i = 0; i < count; i++) {
-					other.nullmask[i] = nullmask[sel_vector[offset + i]];
-				}
+		auto source = (const char **)data;
+		auto target = (const char **)other.data;
+		VectorOperations::Exec(other, [&](size_t i, size_t k) {
+			if (nullmask[i]) {
+				other.nullmask[k - offset] = true;
+				target[k - offset] = nullptr;
 			} else {
-				other.nullmask = nullmask << offset;
+				target[k - offset] = other.string_heap.AddString(source[i]);
 			}
-		}
+		}, offset);
 	} else {
 		VectorOperations::Copy(*this, other, offset);
 	}
@@ -256,13 +252,15 @@ void Vector::Append(Vector &other) {
 	}
 	if (!TypeIsConstantSize(type)) {
 		assert(type == TypeId::VARCHAR);
-		const char **source = (const char **)other.data;
-		const char **target = (const char **)data;
-		for (size_t i = 0; i < other.count; i++) {
-			const char *str =
-			    other.sel_vector ? source[other.sel_vector[i]] : source[i];
-			target[old_count + i] = str ? string_heap.AddString(str) : nullptr;
-		}
+		auto source = (const char **)other.data;
+		auto target = (const char **)data;
+		VectorOperations::Exec(other, [&](size_t i, size_t k) {
+			if (other.nullmask[i]) {
+				target[old_count + k] = nullptr;
+			} else {
+				target[old_count + k] = string_heap.AddString(source[i]);
+			}
+		});
 	} else {
 		VectorOperations::Copy(other, data + old_count * GetTypeIdSize(type));
 	}
@@ -283,7 +281,7 @@ void Vector::Verify() {
 		// of them are deallocated/corrupt
 		VectorOperations::ExecType<const char *>(
 		    *this, [&](const char *string, size_t i, size_t k) {
-			    if (string) {
+			    if (!nullmask[i]) {
 				    strlen(string);
 			    }
 		    });
