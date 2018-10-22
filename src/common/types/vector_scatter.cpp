@@ -24,8 +24,7 @@ void _scatter_templated_loop(Vector &source, Vector &dest) {
 		auto constant = ldata[0];
 		VectorOperations::Exec(dest, [&](size_t i, size_t k) {
 			if (!IsNullValue<T>(destination[i][0])) {
-				destination[i][0] = OP::Operation(
-				    constant, destination[i][0]);
+				destination[i][0] = OP::Operation(constant, destination[i][0]);
 			} else {
 				destination[i][0] = constant;
 			}

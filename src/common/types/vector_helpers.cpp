@@ -76,9 +76,9 @@ static void _copy_loop(Vector &left, void *target, size_t offset,
                        size_t element_count) {
 	T *ldata = (T *)left.data;
 	T *result_data = (T *)target;
-	VectorOperations::Exec(left, [&](size_t i, size_t k) {
-		result_data[k - offset] = ldata[i];
-	}, offset, element_count);
+	VectorOperations::Exec(
+	    left, [&](size_t i, size_t k) { result_data[k - offset] = ldata[i]; },
+	    offset, element_count);
 }
 
 template <class T>
@@ -86,13 +86,15 @@ static void _copy_loop_set_null(Vector &left, void *target, size_t offset,
                                 size_t element_count) {
 	T *ldata = (T *)left.data;
 	T *result_data = (T *)target;
-	VectorOperations::Exec(left, [&](size_t i, size_t k) {
-		if (left.nullmask[i]) {
-			result_data[k - offset] = NullValue<T>();
-		} else {
-			result_data[k - offset] = ldata[i];
-		}
-	}, offset, element_count);
+	VectorOperations::Exec(left,
+	                       [&](size_t i, size_t k) {
+		                       if (left.nullmask[i]) {
+			                       result_data[k - offset] = NullValue<T>();
+		                       } else {
+			                       result_data[k - offset] = ldata[i];
+		                       }
+	                       },
+	                       offset, element_count);
 }
 
 template <class T>
@@ -115,26 +117,26 @@ static void _case_loop(Vector &check, Vector &res_true, Vector &res_false,
 	auto true_data = (T *)res_true.data;
 	auto false_data = (T *)res_false.data;
 	auto res = (T *)result.data;
- 	// it might be the case that not everything has a selection vector
- 	// as constants do not need a selection vector
- 	// check if we are using a selection vector
- 	if (check.sel_vector) {
- 		result.sel_vector = check.sel_vector;
- 	} else if (res_true.sel_vector) {
- 		result.sel_vector = res_true.sel_vector;
- 	} else if (res_false.sel_vector) {
- 		result.sel_vector = res_false.sel_vector;
- 	} else {
- 		result.sel_vector = nullptr;
- 	}
+	// it might be the case that not everything has a selection vector
+	// as constants do not need a selection vector
+	// check if we are using a selection vector
+	if (check.sel_vector) {
+		result.sel_vector = check.sel_vector;
+	} else if (res_true.sel_vector) {
+		result.sel_vector = res_true.sel_vector;
+	} else if (res_false.sel_vector) {
+		result.sel_vector = res_false.sel_vector;
+	} else {
+		result.sel_vector = nullptr;
+	}
 
 	// now check for constants
 	// we handle constants by multiplying the index access by 0 to avoid 2^3
 	// branches in the code
 	size_t check_mul = check.IsConstant() ? 0 : 1,
-		   res_true_mul = res_true.IsConstant() ? 0 : 1,
-		   res_false_mul = res_false.IsConstant() ? 0 : 1;
- 
+	       res_true_mul = res_true.IsConstant() ? 0 : 1,
+	       res_false_mul = res_false.IsConstant() ? 0 : 1;
+
 	VectorOperations::Exec(result, [&](size_t i, size_t k) {
 		size_t check_index = check.sel_vector ? i : k * check_mul;
 		size_t true_index = res_true.sel_vector ? i : k * res_true_mul;
@@ -144,9 +146,8 @@ static void _case_loop(Vector &check, Vector &res_true, Vector &res_false,
 		                      : res_false.nullmask[false_index];
 		result.nullmask[i] = is_null;
 		if (!is_null) {
-			res[i] =
-			    OP::Operation(result, branch, true_data[true_index],
-			                  false_data[false_index]);
+			res[i] = OP::Operation(result, branch, true_data[true_index],
+			                       false_data[false_index]);
 		}
 	});
 }
