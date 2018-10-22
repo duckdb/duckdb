@@ -133,4 +133,10 @@ TEST_CASE("Test insert into from wrong type", "[simpleinserts]") {
 
 	result = con.Query("SELECT * FROM strings");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value("3"), Value("4"), Value()}));
+
+	REQUIRE_NO_FAIL(con.Query("UPDATE strings SET a=13 WHERE a=3"));
+
+	result = con.Query("SELECT * FROM strings ORDER BY cast(a AS INTEGER)");
+	result->Print();
+	REQUIRE(CHECK_COLUMN(result, 0, {Value("4"), Value("13"), Value()}));
 }

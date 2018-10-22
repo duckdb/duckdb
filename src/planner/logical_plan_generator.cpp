@@ -65,6 +65,12 @@ void LogicalPlanGenerator::Visit(UpdateStatement &statement) {
 		if (statement.expressions[i]->type == ExpressionType::VALUE_DEFAULT) {
 			// resolve the type of the DEFAULT expression
 			statement.expressions[i]->return_type = column.type;
+		} else {
+			// check if we have to create a cast
+			if (statement.expressions[i]->return_type != column.type) {
+				// differing types, create a cast
+				statement.expressions[i] = make_unique<CastExpression>(column.type, move(statement.expressions[i]));
+			}
 		}
 	}
 	// create the update node
