@@ -44,15 +44,14 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk,
 			collection.Append(state->child_chunk);
 		}
 
+		// create the chunk to insert from
+		DataChunk insert_chunk;
+		auto types = table->GetTypes();
+
+		insert_chunk.Initialize(types);
 		for (auto &chunkptr : collection.chunks) {
 			auto &chunk = *chunkptr;
 			if (column_index_map.size() > 0) {
-				// create the chunk to insert from
-				DataChunk insert_chunk;
-				auto types = table->GetTypes();
-
-				insert_chunk.Initialize(types);
-
 				// columns specified by the user, use column_index_map
 				for (size_t i = 0; i < table->columns.size(); i++) {
 					if (column_index_map[i] < 0) {
@@ -64,17 +63,34 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk,
 						// get value from child chunk
 						assert((size_t)column_index_map[i] <
 						       chunk.column_count);
-						insert_chunk.data[i].Reference(
-						    chunk.data[column_index_map[i]]);
+						if (insert_chunk.data[i].type ==
+						    chunk.data[column_index_map[i]].type) {
+							// matching type, reference
+							insert_chunk.data[i].Reference(
+							    chunk.data[column_index_map[i]]);
+						} else {
+							// non-matching type, cast
+							VectorOperations::Cast(
+							    chunk.data[column_index_map[i]],
+							    insert_chunk.data[i]);
+						}
 					}
 				}
-				insert_chunk.count = chunk.count;
-
-				table->storage->Append(context, insert_chunk);
 			} else {
 				// no columns specified, just append directly
-				table->storage->Append(context, chunk);
+				for (size_t i = 0; i < insert_chunk.column_count; i++) {
+					if (insert_chunk.data[i].type == chunk.data[i].type) {
+						// matching type, reference
+						insert_chunk.data[i].Reference(chunk.data[i]);
+					} else {
+						// non-matching type, cast
+						VectorOperations::Cast(chunk.data[i],
+						                       insert_chunk.data[i]);
+					}
+				}
 			}
+			insert_chunk.count = chunk.count;
+			table->storage->Append(context, insert_chunk);
 			insert_count += chunk.count;
 		}
 	} else {
