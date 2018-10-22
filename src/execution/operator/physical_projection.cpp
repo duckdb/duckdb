@@ -35,13 +35,7 @@ void PhysicalProjection::_GetChunk(ClientContext &context, DataChunk &chunk,
 	}
 
 	ExpressionExecutor executor(state, context);
-
-	for (size_t i = 0; i < select_list.size(); i++) {
-		auto &expr = select_list[i];
-		executor.Execute(expr.get(), chunk.data[i]);
-	}
-	chunk.sel_vector = state->child_chunk.sel_vector;
-	chunk.count = chunk.data[0].count;
+	executor.Execute(select_list, chunk);
 
 	chunk.Verify();
 }

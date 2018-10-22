@@ -49,23 +49,11 @@ void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk,
 			// aggregation with groups
 			DataChunk &group_chunk = state->group_chunk;
 			DataChunk &payload_chunk = state->payload_chunk;
-			for (size_t i = 0; i < groups.size(); i++) {
-				auto &expr = groups[i];
-				executor.Execute(expr.get(), group_chunk.data[i]);
-			}
-			if (payload_chunk.column_count > 0) {
-				size_t i = 0;
-				for (auto &expr : aggregates) {
-					if (expr->children.size() > 0) {
-						auto &child = expr->children[0];
-						executor.Execute(child.get(), payload_chunk.data[i++]);
-					}
-				}
-				payload_chunk.count = payload_chunk.data[0].count;
-			}
-			group_chunk.count = group_chunk.data[0].count;
-			group_chunk.sel_vector = payload_chunk.sel_vector =
-			    state->child_chunk.sel_vector;
+			executor.Execute(groups, group_chunk);
+			executor.Execute(
+			    payload_chunk,
+			    [&](size_t i) { return state->payload_expressions[i]; },
+			    state->payload_expressions.size());
 
 			group_chunk.Verify();
 			payload_chunk.Verify();
@@ -77,17 +65,18 @@ void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk,
 		} else {
 			// aggregation without groups
 			// merge into the fixed list of aggregates
-
 			if (state->aggregates.size() == 0) {
 				// first run: just store the values
 				state->aggregates.resize(aggregates.size());
 				for (size_t i = 0; i < aggregates.size(); i++) {
-					state->aggregates[i] = executor.Execute(*aggregates[i]);
+					state->aggregates[i] =
+					    executor.ExecuteAggregate(*aggregates[i]);
 				}
 			} else {
 				// subsequent runs: merge the aggregates
 				for (size_t i = 0; i < aggregates.size(); i++) {
-					executor.Merge(*aggregates[i], state->aggregates[i]);
+					executor.MergeAggregate(*aggregates[i],
+					                        state->aggregates[i]);
 				}
 			}
 		}
@@ -108,11 +97,7 @@ void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk,
 	// we finished the child chunk
 	// actually compute the final projection list now
 	ExpressionExecutor executor(state, context, false);
-	for (size_t i = 0; i < select_list.size(); i++) {
-		auto &expr = select_list[i];
-		executor.Execute(expr.get(), chunk.data[i]);
-	}
-	chunk.count = chunk.data[0].count;
+	executor.Execute(select_list, chunk);
 }
 
 unique_ptr<PhysicalOperatorState>
@@ -130,6 +115,7 @@ PhysicalHashAggregate::GetOperatorState(ExpressionExecutor *parent) {
 			if (expr->children.size() > 0) {
 				auto &child = expr->children[0];
 				payload_types.push_back(child->return_type);
+				state->payload_expressions.push_back(child.get());
 			}
 		}
 		state->payload_chunk.Initialize(payload_types);

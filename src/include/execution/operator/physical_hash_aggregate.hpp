@@ -49,5 +49,7 @@ class PhysicalHashAggregateOperatorState
 	std::unique_ptr<SuperLargeHashTable> ht;
 	//! The payload chunk, only used while filling the HT
 	DataChunk payload_chunk;
+
+	std::vector<Expression *> payload_expressions;
 };
 } // namespace duckdb

@@ -41,20 +41,23 @@ void PhysicalUpdate::_GetChunk(ClientContext &context, DataChunk &chunk,
 		auto &row_ids =
 		    state->child_chunk.data[state->child_chunk.column_count - 1];
 		ExpressionExecutor executor(state->child_chunk, context);
-		for (size_t i = 0; i < expressions.size(); i++) {
-			auto &expr = expressions[i];
-			if (expr->type == ExpressionType::VALUE_DEFAULT) {
-				// resolve the default type
-				auto &column = table.table.columns[columns[i]];
-				update_chunk.data[i].count = state->child_chunk.count;
-				VectorOperations::Set(update_chunk.data[i],
-				                      column.default_value);
-			} else {
-				executor.Execute(expr.get(), update_chunk.data[i]);
-			}
-		}
-		update_chunk.sel_vector = move(state->child_chunk.sel_vector);
+		executor.Execute(
+		    update_chunk,
+		    [&](size_t i) -> Expression * {
+			    if (expressions[i]->type == ExpressionType::VALUE_DEFAULT) {
+				    // we resolve default expressions separately
+				    auto &column = table.table.columns[columns[i]];
+				    update_chunk.data[i].count = state->child_chunk.count;
+				    VectorOperations::Set(update_chunk.data[i],
+				                          column.default_value);
+				    return nullptr;
+			    }
+			    return expressions[i].get();
+		    },
+		    expressions.size());
+		update_chunk.sel_vector = state->child_chunk.sel_vector;
 		update_chunk.count = update_chunk.data[0].count;
+
 		table.Update(context, row_ids, columns, update_chunk);
 		updated_count += state->child_chunk.count;
 	}

@@ -33,9 +33,16 @@ TEST_CASE("Test NULL IF statement", "[case]") {
 	con.Query("INSERT INTO test2 VALUES ('blabla', 'b'), ('blabla2', 'c'), "
 	          "('blabla3', 'd')");
 
-	REQUIRE_NO_FAIL(result =
-	                    con.Query("SELECT NULLIF(NULLIF ((SELECT a FROM test "
-	                              "LIMIT 1 offset 1), a), b) FROM test2"));
+	result = con.Query("SELECT NULLIF(NULLIF ((SELECT a FROM test "
+	                   "LIMIT 1 offset 1), a), b) FROM test2");
 	REQUIRE(CHECK_COLUMN(result, 0,
 	                     {Value("world"), Value("world"), Value("world")}));
+
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE test;"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)"));
+
+	// result = con.Query("SELECT NULLIF(CAST(a AS VARCHAR), 11) FROM test;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {Value(11), Value(13), Value(12)}));
 }

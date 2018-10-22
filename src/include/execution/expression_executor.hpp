@@ -47,16 +47,29 @@ class ExpressionExecutor : public SQLNodeVisitor {
 
 	void Reset();
 
+	void Execute(DataChunk &result,
+	             std::function<Expression *(size_t i)> callback, size_t count);
+	//! Executes a set of expressions and stores them in the result chunk
+	void Execute(std::vector<std::unique_ptr<Expression>> &expressions,
+	             DataChunk &result) {
+		Execute(result, [&](size_t i) { return expressions[i].get(); },
+		        expressions.size());
+	}
+	//! Executes a set of column expresions and merges them using the logical
+	//! AND operator
+	void Merge(std::vector<std::unique_ptr<Expression>> &expressions,
+	           Vector &result);
+
 	//! Execute a single abstract expression and store the result in result
-	void Execute(Expression *expr, Vector &result);
+	void ExecuteExpression(Expression *expr, Vector &result);
 	//! Execute the abstract expression, and "logical AND" the result together
 	//! with result
-	void Merge(Expression *expr, Vector &result);
+	void MergeExpression(Expression *expr, Vector &result);
 	//! Execute the given aggregate expression, and merge the result together
 	//! with v
-	void Merge(AggregateExpression &expr, Value &v);
+	void MergeAggregate(AggregateExpression &expr, Value &v);
 	//! Execute the given aggregate expression for the current chunk
-	Value Execute(AggregateExpression &expr);
+	Value ExecuteAggregate(AggregateExpression &expr);
 
 	void Visit(AggregateExpression &expr);
 	void Visit(CaseExpression &expr);
@@ -65,6 +78,7 @@ class ExpressionExecutor : public SQLNodeVisitor {
 	void Visit(ComparisonExpression &expr);
 	void Visit(ConjunctionExpression &expr);
 	void Visit(ConstantExpression &expr);
+	void Visit(DefaultExpression &expr);
 	void Visit(FunctionExpression &expr);
 	void Visit(GroupRefExpression &expr);
 	void Visit(OperatorExpression &expr);

@@ -43,12 +43,7 @@ void PhysicalTableFunction::_GetChunk(ClientContext &context, DataChunk &chunk,
 	input.Initialize(function->arguments);
 
 	ExpressionExecutor executor(nullptr, context);
-	assert(function_call->children.size() == input.column_count);
-	for (size_t i = 0; i < function_call->children.size(); i++) {
-		auto &expression = function_call->children[i];
-		executor.Execute(expression.get(), input.data[i]);
-		input.count = input.data[i].count;
-	}
+	executor.Execute(function_call->children, input);
 
 	// run main code
 	function->function(context, input, chunk, &state->function_data);

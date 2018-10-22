@@ -98,7 +98,8 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk,
 						// get value from constants
 						assert(column_index_map[i] < list.size());
 						auto &expr = list[column_index_map[i]];
-						executor.Execute(expr.get(), temp_chunk.data[i]);
+						executor.ExecuteExpression(expr.get(),
+						                           temp_chunk.data[i]);
 						assert(temp_chunk.data[i].count == 1);
 						// append to the insert chunk
 						insert_chunk.data[i].Append(temp_chunk.data[i]);
@@ -114,7 +115,8 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk,
 						temp_chunk.data[i].SetValue(
 						    0, table->columns[i].default_value);
 					} else {
-						executor.Execute(expr.get(), temp_chunk.data[i]);
+						executor.ExecuteExpression(expr.get(),
+						                           temp_chunk.data[i]);
 					}
 					assert(temp_chunk.data[i].count == 1);
 					// append to the insert chunk

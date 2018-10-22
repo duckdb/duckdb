@@ -184,7 +184,11 @@ struct VectorOperations {
 	//===--------------------------------------------------------------------===//
 	// Exec
 	//===--------------------------------------------------------------------===//
-	static void Exec(Vector &vector, std::function<void(size_t i, size_t k)> fun, size_t offset = 0, size_t count = 0) {
+	//! Exec over the set of indexes, calls the callback function with (i) =
+	//! index, dependent on selection vector and (k) = count
+	static void Exec(Vector &vector,
+	                 std::function<void(size_t i, size_t k)> fun,
+	                 size_t offset = 0, size_t count = 0) {
 		size_t i = offset;
 		if (count == 0) {
 			count = vector.count;
@@ -227,10 +231,18 @@ struct VectorOperations {
 		}
 	}
 
+	//! Exec over a specific type. Note that it is up to the caller to verify
+	//! that the vector passed in has the correct type for the iteration! This
+	//! is effectively equivalent to calling ::Exec() and performing data[i] for
+	//! every entry
 	template <typename T>
-	static void ExecType(Vector &vector, std::function<void(T& value, size_t i, size_t k)> fun, size_t offset = 0, size_t limit = 0) {
+	static void ExecType(Vector &vector,
+	                     std::function<void(T &value, size_t i, size_t k)> fun,
+	                     size_t offset = 0, size_t limit = 0) {
 		auto data = (T *)vector.data;
-		VectorOperations::Exec(vector, [&](size_t i, size_t k) { fun(data[i], i, k); }, offset, limit);
+		VectorOperations::Exec(vector,
+		                       [&](size_t i, size_t k) { fun(data[i], i, k); },
+		                       offset, limit);
 	}
 };
 } // namespace duckdb

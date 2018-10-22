@@ -120,11 +120,11 @@ void PhysicalOrder::_GetChunk(ClientContext &context, DataChunk &chunk,
 			sort_chunk.Initialize(sort_types);
 
 			ExpressionExecutor executor(*big_data.chunks[i], context);
-			for (size_t i = 0; i < description.orders.size(); i++) {
-				auto &expr = description.orders[i].expression;
-				executor.Execute(expr.get(), sort_chunk.data[i]);
-			}
-			sort_chunk.count = sort_chunk.data[0].count;
+			executor.Execute(sort_chunk,
+			                 [&](size_t i) {
+				                 return description.orders[i].expression.get();
+			                 },
+			                 description.orders.size());
 			sort_collection.Append(sort_chunk);
 		}
 

@@ -27,19 +27,14 @@ void PhysicalFilter::_GetChunk(ClientContext &context, DataChunk &chunk,
 
 		Vector result(TypeId::BOOLEAN, true, false);
 		ExpressionExecutor executor(state, context);
-		executor.Execute(expressions[0].get(), result);
-		// AND together the remaining filters!
-		for (size_t i = 1; i < expressions.size(); i++) {
-			auto &expr = expressions[i];
-			executor.Merge(expr.get(), result);
-		}
+		executor.Merge(expressions, result);
+
 		// now generate the selection vector
 		chunk.sel_vector = state->child_chunk.sel_vector;
 		for (size_t i = 0; i < chunk.column_count; i++) {
 			// create a reference to the vector of the child chunk
 			chunk.data[i].Reference(state->child_chunk.data[i]);
 		}
-
 		chunk.SetSelectionVector(result);
 
 	} while (chunk.count == 0);

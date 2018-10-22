@@ -83,12 +83,9 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 			// resolve the left join condition for the current chunk
 			state->left_join_condition.Reset();
 			ExpressionExecutor executor(state->child_chunk, context);
-			for (size_t i = 0; i < conditions.size(); i++) {
-				executor.Execute(conditions[i].left.get(),
-				                 state->left_join_condition.data[i]);
-			}
-			state->left_join_condition.count =
-			    state->left_join_condition.data[0].count;
+			executor.Execute(state->left_join_condition,
+			                 [&](size_t i) { return conditions[i].left.get(); },
+			                 conditions.size());
 		}
 
 		auto &left_chunk = state->child_chunk;
@@ -106,7 +103,7 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 		for (size_t i = 0; i < conditions.size(); i++) {
 			Vector &right_match = state->right_join_condition.data[i];
 			// first resolve the join expression of the right side
-			executor.Execute(conditions[i].right.get(), right_match);
+			executor.ExecuteExpression(conditions[i].right.get(), right_match);
 			// now perform the join for the current tuple
 			// we retrieve one value from the left hand side
 			Vector left_match(state->left_join_condition.data[i].GetValue(

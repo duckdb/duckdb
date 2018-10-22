@@ -16,7 +16,36 @@ using namespace std;
 
 void ExpressionExecutor::Reset() { vector.Destroy(); }
 
-void ExpressionExecutor::Execute(Expression *expr, Vector &result) {
+void ExpressionExecutor::Execute(DataChunk &result,
+                                 std::function<Expression *(size_t i)> callback,
+                                 size_t count) {
+	assert(count == result.column_count);
+	if (count == 0) {
+		return;
+	}
+	for (size_t i = 0; i < count; i++) {
+		auto expression = callback(i);
+		if (expression) {
+			ExecuteExpression(expression, result.data[i]);
+		}
+		result.sel_vector = result.data[i].sel_vector;
+		result.count = result.data[i].count;
+	}
+}
+
+void ExpressionExecutor::Merge(
+    std::vector<std::unique_ptr<Expression>> &expressions, Vector &result) {
+	if (expressions.size() == 0) {
+		return;
+	}
+
+	ExecuteExpression(expressions[0].get(), result);
+	for (size_t i = 1; i < expressions.size(); i++) {
+		MergeExpression(expressions[i].get(), result);
+	}
+}
+
+void ExpressionExecutor::ExecuteExpression(Expression *expr, Vector &result) {
 	vector.Destroy();
 	expr->Accept(this);
 
@@ -45,7 +74,7 @@ void ExpressionExecutor::Execute(Expression *expr, Vector &result) {
 	}
 }
 
-void ExpressionExecutor::Merge(Expression *expr, Vector &result) {
+void ExpressionExecutor::MergeExpression(Expression *expr, Vector &result) {
 	vector.Destroy();
 	if (result.type != TypeId::BOOLEAN) {
 		throw NotImplementedException("Expected a boolean!");
@@ -58,7 +87,7 @@ void ExpressionExecutor::Merge(Expression *expr, Vector &result) {
 	VectorOperations::And(vector, result, result);
 }
 
-Value ExpressionExecutor::Execute(AggregateExpression &expr) {
+Value ExpressionExecutor::ExecuteAggregate(AggregateExpression &expr) {
 	vector.Destroy();
 	if (expr.type == ExpressionType::AGGREGATE_COUNT_STAR) {
 		// COUNT(*)
@@ -99,12 +128,13 @@ Value ExpressionExecutor::Execute(AggregateExpression &expr) {
 	}
 }
 
-void ExpressionExecutor::Merge(AggregateExpression &expr, Value &result) {
+void ExpressionExecutor::MergeAggregate(AggregateExpression &expr,
+                                        Value &result) {
 	// if (result.type != expr.return_type) {
 	// 	throw NotImplementedException(
 	// 	    "Aggregate type does not match value type!");
 	// }
-	Value v = Execute(expr);
+	Value v = ExecuteAggregate(expr);
 	switch (expr.type) {
 	case ExpressionType::AGGREGATE_COUNT_STAR:
 	case ExpressionType::AGGREGATE_SUM:
@@ -155,7 +185,7 @@ void ExpressionExecutor::Visit(AggregateExpression &expr) {
 		} else {
 			if (IsScalarAggr(&expr)) { // even if we do not scan rows, we can
 				                       // still have a result e.g. MAX(42)
-				ExpressionExecutor::Execute(expr);
+				ExecuteAggregate(expr);
 			} else {
 				// the subquery scanned no rows, therefore the aggr is empty.
 				// return something reasonable depending on aggr type.
@@ -300,6 +330,11 @@ void ExpressionExecutor::Visit(ConstantExpression &expr) {
 	Vector v(expr.value);
 	v.Move(vector);
 	expr.stats.Verify(vector);
+}
+
+void ExpressionExecutor::Visit(DefaultExpression &expr) {
+	throw NotImplementedException(
+	    "Cannot execute DEFAULT expression in ExpressionExecutor");
 }
 
 void ExpressionExecutor::Visit(FunctionExpression &expr) {
