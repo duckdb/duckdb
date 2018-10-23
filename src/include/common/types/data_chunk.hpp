@@ -105,6 +105,9 @@ class DataChunk : public Printable {
 	//! SerializationException]
 	void Deserialize(Deserializer &source);
 
+	//! Move all the strings inside this DataChunk to the specified heap
+	void MoveStringsToHeap(StringHeap &heap);
+
 	//! Returns a list of types of the vectors of this data chunk
 	std::vector<TypeId> GetTypes();
 

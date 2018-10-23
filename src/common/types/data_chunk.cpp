@@ -251,6 +251,21 @@ void DataChunk::Deserialize(Deserializer &source) {
 	Verify();
 }
 
+void DataChunk::MoveStringsToHeap(StringHeap &heap) {
+	for (size_t c = 0; c < column_count; c++) {
+		if (data[c].type == TypeId::VARCHAR) {
+			// move strings of this chunk to the specified heap
+			auto strings = (const char **)data[c].data;
+			VectorOperations::ExecType<const char *>(
+			    data[c], [&](const char *str, size_t i, size_t k) {
+				    if (!data[c].nullmask[i]) {
+					    strings[i] = heap.AddString(strings[i]);
+				    }
+			    });
+		}
+	}
+}
+
 #ifdef DEBUG
 void DataChunk::Verify() {
 	// verify that all vectors in this chunk have the chunk selection vector

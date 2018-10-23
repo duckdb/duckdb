@@ -124,10 +124,6 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		group_elements[i] = group_data[i];
 	}
 	group_serializer.Serialize(groups, group_elements);
-	// move the string heap of any of the vectors
-	for (size_t i = 0; i < groups.column_count; i++) {
-		string_heap.MergeHeap(groups.data[i].string_heap);
-	}
 
 	// now we actually access the base table
 	auto ptr = (uint8_t **)addresses.data;

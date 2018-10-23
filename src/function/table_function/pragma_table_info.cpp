@@ -20,7 +20,7 @@ struct PragmaTableFunctionData : public TableFunctionData {
 	size_t offset;
 };
 
-TableFunctionData* pragma_table_info_init(ClientContext &context) {
+TableFunctionData *pragma_table_info_init(ClientContext &context) {
 	// initialize the function data structure
 	return new PragmaTableFunctionData();
 }

@@ -21,7 +21,7 @@ struct SQLiteMasterData : public TableFunctionData {
 	size_t offset;
 };
 
-TableFunctionData* sqlite_master_init(ClientContext &context) {
+TableFunctionData *sqlite_master_init(ClientContext &context) {
 	// initialize the function data structure
 	return new SQLiteMasterData();
 }

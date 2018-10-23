@@ -126,21 +126,6 @@ void DataTable::VerifyConstraints(ClientContext &context, DataChunk &chunk) {
 	}
 }
 
-static void MoveStringsToHeap(DataChunk &chunk, StringHeap &heap) {
-	for (size_t c = 0; c < chunk.column_count; c++) {
-		if (chunk.data[c].type == TypeId::VARCHAR) {
-			// move strings of this chunk to the specified heap
-			auto strings = (const char **)chunk.data[c].data;
-			VectorOperations::ExecType<const char *>(
-			    chunk.data[c], [&](const char *str, size_t i, size_t k) {
-				    if (!chunk.data[c].nullmask[i]) {
-					    strings[i] = heap.AddString(strings[i]);
-				    }
-			    });
-		}
-	}
-}
-
 void DataTable::Append(ClientContext &context, DataChunk &chunk) {
 	if (chunk.count == 0) {
 		return;
@@ -164,7 +149,7 @@ void DataTable::Append(ClientContext &context, DataChunk &chunk) {
 	} while (false);
 
 	StringHeap heap;
-	MoveStringsToHeap(chunk, heap);
+	chunk.MoveStringsToHeap(heap);
 
 	// we have an exclusive lock on the last chunk
 	// now we can append the elements
@@ -300,7 +285,7 @@ void DataTable::Update(ClientContext &context, Vector &row_identifiers,
 
 	// move strings to a temporary heap
 	StringHeap heap;
-	MoveStringsToHeap(updates, heap);
+	updates.MoveStringsToHeap(heap);
 
 	Transaction &transaction = context.ActiveTransaction();
 

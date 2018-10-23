@@ -121,7 +121,7 @@ void TupleSerializer::Deserialize(std::vector<char *> &column_data,
 
 void TupleSerializer::Serialize(vector<char *> &column_data,
                                 Vector &index_vector, uint8_t *targets[]) {
-	uint64_t *indices = (uint64_t *)index_vector.data;
+	auto indices = (uint64_t *)index_vector.data;
 	size_t offset = 0;
 	for (size_t i = 0; i < columns.size(); i++) {
 		for (size_t j = 0; j < index_vector.count; j++) {
@@ -140,7 +140,7 @@ void TupleSerializer::SerializeUpdate(vector<char *> &column_data,
                                       DataChunk &update_chunk,
                                       Vector &index_vector, size_t index_offset,
                                       Tuple targets[], bool *has_null) {
-	uint64_t *indices = (uint64_t *)index_vector.data;
+	auto indices = (uint64_t *)index_vector.data;
 	assert(index_vector.count == update_chunk.count);
 	assert(!inline_varlength);
 

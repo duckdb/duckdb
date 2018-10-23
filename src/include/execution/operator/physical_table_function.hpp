@@ -43,8 +43,7 @@ class PhysicalTableFunction : public PhysicalOperator {
 class PhysicalTableFunctionOperatorState : public PhysicalOperatorState {
   public:
 	PhysicalTableFunctionOperatorState(ExpressionExecutor *parent_executor)
-	    : PhysicalOperatorState(nullptr, parent_executor),
-	      initialized(false) {
+	    : PhysicalOperatorState(nullptr, parent_executor), initialized(false) {
 	}
 
 	std::unique_ptr<TableFunctionData> function_data;
