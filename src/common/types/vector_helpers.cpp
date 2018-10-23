@@ -200,6 +200,13 @@ void VectorOperations::Cast(Vector &source, Vector &result) {
 			throw NotImplementedException("Cannot cast type from date!");
 		}
 		break;
+	case TypeId::TIMESTAMP:
+		if (result.type == TypeId::VARCHAR) {
+			throw NotImplementedException("Cannot cast type from timestamp!");
+		} else {
+			throw NotImplementedException("Cannot cast type from timestamp!");
+		}
+		break;
 	default:
 		throw NotImplementedException("Unimplemented type for cast");
 	}
@@ -245,6 +252,9 @@ void VectorOperations::Copy(Vector &source, void *target, size_t offset,
 	case TypeId::DATE:
 		_copy_loop<date_t>(source, target, offset, element_count);
 		break;
+	case TypeId::TIMESTAMP:
+		_copy_loop<timestamp_t>(source, target, offset, element_count);
+		break;
 	default:
 		throw NotImplementedException("Unimplemented type for copy");
 	}
@@ -281,6 +291,9 @@ void VectorOperations::CopyNull(Vector &source, void *target, size_t offset,
 		break;
 	case TypeId::DATE:
 		_copy_loop_set_null<date_t>(source, target, offset, element_count);
+		break;
+	case TypeId::TIMESTAMP:
+		_copy_loop_set_null<timestamp_t>(source, target, offset, element_count);
 		break;
 	case TypeId::VARCHAR:
 		_copy_loop_set_null<const char *>(source, target, offset,
@@ -321,6 +334,9 @@ void VectorOperations::AppendNull(Vector &source, Vector &target) {
 		break;
 	case TypeId::DATE:
 		_append_loop_check_null<date_t>(source, target);
+		break;
+	case TypeId::TIMESTAMP:
+		_append_loop_check_null<timestamp_t>(source, target);
 		break;
 	case TypeId::VARCHAR:
 		_append_loop_check_null<const char *>(source, target);
@@ -416,6 +432,9 @@ void VectorOperations::Case(Vector &check, Vector &res_true, Vector &res_false,
 	case TypeId::DATE:
 		_case_loop<date_t, RegularCase>(check, res_true, res_false, result);
 		break;
+	case TypeId::TIMESTAMP:
+		_case_loop<timestamp_t, RegularCase>(check, res_true, res_false, result);
+		break;
 	default:
 		throw NotImplementedException("Unimplemented type for case expression");
 	}
@@ -472,6 +491,9 @@ void VectorOperations::ApplySelectionVector(Vector &left, Vector &result,
 		break;
 	case TypeId::DATE:
 		_templated_apply_selection_vector<date_t>(left, result, sel_vector);
+		break;
+	case TypeId::TIMESTAMP:
+		_templated_apply_selection_vector<timestamp_t>(left, result, sel_vector);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for case expression");

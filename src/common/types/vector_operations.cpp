@@ -151,6 +151,9 @@ void _fixed_return_unary_loop_null(Vector &left, Vector &result) {
 	case TypeId::DATE:
 		_templated_unary_loop_null<date_t, RES, OP>(left, result);
 		break;
+	case TypeId::TIMESTAMP:
+		_templated_unary_loop_null<timestamp_t, RES, OP>(left, result);
+		break;
 	default:
 		throw NotImplementedException("Unimplemented type");
 	}
@@ -179,6 +182,9 @@ template <class OP> void _generic_unary_loop(Vector &left, Vector &result) {
 		break;
 	case TypeId::DATE:
 		_templated_unary_loop<date_t, date_t, OP>(left, result);
+		break;
+	case TypeId::TIMESTAMP:
+		_templated_unary_loop<timestamp_t, timestamp_t, OP>(left, result);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type");
@@ -218,6 +224,9 @@ void _generic_binary_loop(Vector &left, Vector &right, Vector &result) {
 	case TypeId::DATE:
 		_templated_binary_loop<date_t, date_t, OP, false>(left, right, result);
 		break;
+	case TypeId::TIMESTAMP:
+		_templated_binary_loop<timestamp_t, timestamp_t, OP, false>(left, right, result);
+		break;
 	default:
 		throw NotImplementedException("Unimplemented type");
 	}
@@ -251,6 +260,9 @@ void _fixed_return_binary_loop(Vector &left, Vector &right, Vector &result) {
 		break;
 	case TypeId::DATE:
 		_templated_binary_loop<date_t, RES, OP, false>(left, right, result);
+		break;
+	case TypeId::TIMESTAMP:
+		_templated_binary_loop<timestamp_t, RES, OP, false>(left, right, result);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type");

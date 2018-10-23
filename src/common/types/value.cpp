@@ -38,6 +38,9 @@ Value Value::MinimumValue(TypeId type) {
 	case TypeId::POINTER:
 		result.value_.pointer = std::numeric_limits<uint64_t>::min();
 		break;
+	case TypeId::TIMESTAMP:
+		result.value_.timestamp = std::numeric_limits<timestamp_t>::min();
+		break;
 	default:
 		throw InvalidTypeException(type, "MinimumValue requires numeric type");
 	}
@@ -69,6 +72,9 @@ Value Value::MaximumValue(TypeId type) {
 		break;
 	case TypeId::POINTER:
 		result.value_.pointer = std::numeric_limits<uint64_t>::max();
+		break;
+	case TypeId::TIMESTAMP:
+		result.value_.timestamp = std::numeric_limits<timestamp_t>::min();
 		break;
 	default:
 		throw InvalidTypeException(type, "MaximumValue requires numeric type");
@@ -347,6 +353,9 @@ void Value::_templated_binary_operation(const Value &left, const Value &right,
 	case TypeId::DATE:
 		result.value_.date = OP::Operation(left.value_.date, right.value_.date);
 		break;
+	case TypeId::TIMESTAMP:
+		result.value_.timestamp = OP::Operation(left.value_.timestamp, right.value_.timestamp);
+		break;
 	case TypeId::DECIMAL:
 		result.value_.decimal =
 		    OP::Operation(left.value_.decimal, right.value_.decimal);
@@ -439,6 +448,8 @@ bool Value::_templated_boolean_operation(const Value &left,
 		return OP::Operation(left.value_.pointer, right.value_.pointer);
 	case TypeId::DATE:
 		return OP::Operation(left.value_.date, right.value_.date);
+	case TypeId::TIMESTAMP:
+		return OP::Operation(left.value_.timestamp, right.value_.timestamp);
 	case TypeId::VARCHAR:
 		return OP::Operation(left.str_value, right.str_value);
 	default:
