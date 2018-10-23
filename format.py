@@ -51,8 +51,8 @@ def format_directory(directory, sort_includes=True):
 		else:
 			# don't format TPC-H constants
 			ignored = False
-			for f in ignored_files:
-				if f in full_path:
+			for ignored_file in ignored_files:
+				if ignored_file in full_path:
 					ignored = True
 					break
 			if ignored:
