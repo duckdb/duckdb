@@ -126,6 +126,20 @@ void DataTable::VerifyConstraints(ClientContext &context, DataChunk &chunk) {
 	}
 }
 
+static void MoveStringsToHeap(DataChunk &chunk, StringHeap &heap) {
+	for(size_t c = 0; c < chunk.column_count; c++) {
+		if (chunk.data[c].type == TypeId::VARCHAR) {
+			// move strings of this chunk to the specified heap
+			auto strings = (const char **) chunk.data[c].data;
+			VectorOperations::ExecType<const char*>(chunk.data[c], [&](const char* str, size_t i, size_t k) {
+				if (!chunk.data[c].nullmask[i]) {
+					strings[i] = heap.AddString(strings[i]);
+				}
+			});
+		}
+	}
+}
+
 void DataTable::Append(ClientContext &context, DataChunk &chunk) {
 	if (chunk.count == 0) {
 		return;
@@ -148,6 +162,9 @@ void DataTable::Append(ClientContext &context, DataChunk &chunk) {
 		}
 	} while (false);
 
+	StringHeap heap;
+	MoveStringsToHeap(chunk, heap);
+
 	// we have an exclusive lock on the last chunk
 	// now we can append the elements
 
@@ -165,12 +182,6 @@ void DataTable::Append(ClientContext &context, DataChunk &chunk) {
 		lock_guard<mutex> stats_lock(statistics_locks[i]);
 		statistics[i].Update(chunk.data[i]);
 	}
-
-	// move any string heaps from the vectors to the storage
-	for (size_t i = 0; i < table.columns.size(); i++) {
-		last_chunk->string_heap.MergeHeap(chunk.data[i].string_heap);
-	}
-	last_chunk->string_heap.MergeHeap(chunk.heap);
 
 	Transaction &transaction = context.ActiveTransaction();
 
@@ -221,6 +232,8 @@ void DataTable::Append(ClientContext &context, DataChunk &chunk) {
 		new_chunk_pointer->count = remainder;
 		new_chunk_pointer->ReleaseExclusiveLock();
 	}
+	// after a successful append move the strings to the chunk
+	last_chunk->string_heap.MergeHeap(heap);
 	// everything has been appended: release lock
 	last_chunk->ReleaseExclusiveLock();
 }
@@ -283,6 +296,10 @@ void DataTable::Update(ClientContext &context, Vector &row_identifiers,
 	}
 
 	VerifyConstraints(context, updates);
+
+	// move strings to a temporary heap
+	StringHeap heap;
+	MoveStringsToHeap(updates, heap);
 
 	Transaction &transaction = context.ActiveTransaction();
 
@@ -351,13 +368,12 @@ void DataTable::Update(ClientContext &context, Vector &row_identifiers,
 			memcpy(dataptr, update_vector->data + update_index * size, size);
 		});
 
-		chunk->string_heap.MergeHeap(update_vector->string_heap);
-
 		// update the statistics with the new data
 		lock_guard<mutex> stats_lock(statistics_locks[column_id]);
 		statistics[column_id].Update(updates.data[j]);
 	}
-	chunk->string_heap.MergeHeap(updates.heap);
+	// after a successful update move the strings into the chunk
+	chunk->string_heap.MergeHeap(heap);
 	chunk->ReleaseExclusiveLock();
 }
 
