@@ -878,7 +878,7 @@ typedef class TTradeLookupFrame1TradeInfo {
 	char settlement_cash_type[cSE_CASH_TYPE_len + 1];
 	DB_INDICATOR trade_history_dts_ind[TradeLookupMaxTradeHistoryRowsReturned];
 	DB_INDICATOR
-	    trade_history_status_id_ind[TradeLookupMaxTradeHistoryRowsReturned];
+	trade_history_status_id_ind[TradeLookupMaxTradeHistoryRowsReturned];
 	DB_INDICATOR bid_price_ind;
 	DB_INDICATOR cash_transaction_amount_ind;
 	DB_INDICATOR cash_transaction_dts_ind;
@@ -953,7 +953,7 @@ typedef class TTradeLookupFrame2TradeInfo {
 	char settlement_cash_type[cSE_CASH_TYPE_len + 1];
 	DB_INDICATOR trade_history_dts_ind[TradeLookupMaxTradeHistoryRowsReturned];
 	DB_INDICATOR
-	    trade_history_status_id_ind[TradeLookupMaxTradeHistoryRowsReturned];
+	trade_history_status_id_ind[TradeLookupMaxTradeHistoryRowsReturned];
 	DB_INDICATOR bid_price_ind;
 	DB_INDICATOR cash_transaction_amount_ind;
 	DB_INDICATOR cash_transaction_dts_ind;
@@ -1032,7 +1032,7 @@ typedef class TTradeLookupFrame3TradeInfo {
 	char trade_type[cTT_ID_len + 1];
 	DB_INDICATOR trade_history_dts_ind[TradeLookupMaxTradeHistoryRowsReturned];
 	DB_INDICATOR
-	    trade_history_status_id_ind[TradeLookupMaxTradeHistoryRowsReturned];
+	trade_history_status_id_ind[TradeLookupMaxTradeHistoryRowsReturned];
 	DB_INDICATOR acct_id_ind;
 	DB_INDICATOR cash_transaction_amount_ind;
 	DB_INDICATOR cash_transaction_dts_ind;
@@ -1729,7 +1729,7 @@ typedef class TTradeUpdateFrame1TradeInfo {
 	char settlement_cash_type[cSE_CASH_TYPE_len + 1];
 	DB_INDICATOR trade_history_dts_ind[TradeUpdateMaxTradeHistoryRowsReturned];
 	DB_INDICATOR
-	    trade_history_status_id_ind[TradeUpdateMaxTradeHistoryRowsReturned];
+	trade_history_status_id_ind[TradeUpdateMaxTradeHistoryRowsReturned];
 	DB_INDICATOR bid_price_ind;
 	DB_INDICATOR cash_transaction_amount_ind;
 	DB_INDICATOR cash_transaction_dts_ind;
@@ -1804,7 +1804,7 @@ typedef class TTradeUpdateFrame2TradeInfo {
 	char settlement_cash_type[cSE_CASH_TYPE_len + 1];
 	DB_INDICATOR trade_history_dts_ind[TradeUpdateMaxTradeHistoryRowsReturned];
 	DB_INDICATOR
-	    trade_history_status_id_ind[TradeUpdateMaxTradeHistoryRowsReturned];
+	trade_history_status_id_ind[TradeUpdateMaxTradeHistoryRowsReturned];
 	DB_INDICATOR bid_price_ind;
 	DB_INDICATOR cash_transaction_amount_ind;
 	DB_INDICATOR cash_transaction_dts_ind;
@@ -1885,7 +1885,7 @@ typedef class TTradeUpdateFrame3TradeInfo {
 	char type_name[cTT_NAME_len + 1];
 	DB_INDICATOR trade_history_dts_ind[TradeUpdateMaxTradeHistoryRowsReturned];
 	DB_INDICATOR
-	    trade_history_status_id_ind[TradeUpdateMaxTradeHistoryRowsReturned];
+	trade_history_status_id_ind[TradeUpdateMaxTradeHistoryRowsReturned];
 	DB_INDICATOR acct_id_ind;
 	DB_INDICATOR cash_transaction_amount_ind;
 	DB_INDICATOR cash_transaction_dts_ind;

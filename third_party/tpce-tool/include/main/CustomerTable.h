@@ -98,7 +98,7 @@ class CCustomerTable : public TableTemplate<CUSTOMER_ROW> {
 
 	TIdent GenerateNextC_ID(); // generate C_ID and store state information;
 	                           // return false if all ids are generated
-	TIdent GetCurrentC_ID(); // return current customer id
+	TIdent GetCurrentC_ID();   // return current customer id
 
 	void
 	GetC_TAX_ID(TIdent C_ID,

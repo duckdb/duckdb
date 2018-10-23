@@ -57,8 +57,8 @@ template <class OP> void _generic_unary_fold_loop(Vector &left, Value &result) {
 		                                              &result.value_.date);
 		break;
 	case TypeId::TIMESTAMP:
-		_templated_unary_fold_single_type<timestamp_t, OP>(left,
-		                                              &result.value_.timestamp);
+		_templated_unary_fold_single_type<timestamp_t, OP>(
+		    left, &result.value_.timestamp);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type");

@@ -116,7 +116,7 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk,
 						    index, table->columns[i].default_value);
 					} else {
 						// get value from constants
-						assert(column_index_map[i] < (int) list.size());
+						assert(column_index_map[i] < (int)list.size());
 						auto &expr = list[column_index_map[i]];
 						executor.ExecuteExpression(expr.get(),
 						                           temp_chunk.data[i]);

@@ -216,7 +216,7 @@ void CCustomerSelection::GenerateRandomCustomer(TIdent &C_ID,
 ////////*   Return a non-uniform random customer and tier.
 ////////*/
 ////////void CCustomerSelection::GenerateCustomerIdAndTier(TIdent &C_ID,
-///eCustomerTier &C_TIER, bool bAcrossEntireRange)
+/// eCustomerTier &C_TIER, bool bAcrossEntireRange)
 ////////{
 ////////    // Can't use this function if there is no external RNG.
 ////////    //
@@ -234,7 +234,7 @@ void CCustomerSelection::GenerateRandomCustomer(TIdent &C_ID,
 ////////    {
 ////////        // Generate a load unit across the entire range
 ////////        iCHigh = (m_pRND->RndInt64Range(1,
-///m_iAdjustedTotalCustomerCount) - 1) // minus 1 for the upper boundary case
+/// m_iAdjustedTotalCustomerCount) - 1) // minus 1 for the upper boundary case
 ////////                                    / 1000;
 ////////        if( iCHigh >= ( m_iStartFromCustomer / 1000 ))
 ////////        {
@@ -246,7 +246,7 @@ void CCustomerSelection::GenerateRandomCustomer(TIdent &C_ID,
 ////////        // Generate a load unit inside the parition.
 ////////        iCHigh = (m_pRND->RndInt64Range(m_iStartFromCustomer,
 ////////                                    m_iStartFromCustomer +
-///m_iCustomerCount - 1) - 1) // minus 1 for the upper boundary case
+/// m_iCustomerCount - 1) - 1) // minus 1 for the upper boundary case
 ////////                                    / 1000;
 ////////    }
 ////////

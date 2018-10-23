@@ -354,7 +354,8 @@ void Value::_templated_binary_operation(const Value &left, const Value &right,
 		result.value_.date = OP::Operation(left.value_.date, right.value_.date);
 		break;
 	case TypeId::TIMESTAMP:
-		result.value_.timestamp = OP::Operation(left.value_.timestamp, right.value_.timestamp);
+		result.value_.timestamp =
+		    OP::Operation(left.value_.timestamp, right.value_.timestamp);
 		break;
 	case TypeId::DECIMAL:
 		result.value_.decimal =

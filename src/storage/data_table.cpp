@@ -127,15 +127,16 @@ void DataTable::VerifyConstraints(ClientContext &context, DataChunk &chunk) {
 }
 
 static void MoveStringsToHeap(DataChunk &chunk, StringHeap &heap) {
-	for(size_t c = 0; c < chunk.column_count; c++) {
+	for (size_t c = 0; c < chunk.column_count; c++) {
 		if (chunk.data[c].type == TypeId::VARCHAR) {
 			// move strings of this chunk to the specified heap
-			auto strings = (const char **) chunk.data[c].data;
-			VectorOperations::ExecType<const char*>(chunk.data[c], [&](const char* str, size_t i, size_t k) {
-				if (!chunk.data[c].nullmask[i]) {
-					strings[i] = heap.AddString(strings[i]);
-				}
-			});
+			auto strings = (const char **)chunk.data[c].data;
+			VectorOperations::ExecType<const char *>(
+			    chunk.data[c], [&](const char *str, size_t i, size_t k) {
+				    if (!chunk.data[c].nullmask[i]) {
+					    strings[i] = heap.AddString(strings[i]);
+				    }
+			    });
 		}
 	}
 }

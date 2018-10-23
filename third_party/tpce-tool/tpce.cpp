@@ -56,8 +56,8 @@ void dbgen(duckdb::DuckDB &db, uint32_t sf, std::string schema,
 	// Create the main class instance
 	pGenerateAndLoad = unique_ptr<CGenerateAndLoad>(new CGenerateAndLoad(
 	    dfm, iCustomerCount, iStartFromCustomer, iTotalCustomerCount,
-	    iLoadUnitSize, sf, iDaysOfInitialTrades, pLoaderFactory.get(),
-	    &logger, &Output, true));
+	    iLoadUnitSize, sf, iDaysOfInitialTrades, pLoaderFactory.get(), &logger,
+	    &Output, true));
 
 	//  The generate and load phase starts here.
 	// Generate static tables

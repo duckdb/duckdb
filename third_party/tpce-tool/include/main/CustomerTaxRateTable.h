@@ -58,7 +58,7 @@ const int iRNGSkipOneRowCustomerTaxrate = 5; // real max count in v3.5: 2
 
 typedef struct CUSTOMER_TAXRATE_ROWS {
 	CUSTOMER_TAXRATE_ROW
-	    m_row[iTaxRatesPerCust]; // multiple tax rates rows per customer
+	m_row[iTaxRatesPerCust]; // multiple tax rates rows per customer
 } * PCUSTOMER_TAXRATE_ROWS;
 
 class CCustomerTaxRateTable : public TableTemplate<CUSTOMER_TAXRATE_ROWS> {

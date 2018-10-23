@@ -46,15 +46,13 @@ using namespace TPCE;
 
 TextFileSplitter::TextFileSplitter(const std::string &content,
                                    char recordDelimiter, char fieldDelimiter)
-    : file(content),
-      splitter(file, recordDelimiter, fieldDelimiter) {
+    : file(content), splitter(file, recordDelimiter, fieldDelimiter) {
 	if (file.fail()) {
 		throw std::runtime_error("Unable to open file");
 	}
 }
 
 TextFileSplitter::~TextFileSplitter() {
-
 }
 
 //

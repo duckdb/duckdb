@@ -1,8 +1,8 @@
 
 #include "catch.hpp"
 
-#include "tpce.hpp"
 #include "test_helpers.hpp"
+#include "tpce.hpp"
 
 #include <chrono>
 #include <iostream>
@@ -11,7 +11,7 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test TPC-E", "[tpce][.]") {
-	DuckDB db(nullptr);
+	DuckDB db("/Users/myth/tpce-test-db");
 	DuckDBConnection con(db);
 	unique_ptr<DuckDBResult> result;
 
@@ -23,15 +23,16 @@ TEST_CASE("Test TPC-E", "[tpce][.]") {
 	result = con.Query("SELECT * FROM sqlite_master()");
 	result->Print();
 
-	for(size_t i = 0; i < result->size(); i++) {
+	for (size_t i = 0; i < result->size(); i++) {
 		auto table_name = result->collection.GetValue(1, i);
 
 		fprintf(stderr, "%s\n\n", table_name.str_value.c_str());
-		auto result2 = con.Query("SELECT COUNT(*) FROM " + table_name.str_value);
+		auto result2 =
+		    con.Query("SELECT COUNT(*) FROM " + table_name.str_value);
 		result2->Print();
 
-		REQUIRE(1==1);
-		// result2 = con.Query("SELECT * FROM " + table_name.str_value + " LIMIT 3");
-		// result2->Print();
+		REQUIRE(1 == 1);
+		// result2 = con.Query("SELECT * FROM " + table_name.str_value + " LIMIT
+		// 3"); result2->Print();
 	}
 }

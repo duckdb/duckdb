@@ -102,9 +102,9 @@ class CCustomerAccountsAndPermissionsTable
 	const NonTaxableAccountNameDataFile_t &m_NonTaxableAccountName;
 	TIdent m_iStartFromCustomer;
 	TIdent m_iCustomerCount;
-	TIdent m_iStartingCA_ID;  // first CA_ID for the current customer
-	UINT m_iRowsToGenForCust; // total # of rows to generate for a given
-	                          // portfolio
+	TIdent m_iStartingCA_ID;      // first CA_ID for the current customer
+	UINT m_iRowsToGenForCust;     // total # of rows to generate for a given
+	                              // portfolio
 	UINT m_iRowsGeneratedForCust; // rows already generated for a particular
 	                              // portfolio
 	CCustomerTable m_cust;
@@ -507,8 +507,8 @@ class CCustomerAccountsAndPermissionsTable
 		    m_iRowsToGenForCust) { // select next customer id as all the rows
 			                       // for this customer have been generated
 			m_cust.GenerateNextC_ID();
-			m_addr.GenerateNextAD_ID(); // next address id (to get the one for
-			                            // this customer)
+			m_addr.GenerateNextAD_ID();  // next address id (to get the one for
+			                             // this customer)
 			m_iRowsGeneratedForCust = 0; // no row generated yet
 			// total # of accounts for this customer
 			m_iRowsToGenForCust =

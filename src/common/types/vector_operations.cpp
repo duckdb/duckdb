@@ -225,7 +225,8 @@ void _generic_binary_loop(Vector &left, Vector &right, Vector &result) {
 		_templated_binary_loop<date_t, date_t, OP, false>(left, right, result);
 		break;
 	case TypeId::TIMESTAMP:
-		_templated_binary_loop<timestamp_t, timestamp_t, OP, false>(left, right, result);
+		_templated_binary_loop<timestamp_t, timestamp_t, OP, false>(left, right,
+		                                                            result);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type");
@@ -262,7 +263,8 @@ void _fixed_return_binary_loop(Vector &left, Vector &right, Vector &result) {
 		_templated_binary_loop<date_t, RES, OP, false>(left, right, result);
 		break;
 	case TypeId::TIMESTAMP:
-		_templated_binary_loop<timestamp_t, RES, OP, false>(left, right, result);
+		_templated_binary_loop<timestamp_t, RES, OP, false>(left, right,
+		                                                    result);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type");

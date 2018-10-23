@@ -365,7 +365,7 @@ CDateTime::CDateTime(TPCE::TIMESTAMP_STRUCT *ts) {
 
 // set to current local time
 void CDateTime::Set(void) {
-	//assert(0); // why is this necessary?
+	// assert(0); // why is this necessary?
 	// //UNIX-specific code to get the current time with 1ms resolution
 	//     struct timeval tv;
 	//     struct tm ltr;

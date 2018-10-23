@@ -63,8 +63,8 @@ class CAddressTable : public TableTemplate<ADDRESS_ROW> {
 	                         // customer
 	TIdent
 	    m_iCompanyCount; // total # of companies for which to generate addresses
-	UINT m_iExchangeCount; // total # of exchanges for which to generate
-	                       // addresses
+	UINT m_iExchangeCount;       // total # of exchanges for which to generate
+	                             // addresses
 	TIdent m_iTotalAddressCount; // total # of address rows to generate
 	bool m_bCacheEnabled;
 	int m_iCacheSize;

@@ -433,7 +433,8 @@ void VectorOperations::Case(Vector &check, Vector &res_true, Vector &res_false,
 		_case_loop<date_t, RegularCase>(check, res_true, res_false, result);
 		break;
 	case TypeId::TIMESTAMP:
-		_case_loop<timestamp_t, RegularCase>(check, res_true, res_false, result);
+		_case_loop<timestamp_t, RegularCase>(check, res_true, res_false,
+		                                     result);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for case expression");
@@ -493,7 +494,8 @@ void VectorOperations::ApplySelectionVector(Vector &left, Vector &result,
 		_templated_apply_selection_vector<date_t>(left, result, sel_vector);
 		break;
 	case TypeId::TIMESTAMP:
-		_templated_apply_selection_vector<timestamp_t>(left, result, sel_vector);
+		_templated_apply_selection_vector<timestamp_t>(left, result,
+		                                               sel_vector);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for case expression");

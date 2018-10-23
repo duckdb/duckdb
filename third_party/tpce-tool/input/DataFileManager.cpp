@@ -133,8 +133,7 @@ void DataFileManager::CleanUp() {
 	}
 }
 
-DataFileManager::DataFileManager(
-                                 TIdent configuredCustomerCount,
+DataFileManager::DataFileManager(TIdent configuredCustomerCount,
                                  TIdent activeCustomerCount)
     : configuredCustomers(configuredCustomerCount),
       activeCustomers(activeCustomerCount), areaCodeDataFile(0),
@@ -148,11 +147,11 @@ DataFileManager::DataFileManager(
       taxRateCountryDataFile(0), taxRateDivisionDataFile(0),
       tradeTypeDataFile(0), zipCodeDataFile(0), companyCompetitorFile(0),
       companyFile(0), securityFile(0), taxRateFile(0) {
-      	
+
 	// WARNING: This code is "brittle" since it is highly dependant on
 	// the enum definition.
-	for (int fileType = AREA_CODE_DATA_FILE;
-	     fileType <= ZIPCODE_DATA_FILE; ++fileType) {
+	for (int fileType = AREA_CODE_DATA_FILE; fileType <= ZIPCODE_DATA_FILE;
+	     ++fileType) {
 		loadFile((DataFileType)fileType);
 	}
 }
@@ -325,7 +324,8 @@ void DataFileManager::loadFile(DataFileType fileType) const {
 	case NON_TAXABLE_ACCOUNT_NAME_DATA_FILE:
 		loadFile<std::string &, TextFileSplitter,
 		         NonTaxableAccountNameDataFile_t>(
-		    NonTaxableAccountNameConstantString, &nonTaxableAccountNameDataFile);
+		    NonTaxableAccountNameConstantString,
+		    &nonTaxableAccountNameDataFile);
 		break;
 	case SECTOR_DATA_FILE:
 		loadFile<std::string &, TextFileSplitter, SectorDataFile_t>(

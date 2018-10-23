@@ -85,10 +85,10 @@ template <typename T> class CDBLoader : public CBaseLoader<T> {
 	~CDBLoader(void);
 
 	virtual void
-	BindColumns() = 0;   // column binding function subclasses must implement
-	virtual void Init(); // resets to clean state; needed after FinishLoad to
-	                     // continue loading
-	virtual void Commit();     // commit rows sent so far
+	BindColumns() = 0;     // column binding function subclasses must implement
+	virtual void Init();   // resets to clean state; needed after FinishLoad to
+	                       // continue loading
+	virtual void Commit(); // commit rows sent so far
 	virtual void FinishLoad(); // finish load
 	void Connect();            // connect to SQL Server
 	void Disconnect(); // disconnect - should not throw any exceptions (to put
