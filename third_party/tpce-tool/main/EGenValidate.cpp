@@ -289,7 +289,7 @@ int main(int argc, const char *argv[]) {
 			}
 			TPCE::Thread<TPCE::BucketSimulator> *thr =
 			    new TPCE::Thread<TPCE::BucketSimulator>(
-			        std::auto_ptr<TPCE::BucketSimulator>(
+			        std::unique_ptr<TPCE::BucketSimulator>(
 			            new TPCE::BucketSimulator(
 			                options.sim_first + sim_idx, sims_per_thread,
 			                options.cust_count, options.calc_simorders(),

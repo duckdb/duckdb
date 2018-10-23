@@ -102,7 +102,6 @@ CMutex::~CMutex() {
 		std::ostringstream strm;
 		strm << "pthread_mutex_destroy error: " << strerror(rc) << "(" << rc
 		     << ")";
-		throw std::runtime_error(strm.str());
 	}
 }
 
