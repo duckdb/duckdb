@@ -12,7 +12,7 @@ using namespace std;
 namespace duckdb {
 namespace function {
 
-struct PragmaTableFunctionData {
+struct PragmaTableFunctionData : public TableFunctionData {
 	PragmaTableFunctionData() : entry(nullptr), offset(0) {
 	}
 
@@ -20,15 +20,14 @@ struct PragmaTableFunctionData {
 	size_t offset;
 };
 
-void pragma_table_info_init(ClientContext &context, void **dataptr) {
+TableFunctionData* pragma_table_info_init(ClientContext &context) {
 	// initialize the function data structure
-	// use the built-in allocator of the ClientContext
-	*dataptr = (void *)context.allocator.make<PragmaTableFunctionData>();
+	return new PragmaTableFunctionData();
 }
 
 void pragma_table_info(ClientContext &context, DataChunk &input,
-                       DataChunk &output, void **dataptr) {
-	auto &data = *((PragmaTableFunctionData *)(*dataptr));
+                       DataChunk &output, TableFunctionData *dataptr) {
+	auto &data = *((PragmaTableFunctionData *)dataptr);
 	if (!data.entry) {
 		// first call: load the entry from the catalog
 		if (input.count != 1) {

@@ -16,9 +16,9 @@
 namespace duckdb {
 namespace function {
 
-void sqlite_master_init(ClientContext &, void **dataptr);
+TableFunctionData* sqlite_master_init(ClientContext &);
 void sqlite_master(ClientContext &, DataChunk &input, DataChunk &output,
-                   void **dataptr);
+                   TableFunctionData *dataptr);
 
 class SQLiteMaster {
   public:

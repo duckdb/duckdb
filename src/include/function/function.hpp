@@ -19,13 +19,17 @@ class Catalog;
 class ClientContext;
 class Transaction;
 
+struct TableFunctionData {
+	virtual ~TableFunctionData(){}
+};
+
 //! Type used for initialization function
-typedef void (*table_function_init_t)(ClientContext &, void **dataptr);
+typedef TableFunctionData* (*table_function_init_t)(ClientContext &);
 //! Type used for table-returning function
 typedef void (*table_function_t)(ClientContext &, DataChunk &input,
-                                 DataChunk &output, void **dataptr);
+                                 DataChunk &output, TableFunctionData *dataptr);
 //! Type used for final (cleanup) function
-typedef void (*table_function_final_t)(ClientContext &, void **dataptr);
+typedef void (*table_function_final_t)(ClientContext &, TableFunctionData *dataptr);
 
 class BuiltinFunctions {
   public:

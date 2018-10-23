@@ -12,7 +12,7 @@ using namespace std;
 namespace duckdb {
 namespace function {
 
-struct SQLiteMasterData {
+struct SQLiteMasterData : public TableFunctionData {
 	SQLiteMasterData() : initialized(false), offset(0) {
 	}
 
@@ -21,15 +21,14 @@ struct SQLiteMasterData {
 	size_t offset;
 };
 
-void sqlite_master_init(ClientContext &context, void **dataptr) {
+TableFunctionData* sqlite_master_init(ClientContext &context) {
 	// initialize the function data structure
-	// use the built-in allocator of the ClientContext
-	*dataptr = (void *)context.allocator.make<SQLiteMasterData>();
+	return new SQLiteMasterData();
 }
 
 void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output,
-                   void **dataptr) {
-	auto &data = *((SQLiteMasterData *)(*dataptr));
+                   TableFunctionData *dataptr) {
+	auto &data = *((SQLiteMasterData *)dataptr);
 	if (!data.initialized) {
 		// scan all the schemas
 		auto &transaction = context.ActiveTransaction();

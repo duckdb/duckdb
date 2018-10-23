@@ -34,7 +34,10 @@ void PhysicalTableFunction::_GetChunk(ClientContext &context, DataChunk &chunk,
 	if (!state->initialized) {
 		// run initialization code
 		if (function->init) {
-			function->init(context, &state->function_data);
+			auto function_data = function->init(context);
+			if (function_data) {
+				state->function_data = unique_ptr<TableFunctionData>(function_data);
+			}
 		}
 		state->initialized = true;
 	}
@@ -46,11 +49,11 @@ void PhysicalTableFunction::_GetChunk(ClientContext &context, DataChunk &chunk,
 	executor.Execute(function_call->children, input);
 
 	// run main code
-	function->function(context, input, chunk, &state->function_data);
+	function->function(context, input, chunk, state->function_data.get());
 	if (chunk.count == 0) {
 		// finished, call clean up
 		if (function->final) {
-			function->final(context, &state->function_data);
+			function->final(context, state->function_data.get());
 		}
 	}
 }
