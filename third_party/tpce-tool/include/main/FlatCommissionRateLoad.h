@@ -35,8 +35,8 @@
  */
 
 /*
-*   Flat file loader for COMMISSIOIN_RATE.
-*/
+ *   Flat file loader for COMMISSIOIN_RATE.
+ */
 #ifndef FLAT_COMMISSION_RATE_LOAD_H
 #define FLAT_COMMISSION_RATE_LOAD_H
 
@@ -44,39 +44,33 @@
 
 #include "TableTypes.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CFlatCommissionRateLoad : public CFlatFileLoader <COMMISSION_RATE_ROW>
-{
-private:
-    const std::string CommissionRateRowFmt;
+class CFlatCommissionRateLoad : public CFlatFileLoader<COMMISSION_RATE_ROW> {
+  private:
+	const std::string CommissionRateRowFmt;
 
-public:
-    CFlatCommissionRateLoad( char *szFileName, FlatFileOutputModes FlatFileOutputMode ) 
-        : CFlatFileLoader<COMMISSION_RATE_ROW>(szFileName, FlatFileOutputMode)
-        , CommissionRateRowFmt("%d|%s|%s|%d|%d|%.2f\n")
-    {};
+  public:
+	CFlatCommissionRateLoad(char *szFileName,
+	                        FlatFileOutputModes FlatFileOutputMode)
+	    : CFlatFileLoader<COMMISSION_RATE_ROW>(szFileName, FlatFileOutputMode),
+	      CommissionRateRowFmt("%d|%s|%s|%d|%d|%.2f\n"){};
 
-    /*
-    *   Writes a record to the file.
-    */
-    void WriteNextRecord(const COMMISSION_RATE_ROW& next_record)
-    {
-        int rc = fprintf( hOutFile, CommissionRateRowFmt.c_str(),
-                  next_record.CR_C_TIER,
-                  next_record.CR_TT_ID,
-                  next_record.CR_EX_ID,
-                  next_record.CR_FROM_QTY,
-                  next_record.CR_TO_QTY,
-                  next_record.CR_RATE
-                );
-        if (rc < 0) {
-            throw CSystemErr(CSystemErr::eWriteFile, "CFlatCommissionRateLoad::WriteNextRecord");
-        }
-    }
+	/*
+	 *   Writes a record to the file.
+	 */
+	void WriteNextRecord(const COMMISSION_RATE_ROW &next_record) {
+		int rc = fprintf(hOutFile, CommissionRateRowFmt.c_str(),
+		                 next_record.CR_C_TIER, next_record.CR_TT_ID,
+		                 next_record.CR_EX_ID, next_record.CR_FROM_QTY,
+		                 next_record.CR_TO_QTY, next_record.CR_RATE);
+		if (rc < 0) {
+			throw CSystemErr(CSystemErr::eWriteFile,
+			                 "CFlatCommissionRateLoad::WriteNextRecord");
+		}
+	}
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //FLAT_COMMISSION_RATE_LOAD_H
+#endif // FLAT_COMMISSION_RATE_LOAD_H

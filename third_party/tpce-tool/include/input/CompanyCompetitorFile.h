@@ -36,9 +36,9 @@
  */
 
 /******************************************************************************
-*   Description:        Implementation of the Company Competitor input file
-*                       that scales with the database size.
-******************************************************************************/
+ *   Description:        Implementation of the Company Competitor input file
+ *                       that scales with the database size.
+ ******************************************************************************/
 
 #ifndef COMPANY_COMPETITOR_FILE_H
 #define COMPANY_COMPETITOR_FILE_H
@@ -47,135 +47,141 @@
 #include "utilities/EGenStandardTypes.h"
 #include "DataFileTypes.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CCompanyCompetitorFile
-{
-    CompanyCompetitorDataFile_t const * m_dataFile;
+class CCompanyCompetitorFile {
+	CompanyCompetitorDataFile_t const *m_dataFile;
 
-    // Configured and active number of companies in the database.
-    // Depends on the configured and active number of customers.
-    //
-    TIdent  m_iConfiguredCompanyCompetitorCount;
-    TIdent  m_iActiveCompanyCompetitorCount;
+	// Configured and active number of companies in the database.
+	// Depends on the configured and active number of customers.
+	//
+	TIdent m_iConfiguredCompanyCompetitorCount;
+	TIdent m_iActiveCompanyCompetitorCount;
 
-    // Number of base companies (=rows in Company.txt input file).
-    //
-    UINT    m_iBaseCompanyCount;
+	// Number of base companies (=rows in Company.txt input file).
+	//
+	UINT m_iBaseCompanyCount;
 
-public:
+  public:
+	/*
+	 *  Constructor.
+	 *
+	 *  PARAMETERS:
+	 *       IN  dataFile                    - CompanyCompetitorDataFile
+	 *       IN  iConfiguredCustomerCount    - total configured number of
+	 * customers in the database IN  iActiveCustomerCount        - active number
+	 * of customers in the database (provided for engineering purposes)
+	 *
+	 *  RETURNS:
+	 *       not applicable.
+	 */
+	CCompanyCompetitorFile(const CompanyCompetitorDataFile_t &dataFile,
+	                       TIdent iConfiguredCustomerCount,
+	                       TIdent iActiveCustomerCount, UINT baseCompanyCount);
 
-    /*
-    *  Constructor.
-    *
-    *  PARAMETERS:
-    *       IN  dataFile                    - CompanyCompetitorDataFile
-    *       IN  iConfiguredCustomerCount    - total configured number of customers in the database
-    *       IN  iActiveCustomerCount        - active number of customers in the database (provided for engineering purposes)
-    *
-    *  RETURNS:
-    *       not applicable.
-    */
-    CCompanyCompetitorFile(const CompanyCompetitorDataFile_t& dataFile, TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount, UINT baseCompanyCount);
+	/*
+	 *  Calculate company competitor count for the specified number of
+	 * customers. Sort of a static method. Used in parallel generation of
+	 * company related tables.
+	 *
+	 *  PARAMETERS:
+	 *       IN  iCustomerCount          - number of customers
+	 *
+	 *  RETURNS:
+	 *       number of company competitors.
+	 */
+	TIdent CalculateCompanyCompetitorCount(TIdent iCustomerCount) const;
 
-    /*
-    *  Calculate company competitor count for the specified number of customers.
-    *  Sort of a static method. Used in parallel generation of company related tables.
-    *
-    *  PARAMETERS:
-    *       IN  iCustomerCount          - number of customers
-    *
-    *  RETURNS:
-    *       number of company competitors.
-    */
-    TIdent CalculateCompanyCompetitorCount(TIdent iCustomerCount) const;
+	/*
+	 *  Calculate the first company competitor id (0-based) for the specified
+	 * customer id.
+	 *
+	 *  PARAMETERS:
+	 *       IN  iStartFromCustomer      - customer id
+	 *
+	 *  RETURNS:
+	 *       company competitor id.
+	 */
+	TIdent CalculateStartFromCompanyCompetitor(TIdent iStartFromCustomer) const;
 
-    /*
-    *  Calculate the first company competitor id (0-based) for the specified customer id.
-    *
-    *  PARAMETERS:
-    *       IN  iStartFromCustomer      - customer id
-    *
-    *  RETURNS:
-    *       company competitor id.
-    */
-    TIdent CalculateStartFromCompanyCompetitor(TIdent iStartFromCustomer) const;
+	/*
+	 *  Return company id for the specified row.
+	 *  Index can exceed the size of the Company Competitor input file.
+	 *
+	 *  PARAMETERS:
+	 *       IN  iIndex      - row number in the Company Competitor file
+	 * (0-based)
+	 *
+	 *  RETURNS:
+	 *       company id.
+	 */
+	TIdent GetCompanyId(TIdent iIndex) const;
 
-    /*
-    *  Return company id for the specified row.
-    *  Index can exceed the size of the Company Competitor input file.
-    *
-    *  PARAMETERS:
-    *       IN  iIndex      - row number in the Company Competitor file (0-based)
-    *
-    *  RETURNS:
-    *       company id.
-    */
-    TIdent GetCompanyId(TIdent iIndex) const;
+	/*
+	 *  Return company competitor id for the specified row.
+	 *  Index can exceed the size of the Company Competitor input file.
+	 *
+	 *  PARAMETERS:
+	 *       IN  iIndex      - row number in the Company Competitor file
+	 * (0-based)
+	 *
+	 *  RETURNS:
+	 *       company competitor id.
+	 */
+	TIdent GetCompanyCompetitorId(TIdent iIndex) const;
 
-    /*
-    *  Return company competitor id for the specified row.
-    *  Index can exceed the size of the Company Competitor input file.
-    *
-    *  PARAMETERS:
-    *       IN  iIndex      - row number in the Company Competitor file (0-based)
-    *
-    *  RETURNS:
-    *       company competitor id.
-    */
-    TIdent GetCompanyCompetitorId(TIdent iIndex) const;
+	/*
+	 *  Return industry id for the specified row.
+	 *  Index can exceed the size of the Company Competitor input file.
+	 *
+	 *  PARAMETERS:
+	 *       IN  iIndex      - row number in the Company Competitor file
+	 * (0-based)
+	 *
+	 *  RETURNS:
+	 *       industry id.
+	 */
+	const std::string &GetIndustryId(TIdent iIndex) const;
+	const char *GetIndustryIdCSTR(TIdent iIndex) const;
 
-    /*
-    *  Return industry id for the specified row.
-    *  Index can exceed the size of the Company Competitor input file.
-    *
-    *  PARAMETERS:
-    *       IN  iIndex      - row number in the Company Competitor file (0-based)
-    *
-    *  RETURNS:
-    *       industry id.
-    */
-    const std::string& GetIndustryId(TIdent iIndex) const;
-    const char* GetIndustryIdCSTR(TIdent iIndex) const;
+	/*
+	 *  Return the number of company competitors in the database for
+	 *  the configured number of customers.
+	 *
+	 *  PARAMETERS:
+	 *       none.
+	 *
+	 *  RETURNS:
+	 *       configured company competitor count.
+	 */
+	TIdent GetConfiguredCompanyCompetitorCount() const;
 
-    /*
-    *  Return the number of company competitors in the database for
-    *  the configured number of customers.
-    *
-    *  PARAMETERS:
-    *       none.
-    *
-    *  RETURNS:
-    *       configured company competitor count.
-    */
-    TIdent GetConfiguredCompanyCompetitorCount() const;
+	/*
+	 *  Return the number of company competitors in the database for
+	 *  the active number of customers.
+	 *
+	 *  PARAMETERS:
+	 *       none.
+	 *
+	 *  RETURNS:
+	 *       active company competitor count.
+	 */
+	TIdent GetActiveCompanyCompetitorCount() const;
 
-    /*
-    *  Return the number of company competitors in the database for
-    *  the active number of customers.
-    *
-    *  PARAMETERS:
-    *       none.
-    *
-    *  RETURNS:
-    *       active company competitor count.
-    */
-    TIdent GetActiveCompanyCompetitorCount() const;
-
-    /*
-    *  Overload GetRecord to wrap around indices that
-    *  are larger than the flat file
-    *
-    *  PARAMETERS:
-    *       IN  iIndex      - row number in the Company Competitor file (0-based)
-    *
-    *  RETURNS:
-    *       reference to the row structure in the Company Competitor file.
-    */
-    const CompanyCompetitorDataFileRecord& GetRecord(TIdent index) const;
+	/*
+	 *  Overload GetRecord to wrap around indices that
+	 *  are larger than the flat file
+	 *
+	 *  PARAMETERS:
+	 *       IN  iIndex      - row number in the Company Competitor file
+	 * (0-based)
+	 *
+	 *  RETURNS:
+	 *       reference to the row structure in the Company Competitor file.
+	 */
+	const CompanyCompetitorDataFileRecord &GetRecord(TIdent index) const;
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
 #endif // COMPANY_COMPETITOR_FILE_H

@@ -43,23 +43,19 @@
 
 #include <cstring>
 
-namespace TPCE
-{
+namespace TPCE {
 
-    class BufferFiller
-    {
-    public:
-        static inline void Fill( void* c, int filler, std::size_t size )
-        {
-            std::memset( c, filler, size );
-        }
+class BufferFiller {
+  public:
+	static inline void Fill(void *c, int filler, std::size_t size) {
+		std::memset(c, filler, size);
+	}
 
-        static inline void Clear( void* c, std::size_t size )
-        {
-            Fill( c, '\0', size );
-        }
-    };
+	static inline void Clear(void *c, std::size_t size) {
+		Fill(c, '\0', size);
+	}
+};
 
-} // TPCE namespace
+} // namespace TPCE
 
 #endif // BUFFER_FILLER_H

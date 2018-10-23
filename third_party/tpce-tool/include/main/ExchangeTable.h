@@ -35,8 +35,8 @@
  */
 
 /*
-*   Class representing the Exchange table.
-*/
+ *   Class representing the Exchange table.
+ */
 #ifndef EXCHANGE_TABLE_H
 #define EXCHANGE_TABLE_H
 
@@ -44,29 +44,28 @@
 #include "input/DataFileTypes.h"
 #include "TableRows.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
+class CExchangeTable : public FixedTable<ExchangeDataFile_t, EXCHANGE_ROW> {
+  private:
+	INT32 securityCount[4];
 
-class CExchangeTable : public FixedTable<ExchangeDataFile_t, EXCHANGE_ROW>
-{
-private:
-    INT32 securityCount[4];
+	/*
+	 *   Computes the number of securities in each exchange.
+	 *   Assumption is that exchanges are ordered in NYSE, NASDAQ, AMEX, PCX
+	 * order. (This is the current ordering of exchanges in the
+	 * flat_in/Exchange.txt file.)
+	 */
+	void ComputeNumSecurities(TIdent iCustomerCount);
 
-    /*
-    *   Computes the number of securities in each exchange.
-    *   Assumption is that exchanges are ordered in NYSE, NASDAQ, AMEX, PCX order.
-    *   (This is the current ordering of exchanges in the flat_in/Exchange.txt file.)
-    */
-    void ComputeNumSecurities( TIdent iCustomerCount );
+  public:
+	CExchangeTable(const ExchangeDataFile_t &dataFile,
+	               TIdent configuredCustomers);
+	~CExchangeTable();
 
-public:
-    CExchangeTable(const ExchangeDataFile_t & dataFile, TIdent configuredCustomers);
-    ~CExchangeTable();
-
-    virtual void LoadTableRow();
+	virtual void LoadTableRow();
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //EXCHANGE_TABLE_H
+#endif // EXCHANGE_TABLE_H

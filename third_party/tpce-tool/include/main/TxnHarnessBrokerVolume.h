@@ -39,44 +39,39 @@
 
 #include "TxnHarnessDBInterface.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CBrokerVolume
-{
-    CBrokerVolumeDBInterface* m_db;
+class CBrokerVolume {
+	CBrokerVolumeDBInterface *m_db;
 
-public:
-    CBrokerVolume(CBrokerVolumeDBInterface *pDB)
-        : m_db(pDB)
-    {
-    };
+  public:
+	CBrokerVolume(CBrokerVolumeDBInterface *pDB) : m_db(pDB){};
 
-    void DoTxn( PBrokerVolumeTxnInput pTxnInput, PBrokerVolumeTxnOutput pTxnOutput )
-    {
-        // Initialize
-        TBrokerVolumeFrame1Output   Frame1Output;
+	void DoTxn(PBrokerVolumeTxnInput pTxnInput,
+	           PBrokerVolumeTxnOutput pTxnOutput) {
+		// Initialize
+		TBrokerVolumeFrame1Output Frame1Output;
 
-        TXN_HARNESS_SET_STATUS_SUCCESS;
+		TXN_HARNESS_SET_STATUS_SUCCESS;
 
-        // Execute Frame 1
-        m_db->DoBrokerVolumeFrame1( pTxnInput, &Frame1Output );
+		// Execute Frame 1
+		m_db->DoBrokerVolumeFrame1(pTxnInput, &Frame1Output);
 
-        // Validate Frame 1 Output
-        if (Frame1Output.list_len < 0 || Frame1Output.list_len > max_broker_list_len)
-        {
-            TXN_HARNESS_PROPAGATE_STATUS(CBaseTxnErr::BVF1_ERROR1);
-        }
+		// Validate Frame 1 Output
+		if (Frame1Output.list_len < 0 ||
+		    Frame1Output.list_len > max_broker_list_len) {
+			TXN_HARNESS_PROPAGATE_STATUS(CBaseTxnErr::BVF1_ERROR1);
+		}
 
-        // Copy Frame 1 Output
-        pTxnOutput->list_len = Frame1Output.list_len;
-        for (int i=0; i < Frame1Output.list_len && i < max_broker_list_len; i++)
-        {
-            pTxnOutput->volume[i] = Frame1Output.volume[i];
-        }
-    }
+		// Copy Frame 1 Output
+		pTxnOutput->list_len = Frame1Output.list_len;
+		for (int i = 0; i < Frame1Output.list_len && i < max_broker_list_len;
+		     i++) {
+			pTxnOutput->volume[i] = Frame1Output.volume[i];
+		}
+	}
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //TXN_HARNESS_BROKER_VOLUME_H
+#endif // TXN_HARNESS_BROKER_VOLUME_H

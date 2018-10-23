@@ -35,8 +35,8 @@
  */
 
 /*
-*   Class representing the StatusType table.
-*/
+ *   Class representing the StatusType table.
+ */
 #ifndef STATUS_TYPE_H
 #define STATUS_TYPE_H
 
@@ -44,18 +44,17 @@
 #include "input/DataFileTypes.h"
 #include "TableRows.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CStatusTypeTable : public FixedTable<StatusTypeDataFile_t, STATUS_TYPE_ROW>
-{
-public:
-    CStatusTypeTable(const StatusTypeDataFile_t &dataFile);
-    ~CStatusTypeTable();
+class CStatusTypeTable
+    : public FixedTable<StatusTypeDataFile_t, STATUS_TYPE_ROW> {
+  public:
+	CStatusTypeTable(const StatusTypeDataFile_t &dataFile);
+	~CStatusTypeTable();
 
-    virtual void LoadTableRow();
+	virtual void LoadTableRow();
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //STATUS_TYPE_H
+#endif // STATUS_TYPE_H

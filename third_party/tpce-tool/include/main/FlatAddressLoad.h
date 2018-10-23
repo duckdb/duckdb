@@ -35,47 +35,40 @@
  */
 
 /*
-*   Flat file loader for Address.
-*/
+ *   Flat file loader for Address.
+ */
 
 #ifndef FLAT_ADDRESS_LOAD_H
 #define FLAT_ADDRESS_LOAD_H
 
 #include "FlatFileLoad_common.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CFlatAddressLoad : public CFlatFileLoader <ADDRESS_ROW>
-{
-private:
-    const std::string AddressRowFmt;
+class CFlatAddressLoad : public CFlatFileLoader<ADDRESS_ROW> {
+  private:
+	const std::string AddressRowFmt;
 
-public:
-    CFlatAddressLoad( char *szFileName, FlatFileOutputModes FlatFileOutputMode ) 
-        : CFlatFileLoader<ADDRESS_ROW>(szFileName, FlatFileOutputMode)
-        , AddressRowFmt("%" PRId64 "|%s|%s|%s|%s\n")
-    {};
+  public:
+	CFlatAddressLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
+	    : CFlatFileLoader<ADDRESS_ROW>(szFileName, FlatFileOutputMode),
+	      AddressRowFmt("%" PRId64 "|%s|%s|%s|%s\n"){};
 
-    /*
-    *   Writes a record to the file.
-    */
-    void WriteNextRecord(const ADDRESS_ROW &next_record)
-    {
-        int rc = fprintf( hOutFile, AddressRowFmt.c_str(),
-                  next_record.AD_ID,
-                  next_record.AD_LINE1,
-                  next_record.AD_LINE2,
-                  next_record.AD_ZC_CODE,
-                  next_record.AD_CTRY
-                );
+	/*
+	 *   Writes a record to the file.
+	 */
+	void WriteNextRecord(const ADDRESS_ROW &next_record) {
+		int rc = fprintf(hOutFile, AddressRowFmt.c_str(), next_record.AD_ID,
+		                 next_record.AD_LINE1, next_record.AD_LINE2,
+		                 next_record.AD_ZC_CODE, next_record.AD_CTRY);
 
-        if (rc < 0) {
-            throw CSystemErr(CSystemErr::eWriteFile, "CFlatAddressLoad::WriteNextRecord");
-        }
-    }
+		if (rc < 0) {
+			throw CSystemErr(CSystemErr::eWriteFile,
+			                 "CFlatAddressLoad::WriteNextRecord");
+		}
+	}
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //FLAT_ADDRESS_LOAD_H
+#endif // FLAT_ADDRESS_LOAD_H

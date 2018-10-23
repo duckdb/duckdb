@@ -37,7 +37,7 @@
 #ifndef FLAT_FILE_LOAD_COMMON_H
 #define FLAT_FILE_LOAD_COMMON_H
 
-#define WIN32_LEAN_AND_MEAN    // Exclude rarely-used stuff from Windows headers
+#define WIN32_LEAN_AND_MEAN // Exclude rarely-used stuff from Windows headers
 
 #include <iostream>
 #include <fstream>
@@ -49,4 +49,4 @@
 #include "utilities/DateTime.h"
 #include "utilities/error.h"
 
-#endif  // #ifndef FLAT_FILE_LOAD_COMMON_H
+#endif // #ifndef FLAT_FILE_LOAD_COMMON_H

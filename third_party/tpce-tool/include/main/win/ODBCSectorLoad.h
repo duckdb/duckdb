@@ -35,44 +35,41 @@
  */
 
 /*
-*   Database loader class for SECTOR table.
-*/
+ *   Database loader class for SECTOR table.
+ */
 #ifndef ODBC_SECTOR_LOAD_H
 #define ODBC_SECTOR_LOAD_H
 
 #include "../utilities/TableConsts.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CODBCSectorLoad : public CDBLoader <SECTOR_ROW>
-{
-public:
-    CODBCSectorLoad(char *szServer, char *szDatabase, char *szLoaderParams, char *szTable = "SECTOR")
-        : CDBLoader<SECTOR_ROW>(szServer, szDatabase, szLoaderParams, szTable)
-    {
-    };
+class CODBCSectorLoad : public CDBLoader<SECTOR_ROW> {
+  public:
+	CODBCSectorLoad(char *szServer, char *szDatabase, char *szLoaderParams,
+	                char *szTable = "SECTOR")
+	    : CDBLoader<SECTOR_ROW>(szServer, szDatabase, szLoaderParams,
+	                            szTable){};
 
-    virtual void BindColumns()
-    {
-        //Binding function we have to implement.
-        int i = 0;
-        if (   bcp_bind(m_hdbc, (BYTE *) &m_row.SC_ID, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED
-            || bcp_bind(m_hdbc, (BYTE *) &m_row.SC_NAME, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED
-            )
-            ThrowError(CODBCERR::eBcpBind);
+	virtual void BindColumns() {
+		// Binding function we have to implement.
+		int i = 0;
+		if (bcp_bind(m_hdbc, (BYTE *)&m_row.SC_ID, 0, SQL_VARLEN_DATA,
+		             (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.SC_NAME, 0, SQL_VARLEN_DATA,
+		             (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED)
+			ThrowError(CODBCERR::eBcpBind);
 
-//      if ( bcp_control(m_hdbc, BCPHINTS, "TABLOCK" ) != SUCCEED )
-//          ThrowError(CODBCERR::eBcpControl);
-    };
+		//      if ( bcp_control(m_hdbc, BCPHINTS, "TABLOCK" ) != SUCCEED )
+		//          ThrowError(CODBCERR::eBcpControl);
+	};
 
-    virtual void CopyRow(const SECTOR_ROW &row)
-    {
-        strncpy(m_row.SC_ID, row.SC_ID, sizeof(m_row.SC_ID));
-        strncpy(m_row.SC_NAME, row.SC_NAME, sizeof(m_row.SC_NAME));
-    };
+	virtual void CopyRow(const SECTOR_ROW &row) {
+		strncpy(m_row.SC_ID, row.SC_ID, sizeof(m_row.SC_ID));
+		strncpy(m_row.SC_NAME, row.SC_NAME, sizeof(m_row.SC_NAME));
+	};
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //ODBC_SECTOR_LOAD_H
+#endif // ODBC_SECTOR_LOAD_H

@@ -35,47 +35,40 @@
  */
 
 /*
-*   Flat file loader for BROKER.
-*/
+ *   Flat file loader for BROKER.
+ */
 
 #ifndef FLAT_BROKER_LOAD_H
 #define FLAT_BROKER_LOAD_H
 
 #include "FlatFileLoad_common.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CFlatBrokerLoad : public CFlatFileLoader <BROKER_ROW>
-{
-private:
-    const std::string BrokerRowFmt;
+class CFlatBrokerLoad : public CFlatFileLoader<BROKER_ROW> {
+  private:
+	const std::string BrokerRowFmt;
 
-public:
-    CFlatBrokerLoad( char *szFileName, FlatFileOutputModes FlatFileOutputMode ) 
-        : CFlatFileLoader<BROKER_ROW>(szFileName, FlatFileOutputMode)
-        , BrokerRowFmt("%" PRId64 "|%s|%s|%d|%.2f\n")
-    {};
+  public:
+	CFlatBrokerLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
+	    : CFlatFileLoader<BROKER_ROW>(szFileName, FlatFileOutputMode),
+	      BrokerRowFmt("%" PRId64 "|%s|%s|%d|%.2f\n"){};
 
-    /*
-    *   Writes a record to the file.
-    */
-    void WriteNextRecord(const BROKER_ROW &next_record)
-    {
-        int rc = fprintf( hOutFile, BrokerRowFmt.c_str(),
-                  next_record.B_ID,
-                  next_record.B_ST_ID,
-                  next_record.B_NAME,
-                  next_record.B_NUM_TRADES,
-                  next_record.B_COMM_TOTAL
-                );
+	/*
+	 *   Writes a record to the file.
+	 */
+	void WriteNextRecord(const BROKER_ROW &next_record) {
+		int rc = fprintf(hOutFile, BrokerRowFmt.c_str(), next_record.B_ID,
+		                 next_record.B_ST_ID, next_record.B_NAME,
+		                 next_record.B_NUM_TRADES, next_record.B_COMM_TOTAL);
 
-        if (rc < 0) {
-            throw CSystemErr(CSystemErr::eWriteFile, "CFlatBrokerLoad::WriteNextRecord");
-        }
-    }
+		if (rc < 0) {
+			throw CSystemErr(CSystemErr::eWriteFile,
+			                 "CFlatBrokerLoad::WriteNextRecord");
+		}
+	}
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //FLAT_BROKER_LOAD_H
+#endif // FLAT_BROKER_LOAD_H

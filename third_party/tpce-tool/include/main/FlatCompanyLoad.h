@@ -35,51 +35,42 @@
  */
 
 /*
-*   Flat file loader for COMPANY.
-*/
+ *   Flat file loader for COMPANY.
+ */
 #ifndef FLAT_COMPANY_LOAD_H
 #define FLAT_COMPANY_LOAD_H
 
 #include "FlatFileLoad_common.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CFlatCompanyLoad : public CFlatFileLoader <COMPANY_ROW>
-{
-private:
-    CDateTime   Flat_CO_OPEN_DATE;
-    const std::string CompanyRowFmt;
+class CFlatCompanyLoad : public CFlatFileLoader<COMPANY_ROW> {
+  private:
+	CDateTime Flat_CO_OPEN_DATE;
+	const std::string CompanyRowFmt;
 
-public:
-    CFlatCompanyLoad( char *szFileName, FlatFileOutputModes FlatFileOutputMode ) 
-        : CFlatFileLoader<COMPANY_ROW>(szFileName, FlatFileOutputMode)
-        , CompanyRowFmt("%" PRId64 "|%s|%s|%s|%s|%s|%" PRId64 "|%s|%s\n")
-    {};
+  public:
+	CFlatCompanyLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
+	    : CFlatFileLoader<COMPANY_ROW>(szFileName, FlatFileOutputMode),
+	      CompanyRowFmt("%" PRId64 "|%s|%s|%s|%s|%s|%" PRId64 "|%s|%s\n"){};
 
-    /*
-    *   Writes a record to the file.
-    */
-    void WriteNextRecord(const COMPANY_ROW &next_record)
-    {
-        Flat_CO_OPEN_DATE = next_record.CO_OPEN_DATE;
-        int rc = fprintf( hOutFile, CompanyRowFmt.c_str(),
-                  next_record.CO_ID,
-                  next_record.CO_ST_ID,
-                  next_record.CO_NAME,
-                  next_record.CO_IN_ID,
-                  next_record.CO_SP_RATE,
-                  next_record.CO_CEO,
-                  next_record.CO_AD_ID,
-                  next_record.CO_DESC,
-                  Flat_CO_OPEN_DATE.ToStr(FlatFileDateFormat)
-                );
-        if (rc < 0) {
-            throw CSystemErr(CSystemErr::eWriteFile, "CFlatCompanyLoad::WriteNextRecord");
-        }
-    }
+	/*
+	 *   Writes a record to the file.
+	 */
+	void WriteNextRecord(const COMPANY_ROW &next_record) {
+		Flat_CO_OPEN_DATE = next_record.CO_OPEN_DATE;
+		int rc = fprintf(
+		    hOutFile, CompanyRowFmt.c_str(), next_record.CO_ID,
+		    next_record.CO_ST_ID, next_record.CO_NAME, next_record.CO_IN_ID,
+		    next_record.CO_SP_RATE, next_record.CO_CEO, next_record.CO_AD_ID,
+		    next_record.CO_DESC, Flat_CO_OPEN_DATE.ToStr(FlatFileDateFormat));
+		if (rc < 0) {
+			throw CSystemErr(CSystemErr::eWriteFile,
+			                 "CFlatCompanyLoad::WriteNextRecord");
+		}
+	}
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //FLAT_COMPANY_LOAD_H
+#endif // FLAT_COMPANY_LOAD_H

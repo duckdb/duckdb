@@ -37,7 +37,7 @@
 #ifndef EGEN_GENERATE_AND_LOAD_STDAFX_H
 #define EGEN_GENERATE_AND_LOAD_STDAFX_H
 
-#define WIN32_LEAN_AND_MEAN     // Exclude rarely-used stuff from Windows headers
+#define WIN32_LEAN_AND_MEAN // Exclude rarely-used stuff from Windows headers
 #include <cstdio>
 #include <cassert>
 #include <fstream>
@@ -58,4 +58,4 @@ using namespace std;
 #include "EGenLogger.h"
 #include "EGenGenerateAndLoad.h"
 
-#endif  // #ifndef EGEN_GENERATE_AND_LOAD_STDAFX_H
+#endif // #ifndef EGEN_GENERATE_AND_LOAD_STDAFX_H

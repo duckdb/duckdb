@@ -39,55 +39,47 @@
 
 #include "TxnHarnessDBInterface.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CSecurityDetail
-{
-    CSecurityDetailDBInterface* m_db;
+class CSecurityDetail {
+	CSecurityDetailDBInterface *m_db;
 
-public:
-    CSecurityDetail(CSecurityDetailDBInterface *pDB)
-        : m_db(pDB)
-    {
-    };
+  public:
+	CSecurityDetail(CSecurityDetailDBInterface *pDB) : m_db(pDB){};
 
-    void DoTxn( PSecurityDetailTxnInput pTxnInput, PSecurityDetailTxnOutput pTxnOutput )
-    {
-        // Initialize
-        TSecurityDetailFrame1Output Frame1Output;
-        // We purposely do not memset the whole structure to 0
-        // because of the large LOB members. So instead we just
-        // 0 out the specific members that get returned out.
-        //memset(&Frame1Output, 0, sizeof( Frame1Output ));
-        pTxnOutput->last_vol = 0;
-        pTxnOutput->news_len = 0;
-        TXN_HARNESS_SET_STATUS_SUCCESS;
+	void DoTxn(PSecurityDetailTxnInput pTxnInput,
+	           PSecurityDetailTxnOutput pTxnOutput) {
+		// Initialize
+		TSecurityDetailFrame1Output Frame1Output;
+		// We purposely do not memset the whole structure to 0
+		// because of the large LOB members. So instead we just
+		// 0 out the specific members that get returned out.
+		// memset(&Frame1Output, 0, sizeof( Frame1Output ));
+		pTxnOutput->last_vol = 0;
+		pTxnOutput->news_len = 0;
+		TXN_HARNESS_SET_STATUS_SUCCESS;
 
-        // Execute Frame 1
-        m_db->DoSecurityDetailFrame1(pTxnInput, &Frame1Output);
+		// Execute Frame 1
+		m_db->DoSecurityDetailFrame1(pTxnInput, &Frame1Output);
 
-        // Validate Frame 1 Output
-        if ((Frame1Output.day_len < min_day_len) || 
-            (Frame1Output.day_len > max_day_len))
-        {
-            TXN_HARNESS_PROPAGATE_STATUS(CBaseTxnErr::SDF1_ERROR1);
-        }
-        if (Frame1Output.fin_len != max_fin_len)
-        {
-            TXN_HARNESS_PROPAGATE_STATUS(CBaseTxnErr::SDF1_ERROR2);
-        }
-        if (Frame1Output.news_len != max_news_len)
-        {
-            TXN_HARNESS_PROPAGATE_STATUS(CBaseTxnErr::SDF1_ERROR3);
-        }
+		// Validate Frame 1 Output
+		if ((Frame1Output.day_len < min_day_len) ||
+		    (Frame1Output.day_len > max_day_len)) {
+			TXN_HARNESS_PROPAGATE_STATUS(CBaseTxnErr::SDF1_ERROR1);
+		}
+		if (Frame1Output.fin_len != max_fin_len) {
+			TXN_HARNESS_PROPAGATE_STATUS(CBaseTxnErr::SDF1_ERROR2);
+		}
+		if (Frame1Output.news_len != max_news_len) {
+			TXN_HARNESS_PROPAGATE_STATUS(CBaseTxnErr::SDF1_ERROR3);
+		}
 
-        // Copy Frame 1 Output
-        pTxnOutput->last_vol = Frame1Output.last_vol;
-        pTxnOutput->news_len = Frame1Output.news_len;
-    }
+		// Copy Frame 1 Output
+		pTxnOutput->last_vol = Frame1Output.last_vol;
+		pTxnOutput->news_len = Frame1Output.news_len;
+	}
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //TXN_HARNESS_SECURITY_DETAIL_H
+#endif // TXN_HARNESS_SECURITY_DETAIL_H

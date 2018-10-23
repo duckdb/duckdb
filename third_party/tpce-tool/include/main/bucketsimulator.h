@@ -42,22 +42,21 @@
 
 #include "progressmeter.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
 class CRandom;
 
-class BucketProgress : public ProgressMeter
-{
-    private:
-        double acceptable_stddev_;
-        double max_stddev_;
+class BucketProgress : public ProgressMeter {
+  private:
+	double acceptable_stddev_;
+	double max_stddev_;
 
-    public:
-        BucketProgress(double acceptable_stddev, int total, int verbosity = 0, std::ostream* output=&std::cout);
-        virtual void display_message(std::ostream& out) const;
-        bool report(double stddev);
-        double max_stddev();
+  public:
+	BucketProgress(double acceptable_stddev, int total, int verbosity = 0,
+	               std::ostream *output = &std::cout);
+	virtual void display_message(std::ostream &out) const;
+	bool report(double stddev);
+	double max_stddev();
 };
 
 // Class to simulate running N completed orders and calculate some metrics
@@ -65,42 +64,40 @@ class BucketProgress : public ProgressMeter
 // Instantiate the class and then call simulate() to perform the actual
 // simulation.
 class BucketSimulator {
-    private:
-        CRandom                 m_rnd;
-        INT64*                  m_buckets;
-        TIdent                  m_custcount;
-        int                     m_iterstart;
-        int                     m_itercount;
-        TPCE::RNGSEED           m_baseseed;
-        TTrade                  m_simorders;
-        int                     m_maxbucket;
-        BucketProgress&         m_progress;
+  private:
+	CRandom m_rnd;
+	INT64 *m_buckets;
+	TIdent m_custcount;
+	int m_iterstart;
+	int m_itercount;
+	TPCE::RNGSEED m_baseseed;
+	TTrade m_simorders;
+	int m_maxbucket;
+	BucketProgress &m_progress;
 
-        static const UINT RND_STEP_PER_ORDER = 1; // Number of random number generator calls
+	static const UINT RND_STEP_PER_ORDER =
+	    1; // Number of random number generator calls
 
-    public:
-        // iStartFromCustomer  - Customer number to start with
-        // iCustomerCount      - Number of customers to simulate
-        // CRandom *rnd        - Pointer to random generator to use
-        // UINT uiLoadUnit     - Size of the TPCE "Load Unit"
-        BucketSimulator(
-                int iterstart,
-                int itercount,
-                TIdent iCustomerCount,
-                TTrade m_simorders,
-                TPCE::RNGSEED base_seed,
-                BucketProgress& prog);
-        ~BucketSimulator();
+  public:
+	// iStartFromCustomer  - Customer number to start with
+	// iCustomerCount      - Number of customers to simulate
+	// CRandom *rnd        - Pointer to random generator to use
+	// UINT uiLoadUnit     - Size of the TPCE "Load Unit"
+	BucketSimulator(int iterstart, int itercount, TIdent iCustomerCount,
+	                TTrade m_simorders, TPCE::RNGSEED base_seed,
+	                BucketProgress &prog);
+	~BucketSimulator();
 
-        double calc_stddev();
+	double calc_stddev();
 
-        // iterations - Number of "orders" to simulate
-        // Returns the Standard deviation of the load unit buckets after the simulation
-        double simulate_onerun(INT64 iterations);
-        double simulate();
+	// iterations - Number of "orders" to simulate
+	// Returns the Standard deviation of the load unit buckets after the
+	// simulation
+	double simulate_onerun(INT64 iterations);
+	double simulate();
 
-        void run(void* thread);
+	void run(void *thread);
 };
-}
+} // namespace TPCE
 
 #endif // BUCKETSIM_H_INCLUDED

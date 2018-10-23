@@ -43,32 +43,31 @@
 
 #include "locking.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
 // Condition class, requires a separate mutex to pair with.
-class CCondition
-{
-    private:
-        CMutex&                     mutex_;
+class CCondition {
+  private:
+	CMutex &mutex_;
 #ifdef WIN32
-        mutable CONDITION_VARIABLE  cond_;
+	mutable CONDITION_VARIABLE cond_;
 #else
-        mutable pthread_cond_t      cond_;
-        bool timedwait(const struct timespec& timeout) const;
+	mutable pthread_cond_t cond_;
+	bool timedwait(const struct timespec &timeout) const;
 #endif
-    protected:
-        CMutex&        mutex();
-    public:
-        CCondition(CMutex& mutex);
-        void wait() const;
-        bool timedwait(long timeout=-1 /*us*/) const;
-        void lock();
-        void unlock();
-        void signal();
-        void broadcast();
+  protected:
+	CMutex &mutex();
+
+  public:
+	CCondition(CMutex &mutex);
+	void wait() const;
+	bool timedwait(long timeout = -1 /*us*/) const;
+	void lock();
+	void unlock();
+	void signal();
+	void broadcast();
 };
 
-}
+} // namespace TPCE
 
 #endif // CONDITION_H_INCLUDED

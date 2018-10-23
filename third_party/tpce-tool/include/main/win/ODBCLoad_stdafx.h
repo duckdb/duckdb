@@ -42,7 +42,7 @@
 #ifndef ODBCLOAD_STDAFX_H
 #define ODBCLOAD_STDAFX_H
 
-#define WIN32_LEAN_AND_MEAN     // Exclude rarely-used stuff from Windows headers
+#define WIN32_LEAN_AND_MEAN // Exclude rarely-used stuff from Windows headers
 
 #include <windows.h>
 
@@ -91,4 +91,4 @@
 #include "ODBCZipCodeLoad.h"
 #include "ODBCLoaderFactory.h"
 
-#endif  // #ifndef ODBCLOAD_STDAFX_H
+#endif // #ifndef ODBCLOAD_STDAFX_H

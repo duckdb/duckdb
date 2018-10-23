@@ -38,22 +38,19 @@
 
 using namespace TPCE;
 
-StringSplitter::StringSplitter(const std::string& textString, char recordDelimiter,
-    char fieldDelimiter)
-    : stream(textString), splitter(stream, recordDelimiter, fieldDelimiter)
-{
+StringSplitter::StringSplitter(const std::string &textString,
+                               char recordDelimiter, char fieldDelimiter)
+    : stream(textString), splitter(stream, recordDelimiter, fieldDelimiter) {
 }
 
 //
 // ITextSplitter interface implementation
 //
 
-bool StringSplitter::eof() const
-{
-    return splitter.eof();
+bool StringSplitter::eof() const {
+	return splitter.eof();
 }
 
-std::deque<std::string> StringSplitter::getNextRecord()
-{
-    return splitter.getNextRecord();
+std::deque<std::string> StringSplitter::getNextRecord() {
+	return splitter.getNextRecord();
 }

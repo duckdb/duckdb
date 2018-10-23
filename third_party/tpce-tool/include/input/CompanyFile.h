@@ -36,9 +36,9 @@
  */
 
 /******************************************************************************
-*   Description:        Implementation of the Company input file that scales
-*                       with the database size.
-******************************************************************************/
+ *   Description:        Implementation of the Company input file that scales
+ *                       with the database size.
+ ******************************************************************************/
 
 #ifndef COMPANY_FILE_H
 #define COMPANY_FILE_H
@@ -46,135 +46,137 @@
 #include "utilities/EGenStandardTypes.h"
 #include "DataFileTypes.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CCompanyFile
-{
-    CompanyDataFile_t const * m_dataFile;
+class CCompanyFile {
+	CompanyDataFile_t const *m_dataFile;
 
-    // Configured and active number of companies in the database.
-    // Depends on the configured and active number of customers.
-    //
-    TIdent  m_iConfiguredCompanyCount;
-    TIdent  m_iActiveCompanyCount;
+	// Configured and active number of companies in the database.
+	// Depends on the configured and active number of customers.
+	//
+	TIdent m_iConfiguredCompanyCount;
+	TIdent m_iActiveCompanyCount;
 
-public:
+  public:
+	/*
+	 *  Constructor.
+	 *
+	 *  PARAMETERS:
+	 *       IN  str                         - file name of the
+	 * CompanyCompetitor input flat file IN  iConfiguredCustomerCount    - total
+	 * configured number of customers in the database IN  iActiveCustomerCount
+	 * - active number of customers in the database (provided for engineering
+	 * purposes)
+	 *
+	 *  RETURNS:
+	 *       not applicable.
+	 */
+	CCompanyFile(const CompanyDataFile_t &dataFile,
+	             TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount);
 
-    /*
-    *  Constructor.
-    *
-    *  PARAMETERS:
-    *       IN  str                         - file name of the CompanyCompetitor input flat file
-    *       IN  iConfiguredCustomerCount    - total configured number of customers in the database
-    *       IN  iActiveCustomerCount        - active number of customers in the database (provided for engineering purposes)
-    *
-    *  RETURNS:
-    *       not applicable.
-    */
-    CCompanyFile(const CompanyDataFile_t &dataFile, TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount);
+	/*
+	 *  Calculate company count for the specified number of customers.
+	 *  Sort of a static method. Used in parallel generation of company related
+	 * tables.
+	 *
+	 *  PARAMETERS:
+	 *       IN  iCustomerCount          - number of customers
+	 *
+	 *  RETURNS:
+	 *       number of company competitors.
+	 */
+	TIdent CalculateCompanyCount(TIdent iCustomerCount) const;
 
-    /*
-    *  Calculate company count for the specified number of customers.
-    *  Sort of a static method. Used in parallel generation of company related tables.
-    *
-    *  PARAMETERS:
-    *       IN  iCustomerCount          - number of customers
-    *
-    *  RETURNS:
-    *       number of company competitors.
-    */
-    TIdent CalculateCompanyCount(TIdent iCustomerCount) const;
+	/*
+	 *  Calculate the first company id (0-based) for the specified customer id.
+	 *
+	 *  PARAMETERS:
+	 *       IN  iStartFromCustomer      - customer id
+	 *
+	 *  RETURNS:
+	 *       company competitor id.
+	 */
+	TIdent CalculateStartFromCompany(TIdent iStartFromCustomer) const;
 
-    /*
-    *  Calculate the first company id (0-based) for the specified customer id.
-    *
-    *  PARAMETERS:
-    *       IN  iStartFromCustomer      - customer id
-    *
-    *  RETURNS:
-    *       company competitor id.
-    */
-    TIdent CalculateStartFromCompany(TIdent iStartFromCustomer) const;
+	/*
+	 *  Create company name with appended suffix based on the
+	 *  load unit number.
+	 *
+	 *  PARAMETERS:
+	 *       IN  iIndex      - row number in the Company Competitor file
+	 * (0-based) IN  szOutput    - output buffer for company name IN  iOutputLen
+	 * - size of the output buffer
+	 *
+	 *  RETURNS:
+	 *       none.
+	 */
+	void CreateName(TIdent iIndex,    // row number
+	                char *szOutput,   // output buffer
+	                size_t iOutputLen // size of the output buffer
+	                ) const;
 
-    /*
-    *  Create company name with appended suffix based on the
-    *  load unit number.
-    *
-    *  PARAMETERS:
-    *       IN  iIndex      - row number in the Company Competitor file (0-based)
-    *       IN  szOutput    - output buffer for company name
-    *       IN  iOutputLen  - size of the output buffer
-    *
-    *  RETURNS:
-    *       none.
-    */
-    void CreateName(TIdent  iIndex,     // row number
-                    char*   szOutput,   // output buffer
-                    size_t  iOutputLen // size of the output buffer
-                    ) const;
+	/*
+	 *  Return company id for the specified row.
+	 *  Index can exceed the size of the Company input file.
+	 *
+	 *  PARAMETERS:
+	 *       IN  iIndex      - row number in the Company Competitor file
+	 * (0-based)
+	 *
+	 *  RETURNS:
+	 *       company id.
+	 */
+	TIdent GetCompanyId(TIdent iIndex) const;
 
-    /*
-    *  Return company id for the specified row.
-    *  Index can exceed the size of the Company input file.
-    *
-    *  PARAMETERS:
-    *       IN  iIndex      - row number in the Company Competitor file (0-based)
-    *
-    *  RETURNS:
-    *       company id.
-    */
-    TIdent GetCompanyId(TIdent iIndex) const;
+	/*
+	 *  Return the number of companies in the database for
+	 *  the configured number of customers.
+	 *
+	 *  PARAMETERS:
+	 *       none.
+	 *
+	 *  RETURNS:
+	 *       number of rows in the file.
+	 */
+	TIdent GetSize() const;
 
-    /*
-    *  Return the number of companies in the database for
-    *  the configured number of customers.
-    *
-    *  PARAMETERS:
-    *       none.
-    *
-    *  RETURNS:
-    *       number of rows in the file.
-    */
-    TIdent GetSize() const;
+	/*
+	 *  Return the number of companies in the database for
+	 *  the configured number of customers.
+	 *
+	 *  PARAMETERS:
+	 *       none.
+	 *
+	 *  RETURNS:
+	 *       configured company count.
+	 */
+	TIdent GetConfiguredCompanyCount() const;
 
-    /*
-    *  Return the number of companies in the database for
-    *  the configured number of customers.
-    *
-    *  PARAMETERS:
-    *       none.
-    *
-    *  RETURNS:
-    *       configured company count.
-    */
-    TIdent GetConfiguredCompanyCount() const;
+	/*
+	 *  Return the number of companies in the database for
+	 *  the active number of customers.
+	 *
+	 *  PARAMETERS:
+	 *       none.
+	 *
+	 *  RETURNS:
+	 *       active company count.
+	 */
+	TIdent GetActiveCompanyCount() const;
 
-    /*
-    *  Return the number of companies in the database for
-    *  the active number of customers.
-    *
-    *  PARAMETERS:
-    *       none.
-    *
-    *  RETURNS:
-    *       active company count.
-    */
-    TIdent GetActiveCompanyCount() const;
-
-    /*
-    *  Overload GetRecord to wrap around indices that
-    *  are larger than the flat file
-    *
-    *  PARAMETERS:
-    *       IN  iIndex      - row number in the Company file (0-based)
-    *
-    *  RETURNS:
-    *       reference to the row structure in the Company file.
-    */
-    const CompanyDataFileRecord& GetRecord(TIdent index) const;
+	/*
+	 *  Overload GetRecord to wrap around indices that
+	 *  are larger than the flat file
+	 *
+	 *  PARAMETERS:
+	 *       IN  iIndex      - row number in the Company file (0-based)
+	 *
+	 *  RETURNS:
+	 *       reference to the row structure in the Company file.
+	 */
+	const CompanyDataFileRecord &GetRecord(TIdent index) const;
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
 #endif // COMPANY_FILE_H

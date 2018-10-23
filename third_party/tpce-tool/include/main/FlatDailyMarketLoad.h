@@ -35,49 +35,44 @@
  */
 
 /*
-*   Flat file loader for DAILY_MARKET.
-*/
+ *   Flat file loader for DAILY_MARKET.
+ */
 #ifndef FLAT_DAILY_MARKET_LOAD_H
 #define FLAT_DAILY_MARKET_LOAD_H
 
 #include "FlatFileLoad_common.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CFlatDailyMarketLoad : public CFlatFileLoader <DAILY_MARKET_ROW>
-{
-private:
-    CDateTime   Flat_DM_DATE;
-    const std::string DailyMarketRowFmt;
+class CFlatDailyMarketLoad : public CFlatFileLoader<DAILY_MARKET_ROW> {
+  private:
+	CDateTime Flat_DM_DATE;
+	const std::string DailyMarketRowFmt;
 
-public:
-    CFlatDailyMarketLoad( char *szFileName, FlatFileOutputModes FlatFileOutputMode ) 
-        : CFlatFileLoader<DAILY_MARKET_ROW>(szFileName, FlatFileOutputMode)
-        , DailyMarketRowFmt("%s|%s|%.2f|%.2f|%.2f|%" PRId64 "\n")
-    {};
+  public:
+	CFlatDailyMarketLoad(char *szFileName,
+	                     FlatFileOutputModes FlatFileOutputMode)
+	    : CFlatFileLoader<DAILY_MARKET_ROW>(szFileName, FlatFileOutputMode),
+	      DailyMarketRowFmt("%s|%s|%.2f|%.2f|%.2f|%" PRId64 "\n"){};
 
-    /*
-    *   Writes a record to the file.
-    */
-    void WriteNextRecord(const DAILY_MARKET_ROW &next_record)
-    {
-        Flat_DM_DATE = next_record.DM_DATE;
-        int rc = fprintf( hOutFile, DailyMarketRowFmt.c_str(),
-                  Flat_DM_DATE.ToStr(FlatFileDateFormat),
-                  next_record.DM_S_SYMB,
-                  next_record.DM_CLOSE,
-                  next_record.DM_HIGH,
-                  next_record.DM_LOW,
-                  next_record.DM_VOL
-                );
+	/*
+	 *   Writes a record to the file.
+	 */
+	void WriteNextRecord(const DAILY_MARKET_ROW &next_record) {
+		Flat_DM_DATE = next_record.DM_DATE;
+		int rc = fprintf(hOutFile, DailyMarketRowFmt.c_str(),
+		                 Flat_DM_DATE.ToStr(FlatFileDateFormat),
+		                 next_record.DM_S_SYMB, next_record.DM_CLOSE,
+		                 next_record.DM_HIGH, next_record.DM_LOW,
+		                 next_record.DM_VOL);
 
-        if (rc < 0) {
-            throw CSystemErr(CSystemErr::eWriteFile, "CFlatDailyMarketLoad::WriteNextRecord");
-        }
-    }
+		if (rc < 0) {
+			throw CSystemErr(CSystemErr::eWriteFile,
+			                 "CFlatDailyMarketLoad::WriteNextRecord");
+		}
+	}
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //FLAT_DAILY_MARKET_LOAD_H
+#endif // FLAT_DAILY_MARKET_LOAD_H

@@ -44,36 +44,27 @@
 
 using namespace TPCE;
 
-TextFileSplitter::TextFileSplitter(const std::string& fileName, char recordDelimiter,
-    char fieldDelimiter) 
-    : file(fileName.c_str(), std::ifstream::in), splitter(file, recordDelimiter, 
-    fieldDelimiter)
-{
-    if( file.fail() )
-    {
-        throw std::runtime_error("Unable to open file: " + fileName);
-    }
+TextFileSplitter::TextFileSplitter(const std::string &content,
+                                   char recordDelimiter, char fieldDelimiter)
+    : file(content),
+      splitter(file, recordDelimiter, fieldDelimiter) {
+	if (file.fail()) {
+		throw std::runtime_error("Unable to open file");
+	}
 }
 
-TextFileSplitter::~TextFileSplitter()
-{
-    if (file.is_open())
-    {
-        file.close();
-    }
+TextFileSplitter::~TextFileSplitter() {
+
 }
 
 //
 // ITextSplitter interface implementation
 //
 
-bool TextFileSplitter::eof() const
-{
-    return splitter.eof();
+bool TextFileSplitter::eof() const {
+	return splitter.eof();
 }
 
-
-std::deque<std::string> TextFileSplitter::getNextRecord()
-{
-    return splitter.getNextRecord();
+std::deque<std::string> TextFileSplitter::getNextRecord() {
+	return splitter.getNextRecord();
 }

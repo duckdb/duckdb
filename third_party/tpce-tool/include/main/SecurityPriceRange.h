@@ -35,18 +35,17 @@
  */
 
 /******************************************************************************
-*   Description:        Minimum and maximum values for a security's price range
-******************************************************************************/
+ *   Description:        Minimum and maximum values for a security's price range
+ ******************************************************************************/
 
 #ifndef SECURITY_PRICE_RANGE_H
 #define SECURITY_PRICE_RANGE_H
 
-namespace TPCE
-{
+namespace TPCE {
 
 const double fMinSecPrice = 20.00;
 const double fMaxSecPrice = 30.00;
 
-} //namespace TPCE
+} // namespace TPCE
 
-#endif //SECURITY_PRICE_RANGE_H
+#endif // SECURITY_PRICE_RANGE_H

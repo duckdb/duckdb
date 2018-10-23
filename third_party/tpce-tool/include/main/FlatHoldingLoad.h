@@ -35,48 +35,41 @@
  */
 
 /*
-*   Flat file loader for HOLDING.
-*/
+ *   Flat file loader for HOLDING.
+ */
 #ifndef FLAT_HOLDING_LOAD_H
 #define FLAT_HOLDING_LOAD_H
 
 #include "FlatFileLoad_common.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CFlatHoldingLoad : public CFlatFileLoader <HOLDING_ROW>
-{
-private:
-    CDateTime   Flat_H_DTS;
-    const std::string HoldingRowFmt;
+class CFlatHoldingLoad : public CFlatFileLoader<HOLDING_ROW> {
+  private:
+	CDateTime Flat_H_DTS;
+	const std::string HoldingRowFmt;
 
-public:
-    CFlatHoldingLoad( char *szFileName, FlatFileOutputModes FlatFileOutputMode ) 
-        : CFlatFileLoader<HOLDING_ROW>(szFileName, FlatFileOutputMode)
-        , HoldingRowFmt("%" PRId64 "|%" PRId64 "|%s|%s|%.2f|%d\n")
-    {};
+  public:
+	CFlatHoldingLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
+	    : CFlatFileLoader<HOLDING_ROW>(szFileName, FlatFileOutputMode),
+	      HoldingRowFmt("%" PRId64 "|%" PRId64 "|%s|%s|%.2f|%d\n"){};
 
-    /*
-    *   Writes a record to the file.
-    */
-    void WriteNextRecord(const HOLDING_ROW &next_record)
-    {
-        Flat_H_DTS = next_record.H_DTS;
-        int rc = fprintf( hOutFile, HoldingRowFmt.c_str(),
-                  next_record.H_T_ID,
-                  next_record.H_CA_ID,
-                  next_record.H_S_SYMB,
-                  Flat_H_DTS.ToStr(FlatFileDateTimeFormat),
-                  next_record.H_PRICE,
-                  next_record.H_QTY
-                );
-        if (rc < 0) {
-            throw CSystemErr(CSystemErr::eWriteFile, "CFlatHoldingLoad::WriteNextRecord");
-        }
-    }
+	/*
+	 *   Writes a record to the file.
+	 */
+	void WriteNextRecord(const HOLDING_ROW &next_record) {
+		Flat_H_DTS = next_record.H_DTS;
+		int rc = fprintf(hOutFile, HoldingRowFmt.c_str(), next_record.H_T_ID,
+		                 next_record.H_CA_ID, next_record.H_S_SYMB,
+		                 Flat_H_DTS.ToStr(FlatFileDateTimeFormat),
+		                 next_record.H_PRICE, next_record.H_QTY);
+		if (rc < 0) {
+			throw CSystemErr(CSystemErr::eWriteFile,
+			                 "CFlatHoldingLoad::WriteNextRecord");
+		}
+	}
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //FLAT_HOLDING_LOAD_H
+#endif // FLAT_HOLDING_LOAD_H

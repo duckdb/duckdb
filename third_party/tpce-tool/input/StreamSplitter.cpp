@@ -41,46 +41,41 @@
 
 using namespace TPCE;
 
-StreamSplitter::StreamSplitter( std::istream& textStream, char recordDelimiter,
-    char fieldDelimiter) 
-    : recordDelim(recordDelimiter), fieldDelim(fieldDelimiter), 
-    stream(textStream)
-{
+StreamSplitter::StreamSplitter(std::istream &textStream, char recordDelimiter,
+                               char fieldDelimiter)
+    : recordDelim(recordDelimiter), fieldDelim(fieldDelimiter),
+      stream(textStream) {
 }
 
 //
 // ITextSplitter implementation
 //
 
-bool StreamSplitter::eof() const
-{
-    return stream.eof();
+bool StreamSplitter::eof() const {
+	return stream.eof();
 }
 
-std::deque<std::string> StreamSplitter::getNextRecord()
-{
-    std::string recordString;
-    std::getline( stream, recordString, recordDelim);
+std::deque<std::string> StreamSplitter::getNextRecord() {
+	std::string recordString;
+	std::getline(stream, recordString, recordDelim);
 
-    std::deque<std::string> fields;
-    std::istringstream recordStream(recordString);
+	std::deque<std::string> fields;
+	std::istringstream recordStream(recordString);
 
-    // Either or both of eof and fail can occur so check
-    // for both.
-    while( ! recordStream.eof() && ! recordStream.fail() )
-    {
-        std::string field;
-        std::getline(recordStream, field, fieldDelim);
-        fields.push_back(field);
-    }
+	// Either or both of eof and fail can occur so check
+	// for both.
+	while (!recordStream.eof() && !recordStream.fail()) {
+		std::string field;
+		std::getline(recordStream, field, fieldDelim);
+		fields.push_back(field);
+	}
 
-    // Fail can get set on eof which we don't want to treat
-    // as a failure. So instead of testing for fail we test
-    // for !eof.
-    if( ! recordStream.eof() )
-    {
-        throw std::runtime_error("Error reading record from stream.");
-    }
+	// Fail can get set on eof which we don't want to treat
+	// as a failure. So instead of testing for fail we test
+	// for !eof.
+	if (!recordStream.eof()) {
+		throw std::runtime_error("Error reading record from stream.");
+	}
 
-    return fields;
+	return fields;
 }

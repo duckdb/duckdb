@@ -35,8 +35,8 @@
  */
 
 /*
-*   Class representing the Sector table.
-*/
+ *   Class representing the Sector table.
+ */
 #ifndef SECTOR_TABLE_H
 #define SECTOR_TABLE_H
 
@@ -44,19 +44,16 @@
 #include "input/DataFileTypes.h"
 #include "TableRows.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CSectorTable : public FixedTable<SectorDataFile_t, SECTOR_ROW>
-{
-public:
-    CSectorTable(const SectorDataFile_t &dataFile);
-    ~CSectorTable();
+class CSectorTable : public FixedTable<SectorDataFile_t, SECTOR_ROW> {
+  public:
+	CSectorTable(const SectorDataFile_t &dataFile);
+	~CSectorTable();
 
-    virtual void LoadTableRow();
-
+	virtual void LoadTableRow();
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //SECTOR_TABLE_H
+#endif // SECTOR_TABLE_H

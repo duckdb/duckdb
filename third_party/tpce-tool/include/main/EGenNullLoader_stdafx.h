@@ -45,4 +45,4 @@
 #include "NullLoader.h"
 #include "NullLoaderFactory.h"
 
-#endif  // #ifndef EGEN_NULLLOADER_STDAFX_H
+#endif // #ifndef EGEN_NULLLOADER_STDAFX_H

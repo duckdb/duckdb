@@ -35,10 +35,10 @@
  */
 
 /******************************************************************************
-*   Description:        This class provides price board functionality for the
-*                       MEE. This allows for the lookup of any security's price
-*                       at any point in time.
-******************************************************************************/
+ *   Description:        This class provides price board functionality for the
+ *                       MEE. This allows for the lookup of any security's price
+ *                       at any point in time.
+ ******************************************************************************/
 
 #ifndef MEE_PRICE_BOARD_H
 #define MEE_PRICE_BOARD_H
@@ -49,63 +49,48 @@
 
 #include "input/DataFileManager.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CMEEPriceBoard
-{
+class CMEEPriceBoard {
 
-private:
+  private:
+	// Mean delay between Pending and Submission times
+	// for an immediatelly triggered (in-the-money) limit order.
+	//
+	double m_fMeanInTheMoneySubmissionDelay;
+	CMEESecurity m_Security;
+	const CSecurityFile &m_SecurityFile;
 
-    // Mean delay between Pending and Submission times
-    // for an immediatelly triggered (in-the-money) limit order.
-    //
-    double              m_fMeanInTheMoneySubmissionDelay;
-    CMEESecurity        m_Security;
-    const CSecurityFile&      m_SecurityFile;
+  public:
+	TIdent m_iNumberOfSecurities;
 
-public:
-    TIdent              m_iNumberOfSecurities;
+	CMEEPriceBoard(INT32 TradingTimeSoFar, CDateTime *pBaseTime,
+	               CDateTime *pCurrentTime, const DataFileManager &dfm);
+	~CMEEPriceBoard(void);
 
-    CMEEPriceBoard( INT32           TradingTimeSoFar,
-                    CDateTime*      pBaseTime,
-                    CDateTime*      pCurrentTime,
-                    const DataFileManager& dfm
-                    );
-    ~CMEEPriceBoard( void );
+	void GetSymbol(
+	    TIdent SecurityIndex,
+	    char *szOutput,     // output buffer
+	    size_t iOutputLen); // size of the output buffer (including null));
 
-    void    GetSymbol(  TIdent  SecurityIndex,
-                        char*   szOutput,       // output buffer
-                        size_t  iOutputLen);    // size of the output buffer (including null));
+	CMoney GetMinPrice();
 
-    CMoney  GetMinPrice();
+	CMoney GetMaxPrice();
 
-    CMoney  GetMaxPrice();
+	CMoney GetCurrentPrice(TIdent SecurityIndex);
+	CMoney GetCurrentPrice(char *pSecuritySymbol);
 
-    CMoney  GetCurrentPrice( TIdent SecurityIndex );
-    CMoney  GetCurrentPrice( char* pSecuritySymbol );
+	CMoney CalculatePrice(char *pSecuritySymbol, double fTime);
 
-    CMoney  CalculatePrice( char* pSecuritySymbol, double fTime );
-
-    double  GetSubmissionTime(
-                                char*           pSecuritySymbol,
-                                double          fPendingTime,
-                                CMoney          fLimitPrice,
-                                eTradeTypeID    TradeType
-                                );
-    double  GetSubmissionTime(
-                                TIdent          SecurityIndex,
-                                double          fPendingTime,
-                                CMoney          fLimitPrice,
-                                eTradeTypeID    TradeType
-                                );
-    double  GetCompletionTime(
-                                TIdent      SecurityIndex,
-                                double      fSubmissionTime,
-                                CMoney*     pCompletionPrice    // output param
-                            );
+	double GetSubmissionTime(char *pSecuritySymbol, double fPendingTime,
+	                         CMoney fLimitPrice, eTradeTypeID TradeType);
+	double GetSubmissionTime(TIdent SecurityIndex, double fPendingTime,
+	                         CMoney fLimitPrice, eTradeTypeID TradeType);
+	double GetCompletionTime(TIdent SecurityIndex, double fSubmissionTime,
+	                         CMoney *pCompletionPrice // output param
+	);
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //MEE_PRICE_BOARD_H
+#endif // MEE_PRICE_BOARD_H

@@ -35,24 +35,23 @@
  */
 
 /******************************************************************************
-*   Description:        Versioning information for the EGen package.
-*                       Updated on every release.
-******************************************************************************/
+ *   Description:        Versioning information for the EGen package.
+ *                       Updated on every release.
+ ******************************************************************************/
 
 #ifndef EGEN_VERSION_H
 #define EGEN_VERSION_H
 
 #include "EGenStandardTypes.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-extern "C"
-{
-void GetEGenVersion_C(INT32 &iMajorVersion, INT32 &iMinorVersion, INT32 &iRevisionNumber, INT32 &iBetaLevel);
-void GetEGenVersionString_C(char* szOutput, size_t iOutputBufferLen);
+extern "C" {
+void GetEGenVersion_C(INT32 &iMajorVersion, INT32 &iMinorVersion,
+                      INT32 &iRevisionNumber, INT32 &iBetaLevel);
+void GetEGenVersionString_C(char *szOutput, size_t iOutputBufferLen);
 void PrintEGenVersion_C();
-void GetEGenVersionUpdateTimestamp_C(char* szOutput, size_t iOutputBufferLen);
+void GetEGenVersionUpdateTimestamp_C(char *szOutput, size_t iOutputBufferLen);
 }
 
 // Retrieve major, minor, revision, and beta level numbers for EGen.
@@ -67,13 +66,15 @@ void GetEGenVersionUpdateTimestamp_C(char* szOutput, size_t iOutputBufferLen);
 //  revision    0
 //  beta level  0
 //
-void GetEGenVersion(INT32 &iMajorVersion, INT32 &iMinorVersion, INT32 &iRevisionNumber, INT32 &iBetaLevel);
+void GetEGenVersion(INT32 &iMajorVersion, INT32 &iMinorVersion,
+                    INT32 &iRevisionNumber, INT32 &iBetaLevel);
 
 // Return versioning information formated as a string
 //
-// Note: requires output buffer at least 64 characters long, or nothing will be returned.
+// Note: requires output buffer at least 64 characters long, or nothing will be
+// returned.
 //
-void GetEGenVersionString(char* szOutput, size_t iOutputBufferLen);
+void GetEGenVersionString(char *szOutput, size_t iOutputBufferLen);
 
 // Output EGen versioning information on stdout
 //
@@ -81,8 +82,8 @@ void PrintEGenVersion();
 
 // Return the date/time when the EGen versioning information was last updated.
 //
-void GetEGenVersionUpdateTimestamp(char* szOutput, size_t iOutputBufferLen);
+void GetEGenVersionUpdateTimestamp(char *szOutput, size_t iOutputBufferLen);
 
-}
+} // namespace TPCE
 
-#endif  // #ifndef EGEN_VERSION_H
+#endif // #ifndef EGEN_VERSION_H

@@ -35,46 +35,41 @@
  */
 
 /*
-*   Flat file loader for CUSTOMER_ACCOUNT.
-*/
+ *   Flat file loader for CUSTOMER_ACCOUNT.
+ */
 #ifndef FLAT_CUSTOMER_ACCOUNT_LOAD_H
 #define FLAT_CUSTOMER_ACCOUNT_LOAD_H
 
 #include "FlatFileLoad_common.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CFlatCustomerAccountLoad : public CFlatFileLoader <CUSTOMER_ACCOUNT_ROW>
-{
-private:
-    const std::string CustomerAccountRowFmt;
+class CFlatCustomerAccountLoad : public CFlatFileLoader<CUSTOMER_ACCOUNT_ROW> {
+  private:
+	const std::string CustomerAccountRowFmt;
 
-public:
-    CFlatCustomerAccountLoad( char *szFileName, FlatFileOutputModes FlatFileOutputMode ) 
-        : CFlatFileLoader<CUSTOMER_ACCOUNT_ROW>(szFileName, FlatFileOutputMode)
-        , CustomerAccountRowFmt("%" PRId64 "|%" PRId64 "|%" PRId64 "|%s|%d|%.2f\n")
-    {};
+  public:
+	CFlatCustomerAccountLoad(char *szFileName,
+	                         FlatFileOutputModes FlatFileOutputMode)
+	    : CFlatFileLoader<CUSTOMER_ACCOUNT_ROW>(szFileName, FlatFileOutputMode),
+	      CustomerAccountRowFmt("%" PRId64 "|%" PRId64 "|%" PRId64
+	                            "|%s|%d|%.2f\n"){};
 
-    /*
-    *   Writes a record to the file.
-    */
-    void WriteNextRecord(const CUSTOMER_ACCOUNT_ROW &next_record)
-    {
-        int rc = fprintf( hOutFile, CustomerAccountRowFmt.c_str(),
-                  next_record.CA_ID,
-                  next_record.CA_B_ID,
-                  next_record.CA_C_ID,
-                  next_record.CA_NAME,
-                  (int)next_record.CA_TAX_ST,
-                  next_record.CA_BAL
-                );
-        if (rc < 0) {
-            throw CSystemErr(CSystemErr::eWriteFile, "CFlatCustomerAccountLoad::WriteNextRecord");
-        }
-    }
+	/*
+	 *   Writes a record to the file.
+	 */
+	void WriteNextRecord(const CUSTOMER_ACCOUNT_ROW &next_record) {
+		int rc = fprintf(hOutFile, CustomerAccountRowFmt.c_str(),
+		                 next_record.CA_ID, next_record.CA_B_ID,
+		                 next_record.CA_C_ID, next_record.CA_NAME,
+		                 (int)next_record.CA_TAX_ST, next_record.CA_BAL);
+		if (rc < 0) {
+			throw CSystemErr(CSystemErr::eWriteFile,
+			                 "CFlatCustomerAccountLoad::WriteNextRecord");
+		}
+	}
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //FLAT_CUSTOMER_ACCOUNT_LOAD_H
+#endif // FLAT_CUSTOMER_ACCOUNT_LOAD_H

@@ -46,27 +46,22 @@
 
 using namespace TPCE;
 
-CSystemErr::CSystemErr(Action eAction, char const * szLocation) 
-    : CBaseErr(szLocation)
-    , m_eAction(eAction)
-{
+CSystemErr::CSystemErr(Action eAction, char const *szLocation)
+    : CBaseErr(szLocation), m_eAction(eAction) {
 #ifdef WIN32
-    m_idMsg = GetLastError();   //for Windows
+	m_idMsg = GetLastError(); // for Windows
 #else
-    m_idMsg = errno;    //for Unix
+	m_idMsg = errno; // for Unix
 #endif
 }
 
-CSystemErr::CSystemErr(int iError, Action eAction, char const * szLocation) 
-    : CBaseErr(szLocation)
-    , m_eAction(eAction)
-{
-    // This constructor is provided for registry functions where the function return code
-    // is the error code.
-    m_idMsg = iError;
+CSystemErr::CSystemErr(int iError, Action eAction, char const *szLocation)
+    : CBaseErr(szLocation), m_eAction(eAction) {
+	// This constructor is provided for registry functions where the function
+	// return code is the error code.
+	m_idMsg = iError;
 }
 
-const char * CSystemErr::ErrorText() const
-{
-    return std::strerror(m_idMsg);
+const char *CSystemErr::ErrorText() const {
+	return std::strerror(m_idMsg);
 }

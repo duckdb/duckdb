@@ -35,44 +35,39 @@
  */
 
 /*
-*   Flat file loader for HOLDING_HISTORY.
-*/
+ *   Flat file loader for HOLDING_HISTORY.
+ */
 #ifndef FLAT_HOLDING_HISTORY_LOAD_H
 #define FLAT_HOLDING_HISTORY_LOAD_H
 
 #include "FlatFileLoad_common.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CFlatHoldingHistoryLoad : public CFlatFileLoader <HOLDING_HISTORY_ROW>
-{
-private:
-    const std::string HoldingHistoryRowFmt;
+class CFlatHoldingHistoryLoad : public CFlatFileLoader<HOLDING_HISTORY_ROW> {
+  private:
+	const std::string HoldingHistoryRowFmt;
 
-public:
-    CFlatHoldingHistoryLoad( char *szFileName, FlatFileOutputModes FlatFileOutputMode ) 
-        : CFlatFileLoader<HOLDING_HISTORY_ROW>(szFileName, FlatFileOutputMode)
-        , HoldingHistoryRowFmt("%" PRId64 "|%" PRId64 "|%d|%d\n")
-    {};
+  public:
+	CFlatHoldingHistoryLoad(char *szFileName,
+	                        FlatFileOutputModes FlatFileOutputMode)
+	    : CFlatFileLoader<HOLDING_HISTORY_ROW>(szFileName, FlatFileOutputMode),
+	      HoldingHistoryRowFmt("%" PRId64 "|%" PRId64 "|%d|%d\n"){};
 
-    /*
-    *   Writes a record to the file.
-    */
-    void WriteNextRecord(const HOLDING_HISTORY_ROW &next_record)
-    {
-        int rc = fprintf( hOutFile, HoldingHistoryRowFmt.c_str(),
-                  next_record.HH_H_T_ID,
-                  next_record.HH_T_ID,
-                  next_record.HH_BEFORE_QTY,
-                  next_record.HH_AFTER_QTY
-                );
-        if (rc < 0) {
-            throw CSystemErr(CSystemErr::eWriteFile, "CFlatHoldingHistoryLoad::WriteNextRecord");
-        }
-    }
+	/*
+	 *   Writes a record to the file.
+	 */
+	void WriteNextRecord(const HOLDING_HISTORY_ROW &next_record) {
+		int rc = fprintf(hOutFile, HoldingHistoryRowFmt.c_str(),
+		                 next_record.HH_H_T_ID, next_record.HH_T_ID,
+		                 next_record.HH_BEFORE_QTY, next_record.HH_AFTER_QTY);
+		if (rc < 0) {
+			throw CSystemErr(CSystemErr::eWriteFile,
+			                 "CFlatHoldingHistoryLoad::WriteNextRecord");
+		}
+	}
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //FLAT_HOLDING_HISTORY_LOAD_H
+#endif // FLAT_HOLDING_HISTORY_LOAD_H

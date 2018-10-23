@@ -34,38 +34,40 @@
  * - Doug Johnson
  */
 /******************************************************************************
-*   Description:        Interface base class to be used for deriving a sponsor
-*                       specific class for commmunicating with the SUT for
-*                       the Data-Maintenance transaction.
-******************************************************************************/
+ *   Description:        Interface base class to be used for deriving a sponsor
+ *                       specific class for commmunicating with the SUT for
+ *                       the Data-Maintenance transaction.
+ ******************************************************************************/
 
 #ifndef DM_SUT_INTERFACE_H
 #define DM_SUT_INTERFACE_H
 
 #include "TxnHarnessStructs.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CDMSUTInterface
-{
-public:
-    /*
-    *  Virtual destructor. Provided so that a sponsor-specific
-    *  destructor can be called on destruction from the base-class pointer.
-    *
-    *  PARAMETERS:
-    *           none.
-    *
-    *  RETURNS:
-    *           not applicable.
-    */
-    virtual ~CDMSUTInterface() {};
+class CDMSUTInterface {
+  public:
+	/*
+	 *  Virtual destructor. Provided so that a sponsor-specific
+	 *  destructor can be called on destruction from the base-class pointer.
+	 *
+	 *  PARAMETERS:
+	 *           none.
+	 *
+	 *  RETURNS:
+	 *           not applicable.
+	 */
+	virtual ~CDMSUTInterface(){};
 
-    virtual bool DataMaintenance( PDataMaintenanceTxnInput pTxnInput ) = 0; // return whether it was successful
-    virtual bool TradeCleanup( PTradeCleanupTxnInput pTxnInput ) = 0;   // return whether it was successful
+	virtual bool
+	DataMaintenance(PDataMaintenanceTxnInput
+	                    pTxnInput) = 0; // return whether it was successful
+	virtual bool
+	TradeCleanup(PTradeCleanupTxnInput
+	                 pTxnInput) = 0; // return whether it was successful
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //DM_SUT_INTERFACE_H
+#endif // DM_SUT_INTERFACE_H

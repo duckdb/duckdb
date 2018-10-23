@@ -35,8 +35,8 @@
  */
 
 /*
-*   Class for generation and load output to stdout.
-*/
+ *   Class for generation and load output to stdout.
+ */
 
 #ifndef EGEN_GENERATE_AND_LOAD_STANDARD_OUTPUT_H
 #define EGEN_GENERATE_AND_LOAD_STANDARD_OUTPUT_H
@@ -47,73 +47,66 @@
 
 using namespace std;
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CGenerateAndLoadStandardOutput : public CGenerateAndLoadBaseOutput
-{
-public:
+class CGenerateAndLoadStandardOutput : public CGenerateAndLoadBaseOutput {
+  public:
+	/*
+	 *  Output beginning of table generation.
+	 *
+	 *  PARAMETERS:
+	 *           IN  szMsg       - string to output to the user
+	 *
+	 *  RETURNS:
+	 *           none.
+	 */
+	void OutputStart(string szMsg) {
+		// printf("%s", szMsg.c_str());
+		// fflush(stdout); // in case there is no newline character in szMsg
+	}
 
-    /*
-    *  Output beginning of table generation.
-    *
-    *  PARAMETERS:
-    *           IN  szMsg       - string to output to the user
-    *
-    *  RETURNS:
-    *           none.
-    */
-    void OutputStart(string szMsg)
-    {
-        printf("%s", szMsg.c_str());
-        fflush(stdout); // in case there is no newline character in szMsg
-    }
+	/*
+	 *  Output progress of table generation.
+	 *
+	 *  PARAMETERS:
+	 *           IN  szMsg       - string to output to the user
+	 *
+	 *  RETURNS:
+	 *           none.
+	 */
+	void OutputProgress(string szMsg) {
+		// printf("%s", szMsg.c_str());
+		// fflush(stdout); // in case there is no newline character in szMsg
+	}
 
-    /*
-    *  Output progress of table generation.
-    *
-    *  PARAMETERS:
-    *           IN  szMsg       - string to output to the user
-    *
-    *  RETURNS:
-    *           none.
-    */
-    void OutputProgress(string szMsg)
-    {
-        printf("%s",szMsg.c_str());
-        fflush(stdout); // in case there is no newline character in szMsg
-    }
+	/*
+	 *  Output completion of table generation.
+	 *
+	 *  PARAMETERS:
+	 *           IN  szMsg       - string to output to the user
+	 *
+	 *  RETURNS:
+	 *           none.
+	 */
+	void OutputComplete(string szMsg) {
+		// printf("%s", szMsg.c_str());
+		// fflush(stdout); // in case there is no newline character in szMsg
+	}
 
-    /*
-    *  Output completion of table generation.
-    *
-    *  PARAMETERS:
-    *           IN  szMsg       - string to output to the user
-    *
-    *  RETURNS:
-    *           none.
-    */
-    void OutputComplete(string szMsg)
-    {
-        printf("%s", szMsg.c_str());
-        fflush(stdout); // in case there is no newline character in szMsg
-    }
-
-    /*
-    *  Output end-of-line.
-    *
-    *  PARAMETERS:
-    *           IN  szMsg       - string to output to the user
-    *
-    *  RETURNS:
-    *           none.
-    */
-    void OutputNewline()
-    {
-        printf("\n");
-    }
+	/*
+	 *  Output end-of-line.
+	 *
+	 *  PARAMETERS:
+	 *           IN  szMsg       - string to output to the user
+	 *
+	 *  RETURNS:
+	 *           none.
+	 */
+	void OutputNewline() {
+		// printf("\n");
+	}
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //EGEN_GENERATE_AND_LOAD_STANDARD_OUTPUT_H
+#endif // EGEN_GENERATE_AND_LOAD_STANDARD_OUTPUT_H

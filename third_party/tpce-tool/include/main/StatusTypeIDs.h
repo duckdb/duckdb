@@ -37,24 +37,22 @@
 #ifndef STATUS_TYPE_IDS_H
 #define STATUS_TYPE_IDS_H
 
-namespace TPCE
-{
+namespace TPCE {
 
-    // Status Type IDs corresponding to the StatusType.txt flat file.
-    // Note: The order of enumeration members must match the order
-    // of rows in the StatusType.txt flat file.
-    enum eStatusTypeID
-    {
-        eCompleted = 0,
-        eActive,
-        eSubmitted,
-        ePending,
-        eCanceled,
+// Status Type IDs corresponding to the StatusType.txt flat file.
+// Note: The order of enumeration members must match the order
+// of rows in the StatusType.txt flat file.
+enum eStatusTypeID {
+	eCompleted = 0,
+	eActive,
+	eSubmitted,
+	ePending,
+	eCanceled,
 
-        eMaxStatusTypeID    // should be the last - contains the number of items in the enumeration
-    };
+	eMaxStatusTypeID // should be the last - contains the number of items in the
+	                 // enumeration
+};
 
+} // namespace TPCE
 
-} //namespace TPCE
-
-#endif //STATUS_TYPE_IDS_H
+#endif // STATUS_TYPE_IDS_H

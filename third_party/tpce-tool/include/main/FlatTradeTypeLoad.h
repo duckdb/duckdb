@@ -35,8 +35,8 @@
  */
 
 /*
-*   Flat file loader for TRADE_TYPE.
-*/
+ *   Flat file loader for TRADE_TYPE.
+ */
 #ifndef FLAT_TRADE_TYPE_LOAD_H
 #define FLAT_TRADE_TYPE_LOAD_H
 
@@ -44,36 +44,33 @@
 
 #include "TableTypes.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CFlatTradeTypeLoad : public CFlatFileLoader <TRADE_TYPE_ROW>
-{
-private:
-    const std::string TradeTypeRowFmt;
-public:
-    CFlatTradeTypeLoad( char *szFileName, FlatFileOutputModes FlatFileOutputMode ) 
-        : CFlatFileLoader<TRADE_TYPE_ROW>(szFileName, FlatFileOutputMode)
-        , TradeTypeRowFmt("%s|%s|%s|%s\n")
-    {};
+class CFlatTradeTypeLoad : public CFlatFileLoader<TRADE_TYPE_ROW> {
+  private:
+	const std::string TradeTypeRowFmt;
 
-    /*
-    *   Writes a record to the file.
-    */
-    void WriteNextRecord(const TRADE_TYPE_ROW & next_record)
-    {
-        int rc = fprintf( hOutFile, TradeTypeRowFmt.c_str(),
-            next_record.TT_ID,
-            next_record.TT_NAME,
-                  (next_record.TT_IS_SELL ? FlatFileBoolTrue : FlatFileBoolFalse),
-                  (next_record.TT_IS_MRKT ? FlatFileBoolTrue : FlatFileBoolFalse)
-                );
-        if (rc < 0) {
-            throw CSystemErr(CSystemErr::eWriteFile, "CFlatTradeTypeLoad::WriteNextRecord");
-        }
-    }
+  public:
+	CFlatTradeTypeLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
+	    : CFlatFileLoader<TRADE_TYPE_ROW>(szFileName, FlatFileOutputMode),
+	      TradeTypeRowFmt("%s|%s|%s|%s\n"){};
+
+	/*
+	 *   Writes a record to the file.
+	 */
+	void WriteNextRecord(const TRADE_TYPE_ROW &next_record) {
+		int rc = fprintf(
+		    hOutFile, TradeTypeRowFmt.c_str(), next_record.TT_ID,
+		    next_record.TT_NAME,
+		    (next_record.TT_IS_SELL ? FlatFileBoolTrue : FlatFileBoolFalse),
+		    (next_record.TT_IS_MRKT ? FlatFileBoolTrue : FlatFileBoolFalse));
+		if (rc < 0) {
+			throw CSystemErr(CSystemErr::eWriteFile,
+			                 "CFlatTradeTypeLoad::WriteNextRecord");
+		}
+	}
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //FLAT_TRADE_TYPE_LOAD_H
+#endif // FLAT_TRADE_TYPE_LOAD_H

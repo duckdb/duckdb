@@ -35,42 +35,38 @@
  */
 
 /*
-*   Flat file loader for CUSTOMER_TAXRATE.
-*/
+ *   Flat file loader for CUSTOMER_TAXRATE.
+ */
 #ifndef FLAT_CUSTOMER_TAXRATE_LOAD_H
 #define FLAT_CUSTOMER_TAXRATE_LOAD_H
 
 #include "FlatFileLoad_common.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CFlatCustomerTaxrateLoad : public CFlatFileLoader <CUSTOMER_TAXRATE_ROW>
-{
-private:
-    const std::string CustomerTaxrateRowFmt;
+class CFlatCustomerTaxrateLoad : public CFlatFileLoader<CUSTOMER_TAXRATE_ROW> {
+  private:
+	const std::string CustomerTaxrateRowFmt;
 
-public:
-    CFlatCustomerTaxrateLoad( char *szFileName, FlatFileOutputModes FlatFileOutputMode ) 
-        : CFlatFileLoader<CUSTOMER_TAXRATE_ROW>(szFileName, FlatFileOutputMode)
-        , CustomerTaxrateRowFmt("%s|%" PRId64 "\n")
-    {};
+  public:
+	CFlatCustomerTaxrateLoad(char *szFileName,
+	                         FlatFileOutputModes FlatFileOutputMode)
+	    : CFlatFileLoader<CUSTOMER_TAXRATE_ROW>(szFileName, FlatFileOutputMode),
+	      CustomerTaxrateRowFmt("%s|%" PRId64 "\n"){};
 
-    /*
-    *   Writes a record to the file.
-    */
-    void WriteNextRecord(const CUSTOMER_TAXRATE_ROW &next_record)
-    {
-        int rc = fprintf( hOutFile, CustomerTaxrateRowFmt.c_str(),
-                  next_record.CX_TX_ID,
-                  next_record.CX_C_ID
-                );
-        if (rc < 0) {
-            throw CSystemErr(CSystemErr::eWriteFile, "CFlatCustomerTaxrateLoad::WriteNextRecord");
-        }
-    }
+	/*
+	 *   Writes a record to the file.
+	 */
+	void WriteNextRecord(const CUSTOMER_TAXRATE_ROW &next_record) {
+		int rc = fprintf(hOutFile, CustomerTaxrateRowFmt.c_str(),
+		                 next_record.CX_TX_ID, next_record.CX_C_ID);
+		if (rc < 0) {
+			throw CSystemErr(CSystemErr::eWriteFile,
+			                 "CFlatCustomerTaxrateLoad::WriteNextRecord");
+		}
+	}
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //FLAT_CUSTOMER_TAXRATE_LOAD_H
+#endif // FLAT_CUSTOMER_TAXRATE_LOAD_H

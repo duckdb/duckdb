@@ -35,8 +35,8 @@
  */
 
 /******************************************************************************
-*   Description:        This file implements the interface for data logging.
-******************************************************************************/
+ *   Description:        This file implements the interface for data logging.
+ ******************************************************************************/
 
 #ifndef BASE_LOGGER_H
 #define BASE_LOGGER_H
@@ -46,49 +46,51 @@
 #include "DriverParamSettings.h"
 #include "BaseLogFormatter.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-/********************************* Generic Logger Class ************************************/
+/********************************* Generic Logger Class
+ * ************************************/
 
-class CBaseLogger
-{
-private:
-    char                m_Prefix[64];
-    CBaseLogFormatter*  m_pLogFormatter;
+class CBaseLogger {
+  private:
+	char m_Prefix[64];
+	CBaseLogFormatter *m_pLogFormatter;
 
-    bool SendToLogger(const char *szPrefix, const char *szMsg);
+	bool SendToLogger(const char *szPrefix, const char *szMsg);
 
-protected:
-    CBaseLogger(eDriverType drvType, INT32 UniqueId, CBaseLogFormatter* pFormatter);
-    virtual bool SendToLoggerImpl(const char *szPrefix, const char *szTimestamp, const char *szMsg) = 0;
+  protected:
+	CBaseLogger(eDriverType drvType, INT32 UniqueId,
+	            CBaseLogFormatter *pFormatter);
+	virtual bool SendToLoggerImpl(const char *szPrefix, const char *szTimestamp,
+	                              const char *szMsg) = 0;
 
-public:
-    // Destructor
-    virtual ~CBaseLogger() {}
+  public:
+	// Destructor
+	virtual ~CBaseLogger() {
+	}
 
-    // Strings
-    bool SendToLogger(const char *str);
-    bool SendToLogger(string str);
+	// Strings
+	bool SendToLogger(const char *str);
+	bool SendToLogger(string str);
 
-    // Parameter Structures
-    bool SendToLogger(CLoaderSettings& parms);
-    bool SendToLogger(CDriverGlobalSettings& parms);
-    bool SendToLogger(CDriverCESettings& parms);
-    bool SendToLogger(CDriverCEPartitionSettings& parms);
-    bool SendToLogger(CDriverMEESettings& parms);
-    bool SendToLogger(CDriverDMSettings& parms);
-    bool SendToLogger(CBrokerVolumeSettings& parms);
-    bool SendToLogger(CCustomerPositionSettings& parms);
-    bool SendToLogger(CMarketWatchSettings& parms);
-    bool SendToLogger(CSecurityDetailSettings& parms);
-    bool SendToLogger(CTradeLookupSettings& parms);
-    bool SendToLogger(CTradeOrderSettings& parms);
-    bool SendToLogger(CTradeUpdateSettings& parms);
-    bool SendToLogger(CTxnMixGeneratorSettings& parms);
-    bool SendToLogger(TDriverCETxnSettings& parms);
+	// Parameter Structures
+	bool SendToLogger(CLoaderSettings &parms);
+	bool SendToLogger(CDriverGlobalSettings &parms);
+	bool SendToLogger(CDriverCESettings &parms);
+	bool SendToLogger(CDriverCEPartitionSettings &parms);
+	bool SendToLogger(CDriverMEESettings &parms);
+	bool SendToLogger(CDriverDMSettings &parms);
+	bool SendToLogger(CBrokerVolumeSettings &parms);
+	bool SendToLogger(CCustomerPositionSettings &parms);
+	bool SendToLogger(CMarketWatchSettings &parms);
+	bool SendToLogger(CSecurityDetailSettings &parms);
+	bool SendToLogger(CTradeLookupSettings &parms);
+	bool SendToLogger(CTradeOrderSettings &parms);
+	bool SendToLogger(CTradeUpdateSettings &parms);
+	bool SendToLogger(CTxnMixGeneratorSettings &parms);
+	bool SendToLogger(TDriverCETxnSettings &parms);
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
 #endif // BASE_LOGGER_H

@@ -35,9 +35,9 @@
  */
 
 /*
-*   Base interface used to output generation and load progress
-*   and any other supporting information.
-*/
+ *   Base interface used to output generation and load progress
+ *   and any other supporting information.
+ */
 
 #ifndef EGEN_GENERATE_AND_LOAD_BASE_OUTPUT_H
 #define EGEN_GENERATE_AND_LOAD_BASE_OUTPUT_H
@@ -46,69 +46,67 @@
 
 using namespace std;
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CGenerateAndLoadBaseOutput
-{
-public:
-    /*
-    *  Virtual destructor. Provided so that a sponsor-specific
-    *  destructor can be called on destruction from the base-class pointer.
-    *
-    *  PARAMETERS:
-    *           none.
-    *
-    *  RETURNS:
-    *           not applicable.
-    */
-    virtual ~CGenerateAndLoadBaseOutput() {};
+class CGenerateAndLoadBaseOutput {
+  public:
+	/*
+	 *  Virtual destructor. Provided so that a sponsor-specific
+	 *  destructor can be called on destruction from the base-class pointer.
+	 *
+	 *  PARAMETERS:
+	 *           none.
+	 *
+	 *  RETURNS:
+	 *           not applicable.
+	 */
+	virtual ~CGenerateAndLoadBaseOutput(){};
 
-    /*
-    *  Output beginning of table generation.
-    *
-    *  PARAMETERS:
-    *           IN  szMsg       - string to output to the user
-    *
-    *  RETURNS:
-    *           none.
-    */
-    virtual void OutputStart(string szMsg) = 0;
+	/*
+	 *  Output beginning of table generation.
+	 *
+	 *  PARAMETERS:
+	 *           IN  szMsg       - string to output to the user
+	 *
+	 *  RETURNS:
+	 *           none.
+	 */
+	virtual void OutputStart(string szMsg) = 0;
 
-    /*
-    *  Output progress of table generation.
-    *
-    *  PARAMETERS:
-    *           IN  szMsg       - string to output to the user
-    *
-    *  RETURNS:
-    *           none.
-    */
-    virtual void OutputProgress(string szMsg) = 0;
+	/*
+	 *  Output progress of table generation.
+	 *
+	 *  PARAMETERS:
+	 *           IN  szMsg       - string to output to the user
+	 *
+	 *  RETURNS:
+	 *           none.
+	 */
+	virtual void OutputProgress(string szMsg) = 0;
 
-    /*
-    *  Output completion of table generation.
-    *
-    *  PARAMETERS:
-    *           IN  szMsg       - string to output to the user
-    *
-    *  RETURNS:
-    *           none.
-    */
-    virtual void OutputComplete(string szMsg) = 0;
+	/*
+	 *  Output completion of table generation.
+	 *
+	 *  PARAMETERS:
+	 *           IN  szMsg       - string to output to the user
+	 *
+	 *  RETURNS:
+	 *           none.
+	 */
+	virtual void OutputComplete(string szMsg) = 0;
 
-    /*
-    *  Output end-of-line.
-    *
-    *  PARAMETERS:
-    *           IN  szMsg       - string to output to the user
-    *
-    *  RETURNS:
-    *           none.
-    */
-    virtual void OutputNewline() = 0;
+	/*
+	 *  Output end-of-line.
+	 *
+	 *  PARAMETERS:
+	 *           IN  szMsg       - string to output to the user
+	 *
+	 *  RETURNS:
+	 *           none.
+	 */
+	virtual void OutputNewline() = 0;
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //EGEN_GENERATE_AND_LOAD_BASE_OUTPUT_H
+#endif // EGEN_GENERATE_AND_LOAD_BASE_OUTPUT_H

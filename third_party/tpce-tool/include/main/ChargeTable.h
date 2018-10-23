@@ -35,8 +35,8 @@
  */
 
 /*
-*   Class representing the Charge table.
-*/
+ *   Class representing the Charge table.
+ */
 #ifndef CHARGE_TABLE_H
 #define CHARGE_TABLE_H
 
@@ -44,19 +44,16 @@
 #include "input/DataFileTypes.h"
 #include "TableRows.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CChargeTable : public FixedTable<ChargeDataFile_t, CHARGE_ROW>
-{
-public:
-    CChargeTable(const ChargeDataFile_t &dataFile);
-    ~CChargeTable();
+class CChargeTable : public FixedTable<ChargeDataFile_t, CHARGE_ROW> {
+  public:
+	CChargeTable(const ChargeDataFile_t &dataFile);
+	~CChargeTable();
 
-    virtual void LoadTableRow();
-
+	virtual void LoadTableRow();
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //CHARGE_TABLE_H
+#endif // CHARGE_TABLE_H

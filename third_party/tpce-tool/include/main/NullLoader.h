@@ -35,9 +35,9 @@
  */
 
 /*
-*   Null loader e.g. it throws away the passed in generated data.
-*   Useful for testing.
-*/
+ *   Null loader e.g. it throws away the passed in generated data.
+ *   Useful for testing.
+ */
 
 #ifndef NULL_LOADER_H
 #define NULL_LOADER_H
@@ -45,38 +45,36 @@
 #include "BaseLoader.h"
 #include "unusedflag.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-template <typename T> class CNullLoader : public CBaseLoader<T>
-{
+template <typename T> class CNullLoader : public CBaseLoader<T> {
 
-public:
-    /*
-    *  Routine to write a new record into the database.
-    *  Since this is a NULL loader, it does nothing.
-    *
-    *  PARAMETERS:
-    *           IN  next_record     - ignored
-    *
-    *  RETURNS:
-    *           none.
-    */
-    virtual void WriteNextRecord(const T& next_record UNUSED) {}; //do not load
+  public:
+	/*
+	 *  Routine to write a new record into the database.
+	 *  Since this is a NULL loader, it does nothing.
+	 *
+	 *  PARAMETERS:
+	 *           IN  next_record     - ignored
+	 *
+	 *  RETURNS:
+	 *           none.
+	 */
+	virtual void WriteNextRecord(const T &next_record UNUSED){}; // do not load
 
-    /*
-    *  Routine called when the table has been loaded.
-    *  Since this is a NULL loader, it does nothing.
-    *
-    *  PARAMETERS:
-    *           none.
-    *
-    *  RETURNS:
-    *           none.
-    */
-    virtual void FinishLoad() {};   //do nothing
+	/*
+	 *  Routine called when the table has been loaded.
+	 *  Since this is a NULL loader, it does nothing.
+	 *
+	 *  PARAMETERS:
+	 *           none.
+	 *
+	 *  RETURNS:
+	 *           none.
+	 */
+	virtual void FinishLoad(){}; // do nothing
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif  // #ifndef NULL_LOADER_H
+#endif // #ifndef NULL_LOADER_H

@@ -47,63 +47,62 @@
 #include "progressmeterinterface.h"
 #include "utilities/locking.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class ProgressMeter : public ProgressMeterInterface
-{
-    private:
-        int            m_total;
-        int            m_current;
-        int            m_display_interval;
-        CDateTime      m_start_time;
-        CDateTime      m_last_time;
-        std::ostream*  m_output;
-        int            m_verbosity;
-        mutable CMutex m_mutex;
+class ProgressMeter : public ProgressMeterInterface {
+  private:
+	int m_total;
+	int m_current;
+	int m_display_interval;
+	CDateTime m_start_time;
+	CDateTime m_last_time;
+	std::ostream *m_output;
+	int m_verbosity;
+	mutable CMutex m_mutex;
 
-    public:
-        // total - The total number of tasks to complete before the job is done.
-        ProgressMeter(int total, int verbosity = 0, std::ostream* output=&std::cout);
+  public:
+	// total - The total number of tasks to complete before the job is done.
+	ProgressMeter(int total, int verbosity = 0,
+	              std::ostream *output = &std::cout);
 
-        // val - minimum number of seconds between automatic display updates
-        //       set to -1 to disable automatic displays
-        void set_display_interval(int val);
-        int display_interval() const;
+	// val - minimum number of seconds between automatic display updates
+	//       set to -1 to disable automatic displays
+	void set_display_interval(int val);
+	int display_interval() const;
 
-        // Displays the current progress and an estimated time to finish onto
-        // the provided output stream.
-        virtual void display() const;
+	// Displays the current progress and an estimated time to finish onto
+	// the provided output stream.
+	virtual void display() const;
 
-        // Displays a progress message to the specified output stream
-        //
-        // output - output stream to display progress to
-        virtual void display_message(std::ostream& out) const;
+	// Displays a progress message to the specified output stream
+	//
+	// output - output stream to display progress to
+	virtual void display_message(std::ostream &out) const;
 
-        // Notifies the progress meter that some tasks have been completed.  If there
-        // hasn't been a display update within display_interval seconds then an update
-        // will be emitted to the output stream.
-        //
-        // count  - number of tasks completed
-        // output - output stream to display progress to
-        void inc(int count=1);
+	// Notifies the progress meter that some tasks have been completed.  If
+	// there hasn't been a display update within display_interval seconds then
+	// an update will be emitted to the output stream.
+	//
+	// count  - number of tasks completed
+	// output - output stream to display progress to
+	void inc(int count = 1);
 
-        // Return current count
-        int current() const;
+	// Return current count
+	int current() const;
 
-        // Return total count
-        int total() const;
+	// Return total count
+	int total() const;
 
-        void lock() const;
-        void unlock() const;
+	void lock() const;
+	void unlock() const;
 
-        // Output a message if it has the correct verbosity
-        //
-        // mesg   - message to display
-        // level  - verbosity level to display at
-        virtual void message(const std::string& mesg, int level=0);
+	// Output a message if it has the correct verbosity
+	//
+	// mesg   - message to display
+	// level  - verbosity level to display at
+	virtual void message(const std::string &mesg, int level = 0);
 };
 
-}
+} // namespace TPCE
 
 #endif // PROGRESSMETER_H_INCLUDED

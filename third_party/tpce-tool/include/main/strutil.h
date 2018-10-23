@@ -46,25 +46,24 @@
 
 using namespace std;
 
-namespace TPCE
-{
+namespace TPCE {
 
 // Converts a string to a 64 bit integer, supports the suffixes
 // KMG for powers of 1000 multipliers
-extern INT64       strtoint64     (const char *ptr);
+extern INT64 strtoint64(const char *ptr);
 
 // Converts a string to a double, supports the suffixes
 // KMG for powers of 1000 multipliers
-extern double      strtodbl       (const char *ptr);
+extern double strtodbl(const char *ptr);
 
 // Converts a string in HH:MM:SS to a 64 bit integral number of seconds
 // HH or HH:MM are optional.  Seconds over 60 may be specified.
 // (i.e. 1:00:00 and 3600 are equivalent)
-extern INT64       timestrtoint64 (const char *ptr);
+extern INT64 timestrtoint64(const char *ptr);
 
 // Converts an integral number of seconds to the string HH:MM:SS
 // HH or HH:MM may be omitted if the time value is small enough
-extern std::string int64totimestr (INT64 val);
-}
+extern std::string int64totimestr(INT64 val);
+} // namespace TPCE
 
 #endif // STRUTIL_H_INCLUDED

@@ -35,41 +35,37 @@
  */
 
 /*
-*   Flat file loader for NEWS_XREF.
-*/
+ *   Flat file loader for NEWS_XREF.
+ */
 #ifndef FLAT_NEWS_XREF_LOAD_H
 #define FLAT_NEWS_XREF_LOAD_H
 
 #include "FlatFileLoad_common.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CFlatNewsXRefLoad : public CFlatFileLoader <NEWS_XREF_ROW>
-{
-private:
-    const std::string NewsXRefRowFmt;
-public:
-    CFlatNewsXRefLoad( char *szFileName, FlatFileOutputModes FlatFileOutputMode ) 
-        : CFlatFileLoader<NEWS_XREF_ROW>(szFileName, FlatFileOutputMode)
-        , NewsXRefRowFmt("%" PRId64 "|%" PRId64 "\n")
-    {};
+class CFlatNewsXRefLoad : public CFlatFileLoader<NEWS_XREF_ROW> {
+  private:
+	const std::string NewsXRefRowFmt;
 
-    /*
-    *   Writes a record to the file.
-    */
-    void WriteNextRecord(const NEWS_XREF_ROW &next_record)
-    {
-        int rc = fprintf( hOutFile, NewsXRefRowFmt.c_str(),
-                  next_record.NX_NI_ID,
-                  next_record.NX_CO_ID
-                );
-        if (rc < 0) {
-            throw CSystemErr(CSystemErr::eWriteFile, "CFlatNewsXRefLoad::WriteNextRecord");
-        }
-    }
+  public:
+	CFlatNewsXRefLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
+	    : CFlatFileLoader<NEWS_XREF_ROW>(szFileName, FlatFileOutputMode),
+	      NewsXRefRowFmt("%" PRId64 "|%" PRId64 "\n"){};
+
+	/*
+	 *   Writes a record to the file.
+	 */
+	void WriteNextRecord(const NEWS_XREF_ROW &next_record) {
+		int rc = fprintf(hOutFile, NewsXRefRowFmt.c_str(), next_record.NX_NI_ID,
+		                 next_record.NX_CO_ID);
+		if (rc < 0) {
+			throw CSystemErr(CSystemErr::eWriteFile,
+			                 "CFlatNewsXRefLoad::WriteNextRecord");
+		}
+	}
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //FLAT_NEWS_XREF_LOAD_H
+#endif // FLAT_NEWS_XREF_LOAD_H

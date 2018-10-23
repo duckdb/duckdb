@@ -35,48 +35,40 @@
  */
 
 /*
-*   Flat file loader for EXCHANGE.
-*/
+ *   Flat file loader for EXCHANGE.
+ */
 #ifndef FLAT_EXCHANGE_LOAD_H
 #define FLAT_EXCHANGE_LOAD_H
 
 #include "FlatFileLoad_common.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CFlatExchangeLoad : public CFlatFileLoader <EXCHANGE_ROW>
-{
-private:
-    const std::string ExchangeRowFmt;
+class CFlatExchangeLoad : public CFlatFileLoader<EXCHANGE_ROW> {
+  private:
+	const std::string ExchangeRowFmt;
 
-public:
-    CFlatExchangeLoad( char *szFileName, FlatFileOutputModes FlatFileOutputMode ) 
-        : CFlatFileLoader<EXCHANGE_ROW>(szFileName, FlatFileOutputMode)
-        , ExchangeRowFmt("%s|%s|%d|%d|%d|%s|%" PRId64 "\n")
-    {};
+  public:
+	CFlatExchangeLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
+	    : CFlatFileLoader<EXCHANGE_ROW>(szFileName, FlatFileOutputMode),
+	      ExchangeRowFmt("%s|%s|%d|%d|%d|%s|%" PRId64 "\n"){};
 
-    /*
-    *   Writes a record to the file.
-    */
-    void WriteNextRecord(const EXCHANGE_ROW & next_record)
-    {
-        int rc = fprintf( hOutFile, ExchangeRowFmt.c_str(),
-            next_record.EX_ID,
-                  next_record.EX_NAME,
-                  next_record.EX_NUM_SYMB,
-                  next_record.EX_OPEN,
-                  next_record.EX_CLOSE,
-                  next_record.EX_DESC,
-                  next_record.EX_AD_ID
-                );
+	/*
+	 *   Writes a record to the file.
+	 */
+	void WriteNextRecord(const EXCHANGE_ROW &next_record) {
+		int rc = fprintf(hOutFile, ExchangeRowFmt.c_str(), next_record.EX_ID,
+		                 next_record.EX_NAME, next_record.EX_NUM_SYMB,
+		                 next_record.EX_OPEN, next_record.EX_CLOSE,
+		                 next_record.EX_DESC, next_record.EX_AD_ID);
 
-        if (rc < 0) {
-            throw CSystemErr(CSystemErr::eWriteFile, "CFlatExchangeLoad::WriteNextRecord");
-        }
-    }
+		if (rc < 0) {
+			throw CSystemErr(CSystemErr::eWriteFile,
+			                 "CFlatExchangeLoad::WriteNextRecord");
+		}
+	}
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //FLAT_EXCHANGE_LOAD_H
+#endif // FLAT_EXCHANGE_LOAD_H

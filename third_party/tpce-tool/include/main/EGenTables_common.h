@@ -37,7 +37,7 @@
 #ifndef EGEN_TABLES_COMMON_H
 #define EGEN_TABLES_COMMON_H
 
-#define WIN32_LEAN_AND_MEAN     // Exclude rarely-used stuff from Windows headers
+#define WIN32_LEAN_AND_MEAN // Exclude rarely-used stuff from Windows headers
 
 #include <cassert>
 #include <cmath>
@@ -60,4 +60,4 @@ using namespace std;
 #include "Person.h"
 #include "CustomerSelection.h"
 
-#endif  // #ifndef EGEN_TABLES_COMMON_H
+#endif // #ifndef EGEN_TABLES_COMMON_H

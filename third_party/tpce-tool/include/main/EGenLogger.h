@@ -35,8 +35,8 @@
  */
 
 /******************************************************************************
-*   Description:        This file implements the interface for data logging.
-******************************************************************************/
+ *   Description:        This file implements the interface for data logging.
+ ******************************************************************************/
 
 #ifndef EGEN_LOGGER_H
 #define EGEN_LOGGER_H
@@ -51,45 +51,45 @@
 #include "BaseLogger.h"
 #include "EGenLogFormatterTab.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CEGenLogger : public CBaseLogger
-{
-private:
-    char        m_Filename[iMaxPath];
-    ofstream    m_Log;
-    CMutex      m_LogLock;
+class CEGenLogger : public CBaseLogger {
+  private:
+	char m_Filename[iMaxPath];
+	ofstream m_Log;
+	CMutex m_LogLock;
 
-    bool SendToLoggerImpl(const char *szPrefix, const char *szTimestamp, const char *szMsg)
-    {
-        m_LogLock.lock();
-        m_Log << szPrefix << " " << szTimestamp << " " << szMsg << endl;
-        m_Log.flush();
-        if (!m_Log)
-        {
-            throw CSystemErr(CSystemErr::eWriteFile, "CEGenLogger::SendToLoggerImpl");
-        }
-        m_LogLock.unlock();
-        return true;
-    }
+	bool SendToLoggerImpl(const char *szPrefix, const char *szTimestamp,
+	                      const char *szMsg) {
+		// m_LogLock.lock();
+		// cerr << szPrefix << " " << szTimestamp << " " << szMsg << endl;
+		// // m_Log.flush();
+		// if (!m_Log)
+		// {
+		//     throw CSystemErr(CSystemErr::eWriteFile,
+		//     "CEGenLogger::SendToLoggerImpl");
+		// }
+		// m_LogLock.unlock();
+		return true;
+	}
 
-public:
-    CEGenLogger(eDriverType drvType, UINT32 UniqueId, const char *szFilename, CBaseLogFormatter* pLogFormatter)
-    : CBaseLogger(drvType, UniqueId, pLogFormatter)
-    {
-        // Copy Log Filename
-        strncpy(m_Filename, szFilename, sizeof(m_Filename));
+  public:
+	CEGenLogger(eDriverType drvType, UINT32 UniqueId, const char *szFilename,
+	            CBaseLogFormatter *pLogFormatter)
+	    : CBaseLogger(drvType, UniqueId, pLogFormatter){
+	          // Copy Log Filename
+	          // strncpy(m_Filename, szFilename, sizeof(m_Filename));
 
-        // Open Log File
-        m_Log.open(m_Filename);
-        if (!m_Log)
-        {
-            throw CSystemErr(CSystemErr::eCreateFile, "CEGenLogger::CEGenLogger");
-        }
-    };
+	          // // Open Log File
+	          // m_Log.open(m_Filename);
+	          // if (!m_Log)
+	          // {
+	          //     throw CSystemErr(CSystemErr::eCreateFile,
+	          //     "CEGenLogger::CEGenLogger");
+	          // }
+	      };
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //EGEN_LOGGER_H
+#endif // EGEN_LOGGER_H

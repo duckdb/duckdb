@@ -37,16 +37,16 @@
 #ifndef EGEN_UTILITIES_STDAFX_H
 #define EGEN_UTILITIES_STDAFX_H
 
-#define WIN32_LEAN_AND_MEAN     // Exclude rarely-used stuff from Windows headers
+#define WIN32_LEAN_AND_MEAN // Exclude rarely-used stuff from Windows headers
 
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
-#ifdef WIN32            //for Windows platform
+#ifdef WIN32 // for Windows platform
 #include <windows.h>
 #else
-#include <cerrno>       //for Unix
-#include <sys/time.h>   //for gettimeofday() on Linux
+#include <cerrno>     //for Unix
+#include <sys/time.h> //for gettimeofday() on Linux
 #endif
 #include <ctime>
 #include <cassert>
@@ -60,7 +60,7 @@
 #ifdef NEED_STDIO_H
 #include <stdio.h>
 #endif
- 
+
 using namespace std;
 
 // TODO: reference additional headers your program requires here
@@ -76,4 +76,4 @@ using namespace std;
 #include "EGenVersion.h"
 #include "Money.h"
 
-#endif  // #ifndef EGEN_UTILITIES_STDAFX_H
+#endif // #ifndef EGEN_UTILITIES_STDAFX_H

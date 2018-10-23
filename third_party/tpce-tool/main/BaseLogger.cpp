@@ -35,8 +35,8 @@
  */
 
 /******************************************************************************
-*   Description:        This file implements the interface for data logging.
-******************************************************************************/
+ *   Description:        This file implements the interface for data logging.
+ ******************************************************************************/
 
 #include <iostream>
 #include <sstream>
@@ -49,128 +49,106 @@
 
 using namespace TPCE;
 
-char TPCE::szDriverTypeNames[eDriverMax][14] =
-{
-  "EGenLoader",
-  "EGenDriverAll",
-  "EGenDriverCE",
-  "EGenDriverMEE",
-  "EGenDriverDM"
-};
+char TPCE::szDriverTypeNames[eDriverMax][14] = {"EGenLoader", "EGenDriverAll",
+                                                "EGenDriverCE", "EGenDriverMEE",
+                                                "EGenDriverDM"};
 
 /* Constructor */
-CBaseLogger::CBaseLogger(eDriverType drvType, INT32 UniqueId, CBaseLogFormatter* pFormatter)
-    : m_pLogFormatter( pFormatter )
-{
-    char m_Version[32];
+CBaseLogger::CBaseLogger(eDriverType drvType, INT32 UniqueId,
+                         CBaseLogFormatter *pFormatter)
+    : m_pLogFormatter(pFormatter) {
+	char m_Version[32];
 
-    // Get EGen Version
-    GetEGenVersionString(m_Version, sizeof(m_Version));
+	// Get EGen Version
+	GetEGenVersionString(m_Version, sizeof(m_Version));
 
-    // Generate Log Prefix String
-    snprintf(&m_Prefix[0], sizeof(m_Prefix), "%s (%s) %d",
-             szDriverTypeNames[drvType], m_Version, UniqueId);
+	// Generate Log Prefix String
+	snprintf(&m_Prefix[0], sizeof(m_Prefix), "%s (%s) %d",
+	         szDriverTypeNames[drvType], m_Version, UniqueId);
 }
 
 /* Methods */
-bool CBaseLogger::SendToLogger(const char *szPrefix, const char *szMsg)
-{
-    CDateTime curTime;
-    return SendToLoggerImpl(szPrefix, curTime.ToStr(12), szMsg);
+bool CBaseLogger::SendToLogger(const char *szPrefix, const char *szMsg) {
+	CDateTime curTime;
+	return SendToLoggerImpl(szPrefix, curTime.ToStr(12), szMsg);
 }
 
 // Strings
-bool CBaseLogger::SendToLogger(const char *str)
-{
-    return SendToLogger(m_Prefix, str);
+bool CBaseLogger::SendToLogger(const char *str) {
+	return SendToLogger(m_Prefix, str);
 }
-bool CBaseLogger::SendToLogger(string str)
-{
-    return SendToLogger(str.c_str());
+bool CBaseLogger::SendToLogger(string str) {
+	return SendToLogger(str.c_str());
 }
 
 // Parameter Structures
-bool CBaseLogger::SendToLogger(CLoaderSettings& parms)
-{
-    return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
+bool CBaseLogger::SendToLogger(CLoaderSettings &parms) {
+	return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
 }
-bool CBaseLogger::SendToLogger(CDriverGlobalSettings& parms)
-{
-    return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
+bool CBaseLogger::SendToLogger(CDriverGlobalSettings &parms) {
+	return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
 }
 
-bool CBaseLogger::SendToLogger(CDriverCESettings& parms)
-{
-    return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
+bool CBaseLogger::SendToLogger(CDriverCESettings &parms) {
+	return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
 }
 
-bool CBaseLogger::SendToLogger(CDriverCEPartitionSettings& parms)
-{
-    return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
+bool CBaseLogger::SendToLogger(CDriverCEPartitionSettings &parms) {
+	return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
 }
 
-bool CBaseLogger::SendToLogger(CDriverMEESettings& parms)
-{
-    return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
+bool CBaseLogger::SendToLogger(CDriverMEESettings &parms) {
+	return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
 }
 
-bool CBaseLogger::SendToLogger(CDriverDMSettings& parms)
-{
-    return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
+bool CBaseLogger::SendToLogger(CDriverDMSettings &parms) {
+	return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
 }
 
-bool CBaseLogger::SendToLogger(CBrokerVolumeSettings& parms)
-{
-    return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
+bool CBaseLogger::SendToLogger(CBrokerVolumeSettings &parms) {
+	return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
 }
 
-bool CBaseLogger::SendToLogger(CCustomerPositionSettings& parms)
-{
-    return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
+bool CBaseLogger::SendToLogger(CCustomerPositionSettings &parms) {
+	return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
 }
 
-bool CBaseLogger::SendToLogger(CMarketWatchSettings& parms)
-{
-    return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
+bool CBaseLogger::SendToLogger(CMarketWatchSettings &parms) {
+	return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
 }
 
-bool CBaseLogger::SendToLogger(CSecurityDetailSettings& parms)
-{
-    return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
+bool CBaseLogger::SendToLogger(CSecurityDetailSettings &parms) {
+	return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
 }
 
-bool CBaseLogger::SendToLogger(CTradeLookupSettings& parms)
-{
-    return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
+bool CBaseLogger::SendToLogger(CTradeLookupSettings &parms) {
+	return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
 }
 
-bool CBaseLogger::SendToLogger(CTradeOrderSettings& parms)
-{
-    return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
+bool CBaseLogger::SendToLogger(CTradeOrderSettings &parms) {
+	return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
 }
 
-bool CBaseLogger::SendToLogger(CTradeUpdateSettings& parms)
-{
-    return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
+bool CBaseLogger::SendToLogger(CTradeUpdateSettings &parms) {
+	return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
 }
 
-bool CBaseLogger::SendToLogger(CTxnMixGeneratorSettings& parms)
-{
-    return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
+bool CBaseLogger::SendToLogger(CTxnMixGeneratorSettings &parms) {
+	return SendToLogger(m_pLogFormatter->GetLogOutput(parms));
 }
 
-bool CBaseLogger::SendToLogger(TDriverCETxnSettings& parms)
-{
-    bool result = false;
+bool CBaseLogger::SendToLogger(TDriverCETxnSettings &parms) {
+	bool result = false;
 
-    result |= SendToLogger(m_pLogFormatter->GetLogOutput(parms.BV_settings));
-    result |= SendToLogger(m_pLogFormatter->GetLogOutput(parms.CP_settings));
-    result |= SendToLogger(m_pLogFormatter->GetLogOutput(parms.MW_settings));
-    result |= SendToLogger(m_pLogFormatter->GetLogOutput(parms.SD_settings));
-    result |= SendToLogger(m_pLogFormatter->GetLogOutput(parms.TL_settings));
-    result |= SendToLogger(m_pLogFormatter->GetLogOutput(parms.TO_settings));
-    result |= SendToLogger(m_pLogFormatter->GetLogOutput(parms.TU_settings));
-    result |= SendToLogger(m_pLogFormatter->GetLogOutput(parms.TxnMixGenerator_settings));
+	result |= SendToLogger(m_pLogFormatter->GetLogOutput(parms.BV_settings));
+	result |= SendToLogger(m_pLogFormatter->GetLogOutput(parms.CP_settings));
+	result |= SendToLogger(m_pLogFormatter->GetLogOutput(parms.MW_settings));
+	result |= SendToLogger(m_pLogFormatter->GetLogOutput(parms.SD_settings));
+	result |= SendToLogger(m_pLogFormatter->GetLogOutput(parms.TL_settings));
+	result |= SendToLogger(m_pLogFormatter->GetLogOutput(parms.TO_settings));
+	result |= SendToLogger(m_pLogFormatter->GetLogOutput(parms.TU_settings));
+	result |= SendToLogger(
+	    m_pLogFormatter->GetLogOutput(parms.TxnMixGenerator_settings));
 
-    return result;
+	return result;
 }

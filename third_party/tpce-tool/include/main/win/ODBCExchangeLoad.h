@@ -35,56 +35,62 @@
  */
 
 /*
-*   Database loader class for EXCHANGE table.
-*/
+ *   Database loader class for EXCHANGE table.
+ */
 #ifndef ODBC_EXCHANGE_LOAD_H
 #define ODBC_EXCHANGE_LOAD_H
 
 #include "../utilities/TableConsts.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CODBCExchangeLoad : public CDBLoader <EXCHANGE_ROW>
-{
-public:
-    CODBCExchangeLoad(char *szServer, char *szDatabase, char *szLoaderParams, char *szTable = "EXCHANGE")
-        : CDBLoader<EXCHANGE_ROW>(szServer, szDatabase, szLoaderParams, szTable)
-    {
-    };
+class CODBCExchangeLoad : public CDBLoader<EXCHANGE_ROW> {
+  public:
+	CODBCExchangeLoad(char *szServer, char *szDatabase, char *szLoaderParams,
+	                  char *szTable = "EXCHANGE")
+	    : CDBLoader<EXCHANGE_ROW>(szServer, szDatabase, szLoaderParams,
+	                              szTable){};
 
-    virtual void BindColumns()
-    {
-        //Binding function we have to implement.
-        int i = 0;
-        if (   bcp_bind(m_hdbc, (BYTE *) &m_row.EX_ID, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED
-            || bcp_bind(m_hdbc, (BYTE *) &m_row.EX_NAME, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED
-            || bcp_bind(m_hdbc, (BYTE *) &m_row.EX_NUM_SYMB, 0, SQL_VARLEN_DATA, NULL, 0, SQLINT4, ++i) != SUCCEED
-            || bcp_bind(m_hdbc, (BYTE *) &m_row.EX_OPEN, 0, SQL_VARLEN_DATA, NULL, 0, SQLINT4, ++i) != SUCCEED
-            || bcp_bind(m_hdbc, (BYTE *) &m_row.EX_CLOSE, 0, SQL_VARLEN_DATA, NULL, 0, SQLINT4, ++i) != SUCCEED
-//          || bcp_bind(m_hdbc, (BYTE *) &m_row.EX_OPEN, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED
-//          || bcp_bind(m_hdbc, (BYTE *) &m_row.EX_CLOSE, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED
-            || bcp_bind(m_hdbc, (BYTE *) &m_row.EX_DESC, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED
-            || bcp_bind(m_hdbc, (BYTE *) &m_row.EX_AD_ID, 0, SQL_VARLEN_DATA, NULL, 0, IDENT_BIND, ++i) != SUCCEED
-            )
-            ThrowError(CODBCERR::eBcpBind);
+	virtual void BindColumns() {
+		// Binding function we have to implement.
+		int i = 0;
+		if (bcp_bind(m_hdbc, (BYTE *)&m_row.EX_ID, 0, SQL_VARLEN_DATA,
+		             (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.EX_NAME, 0, SQL_VARLEN_DATA,
+		             (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.EX_NUM_SYMB, 0, SQL_VARLEN_DATA,
+		             NULL, 0, SQLINT4, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.EX_OPEN, 0, SQL_VARLEN_DATA, NULL,
+		             0, SQLINT4, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.EX_CLOSE, 0, SQL_VARLEN_DATA, NULL,
+		             0, SQLINT4, ++i) != SUCCEED
+		    //          || bcp_bind(m_hdbc, (BYTE *) &m_row.EX_OPEN, 0,
+		    //          SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) !=
+		    //          SUCCEED
+		    //          || bcp_bind(m_hdbc, (BYTE *) &m_row.EX_CLOSE, 0,
+		    //          SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) !=
+		    //          SUCCEED
+		    || bcp_bind(m_hdbc, (BYTE *)&m_row.EX_DESC, 0, SQL_VARLEN_DATA,
+		                (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.EX_AD_ID, 0, SQL_VARLEN_DATA, NULL,
+		             0, IDENT_BIND, ++i) != SUCCEED)
+			ThrowError(CODBCERR::eBcpBind);
 
-//      if ( bcp_control(m_hdbc, BCPHINTS, "TABLOCK" ) != SUCCEED )
-//          ThrowError(CODBCERR::eBcpControl);
-    };
+		//      if ( bcp_control(m_hdbc, BCPHINTS, "TABLOCK" ) != SUCCEED )
+		//          ThrowError(CODBCERR::eBcpControl);
+	};
 
-    virtual void CopyRow(const EXCHANGE_ROW &row)
-    {
-        strncpy(m_row.EX_ID, row.EX_ID, sizeof(m_row.EX_ID));
-        strncpy(m_row.EX_NAME, row.EX_NAME, sizeof(m_row.EX_NAME));
-        m_row.EX_NUM_SYMB = row.EX_NUM_SYMB;
-        m_row.EX_OPEN = row.EX_OPEN;
-        m_row.EX_CLOSE = row.EX_CLOSE;
-        strncpy(m_row.EX_DESC, row.EX_DESC, sizeof(m_row.EX_DESC));
-        m_row.EX_AD_ID = row.EX_AD_ID;
-    };
+	virtual void CopyRow(const EXCHANGE_ROW &row) {
+		strncpy(m_row.EX_ID, row.EX_ID, sizeof(m_row.EX_ID));
+		strncpy(m_row.EX_NAME, row.EX_NAME, sizeof(m_row.EX_NAME));
+		m_row.EX_NUM_SYMB = row.EX_NUM_SYMB;
+		m_row.EX_OPEN = row.EX_OPEN;
+		m_row.EX_CLOSE = row.EX_CLOSE;
+		strncpy(m_row.EX_DESC, row.EX_DESC, sizeof(m_row.EX_DESC));
+		m_row.EX_AD_ID = row.EX_AD_ID;
+	};
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //ODBC_EXCHANGE_LOAD_H
+#endif // ODBC_EXCHANGE_LOAD_H

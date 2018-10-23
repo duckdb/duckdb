@@ -35,49 +35,45 @@
  */
 
 /*
-*   Base interface for a class that implements Send To Market.
-*   Implementations should subclass from this interface to include platform-dependent
-*   functionality.
-*/
+ *   Base interface for a class that implements Send To Market.
+ *   Implementations should subclass from this interface to include
+ * platform-dependent functionality.
+ */
 #ifndef TXN_HARNESS_SEND_TO_MARKET_INTERFACE_H
 #define TXN_HARNESS_SEND_TO_MARKET_INTERFACE_H
 
 #include "TxnHarnessStructs.h"
 #include "MEETradeRequestActions.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CSendToMarketInterface
-{
-public:
-    /*
-    *  Virtual destructor. Provided so that a sponsor-specific
-    *  destructor can be called on destruction from the base-class pointer.
-    *
-    *  PARAMETERS:
-    *           none.
-    *
-    *  RETURNS:
-    *           not applicable.
-    */
-    virtual ~CSendToMarketInterface() {};
+class CSendToMarketInterface {
+  public:
+	/*
+	 *  Virtual destructor. Provided so that a sponsor-specific
+	 *  destructor can be called on destruction from the base-class pointer.
+	 *
+	 *  PARAMETERS:
+	 *           none.
+	 *
+	 *  RETURNS:
+	 *           not applicable.
+	 */
+	virtual ~CSendToMarketInterface(){};
 
-    bool SendToMarketFromFrame(TTradeRequest &trade_mes)
-    {
-        trade_mes.eAction = eMEEProcessOrder;
-        return SendToMarket(trade_mes);
-    }
+	bool SendToMarketFromFrame(TTradeRequest &trade_mes) {
+		trade_mes.eAction = eMEEProcessOrder;
+		return SendToMarket(trade_mes);
+	}
 
-    bool SendToMarketFromHarness(TTradeRequest &trade_mes)
-    {
-        return SendToMarket(trade_mes);
-    }
+	bool SendToMarketFromHarness(TTradeRequest &trade_mes) {
+		return SendToMarket(trade_mes);
+	}
 
-protected:
-    virtual bool SendToMarket(TTradeRequest &trade_mes) = 0;
+  protected:
+	virtual bool SendToMarket(TTradeRequest &trade_mes) = 0;
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //TXN_HARNESS_SEND_TO_MARKET_INTERFACE_H
+#endif // TXN_HARNESS_SEND_TO_MARKET_INTERFACE_H

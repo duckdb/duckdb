@@ -36,8 +36,8 @@
  */
 
 /*
-*   Class representing the TaxRate table.
-*/
+ *   Class representing the TaxRate table.
+ */
 #ifndef TAX_RATE_TABLE_H
 #define TAX_RATE_TABLE_H
 
@@ -45,19 +45,16 @@
 #include "input/TaxRateFile.h"
 #include "TableRows.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class TaxRateTable : public FixedTable<CTaxRateFile, TAX_RATE_ROW>
-{
-public:
-    TaxRateTable(const CTaxRateFile &dataFile);
-    ~TaxRateTable();
+class TaxRateTable : public FixedTable<CTaxRateFile, TAX_RATE_ROW> {
+  public:
+	TaxRateTable(const CTaxRateFile &dataFile);
+	~TaxRateTable();
 
-    virtual void LoadTableRow();
-
+	virtual void LoadTableRow();
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //TAX_RATE_TABLE_H
+#endif // TAX_RATE_TABLE_H

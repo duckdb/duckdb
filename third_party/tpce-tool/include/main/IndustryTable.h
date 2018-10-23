@@ -35,8 +35,8 @@
  */
 
 /*
-*   Class representing the Industry table.
-*/
+ *   Class representing the Industry table.
+ */
 #ifndef INDUSTRY_TABLE_H
 #define INDUSTRY_TABLE_H
 
@@ -44,19 +44,16 @@
 #include "input/DataFileTypes.h"
 #include "TableRows.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CIndustryTable : public FixedTable<IndustryDataFile_t, INDUSTRY_ROW>
-{
-public:
-    CIndustryTable(const IndustryDataFile_t &dataFile);
-    ~CIndustryTable();
+class CIndustryTable : public FixedTable<IndustryDataFile_t, INDUSTRY_ROW> {
+  public:
+	CIndustryTable(const IndustryDataFile_t &dataFile);
+	~CIndustryTable();
 
-    virtual void LoadTableRow();
-
+	virtual void LoadTableRow();
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //INDUSTRY_TABLE_H
+#endif // INDUSTRY_TABLE_H

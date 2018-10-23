@@ -35,46 +35,45 @@
  */
 
 /*
-*   Database loader class for ZIP_CODE table.
-*/
+ *   Database loader class for ZIP_CODE table.
+ */
 #ifndef ODBC_ZIP_CODE_LOAD_H
 #define ODBC_ZIP_CODE_LOAD_H
 
 #include "../utilities/TableConsts.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CODBCZipCodeLoad : public CDBLoader <ZIP_CODE_ROW>
-{
-public:
-    CODBCZipCodeLoad(char *szServer, char *szDatabase, char *szLoaderParams, char *szTable = "ZIP_CODE")
-        : CDBLoader<ZIP_CODE_ROW>(szServer, szDatabase, szLoaderParams, szTable)
-    {
-    };
+class CODBCZipCodeLoad : public CDBLoader<ZIP_CODE_ROW> {
+  public:
+	CODBCZipCodeLoad(char *szServer, char *szDatabase, char *szLoaderParams,
+	                 char *szTable = "ZIP_CODE")
+	    : CDBLoader<ZIP_CODE_ROW>(szServer, szDatabase, szLoaderParams,
+	                              szTable){};
 
-    virtual void BindColumns()
-    {
-        //Binding function we have to implement.
-        int i = 0;
-        if (   bcp_bind(m_hdbc, (BYTE *) &m_row.ZC_CODE, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED
-            || bcp_bind(m_hdbc, (BYTE *) &m_row.ZC_TOWN, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED
-            || bcp_bind(m_hdbc, (BYTE *) &m_row.ZC_DIV, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED
-            )
-            ThrowError(CODBCERR::eBcpBind);
+	virtual void BindColumns() {
+		// Binding function we have to implement.
+		int i = 0;
+		if (bcp_bind(m_hdbc, (BYTE *)&m_row.ZC_CODE, 0, SQL_VARLEN_DATA,
+		             (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.ZC_TOWN, 0, SQL_VARLEN_DATA,
+		             (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.ZC_DIV, 0, SQL_VARLEN_DATA,
+		             (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED)
+			ThrowError(CODBCERR::eBcpBind);
 
-//      if ( bcp_control(m_hdbc, BCPHINTS, "TABLOCK, ORDER (AD_ID)" ) != SUCCEED )
-//          ThrowError(CODBCERR::eBcpControl);
-    };
+		//      if ( bcp_control(m_hdbc, BCPHINTS, "TABLOCK, ORDER (AD_ID)" ) !=
+		//      SUCCEED )
+		//          ThrowError(CODBCERR::eBcpControl);
+	};
 
-    virtual void CopyRow(const ZIP_CODE_ROW &row)
-    {
-        strncpy(m_row.ZC_CODE, row.ZC_CODE, sizeof(m_row.ZC_CODE));
-        strncpy(m_row.ZC_TOWN, row.ZC_TOWN, sizeof(m_row.ZC_TOWN));
-        strncpy(m_row.ZC_DIV, row.ZC_DIV, sizeof(m_row.ZC_DIV));
-    };
+	virtual void CopyRow(const ZIP_CODE_ROW &row) {
+		strncpy(m_row.ZC_CODE, row.ZC_CODE, sizeof(m_row.ZC_CODE));
+		strncpy(m_row.ZC_TOWN, row.ZC_TOWN, sizeof(m_row.ZC_TOWN));
+		strncpy(m_row.ZC_DIV, row.ZC_DIV, sizeof(m_row.ZC_DIV));
+	};
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //ODBC_ZIP_CODE_LOAD_H
+#endif // ODBC_ZIP_CODE_LOAD_H

@@ -35,9 +35,9 @@
  */
 
 /******************************************************************************
-*    Description:        This file implements the interface for
-*                        formatting logger entries.
-******************************************************************************/
+ *    Description:        This file implements the interface for
+ *                        formatting logger entries.
+ ******************************************************************************/
 
 #ifndef BASE_LOG_FORMATTER_H
 #define BASE_LOG_FORMATTER_H
@@ -45,46 +45,40 @@
 #include <string>
 #include "DriverParamSettings.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-enum eLogFormat
-{
-    eLogTab,
-    eLogCustom
+enum eLogFormat { eLogTab, eLogCustom };
+
+class CBaseLogFormatter {
+  public:
+	/*
+	 *  Virtual destructor. Provided so that a sponsor-specific
+	 *  destructor can be called on destruction from the base-class pointer.
+	 *
+	 *  PARAMETERS:
+	 *           none.
+	 *
+	 *  RETURNS:
+	 *           not applicable.
+	 */
+	virtual ~CBaseLogFormatter(){};
+
+	virtual string GetLogOutput(CBrokerVolumeSettings &parms) = 0;
+	virtual string GetLogOutput(CCustomerPositionSettings &parms) = 0;
+	virtual string GetLogOutput(CMarketWatchSettings &parms) = 0;
+	virtual string GetLogOutput(CSecurityDetailSettings &parms) = 0;
+	virtual string GetLogOutput(CTradeLookupSettings &parms) = 0;
+	virtual string GetLogOutput(CTradeOrderSettings &parms) = 0;
+	virtual string GetLogOutput(CTradeUpdateSettings &parms) = 0;
+	virtual string GetLogOutput(CTxnMixGeneratorSettings &parms) = 0;
+	virtual string GetLogOutput(CLoaderSettings &parms) = 0;
+	virtual string GetLogOutput(CDriverGlobalSettings &parms) = 0;
+	virtual string GetLogOutput(CDriverCESettings &parms) = 0;
+	virtual string GetLogOutput(CDriverCEPartitionSettings &parms) = 0;
+	virtual string GetLogOutput(CDriverMEESettings &parms) = 0;
+	virtual string GetLogOutput(CDriverDMSettings &parms) = 0;
 };
 
-class CBaseLogFormatter
-{
-public:
-    /*
-    *  Virtual destructor. Provided so that a sponsor-specific
-    *  destructor can be called on destruction from the base-class pointer.
-    *
-    *  PARAMETERS:
-    *           none.
-    *
-    *  RETURNS:
-    *           not applicable.
-    */
-    virtual ~CBaseLogFormatter() {};
+} // namespace TPCE
 
-    virtual string GetLogOutput(CBrokerVolumeSettings& parms) = 0;
-    virtual string GetLogOutput(CCustomerPositionSettings& parms) = 0;
-    virtual string GetLogOutput(CMarketWatchSettings& parms) = 0;
-    virtual string GetLogOutput(CSecurityDetailSettings& parms) = 0;
-    virtual string GetLogOutput(CTradeLookupSettings& parms) = 0;
-    virtual string GetLogOutput(CTradeOrderSettings& parms) = 0;
-    virtual string GetLogOutput(CTradeUpdateSettings& parms) = 0;
-    virtual string GetLogOutput(CTxnMixGeneratorSettings& parms) = 0;
-    virtual string GetLogOutput(CLoaderSettings& parms) = 0;
-    virtual string GetLogOutput(CDriverGlobalSettings& parms) = 0;
-    virtual string GetLogOutput(CDriverCESettings& parms) = 0;
-    virtual string GetLogOutput(CDriverCEPartitionSettings& parms) = 0;
-    virtual string GetLogOutput(CDriverMEESettings& parms) = 0;
-    virtual string GetLogOutput(CDriverDMSettings& parms) = 0;
-};
-
-}    // namespace TPCE
-
-#endif //BASE_LOG_FORMATTER_H
+#endif // BASE_LOG_FORMATTER_H

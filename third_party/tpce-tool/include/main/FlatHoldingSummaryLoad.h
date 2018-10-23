@@ -35,43 +35,39 @@
  */
 
 /*
-*   Flat file loader for HOLDING_SUMMARY.
-*/
+ *   Flat file loader for HOLDING_SUMMARY.
+ */
 #ifndef FLAT_HOLDING_SUMMARY_LOAD_H
 #define FLAT_HOLDING_SUMMARY_LOAD_H
 
 #include "FlatFileLoad_common.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CFlatHoldingSummaryLoad : public CFlatFileLoader <HOLDING_SUMMARY_ROW>
-{
-private:
-    const std::string HoldingSummaryRowFmt;
+class CFlatHoldingSummaryLoad : public CFlatFileLoader<HOLDING_SUMMARY_ROW> {
+  private:
+	const std::string HoldingSummaryRowFmt;
 
-public:
-    CFlatHoldingSummaryLoad( char *szFileName, FlatFileOutputModes FlatFileOutputMode ) 
-        : CFlatFileLoader<HOLDING_SUMMARY_ROW>(szFileName, FlatFileOutputMode)
-        , HoldingSummaryRowFmt("%" PRId64 "|%s|%d\n")
-    {};
+  public:
+	CFlatHoldingSummaryLoad(char *szFileName,
+	                        FlatFileOutputModes FlatFileOutputMode)
+	    : CFlatFileLoader<HOLDING_SUMMARY_ROW>(szFileName, FlatFileOutputMode),
+	      HoldingSummaryRowFmt("%" PRId64 "|%s|%d\n"){};
 
-    /*
-    *   Writes a record to the file.
-    */
-    void WriteNextRecord(const HOLDING_SUMMARY_ROW &next_record)
-    {
-        int rc = fprintf( hOutFile, HoldingSummaryRowFmt.c_str(),
-                  next_record.HS_CA_ID,
-                  next_record.HS_S_SYMB,
-                  next_record.HS_QTY
-            );
-        if (rc < 0) {
-            throw CSystemErr(CSystemErr::eWriteFile, "CFlatHoldingSummaryLoad::WriteNextRecord");
-        }
-    }
+	/*
+	 *   Writes a record to the file.
+	 */
+	void WriteNextRecord(const HOLDING_SUMMARY_ROW &next_record) {
+		int rc = fprintf(hOutFile, HoldingSummaryRowFmt.c_str(),
+		                 next_record.HS_CA_ID, next_record.HS_S_SYMB,
+		                 next_record.HS_QTY);
+		if (rc < 0) {
+			throw CSystemErr(CSystemErr::eWriteFile,
+			                 "CFlatHoldingSummaryLoad::WriteNextRecord");
+		}
+	}
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //FLAT_HOLDING_SUMMARY_LOAD_H
+#endif // FLAT_HOLDING_SUMMARY_LOAD_H

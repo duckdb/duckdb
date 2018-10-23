@@ -35,70 +35,60 @@
  */
 
 /*
-*   Class representing the Fixed table.
-*/
+ *   Class representing the Fixed table.
+ */
 #ifndef FIXED_TABLE_H
 #define FIXED_TABLE_H
 
-namespace TPCE
-{
+namespace TPCE {
 
-template<class DataFileT, class TableRowT>
-class FixedTable
-{
-protected:
-    const DataFileT & df;
-    TableRowT tableRow;
-    int recordIdx;
+template <class DataFileT, class TableRowT> class FixedTable {
+  protected:
+	const DataFileT &df;
+	TableRowT tableRow;
+	int recordIdx;
 
-public:
-    FixedTable(const DataFileT & dataFile) : df(dataFile), tableRow(), recordIdx(-1)
-    {
-    }
+  public:
+	FixedTable(const DataFileT &dataFile)
+	    : df(dataFile), tableRow(), recordIdx(-1) {
+	}
 
-    virtual ~FixedTable( )
-    {
-    }
+	virtual ~FixedTable() {
+	}
 
-    /*
-    *   Generates all fields for the next record.
-    *   Template Method Pattern used to accomodate
-    *   subtle variations in underlying data files
-    *   (i.e. DataFile vs. WeightedDataFile).
-    */
-    bool GenerateNextRecord()
-    {
-        // Don't increment past size().
-        if (MaxRecordIdx() != recordIdx)
-        {
-            ++recordIdx;
-        }
+	/*
+	 *   Generates all fields for the next record.
+	 *   Template Method Pattern used to accomodate
+	 *   subtle variations in underlying data files
+	 *   (i.e. DataFile vs. WeightedDataFile).
+	 */
+	bool GenerateNextRecord() {
+		// Don't increment past size().
+		if (MaxRecordIdx() != recordIdx) {
+			++recordIdx;
+		}
 
-        // See if we just went past the end.
-        if (MaxRecordIdx() == recordIdx)
-        {
-            return false;
-        }
+		// See if we just went past the end.
+		if (MaxRecordIdx() == recordIdx) {
+			return false;
+		}
 
-        LoadTableRow();
+		LoadTableRow();
 
-        // We have a valid record.
-        return true;
-    }
+		// We have a valid record.
+		return true;
+	}
 
-    virtual unsigned int MaxRecordIdx() const
-    {
-        return df.size();
-    }
+	virtual unsigned int MaxRecordIdx() const {
+		return df.size();
+	}
 
-    const TableRowT& GetRow() const
-    {
-        return tableRow;
-    }
+	const TableRowT &GetRow() const {
+		return tableRow;
+	}
 
-    virtual void LoadTableRow() = 0;
-
+	virtual void LoadTableRow() = 0;
 };
 
-}   // namespace TPCE
-#endif //FIXED_TABLE_H
+} // namespace TPCE
+#endif // FIXED_TABLE_H

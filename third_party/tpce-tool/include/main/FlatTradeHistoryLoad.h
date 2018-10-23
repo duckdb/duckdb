@@ -35,45 +35,41 @@
  */
 
 /*
-*   Flat file loader for TRADE_HISTORY.
-*/
+ *   Flat file loader for TRADE_HISTORY.
+ */
 #ifndef FLAT_TRADE_HISTORY_H
 #define FLAT_TRADE_HISTORY_H
 
 #include "FlatFileLoad_common.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CFlatTradeHistoryLoad : public CFlatFileLoader <TRADE_HISTORY_ROW>
-{
-private:
-    CDateTime   Flat_TH_DTS;
-    const std::string TradeHistoryRowFmt;
+class CFlatTradeHistoryLoad : public CFlatFileLoader<TRADE_HISTORY_ROW> {
+  private:
+	CDateTime Flat_TH_DTS;
+	const std::string TradeHistoryRowFmt;
 
-public:
-    CFlatTradeHistoryLoad( char *szFileName, FlatFileOutputModes FlatFileOutputMode ) 
-        : CFlatFileLoader<TRADE_HISTORY_ROW>(szFileName, FlatFileOutputMode)
-        , TradeHistoryRowFmt("%" PRId64 "|%s|%s\n")
-    {};
+  public:
+	CFlatTradeHistoryLoad(char *szFileName,
+	                      FlatFileOutputModes FlatFileOutputMode)
+	    : CFlatFileLoader<TRADE_HISTORY_ROW>(szFileName, FlatFileOutputMode),
+	      TradeHistoryRowFmt("%" PRId64 "|%s|%s\n"){};
 
-    /*
-    *   Writes a record to the file.
-    */
-    void WriteNextRecord(const TRADE_HISTORY_ROW &next_record)
-    {
-        Flat_TH_DTS = next_record.TH_DTS;
-        int rc = fprintf( hOutFile, TradeHistoryRowFmt.c_str(),
-                  next_record.TH_T_ID,
-                  Flat_TH_DTS.ToStr(FlatFileDateTimeFormat),
-                  next_record.TH_ST_ID
-                );
-        if (rc < 0) {
-            throw CSystemErr(CSystemErr::eWriteFile, "CFlatTradeHistory::WriteNextRecord");
-        }
-    }
+	/*
+	 *   Writes a record to the file.
+	 */
+	void WriteNextRecord(const TRADE_HISTORY_ROW &next_record) {
+		Flat_TH_DTS = next_record.TH_DTS;
+		int rc = fprintf(
+		    hOutFile, TradeHistoryRowFmt.c_str(), next_record.TH_T_ID,
+		    Flat_TH_DTS.ToStr(FlatFileDateTimeFormat), next_record.TH_ST_ID);
+		if (rc < 0) {
+			throw CSystemErr(CSystemErr::eWriteFile,
+			                 "CFlatTradeHistory::WriteNextRecord");
+		}
+	}
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //FLAT_TRADE_HISTORY_H
+#endif // FLAT_TRADE_HISTORY_H

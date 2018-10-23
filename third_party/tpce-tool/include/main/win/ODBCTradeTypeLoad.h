@@ -35,48 +35,47 @@
  */
 
 /*
-*   Database loader class for TRADE_TYPE table.
-*/
+ *   Database loader class for TRADE_TYPE table.
+ */
 #ifndef ODBC_TRADE_TYPE_LOAD_H
 #define ODBC_TRADE_TYPE_LOAD_H
 
 #include "../utilities/TableConsts.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CODBCTradeTypeLoad : public CDBLoader <TRADE_TYPE_ROW>
-{
-public:
-    CODBCTradeTypeLoad(char *szServer, char *szDatabase, char *szLoaderParams, char *szTable = "TRADE_TYPE")
-        : CDBLoader<TRADE_TYPE_ROW>(szServer, szDatabase, szLoaderParams, szTable)
-    {
-    };
+class CODBCTradeTypeLoad : public CDBLoader<TRADE_TYPE_ROW> {
+  public:
+	CODBCTradeTypeLoad(char *szServer, char *szDatabase, char *szLoaderParams,
+	                   char *szTable = "TRADE_TYPE")
+	    : CDBLoader<TRADE_TYPE_ROW>(szServer, szDatabase, szLoaderParams,
+	                                szTable){};
 
-    virtual void BindColumns()
-    {
-        //Binding function we have to implement.
-        int i = 0;
-        if (   bcp_bind(m_hdbc, (BYTE *) &m_row.TT_ID, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED
-            || bcp_bind(m_hdbc, (BYTE *) &m_row.TT_NAME, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED
-            || bcp_bind(m_hdbc, (BYTE *) &m_row.TT_IS_SELL, 0, SQL_VARLEN_DATA, NULL, 0, SQLINT1, ++i) != SUCCEED
-            || bcp_bind(m_hdbc, (BYTE *) &m_row.TT_IS_MRKT, 0, SQL_VARLEN_DATA, NULL, 0, SQLINT1, ++i) != SUCCEED
-            )
-            ThrowError(CODBCERR::eBcpBind);
+	virtual void BindColumns() {
+		// Binding function we have to implement.
+		int i = 0;
+		if (bcp_bind(m_hdbc, (BYTE *)&m_row.TT_ID, 0, SQL_VARLEN_DATA,
+		             (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.TT_NAME, 0, SQL_VARLEN_DATA,
+		             (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.TT_IS_SELL, 0, SQL_VARLEN_DATA,
+		             NULL, 0, SQLINT1, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.TT_IS_MRKT, 0, SQL_VARLEN_DATA,
+		             NULL, 0, SQLINT1, ++i) != SUCCEED)
+			ThrowError(CODBCERR::eBcpBind);
 
-//      if ( bcp_control(m_hdbc, BCPHINTS, "TABLOCK" ) != SUCCEED )
-//          ThrowError(CODBCERR::eBcpControl);
-    };
+		//      if ( bcp_control(m_hdbc, BCPHINTS, "TABLOCK" ) != SUCCEED )
+		//          ThrowError(CODBCERR::eBcpControl);
+	};
 
-    virtual void CopyRow(const TRADE_TYPE_ROW &row)
-    {
-        strncpy(m_row.TT_ID, row.TT_ID, sizeof(m_row.TT_ID));
-        strncpy(m_row.TT_NAME, row.TT_NAME, sizeof(m_row.TT_NAME));
-        m_row.TT_IS_SELL = row.TT_IS_SELL;
-        m_row.TT_IS_MRKT = row.TT_IS_MRKT;
-    };
+	virtual void CopyRow(const TRADE_TYPE_ROW &row) {
+		strncpy(m_row.TT_ID, row.TT_ID, sizeof(m_row.TT_ID));
+		strncpy(m_row.TT_NAME, row.TT_NAME, sizeof(m_row.TT_NAME));
+		m_row.TT_IS_SELL = row.TT_IS_SELL;
+		m_row.TT_IS_MRKT = row.TT_IS_MRKT;
+	};
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //ODBC_TRADE_TYPE_LOAD_H
+#endif // ODBC_TRADE_TYPE_LOAD_H

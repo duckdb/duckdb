@@ -40,4 +40,4 @@
 #include "BaseLoader.h"
 #include "BaseLoaderFactory.h"
 
-#endif  // #ifndef EGEN_BASELOADER_STDAFX_H
+#endif // #ifndef EGEN_BASELOADER_STDAFX_H

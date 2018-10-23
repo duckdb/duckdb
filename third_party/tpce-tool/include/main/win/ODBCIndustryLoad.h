@@ -35,46 +35,44 @@
  */
 
 /*
-*   Database loader class for INDUSTRY table.
-*/
+ *   Database loader class for INDUSTRY table.
+ */
 #ifndef ODBC_INDUSTRY_LOAD_H
 #define ODBC_INDUSTRY_LOAD_H
 
 #include "../utilities/TableConsts.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CODBCIndustryLoad : public CDBLoader <INDUSTRY_ROW>
-{
-public:
-    CODBCIndustryLoad(char *szServer, char *szDatabase, char *szLoaderParams, char *szTable = "INDUSTRY")
-        : CDBLoader<INDUSTRY_ROW>(szServer, szDatabase, szLoaderParams, szTable)
-    {
-    };
+class CODBCIndustryLoad : public CDBLoader<INDUSTRY_ROW> {
+  public:
+	CODBCIndustryLoad(char *szServer, char *szDatabase, char *szLoaderParams,
+	                  char *szTable = "INDUSTRY")
+	    : CDBLoader<INDUSTRY_ROW>(szServer, szDatabase, szLoaderParams,
+	                              szTable){};
 
-    virtual void BindColumns()
-    {
-        //Binding function we have to implement.
-        int i = 0;
-        if (   bcp_bind(m_hdbc, (BYTE *) &m_row.IN_ID, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED
-            || bcp_bind(m_hdbc, (BYTE *) &m_row.IN_NAME, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED
-            || bcp_bind(m_hdbc, (BYTE *) &m_row.IN_SC_ID, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED
-            )
-            ThrowError(CODBCERR::eBcpBind);
+	virtual void BindColumns() {
+		// Binding function we have to implement.
+		int i = 0;
+		if (bcp_bind(m_hdbc, (BYTE *)&m_row.IN_ID, 0, SQL_VARLEN_DATA,
+		             (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.IN_NAME, 0, SQL_VARLEN_DATA,
+		             (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.IN_SC_ID, 0, SQL_VARLEN_DATA,
+		             (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED)
+			ThrowError(CODBCERR::eBcpBind);
 
-//      if ( bcp_control(m_hdbc, BCPHINTS, "TABLOCK" ) != SUCCEED )
-//          ThrowError(CODBCERR::eBcpControl);
-    };
+		//      if ( bcp_control(m_hdbc, BCPHINTS, "TABLOCK" ) != SUCCEED )
+		//          ThrowError(CODBCERR::eBcpControl);
+	};
 
-    virtual void CopyRow(const INDUSTRY_ROW &row)
-    {
-        strncpy(m_row.IN_ID, row.IN_ID, sizeof(m_row.IN_ID));
-        strncpy(m_row.IN_NAME, row.IN_NAME, sizeof(m_row.IN_NAME));
-        strncpy(m_row.IN_SC_ID, row.IN_SC_ID, sizeof(m_row.IN_SC_ID));
-    };
+	virtual void CopyRow(const INDUSTRY_ROW &row) {
+		strncpy(m_row.IN_ID, row.IN_ID, sizeof(m_row.IN_ID));
+		strncpy(m_row.IN_NAME, row.IN_NAME, sizeof(m_row.IN_NAME));
+		strncpy(m_row.IN_SC_ID, row.IN_SC_ID, sizeof(m_row.IN_SC_ID));
+	};
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //ODBC_INDUSTRY_LOAD_H
+#endif // ODBC_INDUSTRY_LOAD_H

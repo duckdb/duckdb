@@ -37,7 +37,7 @@
 #ifndef EGEN_LOADER_STDAFX_H
 #define EGEN_LOADER_STDAFX_H
 
-#define WIN32_LEAN_AND_MEAN     // Exclude rarely-used stuff from Windows headers
+#define WIN32_LEAN_AND_MEAN // Exclude rarely-used stuff from Windows headers
 
 #include <cstdio>
 #include <cassert>
@@ -52,12 +52,12 @@
 #ifdef COMPILE_ODBC_LOAD
 #ifdef WIN32
 #include <windows.h>
-#endif //WIN32
+#endif // WIN32
 // ODBC headers
 #include <sql.h>
 #include <sqlext.h>
 #include <odbcss.h>
-#endif //COMPILE_ODBC_LOAD
+#endif // COMPILE_ODBC_LOAD
 
 // TODO: reference additional headers your program requires here
 using namespace std;
@@ -79,7 +79,7 @@ using namespace std;
 #endif
 #ifdef CUSTOM_LOAD_INCLUDE
 #define COMPILE_CUSTOM_LOAD
-#include CUSTOM_LOAD_INCLUDE 
+#include CUSTOM_LOAD_INCLUDE
 #endif
 
 // Generic Error Codes
@@ -87,4 +87,4 @@ using namespace std;
 #define ERROR_INPUT_FILE 2
 #define ERROR_INVALID_OPTION_VALUE 3
 
-#endif  // #ifndef EGEN_LOADER_STDAFX_H
+#endif // #ifndef EGEN_LOADER_STDAFX_H

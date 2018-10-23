@@ -35,8 +35,8 @@
  */
 
 /*
-*   Class representing the TradeType table.
-*/
+ *   Class representing the TradeType table.
+ */
 #ifndef TRADE_TYPE_TABLE_H
 #define TRADE_TYPE_TABLE_H
 
@@ -44,19 +44,16 @@
 #include "input/DataFileTypes.h"
 #include "TableRows.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CTradeTypeTable : public FixedTable<TradeTypeDataFile_t, TRADE_TYPE_ROW>
-{
-public:
-    CTradeTypeTable(const TradeTypeDataFile_t &dataFile);
-    ~CTradeTypeTable();
+class CTradeTypeTable : public FixedTable<TradeTypeDataFile_t, TRADE_TYPE_ROW> {
+  public:
+	CTradeTypeTable(const TradeTypeDataFile_t &dataFile);
+	~CTradeTypeTable();
 
-    virtual void LoadTableRow();
-
+	virtual void LoadTableRow();
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //TRADE_TYPE_TABLE_H
+#endif // TRADE_TYPE_TABLE_H

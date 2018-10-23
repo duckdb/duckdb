@@ -47,72 +47,68 @@
 
 #include "EGenStandardTypes.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
 // Base class to provide a run() method for objects which can be threaded.
 // This is required because under pthreads we have to provide an interface
 // through a C ABI call, which we can't do with templated classes.
-class ThreadBase
-{
-    public:
-        virtual ~ThreadBase();
-        virtual void invoke() = 0;
+class ThreadBase {
+  public:
+	virtual ~ThreadBase();
+	virtual void invoke() = 0;
 };
 
 // Call the run() method of passed argument.  Always returns NULL.
 #ifdef WIN32
 DWORD WINAPI start_thread(LPVOID arg);
 #else
-extern "C"
-void* start_thread(void *arg);
+extern "C" void *start_thread(void *arg);
 #endif
 
 // Template to wrap around a class that has a ThreadBase::run() method and
 // spawn it in a thread of its own.
-template<typename T>
-class Thread : public ThreadBase
-{
-    private:
-        std::auto_ptr<T> obj_;
-        TThread tid_;
+template <typename T> class Thread : public ThreadBase {
+  private:
+	std::auto_ptr<T> obj_;
+	TThread tid_;
 #ifndef WIN32
-        TThreadAttr attr_;
+	TThreadAttr attr_;
 #endif
-        int stacksize_;
-    public:
-        Thread(std::auto_ptr<T> throbj)
-        : obj_(throbj)
-        , tid_()
+	int stacksize_;
+
+  public:
+	Thread(std::auto_ptr<T> throbj)
+	    : obj_(throbj), tid_()
 #ifndef WIN32
-        , attr_()
+	      ,
+	      attr_()
 #endif
-        , stacksize_(0)
-        {
+	      ,
+	      stacksize_(0) {
 #ifndef WIN32
-        pthread_attr_init(&attr_);
+		pthread_attr_init(&attr_);
 #endif
-        }
-        Thread(std::auto_ptr<T> throbj, int stacksize)
-        : obj_(throbj)
-        , tid_()
+	}
+	Thread(std::auto_ptr<T> throbj, int stacksize)
+	    : obj_(throbj), tid_()
 #ifndef WIN32
-        , attr_()
+	      ,
+	      attr_()
 #endif
-        , stacksize_(stacksize)
-        {
+	      ,
+	      stacksize_(stacksize) {
 #ifndef WIN32
-       pthread_attr_init(&attr_);
+		pthread_attr_init(&attr_);
 #endif
-        }
-        T* obj() {
-            return obj_.get();
-        }
-        void invoke() {
-            obj_->run(this);
-        }
-        void start();
-        void stop();
+	}
+	T *obj() {
+		return obj_.get();
+	}
+	void invoke() {
+		obj_->run(this);
+	}
+	void start();
+	void stop();
 };
 
 //////////////////////////////////////////////////////////
@@ -121,26 +117,22 @@ class Thread : public ThreadBase
 
 #ifdef WIN32
 
-template<typename T>
-void Thread<T>::start()
-{
-    tid_ = CreateThread(NULL, stacksize_, start_thread, this, NULL, NULL);
-    if (tid_ == NULL) {
-       std::ostringstream strm;
-       strm << "CreateThread error: " << GetLastError();
-       throw std::runtime_error(strm.str());
-   }
+template <typename T> void Thread<T>::start() {
+	tid_ = CreateThread(NULL, stacksize_, start_thread, this, NULL, NULL);
+	if (tid_ == NULL) {
+		std::ostringstream strm;
+		strm << "CreateThread error: " << GetLastError();
+		throw std::runtime_error(strm.str());
+	}
 }
 
-template<typename T>
-void Thread<T>::stop()
-{
-   DWORD rc = WaitForSingleObject(tid_, INFINITE);
-   if (rc != 0) {
-       std::ostringstream strm;
-       strm << "WaitForSingleObject error: " << GetLastError();
-       throw std::runtime_error(strm.str());
-   }
+template <typename T> void Thread<T>::stop() {
+	DWORD rc = WaitForSingleObject(tid_, INFINITE);
+	if (rc != 0) {
+		std::ostringstream strm;
+		strm << "WaitForSingleObject error: " << GetLastError();
+		throw std::runtime_error(strm.str());
+	}
 }
 
 //////////////////////////////////////////////////////////
@@ -149,42 +141,38 @@ void Thread<T>::stop()
 
 #else
 
-template<typename T>
-void Thread<T>::start()
-{
-   int rc = 0;
+template <typename T> void Thread<T>::start() {
+	int rc = 0;
 
-   if (stacksize_ > 0)
-   {
-       rc = pthread_attr_setstacksize(&attr_, stacksize_);
-       if (rc != 0) {
-           std::ostringstream strm;
-           strm << "pthread_attr_setstacksize error: " << strerror(rc) << "(" << rc << ")";
-           throw std::runtime_error(strm.str());
-       }
-   }
+	if (stacksize_ > 0) {
+		rc = pthread_attr_setstacksize(&attr_, stacksize_);
+		if (rc != 0) {
+			std::ostringstream strm;
+			strm << "pthread_attr_setstacksize error: " << strerror(rc) << "("
+			     << rc << ")";
+			throw std::runtime_error(strm.str());
+		}
+	}
 
-   rc = pthread_create(&tid_, &attr_, start_thread, this);
-   if (rc != 0) {
-       std::ostringstream strm;
-       strm << "pthread_create error: " << strerror(rc) << "(" << rc << ")";
-       throw std::runtime_error(strm.str());
-   }
+	rc = pthread_create(&tid_, &attr_, start_thread, this);
+	if (rc != 0) {
+		std::ostringstream strm;
+		strm << "pthread_create error: " << strerror(rc) << "(" << rc << ")";
+		throw std::runtime_error(strm.str());
+	}
 }
 
-template<typename T>
-void Thread<T>::stop()
-{
-    int rc = pthread_join(tid_, NULL);
-    if (rc != 0) {
-       std::ostringstream strm;
-       strm << "pthread_join error: " << strerror(rc) << "(" << rc << ")";
-       throw std::runtime_error(strm.str());
-    }
+template <typename T> void Thread<T>::stop() {
+	int rc = pthread_join(tid_, NULL);
+	if (rc != 0) {
+		std::ostringstream strm;
+		strm << "pthread_join error: " << strerror(rc) << "(" << rc << ")";
+		throw std::runtime_error(strm.str());
+	}
 }
 
 #endif
 
-}
+} // namespace TPCE
 
 #endif // THREADING_H_INCLUDED

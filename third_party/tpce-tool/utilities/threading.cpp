@@ -46,34 +46,31 @@
 
 using std::exit;
 
-namespace TPCE
-{
+namespace TPCE {
 
-ThreadBase::~ThreadBase()
-{
+ThreadBase::~ThreadBase() {
 }
 
 #ifdef WIN32
 DWORD WINAPI start_thread(LPVOID arg)
 #else
-extern "C"
-void* start_thread(void *arg)
+extern "C" void *start_thread(void *arg)
 #endif
 {
-    ThreadBase* thrd = reinterpret_cast<ThreadBase*>(arg);
-    // Catch exceptions here again because we're on a new stack
-    // so any previous try/catch blocks won't catch exceptions
-    // thrown in this thread.
-    try {
-        thrd->invoke();
-        return NULL;
-    } catch (std::exception& e) {
-        std::cerr << "Caught Exception: " << e.what() << std::endl;
-    } catch (...) {
-        std::cerr << "Caught Exception: Unknown" << std::endl;
-    }
-    exit (1);
-    return NULL; // Keep xlC happy with a return code...
+	ThreadBase *thrd = reinterpret_cast<ThreadBase *>(arg);
+	// Catch exceptions here again because we're on a new stack
+	// so any previous try/catch blocks won't catch exceptions
+	// thrown in this thread.
+	try {
+		thrd->invoke();
+		return NULL;
+	} catch (std::exception &e) {
+		std::cerr << "Caught Exception: " << e.what() << std::endl;
+	} catch (...) {
+		std::cerr << "Caught Exception: Unknown" << std::endl;
+	}
+	exit(1);
+	return NULL; // Keep xlC happy with a return code...
 }
 
-}
+} // namespace TPCE

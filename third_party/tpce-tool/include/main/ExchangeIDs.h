@@ -37,20 +37,13 @@
 #ifndef EXCHANGE_IDS_H
 #define EXCHANGE_IDS_H
 
-namespace TPCE
-{
+namespace TPCE {
 
-    // Exchange IDs corresponding to the Exchange.txt flat file.
-    // Note: The order of enumeration members must match the order
-    // of rows in the Exchange.txt flat file.
-    enum eExchangeID
-    {
-        eNYSE = 0,
-        eNASDAQ,
-        eAMEX,
-        ePCX
-    };
+// Exchange IDs corresponding to the Exchange.txt flat file.
+// Note: The order of enumeration members must match the order
+// of rows in the Exchange.txt flat file.
+enum eExchangeID { eNYSE = 0, eNASDAQ, eAMEX, ePCX };
 
-} //namespace TPCE
+} // namespace TPCE
 
-#endif //EXCHANGE_IDS_H
+#endif // EXCHANGE_IDS_H

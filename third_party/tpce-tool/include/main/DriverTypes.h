@@ -35,27 +35,24 @@
  */
 
 /******************************************************************************
-*   Description:        Driver types and names
-******************************************************************************/
+ *   Description:        Driver types and names
+ ******************************************************************************/
 
 #ifndef DRIVER_TYPES_H
 #define DRIVER_TYPES_H
 
-namespace TPCE
-{
+namespace TPCE {
 
-enum eDriverType
-{
-  eDriverEGenLoader,
-  eDriverAll,
-  eDriverCE,
-  eDriverMEE,
-  eDriverDM,
-  eDriverMax
+enum eDriverType {
+	eDriverEGenLoader,
+	eDriverAll,
+	eDriverCE,
+	eDriverMEE,
+	eDriverDM,
+	eDriverMax
 };
 
 extern char szDriverTypeNames[eDriverMax][14];
-}   // namespace TPCE
-
+} // namespace TPCE
 
 #endif // DRIVER_TYPES_H

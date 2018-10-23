@@ -37,7 +37,7 @@
 #ifndef EGEN_TABLES_STDAFX_H
 #define EGEN_TABLES_STDAFX_H
 
-#define WIN32_LEAN_AND_MEAN     // Exclude rarely-used stuff from Windows headers
+#define WIN32_LEAN_AND_MEAN // Exclude rarely-used stuff from Windows headers
 
 #include <cassert>
 #include <cmath>
@@ -60,7 +60,7 @@ using namespace std;
 #include "Person.h"
 #include "CustomerSelection.h"
 #include "CustomerTable.h"
-#include "CompanyTable.h"   //must be before Address and Financial tables
+#include "CompanyTable.h" //must be before Address and Financial tables
 #include "FinancialTable.h"
 #include "AddressTable.h"
 #include "CustomerAccountsAndPermissionsTable.h"
@@ -74,8 +74,8 @@ using namespace std;
 #include "CompanyCompetitorTable.h"
 #include "ZipCodeTable.h"
 #include "NewsItemAndXRefTable.h"
-#include "MEESecurity.h"    // must be before LastTradeTable.h
+#include "MEESecurity.h" // must be before LastTradeTable.h
 #include "LastTradeTable.h"
 #include "TradeGen.h"
 
-#endif  // #ifndef EGEN_TABLES_STDAFX_H
+#endif // #ifndef EGEN_TABLES_STDAFX_H

@@ -36,9 +36,9 @@
  */
 
 /*
-*   Flat file loader class factory.
-*   This class instantiates particular table loader classes.
-*/
+ *   Flat file loader class factory.
+ *   This class instantiates particular table loader classes.
+ */
 #ifndef FLAT_LOADER_FACTORY_H
 #define FLAT_LOADER_FACTORY_H
 
@@ -46,239 +46,205 @@
 
 #include "FlatFileLoad_stdafx.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CFlatLoaderFactory : public CBaseLoaderFactory
-{
-    char                    m_szOutDir[iMaxPath];
-    char                    m_szFullFileName[iMaxPath];
-    FlatFileOutputModes     m_eOutputMode;  // overwrite/append
+class CFlatLoaderFactory : public CBaseLoaderFactory {
+	char m_szOutDir[iMaxPath];
+	char m_szFullFileName[iMaxPath];
+	FlatFileOutputModes m_eOutputMode; // overwrite/append
 
-    void SetFileName(const char *szFileName)
-    {
-        snprintf(m_szFullFileName, sizeof(m_szFullFileName), "%s%s", m_szOutDir, szFileName);
-    }
+	void SetFileName(const char *szFileName) {
+		snprintf(m_szFullFileName, sizeof(m_szFullFileName), "%s%s", m_szOutDir,
+		         szFileName);
+	}
 
-public:
-    // Constructor
-    CFlatLoaderFactory(char *szOutDir, FlatFileOutputModes eOutputMode)
-        : m_eOutputMode(eOutputMode)
-    {
-        assert(szOutDir);
+  public:
+	// Constructor
+	CFlatLoaderFactory(char *szOutDir, FlatFileOutputModes eOutputMode)
+	    : m_eOutputMode(eOutputMode) {
+		assert(szOutDir);
 
-        strncpy(m_szOutDir, szOutDir, sizeof(m_szOutDir));
-    };
+		strncpy(m_szOutDir, szOutDir, sizeof(m_szOutDir));
+	};
 
-    // Functions to create loader classes for individual tables.
+	// Functions to create loader classes for individual tables.
 
-    virtual CBaseLoader<ACCOUNT_PERMISSION_ROW>*    CreateAccountPermissionLoader()
-    {
-        SetFileName("AccountPermission.txt");
+	virtual CBaseLoader<ACCOUNT_PERMISSION_ROW> *
+	CreateAccountPermissionLoader() {
+		SetFileName("AccountPermission.txt");
 
-        return new CFlatAccountPermissionLoad(m_szFullFileName, m_eOutputMode);
-    };
-    virtual CBaseLoader<ADDRESS_ROW>*               CreateAddressLoader()
-    {
-        SetFileName("Address.txt");
+		return new CFlatAccountPermissionLoad(m_szFullFileName, m_eOutputMode);
+	};
+	virtual CBaseLoader<ADDRESS_ROW> *CreateAddressLoader() {
+		SetFileName("Address.txt");
 
-        return new CFlatAddressLoad(m_szFullFileName, m_eOutputMode);
-    };
-    virtual CBaseLoader<BROKER_ROW>*                CreateBrokerLoader()
-    {
-        SetFileName("Broker.txt");
+		return new CFlatAddressLoad(m_szFullFileName, m_eOutputMode);
+	};
+	virtual CBaseLoader<BROKER_ROW> *CreateBrokerLoader() {
+		SetFileName("Broker.txt");
 
-        return new CFlatBrokerLoad(m_szFullFileName, m_eOutputMode);
-    };
-    virtual CBaseLoader<CASH_TRANSACTION_ROW>*      CreateCashTransactionLoader()
-    {
-        SetFileName("CashTransaction.txt");
+		return new CFlatBrokerLoad(m_szFullFileName, m_eOutputMode);
+	};
+	virtual CBaseLoader<CASH_TRANSACTION_ROW> *CreateCashTransactionLoader() {
+		SetFileName("CashTransaction.txt");
 
-        return new CFlatCashTransactionLoad(m_szFullFileName, m_eOutputMode);
-    };
-    virtual CBaseLoader<CHARGE_ROW>*                CreateChargeLoader()
-    {
-        SetFileName("Charge.txt");
+		return new CFlatCashTransactionLoad(m_szFullFileName, m_eOutputMode);
+	};
+	virtual CBaseLoader<CHARGE_ROW> *CreateChargeLoader() {
+		SetFileName("Charge.txt");
 
-        return new CFlatChargeLoad(m_szFullFileName, m_eOutputMode);
-    };
+		return new CFlatChargeLoad(m_szFullFileName, m_eOutputMode);
+	};
 
-    virtual CBaseLoader<COMMISSION_RATE_ROW>*       CreateCommissionRateLoader()
-    {
-        SetFileName("CommissionRate.txt");
+	virtual CBaseLoader<COMMISSION_RATE_ROW> *CreateCommissionRateLoader() {
+		SetFileName("CommissionRate.txt");
 
-        return new CFlatCommissionRateLoad(m_szFullFileName, m_eOutputMode);
-    };
+		return new CFlatCommissionRateLoad(m_szFullFileName, m_eOutputMode);
+	};
 
-    virtual CBaseLoader<COMPANY_COMPETITOR_ROW>*    CreateCompanyCompetitorLoader()
-    {
-        SetFileName("CompanyCompetitor.txt");
+	virtual CBaseLoader<COMPANY_COMPETITOR_ROW> *
+	CreateCompanyCompetitorLoader() {
+		SetFileName("CompanyCompetitor.txt");
 
-        return new CFlatCompanyCompetitorLoad(m_szFullFileName, m_eOutputMode);
-    };
+		return new CFlatCompanyCompetitorLoad(m_szFullFileName, m_eOutputMode);
+	};
 
-    virtual CBaseLoader<COMPANY_ROW>*               CreateCompanyLoader()
-    {
-        SetFileName("Company.txt");
+	virtual CBaseLoader<COMPANY_ROW> *CreateCompanyLoader() {
+		SetFileName("Company.txt");
 
-        return new CFlatCompanyLoad(m_szFullFileName, m_eOutputMode);
-    };
+		return new CFlatCompanyLoad(m_szFullFileName, m_eOutputMode);
+	};
 
-    virtual CBaseLoader<CUSTOMER_ACCOUNT_ROW>*      CreateCustomerAccountLoader()
-    {
-        SetFileName("CustomerAccount.txt");
+	virtual CBaseLoader<CUSTOMER_ACCOUNT_ROW> *CreateCustomerAccountLoader() {
+		SetFileName("CustomerAccount.txt");
 
-        return new CFlatCustomerAccountLoad(m_szFullFileName, m_eOutputMode);
-    };
+		return new CFlatCustomerAccountLoad(m_szFullFileName, m_eOutputMode);
+	};
 
-    virtual CBaseLoader<CUSTOMER_ROW>*              CreateCustomerLoader()
-    {
-        SetFileName("Customer.txt");
+	virtual CBaseLoader<CUSTOMER_ROW> *CreateCustomerLoader() {
+		SetFileName("Customer.txt");
 
-        return new CFlatCustomerLoad(m_szFullFileName, m_eOutputMode);
-    };
-    virtual CBaseLoader<CUSTOMER_TAXRATE_ROW>*      CreateCustomerTaxrateLoader()
-    {
-        SetFileName("CustomerTaxrate.txt");
+		return new CFlatCustomerLoad(m_szFullFileName, m_eOutputMode);
+	};
+	virtual CBaseLoader<CUSTOMER_TAXRATE_ROW> *CreateCustomerTaxrateLoader() {
+		SetFileName("CustomerTaxrate.txt");
 
-        return new CFlatCustomerTaxrateLoad(m_szFullFileName, m_eOutputMode);
-    };
-    virtual CBaseLoader<DAILY_MARKET_ROW>*          CreateDailyMarketLoader()
-    {
-        SetFileName("DailyMarket.txt");
+		return new CFlatCustomerTaxrateLoad(m_szFullFileName, m_eOutputMode);
+	};
+	virtual CBaseLoader<DAILY_MARKET_ROW> *CreateDailyMarketLoader() {
+		SetFileName("DailyMarket.txt");
 
-        return new CFlatDailyMarketLoad(m_szFullFileName, m_eOutputMode);
-    };
-    virtual CBaseLoader<EXCHANGE_ROW>*              CreateExchangeLoader()
-    {
-        SetFileName("Exchange.txt");
+		return new CFlatDailyMarketLoad(m_szFullFileName, m_eOutputMode);
+	};
+	virtual CBaseLoader<EXCHANGE_ROW> *CreateExchangeLoader() {
+		SetFileName("Exchange.txt");
 
-        return new CFlatExchangeLoad(m_szFullFileName, m_eOutputMode);
-    };
-    virtual CBaseLoader<FINANCIAL_ROW>*             CreateFinancialLoader()
-    {
-        SetFileName("Financial.txt");
+		return new CFlatExchangeLoad(m_szFullFileName, m_eOutputMode);
+	};
+	virtual CBaseLoader<FINANCIAL_ROW> *CreateFinancialLoader() {
+		SetFileName("Financial.txt");
 
-        return new CFlatFinancialLoad(m_szFullFileName, m_eOutputMode);
-    };
-    virtual CBaseLoader<HOLDING_ROW>*               CreateHoldingLoader()
-    {
-        SetFileName("Holding.txt");
+		return new CFlatFinancialLoad(m_szFullFileName, m_eOutputMode);
+	};
+	virtual CBaseLoader<HOLDING_ROW> *CreateHoldingLoader() {
+		SetFileName("Holding.txt");
 
-        return new CFlatHoldingLoad(m_szFullFileName, m_eOutputMode);
-    };
-    virtual CBaseLoader<HOLDING_HISTORY_ROW>*       CreateHoldingHistoryLoader()
-    {
-        SetFileName("HoldingHistory.txt");
+		return new CFlatHoldingLoad(m_szFullFileName, m_eOutputMode);
+	};
+	virtual CBaseLoader<HOLDING_HISTORY_ROW> *CreateHoldingHistoryLoader() {
+		SetFileName("HoldingHistory.txt");
 
-        return new CFlatHoldingHistoryLoad(m_szFullFileName, m_eOutputMode);
-    };
-    virtual CBaseLoader<HOLDING_SUMMARY_ROW>*           CreateHoldingSummaryLoader()
-    {
-        SetFileName("HoldingSummary.txt");
+		return new CFlatHoldingHistoryLoad(m_szFullFileName, m_eOutputMode);
+	};
+	virtual CBaseLoader<HOLDING_SUMMARY_ROW> *CreateHoldingSummaryLoader() {
+		SetFileName("HoldingSummary.txt");
 
-        return new CFlatHoldingSummaryLoad(m_szFullFileName, m_eOutputMode);
-    };
-    virtual CBaseLoader<INDUSTRY_ROW>*              CreateIndustryLoader()
-    {
-        SetFileName("Industry.txt");
+		return new CFlatHoldingSummaryLoad(m_szFullFileName, m_eOutputMode);
+	};
+	virtual CBaseLoader<INDUSTRY_ROW> *CreateIndustryLoader() {
+		SetFileName("Industry.txt");
 
-        return new CFlatIndustryLoad(m_szFullFileName, m_eOutputMode);
-    };
-    virtual CBaseLoader<LAST_TRADE_ROW>*            CreateLastTradeLoader()
-    {
-        SetFileName("LastTrade.txt");
+		return new CFlatIndustryLoad(m_szFullFileName, m_eOutputMode);
+	};
+	virtual CBaseLoader<LAST_TRADE_ROW> *CreateLastTradeLoader() {
+		SetFileName("LastTrade.txt");
 
-        return new CFlatLastTradeLoad(m_szFullFileName, m_eOutputMode);
-    };
-    virtual CBaseLoader<NEWS_ITEM_ROW>*             CreateNewsItemLoader()
-    {
-        SetFileName("NewsItem.txt");
+		return new CFlatLastTradeLoad(m_szFullFileName, m_eOutputMode);
+	};
+	virtual CBaseLoader<NEWS_ITEM_ROW> *CreateNewsItemLoader() {
+		SetFileName("NewsItem.txt");
 
-        return new CFlatNewsItemLoad(m_szFullFileName, m_eOutputMode);
-    };
-    virtual CBaseLoader<NEWS_XREF_ROW>*             CreateNewsXRefLoader()
-    {
-        SetFileName("NewsXRef.txt");
+		return new CFlatNewsItemLoad(m_szFullFileName, m_eOutputMode);
+	};
+	virtual CBaseLoader<NEWS_XREF_ROW> *CreateNewsXRefLoader() {
+		SetFileName("NewsXRef.txt");
 
-        return new CFlatNewsXRefLoad(m_szFullFileName, m_eOutputMode);
-    };
-    virtual CBaseLoader<SECTOR_ROW>*                CreateSectorLoader()
-    {
-        SetFileName("Sector.txt");
+		return new CFlatNewsXRefLoad(m_szFullFileName, m_eOutputMode);
+	};
+	virtual CBaseLoader<SECTOR_ROW> *CreateSectorLoader() {
+		SetFileName("Sector.txt");
 
-        return new CFlatSectorLoad(m_szFullFileName, m_eOutputMode);
-    };
-    virtual CBaseLoader<SECURITY_ROW>*              CreateSecurityLoader()
-    {
-        SetFileName("Security.txt");
+		return new CFlatSectorLoad(m_szFullFileName, m_eOutputMode);
+	};
+	virtual CBaseLoader<SECURITY_ROW> *CreateSecurityLoader() {
+		SetFileName("Security.txt");
 
-        return new CFlatSecurityLoad(m_szFullFileName, m_eOutputMode);
-    };
-    virtual CBaseLoader<SETTLEMENT_ROW>*            CreateSettlementLoader()
-    {
-        SetFileName("Settlement.txt");
+		return new CFlatSecurityLoad(m_szFullFileName, m_eOutputMode);
+	};
+	virtual CBaseLoader<SETTLEMENT_ROW> *CreateSettlementLoader() {
+		SetFileName("Settlement.txt");
 
-        return new CFlatSettlementLoad(m_szFullFileName, m_eOutputMode);
-    };
-    virtual CBaseLoader<STATUS_TYPE_ROW>*           CreateStatusTypeLoader()
-    {
-        SetFileName("StatusType.txt");
+		return new CFlatSettlementLoad(m_szFullFileName, m_eOutputMode);
+	};
+	virtual CBaseLoader<STATUS_TYPE_ROW> *CreateStatusTypeLoader() {
+		SetFileName("StatusType.txt");
 
-        return new CFlatStatusTypeLoad(m_szFullFileName, m_eOutputMode);
-    };
-    virtual CBaseLoader<TAX_RATE_ROW>*               CreateTaxRateLoader()
-    {
-        SetFileName("TaxRate.txt");
+		return new CFlatStatusTypeLoad(m_szFullFileName, m_eOutputMode);
+	};
+	virtual CBaseLoader<TAX_RATE_ROW> *CreateTaxRateLoader() {
+		SetFileName("TaxRate.txt");
 
-        return new CFlatTaxRateLoad(m_szFullFileName, m_eOutputMode);
-    };
-    virtual CBaseLoader<TRADE_HISTORY_ROW>*         CreateTradeHistoryLoader()
-    {
-        SetFileName("TradeHistory.txt");
+		return new CFlatTaxRateLoad(m_szFullFileName, m_eOutputMode);
+	};
+	virtual CBaseLoader<TRADE_HISTORY_ROW> *CreateTradeHistoryLoader() {
+		SetFileName("TradeHistory.txt");
 
-        return new CFlatTradeHistoryLoad(m_szFullFileName, m_eOutputMode);
-    };
-    virtual CBaseLoader<TRADE_ROW>*                 CreateTradeLoader()
-    {
-        SetFileName("Trade.txt");
+		return new CFlatTradeHistoryLoad(m_szFullFileName, m_eOutputMode);
+	};
+	virtual CBaseLoader<TRADE_ROW> *CreateTradeLoader() {
+		SetFileName("Trade.txt");
 
-        return new CFlatTradeLoad(m_szFullFileName, m_eOutputMode);
-    };
-    virtual CBaseLoader<TRADE_REQUEST_ROW>*         CreateTradeRequestLoader()
-    {
-        SetFileName("TradeRequest.txt");
+		return new CFlatTradeLoad(m_szFullFileName, m_eOutputMode);
+	};
+	virtual CBaseLoader<TRADE_REQUEST_ROW> *CreateTradeRequestLoader() {
+		SetFileName("TradeRequest.txt");
 
-        return new CFlatTradeRequestLoad(m_szFullFileName, m_eOutputMode);
-    };
-    virtual CBaseLoader<TRADE_TYPE_ROW>*            CreateTradeTypeLoader()
-    {
-        SetFileName("TradeType.txt");
+		return new CFlatTradeRequestLoad(m_szFullFileName, m_eOutputMode);
+	};
+	virtual CBaseLoader<TRADE_TYPE_ROW> *CreateTradeTypeLoader() {
+		SetFileName("TradeType.txt");
 
-        return new CFlatTradeTypeLoad(m_szFullFileName, m_eOutputMode);
-    };
-    virtual CBaseLoader<WATCH_ITEM_ROW>*            CreateWatchItemLoader()
-    {
-        SetFileName("WatchItem.txt");
+		return new CFlatTradeTypeLoad(m_szFullFileName, m_eOutputMode);
+	};
+	virtual CBaseLoader<WATCH_ITEM_ROW> *CreateWatchItemLoader() {
+		SetFileName("WatchItem.txt");
 
-        return new CFlatWatchItemLoad(m_szFullFileName, m_eOutputMode);
-    };
+		return new CFlatWatchItemLoad(m_szFullFileName, m_eOutputMode);
+	};
 
-    virtual CBaseLoader<WATCH_LIST_ROW>*            CreateWatchListLoader()
-    {
-        SetFileName("WatchList.txt");
+	virtual CBaseLoader<WATCH_LIST_ROW> *CreateWatchListLoader() {
+		SetFileName("WatchList.txt");
 
-        return new CFlatWatchListLoad(m_szFullFileName, m_eOutputMode);
-    };
+		return new CFlatWatchListLoad(m_szFullFileName, m_eOutputMode);
+	};
 
-    virtual CBaseLoader<ZIP_CODE_ROW>*          CreateZipCodeLoader()
-    {
-        SetFileName("ZipCode.txt");
+	virtual CBaseLoader<ZIP_CODE_ROW> *CreateZipCodeLoader() {
+		SetFileName("ZipCode.txt");
 
-        return new CFlatZipCodeLoad(m_szFullFileName, m_eOutputMode);
-    };
+		return new CFlatZipCodeLoad(m_szFullFileName, m_eOutputMode);
+	};
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //FLAT_LOADER_FACTORY_H
+#endif // FLAT_LOADER_FACTORY_H

@@ -35,43 +35,37 @@
  */
 
 /*
-*   Flat file loader for TAXRATE.
-*/
+ *   Flat file loader for TAXRATE.
+ */
 #ifndef FLAT_TAX_RATE_LOAD_H
 #define FLAT_TAX_RATE_LOAD_H
 
 #include "FlatFileLoad_common.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CFlatTaxRateLoad : public CFlatFileLoader <TAX_RATE_ROW>
-{
-private:
-    const std::string TaxrateRowFmt;
+class CFlatTaxRateLoad : public CFlatFileLoader<TAX_RATE_ROW> {
+  private:
+	const std::string TaxrateRowFmt;
 
-public:
-    CFlatTaxRateLoad( char *szFileName, FlatFileOutputModes FlatFileOutputMode ) 
-        : CFlatFileLoader<TAX_RATE_ROW>(szFileName, FlatFileOutputMode)
-        , TaxrateRowFmt("%s|%s|%.5f\n")
-    {};
+  public:
+	CFlatTaxRateLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
+	    : CFlatFileLoader<TAX_RATE_ROW>(szFileName, FlatFileOutputMode),
+	      TaxrateRowFmt("%s|%s|%.5f\n"){};
 
-    /*
-    *   Writes a record to the file.
-    */
-    void WriteNextRecord(const TAX_RATE_ROW & next_record)
-    {
-        int rc = fprintf( hOutFile, TaxrateRowFmt.c_str(),
-                  next_record.TX_ID,
-                  next_record.TX_NAME,
-                  next_record.TX_RATE
-                );
-        if (rc < 0) {
-            throw CSystemErr(CSystemErr::eWriteFile, "CFlatTaxRateLoad::WriteNextRecord");
-        }
-    }
+	/*
+	 *   Writes a record to the file.
+	 */
+	void WriteNextRecord(const TAX_RATE_ROW &next_record) {
+		int rc = fprintf(hOutFile, TaxrateRowFmt.c_str(), next_record.TX_ID,
+		                 next_record.TX_NAME, next_record.TX_RATE);
+		if (rc < 0) {
+			throw CSystemErr(CSystemErr::eWriteFile,
+			                 "CFlatTaxRateLoad::WriteNextRecord");
+		}
+	}
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //FLAT_TAX_RATE_LOAD_H
+#endif // FLAT_TAX_RATE_LOAD_H

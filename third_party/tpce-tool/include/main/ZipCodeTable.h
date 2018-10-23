@@ -35,8 +35,8 @@
  */
 
 /*
-*   Class representing the ZIP_CODE table.
-*/
+ *   Class representing the ZIP_CODE table.
+ */
 #ifndef ZIP_CODE_TABLE_H
 #define ZIP_CODE_TABLE_H
 
@@ -44,20 +44,17 @@
 #include "input/DataFileTypes.h"
 #include "TableRows.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CZipCodeTable : public FixedTable<ZipCodeDataFile_t, ZIP_CODE_ROW>
-{
-public:
-    CZipCodeTable(const ZipCodeDataFile_t &dataFile);
-    ~CZipCodeTable();
+class CZipCodeTable : public FixedTable<ZipCodeDataFile_t, ZIP_CODE_ROW> {
+  public:
+	CZipCodeTable(const ZipCodeDataFile_t &dataFile);
+	~CZipCodeTable();
 
-    virtual unsigned int MaxRecordIdx() const;
-    virtual void LoadTableRow();
-
+	virtual unsigned int MaxRecordIdx() const;
+	virtual void LoadTableRow();
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //ZIP_CODE_TABLE_H
+#endif // ZIP_CODE_TABLE_H

@@ -36,9 +36,9 @@
  */
 
 /******************************************************************************
-*   Description:        Implementation of the Security input file that scales
-*                       with the database size.
-******************************************************************************/
+ *   Description:        Implementation of the Security input file that scales
+ *                       with the database size.
+ ******************************************************************************/
 
 #ifndef SECURITY_FILE_H
 #define SECURITY_FILE_H
@@ -50,97 +50,99 @@
 #include "DataFileTypes.h"
 #include "main/ExchangeIDs.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CSecurityFile
-{
-    SecurityDataFile_t const * m_dataFile;
+class CSecurityFile {
+	SecurityDataFile_t const *m_dataFile;
 
-    // Total number of securities in the database.
-    // Depends on the total number of customers.
-    //
-    TIdent  m_iConfiguredSecurityCount;
-    TIdent  m_iActiveSecurityCount;
+	// Total number of securities in the database.
+	// Depends on the total number of customers.
+	//
+	TIdent m_iConfiguredSecurityCount;
+	TIdent m_iActiveSecurityCount;
 
-    // Number of base companies (=rows in Company.txt input file).
-    //
-    UINT    m_iBaseCompanyCount;
+	// Number of base companies (=rows in Company.txt input file).
+	//
+	UINT m_iBaseCompanyCount;
 
-    // Used to map a symbol to it's id value. To support logical const-ness these are
-    // mutable since they don't change the "real" contents of the Security File.
-    mutable bool                            m_SymbolToIdMapIsLoaded;
-    mutable std::map< std::string, TIdent > m_SymbolToIdMap;
-    mutable std::map< char, int >           m_LowerCaseLetterToIntMap;
-    char                                    m_SUFFIX_SEPARATOR;
+	// Used to map a symbol to it's id value. To support logical const-ness
+	// these are mutable since they don't change the "real" contents of the
+	// Security File.
+	mutable bool m_SymbolToIdMapIsLoaded;
+	mutable std::map<std::string, TIdent> m_SymbolToIdMap;
+	mutable std::map<char, int> m_LowerCaseLetterToIntMap;
+	char m_SUFFIX_SEPARATOR;
 
-    void CreateSuffix( TIdent Multiplier, char* pBuf, size_t BufSize ) const;
-    INT64 ParseSuffix( const char* pSymbol ) const;
+	void CreateSuffix(TIdent Multiplier, char *pBuf, size_t BufSize) const;
+	INT64 ParseSuffix(const char *pSymbol) const;
 
-public:
+  public:
+	// Constructor.
+	//
+	CSecurityFile(const SecurityDataFile_t &dataFile,
+	              TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount,
+	              UINT baseCompanyCount);
 
-    // Constructor.
-    //
-    CSecurityFile(const SecurityDataFile_t& dataFile, TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount, UINT baseCompanyCount);
+	// Calculate total security count for the specified number of customers.
+	// Sort of a static method. Used in parallel generation of securities
+	// related tables.
+	//
+	TIdent CalculateSecurityCount(TIdent iCustomerCount) const;
 
-    // Calculate total security count for the specified number of customers.
-    // Sort of a static method. Used in parallel generation of securities related tables.
-    //
-    TIdent CalculateSecurityCount(TIdent iCustomerCount) const;
+	// Calculate the first security id (0-based) for the specified customer id
+	//
+	TIdent CalculateStartFromSecurity(TIdent iStartFromCustomer) const;
 
-    // Calculate the first security id (0-based) for the specified customer id
-    //
-    TIdent CalculateStartFromSecurity(TIdent iStartFromCustomer) const;
+	// Create security symbol with mod/div magic.
+	//
+	// This function is needed to scale unique security
+	// symbols with the database size.
+	//
+	void
+	CreateSymbol(TIdent iIndex,    // row number
+	             char *szOutput,   // output buffer
+	             size_t iOutputLen // size of the output buffer (including null)
+	             ) const;
 
-    // Create security symbol with mod/div magic.
-    //
-    // This function is needed to scale unique security
-    // symbols with the database size.
-    //
-    void CreateSymbol(  TIdent  iIndex,     // row number
-                        char*   szOutput,   // output buffer
-                        size_t  iOutputLen // size of the output buffer (including null)
-                        ) const;
+	// Return company id for the specified row of the SECURITY table.
+	// Index can exceed the size of the Security flat file.
+	//
+	TIdent GetCompanyId(TIdent iIndex) const;
 
-    // Return company id for the specified row of the SECURITY table.
-    // Index can exceed the size of the Security flat file.
-    //
-    TIdent GetCompanyId(TIdent iIndex) const;
+	TIdent GetCompanyIndex(TIdent Index) const;
 
-    TIdent GetCompanyIndex( TIdent Index ) const;
+	// Return the number of securities in the database for
+	// a certain number of customers.
+	//
+	TIdent GetSize() const;
 
-    // Return the number of securities in the database for
-    // a certain number of customers.
-    //
-    TIdent GetSize() const;
+	// Return the number of securities in the database for
+	// the configured number of customers.
+	//
+	TIdent GetConfiguredSecurityCount() const;
 
-    // Return the number of securities in the database for
-    // the configured number of customers.
-    //
-    TIdent GetConfiguredSecurityCount() const;
+	// Return the number of securities in the database for
+	// the active number of customers.
+	//
+	TIdent GetActiveSecurityCount() const;
 
-    // Return the number of securities in the database for
-    // the active number of customers.
-    //
-    TIdent GetActiveSecurityCount() const;
+	// Overload GetRecord to wrap around indices that
+	// are larger than the flat file
+	//
+	const SecurityDataFileRecord &GetRecord(TIdent index) const;
 
-    // Overload GetRecord to wrap around indices that
-    // are larger than the flat file
-    //
-    const SecurityDataFileRecord&  GetRecord(TIdent index) const;
+	// Load the symbol-to-id map
+	// Logical const-ness - the maps and the is-loaded flag may change but the
+	// "real" Security File data is unchanged.
+	bool LoadSymbolToIdMap(void) const;
 
-    // Load the symbol-to-id map
-    // Logical const-ness - the maps and the is-loaded flag may change but the "real"
-    // Security File data is unchanged.
-    bool LoadSymbolToIdMap( void ) const;
+	TIdent GetId(char *pSymbol) const;
 
-    TIdent GetId( char* pSymbol ) const;
+	TIdent GetIndex(char *pSymbol) const;
 
-    TIdent GetIndex( char* pSymbol ) const;
-
-    eExchangeID GetExchangeIndex( TIdent index ) const;
+	eExchangeID GetExchangeIndex(TIdent index) const;
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
 #endif // SECURITY_FILE_H

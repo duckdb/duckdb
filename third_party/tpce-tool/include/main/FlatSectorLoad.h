@@ -35,8 +35,8 @@
  */
 
 /*
-*   Flat file loader for SECTOR.
-*/
+ *   Flat file loader for SECTOR.
+ */
 #ifndef FLAT_SECTOR_LOAD_H
 #define FLAT_SECTOR_LOAD_H
 
@@ -44,34 +44,30 @@
 
 #include "TableTypes.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CFlatSectorLoad : public CFlatFileLoader <SECTOR_ROW>
-{
-private:
-    const std::string SectorRowFmt;
-public:
-    CFlatSectorLoad( char *szFileName, FlatFileOutputModes FlatFileOutputMode ) 
-        : CFlatFileLoader<SECTOR_ROW>(szFileName, FlatFileOutputMode)
-        , SectorRowFmt("%s|%s\n")
-    {};
+class CFlatSectorLoad : public CFlatFileLoader<SECTOR_ROW> {
+  private:
+	const std::string SectorRowFmt;
 
-    /*
-    *   Writes a record to the file.
-    */
-    void WriteNextRecord(const SECTOR_ROW & next_record)
-    {
-        int rc = fprintf( hOutFile, SectorRowFmt.c_str(),
-                  next_record.SC_ID,
-                  next_record.SC_NAME
-                );
-        if (rc < 0) {
-            throw CSystemErr(CSystemErr::eWriteFile, "CFlatSectorLoad::WriteNextRecord");
-        }
-    }
+  public:
+	CFlatSectorLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
+	    : CFlatFileLoader<SECTOR_ROW>(szFileName, FlatFileOutputMode),
+	      SectorRowFmt("%s|%s\n"){};
+
+	/*
+	 *   Writes a record to the file.
+	 */
+	void WriteNextRecord(const SECTOR_ROW &next_record) {
+		int rc = fprintf(hOutFile, SectorRowFmt.c_str(), next_record.SC_ID,
+		                 next_record.SC_NAME);
+		if (rc < 0) {
+			throw CSystemErr(CSystemErr::eWriteFile,
+			                 "CFlatSectorLoad::WriteNextRecord");
+		}
+	}
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //FLAT_SECTOR_LOAD_H
+#endif // FLAT_SECTOR_LOAD_H

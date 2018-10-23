@@ -35,43 +35,37 @@
  */
 
 /*
-*   Flat file loader for ZIP_CODE.
-*/
+ *   Flat file loader for ZIP_CODE.
+ */
 #ifndef FLAT_ZIP_CODE_LOAD_H
 #define FLAT_ZIP_CODE_LOAD_H
 
 #include "FlatFileLoad_common.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CFlatZipCodeLoad : public CFlatFileLoader <ZIP_CODE_ROW>
-{
-private:
-    const std::string ZipCodeRowFmt;
+class CFlatZipCodeLoad : public CFlatFileLoader<ZIP_CODE_ROW> {
+  private:
+	const std::string ZipCodeRowFmt;
 
-public:
-    CFlatZipCodeLoad( char *szFileName, FlatFileOutputModes FlatFileOutputMode ) 
-        : CFlatFileLoader<ZIP_CODE_ROW>(szFileName, FlatFileOutputMode)
-        , ZipCodeRowFmt("%s|%s|%s\n")
-    {};
+  public:
+	CFlatZipCodeLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
+	    : CFlatFileLoader<ZIP_CODE_ROW>(szFileName, FlatFileOutputMode),
+	      ZipCodeRowFmt("%s|%s|%s\n"){};
 
-    /*
-    *   Writes a record to the file.
-    */
-    void WriteNextRecord(const ZIP_CODE_ROW & next_record)
-    {
-        int rc = fprintf( hOutFile, ZipCodeRowFmt.c_str(),
-                  next_record.ZC_CODE,
-                  next_record.ZC_TOWN,
-                  next_record.ZC_DIV
-                );
-        if (rc < 0) {
-            throw CSystemErr(CSystemErr::eWriteFile, "CFlatZipCodeLoad::WriteNextRecord");
-        }
-    }
+	/*
+	 *   Writes a record to the file.
+	 */
+	void WriteNextRecord(const ZIP_CODE_ROW &next_record) {
+		int rc = fprintf(hOutFile, ZipCodeRowFmt.c_str(), next_record.ZC_CODE,
+		                 next_record.ZC_TOWN, next_record.ZC_DIV);
+		if (rc < 0) {
+			throw CSystemErr(CSystemErr::eWriteFile,
+			                 "CFlatZipCodeLoad::WriteNextRecord");
+		}
+	}
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //FLAT_ZIP_CODE_LOAD_H
+#endif // FLAT_ZIP_CODE_LOAD_H

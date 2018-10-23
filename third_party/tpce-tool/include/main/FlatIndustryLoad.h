@@ -35,8 +35,8 @@
  */
 
 /*
-*   Flat file loader for INDUSTRY.
-*/
+ *   Flat file loader for INDUSTRY.
+ */
 #ifndef FLAT_INDUSTRY_LOAD_H
 #define FLAT_INDUSTRY_LOAD_H
 
@@ -44,36 +44,30 @@
 
 #include "TableTypes.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CFlatIndustryLoad : public CFlatFileLoader <INDUSTRY_ROW>
-{
-private:
-    const std::string IndustryRowFmt;
+class CFlatIndustryLoad : public CFlatFileLoader<INDUSTRY_ROW> {
+  private:
+	const std::string IndustryRowFmt;
 
-public:
-    CFlatIndustryLoad( char *szFileName, FlatFileOutputModes FlatFileOutputMode ) 
-        : CFlatFileLoader<INDUSTRY_ROW>(szFileName, FlatFileOutputMode)
-        , IndustryRowFmt("%s|%s|%s\n")
-    {};
+  public:
+	CFlatIndustryLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
+	    : CFlatFileLoader<INDUSTRY_ROW>(szFileName, FlatFileOutputMode),
+	      IndustryRowFmt("%s|%s|%s\n"){};
 
-    /*
-    *   Writes a record to the file.
-    */
-    void WriteNextRecord(const INDUSTRY_ROW & next_record)
-    {
-        int rc = fprintf( hOutFile, IndustryRowFmt.c_str(),
-                  next_record.IN_ID,
-                  next_record.IN_NAME,
-                  next_record.IN_SC_ID
-                );
-        if (rc < 0) {
-            throw CSystemErr(CSystemErr::eWriteFile, "CFlatIndustryLoad::WriteNextRecord");
-        }
-    }
+	/*
+	 *   Writes a record to the file.
+	 */
+	void WriteNextRecord(const INDUSTRY_ROW &next_record) {
+		int rc = fprintf(hOutFile, IndustryRowFmt.c_str(), next_record.IN_ID,
+		                 next_record.IN_NAME, next_record.IN_SC_ID);
+		if (rc < 0) {
+			throw CSystemErr(CSystemErr::eWriteFile,
+			                 "CFlatIndustryLoad::WriteNextRecord");
+		}
+	}
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //FLAT_INDUSTRY_LOAD_H
+#endif // FLAT_INDUSTRY_LOAD_H

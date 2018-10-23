@@ -37,24 +37,20 @@
 #include "main/progressmeterinterface.h"
 #include "main/unusedflag.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
 // Dummy implementation in case someone wants to have a null progress meter
-ProgressMeterInterface::~ProgressMeterInterface()
-{
+ProgressMeterInterface::~ProgressMeterInterface() {
 }
 
-void ProgressMeterInterface::display() const
-{
+void ProgressMeterInterface::display() const {
 }
 
-void ProgressMeterInterface::inc(int count UNUSED)
-{
+void ProgressMeterInterface::inc(int count UNUSED) {
 }
 
-void ProgressMeterInterface::message(const std::string& mesg UNUSED, int level UNUSED)
-{
+void ProgressMeterInterface::message(const std::string &mesg UNUSED,
+                                     int level UNUSED) {
 }
 
-}
+} // namespace TPCE

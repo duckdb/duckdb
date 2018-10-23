@@ -35,41 +35,37 @@
  */
 
 /*
-*   Flat file loader for WATCH_LIST.
-*/
+ *   Flat file loader for WATCH_LIST.
+ */
 #ifndef FLAT_WATCH_LIST_LOAD_H
 #define FLAT_WATCH_LIST_LOAD_H
 
 #include "FlatFileLoad_common.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CFlatWatchListLoad : public CFlatFileLoader <WATCH_LIST_ROW>
-{
-private:
-    const std::string WatchListRowFmt;
-public:
-    CFlatWatchListLoad( char *szFileName, FlatFileOutputModes FlatFileOutputMode ) 
-        : CFlatFileLoader<WATCH_LIST_ROW>(szFileName, FlatFileOutputMode)
-        , WatchListRowFmt("%" PRId64 "|%" PRId64 "\n")
-    {};
+class CFlatWatchListLoad : public CFlatFileLoader<WATCH_LIST_ROW> {
+  private:
+	const std::string WatchListRowFmt;
 
-    /*
-    *   Writes a record to the file.
-    */
-    void WriteNextRecord(const WATCH_LIST_ROW &next_record)
-    {
-        int rc = fprintf( hOutFile, WatchListRowFmt.c_str(),
-                  next_record.WL_ID,
-                  next_record.WL_C_ID
-                );
-        if (rc < 0) {
-            throw CSystemErr(CSystemErr::eWriteFile, "CFlatWatchListLoad::WriteNextRecord");
-        }
-    }
+  public:
+	CFlatWatchListLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
+	    : CFlatFileLoader<WATCH_LIST_ROW>(szFileName, FlatFileOutputMode),
+	      WatchListRowFmt("%" PRId64 "|%" PRId64 "\n"){};
+
+	/*
+	 *   Writes a record to the file.
+	 */
+	void WriteNextRecord(const WATCH_LIST_ROW &next_record) {
+		int rc = fprintf(hOutFile, WatchListRowFmt.c_str(), next_record.WL_ID,
+		                 next_record.WL_C_ID);
+		if (rc < 0) {
+			throw CSystemErr(CSystemErr::eWriteFile,
+			                 "CFlatWatchListLoad::WriteNextRecord");
+		}
+	}
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //FLAT_WATCH_LIST_LOAD_H
+#endif // FLAT_WATCH_LIST_LOAD_H

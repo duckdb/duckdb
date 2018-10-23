@@ -35,46 +35,44 @@
  */
 
 /*
-*   Database loader class for TAXRATE table.
-*/
+ *   Database loader class for TAXRATE table.
+ */
 #ifndef ODBC_TAX_RATE_LOAD_H
 #define ODBC_TAX_RATE_LOAD_H
 
 #include "../utilities/TableConsts.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CODBCTaxRateLoad : public CDBLoader <TAX_RATE_ROW>
-{
-public:
-    CODBCTaxRateLoad(char *szServer, char *szDatabase, char *szLoaderParams, char *szTable = "TAXRATE")
-        : CDBLoader<TAX_RATE_ROW>(szServer, szDatabase, szLoaderParams, szTable)
-    {
-    };
+class CODBCTaxRateLoad : public CDBLoader<TAX_RATE_ROW> {
+  public:
+	CODBCTaxRateLoad(char *szServer, char *szDatabase, char *szLoaderParams,
+	                 char *szTable = "TAXRATE")
+	    : CDBLoader<TAX_RATE_ROW>(szServer, szDatabase, szLoaderParams,
+	                              szTable){};
 
-    virtual void BindColumns()
-    {
-        //Binding function we have to implement.
-        int i = 0;
-        if (   bcp_bind(m_hdbc, (BYTE *) &m_row.TX_ID, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED
-            || bcp_bind(m_hdbc, (BYTE *) &m_row.TX_NAME, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED
-            || bcp_bind(m_hdbc, (BYTE *) &m_row.TX_RATE, 0, SQL_VARLEN_DATA, NULL, 0, SQLFLT8, ++i) != SUCCEED
-            )
-            ThrowError(CODBCERR::eBcpBind);
+	virtual void BindColumns() {
+		// Binding function we have to implement.
+		int i = 0;
+		if (bcp_bind(m_hdbc, (BYTE *)&m_row.TX_ID, 0, SQL_VARLEN_DATA,
+		             (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.TX_NAME, 0, SQL_VARLEN_DATA,
+		             (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.TX_RATE, 0, SQL_VARLEN_DATA, NULL,
+		             0, SQLFLT8, ++i) != SUCCEED)
+			ThrowError(CODBCERR::eBcpBind);
 
-//      if ( bcp_control(m_hdbc, BCPHINTS, "TABLOCK" ) != SUCCEED )
-//          ThrowError(CODBCERR::eBcpControl);
-    };
+		//      if ( bcp_control(m_hdbc, BCPHINTS, "TABLOCK" ) != SUCCEED )
+		//          ThrowError(CODBCERR::eBcpControl);
+	};
 
-    virtual void CopyRow(const TAX_RATE_ROW &row)
-    {
-        strncpy(m_row.TX_ID, row.TX_ID, sizeof(m_row.TX_ID));
-        strncpy(m_row.TX_NAME, row.TX_NAME, sizeof(m_row.TX_NAME));
-        m_row.TX_RATE = row.TX_RATE;
-    };
+	virtual void CopyRow(const TAX_RATE_ROW &row) {
+		strncpy(m_row.TX_ID, row.TX_ID, sizeof(m_row.TX_ID));
+		strncpy(m_row.TX_NAME, row.TX_NAME, sizeof(m_row.TX_NAME));
+		m_row.TX_RATE = row.TX_RATE;
+	};
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //ODBC_TAX_RATE_LOAD_H
+#endif // ODBC_TAX_RATE_LOAD_H

@@ -39,43 +39,34 @@
 
 #include "TxnHarnessDBInterface.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CMarketWatch
-{
-    CMarketWatchDBInterface* m_db;
+class CMarketWatch {
+	CMarketWatchDBInterface *m_db;
 
-public:
-    CMarketWatch(CMarketWatchDBInterface *pDB)
-        : m_db(pDB)
-    {
-    };
+  public:
+	CMarketWatch(CMarketWatchDBInterface *pDB) : m_db(pDB){};
 
-    void DoTxn(PMarketWatchTxnInput pTxnInput, PMarketWatchTxnOutput pTxnOutput)
-    {
-        TXN_HARNESS_SET_STATUS_SUCCESS;
+	void DoTxn(PMarketWatchTxnInput pTxnInput,
+	           PMarketWatchTxnOutput pTxnOutput) {
+		TXN_HARNESS_SET_STATUS_SUCCESS;
 
-        if ( pTxnInput->acct_id != 0  ||
-             pTxnInput->c_id != 0     ||
-             pTxnInput->industry_name[0] != '\0')
-        {
-            // Initialization
-            TMarketWatchFrame1Output   Frame1Output;
+		if (pTxnInput->acct_id != 0 || pTxnInput->c_id != 0 ||
+		    pTxnInput->industry_name[0] != '\0') {
+			// Initialization
+			TMarketWatchFrame1Output Frame1Output;
 
-            // Execute Frame 1
-            m_db->DoMarketWatchFrame1(pTxnInput, &Frame1Output);
+			// Execute Frame 1
+			m_db->DoMarketWatchFrame1(pTxnInput, &Frame1Output);
 
-            // Copy Frame 1 Output
-            pTxnOutput->pct_change = Frame1Output.pct_change;
-        }
-        else
-        {
-            TXN_HARNESS_PROPAGATE_STATUS(CBaseTxnErr::MWF1_ERROR1);
-        }
-    }
+			// Copy Frame 1 Output
+			pTxnOutput->pct_change = Frame1Output.pct_change;
+		} else {
+			TXN_HARNESS_PROPAGATE_STATUS(CBaseTxnErr::MWF1_ERROR1);
+		}
+	}
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //TXN_HARNESS_MARKET_WATCH_H
+#endif // TXN_HARNESS_MARKET_WATCH_H

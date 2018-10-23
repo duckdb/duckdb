@@ -35,46 +35,41 @@
  */
 
 /*
-*   Flat file loader for LAST_TRADE.
-*/
+ *   Flat file loader for LAST_TRADE.
+ */
 #ifndef FLAT_LAST_TRADE_LOAD_H
 #define FLAT_LAST_TRADE_LOAD_H
 
 #include "FlatFileLoad_common.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CFlatLastTradeLoad : public CFlatFileLoader <LAST_TRADE_ROW>
-{
-private:
-    CDateTime   Flat_LT_DTS;
-    const std::string LastTradeRowFmt;
-public:
-    CFlatLastTradeLoad( char *szFileName, FlatFileOutputModes FlatFileOutputMode ) 
-        : CFlatFileLoader<LAST_TRADE_ROW>(szFileName, FlatFileOutputMode)
-        , LastTradeRowFmt("%s|%s|%.2f|%.2f|%" PRId64 "\n")
-    {};
+class CFlatLastTradeLoad : public CFlatFileLoader<LAST_TRADE_ROW> {
+  private:
+	CDateTime Flat_LT_DTS;
+	const std::string LastTradeRowFmt;
 
-    /*
-    *   Writes a record to the file.
-    */
-    void WriteNextRecord(const LAST_TRADE_ROW &next_record)
-    {
-        Flat_LT_DTS = next_record.LT_DTS;
-        int rc = fprintf( hOutFile, LastTradeRowFmt.c_str(),
-                  next_record.LT_S_SYMB,
-                  Flat_LT_DTS.ToStr(FlatFileDateTimeFormat),
-                  next_record.LT_PRICE,
-                  next_record.LT_OPEN_PRICE,
-                  next_record.LT_VOL
-                );
-        if (rc < 0) {
-            throw CSystemErr(CSystemErr::eWriteFile, "CFlatLastTradeLoad::WriteNextRecord");
-        }
-    }
+  public:
+	CFlatLastTradeLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
+	    : CFlatFileLoader<LAST_TRADE_ROW>(szFileName, FlatFileOutputMode),
+	      LastTradeRowFmt("%s|%s|%.2f|%.2f|%" PRId64 "\n"){};
+
+	/*
+	 *   Writes a record to the file.
+	 */
+	void WriteNextRecord(const LAST_TRADE_ROW &next_record) {
+		Flat_LT_DTS = next_record.LT_DTS;
+		int rc = fprintf(
+		    hOutFile, LastTradeRowFmt.c_str(), next_record.LT_S_SYMB,
+		    Flat_LT_DTS.ToStr(FlatFileDateTimeFormat), next_record.LT_PRICE,
+		    next_record.LT_OPEN_PRICE, next_record.LT_VOL);
+		if (rc < 0) {
+			throw CSystemErr(CSystemErr::eWriteFile,
+			                 "CFlatLastTradeLoad::WriteNextRecord");
+		}
+	}
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //FLAT_LAST_TRADE_LOAD_H
+#endif // FLAT_LAST_TRADE_LOAD_H

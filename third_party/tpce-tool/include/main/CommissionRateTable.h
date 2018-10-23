@@ -35,8 +35,8 @@
  */
 
 /*
-*   Class representing the CommissionRate table.
-*/
+ *   Class representing the CommissionRate table.
+ */
 #ifndef COMMISSION_RATE_TABLE_H
 #define COMMISSION_RATE_TABLE_H
 
@@ -46,18 +46,17 @@
 #include "input/DataFileTypes.h"
 #include "TableRows.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CCommissionRateTable : public FixedTable<CommissionRateDataFile_t, COMMISSION_RATE_ROW>
-{
-public:
-    CCommissionRateTable(const CommissionRateDataFile_t &dataFile);
-    ~CCommissionRateTable();
+class CCommissionRateTable
+    : public FixedTable<CommissionRateDataFile_t, COMMISSION_RATE_ROW> {
+  public:
+	CCommissionRateTable(const CommissionRateDataFile_t &dataFile);
+	~CCommissionRateTable();
 
-    virtual void LoadTableRow();
+	virtual void LoadTableRow();
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //COMMISSION_RATE_TABLE_H
+#endif // COMMISSION_RATE_TABLE_H

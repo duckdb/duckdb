@@ -35,35 +35,34 @@
  */
 
 /*
-*       Database loader class for HOLDING_SUMMARY table.
-*/
+ *       Database loader class for HOLDING_SUMMARY table.
+ */
 #ifndef ODBC_HOLDING_SUMMARY_LOAD_H
 #define ODBC_HOLDING_SUMMARY_LOAD_H
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CODBCHoldingSummaryLoad : public CDBLoader <HOLDING_SUMMARY_ROW>
-{
-public:
-    CODBCHoldingSummaryLoad(char *szServer, char *szDatabase, char *szLoaderParams, char *szTable = "HOLDING_SUMMARY")
-        : CDBLoader<HOLDING_SUMMARY_ROW>(szServer, szDatabase, szLoaderParams, szTable)
-    {
-    };
+class CODBCHoldingSummaryLoad : public CDBLoader<HOLDING_SUMMARY_ROW> {
+  public:
+	CODBCHoldingSummaryLoad(char *szServer, char *szDatabase,
+	                        char *szLoaderParams,
+	                        char *szTable = "HOLDING_SUMMARY")
+	    : CDBLoader<HOLDING_SUMMARY_ROW>(szServer, szDatabase, szLoaderParams,
+	                                     szTable){};
 
-    virtual void BindColumns()
-    {
-        //Binding function we have to implement.
-        int i = 0;
-        if (   bcp_bind(m_hdbc, (BYTE *) &m_row.HS_CA_ID, 0, SQL_VARLEN_DATA, NULL, 0, IDENT_BIND, ++i) != SUCCEED
-            || bcp_bind(m_hdbc, (BYTE *) &m_row.HS_S_SYMB, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, 0, ++i) != SUCCEED
-            || bcp_bind(m_hdbc, (BYTE *) &m_row.HS_QTY, 0, SQL_VARLEN_DATA, NULL, 0, SQLINT4, ++i) != SUCCEED
-            )
-            ThrowError(CODBCERR::eBcpBind);
-    };
-
+	virtual void BindColumns() {
+		// Binding function we have to implement.
+		int i = 0;
+		if (bcp_bind(m_hdbc, (BYTE *)&m_row.HS_CA_ID, 0, SQL_VARLEN_DATA, NULL,
+		             0, IDENT_BIND, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.HS_S_SYMB, 0, SQL_VARLEN_DATA,
+		             (BYTE *)"", 1, 0, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.HS_QTY, 0, SQL_VARLEN_DATA, NULL, 0,
+		             SQLINT4, ++i) != SUCCEED)
+			ThrowError(CODBCERR::eBcpBind);
+	};
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //ODBC_HOLDING_SUMMARY_LOAD_H
+#endif // ODBC_HOLDING_SUMMARY_LOAD_H

@@ -49,153 +49,139 @@
 
 #include "utilities/error.h"
 
-using std::strerror;
 using std::exit;
+using std::strerror;
 
-namespace TPCE
-{
+namespace TPCE {
 
 #ifdef WIN32
 
-CCondition::CCondition(CMutex& pairedmutex)
-    : mutex_(pairedmutex)
-    , cond_()
-{
-    InitializeConditionVariable(&cond_);
+CCondition::CCondition(CMutex &pairedmutex) : mutex_(pairedmutex), cond_() {
+	InitializeConditionVariable(&cond_);
 }
 
 #else
 
-CCondition::CCondition(CMutex& pairedmutex)
-    : mutex_(pairedmutex)
-    , cond_()
-{
-    int rc = pthread_cond_init(&cond_, NULL);
-    if (rc != 0) {
-        std::ostringstream strm;
-        strm << "pthread_cond_init error: " << strerror(rc) << "(" << rc << ")";
-        throw std::runtime_error(strm.str());
-    }
+CCondition::CCondition(CMutex &pairedmutex) : mutex_(pairedmutex), cond_() {
+	int rc = pthread_cond_init(&cond_, NULL);
+	if (rc != 0) {
+		std::ostringstream strm;
+		strm << "pthread_cond_init error: " << strerror(rc) << "(" << rc << ")";
+		throw std::runtime_error(strm.str());
+	}
 }
 #endif
 
-void CCondition::lock()
-{
-    mutex_.lock();
+void CCondition::lock() {
+	mutex_.lock();
 }
 
-void CCondition::unlock()
-{
-    mutex_.unlock();
+void CCondition::unlock() {
+	mutex_.unlock();
 }
 
 #ifdef WIN32
 
-void CCondition::wait() const
-{
-    SleepConditionVariableCS(&cond_, mutex_.mutex(), INFINITE);
+void CCondition::wait() const {
+	SleepConditionVariableCS(&cond_, mutex_.mutex(), INFINITE);
 }
 
-void CCondition::signal()
-{
-    WakeConditionVariable(&cond_);
+void CCondition::signal() {
+	WakeConditionVariable(&cond_);
 }
 
-void CCondition::broadcast()
-{
-    WakeAllConditionVariable(&cond_);
+void CCondition::broadcast() {
+	WakeAllConditionVariable(&cond_);
 }
 
-bool CCondition::timedwait(long timeout /*us*/) const
-{
-    if (timeout < 0) {
-        wait();
-        return true;
-    }
+bool CCondition::timedwait(long timeout /*us*/) const {
+	if (timeout < 0) {
+		wait();
+		return true;
+	}
 
-    int rc = SleepConditionVariableCS(&cond_, mutex_.mutex(), timeout/1000);
-    if (rc == 0) {
-        int rc2 = GetLastError();
-        if (rc2 == WAIT_TIMEOUT) {
-            return false;
-        } else {
-            std::ostringstream strm;
-            strm << "SleepConditionVariableCS error: " << strerror(rc) << "(" << rc << ")";
-            throw std::runtime_error(strm.str());
-        }
-    }
-    return true;
+	int rc = SleepConditionVariableCS(&cond_, mutex_.mutex(), timeout / 1000);
+	if (rc == 0) {
+		int rc2 = GetLastError();
+		if (rc2 == WAIT_TIMEOUT) {
+			return false;
+		} else {
+			std::ostringstream strm;
+			strm << "SleepConditionVariableCS error: " << strerror(rc) << "("
+			     << rc << ")";
+			throw std::runtime_error(strm.str());
+		}
+	}
+	return true;
 }
 
 #else
 
-void CCondition::wait() const
-{
-    int rc = pthread_cond_wait(&cond_, mutex_.mutex());
-    if (rc != 0) {
-        std::ostringstream strm;
-        strm << "pthread_cond_wait error: " << strerror(rc) << "(" << rc << ")";
-        throw std::runtime_error(strm.str());
-    }
+void CCondition::wait() const {
+	int rc = pthread_cond_wait(&cond_, mutex_.mutex());
+	if (rc != 0) {
+		std::ostringstream strm;
+		strm << "pthread_cond_wait error: " << strerror(rc) << "(" << rc << ")";
+		throw std::runtime_error(strm.str());
+	}
 }
 
-void CCondition::signal()
-{
-    int rc = pthread_cond_signal(&cond_);
-    if (rc != 0) {
-        std::ostringstream strm;
-        strm << "pthread_cond_signal error: " << strerror(rc) << "(" << rc << ")";
-        throw std::runtime_error(strm.str());
-    }
+void CCondition::signal() {
+	int rc = pthread_cond_signal(&cond_);
+	if (rc != 0) {
+		std::ostringstream strm;
+		strm << "pthread_cond_signal error: " << strerror(rc) << "(" << rc
+		     << ")";
+		throw std::runtime_error(strm.str());
+	}
 }
 
-void CCondition::broadcast()
-{
-    int rc = pthread_cond_broadcast(&cond_);
-    if (rc != 0) {
-        std::ostringstream strm;
-        strm << "pthread_cond_broadcast error: " << strerror(rc) << "(" << rc << ")";
-        throw std::runtime_error(strm.str());
-    }
+void CCondition::broadcast() {
+	int rc = pthread_cond_broadcast(&cond_);
+	if (rc != 0) {
+		std::ostringstream strm;
+		strm << "pthread_cond_broadcast error: " << strerror(rc) << "(" << rc
+		     << ")";
+		throw std::runtime_error(strm.str());
+	}
 }
 
-bool CCondition::timedwait(const struct timespec& timeout) const
-{
-    int rc = pthread_cond_timedwait(&cond_, mutex_.mutex(), &timeout);
-    if (rc == ETIMEDOUT) {
-        return false;
-    } else if (rc != 0) {
-        std::ostringstream strm;
-        strm << "pthread_cond_timedwait error: " << strerror(rc) << "(" << rc << ")";
-        throw std::runtime_error(strm.str());
-    }
-    return true;
-
+bool CCondition::timedwait(const struct timespec &timeout) const {
+	int rc = pthread_cond_timedwait(&cond_, mutex_.mutex(), &timeout);
+	if (rc == ETIMEDOUT) {
+		return false;
+	} else if (rc != 0) {
+		std::ostringstream strm;
+		strm << "pthread_cond_timedwait error: " << strerror(rc) << "(" << rc
+		     << ")";
+		throw std::runtime_error(strm.str());
+	}
+	return true;
 }
 
-bool CCondition::timedwait(long timeout /*us*/) const
-{
-    if (timeout < 0) {
-        wait();
-        return true;
-    }
-    
-    const int nsec_in_sec  = 1000000000;
-    const int usec_in_sec  = 1000000;
-    const int usec_in_nsec = 1000;
-    struct timeval  tv;
-    struct timespec ts;
+bool CCondition::timedwait(long timeout /*us*/) const {
+	if (timeout < 0) {
+		wait();
+		return true;
+	}
 
-    gettimeofday(&tv, NULL);
+	const int nsec_in_sec = 1000000000;
+	const int usec_in_sec = 1000000;
+	const int usec_in_nsec = 1000;
+	struct timeval tv;
+	struct timespec ts;
 
-    ts.tv_sec  = tv.tv_sec + static_cast<long>(timeout / usec_in_sec);
-    ts.tv_nsec = (tv.tv_usec + static_cast<long>(timeout % usec_in_sec) * usec_in_nsec);
-    if (ts.tv_nsec > nsec_in_sec) {
-        ts.tv_sec  += ts.tv_nsec / nsec_in_sec;
-        ts.tv_nsec  = ts.tv_nsec % nsec_in_sec;
-    }
-    return timedwait(ts);
+	gettimeofday(&tv, NULL);
+
+	ts.tv_sec = tv.tv_sec + static_cast<long>(timeout / usec_in_sec);
+	ts.tv_nsec =
+	    (tv.tv_usec + static_cast<long>(timeout % usec_in_sec) * usec_in_nsec);
+	if (ts.tv_nsec > nsec_in_sec) {
+		ts.tv_sec += ts.tv_nsec / nsec_in_sec;
+		ts.tv_nsec = ts.tv_nsec % nsec_in_sec;
+	}
+	return timedwait(ts);
 }
 #endif
 
-}
+} // namespace TPCE

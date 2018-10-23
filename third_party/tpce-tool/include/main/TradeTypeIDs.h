@@ -35,29 +35,28 @@
  */
 
 /******************************************************************************
-*   Description:        Trade Type IDs corresponding to the TradeType.txt flat
-*                       file.
-*                       Note: The order of enumeration members must match the
-*                       order of rows in the TradeType.txt flat file.
-******************************************************************************/
+ *   Description:        Trade Type IDs corresponding to the TradeType.txt flat
+ *                       file.
+ *                       Note: The order of enumeration members must match the
+ *                       order of rows in the TradeType.txt flat file.
+ ******************************************************************************/
 
 #ifndef TRADE_TYPE_IDS_H
 #define TRADE_TYPE_IDS_H
 
-namespace TPCE
-{
+namespace TPCE {
 
-enum eTradeTypeID
-{
-    eMarketBuy = 0,
-    eMarketSell,
-    eStopLoss,
-    eLimitSell,
-    eLimitBuy,
+enum eTradeTypeID {
+	eMarketBuy = 0,
+	eMarketSell,
+	eStopLoss,
+	eLimitSell,
+	eLimitBuy,
 
-    eMaxTradeTypeID // should be the last - contains the number of items in the enumeration
+	eMaxTradeTypeID // should be the last - contains the number of items in the
+	                // enumeration
 };
 
-} //namespace TPCE
+} // namespace TPCE
 
-#endif //TRADE_TYPE_IDS_H
+#endif // TRADE_TYPE_IDS_H

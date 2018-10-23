@@ -35,36 +35,37 @@
  */
 
 /******************************************************************************
-*   Description:        This class provides Data-Maintenance functionality.
-*                       It generates all necessary inputs for the
-*                       Data-Maintenance transaction. These inputs are then
-*                       made available to a sponsor provided callback interface
-*                       to the SUT (see DMSUTInterface.h).
-*
-*                       The constructor to this class accepts the following
-*                       parameters.
-*
-*                       - pSUT: a pointer to an instance of a sponsor provided
-*                       subclassing of the CCESUTInterface class.
-*                                               - pLogger: a pointer to an instance of CEGenLogger or a
-*                                               sponsor provided subclassing of the CBaseLogger class.
-*                       - dfm: a reference to an instance of the
-*                       CInputFiles class containing all input files loaded
-*                       into memory.
-*                       - iActiveCustomerCount: the total number of customers
-*                       to emulate. C_IDs will be generated in the range of
-*                       1 to iActiveCustomerCount.
-*                       - RandomSeed: seed to be used for the RNG.
-*
-*                       The DM class provides the following entry point.
-*
-*                       - DoTxn: this entry point will generate all required
-*                       inputs and provide those inputs to sponsor code at the
-*                       - DoCleanupTxn: this entry point will execute the
-*                       Trade-Cleanup transaction. This must be run at the
-*                       start of each measurement run before any CE or MEE
-*                       transactions are executed.
-******************************************************************************/
+ *   Description:        This class provides Data-Maintenance functionality.
+ *                       It generates all necessary inputs for the
+ *                       Data-Maintenance transaction. These inputs are then
+ *                       made available to a sponsor provided callback interface
+ *                       to the SUT (see DMSUTInterface.h).
+ *
+ *                       The constructor to this class accepts the following
+ *                       parameters.
+ *
+ *                       - pSUT: a pointer to an instance of a sponsor provided
+ *                       subclassing of the CCESUTInterface class.
+ *                                               - pLogger: a pointer to an
+ *instance of CEGenLogger or a sponsor provided subclassing of the CBaseLogger
+ *class.
+ *                       - dfm: a reference to an instance of the
+ *                       CInputFiles class containing all input files loaded
+ *                       into memory.
+ *                       - iActiveCustomerCount: the total number of customers
+ *                       to emulate. C_IDs will be generated in the range of
+ *                       1 to iActiveCustomerCount.
+ *                       - RandomSeed: seed to be used for the RNG.
+ *
+ *                       The DM class provides the following entry point.
+ *
+ *                       - DoTxn: this entry point will generate all required
+ *                       inputs and provide those inputs to sponsor code at the
+ *                       - DoCleanupTxn: this entry point will execute the
+ *                       Trade-Cleanup transaction. This must be run at the
+ *                       start of each measurement run before any CE or MEE
+ *                       transactions are executed.
+ ******************************************************************************/
 
 #ifndef DM_H
 #define DM_H
@@ -77,63 +78,66 @@
 
 #include "input/DataFileManager.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CDM
-{
-private:
-    CDriverGlobalSettings                       m_DriverGlobalSettings;
-    CDriverDMSettings                           m_DriverDMSettings;
+class CDM {
+  private:
+	CDriverGlobalSettings m_DriverGlobalSettings;
+	CDriverDMSettings m_DriverDMSettings;
 
-    CRandom                                     m_rnd;
-    CCustomerSelection                          m_CustomerSelection;
-    CCustomerAccountsAndPermissionsTable         m_AccsAndPerms;
-    const CSecurityFile&                         m_Securities;
-    const CCompanyFile&                          m_Companies;
-    const TaxRateDivisionDataFile_t&            m_TaxRatesDivision;
-    const StatusTypeDataFile_t&                 m_StatusType;
-    TIdent                                      m_iSecurityCount;
-    TIdent                                      m_iCompanyCount;
-    TIdent                                      m_iStartFromCompany;
-    INT32                                       m_iDivisionTaxCount;
-    TIdent                                      m_iStartFromCustomer;
+	CRandom m_rnd;
+	CCustomerSelection m_CustomerSelection;
+	CCustomerAccountsAndPermissionsTable m_AccsAndPerms;
+	const CSecurityFile &m_Securities;
+	const CCompanyFile &m_Companies;
+	const TaxRateDivisionDataFile_t &m_TaxRatesDivision;
+	const StatusTypeDataFile_t &m_StatusType;
+	TIdent m_iSecurityCount;
+	TIdent m_iCompanyCount;
+	TIdent m_iStartFromCompany;
+	INT32 m_iDivisionTaxCount;
+	TIdent m_iStartFromCustomer;
 
-    INT32                                       m_DataMaintenanceTableNum;
+	INT32 m_DataMaintenanceTableNum;
 
-    TDataMaintenanceTxnInput                    m_TxnInput;
-    TTradeCleanupTxnInput                       m_CleanupTxnInput;
-    CDMSUTInterface*                            m_pSUT;
-    CBaseLogger*                                m_pLogger;
+	TDataMaintenanceTxnInput m_TxnInput;
+	TTradeCleanupTxnInput m_CleanupTxnInput;
+	CDMSUTInterface *m_pSUT;
+	CBaseLogger *m_pLogger;
 
-    // Automatically generate unique RNG seeds
-    void                                        AutoSetRNGSeeds( UINT32 UniqueId );
+	// Automatically generate unique RNG seeds
+	void AutoSetRNGSeeds(UINT32 UniqueId);
 
-    TIdent                                      GenerateRandomCustomerId();
+	TIdent GenerateRandomCustomerId();
 
-    TIdent                                      GenerateRandomCustomerAccountId();
+	TIdent GenerateRandomCustomerAccountId();
 
-    TIdent                                      GenerateRandomCompanyId();
+	TIdent GenerateRandomCompanyId();
 
-    TIdent                                      GenerateRandomSecurityId();
+	TIdent GenerateRandomSecurityId();
 
-    // Initialization that is common for all constructors.
-    void                                        Initialize();
+	// Initialization that is common for all constructors.
+	void Initialize();
 
-public:
-    // Constructor - automatice RNG seed generation
-    CDM( CDMSUTInterface *pSUT, CBaseLogger *pLogger, const DataFileManager &dfm, TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount, INT32 iScaleFactor, INT32 iDaysOfInitialTrades, UINT32 UniqueId );
+  public:
+	// Constructor - automatice RNG seed generation
+	CDM(CDMSUTInterface *pSUT, CBaseLogger *pLogger, const DataFileManager &dfm,
+	    TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount,
+	    INT32 iScaleFactor, INT32 iDaysOfInitialTrades, UINT32 UniqueId);
 
-    // Constructor - RNG seed provided
-    CDM( CDMSUTInterface *pSUT, CBaseLogger *pLogger, const DataFileManager &dfm, TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount, INT32 iScaleFactor, INT32 iDaysOfInitialTrades, UINT32 UniqueId, RNGSEED RNGSeed );
+	// Constructor - RNG seed provided
+	CDM(CDMSUTInterface *pSUT, CBaseLogger *pLogger, const DataFileManager &dfm,
+	    TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount,
+	    INT32 iScaleFactor, INT32 iDaysOfInitialTrades, UINT32 UniqueId,
+	    RNGSEED RNGSeed);
 
-    ~CDM( void );
+	~CDM(void);
 
-    RNGSEED GetRNGSeed( void );
-    void    DoTxn( void );
-    void    DoCleanupTxn( void );
+	RNGSEED GetRNGSeed(void);
+	void DoTxn(void);
+	void DoCleanupTxn(void);
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif  // #ifndef DM_H
+#endif // #ifndef DM_H

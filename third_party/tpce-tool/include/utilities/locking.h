@@ -39,44 +39,39 @@
 
 #include "EGenStandardTypes.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
 // Standard mutex
-class CMutex
-{
-    private:
-        TMutex  mutex_;
-        TMutex* mutex();
-    public:
-        CMutex();
-        ~CMutex();
-        void lock();
-        void unlock();
+class CMutex {
+  private:
+	TMutex mutex_;
+	TMutex *mutex();
 
-        friend class CCondition;
+  public:
+	CMutex();
+	~CMutex();
+	void lock();
+	void unlock();
+
+	friend class CCondition;
 };
 
 // Provide a RAII style lock for any class which supports
 // lock() and unlock()
-template<typename T>
-class Locker
-{
-    private:
-        T& mutex_;
+template <typename T> class Locker {
+  private:
+	T &mutex_;
 
-    public:
-        explicit Locker<T>(T& mutex)
-            : mutex_(mutex)
-        {
-            mutex_.lock();
-        }
+  public:
+	explicit Locker<T>(T &mutex) : mutex_(mutex) {
+		mutex_.lock();
+	}
 
-        ~Locker<T>() {
-            mutex_.unlock();
-        }
+	~Locker<T>() {
+		mutex_.unlock();
+	}
 };
 
-}
+} // namespace TPCE
 
 #endif // LOCKING_H_INCLUDED

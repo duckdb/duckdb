@@ -35,8 +35,8 @@
  */
 
 /*
-*   Flat file loader for CHARGE.
-*/
+ *   Flat file loader for CHARGE.
+ */
 #ifndef FLAT_CHARGE_LOAD_H
 #define FLAT_CHARGE_LOAD_H
 
@@ -44,37 +44,31 @@
 
 #include "TableTypes.h"
 
-namespace TPCE
-{
+namespace TPCE {
 
-class CFlatChargeLoad : public CFlatFileLoader <CHARGE_ROW>
-{
-private:
-    const std::string ChargeRowFmt;
+class CFlatChargeLoad : public CFlatFileLoader<CHARGE_ROW> {
+  private:
+	const std::string ChargeRowFmt;
 
-public:
-    CFlatChargeLoad( char *szFileName, FlatFileOutputModes FlatFileOutputMode ) 
-        : CFlatFileLoader<CHARGE_ROW>(szFileName, FlatFileOutputMode)
-        , ChargeRowFmt("%s|%d|%.2f\n")
-    {};
+  public:
+	CFlatChargeLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
+	    : CFlatFileLoader<CHARGE_ROW>(szFileName, FlatFileOutputMode),
+	      ChargeRowFmt("%s|%d|%.2f\n"){};
 
-    /*
-    *   Writes a record to the file.
-    */
-    void WriteNextRecord(const CHARGE_ROW& next_record)
-    {
-        //fprintf(hOutFile, "%s\n", next_record.ToString('|').c_str());
-        int rc = fprintf( hOutFile, ChargeRowFmt.c_str(),
-                  next_record.CH_TT_ID,
-                  next_record.CH_C_TIER,
-                  next_record.CH_CHRG
-                );
-        if (rc < 0) {
-            throw CSystemErr(CSystemErr::eWriteFile, "CFlatChargeLoad::WriteNextRecord");
-        }
-    }
+	/*
+	 *   Writes a record to the file.
+	 */
+	void WriteNextRecord(const CHARGE_ROW &next_record) {
+		// fprintf(hOutFile, "%s\n", next_record.ToString('|').c_str());
+		int rc = fprintf(hOutFile, ChargeRowFmt.c_str(), next_record.CH_TT_ID,
+		                 next_record.CH_C_TIER, next_record.CH_CHRG);
+		if (rc < 0) {
+			throw CSystemErr(CSystemErr::eWriteFile,
+			                 "CFlatChargeLoad::WriteNextRecord");
+		}
+	}
 };
 
-}   // namespace TPCE
+} // namespace TPCE
 
-#endif //FLAT_CHARGE_LOAD_H
+#endif // FLAT_CHARGE_LOAD_H

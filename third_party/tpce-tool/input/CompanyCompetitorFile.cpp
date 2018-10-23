@@ -41,154 +41,157 @@
 using namespace TPCE;
 
 /*
-*  Constructor.
-*
-*  PARAMETERS:
-*       IN  dataFile                    - CompanyCompetitorDataFile
-*       IN  iConfiguredCustomerCount    - total configured number of customers in the database
-*       IN  iActiveCustomerCount        - active number of customers in the database (provided for engineering purposes)
-*
-*  RETURNS:
-*       not applicable.
-*/
-CCompanyCompetitorFile::CCompanyCompetitorFile(const CompanyCompetitorDataFile_t& dataFile, TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount, UINT baseCompanyCount)
-    : m_dataFile(&dataFile)
-    , m_iConfiguredCompanyCompetitorCount(CalculateCompanyCompetitorCount(iConfiguredCustomerCount))
-    , m_iActiveCompanyCompetitorCount(CalculateCompanyCompetitorCount(iActiveCustomerCount))
-    , m_iBaseCompanyCount(baseCompanyCount)
-{
+ *  Constructor.
+ *
+ *  PARAMETERS:
+ *       IN  dataFile                    - CompanyCompetitorDataFile
+ *       IN  iConfiguredCustomerCount    - total configured number of customers
+ * in the database IN  iActiveCustomerCount        - active number of customers
+ * in the database (provided for engineering purposes)
+ *
+ *  RETURNS:
+ *       not applicable.
+ */
+CCompanyCompetitorFile::CCompanyCompetitorFile(
+    const CompanyCompetitorDataFile_t &dataFile,
+    TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount,
+    UINT baseCompanyCount)
+    : m_dataFile(&dataFile),
+      m_iConfiguredCompanyCompetitorCount(
+          CalculateCompanyCompetitorCount(iConfiguredCustomerCount)),
+      m_iActiveCompanyCompetitorCount(
+          CalculateCompanyCompetitorCount(iActiveCustomerCount)),
+      m_iBaseCompanyCount(baseCompanyCount) {
 }
 
 /*
-*  Calculate company competitor count for the specified number of customers.
-*  Sort of a static method. Used in parallel generation of company related tables.
-*
-*  PARAMETERS:
-*       IN  iCustomerCount          - number of customers
-*
-*  RETURNS:
-*       number of company competitors.
-*/
-TIdent CCompanyCompetitorFile::CalculateCompanyCompetitorCount(TIdent iCustomerCount) const
-{
-    return iCustomerCount / iDefaultLoadUnitSize * iOneLoadUnitCompanyCompetitorCount;
+ *  Calculate company competitor count for the specified number of customers.
+ *  Sort of a static method. Used in parallel generation of company related
+ * tables.
+ *
+ *  PARAMETERS:
+ *       IN  iCustomerCount          - number of customers
+ *
+ *  RETURNS:
+ *       number of company competitors.
+ */
+TIdent CCompanyCompetitorFile::CalculateCompanyCompetitorCount(
+    TIdent iCustomerCount) const {
+	return iCustomerCount / iDefaultLoadUnitSize *
+	       iOneLoadUnitCompanyCompetitorCount;
 }
 
 /*
-*  Calculate the first company competitor id (0-based) for the specified customer id.
-*
-*  PARAMETERS:
-*       IN  iStartFromCustomer      - customer id
-*
-*  RETURNS:
-*       company competitor id.
-*/
-TIdent CCompanyCompetitorFile::CalculateStartFromCompanyCompetitor(TIdent iStartFromCustomer) const
-{
-    return iStartFromCustomer / iDefaultLoadUnitSize * iOneLoadUnitCompanyCompetitorCount;
+ *  Calculate the first company competitor id (0-based) for the specified
+ * customer id.
+ *
+ *  PARAMETERS:
+ *       IN  iStartFromCustomer      - customer id
+ *
+ *  RETURNS:
+ *       company competitor id.
+ */
+TIdent CCompanyCompetitorFile::CalculateStartFromCompanyCompetitor(
+    TIdent iStartFromCustomer) const {
+	return iStartFromCustomer / iDefaultLoadUnitSize *
+	       iOneLoadUnitCompanyCompetitorCount;
 }
 
 /*
-*  Return company id for the specified row.
-*  Index can exceed the size of the Company Competitor input file.
-*
-*  PARAMETERS:
-*       IN  iIndex      - row number in the Company Competitor file (0-based)
-*
-*  RETURNS:
-*       company id.
-*/
-TIdent CCompanyCompetitorFile::GetCompanyId(TIdent iIndex) const
-{
-    // Index wraps around every 15000 companies.
-    //
-    return (*m_dataFile)[ (int)(iIndex % m_dataFile->size()) ].CP_CO_ID() + iTIdentShift
-        + iIndex / m_dataFile->size() * m_iBaseCompanyCount;
+ *  Return company id for the specified row.
+ *  Index can exceed the size of the Company Competitor input file.
+ *
+ *  PARAMETERS:
+ *       IN  iIndex      - row number in the Company Competitor file (0-based)
+ *
+ *  RETURNS:
+ *       company id.
+ */
+TIdent CCompanyCompetitorFile::GetCompanyId(TIdent iIndex) const {
+	// Index wraps around every 15000 companies.
+	//
+	return (*m_dataFile)[(int)(iIndex % m_dataFile->size())].CP_CO_ID() +
+	       iTIdentShift + iIndex / m_dataFile->size() * m_iBaseCompanyCount;
 }
 
 /*
-*  Return company competitor id for the specified row.
-*  Index can exceed the size of the Company Competitor input file.
-*
-*  PARAMETERS:
-*       IN  iIndex      - row number in the Company Competitor file (0-based)
-*
-*  RETURNS:
-*       company competitor id.
-*/
-TIdent CCompanyCompetitorFile::GetCompanyCompetitorId(TIdent iIndex) const
-{
-    // Index wraps around every 5000 companies.
-    //
-    return (*m_dataFile)[ (int)(iIndex % m_dataFile->size()) ].CP_COMP_CO_ID() + iTIdentShift
-        + iIndex / m_dataFile->size() * m_iBaseCompanyCount;
+ *  Return company competitor id for the specified row.
+ *  Index can exceed the size of the Company Competitor input file.
+ *
+ *  PARAMETERS:
+ *       IN  iIndex      - row number in the Company Competitor file (0-based)
+ *
+ *  RETURNS:
+ *       company competitor id.
+ */
+TIdent CCompanyCompetitorFile::GetCompanyCompetitorId(TIdent iIndex) const {
+	// Index wraps around every 5000 companies.
+	//
+	return (*m_dataFile)[(int)(iIndex % m_dataFile->size())].CP_COMP_CO_ID() +
+	       iTIdentShift + iIndex / m_dataFile->size() * m_iBaseCompanyCount;
 }
 
 /*
-*  Return industry id for the specified row.
-*  Index can exceed the size of the Company Competitor input file.
-*
-*  PARAMETERS:
-*       IN  iIndex      - row number in the Company Competitor file (0-based)
-*
-*  RETURNS:
-*       industry id.
-*/
-const std::string& CCompanyCompetitorFile::GetIndustryId(TIdent iIndex) const
-{
-    // Index wraps around every 5000 companies.
-    //
-    return (*m_dataFile)[ (int)(iIndex % m_dataFile->size()) ].CP_IN_ID();
+ *  Return industry id for the specified row.
+ *  Index can exceed the size of the Company Competitor input file.
+ *
+ *  PARAMETERS:
+ *       IN  iIndex      - row number in the Company Competitor file (0-based)
+ *
+ *  RETURNS:
+ *       industry id.
+ */
+const std::string &CCompanyCompetitorFile::GetIndustryId(TIdent iIndex) const {
+	// Index wraps around every 5000 companies.
+	//
+	return (*m_dataFile)[(int)(iIndex % m_dataFile->size())].CP_IN_ID();
 }
 
-const char* CCompanyCompetitorFile::GetIndustryIdCSTR(TIdent iIndex) const
-{
-    // Index wraps around every 5000 companies.
-    //
-    return (*m_dataFile)[ (int)(iIndex % m_dataFile->size()) ].CP_IN_ID_CSTR();
-}
-
-/*
-*  Return the number of company competitors in the database for
-*  the configured number of customers.
-*
-*  PARAMETERS:
-*       none.
-*
-*  RETURNS:
-*       configured company competitor count.
-*/
-TIdent CCompanyCompetitorFile::GetConfiguredCompanyCompetitorCount() const
-{
-    return m_iConfiguredCompanyCompetitorCount;
+const char *CCompanyCompetitorFile::GetIndustryIdCSTR(TIdent iIndex) const {
+	// Index wraps around every 5000 companies.
+	//
+	return (*m_dataFile)[(int)(iIndex % m_dataFile->size())].CP_IN_ID_CSTR();
 }
 
 /*
-*  Return the number of company competitors in the database for
-*  the active number of customers.
-*
-*  PARAMETERS:
-*       none.
-*
-*  RETURNS:
-*       active company competitor count.
-*/
-TIdent CCompanyCompetitorFile::GetActiveCompanyCompetitorCount() const
-{
-    return m_iActiveCompanyCompetitorCount;
+ *  Return the number of company competitors in the database for
+ *  the configured number of customers.
+ *
+ *  PARAMETERS:
+ *       none.
+ *
+ *  RETURNS:
+ *       configured company competitor count.
+ */
+TIdent CCompanyCompetitorFile::GetConfiguredCompanyCompetitorCount() const {
+	return m_iConfiguredCompanyCompetitorCount;
 }
 
 /*
-*  Overload GetRecord to wrap around indices that
-*  are larger than the flat file
-*
-*  PARAMETERS:
-*       IN  iIndex      - row number in the Company Competitor file (0-based)
-*
-*  RETURNS:
-*       reference to the row structure in the Company Competitor file.
-*/
-const CompanyCompetitorDataFileRecord& CCompanyCompetitorFile::GetRecord(TIdent index) const
-{
-    return (*m_dataFile)[(int)(index % m_dataFile->size())];
+ *  Return the number of company competitors in the database for
+ *  the active number of customers.
+ *
+ *  PARAMETERS:
+ *       none.
+ *
+ *  RETURNS:
+ *       active company competitor count.
+ */
+TIdent CCompanyCompetitorFile::GetActiveCompanyCompetitorCount() const {
+	return m_iActiveCompanyCompetitorCount;
+}
+
+/*
+ *  Overload GetRecord to wrap around indices that
+ *  are larger than the flat file
+ *
+ *  PARAMETERS:
+ *       IN  iIndex      - row number in the Company Competitor file (0-based)
+ *
+ *  RETURNS:
+ *       reference to the row structure in the Company Competitor file.
+ */
+const CompanyCompetitorDataFileRecord &
+CCompanyCompetitorFile::GetRecord(TIdent index) const {
+	return (*m_dataFile)[(int)(index % m_dataFile->size())];
 }
