@@ -63,4 +63,12 @@ TEST_CASE("Test out of range/incorrect date formats", "[date]") {
 	REQUIRE_FAIL(con.Query("INSERT INTO dates VALUES ('1993-20-14')"));
 	// day out of range
 	REQUIRE_FAIL(con.Query("INSERT INTO dates VALUES ('1993-08-99')"));
+	// day out of range because not a leapyear
+	REQUIRE_FAIL(con.Query("INSERT INTO dates VALUES ('1993-02-29')"));
+	// day out of range because not a leapyear
+	REQUIRE_FAIL(con.Query("INSERT INTO dates VALUES ('1900-02-29')"));
+	// day in range because of leapyear
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO dates VALUES ('1992-02-29')"));
+	// day in range because of leapyear
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO dates VALUES ('2000-02-29')"));
 }

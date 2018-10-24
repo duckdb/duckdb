@@ -96,11 +96,11 @@ static inline int32_t date_to_number(int32_t year, int32_t month, int32_t day) {
 
 int32_t Date::FromString(string str) {
 	struct tm tm;
-	bool failed = strptime(str.c_str(), "%Y-%m-%d", &tm) == nullptr;
+	char *ptr = strptime(str.c_str(), "%Y-%m-%d", &tm);
 	int32_t year = 1900 + tm.tm_year;
 	int32_t month = 1 + tm.tm_mon;
 	int32_t day = tm.tm_mday;
-	if (failed || !IsValidDay(year, month, day)) {
+	if (!ptr || *ptr || !IsValidDay(year, month, day)) {
 		throw Exception(StringUtil::Format("date/time field value out of range: \"%s\", "
 		                          "expected format is (YYYY-MM-DD)",
 		                          str.c_str()));
