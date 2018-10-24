@@ -73,7 +73,7 @@ static void _cast_loop(Vector &source, Vector &result) {
 	}
 	case TypeId::DATE:
 		_templated_cast_loop<SRC, date_t, operators::CastToDate, true>(source,
-		                                                               result);
+	                                                               result);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for cast");

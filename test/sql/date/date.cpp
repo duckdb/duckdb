@@ -28,8 +28,6 @@ TEST_CASE("Test basic DATE functionality", "[date]") {
 	result = con.Query("SELECT cast(i AS VARCHAR) FROM dates");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value("1993-08-14"), Value()}));
 
-	// FIXME: the rest doesn't work properly yet
-	return;
 	// check that we can add days to a date
 	result = con.Query("SELECT i + 5 FROM dates");
 	REQUIRE(CHECK_COLUMN(result, 0,
@@ -44,11 +42,13 @@ TEST_CASE("Test basic DATE functionality", "[date]") {
 	REQUIRE_FAIL(con.Query("SELECT i * 3 FROM dates"));
 	REQUIRE_FAIL(con.Query("SELECT i / 3 FROM dates"));
 	REQUIRE_FAIL(con.Query("SELECT i % 3 FROM dates"));
-	// we also can't add two dates together
-	REQUIRE_FAIL(con.Query("SELECT i + i FROM dates"));
-	// but we can subtract them!
-	result = con.Query("SELECT (i + 5) - i FROM dates");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(5)}));
+
+	// FIXME: this
+	// // we also can't add two dates together
+	// REQUIRE_FAIL(con.Query("SELECT i + i FROM dates"));
+	// // but we can subtract them! resulting in an integer
+	// result = con.Query("SELECT (i + 5) - i FROM dates");
+	// REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(5)}));
 }
 
 TEST_CASE("Test out of range/incorrect date formats", "[date]") {

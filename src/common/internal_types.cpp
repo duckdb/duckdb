@@ -513,7 +513,7 @@ bool TypeIsConstantSize(TypeId type) {
 	return type < TypeId::VARCHAR;
 }
 bool TypeIsIntegral(TypeId type) {
-	return type >= TypeId::TINYINT && type <= TypeId::BIGINT;
+	return type >= TypeId::TINYINT && type <= TypeId::TIMESTAMP;
 }
 bool TypeIsNumeric(TypeId type) {
 	return type >= TypeId::TINYINT && type <= TypeId::DECIMAL;

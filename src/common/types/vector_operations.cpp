@@ -283,10 +283,17 @@ void VectorOperations::Subtract(Vector &left, Vector &right, Vector &result) {
 }
 
 void VectorOperations::Multiply(Vector &left, Vector &right, Vector &result) {
+	if (left.type == TypeId::DATE || left.type == TypeId::TIMESTAMP) {
+		throw InvalidTypeException(left.type, "invalid type for multiplication");
+	}
 	_generic_binary_loop<operators::Multiplication>(left, right, result);
 }
 
 void VectorOperations::Divide(Vector &left, Vector &right, Vector &result) {
+	if (left.type == TypeId::DATE || left.type == TypeId::TIMESTAMP) {
+		throw InvalidTypeException(left.type, "invalid type for division");
+	}
+
 	// set 0 in right side to 1 and as NULL so we get a NULL result and don't
 	// trip the exception
 	// also set payload values that are already set to NULL to 1 for same reason
@@ -330,6 +337,9 @@ void VectorOperations::Divide(Vector &left, Vector &right, Vector &result) {
 }
 
 void VectorOperations::Modulo(Vector &left, Vector &right, Vector &result) {
+	if (left.type == TypeId::DATE || left.type == TypeId::TIMESTAMP) {
+		throw InvalidTypeException(left.type, "invalid type for modulo");
+	}
 	_generic_binary_loop<operators::Modulo>(left, right, result);
 }
 
@@ -341,7 +351,7 @@ void VectorOperations::Not(Vector &left, Vector &result) {
 	if (left.type != TypeId::BOOLEAN) {
 		throw InvalidTypeException(left.type, "NOT() needs a boolean input");
 	}
-	_generic_unary_loop<operators::Not>(left, result);
+	_templated_unary_loop<int8_t, int8_t, operators::Not>(left, result);
 }
 
 //===--------------------------------------------------------------------===//

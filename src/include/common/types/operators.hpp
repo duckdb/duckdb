@@ -265,19 +265,23 @@ template <> std::string Cast::Operation(double left);
 
 struct CastFromDate {
 	template <class SRC, class DST> static inline DST Operation(SRC left) {
-		throw duckdb::NotImplementedException(
-		    "Cast from date could not be performed!");
+		throw duckdb::NotImplementedException("Cast from date could not be performed!");
 	}
 };
 struct CastToDate {
 	template <class SRC, class DST> static inline DST Operation(SRC left) {
-		throw duckdb::NotImplementedException(
-		    "Cast to date could not be performed!");
+		throw duckdb::NotImplementedException("Cast to date could not be performed!");
 	}
 };
 
+
+template <> int32_t CastFromDate::Operation(duckdb::date_t left);
+template <> int64_t CastFromDate::Operation(duckdb::date_t left);
 template <> std::string CastFromDate::Operation(duckdb::date_t left);
 template <> duckdb::date_t CastToDate::Operation(const char *left);
+template <> duckdb::date_t CastToDate::Operation(int32_t left);
+template <> duckdb::date_t CastToDate::Operation(int64_t left);
+
 
 struct NOP {
 	template <class T> static inline T Operation(T left) {
