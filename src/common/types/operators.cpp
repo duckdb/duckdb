@@ -102,11 +102,8 @@ template <> const char *Cast::Operation(double left) {
 	return str_to_cstr(to_string(left));
 }
 
-template <> const char *CastFromDate::Operation(date_t left) {
-	auto conv = Date::ToString(left);
-	auto ret = new char[conv.size() + 1];
-	strcpy(ret, conv.c_str());
-	return ret;
+template <> std::string CastFromDate::Operation(duckdb::date_t left) {
+	return Date::ToString(left);
 }
 
 template <> date_t CastToDate::Operation(const char *left) {

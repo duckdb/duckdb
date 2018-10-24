@@ -25,31 +25,31 @@ void _templated_cast_loop(Vector &source, Vector &result) {
 	result.count = source.count;
 }
 
-template <class SRC, bool IGNORENULL>
+template <class SRC, class OP, bool IGNORENULL>
 static void _cast_loop(Vector &source, Vector &result) {
 	switch (result.type) {
 	case TypeId::TINYINT:
-		_templated_cast_loop<SRC, int8_t, operators::Cast, IGNORENULL>(source,
+		_templated_cast_loop<SRC, int8_t, OP, IGNORENULL>(source,
 		                                                               result);
 		break;
 	case TypeId::SMALLINT:
-		_templated_cast_loop<SRC, int16_t, operators::Cast, IGNORENULL>(source,
+		_templated_cast_loop<SRC, int16_t, OP, IGNORENULL>(source,
 		                                                                result);
 		break;
 	case TypeId::INTEGER:
-		_templated_cast_loop<SRC, int32_t, operators::Cast, IGNORENULL>(source,
+		_templated_cast_loop<SRC, int32_t, OP, IGNORENULL>(source,
 		                                                                result);
 		break;
 	case TypeId::BIGINT:
-		_templated_cast_loop<SRC, int64_t, operators::Cast, IGNORENULL>(source,
+		_templated_cast_loop<SRC, int64_t, OP, IGNORENULL>(source,
 		                                                                result);
 		break;
 	case TypeId::DECIMAL:
-		_templated_cast_loop<SRC, double, operators::Cast, IGNORENULL>(source,
+		_templated_cast_loop<SRC, double, OP, IGNORENULL>(source,
 		                                                               result);
 		break;
 	case TypeId::POINTER:
-		_templated_cast_loop<SRC, uint64_t, operators::Cast, IGNORENULL>(
+		_templated_cast_loop<SRC, uint64_t, OP, IGNORENULL>(
 		    source, result);
 		break;
 	case TypeId::VARCHAR: {
@@ -62,7 +62,7 @@ static void _cast_loop(Vector &source, Vector &result) {
 				result_data[i] = nullptr;
 			} else {
 				auto str =
-				    operators::Cast::template Operation<SRC, std::string>(
+				    OP::template Operation<SRC, std::string>(
 				        ldata[i]);
 				result_data[i] = result.string_heap.AddString(str);
 			}
@@ -172,33 +172,28 @@ void VectorOperations::Cast(Vector &source, Vector &result) {
 	switch (source.type) {
 	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
-		_cast_loop<int8_t, false>(source, result);
+		_cast_loop<int8_t, operators::Cast, false>(source, result);
 		break;
 	case TypeId::SMALLINT:
-		_cast_loop<int16_t, false>(source, result);
+		_cast_loop<int16_t, operators::Cast, false>(source, result);
 		break;
 	case TypeId::INTEGER:
-		_cast_loop<int32_t, false>(source, result);
+		_cast_loop<int32_t, operators::Cast, false>(source, result);
 		break;
 	case TypeId::BIGINT:
-		_cast_loop<int64_t, false>(source, result);
+		_cast_loop<int64_t, operators::Cast, false>(source, result);
 		break;
 	case TypeId::DECIMAL:
-		_cast_loop<double, false>(source, result);
+		_cast_loop<double, operators::Cast, false>(source, result);
 		break;
 	case TypeId::POINTER:
-		_cast_loop<uint64_t, false>(source, result);
+		_cast_loop<uint64_t, operators::Cast, false>(source, result);
 		break;
 	case TypeId::VARCHAR:
-		_cast_loop<const char *, true>(source, result);
+		_cast_loop<const char *, operators::Cast, true>(source, result);
 		break;
 	case TypeId::DATE:
-		if (result.type == TypeId::VARCHAR) {
-			_templated_cast_loop<date_t, const char *, operators::CastFromDate,
-			                     true>(source, result);
-		} else {
-			throw NotImplementedException("Cannot cast type from date!");
-		}
+		_cast_loop<date_t, operators::CastFromDate, true>(source, result);
 		break;
 	case TypeId::TIMESTAMP:
 		if (result.type == TypeId::VARCHAR) {
