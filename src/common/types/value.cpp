@@ -269,9 +269,7 @@ Value Value::CastAs(TypeId new_type) const {
 		new_value.value_.date = _cast<date_t, operators::CastToDate>(*this);
 		break;
 	case TypeId::VARCHAR: {
-		auto cstr = _cast<const char *, operators::Cast>(*this);
-		new_value.str_value = string(cstr);
-		delete[] cstr;
+		new_value.str_value = _cast<std::string, operators::Cast>(*this);
 		break;
 	}
 	default:

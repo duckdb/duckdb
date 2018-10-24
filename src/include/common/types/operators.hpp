@@ -255,13 +255,6 @@ template <> int Cast::Operation(const char *left);
 template <> int64_t Cast::Operation(const char *left);
 template <> uint64_t Cast::Operation(const char *left);
 template <> double Cast::Operation(const char *left);
-// numeric -> string
-template <> const char *Cast::Operation(int8_t left);
-template <> const char *Cast::Operation(int16_t left);
-template <> const char *Cast::Operation(int left);
-template <> const char *Cast::Operation(int64_t left);
-template <> const char *Cast::Operation(uint64_t left);
-template <> const char *Cast::Operation(double left);
 // numeric -> std::string
 template <> std::string Cast::Operation(int8_t left);
 template <> std::string Cast::Operation(int16_t left);
