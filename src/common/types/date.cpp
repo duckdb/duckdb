@@ -101,9 +101,9 @@ int32_t Date::FromString(string str) {
 	int32_t month = 1 + tm.tm_mon;
 	int32_t day = tm.tm_mday;
 	if (!IsValidDay(year, month, day)) {
-		throw ConversionException("date/time field value out of range: \"%s\", "
+		throw Exception(StringUtil::Format("date/time field value out of range: \"%s\", "
 		                          "expected format is (YYYY-MM-DD)",
-		                          str.c_str());
+		                          str.c_str()));
 	}
 	return Date::FromDate(year, month, day);
 }
