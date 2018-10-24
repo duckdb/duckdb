@@ -54,7 +54,10 @@ class ChunkCollection : public Printable {
 		           : "ChunkCollection [ " + std::to_string(count) + " ]: \n" +
 		                 chunks[0]->ToString();
 	}
-
+	//! Gets a reference to the chunk at the given index
+	DataChunk &GetChunk(size_t index) {
+		return *chunks[LocateChunk(index)];
+	}
   private:
 	//! Locates the chunk that belongs to the specific index
 	size_t LocateChunk(size_t index) {

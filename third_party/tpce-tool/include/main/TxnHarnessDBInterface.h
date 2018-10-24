@@ -46,26 +46,27 @@
 #include <cstdio>
 #include "TxnHarnessStructs.h"
 #include "TxnHarnessSendToMarketInterface.h"
-#include "error.h"
+#include "utilities/error.h"
+
+#include "main/connection.hpp"
 
 using namespace std;
 
 namespace TPCE {
 
 class CTradeOrderDBInterface {
+	duckdb::DuckDBConnection con;
   public:
-	virtual void DoTradeOrderFrame1(const TTradeOrderFrame1Input *pIn,
-	                                TTradeOrderFrame1Output *pOut) = 0;
-	virtual void DoTradeOrderFrame2(const TTradeOrderFrame2Input *pIn,
-	                                TTradeOrderFrame2Output *pOut) = 0;
-	virtual void DoTradeOrderFrame3(const TTradeOrderFrame3Input *pIn,
-	                                TTradeOrderFrame3Output *pOut) = 0;
-	virtual void DoTradeOrderFrame4(const TTradeOrderFrame4Input *pIn,
-	                                TTradeOrderFrame4Output *pOut) = 0;
-	virtual void DoTradeOrderFrame5(void) = 0;
-	virtual void DoTradeOrderFrame6(void) = 0;
-	virtual ~CTradeOrderDBInterface() {
-	}
+	void DoTradeOrderFrame1(const TTradeOrderFrame1Input *pIn,
+	                                TTradeOrderFrame1Output *pOut);
+	void DoTradeOrderFrame2(const TTradeOrderFrame2Input *pIn,
+	                                TTradeOrderFrame2Output *pOut);
+	void DoTradeOrderFrame3(const TTradeOrderFrame3Input *pIn,
+	                                TTradeOrderFrame3Output *pOut);
+	void DoTradeOrderFrame4(const TTradeOrderFrame4Input *pIn,
+	                                TTradeOrderFrame4Output *pOut);
+	void DoTradeOrderFrame5(void);
+	void DoTradeOrderFrame6(void);
 };
 
 class CTradeStatusDBInterface {

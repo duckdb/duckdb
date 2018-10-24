@@ -30,16 +30,34 @@ class DuckDBResult {
 
 	void Print();
 
+	//! Returns the number of columns in the result
 	size_t column_count() {
 		return collection.types.size();
 	}
+	//! Returns the number of elements in the result
 	size_t size() {
 		return collection.count;
 	}
+	//! Returns a list of types of the result
 	std::vector<TypeId> &types() {
 		return collection.types;
 	}
 
+	//! Gets the value of the column at the given index. Note that this method is unsafe, it is up to the user to do (1) bounds checking (2) proper type checking. i.e. only use GetValue<int32_t> on columns of type TypeId::INTEGER
+	template<class T>
+	T GetValue(size_t column, size_t index) {
+		auto &data = collection.GetChunk(index).data[column];
+		auto offset_in_chunk = index % STANDARD_VECTOR_SIZE;
+		return ((T*)data.data)[offset_in_chunk];
+	}
+
+	bool ValueIsNull(size_t column, size_t index) {
+		auto &data = collection.GetChunk(index).data[column];
+		auto offset_in_chunk = index % STANDARD_VECTOR_SIZE;
+		return data.nullmask[offset_in_chunk];
+	}
+
+	//! The names of the result
 	std::vector<std::string> names;
 	ChunkCollection collection;
 

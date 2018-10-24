@@ -92,86 +92,86 @@ using namespace duckdb;
 using namespace std;
 
 namespace TPCE {
-		struct tpce_append_information {
-			TableCatalogEntry *table;
-			DataChunk chunk;
-			ClientContext *context;
-		};
+struct tpce_append_information {
+	TableCatalogEntry *table;
+	DataChunk chunk;
+	ClientContext *context;
+};
 
-		static void append_value(DataChunk & chunk, size_t index,
-		                         size_t & column, int32_t value) {
-			((int32_t *)chunk.data[column++].data)[index] = value;
-		}
+static void append_value(DataChunk & chunk, size_t index,
+                         size_t & column, int32_t value) {
+	((int32_t *)chunk.data[column++].data)[index] = value;
+}
 
-		static void append_bigint(DataChunk & chunk, size_t index,
-		                          size_t & column, int64_t value) {
-			((int64_t *)chunk.data[column++].data)[index] = value;
-		}
+static void append_bigint(DataChunk & chunk, size_t index,
+                          size_t & column, int64_t value) {
+	((int64_t *)chunk.data[column++].data)[index] = value;
+}
 
-		static void append_string(DataChunk & chunk, size_t index,
-		                          size_t & column, const char *value) {
-			chunk.data[column++].SetStringValue(index, value);
-		}
+static void append_string(DataChunk & chunk, size_t index,
+                          size_t & column, const char *value) {
+	chunk.data[column++].SetStringValue(index, value);
+}
 
-		static void append_double(DataChunk & chunk, size_t index,
-		                          size_t & column, double value) {
-			((double *)chunk.data[column++].data)[index] = value;
-		}
+static void append_double(DataChunk & chunk, size_t index,
+                          size_t & column, double value) {
+	((double *)chunk.data[column++].data)[index] = value;
+}
 
-		static void append_bool(DataChunk & chunk, size_t index,
-		                        size_t & column, bool value) {
-			((bool *)chunk.data[column++].data)[index] = value;
-		}
+static void append_bool(DataChunk & chunk, size_t index,
+                        size_t & column, bool value) {
+	((bool *)chunk.data[column++].data)[index] = value;
+}
 
-		static void append_timestamp(DataChunk & chunk, size_t index,
-		                             size_t & column, CDateTime time) {
-			((timestamp_t *)chunk.data[column++].data)[index] =
-			    0; // Timestamp::FromString(time.ToStr(1));
-		}
+static void append_timestamp(DataChunk & chunk, size_t index,
+                             size_t & column, CDateTime time) {
+	((timestamp_t *)chunk.data[column++].data)[index] =
+	    0; // Timestamp::FromString(time.ToStr(1));
+}
 
-		void append_char(DataChunk & chunk, size_t index, size_t & column,
-		                 char value) {
-			char val[2];
-			val[0] = value;
-			val[1] = '\\0';
-			append_string(chunk, index, column, val);
-		}
+void append_char(DataChunk & chunk, size_t index, size_t & column,
+                 char value) {
+	char val[2];
+	val[0] = value;
+	val[1] = '\\0';
+	append_string(chunk, index, column, val);
+}
 
-		static void append_to_append_info(tpce_append_information & info) {
-			auto &chunk = info.chunk;
-			auto &table = info.table;
-			if (chunk.column_count == 0) {
-				// initalize the chunk
-				auto types = table->GetTypes();
-				chunk.Initialize(types);
-			} else if (chunk.count >= STANDARD_VECTOR_SIZE) {
-				// flush the chunk
-				table->storage->Append(*info.context, chunk);
-				// have to reset the chunk
-				chunk.Reset();
-			}
-			chunk.count++;
-			for (size_t i = 0; i < chunk.column_count; i++) {
-				chunk.data[i].count = chunk.count;
-			}
-		}
+static void append_to_append_info(tpce_append_information & info) {
+	auto &chunk = info.chunk;
+	auto &table = info.table;
+	if (chunk.column_count == 0) {
+		// initalize the chunk
+		auto types = table->GetTypes();
+		chunk.Initialize(types);
+	} else if (chunk.count >= STANDARD_VECTOR_SIZE) {
+		// flush the chunk
+		table->storage->Append(*info.context, chunk);
+		// have to reset the chunk
+		chunk.Reset();
+	}
+	chunk.count++;
+	for (size_t i = 0; i < chunk.column_count; i++) {
+		chunk.data[i].count = chunk.count;
+	}
+}
 
-		template <typename T> class DuckDBBaseLoader : public CBaseLoader<T> {
-		  protected:
-			tpce_append_information info;
+template <typename T> class DuckDBBaseLoader : public CBaseLoader<T> {
+  protected:
+	tpce_append_information info;
 
-		  public:
-			DuckDBBaseLoader(TableCatalogEntry *table, ClientContext *context) {
-				info.table = table;
-				info.context = context;
-			}
+  public:
+	DuckDBBaseLoader(TableCatalogEntry *table, ClientContext *context) {
+		info.table = table;
+		info.context = context;
+	}
 
-			void FinishLoad() {
-				// append the remainder
-				info.table->storage->Append(*info.context, info.chunk);
-				info.chunk.Reset();
-			}
-		};
+	void FinishLoad() {
+		// append the remainder
+		info.table->storage->Append(*info.context, info.chunk);
+		info.chunk.Reset();
+	}
+};
 
 """)
 
@@ -230,9 +230,7 @@ public:
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
 		size_t index = chunk.count - 1;
-		size_t column = 0;""".replace("${
-			TABLENAME}", get_tablename(table)).replace("${
-			ROW_TYPE}", table.upper().replace(' ', '_') + '_ROW'));
+		size_t column = 0;""".replace("${TABLENAME}", get_tablename(table)).replace("${ROW_TYPE}", table.upper().replace(' ', '_') + '_ROW'));
 	source.write("\n\n")
 	collist = tables[table]
 	for i in range(len(collist)):
@@ -273,12 +271,9 @@ CBaseLoader<${ROW_TYPE}> *
 DuckDBLoaderFactory::Create${TABLENAME}Loader() {
 	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
 	                                          schema, "${TABLEINDB}" + suffix);
-	return new DuckDB${TABLENAME} Load(table, context);
+	return new DuckDB${TABLENAME}Load(table, context);
 }
-""".replace("${
-	TABLENAME}", get_tablename(table)).replace("${
-	ROW_TYPE}", table.upper().replace(' ', '_') + '_ROW').replace("${
-	TABLEINDB}", table.replace(' ', '')))
+""".replace("${TABLENAME}", get_tablename(table)).replace("${ROW_TYPE}", table.upper().replace(' ', '_') + '_ROW').replace("${TABLEINDB}", table.replace(' ', '_')))
 
 source.write("\n")
 #static vector < ColumnDefinition> RegionColumns() {
@@ -312,14 +307,14 @@ header.write(func + ';\n\n')
 source.write(func + ' {\n')
 
 for table in tables.keys():
-	tname = table.replace(' ', '')
+	tname = table.replace(' ', '_')
 	source.write('\tCreateTableInformation %s(schema, "%s" + suffix, %sColumns());\n' %
 		(tname, tname, table.title().replace(' ', '')))
 
 #db.catalog.CreateTable(transaction, &region);
 
 for table in tables.keys():
-	tname = table.replace(' ', '')
+	tname = table.replace(' ', '_')
 	source.write('\tdb.catalog.CreateTable(transaction, &%s);\n' % (tname,))
 
 source.write('}\n\n')

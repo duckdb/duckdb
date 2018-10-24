@@ -12,50 +12,52 @@ using namespace duckdb;
 using namespace std;
 
 namespace TPCE {
-
 struct tpce_append_information {
 	TableCatalogEntry *table;
 	DataChunk chunk;
 	ClientContext *context;
 };
 
-static void append_value(DataChunk &chunk, size_t index, size_t &column,
-                  int32_t value) {
+static void append_value(DataChunk & chunk, size_t index,
+                         size_t & column, int32_t value) {
 	((int32_t *)chunk.data[column++].data)[index] = value;
 }
 
-static void append_bigint(DataChunk &chunk, size_t index, size_t &column,
-                  int64_t value) {
+static void append_bigint(DataChunk & chunk, size_t index,
+                          size_t & column, int64_t value) {
 	((int64_t *)chunk.data[column++].data)[index] = value;
 }
 
-static void append_string(DataChunk &chunk, size_t index, size_t &column,
-                   const char *value) {
+static void append_string(DataChunk & chunk, size_t index,
+                          size_t & column, const char *value) {
 	chunk.data[column++].SetStringValue(index, value);
 }
 
-static void append_double(DataChunk &chunk, size_t index, size_t &column,
-                    double value) {
+static void append_double(DataChunk & chunk, size_t index,
+                          size_t & column, double value) {
 	((double *)chunk.data[column++].data)[index] = value;
 }
 
-static void append_bool(DataChunk &chunk, size_t index, size_t &column,
-                    bool value) {
+static void append_bool(DataChunk & chunk, size_t index,
+                        size_t & column, bool value) {
 	((bool *)chunk.data[column++].data)[index] = value;
 }
 
-static void append_timestamp(DataChunk &chunk, size_t index, size_t &column, CDateTime time) {
-	((timestamp_t *)chunk.data[column++].data)[index] = 0; //Timestamp::FromString(time.ToStr(1));
+static void append_timestamp(DataChunk & chunk, size_t index,
+                             size_t & column, CDateTime time) {
+	((timestamp_t *)chunk.data[column++].data)[index] =
+	    0; // Timestamp::FromString(time.ToStr(1));
 }
 
-void append_char(DataChunk &chunk, size_t index, size_t &column, char value) {
+void append_char(DataChunk & chunk, size_t index, size_t & column,
+                 char value) {
 	char val[2];
 	val[0] = value;
 	val[1] = '\0';
 	append_string(chunk, index, column, val);
 }
 
-static void append_to_append_info(tpce_append_information &info) {
+static void append_to_append_info(tpce_append_information & info) {
 	auto &chunk = info.chunk;
 	auto &table = info.table;
 	if (chunk.column_count == 0) {
@@ -74,10 +76,10 @@ static void append_to_append_info(tpce_append_information &info) {
 	}
 }
 
-template <typename T>
-class DuckDBBaseLoader : public CBaseLoader<T> {
+template <typename T> class DuckDBBaseLoader : public CBaseLoader<T> {
   protected:
 	tpce_append_information info;
+
   public:
 	DuckDBBaseLoader(TableCatalogEntry *table, ClientContext *context) {
 		info.table = table;
@@ -846,199 +848,232 @@ public:
 	
 CBaseLoader<SECTOR_ROW> *
 DuckDBLoaderFactory::CreateSectorLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "sector" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "sector" + suffix);
 	return new DuckDBSectorLoad(table, context);
 }
 
 CBaseLoader<LAST_TRADE_ROW> *
 DuckDBLoaderFactory::CreateLastTradeLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "lasttrade" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "last_trade" + suffix);
 	return new DuckDBLastTradeLoad(table, context);
 }
 
 CBaseLoader<FINANCIAL_ROW> *
 DuckDBLoaderFactory::CreateFinancialLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "financial" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "financial" + suffix);
 	return new DuckDBFinancialLoad(table, context);
 }
 
 CBaseLoader<TRADE_ROW> *
 DuckDBLoaderFactory::CreateTradeLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "trade" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "trade" + suffix);
 	return new DuckDBTradeLoad(table, context);
 }
 
 CBaseLoader<SETTLEMENT_ROW> *
 DuckDBLoaderFactory::CreateSettlementLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "settlement" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "settlement" + suffix);
 	return new DuckDBSettlementLoad(table, context);
 }
 
 CBaseLoader<COMMISSION_RATE_ROW> *
 DuckDBLoaderFactory::CreateCommissionRateLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "commissionrate" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "commission_rate" + suffix);
 	return new DuckDBCommissionRateLoad(table, context);
 }
 
 CBaseLoader<CUSTOMER_ACCOUNT_ROW> *
 DuckDBLoaderFactory::CreateCustomerAccountLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "customeraccount" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "customer_account" + suffix);
 	return new DuckDBCustomerAccountLoad(table, context);
 }
 
 CBaseLoader<CASH_TRANSACTION_ROW> *
 DuckDBLoaderFactory::CreateCashTransactionLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "cashtransaction" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "cash_transaction" + suffix);
 	return new DuckDBCashTransactionLoad(table, context);
 }
 
 CBaseLoader<TAX_RATE_ROW> *
 DuckDBLoaderFactory::CreateTaxRateLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "taxrate" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "tax_rate" + suffix);
 	return new DuckDBTaxRateLoad(table, context);
 }
 
 CBaseLoader<CUSTOMER_TAXRATE_ROW> *
 DuckDBLoaderFactory::CreateCustomerTaxrateLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "customertaxrate" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "customer_taxrate" + suffix);
 	return new DuckDBCustomerTaxrateLoad(table, context);
 }
 
 CBaseLoader<NEWS_XREF_ROW> *
 DuckDBLoaderFactory::CreateNewsXRefLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "newsxref" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "news_xref" + suffix);
 	return new DuckDBNewsXRefLoad(table, context);
 }
 
 CBaseLoader<CHARGE_ROW> *
 DuckDBLoaderFactory::CreateChargeLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "charge" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "charge" + suffix);
 	return new DuckDBChargeLoad(table, context);
 }
 
 CBaseLoader<TRADE_TYPE_ROW> *
 DuckDBLoaderFactory::CreateTradeTypeLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "tradetype" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "trade_type" + suffix);
 	return new DuckDBTradeTypeLoad(table, context);
 }
 
 CBaseLoader<HOLDING_ROW> *
 DuckDBLoaderFactory::CreateHoldingLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "holding" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "holding" + suffix);
 	return new DuckDBHoldingLoad(table, context);
 }
 
 CBaseLoader<DAILY_MARKET_ROW> *
 DuckDBLoaderFactory::CreateDailyMarketLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "dailymarket" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "daily_market" + suffix);
 	return new DuckDBDailyMarketLoad(table, context);
 }
 
 CBaseLoader<EXCHANGE_ROW> *
 DuckDBLoaderFactory::CreateExchangeLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "exchange" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "exchange" + suffix);
 	return new DuckDBExchangeLoad(table, context);
 }
 
 CBaseLoader<COMPANY_ROW> *
 DuckDBLoaderFactory::CreateCompanyLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "company" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "company" + suffix);
 	return new DuckDBCompanyLoad(table, context);
 }
 
 CBaseLoader<COMPANY_COMPETITOR_ROW> *
 DuckDBLoaderFactory::CreateCompanyCompetitorLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "companycompetitor" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "company_competitor" + suffix);
 	return new DuckDBCompanyCompetitorLoad(table, context);
 }
 
 CBaseLoader<ACCOUNT_PERMISSION_ROW> *
 DuckDBLoaderFactory::CreateAccountPermissionLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "accountpermission" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "account_permission" + suffix);
 	return new DuckDBAccountPermissionLoad(table, context);
 }
 
 CBaseLoader<BROKER_ROW> *
 DuckDBLoaderFactory::CreateBrokerLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "broker" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "broker" + suffix);
 	return new DuckDBBrokerLoad(table, context);
 }
 
 CBaseLoader<TRADE_HISTORY_ROW> *
 DuckDBLoaderFactory::CreateTradeHistoryLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "tradehistory" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "trade_history" + suffix);
 	return new DuckDBTradeHistoryLoad(table, context);
 }
 
 CBaseLoader<WATCH_ITEM_ROW> *
 DuckDBLoaderFactory::CreateWatchItemLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "watchitem" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "watch_item" + suffix);
 	return new DuckDBWatchItemLoad(table, context);
 }
 
 CBaseLoader<HOLDING_HISTORY_ROW> *
 DuckDBLoaderFactory::CreateHoldingHistoryLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "holdinghistory" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "holding_history" + suffix);
 	return new DuckDBHoldingHistoryLoad(table, context);
 }
 
 CBaseLoader<ADDRESS_ROW> *
 DuckDBLoaderFactory::CreateAddressLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "address" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "address" + suffix);
 	return new DuckDBAddressLoad(table, context);
 }
 
 CBaseLoader<NEWS_ITEM_ROW> *
 DuckDBLoaderFactory::CreateNewsItemLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "newsitem" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "news_item" + suffix);
 	return new DuckDBNewsItemLoad(table, context);
 }
 
 CBaseLoader<WATCH_LIST_ROW> *
 DuckDBLoaderFactory::CreateWatchListLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "watchlist" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "watch_list" + suffix);
 	return new DuckDBWatchListLoad(table, context);
 }
 
 CBaseLoader<CUSTOMER_ROW> *
 DuckDBLoaderFactory::CreateCustomerLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "customer" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "customer" + suffix);
 	return new DuckDBCustomerLoad(table, context);
 }
 
 CBaseLoader<HOLDING_SUMMARY_ROW> *
 DuckDBLoaderFactory::CreateHoldingSummaryLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "holdingsummary" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "holding_summary" + suffix);
 	return new DuckDBHoldingSummaryLoad(table, context);
 }
 
 CBaseLoader<STATUS_TYPE_ROW> *
 DuckDBLoaderFactory::CreateStatusTypeLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "statustype" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "status_type" + suffix);
 	return new DuckDBStatusTypeLoad(table, context);
 }
 
 CBaseLoader<INDUSTRY_ROW> *
 DuckDBLoaderFactory::CreateIndustryLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "industry" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "industry" + suffix);
 	return new DuckDBIndustryLoad(table, context);
 }
 
 CBaseLoader<ZIP_CODE_ROW> *
 DuckDBLoaderFactory::CreateZipCodeLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "zipcode" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "zip_code" + suffix);
 	return new DuckDBZipCodeLoad(table, context);
 }
 
 CBaseLoader<TRADE_REQUEST_ROW> *
 DuckDBLoaderFactory::CreateTradeRequestLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "traderequest" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "trade_request" + suffix);
 	return new DuckDBTradeRequestLoad(table, context);
 }
 
 CBaseLoader<SECURITY_ROW> *
 DuckDBLoaderFactory::CreateSecurityLoader() {
-	auto table = context->db.catalog.GetTable(context->ActiveTransaction(), schema, "security" + suffix);
+	auto table = context->db.catalog.GetTable(context->ActiveTransaction(),
+	                                          schema, "security" + suffix);
 	return new DuckDBSecurityLoad(table, context);
 }
 
@@ -1367,70 +1402,70 @@ static vector<ColumnDefinition> SecurityColumns() {
 
 void CreateTPCESchema(duckdb::DuckDB &db, duckdb::Transaction &transaction, std::string &schema, std::string &suffix) {
 	CreateTableInformation sector(schema, "sector" + suffix, SectorColumns());
-	CreateTableInformation lasttrade(schema, "lasttrade" + suffix, LastTradeColumns());
+	CreateTableInformation last_trade(schema, "last_trade" + suffix, LastTradeColumns());
 	CreateTableInformation financial(schema, "financial" + suffix, FinancialColumns());
 	CreateTableInformation trade(schema, "trade" + suffix, TradeColumns());
 	CreateTableInformation settlement(schema, "settlement" + suffix, SettlementColumns());
-	CreateTableInformation commissionrate(schema, "commissionrate" + suffix, CommissionRateColumns());
-	CreateTableInformation customeraccount(schema, "customeraccount" + suffix, CustomerAccountColumns());
-	CreateTableInformation cashtransaction(schema, "cashtransaction" + suffix, CashTransactionColumns());
-	CreateTableInformation taxrate(schema, "taxrate" + suffix, TaxRateColumns());
-	CreateTableInformation customertaxrate(schema, "customertaxrate" + suffix, CustomerTaxrateColumns());
-	CreateTableInformation newsxref(schema, "newsxref" + suffix, NewsXrefColumns());
+	CreateTableInformation commission_rate(schema, "commission_rate" + suffix, CommissionRateColumns());
+	CreateTableInformation customer_account(schema, "customer_account" + suffix, CustomerAccountColumns());
+	CreateTableInformation cash_transaction(schema, "cash_transaction" + suffix, CashTransactionColumns());
+	CreateTableInformation tax_rate(schema, "tax_rate" + suffix, TaxRateColumns());
+	CreateTableInformation customer_taxrate(schema, "customer_taxrate" + suffix, CustomerTaxrateColumns());
+	CreateTableInformation news_xref(schema, "news_xref" + suffix, NewsXrefColumns());
 	CreateTableInformation charge(schema, "charge" + suffix, ChargeColumns());
-	CreateTableInformation tradetype(schema, "tradetype" + suffix, TradeTypeColumns());
+	CreateTableInformation trade_type(schema, "trade_type" + suffix, TradeTypeColumns());
 	CreateTableInformation holding(schema, "holding" + suffix, HoldingColumns());
-	CreateTableInformation dailymarket(schema, "dailymarket" + suffix, DailyMarketColumns());
+	CreateTableInformation daily_market(schema, "daily_market" + suffix, DailyMarketColumns());
 	CreateTableInformation exchange(schema, "exchange" + suffix, ExchangeColumns());
 	CreateTableInformation company(schema, "company" + suffix, CompanyColumns());
-	CreateTableInformation companycompetitor(schema, "companycompetitor" + suffix, CompanyCompetitorColumns());
-	CreateTableInformation accountpermission(schema, "accountpermission" + suffix, AccountPermissionColumns());
+	CreateTableInformation company_competitor(schema, "company_competitor" + suffix, CompanyCompetitorColumns());
+	CreateTableInformation account_permission(schema, "account_permission" + suffix, AccountPermissionColumns());
 	CreateTableInformation broker(schema, "broker" + suffix, BrokerColumns());
-	CreateTableInformation tradehistory(schema, "tradehistory" + suffix, TradeHistoryColumns());
-	CreateTableInformation watchitem(schema, "watchitem" + suffix, WatchItemColumns());
-	CreateTableInformation holdinghistory(schema, "holdinghistory" + suffix, HoldingHistoryColumns());
+	CreateTableInformation trade_history(schema, "trade_history" + suffix, TradeHistoryColumns());
+	CreateTableInformation watch_item(schema, "watch_item" + suffix, WatchItemColumns());
+	CreateTableInformation holding_history(schema, "holding_history" + suffix, HoldingHistoryColumns());
 	CreateTableInformation address(schema, "address" + suffix, AddressColumns());
-	CreateTableInformation newsitem(schema, "newsitem" + suffix, NewsItemColumns());
-	CreateTableInformation watchlist(schema, "watchlist" + suffix, WatchListColumns());
+	CreateTableInformation news_item(schema, "news_item" + suffix, NewsItemColumns());
+	CreateTableInformation watch_list(schema, "watch_list" + suffix, WatchListColumns());
 	CreateTableInformation customer(schema, "customer" + suffix, CustomerColumns());
-	CreateTableInformation holdingsummary(schema, "holdingsummary" + suffix, HoldingSummaryColumns());
-	CreateTableInformation statustype(schema, "statustype" + suffix, StatusTypeColumns());
+	CreateTableInformation holding_summary(schema, "holding_summary" + suffix, HoldingSummaryColumns());
+	CreateTableInformation status_type(schema, "status_type" + suffix, StatusTypeColumns());
 	CreateTableInformation industry(schema, "industry" + suffix, IndustryColumns());
-	CreateTableInformation zipcode(schema, "zipcode" + suffix, ZipCodeColumns());
-	CreateTableInformation traderequest(schema, "traderequest" + suffix, TradeRequestColumns());
+	CreateTableInformation zip_code(schema, "zip_code" + suffix, ZipCodeColumns());
+	CreateTableInformation trade_request(schema, "trade_request" + suffix, TradeRequestColumns());
 	CreateTableInformation security(schema, "security" + suffix, SecurityColumns());
 	db.catalog.CreateTable(transaction, &sector);
-	db.catalog.CreateTable(transaction, &lasttrade);
+	db.catalog.CreateTable(transaction, &last_trade);
 	db.catalog.CreateTable(transaction, &financial);
 	db.catalog.CreateTable(transaction, &trade);
 	db.catalog.CreateTable(transaction, &settlement);
-	db.catalog.CreateTable(transaction, &commissionrate);
-	db.catalog.CreateTable(transaction, &customeraccount);
-	db.catalog.CreateTable(transaction, &cashtransaction);
-	db.catalog.CreateTable(transaction, &taxrate);
-	db.catalog.CreateTable(transaction, &customertaxrate);
-	db.catalog.CreateTable(transaction, &newsxref);
+	db.catalog.CreateTable(transaction, &commission_rate);
+	db.catalog.CreateTable(transaction, &customer_account);
+	db.catalog.CreateTable(transaction, &cash_transaction);
+	db.catalog.CreateTable(transaction, &tax_rate);
+	db.catalog.CreateTable(transaction, &customer_taxrate);
+	db.catalog.CreateTable(transaction, &news_xref);
 	db.catalog.CreateTable(transaction, &charge);
-	db.catalog.CreateTable(transaction, &tradetype);
+	db.catalog.CreateTable(transaction, &trade_type);
 	db.catalog.CreateTable(transaction, &holding);
-	db.catalog.CreateTable(transaction, &dailymarket);
+	db.catalog.CreateTable(transaction, &daily_market);
 	db.catalog.CreateTable(transaction, &exchange);
 	db.catalog.CreateTable(transaction, &company);
-	db.catalog.CreateTable(transaction, &companycompetitor);
-	db.catalog.CreateTable(transaction, &accountpermission);
+	db.catalog.CreateTable(transaction, &company_competitor);
+	db.catalog.CreateTable(transaction, &account_permission);
 	db.catalog.CreateTable(transaction, &broker);
-	db.catalog.CreateTable(transaction, &tradehistory);
-	db.catalog.CreateTable(transaction, &watchitem);
-	db.catalog.CreateTable(transaction, &holdinghistory);
+	db.catalog.CreateTable(transaction, &trade_history);
+	db.catalog.CreateTable(transaction, &watch_item);
+	db.catalog.CreateTable(transaction, &holding_history);
 	db.catalog.CreateTable(transaction, &address);
-	db.catalog.CreateTable(transaction, &newsitem);
-	db.catalog.CreateTable(transaction, &watchlist);
+	db.catalog.CreateTable(transaction, &news_item);
+	db.catalog.CreateTable(transaction, &watch_list);
 	db.catalog.CreateTable(transaction, &customer);
-	db.catalog.CreateTable(transaction, &holdingsummary);
-	db.catalog.CreateTable(transaction, &statustype);
+	db.catalog.CreateTable(transaction, &holding_summary);
+	db.catalog.CreateTable(transaction, &status_type);
 	db.catalog.CreateTable(transaction, &industry);
-	db.catalog.CreateTable(transaction, &zipcode);
-	db.catalog.CreateTable(transaction, &traderequest);
+	db.catalog.CreateTable(transaction, &zip_code);
+	db.catalog.CreateTable(transaction, &trade_request);
 	db.catalog.CreateTable(transaction, &security);
 }
 
