@@ -310,6 +310,12 @@ void Binder::Visit(ColumnRefExpression &expr) {
 	bind_context->BindColumn(expr);
 }
 
+void Binder::Visit(FunctionExpression &expr) {
+	SQLNodeVisitor::Visit(expr);
+	expr.bound_function = context.db.catalog.GetScalarFunction(
+	    context.ActiveTransaction(), expr.schema, expr.function_name);
+}
+
 void Binder::Visit(SubqueryExpression &expr) {
 	assert(bind_context);
 

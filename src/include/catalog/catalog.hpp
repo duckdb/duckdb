@@ -32,9 +32,12 @@ class Catalog {
 	void CreateTable(Transaction &transaction, CreateTableInformation *info);
 	//! Drops a table from the catalog.
 	void DropTable(Transaction &transaction, DropTableInformation *info);
-	//! Create a table function in the catalog_entry
+	//! Create a table function in the catalog
 	void CreateTableFunction(Transaction &transaction,
 	                         CreateTableFunctionInformation *info);
+	//! Create a scalar function in the catalog
+	void CreateScalarFunction(Transaction &transaction,
+	                          CreateScalarFunctionInformation *info);
 
 	//! Returns true if the schema exists, and false otherwise.
 	bool SchemaExists(Transaction &transaction,
@@ -57,6 +60,10 @@ class Catalog {
 	//! exception otherwise
 	TableFunctionCatalogEntry *GetTableFunction(Transaction &transaction,
 	                                            FunctionExpression *expression);
+
+	ScalarFunctionCatalogEntry *GetScalarFunction(Transaction &transaction,
+	                                              const std::string &schema,
+	                                              const std::string &name);
 
 	//! Reference to the storage manager
 	StorageManager &storage;

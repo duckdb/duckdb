@@ -42,5 +42,12 @@ class Date {
 	//! Returns true if the specified (year, month, day) combination is a valid
 	//! date
 	static bool IsValidDay(int32_t year, int32_t month, int32_t day);
+
+	//! Extract year of a date entry
+	static int32_t ExtractYear(date_t date);
+	//! Extract month of a date entry
+	static int32_t ExtractMonth(date_t date);
+	//! Extract day of a date entry
+	static int32_t ExtractDay(date_t date);
 };
 } // namespace duckdb

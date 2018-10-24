@@ -4,6 +4,8 @@
 #include "common/exception.hpp"
 #include "common/serializer.hpp"
 
+#include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -11,7 +13,7 @@ FunctionExpression::FunctionExpression(std::string schema,
                                        std::string function_name,
                                        vector<unique_ptr<Expression>> &children)
     : Expression(ExpressionType::FUNCTION), schema(schema),
-      function_name(StringUtil::Lower(function_name)) {
+      function_name(StringUtil::Lower(function_name)), bound_function(nullptr) {
 	for (auto &child : children) {
 		AddChild(move(child));
 	}
@@ -19,9 +21,15 @@ FunctionExpression::FunctionExpression(std::string schema,
 
 void FunctionExpression::ResolveType() {
 	Expression::ResolveType();
-	if (function_name == "abs") {
-		return_type = children[0]->return_type;
+	vector<TypeId> child_types;
+	for (auto &child : children) {
+		child_types.push_back(child->return_type);
 	}
+	if (!bound_function->matches(child_types)) {
+		throw CatalogException("Incorrect set of arguments for function \"%s\"",
+		                       function_name.c_str());
+	}
+	return_type = bound_function->return_type(child_types);
 }
 
 unique_ptr<Expression> FunctionExpression::Copy() {

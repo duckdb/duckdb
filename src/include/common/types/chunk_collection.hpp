@@ -58,6 +58,7 @@ class ChunkCollection : public Printable {
 	DataChunk &GetChunk(size_t index) {
 		return *chunks[LocateChunk(index)];
 	}
+
   private:
 	//! Locates the chunk that belongs to the specific index
 	size_t LocateChunk(size_t index) {

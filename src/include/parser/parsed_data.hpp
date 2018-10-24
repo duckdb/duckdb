@@ -15,9 +15,9 @@
 #include "function/function.hpp"
 
 #include "parser/column_definition.hpp"
+#include "parser/constraint.hpp"
 
 namespace duckdb {
-class Constraint;
 
 struct CreateTableInformation {
 	//! Schema name to insert to
@@ -114,6 +114,26 @@ struct DropTableFunctionInformation {
 
 	DropTableFunctionInformation()
 	    : schema(DEFAULT_SCHEMA), if_exists(false), cascade(false) {
+	}
+};
+
+struct CreateScalarFunctionInformation {
+	//! Schema name
+	std::string schema;
+	//! Function name
+	std::string name;
+	//! Replace function if it already exists instead of failing
+	bool or_replace = false;
+	//! The main scalar function to execute
+	scalar_function_t function;
+	//! Function that checks whether or not a set of arguments matches
+	matches_argument_function_t matches;
+	//! Function that gives the return type of the function given the input
+	//! arguments
+	get_return_type_function_t return_type;
+
+	CreateScalarFunctionInformation()
+	    : schema(DEFAULT_SCHEMA), or_replace(false) {
 	}
 };
 

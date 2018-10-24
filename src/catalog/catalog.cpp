@@ -89,3 +89,17 @@ Catalog::GetTableFunction(Transaction &transaction,
 	auto schema = GetSchema(transaction, expression->schema);
 	return schema->GetTableFunction(transaction, expression);
 }
+
+void Catalog::CreateScalarFunction(Transaction &transaction,
+                                   CreateScalarFunctionInformation *info) {
+	auto schema = GetSchema(transaction, info->schema);
+	schema->CreateScalarFunction(transaction, info);
+}
+
+ScalarFunctionCatalogEntry *
+Catalog::GetScalarFunction(Transaction &transaction,
+                           const std::string &schema_name,
+                           const std::string &name) {
+	auto schema = GetSchema(transaction, schema_name);
+	return schema->GetScalarFunction(transaction, name);
+}

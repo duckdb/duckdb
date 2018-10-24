@@ -43,6 +43,7 @@ class Binder : public SQLNodeVisitor {
 	void Visit(CheckConstraint &constraint);
 
 	void Visit(ColumnRefExpression &expr);
+	void Visit(FunctionExpression &expr);
 	void Visit(SubqueryExpression &expr);
 
 	void Visit(BaseTableRef &expr);

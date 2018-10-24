@@ -235,13 +235,17 @@ struct VectorOperations {
 	//! that the vector passed in has the correct type for the iteration! This
 	//! is effectively equivalent to calling ::Exec() and performing data[i] for
 	//! every entry
-	template <typename T>
+	template <typename T, bool IGNORE_NULL = false>
 	static void ExecType(Vector &vector,
 	                     std::function<void(T &value, size_t i, size_t k)> fun,
 	                     size_t offset = 0, size_t limit = 0) {
 		auto data = (T *)vector.data;
 		VectorOperations::Exec(vector,
-		                       [&](size_t i, size_t k) { fun(data[i], i, k); },
+		                       [&](size_t i, size_t k) {
+			                       if (!IGNORE_NULL || !vector.nullmask[i]) {
+				                       fun(data[i], i, k);
+			                       }
+		                       },
 		                       offset, limit);
 	}
 };

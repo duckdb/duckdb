@@ -33,6 +33,14 @@ typedef void (*table_function_t)(ClientContext &, DataChunk &input,
 typedef void (*table_function_final_t)(ClientContext &,
                                        TableFunctionData *dataptr);
 
+//! The type used for scalar functions
+typedef void (*scalar_function_t)(Vector inputs[], size_t input_count,
+                                  Vector &result);
+//! Type used for checking if a function matches the input arguments
+typedef bool (*matches_argument_function_t)(std::vector<TypeId> &arguments);
+//! Gets the return type of the function given the types of the input argument
+typedef TypeId (*get_return_type_function_t)(std::vector<TypeId> &arguments);
+
 class BuiltinFunctions {
   public:
 	//! Initialize a catalog with all built-in functions

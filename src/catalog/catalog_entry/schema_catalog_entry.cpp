@@ -86,6 +86,9 @@ void SchemaCatalogEntry::CreateTableFunction(
 			    "Table function with name \"%s\" already exists!",
 			    info->name.c_str());
 		} else {
+			auto table_function =
+			    make_unique_base<CatalogEntry, TableFunctionCatalogEntry>(
+			        catalog, this, info);
 			// function already exists: replace it
 			if (!table_functions.DropEntry(transaction, info->name, false)) {
 				throw CatalogException("CREATE OR REPLACE was specified, but "
@@ -111,12 +114,54 @@ void SchemaCatalogEntry::DropTableFunction(Transaction &transaction,
 	}
 }
 
+void SchemaCatalogEntry::CreateScalarFunction(
+    Transaction &transaction, CreateScalarFunctionInformation *info) {
+	auto scalar_function =
+	    make_unique_base<CatalogEntry, ScalarFunctionCatalogEntry>(catalog,
+	                                                               this, info);
+	if (!scalar_functions.CreateEntry(transaction, info->name,
+	                                  move(scalar_function))) {
+		if (!info->or_replace) {
+			throw CatalogException(
+			    "Scalar function with name \"%s\" already exists!",
+			    info->name.c_str());
+		} else {
+			auto scalar_function =
+			    make_unique_base<CatalogEntry, ScalarFunctionCatalogEntry>(
+			        catalog, this, info);
+			// function already exists: replace it
+			if (!scalar_functions.DropEntry(transaction, info->name, false)) {
+				throw CatalogException("CREATE OR REPLACE was specified, but "
+				                       "function could not be dropped!");
+			}
+			if (!scalar_functions.CreateEntry(transaction, info->name,
+			                                  move(scalar_function))) {
+				throw CatalogException(
+				    "Error in recreating function in CREATE OR REPLACE");
+			}
+		}
+	}
+}
+
+ScalarFunctionCatalogEntry *
+SchemaCatalogEntry::GetScalarFunction(Transaction &transaction,
+                                      const std::string &name) {
+	auto entry = scalar_functions.GetEntry(transaction, name);
+	if (!entry) {
+		throw CatalogException("Scalar Function with name %s does not exist!",
+		                       name.c_str());
+	}
+	return (ScalarFunctionCatalogEntry *)entry;
+}
+
 bool SchemaCatalogEntry::HasDependents(Transaction &transaction) {
 	return !tables.IsEmpty(transaction) ||
-	       !table_functions.IsEmpty(transaction);
+	       !table_functions.IsEmpty(transaction) ||
+	       !scalar_functions.IsEmpty(transaction);
 }
 
 void SchemaCatalogEntry::DropDependents(Transaction &transaction) {
 	tables.DropAllEntries(transaction);
 	table_functions.DropAllEntries(transaction);
+	scalar_functions.DropAllEntries(transaction);
 }

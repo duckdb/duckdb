@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// catalog/catalog_entry/function_catalog_entry.hpp
+// catalog/catalog_entry/table_function_catalog_entry.hpp
 //
 // Author: Mark Raasveldt
 //

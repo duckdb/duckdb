@@ -341,17 +341,21 @@ void ExpressionExecutor::Visit(DefaultExpression &expr) {
 }
 
 void ExpressionExecutor::Visit(FunctionExpression &expr) {
-	if (expr.function_name == "abs") {
-		Vector l;
-		expr.children[0]->Accept(this);
-		vector.Move(l);
-		vector.Initialize(l.type);
-		VectorOperations::Abs(l, vector);
-		expr.stats.Verify(vector);
-		return;
-	}
+	assert(expr.bound_function);
 
-	throw NotImplementedException("Function not implemented");
+	auto arguments = unique_ptr<Vector[]>(new Vector[expr.children.size()]);
+	for (size_t i = 0; i < expr.children.size(); i++) {
+		expr.children[i]->Accept(this);
+		vector.Move(arguments[i]);
+	}
+	vector.Destroy();
+	expr.bound_function->function(arguments.get(), expr.children.size(),
+	                              vector);
+	if (vector.type != expr.return_type) {
+		throw TypeMismatchException(expr.return_type, vector.type,
+		                            "expected function to return the former "
+		                            "but the function returned the latter");
+	}
 }
 
 void ExpressionExecutor::Visit(GroupRefExpression &expr) {

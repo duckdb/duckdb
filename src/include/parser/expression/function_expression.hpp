@@ -13,6 +13,8 @@
 #include "parser/expression.hpp"
 
 namespace duckdb {
+class ScalarFunctionCatalogEntry;
+
 //! Represents a function call
 class FunctionExpression : public Expression {
   public:
@@ -44,5 +46,8 @@ class FunctionExpression : public Expression {
 	std::string schema;
 	//! Function name
 	std::string function_name;
+
+	// FIXME: remove this
+	ScalarFunctionCatalogEntry *bound_function;
 };
 } // namespace duckdb

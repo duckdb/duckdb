@@ -250,7 +250,8 @@ enum class CatalogType : uint8_t {
 	TABLE = 1,
 	SCHEMA = 2,
 	TABLE_FUNCTION = 3,
-	VIEW = 4,
+	SCALAR_FUNCTION = 4,
+	VIEW = 5,
 	DELETED_ENTRY = 10
 };
 

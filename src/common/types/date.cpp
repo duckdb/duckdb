@@ -1,8 +1,8 @@
 
 #include <time.h>
 
-#include "common/types/date.hpp"
 #include "common/exception.hpp"
+#include "common/types/date.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -101,7 +101,9 @@ int32_t Date::FromString(string str) {
 	int32_t month = 1 + tm.tm_mon;
 	int32_t day = tm.tm_mday;
 	if (!IsValidDay(year, month, day)) {
-		throw ConversionException("date/time field value out of range: \"%s\", expected format is (YYYY-MM-DD)", str.c_str());
+		throw ConversionException("date/time field value out of range: \"%s\", "
+		                          "expected format is (YYYY-MM-DD)",
+		                          str.c_str());
 	}
 	return Date::FromDate(year, month, day);
 }
@@ -153,4 +155,22 @@ bool Date::IsValidDay(int32_t year, int32_t month, int32_t day) {
 		return false;
 
 	return IsLeapYear(year) ? day <= LEAPDAYS[month] : day <= NORMALDAYS[month];
+}
+
+int32_t Date::ExtractYear(date_t date) {
+	int32_t out_year, out_month, out_day;
+	Date::Convert(date, out_year, out_month, out_day);
+	return out_year;
+}
+
+int32_t Date::ExtractMonth(date_t date) {
+	int32_t out_year, out_month, out_day;
+	Date::Convert(date, out_year, out_month, out_day);
+	return out_month;
+}
+
+int32_t Date::ExtractDay(date_t date) {
+	int32_t out_year, out_month, out_day;
+	Date::Convert(date, out_year, out_month, out_day);
+	return out_day;
 }

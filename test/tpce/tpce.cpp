@@ -29,7 +29,7 @@ TEST_CASE("Test TPC-E", "[tpce][.]") {
 		fprintf(stderr, "%s\n\n", table_name.str_value.c_str());
 		auto result2 =
 		    con.Query("SELECT COUNT(*) FROM " + table_name.str_value);
-		//result2->Print();
+		// result2->Print();
 
 		REQUIRE(1 == 1);
 		// result2 = con.Query("SELECT * FROM " + table_name.str_value + " LIMIT

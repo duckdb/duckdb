@@ -13,6 +13,7 @@
 #include <string>
 #include <unordered_map>
 
+#include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "catalog/catalog_entry/table_function_catalog_entry.hpp"
 
@@ -52,6 +53,13 @@ class SchemaCatalogEntry : public CatalogEntry {
 	void DropTableFunction(Transaction &transaction,
 	                       DropTableFunctionInformation *info);
 
+	//! Create a scalar function within the given schema
+	void CreateScalarFunction(Transaction &transaction,
+	                          CreateScalarFunctionInformation *info);
+	//! Gets a scalar function with the given name
+	ScalarFunctionCatalogEntry *GetScalarFunction(Transaction &transaction,
+	                                              const std::string &name);
+
 	//! Returns true if other objects depend on this object
 	virtual bool HasDependents(Transaction &transaction);
 	//! Function that drops all dependents (used for Cascade)
@@ -61,5 +69,7 @@ class SchemaCatalogEntry : public CatalogEntry {
 	CatalogSet tables;
 	//! The catalog set holding the table functions
 	CatalogSet table_functions;
+	//! The catalog set holding the scalar functions
+	CatalogSet scalar_functions;
 };
 } // namespace duckdb

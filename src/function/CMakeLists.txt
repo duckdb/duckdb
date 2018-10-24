@@ -1,4 +1,5 @@
 
+add_subdirectory(scalar_function)
 add_subdirectory(table_function)
 
 add_library(duckdb_function OBJECT function.cpp)

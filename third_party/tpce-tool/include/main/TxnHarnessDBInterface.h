@@ -56,15 +56,16 @@ namespace TPCE {
 
 class CTradeOrderDBInterface {
 	duckdb::DuckDBConnection con;
+
   public:
 	void DoTradeOrderFrame1(const TTradeOrderFrame1Input *pIn,
-	                                TTradeOrderFrame1Output *pOut);
+	                        TTradeOrderFrame1Output *pOut);
 	void DoTradeOrderFrame2(const TTradeOrderFrame2Input *pIn,
-	                                TTradeOrderFrame2Output *pOut);
+	                        TTradeOrderFrame2Output *pOut);
 	void DoTradeOrderFrame3(const TTradeOrderFrame3Input *pIn,
-	                                TTradeOrderFrame3Output *pOut);
+	                        TTradeOrderFrame3Output *pOut);
 	void DoTradeOrderFrame4(const TTradeOrderFrame4Input *pIn,
-	                                TTradeOrderFrame4Output *pOut);
+	                        TTradeOrderFrame4Output *pOut);
 	void DoTradeOrderFrame5(void);
 	void DoTradeOrderFrame6(void);
 };
