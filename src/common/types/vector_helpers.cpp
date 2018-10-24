@@ -72,7 +72,7 @@ static void _cast_loop(Vector &source, Vector &result) {
 		break;
 	}
 	case TypeId::DATE:
-		_templated_cast_loop<SRC, date_t, operators::CastToDate, IGNORENULL>(
+		_templated_cast_loop<SRC, date_t, operators::CastToDate, true>(
 		    source, result);
 		break;
 	default:

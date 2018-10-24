@@ -314,7 +314,7 @@ class TypeMismatchException : public Exception {
 	                      std::string msg)
 	    : Exception(ExceptionType::MISMATCH_TYPE,
 	                "Type " + TypeIdToString(type_1) + " does not match with " +
-	                    TypeIdToString(type_2) + msg) {
+	                    TypeIdToString(type_2) + ". " + msg) {
 	}
 };
 

@@ -2,6 +2,7 @@
 #include <time.h>
 
 #include "common/types/date.hpp"
+#include "common/exception.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -79,23 +80,30 @@ static inline void number_to_date(int32_t n, int32_t &year, int32_t &month,
 
 static inline int32_t date_to_number(int32_t year, int32_t month, int32_t day) {
 	int32_t n = 0;
-	if (DATE(day, month, year)) {
-		if (year < 0)
-			year++;
-		n = (int32_t)(day - 1);
-		if (month > 2 && leapyear(year))
-			n++;
-		n += CUMDAYS[month - 1];
-		/* current year does not count as leapyear */
-		n += 365 * year + leapyears(year >= 0 ? year - 1 : year);
-	}
+	assert(DATE(day, month, year));
+
+	if (year < 0)
+		year++;
+	n = (int32_t)(day - 1);
+	if (month > 2 && leapyear(year))
+		n++;
+	n += CUMDAYS[month - 1];
+	/* current year does not count as leapyear */
+	n += 365 * year + leapyears(year >= 0 ? year - 1 : year);
+
 	return n;
 }
 
 int32_t Date::FromString(string str) {
 	struct tm tm;
 	strptime(str.c_str(), "%Y-%m-%d", &tm);
-	return Date::FromDate(1900 + tm.tm_year, 1 + tm.tm_mon, tm.tm_mday);
+	int32_t year = 1900 + tm.tm_year;
+	int32_t month = 1 + tm.tm_mon;
+	int32_t day = tm.tm_mday;
+	if (!IsValidDay(year, month, day)) {
+		throw ConversionException("date/time field value out of range: \"%s\", expected format is (YYYY-MM-DD)", str.c_str());
+	}
+	return Date::FromDate(year, month, day);
 }
 
 string Date::ToString(int32_t date) {
@@ -140,6 +148,8 @@ bool Date::IsValidDay(int32_t year, int32_t month, int32_t day) {
 	if (month < 1 || month > 12)
 		return false;
 	if (day < 1)
+		return false;
+	if (year < YEAR_MIN || year > YEAR_MAX)
 		return false;
 
 	return IsLeapYear(year) ? day <= LEAPDAYS[month] : day <= NORMALDAYS[month];
