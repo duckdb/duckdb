@@ -214,10 +214,8 @@ int32_t Date::ExtractISODayOfTheWeek(date_t date) {
 	}
 }
 
-int32_t Date::ExtractWeekNumber(date_t date) {
-	int32_t year, month, day;
-	Date::Convert(date, year, month, day);
-	auto day_of_the_year = MONTHDAYS(month, year) + day;
+static int32_t GetWeek(int32_t year, int32_t month, int32_t day) {
+	auto day_of_the_year = (leapyear(year) ? CUMLEAPDAYS[month] : CUMDAYS[month]) + day;
 	// get the first day of the first week of the year
 	// the first week is the week that has the 4th of January in it
 	auto day_of_the_fourth =
@@ -227,11 +225,17 @@ int32_t Date::ExtractWeekNumber(date_t date) {
 	// if fourth is wednesday, second is the first day
 	// if fourth is thursday - sunday, first is the first day
 	auto first_day_of_the_first_week =
-	    day_of_the_fourth >= 4 ? 1 : 5 - day_of_the_fourth;
+	    day_of_the_fourth >= 4 ? 0 : 5 - day_of_the_fourth;
 	if (day_of_the_year < first_day_of_the_first_week) {
-		// day is part of the 53rd week of the last year
-		return 53;
+		// day is part of last year
+		return GetWeek(year - 1, 12, day);
 	} else {
-		return (day_of_the_year - first_day_of_the_first_week) / 7;
+		return ((day_of_the_year - first_day_of_the_first_week) / 7) + 1;
 	}
+}
+
+int32_t Date::ExtractWeekNumber(date_t date) {
+	int32_t year, month, day;
+	Date::Convert(date, year, month, day);
+	return GetWeek(year, month - 1, day - 1);
 }

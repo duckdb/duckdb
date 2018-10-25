@@ -93,4 +93,33 @@ TEST_CASE("Extract function edge cases", "[date]") {
 		expected_day_up = (expected_day_up + 1) % 7;
 		expected_day_down = expected_day_down == 0 ? 6 : expected_day_down - 1;
 	}
+
+	// week numbers are weird
+	result = con.Query(
+	    "SELECT EXTRACT(week FROM cast('2005-01-01' AS DATE));");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(53)}));
+	result = con.Query(
+	    "SELECT EXTRACT(week FROM cast('2006-01-01' AS DATE));");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(52)}));
+	result = con.Query(
+	    "SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE));");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(1)}));
+	result = con.Query(
+	    "SELECT EXTRACT(week FROM cast('2008-01-01' AS DATE));");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(1)}));
+	result = con.Query(
+	    "SELECT EXTRACT(week FROM cast('2009-01-01' AS DATE));");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(1)}));
+	result = con.Query(
+	    "SELECT EXTRACT(week FROM cast('2010-01-01' AS DATE));");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(53)}));
+
+	// every 7 days the week number should go up by 7
+	int expected_week = 1;
+	for(size_t i = 0; i < 40; i++) {
+		result = con.Query(
+		    "SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + " + to_string(i * 7) + ");");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(expected_week)}));
+		expected_week++;
+	}
 }
