@@ -284,7 +284,8 @@ void VectorOperations::Subtract(Vector &left, Vector &right, Vector &result) {
 
 void VectorOperations::Multiply(Vector &left, Vector &right, Vector &result) {
 	if (left.type == TypeId::DATE || left.type == TypeId::TIMESTAMP) {
-		throw InvalidTypeException(left.type, "invalid type for multiplication");
+		throw InvalidTypeException(left.type,
+		                           "invalid type for multiplication");
 	}
 	_generic_binary_loop<operators::Multiplication>(left, right, result);
 }

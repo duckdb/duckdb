@@ -27,6 +27,11 @@ static int CUMLEAPDAYS[13] = {0,   31,  60,  91,  121, 152, 182,
 	((h) >= 0 && (h) < 24 && (m) >= 0 && (m) < 60 && (s) >= 0 && (s) < 60 &&   \
 	 (x) >= 0 && (x) < 1000)
 #define LOWER(c) ((c) >= 'A' && (c) <= 'Z' ? (c) + 'a' - 'A' : (c))
+// 1970-01-01 in date_t format
+#define EPOCH_DATE 719528
+// 1970-01-01 was a Thursday
+#define EPOCH_DAY_OF_THE_WEEK 4
+#define SECONDS_PER_DAY (60 * 60 * 24)
 
 #define leapyear(y) ((y) % 4 == 0 && ((y) % 100 != 0 || (y) % 400 == 0))
 
@@ -80,7 +85,9 @@ static inline void number_to_date(int32_t n, int32_t &year, int32_t &month,
 
 static inline int32_t date_to_number(int32_t year, int32_t month, int32_t day) {
 	int32_t n = 0;
-	assert(DATE(day, month, year));
+	if (!(DATE(day, month, year))) {
+		throw Exception("Invalid date");
+	}
 
 	if (year < 0)
 		year++;
@@ -101,9 +108,10 @@ int32_t Date::FromString(string str) {
 	int32_t month = 1 + tm.tm_mon;
 	int32_t day = tm.tm_mday;
 	if (!ptr || *ptr || !IsValidDay(year, month, day)) {
-		throw Exception(StringUtil::Format("date/time field value out of range: \"%s\", "
-		                          "expected format is (YYYY-MM-DD)",
-		                          str.c_str()));
+		throw Exception(
+		    StringUtil::Format("date/time field value out of range: \"%s\", "
+		                       "expected format is (YYYY-MM-DD)",
+		                       str.c_str()));
 	}
 	return Date::FromDate(year, month, day);
 }
@@ -157,6 +165,9 @@ bool Date::IsValidDay(int32_t year, int32_t month, int32_t day) {
 	return IsLeapYear(year) ? day <= LEAPDAYS[month] : day <= NORMALDAYS[month];
 }
 
+int64_t Date::Epoch(date_t date) {
+	return (date - EPOCH_DATE) * SECONDS_PER_DAY;
+}
 int32_t Date::ExtractYear(date_t date) {
 	int32_t out_year, out_month, out_day;
 	Date::Convert(date, out_year, out_month, out_day);
@@ -173,4 +184,54 @@ int32_t Date::ExtractDay(date_t date) {
 	int32_t out_year, out_month, out_day;
 	Date::Convert(date, out_year, out_month, out_day);
 	return out_day;
+}
+
+int32_t Date::ExtractDayOfTheYear(date_t date) {
+	int32_t out_year, out_month, out_day;
+	Date::Convert(date, out_year, out_month, out_day);
+	if (out_month >= 1) {
+		out_day += Date::IsLeapYear(out_year) ? CUMLEAPDAYS[out_month - 1]
+		                                      : CUMDAYS[out_month - 1];
+	}
+	return out_day;
+}
+
+int32_t Date::ExtractISODayOfTheWeek(date_t date) {
+	// -1 = 5
+	// 0 = 6
+	// 1 = 7
+	// 2 = 1
+	// 3 = 2
+	// 4 = 3
+	// 5 = 4
+	// 6 = 5
+	// 0 = 6
+	// 1 = 7
+	if (date < 2) {
+		return ((date - 1) % 7) + 7;
+	} else {
+		return ((date - 2) % 7) + 1;
+	}
+}
+
+int32_t Date::ExtractWeekNumber(date_t date) {
+	int32_t year, month, day;
+	Date::Convert(date, year, month, day);
+	auto day_of_the_year = MONTHDAYS(month, year) + day;
+	// get the first day of the first week of the year
+	// the first week is the week that has the 4th of January in it
+	auto day_of_the_fourth =
+	    Date::ExtractISODayOfTheWeek(Date::FromDate(year, 1, 4));
+	// if fourth is monday, then fourth is the first day
+	// if fourth is tuesday, third is the first day
+	// if fourth is wednesday, second is the first day
+	// if fourth is thursday - sunday, first is the first day
+	auto first_day_of_the_first_week =
+	    day_of_the_fourth >= 4 ? 1 : 5 - day_of_the_fourth;
+	if (day_of_the_year < first_day_of_the_first_week) {
+		// day is part of the 53rd week of the last year
+		return 53;
+	} else {
+		return (day_of_the_year - first_day_of_the_first_week) / 7;
+	}
 }

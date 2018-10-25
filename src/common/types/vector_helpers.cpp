@@ -29,28 +29,22 @@ template <class SRC, class OP, bool IGNORENULL>
 static void _cast_loop(Vector &source, Vector &result) {
 	switch (result.type) {
 	case TypeId::TINYINT:
-		_templated_cast_loop<SRC, int8_t, OP, IGNORENULL>(source,
-		                                                               result);
+		_templated_cast_loop<SRC, int8_t, OP, IGNORENULL>(source, result);
 		break;
 	case TypeId::SMALLINT:
-		_templated_cast_loop<SRC, int16_t, OP, IGNORENULL>(source,
-		                                                                result);
+		_templated_cast_loop<SRC, int16_t, OP, IGNORENULL>(source, result);
 		break;
 	case TypeId::INTEGER:
-		_templated_cast_loop<SRC, int32_t, OP, IGNORENULL>(source,
-		                                                                result);
+		_templated_cast_loop<SRC, int32_t, OP, IGNORENULL>(source, result);
 		break;
 	case TypeId::BIGINT:
-		_templated_cast_loop<SRC, int64_t, OP, IGNORENULL>(source,
-		                                                                result);
+		_templated_cast_loop<SRC, int64_t, OP, IGNORENULL>(source, result);
 		break;
 	case TypeId::DECIMAL:
-		_templated_cast_loop<SRC, double, OP, IGNORENULL>(source,
-		                                                               result);
+		_templated_cast_loop<SRC, double, OP, IGNORENULL>(source, result);
 		break;
 	case TypeId::POINTER:
-		_templated_cast_loop<SRC, uint64_t, OP, IGNORENULL>(
-		    source, result);
+		_templated_cast_loop<SRC, uint64_t, OP, IGNORENULL>(source, result);
 		break;
 	case TypeId::VARCHAR: {
 		// result is VARCHAR
@@ -61,9 +55,7 @@ static void _cast_loop(Vector &source, Vector &result) {
 			if (source.nullmask[i]) {
 				result_data[i] = nullptr;
 			} else {
-				auto str =
-				    OP::template Operation<SRC, std::string>(
-				        ldata[i]);
+				auto str = OP::template Operation<SRC, std::string>(ldata[i]);
 				result_data[i] = result.string_heap.AddString(str);
 			}
 		});
@@ -73,7 +65,7 @@ static void _cast_loop(Vector &source, Vector &result) {
 	}
 	case TypeId::DATE:
 		_templated_cast_loop<SRC, date_t, operators::CastToDate, true>(source,
-	                                                               result);
+		                                                               result);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for cast");

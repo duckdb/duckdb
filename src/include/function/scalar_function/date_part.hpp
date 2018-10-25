@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// function/scalar_function/abs.hpp
+// function/scalar_function/date_part.hpp
 //
 // Author: Mark Raasveldt
 //
@@ -16,26 +16,26 @@
 namespace duckdb {
 namespace function {
 
-void abs_function(Vector inputs[], size_t input_count, Vector &result);
-bool abs_matches_arguments(std::vector<TypeId> &arguments);
-TypeId abs_get_return_type(std::vector<TypeId> &arguments);
+void date_part_function(Vector inputs[], size_t input_count, Vector &result);
+bool date_part_matches_arguments(std::vector<TypeId> &arguments);
+TypeId date_part_get_return_type(std::vector<TypeId> &arguments);
 
-class AbsFunction {
+class DatePartFunction {
   public:
 	static const char *GetName() {
-		return "abs";
+		return "date_part";
 	}
 
 	static scalar_function_t GetFunction() {
-		return abs_function;
+		return date_part_function;
 	}
 
 	static matches_argument_function_t GetMatchesArgumentFunction() {
-		return abs_matches_arguments;
+		return date_part_matches_arguments;
 	}
 
 	static get_return_type_function_t GetReturnTypeFunction() {
-		return abs_get_return_type;
+		return date_part_get_return_type;
 	}
 };
 

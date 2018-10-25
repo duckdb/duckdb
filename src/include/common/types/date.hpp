@@ -43,11 +43,19 @@ class Date {
 	//! date
 	static bool IsValidDay(int32_t year, int32_t month, int32_t day);
 
+	//! Extract the epoch from the date (seconds since 1970-01-01)
+	static int64_t Epoch(date_t date);
 	//! Extract year of a date entry
 	static int32_t ExtractYear(date_t date);
 	//! Extract month of a date entry
 	static int32_t ExtractMonth(date_t date);
 	//! Extract day of a date entry
 	static int32_t ExtractDay(date_t date);
+	//! Extract the day of the week (1-7)
+	static int32_t ExtractISODayOfTheWeek(date_t date);
+	//! Extract the day of the year
+	static int32_t ExtractDayOfTheYear(date_t date);
+	//! Extract the week number
+	static int32_t ExtractWeekNumber(date_t date);
 };
 } // namespace duckdb

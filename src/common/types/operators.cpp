@@ -20,7 +20,6 @@ template <> double Modulo::Operation(double left, double right) {
 	throw NotImplementedException("Modulo for double not implemented!");
 }
 
-
 //===--------------------------------------------------------------------===//
 // String -> Numeric
 //===--------------------------------------------------------------------===//
@@ -89,11 +88,11 @@ template <> std::string CastFromDate::Operation(duckdb::date_t left) {
 }
 
 template <> int32_t CastFromDate::Operation(date_t left) {
-	return (int32_t) left;	
+	return (int32_t)left;
 }
 
 template <> int64_t CastFromDate::Operation(date_t left) {
-	return (int64_t) left;	
+	return (int64_t)left;
 }
 
 //===--------------------------------------------------------------------===//
@@ -104,11 +103,11 @@ template <> date_t CastToDate::Operation(const char *left) {
 }
 
 template <> date_t CastToDate::Operation(int32_t left) {
-	return (date_t) left;
+	return (date_t)left;
 }
 
 template <> date_t CastToDate::Operation(int64_t left) {
-	return (date_t) left;
+	return (date_t)left;
 }
 
 } // namespace operators

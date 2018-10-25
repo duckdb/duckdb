@@ -15,8 +15,6 @@ TEST_CASE("Extract function", "[date]") {
 	REQUIRE_NO_FAIL(
 	    con.Query("INSERT INTO dates VALUES ('1993-08-14'), (NULL)"));
 
-	// FIXME: not implemented yet
-	return;
 	// extract various parts of the date
 	// year
 	result = con.Query("SELECT EXTRACT(year FROM i) FROM dates");
@@ -43,7 +41,7 @@ TEST_CASE("Extract function", "[date]") {
 	result = con.Query("SELECT EXTRACT(epoch FROM i) FROM dates");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(745286400), Value()}));
 	// isodow (Monday = 1, Sunday = 7)
-	result = con.Query("SELECT EXTRACT(isodow FROM i) FROM dates");
+	result = con.Query("SELECT EXTRACT(ISODOW FROM i) FROM dates");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(6), Value()}));
 	// millenium (change of millenium is January 1, X001)
 	result = con.Query("SELECT EXTRACT(millennium FROM i) FROM dates");
@@ -57,4 +55,42 @@ TEST_CASE("Extract function", "[date]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(0), Value()}));
 	result = con.Query("SELECT EXTRACT(milliseconds FROM i) FROM dates");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(0), Value()}));
+}
+
+TEST_CASE("Extract function edge cases", "[date]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	// century changes in the year 1
+	result =
+	    con.Query("SELECT EXTRACT(century FROM cast('2000-10-10' AS DATE));");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(20)}));
+	result =
+	    con.Query("SELECT EXTRACT(century FROM cast('2001-10-10' AS DATE));");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(21)}));
+	// millennium changes in the year 1
+	result = con.Query(
+	    "SELECT EXTRACT(millennium FROM cast('2000-10-10' AS DATE));");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(2)}));
+	result = con.Query(
+	    "SELECT EXTRACT(millennium FROM cast('2001-10-10' AS DATE));");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(3)}));
+	// check DOW
+	// start from the epoch and go up/down, every time the day should go up/down
+	// one as well
+	int epoch_day = 4;
+	int expected_day_up = epoch_day, expected_day_down = epoch_day;
+	for (size_t i = 0; i < 7; i++) {
+		result =
+		    con.Query("SELECT EXTRACT(dow FROM cast('1970-1-1' AS DATE) + " +
+		              to_string(i) + ");");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(expected_day_up)}));
+		result =
+		    con.Query("SELECT EXTRACT(dow FROM cast('1970-1-1' AS DATE) - " +
+		              to_string(i) + ");");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(expected_day_down)}));
+		expected_day_up = (expected_day_up + 1) % 7;
+		expected_day_down = expected_day_down == 0 ? 6 : expected_day_down - 1;
+	}
 }

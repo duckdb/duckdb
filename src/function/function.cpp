@@ -41,5 +41,6 @@ void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 	AddTableFunction<function::SQLiteMaster>(transaction, catalog);
 
 	AddScalarFunction<function::AbsFunction>(transaction, catalog);
+	AddScalarFunction<function::DatePartFunction>(transaction, catalog);
 	AddScalarFunction<function::YearFunction>(transaction, catalog);
 }
