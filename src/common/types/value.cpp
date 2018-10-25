@@ -1,6 +1,7 @@
 
 #include "common/types/value.hpp"
 #include "common/exception.hpp"
+#include "common/operator/numeric_binary_operators.hpp"
 #include "common/serializer.hpp"
 #include "common/types/operators.hpp"
 
@@ -372,18 +373,17 @@ void Value::_templated_binary_operation(const Value &left, const Value &right,
 // Numeric Operations
 //===--------------------------------------------------------------------===//
 void Value::Add(const Value &left, const Value &right, Value &result) {
-	_templated_binary_operation<operators::Addition>(left, right, result,
-	                                                 false);
+	_templated_binary_operation<operators::Add>(left, right, result, false);
 }
 
 void Value::Subtract(const Value &left, const Value &right, Value &result) {
-	_templated_binary_operation<operators::Subtraction>(left, right, result,
-	                                                    false);
+	_templated_binary_operation<operators::Subtract>(left, right, result,
+	                                                 false);
 }
 
 void Value::Multiply(const Value &left, const Value &right, Value &result) {
-	_templated_binary_operation<operators::Multiplication>(left, right, result,
-	                                                       false);
+	_templated_binary_operation<operators::Multiply>(left, right, result,
+	                                                 false);
 }
 
 void Value::Divide(const Value &left, const Value &right, Value &result) {
@@ -393,13 +393,14 @@ void Value::Divide(const Value &left, const Value &right, Value &result) {
 		result.type = std::max(left.type, right.type);
 		result.is_null = true;
 	} else {
-		_templated_binary_operation<operators::Division>(left, right, result,
-		                                                 false);
+		_templated_binary_operation<operators::Divide>(left, right, result,
+		                                               false);
 	}
 }
 
 void Value::Modulo(const Value &left, const Value &right, Value &result) {
-	_templated_binary_operation<operators::Modulo>(left, right, result, false);
+	//_templated_binary_operation<operators::Modulo>(left, right, result,
+	//false);
 }
 
 void Value::Min(const Value &left, const Value &right, Value &result) {

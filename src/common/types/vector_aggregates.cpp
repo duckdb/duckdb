@@ -1,5 +1,6 @@
 
 #include "common/exception.hpp"
+#include "common/operator/numeric_binary_operators.hpp"
 #include "common/types/hash.hpp"
 #include "common/types/operators.hpp"
 #include "common/types/vector_operations.hpp"
@@ -118,7 +119,7 @@ Value VectorOperations::Sum(Vector &left) {
 	if (Value::Equals(VectorOperations::AllTrue(is_null), Value(true))) {
 		result.is_null = true;
 	} else {
-		_generic_unary_fold_loop<operators::Addition>(left, result);
+		_generic_unary_fold_loop<operators::Add>(left, result);
 	}
 	return result;
 }

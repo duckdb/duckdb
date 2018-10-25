@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// execution/vector/vector_operations.hpp
+// common/types/vector_operations.hpp
 //
 // Author: Mark Raasveldt
 //
@@ -18,105 +18,117 @@ namespace duckdb {
 
 // VectorOperations contains a set of operations that operate on sets of
 // vectors. In general, the operators must all have the same type, otherwise an
-// exception is thrown.
+// exception is thrown. Note that the functions underneath use restrict
+// pointers, hence the data that the vectors point to (and hence the vector
+// themselves) should not be equal! For example, if you call the function Add(A,
+// B, A) then ASSERT_RESTRICT will be triggered. Instead call AddInPlace(A, B)
+// or Add(A, B, C)
 struct VectorOperations {
-	typedef void (*vector_function)(Vector &left, Vector &right,
-	                                Vector &result);
+	//===--------------------------------------------------------------------===//
+	// Numeric Binary Operators
+	//===--------------------------------------------------------------------===//
+	//! result = A + B
+	static void Add(Vector &A, Vector &B, Vector &result);
+	//! result = A - B
+	static void Subtract(Vector &A, Vector &B, Vector &result);
+	//! result = A * B
+	static void Multiply(Vector &A, Vector &B, Vector &result);
+	//! result = A / B
+	static void Divide(Vector &A, Vector &B, Vector &result);
+	//! result = A % B
+	static void Modulo(Vector &A, Vector &B, Vector &result);
 
 	//===--------------------------------------------------------------------===//
-	// Numeric Operations
+	// In-Place Operators
 	//===--------------------------------------------------------------------===//
-	// A + B
-	static void Add(Vector &left, Vector &right, Vector &result);
-	// A - B
-	static void Subtract(Vector &left, Vector &right, Vector &result);
-	// A * B
-	static void Multiply(Vector &left, Vector &right, Vector &result);
-	// A / B
-	static void Divide(Vector &left, Vector &right, Vector &result);
-	// A % B
-	static void Modulo(Vector &left, Vector &right, Vector &result);
-	// ABS(A)
-	static void Abs(Vector &left, Vector &result);
+	//! A += B
+	static void AddInPlace(Vector &A, Vector &B);
+	//! A += B
+	static void AddInPlace(Vector &A, int64_t B);
 
-	// NOT(A)
-	static void Not(Vector &left, Vector &result);
+	//===--------------------------------------------------------------------===//
+	// Numeric Functions
+	//===--------------------------------------------------------------------===//
+	//! result = ABS(A)
+	static void Abs(Vector &A, Vector &result);
 
-	// IS NOT NULL(A)
-	static void IsNotNull(Vector &left, Vector &result);
+	//===--------------------------------------------------------------------===//
+	// Bitwise Operators
+	//===--------------------------------------------------------------------===//
+	//! result = A ^ B
+	static void BitwiseXOR(Vector &A, Vector &B, Vector &result);
+	//! result = A & B
+	static void BitwiseAND(Vector &A, Vector &B, Vector &result);
+	//! result = A | B
+	static void BitwiseOR(Vector &A, Vector &B, Vector &result);
+	//! result = A << B
+	static void BitwiseShiftLeft(Vector &A, Vector &B, Vector &result);
+	//! result = A >> B
+	static void BitwiseShiftRight(Vector &A, Vector &B, Vector &result);
 
-	// IS NULL (A)
-	static void IsNull(Vector &left, Vector &result);
+	//===--------------------------------------------------------------------===//
+	// In-Place Bitwise Operators
+	//===--------------------------------------------------------------------===//
+	//! A ^= B
+	static void BitwiseXORInPlace(Vector &A, Vector &B);
 
-	// A + B
-	static void Add(Vector &left, int64_t right, Vector &result);
-	// A - B
-	static void Subtract(Vector &left, int64_t right, Vector &result);
-	// A * B
-	static void Multiply(Vector &left, int64_t right, Vector &result);
-	// A / B
-	static void Divide(Vector &left, int64_t right, Vector &result);
-	// A % B
-	static void Modulo(Vector &left, int64_t right, Vector &result);
-
-	// A + B
-	static void Add(int64_t left, Vector &right, Vector &result);
-	// A - B
-	static void Subtract(int64_t left, Vector &right, Vector &result);
-	// A * B
-	static void Multiply(int64_t left, Vector &right, Vector &result);
-	// A / B
-	static void Divide(int64_t left, Vector &right, Vector &result);
-	// A % B
-	static void Modulo(int64_t left, Vector &right, Vector &result);
+	//===--------------------------------------------------------------------===//
+	// NULL Operators
+	//===--------------------------------------------------------------------===//
+	//! result = IS NOT NULL(A)
+	static void IsNotNull(Vector &A, Vector &result);
+	//! result = IS NULL (A)
+	static void IsNull(Vector &A, Vector &result);
 
 	//===--------------------------------------------------------------------===//
 	// Boolean Operations
 	//===--------------------------------------------------------------------===//
-	// A && B
-	static void And(Vector &left, Vector &right, Vector &result);
-	// A || B
-	static void Or(Vector &left, Vector &right, Vector &result);
+	// result = A && B
+	static void And(Vector &A, Vector &B, Vector &result);
+	// result = A || B
+	static void Or(Vector &A, Vector &B, Vector &result);
+	// result = NOT(A)
+	static void Not(Vector &A, Vector &result);
 
 	//===--------------------------------------------------------------------===//
 	// Comparison Operations
 	//===--------------------------------------------------------------------===//
-	// A == B
-	static void Equals(Vector &left, Vector &right, Vector &result);
-	// A != B
-	static void NotEquals(Vector &left, Vector &right, Vector &result);
-	// A > B
-	static void GreaterThan(Vector &left, Vector &right, Vector &result);
-	// A >= B
-	static void GreaterThanEquals(Vector &left, Vector &right, Vector &result);
-	// A < B
-	static void LessThan(Vector &left, Vector &right, Vector &result);
-	// A <= B
-	static void LessThanEquals(Vector &left, Vector &right, Vector &result);
+	// result = A == B
+	static void Equals(Vector &A, Vector &B, Vector &result);
+	// result = A != B
+	static void NotEquals(Vector &A, Vector &B, Vector &result);
+	// result = A > B
+	static void GreaterThan(Vector &A, Vector &B, Vector &result);
+	// result = A >= B
+	static void GreaterThanEquals(Vector &A, Vector &B, Vector &result);
+	// result = A < B
+	static void LessThan(Vector &A, Vector &B, Vector &result);
+	// result = A <= B
+	static void LessThanEquals(Vector &A, Vector &B, Vector &result);
 
 	//===--------------------------------------------------------------------===//
 	// Aggregates
 	//===--------------------------------------------------------------------===//
 	// SUM(A)
-	static Value Sum(Vector &source);
+	static Value Sum(Vector &A);
 	// COUNT(A)
-	static Value Count(Vector &source);
+	static Value Count(Vector &A);
 	// MAX(A)
-	static Value Max(Vector &left);
+	static Value Max(Vector &A);
 	// MIN(A)
-	static Value Min(Vector &left);
+	static Value Min(Vector &A);
 	// Returns whether or not a vector has a NULL value
-	static bool HasNull(Vector &left);
+	static bool HasNull(Vector &A);
 	// Maximum string length of the vector, only works on string vectors!
-	static Value MaximumStringLength(Vector &left);
+	static Value MaximumStringLength(Vector &A);
 	// Check if any value is true in a bool vector
-	static Value AnyTrue(Vector &left);
+	static Value AnyTrue(Vector &A);
 	// Check if all values are true in a bool vector
-	static Value AllTrue(Vector &left);
+	static Value AllTrue(Vector &A);
 
-	// CASE expressions, ternary op
-	static void Case(Vector &check, Vector &res_true, Vector &res_false,
-	                 Vector &result);
+	//! CASE expressions, ternary op
+	//! result = check ? A : B
+	static void Case(Vector &check, Vector &A, Vector &B, Vector &result);
 
 	// Returns true if the vector contains an instance of Value
 	static bool Contains(Vector &vector, Value &value);
@@ -148,9 +160,9 @@ struct VectorOperations {
 	//===--------------------------------------------------------------------===//
 	// Hash functions
 	//===--------------------------------------------------------------------===//
-	// HASH(A)
-	static void Hash(Vector &source, Vector &result);
-	// COMBINE(A, HASH(B))
+	// result = HASH(A)
+	static void Hash(Vector &A, Vector &result);
+	// A ^= HASH(B)
 	static void CombineHash(Vector &left, Vector &right, Vector &result);
 
 	//===--------------------------------------------------------------------===//
@@ -197,33 +209,10 @@ struct VectorOperations {
 		}
 		if (vector.sel_vector) {
 			//#pragma GCC ivdep
-			for (; i + 8 < count; i += 8) {
-				fun(vector.sel_vector[i + 0], i + 0);
-				fun(vector.sel_vector[i + 1], i + 1);
-				fun(vector.sel_vector[i + 2], i + 2);
-				fun(vector.sel_vector[i + 3], i + 3);
-				fun(vector.sel_vector[i + 4], i + 4);
-				fun(vector.sel_vector[i + 5], i + 5);
-				fun(vector.sel_vector[i + 6], i + 6);
-				fun(vector.sel_vector[i + 7], i + 7);
-			}
-
-			//#pragma GCC ivdep
 			for (; i < count; i++) {
 				fun(vector.sel_vector[i], i);
 			}
 		} else {
-			//#pragma GCC ivdep
-			for (; i + 8 < count; i += 8) {
-				fun(i + 0, i + 0);
-				fun(i + 1, i + 1);
-				fun(i + 2, i + 2);
-				fun(i + 3, i + 3);
-				fun(i + 4, i + 4);
-				fun(i + 5, i + 5);
-				fun(i + 6, i + 6);
-				fun(i + 7, i + 7);
-			}
 			//#pragma GCC ivdep
 			for (; i < count; i++) {
 				fun(i, i);

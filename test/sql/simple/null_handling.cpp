@@ -41,6 +41,14 @@ TEST_CASE("Test simple NULL handling", "[nullhandling]") {
 	result = con.Query("SELECT cast(a AS BIGINT) FROM test;");
 	REQUIRE(CHECK_COLUMN(result, 0, {11, Value(), 13}));
 
+	// division by constant zero is NULL
+	result = con.Query("SELECT a / 0 FROM test;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value()}));
+
+	// division by non-constant zero as well
+	result = con.Query("SELECT a / (a - a) FROM test;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value()}));
+
 	// NULL addition results in NULL
 	result = con.Query("SELECT a + b FROM test");
 	REQUIRE(CHECK_COLUMN(result, 0, {33, Value(), 35}));

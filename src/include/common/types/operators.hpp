@@ -24,58 +24,9 @@ namespace operators {
 //===--------------------------------------------------------------------===//
 // Numeric Operations
 //===--------------------------------------------------------------------===//
-struct Addition {
-	template <class T> static inline T Operation(T left, T right) {
-		return left + right;
-	}
-};
-
-struct Subtraction {
-	template <class T> static inline T Operation(T left, T right) {
-		return left - right;
-	}
-};
-
-struct Multiplication {
-	template <class T> static inline T Operation(T left, T right) {
-		return left * right;
-	}
-};
-
-struct Division {
-	template <class T> static inline T Operation(T left, T right) {
-		if (right == 0) {
-			throw duckdb::Exception("Division by 0");
-		}
-		return left / right;
-	}
-};
-
-struct Modulo {
-	template <class T> static inline T Operation(T left, T right) {
-		return left % right;
-	}
-};
-
-struct Abs {
-	template <class T> static inline T Operation(T left) {
-		return abs(left);
-	}
-};
-
-template <> uint64_t Abs::Operation(uint64_t left);
-
 struct Not {
 	static inline bool Operation(bool left) {
 		return !left;
-	}
-};
-
-template <> double Modulo::Operation(double left, double right);
-
-struct XOR {
-	template <class T> static inline T Operation(T left, T right) {
-		return left ^ right;
 	}
 };
 

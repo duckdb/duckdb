@@ -10,17 +10,6 @@ using namespace std;
 namespace operators {
 
 //===--------------------------------------------------------------------===//
-// Arithmetic Specializations
-//===--------------------------------------------------------------------===//
-template <> uint64_t Abs::Operation(uint64_t left) {
-	return left;
-}
-
-template <> double Modulo::Operation(double left, double right) {
-	throw NotImplementedException("Modulo for double not implemented!");
-}
-
-//===--------------------------------------------------------------------===//
 // String -> Numeric
 //===--------------------------------------------------------------------===//
 template <> int8_t Cast::Operation(const char *left) {

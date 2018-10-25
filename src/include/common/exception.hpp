@@ -28,6 +28,13 @@
 #include "common/string_util.hpp"
 
 namespace duckdb {
+
+template <class LEFT_TYPE, class RIGHT_TYPE>
+inline void ASSERT_RESTRICT(LEFT_TYPE *left, RIGHT_TYPE *right, size_t count) {
+	// assert that the two pointers do not overlap
+	assert(left + count < right || right + count < left);
+}
+
 //===--------------------------------------------------------------------===//
 // Exception Types
 //===--------------------------------------------------------------------===//

@@ -271,83 +271,6 @@ void _fixed_return_binary_loop(Vector &left, Vector &right, Vector &result) {
 	}
 }
 
-//===--------------------------------------------------------------------===//
-// Numeric Operations
-//===--------------------------------------------------------------------===//
-void VectorOperations::Add(Vector &left, Vector &right, Vector &result) {
-	_generic_binary_loop<operators::Addition>(left, right, result);
-}
-
-void VectorOperations::Subtract(Vector &left, Vector &right, Vector &result) {
-	_generic_binary_loop<operators::Subtraction>(left, right, result);
-}
-
-void VectorOperations::Multiply(Vector &left, Vector &right, Vector &result) {
-	if (left.type == TypeId::DATE || left.type == TypeId::TIMESTAMP) {
-		throw InvalidTypeException(left.type,
-		                           "invalid type for multiplication");
-	}
-	_generic_binary_loop<operators::Multiplication>(left, right, result);
-}
-
-void VectorOperations::Divide(Vector &left, Vector &right, Vector &result) {
-	if (left.type == TypeId::DATE || left.type == TypeId::TIMESTAMP) {
-		throw InvalidTypeException(left.type, "invalid type for division");
-	}
-
-	// set 0 in right side to 1 and as NULL so we get a NULL result and don't
-	// trip the exception
-	// also set payload values that are already set to NULL to 1 for same reason
-
-	Vector zero;
-	zero.Initialize(right.type, 0);
-	zero.count = 1;
-	VectorOperations::Set(zero, Value(0));
-	zero.sel_vector = right.sel_vector;
-
-	Vector is_zero;
-	is_zero.Initialize(TypeId::BOOLEAN);
-	zero.count = right.count;
-
-	Vector is_null;
-	is_null.Initialize(TypeId::BOOLEAN);
-	is_null.count = right.count;
-
-	Vector needs_fix;
-	needs_fix.Initialize(TypeId::BOOLEAN);
-	needs_fix.count = right.count;
-
-	VectorOperations::Equals(right, zero, is_zero);
-	VectorOperations::IsNull(right, is_null);
-	VectorOperations::Or(is_zero, is_null, needs_fix);
-
-	Vector right_fix;
-	right_fix.Initialize(right.type, false);
-	right_fix.count = right.count;
-	right_fix.sel_vector = right.sel_vector;
-
-	Vector one_but_null;
-	one_but_null.Initialize(right.type, 0);
-	one_but_null.count = 1;
-	VectorOperations::Set(one_but_null, Value(1));
-	one_but_null.nullmask.reset().flip(); // all NULLs
-
-	VectorOperations::Case(needs_fix, one_but_null, right, right_fix);
-
-	_generic_binary_loop<operators::Division>(left, right_fix, result);
-}
-
-void VectorOperations::Modulo(Vector &left, Vector &right, Vector &result) {
-	if (left.type == TypeId::DATE || left.type == TypeId::TIMESTAMP) {
-		throw InvalidTypeException(left.type, "invalid type for modulo");
-	}
-	_generic_binary_loop<operators::Modulo>(left, right, result);
-}
-
-void VectorOperations::Abs(Vector &left, Vector &result) {
-	_generic_unary_loop<operators::Abs>(left, result);
-}
-
 void VectorOperations::Not(Vector &left, Vector &result) {
 	if (left.type != TypeId::BOOLEAN) {
 		throw InvalidTypeException(left.type, "NOT() needs a boolean input");
@@ -386,66 +309,6 @@ void VectorOperations::IsNotNull(Vector &left, Vector &result) {
 
 void VectorOperations::IsNull(Vector &left, Vector &result) {
 	_is_null_loop<false>(left, result);
-}
-
-//===--------------------------------------------------------------------===//
-// Right-Hand Side Numeric Helpers
-//===--------------------------------------------------------------------===//
-template <VectorOperations::vector_function OP>
-static void _numeric_operator_right(Vector &left, int64_t right,
-                                    Vector &result) {
-	Vector constant(Value::Numeric(left.type, right));
-	OP(left, constant, result);
-}
-
-void VectorOperations::Add(Vector &left, int64_t right, Vector &result) {
-	_numeric_operator_right<VectorOperations::Add>(left, right, result);
-}
-
-void VectorOperations::Subtract(Vector &left, int64_t right, Vector &result) {
-	_numeric_operator_right<VectorOperations::Subtract>(left, right, result);
-}
-
-void VectorOperations::Multiply(Vector &left, int64_t right, Vector &result) {
-	_numeric_operator_right<VectorOperations::Multiply>(left, right, result);
-}
-
-void VectorOperations::Divide(Vector &left, int64_t right, Vector &result) {
-	_numeric_operator_right<VectorOperations::Divide>(left, right, result);
-}
-
-void VectorOperations::Modulo(Vector &left, int64_t right, Vector &result) {
-	_numeric_operator_right<VectorOperations::Modulo>(left, right, result);
-}
-
-//===--------------------------------------------------------------------===//
-// Left-Hand Side Numeric Helpers
-//===--------------------------------------------------------------------===//
-template <VectorOperations::vector_function OP>
-static void _numeric_operator_left(int64_t left, Vector &right,
-                                   Vector &result) {
-	Vector constant(Value::Numeric(right.type, left));
-	OP(constant, right, result);
-}
-
-void VectorOperations::Add(int64_t left, Vector &right, Vector &result) {
-	_numeric_operator_left<VectorOperations::Add>(left, right, result);
-}
-
-void VectorOperations::Subtract(int64_t left, Vector &right, Vector &result) {
-	_numeric_operator_left<VectorOperations::Subtract>(left, right, result);
-}
-
-void VectorOperations::Multiply(int64_t left, Vector &right, Vector &result) {
-	_numeric_operator_left<VectorOperations::Multiply>(left, right, result);
-}
-
-void VectorOperations::Divide(int64_t left, Vector &right, Vector &result) {
-	_numeric_operator_left<VectorOperations::Divide>(left, right, result);
-}
-
-void VectorOperations::Modulo(int64_t left, Vector &right, Vector &result) {
-	_numeric_operator_left<VectorOperations::Modulo>(left, right, result);
 }
 
 //===--------------------------------------------------------------------===//
@@ -679,6 +542,8 @@ void VectorOperations::Set(Vector &result, Value value) {
 // Hash functions
 //===--------------------------------------------------------------------===//
 
+#include "common/operator/numeric_bitwise_operators.hpp"
+
 void VectorOperations::Hash(Vector &left, Vector &result) {
 	_fixed_return_unary_loop_null<operators::Hash, int32_t>(left, result);
 }
@@ -690,6 +555,7 @@ void VectorOperations::CombineHash(Vector &left, Vector &right,
 		    "Left argument must be 32-bit integer hash");
 	}
 	VectorOperations::Hash(right, result);
-	_templated_binary_loop<int32_t, int32_t, operators::XOR, false>(
+	_templated_binary_loop<int32_t, int32_t, operators::BitwiseXOR, false>(
 	    left, result, result);
+	// VectorOperations::BitwiseXORInPlace(result, left);
 }

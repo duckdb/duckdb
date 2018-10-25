@@ -215,7 +215,8 @@ int32_t Date::ExtractISODayOfTheWeek(date_t date) {
 }
 
 static int32_t GetWeek(int32_t year, int32_t month, int32_t day) {
-	auto day_of_the_year = (leapyear(year) ? CUMLEAPDAYS[month] : CUMDAYS[month]) + day;
+	auto day_of_the_year =
+	    (leapyear(year) ? CUMLEAPDAYS[month] : CUMDAYS[month]) + day;
 	// get the first day of the first week of the year
 	// the first week is the week that has the 4th of January in it
 	auto day_of_the_fourth =

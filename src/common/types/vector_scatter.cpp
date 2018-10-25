@@ -1,5 +1,6 @@
 
 #include "common/exception.hpp"
+#include "common/operator/numeric_binary_operators.hpp"
 #include "common/types/hash.hpp"
 #include "common/types/null_value.hpp"
 #include "common/types/operators.hpp"
@@ -137,7 +138,7 @@ void VectorOperations::Scatter::Set(Vector &source, Vector &dest) {
 }
 
 void VectorOperations::Scatter::Add(Vector &source, Vector &dest) {
-	_generic_scatter_loop<operators::Addition>(source, dest);
+	_generic_scatter_loop<operators::Add>(source, dest);
 }
 
 void VectorOperations::Scatter::Max(Vector &source, Vector &dest) {

@@ -72,6 +72,11 @@ class Vector : public Printable {
 	// implicit copying of Vectors is not allowed
 	Vector(const Vector &) = delete;
 
+	//! Create a vector that references the specified value. Note that if the
+	//! value goes out of scope or is deleted, the data in the vector becomes
+	//! corrupt.
+	void Reference(Value &value);
+
 	//! Destroys the vector, deleting any owned data and resetting it to an
 	//! empty vector of the specified type.
 	void Destroy();

@@ -36,6 +36,51 @@ Vector::~Vector() {
 	Destroy();
 }
 
+void Vector::Reference(Value &value) {
+	type = value.type;
+	count = 1;
+	if (value.is_null) {
+		nullmask[0] = true;
+	}
+	switch (value.type) {
+	case TypeId::BOOLEAN:
+		data = (char *)&value.value_.boolean;
+		break;
+	case TypeId::TINYINT:
+		data = (char *)&value.value_.tinyint;
+		break;
+	case TypeId::SMALLINT:
+		data = (char *)&value.value_.smallint;
+		break;
+	case TypeId::INTEGER:
+		data = (char *)&value.value_.integer;
+		break;
+	case TypeId::BIGINT:
+		data = (char *)&value.value_.bigint;
+		break;
+	case TypeId::DECIMAL:
+		data = (char *)&value.value_.decimal;
+		break;
+	case TypeId::DATE:
+		data = (char *)&value.value_.date;
+		break;
+	case TypeId::POINTER:
+		data = (char *)&value.value_.pointer;
+		break;
+	case TypeId::VARCHAR: {
+		// make size-1 array of char vector
+		owned_data = unique_ptr<char[]>(new char[sizeof(char *)]);
+		data = owned_data.get();
+		// reference the string value of the Value
+		auto strings = (const char **)data;
+		strings[0] = value.str_value.c_str();
+		break;
+	}
+	default:
+		throw NotImplementedException("Unimplemented type");
+	}
+}
+
 void Vector::Initialize(TypeId new_type, bool zero_data) {
 	if (new_type != TypeId::INVALID) {
 		type = new_type;
