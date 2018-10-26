@@ -53,7 +53,7 @@ TEST_CASE("Test UNION/EXCEPT/INTERSECT", "[union]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
 	result = con.Query("SELECT 1, 'a' UNION SELECT 2, 'b' UNION SELECT 3, 'c' "
-	                   "UNION SELECT 1, 'a'");
+	                   "UNION SELECT 1, 'a' ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"a", "b", "c"}));
 
