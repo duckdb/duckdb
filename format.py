@@ -70,6 +70,7 @@ def format_directory(directory, sort_includes=True):
 					break
 
 format_directory('src')
+format_directory('benchmark')
 format_directory('test')
 format_directory('third_party/dbgen')
 format_directory('third_party/sqlsmith', False)
