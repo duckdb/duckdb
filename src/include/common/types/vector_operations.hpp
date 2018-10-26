@@ -163,7 +163,7 @@ struct VectorOperations {
 	// result = HASH(A)
 	static void Hash(Vector &A, Vector &result);
 	// A ^= HASH(B)
-	static void CombineHash(Vector &left, Vector &right, Vector &result);
+	static void CombineHash(Vector &hashes, Vector &B);
 
 	//===--------------------------------------------------------------------===//
 	// Generate functions
@@ -196,21 +196,14 @@ struct VectorOperations {
 	//===--------------------------------------------------------------------===//
 	// Exec
 	//===--------------------------------------------------------------------===//
-	//! Exec over the set of indexes, calls the callback function with (i) =
-	//! index, dependent on selection vector and (k) = count
-	static void Exec(Vector &vector,
-	                 std::function<void(size_t i, size_t k)> fun,
-	                 size_t offset = 0, size_t count = 0) {
+	template <class T>
+	static void Exec(sel_t *sel_vector, size_t count, T &&fun,
+	                 size_t offset = 0) {
 		size_t i = offset;
-		if (count == 0) {
-			count = vector.count;
-		} else {
-			count += offset;
-		}
-		if (vector.sel_vector) {
+		if (sel_vector) {
 			//#pragma GCC ivdep
 			for (; i < count; i++) {
-				fun(vector.sel_vector[i], i);
+				fun(sel_vector[i], i);
 			}
 		} else {
 			//#pragma GCC ivdep
@@ -219,22 +212,29 @@ struct VectorOperations {
 			}
 		}
 	}
+	//! Exec over the set of indexes, calls the callback function with (i) =
+	//! index, dependent on selection vector and (k) = count
+	template <class T>
+	static void Exec(Vector &vector, T &&fun, size_t offset = 0,
+	                 size_t count = 0) {
+		if (count == 0) {
+			count = vector.count;
+		} else {
+			count += offset;
+		}
+		Exec(vector.sel_vector, count, fun, offset);
+	}
 
 	//! Exec over a specific type. Note that it is up to the caller to verify
 	//! that the vector passed in has the correct type for the iteration! This
-	//! is effectively equivalent to calling ::Exec() and performing data[i] for
+	//! is equivalent to calling ::Exec() and performing data[i] for
 	//! every entry
-	template <typename T, bool IGNORE_NULL = false>
-	static void ExecType(Vector &vector,
-	                     std::function<void(T &value, size_t i, size_t k)> fun,
-	                     size_t offset = 0, size_t limit = 0) {
+	template <typename T, class FUNC>
+	static void ExecType(Vector &vector, FUNC &&fun, size_t offset = 0,
+	                     size_t limit = 0) {
 		auto data = (T *)vector.data;
 		VectorOperations::Exec(vector,
-		                       [&](size_t i, size_t k) {
-			                       if (!IGNORE_NULL || !vector.nullmask[i]) {
-				                       fun(data[i], i, k);
-			                       }
-		                       },
+		                       [&](size_t i, size_t k) { fun(data[i], i, k); },
 		                       offset, limit);
 	}
 };

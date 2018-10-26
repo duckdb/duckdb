@@ -30,18 +30,6 @@ struct Not {
 	}
 };
 
-struct And {
-	static inline bool Operation(bool left, bool right) {
-		return left && right;
-	}
-};
-
-struct Or {
-	static inline bool Operation(bool left, bool right) {
-		return left || right;
-	}
-};
-
 //===--------------------------------------------------------------------===//
 // Aggregation Operations
 //===--------------------------------------------------------------------===//
@@ -84,14 +72,6 @@ struct ConstantOne {
 struct AddOne {
 	template <class T> static inline T Operation(T left, T right) {
 		return right + 1;
-	}
-};
-
-struct Hash {
-	template <class T> static inline int32_t Operation(T left, bool is_null) {
-		if (is_null)
-			return duckdb::Hash<T>(duckdb::NullValue<T>());
-		return duckdb::Hash<T>(left);
 	}
 };
 

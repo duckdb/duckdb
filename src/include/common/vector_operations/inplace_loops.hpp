@@ -10,6 +10,7 @@
 
 #include "common/exception.hpp"
 #include "common/types/vector.hpp"
+#include "common/types/vector_operations.hpp"
 
 namespace duckdb {
 
@@ -29,15 +30,9 @@ static inline void
 inplace_loop_function_constant(LEFT_TYPE ldata,
                                RESULT_TYPE *__restrict result_data,
                                size_t count, sel_t *__restrict sel_vector) {
-	if (sel_vector) {
-		for (size_t i = 0; i < count; i++) {
-			OP::Operation(result_data[sel_vector[i]], ldata);
-		}
-	} else {
-		for (size_t i = 0; i < count; i++) {
-			OP::Operation(result_data[i], ldata);
-		}
-	}
+	VectorOperations::Exec(sel_vector, count, [&](size_t i, size_t k) {
+		OP::Operation(result_data[i], ldata);
+	});
 }
 
 template <class LEFT_TYPE, class RESULT_TYPE, class OP>
@@ -46,15 +41,9 @@ inplace_loop_function_array(LEFT_TYPE *__restrict ldata,
                             RESULT_TYPE *__restrict result_data, size_t count,
                             sel_t *__restrict sel_vector) {
 	ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
-	if (sel_vector) {
-		for (size_t i = 0; i < count; i++) {
-			OP::Operation(result_data[sel_vector[i]], ldata[sel_vector[i]]);
-		}
-	} else {
-		for (size_t i = 0; i < count; i++) {
-			OP::Operation(result_data[i], ldata[i]);
-		}
-	}
+	VectorOperations::Exec(sel_vector, count, [&](size_t i, size_t k) {
+		OP::Operation(result_data[i], ldata[i]);
+	});
 }
 
 template <class LEFT_TYPE, class RESULT_TYPE, class OP>

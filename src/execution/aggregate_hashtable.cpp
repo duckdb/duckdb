@@ -94,7 +94,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	Vector hashes(TypeId::INTEGER, true, false);
 	VectorOperations::Hash(groups.data[0], hashes);
 	for (size_t i = 1; i < groups.column_count; i++) {
-		VectorOperations::CombineHash(hashes, groups.data[i], hashes);
+		VectorOperations::CombineHash(hashes, groups.data[i]);
 	}
 
 	assert(hashes.sel_vector == groups.sel_vector);

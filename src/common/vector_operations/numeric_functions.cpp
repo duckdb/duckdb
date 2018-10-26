@@ -33,7 +33,7 @@ void VectorOperations::Abs(Vector &input, Vector &result) {
 		templated_unary_loop<double, double, operators::Abs>(input, result);
 		break;
 	case TypeId::POINTER:
-		// nop, pointer is unsigned
+		// NOP, pointer is unsigned
 		break;
 	default:
 		throw InvalidTypeException(input.type, "Invalid type for abs");

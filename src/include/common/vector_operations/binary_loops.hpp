@@ -10,6 +10,7 @@
 
 #include "common/exception.hpp"
 #include "common/types/vector.hpp"
+#include "common/types/vector_operations.hpp"
 
 namespace duckdb {
 
@@ -37,16 +38,9 @@ binary_loop_function_left_constant(LEFT_TYPE ldata,
                                    RESULT_TYPE *__restrict result_data,
                                    size_t count, sel_t *__restrict sel_vector) {
 	ASSERT_RESTRICT(rdata, rdata + count, result_data, result_data + count);
-	if (sel_vector) {
-		for (size_t i = 0; i < count; i++) {
-			result_data[sel_vector[i]] =
-			    OP::Operation(ldata, rdata[sel_vector[i]]);
-		}
-	} else {
-		for (size_t i = 0; i < count; i++) {
-			result_data[i] = OP::Operation(ldata, rdata[i]);
-		}
-	}
+	VectorOperations::Exec(sel_vector, count, [&](size_t i, size_t k) {
+		result_data[i] = OP::Operation(ldata, rdata[i]);
+	});
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
@@ -55,16 +49,9 @@ static inline void binary_loop_function_right_constant(
     RESULT_TYPE *__restrict result_data, size_t count,
     sel_t *__restrict sel_vector) {
 	ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
-	if (sel_vector) {
-		for (size_t i = 0; i < count; i++) {
-			result_data[sel_vector[i]] =
-			    OP::Operation(ldata[sel_vector[i]], rdata);
-		}
-	} else {
-		for (size_t i = 0; i < count; i++) {
-			result_data[i] = OP::Operation(ldata[i], rdata);
-		}
-	}
+	VectorOperations::Exec(sel_vector, count, [&](size_t i, size_t k) {
+		result_data[i] = OP::Operation(ldata[i], rdata);
+	});
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
@@ -75,16 +62,9 @@ binary_loop_function_array(LEFT_TYPE *__restrict ldata,
                            sel_t *__restrict sel_vector) {
 	ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 	ASSERT_RESTRICT(rdata, rdata + count, result_data, result_data + count);
-	if (sel_vector) {
-		for (size_t i = 0; i < count; i++) {
-			result_data[sel_vector[i]] =
-			    OP::Operation(ldata[sel_vector[i]], rdata[sel_vector[i]]);
-		}
-	} else {
-		for (size_t i = 0; i < count; i++) {
-			result_data[i] = OP::Operation(ldata[i], rdata[i]);
-		}
-	}
+	VectorOperations::Exec(sel_vector, count, [&](size_t i, size_t k) {
+		result_data[i] = OP::Operation(ldata[i], rdata[i]);
+	});
 }
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
