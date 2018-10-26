@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// common/operators/numeric_bitwise_operators.hpp
+// common/operator/numeric_bitwise_operators.hpp
 //
 // Author: Mark Raasveldt
 //

@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// common/operators/numeric_functions.hpp
+// common/operator/numeric_functions.hpp
 //
 // Author: Mark Raasveldt
 //

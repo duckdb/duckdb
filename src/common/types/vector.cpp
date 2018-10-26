@@ -340,4 +340,3 @@ void Vector::Verify() {
 	}
 }
 #endif
-

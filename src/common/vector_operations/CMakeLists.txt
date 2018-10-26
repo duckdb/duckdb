@@ -1,3 +1,3 @@
 
-add_library(duckdb_vector_operations OBJECT numeric_bitwise_operators.cpp numeric_functions.cpp numeric_inplace_operators.cpp numeric_inplace_bitwise_operators.cpp numeric_binary_operators.cpp)
+add_library(duckdb_vector_operations OBJECT comparison_operators.cpp numeric_bitwise_operators.cpp numeric_functions.cpp numeric_inplace_operators.cpp numeric_inplace_bitwise_operators.cpp numeric_binary_operators.cpp)
 set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_vector_operations> PARENT_SCOPE)

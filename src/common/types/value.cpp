@@ -1,6 +1,7 @@
 
 #include "common/types/value.hpp"
 #include "common/exception.hpp"
+#include "common/operator/comparison_operators.hpp"
 #include "common/operator/numeric_binary_operators.hpp"
 #include "common/serializer.hpp"
 #include "common/types/operators.hpp"
@@ -400,7 +401,7 @@ void Value::Divide(const Value &left, const Value &right, Value &result) {
 
 void Value::Modulo(const Value &left, const Value &right, Value &result) {
 	//_templated_binary_operation<operators::Modulo>(left, right, result,
-	//false);
+	// false);
 }
 
 void Value::Min(const Value &left, const Value &right, Value &result) {

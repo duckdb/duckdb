@@ -17,24 +17,19 @@ static void templated_inplace_bitwise_operation(Vector &result, Vector &input) {
 	// the inplace loops take the result as the last parameter
 	switch (input.type) {
 	case TypeId::TINYINT:
-		templated_inplace_loop<int8_t, int8_t, operators::BitwiseXORInPlace>(
-		    input, result);
+		templated_inplace_loop<int8_t, int8_t, OP>(input, result);
 		break;
 	case TypeId::SMALLINT:
-		templated_inplace_loop<int16_t, int16_t, operators::BitwiseXORInPlace>(
-		    input, result);
+		templated_inplace_loop<int16_t, int16_t, OP>(input, result);
 		break;
 	case TypeId::INTEGER:
-		templated_inplace_loop<int32_t, int32_t, operators::BitwiseXORInPlace>(
-		    input, result);
+		templated_inplace_loop<int32_t, int32_t, OP>(input, result);
 		break;
 	case TypeId::BIGINT:
-		templated_inplace_loop<int64_t, int64_t, operators::BitwiseXORInPlace>(
-		    input, result);
+		templated_inplace_loop<int64_t, int64_t, OP>(input, result);
 		break;
 	case TypeId::POINTER:
-		templated_inplace_loop<uint64_t, uint64_t,
-		                       operators::BitwiseXORInPlace>(input, result);
+		templated_inplace_loop<uint64_t, uint64_t, OP>(input, result);
 		break;
 	default:
 		throw InvalidTypeException(input.type, "Invalid type for addition");

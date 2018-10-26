@@ -30,45 +30,6 @@ struct Not {
 	}
 };
 
-//===--------------------------------------------------------------------===//
-// Comparison Operations
-//===--------------------------------------------------------------------===//
-struct Equals {
-	template <class T> static inline bool Operation(T left, T right) {
-		return left == right;
-	}
-};
-
-struct NotEquals {
-	template <class T> static inline bool Operation(T left, T right) {
-		return left != right;
-	}
-};
-
-struct GreaterThan {
-	template <class T> static inline bool Operation(T left, T right) {
-		return left > right;
-	}
-};
-
-struct GreaterThanEquals {
-	template <class T> static inline bool Operation(T left, T right) {
-		return left >= right;
-	}
-};
-
-struct LessThan {
-	template <class T> static inline bool Operation(T left, T right) {
-		return left < right;
-	}
-};
-
-struct LessThanEquals {
-	template <class T> static inline bool Operation(T left, T right) {
-		return left <= right;
-	}
-};
-
 struct And {
 	static inline bool Operation(bool left, bool right) {
 		return left && right;
@@ -78,43 +39,6 @@ struct And {
 struct Or {
 	static inline bool Operation(bool left, bool right) {
 		return left || right;
-	}
-};
-
-// NULLs are passed in these as well but the result is ignored. So just return 0
-struct EqualsVarchar {
-	static inline bool Operation(char *left, char *right) {
-		return strcmp(left, right) == 0;
-	}
-};
-
-struct NotEqualsVarchar {
-	static inline bool Operation(char *left, char *right) {
-		return strcmp(left, right) != 0;
-	}
-};
-
-struct LessThanVarchar {
-	static inline bool Operation(char *left, char *right) {
-		return strcmp(left, right) < 0;
-	}
-};
-
-struct LessThanEqualsVarchar {
-	static inline bool Operation(char *left, char *right) {
-		return strcmp(left, right) <= 0;
-	}
-};
-
-struct GreaterThanVarchar {
-	static inline bool Operation(char *left, char *right) {
-		return strcmp(left, right) > 0;
-	}
-};
-
-struct GreaterThanEqualsVarchar {
-	static inline bool Operation(char *left, char *right) {
-		return strcmp(left, right) >= 0;
 	}
 };
 

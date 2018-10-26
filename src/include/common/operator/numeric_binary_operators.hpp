@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// common/operators/numeric_binary_operators.hpp
+// common/operator/numeric_binary_operators.hpp
 //
 // Author: Mark Raasveldt
 //

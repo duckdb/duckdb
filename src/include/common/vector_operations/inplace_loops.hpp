@@ -45,7 +45,7 @@ static inline void
 inplace_loop_function_array(LEFT_TYPE *__restrict ldata,
                             RESULT_TYPE *__restrict result_data, size_t count,
                             sel_t *__restrict sel_vector) {
-	ASSERT_RESTRICT(ldata, result_data, count);
+	ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 	if (sel_vector) {
 		for (size_t i = 0; i < count; i++) {
 			OP::Operation(result_data[sel_vector[i]], ldata[sel_vector[i]]);
@@ -58,19 +58,23 @@ inplace_loop_function_array(LEFT_TYPE *__restrict ldata,
 }
 
 template <class LEFT_TYPE, class RESULT_TYPE, class OP>
-void templated_inplace_loop(Vector &left, Vector &result) {
-	auto ldata = (LEFT_TYPE *)left.data;
+void templated_inplace_loop(Vector &input, Vector &result) {
+	auto ldata = (LEFT_TYPE *)input.data;
 	auto result_data = (RESULT_TYPE *)result.data;
-	if (left.IsConstant()) {
-		LEFT_TYPE constant = ldata[0];
-		inplace_loop_function_constant<LEFT_TYPE, RESULT_TYPE, OP>(
-		    constant, result_data, result.count, result.sel_vector);
+	if (input.IsConstant()) {
+		if (input.nullmask[0]) {
+			result.nullmask.set();
+		} else {
+			LEFT_TYPE constant = ldata[0];
+			inplace_loop_function_constant<LEFT_TYPE, RESULT_TYPE, OP>(
+			    constant, result_data, result.count, result.sel_vector);
+		}
 	} else {
 		// OR nullmasks together
-		result.nullmask = left.nullmask | result.nullmask;
-		assert(result.sel_vector == left.sel_vector);
+		result.nullmask = input.nullmask | result.nullmask;
+		assert(result.sel_vector == input.sel_vector);
 		inplace_loop_function_array<LEFT_TYPE, RESULT_TYPE, OP>(
-		    ldata, result_data, left.count, left.sel_vector);
+		    ldata, result_data, input.count, input.sel_vector);
 	}
 }
 

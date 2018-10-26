@@ -29,10 +29,10 @@
 
 namespace duckdb {
 
-template <class LEFT_TYPE, class RIGHT_TYPE>
-inline void ASSERT_RESTRICT(LEFT_TYPE *left, RIGHT_TYPE *right, size_t count) {
+inline void ASSERT_RESTRICT(void *left_start, void *left_end, void *right_start,
+                            void *right_end) {
 	// assert that the two pointers do not overlap
-	assert(left + count < right || right + count < left);
+	assert(left_end < right_start || right_end < left_start);
 }
 
 //===--------------------------------------------------------------------===//

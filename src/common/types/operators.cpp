@@ -10,7 +10,7 @@ using namespace std;
 namespace operators {
 
 //===--------------------------------------------------------------------===//
-// String -> Numeric
+// Cast String -> Numeric
 //===--------------------------------------------------------------------===//
 template <> int8_t Cast::Operation(const char *left) {
 	int64_t value = Cast::Operation<const char *, int64_t>(left);
@@ -43,7 +43,7 @@ template <> double Cast::Operation(const char *left) {
 }
 
 //===--------------------------------------------------------------------===//
-// numeric -> string
+// Cast Numeric -> String
 //===--------------------------------------------------------------------===//
 template <> std::string Cast::Operation(int8_t left) {
 	return to_string(left);

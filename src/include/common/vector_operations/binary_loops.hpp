@@ -36,7 +36,7 @@ binary_loop_function_left_constant(LEFT_TYPE ldata,
                                    RIGHT_TYPE *__restrict rdata,
                                    RESULT_TYPE *__restrict result_data,
                                    size_t count, sel_t *__restrict sel_vector) {
-	ASSERT_RESTRICT(rdata, result_data, count);
+	ASSERT_RESTRICT(rdata, rdata + count, result_data, result_data + count);
 	if (sel_vector) {
 		for (size_t i = 0; i < count; i++) {
 			result_data[sel_vector[i]] =
@@ -54,7 +54,7 @@ static inline void binary_loop_function_right_constant(
     LEFT_TYPE *__restrict ldata, RIGHT_TYPE rdata,
     RESULT_TYPE *__restrict result_data, size_t count,
     sel_t *__restrict sel_vector) {
-	ASSERT_RESTRICT(ldata, result_data, count);
+	ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 	if (sel_vector) {
 		for (size_t i = 0; i < count; i++) {
 			result_data[sel_vector[i]] =
@@ -73,8 +73,8 @@ binary_loop_function_array(LEFT_TYPE *__restrict ldata,
                            RIGHT_TYPE *__restrict rdata,
                            RESULT_TYPE *__restrict result_data, size_t count,
                            sel_t *__restrict sel_vector) {
-	ASSERT_RESTRICT(ldata, result_data, count);
-	ASSERT_RESTRICT(rdata, result_data, count);
+	ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
+	ASSERT_RESTRICT(rdata, rdata + count, result_data, result_data + count);
 	if (sel_vector) {
 		for (size_t i = 0; i < count; i++) {
 			result_data[sel_vector[i]] =

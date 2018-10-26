@@ -25,7 +25,7 @@ static inline void
 unary_loop_function_array(LEFT_TYPE *__restrict ldata,
                           RESULT_TYPE *__restrict result_data, size_t count,
                           sel_t *__restrict sel_vector) {
-	ASSERT_RESTRICT(ldata, result_data, count);
+	ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 	if (sel_vector) {
 		for (size_t i = 0; i < count; i++) {
 			result_data[sel_vector[i]] = OP::Operation(ldata[sel_vector[i]]);

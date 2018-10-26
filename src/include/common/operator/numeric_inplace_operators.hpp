@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// common/operators/numeric_inplace_operators.hpp
+// common/operator/numeric_inplace_operators.hpp
 //
 // Author: Mark Raasveldt
 //
