@@ -12,6 +12,7 @@
 
 #include "common/allocator.hpp"
 
+#include "main/appender.hpp"
 #include "main/query_profiler.hpp"
 
 #include "transaction/transaction_context.hpp"
