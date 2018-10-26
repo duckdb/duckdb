@@ -1,4 +1,5 @@
 
+add_subdirectory(operator)
 add_subdirectory(types)
 add_subdirectory(vector_operations)
 

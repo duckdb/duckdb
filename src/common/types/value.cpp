@@ -1,10 +1,11 @@
 
 #include "common/types/value.hpp"
 #include "common/exception.hpp"
+#include "common/operator/aggregate_operators.hpp"
+#include "common/operator/cast_operators.hpp"
 #include "common/operator/comparison_operators.hpp"
 #include "common/operator/numeric_binary_operators.hpp"
 #include "common/serializer.hpp"
-#include "common/types/operators.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -227,6 +228,8 @@ template <class DST, class OP> DST Value::_cast(const Value &v) {
 		return OP::template Operation<const char *, DST>(v.str_value.c_str());
 	case TypeId::DATE:
 		return operators::CastFromDate::Operation<date_t, DST>(v.value_.date);
+	case TypeId::TIMESTAMP:
+		return OP::template Operation<uint64_t, DST>(v.value_.timestamp);
 	default:
 		throw NotImplementedException("Unimplemented type for casting");
 	}

@@ -448,16 +448,14 @@ int64_t MinimumValue(TypeId type) {
 		return std::numeric_limits<int8_t>::min() + 1;
 	case TypeId::SMALLINT:
 		return std::numeric_limits<int16_t>::min() + 1;
+	case TypeId::DATE:
 	case TypeId::INTEGER:
 		return std::numeric_limits<int32_t>::min() + 1;
-	case TypeId::DATE:
-		return std::numeric_limits<date_t>::min() + 1;
+	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		return std::numeric_limits<int64_t>::min() + 1;
 	case TypeId::POINTER:
-		return std::numeric_limits<uint64_t>::min() + 1;
-	case TypeId::TIMESTAMP:
-		return std::numeric_limits<timestamp_t>::min() + 1;
+		return std::numeric_limits<uint64_t>::min();
 	default:
 		throw InvalidTypeException(type, "MinimumValue requires integral type");
 	}
@@ -469,16 +467,14 @@ int64_t MaximumValue(TypeId type) {
 		return std::numeric_limits<int8_t>::max();
 	case TypeId::SMALLINT:
 		return std::numeric_limits<int16_t>::max();
+	case TypeId::DATE:
 	case TypeId::INTEGER:
 		return std::numeric_limits<int32_t>::max();
-	case TypeId::DATE:
-		return std::numeric_limits<date_t>::max();
+	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		return std::numeric_limits<int64_t>::max();
 	case TypeId::POINTER:
 		return std::numeric_limits<int64_t>::max();
-	case TypeId::TIMESTAMP:
-		return std::numeric_limits<timestamp_t>::max();
 	default:
 		throw InvalidTypeException(type, "MaximumValue requires integral type");
 	}

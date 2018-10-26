@@ -8,6 +8,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+#pragma once
+
 #include "common/exception.hpp"
 #include "common/types/vector.hpp"
 #include "common/types/vector_operations.hpp"

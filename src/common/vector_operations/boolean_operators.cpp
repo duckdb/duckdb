@@ -1,12 +1,14 @@
 //===--------------------------------------------------------------------===//
-// conjunction_operators.cpp
-// Description: This file contains the implementation of the conjunction
-// operations AND OR
+// boolean_operators.cpp
+// Description: This file contains the implementation of the boolean
+// operations AND OR !
 //===--------------------------------------------------------------------===//
 
-#include "common/operator/conjunction_operators.hpp"
+#include "common/operator/boolean_operators.hpp"
 #include "common/types/vector_operations.hpp"
+
 #include "common/vector_operations/binary_loops.hpp"
+#include "common/vector_operations/unary_loops.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -53,67 +55,19 @@ void templated_boolean_nullmask(Vector &left, Vector &right, Vector &result) {
 	}
 }
 
-/*
-SQL AND Rules:
-
-TRUE  AND TRUE   = TRUE
-TRUE  AND FALSE  = FALSE
-TRUE  AND NULL   = NULL
-FALSE AND TRUE   = FALSE
-FALSE AND FALSE  = FALSE
-FALSE AND NULL   = FALSE
-NULL  AND TRUE   = NULL
-NULL  AND FALSE  = FALSE
-NULL  AND NULL   = NULL
-
-Basically:
-- Only true if both are true
-- False if either is false (regardless of NULLs)
-- NULL otherwise
-*/
-
-namespace operators {
-struct AndMask {
-	static inline bool Operation(bool left, bool right, bool left_null,
-	                             bool right_null) {
-		return (left_null && (right_null || right)) || (right_null && left);
-	}
-};
-} // namespace operators
-
 void VectorOperations::And(Vector &left, Vector &right, Vector &result) {
 	templated_boolean_nullmask<operators::And, operators::AndMask>(left, right,
 	                                                               result);
 }
 
-/*
-SQL OR Rules:
-
-OR
-TRUE  OR TRUE  = TRUE
-TRUE  OR FALSE = TRUE
-TRUE  OR NULL  = TRUE
-FALSE OR TRUE  = TRUE
-FALSE OR FALSE = FALSE
-FALSE OR NULL  = NULL
-NULL  OR TRUE  = TRUE
-NULL  OR FALSE = NULL
-NULL  OR NULL  = NULL
-
-Basically:
-- Only false if both are false
-- True if either is true (regardless of NULLs)
-- NULL otherwise
-*/
-namespace operators {
-struct OrMask {
-	static inline bool Operation(bool left, bool right, bool left_null,
-	                             bool right_null) {
-		return (left_null && (right_null || !right)) || (right_null && !left);
-	}
-};
-} // namespace operators
 void VectorOperations::Or(Vector &left, Vector &right, Vector &result) {
 	templated_boolean_nullmask<operators::Or, operators::OrMask>(left, right,
 	                                                             result);
+}
+
+void VectorOperations::Not(Vector &left, Vector &result) {
+	if (left.type != TypeId::BOOLEAN) {
+		throw InvalidTypeException(left.type, "NOT() needs a boolean input");
+	}
+	templated_unary_loop<int8_t, int8_t, operators::Not>(left, result);
 }

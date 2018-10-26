@@ -3,7 +3,7 @@
 // Description: This file contains the vectorized hash implementations
 //===--------------------------------------------------------------------===//
 
-#include "common/operator/hash.hpp"
+#include "common/operator/hash_operators.hpp"
 #include "common/vector_operations/binary_loops.hpp"
 #include "common/vector_operations/unary_loops.hpp"
 

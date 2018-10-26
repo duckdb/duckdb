@@ -8,6 +8,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+#pragma once
+
 #include "common/exception.hpp"
 #include "common/types/vector.hpp"
 #include "common/types/vector_operations.hpp"
@@ -67,7 +69,8 @@ binary_loop_function_array(LEFT_TYPE *__restrict ldata,
 	});
 }
 
-template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
+template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP,
+          bool IGNORE_NULL = false>
 void templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 	auto ldata = (LEFT_TYPE *)left.data;
 	auto rdata = (RIGHT_TYPE *)right.data;
@@ -82,9 +85,19 @@ void templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 			// computation
 			LEFT_TYPE constant = ldata[0];
 			result.nullmask = right.nullmask;
-			binary_loop_function_left_constant<LEFT_TYPE, RIGHT_TYPE,
-			                                   RESULT_TYPE, OP>(
-			    constant, rdata, result_data, right.count, right.sel_vector);
+			if (IGNORE_NULL && result.nullmask.any()) {
+				VectorOperations::Exec(
+				    right.sel_vector, right.count, [&](size_t i, size_t k) {
+					    if (!result.nullmask[i]) {
+						    result_data[i] = OP::Operation(constant, rdata[i]);
+					    }
+				    });
+			} else {
+				binary_loop_function_left_constant<LEFT_TYPE, RIGHT_TYPE,
+				                                   RESULT_TYPE, OP>(
+				    constant, rdata, result_data, right.count,
+				    right.sel_vector);
+			}
 		}
 		result.sel_vector = right.sel_vector;
 		result.count = right.count;
@@ -97,9 +110,18 @@ void templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 			// computation
 			RIGHT_TYPE constant = rdata[0];
 			result.nullmask = left.nullmask;
-			binary_loop_function_right_constant<LEFT_TYPE, RIGHT_TYPE,
-			                                    RESULT_TYPE, OP>(
-			    ldata, constant, result_data, left.count, left.sel_vector);
+			if (IGNORE_NULL && result.nullmask.any()) {
+				VectorOperations::Exec(
+				    left.sel_vector, left.count, [&](size_t i, size_t k) {
+					    if (!result.nullmask[i]) {
+						    result_data[i] = OP::Operation(ldata[i], constant);
+					    }
+				    });
+			} else {
+				binary_loop_function_right_constant<LEFT_TYPE, RIGHT_TYPE,
+				                                    RESULT_TYPE, OP>(
+				    ldata, constant, result_data, left.count, left.sel_vector);
+			}
 		}
 		result.sel_vector = left.sel_vector;
 		result.count = left.count;
@@ -108,8 +130,17 @@ void templated_binary_loop(Vector &left, Vector &right, Vector &result) {
 		// OR nullmasks together
 		result.nullmask = left.nullmask | right.nullmask;
 		assert(left.sel_vector == right.sel_vector);
-		binary_loop_function_array<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(
-		    ldata, rdata, result_data, left.count, left.sel_vector);
+		if (IGNORE_NULL && result.nullmask.any()) {
+			VectorOperations::Exec(
+			    left.sel_vector, left.count, [&](size_t i, size_t k) {
+				    if (!result.nullmask[i]) {
+					    result_data[i] = OP::Operation(ldata[i], rdata[i]);
+				    }
+			    });
+		} else {
+			binary_loop_function_array<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(
+			    ldata, rdata, result_data, left.count, left.sel_vector);
+		}
 		result.sel_vector = left.sel_vector;
 		result.count = left.count;
 	}

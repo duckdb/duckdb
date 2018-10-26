@@ -56,56 +56,38 @@ static void templated_boolean_operation(Vector &left, Vector &right,
 		templated_binary_loop<double, double, bool, OP>(left, right, result);
 		break;
 	case TypeId::VARCHAR:
-		templated_binary_loop<const char *, const char *, bool, OP>(left, right,
-		                                                            result);
+		templated_binary_loop<const char *, const char *, bool, OP, true>(
+		    left, right, result);
 		break;
 	default:
 		throw InvalidTypeException(left.type, "Invalid type for addition");
 	}
 }
 
-//===--------------------------------------------------------------------===//
-// Equals
-//===--------------------------------------------------------------------===//
 void VectorOperations::Equals(Vector &left, Vector &right, Vector &result) {
 	templated_boolean_operation<operators::Equals>(left, right, result);
 }
 
-//===--------------------------------------------------------------------===//
-// Not Equals
-//===--------------------------------------------------------------------===//
 void VectorOperations::NotEquals(Vector &left, Vector &right, Vector &result) {
 	templated_boolean_operation<operators::NotEquals>(left, right, result);
 }
 
-//===--------------------------------------------------------------------===//
-// GreaterThanEquals
-//===--------------------------------------------------------------------===//
 void VectorOperations::GreaterThanEquals(Vector &left, Vector &right,
                                          Vector &result) {
 	templated_boolean_operation<operators::GreaterThanEquals>(left, right,
 	                                                          result);
 }
 
-//===--------------------------------------------------------------------===//
-// LessThanEquals
-//===--------------------------------------------------------------------===//
 void VectorOperations::LessThanEquals(Vector &left, Vector &right,
                                       Vector &result) {
 	templated_boolean_operation<operators::LessThanEquals>(left, right, result);
 }
 
-//===--------------------------------------------------------------------===//
-// GreaterThan
-//===--------------------------------------------------------------------===//
 void VectorOperations::GreaterThan(Vector &left, Vector &right,
                                    Vector &result) {
 	templated_boolean_operation<operators::GreaterThan>(left, right, result);
 }
 
-//===--------------------------------------------------------------------===//
-// LessThan
-//===--------------------------------------------------------------------===//
 void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result) {
 	templated_boolean_operation<operators::LessThan>(left, right, result);
 }

@@ -186,7 +186,8 @@ void DataTable::Append(ClientContext &context, DataChunk &chunk) {
 			char *target =
 			    last_chunk->columns[i] +
 			    last_chunk->count * GetTypeIdSize(table.columns[i].type);
-			VectorOperations::CopyNull(chunk.data[i], target, 0, current_count);
+			VectorOperations::CopyToStorage(chunk.data[i], target, 0,
+			                                current_count);
 		}
 		// now increase the count of the chunk
 		last_chunk->count += current_count;
@@ -212,8 +213,8 @@ void DataTable::Append(ClientContext &context, DataChunk &chunk) {
 		// now insert the elements into the vector
 		for (size_t i = 0; i < chunk.column_count; i++) {
 			char *target = new_chunk_pointer->columns[i];
-			VectorOperations::CopyNull(chunk.data[i], target, current_count,
-			                           remainder);
+			VectorOperations::CopyToStorage(chunk.data[i], target,
+			                                current_count, remainder);
 		}
 		new_chunk_pointer->count = remainder;
 		new_chunk_pointer->ReleaseExclusiveLock();
@@ -342,7 +343,7 @@ void DataTable::Update(ClientContext &context, Vector &row_identifiers,
 			// copy them to a temporary vector
 			null_vector.Initialize(update_vector->type, false);
 			null_vector.count = update_vector->count;
-			VectorOperations::CopyNull(*update_vector, null_vector.data);
+			VectorOperations::CopyToStorage(*update_vector, null_vector.data);
 			update_vector = &null_vector;
 		}
 
@@ -476,7 +477,7 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result,
 					source.sel_vector = regular_entries;
 					source.count = regular_count;
 					// append while converting NullValue<T> to the nullmask
-					VectorOperations::AppendNull(source, result.data[j]);
+					VectorOperations::AppendFromStorage(source, result.data[j]);
 				} else {
 					// normal column
 					// grab the data from the source using a selection vector
@@ -487,7 +488,7 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result,
 					source.sel_vector = regular_entries;
 					source.count = regular_count;
 					// append while converting NullValue<T> to the nullmask
-					VectorOperations::AppendNull(source, result.data[j]);
+					VectorOperations::AppendFromStorage(source, result.data[j]);
 				}
 			}
 			result.count += regular_count;

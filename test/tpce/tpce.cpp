@@ -11,7 +11,7 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test TPC-E", "[tpce][.]") {
-	DuckDB db("/Users/myth/tpce-test-db");
+	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 	unique_ptr<DuckDBResult> result;
 

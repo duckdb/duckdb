@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <cstdlib>
+#include <algorithm>
 
 namespace operators {
 
