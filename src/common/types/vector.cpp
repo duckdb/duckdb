@@ -325,6 +325,7 @@ string Vector::ToString() const {
 	return retval;
 }
 
+#ifdef DEBUG
 void Vector::Verify() {
 	if (type == TypeId::VARCHAR) {
 		// we just touch all the strings and let the sanitizer figure out if any
@@ -338,3 +339,5 @@ void Vector::Verify() {
 		    });
 	}
 }
+#endif
+

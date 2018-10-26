@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include <cassert>
+
 namespace operators {
 
 struct Add {
