@@ -63,7 +63,7 @@ TEST_CASE("Test UNION/EXCEPT/INTERSECT", "[union]") {
 
 	// mixed fun
 	result = con.Query("SELECT 1, 'a' UNION ALL SELECT 1, 'a' UNION SELECT 2, "
-	                   "'b' UNION SELECT 1, 'a'");
+	                   "'b' UNION SELECT 1, 'a' ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"a", "a", "b"}));
 }

@@ -153,6 +153,9 @@ unique_ptr<SelectStatement> TransformSelect(Node *node) {
 		return result;
 	}
 	case SETOP_UNION: {
+		stmt->larg->sortClause = stmt->sortClause;
+		stmt->larg->limitOffset = stmt->limitOffset;
+		stmt->larg->limitCount = stmt->limitCount;
 		auto top = TransformSelect((Node *)stmt->larg);
 		if (!top) {
 			return nullptr;
