@@ -1,5 +1,5 @@
 
-#include "common/types/vector_operations.hpp"
+#include "common/vector_operations/vector_operations.hpp"
 #include "duckdb.h"
 #include "duckdb.hpp"
 #include <cstring>

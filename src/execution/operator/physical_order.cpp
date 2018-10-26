@@ -2,7 +2,8 @@
 #include "execution/operator/physical_order.hpp"
 #include "execution/expression_executor.hpp"
 
-#include "common/types/vector_operations.hpp"
+#include "common/value_operations/value_operations.hpp"
+#include "common/vector_operations/vector_operations.hpp"
 
 #include "storage/data_table.hpp"
 
@@ -23,11 +24,11 @@ int compare_tuple(ChunkCollection &sort_by, OrderByDescription &desc,
 	for (size_t i = 0; i < desc.orders.size(); i++) {
 		Value left_value = sort_by.GetValue(i, left);
 		Value right_value = sort_by.GetValue(i, right);
-		if (Value::Equals(left_value, right_value)) {
+		if (ValueOperations::Equals(left_value, right_value)) {
 			continue;
 		}
 		auto order_type = desc.orders[i].type;
-		return Value::LessThan(left_value, right_value)
+		return ValueOperations::LessThan(left_value, right_value)
 		           ? (order_type == OrderType::ASCENDING ? -1 : 1)
 		           : (order_type == OrderType::ASCENDING ? 1 : -1);
 	}

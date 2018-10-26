@@ -5,7 +5,7 @@
 //===--------------------------------------------------------------------===//
 
 #include "common/operator/boolean_operators.hpp"
-#include "common/types/vector_operations.hpp"
+#include "common/vector_operations/vector_operations.hpp"
 
 #include "common/vector_operations/binary_loops.hpp"
 #include "common/vector_operations/unary_loops.hpp"

@@ -5,8 +5,8 @@
 //===--------------------------------------------------------------------===//
 
 #include "common/operator/numeric_functions.hpp"
-#include "common/types/vector_operations.hpp"
 #include "common/vector_operations/unary_loops.hpp"
+#include "common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;

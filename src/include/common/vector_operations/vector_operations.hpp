@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// common/types/vector_operations.hpp
+// common/vector_operations/vector_operations.hpp
 //
 // Author: Mark Raasveldt
 //

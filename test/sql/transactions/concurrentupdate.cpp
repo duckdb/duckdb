@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "common/value_operations/value_operations.hpp"
 #include "test_helpers.hpp"
 
 #include <random>
@@ -110,12 +111,13 @@ TEST_CASE("Concurrent update", "[updates][.]") {
 
 		Value expected_money_from, expected_money_to;
 
-		Value::Subtract(money_from, Value::INTEGER(amount),
-		                expected_money_from);
-		Value::Add(money_to, Value::INTEGER(amount), expected_money_to);
+		ValueOperations::Subtract(money_from, Value::INTEGER(amount),
+		                          expected_money_from);
+		ValueOperations::Add(money_to, Value::INTEGER(amount),
+		                     expected_money_to);
 
-		REQUIRE(Value::Equals(new_money_from, expected_money_from));
-		REQUIRE(Value::Equals(new_money_to, expected_money_to));
+		REQUIRE(ValueOperations::Equals(new_money_from, expected_money_from));
+		REQUIRE(ValueOperations::Equals(new_money_to, expected_money_to));
 
 		REQUIRE_NO_FAIL(con.Query("COMMIT"));
 	}

@@ -3,8 +3,8 @@
 // Description: This file contains the implementation of the scatter operations
 //===--------------------------------------------------------------------===//
 
-#include "common/types/vector_operations.hpp"
 #include "common/vector_operations/scatter_loops.hpp"
+#include "common/vector_operations/vector_operations.hpp"
 
 #include "common/operator/aggregate_operators.hpp"
 #include "common/operator/constant_operators.hpp"

@@ -15,6 +15,7 @@
 
 #include "common/exception.hpp"
 #include "common/internal_types.hpp"
+#include "common/value_operations/value_operations.hpp"
 #include "optimizer/rule.hpp"
 #include "parser/expression/constant_expression.hpp"
 
@@ -39,7 +40,7 @@ class ConstantFoldingRule : public Rule {
 	                                  std::vector<AbstractOperator> &bindings) {
 		Value result;
 
-		// TODO: add bolean ops
+		// TODO: add boolean ops
 
 		auto left = root.children[0].get();
 		auto right = root.children[1].get();
@@ -57,20 +58,24 @@ class ConstantFoldingRule : public Rule {
 			    TypeIsNumeric(right_val->value.type)) {
 				switch (root.type) {
 				case ExpressionType::OPERATOR_ADD:
-					Value::Add(left_val->value, right_val->value, result);
+					ValueOperations::Add(left_val->value, right_val->value,
+					                     result);
 					break;
 				case ExpressionType::OPERATOR_SUBTRACT:
-					Value::Subtract(left_val->value, right_val->value, result);
+					ValueOperations::Subtract(left_val->value, right_val->value,
+					                          result);
 					break;
 				case ExpressionType::OPERATOR_MULTIPLY:
-					Value::Multiply(left_val->value, right_val->value, result);
+					ValueOperations::Multiply(left_val->value, right_val->value,
+					                          result);
 					break;
 				case ExpressionType::OPERATOR_DIVIDE:
-					Value::Divide(left_val->value, right_val->value, result);
+					ValueOperations::Divide(left_val->value, right_val->value,
+					                        result);
 					break;
 				case ExpressionType::OPERATOR_MOD:
-					Value::Modulo(left_val->value, right_val->value, result);
-					break;
+					// Value::Modulo(left_val->value, right_val->value, result);
+					// break;
 				default:
 					throw NotImplementedException("Unsupported operator");
 				}

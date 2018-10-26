@@ -1,6 +1,6 @@
 
 #include "execution/expression_executor.hpp"
-#include "common/types/vector_operations.hpp"
+#include "common/vector_operations/vector_operations.hpp"
 
 #include "common/exception.hpp"
 
@@ -8,6 +8,7 @@
 
 #include "parser/expression/list.hpp"
 
+#include "common/value_operations/value_operations.hpp"
 #include "execution/operator/physical_aggregate.hpp"
 #include "execution/operator/physical_hash_aggregate.hpp"
 
@@ -142,15 +143,15 @@ void ExpressionExecutor::MergeAggregate(AggregateExpression &expr,
 	case ExpressionType::AGGREGATE_COUNT_STAR:
 	case ExpressionType::AGGREGATE_SUM:
 	case ExpressionType::AGGREGATE_COUNT: {
-		Value::Add(result, v, result);
+		ValueOperations::Add(result, v, result);
 		break;
 	}
 	case ExpressionType::AGGREGATE_MIN: {
-		Value::Min(result, v, result);
+		ValueOperations::Min(result, v, result);
 		break;
 	}
 	case ExpressionType::AGGREGATE_MAX: {
-		Value::Max(result, v, result);
+		ValueOperations::Max(result, v, result);
 		break;
 	}
 	// we don't have to merge since the first chunk already set the result
@@ -449,8 +450,8 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 				// if there is any true in comp_res the IN returns true
 				VectorOperations::Equals(lval_vec, rval_vec, comp_res);
 				// if we find any match, IN is true
-				if (Value::Equals(VectorOperations::AnyTrue(comp_res),
-				                  Value(true))) {
+				if (ValueOperations::Equals(VectorOperations::AnyTrue(comp_res),
+				                            Value(true))) {
 					result.SetValue(r, Value(true));
 				} else {
 					// if not, but there are some NULLs in the rhs, its a NULL
@@ -482,8 +483,10 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 				result.Copy(temp_result);
 				VectorOperations::Or(temp_result, comp_res, result);
 				// early abort
-				if (Value::Equals(VectorOperations::Min(result), Value(true)) &&
-				    Value::Equals(VectorOperations::Max(result), Value(true))) {
+				if (ValueOperations::Equals(VectorOperations::Min(result),
+				                            Value(true)) &&
+				    ValueOperations::Equals(VectorOperations::Max(result),
+				                            Value(true))) {
 					break;
 				}
 			}

@@ -1,6 +1,6 @@
 
 #include "execution/operator/physical_nested_loop_join.hpp"
-#include "common/types/vector_operations.hpp"
+#include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
 
 using namespace duckdb;

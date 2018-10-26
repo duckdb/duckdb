@@ -1,5 +1,6 @@
 
 #include "parser/expression/constant_expression.hpp"
+#include "common/value_operations/value_operations.hpp"
 
 #include "common/exception.hpp"
 
@@ -43,5 +44,5 @@ bool ConstantExpression::Equals(const Expression *other_) {
 	if (!other) {
 		return false;
 	}
-	return Value::Equals(value, other->value);
+	return ValueOperations::Equals(value, other->value);
 }

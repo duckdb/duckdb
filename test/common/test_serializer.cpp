@@ -5,6 +5,7 @@
 
 #include "common/serializer.hpp"
 #include "common/types/data_chunk.hpp"
+#include "common/value_operations/value_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -48,11 +49,11 @@ TEST_CASE("Data Chunk serialization", "[serializer]") {
 	REQUIRE(other_chunk.count == 2);
 	REQUIRE(other_chunk.column_count == 2);
 	REQUIRE(other_chunk.data[0].count == 2);
-	REQUIRE(Value::Equals(other_chunk.data[0].GetValue(0), a));
-	REQUIRE(Value::Equals(other_chunk.data[0].GetValue(1), b));
+	REQUIRE(ValueOperations::Equals(other_chunk.data[0].GetValue(0), a));
+	REQUIRE(ValueOperations::Equals(other_chunk.data[0].GetValue(1), b));
 	REQUIRE(other_chunk.data[1].count == 2);
-	REQUIRE(Value::Equals(other_chunk.data[1].GetValue(0), c));
-	REQUIRE(Value::Equals(other_chunk.data[1].GetValue(1), d));
+	REQUIRE(ValueOperations::Equals(other_chunk.data[1].GetValue(0), c));
+	REQUIRE(ValueOperations::Equals(other_chunk.data[1].GetValue(1), d));
 }
 
 TEST_CASE("Value serialization", "[serializer]") {
@@ -83,23 +84,23 @@ TEST_CASE("Value serialization", "[serializer]") {
 	Value a1, b1, c1, d1, e1, f1, g1, h1, i1, j1;
 
 	REQUIRE_NOTHROW(a1 = Value::Deserialize(source));
-	REQUIRE(Value::Equals(a, a1));
+	REQUIRE(ValueOperations::Equals(a, a1));
 	REQUIRE_NOTHROW(b1 = Value::Deserialize(source));
-	REQUIRE(Value::Equals(b, b1));
+	REQUIRE(ValueOperations::Equals(b, b1));
 	REQUIRE_NOTHROW(c1 = Value::Deserialize(source));
-	REQUIRE(Value::Equals(c, c1));
+	REQUIRE(ValueOperations::Equals(c, c1));
 	REQUIRE_NOTHROW(d1 = Value::Deserialize(source));
-	REQUIRE(Value::Equals(d, d1));
+	REQUIRE(ValueOperations::Equals(d, d1));
 	REQUIRE_NOTHROW(e1 = Value::Deserialize(source));
-	REQUIRE(Value::Equals(e, e1));
+	REQUIRE(ValueOperations::Equals(e, e1));
 	REQUIRE_NOTHROW(f1 = Value::Deserialize(source));
-	REQUIRE(Value::Equals(f, f1));
+	REQUIRE(ValueOperations::Equals(f, f1));
 	REQUIRE_NOTHROW(g1 = Value::Deserialize(source));
-	REQUIRE(Value::Equals(g, g1));
+	REQUIRE(ValueOperations::Equals(g, g1));
 	REQUIRE_NOTHROW(h1 = Value::Deserialize(source));
-	REQUIRE(Value::Equals(h, h1));
+	REQUIRE(ValueOperations::Equals(h, h1));
 	REQUIRE_NOTHROW(i1 = Value::Deserialize(source));
-	REQUIRE(Value::Equals(i, i1));
+	REQUIRE(ValueOperations::Equals(i, i1));
 	// try to deserialize too much, should throw a serialization exception
 	REQUIRE_THROWS(j1 = Value::Deserialize(source));
 }

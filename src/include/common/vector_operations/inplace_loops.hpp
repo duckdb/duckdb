@@ -12,7 +12,7 @@
 
 #include "common/exception.hpp"
 #include "common/types/vector.hpp"
-#include "common/types/vector_operations.hpp"
+#include "common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
 

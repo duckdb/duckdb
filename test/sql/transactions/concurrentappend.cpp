@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "common/value_operations/value_operations.hpp"
 #include "test_helpers.hpp"
 
 #include <random>
@@ -27,13 +28,14 @@ TEST_CASE("Sequential append", "[transactions]") {
 	for (size_t i = 0; i < THREAD_COUNT; i++) {
 		result = connections[i]->Query("SELECT COUNT(*) FROM integers");
 		Value count = result->collection.chunks[0]->data[0].GetValue(0);
-		REQUIRE(Value::Equals(count, Value::Numeric(TypeId::BIGINT, 0)));
+		REQUIRE(
+		    ValueOperations::Equals(count, Value::Numeric(TypeId::BIGINT, 0)));
 		for (size_t j = 0; j < INSERT_ELEMENTS; j++) {
 			connections[i]->Query("INSERT INTO integers VALUES (3)");
 			result = connections[i]->Query("SELECT COUNT(*) FROM integers");
 			Value new_count = result->collection.chunks[0]->data[0].GetValue(0);
-			REQUIRE(Value::Equals(new_count,
-			                      Value::Numeric(TypeId::BIGINT, j + 1)));
+			REQUIRE(ValueOperations::Equals(
+			    new_count, Value::Numeric(TypeId::BIGINT, j + 1)));
 			count = new_count;
 		}
 	}
@@ -43,7 +45,7 @@ TEST_CASE("Sequential append", "[transactions]") {
 	}
 	result = con.Query("SELECT COUNT(*) FROM integers");
 	Value count = result->collection.chunks[0]->data[0].GetValue(0);
-	REQUIRE(Value::Equals(
+	REQUIRE(ValueOperations::Equals(
 	    count, Value::Numeric(TypeId::BIGINT, THREAD_COUNT * INSERT_ELEMENTS)));
 }
 
@@ -62,7 +64,7 @@ static void insert_random_elements(DuckDB *db) {
 		con.Query("INSERT INTO integers VALUES (3)");
 		result = con.Query("SELECT COUNT(*) FROM integers");
 		Value new_count = result->collection.chunks[0]->data[0].GetValue(0);
-		REQUIRE(Value::Equals(
+		REQUIRE(ValueOperations::Equals(
 		    new_count, Value::Numeric(TypeId::BIGINT, start_count + i + 1)));
 		count = new_count;
 	}

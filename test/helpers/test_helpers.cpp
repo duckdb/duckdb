@@ -1,4 +1,5 @@
 
+#include "common/value_operations/value_operations.hpp"
 #include "compare_result.hpp"
 
 using namespace std;
@@ -59,7 +60,7 @@ bool CHECK_COLUMN(unique_ptr<duckdb::DuckDBResult> &result,
 			if (vector.GetValue(j).is_null && values[i + j].is_null) {
 				continue;
 			}
-			if (!Value::Equals(vector.GetValue(j), values[i + j])) {
+			if (!ValueOperations::Equals(vector.GetValue(j), values[i + j])) {
 				// FAIL("Incorrect result! Got " + vector.GetValue(j).ToString()
 				// +
 				//      " but expected " + values[i + j].ToString());
@@ -205,7 +206,7 @@ bool compare_result(string csv, ChunkCollection &collection, bool has_header,
 					}
 				}
 			} else {
-				if (!Value::Equals(value, result_value)) {
+				if (!ValueOperations::Equals(value, result_value)) {
 					goto incorrect;
 				}
 			}

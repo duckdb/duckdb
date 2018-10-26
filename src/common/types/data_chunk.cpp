@@ -1,7 +1,7 @@
 
 #include "common/types/data_chunk.hpp"
 #include "common/types/null_value.hpp"
-#include "common/types/vector_operations.hpp"
+#include "common/vector_operations/vector_operations.hpp"
 
 #include "common/exception.hpp"
 #include "common/helper.hpp"

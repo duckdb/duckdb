@@ -7,8 +7,9 @@
 #include "common/operator/aggregate_operators.hpp"
 #include "common/operator/constant_operators.hpp"
 #include "common/operator/numeric_binary_operators.hpp"
-#include "common/types/vector_operations.hpp"
+#include "common/value_operations/value_operations.hpp"
 #include "common/vector_operations/fold_loops.hpp"
+#include "common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -63,7 +64,8 @@ Value VectorOperations::Sum(Vector &left) {
 	is_null.Initialize(TypeId::BOOLEAN);
 	VectorOperations::IsNull(left, is_null);
 
-	if (Value::Equals(VectorOperations::AllTrue(is_null), Value(true))) {
+	if (ValueOperations::Equals(VectorOperations::AllTrue(is_null),
+	                            Value(true))) {
 		result.is_null = true;
 	} else {
 		generic_fold_loop<operators::Add>(left, result);
@@ -84,8 +86,8 @@ Value VectorOperations::Max(Vector &left) {
 	Value minimum_value = Value::MinimumValue(left.type);
 	Value result = minimum_value;
 	generic_fold_loop<operators::Max>(left, result);
-	result.is_null =
-	    Value::Equals(result, minimum_value); // check if any tuples qualified
+	result.is_null = ValueOperations::Equals(
+	    result, minimum_value); // check if any tuples qualified
 	return result;
 }
 
@@ -96,8 +98,8 @@ Value VectorOperations::Min(Vector &left) {
 	Value maximum_value = Value::MaximumValue(left.type);
 	Value result = maximum_value;
 	generic_fold_loop<operators::Min>(left, result);
-	result.is_null =
-	    Value::Equals(result, maximum_value); // check if any tuples qualified
+	result.is_null = ValueOperations::Equals(
+	    result, maximum_value); // check if any tuples qualified
 	return result;
 }
 

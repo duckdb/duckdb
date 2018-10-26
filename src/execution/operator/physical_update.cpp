@@ -1,7 +1,7 @@
 #include "execution/operator/physical_update.hpp"
 #include "execution/expression_executor.hpp"
 
-#include "common/types/vector_operations.hpp"
+#include "common/vector_operations/vector_operations.hpp"
 
 #include "main/client_context.hpp"
 

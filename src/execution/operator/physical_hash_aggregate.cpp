@@ -1,6 +1,6 @@
 
 #include "execution/operator/physical_hash_aggregate.hpp"
-#include "common/types/vector_operations.hpp"
+#include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
 
 #include "parser/expression/aggregate_expression.hpp"

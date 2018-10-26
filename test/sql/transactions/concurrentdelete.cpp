@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "common/value_operations/value_operations.hpp"
 #include "test_helpers.hpp"
 
 #include <random>
@@ -69,7 +70,8 @@ TEST_CASE("Sequential delete", "[transactions]") {
 		REQUIRE_NO_FAIL(
 		    result = connections[i]->Query("SELECT SUM(i) FROM integers"));
 		count = result->collection.chunks[0]->data[0].GetValue(0);
-		REQUIRE(Value::Equals(count, Value::Numeric(TypeId::BIGINT, sum)));
+		REQUIRE(ValueOperations::Equals(count,
+		                                Value::Numeric(TypeId::BIGINT, sum)));
 		// delete the elements for this thread
 		REQUIRE_NO_FAIL(connections[i]->Query("DELETE FROM integers WHERE i=" +
 		                                      to_string(i + 1)));
@@ -77,14 +79,15 @@ TEST_CASE("Sequential delete", "[transactions]") {
 		REQUIRE_NO_FAIL(
 		    result = connections[i]->Query("SELECT SUM(i) FROM integers"));
 		count = result->collection.chunks[0]->data[0].GetValue(0);
-		REQUIRE(Value::Equals(
+		REQUIRE(ValueOperations::Equals(
 		    count,
 		    Value::Numeric(TypeId::BIGINT, sum - (i + 1) * INSERT_ELEMENTS)));
 	}
 	// check the count on the original connection
 	REQUIRE_NO_FAIL(result = con.Query("SELECT SUM(i) FROM integers"));
 	count = result->collection.chunks[0]->data[0].GetValue(0);
-	REQUIRE(Value::Equals(count, Value::Numeric(TypeId::BIGINT, sum)));
+	REQUIRE(
+	    ValueOperations::Equals(count, Value::Numeric(TypeId::BIGINT, sum)));
 
 	// commit everything
 	for (size_t i = 0; i < THREAD_COUNT; i++) {
@@ -94,7 +97,7 @@ TEST_CASE("Sequential delete", "[transactions]") {
 	// check that the count is 0 now
 	REQUIRE_NO_FAIL(result = con.Query("SELECT COUNT(i) FROM integers"));
 	count = result->collection.chunks[0]->data[0].GetValue(0);
-	REQUIRE(Value::Equals(count, Value::Numeric(TypeId::BIGINT, 0)));
+	REQUIRE(ValueOperations::Equals(count, Value::Numeric(TypeId::BIGINT, 0)));
 }
 
 TEST_CASE("Rollback delete", "[transactions]") {
@@ -155,7 +158,7 @@ static void _delete_elements(DuckDB *db, size_t threadnr) {
 		    con.Query("DELETE FROM integers WHERE i=" + to_string(element)));
 		REQUIRE_NO_FAIL(result = con.Query("SELECT COUNT(*) FROM integers"));
 		Value new_count = result->collection.chunks[0]->data[0].GetValue(0);
-		REQUIRE(Value::Equals(
+		REQUIRE(ValueOperations::Equals(
 		    new_count, Value::Numeric(TypeId::BIGINT, start_count - (i + 1))));
 		count = new_count;
 	}
@@ -194,5 +197,5 @@ TEST_CASE("Concurrent delete", "[transactions][.]") {
 	// check that the count is 0 now
 	REQUIRE_NO_FAIL(result = con.Query("SELECT COUNT(i) FROM integers"));
 	auto count = result->collection.chunks[0]->data[0].GetValue(0);
-	REQUIRE(Value::Equals(count, Value::Numeric(TypeId::BIGINT, 0)));
+	REQUIRE(ValueOperations::Equals(count, Value::Numeric(TypeId::BIGINT, 0)));
 }

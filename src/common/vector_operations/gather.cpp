@@ -6,7 +6,7 @@
 #include "common/exception.hpp"
 #include "common/operator/constant_operators.hpp"
 #include "common/types/null_value.hpp"
-#include "common/types/vector_operations.hpp"
+#include "common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
