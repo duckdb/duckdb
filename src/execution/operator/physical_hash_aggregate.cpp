@@ -40,7 +40,7 @@ void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk,
 			// resolve the child chunk if there is one
 			children[0]->GetChunk(context, state->child_chunk,
 			                      state->child_state.get());
-			if (state->child_chunk.count == 0) {
+			if (state->child_chunk.size() == 0) {
 				break;
 			}
 		}
@@ -82,14 +82,15 @@ void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk,
 				}
 			}
 		}
-	} while (state->child_chunk.count > 0);
+	} while (state->child_chunk.size() > 0);
 
 	if (groups.size() > 0) {
 		state->group_chunk.Reset();
 		state->aggregate_chunk.Reset();
-		state->ht->Scan(state->ht_scan_position, state->group_chunk,
-		                state->aggregate_chunk);
-		if (state->aggregate_chunk.count == 0) {
+		size_t elements_found =
+		    state->ht->Scan(state->ht_scan_position, state->group_chunk,
+		                    state->aggregate_chunk);
+		if (elements_found == 0) {
 			state->finished = true;
 			return;
 		}

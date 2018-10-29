@@ -263,7 +263,7 @@ string UniqueIndex::Append(Transaction &transaction,
 
 		// create the row number vector
 		Vector row_numbers(TypeId::POINTER, true, false);
-		row_numbers.count = chunk.count;
+		row_numbers.count = chunk.size();
 		VectorOperations::GenerateSequence(row_numbers, row_identifier_start);
 
 		// now actually add the entries to this index
@@ -278,7 +278,7 @@ string UniqueIndex::Append(Transaction &transaction,
 		// something went wrong! we have to revert all the additions
 		for (size_t k = current_index; k > 0; k--) {
 			auto &index = *indexes[k - 1];
-			for (size_t j = chunk.count; j > 0; j--) {
+			for (size_t j = chunk.size(); j > 0; j--) {
 				if (added_nodes[j - 1]) {
 					index.RemoveEntry(added_nodes[k - 1][j - 1]);
 				}
@@ -346,8 +346,8 @@ string UniqueIndex::Update(Transaction &transaction, StorageChunk *storage,
 
 		// check if there are duplicates in the tuples themselves
 		// FIXME: this should use a hash set or a tree
-		for (size_t i = 0; i < update_chunk.count; i++) {
-			for (size_t j = i + 1; j < update_chunk.count; j++) {
+		for (size_t i = 0; i < update_chunk.size(); i++) {
+			for (size_t j = i + 1; j < update_chunk.size(); j++) {
 				if (index.serializer.Compare(tuples[i], tuples[j]) == 0) {
 					error = "PRIMARY KEY or UNIQUE constraint violated: "
 					        "duplicated key";
@@ -369,7 +369,7 @@ string UniqueIndex::Update(Transaction &transaction, StorageChunk *storage,
 		if (!error.empty()) {
 			break;
 		}
-		added_nodes_count[current_index] = update_chunk.count;
+		added_nodes_count[current_index] = update_chunk.size();
 	}
 	if (current_index != indexes.size()) {
 		// something went wrong! we have to revert all the additions

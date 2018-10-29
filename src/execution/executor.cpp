@@ -19,6 +19,6 @@ ChunkCollection Executor::Execute(ClientContext &context,
 		plan->InitializeChunk(*chunk.get());
 		plan->GetChunk(context, *chunk, state.get());
 		result.Append(*chunk);
-	} while (chunk->count > 0);
+	} while (chunk->size() > 0);
 	return result;
 }

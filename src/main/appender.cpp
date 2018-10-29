@@ -30,38 +30,44 @@ void Appender::check_append(TypeId type) {
 
 void Appender::append_tinyint(int8_t value) {
 	check_append(TypeId::TINYINT);
-	((int32_t *)chunk.data[column++].data)[chunk.count] = value;
+	auto &col = chunk.data[column++];
+	((int8_t *)col.data)[col.count++] = value;
 }
 
 void Appender::append_smallint(int16_t value) {
 	check_append(TypeId::SMALLINT);
-	((int32_t *)chunk.data[column++].data)[chunk.count] = value;
+	auto &col = chunk.data[column++];
+	((int16_t *)col.data)[col.count++] = value;
 }
 
 void Appender::append_int(int value) {
 	check_append(TypeId::INTEGER);
-	((int32_t *)chunk.data[column++].data)[chunk.count] = value;
+	auto &col = chunk.data[column++];
+	((int32_t *)col.data)[col.count++] = value;
 }
 
 void Appender::append_bigint(int64_t value) {
 	check_append(TypeId::BIGINT);
-	((int64_t *)chunk.data[column++].data)[chunk.count] = value;
+	auto &col = chunk.data[column++];
+	((int64_t *)col.data)[col.count++] = value;
 }
 
 void Appender::append_string(const char *value) {
 	check_append(TypeId::VARCHAR);
-	((const char **)chunk.data[column++].data)[chunk.count] = value;
+	auto &col = chunk.data[column++];
+	((const char **)col.data)[col.count++] = value;
 }
 
 void Appender::append_double(double value) {
 	check_append(TypeId::DECIMAL);
-	((double *)chunk.data[column++].data)[chunk.count] = value;
+	auto &col = chunk.data[column++];
+	((double *)col.data)[col.count++] = value;
 }
 
 void Appender::append_value(Value value) {
 	check_append();
-	chunk.data[column].count++;
-	chunk.data[column++].SetValue(chunk.count, value);
+	chunk.data[column].SetValue(chunk.data[column].count++, value);
+	column++;
 }
 
 void Appender::end_append_row() {
@@ -70,16 +76,12 @@ void Appender::end_append_row() {
 		throw Exception("Call to end_append_row() without all rows having been "
 		                "appended to!");
 	}
-	chunk.count++;
-	if (chunk.count >= STANDARD_VECTOR_SIZE) {
+	if (chunk.size() >= STANDARD_VECTOR_SIZE) {
 		flush();
 	}
 }
 
 void Appender::flush() {
-	for (size_t i = 0; i < chunk.column_count; i++) {
-		chunk.data[i].count = chunk.count;
-	}
 	table_entry->storage->Append(context, chunk);
 	chunk.Reset();
 	column = 0;

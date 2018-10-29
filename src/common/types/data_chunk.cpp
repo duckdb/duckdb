@@ -10,12 +10,10 @@
 using namespace duckdb;
 using namespace std;
 
-DataChunk::DataChunk()
-    : count(0), column_count(0), data(nullptr), sel_vector(nullptr) {
+DataChunk::DataChunk() : column_count(0), data(nullptr), sel_vector(nullptr) {
 }
 
 void DataChunk::Initialize(std::vector<TypeId> &types, bool zero_data) {
-	count = 0;
 	column_count = types.size();
 	size_t size = 0;
 	for (auto &type : types) {
@@ -41,7 +39,6 @@ void DataChunk::Initialize(std::vector<TypeId> &types, bool zero_data) {
 }
 
 void DataChunk::Reset() {
-	count = 0;
 	char *ptr = owned_data.get();
 	for (size_t i = 0; i < column_count; i++) {
 		data[i].data = ptr;
@@ -59,7 +56,6 @@ void DataChunk::Destroy() {
 	owned_data.reset();
 	sel_vector = nullptr;
 	column_count = 0;
-	count = 0;
 }
 
 void DataChunk::Copy(DataChunk &other, size_t offset) {
@@ -69,12 +65,10 @@ void DataChunk::Copy(DataChunk &other, size_t offset) {
 	for (size_t i = 0; i < column_count; i++) {
 		data[i].Copy(other.data[i], offset);
 	}
-	other.count = other.data[0].count;
 }
 
 void DataChunk::Move(DataChunk &other) {
 	other.column_count = column_count;
-	other.count = count;
 	other.data = move(data);
 	other.owned_data = move(owned_data);
 	if (sel_vector) {
@@ -100,7 +94,7 @@ void DataChunk::Flatten() {
 }
 
 void DataChunk::Append(DataChunk &other) {
-	if (other.count == 0) {
+	if (other.size() == 0) {
 		return;
 	}
 	if (column_count != other.column_count) {
@@ -113,14 +107,13 @@ void DataChunk::Append(DataChunk &other) {
 			                            "Column types do not match!");
 		}
 	}
-	if (count + other.count > STANDARD_VECTOR_SIZE) {
+	if (size() + other.size() > STANDARD_VECTOR_SIZE) {
 		throw OutOfRangeException(
 		    "Count of chunk cannot exceed STANDARD_VECTOR_SIZE!");
 	}
 	for (size_t i = 0; i < column_count; i++) {
 		data[i].Append(other.data[i]);
 	}
-	count += other.count;
 }
 
 void DataChunk::MergeSelVector(sel_t *current_vector, sel_t *new_vector,
@@ -159,9 +152,8 @@ void DataChunk::SetSelectionVector(Vector &matches) {
 			sel_vector = owned_sel_vector;
 		}
 	}
-	count = match_count;
 	for (size_t i = 0; i < column_count; i++) {
-		data[i].count = this->count;
+		data[i].count = match_count;
 		data[i].sel_vector = sel_vector;
 	}
 }
@@ -184,7 +176,7 @@ string DataChunk::ToString() const {
 
 void DataChunk::Serialize(Serializer &serializer) {
 	// write the count
-	serializer.Write<sel_t>(count);
+	serializer.Write<sel_t>(size());
 	serializer.Write<uint64_t>(column_count);
 	for (size_t i = 0; i < column_count; i++) {
 		// write the types
@@ -194,7 +186,7 @@ void DataChunk::Serialize(Serializer &serializer) {
 	for (size_t i = 0; i < column_count; i++) {
 		auto type = data[i].type;
 		if (TypeIsConstantSize(type)) {
-			auto ptr = serializer.ManualWrite(GetTypeIdSize(type) * count);
+			auto ptr = serializer.ManualWrite(GetTypeIdSize(type) * size());
 			// constant size type: simple memcpy
 			VectorOperations::CopyToStorage(data[i], ptr);
 		} else {
@@ -202,7 +194,7 @@ void DataChunk::Serialize(Serializer &serializer) {
 			// strings are inlined into the blob
 			// we use null-padding to store them
 			const char **strings = (const char **)data[i].data;
-			for (size_t j = 0; j < count; j++) {
+			for (size_t j = 0; j < size(); j++) {
 				auto source =
 				    strings[j] ? strings[j] : NullValue<const char *>();
 				serializer.WriteString(source);
@@ -247,7 +239,6 @@ void DataChunk::Deserialize(Deserializer &source) {
 		}
 		data[i].count = rows;
 	}
-	count = rows;
 	Verify();
 }
 
@@ -276,7 +267,7 @@ void DataChunk::Verify() {
 	}
 	// verify that all vectors in the chunk have the same count
 	for (size_t i = 0; i < column_count; i++) {
-		assert(count == data[i].count);
+		assert(size() == data[i].count);
 	}
 }
 #endif

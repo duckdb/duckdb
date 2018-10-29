@@ -32,7 +32,6 @@ void ExpressionExecutor::Execute(DataChunk &result,
 			ExecuteExpression(expression, result.data[i]);
 		}
 		result.sel_vector = result.data[i].sel_vector;
-		result.count = result.data[i].count;
 		result.heap.MergeHeap(result.data[i].string_heap);
 	}
 }
@@ -55,14 +54,14 @@ void ExpressionExecutor::ExecuteExpression(Expression *expr, Vector &result) {
 
 	if (chunk && scalar_executor) {
 		if (vector.count == 1 &&
-		    (chunk->count > 1 || vector.sel_vector != chunk->sel_vector)) {
+		    (chunk->size() > 1 || vector.sel_vector != chunk->sel_vector)) {
 			// have to duplicate the constant value to match the rows in the
 			// other columns
-			result.count = chunk->count;
+			result.count = chunk->size();
 			result.sel_vector = chunk->sel_vector;
 			VectorOperations::Set(result, vector.GetValue(0));
 			result.Move(vector);
-		} else if (vector.count != chunk->count) {
+		} else if (vector.count != chunk->size()) {
 			throw Exception(
 			    "Computed vector length does not match expected length!");
 		}
@@ -96,12 +95,12 @@ Value ExpressionExecutor::ExecuteAggregate(AggregateExpression &expr) {
 	if (expr.type == ExpressionType::AGGREGATE_COUNT_STAR) {
 		// COUNT(*)
 		// Without FROM clause return "1", else return "count"
-		size_t count = chunk->column_count == 0 ? 1 : chunk->count;
+		size_t count = chunk->column_count == 0 ? 1 : chunk->size();
 		return Value::Numeric(expr.return_type, count);
 	} else if (expr.children.size() > 0) {
 		expr.children[0]->Accept(this);
-		if (vector.count == 1 && vector.count < chunk->count) {
-			vector.count = chunk->count;
+		if (vector.count == 1 && vector.count < chunk->size()) {
+			vector.count = chunk->size();
 			VectorOperations::Set(vector, vector.GetValue(0));
 		}
 		switch (expr.type) {
@@ -404,24 +403,22 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 
 			// row chunk is used to handle correlated subqueries
 			row_chunk.Initialize(types, true);
-			row_chunk.count = 1;
-
 			for (size_t c = 0; c < old_chunk->column_count; c++) {
 				row_chunk.data[c].count = 1;
 			}
 
 			// l could be scalar, make sure we have the same counts everywhere
-			if (l.count != old_chunk->count) {
-				l.count = old_chunk->count;
+			if (l.count != old_chunk->size()) {
+				l.count = old_chunk->size();
 				// replicate
 				VectorOperations::Set(l, l.GetValue(0));
-				result.count = old_chunk->count;
+				result.count = old_chunk->size();
 			}
 
-			assert(l.count == old_chunk->count);
-			assert(result.count == old_chunk->count);
+			assert(l.count == old_chunk->size());
+			assert(result.count == old_chunk->size());
 
-			for (size_t r = 0; r < old_chunk->count; r++) {
+			for (size_t r = 0; r < old_chunk->size(); r++) {
 				for (size_t c = 0; c < old_chunk->column_count; c++) {
 					row_chunk.data[c].SetValue(0,
 					                           old_chunk->data[c].GetValue(r));
@@ -432,7 +429,7 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 				plan->GetChunk(context, s_chunk, state.get());
 
 				// easy case, subquery yields no result, so result is false
-				if (s_chunk.count == 0) {
+				if (s_chunk.size() == 0) {
 					result.SetValue(r, Value(false));
 					continue;
 				}
@@ -572,13 +569,12 @@ void ExpressionExecutor::Visit(SubqueryExpression &expr) {
 		chunk = &row_chunk;
 		auto types = old_chunk->GetTypes();
 		row_chunk.Initialize(types, true);
-		row_chunk.count = 1;
 		for (size_t c = 0; c < old_chunk->column_count; c++) {
 			row_chunk.data[c].count = 1;
 		}
 	}
 	vector.Initialize(expr.return_type);
-	vector.count = old_chunk ? old_chunk->count : 1;
+	vector.count = old_chunk ? old_chunk->size() : 1;
 	vector.sel_vector = old_chunk ? old_chunk->sel_vector : nullptr;
 
 	for (size_t r = 0; r < vector.count; r++) {
@@ -594,7 +590,7 @@ void ExpressionExecutor::Visit(SubqueryExpression &expr) {
 
 		switch (expr.subquery_type) {
 		case SubqueryType::DEFAULT:
-			if (s_chunk.count == 0) {
+			if (s_chunk.size() == 0) {
 				vector.SetValue(r, Value());
 			} else {
 				assert(s_chunk.column_count > 0);
@@ -604,7 +600,7 @@ void ExpressionExecutor::Visit(SubqueryExpression &expr) {
 
 		case SubqueryType::IN: // in case is handled separately above
 		case SubqueryType::EXISTS:
-			vector.SetValue(r, Value::BOOLEAN(s_chunk.count != 0));
+			vector.SetValue(r, Value::BOOLEAN(s_chunk.size() != 0));
 			break;
 		default:
 			throw NotImplementedException("Subquery type not implemented");

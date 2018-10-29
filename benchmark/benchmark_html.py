@@ -67,7 +67,7 @@ def get_benchmarks(results_folder):
 				benchmarks_per_group[group] = []
 				groups.append(group)
 			benchmarks_per_group[group].append(len(benchmarks))
-			benchmarks.append([name, description])
+			benchmarks.append([name, description, info_file])
 	return (benchmarks, groups, benchmarks_per_group)
 
 def begin_row(f):
@@ -193,7 +193,7 @@ def create_html(results_folder):
 				begin_row(f)
 				# benchmark name
 				begin_value(f)
-				f.write(benchmark_name)
+				f.write('<a href="benchmark_results/info/%s">%s</a>' % (benchmark_name,benchmark_name))
 				end_value(f)
 				# benchmark results
 				for result in results:

@@ -50,7 +50,7 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 		do {
 			children[1]->GetChunk(context, new_chunk, right_state.get());
 			state->right_chunks.Append(new_chunk);
-		} while (new_chunk.count > 0);
+		} while (new_chunk.size() > 0);
 
 		if (state->right_chunks.count == 0) {
 			return;
@@ -70,11 +70,11 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 	do {
 		chunk.Reset();
 		// first check if we have to fetch a new chunk from the left child
-		if (state->left_position >= state->child_chunk.count) {
+		if (state->left_position >= state->child_chunk.size()) {
 			// if we have exhausted the current left chunk, fetch a new one
 			children[0]->GetChunk(context, state->child_chunk,
 			                      state->child_state.get());
-			if (state->child_chunk.count == 0) {
+			if (state->child_chunk.size() == 0) {
 				return;
 			}
 			state->left_position = 0;
@@ -150,14 +150,13 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 		assert(final_result.type == TypeId::BOOLEAN);
 		// now we have the final result, create a selection vector from it
 		chunk.SetSelectionVector(final_result);
-		if (chunk.count > 0) {
+		if (chunk.size() > 0) {
 			// we have elements in our join!
 			// use the zero selection vector to prevent duplication on the left
 			// side
 			for (size_t i = 0; i < left_chunk.column_count; i++) {
 				// first duplicate the values of the left side using the
 				// selection vector
-				chunk.data[i].count = chunk.count;
 				VectorOperations::Set(
 				    chunk.data[i],
 				    left_chunk.data[i].GetValue(state->left_position));
@@ -167,8 +166,8 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 				// now create a reference to the vectors of the right chunk
 				size_t chunk_entry = left_chunk.column_count + i;
 				chunk.data[chunk_entry].Reference(right_chunk.data[i]);
-				chunk.data[chunk_entry].count = chunk.count;
 				chunk.data[chunk_entry].sel_vector = chunk.sel_vector;
+				chunk.data[chunk_entry].count = chunk.size();
 			}
 		}
 
@@ -179,9 +178,7 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 			state->left_position++;
 			state->right_chunk = 0;
 		}
-	} while (chunk.count == 0);
-
-	chunk.Verify();
+	} while (chunk.size() == 0);
 }
 
 std::unique_ptr<PhysicalOperatorState>

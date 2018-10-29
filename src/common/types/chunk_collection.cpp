@@ -6,15 +6,15 @@ using namespace duckdb;
 using namespace std;
 
 void ChunkCollection::Append(DataChunk &new_chunk) {
-	if (new_chunk.count == 0) {
+	if (new_chunk.size() == 0) {
 		return;
 	}
 	// we have to ensure that every chunk in the ChunkCollection is completely
 	// filled, otherwise our O(1) lookup in GetValue and SetValue does not work
 	// first fill the latest chunk, if it exists
-	count += new_chunk.count;
+	count += new_chunk.size();
 
-	size_t remaining_data = new_chunk.count;
+	size_t remaining_data = new_chunk.size();
 	size_t offset = 0;
 	if (chunks.size() == 0) {
 		// first chunk
@@ -32,18 +32,16 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 		// first append data to the current chunk
 		DataChunk &last_chunk = *chunks.back();
 		size_t added_data =
-		    std::min(remaining_data, STANDARD_VECTOR_SIZE - last_chunk.count);
+		    std::min(remaining_data, STANDARD_VECTOR_SIZE - last_chunk.size());
 		if (added_data > 0) {
 			// copy <added_data> elements to the last chunk
-			size_t old_count = new_chunk.count;
-			new_chunk.count = added_data;
+			size_t old_count = new_chunk.size();
 			for (size_t c = 0; c < new_chunk.column_count; c++) {
 				new_chunk.data[c].count = added_data;
 			}
 			last_chunk.Append(new_chunk);
 			remaining_data -= added_data;
 			// reset the chunk to the old data
-			new_chunk.count = old_count;
 			for (size_t c = 0; c < new_chunk.column_count; c++) {
 				new_chunk.data[c].count = old_count;
 			}

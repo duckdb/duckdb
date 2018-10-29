@@ -40,7 +40,6 @@ void PhysicalCreate::_GetChunk(ClientContext &context, DataChunk &chunk,
 
 	chunk.data[0].count = 1;
 	chunk.data[0].SetValue(0, Value::BIGINT(inserted_count));
-	chunk.count = 1;
 
 	state->finished = true;
 }

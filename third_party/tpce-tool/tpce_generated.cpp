@@ -64,15 +64,14 @@ static void append_to_append_info(tpce_append_information & info) {
 		// initalize the chunk
 		auto types = table->GetTypes();
 		chunk.Initialize(types);
-	} else if (chunk.count >= STANDARD_VECTOR_SIZE) {
+	} else if (chunk.size() >= STANDARD_VECTOR_SIZE) {
 		// flush the chunk
 		table->storage->Append(*info.context, chunk);
 		// have to reset the chunk
 		chunk.Reset();
 	}
-	chunk.count++;
 	for (size_t i = 0; i < chunk.column_count; i++) {
-		chunk.data[i].count = chunk.count;
+		chunk.data[i].count++;
 	}
 }
 
@@ -104,7 +103,7 @@ public:
 	void WriteNextRecord(const SECTOR_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_string(chunk, index, column, next_record.SC_ID);
@@ -123,7 +122,7 @@ public:
 	void WriteNextRecord(const LAST_TRADE_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_string(chunk, index, column, next_record.LT_S_SYMB);
@@ -145,7 +144,7 @@ public:
 	void WriteNextRecord(const FINANCIAL_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_bigint(chunk, index, column, next_record.FI_CO_ID);
@@ -176,7 +175,7 @@ public:
 	void WriteNextRecord(const TRADE_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_bigint(chunk, index, column, next_record.T_ID);
@@ -208,7 +207,7 @@ public:
 	void WriteNextRecord(const SETTLEMENT_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_bigint(chunk, index, column, next_record.SE_T_ID);
@@ -229,7 +228,7 @@ public:
 	void WriteNextRecord(const COMMISSION_RATE_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_value(chunk, index, column, next_record.CR_C_TIER);
@@ -252,7 +251,7 @@ public:
 	void WriteNextRecord(const CUSTOMER_ACCOUNT_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_bigint(chunk, index, column, next_record.CA_ID);
@@ -275,7 +274,7 @@ public:
 	void WriteNextRecord(const CASH_TRANSACTION_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_bigint(chunk, index, column, next_record.CT_T_ID);
@@ -296,7 +295,7 @@ public:
 	void WriteNextRecord(const TAX_RATE_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_string(chunk, index, column, next_record.TX_ID);
@@ -316,7 +315,7 @@ public:
 	void WriteNextRecord(const CUSTOMER_TAXRATE_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_string(chunk, index, column, next_record.CX_TX_ID);
@@ -335,7 +334,7 @@ public:
 	void WriteNextRecord(const NEWS_XREF_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_bigint(chunk, index, column, next_record.NX_NI_ID);
@@ -354,7 +353,7 @@ public:
 	void WriteNextRecord(const CHARGE_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_string(chunk, index, column, next_record.CH_TT_ID);
@@ -374,7 +373,7 @@ public:
 	void WriteNextRecord(const TRADE_TYPE_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_string(chunk, index, column, next_record.TT_ID);
@@ -395,7 +394,7 @@ public:
 	void WriteNextRecord(const HOLDING_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_bigint(chunk, index, column, next_record.H_T_ID);
@@ -418,7 +417,7 @@ public:
 	void WriteNextRecord(const DAILY_MARKET_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_timestamp(chunk, index, column, next_record.DM_DATE);
@@ -441,7 +440,7 @@ public:
 	void WriteNextRecord(const EXCHANGE_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_string(chunk, index, column, next_record.EX_ID);
@@ -465,7 +464,7 @@ public:
 	void WriteNextRecord(const COMPANY_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_bigint(chunk, index, column, next_record.CO_ID);
@@ -491,7 +490,7 @@ public:
 	void WriteNextRecord(const COMPANY_COMPETITOR_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_bigint(chunk, index, column, next_record.CP_CO_ID);
@@ -511,7 +510,7 @@ public:
 	void WriteNextRecord(const ACCOUNT_PERMISSION_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_bigint(chunk, index, column, next_record.AP_CA_ID);
@@ -533,7 +532,7 @@ public:
 	void WriteNextRecord(const BROKER_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_bigint(chunk, index, column, next_record.B_ID);
@@ -555,7 +554,7 @@ public:
 	void WriteNextRecord(const TRADE_HISTORY_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_bigint(chunk, index, column, next_record.TH_T_ID);
@@ -575,7 +574,7 @@ public:
 	void WriteNextRecord(const WATCH_ITEM_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_bigint(chunk, index, column, next_record.WI_WL_ID);
@@ -594,7 +593,7 @@ public:
 	void WriteNextRecord(const HOLDING_HISTORY_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_bigint(chunk, index, column, next_record.HH_H_T_ID);
@@ -615,7 +614,7 @@ public:
 	void WriteNextRecord(const ADDRESS_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_bigint(chunk, index, column, next_record.AD_ID);
@@ -637,7 +636,7 @@ public:
 	void WriteNextRecord(const NEWS_ITEM_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_bigint(chunk, index, column, next_record.NI_ID);
@@ -661,7 +660,7 @@ public:
 	void WriteNextRecord(const WATCH_LIST_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_bigint(chunk, index, column, next_record.WL_ID);
@@ -680,7 +679,7 @@ public:
 	void WriteNextRecord(const CUSTOMER_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_bigint(chunk, index, column, next_record.C_ID);
@@ -721,7 +720,7 @@ public:
 	void WriteNextRecord(const HOLDING_SUMMARY_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_bigint(chunk, index, column, next_record.HS_CA_ID);
@@ -741,7 +740,7 @@ public:
 	void WriteNextRecord(const STATUS_TYPE_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_string(chunk, index, column, next_record.ST_ID);
@@ -760,7 +759,7 @@ public:
 	void WriteNextRecord(const INDUSTRY_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_string(chunk, index, column, next_record.IN_ID);
@@ -780,7 +779,7 @@ public:
 	void WriteNextRecord(const ZIP_CODE_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_string(chunk, index, column, next_record.ZC_CODE);
@@ -800,7 +799,7 @@ public:
 	void WriteNextRecord(const TRADE_REQUEST_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_bigint(chunk, index, column, next_record.TR_T_ID);
@@ -823,7 +822,7 @@ public:
 	void WriteNextRecord(const SECURITY_ROW &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		append_string(chunk, index, column, next_record.S_SYMB);

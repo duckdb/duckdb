@@ -38,7 +38,7 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk,
 		while (true) {
 			children[0]->GetChunk(context, state->child_chunk,
 			                      state->child_state.get());
-			if (state->child_chunk.count == 0) {
+			if (state->child_chunk.size() == 0) {
 				break;
 			}
 			collection.Append(state->child_chunk);
@@ -56,7 +56,7 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk,
 				for (size_t i = 0; i < table->columns.size(); i++) {
 					if (column_index_map[i] < 0) {
 						// insert default value
-						insert_chunk.data[i].count = chunk.count;
+						insert_chunk.data[i].count = chunk.size();
 						VectorOperations::Set(insert_chunk.data[i],
 						                      table->columns[i].default_value);
 					} else {
@@ -89,9 +89,8 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk,
 					}
 				}
 			}
-			insert_chunk.count = chunk.count;
 			table->storage->Append(context, insert_chunk);
-			insert_count += chunk.count;
+			insert_count += chunk.size();
 		}
 	} else {
 		// insert from constant values
@@ -143,24 +142,22 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk,
 					insert_chunk.data[i].Append(temp_chunk.data[i]);
 				}
 			}
-			insert_chunk.count++;
-			if (insert_chunk.count == STANDARD_VECTOR_SIZE) {
+			if (insert_chunk.size() == STANDARD_VECTOR_SIZE) {
 				// flush the chunk if it is full
 				table->storage->Append(context, insert_chunk);
-				insert_count += insert_chunk.count;
+				insert_count += insert_chunk.size();
 				insert_chunk.Reset();
 			}
 		}
-		if (insert_chunk.count > 0) {
+		if (insert_chunk.size() > 0) {
 			// append any remaining elements to the table
 			table->storage->Append(context, insert_chunk);
-			insert_count += insert_chunk.count;
+			insert_count += insert_chunk.size();
 		}
 	}
 
 	chunk.data[0].count = 1;
 	chunk.data[0].SetValue(0, Value::BIGINT(insert_count));
-	chunk.count = 1;
 
 	state->finished = true;
 }

@@ -219,7 +219,7 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query,
 			for (auto &chunk : result->collection.chunks) {
 				auto &vector = chunk->data[i];
 				VectorOperations::Copy(vector, ptr);
-				ptr += type_size * chunk->count;
+				ptr += type_size * chunk->size();
 			}
 		} else {
 			// NULL initialize: we are going to do mallocs
@@ -230,7 +230,7 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query,
 				for (auto &chunk : result->collection.chunks) {
 					auto &vector = chunk->data[i];
 					const char **str_data = (const char **)vector.data;
-					for (size_t j = 0; j < chunk->count; j++) {
+					for (size_t j = 0; j < chunk->size(); j++) {
 						const char *strptr = str_data[j];
 						if (!str_data[j]) {
 							strptr = "NULL";

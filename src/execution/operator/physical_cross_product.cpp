@@ -33,13 +33,13 @@ void PhysicalCrossProduct::_GetChunk(ClientContext &context, DataChunk &chunk,
 	chunk.Reset();
 
 	if (state->right_state &&
-	    state->left_position >= state->child_chunk.count) {
+	    state->left_position >= state->child_chunk.size()) {
 		// ran out of this chunk
 		// move to the next chunk on the right side
 		state->left_position = 0;
 		children[1]->GetChunk(context, state->right_chunk,
 		                      state->right_state.get());
-		if (state->right_chunk.count == 0) {
+		if (state->right_chunk.size() == 0) {
 			// ran out of chunks on the right side
 			// move to the next left chunk and start over on the right hand side
 			state->right_state = nullptr;
@@ -50,7 +50,7 @@ void PhysicalCrossProduct::_GetChunk(ClientContext &context, DataChunk &chunk,
 		// left chunk
 		children[0]->GetChunk(context, state->child_chunk,
 		                      state->child_state.get());
-		if (state->child_chunk.count == 0) {
+		if (state->child_chunk.size() == 0) {
 			return;
 		}
 		state->left_position = 0;
@@ -68,10 +68,9 @@ void PhysicalCrossProduct::_GetChunk(ClientContext &context, DataChunk &chunk,
 	}
 	// now match the current row of the left relation with the current chunk
 	// from the right relation
-	chunk.count = right_chunk.count;
 	for (size_t i = 0; i < left_chunk.column_count; i++) {
 		// first duplicate the values of the left side
-		chunk.data[i].count = chunk.count;
+		chunk.data[i].count = right_chunk.size();
 		VectorOperations::Set(
 		    chunk.data[i], left_chunk.data[i].GetValue(state->left_position));
 	}

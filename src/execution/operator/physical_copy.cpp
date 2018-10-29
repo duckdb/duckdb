@@ -67,7 +67,6 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk,
 		from_csv.open(file_path);
 		while (getline(from_csv, value)) {
 			if (count_line == STANDARD_VECTOR_SIZE) {
-				insert_chunk.count = insert_chunk.data[0].count;
 				table->storage->Append(context, insert_chunk);
 				total += count_line;
 				count_line = 0;
@@ -103,7 +102,6 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk,
 
 			count_line++;
 		}
-		insert_chunk.count = insert_chunk.data[0].count;
 		table->storage->Append(context, insert_chunk);
 		from_csv.close();
 	} else {
@@ -111,8 +109,8 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk,
 		to_csv.open(file_path);
 		children[0]->GetChunk(context, state->child_chunk,
 		                      state->child_state.get());
-		while (state->child_chunk.count != 0) {
-			for (size_t i = 0; i < state->child_chunk.count; i++) {
+		while (state->child_chunk.size() != 0) {
+			for (size_t i = 0; i < state->child_chunk.size(); i++) {
 				for (size_t col = 0; col < state->child_chunk.column_count;
 				     col++) {
 					if (col != 0) {
@@ -136,7 +134,6 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk,
 	}
 	chunk.data[0].count = 1;
 	chunk.data[0].SetValue(0, Value::BIGINT(total + count_line));
-	chunk.count = 1;
 
 	state->finished = true;
 }

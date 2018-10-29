@@ -294,7 +294,7 @@ bool ReplayDropSchema(Transaction &transaction, Catalog &catalog,
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteInsert(std::string &schema, std::string &table,
                                 DataChunk &chunk) {
-	if (chunk.count == 0) {
+	if (chunk.size() == 0) {
 		return;
 	}
 	chunk.Verify();

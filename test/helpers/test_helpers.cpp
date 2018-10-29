@@ -131,7 +131,6 @@ bool parse_datachunk(string csv, DataChunk &result, bool has_header) {
 			result.data[i].count++;
 			result.data[i].SetValue(row, value);
 		}
-		result.count++;
 		row++;
 	}
 	return true;

@@ -144,15 +144,14 @@ static void append_to_append_info(tpce_append_information & info) {
 		// initalize the chunk
 		auto types = table->GetTypes();
 		chunk.Initialize(types);
-	} else if (chunk.count >= STANDARD_VECTOR_SIZE) {
+	} else if (chunk.size() >= STANDARD_VECTOR_SIZE) {
 		// flush the chunk
 		table->storage->Append(*info.context, chunk);
 		// have to reset the chunk
 		chunk.Reset();
 	}
-	chunk.count++;
 	for (size_t i = 0; i < chunk.column_count; i++) {
-		chunk.data[i].count = chunk.count;
+		chunk.data[i].count++;
 	}
 }
 
@@ -229,7 +228,7 @@ public:
 	void WriteNextRecord(const ${ROW_TYPE} &next_record) {
 		auto &chunk = info.chunk;
 		append_to_append_info(info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;""".replace("${TABLENAME}", get_tablename(table)).replace("${ROW_TYPE}", table.upper().replace(' ', '_') + '_ROW'));
 	source.write("\n\n")
 	collist = tables[table]

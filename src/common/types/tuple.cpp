@@ -47,7 +47,7 @@ void TupleSerializer::Serialize(DataChunk &chunk, Tuple targets[],
 	uint8_t *target_locations[STANDARD_VECTOR_SIZE];
 	if (inline_varlength && has_variable_columns) {
 		// first assign the base size
-		for (size_t i = 0; i < chunk.count; i++) {
+		for (size_t i = 0; i < chunk.size(); i++) {
 			targets[i].size = base_size;
 		}
 		// compute size of variable length columns
@@ -55,7 +55,7 @@ void TupleSerializer::Serialize(DataChunk &chunk, Tuple targets[],
 			if (is_variable[j]) {
 				assert(chunk.data[columns[j]].type == TypeId::VARCHAR);
 				auto dataptr = (const char **)chunk.data[columns[j]].data;
-				for (size_t i = 0; i < chunk.count; i++) {
+				for (size_t i = 0; i < chunk.size(); i++) {
 					size_t index = chunk.sel_vector ? chunk.sel_vector[i] : i;
 					auto str = dataptr[index];
 					if (!str || chunk.data[columns[j]].nullmask[index]) {
@@ -66,13 +66,13 @@ void TupleSerializer::Serialize(DataChunk &chunk, Tuple targets[],
 			}
 		}
 		// now allocate the data
-		for (size_t i = 0; i < chunk.count; i++) {
+		for (size_t i = 0; i < chunk.size(); i++) {
 			targets[i].data =
 			    unique_ptr<uint8_t[]>(new uint8_t[targets[i].size]);
 			target_locations[i] = targets[i].data.get();
 		}
 	} else {
-		for (size_t i = 0; i < chunk.count; i++) {
+		for (size_t i = 0; i < chunk.size(); i++) {
 			targets[i].size = base_size;
 			targets[i].data =
 			    unique_ptr<uint8_t[]>(new uint8_t[targets[i].size]);
@@ -141,7 +141,7 @@ void TupleSerializer::SerializeUpdate(vector<char *> &column_data,
                                       Vector &index_vector, size_t index_offset,
                                       Tuple targets[], bool *has_null) {
 	auto indices = (uint64_t *)index_vector.data;
-	assert(index_vector.count == update_chunk.count);
+	assert(index_vector.count == update_chunk.size());
 	assert(!inline_varlength);
 
 	// first initialize the tuples
@@ -208,7 +208,7 @@ void TupleSerializer::SerializeColumn(DataChunk &chunk, uint8_t *targets[],
 	const auto is_constant = TypeIsConstantSize(type) || !inline_varlength;
 
 	assert(type == chunk.data[column].type);
-	for (size_t i = 0; i < chunk.count; i++) {
+	for (size_t i = 0; i < chunk.size(); i++) {
 		size_t index = chunk.sel_vector ? chunk.sel_vector[i] : i;
 		auto target_data = targets[i] + offsets[i];
 
@@ -239,7 +239,7 @@ void TupleSerializer::SerializeColumn(DataChunk &chunk, uint8_t *targets[],
 	const auto column = columns[column_index];
 	const auto type_size = type_sizes[column_index];
 	assert(types[column_index] == chunk.data[column].type);
-	for (size_t i = 0; i < chunk.count; i++) {
+	for (size_t i = 0; i < chunk.size(); i++) {
 		size_t index = chunk.sel_vector ? chunk.sel_vector[i] : i;
 		auto target_data = targets[i] + offset;
 		SerializeValue(target_data, chunk.data[column], index, i, type_size,

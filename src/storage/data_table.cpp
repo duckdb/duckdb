@@ -127,7 +127,7 @@ void DataTable::VerifyConstraints(ClientContext &context, DataChunk &chunk) {
 }
 
 void DataTable::Append(ClientContext &context, DataChunk &chunk) {
-	if (chunk.count == 0) {
+	if (chunk.size() == 0) {
 		return;
 	}
 	if (chunk.column_count != table.columns.size()) {
@@ -173,7 +173,7 @@ void DataTable::Append(ClientContext &context, DataChunk &chunk) {
 
 	// first copy as much as can fit into the current chunk
 	size_t current_count =
-	    std::min(STORAGE_CHUNK_SIZE - last_chunk->count, chunk.count);
+	    std::min(STORAGE_CHUNK_SIZE - last_chunk->count, chunk.size());
 	if (current_count > 0) {
 		// in the undo buffer, create entries with the "deleted" flag for each
 		// tuple so other transactions see the deleted entries before these
@@ -194,7 +194,7 @@ void DataTable::Append(ClientContext &context, DataChunk &chunk) {
 	}
 
 	// check if we need to append more entries
-	if (current_count != chunk.count) {
+	if (current_count != chunk.size()) {
 		// we need to append more entries
 		// first create a new chunk and lock it
 		auto new_chunk = make_unique<StorageChunk>(
@@ -206,7 +206,7 @@ void DataTable::Append(ClientContext &context, DataChunk &chunk) {
 		this->tail_chunk = new_chunk_pointer;
 
 		// now append the remainder
-		size_t remainder = chunk.count - current_count;
+		size_t remainder = chunk.size() - current_count;
 		// first push the deleted entries
 		transaction.PushDeletedEntries(0, remainder, new_chunk_pointer,
 		                               new_chunk_pointer->version_pointers);
@@ -388,7 +388,6 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result,
 			regular_count += !(is_deleted || has_version);
 		}
 
-		result.count = 0;
 		if (regular_count < end) {
 			// first chase the version pointers, if there are any
 			uint8_t *alternate_version_pointers[STANDARD_VECTOR_SIZE];
@@ -460,7 +459,6 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result,
 					}
 					result.data[j].count += alternate_version_count;
 				}
-				result.count += alternate_version_count;
 			}
 		}
 		// copy the regular entries
@@ -491,7 +489,6 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result,
 					VectorOperations::AppendFromStorage(source, result.data[j]);
 				}
 			}
-			result.count += regular_count;
 		}
 		// release the read lock
 		structure.offset += STANDARD_VECTOR_SIZE;
@@ -500,7 +497,7 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result,
 			structure.chunk = current_chunk->next.get();
 		}
 		current_chunk->ReleaseSharedLock();
-		if (result.count > 0) {
+		if (result.size() > 0) {
 			return;
 		}
 	}

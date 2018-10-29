@@ -64,7 +64,7 @@ void QueryProfiler::EndOperator(DataChunk &chunk) {
 	op.End();
 	auto &info = tree_map[execution_stack.top()]->info;
 	info.time += op.Elapsed();
-	info.elements += chunk.count;
+	info.elements += chunk.size();
 
 	assert(!execution_stack.empty());
 	execution_stack.pop();

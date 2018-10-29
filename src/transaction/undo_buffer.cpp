@@ -145,7 +145,7 @@ WriteTuple(WriteAheadLog *log, VersionInformation *entry,
 	if (append_entry != appends.end()) {
 		// entry exists, check if we need to flush it
 		chunk = append_entry->second.get();
-		if (chunk->count == STANDARD_VECTOR_SIZE) {
+		if (chunk->size() == STANDARD_VECTOR_SIZE) {
 			// entry is full: flush to WAL
 			auto &schema_name = dtable->table.schema->name;
 			auto &table_name = dtable->table.name;
@@ -164,28 +164,28 @@ WriteTuple(WriteAheadLog *log, VersionInformation *entry,
 	if (entry->chunk) {
 		auto id = entry->prev.entry;
 		// append the tuple to the current chunk
+		size_t current_offset = chunk->size();
 		for (size_t i = 0; i < chunk->column_count; i++) {
 			auto type = chunk->data[i].type;
 			size_t value_size = GetTypeIdSize(type);
 			void *storage_pointer = storage->columns[i] + value_size * id;
-			memcpy(chunk->data[i].data + value_size * chunk->count,
+			memcpy(chunk->data[i].data + value_size * current_offset,
 			       storage_pointer, value_size);
 			chunk->data[i].count++;
 		}
-		chunk->count++;
 	} else {
 		assert(entry->prev.pointer->tuple_data);
 		auto tuple_data = entry->prev.pointer->tuple_data;
 		// append the tuple to the current chunk
+		size_t current_offset = chunk->size();
 		for (size_t i = 0; i < chunk->column_count; i++) {
 			auto type = chunk->data[i].type;
 			size_t value_size = GetTypeIdSize(type);
-			memcpy(chunk->data[i].data + value_size * chunk->count, tuple_data,
-			       value_size);
+			memcpy(chunk->data[i].data + value_size * current_offset,
+			       tuple_data, value_size);
 			tuple_data += value_size;
 			chunk->data[i].count++;
 		}
-		chunk->count++;
 	}
 }
 

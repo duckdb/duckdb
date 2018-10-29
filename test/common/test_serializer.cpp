@@ -30,13 +30,11 @@ TEST_CASE("Data Chunk serialization", "[serializer]") {
 	DataChunk chunk;
 	vector<TypeId> types = {TypeId::INTEGER, TypeId::VARCHAR};
 	chunk.Initialize(types);
-	chunk.data[0].count = 2;
+	chunk.data[0].count = chunk.data[1].count = 2;
 	chunk.data[0].SetValue(0, a);
 	chunk.data[0].SetValue(1, b);
-	chunk.data[1].count = 2;
 	chunk.data[1].SetValue(0, c);
 	chunk.data[1].SetValue(1, d);
-	chunk.count = 2;
 
 	Serializer serializer;
 	chunk.Serialize(serializer);
@@ -46,7 +44,7 @@ TEST_CASE("Data Chunk serialization", "[serializer]") {
 
 	DataChunk other_chunk;
 	REQUIRE_NOTHROW(other_chunk.Deserialize(source));
-	REQUIRE(other_chunk.count == 2);
+	REQUIRE(other_chunk.size() == 2);
 	REQUIRE(other_chunk.column_count == 2);
 	REQUIRE(other_chunk.data[0].count == 2);
 	REQUIRE(ValueOperations::Equals(other_chunk.data[0].GetValue(0), a));

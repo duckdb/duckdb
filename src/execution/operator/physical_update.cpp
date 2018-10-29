@@ -37,7 +37,7 @@ void PhysicalUpdate::_GetChunk(ClientContext &context, DataChunk &chunk,
 	while (true) {
 		children[0]->GetChunk(context, state->child_chunk,
 		                      state->child_state.get());
-		if (state->child_chunk.count == 0) {
+		if (state->child_chunk.size() == 0) {
 			break;
 		}
 		// update data in the base table
@@ -51,7 +51,7 @@ void PhysicalUpdate::_GetChunk(ClientContext &context, DataChunk &chunk,
 			    if (expressions[i]->type == ExpressionType::VALUE_DEFAULT) {
 				    // we resolve default expressions separately
 				    auto &column = table.table.columns[columns[i]];
-				    update_chunk.data[i].count = state->child_chunk.count;
+				    update_chunk.data[i].count = state->child_chunk.size();
 				    VectorOperations::Set(update_chunk.data[i],
 				                          column.default_value);
 				    return nullptr;
@@ -60,15 +60,13 @@ void PhysicalUpdate::_GetChunk(ClientContext &context, DataChunk &chunk,
 		    },
 		    expressions.size());
 		update_chunk.sel_vector = state->child_chunk.sel_vector;
-		update_chunk.count = update_chunk.data[0].count;
 
 		table.Update(context, row_ids, columns, update_chunk);
-		updated_count += state->child_chunk.count;
+		updated_count += state->child_chunk.size();
 	}
 
 	chunk.data[0].count = 1;
 	chunk.data[0].SetValue(0, Value::BIGINT(updated_count));
-	chunk.count = 1;
 
 	state->finished = true;
 

@@ -42,7 +42,8 @@ class SuperLargeHashTable {
 	void AddChunk(DataChunk &groups, DataChunk &payload);
 	//! Scan the HT starting from the scan_position until the result and group
 	//! chunks are filled. scan_position will be updated by this function.
-	void Scan(size_t &scan_position, DataChunk &group, DataChunk &result);
+	//! Returns the amount of elements found.
+	size_t Scan(size_t &scan_position, DataChunk &group, DataChunk &result);
 
 	//! The stringheap of the AggregateHashTable
 	StringHeap string_heap;

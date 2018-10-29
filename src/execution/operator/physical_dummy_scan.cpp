@@ -22,7 +22,6 @@ void PhysicalDummyScan::_GetChunk(ClientContext &context, DataChunk &chunk,
 		this->chunk.Move(chunk);
 	} else {
 		chunk.data[0].count = 1;
-		chunk.count = chunk.data[0].count;
 	}
 }
 

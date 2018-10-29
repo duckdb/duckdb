@@ -20,7 +20,7 @@ void PhysicalFilter::_GetChunk(ClientContext &context, DataChunk &chunk,
 	do {
 		children[0]->GetChunk(context, state->child_chunk,
 		                      state->child_state.get());
-		if (state->child_chunk.count == 0) {
+		if (state->child_chunk.size() == 0) {
 			return;
 		}
 
@@ -40,8 +40,7 @@ void PhysicalFilter::_GetChunk(ClientContext &context, DataChunk &chunk,
 			chunk.data[i].Reference(state->child_chunk.data[i]);
 		}
 		chunk.SetSelectionVector(result);
-
-	} while (chunk.count == 0);
+	} while (chunk.size() == 0);
 }
 
 unique_ptr<PhysicalOperatorState>

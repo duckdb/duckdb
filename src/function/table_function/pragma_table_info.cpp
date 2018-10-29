@@ -30,7 +30,7 @@ void pragma_table_info(ClientContext &context, DataChunk &input,
 	auto &data = *((PragmaTableFunctionData *)dataptr);
 	if (!data.entry) {
 		// first call: load the entry from the catalog
-		if (input.count != 1) {
+		if (input.size() != 1) {
 			throw Exception("Expected a single table name as input");
 		}
 		if (input.column_count != 1 || input.data[0].type != TypeId::VARCHAR) {
@@ -51,9 +51,9 @@ void pragma_table_info(ClientContext &context, DataChunk &input,
 	// either fill up the chunk or return all the remaining columns
 	size_t next =
 	    min(data.offset + STANDARD_VECTOR_SIZE, data.entry->columns.size());
-	output.count = next - data.offset;
+	size_t output_count = next - data.offset;
 	for (size_t j = 0; j < output.column_count; j++) {
-		output.data[j].count = output.count;
+		output.data[j].count = output_count;
 	}
 
 	for (size_t i = data.offset; i < next; i++) {

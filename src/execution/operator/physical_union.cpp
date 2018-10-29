@@ -27,14 +27,14 @@ void PhysicalUnion::_GetChunk(ClientContext &context, DataChunk &chunk,
 	chunk.Reset();
 	if (!state->top_done) {
 		children[0]->GetChunk(context, chunk, state->top_state.get());
-		if (chunk.count == 0) {
+		if (chunk.size() == 0) {
 			state->top_done = true;
 		}
 	}
 	if (state->top_done) {
 		children[1]->GetChunk(context, chunk, state->bottom_state.get());
 	}
-	if (chunk.count == 0) {
+	if (chunk.size() == 0) {
 		state->finished = true;
 	}
 	chunk.Verify();

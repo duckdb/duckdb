@@ -109,7 +109,7 @@ void PhysicalOrder::_GetChunk(ClientContext &context, DataChunk &chunk,
 			children[0]->GetChunk(context, state->child_chunk,
 			                      state->child_state.get());
 			big_data.Append(state->child_chunk);
-		} while (state->child_chunk.count != 0);
+		} while (state->child_chunk.size() != 0);
 
 		// now perform the actual ordering of the data
 		// compute the sorting columns from the input data
@@ -157,7 +157,6 @@ void PhysicalOrder::_GetChunk(ClientContext &context, DataChunk &chunk,
 			    j, big_data.GetValue(i, state->sorted_vector[j]));
 		}
 	}
-	chunk.count = remaining_data;
 	state->position += STANDARD_VECTOR_SIZE;
 }
 

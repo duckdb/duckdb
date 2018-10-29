@@ -75,15 +75,14 @@ static void append_to_append_info(tpch_append_information &info) {
 		// initalize the chunk
 		auto types = table->GetTypes();
 		chunk.Initialize(types);
-	} else if (chunk.count >= STANDARD_VECTOR_SIZE) {
+	} else if (chunk.size() >= STANDARD_VECTOR_SIZE) {
 		// flush the chunk
 		table->storage->Append(*info.context, chunk);
 		// have to reset the chunk
 		chunk.Reset();
 	}
-	chunk.count++;
 	for (size_t i = 0; i < chunk.column_count; i++) {
-		chunk.data[i].count = chunk.count;
+		chunk.data[i].count++;
 	}
 }
 
@@ -91,7 +90,7 @@ static void append_order(order_t *o, tpch_append_information *info) {
 	auto &append_info = info[ORDER];
 	auto &chunk = append_info.chunk;
 	append_to_append_info(append_info);
-	size_t index = chunk.count - 1;
+	size_t index = chunk.size() - 1;
 	size_t column = 0;
 
 	// fill the current row with the order information
@@ -122,7 +121,7 @@ static void append_line(order_t *o, tpch_append_information *info) {
 	// fill the current row with the order information
 	for (DSS_HUGE i = 0; i < o->lines; i++) {
 		append_to_append_info(append_info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		// l_orderkey
@@ -169,7 +168,7 @@ static void append_supp(supplier_t *supp, tpch_append_information *info) {
 	auto &append_info = info[SUPP];
 	auto &chunk = append_info.chunk;
 	append_to_append_info(append_info);
-	size_t index = chunk.count - 1;
+	size_t index = chunk.size() - 1;
 	size_t column = 0;
 
 	// s_suppkey
@@ -192,7 +191,7 @@ static void append_cust(customer_t *c, tpch_append_information *info) {
 	auto &append_info = info[CUST];
 	auto &chunk = append_info.chunk;
 	append_to_append_info(append_info);
-	size_t index = chunk.count - 1;
+	size_t index = chunk.size() - 1;
 	size_t column = 0;
 
 	// c_custkey
@@ -217,7 +216,7 @@ static void append_part(part_t *part, tpch_append_information *info) {
 	auto &append_info = info[PART];
 	auto &chunk = append_info.chunk;
 	append_to_append_info(append_info);
-	size_t index = chunk.count - 1;
+	size_t index = chunk.size() - 1;
 	size_t column = 0;
 
 	// p_partkey
@@ -245,7 +244,7 @@ static void append_psupp(part_t *part, tpch_append_information *info) {
 	auto &chunk = append_info.chunk;
 	for (size_t i = 0; i < SUPP_PER_PART; i++) {
 		append_to_append_info(append_info);
-		size_t index = chunk.count - 1;
+		size_t index = chunk.size() - 1;
 		size_t column = 0;
 
 		// ps_partkey
@@ -270,7 +269,7 @@ static void append_nation(code_t *c, tpch_append_information *info) {
 	auto &append_info = info[NATION];
 	auto &chunk = append_info.chunk;
 	append_to_append_info(append_info);
-	size_t index = chunk.count - 1;
+	size_t index = chunk.size() - 1;
 	size_t column = 0;
 
 	// n_nationkey
@@ -287,7 +286,7 @@ static void append_region(code_t *c, tpch_append_information *info) {
 	auto &append_info = info[REGION];
 	auto &chunk = append_info.chunk;
 	append_to_append_info(append_info);
-	size_t index = chunk.count - 1;
+	size_t index = chunk.size() - 1;
 	size_t column = 0;
 
 	// r_regionkey
@@ -577,7 +576,7 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	// flush any incomplete chunks
 	for (size_t i = PART; i <= REGION; i++) {
 		if (append_info[i].table) {
-			if (append_info[i].chunk.count > 0) {
+			if (append_info[i].chunk.size() > 0) {
 				append_info[i].table->storage->Append(*append_info[i].context,
 				                                      append_info[i].chunk);
 			}

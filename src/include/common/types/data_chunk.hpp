@@ -38,9 +38,6 @@ namespace duckdb {
 */
 class DataChunk : public Printable {
   public:
-	//! The amount of elements in the chunk. Every vector holds this amount of
-	//! elements.
-	size_t count;
 	//! The amount of vectors that are part of this DataChunk.
 	size_t column_count;
 	//! The vectors owned by the DataChunk.
@@ -62,6 +59,9 @@ class DataChunk : public Printable {
 	}
 #endif
 
+	size_t size() {
+		return data[0].count;
+	}
 	//! Initializes the DataChunk with the specified types to an empty DataChunk
 	//! that holds at most maximum_chunk_size elements.
 	//! This will create one vector of the specified type for each TypeId in the

@@ -246,7 +246,6 @@ void PhysicalPlanGenerator::Visit(LogicalExplain &op) {
 
 	vector<TypeId> types = {TypeId::VARCHAR, TypeId::VARCHAR};
 	scan->chunk.Initialize(types, false);
-	scan->chunk.count = 3;
 
 	scan->chunk.data[0].count = 3;
 	scan->chunk.data[0].SetStringValue(0, "logical_plan");

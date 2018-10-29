@@ -54,7 +54,7 @@ void SuperLargeHashTable::Resize(size_t size) {
 			groups.Reset();
 			payload.Reset();
 			this->Scan(position, groups, payload);
-			if (groups.count == 0) {
+			if (groups.size() == 0) {
 				break;
 			}
 			new_table->AddChunk(groups, payload);
@@ -78,7 +78,7 @@ void SuperLargeHashTable::Resize(size_t size) {
 }
 
 void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
-	if (groups.count == 0) {
+	if (groups.size() == 0) {
 		return;
 	}
 
@@ -121,7 +121,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	// serialize the elements from the group to a tuple-wide format
 	uint8_t group_data[STANDARD_VECTOR_SIZE][group_serializer.TupleSize()];
 	uint8_t *group_elements[STANDARD_VECTOR_SIZE];
-	for (size_t i = 0; i < groups.count; i++) {
+	for (size_t i = 0; i < groups.size(); i++) {
 		group_elements[i] = group_data[i];
 	}
 	group_serializer.Serialize(groups, group_elements);
@@ -222,15 +222,13 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	VectorOperations::Scatter::Add(one, addresses);
 }
 
-void SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &groups,
-                               DataChunk &result) {
-	result.Reset();
-
+size_t SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &groups,
+                                 DataChunk &result) {
 	uint8_t *ptr;
 	uint8_t *start = data + scan_position;
 	uint8_t *end = data + capacity * tuple_size;
 	if (start >= end)
-		return;
+		return 0;
 
 	Vector addresses(TypeId::POINTER, true, false);
 	auto data_pointers = (uint8_t **)addresses.data;
@@ -245,7 +243,7 @@ void SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &groups,
 		}
 	}
 	if (entry == 0) {
-		return;
+		return 0;
 	}
 	addresses.count = entry;
 	// fetch the group columns
@@ -276,7 +274,6 @@ void SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &groups,
 			VectorOperations::Gather::Set(addresses, target);
 		}
 	}
-	groups.count = entry;
-	result.count = entry;
 	scan_position = ptr - data;
+	return entry;
 }

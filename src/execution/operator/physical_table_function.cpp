@@ -51,7 +51,7 @@ void PhysicalTableFunction::_GetChunk(ClientContext &context, DataChunk &chunk,
 
 	// run main code
 	function->function(context, input, chunk, state->function_data.get());
-	if (chunk.count == 0) {
+	if (chunk.size() == 0) {
 		// finished, call clean up
 		if (function->final) {
 			function->final(context, state->function_data.get());
