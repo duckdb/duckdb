@@ -47,6 +47,12 @@ class Benchmark {
 	}
 	//! Interrupt the benchmark because of a timeout
 	virtual void Interrupt(BenchmarkState *state) = 0;
+	//! Returns information about the benchmark
+	virtual std::string BenchmarkInfo() = 0;
+
+	std::string GetInfo() {
+		return name + " - " + group + "\n" + BenchmarkInfo();
+	}
 
 	//! Whether or not Initialize() should be called once for every run or just
 	//! once

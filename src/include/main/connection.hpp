@@ -43,8 +43,7 @@ class DuckDBConnection {
 
 	//! Create an appender that can be used to easily append to the given table.
 	//! Note that after creating an appender the connection cannot be used
-	//! anymore until the appender is destroyed (either by going out of scope or
-	//! by manually calling Appender::Destroy).
+	//! anymore until the appender is destroyed
 	Appender *GetAppender(std::string table_name,
 	                      std::string schema = DEFAULT_SCHEMA);
 	//! Destroy the current appender, if rollback is true the current

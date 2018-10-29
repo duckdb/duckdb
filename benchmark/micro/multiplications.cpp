@@ -41,4 +41,11 @@ virtual std::string VerifyResult(DuckDBResult *result) {
 	}
 	return std::string();
 }
+
+virtual std::string BenchmarkInfo() {
+	return StringUtil::Format("Runs the following query: \"SELECT (i * j) * (i "
+	                          "* j) * (i * j) * (i * j) FROM integers\""
+	                          " on %d rows",
+	                          MULTIPLICATION_ROW_COUNT);
+}
 FINISH_BENCHMARK(Multiplication)

@@ -41,4 +41,11 @@ virtual std::string VerifyResult(DuckDBResult *result) {
 	}
 	return std::string();
 }
+
+virtual std::string BenchmarkInfo() {
+	return StringUtil::Format("Runs the following query: \"SELECT i, SUM(j) "
+	                          "FROM integers GROUP BY i\""
+	                          "on %d rows with %d unique groups",
+	                          GROUP_ROW_COUNT, GROUP_COUNT);
+}
 FINISH_BENCHMARK(SimpleGroupByAggregate)

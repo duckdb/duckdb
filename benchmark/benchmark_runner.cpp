@@ -41,6 +41,14 @@ void BenchmarkRunner::LogLine(std::string message) {
 	fprintf(stderr, "%s\n", message.c_str());
 }
 
+void BenchmarkRunner::LogResult(std::string message) {
+	LogLine(message);
+	if (out_file.good()) {
+		out_file << message << endl;
+		out_file.flush();
+	}
+}
+
 void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 	Profiler profiler;
 	LogLine(string(benchmark->name.size() + 6, '-'));
@@ -74,11 +82,11 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 		interrupt_thread.join();
 		if (timeout) {
 			// write timeout
-			LogLine("TIMEOUT");
+			LogResult("TIMEOUT");
 			break;
 		} else {
 			// write time
-			LogLine(StringUtil::Format("DONE (%fs)", profiler.Elapsed()));
+			LogResult(to_string(profiler.Elapsed()));
 		}
 		auto verify = benchmark->Verify(state.get());
 		if (!verify.empty()) {
@@ -98,36 +106,81 @@ void BenchmarkRunner::RunBenchmarks() {
 
 void print_help() {
 	fprintf(stderr, "Usage: benchmark_runner\n");
-	fprintf(stderr, "              --list   Show a list of all benchmarks\n");
-	fprintf(stderr, "              [name]   Run only the benchmark of the "
+	fprintf(stderr,
+	        "              --list       Show a list of all benchmarks\n");
+	fprintf(stderr,
+	        "              --out=[file] Move benchmark output to file\n");
+	fprintf(stderr,
+	        "              --info       Prints info about the benchmark\n");
+	fprintf(stderr, "              [name]       Run only the benchmark of the "
 	                "specified name\n");
 }
 
 int main(int argc, char **argv) {
 	auto &instance = BenchmarkRunner::GetInstance();
 	auto &benchmarks = instance.benchmarks;
-	if (argc > 1) {
-		string arg = argv[1];
+	int benchmark_index = -1;
+	bool info = false;
+
+	for (size_t i = 1; i < argc; i++) {
+		string arg = argv[i];
 		if (arg == "--list") {
 			// list names of all benchmarks
 			for (auto &benchmark : benchmarks) {
-				fprintf(stderr, "%s\n", benchmark->name.c_str());
+				fprintf(stdout, "%s\n", benchmark->name.c_str());
 			}
 			exit(0);
+		} else if (arg == "--info") {
+			// write info of benchmark
+			info = true;
+		} else if (StringUtil::StartsWith(arg, "--out=")) {
+			auto splits = StringUtil::Split(arg, '=');
+			if (splits.size() != 2) {
+				print_help();
+				exit(1);
+			}
+			instance.out_file.open(splits[1]);
+			if (!instance.out_file.good()) {
+				fprintf(stderr, "Could not open file %s for writing\n",
+				        splits[1].c_str());
+				exit(1);
+			}
 		} else {
+			if (benchmark_index >= 0) {
+				fprintf(stderr, "ERROR: Can only specify one benchmark.\n");
+				print_help();
+				exit(1);
+			}
 			// run only specific benchmark
 			// check if the benchmark exists
 			for (size_t i = 0; i < benchmarks.size(); i++) {
 				if (benchmarks[i]->name == arg) {
-					instance.RunBenchmark(benchmarks[i]);
-					exit(0);
+					benchmark_index = i;
+					break;
 				}
 			}
-			// benchmark to run could not be found
+			if (benchmark_index < 0) {
+				// benchmark to run could not be found
+				print_help();
+				exit(1);
+			}
+		}
+	}
+	if (benchmark_index < 0) {
+		if (info) {
+			fprintf(stderr, "ERROR: Info requires benchmark name.\n");
 			print_help();
 			exit(1);
 		}
+		// default: run all benchmarks
+		instance.RunBenchmarks();
+	} else {
+		if (info) {
+			// print info of benchmark
+			auto info = benchmarks[benchmark_index]->GetInfo();
+			fprintf(stdout, "%s\n", info.c_str());
+		} else {
+			instance.RunBenchmark(benchmarks[benchmark_index]);
+		}
 	}
-	// default: run all benchmarks
-	instance.RunBenchmarks();
 }

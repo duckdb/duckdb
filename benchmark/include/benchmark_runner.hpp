@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -35,11 +36,13 @@ class BenchmarkRunner {
 
 	void Log(std::string message);
 	void LogLine(std::string message);
+	void LogResult(std::string message);
 
 	void RunBenchmark(Benchmark *benchmark);
 	void RunBenchmarks();
 
 	std::vector<Benchmark *> benchmarks;
+	std::ofstream out_file;
 };
 
 } // namespace duckdb
