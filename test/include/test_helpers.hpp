@@ -17,7 +17,7 @@ namespace duckdb {
 
 #define COMPARE_CSV(result, csv, header)                                       \
 	{                                                                          \
-		auto res = compare_csv(result, csv, header);                           \
+		auto res = compare_csv(*result, csv, header);                          \
 		if (!res.empty())                                                      \
 			FAIL(res);                                                         \
 	}

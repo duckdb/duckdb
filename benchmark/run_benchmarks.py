@@ -1,5 +1,5 @@
 
-import os, sys, subprocess, re
+import os, sys, subprocess, re, time
 import benchmark_html
 
 last_benchmarked_commit_file = '.last_benchmarked_commit'
@@ -16,10 +16,10 @@ def log(msg):
 FNULL = open(os.devnull, 'w')
 benchmark_runner = os.path.join('build', 'release', 'benchmark', 'benchmark_runner')
 out_file = 'out.csv'
+log_file = 'out.log'
 benchmark_results_folder = 'benchmark_results'
 benchmark_info_folder = os.path.join(benchmark_results_folder, 'info')
-default_start_commit = "c948689ce45118df870fc4d47790be30df04cb31"
-#9ea358b716b33a4929348dc96acbaa16436d83fa
+default_start_commit = "9ea358b716b33a4929348dc96acbaa16436d83fa"
 def get_current_git_version():
 	proc = subprocess.Popen(['git', 'rev-parse', 'HEAD'], stdout=subprocess.PIPE)
 	return proc.stdout.readline().rstrip()
@@ -95,8 +95,12 @@ def make_benchmark_folder(commit):
 
 def run_benchmark(benchmark, folder):
 	log("Starting benchmark " + benchmark);
-	file_name = os.path.join(folder, benchmark + ".csv")
-	proc = subprocess.Popen([benchmark_runner, '--out=' + out_file, benchmark])
+	base_path = os.path.join(folder, benchmark)
+	file_name = base_path + ".csv"
+	log_name = base_path + ".log"
+	stdout_name = base_path + ".stdout.log"
+	stderr_name = base_path + ".stderr.log"
+	proc = subprocess.Popen([benchmark_runner, '--out=' + out_file, '--log=' + log_file, benchmark], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	proc.wait()
 	if proc.returncode != 0:
 		log("Failed to run benchmark " + benchmark);
@@ -107,6 +111,11 @@ def run_benchmark(benchmark, folder):
 		log("Succeeded in running benchmark " + benchmark);
 		# succeeded, copy results to output directory
 		os.rename(out_file, file_name)
+	os.rename(log_file, log_name)
+	with open(stdout_name, 'w+') as f:
+		f.write(proc.stdout.read())
+	with open(stderr_name, 'w+') as f:
+		f.write(proc.stderr.read())		
 
 def write_benchmark_info(benchmark, folder):
 	file = os.path.join(folder, benchmark)
@@ -131,7 +140,7 @@ while True:
 	list.reverse()
 
 	if len(list) == 0:
-		sleep(60)
+		time.sleep(60)
 		continue;
 
 	# create a folder for the benchmark results, if it doesn't exist yet
@@ -145,9 +154,9 @@ while True:
 		default_start_commit = commit
 		log("Benchmarking commit " + commit)
 		# switch to this commit in the source tree
-		if not switch_to_commit(commit):
-			log("Failed to switch to commit! Moving to next commit")
-			continue
+		# if not switch_to_commit(commit):
+		# 	log("Failed to switch to commit! Moving to next commit")
+		# 	continue
 		# now try to compile it
 		if not build_optimized():
 			continue

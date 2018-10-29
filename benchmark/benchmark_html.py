@@ -11,7 +11,7 @@ table, td, th {
   border-spacing: 0;
   border: 1px solid;
   border-collapse: collapse;
-  text-align: center;
+  text-align: right;
   table-layout: fixed;
 }
 
@@ -95,10 +95,13 @@ def end_value(f):
 	f.write("</td>")
 
 def color_output(output, r, g, b):
-	return '<span style=color="rgb(%d,%d,%d)">%s</span>' % (r, g, b, output)
+	return '<span style="color:rgb(%d,%d,%d);">%s</span>' % (r, g, b, output)
 
 def bold_output(output):
 	return "<b>%s</b>" % (output,)
+
+def background_color_output(output, r, g, b):
+	return '<div style="background-color:rgb(%d,%d,%d);">%s</div>' % (r, g, b, output)
 
 def write_commit(f, commit):
 	f.write('<a href="https://github.com/cwida/duckdb/commit/%s">%s</a>'  % (commit, commit[:4]))
@@ -107,19 +110,23 @@ def read_results(file):
 	with open(file, 'r') as f:
 		lines = f.read().split('\n')
 		if len(lines) == 0:
-			return bold_output(color_output('????', 184, 134, 11));
+			return ('????', 'Unknown')
 		# try to parse everything as numbers
 		try:
 			numbers = [float(x) for x in lines if len(x) > 0]
-			return "%.2f" % numpy.mean(numbers)
+			if len(numbers) == 0:
+				return ('????', 'Unknown')
+			return ("%.2f" % numpy.mean(numbers), 'Result')
 		except:
 			# failure to parse
-			if lines[0] == 'TIME':
-				return bold_output(color_output('T', 139, 10, 80));
+			if lines[0] == 'TIMEOUT':
+				return ('T', 'Timeout')
 			elif lines[0] == 'CRASH':
-				return bold_output(color_output('C', 178, 34, 34));
+				return ('C', 'Crash')
+			elif lines[0] == 'INCORRECT':
+				return ('!', 'Incorrect')
 			else:
-				return bold_output(color_output('????', 184, 134, 11));
+				return ('????', 'Unknown')
 
 
 def create_html(results_folder):
@@ -139,11 +146,33 @@ def create_html(results_folder):
 			results_dictionary = {}
 			for benchmark in benchmarks:
 				benchmark_name = benchmark[0]
-				benchmark_file = os.path.join(folder, benchmark_name + '.csv')
+				base_path = os.path.join(folder, benchmark_name)
+				benchmark_file = base_path + '.csv'
+				log_name = base_path + ".log"
+				stdout_name = base_path + ".stdout.log"
+				stderr_name = base_path + ".stderr.log"
 				if os.path.isfile(benchmark_file):
-					benchmark_results[benchmark_name][result] = read_results(benchmark_file)
+					(result_html, result_type) = read_results(benchmark_file)
 				else:
-					benchmark_results[benchmark_name][result] = "-"
+					(result_html, result_type) = ('-', 'NoResult')
+
+				result_html = bold_output(result_html)
+
+				if os.path.isfile(log_name):
+					result_html += ' <a href="%s">[L]</a>' % (log_name,)
+				if os.path.isfile(stdout_name):
+					result_html += ' <a href="%s">[O]</a>' % (stdout_name,)
+				if os.path.isfile(stderr_name):
+					result_html += ' <a href="%s">[E]</a>' % (stderr_name,)
+				if result_type == 'Crash' or result_type == 'Incorrect':
+					result_html = background_color_output(result_html, 222, 56, 56)
+				elif result_type == 'Timeout':
+					result_html = background_color_output(result_html, 132, 112, 255)
+				elif result_type == 'Unknown':
+					result_html = background_color_output(result_html, 184, 134, 11)
+
+#				print(result_html)
+				benchmark_results[benchmark_name][result] = result_html
 		# now write the actual tables
 		# we create one table per group
 		for group in groups:
@@ -159,7 +188,8 @@ def create_html(results_folder):
 				end_rotated_header(f)
 			end_row(f)
 			#now write the results
-			for benchmark_id in benchmarks_per_group[group]:
+			group_elements = sorted(benchmarks_per_group[group], key=lambda x: benchmarks[x][0])
+			for benchmark_id in group_elements:
 				benchmark_name = benchmarks[benchmark_id][0]
 				begin_row(f)
 				# benchmark name

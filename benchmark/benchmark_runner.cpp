@@ -18,13 +18,14 @@ Benchmark::Benchmark(std::string name, std::string group)
 }
 
 volatile bool is_active = false;
-bool timeout = false;
+volatile bool timeout = false;
 
-void sleep_thread(Benchmark *benchmark, BenchmarkState *state, int timeout) {
+void sleep_thread(Benchmark *benchmark, BenchmarkState *state,
+                  int timeout_duration) {
 	// timeout is given in seconds
 	// we wait 10ms per iteration, so timeout * 100 gives us the amount of
 	// iterations
-	for (size_t i = 0; i < timeout * 100 && is_active; i++) {
+	for (size_t i = 0; i < timeout_duration * 100 && is_active; i++) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 	}
 	if (is_active) {
@@ -49,24 +50,28 @@ void BenchmarkRunner::LogResult(std::string message) {
 	}
 }
 
+void BenchmarkRunner::LogOutput(std::string message) {
+	if (log_file.good()) {
+		log_file << message << endl;
+		log_file.flush();
+	}
+}
+
 void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 	Profiler profiler;
 	LogLine(string(benchmark->name.size() + 6, '-'));
 	LogLine("|| " + benchmark->name + " ||");
 	LogLine(string(benchmark->name.size() + 6, '-'));
-	Log("Cold run...");
 	auto state = benchmark->Initialize();
-	benchmark->Run(state.get());
-	auto verify = benchmark->Verify(state.get());
-	if (!verify.empty()) {
-		LogLine("INCORRECT RESULT: " + verify);
-		return;
-	}
-	LogLine("DONE");
 	auto nruns = benchmark->NRuns();
-	for (size_t i = 0; i < nruns; i++) {
-		Log(StringUtil::Format("%d/%d...", i + 1, nruns));
-		if (benchmark->RequireReinit()) {
+	for (size_t i = 0; i < nruns + 1; i++) {
+		bool hotrun = i > 0;
+		if (hotrun) {
+			Log(StringUtil::Format("%d/%d...", i, nruns));
+		} else {
+			Log("Cold run...");
+		}
+		if (hotrun && benchmark->RequireReinit()) {
 			state = benchmark->Initialize();
 		}
 		is_active = true;
@@ -80,18 +85,26 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 
 		is_active = false;
 		interrupt_thread.join();
-		if (timeout) {
-			// write timeout
-			LogResult("TIMEOUT");
-			break;
+		if (hotrun) {
+			LogOutput(benchmark->GetLogOutput(state.get()));
+			if (timeout) {
+				// write timeout
+				LogResult("TIMEOUT");
+				break;
+			} else {
+				// write time
+				auto verify = benchmark->Verify(state.get());
+				if (!verify.empty()) {
+					LogResult("INCORRECT");
+					LogLine("INCORRECT RESULT: " + verify);
+					LogOutput("INCORRECT RESULT: " + verify);
+					break;
+				} else {
+					LogResult(to_string(profiler.Elapsed()));
+				}
+			}
 		} else {
-			// write time
-			LogResult(to_string(profiler.Elapsed()));
-		}
-		auto verify = benchmark->Verify(state.get());
-		if (!verify.empty()) {
-			LogLine("INCORRECT RESULT: " + verify);
-			break;
+			LogLine("DONE");
 		}
 	}
 	benchmark->Finalize();
@@ -110,6 +123,7 @@ void print_help() {
 	        "              --list       Show a list of all benchmarks\n");
 	fprintf(stderr,
 	        "              --out=[file] Move benchmark output to file\n");
+	fprintf(stderr, "              --log=[file] Move log output to file\n");
 	fprintf(stderr,
 	        "              --info       Prints info about the benchmark\n");
 	fprintf(stderr, "              [name]       Run only the benchmark of the "
@@ -133,14 +147,18 @@ int main(int argc, char **argv) {
 		} else if (arg == "--info") {
 			// write info of benchmark
 			info = true;
-		} else if (StringUtil::StartsWith(arg, "--out=")) {
+		} else if (StringUtil::StartsWith(arg, "--out=") ||
+		           StringUtil::StartsWith(arg, "--log=")) {
 			auto splits = StringUtil::Split(arg, '=');
 			if (splits.size() != 2) {
 				print_help();
 				exit(1);
 			}
-			instance.out_file.open(splits[1]);
-			if (!instance.out_file.good()) {
+			auto &file = StringUtil::StartsWith(arg, "--out=")
+			                 ? instance.out_file
+			                 : instance.log_file;
+			file.open(splits[1]);
+			if (!file.good()) {
 				fprintf(stderr, "Could not open file %s for writing\n",
 				        splits[1].c_str());
 				exit(1);

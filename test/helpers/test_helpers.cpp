@@ -74,15 +74,14 @@ bool CHECK_COLUMN(unique_ptr<duckdb::DuckDBResult> &result,
 	return true;
 }
 
-string compare_csv(unique_ptr<duckdb::DuckDBResult> &result, string csv,
-                   bool header) {
-	if (!result->GetSuccess()) {
+string compare_csv(duckdb::DuckDBResult &result, string csv, bool header) {
+	if (!result.GetSuccess()) {
 		fprintf(stderr, "Query failed with message: %s\n",
-		        result->GetErrorMessage().c_str());
-		return result->GetErrorMessage().c_str();
+		        result.GetErrorMessage().c_str());
+		return result.GetErrorMessage().c_str();
 	}
 	string error;
-	if (!compare_result(csv, result->collection, header, error)) {
+	if (!compare_result(csv, result.collection, header, error)) {
 		return error;
 	}
 	return "";

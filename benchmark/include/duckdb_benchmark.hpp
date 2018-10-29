@@ -38,6 +38,7 @@ struct DuckDBBenchmarkState : public BenchmarkState {
 	std::unique_ptr<DuckDBResult> result;
 
 	DuckDBBenchmarkState() : db(nullptr), conn(db) {
+		conn.EnableProfiling();
 	}
 	virtual ~DuckDBBenchmarkState() {
 	}
@@ -73,6 +74,11 @@ class DuckDBBenchmark : public Benchmark {
 	virtual std::string Verify(BenchmarkState *state_) override {
 		auto state = (DuckDBBenchmarkState *)state_;
 		return VerifyResult(state->result.get());
+	}
+
+	virtual std::string GetLogOutput(BenchmarkState *state_) override {
+		auto state = (DuckDBBenchmarkState *)state_;
+		return state->conn.GetProfilingInformation();
 	}
 
 	//! Interrupt the benchmark because of a timeout

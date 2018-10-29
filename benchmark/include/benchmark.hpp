@@ -54,6 +54,8 @@ class Benchmark {
 		return name + " - " + group + "\n" + BenchmarkInfo();
 	}
 
+	virtual std::string GetLogOutput(BenchmarkState *state) = 0;
+
 	//! Whether or not Initialize() should be called once for every run or just
 	//! once
 	virtual bool RequireReinit() {

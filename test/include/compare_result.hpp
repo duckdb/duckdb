@@ -7,8 +7,8 @@ namespace duckdb {
 bool CHECK_COLUMN(std::unique_ptr<duckdb::DuckDBResult> &result,
                   size_t column_number, std::vector<duckdb::Value> values);
 
-std::string compare_csv(std::unique_ptr<duckdb::DuckDBResult> &result,
-                        std::string csv, bool header = false);
+std::string compare_csv(duckdb::DuckDBResult &result, std::string csv,
+                        bool header = false);
 
 bool parse_datachunk(std::string csv, DataChunk &result, bool has_header);
 

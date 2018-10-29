@@ -291,3 +291,6 @@ test/evidence/
 third_party/sqllogictest
 # Format timer
 .last_format
+# Benchmarks
+.last_benchmarked_commit
+benchmark_results/

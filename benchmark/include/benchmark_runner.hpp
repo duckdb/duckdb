@@ -37,12 +37,14 @@ class BenchmarkRunner {
 	void Log(std::string message);
 	void LogLine(std::string message);
 	void LogResult(std::string message);
+	void LogOutput(std::string message);
 
 	void RunBenchmark(Benchmark *benchmark);
 	void RunBenchmarks();
 
 	std::vector<Benchmark *> benchmarks;
 	std::ofstream out_file;
+	std::ofstream log_file;
 };
 
 } // namespace duckdb
