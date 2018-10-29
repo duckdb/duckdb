@@ -171,7 +171,6 @@ def create_html(results_folder):
 				elif result_type == 'Unknown':
 					result_html = background_color_output(result_html, 184, 134, 11)
 
-#				print(result_html)
 				benchmark_results[benchmark_name][result] = result_html
 		# now write the actual tables
 		# we create one table per group
@@ -205,6 +204,7 @@ def create_html(results_folder):
 				end_row(f)
 
 		f.write(footer)
+	os.system('./transfer.sh')
 
 if __name__ == "__main__":
 	create_html("benchmark_results")
