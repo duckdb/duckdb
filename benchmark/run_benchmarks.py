@@ -174,5 +174,5 @@ while True:
 		# successfully benchmarked this commit, write to file
 		with open(last_benchmarked_commit_file, 'w+') as f:
 			f.write(commit)
-	benchmark_html.create_html(os.path.join(os.getcwd(), 'benchmark_results'))
+	benchmark_html.create_html('benchmark_results')
 
