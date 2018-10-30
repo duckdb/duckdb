@@ -25,7 +25,10 @@ void sleep_thread(Benchmark *benchmark, BenchmarkState *state,
 	// timeout is given in seconds
 	// we wait 10ms per iteration, so timeout * 100 gives us the amount of
 	// iterations
-	for (size_t i = 0; i < timeout_duration * 100 && is_active; i++) {
+	if (timeout_duration < 0) {
+		return;
+	}
+	for (size_t i = 0; i < (size_t)(timeout_duration * 100) && is_active; i++) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 	}
 	if (is_active) {

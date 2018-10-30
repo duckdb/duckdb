@@ -23,8 +23,8 @@ struct BenchmarkState {
 //! The base Benchmark class is a base class that is used to create and register
 //! new benchmarks
 class Benchmark {
-	constexpr static int DEFAULT_NRUNS = 5;
-	constexpr static int DEFAULT_TIMEOUT = 30;
+	constexpr static size_t DEFAULT_NRUNS = 5;
+	constexpr static size_t DEFAULT_TIMEOUT = 30;
 
   public:
 	//! The name of the benchmark
@@ -62,11 +62,11 @@ class Benchmark {
 		return false;
 	}
 	//! The amount of runs to do for this benchmark
-	virtual int NRuns() {
+	virtual size_t NRuns() {
 		return DEFAULT_NRUNS;
 	}
 	//! The timeout for this benchmark (in seconds)
-	virtual int Timeout() {
+	virtual size_t Timeout() {
 		return DEFAULT_TIMEOUT;
 	}
 };

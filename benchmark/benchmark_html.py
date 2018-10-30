@@ -140,8 +140,8 @@ def create_html(results_folder):
 				if os.path.isfile(log_name):
 					result_html += " ["
 					result_html += '<a href="%s">L</a>' % (log_name,)
-					result_html += '<a href="%s">/O</a>' % (stdout_name,)
-					result_html += '<a href="%s">/E</a>' % (stderr_name,)
+					result_html += '/<a href="%s">O</a>' % (stdout_name,)
+					result_html += '/<a href="%s">E</a>' % (stderr_name,)
 					result_html += "]"
 				table_class = None
 				if result_type == 'Crash' or result_type == 'Incorrect':
