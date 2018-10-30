@@ -107,6 +107,14 @@ struct VectorOperations {
 	static void LessThanEquals(Vector &A, Vector &B, Vector &result);
 
 	//===--------------------------------------------------------------------===//
+	// String Operations
+	//===--------------------------------------------------------------------===//
+	// result = A LIKE B
+	static void Like(Vector &A, Vector &B, Vector &result);
+	// result = A NOT LIKE B
+	static void NotLike(Vector &A, Vector &B, Vector &result);
+
+	//===--------------------------------------------------------------------===//
 	// Aggregates
 	//===--------------------------------------------------------------------===//
 	// SUM(A)

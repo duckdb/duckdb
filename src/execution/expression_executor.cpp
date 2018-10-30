@@ -292,9 +292,11 @@ void ExpressionExecutor::Visit(ComparisonExpression &expr) {
 		VectorOperations::GreaterThanEquals(l, r, vector);
 		break;
 	case ExpressionType::COMPARE_LIKE:
-		throw NotImplementedException("Unimplemented compare: COMPARE_LIKE");
+		VectorOperations::Like(l, r, vector);
+		break;
 	case ExpressionType::COMPARE_NOTLIKE:
-		throw NotImplementedException("Unimplemented compare: COMPARE_NOTLIKE");
+		VectorOperations::NotLike(l, r, vector);
+		break;
 	case ExpressionType::COMPARE_IN:
 		throw NotImplementedException("Unimplemented compare: COMPARE_IN");
 	case ExpressionType::COMPARE_DISTINCT_FROM:

@@ -158,12 +158,14 @@ def create_html(results_folder):
 
 				result_html = bold_output(result_html)
 
+				result_html += " ["
 				if os.path.isfile(log_name):
-					result_html += ' <a href="%s">[L]</a>' % (log_name,)
+					result_html += '<a href="%s">L</a>' % (log_name,)
 				if os.path.isfile(stdout_name):
-					result_html += ' <a href="%s">[O]</a>' % (stdout_name,)
+					result_html += '<a href="%s">-O</a>' % (stdout_name,)
 				if os.path.isfile(stderr_name):
-					result_html += ' <a href="%s">[E]</a>' % (stderr_name,)
+					result_html += '<a href="%s">-E</a>' % (stderr_name,)
+				result_html += "]"
 				if result_type == 'Crash' or result_type == 'Incorrect':
 					result_html = background_color_output(result_html, 222, 56, 56)
 				elif result_type == 'Timeout':
