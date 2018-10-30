@@ -14,7 +14,7 @@ SuperLargeHashTable::SuperLargeHashTable(size_t initial_capacity,
                                          vector<TypeId> payload_types,
                                          vector<ExpressionType> aggregate_types,
                                          bool parallel)
-    : group_serializer(group_types, false), aggregate_types(aggregate_types),
+    : group_serializer(group_types), aggregate_types(aggregate_types),
       group_types(group_types), payload_types(payload_types), payload_width(0),
       capacity(0), entries(0), data(nullptr), max_chain(0), parallel(parallel) {
 	// HT tuple layout is as follows:
@@ -91,11 +91,8 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	assert(capacity - entries > STANDARD_VECTOR_SIZE);
 
 	// first create a hash of all the values
-	Vector hashes(TypeId::INTEGER, true, false);
-	VectorOperations::Hash(groups.data[0], hashes);
-	for (size_t i = 1; i < groups.column_count; i++) {
-		VectorOperations::CombineHash(hashes, groups.data[i]);
-	}
+	Vector hashes;
+	groups.Hash(hashes);
 
 	assert(hashes.sel_vector == groups.sel_vector);
 	// list of addresses for the tuples

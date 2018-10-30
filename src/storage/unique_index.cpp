@@ -14,7 +14,7 @@ using namespace std;
 
 UniqueIndex::UniqueIndex(DataTable &table, std::vector<TypeId> types,
                          std::vector<size_t> keys, bool allow_nulls)
-    : serializer(types, false, keys), comparer(serializer, table.serializer),
+    : serializer(types,  keys), comparer(serializer, table.serializer),
       table(table), types(types), keys(keys), allow_nulls(allow_nulls) {
 }
 
@@ -333,10 +333,10 @@ string UniqueIndex::Update(Transaction &transaction, StorageChunk *storage,
 		}
 
 		// otherwise we need to add the update to the index and verify that
-		// there are no conflicts first we serialize the updates to a set of
-		// tuples this is a bit more difficult as the update_chunk might not
+		// there are no conflicts. First we serialize the updates to a set of
+		// tuples. This is a bit more difficult as the update_chunk might not
 		// contain all columns instead, we might have to go back to the base
-		// table
+		// table.
 		Tuple tuples[STANDARD_VECTOR_SIZE];
 		bool has_null[STANDARD_VECTOR_SIZE] = {0};
 

@@ -108,6 +108,9 @@ class DataChunk : public Printable {
 	//! Move all the strings inside this DataChunk to the specified heap
 	void MoveStringsToHeap(StringHeap &heap);
 
+	//! Hashes the DataChunk to the target vector
+	void Hash(Vector &result);
+
 	//! Returns a list of types of the vectors of this data chunk
 	std::vector<TypeId> GetTypes();
 

@@ -46,6 +46,11 @@ struct VectorOperations {
 	//! A += B
 	static void AddInPlace(Vector &A, int64_t B);
 
+	//! A %= B
+	static void ModuloInPlace(Vector &A, Vector &B);
+	//! A %= B
+	static void ModuloInPlace(Vector &A, int64_t B);
+
 	//===--------------------------------------------------------------------===//
 	// Numeric Functions
 	//===--------------------------------------------------------------------===//

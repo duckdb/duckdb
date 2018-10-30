@@ -26,7 +26,7 @@ class TupleSerializer {
 	friend class TupleComparer;
 
   public:
-	TupleSerializer(const std::vector<TypeId> &types, bool inline_varlength,
+	TupleSerializer(const std::vector<TypeId> &types,
 	                std::vector<size_t> columns = {});
 
 	//! Serialize a DataChunk to a set of tuples. Memory is allocated for the
@@ -56,7 +56,6 @@ class TupleSerializer {
 
 	//! Returns the constant per-tuple size (only if the size is constant)
 	inline size_t TupleSize() {
-		assert(!inline_varlength || !has_variable_columns);
 		return base_size;
 	}
 
@@ -91,8 +90,6 @@ class TupleSerializer {
 	std::vector<bool> is_variable;
 	//! Whether or not the Serializer contains variable-length columns
 	bool has_variable_columns;
-	//! Whether or not variable length columns should be inlined
-	bool inline_varlength;
 };
 
 //! Compare tuples created through different TupleSerializers

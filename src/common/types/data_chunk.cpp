@@ -257,6 +257,14 @@ void DataChunk::MoveStringsToHeap(StringHeap &heap) {
 	}
 }
 
+void DataChunk::Hash(Vector &result) {
+	result.Initialize(TypeId::INTEGER, false);
+	VectorOperations::Hash(data[0], result);
+	for (size_t i = 1; i < column_count; i++) {
+		VectorOperations::CombineHash(result, data[i]);
+	}
+}
+
 #ifdef DEBUG
 void DataChunk::Verify() {
 	// verify that all vectors in this chunk have the chunk selection vector

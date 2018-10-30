@@ -20,7 +20,7 @@ using namespace duckdb;
 using namespace std;
 
 DataTable::DataTable(StorageManager &storage, TableCatalogEntry &table)
-    : table(table), serializer(table.GetTypes(), false), storage(storage) {
+    : table(table), serializer(table.GetTypes()), storage(storage) {
 	size_t accumulative_size = 0;
 	for (size_t i = 0; i < table.columns.size(); i++) {
 		accumulative_tuple_size.push_back(accumulative_size);
