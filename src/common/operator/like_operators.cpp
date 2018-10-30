@@ -35,9 +35,9 @@ bool Like::Operation(const char *s, const char *pattern, const char *escape) {
 				return true;
 			}
 			return false;
-		} else if (*p == *t)
+		} else if (*p == *t) {
 			t++;
-		else {
+		} else {
 			return false;
 		}
 	}
