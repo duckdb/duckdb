@@ -145,9 +145,9 @@ for commit in list:
 	default_start_commit = commit
 	log("Benchmarking commit " + commit)
 	# switch to this commit in the source tree
-	# if not switch_to_commit(commit):
-	# 	log("Failed to switch to commit! Moving to next commit")
-	# 	continue
+	if not switch_to_commit(commit):
+		log("Failed to switch to commit! Moving to next commit")
+		continue
 	# now try to compile it
 	if not build_optimized():
 		continue

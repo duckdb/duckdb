@@ -9,6 +9,7 @@
 #include "common/types/chunk_collection.hpp"
 #include "execution/aggregate_hashtable.hpp"
 #include "execution/column_binding_resolver.hpp"
+#include "execution/join_hashtable.hpp"
 #include "execution/physical_operator.hpp"
 #include "main/query_profiler.hpp"
 #include "main/result.hpp"
@@ -44,6 +45,8 @@ template class std::unique_ptr<DataChunk>;
 template class std::unique_ptr<Statistics[]>;
 template class std::unique_ptr<Constraint>;
 template class std::unique_ptr<SelectStatement>;
+template class std::unique_ptr<JoinHashTable>;
+template class std::unique_ptr<JoinHashTable::ScanStructure>;
 
 #define INSTANTIATE_VECTOR(VECTOR_DEFINITION)                                  \
 	template VECTOR_DEFINITION::size_type VECTOR_DEFINITION::size() const;     \

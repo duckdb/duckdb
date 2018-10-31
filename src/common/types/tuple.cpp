@@ -1,6 +1,7 @@
 
 #include "common/types/tuple.hpp"
 #include "common/types/null_value.hpp"
+#include "common/vector_operations/vector_operations.hpp"
 
 #include "common/exception.hpp"
 
@@ -52,6 +53,12 @@ void TupleSerializer::Serialize(DataChunk &chunk, uint8_t *targets[]) {
 	size_t offset = 0;
 	for (size_t i = 0; i < columns.size(); i++) {
 		SerializeColumn(chunk, targets, i, offset);
+	}
+}
+
+void TupleSerializer::Deserialize(Vector &source, DataChunk &chunk) {
+	for (size_t i = 0; i < columns.size(); i++) {
+		DeserializeColumn(source, i, chunk.data[columns[i]]);
 	}
 }
 
@@ -142,22 +149,6 @@ static void SerializeValue(uint8_t *target_data, Vector &col, size_t index,
 }
 
 void TupleSerializer::SerializeColumn(DataChunk &chunk, uint8_t *targets[],
-                                      size_t column_index, size_t offsets[]) {
-	const auto column = columns[column_index];
-	const auto type_size = type_sizes[column_index];
-	const auto type = types[column_index];
-
-	assert(type == chunk.data[column].type);
-	for (size_t i = 0; i < chunk.size(); i++) {
-		size_t index = chunk.sel_vector ? chunk.sel_vector[i] : i;
-		auto target_data = targets[i] + offsets[i];
-
-		SerializeValue(target_data, chunk.data[column], index, i, type_size);
-		offsets[i] += type_size;
-	}
-}
-
-void TupleSerializer::SerializeColumn(DataChunk &chunk, uint8_t *targets[],
                                       size_t column_index, size_t &offset) {
 	const auto column = columns[column_index];
 	const auto type_size = type_sizes[column_index];
@@ -168,6 +159,15 @@ void TupleSerializer::SerializeColumn(DataChunk &chunk, uint8_t *targets[],
 		SerializeValue(target_data, chunk.data[column], index, i, type_size);
 	}
 	offset += type_size;
+}
+
+void TupleSerializer::DeserializeColumn(Vector &source, size_t column_index,
+                                        Vector &target) {
+	const auto type_size = type_sizes[column_index];
+	assert(types[column_index] == target.type);
+	target.count = source.count;
+	VectorOperations::Gather::Set(source, target);
+	VectorOperations::AddInPlace(source, type_size);
 }
 
 int TupleSerializer::Compare(Tuple &a, Tuple &b) {

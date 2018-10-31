@@ -38,6 +38,9 @@ class TupleSerializer {
 	//! Serializes a tuple from a set of columns to a single memory location
 	void Serialize(std::vector<char *> &columns, size_t offset,
 	               uint8_t *target);
+	//! Deserialize a DataChunk from a set of memory locations
+	void Deserialize(Vector &source, DataChunk &chunk);
+
 	//! Deserialize a tuple from a single memory location to a set of columns
 	void Deserialize(std::vector<char *> &columns, size_t offset,
 	                 uint8_t *target);
@@ -67,15 +70,13 @@ class TupleSerializer {
 	//! inline varlength is FALSE OR (2) no variable length columns are there
 	int Compare(const uint8_t *a, const uint8_t *b);
 
-  private:
-	//! Serialize a single column of a chunk with potential variable columns to
-	//! the target tuples
-	void SerializeColumn(DataChunk &chunk, uint8_t *targets[],
-	                     size_t column_index, size_t offsets[]);
-	//! Single a single column of a chunk
+	//! Serialize a single column of a chunk
 	void SerializeColumn(DataChunk &chunk, uint8_t *targets[],
 	                     size_t column_index, size_t &offset);
+	//! Deserialize a single column of a chunk
+	void DeserializeColumn(Vector &source, size_t column_index, Vector &target);
 
+  private:
 	//! Types of the generated tuples
 	std::vector<TypeId> types;
 	//! The type sizes

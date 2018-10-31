@@ -111,7 +111,11 @@ void BindContext::BindColumn(ColumnRefExpression &expr, size_t depth) {
 		}
 		auto table_index = table.index;
 		auto entry = &table.table->GetColumn(expr.column_name);
-		expr.stats = table.table->GetStatistics(entry->oid);
+		if (bindings.size() == 1) {
+			// single table query without joins, can use base table statistics
+			// directly
+			expr.stats = table.table->GetStatistics(entry->oid);
+		}
 		auto &column_list = bound_columns[expr.table_name];
 		// check if the entry already exists in the column list for the table
 		expr.binding.column_index = column_list.size();

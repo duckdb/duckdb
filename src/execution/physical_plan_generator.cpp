@@ -153,13 +153,26 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 	op.children[1]->Accept(this);
 	auto right = move(plan);
 
+	bool only_equality = true;
 	for (auto &cond : op.conditions) {
 		cond.left->Accept(this);
 		cond.right->Accept(this);
+		if (cond.comparison != ExpressionType::COMPARE_EQUAL) {
+			only_equality = false;
+		}
 	}
 
-	plan = make_unique<PhysicalNestedLoopJoin>(move(left), move(right),
-	                                           move(op.conditions), op.type);
+	assert(left);
+	assert(right);
+	if (only_equality) {
+		// equality join: use hash join
+		plan = make_unique<PhysicalHashJoin>(move(left), move(right),
+		                                     move(op.conditions), op.type);
+	} else {
+		// non-equality join: use nested loop
+		plan = make_unique<PhysicalNestedLoopJoin>(
+		    move(left), move(right), move(op.conditions), op.type);
+	}
 }
 
 void PhysicalPlanGenerator::Visit(LogicalLimit &op) {

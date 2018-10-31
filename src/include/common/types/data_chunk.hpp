@@ -125,12 +125,12 @@ class DataChunk : public Printable {
 
 	// strings owned by the chunk
 	StringHeap heap;
+	//! The selection vector of a chunk, if it owns it
+	sel_t owned_sel_vector[STANDARD_VECTOR_SIZE];
 
   private:
 	//! The data owned by this DataChunk. This data is typically referenced by
 	//! the member vectors.
 	std::unique_ptr<char[]> owned_data;
-	//! The selection vector of a chunk, if it owns it
-	sel_t owned_sel_vector[STANDARD_VECTOR_SIZE];
 };
 } // namespace duckdb
