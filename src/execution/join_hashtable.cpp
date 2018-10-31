@@ -27,14 +27,15 @@ JoinHashTable::JoinHashTable(std::vector<TypeId> key_types,
 
 void JoinHashTable::InsertHashes(Vector &hashes, uint8_t *key_locations[]) {
 	assert(hashes.type == TypeId::POINTER);
+	hashes.Flatten();
 
 	// use modulo to get position in array (FIXME: can be done more efficiently)
 	VectorOperations::ModuloInPlace(hashes, capacity);
 
 	auto pointers = hashed_pointers.get();
-	auto indices = (uint64_t *)hashes.data;
+	auto indices = (uint64_t*) hashes.data;
 	// now fill in the entries
-	for (size_t i = 0; i < hashes.count; i++) {
+	for(size_t i = 0; i < hashes.count; i++) {
 		auto index = indices[i];
 		// set prev in current key to the value (NOTE: this will be nullptr if
 		// there is none)

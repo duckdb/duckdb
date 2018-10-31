@@ -68,7 +68,7 @@ class JoinHashTable {
   public:
 	JoinHashTable(std::vector<TypeId> key_types,
 	              std::vector<TypeId> build_types,
-	              size_t initial_capacity = 2048, bool parallel = false);
+	              size_t initial_capacity = 32768, bool parallel = false);
 	//! Resize the HT to the specified size. Must be larger than the current
 	//! size.
 	void Resize(size_t size);
