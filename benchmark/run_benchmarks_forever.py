@@ -1,5 +1,5 @@
 
-import os, time
+import os, sys, time
 
 # move to the base directory
 path = os.path.dirname(sys.argv[0])
