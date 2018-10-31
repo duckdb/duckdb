@@ -391,18 +391,16 @@ string UniqueIndex::Update(Transaction &transaction, StorageChunk *storage,
 		                                 storage->start, tuples);
 
 		// check if there are duplicates in the tuples themselves
-		// FIXME: this should use a hash set or a tree because 1024^2 is a lot
+		TupleSet set;
 		for (size_t i = 0; i < update_chunk.size(); i++) {
-			for (size_t j = i + 1; j < update_chunk.size(); j++) {
-				if (index.serializer.Compare(tuples[i], tuples[j]) == 0) {
-					error = "PRIMARY KEY or UNIQUE constraint violated: "
-					        "duplicated key";
-					break;
-				}
-			}
-			if (!error.empty()) {
+			TupleReference ref(&tuples[i], index.serializer);
+			auto entry = set.find(ref);
+			if (entry != set.end()) {
+				error = "PRIMARY KEY or UNIQUE constraint violated: "
+				        "duplicated key";
 				break;
 			}
+			set.insert(ref);
 		}
 		if (!error.empty()) {
 			break;

@@ -11,6 +11,7 @@
 #pragma once
 
 #include <memory>
+#include <set>
 
 #include "common/types/data_chunk.hpp"
 
@@ -109,5 +110,24 @@ class TupleComparer {
 	//! The right offsets used for comparison
 	std::vector<size_t> right_offsets;
 };
+
+struct TupleReference {
+	Tuple *tuple;
+	TupleSerializer &serializer;
+
+	TupleReference(Tuple *tuple, TupleSerializer &serializer)
+	    : tuple(tuple), serializer(serializer) {
+		// NULL tuple not allowed
+		assert(tuple);
+	}
+
+	bool operator<(const TupleReference &rhs) const {
+		// comparison needs the same serializer
+		assert(&serializer == &rhs.serializer);
+		return serializer.Compare(*tuple, *rhs.tuple) < 0;
+	}
+};
+
+typedef std::set<TupleReference> TupleSet;
 
 } // namespace duckdb
