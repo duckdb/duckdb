@@ -26,13 +26,16 @@ JoinHashTable::JoinHashTable(std::vector<TypeId> key_types,
 }
 
 void JoinHashTable::InsertHashes(Vector &hashes, uint8_t *key_locations[]) {
-	assert(hashes.type == TypeId::INTEGER);
+	assert(hashes.type == TypeId::POINTER);
+
+	// use modulo to get position in array (FIXME: can be done more efficiently)
+	VectorOperations::ModuloInPlace(hashes, capacity);
 
 	auto pointers = hashed_pointers.get();
-	auto hash_values = (int *)hashes.data;
+	auto indices = (uint64_t *)hashes.data;
 	// now fill in the entries
 	for (size_t i = 0; i < hashes.count; i++) {
-		auto index = abs(hash_values[i]) % capacity;
+		auto index = indices[i];
 		// set prev in current key to the value (NOTE: this will be nullptr if
 		// there is none)
 		auto prev_pointer = (uint8_t **)(key_locations[i] + tuple_size);
@@ -167,12 +170,14 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	// first hash all the keys to do the lookup
 	Vector hashes;
 	keys.Hash(hashes);
+	// use modulo to get index in array
+	VectorOperations::ModuloInPlace(hashes, capacity);
 
 	// now create the initial pointers from the hashes
 	auto ptrs = (uint8_t **)ss->pointers.data;
-	auto hash_values = (int *)hashes.data;
+	auto indices = (uint64_t *)hashes.data;
 	for (size_t i = 0; i < hashes.count; i++) {
-		auto index = abs(hash_values[i]) % capacity;
+		auto index = indices[i];
 		ptrs[i] = hashed_pointers[index];
 	}
 	ss->pointers.count = hashes.count;

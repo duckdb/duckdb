@@ -91,16 +91,13 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	assert(capacity - entries > STANDARD_VECTOR_SIZE);
 
 	// first create a hash of all the values
-	Vector hashes;
-	groups.Hash(hashes);
+	Vector addresses;
+	groups.Hash(addresses);
 
-	assert(hashes.sel_vector == groups.sel_vector);
-	// list of addresses for the tuples
-	Vector addresses(TypeId::POINTER, true, false);
-	auto data_pointers = (uint8_t **)addresses.data;
-	// first cast from the hash type to the address type
-	VectorOperations::Cast(hashes, addresses);
 	assert(addresses.sel_vector == groups.sel_vector);
+	assert(addresses.type == TypeId::POINTER);
+	// list of addresses for the tuples
+	auto data_pointers = (uint8_t **)addresses.data;
 	// now compute the entry in the table based on the hash using a modulo
 	// multiply the position by the tuple size and add the base address
 	VectorOperations::ExecType<uint64_t>(
