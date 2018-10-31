@@ -15,6 +15,8 @@
 #include "common/types/tuple.hpp"
 #include "common/types/vector.hpp"
 
+#include <mutex>
+
 namespace duckdb {
 
 //! JoinHashTable is a linear probing HT that is used for computing joins
