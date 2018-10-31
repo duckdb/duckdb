@@ -38,6 +38,8 @@ def build_optimized():
 		return True
 
 def get_list_of_commits(until_commit=None):
+	proc = subprocess.Popen(['git', 'checkout', 'origin/master'], stdout=subprocess.PIPE)
+	proc.wait()
 	list = []
 	commit_regex = re.compile('commit ([a-z0-9]{40})')
 	proc = subprocess.Popen(['git', 'log'], stdout=subprocess.PIPE)
