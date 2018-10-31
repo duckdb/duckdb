@@ -31,10 +31,9 @@ class TupleSerializer {
 
 	//! Serialize a DataChunk to a set of tuples. Memory is allocated for the
 	//! tuple data.
-	void Serialize(DataChunk &chunk, Tuple targets[], bool *has_null = nullptr);
+	void Serialize(DataChunk &chunk, Tuple targets[]);
 	//! Serialize a DataChunk to a set of memory locations
-	void Serialize(DataChunk &chunk, uint8_t *targets[],
-	               bool *has_null = nullptr);
+	void Serialize(DataChunk &chunk, uint8_t *targets[]);
 	//! Serializes a tuple from a set of columns to a single memory location
 	void Serialize(std::vector<char *> &columns, size_t offset,
 	               uint8_t *target);
@@ -52,7 +51,7 @@ class TupleSerializer {
 	void SerializeUpdate(std::vector<char *> &column_data,
 	                     std::vector<column_t> &affected_columns,
 	                     DataChunk &update_chunk, Vector &index_vector,
-	                     size_t index_offset, Tuple targets[], bool *has_null);
+	                     size_t index_offset, Tuple targets[]);
 
 	//! Returns the constant per-tuple size (only if the size is constant)
 	inline size_t TupleSize() {
@@ -71,12 +70,10 @@ class TupleSerializer {
 	//! Serialize a single column of a chunk with potential variable columns to
 	//! the target tuples
 	void SerializeColumn(DataChunk &chunk, uint8_t *targets[],
-	                     size_t column_index, size_t offsets[],
-	                     bool *has_null = nullptr);
+	                     size_t column_index, size_t offsets[]);
 	//! Single a single column of a chunk
 	void SerializeColumn(DataChunk &chunk, uint8_t *targets[],
-	                     size_t column_index, size_t &offset,
-	                     bool *has_null = nullptr);
+	                     size_t column_index, size_t &offset);
 
 	//! Types of the generated tuples
 	std::vector<TypeId> types;

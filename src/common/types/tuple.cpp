@@ -34,27 +34,24 @@ TupleSerializer::TupleSerializer(const std::vector<TypeId> &types,
 	}
 }
 
-void TupleSerializer::Serialize(DataChunk &chunk, Tuple targets[],
-                                bool *has_null) {
+void TupleSerializer::Serialize(DataChunk &chunk, Tuple targets[]) {
 	// initialize the tuples
 	// first compute the sizes, if there are variable length columns
 	// if there are none, we can just use the base size
 	uint8_t *target_locations[STANDARD_VECTOR_SIZE];
 	for (size_t i = 0; i < chunk.size(); i++) {
 		targets[i].size = base_size;
-		targets[i].data =
-		    unique_ptr<uint8_t[]>(new uint8_t[targets[i].size]);
+		targets[i].data = unique_ptr<uint8_t[]>(new uint8_t[targets[i].size]);
 		target_locations[i] = targets[i].data.get();
 	}
 	// now serialize to the targets
-	Serialize(chunk, target_locations, has_null);
+	Serialize(chunk, target_locations);
 }
 
-void TupleSerializer::Serialize(DataChunk &chunk, uint8_t *targets[],
-                                bool *has_null) {
+void TupleSerializer::Serialize(DataChunk &chunk, uint8_t *targets[]) {
 	size_t offset = 0;
 	for (size_t i = 0; i < columns.size(); i++) {
-		SerializeColumn(chunk, targets, i, offset, has_null);
+		SerializeColumn(chunk, targets, i, offset);
 	}
 }
 
@@ -96,7 +93,7 @@ void TupleSerializer::SerializeUpdate(vector<char *> &column_data,
                                       vector<column_t> &affected_columns,
                                       DataChunk &update_chunk,
                                       Vector &index_vector, size_t index_offset,
-                                      Tuple targets[], bool *has_null) {
+                                      Tuple targets[]) {
 	auto indices = (uint64_t *)index_vector.data;
 	assert(index_vector.count == update_chunk.size());
 
@@ -120,9 +117,6 @@ void TupleSerializer::SerializeUpdate(vector<char *> &column_data,
 				             index_offset;
 				auto source = column_data[column] + type_sizes[i] * index;
 				memcpy(targets[j].data.get() + offset, source, type_sizes[i]);
-				if (has_null && IsNullValue((uint8_t *)source, types[i])) {
-					has_null[j] = true;
-				}
 			}
 		} else {
 			// fetch from update column
@@ -132,10 +126,6 @@ void TupleSerializer::SerializeUpdate(vector<char *> &column_data,
 				    update_chunk.sel_vector ? update_chunk.sel_vector[j] : j;
 				auto source = baseptr + type_sizes[i] * index;
 				memcpy(targets[j].data.get() + offset, source, type_sizes[i]);
-				if (has_null &&
-				    update_chunk.data[update_column].nullmask[index]) {
-					has_null[j] = true;
-				}
 			}
 		}
 		offset += type_sizes[i];
@@ -143,21 +133,16 @@ void TupleSerializer::SerializeUpdate(vector<char *> &column_data,
 }
 
 static void SerializeValue(uint8_t *target_data, Vector &col, size_t index,
-                           size_t result_index, size_t type_size,
-                           bool *has_null) {
+                           size_t result_index, size_t type_size) {
 	if (col.nullmask[index]) {
 		SetNullValue(target_data, col.type);
-		if (has_null) {
-			has_null[result_index] = true;
-		}
 	} else {
 		memcpy(target_data, col.data + index * type_size, type_size);
 	}
 }
 
 void TupleSerializer::SerializeColumn(DataChunk &chunk, uint8_t *targets[],
-                                      size_t column_index, size_t offsets[],
-                                      bool *has_null) {
+                                      size_t column_index, size_t offsets[]) {
 	const auto column = columns[column_index];
 	const auto type_size = type_sizes[column_index];
 	const auto type = types[column_index];
@@ -167,23 +152,20 @@ void TupleSerializer::SerializeColumn(DataChunk &chunk, uint8_t *targets[],
 		size_t index = chunk.sel_vector ? chunk.sel_vector[i] : i;
 		auto target_data = targets[i] + offsets[i];
 
-		SerializeValue(target_data, chunk.data[column], index, i, type_size,
-		               has_null);
+		SerializeValue(target_data, chunk.data[column], index, i, type_size);
 		offsets[i] += type_size;
 	}
 }
 
 void TupleSerializer::SerializeColumn(DataChunk &chunk, uint8_t *targets[],
-                                      size_t column_index, size_t &offset,
-                                      bool *has_null) {
+                                      size_t column_index, size_t &offset) {
 	const auto column = columns[column_index];
 	const auto type_size = type_sizes[column_index];
 	assert(types[column_index] == chunk.data[column].type);
 	for (size_t i = 0; i < chunk.size(); i++) {
 		size_t index = chunk.sel_vector ? chunk.sel_vector[i] : i;
 		auto target_data = targets[i] + offset;
-		SerializeValue(target_data, chunk.data[column], index, i, type_size,
-		               has_null);
+		SerializeValue(target_data, chunk.data[column], index, i, type_size);
 	}
 	offset += type_size;
 }
