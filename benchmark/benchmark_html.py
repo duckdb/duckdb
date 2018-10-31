@@ -174,7 +174,7 @@ def create_html(results_folder):
 				begin_row(f)
 				# benchmark name
 				begin_value(f, 'table-active')
-				f.write('<a href="benchmark_results/info/%s">%s</a>' % (benchmark_name,benchmark_name))
+				f.write('<a href="benchmark_results/info/%s.log">%s</a>' % (benchmark_name,benchmark_name))
 				end_value(f)
 				# benchmark results
 				for result in results:

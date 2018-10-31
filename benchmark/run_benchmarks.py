@@ -114,7 +114,7 @@ def write_benchmark_info(benchmark, folder):
 	file = os.path.join(folder, benchmark)
 	# benchmark, write info
 	log("Write benchmark info " + benchmark);
-	proc = subprocess.Popen([benchmark_runner, '--info', benchmark], stdout=subprocess.PIPE)
+	proc = subprocess.Popen([benchmark_runner, '--info', benchmark + '.log'], stdout=subprocess.PIPE)
 	output = proc.stdout.read()
 	print(output)
 	with open(file, 'w+') as f:
