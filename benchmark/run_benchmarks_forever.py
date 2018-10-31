@@ -8,9 +8,9 @@ if len(path) > 0:
 os.chdir("..")
 
 while True:
-    proc = subprocess.Popen('python', 'benchmark/run_benchmarks.py')
+    proc = subprocess.Popen(['python', 'benchmark/run_benchmarks.py'])
     proc.wait()
     if proc.returncode == 0:
-        proc = subprocess.Popen('python', 'benchmark/benchmark_html.py')
+        proc = subprocess.Popen(['python', 'benchmark/benchmark_html.py'])
         proc.wait()
     time.sleep(60)
