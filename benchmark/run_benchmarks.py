@@ -1,14 +1,7 @@
 
 import os, sys, subprocess, re, time
-import benchmark_html
 
 last_benchmarked_commit_file = '.last_benchmarked_commit'
-
-# move to the base directory
-path = os.path.dirname(sys.argv[0])
-if len(path) > 0:
-	os.chdir(path)
-os.chdir("..")
 
 def log(msg):
 	print(msg)
@@ -132,47 +125,44 @@ if os.path.exists(last_benchmarked_commit_file):
 	with open(last_benchmarked_commit_file, 'r') as f:
 		default_start_commit = f.read().rstrip()
 
-while True:
-	pull_new_changes()
+pull_new_changes()
 
-	# get a list of all commits to benchmark
-	list = get_list_of_commits(default_start_commit)
-	list.reverse()
+# get a list of all commits to benchmark
+list = get_list_of_commits(default_start_commit)
+list.reverse()
 
-	if len(list) == 0:
-		time.sleep(60)
-		continue;
+if len(list) == 0:
+	exit(1)
 
-	# create a folder for the benchmark results, if it doesn't exist yet
-	try:
-		os.mkdir(benchmark_results_folder)
-		os.mkdir(benchmark_info_folder)
-	except:
-		pass
+# create a folder for the benchmark results, if it doesn't exist yet
+try:
+	os.mkdir(benchmark_results_folder)
+	os.mkdir(benchmark_info_folder)
+except:
+	pass
 
-	for commit in list:
-		default_start_commit = commit
-		log("Benchmarking commit " + commit)
-		# switch to this commit in the source tree
-		# if not switch_to_commit(commit):
-		# 	log("Failed to switch to commit! Moving to next commit")
-		# 	continue
-		# now try to compile it
-		if not build_optimized():
-			continue
+for commit in list:
+	default_start_commit = commit
+	log("Benchmarking commit " + commit)
+	# switch to this commit in the source tree
+	# if not switch_to_commit(commit):
+	# 	log("Failed to switch to commit! Moving to next commit")
+	# 	continue
+	# now try to compile it
+	if not build_optimized():
+		continue
 
-		# make a benchmark folder for this commit
-		benchmark_folder = make_benchmark_folder(commit)
-		log("Writing to folder: " + benchmark_folder)
+	# make a benchmark folder for this commit
+	benchmark_folder = make_benchmark_folder(commit)
+	log("Writing to folder: " + benchmark_folder)
 
-		# now run the benchmarks
-		benchmarks_to_run = get_benchmark_list()
-		for benchmark in benchmarks_to_run:
-			write_benchmark_info(benchmark, benchmark_info_folder)
-			run_benchmark(benchmark, benchmark_folder)
+	# now run the benchmarks
+	benchmarks_to_run = get_benchmark_list()
+	for benchmark in benchmarks_to_run:
+		write_benchmark_info(benchmark, benchmark_info_folder)
+		run_benchmark(benchmark, benchmark_folder)
 
-		# successfully benchmarked this commit, write to file
-		with open(last_benchmarked_commit_file, 'w+') as f:
-			f.write(commit)
-	benchmark_html.create_html('benchmark_results')
+	# successfully benchmarked this commit, write to file
+	with open(last_benchmarked_commit_file, 'w+') as f:
+		f.write(commit)
 
