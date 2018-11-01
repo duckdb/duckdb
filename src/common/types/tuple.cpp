@@ -153,11 +153,10 @@ void TupleSerializer::SerializeColumn(DataChunk &chunk, uint8_t *targets[],
 	const auto column = columns[column_index];
 	const auto type_size = type_sizes[column_index];
 	assert(types[column_index] == chunk.data[column].type);
-	for (size_t i = 0; i < chunk.size(); i++) {
-		size_t index = chunk.sel_vector ? chunk.sel_vector[i] : i;
-		auto target_data = targets[i] + offset;
-		SerializeValue(target_data, chunk.data[column], index, i, type_size);
-	}
+	VectorOperations::Exec(chunk.data[column], [&](size_t i, size_t k) {
+		auto target_data = targets[k] + offset;
+		SerializeValue(target_data, chunk.data[column], i, k, type_size);
+	});
 	offset += type_size;
 }
 

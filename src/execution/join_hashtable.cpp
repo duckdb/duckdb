@@ -234,7 +234,7 @@ void ScanStructure::Next(DataChunk &left, DataChunk &result) {
 			}
 			// follow the pointer to the next entry in the chain
 			// check if there is a next pointer
-			auto prev_pointer = (uint8_t **)(ptrs[index] + ht.tuple_size);
+			auto prev_pointer = (uint8_t **)(pointer + ht.tuple_size);
 			ptrs[index] = *prev_pointer;
 			if (ptrs[index]) {
 				// if there is a next pointer, we keep this entry
