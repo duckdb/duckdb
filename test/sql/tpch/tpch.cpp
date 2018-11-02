@@ -93,6 +93,9 @@ TEST_CASE("Test TPC-H SF0.1", "[tpch][.]") {
 	result = con.Query(tpch::get_query(3));
 	COMPARE_CSV(result, tpch::get_answer(sf, 3), true);
 
+	// result = con.Query(tpch::get_query(4));
+	// COMPARE_CSV(result, tpch::get_answer(sf, 4), true);
+
 	result = con.Query(tpch::get_query(5));
 	COMPARE_CSV(result, tpch::get_answer(sf, 5), true);
 
@@ -111,9 +114,18 @@ TEST_CASE("Test TPC-H SF0.1", "[tpch][.]") {
 	result = con.Query(tpch::get_query(10));
 	COMPARE_CSV(result, tpch::get_answer(sf, 10), true);
 
+	// result = con.Query(tpch::get_query(11));
+	// COMPARE_CSV(result, tpch::get_answer(sf, 11), true);
+
 	result = con.Query(tpch::get_query(12));
 	COMPARE_CSV(result, tpch::get_answer(sf, 12), true);
 
+	// result = con.Query(tpch::get_query(13));
+	// COMPARE_CSV(result, tpch::get_answer(sf, 13), true);
+
 	// result = con.Query(tpch::get_query(16));
 	// COMPARE_CSV(result, tpch::get_answer(sf, 16), true);
+
+	result = con.Query(tpch::get_query(17));
+	COMPARE_CSV(result, tpch::get_answer(sf, 17), true);
 }

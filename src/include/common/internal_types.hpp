@@ -140,10 +140,10 @@ enum class ExpressionType : uint8_t {
 	// IS DISTINCT FROM operator
 	COMPARE_DISTINCT_FROM = 34,
 	// compare final boundary
-	COMPARE_BOUNDARY_END = COMPARE_DISTINCT_FROM,
 
 	COMPARE_BETWEEN = 35,
 	COMPARE_NOT_BETWEEN = 36,
+	COMPARE_BOUNDARY_END = COMPARE_NOT_BETWEEN,
 
 	// -----------------------------
 	// Conjunction Operators

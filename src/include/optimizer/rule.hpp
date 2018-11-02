@@ -223,6 +223,17 @@ class ExpressionNodeType : public AbstractRuleNode {
 	}
 };
 
+class ComparisonNodeType : public AbstractRuleNode {
+  public:
+	ComparisonNodeType() {
+	}
+	virtual bool Matches(AbstractOperator &rel) {
+		return rel.type == AbstractOperatorType::ABSTRACT_EXPRESSION &&
+		       rel.value.expr->type >= ExpressionType::COMPARE_BOUNDARY_START &&
+		       rel.value.expr->type <= ExpressionType::COMPARE_BOUNDARY_END;
+	}
+};
+
 class ColumnRefNodeDepth : public ExpressionNodeType {
   public:
 	size_t depth;

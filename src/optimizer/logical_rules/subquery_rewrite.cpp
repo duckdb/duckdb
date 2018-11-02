@@ -9,16 +9,15 @@ SubqueryRewritingRule::SubqueryRewritingRule() {
 	auto subquery = make_unique_base<AbstractRuleNode, ExpressionNodeType>(
 	    ExpressionType::SELECT_SUBQUERY);
 
-	auto equal = make_unique_base<AbstractRuleNode, ExpressionNodeType>(
-	    ExpressionType::COMPARE_EQUAL);
+	auto comparison = make_unique_base<AbstractRuleNode, ComparisonNodeType>();
 
-	equal->children.push_back(move(subquery));
-	equal->child_policy = ChildPolicy::SOME;
+	comparison->children.push_back(move(subquery));
+	comparison->child_policy = ChildPolicy::SOME;
 
 	root = make_unique_base<AbstractRuleNode, LogicalNodeType>(
 	    LogicalOperatorType::FILTER);
 
-	root->children.push_back(move(equal));
+	root->children.push_back(move(comparison));
 	root->child_policy = ChildPolicy::SOME;
 }
 
@@ -26,7 +25,7 @@ std::unique_ptr<LogicalOperator>
 SubqueryRewritingRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
                              std::vector<AbstractOperator> &bindings) {
 	auto *filter = (LogicalFilter *)bindings[0].value.op;
-	auto *equal = (ComparisonExpression *)bindings[1].value.expr;
+	auto *comparison = (ComparisonExpression *)bindings[1].value.expr;
 	auto *subquery = (SubqueryExpression *)bindings[2].value.expr;
 
 	// step 1: check if there is a correlation in the subquery
@@ -45,8 +44,7 @@ SubqueryRewritingRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
 	// with depth == 0 (belonging to the subquery) and a correlating expression
 	// with depth == 1 (belonging to the main expression) we use the matcher to
 	// find this comparison
-	auto sq_eq = make_unique_base<AbstractRuleNode, ExpressionNodeType>(
-	    ExpressionType::COMPARE_EQUAL);
+	auto sq_eq = make_unique_base<AbstractRuleNode, ExpressionNodeType>(ExpressionType::COMPARE_EQUAL);
 
 	sq_eq->children.push_back(make_unique<ColumnRefNodeDepth>(0));
 	sq_eq->children.push_back(make_unique<ColumnRefNodeDepth>(1));
@@ -113,14 +111,14 @@ SubqueryRewritingRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
 	// create the join conditions
 	// first is the original condition
 	JoinCondition original_condition;
-	original_condition.left = subquery == equal->children[0].get()
-	                              ? move(equal->children[1])
-	                              : move(equal->children[0]);
+	original_condition.left = subquery == comparison->children[0].get()
+	                              ? move(comparison->children[1])
+	                              : move(comparison->children[0]);
 	// the right condition is the first column of the subquery
 	auto &first_column = subquery->op->expressions[0];
 	original_condition.right = make_unique<ColumnRefExpression>(
 	    first_column->return_type, ColumnBinding(subquery_table_index, 0));
-	original_condition.comparison = ExpressionType::COMPARE_EQUAL;
+	original_condition.comparison = comparison->type;
 
 	// now we introduce the new join condition
 	JoinCondition condition;
@@ -151,7 +149,7 @@ SubqueryRewritingRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
 
 	// finally we remove the original equality expression from the filter
 	for (size_t i = 0; i < filter->expressions.size(); i++) {
-		if (filter->expressions[i].get() == equal) {
+		if (filter->expressions[i].get() == comparison) {
 			filter->expressions.erase(filter->expressions.begin() + i);
 			break;
 		}
