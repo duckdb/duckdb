@@ -93,18 +93,29 @@ def make_benchmark_folder(commit):
 
 
 class RunBenchmark(object):
-    def __init__(self, benchmark):
+    def __init__(self, benchmark, file_name, log_file, stdout_name, stderr_name, out_file):
         self.benchmark = benchmark
+        self.file_name = file_name
+        self.log_file = log_file
+        self.stdout_name = stdout_name
+        self.stderr_name = stderr_name
+        self.out_file = out_file
+        self.proc = None
 
     def run(self, timeout):
-        def run_benchmark_target():
-            self.proc = subprocess.Popen([benchmark_runner, '--out=' + self.out_file, '--log=' + self.log_file, self.benchmark], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.proc.communicate()
+        def run_benchmark_target(self):
+            self.proc.wait()
 
-        thread = threading.Thread(target=run_benchmark_target)
+        self.proc = subprocess.Popen([benchmark_runner, '--out=' + self.out_file, '--log=' + self.log_file, self.benchmark], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        thread = threading.Thread(target=run_benchmark_target, args=(self,))
         thread.start()
 
         thread.join(timeout)
+
+        self.stdout = self.proc.stdout.read()
+        self.stderr = self.proc.stderr.read()
+
         if thread.is_alive():
             self.proc.terminate()
             thread.join()
@@ -116,11 +127,11 @@ def run_benchmark(benchmark, folder):
     log("Starting benchmark " + benchmark);
     base_path = os.path.join(folder, benchmark)
 
-    runner = RunBenchmark(benchmark)
-    runner.file_name = base_path + ".csv"
-    runner.log_name = base_path + ".log"
-    runner.stdout_name = base_path + ".stdout.log"
-    runner.stderr_name = base_path + ".stderr.log"
+    file_name = base_path + ".csv"
+    log_file = base_path + ".log"
+    stdout_name = base_path + ".stdout.log"
+    stderr_name = base_path + ".stderr.log"
+    runner = RunBenchmark(benchmark, file_name, log_file, stdout_name, stderr_name, out_file)
 
     return_code = runner.run(total_timeout)
 
@@ -133,11 +144,11 @@ def run_benchmark(benchmark, folder):
         log("Succeeded in running benchmark " + benchmark);
         # succeeded, copy results to output directory
         os.rename(runner.out_file, runner.file_name)
-    os.rename(runner.log_file, runner.log_name)
+    os.rename(runner.log_file, runner.file_name)
     with open(runner.stdout_name, 'w+') as f:
-        f.write(runner.proc.stdout.read())
+        f.write(runner.stdout)
     with open(runner.stderr_name, 'w+') as f:
-        f.write(runner.proc.stderr.read())      
+        f.write(runner.stderr)
 
 def write_benchmark_info(benchmark, folder):
     file = os.path.join(folder, benchmark + '.log')
