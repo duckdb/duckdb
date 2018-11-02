@@ -28,6 +28,7 @@ enum class AbstractOperatorType {
 };
 
 class AbstractOperatorIterator;
+class Rewriter;
 
 class AbstractOperator : public Printable {
   public:
@@ -275,11 +276,13 @@ class Rule {
   public:
 	std::unique_ptr<AbstractRuleNode> root;
 	virtual std::unique_ptr<Expression>
-	Apply(Expression &root, std::vector<AbstractOperator> &bindings) {
+	Apply(Rewriter &rewriter, Expression &root,
+	      std::vector<AbstractOperator> &bindings) {
 		throw NotImplementedException("Apply Expression");
 	};
 	virtual std::unique_ptr<LogicalOperator>
-	Apply(LogicalOperator &root, std::vector<AbstractOperator> &bindings) {
+	Apply(Rewriter &rewriter, LogicalOperator &root,
+	      std::vector<AbstractOperator> &bindings) {
 		throw NotImplementedException("Apply LogicalOperator");
 	};
 	virtual ~Rule() {

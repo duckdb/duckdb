@@ -25,7 +25,8 @@ Rewriter::ApplyRules(unique_ptr<LogicalOperator> root) {
 				}
 
 				if (vertex.type == AbstractOperatorType::LOGICAL_OPERATOR) {
-					auto new_vertex = rule->Apply(*vertex.value.op, bindings);
+					auto new_vertex =
+					    rule->Apply(*this, *vertex.value.op, bindings);
 					if (!new_vertex) {
 						continue;
 					}
@@ -40,7 +41,8 @@ Rewriter::ApplyRules(unique_ptr<LogicalOperator> root) {
 					}
 
 				} else { // AbstractOperatorType::ABSTRACT_EXPRESSION
-					auto new_vertex = rule->Apply(*vertex.value.expr, bindings);
+					auto new_vertex =
+					    rule->Apply(*this, *vertex.value.expr, bindings);
 					if (!new_vertex) {
 						continue;
 					}

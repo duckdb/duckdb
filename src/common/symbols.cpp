@@ -83,6 +83,7 @@ template class std::vector<TypeId>;
 template class std::vector<Value>;
 template class std::vector<int>;
 INSTANTIATE_VECTOR(std::vector<WALEntryData>);
+INSTANTIATE_VECTOR(std::vector<AbstractOperator>);
 
 template struct std::atomic<size_t>;
 template class std::bitset<STANDARD_VECTOR_SIZE>;

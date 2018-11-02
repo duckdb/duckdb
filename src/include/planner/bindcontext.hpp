@@ -113,15 +113,16 @@ class BindContext {
 	    std::vector<std::unique_ptr<Expression>> &new_select_list);
 
 	//! Adds a base table with the given alias to the BindContext.
-	void AddBaseTable(const std::string &alias, TableCatalogEntry *table_entry);
+	size_t AddBaseTable(const std::string &alias,
+	                    TableCatalogEntry *table_entry);
 	//! Adds a dummy table with the given set of columns to the BindContext.
 	void AddDummyTable(const std::string &alias,
 	                   std::vector<ColumnDefinition> &columns);
 	//! Adds a subquery with a given alias to the BindContext.
-	void AddSubquery(const std::string &alias, SelectStatement *subquery);
+	size_t AddSubquery(const std::string &alias, SelectStatement *subquery);
 	//! Adds a table function with a given alias to the BindContext
-	void AddTableFunction(const std::string &alias,
-	                      TableFunctionCatalogEntry *function_entry);
+	size_t AddTableFunction(const std::string &alias,
+	                        TableFunctionCatalogEntry *function_entry);
 	//! Adds an expression that has an alias to the BindContext
 	void AddExpression(const std::string &alias, Expression *expression,
 	                   size_t i);
@@ -141,10 +142,13 @@ class BindContext {
 
 	BindContext *parent = nullptr;
 
+	//! Generates an unused alias
+	std::string GenerateAlias();
+	//! Generates an unused index for a table
+	size_t GenerateTableIndex();
+
   private:
 	void AddBinding(const std::string &alias, std::unique_ptr<Binding> binding);
-
-	size_t GenerateTableIndex();
 
 	size_t bound_tables;
 	size_t max_depth;

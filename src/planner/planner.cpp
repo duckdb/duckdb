@@ -24,7 +24,6 @@ void Planner::CreatePlan(ClientContext &context, SQLStatement &statement) {
 	// now create a logical query plan from the query
 	LogicalPlanGenerator logical_planner(context, *binder.bind_context);
 	statement.Accept(&logical_planner);
-	// logical_planner.Print();
 
 	this->plan = move(logical_planner.root);
 	this->context = move(binder.bind_context);

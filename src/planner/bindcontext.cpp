@@ -215,8 +215,7 @@ void BindContext::GenerateAllColumnExpressions(
 	}
 }
 
-void BindContext::AddBinding(const std::string &alias,
-                             unique_ptr<Binding> binding) {
+void BindContext::AddBinding(const string &alias, unique_ptr<Binding> binding) {
 	if (HasAlias(alias)) {
 		throw BinderException("Duplicate alias \"%s\" in query!",
 		                      alias.c_str());
@@ -224,14 +223,15 @@ void BindContext::AddBinding(const std::string &alias,
 	bindings_list.push_back(make_pair(alias, binding.get()));
 	bindings[alias] = move(binding);
 }
-void BindContext::AddBaseTable(const string &alias,
-                               TableCatalogEntry *table_entry) {
-	AddBinding(alias,
-	           make_unique<TableBinding>(table_entry, GenerateTableIndex()));
+size_t BindContext::AddBaseTable(const string &alias,
+                                 TableCatalogEntry *table_entry) {
+	size_t index = GenerateTableIndex();
+	AddBinding(alias, make_unique<TableBinding>(table_entry, index));
+	return index;
 }
 
-void BindContext::AddDummyTable(const std::string &alias,
-                                std::vector<ColumnDefinition> &columns) {
+void BindContext::AddDummyTable(const string &alias,
+                                vector<ColumnDefinition> &columns) {
 	// alias is empty for dummy table
 	// initialize the OIDs of the column definitions
 	for (size_t i = 0; i < columns.size(); i++) {
@@ -240,15 +240,19 @@ void BindContext::AddDummyTable(const std::string &alias,
 	AddBinding(alias, make_unique<DummyTableBinding>(columns));
 }
 
-void BindContext::AddSubquery(const string &alias, SelectStatement *subquery) {
-	AddBinding(alias,
-	           make_unique<SubqueryBinding>(subquery, GenerateTableIndex()));
+size_t BindContext::AddSubquery(const string &alias,
+                                SelectStatement *subquery) {
+	size_t index = GenerateTableIndex();
+	AddBinding(alias, make_unique<SubqueryBinding>(subquery, index));
+	return index;
 }
 
-void BindContext::AddTableFunction(const std::string &alias,
-                                   TableFunctionCatalogEntry *function_entry) {
-	AddBinding(alias, make_unique<TableFunctionBinding>(function_entry,
-	                                                    GenerateTableIndex()));
+size_t
+BindContext::AddTableFunction(const string &alias,
+                              TableFunctionCatalogEntry *function_entry) {
+	size_t index = GenerateTableIndex();
+	AddBinding(alias, make_unique<TableFunctionBinding>(function_entry, index));
+	return index;
 }
 
 void BindContext::AddExpression(const string &alias, Expression *expression,
@@ -260,7 +264,7 @@ bool BindContext::HasAlias(const string &alias) {
 	return bindings.find(alias) != bindings.end();
 }
 
-size_t BindContext::GetBindingIndex(const std::string &alias) {
+size_t BindContext::GetBindingIndex(const string &alias) {
 	auto entry = bindings.find(alias);
 	if (entry == bindings.end()) {
 		throw Exception("Could not find alias!");
@@ -273,4 +277,14 @@ size_t BindContext::GenerateTableIndex() {
 		return parent->GenerateTableIndex();
 	}
 	return bound_tables++;
+}
+
+string BindContext::GenerateAlias() {
+	size_t index = 1;
+	string alias = "dummy_alias";
+	while (bindings.find(alias) != bindings.end()) {
+		alias = "dummy_alias" + to_string(index);
+		index++;
+	}
+	return alias;
 }

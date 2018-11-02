@@ -39,7 +39,7 @@ TEST_CASE("Subquery rewriting", "[subquery_rewrite]") {
 		FAIL();
 	}
 
-	Rewriter rewriter;
+	Rewriter rewriter(*planner.context);
 	rewriter.rules.push_back(make_unique_base<Rule, SubqueryRewritingRule>());
 
 	// cout << planner.plan->ToString() + "\n";
