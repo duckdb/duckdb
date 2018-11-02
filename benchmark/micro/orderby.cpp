@@ -27,8 +27,8 @@ virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.DestroyAppender();
 }
 
-virtual std::unique_ptr<DuckDBResult> RunQuery(DuckDBBenchmarkState *state) {
-	return state->conn.Query("SELECT * FROM integers ORDER BY i");
+virtual std::string GetQuery() {
+	return "SELECT * FROM integers ORDER BY i";
 }
 
 virtual std::string VerifyResult(DuckDBResult *result) {

@@ -28,8 +28,8 @@ virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.DestroyAppender();
 }
 
-virtual std::unique_ptr<DuckDBResult> RunQuery(DuckDBBenchmarkState *state) {
-	return state->conn.Query("SELECT i, SUM(j) FROM integers GROUP BY i");
+virtual std::string GetQuery() {
+	return "SELECT i, SUM(j) FROM integers GROUP BY i";
 }
 
 virtual std::string VerifyResult(DuckDBResult *result) {

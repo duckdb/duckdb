@@ -7,6 +7,8 @@
 #include <chrono>
 #include <iostream>
 
+#include "sqlite_helpers.hpp"
+
 using namespace duckdb;
 using namespace std;
 

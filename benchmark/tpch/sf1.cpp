@@ -13,9 +13,8 @@ using namespace std;
 	virtual void Load(DuckDBBenchmarkState *state) {                           \
 		tpch::dbgen(SF, state->db);                                            \
 	}                                                                          \
-	virtual std::unique_ptr<DuckDBResult> RunQuery(                            \
-	    DuckDBBenchmarkState *state) {                                         \
-		return state->conn.Query(tpch::get_query(QNR));                        \
+	virtual std::string GetQuery() {                                           \
+		return tpch::get_query(QNR);                                           \
 	}                                                                          \
 	virtual std::string VerifyResult(DuckDBResult *result) {                   \
 		if (!result->GetSuccess()) {                                           \
