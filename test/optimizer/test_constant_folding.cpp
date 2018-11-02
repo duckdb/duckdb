@@ -3,27 +3,15 @@
 
 #include <vector>
 
+#include "expression_helper.hpp"
 #include "optimizer/expression_rules/rule_list.hpp"
 #include "optimizer/rewriter.hpp"
 #include "parser/expression/list.hpp"
-#include "planner/operator/logical_projection.hpp"
 
 #include "common/helper.hpp"
 
 using namespace duckdb;
 using namespace std;
-
-static unique_ptr<Expression> ApplyExprRule(Rewriter &rewriter,
-                                            unique_ptr<Expression> root) {
-	vector<unique_ptr<Expression>> exprs;
-	exprs.push_back(move(root));
-
-	unique_ptr<LogicalOperator> op =
-	    make_unique<LogicalProjection>(move(exprs));
-
-	auto result = rewriter.ApplyRules(move(op));
-	return move(result->expressions[0]);
-}
 
 // ADD(42, 1) -> 43
 TEST_CASE("Constant folding does something", "[optimizer]") {

@@ -4,6 +4,8 @@
 
 #include "parser/statement/select_statement.hpp"
 
+#include "planner/operator/logical_projection.hpp"
+
 using namespace std;
 
 namespace duckdb {
@@ -25,6 +27,17 @@ unique_ptr<Expression> ParseExpression(std::string expression) {
 	} catch (...) {
 		return nullptr;
 	}
+}
+
+unique_ptr<Expression> ApplyExprRule(Rewriter &rewriter,
+                                     unique_ptr<Expression> root) {
+	vector<unique_ptr<Expression>> exprs;
+	exprs.push_back(move(root));
+
+	auto op = make_unique<LogicalProjection>(move(exprs));
+
+	auto result = rewriter.ApplyRules(move(op));
+	return move(result->expressions[0]);
 }
 
 } // namespace duckdb

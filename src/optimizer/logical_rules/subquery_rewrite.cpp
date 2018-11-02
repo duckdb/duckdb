@@ -44,7 +44,8 @@ SubqueryRewritingRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
 	// with depth == 0 (belonging to the subquery) and a correlating expression
 	// with depth == 1 (belonging to the main expression) we use the matcher to
 	// find this comparison
-	auto sq_eq = make_unique_base<AbstractRuleNode, ExpressionNodeType>(ExpressionType::COMPARE_EQUAL);
+	auto sq_eq = make_unique_base<AbstractRuleNode, ExpressionNodeType>(
+	    ExpressionType::COMPARE_EQUAL);
 
 	sq_eq->children.push_back(make_unique<ColumnRefNodeDepth>(0));
 	sq_eq->children.push_back(make_unique<ColumnRefNodeDepth>(1));
