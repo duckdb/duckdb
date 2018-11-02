@@ -144,7 +144,6 @@ def run_benchmark(benchmark, folder):
         log("Succeeded in running benchmark " + benchmark);
         # succeeded, copy results to output directory
         os.rename(runner.out_file, runner.file_name)
-    os.rename(runner.log_file, runner.file_name)
     with open(runner.stdout_name, 'w+') as f:
         f.write(runner.stdout)
     with open(runner.stderr_name, 'w+') as f:
