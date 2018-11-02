@@ -65,7 +65,6 @@ void ExpressionExecutor::ExecuteExpression(Expression *expr, Vector &result) {
 			throw Exception(
 			    "Computed vector length does not match expected length!");
 		}
-		// the expression executor guarantees that
 		assert(vector.sel_vector == chunk->sel_vector);
 	}
 	if (result.type != vector.type) {

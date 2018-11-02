@@ -91,16 +91,19 @@ bool parse_datachunk(string csv, DataChunk &result, bool has_header) {
 	istringstream f(csv);
 	string line;
 
-	if (has_header) {
-		auto split = StringUtil::Split(line, '|');
-		if (split.size() != result.column_count) {
-			// column length is different
-			return false;
-		}
-	}
 	size_t row = 0;
 	while (getline(f, line)) {
 		auto split = StringUtil::Split(line, '|');
+
+		if (has_header) {
+			if (split.size() != result.column_count) {
+				// column length is different
+				return false;
+			}
+			has_header = false;
+			continue;
+		}
+
 		if (line.back() == '|') {
 			split.push_back("");
 		}
@@ -134,6 +137,91 @@ bool parse_datachunk(string csv, DataChunk &result, bool has_header) {
 		row++;
 	}
 	return true;
+}
+
+static bool ValuesAreEqual(Value result_value, Value value) {
+	if (result_value.is_null && value.is_null) {
+		// NULL = NULL in checking code
+		return true;
+	}
+	if (value.type == TypeId::DECIMAL) {
+		// round to two decimals
+		auto left = StringUtil::Format("%.2f", value.value_.decimal);
+		auto right = StringUtil::Format("%.2f", result_value.value_.decimal);
+		if (left != right) {
+			double ldecimal = value.value_.decimal;
+			double rdecimal = result_value.value_.decimal;
+			if (ldecimal < 0.999 * rdecimal || ldecimal > 1.001 * rdecimal) {
+				return false;
+			}
+		}
+	} else if (value.type == TypeId::VARCHAR) {
+		// some results might contain padding spaces, e.g. when rendering
+		// VARCHAR(10) and the string only has 6 characters, they will be padded
+		// with spaces to 10 in the rendering. We don't do that here yet as we
+		// are looking at internal structures. So just ignore any extra spaces
+		// on the right
+		string left = result_value.str_value;
+		string right = value.str_value;
+		StringUtil::RTrim(left);
+		StringUtil::RTrim(right);
+		return left == right;
+	} else {
+		if (!ValueOperations::Equals(value, result_value)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+string show_diff(DataChunk &left, DataChunk &right) {
+	if (left.column_count != right.column_count) {
+		return StringUtil::Format("Different column counts: %d vs %d",
+		                          (int)left.column_count,
+		                          (int)right.column_count);
+	}
+	if (left.size() != right.size()) {
+		return StringUtil::Format("Different sizes: %zu vs %zu", left.size(),
+		                          right.size());
+	}
+	string difference;
+	for (size_t i = 0; i < left.column_count; i++) {
+		bool has_differences = false;
+		auto &left_vector = left.data[i];
+		auto &right_vector = right.data[i];
+		string left_column = StringUtil::Format(
+		    "Result\n------\n%s [", TypeIdToString(left_vector.type).c_str());
+		string right_column = StringUtil::Format(
+		    "Expect\n------\n%s [", TypeIdToString(right_vector.type).c_str());
+		if (left_vector.type == right_vector.type) {
+			for (size_t j = 0; j < left_vector.count; j++) {
+				auto left_value = left_vector.GetValue(j);
+				auto right_value = right_vector.GetValue(j);
+				if (!ValuesAreEqual(left_value, right_value)) {
+					left_column += left_value.ToString() + ",";
+					right_column += right_value.ToString() + ",";
+					has_differences = true;
+				} else {
+					left_column += "_,";
+					right_column += "_,";
+				}
+			}
+		} else {
+			left_column += "...";
+			right_column += "...";
+		}
+		left_column += "]\n";
+		right_column += "]\n";
+		if (has_differences) {
+			difference += StringUtil::Format("Difference in column %d:\n", i);
+			difference += left_column + "\n" + right_column + "\n";
+		}
+	}
+	return difference;
+}
+
+string show_diff(ChunkCollection &collection, DataChunk &chunk) {
+	return show_diff(*collection.chunks[0], chunk);
 }
 
 //! Compares the result of a pipe-delimited CSV with the given DataChunk
@@ -186,27 +274,8 @@ bool compare_result(string csv, ChunkCollection &collection, bool has_header,
 			}
 			// now perform a comparison
 			Value result_value = collection.GetValue(i, row);
-			if (result_value.is_null && value.is_null) {
-				// NULL = NULL in checking code
-				continue;
-			}
-			if (value.type == TypeId::DECIMAL) {
-				// round to two decimals
-				auto left = StringUtil::Format("%.2f", value.value_.decimal);
-				auto right =
-				    StringUtil::Format("%.2f", result_value.value_.decimal);
-				if (left != right) {
-					double ldecimal = value.value_.decimal;
-					double rdecimal = result_value.value_.decimal;
-					if (ldecimal < 0.999 * rdecimal ||
-					    ldecimal > 1.001 * rdecimal) {
-						goto incorrect;
-					}
-				}
-			} else {
-				if (!ValueOperations::Equals(value, result_value)) {
-					goto incorrect;
-				}
+			if (!ValuesAreEqual(result_value, value)) {
+				goto incorrect;
 			}
 		}
 		row++;
@@ -225,7 +294,8 @@ incorrect:
 	} else {
 		error_message = "Incorrect answer for query!\nProvided answer:\n" +
 		                collection.ToString() + "\nExpected answer:\n" +
-		                correct_result.ToString() + "\n";
+		                correct_result.ToString() + "\n" +
+		                show_diff(collection, correct_result);
 	}
 	return false;
 }
