@@ -18,6 +18,8 @@ TEST_CASE("Test crashing SQLSmith queries", "[sqlsmith][.]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 
+	con.EnableProfiling();
+
 	tpch::dbgen(0.1, db);
 	auto query_directory =
 	    JoinPath(GetWorkingDirectory(), "test/sqlsmith/queries");

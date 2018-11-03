@@ -7,6 +7,7 @@ using namespace std;
 LogicalFilter::LogicalFilter(unique_ptr<Expression> expression)
     : LogicalOperator(LogicalOperatorType::FILTER) {
 	expressions.push_back(move(expression));
+	SplitPredicates();
 }
 
 LogicalFilter::LogicalFilter() : LogicalOperator(LogicalOperatorType::FILTER) {
