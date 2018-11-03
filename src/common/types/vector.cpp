@@ -37,6 +37,7 @@ Vector::~Vector() {
 }
 
 void Vector::Reference(Value &value) {
+	Destroy();
 	type = value.type;
 	count = 1;
 	if (value.is_null) {

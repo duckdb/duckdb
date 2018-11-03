@@ -331,8 +331,7 @@ void ExpressionExecutor::Visit(ConjunctionExpression &expr) {
 }
 
 void ExpressionExecutor::Visit(ConstantExpression &expr) {
-	Vector v(expr.value);
-	v.Move(vector);
+	vector.Reference(expr.value);
 	expr.stats.Verify(vector);
 }
 
