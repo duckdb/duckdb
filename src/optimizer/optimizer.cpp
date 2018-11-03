@@ -12,6 +12,8 @@ Optimizer::Optimizer(BindContext &context) : rewriter(context), success(false) {
 	rewriter.rules.push_back(make_unique_base<Rule, ConstantCastRule>());
 	rewriter.rules.push_back(make_unique_base<Rule, ConstantFoldingRule>());
 	rewriter.rules.push_back(make_unique_base<Rule, DistributivityRule>());
+	rewriter.rules.push_back(
+	    make_unique_base<Rule, SplitFilterConjunctionRule>());
 	rewriter.rules.push_back(make_unique_base<Rule, CrossProductRewrite>());
 	rewriter.rules.push_back(make_unique_base<Rule, SelectionPushdownRule>());
 	rewriter.rules.push_back(make_unique_base<Rule, SubqueryRewritingRule>());

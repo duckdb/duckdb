@@ -4,25 +4,29 @@
 using namespace duckdb;
 using namespace std;
 
-// Split a set of predicates separate by AND statements
-// These are the predicates that are safe to push down because all of them MUST
-// be true
-void LogicalFilter::SplitPredicates(std::unique_ptr<Expression> expression) {
-	if (expression->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
-		// Traverse down the expression tree along conjunction
-		for (auto &child : expression->children) {
-			SplitPredicates(move(child));
-		}
-	} else {
-		// Find an expression that is the child of conjunction expression
-		expressions.push_back(move(expression));
-	}
-}
-
 LogicalFilter::LogicalFilter(unique_ptr<Expression> expression)
     : LogicalOperator(LogicalOperatorType::FILTER) {
-	SplitPredicates(move(expression));
+	expressions.push_back(move(expression));
 }
 
 LogicalFilter::LogicalFilter() : LogicalOperator(LogicalOperatorType::FILTER) {
+}
+
+// Split the predicates separated by AND statements
+// These are the predicates that are safe to push down because all of them MUST
+// be true
+bool LogicalFilter::SplitPredicates() {
+	bool found_conjunction = false;
+	for (size_t i = 0; i < expressions.size(); i++) {
+		if (expressions[i]->type == ExpressionType::CONJUNCTION_AND) {
+			found_conjunction = true;
+			// AND expression, split into left and right child
+			expressions.push_back(move(expressions[i]->children[0]));
+			expressions[i] = move(expressions[i]->children[1]);
+			// we move back by one so the right child is checked again
+			// in case it is an AND expression as well
+			i--;
+		}
+	}
+	return found_conjunction;
 }

@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// optimizer/logical_rules/subquery_rewrite.hpp
+// optimizer/logical_rules/split_filter_conjunction.hpp
 //
 // Author: Hannes Mühleisen & Mark Raasveldt
 //
@@ -10,27 +10,18 @@
 
 #pragma once
 
-#include <algorithm>
-#include <vector>
-
-#include "common/exception.hpp"
-#include "common/internal_types.hpp"
 #include "optimizer/rule.hpp"
-#include "parser/expression/list.hpp"
-#include "planner/operator/list.hpp"
 
 namespace duckdb {
 
-class SubqueryRewritingRule : public Rule {
+//! Splits up AND expressions in a PhysicalFilter into separate expressions
+class SplitFilterConjunctionRule : public Rule {
   public:
-	SubqueryRewritingRule();
+	SplitFilterConjunctionRule();
 
 	std::unique_ptr<LogicalOperator>
-	Apply(Rewriter &rewriter, LogicalOperator &op_root,
+	Apply(Rewriter &rewriter, LogicalOperator &root,
 	      std::vector<AbstractOperator> &bindings, bool &fixed_point);
-
-  private:
-	std::unique_ptr<AbstractRuleNode> filter_rule;
 };
 
 } // namespace duckdb

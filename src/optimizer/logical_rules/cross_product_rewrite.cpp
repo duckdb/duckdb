@@ -87,7 +87,8 @@ CrossProductRewrite::CrossProductRewrite() {
 
 unique_ptr<LogicalOperator>
 CrossProductRewrite::Apply(Rewriter &rewriter, LogicalOperator &root,
-                           vector<AbstractOperator> &bindings) {
+                           vector<AbstractOperator> &bindings,
+                           bool &fixed_point) {
 	auto &filter = (LogicalFilter &)root;
 	assert(filter.children.size() == 1);
 	// for each filter condition, check if they can be a join condition

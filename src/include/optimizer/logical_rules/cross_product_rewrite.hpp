@@ -24,7 +24,7 @@ class CrossProductRewrite : public Rule {
 
 	std::unique_ptr<LogicalOperator>
 	Apply(Rewriter &rewriter, LogicalOperator &root,
-	      std::vector<AbstractOperator> &bindings);
+	      std::vector<AbstractOperator> &bindings, bool &fixed_point);
 };
 
 } // namespace duckdb

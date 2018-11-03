@@ -28,7 +28,8 @@ ConstantFoldingRule::ConstantFoldingRule() {
 
 std::unique_ptr<Expression>
 ConstantFoldingRule::Apply(Rewriter &rewriter, Expression &root,
-                           std::vector<AbstractOperator> &bindings) {
+                           std::vector<AbstractOperator> &bindings,
+                           bool &fixed_point) {
 	Value result;
 
 	// TODO: add boolean ops

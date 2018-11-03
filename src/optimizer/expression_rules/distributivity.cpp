@@ -26,7 +26,8 @@ DistributivityRule::DistributivityRule() {
 
 std::unique_ptr<Expression>
 DistributivityRule::Apply(Rewriter &rewriter, Expression &root,
-                          std::vector<AbstractOperator> &bindings) {
+                          std::vector<AbstractOperator> &bindings,
+                          bool &fixed_point) {
 	auto main_or = (ConjunctionExpression *)bindings[0].value.expr;
 	auto land = (ConjunctionExpression *)bindings[1].value.expr;
 	auto rand = (ConjunctionExpression *)bindings[2].value.expr;

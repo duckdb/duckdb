@@ -24,7 +24,7 @@ ConstantCastRule::ConstantCastRule() {
 
 unique_ptr<Expression>
 ConstantCastRule::Apply(Rewriter &rewriter, Expression &root,
-                        vector<AbstractOperator> &bindings) {
+                        vector<AbstractOperator> &bindings, bool &fixed_point) {
 
 	auto &cast_expr = (CastExpression &)root;
 	auto const_expr =

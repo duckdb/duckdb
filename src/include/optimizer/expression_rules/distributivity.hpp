@@ -20,7 +20,8 @@ class DistributivityRule : public Rule {
 	DistributivityRule();
 
 	std::unique_ptr<Expression> Apply(Rewriter &rewriter, Expression &root,
-	                                  std::vector<AbstractOperator> &bindings);
+	                                  std::vector<AbstractOperator> &bindings,
+	                                  bool &fixed_point);
 };
 
 } // namespace duckdb

@@ -110,7 +110,8 @@ SelectionPushdownRule::SelectionPushdownRule() {
 
 unique_ptr<LogicalOperator>
 SelectionPushdownRule::Apply(Rewriter &rewriter, LogicalOperator &root,
-                             vector<AbstractOperator> &bindings) {
+                             vector<AbstractOperator> &bindings,
+                             bool &fixed_point) {
 	auto &filter = (LogicalFilter &)root;
 	assert(filter.children.size() == 1);
 	// for each filter condition, check if they can be a join condition

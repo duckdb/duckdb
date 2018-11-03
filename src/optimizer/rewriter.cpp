@@ -9,10 +9,10 @@ using namespace std;
 namespace duckdb {
 unique_ptr<LogicalOperator>
 Rewriter::ApplyRules(unique_ptr<LogicalOperator> root) {
-	bool fixed_point;
+	bool finished_iterating;
 
 	do {
-		fixed_point = true;
+		finished_iterating = true;
 		AbstractOperator op(root.get());
 		for (auto iterator = op.begin(); iterator != op.end(); iterator++) {
 			auto &vertex = *iterator;
@@ -25,8 +25,8 @@ Rewriter::ApplyRules(unique_ptr<LogicalOperator> root) {
 				}
 
 				if (vertex.type == AbstractOperatorType::LOGICAL_OPERATOR) {
-					auto new_vertex =
-					    rule->Apply(*this, *vertex.value.op, bindings);
+					auto new_vertex = rule->Apply(*this, *vertex.value.op,
+					                              bindings, finished_iterating);
 					if (!new_vertex) {
 						continue;
 					}
@@ -41,8 +41,8 @@ Rewriter::ApplyRules(unique_ptr<LogicalOperator> root) {
 					}
 
 				} else { // AbstractOperatorType::ABSTRACT_EXPRESSION
-					auto new_vertex =
-					    rule->Apply(*this, *vertex.value.expr, bindings);
+					auto new_vertex = rule->Apply(*this, *vertex.value.expr,
+					                              bindings, finished_iterating);
 					if (!new_vertex) {
 						continue;
 					}
@@ -50,11 +50,11 @@ Rewriter::ApplyRules(unique_ptr<LogicalOperator> root) {
 					// abstract expressions cannot be the root of the plan
 					iterator.replace(move(new_vertex));
 				}
-				fixed_point = false;
+				finished_iterating = false;
 				break;
 			}
 		}
-	} while (!fixed_point);
+	} while (!finished_iterating);
 	return root;
 }
 

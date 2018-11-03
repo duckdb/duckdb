@@ -19,11 +19,29 @@ SubqueryRewritingRule::SubqueryRewritingRule() {
 
 	root->children.push_back(move(comparison));
 	root->child_policy = ChildPolicy::SOME;
+
+	// sub rules for subsequent matching
+
+	// we look through the subquery to find the matching correlation expression
+	// using the Column Depth a correlating expression will have a column ref
+	// with depth == 0 (belonging to the subquery) and a correlating expression
+	// with depth == 1 (belonging to the main expression) we use the matcher to
+	// find this comparison
+	auto equality_rule =
+	    make_unique<ExpressionNodeType>(ExpressionType::COMPARE_EQUAL);
+	equality_rule->children.push_back(make_unique<ColumnRefNodeDepth>(0));
+	equality_rule->children.push_back(make_unique<ColumnRefNodeDepth>(1));
+	equality_rule->child_policy = ChildPolicy::SOME;
+
+	filter_rule = make_unique<LogicalNodeType>(LogicalOperatorType::FILTER);
+	filter_rule->children.push_back(move(equality_rule));
+	filter_rule->child_policy = ChildPolicy::SOME;
 }
 
 std::unique_ptr<LogicalOperator>
 SubqueryRewritingRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
-                             std::vector<AbstractOperator> &bindings) {
+                             std::vector<AbstractOperator> &bindings,
+                             bool &fixed_point) {
 	auto *filter = (LogicalFilter *)bindings[0].value.op;
 	auto *comparison = (ComparisonExpression *)bindings[1].value.expr;
 	auto *subquery = (SubqueryExpression *)bindings[2].value.expr;
@@ -39,35 +57,18 @@ SubqueryRewritingRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
 	}
 
 	// step 3: find correlation
-	// we look through the subquery to find the matching correlation expression
-	// using the Column Depth a correlating expression will have a column ref
-	// with depth == 0 (belonging to the subquery) and a correlating expression
-	// with depth == 1 (belonging to the main expression) we use the matcher to
-	// find this comparison
-	auto sq_eq = make_unique_base<AbstractRuleNode, ExpressionNodeType>(
-	    ExpressionType::COMPARE_EQUAL);
-
-	sq_eq->children.push_back(make_unique<ColumnRefNodeDepth>(0));
-	sq_eq->children.push_back(make_unique<ColumnRefNodeDepth>(1));
-	sq_eq->child_policy = ChildPolicy::SOME;
-
-	auto sq_root = make_unique_base<AbstractRuleNode, LogicalNodeType>(
-	    LogicalOperatorType::FILTER);
-
-	sq_root->children.push_back(move(sq_eq));
-	sq_root->child_policy = ChildPolicy::SOME;
-
 	std::vector<AbstractOperator> sq_bindings;
 
 	// FIXME: what if there are multiple correlations?
 	auto aop = AbstractOperator(subquery->op.get());
 	for (auto it = aop.begin(); it != aop.end(); it++) {
-		if (Rewriter::MatchOperands(sq_root.get(), *it, sq_bindings)) {
+		if (Rewriter::MatchOperands(filter_rule.get(), *it, sq_bindings)) {
 			break;
 		}
 	}
 	if (sq_bindings.size() == 0) {
-		throw Exception("Could not find equality correlation comparision");
+		// equality comparison operator not found inside subquery
+		return nullptr;
 	}
 
 	auto *sq_filter = (LogicalFilter *)sq_bindings[0].value.op;
@@ -155,6 +156,6 @@ SubqueryRewritingRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
 			break;
 		}
 	}
-
+	fixed_point = false;
 	return nullptr;
 }

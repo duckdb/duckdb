@@ -24,8 +24,9 @@ class LogicalFilter : public LogicalOperator {
 		v->Visit(*this);
 	}
 
-  private:
-	void SplitPredicates(std::unique_ptr<Expression> expression);
+	//! Splits up the predicates of the LogicalFilter into a set of predicates
+	//! separated by AND Returns whether or not any splits were made
+	bool SplitPredicates();
 };
 
 } // namespace duckdb
