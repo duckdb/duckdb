@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-// (X AND B) OR (X AND C) = X AND (B OR C)
+// (X AND B) OR (X AND C) OR (X AND D) = X AND (B OR C OR D)
 class DistributivityRule : public Rule {
   public:
 	DistributivityRule();

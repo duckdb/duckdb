@@ -92,8 +92,8 @@ bool Rewriter::MatchOperands(AbstractRuleNode *node, AbstractOperator rel,
 		break;
 	}
 	case ChildPolicy::UNORDERED: {
-		// ChildPolicy::UNORDERED requires all children to match to exactly one node
-		// and none of the child nodes should be left unmatched
+		// ChildPolicy::UNORDERED requires all children to match to exactly one
+		// node and none of the child nodes should be left unmatched
 
 		// FIXME: unordered should match all of node->children of the node!
 		// current implementation is not correct
@@ -132,8 +132,9 @@ bool Rewriter::MatchOperands(AbstractRuleNode *node, AbstractOperator rel,
 		break;
 	}
 	case ChildPolicy::SOME: {
-		// ChildPolicy::SOME requires all nodes to find a match in node->children
-		// for one child, ChildPolicy::SOME and ChildPolicy::ANY is identical
+		// ChildPolicy::SOME requires all nodes to find a match in
+		// node->children for one child, ChildPolicy::SOME and ChildPolicy::ANY
+		// is identical
 		if (children.size() < node->children.size()) {
 			return false;
 		}
