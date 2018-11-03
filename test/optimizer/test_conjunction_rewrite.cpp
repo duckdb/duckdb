@@ -14,10 +14,10 @@ using namespace duckdb;
 using namespace std;
 
 // (X AND B) OR (X AND C) => X AND (B OR C)
-TEST_CASE("Extract And test", "[optimizer]") {
+TEST_CASE("Distributivity test", "[optimizer]") {
 	BindContext context;
 	vector<unique_ptr<Rule>> rules;
-	rules.push_back(unique_ptr<Rule>(new ExtractAndRule()));
+	rules.push_back(unique_ptr<Rule>(new DistributivityRule()));
 	auto rewriter = Rewriter(context, move(rules), MatchOrder::DEPTH_FIRST);
 
 	auto root = ParseExpression("(i > 3 AND j < 5) OR (i > 3 AND k > 5)");

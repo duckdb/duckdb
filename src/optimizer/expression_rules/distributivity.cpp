@@ -6,15 +6,14 @@
 #include "common/internal_types.hpp"
 #include "common/value_operations/value_operations.hpp"
 #include "optimizer/rule.hpp"
-#include "parser/expression/constant_expression.hpp"
 
-#include "optimizer/expression_rules/extract_and.hpp"
+#include "optimizer/expression_rules/distributivity.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 // match on (A AND B) OR (C AND D)
-ExtractAndRule::ExtractAndRule() {
+DistributivityRule::DistributivityRule() {
 	root = make_unique<ExpressionNodeType>(ExpressionType::CONJUNCTION_OR);
 	root->child_policy = ChildPolicy::UNORDERED;
 
@@ -26,8 +25,8 @@ ExtractAndRule::ExtractAndRule() {
 }
 
 std::unique_ptr<Expression>
-ExtractAndRule::Apply(Rewriter &rewriter, Expression &root,
-                      std::vector<AbstractOperator> &bindings) {
+DistributivityRule::Apply(Rewriter &rewriter, Expression &root,
+                          std::vector<AbstractOperator> &bindings) {
 	auto main_or = (ConjunctionExpression *)bindings[0].value.expr;
 	auto land = (ConjunctionExpression *)bindings[1].value.expr;
 	auto rand = (ConjunctionExpression *)bindings[2].value.expr;
