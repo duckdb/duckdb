@@ -30,6 +30,8 @@ class ConjunctionExpression : public Expression {
 
 	virtual std::unique_ptr<Expression> Copy() override;
 
+	bool Equals(const Expression *other) override;
+
 	//! Deserializes a blob back into a ConjunctionExpression
 	static std::unique_ptr<Expression>
 	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);

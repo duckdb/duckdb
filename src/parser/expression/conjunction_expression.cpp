@@ -24,3 +24,26 @@ ConjunctionExpression::Deserialize(ExpressionDeserializeInformation *info,
 	return make_unique_base<Expression, ConjunctionExpression>(
 	    info->type, move(info->children[0]), move(info->children[1]));
 }
+
+bool ConjunctionExpression::Equals(const Expression *other) {
+	if (!other) {
+		return false;
+	}
+	if (this->type != other->type) {
+		return false;
+	}
+	if (children.size() != other->children.size()) {
+		return false;
+	}
+	assert(children.size() == 2 && other->children.size() == 2);
+	// conjunctions are Commutative
+	if (children[0]->Equals(other->children[0].get()) &&
+	    children[1]->Equals(other->children[1].get())) {
+		return true;
+	}
+	if (children[0]->Equals(other->children[1].get()) &&
+	    children[1]->Equals(other->children[0].get())) {
+		return true;
+	}
+	return false;
+}

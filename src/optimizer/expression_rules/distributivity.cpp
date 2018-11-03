@@ -59,6 +59,7 @@ static unique_ptr<Expression> Prune(unique_ptr<Expression> root) {
 		root->children[1] = Prune(move(root->children[1]));
 		if (root->children[0] && root->children[1]) {
 			// don't prune
+			return root;
 		} else if (root->children[0]) {
 			// prune right
 			return move(root->children[0]);
@@ -147,7 +148,9 @@ DistributivityRule::Apply(Rewriter &rewriter, Expression &root,
 	if (new_root) {
 		// we made a new root
 		// we need to prune invalid entries!
-		return Prune(move(new_root));
+		new_root = Prune(move(new_root));
+		assert(new_root);
+		return new_root;
 	} else {
 		return nullptr;
 	}
