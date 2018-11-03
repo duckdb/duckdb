@@ -462,29 +462,23 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 			}
 			chunk = old_chunk;
 
-		} else { // in rhs is list of constants
-			Vector comp_res;
-
-			// init comparision result once
-			comp_res.Initialize(TypeId::BOOLEAN);
-			comp_res.count = l.count;
-
-			// for every child, or result of comparision with left to overall
-			// result
+		} else {
+			// in rhs is a list of constants
+			// for every child, OR the result of the comparision with the left
+			// to get the overall result.
 			for (size_t child = 1; child < expr.children.size(); child++) {
+				Vector comp_res(TypeId::BOOLEAN, true, false);
 				expr.children[child]->Accept(this);
 				VectorOperations::Equals(l, vector, comp_res);
 				vector.Destroy();
-				Vector temp_result;
-				temp_result.Initialize(TypeId::BOOLEAN);
-				result.Copy(temp_result);
-				VectorOperations::Or(temp_result, comp_res, result);
-				// early abort
-				if (ValueOperations::Equals(VectorOperations::Min(result),
-				                            Value(true)) &&
-				    ValueOperations::Equals(VectorOperations::Max(result),
-				                            Value(true))) {
-					break;
+				if (child == 1) {
+					// first child: move to result
+					comp_res.Move(result);
+				} else {
+					// otherwise OR together
+					Vector new_result(TypeId::BOOLEAN, true, false);
+					VectorOperations::Or(result, comp_res, new_result);
+					new_result.Move(result);
 				}
 			}
 		}
