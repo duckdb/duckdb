@@ -139,7 +139,7 @@ int main(int argc, char **argv) {
 	int benchmark_index = -1;
 	bool info = false;
 
-	for (size_t i = 1; i < argc; i++) {
+	for (int i = 1; i < argc; i++) {
 		string arg = argv[i];
 		if (arg == "--list") {
 			// list names of all benchmarks
