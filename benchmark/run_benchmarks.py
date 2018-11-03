@@ -117,7 +117,8 @@ class RunBenchmark(object):
         self.stderr = self.proc.stderr.read()
 
         if thread.is_alive():
-            self.proc.terminate()
+            log("Force terminating process...");
+            self.proc.kill()
             thread.join()
             return 1
         return self.proc.returncode

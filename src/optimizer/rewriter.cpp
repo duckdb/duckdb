@@ -69,10 +69,35 @@ bool Rewriter::MatchOperands(AbstractRuleNode *node, AbstractOperator rel,
 	vector<AbstractOperator> current_bindings = {rel};
 
 	switch (node->child_policy) {
-	case ChildPolicy::ANY:
+	case ChildPolicy::ALWAYS_MATCH:
+		// ChildPolicy::ALWAYS_MATCH simply always matches
 		break;
+	case ChildPolicy::ANY: {
+		// with ChildPolicy::Any only a single child must match
+		bool match = false;
+		for (auto &c : children) {
+			for (auto &co : node->children) {
+				match = MatchOperands(co.get(), c, current_bindings);
+				if (match) {
+					break;
+				}
+			}
+			if (match) {
+				break;
+			}
+		}
+		if (match) {
+			return true;
+		}
+		break;
+	}
 	case ChildPolicy::UNORDERED: {
-		if (children.size() < node->children.size()) {
+		// ChildPolicy::UNORDERED requires all children to match to exactly one node
+		// and none of the child nodes should be left unmatched
+
+		// FIXME: unordered should match all of node->children of the node!
+		// current implementation is not correct
+		if (children.size() != node->children.size()) {
 			return false;
 		}
 		// For each operand, at least one child must match. If
@@ -91,7 +116,8 @@ bool Rewriter::MatchOperands(AbstractRuleNode *node, AbstractOperator rel,
 		}
 		break;
 	}
-	case ChildPolicy::ORDERED: { // proceed along child ops and compare
+	case ChildPolicy::ORDERED: {
+		// ChildPolicy::ORDERED requires the children to match exactly in order
 		auto n = node->children.size();
 		if (children.size() < n) {
 			return false;
@@ -106,8 +132,9 @@ bool Rewriter::MatchOperands(AbstractRuleNode *node, AbstractOperator rel,
 		break;
 	}
 	case ChildPolicy::SOME: {
-		auto n = node->children.size();
-		if (children.size() < n) {
+		// ChildPolicy::SOME requires all nodes to find a match in node->children
+		// for one child, ChildPolicy::SOME and ChildPolicy::ANY is identical
+		if (children.size() < node->children.size()) {
 			return false;
 		}
 		for (auto &co : node->children) {

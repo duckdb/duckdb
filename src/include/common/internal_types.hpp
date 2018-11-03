@@ -422,7 +422,7 @@ enum class MatchOrder : uint8_t { ARBITRARY, DEPTH_FIRST };
 //===--------------------------------------------------------------------===//
 // Child Match Policy
 //===--------------------------------------------------------------------===//
-enum class ChildPolicy : uint8_t { ANY, LEAF, SOME, UNORDERED, ORDERED };
+enum class ChildPolicy : uint8_t { ALWAYS_MATCH, ANY, LEAF, SOME, UNORDERED, ORDERED };
 
 //===--------------------------------------------------------------------===//
 // External File Format Types
