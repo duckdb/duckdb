@@ -296,8 +296,6 @@ void ExpressionExecutor::Visit(ComparisonExpression &expr) {
 	case ExpressionType::COMPARE_NOTLIKE:
 		VectorOperations::NotLike(l, r, vector);
 		break;
-	case ExpressionType::COMPARE_IN:
-		throw NotImplementedException("Unimplemented compare: COMPARE_IN");
 	case ExpressionType::COMPARE_DISTINCT_FROM:
 		throw NotImplementedException(
 		    "Unimplemented compare: COMPARE_DISTINCT_FROM");
@@ -384,6 +382,7 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 		Vector result;
 		result.Initialize(TypeId::BOOLEAN);
 		result.count = l.count;
+		result.sel_vector = l.sel_vector;
 		VectorOperations::Set(result, Value(false));
 
 		// FIXME this is very similar to the visit method of subqueries,

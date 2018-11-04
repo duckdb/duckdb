@@ -97,13 +97,6 @@ class JoinHashTable {
 	TupleSerializer key_serializer;
 	//! Serializer for the build side
 	TupleSerializer build_serializer;
-	//! The total tuple size
-	size_t tuple_size;
-
-  private:
-	//! Insert the given set of locations into the HT with the given set of
-	//! hashes. Caller should hold lock in parallel HT.
-	void InsertHashes(Vector &hashes, uint8_t *key_locations[]);
 	//! The types of the build side
 	std::vector<TypeId> key_types;
 	//! The types of the build side
@@ -114,6 +107,12 @@ class JoinHashTable {
 	size_t build_size;
 	//! The size of an entry as stored in the HashTable
 	size_t entry_size;
+	//! The total tuple size
+	size_t tuple_size;
+  private:
+	//! Insert the given set of locations into the HT with the given set of
+	//! hashes. Caller should hold lock in parallel HT.
+	void InsertHashes(Vector &hashes, uint8_t *key_locations[]);
 	//! The capacity of the HT. This can be increased using
 	//! JoinHashTable::Resize
 	size_t capacity;
