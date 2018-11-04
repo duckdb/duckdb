@@ -85,7 +85,6 @@ TEST_CASE("Test TPC-H SF0.1", "[tpch][.]") {
 
 	result = con.Query(tpch::get_query(1));
 	COMPARE_CSV(result, tpch::get_answer(sf, 1), true);
-	// std::cout << con.GetProfilingInformation() << "\n";
 
 	result = con.Query(tpch::get_query(2));
 	COMPARE_CSV(result, tpch::get_answer(sf, 2), true);
@@ -93,8 +92,8 @@ TEST_CASE("Test TPC-H SF0.1", "[tpch][.]") {
 	result = con.Query(tpch::get_query(3));
 	COMPARE_CSV(result, tpch::get_answer(sf, 3), true);
 
-	// result = con.Query(tpch::get_query(4));
-	// COMPARE_CSV(result, tpch::get_answer(sf, 4), true);
+	result = con.Query(tpch::get_query(4));
+	COMPARE_CSV(result, tpch::get_answer(sf, 4), true);
 
 	result = con.Query(tpch::get_query(5));
 	COMPARE_CSV(result, tpch::get_answer(sf, 5), true);
@@ -102,8 +101,8 @@ TEST_CASE("Test TPC-H SF0.1", "[tpch][.]") {
 	result = con.Query(tpch::get_query(6));
 	COMPARE_CSV(result, tpch::get_answer(sf, 6), true);
 
-	// result = con.Query(tpch::get_query(7));
-	// COMPARE_CSV(result, tpch::get_answer(sf, 7), true);
+	result = con.Query(tpch::get_query(7));
+	COMPARE_CSV(result, tpch::get_answer(sf, 7), true);
 
 	result = con.Query(tpch::get_query(8));
 	COMPARE_CSV(result, tpch::get_answer(sf, 8), true);

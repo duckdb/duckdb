@@ -18,7 +18,8 @@ PhysicalHashJoin::PhysicalHashJoin(std::unique_ptr<PhysicalOperator> left,
 		assert(cond.left->return_type == cond.right->return_type);
 		join_key_types.push_back(cond.left->return_type);
 	}
-	hash_table = make_unique<JoinHashTable>(join_key_types, right->GetTypes());
+	hash_table = make_unique<JoinHashTable>(join_key_types, right->GetTypes(),
+	                                        join_type);
 
 	children.push_back(move(left));
 	children.push_back(move(right));
@@ -42,10 +43,6 @@ void PhysicalHashJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
                                  PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalHashJoinOperatorState *>(state_);
 	chunk.Reset();
-
-	if (type != JoinType::INNER) {
-		throw NotImplementedException("Only inner joins supported for now!");
-	}
 
 	if (!state->initialized) {
 		// build the HT

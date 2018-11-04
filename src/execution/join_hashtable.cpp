@@ -9,11 +9,12 @@ using namespace std;
 using ScanStructure = JoinHashTable::ScanStructure;
 
 JoinHashTable::JoinHashTable(std::vector<TypeId> key_types,
-                             std::vector<TypeId> build_types,
+                             std::vector<TypeId> build_types, JoinType type,
                              size_t initial_capacity, bool parallel)
     : key_serializer(key_types), build_serializer(build_types),
       key_types(key_types), build_types(build_types), key_size(0),
-      build_size(0), tuple_size(0), capacity(0), count(0), parallel(parallel) {
+      build_size(0), tuple_size(0), capacity(0), count(0), parallel(parallel),
+      join_type(type) {
 	for (size_t i = 0; i < key_types.size(); i++) {
 		key_size += GetTypeIdSize(key_types[i]);
 	}
@@ -183,15 +184,17 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	}
 	ss->pointers.count = hashes.count;
 
-	// create the selection vector linking to only non-empty entries
-	size_t count = 0;
-	for (size_t i = 0; i < ss->pointers.count; i++) {
-		if (ptrs[i]) {
-			ss->sel_vector[count++] = i;
+	// create the selection vector linking to only non-empty entries for inner
+	// join
+	if (join_type == JoinType::INNER) {
+		size_t count = 0;
+		for (size_t i = 0; i < ss->pointers.count; i++) {
+			if (ptrs[i]) {
+				ss->sel_vector[count++] = i;
+			}
 		}
+		ss->pointers.count = count;
 	}
-	ss->pointers.count = count;
-
 	// serialize the keys for later comparison purposes
 	key_serializer.Serialize(keys, ss->serialized_keys);
 
@@ -212,6 +215,22 @@ void ScanStructure::Next(DataChunk &left, DataChunk &result) {
 		return;
 	}
 
+	switch (ht.join_type) {
+	case JoinType::INNER:
+		NextInnerJoin(left, result);
+		break;
+	case JoinType::SEMI:
+		NextSemiJoin(left, result);
+		break;
+	case JoinType::ANTI:
+		NextAntiJoin(left, result);
+		break;
+	default:
+		throw Exception("Unhandled join type in JoinHashTable");
+	}
+}
+
+void ScanStructure::NextInnerJoin(DataChunk &left, DataChunk &result) {
 	size_t result_count;
 	auto build_pointers = (uint8_t **)build_pointer_vector.data;
 	do {
@@ -267,4 +286,59 @@ void ScanStructure::Next(DataChunk &left, DataChunk &result) {
 			    build_pointer_vector, i, result.data[left.column_count + i]);
 		}
 	}
+}
+
+//! Implementation for semi (INVERT=false) or anti (INVERT=true) joins
+template <bool INVERT>
+static void NextSemiOrAntiJoin(DataChunk &left, DataChunk &result,
+                               ScanStructure &ss) {
+	size_t result_count = 0;
+	// the semi-join and anti-join we handle a differently from the inner join
+	// since there can be at most STANDARD_VECTOR_SIZE results
+	// we handle the entire chunk in one call to Next().
+	// for every pointer, we keep chasing pointers and doing comparisons.
+	// if a matching tuple is found, we keep (semi) or discard (anti) the entry
+	// if we reach the end of the chain without finding a match
+	// we add it to the result.
+	auto ptrs = (uint8_t **)ss.pointers.data;
+	for (size_t i = 0; i < ss.pointers.count; i++) {
+		auto pointer = ptrs[i];
+		bool match = INVERT;
+		while (pointer) {
+			// check if there is an actual match here
+			if (ss.ht.key_serializer.Compare(ss.serialized_keys[i].data.get(),
+			                                 pointer) == 0) {
+				// if there is, we add this entry to the result
+				match = !INVERT;
+				break;
+			}
+			auto prev_pointer = (uint8_t **)(pointer + ss.ht.tuple_size);
+			pointer = *prev_pointer;
+		}
+		if (!match) {
+			// match was found (semi) or no match was found (anti)
+			result.owned_sel_vector[result_count++] = i;
+		}
+	}
+	// we have chased all the pointers
+	// construct the final result
+	if (result_count > 0) {
+		// in the anti join, we only return the columns on the left side
+		// project them using the result selection vector
+		result.sel_vector = result.owned_sel_vector;
+		// reference the columns of the left side from the result
+		for (size_t i = 0; i < left.column_count; i++) {
+			result.data[i].Reference(left.data[i]);
+			result.data[i].sel_vector = result.sel_vector;
+			result.data[i].count = result_count;
+		}
+	}
+}
+
+void ScanStructure::NextSemiJoin(DataChunk &left, DataChunk &result) {
+	NextSemiOrAntiJoin<false>(left, result, *this);
+}
+
+void ScanStructure::NextAntiJoin(DataChunk &left, DataChunk &result) {
+	NextSemiOrAntiJoin<true>(left, result, *this);
 }
