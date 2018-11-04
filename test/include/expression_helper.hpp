@@ -12,6 +12,7 @@ class DuckDBConnection;
 std::unique_ptr<Expression> ParseExpression(std::string expression);
 std::unique_ptr<Expression> ApplyExprRule(Rewriter &rewriter,
                                           std::unique_ptr<Expression> root);
-std::unique_ptr<Planner> ParseLogicalPlan(DuckDBConnection& con, std::string query);
+std::unique_ptr<Planner> ParseLogicalPlan(DuckDBConnection &con,
+                                          std::string query);
 
 } // namespace duckdb

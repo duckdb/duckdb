@@ -209,7 +209,6 @@ ScanStructure::ScanStructure(JoinHashTable &ht) : ht(ht) {
 
 void ScanStructure::Next(DataChunk &left, DataChunk &result) {
 	assert(!left.sel_vector); // should be flattened before
-	assert(result.column_count == left.column_count + ht.build_types.size());
 	if (pointers.count == 0) {
 		// no pointers left to chase
 		return;
@@ -231,6 +230,7 @@ void ScanStructure::Next(DataChunk &left, DataChunk &result) {
 }
 
 void ScanStructure::NextInnerJoin(DataChunk &left, DataChunk &result) {
+	assert(result.column_count == left.column_count + ht.build_types.size());
 	size_t result_count;
 	auto build_pointers = (uint8_t **)build_pointer_vector.data;
 	do {
@@ -292,6 +292,7 @@ void ScanStructure::NextInnerJoin(DataChunk &left, DataChunk &result) {
 template <bool INVERT>
 static void NextSemiOrAntiJoin(DataChunk &left, DataChunk &result,
                                ScanStructure &ss) {
+	assert(left.column_count == result.column_count);
 	size_t result_count = 0;
 	// the semi-join and anti-join we handle a differently from the inner join
 	// since there can be at most STANDARD_VECTOR_SIZE results
@@ -333,6 +334,8 @@ static void NextSemiOrAntiJoin(DataChunk &left, DataChunk &result,
 			result.data[i].count = result_count;
 		}
 	}
+	// finished chasing all pointers
+	ss.pointers.count = 0;
 }
 
 void ScanStructure::NextSemiJoin(DataChunk &left, DataChunk &result) {

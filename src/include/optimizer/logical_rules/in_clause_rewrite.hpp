@@ -2,9 +2,9 @@
 //
 //                         DuckDB
 //
-// optimizer/logical_rules/subquery_rewrite.hpp
+// optimizer/logical_rules/in_clause_rewrite.hpp
 //
-// Author: Hannes Mühleisen & Mark Raasveldt
+// Author: Mark Raasveldt
 //
 //===----------------------------------------------------------------------===//
 
@@ -14,16 +14,13 @@
 
 namespace duckdb {
 
-class SubqueryRewritingRule : public Rule {
+class InClauseRewriteRule : public Rule {
   public:
-	SubqueryRewritingRule();
+	InClauseRewriteRule();
 
 	std::unique_ptr<LogicalOperator>
 	Apply(Rewriter &rewriter, LogicalOperator &op_root,
 	      std::vector<AbstractOperator> &bindings, bool &fixed_point);
-
-  private:
-	std::unique_ptr<AbstractRuleNode> filter_rule;
 };
 
 } // namespace duckdb

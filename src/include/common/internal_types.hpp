@@ -137,12 +137,14 @@ enum class ExpressionType : uint8_t {
 	COMPARE_NOTLIKE = 32,
 	// IN operator [left IN (right1, right2, ...)]
 	COMPARE_IN = 33,
+	// NOT IN operator [left NOT IN (right1, right2, ...)]
+	COMPARE_NOT_IN = 34,
 	// IS DISTINCT FROM operator
-	COMPARE_DISTINCT_FROM = 34,
+	COMPARE_DISTINCT_FROM = 35,
 	// compare final boundary
 
-	COMPARE_BETWEEN = 35,
-	COMPARE_NOT_BETWEEN = 36,
+	COMPARE_BETWEEN = 36,
+	COMPARE_NOT_BETWEEN = 37,
 	COMPARE_BOUNDARY_END = COMPARE_NOT_BETWEEN,
 
 	// -----------------------------

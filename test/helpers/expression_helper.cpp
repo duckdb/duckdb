@@ -5,7 +5,6 @@
 
 #include "parser/parser.hpp"
 #include "parser/statement/select_statement.hpp"
-#include "parser/parser.hpp"
 
 #include "planner/operator/logical_projection.hpp"
 #include "planner/planner.hpp"
@@ -40,8 +39,7 @@ unique_ptr<Expression> ApplyExprRule(Rewriter &rewriter,
 	return move(result->expressions[0]);
 }
 
-
-unique_ptr<Planner> ParseLogicalPlan(DuckDBConnection& con, string query) {
+unique_ptr<Planner> ParseLogicalPlan(DuckDBConnection &con, string query) {
 	Parser parser;
 	if (!parser.ParseQuery(query)) {
 		throw Exception(parser.GetErrorMessage());

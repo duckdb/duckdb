@@ -2,6 +2,9 @@
 #include "optimizer/logical_rules/subquery_rewrite.hpp"
 #include "optimizer/rewriter.hpp"
 
+#include "parser/expression/list.hpp"
+#include "planner/operator/list.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -38,9 +41,9 @@ SubqueryRewritingRule::SubqueryRewritingRule() {
 	filter_rule->child_policy = ChildPolicy::SOME;
 }
 
-std::unique_ptr<LogicalOperator>
+unique_ptr<LogicalOperator>
 SubqueryRewritingRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
-                             std::vector<AbstractOperator> &bindings,
+                             vector<AbstractOperator> &bindings,
                              bool &fixed_point) {
 	auto *filter = (LogicalFilter *)bindings[0].value.op;
 	auto *comparison = (ComparisonExpression *)bindings[1].value.expr;
@@ -57,7 +60,7 @@ SubqueryRewritingRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
 	}
 
 	// step 3: find correlation
-	std::vector<AbstractOperator> sq_bindings;
+	vector<AbstractOperator> sq_bindings;
 
 	// FIXME: what if there are multiple correlations?
 	auto aop = AbstractOperator(subquery->op.get());

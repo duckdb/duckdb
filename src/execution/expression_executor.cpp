@@ -369,7 +369,8 @@ void ExpressionExecutor::Visit(GroupRefExpression &expr) {
 void ExpressionExecutor::Visit(OperatorExpression &expr) {
 	// special handling for special snowflake 'IN'
 	// IN has n children
-	if (expr.type == ExpressionType::COMPARE_IN) {
+	if (expr.type == ExpressionType::COMPARE_IN ||
+	    expr.type == ExpressionType::COMPARE_NOT_IN) {
 		if (expr.children.size() < 2) {
 			throw Exception("IN needs at least two children");
 		}
@@ -481,7 +482,14 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 				}
 			}
 		}
-		result.Move(vector);
+		if (expr.type == ExpressionType::COMPARE_NOT_IN) {
+			// invert result
+			vector.Initialize(TypeId::BOOLEAN);
+			VectorOperations::Not(result, vector);
+		} else {
+			// just move result
+			result.Move(vector);
+		}
 		expr.stats.Verify(vector);
 		return;
 	}

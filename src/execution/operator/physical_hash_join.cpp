@@ -27,15 +27,21 @@ PhysicalHashJoin::PhysicalHashJoin(std::unique_ptr<PhysicalOperator> left,
 
 vector<string> PhysicalHashJoin::GetNames() {
 	auto left = children[0]->GetNames();
-	auto right = children[1]->GetNames();
-	left.insert(left.end(), right.begin(), right.end());
+	if (type != JoinType::SEMI && type != JoinType::ANTI) {
+		// for normal joins we project both sides
+		auto right = children[1]->GetNames();
+		left.insert(left.end(), right.begin(), right.end());
+	}
 	return left;
 }
 
 vector<TypeId> PhysicalHashJoin::GetTypes() {
 	auto types = children[0]->GetTypes();
-	auto right_types = children[1]->GetTypes();
-	types.insert(types.end(), right_types.begin(), right_types.end());
+	if (type != JoinType::SEMI && type != JoinType::ANTI) {
+		// for normal joins we project both sides
+		auto right_types = children[1]->GetTypes();
+		types.insert(types.end(), right_types.begin(), right_types.end());
+	}
 	return types;
 }
 

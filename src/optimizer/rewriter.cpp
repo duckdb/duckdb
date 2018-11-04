@@ -119,7 +119,7 @@ bool Rewriter::MatchOperands(AbstractRuleNode *node, AbstractOperator rel,
 	case ChildPolicy::ORDERED: {
 		// ChildPolicy::ORDERED requires the children to match exactly in order
 		auto n = node->children.size();
-		if (children.size() < n) {
+		if (children.size() != n) {
 			return false;
 		}
 		for (size_t i = 0; i < n; i++) {

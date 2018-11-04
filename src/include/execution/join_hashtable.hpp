@@ -109,6 +109,7 @@ class JoinHashTable {
 	size_t entry_size;
 	//! The total tuple size
 	size_t tuple_size;
+
   private:
 	//! Insert the given set of locations into the HT with the given set of
 	//! hashes. Caller should hold lock in parallel HT.

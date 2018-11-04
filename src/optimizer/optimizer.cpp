@@ -9,14 +9,21 @@ using namespace duckdb;
 using namespace std;
 
 Optimizer::Optimizer(BindContext &context) : rewriter(context), success(false) {
-	rewriter.rules.push_back(make_unique_base<Rule, ConstantCastRule>());
-	rewriter.rules.push_back(make_unique_base<Rule, ConstantFoldingRule>());
-	rewriter.rules.push_back(make_unique_base<Rule, DistributivityRule>());
-	rewriter.rules.push_back(
-	    make_unique_base<Rule, SplitFilterConjunctionRule>());
-	rewriter.rules.push_back(make_unique_base<Rule, CrossProductRewrite>());
-	rewriter.rules.push_back(make_unique_base<Rule, SelectionPushdownRule>());
-	rewriter.rules.push_back(make_unique_base<Rule, SubqueryRewritingRule>());
+	rewriter.rules.push_back(make_unique<ConstantCastRule>());
+	rewriter.rules.push_back(make_unique<ConstantFoldingRule>());
+	rewriter.rules.push_back(make_unique<DistributivityRule>());
+	rewriter.rules.push_back(make_unique<SplitFilterConjunctionRule>());
+	rewriter.rules.push_back(make_unique<InClauseRewriteRule>());
+	rewriter.rules.push_back(make_unique<CrossProductRewrite>());
+	rewriter.rules.push_back(make_unique<SelectionPushdownRule>());
+	rewriter.rules.push_back(make_unique<SubqueryRewritingRule>());
+
+#ifdef DEBUG
+	for (auto &rule : rewriter.rules) {
+		// root not defined in rule
+		assert(rule->root);
+	}
+#endif
 }
 
 unique_ptr<LogicalOperator>
