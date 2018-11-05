@@ -556,7 +556,8 @@ unique_ptr<Expression> TransformFuncCall(FuncCall *root) {
 		auto agg_fun_type =
 		    StringToExpressionType("AGGREGATE_" + function_name);
 		if (root->agg_distinct) {
-			throw NotImplementedException("AGGREGATE DISTINCT not supported yet!");
+			throw NotImplementedException(
+			    "AGGREGATE DISTINCT not supported yet!");
 		}
 		if (root->agg_star) {
 			return make_unique<AggregateExpression>(

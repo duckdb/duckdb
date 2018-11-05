@@ -329,6 +329,12 @@ void Binder::Visit(SubqueryExpression &expr) {
 	if (expr.subquery->select_list[0]->return_type == TypeId::INVALID) {
 		throw BinderException("Subquery has no type");
 	}
+	if (expr.subquery_type == SubqueryType::IN &&
+	    expr.subquery->select_list.size() != 1) {
+		throw BinderException("Subquery returns %zu columns - expected 1",
+		                      expr.subquery->select_list.size());
+	}
+
 	expr.return_type = expr.subquery_type == SubqueryType::EXISTS
 	                       ? TypeId::BOOLEAN
 	                       : expr.subquery->select_list[0]->return_type;
