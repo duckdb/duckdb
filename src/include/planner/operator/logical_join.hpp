@@ -18,6 +18,9 @@ struct JoinCondition {
 	std::unique_ptr<Expression> left;
 	std::unique_ptr<Expression> right;
 	ExpressionType comparison;
+	// If flip = true, the operator is applied (right, left) instead of (left, right)
+	// Only used for non-commutative operators (i.e. < <= > >=)
+	bool flip = false;
 };
 
 enum JoinSide { NONE, LEFT, RIGHT, BOTH };

@@ -21,9 +21,12 @@ class SubqueryRewritingRule : public Rule {
 	std::unique_ptr<LogicalOperator>
 	Apply(Rewriter &rewriter, LogicalOperator &op_root,
 	      std::vector<AbstractOperator> &bindings, bool &fixed_point);
-
-  private:
-	std::unique_ptr<AbstractRuleNode> filter_rule;
 };
 
+struct JoinCondition;
+class LogicalAggregate;
+class SubqueryExpression;
+
+void ExtractCorrelatedExpressions(LogicalAggregate *aggr, SubqueryExpression *subquery,
+	size_t subquery_table_index, std::vector<JoinCondition>& join_conditions);
 } // namespace duckdb

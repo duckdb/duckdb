@@ -109,30 +109,28 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 			Vector left_match(state->left_join_condition.data[i].GetValue(
 			    state->left_position));
 
+			Vector& l = conditions[i].flip ? right_match : left_match;
+			Vector& r = conditions[i].flip ? left_match : right_match;
+
 			Vector intermediate(TypeId::BOOLEAN, true, false);
 			switch (conditions[i].comparison) {
 			case ExpressionType::COMPARE_EQUAL:
-				VectorOperations::Equals(left_match, right_match, intermediate);
+				VectorOperations::Equals(l, r, intermediate);
 				break;
 			case ExpressionType::COMPARE_NOTEQUAL:
-				VectorOperations::NotEquals(left_match, right_match,
-				                            intermediate);
+				VectorOperations::NotEquals(l, r, intermediate);
 				break;
 			case ExpressionType::COMPARE_LESSTHAN:
-				VectorOperations::LessThan(left_match, right_match,
-				                           intermediate);
+				VectorOperations::LessThan(l, r, intermediate);
 				break;
 			case ExpressionType::COMPARE_GREATERTHAN:
-				VectorOperations::GreaterThan(left_match, right_match,
-				                              intermediate);
+				VectorOperations::GreaterThan(l, r, intermediate);
 				break;
 			case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-				VectorOperations::LessThanEquals(left_match, right_match,
-				                                 intermediate);
+				VectorOperations::LessThanEquals(l, r, intermediate);
 				break;
 			case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-				VectorOperations::GreaterThanEquals(left_match, right_match,
-				                                    intermediate);
+				VectorOperations::GreaterThanEquals(l, r, intermediate);
 				break;
 			default:
 				throw NotImplementedException(
