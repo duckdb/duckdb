@@ -248,5 +248,40 @@ struct VectorOperations {
 		                       [&](size_t i, size_t k) { fun(data[i], i, k); },
 		                       offset, limit);
 	}
+	template <class FUNC>
+	static void TernaryExec(Vector &a, Vector &b, Vector &c, Vector &result,
+	                        FUNC &&fun) {
+		// it might be the case that not everything has a selection vector
+		// as constants do not need a selection vector
+		// check if we are using a selection vector
+		if (!a.IsConstant()) {
+			result.sel_vector = a.sel_vector;
+			result.count = a.count;
+		} else if (!b.IsConstant()) {
+			result.sel_vector = b.sel_vector;
+			result.count = b.count;
+		} else if (!c.IsConstant()) {
+			result.sel_vector = c.sel_vector;
+			result.count = c.count;
+		} else {
+			result.sel_vector = nullptr;
+			result.count = 1;
+		}
+
+		// now check for constants
+		// we handle constants by multiplying the index access by 0 to avoid 2^3
+		// branches in the code
+		size_t a_mul = a.IsConstant() ? 0 : 1;
+		size_t b_mul = b.IsConstant() ? 0 : 1;
+		size_t c_mul = c.IsConstant() ? 0 : 1;
+
+		assert(a.IsConstant() || a.count == result.count);
+		assert(b.IsConstant() || b.count == result.count);
+		assert(c.IsConstant() || c.count == result.count);
+
+		VectorOperations::Exec(result, [&](size_t i, size_t k) {
+			fun(a_mul * i, b_mul * i, c_mul * i, i);
+		});
+	}
 };
 } // namespace duckdb

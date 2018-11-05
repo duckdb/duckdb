@@ -1,0 +1,40 @@
+
+#include "catch.hpp"
+#include "test_helpers.hpp"
+
+using namespace duckdb;
+using namespace std;
+
+TEST_CASE("Substring test", "[function]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	REQUIRE_NO_FAIL(con.Query(
+	    "CREATE TABLE strings(s VARCHAR, off INTEGER, length INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('hello', 1, 2), "
+	                          "('world', 2, 3), ('b', 1, 1), (NULL, 2, 2)"));
+
+	// constant offset/length
+	// normal substring
+	result = con.Query("SELECT substring(s from 1 for 2) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"he", "wo", "b", Value()}));
+
+	// substring out of range
+	result = con.Query("SELECT substring(s from 2 for 2) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"el", "or", "", Value()}));
+
+	// variable length offset/length
+	result = con.Query("SELECT substring(s from off for length) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"he", "orl", "b", Value()}));
+
+	result = con.Query("SELECT substring(s from off for 2) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"he", "or", "b", Value()}));
+
+	result = con.Query("SELECT substring(s from 1 for length) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"he", "wor", "b", Value()}));
+
+	result =
+	    con.Query("SELECT substring('hello' from off for length) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"he", "ell", "h", "el"}));
+}
