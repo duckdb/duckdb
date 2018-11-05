@@ -151,7 +151,7 @@ static bool ValuesAreEqual(Value result_value, Value value) {
 		if (left != right) {
 			double ldecimal = value.value_.decimal;
 			double rdecimal = result_value.value_.decimal;
-			if (ldecimal < 0.999 * rdecimal || ldecimal > 1.001 * rdecimal) {
+			if (ldecimal < 0.99 * rdecimal || ldecimal > 1.01 * rdecimal) {
 				return false;
 			}
 		}
