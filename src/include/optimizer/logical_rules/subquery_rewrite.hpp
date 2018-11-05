@@ -27,6 +27,8 @@ struct JoinCondition;
 class LogicalAggregate;
 class SubqueryExpression;
 
-void ExtractCorrelatedExpressions(LogicalAggregate *aggr, SubqueryExpression *subquery,
-	size_t subquery_table_index, std::vector<JoinCondition>& join_conditions);
+void ExtractCorrelatedExpressions(LogicalAggregate *aggr,
+                                  SubqueryExpression *subquery,
+                                  size_t subquery_table_index,
+                                  std::vector<JoinCondition> &join_conditions);
 } // namespace duckdb

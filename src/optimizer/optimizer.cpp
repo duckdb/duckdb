@@ -14,9 +14,10 @@ Optimizer::Optimizer(BindContext &context) : rewriter(context), success(false) {
 	rewriter.rules.push_back(make_unique<DistributivityRule>());
 	rewriter.rules.push_back(make_unique<SplitFilterConjunctionRule>());
 	rewriter.rules.push_back(make_unique<InClauseRewriteRule>());
+	rewriter.rules.push_back(make_unique<ExistsRewriteRule>());
+	rewriter.rules.push_back(make_unique<SubqueryRewritingRule>());
 	rewriter.rules.push_back(make_unique<CrossProductRewrite>());
 	rewriter.rules.push_back(make_unique<SelectionPushdownRule>());
-	rewriter.rules.push_back(make_unique<SubqueryRewritingRule>());
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {

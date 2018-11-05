@@ -102,7 +102,8 @@ TEST_CASE("Test correlated subqueries in WHERE clause", "[subqueries]") {
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (2, 22)"));
 
 	// correlated subquery with one correlated expression
-	// result = con.Query("SELECT * FROM test WHERE b=(SELECT MIN(b) FROM test AS "
+	// result = con.Query("SELECT * FROM test WHERE b=(SELECT MIN(b) FROM test
+	// AS "
 	//                    "a WHERE a.id=test.id)");
 	// REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
 	// REQUIRE(CHECK_COLUMN(result, 1, {21, 22}));

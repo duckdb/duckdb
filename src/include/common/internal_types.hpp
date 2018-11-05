@@ -113,6 +113,8 @@ enum class ExpressionType : uint8_t {
 	OPERATOR_IS_NOT_NULL = 10,
 	// exists test.
 	OPERATOR_EXISTS = 11,
+	// not exists test
+	OPERATOR_NOT_EXISTS = 12,
 
 	// -----------------------------
 	// Comparison Operators

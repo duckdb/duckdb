@@ -123,6 +123,9 @@ unique_ptr<Expression> TransformBoolExpr(BoolExpr *root) {
 				// convert COMPARE_IN to COMPARE_NOT_IN
 				next->type = ExpressionType::COMPARE_NOT_IN;
 				result = move(next);
+			} else if (next->type == ExpressionType::OPERATOR_EXISTS) {
+				next->type = ExpressionType::OPERATOR_NOT_EXISTS;
+				result = move(next);
 			} else {
 				result = make_unique<OperatorExpression>(
 				    ExpressionType::OPERATOR_NOT, TypeId::BOOLEAN, move(next),
