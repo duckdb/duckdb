@@ -194,6 +194,8 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 			}
 		}
 		ss->pointers.count = count;
+	} else {
+		ss->pointers.sel_vector = nullptr;
 	}
 	// serialize the keys for later comparison purposes
 	key_serializer.Serialize(keys, ss->serialized_keys);
@@ -316,7 +318,7 @@ static void NextSemiOrAntiJoin(DataChunk &left, DataChunk &result,
 			auto prev_pointer = (uint8_t **)(pointer + ss.ht.tuple_size);
 			pointer = *prev_pointer;
 		}
-		if (!match) {
+		if (match) {
 			// match was found (semi) or no match was found (anti)
 			result.owned_sel_vector[result_count++] = i;
 		}
