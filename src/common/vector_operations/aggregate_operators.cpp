@@ -109,7 +109,9 @@ bool VectorOperations::AnyTrue(Vector &left) {
 	}
 	bool result = false;
 	VectorOperations::ExecType<bool>(left, [&](bool value, size_t i, size_t k) {
-		result = result || value;
+		if (!left.nullmask[i]) {
+			result = result || value;
+		}
 	});
 	return result;
 }
@@ -124,7 +126,11 @@ bool VectorOperations::AllTrue(Vector &left) {
 	}
 	bool result = true;
 	VectorOperations::ExecType<bool>(left, [&](bool value, size_t i, size_t k) {
-		result = result && value;
+		if (left.nullmask[i]) {
+			result = false;
+		} else {
+			result = result && value;
+		}
 	});
 	return result;
 }

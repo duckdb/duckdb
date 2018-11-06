@@ -55,8 +55,7 @@ bool PhysicalNestedLoopJoin::CreateResult(DataChunk &left, size_t left_position,
 			for (size_t i = 0; i < left.column_count; i++) {
 				result.data[i].count = 1;
 				result.data[i].sel_vector = nullptr;
-				VectorOperations::Set(result.data[i],
-				                      left.data[i].GetValue(left_position));
+				result.data[i].SetValue(0, left.data[i].GetValue(left_position));
 			}
 		}
 		return false;
@@ -74,8 +73,7 @@ bool PhysicalNestedLoopJoin::CreateResult(DataChunk &left, size_t left_position,
 		for (size_t i = 0; i < left.column_count; i++) {
 			result.data[i].count = 1;
 			result.data[i].sel_vector = nullptr;
-			VectorOperations::Set(result.data[i],
-			                      left.data[i].GetValue(left_position));
+			result.data[i].SetValue(0, left.data[i].GetValue(left_position));
 		}
 		return true;
 	}

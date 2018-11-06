@@ -102,16 +102,6 @@ void DataChunk::Append(DataChunk &other) {
 		    "Column counts of appending chunk doesn't match!");
 	}
 	for (size_t i = 0; i < column_count; i++) {
-		if (other.data[i].type != data[i].type) {
-			throw TypeMismatchException(data[i].type, other.data[i].type,
-			                            "Column types do not match!");
-		}
-	}
-	if (size() + other.size() > STANDARD_VECTOR_SIZE) {
-		throw OutOfRangeException(
-		    "Count of chunk cannot exceed STANDARD_VECTOR_SIZE!");
-	}
-	for (size_t i = 0; i < column_count; i++) {
 		data[i].Append(other.data[i]);
 	}
 }

@@ -16,6 +16,7 @@
 #include "optimizer/rule.hpp"
 #include "parser/constraint.hpp"
 #include "planner/logical_operator.hpp"
+#include "planner/operator/list.hpp"
 #include "planner/operator/logical_join.hpp"
 #include "storage/data_table.hpp"
 
@@ -50,6 +51,7 @@ template class std::unique_ptr<JoinHashTable::ScanStructure>;
 template class std::unique_ptr<JoinHashTable::Node>;
 template class std::unique_ptr<uint8_t *[]>;
 template class std::unique_ptr<Rule>;
+template class std::unique_ptr<LogicalJoin>;
 
 #define INSTANTIATE_VECTOR(VECTOR_DEFINITION)                                  \
 	template VECTOR_DEFINITION::size_type VECTOR_DEFINITION::size() const;     \
