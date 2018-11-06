@@ -6,7 +6,7 @@
 using namespace duckdb;
 using namespace std;
 
-#define RANGEJOIN_COUNT 1000000
+#define RANGEJOIN_COUNT 100000
 
 DUCKDB_BENCHMARK(RangeJoin, "[micro]")
 virtual void Load(DuckDBBenchmarkState *state) {
@@ -28,7 +28,7 @@ virtual void Load(DuckDBBenchmarkState *state) {
 }
 
 virtual std::string GetQuery() {
-	return "SELECT * FROM integers a, integers b WHERE (a.i / 100) > b.j;";
+	return "SELECT * FROM integers a, integers b WHERE (a.i / 1000) > b.j;";
 }
 
 virtual std::string VerifyResult(DuckDBResult *result) {
@@ -41,7 +41,7 @@ virtual std::string VerifyResult(DuckDBResult *result) {
 virtual std::string BenchmarkInfo() {
 	return StringUtil::Format(
 	    "Runs the following query: \"SELECT * FROM "
-	    "integers a, integers b WHERE (a.i / 100) > b.j;\""
+	    "integers a, integers b WHERE (a.i / 1000) > b.j;\""
 	    " on %d rows",
 	    RANGEJOIN_COUNT);
 }
