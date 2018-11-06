@@ -447,8 +447,7 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 				// if there is any true in comp_res the IN returns true
 				VectorOperations::Equals(lval_vec, rval_vec, comp_res);
 				// if we find any match, IN is true
-				if (ValueOperations::Equals(VectorOperations::AnyTrue(comp_res),
-				                            Value(true))) {
+				if (VectorOperations::AnyTrue(comp_res)) {
 					result.SetValue(r, Value(true));
 				} else {
 					// if not, but there are some NULLs in the rhs, its a NULL

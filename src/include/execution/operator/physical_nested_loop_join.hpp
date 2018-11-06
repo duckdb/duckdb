@@ -28,6 +28,12 @@ class PhysicalNestedLoopJoin : public PhysicalJoin {
 
 	virtual std::unique_ptr<PhysicalOperatorState>
 	GetOperatorState(ExpressionExecutor *parent_executor) override;
+
+  private:
+	// method to create the final result given the vector of matches of the left
+	// tuple with the right chunk
+	bool CreateResult(DataChunk &left, size_t left_position, DataChunk &right,
+	                  DataChunk &result, Vector &matches, bool is_last_chunk);
 };
 
 class PhysicalNestedLoopJoinOperatorState : public PhysicalOperatorState {

@@ -64,8 +64,7 @@ Value VectorOperations::Sum(Vector &left) {
 	is_null.Initialize(TypeId::BOOLEAN);
 	VectorOperations::IsNull(left, is_null);
 
-	if (ValueOperations::Equals(VectorOperations::AllTrue(is_null),
-	                            Value(true))) {
+	if (VectorOperations::AllTrue(is_null)) {
 		result.is_null = true;
 	} else {
 		generic_fold_loop<operators::Add>(left, result);
@@ -103,31 +102,30 @@ Value VectorOperations::Min(Vector &left) {
 	return result;
 }
 
-Value VectorOperations::AnyTrue(Vector &left) {
+bool VectorOperations::AnyTrue(Vector &left) {
 	if (left.type != TypeId::BOOLEAN) {
 		throw InvalidTypeException(
 		    left.type, "AnyTrue can only be computed for boolean columns!");
 	}
-	if (left.count == 0) {
-		return Value(false);
-	}
-
-	Value result = Value(false);
-	generic_fold_loop<operators::AnyTrue>(left, result);
+	bool result = false;
+	VectorOperations::ExecType<bool>(left, [&](bool value, size_t i, size_t k) {
+		result = result || value;
+	});
 	return result;
 }
 
-Value VectorOperations::AllTrue(Vector &left) {
+bool VectorOperations::AllTrue(Vector &left) {
 	if (left.type != TypeId::BOOLEAN) {
 		throw InvalidTypeException(
 		    left.type, "AllTrue can only be computed for boolean columns!");
 	}
 	if (left.count == 0) {
-		return Value(false);
+		return false;
 	}
-
-	Value result = Value(true);
-	generic_fold_loop<operators::AllTrue>(left, result);
+	bool result = true;
+	VectorOperations::ExecType<bool>(left, [&](bool value, size_t i, size_t k) {
+		result = result && value;
+	});
 	return result;
 }
 
@@ -141,9 +139,7 @@ bool VectorOperations::Contains(Vector &vector, Value &value) {
 	Vector right(value.CastAs(vector.type));
 	Vector comparison_result(TypeId::BOOLEAN, true, false);
 	VectorOperations::Equals(vector, right, comparison_result);
-	auto result = VectorOperations::AnyTrue(comparison_result);
-	assert(result.type == TypeId::BOOLEAN);
-	return result.value_.boolean;
+	return VectorOperations::AnyTrue(comparison_result);
 }
 
 bool VectorOperations::HasNull(Vector &left) {

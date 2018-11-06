@@ -135,9 +135,9 @@ struct VectorOperations {
 	// Maximum string length of the vector, only works on string vectors!
 	static Value MaximumStringLength(Vector &A);
 	// Check if any value is true in a bool vector
-	static Value AnyTrue(Vector &A);
+	static bool AnyTrue(Vector &A);
 	// Check if all values are true in a bool vector
-	static Value AllTrue(Vector &A);
+	static bool AllTrue(Vector &A);
 
 	//! CASE expressions, ternary op
 	//! result = check ? A : B
