@@ -12,30 +12,22 @@
 
 #include "common/types/chunk_collection.hpp"
 
-#include "execution/physical_operator.hpp"
-
-#include "planner/operator/logical_join.hpp"
+#include "execution/operator/physical_join.hpp"
 
 namespace duckdb {
 
 //! PhysicalNestedLoopJoin represents a nested loop join between two tables
-class PhysicalNestedLoopJoin : public PhysicalOperator {
+class PhysicalNestedLoopJoin : public PhysicalJoin {
   public:
 	PhysicalNestedLoopJoin(std::unique_ptr<PhysicalOperator> left,
 	                       std::unique_ptr<PhysicalOperator> right,
 	                       std::vector<JoinCondition> cond, JoinType join_type);
-
-	std::vector<std::string> GetNames() override;
-	std::vector<TypeId> GetTypes() override;
 
 	virtual void _GetChunk(ClientContext &context, DataChunk &chunk,
 	                       PhysicalOperatorState *state) override;
 
 	virtual std::unique_ptr<PhysicalOperatorState>
 	GetOperatorState(ExpressionExecutor *parent_executor) override;
-
-	std::vector<JoinCondition> conditions;
-	JoinType type;
 };
 
 class PhysicalNestedLoopJoinOperatorState : public PhysicalOperatorState {

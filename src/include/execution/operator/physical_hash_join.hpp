@@ -15,19 +15,17 @@
 #include "execution/join_hashtable.hpp"
 #include "execution/physical_operator.hpp"
 
+#include "execution/operator/physical_join.hpp"
 #include "planner/operator/logical_join.hpp"
 
 namespace duckdb {
 
 //! PhysicalHashJoin represents a hash loop join between two tables
-class PhysicalHashJoin : public PhysicalOperator {
+class PhysicalHashJoin : public PhysicalJoin {
   public:
 	PhysicalHashJoin(std::unique_ptr<PhysicalOperator> left,
 	                 std::unique_ptr<PhysicalOperator> right,
 	                 std::vector<JoinCondition> cond, JoinType join_type);
-
-	std::vector<std::string> GetNames() override;
-	std::vector<TypeId> GetTypes() override;
 
 	virtual void _GetChunk(ClientContext &context, DataChunk &chunk,
 	                       PhysicalOperatorState *state) override;
@@ -37,8 +35,6 @@ class PhysicalHashJoin : public PhysicalOperator {
 
 	std::unique_ptr<JoinHashTable> hash_table;
 	std::vector<TypeId> join_key_types;
-	std::vector<JoinCondition> conditions;
-	JoinType type;
 };
 
 class PhysicalHashJoinOperatorState : public PhysicalOperatorState {
