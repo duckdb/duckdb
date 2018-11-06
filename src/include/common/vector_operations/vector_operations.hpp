@@ -145,7 +145,6 @@ struct VectorOperations {
 
 	// Returns true if the vector contains an instance of Value
 	static bool Contains(Vector &vector, Value &value);
-
 	//===--------------------------------------------------------------------===//
 	// Scatter methods
 	//===--------------------------------------------------------------------===//
@@ -170,6 +169,12 @@ struct VectorOperations {
 		// dest.data[i] = ptr[i]
 		static void Set(Vector &source, Vector &dest);
 	};
+
+	//===--------------------------------------------------------------------===//
+	// Sort functions
+	//===--------------------------------------------------------------------===//
+	// Sort the vector, setting the given selection vector to a sorted state.
+	static void Sort(Vector &vector, sel_t result[]);
 	//===--------------------------------------------------------------------===//
 	// Hash functions
 	//===--------------------------------------------------------------------===//
