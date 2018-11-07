@@ -26,8 +26,7 @@ SuperLargeHashTable::SuperLargeHashTable(size_t initial_capacity,
 	for (auto type : payload_types) {
 		payload_width += GetTypeIdSize(type);
 	}
-	tuple_size = FLAG_SIZE + (group_serializer.TupleSize() + payload_width +
-	                          sizeof(int64_t));
+	tuple_size = FLAG_SIZE + (group_serializer.TupleSize() + payload_width);
 	Resize(initial_capacity);
 }
 
@@ -142,15 +141,15 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 					// counts are zero initialized, all other aggregates NULL
 					// initialized
 					auto type = payload_types[i];
-					if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT) {
+					if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT ||
+					    aggregate_types[i] ==
+					        ExpressionType::AGGREGATE_COUNT_STAR) {
 						memset(location, 0, GetTypeIdSize(type));
 					} else {
 						SetNullValue(location, type);
 					}
 					location += GetTypeIdSize(type);
 				}
-				// set the count
-				*((int64_t *)location) = 0;
 				entries++;
 				break;
 			}
@@ -179,12 +178,13 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	size_t j = 0;
 
 	for (size_t i = 0; i < aggregate_types.size(); i++) {
-		if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_STAR) {
-			continue;
-		}
 		assert(payload.column_count > j);
 		// for any entries for which a group was found, update the aggregate
 		switch (aggregate_types[i]) {
+		case ExpressionType::AGGREGATE_COUNT_STAR:
+			// add one to each address, regardless of if the value is NULL
+			VectorOperations::Scatter::Add(one, addresses);
+			break;
 		case ExpressionType::AGGREGATE_COUNT:
 			VectorOperations::Scatter::AddOne(payload.data[j], addresses);
 			break;
@@ -212,8 +212,6 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		                             GetTypeIdSize(payload.data[j].type));
 		j++;
 	}
-	// update the counts in each bucket
-	VectorOperations::Scatter::Add(one, addresses);
 }
 
 size_t SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &groups,
@@ -252,21 +250,8 @@ size_t SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &groups,
 		auto &target = result.data[i];
 		target.count = entry;
 
-		if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_STAR) {
-			// we fetch the total counts later because they are stored at the
-			// end
-			continue;
-		}
 		VectorOperations::Gather::Set(addresses, target);
 		VectorOperations::AddInPlace(addresses, GetTypeIdSize(target.type));
-	}
-	for (size_t i = 0; i < aggregate_types.size(); i++) {
-		// now we can fetch the counts
-		if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_STAR) {
-			auto &target = result.data[i];
-			target.count = entry;
-			VectorOperations::Gather::Set(addresses, target);
-		}
 	}
 	scan_position = ptr - data;
 	return entry;

@@ -53,7 +53,8 @@ unique_ptr<Expression>
 FunctionExpression::Deserialize(ExpressionDeserializeInformation *info,
                                 Deserializer &source) {
 	auto function_name = source.Read<string>();
-	auto function = make_unique<FunctionExpression>(function_name, info->children);
+	auto function =
+	    make_unique<FunctionExpression>(function_name, info->children);
 	function->schema = source.Read<string>();
 	return function;
 }
