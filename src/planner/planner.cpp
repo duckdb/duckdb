@@ -22,7 +22,7 @@ void Planner::CreatePlan(ClientContext &context, SQLStatement &statement) {
 	statement.Accept(&binder);
 
 	// now create a logical query plan from the query
-	LogicalPlanGenerator logical_planner(context, *binder.bind_context);
+	LogicalPlanGenerator logical_planner(context, *binder.bind_context, false);
 	statement.Accept(&logical_planner);
 
 	this->plan = move(logical_planner.root);
@@ -31,6 +31,7 @@ void Planner::CreatePlan(ClientContext &context, SQLStatement &statement) {
 
 bool Planner::CreatePlan(ClientContext &context,
                          unique_ptr<SQLStatement> statement) {
+	assert(statement);
 	this->success = false;
 	try {
 		switch (statement->type) {

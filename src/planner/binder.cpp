@@ -40,6 +40,7 @@ void Binder::Visit(SelectStatement &statement) {
 			new_select_list.push_back(move(select_element));
 		}
 	}
+	statement.result_column_count = new_select_list.size();
 
 	for (size_t i = 0; i < new_select_list.size(); i++) {
 		auto &select_element = new_select_list[i];

@@ -33,11 +33,11 @@ SubqueryRewritingRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
 	auto *subquery = (SubqueryExpression *)bindings[2].value.expr;
 
 	// step 1: check that subquery is an aggregation
-	// FIXME: what about LIMIT or ORDER BY after the aggregation?
-	if (subquery->op->type != LogicalOperatorType::AGGREGATE_AND_GROUP_BY) {
+	auto node = GetProjection(subquery->op.get());
+	if (node->type != LogicalOperatorType::AGGREGATE_AND_GROUP_BY) {
 		return nullptr;
 	}
-	auto aggr = (LogicalAggregate *)subquery->op.get();
+	auto aggr = (LogicalAggregate *)node;
 
 	// now we turn a subquery in the WHERE clause into a "proper" subquery
 	// hence we need to get a new table index from the BindContext
@@ -55,7 +55,7 @@ SubqueryRewritingRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
 	                     ? move(comparison->children[1])
 	                     : move(comparison->children[0]);
 	// the right condition is the first column of the subquery
-	auto &first_column = subquery->op->expressions[0];
+	auto &first_column = aggr->expressions[0];
 	condition.right = make_unique<ColumnRefExpression>(
 	    first_column->return_type, ColumnBinding(subquery_table_index, 0));
 	condition.comparison = comparison->type;
@@ -115,7 +115,7 @@ void ExtractCorrelatedExpressions(LogicalAggregate *aggr,
 		// this is a comparison like e.g. a.A = b.A
 		// where "a" is from the subquery, and "b" from the outer layer
 		vector<AbstractOperator> sq_bindings;
-		auto subquery_op = AbstractOperator(subquery->op.get());
+		auto subquery_op = AbstractOperator(aggr);
 		for (auto it = subquery_op.begin(); it != subquery_op.end(); it++) {
 			if (Rewriter::MatchOperands(filter_rule.get(), *it, sq_bindings)) {
 				break;

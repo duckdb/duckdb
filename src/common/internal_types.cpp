@@ -269,6 +269,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "DELETE";
 	case LogicalOperatorType::UPDATE:
 		return "UPDATE";
+	case LogicalOperatorType::PRUNE_COLUMNS:
+		return "PRUNE";
 	case LogicalOperatorType::EXPORT_EXTERNAL_FILE:
 		return "EXPORT_EXTERNAL_FILE";
 	default:
@@ -326,6 +328,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "UPDATE";
 	case PhysicalOperatorType::EXPORT_EXTERNAL_FILE:
 		return "EXPORT_EXTERNAL_FILE";
+	case PhysicalOperatorType::PRUNE_COLUMNS:
+		return "PRUNE";
 	default:
 		return "INVALID";
 	}

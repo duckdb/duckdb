@@ -42,6 +42,9 @@ InClauseRewriteRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
 		return nullptr;
 	}
 
+	// find the projection
+	auto node = GetProjection(subquery->op.get());
+
 	// convert the expression into a semi-join or anti-join
 
 	// first figure out the join type
@@ -61,15 +64,15 @@ InClauseRewriteRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
 	// it is between the left_expression of the IN clause
 	condition.left = move(operator_expression->children[0]);
 	// and the first column of the subquery
-	assert(subquery->op->expressions.size() > 0);
+	assert(node->expressions.size() > 0);
 	condition.right = make_unique<ColumnRefExpression>(
-	    subquery->op->expressions[0]->return_type,
+	    node->expressions[0]->return_type,
 	    ColumnBinding(subquery_table_index, 0));
 	condition.comparison = ExpressionType::COMPARE_EQUAL;
 
 	// now convert the subquery expression into a proper subquery
 	auto table_subquery = make_unique<LogicalSubquery>(
-	    subquery_table_index, subquery->op->expressions.size());
+	    subquery_table_index, node->expressions.size());
 	table_subquery->children.push_back(move(subquery->op));
 
 	// create the join between the new subquery and the child of the filter

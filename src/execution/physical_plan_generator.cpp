@@ -226,10 +226,12 @@ void PhysicalPlanGenerator::Visit(LogicalPruneColumns &op) {
 	if (!plan) {
 		throw Exception("Prune columns cannot be the first node of a plan!");
 	}
-
-	auto node = make_unique<PhysicalPruneColumns>(op.column_limit);
-	node->children.push_back(move(plan));
-	this->plan = move(node);
+	if (plan->GetTypes().size() > op.column_limit) {
+		// only prune if we need to
+		auto node = make_unique<PhysicalPruneColumns>(op.column_limit);
+		node->children.push_back(move(plan));
+		this->plan = move(node);
+	}
 }
 
 void PhysicalPlanGenerator::Visit(LogicalTableFunction &op) {
