@@ -1,11 +1,8 @@
-
 #include "dsdgen.hpp"
 #include "common/exception.hpp"
 #include "main/client_context.hpp"
 #include "common/types/data_chunk.hpp"
-
 #include "storage/data_table.hpp"
-
 #include "tpcds_constants.hpp"
 #include "append_info.hpp"
 
@@ -28,17 +25,18 @@ typedef int64_t ds_key_t;
 
 void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	DuckDBConnection con(db);
-	ClientContext &context = con.context;
+	con.context.transaction.BeginTransaction();
+	auto &transaction = con.context.ActiveTransaction();
 
-	// FIXME: use a transaction for the load
 	// FIXME: no schema/suffix support yet
+
 	for (int t = 0; t < TPCDS_TABLE_COUNT; t++) {
-		con.Query(TPCDS_TABLE_DDL[t]);
+		con.GetQueryResult(con.context, TPCDS_TABLE_DDL[t]);
 	}
 
 	if (flt_scale == 0) {
 		// schema only
-		context.transaction.Commit();
+		con.context.transaction.Commit();
 		return;
 	}
 
@@ -64,11 +62,11 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 		}
 
 		tpcds_append_information append_info;
+		append_info.chunk.Reset();
 		append_info.row = 0;
-		append_info.context = &context;
+		append_info.context = &con.context;
 		append_info.table =
-		    db.catalog.GetTable(context.transaction.ActiveTransaction(),
-		                        DEFAULT_SCHEMA, table_def->name);
+		    db.catalog.GetTable(transaction, DEFAULT_SCHEMA, table_def->name);
 
 		// get function pointers for this table
 		table_func_t *table_funcs = getTdefFunctionsByNumber(table_id);
@@ -85,16 +83,16 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 				append_info.row++;
 			}
 		}
-		append_info.chunk.Print();
+		append_info.chunk.Verify();
 
 		// incomplete chunks
 		if (append_info.chunk.size() > 0) {
 			append_info.table->storage->Append(*append_info.context,
 			                                   append_info.chunk);
 		}
-		return;
+		break; // only caring about first table now
 	}
-	// context.transaction.Commit();
+	con.context.transaction.Commit();
 }
 
 string get_query(int query) {

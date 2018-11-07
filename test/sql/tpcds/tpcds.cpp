@@ -6,9 +6,10 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test TPC-DS SF0.1", "[tpcds][.]") {
-	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	unique_ptr<DuckDBResult> result;
+
 	tpcds::dbgen(1, db);
 
 	result = con.Query("SELECT COUNT(*) FROM call_center");
