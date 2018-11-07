@@ -20,6 +20,7 @@
 
 namespace duckdb {
 
+// NOTE: there is a copy of this in the Postgres' parser grammar (gram.y)
 #define DEFAULT_SCHEMA "main"
 
 #define STANDARD_VECTOR_SIZE 1024
