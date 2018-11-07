@@ -221,6 +221,9 @@ string show_diff(DataChunk &left, DataChunk &right) {
 }
 
 string show_diff(ChunkCollection &collection, DataChunk &chunk) {
+	if (collection.chunks.size() == 0) {
+		return "<EMPTY RESULT>";
+	}
 	return show_diff(*collection.chunks[0], chunk);
 }
 
