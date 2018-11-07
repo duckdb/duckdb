@@ -56,7 +56,7 @@ void SuperLargeHashTable::Resize(size_t size) {
 			if (groups.size() == 0) {
 				break;
 			}
-			new_table->AddChunk(groups, payload);
+			new_table->AddChunk(groups, payload, true);
 		}
 
 		assert(this->entries == new_table->entries);
@@ -76,7 +76,7 @@ void SuperLargeHashTable::Resize(size_t size) {
 	}
 }
 
-void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
+void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bool resize) {
 	if (groups.size() == 0) {
 		return;
 	}
@@ -179,33 +179,38 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 
 	for (size_t i = 0; i < aggregate_types.size(); i++) {
 		assert(payload.column_count > j);
-		// for any entries for which a group was found, update the aggregate
-		switch (aggregate_types[i]) {
-		case ExpressionType::AGGREGATE_COUNT_STAR:
-			// add one to each address, regardless of if the value is NULL
-			VectorOperations::Scatter::Add(one, addresses);
-			break;
-		case ExpressionType::AGGREGATE_COUNT:
-			VectorOperations::Scatter::AddOne(payload.data[j], addresses);
-			break;
-		case ExpressionType::AGGREGATE_SUM:
-			// addition
-			VectorOperations::Scatter::Add(payload.data[j], addresses);
-			break;
-		case ExpressionType::AGGREGATE_MIN:
-			// min
-			VectorOperations::Scatter::Min(payload.data[j], addresses);
-			break;
-		case ExpressionType::AGGREGATE_MAX:
-			// max
-			VectorOperations::Scatter::Max(payload.data[j], addresses);
-			break;
-		case ExpressionType::AGGREGATE_FIRST:
-			// first
-			VectorOperations::Scatter::SetFirst(payload.data[j], addresses);
-			break;
-		default:
-			throw NotImplementedException("Unimplemented aggregate type!");
+		if (resize) {
+			// in resize just set the values
+			VectorOperations::Scatter::Set(payload.data[j], addresses);
+		} else {
+			// for any entries for which a group was found, update the aggregate
+			switch (aggregate_types[i]) {
+			case ExpressionType::AGGREGATE_COUNT_STAR:
+				// add one to each address, regardless of if the value is NULL
+				VectorOperations::Scatter::Add(one, addresses);
+				break;
+			case ExpressionType::AGGREGATE_COUNT:
+				VectorOperations::Scatter::AddOne(payload.data[j], addresses);
+				break;
+			case ExpressionType::AGGREGATE_SUM:
+				// addition
+				VectorOperations::Scatter::Add(payload.data[j], addresses);
+				break;
+			case ExpressionType::AGGREGATE_MIN:
+				// min
+				VectorOperations::Scatter::Min(payload.data[j], addresses);
+				break;
+			case ExpressionType::AGGREGATE_MAX:
+				// max
+				VectorOperations::Scatter::Max(payload.data[j], addresses);
+				break;
+			case ExpressionType::AGGREGATE_FIRST:
+				// first
+				VectorOperations::Scatter::SetFirst(payload.data[j], addresses);
+				break;
+			default:
+				throw NotImplementedException("Unimplemented aggregate type!");
+			}
 		}
 		// move to the next aggregate
 		VectorOperations::AddInPlace(addresses,
