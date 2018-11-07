@@ -122,6 +122,8 @@ typedef int64_t ds_key_t;
 #include "scaling.h"
 #include "address.h"
 #include "dist.h"
+#include "genrand.h"
+
 
 static void gen_tbl(int tabid, ds_key_t kFirstRow, ds_key_t kRowCount) {
 	int direct, bIsVerbose, nLifeFreq, nMultiplier, nChild;
@@ -178,6 +180,8 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	for (int t = 0; t < TPCDS_TABLE_COUNT; t++) {
 		con.Query(TPCDS_TABLE_DDL[t]);
 	}
+
+	init_rand();
 
 	tdef *pT;
 	for (int i = CALL_CENTER; (pT = getSimpleTdefsByNumber(i)); i++) {

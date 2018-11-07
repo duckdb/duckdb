@@ -35,6 +35,12 @@
  */
 #ifndef GENRAND_H
 #define GENRAND_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 #include "decimal.h"
 #include "date.h"
 #include "dist.h"
@@ -82,5 +88,10 @@ void genrand_ipaddr(char *pDest, int nColumn);
 int genrand_url(char *pDest, int nColumn);
 int setSeed(int nStream, int nValue);
 void resetSeeds(int nTable);
+
+#ifdef __cplusplus
+}
+#endif
+
 
 #endif
