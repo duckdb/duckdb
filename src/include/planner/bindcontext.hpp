@@ -73,7 +73,7 @@ struct SubqueryBinding : public Binding {
 	//! Name -> index for the names
 	std::unordered_map<std::string, size_t> name_map;
 
-	SubqueryBinding(SubqueryRef& subquery_, size_t index);
+	SubqueryBinding(SubqueryRef &subquery_, size_t index);
 	virtual ~SubqueryBinding() {
 	}
 };
@@ -113,7 +113,7 @@ class BindContext {
 	void AddDummyTable(const std::string &alias,
 	                   std::vector<ColumnDefinition> &columns);
 	//! Adds a subquery with a given alias to the BindContext.
-	size_t AddSubquery(const std::string &alias, SubqueryRef& subquery);
+	size_t AddSubquery(const std::string &alias, SubqueryRef &subquery);
 	//! Adds a table function with a given alias to the BindContext
 	size_t AddTableFunction(const std::string &alias,
 	                        TableFunctionCatalogEntry *function_entry);

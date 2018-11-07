@@ -40,7 +40,7 @@ bool CHECK_COLUMN(unique_ptr<duckdb::DuckDBResult> &result,
 	}
 	size_t chunk_index = 0;
 	for (size_t i = 0; i < values.size();) {
-		if (chunk_index >= result->size()) {
+		if (chunk_index >= result->collection.chunks.size()) {
 			// ran out of chunks
 			result->Print();
 			return false;
