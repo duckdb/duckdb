@@ -365,21 +365,17 @@ int ld_w_catalog_sales(void *info) {
 	append_decimal(info, &r->cs_pricing.wholesale_cost);
 	append_decimal(info, &r->cs_pricing.list_price);
 	append_decimal(info, &r->cs_pricing.sales_price);
-	append_decimal(info,
-				  &r->cs_pricing.ext_discount_amt);
+	append_decimal(info, &r->cs_pricing.ext_discount_amt);
 	append_decimal(info, &r->cs_pricing.ext_sales_price);
-	append_decimal(info,
-				  &r->cs_pricing.ext_wholesale_cost);
+	append_decimal(info, &r->cs_pricing.ext_wholesale_cost);
 	append_decimal(info, &r->cs_pricing.ext_list_price);
 	append_decimal(info, &r->cs_pricing.ext_tax);
 	append_decimal(info, &r->cs_pricing.coupon_amt);
 	append_decimal(info, &r->cs_pricing.ext_ship_cost);
 	append_decimal(info, &r->cs_pricing.net_paid);
 	append_decimal(info, &r->cs_pricing.net_paid_inc_tax);
-	append_decimal(info,
-				  &r->cs_pricing.net_paid_inc_ship);
-	append_decimal(info,
-				  &r->cs_pricing.net_paid_inc_ship_tax);
+	append_decimal(info, &r->cs_pricing.net_paid_inc_ship);
+	append_decimal(info, &r->cs_pricing.net_paid_inc_ship_tax);
 	append_decimal(info, &r->cs_pricing.net_profit);
 
 	return (0);

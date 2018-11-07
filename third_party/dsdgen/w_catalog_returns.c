@@ -235,7 +235,6 @@ int pr_w_catalog_returns(void *row) {
 
 #include "append_info.h"
 
-
 int ld_w_catalog_returns(void *info) {
 	struct W_CATALOG_RETURNS_TBL *r = &g_w_catalog_returns;
 
@@ -267,7 +266,7 @@ int ld_w_catalog_returns(void *info) {
 	append_decimal(info, &r->cr_pricing.refunded_cash);
 	append_decimal(info, &r->cr_pricing.reversed_charge);
 	append_decimal(info, &r->cr_pricing.store_credit);
-	append_decimal(info, &r->cr_pricing.net_loss );
+	append_decimal(info, &r->cr_pricing.net_loss);
 
 	return (0);
 }

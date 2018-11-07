@@ -90,7 +90,8 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 			                                   append_info.chunk);
 		}
 
-		if (table_id == CATALOG_PAGE) break;
+		if (table_id == CATALOG_PAGE)
+			break;
 	}
 	con.context.transaction.Commit();
 }

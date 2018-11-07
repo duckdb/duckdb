@@ -20,10 +20,8 @@ TEST_CASE("Test TPC-DS SF1", "[tpcds][.]") {
 	result = con.Query("SELECT COUNT(*) FROM catalog_page");
 	REQUIRE(CHECK_COLUMN(result, 0, {11718}));
 
-//	result = con.Query("SELECT COUNT(*) FROM catalog_returns");
-//	REQUIRE(CHECK_COLUMN(result, 0, {144067}));
-
-
+	//	result = con.Query("SELECT COUNT(*) FROM catalog_returns");
+	//	REQUIRE(CHECK_COLUMN(result, 0, {144067}));
 
 	//	// run queries, these work already
 	//	con.Query(TPCDS_QUERIES[TPCDS_QUERY_ID::Q01]);
