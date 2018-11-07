@@ -24,6 +24,7 @@
 #include "parser/statement/select_statement.hpp"
 
 namespace duckdb {
+class SubqueryRef;
 
 enum class BindingType : uint8_t {
 	DUMMY = 0,
@@ -72,14 +73,7 @@ struct SubqueryBinding : public Binding {
 	//! Name -> index for the names
 	std::unordered_map<std::string, size_t> name_map;
 
-	SubqueryBinding(SelectStatement *subquery_, size_t index)
-	    : Binding(BindingType::SUBQUERY, index), subquery(subquery_) {
-		for (auto &entry : subquery->select_list) {
-			auto name = entry->GetName();
-			name_map[name] = names.size();
-			names.push_back(name);
-		}
-	}
+	SubqueryBinding(SubqueryRef& subquery_, size_t index);
 	virtual ~SubqueryBinding() {
 	}
 };
@@ -119,7 +113,7 @@ class BindContext {
 	void AddDummyTable(const std::string &alias,
 	                   std::vector<ColumnDefinition> &columns);
 	//! Adds a subquery with a given alias to the BindContext.
-	size_t AddSubquery(const std::string &alias, SelectStatement *subquery);
+	size_t AddSubquery(const std::string &alias, SubqueryRef& subquery);
 	//! Adds a table function with a given alias to the BindContext
 	size_t AddTableFunction(const std::string &alias,
 	                        TableFunctionCatalogEntry *function_entry);

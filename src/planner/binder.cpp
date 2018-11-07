@@ -365,7 +365,7 @@ void Binder::Visit(SubqueryRef &expr) {
 	expr.subquery->Accept(&binder);
 	expr.context = move(binder.bind_context);
 
-	bind_context->AddSubquery(expr.alias, expr.subquery.get());
+	bind_context->AddSubquery(expr.alias, expr);
 }
 
 void Binder::Visit(TableFunction &expr) {
