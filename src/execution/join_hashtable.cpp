@@ -184,9 +184,14 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	}
 	ss->pointers.count = hashes.count;
 
-	// create the selection vector linking to only non-empty entries for inner
-	// join
-	if (join_type == JoinType::INNER) {
+	switch (join_type) {
+	case JoinType::LEFT:
+		// initialize all tuples with found_match to false
+		for (size_t i = 0; i < ss->pointers.count; i++) {
+			ss->found_match[i] = false;
+		}
+	case JoinType::INNER: {
+		// create the selection vector linking to only non-empty entries
 		size_t count = 0;
 		for (size_t i = 0; i < ss->pointers.count; i++) {
 			if (ptrs[i]) {
@@ -194,7 +199,8 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 			}
 		}
 		ss->pointers.count = count;
-	} else {
+	}
+	default:
 		ss->pointers.sel_vector = nullptr;
 	}
 	// serialize the keys for later comparison purposes
@@ -203,7 +209,7 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	return ss;
 }
 
-ScanStructure::ScanStructure(JoinHashTable &ht) : ht(ht) {
+ScanStructure::ScanStructure(JoinHashTable &ht) : ht(ht), finished(false) {
 	pointers.Initialize(TypeId::POINTER, false);
 	build_pointer_vector.Initialize(TypeId::POINTER, false);
 	pointers.sel_vector = this->sel_vector;
@@ -211,8 +217,7 @@ ScanStructure::ScanStructure(JoinHashTable &ht) : ht(ht) {
 
 void ScanStructure::Next(DataChunk &left, DataChunk &result) {
 	assert(!left.sel_vector); // should be flattened before
-	if (pointers.count == 0) {
-		// no pointers left to chase
+	if (finished) {
 		return;
 	}
 
@@ -226,6 +231,9 @@ void ScanStructure::Next(DataChunk &left, DataChunk &result) {
 	case JoinType::ANTI:
 		NextAntiJoin(left, result);
 		break;
+	case JoinType::LEFT:
+		NextLeftJoin(left, result);
+		break;
 	default:
 		throw Exception("Unhandled join type in JoinHashTable");
 	}
@@ -233,6 +241,11 @@ void ScanStructure::Next(DataChunk &left, DataChunk &result) {
 
 void ScanStructure::NextInnerJoin(DataChunk &left, DataChunk &result) {
 	assert(result.column_count == left.column_count + ht.build_types.size());
+	if (pointers.count == 0) {
+		// no pointers left to chase
+		return;
+	}
+
 	size_t result_count;
 	auto build_pointers = (uint8_t **)build_pointer_vector.data;
 	do {
@@ -249,6 +262,7 @@ void ScanStructure::NextInnerJoin(DataChunk &left, DataChunk &result) {
 			if (ht.key_serializer.Compare(serialized_keys[index].data.get(),
 			                              pointer) == 0) {
 				// if there is, we have to add this entry to the result
+				found_match[index] = true;
 				result.owned_sel_vector[result_count] = index;
 				build_pointers[result_count] = pointer + ht.key_size;
 				result_count++;
@@ -295,6 +309,11 @@ template <bool INVERT>
 static void NextSemiOrAntiJoin(DataChunk &left, DataChunk &result,
                                ScanStructure &ss) {
 	assert(left.column_count == result.column_count);
+	if (ss.pointers.count == 0) {
+		// no pointers left to chase
+		return;
+	}
+
 	size_t result_count = 0;
 	// the semi-join and anti-join we handle a differently from the inner join
 	// since there can be at most STANDARD_VECTOR_SIZE results
@@ -346,4 +365,40 @@ void ScanStructure::NextSemiJoin(DataChunk &left, DataChunk &result) {
 
 void ScanStructure::NextAntiJoin(DataChunk &left, DataChunk &result) {
 	NextSemiOrAntiJoin<true>(left, result, *this);
+}
+
+void ScanStructure::NextLeftJoin(DataChunk &left, DataChunk &result) {
+	// a LEFT OUTER JOIN is identical to an INNER JOIN except all tuples that do
+	// not have a match must return at least one tuple (with the right side set
+	// to NULL in every column)
+	NextInnerJoin(left, result);
+	if (result.size() == 0) {
+		// no entries left from the normal join
+		// fill in the result of the remaining left tuples
+		// together with NULL values on the right-hand side
+		size_t remaining_count = 0;
+		for (size_t i = 0; i < left.size(); i++) {
+			if (!found_match[i]) {
+				result.owned_sel_vector[remaining_count++] = i;
+			}
+		}
+		if (remaining_count > 0) {
+			// have remaining tuples
+			// first set the left side
+			result.sel_vector = result.owned_sel_vector;
+			size_t i = 0;
+			for (; i < left.column_count; i++) {
+				result.data[i].Reference(left.data[i]);
+				result.data[i].sel_vector = result.sel_vector;
+				result.data[i].count = remaining_count;
+			}
+			// now set the right side to NULL
+			for (; i < result.column_count; i++) {
+				result.data[i].nullmask.set();
+				result.data[i].sel_vector = result.sel_vector;
+				result.data[i].count = remaining_count;
+			}
+		}
+		finished = true;
+	}
 }

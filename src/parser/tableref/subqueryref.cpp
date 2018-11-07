@@ -24,7 +24,7 @@ void SubqueryRef::Serialize(Serializer &serializer) {
 	TableRef::Serialize(serializer);
 	subquery->Serialize(serializer);
 	serializer.Write<int>(column_name_alias.size());
-	for(auto &alias : column_name_alias) {
+	for (auto &alias : column_name_alias) {
 		serializer.WriteString(alias);
 	}
 }
@@ -36,7 +36,7 @@ unique_ptr<TableRef> SubqueryRef::Deserialize(Deserializer &source) {
 	}
 	auto result = make_unique<SubqueryRef>(move(subquery));
 	int column_count = source.Read<int>();
-	for(size_t i = 0; i < column_count; i++) {
+	for (size_t i = 0; i < column_count; i++) {
 		result->column_name_alias.push_back(source.Read<string>());
 	}
 	return result;

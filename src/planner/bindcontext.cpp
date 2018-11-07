@@ -7,11 +7,13 @@
 using namespace duckdb;
 using namespace std;
 
-SubqueryBinding::SubqueryBinding(SubqueryRef& subquery_, size_t index)
-    : Binding(BindingType::SUBQUERY, index), subquery(subquery_.subquery.get()) {
+SubqueryBinding::SubqueryBinding(SubqueryRef &subquery_, size_t index)
+    : Binding(BindingType::SUBQUERY, index),
+      subquery(subquery_.subquery.get()) {
 	if (subquery_.column_name_alias.size() > 0) {
-		assert(subquery_.column_name_alias.size() == subquery->select_list.size());
-		for(auto &name : subquery_.column_name_alias) {
+		assert(subquery_.column_name_alias.size() ==
+		       subquery->select_list.size());
+		for (auto &name : subquery_.column_name_alias) {
 			name_map[name] = names.size();
 			names.push_back(name);
 		}
@@ -21,7 +23,7 @@ SubqueryBinding::SubqueryBinding(SubqueryRef& subquery_, size_t index)
 			name_map[name] = names.size();
 			names.push_back(name);
 		}
-    }
+	}
 }
 
 static bool HasMatchingBinding(Binding *binding, const string &column_name) {
@@ -258,8 +260,7 @@ void BindContext::AddDummyTable(const string &alias,
 	AddBinding(alias, make_unique<DummyTableBinding>(columns));
 }
 
-size_t BindContext::AddSubquery(const string &alias,
-                                SubqueryRef &subquery) {
+size_t BindContext::AddSubquery(const string &alias, SubqueryRef &subquery) {
 	size_t index = GenerateTableIndex();
 	AddBinding(alias, make_unique<SubqueryBinding>(subquery, index));
 	return index;

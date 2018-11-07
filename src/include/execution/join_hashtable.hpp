@@ -43,7 +43,10 @@ class JoinHashTable {
 		Vector build_pointer_vector;
 		sel_t sel_vector[STANDARD_VECTOR_SIZE];
 		Tuple serialized_keys[STANDARD_VECTOR_SIZE];
+		// whether or not the given tuple has found a match, used for LeftJoin
+		bool found_match[STANDARD_VECTOR_SIZE];
 		JoinHashTable &ht;
+		bool finished;
 
 		ScanStructure(JoinHashTable &ht);
 		//! Get the next batch of data from the scan structure
@@ -56,6 +59,8 @@ class JoinHashTable {
 		void NextSemiJoin(DataChunk &left, DataChunk &result);
 		//! Next operator for the anti join
 		void NextAntiJoin(DataChunk &left, DataChunk &result);
+		//! Next operator for the left outer join
+		void NextLeftJoin(DataChunk &left, DataChunk &result);
 	};
 
   private:
