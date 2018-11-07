@@ -38,6 +38,7 @@ unique_ptr<Expression> FunctionExpression::Copy() {
 		copy_children.push_back(child->Copy());
 	}
 	auto copy = make_unique<FunctionExpression>(function_name, copy_children);
+	copy->schema = schema;
 	copy->CopyProperties(*this);
 	return copy;
 }
@@ -45,11 +46,14 @@ unique_ptr<Expression> FunctionExpression::Copy() {
 void FunctionExpression::Serialize(Serializer &serializer) {
 	Expression::Serialize(serializer);
 	serializer.WriteString(function_name);
+	serializer.WriteString(schema);
 }
 
 unique_ptr<Expression>
 FunctionExpression::Deserialize(ExpressionDeserializeInformation *info,
                                 Deserializer &source) {
 	auto function_name = source.Read<string>();
-	return make_unique<FunctionExpression>(function_name, info->children);
+	auto function = make_unique<FunctionExpression>(function_name, info->children);
+	function->schema = source.Read<string>();
+	return function;
 }
