@@ -123,12 +123,8 @@ void VectorOperations::Copy(Vector &source, Vector &target, size_t offset) {
 	}
 	assert(offset <= source.count);
 	target.count = source.count - offset;
-	if (source.sel_vector) {
-		for (size_t i = 0; i < target.count; i++) {
-			target.nullmask[i] = source.nullmask[source.sel_vector[offset + i]];
-		}
-	} else {
-		target.nullmask = source.nullmask << offset;
-	}
+	VectorOperations::Exec(source, [&](size_t i, size_t k) {
+		target.nullmask[k - offset] = source.nullmask[i];
+	}, offset);
 	VectorOperations::Copy(source, target.data, offset, target.count);
 }
