@@ -5,17 +5,26 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test TPC-DS SF0.1", "[tpcds][.]") {
+TEST_CASE("Test TPC-DS SF1", "[tpcds][.]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 	unique_ptr<DuckDBResult> result;
 
+	// create and load data
 	tpcds::dbgen(1, db);
 
+	// verify table counts
 	result = con.Query("SELECT COUNT(*) FROM call_center");
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
 
-	//
+	result = con.Query("SELECT COUNT(*) FROM catalog_page");
+	REQUIRE(CHECK_COLUMN(result, 0, {11718}));
+
+//	result = con.Query("SELECT COUNT(*) FROM catalog_returns");
+//	REQUIRE(CHECK_COLUMN(result, 0, {144067}));
+
+
+
 	//	// run queries, these work already
 	//	con.Query(TPCDS_QUERIES[TPCDS_QUERY_ID::Q01]);
 	//	con.Query(TPCDS_QUERIES[TPCDS_QUERY_ID::Q06]);

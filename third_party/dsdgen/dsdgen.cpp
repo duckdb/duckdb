@@ -41,12 +41,11 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	}
 
 	init_rand(); // no random numbers without this
-	tdef *table_def;
 
-	for (int table_id = CALL_CENTER;
-	     (table_def = getSimpleTdefsByNumber(table_id)); table_id++) {
-		if (!table_def->name)
-			break;
+	for (int table_id = CALL_CENTER; table_id < S_BRAND; table_id++) {
+		tdef *table_def = getSimpleTdefsByNumber(table_id);
+		assert(table_def);
+		assert(table_def->name);
 
 		// child tables are created in parent loaders
 		if (table_def->flags & FL_CHILD) {
@@ -90,7 +89,8 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 			append_info.table->storage->Append(*append_info.context,
 			                                   append_info.chunk);
 		}
-		break; // only caring about first table now
+
+		if (table_id == CATALOG_PAGE) break;
 	}
 	con.context.transaction.Commit();
 }
@@ -106,7 +106,6 @@ string get_answer(double sf, int query) {
 	if (query <= 0 || query > TPCDS_QUERIES_COUNT) {
 		throw SyntaxException("Out of range TPC-DS query number %d", query);
 	}
-	const char *answer;
 	return "";
 }
 

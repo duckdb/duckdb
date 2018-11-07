@@ -232,13 +232,42 @@ int pr_w_catalog_returns(void *row) {
  * Side Effects:
  * TODO: None
  */
-int ld_w_catalog_returns(void *row) {
-	struct W_CATALOG_RETURNS_TBL *r;
 
-	if (row == NULL)
-		r = &g_w_catalog_returns;
-	else
-		r = row;
+#include "append_info.h"
+
+
+int ld_w_catalog_returns(void *info) {
+	struct W_CATALOG_RETURNS_TBL *r = &g_w_catalog_returns;
+
+	append_row(info);
+
+	append_key(info, r->cr_returned_date_sk);
+	append_key(info, r->cr_returned_time_sk);
+	append_key(info, r->cr_item_sk);
+	append_key(info, r->cr_refunded_customer_sk);
+	append_key(info, r->cr_refunded_cdemo_sk);
+	append_key(info, r->cr_refunded_hdemo_sk);
+	append_key(info, r->cr_refunded_addr_sk);
+	append_key(info, r->cr_returning_customer_sk);
+	append_key(info, r->cr_returning_cdemo_sk);
+	append_key(info, r->cr_returning_hdemo_sk);
+	append_key(info, r->cr_returning_addr_sk);
+	append_key(info, r->cr_call_center_sk);
+	append_key(info, r->cr_catalog_page_sk);
+	append_key(info, r->cr_ship_mode_sk);
+	append_key(info, r->cr_warehouse_sk);
+	append_key(info, r->cr_reason_sk);
+	append_key(info, r->cr_order_number);
+	append_integer(info, r->cr_pricing.quantity);
+	append_decimal(info, &r->cr_pricing.net_paid);
+	append_decimal(info, &r->cr_pricing.ext_tax);
+	append_decimal(info, &r->cr_pricing.net_paid_inc_tax);
+	append_decimal(info, &r->cr_pricing.fee);
+	append_decimal(info, &r->cr_pricing.ext_ship_cost);
+	append_decimal(info, &r->cr_pricing.refunded_cash);
+	append_decimal(info, &r->cr_pricing.reversed_charge);
+	append_decimal(info, &r->cr_pricing.store_credit);
+	append_decimal(info, &r->cr_pricing.net_loss );
 
 	return (0);
 }

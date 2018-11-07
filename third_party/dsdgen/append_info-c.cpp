@@ -22,9 +22,11 @@ void append_row(append_info *info) {
 		chunk.Initialize(types);
 	} else if (chunk.size() >= STANDARD_VECTOR_SIZE) {
 		// flush the chunk
+		chunk.Verify();
 		table->storage->Append(*append_info->context, chunk);
 		// have to reset the chunk
 		chunk.Reset();
+		append_info->row = 0;
 	}
 	for (size_t i = 0; i < chunk.column_count; i++) {
 		chunk.data[i].count++;

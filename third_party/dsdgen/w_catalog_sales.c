@@ -335,13 +335,52 @@ int pr_w_catalog_sales(void *row) {
  * Side Effects:
  * TODO: None
  */
-int ld_w_catalog_sales(void *row) {
-	struct W_CATALOG_SALES_TBL *r;
 
-	if (row == NULL)
-		r = &g_w_catalog_sales;
-	else
-		r = row;
+#include "append_info.h"
+
+int ld_w_catalog_sales(void *info) {
+	struct W_CATALOG_SALES_TBL *r = &g_w_catalog_sales;
+
+	append_row(info);
+
+	append_key(info, r->cs_sold_date_sk);
+	append_key(info, r->cs_sold_time_sk);
+	append_key(info, r->cs_ship_date_sk);
+	append_key(info, r->cs_bill_customer_sk);
+	append_key(info, r->cs_bill_cdemo_sk);
+	append_key(info, r->cs_bill_hdemo_sk);
+	append_key(info, r->cs_bill_addr_sk);
+	append_key(info, r->cs_ship_customer_sk);
+	append_key(info, r->cs_ship_cdemo_sk);
+	append_key(info, r->cs_ship_hdemo_sk);
+	append_key(info, r->cs_ship_addr_sk);
+	append_key(info, r->cs_call_center_sk);
+	append_key(info, r->cs_catalog_page_sk);
+	append_key(info, r->cs_ship_mode_sk);
+	append_key(info, r->cs_warehouse_sk);
+	append_key(info, r->cs_sold_item_sk);
+	append_key(info, r->cs_promo_sk);
+	append_key(info, r->cs_order_number);
+	append_integer(info, r->cs_pricing.quantity);
+	append_decimal(info, &r->cs_pricing.wholesale_cost);
+	append_decimal(info, &r->cs_pricing.list_price);
+	append_decimal(info, &r->cs_pricing.sales_price);
+	append_decimal(info,
+				  &r->cs_pricing.ext_discount_amt);
+	append_decimal(info, &r->cs_pricing.ext_sales_price);
+	append_decimal(info,
+				  &r->cs_pricing.ext_wholesale_cost);
+	append_decimal(info, &r->cs_pricing.ext_list_price);
+	append_decimal(info, &r->cs_pricing.ext_tax);
+	append_decimal(info, &r->cs_pricing.coupon_amt);
+	append_decimal(info, &r->cs_pricing.ext_ship_cost);
+	append_decimal(info, &r->cs_pricing.net_paid);
+	append_decimal(info, &r->cs_pricing.net_paid_inc_tax);
+	append_decimal(info,
+				  &r->cs_pricing.net_paid_inc_ship);
+	append_decimal(info,
+				  &r->cs_pricing.net_paid_inc_ship_tax);
+	append_decimal(info, &r->cs_pricing.net_profit);
 
 	return (0);
 }

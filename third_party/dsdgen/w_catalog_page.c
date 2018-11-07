@@ -170,20 +170,22 @@ int pr_w_catalog_page(void *row) {
 	return (0);
 }
 
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data tdefsures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int ld_w_catalog_page(void *r) {
-	return (0);
+#include "append_info.h"
+
+int ld_w_catalog_page(void *info) {
+	struct CATALOG_PAGE_TBL *r = &g_w_catalog_page;
+
+	append_row(info);
+
+	append_key(info, r->cp_catalog_page_sk);
+	append_varchar(info, r->cp_catalog_page_id);
+	append_key(info, r->cp_start_date_id);
+	append_key(info, r->cp_end_date_id);
+	append_varchar(info, &r->cp_department[0]);
+	append_integer(info, r->cp_catalog_number);
+	append_integer(info, r->cp_catalog_page_number);
+	append_varchar(info, &r->cp_description[0]);
+	append_varchar(info, r->cp_type);
+
+	return 0;
 }
