@@ -154,7 +154,7 @@ void PhysicalOrder::_GetChunk(ClientContext &context, DataChunk &chunk,
 		chunk.data[i].count = remaining_data;
 		for (size_t j = 0; j < remaining_data; j++) {
 			chunk.data[i].SetValue(
-			    j, big_data.GetValue(i, state->sorted_vector[j]));
+			    j, big_data.GetValue(i, state->sorted_vector[state->position + j]));
 		}
 	}
 	state->position += STANDARD_VECTOR_SIZE;
