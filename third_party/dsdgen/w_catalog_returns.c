@@ -144,7 +144,7 @@ mk_w_catalog_returns (void * row, ds_key_t index)
     * the rest of the columns are generated for this specific return
 	*/
 	/* the items cannot be returned until they are shipped; offset is handled in mk_join, based on sales date */
-	r->cr_returned_date_sk = mk_join (CR_RETURNED_DATE_SK, DATE, sale->cs_ship_date_sk);
+	r->cr_returned_date_sk = mk_join (CR_RETURNED_DATE_SK, DATET, sale->cs_ship_date_sk);
 
 	/* the call center determines the time of the return */
 	r->cr_returned_time_sk =

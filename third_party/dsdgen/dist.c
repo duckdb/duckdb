@@ -286,6 +286,8 @@ load_dist(d_idx_t *di)
 		MALLOC_CHECK(di->dist);
 		d = di->dist;
 		
+		//fprintf(stderr, "\ndist %s ", di->name);
+
 		/* load the type information */
 		d->type_vector = (int *)malloc(sizeof(int32_t) * di->v_width);
 		MALLOC_CHECK(d->type_vector);
@@ -298,6 +300,7 @@ load_dist(d_idx_t *di)
 				exit(3);
 			}
 			d->type_vector[i] = ntohl(temp);
+			//fprintf(stderr, "type %d, ", d->type_vector[i]);
 		}
 		
 		/* load the weights */
@@ -369,6 +372,130 @@ load_dist(d_idx_t *di)
 		}
 	
 	fclose(ifp);
+
+//
+//	fprintf(stderr, "%s {\n", di->name);
+//
+//	// type_vector
+//	fprintf(stderr, "{");
+//
+//	for (int i = 0 ; i < di->v_width; i++) {
+//		fprintf(stderr, "%d", d->type_vector[i]);
+//
+//		if (i < di->v_width-1) {
+//			fprintf(stderr, ", ");
+//
+//		}
+//	}
+//	fprintf(stderr, "},");
+//
+//// weight_sets
+//	fprintf(stderr, "{");
+//		for (int i = 0 ; i < di->w_width; i++) {
+//			fprintf(stderr, "{");
+//
+//					for (int j = 0 ; j < di->length; j++) {
+//
+//						fprintf(stderr, "%d", d->weight_sets[i][j]);
+//
+//
+//
+//						if (j < di->length-1) {
+//							fprintf(stderr, ", ");
+//
+//						}
+//					}
+//					fprintf(stderr, "},");
+//
+//
+//
+//			if (i < di->w_width-1) {
+//				fprintf(stderr, ", ");
+//
+//			}
+//		}
+//		fprintf(stderr, "},");
+//
+//
+//	// maximums
+//			fprintf(stderr, "{");
+//
+//		for (int i = 0 ; i < di->w_width; i++) {
+//			fprintf(stderr, "%d", d->maximums[i]);
+//
+//			if (i < di->w_width-1) {
+//				fprintf(stderr, ", ");
+//
+//			}
+//		}
+//		fprintf(stderr, "},");
+//
+//
+//
+//		// value sets
+//		fprintf(stderr, "{");
+//			for (int i = 0 ; i < di->v_width; i++) {
+//				fprintf(stderr, "{");
+//
+//						for (int j = 0 ; j < di->length; j++) {
+//
+//							fprintf(stderr, "%d", d->value_sets[i][j]);
+//
+//
+//
+//							if (j < di->length-1) {
+//								fprintf(stderr, ", ");
+//
+//							}
+//						}
+//						fprintf(stderr, "},");
+//
+//
+//
+//				if (i < di->v_width-1) {
+//					fprintf(stderr, ", ");
+//
+//				}
+//			}
+//			fprintf(stderr, "},");
+//
+//
+//// strings
+//
+//
+//			fprintf(stderr, "{");
+//
+//				for (int i = 0 ; i < di->str_space; i++) {
+//					fprintf(stderr, "%d", (int) d->strings[i]);
+//
+//					if (i < di->str_space-1) {
+//						fprintf(stderr, ", ");
+//
+//					}
+//				}
+//				fprintf(stderr, "},");
+//
+//
+//
+//			// names
+//
+//			fprintf(stderr, "{");
+//
+//				for (int i = 0 ; i < di->name_space; i++) {
+//					fprintf(stderr, "%d", (int) d->names[i]);
+//
+//					if (i < di->name_space-1) {
+//						fprintf(stderr, ", ");
+//
+//					}
+//				}
+//				fprintf(stderr, "},");
+//
+//
+//
+//			// size
+//	fprintf(stderr, "%d}\n", d->size);
+
 	di->flags = FL_LOADED;
 	}
 

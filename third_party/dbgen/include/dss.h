@@ -166,8 +166,8 @@ DSS_HUGE NextRand PROTO((DSS_HUGE nSeed));
 DSS_HUGE UnifInt PROTO((DSS_HUGE nLow, DSS_HUGE nHigh, long nStream));
 void dss_random(DSS_HUGE *tgt, DSS_HUGE min, DSS_HUGE max, long seed);
 void row_start(int t);
-void row_stop(int t);
-void dump_seeds(int t);
+void row_stop_h(int t);
+void dump_seeds_ds(int t);
 
 /* text.c */
 #define MAX_GRAMMAR_LEN 12 /* max length of grammar component */

@@ -53,9 +53,9 @@
 #include "permute.h"
 #include "scd.h"
 #include "parallel.h"
+#include "skip_days.h"
 
 struct W_WEB_SALES_TBL g_w_web_sales;
-ds_key_t skipDays(int nTable, ds_key_t *pRemainder);
 
 static ds_key_t kNewDateIndex = 0;
 static ds_key_t jDate;
@@ -103,7 +103,7 @@ mk_master (void *row, ds_key_t index)
       kNewDateIndex += dateScaling(WEB_SALES, jDate);
    }
 
-   r->ws_sold_date_sk = mk_join (WS_SOLD_DATE_SK, DATE, 1);
+   r->ws_sold_date_sk = mk_join (WS_SOLD_DATE_SK, DATET, 1);
    r->ws_sold_time_sk = mk_join(WS_SOLD_TIME_SK, TIME, 1);
    r->ws_bill_customer_sk = mk_join (WS_BILL_CUSTOMER_SK, CUSTOMER, 1);
    r->ws_bill_cdemo_sk = mk_join (WS_BILL_CDEMO_SK, CUSTOMER_DEMOGRAPHICS, 1);

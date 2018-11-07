@@ -134,7 +134,7 @@ mk_w_web_page (void * row, ds_key_t index)
   */
 	nFieldChangeFlags = next_random(WP_SCD);
 
-	r->wp_creation_date_sk = mk_join(WP_CREATION_DATE_SK, DATE, index);
+	r->wp_creation_date_sk = mk_join(WP_CREATION_DATE_SK, DATET, index);
 	changeSCD(SCD_KEY, &r->wp_creation_date_sk, &rOldValues->wp_creation_date_sk,  &nFieldChangeFlags,  bFirstRecord);
 
 	genrand_integer(&nAccess, DIST_UNIFORM, 0, WP_IDLE_TIME_MAX, 0, WP_ACCESS_DATE_SK);

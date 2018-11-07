@@ -50,12 +50,13 @@
 #include "permute.h"
 #include "scd.h"
 #include "parallel.h"
+#include "skip_days.h"
+
 #ifdef JMS
 extern rng_t Streams[];
 #endif
 
 struct W_STORE_SALES_TBL g_w_store_sales;
-ds_key_t skipDays(int nTable, ds_key_t *pRemainder);
 static int *pItemPermutation,
    nItemCount,
 	nItemIndex;
@@ -99,7 +100,7 @@ mk_master (void *row, ds_key_t index)
    }
 		r->ss_sold_store_sk = mk_join (SS_SOLD_STORE_SK, STORE, 1);
 		r->ss_sold_time_sk = mk_join (SS_SOLD_TIME_SK, TIME, 1);
-		r->ss_sold_date_sk = mk_join (SS_SOLD_DATE_SK, DATE, 1);
+		r->ss_sold_date_sk = mk_join (SS_SOLD_DATE_SK, DATET, 1);
 		r->ss_sold_customer_sk = mk_join (SS_SOLD_CUSTOMER_SK, CUSTOMER, 1);
 		r->ss_sold_cdemo_sk = mk_join (SS_SOLD_CDEMO_SK, CUSTOMER_DEMOGRAPHICS, 1);
 		r->ss_sold_hdemo_sk = mk_join (SS_SOLD_HDEMO_SK, HOUSEHOLD_DEMOGRAPHICS, 1);

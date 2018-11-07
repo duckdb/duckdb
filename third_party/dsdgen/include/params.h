@@ -35,6 +35,12 @@
  */ 
 #ifndef QGEN_PARAMS_H
 #define QGEN_PARAMS_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 #include "r_params.h"
 #include "release.h"
 #ifdef DECLARER
@@ -75,4 +81,11 @@ extern option_t options[];
 extern char *params[];
 extern char *szTableNames[];
 #endif
+
+#ifdef __cplusplus
+};
+#endif
+
+
+
 #endif

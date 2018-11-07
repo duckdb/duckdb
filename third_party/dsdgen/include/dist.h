@@ -36,6 +36,10 @@
 #ifndef R_DIST_H
 #define R_DIST_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define D_NAME_LEN	20
 
 typedef struct DIST_T {
@@ -102,4 +106,10 @@ int di_compare(const void *op1, const void *op2);
 /* DistNameIndex needs to know what sort of name we are trying to match */
 #define VALUE_NAME			0x0000
 #define WEIGHT_NAME			0x0001
+
+#ifdef __cplusplus
+};
+#endif
+
+
 #endif /* R_DIST_H */

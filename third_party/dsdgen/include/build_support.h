@@ -35,6 +35,11 @@
  */ 
 #ifndef BUILD_SUPPORT_H
 #define BUILD_SUPPORT_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "decimal.h"
 #include "date.h"
 #include "dist.h"
@@ -56,4 +61,9 @@ int embed_string(char *szDest, char *szDist, int nValue, int nWeight, int nStrea
 int SetScaleIndex(char *szName, char *szValue);
 int mk_companyname(char *dest, int nTable, int nCompany);
 void setUpdateDateRange(int nTable, date_t *pMinDate, date_t *pMaxDate);
+
+#ifdef __cplusplus
+};
+#endif
+
 #endif /* BUILD_SUPPORT_H */

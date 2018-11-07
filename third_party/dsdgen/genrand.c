@@ -57,7 +57,7 @@
 static long Mult = 16807;       /* the multiplier */
 static long nQ = 127773;        /* the quotient MAXINT / Mult */
 static long nR = 2836;          /* the remainder MAXINT % Mult */
-void NthElement (HUGE_TYPE N, int nStream);
+void DSNthElement (HUGE_TYPE N, int nStream);
 
 /*
  * Routine: next_random(int stream)
@@ -371,7 +371,7 @@ static HUGE_TYPE Modulus = 2147483647;  /* trick you use to get 64 bit int */
 
 /* Nth Element of sequence starting with StartSeed */
 void
-NthElement (HUGE_TYPE N, int nStream)
+DSNthElementNthElement (HUGE_TYPE N, int nStream)
 {
    HUGE_TYPE Z;
    HUGE_TYPE Mult;
@@ -413,7 +413,7 @@ NthElement (HUGE_TYPE N, int nStream)
  * TODO: None
  */
 int
-dump_seeds (int tbl)
+dump_seeds_ds (int tbl)
 {
    int i;
 

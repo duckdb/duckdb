@@ -33,50 +33,59 @@
  * Contributors:
  * Gradient Systems
  */ 
-#ifndef GENRAND_H
-#define GENRAND_H
-#include "decimal.h"
-#include "date.h"
-#include "dist.h"
-#include "address.h"
-#define JMS 1
 
-typedef struct RNG_T 
-{
-int nUsed;
-int nUsedPerRow;
-long nSeed;
-long nInitialSeed; /* used to allow skip_row() to back up */
-int nColumn; /* column where this stream is used */
-int nTable;	/* table where this stream is used */
-int nDuplicateOf;	/* duplicate streams allow independent tables to share data streams */
-#ifdef JMS
-ds_key_t nTotal;
+#ifndef DS_ADDRESS_H
+#define DS_ADDRESS_H
+
+#ifdef __cplusplus
+extern "C" {
 #endif
-} rng_t;
-extern rng_t Streams[];
 
-#define FL_SEED_OVERRUN	0x0001
 
-#define ALPHANUM	"abcdefghijklmnopqrstuvxyzABCDEFGHIJKLMNOPQRSTUVXYZ0123456789"
-#define DIGITS	"0123456789"
+#include "constants.h"
 
-#define RNG_SEED	19620718
+typedef struct DS_ADDR_T {
+	char		suite_num[RS_CC_SUITE_NUM + 1];
+	int			street_num;
+	char		*street_name1;
+	char		*street_name2;
+	char		*street_type;
+	char		*city;
+	char		*county;
+	char		*state;
+	char		country[RS_CC_COUNTRY + 1];
+	int			zip;
+	int			plus4;
+	int			gmt_offset;
+} ds_addr_t;
 
-int		genrand_integer(int *dest, int dist, int min, int max, int mean, int stream);
-int		genrand_decimal(decimal_t *dest, int dist, decimal_t *min, decimal_t *max, decimal_t *mean, int stream);
-int		genrand_date(date_t *dest, int dist, date_t *min, date_t *max, date_t *mean, int stream);
-ds_key_t	genrand_key(ds_key_t *dest, int dist, ds_key_t min, ds_key_t max, ds_key_t mean, int stream);
-int		gen_charset(char *dest, char *set, int min, int max, int stream);
-int	dump_seeds(int tbl);
-void	init_rand(void);
-void	skip_random(int s, ds_key_t count);
-int	RNGReset(int nTable);
-long	next_random(int nStream);
-void	genrand_email(char *pEmail, char *pFirst, char *pLast, int nColumn);
-void	genrand_ipaddr(char *pDest, int nColumn);
-int	genrand_url(char *pDest, int nColumn);
-int	setSeed(int nStream, int nValue);
-void resetSeeds(int nTable);
+#define DS_ADDR_SUITE_NUM	0
+#define DS_ADDR_STREET_NUM	1
+#define DS_ADDR_STREET_NAME1	2
+#define DS_ADDR_STREET_NAME2	3
+#define DS_ADDR_STREET_TYPE		4
+#define DS_ADDR_CITY			5
+#define DS_ADDR_COUNTY			6
+#define DS_ADDR_STATE			7
+#define DS_ADDR_COUNTRY			8
+#define DS_ADDR_ZIP				9
+#define DS_ADDR_PLUS4			10
+#define DS_ADDR_GMT_OFFSET		11
+
+int mk_address(ds_addr_t *pDest, int nColumn);
+int mk_streetnumber(int nTable, int *dest);
+int	mk_suitenumber(int nTable, char *dest);
+int mk_streetname(int nTable, char *dest);
+int mk_city(int nTable, char **dest);
+int city_hash(int nTable, char *name);
+int mk_zipcode(int nTable, char *dest, int nRegion, char *city);
+void printAddressPart(FILE *fp, ds_addr_t *pAddr, int nAddressPart);
+void resetCountCount(void);
+
+#ifdef __cplusplus
+};
+#endif
+
 
 #endif
+

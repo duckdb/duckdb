@@ -53,9 +53,10 @@
 #include "params.h"
 #include "parallel.h"
 #include "scd.h"
+#include "skip_days.h"
+
 
 struct W_CATALOG_SALES_TBL g_w_catalog_sales;
-ds_key_t skipDays(int nTable, ds_key_t *pRemainder);
 
 static ds_key_t kNewDateIndex = 0;
 static ds_key_t jDate;

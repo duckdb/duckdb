@@ -74,7 +74,7 @@ mk_w_date (void * row, ds_key_t index)
 	date_t temp_date, dTemp2;
 	struct W_DATE_TBL *r;
 	static int bInit = 0;
-   tdef *pT = getSimpleTdefsByNumber(DATE);
+   tdef *pT = getSimpleTdefsByNumber(DATET);
 
 	if (row == NULL)
 		r = &g_w_date;
@@ -170,7 +170,7 @@ pr_w_date(void *row)
 	else
 		r = row;
 
-	print_start(DATE);
+	print_start(DATET);
 	print_key(D_DATE_SK, r->d_date_sk, 1);
 	print_varchar(D_DATE_ID, r->d_date_id, 1);
 	/* output the same information in a different format */
@@ -201,7 +201,7 @@ pr_w_date(void *row)
 	print_boolean(D_CURRENT_MONTH, r->d_current_month, 1);
 	print_boolean(D_CURRENT_QUARTER, r->d_current_quarter, 1);
 	print_boolean(D_CURRENT_YEAR, r->d_current_year, 0);
-	print_end(DATE);
+	print_end(DATET);
 
 	return(0);
 }
@@ -258,7 +258,7 @@ vld_w_date(int nTable, ds_key_t kRow, int *Permutation)
 		nTemp;
 	date_t temp_date, dTemp2;
 	struct W_DATE_TBL *r;
-   tdef *pT = getSimpleTdefsByNumber(DATE);
+   tdef *pT = getSimpleTdefsByNumber(DATET);
 
 		r = &g_w_date;
 

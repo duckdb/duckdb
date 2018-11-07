@@ -109,7 +109,7 @@ mk_w_web_returns (void* row, ds_key_t index)
 	* the rest of the columns are generated for this specific return
 	*/
 	/* the items cannot be returned until they are shipped; offset is handled in mk_join, based on sales date */
-	r->wr_returned_date_sk = mk_join (WR_RETURNED_DATE_SK, DATE, sale->ws_ship_date_sk);
+	r->wr_returned_date_sk = mk_join (WR_RETURNED_DATE_SK, DATET, sale->ws_ship_date_sk);
 	r->wr_returned_time_sk = mk_join(WR_RETURNED_TIME_SK, TIME, 1);
 
 	/* most items are returned by the people they were shipped to, but some are returned

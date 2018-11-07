@@ -33,51 +33,27 @@
  * Contributors:
  * Gradient Systems
  */ 
+#ifndef SCALING_H
+#define SCALING_H
 
-#ifndef R_PARAMS_H
-#define R_PARAMS_H
-#define OPT_NONE    0x00 
-#define OPT_FLG     0x01 /* option is a flag; no parameter */
-#define OPT_INT     0x02 /* argument is an integer */
-#define OPT_STR     0x04 /* argument is a string */
-#define OPT_NOP     0x08 /* flags non-operational options */
-#define OPT_SUB     0x10 /* sub-option defined */
-#define OPT_ADV		0x20 /* advanced option */
-#define OPT_SET		0x40 /* not changeable -- used for default/file/command precedence */
-#define OPT_DFLT	0x80 /* param set to non-zero default */
-#define OPT_MULTI	0x100 /* param may be set repeatedly */
-#define OPT_HIDE	0x200 /* hidden option -- not listed in usage */
-#define TYPE_MASK   0x07
-
-typedef struct OPTION_T
-	{
-	char    *name;
-	int     flags;
-	int     index;
-	char    *usage;
-	int     (*action)(char *szPName, char *optarg);
-	char	*dflt;
-	} option_t;
+#ifdef __cplusplus
+extern "C" {
 #endif
-/*
- * function declarations
- */
-int	process_options(int count, char **args);
-char	*get_str(char *var);
-void	set_str(char *param, char *value);
-int		get_int(char *var);
-void	set_int(char *var, char *val);
-int		is_set(char *flag);
-void	clr_flg(char *flag);
-int		find_table(char *szParamName, char *tname);
-int		read_file(char *param_name, char *arg);
-int		usage(char *param_name, char *msg);
-char	*GetParamName(int nParam);
-char	*GetParamValue(int nParam);
-int		load_param(int nParam, char *value);
-int		fnd_param(char *name);
-int		init_params(void);
-int		set_option(char *pname, char *value);
-void	load_params(void);
-int		IsIntParam(char *szName);
-int		IsStrParam(char *szName);
+
+
+ds_key_t get_rowcount(int table);
+ds_key_t getIDCount(int nTable);
+int getUpdateID(ds_key_t *pDest, int nTable, int nColumn);
+int getScaleSlot(int nTargetGB);
+int getSkewedJulianDate(int nWeight, int nColumn);
+ds_key_t dateScaling(int nColumn, ds_key_t jDate);
+int getUpdateDate(int nTable, ds_key_t kRowcount);
+void setUpdateDates(void);
+void setUpdateScaling(int nTable);
+ds_key_t getUpdateBase(int nTable);
+
+#ifdef __cplusplus
+};
+#endif
+
+#endif

@@ -342,9 +342,9 @@ get_rowcount(int table)
 		bScaleSet = 1;
 	}
 	
-	if ((table == INVENTORY))
+	if (table == INVENTORY)
 		return(sc_w_inventory(nScale));
-	if ((table == S_INVENTORY))
+	if (table == S_INVENTORY)
 		return(getIDCount(ITEM) * get_rowcount(WAREHOUSE) * 6);
 
 	return(arRowcount[table].kBaseRowcount);

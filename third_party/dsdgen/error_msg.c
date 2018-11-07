@@ -148,31 +148,8 @@ ProcessErrorCode (int nErrorCode, char *szRoutineName, char *szParam,
 int
 ReportError (int nError, char *msg, int bExit)
 {
-   char e_msg[128];
-
-   if (nError < MAX_ERROR)
-     {
-        switch (Errors[-nError].flags & EFLG_ARG_MASK)
-          {
-          case EFLG_NO_ARG:
-             fprintf (stderr, "ERROR: %s at line %d in %s\n",
-                      Errors[-nError].prompt, pCurrentFile->line_number, pCurrentFile->name);
-             break;
-          case EFLG_STR_ARG:
-             sprintf (e_msg, Errors[-nError].prompt, msg);
-             fprintf (stderr, "ERROR: %s at line %d in %s\n",
-                      e_msg, pCurrentFile->line_number, pCurrentFile->name);
-             break;
-          }
-
-        if (Errors[-nError].flags & EFLG_SYSTEM)
-           perror (msg);
-     }
-
-   if (bExit)
-      exit (nError);
-   else
-      return (nError);
+    fprintf (stderr, "ERROR?!\n");
+     return (nError);
 }
 
 /*

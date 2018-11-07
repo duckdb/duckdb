@@ -117,8 +117,8 @@ mk_w_web_site (void *row, ds_key_t index)
 	 */
 	if (setSCDKeys(WEB_SITE_ID, index, r->web_site_id, &r->web_rec_start_date_id, &r->web_rec_end_date_id))
 	{
-		r->web_open_date = mk_join(WEB_OPEN_DATE, DATE, index);
-		r->web_close_date = mk_join(WEB_CLOSE_DATE, DATE, index);
+		r->web_open_date = mk_join(WEB_OPEN_DATE, DATET, index);
+		r->web_close_date = mk_join(WEB_CLOSE_DATE, DATET, index);
 	if (r->web_close_date > r->web_rec_end_date_id)
 		r->web_close_date = -1;
 		sprintf(r->web_name, "site_%d", (int)(index / 6));

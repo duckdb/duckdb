@@ -50,7 +50,7 @@ void row_start(int t) {
 	return;
 }
 
-void row_stop(int t) {
+void row_stop_h(int t) {
 	int i;
 
 	/* need to allow for handling the master and detail together */

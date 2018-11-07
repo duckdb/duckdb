@@ -50,6 +50,7 @@
 #include "w_web_sales.h"
 #include "parallel.h"
 
+
 struct S_CATALOG_ORDER_TBL g_s_catalog_order;
 struct S_CATALOG_ORDER_LINEITEM_TBL g_s_catalog_order_lineitem;
 struct S_CATALOG_RETURNS_TBL	g_s_catalog_return;

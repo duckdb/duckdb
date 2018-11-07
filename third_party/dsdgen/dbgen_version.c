@@ -46,7 +46,6 @@
 #include "release.h"
 
 struct DBGEN_VERSION_TBL g_dbgen_version;
-extern char g_szCommandLine[];
 
 /*
 * Routine: 
@@ -88,7 +87,7 @@ mk_dbgen_version(void *pDest, ds_key_t kIndex)
 	sprintf(r->szDate, "%4d-%02d-%02d", pTimeStamp->tm_year + 1900, pTimeStamp->tm_mon + 1, pTimeStamp->tm_mday);
 	sprintf(r->szTime, "%02d:%02d:%02d", pTimeStamp->tm_hour, pTimeStamp->tm_min, pTimeStamp->tm_sec);
 	sprintf (r->szVersion,"%d.%d.%d%s", VERSION, RELEASE, MODIFICATION, PATCH);
-	strcpy(r->szCmdLineArgs, g_szCommandLine);
+	strcpy(r->szCmdLineArgs, "--this_table_is_rather_pointless");
 	
 	return(0);
 }

@@ -36,6 +36,10 @@
 #ifndef TDEFS_H
 #define TDEFS_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdio.h>
 #include "tables.h"
 #include "columns.h"
@@ -99,5 +103,7 @@ int initSpareKeys(int id);
 tdef *getSimpleTdefsByNumber(int nTable);
 tdef *getTdefsByNumber(int nTable);
 
-
+#ifdef __cplusplus
+};
+#endif
 #endif

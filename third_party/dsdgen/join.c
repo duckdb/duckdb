@@ -437,7 +437,7 @@ mk_join(int from_col, int to_tbl, ds_key_t join_count)
 	/* some tables require special handling */
 	case CATALOG_PAGE:
 		return(cp_join(nFromTable, from_col, join_count));
-	case DATE:
+	case DATET:
 		genrand_integer(&nYear, DIST_UNIFORM, YEAR_MINIMUM, YEAR_MAXIMUM, 0, from_col);
 		return(date_join(nFromTable, from_col, join_count, nYear));
 	case TIME:

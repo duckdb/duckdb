@@ -109,7 +109,7 @@ mk_w_store_returns (void * row, ds_key_t index)
 	* the rest of the columns are generated for this specific return
 	*/
 	/* the items cannot be returned until they are sold; offset is handled in mk_join, based on sales date */
-	r->sr_returned_date_sk = mk_join (SR_RETURNED_DATE_SK, DATE, sale->ss_sold_date_sk);
+	r->sr_returned_date_sk = mk_join (SR_RETURNED_DATE_SK, DATET, sale->ss_sold_date_sk);
 	genrand_integer(&nTemp, DIST_UNIFORM, (8 * 3600) - 1, (17 * 3600) - 1, 0, SR_RETURNED_TIME_SK);
 	r->sr_returned_time_sk = nTemp;
 	r->sr_cdemo_sk =

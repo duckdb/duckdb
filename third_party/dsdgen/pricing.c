@@ -42,7 +42,6 @@
 #include "columns.h"
 #include "error_msg.h"
 #include "dist.h"
-#include "driver.h"
 #include "genrand.h"
 #include "w_web_sales.h"
 #include "s_pline.h"
