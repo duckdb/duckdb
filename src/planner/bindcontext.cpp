@@ -2,9 +2,27 @@
 #include "planner/bindcontext.hpp"
 
 #include "parser/expression/columnref_expression.hpp"
+#include "parser/tableref/subqueryref.hpp"
 
 using namespace duckdb;
 using namespace std;
+
+SubqueryBinding::SubqueryBinding(SubqueryRef& subquery_, size_t index)
+    : Binding(BindingType::SUBQUERY, index), subquery(subquery_.subquery.get()) {
+	if (subquery_.column_name_alias.size() > 0) {
+		assert(subquery_.column_name_alias.size() == subquery->select_list.size());
+		for(auto &name : subquery_.column_name_alias) {
+			name_map[name] = names.size();
+			names.push_back(name);
+		}
+	} else {
+		for (auto &entry : subquery->select_list) {
+			auto name = entry->GetName();
+			name_map[name] = names.size();
+			names.push_back(name);
+		}
+    }
+}
 
 static bool HasMatchingBinding(Binding *binding, const string &column_name) {
 	switch (binding->type) {
@@ -241,7 +259,7 @@ void BindContext::AddDummyTable(const string &alias,
 }
 
 size_t BindContext::AddSubquery(const string &alias,
-                                SelectStatement *subquery) {
+                                SubqueryRef &subquery) {
 	size_t index = GenerateTableIndex();
 	AddBinding(alias, make_unique<SubqueryBinding>(subquery, index));
 	return index;

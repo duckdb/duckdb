@@ -34,16 +34,17 @@ bool Planner::CreatePlan(ClientContext &context,
 	this->success = false;
 	try {
 		switch (statement->type) {
-		case StatementType::SELECT: {
-			Serializer serializer;
-			((SelectStatement *)statement.get())->Serialize(serializer);
-			Deserializer source(serializer);
-			auto new_statement = SelectStatement::Deserialize(source);
-			statement.reset();
-			CreatePlan(context, *new_statement);
-			this->success = true;
-			break;
-		}
+		case StatementType::SELECT:
+		// {
+		// 	Serializer serializer;
+		// 	((SelectStatement *)statement.get())->Serialize(serializer);
+		// 	Deserializer source(serializer);
+		// 	auto new_statement = SelectStatement::Deserialize(source);
+		// 	statement.reset();
+		// 	CreatePlan(context, *new_statement);
+		// 	this->success = true;
+		// 	break;
+		// }
 		case StatementType::INSERT:
 		case StatementType::COPY:
 		case StatementType::DELETE:

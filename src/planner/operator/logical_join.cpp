@@ -41,7 +41,7 @@ JoinSide LogicalJoin::GetJoinSide(LogicalOperator *op,
 	}
 }
 
-static ExpressionType NegateComparisionExpression(ExpressionType type) {
+ExpressionType LogicalJoin::NegateComparisionExpression(ExpressionType type) {
 	ExpressionType negated_type = ExpressionType::INVALID;
 	switch (type) {
 	case ExpressionType::COMPARE_EQUAL:
@@ -69,7 +69,7 @@ static ExpressionType NegateComparisionExpression(ExpressionType type) {
 	return negated_type;
 }
 
-static ExpressionType FlipComparisionExpression(ExpressionType type) {
+ExpressionType LogicalJoin::FlipComparisionExpression(ExpressionType type) {
 	ExpressionType flipped_type = ExpressionType::INVALID;
 	switch (type) {
 	case ExpressionType::COMPARE_NOTEQUAL:

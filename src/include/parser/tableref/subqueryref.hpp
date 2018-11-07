@@ -40,6 +40,8 @@ class SubqueryRef : public TableRef {
 
 	//! The subquery
 	std::unique_ptr<SelectStatement> subquery;
+	//! Alises for the column names
+	std::vector<std::string> column_name_alias;
 	// Bindcontext, FIXME
 	std::unique_ptr<BindContext> context;
 };

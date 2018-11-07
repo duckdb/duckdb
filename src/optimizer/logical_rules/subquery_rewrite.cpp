@@ -178,7 +178,11 @@ void ExtractCorrelatedExpressions(LogicalAggregate *aggr,
 		    aggr->expressions.back()->return_type,
 		    ColumnBinding(subquery_table_index, aggr->expressions.size() - 1));
 		condition.comparison = comparison_type;
-		condition.flip = uncorrelated_index == 0;
+		if (uncorrelated_index == 0) {
+			// flip the comparison
+			condition.comparison =
+			    LogicalJoin::FlipComparisionExpression(condition.comparison);
+		}
 
 		// add the join condition
 		join_conditions.push_back(move(condition));

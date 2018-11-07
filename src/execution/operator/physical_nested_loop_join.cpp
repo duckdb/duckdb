@@ -165,8 +165,8 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 			Vector left_match(state->left_join_condition.data[i].GetValue(
 			    state->left_position));
 
-			Vector &l = conditions[i].flip ? right_match : left_match;
-			Vector &r = conditions[i].flip ? left_match : right_match;
+			Vector &l = left_match;
+			Vector &r = right_match;
 
 			Vector intermediate(TypeId::BOOLEAN, true, false);
 			switch (conditions[i].comparison) {
