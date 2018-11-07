@@ -1,74 +1,73 @@
-/* 
- * Legal Notice 
- * 
- * This document and associated source code (the "Work") is a part of a 
- * benchmark specification maintained by the TPC. 
- * 
- * The TPC reserves all right, title, and interest to the Work as provided 
- * under U.S. and international laws, including without limitation all patent 
- * and trademark rights therein. 
- * 
- * No Warranty 
- * 
- * 1.1 TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE INFORMATION 
- *     CONTAINED HEREIN IS PROVIDED "AS IS" AND WITH ALL FAULTS, AND THE 
- *     AUTHORS AND DEVELOPERS OF THE WORK HEREBY DISCLAIM ALL OTHER 
- *     WARRANTIES AND CONDITIONS, EITHER EXPRESS, IMPLIED OR STATUTORY, 
- *     INCLUDING, BUT NOT LIMITED TO, ANY (IF ANY) IMPLIED WARRANTIES, 
- *     DUTIES OR CONDITIONS OF MERCHANTABILITY, OF FITNESS FOR A PARTICULAR 
- *     PURPOSE, OF ACCURACY OR COMPLETENESS OF RESPONSES, OF RESULTS, OF 
- *     WORKMANLIKE EFFORT, OF LACK OF VIRUSES, AND OF LACK OF NEGLIGENCE. 
- *     ALSO, THERE IS NO WARRANTY OR CONDITION OF TITLE, QUIET ENJOYMENT, 
- *     QUIET POSSESSION, CORRESPONDENCE TO DESCRIPTION OR NON-INFRINGEMENT 
- *     WITH REGARD TO THE WORK. 
- * 1.2 IN NO EVENT WILL ANY AUTHOR OR DEVELOPER OF THE WORK BE LIABLE TO 
- *     ANY OTHER PARTY FOR ANY DAMAGES, INCLUDING BUT NOT LIMITED TO THE 
- *     COST OF PROCURING SUBSTITUTE GOODS OR SERVICES, LOST PROFITS, LOSS 
- *     OF USE, LOSS OF DATA, OR ANY INCIDENTAL, CONSEQUENTIAL, DIRECT, 
+/*
+ * Legal Notice
+ *
+ * This document and associated source code (the "Work") is a part of a
+ * benchmark specification maintained by the TPC.
+ *
+ * The TPC reserves all right, title, and interest to the Work as provided
+ * under U.S. and international laws, including without limitation all patent
+ * and trademark rights therein.
+ *
+ * No Warranty
+ *
+ * 1.1 TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE INFORMATION
+ *     CONTAINED HEREIN IS PROVIDED "AS IS" AND WITH ALL FAULTS, AND THE
+ *     AUTHORS AND DEVELOPERS OF THE WORK HEREBY DISCLAIM ALL OTHER
+ *     WARRANTIES AND CONDITIONS, EITHER EXPRESS, IMPLIED OR STATUTORY,
+ *     INCLUDING, BUT NOT LIMITED TO, ANY (IF ANY) IMPLIED WARRANTIES,
+ *     DUTIES OR CONDITIONS OF MERCHANTABILITY, OF FITNESS FOR A PARTICULAR
+ *     PURPOSE, OF ACCURACY OR COMPLETENESS OF RESPONSES, OF RESULTS, OF
+ *     WORKMANLIKE EFFORT, OF LACK OF VIRUSES, AND OF LACK OF NEGLIGENCE.
+ *     ALSO, THERE IS NO WARRANTY OR CONDITION OF TITLE, QUIET ENJOYMENT,
+ *     QUIET POSSESSION, CORRESPONDENCE TO DESCRIPTION OR NON-INFRINGEMENT
+ *     WITH REGARD TO THE WORK.
+ * 1.2 IN NO EVENT WILL ANY AUTHOR OR DEVELOPER OF THE WORK BE LIABLE TO
+ *     ANY OTHER PARTY FOR ANY DAMAGES, INCLUDING BUT NOT LIMITED TO THE
+ *     COST OF PROCURING SUBSTITUTE GOODS OR SERVICES, LOST PROFITS, LOSS
+ *     OF USE, LOSS OF DATA, OR ANY INCIDENTAL, CONSEQUENTIAL, DIRECT,
  *     INDIRECT, OR SPECIAL DAMAGES WHETHER UNDER CONTRACT, TORT, WARRANTY,
- *     OR OTHERWISE, ARISING IN ANY WAY OUT OF THIS OR ANY OTHER AGREEMENT 
- *     RELATING TO THE WORK, WHETHER OR NOT SUCH AUTHOR OR DEVELOPER HAD 
- *     ADVANCE NOTICE OF THE POSSIBILITY OF SUCH DAMAGES. 
- * 
+ *     OR OTHERWISE, ARISING IN ANY WAY OUT OF THIS OR ANY OTHER AGREEMENT
+ *     RELATING TO THE WORK, WHETHER OR NOT SUCH AUTHOR OR DEVELOPER HAD
+ *     ADVANCE NOTICE OF THE POSSIBILITY OF SUCH DAMAGES.
+ *
  * Contributors:
  * Gradient Systems
- */ 
+ */
 /*
  * parameter handling functions
  */
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
-#include <time.h>
+#include "r_params.h"
 #include "config.h"
 #include "porting.h"
-#include "r_params.h"
-#include "tdefs.h"
 #include "release.h"
+#include "tdefs.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
 
-#define PARAM_MAX_LEN	80
+#define PARAM_MAX_LEN 80
 
 #ifndef TEST
 extern option_t options[];
 extern char *params[];
 #else
-option_t options[] =
-{
-{"PROG", OPT_STR|OPT_HIDE, 0, NULL, NULL, "tester"}, 
-{"PARAMS", OPT_STR, 1, "read parameters from file <s>", read_file, ""}, 
-{"DISTRIBUTIONS", OPT_STR, 2, "read distributions from file <s>", NULL, "tester_dist.idx"}, 
-{"OUTDIR", OPT_STR, 3, "generate files in directory <s>", NULL, "./"}, 
-{"VERBOSE", OPT_FLG, 4, "enable verbose output", NULL, "N"}, 
-{"HELP", OPT_FLG, 5, "display this message", usage, "N"}, 
-{"scale", OPT_INT, 6, "set scale to <i>", NULL, "1"}, 
-NULL
-};
+option_t options[] = {
+    {"PROG", OPT_STR | OPT_HIDE, 0, NULL, NULL, "tester"},
+    {"PARAMS", OPT_STR, 1, "read parameters from file <s>", read_file, ""},
+    {"DISTRIBUTIONS", OPT_STR, 2, "read distributions from file <s>", NULL,
+     "tester_dist.idx"},
+    {"OUTDIR", OPT_STR, 3, "generate files in directory <s>", NULL, "./"},
+    {"VERBOSE", OPT_FLG, 4, "enable verbose output", NULL, "N"},
+    {"HELP", OPT_FLG, 5, "display this message", usage, "N"},
+    {"scale", OPT_INT, 6, "set scale to <i>", NULL, "1"},
+    NULL};
 char *params[9];
 #endif
 
 static int param_init = 0;
 
-#define MAX_LINE_LEN	120
+#define MAX_LINE_LEN 120
 #ifdef WIN32
 #define OPTION_START '/'
 #else
@@ -77,35 +76,33 @@ static int param_init = 0;
 
 int read_file(char *param_name, char *option);
 int fnd_param(char *name);
-void  print_params(void);
+void print_params(void);
 
 /*
  * Routine:  load_params()
- * Purpose:  
+ * Purpose:
  * Algorithm:
  * Data Structures:
  *
  * Params:
  * Returns:
- * Called By: 
- * Calls: 
+ * Called By:
+ * Calls:
  * Assumptions:
  * Side Effects:
- * TODO: 
+ * TODO:
  * 20010621 JMS shared memory not yet implemented
  */
-void
-load_params()
-{
-/*
-	int i=0;
-	while (options[i].name != NULL)
-	{
-		load_param(i, GetSharedMemoryParam(options[i].index));
-		i++;
-	}
-	SetSharedMemoryStat(STAT_ROWCOUNT, get_int("STEP"), 0);
-*/
+void load_params() {
+	/*
+	    int i=0;
+	    while (options[i].name != NULL)
+	    {
+	        load_param(i, GetSharedMemoryParam(options[i].index));
+	        i++;
+	    }
+	    SetSharedMemoryStat(STAT_ROWCOUNT, get_int("STEP"), 0);
+	*/
 	return;
 }
 
@@ -117,15 +114,13 @@ load_params()
  *
  * Params:
  * Returns:
- * Called By: 
- * Calls: 
+ * Called By:
+ * Calls:
  * Assumptions:
  * Side Effects:
  * TODO: None
  */
-void
-set_flg(char *flag)
-{
+void set_flg(char *flag) {
 	int nParam;
 
 	init_params();
@@ -144,15 +139,13 @@ set_flg(char *flag)
  *
  * Params:
  * Returns:
- * Called By: 
- * Calls: 
+ * Called By:
+ * Calls:
  * Assumptions:
  * Side Effects:
  * TODO: None
  */
-void
-clr_flg(char *flag)
-{
+void clr_flg(char *flag) {
 	int nParam;
 
 	init_params();
@@ -164,36 +157,31 @@ clr_flg(char *flag)
 
 /*
  * Routine: is_set(int f)
- * Purpose: return the state of a toggle parameter, or whether or not a string or int parameter
- *          has been set
- * Algorithm:
- * Data Structures:
+ * Purpose: return the state of a toggle parameter, or whether or not a string
+ * or int parameter has been set Algorithm: Data Structures:
  *
  * Params:
  * Returns:
- * Called By: 
- * Calls: 
+ * Called By:
+ * Calls:
  * Assumptions:
  * Side Effects:
  * TODO: None
  */
-int
-is_set(char *flag)
-{
-   int nParam,
-      bIsSet = 0;
-   
-   init_params();
-   nParam = fnd_param(flag);
-   if (nParam >= 0)
-   {
-      if ((options[nParam].flags & TYPE_MASK) == OPT_FLG)
-         bIsSet = (params[options[nParam].index][0] == 'Y')?1:0;
-      else
-         bIsSet = (options[nParam].flags & OPT_SET) || (strlen(options[nParam].dflt) > 0);
-   }
-   
-   return(bIsSet );	/* better a false negative than a false positive ? */
+int is_set(char *flag) {
+	int nParam, bIsSet = 0;
+
+	init_params();
+	nParam = fnd_param(flag);
+	if (nParam >= 0) {
+		if ((options[nParam].flags & TYPE_MASK) == OPT_FLG)
+			bIsSet = (params[options[nParam].index][0] == 'Y') ? 1 : 0;
+		else
+			bIsSet = (options[nParam].flags & OPT_SET) ||
+			         (strlen(options[nParam].dflt) > 0);
+	}
+
+	return (bIsSet); /* better a false negative than a false positive ? */
 }
 
 /*
@@ -204,21 +192,18 @@ is_set(char *flag)
  *
  * Params:
  * Returns:
- * Called By: 
- * Calls: 
+ * Called By:
+ * Calls:
  * Assumptions:
  * Side Effects:
  * TODO: None
  */
-void 
-set_int(char *var, char *val)
-{
+void set_int(char *var, char *val) {
 	int nParam;
 
 	init_params();
 	nParam = fnd_param(var);
-	if (nParam >= 0)
-	{
+	if (nParam >= 0) {
 		strcpy(params[options[nParam].index], val);
 		options[nParam].flags |= OPT_SET;
 	}
@@ -233,23 +218,21 @@ set_int(char *var, char *val)
  *
  * Params:
  * Returns:
- * Called By: 
- * Calls: 
+ * Called By:
+ * Calls:
  * Assumptions:
  * Side Effects:
  * TODO: None
  */
-int 
-get_int(char *var)
-{
+int get_int(char *var) {
 	int nParam;
 
 	init_params();
 	nParam = fnd_param(var);
 	if (nParam >= 0)
-		return(atoi(params[options[nParam].index]));
+		return (atoi(params[options[nParam].index]));
 	else
-		return(0);
+		return (0);
 }
 
 /*
@@ -260,25 +243,21 @@ get_int(char *var)
  *
  * Params:
  * Returns:
- * Called By: 
- * Calls: 
+ * Called By:
+ * Calls:
  * Assumptions:
  * Side Effects:
  * TODO: None
  */
-void 
-set_str(char *var, char *val)
-{
+void set_str(char *var, char *val) {
 	int nParam;
-	
+
 	init_params();
 	nParam = fnd_param(var);
-	if (nParam >= 0)
-	{
+	if (nParam >= 0) {
 		strcpy(params[options[nParam].index], val);
 		options[nParam].flags |= OPT_SET;
 	}
-
 
 	return;
 }
@@ -291,23 +270,21 @@ set_str(char *var, char *val)
  *
  * Params:
  * Returns:
- * Called By: 
- * Calls: 
+ * Called By:
+ * Calls:
  * Assumptions:
  * Side Effects:
  * TODO: None
  */
-char *
-get_str(char *var)
-{
+char *get_str(char *var) {
 	int nParam;
 
 	init_params();
 	nParam = fnd_param(var);
 	if (nParam >= 0)
-		return(params[options[nParam].index]);
+		return (params[options[nParam].index]);
 	else
-		return(NULL);
+		return (NULL);
 }
 
 /*
@@ -318,24 +295,20 @@ get_str(char *var)
  *
  * Params:
  * Returns:
- * Called By: 
- * Calls: 
+ * Called By:
+ * Calls:
  * Assumptions:
  * Side Effects:
  * TODO: None
  */
-int
-init_params(void)
-{
+int init_params(void) {
 	int i;
 	static int init = 0;
 
 	if (init)
-		return(0);
+		return (0);
 
-
-	for (i=0; options[i].name != NULL; i++)
-	{
+	for (i = 0; options[i].name != NULL; i++) {
 		params[options[i].index] = (char *)malloc(PARAM_MAX_LEN * sizeof(char));
 		MALLOC_CHECK(params[options[i].index]);
 		strncpy(params[options[i].index], options[i].dflt, 80);
@@ -345,8 +318,8 @@ init_params(void)
 
 	init = 1;
 	param_init = 1;
-	
-	return(0);
+
+	return (0);
 }
 
 /*
@@ -357,25 +330,19 @@ init_params(void)
  *
  * Params:
  * Returns:
- * Called By: 
- * Calls: 
+ * Called By:
+ * Calls:
  * Assumptions:
  * Side Effects:
  * TODO: None
  */
-static void
-print_options(struct OPTION_T *o, int bShowOptional)
-{
-	int i,
-	w_adjust,
-	bShow = 0,
-	nCount = 0;
+static void print_options(struct OPTION_T *o, int bShowOptional) {
+	int i, w_adjust, bShow = 0, nCount = 0;
 
-	for (i=0; options[i].name != NULL; i++)
-	{
+	for (i = 0; options[i].name != NULL; i++) {
 		/*
-		 * options come in two groups, general and "hidden". Decide which group to show 
-		 * in this pass, and ignore others
+		 * options come in two groups, general and "hidden". Decide which group
+		 * to show in this pass, and ignore others
 		 */
 		bShow = 0;
 		if (bShowOptional && (o[i].flags & OPT_ADV))
@@ -397,7 +364,8 @@ print_options(struct OPTION_T *o, int bShowOptional)
 			printf(" <opt> ");
 		else if (o[i].flags & OPT_FLG)
 			printf(" [Y|N] ");
-		else printf("       ");
+		else
+			printf("       ");
 		printf("%*s-- %s", w_adjust, " ", o[i].usage);
 		if (o[i].flags & OPT_NOP)
 			printf(" NOT IMPLEMENTED");
@@ -417,46 +385,41 @@ print_options(struct OPTION_T *o, int bShowOptional)
  *
  * Params:
  * Returns:
- * Called By: 
- * Calls: 
+ * Called By:
+ * Calls:
  * Assumptions:
  * Side Effects:
  * TODO: None
  */
-int
-save_file(char *path)
-{
-	int i,
-	w_adjust;
+int save_file(char *path) {
+	int i, w_adjust;
 	FILE *ofp;
 	time_t timestamp;
 
 	init_params();
 	time(&timestamp);
-	
+
 	if ((ofp = fopen(path, "w")) == NULL)
-		return(-1);
+		return (-1);
 
 	fprintf(ofp, "--\n-- %s Benchmark Parameter File\n-- Created: %s",
-		get_str("PROG"), ctime(&timestamp));
-	fprintf(ofp, "--\n-- Each entry is of the form: '<parameter> = <value> -- optional comment'\n");
+	        get_str("PROG"), ctime(&timestamp));
+	fprintf(ofp, "--\n-- Each entry is of the form: '<parameter> = <value> -- "
+	             "optional comment'\n");
 	fprintf(ofp, "-- Refer to benchmark documentation for more details\n--\n");
-	
-	for (i=0; options[i].name != NULL; i++)
-	{
-		if (options[i].flags & OPT_HIDE)		/* hidden option */
+
+	for (i = 0; options[i].name != NULL; i++) {
+		if (options[i].flags & OPT_HIDE) /* hidden option */
 			continue;
 		if (strlen(params[options[i].index]) == 0)
 			continue;
 
 		fprintf(ofp, "%s = ", options[i].name);
 		w_adjust = strlen(options[i].name) + 3;
-		if (options[i].flags & OPT_STR)
-		{
+		if (options[i].flags & OPT_STR) {
 			fprintf(ofp, "\"%s\"", params[options[i].index]);
 			w_adjust += 2;
-		}
-		else
+		} else
 			fprintf(ofp, "%s", params[options[i].index]);
 		w_adjust += strlen(params[options[i].index]) + 3;
 		w_adjust = 60 - w_adjust;
@@ -468,7 +431,7 @@ save_file(char *path)
 
 	fclose(ofp);
 
-	return(0);
+	return (0);
 }
 
 /*
@@ -479,42 +442,39 @@ save_file(char *path)
  *
  * Params:
  * Returns:
- * Called By: 
- * Calls: 
+ * Called By:
+ * Calls:
  * Assumptions:
  * Side Effects:
  * TODO: None
  */
-int
-usage (char *param_name, char *msg)
-{
+int usage(char *param_name, char *msg) {
 	init_params();
-	
-	fprintf (stderr,
-		"%s Population Generator (Version %d.%d.%d%s)\n",
-		get_str("PROG"), VERSION, RELEASE, MODIFICATION, PATCH);
-	fprintf (stderr, "Copyright %s %s\n", COPYRIGHT, C_DATES);
+
+	fprintf(stderr, "%s Population Generator (Version %d.%d.%d%s)\n",
+	        get_str("PROG"), VERSION, RELEASE, MODIFICATION, PATCH);
+	fprintf(stderr, "Copyright %s %s\n", COPYRIGHT, C_DATES);
 
 	if (msg != NULL)
 		printf("\nERROR: %s\n\n", msg);
-	
+
 	printf("\n\nUSAGE: %s [options]\n", get_str("PROG"));
-	printf("\nNote: When defined in a parameter file (using -p), parmeters should\n");
-	printf("use the form below. Each option can also be set from the command\n");
-	printf("line, using a form of '%cparam [optional argument]'\n", 
-		OPTION_START);
+	printf("\nNote: When defined in a parameter file (using -p), parmeters "
+	       "should\n");
+	printf(
+	    "use the form below. Each option can also be set from the command\n");
+	printf("line, using a form of '%cparam [optional argument]'\n",
+	       OPTION_START);
 	printf("Unique anchored substrings of options are also recognized, and \n");
 	printf("case is ignored, so '%csc' is equivalent to '%cSCALE'\n\n",
-		OPTION_START, OPTION_START);
+	       OPTION_START, OPTION_START);
 	printf("General Options\n===============\n");
 	print_options(options, 0);
 	printf("\n");
 	printf("Advanced Options\n===============\n");
 	print_options(options, 1);
 	printf("\n");
-	exit((msg == NULL)?0:1);
-
-
+	exit((msg == NULL) ? 0 : 1);
 }
 
 /*
@@ -525,74 +485,65 @@ usage (char *param_name, char *msg)
  *
  * Params:
  * Returns:
- * Called By: 
- * Calls: 
+ * Called By:
+ * Calls:
  * Assumptions:
  * Side Effects:
  * TODO: None
  */
-int
-set_option(char *name, char *param)
-{
+int set_option(char *name, char *param) {
 	int res = 1;
 	option_t *o;
 	char parse_int[15];
 	char *cp;
 
 	init_params();
-	
+
 	res = fnd_param(name);
 	if (res == -1)
-		return(res);
-	
+		return (res);
+
 	o = &options[res];
 
-	if (o->flags & OPT_NOP)
-	{
+	if (o->flags & OPT_NOP) {
 		printf("ERROR: Cannot accept %s.\tNot Implemented!\n", o->name);
-		return(0);
+		return (0);
 	}
 
 	/* option is already set from the command line or hard-coded */
 	/* and doesn't allow multiple settings */
 
-	switch(o->flags & TYPE_MASK)
-	{
-	case	OPT_FLG:
-		if ((param && (*param == 'Y' || *param == 'Y' || *param == OPTION_START)) ||
-			(param == NULL))
-		{
+	switch (o->flags & TYPE_MASK) {
+	case OPT_FLG:
+		if ((param &&
+		     (*param == 'Y' || *param == 'Y' || *param == OPTION_START)) ||
+		    (param == NULL)) {
 			if (o->action)
 				if (o->action(o->name, NULL) < 0)
 					usage(o->name, "Cannot process option");
 			set_flg(name);
-		}
-		else
+		} else
 			clr_flg(name);
 		res = 1;
 		break;
-	case	OPT_INT:
-		if (o->action)
-      {
+	case OPT_INT:
+		if (o->action) {
 			if ((res = o->action(o->name, param)) < 0)
 				usage(NULL, "Bad parameter argument");
 			else
 				sprintf(parse_int, "%d", res);
-      }
-		set_int(name, (o->action)?parse_int:param);
+		}
+		set_int(name, (o->action) ? parse_int : param);
 		res = 2;
 		break;
-	case	OPT_STR:
-		if (*param == '"')
-		{
+	case OPT_STR:
+		if (*param == '"') {
 			cp = strchr((param + 1), '"');
-			if (cp == NULL)	/* non-terminated string literal */
+			if (cp == NULL) /* non-terminated string literal */
 				usage(NULL, "Non-terminated string");
 			*cp = '\0';
 			param += 1;
-		}
-		else
-		{
+		} else {
 			cp = strpbrk(param, " \t\n");
 			if (cp != NULL)
 				*cp = '\0';
@@ -604,15 +555,15 @@ set_option(char *name, char *param)
 		res = 2;
 		break;
 	default:
-		fprintf(stderr, "Invalid option/type (%d/%s)\n", 
-		    o->flags & TYPE_MASK, o->name);
+		fprintf(stderr, "Invalid option/type (%d/%s)\n", o->flags & TYPE_MASK,
+		        o->name);
 		exit(0);
 		break;
 	}
 
-	o->flags |= OPT_SET;	/* marked as set */
+	o->flags |= OPT_SET; /* marked as set */
 
-	return(res);
+	return (res);
 }
 
 /*
@@ -623,39 +574,32 @@ set_option(char *name, char *param)
  *
  * Params:
  * Returns:
- * Called By: 
- * Calls: 
+ * Called By:
+ * Calls:
  * Assumptions:
  * Side Effects:
  * TODO: 20000309 need to return integer to allow processing of left-over args
  */
-int
-process_options (int count, char **vector)
-{
-	int option_num = 1,
-	res = 1;
+int process_options(int count, char **vector) {
+	int option_num = 1, res = 1;
 
 	init_params();
 
-	while (option_num < count)
-	{
-		if (*vector[option_num] == OPTION_START)
-		{
+	while (option_num < count) {
+		if (*vector[option_num] == OPTION_START) {
 			if (option_num == (count - 1))
 				res = set_option(vector[option_num] + 1, NULL);
 			else
-				res = set_option(vector[option_num] + 1, 
-				    vector[option_num + 1]);
+				res =
+				    set_option(vector[option_num] + 1, vector[option_num + 1]);
 		}
 
-		if (res < 0)
-		{
-			printf ("ERROR: option '%s' or its argument unknown.\n", 
-			    (vector[option_num] + 1));
-			usage (NULL, NULL);
-			exit (1);
-		}
-		else
+		if (res < 0) {
+			printf("ERROR: option '%s' or its argument unknown.\n",
+			       (vector[option_num] + 1));
+			usage(NULL, NULL);
+			exit(1);
+		} else
 			option_num += res;
 	}
 
@@ -664,7 +608,7 @@ process_options (int count, char **vector)
 		print_params();
 #endif
 
-	return(option_num);
+	return (option_num);
 }
 
 /*
@@ -675,15 +619,13 @@ process_options (int count, char **vector)
  *
  * Params:
  * Returns:
- * Called By: 
- * Calls: 
+ * Called By:
+ * Calls:
  * Assumptions:
  * Side Effects:
  * TODO: None
  */
-int
-read_file(char *param_name, char *optarg)
-{
+int read_file(char *param_name, char *optarg) {
 	FILE *fp;
 	char *cp;
 	char line[MAX_LINE_LEN];
@@ -691,34 +633,30 @@ read_file(char *param_name, char *optarg)
 	int index;
 
 	init_params();
-	
+
 	if ((fp = fopen(optarg, "r")) == NULL)
-		return(-1);
-	while (fgets(line, MAX_LINE_LEN, fp) != NULL)
-	{
+		return (-1);
+	while (fgets(line, MAX_LINE_LEN, fp) != NULL) {
 		if ((cp = strchr(line, '\n')) != NULL)
 			*cp = '\0';
 		if ((cp = strchr(line, '-')) != NULL)
 			if (*(cp + 1) == '-')
 				*cp = '\0';
-		if ((cp = strtok(line, " \t=\n")) != NULL)
-		{
+		if ((cp = strtok(line, " \t=\n")) != NULL) {
 			strcpy(name, cp);
 			index = fnd_param(name);
 			if (index == -1)
-				continue;	/* JMS: errors are silently ignored */
+				continue; /* JMS: errors are silently ignored */
 			cp += strlen(cp) + 1;
-			while ( *cp && strchr(" \t =", *cp))
+			while (*cp && strchr(" \t =", *cp))
 				cp++;
 
 			/* command line options over-ride those in a file */
 			if (options[index].flags & OPT_SET)
 				continue;
 
-			if (*cp)
-			{
-				switch(options[index].flags & TYPE_MASK)
-				{
+			if (*cp) {
+				switch (options[index].flags & TYPE_MASK) {
 				case OPT_INT:
 					if ((cp = strtok(cp, " \t\n")) != NULL)
 						set_option(name, cp);
@@ -734,7 +672,7 @@ read_file(char *param_name, char *optarg)
 
 	fclose(fp);
 
-	return(0);
+	return (0);
 }
 
 /*
@@ -745,25 +683,21 @@ read_file(char *param_name, char *optarg)
  *
  * Params:
  * Returns:
- * Called By: 
- * Calls: 
+ * Called By:
+ * Calls:
  * Assumptions:
  * Side Effects:
  * TODO: None
  */
-void 
-print_params(void)
-{
+void print_params(void) {
 	int i;
 
 	init_params();
-	
-	for (i=0; options[i].name != NULL; i++)
-		if (options[i].name != NULL)
-		{
+
+	for (i = 0; options[i].name != NULL; i++)
+		if (options[i].name != NULL) {
 			printf("%s = ", options[i].name);
-			switch(options[i].flags & TYPE_MASK)
-			{
+			switch (options[i].flags & TYPE_MASK) {
 			case OPT_INT:
 				printf("%d\n", get_int(options[i].name));
 				break;
@@ -771,46 +705,41 @@ print_params(void)
 				printf("%s\n", get_str(options[i].name));
 				break;
 			case OPT_FLG:
-				printf("%c\n", is_set(options[i].name)?'Y':'N');
+				printf("%c\n", is_set(options[i].name) ? 'Y' : 'N');
 				break;
 			}
 		}
 
-		return;
+	return;
 }
 
 /*
  * Routine: fnd_param(char *name, int *type, char *value)
  * Purpose: traverse the defined parameters, looking for a match
- * Algorithm: 
+ * Algorithm:
  * Data Structures:
  *
  * Params:
  * Returns: index of option
- * Called By: 
- * Calls: 
+ * Called By:
+ * Calls:
  * Assumptions:
  * Side Effects:
  * TODO: None
  */
-int
-fnd_param(char *name)
-{
-	int i,
-		res = -1;
+int fnd_param(char *name) {
+	int i, res = -1;
 
-	for (i=0; options[i].name != NULL; i++)
-	{
-		if (strncasecmp(name, options[i].name, strlen(name)) == 0)
-      {
+	for (i = 0; options[i].name != NULL; i++) {
+		if (strncasecmp(name, options[i].name, strlen(name)) == 0) {
 			if (res == -1)
 				res = i;
 			else
-				return(-1);
-      }
+				return (-1);
+		}
 	}
 
-	return(res);
+	return (res);
 }
 
 /*
@@ -821,20 +750,17 @@ fnd_param(char *name)
  *
  * Params:
  * Returns:
- * Called By: 
- * Calls: 
+ * Called By:
+ * Calls:
  * Assumptions:
  * Side Effects:
  * TODO: None
  */
-char *
-GetParamName(int nParam)
-{
+char *GetParamName(int nParam) {
 	init_params();
-	
-	return(options[nParam].name);
-}
 
+	return (options[nParam].name);
+}
 
 /*
  * Routine:  GetParamValue(int nParam)
@@ -844,18 +770,16 @@ GetParamName(int nParam)
  *
  * Params:
  * Returns:
- * Called By: 
- * Calls: 
+ * Called By:
+ * Calls:
  * Assumptions:
  * Side Effects:
  * TODO: None
  */
-char *
-GetParamValue(int nParam)
-{
+char *GetParamValue(int nParam) {
 	init_params();
-	
-	return(params[options[nParam].index]);
+
+	return (params[options[nParam].index]);
 }
 
 /*
@@ -866,23 +790,21 @@ GetParamValue(int nParam)
  *
  * Params:
  * Returns:
- * Called By: 
- * Calls: 
+ * Called By:
+ * Calls:
  * Assumptions:
  * Side Effects:
  * TODO: None
  */
-int
-load_param(int nParam, char *szValue)
-{
+int load_param(int nParam, char *szValue) {
 	init_params();
-	
-	if (options[nParam].flags & OPT_SET)		/* already set from the command line */
-		return(0);
+
+	if (options[nParam].flags & OPT_SET) /* already set from the command line */
+		return (0);
 	else
 		strcpy(params[options[nParam].index], szValue);
 
-	return(0);
+	return (0);
 }
 
 /*
@@ -893,21 +815,19 @@ load_param(int nParam, char *szValue)
  *
  * Params:
  * Returns:
- * Called By: 
- * Calls: 
+ * Called By:
+ * Calls:
  * Assumptions:
  * Side Effects:
  * TODO: None
  */
-int
-IsIntParam(char *szParam)
-{
+int IsIntParam(char *szParam) {
 	int nParam;
 
 	if ((nParam = fnd_param(szParam)) == -1)
-		return(nParam);
+		return (nParam);
 
-	return((options[nParam].flags & OPT_INT)?1:0);
+	return ((options[nParam].flags & OPT_INT) ? 1 : 0);
 }
 
 /*
@@ -918,33 +838,30 @@ IsIntParam(char *szParam)
  *
  * Params:
  * Returns:
- * Called By: 
- * Calls: 
+ * Called By:
+ * Calls:
  * Assumptions:
  * Side Effects:
  * TODO: None
  */
-int
-IsStrParam(char *szParam)
-{
+int IsStrParam(char *szParam) {
 	int nParam;
 
 	if ((nParam = fnd_param(szParam)) == -1)
-		return(nParam);
+		return (nParam);
 
-	return((options[nParam].flags & OPT_STR)?1:0);
+	return ((options[nParam].flags & OPT_STR) ? 1 : 0);
 }
 
 #ifdef TEST
 
-main()
-{
+main() {
 	init_params();
 	set_int("SCALE", "7");
 	set_flg("VERBOSE");
 	set_str("DISTRIBUTIONS", "'some file name'");
 	print_params();
-	set_int("s" , "8");
+	set_int("s", "8");
 	clr_flg("VERBOSE");
 	printf("DIST is %s\n", get_str("DISTRIBUTIONS"));
 	print_params();
