@@ -32,7 +32,8 @@ JoinSide LogicalJoin::GetJoinSide(LogicalOperator *op,
 		JoinSide join_side = JoinSide::NONE;
 		for (auto &child : expr->children) {
 			auto child_side = LogicalJoin::GetJoinSide(op, child);
-			if (child_side != join_side) {
+			if (child_side != join_side &&
+				child_side != JoinSide::NONE) {
 				join_side =
 				    join_side == JoinSide::NONE ? child_side : JoinSide::BOTH;
 			}
@@ -103,7 +104,7 @@ void LogicalJoin::SetJoinCondition(std::unique_ptr<Expression> condition) {
 			SetJoinCondition(move(child));
 		}
 	} else {
-		auto total_side = LogicalJoin::GetJoinSide(this, condition.get());
+		auto total_side = LogicalJoin::GetJoinSide(this, condition);
 		if (total_side == JoinSide::LEFT || total_side == JoinSide::RIGHT ||
 			total_side == JoinSide::NONE) {
 			// the condition only relates to one side
