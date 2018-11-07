@@ -216,6 +216,7 @@ void Binder::Visit(SelectStatement &statement) {
 
 	if (statement.groupby.having) {
 		statement.groupby.having->Accept(this);
+		statement.groupby.having->ResolveType();
 	}
 	// the union has a completely independent binder
 	if (statement.union_select) {

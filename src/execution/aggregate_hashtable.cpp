@@ -26,6 +26,22 @@ SuperLargeHashTable::SuperLargeHashTable(size_t initial_capacity,
 	for (auto type : payload_types) {
 		payload_width += GetTypeIdSize(type);
 	}
+	empty_payload_data = unique_ptr<uint8_t[]>(new uint8_t[payload_width]);
+	// initialize the aggregetes to the NULL value
+	auto pointer = empty_payload_data.get();
+	for (size_t i = 0; i < payload_types.size(); i++) {
+		// counts are zero initialized, all other aggregates NULL
+		// initialized
+		auto type = payload_types[i];
+		if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT ||
+		    aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_STAR) {
+			memset(pointer, 0, GetTypeIdSize(type));
+		} else {
+			SetNullValue(pointer, type);
+		}
+		pointer += GetTypeIdSize(type);
+	}
+
 	tuple_size = FLAG_SIZE + (group_serializer.TupleSize() + payload_width);
 	Resize(initial_capacity);
 }
@@ -136,21 +152,8 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 				// entry
 				*entry = FULL_CELL;
 				memcpy(entry + FLAG_SIZE, group_elements[i], group_width);
-				// initialize the aggragetes to the NULL value
-				auto location = entry + group_width + FLAG_SIZE;
-				for (size_t i = 0; i < payload_types.size(); i++) {
-					// counts are zero initialized, all other aggregates NULL
-					// initialized
-					auto type = payload_types[i];
-					if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT ||
-					    aggregate_types[i] ==
-					        ExpressionType::AGGREGATE_COUNT_STAR) {
-						memset(location, 0, GetTypeIdSize(type));
-					} else {
-						SetNullValue(location, type);
-					}
-					location += GetTypeIdSize(type);
-				}
+				memcpy(entry + FLAG_SIZE + group_width,
+				       empty_payload_data.get(), payload_width);
 				entries++;
 				break;
 			}

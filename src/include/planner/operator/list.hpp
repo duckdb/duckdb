@@ -12,6 +12,7 @@
 #include "planner/operator/logical_limit.hpp"
 #include "planner/operator/logical_order.hpp"
 #include "planner/operator/logical_projection.hpp"
+#include "planner/operator/logical_prune_columns.hpp"
 #include "planner/operator/logical_subquery.hpp"
 #include "planner/operator/logical_table_function.hpp"
 #include "planner/operator/logical_union.hpp"

@@ -103,6 +103,36 @@ void LogicalPlanGenerator::Visit(DeleteStatement &statement) {
 	root = move(del);
 }
 
+static std::unique_ptr<Expression>
+transform_aggregates_into_colref(LogicalOperator *root,
+                                 std::unique_ptr<Expression> expr) {
+	if (expr->GetExpressionClass() == ExpressionClass::AGGREGATE) {
+		// the current expression is an aggregate node!
+		// first check if the aggregate is already computed in the GROUP BY
+		size_t match_index = root->expressions.size();
+		for (size_t j = 0; j < root->expressions.size(); j++) {
+			if (expr->Equals(root->expressions[j].get())) {
+				match_index = j;
+				break;
+			}
+		}
+		auto type = expr->return_type;
+		if (match_index == root->expressions.size()) {
+			// the expression is not computed yet!
+			// add it to the list of aggregates to compute
+			root->expressions.push_back(move(expr));
+		}
+		// now turn this node into a reference
+		return make_unique<ColumnRefExpression>(type, match_index);
+	} else {
+		for (size_t i = 0; i < expr->children.size(); i++) {
+			expr->children[i] =
+			    transform_aggregates_into_colref(root, move(expr->children[i]));
+		}
+		return expr;
+	}
+}
+
 void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 	for (auto &expr : statement.select_list) {
 		expr->Accept(this);
@@ -138,11 +168,27 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 
 		if (statement.HasHaving()) {
 			statement.groupby.having->Accept(this);
-
 			auto having =
 			    make_unique<LogicalFilter>(move(statement.groupby.having));
+			// the HAVING child cannot contain aggregates itself
+			// turn them into Column References
+			size_t original_column_count = root->expressions.size();
+			for (size_t i = 0; i < having->expressions.size(); i++) {
+				having->expressions[i] = transform_aggregates_into_colref(
+				    root.get(), move(having->expressions[i]));
+			}
+			bool require_prune =
+			    root->expressions.size() > original_column_count;
 			having->AddChild(move(root));
 			root = move(having);
+			if (require_prune) {
+				// we added extra aggregates for the HAVING clause
+				// we need to prune them after
+				auto prune =
+				    make_unique<LogicalPruneColumns>(original_column_count);
+				prune->AddChild(move(root));
+				root = move(prune);
+			}
 		}
 	} else {
 		auto projection =

@@ -59,6 +59,7 @@ class PhysicalPlanGenerator : public LogicalOperatorVisitor {
 	virtual void Visit(LogicalUnion &op);
 	virtual void Visit(LogicalUpdate &op);
 	virtual void Visit(LogicalTableFunction &expr);
+	virtual void Visit(LogicalPruneColumns &expr);
 
 	virtual void Visit(SubqueryExpression &expr);
 

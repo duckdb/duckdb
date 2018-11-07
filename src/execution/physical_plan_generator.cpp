@@ -220,6 +220,18 @@ void PhysicalPlanGenerator::Visit(LogicalInsert &op) {
 	this->plan = move(insertion);
 }
 
+void PhysicalPlanGenerator::Visit(LogicalPruneColumns &op) {
+	LogicalOperatorVisitor::Visit(op);
+
+	if (!plan) {
+		throw Exception("Prune columns cannot be the first node of a plan!");
+	}
+
+	auto node = make_unique<PhysicalPruneColumns>(op.column_limit);
+	node->children.push_back(move(plan));
+	this->plan = move(node);
+}
+
 void PhysicalPlanGenerator::Visit(LogicalTableFunction &op) {
 	LogicalOperatorVisitor::Visit(op);
 

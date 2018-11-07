@@ -74,6 +74,8 @@ class SuperLargeHashTable {
 	size_t max_chain;
 	//! Whether or not the HT has to support parallel insertion operations
 	bool parallel = false;
+	//! The empty payload data
+	std::unique_ptr<uint8_t[]> empty_payload_data;
 
 	//! The size of the initial flag for each cell
 	static constexpr int FLAG_SIZE = sizeof(uint8_t);

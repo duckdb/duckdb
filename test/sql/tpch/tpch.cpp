@@ -23,6 +23,9 @@ TEST_CASE("Test TPC-H SF0.1", "[tpch][.]") {
 
 	con.EnableProfiling();
 
+	// result = con.Query(tpch::get_query(11));
+	// COMPARE_CSV(result, tpch::get_answer(sf, 11), true);
+
 	// check if all the counts are correct
 	result = con.Query("SELECT COUNT(*) FROM orders");
 	REQUIRE(CHECK_COLUMN(result, 0, {150000}));
@@ -112,9 +115,6 @@ TEST_CASE("Test TPC-H SF0.1", "[tpch][.]") {
 
 	result = con.Query(tpch::get_query(10));
 	COMPARE_CSV(result, tpch::get_answer(sf, 10), true);
-
-	// result = con.Query(tpch::get_query(11));
-	// COMPARE_CSV(result, tpch::get_answer(sf, 11), true);
 
 	result = con.Query(tpch::get_query(12));
 	COMPARE_CSV(result, tpch::get_answer(sf, 12), true);
