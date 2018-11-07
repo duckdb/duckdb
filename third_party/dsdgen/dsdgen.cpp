@@ -165,10 +165,14 @@ static void gen_tbl(int tabid, ds_key_t kFirstRow, ds_key_t kRowCount) {
 }
 
 void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
-	ClientContext context(db);
-	context.transaction.BeginTransaction();
+	DuckDBConnection con(db);
+	ClientContext &context = con.context;
 
-	auto &transaction = context.ActiveTransaction();
+	// FIXME: use a transaction for the load
+	// FIXME: no schema/suffix support yet
+	for (int t = 0; t < TPCDS_TABLE_COUNT; t++) {
+		con.Query(TPCDS_TABLE_DDL[t]);
+	}
 
 	if (flt_scale == 0) {
 		// schema only
@@ -176,26 +180,64 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 		return;
 	}
 
-	DuckDBConnection con(db);
-	for (int t = 0; t < TPCDS_TABLE_COUNT; t++) {
-		con.Query(TPCDS_TABLE_DDL[t]);
-	}
-
-	init_rand();
-
+	init_rand(); // no random numbers without this
 	tdef *pT;
-	for (int i = CALL_CENTER; (pT = getSimpleTdefsByNumber(i)); i++) {
+	for (int table_id = CALL_CENTER; (pT = getSimpleTdefsByNumber(table_id)); table_id++) {
 		if (!pT->name)
 			break;
 
-		table_func_t *pF = getTdefFunctionsByNumber(i);
-		if ((pT->flags & FL_NOP) || (pT->flags & FL_CHILD)) {
+		// child tables are created in parent loaders
+		if (pT->flags & FL_CHILD) {
 			continue;
 		}
-		gen_tbl(i, 1, get_rowcount(i));
+
+//#define CALL_CENTER 0
+//#define CATALOG_PAGE 1
+//#define CATALOG_RETURNS 2
+//#define CATALOG_SALES 3
+//#define CUSTOMER 4
+//#define CUSTOMER_ADDRESS 5
+//#define CUSTOMER_DEMOGRAPHICS 6
+//#define DATET 7
+//#define HOUSEHOLD_DEMOGRAPHICS 8
+//#define INCOME_BAND 9
+//#define INVENTORY 10
+//#define ITEM 11
+//#define PROMOTION 12
+//#define REASON 13
+//#define SHIP_MODE 14
+//#define STORE 15
+//#define STORE_RETURNS 16
+//#define STORE_SALES 17
+//#define TIME 18
+//#define WAREHOUSE 19
+//#define WEB_PAGE 20
+//#define WEB_RETURNS 21
+//#define WEB_SALES 22
+//#define WEB_SITE 23
+//#define DBGEN_VERSION 24
+
+		table_func_t *pF = getTdefFunctionsByNumber(table_id);
+
+		// TODO: verify this is correct and required here
+		/*
+		 * small tables use a constrained set of geography information
+		 */
+		if (pT->flags & FL_SMALL)
+			resetCountCount();
+
+		for (ds_key_t i = 1, kRowCount = get_rowcount(table_id); kRowCount; i++, kRowCount--) {
+			/* not all rows that are built should be printed. Use return code to
+			 * deterine output */
+			if (!pF->builder(NULL, i))
+				if (pF->loader[1](NULL)) {
+					throw Exception("Table generation failed");
+				}
+		}
+		return;
 	}
 
-	context.transaction.Commit();
+	//context.transaction.Commit();
 }
 
 string get_query(int query) {

@@ -305,6 +305,15 @@ int pr_w_call_center(void *row) {
  * Side Effects:
  * TODO: None
  */
-int ld_w_call_center(void *r) {
+int ld_w_call_center(void *row) {
+	assert(row == NULL);
+
+	struct CALL_CENTER_TBL *r;
+	char szTemp[128];
+	r = &g_w_call_center;
+
+	fprintf(stderr, "cc %lld\n", r->cc_call_center_sk);
+
+
 	return (0);
 }
