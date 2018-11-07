@@ -38,21 +38,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 #ifdef WIN32
-#include <limits.h>
 #include <search.h>
+#include <limits.h>
 #endif
 #include "config.h"
-#include "date.h"
-#include "decimal.h"
-#include "dist.h"
-#include "genrand.h"
-#include "params.h"
 #include "porting.h"
+#include "decimal.h"
+#include "date.h"
+#include "genrand.h"
+#include "dist.h"
 #include "r_params.h"
+#include "params.h"
 
 #include "columns.h"
-#include "streams.h"
 #include "tables.h"
+#include "streams.h"
 
 static long Mult = 16807; /* the multiplier */
 static long nQ = 127773;  /* the quotient MAXINT / Mult */

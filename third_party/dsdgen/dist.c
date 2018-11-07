@@ -35,17 +35,17 @@
  */
 #include "config.h"
 #include "porting.h"
-#include <assert.h>
-#include <fcntl.h>
 #include <stdio.h>
+#include <fcntl.h>
+#include <assert.h>
 #ifdef WIN32
 #include <io.h>
-#include <search.h>
 #include <stdlib.h>
+#include <search.h>
 #else
-#include <netinet/in.h>
-#include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <netinet/in.h>
 #endif
 #ifdef NCR
 #include <sys/types.h>
@@ -54,13 +54,13 @@
 #include <malloc.h>
 #endif
 #include "config.h"
-#include "date.h"
-#include "dcomp.h"
 #include "decimal.h"
+#include "date.h"
 #include "dist.h"
-#include "error_msg.h"
 #include "genrand.h"
+#include "error_msg.h"
 #include "r_params.h"
+#include "dcomp.h"
 #ifdef TEST
 option_t options[] = {{"DISTRIBUTIONS", OPT_STR, 2,
                        "read distributions from file <s>", NULL,

@@ -33,21 +33,21 @@
  * Contributors:
  * Gradient Systems
  */
-#include "s_web_page.h"
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
+#include "porting.h"
+#include <stdio.h>
 #include "genrand.h"
+#include "s_web_page.h"
+#include "w_web_page.h"
+#include "print.h"
+#include "columns.h"
+#include "build_support.h"
+#include "tables.h"
+#include "scaling.h"
 #include "parallel.h"
 #include "permute.h"
-#include "porting.h"
-#include "print.h"
-#include "scaling.h"
 #include "scd.h"
-#include "tables.h"
 #include "tdef_functions.h"
-#include "w_web_page.h"
-#include <stdio.h>
 
 extern struct W_WEB_PAGE_TBL g_w_web_page;
 

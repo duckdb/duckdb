@@ -36,15 +36,15 @@
 /*
  * parameter handling functions
  */
-#include "r_params.h"
-#include "config.h"
-#include "porting.h"
-#include "release.h"
-#include "tdefs.h"
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #include <time.h>
+#include "config.h"
+#include "porting.h"
+#include "r_params.h"
+#include "tdefs.h"
+#include "release.h"
 
 #define PARAM_MAX_LEN 80
 

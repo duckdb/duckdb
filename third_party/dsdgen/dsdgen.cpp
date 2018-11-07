@@ -1,9 +1,49 @@
+
 #include "dsdgen.hpp"
 #include "common/exception.hpp"
-#include "common/types/data_chunk.hpp"
 #include "main/client_context.hpp"
+#include "common/types/data_chunk.hpp"
+
 #include "storage/data_table.hpp"
+
 #include "tpcds_constants.hpp"
+
+//#define DECLARER
+//
+//#include "config.h"
+//#include "porting.h"
+//#include <stdio.h>
+//#include <time.h>
+//#include <stdlib.h>
+//#ifdef WIN32
+//#include <process.h>
+//#include <direct.h>
+//#endif
+//#ifdef USE_STRING_H
+//#include <string.h>
+//#else
+//#include <strings.h>
+//#endif
+//#include "config.h"
+//#include "date.h"
+//#include "decimal.h"
+//#include "genrand.h"
+//#include "tdefs.h"
+//#include "tdef_functions.h"
+//#include "build_support.h"
+//#include "params.h"
+//#include "parallel.h"
+//#include "tables.h"
+//#include "release.h"
+//#include "scaling.h"
+//#include "load.h"
+//#include "error_msg.h"
+//#include "print.h"
+//#include "release.h"
+//#include "tpcds.idx.h"
+//#include "grammar_support.h" /* to get definition of file_ref_t */
+//#include "address.h" /* for access to resetCountyCount() */
+//#include "scd.h"
 
 using namespace duckdb;
 using namespace std;
@@ -115,10 +155,10 @@ typedef int64_t ds_key_t;
 #include "build_support.h"
 #include "params.h"
 
+#include "tdefs.h"
+#include "scaling.h"
 #include "address.h"
 #include "dist.h"
-#include "scaling.h"
-#include "tdefs.h"
 
 static void gen_tbl(int tabid, ds_key_t kFirstRow, ds_key_t kRowCount) {
 	int direct, bIsVerbose, nLifeFreq, nMultiplier, nChild;
@@ -152,13 +192,11 @@ static void gen_tbl(int tabid, ds_key_t kFirstRow, ds_key_t kRowCount) {
 		 * deterine output */
 		if (!pF->builder(NULL, i))
 			if (pF->loader[direct](NULL)) {
-				{
-					throw Exception("Table generation failed");
-				}
+				throw Exception("Table generation failed");
 			}
-
-		return;
 	}
+
+	return;
 }
 
 void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
@@ -197,6 +235,8 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 
 	tdef *pT;
 	table_func_t *pF;
+
+	ds_key_t kRowCount, kFirstRow;
 
 	for (int i = CALL_CENTER; (pT = getSimpleTdefsByNumber(i)); i++) {
 

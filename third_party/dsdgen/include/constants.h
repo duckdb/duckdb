@@ -148,9 +148,10 @@
 #define WP_IMAGE_MAX 7
 #define WP_AD_MIN 0
 #define WP_AD_MAX 4
-#define WP_MAX_REC_DURATION 1000 /* maximum time from start to end of record   \
-	                              */
-#define WP_IDLE_TIME_MAX 100     /* maximum time since last page access */
+#define WP_MAX_REC_DURATION                                                    \
+	1000                     /* maximum time from start to end of record       \
+	                          */
+#define WP_IDLE_TIME_MAX 100 /* maximum time since last page access */
 
 /***
 *** W_xxx Warehouse Defines

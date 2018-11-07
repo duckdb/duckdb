@@ -33,25 +33,26 @@
  * Contributors:
  * Gradient Systems
  */
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
-#include "constants.h"
+#include "porting.h"
+#include <stdio.h>
 #include "date.h"
 #include "decimal.h"
 #include "dist.h"
-#include "error_msg.h"
+#include "constants.h"
+#include "columns.h"
 #include "genrand.h"
-#include "porting.h"
-#include "r_params.h"
-#include "scaling.h"
-#include "scd.h"
-#include "sparse.h"
-#include "tables.h"
 #include "tdefs.h"
+#include "tables.h"
+#include "build_support.h"
 #include "tpcds.idx.h"
+#include "scaling.h"
 #include "w_web_sales.h"
-#include <stdio.h>
+#include "error_msg.h"
+#include "tdefs.h"
+#include "scd.h"
+#include "r_params.h"
+#include "sparse.h"
 
 static ds_key_t web_join(int col, ds_key_t join_key);
 

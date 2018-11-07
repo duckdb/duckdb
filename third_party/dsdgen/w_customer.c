@@ -33,18 +33,18 @@
  * Contributors:
  * Gradient Systems
  */
-#include "w_customer.h"
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
-#include "constants.h"
-#include "genrand.h"
-#include "nulls.h"
 #include "porting.h"
-#include "print.h"
-#include "tables.h"
-#include "tdefs.h"
 #include <stdio.h>
+#include "constants.h"
+#include "columns.h"
+#include "w_customer.h"
+#include "genrand.h"
+#include "build_support.h"
+#include "tables.h"
+#include "print.h"
+#include "nulls.h"
+#include "tdefs.h"
 
 struct W_CUSTOMER_TBL g_w_customer;
 /* extern tdef w_tdefs[]; */

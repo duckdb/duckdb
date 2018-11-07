@@ -79,9 +79,9 @@ char *strdup(const char *);
 #endif
 
 #ifdef WIN32
-#include <io.h>
-#include <winbase.h>
 #include <windows.h>
+#include <winbase.h>
+#include <io.h>
 #define random rand
 #define strncasecmp _strnicmp
 #define strcasecmp _stricmp

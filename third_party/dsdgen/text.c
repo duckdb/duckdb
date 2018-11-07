@@ -34,14 +34,14 @@
  * Gradient Systems
  */
 #include "config.h"
-#include "date.h"
-#include "decimal.h"
-#include "dist.h"
-#include "genrand.h"
 #include "porting.h"
-#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
+#include "decimal.h"
+#include "date.h"
+#include "genrand.h"
+#include "dist.h"
 
 /*
  * Routine: mk_sentence()

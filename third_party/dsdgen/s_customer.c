@@ -33,21 +33,21 @@
  * Contributors:
  * Gradient Systems
  */
-#include "s_customer.h"
-#include "address.h"
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
-#include "genrand.h"
-#include "parallel.h"
-#include "permute.h"
 #include "porting.h"
-#include "print.h"
-#include "scaling.h"
-#include "tables.h"
-#include "w_customer_address.h"
-#include "w_customer_demographics.h"
 #include <stdio.h>
+#include "genrand.h"
+#include "s_customer.h"
+#include "print.h"
+#include "columns.h"
+#include "build_support.h"
+#include "tables.h"
+#include "address.h"
+#include "scaling.h"
+#include "parallel.h"
+#include "w_customer_demographics.h"
+#include "w_customer_address.h"
+#include "permute.h"
 
 struct S_CUSTOMER_TBL g_s_customer;
 extern struct W_CUSTOMER_ADDRESS_TBL g_w_customer_address;

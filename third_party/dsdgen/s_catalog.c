@@ -33,16 +33,16 @@
  * Contributors:
  * Gradient Systems
  */
-#include "s_catalog.h"
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
-#include "genrand.h"
-#include "misc.h"
 #include "porting.h"
-#include "print.h"
-#include "tables.h"
 #include <stdio.h>
+#include "genrand.h"
+#include "s_catalog.h"
+#include "print.h"
+#include "columns.h"
+#include "build_support.h"
+#include "misc.h"
+#include "tables.h"
 
 struct S_CATALOG_TBL g_s_catalog;
 

@@ -33,21 +33,22 @@
  * Contributors:
  * Gradient Systems
  */
-#include "w_warehouse.h"
-#include "address.h"
-#include "build_support.h"
 #include "config.h"
+#include "porting.h"
+#include <stdio.h>
 #include "constants.h"
+#include "w_warehouse.h"
 #include "date.h"
 #include "decimal.h"
 #include "genrand.h"
+#include "build_support.h"
 #include "misc.h"
-#include "nulls.h"
-#include "porting.h"
 #include "print.h"
+#include "address.h"
+#include "constants.h"
 #include "tables.h"
+#include "nulls.h"
 #include "tdefs.h"
-#include <stdio.h>
 
 struct W_WAREHOUSE_TBL g_w_warehouse;
 

@@ -33,11 +33,11 @@
  * Contributors:
  * Gradient Systems
  */
-#include "release.h"
 #include "config.h"
 #include "porting.h"
-#include "r_params.h"
 #include <stdio.h>
+#include "release.h"
+#include "r_params.h"
 
 /*
  * Routine: release(char *param_name, char *msg)

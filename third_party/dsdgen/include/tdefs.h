@@ -40,10 +40,10 @@
 extern "C" {
 #endif
 
-#include "columns.h"
-#include "tables.h"
-#include "tdef_functions.h"
 #include <stdio.h>
+#include "tables.h"
+#include "columns.h"
+#include "tdef_functions.h"
 
 /*
  * Flag field definitions used in tdefs[]

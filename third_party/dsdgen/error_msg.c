@@ -33,11 +33,11 @@
  * Contributors:
  * Gradient Systems
  */
-#include "error_msg.h"
 #include "config.h"
-#include "grammar_support.h"
 #include "porting.h"
 #include <stdio.h>
+#include "error_msg.h"
+#include "grammar_support.h"
 static int *LN;
 static char *FN;
 

@@ -33,21 +33,21 @@
  * Contributors:
  * Gradient Systems
  */
-#include "w_inventory.h"
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
+#include "porting.h"
+#include <stdio.h>
+#include "genrand.h"
+#include "w_inventory.h"
+#include "print.h"
+#include "columns.h"
+#include "build_support.h"
+#include "tables.h"
+#include "scaling.h"
 #include "constants.h"
 #include "date.h"
-#include "genrand.h"
 #include "nulls.h"
-#include "porting.h"
-#include "print.h"
-#include "scaling.h"
-#include "scd.h"
-#include "tables.h"
 #include "tdefs.h"
-#include <stdio.h>
+#include "scd.h"
 
 struct W_INVENTORY_TBL g_w_inventory;
 

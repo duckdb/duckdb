@@ -33,18 +33,18 @@
  * Contributors:
  * Gradient Systems
  */
-#include "s_catalog_returns.h"
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
-#include "genrand.h"
-#include "parallel.h"
 #include "porting.h"
-#include "print.h"
+#include <stdio.h>
+#include "genrand.h"
+#include "s_catalog_returns.h"
 #include "s_catalog_order.h"
 #include "s_catalog_order_lineitem.h"
+#include "print.h"
+#include "columns.h"
+#include "build_support.h"
 #include "tables.h"
-#include <stdio.h>
+#include "parallel.h"
 
 struct S_CATALOG_RETURNS_TBL g_s_catalog_returns;
 extern struct S_CATALOG_ORDER_LINEITEM_TBL g_s_catalog_order_lineitem;

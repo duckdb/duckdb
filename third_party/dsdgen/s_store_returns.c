@@ -33,18 +33,19 @@
  * Contributors:
  * Gradient Systems
  */
-#include "s_store_returns.h"
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
-#include "genrand.h"
-#include "parallel.h"
 #include "porting.h"
-#include "print.h"
+#include <stdio.h>
+#include "genrand.h"
+#include "s_store_returns.h"
+#include "s_purchase.h"
 #include "s_pline.h"
 #include "s_purchase.h"
+#include "print.h"
+#include "columns.h"
+#include "build_support.h"
 #include "tables.h"
-#include <stdio.h>
+#include "parallel.h"
 
 struct S_STORE_RETURNS_TBL g_s_store_returns;
 extern struct S_PURCHASE_TBL g_s_purchase;

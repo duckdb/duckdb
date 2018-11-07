@@ -33,19 +33,19 @@
  * Contributors:
  * Gradient Systems
  */
-#include "w_customer_address.h"
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
+#include "porting.h"
+#include <stdio.h>
+#include "w_customer_address.h"
 #include "date.h"
 #include "decimal.h"
 #include "genrand.h"
-#include "nulls.h"
-#include "porting.h"
+#include "columns.h"
+#include "build_support.h"
 #include "print.h"
 #include "tables.h"
+#include "nulls.h"
 #include "tdefs.h"
-#include <stdio.h>
 
 struct W_CUSTOMER_ADDRESS_TBL g_w_customer_address;
 

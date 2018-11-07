@@ -33,22 +33,22 @@
  * Contributors:
  * Gradient Systems
  */
-#include "s_catalog_order.h"
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
-#include "genrand.h"
-#include "misc.h"
-#include "parallel.h"
-#include "params.h"
 #include "porting.h"
-#include "print.h"
+#include <stdio.h>
+#include "genrand.h"
+#include "s_catalog_order.h"
 #include "s_catalog_order_lineitem.h"
 #include "s_catalog_returns.h"
-#include "scaling.h"
+#include "print.h"
+#include "columns.h"
+#include "build_support.h"
 #include "tables.h"
+#include "misc.h"
+#include "scaling.h"
+#include "params.h"
 #include "w_web_sales.h"
-#include <stdio.h>
+#include "parallel.h"
 
 struct S_CATALOG_ORDER_TBL g_s_catalog_order;
 struct S_CATALOG_ORDER_LINEITEM_TBL g_s_catalog_order_lineitem;

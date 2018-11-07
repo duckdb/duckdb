@@ -35,8 +35,8 @@
  */
 #include "config.h"
 #include "porting.h"
-#include <assert.h>
 #include <stdio.h>
+#include <assert.h>
 #ifdef NCR
 #include <sys/types.h>
 #endif
@@ -46,21 +46,21 @@
 #ifndef USE_STDLIB_H
 #include <malloc.h>
 #endif
-#include "build_support.h"
-#include "columns.h"
+#include "w_call_center.h"
 #include "date.h"
 #include "decimal.h"
-#include "dist.h"
 #include "genrand.h"
-#include "misc.h"
-#include "nulls.h"
-#include "print.h"
 #include "r_params.h"
 #include "scaling.h"
-#include "scd.h"
+#include "columns.h"
 #include "tables.h"
+#include "misc.h"
+#include "dist.h"
+#include "build_support.h"
+#include "print.h"
 #include "tdefs.h"
-#include "w_call_center.h"
+#include "nulls.h"
+#include "scd.h"
 
 struct CALL_CENTER_TBL g_w_call_center;
 static struct CALL_CENTER_TBL g_OldValues;

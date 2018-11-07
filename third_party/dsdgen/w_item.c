@@ -42,16 +42,16 @@
 #ifndef WIN32
 #include <netinet/in.h>
 #endif
-#include "build_support.h"
-#include "columns.h"
 #include "genrand.h"
+#include "w_item.h"
+#include "print.h"
+#include "columns.h"
+#include "build_support.h"
+#include "tables.h"
 #include "misc.h"
 #include "nulls.h"
-#include "print.h"
-#include "scd.h"
-#include "tables.h"
 #include "tdefs.h"
-#include "w_item.h"
+#include "scd.h"
 
 /* extern tdef w_tdefs[]; */
 

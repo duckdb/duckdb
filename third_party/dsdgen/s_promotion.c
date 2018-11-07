@@ -33,24 +33,24 @@
  * Contributors:
  * Gradient Systems
  */
-#include "s_promotion.h"
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
-#include "date.h"
+#include "porting.h"
+#include <stdio.h>
 #include "genrand.h"
+#include "s_promotion.h"
+#include "w_promotion.h"
+#include "print.h"
+#include "columns.h"
+#include "build_support.h"
+#include "tables.h"
 #include "misc.h"
 #include "parallel.h"
+#include "date.h"
 #include "permute.h"
-#include "porting.h"
-#include "print.h"
-#include "r_params.h"
 #include "scaling.h"
-#include "scd.h"
-#include "tables.h"
 #include "tdef_functions.h"
-#include "w_promotion.h"
-#include <stdio.h>
+#include "scd.h"
+#include "r_params.h"
 
 extern struct W_PROMOTION_TBL g_w_promotion;
 

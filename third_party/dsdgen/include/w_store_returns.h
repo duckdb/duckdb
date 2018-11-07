@@ -35,8 +35,8 @@
  */
 #ifndef W_STORE_RETURNS_H
 #define W_STORE_RETURNS_H
-#include "decimal.h"
 #include "pricing.h"
+#include "decimal.h"
 
 #define SR_SAME_CUSTOMER 80
 

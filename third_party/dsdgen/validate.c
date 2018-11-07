@@ -34,15 +34,15 @@
  * Gradient Systems
  */
 #include "config.h"
-#include "constants.h"
-#include "parallel.h"
-#include "permute.h"
 #include "porting.h"
-#include "print.h"
-#include "r_params.h"
-#include "scd.h"
-#include "tdef_functions.h"
 #include "tdefs.h"
+#include "tdef_functions.h"
+#include "r_params.h"
+#include "parallel.h"
+#include "constants.h"
+#include "scd.h"
+#include "permute.h"
+#include "print.h"
 
 /* extern tdef w_tdefs[]; */
 

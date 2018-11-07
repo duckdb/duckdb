@@ -33,23 +33,23 @@
  * Contributors:
  * Gradient Systems
  */
-#include "s_item.h"
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
+#include "porting.h"
+#include <stdio.h>
 #include "genrand.h"
+#include "s_item.h"
+#include "w_item.h"
+#include "print.h"
+#include "columns.h"
+#include "build_support.h"
+#include "tables.h"
 #include "misc.h"
 #include "parallel.h"
 #include "permute.h"
-#include "porting.h"
-#include "print.h"
-#include "r_params.h"
 #include "scaling.h"
 #include "scd.h"
-#include "tables.h"
 #include "tdef_functions.h"
-#include "w_item.h"
-#include <stdio.h>
+#include "r_params.h"
 
 extern struct W_ITEM_TBL g_w_item;
 extern struct W_ITEM_TBL g_OldValues;

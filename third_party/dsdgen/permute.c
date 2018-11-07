@@ -38,8 +38,8 @@
 #ifndef USE_STDLIB_H
 #include <malloc.h>
 #endif
-#include "genrand.h"
 #include <stdio.h>
+#include "genrand.h"
 
 /*
  * Routine: MakePermutation(int nSize)

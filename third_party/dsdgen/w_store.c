@@ -42,19 +42,19 @@
 #ifndef WIN32
 #include <netinet/in.h>
 #endif
-#include "build_support.h"
 #include "constants.h"
+#include "w_store.h"
 #include "date.h"
 #include "decimal.h"
 #include "genrand.h"
+#include "build_support.h"
 #include "misc.h"
-#include "nulls.h"
 #include "print.h"
-#include "scaling.h"
-#include "scd.h"
 #include "tables.h"
+#include "scaling.h"
+#include "nulls.h"
 #include "tdefs.h"
-#include "w_store.h"
+#include "scd.h"
 
 struct W_STORE_TBL g_w_store;
 static struct W_STORE_TBL g_OldValues;

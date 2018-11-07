@@ -50,7 +50,7 @@ option_t options[] = {
      NULL, "|"},
     {"DIR", OPT_STR, 2, "generate tables in directory <s>", NULL, "."},
     {"DISTRIBUTIONS", OPT_STR | OPT_ADV, 3, "read distributions from file <s>",
-     NULL, "./third_party/dsdgen/tpcds.idx"},
+     NULL, "third_party/dsdgen/tpcds.idx"},
     {"FORCE", OPT_FLG | OPT_ADV, 4, "over-write data files without prompting",
      NULL, "N"},
     {"HELP", OPT_INT, 5, "display this message", usage, "0"},

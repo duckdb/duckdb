@@ -33,20 +33,20 @@
  * Contributors:
  * Gradient Systems
  */
-#include "s_web_site.h"
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
-#include "decimal.h"
-#include "genrand.h"
-#include "permute.h"
 #include "porting.h"
-#include "print.h"
-#include "scaling.h"
-#include "scd.h"
-#include "tables.h"
-#include "w_web_site.h"
 #include <stdio.h>
+#include "genrand.h"
+#include "s_web_site.h"
+#include "w_web_site.h"
+#include "print.h"
+#include "columns.h"
+#include "build_support.h"
+#include "tables.h"
+#include "scaling.h"
+#include "decimal.h"
+#include "permute.h"
+#include "scd.h"
 
 struct W_WEB_SITE_TBL g_w_web_site;
 

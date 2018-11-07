@@ -45,15 +45,15 @@
 #ifndef USE_STDLIB_H
 #include <malloc.h>
 #endif
-#include "build_support.h"
-#include "columns.h"
 #include "genrand.h"
-#include "nulls.h"
-#include "print.h"
-#include "sparse.h"
-#include "tables.h"
-#include "tdefs.h"
 #include "w_household_demographics.h"
+#include "print.h"
+#include "columns.h"
+#include "build_support.h"
+#include "tables.h"
+#include "nulls.h"
+#include "tdefs.h"
+#include "sparse.h"
 
 struct W_HOUSEHOLD_DEMOGRAPHICS_TBL g_w_household_demographics;
 

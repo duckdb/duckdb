@@ -1,6 +1,8 @@
 #include "skip_days.h"
-#include "constants.h"
 #include "date.h"
+#include "constants.h"
+#include "scaling.h"
+#include "parallel.h"
 
 ds_key_t skipDays(int nTable, ds_key_t *pRemainder) {
 	static int bInit = 0;
@@ -19,7 +21,7 @@ ds_key_t skipDays(int nTable, ds_key_t *pRemainder) {
 	*pRemainder = dateScaling(nTable, jDate) + index;
 
 	// now check to see if we need to move to the
-	// the next peice of a parallel build
+	// the next piece of a parallel build
 	// move forward one day at a time
 	split_work(nTable, &kFirstRow, &kRowCount);
 	while (index < kFirstRow) {

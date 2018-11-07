@@ -33,30 +33,29 @@
  * Contributors:
  * Gradient Systems
  */
-#include "w_store_sales.h"
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
-#include "constants.h"
-#include "decimal.h"
-#include "genrand.h"
-#include "nulls.h"
-#include "parallel.h"
-#include "permute.h"
 #include "porting.h"
-#include "print.h"
-#include "scaling.h"
-#include "scd.h"
-#include "skip_days.h"
-#include "tables.h"
-#include "tdefs.h"
+#include "decimal.h"
+#include "w_store_sales.h"
 #include "w_store_returns.h"
-
+#include "genrand.h"
+#include "columns.h"
+#include "build_support.h"
+#include "tables.h"
+#include "constants.h"
+#include "print.h"
+#include "nulls.h"
+#include "tdefs.h"
+#include "scaling.h"
+#include "permute.h"
+#include "scd.h"
+#include "parallel.h"
 #ifdef JMS
 extern rng_t Streams[];
 #endif
 
 struct W_STORE_SALES_TBL g_w_store_sales;
+ds_key_t skipDays(int nTable, ds_key_t *pRemainder);
 static int *pItemPermutation, nItemCount, nItemIndex;
 static ds_key_t jDate, kNewDateIndex;
 

@@ -33,24 +33,28 @@
  * Contributors:
  * Gradient Systems
  */
-#include "scaling.h"
-#include "columns.h"
 #include "config.h"
-#include "constants.h"
-#include "dist.h"
-#include "error_msg.h"
-#include "genrand.h"
-#include "parallel.h"
 #include "porting.h"
-#include "print.h"
-#include "r_params.h"
-#include "scd.h"
-#include "tdef_functions.h"
-#include "tdefs.h"
-#include "tpcds.idx.h"
-#include "w_inventory.h"
+#include <stdio.h>
 #include <assert.h>
 #include <stdio.h>
+#include "config.h"
+#include "porting.h"
+#include "dist.h"
+#include "constants.h"
+#include "genrand.h"
+#include "columns.h"
+#include "tdefs.h"
+#include "error_msg.h"
+#include "r_params.h"
+#include "tdefs.h"
+#include "tdef_functions.h"
+#include "w_inventory.h"
+#include "scaling.h"
+#include "tpcds.idx.h"
+#include "print.h"
+#include "parallel.h"
+#include "scd.h"
 
 static struct SCALING_T {
 	ds_key_t kBaseRowcount;

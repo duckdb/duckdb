@@ -33,19 +33,19 @@
  * Contributors:
  * Gradient Systems
  */
-#include "s_inventory.h"
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
-#include "genrand.h"
-#include "parallel.h"
 #include "porting.h"
+#include <stdio.h>
+#include "genrand.h"
+#include "s_inventory.h"
 #include "print.h"
+#include "columns.h"
+#include "build_support.h"
+#include "tables.h"
 #include "r_params.h"
+#include "parallel.h"
 #include "scaling.h"
 #include "scd.h"
-#include "tables.h"
-#include <stdio.h>
 
 struct S_INVENTORY_TBL g_s_inventory;
 

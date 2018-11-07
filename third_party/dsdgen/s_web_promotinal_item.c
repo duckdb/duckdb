@@ -33,16 +33,16 @@
  * Contributors:
  * Gradient Systems
  */
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
-#include "genrand.h"
-#include "parallel.h"
 #include "porting.h"
-#include "print.h"
-#include "s_web_promotional_item.h"
-#include "tables.h"
 #include <stdio.h>
+#include "genrand.h"
+#include "s_web_promotional_item.h"
+#include "print.h"
+#include "columns.h"
+#include "build_support.h"
+#include "tables.h"
+#include "parallel.h"
 
 struct S_WEB_PROMOTIONAL_ITEM_TBL g_s_web_promotional_item;
 

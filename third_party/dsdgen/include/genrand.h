@@ -35,10 +35,10 @@
  */
 #ifndef GENRAND_H
 #define GENRAND_H
-#include "address.h"
-#include "date.h"
 #include "decimal.h"
+#include "date.h"
 #include "dist.h"
+#include "address.h"
 #define JMS 1
 
 typedef struct RNG_T {

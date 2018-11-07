@@ -40,10 +40,10 @@
 extern "C" {
 #endif
 
-#include "columns.h"
-#include "date.h"
 #include "decimal.h"
+#include "date.h"
 #include "dist.h"
+#include "columns.h"
 #include "pricing.h"
 
 void bitmap_to_dist(void *pDest, char *distname, ds_key_t *modulus, int vset,

@@ -33,25 +33,25 @@
  * Contributors:
  * Gradient Systems
  */
-#include "s_call_center.h"
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
-#include "constants.h"
-#include "date.h"
-#include "decimal.h"
-#include "dist.h"
-#include "genrand.h"
-#include "permute.h"
 #include "porting.h"
-#include "print.h"
-#include "r_params.h"
-#include "scaling.h"
-#include "scd.h"
-#include "tables.h"
-#include "w_call_center.h"
 #include <assert.h>
 #include <stdio.h>
+#include "s_call_center.h"
+#include "genrand.h"
+#include "r_params.h"
+#include "scaling.h"
+#include "constants.h"
+#include "date.h"
+#include "tables.h"
+#include "dist.h"
+#include "build_support.h"
+#include "columns.h"
+#include "print.h"
+#include "w_call_center.h"
+#include "decimal.h"
+#include "permute.h"
+#include "scd.h"
 
 extern struct CALL_CENTER_TBL g_w_call_center;
 

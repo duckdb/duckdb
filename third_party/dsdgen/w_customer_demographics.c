@@ -33,19 +33,19 @@
  * Contributors:
  * Gradient Systems
  */
-#include "w_customer_demographics.h"
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
-#include "constants.h"
-#include "genrand.h"
-#include "nulls.h"
 #include "porting.h"
-#include "print.h"
-#include "sparse.h"
-#include "tables.h"
-#include "tdefs.h"
 #include <stdio.h>
+#include "w_customer_demographics.h"
+#include "genrand.h"
+#include "columns.h"
+#include "build_support.h"
+#include "constants.h"
+#include "tables.h"
+#include "print.h"
+#include "nulls.h"
+#include "tdefs.h"
+#include "sparse.h"
 
 struct W_CUSTOMER_DEMOGRAPHICS_TBL g_w_customer_demographics;
 

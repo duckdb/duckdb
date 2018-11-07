@@ -41,16 +41,16 @@
 #else
 #include <unistd.h>
 #endif
-#include "build_support.h"
-#include "constants.h"
+#include "tables.h"
+#include "print.h"
+#include "tdef_functions.h"
+#include "r_params.h"
 #include "date.h"
 #include "decimal.h"
-#include "nulls.h"
-#include "print.h"
-#include "r_params.h"
-#include "tables.h"
-#include "tdef_functions.h"
 #include "tdefs.h"
+#include "nulls.h"
+#include "constants.h"
+#include "build_support.h"
 
 static FILE *fpOutfile = NULL;
 static FILE *fpDeleteFile;

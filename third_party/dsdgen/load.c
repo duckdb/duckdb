@@ -39,9 +39,9 @@
 
 #ifdef SQLSERVER
 // ODBC headers
-#include <odbcss.h>
 #include <sql.h>
 #include <sqlext.h>
+#include <odbcss.h>
 SQLHENV henv;
 #endif
 

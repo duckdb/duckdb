@@ -34,12 +34,12 @@
  * Gradient Systems
  */
 #include "config.h"
-#include "genrand.h"
 #include "porting.h"
+#include <stdio.h>
 #include "r_params.h"
 #include "scaling.h"
 #include "tdefs.h"
-#include <stdio.h>
+#include "genrand.h"
 
 /*
  * Routine: split_work(int tnum, worker_t *w)

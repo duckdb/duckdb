@@ -33,17 +33,17 @@
  * Contributors:
  * Gradient Systems
  */
-#include "w_income_band.h"
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
-#include "genrand.h"
-#include "nulls.h"
 #include "porting.h"
-#include "print.h"
-#include "tables.h"
-#include "tdefs.h"
 #include <stdio.h>
+#include "genrand.h"
+#include "w_income_band.h"
+#include "print.h"
+#include "columns.h"
+#include "build_support.h"
+#include "tables.h"
+#include "nulls.h"
+#include "tdefs.h"
 
 struct W_INCOME_BAND_TBL g_w_income_band;
 

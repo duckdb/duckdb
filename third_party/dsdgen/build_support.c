@@ -39,19 +39,20 @@
 #ifndef WIN32
 #include <netinet/in.h>
 #endif
-#include "StringBuffer.h"
-#include "build_support.h"
-#include "columns.h"
-#include "constants.h"
-#include "decimal.h"
-#include "dist.h"
-#include "error_msg.h"
-#include "genrand.h"
-#include "r_params.h"
-#include "scaling.h"
-#include "tables.h"
-#include "tdefs.h"
 #include <math.h>
+#include "decimal.h"
+#include "constants.h"
+#include "dist.h"
+#include "r_params.h"
+#include "genrand.h"
+#include "tdefs.h"
+#include "tables.h"
+#include "build_support.h"
+#include "genrand.h"
+#include "columns.h"
+#include "StringBuffer.h"
+#include "error_msg.h"
+#include "scaling.h"
 
 /*
  * Routine: hierarchy_item

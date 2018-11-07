@@ -33,17 +33,17 @@
  * Contributors:
  * Gradient Systems
  */
-#include "s_market.h"
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
+#include "porting.h"
+#include <stdio.h>
 #include "genrand.h"
+#include "s_market.h"
+#include "print.h"
+#include "columns.h"
+#include "build_support.h"
+#include "tables.h"
 #include "misc.h"
 #include "parallel.h"
-#include "porting.h"
-#include "print.h"
-#include "tables.h"
-#include <stdio.h>
 
 struct S_MARKET_TBL g_s_market;
 

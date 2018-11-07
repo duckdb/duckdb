@@ -33,17 +33,17 @@
  * Contributors:
  * Gradient Systems
  */
+#include "config.h"
+#include "porting.h"
+#include <stdio.h>
+#include "genrand.h"
 #include "s_class.h"
+#include "print.h"
 #include "build_support.h"
 #include "columns.h"
-#include "config.h"
-#include "genrand.h"
+#include "tables.h"
 #include "misc.h"
 #include "parallel.h"
-#include "porting.h"
-#include "print.h"
-#include "tables.h"
-#include <stdio.h>
 
 struct S_CLASS_TBL g_s_class;
 

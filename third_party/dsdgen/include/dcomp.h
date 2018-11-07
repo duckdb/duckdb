@@ -37,9 +37,9 @@
 #define DCOMP_H
 
 #include "config.h"
-#include "dist.h"
-#include "grammar.h"
 #include "porting.h"
+#include "grammar.h"
+#include "dist.h"
 
 /*
  * query template grammar definition

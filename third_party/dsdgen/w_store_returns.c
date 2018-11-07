@@ -33,19 +33,19 @@
  * Contributors:
  * Gradient Systems
  */
-#include "w_store_returns.h"
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
-#include "genrand.h"
-#include "nulls.h"
 #include "porting.h"
-#include "pricing.h"
-#include "print.h"
-#include "tables.h"
-#include "tdefs.h"
-#include "w_store_sales.h"
 #include <stdio.h>
+#include "w_store_returns.h"
+#include "w_store_sales.h"
+#include "tables.h"
+#include "print.h"
+#include "pricing.h"
+#include "columns.h"
+#include "genrand.h"
+#include "build_support.h"
+#include "nulls.h"
+#include "tdefs.h"
 
 struct W_STORE_RETURNS_TBL g_w_store_returns;
 extern struct W_STORE_SALES_TBL g_w_store_sales;

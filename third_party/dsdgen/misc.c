@@ -36,11 +36,11 @@
 
 #include "config.h"
 #include "porting.h"
-#include <ctype.h>
-#include <errno.h>
-#include <math.h>
 #include <stdio.h>
 #include <time.h>
+#include <errno.h>
+#include <ctype.h>
+#include <math.h>
 #ifndef USE_STDLIB_H
 #include <malloc.h>
 #endif
@@ -48,15 +48,15 @@
 #ifdef AIX
 #include <sys/mode.h>
 #endif /* AIX */
+#include <sys/types.h>
+#include <sys/stat.h>
 #include "date.h"
 #include "decimal.h"
 #include "dist.h"
-#include "genrand.h"
 #include "misc.h"
-#include "r_params.h"
 #include "tdefs.h"
-#include <sys/stat.h>
-#include <sys/types.h>
+#include "r_params.h"
+#include "genrand.h"
 
 static char alpha_num[65] =
     "0123456789abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ,";

@@ -40,9 +40,9 @@
 #ifndef USE_STDLIB_H
 #include <malloc.h>
 #endif
+#include <stdio.h>
 #include "decimal.h"
 #include "mathops.h"
-#include <stdio.h>
 
 /*
  * Routine: set_precision(decimal_t *dest, int size, int precision)

@@ -35,8 +35,8 @@
  */
 #include "config.h"
 #include "porting.h"
-#include <assert.h>
 #include <stdio.h>
+#include <assert.h>
 #ifndef USE_STDLIB_H
 #include <malloc.h>
 #endif

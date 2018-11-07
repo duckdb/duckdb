@@ -36,8 +36,8 @@
 #ifndef R_DECIMAL_H
 #define R_DECIMAL_H
 #include "config.h"
-#include "mathops.h"
 #include "porting.h"
+#include "mathops.h"
 #include <stdio.h>
 
 /*

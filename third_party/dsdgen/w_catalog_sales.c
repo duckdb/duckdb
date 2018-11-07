@@ -33,29 +33,29 @@
  * Contributors:
  * Gradient Systems
  */
-#include "w_catalog_sales.h"
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
-#include "constants.h"
-#include "date.h"
-#include "decimal.h"
-#include "genrand.h"
-#include "nulls.h"
-#include "parallel.h"
-#include "params.h"
-#include "permute.h"
 #include "porting.h"
-#include "print.h"
-#include "scaling.h"
-#include "scd.h"
-#include "skip_days.h"
-#include "tables.h"
-#include "tdefs.h"
-#include "w_catalog_returns.h"
 #include <stdio.h>
+#include "w_catalog_sales.h"
+#include "w_catalog_returns.h"
+#include "decimal.h"
+#include "date.h"
+#include "genrand.h"
+#include "columns.h"
+#include "tables.h"
+#include "constants.h"
+#include "build_support.h"
+#include "print.h"
+#include "nulls.h"
+#include "tdefs.h"
+#include "scaling.h"
+#include "permute.h"
+#include "params.h"
+#include "parallel.h"
+#include "scd.h"
 
 struct W_CATALOG_SALES_TBL g_w_catalog_sales;
+ds_key_t skipDays(int nTable, ds_key_t *pRemainder);
 
 static ds_key_t kNewDateIndex = 0;
 static ds_key_t jDate;

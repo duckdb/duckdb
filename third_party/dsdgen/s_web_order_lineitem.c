@@ -33,23 +33,23 @@
  * Contributors:
  * Gradient Systems
  */
-#include "s_web_order_lineitem.h"
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
-#include "decimal.h"
+#include "porting.h"
+#include <stdio.h>
 #include "genrand.h"
+#include "s_web_order_lineitem.h"
+#include "s_web_order.h"
+#include "print.h"
+#include "columns.h"
+#include "build_support.h"
+#include "tables.h"
+#include "decimal.h"
+#include "w_web_sales.h"
+#include "pricing.h"
 #include "parallel.h"
 #include "permute.h"
-#include "porting.h"
-#include "pricing.h"
-#include "print.h"
-#include "s_web_order.h"
 #include "scaling.h"
 #include "scd.h"
-#include "tables.h"
-#include "w_web_sales.h"
-#include <stdio.h>
 
 struct S_WEB_ORDER_LINEITEM_TBL g_s_web_order_lineitem;
 extern struct S_WEB_ORDER_TBL g_s_web_order;

@@ -33,20 +33,20 @@
  * Contributors:
  * Gradient Systems
  */
-#include "s_catalog_page.h"
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
-#include "genrand.h"
-#include "parallel.h"
 #include "porting.h"
+#include <stdio.h>
+#include "genrand.h"
+#include "s_catalog_page.h"
+#include "w_catalog_page.h"
 #include "print.h"
-#include "scaling.h"
+#include "columns.h"
+#include "build_support.h"
 #include "tables.h"
+#include "scaling.h"
 #include "tdef_functions.h"
 #include "validate.h"
-#include "w_catalog_page.h"
-#include <stdio.h>
+#include "parallel.h"
 
 struct CATALOG_PAGE_TBL g_w_catalog_page;
 

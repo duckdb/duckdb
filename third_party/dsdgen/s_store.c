@@ -33,20 +33,21 @@
  * Contributors:
  * Gradient Systems
  */
-#include "s_store.h"
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
-#include "genrand.h"
-#include "parallel.h"
-#include "permute.h"
 #include "porting.h"
+#include <stdio.h>
+#include "genrand.h"
+#include "s_store.h"
+#include "w_store.h"
 #include "print.h"
-#include "scaling.h"
-#include "scd.h"
+#include "columns.h"
+#include "build_support.h"
 #include "tables.h"
 #include "w_store.h"
-#include <stdio.h>
+#include "parallel.h"
+#include "permute.h"
+#include "scaling.h"
+#include "scd.h"
 
 extern struct W_STORE_TBL g_w_store;
 

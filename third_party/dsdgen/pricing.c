@@ -33,18 +33,18 @@
  * Contributors:
  * Gradient Systems
  */
-#include "pricing.h"
-#include "columns.h"
 #include "config.h"
-#include "constants.h"
-#include "decimal.h"
-#include "dist.h"
-#include "error_msg.h"
-#include "genrand.h"
 #include "porting.h"
-#include "s_pline.h"
-#include "w_web_sales.h"
 #include <stdio.h>
+#include "decimal.h"
+#include "pricing.h"
+#include "constants.h"
+#include "columns.h"
+#include "error_msg.h"
+#include "dist.h"
+#include "genrand.h"
+#include "w_web_sales.h"
+#include "s_pline.h"
 
 #define MAX_LIMIT 12
 static ds_limits_t aPriceLimits[MAX_LIMIT] = {

@@ -33,19 +33,19 @@
  * Contributors:
  * Gradient Systems
  */
-#include "s_zip_to_gmt.h"
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
-#include "genrand.h"
-#include "parallel.h"
 #include "porting.h"
+#include <stdio.h>
+#include "genrand.h"
+#include "s_zip_to_gmt.h"
 #include "print.h"
-#include "r_params.h"
+#include "columns.h"
+#include "build_support.h"
 #include "tables.h"
 #include "tdef_functions.h"
+#include "r_params.h"
+#include "parallel.h"
 #include "tdefs.h"
-#include <stdio.h>
 
 struct S_ZIP_GMT_TBL g_s_zip;
 

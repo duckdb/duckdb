@@ -33,22 +33,22 @@
  * Contributors:
  * Gradient Systems
  */
-#include "w_web_returns.h"
-#include "build_support.h"
 #include "config.h"
+#include "porting.h"
+#include <stdio.h>
+#include "pricing.h"
+#include "w_web_returns.h"
+#include "w_web_sales.h"
 #include "date.h"
 #include "decimal.h"
-#include "error_msg.h"
 #include "genrand.h"
+#include "build_support.h"
 #include "misc.h"
-#include "nulls.h"
-#include "porting.h"
-#include "pricing.h"
 #include "print.h"
+#include "error_msg.h"
 #include "tables.h"
+#include "nulls.h"
 #include "tdefs.h"
-#include "w_web_sales.h"
-#include <stdio.h>
 
 struct W_WEB_RETURNS_TBL g_w_web_returns;
 extern struct W_WEB_SALES_TBL g_w_web_sales;

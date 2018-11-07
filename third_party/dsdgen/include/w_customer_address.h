@@ -35,8 +35,8 @@
  */
 #ifndef W_CUSTOMER_ADDRESS_H
 #define W_CUSTOMER_ADDRESS_H
-#include "address.h"
 #include "constants.h"
+#include "address.h"
 
 /*
  * CUSTOMER_ADDRESS table structure

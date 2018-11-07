@@ -35,7 +35,13 @@
  */
 #ifndef PARALLEL_H
 #define PARALLEL_H
+#ifdef __cplusplus
+extern "C" {
+#endif
 int split_work(int nTable, ds_key_t *pkFirstRow, ds_key_t *pkRowCount);
 int row_stop(int tbl);
 int row_skip(int tbl, ds_key_t count);
+#ifdef __cplusplus
+}
+#endif
 #endif /* PARALLEL_H */

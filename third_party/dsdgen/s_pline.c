@@ -33,21 +33,21 @@
  * Contributors:
  * Gradient Systems
  */
-#include "s_pline.h"
-#include "build_support.h"
-#include "columns.h"
 #include "config.h"
+#include "porting.h"
+#include <stdio.h>
 #include "genrand.h"
+#include "s_pline.h"
+#include "s_purchase.h"
+#include "print.h"
+#include "columns.h"
+#include "build_support.h"
+#include "tables.h"
 #include "misc.h"
 #include "parallel.h"
-#include "permute.h"
-#include "porting.h"
-#include "print.h"
-#include "s_purchase.h"
 #include "scaling.h"
+#include "permute.h"
 #include "scd.h"
-#include "tables.h"
-#include <stdio.h>
 
 struct S_PURCHASE_LINEITEM_TBL g_s_pline;
 extern struct S_PURCHASE_TBL g_s_purchase;

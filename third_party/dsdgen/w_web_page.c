@@ -42,19 +42,20 @@
 #ifndef WIN32
 #include <netinet/in.h>
 #endif
-#include "build_support.h"
 #include "constants.h"
+#include "w_web_page.h"
 #include "date.h"
 #include "decimal.h"
 #include "genrand.h"
+#include "build_support.h"
 #include "misc.h"
-#include "nulls.h"
 #include "print.h"
 #include "scaling.h"
-#include "scd.h"
+#include "constants.h"
 #include "tables.h"
+#include "nulls.h"
 #include "tdefs.h"
-#include "w_web_page.h"
+#include "scd.h"
 
 struct W_WEB_PAGE_TBL g_w_web_page;
 static struct W_WEB_PAGE_TBL g_OldValues;

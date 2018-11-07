@@ -42,19 +42,19 @@
 #ifndef WIN32
 #include <netinet/in.h>
 #endif
-#include "address.h"
-#include "build_support.h"
-#include "columns.h"
 #include "constants.h"
+#include "address.h"
+#include "w_web_site.h"
 #include "genrand.h"
-#include "misc.h"
-#include "nulls.h"
+#include "tables.h"
+#include "columns.h"
 #include "print.h"
 #include "scaling.h"
-#include "scd.h"
-#include "tables.h"
+#include "build_support.h"
+#include "misc.h"
+#include "nulls.h"
 #include "tdefs.h"
-#include "w_web_site.h"
+#include "scd.h"
 
 struct W_WEB_SITE_TBL g_w_web_site;
 static struct W_WEB_SITE_TBL g_OldValues;
