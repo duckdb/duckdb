@@ -44,7 +44,6 @@
 #include "dist.h"
 #include "genrand.h"
 #include "w_web_sales.h"
-#include "s_pline.h"
 
 #define MAX_LIMIT 12
 static ds_limits_t aPriceLimits[MAX_LIMIT] = {

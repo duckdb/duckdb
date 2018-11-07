@@ -42,13 +42,10 @@
 #include "tdefs.h"
 #include "scaling.h"
 #include "w_tdefs.h"
-#include "s_tdefs.h"
 #include "tdef_functions.h"
 #include "r_params.h"
 
 extern tdef w_tdefs[];
-extern tdef s_tdefs[];
-extern table_func_t s_tdef_funcs[];
 extern table_func_t w_tdef_funcs[];
 
 /*
@@ -141,31 +138,12 @@ getTdefsByNumber(int nTable)
 }
 */
 tdef *getSimpleTdefsByNumber(nTable) {
-	if (nTable >= S_BRAND)
-		return (&s_tdefs[nTable - S_BRAND]);
+
 	return (&w_tdefs[nTable]);
 }
 
 tdef *getTdefsByNumber(int nTable) {
-	if (is_set("UPDATE") && is_set("VALIDATE")) {
-		if (s_tdefs[nTable].flags & FL_PASSTHRU) {
-			switch (nTable + S_BRAND) {
-			case S_CATALOG_PAGE:
-				nTable = CATALOG_PAGE;
-				break;
-			case S_CUSTOMER_ADDRESS:
-				nTable = CUSTOMER_ADDRESS;
-				break;
-			case S_PROMOTION:
-				nTable = PROMOTION;
-				break;
-			}
-			return (&w_tdefs[nTable]);
-		} else
-			return (&s_tdefs[nTable]);
-	}
-
-	return (getSimpleTdefsByNumber(nTable));
+	return getSimpleTdefsByNumber(nTable);
 }
 
 /*
