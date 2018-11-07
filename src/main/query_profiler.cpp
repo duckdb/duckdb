@@ -89,7 +89,11 @@ std::string QueryProfiler::ToString() const {
 	result += "<<Timing>>\n";
 	result += "Total Time: " + std::to_string(main_query.Elapsed()) + "s\n";
 	result += "<<Operator Tree>>\n";
-	result += RenderTree(*root);
+	if (!root) {
+		result += "<<ERROR RENDERING ROOT>";
+	} else {
+		result += RenderTree(*root);
+	}
 	return result;
 }
 
