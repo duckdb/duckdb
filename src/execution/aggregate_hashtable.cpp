@@ -76,7 +76,8 @@ void SuperLargeHashTable::Resize(size_t size) {
 	}
 }
 
-void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bool resize) {
+void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
+                                   bool resize) {
 	if (groups.size() == 0) {
 		return;
 	}

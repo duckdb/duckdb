@@ -123,8 +123,10 @@ void VectorOperations::Copy(Vector &source, Vector &target, size_t offset) {
 	}
 	assert(offset <= source.count);
 	target.count = source.count - offset;
-	VectorOperations::Exec(source, [&](size_t i, size_t k) {
-		target.nullmask[k - offset] = source.nullmask[i];
-	}, offset);
+	VectorOperations::Exec(source,
+	                       [&](size_t i, size_t k) {
+		                       target.nullmask[k - offset] = source.nullmask[i];
+	                       },
+	                       offset);
 	VectorOperations::Copy(source, target.data, offset, target.count);
 }

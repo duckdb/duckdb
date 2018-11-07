@@ -99,11 +99,11 @@ TEST_CASE("Test ORDER BY with large table", "[order]") {
 	DuckDBConnection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER);"));
-	for(size_t i = 0; i < 10000; i++) {
+	for (size_t i = 0; i < 10000; i++) {
 		con.Query("INSERT INTO test VALUES (" + to_string(10000 - i) + ")");
 	}
 	result = con.Query("SELECT * FROM test ORDER BY a");
-	for(size_t i = 0; i < 10000; i++) {
+	for (size_t i = 0; i < 10000; i++) {
 		REQUIRE(result->GetValue<int>(0, i) == i + 1);
 	}
 }
