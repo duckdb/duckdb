@@ -291,29 +291,55 @@ int pr_w_call_center(void *row) {
 	return (0);
 }
 
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int ld_w_call_center(void *row) {
-	assert(row == NULL);
+#include "append_info.h"
 
+int ld_w_call_center(void *info) {
 	struct CALL_CENTER_TBL *r;
 	char szTemp[128];
 	r = &g_w_call_center;
 
-	fprintf(stderr, "cc %lld\n", r->cc_call_center_sk);
+	append_row(info);
 
+	append_key(info, r->cc_call_center_sk);
+	append_varchar(info, r->cc_call_center_id);
+	append_date(info, r->cc_rec_start_date_id);
+	append_date(info, r->cc_rec_end_date_id);
+	append_key(info, r->cc_closed_date_id);
+	append_key(info, r->cc_open_date_id);
+	append_varchar(info, r->cc_name);
+	append_varchar(info, &r->cc_class[0]);
+	append_integer(info, r->cc_employees);
+	append_integer(info, r->cc_sq_ft);
+	append_varchar(info, r->cc_hours);
+	append_varchar(info, &r->cc_manager[0]);
+	append_integer(info, r->cc_market_id);
+	append_varchar(info, &r->cc_market_class[0]);
+	append_varchar(info, &r->cc_market_desc[0]);
+	append_varchar(info, &r->cc_market_manager[0]);
+	append_integer(info, r->cc_division_id);
+	append_varchar(info, &r->cc_division_name[0]);
+	append_integer(info, r->cc_company);
+	append_varchar(info, &r->cc_company_name[0]);
+	append_integer(info, r->cc_address.street_num);
 
-	return (0);
+	if (r->cc_address.street_name2) {
+		sprintf(szTemp, "%s %s", r->cc_address.street_name1,
+		        r->cc_address.street_name2);
+		append_varchar(info, szTemp);
+	} else {
+		append_varchar(info, r->cc_address.street_name1);
+	}
+
+	append_varchar(info, r->cc_address.street_type);
+	append_varchar(info, &r->cc_address.suite_num[0]);
+	append_varchar(info, r->cc_address.city);
+	append_varchar(info, r->cc_address.county);
+	append_varchar(info, r->cc_address.state);
+	sprintf(szTemp, "%05d", r->cc_address.zip);
+	append_varchar(info, szTemp);
+	append_varchar(info, &r->cc_address.country[0]);
+	append_integer(info, r->cc_address.gmt_offset);
+	append_decimal(info, &r->cc_tax_percentage);
+
+	return 0;
 }

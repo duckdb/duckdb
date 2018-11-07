@@ -33,5 +33,19 @@
  * Contributors:
  * Gradient Systems
  */
+
+#ifndef R_NULLCHECK_H
+#define R_NULLCHECK_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int nullCheck(int nColumn);
 void nullSet(ds_key_t *pDest, int nStream);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

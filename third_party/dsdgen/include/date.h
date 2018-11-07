@@ -35,6 +35,11 @@
  */
 #ifndef R_DATE_H
 #define R_DATE_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "mathops.h"
 
 typedef struct DATE_T {
@@ -73,5 +78,9 @@ int getDateWeightFromJulian(int jDay, int nDistribution);
 #define OP_SAME_LQ 0x04 /* get date for same offset in the prior quarter */
 
 extern char *weekday_names[];
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* R_DATE_H */

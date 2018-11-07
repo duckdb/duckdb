@@ -40,7 +40,6 @@
 extern "C" {
 #endif
 
-
 #include "decimal.h"
 #include "date.h"
 #include "dist.h"
@@ -92,6 +91,5 @@ void resetSeeds(int nTable);
 #ifdef __cplusplus
 }
 #endif
-
 
 #endif

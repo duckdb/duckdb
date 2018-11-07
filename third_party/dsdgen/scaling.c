@@ -318,8 +318,8 @@ ds_key_t get_rowcount(int table) {
 
 		} /* for each table */
 
-//		if (nBadScale && !is_set("QUIET"))
-//			ReportErrorNoLine(nBadScale, NULL, 0);
+		//		if (nBadScale && !is_set("QUIET"))
+		//			ReportErrorNoLine(nBadScale, NULL, 0);
 
 		bScaleSet = 1;
 	}
