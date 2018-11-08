@@ -39,6 +39,9 @@ UniqueIndex::AddEntry(Transaction &transaction, Tuple tuple,
 			// node is potentially equivalent
 			// check the base table for the actual version
 			auto chunk = table.GetChunk(entry->row_identifier);
+			if (!chunk) {
+				throw Exception("Failed to fetch chunk");
+			}
 			auto offset = entry->row_identifier - chunk->start;
 			// whenever we call the AddEntry method we need a lock
 			// on the last StorageChunk to guarantee that
