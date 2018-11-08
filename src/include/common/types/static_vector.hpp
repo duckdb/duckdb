@@ -16,11 +16,13 @@
 
 namespace duckdb {
 
-//! The StaticVector is a vector that stores its elements on the heap
+//! The StaticVector is an alias for creating a vector of a specific type
 template <class T> class StaticVector : public Vector {
   public:
 	StaticVector() {
-		data = (char *)elements;
+		owned_data =
+		    std::unique_ptr<char[]>(new char[sizeof(T) * STANDARD_VECTOR_SIZE]);
+		data = owned_data.get();
 		if (std::is_same<T, bool>::value) {
 			type = TypeId::BOOLEAN;
 		} else if (std::is_same<T, int8_t>::value) {
@@ -36,13 +38,10 @@ template <class T> class StaticVector : public Vector {
 		} else if (std::is_same<T, double>::value) {
 			type = TypeId::DECIMAL;
 		} else {
-			// unsupported!
+			// unsupported type!
 			assert(0);
 		}
 	}
-
-  private:
-	T elements[STANDARD_VECTOR_SIZE];
 };
 
 } // namespace duckdb

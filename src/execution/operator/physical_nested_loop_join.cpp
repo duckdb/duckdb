@@ -32,6 +32,7 @@ bool PhysicalNestedLoopJoin::CreateResult(DataChunk &left, size_t left_position,
 		for (size_t i = 0; i < match_count; i++) {
 			result.owned_sel_vector[i] = matches[i];
 		}
+
 		result.sel_vector = result.owned_sel_vector;
 		// we have elements in our result!
 		// first duplicate the left side
@@ -121,12 +122,16 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 		right_condition.Initialize(right_types);
 		do {
 			children[1]->GetChunk(context, new_chunk, right_state.get());
+			if (new_chunk.size() == 0) {
+				break;
+			}
 			// resolve the join expression of the right side
 			ExpressionExecutor executor(new_chunk, context);
 			for (size_t i = 0; i < conditions.size(); i++) {
 				executor.ExecuteExpression(conditions[i].right.get(),
 				                           right_condition.data[i]);
 			}
+			state->right_data.Append(new_chunk);
 			state->right_chunks.Append(right_condition);
 		} while (new_chunk.size() > 0);
 
@@ -162,6 +167,7 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 
 		auto &left_chunk = state->child_chunk;
 		auto &right_chunk = *state->right_chunks.chunks[state->right_chunk];
+		auto &right_data = *state->right_data.chunks[state->right_chunk];
 
 		// sanity check, this went wrong before
 		left_chunk.Verify();
@@ -229,12 +235,13 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 				break;
 			}
 		}
+
 		state->right_chunk++;
 		bool is_last_chunk =
 		    state->right_chunk >= state->right_chunks.chunks.size();
 		// now create the final result
 		bool next_chunk =
-		    CreateResult(left_chunk, state->left_position, right_chunk, chunk,
+		    CreateResult(left_chunk, state->left_position, right_data, chunk,
 		                 matches, match_count, is_last_chunk);
 		if (is_last_chunk || next_chunk) {
 			// if we have exhausted all the chunks, move to the next tuple in

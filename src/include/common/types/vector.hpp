@@ -139,7 +139,7 @@ class Vector : public Printable {
 	//! The stringheap of the vector
 	StringHeap string_heap;
 
-  private:
+  protected:
 	//! If the vector owns data, this is the unique_ptr holds the actual data.
 	std::unique_ptr<char[]> owned_data;
 };

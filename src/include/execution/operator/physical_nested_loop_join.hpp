@@ -50,6 +50,7 @@ class PhysicalNestedLoopJoinOperatorState : public PhysicalOperatorState {
 	size_t left_position;
 	size_t right_chunk;
 	DataChunk left_join_condition;
+	ChunkCollection right_data;
 	ChunkCollection right_chunks;
 };
 } // namespace duckdb
