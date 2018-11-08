@@ -11,6 +11,9 @@
 #include "common/vector_operations/fold_loops.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 
+#include "common/types/constant_vector.hpp"
+#include "common/types/static_vector.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -60,8 +63,7 @@ Value VectorOperations::Sum(Vector &left) {
 	Value result = Value::Numeric(left.type, 0);
 
 	// check if all are NULL, because then the result is NULL and not 0
-	Vector is_null;
-	is_null.Initialize(TypeId::BOOLEAN);
+	StaticVector<bool> is_null;
 	VectorOperations::IsNull(left, is_null);
 
 	if (VectorOperations::AllTrue(is_null)) {
@@ -142,8 +144,9 @@ bool VectorOperations::Contains(Vector &vector, Value &value) {
 	// first perform a comparison using Equals
 	// then return TRUE if any of the comparisons are true
 	// FIXME: this can be done more efficiently in one loop
-	Vector right(value.CastAs(vector.type));
-	Vector comparison_result(TypeId::BOOLEAN, true, false);
+
+	ConstantVector right(value.CastAs(vector.type));
+	StaticVector<bool> comparison_result;
 	VectorOperations::Equals(vector, right, comparison_result);
 	return VectorOperations::AnyTrue(comparison_result);
 }

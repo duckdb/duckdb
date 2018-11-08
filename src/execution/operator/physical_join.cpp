@@ -28,8 +28,7 @@ string PhysicalJoin::ExtraRenderInformation() {
 	string extra_info;
 	for (auto &it : conditions) {
 		string op = ExpressionTypeToOperator(it.comparison);
-		extra_info += it.left->ToString() + "\n" + op + "\n" +
-		              it.right->ToString() + "\n";
+		extra_info += it.left->ToString() + op + it.right->ToString() + "\n";
 	}
 	return extra_info;
 }

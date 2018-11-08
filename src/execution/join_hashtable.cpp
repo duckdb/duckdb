@@ -3,6 +3,8 @@
 #include "common/exception.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 
+#include "common/types/static_vector.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -101,7 +103,7 @@ void JoinHashTable::Resize(size_t size) {
 			key_serializer.Deserialize(entry_pointers, keys);
 
 			// create the hash
-			Vector hashes;
+			StaticVector<uint64_t> hashes;
 			keys.Hash(hashes);
 
 			// re-insert the entries
@@ -145,7 +147,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	build_serializer.Serialize(payload, tuple_locations);
 
 	// hash the keys and obtain an entry in the list
-	Vector hashes;
+	StaticVector<uint64_t> hashes;
 	keys.Hash(hashes);
 
 	if (parallel) {
@@ -170,7 +172,7 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	// scan structure
 	auto ss = make_unique<ScanStructure>(*this);
 	// first hash all the keys to do the lookup
-	Vector hashes;
+	StaticVector<uint64_t> hashes;
 	keys.Hash(hashes);
 	// use modulo to get index in array
 	VectorOperations::ModuloInPlace(hashes, capacity);

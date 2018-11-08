@@ -4,6 +4,8 @@
 #include "common/types/null_value.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 
+#include "common/types/static_vector.hpp"
+
 #include <map>
 
 using namespace duckdb;
@@ -107,7 +109,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 	assert(capacity - entries > STANDARD_VECTOR_SIZE);
 
 	// first create a hash of all the values
-	Vector addresses;
+	StaticVector<uint64_t> addresses;
 	groups.Hash(addresses);
 
 	assert(addresses.sel_vector == groups.sel_vector);

@@ -102,7 +102,8 @@ string QueryProfiler::ToString() const {
 }
 
 static bool is_non_split_char(char l) {
-	return (l >= 65 && l <= 90) || (l >= 97 && l <= 122) || l == 95;
+	return (l >= 65 && l <= 90) || (l >= 97 && l <= 122) || l == 95 ||
+	       l == ']' || l == ')';
 }
 
 static bool is_padding(char l) {
@@ -137,7 +138,7 @@ QueryProfiler::CreateTree(PhysicalOperator *root, size_t depth) {
 				if (has_to_split) {
 					// look for a split character
 					size_t i;
-					for (i = 1; i < max_segment_size; i++) {
+					for (i = 8; i < max_segment_size; i++) {
 						if (!is_non_split_char(str[location + i])) {
 							// split here
 							break;
