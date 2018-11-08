@@ -35,7 +35,7 @@ void substring_function(Vector inputs[], size_t input_count, Vector &result) {
 
 		    // create the output string
 		    char output[length + 1];
-		    size_t input_offset = 0;
+		    int input_offset = 0;
 		    while (input[input_offset] && input_offset < offset) {
 			    input_offset++;
 		    }
