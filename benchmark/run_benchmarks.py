@@ -106,7 +106,7 @@ class RunBenchmark(object):
         def run_benchmark_target(self):
             self.proc.wait()
 
-        self.proc = subprocess.Popen([benchmark_runner, '--out=' + self.out_file, '--log=' + self.log_file, self.benchmark], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.proc = subprocess.Popen(['timeout', '300', benchmark_runner, '--out=' + self.out_file, '--log=' + self.log_file, self.benchmark], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         thread = threading.Thread(target=run_benchmark_target, args=(self,))
         thread.start()

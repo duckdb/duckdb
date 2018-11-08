@@ -243,6 +243,7 @@ void Vector::Copy(Vector &other, size_t offset) {
 		    "Copy to vector with sel_vector not supported!");
 	}
 
+	other.nullmask.reset();
 	if (!TypeIsConstantSize(type)) {
 		assert(type == TypeId::VARCHAR);
 		other.count = count - offset;
@@ -292,15 +293,10 @@ void Vector::Append(Vector &other) {
 	}
 	size_t old_count = count;
 	count += other.count;
-	if (!other.sel_vector) {
-		// we can simply shift the NULL mask and OR it
-		nullmask |= other.nullmask << old_count;
-	} else {
-		// have to merge NULL mask
-		for (size_t i = 0; i < other.count; i++) {
-			nullmask[old_count + i] = other.nullmask[other.sel_vector[i]];
-		}
-	}
+	// merge NULL mask
+	VectorOperations::Exec(other, [&](size_t i, size_t k) {
+		nullmask[old_count + k] = other.nullmask[i];
+	});
 	if (!TypeIsConstantSize(type)) {
 		assert(type == TypeId::VARCHAR);
 		auto source = (const char **)other.data;

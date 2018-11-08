@@ -10,14 +10,7 @@
 
 #pragma once
 
-#include <algorithm>
-#include <vector>
-
-#include "common/exception.hpp"
-#include "common/internal_types.hpp"
 #include "optimizer/rule.hpp"
-#include "parser/expression/list.hpp"
-#include "planner/operator/list.hpp"
 
 namespace duckdb {
 
@@ -28,9 +21,14 @@ class SubqueryRewritingRule : public Rule {
 	std::unique_ptr<LogicalOperator>
 	Apply(Rewriter &rewriter, LogicalOperator &op_root,
 	      std::vector<AbstractOperator> &bindings, bool &fixed_point);
-
-  private:
-	std::unique_ptr<AbstractRuleNode> filter_rule;
 };
 
+struct JoinCondition;
+class LogicalAggregate;
+class SubqueryExpression;
+
+void ExtractCorrelatedExpressions(LogicalAggregate *aggr,
+                                  SubqueryExpression *subquery,
+                                  size_t subquery_table_index,
+                                  std::vector<JoinCondition> &join_conditions);
 } // namespace duckdb

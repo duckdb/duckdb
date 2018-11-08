@@ -33,6 +33,8 @@ class PhysicalFilter : public PhysicalOperator {
 	virtual std::unique_ptr<PhysicalOperatorState>
 	GetOperatorState(ExpressionExecutor *parent) override;
 
+	virtual std::string ExtraRenderInformation() override;
+
 	std::vector<std::unique_ptr<Expression>> expressions;
 };
 } // namespace duckdb

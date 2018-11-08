@@ -40,7 +40,7 @@ bool CHECK_COLUMN(unique_ptr<duckdb::DuckDBResult> &result,
 	}
 	size_t chunk_index = 0;
 	for (size_t i = 0; i < values.size();) {
-		if (chunk_index >= result->size()) {
+		if (chunk_index >= result->collection.chunks.size()) {
 			// ran out of chunks
 			result->Print();
 			return false;
@@ -151,7 +151,7 @@ static bool ValuesAreEqual(Value result_value, Value value) {
 		if (left != right) {
 			double ldecimal = value.value_.decimal;
 			double rdecimal = result_value.value_.decimal;
-			if (ldecimal < 0.999 * rdecimal || ldecimal > 1.001 * rdecimal) {
+			if (ldecimal < 0.99 * rdecimal || ldecimal > 1.01 * rdecimal) {
 				return false;
 			}
 		}
@@ -221,6 +221,9 @@ string show_diff(DataChunk &left, DataChunk &right) {
 }
 
 string show_diff(ChunkCollection &collection, DataChunk &chunk) {
+	if (collection.chunks.size() == 0) {
+		return "<EMPTY RESULT>";
+	}
 	return show_diff(*collection.chunks[0], chunk);
 }
 

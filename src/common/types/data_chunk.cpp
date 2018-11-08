@@ -46,6 +46,7 @@ void DataChunk::Reset() {
 		data[i].sel_vector = nullptr;
 		data[i].owned_data = nullptr;
 		data[i].string_heap.Destroy();
+		data[i].nullmask.reset();
 		ptr += GetTypeIdSize(data[i].type) * STANDARD_VECTOR_SIZE;
 	}
 	sel_vector = nullptr;
@@ -100,16 +101,6 @@ void DataChunk::Append(DataChunk &other) {
 	if (column_count != other.column_count) {
 		throw OutOfRangeException(
 		    "Column counts of appending chunk doesn't match!");
-	}
-	for (size_t i = 0; i < column_count; i++) {
-		if (other.data[i].type != data[i].type) {
-			throw TypeMismatchException(data[i].type, other.data[i].type,
-			                            "Column types do not match!");
-		}
-	}
-	if (size() + other.size() > STANDARD_VECTOR_SIZE) {
-		throw OutOfRangeException(
-		    "Count of chunk cannot exceed STANDARD_VECTOR_SIZE!");
 	}
 	for (size_t i = 0; i < column_count; i++) {
 		data[i].Append(other.data[i]);
@@ -258,7 +249,7 @@ void DataChunk::MoveStringsToHeap(StringHeap &heap) {
 }
 
 void DataChunk::Hash(Vector &result) {
-	result.Initialize(TypeId::POINTER, false);
+	assert(result.type == TypeId::POINTER);
 	VectorOperations::Hash(data[0], result);
 	for (size_t i = 1; i < column_count; i++) {
 		VectorOperations::CombineHash(result, data[i]);

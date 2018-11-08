@@ -7,7 +7,7 @@ ignore_last_format = False
 cpp_format_command = 'clang-format -i -sort-includes=${SORT_INCLUDES} -style=file "${FILE}"'
 sql_format_command = 'pg_format "${FILE}" -o "${FILE}.out" && mv "${FILE}.out" "${FILE}"'
 extensions = ['.cpp', '.c', '.hpp', '.h', '.cc', '.hh', '.sql']
-ignored_files = ['tpch_constants.hpp', '_generated', 'tpce_flat_input.hpp']
+ignored_files = ['tpch_constants.hpp', 'tpcds_constants.hpp', '_generated', 'tpce_flat_input.hpp']
 
 for arg in sys.argv:
 	if arg == '--ignore-last-format':
@@ -73,6 +73,7 @@ format_directory('src')
 format_directory('benchmark')
 format_directory('test')
 format_directory('third_party/dbgen')
+format_directory('third_party/dsdgen', False)
 format_directory('third_party/sqlsmith', False)
 format_directory('third_party/tpce-tool', False)
 format_directory('tools')

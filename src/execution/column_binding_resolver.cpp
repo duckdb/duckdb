@@ -108,9 +108,14 @@ void ColumnBindingResolver::Visit(LogicalJoin &op) {
 	}
 	auto right_tables = bound_tables;
 
-	// now merge the two together
-	bound_tables = left_tables;
-	AppendTables(right_tables);
+	if (op.type != JoinType::ANTI && op.type != JoinType::SEMI) {
+		// for normal joins the two results are combined
+		bound_tables = left_tables;
+		AppendTables(right_tables);
+	} else {
+		// for semi/anti joins the result is just the left side
+		bound_tables = left_tables;
+	}
 }
 
 void ColumnBindingResolver::Visit(ColumnRefExpression &expr) {

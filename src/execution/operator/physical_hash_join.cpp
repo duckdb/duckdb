@@ -10,42 +10,24 @@ PhysicalHashJoin::PhysicalHashJoin(std::unique_ptr<PhysicalOperator> left,
                                    std::unique_ptr<PhysicalOperator> right,
                                    std::vector<JoinCondition> cond,
                                    JoinType join_type)
-    : PhysicalOperator(PhysicalOperatorType::HASH_JOIN), conditions(move(cond)),
-      type(join_type) {
+    : PhysicalJoin(PhysicalOperatorType::HASH_JOIN, move(cond), join_type) {
 	for (auto &cond : conditions) {
 		// HT only supports equality right now (TODO: anti joins)
 		assert(cond.comparison == ExpressionType::COMPARE_EQUAL);
 		assert(cond.left->return_type == cond.right->return_type);
 		join_key_types.push_back(cond.left->return_type);
 	}
-	hash_table = make_unique<JoinHashTable>(join_key_types, right->GetTypes());
+	hash_table = make_unique<JoinHashTable>(join_key_types, right->GetTypes(),
+	                                        join_type);
 
 	children.push_back(move(left));
 	children.push_back(move(right));
-}
-
-vector<string> PhysicalHashJoin::GetNames() {
-	auto left = children[0]->GetNames();
-	auto right = children[1]->GetNames();
-	left.insert(left.end(), right.begin(), right.end());
-	return left;
-}
-
-vector<TypeId> PhysicalHashJoin::GetTypes() {
-	auto types = children[0]->GetTypes();
-	auto right_types = children[1]->GetTypes();
-	types.insert(types.end(), right_types.begin(), right_types.end());
-	return types;
 }
 
 void PhysicalHashJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
                                  PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalHashJoinOperatorState *>(state_);
 	chunk.Reset();
-
-	if (type != JoinType::INNER) {
-		throw NotImplementedException("Only inner joins supported for now!");
-	}
 
 	if (!state->initialized) {
 		// build the HT

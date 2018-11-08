@@ -163,4 +163,32 @@ struct CreateScalarFunctionInformation {
 	}
 };
 
+struct CreateIndexInformation {
+	//! Schema name to insert to
+	std::string schema;
+	//! Table name to insert to
+	std::string table;
+
+    ////! The columns that are indexed
+    std::vector<std::string> indexed_columns;
+    ////! Index Type (e.g., B+-tree, Skip-List, ...)
+    IndexType index_type;
+    ////! Name of the Index
+    std::string index_name;
+    ////! If it is an unique index
+    bool unique = false;
+
+	//! Ignore if the entry already exists, instead of failing
+	bool if_not_exists = false;
+
+	CreateIndexInformation() : schema(DEFAULT_SCHEMA), if_not_exists(false) {
+	}
+	CreateIndexInformation(std::string schema, std::string table,
+						   std::vector<std::string> indexed_columns,IndexType index_type,
+                           std::string index_name,bool unique)
+			: schema(schema), table(table), indexed_columns(indexed_columns),index_type(index_type),
+              index_name(index_name), if_not_exists(false) {
+	}
+};
+
 } // namespace duckdb

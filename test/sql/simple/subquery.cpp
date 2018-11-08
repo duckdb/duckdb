@@ -70,6 +70,27 @@ TEST_CASE("Test subqueries", "[subqueries]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {22, 22}));
 }
 
+TEST_CASE("Test subqueries with (NOT) IN clause", "[subqueries]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (id INTEGER, b INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1, 22)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (2, 21)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (3, 23)"));
+
+	result = con.Query("SELECT * FROM test WHERE b IN (SELECT b FROM test "
+	                   "WHERE b * id < 30) ORDER BY id, b");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {22}));
+
+	result = con.Query("SELECT * FROM test WHERE b NOT IN (SELECT b FROM test "
+	                   "WHERE b * id < 30) ORDER BY id, b");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {21, 23}));
+}
+
 TEST_CASE("Test correlated subqueries in WHERE clause", "[subqueries]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
@@ -80,8 +101,16 @@ TEST_CASE("Test correlated subqueries in WHERE clause", "[subqueries]") {
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1, 21)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (2, 22)"));
 
+	// correlated subquery with one correlated expression
+	// result = con.Query("SELECT * FROM test WHERE b=(SELECT MIN(b) FROM test
+	// AS "
+	//                    "a WHERE a.id=test.id)");
+	// REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {21, 22}));
+
+	// correlated subquery with two correlated expressions
 	result = con.Query("SELECT * FROM test WHERE b=(SELECT MIN(b) FROM test AS "
-	                   "a WHERE a.id=test.id)");
+	                   "a WHERE a.id=test.id AND a.id < test.b)");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {21, 22}));
 }

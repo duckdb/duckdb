@@ -32,6 +32,10 @@ void LogicalOperatorVisitor::Visit(LogicalTableFunction &op) {
 	VisitOperator(op);
 }
 
+void LogicalOperatorVisitor::Visit(LogicalPruneColumns &op) {
+	VisitOperator(op);
+}
+
 void LogicalOperatorVisitor::Visit(LogicalDelete &op) {
 	VisitOperator(op);
 	for (auto &exp : op.expressions) {

@@ -3,31 +3,95 @@
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
 
+#include "common/types/constant_vector.hpp"
+#include "common/types/static_vector.hpp"
+
 using namespace duckdb;
 using namespace std;
 
 PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(
-    std::unique_ptr<PhysicalOperator> left,
-    std::unique_ptr<PhysicalOperator> right, std::vector<JoinCondition> cond,
-    JoinType join_type)
-    : PhysicalOperator(PhysicalOperatorType::NESTED_LOOP_JOIN),
-      conditions(move(cond)), type(join_type) {
+    unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
+    vector<JoinCondition> cond, JoinType join_type)
+    : PhysicalJoin(PhysicalOperatorType::NESTED_LOOP_JOIN, move(cond),
+                   join_type) {
 	children.push_back(move(left));
 	children.push_back(move(right));
 }
 
-vector<string> PhysicalNestedLoopJoin::GetNames() {
-	auto left = children[0]->GetNames();
-	auto right = children[1]->GetNames();
-	left.insert(left.end(), right.begin(), right.end());
-	return left;
-}
+bool PhysicalNestedLoopJoin::CreateResult(DataChunk &left, size_t left_position,
+                                          DataChunk &right, DataChunk &result,
+                                          sel_t matches[], size_t match_count,
+                                          bool is_last_chunk) {
+	switch (type) {
+	case JoinType::INNER: {
+		if (match_count == 0) {
+			// no matches
+			break;
+		}
+		// create a selection vector from the result
+		for (size_t i = 0; i < match_count; i++) {
+			result.owned_sel_vector[i] = matches[i];
+		}
 
-vector<TypeId> PhysicalNestedLoopJoin::GetTypes() {
-	auto types = children[0]->GetTypes();
-	auto right_types = children[1]->GetTypes();
-	types.insert(types.end(), right_types.begin(), right_types.end());
-	return types;
+		result.sel_vector = result.owned_sel_vector;
+		// we have elements in our result!
+		// first duplicate the left side
+		for (size_t i = 0; i < left.column_count; i++) {
+			result.data[i].count = match_count;
+			result.data[i].sel_vector = result.sel_vector;
+			VectorOperations::Set(result.data[i],
+			                      left.data[i].GetValue(left_position));
+		}
+		// use the selection vector we created on the right side
+		for (size_t i = 0; i < right.column_count; i++) {
+			// now create a reference to the vectors of the right chunk
+			size_t chunk_entry = left.column_count + i;
+			result.data[chunk_entry].Reference(right.data[i]);
+			result.data[chunk_entry].sel_vector = result.sel_vector;
+			result.data[chunk_entry].count = match_count;
+		}
+		break;
+	}
+	case JoinType::ANTI: {
+		// anti-join
+		// we want to know if there are zero matches or not
+		// check if this chunk has any matches
+		if (match_count > 0) {
+			// if there is a match, we skip this value
+			return true;
+		}
+		// otherwise, we output it ONLY if it is the last chunk on the right
+		// side
+		if (is_last_chunk) {
+			for (size_t i = 0; i < left.column_count; i++) {
+				result.data[i].count = 1;
+				result.data[i].sel_vector = nullptr;
+				result.data[i].SetValue(0,
+				                        left.data[i].GetValue(left_position));
+			}
+		}
+		return false;
+	}
+	case JoinType::SEMI: {
+		// semi-join, check if there are any matches
+		if (match_count == 0) {
+			// there is no match, check the next chunk
+			return false;
+		}
+
+		// there is a match, output this tuple
+		// we only output the left side, we don't care which tuple matched
+		for (size_t i = 0; i < left.column_count; i++) {
+			result.data[i].count = 1;
+			result.data[i].sel_vector = nullptr;
+			result.data[i].SetValue(0, left.data[i].GetValue(left_position));
+		}
+		return true;
+	}
+	default:
+		throw NotImplementedException("Join type not supported!");
+	}
+	return false;
 }
 
 void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
@@ -36,33 +100,46 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 	    reinterpret_cast<PhysicalNestedLoopJoinOperatorState *>(state_);
 	chunk.Reset();
 
-	if (type != JoinType::INNER) {
-		throw NotImplementedException("Only inner joins supported for now!");
+	if (type == JoinType::LEFT || type == JoinType::RIGHT ||
+	    type == JoinType::OUTER) {
+		throw NotImplementedException(
+		    "Only inner/semi/anti joins supported for now!");
 	}
 
 	// first we fully materialize the right child, if we haven't done that yet
 	if (state->right_chunks.column_count() == 0) {
+		vector<TypeId> left_types, right_types;
+		for (auto &cond : conditions) {
+			left_types.push_back(cond.left->return_type);
+			right_types.push_back(cond.right->return_type);
+		}
+
 		auto right_state = children[1]->GetOperatorState(state->parent);
 		auto types = children[1]->GetTypes();
 
-		DataChunk new_chunk;
+		DataChunk new_chunk, right_condition;
 		new_chunk.Initialize(types);
+		right_condition.Initialize(right_types);
 		do {
 			children[1]->GetChunk(context, new_chunk, right_state.get());
-			state->right_chunks.Append(new_chunk);
+			if (new_chunk.size() == 0) {
+				break;
+			}
+			// resolve the join expression of the right side
+			ExpressionExecutor executor(new_chunk, context);
+			for (size_t i = 0; i < conditions.size(); i++) {
+				executor.ExecuteExpression(conditions[i].right.get(),
+				                           right_condition.data[i]);
+			}
+			state->right_data.Append(new_chunk);
+			state->right_chunks.Append(right_condition);
 		} while (new_chunk.size() > 0);
 
 		if (state->right_chunks.count == 0) {
 			return;
 		}
 		// initialize the chunks for the join conditions
-		vector<TypeId> left_types, right_types;
-		for (auto &cond : conditions) {
-			left_types.push_back(cond.left->return_type);
-			right_types.push_back(cond.right->return_type);
-		}
 		state->left_join_condition.Initialize(left_types);
-		state->right_join_condition.Initialize(right_types);
 	}
 	// now that we have fully materialized the right child
 	// we have to perform the nested loop join
@@ -90,6 +167,7 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 
 		auto &left_chunk = state->child_chunk;
 		auto &right_chunk = *state->right_chunks.chunks[state->right_chunk];
+		auto &right_data = *state->right_data.chunks[state->right_chunk];
 
 		// sanity check, this went wrong before
 		left_chunk.Verify();
@@ -97,82 +175,75 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 
 		// join the current row of the left relation with the current chunk
 		// from the right relation
-		state->right_join_condition.Reset();
-		ExpressionExecutor executor(right_chunk, context);
-		Vector final_result;
+		sel_t matches[STANDARD_VECTOR_SIZE];
+		size_t match_count = 0;
+
+		StaticVector<bool> intermediate;
 		for (size_t i = 0; i < conditions.size(); i++) {
-			Vector &right_match = state->right_join_condition.data[i];
-			// first resolve the join expression of the right side
-			executor.ExecuteExpression(conditions[i].right.get(), right_match);
 			// now perform the join for the current tuple
 			// we retrieve one value from the left hand side
-			Vector left_match(state->left_join_condition.data[i].GetValue(
-			    state->left_position));
+			ConstantVector left_match(
+			    state->left_join_condition.data[i].GetValue(
+			        state->left_position));
 
-			Vector intermediate(TypeId::BOOLEAN, true, false);
+			Vector &l = left_match;
+			Vector &r = right_chunk.data[i];
+
+			size_t right_count = r.count;
+			if (i > 0) {
+				r.sel_vector = matches;
+				r.count = match_count;
+			} else {
+				r.sel_vector = nullptr;
+			}
+
 			switch (conditions[i].comparison) {
 			case ExpressionType::COMPARE_EQUAL:
-				VectorOperations::Equals(left_match, right_match, intermediate);
+				VectorOperations::Equals(l, r, intermediate);
 				break;
 			case ExpressionType::COMPARE_NOTEQUAL:
-				VectorOperations::NotEquals(left_match, right_match,
-				                            intermediate);
+				VectorOperations::NotEquals(l, r, intermediate);
 				break;
 			case ExpressionType::COMPARE_LESSTHAN:
-				VectorOperations::LessThan(left_match, right_match,
-				                           intermediate);
+				VectorOperations::LessThan(l, r, intermediate);
 				break;
 			case ExpressionType::COMPARE_GREATERTHAN:
-				VectorOperations::GreaterThan(left_match, right_match,
-				                              intermediate);
+				VectorOperations::GreaterThan(l, r, intermediate);
 				break;
 			case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-				VectorOperations::LessThanEquals(left_match, right_match,
-				                                 intermediate);
+				VectorOperations::LessThanEquals(l, r, intermediate);
 				break;
 			case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-				VectorOperations::GreaterThanEquals(left_match, right_match,
-				                                    intermediate);
+				VectorOperations::GreaterThanEquals(l, r, intermediate);
 				break;
 			default:
 				throw NotImplementedException(
 				    "Unsupported join comparison expression %s",
 				    ExpressionTypeToString(conditions[i].comparison).c_str());
 			}
-			if (i == 0) {
-				// first predicate, move to the final result
-				intermediate.Move(final_result);
-			} else {
-				// subsequent predicates: AND together
-				VectorOperations::And(intermediate, final_result, final_result);
-			}
-		}
-		assert(final_result.type == TypeId::BOOLEAN);
-		// now we have the final result, create a selection vector from it
-		chunk.SetSelectionVector(final_result);
-		if (chunk.size() > 0) {
-			// we have elements in our join!
-			// use the zero selection vector to prevent duplication on the left
-			// side
-			for (size_t i = 0; i < left_chunk.column_count; i++) {
-				// first duplicate the values of the left side using the
-				// selection vector
-				VectorOperations::Set(
-				    chunk.data[i],
-				    left_chunk.data[i].GetValue(state->left_position));
-			}
-			// use the selection vector we created on the right side
-			for (size_t i = 0; i < right_chunk.column_count; i++) {
-				// now create a reference to the vectors of the right chunk
-				size_t chunk_entry = left_chunk.column_count + i;
-				chunk.data[chunk_entry].Reference(right_chunk.data[i]);
-				chunk.data[chunk_entry].sel_vector = chunk.sel_vector;
-				chunk.data[chunk_entry].count = chunk.size();
+			match_count = 0;
+			VectorOperations::ExecType<bool>(
+			    intermediate, [&](bool match, size_t i, size_t k) {
+				    if (match) {
+					    matches[match_count++] = i;
+				    }
+			    });
+			// reset the right properties
+			r.count = right_count;
+			r.sel_vector = nullptr;
+			if (match_count == 0) {
+				break;
 			}
 		}
 
 		state->right_chunk++;
-		if (state->right_chunk >= state->right_chunks.chunks.size()) {
+		bool is_last_chunk =
+		    state->right_chunk >= state->right_chunks.chunks.size();
+		// now create the final result
+		bool next_chunk =
+		    CreateResult(left_chunk, state->left_position, right_data, chunk,
+		                 matches, match_count, is_last_chunk);
+		if (is_last_chunk || next_chunk) {
 			// if we have exhausted all the chunks, move to the next tuple in
 			// the left set
 			state->left_position++;
@@ -181,7 +252,7 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 	} while (chunk.size() == 0);
 }
 
-std::unique_ptr<PhysicalOperatorState>
+unique_ptr<PhysicalOperatorState>
 PhysicalNestedLoopJoin::GetOperatorState(ExpressionExecutor *parent_executor) {
 	return make_unique<PhysicalNestedLoopJoinOperatorState>(
 	    children[0].get(), children[1].get(), parent_executor);

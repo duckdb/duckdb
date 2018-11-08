@@ -34,6 +34,7 @@ class QueryProfiler : public Printable {
 	};
 	struct TreeNode {
 		std::string name;
+		std::vector<std::string> extra_info;
 		TimingInformation info;
 		std::vector<std::unique_ptr<TreeNode>> children;
 		size_t depth = 0;
@@ -46,7 +47,9 @@ class QueryProfiler : public Printable {
 
 	static size_t RenderTreeRecursive(TreeNode &node,
 	                                  std::vector<std::string> &render,
-	                                  size_t base_render_x);
+	                                  std::vector<int> &render_heights,
+	                                  size_t base_render_x = 0,
+	                                  size_t start_depth = 0, int depth = 0);
 	static std::string RenderTree(TreeNode &node);
 
   public:

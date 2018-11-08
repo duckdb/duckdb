@@ -13,7 +13,9 @@ void OperatorExpression::ResolveType() {
 	    type == ExpressionType::OPERATOR_IS_NULL ||
 	    type == ExpressionType::OPERATOR_IS_NOT_NULL ||
 	    type == ExpressionType::OPERATOR_EXISTS ||
-	    type == ExpressionType::COMPARE_IN) {
+	    type == ExpressionType::OPERATOR_NOT_EXISTS ||
+	    type == ExpressionType::COMPARE_IN ||
+	    type == ExpressionType::COMPARE_NOT_IN) {
 		return_type = TypeId::BOOLEAN;
 		return;
 	}

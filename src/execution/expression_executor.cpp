@@ -296,8 +296,6 @@ void ExpressionExecutor::Visit(ComparisonExpression &expr) {
 	case ExpressionType::COMPARE_NOTLIKE:
 		VectorOperations::NotLike(l, r, vector);
 		break;
-	case ExpressionType::COMPARE_IN:
-		throw NotImplementedException("Unimplemented compare: COMPARE_IN");
 	case ExpressionType::COMPARE_DISTINCT_FROM:
 		throw NotImplementedException(
 		    "Unimplemented compare: COMPARE_DISTINCT_FROM");
@@ -371,7 +369,8 @@ void ExpressionExecutor::Visit(GroupRefExpression &expr) {
 void ExpressionExecutor::Visit(OperatorExpression &expr) {
 	// special handling for special snowflake 'IN'
 	// IN has n children
-	if (expr.type == ExpressionType::COMPARE_IN) {
+	if (expr.type == ExpressionType::COMPARE_IN ||
+	    expr.type == ExpressionType::COMPARE_NOT_IN) {
 		if (expr.children.size() < 2) {
 			throw Exception("IN needs at least two children");
 		}
@@ -384,6 +383,7 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 		Vector result;
 		result.Initialize(TypeId::BOOLEAN);
 		result.count = l.count;
+		result.sel_vector = l.sel_vector;
 		VectorOperations::Set(result, Value(false));
 
 		// FIXME this is very similar to the visit method of subqueries,
@@ -447,8 +447,7 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 				// if there is any true in comp_res the IN returns true
 				VectorOperations::Equals(lval_vec, rval_vec, comp_res);
 				// if we find any match, IN is true
-				if (ValueOperations::Equals(VectorOperations::AnyTrue(comp_res),
-				                            Value(true))) {
+				if (VectorOperations::AnyTrue(comp_res)) {
 					result.SetValue(r, Value(true));
 				} else {
 					// if not, but there are some NULLs in the rhs, its a NULL
@@ -482,7 +481,14 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 				}
 			}
 		}
-		result.Move(vector);
+		if (expr.type == ExpressionType::COMPARE_NOT_IN) {
+			// invert result
+			vector.Initialize(TypeId::BOOLEAN);
+			VectorOperations::Not(result, vector);
+		} else {
+			// just move result
+			result.Move(vector);
+		}
 		expr.stats.Verify(vector);
 		return;
 	}

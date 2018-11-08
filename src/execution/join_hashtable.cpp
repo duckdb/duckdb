@@ -3,17 +3,20 @@
 #include "common/exception.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 
+#include "common/types/static_vector.hpp"
+
 using namespace duckdb;
 using namespace std;
 
 using ScanStructure = JoinHashTable::ScanStructure;
 
 JoinHashTable::JoinHashTable(std::vector<TypeId> key_types,
-                             std::vector<TypeId> build_types,
+                             std::vector<TypeId> build_types, JoinType type,
                              size_t initial_capacity, bool parallel)
     : key_serializer(key_types), build_serializer(build_types),
       key_types(key_types), build_types(build_types), key_size(0),
-      build_size(0), tuple_size(0), capacity(0), count(0), parallel(parallel) {
+      build_size(0), tuple_size(0), capacity(0), count(0), parallel(parallel),
+      join_type(type) {
 	for (size_t i = 0; i < key_types.size(); i++) {
 		key_size += GetTypeIdSize(key_types[i]);
 	}
@@ -100,7 +103,7 @@ void JoinHashTable::Resize(size_t size) {
 			key_serializer.Deserialize(entry_pointers, keys);
 
 			// create the hash
-			Vector hashes;
+			StaticVector<uint64_t> hashes;
 			keys.Hash(hashes);
 
 			// re-insert the entries
@@ -144,7 +147,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	build_serializer.Serialize(payload, tuple_locations);
 
 	// hash the keys and obtain an entry in the list
-	Vector hashes;
+	StaticVector<uint64_t> hashes;
 	keys.Hash(hashes);
 
 	if (parallel) {
@@ -169,7 +172,7 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	// scan structure
 	auto ss = make_unique<ScanStructure>(*this);
 	// first hash all the keys to do the lookup
-	Vector hashes;
+	StaticVector<uint64_t> hashes;
 	keys.Hash(hashes);
 	// use modulo to get index in array
 	VectorOperations::ModuloInPlace(hashes, capacity);
@@ -183,22 +186,32 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	}
 	ss->pointers.count = hashes.count;
 
-	// create the selection vector linking to only non-empty entries
-	size_t count = 0;
-	for (size_t i = 0; i < ss->pointers.count; i++) {
-		if (ptrs[i]) {
-			ss->sel_vector[count++] = i;
+	switch (join_type) {
+	case JoinType::LEFT:
+		// initialize all tuples with found_match to false
+		for (size_t i = 0; i < ss->pointers.count; i++) {
+			ss->found_match[i] = false;
 		}
+	case JoinType::INNER: {
+		// create the selection vector linking to only non-empty entries
+		size_t count = 0;
+		for (size_t i = 0; i < ss->pointers.count; i++) {
+			if (ptrs[i]) {
+				ss->sel_vector[count++] = i;
+			}
+		}
+		ss->pointers.count = count;
 	}
-	ss->pointers.count = count;
-
+	default:
+		ss->pointers.sel_vector = nullptr;
+	}
 	// serialize the keys for later comparison purposes
 	key_serializer.Serialize(keys, ss->serialized_keys);
 
 	return ss;
 }
 
-ScanStructure::ScanStructure(JoinHashTable &ht) : ht(ht) {
+ScanStructure::ScanStructure(JoinHashTable &ht) : ht(ht), finished(false) {
 	pointers.Initialize(TypeId::POINTER, false);
 	build_pointer_vector.Initialize(TypeId::POINTER, false);
 	pointers.sel_vector = this->sel_vector;
@@ -206,6 +219,29 @@ ScanStructure::ScanStructure(JoinHashTable &ht) : ht(ht) {
 
 void ScanStructure::Next(DataChunk &left, DataChunk &result) {
 	assert(!left.sel_vector); // should be flattened before
+	if (finished) {
+		return;
+	}
+
+	switch (ht.join_type) {
+	case JoinType::INNER:
+		NextInnerJoin(left, result);
+		break;
+	case JoinType::SEMI:
+		NextSemiJoin(left, result);
+		break;
+	case JoinType::ANTI:
+		NextAntiJoin(left, result);
+		break;
+	case JoinType::LEFT:
+		NextLeftJoin(left, result);
+		break;
+	default:
+		throw Exception("Unhandled join type in JoinHashTable");
+	}
+}
+
+void ScanStructure::NextInnerJoin(DataChunk &left, DataChunk &result) {
 	assert(result.column_count == left.column_count + ht.build_types.size());
 	if (pointers.count == 0) {
 		// no pointers left to chase
@@ -228,6 +264,7 @@ void ScanStructure::Next(DataChunk &left, DataChunk &result) {
 			if (ht.key_serializer.Compare(serialized_keys[index].data.get(),
 			                              pointer) == 0) {
 				// if there is, we have to add this entry to the result
+				found_match[index] = true;
 				result.owned_sel_vector[result_count] = index;
 				build_pointers[result_count] = pointer + ht.key_size;
 				result_count++;
@@ -266,5 +303,104 @@ void ScanStructure::Next(DataChunk &left, DataChunk &result) {
 			ht.build_serializer.DeserializeColumn(
 			    build_pointer_vector, i, result.data[left.column_count + i]);
 		}
+	}
+}
+
+//! Implementation for semi (INVERT=false) or anti (INVERT=true) joins
+template <bool INVERT>
+static void NextSemiOrAntiJoin(DataChunk &left, DataChunk &result,
+                               ScanStructure &ss) {
+	assert(left.column_count == result.column_count);
+	if (ss.pointers.count == 0) {
+		// no pointers left to chase
+		return;
+	}
+
+	size_t result_count = 0;
+	// the semi-join and anti-join we handle a differently from the inner join
+	// since there can be at most STANDARD_VECTOR_SIZE results
+	// we handle the entire chunk in one call to Next().
+	// for every pointer, we keep chasing pointers and doing comparisons.
+	// if a matching tuple is found, we keep (semi) or discard (anti) the entry
+	// if we reach the end of the chain without finding a match
+	// we add it to the result.
+	auto ptrs = (uint8_t **)ss.pointers.data;
+	for (size_t i = 0; i < ss.pointers.count; i++) {
+		auto pointer = ptrs[i];
+		bool match = INVERT;
+		while (pointer) {
+			// check if there is an actual match here
+			if (ss.ht.key_serializer.Compare(ss.serialized_keys[i].data.get(),
+			                                 pointer) == 0) {
+				// if there is, we add this entry to the result
+				match = !INVERT;
+				break;
+			}
+			auto prev_pointer = (uint8_t **)(pointer + ss.ht.tuple_size);
+			pointer = *prev_pointer;
+		}
+		if (match) {
+			// match was found (semi) or no match was found (anti)
+			result.owned_sel_vector[result_count++] = i;
+		}
+	}
+	// we have chased all the pointers
+	// construct the final result
+	if (result_count > 0) {
+		// in the anti join, we only return the columns on the left side
+		// project them using the result selection vector
+		result.sel_vector = result.owned_sel_vector;
+		// reference the columns of the left side from the result
+		for (size_t i = 0; i < left.column_count; i++) {
+			result.data[i].Reference(left.data[i]);
+			result.data[i].sel_vector = result.sel_vector;
+			result.data[i].count = result_count;
+		}
+	}
+	// finished chasing all pointers
+	ss.pointers.count = 0;
+}
+
+void ScanStructure::NextSemiJoin(DataChunk &left, DataChunk &result) {
+	NextSemiOrAntiJoin<false>(left, result, *this);
+}
+
+void ScanStructure::NextAntiJoin(DataChunk &left, DataChunk &result) {
+	NextSemiOrAntiJoin<true>(left, result, *this);
+}
+
+void ScanStructure::NextLeftJoin(DataChunk &left, DataChunk &result) {
+	// a LEFT OUTER JOIN is identical to an INNER JOIN except all tuples that do
+	// not have a match must return at least one tuple (with the right side set
+	// to NULL in every column)
+	NextInnerJoin(left, result);
+	if (result.size() == 0) {
+		// no entries left from the normal join
+		// fill in the result of the remaining left tuples
+		// together with NULL values on the right-hand side
+		size_t remaining_count = 0;
+		for (size_t i = 0; i < left.size(); i++) {
+			if (!found_match[i]) {
+				result.owned_sel_vector[remaining_count++] = i;
+			}
+		}
+		if (remaining_count > 0) {
+			// have remaining tuples
+			// first set the left side
+			result.sel_vector = result.owned_sel_vector;
+			size_t i = 0;
+			for (; i < left.column_count; i++) {
+				result.data[i].Reference(left.data[i]);
+				result.data[i].sel_vector = result.sel_vector;
+				result.data[i].count = remaining_count;
+			}
+			// now set the right side to NULL
+			for (; i < result.column_count; i++) {
+				result.data[i].nullmask.set();
+				result.data[i].sel_vector = result.sel_vector;
+				result.data[i].count = remaining_count;
+			}
+		}
+		finished = true;
 	}
 }

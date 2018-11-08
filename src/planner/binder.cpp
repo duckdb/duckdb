@@ -40,6 +40,7 @@ void Binder::Visit(SelectStatement &statement) {
 			new_select_list.push_back(move(select_element));
 		}
 	}
+	statement.result_column_count = new_select_list.size();
 
 	for (size_t i = 0; i < new_select_list.size(); i++) {
 		auto &select_element = new_select_list[i];
@@ -216,6 +217,7 @@ void Binder::Visit(SelectStatement &statement) {
 
 	if (statement.groupby.having) {
 		statement.groupby.having->Accept(this);
+		statement.groupby.having->ResolveType();
 	}
 	// the union has a completely independent binder
 	if (statement.union_select) {
@@ -335,6 +337,12 @@ void Binder::Visit(SubqueryExpression &expr) {
 	if (expr.subquery->select_list[0]->return_type == TypeId::INVALID) {
 		throw BinderException("Subquery has no type");
 	}
+	if (expr.subquery_type == SubqueryType::IN &&
+	    expr.subquery->select_list.size() != 1) {
+		throw BinderException("Subquery returns %zu columns - expected 1",
+		                      expr.subquery->select_list.size());
+	}
+
 	expr.return_type = expr.subquery_type == SubqueryType::EXISTS
 	                       ? TypeId::BOOLEAN
 	                       : expr.subquery->select_list[0]->return_type;
@@ -365,7 +373,7 @@ void Binder::Visit(SubqueryRef &expr) {
 	expr.subquery->Accept(&binder);
 	expr.context = move(binder.bind_context);
 
-	bind_context->AddSubquery(expr.alias, expr.subquery.get());
+	bind_context->AddSubquery(expr.alias, expr);
 }
 
 void Binder::Visit(TableFunction &expr) {

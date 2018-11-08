@@ -16,12 +16,6 @@
 using namespace duckdb;
 using namespace std;
 
-static bool has_select_list(LogicalOperatorType type) {
-	return type == LogicalOperatorType::PROJECTION ||
-	       type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY ||
-	       type == LogicalOperatorType::UNION;
-}
-
 void LogicalPlanGenerator::Visit(CreateTableStatement &statement) {
 	if (root) {
 		throw Exception("CREATE TABLE from SELECT not supported yet!");
@@ -103,6 +97,36 @@ void LogicalPlanGenerator::Visit(DeleteStatement &statement) {
 	root = move(del);
 }
 
+static std::unique_ptr<Expression>
+transform_aggregates_into_colref(LogicalOperator *root,
+                                 std::unique_ptr<Expression> expr) {
+	if (expr->GetExpressionClass() == ExpressionClass::AGGREGATE) {
+		// the current expression is an aggregate node!
+		// first check if the aggregate is already computed in the GROUP BY
+		size_t match_index = root->expressions.size();
+		for (size_t j = 0; j < root->expressions.size(); j++) {
+			if (expr->Equals(root->expressions[j].get())) {
+				match_index = j;
+				break;
+			}
+		}
+		auto type = expr->return_type;
+		if (match_index == root->expressions.size()) {
+			// the expression is not computed yet!
+			// add it to the list of aggregates to compute
+			root->expressions.push_back(move(expr));
+		}
+		// now turn this node into a reference
+		return make_unique<ColumnRefExpression>(type, match_index);
+	} else {
+		for (size_t i = 0; i < expr->children.size(); i++) {
+			expr->children[i] =
+			    transform_aggregates_into_colref(root, move(expr->children[i]));
+		}
+		return expr;
+	}
+}
+
 void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 	for (auto &expr : statement.select_list) {
 		expr->Accept(this);
@@ -124,6 +148,7 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 		root = move(filter);
 	}
 
+	size_t original_column_count = statement.select_list.size();
 	if (statement.HasAggregation()) {
 		auto aggregate =
 		    make_unique<LogicalAggregate>(move(statement.select_list));
@@ -138,11 +163,26 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 
 		if (statement.HasHaving()) {
 			statement.groupby.having->Accept(this);
-
 			auto having =
 			    make_unique<LogicalFilter>(move(statement.groupby.having));
+			// the HAVING child cannot contain aggregates itself
+			// turn them into Column References
+			for (size_t i = 0; i < having->expressions.size(); i++) {
+				having->expressions[i] = transform_aggregates_into_colref(
+				    root.get(), move(having->expressions[i]));
+			}
+			bool require_prune =
+			    root->expressions.size() > original_column_count;
 			having->AddChild(move(root));
 			root = move(having);
+			if (require_prune) {
+				// we added extra aggregates for the HAVING clause
+				// we need to prune them after
+				auto prune =
+				    make_unique<LogicalPruneColumns>(original_column_count);
+				prune->AddChild(move(root));
+				root = move(prune);
+			}
 		}
 	} else {
 		auto projection =
@@ -152,12 +192,16 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 	}
 
 	if (statement.union_select) {
-		auto top_select = move(root);
+		auto top_node = move(root);
 		statement.union_select->Accept(this);
-		// TODO: LIMIT/ORDER BY with UNION? How does that work?
-		auto bottom_select = move(root);
-		if (!has_select_list(top_select->type) ||
-		    !has_select_list(bottom_select->type)) {
+		auto bottom_node = move(root);
+
+		// get the projections
+		auto top_select = GetProjection(top_node.get());
+		auto bottom_select = GetProjection(bottom_node.get());
+
+		if (!IsProjection(top_select->type) ||
+		    !IsProjection(bottom_select->type)) {
 			throw Exception(
 			    "UNION can only apply to projection, union or group");
 		}
@@ -196,14 +240,15 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 		}
 
 		auto union_op =
-		    make_unique<LogicalUnion>(move(top_select), move(bottom_select));
+		    make_unique<LogicalUnion>(move(top_node), move(bottom_node));
 		union_op->expressions = move(expressions);
 
 		root = move(union_op);
 	}
 
 	if (statement.select_distinct) {
-		if (!has_select_list(root->type)) {
+		auto node = GetProjection(root.get());
+		if (!IsProjection(node->type)) {
 			throw Exception(
 			    "DISTINCT can only apply to projection, union or group");
 		}
@@ -211,8 +256,8 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 		vector<unique_ptr<Expression>> expressions;
 		vector<unique_ptr<Expression>> groups;
 
-		for (size_t i = 0; i < root->expressions.size(); i++) {
-			Expression *proj_ele = root->expressions[i].get();
+		for (size_t i = 0; i < node->expressions.size(); i++) {
+			Expression *proj_ele = node->expressions[i].get();
 			auto group_ref = make_unique_base<Expression, GroupRefExpression>(
 			    proj_ele->return_type, i);
 			group_ref->alias = proj_ele->alias;
@@ -238,6 +283,13 @@ void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 		                                       statement.limit.offset);
 		limit->AddChild(move(root));
 		root = move(limit);
+	}
+	if (!is_subquery) {
+		// always prune the root node
+		auto prune =
+		    make_unique<LogicalPruneColumns>(statement.result_column_count);
+		prune->AddChild(move(root));
+		root = move(prune);
 	}
 }
 
@@ -324,7 +376,7 @@ void LogicalPlanGenerator::Visit(OperatorExpression &expr) {
 }
 
 void LogicalPlanGenerator::Visit(SubqueryExpression &expr) {
-	LogicalPlanGenerator generator(context, *expr.context);
+	LogicalPlanGenerator generator(context, *expr.context, true);
 	expr.subquery->Accept(&generator);
 	if (!generator.root) {
 		throw Exception("Can't plan subquery");
@@ -413,7 +465,7 @@ void LogicalPlanGenerator::Visit(JoinRef &expr) {
 void LogicalPlanGenerator::Visit(SubqueryRef &expr) {
 	// generate the logical plan for the subquery
 	// this happens separately from the current LogicalPlan generation
-	LogicalPlanGenerator generator(context, *expr.context);
+	LogicalPlanGenerator generator(context, *expr.context, true);
 
 	size_t column_count = expr.subquery->select_list.size();
 	expr.subquery->Accept(&generator);

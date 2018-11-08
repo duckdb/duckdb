@@ -2,6 +2,7 @@
 #include "parser/statement/copy_statement.hpp"
 #include "parser/statement/create_schema_statement.hpp"
 #include "parser/statement/create_table_statement.hpp"
+#include "parser/statement/create_index_statement.hpp"
 #include "parser/statement/delete_statement.hpp"
 #include "parser/statement/drop_schema_statement.hpp"
 #include "parser/statement/drop_table_statement.hpp"

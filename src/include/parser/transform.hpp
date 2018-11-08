@@ -37,6 +37,10 @@ TransformCreateSchema(postgres::Node *node);
 std::unique_ptr<SQLStatement> TransformDrop(postgres::Node *node);
 //! Transform a Postgres T_InsertStmt node into a InsertStatement
 std::unique_ptr<InsertStatement> TransformInsert(postgres::Node *node);
+
+//! Transform a Postgres T_IndexStmt node into (Index)CreateStatement
+std::unique_ptr<CreateIndexStatement> TransformCreateIndex(postgres::Node *node);
+
 //! Transform a Postgres T_CopyStmt node into a CopyStatement
 std::unique_ptr<CopyStatement> TransformCopy(postgres::Node *node);
 //! Transform a Postgres T_TransactionStmt node into a TransactionStatement

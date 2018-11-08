@@ -108,3 +108,18 @@ TEST_CASE("GROUP BY large strings", "[aggregations]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {"helloworld", "thisisalongstring"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {43, 22}));
 }
+
+TEST_CASE("Aggregate only COUNT STAR", "[aggregations]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER);"));
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO integers VALUES (3, 4), (3, 4), (2, 4);"));
+
+	result =
+	    con.Query("SELECT i, COUNT(*) FROM integers GROUP BY i ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+}

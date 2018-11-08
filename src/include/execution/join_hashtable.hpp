@@ -43,10 +43,24 @@ class JoinHashTable {
 		Vector build_pointer_vector;
 		sel_t sel_vector[STANDARD_VECTOR_SIZE];
 		Tuple serialized_keys[STANDARD_VECTOR_SIZE];
+		// whether or not the given tuple has found a match, used for LeftJoin
+		bool found_match[STANDARD_VECTOR_SIZE];
 		JoinHashTable &ht;
+		bool finished;
 
 		ScanStructure(JoinHashTable &ht);
+		//! Get the next batch of data from the scan structure
 		void Next(DataChunk &left, DataChunk &result);
+
+	  private:
+		//! Next operator for the inner join
+		void NextInnerJoin(DataChunk &left, DataChunk &result);
+		//! Next operator for the semi join
+		void NextSemiJoin(DataChunk &left, DataChunk &result);
+		//! Next operator for the anti join
+		void NextAntiJoin(DataChunk &left, DataChunk &result);
+		//! Next operator for the left outer join
+		void NextLeftJoin(DataChunk &left, DataChunk &result);
 	};
 
   private:
@@ -67,7 +81,7 @@ class JoinHashTable {
 
   public:
 	JoinHashTable(std::vector<TypeId> key_types,
-	              std::vector<TypeId> build_types,
+	              std::vector<TypeId> build_types, JoinType type,
 	              size_t initial_capacity = 32768, bool parallel = false);
 	//! Resize the HT to the specified size. Must be larger than the current
 	//! size.
@@ -84,10 +98,6 @@ class JoinHashTable {
 		return count;
 	}
 
-  private:
-	//! Insert the given set of locations into the HT with the given set of
-	//! hashes. Caller should hold lock in parallel HT.
-	void InsertHashes(Vector &hashes, uint8_t *key_locations[]);
 	//! Serializer for the keys
 	TupleSerializer key_serializer;
 	//! Serializer for the build side
@@ -100,10 +110,15 @@ class JoinHashTable {
 	size_t key_size;
 	//! Size of build tuple
 	size_t build_size;
-	//! The total tuple size
-	size_t tuple_size;
 	//! The size of an entry as stored in the HashTable
 	size_t entry_size;
+	//! The total tuple size
+	size_t tuple_size;
+
+  private:
+	//! Insert the given set of locations into the HT with the given set of
+	//! hashes. Caller should hold lock in parallel HT.
+	void InsertHashes(Vector &hashes, uint8_t *key_locations[]);
 	//! The capacity of the HT. This can be increased using
 	//! JoinHashTable::Resize
 	size_t capacity;
@@ -117,6 +132,8 @@ class JoinHashTable {
 	bool parallel = false;
 	//! Mutex used for parallelism
 	std::mutex parallel_lock;
+	//! The join type of the HT
+	JoinType join_type;
 
 	//! Copying not allowed
 	JoinHashTable(const JoinHashTable &) = delete;
