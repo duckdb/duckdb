@@ -444,6 +444,41 @@ string ExpressionTypeToString(ExpressionType type) {
 	}
 }
 
+string ExpressionTypeToOperator(ExpressionType type) {
+	switch (type) {
+	case ExpressionType::OPERATOR_ADD:
+		return "+";
+	case ExpressionType::OPERATOR_SUBTRACT:
+		return "-";
+	case ExpressionType::OPERATOR_MULTIPLY:
+		return "*";
+	case ExpressionType::OPERATOR_DIVIDE:
+		return "/";
+	case ExpressionType::OPERATOR_CONCAT:
+		return "+";
+	case ExpressionType::OPERATOR_MOD:
+		return "%";
+	case ExpressionType::OPERATOR_NOT:
+		return "!";
+	case ExpressionType::COMPARE_EQUAL:
+		return "=";
+	case ExpressionType::COMPARE_NOTEQUAL:
+		return "!=";
+	case ExpressionType::COMPARE_LESSTHAN:
+		return "<";
+	case ExpressionType::COMPARE_GREATERTHAN:
+		return ">";
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		return "<=";
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		return ">=";
+	case ExpressionType::STAR:
+		return "*";
+	default:
+		return "";
+	}
+}
+
 // we offset the minimum value by 1 to account for the NULL value in the
 // hashtables
 int64_t MinimumValue(TypeId type) {

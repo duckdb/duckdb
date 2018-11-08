@@ -39,6 +39,51 @@ bool Expression::HasSubquery() {
 	return false;
 }
 
+bool Expression::Equals(const Expression *other) {
+	if (!other) {
+		return false;
+	}
+	if (this->type != other->type) {
+		return false;
+	}
+	if (children.size() != other->children.size()) {
+		return false;
+	}
+	for (size_t i = 0; i < children.size(); i++) {
+		if (!children[i]->Equals(other->children[i].get())) {
+			return false;
+		}
+	}
+	return true;
+}
+
+string Expression::ToString() const {
+	auto op = ExpressionTypeToOperator(type);
+	if (!op.empty()) {
+		if (children.size() == 0) {
+			return "(" + op + ")";
+		} else if (children.size() == 1) {
+			return "(" + op + children[0]->ToString() + ")";
+		} else if (children.size() == 2) {
+			return "(" + children[0]->ToString() + " " + op + " " +
+			       children[1]->ToString() + ")";
+		}
+	}
+	string result = ExpressionTypeToString(type);
+	if (children.size() > 0) {
+		result += "(";
+		for (size_t i = 0; i < children.size(); i++) {
+			auto &child = children[i];
+			result += child->ToString();
+			if (i < children.size() - 1) {
+				result += ", ";
+			}
+		}
+		result += ")";
+	}
+	return result;
+}
+
 void Expression::Serialize(Serializer &serializer) {
 	serializer.Write<ExpressionClass>(GetExpressionClass());
 	serializer.Write<ExpressionType>(type);

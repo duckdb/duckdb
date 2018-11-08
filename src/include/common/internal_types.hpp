@@ -481,6 +481,7 @@ TypeId MinimalType(int64_t value);
 std::string LogicalOperatorToString(LogicalOperatorType type);
 std::string PhysicalOperatorToString(PhysicalOperatorType type);
 std::string ExpressionTypeToString(ExpressionType type);
+std::string ExpressionTypeToOperator(ExpressionType type);
 
 ExternalFileFormat StringToExternalFileFormat(const std::string &str);
 } // namespace duckdb

@@ -92,6 +92,10 @@ class PhysicalOperator : public Printable {
 	virtual std::unique_ptr<PhysicalOperatorState>
 	GetOperatorState(ExpressionExecutor *executor) = 0;
 
+	virtual std::string ExtraRenderInformation() {
+		return "";
+	}
+
 	//! The physical operator type
 	PhysicalOperatorType type;
 	//! The set of children of the operator
