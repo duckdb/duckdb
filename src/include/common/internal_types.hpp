@@ -290,6 +290,8 @@ enum class StatementType : uint8_t {
 	// -----------------------------
 	CREATE_TABLE,  // create table statement type
 	CREATE_SCHEMA, // create schema statement type
+	CREATE_INDEX, // create index statement type
+
 
 	// -----------------------------
 	// Drop Types
@@ -322,6 +324,16 @@ enum class JoinType : uint8_t {
 	OUTER = 4,   // outer
 	SEMI = 5     // IN+Subquery is SEMI
 };
+
+//===--------------------------------------------------------------------===//
+// Index Types
+//===--------------------------------------------------------------------===//
+
+    enum class IndexType {
+        INVALID = 0,  // invalid index type
+        BTREE = 1 //B+-Tree
+    };
+    IndexType StringToIndexType(const std::string &str);
 
 //===--------------------------------------------------------------------===//
 // ORDER BY Clause Types

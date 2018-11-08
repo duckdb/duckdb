@@ -375,6 +375,36 @@ unique_ptr<CreateSchemaStatement> TransformCreateSchema(Node *node) {
 	return result;
 }
 
+unique_ptr<CreateIndexStatement> TransformCreateIndex(Node *node){
+	IndexStmt *stmt = reinterpret_cast<IndexStmt *>(node);
+	assert(stmt);
+	auto result = make_unique<CreateIndexStatement>();
+	auto &info = *result->info.get();
+
+    info.unique = stmt->unique;
+
+	for (auto cell = stmt->indexParams->head; cell != nullptr;
+		 cell = cell->next) {
+		char *index_attr =
+				reinterpret_cast<IndexElem *>(cell->data.ptr_value)->name;
+        info.indexed_columns.push_back(std::string(index_attr));
+	}
+
+    info.index_type = StringToIndexType(std::string(stmt->accessMethod));
+    info.table = stmt->relation->relname;
+	if (stmt->relation->schemaname) {
+        info.schema = stmt->relation->schemaname;
+	}
+    if (stmt->idxname){
+        info.index_name = stmt->idxname;
+    }
+    else{
+        throw NotImplementedException(
+                "Index wout a name not supported yet!");
+    }
+	return result;
+}
+
 unique_ptr<CopyStatement> TransformCopy(Node *node) {
 	const string kDelimiterTok = "delimiter";
 	const string kFormatTok = "format";
@@ -505,5 +535,7 @@ unique_ptr<UpdateStatement> TransformUpdate(Node *node) {
 	}
 	return result;
 }
+
+
 
 } // namespace duckdb

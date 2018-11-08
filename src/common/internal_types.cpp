@@ -505,7 +505,21 @@ ExternalFileFormat StringToExternalFileFormat(const std::string &str) {
 	                          upper.c_str());
 }
 
-bool TypeIsConstantSize(TypeId type) {
+IndexType StringToIndexType(const std::string &str) {
+	std::string upper_str = StringUtil::Upper(str);
+	if (upper_str == "INVALID") {
+		return IndexType::INVALID;
+	} else if (upper_str == "BTREE") {
+		return IndexType::BTREE;
+	} else {
+		throw ConversionException(StringUtil::Format(
+				"No IndexType conversion from string '%s'", upper_str.c_str()));
+	}
+	return IndexType::INVALID;
+}
+
+
+	bool TypeIsConstantSize(TypeId type) {
 	return type < TypeId::VARCHAR;
 }
 bool TypeIsIntegral(TypeId type) {
