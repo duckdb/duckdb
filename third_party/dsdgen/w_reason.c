@@ -38,7 +38,6 @@
 #include <stdio.h>
 #include "genrand.h"
 #include "w_reason.h"
-#include "print.h"
 #include "columns.h"
 #include "build_support.h"
 #include "tables.h"

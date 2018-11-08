@@ -37,15 +37,6 @@
 #include "porting.h"
 #include <stdio.h>
 #include <assert.h>
-#ifdef NCR
-#include <sys/types.h>
-#endif
-#ifndef WIN32
-#include <netinet/in.h>
-#endif
-#ifndef USE_STDLIB_H
-#include <malloc.h>
-#endif
 #include "w_call_center.h"
 #include "date.h"
 #include "decimal.h"
@@ -57,7 +48,6 @@
 #include "misc.h"
 #include "dist.h"
 #include "build_support.h"
-#include "print.h"
 #include "tdefs.h"
 #include "nulls.h"
 #include "scd.h"

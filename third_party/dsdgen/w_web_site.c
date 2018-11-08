@@ -36,19 +36,12 @@
 #include "config.h"
 #include "porting.h"
 #include <stdio.h>
-#ifdef NCR
-#include <sys/types.h>
-#endif
-#ifndef WIN32
-#include <netinet/in.h>
-#endif
 #include "constants.h"
 #include "address.h"
 #include "w_web_site.h"
 #include "genrand.h"
 #include "tables.h"
 #include "columns.h"
-#include "print.h"
 #include "scaling.h"
 #include "build_support.h"
 #include "misc.h"

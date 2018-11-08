@@ -42,7 +42,6 @@
 #include "build_support.h"
 #include "constants.h"
 #include "tables.h"
-#include "print.h"
 #include "nulls.h"
 #include "tdefs.h"
 #include "sparse.h"

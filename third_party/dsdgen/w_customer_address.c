@@ -42,7 +42,6 @@
 #include "genrand.h"
 #include "columns.h"
 #include "build_support.h"
-#include "print.h"
 #include "tables.h"
 #include "nulls.h"
 #include "tdefs.h"

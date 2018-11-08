@@ -36,12 +36,6 @@
 #include "config.h"
 #include "porting.h"
 #include <stdio.h>
-#ifdef NCR
-#include <sys/types.h>
-#endif
-#ifndef WIN32
-#include <netinet/in.h>
-#endif
 #include "constants.h"
 #include "w_store.h"
 #include "date.h"
@@ -49,7 +43,6 @@
 #include "genrand.h"
 #include "build_support.h"
 #include "misc.h"
-#include "print.h"
 #include "tables.h"
 #include "scaling.h"
 #include "nulls.h"

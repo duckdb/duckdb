@@ -52,7 +52,6 @@
 #include "w_inventory.h"
 #include "scaling.h"
 #include "tpcds.idx.h"
-#include "print.h"
 #include "parallel.h"
 #include "scd.h"
 
@@ -347,6 +346,7 @@ ds_key_t get_rowcount(int table) {
  * TODO: None
  */
 void setUpdateDates(void) {
+	assert(0);
 	int nDay, nUpdate, i;
 	date_t dtTemp;
 
@@ -439,20 +439,20 @@ void setUpdateDates(void) {
 			arInventoryUpdateDates[5] -= 14;
 	}
 
-	/*
-	 * output the update dates for this update set
-	 */
-	openDeleteFile(1);
-	for (i = 0; i < 6; i += 2)
-		print_delete(&arUpdateDates[i]);
-
-	/*
-	 * inventory uses separate dates
-	 */
-	openDeleteFile(2);
-	for (i = 0; i < 6; i += 2)
-		print_delete(&arInventoryUpdateDates[i]);
-	openDeleteFile(0);
+//	/*
+//	 * output the update dates for this update set
+//	 */
+//	openDeleteFile(1);
+//	for (i = 0; i < 6; i += 2)
+//		print_delete(&arUpdateDates[i]);
+//
+//	/*
+//	 * inventory uses separate dates
+//	 */
+//	openDeleteFile(2);
+//	for (i = 0; i < 6; i += 2)
+//		print_delete(&arInventoryUpdateDates[i]);
+//	openDeleteFile(0);
 
 	return;
 }

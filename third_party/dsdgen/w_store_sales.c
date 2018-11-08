@@ -43,7 +43,6 @@
 #include "build_support.h"
 #include "tables.h"
 #include "constants.h"
-#include "print.h"
 #include "nulls.h"
 #include "tdefs.h"
 #include "scaling.h"

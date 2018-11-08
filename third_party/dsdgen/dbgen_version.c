@@ -38,7 +38,6 @@
 #include <stdio.h>
 #include <time.h>
 #include "dbgen_version.h"
-#include "print.h"
 #include "columns.h"
 #include "build_support.h"
 #include "tables.h"
@@ -89,60 +88,35 @@ int mk_dbgen_version(void *pDest, ds_key_t kIndex) {
 
 	return (0);
 }
-
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int pr_dbgen_version(void *pSrc) {
-	struct DBGEN_VERSION_TBL *r;
-
-	if (pSrc == NULL)
-		r = &g_dbgen_version;
-	else
-		r = pSrc;
-
-	print_start(DBGEN_VERSION);
-	print_varchar(DV_VERSION, r->szVersion, 1);
-	print_varchar(DV_CREATE_DATE, r->szDate, 1);
-	print_varchar(DV_CREATE_TIME, r->szTime, 1);
-	print_varchar(DV_CMDLINE_ARGS, r->szCmdLineArgs, 0);
-	print_end(DBGEN_VERSION);
-
-	return (0);
-}
-
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int ld_dbgen_version(void *pSrc) {
-	struct DBGEN_VERSION_TBL *r;
-
-	if (pSrc == NULL)
-		r = &g_dbgen_version;
-	else
-		r = pSrc;
-
-	return (0);
-}
+//
+///*
+// * Routine:
+// * Purpose:
+// * Algorithm:
+// * Data Structures:
+// *
+// * Params:
+// * Returns:
+// * Called By:
+// * Calls:
+// * Assumptions:
+// * Side Effects:
+// * TODO: None
+// */
+//int pr_dbgen_version(void *pSrc) {
+//	struct DBGEN_VERSION_TBL *r;
+//
+//	if (pSrc == NULL)
+//		r = &g_dbgen_version;
+//	else
+//		r = pSrc;
+//
+//	print_start(DBGEN_VERSION);
+//	print_varchar(DV_VERSION, r->szVersion, 1);
+//	print_varchar(DV_CREATE_DATE, r->szDate, 1);
+//	print_varchar(DV_CREATE_TIME, r->szTime, 1);
+//	print_varchar(DV_CMDLINE_ARGS, r->szCmdLineArgs, 0);
+//	print_end(DBGEN_VERSION);
+//
+//	return (0);
+//}

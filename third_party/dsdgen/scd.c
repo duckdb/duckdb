@@ -47,7 +47,6 @@
 #include "parallel.h"
 #include "params.h"
 #include "tdef_functions.h"
-#include "print.h"
 #include "permute.h"
 
 /* an array of the most recent business key for each table */

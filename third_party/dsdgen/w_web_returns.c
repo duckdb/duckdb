@@ -44,7 +44,6 @@
 #include "genrand.h"
 #include "build_support.h"
 #include "misc.h"
-#include "print.h"
 #include "error_msg.h"
 #include "tables.h"
 #include "nulls.h"

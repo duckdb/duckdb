@@ -36,18 +36,8 @@
 #include "config.h"
 #include "porting.h"
 #include <stdio.h>
-#ifdef NCR
-#include <sys/types.h>
-#endif
-#ifndef WIN32
-#include <netinet/in.h>
-#endif
-#ifndef USE_STDLIB_H
-#include <malloc.h>
-#endif
 #include "genrand.h"
 #include "w_household_demographics.h"
-#include "print.h"
 #include "columns.h"
 #include "build_support.h"
 #include "tables.h"
