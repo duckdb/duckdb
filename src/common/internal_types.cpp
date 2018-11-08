@@ -269,6 +269,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "DELETE";
 	case LogicalOperatorType::UPDATE:
 		return "UPDATE";
+	case LogicalOperatorType::PRUNE_COLUMNS:
+		return "PRUNE";
 	case LogicalOperatorType::EXPORT_EXTERNAL_FILE:
 		return "EXPORT_EXTERNAL_FILE";
 	default:
@@ -326,6 +328,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "UPDATE";
 	case PhysicalOperatorType::EXPORT_EXTERNAL_FILE:
 		return "EXPORT_EXTERNAL_FILE";
+	case PhysicalOperatorType::PRUNE_COLUMNS:
+		return "PRUNE";
 	default:
 		return "INVALID";
 	}
@@ -437,6 +441,41 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "CAST";
 	default:
 		return "UKNOWN_EXP_" + std::to_string((int)type);
+	}
+}
+
+string ExpressionTypeToOperator(ExpressionType type) {
+	switch (type) {
+	case ExpressionType::OPERATOR_ADD:
+		return "+";
+	case ExpressionType::OPERATOR_SUBTRACT:
+		return "-";
+	case ExpressionType::OPERATOR_MULTIPLY:
+		return "*";
+	case ExpressionType::OPERATOR_DIVIDE:
+		return "/";
+	case ExpressionType::OPERATOR_CONCAT:
+		return "+";
+	case ExpressionType::OPERATOR_MOD:
+		return "%";
+	case ExpressionType::OPERATOR_NOT:
+		return "!";
+	case ExpressionType::COMPARE_EQUAL:
+		return "=";
+	case ExpressionType::COMPARE_NOTEQUAL:
+		return "!=";
+	case ExpressionType::COMPARE_LESSTHAN:
+		return "<";
+	case ExpressionType::COMPARE_GREATERTHAN:
+		return ">";
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		return "<=";
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		return ">=";
+	case ExpressionType::STAR:
+		return "*";
+	default:
+		return "";
 	}
 }
 

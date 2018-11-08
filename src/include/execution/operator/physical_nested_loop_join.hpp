@@ -33,7 +33,8 @@ class PhysicalNestedLoopJoin : public PhysicalJoin {
 	// method to create the final result given the vector of matches of the left
 	// tuple with the right chunk
 	bool CreateResult(DataChunk &left, size_t left_position, DataChunk &right,
-	                  DataChunk &result, Vector &matches, bool is_last_chunk);
+	                  DataChunk &result, sel_t matches[], size_t match_count,
+	                  bool is_last_chunk);
 };
 
 class PhysicalNestedLoopJoinOperatorState : public PhysicalOperatorState {
@@ -49,7 +50,6 @@ class PhysicalNestedLoopJoinOperatorState : public PhysicalOperatorState {
 	size_t left_position;
 	size_t right_chunk;
 	DataChunk left_join_condition;
-	DataChunk right_join_condition;
 	ChunkCollection right_chunks;
 };
 } // namespace duckdb

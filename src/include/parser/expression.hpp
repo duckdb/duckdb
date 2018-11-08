@@ -106,47 +106,13 @@ class Expression : public Printable {
 		return type;
 	}
 
-	virtual bool Equals(const Expression *other) {
-		if (!other) {
-			return false;
-		}
-		if (this->type != other->type) {
-			return false;
-		}
-		if (children.size() != other->children.size()) {
-			return false;
-		}
-		for (size_t i = 0; i < children.size(); i++) {
-			if (!children[i]->Equals(other->children[i].get())) {
-				return false;
-			}
-		}
-		return true;
-	}
+	virtual bool Equals(const Expression *other);
 
 	bool operator==(const Expression &rhs) {
 		return this->Equals(&rhs);
 	}
 
-	virtual std::string GetExprName() const {
-		return ExpressionTypeToString(type);
-	}
-
-	virtual std::string ToString() const override {
-		std::string result = GetExprName();
-		if (children.size() > 0) {
-			result += "(";
-			for (size_t i = 0; i < children.size(); i++) {
-				auto &child = children[i];
-				result += child->ToString();
-				if (i < children.size() - 1) {
-					result += ", ";
-				}
-			}
-			result += ")";
-		}
-		return result;
-	}
+	virtual std::string ToString() const override;
 
 	virtual std::string GetName() {
 		return !alias.empty() ? alias : "Unknown";

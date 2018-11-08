@@ -51,13 +51,22 @@ void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk,
 			DataChunk &group_chunk = state->group_chunk;
 			DataChunk &payload_chunk = state->payload_chunk;
 			executor.Execute(groups, group_chunk);
-			executor.Execute(
-			    payload_chunk,
-			    [&](size_t i) { return state->payload_expressions[i]; },
-			    state->payload_expressions.size());
+			executor.Execute(payload_chunk,
+			                 [&](size_t i) {
+				                 if (!state->payload_expressions[i]) {
+					                 state->payload_chunk.data[i].count =
+					                     group_chunk.size();
+					                 state->payload_chunk.data[i].sel_vector =
+					                     group_chunk.sel_vector;
+				                 }
+				                 return state->payload_expressions[i];
+			                 },
+			                 state->payload_expressions.size());
 
 			group_chunk.Verify();
 			payload_chunk.Verify();
+			assert(payload_chunk.column_count == 0 ||
+			       group_chunk.size() == payload_chunk.size());
 
 			// move the strings inside the groups to the string heap
 			group_chunk.MoveStringsToHeap(state->ht->string_heap);
@@ -119,6 +128,10 @@ PhysicalHashAggregate::GetOperatorState(ExpressionExecutor *parent) {
 				auto &child = expr->children[0];
 				payload_types.push_back(child->return_type);
 				state->payload_expressions.push_back(child.get());
+			} else {
+				// COUNT(*)
+				payload_types.push_back(TypeId::BIGINT);
+				state->payload_expressions.push_back(nullptr);
 			}
 		}
 		state->payload_chunk.Initialize(payload_types);

@@ -32,6 +32,7 @@ class LogicalUnion;
 class LogicalSubquery;
 class LogicalUpdate;
 class LogicalTableFunction;
+class LogicalPruneColumns;
 
 //! The LogicalOperatorVisitor is an abstract base class that implements the
 //! Visitor pattern on LogicalOperator.
@@ -54,6 +55,7 @@ class LogicalOperatorVisitor : public SQLNodeVisitor {
 	virtual void Visit(LogicalProjection &op);
 	virtual void Visit(LogicalInsert &op);
 	virtual void Visit(LogicalCopy &op);
+	virtual void Visit(LogicalPruneColumns &op);
 	virtual void Visit(LogicalSubquery &op);
 	virtual void Visit(LogicalExplain &op);
 	virtual void Visit(LogicalUnion &op);

@@ -52,6 +52,7 @@ template class std::unique_ptr<JoinHashTable::ScanStructure>;
 template class std::unique_ptr<JoinHashTable::Node>;
 template class std::unique_ptr<uint8_t *[]>;
 template class std::unique_ptr<Rule>;
+template class std::unique_ptr<LogicalFilter>;
 template class std::unique_ptr<LogicalJoin>;
 template class std::unique_ptr<SubqueryRef>;
 

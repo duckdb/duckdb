@@ -42,7 +42,15 @@ ExistsRewriteRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
 		return nullptr;
 	}
 
-	// first figure out the join type
+	// find the projection
+	auto node = subquery->op.get();
+	LogicalOperator *parent = nullptr;
+	while (node->children.size() == 1 && !IsProjection(node->type)) {
+		parent = node;
+		node = node->children[0].get();
+	}
+
+	// figure out the join type
 	JoinType type;
 	if (exists->type == ExpressionType::OPERATOR_EXISTS) {
 		type = JoinType::SEMI;
@@ -51,22 +59,20 @@ ExistsRewriteRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
 		type = JoinType::ANTI;
 	}
 
-	if (subquery->op->type == LogicalOperatorType::PROJECTION) {
+	if (node->type != LogicalOperatorType::AGGREGATE_AND_GROUP_BY) {
 		// replace with AGGREGATE_AND_GROUP_BY node
 		// the select list is irrelevant, as we only care about existance
 		vector<unique_ptr<Expression>> empty_list;
 		auto aggregate = make_unique<LogicalAggregate>(move(empty_list));
-		aggregate->children = move(subquery->op->children);
-		subquery->op = move(aggregate);
-	} else if (subquery->op->type !=
-	           LogicalOperatorType::AGGREGATE_AND_GROUP_BY) {
-		// for now we don't support anything other than projection and aggregate
-		// as root
-		// FIXME: what about LIMIT or ORDER BY or HAVING?
-		return nullptr;
+		aggregate->children = move(node->children);
+		node = aggregate.get();
+		if (parent) {
+			parent->children[0] = move(aggregate);
+		} else {
+			subquery->op = move(aggregate);
+		}
 	}
-
-	auto aggr = (LogicalAggregate *)subquery->op.get();
+	auto aggr = (LogicalAggregate *)node;
 
 	// now we turn a subquery in the WHERE clause into a "proper" subquery
 	// hence we need to get a new table index from the BindContext

@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// execution/operator/physical_filter.hpp
+// execution/operator/physical_prune_columns.hpp
 //
 // Author: Mark Raasveldt
 //
@@ -14,14 +14,12 @@
 
 namespace duckdb {
 
-//! PhysicalFilter represents a filter operator. It removes non-matching tupels
-//! from the result. Note that it does not physically change the data, it only
-//! adds a selection vector to the chunk.
-class PhysicalFilter : public PhysicalOperator {
+//! PhysicalPruneColumns prunes (removes) columns from its input
+class PhysicalPruneColumns : public PhysicalOperator {
   public:
-	PhysicalFilter(std::vector<std::unique_ptr<Expression>> select_list)
-	    : PhysicalOperator(PhysicalOperatorType::FILTER),
-	      expressions(std::move(select_list)) {
+	PhysicalPruneColumns(size_t column_limit)
+	    : PhysicalOperator(PhysicalOperatorType::PRUNE_COLUMNS),
+	      column_limit(column_limit) {
 	}
 
 	std::vector<std::string> GetNames() override;
@@ -33,8 +31,6 @@ class PhysicalFilter : public PhysicalOperator {
 	virtual std::unique_ptr<PhysicalOperatorState>
 	GetOperatorState(ExpressionExecutor *parent) override;
 
-	virtual std::string ExtraRenderInformation() override;
-
-	std::vector<std::unique_ptr<Expression>> expressions;
+	size_t column_limit;
 };
 } // namespace duckdb

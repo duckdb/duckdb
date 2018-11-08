@@ -46,6 +46,7 @@ void DataChunk::Reset() {
 		data[i].sel_vector = nullptr;
 		data[i].owned_data = nullptr;
 		data[i].string_heap.Destroy();
+		data[i].nullmask.reset();
 		ptr += GetTypeIdSize(data[i].type) * STANDARD_VECTOR_SIZE;
 	}
 	sel_vector = nullptr;
@@ -248,7 +249,7 @@ void DataChunk::MoveStringsToHeap(StringHeap &heap) {
 }
 
 void DataChunk::Hash(Vector &result) {
-	result.Initialize(TypeId::POINTER, false);
+	assert(result.type == TypeId::POINTER);
 	VectorOperations::Hash(data[0], result);
 	for (size_t i = 1; i < column_count; i++) {
 		VectorOperations::CombineHash(result, data[i]);

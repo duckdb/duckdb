@@ -34,3 +34,7 @@ unique_ptr<PhysicalOperatorState>
 PhysicalTableScan::GetOperatorState(ExpressionExecutor *parent_executor) {
 	return make_unique<PhysicalTableScanOperatorState>(table, parent_executor);
 }
+
+string PhysicalTableScan::ExtraRenderInformation() {
+	return table.table.name;
+}

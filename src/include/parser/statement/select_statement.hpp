@@ -75,6 +75,8 @@ class SelectStatement : public SQLStatement {
 	std::unique_ptr<Expression> where_clause;
 	//! DISTINCT or not
 	bool select_distinct;
+	//! The amount of columns in the result
+	size_t result_column_count;
 
 	//! Group By Description
 	GroupByDescription groupby;

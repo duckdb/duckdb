@@ -243,6 +243,7 @@ void Vector::Copy(Vector &other, size_t offset) {
 		    "Copy to vector with sel_vector not supported!");
 	}
 
+	other.nullmask.reset();
 	if (!TypeIsConstantSize(type)) {
 		assert(type == TypeId::VARCHAR);
 		other.count = count - offset;

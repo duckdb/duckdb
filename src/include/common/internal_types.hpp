@@ -374,7 +374,12 @@ enum class LogicalOperatorType : uint8_t {
 	// -----------------------------
 	// Explain
 	// -----------------------------
-	EXPLAIN
+	EXPLAIN,
+
+	// -----------------------------
+	// Helpers
+	// -----------------------------
+	PRUNE_COLUMNS
 };
 
 //===--------------------------------------------------------------------===//
@@ -418,7 +423,11 @@ enum class PhysicalOperatorType : uint8_t {
 	DELETE,
 	UPDATE,
 	EXPORT_EXTERNAL_FILE,
-	CREATE
+	CREATE,
+	// -----------------------------
+	// Helpers
+	// -----------------------------
+	PRUNE_COLUMNS
 };
 
 //===--------------------------------------------------------------------===//
@@ -472,6 +481,7 @@ TypeId MinimalType(int64_t value);
 std::string LogicalOperatorToString(LogicalOperatorType type);
 std::string PhysicalOperatorToString(PhysicalOperatorType type);
 std::string ExpressionTypeToString(ExpressionType type);
+std::string ExpressionTypeToOperator(ExpressionType type);
 
 ExternalFileFormat StringToExternalFileFormat(const std::string &str);
 } // namespace duckdb

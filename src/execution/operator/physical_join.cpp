@@ -23,3 +23,12 @@ vector<TypeId> PhysicalJoin::GetTypes() {
 	}
 	return types;
 }
+
+string PhysicalJoin::ExtraRenderInformation() {
+	string extra_info;
+	for (auto &it : conditions) {
+		string op = ExpressionTypeToOperator(it.comparison);
+		extra_info += it.left->ToString() + op + it.right->ToString() + "\n";
+	}
+	return extra_info;
+}

@@ -32,7 +32,7 @@ JoinSide LogicalJoin::GetJoinSide(LogicalOperator *op,
 		JoinSide join_side = JoinSide::NONE;
 		for (auto &child : expr->children) {
 			auto child_side = LogicalJoin::GetJoinSide(op, child);
-			if (child_side != join_side) {
+			if (child_side != join_side && child_side != JoinSide::NONE) {
 				join_side =
 				    join_side == JoinSide::NONE ? child_side : JoinSide::BOTH;
 			}
@@ -102,37 +102,14 @@ void LogicalJoin::SetJoinCondition(std::unique_ptr<Expression> condition) {
 		for (auto &child : condition->children) {
 			SetJoinCondition(move(child));
 		}
-	} else if (condition->GetExpressionType() >=
-	               ExpressionType::COMPARE_EQUAL &&
-	           condition->GetExpressionType() <=
-	               ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
-		// logical comparison
-		// figure out which side belongs to the left and which side belongs to
-		// the right
-		assert(condition->children.size() == 2);
-		size_t left_side =
-		    LogicalJoin::GetJoinSide(this, condition->children[0]);
-		size_t right_side =
-		    LogicalJoin::GetJoinSide(this, condition->children[1]);
-
-		JoinCondition join_condition;
-		join_condition.comparison = condition->GetExpressionType();
-		if (left_side == JoinSide::LEFT && right_side == JoinSide::RIGHT) {
-			// left is left right is right
-			join_condition.left = move(condition->children[0]);
-			join_condition.right = move(condition->children[1]);
-		} else if (left_side == JoinSide::RIGHT &&
-		           right_side == JoinSide::LEFT) {
-			// left is right right is left
-			join_condition.left = move(condition->children[1]);
-			join_condition.right = move(condition->children[0]);
-			// have to negate the condition, too
-			join_condition.comparison =
-			    FlipComparisionExpression(join_condition.comparison);
-		} else {
-			// create filters for non-comparision conditions
+	} else {
+		auto total_side = LogicalJoin::GetJoinSide(this, condition);
+		if (total_side == JoinSide::LEFT || total_side == JoinSide::RIGHT ||
+		    total_side == JoinSide::NONE) {
+			// the condition only relates to one side
+			// turn it into a filter
 			auto filter = make_unique<LogicalFilter>(move(condition));
-			if (left_side == JoinSide::LEFT || right_side == JoinSide::LEFT) {
+			if (total_side == JoinSide::LEFT) {
 				filter->AddChild(move(children[0]));
 				children[0] = move(filter);
 			} else {
@@ -141,23 +118,60 @@ void LogicalJoin::SetJoinCondition(std::unique_ptr<Expression> condition) {
 				filter->AddChild(move(children[1]));
 				children[1] = move(filter);
 			}
-			return;
+		} else if (condition->GetExpressionType() >=
+		               ExpressionType::COMPARE_EQUAL &&
+		           condition->GetExpressionType() <=
+		               ExpressionType::COMPARE_NOTLIKE) {
+			// logical comparison
+			// figure out which side belongs to the left and which side belongs
+			// to the right
+			assert(condition->children.size() == 2);
+			size_t left_side =
+			    LogicalJoin::GetJoinSide(this, condition->children[0]);
+			size_t right_side =
+			    LogicalJoin::GetJoinSide(this, condition->children[1]);
+
+			JoinCondition join_condition;
+			join_condition.comparison = condition->GetExpressionType();
+			if (left_side == JoinSide::LEFT && right_side == JoinSide::RIGHT) {
+				// left is left right is right
+				join_condition.left = move(condition->children[0]);
+				join_condition.right = move(condition->children[1]);
+			} else if (left_side == JoinSide::RIGHT &&
+			           right_side == JoinSide::LEFT) {
+				// left is right right is left
+				join_condition.left = move(condition->children[1]);
+				join_condition.right = move(condition->children[0]);
+				// have to negate the condition, too
+				join_condition.comparison =
+				    FlipComparisionExpression(join_condition.comparison);
+			} else {
+				// this can't happen, we handle this before
+				assert(0);
+			}
+			conditions.push_back(move(join_condition));
+
+		} else if (condition->GetExpressionType() ==
+		           ExpressionType::OPERATOR_NOT) {
+			assert(condition->children.size() == 1);
+			ExpressionType child_type =
+			    condition->children[0]->GetExpressionType();
+
+			if (child_type < ExpressionType::COMPARE_EQUAL ||
+			    child_type > ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
+				throw Exception("ON NOT only supports comparision operators");
+			}
+			// switcheroo the child condition
+			// our join needs to compare explicit left and right sides. So we
+			// invert the condition to express NOT, this way we can still use
+			// equi-joins
+
+			condition->children[0]->type =
+			    NegateComparisionExpression(child_type);
+			SetJoinCondition(move(condition->children[0]));
+		} else {
+			// unrecognized type
+			throw Exception("Unrecognized operator type for join!");
 		}
-		conditions.push_back(move(join_condition));
-
-	} else if (condition->GetExpressionType() == ExpressionType::OPERATOR_NOT) {
-		assert(condition->children.size() == 1);
-		ExpressionType child_type = condition->children[0]->GetExpressionType();
-
-		if (child_type < ExpressionType::COMPARE_EQUAL ||
-		    child_type > ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
-			throw Exception("ON NOT only supports comparision operators");
-		}
-		// switcheroo the child condition
-		// our join needs to compare explicit left and right sides. So we invert
-		// the condition to express NOT, this way we can still use equi-joins
-
-		condition->children[0]->type = NegateComparisionExpression(child_type);
-		SetJoinCondition(move(condition->children[0]));
 	}
 }
