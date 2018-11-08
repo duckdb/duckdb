@@ -157,6 +157,8 @@ unique_ptr<SQLStatement> Parser::TransformNode(Node *stmt) {
 		return TransformDelete(stmt);
 	case T_UpdateStmt:
 		return TransformUpdate(stmt);
+	case T_AlterTableStmt:
+		return TransformAlter(stmt);
 	case T_ExplainStmt: {
 		ExplainStmt *explain_stmt = reinterpret_cast<ExplainStmt *>(stmt);
 		return make_unique<ExplainStatement>(

@@ -37,6 +37,16 @@ void SchemaCatalogEntry::DropTable(Transaction &transaction,
 	}
 }
 
+void SchemaCatalogEntry::AlterTable(Transaction &transaction,
+                                   AlterTableInformation *info) {
+	if (!tables.AlterEntry(transaction, info->table, info->cascade)) {
+		if (!info->if_exists) {
+			throw CatalogException("Table with name \"%s\" does not exist!",
+			                       info->table.c_str());
+		}
+	}
+}
+
 bool SchemaCatalogEntry::TableExists(Transaction &transaction,
                                      const string &table_name) {
 	return tables.EntryExists(transaction, table_name);

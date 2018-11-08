@@ -70,6 +70,11 @@ void Catalog::DropTable(Transaction &transaction, DropTableInformation *info) {
 	schema->DropTable(transaction, info);
 }
 
+void Catalog::AlterTable(Transaction &transaction, AlterTableInformation *info) {
+	auto schema = GetSchema(transaction, info->schema);
+	schema->AlterTable(transaction, info);
+}
+
 TableCatalogEntry *Catalog::GetTable(Transaction &transaction,
                                      const string &schema_name,
                                      const string &table_name) {

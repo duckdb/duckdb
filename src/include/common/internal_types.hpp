@@ -364,6 +364,8 @@ enum class LogicalOperatorType : uint8_t {
 	UPDATE,
 	EXPORT_EXTERNAL_FILE,
 	CREATE,
+	ALTER,
+	ADD,
 
 	// -----------------------------
 	// Explain

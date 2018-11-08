@@ -306,7 +306,7 @@ unique_ptr<CreateTableStatement> TransformCreateTable(Node *node) {
 	info.if_not_exists = stmt->if_not_exists;
 	assert(stmt->tableElts);
 
-	for (auto c = stmt->tableElts->head; c != NULL; c = lnext(c)) {
+	for (auto c = stmt->tableElts->head; c != nullptr; c = lnext(c)) {
 		auto node = reinterpret_cast<Node *>(c->data.ptr_value);
 		switch (node->type) {
 		case T_ColumnDef: {
@@ -369,6 +369,44 @@ unique_ptr<CreateSchemaStatement> TransformCreateSchema(Node *node) {
 				throw NotImplementedException(
 				    "Schema element not supported yet!");
 			}
+		}
+	}
+
+	return result;
+}
+
+
+unique_ptr<AlterTableStatement> TransformAlter(Node *node) {
+	auto stmt = reinterpret_cast<AlterTableStmt *>(node);
+	assert(stmt);
+	assert(stmt->relation);
+
+	auto result = make_unique<AlterTableStatement>();
+	auto &info = *result->info.get();
+	auto new_alter_cmd = make_unique<AlterTableCmd>();
+	result->table = TransformRangeVar(stmt->relation);
+
+	info.table = stmt->relation->relname;
+
+	// first we check the type of ALTER
+	for (auto c = stmt->cmds->head; c != NULL; c = c->next) {
+		auto command = reinterpret_cast<AlterTableCmd *>(lfirst(c));
+		//TODO: Include more options for command->subtype
+		switch (command->subtype) {
+			case AT_AddColumn: {
+                auto cdef = (ColumnDef *)command->def;
+                char *name = (reinterpret_cast<value *>(
+                        cdef->typeName->names->tail->data.ptr_value)
+                        ->val.str);
+                auto centry =
+                        ColumnDefinition(cdef->colname, TransformStringToTypeId(name));
+                info.new_columns.push_back(centry);
+                break;
+            }
+			case AT_DropColumn:
+			default:
+				throw NotImplementedException(
+				    "ALTER TABLE option not supported yet!");
 		}
 	}
 

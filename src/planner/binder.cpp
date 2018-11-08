@@ -250,6 +250,12 @@ void Binder::Visit(DeleteStatement &stmt) {
 	stmt.condition->Accept(this);
 }
 
+void Binder::Visit(AlterTableStatement &stmt) {
+	// visit the table reference
+	stmt.table->Accept(this);
+
+}
+
 void Binder::Visit(UpdateStatement &stmt) {
 	// visit the table reference
 	stmt.table->Accept(this);

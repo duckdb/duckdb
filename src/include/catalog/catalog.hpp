@@ -32,6 +32,8 @@ class Catalog {
 	void CreateTable(Transaction &transaction, CreateTableInformation *info);
 	//! Drops a table from the catalog.
 	void DropTable(Transaction &transaction, DropTableInformation *info);
+	//! Alter an existing table in the catalog.
+	void AlterTable(Transaction &transaction, AlterTableInformation *info);
 	//! Create a table function in the catalog
 	void CreateTableFunction(Transaction &transaction,
 	                         CreateTableFunctionInformation *info);

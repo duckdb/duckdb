@@ -54,6 +54,14 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name,
 	return true;
 }
 
+bool CatalogSet::AlterEntry(Transaction &transaction, const string &name,
+							bool cascade) {
+	lock_guard<mutex> lock(catalog_lock);
+
+
+	return true;
+}
+
 bool CatalogSet::DropEntry(Transaction &transaction, CatalogEntry &current,
                            bool cascade) {
 	if (current.timestamp >= TRANSACTION_ID_START &&

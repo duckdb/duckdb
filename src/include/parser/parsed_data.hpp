@@ -55,6 +55,32 @@ struct DropTableInformation {
 	}
 };
 
+struct AlterTableInformation {
+	//! Schema name to alter to
+	std::string schema;
+	//! Table name to alter to
+	std::string table;
+	//! List of columns of the table
+	std::vector<ColumnDefinition> new_columns;
+	//TODO: List of constrains
+	//! List of constraints on the table
+	//std::vector<std::unique_ptr<Constraint>> constraints;
+	//! Ignore if the entry already exists, instead of failing
+	
+	//! Ignore if the entry does not exist instead of failing
+	bool if_exists = false;
+	//! Cascade drop (drop all dependents instead of throwing an error if there
+	//! are any)
+	bool cascade = false;
+
+	AlterTableInformation() : schema(DEFAULT_SCHEMA), if_exists(false), cascade(false) {
+	}
+	AlterTableInformation(std::string schema, std::string table,
+	                       std::vector<ColumnDefinition> columns)
+	    : schema(schema), table(table), new_columns(columns), if_exists(false), cascade(false) {
+	}
+};
+
 struct CreateSchemaInformation {
 	//! Schema name to create
 	std::string schema;

@@ -742,6 +742,126 @@ typedef struct CreateSchemaStmt {
 	bool if_not_exists; /* just do nothing if schema already exists? */
 } CreateSchemaStmt;
 
+/* ----------------------
+ *	Alter Table
+ * ----------------------
+ */
+typedef struct AlterTableStmt {
+	NodeTag		type;
+	RangeVar   *relation;		/* table to work on */
+	List	   *cmds;			/* list of subcommands */
+	ObjectType	relkind;		/* type of object */
+	bool		missing_ok;		/* skip error if table missing */
+} AlterTableStmt;
+
+typedef enum AlterTableType {
+	AT_AddColumn,				/* add column */
+	AT_AddColumnRecurse,		/* internal to commands/tablecmds.c */
+	AT_AddColumnToView,			/* implicitly via CREATE OR REPLACE VIEW */
+	AT_ColumnDefault,			/* alter column default */
+	AT_DropNotNull,				/* alter column drop not null */
+	AT_SetNotNull,				/* alter column set not null */
+	AT_SetStatistics,			/* alter column set statistics */
+	AT_SetOptions,				/* alter column set ( options ) */
+	AT_ResetOptions,			/* alter column reset ( options ) */
+	AT_SetStorage,				/* alter column set storage */
+	AT_DropColumn,				/* drop column */
+	AT_DropColumnRecurse,		/* internal to commands/tablecmds.c */
+	AT_AddIndex,				/* add index */
+	AT_ReAddIndex,				/* internal to commands/tablecmds.c */
+	AT_AddConstraint,			/* add constraint */
+	AT_AddConstraintRecurse,	/* internal to commands/tablecmds.c */
+	AT_ReAddConstraint,			/* internal to commands/tablecmds.c */
+	AT_AlterConstraint,			/* alter constraint */
+	AT_ValidateConstraint,		/* validate constraint */
+	AT_ValidateConstraintRecurse,		/* internal to commands/tablecmds.c */
+	AT_ProcessedConstraint,		/* pre-processed add constraint (local in
+								 * parser/parse_utilcmd.c) */
+	AT_AddIndexConstraint,		/* add constraint using existing index */
+	AT_DropConstraint,			/* drop constraint */
+	AT_DropConstraintRecurse,	/* internal to commands/tablecmds.c */
+	AT_ReAddComment,			/* internal to commands/tablecmds.c */
+	AT_AlterColumnType,			/* alter column type */
+	AT_AlterColumnGenericOptions,		/* alter column OPTIONS (...) */
+	AT_ChangeOwner,				/* change owner */
+	AT_ClusterOn,				/* CLUSTER ON */
+	AT_DropCluster,				/* SET WITHOUT CLUSTER */
+	AT_SetLogged,				/* SET LOGGED */
+	AT_SetUnLogged,				/* SET UNLOGGED */
+	AT_AddOids,					/* SET WITH OIDS */
+	AT_AddOidsRecurse,			/* internal to commands/tablecmds.c */
+	AT_DropOids,				/* SET WITHOUT OIDS */
+	AT_SetTableSpace,			/* SET TABLESPACE */
+	AT_SetRelOptions,			/* SET (...) -- AM specific parameters */
+	AT_ResetRelOptions,			/* RESET (...) -- AM specific parameters */
+	AT_ReplaceRelOptions,		/* replace reloption list in its entirety */
+	AT_EnableTrig,				/* ENABLE TRIGGER name */
+	AT_EnableAlwaysTrig,		/* ENABLE ALWAYS TRIGGER name */
+	AT_EnableReplicaTrig,		/* ENABLE REPLICA TRIGGER name */
+	AT_DisableTrig,				/* DISABLE TRIGGER name */
+	AT_EnableTrigAll,			/* ENABLE TRIGGER ALL */
+	AT_DisableTrigAll,			/* DISABLE TRIGGER ALL */
+	AT_EnableTrigUser,			/* ENABLE TRIGGER USER */
+	AT_DisableTrigUser,			/* DISABLE TRIGGER USER */
+	AT_EnableRule,				/* ENABLE RULE name */
+	AT_EnableAlwaysRule,		/* ENABLE ALWAYS RULE name */
+	AT_EnableReplicaRule,		/* ENABLE REPLICA RULE name */
+	AT_DisableRule,				/* DISABLE RULE name */
+	AT_AddInherit,				/* INHERIT parent */
+	AT_DropInherit,				/* NO INHERIT parent */
+	AT_AddOf,					/* OF <type_name> */
+	AT_DropOf,					/* NOT OF */
+	AT_ReplicaIdentity,			/* REPLICA IDENTITY */
+	AT_EnableRowSecurity,		/* ENABLE ROW SECURITY */
+	AT_DisableRowSecurity,		/* DISABLE ROW SECURITY */
+	AT_ForceRowSecurity,		/* FORCE ROW SECURITY */
+	AT_NoForceRowSecurity,		/* NO FORCE ROW SECURITY */
+	AT_GenericOptions			/* OPTIONS (...) */
+} AlterTableType;
+
+typedef struct ReplicaIdentityStmt {
+	NodeTag		type;
+	char		identity_type;
+	char	   *name;
+} ReplicaIdentityStmt;
+/* one subcommand of an ALTER TABLE */
+typedef struct AlterTableCmd {
+	NodeTag		type;
+	AlterTableType subtype;		/* Type of table alteration to apply */
+	char	   *name;			/* column, constraint, or trigger to act on,
+								 * or tablespace */
+	Node	   *newowner;		/* RoleSpec */
+	Node	   *def;			/* definition of new column, index,
+								 * constraint, or parent table */
+	DropBehavior behavior;		/* RESTRICT or CASCADE for DROP cases */
+	bool		missing_ok;		/* skip error if missing? */
+} AlterTableCmd;
+
+
+/* ----------------------
+ *	Alter Domain
+ *
+ * The fields are used in different ways by the different variants of
+ * this command.
+ * ----------------------
+ */
+typedef struct AlterDomainStmt {
+	NodeTag		type;
+	char		subtype;		/*------------
+								 *	T = alter column default
+								 *	N = alter column drop not null
+								 *	O = alter column set not null
+								 *	C = add constraint
+								 *	X = drop constraint
+								 *------------
+								 */
+	List	   *typeName;		/* domain to work on */
+	char	   *name;			/* column or constraint name to act on */
+	Node	   *def;			/* definition of default or constraint */
+	DropBehavior behavior;		/* RESTRICT or CASCADE for DROP cases */
+	bool		missing_ok;		/* skip error if missing? */
+} AlterDomainStmt;
+
 typedef enum RoleSpecType {
 	ROLESPEC_CSTRING,      /* role name is stored as a C string */
 	ROLESPEC_CURRENT_USER, /* role spec is CURRENT_USER */
