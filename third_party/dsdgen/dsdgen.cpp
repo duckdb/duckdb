@@ -22,6 +22,7 @@ typedef int64_t ds_key_t;
 #include "address.h"
 #include "dist.h"
 #include "genrand.h"
+#include "parallel.h"
 
 void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	DuckDBConnection con(db);
@@ -69,6 +70,11 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 			continue;
 		}
 
+		ds_key_t kRowCount=get_rowcount(table_id), kFirstRow=1;
+
+		// TODO not sure we need this
+        split_work(table_id, &kFirstRow, &kRowCount);
+
 		// TODO: verify this is correct and required here
 		/*
 		 * small tables use a constrained set of geography information
@@ -80,8 +86,7 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 		table_func_t *table_funcs = getTdefFunctionsByNumber(table_id);
 		assert(table_funcs);
 
-		for (ds_key_t i = 1, kRowCount = get_rowcount(table_id); kRowCount;
-		     i++, kRowCount--) {
+		   for (ds_key_t i=kFirstRow; kRowCount; i++,kRowCount--) {
 			// append happens directly in builders since they dump child tables
 			// immediately
 			if (table_funcs->builder((void *)append_info.get(), i)) {
