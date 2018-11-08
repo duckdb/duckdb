@@ -49,6 +49,8 @@
 #include "tdefs.h"
 #include "scd.h"
 
+#include "append_info.h"
+
 struct W_INVENTORY_TBL g_w_inventory;
 
 /*
@@ -65,7 +67,7 @@ struct W_INVENTORY_TBL g_w_inventory;
  * Side Effects:
  * TODO: None
  */
-int mk_w_inventory(void *pDest, ds_key_t index) {
+int mk_w_inventory(void *info_arr, ds_key_t index) {
 	static int bInit = 0;
 	struct W_INVENTORY_TBL *r;
 	static ds_key_t item_count;
@@ -75,10 +77,7 @@ int mk_w_inventory(void *pDest, ds_key_t index) {
 	int nTemp;
 	tdef *pTdef = getSimpleTdefsByNumber(INVENTORY);
 
-	if (pDest == NULL)
-		r = &g_w_inventory;
-	else
-		r = pDest;
+	r = &g_w_inventory;
 
 	if (!bInit) {
 		memset(&g_w_inventory, 0, sizeof(struct W_INVENTORY_TBL));
@@ -109,64 +108,15 @@ int mk_w_inventory(void *pDest, ds_key_t index) {
 	genrand_integer(&r->inv_quantity_on_hand, DIST_UNIFORM, INV_QUANTITY_MIN,
 	                INV_QUANTITY_MAX, 0, INV_QUANTITY_ON_HAND);
 
-	return (0);
-}
+	void *info = append_info_get(info_arr, INVENTORY);
+	append_row_start(info);
+	append_key(info, r->inv_date_sk);
+	append_key(info, r->inv_item_sk);
+	append_key(info, r->inv_warehouse_sk);
+	append_integer(info, r->inv_quantity_on_hand);
+	append_row_end(info);
 
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int pr_w_inventory(void *row) {
-	struct W_INVENTORY_TBL *r;
-
-	if (row == NULL)
-		r = &g_w_inventory;
-	else
-		r = row;
-
-	print_start(INVENTORY);
-	print_key(INV_DATE_SK, r->inv_date_sk, 1);
-	print_key(INV_ITEM_SK, r->inv_item_sk, 1);
-	print_key(INV_WAREHOUSE_SK, r->inv_warehouse_sk, 1);
-	print_integer(INV_QUANTITY_ON_HAND, r->inv_quantity_on_hand, 0);
-	print_end(INVENTORY);
-
-	return (0);
-}
-
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int ld_w_inventory(void *pSrc) {
-	struct W_INVENTORY_TBL *r;
-
-	if (pSrc == NULL)
-		r = &g_w_inventory;
-	else
-		r = pSrc;
-
-	return (0);
+	return 0;
 }
 
 /*

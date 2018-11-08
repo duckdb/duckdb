@@ -67,7 +67,6 @@ struct W_CATALOG_RETURNS_TBL {
 	decimal_t cr_net_loss;
 };
 
-int mk_w_catalog_returns(void *pDest, ds_key_t kIndex);
-int pr_w_catalog_returns(void *pSrc);
-int ld_w_catalog_returns(void *pSrc);
+int mk_w_catalog_returns(void *row, ds_key_t kIndex);
+
 #endif

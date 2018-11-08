@@ -60,7 +60,6 @@ struct W_CUSTOMER_TBL {
 	int c_last_review_date;
 };
 
-int mk_w_customer(void *pDest, ds_key_t kIndex);
-int pr_w_customer(void *pSrc);
-int ld_w_customer(void *pSrc);
+int mk_w_customer(void *info_arr, ds_key_t kIndex);
+
 #endif

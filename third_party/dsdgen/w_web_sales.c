@@ -54,6 +54,8 @@
 #include "scd.h"
 #include "parallel.h"
 
+#include "append_info.h"
+
 struct W_WEB_SALES_TBL g_w_web_sales;
 ds_key_t skipDays(int nTable, ds_key_t *pRemainder);
 
@@ -66,16 +68,13 @@ static int nItemIndex = 0;
  * so the main mk_xxx routine has been split into a master record portion
  * and a detail/lineitem portion.
  */
-static void mk_master(void *row, ds_key_t index) {
+static void mk_master(void *info_arr, ds_key_t index) {
 	static decimal_t dMin, dMax;
 	int nGiftPct;
 	struct W_WEB_SALES_TBL *r;
 	static int bInit = 0, nItemCount;
 
-	if (row == NULL)
-		r = &g_w_web_sales;
-	else
-		r = row;
+	r = &g_w_web_sales;
 
 	if (!bInit) {
 		strtodec(&dMin, "1.00");
@@ -126,7 +125,7 @@ static void mk_master(void *row, ds_key_t index) {
 	return;
 }
 
-static void mk_detail(void *row, int bPrint) {
+static void mk_detail(void *info_arr, int bPrint) {
 	static int *pItemPermutation, nItemCount, bInit = 0;
 	struct W_WEB_SALES_TBL *r;
 	int nShipLag, nTemp;
@@ -141,10 +140,7 @@ static void mk_detail(void *row, int bPrint) {
 		bInit = 1;
 	}
 
-	if (row == NULL)
-		r = &g_w_web_sales;
-	else
-		r = row;
+	r = &g_w_web_sales;
 
 	nullSet(&pT->kNullBitMap, WS_NULLS);
 
@@ -177,15 +173,79 @@ static void mk_detail(void *row, int bPrint) {
 	genrand_integer(&nTemp, DIST_UNIFORM, 0, 99, 0, WR_IS_RETURNED);
 	if (nTemp < WR_RETURN_PCT) {
 		mk_w_web_returns(&w_web_returns, 1);
-		if (bPrint)
-			pr_w_web_returns(&w_web_returns);
+
+		struct W_WEB_RETURNS_TBL *rr = &w_web_returns;
+
+		void *info = append_info_get(info_arr, WEB_RETURNS);
+		append_row_start(info);
+
+		append_key(info, rr->wr_returned_date_sk);
+		append_key(info, rr->wr_returned_time_sk);
+		append_key(info, rr->wr_item_sk);
+		append_key(info, rr->wr_refunded_customer_sk);
+		append_key(info, rr->wr_refunded_cdemo_sk);
+		append_key(info, rr->wr_refunded_hdemo_sk);
+		append_key(info, rr->wr_refunded_addr_sk);
+		append_key(info, rr->wr_returning_customer_sk);
+		append_key(info, rr->wr_returning_cdemo_sk);
+		append_key(info, rr->wr_returning_hdemo_sk);
+		append_key(info, rr->wr_returning_addr_sk);
+		append_key(info, rr->wr_web_page_sk);
+		append_key(info, rr->wr_reason_sk);
+		append_key(info, rr->wr_order_number);
+		append_integer(info, rr->wr_pricing.quantity);
+		append_decimal(info, &rr->wr_pricing.net_paid);
+		append_decimal(info, &rr->wr_pricing.ext_tax);
+		append_decimal(info, &rr->wr_pricing.net_paid_inc_tax);
+		append_decimal(info, &rr->wr_pricing.fee);
+		append_decimal(info, &rr->wr_pricing.ext_ship_cost);
+		append_decimal(info, &rr->wr_pricing.refunded_cash);
+		append_decimal(info, &rr->wr_pricing.reversed_charge);
+		append_decimal(info, &rr->wr_pricing.store_credit);
+		append_decimal(info, &rr->wr_pricing.net_loss);
+
+		append_row_end(info);
 	}
 
-	/**
-	 * now we print out the order and lineitem together as a single row
-	 */
-	if (bPrint)
-		pr_w_web_sales(NULL);
+	void *info = append_info_get(info_arr, WEB_SALES);
+	append_row_start(info);
+
+	append_key(info, r->ws_sold_date_sk);
+	append_key(info, r->ws_sold_time_sk);
+	append_key(info, r->ws_ship_date_sk);
+	append_key(info, r->ws_item_sk);
+	append_key(info, r->ws_bill_customer_sk);
+	append_key(info, r->ws_bill_cdemo_sk);
+	append_key(info, r->ws_bill_hdemo_sk);
+	append_key(info, r->ws_bill_addr_sk);
+	append_key(info, r->ws_ship_customer_sk);
+	append_key(info, r->ws_ship_cdemo_sk);
+	append_key(info, r->ws_ship_hdemo_sk);
+	append_key(info, r->ws_ship_addr_sk);
+	append_key(info, r->ws_web_page_sk);
+	append_key(info, r->ws_web_site_sk);
+	append_key(info, r->ws_ship_mode_sk);
+	append_key(info, r->ws_warehouse_sk);
+	append_key(info, r->ws_promo_sk);
+	append_key(info, r->ws_order_number);
+	append_integer(info, r->ws_pricing.quantity);
+	append_decimal(info, &r->ws_pricing.wholesale_cost);
+	append_decimal(info, &r->ws_pricing.list_price);
+	append_decimal(info, &r->ws_pricing.sales_price);
+	append_decimal(info, &r->ws_pricing.ext_discount_amt);
+	append_decimal(info, &r->ws_pricing.ext_sales_price);
+	append_decimal(info, &r->ws_pricing.ext_wholesale_cost);
+	append_decimal(info, &r->ws_pricing.ext_list_price);
+	append_decimal(info, &r->ws_pricing.ext_tax);
+	append_decimal(info, &r->ws_pricing.coupon_amt);
+	append_decimal(info, &r->ws_pricing.ext_ship_cost);
+	append_decimal(info, &r->ws_pricing.net_paid);
+	append_decimal(info, &r->ws_pricing.net_paid_inc_tax);
+	append_decimal(info, &r->ws_pricing.net_paid_inc_ship);
+	append_decimal(info, &r->ws_pricing.net_paid_inc_ship_tax);
+	append_decimal(info, &r->ws_pricing.net_profit);
+
+	append_row_end(info);
 
 	return;
 }
@@ -193,115 +253,22 @@ static void mk_detail(void *row, int bPrint) {
 /*
  * mk_web_sales
  */
-int mk_w_web_sales(void *row, ds_key_t index) {
+int mk_w_web_sales(void *info_arr, ds_key_t index) {
 	int nLineitems, i;
 
 	/* build the static portion of an order */
-	mk_master(row, index);
+	mk_master(info_arr, index);
 
 	/* set the number of lineitems and build them */
 	genrand_integer(&nLineitems, DIST_UNIFORM, 8, 16, 9, WS_ORDER_NUMBER);
 	for (i = 1; i <= nLineitems; i++) {
-		mk_detail(NULL, 1);
+		mk_detail(info_arr, 1);
 	}
 
 	/**
 	 * and finally return 1 since we have already printed the rows
 	 */
-	return (1);
-}
-
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int pr_w_web_sales(void *row) {
-	struct W_WEB_SALES_TBL *r;
-
-	if (row == NULL)
-		r = &g_w_web_sales;
-	else
-		r = row;
-
-	print_start(WEB_SALES);
-	print_key(WS_SOLD_DATE_SK, r->ws_sold_date_sk, 1);
-	print_key(WS_SOLD_TIME_SK, r->ws_sold_time_sk, 1);
-	print_key(WS_SHIP_DATE_SK, r->ws_ship_date_sk, 1);
-	print_key(WS_ITEM_SK, r->ws_item_sk, 1);
-	print_key(WS_BILL_CUSTOMER_SK, r->ws_bill_customer_sk, 1);
-	print_key(WS_BILL_CDEMO_SK, r->ws_bill_cdemo_sk, 1);
-	print_key(WS_BILL_HDEMO_SK, r->ws_bill_hdemo_sk, 1);
-	print_key(WS_BILL_ADDR_SK, r->ws_bill_addr_sk, 1);
-	print_key(WS_SHIP_CUSTOMER_SK, r->ws_ship_customer_sk, 1);
-	print_key(WS_SHIP_CDEMO_SK, r->ws_ship_cdemo_sk, 1);
-	print_key(WS_SHIP_HDEMO_SK, r->ws_ship_hdemo_sk, 1);
-	print_key(WS_SHIP_ADDR_SK, r->ws_ship_addr_sk, 1);
-	print_key(WS_WEB_PAGE_SK, r->ws_web_page_sk, 1);
-	print_key(WS_WEB_SITE_SK, r->ws_web_site_sk, 1);
-	print_key(WS_SHIP_MODE_SK, r->ws_ship_mode_sk, 1);
-	print_key(WS_WAREHOUSE_SK, r->ws_warehouse_sk, 1);
-	print_key(WS_PROMO_SK, r->ws_promo_sk, 1);
-	print_key(WS_ORDER_NUMBER, r->ws_order_number, 1);
-	print_integer(WS_PRICING_QUANTITY, r->ws_pricing.quantity, 1);
-	print_decimal(WS_PRICING_WHOLESALE_COST, &r->ws_pricing.wholesale_cost, 1);
-	print_decimal(WS_PRICING_LIST_PRICE, &r->ws_pricing.list_price, 1);
-	print_decimal(WS_PRICING_SALES_PRICE, &r->ws_pricing.sales_price, 1);
-	print_decimal(WS_PRICING_EXT_DISCOUNT_AMT, &r->ws_pricing.ext_discount_amt,
-	              1);
-	print_decimal(WS_PRICING_EXT_SALES_PRICE, &r->ws_pricing.ext_sales_price,
-	              1);
-	print_decimal(WS_PRICING_EXT_WHOLESALE_COST,
-	              &r->ws_pricing.ext_wholesale_cost, 1);
-	print_decimal(WS_PRICING_EXT_LIST_PRICE, &r->ws_pricing.ext_list_price, 1);
-	print_decimal(WS_PRICING_EXT_TAX, &r->ws_pricing.ext_tax, 1);
-	print_decimal(WS_PRICING_COUPON_AMT, &r->ws_pricing.coupon_amt, 1);
-	print_decimal(WS_PRICING_EXT_SHIP_COST, &r->ws_pricing.ext_ship_cost, 1);
-	print_decimal(WS_PRICING_NET_PAID, &r->ws_pricing.net_paid, 1);
-	print_decimal(WS_PRICING_NET_PAID_INC_TAX, &r->ws_pricing.net_paid_inc_tax,
-	              1);
-	print_decimal(WS_PRICING_NET_PAID_INC_SHIP,
-	              &r->ws_pricing.net_paid_inc_ship, 1);
-	print_decimal(WS_PRICING_NET_PAID_INC_SHIP_TAX,
-	              &r->ws_pricing.net_paid_inc_ship_tax, 1);
-	print_decimal(WS_PRICING_NET_PROFIT, &r->ws_pricing.net_profit, 0);
-	print_end(WEB_SALES);
-
-	return (0);
-}
-
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int ld_w_web_sales(void *pSrc) {
-	struct W_WEB_SALES_TBL *r;
-
-	if (pSrc == NULL)
-		r = &g_w_web_sales;
-	else
-		r = pSrc;
-
-	return (0);
+	return 0;
 }
 
 /*

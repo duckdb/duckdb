@@ -11,8 +11,14 @@
 
 using namespace tpcds;
 
-void append_row(append_info *info) {
+append_info *append_info_get(void *info_list, int table_id) {
+	auto arr = (tpcds_append_information *)info_list;
+	return (append_info *)&arr[table_id];
+}
+
+void append_row_start(append_info *info) {
 	auto append_info = (tpcds_append_information *)info;
+	append_info->col = 0;
 
 	auto &chunk = append_info->chunk;
 	auto &table = append_info->table;
@@ -33,6 +39,14 @@ void append_row(append_info *info) {
 	}
 }
 
+void append_row_end(append_info *info) {
+	auto append_info = (tpcds_append_information *)info;
+	if (append_info->col != append_info->chunk.column_count) {
+		throw duckdb::Exception("Not all columns were appended to");
+	}
+	append_info->row++;
+}
+
 void append_varchar(append_info *info, const char *value) {
 	auto append_info = (tpcds_append_information *)info;
 	if (append_info->col > append_info->chunk.column_count - 1) {
@@ -48,6 +62,7 @@ void append_varchar(append_info *info, const char *value) {
 	append_info->col++;
 }
 
+// TODO: use direct array manipulation for speed, but not now
 static void append_value(append_info *info, duckdb::Value v) {
 	auto append_info = (tpcds_append_information *)info;
 	if (append_info->col > append_info->chunk.column_count - 1) {
@@ -68,6 +83,10 @@ void append_key(append_info *info, int64_t value) {
 
 void append_integer(append_info *info, int32_t value) {
 	append_value(info, duckdb::Value::INTEGER(value));
+}
+
+void append_boolean(append_info *info, int32_t value) {
+	append_value(info, duckdb::Value::BOOLEAN((int8_t)value));
 }
 
 // value is a Julian date

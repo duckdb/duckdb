@@ -48,7 +48,6 @@ struct W_CUSTOMER_ADDRESS_TBL {
 	char *ca_location_type;
 };
 
-int mk_w_customer_address(void *pDest, ds_key_t kIndex);
-int pr_w_customer_address(void *pSrc);
-int ld_w_customer_address(void *pSrc);
+int mk_w_customer_address(void *info_arr, ds_key_t kIndex);
+
 #endif

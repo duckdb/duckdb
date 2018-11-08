@@ -58,7 +58,6 @@ struct W_CUSTOMER_DEMOGRAPHICS_TBL {
 	int cd_dep_college_count;
 };
 
-int mk_w_customer_demographics(void *pDest, ds_key_t kIndex);
-int pr_w_customer_demographics(void *pSrc);
-int ld_w_customer_demographics(void *pSrc);
+int mk_w_customer_demographics(void *info_arr, ds_key_t kIndex);
+
 #endif

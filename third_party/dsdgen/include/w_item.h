@@ -71,8 +71,6 @@ struct W_ITEM_TBL {
 	ds_key_t i_promo_sk;
 };
 
-int mk_w_item(void *pDest, ds_key_t kIndex);
-int pr_w_item(void *pSrc);
-int ld_w_item(void *pSrc);
+int mk_w_item(void *info_arr, ds_key_t kIndex);
 int vld_w_item(int nTable, ds_key_t kRow, int *Permutation);
 #endif

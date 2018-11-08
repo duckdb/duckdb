@@ -47,22 +47,20 @@
 #include "tdefs.h"
 #include "sparse.h"
 
+#include "append_info.h"
+
 struct W_CUSTOMER_DEMOGRAPHICS_TBL g_w_customer_demographics;
 
 /*
  * mk_customer_demographics
  */
-int mk_w_customer_demographics(void *row, ds_key_t index) {
-	int res = 0;
+int mk_w_customer_demographics(void *info_arr, ds_key_t index) {
 
 	struct W_CUSTOMER_DEMOGRAPHICS_TBL *r;
 	ds_key_t kTemp;
 	tdef *pTdef = getSimpleTdefsByNumber(CUSTOMER_DEMOGRAPHICS);
 
-	if (row == NULL)
-		r = &g_w_customer_demographics;
-	else
-		r = row;
+	r = &g_w_customer_demographics;
 
 	nullSet(&pTdef->kNullBitMap, CD_NULLS);
 	r->cd_demo_sk = index;
@@ -82,67 +80,20 @@ int mk_w_customer_demographics(void *row, ds_key_t index) {
 	kTemp /= (ds_key_t)CD_MAX_EMPLOYED;
 	r->cd_dep_college_count = (int)(kTemp % (ds_key_t)CD_MAX_COLLEGE);
 
-	return (res);
-}
+	void *info = append_info_get(info_arr, CUSTOMER_DEMOGRAPHICS);
+	append_row_start(info);
 
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int pr_w_customer_demographics(void *row) {
-	struct W_CUSTOMER_DEMOGRAPHICS_TBL *r;
+	append_key(info, r->cd_demo_sk);
+	append_varchar(info, r->cd_gender);
+	append_varchar(info, r->cd_marital_status);
+	append_varchar(info, r->cd_education_status);
+	append_integer(info, r->cd_purchase_estimate);
+	append_varchar(info, r->cd_credit_rating);
+	append_integer(info, r->cd_dep_count);
+	append_integer(info, r->cd_dep_employed_count);
+	append_integer(info, r->cd_dep_college_count);
 
-	if (row == NULL)
-		r = &g_w_customer_demographics;
-	else
-		r = row;
+	append_row_end(info);
 
-	print_start(CUSTOMER_DEMOGRAPHICS);
-	print_key(CD_DEMO_SK, r->cd_demo_sk, 1);
-	print_varchar(CD_GENDER, r->cd_gender, 1);
-	print_varchar(CD_MARITAL_STATUS, r->cd_marital_status, 1);
-	print_varchar(CD_EDUCATION_STATUS, r->cd_education_status, 1);
-	print_integer(CD_PURCHASE_ESTIMATE, r->cd_purchase_estimate, 1);
-	print_varchar(CD_CREDIT_RATING, r->cd_credit_rating, 1);
-	print_integer(CD_DEP_COUNT, r->cd_dep_count, 1);
-	print_integer(CD_DEP_EMPLOYED_COUNT, r->cd_dep_employed_count, 1);
-	print_integer(CD_DEP_COLLEGE_COUNT, r->cd_dep_college_count, 0);
-	print_end(CUSTOMER_DEMOGRAPHICS);
-
-	return (0);
-}
-
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int ld_w_customer_demographics(void *row) {
-	struct W_CUSTOMER_DEMOGRAPHICS_TBL *r;
-
-	if (row == NULL)
-		r = &g_w_customer_demographics;
-	else
-		r = row;
-
-	return (0);
+	return 0;
 }

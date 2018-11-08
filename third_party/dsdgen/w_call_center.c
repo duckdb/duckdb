@@ -62,6 +62,8 @@
 #include "nulls.h"
 #include "scd.h"
 
+#include "append_info.h"
+
 struct CALL_CENTER_TBL g_w_call_center;
 static struct CALL_CENTER_TBL g_OldValues;
 
@@ -80,8 +82,7 @@ static struct CALL_CENTER_TBL g_OldValues;
  * TODO:
  * 20020830 jms Need to populate open and close dates
  */
-int mk_w_call_center(void *row, ds_key_t index) {
-	int32_t res = 0;
+int mk_w_call_center(void *info_arr, ds_key_t index) {
 	static int32_t jDateStart, nDaysPerRevision;
 	int32_t nSuffix, bFirstRecord = 0, nFieldChangeFlags, jDateEnd, nDateRange;
 	char *cp, *sName1, *sName2;
@@ -93,10 +94,7 @@ int mk_w_call_center(void *row, ds_key_t index) {
 	static int bInit = 0, nScale;
 	struct CALL_CENTER_TBL *r, *rOldValues = &g_OldValues;
 
-	if (row == NULL)
-		r = &g_w_call_center;
-	else
-		r = row;
+	r = &g_w_call_center;
 
 	if (!bInit) {
 		/* begin locals allocation/initialization */
@@ -222,83 +220,12 @@ int mk_w_call_center(void *row, ds_key_t index) {
 	changeSCD(SCD_DEC, &r->cc_tax_percentage, &rOldValues->cc_tax_percentage,
 	          &nFieldChangeFlags, bFirstRecord);
 
-	return (res);
-}
-
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int pr_w_call_center(void *row) {
-	struct CALL_CENTER_TBL *r;
+	// append the newly created row
 	char szTemp[128];
 
-	if (row == NULL)
-		r = &g_w_call_center;
-	else
-		r = row;
+	void *info = append_info_get(info_arr, CALL_CENTER);
 
-	print_start(CALL_CENTER);
-	print_key(CC_CALL_CENTER_SK, r->cc_call_center_sk, 1);
-	print_varchar(CC_CALL_CENTER_ID, r->cc_call_center_id, 1);
-	print_date(CC_REC_START_DATE_ID, r->cc_rec_start_date_id, 1);
-	print_date(CC_REC_END_DATE_ID, r->cc_rec_end_date_id, 1);
-	print_key(CC_CLOSED_DATE_ID, r->cc_closed_date_id, 1);
-	print_key(CC_OPEN_DATE_ID, r->cc_open_date_id, 1);
-	print_varchar(CC_NAME, r->cc_name, 1);
-	print_varchar(CC_CLASS, &r->cc_class[0], 1);
-	print_integer(CC_EMPLOYEES, r->cc_employees, 1);
-	print_integer(CC_SQ_FT, r->cc_sq_ft, 1);
-	print_varchar(CC_HOURS, r->cc_hours, 1);
-	print_varchar(CC_MANAGER, &r->cc_manager[0], 1);
-	print_integer(CC_MARKET_ID, r->cc_market_id, 1);
-	print_varchar(CC_MARKET_CLASS, &r->cc_market_class[0], 1);
-	print_varchar(CC_MARKET_DESC, &r->cc_market_desc[0], 1);
-	print_varchar(CC_MARKET_MANAGER, &r->cc_market_manager[0], 1);
-	print_integer(CC_DIVISION, r->cc_division_id, 1);
-	print_varchar(CC_DIVISION_NAME, &r->cc_division_name[0], 1);
-	print_integer(CC_COMPANY, r->cc_company, 1);
-	print_varchar(CC_COMPANY_NAME, &r->cc_company_name[0], 1);
-	print_integer(CC_ADDRESS, r->cc_address.street_num, 1);
-	if (r->cc_address.street_name2) {
-		sprintf(szTemp, "%s %s", r->cc_address.street_name1,
-		        r->cc_address.street_name2);
-		print_varchar(CC_ADDRESS, szTemp, 1);
-	} else
-		print_varchar(CC_ADDRESS, r->cc_address.street_name1, 1);
-	print_varchar(CC_ADDRESS, r->cc_address.street_type, 1);
-	print_varchar(CC_ADDRESS, &r->cc_address.suite_num[0], 1);
-	print_varchar(CC_ADDRESS, r->cc_address.city, 1);
-	print_varchar(CC_ADDRESS, r->cc_address.county, 1);
-	print_varchar(CC_ADDRESS, r->cc_address.state, 1);
-	sprintf(szTemp, "%05d", r->cc_address.zip);
-	print_varchar(CC_ADDRESS, szTemp, 1);
-	print_varchar(CC_ADDRESS, &r->cc_address.country[0], 1);
-	print_integer(CC_ADDRESS, r->cc_address.gmt_offset, 1);
-	print_decimal(CC_TAX_PERCENTAGE, &r->cc_tax_percentage, 0);
-	print_end(CALL_CENTER);
-
-	return (0);
-}
-
-#include "append_info.h"
-
-int ld_w_call_center(void *info) {
-	struct CALL_CENTER_TBL *r;
-	char szTemp[128];
-	r = &g_w_call_center;
-
-	append_row(info);
+	append_row_start(info);
 
 	append_key(info, r->cc_call_center_sk);
 	append_varchar(info, r->cc_call_center_id);
@@ -340,6 +267,8 @@ int ld_w_call_center(void *info) {
 	append_varchar(info, &r->cc_address.country[0]);
 	append_integer(info, r->cc_address.gmt_offset);
 	append_decimal(info, &r->cc_tax_percentage);
+
+	append_row_end(info);
 
 	return 0;
 }

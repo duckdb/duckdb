@@ -46,6 +46,8 @@
 #include "nulls.h"
 #include "tdefs.h"
 
+#include "append_info.h"
+
 struct W_PROMOTION_TBL g_w_promotion;
 
 /*
@@ -64,10 +66,9 @@ struct W_PROMOTION_TBL g_w_promotion;
  * 20020829 jms RNG usage on p_promo_name may be too large
  * 20020829 jms RNG usage on P_CHANNEL_DETAILS may be too large
  */
-int mk_w_promotion(void *pDest, ds_key_t index) {
+int mk_w_promotion(void *info_arr, ds_key_t index) {
 	static int bInit = 0;
 	struct W_PROMOTION_TBL *r;
-	int res = 0;
 
 	/* begin locals declarations */
 	static date_t *start_date;
@@ -75,10 +76,7 @@ int mk_w_promotion(void *pDest, ds_key_t index) {
 	int nFlags;
 	tdef *pTdef = getSimpleTdefsByNumber(PROMOTION);
 
-	if (pDest == NULL)
-		r = &g_w_promotion;
-	else
-		r = pDest;
+	r = &g_w_promotion;
 
 	if (!bInit) {
 		memset(&g_w_promotion, 0, sizeof(struct W_PROMOTION_TBL));
@@ -125,77 +123,29 @@ int mk_w_promotion(void *pDest, ds_key_t index) {
 	         PROMO_DETAIL_LEN_MAX, P_CHANNEL_DETAILS);
 	pick_distribution(&r->p_purpose, "promo_purpose", 1, 1, P_PURPOSE);
 
-	return (res);
-}
+	void *info = append_info_get(info_arr, PROMOTION);
+	append_row_start(info);
+	append_key(info, r->p_promo_sk);
+	append_varchar(info, r->p_promo_id);
+	append_key(info, r->p_start_date_id);
+	append_key(info, r->p_end_date_id);
+	append_key(info, r->p_item_sk);
+	append_decimal(info, &r->p_cost);
+	append_integer(info, r->p_response_target);
+	append_varchar(info, &r->p_promo_name[0]);
+	append_boolean(info, r->p_channel_dmail);
+	append_boolean(info, r->p_channel_email);
+	append_boolean(info, r->p_channel_catalog);
+	append_boolean(info, r->p_channel_tv);
+	append_boolean(info, r->p_channel_radio);
+	append_boolean(info, r->p_channel_press);
+	append_boolean(info, r->p_channel_event);
+	append_boolean(info, r->p_channel_demo);
+	append_varchar(info, &r->p_channel_details[0]);
+	append_varchar(info, r->p_purpose);
+	append_boolean(info, r->p_discount_active);
 
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int pr_w_promotion(void *row) {
-	struct W_PROMOTION_TBL *r;
+	append_row_end(info);
 
-	if (row == NULL)
-		r = &g_w_promotion;
-	else
-		r = row;
-
-	print_start(PROMOTION);
-	print_key(P_PROMO_SK, r->p_promo_sk, 1);
-	print_varchar(P_PROMO_ID, r->p_promo_id, 1);
-	print_key(P_START_DATE_ID, r->p_start_date_id, 1);
-	print_key(P_END_DATE_ID, r->p_end_date_id, 1);
-	print_key(P_ITEM_SK, r->p_item_sk, 1);
-	print_decimal(P_COST, &r->p_cost, 1);
-	print_integer(P_RESPONSE_TARGET, r->p_response_target, 1);
-	print_varchar(P_PROMO_NAME, &r->p_promo_name[0], 1);
-	print_boolean(P_CHANNEL_DMAIL, r->p_channel_dmail, 1);
-	print_boolean(P_CHANNEL_EMAIL, r->p_channel_email, 1);
-	print_boolean(P_CHANNEL_CATALOG, r->p_channel_catalog, 1);
-	print_boolean(P_CHANNEL_TV, r->p_channel_tv, 1);
-	print_boolean(P_CHANNEL_RADIO, r->p_channel_radio, 1);
-	print_boolean(P_CHANNEL_PRESS, r->p_channel_press, 1);
-	print_boolean(P_CHANNEL_EVENT, r->p_channel_event, 1);
-	print_boolean(P_CHANNEL_DEMO, r->p_channel_demo, 1);
-	print_varchar(P_CHANNEL_DETAILS, &r->p_channel_details[0], 1);
-	print_varchar(P_PURPOSE, r->p_purpose, 1);
-	print_boolean(P_DISCOUNT_ACTIVE, r->p_discount_active, 0);
-	print_end(PROMOTION);
-
-	return (0);
-}
-
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int ld_w_promotion(void *pSrc) {
-	struct W_PROMOTION_TBL *r;
-
-	if (pSrc == NULL)
-		r = &g_w_promotion;
-	else
-		r = pSrc;
-
-	return (0);
+	return 0;
 }

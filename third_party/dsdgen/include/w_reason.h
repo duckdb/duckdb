@@ -45,7 +45,6 @@ struct W_REASON_TBL {
 	char *r_reason_description;
 };
 
-int mk_w_reason(void *pDest, ds_key_t kIndex);
-int pr_w_reason(void *pSrc);
-int ld_w_reason(void *pSrc);
+int mk_w_reason(void *info_arr, ds_key_t kIndex);
+
 #endif

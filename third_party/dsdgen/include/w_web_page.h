@@ -54,6 +54,4 @@ struct W_WEB_PAGE_TBL {
 	int wp_max_ad_count;
 };
 
-int mk_w_web_page(void *pDest, ds_key_t kIndex);
-int pr_w_web_page(void *pSrc);
-int ld_w_web_page(void *pSrc);
+int mk_w_web_page(void *info_arr, ds_key_t kIndex);

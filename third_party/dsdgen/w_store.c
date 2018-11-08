@@ -56,14 +56,16 @@
 #include "tdefs.h"
 #include "scd.h"
 
+#include "append_info.h"
+
 struct W_STORE_TBL g_w_store;
 static struct W_STORE_TBL g_OldValues;
 
 /*
  * mk_store
  */
-int mk_w_store(void *row, ds_key_t index) {
-	int32_t res = 0, nFieldChangeFlags, bFirstRecord = 0;
+int mk_w_store(void *info_arr, ds_key_t index) {
+	int32_t nFieldChangeFlags, bFirstRecord = 0;
 
 	/* begin locals declarations */
 	static decimal_t dRevMin, dRevMax;
@@ -76,10 +78,7 @@ int mk_w_store(void *row, ds_key_t index) {
 	struct W_STORE_TBL *r, *rOldValues = &g_OldValues;
 	tdef *pT = getSimpleTdefsByNumber(STORE);
 
-	if (row == NULL)
-		r = &g_w_store;
-	else
-		r = row;
+	r = &g_w_store;
 
 	if (!bInit) {
 		nHierarchyTotal = (int)get_rowcount(DIVISIONS);
@@ -226,94 +225,48 @@ int mk_w_store(void *row, ds_key_t index) {
 	changeSCD(SCD_INT, &r->address.zip, &rOldValues->address.zip,
 	          &nFieldChangeFlags, bFirstRecord);
 
-	return (res);
-}
+	char szTemp2[128];
 
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int pr_w_store(void *row) {
-	struct W_STORE_TBL *r;
-	char szTemp[128];
+	void *info = append_info_get(info_arr, STORE);
+	append_row_start(info);
 
-	if (row == NULL)
-		r = &g_w_store;
-	else
-		r = row;
-
-	print_start(STORE);
-	print_key(W_STORE_SK, r->store_sk, 1);
-	print_varchar(W_STORE_ID, r->store_id, 1);
-	print_date(W_STORE_REC_START_DATE_ID, r->rec_start_date_id, 1);
-	print_date(W_STORE_REC_END_DATE_ID, r->rec_end_date_id, 1);
-	print_key(W_STORE_CLOSED_DATE_ID, r->closed_date_id, 1);
-	print_varchar(W_STORE_NAME, r->store_name, 1);
-	print_integer(W_STORE_EMPLOYEES, r->employees, 1);
-	print_integer(W_STORE_FLOOR_SPACE, r->floor_space, 1);
-	print_varchar(W_STORE_HOURS, r->hours, 1);
-	print_varchar(W_STORE_MANAGER, &r->store_manager[0], 1);
-	print_integer(W_STORE_MARKET_ID, r->market_id, 1);
-	print_varchar(W_STORE_GEOGRAPHY_CLASS, r->geography_class, 1);
-	print_varchar(W_STORE_MARKET_DESC, &r->market_desc[0], 1);
-	print_varchar(W_STORE_MARKET_MANAGER, &r->market_manager[0], 1);
-	print_key(W_STORE_DIVISION_ID, r->division_id, 1);
-	print_varchar(W_STORE_DIVISION_NAME, r->division_name, 1);
-	print_key(W_STORE_COMPANY_ID, r->company_id, 1);
-	print_varchar(W_STORE_COMPANY_NAME, r->company_name, 1);
-	print_integer(W_STORE_ADDRESS_STREET_NUM, r->address.street_num, 1);
+	append_key(info, r->store_sk);
+	append_varchar(info, r->store_id);
+	append_date(info, r->rec_start_date_id);
+	append_date(info, r->rec_end_date_id);
+	append_key(info, r->closed_date_id);
+	append_varchar(info, r->store_name);
+	append_integer(info, r->employees);
+	append_integer(info, r->floor_space);
+	append_varchar(info, r->hours);
+	append_varchar(info, &r->store_manager[0]);
+	append_integer(info, r->market_id);
+	append_varchar(info, r->geography_class);
+	append_varchar(info, &r->market_desc[0]);
+	append_varchar(info, &r->market_manager[0]);
+	append_key(info, r->division_id);
+	append_varchar(info, r->division_name);
+	append_key(info, r->company_id);
+	append_varchar(info, r->company_name);
+	append_integer(info, r->address.street_num);
 	if (r->address.street_name2) {
-		sprintf(szTemp, "%s %s", r->address.street_name1,
+		sprintf(szTemp2, "%s %s", r->address.street_name1,
 		        r->address.street_name2);
-		print_varchar(W_STORE_ADDRESS_STREET_NAME1, szTemp, 1);
+		append_varchar(info, szTemp2);
 	} else
-		print_varchar(W_STORE_ADDRESS_STREET_NAME1, r->address.street_name1, 1);
-	print_varchar(W_STORE_ADDRESS_STREET_TYPE, r->address.street_type, 1);
-	print_varchar(W_STORE_ADDRESS_SUITE_NUM, r->address.suite_num, 1);
-	print_varchar(W_STORE_ADDRESS_CITY, r->address.city, 1);
-	print_varchar(W_STORE_ADDRESS_COUNTY, r->address.county, 1);
-	print_varchar(W_STORE_ADDRESS_STATE, r->address.state, 1);
-	sprintf(szTemp, "%05d", r->address.zip);
-	print_varchar(W_STORE_ADDRESS_ZIP, szTemp, 1);
-	print_varchar(W_STORE_ADDRESS_COUNTRY, r->address.country, 1);
-	print_integer(W_STORE_ADDRESS_GMT_OFFSET, r->address.gmt_offset, 1);
-	print_decimal(W_STORE_TAX_PERCENTAGE, &r->dTaxPercentage, 0);
-	print_end(STORE);
+		append_varchar(info, r->address.street_name1);
+	append_varchar(info, r->address.street_type);
+	append_varchar(info, r->address.suite_num);
+	append_varchar(info, r->address.city);
+	append_varchar(info, r->address.county);
+	append_varchar(info, r->address.state);
+	sprintf(szTemp2, "%05d", r->address.zip);
+	append_varchar(info, szTemp2);
+	append_varchar(info, r->address.country);
+	append_integer(info, r->address.gmt_offset);
+	append_decimal(info, &r->dTaxPercentage);
 
-	return (0);
-}
+	append_row_end(info);
 
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int ld_w_store(void *pSrc) {
-	struct W_STORE_TBL *r;
-
-	if (pSrc == NULL)
-		r = &g_w_store;
-	else
-		r = pSrc;
-
-	return (0);
+	return 0;
 }

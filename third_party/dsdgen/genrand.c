@@ -519,6 +519,7 @@ int genrand_date(date_t *dest, int dist, date_t *min, date_t *max, date_t *mean,
  * Side Effects:
  * TODO:
  */
+// FIXME: allow re-init
 void init_rand(void) {
 	static int bInit = 0;
 	int i, skip, nSeed;

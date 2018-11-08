@@ -50,6 +50,9 @@
 #include "permute.h"
 #include "scd.h"
 #include "parallel.h"
+
+#include "append_info.h"
+
 #ifdef JMS
 extern rng_t Streams[];
 #endif
@@ -62,16 +65,13 @@ static ds_key_t jDate, kNewDateIndex;
 /*
  * mk_store_sales
  */
-static void mk_master(void *row, ds_key_t index) {
+static void mk_master(void *info_arr, ds_key_t index) {
 	struct W_STORE_SALES_TBL *r;
 	static decimal_t dMin, dMax;
 	static int bInit = 0, nMaxItemCount;
 	static ds_key_t kNewDateIndex = 0;
 
-	if (row == NULL)
-		r = &g_w_store_sales;
-	else
-		r = row;
+	r = &g_w_store_sales;
 
 	if (!bInit) {
 		strtodec(&dMin, "1.00");
@@ -103,16 +103,12 @@ static void mk_master(void *row, ds_key_t index) {
 	return;
 }
 
-static void mk_detail(void *row, int bPrint) {
+static void mk_detail(void *info_arr, int bPrint) {
 	int nTemp;
-	struct W_STORE_RETURNS_TBL ReturnRow;
 	struct W_STORE_SALES_TBL *r;
 	tdef *pT = getSimpleTdefsByNumber(STORE_SALES);
 
-	if (row == NULL)
-		r = &g_w_store_sales;
-	else
-		r = row;
+	r = &g_w_store_sales;
 
 	nullSet(&pT->kNullBitMap, SS_NULLS);
 	/*
@@ -133,115 +129,87 @@ static void mk_detail(void *row, int bPrint) {
 	 */
 	genrand_integer(&nTemp, DIST_UNIFORM, 0, 99, 0, SR_IS_RETURNED);
 	if (nTemp < SR_RETURN_PCT) {
-		mk_w_store_returns(&ReturnRow, 1);
-		if (bPrint)
-			pr_w_store_returns(&ReturnRow);
+		struct W_STORE_RETURNS_TBL w_web_returns;
+		struct W_STORE_RETURNS_TBL *rr = &w_web_returns;
+		mk_w_store_returns(rr, 1);
+
+		void *info = append_info_get(info_arr, STORE_RETURNS);
+		append_row_start(info);
+
+		append_key(info, rr->sr_returned_date_sk);
+		append_key(info, rr->sr_returned_time_sk);
+		append_key(info, rr->sr_item_sk);
+		append_key(info, rr->sr_customer_sk);
+		append_key(info, rr->sr_cdemo_sk);
+		append_key(info, rr->sr_hdemo_sk);
+		append_key(info, rr->sr_addr_sk);
+		append_key(info, rr->sr_store_sk);
+		append_key(info, rr->sr_reason_sk);
+		append_key(info, rr->sr_ticket_number);
+		append_integer(info, rr->sr_pricing.quantity);
+		append_decimal(info, &rr->sr_pricing.net_paid);
+		append_decimal(info, &rr->sr_pricing.ext_tax);
+		append_decimal(info, &rr->sr_pricing.net_paid_inc_tax);
+		append_decimal(info, &rr->sr_pricing.fee);
+		append_decimal(info, &rr->sr_pricing.ext_ship_cost);
+		append_decimal(info, &rr->sr_pricing.refunded_cash);
+		append_decimal(info, &rr->sr_pricing.reversed_charge);
+		append_decimal(info, &rr->sr_pricing.store_credit);
+		append_decimal(info, &rr->sr_pricing.net_loss);
+		append_row_end(info);
 	}
 
-	if (bPrint)
-		pr_w_store_sales(NULL);
+	void *info = append_info_get(info_arr, STORE_SALES);
+	append_row_start(info);
+
+	append_key(info, r->ss_sold_date_sk);
+	append_key(info, r->ss_sold_time_sk);
+	append_key(info, r->ss_sold_item_sk);
+	append_key(info, r->ss_sold_customer_sk);
+	append_key(info, r->ss_sold_cdemo_sk);
+	append_key(info, r->ss_sold_hdemo_sk);
+	append_key(info, r->ss_sold_addr_sk);
+	append_key(info, r->ss_sold_store_sk);
+	append_key(info, r->ss_sold_promo_sk);
+	append_key(info, r->ss_ticket_number);
+	append_integer(info, r->ss_pricing.quantity);
+	append_decimal(info, &r->ss_pricing.wholesale_cost);
+	append_decimal(info, &r->ss_pricing.list_price);
+	append_decimal(info, &r->ss_pricing.sales_price);
+	append_decimal(info, &r->ss_pricing.coupon_amt);
+	append_decimal(info, &r->ss_pricing.ext_sales_price);
+	append_decimal(info, &r->ss_pricing.ext_wholesale_cost);
+	append_decimal(info, &r->ss_pricing.ext_list_price);
+	append_decimal(info, &r->ss_pricing.ext_tax);
+	append_decimal(info, &r->ss_pricing.coupon_amt);
+	append_decimal(info, &r->ss_pricing.net_paid);
+	append_decimal(info, &r->ss_pricing.net_paid_inc_tax);
+	append_decimal(info, &r->ss_pricing.net_profit);
+
+	append_row_end(info);
 
 	return;
 }
 
 /*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int pr_w_store_sales(void *row) {
-	struct W_STORE_SALES_TBL *r;
-
-	if (row == NULL)
-		r = &g_w_store_sales;
-	else
-		r = row;
-
-	print_start(STORE_SALES);
-	print_key(SS_SOLD_DATE_SK, r->ss_sold_date_sk, 1);
-	print_key(SS_SOLD_TIME_SK, r->ss_sold_time_sk, 1);
-	print_key(SS_SOLD_ITEM_SK, r->ss_sold_item_sk, 1);
-	print_key(SS_SOLD_CUSTOMER_SK, r->ss_sold_customer_sk, 1);
-	print_key(SS_SOLD_CDEMO_SK, r->ss_sold_cdemo_sk, 1);
-	print_key(SS_SOLD_HDEMO_SK, r->ss_sold_hdemo_sk, 1);
-	print_key(SS_SOLD_ADDR_SK, r->ss_sold_addr_sk, 1);
-	print_key(SS_SOLD_STORE_SK, r->ss_sold_store_sk, 1);
-	print_key(SS_SOLD_PROMO_SK, r->ss_sold_promo_sk, 1);
-	print_key(SS_TICKET_NUMBER, r->ss_ticket_number, 1);
-	print_integer(SS_PRICING_QUANTITY, r->ss_pricing.quantity, 1);
-	print_decimal(SS_PRICING_WHOLESALE_COST, &r->ss_pricing.wholesale_cost, 1);
-	print_decimal(SS_PRICING_LIST_PRICE, &r->ss_pricing.list_price, 1);
-	print_decimal(SS_PRICING_SALES_PRICE, &r->ss_pricing.sales_price, 1);
-	print_decimal(SS_PRICING_COUPON_AMT, &r->ss_pricing.coupon_amt, 1);
-	print_decimal(SS_PRICING_EXT_SALES_PRICE, &r->ss_pricing.ext_sales_price,
-	              1);
-	print_decimal(SS_PRICING_EXT_WHOLESALE_COST,
-	              &r->ss_pricing.ext_wholesale_cost, 1);
-	print_decimal(SS_PRICING_EXT_LIST_PRICE, &r->ss_pricing.ext_list_price, 1);
-	print_decimal(SS_PRICING_EXT_TAX, &r->ss_pricing.ext_tax, 1);
-	print_decimal(SS_PRICING_COUPON_AMT, &r->ss_pricing.coupon_amt, 1);
-	print_decimal(SS_PRICING_NET_PAID, &r->ss_pricing.net_paid, 1);
-	print_decimal(SS_PRICING_NET_PAID_INC_TAX, &r->ss_pricing.net_paid_inc_tax,
-	              1);
-	print_decimal(SS_PRICING_NET_PROFIT, &r->ss_pricing.net_profit, 0);
-	print_end(STORE_SALES);
-
-	return (0);
-}
-
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int ld_w_store_sales(void *pSrc) {
-	struct W_STORE_SALES_TBL *r;
-
-	if (pSrc == NULL)
-		r = &g_w_store_sales;
-	else
-		r = pSrc;
-
-	return (0);
-}
-
-/*
  * mk_store_sales
  */
-int mk_w_store_sales(void *row, ds_key_t index) {
+int mk_w_store_sales(void *info_arr, ds_key_t index) {
 	int nLineitems, i;
 
 	/* build the static portion of an order */
-	mk_master(row, index);
+	mk_master(info_arr, index);
 
 	/* set the number of lineitems and build them */
 	genrand_integer(&nLineitems, DIST_UNIFORM, 8, 16, 0, SS_TICKET_NUMBER);
 	for (i = 1; i <= nLineitems; i++) {
-		mk_detail(NULL, 1);
+		mk_detail(info_arr, 1);
 	}
 
 	/**
 	 * and finally return 1 since we have already printed the rows
 	 */
-	return (1);
+	return 0;
 }
 
 /*

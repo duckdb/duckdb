@@ -50,22 +50,20 @@
 #include "nulls.h"
 #include "tdefs.h"
 
+#include "append_info.h"
+
 struct W_WAREHOUSE_TBL g_w_warehouse;
 
 /*
  * mk_warehouse
  */
-int mk_w_warehouse(void *row, ds_key_t index) {
-	int res = 0;
+int mk_w_warehouse(void *info_arr, ds_key_t index) {
 
 	/* begin locals declarations */
 	struct W_WAREHOUSE_TBL *r;
 	tdef *pT = getSimpleTdefsByNumber(WAREHOUSE);
 
-	if (row == NULL)
-		r = &g_w_warehouse;
-	else
-		r = row;
+	r = &g_w_warehouse;
 
 	nullSet(&pT->kNullBitMap, W_NULLS);
 	r->w_warehouse_sk = index;
@@ -77,79 +75,33 @@ int mk_w_warehouse(void *row, ds_key_t index) {
 
 	mk_address(&r->w_address, W_WAREHOUSE_ADDRESS);
 
-	return (res);
-}
-
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int pr_w_warehouse(void *row) {
-	struct W_WAREHOUSE_TBL *r;
 	char szTemp[128];
 
-	if (row == NULL)
-		r = &g_w_warehouse;
-	else
-		r = row;
+	void *info = append_info_get(info_arr, WAREHOUSE);
+	append_row_start(info);
 
-	print_start(WAREHOUSE);
-	print_key(W_WAREHOUSE_SK, r->w_warehouse_sk, 1);
-	print_varchar(W_WAREHOUSE_ID, r->w_warehouse_id, 1);
-	print_varchar(W_WAREHOUSE_NAME, &r->w_warehouse_name[0], 1);
-	print_integer(W_WAREHOUSE_SQ_FT, r->w_warehouse_sq_ft, 1);
-	print_integer(W_ADDRESS_STREET_NUM, r->w_address.street_num, 1);
+	append_key(info, r->w_warehouse_sk);
+	append_varchar(info, r->w_warehouse_id);
+	append_varchar(info, &r->w_warehouse_name[0]);
+	append_integer(info, r->w_warehouse_sq_ft);
+	append_integer(info, r->w_address.street_num);
 	if (r->w_address.street_name2 != NULL) {
 		sprintf(szTemp, "%s %s", r->w_address.street_name1,
 		        r->w_address.street_name2);
-		print_varchar(W_ADDRESS_STREET_NAME1, szTemp, 1);
+		append_varchar(info, szTemp);
 	} else
-		print_varchar(W_ADDRESS_STREET_NAME1, r->w_address.street_name1, 1);
-	print_varchar(W_ADDRESS_STREET_TYPE, r->w_address.street_type, 1);
-	print_varchar(W_ADDRESS_SUITE_NUM, r->w_address.suite_num, 1);
-	print_varchar(W_ADDRESS_CITY, r->w_address.city, 1);
-	print_varchar(W_ADDRESS_COUNTY, r->w_address.county, 1);
-	print_varchar(W_ADDRESS_STATE, r->w_address.state, 1);
+		append_varchar(info, r->w_address.street_name1);
+	append_varchar(info, r->w_address.street_type);
+	append_varchar(info, r->w_address.suite_num);
+	append_varchar(info, r->w_address.city);
+	append_varchar(info, r->w_address.county);
+	append_varchar(info, r->w_address.state);
 	sprintf(szTemp, "%05d", r->w_address.zip);
-	print_varchar(W_ADDRESS_ZIP, szTemp, 1);
-	print_varchar(W_ADDRESS_COUNTRY, r->w_address.country, 1);
-	print_integer(W_ADDRESS_GMT_OFFSET, r->w_address.gmt_offset, 0);
-	print_end(WAREHOUSE);
+	append_varchar(info, szTemp);
+	append_varchar(info, r->w_address.country);
+	append_integer(info, r->w_address.gmt_offset);
 
-	return (0);
-}
+	append_row_end(info);
 
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int ld_w_warehouse(void *pSrc) {
-	struct W_WAREHOUSE_TBL *r;
-
-	if (pSrc == NULL)
-		r = &g_w_warehouse;
-	else
-		r = pSrc;
-
-	return (0);
+	return 0;
 }

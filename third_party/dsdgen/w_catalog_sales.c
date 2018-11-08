@@ -54,6 +54,8 @@
 #include "parallel.h"
 #include "scd.h"
 
+#include "append_info.h"
+
 struct W_CATALOG_SALES_TBL g_w_catalog_sales;
 ds_key_t skipDays(int nTable, ds_key_t *pRemainder);
 
@@ -68,16 +70,13 @@ static int nItemCount;
  * so the main mk_xxx routine has been split into a master record portion
  * and a detail/lineitem portion.
  */
-static void mk_master(void *row, ds_key_t index) {
+static void mk_master(void *info_arr, ds_key_t index) {
 	static decimal_t dZero, dHundred, dOne, dOneHalf;
 	int nGiftPct;
 	struct W_CATALOG_SALES_TBL *r;
 	static int bInit = 0;
 
-	if (row == NULL)
-		r = &g_w_catalog_sales;
-	else
-		r = row;
+	r = &g_w_catalog_sales;
 
 	if (!bInit) {
 		strtodec(&dZero, "0.00");
@@ -143,7 +142,7 @@ static void mk_master(void *row, ds_key_t index) {
 	return;
 }
 
-static void mk_detail(void *row, int bPrint) {
+static void mk_detail(void *info_arr, int bPrint) {
 	static decimal_t dZero, dHundred, dOne, dOneHalf;
 	int nShipLag, nTemp;
 	ds_key_t kItem;
@@ -153,10 +152,7 @@ static void mk_detail(void *row, int bPrint) {
 	static int bInit = 0;
 	tdef *pTdef = getSimpleTdefsByNumber(CATALOG_SALES);
 
-	if (row == NULL)
-		r = &g_w_catalog_sales;
-	else
-		r = row;
+	r = &g_w_catalog_sales;
 
 	if (!bInit) {
 		strtodec(&dZero, "0.00");
@@ -203,145 +199,46 @@ static void mk_detail(void *row, int bPrint) {
 	 */
 	genrand_integer(&nTemp, DIST_UNIFORM, 0, 99, 0, CR_IS_RETURNED);
 	if (nTemp < CR_RETURN_PCT) {
-		mk_w_catalog_returns(NULL, 1);
-		if (bPrint)
-			pr_w_catalog_returns(NULL);
+		struct W_CATALOG_RETURNS_TBL w_catalog_returns;
+		struct W_CATALOG_RETURNS_TBL *rr = &w_catalog_returns;
+		mk_w_catalog_returns(rr, 1);
+
+		void *info = append_info_get(info_arr, CATALOG_RETURNS);
+		append_row_start(info);
+
+		append_key(info, rr->cr_returned_date_sk);
+		append_key(info, rr->cr_returned_time_sk);
+		append_key(info, rr->cr_item_sk);
+		append_key(info, rr->cr_refunded_customer_sk);
+		append_key(info, rr->cr_refunded_cdemo_sk);
+		append_key(info, rr->cr_refunded_hdemo_sk);
+		append_key(info, rr->cr_refunded_addr_sk);
+		append_key(info, rr->cr_returning_customer_sk);
+		append_key(info, rr->cr_returning_cdemo_sk);
+		append_key(info, rr->cr_returning_hdemo_sk);
+		append_key(info, rr->cr_returning_addr_sk);
+		append_key(info, rr->cr_call_center_sk);
+		append_key(info, rr->cr_catalog_page_sk);
+		append_key(info, rr->cr_ship_mode_sk);
+		append_key(info, rr->cr_warehouse_sk);
+		append_key(info, rr->cr_reason_sk);
+		append_key(info, rr->cr_order_number);
+		append_integer(info, rr->cr_pricing.quantity);
+		append_decimal(info, &rr->cr_pricing.net_paid);
+		append_decimal(info, &rr->cr_pricing.ext_tax);
+		append_decimal(info, &rr->cr_pricing.net_paid_inc_tax);
+		append_decimal(info, &rr->cr_pricing.fee);
+		append_decimal(info, &rr->cr_pricing.ext_ship_cost);
+		append_decimal(info, &rr->cr_pricing.refunded_cash);
+		append_decimal(info, &rr->cr_pricing.reversed_charge);
+		append_decimal(info, &rr->cr_pricing.store_credit);
+		append_decimal(info, &rr->cr_pricing.net_loss);
+
+		append_row_end(info);
 	}
 
-	/**
-	 * now we print out the order and lineitem together as a single row
-	 */
-	if (bPrint)
-		pr_w_catalog_sales(NULL);
-
-	return;
-}
-
-/*
- * Routine: mk_catalog_sales()
- * Purpose: build rows for the catalog sales table
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO:
- * 20020902 jms Need to link order date/time to call center record
- * 20020902 jms Should promos be tied to item id?
- */
-int mk_w_catalog_sales(void *row, ds_key_t index) {
-	int nLineitems, i;
-
-	mk_master(row, index);
-
-	/*
-	 * now we select the number of lineitems in this order, and loop through
-	 * them, printing as we go
-	 */
-	genrand_integer(&nLineitems, DIST_UNIFORM, 4, 14, 0, CS_ORDER_NUMBER);
-	for (i = 1; i <= nLineitems; i++) {
-		mk_detail(NULL, 1);
-	}
-
-	/**
-	 * and finally return 1 since we have already printed the rows.
-	 */
-	return (1);
-}
-
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int pr_w_catalog_sales(void *row) {
-	struct W_CATALOG_SALES_TBL *r;
-
-	if (row == NULL)
-		r = &g_w_catalog_sales;
-	else
-		r = row;
-
-	print_start(CATALOG_SALES);
-	print_key(CS_SOLD_DATE_SK, r->cs_sold_date_sk, 1);
-	print_key(CS_SOLD_TIME_SK, r->cs_sold_time_sk, 1);
-	print_key(CS_SHIP_DATE_SK, r->cs_ship_date_sk, 1);
-	print_key(CS_BILL_CUSTOMER_SK, r->cs_bill_customer_sk, 1);
-	print_key(CS_BILL_CDEMO_SK, r->cs_bill_cdemo_sk, 1);
-	print_key(CS_BILL_HDEMO_SK, r->cs_bill_hdemo_sk, 1);
-	print_key(CS_BILL_ADDR_SK, r->cs_bill_addr_sk, 1);
-	print_key(CS_SHIP_CUSTOMER_SK, r->cs_ship_customer_sk, 1);
-	print_key(CS_SHIP_CDEMO_SK, r->cs_ship_cdemo_sk, 1);
-	print_key(CS_SHIP_HDEMO_SK, r->cs_ship_hdemo_sk, 1);
-	print_key(CS_SHIP_ADDR_SK, r->cs_ship_addr_sk, 1);
-	print_key(CS_CALL_CENTER_SK, r->cs_call_center_sk, 1);
-	print_key(CS_CATALOG_PAGE_SK, r->cs_catalog_page_sk, 1);
-	print_key(CS_SHIP_MODE_SK, r->cs_ship_mode_sk, 1);
-	print_key(CS_WAREHOUSE_SK, r->cs_warehouse_sk, 1);
-	print_key(CS_SOLD_ITEM_SK, r->cs_sold_item_sk, 1);
-	print_key(CS_PROMO_SK, r->cs_promo_sk, 1);
-	print_key(CS_ORDER_NUMBER, r->cs_order_number, 1);
-	print_integer(CS_PRICING_QUANTITY, r->cs_pricing.quantity, 1);
-	print_decimal(CS_PRICING_WHOLESALE_COST, &r->cs_pricing.wholesale_cost, 1);
-	print_decimal(CS_PRICING_LIST_PRICE, &r->cs_pricing.list_price, 1);
-	print_decimal(CS_PRICING_SALES_PRICE, &r->cs_pricing.sales_price, 1);
-	print_decimal(CS_PRICING_EXT_DISCOUNT_AMOUNT,
-	              &r->cs_pricing.ext_discount_amt, 1);
-	print_decimal(CS_PRICING_EXT_SALES_PRICE, &r->cs_pricing.ext_sales_price,
-	              1);
-	print_decimal(CS_PRICING_EXT_WHOLESALE_COST,
-	              &r->cs_pricing.ext_wholesale_cost, 1);
-	print_decimal(CS_PRICING_EXT_LIST_PRICE, &r->cs_pricing.ext_list_price, 1);
-	print_decimal(CS_PRICING_EXT_TAX, &r->cs_pricing.ext_tax, 1);
-	print_decimal(CS_PRICING_COUPON_AMT, &r->cs_pricing.coupon_amt, 1);
-	print_decimal(CS_PRICING_EXT_SHIP_COST, &r->cs_pricing.ext_ship_cost, 1);
-	print_decimal(CS_PRICING_NET_PAID, &r->cs_pricing.net_paid, 1);
-	print_decimal(CS_PRICING_NET_PAID_INC_TAX, &r->cs_pricing.net_paid_inc_tax,
-	              1);
-	print_decimal(CS_PRICING_NET_PAID_INC_SHIP,
-	              &r->cs_pricing.net_paid_inc_ship, 1);
-	print_decimal(CS_PRICING_NET_PAID_INC_SHIP_TAX,
-	              &r->cs_pricing.net_paid_inc_ship_tax, 1);
-	print_decimal(CS_PRICING_NET_PROFIT, &r->cs_pricing.net_profit, 0);
-	print_end(CATALOG_SALES);
-
-	return (0);
-}
-
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-
-#include "append_info.h"
-
-int ld_w_catalog_sales(void *info) {
-	struct W_CATALOG_SALES_TBL *r = &g_w_catalog_sales;
-
-	append_row(info);
+	void *info = append_info_get(info_arr, CATALOG_SALES);
+	append_row_start(info);
 
 	append_key(info, r->cs_sold_date_sk);
 	append_key(info, r->cs_sold_time_sk);
@@ -378,7 +275,45 @@ int ld_w_catalog_sales(void *info) {
 	append_decimal(info, &r->cs_pricing.net_paid_inc_ship_tax);
 	append_decimal(info, &r->cs_pricing.net_profit);
 
-	return (0);
+	append_row_end(info);
+
+	return;
+}
+
+/*
+ * Routine: mk_catalog_sales()
+ * Purpose: build rows for the catalog sales table
+ * Algorithm:
+ * Data Structures:
+ *
+ * Params:
+ * Returns:
+ * Called By:
+ * Calls:
+ * Assumptions:
+ * Side Effects:
+ * TODO:
+ * 20020902 jms Need to link order date/time to call center record
+ * 20020902 jms Should promos be tied to item id?
+ */
+int mk_w_catalog_sales(void *info_arr, ds_key_t index) {
+	int nLineitems, i;
+
+	mk_master(info_arr, index);
+
+	/*
+	 * now we select the number of lineitems in this order, and loop through
+	 * them, printing as we go
+	 */
+	genrand_integer(&nLineitems, DIST_UNIFORM, 4, 14, 0, CS_ORDER_NUMBER);
+	for (i = 1; i <= nLineitems; i++) {
+		mk_detail(info_arr, 1);
+	}
+
+	/**
+	 * and finally return 1 since we have already printed the rows.
+	 */
+	return 0;
 }
 
 /*

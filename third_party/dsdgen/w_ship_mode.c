@@ -45,6 +45,8 @@
 #include "nulls.h"
 #include "tdefs.h"
 
+#include "append_info.h"
+
 struct W_SHIP_MODE_TBL g_w_ship_mode;
 
 /*
@@ -61,16 +63,13 @@ struct W_SHIP_MODE_TBL g_w_ship_mode;
  * Side Effects:
  * TODO: None
  */
-int mk_w_ship_mode(void *pDest, ds_key_t kIndex) {
+int mk_w_ship_mode(void *info_arr, ds_key_t kIndex) {
 	static int bInit = 0;
 	struct W_SHIP_MODE_TBL *r;
 	ds_key_t nTemp;
 	tdef *pTdef = getSimpleTdefsByNumber(SHIP_MODE);
 
-	if (pDest == NULL)
-		r = &g_w_ship_mode;
-	else
-		r = pDest;
+	r = &g_w_ship_mode;
 
 	if (!bInit) {
 		memset(&g_w_ship_mode, 0, sizeof(struct W_SHIP_MODE_TBL));
@@ -86,64 +85,15 @@ int mk_w_ship_mode(void *pDest, ds_key_t kIndex) {
 	dist_member(&r->sm_carrier, "ship_mode_carrier", (int)kIndex, 1);
 	gen_charset(r->sm_contract, ALPHANUM, 1, RS_SM_CONTRACT, SM_CONTRACT);
 
-	return (0);
-}
+	void *info = append_info_get(info_arr, SHIP_MODE);
+	append_row_start(info);
+	append_key(info, r->sm_ship_mode_sk);
+	append_varchar(info, r->sm_ship_mode_id);
+	append_varchar(info, r->sm_type);
+	append_varchar(info, r->sm_code);
+	append_varchar(info, r->sm_carrier);
+	append_varchar(info, &r->sm_contract[0]);
+	append_row_end(info);
 
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int pr_w_ship_mode(void *pSrc) {
-	struct W_SHIP_MODE_TBL *r;
-
-	if (pSrc == NULL)
-		r = &g_w_ship_mode;
-	else
-		r = pSrc;
-
-	print_start(SHIP_MODE);
-	print_key(SM_SHIP_MODE_SK, r->sm_ship_mode_sk, 1);
-	print_varchar(SM_SHIP_MODE_ID, r->sm_ship_mode_id, 1);
-	print_varchar(SM_TYPE, r->sm_type, 1);
-	print_varchar(SM_CODE, r->sm_code, 1);
-	print_varchar(SM_CARRIER, r->sm_carrier, 1);
-	print_varchar(SM_CONTRACT, &r->sm_contract[0], 0);
-	print_end(SHIP_MODE);
-
-	return (0);
-}
-
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int ld_w_ship_mode(void *pSrc) {
-	struct W_SHIP_MODE_TBL *r;
-
-	if (pSrc == NULL)
-		r = &g_w_ship_mode;
-	else
-		r = pSrc;
-
-	return (0);
+	return 0;
 }

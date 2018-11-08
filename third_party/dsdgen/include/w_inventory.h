@@ -43,7 +43,6 @@ struct W_INVENTORY_TBL {
 	int inv_quantity_on_hand;
 };
 
-int mk_w_inventory(void *pDest, ds_key_t kIndex);
-int pr_w_inventory(void *pSrc);
-int ld_w_inventory(void *pSrc);
+int mk_w_inventory(void *info_arr, ds_key_t kIndex);
+
 ds_key_t sc_w_inventory(int nScale);

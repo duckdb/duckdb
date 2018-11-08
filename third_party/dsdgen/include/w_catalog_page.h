@@ -50,7 +50,6 @@ struct CATALOG_PAGE_TBL {
 	char *cp_type;
 };
 
-int mk_w_catalog_page(void *row, ds_key_t index);
-int pr_w_catalog_page(void *r);
-int ld_w_catalog_page(void *r);
+int mk_w_catalog_page(void *info_arr, ds_key_t index);
+
 #endif

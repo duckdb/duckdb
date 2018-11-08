@@ -46,7 +46,6 @@ struct W_HOUSEHOLD_DEMOGRAPHICS_TBL {
 	int hd_vehicle_count;
 };
 
-int mk_w_household_demographics(void *pDest, ds_key_t kIndex);
-int pr_w_household_demographics(void *pSrc);
-int ld_w_household_demographics(void *pSrc);
+int mk_w_household_demographics(void *info_arr, ds_key_t kIndex);
+
 #endif

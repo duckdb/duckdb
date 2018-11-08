@@ -49,8 +49,6 @@ struct W_WAREHOUSE_TBL {
 	ds_addr_t w_address;
 };
 
-int mk_w_warehouse(void *pDest, ds_key_t kIndex);
-int pr_w_warehouse(void *pSrc);
-int ld_w_warehouse(void *pSrc);
+int mk_w_warehouse(void *info_arr, ds_key_t kIndex);
 
 #endif

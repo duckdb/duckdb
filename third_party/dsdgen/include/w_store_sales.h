@@ -56,8 +56,6 @@ struct W_STORE_SALES_TBL {
 	ds_pricing_t ss_pricing;
 };
 
-int mk_w_store_sales(void *pDest, ds_key_t kIndex);
-int pr_w_store_sales(void *pSrc);
-int ld_w_store_sales(void *pSrc);
+int mk_w_store_sales(void *info_arr, ds_key_t kIndex);
 int vld_w_store_sales(int nTable, ds_key_t kRow, int *Permutation);
 #endif

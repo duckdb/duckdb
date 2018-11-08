@@ -55,22 +55,20 @@
 #include "tdefs.h"
 #include "sparse.h"
 
+#include "append_info.h"
+
 struct W_HOUSEHOLD_DEMOGRAPHICS_TBL g_w_household_demographics;
 
 /*
  * mk_household_demographics
  */
-int mk_w_household_demographics(void *row, ds_key_t index) {
-	int32_t res = 0;
+int mk_w_household_demographics(void *info_arr, ds_key_t index) {
 	/* begin locals declarations */
 	ds_key_t nTemp;
 	struct W_HOUSEHOLD_DEMOGRAPHICS_TBL *r;
 	tdef *pTdef = getSimpleTdefsByNumber(HOUSEHOLD_DEMOGRAPHICS);
 
-	if (row == NULL)
-		r = &g_w_household_demographics;
-	else
-		r = row;
+	r = &g_w_household_demographics;
 
 	nullSet(&pTdef->kNullBitMap, HD_NULLS);
 	r->hd_demo_sk = index;
@@ -84,63 +82,14 @@ int mk_w_household_demographics(void *row, ds_key_t index) {
 	bitmap_to_dist(&r->hd_vehicle_count, "vehicle_count", &nTemp, 1,
 	               HOUSEHOLD_DEMOGRAPHICS);
 
-	return (res);
-}
+	void *info = append_info_get(info_arr, HOUSEHOLD_DEMOGRAPHICS);
+	append_row_start(info);
+	append_key(info, r->hd_demo_sk);
+	append_key(info, r->hd_income_band_id);
+	append_varchar(info, r->hd_buy_potential);
+	append_integer(info, r->hd_dep_count);
+	append_integer(info, r->hd_vehicle_count);
+	append_row_end(info);
 
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int pr_w_household_demographics(void *row) {
-	struct W_HOUSEHOLD_DEMOGRAPHICS_TBL *r;
-
-	if (row == NULL)
-		r = &g_w_household_demographics;
-	else
-		r = row;
-
-	print_start(HOUSEHOLD_DEMOGRAPHICS);
-	print_key(HD_DEMO_SK, r->hd_demo_sk, 1);
-	print_key(HD_INCOME_BAND_ID, r->hd_income_band_id, 1);
-	print_varchar(HD_BUY_POTENTIAL, r->hd_buy_potential, 1);
-	print_integer(HD_DEP_COUNT, r->hd_dep_count, 1);
-	print_integer(HD_VEHICLE_COUNT, r->hd_vehicle_count, 0);
-	print_end(HOUSEHOLD_DEMOGRAPHICS);
-
-	return (0);
-}
-
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int ld_w_household_demographics(void *pSrc) {
-	struct W_HOUSEHOLD_DEMOGRAPHICS_TBL *r;
-
-	if (pSrc == NULL)
-		r = &g_w_household_demographics;
-	else
-		r = pSrc;
-
-	return (0);
+	return 0;
 }

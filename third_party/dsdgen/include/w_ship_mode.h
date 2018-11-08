@@ -48,7 +48,5 @@ struct W_SHIP_MODE_TBL {
 	char sm_contract[RS_SM_CONTRACT + 1];
 };
 
-int mk_w_ship_mode(void *pDest, ds_key_t kIndex);
-int pr_w_ship_mode(void *pSrc);
-int ld_w_ship_mode(void *pSrc);
+int mk_w_ship_mode(void *info_arr, ds_key_t kIndex);
 #endif

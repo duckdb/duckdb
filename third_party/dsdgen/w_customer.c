@@ -46,6 +46,8 @@
 #include "nulls.h"
 #include "tdefs.h"
 
+#include "append_info.h"
+
 struct W_CUSTOMER_TBL g_w_customer;
 /* extern tdef w_tdefs[]; */
 
@@ -63,8 +65,8 @@ struct W_CUSTOMER_TBL g_w_customer;
  * Side Effects:
  * TODO:
  */
-int mk_w_customer(void *row, ds_key_t index) {
-	int res = 0, nTemp;
+int mk_w_customer(void *info_arr, ds_key_t index) {
+	int nTemp;
 
 	static int nBaseDate;
 	/* begin locals declarations */
@@ -75,10 +77,7 @@ int mk_w_customer(void *row, ds_key_t index) {
 	static date_t dtBirthMin, dtBirthMax, dtToday, dt1YearAgo, dt10YearsAgo;
 	tdef *pT = getSimpleTdefsByNumber(CUSTOMER);
 
-	if (row == NULL)
-		r = &g_w_customer;
-	else
-		r = row;
+	r = &g_w_customer;
 
 	if (!bInit) {
 		nBaseDate = dttoj(strtodate(DATE_MINIMUM));
@@ -131,76 +130,29 @@ int mk_w_customer(void *row, ds_key_t index) {
 
 	pick_distribution(&r->c_birth_country, "countries", 1, 1, C_BIRTH_COUNTRY);
 
-	return (res);
-}
+	void *info = append_info_get(info_arr, CUSTOMER);
+	append_row_start(info);
 
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int pr_w_customer(void *row) {
-	struct W_CUSTOMER_TBL *r;
+	append_key(info, r->c_customer_sk);
+	append_varchar(info, r->c_customer_id);
+	append_key(info, r->c_current_cdemo_sk);
+	append_key(info, r->c_current_hdemo_sk);
+	append_key(info, r->c_current_addr_sk);
+	append_integer(info, r->c_first_shipto_date_id);
+	append_integer(info, r->c_first_sales_date_id);
+	append_varchar(info, r->c_salutation);
+	append_varchar(info, r->c_first_name);
+	append_varchar(info, r->c_last_name);
+	append_boolean(info, r->c_preferred_cust_flag);
+	append_integer(info, r->c_birth_day);
+	append_integer(info, r->c_birth_month);
+	append_integer(info, r->c_birth_year);
+	append_varchar(info, r->c_birth_country);
+	append_varchar(info, &r->c_login[0]);
+	append_varchar(info, &r->c_email_address[0]);
+	append_integer(info, r->c_last_review_date);
 
-	if (row == NULL)
-		r = &g_w_customer;
-	else
-		r = row;
+	append_row_end(info);
 
-	print_start(CUSTOMER);
-	print_key(C_CUSTOMER_SK, r->c_customer_sk, 1);
-	print_varchar(C_CUSTOMER_ID, r->c_customer_id, 1);
-	print_key(C_CURRENT_CDEMO_SK, r->c_current_cdemo_sk, 1);
-	print_key(C_CURRENT_HDEMO_SK, r->c_current_hdemo_sk, 1);
-	print_key(C_CURRENT_ADDR_SK, r->c_current_addr_sk, 1);
-	print_integer(C_FIRST_SHIPTO_DATE_ID, r->c_first_shipto_date_id, 1);
-	print_integer(C_FIRST_SALES_DATE_ID, r->c_first_sales_date_id, 1);
-	print_varchar(C_SALUTATION, r->c_salutation, 1);
-	print_varchar(C_FIRST_NAME, r->c_first_name, 1);
-	print_varchar(C_LAST_NAME, r->c_last_name, 1);
-	print_boolean(C_PREFERRED_CUST_FLAG, r->c_preferred_cust_flag, 1);
-	print_integer(C_BIRTH_DAY, r->c_birth_day, 1);
-	print_integer(C_BIRTH_MONTH, r->c_birth_month, 1);
-	print_integer(C_BIRTH_YEAR, r->c_birth_year, 1);
-	print_varchar(C_BIRTH_COUNTRY, r->c_birth_country, 1);
-	print_varchar(C_LOGIN, &r->c_login[0], 1);
-	print_varchar(C_EMAIL_ADDRESS, &r->c_email_address[0], 1);
-	print_integer(C_LAST_REVIEW_DATE, r->c_last_review_date, 0);
-	print_end(CUSTOMER);
-
-	return (0);
-}
-
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int ld_w_customer(void *row) {
-	struct W_CUSTOMER_TBL *r;
-
-	if (row == NULL)
-		r = &g_w_customer;
-	else
-		r = row;
-
-	return (0);
+	return 0;
 }

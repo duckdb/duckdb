@@ -49,6 +49,8 @@
 #include "nulls.h"
 #include "tdefs.h"
 
+#include "append_info.h"
+
 struct CATALOG_PAGE_TBL g_w_catalog_page;
 
 /*
@@ -69,8 +71,7 @@ struct CATALOG_PAGE_TBL g_w_catalog_page;
  * 20020903 jms cp_department needs to be randomized
  * 20020903 jms cp_description needs to be randomized
  */
-int mk_w_catalog_page(void *row, ds_key_t index) {
-	int res = 0;
+int mk_w_catalog_page(void *info_arr, ds_key_t index) {
 	static date_t *dStartDate;
 	static int nCatalogPageMax;
 	int nDuration, nOffset, nType;
@@ -79,10 +80,7 @@ int mk_w_catalog_page(void *row, ds_key_t index) {
 	int nCatalogInterval;
 	tdef *pTdef = getSimpleTdefsByNumber(CATALOG_PAGE);
 
-	if (row == NULL)
-		r = &g_w_catalog_page;
-	else
-		r = row;
+	r = &g_w_catalog_page;
 
 	if (!bInit) {
 		nCatalogPageMax =
@@ -130,52 +128,9 @@ int mk_w_catalog_page(void *row, ds_key_t index) {
 	gen_text(&r->cp_description[0], RS_CP_DESCRIPTION / 2,
 	         RS_CP_DESCRIPTION - 1, CP_DESCRIPTION);
 
-	return (res);
-}
+	void *info = append_info_get(info_arr, CATALOG_PAGE);
 
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data tdefsures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int pr_w_catalog_page(void *row) {
-	struct CATALOG_PAGE_TBL *r;
-
-	if (row == NULL)
-		r = &g_w_catalog_page;
-	else
-		r = row;
-
-	print_start(CATALOG_PAGE);
-	print_key(CP_CATALOG_PAGE_SK, r->cp_catalog_page_sk, 1);
-	print_varchar(CP_CATALOG_PAGE_ID, r->cp_catalog_page_id, 1);
-	print_key(CP_START_DATE_ID, r->cp_start_date_id, 1);
-	print_key(CP_END_DATE_ID, r->cp_end_date_id, 1);
-	print_varchar(CP_DEPARTMENT, &r->cp_department[0], 1);
-	print_integer(CP_CATALOG_NUMBER, r->cp_catalog_number, 1);
-	print_integer(CP_CATALOG_PAGE_NUMBER, r->cp_catalog_page_number, 1);
-	print_varchar(CP_DESCRIPTION, &r->cp_description[0], 1);
-	print_varchar(CP_TYPE, r->cp_type, 0);
-	print_end(CATALOG_PAGE);
-
-	return (0);
-}
-
-#include "append_info.h"
-
-int ld_w_catalog_page(void *info) {
-	struct CATALOG_PAGE_TBL *r = &g_w_catalog_page;
-
-	append_row(info);
+	append_row_start(info);
 
 	append_key(info, r->cp_catalog_page_sk);
 	append_varchar(info, r->cp_catalog_page_id);
@@ -186,6 +141,8 @@ int ld_w_catalog_page(void *info) {
 	append_integer(info, r->cp_catalog_page_number);
 	append_varchar(info, &r->cp_description[0]);
 	append_varchar(info, r->cp_type);
+
+	append_row_end(info);
 
 	return 0;
 }

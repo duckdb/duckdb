@@ -64,7 +64,5 @@ struct W_WEB_SITE_TBL {
 	decimal_t web_tax_percentage;
 };
 
-int mk_w_web_site(void *pDest, ds_key_t kIndex);
-int pr_w_web_site(void *pSrc);
-int ld_w_web_site(void *pSrc);
+int mk_w_web_site(void *info_arr, ds_key_t kIndex);
 #endif

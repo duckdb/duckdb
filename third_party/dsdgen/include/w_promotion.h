@@ -61,7 +61,6 @@ struct W_PROMOTION_TBL {
 	int p_discount_active;
 };
 
-int mk_w_promotion(void *pDest, ds_key_t kIndex);
-int pr_w_promotion(void *pSrc);
-int ld_w_promotion(void *pSrc);
+int mk_w_promotion(void *info_arr, ds_key_t kIndex);
+
 #endif

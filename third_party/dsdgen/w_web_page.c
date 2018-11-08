@@ -57,6 +57,8 @@
 #include "tdefs.h"
 #include "scd.h"
 
+#include "append_info.h"
+
 struct W_WEB_PAGE_TBL g_w_web_page;
 static struct W_WEB_PAGE_TBL g_OldValues;
 
@@ -75,8 +77,8 @@ static struct W_WEB_PAGE_TBL g_OldValues;
  * TODO:
  * 20020815 jms check text generation/seed usage
  */
-int mk_w_web_page(void *row, ds_key_t index) {
-	int32_t res = 0, bFirstRecord = 0, nFieldChangeFlags;
+int mk_w_web_page(void *info_arr, ds_key_t index) {
+	int32_t bFirstRecord = 0, nFieldChangeFlags;
 	static date_t *dToday;
 	static ds_key_t nConcurrent, nRevisions;
 
@@ -87,10 +89,7 @@ int mk_w_web_page(void *row, ds_key_t index) {
 	struct W_WEB_PAGE_TBL *r, *rOldValues = &g_OldValues;
 	tdef *pT = getSimpleTdefsByNumber(WEB_PAGE);
 
-	if (row == NULL)
-		r = &g_w_web_page;
-	else
-		r = row;
+	r = &g_w_web_page;
 
 	if (!bInit) {
 		/* setup invariant values */
@@ -182,72 +181,24 @@ int mk_w_web_page(void *row, ds_key_t index) {
 	changeSCD(SCD_INT, &r->wp_char_count, &rOldValues->wp_char_count,
 	          &nFieldChangeFlags, bFirstRecord);
 
-	return (res);
-}
+	void *info = append_info_get(info_arr, WEB_PAGE);
+	append_row_start(info);
 
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int pr_w_web_page(void *row) {
-	struct W_WEB_PAGE_TBL *r;
+	append_key(info, r->wp_page_sk);
+	append_varchar(info, r->wp_page_id);
+	append_date(info, r->wp_rec_start_date_id);
+	append_date(info, r->wp_rec_end_date_id);
+	append_key(info, r->wp_creation_date_sk);
+	append_key(info, r->wp_access_date_sk);
+	append_boolean(info, r->wp_autogen_flag);
+	append_key(info, r->wp_customer_sk);
+	append_varchar(info, &r->wp_url[0]);
+	append_varchar(info, &r->wp_type[0]);
+	append_integer(info, r->wp_char_count);
+	append_integer(info, r->wp_link_count);
+	append_integer(info, r->wp_image_count);
+	append_integer(info, r->wp_max_ad_count);
+	append_row_end(info);
 
-	if (row == NULL)
-		r = &g_w_web_page;
-	else
-		r = row;
-
-	print_start(WEB_PAGE);
-	print_key(WP_PAGE_SK, r->wp_page_sk, 1);
-	print_varchar(WP_PAGE_ID, r->wp_page_id, 1);
-	print_date(WP_REC_START_DATE_ID, r->wp_rec_start_date_id, 1);
-	print_date(WP_REC_END_DATE_ID, r->wp_rec_end_date_id, 1);
-	print_key(WP_CREATION_DATE_SK, r->wp_creation_date_sk, 1);
-	print_key(WP_ACCESS_DATE_SK, r->wp_access_date_sk, 1);
-	print_boolean(WP_AUTOGEN_FLAG, r->wp_autogen_flag, 1);
-	print_key(WP_CUSTOMER_SK, r->wp_customer_sk, 1);
-	print_varchar(WP_URL, &r->wp_url[0], 1);
-	print_varchar(WP_TYPE, &r->wp_type[0], 1);
-	print_integer(WP_CHAR_COUNT, r->wp_char_count, 1);
-	print_integer(WP_LINK_COUNT, r->wp_link_count, 1);
-	print_integer(WP_IMAGE_COUNT, r->wp_image_count, 1);
-	print_integer(WP_MAX_AD_COUNT, r->wp_max_ad_count, 0);
-	print_end(WEB_PAGE);
-
-	return (0);
-}
-
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int ld_w_web_page(void *pSrc) {
-	struct W_WEB_PAGE_TBL *r;
-
-	if (pSrc == NULL)
-		r = &g_w_web_page;
-	else
-		r = pSrc;
-
-	return (0);
+	return 0;
 }

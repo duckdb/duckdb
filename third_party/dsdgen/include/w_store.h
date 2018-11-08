@@ -82,8 +82,6 @@ struct W_STORE_TBL {
 #define STORE_MAX_REV_GROWTH "0.50"
 #define STORE_DESC_MIN 15
 
-int mk_w_store(void *pDest, ds_key_t kIndex);
-int pr_w_store(void *pSrc);
-int ld_w_store(void *pSrc);
+int mk_w_store(void *info_arr, ds_key_t kIndex);
 
 #endif

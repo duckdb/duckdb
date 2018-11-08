@@ -56,6 +56,8 @@
 #include "tdefs.h"
 #include "scd.h"
 
+#include "append_info.h"
+
 struct W_WEB_SITE_TBL g_w_web_site;
 static struct W_WEB_SITE_TBL g_OldValues;
 
@@ -73,8 +75,8 @@ static struct W_WEB_SITE_TBL g_OldValues;
  * Side Effects:
  * TODO:
  */
-int mk_w_web_site(void *row, ds_key_t index) {
-	int32_t res = 0, nFieldChangeFlags, bFirstRecord = 0;
+int mk_w_web_site(void *info_arr, ds_key_t index) {
+	int32_t nFieldChangeFlags, bFirstRecord = 0;
 	static date_t *dToday;
 	static decimal_t dMinTaxPercentage, dMaxTaxPercentage;
 	static int32_t bInit = 0;
@@ -84,10 +86,7 @@ int mk_w_web_site(void *row, ds_key_t index) {
 	struct W_WEB_SITE_TBL *r, *rOldValues = &g_OldValues;
 	tdef *pT = getSimpleTdefsByNumber(WEB_SITE);
 
-	if (row == NULL)
-		r = &g_w_web_site;
-	else
-		r = row;
+	r = &g_w_web_site;
 
 	if (!bInit) {
 		/* setup invariant values */
@@ -190,91 +189,45 @@ int mk_w_web_site(void *row, ds_key_t index) {
 	changeSCD(SCD_DEC, &r->web_tax_percentage, &rOldValues->web_tax_percentage,
 	          &nFieldChangeFlags, bFirstRecord);
 
-	return (res);
-}
+	void *info = append_info_get(info_arr, WEB_SITE);
+	append_row_start(info);
 
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int pr_w_web_site(void *row) {
-	struct W_WEB_SITE_TBL *r;
 	char szStreetName[128];
 
-	if (row == NULL)
-		r = &g_w_web_site;
-	else
-		r = row;
-
-	print_start(WEB_SITE);
-	print_key(WEB_SITE_SK, r->web_site_sk, 1);
-	print_varchar(WEB_SITE_ID, &r->web_site_id[0], 1);
-	print_date(WEB_REC_START_DATE_ID, (int)r->web_rec_start_date_id, 1);
-	print_date(WEB_REC_END_DATE_ID, (int)r->web_rec_end_date_id, 1);
-	print_varchar(WEB_NAME, &r->web_name[0], 1);
-	print_key(WEB_OPEN_DATE, r->web_open_date, 1);
-	print_key(WEB_CLOSE_DATE, r->web_close_date, 1);
-	print_varchar(WEB_CLASS, &r->web_class[0], 1);
-	print_varchar(WEB_MANAGER, &r->web_manager[0], 1);
-	print_integer(WEB_MARKET_ID, r->web_market_id, 1);
-	print_varchar(WEB_MARKET_CLASS, &r->web_market_class[0], 1);
-	print_varchar(WEB_MARKET_DESC, &r->web_market_desc[0], 1);
-	print_varchar(WEB_MARKET_MANAGER, &r->web_market_manager[0], 1);
-	print_integer(WEB_COMPANY_ID, r->web_company_id, 1);
-	print_varchar(WEB_COMPANY_NAME, &r->web_company_name[0], 1);
-	print_integer(WEB_ADDRESS_STREET_NUM, r->web_address.street_num, 1);
+	append_key(info, r->web_site_sk);
+	append_varchar(info, &r->web_site_id[0]);
+	append_date(info, (int)r->web_rec_start_date_id);
+	append_date(info, (int)r->web_rec_end_date_id);
+	append_varchar(info, &r->web_name[0]);
+	append_key(info, r->web_open_date);
+	append_key(info, r->web_close_date);
+	append_varchar(info, &r->web_class[0]);
+	append_varchar(info, &r->web_manager[0]);
+	append_integer(info, r->web_market_id);
+	append_varchar(info, &r->web_market_class[0]);
+	append_varchar(info, &r->web_market_desc[0]);
+	append_varchar(info, &r->web_market_manager[0]);
+	append_integer(info, r->web_company_id);
+	append_varchar(info, &r->web_company_name[0]);
+	append_integer(info, r->web_address.street_num);
 	if (r->web_address.street_name2) {
 		sprintf(szStreetName, "%s %s", r->web_address.street_name1,
 		        r->web_address.street_name2);
-		print_varchar(WEB_ADDRESS_STREET_NAME1, szStreetName, 1);
+		append_varchar(info, szStreetName);
 	} else
-		print_varchar(WEB_ADDRESS_STREET_NAME1, r->web_address.street_name1, 1);
-	print_varchar(WEB_ADDRESS_STREET_TYPE, r->web_address.street_type, 1);
-	print_varchar(WEB_ADDRESS_SUITE_NUM, r->web_address.suite_num, 1);
-	print_varchar(WEB_ADDRESS_CITY, r->web_address.city, 1);
-	print_varchar(WEB_ADDRESS_COUNTY, r->web_address.county, 1);
-	print_varchar(WEB_ADDRESS_STATE, r->web_address.state, 1);
+		append_varchar(info, r->web_address.street_name1);
+	append_varchar(info, r->web_address.street_type);
+	append_varchar(info, r->web_address.suite_num);
+	append_varchar(info, r->web_address.city);
+	append_varchar(info, r->web_address.county);
+	append_varchar(info, r->web_address.state);
 	sprintf(szStreetName, "%05d", r->web_address.zip);
-	print_varchar(WEB_ADDRESS_ZIP, szStreetName, 1);
-	print_varchar(WEB_ADDRESS_COUNTRY, r->web_address.country, 1);
-	print_integer(WEB_ADDRESS_GMT_OFFSET, r->web_address.gmt_offset, 1);
-	print_decimal(WEB_TAX_PERCENTAGE, &r->web_tax_percentage, 0);
-	print_end(WEB_SITE);
+	append_varchar(info, szStreetName);
+	append_varchar(info, r->web_address.country);
+	append_integer(info, r->web_address.gmt_offset);
+	append_decimal(info, &r->web_tax_percentage);
 
-	return (0);
-}
+	append_row_end(info);
 
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int ld_w_web_site(void *pSrc) {
-	struct W_WEB_SITE_TBL *r;
-
-	if (pSrc == NULL)
-		r = &g_w_web_site;
-	else
-		r = pSrc;
-
-	return (0);
+	return 0;
 }

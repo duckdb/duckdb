@@ -48,23 +48,21 @@
 #include "nulls.h"
 #include "tdefs.h"
 
+#include "append_info.h"
+
 struct W_TIME_TBL g_w_time;
 
 /*
  * mk_time
  */
-int mk_w_time(void *row, ds_key_t index) {
-	int res = 0;
+int mk_w_time(void *info_arr, ds_key_t index) {
 
 	/* begin locals declarations */
 	int nTemp;
 	struct W_TIME_TBL *r;
 	tdef *pT = getSimpleTdefsByNumber(TIME);
 
-	if (row == NULL)
-		r = &g_w_time;
-	else
-		r = row;
+	r = &g_w_time;
 
 	nullSet(&pT->kNullBitMap, T_NULLS);
 	r->t_time_sk = index - 1;
@@ -81,68 +79,19 @@ int mk_w_time(void *row, ds_key_t index) {
 	dist_member(&r->t_sub_shift, "hours", r->t_hour + 1, 4);
 	dist_member(&r->t_meal_time, "hours", r->t_hour + 1, 5);
 
-	return (res);
-}
+	void *info = append_info_get(info_arr, TIME);
+	append_row_start(info);
+	append_key(info, r->t_time_sk);
+	append_varchar(info, r->t_time_id);
+	append_integer(info, r->t_time);
+	append_integer(info, r->t_hour);
+	append_integer(info, r->t_minute);
+	append_integer(info, r->t_second);
+	append_varchar(info, r->t_am_pm);
+	append_varchar(info, r->t_shift);
+	append_varchar(info, r->t_sub_shift);
+	append_varchar(info, r->t_meal_time);
+	append_row_end(info);
 
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int pr_w_time(void *row) {
-	struct W_TIME_TBL *r;
-
-	if (row == NULL)
-		r = &g_w_time;
-	else
-		r = row;
-
-	print_start(TIME);
-	print_key(T_TIME_SK, r->t_time_sk, 1);
-	print_varchar(T_TIME_ID, r->t_time_id, 1);
-	print_integer(T_TIME, r->t_time, 1);
-	print_integer(T_HOUR, r->t_hour, 1);
-	print_integer(T_MINUTE, r->t_minute, 1);
-	print_integer(T_SECOND, r->t_second, 1);
-	print_varchar(T_AM_PM, r->t_am_pm, 1);
-	print_varchar(T_SHIFT, r->t_shift, 1);
-	print_varchar(T_SUB_SHIFT, r->t_sub_shift, 1);
-	print_varchar(T_MEAL_TIME, r->t_meal_time, 0);
-	print_end(TIME);
-
-	return (0);
-}
-
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int ld_w_time(void *pSrc) {
-	struct W_TIME_TBL *r;
-
-	if (pSrc == NULL)
-		r = &g_w_time;
-	else
-		r = pSrc;
-
-	return (0);
+	return 0;
 }

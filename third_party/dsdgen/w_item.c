@@ -53,6 +53,8 @@
 #include "tdefs.h"
 #include "scd.h"
 
+#include "append_info.h"
+
 /* extern tdef w_tdefs[]; */
 
 struct W_ITEM_TBL g_w_item, g_OldValues;
@@ -60,9 +62,7 @@ struct W_ITEM_TBL g_w_item, g_OldValues;
 /*
  * mk_item
  */
-int mk_w_item(void *row, ds_key_t index) {
-
-	int32_t res = 0;
+int mk_w_item(void *info_arr, ds_key_t index) {
 	/* begin locals declarations */
 	decimal_t dMinPrice, dMaxPrice, dMarkdown;
 	static decimal_t dMinMarkdown, dMaxMarkdown;
@@ -75,10 +75,7 @@ int mk_w_item(void *row, ds_key_t index) {
 	char *szMinPrice = NULL, *szMaxPrice = NULL;
 	tdef *pT = getSimpleTdefsByNumber(ITEM);
 
-	if (row == NULL)
-		r = &g_w_item;
-	else
-		r = row;
+	r = &g_w_item;
 
 	if (!bInit) {
 		/* some fields are static throughout the data set */
@@ -217,80 +214,33 @@ int mk_w_item(void *row, ds_key_t index) {
 	if (index == 1)
 		memcpy(&g_OldValues, r, sizeof(struct W_ITEM_TBL));
 
-	return (res);
-}
+	void *info = append_info_get(info_arr, ITEM);
+	append_row_start(info);
 
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int pr_w_item(void *row) {
-	struct W_ITEM_TBL *r;
+	append_key(info, r->i_item_sk);
+	append_varchar(info, r->i_item_id);
+	append_date(info, r->i_rec_start_date_id);
+	append_date(info, r->i_rec_end_date_id);
+	append_varchar(info, r->i_item_desc);
+	append_decimal(info, &r->i_current_price);
+	append_decimal(info, &r->i_wholesale_cost);
+	append_key(info, r->i_brand_id);
+	append_varchar(info, r->i_brand);
+	append_key(info, r->i_class_id);
+	append_varchar(info, r->i_class);
+	append_key(info, r->i_category_id);
+	append_varchar(info, r->i_category);
+	append_key(info, r->i_manufact_id);
+	append_varchar(info, r->i_manufact);
+	append_varchar(info, r->i_size);
+	append_varchar(info, r->i_formulation);
+	append_varchar(info, r->i_color);
+	append_varchar(info, r->i_units);
+	append_varchar(info, r->i_container);
+	append_key(info, r->i_manager_id);
+	append_varchar(info, r->i_product_name);
 
-	if (row == NULL)
-		r = &g_w_item;
-	else
-		r = row;
+	append_row_end(info);
 
-	print_start(ITEM);
-	print_key(I_ITEM_SK, r->i_item_sk, 1);
-	print_varchar(I_ITEM_ID, r->i_item_id, 1);
-	print_date(I_REC_START_DATE_ID, r->i_rec_start_date_id, 1);
-	print_date(I_REC_END_DATE_ID, r->i_rec_end_date_id, 1);
-	print_varchar(I_ITEM_DESC, r->i_item_desc, 1);
-	print_decimal(I_CURRENT_PRICE, &r->i_current_price, 1);
-	print_decimal(I_WHOLESALE_COST, &r->i_wholesale_cost, 1);
-	print_key(I_BRAND_ID, r->i_brand_id, 1);
-	print_varchar(I_BRAND, r->i_brand, 1);
-	print_key(I_CLASS_ID, r->i_class_id, 1);
-	print_varchar(I_CLASS, r->i_class, 1);
-	print_key(I_CATEGORY_ID, r->i_category_id, 1);
-	print_varchar(I_CATEGORY, r->i_category, 1);
-	print_key(I_MANUFACT_ID, r->i_manufact_id, 1);
-	print_varchar(I_MANUFACT, r->i_manufact, 1);
-	print_varchar(I_SIZE, r->i_size, 1);
-	print_varchar(I_FORMULATION, r->i_formulation, 1);
-	print_varchar(I_COLOR, r->i_color, 1);
-	print_varchar(I_UNITS, r->i_units, 1);
-	print_varchar(I_CONTAINER, r->i_container, 1);
-	print_key(I_MANAGER_ID, r->i_manager_id, 1);
-	print_varchar(I_PRODUCT_NAME, r->i_product_name, 0);
-	print_end(ITEM);
-
-	return (0);
-}
-
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int ld_w_item(void *pSrc) {
-	struct W_ITEM_TBL *r;
-
-	if (pSrc == NULL)
-		r = &g_w_item;
-	else
-		r = pSrc;
-
-	return (0);
+	return 0;
 }

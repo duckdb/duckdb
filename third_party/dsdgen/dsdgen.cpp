@@ -28,10 +28,11 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	con.context.transaction.BeginTransaction();
 	auto &transaction = con.context.ActiveTransaction();
 
+	// FIXME: No restart support yet, suspect only fix is init_rand
 	// FIXME: no schema/suffix support yet
 
 	for (int t = 0; t < TPCDS_TABLE_COUNT; t++) {
-		con.GetQueryResult(con.context, TPCDS_TABLE_DDL[t]);
+		con.GetQueryResult(con.context, TPCDS_TABLE_DDL_NOKEYS[t]);
 	}
 
 	if (flt_scale == 0) {
@@ -42,13 +43,29 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 
 	init_rand(); // no random numbers without this
 
-	for (int table_id = CALL_CENTER; table_id < S_BRAND; table_id++) {
+	// populate append info
+	auto append_info = unique_ptr<tpcds_append_information[]>(
+	    new tpcds_append_information[DBGEN_VERSION]);
+
+	int tmin = CALL_CENTER, tmax = DBGEN_VERSION; // because fuck dbgen_version
+
+	for (int table_id = tmin; table_id < tmax; table_id++) {
 		tdef *table_def = getSimpleTdefsByNumber(table_id);
 		assert(table_def);
 		assert(table_def->name);
 
+		append_info[table_id].table_def = table_def;
+		append_info[table_id].row = 0;
+		append_info[table_id].chunk.Reset();
+		append_info[table_id].context = &con.context;
+		append_info[table_id].table =
+		    db.catalog.GetTable(transaction, DEFAULT_SCHEMA, table_def->name);
+	}
+
+	// actually generate tables using modified data generator functions
+	for (int table_id = tmin; table_id < tmax; table_id++) {
 		// child tables are created in parent loaders
-		if (table_def->flags & FL_CHILD) {
+		if (append_info[table_id].table_def->flags & FL_CHILD) {
 			continue;
 		}
 
@@ -56,43 +73,35 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 		/*
 		 * small tables use a constrained set of geography information
 		 */
-		if (table_def->flags & FL_SMALL) {
+		if (append_info[table_id].table_def->flags & FL_SMALL) {
 			resetCountCount();
 		}
 
-		tpcds_append_information append_info;
-		append_info.chunk.Reset();
-		append_info.row = 0;
-		append_info.context = &con.context;
-		append_info.table =
-		    db.catalog.GetTable(transaction, DEFAULT_SCHEMA, table_def->name);
-
-		// get function pointers for this table
 		table_func_t *table_funcs = getTdefFunctionsByNumber(table_id);
+		assert(table_funcs);
+
 		for (ds_key_t i = 1, kRowCount = get_rowcount(table_id); kRowCount;
 		     i++, kRowCount--) {
-			append_info.col = 0;
-
-			/* not all rows that are built should be printed. Use return code to
-			 * deterine output */
-			if (!table_funcs->builder(NULL, i)) {
-				if (table_funcs->loader[1]((void *)&append_info)) {
-					throw Exception("Table generation failed");
-				}
-				append_info.row++;
+			// append happens directly in builders since they dump child tables
+			// immediately
+			if (table_funcs->builder((void *)append_info.get(), i)) {
+				throw Exception("Table generation failed");
 			}
 		}
-		append_info.chunk.Verify();
-
-		// incomplete chunks
-		if (append_info.chunk.size() > 0) {
-			append_info.table->storage->Append(*append_info.context,
-			                                   append_info.chunk);
-		}
-
-		if (table_id == CATALOG_PAGE)
-			break;
 	}
+
+	// flush any incomplete chunks
+	for (int table_id = tmin; table_id < tmax; table_id++) {
+		if (append_info[table_id].table) {
+			if (append_info[table_id].chunk.size() > 0) {
+				append_info[table_id].chunk.Verify();
+				append_info[table_id].table->storage->Append(
+				    *append_info[table_id].context,
+				    append_info[table_id].chunk);
+			}
+		}
+	}
+
 	con.context.transaction.Commit();
 }
 

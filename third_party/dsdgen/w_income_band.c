@@ -45,21 +45,19 @@
 #include "nulls.h"
 #include "tdefs.h"
 
+#include "append_info.h"
+
 struct W_INCOME_BAND_TBL g_w_income_band;
 
 /*
  * mk_income_band
  */
-int mk_w_income_band(void *row, ds_key_t index) {
-	int res = 0;
+int mk_w_income_band(void *info_arr, ds_key_t index) {
 	struct W_INCOME_BAND_TBL *r;
 	static int bInit = 0;
 	tdef *pTdef = getSimpleTdefsByNumber(INCOME_BAND);
 
-	if (row == NULL)
-		r = &g_w_income_band;
-	else
-		r = row;
+	r = &g_w_income_band;
 
 	if (!bInit) {
 		/* Make exceptions to the 1-rng-call-per-row rule */
@@ -71,61 +69,12 @@ int mk_w_income_band(void *row, ds_key_t index) {
 	dist_member(&r->ib_lower_bound, "income_band", (long)index, 1);
 	dist_member(&r->ib_upper_bound, "income_band", (long)index, 2);
 
-	return (res);
-}
+	void *info = append_info_get(info_arr, INCOME_BAND);
+	append_row_start(info);
+	append_integer(info, r->ib_income_band_id);
+	append_integer(info, r->ib_lower_bound);
+	append_integer(info, r->ib_upper_bound);
+	append_row_end(info);
 
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int pr_w_income_band(void *row) {
-	struct W_INCOME_BAND_TBL *r;
-
-	if (row == NULL)
-		r = &g_w_income_band;
-	else
-		r = row;
-
-	print_start(INCOME_BAND);
-	print_integer(IB_INCOME_BAND_ID, r->ib_income_band_id, 1);
-	print_integer(IB_LOWER_BOUND, r->ib_lower_bound, 1);
-	print_integer(IB_UPPER_BOUND, r->ib_upper_bound, 0);
-	print_end(INCOME_BAND);
-
-	return (0);
-}
-
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int ld_w_income_band(void *pSrc) {
-	struct W_INCOME_BAND_TBL *r;
-
-	if (pSrc == NULL)
-		r = &g_w_income_band;
-	else
-		r = pSrc;
-
-	return (0);
+	return 0;
 }

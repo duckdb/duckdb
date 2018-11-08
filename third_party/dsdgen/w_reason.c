@@ -45,21 +45,19 @@
 #include "nulls.h"
 #include "tdefs.h"
 
+#include "append_info.h"
+
 struct W_REASON_TBL g_w_reason;
 
 /*
  * mk_reason
  */
-int mk_w_reason(void *row, ds_key_t index) {
-	int res = 0;
+int mk_w_reason(void *info_arr, ds_key_t index) {
 	static int bInit = 0;
 	struct W_REASON_TBL *r;
 	tdef *pTdef = getSimpleTdefsByNumber(REASON);
 
-	if (row == NULL)
-		r = &g_w_reason;
-	else
-		r = row;
+	r = &g_w_reason;
 
 	if (!bInit) {
 		memset(&g_w_reason, 0, sizeof(struct W_REASON_TBL));
@@ -71,61 +69,12 @@ int mk_w_reason(void *row, ds_key_t index) {
 	mk_bkey(&r->r_reason_id[0], index, R_REASON_ID);
 	dist_member(&r->r_reason_description, "return_reasons", (int)index, 1);
 
-	return (res);
-}
+	void *info = append_info_get(info_arr, REASON);
+	append_row_start(info);
+	append_key(info, r->r_reason_sk);
+	append_varchar(info, r->r_reason_id);
+	append_varchar(info, r->r_reason_description);
+	append_row_end(info);
 
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int pr_w_reason(void *row) {
-	struct W_REASON_TBL *r;
-
-	if (row == NULL)
-		r = &g_w_reason;
-	else
-		r = row;
-
-	print_start(REASON);
-	print_key(R_REASON_SK, r->r_reason_sk, 1);
-	print_varchar(R_REASON_ID, r->r_reason_id, 1);
-	print_varchar(R_REASON_DESCRIPTION, r->r_reason_description, 0);
-	print_end(REASON);
-
-	return (0);
-}
-
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int ld_w_reason(void *pSrc) {
-	struct W_REASON_TBL *r;
-
-	if (pSrc == NULL)
-		r = &g_w_reason;
-	else
-		r = pSrc;
-
-	return (0);
+	return 0;
 }

@@ -51,7 +51,6 @@ struct W_TIME_TBL {
 	char *t_meal_time;
 };
 
-int mk_w_time(void *pDest, ds_key_t kIndex);
-int pr_w_time(void *pSrc);
-int ld_w_time(void *pSrc);
+int mk_w_time(void *info_arr, ds_key_t kIndex);
+
 #endif

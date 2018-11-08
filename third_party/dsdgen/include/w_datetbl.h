@@ -71,8 +71,7 @@ struct W_DATE_TBL {
 	int d_current_year;
 };
 
-int mk_w_date(void *pDest, ds_key_t kIndex);
-int pr_w_date(void *pSrc);
-int ld_w_date(void *pSrc);
+int mk_w_date(void *info_arr, ds_key_t kIndex);
+
 int vld_w_date(int nTable, ds_key_t kRow, int *Permutation);
 #endif

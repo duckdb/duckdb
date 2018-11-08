@@ -42,6 +42,4 @@ struct W_INCOME_BAND_TBL {
 	int ib_upper_bound;
 };
 
-int mk_w_income_band(void *pDest, ds_key_t kIndex);
-int pr_w_income_band(void *pSrc);
-int ld_w_income_band(void *pSrc);
+int mk_w_income_band(void *info_arr, ds_key_t kIndex);

@@ -47,23 +47,20 @@
 #include "nulls.h"
 #include "tdefs.h"
 
+#include "append_info.h"
+
 struct W_CUSTOMER_ADDRESS_TBL g_w_customer_address;
 
 /*
  * mk_customer_address
  */
-int mk_w_customer_address(void *row, ds_key_t index) {
-
-	int res = 0;
+int mk_w_customer_address(void *info_arr, ds_key_t index) {
 
 	/* begin locals declarations */
 	struct W_CUSTOMER_ADDRESS_TBL *r;
 	tdef *pTdef = getSimpleTdefsByNumber(CUSTOMER_ADDRESS);
 
-	if (row == NULL)
-		r = &g_w_customer_address;
-	else
-		r = row;
+	r = &g_w_customer_address;
 
 	nullSet(&pTdef->kNullBitMap, CA_NULLS);
 	r->ca_addr_sk = index;
@@ -72,78 +69,32 @@ int mk_w_customer_address(void *row, ds_key_t index) {
 	                  CA_LOCATION_TYPE);
 	mk_address(&r->ca_address, CA_ADDRESS);
 
-	return (res);
-}
+	void *info = append_info_get(info_arr, CUSTOMER_ADDRESS);
+	append_row_start(info);
 
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int pr_w_customer_address(void *row) {
-	struct W_CUSTOMER_ADDRESS_TBL *r;
 	char szTemp[128];
 
-	if (row == NULL)
-		r = &g_w_customer_address;
-	else
-		r = row;
-
-	print_start(CUSTOMER_ADDRESS);
-	print_key(CA_ADDRESS_SK, r->ca_addr_sk, 1);
-	print_varchar(CA_ADDRESS_ID, r->ca_addr_id, 1);
-	print_integer(CA_ADDRESS_STREET_NUM, r->ca_address.street_num, 1);
+	append_key(info, r->ca_addr_sk);
+	append_varchar(info, r->ca_addr_id);
+	append_integer(info, r->ca_address.street_num);
 	if (r->ca_address.street_name2) {
 		sprintf(szTemp, "%s %s", r->ca_address.street_name1,
 		        r->ca_address.street_name2);
-		print_varchar(CA_ADDRESS_STREET_NAME1, szTemp, 1);
+		append_varchar(info, szTemp);
 	} else
-		print_varchar(CA_ADDRESS_STREET_NAME1, r->ca_address.street_name1, 1);
-	print_varchar(CA_ADDRESS_STREET_TYPE, r->ca_address.street_type, 1);
-	print_varchar(CA_ADDRESS_SUITE_NUM, &r->ca_address.suite_num[0], 1);
-	print_varchar(CA_ADDRESS_CITY, r->ca_address.city, 1);
-	print_varchar(CA_ADDRESS_COUNTY, r->ca_address.county, 1);
-	print_varchar(CA_ADDRESS_STATE, r->ca_address.state, 1);
+		append_varchar(info, r->ca_address.street_name1);
+	append_varchar(info, r->ca_address.street_type);
+	append_varchar(info, &r->ca_address.suite_num[0]);
+	append_varchar(info, r->ca_address.city);
+	append_varchar(info, r->ca_address.county);
+	append_varchar(info, r->ca_address.state);
 	sprintf(szTemp, "%05d", r->ca_address.zip);
-	print_varchar(CA_ADDRESS_ZIP, szTemp, 1);
-	print_varchar(CA_ADDRESS_COUNTRY, &r->ca_address.country[0], 1);
-	print_integer(CA_ADDRESS_GMT_OFFSET, r->ca_address.gmt_offset, 1);
-	print_varchar(CA_LOCATION_TYPE, r->ca_location_type, 0);
-	print_end(CUSTOMER_ADDRESS);
+	append_varchar(info, szTemp);
+	append_varchar(info, &r->ca_address.country[0]);
+	append_integer(info, r->ca_address.gmt_offset);
+	append_varchar(info, r->ca_location_type);
 
-	return (0);
-}
+	append_row_end(info);
 
-/*
- * Routine:
- * Purpose:
- * Algorithm:
- * Data Structures:
- *
- * Params:
- * Returns:
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-int ld_w_customer_address(void *row) {
-	struct W_CUSTOMER_ADDRESS_TBL *r;
-
-	if (row == NULL)
-		r = &g_w_customer_address;
-	else
-		r = row;
-
-	return (0);
+	return 0;
 }
