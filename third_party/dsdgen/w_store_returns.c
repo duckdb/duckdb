@@ -122,4 +122,3 @@ int mk_w_store_returns(void *row, ds_key_t index) {
 
 	return (res);
 }
-

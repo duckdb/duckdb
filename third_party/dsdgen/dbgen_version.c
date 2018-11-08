@@ -103,7 +103,7 @@ int mk_dbgen_version(void *pDest, ds_key_t kIndex) {
 // * Side Effects:
 // * TODO: None
 // */
-//int pr_dbgen_version(void *pSrc) {
+// int pr_dbgen_version(void *pSrc) {
 //	struct DBGEN_VERSION_TBL *r;
 //
 //	if (pSrc == NULL)

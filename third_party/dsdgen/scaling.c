@@ -439,20 +439,20 @@ void setUpdateDates(void) {
 			arInventoryUpdateDates[5] -= 14;
 	}
 
-//	/*
-//	 * output the update dates for this update set
-//	 */
-//	openDeleteFile(1);
-//	for (i = 0; i < 6; i += 2)
-//		print_delete(&arUpdateDates[i]);
-//
-//	/*
-//	 * inventory uses separate dates
-//	 */
-//	openDeleteFile(2);
-//	for (i = 0; i < 6; i += 2)
-//		print_delete(&arInventoryUpdateDates[i]);
-//	openDeleteFile(0);
+	//	/*
+	//	 * output the update dates for this update set
+	//	 */
+	//	openDeleteFile(1);
+	//	for (i = 0; i < 6; i += 2)
+	//		print_delete(&arUpdateDates[i]);
+	//
+	//	/*
+	//	 * inventory uses separate dates
+	//	 */
+	//	openDeleteFile(2);
+	//	for (i = 0; i < 6; i += 2)
+	//		print_delete(&arInventoryUpdateDates[i]);
+	//	openDeleteFile(0);
 
 	return;
 }
