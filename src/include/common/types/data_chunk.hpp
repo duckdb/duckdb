@@ -108,6 +108,9 @@ class DataChunk : public Printable {
 	//! Move all the strings inside this DataChunk to the specified heap
 	void MoveStringsToHeap(StringHeap &heap);
 
+	//! Hashes the DataChunk to the target vector
+	void Hash(Vector &result);
+
 	//! Returns a list of types of the vectors of this data chunk
 	std::vector<TypeId> GetTypes();
 
@@ -122,12 +125,12 @@ class DataChunk : public Printable {
 
 	// strings owned by the chunk
 	StringHeap heap;
+	//! The selection vector of a chunk, if it owns it
+	sel_t owned_sel_vector[STANDARD_VECTOR_SIZE];
 
   private:
 	//! The data owned by this DataChunk. This data is typically referenced by
 	//! the member vectors.
 	std::unique_ptr<char[]> owned_data;
-	//! The selection vector of a chunk, if it owns it
-	sel_t owned_sel_vector[STANDARD_VECTOR_SIZE];
 };
 } // namespace duckdb

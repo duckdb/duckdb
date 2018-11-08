@@ -336,7 +336,7 @@ static void gen_tbl(int tnum, DSS_HUGE count, tpch_append_information *info) {
 			append_region(&code, info);
 			break;
 		}
-		row_stop(tnum);
+		row_stop_h(tnum);
 	}
 }
 

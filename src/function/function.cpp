@@ -42,5 +42,6 @@ void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 
 	AddScalarFunction<function::AbsFunction>(transaction, catalog);
 	AddScalarFunction<function::DatePartFunction>(transaction, catalog);
+	AddScalarFunction<function::SubstringFunction>(transaction, catalog);
 	AddScalarFunction<function::YearFunction>(transaction, catalog);
 }

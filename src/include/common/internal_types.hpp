@@ -20,6 +20,7 @@
 
 namespace duckdb {
 
+// NOTE: there is a copy of this in the Postgres' parser grammar (gram.y)
 #define DEFAULT_SCHEMA "main"
 
 #define STANDARD_VECTOR_SIZE 1024
@@ -113,6 +114,8 @@ enum class ExpressionType : uint8_t {
 	OPERATOR_IS_NOT_NULL = 10,
 	// exists test.
 	OPERATOR_EXISTS = 11,
+	// not exists test
+	OPERATOR_NOT_EXISTS = 12,
 
 	// -----------------------------
 	// Comparison Operators
@@ -137,13 +140,15 @@ enum class ExpressionType : uint8_t {
 	COMPARE_NOTLIKE = 32,
 	// IN operator [left IN (right1, right2, ...)]
 	COMPARE_IN = 33,
+	// NOT IN operator [left NOT IN (right1, right2, ...)]
+	COMPARE_NOT_IN = 34,
 	// IS DISTINCT FROM operator
-	COMPARE_DISTINCT_FROM = 34,
+	COMPARE_DISTINCT_FROM = 35,
 	// compare final boundary
-	COMPARE_BOUNDARY_END = COMPARE_DISTINCT_FROM,
 
-	COMPARE_BETWEEN = 35,
-	COMPARE_NOT_BETWEEN = 36,
+	COMPARE_BETWEEN = 36,
+	COMPARE_NOT_BETWEEN = 37,
+	COMPARE_BOUNDARY_END = COMPARE_NOT_BETWEEN,
 
 	// -----------------------------
 	// Conjunction Operators
@@ -322,7 +327,8 @@ enum class JoinType : uint8_t {
 	RIGHT = 2,   // right
 	INNER = 3,   // inner
 	OUTER = 4,   // outer
-	SEMI = 5     // IN+Subquery is SEMI
+	SEMI = 5,    // IN+Subquery is SEMI
+	ANTI = 6     // Opposite of SEMI JOIN
 };
 
 //===--------------------------------------------------------------------===//
@@ -380,7 +386,12 @@ enum class LogicalOperatorType : uint8_t {
 	// -----------------------------
 	// Explain
 	// -----------------------------
-	EXPLAIN
+	EXPLAIN,
+
+	// -----------------------------
+	// Helpers
+	// -----------------------------
+	PRUNE_COLUMNS
 };
 
 //===--------------------------------------------------------------------===//
@@ -424,7 +435,11 @@ enum class PhysicalOperatorType : uint8_t {
 	DELETE,
 	UPDATE,
 	EXPORT_EXTERNAL_FILE,
-	CREATE
+	CREATE,
+	// -----------------------------
+	// Helpers
+	// -----------------------------
+	PRUNE_COLUMNS
 };
 
 //===--------------------------------------------------------------------===//
@@ -434,7 +449,14 @@ enum class MatchOrder : uint8_t { ARBITRARY, DEPTH_FIRST };
 //===--------------------------------------------------------------------===//
 // Child Match Policy
 //===--------------------------------------------------------------------===//
-enum class ChildPolicy : uint8_t { ANY, LEAF, SOME, UNORDERED, ORDERED };
+enum class ChildPolicy : uint8_t {
+	ALWAYS_MATCH,
+	ANY,
+	LEAF,
+	SOME,
+	UNORDERED,
+	ORDERED
+};
 
 //===--------------------------------------------------------------------===//
 // External File Format Types
@@ -471,6 +493,7 @@ TypeId MinimalType(int64_t value);
 std::string LogicalOperatorToString(LogicalOperatorType type);
 std::string PhysicalOperatorToString(PhysicalOperatorType type);
 std::string ExpressionTypeToString(ExpressionType type);
+std::string ExpressionTypeToOperator(ExpressionType type);
 
 ExternalFileFormat StringToExternalFileFormat(const std::string &str);
 } // namespace duckdb

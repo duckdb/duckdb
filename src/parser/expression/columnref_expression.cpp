@@ -64,13 +64,9 @@ bool ColumnRefExpression::Equals(const Expression *other_) {
 }
 
 string ColumnRefExpression::ToString() const {
-	if (index != (size_t)-1) {
+	if (column_name.empty() && index != (size_t)-1) {
 		return "#" + std::to_string(index);
 	}
-	auto str =
-	    table_name.empty() ? std::to_string(binding.table_index) : table_name;
-	str += ".";
-	str += column_name.empty() ? std::to_string(binding.column_index)
+	return column_name.empty() ? std::to_string(binding.column_index)
 	                           : column_name;
-	return str;
 }

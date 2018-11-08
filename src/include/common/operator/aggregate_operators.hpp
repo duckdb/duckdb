@@ -34,16 +34,4 @@ struct MaximumStringLength {
 	}
 };
 
-struct AnyTrue {
-	static inline uint8_t Operation(uint8_t val, uint8_t result) {
-		return result || val == true;
-	}
-};
-
-struct AllTrue {
-	static inline uint8_t Operation(uint8_t val, uint8_t result) {
-		return result && val == true;
-	}
-};
-
 } // namespace operators

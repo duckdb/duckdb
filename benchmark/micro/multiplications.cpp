@@ -27,9 +27,8 @@ virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.DestroyAppender();
 }
 
-virtual std::unique_ptr<DuckDBResult> RunQuery(DuckDBBenchmarkState *state) {
-	return state->conn.Query(
-	    "SELECT (i * j) * (i * j) * (i * j) * (i * j) FROM integers");
+virtual std::string GetQuery() {
+	return "SELECT (i * j) * (i * j) * (i * j) * (i * j) FROM integers";
 }
 
 virtual std::string VerifyResult(DuckDBResult *result) {

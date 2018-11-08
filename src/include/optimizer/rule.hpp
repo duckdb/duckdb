@@ -28,6 +28,7 @@ enum class AbstractOperatorType {
 };
 
 class AbstractOperatorIterator;
+class Rewriter;
 
 class AbstractOperator : public Printable {
   public:
@@ -110,9 +111,15 @@ class AbstractOperatorIterator {
 
 		} else { // AbstractOperatorType::ABSTRACT_EXPRESSION
 			Expression *expr = child.node.value.expr;
+
 			if (child.expr_index < expr->children.size()) {
 				nodes.push(Node(expr->children[child.expr_index].get(), 0));
 				child.expr_index++;
+			} else if (expr->type == ExpressionType::SELECT_SUBQUERY &&
+			           child.op_index == 0) {
+				auto subquery = (SubqueryExpression *)expr;
+				nodes.push(Node(subquery->op.get(), 0, 0));
+				child.op_index++;
 			} else {
 				assert(nodes.size() > 1);
 				nodes.pop();
@@ -147,9 +154,15 @@ class AbstractOperatorIterator {
 		assert(nodes.top().node.type == AbstractOperatorType::LOGICAL_OPERATOR);
 		nodes.pop();
 		auto &parent = nodes.top();
-		assert(parent.node.type == AbstractOperatorType::LOGICAL_OPERATOR);
 		parent.op_index--;
-		parent.node.value.op->children[parent.op_index] = std::move(new_op);
+		if (parent.node.type == AbstractOperatorType::LOGICAL_OPERATOR) {
+			parent.node.value.op->children[parent.op_index] = std::move(new_op);
+		} else {
+			// SubqueryExpression
+			auto expr = parent.node.value.expr;
+			assert(expr->type == ExpressionType::SELECT_SUBQUERY);
+			((SubqueryExpression *)expr)->op = std::move(new_op);
+		}
 	}
 
 	void replace(std::unique_ptr<Expression> new_exp) {
@@ -222,6 +235,17 @@ class ExpressionNodeType : public AbstractRuleNode {
 	}
 };
 
+class ComparisonNodeType : public AbstractRuleNode {
+  public:
+	ComparisonNodeType() {
+	}
+	virtual bool Matches(AbstractOperator &rel) {
+		return rel.type == AbstractOperatorType::ABSTRACT_EXPRESSION &&
+		       rel.value.expr->type >= ExpressionType::COMPARE_BOUNDARY_START &&
+		       rel.value.expr->type <= ExpressionType::COMPARE_BOUNDARY_END;
+	}
+};
+
 class ColumnRefNodeDepth : public ExpressionNodeType {
   public:
 	size_t depth;
@@ -275,11 +299,13 @@ class Rule {
   public:
 	std::unique_ptr<AbstractRuleNode> root;
 	virtual std::unique_ptr<Expression>
-	Apply(Expression &root, std::vector<AbstractOperator> &bindings) {
+	Apply(Rewriter &rewriter, Expression &root,
+	      std::vector<AbstractOperator> &bindings, bool &fixed_point) {
 		throw NotImplementedException("Apply Expression");
 	};
 	virtual std::unique_ptr<LogicalOperator>
-	Apply(LogicalOperator &root, std::vector<AbstractOperator> &bindings) {
+	Apply(Rewriter &rewriter, LogicalOperator &root,
+	      std::vector<AbstractOperator> &bindings, bool &fixed_point) {
 		throw NotImplementedException("Apply LogicalOperator");
 	};
 	virtual ~Rule() {

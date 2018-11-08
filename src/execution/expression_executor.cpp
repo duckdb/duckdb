@@ -65,7 +65,6 @@ void ExpressionExecutor::ExecuteExpression(Expression *expr, Vector &result) {
 			throw Exception(
 			    "Computed vector length does not match expected length!");
 		}
-		// the expression executor guarantees that
 		assert(vector.sel_vector == chunk->sel_vector);
 	}
 	if (result.type != vector.type) {
@@ -297,8 +296,6 @@ void ExpressionExecutor::Visit(ComparisonExpression &expr) {
 	case ExpressionType::COMPARE_NOTLIKE:
 		VectorOperations::NotLike(l, r, vector);
 		break;
-	case ExpressionType::COMPARE_IN:
-		throw NotImplementedException("Unimplemented compare: COMPARE_IN");
 	case ExpressionType::COMPARE_DISTINCT_FROM:
 		throw NotImplementedException(
 		    "Unimplemented compare: COMPARE_DISTINCT_FROM");
@@ -332,8 +329,7 @@ void ExpressionExecutor::Visit(ConjunctionExpression &expr) {
 }
 
 void ExpressionExecutor::Visit(ConstantExpression &expr) {
-	Vector v(expr.value);
-	v.Move(vector);
+	vector.Reference(expr.value);
 	expr.stats.Verify(vector);
 }
 
@@ -373,7 +369,8 @@ void ExpressionExecutor::Visit(GroupRefExpression &expr) {
 void ExpressionExecutor::Visit(OperatorExpression &expr) {
 	// special handling for special snowflake 'IN'
 	// IN has n children
-	if (expr.type == ExpressionType::COMPARE_IN) {
+	if (expr.type == ExpressionType::COMPARE_IN ||
+	    expr.type == ExpressionType::COMPARE_NOT_IN) {
 		if (expr.children.size() < 2) {
 			throw Exception("IN needs at least two children");
 		}
@@ -386,6 +383,7 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 		Vector result;
 		result.Initialize(TypeId::BOOLEAN);
 		result.count = l.count;
+		result.sel_vector = l.sel_vector;
 		VectorOperations::Set(result, Value(false));
 
 		// FIXME this is very similar to the visit method of subqueries,
@@ -449,8 +447,7 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 				// if there is any true in comp_res the IN returns true
 				VectorOperations::Equals(lval_vec, rval_vec, comp_res);
 				// if we find any match, IN is true
-				if (ValueOperations::Equals(VectorOperations::AnyTrue(comp_res),
-				                            Value(true))) {
+				if (VectorOperations::AnyTrue(comp_res)) {
 					result.SetValue(r, Value(true));
 				} else {
 					// if not, but there are some NULLs in the rhs, its a NULL
@@ -464,33 +461,34 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 			}
 			chunk = old_chunk;
 
-		} else { // in rhs is list of constants
-			Vector comp_res;
-
-			// init comparision result once
-			comp_res.Initialize(TypeId::BOOLEAN);
-			comp_res.count = l.count;
-
-			// for every child, or result of comparision with left to overall
-			// result
+		} else {
+			// in rhs is a list of constants
+			// for every child, OR the result of the comparision with the left
+			// to get the overall result.
 			for (size_t child = 1; child < expr.children.size(); child++) {
+				Vector comp_res(TypeId::BOOLEAN, true, false);
 				expr.children[child]->Accept(this);
 				VectorOperations::Equals(l, vector, comp_res);
 				vector.Destroy();
-				Vector temp_result;
-				temp_result.Initialize(TypeId::BOOLEAN);
-				result.Copy(temp_result);
-				VectorOperations::Or(temp_result, comp_res, result);
-				// early abort
-				if (ValueOperations::Equals(VectorOperations::Min(result),
-				                            Value(true)) &&
-				    ValueOperations::Equals(VectorOperations::Max(result),
-				                            Value(true))) {
-					break;
+				if (child == 1) {
+					// first child: move to result
+					comp_res.Move(result);
+				} else {
+					// otherwise OR together
+					Vector new_result(TypeId::BOOLEAN, true, false);
+					VectorOperations::Or(result, comp_res, new_result);
+					new_result.Move(result);
 				}
 			}
 		}
-		result.Move(vector);
+		if (expr.type == ExpressionType::COMPARE_NOT_IN) {
+			// invert result
+			vector.Initialize(TypeId::BOOLEAN);
+			VectorOperations::Not(result, vector);
+		} else {
+			// just move result
+			result.Move(vector);
+		}
 		expr.stats.Verify(vector);
 		return;
 	}

@@ -55,7 +55,7 @@ class SubqueryExpression : public Expression {
 	SubqueryType subquery_type;
 
 	virtual std::string ToString() const override {
-		std::string result = GetExprName();
+		std::string result = ExpressionTypeToString(type);
 		if (op) {
 			result += "(" + op->ToString() + ")";
 		}

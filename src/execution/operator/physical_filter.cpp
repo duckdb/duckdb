@@ -47,3 +47,11 @@ unique_ptr<PhysicalOperatorState>
 PhysicalFilter::GetOperatorState(ExpressionExecutor *parent) {
 	return make_unique<PhysicalOperatorState>(children[0].get(), parent);
 }
+
+string PhysicalFilter::ExtraRenderInformation() {
+	string extra_info;
+	for (auto &expr : expressions) {
+		extra_info += expr->ToString() + "\n";
+	}
+	return extra_info;
+}

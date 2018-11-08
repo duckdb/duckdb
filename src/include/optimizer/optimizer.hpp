@@ -15,6 +15,8 @@
 
 #include "optimizer/rewriter.hpp"
 
+#include "planner/bindcontext.hpp"
+
 #include "planner/logical_operator.hpp"
 #include "planner/logical_operator_visitor.hpp"
 
@@ -22,7 +24,7 @@ namespace duckdb {
 
 class Optimizer {
   public:
-	Optimizer();
+	Optimizer(BindContext &context);
 
 	std::unique_ptr<LogicalOperator>
 	Optimize(std::unique_ptr<LogicalOperator> plan);

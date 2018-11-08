@@ -3,13 +3,10 @@
 
 #include <vector>
 
-#include "main/client_context.hpp"
-
 #include "optimizer/rewriter.hpp"
-#include "parser/parser.hpp"
-#include "planner/planner.hpp"
 
 #include "common/helper.hpp"
+#include "expression_helper.hpp"
 #include "optimizer/logical_rules/rule_list.hpp"
 
 #include "duckdb.hpp"
@@ -17,7 +14,19 @@
 using namespace duckdb;
 using namespace std;
 
-// ADD(42, 1) -> 43
+bool FindLogicalNode(LogicalOperator *op, LogicalOperatorType type) {
+	if (op->type == type) {
+		return true;
+	}
+	for (auto &child : op->children) {
+		if (FindLogicalNode(child.get(), type)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// Rewrite subquery with correlated equality in WHERE to INNER JOIN
 TEST_CASE("Subquery rewriting", "[subquery_rewrite]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
@@ -25,24 +34,47 @@ TEST_CASE("Subquery rewriting", "[subquery_rewrite]") {
 	con.Query("CREATE TABLE t1 (a INTEGER, b INTEGER)");
 	con.Query("INSERT INTO t1 VALUES (1, 10), (2, 20), (3, 30), (3, 42)");
 
-	Parser parser;
-	if (!parser.ParseQuery("SELECT t1.a, t1.b FROM t1 WHERE b = (SELECT MIN(b) "
-	                       "FROM t1 ts WHERE t1.a=ts.a)")) {
-		FAIL(parser.GetErrorMessage());
-	}
+	auto planner = ParseLogicalPlan(
+	    con, "SELECT t1.a, t1.b FROM t1 WHERE b = (SELECT MIN(b) "
+	         "FROM t1 ts WHERE t1.a=ts.a)");
 
-	Planner planner;
-	if (!planner.CreatePlan(con.context, move(parser.statements.back()))) {
-		FAIL(planner.GetErrorMessage());
-	}
-	if (!planner.plan) {
-		FAIL();
-	}
-
-	Rewriter rewriter;
+	Rewriter rewriter(*planner->context);
 	rewriter.rules.push_back(make_unique_base<Rule, SubqueryRewritingRule>());
+	auto plan = rewriter.ApplyRules(move(planner->plan));
+	// now we expect a subquery
+	REQUIRE(FindLogicalNode(plan.get(), LogicalOperatorType::SUBQUERY));
+};
 
-	// cout << planner.plan->ToString() + "\n";
-	auto plan = rewriter.ApplyRules(move(planner.plan));
-	// cout << plan->ToString() + "\n";
+// Rewrite subquery with (NOT) IN clause to semi/anti join
+TEST_CASE("(NOT) IN clause rewriting", "[subquery_rewrite]") {
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+	con.Query("BEGIN TRANSACTION");
+	con.Query("CREATE TABLE t1 (a INTEGER, b INTEGER)");
+	con.Query("INSERT INTO t1 VALUES (1, 10), (2, 20), (3, 30), (3, 42)");
+
+	// anti join
+	{
+		auto planner = ParseLogicalPlan(
+		    con, "SELECT t1.a, t1.b FROM t1 WHERE b NOT IN (SELECT b "
+		         "FROM t1 WHERE t1.a < 20)");
+
+		Rewriter rewriter(*planner->context);
+		rewriter.rules.push_back(make_unique_base<Rule, InClauseRewriteRule>());
+		auto plan = rewriter.ApplyRules(move(planner->plan));
+		// now we expect a subquery
+		REQUIRE(FindLogicalNode(plan.get(), LogicalOperatorType::SUBQUERY));
+	}
+	// semi join
+	{
+		auto planner = ParseLogicalPlan(
+		    con, "SELECT t1.a, t1.b FROM t1 WHERE b IN (SELECT b "
+		         "FROM t1 WHERE t1.a < 20)");
+
+		Rewriter rewriter(*planner->context);
+		rewriter.rules.push_back(make_unique_base<Rule, InClauseRewriteRule>());
+		auto plan = rewriter.ApplyRules(move(planner->plan));
+		// now we expect a subquery
+		REQUIRE(FindLogicalNode(plan.get(), LogicalOperatorType::SUBQUERY));
+	}
 };

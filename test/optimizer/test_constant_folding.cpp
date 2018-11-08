@@ -3,34 +3,22 @@
 
 #include <vector>
 
+#include "expression_helper.hpp"
 #include "optimizer/expression_rules/rule_list.hpp"
 #include "optimizer/rewriter.hpp"
 #include "parser/expression/list.hpp"
-#include "planner/operator/logical_projection.hpp"
 
 #include "common/helper.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-static unique_ptr<Expression> ApplyExprRule(Rewriter &rewriter,
-                                            unique_ptr<Expression> root) {
-	vector<unique_ptr<Expression>> exprs;
-	exprs.push_back(move(root));
-
-	unique_ptr<LogicalOperator> op =
-	    make_unique<LogicalProjection>(move(exprs));
-
-	auto result = rewriter.ApplyRules(move(op));
-	return move(result->expressions[0]);
-}
-
 // ADD(42, 1) -> 43
 TEST_CASE("Constant folding does something", "[optimizer]") {
-
+	BindContext context;
 	vector<unique_ptr<Rule>> rules;
 	rules.push_back(unique_ptr<Rule>(new ConstantFoldingRule()));
-	auto rewriter = Rewriter(move(rules), MatchOrder::DEPTH_FIRST);
+	auto rewriter = Rewriter(context, move(rules), MatchOrder::DEPTH_FIRST);
 
 	auto left = make_unique<ConstantExpression>(Value::INTEGER(42));
 	auto right = make_unique<ConstantExpression>(Value::INTEGER(1));
@@ -50,10 +38,11 @@ TEST_CASE("Constant folding does something", "[optimizer]") {
 
 // ADD(ADD(42, 1), 10) -> 53
 TEST_CASE("Constant folding finishes in fixpoint", "[optimizer]") {
+	BindContext context;
 
 	vector<unique_ptr<Rule>> rules;
 	rules.push_back(unique_ptr<Rule>(new ConstantFoldingRule()));
-	auto rewriter = Rewriter(move(rules), MatchOrder::DEPTH_FIRST);
+	auto rewriter = Rewriter(context, move(rules), MatchOrder::DEPTH_FIRST);
 
 	auto ll = make_unique<ConstantExpression>(Value::INTEGER(42));
 	auto lr = make_unique<ConstantExpression>(Value::INTEGER(1));
@@ -76,10 +65,11 @@ TEST_CASE("Constant folding finishes in fixpoint", "[optimizer]") {
 
 // MUL(42, SUB(10, 9)) -> 42
 TEST_CASE("Constant folding reduces complex expression", "[optimizer]") {
+	BindContext context;
 
 	vector<unique_ptr<Rule>> rules;
 	rules.push_back(unique_ptr<Rule>(new ConstantFoldingRule()));
-	auto rewriter = Rewriter(move(rules), MatchOrder::DEPTH_FIRST);
+	auto rewriter = Rewriter(context, move(rules), MatchOrder::DEPTH_FIRST);
 
 	auto ll = make_unique<ConstantExpression>(Value::INTEGER(10));
 	auto lr = make_unique<ConstantExpression>(Value::INTEGER(9));
@@ -175,10 +165,11 @@ TEST_CASE("Constant folding reduces complex expression", "[optimizer]") {
 
 //// CAST(42.0 AS INTEGER) -> 42
 TEST_CASE("Constant casting does something", "[optimizer]") {
+	BindContext context;
 
 	vector<unique_ptr<Rule>> rules;
 	rules.push_back(unique_ptr<Rule>(new ConstantCastRule()));
-	auto rewriter = Rewriter(move(rules), MatchOrder::DEPTH_FIRST);
+	auto rewriter = Rewriter(context, move(rules), MatchOrder::DEPTH_FIRST);
 	auto child = make_unique<ConstantExpression>(Value(42.0));
 	unique_ptr<Expression> root =
 	    make_unique<CastExpression>(TypeId::INTEGER, move(child));

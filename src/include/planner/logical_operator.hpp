@@ -24,6 +24,12 @@
 #include "planner/logical_operator_visitor.hpp"
 
 namespace duckdb {
+
+//! Returns true if the node is a projection
+bool IsProjection(LogicalOperatorType type);
+//! Returns the root projection or join node
+LogicalOperator *GetProjection(LogicalOperator *);
+
 //! LogicalOperator is the base class of the logical operators present in the
 //! logical query tree
 class LogicalOperator : public Printable {
@@ -40,40 +46,8 @@ class LogicalOperator : public Printable {
 		return type;
 	}
 
-	virtual std::string ParamsToString() const {
-		std::string result = "";
-		if (expressions.size() > 0) {
-			result += "[";
-			for (size_t i = 0; i < expressions.size(); i++) {
-				auto &child = expressions[i];
-				result += child->ToString();
-				if (i < expressions.size() - 1) {
-					result += ", ";
-				}
-			}
-			result += "]";
-		}
-
-		return result;
-	}
-
-	virtual std::string ToString() const override {
-		std::string result = LogicalOperatorToString(type);
-		result += ParamsToString();
-		if (children.size() > 0) {
-			result += "(";
-			for (size_t i = 0; i < children.size(); i++) {
-				auto &child = children[i];
-				result += child->ToString();
-				if (i < children.size() - 1) {
-					result += ", ";
-				}
-			}
-			result += ")";
-		}
-
-		return result;
-	}
+	virtual std::string ParamsToString() const;
+	virtual std::string ToString() const override;
 
 	virtual void Accept(LogicalOperatorVisitor *) = 0;
 	virtual void AcceptChildren(LogicalOperatorVisitor *v) {
@@ -97,24 +71,8 @@ class LogicalOperator : public Printable {
 	//! The set of expressions contained within the operator, if any
 	std::vector<std::unique_ptr<Expression>> expressions;
 
-	virtual size_t ExpressionCount() {
-		return expressions.size();
-	}
-
-	virtual Expression *GetExpression(size_t index) {
-		if (index >= ExpressionCount()) {
-			throw OutOfRangeException(
-			    "GetExpression(): Expression index out of range!");
-		}
-		return expressions[index].get();
-	}
-
-	virtual void SetExpression(size_t index, std::unique_ptr<Expression> expr) {
-		if (index >= ExpressionCount()) {
-			throw OutOfRangeException(
-			    "SetExpression(): Expression index out of range!");
-		}
-		expressions[index] = std::move(expr);
-	}
+	virtual size_t ExpressionCount();
+	virtual Expression *GetExpression(size_t index);
+	virtual void SetExpression(size_t index, std::unique_ptr<Expression> expr);
 };
 } // namespace duckdb

@@ -9,12 +9,15 @@
 #include "common/types/chunk_collection.hpp"
 #include "execution/aggregate_hashtable.hpp"
 #include "execution/column_binding_resolver.hpp"
+#include "execution/join_hashtable.hpp"
 #include "execution/physical_operator.hpp"
 #include "main/query_profiler.hpp"
 #include "main/result.hpp"
 #include "optimizer/rule.hpp"
 #include "parser/constraint.hpp"
+#include "parser/tableref/list.hpp"
 #include "planner/logical_operator.hpp"
+#include "planner/operator/list.hpp"
 #include "planner/operator/logical_join.hpp"
 #include "storage/data_table.hpp"
 
@@ -44,6 +47,14 @@ template class std::unique_ptr<DataChunk>;
 template class std::unique_ptr<Statistics[]>;
 template class std::unique_ptr<Constraint>;
 template class std::unique_ptr<SelectStatement>;
+template class std::unique_ptr<JoinHashTable>;
+template class std::unique_ptr<JoinHashTable::ScanStructure>;
+template class std::unique_ptr<JoinHashTable::Node>;
+template class std::unique_ptr<uint8_t *[]>;
+template class std::unique_ptr<Rule>;
+template class std::unique_ptr<LogicalFilter>;
+template class std::unique_ptr<LogicalJoin>;
+template class std::unique_ptr<SubqueryRef>;
 
 #define INSTANTIATE_VECTOR(VECTOR_DEFINITION)                                  \
 	template VECTOR_DEFINITION::size_type VECTOR_DEFINITION::size() const;     \
@@ -78,6 +89,8 @@ template class std::vector<TypeId>;
 template class std::vector<Value>;
 template class std::vector<int>;
 INSTANTIATE_VECTOR(std::vector<WALEntryData>);
+INSTANTIATE_VECTOR(std::vector<AbstractOperator>);
+template class std::vector<vector<Expression *>>;
 
 template struct std::atomic<size_t>;
 template class std::bitset<STANDARD_VECTOR_SIZE>;

@@ -1,8 +1,6 @@
 
 #include "common/operator/like_operators.hpp"
 
-using namespace std;
-
 namespace operators {
 
 bool Like::Operation(const char *s, const char *pattern, const char *escape) {

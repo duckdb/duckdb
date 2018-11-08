@@ -95,7 +95,7 @@ DuckDBConnection::GetQueryResult(ClientContext &context, std::string query) {
 
 		auto plan = move(planner.plan);
 
-		Optimizer optimizer;
+		Optimizer optimizer(*planner.context);
 		plan = optimizer.Optimize(move(plan));
 		if (!optimizer.GetSuccess()) {
 			// failed to optimize

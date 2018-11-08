@@ -74,7 +74,7 @@ class Vector : public Printable {
 
 	//! Create a vector that references the specified value. Note that if the
 	//! value goes out of scope or is deleted, the data in the vector becomes
-	//! corrupt.
+	//! corrupt. Use a ConstantVector if you want to use this method safely.
 	void Reference(Value &value);
 
 	//! Destroys the vector, deleting any owned data and resetting it to an
@@ -139,7 +139,7 @@ class Vector : public Printable {
 	//! The stringheap of the vector
 	StringHeap string_heap;
 
-  private:
+  protected:
 	//! If the vector owns data, this is the unique_ptr holds the actual data.
 	std::unique_ptr<char[]> owned_data;
 };

@@ -11,6 +11,7 @@
 #pragma once
 
 #include <memory>
+#include <set>
 
 #include "common/types/data_chunk.hpp"
 
@@ -26,18 +27,20 @@ class TupleSerializer {
 	friend class TupleComparer;
 
   public:
-	TupleSerializer(const std::vector<TypeId> &types, bool inline_varlength,
+	TupleSerializer(const std::vector<TypeId> &types,
 	                std::vector<size_t> columns = {});
 
 	//! Serialize a DataChunk to a set of tuples. Memory is allocated for the
 	//! tuple data.
-	void Serialize(DataChunk &chunk, Tuple targets[], bool *has_null = nullptr);
+	void Serialize(DataChunk &chunk, Tuple targets[]);
 	//! Serialize a DataChunk to a set of memory locations
-	void Serialize(DataChunk &chunk, uint8_t *targets[],
-	               bool *has_null = nullptr);
+	void Serialize(DataChunk &chunk, uint8_t *targets[]);
 	//! Serializes a tuple from a set of columns to a single memory location
 	void Serialize(std::vector<char *> &columns, size_t offset,
 	               uint8_t *target);
+	//! Deserialize a DataChunk from a set of memory locations
+	void Deserialize(Vector &source, DataChunk &chunk);
+
 	//! Deserialize a tuple from a single memory location to a set of columns
 	void Deserialize(std::vector<char *> &columns, size_t offset,
 	                 uint8_t *target);
@@ -52,11 +55,10 @@ class TupleSerializer {
 	void SerializeUpdate(std::vector<char *> &column_data,
 	                     std::vector<column_t> &affected_columns,
 	                     DataChunk &update_chunk, Vector &index_vector,
-	                     size_t index_offset, Tuple targets[], bool *has_null);
+	                     size_t index_offset, Tuple targets[]);
 
 	//! Returns the constant per-tuple size (only if the size is constant)
 	inline size_t TupleSize() {
-		assert(!inline_varlength || !has_variable_columns);
 		return base_size;
 	}
 
@@ -68,17 +70,13 @@ class TupleSerializer {
 	//! inline varlength is FALSE OR (2) no variable length columns are there
 	int Compare(const uint8_t *a, const uint8_t *b);
 
-  private:
-	//! Serialize a single column of a chunk with potential variable columns to
-	//! the target tuples
+	//! Serialize a single column of a chunk
 	void SerializeColumn(DataChunk &chunk, uint8_t *targets[],
-	                     size_t column_index, size_t offsets[],
-	                     bool *has_null = nullptr);
-	//! Single a single column of a chunk
-	void SerializeColumn(DataChunk &chunk, uint8_t *targets[],
-	                     size_t column_index, size_t &offset,
-	                     bool *has_null = nullptr);
+	                     size_t column_index, size_t &offset);
+	//! Deserialize a single column of a chunk
+	void DeserializeColumn(Vector &source, size_t column_index, Vector &target);
 
+  private:
 	//! Types of the generated tuples
 	std::vector<TypeId> types;
 	//! The type sizes
@@ -91,8 +89,6 @@ class TupleSerializer {
 	std::vector<bool> is_variable;
 	//! Whether or not the Serializer contains variable-length columns
 	bool has_variable_columns;
-	//! Whether or not variable length columns should be inlined
-	bool inline_varlength;
 };
 
 //! Compare tuples created through different TupleSerializers
@@ -115,5 +111,24 @@ class TupleComparer {
 	//! The right offsets used for comparison
 	std::vector<size_t> right_offsets;
 };
+
+struct TupleReference {
+	Tuple *tuple;
+	TupleSerializer &serializer;
+
+	TupleReference(Tuple *tuple, TupleSerializer &serializer)
+	    : tuple(tuple), serializer(serializer) {
+		// NULL tuple not allowed
+		assert(tuple);
+	}
+
+	bool operator<(const TupleReference &rhs) const {
+		// comparison needs the same serializer
+		assert(&serializer == &rhs.serializer);
+		return serializer.Compare(*tuple, *rhs.tuple) < 0;
+	}
+};
+
+typedef std::set<TupleReference> TupleSet;
 
 } // namespace duckdb

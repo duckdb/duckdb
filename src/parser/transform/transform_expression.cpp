@@ -119,9 +119,18 @@ unique_ptr<Expression> TransformBoolExpr(BoolExpr *root) {
 			break;
 		}
 		case NOT_EXPR: {
-			result = make_unique<OperatorExpression>(
-			    ExpressionType::OPERATOR_NOT, TypeId::BOOLEAN, move(next),
-			    nullptr);
+			if (next->type == ExpressionType::COMPARE_IN) {
+				// convert COMPARE_IN to COMPARE_NOT_IN
+				next->type = ExpressionType::COMPARE_NOT_IN;
+				result = move(next);
+			} else if (next->type == ExpressionType::OPERATOR_EXISTS) {
+				next->type = ExpressionType::OPERATOR_NOT_EXISTS;
+				result = move(next);
+			} else {
+				result = make_unique<OperatorExpression>(
+				    ExpressionType::OPERATOR_NOT, TypeId::BOOLEAN, move(next),
+				    nullptr);
+			}
 			break;
 		}
 		}
@@ -147,6 +156,17 @@ unique_ptr<TableRef> TransformRangeSubselect(RangeSubselect *root) {
 	}
 	auto result = make_unique<SubqueryRef>(move(subquery));
 	result->alias = TransformAlias(root->alias);
+	if (root->alias->colnames) {
+		for (auto node = root->alias->colnames->head; node != nullptr;
+		     node = node->next) {
+			result->column_name_alias.push_back(
+			    reinterpret_cast<value *>(node->data.ptr_value)->val.str);
+		}
+		if (result->column_name_alias.size() !=
+		    result->subquery->select_list.size()) {
+			throw ParserException("Column alias list count does not match");
+		}
+	}
 	return move(result);
 }
 
@@ -411,17 +431,19 @@ unique_ptr<Expression> TransformAExpr(A_Expr *root) {
 		break;
 	case AEXPR_IN: {
 		auto left_expr = TransformExpression(root->lexpr);
-		auto result = make_unique<OperatorExpression>(
-		    ExpressionType::COMPARE_IN, TypeId::BOOLEAN, move(left_expr));
-		TransformExpressionList((List *)root->rexpr, result->children);
+		ExpressionType operator_type;
 		// this looks very odd, but seems to be the way to find out its NOT IN
 		if (name == "<>") {
-			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT,
-			                                       TypeId::BOOLEAN,
-			                                       move(result), nullptr);
+			// NOT IN
+			operator_type = ExpressionType::COMPARE_NOT_IN;
 		} else {
-			return move(result);
+			// IN
+			operator_type = ExpressionType::COMPARE_IN;
 		}
+		auto result = make_unique<OperatorExpression>(
+		    operator_type, TypeId::BOOLEAN, move(left_expr));
+		TransformExpressionList((List *)root->rexpr, result->children);
+		return move(result);
 	} break;
 	// rewrite NULLIF(a, b) into CASE WHEN a=b THEN NULL ELSE a END
 	case AEXPR_NULLIF: {
@@ -547,6 +569,10 @@ unique_ptr<Expression> TransformFuncCall(FuncCall *root) {
 		// Aggregate function
 		auto agg_fun_type =
 		    StringToExpressionType("AGGREGATE_" + function_name);
+		// if (root->agg_distinct) {
+		// 	throw NotImplementedException(
+		// 	    "AGGREGATE DISTINCT not supported yet!");
+		// }
 		if (root->agg_star) {
 			return make_unique<AggregateExpression>(
 			    agg_fun_type, false, make_unique<StarExpression>());

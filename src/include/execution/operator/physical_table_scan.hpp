@@ -33,6 +33,8 @@ class PhysicalTableScan : public PhysicalOperator {
 	virtual void _GetChunk(ClientContext &context, DataChunk &chunk,
 	                       PhysicalOperatorState *state) override;
 
+	virtual std::string ExtraRenderInformation() override;
+
 	virtual std::unique_ptr<PhysicalOperatorState>
 	GetOperatorState(ExpressionExecutor *parent_executor) override;
 };

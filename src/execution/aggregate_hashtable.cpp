@@ -4,6 +4,8 @@
 #include "common/types/null_value.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 
+#include "common/types/static_vector.hpp"
+
 #include <map>
 
 using namespace duckdb;
@@ -14,7 +16,7 @@ SuperLargeHashTable::SuperLargeHashTable(size_t initial_capacity,
                                          vector<TypeId> payload_types,
                                          vector<ExpressionType> aggregate_types,
                                          bool parallel)
-    : group_serializer(group_types, false), aggregate_types(aggregate_types),
+    : group_serializer(group_types), aggregate_types(aggregate_types),
       group_types(group_types), payload_types(payload_types), payload_width(0),
       capacity(0), entries(0), data(nullptr), max_chain(0), parallel(parallel) {
 	// HT tuple layout is as follows:
@@ -26,8 +28,23 @@ SuperLargeHashTable::SuperLargeHashTable(size_t initial_capacity,
 	for (auto type : payload_types) {
 		payload_width += GetTypeIdSize(type);
 	}
-	tuple_size = FLAG_SIZE + (group_serializer.TupleSize() + payload_width +
-	                          sizeof(int64_t));
+	empty_payload_data = unique_ptr<uint8_t[]>(new uint8_t[payload_width]);
+	// initialize the aggregetes to the NULL value
+	auto pointer = empty_payload_data.get();
+	for (size_t i = 0; i < payload_types.size(); i++) {
+		// counts are zero initialized, all other aggregates NULL
+		// initialized
+		auto type = payload_types[i];
+		if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT ||
+		    aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_STAR) {
+			memset(pointer, 0, GetTypeIdSize(type));
+		} else {
+			SetNullValue(pointer, type);
+		}
+		pointer += GetTypeIdSize(type);
+	}
+
+	tuple_size = FLAG_SIZE + (group_serializer.TupleSize() + payload_width);
 	Resize(initial_capacity);
 }
 
@@ -57,7 +74,7 @@ void SuperLargeHashTable::Resize(size_t size) {
 			if (groups.size() == 0) {
 				break;
 			}
-			new_table->AddChunk(groups, payload);
+			new_table->AddChunk(groups, payload, true);
 		}
 
 		assert(this->entries == new_table->entries);
@@ -77,7 +94,8 @@ void SuperLargeHashTable::Resize(size_t size) {
 	}
 }
 
-void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
+void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
+                                   bool resize) {
 	if (groups.size() == 0) {
 		return;
 	}
@@ -91,19 +109,13 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	assert(capacity - entries > STANDARD_VECTOR_SIZE);
 
 	// first create a hash of all the values
-	Vector hashes(TypeId::INTEGER, true, false);
-	VectorOperations::Hash(groups.data[0], hashes);
-	for (size_t i = 1; i < groups.column_count; i++) {
-		VectorOperations::CombineHash(hashes, groups.data[i]);
-	}
+	StaticVector<uint64_t> addresses;
+	groups.Hash(addresses);
 
-	assert(hashes.sel_vector == groups.sel_vector);
-	// list of addresses for the tuples
-	Vector addresses(TypeId::POINTER, true, false);
-	auto data_pointers = (uint8_t **)addresses.data;
-	// first cast from the hash type to the address type
-	VectorOperations::Cast(hashes, addresses);
 	assert(addresses.sel_vector == groups.sel_vector);
+	assert(addresses.type == TypeId::POINTER);
+	// list of addresses for the tuples
+	auto data_pointers = (uint8_t **)addresses.data;
 	// now compute the entry in the table based on the hash using a modulo
 	// multiply the position by the tuple size and add the base address
 	VectorOperations::ExecType<uint64_t>(
@@ -142,21 +154,8 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 				// entry
 				*entry = FULL_CELL;
 				memcpy(entry + FLAG_SIZE, group_elements[i], group_width);
-				// initialize the aggragetes to the NULL value
-				auto location = entry + group_width + FLAG_SIZE;
-				for (size_t i = 0; i < payload_types.size(); i++) {
-					// counts are zero initialized, all other aggregates NULL
-					// initialized
-					auto type = payload_types[i];
-					if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT) {
-						memset(location, 0, GetTypeIdSize(type));
-					} else {
-						SetNullValue(location, type);
-					}
-					location += GetTypeIdSize(type);
-				}
-				// set the count
-				*((int64_t *)location) = 0;
+				memcpy(entry + FLAG_SIZE + group_width,
+				       empty_payload_data.get(), payload_width);
 				entries++;
 				break;
 			}
@@ -185,41 +184,45 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	size_t j = 0;
 
 	for (size_t i = 0; i < aggregate_types.size(); i++) {
-		if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_STAR) {
-			continue;
-		}
 		assert(payload.column_count > j);
-		// for any entries for which a group was found, update the aggregate
-		switch (aggregate_types[i]) {
-		case ExpressionType::AGGREGATE_COUNT:
-			VectorOperations::Scatter::AddOne(payload.data[j], addresses);
-			break;
-		case ExpressionType::AGGREGATE_SUM:
-			// addition
-			VectorOperations::Scatter::Add(payload.data[j], addresses);
-			break;
-		case ExpressionType::AGGREGATE_MIN:
-			// min
-			VectorOperations::Scatter::Min(payload.data[j], addresses);
-			break;
-		case ExpressionType::AGGREGATE_MAX:
-			// max
-			VectorOperations::Scatter::Max(payload.data[j], addresses);
-			break;
-		case ExpressionType::AGGREGATE_FIRST:
-			// first
-			VectorOperations::Scatter::SetFirst(payload.data[j], addresses);
-			break;
-		default:
-			throw NotImplementedException("Unimplemented aggregate type!");
+		if (resize) {
+			// in resize just set the values
+			VectorOperations::Scatter::Set(payload.data[j], addresses);
+		} else {
+			// for any entries for which a group was found, update the aggregate
+			switch (aggregate_types[i]) {
+			case ExpressionType::AGGREGATE_COUNT_STAR:
+				// add one to each address, regardless of if the value is NULL
+				VectorOperations::Scatter::Add(one, addresses);
+				break;
+			case ExpressionType::AGGREGATE_COUNT:
+				VectorOperations::Scatter::AddOne(payload.data[j], addresses);
+				break;
+			case ExpressionType::AGGREGATE_SUM:
+				// addition
+				VectorOperations::Scatter::Add(payload.data[j], addresses);
+				break;
+			case ExpressionType::AGGREGATE_MIN:
+				// min
+				VectorOperations::Scatter::Min(payload.data[j], addresses);
+				break;
+			case ExpressionType::AGGREGATE_MAX:
+				// max
+				VectorOperations::Scatter::Max(payload.data[j], addresses);
+				break;
+			case ExpressionType::AGGREGATE_FIRST:
+				// first
+				VectorOperations::Scatter::SetFirst(payload.data[j], addresses);
+				break;
+			default:
+				throw NotImplementedException("Unimplemented aggregate type!");
+			}
 		}
 		// move to the next aggregate
 		VectorOperations::AddInPlace(addresses,
 		                             GetTypeIdSize(payload.data[j].type));
 		j++;
 	}
-	// update the counts in each bucket
-	VectorOperations::Scatter::Add(one, addresses);
 }
 
 size_t SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &groups,
@@ -258,21 +261,8 @@ size_t SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &groups,
 		auto &target = result.data[i];
 		target.count = entry;
 
-		if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_STAR) {
-			// we fetch the total counts later because they are stored at the
-			// end
-			continue;
-		}
 		VectorOperations::Gather::Set(addresses, target);
 		VectorOperations::AddInPlace(addresses, GetTypeIdSize(target.type));
-	}
-	for (size_t i = 0; i < aggregate_types.size(); i++) {
-		// now we can fetch the counts
-		if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_STAR) {
-			auto &target = result.data[i];
-			target.count = entry;
-			VectorOperations::Gather::Set(addresses, target);
-		}
 	}
 	scan_position = ptr - data;
 	return entry;

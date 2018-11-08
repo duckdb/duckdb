@@ -41,6 +41,9 @@ class LogicalJoin : public LogicalOperator {
 	static JoinSide GetJoinSide(LogicalOperator *op,
 	                            std::unique_ptr<Expression> &expr);
 
+	static ExpressionType NegateComparisionExpression(ExpressionType type);
+	static ExpressionType FlipComparisionExpression(ExpressionType type);
+
 	virtual std::string ParamsToString() const override {
 		std::string result = "";
 		if (conditions.size() > 0) {

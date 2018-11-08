@@ -26,6 +26,29 @@ TableFunctionData *sqlite_master_init(ClientContext &context) {
 	return new SQLiteMasterData();
 }
 
+string GenerateQuery(CatalogEntry *entry) {
+	// generate a query from a catalog entry
+	if (entry->type == CatalogType::TABLE) {
+		// FIXME: constraints
+		stringstream ss;
+		auto table = (TableCatalogEntry *)entry;
+		ss << "CREATE TABLE " << table->name << "(";
+
+		for (size_t i = 0; i < table->columns.size(); i++) {
+			auto &column = table->columns[i];
+			ss << column.name << " " << TypeIdToString(column.type);
+			if (i + 1 < table->columns.size()) {
+				ss << ", ";
+			}
+		}
+
+		ss << ");";
+		return ss.str();
+	} else {
+		return "[Unknown]";
+	}
+}
+
 void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output,
                    TableFunctionData *dataptr) {
 	auto &data = *((SQLiteMasterData *)dataptr);
@@ -84,9 +107,7 @@ void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output,
 		// "rootpage", TypeId::INTEGER
 		output.data[3].SetValue(index, Value::INTEGER(0));
 		// "sql", TypeId::VARCHAR
-		output.data[4].SetValue(
-		    index, Value("CREATE TABLE...")); // FIXME: generate SQL from table
-		                                      // definition
+		output.data[4].SetValue(index, Value(GenerateQuery(entry)));
 	}
 	data.offset = next;
 }

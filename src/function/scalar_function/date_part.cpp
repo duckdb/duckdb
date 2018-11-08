@@ -122,6 +122,7 @@ void date_part_function(Vector inputs[], size_t input_count, Vector &result) {
 	result.Initialize(TypeId::BIGINT);
 	result.nullmask = inputs[1].nullmask;
 	result.count = inputs[1].count;
+	result.sel_vector = inputs[1].sel_vector;
 	if (inputs[1].type != TypeId::DATE) {
 		throw NotImplementedException(
 		    "For now only DATE is implemented in Extract");

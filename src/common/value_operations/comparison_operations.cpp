@@ -55,6 +55,9 @@ bool ValueOperations::Equals(const Value &left, const Value &right) {
 	if (left.is_null && right.is_null) {
 		return true;
 	}
+	if (left.is_null != right.is_null) {
+		return false;
+	}
 	return templated_boolean_operation<operators::Equals>(left, right);
 }
 

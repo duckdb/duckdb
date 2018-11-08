@@ -14,7 +14,7 @@ using namespace std;
 
 UniqueIndex::UniqueIndex(DataTable &table, std::vector<TypeId> types,
                          std::vector<size_t> keys, bool allow_nulls)
-    : serializer(types, false, keys), comparer(serializer, table.serializer),
+    : serializer(types, keys), comparer(serializer, table.serializer),
       table(table), types(types), keys(keys), allow_nulls(allow_nulls) {
 }
 
@@ -39,6 +39,9 @@ UniqueIndex::AddEntry(Transaction &transaction, Tuple tuple,
 			// node is potentially equivalent
 			// check the base table for the actual version
 			auto chunk = table.GetChunk(entry->row_identifier);
+			if (!chunk) {
+				throw Exception("Failed to fetch chunk");
+			}
 			auto offset = entry->row_identifier - chunk->start;
 			// whenever we call the AddEntry method we need a lock
 			// on the last StorageChunk to guarantee that
@@ -237,6 +240,20 @@ string UniqueIndex::AddEntries(Transaction &transaction,
 	return error;
 }
 
+static bool boolean_array_from_nullmask(sel_t *sel_vector, size_t count,
+                                        nullmask_t &mask, bool array[],
+                                        bool allow_nulls) {
+	bool success = true;
+	VectorOperations::Exec(sel_vector, count, [&](size_t i, size_t k) {
+		array[i] = mask[i];
+		if (array[i] && !allow_nulls) {
+			success = false;
+			return;
+		}
+	});
+	return success;
+}
+
 string UniqueIndex::Append(Transaction &transaction,
                            vector<unique_ptr<UniqueIndex>> &indexes,
                            DataChunk &chunk, size_t row_identifier_start) {
@@ -257,9 +274,18 @@ string UniqueIndex::Append(Transaction &transaction,
 		auto &index = *indexes[current_index];
 
 		Tuple tuples[STANDARD_VECTOR_SIZE];
-		bool has_null[STANDARD_VECTOR_SIZE] = {0};
+		bool has_null[STANDARD_VECTOR_SIZE];
 
-		index.serializer.Serialize(chunk, tuples, has_null);
+		nullmask_t nulls;
+		for (auto &key : index.keys) {
+			nulls |= chunk.data[key].nullmask;
+		}
+		if (!boolean_array_from_nullmask(chunk.sel_vector, chunk.size(), nulls,
+		                                 has_null, index.allow_nulls)) {
+			error = "PRIMARY KEY column cannot contain NULL values!";
+			break;
+		}
+		index.serializer.Serialize(chunk, tuples);
 
 		// create the row number vector
 		Vector row_numbers(TypeId::POINTER, true, false);
@@ -289,6 +315,15 @@ string UniqueIndex::Append(Transaction &transaction,
 	return string();
 }
 
+// Handle an update in the UniqueIndex
+// Handling updates is a bit more difficult than handling an Append because we
+// do it in bulk and if we simply treat the entries as an append there might be
+// conflicts Consider for example if we do the query "UPDATE integers SET
+// i=i+1"; This will never cause a conflict to happen, but might cause a fake
+// conflict if we add the entries to the list in bulk, because {10, 11} -> {11,
+// 12}: 11 already exists ERROR For this reason we check separately for
+// conflicts WITHIN the update_chunk and ignore any of these entries when
+// checking inside the actual index
 string UniqueIndex::Update(Transaction &transaction, StorageChunk *storage,
                            std::vector<std::unique_ptr<UniqueIndex>> &indexes,
                            std::vector<column_t> &updated_columns,
@@ -333,30 +368,42 @@ string UniqueIndex::Update(Transaction &transaction, StorageChunk *storage,
 		}
 
 		// otherwise we need to add the update to the index and verify that
-		// there are no conflicts first we serialize the updates to a set of
-		// tuples this is a bit more difficult as the update_chunk might not
+		// there are no conflicts. First we serialize the updates to a set of
+		// tuples. This is a bit more difficult as the update_chunk might not
 		// contain all columns instead, we might have to go back to the base
-		// table
+		// table.
 		Tuple tuples[STANDARD_VECTOR_SIZE];
-		bool has_null[STANDARD_VECTOR_SIZE] = {0};
+		// first handle any NULL values
+		bool has_null[STANDARD_VECTOR_SIZE];
+
+		nullmask_t nulls;
+		for (size_t i = 0; i < index.keys.size(); i++) {
+			if (affected_columns[i] != (column_t)-1) {
+				nulls |= update_chunk.data[affected_columns[i]].nullmask;
+			}
+		}
+		if (!boolean_array_from_nullmask(update_chunk.sel_vector,
+		                                 update_chunk.size(), nulls, has_null,
+		                                 index.allow_nulls)) {
+			error = "PRIMARY KEY column cannot contain NULL values!";
+			break;
+		}
 
 		index.serializer.SerializeUpdate(storage->columns, affected_columns,
 		                                 update_chunk, row_identifiers,
-		                                 storage->start, tuples, has_null);
+		                                 storage->start, tuples);
 
 		// check if there are duplicates in the tuples themselves
-		// FIXME: this should use a hash set or a tree
+		TupleSet set;
 		for (size_t i = 0; i < update_chunk.size(); i++) {
-			for (size_t j = i + 1; j < update_chunk.size(); j++) {
-				if (index.serializer.Compare(tuples[i], tuples[j]) == 0) {
-					error = "PRIMARY KEY or UNIQUE constraint violated: "
-					        "duplicated key";
-					break;
-				}
-			}
-			if (!error.empty()) {
+			TupleReference ref(&tuples[i], index.serializer);
+			auto entry = set.find(ref);
+			if (entry != set.end()) {
+				error = "PRIMARY KEY or UNIQUE constraint violated: "
+				        "duplicated key";
 				break;
 			}
+			set.insert(ref);
 		}
 		if (!error.empty()) {
 			break;

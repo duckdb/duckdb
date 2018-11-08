@@ -140,8 +140,8 @@ def create_html(results_folder):
 				if os.path.isfile(log_name):
 					result_html += " ["
 					result_html += '<a href="%s">L</a>' % (log_name,)
-					result_html += '<a href="%s">/O</a>' % (stdout_name,)
-					result_html += '<a href="%s">/E</a>' % (stderr_name,)
+					result_html += '/<a href="%s">O</a>' % (stdout_name,)
+					result_html += '/<a href="%s">E</a>' % (stderr_name,)
 					result_html += "]"
 				table_class = None
 				if result_type == 'Crash' or result_type == 'Incorrect':
@@ -174,7 +174,7 @@ def create_html(results_folder):
 				begin_row(f)
 				# benchmark name
 				begin_value(f, 'table-active')
-				f.write('<a href="benchmark_results/info/%s">%s</a>' % (benchmark_name,benchmark_name))
+				f.write('<a href="benchmark_results/info/%s.log">%s</a>' % (benchmark_name,benchmark_name))
 				end_value(f)
 				# benchmark results
 				for result in results:

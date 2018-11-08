@@ -11,6 +11,9 @@
 #include "common/vector_operations/fold_loops.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 
+#include "common/types/constant_vector.hpp"
+#include "common/types/static_vector.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -60,12 +63,10 @@ Value VectorOperations::Sum(Vector &left) {
 	Value result = Value::Numeric(left.type, 0);
 
 	// check if all are NULL, because then the result is NULL and not 0
-	Vector is_null;
-	is_null.Initialize(TypeId::BOOLEAN);
+	StaticVector<bool> is_null;
 	VectorOperations::IsNull(left, is_null);
 
-	if (ValueOperations::Equals(VectorOperations::AllTrue(is_null),
-	                            Value(true))) {
+	if (VectorOperations::AllTrue(is_null)) {
 		result.is_null = true;
 	} else {
 		generic_fold_loop<operators::Add>(left, result);
@@ -103,31 +104,36 @@ Value VectorOperations::Min(Vector &left) {
 	return result;
 }
 
-Value VectorOperations::AnyTrue(Vector &left) {
+bool VectorOperations::AnyTrue(Vector &left) {
 	if (left.type != TypeId::BOOLEAN) {
 		throw InvalidTypeException(
 		    left.type, "AnyTrue can only be computed for boolean columns!");
 	}
-	if (left.count == 0) {
-		return Value(false);
-	}
-
-	Value result = Value(false);
-	generic_fold_loop<operators::AnyTrue>(left, result);
+	bool result = false;
+	VectorOperations::ExecType<bool>(left, [&](bool value, size_t i, size_t k) {
+		if (!left.nullmask[i]) {
+			result = result || value;
+		}
+	});
 	return result;
 }
 
-Value VectorOperations::AllTrue(Vector &left) {
+bool VectorOperations::AllTrue(Vector &left) {
 	if (left.type != TypeId::BOOLEAN) {
 		throw InvalidTypeException(
 		    left.type, "AllTrue can only be computed for boolean columns!");
 	}
 	if (left.count == 0) {
-		return Value(false);
+		return false;
 	}
-
-	Value result = Value(true);
-	generic_fold_loop<operators::AllTrue>(left, result);
+	bool result = true;
+	VectorOperations::ExecType<bool>(left, [&](bool value, size_t i, size_t k) {
+		if (left.nullmask[i]) {
+			result = false;
+		} else {
+			result = result && value;
+		}
+	});
 	return result;
 }
 
@@ -138,12 +144,11 @@ bool VectorOperations::Contains(Vector &vector, Value &value) {
 	// first perform a comparison using Equals
 	// then return TRUE if any of the comparisons are true
 	// FIXME: this can be done more efficiently in one loop
-	Vector right(value.CastAs(vector.type));
-	Vector comparison_result(TypeId::BOOLEAN, true, false);
+
+	ConstantVector right(value.CastAs(vector.type));
+	StaticVector<bool> comparison_result;
 	VectorOperations::Equals(vector, right, comparison_result);
-	auto result = VectorOperations::AnyTrue(comparison_result);
-	assert(result.type == TypeId::BOOLEAN);
-	return result.value_.boolean;
+	return VectorOperations::AnyTrue(comparison_result);
 }
 
 bool VectorOperations::HasNull(Vector &left) {

@@ -147,19 +147,33 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 
 	// now visit the children
 	assert(op.children.size() == 2);
+	assert(op.conditions.size() > 0);
 
 	op.children[0]->Accept(this);
 	auto left = move(plan);
 	op.children[1]->Accept(this);
 	auto right = move(plan);
 
+	bool only_equality = true;
 	for (auto &cond : op.conditions) {
 		cond.left->Accept(this);
 		cond.right->Accept(this);
+		if (cond.comparison != ExpressionType::COMPARE_EQUAL) {
+			only_equality = false;
+		}
 	}
 
-	plan = make_unique<PhysicalNestedLoopJoin>(move(left), move(right),
-	                                           move(op.conditions), op.type);
+	assert(left);
+	assert(right);
+	if (only_equality) {
+		// equality join: use hash join
+		plan = make_unique<PhysicalHashJoin>(move(left), move(right),
+		                                     move(op.conditions), op.type);
+	} else {
+		// non-equality join: use nested loop
+		plan = make_unique<PhysicalNestedLoopJoin>(
+		    move(left), move(right), move(op.conditions), op.type);
+	}
 }
 
 void PhysicalPlanGenerator::Visit(LogicalLimit &op) {
@@ -204,6 +218,20 @@ void PhysicalPlanGenerator::Visit(LogicalInsert &op) {
 		insertion->children.push_back(move(plan));
 	}
 	this->plan = move(insertion);
+}
+
+void PhysicalPlanGenerator::Visit(LogicalPruneColumns &op) {
+	LogicalOperatorVisitor::Visit(op);
+
+	if (!plan) {
+		throw Exception("Prune columns cannot be the first node of a plan!");
+	}
+	if (plan->GetTypes().size() > op.column_limit) {
+		// only prune if we need to
+		auto node = make_unique<PhysicalPruneColumns>(op.column_limit);
+		node->children.push_back(move(plan));
+		this->plan = move(node);
+	}
 }
 
 void PhysicalPlanGenerator::Visit(LogicalTableFunction &op) {

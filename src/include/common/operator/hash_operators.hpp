@@ -17,7 +17,7 @@
 namespace operators {
 
 struct Hash {
-	template <class T> static inline int32_t Operation(T input, bool is_null) {
+	template <class T> static inline uint64_t Operation(T input, bool is_null) {
 		if (is_null) {
 			return duckdb::Hash<T>(duckdb::NullValue<T>());
 		}
