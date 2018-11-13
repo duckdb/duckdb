@@ -4,14 +4,15 @@
 //
 // parser/statement/alter_table_statement.hpp
 //
-// Author: Diego Tomé -  adapted from parser/statement/create_table_statement.hpp
+// Author: Diego Tomé -  adapted from
+// parser/statement/create_table_statement.hpp
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
 #include "parser/column_definition.hpp"
-
+#include "parser/expression.hpp"
 #include "parser/parsed_data.hpp"
 #include "parser/sql_statement.hpp"
 

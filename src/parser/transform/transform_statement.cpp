@@ -375,7 +375,6 @@ unique_ptr<CreateSchemaStatement> TransformCreateSchema(Node *node) {
 	return result;
 }
 
-
 unique_ptr<AlterTableStatement> TransformAlter(Node *node) {
 	auto stmt = reinterpret_cast<AlterTableStmt *>(node);
 	assert(stmt);
@@ -391,55 +390,53 @@ unique_ptr<AlterTableStatement> TransformAlter(Node *node) {
 	// first we check the type of ALTER
 	for (auto c = stmt->cmds->head; c != NULL; c = c->next) {
 		auto command = reinterpret_cast<AlterTableCmd *>(lfirst(c));
-		//TODO: Include more options for command->subtype
+		// TODO: Include more options for command->subtype
 		switch (command->subtype) {
-			case AT_AddColumn: {
-                auto cdef = (ColumnDef *)command->def;
-                char *name = (reinterpret_cast<value *>(
-                        cdef->typeName->names->tail->data.ptr_value)
-                        ->val.str);
-                auto centry =
-                        ColumnDefinition(cdef->colname, TransformStringToTypeId(name));
-                info.new_columns.push_back(centry);
-                break;
-            }
-			case AT_DropColumn:
-			default:
-				throw NotImplementedException(
-				    "ALTER TABLE option not supported yet!");
+		case AT_AddColumn: {
+			auto cdef = (ColumnDef *)command->def;
+			char *name = (reinterpret_cast<value *>(
+			                  cdef->typeName->names->tail->data.ptr_value)
+			                  ->val.str);
+			auto centry =
+			    ColumnDefinition(cdef->colname, TransformStringToTypeId(name));
+			info.new_columns.push_back(centry);
+			break;
+		}
+		case AT_DropColumn:
+		default:
+			throw NotImplementedException(
+			    "ALTER TABLE option not supported yet!");
 		}
 	}
 
 	return result;
 }
 
-unique_ptr<CreateIndexStatement> TransformCreateIndex(Node *node){
+unique_ptr<CreateIndexStatement> TransformCreateIndex(Node *node) {
 	IndexStmt *stmt = reinterpret_cast<IndexStmt *>(node);
 	assert(stmt);
 	auto result = make_unique<CreateIndexStatement>();
 	auto &info = *result->info.get();
 
-    info.unique = stmt->unique;
+	info.unique = stmt->unique;
 
 	for (auto cell = stmt->indexParams->head; cell != nullptr;
-		 cell = cell->next) {
+	     cell = cell->next) {
 		char *index_attr =
-				reinterpret_cast<IndexElem *>(cell->data.ptr_value)->name;
-        info.indexed_columns.push_back(std::string(index_attr));
+		    reinterpret_cast<IndexElem *>(cell->data.ptr_value)->name;
+		info.indexed_columns.push_back(std::string(index_attr));
 	}
 
-    info.index_type = StringToIndexType(std::string(stmt->accessMethod));
-    info.table = stmt->relation->relname;
+	info.index_type = StringToIndexType(std::string(stmt->accessMethod));
+	info.table = stmt->relation->relname;
 	if (stmt->relation->schemaname) {
-        info.schema = stmt->relation->schemaname;
+		info.schema = stmt->relation->schemaname;
 	}
-    if (stmt->idxname){
-        info.index_name = stmt->idxname;
-    }
-    else{
-        throw NotImplementedException(
-                "Index wout a name not supported yet!");
-    }
+	if (stmt->idxname) {
+		info.index_name = stmt->idxname;
+	} else {
+		throw NotImplementedException("Index wout a name not supported yet!");
+	}
 	return result;
 }
 

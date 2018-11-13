@@ -578,7 +578,7 @@ unique_ptr<Expression> TransformFuncCall(FuncCall *root) {
 			    agg_fun_type, make_unique<StarExpression>());
 		} else {
 			if (root->agg_distinct) {
-				switch(agg_fun_type) {
+				switch (agg_fun_type) {
 				case ExpressionType::AGGREGATE_COUNT:
 					agg_fun_type = ExpressionType::AGGREGATE_COUNT_DISTINCT;
 					break;
@@ -598,12 +598,16 @@ unique_ptr<Expression> TransformFuncCall(FuncCall *root) {
 					// rewrite AVG(a) to SUM(a) / COUNT(a)
 					// first create the SUM
 					auto sum = make_unique<AggregateExpression>(
-							root->agg_distinct ? ExpressionType::AGGREGATE_SUM_DISTINCT : ExpressionType::AGGREGATE_SUM,
+					    root->agg_distinct
+					        ? ExpressionType::AGGREGATE_SUM_DISTINCT
+					        : ExpressionType::AGGREGATE_SUM,
 					    TransformExpression(
 					        (Node *)root->args->head->data.ptr_value));
 					// now create the count
 					auto count = make_unique<AggregateExpression>(
-							root->agg_distinct ? ExpressionType::AGGREGATE_COUNT_DISTINCT : ExpressionType::AGGREGATE_COUNT,
+					    root->agg_distinct
+					        ? ExpressionType::AGGREGATE_COUNT_DISTINCT
+					        : ExpressionType::AGGREGATE_COUNT,
 					    TransformExpression(
 					        (Node *)root->args->head->data.ptr_value));
 					// cast both to decimal
@@ -618,8 +622,8 @@ unique_ptr<Expression> TransformFuncCall(FuncCall *root) {
 				} else {
 					auto child = TransformExpression(
 					    (Node *)root->args->head->data.ptr_value);
-					return make_unique<AggregateExpression>(
-					    agg_fun_type, move(child));
+					return make_unique<AggregateExpression>(agg_fun_type,
+					                                        move(child));
 				}
 			} else {
 				throw NotImplementedException(

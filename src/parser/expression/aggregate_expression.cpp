@@ -108,8 +108,7 @@ unique_ptr<Expression> AggregateExpression::Copy() {
 		return nullptr;
 	}
 	auto child = children.size() == 1 ? children[0]->Copy() : nullptr;
-	auto new_aggregate =
-	    make_unique<AggregateExpression>(type, move(child));
+	auto new_aggregate = make_unique<AggregateExpression>(type, move(child));
 	new_aggregate->index = index;
 	new_aggregate->CopyProperties(*this);
 	return new_aggregate;
@@ -129,7 +128,7 @@ AggregateExpression::Deserialize(ExpressionDeserializeInformation *info,
 	}
 
 	auto child = info->children.size() == 0 ? nullptr : move(info->children[0]);
-	return make_unique<AggregateExpression>(info->type,  move(child));
+	return make_unique<AggregateExpression>(info->type, move(child));
 }
 
 string AggregateExpression::GetName() {

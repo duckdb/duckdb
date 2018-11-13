@@ -158,7 +158,7 @@ unique_ptr<SQLStatement> Parser::TransformNode(Node *stmt) {
 	case T_UpdateStmt:
 		return TransformUpdate(stmt);
 	case T_IndexStmt:
-			return TransformCreateIndex(stmt);
+		return TransformCreateIndex(stmt);
 	case T_AlterTableStmt:
 		return TransformAlter(stmt);
 	case T_ExplainStmt: {

@@ -17,24 +17,23 @@
 
 namespace duckdb {
 
-    class CreateIndexStatement : public SQLStatement {
-    public:
-        CreateIndexStatement()
-                : SQLStatement(StatementType::CREATE_INDEX),
-                  info(make_unique<CreateIndexInformation>()){};
-        virtual ~CreateIndexStatement() {
-        }
+class CreateIndexStatement : public SQLStatement {
+  public:
+	CreateIndexStatement()
+	    : SQLStatement(StatementType::CREATE_INDEX),
+	      info(make_unique<CreateIndexInformation>()){};
+	virtual ~CreateIndexStatement() {
+	}
 
-        virtual std::string ToString() const {
-            return "CREATE INDEX";
-        }
-        virtual void Accept(SQLNodeVisitor *v) {
-//            v->Visit(*this);
-        }
+	virtual std::string ToString() const {
+		return "CREATE INDEX";
+	}
+	virtual void Accept(SQLNodeVisitor *v) {
+		//            v->Visit(*this);
+	}
 
-        std::unique_ptr<CreateIndexInformation> info;
-    };
+	std::unique_ptr<CreateIndexInformation> info;
+};
 
 } // namespace duckdb
 //
-

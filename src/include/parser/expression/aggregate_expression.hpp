@@ -18,8 +18,7 @@ namespace duckdb {
 //! The AggregateExpression represents an aggregate in the query
 class AggregateExpression : public Expression {
   public:
-	AggregateExpression(ExpressionType type,
-	                    std::unique_ptr<Expression> child);
+	AggregateExpression(ExpressionType type, std::unique_ptr<Expression> child);
 
 	//! Resolve the type of the aggregate
 	virtual void ResolveType() override;

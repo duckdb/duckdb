@@ -134,13 +134,13 @@ TEST_CASE("DISTINCT aggregations", "[aggregations]") {
 	REQUIRE_NO_FAIL(
 	    con.Query("INSERT INTO distinctagg VALUES (1,1),(1,1),(2,2), (1,2)"));
 
-//	result = con.Query("SELECT COUNT(i), COUNT(DISTINCT i), SUM(i), "
-//	                   "SUM(DISTINCT i) FROM distinctagg");
-//
-//		REQUIRE(CHECK_COLUMN(result, 0, {4}));
-//	REQUIRE(CHECK_COLUMN(result, 1, {2}));
-//	REQUIRE(CHECK_COLUMN(result, 2, {5}));
-//	REQUIRE(CHECK_COLUMN(result, 3, {3}));
+	//	result = con.Query("SELECT COUNT(i), COUNT(DISTINCT i), SUM(i), "
+	//	                   "SUM(DISTINCT i) FROM distinctagg");
+	//
+	//		REQUIRE(CHECK_COLUMN(result, 0, {4}));
+	//	REQUIRE(CHECK_COLUMN(result, 1, {2}));
+	//	REQUIRE(CHECK_COLUMN(result, 2, {5}));
+	//	REQUIRE(CHECK_COLUMN(result, 3, {3}));
 
 	result =
 	    con.Query("SELECT COUNT(i), COUNT(DISTINCT i), SUM(i), SUM(DISTINCT i) "

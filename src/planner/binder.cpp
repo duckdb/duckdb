@@ -255,7 +255,6 @@ void Binder::Visit(DeleteStatement &stmt) {
 void Binder::Visit(AlterTableStatement &stmt) {
 	// visit the table reference
 	stmt.table->Accept(this);
-
 }
 
 void Binder::Visit(UpdateStatement &stmt) {

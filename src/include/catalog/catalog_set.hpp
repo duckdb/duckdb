@@ -30,10 +30,10 @@ class CatalogSet {
 	//! Create an entry in the catalog set. Returns whether or not it was
 	//! successful.
 	bool CreateEntry(Transaction &transaction, const std::string &name,
-	                 std::unique_ptr<CatalogEntry> value);	
+	                 std::unique_ptr<CatalogEntry> value);
 
 	bool AlterEntry(Transaction &transaction, const std::string &name,
-					bool cascade);
+	                bool cascade);
 
 	bool DropEntry(Transaction &transaction, const std::string &name,
 	               bool cascade);

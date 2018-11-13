@@ -55,9 +55,8 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name,
 }
 
 bool CatalogSet::AlterEntry(Transaction &transaction, const string &name,
-							bool cascade) {
+                            bool cascade) {
 	lock_guard<mutex> lock(catalog_lock);
-
 
 	return true;
 }

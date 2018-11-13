@@ -61,7 +61,7 @@ class SchemaCatalogEntry : public CatalogEntry {
 	//! Create a scalar function within the given schema
 	void CreateScalarFunction(Transaction &transaction,
 	                          CreateScalarFunctionInformation *info);
-	
+
 	//! Gets a scalar function with the given name
 	ScalarFunctionCatalogEntry *GetScalarFunction(Transaction &transaction,
 	                                              const std::string &name);

@@ -46,7 +46,8 @@ class SuperLargeHashTable {
 	//! Returns the amount of elements found.
 	size_t Scan(size_t &scan_position, DataChunk &group, DataChunk &result);
 
-	void FindOrCreateGroups(DataChunk &groups, Vector& addresses, Vector &new_group);
+	void FindOrCreateGroups(DataChunk &groups, Vector &addresses,
+	                        Vector &new_group);
 
 	//! The stringheap of the AggregateHashTable
 	StringHeap string_heap;
