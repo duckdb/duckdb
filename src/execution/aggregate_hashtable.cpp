@@ -29,19 +29,45 @@ SuperLargeHashTable::SuperLargeHashTable(size_t initial_capacity,
 		payload_width += GetTypeIdSize(type);
 	}
 	empty_payload_data = unique_ptr<uint8_t[]>(new uint8_t[payload_width]);
-	// initialize the aggregetes to the NULL value
+	// initialize the aggregates to the NULL value
 	auto pointer = empty_payload_data.get();
 	for (size_t i = 0; i < payload_types.size(); i++) {
 		// counts are zero initialized, all other aggregates NULL
 		// initialized
 		auto type = payload_types[i];
 		if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT ||
+		    aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_DISTINCT ||
 		    aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_STAR) {
 			memset(pointer, 0, GetTypeIdSize(type));
 		} else {
 			SetNullValue(pointer, type);
 		}
 		pointer += GetTypeIdSize(type);
+	}
+
+	// FIXME: this always creates this vector, even if no distinct if present.
+	// it likely does not matter.
+	distinct_hashes.resize(aggregate_types.size());
+
+	// create additional hash tables for distinct aggrs
+	for (size_t i = 0; i < aggregate_types.size(); i++) {
+		switch (aggregate_types[i]) {
+		case ExpressionType::AGGREGATE_COUNT_DISTINCT:
+		case ExpressionType::AGGREGATE_SUM_DISTINCT: {
+			// group types plus aggr return type
+			vector<TypeId> distinct_group_types(group_types);
+			vector<TypeId> distinct_payload_types;
+			vector<ExpressionType> distinct_aggregate_types;
+			distinct_group_types.push_back(payload_types[i]);
+			distinct_hashes[i] = make_unique<SuperLargeHashTable>(
+			    initial_capacity, distinct_group_types, distinct_payload_types,
+			    distinct_aggregate_types);
+			break;
+		}
+		default:
+			// nothing
+			break;
+		}
 	}
 
 	tuple_size = FLAG_SIZE + (group_serializer.TupleSize() + payload_width);
@@ -100,83 +126,10 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 		return;
 	}
 
-	// resize at 50% capacity, also need to fit the entire vector
-	if (entries > capacity / 2 || capacity - entries <= STANDARD_VECTOR_SIZE) {
-		Resize(capacity * 2);
-	}
-
-	// we need to be able to fit at least one vector of data
-	assert(capacity - entries > STANDARD_VECTOR_SIZE);
-
-	// first create a hash of all the values
 	StaticVector<uint64_t> addresses;
-	groups.Hash(addresses);
+	StaticVector<bool> new_group_dummy;
 
-	assert(addresses.sel_vector == groups.sel_vector);
-	assert(addresses.type == TypeId::POINTER);
-	// list of addresses for the tuples
-	auto data_pointers = (uint8_t **)addresses.data;
-	// now compute the entry in the table based on the hash using a modulo
-	// multiply the position by the tuple size and add the base address
-	VectorOperations::ExecType<uint64_t>(
-	    addresses, [&](uint64_t element, size_t i, size_t k) {
-		    data_pointers[i] = data + ((element % capacity) * tuple_size);
-	    });
-
-	assert(addresses.sel_vector == groups.sel_vector);
-	if (parallel) {
-		throw NotImplementedException("Parallel HT not implemented");
-	}
-
-	auto group_width = group_serializer.TupleSize();
-
-	// serialize the elements from the group to a tuple-wide format
-	uint8_t group_data[STANDARD_VECTOR_SIZE][group_serializer.TupleSize()];
-	uint8_t *group_elements[STANDARD_VECTOR_SIZE];
-	for (size_t i = 0; i < groups.size(); i++) {
-		group_elements[i] = group_data[i];
-	}
-	group_serializer.Serialize(groups, group_elements);
-
-	// now we actually access the base table
-	for (size_t i = 0; i < addresses.count; i++) {
-		// place this tuple in the hash table
-		size_t index = addresses.sel_vector ? addresses.sel_vector[i] : i;
-		auto entry = data_pointers[index];
-		assert(entry >= data && entry < data + capacity * tuple_size);
-
-		size_t chain = 0;
-		do {
-			// check if the group is the actual group for this tuple or if it is
-			// empty otherwise we have to do linear probing
-			if (*entry == EMPTY_CELL) {
-				// cell is empty; zero initialize the aggregates and add an
-				// entry
-				*entry = FULL_CELL;
-				memcpy(entry + FLAG_SIZE, group_elements[i], group_width);
-				memcpy(entry + FLAG_SIZE + group_width,
-				       empty_payload_data.get(), payload_width);
-				entries++;
-				break;
-			}
-			if (group_serializer.Compare(group_elements[i],
-			                             entry + FLAG_SIZE) == 0) {
-				// cell has the current group, just point to this cell
-				break;
-			}
-
-			// collision: move to the next location
-			chain++;
-			entry += tuple_size;
-			if (entry >= data + tuple_size * capacity) {
-				entry = data;
-			}
-		} while (true);
-
-		// update the address pointer with the final position
-		data_pointers[index] = entry + FLAG_SIZE + group_width;
-		max_chain = max(chain, max_chain);
-	}
+	FindOrCreateGroups(groups, addresses, new_group_dummy);
 
 	// now every cell has an entry
 	// update the aggregates
@@ -191,6 +144,48 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 		} else {
 			// for any entries for which a group was found, update the aggregate
 			switch (aggregate_types[i]) {
+			case ExpressionType::AGGREGATE_SUM_DISTINCT:
+			case ExpressionType::AGGREGATE_COUNT_DISTINCT: {
+
+				// construct chunk for probing
+				std::vector<TypeId> probe_types(group_types);
+				probe_types.push_back(payload_types[i]);
+				DataChunk probe_chunk;
+				probe_chunk.Initialize(probe_types, false);
+				for (size_t g = 0; g < group_types.size(); g++) {
+					probe_chunk.data[g].Reference(groups.data[g]);
+				}
+				probe_chunk.data[group_types.size()].Reference(payload.data[j]);
+				probe_chunk.Verify();
+
+				StaticVector<uint64_t> dummy_addresses;
+				StaticVector<bool> probe_result;
+				probe_result.count = payload.data[j].count;
+				distinct_hashes[i]->FindOrCreateGroups(
+				    probe_chunk, dummy_addresses, probe_result);
+
+				StaticVector<uint64_t> fixed_addresses;
+				fixed_addresses.count = 0;
+				assert(addresses.count == probe_result.count);
+				for (size_t b = 0; b < probe_result.count; b++) {
+					if (probe_result.data[b]) {
+						fixed_addresses.count++;
+						((uint64_t *)
+						     fixed_addresses.data)[fixed_addresses.count - 1] =
+						    ((uint64_t *)addresses.data)[b];
+					}
+				}
+				if (aggregate_types[i] ==
+				    ExpressionType::AGGREGATE_COUNT_DISTINCT) {
+					VectorOperations::Scatter::AddOne(payload.data[j],
+					                                  fixed_addresses);
+				} else {
+					VectorOperations::Scatter::Add(payload.data[j],
+					                               fixed_addresses);
+				}
+
+				break;
+			}
 			case ExpressionType::AGGREGATE_COUNT_STAR:
 				// add one to each address, regardless of if the value is NULL
 				VectorOperations::Scatter::Add(one, addresses);
@@ -222,6 +217,95 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 		VectorOperations::AddInPlace(addresses,
 		                             GetTypeIdSize(payload.data[j].type));
 		j++;
+	}
+}
+
+// this is to support distinct aggregations where we need to record whether we
+// have already seen a value for a group
+void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups,
+                                             Vector &addresses,
+                                             Vector &new_group) {
+
+	// resize at 50% capacity, also need to fit the entire vector
+	if (entries > capacity / 2 || capacity - entries <= STANDARD_VECTOR_SIZE) {
+		Resize(capacity * 2);
+	}
+
+	// we need to be able to fit at least one vector of data
+	assert(capacity - entries > STANDARD_VECTOR_SIZE);
+	assert(new_group.type == TypeId::BOOLEAN);
+	assert(addresses.type == TypeId::POINTER);
+
+	new_group.sel_vector = groups.data[0].sel_vector;
+
+	groups.Hash(addresses);
+
+	assert(addresses.sel_vector == groups.sel_vector);
+	assert(addresses.type == TypeId::POINTER);
+	// list of addresses for the tuples
+	auto data_pointers = (uint8_t **)addresses.data;
+	// now compute the entry in the table based on the hash using a modulo
+	// multiply the position by the tuple size and add the base address
+	VectorOperations::ExecType<uint64_t>(
+	    addresses, [&](uint64_t element, size_t i, size_t k) {
+		    data_pointers[i] = data + ((element % capacity) * tuple_size);
+	    });
+
+	assert(addresses.sel_vector == groups.sel_vector);
+	if (parallel) {
+		throw NotImplementedException("Parallel HT not implemented");
+	}
+
+	auto group_width = group_serializer.TupleSize();
+
+	// serialize the elements from the group to a tuple-wide format
+	uint8_t group_data[STANDARD_VECTOR_SIZE][group_width];
+	uint8_t *group_elements[STANDARD_VECTOR_SIZE];
+	for (size_t i = 0; i < groups.size(); i++) {
+		group_elements[i] = group_data[i];
+	}
+	group_serializer.Serialize(groups, group_elements);
+
+	// now we actually access the base table
+	for (size_t i = 0; i < addresses.count; i++) {
+		// place this tuple in the hash table
+		size_t index = addresses.sel_vector ? addresses.sel_vector[i] : i;
+		auto entry = data_pointers[index];
+		assert(entry >= data && entry < data + capacity * tuple_size);
+
+		size_t chain = 0;
+		do {
+			// check if the group is the actual group for this tuple or if it is
+			// empty otherwise we have to do linear probing
+			if (*entry == EMPTY_CELL) {
+				// cell is empty; zero initialize the aggregates and add an
+				// entry
+				*entry = FULL_CELL;
+				memcpy(entry + FLAG_SIZE, group_elements[i], group_width);
+				memcpy(entry + FLAG_SIZE + group_width,
+				       empty_payload_data.get(), payload_width);
+				entries++;
+				new_group.data[index] = 1;
+				break;
+			}
+			if (group_serializer.Compare(group_elements[i],
+			                             entry + FLAG_SIZE) == 0) {
+				// cell has the current group, just point to this cell
+				new_group.data[index] = 0;
+				break;
+			}
+
+			// collision: move to the next location
+			chain++;
+			entry += tuple_size;
+			if (entry >= data + tuple_size * capacity) {
+				entry = data;
+			}
+		} while (true);
+
+		// update the address pointer with the final position
+		data_pointers[index] = entry + FLAG_SIZE + group_width;
+		max_chain = max(chain, max_chain);
 	}
 }
 

@@ -22,7 +22,6 @@ typedef int64_t ds_key_t;
 #include "address.h"
 #include "dist.h"
 #include "genrand.h"
-#include "parallel.h"
 
 void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	DuckDBConnection con(db);
@@ -42,7 +41,8 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 		return;
 	}
 
-	init_rand(); // no random numbers without this
+	init_params(); // among other set random seed
+	init_rand();   // no random numbers without this
 
 	// populate append info
 	auto append_info = unique_ptr<tpcds_append_information[]>(
@@ -71,9 +71,6 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 		}
 
 		ds_key_t kRowCount = get_rowcount(table_id), kFirstRow = 1;
-
-		// TODO not sure we need this
-		split_work(table_id, &kFirstRow, &kRowCount);
 
 		// TODO: verify this is correct and required here
 		/*

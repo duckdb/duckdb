@@ -46,6 +46,8 @@ class SuperLargeHashTable {
 	//! Returns the amount of elements found.
 	size_t Scan(size_t &scan_position, DataChunk &group, DataChunk &result);
 
+	void FindOrCreateGroups(DataChunk &groups, Vector& addresses, Vector &new_group);
+
 	//! The stringheap of the AggregateHashTable
 	StringHeap string_heap;
 
@@ -76,6 +78,8 @@ class SuperLargeHashTable {
 	bool parallel = false;
 	//! The empty payload data
 	std::unique_ptr<uint8_t[]> empty_payload_data;
+
+	std::vector<std::unique_ptr<SuperLargeHashTable>> distinct_hashes;
 
 	//! The size of the initial flag for each cell
 	static constexpr int FLAG_SIZE = sizeof(uint8_t);

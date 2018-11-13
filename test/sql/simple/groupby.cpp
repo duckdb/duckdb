@@ -123,3 +123,31 @@ TEST_CASE("Aggregate only COUNT STAR", "[aggregations]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
 }
+
+TEST_CASE("DISTINCT aggregations", "[aggregations]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	REQUIRE_NO_FAIL(
+	    con.Query("CREATE TABLE distinctagg(i INTEGER, j INTEGER);"));
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO distinctagg VALUES (1,1),(1,1),(2,2), (1,2)"));
+
+//	result = con.Query("SELECT COUNT(i), COUNT(DISTINCT i), SUM(i), "
+//	                   "SUM(DISTINCT i) FROM distinctagg");
+//
+//		REQUIRE(CHECK_COLUMN(result, 0, {4}));
+//	REQUIRE(CHECK_COLUMN(result, 1, {2}));
+//	REQUIRE(CHECK_COLUMN(result, 2, {5}));
+//	REQUIRE(CHECK_COLUMN(result, 3, {3}));
+
+	result =
+	    con.Query("SELECT COUNT(i), COUNT(DISTINCT i), SUM(i), SUM(DISTINCT i) "
+	              "FROM distinctagg GROUP BY j ORDER BY j");
+
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 3, {1, 3}));
+}

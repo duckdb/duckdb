@@ -18,7 +18,7 @@ namespace duckdb {
 //! The AggregateExpression represents an aggregate in the query
 class AggregateExpression : public Expression {
   public:
-	AggregateExpression(ExpressionType type, bool distinct,
+	AggregateExpression(ExpressionType type,
 	                    std::unique_ptr<Expression> child);
 
 	//! Resolve the type of the aggregate
@@ -50,7 +50,5 @@ class AggregateExpression : public Expression {
 	size_t index;
 
   private:
-	//! Whether or not the aggregate returns only distinct values (what?)
-	bool distinct;
 };
 } // namespace duckdb

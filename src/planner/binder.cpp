@@ -207,7 +207,7 @@ void Binder::Visit(SelectStatement &statement) {
 			// not a group by column or aggregate
 			// create a FIRST aggregate around this aggregate
 			statement.select_list[i] = make_unique<AggregateExpression>(
-			    ExpressionType::AGGREGATE_FIRST, false,
+			    ExpressionType::AGGREGATE_FIRST,
 			    move(statement.select_list[i]));
 			statement.select_list[i]->ResolveType();
 			// throw Exception("SELECT with GROUP BY can only contain "
