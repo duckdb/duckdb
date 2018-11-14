@@ -130,36 +130,6 @@ Value ExpressionExecutor::ExecuteAggregate(AggregateExpression &expr) {
 	}
 }
 
-void ExpressionExecutor::MergeAggregate(AggregateExpression &expr,
-                                        Value &result) {
-	// if (result.type != expr.return_type) {
-	// 	throw NotImplementedException(
-	// 	    "Aggregate type does not match value type!");
-	// }
-	Value v = ExecuteAggregate(expr);
-	switch (expr.type) {
-	case ExpressionType::AGGREGATE_COUNT_STAR:
-	case ExpressionType::AGGREGATE_SUM:
-	case ExpressionType::AGGREGATE_COUNT: {
-		ValueOperations::Add(result, v, result);
-		break;
-	}
-	case ExpressionType::AGGREGATE_MIN: {
-		ValueOperations::Min(result, v, result);
-		break;
-	}
-	case ExpressionType::AGGREGATE_MAX: {
-		ValueOperations::Max(result, v, result);
-		break;
-	}
-	// we don't have to merge since the first chunk already set the result
-	case ExpressionType::AGGREGATE_FIRST:
-		break;
-	default:
-		throw NotImplementedException("Unsupported aggregate type");
-	}
-}
-
 static bool IsScalarAggr(Expression *expr) {
 	if (expr->type == ExpressionType::COLUMN_REF ||
 	    expr->type == ExpressionType::GROUP_REF ||

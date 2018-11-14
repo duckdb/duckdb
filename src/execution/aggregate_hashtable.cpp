@@ -134,65 +134,70 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 	// now every cell has an entry
 	// update the aggregates
 	Vector one(Value::BIGINT(1));
-	size_t j = 0;
+	size_t payload_idx = 0;
 
-	for (size_t i = 0; i < aggregate_types.size(); i++) {
-		assert(payload.column_count > j);
+	for (size_t aggr_idx = 0; aggr_idx < aggregate_types.size(); aggr_idx++) {
+		assert(payload.column_count > payload_idx);
 		if (resize) {
 			// in resize just set the values
-			VectorOperations::Scatter::Set(payload.data[j], addresses);
+			VectorOperations::Scatter::Set(payload.data[payload_idx],
+			                               addresses);
 		} else {
 			// for any entries for which a group was found, update the aggregate
-			switch (aggregate_types[i]) {
+			switch (aggregate_types[aggr_idx]) {
 			case ExpressionType::AGGREGATE_SUM_DISTINCT:
 			case ExpressionType::AGGREGATE_COUNT_DISTINCT: {
 				assert(groups.sel_vector == payload.sel_vector);
-				// construct chunk for probing
+
+				// construct chunk for secondary hash table probing
 				std::vector<TypeId> probe_types(group_types);
-				probe_types.push_back(payload_types[i]);
+				probe_types.push_back(payload_types[aggr_idx]);
 				DataChunk probe_chunk;
 				probe_chunk.Initialize(probe_types, false);
-				for (size_t g = 0; g < group_types.size(); g++) {
-					probe_chunk.data[g].Reference(groups.data[g]);
+				for (size_t group_idx = 0; group_idx < group_types.size();
+				     group_idx++) {
+					probe_chunk.data[group_idx].Reference(
+					    groups.data[group_idx]);
 				}
-				probe_chunk.data[group_types.size()].Reference(payload.data[j]);
+				probe_chunk.data[group_types.size()].Reference(
+				    payload.data[payload_idx]);
 				probe_chunk.sel_vector = groups.sel_vector;
 				probe_chunk.Verify();
 
 				StaticVector<uint64_t> dummy_addresses;
 				StaticVector<bool> probe_result;
-				probe_result.count = payload.data[j].count;
-				distinct_hashes[i]->FindOrCreateGroups(
+				probe_result.count = payload.data[payload_idx].count;
+				// this is the actual meat, find out which groups plus payload
+				// value have not been seen yet
+				distinct_hashes[aggr_idx]->FindOrCreateGroups(
 				    probe_chunk, dummy_addresses, probe_result);
 
-				Vector distinct_payload, distinct_addresses;
-				// we need references here because other iterations of main loop
-				// will use them, too
-				distinct_payload.Reference(payload.data[j]);
-				distinct_addresses.Reference(addresses);
-
-				// now set distinct_payload and distinct_addresses selection
-				// vectors according to probe_result which contains the
-
+				// now fix up the payload and addresses accordingly by creating
+				// a selection vector
 				sel_t distinct_sel_vector[STANDARD_VECTOR_SIZE];
 				size_t match_count = 0;
-				for (size_t m = 0; m < probe_result.count; m++) {
-					size_t index =
-					    payload.sel_vector ? payload.sel_vector[m] : m;
-					if (probe_result.data[index]) {
-						distinct_sel_vector[match_count++] = index;
+				for (size_t probe_idx = 0; probe_idx < probe_result.count;
+				     probe_idx++) {
+					size_t sel_idx = payload.sel_vector
+					                     ? payload.sel_vector[probe_idx]
+					                     : probe_idx;
+					if (probe_result.data[sel_idx]) {
+						distinct_sel_vector[match_count++] = sel_idx;
 					}
 				}
 
+				Vector distinct_payload, distinct_addresses;
+				distinct_payload.Reference(payload.data[payload_idx]);
 				distinct_payload.sel_vector = distinct_sel_vector;
-				distinct_addresses.sel_vector = distinct_sel_vector;
 				distinct_payload.count = match_count;
-				distinct_addresses.count = match_count;
-
 				distinct_payload.Verify();
+
+				distinct_addresses.Reference(addresses);
+				distinct_addresses.sel_vector = distinct_sel_vector;
+				distinct_addresses.count = match_count;
 				distinct_addresses.Verify();
 
-				if (aggregate_types[i] ==
+				if (aggregate_types[aggr_idx] ==
 				    ExpressionType::AGGREGATE_COUNT_DISTINCT) {
 					VectorOperations::Scatter::AddOne(distinct_payload,
 					                                  distinct_addresses);
@@ -208,32 +213,37 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 				VectorOperations::Scatter::Add(one, addresses);
 				break;
 			case ExpressionType::AGGREGATE_COUNT:
-				VectorOperations::Scatter::AddOne(payload.data[j], addresses);
+				VectorOperations::Scatter::AddOne(payload.data[payload_idx],
+				                                  addresses);
 				break;
 			case ExpressionType::AGGREGATE_SUM:
 				// addition
-				VectorOperations::Scatter::Add(payload.data[j], addresses);
+				VectorOperations::Scatter::Add(payload.data[payload_idx],
+				                               addresses);
 				break;
 			case ExpressionType::AGGREGATE_MIN:
 				// min
-				VectorOperations::Scatter::Min(payload.data[j], addresses);
+				VectorOperations::Scatter::Min(payload.data[payload_idx],
+				                               addresses);
 				break;
 			case ExpressionType::AGGREGATE_MAX:
 				// max
-				VectorOperations::Scatter::Max(payload.data[j], addresses);
+				VectorOperations::Scatter::Max(payload.data[payload_idx],
+				                               addresses);
 				break;
 			case ExpressionType::AGGREGATE_FIRST:
 				// first
-				VectorOperations::Scatter::SetFirst(payload.data[j], addresses);
+				VectorOperations::Scatter::SetFirst(payload.data[payload_idx],
+				                                    addresses);
 				break;
 			default:
 				throw NotImplementedException("Unimplemented aggregate type!");
 			}
 		}
 		// move to the next aggregate
-		VectorOperations::AddInPlace(addresses,
-		                             GetTypeIdSize(payload.data[j].type));
-		j++;
+		VectorOperations::AddInPlace(
+		    addresses, GetTypeIdSize(payload.data[payload_idx].type));
+		payload_idx++;
 	}
 }
 
