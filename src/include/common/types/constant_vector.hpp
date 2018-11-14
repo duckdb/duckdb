@@ -20,7 +20,7 @@ namespace duckdb {
 class ConstantVector : public Vector {
   public:
 	ConstantVector(Value value_) : value(value_) {
-		Reference(value_);
+		Reference(value);
 	}
 
   private:
