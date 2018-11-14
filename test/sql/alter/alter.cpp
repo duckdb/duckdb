@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test ALTER TABLE", "[alter]") {
+TEST_CASE("Test ALTER TABLE", "[alter][.]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);

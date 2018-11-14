@@ -27,6 +27,7 @@ TEST_CASE("Sequential append", "[transactions]") {
 
 	for (size_t i = 0; i < THREAD_COUNT; i++) {
 		result = connections[i]->Query("SELECT COUNT(*) FROM integers");
+		assert(result->collection.count > 0);
 		Value count = result->collection.chunks[0]->data[0].GetValue(0);
 		REQUIRE(
 		    ValueOperations::Equals(count, Value::Numeric(TypeId::BIGINT, 0)));

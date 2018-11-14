@@ -67,9 +67,6 @@ class ExpressionExecutor : public SQLNodeVisitor {
 	//! Execute the abstract expression, and "logical AND" the result together
 	//! with result
 	void MergeExpression(Expression *expr, Vector &result);
-	//! Execute the given aggregate expression, and merge the result together
-	//! with v
-	void MergeAggregate(AggregateExpression &expr, Value &v);
 	//! Execute the given aggregate expression for the current chunk
 	Value ExecuteAggregate(AggregateExpression &expr);
 

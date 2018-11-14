@@ -124,6 +124,31 @@ TEST_CASE("Aggregate only COUNT STAR", "[aggregations]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
 }
 
+TEST_CASE("Aggregating from empty table", "[aggregations]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE emptyaggr(i INTEGER);"));
+
+	result = con.Query("SELECT COUNT(*) FROM emptyaggr");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+
+	result = con.Query(
+	    "SELECT SUM(i), COUNT(i), COUNT(DISTINCT i), COUNT(*), AVG(i), "
+	    "COUNT(*)+1, COUNT(i)+1, MIN(i), MIN(i+1), MIN(i)+1 FROM emptyaggr");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0}));
+	REQUIRE(CHECK_COLUMN(result, 2, {0}));
+	REQUIRE(CHECK_COLUMN(result, 3, {0}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 5, {1}));
+	REQUIRE(CHECK_COLUMN(result, 6, {1}));
+	REQUIRE(CHECK_COLUMN(result, 7, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 8, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 9, {Value()}));
+}
+
 TEST_CASE("DISTINCT aggregations", "[aggregations]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
@@ -134,13 +159,13 @@ TEST_CASE("DISTINCT aggregations", "[aggregations]") {
 	REQUIRE_NO_FAIL(
 	    con.Query("INSERT INTO distinctagg VALUES (1,1),(1,1),(2,2), (1,2)"));
 
-	//	result = con.Query("SELECT COUNT(i), COUNT(DISTINCT i), SUM(i), "
-	//	                   "SUM(DISTINCT i) FROM distinctagg");
-	//
-	//		REQUIRE(CHECK_COLUMN(result, 0, {4}));
-	//	REQUIRE(CHECK_COLUMN(result, 1, {2}));
-	//	REQUIRE(CHECK_COLUMN(result, 2, {5}));
-	//	REQUIRE(CHECK_COLUMN(result, 3, {3}));
+	result = con.Query("SELECT COUNT(i), COUNT(DISTINCT i), SUM(i), "
+	                   "SUM(DISTINCT i) FROM distinctagg");
+
+	REQUIRE(CHECK_COLUMN(result, 0, {4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {5}));
+	REQUIRE(CHECK_COLUMN(result, 3, {3}));
 
 	result =
 	    con.Query("SELECT COUNT(i), COUNT(DISTINCT i), SUM(i), SUM(DISTINCT i) "

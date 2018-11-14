@@ -36,6 +36,11 @@ docs:
 
 doxygen: docs
 	open build/docs/html/index.html
+
+coverage: unittest
+	lcov -c -d build -o build/cov.info
+	genhtml build/cov.info -o build/coverage --ignore-errors source
+	open build/coverage/index.html
 	
 format:
 	python format.py

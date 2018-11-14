@@ -53,6 +53,7 @@ class PhysicalAggregateOperatorState : public PhysicalOperatorState {
 	DataChunk group_chunk;
 	//! Materialized aggregates
 	DataChunk aggregate_chunk;
+	bool is_implicit_aggr;
 };
 
 } // namespace duckdb
