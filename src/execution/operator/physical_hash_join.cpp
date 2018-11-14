@@ -12,7 +12,7 @@ PhysicalHashJoin::PhysicalHashJoin(std::unique_ptr<PhysicalOperator> left,
                                    JoinType join_type)
     : PhysicalJoin(PhysicalOperatorType::HASH_JOIN, move(cond), join_type) {
 	for (auto &cond : conditions) {
-		// HT only supports equality right now (TODO: anti joins)
+		// HT only supports equality joins
 		assert(cond.comparison == ExpressionType::COMPARE_EQUAL);
 		assert(cond.left->return_type == cond.right->return_type);
 		join_key_types.push_back(cond.left->return_type);

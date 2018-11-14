@@ -25,7 +25,7 @@ vector<TypeId> PhysicalJoin::GetTypes() {
 }
 
 string PhysicalJoin::ExtraRenderInformation() {
-	string extra_info;
+	string extra_info = JoinTypeToString(type) + "\n";
 	for (auto &it : conditions) {
 		string op = ExpressionTypeToOperator(it.comparison);
 		extra_info += it.left->ToString() + op + it.right->ToString() + "\n";

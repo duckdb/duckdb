@@ -171,8 +171,16 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 		                                     move(op.conditions), op.type);
 	} else {
 		// non-equality join: use nested loop
-		plan = make_unique<PhysicalNestedLoopJoin>(
-		    move(left), move(right), move(op.conditions), op.type);
+		if (op.type == JoinType::INNER) {
+			plan = make_unique<PhysicalNestedLoopJoinInner>(
+			    move(left), move(right), move(op.conditions), op.type);
+		} else if (op.type == JoinType::ANTI || op.type == JoinType::SEMI) {
+			plan = make_unique<PhysicalNestedLoopJoinSemi>(
+			    move(left), move(right), move(op.conditions), op.type);
+		} else {
+			throw NotImplementedException(
+			    "Unimplemented nested loop join type!");
+		}
 	}
 }
 

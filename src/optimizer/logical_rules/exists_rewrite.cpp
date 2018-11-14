@@ -86,6 +86,26 @@ ExistsRewriteRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
 	// unlike equality comparison with subquery we only have the correlated
 	// expressions as join condition
 	assert(join_conditions.size() > 0);
+	bool has_only_inequality = true;
+	for (auto &condition : join_conditions) {
+		if (condition.comparison != ExpressionType::COMPARE_NOTEQUAL) {
+			has_only_inequality = false;
+			break;
+		}
+	}
+	if (has_only_inequality) {
+		// only inequality comparisons
+		// we flip them to equality comparisons and invert the join
+		// this allows us to use a hash join
+		for (auto &condition : join_conditions) {
+			condition.comparison = ExpressionType::COMPARE_EQUAL;
+		}
+		if (type == JoinType::SEMI) {
+			type = JoinType::ANTI;
+		} else {
+			type = JoinType::SEMI;
+		}
+	}
 
 	// now we add join between the filter and the subquery
 	assert(filter->children.size() == 1);

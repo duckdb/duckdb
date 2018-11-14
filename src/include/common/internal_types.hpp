@@ -332,6 +332,8 @@ enum class JoinType : uint8_t {
 	ANTI = 6     // Opposite of SEMI JOIN
 };
 
+std::string JoinTypeToString(JoinType type);
+
 //===--------------------------------------------------------------------===//
 // Index Types
 //===--------------------------------------------------------------------===//
@@ -424,6 +426,7 @@ enum class PhysicalOperatorType : uint8_t {
 	NESTED_LOOP_JOIN,
 	HASH_JOIN,
 	CROSS_PRODUCT,
+	MERGE_JOIN,
 
 	// -----------------------------
 	// SetOps

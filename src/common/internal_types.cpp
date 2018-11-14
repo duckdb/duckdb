@@ -314,6 +314,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "NESTED_LOOP_JOIN";
 	case PhysicalOperatorType::HASH_JOIN:
 		return "HASH_JOIN";
+	case PhysicalOperatorType::MERGE_JOIN:
+		return "MERGE_JOIN";
 	case PhysicalOperatorType::CROSS_PRODUCT:
 		return "CROSS_PRODUCT";
 	case PhysicalOperatorType::UNION:
@@ -480,6 +482,25 @@ string ExpressionTypeToOperator(ExpressionType type) {
 		return "*";
 	default:
 		return "";
+	}
+}
+
+string JoinTypeToString(JoinType type) {
+	switch (type) {
+	case JoinType::LEFT:
+		return "LEFT";
+	case JoinType::RIGHT:
+		return "RIGHT";
+	case JoinType::INNER:
+		return "INNER";
+	case JoinType::OUTER:
+		return "OUTER";
+	case JoinType::SEMI:
+		return "SEMI";
+	case JoinType::ANTI:
+		return "ANTI";
+	default:
+		return "INVALID";
 	}
 }
 
