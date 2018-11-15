@@ -24,10 +24,9 @@ class SubqueryRewritingRule : public Rule {
 };
 
 struct JoinCondition;
-class LogicalAggregate;
 class SubqueryExpression;
 
-void ExtractCorrelatedExpressions(LogicalAggregate *aggr,
+void ExtractCorrelatedExpressions(LogicalOperator *op,
                                   SubqueryExpression *subquery,
                                   size_t subquery_table_index,
                                   std::vector<JoinCondition> &join_conditions);
