@@ -141,12 +141,12 @@ void Binder::Visit(SelectStatement &statement) {
 				// alias reference
 				// move the computation here from the SELECT clause
 				size_t select_index = group_column->index;
-				statement.groupby.groups[i] =
-				    move(statement.select_list[select_index]);
-				// and add a GROUP REF expression to the SELECT clause
 				auto group_ref = make_unique<GroupRefExpression>(
 				    statement.groupby.groups[i]->return_type, i);
 				group_ref->alias = string(group_column->column_name);
+				statement.groupby.groups[i] =
+				    move(statement.select_list[select_index]);
+				// and add a GROUP REF expression to the SELECT clause
 				statement.select_list[select_index] = move(group_ref);
 			}
 		}
