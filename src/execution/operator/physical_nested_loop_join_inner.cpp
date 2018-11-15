@@ -30,7 +30,9 @@ static size_t templated_nested_loop_join(Vector &left, Vector &right,
 	size_t result_count = 0;
 	while (true) {
 		size_t left_position = left.sel_vector ? left.sel_vector[lpos] : lpos;
-		if (OP::Operation(ldata[left_position], rdata[rpos])) {
+		if (!left.nullmask[left_position] && 
+			!right.nullmask[rpos] &&
+			OP::Operation(ldata[left_position], rdata[rpos])) {
 			// emit tuple
 			lvector[result_count] = left_position;
 			rvector[result_count] = rpos;
@@ -134,7 +136,9 @@ static size_t templated_nested_loop_comparison(Vector &left, Vector &right,
 	auto rdata = (T *)right.data;
 	size_t result_count = 0;
 	for (size_t i = 0; i < count; i++) {
-		if (OP::Operation(ldata[lvector[i]], rdata[rvector[i]])) {
+		if (!left.nullmask[lvector[i]] &&
+			!right.nullmask[rvector[i]] &&
+			OP::Operation(ldata[lvector[i]], rdata[rvector[i]])) {
 			lvector[result_count] = lvector[i];
 			rvector[result_count] = rvector[i];
 			result_count++;
