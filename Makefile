@@ -1,6 +1,3 @@
-
-
-
 .PHONY: main clean all format test docs doxygen
 
 all: main
@@ -37,10 +34,15 @@ docs:
 doxygen: docs
 	open build/docs/html/index.html
 
-coverage: unittest
-	lcov -c -d build -o build/cov.info
-	genhtml build/cov.info -o build/coverage --ignore-errors source
-	open build/coverage/index.html
+coverage: 
+	rm -r build/coverage
+	mkdir -p build/coverage
+	(cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make -j)
+	build/coverage/test/unittest "*"
+	lcov -c -d build/coverage -o build/coverage/cov.info 
+	lcov --remove build/coverage/cov.info  "/usr/include/*" "*/test/*" "*/third_party/*" -o build/coverage/cov-filtered.info 
+	GITID=`git show -s --format=%h`
+	genhtml build/coverage/cov-filtered.info -o build/coverage/html --ignore-errors source -t "DuckDB Code Coverage Report $GITID"
 	
 format:
 	python format.py
