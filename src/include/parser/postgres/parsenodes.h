@@ -225,6 +225,23 @@ typedef struct WithClause {
 	int location;   /* token location, or -1 if unknown */
 } WithClause;
 
+typedef struct CommonTableExpr {
+	NodeTag type;
+	char *ctename;       /* query name (never qualified) */
+	List *aliascolnames; /* optional list of column names */
+	/* SelectStmt/InsertStmt/etc before parse analysis, Query afterwards: */
+	Node *ctequery; /* the CTE's subquery */
+	int location;   /* token location, or -1 if unknown */
+	/* These fields are set during parse analysis: */
+	bool cterecursive;      /* is this CTE actually recursive? */
+	int cterefcount;        /* number of RTEs referencing this CTE
+	                         * (excluding internal self-references) */
+	List *ctecolnames;      /* list of output column names */
+	List *ctecoltypes;      /* OID list of output column type OIDs */
+	List *ctecoltypmods;    /* integer list of output column typmods */
+	List *ctecolcollations; /* OID list of column collation OIDs */
+} CommonTableExpr;
+
 typedef enum OnCommitAction {
 	ONCOMMIT_NOOP,          /* No ON COMMIT clause (do nothing) */
 	ONCOMMIT_PRESERVE_ROWS, /* ON COMMIT PRESERVE ROWS (do nothing) */

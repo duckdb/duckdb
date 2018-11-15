@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include <map>
 #include <vector>
 
 #include "parser/sql_statement.hpp"
@@ -84,6 +85,9 @@ class SelectStatement : public SQLStatement {
 	OrderByDescription orderby;
 	//! Limit Description
 	LimitDescription limit;
+
+	//! CTEs
+	std::map<std::string, std::unique_ptr<SelectStatement>> cte_map;
 
 	//! Create a copy of this SelectStatement
 	std::unique_ptr<SelectStatement> Copy();

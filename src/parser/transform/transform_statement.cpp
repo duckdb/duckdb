@@ -150,6 +150,62 @@ unique_ptr<SelectStatement> TransformSelect(Node *node) {
 			        : reinterpret_cast<A_Const *>(stmt->limitOffset)
 			              ->val.val.ival;
 		}
+		if (stmt->withClause) {
+			auto with = reinterpret_cast<WithClause *>(stmt->withClause);
+			if (with->recursive) {
+				throw NotImplementedException("Recursive CTEs not supported");
+			}
+			assert(with->ctes);
+			for (auto cte_ele = with->ctes->head; cte_ele != NULL;
+			     cte_ele = cte_ele->next) {
+				auto cte = reinterpret_cast<CommonTableExpr *>(
+				    cte_ele->data.ptr_value);
+				// lets throw some errors on unsupported features early
+				if (cte->cterecursive) {
+					throw NotImplementedException(
+					    "Recursive CTEs not supported");
+				}
+				if (cte->aliascolnames) {
+					throw NotImplementedException(
+					    "Column name aliases not supported in CTEs");
+				}
+				if (cte->ctecolnames) {
+					throw NotImplementedException(
+					    "Column name setting not supported in CTEs");
+				}
+				if (cte->ctecoltypes) {
+					throw NotImplementedException(
+					    "Column type setting not supported in CTEs");
+				}
+				if (cte->ctecoltypmods) {
+					throw NotImplementedException(
+					    "Column type modification not supported in CTEs");
+				}
+				if (cte->ctecolcollations) {
+					throw NotImplementedException(
+					    "CTE collations not supported");
+				}
+				// we need a query
+				if (!cte->ctequery || cte->ctequery->type != T_SelectStmt) {
+					throw Exception("A CTE needs a SELECT");
+				}
+
+				auto cte_select = TransformSelect(cte->ctequery);
+				auto cte_name = string(cte->ctename);
+
+				map<string, unique_ptr<SelectStatement>>::iterator it =
+				    result->cte_map.find(cte_name);
+				if (it != result->cte_map.end()) {
+					// can't have two CTEs with same name
+					throw Exception("A CTE needs an unique name");
+				}
+				result->cte_map[cte_name] = move(cte_select);
+			}
+			// temporary backstop
+			if (result->cte_map.size() > 0) {
+				throw NotImplementedException("CTEs are not supported");
+			}
+		}
 		return result;
 	}
 	case SETOP_UNION: {
