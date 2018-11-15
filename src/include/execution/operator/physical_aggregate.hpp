@@ -38,6 +38,7 @@ class PhysicalAggregate : public PhysicalOperator {
 	//! The actual aggregates that have to be computed (i.e. the deepest
 	//! aggregates in the expression)
 	std::vector<AggregateExpression *> aggregates;
+	bool is_implicit_aggr;
 };
 
 //! The operator state of the aggregate
@@ -53,7 +54,6 @@ class PhysicalAggregateOperatorState : public PhysicalOperatorState {
 	DataChunk group_chunk;
 	//! Materialized aggregates
 	DataChunk aggregate_chunk;
-	bool is_implicit_aggr;
 };
 
 } // namespace duckdb

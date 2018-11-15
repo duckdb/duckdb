@@ -42,6 +42,15 @@ vector<TypeId> PhysicalAggregate::GetTypes() {
 
 void PhysicalAggregate::Initialize() {
 	// get a list of all aggregates to be computed
+	// fake a single group with a constant value for aggregation without groups
+	if (groups.size() == 0) {
+		unique_ptr<Expression> ce =
+		    make_unique<ConstantExpression>(Value::TINYINT(42));
+		groups.push_back(move(ce));
+		is_implicit_aggr = true;
+	} else {
+		is_implicit_aggr = false;
+	}
 	for (auto &expr : select_list) {
 		expr->GetAggregates(aggregates);
 	}
@@ -54,23 +63,11 @@ PhysicalAggregateOperatorState::PhysicalAggregateOperatorState(
     PhysicalAggregate *parent, PhysicalOperator *child,
     ExpressionExecutor *parent_executor)
     : PhysicalOperatorState(child, parent_executor) {
-	// fake a single group with a constant value for aggregation without groups
-	if (parent->groups.size() == 0) {
-		unique_ptr<Expression> ce =
-		    make_unique<ConstantExpression>(Value::TINYINT(42));
-		parent->groups.push_back(move(ce));
-		is_implicit_aggr = true;
-	} else {
-		is_implicit_aggr = false;
-	}
 	vector<TypeId> group_types, aggregate_types;
-
 	for (auto &expr : parent->groups) {
 		group_types.push_back(expr->return_type);
 	}
-
 	group_chunk.Initialize(group_types);
-
 	for (auto &expr : parent->aggregates) {
 		aggregate_types.push_back(expr->return_type);
 	}
