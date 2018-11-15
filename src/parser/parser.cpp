@@ -36,6 +36,12 @@ bool Parser::ParseQuery(std::string query) {
 			goto wrapup;
 		}
 
+		if (!result.tree) {
+			// empty statement
+			this->success = true;
+			goto wrapup;
+		}
+
 		// if it succeeded, we transform the Postgres parse tree into a list of
 		// SQLStatements
 		if (!TransformList(result.tree)) {
