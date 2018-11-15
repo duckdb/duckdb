@@ -60,6 +60,9 @@ class DataChunk : public Printable {
 #endif
 
 	size_t size() {
+		if (column_count == 0) {
+			return 0;
+		}
 		return data[0].count;
 	}
 	//! Initializes the DataChunk with the specified types to an empty DataChunk

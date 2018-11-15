@@ -132,7 +132,9 @@ void ColumnBindingResolver::Visit(ColumnRefExpression &expr) {
 			break;
 		}
 	}
-	assert(expr.index != (size_t)-1);
+	if (expr.index == (size_t)-1) {
+		throw Exception("Failed to bind column ref");
+	}
 }
 
 void ColumnBindingResolver::Visit(SubqueryExpression &expr) {

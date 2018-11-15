@@ -69,7 +69,9 @@ ExistsRewriteRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
 
 	// unlike equality comparison with subquery we only have the correlated
 	// expressions as join condition
-	assert(join_conditions.size() > 0);
+	if (join_conditions.size() == 0) {
+		return nullptr;
+	}
 	bool has_only_inequality = true;
 	for (auto &condition : join_conditions) {
 		if (condition.comparison != ExpressionType::COMPARE_NOTEQUAL) {

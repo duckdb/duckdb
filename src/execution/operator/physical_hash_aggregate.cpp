@@ -82,8 +82,7 @@ void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk,
 
 	// special case hack to sort out aggregating from empty intermediates
 	// for aggregations without groups
-	if (elements_found == 0 && state->tuples_scanned == 0 &&
-	    state->is_implicit_aggr) {
+	if (elements_found == 0 && state->tuples_scanned == 0 && is_implicit_aggr) {
 		assert(state->aggregate_chunk.column_count == aggregates.size());
 		// for each column in the aggregates, seit either to NULL or 0
 		for (size_t i = 0; i < state->aggregate_chunk.column_count; i++) {

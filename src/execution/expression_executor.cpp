@@ -533,6 +533,9 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 
 void ExpressionExecutor::Visit(SubqueryExpression &expr) {
 	auto &plan = expr.plan;
+	if (!plan) {
+		throw Exception("Failed to generate query plan for subquery");
+	}
 	DataChunk *old_chunk = chunk;
 	DataChunk row_chunk;
 	if (old_chunk) {
