@@ -81,6 +81,9 @@ static size_t nested_loop_join_operator(Vector &left, Vector &right,
 	case TypeId::POINTER:
 		return templated_nested_loop_join<uint64_t, OP>(left, right, lpos, rpos,
 		                                                lvector, rvector);
+	case TypeId::VARCHAR:
+		return templated_nested_loop_join<const char*, OP>(left, right, lpos, rpos,
+		                                                lvector, rvector);
 	default:
 		throw NotImplementedException("Unimplemented type for join!");
 	}
@@ -166,6 +169,9 @@ static size_t nested_loop_comparison_operator(Vector &l, Vector &r,
 		                                                    rvector, count);
 	case TypeId::POINTER:
 		return templated_nested_loop_comparison<uint64_t, OP>(l, r, lvector,
+		                                                      rvector, count);
+	case TypeId::VARCHAR:
+		return templated_nested_loop_comparison<const char*, OP>(l, r, lvector,
 		                                                      rvector, count);
 	default:
 		throw NotImplementedException("Unimplemented type for join!");
