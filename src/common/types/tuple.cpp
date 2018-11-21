@@ -8,16 +8,28 @@
 using namespace duckdb;
 using namespace std;
 
-TupleSerializer::TupleSerializer(const std::vector<TypeId> &types,
-                                 std::vector<size_t> _columns)
-    : types(types), columns(_columns), base_size(0),
-      has_variable_columns(false) {
-	if (_columns.size() == 0) {
+TupleSerializer::TupleSerializer() : base_size(0), has_variable_columns(false) {
+}
+
+TupleSerializer::TupleSerializer(const std::vector<TypeId> &types_,
+                                 std::vector<size_t> columns_)
+    : TupleSerializer() {
+	Initialize(types_, columns_);
+}
+
+void TupleSerializer::Initialize(const std::vector<TypeId> &types_,
+                                 std::vector<size_t> columns_) {
+	types = types_;
+
+	if (columns_.size() == 0) {
 		// if _columns is not supplied we use all columns
 		for (size_t i = 0; i < types.size(); i++) {
 			columns.push_back(i);
 		}
+	} else {
+		columns = columns_;
 	}
+
 	assert(types.size() == columns.size());
 	is_variable.resize(columns.size());
 	type_sizes.resize(columns.size());

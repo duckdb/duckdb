@@ -154,18 +154,18 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 	op.children[1]->Accept(this);
 	auto right = move(plan);
 
-	bool only_equality = true;
+	bool has_equality = false;
 	for (auto &cond : op.conditions) {
 		cond.left->Accept(this);
 		cond.right->Accept(this);
-		if (cond.comparison != ExpressionType::COMPARE_EQUAL) {
-			only_equality = false;
+		if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
+			has_equality = true;
 		}
 	}
 
 	assert(left);
 	assert(right);
-	if (only_equality) {
+	if (has_equality) {
 		// equality join: use hash join
 		plan = make_unique<PhysicalHashJoin>(move(left), move(right),
 		                                     move(op.conditions), op.type);

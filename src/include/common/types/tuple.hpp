@@ -27,7 +27,13 @@ class TupleSerializer {
 	friend class TupleComparer;
 
   public:
+	TupleSerializer();
 	TupleSerializer(const std::vector<TypeId> &types,
+	                std::vector<size_t> columns = {});
+
+	//! Initialize the TupleSerializer, should only be called if the empty
+	//! constructor is used
+	void Initialize(const std::vector<TypeId> &types,
 	                std::vector<size_t> columns = {});
 
 	//! Serialize a DataChunk to a set of tuples. Memory is allocated for the
