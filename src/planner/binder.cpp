@@ -16,9 +16,19 @@ void Binder::Visit(SelectStatement &statement) {
 	// first we visit the FROM statement
 	// here we determine from where we can retrieve our columns (from which
 	// tables/subqueries)
+
+
+	// we also need to visit the CTEs because they generate table names
+
+	for (map<string, unique_ptr<SelectStatement>>::iterator cte_it = statement.cte_map.begin(); cte_it != statement.cte_map.end(); cte_it++ ) {
+		bind_context->AddCte(cte_it->first, cte_it->second.get());
+	}
+
 	if (statement.from_table) {
 		statement.from_table->Accept(this);
 	}
+
+
 	// now we visit the rest of the statements
 	// here we performing the binding of any mentioned column names
 	// back to the tables/subqueries found in the FROM statement
@@ -349,7 +359,17 @@ void Binder::Visit(SubqueryExpression &expr) {
 	expr.is_correlated = expr.context->GetMaxDepth() > 0;
 }
 
+
+// CTEs are also referred to using BaseTableRefs, hence need to distinguish
 void Binder::Visit(BaseTableRef &expr) {
+	if (bind_context->HasCte(expr.table_name)) {
+		if (!expr.alias.empty()) {
+			bind_context->AddCteAlias(expr.alias, expr.table_name);
+		}
+
+		return;
+	}
+
 	auto table = context.db.catalog.GetTable(context.ActiveTransaction(),
 	                                         expr.schema_name, expr.table_name);
 	bind_context->AddBaseTable(

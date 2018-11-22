@@ -74,6 +74,8 @@ struct SubqueryBinding : public Binding {
 	std::unordered_map<std::string, size_t> name_map;
 
 	SubqueryBinding(SubqueryRef &subquery_, size_t index);
+	SubqueryBinding(SelectStatement *select_, size_t index);
+
 	virtual ~SubqueryBinding() {
 	}
 };
@@ -114,6 +116,11 @@ class BindContext {
 	                   std::vector<ColumnDefinition> &columns);
 	//! Adds a subquery with a given alias to the BindContext.
 	size_t AddSubquery(const std::string &alias, SubqueryRef &subquery);
+
+	size_t AddCte(const std::string &name, SelectStatement *cte);
+	bool HasCte(const std::string &name);
+	size_t AddCteAlias(const std::string &alias, const std::string &name);
+
 	//! Adds a table function with a given alias to the BindContext
 	size_t AddTableFunction(const std::string &alias,
 	                        TableFunctionCatalogEntry *function_entry);

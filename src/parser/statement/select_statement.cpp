@@ -235,5 +235,11 @@ bool SelectStatement::Equals(const SQLStatement *other_) {
 		}
 	}
 
+	// WITH clauses (CTEs)
+	if (cte_map.size() != other->cte_map.size() || !std::equal(cte_map.begin(), cte_map.end(),
+			other->cte_map.begin())) {
+		return false;
+	}
+
 	return true;
 }
