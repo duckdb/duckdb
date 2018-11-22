@@ -27,8 +27,7 @@ SubqueryBinding::SubqueryBinding(SubqueryRef &subquery_, size_t index)
 }
 
 SubqueryBinding::SubqueryBinding(SelectStatement *select_, size_t index)
-    : Binding(BindingType::SUBQUERY, index),
-      subquery(select_) {
+    : Binding(BindingType::SUBQUERY, index), subquery(select_) {
 	// FIXME: double-check this
 	for (auto &entry : subquery->select_list) {
 		auto name = entry->GetName();
@@ -36,7 +35,6 @@ SubqueryBinding::SubqueryBinding(SelectStatement *select_, size_t index)
 		names.push_back(name);
 	}
 }
-
 
 static bool HasMatchingBinding(Binding *binding, const string &column_name) {
 	switch (binding->type) {
@@ -262,7 +260,6 @@ size_t BindContext::AddBaseTable(const string &alias,
 	return index;
 }
 
-
 size_t BindContext::AddCte(const std::string &name, SelectStatement *cte) {
 	size_t index = GenerateTableIndex();
 	AddBinding(name, make_unique<SubqueryBinding>(cte, index));
@@ -272,7 +269,8 @@ bool BindContext::HasCte(const std::string &name) {
 	return bindings.find(name) != bindings.end();
 }
 
-size_t  BindContext::AddCteAlias(const std::string &alias, const std::string &name) {
+size_t BindContext::AddCteAlias(const std::string &alias,
+                                const std::string &name) {
 	if (HasAlias(alias)) {
 		throw BinderException("Duplicate alias \"%s\" in query!",
 		                      alias.c_str());
@@ -280,7 +278,6 @@ size_t  BindContext::AddCteAlias(const std::string &alias, const std::string &na
 	throw NotImplementedException("Aliasing CTEs not supported");
 	// FIXME: copy here?
 }
-
 
 void BindContext::AddDummyTable(const string &alias,
                                 vector<ColumnDefinition> &columns) {

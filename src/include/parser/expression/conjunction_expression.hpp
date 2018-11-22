@@ -11,6 +11,7 @@
 #pragma once
 
 #include "parser/expression.hpp"
+#include "parser/sql_node_visitor.hpp"
 
 namespace duckdb {
 //! Represents a conjunction (AND/OR)
@@ -21,8 +22,8 @@ class ConjunctionExpression : public Expression {
 	    : Expression(type, TypeId::BOOLEAN, std::move(left), std::move(right)) {
 	}
 
-	virtual void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
+	virtual std::unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
+		return v->Visit(*this);
 	}
 	virtual ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::CONJUNCTION;

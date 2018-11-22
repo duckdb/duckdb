@@ -303,7 +303,7 @@ unique_ptr<TableRef> TransformFrom(List *root) {
 		return move(result);
 	}
 
-	Node *n = reinterpret_cast<Node *>(root->head->dataptr_value);
+	Node *n = reinterpret_cast<Node *>(root->head->data.ptr_value);
 	return TransformTableRefNode(n);
 }
 

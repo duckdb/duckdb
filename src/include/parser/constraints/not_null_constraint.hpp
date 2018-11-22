@@ -11,6 +11,7 @@
 #pragma once
 
 #include "parser/constraint.hpp"
+#include "parser/sql_node_visitor.hpp"
 
 namespace duckdb {
 
@@ -21,8 +22,8 @@ class NotNullConstraint : public Constraint {
 	virtual ~NotNullConstraint() {
 	}
 
-	virtual void Accept(SQLNodeVisitor *v) {
-		v->Visit(*this);
+	virtual std::unique_ptr<Constraint> Accept(SQLNodeVisitor *v) {
+		return v->Visit(*this);
 	}
 
 	virtual std::string ToString() const {

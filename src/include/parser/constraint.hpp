@@ -13,10 +13,9 @@
 #include "common/internal_types.hpp"
 #include "common/printable.hpp"
 
-#include "parser/sql_node_visitor.hpp"
-
 namespace duckdb {
 
+class SQLNodeVisitor;
 //! Constraint is the base class of any type of table constraint.
 class Constraint : public Printable {
   public:
@@ -24,8 +23,7 @@ class Constraint : public Printable {
 	virtual ~Constraint() {
 	}
 
-	virtual void Accept(SQLNodeVisitor *) {
-	}
+	virtual std::unique_ptr<Constraint> Accept(SQLNodeVisitor *) = 0;
 
 	ConstraintType type;
 

@@ -12,6 +12,7 @@
 
 #include "common/types/value.hpp"
 #include "parser/expression.hpp"
+#include "parser/sql_node_visitor.hpp"
 
 namespace duckdb {
 //! Represents a constant value in the query
@@ -24,8 +25,8 @@ class ConstantExpression : public Expression {
 	    : Expression(ExpressionType::VALUE_CONSTANT, val.type), value(val) {
 	}
 
-	virtual void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
+	virtual std::unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
+		return v->Visit(*this);
 	}
 	virtual ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::CONSTANT;

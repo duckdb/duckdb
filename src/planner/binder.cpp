@@ -12,22 +12,22 @@
 using namespace duckdb;
 using namespace std;
 
-void Binder::Visit(SelectStatement &statement) {
+unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 	// first we visit the FROM statement
 	// here we determine from where we can retrieve our columns (from which
 	// tables/subqueries)
 
-
 	// we also need to visit the CTEs because they generate table names
 
-	for (map<string, unique_ptr<SelectStatement>>::iterator cte_it = statement.cte_map.begin(); cte_it != statement.cte_map.end(); cte_it++ ) {
+	for (map<string, unique_ptr<SelectStatement>>::iterator cte_it =
+	         statement.cte_map.begin();
+	     cte_it != statement.cte_map.end(); cte_it++) {
 		bind_context->AddCte(cte_it->first, cte_it->second.get());
 	}
 
 	if (statement.from_table) {
 		statement.from_table->Accept(this);
 	}
-
 
 	// now we visit the rest of the statements
 	// here we performing the binding of any mentioned column names
@@ -235,9 +235,10 @@ void Binder::Visit(SelectStatement &statement) {
 		binder.bind_context = make_unique<BindContext>();
 		statement.union_select->Accept(&binder);
 	}
+	return nullptr;
 }
 
-void Binder::Visit(InsertStatement &statement) {
+unique_ptr<SQLStatement> Binder::Visit(InsertStatement &statement) {
 	if (statement.select_statement) {
 		statement.select_statement->Accept(this);
 	}
@@ -247,27 +248,31 @@ void Binder::Visit(InsertStatement &statement) {
 			expression->Accept(this);
 		}
 	}
+	return nullptr;
 }
 
-void Binder::Visit(CopyStatement &stmt) {
+unique_ptr<SQLStatement> Binder::Visit(CopyStatement &stmt) {
 	if (stmt.select_statement) {
 		stmt.select_statement->Accept(this);
 	}
+	return nullptr;
 }
 
-void Binder::Visit(DeleteStatement &stmt) {
+unique_ptr<SQLStatement> Binder::Visit(DeleteStatement &stmt) {
 	// visit the table reference
 	stmt.table->Accept(this);
 	// project any additional columns required for the condition
 	stmt.condition->Accept(this);
+	return nullptr;
 }
 
-void Binder::Visit(AlterTableStatement &stmt) {
+unique_ptr<SQLStatement> Binder::Visit(AlterTableStatement &stmt) {
 	// visit the table reference
 	stmt.table->Accept(this);
+	return nullptr;
 }
 
-void Binder::Visit(UpdateStatement &stmt) {
+unique_ptr<SQLStatement> Binder::Visit(UpdateStatement &stmt) {
 	// visit the table reference
 	stmt.table->Accept(this);
 	// project any additional columns required for the condition/expressions
@@ -288,18 +293,20 @@ void Binder::Visit(UpdateStatement &stmt) {
 			    "Could not resolve type of projection element!");
 		}
 	}
+	return nullptr;
 }
 
-void Binder::Visit(CreateTableStatement &stmt) {
+unique_ptr<SQLStatement> Binder::Visit(CreateTableStatement &stmt) {
 	// bind any constraints
 	// first create a fake table
 	bind_context->AddDummyTable(stmt.info->table, stmt.info->columns);
 	for (auto &it : stmt.info->constraints) {
 		it->Accept(this);
 	}
+	return nullptr;
 }
 
-void Binder::Visit(CheckConstraint &constraint) {
+unique_ptr<Constraint> Binder::Visit(CheckConstraint &constraint) {
 	SQLNodeVisitor::Visit(constraint);
 
 	constraint.expression->ResolveType();
@@ -311,12 +318,13 @@ void Binder::Visit(CheckConstraint &constraint) {
 		constraint.expression = make_unique<CastExpression>(
 		    TypeId::INTEGER, move(constraint.expression));
 	}
+	return nullptr;
 }
 
-void Binder::Visit(ColumnRefExpression &expr) {
+unique_ptr<Expression> Binder::Visit(ColumnRefExpression &expr) {
 	if (expr.column_name.empty()) {
 		// column expression should have been bound already
-		return;
+		return nullptr;
 	}
 	// individual column reference
 	// resolve to either a base table or a subquery expression
@@ -325,15 +333,17 @@ void Binder::Visit(ColumnRefExpression &expr) {
 		expr.table_name = bind_context->GetMatchingBinding(expr.column_name);
 	}
 	bind_context->BindColumn(expr);
+	return nullptr;
 }
 
-void Binder::Visit(FunctionExpression &expr) {
+unique_ptr<Expression> Binder::Visit(FunctionExpression &expr) {
 	SQLNodeVisitor::Visit(expr);
 	expr.bound_function = context.db.catalog.GetScalarFunction(
 	    context.ActiveTransaction(), expr.schema, expr.function_name);
+	return nullptr;
 }
 
-void Binder::Visit(SubqueryExpression &expr) {
+unique_ptr<Expression> Binder::Visit(SubqueryExpression &expr) {
 	assert(bind_context);
 
 	Binder binder(context);
@@ -357,49 +367,54 @@ void Binder::Visit(SubqueryExpression &expr) {
 	                       : expr.subquery->select_list[0]->return_type;
 	expr.context = move(binder.bind_context);
 	expr.is_correlated = expr.context->GetMaxDepth() > 0;
+	return nullptr;
 }
 
-
 // CTEs are also referred to using BaseTableRefs, hence need to distinguish
-void Binder::Visit(BaseTableRef &expr) {
+unique_ptr<TableRef> Binder::Visit(BaseTableRef &expr) {
 	if (bind_context->HasCte(expr.table_name)) {
 		if (!expr.alias.empty()) {
 			bind_context->AddCteAlias(expr.alias, expr.table_name);
 		}
 
-		return;
+		return nullptr;
 	}
 
 	auto table = context.db.catalog.GetTable(context.ActiveTransaction(),
 	                                         expr.schema_name, expr.table_name);
 	bind_context->AddBaseTable(
 	    expr.alias.empty() ? expr.table_name : expr.alias, table);
+	return nullptr;
 }
 
-void Binder::Visit(CrossProductRef &expr) {
+unique_ptr<TableRef> Binder::Visit(CrossProductRef &expr) {
 	expr.left->Accept(this);
 	expr.right->Accept(this);
+	return nullptr;
 }
 
-void Binder::Visit(JoinRef &expr) {
+unique_ptr<TableRef> Binder::Visit(JoinRef &expr) {
 	expr.left->Accept(this);
 	expr.right->Accept(this);
 	expr.condition->Accept(this);
+	return nullptr;
 }
 
-void Binder::Visit(SubqueryRef &expr) {
+unique_ptr<TableRef> Binder::Visit(SubqueryRef &expr) {
 	Binder binder(context);
 	expr.subquery->Accept(&binder);
 	expr.context = move(binder.bind_context);
 
 	bind_context->AddSubquery(expr.alias, expr);
+	return nullptr;
 }
 
-void Binder::Visit(TableFunction &expr) {
+unique_ptr<TableRef> Binder::Visit(TableFunction &expr) {
 	auto function_definition = (FunctionExpression *)expr.function.get();
 	auto function = context.db.catalog.GetTableFunction(
 	    context.ActiveTransaction(), function_definition);
 	bind_context->AddTableFunction(
 	    expr.alias.empty() ? function_definition->function_name : expr.alias,
 	    function);
+	return nullptr;
 }

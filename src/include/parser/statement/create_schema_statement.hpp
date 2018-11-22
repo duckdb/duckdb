@@ -11,6 +11,7 @@
 #pragma once
 
 #include "parser/parsed_data.hpp"
+#include "parser/sql_node_visitor.hpp"
 #include "parser/sql_statement.hpp"
 
 namespace duckdb {
@@ -26,8 +27,8 @@ class CreateSchemaStatement : public SQLStatement {
 	virtual std::string ToString() const {
 		return "CREATE SCHEMA";
 	}
-	virtual void Accept(SQLNodeVisitor *v) {
-		v->Visit(*this);
+	virtual std::unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
+		return v->Visit(*this);
 	}
 
 	virtual bool Equals(const SQLStatement *other_) {

@@ -10,8 +10,10 @@
 
 #pragma once
 
+#include "parser/sql_node_visitor.hpp"
 #include "parser/statement/select_statement.hpp"
 #include "parser/tableref.hpp"
+
 // FIXME: should not include this here!
 #include "execution/physical_operator.hpp"
 #include "planner/bindcontext.hpp"
@@ -27,8 +29,8 @@ class SubqueryExpression : public Expression {
 	      subquery_type(SubqueryType::DEFAULT) {
 	}
 
-	virtual void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
+	virtual std::unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
+		return v->Visit(*this);
 	}
 	virtual ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::SUBQUERY;

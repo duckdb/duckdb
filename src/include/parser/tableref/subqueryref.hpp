@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "parser/sql_node_visitor.hpp"
 #include "parser/statement/select_statement.hpp"
 #include "parser/tableref.hpp"
 #include "planner/bindcontext.hpp"
@@ -20,8 +21,8 @@ class SubqueryRef : public TableRef {
   public:
 	SubqueryRef(std::unique_ptr<SelectStatement> subquery);
 
-	virtual void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
+	virtual std::unique_ptr<TableRef> Accept(SQLNodeVisitor *v) override {
+		return v->Visit(*this);
 	}
 	virtual bool Equals(const TableRef *other_) override {
 		if (!TableRef::Equals(other_)) {

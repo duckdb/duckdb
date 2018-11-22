@@ -14,6 +14,7 @@
 
 #include "parser/constraint.hpp"
 #include "parser/expression.hpp"
+#include "parser/sql_node_visitor.hpp"
 
 namespace duckdb {
 
@@ -26,8 +27,8 @@ class CheckConstraint : public Constraint {
 	virtual ~CheckConstraint() {
 	}
 
-	virtual void Accept(SQLNodeVisitor *v) {
-		v->Visit(*this);
+	virtual std::unique_ptr<Constraint> Accept(SQLNodeVisitor *v) {
+		return v->Visit(*this);
 	}
 
 	virtual std::string ToString() const {

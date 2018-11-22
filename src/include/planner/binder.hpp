@@ -33,25 +33,25 @@ class Binder : public SQLNodeVisitor {
 	    : bind_context(make_unique<BindContext>()), context(context) {
 	}
 
-	void Visit(SelectStatement &statement);
-	void Visit(InsertStatement &stmt);
-	void Visit(CopyStatement &stmt);
-	void Visit(DeleteStatement &stmt);
-	void Visit(UpdateStatement &stmt);
-	void Visit(AlterTableStatement &stmt);
-	void Visit(CreateTableStatement &stmt);
+	std::unique_ptr<SQLStatement> Visit(SelectStatement &statement);
+	std::unique_ptr<SQLStatement> Visit(InsertStatement &stmt);
+	std::unique_ptr<SQLStatement> Visit(CopyStatement &stmt);
+	std::unique_ptr<SQLStatement> Visit(DeleteStatement &stmt);
+	std::unique_ptr<SQLStatement> Visit(UpdateStatement &stmt);
+	std::unique_ptr<SQLStatement> Visit(AlterTableStatement &stmt);
+	std::unique_ptr<SQLStatement> Visit(CreateTableStatement &stmt);
 
-	void Visit(CheckConstraint &constraint);
+	std::unique_ptr<Constraint> Visit(CheckConstraint &constraint);
 
-	void Visit(ColumnRefExpression &expr);
-	void Visit(FunctionExpression &expr);
-	void Visit(SubqueryExpression &expr);
+	std::unique_ptr<Expression> Visit(ColumnRefExpression &expr);
+	std::unique_ptr<Expression> Visit(FunctionExpression &expr);
+	std::unique_ptr<Expression> Visit(SubqueryExpression &expr);
 
-	void Visit(BaseTableRef &expr);
-	void Visit(CrossProductRef &expr);
-	void Visit(JoinRef &expr);
-	void Visit(SubqueryRef &expr);
-	void Visit(TableFunction &expr);
+	std::unique_ptr<TableRef> Visit(BaseTableRef &expr);
+	std::unique_ptr<TableRef> Visit(CrossProductRef &expr);
+	std::unique_ptr<TableRef> Visit(JoinRef &expr);
+	std::unique_ptr<TableRef> Visit(SubqueryRef &expr);
+	std::unique_ptr<TableRef> Visit(TableFunction &expr);
 
 	//! The BindContext created and used by the Binder.
 	std::unique_ptr<BindContext> bind_context;
