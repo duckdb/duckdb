@@ -150,8 +150,8 @@ void ExtractCorrelatedExpressions(LogicalOperator *op,
 
 		if (op->type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY) {
 			auto aggr = (LogicalAggregate *)op;
-			// now inside the aggregation, we use the uncorrelated column used in
-			// the comparison as both projection and grouping col in subquery
+			// now inside the aggregation, we use the uncorrelated column used
+			// in the comparison as both projection and grouping col in subquery
 			aggr->expressions.push_back(
 			    make_unique_base<Expression, GroupRefExpression>(
 			        uncorrelated_expression->return_type, aggr->groups.size()));

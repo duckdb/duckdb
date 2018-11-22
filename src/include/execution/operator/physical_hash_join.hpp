@@ -34,18 +34,15 @@ class PhysicalHashJoin : public PhysicalJoin {
 	GetOperatorState(ExpressionExecutor *parent_executor) override;
 
 	std::unique_ptr<JoinHashTable> hash_table;
-	std::vector<TypeId> join_key_types;
 };
 
 class PhysicalHashJoinOperatorState : public PhysicalOperatorState {
   public:
 	PhysicalHashJoinOperatorState(PhysicalOperator *left,
 	                              PhysicalOperator *right,
-	                              std::vector<TypeId> &join_key_types,
 	                              ExpressionExecutor *parent_executor)
 	    : PhysicalOperatorState(left, parent_executor), initialized(false) {
 		assert(left && right);
-		join_keys.Initialize(join_key_types);
 	}
 
 	bool initialized;

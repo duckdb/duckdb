@@ -20,9 +20,7 @@ namespace duckdb {
 class PhysicalJoin : public PhysicalOperator {
   public:
 	PhysicalJoin(PhysicalOperatorType type, std::vector<JoinCondition> cond,
-	             JoinType join_type)
-	    : PhysicalOperator(type), conditions(move(cond)), type(join_type) {
-	}
+	             JoinType join_type);
 
 	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;
