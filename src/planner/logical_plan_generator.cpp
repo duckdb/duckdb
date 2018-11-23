@@ -34,14 +34,14 @@ LogicalPlanGenerator::Visit(UpdateStatement &statement) {
 	// we require row ids for the deletion
 	require_row_id = true;
 	// create the table scan
-	statement.table->Accept(this);
+	AcceptChild(&statement.table);
 	if (!root || root->type != LogicalOperatorType::GET) {
 		throw Exception("Cannot create update node without table scan!");
 	}
 	auto get = (LogicalGet *)root.get();
 	// create the filter (if any)
 	if (statement.condition) {
-		statement.condition->Accept(this);
+		AcceptChild(&statement.condition);
 		auto filter = make_unique<LogicalFilter>(move(statement.condition));
 		filter->AddChild(move(root));
 		root = move(filter);
@@ -84,14 +84,14 @@ LogicalPlanGenerator::Visit(DeleteStatement &statement) {
 	// we require row ids for the deletion
 	require_row_id = true;
 	// create the table scan
-	statement.table->Accept(this);
+	AcceptChild(&statement.table);
 	if (!root || root->type != LogicalOperatorType::GET) {
 		throw Exception("Cannot create delete node without table scan!");
 	}
 	auto get = (LogicalGet *)root.get();
 	// create the filter (if any)
 	if (statement.condition) {
-		statement.condition->Accept(this);
+		AcceptChild(&statement.condition);
 		auto filter = make_unique<LogicalFilter>(move(statement.condition));
 		filter->AddChild(move(root));
 		root = move(filter);
@@ -136,19 +136,19 @@ transform_aggregates_into_colref(LogicalOperator *root,
 unique_ptr<SQLStatement>
 LogicalPlanGenerator::Visit(SelectStatement &statement) {
 	for (auto &expr : statement.select_list) {
-		expr->Accept(this);
+		AcceptChild(&expr);
 	}
 
 	if (statement.from_table) {
 		// SELECT with FROM
-		statement.from_table->Accept(this);
+		AcceptChild(&statement.from_table);
 	} else {
 		// SELECT without FROM, add empty GET
 		root = make_unique<LogicalGet>();
 	}
 
 	if (statement.where_clause) {
-		statement.where_clause->Accept(this);
+		AcceptChild(&statement.where_clause);
 
 		auto filter = make_unique<LogicalFilter>(move(statement.where_clause));
 		filter->AddChild(move(root));
@@ -169,7 +169,7 @@ LogicalPlanGenerator::Visit(SelectStatement &statement) {
 		root = move(aggregate);
 
 		if (statement.HasHaving()) {
-			statement.groupby.having->Accept(this);
+			AcceptChild(&statement.groupby.having);
 			auto having =
 			    make_unique<LogicalFilter>(move(statement.groupby.having));
 			// the HAVING child cannot contain aggregates itself
@@ -200,8 +200,10 @@ LogicalPlanGenerator::Visit(SelectStatement &statement) {
 
 	if (statement.union_select) {
 		auto top_node = move(root);
-		statement.union_select->Accept(this);
-		auto bottom_node = move(root);
+		LogicalPlanGenerator generator(context, *statement.setop_binder, true);
+
+		statement.union_select->Accept(&generator);
+		auto bottom_node = move(generator.root);
 
 		// get the projections
 		auto top_select = GetProjection(top_node.get());
@@ -435,12 +437,12 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(CrossProductRef &expr) {
 		throw Exception("Cross product cannot have children!");
 	}
 
-	expr.left->Accept(this);
+	AcceptChild(&expr.left);
 	assert(root);
 	cross_product->AddChild(move(root));
 	root = nullptr;
 
-	expr.right->Accept(this);
+	AcceptChild(&expr.right);
 	assert(root);
 	cross_product->AddChild(move(root));
 	root = nullptr;
@@ -450,19 +452,19 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(CrossProductRef &expr) {
 }
 
 unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
-	expr.condition->Accept(this);
+	AcceptChild(&expr.condition);
 	auto join = make_unique<LogicalJoin>(expr.type);
 
 	if (root) {
 		throw Exception("Cross product cannot have children!");
 	}
 
-	expr.left->Accept(this);
+	AcceptChild(&expr.left);
 	assert(root);
 	join->AddChild(move(root));
 	root = nullptr;
 
-	expr.right->Accept(this);
+	AcceptChild(&expr.right);
 	assert(root);
 	join->AddChild(move(root));
 	root = nullptr;
@@ -548,7 +550,7 @@ LogicalPlanGenerator::Visit(InsertStatement &statement) {
 	if (statement.select_statement) {
 		// insert from select statement
 		// parse select statement and add to logical plan
-		statement.select_statement->Accept(this);
+		AcceptChild(&statement.select_statement);
 		assert(root);
 		insert->AddChild(move(root));
 		root = move(insert);
@@ -556,7 +558,7 @@ LogicalPlanGenerator::Visit(InsertStatement &statement) {
 		// first visit the expressions
 		for (auto &expression_list : statement.values) {
 			for (auto &expression : expression_list) {
-				expression->Accept(this);
+				AcceptChild(&expression);
 			}
 		}
 		// insert from constants
@@ -595,7 +597,7 @@ unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(CopyStatement &statement) {
 		    move(statement.file_path), move(statement.is_from),
 		    move(statement.delimiter), move(statement.quote),
 		    move(statement.escape));
-		statement.select_statement->Accept(this);
+		AcceptChild(&statement.select_statement);
 		assert(root);
 		copy->AddChild(move(root));
 		root = move(copy);

@@ -132,7 +132,7 @@ class SQLNodeVisitor {
 		assert(accept);
 		auto accept_res = (*accept)->Accept(this);
 		if (accept_res) {
-			*accept = move(accept_res);
+			(*accept) = std::unique_ptr<T>((T *)accept_res.release());
 		}
 	}
 };

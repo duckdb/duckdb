@@ -21,10 +21,11 @@
 #include "parser/column_definition.hpp"
 #include "parser/expression.hpp"
 #include "parser/sql_statement.hpp"
-#include "parser/statement/select_statement.hpp"
 
 namespace duckdb {
 class SubqueryRef;
+class SelectStatement;
+class ColumnRefExpression;
 
 enum class BindingType : uint8_t {
 	DUMMY = 0,
@@ -116,10 +117,6 @@ class BindContext {
 	                   std::vector<ColumnDefinition> &columns);
 	//! Adds a subquery with a given alias to the BindContext.
 	size_t AddSubquery(const std::string &alias, SubqueryRef &subquery);
-
-	size_t AddCte(const std::string &name, SelectStatement *cte);
-	bool HasCte(const std::string &name);
-	size_t AddCteAlias(const std::string &alias, const std::string &name);
 
 	//! Adds a table function with a given alias to the BindContext
 	size_t AddTableFunction(const std::string &alias,

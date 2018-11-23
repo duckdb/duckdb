@@ -18,6 +18,7 @@
 #include "parser/expression.hpp"
 #include "parser/sql_node_visitor.hpp"
 #include "parser/tableref.hpp"
+#include "planner/bindcontext.hpp"
 
 namespace duckdb {
 //! GROUP BY description
@@ -120,5 +121,6 @@ class SelectStatement : public SQLStatement {
 
 	std::unique_ptr<SelectStatement> union_select;
 	std::unique_ptr<SelectStatement> except_select;
+	std::unique_ptr<BindContext> setop_binder;
 };
 } // namespace duckdb

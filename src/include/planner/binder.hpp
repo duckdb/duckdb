@@ -29,8 +29,9 @@ class ClientContext;
 */
 class Binder : public SQLNodeVisitor {
   public:
-	Binder(ClientContext &context)
-	    : bind_context(make_unique<BindContext>()), context(context) {
+	Binder(ClientContext &context, Binder *parent = nullptr)
+	    : bind_context(make_unique<BindContext>()), context(context),
+	      parent(parent) {
 	}
 
 	std::unique_ptr<SQLStatement> Visit(SelectStatement &statement);
@@ -53,10 +54,16 @@ class Binder : public SQLNodeVisitor {
 	std::unique_ptr<TableRef> Visit(SubqueryRef &expr);
 	std::unique_ptr<TableRef> Visit(TableFunction &expr);
 
+	void AddCTE(const std::string &name, SelectStatement *cte);
+	std::unique_ptr<SelectStatement> FindCTE(const std::string &name);
+
 	//! The BindContext created and used by the Binder.
 	std::unique_ptr<BindContext> bind_context;
 
+	std::unordered_map<std::string, SelectStatement *> CTE_bindings;
+
   private:
 	ClientContext &context;
+	Binder *parent;
 };
 } // namespace duckdb

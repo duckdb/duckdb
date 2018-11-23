@@ -260,25 +260,6 @@ size_t BindContext::AddBaseTable(const string &alias,
 	return index;
 }
 
-size_t BindContext::AddCte(const std::string &name, SelectStatement *cte) {
-	size_t index = GenerateTableIndex();
-	AddBinding(name, make_unique<SubqueryBinding>(cte, index));
-	return index;
-}
-bool BindContext::HasCte(const std::string &name) {
-	return bindings.find(name) != bindings.end();
-}
-
-size_t BindContext::AddCteAlias(const std::string &alias,
-                                const std::string &name) {
-	if (HasAlias(alias)) {
-		throw BinderException("Duplicate alias \"%s\" in query!",
-		                      alias.c_str());
-	}
-	throw NotImplementedException("Aliasing CTEs not supported");
-	// FIXME: copy here?
-}
-
 void BindContext::AddDummyTable(const string &alias,
                                 vector<ColumnDefinition> &columns) {
 	// alias is empty for dummy table
@@ -315,7 +296,7 @@ bool BindContext::HasAlias(const string &alias) {
 size_t BindContext::GetBindingIndex(const string &alias) {
 	auto entry = bindings.find(alias);
 	if (entry == bindings.end()) {
-		throw Exception("Could not find alias!");
+		throw BinderException("Could not find alias!");
 	}
 	return entry->second->index;
 }

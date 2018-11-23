@@ -29,34 +29,39 @@ static size_t templated_nested_loop_join(Vector &left, Vector &right,
 	auto rdata = (T *)right.data;
 	size_t result_count = 0;
 
-	// FIXME: this only needs to be done once per vector instead of once per call
-	// create a selection vector that disqualifies any entries with NULL from qualifying
-	// because NULL never matches anything
-	sel_t left_null_vector[STANDARD_VECTOR_SIZE], right_null_vector[STANDARD_VECTOR_SIZE];
+	// FIXME: this only needs to be done once per vector instead of once per
+	// call create a selection vector that disqualifies any entries with NULL
+	// from qualifying because NULL never matches anything
+	sel_t left_null_vector[STANDARD_VECTOR_SIZE],
+	    right_null_vector[STANDARD_VECTOR_SIZE];
 	size_t left_count = 0, right_count = 0;
 	sel_t *left_sel_vector = nullptr, *right_sel_vector = nullptr;
 	if (left.nullmask.any()) {
-		VectorOperations::Exec(left.sel_vector, left.count, [&](size_t i, size_t k) {
-			if (!left.nullmask[i]) {
-				left_null_vector[left_count++] = i;
-			}
-		});
+		VectorOperations::Exec(left.sel_vector, left.count,
+		                       [&](size_t i, size_t k) {
+			                       if (!left.nullmask[i]) {
+				                       left_null_vector[left_count++] = i;
+			                       }
+		                       });
 	} else {
 		left_count = left.count;
 	}
 	if (right.nullmask.any()) {
-		VectorOperations::Exec(right.sel_vector, right.count, [&](size_t i, size_t k) {
-			if (!right.nullmask[i]) {
-				right_null_vector[right_count++] = i;
-			}
-		});
+		VectorOperations::Exec(right.sel_vector, right.count,
+		                       [&](size_t i, size_t k) {
+			                       if (!right.nullmask[i]) {
+				                       right_null_vector[right_count++] = i;
+			                       }
+		                       });
 	} else {
 		right_count = right.count;
 	}
-	for(; rpos < right_count; rpos++) {
-		size_t right_position = right_sel_vector ? right_sel_vector[rpos] : rpos;
-		for(; lpos < left_count; lpos++) {
-			size_t left_position = left_sel_vector ? left_sel_vector[lpos] : lpos;
+	for (; rpos < right_count; rpos++) {
+		size_t right_position =
+		    right_sel_vector ? right_sel_vector[rpos] : rpos;
+		for (; lpos < left_count; lpos++) {
+			size_t left_position =
+			    left_sel_vector ? left_sel_vector[lpos] : lpos;
 			if (OP::Operation(ldata[left_position], rdata[right_position])) {
 				// emit tuple
 				lvector[result_count] = left_position;

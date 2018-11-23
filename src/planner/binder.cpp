@@ -19,14 +19,12 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 
 	// we also need to visit the CTEs because they generate table names
 
-	for (map<string, unique_ptr<SelectStatement>>::iterator cte_it =
-	         statement.cte_map.begin();
-	     cte_it != statement.cte_map.end(); cte_it++) {
-		bind_context->AddCte(cte_it->first, cte_it->second.get());
+	for (auto &cte_it : statement.cte_map) {
+		AddCTE(cte_it.first, cte_it.second.get());
 	}
 
 	if (statement.from_table) {
-		statement.from_table->Accept(this);
+		AcceptChild(&statement.from_table);
 	}
 
 	// now we visit the rest of the statements
@@ -54,7 +52,7 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 
 	for (size_t i = 0; i < new_select_list.size(); i++) {
 		auto &select_element = new_select_list[i];
-		select_element->Accept(this);
+		AcceptChild(&select_element);
 		select_element->ResolveType();
 		if (select_element->return_type == TypeId::INVALID) {
 			throw BinderException(
@@ -67,7 +65,7 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 		}
 	}
 	for (auto &order : statement.orderby.orders) {
-		order.expression->Accept(this);
+		AcceptChild(&order.expression);
 		if (order.expression->type == ExpressionType::COLUMN_REF) {
 			auto selection_ref =
 			    reinterpret_cast<ColumnRefExpression *>(order.expression.get());
@@ -128,14 +126,14 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 	statement.select_list = move(new_select_list);
 
 	if (statement.where_clause) {
-		statement.where_clause->Accept(this);
+		AcceptChild(&statement.where_clause);
 		statement.where_clause->ResolveType();
 	}
 
 	if (statement.HasGroup()) {
 		// bind group columns
 		for (auto &group : statement.groupby.groups) {
-			group->Accept(this);
+			AcceptChild(&group);
 		}
 
 		// handle aliases in the GROUP BY columns
@@ -226,26 +224,26 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 	}
 
 	if (statement.groupby.having) {
-		statement.groupby.having->Accept(this);
+		AcceptChild(&statement.groupby.having);
 		statement.groupby.having->ResolveType();
 	}
-	// the union has a completely independent binder
+	// the union has an independent binder
 	if (statement.union_select) {
-		Binder binder(context);
-		binder.bind_context = make_unique<BindContext>();
+		Binder binder(context, this);
 		statement.union_select->Accept(&binder);
+		statement.setop_binder = move(binder.bind_context);
 	}
 	return nullptr;
 }
 
 unique_ptr<SQLStatement> Binder::Visit(InsertStatement &statement) {
 	if (statement.select_statement) {
-		statement.select_statement->Accept(this);
+		AcceptChild(&statement.select_statement);
 	}
 	// visit the expressions
 	for (auto &expression_list : statement.values) {
 		for (auto &expression : expression_list) {
-			expression->Accept(this);
+			AcceptChild(&expression);
 		}
 	}
 	return nullptr;
@@ -253,34 +251,34 @@ unique_ptr<SQLStatement> Binder::Visit(InsertStatement &statement) {
 
 unique_ptr<SQLStatement> Binder::Visit(CopyStatement &stmt) {
 	if (stmt.select_statement) {
-		stmt.select_statement->Accept(this);
+		AcceptChild(&stmt.select_statement);
 	}
 	return nullptr;
 }
 
 unique_ptr<SQLStatement> Binder::Visit(DeleteStatement &stmt) {
 	// visit the table reference
-	stmt.table->Accept(this);
+	AcceptChild(&stmt.table);
 	// project any additional columns required for the condition
-	stmt.condition->Accept(this);
+	AcceptChild(&stmt.condition);
 	return nullptr;
 }
 
 unique_ptr<SQLStatement> Binder::Visit(AlterTableStatement &stmt) {
 	// visit the table reference
-	stmt.table->Accept(this);
+	AcceptChild(&stmt.table);
 	return nullptr;
 }
 
 unique_ptr<SQLStatement> Binder::Visit(UpdateStatement &stmt) {
 	// visit the table reference
-	stmt.table->Accept(this);
+	AcceptChild(&stmt.table);
 	// project any additional columns required for the condition/expressions
 	if (stmt.condition) {
-		stmt.condition->Accept(this);
+		AcceptChild(&stmt.condition);
 	}
 	for (auto &expression : stmt.expressions) {
-		expression->Accept(this);
+		AcceptChild(&expression);
 		if (expression->type == ExpressionType::VALUE_DEFAULT) {
 			// we resolve the type of the DEFAULT expression in the
 			// LogicalPlanGenerator because that is where we resolve the
@@ -301,7 +299,7 @@ unique_ptr<SQLStatement> Binder::Visit(CreateTableStatement &stmt) {
 	// first create a fake table
 	bind_context->AddDummyTable(stmt.info->table, stmt.info->columns);
 	for (auto &it : stmt.info->constraints) {
-		it->Accept(this);
+		AcceptChild(&it);
 	}
 	return nullptr;
 }
@@ -372,12 +370,12 @@ unique_ptr<Expression> Binder::Visit(SubqueryExpression &expr) {
 
 // CTEs are also referred to using BaseTableRefs, hence need to distinguish
 unique_ptr<TableRef> Binder::Visit(BaseTableRef &expr) {
-	if (bind_context->HasCte(expr.table_name)) {
-		if (!expr.alias.empty()) {
-			bind_context->AddCteAlias(expr.alias, expr.table_name);
-		}
-
-		return nullptr;
+	auto cte = FindCTE(expr.table_name);
+	if (cte) {
+		auto subquery = make_unique<SubqueryRef>(move(cte));
+		subquery->alias = expr.alias.empty() ? expr.table_name : expr.alias;
+		AcceptChild(&subquery);
+		return move(subquery);
 	}
 
 	auto table = context.db.catalog.GetTable(context.ActiveTransaction(),
@@ -388,20 +386,20 @@ unique_ptr<TableRef> Binder::Visit(BaseTableRef &expr) {
 }
 
 unique_ptr<TableRef> Binder::Visit(CrossProductRef &expr) {
-	expr.left->Accept(this);
-	expr.right->Accept(this);
+	AcceptChild(&expr.left);
+	AcceptChild(&expr.right);
 	return nullptr;
 }
 
 unique_ptr<TableRef> Binder::Visit(JoinRef &expr) {
-	expr.left->Accept(this);
-	expr.right->Accept(this);
-	expr.condition->Accept(this);
+	AcceptChild(&expr.left);
+	AcceptChild(&expr.right);
+	AcceptChild(&expr.condition);
 	return nullptr;
 }
 
 unique_ptr<TableRef> Binder::Visit(SubqueryRef &expr) {
-	Binder binder(context);
+	Binder binder(context, this);
 	expr.subquery->Accept(&binder);
 	expr.context = move(binder.bind_context);
 
@@ -417,4 +415,24 @@ unique_ptr<TableRef> Binder::Visit(TableFunction &expr) {
 	    expr.alias.empty() ? function_definition->function_name : expr.alias,
 	    function);
 	return nullptr;
+}
+
+void Binder::AddCTE(const std::string &name, SelectStatement *cte) {
+	assert(cte);
+	assert(!name.empty());
+	auto entry = CTE_bindings.find(name);
+	if (entry != CTE_bindings.end()) {
+		throw BinderException("Duplicate CTE \"%s\" in query!", name.c_str());
+	}
+	CTE_bindings[name] = cte;
+}
+unique_ptr<SelectStatement> Binder::FindCTE(const std::string &name) {
+	auto entry = CTE_bindings.find(name);
+	if (entry == CTE_bindings.end()) {
+		if (parent) {
+			return parent->FindCTE(name);
+		}
+		return nullptr;
+	}
+	return entry->second->Copy();
 }
