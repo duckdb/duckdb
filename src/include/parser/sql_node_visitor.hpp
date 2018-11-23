@@ -10,6 +10,11 @@
 
 #pragma once
 
+#include "parser/constraint.hpp"
+#include "parser/expression.hpp"
+#include "parser/sql_statement.hpp"
+#include "parser/tableref.hpp"
+
 namespace duckdb {
 
 class AlterTableStatement;
@@ -46,7 +51,6 @@ class BaseTableRef;
 class CrossProductRef;
 class JoinRef;
 class SubqueryRef;
-class TableRef;
 class TableFunction;
 //! The SQLNodeVisitor is an abstract base class that implements the Visitor
 //! pattern on Expression and SQLStatement. It will visit nodes
@@ -56,40 +60,80 @@ class SQLNodeVisitor {
   public:
 	virtual ~SQLNodeVisitor(){};
 
-	virtual void Visit(CopyStatement &){};
-	virtual void Visit(AlterTableStatement &){};
-	virtual void Visit(CreateSchemaStatement &){};
-	virtual void Visit(CreateTableStatement &){};
-	virtual void Visit(DeleteStatement &){};
-	virtual void Visit(DropSchemaStatement &){};
-	virtual void Visit(DropTableStatement &){};
-	virtual void Visit(InsertStatement &){};
-	virtual void Visit(SelectStatement &);
-	virtual void Visit(TransactionStatement &){};
-	virtual void Visit(UpdateStatement &){};
+	virtual std::unique_ptr<SQLStatement> Visit(CopyStatement &) {
+		return nullptr;
+	};
+	virtual std::unique_ptr<SQLStatement> Visit(AlterTableStatement &) {
+		return nullptr;
+	};
+	virtual std::unique_ptr<SQLStatement> Visit(CreateSchemaStatement &) {
+		return nullptr;
+	};
+	virtual std::unique_ptr<SQLStatement> Visit(CreateTableStatement &) {
+		return nullptr;
+	};
+	virtual std::unique_ptr<SQLStatement> Visit(DeleteStatement &) {
+		return nullptr;
+	};
+	virtual std::unique_ptr<SQLStatement> Visit(DropSchemaStatement &) {
+		return nullptr;
+	};
+	virtual std::unique_ptr<SQLStatement> Visit(DropTableStatement &) {
+		return nullptr;
+	};
+	virtual std::unique_ptr<SQLStatement> Visit(InsertStatement &) {
+		return nullptr;
+	};
+	virtual std::unique_ptr<SQLStatement> Visit(SelectStatement &) {
+		return nullptr;
+	};
+	virtual std::unique_ptr<SQLStatement> Visit(TransactionStatement &) {
+		return nullptr;
+	};
+	virtual std::unique_ptr<SQLStatement> Visit(UpdateStatement &) {
+		return nullptr;
+	};
 
-	virtual void Visit(AggregateExpression &expr);
-	virtual void Visit(CaseExpression &expr);
-	virtual void Visit(CastExpression &expr);
-	virtual void Visit(ColumnRefExpression &expr);
-	virtual void Visit(ComparisonExpression &expr);
-	virtual void Visit(ConjunctionExpression &expr);
-	virtual void Visit(ConstantExpression &expr);
-	virtual void Visit(DefaultExpression &expr);
-	virtual void Visit(FunctionExpression &expr);
-	virtual void Visit(GroupRefExpression &expr);
-	virtual void Visit(OperatorExpression &expr);
-	virtual void Visit(StarExpression &expr);
-	virtual void Visit(SubqueryExpression &expr);
+	virtual std::unique_ptr<Expression> Visit(AggregateExpression &expr);
+	virtual std::unique_ptr<Expression> Visit(CaseExpression &expr);
+	virtual std::unique_ptr<Expression> Visit(CastExpression &expr);
+	virtual std::unique_ptr<Expression> Visit(ColumnRefExpression &expr);
+	virtual std::unique_ptr<Expression> Visit(ComparisonExpression &expr);
+	virtual std::unique_ptr<Expression> Visit(ConjunctionExpression &expr);
+	virtual std::unique_ptr<Expression> Visit(ConstantExpression &expr);
+	virtual std::unique_ptr<Expression> Visit(DefaultExpression &expr);
+	virtual std::unique_ptr<Expression> Visit(FunctionExpression &expr);
+	virtual std::unique_ptr<Expression> Visit(GroupRefExpression &expr);
+	virtual std::unique_ptr<Expression> Visit(OperatorExpression &expr);
+	virtual std::unique_ptr<Expression> Visit(StarExpression &expr);
+	virtual std::unique_ptr<Expression> Visit(SubqueryExpression &expr);
 
-	virtual void Visit(NotNullConstraint &expr);
-	virtual void Visit(CheckConstraint &expr);
-	virtual void Visit(ParsedConstraint &expr);
+	virtual std::unique_ptr<Constraint> Visit(NotNullConstraint &expr) {
+		return nullptr;
+	};
+	virtual std::unique_ptr<Constraint> Visit(CheckConstraint &expr);
+	virtual std::unique_ptr<Constraint> Visit(ParsedConstraint &expr) {
+		return nullptr;
+	};
 
-	virtual void Visit(BaseTableRef &expr);
-	virtual void Visit(CrossProductRef &expr);
-	virtual void Visit(JoinRef &expr);
-	virtual void Visit(SubqueryRef &expr);
-	virtual void Visit(TableFunction &expr);
+	virtual std::unique_ptr<TableRef> Visit(BaseTableRef &expr) {
+		return nullptr;
+	};
+	virtual std::unique_ptr<TableRef> Visit(CrossProductRef &expr);
+	virtual std::unique_ptr<TableRef> Visit(JoinRef &expr);
+	virtual std::unique_ptr<TableRef> Visit(SubqueryRef &expr) {
+		return nullptr;
+	};
+	virtual std::unique_ptr<TableRef> Visit(TableFunction &expr) {
+		return nullptr;
+	};
+
+	template <class T> void AcceptChild(std::unique_ptr<T> *accept) {
+		assert(accept);
+		auto accept_res = (*accept)->Accept(this);
+		if (accept_res) {
+			(*accept) = std::unique_ptr<T>((T *)accept_res.release());
+		}
+	}
 };
 } // namespace duckdb

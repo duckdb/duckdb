@@ -21,10 +21,11 @@
 #include "parser/column_definition.hpp"
 #include "parser/expression.hpp"
 #include "parser/sql_statement.hpp"
-#include "parser/statement/select_statement.hpp"
 
 namespace duckdb {
 class SubqueryRef;
+class SelectStatement;
+class ColumnRefExpression;
 
 enum class BindingType : uint8_t {
 	DUMMY = 0,
@@ -74,6 +75,8 @@ struct SubqueryBinding : public Binding {
 	std::unordered_map<std::string, size_t> name_map;
 
 	SubqueryBinding(SubqueryRef &subquery_, size_t index);
+	SubqueryBinding(SelectStatement *select_, size_t index);
+
 	virtual ~SubqueryBinding() {
 	}
 };
@@ -114,6 +117,7 @@ class BindContext {
 	                   std::vector<ColumnDefinition> &columns);
 	//! Adds a subquery with a given alias to the BindContext.
 	size_t AddSubquery(const std::string &alias, SubqueryRef &subquery);
+
 	//! Adds a table function with a given alias to the BindContext
 	size_t AddTableFunction(const std::string &alias,
 	                        TableFunctionCatalogEntry *function_entry);

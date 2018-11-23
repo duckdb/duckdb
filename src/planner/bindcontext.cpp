@@ -26,6 +26,16 @@ SubqueryBinding::SubqueryBinding(SubqueryRef &subquery_, size_t index)
 	}
 }
 
+SubqueryBinding::SubqueryBinding(SelectStatement *select_, size_t index)
+    : Binding(BindingType::SUBQUERY, index), subquery(select_) {
+	// FIXME: double-check this
+	for (auto &entry : subquery->select_list) {
+		auto name = entry->GetName();
+		name_map[name] = names.size();
+		names.push_back(name);
+	}
+}
+
 static bool HasMatchingBinding(Binding *binding, const string &column_name) {
 	switch (binding->type) {
 	case BindingType::DUMMY:
@@ -286,7 +296,7 @@ bool BindContext::HasAlias(const string &alias) {
 size_t BindContext::GetBindingIndex(const string &alias) {
 	auto entry = bindings.find(alias);
 	if (entry == bindings.end()) {
-		throw Exception("Could not find alias!");
+		throw BinderException("Could not find alias!");
 	}
 	return entry->second->index;
 }

@@ -87,6 +87,10 @@ void SelectStatement::Serialize(Serializer &serializer) {
 	if (except_select) {
 		except_select->Serialize(serializer);
 	}
+	// with clauses
+	serializer.Write<bool>(cte_map.size() > 0 ? true : false);
+	// FIXME: serialize this how?
+	// cte_map.Serialize(serializer);
 }
 
 unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &source) {
@@ -142,6 +146,11 @@ unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &source) {
 	auto has_except_select = source.Read<bool>();
 	if (has_except_select) {
 		statement->except_select = SelectStatement::Deserialize(source);
+	}
+	auto has_cte_list = source.Read<bool>();
+	// FIXME: deserialize this how?
+	if (has_cte_list) {
+		// statement->cte_map = std::map::Deserialize(source);
 	}
 
 	return statement;
@@ -224,6 +233,12 @@ bool SelectStatement::Equals(const SQLStatement *other_) {
 		        other->orderby.orders[i].expression.get())) {
 			return false;
 		}
+	}
+
+	// WITH clauses (CTEs)
+	if (cte_map.size() != other->cte_map.size() ||
+	    !std::equal(cte_map.begin(), cte_map.end(), other->cte_map.begin())) {
+		return false;
 	}
 
 	return true;

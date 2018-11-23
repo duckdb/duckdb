@@ -321,8 +321,9 @@ void PhysicalPlanGenerator::Visit(LogicalUnion &op) {
 	plan = make_unique<PhysicalUnion>(move(top), move(bottom));
 }
 
-void PhysicalPlanGenerator::Visit(SubqueryExpression &expr) {
+unique_ptr<Expression> PhysicalPlanGenerator::Visit(SubqueryExpression &expr) {
 	PhysicalPlanGenerator generator(context, this);
 	generator.CreatePlan(move(expr.op));
 	expr.plan = move(generator.plan);
+	return nullptr;
 }

@@ -61,7 +61,7 @@ class PhysicalPlanGenerator : public LogicalOperatorVisitor {
 	virtual void Visit(LogicalTableFunction &expr);
 	virtual void Visit(LogicalPruneColumns &expr);
 
-	virtual void Visit(SubqueryExpression &expr);
+	virtual std::unique_ptr<Expression> Visit(SubqueryExpression &expr);
 
 	void Print() {
 		plan->Print();

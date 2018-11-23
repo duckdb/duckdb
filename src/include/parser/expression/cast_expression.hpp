@@ -11,6 +11,7 @@
 #pragma once
 
 #include "parser/expression.hpp"
+#include "parser/sql_node_visitor.hpp"
 
 namespace duckdb {
 //! Represents a type cast from one type to another type
@@ -40,8 +41,8 @@ class CastExpression : public Expression {
 		       children[0]->ToString() + ")";
 	}
 
-	virtual void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
+	virtual std::unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
+		return v->Visit(*this);
 	}
 	virtual ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::CAST;

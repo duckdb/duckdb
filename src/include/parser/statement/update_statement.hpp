@@ -11,6 +11,7 @@
 
 #include <vector>
 
+#include "parser/sql_node_visitor.hpp"
 #include "parser/sql_statement.hpp"
 
 #include "parser/expression.hpp"
@@ -27,8 +28,8 @@ class UpdateStatement : public SQLStatement {
 	virtual std::string ToString() const {
 		return "Update";
 	}
-	virtual void Accept(SQLNodeVisitor *v) {
-		v->Visit(*this);
+	virtual std::unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
+		return v->Visit(*this);
 	}
 
 	virtual bool Equals(const SQLStatement *other_) {

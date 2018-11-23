@@ -23,7 +23,7 @@
 #include "transaction/transaction.hpp"
 
 namespace duckdb {
-
+class FunctionExpression;
 class Catalog;
 class Constraint;
 

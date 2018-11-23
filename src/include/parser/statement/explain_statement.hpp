@@ -16,6 +16,7 @@
 #include "parser/sql_statement.hpp"
 
 #include "parser/expression.hpp"
+#include "parser/sql_node_visitor.hpp"
 
 namespace duckdb {
 
@@ -31,7 +32,8 @@ class ExplainStatement : public SQLStatement {
 	virtual std::string ToString() const {
 		return "Explain";
 	}
-	virtual void Accept(SQLNodeVisitor *v) {
+	virtual std::unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
+		return nullptr;
 	}
 
 	virtual bool Equals(const SQLStatement *other_) {
