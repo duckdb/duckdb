@@ -39,8 +39,8 @@ class ColumnBindingResolver : public LogicalOperatorVisitor {
 	void Visit(LogicalSubquery &op);
 	void Visit(LogicalTableFunction &op);
 
-	void Visit(ColumnRefExpression &expr);
-	void Visit(SubqueryExpression &expr);
+	std::unique_ptr<Expression> Visit(ColumnRefExpression &expr);
+	std::unique_ptr<Expression> Visit(SubqueryExpression &expr);
 
 	std::vector<BoundTable> bound_tables;
 	size_t current_depth;

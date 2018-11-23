@@ -13,6 +13,7 @@
 #include "parser/column_definition.hpp"
 
 #include "parser/parsed_data.hpp"
+#include "parser/sql_node_visitor.hpp"
 #include "parser/sql_statement.hpp"
 
 namespace duckdb {
@@ -28,8 +29,8 @@ class CreateTableStatement : public SQLStatement {
 	virtual std::string ToString() const {
 		return "CREATE TABLE";
 	}
-	virtual void Accept(SQLNodeVisitor *v) {
-		v->Visit(*this);
+	virtual std::unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
+		return v->Visit(*this);
 	}
 
 	virtual bool Equals(const SQLStatement *other_) {

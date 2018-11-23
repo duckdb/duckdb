@@ -140,3 +140,13 @@ TEST_CASE("Joins in subqueries", "[subqueries]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 3, {44, 42}));
 }
+
+TEST_CASE("UNIONS of subqueries", "[subqueries]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	result = con.Query("select * from (select 42) sq1 union all select * from "
+	                   "(select 43) sq2;");
+	REQUIRE(CHECK_COLUMN(result, 0, {42, 43}));
+}

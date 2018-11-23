@@ -14,6 +14,7 @@
 #include "parser/sql_statement.hpp"
 
 #include "parser/expression.hpp"
+#include "parser/sql_node_visitor.hpp"
 
 namespace duckdb {
 
@@ -27,8 +28,8 @@ class DeleteStatement : public SQLStatement {
 	virtual std::string ToString() const {
 		return "Delete";
 	}
-	virtual void Accept(SQLNodeVisitor *v) {
-		v->Visit(*this);
+	virtual std::unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
+		return v->Visit(*this);
 	}
 
 	virtual bool Equals(const SQLStatement *other_) {

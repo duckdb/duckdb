@@ -127,11 +127,70 @@ bool TransformOrderBy(List *order, OrderByDescription &result) {
 	return true;
 }
 
+static void TransformCTE(WithClause *de_with_clause, SelectStatement &select) {
+	// TODO: might need to update in case of future lawsuit
+	assert(de_with_clause);
+
+	if (de_with_clause->recursive) {
+		throw NotImplementedException("Recursive CTEs not supported");
+	}
+	assert(de_with_clause->ctes);
+	for (auto cte_ele = de_with_clause->ctes->head; cte_ele != NULL;
+	     cte_ele = cte_ele->next) {
+		auto cte = reinterpret_cast<CommonTableExpr *>(cte_ele->data.ptr_value);
+		// lets throw some errors on unsupported features early
+		if (cte->cterecursive) {
+			throw NotImplementedException("Recursive CTEs not supported");
+		}
+		if (cte->aliascolnames) {
+			throw NotImplementedException(
+			    "Column name aliases not supported in CTEs");
+		}
+		if (cte->ctecolnames) {
+			throw NotImplementedException(
+			    "Column name setting not supported in CTEs");
+		}
+		if (cte->ctecoltypes) {
+			throw NotImplementedException(
+			    "Column type setting not supported in CTEs");
+		}
+		if (cte->ctecoltypmods) {
+			throw NotImplementedException(
+			    "Column type modification not supported in CTEs");
+		}
+		if (cte->ctecolcollations) {
+			throw NotImplementedException("CTE collations not supported");
+		}
+		// we need a query
+		if (!cte->ctequery || cte->ctequery->type != T_SelectStmt) {
+			throw Exception("A CTE needs a SELECT");
+		}
+
+		auto cte_select = TransformSelect(cte->ctequery);
+		if (!cte_select) {
+			throw Exception("A CTE needs a SELECT");
+		}
+		auto cte_name = string(cte->ctename);
+
+		auto it = select.cte_map.find(cte_name);
+		if (it != select.cte_map.end()) {
+			// can't have two CTEs with same name
+			throw Exception("A CTE needs an unique name");
+		}
+		select.cte_map[cte_name] = move(cte_select);
+	}
+}
+
 unique_ptr<SelectStatement> TransformSelect(Node *node) {
 	SelectStmt *stmt = reinterpret_cast<SelectStmt *>(node);
 	switch (stmt->op) {
 	case SETOP_NONE: {
 		auto result = make_unique<SelectStatement>();
+		if (stmt->withClause) {
+			TransformCTE(reinterpret_cast<WithClause *>(stmt->withClause),
+			             *result);
+		}
+
 		result->select_distinct = stmt->distinctClause != NULL ? true : false;
 		if (!TransformExpressionList(stmt->targetList, result->select_list)) {
 			return nullptr;
@@ -150,6 +209,7 @@ unique_ptr<SelectStatement> TransformSelect(Node *node) {
 			        : reinterpret_cast<A_Const *>(stmt->limitOffset)
 			              ->val.val.ival;
 		}
+
 		return result;
 	}
 	case SETOP_UNION: {
@@ -159,6 +219,10 @@ unique_ptr<SelectStatement> TransformSelect(Node *node) {
 		auto top = TransformSelect((Node *)stmt->larg);
 		if (!top) {
 			return nullptr;
+		}
+		if (stmt->withClause) {
+			TransformCTE(reinterpret_cast<WithClause *>(stmt->withClause),
+			             *top);
 		}
 		auto bottom = TransformSelect((Node *)stmt->rarg);
 		if (!bottom) {

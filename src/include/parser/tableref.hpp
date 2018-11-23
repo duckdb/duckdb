@@ -13,16 +13,15 @@
 #include "common/internal_types.hpp"
 #include "common/printable.hpp"
 
-#include "parser/sql_node_visitor.hpp"
-
 namespace duckdb {
+class SQLNodeVisitor;
 //! Represents a generic expression that returns a table.
 class TableRef : public Printable {
   public:
 	TableRef(TableReferenceType type) : type(type) {
 	}
 
-	virtual void Accept(SQLNodeVisitor *v) = 0;
+	virtual std::unique_ptr<TableRef> Accept(SQLNodeVisitor *v) = 0;
 	virtual bool Equals(const TableRef *other) {
 		return other && type == other->type && alias == other->alias;
 	}

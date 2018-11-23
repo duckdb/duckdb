@@ -11,6 +11,7 @@
 #pragma once
 
 #include "parser/constraint.hpp"
+#include "parser/sql_node_visitor.hpp"
 
 #include <vector>
 
@@ -31,8 +32,8 @@ class ParsedConstraint : public Constraint {
 	virtual ~ParsedConstraint() {
 	}
 
-	virtual void Accept(SQLNodeVisitor *v) {
-		v->Visit(*this);
+	virtual std::unique_ptr<Constraint> Accept(SQLNodeVisitor *v) {
+		return v->Visit(*this);
 	}
 
 	virtual std::string ToString() const {

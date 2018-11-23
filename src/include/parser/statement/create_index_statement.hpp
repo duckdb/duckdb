@@ -13,6 +13,7 @@
 #include "parser/column_definition.hpp"
 
 #include "parser/parsed_data.hpp"
+#include "parser/sql_node_visitor.hpp"
 #include "parser/sql_statement.hpp"
 
 namespace duckdb {
@@ -28,8 +29,9 @@ class CreateIndexStatement : public SQLStatement {
 	virtual std::string ToString() const {
 		return "CREATE INDEX";
 	}
-	virtual void Accept(SQLNodeVisitor *v) {
+	virtual std::unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
 		//            v->Visit(*this);
+		return nullptr;
 	}
 
 	std::unique_ptr<CreateIndexInformation> info;

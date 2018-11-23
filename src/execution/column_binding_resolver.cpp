@@ -118,12 +118,12 @@ void ColumnBindingResolver::Visit(LogicalJoin &op) {
 	}
 }
 
-void ColumnBindingResolver::Visit(ColumnRefExpression &expr) {
+unique_ptr<Expression> ColumnBindingResolver::Visit(ColumnRefExpression &expr) {
 	if (expr.index != (size_t)-1 || expr.reference ||
 	    expr.depth != current_depth) {
 		// not a base table reference OR should not be resolved by the current
 		// resolver
-		return;
+		return nullptr;
 	}
 	for (auto &binding : bound_tables) {
 		if (binding.table_index == expr.binding.table_index) {
@@ -135,11 +135,13 @@ void ColumnBindingResolver::Visit(ColumnRefExpression &expr) {
 	if (expr.index == (size_t)-1) {
 		throw Exception("Failed to bind column ref");
 	}
+	return nullptr;
 }
 
-void ColumnBindingResolver::Visit(SubqueryExpression &expr) {
+unique_ptr<Expression> ColumnBindingResolver::Visit(SubqueryExpression &expr) {
 	// resolve the column ref indices of subqueries
 	current_depth++;
 	expr.op->Accept(this);
 	current_depth--;
+	return nullptr;
 }
