@@ -284,10 +284,14 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	}
 }
 
-void ScanStructure::ResolvePredicates(DataChunk &keys, Vector &final_result,
-                                      sel_t temporary_selection_vector[]) {
+void ScanStructure::ResolvePredicates(DataChunk &keys, Vector &final_result) {
 	Vector current_pointers;
 	current_pointers.Reference(pointers);
+
+	sel_t temporary_selection_vector[STANDARD_VECTOR_SIZE];
+
+	auto old_sel_vector = current_pointers.sel_vector;
+	auto old_count = current_pointers.count;
 
 	for (size_t i = 0; i < ht.predicates.size(); i++) {
 		// gather the data from the pointers
@@ -297,7 +301,6 @@ void ScanStructure::ResolvePredicates(DataChunk &keys, Vector &final_result,
 
 		VectorOperations::Gather::Set(current_pointers, ht_data);
 
-		StaticVector<bool> comparison_result;
 		// set the selection vector
 		size_t old_count = keys.data[i].count;
 		assert(!keys.data[i].sel_vector);
@@ -307,27 +310,24 @@ void ScanStructure::ResolvePredicates(DataChunk &keys, Vector &final_result,
 		// perform the comparison expression
 		switch (ht.predicates[i]) {
 		case ExpressionType::COMPARE_EQUAL:
-			VectorOperations::Equals(keys.data[i], ht_data, comparison_result);
+			VectorOperations::Equals(keys.data[i], ht_data, final_result);
 			break;
 		case ExpressionType::COMPARE_GREATERTHAN:
-			VectorOperations::GreaterThan(keys.data[i], ht_data,
-			                              comparison_result);
+			VectorOperations::GreaterThan(keys.data[i], ht_data, final_result);
 			break;
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 			VectorOperations::GreaterThanEquals(keys.data[i], ht_data,
-			                                    comparison_result);
+			                                    final_result);
 			break;
 		case ExpressionType::COMPARE_LESSTHAN:
-			VectorOperations::LessThan(keys.data[i], ht_data,
-			                           comparison_result);
+			VectorOperations::LessThan(keys.data[i], ht_data, final_result);
 			break;
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 			VectorOperations::LessThanEquals(keys.data[i], ht_data,
-			                                 comparison_result);
+			                                 final_result);
 			break;
 		case ExpressionType::COMPARE_NOTEQUAL:
-			VectorOperations::NotEquals(keys.data[i], ht_data,
-			                            comparison_result);
+			VectorOperations::NotEquals(keys.data[i], ht_data, final_result);
 			break;
 		default:
 			throw NotImplementedException(
@@ -337,29 +337,25 @@ void ScanStructure::ResolvePredicates(DataChunk &keys, Vector &final_result,
 		keys.data[i].sel_vector = nullptr;
 		keys.data[i].count = old_count;
 
-		if (i == 0) {
-			comparison_result.Move(final_result);
-		} else {
-			StaticVector<bool> temp_result;
-			VectorOperations::And(comparison_result, final_result, temp_result);
-			temp_result.Move(final_result);
-		}
-
 		// now based on the result recreate the selection vector for the next
-		// step so we can skip unnecessary comparisons in the next phase if (i
-		// != ht.predicates.size() - 1) { 	size_t new_count = 0;
-		// 	VectorOperations::ExecType<bool>(comparison_result, [&](bool match,
-		// size_t index, size_t k) { 		if (match) {
-		// 			temporary_selection_vector[new_count++] = index;
-		// 		}
-		// 	});
-		// 	current_pointers.sel_vector = temporary_selection_vector;
-		// 	current_pointers.count = new_count;
-		// }
+		// step so we can skip unnecessary comparisons in the next phase
+		if (i != ht.predicates.size() - 1) {
+			size_t new_count = 0;
+			VectorOperations::ExecType<bool>(
+			    final_result, [&](bool match, size_t index, size_t k) {
+				    if (match) {
+					    temporary_selection_vector[new_count++] = index;
+				    }
+			    });
+			current_pointers.sel_vector = temporary_selection_vector;
+			current_pointers.count = new_count;
+		}
 		// move all the pointers to the next element
 		VectorOperations::AddInPlace(pointers,
 		                             GetTypeIdSize(keys.data[i].type));
 	}
+	final_result.sel_vector = old_sel_vector;
+	final_result.count = old_count;
 }
 
 void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left,
@@ -371,14 +367,13 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left,
 	}
 
 	StaticVector<bool> comparison_result;
-	sel_t temporary_selection_vector[STANDARD_VECTOR_SIZE];
 
 	size_t result_count = 0;
 	do {
 		auto build_pointers = (uint8_t **)build_pointer_vector.data;
 
 		// resolve the predicates for all the pointers
-		ResolvePredicates(keys, comparison_result, temporary_selection_vector);
+		ResolvePredicates(keys, comparison_result);
 
 		auto ptrs = (uint8_t **)pointers.data;
 		// after doing all the comparisons we loop to find all the actual
@@ -444,10 +439,9 @@ void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left,
 	// if a matching tuple is found, we keep (semi) or discard (anti) the entry
 	// if we reach the end of the chain without finding a match
 	StaticVector<bool> comparison_result;
-	sel_t temporary_selection_vector[STANDARD_VECTOR_SIZE];
 	while (pointers.count > 0) {
 		// resolve the predicates for the current set of pointers
-		ResolvePredicates(keys, comparison_result, temporary_selection_vector);
+		ResolvePredicates(keys, comparison_result);
 
 		// after doing all the comparisons we loop to find all the matches
 		auto ptrs = (uint8_t **)pointers.data;

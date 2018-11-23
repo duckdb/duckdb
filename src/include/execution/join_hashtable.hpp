@@ -68,8 +68,7 @@ class JoinHashTable {
 		void NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left,
 		                        DataChunk &result);
 
-		void ResolvePredicates(DataChunk &keys, Vector &comparison_result,
-		                       sel_t temporary_selection_vector[]);
+		void ResolvePredicates(DataChunk &keys, Vector &comparison_result);
 	};
 
   private:
