@@ -487,6 +487,7 @@ size_t GetTypeIdSize(TypeId type);
 bool TypeIsConstantSize(TypeId type);
 bool TypeIsIntegral(TypeId type);
 bool TypeIsNumeric(TypeId type);
+bool TypeIsInteger(TypeId type);
 
 //! Returns the minimum value that can be stored in a given type
 int64_t MinimumValue(TypeId type);

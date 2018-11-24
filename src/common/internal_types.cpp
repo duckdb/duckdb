@@ -591,5 +591,8 @@ bool TypeIsIntegral(TypeId type) {
 bool TypeIsNumeric(TypeId type) {
 	return type >= TypeId::TINYINT && type <= TypeId::DECIMAL;
 }
+bool TypeIsInteger(TypeId type) {
+	return type >= TypeId::TINYINT && type <= TypeId::BIGINT;
+}
 
 }; // namespace duckdb

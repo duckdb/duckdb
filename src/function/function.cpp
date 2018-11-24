@@ -39,9 +39,10 @@ static void AddScalarFunction(Transaction &transaction, Catalog &catalog) {
 void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 	AddTableFunction<function::PragmaTableInfo>(transaction, catalog);
 	AddTableFunction<function::SQLiteMaster>(transaction, catalog);
-
 	AddScalarFunction<function::AbsFunction>(transaction, catalog);
+	AddScalarFunction<function::ConcatFunction>(transaction, catalog);
 	AddScalarFunction<function::DatePartFunction>(transaction, catalog);
+	AddScalarFunction<function::RoundFunction>(transaction, catalog);
 	AddScalarFunction<function::SubstringFunction>(transaction, catalog);
 	AddScalarFunction<function::YearFunction>(transaction, catalog);
 }

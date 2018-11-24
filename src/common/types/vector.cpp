@@ -273,7 +273,6 @@ void Vector::Cast(TypeId new_type) {
 	if (type == new_type) {
 		return;
 	}
-	type = new_type;
 	Vector new_vector(new_type, true, false);
 	VectorOperations::Cast(*this, new_vector);
 	new_vector.Move(*this);
