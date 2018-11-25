@@ -1,4 +1,6 @@
-# DuckDB, the SQLite for Analytics    [![Build Status](http://jenkins.u0d.de/buildStatus/icon?job=duckdb)](http://jenkins.u0d.de/job/duckdb) [![Coverage](http://www.duckdb.org/coverage/badge.svg)](http://www.duckdb.org/coverage/)
+# DuckDB, the SQLite for Analytics
+[![Build Status](http://jenkins.u0d.de/buildStatus/icon?job=duckdb)](http://jenkins.u0d.de/job/duckdb) [![Coverage](http://www.duckdb.org/coverage/badge.svg)](http://www.duckdb.org/coverage/) 
+[![CodeFactor](https://www.codefactor.io/repository/github/cwida/duckdb/badge)](https://www.codefactor.io/repository/github/cwida/duckdb)
 
 ## Compiling and Testing
 DuckDB does not require additional libraries to be installed. Hence, only GCC (`g++`) or clang and [CMake](https://cmake.org) need to be installed to build. To run all tests, a `git` installation is also required. 
