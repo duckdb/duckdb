@@ -1,4 +1,3 @@
-
 #include "function/function.hpp"
 #include "function/scalar_function/list.hpp"
 #include "function/table_function/list.hpp"
@@ -45,4 +44,6 @@ void BuiltinFunctions::Initialize(Transaction &transaction, Catalog &catalog) {
 	AddScalarFunction<function::RoundFunction>(transaction, catalog);
 	AddScalarFunction<function::SubstringFunction>(transaction, catalog);
 	AddScalarFunction<function::YearFunction>(transaction, catalog);
+	AddScalarFunction<function::UpperFunction>(transaction, catalog);
+	AddScalarFunction<function::LowerFunction>(transaction, catalog);
 }

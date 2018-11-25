@@ -20,7 +20,7 @@ void concat_function(Vector inputs[], size_t input_count, Vector &result) {
 	assert(input2.type == TypeId::VARCHAR);
 
 	result.Initialize(TypeId::VARCHAR);
-	result.nullmask = input1.nullmask;
+	result.nullmask = input1.nullmask | input2.nullmask;
 
 	auto result_data = (const char **)result.data;
 	auto input1_data = (const char **)input1.data;
