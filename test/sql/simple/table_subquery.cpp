@@ -45,7 +45,7 @@ TEST_CASE("Table subquery", "[subquery]") {
 
 	// subquery group cols are visible
 	result = con.Query(
-	    "select sum(i) from (select i as x from test group by i) sq;");
+	    "select sum(x) from (select i as x from test group by i) sq;");
 	REQUIRE(CHECK_COLUMN(result, 0, {12}));
 
 	// subquery group aliases are visible

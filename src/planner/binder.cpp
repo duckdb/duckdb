@@ -198,7 +198,9 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 								        statement.select_list[i]->return_type,
 								        j);
 								group_ref->alias =
-								    string(select_column->column_name);
+								    statement.select_list[i]->alias.empty()
+								        ? select_column->column_name
+								        : statement.select_list[i]->alias;
 								statement.select_list[i] = move(group_ref);
 								found_matching = true;
 								break;

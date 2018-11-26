@@ -5,6 +5,27 @@
 using namespace duckdb;
 using namespace std;
 
+TEST_CASE("Test TPC-DS SF0 Query Compilation", "[tpcds]") {
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+	unique_ptr<DuckDBResult> result;
+
+	// create schema only
+	tpcds::dbgen(0, db);
+
+	// this is to make sure we do not get regressions in query compilation
+	vector<size_t> compiling_queries = {
+	    1,  2,  3,  5,  6,  7,  9,  12, 13, 16,  17,  20, 21, 22, 28,
+	    29, 31, 32, 35, 36, 37, 40, 44, 46, 47,  49,  52, 54, 56, 57,
+	    58, 59, 60, 63, 64, 65, 66, 67, 73, 75,  77,  79, 80, 81, 83,
+	    86, 88, 92, 93, 94, 95, 96, 97, 98, 100, 102, 103};
+
+	for (auto q : compiling_queries) {
+		result = con.Query(tpcds::get_query(q));
+		REQUIRE(result->success);
+	}
+}
+
 TEST_CASE("Test TPC-DS SF1", "[tpcds][.]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
