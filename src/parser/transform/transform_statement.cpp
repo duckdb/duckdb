@@ -516,6 +516,27 @@ unique_ptr<CopyStatement> TransformCopy(Node *node) {
 	result->file_path = stmt->filename;
 	result->is_from = stmt->is_from;
 
+	if (stmt->options) {
+		for (auto n = stmt->options->head; n != nullptr; n = n->next) {
+			auto option = reinterpret_cast<DefElem *>(n->data.ptr_value);
+			if (!option->defname) {
+				continue;
+			}
+			if (string(option->defname) == "delimiter") {
+				if (!option->arg || option->arg->type != T_String) {
+					throw Exception("DELIMITER needs a constant "
+					                "single-character string argument");
+				}
+				char *delim = ((value *)option->arg)->val.str;
+				if (!delim || strlen(delim) != 1) {
+					throw Exception("DELIMITER needs a constant "
+					                "single-character string argument");
+				}
+				result->delimiter = delim[0];
+			}
+		}
+	}
+
 	if (stmt->attlist) {
 		for (auto n = stmt->attlist->head; n != nullptr; n = n->next) {
 			auto target = reinterpret_cast<ResTarget *>(n->data.ptr_value);

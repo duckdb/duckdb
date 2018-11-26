@@ -29,6 +29,9 @@ void concat_function(Vector inputs[], size_t input_count, Vector &result) {
 	VectorOperations::BinaryExec(
 	    input1, input2, result,
 	    [&](size_t input1_index, size_t input2_index, size_t result_index) {
+		    if (result.nullmask[result_index]) {
+			    return;
+		    }
 		    auto input1 = input1_data[input1_index];
 		    auto input2 = input2_data[input2_index];
 		    char output[strlen(input1) + strlen(input2) + 1];

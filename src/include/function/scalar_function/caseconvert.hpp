@@ -5,8 +5,10 @@
 namespace duckdb {
 namespace function {
 
-void upper_function(Vector inputs[], size_t input_count, Vector &result);
-void lower_function(Vector inputs[], size_t input_count, Vector &result);
+void caseconvert_upper_function(Vector inputs[], size_t input_count,
+                                Vector &result);
+void caseconvert_lower_function(Vector inputs[], size_t input_count,
+                                Vector &result);
 
 bool caseconvert_matches_arguments(std::vector<TypeId> &arguments);
 TypeId caseconvert_get_return_type(std::vector<TypeId> &arguments);
@@ -18,7 +20,7 @@ class UpperFunction {
 	}
 
 	static scalar_function_t GetFunction() {
-		return upper_function;
+		return caseconvert_upper_function;
 	}
 
 	static matches_argument_function_t GetMatchesArgumentFunction() {
@@ -37,7 +39,7 @@ class LowerFunction {
 	}
 
 	static scalar_function_t GetFunction() {
-		return lower_function;
+		return caseconvert_lower_function;
 	}
 
 	static matches_argument_function_t GetMatchesArgumentFunction() {

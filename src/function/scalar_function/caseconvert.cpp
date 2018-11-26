@@ -41,6 +41,9 @@ static void caseconvert_function(Vector inputs[], size_t input_count,
 	auto input_data = (const char **)input.data;
 
 	VectorOperations::Exec(input, [&](size_t i, size_t k) {
+		if (input.nullmask[i]) {
+			return;
+		}
 		char output[strlen(input_data[i]) + 1];
 		strncpy(output, input_data[i], strlen(input_data[i]));
 		output[strlen(input_data[i])] = '\0';
@@ -60,12 +63,14 @@ static void caseconvert_function(Vector inputs[], size_t input_count,
 	});
 }
 
-void upper_function(Vector inputs[], size_t input_count, Vector &result) {
+void caseconvert_upper_function(Vector inputs[], size_t input_count,
+                                Vector &result) {
 	caseconvert_function(inputs, input_count, result,
 	                     CaseconvertDirection::UPPER);
 }
 
-void lower_function(Vector inputs[], size_t input_count, Vector &result) {
+void caseconvert_lower_function(Vector inputs[], size_t input_count,
+                                Vector &result) {
 	caseconvert_function(inputs, input_count, result,
 	                     CaseconvertDirection::LOWER);
 }
