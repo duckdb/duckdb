@@ -54,10 +54,36 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name,
 	return true;
 }
 
-bool CatalogSet::AlterEntry(Transaction &transaction, const string &name,
-							bool cascade) {
+bool CatalogSet::AlterEntry(Transaction &transaction, const string &name, AlterInformation* alter_info) {
 	lock_guard<mutex> lock(catalog_lock);
+	// first check if the entry exists in the unordered set
+	auto entry = data.find(name);
+	if (entry == data.end()) {
+		// if it does not: entry has never been created and cannot be altered
+		return false;
+	}
+	// if it does: we have to retrieve the entry and to check version numbers
+	CatalogEntry &current = *entry->second;
 
+	if (current.timestamp >= TRANSACTION_ID_START &&
+	    current.timestamp != transaction.transaction_id) {
+		// current version has been written to by a currently active
+		// transaction
+		throw TransactionException("Catalog write-write conflict!");
+	}
+
+	// create a new entry and replace the currently stored one
+	// set the timestamp to the timestamp of the current transaction
+	// and point it to the updated table node
+	auto value = current.AlterEntry(alter_info);
+	value->timestamp = transaction.transaction_id;
+	value->child = move(data[name]);
+	value->child->parent = value.get();
+	value->set = this;
+
+	// push the old entry in the undo buffer for this transaction
+	transaction.PushCatalogEntry(value->child.get());
+	data[name] = move(value);
 
 	return true;
 }

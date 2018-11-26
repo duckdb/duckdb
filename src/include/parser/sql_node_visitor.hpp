@@ -56,8 +56,8 @@ class SQLNodeVisitor {
   public:
 	virtual ~SQLNodeVisitor(){};
 
-	virtual void Visit(CopyStatement &){};
 	virtual void Visit(AlterTableStatement &){};
+	virtual void Visit(CopyStatement &){};
 	virtual void Visit(CreateSchemaStatement &){};
 	virtual void Visit(CreateTableStatement &){};
 	virtual void Visit(DeleteStatement &){};

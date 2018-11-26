@@ -67,7 +67,7 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk,
 		from_csv.open(file_path);
 		while (getline(from_csv, value)) {
 			if (count_line == STANDARD_VECTOR_SIZE) {
-				table->storage->Append(context, insert_chunk);
+				table->storage->Append(*table, context, insert_chunk);
 				total += count_line;
 				count_line = 0;
 				insert_chunk.Reset();
@@ -102,7 +102,7 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk,
 
 			count_line++;
 		}
-		table->storage->Append(context, insert_chunk);
+		table->storage->Append(*table, context, insert_chunk);
 		from_csv.close();
 	} else {
 		ofstream to_csv;

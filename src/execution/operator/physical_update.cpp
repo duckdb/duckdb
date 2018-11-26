@@ -50,7 +50,7 @@ void PhysicalUpdate::_GetChunk(ClientContext &context, DataChunk &chunk,
 		    [&](size_t i) -> Expression * {
 			    if (expressions[i]->type == ExpressionType::VALUE_DEFAULT) {
 				    // we resolve default expressions separately
-				    auto &column = table.table.columns[columns[i]];
+				    auto &column = tableref.columns[columns[i]];
 				    update_chunk.data[i].count = state->child_chunk.size();
 				    VectorOperations::Set(update_chunk.data[i],
 				                          column.default_value);
@@ -61,7 +61,7 @@ void PhysicalUpdate::_GetChunk(ClientContext &context, DataChunk &chunk,
 		    expressions.size());
 		update_chunk.sel_vector = state->child_chunk.sel_vector;
 
-		table.Update(context, row_ids, columns, update_chunk);
+		table.Update(tableref, context, row_ids, columns, update_chunk);
 		updated_count += state->child_chunk.size();
 	}
 

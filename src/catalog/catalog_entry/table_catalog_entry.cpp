@@ -12,10 +12,7 @@
 using namespace duckdb;
 using namespace std;
 
-TableCatalogEntry::TableCatalogEntry(Catalog *catalog,
-                                     SchemaCatalogEntry *schema,
-                                     CreateTableInformation *info)
-    : CatalogEntry(CatalogType::TABLE, catalog, info->table), schema(schema) {
+void TableCatalogEntry::Initialize(CreateTableInformation *info) {
 	for (auto entry : info->columns) {
 		if (ColumnExists(entry.name)) {
 			throw CatalogException("Column with name %s already exists!",
@@ -27,8 +24,14 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog,
 		entry.oid = oid;
 		columns.push_back(entry);
 	}
-	storage = make_unique<DataTable>(catalog->storage, *this);
+}
 
+TableCatalogEntry::TableCatalogEntry(Catalog *catalog,
+                                     SchemaCatalogEntry *schema,
+                                     CreateTableInformation *info)
+    : CatalogEntry(CatalogType::TABLE, catalog, info->table), schema(schema) {
+	Initialize(info);
+	storage = make_shared<DataTable>(catalog->storage, schema->name, name, GetTypes());
 	// resolve the constraints
 	// we have to parse the DUMMY constraints and initialize the indices
 	bool has_primary_key = false;
@@ -83,8 +86,53 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog,
 	}
 }
 
+TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
+                  CreateTableInformation *info, shared_ptr<DataTable> storage) 
+    : CatalogEntry(CatalogType::TABLE, catalog, info->table), schema(schema), storage(storage) {
+	Initialize(info);
+	for (auto &constraint : info->constraints) {
+		assert(constraint->type != ConstraintType::DUMMY);
+		constraints.push_back(move(constraint));
+	}
+}
+
 bool TableCatalogEntry::ColumnExists(const string &name) {
 	return name_map.find(name) != name_map.end();
+}
+
+
+unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(AlterInformation *info) {
+	if (info->type != AlterType::ALTER_TABLE) {
+		throw CatalogException("Can only modify table with ALTER TABLE statement");
+	}
+	auto table_info = (AlterTableInformation*) info;
+	switch(table_info->alter_table_type) {
+		case AlterTableType::RENAME_COLUMN: {
+			auto rename_info = (RenameColumnInformation*) table_info;
+			CreateTableInformation create_info;
+			create_info.schema = schema->name;
+			create_info.table = name;
+			bool found = false;
+			for(size_t i = 0; i < columns.size(); i++) {
+				create_info.columns.push_back(columns[i]);
+				if (rename_info->name == columns[i].name) {
+					assert(!found);
+					create_info.columns[i].name = rename_info->new_name;
+					found = true;
+				}
+			}
+			if (!found) {
+				throw CatalogException("Table does not have a column with name \"%s\"", rename_info->name.c_str());
+			}
+			create_info.constraints.resize(constraints.size());
+			for(size_t i = 0; i < constraints.size(); i++) {
+				create_info.constraints[i] = constraints[i]->Copy();
+			}
+			return make_unique<TableCatalogEntry>(catalog, schema, &create_info, storage);
+		}
+		default:
+			throw CatalogException("Unrecognized alter table type!");
+	}
 }
 
 ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) {

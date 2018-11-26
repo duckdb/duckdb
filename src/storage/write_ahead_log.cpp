@@ -325,7 +325,7 @@ bool ReplayInsert(ClientContext &context, Catalog &catalog,
 		// first find the table
 		auto table = catalog.GetTable(transaction, schema_name, table_name);
 		// now append to the chunk
-		table->storage->Append(context, chunk);
+		table->storage->Append(*table, context, chunk);
 	} catch (...) {
 		return false;
 	}

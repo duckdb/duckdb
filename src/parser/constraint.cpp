@@ -7,6 +7,15 @@
 using namespace duckdb;
 using namespace std;
 
+
+// FIXME: this is quite dirty, just copy by first serializing and then deserializing
+unique_ptr<Constraint> Constraint::Copy() {
+	Serializer serializer;
+	Serialize(serializer);
+	Deserializer source(serializer);
+	return Constraint::Deserialize(source);
+}
+
 void Constraint::Serialize(Serializer &serializer) {
 	serializer.Write<int>((int)type);
 }

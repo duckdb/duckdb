@@ -79,7 +79,8 @@ DuckDBConnection::GetQueryResult(ClientContext &context, std::string query) {
 
 		auto &statement = parser.statements.back();
 		if (statement->type == StatementType::UPDATE ||
-		    statement->type == StatementType::DELETE) {
+		    statement->type == StatementType::DELETE ||
+		    statement->type == StatementType::ALTER) {
 			// log query in UNDO buffer so it can be saved in the WAL on commit
 			auto &transaction = context.transaction.ActiveTransaction();
 			transaction.PushQuery(query);

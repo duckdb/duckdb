@@ -12,9 +12,11 @@
 
 #include "common/internal_types.hpp"
 #include "common/printable.hpp"
+#include "common/exception.hpp"
 
 namespace duckdb {
 
+struct AlterInformation;
 class Catalog;
 class CatalogSet;
 class Transaction;
@@ -36,6 +38,10 @@ class CatalogEntry {
 	}
 	//! Function that drops all dependents (used for Cascade)
 	virtual void DropDependents(Transaction &transaction) {
+	}
+
+	virtual std::unique_ptr<CatalogEntry> AlterEntry(AlterInformation *info) {
+		throw CatalogException("Unsupported alter type for catalog entry!");
 	}
 
 	//! The type of this catalog entry

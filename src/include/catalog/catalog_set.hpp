@@ -24,16 +24,17 @@
 
 namespace duckdb {
 
+struct AlterInformation;
+
 //! The Catalog Set stores (key, value) map of a set of AbstractCatalogEntries
 class CatalogSet {
   public:
 	//! Create an entry in the catalog set. Returns whether or not it was
 	//! successful.
 	bool CreateEntry(Transaction &transaction, const std::string &name,
-	                 std::unique_ptr<CatalogEntry> value);	
+	                 std::unique_ptr<CatalogEntry> value);
 
-	bool AlterEntry(Transaction &transaction, const std::string &name,
-					bool cascade);
+	bool AlterEntry(Transaction &transaction, const std::string &name, AlterInformation* alter_info);
 
 	bool DropEntry(Transaction &transaction, const std::string &name,
 	               bool cascade);

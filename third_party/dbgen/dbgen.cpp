@@ -77,7 +77,7 @@ static void append_to_append_info(tpch_append_information &info) {
 		chunk.Initialize(types);
 	} else if (chunk.size() >= STANDARD_VECTOR_SIZE) {
 		// flush the chunk
-		table->storage->Append(*info.context, chunk);
+		table->storage->Append(*table, *info.context, chunk);
 		// have to reset the chunk
 		chunk.Reset();
 	}
@@ -577,7 +577,8 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	for (size_t i = PART; i <= REGION; i++) {
 		if (append_info[i].table) {
 			if (append_info[i].chunk.size() > 0) {
-				append_info[i].table->storage->Append(*append_info[i].context,
+				append_info[i].table->storage->Append(*append_info[i].table,
+													  *append_info[i].context,
 				                                      append_info[i].chunk);
 			}
 		}

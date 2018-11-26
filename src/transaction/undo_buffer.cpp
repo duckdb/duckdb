@@ -40,7 +40,9 @@ void UndoBuffer::Cleanup() {
 			CatalogEntry *catalog_entry = *((CatalogEntry **)entry.data.get());
 			// destroy the backed up entry: it is no longer required
 			assert(catalog_entry->parent);
-			catalog_entry->parent->child = move(catalog_entry->child);
+			if (catalog_entry->parent->type != CatalogType::UPDATED_ENTRY) {
+				catalog_entry->parent->child = move(catalog_entry->child);
+			}
 		} else if (entry.type == UndoFlags::TUPLE_ENTRY) {
 			// undo this entry
 			auto info = (VersionInformation *)entry.data.get();
@@ -72,9 +74,17 @@ static void WriteCatalogEntry(WriteAheadLog *log, CatalogEntry *entry) {
 	auto parent = entry->parent;
 	switch (parent->type) {
 	case CatalogType::TABLE:
+		if (entry->type == CatalogType::TABLE) {
+			// ALTER TABLE statement, skip it
+			return;
+		}
 		log->WriteCreateTable((TableCatalogEntry *)parent);
 		break;
 	case CatalogType::SCHEMA:
+		if (entry->type == CatalogType::SCHEMA) {
+			// ALTER TABLE statement, skip it
+			return;
+		}
 		log->WriteCreateSchema((SchemaCatalogEntry *)parent);
 		break;
 	case CatalogType::DELETED_ENTRY:
@@ -103,8 +113,8 @@ FlushAppends(WriteAheadLog *log,
 	for (auto &entry : appends) {
 		auto dtable = entry.first;
 		auto chunk = entry.second.get();
-		auto &schema_name = dtable->table.schema->name;
-		auto &table_name = dtable->table.name;
+		auto &schema_name = dtable->schema;
+		auto &table_name = dtable->table;
 		log->WriteInsert(schema_name, table_name, *chunk);
 	}
 	appends.clear();
@@ -147,14 +157,14 @@ WriteTuple(WriteAheadLog *log, VersionInformation *entry,
 		chunk = append_entry->second.get();
 		if (chunk->size() == STANDARD_VECTOR_SIZE) {
 			// entry is full: flush to WAL
-			auto &schema_name = dtable->table.schema->name;
-			auto &table_name = dtable->table.name;
+			auto &schema_name = dtable->schema;
+			auto &table_name = dtable->table;
 			log->WriteInsert(schema_name, table_name, *chunk);
 			chunk->Reset();
 		}
 	} else {
 		// entry does not exist: need to make a new entry
-		auto types = dtable->table.GetTypes();
+		auto &types = dtable->types;
 		auto new_chunk = make_unique<DataChunk>();
 		chunk = new_chunk.get();
 		chunk->Initialize(types);

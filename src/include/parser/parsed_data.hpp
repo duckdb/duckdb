@@ -55,29 +55,42 @@ struct DropTableInformation {
 	}
 };
 
-struct AlterTableInformation {
+enum class AlterType : uint8_t {
+	INVALID = 0,
+	ALTER_TABLE = 1
+};
+
+struct AlterInformation {
+	AlterType type;
+
+	AlterInformation(AlterType type) : type(type) { }
+};
+
+enum class AlterTableType : uint8_t {
+	INVALID = 0,
+	RENAME_COLUMN = 1
+};
+
+struct AlterTableInformation : public AlterInformation {
+	AlterTableType alter_table_type;
 	//! Schema name to alter to
 	std::string schema;
 	//! Table name to alter to
 	std::string table;
-	//! List of columns of the table
-	std::vector<ColumnDefinition> new_columns;
-	//TODO: List of constrains
-	//! List of constraints on the table
-	//std::vector<std::unique_ptr<Constraint>> constraints;
-	//! Ignore if the entry already exists, instead of failing
-	
-	//! Ignore if the entry does not exist instead of failing
-	bool if_exists = false;
-	//! Cascade drop (drop all dependents instead of throwing an error if there
-	//! are any)
-	bool cascade = false;
 
-	AlterTableInformation() : schema(DEFAULT_SCHEMA), if_exists(false), cascade(false) {
-	}
-	AlterTableInformation(std::string schema, std::string table,
-	                       std::vector<ColumnDefinition> columns)
-	    : schema(schema), table(table), new_columns(columns), if_exists(false), cascade(false) {
+	AlterTableInformation(AlterTableType type, std::string schema, std::string table) : 
+		AlterInformation(AlterType::ALTER_TABLE), alter_table_type(type), schema(schema), table(table) { }
+};
+
+struct RenameColumnInformation : public AlterTableInformation {
+	//! Column old name
+	std::string name;
+	//! Column new name
+	std::string new_name;
+
+	RenameColumnInformation(std::string schema, std::string table, std::string name,
+	                  std::string new_name)
+	    : AlterTableInformation(AlterTableType::RENAME_COLUMN, schema, table), name(name), new_name(new_name) {
 	}
 };
 
@@ -169,14 +182,14 @@ struct CreateIndexInformation {
 	//! Table name to insert to
 	std::string table;
 
-    ////! The columns that are indexed
-    std::vector<std::string> indexed_columns;
-    ////! Index Type (e.g., B+-tree, Skip-List, ...)
-    IndexType index_type;
-    ////! Name of the Index
-    std::string index_name;
-    ////! If it is an unique index
-    bool unique = false;
+	////! The columns that are indexed
+	std::vector<std::string> indexed_columns;
+	////! Index Type (e.g., B+-tree, Skip-List, ...)
+	IndexType index_type;
+	////! Name of the Index
+	std::string index_name;
+	////! If it is an unique index
+	bool unique = false;
 
 	//! Ignore if the entry already exists, instead of failing
 	bool if_not_exists = false;
@@ -184,10 +197,11 @@ struct CreateIndexInformation {
 	CreateIndexInformation() : schema(DEFAULT_SCHEMA), if_not_exists(false) {
 	}
 	CreateIndexInformation(std::string schema, std::string table,
-						   std::vector<std::string> indexed_columns,IndexType index_type,
-                           std::string index_name,bool unique)
-			: schema(schema), table(table), indexed_columns(indexed_columns),index_type(index_type),
-              index_name(index_name), if_not_exists(false) {
+	                       std::vector<std::string> indexed_columns,
+	                       IndexType index_type, std::string index_name,
+	                       bool unique)
+	    : schema(schema), table(table), indexed_columns(indexed_columns),
+	      index_type(index_type), index_name(index_name), if_not_exists(false) {
 	}
 };
 

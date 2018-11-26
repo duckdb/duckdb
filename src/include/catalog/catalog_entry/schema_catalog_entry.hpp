@@ -45,7 +45,7 @@ class SchemaCatalogEntry : public CatalogEntry {
 	//! Drops a table with the given name
 	void DropTable(Transaction &transaction, DropTableInformation *info);
 
-	//! Drops a table with the given name
+	//! Alters a table
 	void AlterTable(Transaction &transaction, AlterTableInformation *info);
 
 	//! Gets a table function matching the given function expression
@@ -61,7 +61,7 @@ class SchemaCatalogEntry : public CatalogEntry {
 	//! Create a scalar function within the given schema
 	void CreateScalarFunction(Transaction &transaction,
 	                          CreateScalarFunctionInformation *info);
-	
+
 	//! Gets a scalar function with the given name
 	ScalarFunctionCatalogEntry *GetScalarFunction(Transaction &transaction,
 	                                              const std::string &name);
