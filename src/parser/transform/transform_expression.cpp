@@ -575,23 +575,39 @@ unique_ptr<Expression> TransformFuncCall(FuncCall *root) {
 		// }
 		if (root->agg_star) {
 			return make_unique<AggregateExpression>(
-			    agg_fun_type, false, make_unique<StarExpression>());
+			    agg_fun_type, make_unique<StarExpression>());
 		} else {
+			if (root->agg_distinct) {
+				switch (agg_fun_type) {
+				case ExpressionType::AGGREGATE_COUNT:
+					agg_fun_type = ExpressionType::AGGREGATE_COUNT_DISTINCT;
+					break;
+				case ExpressionType::AGGREGATE_SUM:
+					agg_fun_type = ExpressionType::AGGREGATE_SUM_DISTINCT;
+					break;
+				default:
+					// makes no difference for other aggregation types
+					break;
+				}
+			}
 			if (!root->args) {
 				throw NotImplementedException(
 				    "Aggregation over zero columns not supported!");
 			} else if (root->args->length < 2) {
-
 				if (agg_fun_type == ExpressionType::AGGREGATE_AVG) {
 					// rewrite AVG(a) to SUM(a) / COUNT(a)
 					// first create the SUM
 					auto sum = make_unique<AggregateExpression>(
-					    ExpressionType::AGGREGATE_SUM, root->agg_distinct,
+					    root->agg_distinct
+					        ? ExpressionType::AGGREGATE_SUM_DISTINCT
+					        : ExpressionType::AGGREGATE_SUM,
 					    TransformExpression(
 					        (Node *)root->args->head->data.ptr_value));
 					// now create the count
 					auto count = make_unique<AggregateExpression>(
-					    ExpressionType::AGGREGATE_COUNT, root->agg_distinct,
+					    root->agg_distinct
+					        ? ExpressionType::AGGREGATE_COUNT_DISTINCT
+					        : ExpressionType::AGGREGATE_COUNT,
 					    TransformExpression(
 					        (Node *)root->args->head->data.ptr_value));
 					// cast both to decimal
@@ -606,8 +622,8 @@ unique_ptr<Expression> TransformFuncCall(FuncCall *root) {
 				} else {
 					auto child = TransformExpression(
 					    (Node *)root->args->head->data.ptr_value);
-					return make_unique<AggregateExpression>(
-					    agg_fun_type, root->agg_distinct, move(child));
+					return make_unique<AggregateExpression>(agg_fun_type,
+					                                        move(child));
 				}
 			} else {
 				throw NotImplementedException(

@@ -43,11 +43,10 @@ ExistsRewriteRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
 	}
 
 	// find the projection
-	auto node = subquery->op.get();
-	LogicalOperator *parent = nullptr;
-	while (node->children.size() == 1 && !IsProjection(node->type)) {
-		parent = node;
-		node = node->children[0].get();
+	auto node = GetProjection(subquery->op.get());
+	if (node->type != LogicalOperatorType::PROJECTION) {
+		// only know how to rewrite normal projections in EXISTS clause
+		return nullptr;
 	}
 
 	// figure out the join type
@@ -59,39 +58,46 @@ ExistsRewriteRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
 		type = JoinType::ANTI;
 	}
 
-	if (node->type != LogicalOperatorType::AGGREGATE_AND_GROUP_BY) {
-		// replace with AGGREGATE_AND_GROUP_BY node
-		// the select list is irrelevant, as we only care about existance
-		vector<unique_ptr<Expression>> empty_list;
-		auto aggregate = make_unique<LogicalAggregate>(move(empty_list));
-		aggregate->children = move(node->children);
-		node = aggregate.get();
-		if (parent) {
-			parent->children[0] = move(aggregate);
-		} else {
-			subquery->op = move(aggregate);
-		}
-	}
-	auto aggr = (LogicalAggregate *)node;
-
 	// now we turn a subquery in the WHERE clause into a "proper" subquery
 	// hence we need to get a new table index from the BindContext
 	auto subquery_table_index = rewriter.context.GenerateTableIndex();
 
 	// step 2: find correlations to add to the list of join conditions
 	vector<JoinCondition> join_conditions;
-	ExtractCorrelatedExpressions(aggr, subquery, subquery_table_index,
+	ExtractCorrelatedExpressions(node, subquery, subquery_table_index,
 	                             join_conditions);
 
 	// unlike equality comparison with subquery we only have the correlated
 	// expressions as join condition
-	assert(join_conditions.size() > 0);
+	if (join_conditions.size() == 0) {
+		return nullptr;
+	}
+	bool has_only_inequality = true;
+	for (auto &condition : join_conditions) {
+		if (condition.comparison != ExpressionType::COMPARE_NOTEQUAL) {
+			has_only_inequality = false;
+			break;
+		}
+	}
+	if (has_only_inequality) {
+		// only inequality comparisons
+		// we flip them to equality comparisons and invert the join
+		// this allows us to use a hash join
+		for (auto &condition : join_conditions) {
+			condition.comparison = ExpressionType::COMPARE_EQUAL;
+		}
+		if (type == JoinType::SEMI) {
+			type = JoinType::ANTI;
+		} else {
+			type = JoinType::SEMI;
+		}
+	}
 
 	// now we add join between the filter and the subquery
 	assert(filter->children.size() == 1);
 
 	auto table_subquery = make_unique<LogicalSubquery>(
-	    subquery_table_index, aggr->expressions.size());
+	    subquery_table_index, node->expressions.size());
 	table_subquery->children.push_back(move(subquery->op));
 
 	auto join = make_unique<LogicalJoin>(type);

@@ -16,7 +16,7 @@ class LogicalExplain : public LogicalOperator {
 	std::string logical_plan_unopt;
 	std::string logical_plan_opt;
 
-	virtual void Accept(LogicalOperatorVisitor *v) override {
+	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
 };

@@ -29,7 +29,7 @@ class LogicalSubquery : public LogicalOperator {
 	size_t table_index;
 	size_t column_count;
 
-	virtual void Accept(LogicalOperatorVisitor *v) override {
+	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
 };

@@ -17,7 +17,6 @@ vector<TypeId> PhysicalDelete::GetTypes() {
 
 void PhysicalDelete::_GetChunk(ClientContext &context, DataChunk &chunk,
                                PhysicalOperatorState *state) {
-
 	chunk.Reset();
 
 	if (state->finished) {

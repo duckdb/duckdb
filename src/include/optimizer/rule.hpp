@@ -70,7 +70,7 @@ class AbstractOperator : public Printable {
 
 	iterator end();
 
-	virtual std::string ToString() const override {
+	std::string ToString() const override {
 		if (type == AbstractOperatorType::LOGICAL_OPERATOR) {
 			return value.op->ToString();
 		} else {

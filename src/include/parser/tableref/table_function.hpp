@@ -11,6 +11,7 @@
 #pragma once
 
 #include "parser/expression.hpp"
+#include "parser/sql_node_visitor.hpp"
 #include "parser/tableref.hpp"
 
 namespace duckdb {
@@ -20,10 +21,10 @@ class TableFunction : public TableRef {
 	TableFunction() : TableRef(TableReferenceType::TABLE_FUNCTION) {
 	}
 
-	virtual void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
+	std::unique_ptr<TableRef> Accept(SQLNodeVisitor *v) override {
+		return v->Visit(*this);
 	}
-	virtual bool Equals(const TableRef *other_) override {
+	bool Equals(const TableRef *other_) override {
 		if (!TableRef::Equals(other_)) {
 			return false;
 		}
@@ -31,14 +32,14 @@ class TableFunction : public TableRef {
 		return function->Equals(other->function.get());
 	}
 
-	virtual std::unique_ptr<TableRef> Copy() override;
+	std::unique_ptr<TableRef> Copy() override;
 
 	//! Serializes a blob into a BaseTableRef
-	virtual void Serialize(Serializer &serializer) override;
+	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into a BaseTableRef
 	static std::unique_ptr<TableRef> Deserialize(Deserializer &source);
 
-	virtual std::string ToString() const override {
+	std::string ToString() const override {
 		return function->ToString();
 	}
 

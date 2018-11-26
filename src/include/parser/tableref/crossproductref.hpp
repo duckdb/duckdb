@@ -20,10 +20,10 @@ class CrossProductRef : public TableRef {
 	CrossProductRef() : TableRef(TableReferenceType::CROSS_PRODUCT) {
 	}
 
-	virtual void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
+	std::unique_ptr<TableRef> Accept(SQLNodeVisitor *v) override {
+		return v->Visit(*this);
 	}
-	virtual bool Equals(const TableRef *other_) override {
+	bool Equals(const TableRef *other_) override {
 		if (!TableRef::Equals(other_)) {
 			return false;
 		}
@@ -32,10 +32,10 @@ class CrossProductRef : public TableRef {
 		       right->Equals(other->right.get());
 	}
 
-	virtual std::unique_ptr<TableRef> Copy() override;
+	std::unique_ptr<TableRef> Copy() override;
 
 	//! Serializes a blob into a CrossProductRef
-	virtual void Serialize(Serializer &serializer) override;
+	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into a CrossProductRef
 	static std::unique_ptr<TableRef> Deserialize(Deserializer &source);
 

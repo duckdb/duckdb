@@ -47,7 +47,7 @@ class LogicalOperator : public Printable {
 	}
 
 	virtual std::string ParamsToString() const;
-	virtual std::string ToString() const override;
+	std::string ToString() const override;
 
 	virtual void Accept(LogicalOperatorVisitor *) = 0;
 	virtual void AcceptChildren(LogicalOperatorVisitor *v) {

@@ -11,6 +11,7 @@
 #pragma once
 
 #include "parser/expression.hpp"
+#include "parser/sql_node_visitor.hpp"
 
 namespace duckdb {
 //! Represents a reference to one of the GROUP BY columns
@@ -18,18 +19,18 @@ class GroupRefExpression : public Expression {
   public:
 	GroupRefExpression(TypeId return_type, size_t group_index);
 
-	virtual void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
+	std::unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
+		return v->Visit(*this);
 	}
-	virtual ExpressionClass GetExpressionClass() override {
+	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::GROUP_REF;
 	}
 
-	virtual std::unique_ptr<Expression> Copy() override;
+	std::unique_ptr<Expression> Copy() override;
 
-	virtual bool Equals(const Expression *other_) override;
+	bool Equals(const Expression *other_) override;
 
-	virtual bool IsScalar() override {
+	bool IsScalar() override {
 		return false;
 	}
 

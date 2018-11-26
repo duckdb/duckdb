@@ -26,7 +26,7 @@ class LogicalGet : public LogicalOperator {
 		referenced_tables.insert(table_index);
 	}
 
-	virtual void Accept(LogicalOperatorVisitor *v) override {
+	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
 
@@ -37,7 +37,7 @@ class LogicalGet : public LogicalOperator {
 	//! Bound column IDs
 	std::vector<column_t> column_ids;
 
-	virtual std::string ParamsToString() const override {
+	std::string ParamsToString() const override {
 		if (!table) {
 			return "";
 		}

@@ -18,9 +18,8 @@
 #include "common/printable.hpp"
 #include "common/types/statistics.hpp"
 
-#include "parser/sql_node_visitor.hpp"
-
 namespace duckdb {
+class SQLNodeVisitor;
 class AggregateExpression;
 
 //!  Expression class is a base class that can represent any expression
@@ -51,12 +50,8 @@ class Expression : public Printable {
 			AddChild(std::move(right));
 	}
 
-	virtual void Accept(SQLNodeVisitor *) = 0;
-	virtual void AcceptChildren(SQLNodeVisitor *v) {
-		for (auto &child : children) {
-			child->Accept(v);
-		}
-	}
+	virtual std::unique_ptr<Expression> Accept(SQLNodeVisitor *) = 0;
+	virtual void AcceptChildren(SQLNodeVisitor *v);
 
 	//! Resolves the type for this expression based on its children
 	virtual void ResolveType() {
@@ -112,7 +107,7 @@ class Expression : public Printable {
 		return this->Equals(&rhs);
 	}
 
-	virtual std::string ToString() const override;
+	std::string ToString() const override;
 
 	virtual std::string GetName() {
 		return !alias.empty() ? alias : "Unknown";

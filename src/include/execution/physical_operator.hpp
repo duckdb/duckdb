@@ -66,7 +66,7 @@ class PhysicalOperator : public Printable {
 		return type;
 	}
 
-	virtual std::string ToString() const override;
+	std::string ToString() const override;
 
 	//! Return a vector of the column names that will be returned by this
 	//! operator

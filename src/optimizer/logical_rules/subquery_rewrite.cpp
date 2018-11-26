@@ -90,7 +90,7 @@ SubqueryRewritingRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
 
 namespace duckdb {
 
-void ExtractCorrelatedExpressions(LogicalAggregate *aggr,
+void ExtractCorrelatedExpressions(LogicalOperator *op,
                                   SubqueryExpression *subquery,
                                   size_t subquery_table_index,
                                   vector<JoinCondition> &join_conditions) {
@@ -115,7 +115,7 @@ void ExtractCorrelatedExpressions(LogicalAggregate *aggr,
 		// this is a comparison like e.g. a.A = b.A
 		// where "a" is from the subquery, and "b" from the outer layer
 		vector<AbstractOperator> sq_bindings;
-		auto subquery_op = AbstractOperator(aggr);
+		auto subquery_op = AbstractOperator(op);
 		for (auto it = subquery_op.begin(); it != subquery_op.end(); it++) {
 			if (Rewriter::MatchOperands(filter_rule.get(), *it, sq_bindings)) {
 				break;
@@ -148,12 +148,19 @@ void ExtractCorrelatedExpressions(LogicalAggregate *aggr,
 		auto correlated_expression =
 		    move(sq_comp->children[1 - uncorrelated_index]);
 
-		// now inside the aggregation, we use the uncorrelated column used in
-		// the comparison as both projection and grouping col in subquery
-		aggr->expressions.push_back(
-		    make_unique_base<Expression, GroupRefExpression>(
-		        uncorrelated_expression->return_type, aggr->groups.size()));
-		aggr->groups.push_back(move(uncorrelated_expression));
+		if (op->type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY) {
+			auto aggr = (LogicalAggregate *)op;
+			// now inside the aggregation, we use the uncorrelated column used
+			// in the comparison as both projection and grouping col in subquery
+			aggr->expressions.push_back(
+			    make_unique_base<Expression, GroupRefExpression>(
+			        uncorrelated_expression->return_type, aggr->groups.size()));
+			aggr->groups.push_back(move(uncorrelated_expression));
+		} else {
+			// push the expression into the select list
+			assert(op->type == LogicalOperatorType::PROJECTION);
+			op->expressions.push_back(move(uncorrelated_expression));
+		}
 
 		// remove the correlated expression from the filter in the subquery
 		for (size_t i = 0; i < sq_filter->expressions.size(); i++) {
@@ -175,8 +182,8 @@ void ExtractCorrelatedExpressions(LogicalAggregate *aggr,
 		// on the right side is the newly added aggregate in the original
 		// subquery
 		condition.right = make_unique<ColumnRefExpression>(
-		    aggr->expressions.back()->return_type,
-		    ColumnBinding(subquery_table_index, aggr->expressions.size() - 1));
+		    op->expressions.back()->return_type,
+		    ColumnBinding(subquery_table_index, op->expressions.size() - 1));
 		condition.comparison = comparison_type;
 		if (uncorrelated_index == 0) {
 			// flip the comparison

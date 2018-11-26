@@ -10,8 +10,10 @@
 
 #pragma once
 
+#include "parser/sql_node_visitor.hpp"
 #include "parser/statement/select_statement.hpp"
 #include "parser/tableref.hpp"
+
 // FIXME: should not include this here!
 #include "execution/physical_operator.hpp"
 #include "planner/bindcontext.hpp"
@@ -27,22 +29,22 @@ class SubqueryExpression : public Expression {
 	      subquery_type(SubqueryType::DEFAULT) {
 	}
 
-	virtual void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
+	std::unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
+		return v->Visit(*this);
 	}
-	virtual ExpressionClass GetExpressionClass() override {
+	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::SUBQUERY;
 	}
 
-	virtual std::unique_ptr<Expression> Copy() override;
+	std::unique_ptr<Expression> Copy() override;
 
 	//! Serializes an Expression to a stand-alone binary blob
-	virtual void Serialize(Serializer &serializer) override;
+	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into an ConstantExpression
 	static std::unique_ptr<Expression>
 	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);
 
-	virtual bool Equals(const Expression *other) override;
+	bool Equals(const Expression *other) override;
 
 	// FIXME: move these, not related to parser but to execution!
 	std::unique_ptr<LogicalOperator> op;
@@ -54,7 +56,7 @@ class SubqueryExpression : public Expression {
 	std::unique_ptr<SelectStatement> subquery;
 	SubqueryType subquery_type;
 
-	virtual std::string ToString() const override {
+	std::string ToString() const override {
 		std::string result = ExpressionTypeToString(type);
 		if (op) {
 			result += "(" + op->ToString() + ")";
@@ -62,11 +64,11 @@ class SubqueryExpression : public Expression {
 		return result;
 	}
 
-	virtual bool HasSubquery() override {
+	bool HasSubquery() override {
 		return true;
 	}
 
-	virtual bool IsScalar() override {
+	bool IsScalar() override {
 		return false;
 	}
 };

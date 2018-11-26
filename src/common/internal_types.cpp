@@ -159,41 +159,6 @@ string TypeIdToString(TypeId type) {
 	return "INVALID";
 }
 
-TypeId StringToTypeId(const string &str) {
-	string upper_str = StringUtil::Upper(str);
-	if (upper_str == "INVALID") {
-		return TypeId::INVALID;
-	} else if (upper_str == "PARAMETER_OFFSET") {
-		return TypeId::PARAMETER_OFFSET;
-	} else if (upper_str == "BOOLEAN") {
-		return TypeId::BOOLEAN;
-	} else if (upper_str == "TINYINT") {
-		return TypeId::TINYINT;
-	} else if (upper_str == "SMALLINT") {
-		return TypeId::SMALLINT;
-	} else if (upper_str == "INTEGER") {
-		return TypeId::INTEGER;
-	} else if (upper_str == "BIGINT") {
-		return TypeId::BIGINT;
-	} else if (upper_str == "DECIMAL") {
-		return TypeId::DECIMAL;
-	} else if (upper_str == "POINTER") {
-		return TypeId::POINTER;
-	} else if (upper_str == "TIMESTAMP") {
-		return TypeId::TIMESTAMP;
-	} else if (upper_str == "DATE") {
-		return TypeId::DATE;
-	} else if (upper_str == "VARCHAR") {
-		return TypeId::VARCHAR;
-	} else if (upper_str == "VARBINARY") {
-		return TypeId::VARBINARY;
-	} else if (upper_str == "ARRAY") {
-		return TypeId::ARRAY;
-	} else if (upper_str == "UDT") {
-		return TypeId::UDT;
-	}
-	return TypeId::INVALID;
-}
 
 size_t GetTypeIdSize(TypeId type) {
 	switch (type) {
@@ -314,6 +279,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "NESTED_LOOP_JOIN";
 	case PhysicalOperatorType::HASH_JOIN:
 		return "HASH_JOIN";
+	case PhysicalOperatorType::MERGE_JOIN:
+		return "MERGE_JOIN";
 	case PhysicalOperatorType::CROSS_PRODUCT:
 		return "CROSS_PRODUCT";
 	case PhysicalOperatorType::UNION:
@@ -403,8 +370,12 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "COUNT";
 	case ExpressionType::AGGREGATE_COUNT_STAR:
 		return "COUNT_STAR";
+	case ExpressionType::AGGREGATE_COUNT_DISTINCT:
+		return "COUNT_DISTINCT";
 	case ExpressionType::AGGREGATE_SUM:
 		return "SUM";
+	case ExpressionType::AGGREGATE_SUM_DISTINCT:
+		return "SUM_DISTINCT";
 	case ExpressionType::AGGREGATE_MIN:
 		return "MIN";
 	case ExpressionType::AGGREGATE_MAX:
@@ -476,6 +447,25 @@ string ExpressionTypeToOperator(ExpressionType type) {
 		return "*";
 	default:
 		return "";
+	}
+}
+
+string JoinTypeToString(JoinType type) {
+	switch (type) {
+	case JoinType::LEFT:
+		return "LEFT";
+	case JoinType::RIGHT:
+		return "RIGHT";
+	case JoinType::INNER:
+		return "INNER";
+	case JoinType::OUTER:
+		return "OUTER";
+	case JoinType::SEMI:
+		return "SEMI";
+	case JoinType::ANTI:
+		return "ANTI";
+	default:
+		return "INVALID";
 	}
 }
 
@@ -552,13 +542,12 @@ IndexType StringToIndexType(const std::string &str) {
 		return IndexType::BTREE;
 	} else {
 		throw ConversionException(StringUtil::Format(
-				"No IndexType conversion from string '%s'", upper_str.c_str()));
+		    "No IndexType conversion from string '%s'", upper_str.c_str()));
 	}
 	return IndexType::INVALID;
 }
 
-
-	bool TypeIsConstantSize(TypeId type) {
+bool TypeIsConstantSize(TypeId type) {
 	return type < TypeId::VARCHAR;
 }
 bool TypeIsIntegral(TypeId type) {
@@ -566,6 +555,9 @@ bool TypeIsIntegral(TypeId type) {
 }
 bool TypeIsNumeric(TypeId type) {
 	return type >= TypeId::TINYINT && type <= TypeId::DECIMAL;
+}
+bool TypeIsInteger(TypeId type) {
+	return type >= TypeId::TINYINT && type <= TypeId::BIGINT;
 }
 
 }; // namespace duckdb

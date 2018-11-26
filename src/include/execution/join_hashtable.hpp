@@ -15,6 +15,8 @@
 #include "common/types/tuple.hpp"
 #include "common/types/vector.hpp"
 
+#include "planner/operator/logical_join.hpp"
+
 #include <mutex>
 
 namespace duckdb {
@@ -50,17 +52,23 @@ class JoinHashTable {
 
 		ScanStructure(JoinHashTable &ht);
 		//! Get the next batch of data from the scan structure
-		void Next(DataChunk &left, DataChunk &result);
+		void Next(DataChunk &keys, DataChunk &left, DataChunk &result);
 
 	  private:
 		//! Next operator for the inner join
-		void NextInnerJoin(DataChunk &left, DataChunk &result);
+		void NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 		//! Next operator for the semi join
-		void NextSemiJoin(DataChunk &left, DataChunk &result);
+		void NextSemiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 		//! Next operator for the anti join
-		void NextAntiJoin(DataChunk &left, DataChunk &result);
+		void NextAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 		//! Next operator for the left outer join
-		void NextLeftJoin(DataChunk &left, DataChunk &result);
+		void NextLeftJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
+
+		template <bool MATCH>
+		void NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left,
+		                        DataChunk &result);
+
+		void ResolvePredicates(DataChunk &keys, Vector &comparison_result);
 	};
 
   private:
@@ -79,8 +87,10 @@ class JoinHashTable {
 		}
 	};
 
+	void Hash(DataChunk &keys, Vector &hashes);
+
   public:
-	JoinHashTable(std::vector<TypeId> key_types,
+	JoinHashTable(std::vector<JoinCondition> &conditions,
 	              std::vector<TypeId> build_types, JoinType type,
 	              size_t initial_capacity = 32768, bool parallel = false);
 	//! Resize the HT to the specified size. Must be larger than the current
@@ -98,22 +108,32 @@ class JoinHashTable {
 		return count;
 	}
 
-	//! Serializer for the keys
-	TupleSerializer key_serializer;
+	//! Serializer for the keys used in equality comparison
+	TupleSerializer equality_serializer;
+	//! Serializer for all conditions
+	TupleSerializer condition_serializer;
 	//! Serializer for the build side
 	TupleSerializer build_serializer;
-	//! The types of the build side
-	std::vector<TypeId> key_types;
-	//! The types of the build side
+	//! The types of the keys used in equality comparison
+	std::vector<TypeId> equality_types;
+	//! The types of the keys
+	std::vector<TypeId> condition_types;
+	//! The types of all conditions
 	std::vector<TypeId> build_types;
-	//! Size of key tuple
-	size_t key_size;
+	//! The comparison predicates
+	std::vector<ExpressionType> predicates;
+	//! Size of condition keys
+	size_t equality_size;
+	//! Size of condition keys
+	size_t condition_size;
 	//! Size of build tuple
 	size_t build_size;
 	//! The size of an entry as stored in the HashTable
 	size_t entry_size;
 	//! The total tuple size
 	size_t tuple_size;
+	//! The join type of the HT
+	JoinType join_type;
 
   private:
 	//! Insert the given set of locations into the HT with the given set of
@@ -132,8 +152,6 @@ class JoinHashTable {
 	bool parallel = false;
 	//! Mutex used for parallelism
 	std::mutex parallel_lock;
-	//! The join type of the HT
-	JoinType join_type;
 
 	//! Copying not allowed
 	JoinHashTable(const JoinHashTable &) = delete;

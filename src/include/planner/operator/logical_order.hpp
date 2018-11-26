@@ -22,7 +22,7 @@ class LogicalOrder : public LogicalOperator {
 	      description(std::move(description)) {
 	}
 
-	virtual void Accept(LogicalOperatorVisitor *v) override {
+	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
 

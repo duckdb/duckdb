@@ -22,7 +22,7 @@ class LogicalLimit : public LogicalOperator {
 	      offset(offset) {
 	}
 
-	virtual void Accept(LogicalOperatorVisitor *v) override {
+	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
 

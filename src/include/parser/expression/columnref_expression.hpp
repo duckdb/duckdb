@@ -11,6 +11,7 @@
 #pragma once
 
 #include "parser/expression.hpp"
+#include "parser/sql_node_visitor.hpp"
 
 namespace duckdb {
 
@@ -63,28 +64,28 @@ class ColumnRefExpression : public Expression {
 		return table_name;
 	}
 
-	virtual void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
+	std::unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
+		return v->Visit(*this);
 	}
 
-	virtual std::string GetName() override {
+	std::string GetName() override {
 		return !alias.empty() ? alias : column_name;
 	}
-	virtual ExpressionClass GetExpressionClass() override {
+	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::COLUMN_REF;
 	}
 
-	virtual std::unique_ptr<Expression> Copy() override;
+	std::unique_ptr<Expression> Copy() override;
 
 	//! Serializes an Expression to a stand-alone binary blob
-	virtual void Serialize(Serializer &serializer) override;
+	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into an ConstantExpression
 	static std::unique_ptr<Expression>
 	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);
 
-	virtual void ResolveType() override;
+	void ResolveType() override;
 
-	virtual bool Equals(const Expression *other) override;
+	bool Equals(const Expression *other) override;
 
 	// FIXME: move these
 
@@ -106,9 +107,9 @@ class ColumnRefExpression : public Expression {
 	//! Table name of the column name that is referenced (optional)
 	std::string table_name;
 
-	virtual std::string ToString() const override;
+	std::string ToString() const override;
 
-	virtual bool IsScalar() override {
+	bool IsScalar() override {
 		return false;
 	}
 };

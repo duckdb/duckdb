@@ -72,6 +72,11 @@ DuckDBConnection::GetQueryResult(ClientContext &context, std::string query) {
 			return make_unique<DuckDBResult>(parser.GetErrorMessage());
 		}
 
+		if (parser.statements.size() == 0) {
+			// empty query
+			return make_unique<DuckDBResult>();
+		}
+
 		if (parser.statements.size() > 1) {
 			throw Exception(
 			    "More than one statement per query not supported yet!");

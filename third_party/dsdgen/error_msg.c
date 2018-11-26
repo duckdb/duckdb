@@ -73,9 +73,10 @@ err_msg_t Errors[MAX_ERROR + 2] = {
     {EFLG_STR_ARG, "Name is not a distribution or table name: '%s'"},
     {EFLG_NO_ARG, "Cannot evaluate expression"},
     {EFLG_STR_ARG,
-     "Substitution'%s' is used before being initialized"}, /* QERR_NO_INIT */
-    {EFLG_NO_ARG,
-     "RANGE()/LIST()/ULIST() not supported for NORMAL distributions"},
+     "Substitution'%s' is used before being initialized"}, /* QERR_NO_INIT
+                                                            */
+    {EFLG_NO_ARG, "RANGE()/LIST()/ULIST() not supported for NORMAL "
+                  "distributions"},
     {EFLG_STR_ARG, "Bad Nesting; '%s' not found"},
     {EFLG_STR_ARG, "Include stack overflow when opening '%s'"},
     {EFLG_STR_ARG, "Bad function call: '%s'"},
@@ -83,9 +84,9 @@ err_msg_t Errors[MAX_ERROR + 2] = {
     {EFLG_NO_ARG, "Must set types and weights before defining names"},
     {EFLG_NO_ARG, "More than 20 arguments in definition"},
     {EFLG_NO_ARG, "Argument type mismatch"},
-    {EFLG_NO_ARG,
-     "RANGE()/LIST()/ULIST() cannot be used in the same expression"}, /* QERR_RANGE_LIST
-                                                                       */
+    {EFLG_NO_ARG, "RANGE()/LIST()/ULIST() cannot be used in the "
+                  "same expression"}, /* QERR_RANGE_LIST
+                                       */
     {EFLG_NO_ARG, "Selected scale factor is NOT valid for result publication"},
     {EFLG_STR_ARG, "Parameter setting failed for '%s'"},
     {EFLG_STR_ARG, "Table %s is being joined without an explicit rule"},
@@ -94,20 +95,24 @@ err_msg_t Errors[MAX_ERROR + 2] = {
                    "its parent (e.g., catalog_sales builds catalog returns)"},
     {EFLG_NO_ARG, "Command line arguments for dbgen_version exceed 200 "
                   "characters; truncated"},
+    {EFLG_NO_ARG, "A query template list must be supplied using the "
+                  "INPUT option"}, /* QERR_NO_QUERYLIST
+                                    */
     {EFLG_NO_ARG,
-     "A query template list must be supplied using the INPUT option"}, /* QERR_NO_QUERYLIST
-                                                                        */
-    {EFLG_NO_ARG,
-     "Invalid query number found in permutation!"}, /* QERR_QUERY_RANGE */
-    {EFLG_NO_ARG,
-     "RANGE/LIST/ULIST expressions not valid as function parameters"}, /* QERR_MODIFIED_PARAM
-                                                                        */
-    {EFLG_NO_ARG, "RANGE/LIST/ULIST truncated to available values"}, /* QERR_MODIFIED_PARAM
-                                                                      */
-    {EFLG_NO_ARG, "This scale factor is valid for QUALIFICATION ONLY"}, /* QERR_QUALIFICATION_SCALE
-                                                                         */
+     "Invalid query number found in permutation!"}, /* QERR_QUERY_RANGE
+                                                     */
+    {EFLG_NO_ARG, "RANGE/LIST/ULIST expressions not valid as "
+                  "function parameters"}, /* QERR_MODIFIED_PARAM
+                                           */
+    {EFLG_NO_ARG, "RANGE/LIST/ULIST truncated to available "
+                  "values"}, /* QERR_MODIFIED_PARAM
+                              */
+    {EFLG_NO_ARG, "This scale factor is valid for QUALIFICATION "
+                  "ONLY"}, /* QERR_QUALIFICATION_SCALE
+                            */
     {EFLG_STR_ARG,
-     "Generating %s requires the '-update' option"}, /* QERR_TABLE_UPDATE */
+     "Generating %s requires the '-update' option"}, /* QERR_TABLE_UPDATE
+                                                      */
     {0, NULL}};
 
 /*

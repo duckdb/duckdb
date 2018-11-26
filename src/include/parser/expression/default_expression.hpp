@@ -11,6 +11,7 @@
 #pragma once
 
 #include "parser/expression.hpp"
+#include "parser/sql_node_visitor.hpp"
 
 namespace duckdb {
 //! Represents the default value of a column
@@ -19,20 +20,20 @@ class DefaultExpression : public Expression {
 	DefaultExpression() : Expression(ExpressionType::VALUE_DEFAULT) {
 	}
 
-	virtual void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
+	std::unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
+		return v->Visit(*this);
 	}
-	virtual ExpressionClass GetExpressionClass() override {
+	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::DEFAULT;
 	}
 
-	virtual std::unique_ptr<Expression> Copy() override;
+	std::unique_ptr<Expression> Copy() override;
 
 	//! Deserializes a blob back into an DefaultExpression
 	static std::unique_ptr<Expression>
 	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);
 
-	virtual std::string ToString() const override {
+	std::string ToString() const override {
 		return "Default";
 	}
 };

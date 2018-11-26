@@ -7,6 +7,15 @@
 using namespace duckdb;
 using namespace std;
 
+void Expression::AcceptChildren(SQLNodeVisitor *v) {
+	for (size_t i = 0; i < children.size(); i++) {
+		auto accept_res = children[i]->Accept(v);
+		if (accept_res) {
+			children[i] = move(accept_res);
+		}
+	}
+}
+
 bool Expression::IsAggregate() {
 	bool is_aggregate = false;
 	for (auto &child : children) {

@@ -22,7 +22,7 @@ class LogicalCreate : public LogicalOperator {
 	      info(move(info)) {
 	}
 
-	virtual void Accept(LogicalOperatorVisitor *v) override {
+	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
 

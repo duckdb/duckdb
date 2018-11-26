@@ -1,5 +1,6 @@
 SELECT
-    subq_0.c3 AS c0, (
+    subq_0.c3 AS c0,
+    (
         SELECT
             p_retailprice
         FROM

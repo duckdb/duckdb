@@ -22,7 +22,6 @@ vector<TypeId> PhysicalUnion::GetTypes() {
 // first exhaust top, then exhaust bottom. state to remember which.
 void PhysicalUnion::_GetChunk(ClientContext &context, DataChunk &chunk,
                               PhysicalOperatorState *state_) {
-
 	auto state = reinterpret_cast<PhysicalUnionOperatorState *>(state_);
 	chunk.Reset();
 	if (!state->top_done) {

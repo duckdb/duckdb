@@ -10,12 +10,15 @@
 
 #pragma once
 
+#include <map>
 #include <vector>
 
 #include "parser/sql_statement.hpp"
 
 #include "parser/expression.hpp"
+#include "parser/sql_node_visitor.hpp"
 #include "parser/tableref.hpp"
+#include "planner/bindcontext.hpp"
 
 namespace duckdb {
 //! GROUP BY description
@@ -61,8 +64,8 @@ class SelectStatement : public SQLStatement {
 	}
 
 	virtual std::string ToString() const;
-	virtual void Accept(SQLNodeVisitor *v) {
-		v->Visit(*this);
+	virtual std::unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
+		return v->Visit(*this);
 	}
 
 	virtual bool Equals(const SQLStatement *other);
@@ -84,6 +87,9 @@ class SelectStatement : public SQLStatement {
 	OrderByDescription orderby;
 	//! Limit Description
 	LimitDescription limit;
+
+	//! CTEs
+	std::map<std::string, std::unique_ptr<SelectStatement>> cte_map;
 
 	//! Create a copy of this SelectStatement
 	std::unique_ptr<SelectStatement> Copy();
@@ -115,5 +121,6 @@ class SelectStatement : public SQLStatement {
 
 	std::unique_ptr<SelectStatement> union_select;
 	std::unique_ptr<SelectStatement> except_select;
+	std::unique_ptr<BindContext> setop_binder;
 };
 } // namespace duckdb

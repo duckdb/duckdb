@@ -19,7 +19,6 @@
 namespace duckdb {
 
 class BufferPool {
-
 	Page *CreatePage();
 	void LoadPage(int64_t page_identifier);
 

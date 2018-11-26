@@ -130,36 +130,6 @@ Value ExpressionExecutor::ExecuteAggregate(AggregateExpression &expr) {
 	}
 }
 
-void ExpressionExecutor::MergeAggregate(AggregateExpression &expr,
-                                        Value &result) {
-	// if (result.type != expr.return_type) {
-	// 	throw NotImplementedException(
-	// 	    "Aggregate type does not match value type!");
-	// }
-	Value v = ExecuteAggregate(expr);
-	switch (expr.type) {
-	case ExpressionType::AGGREGATE_COUNT_STAR:
-	case ExpressionType::AGGREGATE_SUM:
-	case ExpressionType::AGGREGATE_COUNT: {
-		ValueOperations::Add(result, v, result);
-		break;
-	}
-	case ExpressionType::AGGREGATE_MIN: {
-		ValueOperations::Min(result, v, result);
-		break;
-	}
-	case ExpressionType::AGGREGATE_MAX: {
-		ValueOperations::Max(result, v, result);
-		break;
-	}
-	// we don't have to merge since the first chunk already set the result
-	case ExpressionType::AGGREGATE_FIRST:
-		break;
-	default:
-		throw NotImplementedException("Unsupported aggregate type");
-	}
-}
-
 static bool IsScalarAggr(Expression *expr) {
 	if (expr->type == ExpressionType::COLUMN_REF ||
 	    expr->type == ExpressionType::GROUP_REF ||
@@ -174,7 +144,7 @@ static bool IsScalarAggr(Expression *expr) {
 	return true;
 }
 
-void ExpressionExecutor::Visit(AggregateExpression &expr) {
+unique_ptr<Expression> ExpressionExecutor::Visit(AggregateExpression &expr) {
 	auto state =
 	    reinterpret_cast<PhysicalAggregateOperatorState *>(this->state);
 	if (!state) {
@@ -208,9 +178,10 @@ void ExpressionExecutor::Visit(AggregateExpression &expr) {
 		v.Move(vector);
 	}
 	expr.stats.Verify(vector);
+	return nullptr;
 }
 
-void ExpressionExecutor::Visit(CaseExpression &expr) {
+unique_ptr<Expression> ExpressionExecutor::Visit(CaseExpression &expr) {
 	if (expr.children.size() != 3) {
 		throw Exception("Cast needs three child nodes");
 	}
@@ -225,24 +196,26 @@ void ExpressionExecutor::Visit(CaseExpression &expr) {
 	vector.Initialize(res_true.type);
 	VectorOperations::Case(check, res_true, res_false, vector);
 	expr.stats.Verify(vector);
+	return nullptr;
 }
 
-void ExpressionExecutor::Visit(CastExpression &expr) {
+unique_ptr<Expression> ExpressionExecutor::Visit(CastExpression &expr) {
 	// resolve the child
 	Vector l;
 	expr.children[0]->Accept(this);
 	if (vector.type == expr.return_type) {
 		// NOP cast
-		return;
+		return nullptr;
 	}
 	vector.Move(l);
 	// now cast it to the type specified by the cast expression
 	vector.Initialize(expr.return_type);
 	VectorOperations::Cast(l, vector);
 	expr.stats.Verify(vector);
+	return nullptr;
 }
 
-void ExpressionExecutor::Visit(ColumnRefExpression &expr) {
+unique_ptr<Expression> ExpressionExecutor::Visit(ColumnRefExpression &expr) {
 	size_t cur_depth = expr.depth;
 	ExpressionExecutor *cur_exec = this;
 	while (cur_depth > 0) {
@@ -261,9 +234,10 @@ void ExpressionExecutor::Visit(ColumnRefExpression &expr) {
 	}
 	vector.Reference(cur_exec->chunk->data[expr.index]);
 	expr.stats.Verify(vector);
+	return nullptr;
 }
 
-void ExpressionExecutor::Visit(ComparisonExpression &expr) {
+unique_ptr<Expression> ExpressionExecutor::Visit(ComparisonExpression &expr) {
 	Vector l, r;
 	expr.children[0]->Accept(this);
 	vector.Move(l);
@@ -303,9 +277,10 @@ void ExpressionExecutor::Visit(ComparisonExpression &expr) {
 		throw NotImplementedException("Unknown comparison type!");
 	}
 	expr.stats.Verify(vector);
+	return nullptr;
 }
 
-void ExpressionExecutor::Visit(ConjunctionExpression &expr) {
+unique_ptr<Expression> ExpressionExecutor::Visit(ConjunctionExpression &expr) {
 	if (expr.children.size() != 2) {
 		throw Exception("Unsupported conjunction!");
 	}
@@ -326,19 +301,21 @@ void ExpressionExecutor::Visit(ConjunctionExpression &expr) {
 		throw NotImplementedException("Unknown conjunction type!");
 	}
 	expr.stats.Verify(vector);
+	return nullptr;
 }
 
-void ExpressionExecutor::Visit(ConstantExpression &expr) {
+unique_ptr<Expression> ExpressionExecutor::Visit(ConstantExpression &expr) {
 	vector.Reference(expr.value);
 	expr.stats.Verify(vector);
+	return nullptr;
 }
 
-void ExpressionExecutor::Visit(DefaultExpression &expr) {
+unique_ptr<Expression> ExpressionExecutor::Visit(DefaultExpression &expr) {
 	throw NotImplementedException(
 	    "Cannot execute DEFAULT expression in ExpressionExecutor");
 }
 
-void ExpressionExecutor::Visit(FunctionExpression &expr) {
+unique_ptr<Expression> ExpressionExecutor::Visit(FunctionExpression &expr) {
 	assert(expr.bound_function);
 
 	auto arguments = unique_ptr<Vector[]>(new Vector[expr.children.size()]);
@@ -354,9 +331,10 @@ void ExpressionExecutor::Visit(FunctionExpression &expr) {
 		                            "expected function to return the former "
 		                            "but the function returned the latter");
 	}
+	return nullptr;
 }
 
-void ExpressionExecutor::Visit(GroupRefExpression &expr) {
+unique_ptr<Expression> ExpressionExecutor::Visit(GroupRefExpression &expr) {
 	auto state =
 	    reinterpret_cast<PhysicalAggregateOperatorState *>(this->state);
 	if (!state) {
@@ -364,9 +342,10 @@ void ExpressionExecutor::Visit(GroupRefExpression &expr) {
 	}
 	vector.Reference(state->group_chunk.data[expr.group_index]);
 	expr.stats.Verify(vector);
+	return nullptr;
 }
 
-void ExpressionExecutor::Visit(OperatorExpression &expr) {
+unique_ptr<Expression> ExpressionExecutor::Visit(OperatorExpression &expr) {
 	// special handling for special snowflake 'IN'
 	// IN has n children
 	if (expr.type == ExpressionType::COMPARE_IN ||
@@ -490,7 +469,7 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 			result.Move(vector);
 		}
 		expr.stats.Verify(vector);
-		return;
+		return nullptr;
 	}
 	if (expr.children.size() == 1) {
 		expr.children[0]->Accept(this);
@@ -559,10 +538,14 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 		throw NotImplementedException("operator");
 	}
 	expr.stats.Verify(vector);
+	return nullptr;
 }
 
-void ExpressionExecutor::Visit(SubqueryExpression &expr) {
+unique_ptr<Expression> ExpressionExecutor::Visit(SubqueryExpression &expr) {
 	auto &plan = expr.plan;
+	if (!plan) {
+		throw Exception("Failed to generate query plan for subquery");
+	}
 	DataChunk *old_chunk = chunk;
 	DataChunk row_chunk;
 	if (old_chunk) {
@@ -608,4 +591,5 @@ void ExpressionExecutor::Visit(SubqueryExpression &expr) {
 	}
 	chunk = old_chunk;
 	expr.stats.Verify(vector);
+	return nullptr;
 }

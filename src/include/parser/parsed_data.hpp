@@ -78,7 +78,7 @@ struct AlterTableInformation : public AlterInformation {
 	//! Table name to alter to
 	std::string table;
 
-	AlterTableInformation(AlterTableType type, std::string schema, std::string table) : 
+	AlterTableInformation(AlterTableType type, std::string schema, std::string table) :
 		AlterInformation(AlterType::ALTER_TABLE), alter_table_type(type), schema(schema), table(table) { }
 };
 

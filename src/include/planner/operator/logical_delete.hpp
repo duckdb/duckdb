@@ -20,7 +20,7 @@ class LogicalDelete : public LogicalOperator {
 	    : LogicalOperator(LogicalOperatorType::DELETE), table(table) {
 	}
 
-	virtual void Accept(LogicalOperatorVisitor *v) override {
+	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
 

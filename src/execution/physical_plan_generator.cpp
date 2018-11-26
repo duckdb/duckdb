@@ -154,25 +154,33 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 	op.children[1]->Accept(this);
 	auto right = move(plan);
 
-	bool only_equality = true;
+	bool has_equality = false;
 	for (auto &cond : op.conditions) {
 		cond.left->Accept(this);
 		cond.right->Accept(this);
-		if (cond.comparison != ExpressionType::COMPARE_EQUAL) {
-			only_equality = false;
+		if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
+			has_equality = true;
 		}
 	}
 
 	assert(left);
 	assert(right);
-	if (only_equality) {
+	if (has_equality) {
 		// equality join: use hash join
 		plan = make_unique<PhysicalHashJoin>(move(left), move(right),
 		                                     move(op.conditions), op.type);
 	} else {
 		// non-equality join: use nested loop
-		plan = make_unique<PhysicalNestedLoopJoin>(
-		    move(left), move(right), move(op.conditions), op.type);
+		if (op.type == JoinType::INNER) {
+			plan = make_unique<PhysicalNestedLoopJoinInner>(
+			    move(left), move(right), move(op.conditions), op.type);
+		} else if (op.type == JoinType::ANTI || op.type == JoinType::SEMI) {
+			plan = make_unique<PhysicalNestedLoopJoinSemi>(
+			    move(left), move(right), move(op.conditions), op.type);
+		} else {
+			throw NotImplementedException(
+			    "Unimplemented nested loop join type!");
+		}
 	}
 }
 
@@ -313,8 +321,9 @@ void PhysicalPlanGenerator::Visit(LogicalUnion &op) {
 	plan = make_unique<PhysicalUnion>(move(top), move(bottom));
 }
 
-void PhysicalPlanGenerator::Visit(SubqueryExpression &expr) {
+unique_ptr<Expression> PhysicalPlanGenerator::Visit(SubqueryExpression &expr) {
 	PhysicalPlanGenerator generator(context, this);
 	generator.CreatePlan(move(expr.op));
 	expr.plan = move(generator.plan);
+	return nullptr;
 }

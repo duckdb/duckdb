@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test ALTER TABLE RENAME COLUMN", "[alter]") {
+TEST_CASE("Test ALTER TABLE RENAME COLUMN", "[alter][.]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
@@ -15,7 +15,7 @@ TEST_CASE("Test ALTER TABLE RENAME COLUMN", "[alter]") {
 	    con.Query("CREATE TABLE test(i INTEGER, j INTEGER)"));
 	REQUIRE_NO_FAIL(
 	    con.Query("ALTER TABLE test RENAME COLUMN i TO k"));
-	
+
 	result = con.Query(
 	    "SELECT * FROM test");
 	REQUIRE(result->column_count() == 2);

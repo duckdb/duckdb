@@ -22,7 +22,7 @@ class LogicalProjection : public LogicalOperator {
 	                      std::move(select_list)) {
 	}
 
-	virtual void Accept(LogicalOperatorVisitor *v) override {
+	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
 };

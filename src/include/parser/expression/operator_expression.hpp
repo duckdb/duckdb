@@ -11,6 +11,7 @@
 #pragma once
 
 #include "parser/expression.hpp"
+#include "parser/sql_node_visitor.hpp"
 
 namespace duckdb {
 //! Represents a built-in operator expression
@@ -25,16 +26,16 @@ class OperatorExpression : public Expression {
 	    : Expression(type, type_id, std::move(left), std::move(right)) {
 	}
 
-	virtual void ResolveType() override;
+	void ResolveType() override;
 
-	virtual void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
+	std::unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
+		return v->Visit(*this);
 	}
-	virtual ExpressionClass GetExpressionClass() override {
+	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::OPERATOR;
 	}
 
-	virtual std::unique_ptr<Expression> Copy() override;
+	std::unique_ptr<Expression> Copy() override;
 
 	//! Deserializes a blob back into an OperatorExpression
 	static std::unique_ptr<Expression>

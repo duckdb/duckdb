@@ -21,9 +21,9 @@ class PhysicalUnion : public PhysicalOperator {
 	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;
 
-	virtual void _GetChunk(ClientContext &context, DataChunk &chunk,
-	                       PhysicalOperatorState *state) override;
-	virtual std::unique_ptr<PhysicalOperatorState>
+	void _GetChunk(ClientContext &context, DataChunk &chunk,
+	               PhysicalOperatorState *state) override;
+	std::unique_ptr<PhysicalOperatorState>
 	GetOperatorState(ExpressionExecutor *parent_executor) override;
 };
 

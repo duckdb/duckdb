@@ -19,7 +19,6 @@ vector<TypeId> PhysicalUpdate::GetTypes() {
 
 void PhysicalUpdate::_GetChunk(ClientContext &context, DataChunk &chunk,
                                PhysicalOperatorState *state) {
-
 	chunk.Reset();
 
 	if (state->finished) {

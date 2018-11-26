@@ -173,11 +173,13 @@ enum class ExpressionType : uint8_t {
 	// -----------------------------
 	AGGREGATE_COUNT = 100,
 	AGGREGATE_COUNT_STAR = 101,
-	AGGREGATE_SUM = 102,
-	AGGREGATE_MIN = 103,
-	AGGREGATE_MAX = 104,
-	AGGREGATE_AVG = 105,
-	AGGREGATE_FIRST = 106,
+	AGGREGATE_COUNT_DISTINCT = 102,
+	AGGREGATE_SUM = 103,
+	AGGREGATE_SUM_DISTINCT = 104,
+	AGGREGATE_MIN = 105,
+	AGGREGATE_MAX = 106,
+	AGGREGATE_AVG = 107,
+	AGGREGATE_FIRST = 108,
 
 	// -----------------------------
 	// Functions
@@ -295,15 +297,13 @@ enum class StatementType : uint8_t {
 	// -----------------------------
 	CREATE_TABLE,  // create table statement type
 	CREATE_SCHEMA, // create schema statement type
-	CREATE_INDEX, // create index statement type
-
+	CREATE_INDEX,  // create index statement type
 
 	// -----------------------------
 	// Drop Types
 	// -----------------------------
-	DROP_TABLE,  // drop table statement type
-	DROP_SCHEMA, // drop table statement type
-
+	DROP_TABLE, // drop table statement type
+	DROP_SCHEMA // drop table statement type
 };
 
 //===--------------------------------------------------------------------===//
@@ -331,15 +331,17 @@ enum class JoinType : uint8_t {
 	ANTI = 6     // Opposite of SEMI JOIN
 };
 
+std::string JoinTypeToString(JoinType type);
+
 //===--------------------------------------------------------------------===//
 // Index Types
 //===--------------------------------------------------------------------===//
 
-    enum class IndexType {
-        INVALID = 0,  // invalid index type
-        BTREE = 1 //B+-Tree
-    };
-    IndexType StringToIndexType(const std::string &str);
+enum class IndexType {
+	INVALID = 0, // invalid index type
+	BTREE = 1    // B+-Tree
+};
+IndexType StringToIndexType(const std::string &str);
 
 //===--------------------------------------------------------------------===//
 // ORDER BY Clause Types
@@ -423,6 +425,7 @@ enum class PhysicalOperatorType : uint8_t {
 	NESTED_LOOP_JOIN,
 	HASH_JOIN,
 	CROSS_PRODUCT,
+	MERGE_JOIN,
 
 	// -----------------------------
 	// SetOps
@@ -478,11 +481,11 @@ enum class TransactionType : uint8_t {
 ExpressionType StringToExpressionType(const std::string &str);
 
 std::string TypeIdToString(TypeId type);
-TypeId StringToTypeId(const std::string &str);
 size_t GetTypeIdSize(TypeId type);
 bool TypeIsConstantSize(TypeId type);
 bool TypeIsIntegral(TypeId type);
 bool TypeIsNumeric(TypeId type);
+bool TypeIsInteger(TypeId type);
 
 //! Returns the minimum value that can be stored in a given type
 int64_t MinimumValue(TypeId type);

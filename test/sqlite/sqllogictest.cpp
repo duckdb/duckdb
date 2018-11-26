@@ -81,7 +81,6 @@ static int nextLine(Script *p) {
 
 	/* Loop until a non-comment line is found, or until end-of-file */
 	while (1) {
-
 		/* When we reach end-of-file, return 0 */
 		if (p->iNext >= p->iEnd) {
 			p->iCur = p->iEnd;
@@ -152,7 +151,6 @@ static int nextIsBlank(Script *p) {
 ** Return 1 on success.  Return 0 at end-of-file.
 */
 static int findStartOfNextRecord(Script *p) {
-
 	/* Skip over any existing content to find a blank line */
 	if (p->iCur > 0) {
 		while (p->zLine[0] && p->iCur < p->iEnd) {
@@ -348,7 +346,6 @@ static void execute_file(string script) {
 		FAIL("Could not find test script '" + script +
 		     "'. Perhaps run `make sqlite`. ");
 	}
-	fprintf(stderr, "%s\n", script.c_str());
 	REQUIRE(in);
 	fseek(in, 0L, SEEK_END);
 	nScript = ftell(in);
@@ -704,12 +701,28 @@ static bool endsWith(const std::string &mainStr, const std::string &toMatch) {
 static void testRunner() {
 	// this is an ugly hack that uses the test case name to pass the script file
 	// name if someone has a better idea...
-	execute_file(Catch::getResultCapture().getCurrentTestName());
+	auto name = Catch::getResultCapture().getCurrentTestName();
+	fprintf(stderr, "%s\n", name.c_str());
+	execute_file(name);
+}
+
+TEST_CASE("SQLite select1", "[sqlitelogic]") {
+	execute_file("test/sqlite/select1.test");
+}
+
+TEST_CASE("SQLite select2", "[sqlitelogic]") {
+	execute_file("test/sqlite/select2.test");
+}
+
+TEST_CASE("SQLite select3", "[sqlitelogic]") {
+	execute_file("test/sqlite/select3.test");
 }
 
 struct AutoRegTests {
 	AutoRegTests() {
 		vector<string> excludes = {
+		    "test/select1.test", // tested separately
+		    "test/select2.test", "test/select3.test",
 		    "test/select4.test", // EXCEPT etc.
 		    "test/select5.test", // joins too slow
 		    "test/index",        // no index yet

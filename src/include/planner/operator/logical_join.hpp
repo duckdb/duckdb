@@ -29,7 +29,7 @@ class LogicalJoin : public LogicalOperator {
 	    : LogicalOperator(LogicalOperatorType::JOIN), type(type) {
 	}
 
-	virtual void Accept(LogicalOperatorVisitor *v) override {
+	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
 
@@ -44,7 +44,7 @@ class LogicalJoin : public LogicalOperator {
 	static ExpressionType NegateComparisionExpression(ExpressionType type);
 	static ExpressionType FlipComparisionExpression(ExpressionType type);
 
-	virtual std::string ParamsToString() const override {
+	std::string ParamsToString() const override {
 		std::string result = "";
 		if (conditions.size() > 0) {
 			result += "[";

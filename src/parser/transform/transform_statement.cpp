@@ -127,11 +127,70 @@ bool TransformOrderBy(List *order, OrderByDescription &result) {
 	return true;
 }
 
+static void TransformCTE(WithClause *de_with_clause, SelectStatement &select) {
+	// TODO: might need to update in case of future lawsuit
+	assert(de_with_clause);
+
+	if (de_with_clause->recursive) {
+		throw NotImplementedException("Recursive CTEs not supported");
+	}
+	assert(de_with_clause->ctes);
+	for (auto cte_ele = de_with_clause->ctes->head; cte_ele != NULL;
+	     cte_ele = cte_ele->next) {
+		auto cte = reinterpret_cast<CommonTableExpr *>(cte_ele->data.ptr_value);
+		// lets throw some errors on unsupported features early
+		if (cte->cterecursive) {
+			throw NotImplementedException("Recursive CTEs not supported");
+		}
+		if (cte->aliascolnames) {
+			throw NotImplementedException(
+			    "Column name aliases not supported in CTEs");
+		}
+		if (cte->ctecolnames) {
+			throw NotImplementedException(
+			    "Column name setting not supported in CTEs");
+		}
+		if (cte->ctecoltypes) {
+			throw NotImplementedException(
+			    "Column type setting not supported in CTEs");
+		}
+		if (cte->ctecoltypmods) {
+			throw NotImplementedException(
+			    "Column type modification not supported in CTEs");
+		}
+		if (cte->ctecolcollations) {
+			throw NotImplementedException("CTE collations not supported");
+		}
+		// we need a query
+		if (!cte->ctequery || cte->ctequery->type != T_SelectStmt) {
+			throw Exception("A CTE needs a SELECT");
+		}
+
+		auto cte_select = TransformSelect(cte->ctequery);
+		if (!cte_select) {
+			throw Exception("A CTE needs a SELECT");
+		}
+		auto cte_name = string(cte->ctename);
+
+		auto it = select.cte_map.find(cte_name);
+		if (it != select.cte_map.end()) {
+			// can't have two CTEs with same name
+			throw Exception("A CTE needs an unique name");
+		}
+		select.cte_map[cte_name] = move(cte_select);
+	}
+}
+
 unique_ptr<SelectStatement> TransformSelect(Node *node) {
 	SelectStmt *stmt = reinterpret_cast<SelectStmt *>(node);
 	switch (stmt->op) {
 	case SETOP_NONE: {
 		auto result = make_unique<SelectStatement>();
+		if (stmt->withClause) {
+			TransformCTE(reinterpret_cast<WithClause *>(stmt->withClause),
+			             *result);
+		}
+
 		result->select_distinct = stmt->distinctClause != NULL ? true : false;
 		if (!TransformExpressionList(stmt->targetList, result->select_list)) {
 			return nullptr;
@@ -150,6 +209,7 @@ unique_ptr<SelectStatement> TransformSelect(Node *node) {
 			        : reinterpret_cast<A_Const *>(stmt->limitOffset)
 			              ->val.val.ival;
 		}
+
 		return result;
 	}
 	case SETOP_UNION: {
@@ -159,6 +219,10 @@ unique_ptr<SelectStatement> TransformSelect(Node *node) {
 		auto top = TransformSelect((Node *)stmt->larg);
 		if (!top) {
 			return nullptr;
+		}
+		if (stmt->withClause) {
+			TransformCTE(reinterpret_cast<WithClause *>(stmt->withClause),
+			             *top);
 		}
 		auto bottom = TransformSelect((Node *)stmt->rarg);
 		if (!bottom) {
@@ -380,7 +444,7 @@ unique_ptr<AlterTableStatement> TransformRename(Node *node) {
 	assert(stmt);
 	assert(stmt->relation);
 
-	unique_ptr<AlterTableInformation> info;	
+	unique_ptr<AlterTableInformation> info;
 
 	// first we check the type of ALTER
 	switch (stmt->renameType) {
@@ -451,33 +515,31 @@ unique_ptr<AlterTableStatement> TransformAlter(Node *node) {
 	// return result;
 }
 
-unique_ptr<CreateIndexStatement> TransformCreateIndex(Node *node){
+unique_ptr<CreateIndexStatement> TransformCreateIndex(Node *node) {
 	IndexStmt *stmt = reinterpret_cast<IndexStmt *>(node);
 	assert(stmt);
 	auto result = make_unique<CreateIndexStatement>();
 	auto &info = *result->info.get();
 
-    info.unique = stmt->unique;
+	info.unique = stmt->unique;
 
 	for (auto cell = stmt->indexParams->head; cell != nullptr;
-		 cell = cell->next) {
+	     cell = cell->next) {
 		char *index_attr =
-				reinterpret_cast<IndexElem *>(cell->data.ptr_value)->name;
-        info.indexed_columns.push_back(std::string(index_attr));
+		    reinterpret_cast<IndexElem *>(cell->data.ptr_value)->name;
+		info.indexed_columns.push_back(std::string(index_attr));
 	}
 
-    info.index_type = StringToIndexType(std::string(stmt->accessMethod));
-    info.table = stmt->relation->relname;
+	info.index_type = StringToIndexType(std::string(stmt->accessMethod));
+	info.table = stmt->relation->relname;
 	if (stmt->relation->schemaname) {
-        info.schema = stmt->relation->schemaname;
+		info.schema = stmt->relation->schemaname;
 	}
-    if (stmt->idxname){
-        info.index_name = stmt->idxname;
-    }
-    else{
-        throw NotImplementedException(
-                "Index wout a name not supported yet!");
-    }
+	if (stmt->idxname) {
+		info.index_name = stmt->idxname;
+	} else {
+		throw NotImplementedException("Index wout a name not supported yet!");
+	}
 	return result;
 }
 

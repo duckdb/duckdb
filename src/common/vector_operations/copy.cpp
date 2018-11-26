@@ -59,7 +59,6 @@ static void copy_loop(Vector &input, void *target, size_t offset,
 template <bool SET_NULL>
 void generic_copy_loop(Vector &source, void *target, size_t offset,
                        size_t element_count) {
-
 	if (source.count == 0)
 		return;
 	if (element_count == 0) {

@@ -67,24 +67,21 @@ class ExpressionExecutor : public SQLNodeVisitor {
 	//! Execute the abstract expression, and "logical AND" the result together
 	//! with result
 	void MergeExpression(Expression *expr, Vector &result);
-	//! Execute the given aggregate expression, and merge the result together
-	//! with v
-	void MergeAggregate(AggregateExpression &expr, Value &v);
 	//! Execute the given aggregate expression for the current chunk
 	Value ExecuteAggregate(AggregateExpression &expr);
 
-	void Visit(AggregateExpression &expr);
-	void Visit(CaseExpression &expr);
-	void Visit(CastExpression &expr);
-	void Visit(ColumnRefExpression &expr);
-	void Visit(ComparisonExpression &expr);
-	void Visit(ConjunctionExpression &expr);
-	void Visit(ConstantExpression &expr);
-	void Visit(DefaultExpression &expr);
-	void Visit(FunctionExpression &expr);
-	void Visit(GroupRefExpression &expr);
-	void Visit(OperatorExpression &expr);
-	void Visit(SubqueryExpression &expr);
+	std::unique_ptr<Expression> Visit(AggregateExpression &expr);
+	std::unique_ptr<Expression> Visit(CaseExpression &expr);
+	std::unique_ptr<Expression> Visit(CastExpression &expr);
+	std::unique_ptr<Expression> Visit(ColumnRefExpression &expr);
+	std::unique_ptr<Expression> Visit(ComparisonExpression &expr);
+	std::unique_ptr<Expression> Visit(ConjunctionExpression &expr);
+	std::unique_ptr<Expression> Visit(ConstantExpression &expr);
+	std::unique_ptr<Expression> Visit(DefaultExpression &expr);
+	std::unique_ptr<Expression> Visit(FunctionExpression &expr);
+	std::unique_ptr<Expression> Visit(GroupRefExpression &expr);
+	std::unique_ptr<Expression> Visit(OperatorExpression &expr);
+	std::unique_ptr<Expression> Visit(SubqueryExpression &expr);
 
   private:
 	ClientContext &context;

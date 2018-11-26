@@ -6,10 +6,9 @@
 using namespace duckdb;
 using namespace std;
 
-AggregateExpression::AggregateExpression(ExpressionType type, bool distinct,
+AggregateExpression::AggregateExpression(ExpressionType type,
                                          unique_ptr<Expression> child)
     : Expression(type), index(0) {
-	this->distinct = distinct;
 
 	// translate COUNT(*) into AGGREGATE_COUNT_STAR
 	if (type == ExpressionType::AGGREGATE_COUNT) {
@@ -23,7 +22,9 @@ AggregateExpression::AggregateExpression(ExpressionType type, bool distinct,
 	switch (type) {
 	case ExpressionType::AGGREGATE_COUNT:
 	case ExpressionType::AGGREGATE_COUNT_STAR:
+	case ExpressionType::AGGREGATE_COUNT_DISTINCT:
 	case ExpressionType::AGGREGATE_SUM:
+	case ExpressionType::AGGREGATE_SUM_DISTINCT:
 	case ExpressionType::AGGREGATE_MIN:
 	case ExpressionType::AGGREGATE_MAX:
 	case ExpressionType::AGGREGATE_FIRST:
@@ -45,6 +46,7 @@ void AggregateExpression::ResolveType() {
 		return_type = TypeId::BIGINT;
 		break;
 	case ExpressionType::AGGREGATE_COUNT:
+	case ExpressionType::AGGREGATE_COUNT_DISTINCT:
 		if (children[0]->IsScalar()) {
 			stats.has_stats = false;
 		} else {
@@ -61,6 +63,7 @@ void AggregateExpression::ResolveType() {
 		return_type = max(children[0]->return_type, stats.MinimalType());
 		break;
 	case ExpressionType::AGGREGATE_SUM:
+	case ExpressionType::AGGREGATE_SUM_DISTINCT:
 		if (children[0]->IsScalar()) {
 			stats.has_stats = false;
 			switch (children[0]->return_type) {
@@ -105,8 +108,7 @@ unique_ptr<Expression> AggregateExpression::Copy() {
 		return nullptr;
 	}
 	auto child = children.size() == 1 ? children[0]->Copy() : nullptr;
-	auto new_aggregate =
-	    make_unique<AggregateExpression>(type, distinct, move(child));
+	auto new_aggregate = make_unique<AggregateExpression>(type, move(child));
 	new_aggregate->index = index;
 	new_aggregate->CopyProperties(*this);
 	return new_aggregate;
@@ -114,21 +116,18 @@ unique_ptr<Expression> AggregateExpression::Copy() {
 
 void AggregateExpression::Serialize(Serializer &serializer) {
 	Expression::Serialize(serializer);
-	serializer.Write<bool>(distinct);
 }
 
 unique_ptr<Expression>
 AggregateExpression::Deserialize(ExpressionDeserializeInformation *info,
                                  Deserializer &source) {
-	auto distinct = source.Read<bool>();
-
 	if (info->children.size() > 1) {
 		throw SerializationException(
 		    "More than one child for aggregate expression!");
 	}
 
 	auto child = info->children.size() == 0 ? nullptr : move(info->children[0]);
-	return make_unique<AggregateExpression>(info->type, distinct, move(child));
+	return make_unique<AggregateExpression>(info->type, move(child));
 }
 
 string AggregateExpression::GetName() {
@@ -138,8 +137,10 @@ string AggregateExpression::GetName() {
 	switch (type) {
 	case ExpressionType::AGGREGATE_COUNT:
 	case ExpressionType::AGGREGATE_COUNT_STAR:
+	case ExpressionType::AGGREGATE_COUNT_DISTINCT:
 		return "COUNT";
 	case ExpressionType::AGGREGATE_SUM:
+	case ExpressionType::AGGREGATE_SUM_DISTINCT:
 		return "SUM";
 	case ExpressionType::AGGREGATE_MIN:
 		return "MIN";

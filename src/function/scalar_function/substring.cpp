@@ -2,7 +2,6 @@
 #include "function/scalar_function/substring.hpp"
 
 #include "common/exception.hpp"
-#include "common/types/date.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 
 using namespace std;

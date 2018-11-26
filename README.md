@@ -1,4 +1,6 @@
-# DuckDB, the SQLite for Analytics    [![Build Status](http://jenkins.u0d.de/buildStatus/icon?job=duckdb)](http://jenkins.u0d.de/job/duckdb)
+# DuckDB, the SQLite for Analytics
+[![Build Status](http://jenkins.u0d.de/buildStatus/icon?job=duckdb)](http://jenkins.u0d.de/job/duckdb) [![Coverage](http://www.duckdb.org/coverage/badge.svg)](http://www.duckdb.org/coverage/) 
+[![CodeFactor](https://www.codefactor.io/repository/github/cwida/duckdb/badge)](https://www.codefactor.io/repository/github/cwida/duckdb)
 
 ## Compiling and Testing
 DuckDB does not require additional libraries to be installed. Hence, only GCC (`g++`) or clang and [CMake](https://cmake.org) need to be installed to build. To run all tests, a `git` installation is also required. 
@@ -13,7 +15,11 @@ DuckDB is implemented in C++ 11, should compile with GCC and clang, uses CMake t
 * Parser: We use the PostgreSQL parser that was [repackaged as a stand-alone library](https://github.com/lfittl/libpg_query). The translation to our own parse tree is inspired by [Peloton](https://pelotondb.io), as is the parse tree structure itself.
 * Shell: We have adapted the [SQLite shell](https://sqlite.org/cli.html) to work with DuckDB.
 * Tests: We use the [SQL Logic Tests from SQLite](https://www.sqlite.org/sqllogictest/doc/trunk/about.wiki) to test DuckDB.
+* Query fuzzing: We use [SQLsmith](https://github.com/anse1/sqlsmith) to generate random queries for additional testing.
 * Date Math: We use the date math component from [MonetDB](https://www.monetdb.org).
 * Execution engine: The vectorized execution engine is inspired by the paper "MonetDB/X100: Hyper-Pipelining Query Execution" by Peter Boncz, Marcin Zukowski and Niels Nes.
 * Concurrency control: Our MVCC implementation is inspired by the paper "Fast Serializable Multi-Version Concurrency Control for Main-Memory Database Systems" by Thomas Neumann, Tobias Mühlbauer and Alfons Kemper.
 * Rule-based Rewriting: The query rewriting rule engine is inspired by the one in [Apache Calcite](https://calcite.apache.org).
+
+## Other pages
+* [Continous Benchmarking (CB™)](http://www.duckdb.org/benchmarking/), runs TPC-H, TPC-DS and some microbenchmarks on every commit
