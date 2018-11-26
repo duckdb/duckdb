@@ -59,29 +59,29 @@ class DuckDBBenchmark : public Benchmark {
 	//! Verify a result
 	virtual std::string VerifyResult(DuckDBResult *result) = 0;
 
-	virtual std::unique_ptr<BenchmarkState> Initialize() override {
+	std::unique_ptr<BenchmarkState> Initialize() override {
 		auto state = make_unique<DuckDBBenchmarkState>();
 		Load(state.get());
 		return move(state);
 	}
 
-	virtual void Run(BenchmarkState *state_) override {
+	void Run(BenchmarkState *state_) override {
 		auto state = (DuckDBBenchmarkState *)state_;
 		state->result = state->conn.Query(GetQuery());
 	}
 
-	virtual std::string Verify(BenchmarkState *state_) override {
+	std::string Verify(BenchmarkState *state_) override {
 		auto state = (DuckDBBenchmarkState *)state_;
 		return VerifyResult(state->result.get());
 	}
 
-	virtual std::string GetLogOutput(BenchmarkState *state_) override {
+	std::string GetLogOutput(BenchmarkState *state_) override {
 		auto state = (DuckDBBenchmarkState *)state_;
 		return state->conn.GetProfilingInformation();
 	}
 
 	//! Interrupt the benchmark because of a timeout
-	virtual void Interrupt(BenchmarkState *state_) override {
+	void Interrupt(BenchmarkState *state_) override {
 		auto state = (DuckDBBenchmarkState *)state_;
 		state->conn.Interrupt();
 	}

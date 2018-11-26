@@ -107,7 +107,7 @@ class Expression : public Printable {
 		return this->Equals(&rhs);
 	}
 
-	virtual std::string ToString() const override;
+	std::string ToString() const override;
 
 	virtual std::string GetName() {
 		return !alias.empty() ? alias : "Unknown";

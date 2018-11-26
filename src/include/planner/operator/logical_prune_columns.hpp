@@ -23,7 +23,7 @@ class LogicalPruneColumns : public LogicalOperator {
 	      column_limit(column_limit) {
 	}
 
-	virtual void Accept(LogicalOperatorVisitor *v) override {
+	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
 

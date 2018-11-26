@@ -13,7 +13,7 @@ class LogicalUnion : public LogicalOperator {
 		AddChild(move(bottom_select));
 	}
 
-	virtual void Accept(LogicalOperatorVisitor *v) override {
+	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
 };

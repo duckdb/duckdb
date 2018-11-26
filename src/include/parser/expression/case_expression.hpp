@@ -22,19 +22,19 @@ class CaseExpression : public Expression {
 	CaseExpression() : Expression(ExpressionType::OPERATOR_CASE_EXPR) {
 	}
 
-	virtual std::unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
+	std::unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
 		return v->Visit(*this);
 	}
-	virtual ExpressionClass GetExpressionClass() override {
+	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::CASE;
 	}
 
-	virtual std::unique_ptr<Expression> Copy() override;
+	std::unique_ptr<Expression> Copy() override;
 
 	//! Deserializes a blob back into an CaseExpression
 	static std::unique_ptr<Expression>
 	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);
 
-	virtual void ResolveType() override;
+	void ResolveType() override;
 };
 } // namespace duckdb

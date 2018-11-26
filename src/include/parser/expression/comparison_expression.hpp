@@ -23,14 +23,14 @@ class ComparisonExpression : public Expression {
 	    : Expression(type, TypeId::BOOLEAN, std::move(left), std::move(right)) {
 	}
 
-	virtual std::unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
+	std::unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
 		return v->Visit(*this);
 	}
-	virtual ExpressionClass GetExpressionClass() override {
+	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::COMPARISON;
 	}
 
-	virtual std::unique_ptr<Expression> Copy() override;
+	std::unique_ptr<Expression> Copy() override;
 
 	//! Deserializes a blob back into an OperatorExpression
 	static std::unique_ptr<Expression>

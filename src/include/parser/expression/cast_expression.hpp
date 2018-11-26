@@ -21,7 +21,7 @@ class CastExpression : public Expression {
 	    : Expression(ExpressionType::OPERATOR_CAST, target, std::move(child)) {
 	}
 
-	virtual void ResolveType() override {
+	void ResolveType() override {
 		Expression::ResolveType();
 		stats.type = return_type;
 		Statistics::Cast(children[0]->stats, stats);
@@ -30,21 +30,21 @@ class CastExpression : public Expression {
 		}
 	}
 
-	virtual std::unique_ptr<Expression> Copy() override;
+	std::unique_ptr<Expression> Copy() override;
 
 	//! Deserializes a blob back into an CastExpression
 	static std::unique_ptr<Expression>
 	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);
 
-	virtual std::string ToString() const override {
+	std::string ToString() const override {
 		return "CAST[" + TypeIdToString(return_type) + "](" +
 		       children[0]->ToString() + ")";
 	}
 
-	virtual std::unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
+	std::unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
 		return v->Visit(*this);
 	}
-	virtual ExpressionClass GetExpressionClass() override {
+	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::CAST;
 	}
 };

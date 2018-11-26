@@ -22,10 +22,10 @@ class BaseTableRef : public TableRef {
 	      schema_name(DEFAULT_SCHEMA) {
 	}
 
-	virtual std::unique_ptr<TableRef> Accept(SQLNodeVisitor *v) override {
+	std::unique_ptr<TableRef> Accept(SQLNodeVisitor *v) override {
 		return v->Visit(*this);
 	}
-	virtual bool Equals(const TableRef *other_) override {
+	bool Equals(const TableRef *other_) override {
 		if (!TableRef::Equals(other_)) {
 			return false;
 		}
@@ -34,14 +34,14 @@ class BaseTableRef : public TableRef {
 		       other->table_name == table_name;
 	}
 
-	virtual std::unique_ptr<TableRef> Copy() override;
+	std::unique_ptr<TableRef> Copy() override;
 
 	//! Serializes a blob into a BaseTableRef
-	virtual void Serialize(Serializer &serializer) override;
+	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into a BaseTableRef
 	static std::unique_ptr<TableRef> Deserialize(Deserializer &source);
 
-	virtual std::string ToString() const override {
+	std::string ToString() const override {
 		return "GET(" + schema_name + "." + table_name + ")";
 	}
 

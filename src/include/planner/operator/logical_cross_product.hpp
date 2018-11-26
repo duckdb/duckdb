@@ -21,7 +21,7 @@ class LogicalCrossProduct : public LogicalOperator {
 	    : LogicalOperator(LogicalOperatorType::CROSS_PRODUCT) {
 	}
 
-	virtual void Accept(LogicalOperatorVisitor *v) override {
+	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
 };

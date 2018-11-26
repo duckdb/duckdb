@@ -70,7 +70,7 @@ class QueryProfiler : public Printable {
 	void StartOperator(PhysicalOperator *phys_op);
 	void EndOperator(DataChunk &chunk);
 
-	virtual std::string ToString() const override;
+	std::string ToString() const override;
 
   private:
 	bool enabled;

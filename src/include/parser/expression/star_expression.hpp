@@ -21,20 +21,20 @@ class StarExpression : public Expression {
 	StarExpression() : Expression(ExpressionType::STAR) {
 	}
 
-	virtual std::unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
+	std::unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
 		return v->Visit(*this);
 	}
-	virtual ExpressionClass GetExpressionClass() override {
+	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::STAR;
 	}
 
-	virtual std::unique_ptr<Expression> Copy() override;
+	std::unique_ptr<Expression> Copy() override;
 
 	//! Deserializes a blob back into a StarExpression
 	static std::unique_ptr<Expression>
 	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);
 
-	virtual std::string ToString() const override {
+	std::string ToString() const override {
 		return "*";
 	}
 };

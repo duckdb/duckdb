@@ -22,7 +22,7 @@ class LogicalUpdate : public LogicalOperator {
 	      table(table), columns(columns) {
 	}
 
-	virtual void Accept(LogicalOperatorVisitor *v) override {
+	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
 

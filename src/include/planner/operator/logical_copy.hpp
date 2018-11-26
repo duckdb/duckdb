@@ -29,7 +29,7 @@ class LogicalCopy : public LogicalOperator {
 	      is_from(is_from), delimiter(delimiter), quote(quote), escape(escape) {
 	}
 
-	virtual void Accept(LogicalOperatorVisitor *v) override {
+	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
 

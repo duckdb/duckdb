@@ -27,10 +27,10 @@ class PhysicalHashJoin : public PhysicalJoin {
 	                 std::unique_ptr<PhysicalOperator> right,
 	                 std::vector<JoinCondition> cond, JoinType join_type);
 
-	virtual void _GetChunk(ClientContext &context, DataChunk &chunk,
-	                       PhysicalOperatorState *state) override;
+	void _GetChunk(ClientContext &context, DataChunk &chunk,
+	               PhysicalOperatorState *state) override;
 
-	virtual std::unique_ptr<PhysicalOperatorState>
+	std::unique_ptr<PhysicalOperatorState>
 	GetOperatorState(ExpressionExecutor *parent_executor) override;
 
 	std::unique_ptr<JoinHashTable> hash_table;

@@ -24,7 +24,7 @@ class LogicalInsert : public LogicalOperator {
 	std::vector<std::vector<std::unique_ptr<Expression>>> insert_values;
 	std::vector<int> column_index_map;
 
-	virtual void Accept(LogicalOperatorVisitor *v) override {
+	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
 

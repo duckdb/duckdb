@@ -21,10 +21,10 @@ class JoinRef : public TableRef {
 	JoinRef() : TableRef(TableReferenceType::JOIN) {
 	}
 
-	virtual std::unique_ptr<TableRef> Accept(SQLNodeVisitor *v) override {
+	std::unique_ptr<TableRef> Accept(SQLNodeVisitor *v) override {
 		return v->Visit(*this);
 	}
-	virtual bool Equals(const TableRef *other_) override {
+	bool Equals(const TableRef *other_) override {
 		if (!TableRef::Equals(other_)) {
 			return false;
 		}
@@ -34,10 +34,10 @@ class JoinRef : public TableRef {
 		       condition->Equals(other->condition.get()) && type == other->type;
 	}
 
-	virtual std::unique_ptr<TableRef> Copy() override;
+	std::unique_ptr<TableRef> Copy() override;
 
 	//! Serializes a blob into a JoinRef
-	virtual void Serialize(Serializer &serializer) override;
+	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into a JoinRef
 	static std::unique_ptr<TableRef> Deserialize(Deserializer &source);
 

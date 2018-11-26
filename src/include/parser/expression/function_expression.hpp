@@ -26,19 +26,19 @@ class FunctionExpression : public Expression {
 	    : FunctionExpression(DEFAULT_SCHEMA, function_name, children) {
 	}
 
-	virtual void ResolveType() override;
+	void ResolveType() override;
 
-	virtual std::unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
+	std::unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
 		return v->Visit(*this);
 	}
-	virtual ExpressionClass GetExpressionClass() override {
+	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::FUNCTION;
 	}
 
-	virtual std::unique_ptr<Expression> Copy() override;
+	std::unique_ptr<Expression> Copy() override;
 
 	//! Serializes an Expression to a stand-alone binary blob
-	virtual void Serialize(Serializer &serializer) override;
+	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into an ConstantExpression
 	static std::unique_ptr<Expression>
 	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);

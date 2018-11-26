@@ -20,7 +20,7 @@ class LogicalFilter : public LogicalOperator {
 	LogicalFilter(std::unique_ptr<Expression> expression);
 	LogicalFilter();
 
-	virtual void Accept(LogicalOperatorVisitor *v) override {
+	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
 

@@ -26,16 +26,16 @@ class OperatorExpression : public Expression {
 	    : Expression(type, type_id, std::move(left), std::move(right)) {
 	}
 
-	virtual void ResolveType() override;
+	void ResolveType() override;
 
-	virtual std::unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
+	std::unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
 		return v->Visit(*this);
 	}
-	virtual ExpressionClass GetExpressionClass() override {
+	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::OPERATOR;
 	}
 
-	virtual std::unique_ptr<Expression> Copy() override;
+	std::unique_ptr<Expression> Copy() override;
 
 	//! Deserializes a blob back into an OperatorExpression
 	static std::unique_ptr<Expression>

@@ -23,18 +23,18 @@ class LogicalAggregate : public LogicalOperator {
 	                      std::move(select_list)) {
 	}
 
-	virtual void Accept(LogicalOperatorVisitor *v) override {
+	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
 
 	//! The set of groups (optional).
 	std::vector<std::unique_ptr<Expression>> groups;
 
-	virtual size_t ExpressionCount() override {
+	size_t ExpressionCount() override {
 		return expressions.size() + groups.size();
 	}
 
-	virtual Expression *GetExpression(size_t index) override {
+	Expression *GetExpression(size_t index) override {
 		if (index >= ExpressionCount()) {
 			throw OutOfRangeException(
 			    "GetExpression(): Expression index out of range!");
@@ -58,7 +58,7 @@ class LogicalAggregate : public LogicalOperator {
 		}
 	}
 
-	virtual std::string ParamsToString() const override {
+	std::string ParamsToString() const override {
 		std::string result = LogicalOperator::ParamsToString();
 		if (groups.size() > 0) {
 			result += "[";
