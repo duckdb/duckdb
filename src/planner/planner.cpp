@@ -50,7 +50,6 @@ bool Planner::CreatePlan(ClientContext &context,
 		case StatementType::COPY:
 		case StatementType::DELETE:
 		case StatementType::UPDATE:
-		case StatementType::ALTER:
 		case StatementType::CREATE_TABLE:
 			CreatePlan(context, *statement);
 			this->success = true;
@@ -74,6 +73,14 @@ bool Planner::CreatePlan(ClientContext &context,
 			// TODO: create actual plan
 			context.db.catalog.DropTable(context.ActiveTransaction(),
 			                             stmt.info.get());
+			this->success = true;
+			break;
+		}
+		case StatementType::ALTER: {
+			// TODO: create actual plan
+			auto &stmt = *((AlterTableStatement *)statement.get());
+			context.db.catalog.AlterTable(context.ActiveTransaction(),
+			                              stmt.info.get());
 			this->success = true;
 			break;
 		}

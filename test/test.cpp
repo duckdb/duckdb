@@ -13,7 +13,7 @@ int main() {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 
-	string input_file = "test/test.sql";
+	string input_file = "test.sql";
 	ifstream infile(input_file);
 	if (!infile.good()) {
 		fprintf(stderr, "Cannot find file test/test.sql! Copy a template from "

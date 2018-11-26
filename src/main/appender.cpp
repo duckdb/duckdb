@@ -82,7 +82,7 @@ void Appender::end_append_row() {
 }
 
 void Appender::flush() {
-	table_entry->storage->Append(context, chunk);
+	table_entry->storage->Append(*table_entry, context, chunk);
 	chunk.Reset();
 	column = 0;
 }

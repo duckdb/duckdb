@@ -72,3 +72,18 @@ TEST_CASE("Test UNION/EXCEPT/INTERSECT", "[union]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 1, 1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"b", "a", "a"}));
 }
+
+TEST_CASE("Test UNION in subquery with aliases", "[union]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO t VALUES (42)"));
+
+	result = con.Query("select i, j from (select i, 1 as j from t group by i "
+	                   "union all select i, 2 as j from t group by i) sq1");
+
+	REQUIRE(CHECK_COLUMN(result, 0, {42, 42}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+}

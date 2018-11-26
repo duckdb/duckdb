@@ -29,7 +29,7 @@ void append_row_start(append_info *info) {
 	} else if (chunk.size() >= STANDARD_VECTOR_SIZE) {
 		// flush the chunk
 		chunk.Verify();
-		table->storage->Append(*append_info->context, chunk);
+		table->storage->Append(*table, *append_info->context, chunk);
 		// have to reset the chunk
 		chunk.Reset();
 		append_info->row = 0;

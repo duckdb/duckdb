@@ -27,6 +27,8 @@ namespace duckdb {
 std::unique_ptr<SelectStatement> TransformSelect(postgres::Node *node);
 //! Transform a Postgres T_AlterStmt node into a AlterTableStatement
 std::unique_ptr<AlterTableStatement> TransformAlter(postgres::Node *node);
+//! Transform a Postgres T_RenameStmt node into a RenameStatement
+std::unique_ptr<AlterTableStatement> TransformRename(postgres::Node *node);
 //! Transform a Postgres T_CreateStmt node into a CreateTableStatement
 std::unique_ptr<CreateTableStatement>
 TransformCreateTable(postgres::Node *node);

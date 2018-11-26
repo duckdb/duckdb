@@ -27,6 +27,7 @@ class Constraint : public Printable {
 
 	ConstraintType type;
 
+	std::unique_ptr<Constraint> Copy();
 	//! Serializes a Constraint to a stand-alone binary blob
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes a blob back into a Constraint, returns NULL if
