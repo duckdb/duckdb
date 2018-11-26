@@ -81,7 +81,6 @@ static int nextLine(Script *p) {
 
 	/* Loop until a non-comment line is found, or until end-of-file */
 	while (1) {
-
 		/* When we reach end-of-file, return 0 */
 		if (p->iNext >= p->iEnd) {
 			p->iCur = p->iEnd;
@@ -152,7 +151,6 @@ static int nextIsBlank(Script *p) {
 ** Return 1 on success.  Return 0 at end-of-file.
 */
 static int findStartOfNextRecord(Script *p) {
-
 	/* Skip over any existing content to find a blank line */
 	if (p->iCur > 0) {
 		while (p->zLine[0] && p->iCur < p->iEnd) {

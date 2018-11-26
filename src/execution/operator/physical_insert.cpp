@@ -20,9 +20,7 @@ vector<TypeId> PhysicalInsert::GetTypes() {
 
 void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk,
                                PhysicalOperatorState *state) {
-
 	chunk.Reset();
-
 	if (state->finished) {
 		return;
 	}

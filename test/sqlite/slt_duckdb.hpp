@@ -60,7 +60,6 @@ duckdbQuery(void *pConn,       /* Connection created by xConnect */
             char ***pazResult, /* RETURN:  Array of result values */
             int *pnResult      /* RETURN:  Number of result values */
 ) {
-
 	duckdb_result result;
 
 	size_t r, c;

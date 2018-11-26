@@ -18,7 +18,6 @@ vector<TypeId> PhysicalCreate::GetTypes() {
 
 void PhysicalCreate::_GetChunk(ClientContext &context, DataChunk &chunk,
                                PhysicalOperatorState *state) {
-
 	chunk.Reset();
 
 	if (state->finished) {

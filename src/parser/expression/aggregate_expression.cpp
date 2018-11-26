@@ -121,7 +121,6 @@ void AggregateExpression::Serialize(Serializer &serializer) {
 unique_ptr<Expression>
 AggregateExpression::Deserialize(ExpressionDeserializeInformation *info,
                                  Deserializer &source) {
-
 	if (info->children.size() > 1) {
 		throw SerializationException(
 		    "More than one child for aggregate expression!");

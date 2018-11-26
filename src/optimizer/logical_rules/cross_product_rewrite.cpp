@@ -101,7 +101,6 @@ CrossProductRewrite::Apply(Rewriter &rewriter, LogicalOperator &root,
 		if (expr->children.size() == 2 &&
 		    expr->type >= ExpressionType::COMPARE_EQUAL &&
 		    expr->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
-
 			auto ex_again = RewriteCP(move(expr), &root);
 			if (ex_again) {
 				new_expressions.push_back(move(ex_again));

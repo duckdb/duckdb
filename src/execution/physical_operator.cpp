@@ -34,7 +34,6 @@ PhysicalOperatorState::PhysicalOperatorState(
 
 void PhysicalOperator::GetChunk(ClientContext &context, DataChunk &chunk,
                                 PhysicalOperatorState *state) {
-
 	if (context.interrupted) {
 		throw InterruptException();
 	}

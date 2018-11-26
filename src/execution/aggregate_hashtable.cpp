@@ -252,7 +252,6 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups,
                                              Vector &addresses,
                                              Vector &new_group) {
-
 	// resize at 50% capacity, also need to fit the entire vector
 	if (entries > capacity / 2 || capacity - entries <= STANDARD_VECTOR_SIZE) {
 		Resize(capacity * 2);

@@ -60,7 +60,6 @@ Rewriter::ApplyRules(unique_ptr<LogicalOperator> root) {
 
 bool Rewriter::MatchOperands(AbstractRuleNode *node, AbstractOperator rel,
                              vector<AbstractOperator> &bindings) {
-
 	if (!node->Matches(rel)) {
 		return false;
 	}

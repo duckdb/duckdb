@@ -9,7 +9,6 @@
 using namespace duckdb;
 
 int main(int argc, char *argv[]) {
-
 	// delete the testing directory if it exists
 	if (DirectoryExists(TESTING_DIRECTORY_NAME)) {
 		RemoveDirectory(TESTING_DIRECTORY_NAME);

@@ -25,7 +25,6 @@ ConstantCastRule::ConstantCastRule() {
 unique_ptr<Expression>
 ConstantCastRule::Apply(Rewriter &rewriter, Expression &root,
                         vector<AbstractOperator> &bindings, bool &fixed_point) {
-
 	auto &cast_expr = (CastExpression &)root;
 	auto const_expr =
 	    reinterpret_cast<ConstantExpression *>(root.children[0].get());
