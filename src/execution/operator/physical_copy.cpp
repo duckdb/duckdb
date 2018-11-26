@@ -20,8 +20,8 @@ vector<TypeId> PhysicalCopy::GetTypes() {
 vector<string> split(const string &str, char delimiter, char quote) {
 	vector<string> res;
 	size_t i = 0;
-	if(str[i] == delimiter)
-	    res.push_back("");
+	if (str[i] == delimiter)
+		res.push_back("");
 	while (i != str.size()) {
 		if (str[i] == quote) {
 			i++;

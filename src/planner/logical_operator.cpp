@@ -7,12 +7,13 @@ using namespace std;
 namespace duckdb {
 bool IsProjection(LogicalOperatorType type) {
 	return type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY ||
-	       type == LogicalOperatorType::PROJECTION ||
-	       type == LogicalOperatorType::UNION;
+	       type == LogicalOperatorType::PROJECTION;
 }
 
 LogicalOperator *GetProjection(LogicalOperator *node) {
-	while (node->children.size() == 1 && !IsProjection(node->type)) {
+	while ((node->children.size() == 1 ||
+	        node->type == LogicalOperatorType::UNION) &&
+	       !IsProjection(node->type)) {
 		node = node->children[0].get();
 	}
 	return node;
