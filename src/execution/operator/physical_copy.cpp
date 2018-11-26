@@ -20,8 +20,10 @@ vector<TypeId> PhysicalCopy::GetTypes() {
 vector<string> split(const string &str, char delimiter, char quote) {
 	vector<string> res;
 	size_t i = 0;
+	if(str[i] == delimiter)
+	    res.push_back("");
 	while (i != str.size()) {
-		if (i != str.size() && str[i] == quote) {
+		if (str[i] == quote) {
 			i++;
 			size_t j = i;
 			while (j != str.size() && str[j] != quote)
@@ -30,7 +32,7 @@ vector<string> split(const string &str, char delimiter, char quote) {
 				res.push_back(str.substr(i, j - i));
 				i = j;
 			}
-		} else if (i != str.size() && str[i] == delimiter)
+		} else if (str[i] == delimiter)
 			i++;
 		size_t j = i;
 		while (j != str.size() && str[j] != delimiter)
@@ -91,7 +93,7 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk,
 					                                               csv_line[i]);
 				}
 			} else {
-				for (size_t i = 0; i < csv_line.size(); ++i) {
+				for (size_t i = 0; i < insert_chunk.column_count; ++i) {
 					insert_chunk.data[i].count++;
 					if (csv_line[i] == "") {
 						insert_chunk.data[i].nullmask[count_line] = true;
