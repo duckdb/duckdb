@@ -22,8 +22,7 @@ namespace duckdb {
 class AlterTableStatement : public SQLStatement {
   public:
 	AlterTableStatement(std::unique_ptr<AlterTableInformation> info)
-	    : SQLStatement(StatementType::ALTER),
-	      info(std::move(info)) { };
+	    : SQLStatement(StatementType::ALTER), info(std::move(info)){};
 	virtual ~AlterTableStatement() {
 	}
 

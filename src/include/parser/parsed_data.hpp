@@ -55,21 +55,16 @@ struct DropTableInformation {
 	}
 };
 
-enum class AlterType : uint8_t {
-	INVALID = 0,
-	ALTER_TABLE = 1
-};
+enum class AlterType : uint8_t { INVALID = 0, ALTER_TABLE = 1 };
 
 struct AlterInformation {
 	AlterType type;
 
-	AlterInformation(AlterType type) : type(type) { }
+	AlterInformation(AlterType type) : type(type) {
+	}
 };
 
-enum class AlterTableType : uint8_t {
-	INVALID = 0,
-	RENAME_COLUMN = 1
-};
+enum class AlterTableType : uint8_t { INVALID = 0, RENAME_COLUMN = 1 };
 
 struct AlterTableInformation : public AlterInformation {
 	AlterTableType alter_table_type;
@@ -78,8 +73,11 @@ struct AlterTableInformation : public AlterInformation {
 	//! Table name to alter to
 	std::string table;
 
-	AlterTableInformation(AlterTableType type, std::string schema, std::string table) :
-		AlterInformation(AlterType::ALTER_TABLE), alter_table_type(type), schema(schema), table(table) { }
+	AlterTableInformation(AlterTableType type, std::string schema,
+	                      std::string table)
+	    : AlterInformation(AlterType::ALTER_TABLE), alter_table_type(type),
+	      schema(schema), table(table) {
+	}
 };
 
 struct RenameColumnInformation : public AlterTableInformation {
@@ -88,9 +86,10 @@ struct RenameColumnInformation : public AlterTableInformation {
 	//! Column new name
 	std::string new_name;
 
-	RenameColumnInformation(std::string schema, std::string table, std::string name,
-	                  std::string new_name)
-	    : AlterTableInformation(AlterTableType::RENAME_COLUMN, schema, table), name(name), new_name(new_name) {
+	RenameColumnInformation(std::string schema, std::string table,
+	                        std::string name, std::string new_name)
+	    : AlterTableInformation(AlterTableType::RENAME_COLUMN, schema, table),
+	      name(name), new_name(new_name) {
 	}
 };
 

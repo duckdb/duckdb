@@ -578,7 +578,7 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 		if (append_info[i].table) {
 			if (append_info[i].chunk.size() > 0) {
 				append_info[i].table->storage->Append(*append_info[i].table,
-													  *append_info[i].context,
+				                                      *append_info[i].context,
 				                                      append_info[i].chunk);
 			}
 		}

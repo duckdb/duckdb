@@ -21,9 +21,9 @@ TEST_CASE("Test storage of alter table", "[storage]") {
 		DuckDB db(storage_database);
 		DuckDBConnection con(db);
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)"));
 		REQUIRE_NO_FAIL(
-		    con.Query("ALTER TABLE test RENAME COLUMN a TO k"));
+		    con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)"));
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test RENAME COLUMN a TO k"));
 	}
 	// reload the database from disk
 	{

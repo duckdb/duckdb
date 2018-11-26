@@ -34,7 +34,8 @@ class CatalogSet {
 	bool CreateEntry(Transaction &transaction, const std::string &name,
 	                 std::unique_ptr<CatalogEntry> value);
 
-	bool AlterEntry(Transaction &transaction, const std::string &name, AlterInformation* alter_info);
+	bool AlterEntry(Transaction &transaction, const std::string &name,
+	                AlterInformation *alter_info);
 
 	bool DropEntry(Transaction &transaction, const std::string &name,
 	               bool cascade);

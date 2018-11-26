@@ -10,9 +10,9 @@
 
 #pragma once
 
+#include "common/exception.hpp"
 #include "common/internal_types.hpp"
 #include "common/printable.hpp"
-#include "common/exception.hpp"
 
 namespace duckdb {
 

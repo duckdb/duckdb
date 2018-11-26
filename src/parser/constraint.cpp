@@ -7,8 +7,8 @@
 using namespace duckdb;
 using namespace std;
 
-
-// FIXME: this is quite dirty, just copy by first serializing and then deserializing
+// FIXME: this is quite dirty, just copy by first serializing and then
+// deserializing
 unique_ptr<Constraint> Constraint::Copy() {
 	Serializer serializer;
 	Serialize(serializer);

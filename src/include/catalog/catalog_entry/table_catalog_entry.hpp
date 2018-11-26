@@ -34,7 +34,8 @@ class TableCatalogEntry : public CatalogEntry {
 	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
 	                  CreateTableInformation *info);
 	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
-	                  CreateTableInformation *info, std::shared_ptr<DataTable> storage);
+	                  CreateTableInformation *info,
+	                  std::shared_ptr<DataTable> storage);
 
 	//! The schema the table belongs to
 	SchemaCatalogEntry *schema;
@@ -47,7 +48,6 @@ class TableCatalogEntry : public CatalogEntry {
 	//! A map of column name to column index
 	std::unordered_map<std::string, column_t> name_map;
 
-
 	std::unique_ptr<CatalogEntry> AlterEntry(AlterInformation *info);
 	//! Returns whether or not a column with the given name exists
 	bool ColumnExists(const std::string &name);
@@ -59,6 +59,7 @@ class TableCatalogEntry : public CatalogEntry {
 	ColumnDefinition &GetColumn(const std::string &name);
 	//! Returns a list of types of the table
 	std::vector<TypeId> GetTypes();
+
   private:
 	void Initialize(CreateTableInformation *info);
 };

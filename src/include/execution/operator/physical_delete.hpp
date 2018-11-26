@@ -17,8 +17,9 @@ namespace duckdb {
 //! Physically delete data from a table
 class PhysicalDelete : public PhysicalOperator {
   public:
-	PhysicalDelete(TableCatalogEntry& tableref, DataTable &table)
-	    : PhysicalOperator(PhysicalOperatorType::DELETE), tableref(tableref), table(table) {
+	PhysicalDelete(TableCatalogEntry &tableref, DataTable &table)
+	    : PhysicalOperator(PhysicalOperatorType::DELETE), tableref(tableref),
+	      table(table) {
 	}
 
 	std::vector<std::string> GetNames() override;
@@ -30,7 +31,7 @@ class PhysicalDelete : public PhysicalOperator {
 	std::unique_ptr<PhysicalOperatorState>
 	GetOperatorState(ExpressionExecutor *parent_executor) override;
 
-	TableCatalogEntry& tableref;
+	TableCatalogEntry &tableref;
 	DataTable &table;
 };
 

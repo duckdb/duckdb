@@ -882,19 +882,18 @@ typedef struct AlterDomainStmt {
  *		Alter Object Rename Statement
  * ----------------------
  */
-typedef struct RenameStmt
-{
-	NodeTag		type;
-	ObjectType	renameType;		/* OBJECT_TABLE, OBJECT_COLUMN, etc */
-	ObjectType	relationType;	/* if column name, associated relation type */
-	RangeVar   *relation;		/* in case it's a table */
-	List	   *object;			/* in case it's some other object */
-	List	   *objarg;			/* argument types, if applicable */
-	char	   *subname;		/* name of contained object (column, rule,
-								 * trigger, etc) */
-	char	   *newname;		/* the new name */
-	DropBehavior behavior;		/* RESTRICT or CASCADE behavior */
-	bool		missing_ok;		/* skip error if missing? */
+typedef struct RenameStmt {
+	NodeTag type;
+	ObjectType renameType;   /* OBJECT_TABLE, OBJECT_COLUMN, etc */
+	ObjectType relationType; /* if column name, associated relation type */
+	RangeVar *relation;      /* in case it's a table */
+	List *object;            /* in case it's some other object */
+	List *objarg;            /* argument types, if applicable */
+	char *subname;           /* name of contained object (column, rule,
+	                          * trigger, etc) */
+	char *newname;           /* the new name */
+	DropBehavior behavior;   /* RESTRICT or CASCADE behavior */
+	bool missing_ok;         /* skip error if missing? */
 } RenameStmt;
 
 typedef enum RoleSpecType {

@@ -19,8 +19,10 @@
 using namespace duckdb;
 using namespace std;
 
-DataTable::DataTable(StorageManager &storage, std::string schema, std::string table, std::vector<TypeId> types_)
-    : schema(schema), table(table), types(types_), serializer(types), storage(storage) {
+DataTable::DataTable(StorageManager &storage, std::string schema,
+                     std::string table, std::vector<TypeId> types_)
+    : schema(schema), table(table), types(types_), serializer(types),
+      storage(storage) {
 	size_t accumulative_size = 0;
 	for (size_t i = 0; i < types.size(); i++) {
 		accumulative_tuple_size.push_back(accumulative_size);
@@ -70,7 +72,8 @@ StorageChunk *DataTable::GetChunk(size_t row_number) {
 	return nullptr;
 }
 
-void DataTable::VerifyConstraints(TableCatalogEntry& table, ClientContext &context, DataChunk &chunk) {
+void DataTable::VerifyConstraints(TableCatalogEntry &table,
+                                  ClientContext &context, DataChunk &chunk) {
 	for (auto &constraint : table.constraints) {
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
@@ -126,7 +129,8 @@ void DataTable::VerifyConstraints(TableCatalogEntry& table, ClientContext &conte
 	}
 }
 
-void DataTable::Append(TableCatalogEntry& table, ClientContext &context, DataChunk &chunk) {
+void DataTable::Append(TableCatalogEntry &table, ClientContext &context,
+                       DataChunk &chunk) {
 	if (chunk.size() == 0) {
 		return;
 	}
@@ -225,7 +229,8 @@ void DataTable::Append(TableCatalogEntry& table, ClientContext &context, DataChu
 	last_chunk->ReleaseExclusiveLock();
 }
 
-void DataTable::Delete(TableCatalogEntry& table, ClientContext &context, Vector &row_identifiers) {
+void DataTable::Delete(TableCatalogEntry &table, ClientContext &context,
+                       Vector &row_identifiers) {
 	if (row_identifiers.type != TypeId::POINTER) {
 		throw InvalidTypeException(row_identifiers.type,
 		                           "Row identifiers must be POINTER type!");
@@ -271,8 +276,9 @@ void DataTable::Delete(TableCatalogEntry& table, ClientContext &context, Vector 
 	chunk->ReleaseExclusiveLock();
 }
 
-void DataTable::Update(TableCatalogEntry& table, ClientContext &context, Vector &row_identifiers,
-                       vector<column_t> &column_ids, DataChunk &updates) {
+void DataTable::Update(TableCatalogEntry &table, ClientContext &context,
+                       Vector &row_identifiers, vector<column_t> &column_ids,
+                       DataChunk &updates) {
 	if (row_identifiers.type != TypeId::POINTER) {
 		throw InvalidTypeException(row_identifiers.type,
 		                           "Row identifiers must be POINTER type!");
@@ -378,7 +384,7 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result,
 		    version_entries[STANDARD_VECTOR_SIZE];
 		size_t regular_count = 0, version_count = 0;
 		size_t end = min((size_t)STANDARD_VECTOR_SIZE,
-		                      current_chunk->count - structure.offset);
+		                 current_chunk->count - structure.offset);
 		for (size_t i = 0; i < end; i++) {
 			version_entries[version_count] = regular_entries[regular_count] = i;
 			bool has_version =

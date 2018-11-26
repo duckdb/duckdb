@@ -159,7 +159,6 @@ string TypeIdToString(TypeId type) {
 	return "INVALID";
 }
 
-
 size_t GetTypeIdSize(TypeId type) {
 	switch (type) {
 	case TypeId::PARAMETER_OFFSET:

@@ -54,7 +54,8 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name,
 	return true;
 }
 
-bool CatalogSet::AlterEntry(Transaction &transaction, const string &name, AlterInformation* alter_info) {
+bool CatalogSet::AlterEntry(Transaction &transaction, const string &name,
+                            AlterInformation *alter_info) {
 	lock_guard<mutex> lock(catalog_lock);
 	// first check if the entry exists in the unordered set
 	auto entry = data.find(name);

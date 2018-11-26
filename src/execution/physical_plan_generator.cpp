@@ -96,8 +96,8 @@ void PhysicalPlanGenerator::Visit(LogicalUpdate &op) {
 		throw Exception("Update node cannot be the first node of a plan!");
 	}
 
-	auto update = make_unique<PhysicalUpdate>(*op.table, *op.table->storage, op.columns,
-	                                          move(op.expressions));
+	auto update = make_unique<PhysicalUpdate>(*op.table, *op.table->storage,
+	                                          op.columns, move(op.expressions));
 	update->children.push_back(move(plan));
 	this->plan = move(update);
 }
@@ -132,8 +132,8 @@ void PhysicalPlanGenerator::Visit(LogicalGet &op) {
 		return;
 	}
 
-	auto scan =
-	    make_unique<PhysicalTableScan>(*op.table, *op.table->storage, op.column_ids);
+	auto scan = make_unique<PhysicalTableScan>(*op.table, *op.table->storage,
+	                                           op.column_ids);
 	if (plan) {
 		throw Exception("Scan has to be the first node of a plan!");
 	}
