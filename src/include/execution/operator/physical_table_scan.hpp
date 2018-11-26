@@ -35,7 +35,7 @@ class PhysicalTableScan : public PhysicalOperator {
 
 	std::string ExtraRenderInformation() override;
 
-	virtual std::unique_ptr<PhysicalOperatorState>
+	std::unique_ptr<PhysicalOperatorState>
 	GetOperatorState(ExpressionExecutor *parent_executor) override;
 };
 

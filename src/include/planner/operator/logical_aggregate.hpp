@@ -45,8 +45,8 @@ class LogicalAggregate : public LogicalOperator {
 		return expressions[index].get();
 	}
 
-	virtual void SetExpression(size_t index,
-	                           std::unique_ptr<Expression> expr) override {
+	void SetExpression(size_t index,
+	                   std::unique_ptr<Expression> expr) override {
 		if (index >= ExpressionCount()) {
 			throw OutOfRangeException(
 			    "SetExpression(): Expression index out of range!");
