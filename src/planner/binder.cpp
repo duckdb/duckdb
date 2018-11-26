@@ -346,6 +346,8 @@ unique_ptr<Expression> Binder::Visit(SubqueryExpression &expr) {
 
 	Binder binder(context);
 	binder.bind_context->parent = bind_context.get();
+	// the subquery may refer to CTEs from the parent query
+	binder.CTE_bindings = CTE_bindings;
 
 	expr.subquery->Accept(&binder);
 	if (expr.subquery->select_list.size() < 1) {

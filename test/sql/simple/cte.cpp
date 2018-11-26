@@ -41,4 +41,8 @@ TEST_CASE("Test Common Table Expressions (CTE)", "[cte]") {
 	                   "from cte1 cte11, cte1 cte12;");
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
 	REQUIRE(CHECK_COLUMN(result, 1, {42}));
+
+	// refer to CTE in subquery
+	result = con.Query("with cte1 as (Select i as j from a) select * from cte1 where j = (select max(j) from cte1 as cte2);");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
 }

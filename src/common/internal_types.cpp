@@ -159,41 +159,6 @@ string TypeIdToString(TypeId type) {
 	return "INVALID";
 }
 
-TypeId StringToTypeId(const string &str) {
-	string upper_str = StringUtil::Upper(str);
-	if (upper_str == "INVALID") {
-		return TypeId::INVALID;
-	} else if (upper_str == "PARAMETER_OFFSET") {
-		return TypeId::PARAMETER_OFFSET;
-	} else if (upper_str == "BOOLEAN") {
-		return TypeId::BOOLEAN;
-	} else if (upper_str == "TINYINT") {
-		return TypeId::TINYINT;
-	} else if (upper_str == "SMALLINT") {
-		return TypeId::SMALLINT;
-	} else if (upper_str == "INTEGER") {
-		return TypeId::INTEGER;
-	} else if (upper_str == "BIGINT") {
-		return TypeId::BIGINT;
-	} else if (upper_str == "DECIMAL") {
-		return TypeId::DECIMAL;
-	} else if (upper_str == "POINTER") {
-		return TypeId::POINTER;
-	} else if (upper_str == "TIMESTAMP") {
-		return TypeId::TIMESTAMP;
-	} else if (upper_str == "DATE") {
-		return TypeId::DATE;
-	} else if (upper_str == "VARCHAR") {
-		return TypeId::VARCHAR;
-	} else if (upper_str == "VARBINARY") {
-		return TypeId::VARBINARY;
-	} else if (upper_str == "ARRAY") {
-		return TypeId::ARRAY;
-	} else if (upper_str == "UDT") {
-		return TypeId::UDT;
-	}
-	return TypeId::INVALID;
-}
 
 size_t GetTypeIdSize(TypeId type) {
 	switch (type) {

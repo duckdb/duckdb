@@ -481,7 +481,6 @@ enum class TransactionType : uint8_t {
 ExpressionType StringToExpressionType(const std::string &str);
 
 std::string TypeIdToString(TypeId type);
-TypeId StringToTypeId(const std::string &str);
 size_t GetTypeIdSize(TypeId type);
 bool TypeIsConstantSize(TypeId type);
 bool TypeIsIntegral(TypeId type);
