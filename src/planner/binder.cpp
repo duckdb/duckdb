@@ -216,9 +216,11 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 			}
 			// not a group by column or aggregate
 			// create a FIRST aggregate around this aggregate
+			string stmt_alias = statement.select_list[i]->alias;
 			statement.select_list[i] = make_unique<AggregateExpression>(
 			    ExpressionType::AGGREGATE_FIRST,
 			    move(statement.select_list[i]));
+			statement.select_list[i]->alias = stmt_alias;
 			statement.select_list[i]->ResolveType();
 			// throw Exception("SELECT with GROUP BY can only contain "
 			//                 "aggregates or references to group columns!");
