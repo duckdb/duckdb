@@ -38,6 +38,8 @@ vector<string> split(const string &str, char delimiter, char quote) {
 		if (i != j) {
 			res.push_back(str.substr(i, j - i));
 			i = j;
+		} else {
+			res.push_back("");
 		}
 	}
 	return res;
@@ -91,7 +93,11 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk,
 			} else {
 				for (size_t i = 0; i < csv_line.size(); ++i) {
 					insert_chunk.data[i].count++;
-					insert_chunk.data[i].SetValue(count_line, csv_line[i]);
+					if (csv_line[i] == "") {
+						insert_chunk.data[i].nullmask[count_line] = true;
+					} else {
+						insert_chunk.data[i].SetValue(count_line, csv_line[i]);
+					}
 				}
 				for (size_t i = csv_line.size(); i < table->columns.size();
 				     ++i) {
