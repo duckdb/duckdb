@@ -35,8 +35,9 @@ unique_ptr<SelectStatement> SelectStatement::Copy() {
 	statement->limit.limit = limit.limit;
 	statement->limit.offset = limit.offset;
 
-	statement->union_select = union_select ? union_select->Copy() : nullptr;
-	statement->except_select = except_select ? except_select->Copy() : nullptr;
+	statement->setop_select = setop_select ? setop_select->Copy() : nullptr;
+	statement->setop_type =
+	    setop_type ? setop_type : SelectStatement::SetopType::NONE;
 
 	return statement;
 }
@@ -78,15 +79,12 @@ void SelectStatement::Serialize(Serializer &serializer) {
 	// limit
 	serializer.Write<int64_t>(limit.limit);
 	serializer.Write<int64_t>(limit.offset);
-	// union, except
-	serializer.Write<bool>(union_select ? true : false);
-	if (union_select) {
-		union_select->Serialize(serializer);
+	// union, except, intersect
+	serializer.Write<uint8_t>(setop_type);
+	if (setop_type != SelectStatement::SetopType::NONE) {
+		setop_select->Serialize(serializer);
 	}
-	serializer.Write<bool>(except_select ? true : false);
-	if (except_select) {
-		except_select->Serialize(serializer);
-	}
+
 	// with clauses
 	serializer.Write<bool>(cte_map.size() > 0 ? true : false);
 	// FIXME: serialize this how?
@@ -138,14 +136,10 @@ unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &source) {
 	statement->limit.limit = source.Read<int64_t>();
 	statement->limit.offset = source.Read<int64_t>();
 
-	// union, except
-	auto has_union_select = source.Read<bool>();
-	if (has_union_select) {
-		statement->union_select = SelectStatement::Deserialize(source);
-	}
-	auto has_except_select = source.Read<bool>();
-	if (has_except_select) {
-		statement->except_select = SelectStatement::Deserialize(source);
+	// union, except, intersect
+	statement->setop_type = (SelectStatement::SetopType)source.Read<uint8_t>();
+	if (statement->setop_type != SelectStatement::SetopType::NONE) {
+		statement->setop_select = SelectStatement::Deserialize(source);
 	}
 	auto has_cte_list = source.Read<bool>();
 	// FIXME: deserialize this how?

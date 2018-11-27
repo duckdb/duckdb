@@ -198,11 +198,11 @@ LogicalPlanGenerator::Visit(SelectStatement &statement) {
 		root = move(projection);
 	}
 
-	if (statement.union_select) {
+	if (statement.setop_type != SelectStatement::SetopType::NONE) {
 		auto top_node = move(root);
 		LogicalPlanGenerator generator(context, *statement.setop_binder, true);
 
-		statement.union_select->Accept(&generator);
+		statement.setop_select->Accept(&generator);
 		auto bottom_node = move(generator.root);
 
 		// get the projections
@@ -212,12 +212,13 @@ LogicalPlanGenerator::Visit(SelectStatement &statement) {
 		if (!IsProjection(top_select->type) ||
 		    !IsProjection(bottom_select->type)) {
 			throw Exception(
-			    "UNION can only apply to projection, union or group");
+			    "Set operations can only apply to projection, union or group");
 		}
 		if (top_select->expressions.size() !=
 		    bottom_select->expressions.size()) {
-			throw Exception("UNION can only concatenate expressions with the "
-			                "same number of result columns");
+			throw Exception(
+			    "Set operations can only apply to expressions with the "
+			    "same number of result columns");
 		}
 
 		vector<TypeId> union_types;
@@ -271,10 +272,28 @@ LogicalPlanGenerator::Visit(SelectStatement &statement) {
 			bottom_node = move(projection_bottom);
 		}
 
-		auto union_op =
-		    make_unique<LogicalUnion>(move(top_node), move(bottom_node));
-
-		root = move(union_op);
+		switch (statement.setop_type) {
+		case SelectStatement::SetopType::UNION: {
+			auto union_op =
+			    make_unique<LogicalUnion>(move(top_node), move(bottom_node));
+			root = move(union_op);
+			break;
+		}
+		case SelectStatement::SetopType::EXCEPT: {
+			auto except_op =
+			    make_unique<LogicalExcept>(move(top_node), move(bottom_node));
+			root = move(except_op);
+			break;
+		}
+		case SelectStatement::SetopType::INTERSECT: {
+			auto except_op = make_unique<LogicalIntersect>(move(top_node),
+			                                               move(bottom_node));
+			root = move(except_op);
+			break;
+		}
+		default:
+			throw NotImplementedException("Setop type");
+		}
 	}
 
 	if (statement.select_distinct) {

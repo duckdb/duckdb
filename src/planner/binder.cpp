@@ -232,9 +232,10 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 		statement.groupby.having->ResolveType();
 	}
 	// the union has an independent binder
-	if (statement.union_select) {
+	if (statement.setop_type != SelectStatement::SetopType::NONE) {
+		assert(statement.setop_select);
 		Binder binder(context, this);
-		statement.union_select->Accept(&binder);
+		statement.setop_select->Accept(&binder);
 		statement.setop_binder = move(binder.bind_context);
 	}
 	return nullptr;

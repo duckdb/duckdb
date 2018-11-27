@@ -57,9 +57,7 @@ struct LimitDescription {
 //! SelectStatement is a typical SELECT clause
 class SelectStatement : public SQLStatement {
   public:
-	SelectStatement()
-	    : SQLStatement(StatementType::SELECT), select_distinct(false),
-	      union_select(nullptr){};
+	SelectStatement() : SQLStatement(StatementType::SELECT){};
 	virtual ~SelectStatement() {
 	}
 
@@ -77,7 +75,7 @@ class SelectStatement : public SQLStatement {
 	//! The WHERE clause
 	std::unique_ptr<Expression> where_clause;
 	//! DISTINCT or not
-	bool select_distinct;
+	bool select_distinct = false;
 	//! The amount of columns in the result
 	size_t result_column_count;
 
@@ -119,8 +117,9 @@ class SelectStatement : public SQLStatement {
 	//! Whether or not the query has an AGGREGATION
 	bool HasAggregation();
 
-	std::unique_ptr<SelectStatement> union_select;
-	std::unique_ptr<SelectStatement> except_select;
+	enum SetopType { NONE, UNION, EXCEPT, INTERSECT };
+	SetopType setop_type = SetopType::NONE;
+	std::unique_ptr<SelectStatement> setop_select = nullptr;
 	std::unique_ptr<BindContext> setop_binder;
 };
 } // namespace duckdb

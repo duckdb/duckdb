@@ -321,6 +321,76 @@ void PhysicalPlanGenerator::Visit(LogicalUnion &op) {
 	plan = make_unique<PhysicalUnion>(move(top), move(bottom));
 }
 
+void PhysicalPlanGenerator::Visit(LogicalExcept &op) {
+	assert(op.children.size() == 2);
+
+	op.children[0]->Accept(this);
+	auto top = move(plan);
+	op.children[1]->Accept(this);
+	auto bottom = move(plan);
+
+	auto top_types = top->GetTypes();
+	if (top_types != bottom->GetTypes()) {
+		throw Exception("Type mismatch for EXCEPT");
+	}
+
+	vector<JoinCondition> conditions;
+	// create equality condition for all columns
+	for (size_t i = 0; i < top_types.size(); i++) {
+		JoinCondition cond;
+		cond.comparison = ExpressionType::COMPARE_EQUAL;
+		cond.left =
+		    make_unique_base<Expression, ColumnRefExpression>(top_types[i], i);
+		cond.right =
+		    make_unique_base<Expression, ColumnRefExpression>(top_types[i], i);
+		conditions.push_back(move(cond));
+	}
+	// use anti-join to implement EXCEPT
+	plan = make_unique<PhysicalHashJoin>(move(top), move(bottom),
+	                                     move(conditions), JoinType::ANTI);
+}
+
+void PhysicalPlanGenerator::Visit(LogicalIntersect &op) {
+	op.children[0]->Accept(this);
+	auto top = move(plan);
+	op.children[1]->Accept(this);
+	auto bottom = move(plan);
+
+	auto top_types = top->GetTypes();
+	if (top_types != bottom->GetTypes()) {
+		throw Exception("Type mismatch for INTERSECT");
+	}
+
+	vector<JoinCondition> conditions;
+	vector<unique_ptr<Expression>> select_list;
+	vector<unique_ptr<Expression>> groups;
+
+	// create equality condition for all columns
+	// create distinct computation grups and select list
+	for (size_t i = 0; i < top_types.size(); i++) {
+		JoinCondition cond;
+		cond.comparison = ExpressionType::COMPARE_EQUAL;
+		cond.left =
+		    make_unique_base<Expression, ColumnRefExpression>(top_types[i], i);
+		cond.right =
+		    make_unique_base<Expression, ColumnRefExpression>(top_types[i], i);
+		conditions.push_back(move(cond));
+
+		groups.push_back(
+		    make_unique_base<Expression, ColumnRefExpression>(top_types[i], i));
+		select_list.push_back(
+		    make_unique_base<Expression, GroupRefExpression>(top_types[i], i));
+	}
+	// use inner to partially implement INTERSECT
+	auto join = make_unique<PhysicalHashJoin>(
+	    move(top), move(bottom), move(conditions), JoinType::INNER);
+	// use grouping to finish INTERSECT
+	auto group =
+	    make_unique<PhysicalHashAggregate>(move(select_list), move(groups));
+	group->children.push_back(move(join));
+	plan = move(group);
+}
+
 unique_ptr<Expression> PhysicalPlanGenerator::Visit(SubqueryExpression &expr) {
 	PhysicalPlanGenerator generator(context, this);
 	generator.CreatePlan(move(expr.op));

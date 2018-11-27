@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test UNION/EXCEPT/INTERSECT", "[union]") {
+TEST_CASE("Test UNION/EXCEPT/INTERSECT", "[setop]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
@@ -73,7 +73,7 @@ TEST_CASE("Test UNION/EXCEPT/INTERSECT", "[union]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {"b", "a", "a"}));
 }
 
-TEST_CASE("Test UNION in subquery with aliases", "[union]") {
+TEST_CASE("Test UNION in subquery with aliases", "[setop]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
@@ -86,4 +86,22 @@ TEST_CASE("Test UNION in subquery with aliases", "[union]") {
 
 	REQUIRE(CHECK_COLUMN(result, 0, {42, 42}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+}
+
+TEST_CASE("Test EXCEPT / INTERSECT", "[setop]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO a VALUES (41), (42), (43)"));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE b(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO b VALUES (40), (43), (43)"));
+
+	result = con.Query("select * from a except select * from b");
+	REQUIRE(CHECK_COLUMN(result, 0, {41, 42}));
+
+	result = con.Query("select * from a intersect select * from b");
+	REQUIRE(CHECK_COLUMN(result, 0, {43}));
 }

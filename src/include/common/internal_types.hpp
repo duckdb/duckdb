@@ -374,6 +374,8 @@ enum class LogicalOperatorType : uint8_t {
 	// SetOps
 	// -----------------------------
 	UNION,
+	EXCEPT,
+	INTERSECT,
 
 	// -----------------------------
 	// Updates

@@ -212,7 +212,10 @@ unique_ptr<SelectStatement> TransformSelect(Node *node) {
 
 		return result;
 	}
-	case SETOP_UNION: {
+	case SETOP_UNION:
+	case SETOP_EXCEPT:
+	case SETOP_INTERSECT: {
+
 		stmt->larg->sortClause = stmt->sortClause;
 		stmt->larg->limitOffset = stmt->limitOffset;
 		stmt->larg->limitCount = stmt->limitCount;
@@ -232,19 +235,34 @@ unique_ptr<SelectStatement> TransformSelect(Node *node) {
 		// top may already have a union_select
 		// we need to find the rightmost union child in the top chain and add
 		// bottom there
-		while (top_ptr->union_select) {
-			top_ptr = top_ptr->union_select.get();
+		while (top_ptr->setop_select) {
+			top_ptr = top_ptr->setop_select.get();
 		}
 		assert(top_ptr);
 
-		top_ptr->union_select = move(bottom);
-		top_ptr->select_distinct = !stmt->all;
+		top_ptr->setop_select = move(bottom);
+		top_ptr->select_distinct = false;
+
+		switch (stmt->op) {
+		case SETOP_UNION:
+			top_ptr->select_distinct = !stmt->all;
+			top_ptr->setop_type = SelectStatement::SetopType::UNION;
+			break;
+		case SETOP_EXCEPT:
+			top_ptr->setop_type = SelectStatement::SetopType::EXCEPT;
+			break;
+		case SETOP_INTERSECT:
+			top_ptr->setop_type = SelectStatement::SetopType::INTERSECT;
+			break;
+		default:
+			throw Exception("Unexpected setop type");
+		}
 		return top;
 	}
-	case SETOP_EXCEPT:
-	case SETOP_INTERSECT:
+
 	default:
-		throw NotImplementedException("A_Expr not implemented!");
+		throw NotImplementedException("Statement type %d not implemented!",
+		                              stmt->op);
 	}
 }
 

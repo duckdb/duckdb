@@ -54,6 +54,14 @@ void LogicalOperatorVisitor::Visit(LogicalUnion &op) {
 	VisitOperator(op);
 }
 
+void LogicalOperatorVisitor::Visit(LogicalExcept &op) {
+	VisitOperator(op);
+}
+
+void LogicalOperatorVisitor::Visit(LogicalIntersect &op) {
+	VisitOperator(op);
+}
+
 void LogicalOperatorVisitor::Visit(LogicalFilter &op) {
 	VisitOperator(op);
 	for (auto &exp : op.expressions) {
