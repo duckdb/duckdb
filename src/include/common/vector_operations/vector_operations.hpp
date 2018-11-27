@@ -176,6 +176,10 @@ struct VectorOperations {
 	//===--------------------------------------------------------------------===//
 	// Sort the vector, setting the given selection vector to a sorted state.
 	static void Sort(Vector &vector, sel_t result[]);
+	// Sort the vector, setting the given selection vector to a sorted state
+	// while ignoring NULL values.
+	static void Sort(Vector &vector, sel_t *result_vector, size_t count,
+	                 sel_t result[]);
 	//===--------------------------------------------------------------------===//
 	// Hash functions
 	//===--------------------------------------------------------------------===//
@@ -232,7 +236,7 @@ struct VectorOperations {
 	//! Exec over the set of indexes, calls the callback function with (i) =
 	//! index, dependent on selection vector and (k) = count
 	template <class T>
-	static void Exec(Vector &vector, T &&fun, size_t offset = 0,
+	static void Exec(const Vector &vector, T &&fun, size_t offset = 0,
 	                 size_t count = 0) {
 		if (count == 0) {
 			count = vector.count;

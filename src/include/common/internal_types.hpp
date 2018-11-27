@@ -425,7 +425,7 @@ enum class PhysicalOperatorType : uint8_t {
 	NESTED_LOOP_JOIN,
 	HASH_JOIN,
 	CROSS_PRODUCT,
-	MERGE_JOIN,
+	PIECEWISE_MERGE_JOIN,
 
 	// -----------------------------
 	// SetOps

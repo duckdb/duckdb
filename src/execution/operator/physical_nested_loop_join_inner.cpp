@@ -36,30 +36,11 @@ static size_t templated_nested_loop_join(Vector &left, Vector &right,
 	    right_null_vector[STANDARD_VECTOR_SIZE];
 	size_t left_count = 0, right_count = 0;
 	sel_t *left_sel_vector = nullptr, *right_sel_vector = nullptr;
-	if (left.nullmask.any()) {
-		VectorOperations::Exec(left.sel_vector, left.count,
-		                       [&](size_t i, size_t k) {
-			                       if (!left.nullmask[i]) {
-				                       left_null_vector[left_count++] = i;
-			                       }
-		                       });
-		left_sel_vector = left_null_vector;
-	} else {
-		left_count = left.count;
-		left_sel_vector = left.sel_vector;
-	}
-	if (right.nullmask.any()) {
-		VectorOperations::Exec(right.sel_vector, right.count,
-		                       [&](size_t i, size_t k) {
-			                       if (!right.nullmask[i]) {
-				                       right_null_vector[right_count++] = i;
-			                       }
-		                       });
-		right_sel_vector = right_null_vector;
-	} else {
-		right_count = right.count;
-		right_sel_vector = right.sel_vector;
-	}
+	left_count =
+	    Vector::NotNullSelVector(left, left_null_vector, left_sel_vector);
+	right_count =
+	    Vector::NotNullSelVector(right, right_null_vector, right_sel_vector);
+
 	for (; rpos < right_count; rpos++) {
 		size_t right_position =
 		    right_sel_vector ? right_sel_vector[rpos] : rpos;

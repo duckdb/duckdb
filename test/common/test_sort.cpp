@@ -30,16 +30,24 @@ template <class T> bool IsSorted(Vector &v) {
 }
 
 TEST_CASE("Sorting vectors works", "[sort]") {
+	sel_t sel[STANDARD_VECTOR_SIZE];
 	Vector v(TypeId::INTEGER, true, false);
 	v.count = STANDARD_VECTOR_SIZE;
 	auto data = (int *)v.data;
+	// sort without NULLs
+	VectorOperations::Exec(v, [&](size_t i, size_t k) { data[i] = i % 6; });
+	VectorOperations::Sort(v, sel);
+
+	v.sel_vector = sel;
+	REQUIRE(IsSorted<int>(v));
+
+	// sort with NULLs
 	VectorOperations::Exec(v, [&](size_t i, size_t k) {
 		data[i] = i % 6;
 		if (data[i] == 5) {
 			v.nullmask[i] = true;
 		}
 	});
-	sel_t sel[STANDARD_VECTOR_SIZE];
 	VectorOperations::Sort(v, sel);
 
 	v.sel_vector = sel;
