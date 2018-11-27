@@ -57,9 +57,18 @@ TEST_CASE("Test Copy statement", "[copystatement]") {
 	result = con.Query("COPY test FROM 'test_pipe.csv' DELIMITER '|';");
 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
 
+	// test null
+	ofstream from_csv_file_null("null.csv");
+	for (int i = 0; i < 1; i++)
+		from_csv_file_null << i << "||test" << endl;
+	from_csv_file_null.close();
+	result = con.Query("COPY test FROM 'null.csv' DELIMITER '|';");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
 	remove("test.csv");
 	remove("test2.csv");
 	remove("test3.csv");
 	remove("test4.csv");
 	remove("test_pipe.csv");
+	remove("null.csv");
 }

@@ -20,8 +20,10 @@ vector<TypeId> PhysicalCopy::GetTypes() {
 vector<string> split(const string &str, char delimiter, char quote) {
 	vector<string> res;
 	size_t i = 0;
+	if (str[i] == delimiter)
+		res.push_back("");
 	while (i != str.size()) {
-		if (i != str.size() && str[i] == quote) {
+		if (str[i] == quote) {
 			i++;
 			size_t j = i;
 			while (j != str.size() && str[j] != quote)
@@ -30,7 +32,7 @@ vector<string> split(const string &str, char delimiter, char quote) {
 				res.push_back(str.substr(i, j - i));
 				i = j;
 			}
-		} else if (i != str.size() && str[i] == delimiter)
+		} else if (str[i] == delimiter)
 			i++;
 		size_t j = i;
 		while (j != str.size() && str[j] != delimiter)
@@ -38,6 +40,8 @@ vector<string> split(const string &str, char delimiter, char quote) {
 		if (i != j) {
 			res.push_back(str.substr(i, j - i));
 			i = j;
+		} else {
+			res.push_back("");
 		}
 	}
 	return res;
@@ -67,7 +71,7 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk,
 		from_csv.open(file_path);
 		while (getline(from_csv, value)) {
 			if (count_line == STANDARD_VECTOR_SIZE) {
-				table->storage->Append(context, insert_chunk);
+				table->storage->Append(*table, context, insert_chunk);
 				total += count_line;
 				count_line = 0;
 				insert_chunk.Reset();
@@ -89,9 +93,13 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk,
 					                                               csv_line[i]);
 				}
 			} else {
-				for (size_t i = 0; i < csv_line.size(); ++i) {
+				for (size_t i = 0; i < insert_chunk.column_count; ++i) {
 					insert_chunk.data[i].count++;
-					insert_chunk.data[i].SetValue(count_line, csv_line[i]);
+					if (csv_line[i] == "") {
+						insert_chunk.data[i].nullmask[count_line] = true;
+					} else {
+						insert_chunk.data[i].SetValue(count_line, csv_line[i]);
+					}
 				}
 				for (size_t i = csv_line.size(); i < table->columns.size();
 				     ++i) {
@@ -102,7 +110,7 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk,
 
 			count_line++;
 		}
-		table->storage->Append(context, insert_chunk);
+		table->storage->Append(*table, context, insert_chunk);
 		from_csv.close();
 	} else {
 		ofstream to_csv;

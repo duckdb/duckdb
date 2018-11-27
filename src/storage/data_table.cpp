@@ -19,35 +19,37 @@
 using namespace duckdb;
 using namespace std;
 
-DataTable::DataTable(StorageManager &storage, TableCatalogEntry &table)
-    : table(table), serializer(table.GetTypes()), storage(storage) {
+DataTable::DataTable(StorageManager &storage, std::string schema,
+                     std::string table, std::vector<TypeId> types_)
+    : schema(schema), table(table), types(types_), serializer(types),
+      storage(storage) {
 	size_t accumulative_size = 0;
-	for (size_t i = 0; i < table.columns.size(); i++) {
+	for (size_t i = 0; i < types.size(); i++) {
 		accumulative_tuple_size.push_back(accumulative_size);
-		accumulative_size += GetTypeIdSize(table.columns[i].type);
+		accumulative_size += GetTypeIdSize(types[i]);
 	}
 	tuple_size = accumulative_size;
 	// create empty statistics for the table
-	statistics = unique_ptr<Statistics[]>(new Statistics[table.columns.size()]);
-	for (size_t i = 0; i < table.columns.size(); i++) {
-		statistics[i].type = table.columns[i].type;
+	statistics = unique_ptr<Statistics[]>(new Statistics[types.size()]);
+	for (size_t i = 0; i < types.size(); i++) {
+		statistics[i].type = types[i];
 	}
-	statistics_locks = unique_ptr<mutex[]>(new mutex[table.columns.size()]);
+	statistics_locks = unique_ptr<mutex[]>(new mutex[types.size()]);
 	// initialize the table with an empty data chunk
 	chunk_list = make_unique<StorageChunk>(*this, 0);
 	tail_chunk = chunk_list.get();
 }
 
-vector<TypeId> DataTable::GetTypes(const std::vector<column_t> &column_ids) {
-	vector<TypeId> types;
+vector<TypeId> DataTable::GetTypes(const vector<column_t> &column_ids) {
+	vector<TypeId> result;
 	for (auto &index : column_ids) {
 		if (index == COLUMN_IDENTIFIER_ROW_ID) {
-			types.push_back(TypeId::POINTER);
+			result.push_back(TypeId::POINTER);
 		} else {
-			types.push_back(table.columns[index].type);
+			result.push_back(types[index]);
 		}
 	}
-	return types;
+	return result;
 }
 
 void DataTable::InitializeScan(ScanStructure &structure) {
@@ -70,7 +72,8 @@ StorageChunk *DataTable::GetChunk(size_t row_number) {
 	return nullptr;
 }
 
-void DataTable::VerifyConstraints(ClientContext &context, DataChunk &chunk) {
+void DataTable::VerifyConstraints(TableCatalogEntry &table,
+                                  ClientContext &context, DataChunk &chunk) {
 	for (auto &constraint : table.constraints) {
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
@@ -126,7 +129,8 @@ void DataTable::VerifyConstraints(ClientContext &context, DataChunk &chunk) {
 	}
 }
 
-void DataTable::Append(ClientContext &context, DataChunk &chunk) {
+void DataTable::Append(TableCatalogEntry &table, ClientContext &context,
+                       DataChunk &chunk) {
 	if (chunk.size() == 0) {
 		return;
 	}
@@ -135,7 +139,7 @@ void DataTable::Append(ClientContext &context, DataChunk &chunk) {
 	}
 
 	chunk.Verify();
-	VerifyConstraints(context, chunk);
+	VerifyConstraints(table, context, chunk);
 
 	auto last_chunk = tail_chunk;
 	do {
@@ -164,7 +168,7 @@ void DataTable::Append(ClientContext &context, DataChunk &chunk) {
 	}
 
 	// update the statistics with the new data
-	for (size_t i = 0; i < table.columns.size(); i++) {
+	for (size_t i = 0; i < types.size(); i++) {
 		lock_guard<mutex> stats_lock(statistics_locks[i]);
 		statistics[i].Update(chunk.data[i]);
 	}
@@ -173,7 +177,7 @@ void DataTable::Append(ClientContext &context, DataChunk &chunk) {
 
 	// first copy as much as can fit into the current chunk
 	size_t current_count =
-	    std::min(STORAGE_CHUNK_SIZE - last_chunk->count, chunk.size());
+	    min(STORAGE_CHUNK_SIZE - last_chunk->count, chunk.size());
 	if (current_count > 0) {
 		// in the undo buffer, create entries with the "deleted" flag for each
 		// tuple so other transactions see the deleted entries before these
@@ -225,7 +229,8 @@ void DataTable::Append(ClientContext &context, DataChunk &chunk) {
 	last_chunk->ReleaseExclusiveLock();
 }
 
-void DataTable::Delete(ClientContext &context, Vector &row_identifiers) {
+void DataTable::Delete(TableCatalogEntry &table, ClientContext &context,
+                       Vector &row_identifiers) {
 	if (row_identifiers.type != TypeId::POINTER) {
 		throw InvalidTypeException(row_identifiers.type,
 		                           "Row identifiers must be POINTER type!");
@@ -271,8 +276,9 @@ void DataTable::Delete(ClientContext &context, Vector &row_identifiers) {
 	chunk->ReleaseExclusiveLock();
 }
 
-void DataTable::Update(ClientContext &context, Vector &row_identifiers,
-                       vector<column_t> &column_ids, DataChunk &updates) {
+void DataTable::Update(TableCatalogEntry &table, ClientContext &context,
+                       Vector &row_identifiers, vector<column_t> &column_ids,
+                       DataChunk &updates) {
 	if (row_identifiers.type != TypeId::POINTER) {
 		throw InvalidTypeException(row_identifiers.type,
 		                           "Row identifiers must be POINTER type!");
@@ -282,7 +288,7 @@ void DataTable::Update(ClientContext &context, Vector &row_identifiers,
 		return;
 	}
 
-	VerifyConstraints(context, updates);
+	VerifyConstraints(table, context, updates);
 
 	// move strings to a temporary heap
 	StringHeap heap;
@@ -377,8 +383,8 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result,
 		sel_t regular_entries[STANDARD_VECTOR_SIZE],
 		    version_entries[STANDARD_VECTOR_SIZE];
 		size_t regular_count = 0, version_count = 0;
-		size_t end = std::min((size_t)STANDARD_VECTOR_SIZE,
-		                      current_chunk->count - structure.offset);
+		size_t end = min((size_t)STANDARD_VECTOR_SIZE,
+		                 current_chunk->count - structure.offset);
 		for (size_t i = 0; i < end; i++) {
 			version_entries[version_count] = regular_entries[regular_count] = i;
 			bool has_version =

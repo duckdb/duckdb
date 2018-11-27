@@ -146,7 +146,7 @@ static void append_to_append_info(tpce_append_information & info) {
 		chunk.Initialize(types);
 	} else if (chunk.size() >= STANDARD_VECTOR_SIZE) {
 		// flush the chunk
-		table->storage->Append(*info.context, chunk);
+		table->storage->Append(*table, *info.context, chunk);
 		// have to reset the chunk
 		chunk.Reset();
 	}
@@ -167,7 +167,7 @@ template <typename T> class DuckDBBaseLoader : public CBaseLoader<T> {
 
 	void FinishLoad() {
 		// append the remainder
-		info.table->storage->Append(*info.context, info.chunk);
+		info.table->storage->Append(*info.table, *info.context, info.chunk);
 		info.chunk.Reset();
 	}
 };

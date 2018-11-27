@@ -216,9 +216,11 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 			}
 			// not a group by column or aggregate
 			// create a FIRST aggregate around this aggregate
+			string stmt_alias = statement.select_list[i]->alias;
 			statement.select_list[i] = make_unique<AggregateExpression>(
 			    ExpressionType::AGGREGATE_FIRST,
 			    move(statement.select_list[i]));
+			statement.select_list[i]->alias = stmt_alias;
 			statement.select_list[i]->ResolveType();
 			// throw Exception("SELECT with GROUP BY can only contain "
 			//                 "aggregates or references to group columns!");
@@ -230,9 +232,10 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 		statement.groupby.having->ResolveType();
 	}
 	// the union has an independent binder
-	if (statement.union_select) {
+	if (statement.setop_type != SelectStatement::SetopType::NONE) {
+		assert(statement.setop_select);
 		Binder binder(context, this);
-		statement.union_select->Accept(&binder);
+		statement.setop_select->Accept(&binder);
 		statement.setop_binder = move(binder.bind_context);
 	}
 	return nullptr;

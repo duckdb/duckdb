@@ -225,6 +225,10 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "CROSS_PRODUCT";
 	case LogicalOperatorType::UNION:
 		return "UNION";
+	case LogicalOperatorType::EXCEPT:
+		return "EXCEPT";
+	case LogicalOperatorType::INTERSECT:
+		return "INTERSECT";
 	case LogicalOperatorType::INSERT:
 		return "INSERT";
 	case LogicalOperatorType::INSERT_SELECT:

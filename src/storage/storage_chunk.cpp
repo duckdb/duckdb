@@ -14,17 +14,16 @@ using namespace std;
 
 StorageChunk::StorageChunk(DataTable &_table, size_t start)
     : table(_table), count(0), start(start), read_count(0) {
-	auto &table_columns = table.table.columns;
-	columns.resize(table_columns.size());
+	columns.resize(table.types.size());
 	size_t tuple_size = 0;
-	for (auto &column : table_columns) {
-		tuple_size += GetTypeIdSize(column.type);
+	for (auto &type : table.types) {
+		tuple_size += GetTypeIdSize(type);
 	}
 	owned_data = unique_ptr<char[]>(new char[tuple_size * STORAGE_CHUNK_SIZE]);
 	char *dataptr = owned_data.get();
-	for (size_t i = 0; i < table_columns.size(); i++) {
+	for (size_t i = 0; i < table.types.size(); i++) {
 		columns[i] = dataptr;
-		dataptr += GetTypeIdSize(table_columns[i].type) * STORAGE_CHUNK_SIZE;
+		dataptr += GetTypeIdSize(table.types[i]) * STORAGE_CHUNK_SIZE;
 	}
 }
 

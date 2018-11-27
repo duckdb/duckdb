@@ -38,7 +38,8 @@ class DataTable {
 	friend class UniqueIndex;
 
   public:
-	DataTable(StorageManager &storage, TableCatalogEntry &table);
+	DataTable(StorageManager &storage, std::string schema, std::string table,
+	          std::vector<TypeId> types);
 
 	void InitializeScan(ScanStructure &structure);
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
@@ -49,12 +50,15 @@ class DataTable {
 	          ScanStructure &structure);
 	//! Append a DataChunk to the table. Throws an exception if the columns
 	// don't match the tables' columns.
-	void Append(ClientContext &context, DataChunk &chunk);
+	void Append(TableCatalogEntry &table, ClientContext &context,
+	            DataChunk &chunk);
 	//! Delete the entries with the specified row identifier from the table
-	void Delete(ClientContext &context, Vector &row_ids);
+	void Delete(TableCatalogEntry &table, ClientContext &context,
+	            Vector &row_ids);
 	//! Update the entries with the specified row identifier from the table
-	void Update(ClientContext &context, Vector &row_ids,
-	            std::vector<column_t> &column_ids, DataChunk &data);
+	void Update(TableCatalogEntry &table, ClientContext &context,
+	            Vector &row_ids, std::vector<column_t> &column_ids,
+	            DataChunk &data);
 
 	//! Get statistics of the specified column
 	Statistics &GetStatistics(column_t oid) {
@@ -70,8 +74,13 @@ class DataTable {
 	size_t tuple_size;
 	//! Accumulative per-tuple size
 	std::vector<size_t> accumulative_tuple_size;
-	//! A reference to the catalog table entry
-	TableCatalogEntry &table;
+
+	// schema of the table
+	std::string schema;
+	// name of the table
+	std::string table;
+	//! Types managed by data table
+	std::vector<TypeId> types;
 
 	//! Tuple serializer for this table
 	TupleSerializer serializer;
@@ -85,7 +94,8 @@ class DataTable {
 
   private:
 	//! Verify whether or not a new chunk violates any constraints
-	void VerifyConstraints(ClientContext &context, DataChunk &new_chunk);
+	void VerifyConstraints(TableCatalogEntry &table, ClientContext &context,
+	                       DataChunk &new_chunk);
 	//! The stored data of the table
 	std::unique_ptr<StorageChunk> chunk_list;
 	//! A reference to the last entry in the chunk list

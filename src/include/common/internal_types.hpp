@@ -259,6 +259,7 @@ enum class CatalogType : uint8_t {
 	TABLE_FUNCTION = 3,
 	SCALAR_FUNCTION = 4,
 	VIEW = 5,
+	UPDATED_ENTRY = 6,
 	DELETED_ENTRY = 10
 };
 
@@ -283,7 +284,6 @@ enum class StatementType : uint8_t {
 	DELETE,       // delete statement type
 	PREPARE,      // prepare statement type
 	EXECUTE,      // execute statement type
-	RENAME,       // rename statement type
 	ALTER,        // alter statement type
 	TRANSACTION,  // transaction statement type,
 	COPY,         // copy type
@@ -374,6 +374,8 @@ enum class LogicalOperatorType : uint8_t {
 	// SetOps
 	// -----------------------------
 	UNION,
+	EXCEPT,
+	INTERSECT,
 
 	// -----------------------------
 	// Updates

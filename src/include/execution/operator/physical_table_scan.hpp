@@ -19,11 +19,13 @@ namespace duckdb {
 //! Represents a scan of a base table
 class PhysicalTableScan : public PhysicalOperator {
   public:
-	PhysicalTableScan(DataTable &table, std::vector<column_t> column_ids)
-	    : PhysicalOperator(PhysicalOperatorType::SEQ_SCAN), table(table),
-	      column_ids(column_ids) {
+	PhysicalTableScan(TableCatalogEntry &tableref, DataTable &table,
+	                  std::vector<column_t> column_ids)
+	    : PhysicalOperator(PhysicalOperatorType::SEQ_SCAN), tableref(tableref),
+	      table(table), column_ids(column_ids) {
 	}
 
+	TableCatalogEntry &tableref;
 	DataTable &table;
 	std::vector<column_t> column_ids;
 

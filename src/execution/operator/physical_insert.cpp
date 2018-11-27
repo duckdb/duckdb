@@ -87,7 +87,7 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk,
 					}
 				}
 			}
-			table->storage->Append(context, insert_chunk);
+			table->storage->Append(*table, context, insert_chunk);
 			insert_count += chunk.size();
 		}
 	} else {
@@ -142,14 +142,14 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk,
 			}
 			if (insert_chunk.size() == STANDARD_VECTOR_SIZE) {
 				// flush the chunk if it is full
-				table->storage->Append(context, insert_chunk);
+				table->storage->Append(*table, context, insert_chunk);
 				insert_count += insert_chunk.size();
 				insert_chunk.Reset();
 			}
 		}
 		if (insert_chunk.size() > 0) {
 			// append any remaining elements to the table
-			table->storage->Append(context, insert_chunk);
+			table->storage->Append(*table, context, insert_chunk);
 			insert_count += insert_chunk.size();
 		}
 	}

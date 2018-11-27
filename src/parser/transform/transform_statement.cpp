@@ -212,7 +212,10 @@ unique_ptr<SelectStatement> TransformSelect(Node *node) {
 
 		return result;
 	}
-	case SETOP_UNION: {
+	case SETOP_UNION:
+	case SETOP_EXCEPT:
+	case SETOP_INTERSECT: {
+
 		stmt->larg->sortClause = stmt->sortClause;
 		stmt->larg->limitOffset = stmt->limitOffset;
 		stmt->larg->limitCount = stmt->limitCount;
@@ -232,19 +235,34 @@ unique_ptr<SelectStatement> TransformSelect(Node *node) {
 		// top may already have a union_select
 		// we need to find the rightmost union child in the top chain and add
 		// bottom there
-		while (top_ptr->union_select) {
-			top_ptr = top_ptr->union_select.get();
+		while (top_ptr->setop_select) {
+			top_ptr = top_ptr->setop_select.get();
 		}
 		assert(top_ptr);
 
-		top_ptr->union_select = move(bottom);
-		top_ptr->select_distinct = !stmt->all;
+		top_ptr->setop_select = move(bottom);
+		top_ptr->select_distinct = false;
+
+		switch (stmt->op) {
+		case SETOP_UNION:
+			top_ptr->select_distinct = !stmt->all;
+			top_ptr->setop_type = SelectStatement::SetopType::UNION;
+			break;
+		case SETOP_EXCEPT:
+			top_ptr->setop_type = SelectStatement::SetopType::EXCEPT;
+			break;
+		case SETOP_INTERSECT:
+			top_ptr->setop_type = SelectStatement::SetopType::INTERSECT;
+			break;
+		default:
+			throw Exception("Unexpected setop type");
+		}
 		return top;
 	}
-	case SETOP_EXCEPT:
-	case SETOP_INTERSECT:
+
 	default:
-		throw NotImplementedException("A_Expr not implemented!");
+		throw NotImplementedException("Statement type %d not implemented!",
+		                              stmt->op);
 	}
 }
 
@@ -439,41 +457,81 @@ unique_ptr<CreateSchemaStatement> TransformCreateSchema(Node *node) {
 	return result;
 }
 
-unique_ptr<AlterTableStatement> TransformAlter(Node *node) {
-	auto stmt = reinterpret_cast<AlterTableStmt *>(node);
+unique_ptr<AlterTableStatement> TransformRename(Node *node) {
+	auto stmt = reinterpret_cast<RenameStmt *>(node);
 	assert(stmt);
 	assert(stmt->relation);
 
-	auto result = make_unique<AlterTableStatement>();
-	auto &info = *result->info.get();
-	auto new_alter_cmd = make_unique<AlterTableCmd>();
-	result->table = TransformRangeVar(stmt->relation);
-
-	info.table = stmt->relation->relname;
+	unique_ptr<AlterTableInformation> info;
 
 	// first we check the type of ALTER
-	for (auto c = stmt->cmds->head; c != NULL; c = c->next) {
-		auto command = reinterpret_cast<AlterTableCmd *>(lfirst(c));
-		// TODO: Include more options for command->subtype
-		switch (command->subtype) {
-		case AT_AddColumn: {
-			auto cdef = (ColumnDef *)command->def;
-			char *name = (reinterpret_cast<value *>(
-			                  cdef->typeName->names->tail->data.ptr_value)
-			                  ->val.str);
-			auto centry =
-			    ColumnDefinition(cdef->colname, TransformStringToTypeId(name));
-			info.new_columns.push_back(centry);
-			break;
-		}
-		case AT_DropColumn:
-		default:
-			throw NotImplementedException(
-			    "ALTER TABLE option not supported yet!");
-		}
-	}
+	switch (stmt->renameType) {
+	case OBJECT_COLUMN: {
+		// change column name
 
-	return result;
+		// get the table and schema
+		string schema = DEFAULT_SCHEMA;
+		string table;
+		assert(stmt->relation->relname);
+		if (stmt->relation->relname) {
+			table = stmt->relation->relname;
+		}
+		if (stmt->relation->schemaname) {
+			schema = stmt->relation->schemaname;
+		}
+		// get the old name and the new name
+		string old_name = stmt->subname;
+		string new_name = stmt->newname;
+		info = make_unique<RenameColumnInformation>(schema, table, old_name,
+		                                            new_name);
+		break;
+	}
+	case OBJECT_DATABASE:
+	default:
+		throw NotImplementedException("Schema element not supported yet!");
+	}
+	assert(info);
+	return make_unique<AlterTableStatement>(move(info));
+}
+
+unique_ptr<AlterTableStatement> TransformAlter(Node *node) {
+	throw NotImplementedException("Alter table not supported yet!");
+	// auto stmt = reinterpret_cast<AlterTableStmt *>(node);
+	// assert(stmt);
+	// assert(stmt->relation);
+
+	// auto result = make_unique<AlterTableStatement>();
+	// auto &info = *result->info.get();
+	// auto new_alter_cmd = make_unique<AlterTableCmd>();
+	// result->table = TransformRangeVar(stmt->relation);
+
+	// info.table = stmt->relation->relname;
+
+	// // first we check the type of ALTER
+	// for (auto c = stmt->cmds->head; c != NULL; c = c->next) {
+	// 	auto command = reinterpret_cast<AlterTableCmd *>(lfirst(c));
+	// 	//TODO: Include more options for command->subtype
+	// 	switch (command->subtype) {
+	// 		case AT_AddColumn: {
+	//                auto cdef = (ColumnDef *)command->def;
+	//                char *name = (reinterpret_cast<value *>(
+	//                        cdef->typeName->names->tail->data.ptr_value)
+	//                        ->val.str);
+	//                auto centry =
+	//                        ColumnDefinition(cdef->colname,
+	//                        TransformStringToTypeId(name));
+	//                info.new_columns.push_back(centry);
+	//                break;
+	//            }
+	// 		case AT_DropColumn:
+	// 		case AT_AlterColumnType:
+	// 		default:
+	// 			throw NotImplementedException(
+	// 			    "ALTER TABLE option not supported yet!");
+	// 	}
+	// }
+
+	// return result;
 }
 
 unique_ptr<CreateIndexStatement> TransformCreateIndex(Node *node) {

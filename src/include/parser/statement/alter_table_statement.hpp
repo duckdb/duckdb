@@ -4,8 +4,7 @@
 //
 // parser/statement/alter_table_statement.hpp
 //
-// Author: Diego Tomé -  adapted from
-// parser/statement/create_table_statement.hpp
+// Author: Diego Tomé
 //
 //===----------------------------------------------------------------------===//
 
@@ -22,9 +21,8 @@ namespace duckdb {
 
 class AlterTableStatement : public SQLStatement {
   public:
-	AlterTableStatement()
-	    : SQLStatement(StatementType::ALTER),
-	      info(make_unique<AlterTableInformation>()){};
+	AlterTableStatement(std::unique_ptr<AlterTableInformation> info)
+	    : SQLStatement(StatementType::ALTER), info(std::move(info)){};
 	virtual ~AlterTableStatement() {
 	}
 
@@ -42,12 +40,8 @@ class AlterTableStatement : public SQLStatement {
 		throw NotImplementedException("Equality not implemented!");
 	}
 
-	std::unique_ptr<Expression> condition;
 	std::unique_ptr<TableRef> table;
 	std::unique_ptr<AlterTableInformation> info;
-
-	std::vector<std::string> columns;
-	std::vector<std::unique_ptr<Expression>> expressions;
 };
 
 } // namespace duckdb

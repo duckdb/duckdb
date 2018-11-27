@@ -45,7 +45,7 @@ class SchemaCatalogEntry : public CatalogEntry {
 	//! Drops a table with the given name
 	void DropTable(Transaction &transaction, DropTableInformation *info);
 
-	//! Drops a table with the given name
+	//! Alters a table
 	void AlterTable(Transaction &transaction, AlterTableInformation *info);
 
 	//! Gets a table function matching the given function expression

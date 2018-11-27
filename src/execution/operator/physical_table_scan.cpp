@@ -8,7 +8,7 @@ using namespace std;
 
 vector<string> PhysicalTableScan::GetNames() {
 	vector<string> names;
-	for (auto &column : table.table.columns) {
+	for (auto &column : tableref.columns) {
 		names.push_back(column.name);
 	}
 	return names;
@@ -36,5 +36,5 @@ PhysicalTableScan::GetOperatorState(ExpressionExecutor *parent_executor) {
 }
 
 string PhysicalTableScan::ExtraRenderInformation() {
-	return table.table.name;
+	return tableref.name;
 }
