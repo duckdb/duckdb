@@ -212,7 +212,7 @@ LogicalPlanGenerator::Visit(SelectStatement &statement) {
 		if (!IsProjection(top_select->type) ||
 		    !IsProjection(bottom_select->type)) {
 			throw Exception(
-			    "Set operations can only apply to projection, union or group");
+			    "Set operations can only apply to projection, set op or group");
 		}
 		if (top_select->expressions.size() !=
 		    bottom_select->expressions.size()) {

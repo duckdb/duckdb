@@ -12,7 +12,9 @@ bool IsProjection(LogicalOperatorType type) {
 
 LogicalOperator *GetProjection(LogicalOperator *node) {
 	while ((node->children.size() == 1 ||
-	        node->type == LogicalOperatorType::UNION) &&
+	        node->type == LogicalOperatorType::UNION ||
+	        node->type == LogicalOperatorType::EXCEPT ||
+	        node->type == LogicalOperatorType::INTERSECT) &&
 	       !IsProjection(node->type)) {
 		node = node->children[0].get();
 	}
