@@ -54,7 +54,7 @@ OrderIndex::OrderIndex(DataTable &table, vector<column_t> column_ids,
 		initial_capacity = STANDARD_VECTOR_SIZE;
 	}
 	capacity = initial_capacity;
-	data = unique_ptr<uint8_t[]>(new uint8_t[capacity]);
+	data = unique_ptr<uint8_t[]>(new uint8_t[capacity * tuple_size]);
 
 	expression_result.Initialize(expression_types);
 }
@@ -108,7 +108,7 @@ void OrderIndex::Insert(DataChunk &input, Vector &row_ids) {
 	if (count + row_ids.count >= capacity) {
 		// have to allocate new structure to make room for new entries
 		capacity *= 2;
-		auto new_data = unique_ptr<uint8_t[]>(new uint8_t[capacity]);
+		auto new_data = unique_ptr<uint8_t[]>(new uint8_t[capacity * tuple_size]);
 		// copy the old data
 		memcpy(new_data.get(), data.get(), count * tuple_size);
 		data = move(new_data);
