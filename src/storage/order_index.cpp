@@ -6,6 +6,8 @@
 
 #include "execution/expression_executor.hpp"
 
+#include <algorithm>
+
 using namespace duckdb;
 using namespace std;
 

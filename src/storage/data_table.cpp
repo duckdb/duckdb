@@ -330,7 +330,6 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context,
 	// first update any indexes
 	//
 	//    for (auto &index : indexes) {
-	//        fprintf(stderr, "wut");
 	//		index->Update(context, column_ids, updates, row_identifiers);
 	//	}
 
