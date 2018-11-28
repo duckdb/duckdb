@@ -142,9 +142,17 @@ void PhysicalPlanGenerator::Visit(LogicalGet &op) {
 		this->plan = make_unique<PhysicalDummyScan>();
 		return;
 	}
-
-	auto scan = make_unique<PhysicalTableScan>(*op.table, *op.table->storage,
-	                                           op.column_ids);
+	unique_ptr<PhysicalOperator> scan;
+	if (op.expression) {
+		throw NotImplementedException("FIXME: index scan");
+		//        scan = make_unique<PhysicalIndexScan>(*op.table,
+		//        *op.table->storage,
+		//                                              *op.table->storage->indexes[op.index_id],
+		//                                              op.column_ids);
+	} else {
+		scan = make_unique<PhysicalTableScan>(*op.table, *op.table->storage,
+		                                      op.column_ids);
+	}
 	if (plan) {
 		throw Exception("Scan has to be the first node of a plan!");
 	}

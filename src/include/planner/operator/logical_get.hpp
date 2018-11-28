@@ -36,6 +36,10 @@ class LogicalGet : public LogicalOperator {
 	size_t table_index;
 	//! Bound column IDs
 	std::vector<column_t> column_ids;
+	//! Expression to scan, only used for index scan
+	std::unique_ptr<Expression> expression;
+	// Id of index to use
+	size_t index_id;
 
 	std::string ParamsToString() const override {
 		if (!table) {
