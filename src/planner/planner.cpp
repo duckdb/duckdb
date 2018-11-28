@@ -50,6 +50,7 @@ bool Planner::CreatePlan(ClientContext &context,
 		case StatementType::COPY:
 		case StatementType::DELETE:
 		case StatementType::UPDATE:
+		case StatementType::CREATE_INDEX:
 		case StatementType::CREATE_TABLE:
 			CreatePlan(context, *statement);
 			this->success = true;

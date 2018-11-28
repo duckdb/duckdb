@@ -112,6 +112,17 @@ void PhysicalPlanGenerator::Visit(LogicalCreate &op) {
 	this->plan = make_unique<PhysicalCreate>(op.schema, move(op.info));
 }
 
+void PhysicalPlanGenerator::Visit(LogicalCreateIndex &op) {
+	LogicalOperatorVisitor::Visit(op);
+
+	if (plan) {
+		throw Exception("CREATE INDEX node must be first node of the plan!");
+	}
+
+	this->plan = make_unique<PhysicalCreateIndex>(
+	    op.table, op.column_ids, move(op.expressions), move(op.info));
+}
+
 void PhysicalPlanGenerator::Visit(LogicalFilter &op) {
 	LogicalOperatorVisitor::Visit(op);
 

@@ -41,6 +41,7 @@ class Binder : public SQLNodeVisitor {
 	std::unique_ptr<SQLStatement> Visit(UpdateStatement &stmt);
 	std::unique_ptr<SQLStatement> Visit(AlterTableStatement &stmt);
 	std::unique_ptr<SQLStatement> Visit(CreateTableStatement &stmt);
+	std::unique_ptr<SQLStatement> Visit(CreateIndexStatement &stmt);
 
 	std::unique_ptr<Constraint> Visit(CheckConstraint &constraint);
 

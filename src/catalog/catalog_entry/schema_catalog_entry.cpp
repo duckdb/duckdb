@@ -1,6 +1,7 @@
 
 #include "catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "catalog/catalog.hpp"
+#include "catalog/catalog_entry/index_catalog_entry.hpp"
 
 #include "common/exception.hpp"
 
@@ -25,6 +26,20 @@ void SchemaCatalogEntry::CreateTable(Transaction &transaction,
 			                       info->table.c_str());
 		}
 	}
+}
+
+bool SchemaCatalogEntry::CreateIndex(Transaction &transaction,
+                                     CreateIndexInformation *info) {
+	auto index =
+	    make_unique_base<CatalogEntry, IndexCatalogEntry>(catalog, this, info);
+	if (!indexes.CreateEntry(transaction, info->index_name, move(index))) {
+		if (!info->if_not_exists) {
+			throw CatalogException("Index with name \"%s\" already exists!",
+			                       info->index_name.c_str());
+		}
+		return false;
+	}
+	return true;
 }
 
 void SchemaCatalogEntry::DropTable(Transaction &transaction,

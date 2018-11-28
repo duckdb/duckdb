@@ -39,6 +39,7 @@ class LogicalPlanGenerator : public SQLNodeVisitor {
 	std::unique_ptr<SQLStatement> Visit(DeleteStatement &statement);
 	std::unique_ptr<SQLStatement> Visit(UpdateStatement &statement);
 	std::unique_ptr<SQLStatement> Visit(CreateTableStatement &statement);
+	std::unique_ptr<SQLStatement> Visit(CreateIndexStatement &statement);
 
 	std::unique_ptr<Expression> Visit(AggregateExpression &expr);
 	std::unique_ptr<Expression> Visit(ComparisonExpression &expr);

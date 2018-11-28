@@ -16,6 +16,8 @@
 #include "parser/sql_node_visitor.hpp"
 #include "parser/sql_statement.hpp"
 
+#include "parser/tableref/basetableref.hpp"
+
 namespace duckdb {
 
 class CreateIndexStatement : public SQLStatement {
@@ -30,10 +32,14 @@ class CreateIndexStatement : public SQLStatement {
 		return "CREATE INDEX";
 	}
 	virtual std::unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
-		//            v->Visit(*this);
-		return nullptr;
+		return v->Visit(*this);
 	}
 
+	//! The table to create the index on
+	std::unique_ptr<BaseTableRef> table;
+	//! Set of expressions to index by
+	std::vector<std::unique_ptr<Expression>> expressions;
+	// Info for index creation
 	std::unique_ptr<CreateIndexInformation> info;
 };
 

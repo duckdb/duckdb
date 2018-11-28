@@ -33,6 +33,7 @@ class ColumnBindingResolver : public LogicalOperatorVisitor {
 	using LogicalOperatorVisitor::Visit;
 
 	void Visit(LogicalUnion &op);
+	void Visit(LogicalCreateIndex &op);
 	void Visit(LogicalCrossProduct &op);
 	void Visit(LogicalGet &op);
 	void Visit(LogicalJoin &op);

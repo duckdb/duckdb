@@ -18,6 +18,7 @@
 #include "common/types/statistics.hpp"
 #include "common/types/tuple.hpp"
 
+#include "storage/index.hpp"
 #include "storage/storage_chunk.hpp"
 #include "storage/unique_index.hpp"
 
@@ -28,9 +29,12 @@ class StorageManager;
 class TableCatalogEntry;
 class Transaction;
 
+struct VersionInformation;
+
 struct ScanStructure {
 	StorageChunk *chunk;
 	size_t offset;
+	VersionInformation *version_chain;
 };
 
 //! DataTable represents a physical table on disk
@@ -59,6 +63,14 @@ class DataTable {
 	void Update(TableCatalogEntry &table, ClientContext &context,
 	            Vector &row_ids, std::vector<column_t> &column_ids,
 	            DataChunk &data);
+
+	//! Scan used for creating an index, incrementally locks all storage chunks
+	void CreateIndexScan(ScanStructure &structure,
+	                     std::vector<column_t> &column_ids, DataChunk &result);
+
+	//! After finishing the CreateIndexScan, releases all locks acquired during
+	//! the scan
+	void ReleaseIndexLocks();
 
 	//! Get statistics of the specified column
 	Statistics &GetStatistics(column_t oid) {
@@ -90,9 +102,27 @@ class DataTable {
 	StorageChunk *GetChunk(size_t row_number);
 
 	//! Unique indexes
-	std::vector<std::unique_ptr<UniqueIndex>> indexes;
+	std::vector<std::unique_ptr<UniqueIndex>> unique_indexes;
+
+	//! Indexes
+	std::vector<std::unique_ptr<Index>> indexes;
 
   private:
+	//! Retrieves versioned data from a set of pointers to tuples inside an
+	//! UndoBuffer and stores them inside the result chunk; used for scanning of
+	//! versioned tuples
+	void RetrieveVersionedData(DataChunk &result,
+	                           const std::vector<column_t> &column_ids,
+	                           uint8_t *alternate_version_pointers[],
+	                           size_t alternate_version_index[],
+	                           size_t alternate_version_count);
+	//! Retrieves data from the base table for use in scans
+	void RetrieveBaseTableData(DataChunk &result,
+	                           const std::vector<column_t> &column_ids,
+	                           sel_t regular_entries[], size_t regular_count,
+	                           StorageChunk *current_chunk,
+	                           size_t current_offset = 0);
+
 	//! Verify whether or not a new chunk violates any constraints
 	void VerifyConstraints(TableCatalogEntry &table, ClientContext &context,
 	                       DataChunk &new_chunk);

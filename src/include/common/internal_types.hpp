@@ -259,8 +259,9 @@ enum class CatalogType : uint8_t {
 	TABLE_FUNCTION = 3,
 	SCALAR_FUNCTION = 4,
 	VIEW = 5,
-	UPDATED_ENTRY = 6,
-	DELETED_ENTRY = 10
+	INDEX = 6,
+	UPDATED_ENTRY = 10,
+	DELETED_ENTRY = 11
 };
 
 //===--------------------------------------------------------------------===//
@@ -386,6 +387,7 @@ enum class LogicalOperatorType : uint8_t {
 	UPDATE,
 	EXPORT_EXTERNAL_FILE,
 	CREATE,
+	CREATE_INDEX,
 	ALTER,
 	ADD,
 
@@ -443,6 +445,7 @@ enum class PhysicalOperatorType : uint8_t {
 	UPDATE,
 	EXPORT_EXTERNAL_FILE,
 	CREATE,
+	CREATE_INDEX,
 	// -----------------------------
 	// Helpers
 	// -----------------------------

@@ -16,6 +16,7 @@ namespace duckdb {
 
 class LogicalAggregate;
 class LogicalCreate;
+class LogicalCreateIndex;
 class LogicalCrossProduct;
 class LogicalDelete;
 class LogicalFilter;
@@ -47,6 +48,7 @@ class LogicalOperatorVisitor : public SQLNodeVisitor {
 
 	virtual void Visit(LogicalAggregate &op);
 	virtual void Visit(LogicalCreate &op);
+	virtual void Visit(LogicalCreateIndex &op);
 	virtual void Visit(LogicalCrossProduct &op);
 	virtual void Visit(LogicalDelete &op);
 	virtual void Visit(LogicalFilter &op);

@@ -1,6 +1,7 @@
 
 #include "execution/operator/physical_copy.hpp"
 #include "execution/operator/physical_create.hpp"
+#include "execution/operator/physical_create_index.hpp"
 #include "execution/operator/physical_cross_product.hpp"
 #include "execution/operator/physical_delete.hpp"
 #include "execution/operator/physical_dummy_scan.hpp"

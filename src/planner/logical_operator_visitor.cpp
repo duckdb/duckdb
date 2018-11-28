@@ -114,6 +114,14 @@ void LogicalOperatorVisitor::Visit(LogicalCreate &op) {
 	// FIXME: visit expressions in constraints
 }
 
+void LogicalOperatorVisitor::Visit(LogicalCreateIndex &op) {
+	VisitOperator(op);
+
+	for (auto &exp : op.expressions) {
+		exp->Accept(this);
+	}
+}
+
 void LogicalOperatorVisitor::Visit(LogicalCopy &op) {
 	VisitOperator(op);
 }

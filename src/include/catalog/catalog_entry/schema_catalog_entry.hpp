@@ -42,6 +42,9 @@ class SchemaCatalogEntry : public CatalogEntry {
 	//! Creates a table with the given name in the schema
 	void CreateTable(Transaction &transaction, CreateTableInformation *info);
 
+	//! Creates an index with the given name in the schema
+	bool CreateIndex(Transaction &transaction, CreateIndexInformation *info);
+
 	//! Drops a table with the given name
 	void DropTable(Transaction &transaction, DropTableInformation *info);
 
@@ -73,6 +76,8 @@ class SchemaCatalogEntry : public CatalogEntry {
 
 	//! The catalog set holding the tables
 	CatalogSet tables;
+	//! The catalog set holding the indexes
+	CatalogSet indexes;
 	//! The catalog set holding the table functions
 	CatalogSet table_functions;
 	//! The catalog set holding the scalar functions

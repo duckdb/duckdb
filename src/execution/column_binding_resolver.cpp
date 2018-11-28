@@ -17,6 +17,18 @@ void ColumnBindingResolver::AppendTables(
 	}
 }
 
+void ColumnBindingResolver::Visit(LogicalCreateIndex &op) {
+	// add the table to the column binding resolver
+	// since we only have one table in the CREATE INDEX statement there is no
+	// offset
+	BoundTable binding;
+	binding.table_index = 0;
+	binding.column_count = op.table.columns.size();
+	binding.column_offset = 0;
+	bound_tables.push_back(binding);
+	LogicalOperatorVisitor::Visit(op);
+}
+
 void ColumnBindingResolver::Visit(LogicalCrossProduct &op) {
 	// resolve the column indices of the left side
 	op.children[0]->Accept(this);

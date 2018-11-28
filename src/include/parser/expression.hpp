@@ -123,6 +123,14 @@ class Expression : public Printable {
 	//! SerializationException]
 	static std::unique_ptr<Expression> Deserialize(Deserializer &source);
 
+	//! Clears the statistics of this expression and all child expressions
+	void ClearStatistics() {
+		stats.has_stats = false;
+		for (auto &child : children) {
+			child->ClearStatistics();
+		}
+	}
+
 	//! Type of the expression
 	ExpressionType type;
 	//! Return type of the expression. This must be known in the execution

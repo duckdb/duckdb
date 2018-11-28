@@ -261,6 +261,22 @@ unique_ptr<SQLStatement> Binder::Visit(CopyStatement &stmt) {
 	return nullptr;
 }
 
+unique_ptr<SQLStatement> Binder::Visit(CreateIndexStatement &stmt) {
+	// visit the table reference
+	AcceptChild(&stmt.table);
+	// visit the expressions
+	for (auto &expr : stmt.expressions) {
+		AcceptChild(&expr);
+		expr->ResolveType();
+		if (expr->return_type == TypeId::INVALID) {
+			throw BinderException(
+			    "Could not resolve type of projection element!");
+		}
+		expr->ClearStatistics();
+	}
+	return nullptr;
+}
+
 unique_ptr<SQLStatement> Binder::Visit(DeleteStatement &stmt) {
 	// visit the table reference
 	AcceptChild(&stmt.table);

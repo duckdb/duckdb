@@ -19,6 +19,7 @@ namespace duckdb {
 
 class AlterTableStatement;
 class CopyStatement;
+class CreateIndexStatement;
 class CreateSchemaStatement;
 class CreateTableStatement;
 class DeleteStatement;
@@ -64,6 +65,9 @@ class SQLNodeVisitor {
 		return nullptr;
 	};
 	virtual std::unique_ptr<SQLStatement> Visit(AlterTableStatement &) {
+		return nullptr;
+	};
+	virtual std::unique_ptr<SQLStatement> Visit(CreateIndexStatement &) {
 		return nullptr;
 	};
 	virtual std::unique_ptr<SQLStatement> Visit(CreateSchemaStatement &) {

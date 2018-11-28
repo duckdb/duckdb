@@ -544,16 +544,35 @@ unique_ptr<CreateIndexStatement> TransformCreateIndex(Node *node) {
 
 	for (auto cell = stmt->indexParams->head; cell != nullptr;
 	     cell = cell->next) {
-		char *index_attr =
-		    reinterpret_cast<IndexElem *>(cell->data.ptr_value)->name;
-		info.indexed_columns.push_back(std::string(index_attr));
+		auto index_element = (IndexElem *)cell->data.ptr_value;
+		if (index_element->collation) {
+			throw NotImplementedException(
+			    "Index with collation not supported yet!");
+		}
+		if (index_element->opclass) {
+			throw NotImplementedException(
+			    "Index with opclass not supported yet!");
+		}
+
+		if (index_element->name) {
+			// create a column reference expression
+			result->expressions.push_back(
+			    make_unique<ColumnRefExpression>(index_element->name));
+		} else {
+			// parse the index expression
+			assert(index_element->expr);
+			result->expressions.push_back(
+			    TransformExpression(index_element->expr));
+		}
 	}
 
 	info.index_type = StringToIndexType(std::string(stmt->accessMethod));
-	info.table = stmt->relation->relname;
+	auto tableref = make_unique<BaseTableRef>();
+	tableref->table_name = stmt->relation->relname;
 	if (stmt->relation->schemaname) {
-		info.schema = stmt->relation->schemaname;
+		tableref->schema_name = stmt->relation->schemaname;
 	}
+	result->table = move(tableref);
 	if (stmt->idxname) {
 		info.index_name = stmt->idxname;
 	} else {
