@@ -328,9 +328,11 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context,
 
 	// no constraints are violated
 	// first update any indexes
-	for (auto &index : indexes) {
-		index->Update(context, column_ids, updates, row_identifiers);
-	}
+	//
+	//    for (auto &index : indexes) {
+	//        fprintf(stderr, "wut");
+	//		index->Update(context, column_ids, updates, row_identifiers);
+	//	}
 
 	// now update the entries
 	VectorOperations::Exec(row_identifiers, [&](size_t i, size_t k) {
