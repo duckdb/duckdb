@@ -33,6 +33,9 @@ class ColumnBindingResolver : public LogicalOperatorVisitor {
 	using LogicalOperatorVisitor::Visit;
 
 	void Visit(LogicalUnion &op);
+	void Visit(LogicalExcept &op);
+	void Visit(LogicalIntersect &op);
+
 	void Visit(LogicalCrossProduct &op);
 	void Visit(LogicalGet &op);
 	void Visit(LogicalJoin &op);
@@ -44,8 +47,6 @@ class ColumnBindingResolver : public LogicalOperatorVisitor {
 
 	std::vector<BoundTable> bound_tables;
 	size_t current_depth;
-
-  private:
 	//! Append a list of tables to the current set of bound tables
 	void AppendTables(std::vector<BoundTable> &right_tables);
 };

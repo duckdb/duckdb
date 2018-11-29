@@ -17,37 +17,42 @@ void ColumnBindingResolver::AppendTables(
 	}
 }
 
-void ColumnBindingResolver::Visit(LogicalCrossProduct &op) {
+
+// FIXME: remove duplication
+
+static void BindTablesBinaryOp(LogicalOperator &op, ColumnBindingResolver *res, bool append_right) {
+	assert(res);
 	// resolve the column indices of the left side
-	op.children[0]->Accept(this);
+	op.children[0]->Accept(res);
 	// store the added tables
-	auto left_tables = bound_tables;
-	bound_tables.clear();
+	auto left_tables = res->bound_tables;
+	res->bound_tables.clear();
 
 	// now resolve the column indices of the right side
-	op.children[1]->Accept(this);
-	auto right_tables = bound_tables;
+	op.children[1]->Accept(res);
+	auto right_tables = res->bound_tables;
 
 	// now merge the two together
-	bound_tables = left_tables;
-	AppendTables(right_tables);
+	res->bound_tables = left_tables;
+	if (append_right) {
+		res->AppendTables(right_tables);
+	}
 }
 
-// FIXME: is this correct for the UNION?
+void ColumnBindingResolver::Visit(LogicalCrossProduct &op) {
+	BindTablesBinaryOp(op, this, true);
+}
+
 void ColumnBindingResolver::Visit(LogicalUnion &op) {
-	// resolve the column indices of the left side
-	op.children[0]->Accept(this);
-	// store the added tables
-	auto left_tables = bound_tables;
-	bound_tables.clear();
+	BindTablesBinaryOp(op, this, false);
+}
 
-	// now resolve the column indices of the right side
-	op.children[1]->Accept(this);
-	auto right_tables = bound_tables;
+void ColumnBindingResolver::Visit(LogicalExcept &op) {
+	BindTablesBinaryOp(op, this, false);
+}
 
-	// now merge the two together
-	bound_tables = left_tables;
-	AppendTables(right_tables);
+void ColumnBindingResolver::Visit(LogicalIntersect &op) {
+	BindTablesBinaryOp(op, this, false);
 }
 
 void ColumnBindingResolver::Visit(LogicalGet &op) {

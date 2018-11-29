@@ -191,104 +191,107 @@ LogicalPlanGenerator::Visit(SelectStatement &statement) {
 				root = move(prune);
 			}
 		}
-	} else {
+	} else if (statement.select_list.size() > 0) {
 		auto projection =
 		    make_unique<LogicalProjection>(move(statement.select_list));
 		projection->AddChild(move(root));
 		root = move(projection);
 	}
 
+	// special case handling for set ops
 	if (statement.setop_type != SelectStatement::SetopType::NONE) {
-		auto top_node = move(root);
-		LogicalPlanGenerator generator(context, *statement.setop_binder, true);
+		LogicalPlanGenerator generator_left(context,
+		                                    *statement.setop_left_binder, true);
+		LogicalPlanGenerator generator_right(
+		    context, *statement.setop_right_binder, true);
 
-		statement.setop_select->Accept(&generator);
-		auto bottom_node = move(generator.root);
+		statement.setop_left->Accept(&generator_left);
+		auto left_node = move(generator_left.root);
 
+		statement.setop_right->Accept(&generator_right);
+		auto right_node = move(generator_right.root);
+
+		assert(left_node);
+		assert(right_node);
 		// get the projections
-		auto top_select = GetProjection(top_node.get());
-		auto bottom_select = GetProjection(bottom_node.get());
+		auto left_select = GetProjection(left_node.get());
+		auto right_select = GetProjection(right_node.get());
 
-		if (!IsProjection(top_select->type) ||
-		    !IsProjection(bottom_select->type)) {
+		if (!IsProjection(left_select->type) ||
+		    !IsProjection(right_select->type)) {
 			throw Exception(
 			    "Set operations can only apply to projection, set op or group");
 		}
-		if (top_select->expressions.size() !=
-		    bottom_select->expressions.size()) {
+		if (left_select->expressions.size() !=
+		    right_select->expressions.size()) {
 			throw Exception(
 			    "Set operations can only apply to expressions with the "
 			    "same number of result columns");
 		}
 
 		vector<TypeId> union_types;
-		bool top_changed = false, bottom_changed = false;
 
-		for (size_t i = 0; i < top_select->expressions.size(); i++) {
-			Expression *proj_ele = top_select->expressions[i].get();
+		// figure out types of setop result
+		for (size_t i = 0; i < left_select->expressions.size(); i++) {
+			Expression *proj_ele = left_select->expressions[i].get();
 
 			TypeId union_expr_type = TypeId::INVALID;
-			auto top_expr_type = proj_ele->return_type;
-			auto bottom_expr_type = bottom_select->expressions[i]->return_type;
-			union_expr_type = top_expr_type;
-			if (bottom_expr_type > union_expr_type) {
-				union_expr_type = bottom_expr_type;
+			auto left_expr_type = proj_ele->return_type;
+			auto right_expr_type = right_select->expressions[i]->return_type;
+			union_expr_type = left_expr_type;
+			if (right_expr_type > union_expr_type) {
+				union_expr_type = right_expr_type;
 			}
-			if (top_expr_type != union_expr_type) {
-				top_changed = true;
-			}
-			if (bottom_expr_type != union_expr_type) {
-				bottom_changed = true;
-			}
+
 			union_types.push_back(union_expr_type);
 		}
-		// FIXME duplicated code
-		if (top_changed) {
-			vector<unique_ptr<Expression>> proj_exprs_top;
-			for (size_t i = 0; i < union_types.size(); i++) {
-				auto ref_expr = make_unique<ColumnRefExpression>(
-				    top_select->expressions[i]->return_type, i);
-				auto cast_expr = make_unique_base<Expression, CastExpression>(
-				    union_types[i], move(ref_expr));
-				proj_exprs_top.push_back(move(cast_expr));
-			}
-			auto projection_top =
-			    make_unique<LogicalProjection>(move(proj_exprs_top));
-			projection_top->children.push_back(move(top_node));
-			top_node = move(projection_top);
-		}
-		if (bottom_changed) {
-			vector<unique_ptr<Expression>> proj_exprs_bottom;
-			for (size_t i = 0; i < union_types.size(); i++) {
-				auto ref_expr = make_unique<ColumnRefExpression>(
-				    bottom_select->expressions[i]->return_type, i);
-				auto cast_expr = make_unique_base<Expression, CastExpression>(
-				    union_types[i], move(ref_expr));
-				proj_exprs_bottom.push_back(move(cast_expr));
-			}
-			auto projection_bottom =
-			    make_unique<LogicalProjection>(move(proj_exprs_bottom));
-			projection_bottom->children.push_back(move(bottom_node));
-			bottom_node = move(projection_bottom);
-		}
 
+		// project setop children to produce common type
+		// FIXME duplicated code
+		vector<unique_ptr<Expression>> proj_exprs_left;
+		for (size_t i = 0; i < union_types.size(); i++) {
+			auto ref_expr = make_unique<ColumnRefExpression>(
+			    left_select->expressions[i]->return_type, i);
+			auto cast_expr = make_unique_base<Expression, CastExpression>(
+			    union_types[i], move(ref_expr));
+			proj_exprs_left.push_back(move(cast_expr));
+		}
+		auto projection_left =
+		    make_unique<LogicalProjection>(move(proj_exprs_left));
+		projection_left->children.push_back(move(left_node));
+		left_node = move(projection_left);
+
+		vector<unique_ptr<Expression>> proj_exprs_right;
+		for (size_t i = 0; i < union_types.size(); i++) {
+			auto ref_expr = make_unique<ColumnRefExpression>(
+			    right_select->expressions[i]->return_type, i);
+			auto cast_expr = make_unique_base<Expression, CastExpression>(
+			    union_types[i], move(ref_expr));
+			proj_exprs_right.push_back(move(cast_expr));
+		}
+		auto projection_right =
+		    make_unique<LogicalProjection>(move(proj_exprs_right));
+		projection_right->children.push_back(move(right_node));
+		right_node = move(projection_right);
+
+		// create actual logical ops for setops
 		switch (statement.setop_type) {
 		case SelectStatement::SetopType::UNION: {
 			auto union_op =
-			    make_unique<LogicalUnion>(move(top_node), move(bottom_node));
+			    make_unique<LogicalUnion>(move(left_node), move(right_node));
 			root = move(union_op);
 			break;
 		}
 		case SelectStatement::SetopType::EXCEPT: {
 			auto except_op =
-			    make_unique<LogicalExcept>(move(top_node), move(bottom_node));
+			    make_unique<LogicalExcept>(move(left_node), move(right_node));
 			root = move(except_op);
 			break;
 		}
 		case SelectStatement::SetopType::INTERSECT: {
-			auto except_op = make_unique<LogicalIntersect>(move(top_node),
-			                                               move(bottom_node));
-			root = move(except_op);
+			auto intersect_op = make_unique<LogicalIntersect>(move(left_node),
+			                                                  move(right_node));
+			root = move(intersect_op);
 			break;
 		}
 		default:

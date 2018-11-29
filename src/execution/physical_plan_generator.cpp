@@ -311,23 +311,25 @@ void PhysicalPlanGenerator::Visit(LogicalUnion &op) {
 	assert(op.children.size() == 2);
 
 	op.children[0]->Accept(this);
-	auto top = move(plan);
+	auto left = move(plan);
 	op.children[1]->Accept(this);
-	auto bottom = move(plan);
+	auto right = move(plan);
 
-	if (top->GetTypes() != bottom->GetTypes()) {
+	if (left->GetTypes() != right->GetTypes()) {
 		throw Exception("Type mismatch for UNION");
 	}
-	plan = make_unique<PhysicalUnion>(move(top), move(bottom));
+	plan = make_unique<PhysicalUnion>(move(left), move(right));
 }
 
-void PhysicalPlanGenerator::Visit(LogicalExcept &op) {
+static void GenerateExceptIntersect(PhysicalPlanGenerator *generator,
+                                    LogicalOperator &op, JoinType join_type) {
 	assert(op.children.size() == 2);
+	assert(generator);
 
-	op.children[0]->Accept(this);
-	auto top = move(plan);
-	op.children[1]->Accept(this);
-	auto bottom = move(plan);
+	op.children[0]->Accept(generator);
+	auto top = move(generator->plan);
+	op.children[1]->Accept(generator);
+	auto bottom = move(generator->plan);
 
 	auto top_types = top->GetTypes();
 	if (top_types != bottom->GetTypes()) {
@@ -335,6 +337,7 @@ void PhysicalPlanGenerator::Visit(LogicalExcept &op) {
 	}
 
 	vector<JoinCondition> conditions;
+
 	// create equality condition for all columns
 	for (size_t i = 0; i < top_types.size(); i++) {
 		JoinCondition cond;
@@ -345,50 +348,16 @@ void PhysicalPlanGenerator::Visit(LogicalExcept &op) {
 		    make_unique_base<Expression, ColumnRefExpression>(top_types[i], i);
 		conditions.push_back(move(cond));
 	}
-	// use anti-join to implement EXCEPT
-	plan = make_unique<PhysicalHashJoin>(move(top), move(bottom),
-	                                     move(conditions), JoinType::ANTI);
+	generator->plan = make_unique<PhysicalHashJoin>(
+	    move(top), move(bottom), move(conditions), join_type);
+}
+
+void PhysicalPlanGenerator::Visit(LogicalExcept &op) {
+	GenerateExceptIntersect(this, op, JoinType::ANTI);
 }
 
 void PhysicalPlanGenerator::Visit(LogicalIntersect &op) {
-	op.children[0]->Accept(this);
-	auto top = move(plan);
-	op.children[1]->Accept(this);
-	auto bottom = move(plan);
-
-	auto top_types = top->GetTypes();
-	if (top_types != bottom->GetTypes()) {
-		throw Exception("Type mismatch for INTERSECT");
-	}
-
-	vector<JoinCondition> conditions;
-	vector<unique_ptr<Expression>> select_list;
-	vector<unique_ptr<Expression>> groups;
-
-	// create equality condition for all columns
-	// create distinct computation grups and select list
-	for (size_t i = 0; i < top_types.size(); i++) {
-		JoinCondition cond;
-		cond.comparison = ExpressionType::COMPARE_EQUAL;
-		cond.left =
-		    make_unique_base<Expression, ColumnRefExpression>(top_types[i], i);
-		cond.right =
-		    make_unique_base<Expression, ColumnRefExpression>(top_types[i], i);
-		conditions.push_back(move(cond));
-
-		groups.push_back(
-		    make_unique_base<Expression, ColumnRefExpression>(top_types[i], i));
-		select_list.push_back(
-		    make_unique_base<Expression, GroupRefExpression>(top_types[i], i));
-	}
-	// use inner to partially implement INTERSECT
-	auto join = make_unique<PhysicalHashJoin>(
-	    move(top), move(bottom), move(conditions), JoinType::INNER);
-	// use grouping to finish INTERSECT
-	auto group =
-	    make_unique<PhysicalHashAggregate>(move(select_list), move(groups));
-	group->children.push_back(move(join));
-	plan = move(group);
+	GenerateExceptIntersect(this, op, JoinType::INNER);
 }
 
 unique_ptr<Expression> PhysicalPlanGenerator::Visit(SubqueryExpression &expr) {

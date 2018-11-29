@@ -48,6 +48,31 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 			new_select_list.push_back(move(select_element));
 		}
 	}
+
+	// the set ops have an independent binder
+	if (statement.setop_type != SelectStatement::SetopType::NONE) {
+		assert(statement.setop_left);
+		assert(statement.setop_right);
+
+		Binder binder_left(context, this);
+		Binder binder_right(context, this);
+
+		statement.setop_left->Accept(&binder_left);
+		statement.setop_left_binder = move(binder_left.bind_context);
+
+		statement.setop_right->Accept(&binder_right);
+		statement.setop_right_binder = move(binder_right.bind_context);
+
+		// FIXME: this seems quite ugly
+		// create a new select list for the dummy statement so code below works correctly
+		for (size_t i = 0; i < statement.setop_left->select_list.size(); i++) {
+			auto expr = make_unique<ColumnRefExpression>(
+			    statement.setop_left->select_list[i]->return_type, i);
+			expr->alias = statement.setop_left->select_list[i]->alias;
+			new_select_list.push_back(move(expr));
+		}
+	}
+
 	statement.result_column_count = new_select_list.size();
 
 	for (size_t i = 0; i < new_select_list.size(); i++) {
@@ -64,6 +89,7 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 			                            select_element.get(), i);
 		}
 	}
+
 	for (auto &order : statement.orderby.orders) {
 		AcceptChild(&order.expression);
 		if (order.expression->type == ExpressionType::COLUMN_REF) {
@@ -74,7 +100,7 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 				// clause by index e.g. ORDER BY 1 assign the type of the SELECT
 				// clause
 				if (selection_ref->index < 1 ||
-				    selection_ref->index > new_select_list.size()) {
+				    selection_ref->index > statement.result_column_count) {
 					throw BinderException(
 					    "ORDER term out of range - should be between 1 and %d",
 					    (int)new_select_list.size());
@@ -231,13 +257,7 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 		AcceptChild(&statement.groupby.having);
 		statement.groupby.having->ResolveType();
 	}
-	// the union has an independent binder
-	if (statement.setop_type != SelectStatement::SetopType::NONE) {
-		assert(statement.setop_select);
-		Binder binder(context, this);
-		statement.setop_select->Accept(&binder);
-		statement.setop_binder = move(binder.bind_context);
-	}
+
 	return nullptr;
 }
 

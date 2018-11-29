@@ -53,6 +53,12 @@ class DuckDBResult {
 		return ((T *)data.data)[offset_in_chunk];
 	}
 
+	Value GetValue(size_t column, size_t index) {
+		auto &data = collection.GetChunk(index).data[column];
+		auto offset_in_chunk = index % STANDARD_VECTOR_SIZE;
+		return data.GetValue(offset_in_chunk);
+	}
+
 	bool ValueIsNull(size_t column, size_t index) {
 		auto &data = collection.GetChunk(index).data[column];
 		auto offset_in_chunk = index % STANDARD_VECTOR_SIZE;

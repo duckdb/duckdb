@@ -17,13 +17,13 @@ TEST_CASE("Test UNION/EXCEPT/INTERSECT", "[setop]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"a", "b"}));
 
-	result = con.Query(
-	    "SELECT 1, 'a' UNION ALL SELECT 2, 'b' UNION ALL SELECT 3, 'c'");
+	result = con.Query("SELECT 1, 'a' UNION ALL SELECT 2, 'b' UNION ALL SELECT "
+	                   "3, 'c' order by 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"a", "b", "c"}));
 
 	result = con.Query("SELECT 1, 'a' UNION ALL SELECT 2, 'b' UNION ALL SELECT "
-	                   "3, 'c' UNION ALL SELECT 4, 'd'");
+	                   "3, 'c' UNION ALL SELECT 4, 'd' order by 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"a", "b", "c", "d"}));
 
@@ -53,7 +53,7 @@ TEST_CASE("Test UNION/EXCEPT/INTERSECT", "[setop]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
 	result = con.Query("SELECT 1, 'a' UNION SELECT 2, 'b' UNION SELECT 3, 'c' "
-	                   "UNION SELECT 1, 'a' ORDER BY 1");
+	                   "UNION SELECT 1, 'a' order by 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"a", "b", "c"}));
 
@@ -64,13 +64,13 @@ TEST_CASE("Test UNION/EXCEPT/INTERSECT", "[setop]") {
 	// mixed fun
 	result = con.Query("SELECT 1, 'a' UNION ALL SELECT 1, 'a' UNION SELECT 2, "
 	                   "'b' UNION SELECT 1, 'a' ORDER BY 1");
-	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 2}));
-	REQUIRE(CHECK_COLUMN(result, 1, {"a", "a", "b"}));
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"a", "b"}));
 
 	result = con.Query("SELECT 1, 'a' UNION ALL SELECT 1, 'a' UNION SELECT 2, "
 	                   "'b' UNION SELECT 1, 'a' ORDER BY 1 DESC");
-	REQUIRE(CHECK_COLUMN(result, 0, {2, 1, 1}));
-	REQUIRE(CHECK_COLUMN(result, 1, {"b", "a", "a"}));
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"b", "a"}));
 }
 
 TEST_CASE("Test UNION in subquery with aliases", "[setop]") {
@@ -104,4 +104,22 @@ TEST_CASE("Test EXCEPT / INTERSECT", "[setop]") {
 
 	result = con.Query("select * from a intersect select * from b");
 	REQUIRE(CHECK_COLUMN(result, 0, {43}));
+}
+
+TEST_CASE("Test nested EXCEPT", "[setop]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("create table a (i integer)"));
+	REQUIRE_NO_FAIL(con.Query("create table b(i integer)"));
+	REQUIRE_NO_FAIL(con.Query("create table c (i integer)"));
+
+	REQUIRE_NO_FAIL(con.Query("insert into a values(42), (43), (44)"));
+	REQUIRE_NO_FAIL(con.Query("insert into b values(43)"));
+	REQUIRE_NO_FAIL(con.Query("insert into c values(44)"));
+
+	result = con.Query(
+	    "select * from a except select * from b except select * from c");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
 }

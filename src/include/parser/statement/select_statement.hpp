@@ -119,7 +119,10 @@ class SelectStatement : public SQLStatement {
 
 	enum SetopType { NONE, UNION, EXCEPT, INTERSECT };
 	SetopType setop_type = SetopType::NONE;
-	std::unique_ptr<SelectStatement> setop_select = nullptr;
-	std::unique_ptr<BindContext> setop_binder;
+	std::unique_ptr<SelectStatement> setop_left = nullptr;
+	std::unique_ptr<SelectStatement> setop_right = nullptr;
+
+	std::unique_ptr<BindContext> setop_left_binder;
+	std::unique_ptr<BindContext> setop_right_binder;
 };
 } // namespace duckdb

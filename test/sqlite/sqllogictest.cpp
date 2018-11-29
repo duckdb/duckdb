@@ -718,13 +718,16 @@ TEST_CASE("SQLite select3", "[sqlitelogic]") {
 	execute_file("test/sqlite/select3.test");
 }
 
+TEST_CASE("SQLite select4", "[sqlitelogic][.]") {
+	execute_file("test/sqlite/select4.test");
+}
+
 struct AutoRegTests {
 	AutoRegTests() {
 		vector<string> excludes = {
 		    "test/select1.test", // tested separately
-		    "test/select2.test", "test/select3.test",
-		    "test/select4.test", // EXCEPT etc.
-		    "test/select5.test", // joins too slow
+		    "test/select2.test", "test/select3.test", "test/select4.test",
+		  //  "test/select5.test", // joins too slow
 		    "test/index",        // no index yet
 		    "random/aggregates", // too many diffs to SQLite, but TODO
 		    "random/groupby/",   // ditto

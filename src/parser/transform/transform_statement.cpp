@@ -183,87 +183,78 @@ static void TransformCTE(WithClause *de_with_clause, SelectStatement &select) {
 
 unique_ptr<SelectStatement> TransformSelect(Node *node) {
 	SelectStmt *stmt = reinterpret_cast<SelectStmt *>(node);
+	auto result = make_unique<SelectStatement>();
+
+	if (stmt->withClause) {
+		TransformCTE(reinterpret_cast<WithClause *>(stmt->withClause), *result);
+	}
+
+	result->select_distinct = stmt->distinctClause != NULL ? true : false;
+	result->setop_type = SelectStatement::SetopType::NONE;
+	result->from_table = TransformFrom(stmt->fromClause);
+	TransformGroupBy(stmt->groupClause, result->groupby.groups);
+	result->groupby.having = TransformExpression(stmt->havingClause);
+	TransformOrderBy(stmt->sortClause, result->orderby);
+	result->where_clause = TransformExpression(stmt->whereClause);
+	if (stmt->limitCount) {
+		result->limit.limit =
+		    reinterpret_cast<A_Const *>(stmt->limitCount)->val.val.ival;
+		result->limit.offset =
+		    !stmt->limitOffset
+		        ? 0
+		        : reinterpret_cast<A_Const *>(stmt->limitOffset)->val.val.ival;
+	}
+
 	switch (stmt->op) {
 	case SETOP_NONE: {
-		auto result = make_unique<SelectStatement>();
-		if (stmt->withClause) {
-			TransformCTE(reinterpret_cast<WithClause *>(stmt->withClause),
-			             *result);
-		}
-
-		result->select_distinct = stmt->distinctClause != NULL ? true : false;
+		// rest done above
+		result->setop_type = SelectStatement::SetopType::NONE;
 		if (!TransformExpressionList(stmt->targetList, result->select_list)) {
 			return nullptr;
 		}
-		result->from_table = TransformFrom(stmt->fromClause);
-		TransformGroupBy(stmt->groupClause, result->groupby.groups);
-		result->groupby.having = TransformExpression(stmt->havingClause);
-		TransformOrderBy(stmt->sortClause, result->orderby);
-		result->where_clause = TransformExpression(stmt->whereClause);
-		if (stmt->limitCount) {
-			result->limit.limit =
-			    reinterpret_cast<A_Const *>(stmt->limitCount)->val.val.ival;
-			result->limit.offset =
-			    !stmt->limitOffset
-			        ? 0
-			        : reinterpret_cast<A_Const *>(stmt->limitOffset)
-			              ->val.val.ival;
-		}
-
-		return result;
+		break;
 	}
 	case SETOP_UNION:
 	case SETOP_EXCEPT:
 	case SETOP_INTERSECT: {
-
-		stmt->larg->sortClause = stmt->sortClause;
-		stmt->larg->limitOffset = stmt->limitOffset;
-		stmt->larg->limitCount = stmt->limitCount;
-		auto top = TransformSelect((Node *)stmt->larg);
-		if (!top) {
+		auto larg = TransformSelect((Node *)stmt->larg);
+		auto rarg = TransformSelect((Node *)stmt->rarg);
+		if (!larg || !rarg) {
 			return nullptr;
 		}
-		if (stmt->withClause) {
-			TransformCTE(reinterpret_cast<WithClause *>(stmt->withClause),
-			             *top);
-		}
-		auto bottom = TransformSelect((Node *)stmt->rarg);
-		if (!bottom) {
-			return nullptr;
-		}
-		SelectStatement *top_ptr = top.get();
-		// top may already have a union_select
-		// we need to find the rightmost union child in the top chain and add
-		// bottom there
-		while (top_ptr->setop_select) {
-			top_ptr = top_ptr->setop_select.get();
-		}
-		assert(top_ptr);
 
-		top_ptr->setop_select = move(bottom);
-		top_ptr->select_distinct = false;
+		result->setop_left = move(larg);
+		result->setop_right = move(rarg);
+		result->select_distinct = true;
 
 		switch (stmt->op) {
 		case SETOP_UNION:
-			top_ptr->select_distinct = !stmt->all;
-			top_ptr->setop_type = SelectStatement::SetopType::UNION;
+			result->select_distinct = !stmt->all;
+			result->setop_type = SelectStatement::SetopType::UNION;
 			break;
 		case SETOP_EXCEPT:
-			top_ptr->setop_type = SelectStatement::SetopType::EXCEPT;
+			result->setop_type = SelectStatement::SetopType::EXCEPT;
 			break;
 		case SETOP_INTERSECT:
-			top_ptr->setop_type = SelectStatement::SetopType::INTERSECT;
+			result->setop_type = SelectStatement::SetopType::INTERSECT;
 			break;
 		default:
 			throw Exception("Unexpected setop type");
 		}
-		return top;
+		// if we compute the distinct result here, we do not have to do this in
+		// the children saves bunch of aggrs
+		if (result->select_distinct) {
+			result->setop_left->select_distinct = false;
+			result->setop_right->select_distinct = false;
+		}
+		break;
 	}
 
 	default:
 		throw NotImplementedException("Statement type %d not implemented!",
 		                              stmt->op);
 	}
+	return result;
 }
 
 static unique_ptr<DropTableStatement> TransformDropTable(DropStmt *stmt) {
