@@ -87,10 +87,6 @@ void PhysicalHashJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 			executor.ExecuteExpression(conditions[i].left.get(),
 			                           state->join_keys.data[i]);
 		}
-		if (hash_table->join_type == JoinType::ANTI) {
-			int x = 5;
-			x += 5;
-		}
 		// perform the actual probe
 		state->scan_structure = hash_table->Probe(state->join_keys);
 		state->scan_structure->Next(state->join_keys, state->child_chunk,

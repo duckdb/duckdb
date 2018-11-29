@@ -18,7 +18,6 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 	// tables/subqueries)
 
 	// we also need to visit the CTEs because they generate table names
-
 	for (auto &cte_it : statement.cte_map) {
 		AddCTE(cte_it.first, cte_it.second.get());
 	}
@@ -50,7 +49,7 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 	}
 
 	// the set ops have an independent binder
-	if (statement.setop_type != SelectStatement::SetopType::NONE) {
+	if (statement.setop_type != SetopType::NONE) {
 		assert(statement.setop_left);
 		assert(statement.setop_right);
 
@@ -64,7 +63,8 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 		statement.setop_right_binder = move(binder_right.bind_context);
 
 		// FIXME: this seems quite ugly
-		// create a new select list for the dummy statement so code below works correctly
+		// create a new select list for the dummy statement so code below works
+		// correctly
 		for (size_t i = 0; i < statement.setop_left->select_list.size(); i++) {
 			auto expr = make_unique<ColumnRefExpression>(
 			    statement.setop_left->select_list[i]->return_type, i);
@@ -277,6 +277,22 @@ unique_ptr<SQLStatement> Binder::Visit(InsertStatement &statement) {
 unique_ptr<SQLStatement> Binder::Visit(CopyStatement &stmt) {
 	if (stmt.select_statement) {
 		AcceptChild(&stmt.select_statement);
+	}
+	return nullptr;
+}
+
+unique_ptr<SQLStatement> Binder::Visit(CreateIndexStatement &stmt) {
+	// visit the table reference
+	AcceptChild(&stmt.table);
+	// visit the expressions
+	for (auto &expr : stmt.expressions) {
+		AcceptChild(&expr);
+		expr->ResolveType();
+		if (expr->return_type == TypeId::INVALID) {
+			throw BinderException(
+			    "Could not resolve type of projection element!");
+		}
+		expr->ClearStatistics();
 	}
 	return nullptr;
 }

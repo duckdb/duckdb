@@ -30,6 +30,26 @@ LogicalPlanGenerator::Visit(CreateTableStatement &statement) {
 }
 
 unique_ptr<SQLStatement>
+LogicalPlanGenerator::Visit(CreateIndexStatement &statement) {
+	// first we visit the base table
+	statement.table->Accept(this);
+	// this gives us a logical table scan
+	// we take the required columns from here
+	assert(root && root->type == LogicalOperatorType::GET);
+	auto get = (LogicalGet *)root.get();
+	auto column_ids = get->column_ids;
+
+	// bind the table
+	auto table = context.db.catalog.GetTable(context.ActiveTransaction(),
+	                                         statement.table->schema_name,
+	                                         statement.table->table_name);
+	// create the logical operator
+	root = make_unique<LogicalCreateIndex>(
+	    *table, column_ids, move(statement.expressions), move(statement.info));
+	return nullptr;
+}
+
+unique_ptr<SQLStatement>
 LogicalPlanGenerator::Visit(UpdateStatement &statement) {
 	// we require row ids for the deletion
 	require_row_id = true;
@@ -199,7 +219,7 @@ LogicalPlanGenerator::Visit(SelectStatement &statement) {
 	}
 
 	// special case handling for set ops
-	if (statement.setop_type != SelectStatement::SetopType::NONE) {
+	if (statement.setop_type != SetopType::NONE) {
 		LogicalPlanGenerator generator_left(context,
 		                                    *statement.setop_left_binder, true);
 		LogicalPlanGenerator generator_right(
@@ -276,19 +296,19 @@ LogicalPlanGenerator::Visit(SelectStatement &statement) {
 
 		// create actual logical ops for setops
 		switch (statement.setop_type) {
-		case SelectStatement::SetopType::UNION: {
+		case SetopType::UNION: {
 			auto union_op =
 			    make_unique<LogicalUnion>(move(left_node), move(right_node));
 			root = move(union_op);
 			break;
 		}
-		case SelectStatement::SetopType::EXCEPT: {
+		case SetopType::EXCEPT: {
 			auto except_op =
 			    make_unique<LogicalExcept>(move(left_node), move(right_node));
 			root = move(except_op);
 			break;
 		}
-		case SelectStatement::SetopType::INTERSECT: {
+		case SetopType::INTERSECT: {
 			auto intersect_op = make_unique<LogicalIntersect>(move(left_node),
 			                                                  move(right_node));
 			root = move(intersect_op);

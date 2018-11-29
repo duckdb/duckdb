@@ -80,7 +80,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog,
 				assert(c->ctype == ConstraintType::UNIQUE);
 			}
 			// initialize the index with the parsed data
-			storage->indexes.push_back(
+			storage->unique_indexes.push_back(
 			    make_unique<UniqueIndex>(*storage, types, keys, allow_null));
 		}
 		constraints.push_back(move(constraint));

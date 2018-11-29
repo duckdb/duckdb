@@ -17,11 +17,22 @@ void ColumnBindingResolver::AppendTables(
 	}
 }
 
+void ColumnBindingResolver::Visit(LogicalCreateIndex &op) {
+	// add the table to the column binding resolver
+	// since we only have one table in the CREATE INDEX statement there is no
+	// offset
+	BoundTable binding;
+	binding.table_index = 0;
+	binding.column_count = op.table.columns.size();
+	binding.column_offset = 0;
+	bound_tables.push_back(binding);
+	LogicalOperatorVisitor::Visit(op);
+}
 
-// FIXME: remove duplication
-
-static void BindTablesBinaryOp(LogicalOperator &op, ColumnBindingResolver *res, bool append_right) {
+static void BindTablesBinaryOp(LogicalOperator &op, ColumnBindingResolver *res,
+                               bool append_right) {
 	assert(res);
+
 	// resolve the column indices of the left side
 	op.children[0]->Accept(res);
 	// store the added tables

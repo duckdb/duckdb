@@ -31,11 +31,10 @@ class ColumnBindingResolver : public LogicalOperatorVisitor {
 	ColumnBindingResolver() : current_depth(0) {
 	}
 	using LogicalOperatorVisitor::Visit;
-
+	void Visit(LogicalCreateIndex &op);
 	void Visit(LogicalUnion &op);
 	void Visit(LogicalExcept &op);
 	void Visit(LogicalIntersect &op);
-
 	void Visit(LogicalCrossProduct &op);
 	void Visit(LogicalGet &op);
 	void Visit(LogicalJoin &op);

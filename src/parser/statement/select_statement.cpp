@@ -35,10 +35,16 @@ unique_ptr<SelectStatement> SelectStatement::Copy() {
 	statement->limit.limit = limit.limit;
 	statement->limit.offset = limit.offset;
 
-	statement->setop_select = setop_select ? setop_select->Copy() : nullptr;
-	statement->setop_type =
-	    setop_type ? setop_type : SelectStatement::SetopType::NONE;
+	statement->setop_left =
+	    setop_type != SetopType::NONE ? setop_left->Copy() : nullptr;
+	statement->setop_right =
+	    setop_type != SetopType::NONE ? setop_right->Copy() : nullptr;
 
+	statement->setop_type = setop_type;
+
+	for (auto &cte : cte_map) {
+		statement->cte_map[cte.first] = cte.second->Copy();
+	}
 	return statement;
 }
 
@@ -79,16 +85,20 @@ void SelectStatement::Serialize(Serializer &serializer) {
 	// limit
 	serializer.Write<int64_t>(limit.limit);
 	serializer.Write<int64_t>(limit.offset);
+
 	// union, except, intersect
-	serializer.Write<uint8_t>(setop_type);
-	if (setop_type != SelectStatement::SetopType::NONE) {
-		setop_select->Serialize(serializer);
+	serializer.Write<SetopType>(setop_type);
+	if (setop_type != SetopType::NONE) {
+		setop_left->Serialize(serializer);
+		setop_right->Serialize(serializer);
 	}
 
 	// with clauses
-	serializer.Write<bool>(cte_map.size() > 0 ? true : false);
-	// FIXME: serialize this how?
-	// cte_map.Serialize(serializer);
+	serializer.Write<uint32_t>(cte_map.size());
+	for (auto &cte : cte_map) {
+		serializer.WriteString(cte.first);
+		cte.second->Serialize(serializer);
+	}
 }
 
 unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &source) {
@@ -137,14 +147,17 @@ unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &source) {
 	statement->limit.offset = source.Read<int64_t>();
 
 	// union, except, intersect
-	statement->setop_type = (SelectStatement::SetopType)source.Read<uint8_t>();
-	if (statement->setop_type != SelectStatement::SetopType::NONE) {
-		statement->setop_select = SelectStatement::Deserialize(source);
+	statement->setop_type = source.Read<SetopType>();
+	if (statement->setop_type != SetopType::NONE) {
+		statement->setop_left = SelectStatement::Deserialize(source);
+		statement->setop_right = SelectStatement::Deserialize(source);
 	}
-	auto has_cte_list = source.Read<bool>();
-	// FIXME: deserialize this how?
-	if (has_cte_list) {
-		// statement->cte_map = std::map::Deserialize(source);
+	auto cte_count = source.Read<uint32_t>();
+	while (cte_count > 0) {
+		auto name = source.Read<string>();
+		auto statement = SelectStatement::Deserialize(source);
+		statement->cte_map[name] = move(statement);
+		cte_count--;
 	}
 
 	return statement;

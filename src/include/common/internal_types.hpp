@@ -259,8 +259,9 @@ enum class CatalogType : uint8_t {
 	TABLE_FUNCTION = 3,
 	SCALAR_FUNCTION = 4,
 	VIEW = 5,
-	UPDATED_ENTRY = 6,
-	DELETED_ENTRY = 10
+	INDEX = 6,
+	UPDATED_ENTRY = 10,
+	DELETED_ENTRY = 11
 };
 
 //===--------------------------------------------------------------------===//
@@ -348,6 +349,13 @@ IndexType StringToIndexType(const std::string &str);
 //===--------------------------------------------------------------------===//
 enum class OrderType : uint8_t { INVALID = 0, ASCENDING = 1, DESCENDING = 2 };
 
+enum class SetopType : uint8_t {
+	NONE = 0,
+	UNION = 1,
+	EXCEPT = 2,
+	INTERSECT = 3
+};
+
 //===--------------------------------------------------------------------===//
 // Logical Operator Types
 //===--------------------------------------------------------------------===//
@@ -386,6 +394,7 @@ enum class LogicalOperatorType : uint8_t {
 	UPDATE,
 	EXPORT_EXTERNAL_FILE,
 	CREATE,
+	CREATE_INDEX,
 	ALTER,
 	ADD,
 
@@ -427,7 +436,7 @@ enum class PhysicalOperatorType : uint8_t {
 	NESTED_LOOP_JOIN,
 	HASH_JOIN,
 	CROSS_PRODUCT,
-	MERGE_JOIN,
+	PIECEWISE_MERGE_JOIN,
 
 	// -----------------------------
 	// SetOps
@@ -443,6 +452,7 @@ enum class PhysicalOperatorType : uint8_t {
 	UPDATE,
 	EXPORT_EXTERNAL_FILE,
 	CREATE,
+	CREATE_INDEX,
 	// -----------------------------
 	// Helpers
 	// -----------------------------

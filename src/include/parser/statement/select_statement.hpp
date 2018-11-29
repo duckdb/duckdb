@@ -117,7 +117,6 @@ class SelectStatement : public SQLStatement {
 	//! Whether or not the query has an AGGREGATION
 	bool HasAggregation();
 
-	enum SetopType { NONE, UNION, EXCEPT, INTERSECT };
 	SetopType setop_type = SetopType::NONE;
 	std::unique_ptr<SelectStatement> setop_left = nullptr;
 	std::unique_ptr<SelectStatement> setop_right = nullptr;

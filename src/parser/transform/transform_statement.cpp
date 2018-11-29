@@ -190,7 +190,7 @@ unique_ptr<SelectStatement> TransformSelect(Node *node) {
 	}
 
 	result->select_distinct = stmt->distinctClause != NULL ? true : false;
-	result->setop_type = SelectStatement::SetopType::NONE;
+	result->setop_type = SetopType::NONE;
 	result->from_table = TransformFrom(stmt->fromClause);
 	TransformGroupBy(stmt->groupClause, result->groupby.groups);
 	result->groupby.having = TransformExpression(stmt->havingClause);
@@ -208,9 +208,9 @@ unique_ptr<SelectStatement> TransformSelect(Node *node) {
 	switch (stmt->op) {
 	case SETOP_NONE: {
 		// rest done above
-		result->setop_type = SelectStatement::SetopType::NONE;
+		result->setop_type = SetopType::NONE;
 		if (!TransformExpressionList(stmt->targetList, result->select_list)) {
-			return nullptr;
+			throw Exception("Failed to transform expression list.");
 		}
 		break;
 	}
@@ -220,7 +220,7 @@ unique_ptr<SelectStatement> TransformSelect(Node *node) {
 		auto larg = TransformSelect((Node *)stmt->larg);
 		auto rarg = TransformSelect((Node *)stmt->rarg);
 		if (!larg || !rarg) {
-			return nullptr;
+			throw Exception("Failed to transform setop children.");
 		}
 
 		result->setop_left = move(larg);
@@ -230,13 +230,13 @@ unique_ptr<SelectStatement> TransformSelect(Node *node) {
 		switch (stmt->op) {
 		case SETOP_UNION:
 			result->select_distinct = !stmt->all;
-			result->setop_type = SelectStatement::SetopType::UNION;
+			result->setop_type = SetopType::UNION;
 			break;
 		case SETOP_EXCEPT:
-			result->setop_type = SelectStatement::SetopType::EXCEPT;
+			result->setop_type = SetopType::EXCEPT;
 			break;
 		case SETOP_INTERSECT:
-			result->setop_type = SelectStatement::SetopType::INTERSECT;
+			result->setop_type = SetopType::INTERSECT;
 			break;
 		default:
 			throw Exception("Unexpected setop type");
@@ -535,16 +535,35 @@ unique_ptr<CreateIndexStatement> TransformCreateIndex(Node *node) {
 
 	for (auto cell = stmt->indexParams->head; cell != nullptr;
 	     cell = cell->next) {
-		char *index_attr =
-		    reinterpret_cast<IndexElem *>(cell->data.ptr_value)->name;
-		info.indexed_columns.push_back(std::string(index_attr));
+		auto index_element = (IndexElem *)cell->data.ptr_value;
+		if (index_element->collation) {
+			throw NotImplementedException(
+			    "Index with collation not supported yet!");
+		}
+		if (index_element->opclass) {
+			throw NotImplementedException(
+			    "Index with opclass not supported yet!");
+		}
+
+		if (index_element->name) {
+			// create a column reference expression
+			result->expressions.push_back(
+			    make_unique<ColumnRefExpression>(index_element->name));
+		} else {
+			// parse the index expression
+			assert(index_element->expr);
+			result->expressions.push_back(
+			    TransformExpression(index_element->expr));
+		}
 	}
 
 	info.index_type = StringToIndexType(std::string(stmt->accessMethod));
-	info.table = stmt->relation->relname;
+	auto tableref = make_unique<BaseTableRef>();
+	tableref->table_name = stmt->relation->relname;
 	if (stmt->relation->schemaname) {
-		info.schema = stmt->relation->schemaname;
+		tableref->schema_name = stmt->relation->schemaname;
 	}
+	result->table = move(tableref);
 	if (stmt->idxname) {
 		info.index_name = stmt->idxname;
 	} else {

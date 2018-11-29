@@ -18,6 +18,7 @@ Optimizer::Optimizer(BindContext &context) : rewriter(context), success(false) {
 	rewriter.rules.push_back(make_unique<SubqueryRewritingRule>());
 	rewriter.rules.push_back(make_unique<CrossProductRewrite>());
 	rewriter.rules.push_back(make_unique<SelectionPushdownRule>());
+	//	rewriter.rules.push_back(make_unique<IndexScanRewriteRule>());
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {

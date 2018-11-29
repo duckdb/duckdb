@@ -10,60 +10,46 @@
 using namespace duckdb;
 using namespace std;
 
-template <class T, class OP, bool HAS_NULL>
-static sel_t templated_quicksort_initial(T *data, nullmask_t &mask,
+template <class T, class OP>
+static sel_t templated_quicksort_initial(T *data, sel_t *sel_vector,
                                          sel_t result[], size_t count) {
 	// select pivot
 	sel_t pivot = 0;
 	sel_t low = 0, high = count - 1;
-	if (HAS_NULL) {
-		// set pivot to a not-null value
-		while (pivot < count && mask[pivot]) {
-			pivot++;
-		}
-		if (pivot == count) {
-			// everything is NULL
-			// array is already sorted!
-			for (size_t i = 0; i < count; i++) {
-				result[i] = i;
+	if (sel_vector) {
+		// now insert elements
+		for (size_t i = 1; i < count; i++) {
+			if (OP::Operation(data[sel_vector[i]], data[pivot])) {
+				result[low++] = sel_vector[i];
+			} else {
+				result[high--] = sel_vector[i];
 			}
-			return (sel_t)-1;
 		}
-	}
-	// now insert elements
-	for (size_t i = 1; i < count; i++) {
-		if (OP::Operation(data[i], data[pivot]) || (HAS_NULL && mask[i])) {
-			result[low++] = i;
-		} else {
-			result[high--] = i;
+		assert(low == high);
+		result[low] = sel_vector[pivot];
+	} else {
+		// now insert elements
+		for (size_t i = 1; i < count; i++) {
+			if (OP::Operation(data[i], data[pivot])) {
+				result[low++] = i;
+			} else {
+				result[high--] = i;
+			}
 		}
+		assert(low == high);
+		result[low] = pivot;
 	}
-	assert(low == high);
-	result[low] = pivot;
 	return low;
 }
 
-template <class T, class OP, bool HAS_NULL>
-static void templated_quicksort_inplace(T *data, nullmask_t &mask,
-                                        sel_t result[], sel_t left,
+template <class T, class OP>
+static void templated_quicksort_inplace(T *data, sel_t result[], sel_t left,
                                         sel_t right) {
 	if (left >= right) {
 		return;
 	}
 
 	sel_t middle = left + (right - left) / 2;
-	if (HAS_NULL && mask[result[middle]]) {
-		middle = left;
-		// set pivot to a not-null value
-		while (middle < right && mask[result[middle]]) {
-			middle++;
-		}
-		if (middle == right) {
-			// array is sorted already!
-			// everything is NULL
-			return;
-		}
-	}
 	sel_t pivot = result[middle];
 
 	// move the mid point value to the front.
@@ -72,13 +58,11 @@ static void templated_quicksort_inplace(T *data, nullmask_t &mask,
 
 	std::swap(result[middle], result[left]);
 	while (i <= j) {
-		while (i <= j && (OP::Operation(data[result[i]], data[pivot]) ||
-		                  (HAS_NULL && mask[result[i]]))) {
+		while (i <= j && (OP::Operation(data[result[i]], data[pivot]))) {
 			i++;
 		}
 
-		while (i <= j && OP::Operation(data[pivot], data[result[j]]) &&
-		       (!HAS_NULL || !mask[result[i]])) {
+		while (i <= j && OP::Operation(data[pivot], data[result[j]])) {
 			j--;
 		}
 
@@ -89,71 +73,88 @@ static void templated_quicksort_inplace(T *data, nullmask_t &mask,
 	std::swap(result[i - 1], result[left]);
 	sel_t part = i - 1;
 
-	templated_quicksort_inplace<T, OP, HAS_NULL>(data, mask, result, left,
-	                                             part - 1);
-	templated_quicksort_inplace<T, OP, HAS_NULL>(data, mask, result, part + 1,
-	                                             right);
-}
-
-template <class T, class OP, bool HAS_NULL>
-void templated_quicksort(T *data, nullmask_t &nullmask, size_t count,
-                         sel_t result[]) {
-	auto part = templated_quicksort_initial<T, OP, HAS_NULL>(data, nullmask,
-	                                                         result, count);
-	if (part > count) {
-		return;
+	if (part > 0) {
+		templated_quicksort_inplace<T, OP>(data, result, left, part - 1);
 	}
-	templated_quicksort_inplace<T, OP, HAS_NULL>(data, nullmask, result, 0,
-	                                             part);
-	templated_quicksort_inplace<T, OP, HAS_NULL>(data, nullmask, result,
-	                                             part + 1, count - 1);
+	templated_quicksort_inplace<T, OP>(data, result, part + 1, right);
 }
 
 template <class T, class OP>
-static void templated_quicksort(Vector &vector, sel_t result[]) {
-	if (vector.count == 0)
+void templated_quicksort(T *data, sel_t *sel_vector, size_t count,
+                         sel_t result[]) {
+	auto part =
+	    templated_quicksort_initial<T, OP>(data, sel_vector, result, count);
+	if (part > count) {
 		return;
+	}
+	templated_quicksort_inplace<T, OP>(data, result, 0, part);
+	templated_quicksort_inplace<T, OP>(data, result, part + 1, count - 1);
+}
+
+template <class T>
+static void templated_quicksort(Vector &vector, sel_t *sel_vector, size_t count,
+                                sel_t result[]) {
 	auto data = (T *)vector.data;
-	if (vector.nullmask.any()) {
-		// quicksort with nulls
-		templated_quicksort<T, OP, true>(data, vector.nullmask, vector.count,
-		                                 result);
-	} else {
-		// quicksort without nulls
-		templated_quicksort<T, OP, false>(data, vector.nullmask, vector.count,
-		                                  result);
+	// quicksort without nulls
+	templated_quicksort<T, operators::LessThanEquals>(data, sel_vector, count,
+	                                                  result);
+}
+
+void VectorOperations::Sort(Vector &vector, sel_t *sel_vector, size_t count,
+                            sel_t result[]) {
+	if (count == 0) {
+		return;
+	}
+#ifdef DEBUG
+	VectorOperations::Exec(sel_vector, count, [&](size_t i, size_t k) {
+		assert(!vector.nullmask[i]);
+	});
+#endif
+	switch (vector.type) {
+	case TypeId::TINYINT:
+		templated_quicksort<int8_t>(vector, sel_vector, count, result);
+		break;
+	case TypeId::SMALLINT:
+		templated_quicksort<int16_t>(vector, sel_vector, count, result);
+		break;
+	case TypeId::DATE:
+	case TypeId::INTEGER:
+		templated_quicksort<int32_t>(vector, sel_vector, count, result);
+		break;
+	case TypeId::TIMESTAMP:
+	case TypeId::BIGINT:
+		templated_quicksort<int64_t>(vector, sel_vector, count, result);
+		break;
+	case TypeId::DECIMAL:
+		templated_quicksort<double>(vector, sel_vector, count, result);
+		break;
+	case TypeId::VARCHAR:
+		templated_quicksort<const char *>(vector, sel_vector, count, result);
+		break;
+	default:
+		throw NotImplementedException("Unimplemented type for sort");
 	}
 }
 
 void VectorOperations::Sort(Vector &vector, sel_t result[]) {
-	if (vector.sel_vector) {
-		throw Exception(
-		    "Cannot sort a vector with a sel_vector, call Flatten() first");
-	}
-	// now we order
-	switch (vector.type) {
-	case TypeId::TINYINT:
-		templated_quicksort<int8_t, operators::LessThanEquals>(vector, result);
-		break;
-	case TypeId::SMALLINT:
-		templated_quicksort<int16_t, operators::LessThanEquals>(vector, result);
-		break;
-	case TypeId::DATE:
-	case TypeId::INTEGER:
-		templated_quicksort<int32_t, operators::LessThanEquals>(vector, result);
-		break;
-	case TypeId::TIMESTAMP:
-	case TypeId::BIGINT:
-		templated_quicksort<int64_t, operators::LessThanEquals>(vector, result);
-		break;
-	case TypeId::DECIMAL:
-		templated_quicksort<double, operators::LessThanEquals>(vector, result);
-		break;
-	case TypeId::VARCHAR:
-		templated_quicksort<const char *, operators::LessThanEquals>(vector,
-		                                                             result);
-		break;
-	default:
-		throw NotImplementedException("Unimplemented type for sort");
+	// first we extract NULL values
+	sel_t not_null_sel_vector[STANDARD_VECTOR_SIZE],
+	    null_sel_vector[STANDARD_VECTOR_SIZE];
+	sel_t *sel_vector;
+	size_t count = Vector::NotNullSelVector(vector, not_null_sel_vector,
+	                                        sel_vector, null_sel_vector);
+	if (count == vector.count) {
+		// no NULL values
+		// we don't need to use the selection vector at all
+		VectorOperations::Sort(vector, nullptr, vector.count, result);
+	} else {
+		// first fill in the NULL values
+		size_t null_count = vector.count - count;
+		for (size_t i = 0; i < null_count; i++) {
+			result[i] = null_sel_vector[i];
+		}
+		// now sort the remainder
+		VectorOperations::Sort(vector, not_null_sel_vector, count,
+		                       result + null_count);
 	}
 }

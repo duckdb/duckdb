@@ -312,6 +312,26 @@ void Vector::Append(Vector &other) {
 	}
 }
 
+size_t Vector::NotNullSelVector(const Vector &vector, sel_t *not_null_vector,
+                                sel_t *&result_assignment, sel_t *null_vector) {
+	if (vector.nullmask.any()) {
+		size_t result_count = 0, null_count = 0;
+		VectorOperations::Exec(vector.sel_vector, vector.count,
+		                       [&](size_t i, size_t k) {
+			                       if (!vector.nullmask[i]) {
+				                       not_null_vector[result_count++] = i;
+			                       } else if (null_vector) {
+				                       null_vector[null_count++] = i;
+			                       }
+		                       });
+		result_assignment = not_null_vector;
+		return result_count;
+	} else {
+		result_assignment = vector.sel_vector;
+		return vector.count;
+	}
+}
+
 string Vector::ToString() const {
 	string retval = TypeIdToString(type) + ": " + to_string(count) + " = [ ";
 	for (size_t i = 0; i < count; i++) {

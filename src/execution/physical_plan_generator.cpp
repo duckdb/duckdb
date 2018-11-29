@@ -112,6 +112,17 @@ void PhysicalPlanGenerator::Visit(LogicalCreate &op) {
 	this->plan = make_unique<PhysicalCreate>(op.schema, move(op.info));
 }
 
+void PhysicalPlanGenerator::Visit(LogicalCreateIndex &op) {
+	LogicalOperatorVisitor::Visit(op);
+
+	if (plan) {
+		throw Exception("CREATE INDEX node must be first node of the plan!");
+	}
+
+	this->plan = make_unique<PhysicalCreateIndex>(
+	    op.table, op.column_ids, move(op.expressions), move(op.info));
+}
+
 void PhysicalPlanGenerator::Visit(LogicalFilter &op) {
 	LogicalOperatorVisitor::Visit(op);
 
@@ -131,9 +142,17 @@ void PhysicalPlanGenerator::Visit(LogicalGet &op) {
 		this->plan = make_unique<PhysicalDummyScan>();
 		return;
 	}
-
-	auto scan = make_unique<PhysicalTableScan>(*op.table, *op.table->storage,
-	                                           op.column_ids);
+	unique_ptr<PhysicalOperator> scan;
+	if (op.expression) {
+		throw NotImplementedException("FIXME: index scan");
+		//        scan = make_unique<PhysicalIndexScan>(*op.table,
+		//        *op.table->storage,
+		//                                              *op.table->storage->indexes[op.index_id],
+		//                                              op.column_ids);
+	} else {
+		scan = make_unique<PhysicalTableScan>(*op.table, *op.table->storage,
+		                                      op.column_ids);
+	}
 	if (plan) {
 		throw Exception("Scan has to be the first node of a plan!");
 	}
@@ -155,11 +174,15 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 	auto right = move(plan);
 
 	bool has_equality = false;
+	bool has_inequality = false;
 	for (auto &cond : op.conditions) {
 		cond.left->Accept(this);
 		cond.right->Accept(this);
 		if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
 			has_equality = true;
+		}
+		if (cond.comparison == ExpressionType::COMPARE_NOTEQUAL) {
+			has_inequality = true;
 		}
 	}
 
@@ -170,16 +193,23 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 		plan = make_unique<PhysicalHashJoin>(move(left), move(right),
 		                                     move(op.conditions), op.type);
 	} else {
-		// non-equality join: use nested loop
-		if (op.type == JoinType::INNER) {
-			plan = make_unique<PhysicalNestedLoopJoinInner>(
-			    move(left), move(right), move(op.conditions), op.type);
-		} else if (op.type == JoinType::ANTI || op.type == JoinType::SEMI) {
-			plan = make_unique<PhysicalNestedLoopJoinSemi>(
+		if (op.conditions.size() == 1 && op.type == JoinType::INNER &&
+		    !has_inequality) {
+			// range join: use piecewise merge join
+			plan = make_unique<PhysicalPiecewiseMergeJoin>(
 			    move(left), move(right), move(op.conditions), op.type);
 		} else {
-			throw NotImplementedException(
-			    "Unimplemented nested loop join type!");
+			// non-equality join: use nested loop
+			if (op.type == JoinType::INNER) {
+				plan = make_unique<PhysicalNestedLoopJoinInner>(
+				    move(left), move(right), move(op.conditions), op.type);
+			} else if (op.type == JoinType::ANTI || op.type == JoinType::SEMI) {
+				plan = make_unique<PhysicalNestedLoopJoinSemi>(
+				    move(left), move(right), move(op.conditions), op.type);
+			} else {
+				throw NotImplementedException(
+				    "Unimplemented nested loop join type!");
+			}
 		}
 	}
 }
