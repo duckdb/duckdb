@@ -727,7 +727,7 @@ struct AutoRegTests {
 		vector<string> excludes = {
 		    "test/select1.test", // tested separately
 		    "test/select2.test", "test/select3.test", "test/select4.test",
-		  //  "test/select5.test", // joins too slow
+		    "test/select5.test", // joins too slow
 		    "test/index",        // no index yet
 		    "random/aggregates", // too many diffs to SQLite, but TODO
 		    "random/groupby/",   // ditto
