@@ -68,7 +68,7 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 		for (size_t i = 0; i < statement.setop_left->select_list.size(); i++) {
 			auto expr = make_unique<ColumnRefExpression>(
 			    statement.setop_left->select_list[i]->return_type, i);
-			expr->alias = statement.setop_left->select_list[i]->alias;
+			expr->alias = statement.setop_left->select_list[i]->GetName();
 			new_select_list.push_back(move(expr));
 		}
 	}
