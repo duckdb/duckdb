@@ -240,22 +240,16 @@ unique_ptr<TableRef> TransformJoin(JoinExpr *root) {
 		return move(cross);
 	}
 
-	// transform the quals, depends on AExprTranform and BoolExprTransform
 	switch (root->quals->type) {
-	case T_A_Expr: {
-		result->condition =
-		    TransformAExpr(reinterpret_cast<A_Expr *>(root->quals));
+	case T_A_Expr:
+	case T_BoolExpr:
+	case T_NullTest:
+		result->condition = TransformExpression(root->quals);
 		break;
-	}
-	case T_BoolExpr: {
-		result->condition =
-		    TransformBoolExpr(reinterpret_cast<BoolExpr *>(root->quals));
-		break;
-	}
-	default: {
+
+	default:
 		throw NotImplementedException(
 		    "Join quals type %d not supported yet...\n", root->larg->type);
-	}
 	}
 	return move(result);
 }
