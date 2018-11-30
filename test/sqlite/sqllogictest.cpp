@@ -729,8 +729,7 @@ struct AutoRegTests {
 		    "test/select2.test", "test/select3.test", "test/select4.test",
 		    "test/select5.test", // joins too slow
 		    "test/index",        // no index yet
-		    "random/aggregates", // too many diffs to SQLite, but TODO
-		    "random/groupby/",   // ditto
+		    //  "random/groupby/",   // ditto
 		    "random/select/slt_good_70.test", // join on not between
 		    "random/expr/slt_good_10.test",   // these all fail because the AVG
 		                                      // decimal rewrite
@@ -760,7 +759,25 @@ struct AutoRegTests {
 		    "random/expr/slt_good_9.test", "random/expr/slt_good_90.test",
 		    "random/expr/slt_good_91.test", "random/expr/slt_good_94.test",
 		    "random/expr/slt_good_95.test", "random/expr/slt_good_96.test",
-		    "random/expr/slt_good_99.test",
+		    "random/expr/slt_good_99.test", "random/aggregates/slt_good_2.test",
+		    "random/aggregates/slt_good_5.test",
+		    "random/aggregates/slt_good_7.test",
+		    "random/aggregates/slt_good_9.test",
+		    "random/aggregates/slt_good_17.test",
+		    "random/aggregates/slt_good_28.test",
+		    "random/aggregates/slt_good_45.test",
+		    "random/aggregates/slt_good_50.test",
+		    "random/aggregates/slt_good_52.test",
+		    "random/aggregates/slt_good_58.test",
+		    "random/aggregates/slt_good_65.test",
+		    "random/aggregates/slt_good_66.test",
+		    "random/aggregates/slt_good_76.test",
+		    "random/aggregates/slt_good_81.test",
+		    "random/aggregates/slt_good_96.test",
+		    "random/aggregates/slt_good_102.test",
+		    "random/aggregates/slt_good_106.test",
+		    "random/aggregates/slt_good_112.test",
+		    "random/aggregates/slt_good_118.test",
 		    "evidence/slt_lang_replace.test",       // feature not supported
 		    "evidence/slt_lang_createview.test",    // "
 		    "evidence/slt_lang_dropview.test",      // "

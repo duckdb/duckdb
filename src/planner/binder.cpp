@@ -438,6 +438,7 @@ unique_ptr<TableRef> Binder::Visit(JoinRef &expr) {
 	AcceptChild(&expr.left);
 	AcceptChild(&expr.right);
 	AcceptChild(&expr.condition);
+	expr.condition->ResolveType();
 	return nullptr;
 }
 
