@@ -25,8 +25,11 @@ class PhysicalTableScan : public PhysicalOperator {
 	      table(table), column_ids(column_ids) {
 	}
 
+	//! The table to scan
 	TableCatalogEntry &tableref;
+	//! The physical data table to scan
 	DataTable &table;
+	//! The column ids to project
 	std::vector<column_t> column_ids;
 
 	std::vector<std::string> GetNames() override;

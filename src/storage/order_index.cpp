@@ -6,6 +6,8 @@
 
 #include "execution/expression_executor.hpp"
 
+#include "parser/expression/constant_expression.hpp"
+
 #include <algorithm>
 
 using namespace duckdb;
@@ -13,7 +15,7 @@ using namespace std;
 
 template <class T> struct SortChunk {
 	T value;
-	uint64_t column_id;
+	uint64_t row_id;
 };
 
 template <class T> static size_t templated_get_tuple_size() {
@@ -44,9 +46,9 @@ OrderIndex::OrderIndex(DataTable &table, vector<column_t> column_ids,
                        std::vector<TypeId> expression_types,
                        vector<unique_ptr<Expression>> expressions,
                        size_t initial_capacity)
-    : table(table), column_ids(column_ids), types(types),
-      expressions(move(expressions)), tuple_size(0), data(nullptr), count(0),
-      capacity(0) {
+    : Index(IndexType::ORDER_INDEX), table(table), column_ids(column_ids),
+      types(types), expressions(move(expressions)), tuple_size(0),
+      data(nullptr), count(0), capacity(0) {
 	// size of tuple is size of column id plus size of types
 	tuple_size = GetTupleSize(types[0]);
 	// initialize the data
@@ -60,14 +62,158 @@ OrderIndex::OrderIndex(DataTable &table, vector<column_t> column_ids,
 }
 
 template <class T>
+static size_t binary_search(SortChunk<T> *array, T key, size_t lower,
+                            size_t upper, bool &found) {
+	found = false;
+	while (lower <= upper) {
+		size_t middle = (lower + upper) / 2;
+		auto middle_element = array[middle].value;
+
+		if (middle_element < key) {
+			lower = middle + 1;
+		} else if (middle_element > key) {
+			upper = middle - 1;
+		} else {
+			found = true;
+			return middle;
+		}
+	}
+	return upper;
+}
+
+template <class T>
+static size_t binary_search_lt(uint8_t *data, T key, size_t count) {
+	auto array = (SortChunk<T> *)data;
+	bool found = false;
+	size_t pos = binary_search(array, key, 0, count, found);
+	if (found) {
+		while (pos > 0 && array[pos - 1].value == key) {
+			pos--;
+		}
+		return pos;
+	} else {
+		return count;
+	}
+}
+
+size_t OrderIndex::Search(Value value) {
+	assert(value.type == types[0]);
+
+	// perform the templated search to find the start location
+	switch (types[0]) {
+	case TypeId::TINYINT:
+		return binary_search_lt<int8_t>(data.get(), value.value_.tinyint,
+		                                count);
+	case TypeId::SMALLINT:
+		return binary_search_lt<int16_t>(data.get(), value.value_.smallint,
+		                                 count);
+	case TypeId::DATE:
+	case TypeId::INTEGER:
+		return binary_search_lt<int32_t>(data.get(), value.value_.integer,
+		                                 count);
+	case TypeId::TIMESTAMP:
+	case TypeId::BIGINT:
+		return binary_search_lt<int64_t>(data.get(), value.value_.bigint,
+		                                 count);
+	case TypeId::DECIMAL:
+		return binary_search_lt<double>(data.get(), value.value_.decimal,
+		                                count);
+	default:
+		throw NotImplementedException("Unimplemented type for index search");
+	}
+}
+
+template <class T>
+static size_t templated_scan(size_t &position, uint8_t *data, T key,
+                             size_t count, uint64_t *result_ids) {
+	auto array = (SortChunk<T> *)data;
+	size_t result_count = 0;
+	for (; position < count; position++) {
+		if (array[position].value != key) {
+			// finished the scan
+			position = count;
+			break;
+		}
+		result_ids[result_count++] = array[position].row_id;
+		if (result_count == STANDARD_VECTOR_SIZE) {
+			break;
+		}
+	}
+	return result_count;
+}
+
+void OrderIndex::Scan(size_t &position, Value value,
+                      Vector &result_identifiers) {
+	if (position == count) {
+		return;
+	}
+	assert(result_identifiers.type == TypeId::POINTER);
+	auto row_ids = (uint64_t *)result_identifiers.data;
+	// perform the templated scan to find the tuples to extract
+	switch (types[0]) {
+	case TypeId::TINYINT:
+		result_identifiers.count = templated_scan<int8_t>(
+		    position, data.get(), value.value_.tinyint, count, row_ids);
+		break;
+	case TypeId::SMALLINT:
+		result_identifiers.count = templated_scan<int16_t>(
+		    position, data.get(), value.value_.smallint, count, row_ids);
+		break;
+	case TypeId::DATE:
+	case TypeId::INTEGER:
+		result_identifiers.count = templated_scan<int32_t>(
+		    position, data.get(), value.value_.integer, count, row_ids);
+		break;
+	case TypeId::TIMESTAMP:
+	case TypeId::BIGINT:
+		result_identifiers.count = templated_scan<int64_t>(
+		    position, data.get(), value.value_.bigint, count, row_ids);
+		break;
+	case TypeId::DECIMAL:
+		result_identifiers.count = templated_scan<double>(
+		    position, data.get(), value.value_.decimal, count, row_ids);
+		break;
+	default:
+		throw NotImplementedException("Unimplemented type for index scan");
+	}
+}
+
+unique_ptr<IndexScanState>
+OrderIndex::InitializeScan(Transaction &transaction,
+                           vector<column_t> column_ids,
+                           Expression *expression) {
+	auto result = make_unique<OrderIndexScanState>(column_ids, *expression);
+	assert(expression->type == ExpressionType::VALUE_CONSTANT);
+	// search inside the index for the constant value
+	result->value = ((ConstantExpression *)expression)->value.CastAs(types[0]);
+	result->current_index = Search(result->value);
+	return move(result);
+}
+
+void OrderIndex::Scan(Transaction &transaction, IndexScanState *ss,
+                      DataChunk &result) {
+	auto state = (OrderIndexScanState *)ss;
+	// scan the index
+	StaticVector<uint64_t> result_identifiers;
+	do {
+		Scan(state->current_index, state->value, result_identifiers);
+		if (result_identifiers.count == 0) {
+			return;
+		}
+		// now go to the base table to fetch the tuples
+		table.Fetch(transaction, result, state->column_ids, result_identifiers);
+	} while (result_identifiers.count == 0);
+}
+
+template <class T>
 static void templated_insert(uint8_t *dataptr, DataChunk &input,
                              Vector &row_ids) {
 	auto actual_data = (SortChunk<T> *)dataptr;
 	auto input_data = (T *)input.data[0].data;
-	auto column_ids = (uint64_t *)row_ids.data;
+	auto row_identifiers = (uint64_t *)row_ids.data;
 	for (size_t i = 0; i < row_ids.count; i++) {
 		actual_data[i].value = input_data[i];
-		actual_data[i].column_id = column_ids[i];
+		actual_data[i].row_id = row_identifiers[i];
 	}
 }
 
@@ -162,10 +308,10 @@ void OrderIndex::Append(ClientContext &context, DataChunk &appended_data,
 
 	// create the row identifiers
 	StaticVector<uint64_t> row_identifiers;
-	auto column_ids = (uint64_t *)row_identifiers.data;
+	auto row_ids = (uint64_t *)row_identifiers.data;
 	row_identifiers.count = appended_data.size();
 	for (size_t i = 0; i < row_identifiers.count; i++) {
-		column_ids[i] = row_identifier_start + i;
+		row_ids[i] = row_identifier_start + i;
 	}
 
 	Insert(expression_result, row_identifiers);
@@ -190,10 +336,38 @@ void OrderIndex::Update(ClientContext &context,
 		// we can ignore the update
 		return;
 	}
-	throw NotImplementedException("Update");
-
 	// otherwise we need to change the data inside the index
 	lock_guard<mutex> l(lock);
+
+	// first we recreate an insert chunk using the updated data
+	// NOTE: this assumes update_data contains ALL columns used by the index
+	// FIXME this method is ugly, but if we use a different DataChunk the column
+	// references will not be aligned properly
+	DataChunk temp_chunk;
+	temp_chunk.Initialize(table.types);
+	temp_chunk.data[0].count = update_data.size();
+	for (size_t i = 0; i < column_ids.size(); i++) {
+		if (column_ids[i] == COLUMN_IDENTIFIER_ROW_ID) {
+			continue;
+		}
+		bool found_column = false;
+		for (size_t j = 0; i < update_columns.size(); j++) {
+			if (column_ids[i] == update_columns[j]) {
+				temp_chunk.data[column_ids[i]].Reference(
+				    update_data.data[update_columns[j]]);
+				found_column = true;
+				break;
+			}
+		}
+		assert(found_column);
+	}
+
+	// now resolve the expressions on the temp_chunk
+	ExpressionExecutor executor(temp_chunk, context);
+	executor.Execute(expressions, expression_result);
+
+	// insert the expression result
+	Insert(expression_result, row_identifiers);
 
 	// finally sort the index again
 	Sort();
@@ -202,7 +376,7 @@ void OrderIndex::Update(ClientContext &context,
 template <class T> void templated_print(uint8_t *dataptr, size_t count) {
 	auto actual_data = (SortChunk<T> *)dataptr;
 	for (size_t i = 0; i < count; i++) {
-		cout << "[" << actual_data[i].value << " - " << actual_data[i].column_id
+		cout << "[" << actual_data[i].value << " - " << actual_data[i].row_id
 		     << "]"
 		     << "\n";
 	}

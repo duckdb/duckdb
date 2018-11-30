@@ -135,9 +135,7 @@ duckdbQuery(void *pConn,       /* Connection created by xConnect */
 				         str ? (str == 0 ? "(empty)" : str) : "NULL");
 				break;
 			}
-			default: {
-				fprintf(stderr, "%s\n", "UNKNOWN");
-			}
+			default: { fprintf(stderr, "%s\n", "UNKNOWN"); }
 			}
 			(*pazResult)[r * result.column_count + c] = buffer;
 		}

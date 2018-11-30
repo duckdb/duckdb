@@ -70,7 +70,7 @@ StorageChunk *DataTable::GetChunk(size_t row_number) {
 		}
 		chunk = chunk->next.get();
 	}
-	return nullptr;
+	throw OutOfRangeException("Row identifiers out of bounds!");
 }
 
 void DataTable::VerifyConstraints(TableCatalogEntry &table,
@@ -253,10 +253,6 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context,
 	auto first_id = sel_vector ? ids[sel_vector[0]] : ids[0];
 	// first find the chunk the row ids belong to
 	auto chunk = GetChunk(first_id);
-	if (!chunk) {
-		throw OutOfRangeException(
-		    "Row identifiers for deletion out of bounds!");
-	}
 
 	// get an exclusive lock on the chunk
 	chunk->GetExclusiveLock();
@@ -308,9 +304,6 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context,
 	auto first_id = sel_vector ? ids[sel_vector[0]] : ids[0];
 	// first find the chunk the row ids belong to
 	auto chunk = GetChunk(first_id);
-	if (!chunk) {
-		throw OutOfRangeException("Row identifiers for update out of bounds!");
-	}
 
 	// get an exclusive lock on the chunk
 	chunk->GetExclusiveLock();
@@ -328,10 +321,9 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context,
 
 	// no constraints are violated
 	// first update any indexes
-	//
-	//    for (auto &index : indexes) {
-	//		index->Update(context, column_ids, updates, row_identifiers);
-	//	}
+	for (auto &index : indexes) {
+		index->Update(context, column_ids, updates, row_identifiers);
+	}
 
 	// now update the entries
 	VectorOperations::Exec(row_identifiers, [&](size_t i, size_t k) {
@@ -396,14 +388,16 @@ void DataTable::RetrieveVersionedData(DataChunk &result,
 	for (size_t j = 0; j < column_ids.size(); j++) {
 		if (column_ids[j] == COLUMN_IDENTIFIER_ROW_ID) {
 			// assign the row identifiers
-			auto data = (uint64_t *)result.data[j].data;
+			auto data =
+			    ((uint64_t *)result.data[j].data) + result.data[j].count;
 			for (size_t k = 0; k < alternate_version_count; k++) {
 				data[k] = alternate_version_index[k];
 			}
 		} else {
 			// grab data from the stored tuple for each column
 			size_t tuple_size = GetTypeIdSize(result.data[j].type);
-			auto res_data = result.data[j].data;
+			auto res_data =
+			    result.data[j].data + result.data[j].count * tuple_size;
 			size_t offset = accumulative_tuple_size[column_ids[j]];
 			for (size_t k = 0; k < alternate_version_count; k++) {
 				auto base_data = alternate_version_pointers[k] + offset;
@@ -540,6 +534,92 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result,
 			return;
 		}
 	}
+}
+
+void DataTable::Fetch(Transaction &transaction, DataChunk &result,
+                      std::vector<column_t> &column_ids,
+                      Vector &row_identifiers) {
+	assert(row_identifiers.type == TypeId::POINTER);
+	auto row_ids = (uint64_t *)row_identifiers.data;
+	// sort the row identifiers first
+	// this is done so we can minimize the amount of chunks that we lock
+	sel_t sort_vector[STANDARD_VECTOR_SIZE];
+	VectorOperations::Sort(row_identifiers, sort_vector);
+
+	StorageChunk *current_chunk = nullptr;
+	for (size_t i = 0; i < row_identifiers.count; i++) {
+		auto row_id = row_ids[sort_vector[i]];
+		auto chunk = GetChunk(row_id);
+		if (chunk != current_chunk) {
+			// chunk is not locked yet
+			// release the current lock, if any
+			if (current_chunk) {
+				current_chunk->ReleaseSharedLock();
+			}
+			// get the lock on the current chunk
+			chunk->GetSharedLock();
+			current_chunk = chunk;
+		}
+		assert(row_id >= chunk->start && row_id < chunk->start + chunk->count);
+		auto index = row_id - chunk->start;
+		bool retrieve_base_version = true;
+
+		// check if this tuple is versioned
+		auto version = chunk->version_pointers[index];
+		if (version) {
+			// tuple is versioned
+			// check which tuple to retrieve
+			if (!(version->version_number == transaction.transaction_id ||
+			      version->version_number < transaction.start_time)) {
+				// use the data in the original table
+				retrieve_base_version = true;
+			} else {
+				retrieve_base_version = false;
+
+				uint8_t *alternate_version_pointer;
+				size_t alternate_version_index;
+
+				// follow the version pointers
+				while (true) {
+					auto next = version->next;
+					if (!next) {
+						// use this version: no predecessor
+						break;
+					}
+					if (next->version_number == transaction.transaction_id) {
+						// use this version: it was created by us
+						break;
+					}
+					if (next->version_number < transaction.start_time) {
+						// use this version: it was committed by us
+						break;
+					}
+					version = next;
+				}
+				if (!version->tuple_data) {
+					// we have to use this version, but it was deleted
+					continue;
+				} else {
+					alternate_version_pointer = version->tuple_data;
+					alternate_version_index = row_id;
+
+					RetrieveVersionedData(result, column_ids,
+					                      &alternate_version_pointer,
+					                      &alternate_version_index, 1);
+				}
+			}
+		}
+
+		if (retrieve_base_version) {
+			if (!chunk->deleted[index]) {
+				sel_t regular_entry = index;
+				// not versioned, just retrieve the base info
+				RetrieveBaseTableData(result, column_ids, &regular_entry, 1,
+				                      chunk);
+			}
+		}
+	}
+	current_chunk->ReleaseSharedLock();
 }
 
 void DataTable::CreateIndexScan(ScanStructure &structure,

@@ -339,8 +339,9 @@ std::string JoinTypeToString(JoinType type);
 //===--------------------------------------------------------------------===//
 
 enum class IndexType {
-	INVALID = 0, // invalid index type
-	BTREE = 1    // B+-Tree
+	INVALID = 0,     // invalid index type
+	ORDER_INDEX = 1, // Order Index
+	BTREE = 2        // B+-Tree
 };
 IndexType StringToIndexType(const std::string &str);
 

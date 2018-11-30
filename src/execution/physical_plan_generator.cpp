@@ -6,6 +6,7 @@
 #include "parser/expression/list.hpp"
 #include "planner/operator/list.hpp"
 
+#include "storage/order_index.hpp"
 #include "storage/storage_manager.hpp"
 
 using namespace duckdb;
@@ -123,16 +124,91 @@ void PhysicalPlanGenerator::Visit(LogicalCreateIndex &op) {
 	    op.table, op.column_ids, move(op.expressions), move(op.info));
 }
 
+//! Attempt to create an index scan from a filter + get, if possible
+static unique_ptr<PhysicalOperator> CreateIndexScan(LogicalFilter &filter,
+                                                    LogicalGet &scan) {
+	if (!scan.table) {
+		return nullptr;
+	}
+
+	auto &storage = *scan.table->storage;
+
+	if (storage.indexes.size() == 0) {
+		// no indexes on the table, can't rewrite
+		return nullptr;
+	}
+
+	// check all the indexes
+	for (size_t j = 0; j < storage.indexes.size(); j++) {
+		auto &index = storage.indexes[j];
+		// FIXME: assume every index is order index currently
+		assert(index->type == IndexType::ORDER_INDEX);
+		auto order_index = (OrderIndex *)index.get();
+		// try to find a matching index for any of the filter expressions
+		// currently we only look for equality predicates
+		for (size_t i = 0; i < filter.expressions.size(); i++) {
+			auto expr = filter.expressions[i].get();
+			// equality predicate
+			if (expr->type == ExpressionType::COMPARE_EQUAL) {
+				auto comparison = (ComparisonExpression *)expr;
+				int child = -1;
+				// check if any of the two children is an index
+				if (order_index->expressions[0]->Equals(
+				        comparison->children[0].get()) &&
+				    comparison->children[1]->type ==
+				        ExpressionType::VALUE_CONSTANT) {
+					child = 0;
+				} else if (order_index->expressions[0]->Equals(
+				               comparison->children[1].get()) &&
+				           comparison->children[0]->type ==
+				               ExpressionType::VALUE_CONSTANT) {
+					child = 1;
+				}
+				if (child >= 0) {
+					// we can use the index here!
+					// create an index scan
+					// FIXME: use statistics to see if it is worth it
+					auto index_scan = make_unique<PhysicalIndexScan>(
+					    *scan.table, *scan.table->storage, *order_index,
+					    scan.column_ids, move(comparison->children[1 - child]));
+					// remove the original expression from the filter
+					filter.expressions.erase(filter.expressions.begin() + i);
+					return move(index_scan);
+				}
+			}
+		}
+	}
+	return nullptr;
+}
+
 void PhysicalPlanGenerator::Visit(LogicalFilter &op) {
-	LogicalOperatorVisitor::Visit(op);
+	if (op.children[0]->type == LogicalOperatorType::GET) {
+		// filter + get
+		// check if we can transform this into an index scan
+		auto scan = (LogicalGet *)op.children[0].get();
+		auto node = CreateIndexScan(op, *scan);
+		if (node) {
+			// we can do an index scan, move it to the root node
+			assert(!plan);
+			plan = move(node);
+		} else {
+			// we can't do an index scan, create a normal table scan
+			LogicalOperatorVisitor::Visit(op);
+		}
+	} else {
+		LogicalOperatorVisitor::Visit(op);
+	}
 
 	if (!plan) {
 		throw Exception("Filter cannot be the first node of a plan!");
 	}
 
-	auto filter = make_unique<PhysicalFilter>(move(op.expressions));
-	filter->children.push_back(move(plan));
-	this->plan = move(filter);
+	if (op.expressions.size() > 0) {
+		// create a filter if there is anything to filter
+		auto filter = make_unique<PhysicalFilter>(move(op.expressions));
+		filter->children.push_back(move(plan));
+		this->plan = move(filter);
+	}
 }
 
 void PhysicalPlanGenerator::Visit(LogicalGet &op) {
@@ -142,17 +218,8 @@ void PhysicalPlanGenerator::Visit(LogicalGet &op) {
 		this->plan = make_unique<PhysicalDummyScan>();
 		return;
 	}
-	unique_ptr<PhysicalOperator> scan;
-	if (op.expression) {
-		throw NotImplementedException("FIXME: index scan");
-		//        scan = make_unique<PhysicalIndexScan>(*op.table,
-		//        *op.table->storage,
-		//                                              *op.table->storage->indexes[op.index_id],
-		//                                              op.column_ids);
-	} else {
-		scan = make_unique<PhysicalTableScan>(*op.table, *op.table->storage,
-		                                      op.column_ids);
-	}
+	auto scan = make_unique<PhysicalTableScan>(*op.table, *op.table->storage,
+	                                           op.column_ids);
 	if (plan) {
 		throw Exception("Scan has to be the first node of a plan!");
 	}

@@ -140,16 +140,16 @@ TEST_CASE("Test insert into from wrong type", "[simpleinserts]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value("4"), Value("13")}));
 }
 
-TEST_CASE("Test insert  from constant query", "[simpleinserts]") {
+TEST_CASE("Test insert from constant query", "[simpleinserts]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers SELECT 42"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers SELECT NULL"));
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO integers SELECT CAST(NULL AS VARCHAR)"));
 
 	result = con.Query("SELECT * FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {42, Value()}));
 }
-

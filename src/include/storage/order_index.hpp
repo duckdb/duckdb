@@ -21,6 +21,16 @@
 
 namespace duckdb {
 
+struct OrderIndexScanState : public IndexScanState {
+	Value value;
+	size_t current_index;
+
+	OrderIndexScanState(std::vector<column_t> column_ids,
+	                    Expression &expression)
+	    : IndexScanState(column_ids, expression) {
+	}
+};
+
 //! OrderIndex is a simple sorted list index that can be binary searched
 class OrderIndex : public Index {
   public:
@@ -36,6 +46,15 @@ class OrderIndex : public Index {
 	void Sort();
 	//! Print the index to the console
 	void Print();
+
+	//! Initialize a scan on the index with the given expression and column ids
+	//! to fetch from the base table
+	std::unique_ptr<IndexScanState>
+	InitializeScan(Transaction &transaction, std::vector<column_t> column_ids,
+	               Expression *expression) override;
+	//! Perform a lookup on the index
+	void Scan(Transaction &transaction, IndexScanState *ss,
+	          DataChunk &result) override;
 
 	// Append entries to the index
 	void Append(ClientContext &context, DataChunk &entries,
@@ -65,6 +84,12 @@ class OrderIndex : public Index {
 
   private:
 	DataChunk expression_result;
+
+	//! Get the start position in the index for a constant value (point query)
+	size_t Search(Value value);
+	//! Scan the index starting from the position, updating the position.
+	//! Returns the amount of tuples scanned.
+	void Scan(size_t &position, Value value, Vector &result_identifiers);
 };
 
 } // namespace duckdb

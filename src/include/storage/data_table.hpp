@@ -52,6 +52,9 @@ class DataTable {
 	void Scan(Transaction &transaction, DataChunk &result,
 	          const std::vector<column_t> &column_ids,
 	          ScanStructure &structure);
+	//! Fetch data from the specific row identifiers from the base table
+	void Fetch(Transaction &transaction, DataChunk &result,
+	           std::vector<column_t> &column_ids, Vector &row_ids);
 	//! Append a DataChunk to the table. Throws an exception if the columns
 	// don't match the tables' columns.
 	void Append(TableCatalogEntry &table, ClientContext &context,
