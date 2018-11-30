@@ -8,11 +8,11 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test index creation statements", "[join]") {
+TEST_CASE("Test index creation statements with multiple connections",
+          "[join]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
-
 	DuckDBConnection con2(db);
 
 	// create a table
@@ -60,4 +60,27 @@ TEST_CASE("Test index creation statements", "[join]") {
 	// the new state should be visible
 	result = con.Query("SELECT j FROM integers WHERE i=7");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+}
+
+TEST_CASE("Index creation on an expression", "[join]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+
+	DuckDBConnection con(db);
+
+	// create a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER)"));
+	for (size_t i = 0; i < 3000; i++) {
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" +
+		                          to_string((int)(i - 1500)) + ", " +
+		                          to_string(i + 12) + ")"));
+	}
+
+	result = con.Query("SELECT j FROM integers WHERE abs(i)=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1511, 1513}));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(abs(i))"));
+
+	result = con.Query("SELECT j FROM integers WHERE abs(i)=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1511, 1513}));
 }

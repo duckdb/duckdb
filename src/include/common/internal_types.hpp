@@ -500,6 +500,47 @@ bool TypeIsIntegral(TypeId type);
 bool TypeIsNumeric(TypeId type);
 bool TypeIsInteger(TypeId type);
 
+template <class T> constexpr bool IsValidType() {
+	return std::is_same<T, bool>() || std::is_same<T, int8_t>() ||
+	       std::is_same<T, int16_t>() || std::is_same<T, int32_t>() ||
+	       std::is_same<T, int64_t>() || std::is_same<T, uint64_t>() ||
+	       std::is_same<T, double>() || std::is_same<T, const char *>();
+}
+
+template <class T> constexpr bool IsIntegerType() {
+	return std::is_same<T, int8_t>() || std::is_same<T, int16_t>() ||
+	       std::is_same<T, int32_t>() || std::is_same<T, int64_t>() ||
+	       std::is_same<T, uint64_t>();
+}
+
+//! Returns the TypeId for the given type
+template <class T> TypeId GetTypeId() {
+	static_assert(IsValidType<T>(), "Invalid type for GetTypeId");
+	if (std::is_same<T, bool>()) {
+	} else if (std::is_same<T, int8_t>()) {
+		return TypeId::TINYINT;
+	} else if (std::is_same<T, int16_t>()) {
+		return TypeId::SMALLINT;
+	} else if (std::is_same<T, int32_t>()) {
+		return TypeId::INTEGER;
+	} else if (std::is_same<T, int64_t>()) {
+		return TypeId::BIGINT;
+	} else if (std::is_same<T, uint64_t>()) {
+		return TypeId::POINTER;
+	} else if (std::is_same<T, double>()) {
+		return TypeId::DECIMAL;
+	} else if (std::is_same<T, const char *>()) {
+		return TypeId::VARCHAR;
+	} else {
+		assert(0);
+	}
+}
+
+//! Returns the minimum value that can be stored in a given type
+template <class T> int64_t MinimumValue();
+//! Returns the maximum value that can be stored in a given type
+template <class T> int64_t MaximumValue();
+
 //! Returns the minimum value that can be stored in a given type
 int64_t MinimumValue(TypeId type);
 //! Returns the maximum value that can be stored in a given type

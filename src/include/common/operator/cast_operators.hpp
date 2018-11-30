@@ -22,11 +22,46 @@ struct Cast {
 };
 
 //===--------------------------------------------------------------------===//
+// Numeric -> int8_t casts
+//===--------------------------------------------------------------------===//
+template <> int8_t Cast::Operation(int16_t left);
+template <> int8_t Cast::Operation(int32_t left);
+template <> int8_t Cast::Operation(int64_t left);
+template <> int8_t Cast::Operation(uint64_t left);
+template <> int8_t Cast::Operation(double left);
+//===--------------------------------------------------------------------===//
+// Numeric -> int16_t casts
+//===--------------------------------------------------------------------===//
+template <> int16_t Cast::Operation(int32_t left);
+template <> int16_t Cast::Operation(int64_t left);
+template <> int16_t Cast::Operation(uint64_t left);
+template <> int16_t Cast::Operation(double left);
+//===--------------------------------------------------------------------===//
+// Numeric -> int32_t casts
+//===--------------------------------------------------------------------===//
+template <> int32_t Cast::Operation(int64_t left);
+template <> int32_t Cast::Operation(uint64_t left);
+template <> int32_t Cast::Operation(double left);
+//===--------------------------------------------------------------------===//
+// Numeric -> int64_t casts
+//===--------------------------------------------------------------------===//
+template <> int64_t Cast::Operation(uint64_t left);
+template <> int64_t Cast::Operation(double left);
+//===--------------------------------------------------------------------===//
+// Numeric -> uint64_t casts
+//===--------------------------------------------------------------------===//
+template <> uint64_t Cast::Operation(int8_t left);
+template <> uint64_t Cast::Operation(int16_t left);
+template <> uint64_t Cast::Operation(int32_t left);
+template <> uint64_t Cast::Operation(int64_t left);
+template <> uint64_t Cast::Operation(double left);
+
+//===--------------------------------------------------------------------===//
 // String -> Numeric Casts
 //===--------------------------------------------------------------------===//
 template <> int8_t Cast::Operation(const char *left);
 template <> int16_t Cast::Operation(const char *left);
-template <> int Cast::Operation(const char *left);
+template <> int32_t Cast::Operation(const char *left);
 template <> int64_t Cast::Operation(const char *left);
 template <> uint64_t Cast::Operation(const char *left);
 template <> double Cast::Operation(const char *left);
@@ -35,7 +70,7 @@ template <> double Cast::Operation(const char *left);
 //===--------------------------------------------------------------------===//
 template <> std::string Cast::Operation(int8_t left);
 template <> std::string Cast::Operation(int16_t left);
-template <> std::string Cast::Operation(int left);
+template <> std::string Cast::Operation(int32_t left);
 template <> std::string Cast::Operation(int64_t left);
 template <> std::string Cast::Operation(uint64_t left);
 template <> std::string Cast::Operation(double left);

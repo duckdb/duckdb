@@ -11,7 +11,12 @@ TEST_CASE("Test handling of overflows in basic types", "[overflowhandling]") {
 	DuckDBConnection con(db);
 
 	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
-	result = con.Query("INSERT INTO test VALUES (11, 22), (12, 21), (14, 22)");
+
+	// insert too large value for domain should cause error
+	REQUIRE_FAIL(con.Query("INSERT INTO test VALUES (-1099511627776, 3)"));
+
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO test VALUES (11, 22), (12, 21), (14, 22)"));
 
 	// proper upcasting of integer columns in AVG
 	result = con.Query("SELECT b, AVG(a) FROM test GROUP BY b ORDER BY b;");

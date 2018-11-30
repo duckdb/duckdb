@@ -41,7 +41,11 @@ void PhysicalCreateIndex::_GetChunk(ClientContext &context, DataChunk &chunk,
 	}
 
 	// create the chunk to hold intermediate expression results
-	assert(expressions.size() == 1);
+	if (expressions.size() > 1) {
+		throw NotImplementedException(
+		    "Multidimensional indexes not supported yet");
+	}
+
 	DataChunk result;
 	vector<TypeId> result_types;
 	for (auto &expr : expressions) {

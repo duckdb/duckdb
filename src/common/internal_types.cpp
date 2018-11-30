@@ -3,6 +3,8 @@
 #include "common/exception.hpp"
 #include "common/string_util.hpp"
 
+#include <type_traits>
+
 using namespace std;
 
 namespace duckdb {
@@ -472,22 +474,56 @@ string JoinTypeToString(JoinType type) {
 	}
 }
 
+template <class T> int64_t MinimumValue() {
+	static_assert(IsIntegerType<T>(), "MinimumValue requires integral type");
+	if (std::is_same<T, int8_t>()) {
+		return std::numeric_limits<int8_t>::min() + 1;
+	} else if (std::is_same<T, int16_t>()) {
+		return std::numeric_limits<int16_t>::min() + 1;
+	} else if (std::is_same<T, int32_t>()) {
+		return std::numeric_limits<int32_t>::min() + 1;
+	} else if (std::is_same<T, int64_t>()) {
+		return std::numeric_limits<int64_t>::min() + 1;
+	} else if (std::is_same<T, uint64_t>()) {
+		return std::numeric_limits<uint64_t>::min();
+	} else {
+		assert(0);
+	}
+}
+
+template <class T> int64_t MaximumValue() {
+	static_assert(IsIntegerType<T>(), "MaximumValue requires integral type");
+	if (std::is_same<T, int8_t>()) {
+		return std::numeric_limits<int8_t>::max();
+	} else if (std::is_same<T, int16_t>()) {
+		return std::numeric_limits<int16_t>::max();
+	} else if (std::is_same<T, int32_t>()) {
+		return std::numeric_limits<int32_t>::max();
+	} else if (std::is_same<T, int64_t>()) {
+		return std::numeric_limits<int64_t>::max();
+	} else if (std::is_same<T, uint64_t>()) {
+		return std::numeric_limits<int64_t>::max();
+	} else {
+		assert(0);
+	}
+}
+
 // we offset the minimum value by 1 to account for the NULL value in the
 // hashtables
 int64_t MinimumValue(TypeId type) {
 	switch (type) {
 	case TypeId::TINYINT:
-		return std::numeric_limits<int8_t>::min() + 1;
+		return MinimumValue<int8_t>();
 	case TypeId::SMALLINT:
-		return std::numeric_limits<int16_t>::min() + 1;
+		return MinimumValue<int16_t>();
 	case TypeId::DATE:
 	case TypeId::INTEGER:
-		return std::numeric_limits<int32_t>::min() + 1;
+		return MinimumValue<int32_t>();
 	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
-		return std::numeric_limits<int64_t>::min() + 1;
+		return MinimumValue<int64_t>();
 	case TypeId::POINTER:
-		return std::numeric_limits<uint64_t>::min();
+		return MinimumValue<uint64_t>();
 	default:
 		throw InvalidTypeException(type, "MinimumValue requires integral type");
 	}
@@ -496,17 +532,17 @@ int64_t MinimumValue(TypeId type) {
 int64_t MaximumValue(TypeId type) {
 	switch (type) {
 	case TypeId::TINYINT:
-		return std::numeric_limits<int8_t>::max();
+		return MaximumValue<int8_t>();
 	case TypeId::SMALLINT:
-		return std::numeric_limits<int16_t>::max();
+		return MaximumValue<int16_t>();
 	case TypeId::DATE:
 	case TypeId::INTEGER:
-		return std::numeric_limits<int32_t>::max();
+		return MaximumValue<int32_t>();
 	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
-		return std::numeric_limits<int64_t>::max();
+		return MaximumValue<int64_t>();
 	case TypeId::POINTER:
-		return std::numeric_limits<int64_t>::max();
+		return MaximumValue<uint64_t>();
 	default:
 		throw InvalidTypeException(type, "MaximumValue requires integral type");
 	}
