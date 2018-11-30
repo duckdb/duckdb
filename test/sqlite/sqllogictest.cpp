@@ -773,6 +773,7 @@ struct AutoRegTests {
 		    "random/aggregates/slt_good_66.test",
 		    "random/aggregates/slt_good_76.test",
 		    "random/aggregates/slt_good_81.test",
+		    "random/aggregates/slt_good_90.test",
 		    "random/aggregates/slt_good_96.test",
 		    "random/aggregates/slt_good_102.test",
 		    "random/aggregates/slt_good_106.test",
