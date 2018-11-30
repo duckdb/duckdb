@@ -327,13 +327,10 @@ unique_ptr<InsertStatement> TransformInsert(Node *node) {
 	}
 
 	auto select_stmt = reinterpret_cast<SelectStmt *>(stmt->selectStmt);
-	if (select_stmt->fromClause) {
+	if (!select_stmt->valuesLists) {
 		// insert from select statement
 		result->select_statement = TransformSelect(stmt->selectStmt);
 	} else {
-		// simple set of values
-		assert(select_stmt->valuesLists);
-
 		// transform the insert list
 		auto list = select_stmt->valuesLists;
 		for (auto value_list = list->head; value_list != NULL;
