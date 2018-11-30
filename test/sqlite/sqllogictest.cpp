@@ -729,7 +729,7 @@ struct AutoRegTests {
 		    "test/select2.test", "test/select3.test", "test/select4.test",
 		    "test/select5.test", // joins too slow
 		    "test/index",        // no index yet
-		    //  "random/groupby/",   // ditto
+		    "random/groupby/",   // having column binding issue with first
 		    "random/select/slt_good_70.test", // join on not between
 		    "random/expr/slt_good_10.test",   // these all fail because the AVG
 		                                      // decimal rewrite
