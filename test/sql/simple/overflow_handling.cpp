@@ -18,6 +18,9 @@ TEST_CASE("Test handling of overflows in basic types", "[overflowhandling]") {
 	REQUIRE_NO_FAIL(
 	    con.Query("INSERT INTO test VALUES (11, 22), (12, 21), (14, 22)"));
 
+	//! Casting NULL should still work though
+	REQUIRE_NO_FAIL(con.Query("SELECT ALL CAST ( - SUM ( DISTINCT - CAST ( NULL AS INTEGER ) ) AS INTEGER ) FROM test"));
+
 	// proper upcasting of integer columns in AVG
 	result = con.Query("SELECT b, AVG(a) FROM test GROUP BY b ORDER BY b;");
 	REQUIRE(CHECK_COLUMN(result, 0, {21, 22}));

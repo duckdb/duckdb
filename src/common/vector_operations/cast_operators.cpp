@@ -13,12 +13,20 @@ template <class SRC_TYPE, class DST_TYPE, class OP, bool IGNORE_NULL>
 void templated_cast_loop(Vector &source, Vector &result) {
 	auto ldata = (SRC_TYPE *)source.data;
 	auto result_data = (DST_TYPE *)result.data;
-	VectorOperations::Exec(source, [&](size_t i, size_t k) {
-		if (!IGNORE_NULL || !result.nullmask[i]) {
+	if (!IGNORE_NULL || !result.nullmask.any()) {
+		VectorOperations::Exec(source, [&](size_t i, size_t k) {
 			result_data[i] =
 			    OP::template Operation<SRC_TYPE, DST_TYPE>(ldata[i]);
-		}
-	});
+		});
+	} else {
+		VectorOperations::Exec(source, [&](size_t i, size_t k) {
+			if (!result.nullmask[i]) {
+				result_data[i] =
+				    OP::template Operation<SRC_TYPE, DST_TYPE>(ldata[i]);
+			}
+		});
+
+	}
 	result.sel_vector = source.sel_vector;
 	result.count = source.count;
 }
@@ -80,22 +88,22 @@ void VectorOperations::Cast(Vector &source, Vector &result) {
 	switch (source.type) {
 	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
-		result_cast_switch<int8_t, operators::Cast, false>(source, result);
+		result_cast_switch<int8_t, operators::Cast, true>(source, result);
 		break;
 	case TypeId::SMALLINT:
-		result_cast_switch<int16_t, operators::Cast, false>(source, result);
+		result_cast_switch<int16_t, operators::Cast, true>(source, result);
 		break;
 	case TypeId::INTEGER:
-		result_cast_switch<int32_t, operators::Cast, false>(source, result);
+		result_cast_switch<int32_t, operators::Cast, true>(source, result);
 		break;
 	case TypeId::BIGINT:
-		result_cast_switch<int64_t, operators::Cast, false>(source, result);
+		result_cast_switch<int64_t, operators::Cast, true>(source, result);
 		break;
 	case TypeId::DECIMAL:
-		result_cast_switch<double, operators::Cast, false>(source, result);
+		result_cast_switch<double, operators::Cast, true>(source, result);
 		break;
 	case TypeId::POINTER:
-		result_cast_switch<uint64_t, operators::Cast, false>(source, result);
+		result_cast_switch<uint64_t, operators::Cast, true>(source, result);
 		break;
 	case TypeId::VARCHAR:
 		result_cast_switch<const char *, operators::Cast, true>(source, result);
