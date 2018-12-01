@@ -245,8 +245,8 @@ static bool boolean_array_from_nullmask(sel_t *sel_vector, size_t count,
                                         bool allow_nulls) {
 	bool success = true;
 	VectorOperations::Exec(sel_vector, count, [&](size_t i, size_t k) {
-		array[i] = mask[i];
-		if (array[i] && !allow_nulls) {
+		array[k] = mask[i];
+		if (array[k] && !allow_nulls) {
 			success = false;
 			return;
 		}
