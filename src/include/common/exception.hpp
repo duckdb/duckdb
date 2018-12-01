@@ -24,8 +24,8 @@
 #include <stdexcept>
 #include <string>
 
-#include "common/internal_types.hpp"
 #include "common/string_util.hpp"
+#include "common/types.hpp"
 
 namespace duckdb {
 

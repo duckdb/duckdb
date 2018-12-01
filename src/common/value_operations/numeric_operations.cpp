@@ -1,5 +1,6 @@
 
 #include "common/exception.hpp"
+#include "common/limits.hpp"
 #include "common/operator/aggregate_operators.hpp"
 #include "common/operator/numeric_binary_operators.hpp"
 #include "common/value_operations/value_operations.hpp"
@@ -18,7 +19,7 @@ static void templated_binary_operation(const Value &left, const Value &right,
 				result = left;
 			}
 		} else {
-			result.type = std::max(left.type, right.type);
+			result.type = max(left.type, right.type);
 			result.is_null = true;
 		}
 		return;
@@ -32,10 +33,10 @@ static void templated_binary_operation(const Value &left, const Value &right,
 		templated_binary_operation<OP>(left_cast, right_cast, result,
 		                               ignore_null);
 		if (result.is_null) {
-			result.type = std::max(left.type, right.type);
+			result.type = max(left.type, right.type);
 		} else {
-			auto type = std::max(MinimalType(result.GetNumericValue()),
-			                     std::max(left.type, right.type));
+			auto type = max(MinimalType(result.GetNumericValue()),
+			                max(left.type, right.type));
 			result = result.CastAs(type);
 		}
 		return;
@@ -120,7 +121,7 @@ void ValueOperations::Divide(const Value &left, const Value &right,
 	Value zero = Value::Numeric(right.type, 0);
 	if (ValueOperations::Equals(right, zero)) {
 		// special case: divide by zero
-		result.type = std::max(left.type, right.type);
+		result.type = max(left.type, right.type);
 		result.is_null = true;
 	} else {
 		templated_binary_operation<operators::Divide>(left, right, result,

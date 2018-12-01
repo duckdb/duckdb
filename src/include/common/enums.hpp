@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// common/internal_types.hpp
+// common/enums.hpp
 //
 // Author: Mark Raasveldt
 //
@@ -10,52 +10,14 @@
 
 #pragma once
 
-#include <bitset>
-#include <cassert>
-#include <cstring>
-#include <limits>
+#include <cstdlib>
 #include <math.h>
-#include <memory>
 #include <string>
 
 namespace duckdb {
 
-// NOTE: there is a copy of this in the Postgres' parser grammar (gram.y)
-#define DEFAULT_SCHEMA "main"
-
-#define STANDARD_VECTOR_SIZE 1024
-#define STORAGE_CHUNK_SIZE 10240
-
-//! Type used to represent dates
-typedef int32_t date_t;
-//! Type used to represent timestamps
-typedef int64_t timestamp_t;
-//! Type used for the selection vector
-typedef uint16_t sel_t;
-//! Type used for transaction timestamps
-//! FIXME: this should be a 128-bit integer
-//! With 64-bit, the database only supports up to 2^32 transactions
-typedef uint64_t transaction_t;
-//! Type used for nullmasks
-typedef std::bitset<STANDARD_VECTOR_SIZE> nullmask_t;
-
-//! Type used for column identifiers
-typedef size_t column_t;
-//! Special value used to signify the ROW ID of
-extern column_t COLUMN_IDENTIFIER_ROW_ID;
-
-//! Zero selection vector: completely filled with the value 0 [READ ONLY]
-extern sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE];
-//! Zero NULL mask: filled with the value 0 [READ ONLY]
-extern nullmask_t ZERO_MASK;
-
-struct BinaryData {
-	std::unique_ptr<uint8_t[]> data;
-	size_t size;
-};
-
 //===--------------------------------------------------------------------===//
-// SQL Value Types
+// Internal Types
 //===--------------------------------------------------------------------===//
 enum class TypeId : uint8_t {
 	INVALID = 0,
@@ -332,8 +294,6 @@ enum class JoinType : uint8_t {
 	ANTI = 6     // Opposite of SEMI JOIN
 };
 
-std::string JoinTypeToString(JoinType type);
-
 //===--------------------------------------------------------------------===//
 // Index Types
 //===--------------------------------------------------------------------===//
@@ -343,7 +303,6 @@ enum class IndexType {
 	ORDER_INDEX = 1, // Order Index
 	BTREE = 2        // B+-Tree
 };
-IndexType StringToIndexType(const std::string &str);
 
 //===--------------------------------------------------------------------===//
 // ORDER BY Clause Types
@@ -491,63 +450,14 @@ enum class TransactionType : uint8_t {
 	ROLLBACK
 };
 
-ExpressionType StringToExpressionType(const std::string &str);
-
+//===--------------------------------------------------------------------===//
+// String <-> Enum conversion
+//===--------------------------------------------------------------------===//
 std::string TypeIdToString(TypeId type);
-size_t GetTypeIdSize(TypeId type);
-bool TypeIsConstantSize(TypeId type);
-bool TypeIsIntegral(TypeId type);
-bool TypeIsNumeric(TypeId type);
-bool TypeIsInteger(TypeId type);
+std::string JoinTypeToString(JoinType type);
+IndexType StringToIndexType(const std::string &str);
 
-template <class T> constexpr bool IsValidType() {
-	return std::is_same<T, bool>() || std::is_same<T, int8_t>() ||
-	       std::is_same<T, int16_t>() || std::is_same<T, int32_t>() ||
-	       std::is_same<T, int64_t>() || std::is_same<T, uint64_t>() ||
-	       std::is_same<T, double>() || std::is_same<T, const char *>();
-}
-
-template <class T> constexpr bool IsIntegerType() {
-	return std::is_same<T, int8_t>() || std::is_same<T, int16_t>() ||
-	       std::is_same<T, int32_t>() || std::is_same<T, int64_t>() ||
-	       std::is_same<T, uint64_t>();
-}
-
-//! Returns the TypeId for the given type
-template <class T> TypeId GetTypeId() {
-	static_assert(IsValidType<T>(), "Invalid type for GetTypeId");
-	if (std::is_same<T, bool>()) {
-	} else if (std::is_same<T, int8_t>()) {
-		return TypeId::TINYINT;
-	} else if (std::is_same<T, int16_t>()) {
-		return TypeId::SMALLINT;
-	} else if (std::is_same<T, int32_t>()) {
-		return TypeId::INTEGER;
-	} else if (std::is_same<T, int64_t>()) {
-		return TypeId::BIGINT;
-	} else if (std::is_same<T, uint64_t>()) {
-		return TypeId::POINTER;
-	} else if (std::is_same<T, double>()) {
-		return TypeId::DECIMAL;
-	} else if (std::is_same<T, const char *>()) {
-		return TypeId::VARCHAR;
-	} else {
-		assert(0);
-	}
-}
-
-//! Returns the minimum value that can be stored in a given type
-template <class T> int64_t MinimumValue();
-//! Returns the maximum value that can be stored in a given type
-template <class T> int64_t MaximumValue();
-
-//! Returns the minimum value that can be stored in a given type
-int64_t MinimumValue(TypeId type);
-//! Returns the maximum value that can be stored in a given type
-int64_t MaximumValue(TypeId type);
-//! Returns the minimal type that guarantees an integer value from not
-//! overflowing
-TypeId MinimalType(int64_t value);
+ExpressionType StringToExpressionType(const std::string &str);
 
 std::string LogicalOperatorToString(LogicalOperatorType type);
 std::string PhysicalOperatorToString(PhysicalOperatorType type);
@@ -555,4 +465,5 @@ std::string ExpressionTypeToString(ExpressionType type);
 std::string ExpressionTypeToOperator(ExpressionType type);
 
 ExternalFileFormat StringToExternalFileFormat(const std::string &str);
+
 } // namespace duckdb

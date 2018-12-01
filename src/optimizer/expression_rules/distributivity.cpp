@@ -2,8 +2,8 @@
 #include <algorithm>
 #include <vector>
 
+#include "common/common.hpp"
 #include "common/exception.hpp"
-#include "common/internal_types.hpp"
 #include "common/value_operations/value_operations.hpp"
 #include "optimizer/rule.hpp"
 

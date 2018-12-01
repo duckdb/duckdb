@@ -2,8 +2,8 @@
 #include <algorithm>
 #include <vector>
 
+#include "common/common.hpp"
 #include "common/exception.hpp"
-#include "common/internal_types.hpp"
 
 #include "optimizer/logical_rules/cross_product_rewrite.hpp"
 

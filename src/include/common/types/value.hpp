@@ -12,7 +12,7 @@
 
 #include <memory.h>
 
-#include "common/internal_types.hpp"
+#include "common/common.hpp"
 #include "common/printable.hpp"
 
 #include "common/types/date.hpp"

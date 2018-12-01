@@ -4,8 +4,8 @@
 
 #include "optimizer/expression_rules/constant_cast.hpp"
 
+#include "common/common.hpp"
 #include "common/exception.hpp"
-#include "common/internal_types.hpp"
 
 #include "parser/expression/cast_expression.hpp"
 #include "parser/expression/constant_expression.hpp"

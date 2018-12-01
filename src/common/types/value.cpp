@@ -1,6 +1,7 @@
 
 #include "common/types/value.hpp"
 #include "common/exception.hpp"
+#include "common/limits.hpp"
 #include "common/operator/aggregate_operators.hpp"
 #include "common/operator/cast_operators.hpp"
 #include "common/operator/comparison_operators.hpp"

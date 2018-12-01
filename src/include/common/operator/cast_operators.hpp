@@ -10,8 +10,8 @@
 
 #pragma once
 
+#include "common/constants.hpp"
 #include "common/exception.hpp"
-#include <cstdint>
 
 namespace operators {
 

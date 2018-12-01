@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include "common/internal_types.hpp"
+#include "common/common.hpp"
 #include "common/types/hash.hpp"
 #include "common/types/null_value.hpp"
 

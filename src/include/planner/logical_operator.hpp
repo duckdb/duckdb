@@ -15,7 +15,7 @@
 
 #include "catalog/catalog.hpp"
 
-#include "common/internal_types.hpp"
+#include "common/common.hpp"
 #include "common/printable.hpp"
 
 #include "parser/expression.hpp"

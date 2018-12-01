@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include "common/internal_types.hpp"
+#include "common/common.hpp"
 #include "common/types/data_chunk.hpp"
 #include "common/types/tuple.hpp"
 #include "common/types/vector.hpp"

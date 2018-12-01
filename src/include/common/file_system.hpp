@@ -35,4 +35,5 @@ std::string PathSeparator();
 std::string JoinPath(const std::string &a, const std::string &path);
 //! Sync a file descriptor to disk
 void FileSync(FILE *file);
+
 } // namespace duckdb

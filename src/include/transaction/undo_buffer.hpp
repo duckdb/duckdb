@@ -13,7 +13,7 @@
 #include <memory>
 #include <vector>
 
-#include "common/internal_types.hpp"
+#include "common/common.hpp"
 
 namespace duckdb {
 

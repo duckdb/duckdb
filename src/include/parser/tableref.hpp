@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include "common/internal_types.hpp"
+#include "common/common.hpp"
 #include "common/printable.hpp"
 
 namespace duckdb {

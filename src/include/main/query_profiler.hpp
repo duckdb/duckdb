@@ -13,7 +13,7 @@
 #include <stack>
 #include <unordered_map>
 
-#include "common/internal_types.hpp"
+#include "common/common.hpp"
 #include "common/printable.hpp"
 #include "common/profiler.hpp"
 #include "common/string_util.hpp"

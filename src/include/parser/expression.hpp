@@ -14,7 +14,7 @@
 #include <stack>
 #include <vector>
 
-#include "common/internal_types.hpp"
+#include "common/common.hpp"
 #include "common/printable.hpp"
 #include "common/types/statistics.hpp"
 

@@ -1,8 +1,8 @@
 
 #include <algorithm>
 
+#include "common/common.hpp"
 #include "common/exception.hpp"
-#include "common/internal_types.hpp"
 
 #include "optimizer/logical_rules/selection_pushdown.hpp"
 

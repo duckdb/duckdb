@@ -16,7 +16,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "common/internal_types.hpp"
+#include "common/common.hpp"
 
 #include "catalog/catalog_entry.hpp"
 

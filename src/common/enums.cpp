@@ -1,17 +1,11 @@
 
-#include "common/internal_types.hpp"
+#include "common/enums.hpp"
 #include "common/exception.hpp"
 #include "common/string_util.hpp"
-
-#include <type_traits>
 
 using namespace std;
 
 namespace duckdb {
-
-column_t COLUMN_IDENTIFIER_ROW_ID = (column_t)-1;
-sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE] = {0};
-nullmask_t ZERO_MASK = nullmask_t(0);
 
 ExpressionType StringToExpressionType(const string &str) {
 	string upper_str = StringUtil::Upper(str);
@@ -125,7 +119,7 @@ ExpressionType StringToExpressionType(const string &str) {
 // Value <--> String Utilities
 //===--------------------------------------------------------------------===//
 
-string TypeIdToString(TypeId type) {
+std::string TypeIdToString(TypeId type) {
 	switch (type) {
 	case TypeId::INVALID:
 		return "INVALID";
@@ -159,42 +153,6 @@ string TypeIdToString(TypeId type) {
 		return "UDT";
 	}
 	return "INVALID";
-}
-
-size_t GetTypeIdSize(TypeId type) {
-	switch (type) {
-	case TypeId::PARAMETER_OFFSET:
-		return sizeof(uint64_t);
-	case TypeId::BOOLEAN:
-		return sizeof(bool);
-	case TypeId::TINYINT:
-		return sizeof(int8_t);
-	case TypeId::SMALLINT:
-		return sizeof(int16_t);
-	case TypeId::INTEGER:
-		return sizeof(int32_t);
-	case TypeId::BIGINT:
-		return sizeof(int64_t);
-	case TypeId::DECIMAL:
-		return sizeof(double);
-	case TypeId::POINTER:
-		return sizeof(uint64_t);
-	case TypeId::TIMESTAMP:
-		return sizeof(int64_t);
-	case TypeId::DATE:
-		return sizeof(int32_t);
-	case TypeId::VARCHAR:
-		return sizeof(void *);
-	case TypeId::VARBINARY:
-		return sizeof(void *);
-	case TypeId::ARRAY:
-		return sizeof(void *);
-	case TypeId::UDT:
-		return sizeof(void *);
-	default:
-		throw OutOfRangeException("Invalid type ID size!");
-		return (size_t)-1;
-	}
 }
 
 string LogicalOperatorToString(LogicalOperatorType type) {
@@ -474,96 +432,6 @@ string JoinTypeToString(JoinType type) {
 	}
 }
 
-template <class T> int64_t MinimumValue() {
-	static_assert(IsIntegerType<T>(), "MinimumValue requires integral type");
-	if (std::is_same<T, int8_t>()) {
-		return std::numeric_limits<int8_t>::min() + 1;
-	} else if (std::is_same<T, int16_t>()) {
-		return std::numeric_limits<int16_t>::min() + 1;
-	} else if (std::is_same<T, int32_t>()) {
-		return std::numeric_limits<int32_t>::min() + 1;
-	} else if (std::is_same<T, int64_t>()) {
-		return std::numeric_limits<int64_t>::min() + 1;
-	} else if (std::is_same<T, uint64_t>()) {
-		return std::numeric_limits<uint64_t>::min();
-	} else {
-		assert(0);
-	}
-}
-
-template <class T> int64_t MaximumValue() {
-	static_assert(IsIntegerType<T>(), "MaximumValue requires integral type");
-	if (std::is_same<T, int8_t>()) {
-		return std::numeric_limits<int8_t>::max();
-	} else if (std::is_same<T, int16_t>()) {
-		return std::numeric_limits<int16_t>::max();
-	} else if (std::is_same<T, int32_t>()) {
-		return std::numeric_limits<int32_t>::max();
-	} else if (std::is_same<T, int64_t>()) {
-		return std::numeric_limits<int64_t>::max();
-	} else if (std::is_same<T, uint64_t>()) {
-		return std::numeric_limits<int64_t>::max();
-	} else {
-		assert(0);
-	}
-}
-
-// we offset the minimum value by 1 to account for the NULL value in the
-// hashtables
-int64_t MinimumValue(TypeId type) {
-	switch (type) {
-	case TypeId::TINYINT:
-		return MinimumValue<int8_t>();
-	case TypeId::SMALLINT:
-		return MinimumValue<int16_t>();
-	case TypeId::DATE:
-	case TypeId::INTEGER:
-		return MinimumValue<int32_t>();
-	case TypeId::TIMESTAMP:
-	case TypeId::BIGINT:
-		return MinimumValue<int64_t>();
-	case TypeId::POINTER:
-		return MinimumValue<uint64_t>();
-	default:
-		throw InvalidTypeException(type, "MinimumValue requires integral type");
-	}
-}
-
-int64_t MaximumValue(TypeId type) {
-	switch (type) {
-	case TypeId::TINYINT:
-		return MaximumValue<int8_t>();
-	case TypeId::SMALLINT:
-		return MaximumValue<int16_t>();
-	case TypeId::DATE:
-	case TypeId::INTEGER:
-		return MaximumValue<int32_t>();
-	case TypeId::TIMESTAMP:
-	case TypeId::BIGINT:
-		return MaximumValue<int64_t>();
-	case TypeId::POINTER:
-		return MaximumValue<uint64_t>();
-	default:
-		throw InvalidTypeException(type, "MaximumValue requires integral type");
-	}
-}
-
-TypeId MinimalType(int64_t value) {
-	if (value >= MinimumValue(TypeId::TINYINT) &&
-	    value <= MaximumValue(TypeId::TINYINT)) {
-		return TypeId::TINYINT;
-	}
-	if (value >= MinimumValue(TypeId::SMALLINT) &&
-	    value <= MaximumValue(TypeId::SMALLINT)) {
-		return TypeId::SMALLINT;
-	}
-	if (value >= MinimumValue(TypeId::INTEGER) &&
-	    value <= MaximumValue(TypeId::INTEGER)) {
-		return TypeId::INTEGER;
-	}
-	return TypeId::BIGINT;
-}
-
 ExternalFileFormat StringToExternalFileFormat(const std::string &str) {
 	auto upper = StringUtil::Upper(str);
 	if (upper == "CSV") {
@@ -586,17 +454,4 @@ IndexType StringToIndexType(const std::string &str) {
 	return IndexType::INVALID;
 }
 
-bool TypeIsConstantSize(TypeId type) {
-	return type < TypeId::VARCHAR;
-}
-bool TypeIsIntegral(TypeId type) {
-	return type >= TypeId::TINYINT && type <= TypeId::TIMESTAMP;
-}
-bool TypeIsNumeric(TypeId type) {
-	return type >= TypeId::TINYINT && type <= TypeId::DECIMAL;
-}
-bool TypeIsInteger(TypeId type) {
-	return type >= TypeId::TINYINT && type <= TypeId::BIGINT;
-}
-
-}; // namespace duckdb
+} // namespace duckdb
