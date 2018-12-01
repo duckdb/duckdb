@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "common/assert.hpp"
 #include "common/enums.hpp"
 
 #include <type_traits>
@@ -27,6 +28,7 @@ template <class T> constexpr bool IsValidType() {
 template <class T> TypeId GetTypeId() {
 	static_assert(IsValidType<T>(), "Invalid type for GetTypeId");
 	if (std::is_same<T, bool>()) {
+		return TypeId::BOOLEAN;
 	} else if (std::is_same<T, int8_t>()) {
 		return TypeId::TINYINT;
 	} else if (std::is_same<T, int16_t>()) {
@@ -43,6 +45,7 @@ template <class T> TypeId GetTypeId() {
 		return TypeId::VARCHAR;
 	} else {
 		assert(0);
+		return TypeId::INVALID;
 	}
 }
 

@@ -2,6 +2,8 @@
 #include "common/limits.hpp"
 #include "common/exception.hpp"
 
+#include <limits>
+
 using namespace std;
 
 namespace duckdb {

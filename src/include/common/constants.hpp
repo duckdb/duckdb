@@ -12,6 +12,7 @@
 
 #include <bitset>
 #include <cstdlib>
+#include <memory>
 
 namespace duckdb {
 

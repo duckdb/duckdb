@@ -12,7 +12,6 @@
 
 #include "common/common.hpp"
 #include "common/exception.hpp"
-#include "common/helper.hpp"
 
 namespace duckdb {
 
