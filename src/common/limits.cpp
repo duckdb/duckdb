@@ -2,47 +2,9 @@
 #include "common/limits.hpp"
 #include "common/exception.hpp"
 
-#include <limits>
-
 using namespace std;
 
 namespace duckdb {
-
-template <class T> int64_t MinimumValue() {
-	assert(IsIntegerType<T>());
-	if (std::is_same<T, int8_t>()) {
-		return std::numeric_limits<int8_t>::min() + 1;
-	} else if (std::is_same<T, int16_t>()) {
-		return std::numeric_limits<int16_t>::min() + 1;
-	} else if (std::is_same<T, int32_t>()) {
-		return std::numeric_limits<int32_t>::min() + 1;
-	} else if (std::is_same<T, int64_t>()) {
-		return std::numeric_limits<int64_t>::min() + 1;
-	} else if (std::is_same<T, uint64_t>()) {
-		return std::numeric_limits<uint64_t>::min();
-	} else {
-		assert(0);
-		return 0;
-	}
-}
-
-template <class T> int64_t MaximumValue() {
-	assert(IsIntegerType<T>());
-	if (std::is_same<T, int8_t>()) {
-		return std::numeric_limits<int8_t>::max();
-	} else if (std::is_same<T, int16_t>()) {
-		return std::numeric_limits<int16_t>::max();
-	} else if (std::is_same<T, int32_t>()) {
-		return std::numeric_limits<int32_t>::max();
-	} else if (std::is_same<T, int64_t>()) {
-		return std::numeric_limits<int64_t>::max();
-	} else if (std::is_same<T, uint64_t>()) {
-		return std::numeric_limits<int64_t>::max();
-	} else {
-		assert(0);
-		return 0;
-	}
-}
 
 // we offset the minimum value by 1 to account for the NULL value in the
 // hashtables
