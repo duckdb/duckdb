@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===// 
+// 
+//                         DuckDB 
+// 
+// parser/tableref/list.hpp
+// 
+// 
+// 
+//===----------------------------------------------------------------------===//
 
 #include "parser/tableref/basetableref.hpp"
 #include "parser/tableref/crossproductref.hpp"

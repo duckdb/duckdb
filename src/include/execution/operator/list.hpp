@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===// 
+// 
+//                         DuckDB 
+// 
+// execution/operator/list.hpp
+// 
+// 
+// 
+//===----------------------------------------------------------------------===//
 
 #include "execution/operator/physical_copy.hpp"
 #include "execution/operator/physical_create.hpp"

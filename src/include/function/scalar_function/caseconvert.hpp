@@ -1,3 +1,13 @@
+//===----------------------------------------------------------------------===// 
+// 
+//                         DuckDB 
+// 
+// function/scalar_function/caseconvert.hpp
+// 
+// 
+// 
+//===----------------------------------------------------------------------===//
+
 #pragma once
 #include "common/types/data_chunk.hpp"
 #include "function/function.hpp"

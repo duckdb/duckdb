@@ -1,13 +1,11 @@
-//===----------------------------------------------------------------------===//
-//
-//                         DuckDB
-//
+//===----------------------------------------------------------------------===// 
+// 
+//                         DuckDB 
+// 
 // parser/transform.hpp
-//
-// Author: Mark Raasveldt
-// Description: Transform functions take as input elements from the Postgres
-//              parse tree, and convert them into the internal representaton
-//              used by DuckDB.
+// 
+// 
+// 
 //===----------------------------------------------------------------------===//
 
 #pragma once

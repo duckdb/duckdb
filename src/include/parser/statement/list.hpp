@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===// 
+// 
+//                         DuckDB 
+// 
+// parser/statement/list.hpp
+// 
+// 
+// 
+//===----------------------------------------------------------------------===//
 
 #include "parser/statement/alter_table_statement.hpp"
 #include "parser/statement/copy_statement.hpp"
