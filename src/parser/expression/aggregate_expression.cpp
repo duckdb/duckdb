@@ -28,6 +28,7 @@ AggregateExpression::AggregateExpression(ExpressionType type,
 	case ExpressionType::AGGREGATE_MIN:
 	case ExpressionType::AGGREGATE_MAX:
 	case ExpressionType::AGGREGATE_FIRST:
+	case ExpressionType::AGGREGATE_STDDEV_SAMP:
 
 		break;
 	default:
@@ -86,6 +87,9 @@ void AggregateExpression::ResolveType() {
 		break;
 	case ExpressionType::AGGREGATE_FIRST:
 		return_type = children[0]->return_type;
+		break;
+	case ExpressionType::AGGREGATE_STDDEV_SAMP:
+		return_type = TypeId::DECIMAL;
 		break;
 	default:
 		throw NotImplementedException("Unsupported aggregate type!");

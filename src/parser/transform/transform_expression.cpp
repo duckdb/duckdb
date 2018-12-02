@@ -13,7 +13,8 @@ namespace duckdb {
 
 static bool IsAggregateFunction(const string &fun_name) {
 	if (fun_name == "min" || fun_name == "max" || fun_name == "count" ||
-	    fun_name == "avg" || fun_name == "sum" || fun_name == "first")
+	    fun_name == "avg" || fun_name == "sum" || fun_name == "first" ||
+	    fun_name == "stddev_samp")
 		return true;
 	return false;
 }
@@ -582,6 +583,8 @@ unique_ptr<Expression> TransformFuncCall(FuncCall *root) {
 				case ExpressionType::AGGREGATE_SUM:
 					agg_fun_type = ExpressionType::AGGREGATE_SUM_DISTINCT;
 					break;
+				case ExpressionType::AGGREGATE_STDDEV_SAMP:
+					throw NotImplementedException("STDDEV_SAMP with DISTINCT");
 				default:
 					// makes no difference for other aggregation types
 					break;

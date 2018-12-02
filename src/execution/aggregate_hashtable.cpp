@@ -11,6 +11,16 @@
 using namespace duckdb;
 using namespace std;
 
+static size_t GetAggrPayloadSize(ExpressionType expr_type, TypeId return_type) {
+	switch (expr_type) {
+	case ExpressionType::AGGREGATE_STDDEV_SAMP:
+		// count running_mean running_dsquared
+		return sizeof(uint64_t) + sizeof(double) + sizeof(double);
+	default:
+		return GetTypeIdSize(return_type);
+	}
+}
+
 SuperLargeHashTable::SuperLargeHashTable(size_t initial_capacity,
                                          vector<TypeId> group_types,
                                          vector<TypeId> payload_types,
@@ -25,8 +35,9 @@ SuperLargeHashTable::SuperLargeHashTable(size_t initial_capacity,
 	// [GROUPS] is the groups
 	// [PAYLOAD] is the payload (i.e. the aggregates)
 	// [COUNT] is an 8-byte count for each element
-	for (auto type : payload_types) {
-		payload_width += GetTypeIdSize(type);
+	for (size_t i = 0; i < payload_types.size(); i++) {
+		payload_width +=
+		    GetAggrPayloadSize(aggregate_types[i], payload_types[i]);
 	}
 	empty_payload_data = unique_ptr<uint8_t[]>(new uint8_t[payload_width]);
 	// initialize the aggregates to the NULL value
@@ -34,15 +45,20 @@ SuperLargeHashTable::SuperLargeHashTable(size_t initial_capacity,
 	for (size_t i = 0; i < payload_types.size(); i++) {
 		// counts are zero initialized, all other aggregates NULL
 		// initialized
-		auto type = payload_types[i];
-		if (aggregate_types[i] == ExpressionType::AGGREGATE_COUNT ||
-		    aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_DISTINCT ||
-		    aggregate_types[i] == ExpressionType::AGGREGATE_COUNT_STAR) {
-			memset(pointer, 0, GetTypeIdSize(type));
-		} else {
-			SetNullValue(pointer, type);
+		switch (aggregate_types[i]) {
+		case ExpressionType::AGGREGATE_COUNT:
+		case ExpressionType::AGGREGATE_COUNT_DISTINCT:
+		case ExpressionType::AGGREGATE_COUNT_STAR:
+		case ExpressionType::AGGREGATE_STDDEV_SAMP:
+			memset(pointer, 0,
+			       GetAggrPayloadSize(aggregate_types[i], payload_types[i]));
+			break;
+		default:
+			SetNullValue(pointer, payload_types[i]);
+			break;
 		}
-		pointer += GetTypeIdSize(type);
+
+		pointer += GetAggrPayloadSize(aggregate_types[i], payload_types[i]);
 	}
 
 	// FIXME: this always creates this vector, even if no distinct if present.
@@ -236,13 +252,57 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 				VectorOperations::Scatter::SetFirst(payload.data[payload_idx],
 				                                    addresses);
 				break;
+			case ExpressionType::AGGREGATE_STDDEV_SAMP: {
+
+				Vector payload_double;
+				if (payload.data[payload_idx].type != TypeId::DECIMAL) {
+					payload_double.Initialize(TypeId::DECIMAL);
+					VectorOperations::Cast(payload.data[payload_idx],
+					                       payload_double);
+				} else {
+					payload_double.Reference(payload.data[payload_idx]);
+				}
+
+				// FIXME: selection vectors?
+				// FIXME: vectorized version of this?
+
+				// Streaming standard deviation using Welford's method,
+				// DOI: 10.2307/1266577
+				for (size_t addr_idx = 0; addr_idx < addresses.count;
+				     addr_idx++) {
+					uint64_t *count_ptr =
+					    ((uint64_t **)addresses.data)[addr_idx];
+					*count_ptr += 1;
+
+					double *mean_ptr = (double *)(count_ptr + sizeof(uint64_t));
+					double *dsquared_ptr =
+					    (double *)(count_ptr + sizeof(uint64_t) +
+					               sizeof(double));
+
+					// use const so this can be pipelined
+					const double new_value =
+					    ((double *)payload_double.data)[addr_idx];
+					const double mean_differential =
+					    (new_value - *mean_ptr) / (*count_ptr);
+					const double new_mean = *mean_ptr + mean_differential;
+					const double dsquared_increment =
+					    (new_value - new_mean) * (new_value - *mean_ptr);
+					const double new_dsquared =
+					    *dsquared_ptr + dsquared_increment;
+
+					*mean_ptr = new_mean;
+					*dsquared_ptr = new_dsquared;
+				}
+				break;
+			}
 			default:
 				throw NotImplementedException("Unimplemented aggregate type!");
 			}
 		}
 		// move to the next aggregate
 		VectorOperations::AddInPlace(
-		    addresses, GetTypeIdSize(payload.data[payload_idx].type));
+		    addresses, GetAggrPayloadSize(aggregate_types[aggr_idx],
+		                                  payload.data[payload_idx].type));
 		payload_idx++;
 	}
 }
@@ -370,9 +430,31 @@ size_t SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &groups,
 	for (size_t i = 0; i < aggregate_types.size(); i++) {
 		auto &target = result.data[i];
 		target.count = entry;
+		switch (aggregate_types[i]) {
+		case ExpressionType::AGGREGATE_STDDEV_SAMP: {
+			// compute finalization of streaming stddev of sample
+			// Math.sqrt(this.count > 1 ? this.dSquared / (this.count - 1) : 0)
 
-		VectorOperations::Gather::Set(addresses, target);
-		VectorOperations::AddInPlace(addresses, GetTypeIdSize(target.type));
+			for (size_t addr_idx = 0; addr_idx < addresses.count; addr_idx++) {
+				uint64_t *count_ptr = ((uint64_t **)addresses.data)[addr_idx];
+				double *dsquared_ptr =
+				    (double *)(count_ptr + sizeof(uint64_t) + sizeof(double));
+
+				double res =
+				    *count_ptr > 1 ? sqrt(*dsquared_ptr / (*count_ptr - 1)) : 0;
+
+				target.SetValue(addr_idx, Value(res));
+			}
+
+			break;
+		}
+		default:
+			VectorOperations::Gather::Set(addresses, target);
+			break;
+		}
+
+		VectorOperations::AddInPlace(
+		    addresses, GetAggrPayloadSize(aggregate_types[i], target.type));
 	}
 	scan_position = ptr - data;
 	return entry;
