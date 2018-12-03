@@ -40,7 +40,7 @@ class SuperLargeHashTable {
 	//! Add the given data to the HT, computing the aggregates grouped by the
 	//! data in the group chunk. When resize = true, aggregates will not be
 	//! computed but instead just assigned.
-	void AddChunk(DataChunk &groups, DataChunk &payload, bool resize = false);
+	void AddChunk(DataChunk &groups, DataChunk &payload);
 	//! Scan the HT starting from the scan_position until the result and group
 	//! chunks are filled. scan_position will be updated by this function.
 	//! Returns the amount of elements found.

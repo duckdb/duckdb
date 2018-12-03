@@ -152,6 +152,8 @@ string AggregateExpression::GetName() {
 		return "MAX";
 	case ExpressionType::AGGREGATE_FIRST:
 		return "FIRST";
+	case ExpressionType::AGGREGATE_STDDEV_SAMP:
+		return "STDDEV_SAMP";
 	default:
 		return "UNKNOWN";
 	}

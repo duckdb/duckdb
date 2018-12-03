@@ -176,3 +176,36 @@ TEST_CASE("DISTINCT aggregations", "[aggregations]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 3, {1, 3}));
 }
+
+TEST_CASE("STDDEV_SAMP aggregations", "[aggregations]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	REQUIRE_NO_FAIL(
+	    con.Query("create table stddev_test(val integer, grp integer)"));
+	REQUIRE_NO_FAIL(con.Query("insert into stddev_test values (42, 1), (43, "
+	                          "1), (42, 2), (1000, 2), (NULL, 1), (NULL, 3)"));
+
+	result = con.Query("select round(stddev_samp(val), 1) from stddev_test");
+	REQUIRE(CHECK_COLUMN(result, 0, {478.8}));
+
+	result = con.Query("select round(stddev_samp(val), 1) from stddev_test  "
+	                   "where val is not null");
+	REQUIRE(CHECK_COLUMN(result, 0, {478.8}));
+
+	result = con.Query("select grp, sum(val), round(stddev_samp(val), 1), "
+	                   "min(val) from stddev_test group by grp order by grp");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {85, 1042, Value()}));
+	REQUIRE(CHECK_COLUMN(result, 2, {0.7, 677.4, Value()}));
+	REQUIRE(CHECK_COLUMN(result, 3, {42, 42, Value()}));
+
+	result = con.Query(
+	    "select grp, sum(val), round(stddev_samp(val), 1), min(val) from "
+	    "stddev_test where val is not null group by grp order by grp");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {85, 1042}));
+	REQUIRE(CHECK_COLUMN(result, 2, {0.7, 677.4}));
+	REQUIRE(CHECK_COLUMN(result, 3, {42, 42}));
+}
