@@ -85,6 +85,8 @@ ExpressionType StringToExpressionType(const string &str) {
 		return ExpressionType::AGGREGATE_AVG;
 	} else if (upper_str == "AGGREGATE_FIRST") {
 		return ExpressionType::AGGREGATE_FIRST;
+	} else if (upper_str == "AGGREGATE_STDDEV_SAMP") {
+		return ExpressionType::AGGREGATE_STDDEV_SAMP;
 	} else if (upper_str == "FUNCTION") {
 		return ExpressionType::FUNCTION;
 	} else if (upper_str == "OPERATOR_CASE_EXPR") {
