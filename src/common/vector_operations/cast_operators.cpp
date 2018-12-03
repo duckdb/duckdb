@@ -25,7 +25,6 @@ void templated_cast_loop(Vector &source, Vector &result) {
 				    OP::template Operation<SRC_TYPE, DST_TYPE>(ldata[i]);
 			}
 		});
-
 	}
 	result.sel_vector = source.sel_vector;
 	result.count = source.count;

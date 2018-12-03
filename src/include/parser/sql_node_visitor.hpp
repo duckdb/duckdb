@@ -14,45 +14,10 @@
 #include "parser/expression.hpp"
 #include "parser/sql_statement.hpp"
 #include "parser/tableref.hpp"
+#include "parser/tokens.hpp"
 
 namespace duckdb {
 
-class AlterTableStatement;
-class CopyStatement;
-class CreateIndexStatement;
-class CreateSchemaStatement;
-class CreateTableStatement;
-class DeleteStatement;
-class DropSchemaStatement;
-class DropTableStatement;
-class InsertStatement;
-class SelectStatement;
-class TransactionStatement;
-class UpdateStatement;
-
-class AggregateExpression;
-class CaseExpression;
-class CastExpression;
-class ColumnRefExpression;
-class ComparisonExpression;
-class ConjunctionExpression;
-class ConstantExpression;
-class DefaultExpression;
-class FunctionExpression;
-class GroupRefExpression;
-class OperatorExpression;
-class StarExpression;
-class SubqueryExpression;
-
-class NotNullConstraint;
-class CheckConstraint;
-class ParsedConstraint;
-
-class BaseTableRef;
-class CrossProductRef;
-class JoinRef;
-class SubqueryRef;
-class TableFunction;
 //! The SQLNodeVisitor is an abstract base class that implements the Visitor
 //! pattern on Expression and SQLStatement. It will visit nodes
 //! recursively and call the Visit expression corresponding to the expression
