@@ -106,6 +106,32 @@ class Value : public Printable {
 	//! Deserializes a Value from a blob
 	static Value Deserialize(Deserializer &source);
 
+	//===--------------------------------------------------------------------===//
+	// Numeric Operators
+	//===--------------------------------------------------------------------===//
+	Value operator+(const Value &rhs) const;
+	Value operator-(const Value &rhs) const;
+	Value operator*(const Value &rhs) const;
+	Value operator/(const Value &rhs) const;
+	Value operator%(const Value &rhs) const;
+
+	//===--------------------------------------------------------------------===//
+	// Comparison Operators
+	//===--------------------------------------------------------------------===//
+	bool operator==(const Value &rhs) const;
+	bool operator!=(const Value &rhs) const;
+	bool operator<(const Value &rhs) const;
+	bool operator>(const Value &rhs) const;
+	bool operator<=(const Value &rhs) const;
+	bool operator>=(const Value &rhs) const;
+
+	bool operator==(const int64_t &rhs) const;
+	bool operator!=(const int64_t &rhs) const;
+	bool operator<(const int64_t &rhs) const;
+	bool operator>(const int64_t &rhs) const;
+	bool operator<=(const int64_t &rhs) const;
+	bool operator>=(const int64_t &rhs) const;
+
   private:
 	//! Templated helper function for casting
 	template <class DST, class OP> static DST _cast(const Value &v);

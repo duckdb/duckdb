@@ -8,6 +8,7 @@ using namespace std;
 
 void CaseExpression::ResolveType() {
 	Expression::ResolveType();
+	ExpressionStatistics::Case(children[1]->stats, children[2]->stats, stats);
 	return_type = std::max(children[1]->return_type, children[2]->return_type);
 }
 

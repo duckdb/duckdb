@@ -30,11 +30,8 @@ DataTable::DataTable(StorageManager &storage, std::string schema,
 	}
 	tuple_size = accumulative_size;
 	// create empty statistics for the table
-	statistics = unique_ptr<Statistics[]>(new Statistics[types.size()]);
-	for (size_t i = 0; i < types.size(); i++) {
-		statistics[i].type = types[i];
-	}
-	statistics_locks = unique_ptr<mutex[]>(new mutex[types.size()]);
+	statistics =
+	    unique_ptr<ColumnStatistics[]>(new ColumnStatistics[types.size()]);
 	// initialize the table with an empty data chunk
 	chunk_list = make_unique<StorageChunk>(*this, 0);
 	tail_chunk = chunk_list.get();
@@ -170,7 +167,6 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context,
 
 	// update the statistics with the new data
 	for (size_t i = 0; i < types.size(); i++) {
-		lock_guard<mutex> stats_lock(statistics_locks[i]);
 		statistics[i].Update(chunk.data[i]);
 	}
 
@@ -368,7 +364,6 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context,
 		});
 
 		// update the statistics with the new data
-		lock_guard<mutex> stats_lock(statistics_locks[column_id]);
 		statistics[column_id].Update(updates.data[j]);
 	}
 	// after a successful update move the strings into the chunk

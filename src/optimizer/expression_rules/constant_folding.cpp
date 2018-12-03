@@ -50,19 +50,16 @@ ConstantFoldingRule::Apply(Rewriter &rewriter, Expression &root,
 		    TypeIsNumeric(right_val->value.type)) {
 			switch (root.type) {
 			case ExpressionType::OPERATOR_ADD:
-				ValueOperations::Add(left_val->value, right_val->value, result);
+				result = left_val->value + right_val->value;
 				break;
 			case ExpressionType::OPERATOR_SUBTRACT:
-				ValueOperations::Subtract(left_val->value, right_val->value,
-				                          result);
+				result = left_val->value - right_val->value;
 				break;
 			case ExpressionType::OPERATOR_MULTIPLY:
-				ValueOperations::Multiply(left_val->value, right_val->value,
-				                          result);
+				result = left_val->value * right_val->value;
 				break;
 			case ExpressionType::OPERATOR_DIVIDE:
-				ValueOperations::Divide(left_val->value, right_val->value,
-				                        result);
+				result = left_val->value / right_val->value;
 				break;
 			case ExpressionType::OPERATOR_MOD:
 				// Value::Modulo(left_val->value, right_val->value, result);
@@ -70,8 +67,6 @@ ConstantFoldingRule::Apply(Rewriter &rewriter, Expression &root,
 			default:
 				throw NotImplementedException("Unsupported operator");
 			}
-			// FIXME: this could hide an overflow, but breaks the plan if we
-			// don't
 			return make_unique<ConstantExpression>(
 			    result.CastAs(root.return_type));
 		}

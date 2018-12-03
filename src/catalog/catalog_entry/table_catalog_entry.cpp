@@ -150,7 +150,7 @@ ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) {
 	return columns[name_map[name]];
 }
 
-Statistics &TableCatalogEntry::GetStatistics(column_t oid) {
+ColumnStatistics &TableCatalogEntry::GetStatistics(column_t oid) {
 	return storage->GetStatistics(oid);
 }
 

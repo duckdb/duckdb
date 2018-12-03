@@ -5,6 +5,8 @@
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/tableref/subqueryref.hpp"
 
+#include "storage/column_statistics.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -142,11 +144,14 @@ void BindContext::BindColumn(ColumnRefExpression &expr, size_t depth) {
 		}
 		auto table_index = table.index;
 		auto entry = &table.table->GetColumn(expr.column_name);
-		if (bindings.size() == 1) {
-			// single table query without joins, can use base table statistics
-			// directly
-			expr.stats = table.table->GetStatistics(entry->oid);
+		// assign the base table statistics
+		auto &table_stats = table.table->GetStatistics(entry->oid);
+		table_stats.Initialize(expr.stats);
+		if (bindings.size() > 1) {
+			// OUTER JOINS can introduce NULLs in the column
+			expr.stats.can_have_null = true;
 		}
+
 		auto &column_list = bound_columns[expr.table_name];
 		// check if the entry already exists in the column list for the table
 		expr.binding.column_index = column_list.size();

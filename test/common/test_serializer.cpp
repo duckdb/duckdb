@@ -142,7 +142,7 @@ TEST_CASE("Expression serializer", "[serializer]") {
 	{
 		// subquery, function, aggregate, case, negation
 		auto expression =
-		    ParseExpression("(SELECT 42) + abs(a) - COUNT(*) + + 33 - (CASE "
+		    ParseExpression("(SELECT 42) - COUNT(*) + + 33 - (CASE "
 		                    "WHEN NOT 0 THEN 33 ELSE 22 END)");
 		REQUIRE(expression.get());
 
@@ -160,10 +160,10 @@ TEST_CASE("Expression serializer", "[serializer]") {
 	{
 		// subtle differences should result in different results
 		auto expression =
-		    ParseExpression("(SELECT 42) + abs(a) - COUNT(*) + + 33 - (CASE "
+		    ParseExpression("(SELECT 42) - COUNT(*) + + 33 - (CASE "
 		                    "WHEN NOT 0 THEN 33 ELSE 22 END)");
 		auto expression2 =
-		    ParseExpression("(SELECT 43) + abs(a) - COUNT(*) + + 33 - (CASE "
+		    ParseExpression("(SELECT 43) - COUNT(*) + + 33 - (CASE "
 		                    "WHEN NOT 0 THEN 33 ELSE 22 END)");
 		REQUIRE(expression.get());
 		REQUIRE(expression2.get());

@@ -15,9 +15,9 @@
 #include <vector>
 
 #include "common/types/data_chunk.hpp"
-#include "common/types/statistics.hpp"
 #include "common/types/tuple.hpp"
 
+#include "storage/column_statistics.hpp"
 #include "storage/index.hpp"
 #include "storage/storage_chunk.hpp"
 #include "storage/unique_index.hpp"
@@ -76,7 +76,7 @@ class DataTable {
 	void ReleaseIndexLocks();
 
 	//! Get statistics of the specified column
-	Statistics &GetStatistics(column_t oid) {
+	ColumnStatistics &GetStatistics(column_t oid) {
 		if (oid == COLUMN_IDENTIFIER_ROW_ID) {
 			return rowid_statistics;
 		}
@@ -134,10 +134,8 @@ class DataTable {
 	//! A reference to the last entry in the chunk list
 	StorageChunk *tail_chunk;
 	//! Row ID statistics
-	Statistics rowid_statistics;
+	ColumnStatistics rowid_statistics;
 	//! The statistics of each of the columns
-	std::unique_ptr<Statistics[]> statistics;
-	//! Locks used for updating the statistics
-	std::unique_ptr<std::mutex[]> statistics_locks;
+	std::unique_ptr<ColumnStatistics[]> statistics;
 };
 } // namespace duckdb

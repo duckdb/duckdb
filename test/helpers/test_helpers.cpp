@@ -60,7 +60,7 @@ bool CHECK_COLUMN(unique_ptr<duckdb::DuckDBResult> &result,
 			if (vector.GetValue(j).is_null && values[i + j].is_null) {
 				continue;
 			}
-			if (!ValueOperations::Equals(vector.GetValue(j), values[i + j])) {
+			if (vector.GetValue(j) != values[i + j]) {
 				// FAIL("Incorrect result! Got " + vector.GetValue(j).ToString()
 				// +
 				//      " but expected " + values[i + j].ToString());
@@ -167,7 +167,7 @@ static bool ValuesAreEqual(Value result_value, Value value) {
 		StringUtil::RTrim(right);
 		return left == right;
 	} else {
-		if (!ValueOperations::Equals(value, result_value)) {
+		if (value != result_value) {
 			return false;
 		}
 	}

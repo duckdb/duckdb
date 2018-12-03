@@ -24,6 +24,7 @@
 
 namespace duckdb {
 
+class ColumnStatistics;
 class DataTable;
 class SchemaCatalogEntry;
 
@@ -53,7 +54,7 @@ class TableCatalogEntry : public CatalogEntry {
 	bool ColumnExists(const std::string &name);
 	//! Returns the statistics of the oid-th column. Throws an exception if the
 	//! access is out of range.
-	Statistics &GetStatistics(column_t oid);
+	ColumnStatistics &GetStatistics(column_t oid);
 	//! Returns a reference to the column of the specified name. Throws an
 	//! exception if the column does not exist.
 	ColumnDefinition &GetColumn(const std::string &name);

@@ -13,6 +13,17 @@ using namespace std;
 
 namespace duckdb {
 
+//! Set column ref types to a specific type (faking binding them)
+static void SetColumnRefTypes(Expression &op,
+                              TypeId colref_type = TypeId::INTEGER) {
+	if (op.type == ExpressionType::COLUMN_REF) {
+		op.return_type = colref_type;
+	}
+	for (auto &child : op.children) {
+		SetColumnRefTypes(*child, colref_type);
+	}
+}
+
 unique_ptr<Expression> ParseExpression(string expression) {
 	string query = "SELECT " + expression;
 
@@ -25,6 +36,10 @@ unique_ptr<Expression> ParseExpression(string expression) {
 		return nullptr;
 	}
 	auto &select = *((SelectStatement *)parser.statements[0].get());
+
+	SetColumnRefTypes(*select.select_list[0]);
+	select.select_list[0]->ResolveType();
+
 	return move(select.select_list[0]);
 }
 

@@ -111,13 +111,11 @@ TEST_CASE("Concurrent update", "[updates][.]") {
 
 		Value expected_money_from, expected_money_to;
 
-		ValueOperations::Subtract(money_from, Value::INTEGER(amount),
-		                          expected_money_from);
-		ValueOperations::Add(money_to, Value::INTEGER(amount),
-		                     expected_money_to);
+		expected_money_from = money_from - amount;
+		expected_money_to = money_to + amount;
 
-		REQUIRE(ValueOperations::Equals(new_money_from, expected_money_from));
-		REQUIRE(ValueOperations::Equals(new_money_to, expected_money_to));
+		REQUIRE(new_money_from == expected_money_from);
+		REQUIRE(new_money_to == expected_money_to);
 
 		REQUIRE_NO_FAIL(con.Query("COMMIT"));
 	}

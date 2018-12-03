@@ -44,7 +44,7 @@ template class std::unique_ptr<uint64_t[]>;
 template class std::unique_ptr<uint8_t[]>;
 template class std::unique_ptr<Vector[]>;
 template class std::unique_ptr<DataChunk>;
-template class std::unique_ptr<Statistics[]>;
+template class std::unique_ptr<ExpressionStatistics[]>;
 template class std::unique_ptr<Constraint>;
 template class std::unique_ptr<SelectStatement>;
 template class std::unique_ptr<JoinHashTable>;
@@ -76,7 +76,7 @@ template class std::vector<ExpressionType>;
 INSTANTIATE_VECTOR(std::vector<JoinCondition>);
 INSTANTIATE_VECTOR(std::vector<OrderByNode>);
 template class std::vector<size_t>;
-template class std::vector<Statistics>;
+INSTANTIATE_VECTOR(std::vector<ExpressionStatistics>);
 template class std::vector<std::string>;
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Expression>>)
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<AbstractRuleNode>>);

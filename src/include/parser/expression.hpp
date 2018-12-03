@@ -36,14 +36,14 @@ class AggregateExpression;
 class Expression : public Printable {
   public:
 	//! Create an Expression
-	Expression(ExpressionType type) : type(type) {
+	Expression(ExpressionType type) : type(type), stats(*this) {
 	}
 	//! Create an Expression with zero, one or two children with the
 	//! specified return type
 	Expression(ExpressionType type, TypeId return_type,
 	           std::unique_ptr<Expression> left = nullptr,
 	           std::unique_ptr<Expression> right = nullptr)
-	    : type(type), return_type(return_type) {
+	    : type(type), return_type(return_type), stats(*this) {
 		if (left)
 			AddChild(std::move(left));
 		if (right)
@@ -138,7 +138,7 @@ class Expression : public Printable {
 	TypeId return_type = TypeId::INVALID;
 
 	//! The statistics of the current expression in the plan
-	Statistics stats;
+	ExpressionStatistics stats;
 
 	//! The alias of the expression, used in the SELECT clause (e.g. SELECT x +
 	//! 1 AS f)

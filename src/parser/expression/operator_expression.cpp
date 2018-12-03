@@ -19,28 +19,34 @@ void OperatorExpression::ResolveType() {
 		return_type = TypeId::BOOLEAN;
 		return;
 	}
+	return_type = std::max(children[0]->return_type, children[1]->return_type);
 	switch (type) {
 	case ExpressionType::OPERATOR_ADD:
-		Statistics::Add(children[0]->stats, children[1]->stats, stats);
+		ExpressionStatistics::Add(children[0]->stats, children[1]->stats,
+		                          stats);
 		break;
 	case ExpressionType::OPERATOR_SUBTRACT:
-		Statistics::Subtract(children[0]->stats, children[1]->stats, stats);
+		ExpressionStatistics::Subtract(children[0]->stats, children[1]->stats,
+		                               stats);
 		break;
 	case ExpressionType::OPERATOR_MULTIPLY:
-		Statistics::Multiply(children[0]->stats, children[1]->stats, stats);
+		ExpressionStatistics::Multiply(children[0]->stats, children[1]->stats,
+		                               stats);
 		break;
 	case ExpressionType::OPERATOR_DIVIDE:
-		Statistics::Divide(children[0]->stats, children[1]->stats, stats);
+		ExpressionStatistics::Divide(children[0]->stats, children[1]->stats,
+		                             stats);
 		break;
 	case ExpressionType::OPERATOR_MOD:
-		Statistics::Modulo(children[0]->stats, children[1]->stats, stats);
+		ExpressionStatistics::Modulo(children[0]->stats, children[1]->stats,
+		                             stats);
 		break;
 	default:
-		throw NotImplementedException("Unsupported operator type!");
+		throw NotImplementedException(
+		    "Unsupported operator type for statistics!");
 	}
 	// return the highest type of the children, unless we need to upcast to
 	// avoid overflow
-	return_type = std::max(children[0]->return_type, children[1]->return_type);
 	if (!stats.FitsInType(return_type)) {
 		return_type = stats.MinimalType();
 	}

@@ -51,16 +51,16 @@ void AggregateExpression::ResolveType() {
 		if (children[0]->IsScalar()) {
 			stats.has_stats = false;
 		} else {
-			Statistics::Count(children[0]->stats, stats);
+			ExpressionStatistics::Count(children[0]->stats, stats);
 		}
 		return_type = TypeId::BIGINT;
 		break;
 	case ExpressionType::AGGREGATE_MAX:
-		Statistics::Max(children[0]->stats, stats);
+		ExpressionStatistics::Max(children[0]->stats, stats);
 		return_type = max(children[0]->return_type, stats.MinimalType());
 		break;
 	case ExpressionType::AGGREGATE_MIN:
-		Statistics::Min(children[0]->stats, stats);
+		ExpressionStatistics::Min(children[0]->stats, stats);
 		return_type = max(children[0]->return_type, stats.MinimalType());
 		break;
 	case ExpressionType::AGGREGATE_SUM:
@@ -79,8 +79,8 @@ void AggregateExpression::ResolveType() {
 				return_type = children[0]->return_type;
 			}
 		} else {
-			Statistics::Count(children[0]->stats, stats);
-			Statistics::Sum(children[0]->stats, stats);
+			ExpressionStatistics::Count(children[0]->stats, stats);
+			ExpressionStatistics::Sum(children[0]->stats, stats);
 			return_type = max(children[0]->return_type, stats.MinimalType());
 		}
 

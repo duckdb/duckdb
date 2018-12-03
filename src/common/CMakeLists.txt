@@ -1,5 +1,6 @@
 
 add_subdirectory(operator)
+add_subdirectory(statistics_operations)
 add_subdirectory(types)
 add_subdirectory(value_operations)
 add_subdirectory(vector_operations)

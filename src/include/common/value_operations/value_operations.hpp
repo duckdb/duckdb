@@ -19,17 +19,19 @@ struct ValueOperations {
 	// Numeric Operations
 	//===--------------------------------------------------------------------===//
 	// A + B
-	static void Add(const Value &left, const Value &right, Value &result);
+	static Value Add(const Value &left, const Value &right);
 	// A - B
-	static void Subtract(const Value &left, const Value &right, Value &result);
+	static Value Subtract(const Value &left, const Value &right);
 	// A * B
-	static void Multiply(const Value &left, const Value &right, Value &result);
+	static Value Multiply(const Value &left, const Value &right);
 	// A / B
-	static void Divide(const Value &left, const Value &right, Value &result);
+	static Value Divide(const Value &left, const Value &right);
+	// A % B
+	static Value Modulo(const Value &left, const Value &right);
 	// MIN(A, B)
-	static void Min(const Value &left, const Value &right, Value &result);
+	static Value Min(const Value &left, const Value &right);
 	// MAX(A, B)
-	static void Max(const Value &left, const Value &right, Value &result);
+	static Value Max(const Value &left, const Value &right);
 	//===--------------------------------------------------------------------===//
 	// Comparison Operations
 	//===--------------------------------------------------------------------===//
@@ -45,5 +47,10 @@ struct ValueOperations {
 	static bool LessThan(const Value &left, const Value &right);
 	// A <= B
 	static bool LessThanEquals(const Value &left, const Value &right);
+	//===--------------------------------------------------------------------===//
+	// Numeric Functions
+	//===--------------------------------------------------------------------===//
+	// ABS(A)
+	static Value Abs(const Value &left);
 };
 } // namespace duckdb

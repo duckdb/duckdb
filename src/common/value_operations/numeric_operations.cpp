@@ -8,11 +8,11 @@
 using namespace duckdb;
 using namespace std;
 
-template <class OP>
-static void templated_binary_operation(const Value &left, const Value &right,
-                                       Value &result, bool ignore_null) {
+template <class OP, bool IGNORE_NULL>
+static Value templated_binary_operation(const Value &left, const Value &right) {
+	Value result;
 	if (left.is_null || right.is_null) {
-		if (ignore_null) {
+		if (IGNORE_NULL) {
 			if (!right.is_null) {
 				result = right;
 			} else {
@@ -22,7 +22,7 @@ static void templated_binary_operation(const Value &left, const Value &right,
 			result.type = max(left.type, right.type);
 			result.is_null = true;
 		}
-		return;
+		return result;
 	}
 	result.is_null = false;
 	if (TypeIsIntegral(left.type) && TypeIsIntegral(right.type) &&
@@ -30,8 +30,8 @@ static void templated_binary_operation(const Value &left, const Value &right,
 		// upcast integer types if necessary
 		Value left_cast = left.CastAs(TypeId::BIGINT);
 		Value right_cast = right.CastAs(TypeId::BIGINT);
-		templated_binary_operation<OP>(left_cast, right_cast, result,
-		                               ignore_null);
+		result =
+		    templated_binary_operation<OP, IGNORE_NULL>(left_cast, right_cast);
 		if (result.is_null) {
 			result.type = max(left.type, right.type);
 		} else {
@@ -39,17 +39,15 @@ static void templated_binary_operation(const Value &left, const Value &right,
 			                max(left.type, right.type));
 			result = result.CastAs(type);
 		}
-		return;
+		return result;
 	}
 	if (TypeIsIntegral(left.type) && right.type == TypeId::DECIMAL) {
 		Value left_cast = left.CastAs(TypeId::DECIMAL);
-		templated_binary_operation<OP>(left_cast, right, result, ignore_null);
-		return;
+		return templated_binary_operation<OP, IGNORE_NULL>(left_cast, right);
 	}
 	if (left.type == TypeId::DECIMAL && TypeIsIntegral(right.type)) {
 		Value right_cast = right.CastAs(TypeId::DECIMAL);
-		templated_binary_operation<OP>(left, right_cast, result, ignore_null);
-		return;
+		return templated_binary_operation<OP, IGNORE_NULL>(left, right_cast);
 	}
 	if (left.type != right.type) {
 		throw TypeMismatchException(
@@ -96,45 +94,46 @@ static void templated_binary_operation(const Value &left, const Value &right,
 	default:
 		throw NotImplementedException("Unimplemented type");
 	}
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
 // Numeric Operations
 //===--------------------------------------------------------------------===//
-void ValueOperations::Add(const Value &left, const Value &right,
-                          Value &result) {
-	templated_binary_operation<operators::Add>(left, right, result, false);
+Value ValueOperations::Add(const Value &left, const Value &right) {
+	return templated_binary_operation<operators::Add, false>(left, right);
 }
 
-void ValueOperations::Subtract(const Value &left, const Value &right,
-                               Value &result) {
-	templated_binary_operation<operators::Subtract>(left, right, result, false);
+Value ValueOperations::Subtract(const Value &left, const Value &right) {
+	return templated_binary_operation<operators::Subtract, false>(left, right);
 }
 
-void ValueOperations::Multiply(const Value &left, const Value &right,
-                               Value &result) {
-	templated_binary_operation<operators::Multiply>(left, right, result, false);
+Value ValueOperations::Multiply(const Value &left, const Value &right) {
+	return templated_binary_operation<operators::Multiply, false>(left, right);
 }
 
-void ValueOperations::Divide(const Value &left, const Value &right,
-                             Value &result) {
+Value ValueOperations::Modulo(const Value &left, const Value &right) {
+	throw NotImplementedException("Value modulo");
+}
+
+Value ValueOperations::Divide(const Value &left, const Value &right) {
 	Value zero = Value::Numeric(right.type, 0);
-	if (ValueOperations::Equals(right, zero)) {
+	if (right == 0) {
 		// special case: divide by zero
+		Value result;
 		result.type = max(left.type, right.type);
 		result.is_null = true;
+		return result;
 	} else {
-		templated_binary_operation<operators::Divide>(left, right, result,
-		                                              false);
+		return templated_binary_operation<operators::Divide, false>(left,
+		                                                            right);
 	}
 }
 
-void ValueOperations::Min(const Value &left, const Value &right,
-                          Value &result) {
-	templated_binary_operation<operators::Min>(left, right, result, true);
+Value ValueOperations::Min(const Value &left, const Value &right) {
+	return templated_binary_operation<operators::Min, true>(left, right);
 }
 
-void ValueOperations::Max(const Value &left, const Value &right,
-                          Value &result) {
-	templated_binary_operation<operators::Max>(left, right, result, true);
+Value ValueOperations::Max(const Value &left, const Value &right) {
+	return templated_binary_operation<operators::Max, true>(left, right);
 }

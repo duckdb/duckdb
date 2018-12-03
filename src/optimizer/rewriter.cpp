@@ -46,8 +46,12 @@ Rewriter::ApplyRules(unique_ptr<LogicalOperator> root) {
 					if (!new_vertex) {
 						continue;
 					}
+					// resolve the type of the new expression
+					// this also resolves statistics for the operator again
+					new_vertex->ResolveType();
 
 					// abstract expressions cannot be the root of the plan
+					// so we don't need to consider replacing it
 					iterator.replace(move(new_vertex));
 				}
 				finished_iterating = false;

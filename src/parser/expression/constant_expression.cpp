@@ -33,7 +33,7 @@ ConstantExpression::Deserialize(ExpressionDeserializeInformation *info,
 
 void ConstantExpression::ResolveType() {
 	Expression::ResolveType();
-	stats = Statistics(value);
+	stats.SetFromValue(value);
 }
 
 bool ConstantExpression::Equals(const Expression *other_) {
@@ -44,5 +44,5 @@ bool ConstantExpression::Equals(const Expression *other_) {
 	if (!other) {
 		return false;
 	}
-	return ValueOperations::Equals(value, other->value);
+	return value == other->value;
 }

@@ -33,9 +33,6 @@ void VectorOperations::Abs(Vector &input, Vector &result) {
 	case TypeId::DECIMAL:
 		templated_unary_loop<double, double, operators::Abs>(input, result);
 		break;
-	case TypeId::POINTER:
-		// NOP, pointer is unsigned
-		break;
 	default:
 		throw InvalidTypeException(input.type, "Invalid type for abs");
 	}

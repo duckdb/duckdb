@@ -370,22 +370,21 @@ LogicalPlanGenerator::Visit(SelectStatement &statement) {
 static void cast_children_to_equal_types(Expression &expr,
                                          size_t start_idx = 0) {
 	// first figure out the widest type
-	TypeId max_type = TypeId::INVALID;
-	for (size_t child_idx = start_idx; child_idx < expr.children.size();
-	     child_idx++) {
-		TypeId child_type = expr.children[child_idx]->return_type;
+	TypeId max_type = expr.return_type;
+	for (size_t i = start_idx; i < expr.children.size(); i++) {
+		TypeId child_type = expr.children[i]->return_type;
 		if (child_type > max_type) {
 			max_type = child_type;
 		}
 	}
 	// now add casts where appropriate
-	for (size_t child_idx = start_idx; child_idx < expr.children.size();
-	     child_idx++) {
-		TypeId child_type = expr.children[child_idx]->return_type;
+	for (size_t i = start_idx; i < expr.children.size(); i++) {
+		TypeId child_type = expr.children[i]->return_type;
 		if (child_type != max_type) {
-			auto cast = make_unique<CastExpression>(
-			    max_type, move(expr.children[child_idx]));
-			expr.children[child_idx] = move(cast);
+			auto cast =
+			    make_unique<CastExpression>(max_type, move(expr.children[i]));
+			cast->ResolveType();
+			expr.children[i] = move(cast);
 		}
 	}
 }

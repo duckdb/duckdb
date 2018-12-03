@@ -11,85 +11,102 @@ using namespace std;
 
 namespace operators {
 
-template <class SRC, class DST> DST CastWithOverflowCheck(SRC value) {
+template <class SRC, class DST> static DST cast_with_overflow_check(SRC value) {
 	if (value < MinimumValue<DST>() || value > MaximumValue<DST>()) {
 		throw ValueOutOfRangeException((int64_t)value, GetTypeId<SRC>(),
 		                               GetTypeId<DST>());
 	}
-	return (SRC)value;
+	return (DST)value;
+}
+
+template <class SRC> static uint64_t cast_to_uint64_overflow_check(SRC value) {
+	if (value < 0) {
+		throw ValueOutOfRangeException((int64_t)value, GetTypeId<SRC>(),
+		                               TypeId::POINTER);
+	}
+	return (uint64_t)value;
+}
+
+template <class DST>
+static DST cast_from_uint64_overflow_check(uint64_t value) {
+	if (value > MaximumValue<DST>()) {
+		throw ValueOutOfRangeException((int64_t)value, TypeId::POINTER,
+		                               GetTypeId<DST>());
+	}
+	return (DST)value;
 }
 
 //===--------------------------------------------------------------------===//
 // Numeric -> int8_t casts
 //===--------------------------------------------------------------------===//
 template <> int8_t Cast::Operation(int16_t left) {
-	return CastWithOverflowCheck<int16_t, int8_t>(left);
+	return cast_with_overflow_check<int16_t, int8_t>(left);
 }
 template <> int8_t Cast::Operation(int32_t left) {
-	return CastWithOverflowCheck<int32_t, int8_t>(left);
+	return cast_with_overflow_check<int32_t, int8_t>(left);
 }
 template <> int8_t Cast::Operation(int64_t left) {
-	return CastWithOverflowCheck<int64_t, int8_t>(left);
+	return cast_with_overflow_check<int64_t, int8_t>(left);
 }
 template <> int8_t Cast::Operation(uint64_t left) {
-	return CastWithOverflowCheck<uint64_t, int8_t>(left);
+	return cast_from_uint64_overflow_check<int8_t>(left);
 }
 template <> int8_t Cast::Operation(double left) {
-	return CastWithOverflowCheck<double, int8_t>(left);
+	return cast_with_overflow_check<double, int8_t>(left);
 }
 //===--------------------------------------------------------------------===//
 // Numeric -> int16_t casts
 //===--------------------------------------------------------------------===//
 template <> int16_t Cast::Operation(int32_t left) {
-	return CastWithOverflowCheck<int32_t, int16_t>(left);
+	return cast_with_overflow_check<int32_t, int16_t>(left);
 }
 template <> int16_t Cast::Operation(int64_t left) {
-	return CastWithOverflowCheck<int64_t, int16_t>(left);
+	return cast_with_overflow_check<int64_t, int16_t>(left);
 }
 template <> int16_t Cast::Operation(uint64_t left) {
-	return CastWithOverflowCheck<uint64_t, int16_t>(left);
+	return cast_from_uint64_overflow_check<int16_t>(left);
 }
 template <> int16_t Cast::Operation(double left) {
-	return CastWithOverflowCheck<double, int16_t>(left);
+	return cast_with_overflow_check<double, int16_t>(left);
 }
 //===--------------------------------------------------------------------===//
 // Numeric -> int32_t casts
 //===--------------------------------------------------------------------===//
 template <> int32_t Cast::Operation(int64_t left) {
-	return CastWithOverflowCheck<int64_t, int32_t>(left);
+	return cast_with_overflow_check<int64_t, int32_t>(left);
 }
 template <> int32_t Cast::Operation(uint64_t left) {
-	return CastWithOverflowCheck<uint64_t, int32_t>(left);
+	return cast_from_uint64_overflow_check<uint64_t>(left);
 }
 template <> int32_t Cast::Operation(double left) {
-	return CastWithOverflowCheck<double, int32_t>(left);
+	return cast_with_overflow_check<double, int32_t>(left);
 }
 //===--------------------------------------------------------------------===//
 // Numeric -> int64_t casts
 //===--------------------------------------------------------------------===//
 template <> int64_t Cast::Operation(uint64_t left) {
-	return CastWithOverflowCheck<uint64_t, int64_t>(left);
+	return cast_from_uint64_overflow_check<uint64_t>(left);
 }
 template <> int64_t Cast::Operation(double left) {
-	return CastWithOverflowCheck<double, int64_t>(left);
+	return cast_with_overflow_check<double, int64_t>(left);
 }
 //===--------------------------------------------------------------------===//
 // Numeric -> uint64_t casts
 //===--------------------------------------------------------------------===//
 template <> uint64_t Cast::Operation(int8_t left) {
-	return CastWithOverflowCheck<int8_t, uint64_t>(left);
+	return cast_to_uint64_overflow_check<int8_t>(left);
 }
 template <> uint64_t Cast::Operation(int16_t left) {
-	return CastWithOverflowCheck<int16_t, uint64_t>(left);
+	return cast_to_uint64_overflow_check<int16_t>(left);
 }
 template <> uint64_t Cast::Operation(int32_t left) {
-	return CastWithOverflowCheck<int32_t, uint64_t>(left);
+	return cast_to_uint64_overflow_check<int32_t>(left);
 }
 template <> uint64_t Cast::Operation(int64_t left) {
-	return CastWithOverflowCheck<int64_t, uint64_t>(left);
+	return cast_to_uint64_overflow_check<int64_t>(left);
 }
 template <> uint64_t Cast::Operation(double left) {
-	return CastWithOverflowCheck<double, uint64_t>(left);
+	return cast_to_uint64_overflow_check<double>(left);
 }
 
 //===--------------------------------------------------------------------===//

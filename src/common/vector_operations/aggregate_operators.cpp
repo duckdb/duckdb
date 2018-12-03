@@ -87,8 +87,7 @@ Value VectorOperations::Max(Vector &left) {
 	Value minimum_value = Value::MinimumValue(left.type);
 	Value result = minimum_value;
 	generic_fold_loop<operators::Max>(left, result);
-	result.is_null = ValueOperations::Equals(
-	    result, minimum_value); // check if any tuples qualified
+	result.is_null = result == minimum_value; // check if any tuples qualified
 	return result;
 }
 
@@ -99,8 +98,7 @@ Value VectorOperations::Min(Vector &left) {
 	Value maximum_value = Value::MaximumValue(left.type);
 	Value result = maximum_value;
 	generic_fold_loop<operators::Min>(left, result);
-	result.is_null = ValueOperations::Equals(
-	    result, maximum_value); // check if any tuples qualified
+	result.is_null = result == maximum_value; // check if any tuples qualified
 	return result;
 }
 

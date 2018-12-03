@@ -7,6 +7,7 @@
 #include "common/operator/comparison_operators.hpp"
 #include "common/operator/numeric_binary_operators.hpp"
 #include "common/serializer.hpp"
+#include "common/value_operations/value_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -209,6 +210,81 @@ string Value::ToString() const {
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// Numeric Operators
+//===--------------------------------------------------------------------===//
+Value Value::operator+(const Value &rhs) const {
+	return ValueOperations::Add(*this, rhs);
+}
+
+Value Value::operator-(const Value &rhs) const {
+	return ValueOperations::Subtract(*this, rhs);
+}
+
+Value Value::operator*(const Value &rhs) const {
+	return ValueOperations::Multiply(*this, rhs);
+}
+
+Value Value::operator/(const Value &rhs) const {
+	return ValueOperations::Divide(*this, rhs);
+}
+
+Value Value::operator%(const Value &rhs) const {
+	throw NotImplementedException("value modulo");
+	// return ValueOperations::Modulo(*this, rhs);
+}
+
+//===--------------------------------------------------------------------===//
+// Comparison Operators
+//===--------------------------------------------------------------------===//
+bool Value::operator==(const Value &rhs) const {
+	return ValueOperations::Equals(*this, rhs);
+}
+
+bool Value::operator!=(const Value &rhs) const {
+	return ValueOperations::NotEquals(*this, rhs);
+}
+
+bool Value::operator<(const Value &rhs) const {
+	return ValueOperations::LessThan(*this, rhs);
+}
+
+bool Value::operator>(const Value &rhs) const {
+	return ValueOperations::GreaterThan(*this, rhs);
+}
+
+bool Value::operator<=(const Value &rhs) const {
+	return ValueOperations::LessThanEquals(*this, rhs);
+}
+
+bool Value::operator>=(const Value &rhs) const {
+	return ValueOperations::GreaterThanEquals(*this, rhs);
+}
+
+bool Value::operator==(const int64_t &rhs) const {
+	return *this == Value::Numeric(type, rhs);
+}
+
+bool Value::operator!=(const int64_t &rhs) const {
+	return *this != Value::Numeric(type, rhs);
+}
+
+bool Value::operator<(const int64_t &rhs) const {
+	return *this < Value::Numeric(type, rhs);
+}
+
+bool Value::operator>(const int64_t &rhs) const {
+	return *this > Value::Numeric(type, rhs);
+}
+
+bool Value::operator<=(const int64_t &rhs) const {
+	return *this <= Value::Numeric(type, rhs);
+}
+
+bool Value::operator>=(const int64_t &rhs) const {
+	return *this >= Value::Numeric(type, rhs);
+}
+
 template <class DST, class OP> DST Value::_cast(const Value &v) {
 	switch (v.type) {
 	case TypeId::BOOLEAN:
@@ -230,7 +306,7 @@ template <class DST, class OP> DST Value::_cast(const Value &v) {
 	case TypeId::DATE:
 		return operators::CastFromDate::Operation<date_t, DST>(v.value_.date);
 	case TypeId::TIMESTAMP:
-		return OP::template Operation<uint64_t, DST>(v.value_.timestamp);
+		return OP::template Operation<timestamp_t, DST>(v.value_.timestamp);
 	default:
 		throw NotImplementedException("Unimplemented type for casting");
 	}

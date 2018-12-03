@@ -23,8 +23,7 @@ class CastExpression : public Expression {
 
 	void ResolveType() override {
 		Expression::ResolveType();
-		stats.type = return_type;
-		Statistics::Cast(children[0]->stats, stats);
+		ExpressionStatistics::Cast(children[0]->stats, stats);
 		if (!stats.FitsInType(return_type)) {
 			return_type = stats.MinimalType();
 		}
