@@ -1,3 +1,13 @@
+//===----------------------------------------------------------------------===// 
+// 
+//                         DuckDB 
+// 
+// planner/operator/list.hpp
+// 
+// 
+// 
+//===----------------------------------------------------------------------===//
+
 #include "planner/operator/logical_aggregate.hpp"
 #include "planner/operator/logical_copy.hpp"
 #include "planner/operator/logical_create.hpp"

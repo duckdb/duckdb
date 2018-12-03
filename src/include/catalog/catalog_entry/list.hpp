@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===// 
+// 
+//                         DuckDB 
+// 
+// catalog/catalog_entry/list.hpp
+// 
+// 
+// 
+//===----------------------------------------------------------------------===//
 
 #include "catalog/catalog_entry/index_catalog_entry.hpp"
 #include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"

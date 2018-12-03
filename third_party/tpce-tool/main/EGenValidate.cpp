@@ -69,9 +69,9 @@ using TPCE::timestrtoint64;
 
 using TPCE::CCustomerSelection;
 using TPCE::CRandom;
+using TPCE::RNGSEED;
 using TPCE::eCustomerTier;
 using TPCE::iDefaultLoadUnitSize;
-using TPCE::RNGSEED;
 
 using std::cout;
 using std::endl;

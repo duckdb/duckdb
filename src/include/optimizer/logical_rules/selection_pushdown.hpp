@@ -1,14 +1,12 @@
+//===----------------------------------------------------------------------===// 
+// 
+//                         DuckDB 
+// 
+// optimizer/logical_rules/selection_pushdown.hpp
+// 
+// 
+// 
 //===----------------------------------------------------------------------===//
-//
-//                         DuckDB
-//
-// optimizer/logical_rules/cross_product_rewrite.hpp
-//
-// Author: Hannes Mühleisen & Mark Raasveldt
-//
-//===----------------------------------------------------------------------===//
-
-// TODO: possibly merge into cross product rewrite, lots of overlap?
 
 #pragma once
 
