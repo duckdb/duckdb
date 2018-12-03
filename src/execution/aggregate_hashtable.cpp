@@ -139,6 +139,7 @@ void SuperLargeHashTable::Resize(size_t size) {
 			}
 
 			groups.Verify();
+			assert(groups.size() == entry);
 			StaticVector<uint64_t> new_addresses;
 			StaticVector<bool> new_group_dummy;
 			new_table->FindOrCreateGroups(groups, new_addresses,
@@ -154,7 +155,6 @@ void SuperLargeHashTable::Resize(size_t size) {
 				memcpy(((uint8_t **)new_addresses.data)[i], data_pointers[i],
 				       payload_width);
 			});
-			new_table->entries += entry;
 		}
 
 		assert(this->entries == new_table->entries);

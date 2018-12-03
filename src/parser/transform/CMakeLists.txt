@@ -1,3 +1,8 @@
 
-add_library(duckdb_transform OBJECT transform_expression.cpp transform_statement.cpp)
-set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_transform> PARENT_SCOPE)
+add_subdirectory(constraint)
+add_subdirectory(expression)
+add_subdirectory(helpers)
+add_subdirectory(statement)
+add_subdirectory(tableref)
+
+set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES} PARENT_SCOPE)
