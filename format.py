@@ -65,6 +65,20 @@ def format_directory(directory, sort_includes=True):
 			if ignored:
 				continue
 			for ext in extensions:
+				if f.endswith(".hpp") and directory == "src/include" and os.path.getmtime(full_path) > last_format_time:
+					header_middle ="// "+ os.path.relpath(full_path, script_dir) + "\n"
+					file = open(full_path, "r")
+					lines = file.readlines()
+					file.close()
+					file = open(full_path, "w")
+					file.write(header_top + header_middle + header_bottom)
+					is_old_header = True
+					for line in lines:
+						if not (line.startswith("//") or line.startswith("\n")) and is_old_header:
+							is_old_header = False
+						if not is_old_header:
+							file.write(line)
+					file.close()
 				if f.endswith(ext):
 					if os.path.getmtime(full_path) > last_format_time:
 						format_command = format_commands[ext]
@@ -75,28 +89,6 @@ def format_directory(directory, sort_includes=True):
 						print(cmd)
 						os.system(cmd)
 					break
-
-def add_header(directory):
-	files = os.listdir(directory)
-	for file in files:
-		full_path = os.path.join(directory, file)
-		if os.path.isdir(full_path):
-			add_header(full_path)
-		else:
-			if file.endswith(".hpp"): 
-				header_middle ="// "+ os.path.relpath(full_path, script_dir) + "\n"
-				f = open(full_path, "r")
-				lines = f.readlines()
-				f.close()
-				f = open(full_path, "w")
-				f.write(header_top + header_middle + header_bottom)
-				is_old_header = True
-				for line in lines:
-					if not (line.startswith("//") or line.startswith("\n")) and is_old_header:
-						is_old_header = False
-					if not is_old_header:
-						f.write(line)
-				f.close()
 				
 format_directory('src')
 format_directory('benchmark')
@@ -107,7 +99,6 @@ format_directory('third_party/sqlsmith', False)
 format_directory('third_party/tpce-tool', False)
 format_directory('tools')
 
-add_header('src/include')
 # write the last modified time
 if not ignore_last_format:
 	with open(last_format_file, 'w+') as f:
