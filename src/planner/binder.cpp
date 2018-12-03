@@ -385,7 +385,7 @@ unique_ptr<Expression> Binder::Visit(FunctionExpression &expr) {
 unique_ptr<Expression> Binder::Visit(SubqueryExpression &expr) {
 	assert(bind_context);
 
-	Binder binder(context);
+	Binder binder(context, this);
 	binder.bind_context->parent = bind_context.get();
 	// the subquery may refer to CTEs from the parent query
 	binder.CTE_bindings = CTE_bindings;
