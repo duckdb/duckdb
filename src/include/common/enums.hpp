@@ -142,6 +142,7 @@ enum class ExpressionType : uint8_t {
 	AGGREGATE_MAX = 106,
 	AGGREGATE_AVG = 107,
 	AGGREGATE_FIRST = 108,
+	AGGREGATE_STDDEV_SAMP = 109,
 
 	// -----------------------------
 	// Functions

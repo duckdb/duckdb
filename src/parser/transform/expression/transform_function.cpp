@@ -12,7 +12,8 @@ using namespace std;
 
 static bool IsAggregateFunction(const string &fun_name) {
 	if (fun_name == "min" || fun_name == "max" || fun_name == "count" ||
-	    fun_name == "avg" || fun_name == "sum" || fun_name == "first")
+	    fun_name == "avg" || fun_name == "sum" || fun_name == "first" ||
+	    fun_name == "stddev_samp")
 		return true;
 	return false;
 }
