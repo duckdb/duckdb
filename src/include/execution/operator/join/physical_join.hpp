@@ -22,7 +22,6 @@ class PhysicalJoin : public PhysicalOperator {
 	PhysicalJoin(PhysicalOperatorType type, std::vector<JoinCondition> cond,
 	             JoinType join_type);
 
-	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;
 
 	std::string ExtraRenderInformation() override;

@@ -12,9 +12,6 @@ PhysicalUnion::PhysicalUnion(std::unique_ptr<PhysicalOperator> top,
 	children.push_back(move(bottom));
 }
 
-vector<string> PhysicalUnion::GetNames() {
-	return children[0]->GetNames();
-}
 vector<TypeId> PhysicalUnion::GetTypes() {
 	return children[0]->GetTypes();
 }

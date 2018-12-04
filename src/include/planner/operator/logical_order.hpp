@@ -25,6 +25,9 @@ class LogicalOrder : public LogicalOperator {
 	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
+	std::vector<string> GetNames() override {
+		return children[0]->GetNames();
+	}
 
 	OrderByDescription description;
 };

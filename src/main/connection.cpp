@@ -101,7 +101,6 @@ DuckDBConnection::GetQueryResult(ClientContext &context, std::string query) {
 		}
 
 		auto plan = move(planner.plan);
-
 		Optimizer optimizer(*planner.context);
 		plan = optimizer.Optimize(move(plan));
 		if (!optimizer.GetSuccess()) {
@@ -112,6 +111,9 @@ DuckDBConnection::GetQueryResult(ClientContext &context, std::string query) {
 			return make_unique<DuckDBResult>();
 		}
 
+		// extract the result column names from the plan
+		result->names = plan->GetNames();
+
 		// now convert logical query plan into a physical query plan
 		PhysicalPlanGenerator physical_planner(context);
 		if (!physical_planner.CreatePlan(move(plan))) {
@@ -121,7 +123,6 @@ DuckDBConnection::GetQueryResult(ClientContext &context, std::string query) {
 
 		// finally execute the plan and return the result
 		Executor executor;
-		result->names = physical_planner.plan->GetNames();
 		result->collection =
 		    executor.Execute(context, move(physical_planner.plan));
 		result->success = true;

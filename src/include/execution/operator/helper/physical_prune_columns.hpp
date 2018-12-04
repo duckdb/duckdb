@@ -22,7 +22,6 @@ class PhysicalPruneColumns : public PhysicalOperator {
 	      column_limit(column_limit) {
 	}
 
-	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk,

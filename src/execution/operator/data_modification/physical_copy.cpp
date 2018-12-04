@@ -10,9 +10,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<string> PhysicalCopy::GetNames() {
-	return {"Count"};
-}
 vector<TypeId> PhysicalCopy::GetTypes() {
 	return {TypeId::BIGINT};
 }

@@ -8,9 +8,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<string> PhysicalDelete::GetNames() {
-	return {"Count"};
-}
 vector<TypeId> PhysicalDelete::GetTypes() {
 	return {TypeId::BIGINT};
 }

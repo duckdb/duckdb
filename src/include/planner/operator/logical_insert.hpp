@@ -27,6 +27,9 @@ class LogicalInsert : public LogicalOperator {
 	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
+	std::vector<string> GetNames() override {
+		return {"Count"};
+	}
 
 	//! The base table to insert into
 	TableCatalogEntry *table;

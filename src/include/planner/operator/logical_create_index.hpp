@@ -28,6 +28,9 @@ class LogicalCreateIndex : public LogicalOperator {
 	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
+	std::vector<string> GetNames() override {
+		return {"Count"};
+	}
 
 	//! The table to create the index for
 	TableCatalogEntry &table;

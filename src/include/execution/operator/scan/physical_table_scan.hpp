@@ -32,7 +32,6 @@ class PhysicalTableScan : public PhysicalOperator {
 	//! The column ids to project
 	std::vector<column_t> column_ids;
 
-	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk,

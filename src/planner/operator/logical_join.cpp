@@ -8,6 +8,35 @@
 using namespace duckdb;
 using namespace std;
 
+vector<string> LogicalJoin::GetNames() {
+	auto left = children[0]->GetNames();
+	if (type != JoinType::SEMI && type != JoinType::ANTI) {
+		// for normal joins we project both sides
+		auto right = children[1]->GetNames();
+		left.insert(left.end(), right.begin(), right.end());
+	}
+	return left;
+}
+
+std::string LogicalJoin::ParamsToString() const {
+	std::string result = "";
+	if (conditions.size() > 0) {
+		result += "[";
+		for (size_t i = 0; i < conditions.size(); i++) {
+			auto &cond = conditions[i];
+			result += ExpressionTypeToString(cond.comparison) + "(" +
+						cond.left->ToString() + ", " +
+						cond.right->ToString() + ")";
+			if (i < conditions.size() - 1) {
+				result += ", ";
+			}
+		}
+		result += "]";
+	}
+
+	return result;
+}
+
 JoinSide LogicalJoin::GetJoinSide(LogicalOperator *op,
                                   std::unique_ptr<Expression> &expr) {
 	if (expr->type == ExpressionType::SELECT_SUBQUERY) {

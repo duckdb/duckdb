@@ -19,7 +19,6 @@ class PhysicalCrossProduct : public PhysicalOperator {
 	PhysicalCrossProduct(std::unique_ptr<PhysicalOperator> left,
 	                     std::unique_ptr<PhysicalOperator> right);
 
-	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk,

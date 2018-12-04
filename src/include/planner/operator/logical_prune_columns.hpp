@@ -26,6 +26,7 @@ class LogicalPruneColumns : public LogicalOperator {
 	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
+	std::vector<string> GetNames() override;
 
 	size_t column_limit;
 };

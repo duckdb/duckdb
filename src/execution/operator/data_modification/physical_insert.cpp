@@ -11,9 +11,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<string> PhysicalInsert::GetNames() {
-	return {"Count"};
-}
 vector<TypeId> PhysicalInsert::GetTypes() {
 	return {TypeId::BIGINT};
 }

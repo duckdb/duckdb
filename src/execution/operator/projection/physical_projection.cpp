@@ -5,14 +5,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<string> PhysicalProjection::GetNames() {
-	vector<string> names;
-	for (auto &exp : select_list) {
-		names.push_back(exp->GetName());
-	}
-	return names;
-}
-
 vector<TypeId> PhysicalProjection::GetTypes() {
 	// get the chunk types from the projection list
 	vector<TypeId> types;

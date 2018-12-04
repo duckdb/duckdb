@@ -23,7 +23,9 @@ class LogicalFilter : public LogicalOperator {
 	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
-
+	std::vector<string> GetNames() override {
+		return children[0]->GetNames();
+	}
 	//! Splits up the predicates of the LogicalFilter into a set of predicates
 	//! separated by AND Returns whether or not any splits were made
 	bool SplitPredicates();

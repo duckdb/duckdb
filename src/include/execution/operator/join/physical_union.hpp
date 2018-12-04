@@ -18,7 +18,6 @@ class PhysicalUnion : public PhysicalOperator {
 	PhysicalUnion(std::unique_ptr<PhysicalOperator> top,
 	              std::unique_ptr<PhysicalOperator> bottom);
 
-	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk,

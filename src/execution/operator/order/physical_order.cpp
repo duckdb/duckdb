@@ -12,9 +12,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<string> PhysicalOrder::GetNames() {
-	return children[0]->GetNames();
-}
 vector<TypeId> PhysicalOrder::GetTypes() {
 	return children[0]->GetTypes();
 }

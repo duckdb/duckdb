@@ -33,6 +33,10 @@ class LogicalCopy : public LogicalOperator {
 		v->Visit(*this);
 	}
 
+	std::vector<string> GetNames() override {
+		return {"Count"};
+	}
+
 	TableCatalogEntry *table;
 
 	std::string file_path;

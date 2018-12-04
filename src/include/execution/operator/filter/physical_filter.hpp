@@ -24,7 +24,6 @@ class PhysicalFilter : public PhysicalOperator {
 	      expressions(std::move(select_list)) {
 	}
 
-	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk,

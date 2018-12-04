@@ -29,6 +29,7 @@ class LogicalGet : public LogicalOperator {
 	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
+	std::vector<string> GetNames() override;
 
 	//! The base table to retrieve data from
 	TableCatalogEntry *table;

@@ -24,5 +24,7 @@ class LogicalCrossProduct : public LogicalOperator {
 	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
+
+	std::vector<string> GetNames() override;
 };
 } // namespace duckdb

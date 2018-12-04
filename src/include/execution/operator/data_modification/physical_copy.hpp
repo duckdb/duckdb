@@ -33,7 +33,6 @@ class PhysicalCopy : public PhysicalOperator {
 	      quote(quote), escape(escape) {
 	}
 
-	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk,

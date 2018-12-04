@@ -25,6 +25,9 @@ class LogicalCreate : public LogicalOperator {
 	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
+	std::vector<string> GetNames() override {
+		return {"Count"};
+	}
 
 	//! Schema to insert to
 	SchemaCatalogEntry *schema;

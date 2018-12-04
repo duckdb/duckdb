@@ -32,6 +32,7 @@ class LogicalJoin : public LogicalOperator {
 	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
+	std::vector<string> GetNames() override;
 
 	//! Creates the join condition for this node from the given expression
 	void SetJoinCondition(std::unique_ptr<Expression> condition);
@@ -44,25 +45,6 @@ class LogicalJoin : public LogicalOperator {
 	static ExpressionType NegateComparisionExpression(ExpressionType type);
 	static ExpressionType FlipComparisionExpression(ExpressionType type);
 
-	std::string ParamsToString() const override {
-		std::string result = "";
-		if (conditions.size() > 0) {
-			result += "[";
-			for (size_t i = 0; i < conditions.size(); i++) {
-				auto &cond = conditions[i];
-				result += ExpressionTypeToString(cond.comparison) + "(" +
-				          cond.left->ToString() + ", " +
-				          cond.right->ToString() + ")";
-				if (i < conditions.size() - 1) {
-					result += ", ";
-				}
-			}
-			result += "]";
-		}
-
-		return result;
-	}
-
-  private:
+	std::string ParamsToString() const override;
 };
 } // namespace duckdb

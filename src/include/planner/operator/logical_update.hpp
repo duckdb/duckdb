@@ -25,6 +25,9 @@ class LogicalUpdate : public LogicalOperator {
 	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
+	std::vector<string> GetNames() override {
+		return {"Count"};
+	}
 
 	TableCatalogEntry *table;
 	std::vector<column_t> columns;

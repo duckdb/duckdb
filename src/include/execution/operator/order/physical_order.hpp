@@ -24,7 +24,6 @@ class PhysicalOrder : public PhysicalOperator {
 	      description(std::move(description)) {
 	}
 
-	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk,

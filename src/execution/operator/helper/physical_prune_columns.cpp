@@ -5,12 +5,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<string> PhysicalPruneColumns::GetNames() {
-	auto names = children[0]->GetNames();
-	assert(column_limit <= names.size());
-	names.erase(names.begin() + column_limit, names.end());
-	return names;
-}
 vector<TypeId> PhysicalPruneColumns::GetTypes() {
 	auto types = children[0]->GetTypes();
 	assert(column_limit <= types.size());

@@ -27,7 +27,6 @@ class PhysicalCreateIndex : public PhysicalOperator {
 	      info(std::move(info)) {
 	}
 
-	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;
 	void _GetChunk(ClientContext &context, DataChunk &chunk,
 	               PhysicalOperatorState *state) override;

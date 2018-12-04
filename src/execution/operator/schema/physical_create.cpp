@@ -9,9 +9,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<string> PhysicalCreate::GetNames() {
-	return {"Count"};
-}
 vector<TypeId> PhysicalCreate::GetTypes() {
 	return {TypeId::BIGINT};
 }

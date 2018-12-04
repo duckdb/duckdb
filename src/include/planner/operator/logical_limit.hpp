@@ -25,6 +25,9 @@ class LogicalLimit : public LogicalOperator {
 	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
+	std::vector<string> GetNames() override {
+		return children[0]->GetNames();
+	}
 
 	//! The maximum amount of elements to emit
 	int64_t limit;

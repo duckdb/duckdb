@@ -30,7 +30,6 @@ class PhysicalTableFunction : public PhysicalOperator {
 	//! Expressions
 	std::unique_ptr<Expression> function_call;
 
-	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk,

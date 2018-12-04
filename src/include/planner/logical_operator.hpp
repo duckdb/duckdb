@@ -46,6 +46,10 @@ class LogicalOperator : public Printable {
 		return type;
 	}
 
+	//! Return a vector of the column names that will be returned by this
+	//! operator
+	virtual std::vector<std::string> GetNames() = 0;
+	
 	virtual std::string ParamsToString() const;
 	std::string ToString() const override;
 

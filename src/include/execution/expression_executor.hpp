@@ -5,21 +5,15 @@
 // execution/expression_executor.hpp
 //
 //
-//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include <vector>
-
 #include "common/common.hpp"
-#include "common/printable.hpp"
 #include "common/types/data_chunk.hpp"
-
+#include "execution/physical_operator.hpp"
 #include "parser/expression.hpp"
 #include "parser/sql_node_visitor.hpp"
-
-#include "execution/physical_operator.hpp"
 
 namespace duckdb {
 
@@ -34,33 +28,25 @@ class ClientContext;
 */
 class ExpressionExecutor : public SQLNodeVisitor {
   public:
-	ExpressionExecutor(PhysicalOperatorState *state, ClientContext &context,
-	                   bool scalar_executor = true)
-	    : context(context), scalar_executor(scalar_executor),
-	      chunk(state ? &state->child_chunk : nullptr),
+	ExpressionExecutor(PhysicalOperatorState *state, ClientContext &context, bool scalar_executor = true)
+	    : context(context), scalar_executor(scalar_executor), chunk(state ? &state->child_chunk : nullptr),
 	      parent(state ? state->parent : nullptr), state(state) {
 	}
 
-	ExpressionExecutor(DataChunk &child_chunk, ClientContext &context,
-	                   ExpressionExecutor *parent = nullptr)
-	    : context(context), scalar_executor(true), chunk(&child_chunk),
-	      parent(parent), state(nullptr) {
+	ExpressionExecutor(DataChunk &child_chunk, ClientContext &context, ExpressionExecutor *parent = nullptr)
+	    : context(context), scalar_executor(true), chunk(&child_chunk), parent(parent), state(nullptr) {
 	}
 
 	void Reset();
 
-	void Execute(DataChunk &result,
-	             std::function<Expression *(size_t i)> callback, size_t count);
+	void Execute(DataChunk &result, std::function<Expression *(size_t i)> callback, size_t count);
 	//! Executes a set of expressions and stores them in the result chunk
-	void Execute(std::vector<std::unique_ptr<Expression>> &expressions,
-	             DataChunk &result) {
-		Execute(result, [&](size_t i) { return expressions[i].get(); },
-		        expressions.size());
+	void Execute(std::vector<std::unique_ptr<Expression>> &expressions, DataChunk &result) {
+		Execute(result, [&](size_t i) { return expressions[i].get(); }, expressions.size());
 	}
 	//! Executes a set of column expresions and merges them using the logical
 	//! AND operator
-	void Merge(std::vector<std::unique_ptr<Expression>> &expressions,
-	           Vector &result);
+	void Merge(std::vector<std::unique_ptr<Expression>> &expressions, Vector &result);
 
 	//! Execute a single abstract expression and store the result in result
 	void ExecuteExpression(Expression *expr, Vector &result);
@@ -78,8 +64,7 @@ class ExpressionExecutor : public SQLNodeVisitor {
 	std::unique_ptr<Expression> Visit(ConjunctionExpression &expr);
 	std::unique_ptr<Expression> Visit(ConstantExpression &expr);
 	std::unique_ptr<Expression> Visit(DefaultExpression &expr) {
-		throw NotImplementedException(
-		    "Cannot execute DEFAULT expression in ExpressionExecutor");
+		throw NotImplementedException("Cannot execute DEFAULT expression in ExpressionExecutor");
 	}
 	std::unique_ptr<Expression> Visit(FunctionExpression &expr);
 	std::unique_ptr<Expression> Visit(GroupRefExpression &expr);

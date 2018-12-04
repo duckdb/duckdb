@@ -28,7 +28,6 @@ class PhysicalAggregate : public PhysicalOperator {
 
 	void Initialize();
 
-	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;
 
 	//! The projection list of the SELECT statement (that contains aggregates)

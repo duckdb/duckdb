@@ -13,6 +13,7 @@
 #include <bitset>
 #include <cstdlib>
 #include <memory>
+#include <vector>
 
 namespace duckdb {
 
@@ -49,5 +50,11 @@ extern column_t COLUMN_IDENTIFIER_ROW_ID;
 extern sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE];
 //! Zero NULL mask: filled with the value 0 [READ ONLY]
 extern nullmask_t ZERO_MASK;
+
+//! std directives that we use inside headers
+using std::move;
+using std::unique_ptr;
+using std::string;
+using std::vector;
 
 } // namespace duckdb

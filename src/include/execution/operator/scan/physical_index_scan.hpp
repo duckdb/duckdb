@@ -40,7 +40,6 @@ class PhysicalIndexScan : public PhysicalOperator {
 	//! index)
 	std::unique_ptr<Expression> expression;
 
-	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk,

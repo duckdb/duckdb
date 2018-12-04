@@ -27,52 +27,16 @@ class LogicalAggregate : public LogicalOperator {
 		v->Visit(*this);
 	}
 
+	std::vector<string> GetNames() override;
+	
 	//! The set of groups (optional).
 	std::vector<std::unique_ptr<Expression>> groups;
 
-	size_t ExpressionCount() override {
-		return expressions.size() + groups.size();
-	}
-
-	Expression *GetExpression(size_t index) override {
-		if (index >= ExpressionCount()) {
-			throw OutOfRangeException(
-			    "GetExpression(): Expression index out of range!");
-		}
-		if (index >= expressions.size()) {
-			return groups[index - expressions.size()].get();
-		}
-		return expressions[index].get();
-	}
-
+	size_t ExpressionCount() override;
+	Expression *GetExpression(size_t index) override;
 	void SetExpression(size_t index,
-	                   std::unique_ptr<Expression> expr) override {
-		if (index >= ExpressionCount()) {
-			throw OutOfRangeException(
-			    "SetExpression(): Expression index out of range!");
-		}
-		if (index >= expressions.size()) {
-			groups[index - expressions.size()] = std::move(expr);
-		} else {
-			expressions[index] = std::move(expr);
-		}
-	}
+	                   std::unique_ptr<Expression> expr) override;
 
-	std::string ParamsToString() const override {
-		std::string result = LogicalOperator::ParamsToString();
-		if (groups.size() > 0) {
-			result += "[";
-			for (size_t i = 0; i < groups.size(); i++) {
-				auto &child = groups[i];
-				result += child->ToString();
-				if (i < groups.size() - 1) {
-					result += ", ";
-				}
-			}
-			result += "]";
-		}
-
-		return result;
-	}
+	std::string ParamsToString() const override;
 };
 } // namespace duckdb

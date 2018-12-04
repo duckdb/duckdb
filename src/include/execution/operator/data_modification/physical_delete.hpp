@@ -22,7 +22,6 @@ class PhysicalDelete : public PhysicalOperator {
 	      table(table) {
 	}
 
-	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk,

@@ -13,9 +13,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<string> PhysicalCreateIndex::GetNames() {
-	return {"Count"};
-}
 vector<TypeId> PhysicalCreateIndex::GetTypes() {
 	return {TypeId::BIGINT};
 }

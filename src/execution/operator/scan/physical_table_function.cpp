@@ -9,14 +9,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<string> PhysicalTableFunction::GetNames() {
-	vector<string> names;
-	for (auto &column : function->return_values) {
-		names.push_back(column.name);
-	}
-	return names;
-}
-
 vector<TypeId> PhysicalTableFunction::GetTypes() {
 	vector<TypeId> types;
 	for (auto &column : function->return_values) {
