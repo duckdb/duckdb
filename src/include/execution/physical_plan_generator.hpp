@@ -34,14 +34,7 @@ class PhysicalPlanGenerator : public LogicalOperatorVisitor {
 	}
 	using LogicalOperatorVisitor::Visit;
 
-	bool CreatePlan(std::unique_ptr<LogicalOperator> logical);
-
-	bool GetSuccess() const {
-		return success;
-	}
-	const std::string &GetErrorMessage() const {
-		return message;
-	}
+	void CreatePlan(std::unique_ptr<LogicalOperator> logical);
 
 	virtual void Visit(LogicalAggregate &op);
 	virtual void Visit(LogicalCreate &op);
@@ -73,10 +66,6 @@ class PhysicalPlanGenerator : public LogicalOperatorVisitor {
 	std::unique_ptr<PhysicalOperator> plan;
 
 	PhysicalPlanGenerator *parent;
-
-	bool success;
-	std::string message;
-
   private:
 	ClientContext &context;
 };

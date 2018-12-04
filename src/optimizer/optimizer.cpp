@@ -8,7 +8,7 @@
 using namespace duckdb;
 using namespace std;
 
-Optimizer::Optimizer(BindContext &context) : rewriter(context), success(false) {
+Optimizer::Optimizer(BindContext &context) : rewriter(context) {
 	rewriter.rules.push_back(make_unique<ConstantCastRule>());
 	rewriter.rules.push_back(make_unique<ConstantFoldingRule>());
 	rewriter.rules.push_back(make_unique<DistributivityRule>());
@@ -29,16 +29,6 @@ Optimizer::Optimizer(BindContext &context) : rewriter(context), success(false) {
 
 unique_ptr<LogicalOperator>
 Optimizer::Optimize(unique_ptr<LogicalOperator> plan) {
-	success = false;
-	try {
-		// then we optimize the logical tree
-		plan = rewriter.ApplyRules(move(plan));
-		success = true;
-		return plan;
-	} catch (Exception &ex) {
-		this->message = ex.GetMessage();
-	} catch (...) {
-		this->message = "UNHANDLED EXCEPTION TYPE THROWN IN PLANNER!";
-	}
-	return nullptr;
+    // then we optimize the logical tree
+    return rewriter.ApplyRules(move(plan));
 }

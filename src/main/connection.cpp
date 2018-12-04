@@ -68,10 +68,7 @@ DuckDBConnection::GetQueryResult(ClientContext &context, std::string query) {
 	try {
 		// parse the query and transform it into a set of statements
 		Parser parser;
-		if (!parser.ParseQuery(query.c_str())) {
-			return make_unique<DuckDBResult>(parser.GetErrorMessage());
-		}
-
+		parser.ParseQuery(query.c_str());
 		if (parser.statements.size() == 0) {
 			// empty query
 			return make_unique<DuckDBResult>();
@@ -93,9 +90,7 @@ DuckDBConnection::GetQueryResult(ClientContext &context, std::string query) {
 		}
 
 		Planner planner;
-		if (!planner.CreatePlan(context, move(statement))) {
-			return make_unique<DuckDBResult>(planner.GetErrorMessage());
-		}
+		planner.CreatePlan(context, move(statement));
 		if (!planner.plan) {
 			return make_unique<DuckDBResult>();
 		}
@@ -103,10 +98,6 @@ DuckDBConnection::GetQueryResult(ClientContext &context, std::string query) {
 		auto plan = move(planner.plan);
 		Optimizer optimizer(*planner.context);
 		plan = optimizer.Optimize(move(plan));
-		if (!optimizer.GetSuccess()) {
-			// failed to optimize
-			return make_unique<DuckDBResult>(optimizer.GetErrorMessage());
-		}
 		if (!plan) {
 			return make_unique<DuckDBResult>();
 		}
@@ -116,10 +107,7 @@ DuckDBConnection::GetQueryResult(ClientContext &context, std::string query) {
 
 		// now convert logical query plan into a physical query plan
 		PhysicalPlanGenerator physical_planner(context);
-		if (!physical_planner.CreatePlan(move(plan))) {
-			return make_unique<DuckDBResult>(
-			    physical_planner.GetErrorMessage());
-		}
+		physical_planner.CreatePlan(move(plan));
 
 		// finally execute the plan and return the result
 		Executor executor;

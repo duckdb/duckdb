@@ -28,9 +28,7 @@ unique_ptr<Expression> ParseExpression(string expression) {
 	string query = "SELECT " + expression;
 
 	Parser parser;
-	if (!parser.ParseQuery(query.c_str())) {
-		return nullptr;
-	}
+	parser.ParseQuery(query.c_str());
 	if (parser.statements.size() == 0 ||
 	    parser.statements[0]->type != StatementType::SELECT) {
 		return nullptr;
@@ -56,14 +54,10 @@ unique_ptr<Expression> ApplyExprRule(Rewriter &rewriter,
 
 unique_ptr<Planner> ParseLogicalPlan(DuckDBConnection &con, string query) {
 	Parser parser;
-	if (!parser.ParseQuery(query)) {
-		throw Exception(parser.GetErrorMessage());
-	}
+	parser.ParseQuery(query);
 
 	auto planner = make_unique<Planner>();
-	if (!planner->CreatePlan(con.context, move(parser.statements.back()))) {
-		throw Exception(planner->GetErrorMessage());
-	}
+	planner->CreatePlan(con.context, move(parser.statements.back()));
 	if (!planner->plan) {
 		throw Exception("No plan?");
 	}

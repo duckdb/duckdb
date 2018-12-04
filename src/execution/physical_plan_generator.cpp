@@ -12,26 +12,17 @@
 using namespace duckdb;
 using namespace std;
 
-bool PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> logical) {
-	this->success = false;
-	try {
-		// first resolve column references
-		ColumnBindingResolver resolver;
-		logical->Accept(&resolver);
-		// now resolve types of all the operators
-		logical->ResolveOperatorTypes();
-		// then create the physical plan
-		logical->Accept(this);
-		if (!this->plan) {
-			throw Exception("Unknown error in physical plan generation");
-		}
-		this->success = true;
-	} catch (Exception &ex) {
-		this->message = ex.GetMessage();
-	} catch (...) {
-		this->message = "UNHANDLED EXCEPTION TYPE THROWN IN PLANNER!";
-	}
-	return this->success;
+void PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> logical) {
+    // first resolve column references
+    ColumnBindingResolver resolver;
+    logical->Accept(&resolver);
+    // now resolve types of all the operators
+    logical->ResolveOperatorTypes();
+    // then create the physical plan
+    logical->Accept(this);
+    if (!this->plan) {
+        throw Exception("Unknown error in physical plan generation");
+    }
 }
 
 void PhysicalPlanGenerator::Visit(LogicalAggregate &op) {

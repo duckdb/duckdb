@@ -8,58 +8,46 @@ using namespace postgres;
 using namespace duckdb;
 using namespace std;
 
-Parser::Parser() : success(false) {
+Parser::Parser()  {
 }
 
-bool Parser::ParseQuery(std::string query) {
+void Parser::ParseQuery(std::string query) {
 	void *context = nullptr;
 	PgQueryInternalParsetreeAndError result;
-	try {
-		// first try to parse any PRAGMA statements
-		if (ParsePragma(query)) {
-			// query parsed as pragma statement
-			// if there was no error we were successful
-			this->success = this->message.empty();
-			goto wrapup;
-		}
+    // first try to parse any PRAGMA statements
+    if (ParsePragma(query)) {
+        // query parsed as pragma statement
+        // if there was no error we were successful
+        goto wrapup;
+    }
 
-		// use the postgres parser to parse the query
-		context = pg_query_parse_init();
-		result = pg_query_parse(query.c_str());
+    // use the postgres parser to parse the query
+    context = pg_query_parse_init();
+    result = pg_query_parse(query.c_str());
+    // check if it succeeded
+    if (result.error) {
+        throw ParserException(string(result.error->message) + "[" +
+                        to_string(result.error->lineno) + ":" +
+                        to_string(result.error->cursorpos) + "]");
+        goto wrapup;
+    }
 
-		// check if it succeeded
-		this->success = false;
-		if (result.error) {
-			this->message = string(result.error->message) + "[" +
-			                to_string(result.error->lineno) + ":" +
-			                to_string(result.error->cursorpos) + "]";
-			goto wrapup;
-		}
+    if (!result.tree) {
+        // empty statement
+        goto wrapup;
+    }
 
-		if (!result.tree) {
-			// empty statement
-			this->success = true;
-			goto wrapup;
-		}
-
-		// if it succeeded, we transform the Postgres parse tree into a list of
-		// SQLStatements
-		Transformer transformer;
-		if (!transformer.TransformParseTree(result.tree, statements)) {
-			goto wrapup;
-		}
-		this->success = true;
-	} catch (Exception &ex) {
-		this->message = ex.GetMessage();
-	} catch (...) {
-		this->message = "UNHANDLED EXCEPTION TYPE THROWN IN PARSER!";
-	}
+    // if it succeeded, we transform the Postgres parse tree into a list of
+    // SQLStatements
+    Transformer transformer;
+    if (!transformer.TransformParseTree(result.tree, statements)) {
+        goto wrapup;
+    }
 wrapup:
 	if (context) {
 		pg_query_parse_finish(context);
 		pg_query_free_parse_result(result);
 	}
-	return this->success;
 }
 
 enum class PragmaType : uint8_t { NOTHING, ASSIGNMENT, CALL };

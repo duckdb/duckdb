@@ -33,20 +33,7 @@ class Parser {
 	//! whether or not the parsing was successful. If the parsing was
 	//! successful, the parsed statements will be stored in the statements
 	//! variable.
-	bool ParseQuery(std::string query);
-
-	//! Returns whether or not the parsing was successful.
-	bool GetSuccess() const {
-		return success;
-	}
-	//! If the parsing was unsuccessful, returns the error message that was
-	//! generated.
-	const std::string &GetErrorMessage() const {
-		return message;
-	}
-
-	bool success;
-	std::string message;
+	void ParseQuery(std::string query);
 
 	//! The parsed SQL statements from an invocation to ParseQuery.
 	std::vector<std::unique_ptr<SQLStatement>> statements;
