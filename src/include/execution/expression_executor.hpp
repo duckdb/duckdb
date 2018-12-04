@@ -1,11 +1,11 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
 // execution/expression_executor.hpp
-// 
-// 
-// 
+//
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -77,7 +77,10 @@ class ExpressionExecutor : public SQLNodeVisitor {
 	std::unique_ptr<Expression> Visit(ComparisonExpression &expr);
 	std::unique_ptr<Expression> Visit(ConjunctionExpression &expr);
 	std::unique_ptr<Expression> Visit(ConstantExpression &expr);
-	std::unique_ptr<Expression> Visit(DefaultExpression &expr);
+	std::unique_ptr<Expression> Visit(DefaultExpression &expr) {
+		throw NotImplementedException(
+		    "Cannot execute DEFAULT expression in ExpressionExecutor");
+	}
 	std::unique_ptr<Expression> Visit(FunctionExpression &expr);
 	std::unique_ptr<Expression> Visit(GroupRefExpression &expr);
 	std::unique_ptr<Expression> Visit(OperatorExpression &expr);
