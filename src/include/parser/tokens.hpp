@@ -25,6 +25,7 @@ class CreateTableStatement;
 class DeleteStatement;
 class DropSchemaStatement;
 class DropTableStatement;
+class DropIndexStatement;
 class InsertStatement;
 class SelectStatement;
 class TransactionStatement;

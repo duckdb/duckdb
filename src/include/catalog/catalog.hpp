@@ -66,7 +66,8 @@ class Catalog {
 	ScalarFunctionCatalogEntry *GetScalarFunction(Transaction &transaction,
 	                                              const std::string &schema,
 	                                              const std::string &name);
-
+	//! Drops an index from the catalog.
+	void DropIndex(Transaction &transaction, DropIndexInformation *info);
 	//! Reference to the storage manager
 	StorageManager &storage;
 

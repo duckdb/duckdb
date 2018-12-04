@@ -190,4 +190,17 @@ struct CreateIndexInformation {
 	}
 };
 
+struct DropIndexInformation {
+    //! Schema name
+    std::string schema;
+	//! Index function name to drop
+	std::string name;
+	//! Ignore if the entry does not exist instead of failing
+	bool if_exists = false;
+
+	DropIndexInformation()
+			: schema(DEFAULT_SCHEMA),if_exists(false){
+	}
+};
+
 } // namespace duckdb

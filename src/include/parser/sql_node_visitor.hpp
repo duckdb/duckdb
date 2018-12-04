@@ -50,6 +50,9 @@ class SQLNodeVisitor {
 	virtual std::unique_ptr<SQLStatement> Visit(DropTableStatement &) {
 		return nullptr;
 	};
+	virtual std::unique_ptr<SQLStatement> Visit(DropIndexStatement &) {
+		return nullptr;
+	};
 	virtual std::unique_ptr<SQLStatement> Visit(InsertStatement &) {
 		return nullptr;
 	};

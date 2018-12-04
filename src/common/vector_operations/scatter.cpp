@@ -37,6 +37,7 @@ static void generic_scatter_loop(Vector &source, Vector &dest) {
 	case TypeId::DECIMAL:
 		scatter_templated_loop<double, OP>(source, dest);
 		break;
+
 	case TypeId::POINTER:
 		scatter_templated_loop<uint64_t, OP>(source, dest);
 		break;
@@ -46,7 +47,19 @@ static void generic_scatter_loop(Vector &source, Vector &dest) {
 }
 
 void VectorOperations::Scatter::Set(Vector &source, Vector &dest) {
-	generic_scatter_loop<operators::PickLeft>(source, dest);
+	if (source.type == TypeId::VARCHAR) {
+		scatter_templated_loop<char *, operators::PickLeft>(source, dest);
+	} else {
+		generic_scatter_loop<operators::PickLeft>(source, dest);
+	}
+}
+
+void VectorOperations::Scatter::SetFirst(Vector &source, Vector &dest) {
+	if (source.type == TypeId::VARCHAR) {
+		scatter_templated_loop<char *, operators::PickRight>(source, dest);
+	} else {
+		generic_scatter_loop<operators::PickRight>(source, dest);
+	}
 }
 
 void VectorOperations::Scatter::Add(Vector &source, Vector &dest) {
@@ -63,8 +76,4 @@ void VectorOperations::Scatter::Min(Vector &source, Vector &dest) {
 
 void VectorOperations::Scatter::AddOne(Vector &source, Vector &dest) {
 	generic_scatter_loop<operators::AddOne>(source, dest);
-}
-
-void VectorOperations::Scatter::SetFirst(Vector &source, Vector &dest) {
-	generic_scatter_loop<operators::PickRight>(source, dest);
 }

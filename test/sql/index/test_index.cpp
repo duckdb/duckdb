@@ -84,3 +84,30 @@ TEST_CASE("Index creation on an expression", "[join]") {
 	result = con.Query("SELECT j FROM integers WHERE abs(i)=1");
 	REQUIRE(CHECK_COLUMN(result, 0, {1511, 1513}));
 }
+
+TEST_CASE("Drop Index", "[drop]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+
+	DuckDBConnection con(db);
+
+	// create a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (7)"));
+	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET i=4"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (2)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (5)"));
+	result = con.Query("SELECT * FROM integers WHERE i=2");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (8)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
+	result = con.Query("SELECT * FROM integers WHERE i=2");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+	result = con.Query("DROP INDEX i_index;");
+	result = con.Query("SELECT * FROM integers WHERE i=2");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
+	result = con.Query("SELECT * FROM integers WHERE i=2");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+}
