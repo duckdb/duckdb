@@ -4,8 +4,8 @@
 
 #include "parser/expression/aggregate_expression.hpp"
 
-#include "execution/operator/physical_aggregate.hpp"
-#include "execution/operator/physical_hash_aggregate.hpp"
+#include "execution/operator/aggregate/physical_aggregate.hpp"
+#include "execution/operator/aggregate/physical_hash_aggregate.hpp"
 
 using namespace duckdb;
 using namespace std;

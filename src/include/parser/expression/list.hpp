@@ -1,15 +1,3 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
-// parser/expression/list.hpp
-// 
-// 
-// 
-//===----------------------------------------------------------------------===//
-
-#pragma once
-
 #include "parser/expression/aggregate_expression.hpp"
 #include "parser/expression/case_expression.hpp"
 #include "parser/expression/cast_expression.hpp"

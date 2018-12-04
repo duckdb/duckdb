@@ -1,13 +1,3 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
-// function/scalar_function/list.hpp
-// 
-// 
-// 
-//===----------------------------------------------------------------------===//
-
 #include "function/scalar_function/abs.hpp"
 #include "function/scalar_function/caseconvert.hpp"
 #include "function/scalar_function/concat.hpp"
