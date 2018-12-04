@@ -65,22 +65,31 @@ def format_directory(directory, sort_includes=True):
 			if ignored:
 				continue
 			for ext in extensions:
-				if f.endswith(".hpp") and directory == "src/include" and os.path.getmtime(full_path) > last_format_time:
-					header_middle ="// "+ os.path.relpath(full_path, script_dir) + "\n"
-					file = open(full_path, "r")
-					lines = file.readlines()
-					file.close()
-					file = open(full_path, "w")
-					file.write(header_top + header_middle + header_bottom)
-					is_old_header = True
-					for line in lines:
-						if not (line.startswith("//") or line.startswith("\n")) and is_old_header:
-							is_old_header = False
-						if not is_old_header:
-							file.write(line)
-					file.close()
 				if f.endswith(ext):
 					if os.path.getmtime(full_path) > last_format_time:
+						if f == 'list.hpp':
+							# fill in list file
+							list = [os.path.join(dp, f) for dp, dn, filenames in os.walk(directory) for f in filenames if os.path.splitext(f)[1] == '.hpp' and not f.endswith("list.hpp")]
+							list = [x.replace('src/include/', '') for x in list]
+							list.sort()
+							with open(full_path, "w") as f:
+								for x in list:
+									f.write('#include "%s"\n' % (x))
+						elif ext == ".hpp" and directory.startswith("src/include"):
+							# format header in files
+							header_middle ="// "+ os.path.relpath(full_path, script_dir) + "\n"
+							file = open(full_path, "r")
+							lines = file.readlines()
+							file.close()
+							file = open(full_path, "w")
+							file.write(header_top + header_middle + header_bottom)
+							is_old_header = True
+							for line in lines:
+								if not (line.startswith("//") or line.startswith("\n")) and is_old_header:
+									is_old_header = False
+								if not is_old_header:
+									file.write(line)
+							file.close()
 						format_command = format_commands[ext]
 						if not directory_printed:
 							print(directory)

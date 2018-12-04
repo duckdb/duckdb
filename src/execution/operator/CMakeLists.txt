@@ -1,3 +1,12 @@
 
-add_library(duckdb_execution_operator OBJECT physical_create.cpp physical_create_index.cpp physical_copy.cpp physical_aggregate.cpp physical_cross_product.cpp physical_delete.cpp physical_filter.cpp physical_hash_join.cpp physical_index_scan.cpp physical_join.cpp physical_nested_loop_join_inner.cpp physical_nested_loop_join_semi.cpp physical_limit.cpp physical_table_function.cpp physical_table_scan.cpp physical_dummy_scan.cpp physical_projection.cpp physical_hash_aggregate.cpp physical_insert.cpp physical_order.cpp physical_union.cpp physical_update.cpp physical_prune_columns.cpp physical_piecewise_merge_join.cpp)
-set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_execution_operator> PARENT_SCOPE)
+add_subdirectory(aggregate)
+add_subdirectory(data_modification)
+add_subdirectory(filter)
+add_subdirectory(helper)
+add_subdirectory(join)
+add_subdirectory(order)
+add_subdirectory(projection)
+add_subdirectory(scan)
+add_subdirectory(schema)
+
+set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES} PARENT_SCOPE)
