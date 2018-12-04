@@ -88,7 +88,9 @@ class PhysicalOperator : public Printable {
 
 	//! Create a new empty instance of the operator state
 	virtual std::unique_ptr<PhysicalOperatorState>
-	GetOperatorState(ExpressionExecutor *executor) = 0;
+	GetOperatorState(ExpressionExecutor *parent) {
+	    return make_unique<PhysicalOperatorState>(children.size() == 0 ? nullptr : children[0].get(), parent);
+    }
 
 	virtual std::string ExtraRenderInformation() {
 		return "";

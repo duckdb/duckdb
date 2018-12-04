@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// execution/operator/helper/physical_prune_columns.hpp
+// execution/operator/helper/physical_explain.hpp
 //
 //
 //
@@ -14,17 +14,19 @@
 
 namespace duckdb {
 
-//! PhysicalPruneColumns prunes (removes) columns from its input
-class PhysicalPruneColumns : public PhysicalOperator {
+//! PhysicalExplain represents the EXPLAIN operator
+class PhysicalExplain : public PhysicalOperator {
   public:
-	PhysicalPruneColumns(LogicalOperator &op, size_t column_limit)
-	    : PhysicalOperator(PhysicalOperatorType::PRUNE_COLUMNS, op.types),
-	      column_limit(column_limit) {
+	PhysicalExplain(LogicalOperator &op, vector<string> keys, vector<string> values)
+	    : PhysicalOperator(PhysicalOperatorType::EXPLAIN, op.types), keys(keys), values(values) {
+        assert(keys.size() == types.size());
 	}
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk,
 	               PhysicalOperatorState *state) override;
 
-	size_t column_limit;
+    vector<string> keys;
+    vector<string> values;
 };
+
 } // namespace duckdb

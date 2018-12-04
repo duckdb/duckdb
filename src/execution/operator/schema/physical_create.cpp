@@ -11,12 +11,6 @@ using namespace std;
 
 void PhysicalCreate::_GetChunk(ClientContext &context, DataChunk &chunk,
                                PhysicalOperatorState *state) {
-	chunk.Reset();
-
-	if (state->finished) {
-		return;
-	}
-
 	int64_t inserted_count = 0;
 	if (children.size() > 0) {
 		// children[0]->GetChunk(context, state->child_chunk,
@@ -34,10 +28,4 @@ void PhysicalCreate::_GetChunk(ClientContext &context, DataChunk &chunk,
 	chunk.data[0].SetValue(0, Value::BIGINT(inserted_count));
 
 	state->finished = true;
-}
-
-unique_ptr<PhysicalOperatorState>
-PhysicalCreate::GetOperatorState(ExpressionExecutor *parent_executor) {
-	return make_unique<PhysicalOperatorState>(
-	    children.size() == 0 ? nullptr : children[0].get(), parent_executor);
 }

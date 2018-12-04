@@ -12,9 +12,6 @@ using namespace std;
 void PhysicalTableFunction::_GetChunk(ClientContext &context, DataChunk &chunk,
                                       PhysicalOperatorState *state_) {
 	auto state = (PhysicalTableFunctionOperatorState *)state_;
-
-	chunk.Reset();
-
 	if (!state->initialized) {
 		// run initialization code
 		if (function->init) {

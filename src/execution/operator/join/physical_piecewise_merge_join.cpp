@@ -219,8 +219,6 @@ void PhysicalPiecewiseMergeJoin::_GetChunk(ClientContext &context,
                                            PhysicalOperatorState *state_) {
 	auto state =
 	    reinterpret_cast<PhysicalPiecewiseMergeJoinOperatorState *>(state_);
-	chunk.Reset();
-
 	assert(conditions.size() == 1);
 	if (!state->initialized) {
 		// create the sorted pieces

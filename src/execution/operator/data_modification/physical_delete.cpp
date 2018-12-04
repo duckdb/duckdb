@@ -10,12 +10,6 @@ using namespace std;
 
 void PhysicalDelete::_GetChunk(ClientContext &context, DataChunk &chunk,
                                PhysicalOperatorState *state) {
-	chunk.Reset();
-
-	if (state->finished) {
-		return;
-	}
-
 	int64_t deleted_count = 0;
 	while (true) {
 		children[0]->GetChunk(context, state->child_chunk,
@@ -35,10 +29,4 @@ void PhysicalDelete::_GetChunk(ClientContext &context, DataChunk &chunk,
 	chunk.data[0].SetValue(0, Value::BIGINT(deleted_count));
 
 	state->finished = true;
-}
-
-unique_ptr<PhysicalOperatorState>
-PhysicalDelete::GetOperatorState(ExpressionExecutor *parent_executor) {
-	return make_unique<PhysicalOperatorState>(children[0].get(),
-	                                          parent_executor);
 }

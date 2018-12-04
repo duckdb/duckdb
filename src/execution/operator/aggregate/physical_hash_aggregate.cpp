@@ -31,12 +31,6 @@ void PhysicalHashAggregate::Initialize() {
 void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk,
                                       PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalHashAggregateOperatorState *>(state_);
-	chunk.Reset();
-
-	if (state->finished) {
-		return;
-	}
-
 	do {
 		if (children.size() > 0) {
 			// resolve the child chunk if there is one

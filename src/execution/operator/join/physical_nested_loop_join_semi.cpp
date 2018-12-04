@@ -24,10 +24,8 @@ void PhysicalNestedLoopJoinSemi::_GetChunk(ClientContext &context,
                                            DataChunk &chunk,
                                            PhysicalOperatorState *state_) {
 	assert(type == JoinType::SEMI || type == JoinType::ANTI);
-
 	auto state =
 	    reinterpret_cast<PhysicalNestedLoopJoinSemiOperatorState *>(state_);
-	chunk.Reset();
 
 	// first we fully materialize the right child, if we haven't done that yet
 	if (state->right_chunk.column_count() == 0) {

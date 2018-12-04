@@ -42,10 +42,6 @@ vector<string> split(const string &str, char delimiter, char quote) {
 
 void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk,
                              PhysicalOperatorState *state) {
-	chunk.Reset();
-	if (state->finished) {
-		return;
-	}
 	int64_t count_line = 0;
 	int64_t total = 0;
 
@@ -137,10 +133,4 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk,
 	chunk.data[0].SetValue(0, Value::BIGINT(total + count_line));
 
 	state->finished = true;
-}
-
-unique_ptr<PhysicalOperatorState>
-PhysicalCopy::GetOperatorState(ExpressionExecutor *executor) {
-	return make_unique<PhysicalOperatorState>(
-	    children.size() == 0 ? nullptr : children[0].get(), executor);
 }

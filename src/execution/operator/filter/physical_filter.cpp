@@ -8,8 +8,6 @@ using namespace std;
 void PhysicalFilter::_GetChunk(ClientContext &context, DataChunk &chunk,
                                PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOperatorState *>(state_);
-	chunk.Reset();
-
 	do {
 		children[0]->GetChunk(context, state->child_chunk,
 		                      state->child_state.get());
@@ -34,11 +32,6 @@ void PhysicalFilter::_GetChunk(ClientContext &context, DataChunk &chunk,
 		}
 		chunk.SetSelectionVector(result);
 	} while (chunk.size() == 0);
-}
-
-unique_ptr<PhysicalOperatorState>
-PhysicalFilter::GetOperatorState(ExpressionExecutor *parent) {
-	return make_unique<PhysicalOperatorState>(children[0].get(), parent);
 }
 
 string PhysicalFilter::ExtraRenderInformation() {

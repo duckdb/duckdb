@@ -12,12 +12,6 @@ using namespace std;
 
 void PhysicalUpdate::_GetChunk(ClientContext &context, DataChunk &chunk,
                                PhysicalOperatorState *state) {
-	chunk.Reset();
-
-	if (state->finished) {
-		return;
-	}
-
 	vector<TypeId> update_types;
 	for (auto &expr : expressions) {
 		update_types.push_back(expr->return_type);
@@ -63,10 +57,4 @@ void PhysicalUpdate::_GetChunk(ClientContext &context, DataChunk &chunk,
 	state->finished = true;
 
 	chunk.Verify();
-}
-
-unique_ptr<PhysicalOperatorState>
-PhysicalUpdate::GetOperatorState(ExpressionExecutor *parent_executor) {
-	return make_unique<PhysicalOperatorState>(children[0].get(),
-	                                          parent_executor);
 }

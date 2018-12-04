@@ -5,6 +5,7 @@
 #include "execution/operator/data_modification/physical_insert.hpp"
 #include "execution/operator/data_modification/physical_update.hpp"
 #include "execution/operator/filter/physical_filter.hpp"
+#include "execution/operator/helper/physical_explain.hpp"
 #include "execution/operator/helper/physical_limit.hpp"
 #include "execution/operator/helper/physical_prune_columns.hpp"
 #include "execution/operator/join/physical_cross_product.hpp"

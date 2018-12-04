@@ -29,8 +29,9 @@ class LogicalExplain : public LogicalOperator {
 	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
+
 	std::vector<string> GetNames() override {
-		return {"plan_type", "plan"};
+		return {"explain_key", "explain_value"};
 	}
   protected:
 	void ResolveTypes() override {

@@ -36,9 +36,6 @@ class PhysicalCopy : public PhysicalOperator {
 	void _GetChunk(ClientContext &context, DataChunk &chunk,
 	               PhysicalOperatorState *state) override;
 
-	std::unique_ptr<PhysicalOperatorState>
-	GetOperatorState(ExpressionExecutor *executor) override;
-
 	TableCatalogEntry *table;
 	std::string file_path;
 	bool is_from;

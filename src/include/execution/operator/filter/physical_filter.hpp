@@ -27,9 +27,6 @@ class PhysicalFilter : public PhysicalOperator {
 	void _GetChunk(ClientContext &context, DataChunk &chunk,
 	               PhysicalOperatorState *state) override;
 
-	std::unique_ptr<PhysicalOperatorState>
-	GetOperatorState(ExpressionExecutor *parent) override;
-
 	std::string ExtraRenderInformation() override;
 
 	std::vector<std::unique_ptr<Expression>> expressions;

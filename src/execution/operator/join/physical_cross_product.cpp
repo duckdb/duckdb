@@ -17,8 +17,6 @@ PhysicalCrossProduct::PhysicalCrossProduct(
 void PhysicalCrossProduct::_GetChunk(ClientContext &context, DataChunk &chunk,
                                      PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalCrossProductOperatorState *>(state_);
-	chunk.Reset();
-
 	if (state->right_state &&
 	    state->left_position >= state->child_chunk.size()) {
 		// ran out of this chunk

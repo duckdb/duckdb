@@ -219,10 +219,8 @@ void PhysicalNestedLoopJoinInner::_GetChunk(ClientContext &context,
                                             DataChunk &chunk,
                                             PhysicalOperatorState *state_) {
 	assert(type == JoinType::INNER);
-
 	auto state =
 	    reinterpret_cast<PhysicalNestedLoopJoinInnerOperatorState *>(state_);
-	chunk.Reset();
 
 	// first we fully materialize the right child, if we haven't done that yet
 	if (state->right_chunks.column_count() == 0) {

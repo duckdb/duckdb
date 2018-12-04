@@ -21,8 +21,6 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, std::unique_ptr<Physical
 void PhysicalHashJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
                                  PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalHashJoinOperatorState *>(state_);
-	chunk.Reset();
-
 	if (!state->initialized) {
 		// build the HT
 		auto right_state = children[1]->GetOperatorState(state->parent);

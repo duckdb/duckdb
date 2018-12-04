@@ -16,7 +16,6 @@ PhysicalUnion::PhysicalUnion(LogicalOperator &op, std::unique_ptr<PhysicalOperat
 void PhysicalUnion::_GetChunk(ClientContext &context, DataChunk &chunk,
                               PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalUnionOperatorState *>(state_);
-	chunk.Reset();
 	if (!state->top_done) {
 		children[0]->GetChunk(context, chunk, state->top_state.get());
 		if (chunk.size() == 0) {
@@ -29,7 +28,6 @@ void PhysicalUnion::_GetChunk(ClientContext &context, DataChunk &chunk,
 	if (chunk.size() == 0) {
 		state->finished = true;
 	}
-	chunk.Verify();
 }
 
 std::unique_ptr<PhysicalOperatorState>

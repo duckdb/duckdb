@@ -30,9 +30,6 @@ class PhysicalCreateIndex : public PhysicalOperator {
 	void _GetChunk(ClientContext &context, DataChunk &chunk,
 	               PhysicalOperatorState *state) override;
 
-	std::unique_ptr<PhysicalOperatorState>
-	GetOperatorState(ExpressionExecutor *parent_executor) override;
-
 	//! The table to create the index for
 	TableCatalogEntry &table;
 	//! The list of column IDs required for the index

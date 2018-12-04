@@ -12,8 +12,6 @@
 
 #include "execution/physical_operator.hpp"
 
-#include "storage/data_table.hpp"
-
 namespace duckdb {
 
 //! PhyisicalLimit represents the LIMIT operator

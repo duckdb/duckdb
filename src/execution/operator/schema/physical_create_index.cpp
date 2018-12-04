@@ -15,12 +15,6 @@ using namespace std;
 
 void PhysicalCreateIndex::_GetChunk(ClientContext &context, DataChunk &chunk,
                                     PhysicalOperatorState *state) {
-	chunk.Reset();
-
-	if (state->finished) {
-		return;
-	}
-
 	if (column_ids.size() == 0) {
 		throw NotImplementedException(
 		    "CREATE INDEX does not refer to any columns in the base table!");
@@ -87,9 +81,4 @@ void PhysicalCreateIndex::_GetChunk(ClientContext &context, DataChunk &chunk,
 	chunk.data[0].SetValue(0, Value::BIGINT(0));
 
 	state->finished = true;
-}
-
-unique_ptr<PhysicalOperatorState>
-PhysicalCreateIndex::GetOperatorState(ExpressionExecutor *parent_executor) {
-	return make_unique<PhysicalOperatorState>(nullptr, parent_executor);
 }

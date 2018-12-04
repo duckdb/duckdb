@@ -93,8 +93,6 @@ static void quicksort(ChunkCollection &sort_by, OrderByDescription &desc,
 void PhysicalOrder::_GetChunk(ClientContext &context, DataChunk &chunk,
                               PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOrderOperatorState *>(state_);
-	chunk.Reset();
-
 	ChunkCollection &big_data = state->sorted_data;
 	if (state->position == 0) {
 		// first concatenate all the data of the child chunks

@@ -43,7 +43,7 @@ DUCKDB_BENCHMARK(IndexCreationUniformRandomData, "[micro]")
         }
         if (result->GetValue<int>(0, 0) != SUCCESS) {
             return "Incorrect result returned, expected " +
-                    result->GetValue<int>(0, 0) ;
+                    to_string(result->GetValue<int>(0, 0));
         }
         return std::string();
     }

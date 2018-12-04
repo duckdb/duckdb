@@ -7,7 +7,6 @@ using namespace std;
 void PhysicalLimit::_GetChunk(ClientContext &context, DataChunk &chunk,
                               PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalLimitOperatorState *>(state_);
-	chunk.Reset();
 
 	size_t max_element = limit + offset;
 	if (state->current_offset >= max_element) {
@@ -57,8 +56,6 @@ void PhysicalLimit::_GetChunk(ClientContext &context, DataChunk &chunk,
 	}
 
 	state->current_offset += state->child_chunk.size();
-
-	chunk.Verify();
 }
 
 unique_ptr<PhysicalOperatorState>

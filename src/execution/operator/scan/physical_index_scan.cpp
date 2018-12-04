@@ -8,8 +8,6 @@ using namespace std;
 void PhysicalIndexScan::_GetChunk(ClientContext &context, DataChunk &chunk,
                                   PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalIndexScanOperatorState *>(state_);
-	chunk.Reset();
-
 	if (column_ids.size() == 0)
 		return;
 

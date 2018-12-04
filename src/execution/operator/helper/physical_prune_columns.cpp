@@ -8,7 +8,6 @@ using namespace std;
 void PhysicalPruneColumns::_GetChunk(ClientContext &context, DataChunk &chunk,
                                      PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOperatorState *>(state_);
-	chunk.Reset();
 
 	children[0]->GetChunk(context, state->child_chunk,
 	                      state->child_state.get());
@@ -20,9 +19,4 @@ void PhysicalPruneColumns::_GetChunk(ClientContext &context, DataChunk &chunk,
 		chunk.data[i].Reference(state->child_chunk.data[i]);
 	}
 	chunk.sel_vector = state->child_chunk.sel_vector;
-}
-
-unique_ptr<PhysicalOperatorState>
-PhysicalPruneColumns::GetOperatorState(ExpressionExecutor *parent) {
-	return make_unique<PhysicalOperatorState>(children[0].get(), parent);
 }

@@ -13,11 +13,6 @@ using namespace std;
 
 void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk,
                                PhysicalOperatorState *state) {
-	chunk.Reset();
-	if (state->finished) {
-		return;
-	}
-
 	int64_t insert_count = 0;
 	if (children.size() > 0) {
 		// insert from SELECT statement
@@ -151,10 +146,4 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk,
 	chunk.data[0].SetValue(0, Value::BIGINT(insert_count));
 
 	state->finished = true;
-}
-
-unique_ptr<PhysicalOperatorState>
-PhysicalInsert::GetOperatorState(ExpressionExecutor *parent_executor) {
-	return make_unique<PhysicalOperatorState>(
-	    children.size() == 0 ? nullptr : children[0].get(), parent_executor);
 }
