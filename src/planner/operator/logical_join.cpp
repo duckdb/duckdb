@@ -19,15 +19,15 @@ JoinSide LogicalJoin::GetJoinSide(LogicalOperator *op,
 		        colref->binding.table_index) !=
 		    op->children[0]->referenced_tables.end()) {
 			return JoinSide::LEFT;
+		} else if (op->children[1]->referenced_tables.find(
+		               colref->binding.table_index) !=
+		           op->children[1]->referenced_tables.end()) {
+			return JoinSide::RIGHT;
 		} else {
-			if (op->children[1]->referenced_tables.find(
-			        colref->binding.table_index) !=
-			    op->children[1]->referenced_tables.end()) {
-				return JoinSide::RIGHT;
-			} else {
-				return JoinSide::NONE;
-			}
+			// if its neither in left nor right its both not none
+			return JoinSide::BOTH;
 		}
+
 	} else {
 		JoinSide join_side = JoinSide::NONE;
 		for (auto &child : expr->children) {
