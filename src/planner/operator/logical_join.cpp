@@ -18,6 +18,14 @@ vector<string> LogicalJoin::GetNames() {
 	return left;
 }
 
+void LogicalJoin::ResolveTypes() {
+	types.insert(types.end(), children[0]->types.begin(), children[0]->types.end());
+	if (type != JoinType::SEMI && type != JoinType::ANTI) {
+		// for normal joins we project both sides
+		types.insert(types.end(), children[1]->types.begin(), children[1]->types.end());
+	}
+}
+
 std::string LogicalJoin::ParamsToString() const {
 	std::string result = "";
 	if (conditions.size() > 0) {

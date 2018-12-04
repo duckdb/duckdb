@@ -17,12 +17,10 @@ namespace duckdb {
 //! PhysicalPruneColumns prunes (removes) columns from its input
 class PhysicalPruneColumns : public PhysicalOperator {
   public:
-	PhysicalPruneColumns(size_t column_limit)
-	    : PhysicalOperator(PhysicalOperatorType::PRUNE_COLUMNS),
+	PhysicalPruneColumns(LogicalOperator &op, size_t column_limit)
+	    : PhysicalOperator(PhysicalOperatorType::PRUNE_COLUMNS, op.types),
 	      column_limit(column_limit) {
 	}
-
-	std::vector<TypeId> GetTypes() override;
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk,
 	               PhysicalOperatorState *state) override;

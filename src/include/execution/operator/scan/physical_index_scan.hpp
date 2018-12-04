@@ -20,10 +20,10 @@ namespace duckdb {
 //! Represents a scan of an index
 class PhysicalIndexScan : public PhysicalOperator {
   public:
-	PhysicalIndexScan(TableCatalogEntry &tableref, DataTable &table,
+	PhysicalIndexScan(LogicalOperator &op, TableCatalogEntry &tableref, DataTable &table,
 	                  Index &index, std::vector<column_t> column_ids,
 	                  std::unique_ptr<Expression> expression)
-	    : PhysicalOperator(PhysicalOperatorType::INDEX_SCAN),
+	    : PhysicalOperator(PhysicalOperatorType::INDEX_SCAN, op.types),
 	      tableref(tableref), table(table), index(index),
 	      column_ids(column_ids), expression(move(expression)) {
 	}
@@ -39,8 +39,6 @@ class PhysicalIndexScan : public PhysicalOperator {
 	//! The expression that must be fulfilled (i.e. the value looked up in the
 	//! index)
 	std::unique_ptr<Expression> expression;
-
-	std::vector<TypeId> GetTypes() override;
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk,
 	               PhysicalOperatorState *state) override;

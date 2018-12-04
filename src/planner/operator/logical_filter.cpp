@@ -13,6 +13,14 @@ LogicalFilter::LogicalFilter(unique_ptr<Expression> expression)
 LogicalFilter::LogicalFilter() : LogicalOperator(LogicalOperatorType::FILTER) {
 }
 
+vector<string> LogicalFilter::GetNames() {
+	return children[0]->GetNames();
+}
+
+void LogicalFilter::ResolveTypes() {
+	types = children[0]->types;
+}
+
 // Split the predicates separated by AND statements
 // These are the predicates that are safe to push down because all of them MUST
 // be true

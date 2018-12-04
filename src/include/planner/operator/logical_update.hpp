@@ -31,5 +31,9 @@ class LogicalUpdate : public LogicalOperator {
 
 	TableCatalogEntry *table;
 	std::vector<column_t> columns;
+  protected:
+	void ResolveTypes() override {
+		types.push_back(TypeId::BIGINT);
+	}
 };
 } // namespace duckdb

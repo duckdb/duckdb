@@ -13,9 +13,9 @@ using namespace std;
 namespace duckdb {
 
 PhysicalNestedLoopJoinInner::PhysicalNestedLoopJoinInner(
-    unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
+    LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
     vector<JoinCondition> cond, JoinType join_type)
-    : PhysicalJoin(PhysicalOperatorType::NESTED_LOOP_JOIN, move(cond),
+    : PhysicalJoin(op, PhysicalOperatorType::NESTED_LOOP_JOIN, move(cond),
                    join_type) {
 	children.push_back(move(left));
 	children.push_back(move(right));

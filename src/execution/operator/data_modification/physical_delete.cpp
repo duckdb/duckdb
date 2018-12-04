@@ -8,10 +8,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<TypeId> PhysicalDelete::GetTypes() {
-	return {TypeId::BIGINT};
-}
-
 void PhysicalDelete::_GetChunk(ClientContext &context, DataChunk &chunk,
                                PhysicalOperatorState *state) {
 	chunk.Reset();

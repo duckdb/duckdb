@@ -12,10 +12,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<TypeId> PhysicalOrder::GetTypes() {
-	return children[0]->GetTypes();
-}
-
 int compare_tuple(ChunkCollection &sort_by, OrderByDescription &desc,
                   size_t left, size_t right) {
 	for (size_t i = 0; i < desc.orders.size(); i++) {

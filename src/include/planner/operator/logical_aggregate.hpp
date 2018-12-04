@@ -38,5 +38,7 @@ class LogicalAggregate : public LogicalOperator {
 	                   std::unique_ptr<Expression> expr) override;
 
 	std::string ParamsToString() const override;
+  protected:
+	void ResolveTypes() override;
 };
 } // namespace duckdb

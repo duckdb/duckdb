@@ -18,16 +18,15 @@ namespace duckdb {
 //! Physically CREATE INDEX statement
 class PhysicalCreateIndex : public PhysicalOperator {
   public:
-	PhysicalCreateIndex(TableCatalogEntry &table,
+	PhysicalCreateIndex(LogicalOperator &op, TableCatalogEntry &table,
 	                    std::vector<column_t> column_ids,
 	                    std::vector<std::unique_ptr<Expression>> expressions,
 	                    std::unique_ptr<CreateIndexInformation> info)
-	    : PhysicalOperator(PhysicalOperatorType::CREATE_INDEX), table(table),
+	    : PhysicalOperator(PhysicalOperatorType::CREATE_INDEX, op.types), table(table),
 	      column_ids(column_ids), expressions(std::move(expressions)),
 	      info(std::move(info)) {
 	}
 
-	std::vector<TypeId> GetTypes() override;
 	void _GetChunk(ClientContext &context, DataChunk &chunk,
 	               PhysicalOperatorState *state) override;
 

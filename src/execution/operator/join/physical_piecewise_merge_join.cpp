@@ -188,10 +188,10 @@ static size_t MergeJoin(MergeInfo &l, MergeInfo &r,
 }
 
 PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(
-    std::unique_ptr<PhysicalOperator> left,
+    LogicalOperator &op, std::unique_ptr<PhysicalOperator> left,
     std::unique_ptr<PhysicalOperator> right, std::vector<JoinCondition> cond,
     JoinType join_type)
-    : PhysicalJoin(PhysicalOperatorType::PIECEWISE_MERGE_JOIN, move(cond),
+    : PhysicalJoin(op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, move(cond),
                    join_type) {
 	// for now we only support one condition!
 	assert(conditions.size() == 1);

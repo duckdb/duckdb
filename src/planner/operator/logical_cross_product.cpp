@@ -10,3 +10,8 @@ vector<string> LogicalCrossProduct::GetNames() {
 	left.insert(left.end(), right.begin(), right.end());
 	return left;
 }
+
+void LogicalCrossProduct::ResolveTypes() {
+	types.insert(types.end(), children[0]->types.begin(), children[0]->types.end());
+	types.insert(types.end(), children[1]->types.begin(), children[1]->types.end());
+}

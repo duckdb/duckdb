@@ -19,12 +19,10 @@ namespace duckdb {
 //! the data but only add a selection vector.
 class PhysicalOrder : public PhysicalOperator {
   public:
-	PhysicalOrder(OrderByDescription description)
-	    : PhysicalOperator(PhysicalOperatorType::ORDER_BY),
+	PhysicalOrder(LogicalOperator &op, OrderByDescription description)
+	    : PhysicalOperator(PhysicalOperatorType::ORDER_BY, op.types),
 	      description(std::move(description)) {
 	}
-
-	std::vector<TypeId> GetTypes() override;
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk,
 	               PhysicalOperatorState *state) override;

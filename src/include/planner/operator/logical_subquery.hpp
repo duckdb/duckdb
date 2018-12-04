@@ -35,5 +35,9 @@ class LogicalSubquery : public LogicalOperator {
 	std::vector<string> GetNames() override {
 		return children[0]->GetNames();
 	}
+  protected:
+	void ResolveTypes() override {
+		types = children[0]->types;
+	}
 };
 } // namespace duckdb

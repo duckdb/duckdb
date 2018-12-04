@@ -48,5 +48,9 @@ class LogicalCopy : public LogicalOperator {
 	char delimiter = ',';
 	char quote = '"';
 	char escape = '"';
+  protected:
+	void ResolveTypes() override {
+		types.push_back(TypeId::BIGINT);
+	}
 };
 } // namespace duckdb

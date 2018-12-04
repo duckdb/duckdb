@@ -33,5 +33,9 @@ class LogicalInsert : public LogicalOperator {
 
 	//! The base table to insert into
 	TableCatalogEntry *table;
+  protected:
+	void ResolveTypes() override {
+		types.push_back(TypeId::BIGINT);
+	}
 };
 } // namespace duckdb

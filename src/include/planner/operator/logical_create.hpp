@@ -33,5 +33,9 @@ class LogicalCreate : public LogicalOperator {
 	SchemaCatalogEntry *schema;
 	//! Create Table information
 	std::unique_ptr<CreateTableInformation> info;
+  protected:
+	void ResolveTypes() override {
+		types.push_back(TypeId::BIGINT);
+	}
 };
 } // namespace duckdb

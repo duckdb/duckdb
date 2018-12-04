@@ -5,15 +5,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<TypeId> PhysicalProjection::GetTypes() {
-	// get the chunk types from the projection list
-	vector<TypeId> types;
-	for (auto &expr : select_list) {
-		types.push_back(expr->return_type);
-	}
-	return types;
-}
-
 void PhysicalProjection::_GetChunk(ClientContext &context, DataChunk &chunk,
                                    PhysicalOperatorState *state) {
 	chunk.Reset();

@@ -5,13 +5,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<TypeId> PhysicalPruneColumns::GetTypes() {
-	auto types = children[0]->GetTypes();
-	assert(column_limit <= types.size());
-	types.erase(types.begin() + column_limit, types.end());
-	return types;
-}
-
 void PhysicalPruneColumns::_GetChunk(ClientContext &context, DataChunk &chunk,
                                      PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOperatorState *>(state_);

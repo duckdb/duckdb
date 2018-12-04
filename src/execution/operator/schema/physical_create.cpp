@@ -9,10 +9,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<TypeId> PhysicalCreate::GetTypes() {
-	return {TypeId::BIGINT};
-}
-
 void PhysicalCreate::_GetChunk(ClientContext &context, DataChunk &chunk,
                                PhysicalOperatorState *state) {
 	chunk.Reset();

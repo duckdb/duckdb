@@ -21,7 +21,8 @@ namespace duckdb {
 //! two tables
 class PhysicalNestedLoopJoinSemi : public PhysicalJoin {
   public:
-	PhysicalNestedLoopJoinSemi(std::unique_ptr<PhysicalOperator> left,
+	PhysicalNestedLoopJoinSemi(LogicalOperator &op, 
+                               std::unique_ptr<PhysicalOperator> left,
 	                           std::unique_ptr<PhysicalOperator> right,
 	                           std::vector<JoinCondition> cond,
 	                           JoinType join_type);

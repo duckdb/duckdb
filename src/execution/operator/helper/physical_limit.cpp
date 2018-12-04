@@ -4,10 +4,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<TypeId> PhysicalLimit::GetTypes() {
-	return children[0]->GetTypes();
-}
-
 void PhysicalLimit::_GetChunk(ClientContext &context, DataChunk &chunk,
                               PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalLimitOperatorState *>(state_);

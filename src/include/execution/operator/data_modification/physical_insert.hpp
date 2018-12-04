@@ -18,15 +18,14 @@ namespace duckdb {
 class PhysicalInsert : public PhysicalOperator {
   public:
 	PhysicalInsert(
+        LogicalOperator &op,
 	    TableCatalogEntry *table,
 	    std::vector<std::vector<std::unique_ptr<Expression>>> insert_values,
 	    std::vector<int> column_index_map)
-	    : PhysicalOperator(PhysicalOperatorType::INSERT),
+	    : PhysicalOperator(PhysicalOperatorType::INSERT, op.types),
 	      column_index_map(column_index_map),
 	      insert_values(move(insert_values)), table(table) {
 	}
-
-	std::vector<TypeId> GetTypes() override;
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk,
 	               PhysicalOperatorState *state) override;

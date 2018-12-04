@@ -6,11 +6,11 @@
 using namespace duckdb;
 using namespace std;
 
-PhysicalHashJoin::PhysicalHashJoin(std::unique_ptr<PhysicalOperator> left,
+PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, std::unique_ptr<PhysicalOperator> left,
                                    std::unique_ptr<PhysicalOperator> right,
                                    std::vector<JoinCondition> cond,
                                    JoinType join_type)
-    : PhysicalJoin(PhysicalOperatorType::HASH_JOIN, move(cond), join_type) {
+    : PhysicalJoin(op, PhysicalOperatorType::HASH_JOIN, move(cond), join_type) {
 	hash_table =
 	    make_unique<JoinHashTable>(conditions, right->GetTypes(), join_type);
 

@@ -83,8 +83,6 @@ class DataTable {
 		return statistics[oid];
 	}
 
-	std::vector<TypeId> GetTypes(const std::vector<column_t> &column_ids);
-
 	//! Total per-tuple size of the table
 	size_t tuple_size;
 	//! Accumulative per-tuple size

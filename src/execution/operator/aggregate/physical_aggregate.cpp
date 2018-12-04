@@ -9,27 +9,20 @@ using namespace duckdb;
 using namespace std;
 
 PhysicalAggregate::PhysicalAggregate(
+    LogicalOperator &op,
     std::vector<std::unique_ptr<Expression>> select_list,
     PhysicalOperatorType type)
-    : PhysicalOperator(type), select_list(std::move(select_list)) {
+    : PhysicalOperator(type, op.types), select_list(std::move(select_list)) {
 	Initialize();
 }
 
 PhysicalAggregate::PhysicalAggregate(
+    LogicalOperator &op,
     std::vector<std::unique_ptr<Expression>> select_list,
     std::vector<std::unique_ptr<Expression>> groups, PhysicalOperatorType type)
-    : PhysicalOperator(type), select_list(std::move(select_list)),
+    : PhysicalOperator(type, op.types), select_list(std::move(select_list)),
       groups(std::move(groups)) {
 	Initialize();
-}
-
-vector<TypeId> PhysicalAggregate::GetTypes() {
-	// get the chunk types from the projection list
-	vector<TypeId> types;
-	for (auto &expr : select_list) {
-		types.push_back(expr->return_type);
-	}
-	return types;
 }
 
 void PhysicalAggregate::Initialize() {

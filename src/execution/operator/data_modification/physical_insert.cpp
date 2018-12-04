@@ -11,10 +11,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<TypeId> PhysicalInsert::GetTypes() {
-	return {TypeId::BIGINT};
-}
-
 void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk,
                                PhysicalOperatorState *state) {
 	chunk.Reset();

@@ -19,9 +19,9 @@ namespace duckdb {
 //! Represents a scan of a base table
 class PhysicalTableFunction : public PhysicalOperator {
   public:
-	PhysicalTableFunction(TableFunctionCatalogEntry *function,
+	PhysicalTableFunction(LogicalOperator &op, TableFunctionCatalogEntry *function,
 	                      std::unique_ptr<Expression> function_call)
-	    : PhysicalOperator(PhysicalOperatorType::TABLE_FUNCTION),
+	    : PhysicalOperator(PhysicalOperatorType::TABLE_FUNCTION, op.types),
 	      function(function), function_call(std::move(function_call)) {
 	}
 
@@ -29,8 +29,6 @@ class PhysicalTableFunction : public PhysicalOperator {
 	TableFunctionCatalogEntry *function;
 	//! Expressions
 	std::unique_ptr<Expression> function_call;
-
-	std::vector<TypeId> GetTypes() override;
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk,
 	               PhysicalOperatorState *state) override;

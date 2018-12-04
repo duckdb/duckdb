@@ -13,10 +13,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<TypeId> PhysicalCreateIndex::GetTypes() {
-	return {TypeId::BIGINT};
-}
-
 void PhysicalCreateIndex::_GetChunk(ClientContext &context, DataChunk &chunk,
                                     PhysicalOperatorState *state) {
 	chunk.Reset();

@@ -11,3 +11,7 @@ vector<string> LogicalPruneColumns::GetNames() {
 	names.erase(names.begin() + column_limit, names.end());
 	return names;
 }
+
+void LogicalPruneColumns::ResolveTypes() {
+	types.insert(types.end(), children[0]->types.begin(), children[0]->types.begin() + column_limit);
+}

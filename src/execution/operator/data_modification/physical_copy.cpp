@@ -10,10 +10,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<TypeId> PhysicalCopy::GetTypes() {
-	return {TypeId::BIGINT};
-}
-
 vector<string> split(const string &str, char delimiter, char quote) {
 	vector<string> res;
 	size_t i = 0;

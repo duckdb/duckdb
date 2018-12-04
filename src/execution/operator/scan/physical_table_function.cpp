@@ -9,14 +9,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<TypeId> PhysicalTableFunction::GetTypes() {
-	vector<TypeId> types;
-	for (auto &column : function->return_values) {
-		types.push_back(column.type);
-	}
-	return types;
-}
-
 void PhysicalTableFunction::_GetChunk(ClientContext &context, DataChunk &chunk,
                                       PhysicalOperatorState *state_) {
 	auto state = (PhysicalTableFunctionOperatorState *)state_;

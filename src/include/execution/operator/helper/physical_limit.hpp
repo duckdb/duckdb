@@ -19,15 +19,13 @@ namespace duckdb {
 //! PhyisicalLimit represents the LIMIT operator
 class PhysicalLimit : public PhysicalOperator {
   public:
-	PhysicalLimit(size_t limit, size_t offset)
-	    : PhysicalOperator(PhysicalOperatorType::LIMIT), limit(limit),
+	PhysicalLimit(LogicalOperator &op, size_t limit, size_t offset)
+	    : PhysicalOperator(PhysicalOperatorType::LIMIT, op.types), limit(limit),
 	      offset(offset) {
 	}
 
 	size_t limit;
 	size_t offset;
-
-	std::vector<TypeId> GetTypes() override;
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk,
 	               PhysicalOperatorState *state) override;

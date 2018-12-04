@@ -15,10 +15,8 @@
 namespace duckdb {
 class PhysicalUnion : public PhysicalOperator {
   public:
-	PhysicalUnion(std::unique_ptr<PhysicalOperator> top,
+	PhysicalUnion(LogicalOperator &op, std::unique_ptr<PhysicalOperator> top,
 	              std::unique_ptr<PhysicalOperator> bottom);
-
-	std::vector<TypeId> GetTypes() override;
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk,
 	               PhysicalOperatorState *state) override;

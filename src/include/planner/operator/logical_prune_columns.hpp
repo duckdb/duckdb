@@ -29,6 +29,8 @@ class LogicalPruneColumns : public LogicalOperator {
 	std::vector<string> GetNames() override;
 
 	size_t column_limit;
+  protected:
+	void ResolveTypes() override;
 };
 
 } // namespace duckdb

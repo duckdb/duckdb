@@ -12,3 +12,9 @@ vector<string> LogicalTableFunction::GetNames() {
 	}
 	return names;
 }
+
+void LogicalTableFunction::ResolveTypes() {
+	for (auto &column : function->return_values) {
+		types.push_back(column.type);
+	}
+}

@@ -10,10 +10,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<TypeId> PhysicalUpdate::GetTypes() {
-	return {TypeId::BIGINT};
-}
-
 void PhysicalUpdate::_GetChunk(ClientContext &context, DataChunk &chunk,
                                PhysicalOperatorState *state) {
 	chunk.Reset();

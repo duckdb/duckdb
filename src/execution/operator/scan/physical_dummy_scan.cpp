@@ -4,10 +4,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<TypeId> PhysicalDummyScan::GetTypes() {
-	return {TypeId::INTEGER};
-}
-
 void PhysicalDummyScan::_GetChunk(ClientContext &context, DataChunk &chunk,
                                   PhysicalOperatorState *state) {
 	chunk.Reset();

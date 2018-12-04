@@ -16,10 +16,8 @@ namespace duckdb {
 //! PhysicalCrossProduct represents a cross product between two tables
 class PhysicalCrossProduct : public PhysicalOperator {
   public:
-	PhysicalCrossProduct(std::unique_ptr<PhysicalOperator> left,
+	PhysicalCrossProduct(LogicalOperator &op, std::unique_ptr<PhysicalOperator> left,
 	                     std::unique_ptr<PhysicalOperator> right);
-
-	std::vector<TypeId> GetTypes() override;
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk,
 	               PhysicalOperatorState *state) override;

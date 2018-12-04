@@ -46,5 +46,7 @@ class LogicalJoin : public LogicalOperator {
 	static ExpressionType FlipComparisionExpression(ExpressionType type);
 
 	std::string ParamsToString() const override;
+  protected:
+	void ResolveTypes() override;
 };
 } // namespace duckdb

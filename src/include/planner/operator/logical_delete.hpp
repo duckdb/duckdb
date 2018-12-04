@@ -28,5 +28,9 @@ class LogicalDelete : public LogicalOperator {
 	}
 
 	TableCatalogEntry *table;
+  protected:
+	void ResolveTypes() override {
+		types.push_back(TypeId::BIGINT);
+	}
 };
 } // namespace duckdb

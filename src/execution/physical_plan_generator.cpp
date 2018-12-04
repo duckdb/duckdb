@@ -18,6 +18,8 @@ bool PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> logical) {
 		// first resolve column references
 		ColumnBindingResolver resolver;
 		logical->Accept(&resolver);
+		// now resolve types of all the operators
+		logical->ResolveOperatorTypes();
 		// then create the physical plan
 		logical->Accept(this);
 		if (!this->plan) {
@@ -40,13 +42,13 @@ void PhysicalPlanGenerator::Visit(LogicalAggregate &op) {
 		if (!plan) {
 			// and no FROM clause, use a dummy aggregate
 			auto groupby =
-			    make_unique<PhysicalHashAggregate>(move(op.expressions));
+			    make_unique<PhysicalHashAggregate>(op, move(op.expressions));
 			this->plan = move(groupby);
 		} else {
 			// but there is a FROM clause
 			// special case: aggregate entire columns together
 			auto groupby =
-			    make_unique<PhysicalHashAggregate>(move(op.expressions));
+			    make_unique<PhysicalHashAggregate>(op, move(op.expressions));
 			groupby->children.push_back(move(plan));
 			this->plan = move(groupby);
 		}
@@ -56,7 +58,7 @@ void PhysicalPlanGenerator::Visit(LogicalAggregate &op) {
 			throw Exception("Cannot have GROUP BY without FROM clause!");
 		}
 
-		auto groupby = make_unique<PhysicalHashAggregate>(move(op.expressions),
+		auto groupby = make_unique<PhysicalHashAggregate>(op, move(op.expressions),
 		                                                  move(op.groups));
 		groupby->children.push_back(move(plan));
 		this->plan = move(groupby);
@@ -75,7 +77,7 @@ void PhysicalPlanGenerator::Visit(LogicalCrossProduct &op) {
 	op.children[1]->Accept(this);
 	auto right = move(plan);
 
-	plan = make_unique<PhysicalCrossProduct>(move(left), move(right));
+	plan = make_unique<PhysicalCrossProduct>(op, move(left), move(right));
 }
 
 void PhysicalPlanGenerator::Visit(LogicalDelete &op) {
@@ -85,7 +87,7 @@ void PhysicalPlanGenerator::Visit(LogicalDelete &op) {
 		throw Exception("Delete node cannot be the first node of a plan!");
 	}
 
-	auto del = make_unique<PhysicalDelete>(*op.table, *op.table->storage);
+	auto del = make_unique<PhysicalDelete>(op, *op.table, *op.table->storage);
 	del->children.push_back(move(plan));
 	this->plan = move(del);
 }
@@ -97,7 +99,7 @@ void PhysicalPlanGenerator::Visit(LogicalUpdate &op) {
 		throw Exception("Update node cannot be the first node of a plan!");
 	}
 
-	auto update = make_unique<PhysicalUpdate>(*op.table, *op.table->storage,
+	auto update = make_unique<PhysicalUpdate>(op, *op.table, *op.table->storage,
 	                                          op.columns, move(op.expressions));
 	update->children.push_back(move(plan));
 	this->plan = move(update);
@@ -110,7 +112,7 @@ void PhysicalPlanGenerator::Visit(LogicalCreate &op) {
 		throw Exception("CREATE node must be first node of the plan!");
 	}
 
-	this->plan = make_unique<PhysicalCreate>(op.schema, move(op.info));
+	this->plan = make_unique<PhysicalCreate>(op, op.schema, move(op.info));
 }
 
 void PhysicalPlanGenerator::Visit(LogicalCreateIndex &op) {
@@ -121,7 +123,7 @@ void PhysicalPlanGenerator::Visit(LogicalCreateIndex &op) {
 	}
 
 	this->plan = make_unique<PhysicalCreateIndex>(
-	    op.table, op.column_ids, move(op.expressions), move(op.info));
+	    op, op.table, op.column_ids, move(op.expressions), move(op.info));
 }
 
 //! Attempt to create an index scan from a filter + get, if possible
@@ -169,7 +171,7 @@ static unique_ptr<PhysicalOperator> CreateIndexScan(LogicalFilter &filter,
 					// create an index scan
 					// FIXME: use statistics to see if it is worth it
 					auto index_scan = make_unique<PhysicalIndexScan>(
-					    *scan.table, *scan.table->storage, *order_index,
+					    scan, *scan.table, *scan.table->storage, *order_index,
 					    scan.column_ids, move(comparison->children[1 - child]));
 					// remove the original expression from the filter
 					filter.expressions.erase(filter.expressions.begin() + i);
@@ -205,7 +207,7 @@ void PhysicalPlanGenerator::Visit(LogicalFilter &op) {
 
 	if (op.expressions.size() > 0) {
 		// create a filter if there is anything to filter
-		auto filter = make_unique<PhysicalFilter>(move(op.expressions));
+		auto filter = make_unique<PhysicalFilter>(op, move(op.expressions));
 		filter->children.push_back(move(plan));
 		this->plan = move(filter);
 	}
@@ -215,10 +217,11 @@ void PhysicalPlanGenerator::Visit(LogicalGet &op) {
 	LogicalOperatorVisitor::Visit(op);
 
 	if (!op.table) {
-		this->plan = make_unique<PhysicalDummyScan>();
+        vector<TypeId> types = {TypeId::BIGINT};
+		this->plan = make_unique<PhysicalDummyScan>(types);
 		return;
 	}
-	auto scan = make_unique<PhysicalTableScan>(*op.table, *op.table->storage,
+	auto scan = make_unique<PhysicalTableScan>(op, *op.table, *op.table->storage,
 	                                           op.column_ids);
 	if (plan) {
 		throw Exception("Scan has to be the first node of a plan!");
@@ -257,21 +260,21 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 	assert(right);
 	if (has_equality) {
 		// equality join: use hash join
-		plan = make_unique<PhysicalHashJoin>(move(left), move(right),
+		plan = make_unique<PhysicalHashJoin>(op, move(left), move(right),
 		                                     move(op.conditions), op.type);
 	} else {
 		if (op.conditions.size() == 1 && op.type == JoinType::INNER &&
 		    !has_inequality) {
 			// range join: use piecewise merge join
-			plan = make_unique<PhysicalPiecewiseMergeJoin>(
+			plan = make_unique<PhysicalPiecewiseMergeJoin>(op,
 			    move(left), move(right), move(op.conditions), op.type);
 		} else {
 			// non-equality join: use nested loop
 			if (op.type == JoinType::INNER) {
-				plan = make_unique<PhysicalNestedLoopJoinInner>(
+				plan = make_unique<PhysicalNestedLoopJoinInner>(op,
 				    move(left), move(right), move(op.conditions), op.type);
 			} else if (op.type == JoinType::ANTI || op.type == JoinType::SEMI) {
-				plan = make_unique<PhysicalNestedLoopJoinSemi>(
+				plan = make_unique<PhysicalNestedLoopJoinSemi>(op,
 				    move(left), move(right), move(op.conditions), op.type);
 			} else {
 				throw NotImplementedException(
@@ -284,7 +287,7 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 void PhysicalPlanGenerator::Visit(LogicalLimit &op) {
 	LogicalOperatorVisitor::Visit(op);
 
-	auto limit = make_unique<PhysicalLimit>(op.limit, op.offset);
+	auto limit = make_unique<PhysicalLimit>(op, op.limit, op.offset);
 	if (!plan) {
 		throw Exception("Limit cannot be the first node of a plan!");
 	}
@@ -299,7 +302,7 @@ void PhysicalPlanGenerator::Visit(LogicalOrder &op) {
 		throw Exception("Order cannot be the first node of a plan!");
 	}
 
-	auto order = make_unique<PhysicalOrder>(move(op.description));
+	auto order = make_unique<PhysicalOrder>(op, move(op.description));
 	order->children.push_back(move(plan));
 	this->plan = move(order);
 }
@@ -307,7 +310,7 @@ void PhysicalPlanGenerator::Visit(LogicalOrder &op) {
 void PhysicalPlanGenerator::Visit(LogicalProjection &op) {
 	LogicalOperatorVisitor::Visit(op);
 
-	auto projection = make_unique<PhysicalProjection>(move(op.expressions));
+	auto projection = make_unique<PhysicalProjection>(op, move(op.expressions));
 	if (plan) {
 		projection->children.push_back(move(plan));
 	}
@@ -317,7 +320,7 @@ void PhysicalPlanGenerator::Visit(LogicalProjection &op) {
 void PhysicalPlanGenerator::Visit(LogicalInsert &op) {
 	LogicalOperatorVisitor::Visit(op);
 
-	auto insertion = make_unique<PhysicalInsert>(
+	auto insertion = make_unique<PhysicalInsert>(op,
 	    op.table, move(op.insert_values), op.column_index_map);
 	if (plan) {
 		insertion->children.push_back(move(plan));
@@ -333,7 +336,7 @@ void PhysicalPlanGenerator::Visit(LogicalPruneColumns &op) {
 	}
 	if (plan->GetTypes().size() > op.column_limit) {
 		// only prune if we need to
-		auto node = make_unique<PhysicalPruneColumns>(op.column_limit);
+		auto node = make_unique<PhysicalPruneColumns>(op, op.column_limit);
 		node->children.push_back(move(plan));
 		this->plan = move(node);
 	}
@@ -346,20 +349,20 @@ void PhysicalPlanGenerator::Visit(LogicalTableFunction &op) {
 		throw Exception("Table function has to be first node of the plan!");
 	}
 	this->plan =
-	    make_unique<PhysicalTableFunction>(op.function, move(op.function_call));
+	    make_unique<PhysicalTableFunction>(op, op.function, move(op.function_call));
 }
 
 void PhysicalPlanGenerator::Visit(LogicalCopy &op) {
 	LogicalOperatorVisitor::Visit(op);
 
 	if (plan) {
-		auto copy = make_unique<PhysicalCopy>(
+		auto copy = make_unique<PhysicalCopy>(op,
 		    move(op.file_path), move(op.is_from), move(op.delimiter),
 		    move(op.quote), move(op.escape));
 		copy->children.push_back(move(plan));
 		this->plan = move(copy);
 	} else {
-		auto copy = make_unique<PhysicalCopy>(
+		auto copy = make_unique<PhysicalCopy>(op,
 		    op.table, move(op.file_path), move(op.is_from), move(op.delimiter),
 		    move(op.quote), move(op.escape), move(op.select_list));
 		this->plan = move(copy);
@@ -375,9 +378,9 @@ void PhysicalPlanGenerator::Visit(LogicalExplain &op) {
 	}
 
 	// Construct a dummy plan that just returns the plan strings
-	auto scan = make_unique<PhysicalDummyScan>();
-
 	vector<TypeId> types = {TypeId::VARCHAR, TypeId::VARCHAR};
+
+	auto scan = make_unique<PhysicalDummyScan>(types);
 	scan->chunk.Initialize(types, false);
 
 	scan->chunk.data[0].count = 3;
@@ -399,7 +402,7 @@ void PhysicalPlanGenerator::Visit(LogicalExplain &op) {
 	select_list[0]->alias = "explain_key";
 	select_list[1]->alias = "explain_value";
 
-	auto projection = make_unique<PhysicalProjection>(move(select_list));
+	auto projection = make_unique<PhysicalProjection>(op, move(select_list));
 	projection->children.push_back(move(scan));
 	this->plan = move(projection);
 }
@@ -415,7 +418,7 @@ void PhysicalPlanGenerator::Visit(LogicalUnion &op) {
 	if (left->GetTypes() != right->GetTypes()) {
 		throw Exception("Type mismatch for UNION");
 	}
-	plan = make_unique<PhysicalUnion>(move(left), move(right));
+	plan = make_unique<PhysicalUnion>(op, move(left), move(right));
 }
 
 static void GenerateExceptIntersect(PhysicalPlanGenerator *generator,
@@ -445,7 +448,7 @@ static void GenerateExceptIntersect(PhysicalPlanGenerator *generator,
 		    make_unique_base<Expression, ColumnRefExpression>(top_types[i], i);
 		conditions.push_back(move(cond));
 	}
-	generator->plan = make_unique<PhysicalHashJoin>(
+	generator->plan = make_unique<PhysicalHashJoin>(op,
 	    move(top), move(bottom), move(conditions), join_type);
 }
 
@@ -454,7 +457,7 @@ void PhysicalPlanGenerator::Visit(LogicalExcept &op) {
 }
 
 void PhysicalPlanGenerator::Visit(LogicalIntersect &op) {
-	GenerateExceptIntersect(this, op, JoinType::INNER);
+	GenerateExceptIntersect(this, op, JoinType::SEMI);
 }
 
 unique_ptr<Expression> PhysicalPlanGenerator::Visit(SubqueryExpression &expr) {

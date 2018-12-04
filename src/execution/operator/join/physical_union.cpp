@@ -5,15 +5,11 @@
 using namespace duckdb;
 using namespace std;
 
-PhysicalUnion::PhysicalUnion(std::unique_ptr<PhysicalOperator> top,
+PhysicalUnion::PhysicalUnion(LogicalOperator &op, std::unique_ptr<PhysicalOperator> top,
                              std::unique_ptr<PhysicalOperator> bottom)
-    : PhysicalOperator(PhysicalOperatorType::UNION) {
+    : PhysicalOperator(PhysicalOperatorType::UNION, op.types) {
 	children.push_back(move(top));
 	children.push_back(move(bottom));
-}
-
-vector<TypeId> PhysicalUnion::GetTypes() {
-	return children[0]->GetTypes();
 }
 
 // first exhaust top, then exhaust bottom. state to remember which.

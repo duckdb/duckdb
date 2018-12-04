@@ -37,5 +37,7 @@ class LogicalTableFunction : public LogicalOperator {
 		v->Visit(*this);
 	}
 	std::vector<string> GetNames() override;
+  protected:
+	void ResolveTypes() override;
 };
 } // namespace duckdb

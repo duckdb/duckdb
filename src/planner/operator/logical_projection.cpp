@@ -11,3 +11,9 @@ vector<string> LogicalProjection::GetNames() {
 	}
 	return names;
 }
+
+void LogicalProjection::ResolveTypes() {
+	for (auto &expr : expressions) {
+		types.push_back(expr->return_type);
+	}
+}

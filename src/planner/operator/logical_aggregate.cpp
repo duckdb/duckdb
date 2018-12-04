@@ -12,6 +12,13 @@ vector<string> LogicalAggregate::GetNames() {
     return names;
 }
 
+void LogicalAggregate::ResolveTypes() {
+	// get the chunk types from the projection list
+	for (auto &expr : expressions) {
+		types.push_back(expr->return_type);
+	}
+}
+
 size_t LogicalAggregate::ExpressionCount() {
     return expressions.size() + groups.size();
 }

@@ -5,10 +5,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<TypeId> PhysicalIndexScan::GetTypes() {
-	return table.GetTypes(column_ids);
-}
-
 void PhysicalIndexScan::_GetChunk(ClientContext &context, DataChunk &chunk,
                                   PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalIndexScanOperatorState *>(state_);

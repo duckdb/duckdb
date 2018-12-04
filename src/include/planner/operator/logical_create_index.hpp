@@ -40,5 +40,9 @@ class LogicalCreateIndex : public LogicalOperator {
 	std::vector<std::unique_ptr<Expression>> expressions;
 	// Info for index creation
 	std::unique_ptr<CreateIndexInformation> info;
+  protected:
+	void ResolveTypes() override {
+		types.push_back(TypeId::BIGINT);
+	}
 };
 } // namespace duckdb

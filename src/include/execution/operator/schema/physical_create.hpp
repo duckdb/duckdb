@@ -18,13 +18,12 @@ namespace duckdb {
 //! Physically CREATE TABLE statement
 class PhysicalCreate : public PhysicalOperator {
   public:
-	PhysicalCreate(SchemaCatalogEntry *schema,
+	PhysicalCreate(LogicalOperator &op, SchemaCatalogEntry *schema,
 	               std::unique_ptr<CreateTableInformation> info)
-	    : PhysicalOperator(PhysicalOperatorType::CREATE), schema(schema),
+	    : PhysicalOperator(PhysicalOperatorType::CREATE, op.types), schema(schema),
 	      info(move(info)) {
 	}
 
-	std::vector<TypeId> GetTypes() override;
 	void _GetChunk(ClientContext &context, DataChunk &chunk,
 	               PhysicalOperatorState *state) override;
 

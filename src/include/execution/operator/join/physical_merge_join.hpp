@@ -19,7 +19,7 @@ namespace duckdb {
 //! PhysicalMergeJoin represents a merge loop join between two tables
 class PhysicalMergeJoin : public PhysicalJoin {
   public:
-	PhysicalMergeJoin(std::unique_ptr<PhysicalOperator> left,
+	PhysicalMergeJoin(LogicalOperator &op, std::unique_ptr<PhysicalOperator> left,
 	                  std::unique_ptr<PhysicalOperator> right,
 	                  std::vector<JoinCondition> cond, JoinType join_type);
 

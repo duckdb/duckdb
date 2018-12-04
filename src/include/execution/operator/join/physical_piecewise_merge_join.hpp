@@ -25,7 +25,8 @@ class PhysicalPiecewiseMergeJoin : public PhysicalJoin {
 		size_t count;
 	};
 
-	PhysicalPiecewiseMergeJoin(std::unique_ptr<PhysicalOperator> left,
+	PhysicalPiecewiseMergeJoin(LogicalOperator &op,
+                               std::unique_ptr<PhysicalOperator> left,
 	                           std::unique_ptr<PhysicalOperator> right,
 	                           std::vector<JoinCondition> cond,
 	                           JoinType join_type);

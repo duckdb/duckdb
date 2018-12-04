@@ -19,10 +19,8 @@ namespace duckdb {
 //! PhysicalJoin represents the base class of the join operators
 class PhysicalJoin : public PhysicalOperator {
   public:
-	PhysicalJoin(PhysicalOperatorType type, std::vector<JoinCondition> cond,
+	PhysicalJoin(LogicalOperator &op, PhysicalOperatorType type, std::vector<JoinCondition> cond,
 	             JoinType join_type);
-
-	std::vector<TypeId> GetTypes() override;
 
 	std::string ExtraRenderInformation() override;
 

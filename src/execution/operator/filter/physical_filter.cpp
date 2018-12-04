@@ -5,10 +5,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<TypeId> PhysicalFilter::GetTypes() {
-	return children[0]->GetTypes();
-}
-
 void PhysicalFilter::_GetChunk(ClientContext &context, DataChunk &chunk,
                                PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOperatorState *>(state_);

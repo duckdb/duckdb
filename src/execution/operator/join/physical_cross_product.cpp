@@ -6,18 +6,12 @@ using namespace duckdb;
 using namespace std;
 
 PhysicalCrossProduct::PhysicalCrossProduct(
+    LogicalOperator &op,
     std::unique_ptr<PhysicalOperator> left,
     std::unique_ptr<PhysicalOperator> right)
-    : PhysicalOperator(PhysicalOperatorType::CROSS_PRODUCT) {
+    : PhysicalOperator(PhysicalOperatorType::CROSS_PRODUCT, op.types) {
 	children.push_back(move(left));
 	children.push_back(move(right));
-}
-
-vector<TypeId> PhysicalCrossProduct::GetTypes() {
-	auto left = children[0]->GetTypes();
-	auto right = children[1]->GetTypes();
-	left.insert(left.end(), right.begin(), right.end());
-	return left;
 }
 
 void PhysicalCrossProduct::_GetChunk(ClientContext &context, DataChunk &chunk,

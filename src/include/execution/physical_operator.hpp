@@ -16,6 +16,8 @@
 #include "common/printable.hpp"
 #include "common/types/data_chunk.hpp"
 
+#include "planner/logical_operator.hpp"
+
 #include "parser/expression.hpp"
 #include "parser/statement/select_statement.hpp"
 
@@ -56,7 +58,7 @@ class PhysicalOperatorState {
 */
 class PhysicalOperator : public Printable {
   public:
-	PhysicalOperator(PhysicalOperatorType type) : type(type) {
+	PhysicalOperator(PhysicalOperatorType type, std::vector<TypeId> types) : type(type), types(types) {
 	}
 
 	PhysicalOperatorType GetOperatorType() {
@@ -66,12 +68,14 @@ class PhysicalOperator : public Printable {
 	std::string ToString() const override;
 
 	//! Return a vector of the types that will be returned by this operator
-	virtual std::vector<TypeId> GetTypes() = 0;
+	std::vector<TypeId>& GetTypes() {
+		return types;
+	}
 	//! Initialize a given chunk to the types that will be returned by this
 	//! operator, this will prepare chunk for a call to GetChunk. This method
 	//! only has to be called once for any amount of calls to GetChunk.
 	virtual void InitializeChunk(DataChunk &chunk) {
-		auto types = GetTypes();
+		auto &types = GetTypes();
 		chunk.Initialize(types);
 	}
 	//! Retrieves a chunk from this operator and stores it in the chunk
@@ -94,5 +98,7 @@ class PhysicalOperator : public Printable {
 	PhysicalOperatorType type;
 	//! The set of children of the operator
 	std::vector<std::unique_ptr<PhysicalOperator>> children;
+	//! The types returned by this physical operator
+	std::vector<TypeId> types;
 };
 } // namespace duckdb

@@ -49,7 +49,20 @@ class LogicalOperator : public Printable {
 	//! Return a vector of the column names that will be returned by this
 	//! operator
 	virtual std::vector<std::string> GetNames() = 0;
-	
+	//! Resolve the types of the logical operator and its children
+	void ResolveOperatorTypes() {
+		if (types.size() > 0) {
+			// types already resolved for this node
+			return;
+		}
+		// first resolve child types
+		for(auto &child : children) {
+			child->ResolveOperatorTypes();
+		}
+		// now resolve the types for this operator
+		ResolveTypes();
+	}
+
 	virtual std::string ParamsToString() const;
 	std::string ToString() const override;
 
@@ -74,9 +87,14 @@ class LogicalOperator : public Printable {
 	std::vector<std::unique_ptr<LogicalOperator>> children;
 	//! The set of expressions contained within the operator, if any
 	std::vector<std::unique_ptr<Expression>> expressions;
+	//! The types returned by this logical operator. Set by calling LogicalOperator::ResolveTypes.
+	std::vector<TypeId> types;
 
 	virtual size_t ExpressionCount();
 	virtual Expression *GetExpression(size_t index);
 	virtual void SetExpression(size_t index, std::unique_ptr<Expression> expr);
+  protected:
+	//! Resolve types for this specific operator
+	virtual void ResolveTypes() = 0;
 };
 } // namespace duckdb

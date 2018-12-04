@@ -32,5 +32,9 @@ class LogicalExplain : public LogicalOperator {
 	std::vector<string> GetNames() override {
 		return {"plan_type", "plan"};
 	}
+  protected:
+	void ResolveTypes() override {
+		types = {TypeId::VARCHAR, TypeId::VARCHAR};
+	}
 };
 } // namespace duckdb

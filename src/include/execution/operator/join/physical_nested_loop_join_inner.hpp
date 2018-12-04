@@ -26,7 +26,8 @@ size_t nested_loop_comparison(ExpressionType op, Vector &left, Vector &right,
 //! tables
 class PhysicalNestedLoopJoinInner : public PhysicalJoin {
   public:
-	PhysicalNestedLoopJoinInner(std::unique_ptr<PhysicalOperator> left,
+	PhysicalNestedLoopJoinInner(LogicalOperator &op,
+                                std::unique_ptr<PhysicalOperator> left,
 	                            std::unique_ptr<PhysicalOperator> right,
 	                            std::vector<JoinCondition> cond,
 	                            JoinType join_type);

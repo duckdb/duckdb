@@ -19,16 +19,16 @@ namespace duckdb {
 class PhysicalAggregate : public PhysicalOperator {
   public:
 	PhysicalAggregate(
+        LogicalOperator &op,
 	    std::vector<std::unique_ptr<Expression>> select_list,
 	    PhysicalOperatorType type = PhysicalOperatorType::BASE_GROUP_BY);
 	PhysicalAggregate(
+        LogicalOperator &op,
 	    std::vector<std::unique_ptr<Expression>> select_list,
 	    std::vector<std::unique_ptr<Expression>> groups,
 	    PhysicalOperatorType type = PhysicalOperatorType::BASE_GROUP_BY);
 
 	void Initialize();
-
-	std::vector<TypeId> GetTypes() override;
 
 	//! The projection list of the SELECT statement (that contains aggregates)
 	std::vector<std::unique_ptr<Expression>> select_list;

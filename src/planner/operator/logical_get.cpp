@@ -12,3 +12,7 @@ std::vector<string> LogicalGet::GetNames() {
 	}
 	return names;
 }
+
+void LogicalGet::ResolveTypes() {
+	types = table->GetTypes(column_ids);
+}

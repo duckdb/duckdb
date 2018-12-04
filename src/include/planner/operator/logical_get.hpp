@@ -44,5 +44,7 @@ class LogicalGet : public LogicalOperator {
 		}
 		return "(" + table->name + ")";
 	}
+  protected:
+	void ResolveTypes() override;
 };
 } // namespace duckdb

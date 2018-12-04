@@ -30,5 +30,9 @@ class LogicalOrder : public LogicalOperator {
 	}
 
 	OrderByDescription description;
+  protected:
+	void ResolveTypes() override {
+		types = children[0]->types;
+	}
 };
 } // namespace duckdb
