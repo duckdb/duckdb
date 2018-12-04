@@ -109,3 +109,8 @@ Catalog::GetScalarFunction(Transaction &transaction,
 	auto schema = GetSchema(transaction, schema_name);
 	return schema->GetScalarFunction(transaction, name);
 }
+
+void Catalog::DropIndex(Transaction &transaction, DropIndexInformation *info) {
+	auto schema = GetSchema(transaction, info->schema);
+	schema->DropIndex(transaction, info);
+}

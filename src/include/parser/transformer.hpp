@@ -61,6 +61,9 @@ class Transformer {
 	//! Transform a Postgres DropStmt node into a DropTableStatement
 	std::unique_ptr<DropTableStatement>
 	TransformDropTable(postgres::DropStmt *stmt);
+	//! Transform a Postgres DropStmt node into a DropIndexStatement
+	std::unique_ptr<DropIndexStatement>
+	TransformDropIndex(postgres::DropStmt *stmt);
 	//! Transform a Postgres DropStmt node into a DropSchemaStatement
 	std::unique_ptr<DropSchemaStatement>
 	TransformDropSchema(postgres::DropStmt *stmt);

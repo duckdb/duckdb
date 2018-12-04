@@ -1,6 +1,7 @@
 
 #include "parser/statement/drop_schema_statement.hpp"
 #include "parser/statement/drop_table_statement.hpp"
+#include "parser/statement/drop_index_statement.hpp"
 #include "parser/transformer.hpp"
 
 using namespace duckdb;
@@ -19,6 +20,8 @@ unique_ptr<SQLStatement> Transformer::TransformDrop(Node *node) {
 		return TransformDropTable(stmt);
 	case OBJECT_SCHEMA:
 		return TransformDropSchema(stmt);
+    case OBJECT_INDEX:
+        return TransformDropIndex(stmt);
 	default:
 		throw NotImplementedException("Cannot drop this type yet");
 	}

@@ -44,7 +44,8 @@ class SchemaCatalogEntry : public CatalogEntry {
 
 	//! Creates an index with the given name in the schema
 	bool CreateIndex(Transaction &transaction, CreateIndexInformation *info);
-
+	//! Drops a index with the given name
+	void DropIndex(Transaction &transaction,  DropIndexInformation *info);
 	//! Drops a table with the given name
 	void DropTable(Transaction &transaction, DropTableInformation *info);
 

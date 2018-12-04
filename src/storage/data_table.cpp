@@ -564,8 +564,8 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result,
 		if (version) {
 			// tuple is versioned
 			// check which tuple to retrieve
-			if (!(version->version_number == transaction.transaction_id ||
-			      version->version_number < transaction.start_time)) {
+			if (version->version_number == transaction.transaction_id ||
+			      version->version_number < transaction.start_time) {
 				// use the data in the original table
 				retrieve_base_version = true;
 			} else {

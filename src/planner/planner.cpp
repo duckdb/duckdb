@@ -77,6 +77,14 @@ bool Planner::CreatePlan(ClientContext &context,
 			this->success = true;
 			break;
 		}
+		case StatementType::DROP_INDEX:{
+			auto &stmt = *((DropIndexStatement *)statement.get());
+			// TODO: create actual plan
+			context.db.catalog.DropIndex(context.ActiveTransaction(),
+										 stmt.info.get());
+			this->success = true;
+			break;
+		}
 		case StatementType::ALTER: {
 			// TODO: create actual plan
 			auto &stmt = *((AlterTableStatement *)statement.get());

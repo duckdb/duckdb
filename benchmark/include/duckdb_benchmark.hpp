@@ -56,6 +56,9 @@ class DuckDBBenchmark : public Benchmark {
 	virtual void Load(DuckDBBenchmarkState *state) = 0;
 	//! Run queries against the DB
 	virtual std::string GetQuery() = 0;
+	//! This function gets called after the GetQuery() method
+	virtual void Cleanup(DuckDBBenchmarkState *state) {
+	};
 	//! Verify a result
 	virtual std::string VerifyResult(DuckDBResult *result) = 0;
 
@@ -68,6 +71,7 @@ class DuckDBBenchmark : public Benchmark {
 	void Run(BenchmarkState *state_) override {
 		auto state = (DuckDBBenchmarkState *)state_;
 		state->result = state->conn.Query(GetQuery());
+		Cleanup(state);
 	}
 
 	std::string Verify(BenchmarkState *state_) override {

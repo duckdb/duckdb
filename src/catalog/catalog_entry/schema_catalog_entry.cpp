@@ -42,6 +42,16 @@ bool SchemaCatalogEntry::CreateIndex(Transaction &transaction,
 	return true;
 }
 
+void SchemaCatalogEntry::DropIndex(Transaction &transaction,
+								   DropIndexInformation *info) {
+	if (!indexes.DropEntry(transaction, info->name,false)) {
+		if (!info->if_exists) {
+			throw CatalogException("Index with name \"%s\" does not exist!",
+								   info->name.c_str());
+		}
+	}
+}
+
 void SchemaCatalogEntry::DropTable(Transaction &transaction,
                                    DropTableInformation *info) {
 	if (!tables.DropEntry(transaction, info->table, info->cascade)) {
