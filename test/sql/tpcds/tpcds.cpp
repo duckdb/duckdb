@@ -92,7 +92,7 @@ TEST_CASE("Test TPC-DS SF1", "[tpcds][.]") {
 	con.EnableProfiling();
 
 	//	// run queries, these work already
-	//	con.Query(tpcds::get_query(6))->Print();
+		// con.Query(tpcds::get_query(6))->Print();
 	//	con.Query(TPCDS_QUERIES[TPCDS_QUERY_ID::Q06])->Print();
 	//	con.Query(TPCDS_QUERIES[TPCDS_QUERY_ID::Q07])->Print();
 	//	con.Query(TPCDS_QUERIES[TPCDS_QUERY_ID::Q10])->Print();

@@ -11,15 +11,15 @@
 #pragma once
 
 #include "parser/sql_node_visitor.hpp"
-#include "parser/statement/select_statement.hpp"
 #include "parser/tableref.hpp"
 #include "planner/bindcontext.hpp"
+#include "parser/query_node.hpp"
 
 namespace duckdb {
 //! Represents a subquery
 class SubqueryRef : public TableRef {
   public:
-	SubqueryRef(std::unique_ptr<SelectStatement> subquery);
+	SubqueryRef(std::unique_ptr<QueryNode> subquery);
 
 	std::unique_ptr<TableRef> Accept(SQLNodeVisitor *v) override {
 		return v->Visit(*this);
@@ -40,7 +40,7 @@ class SubqueryRef : public TableRef {
 	static std::unique_ptr<TableRef> Deserialize(Deserializer &source);
 
 	//! The subquery
-	std::unique_ptr<SelectStatement> subquery;
+	std::unique_ptr<QueryNode> subquery;
 	//! Alises for the column names
 	std::vector<std::string> column_name_alias;
 	// Bindcontext, FIXME

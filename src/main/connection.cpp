@@ -1,9 +1,8 @@
-
 #include "main/connection.hpp"
-#include "main/database.hpp"
 
 #include "execution/executor.hpp"
 #include "execution/physical_plan_generator.hpp"
+#include "main/database.hpp"
 #include "optimizer/optimizer.hpp"
 #include "parser/parser.hpp"
 #include "planner/planner.hpp"
@@ -11,8 +10,7 @@
 using namespace duckdb;
 using namespace std;
 
-DuckDBConnection::DuckDBConnection(DuckDB &database)
-    : db(database), context(database) {
+DuckDBConnection::DuckDBConnection(DuckDB &database) : db(database), context(database) {
 }
 
 DuckDBConnection::~DuckDBConnection() {
@@ -20,8 +18,7 @@ DuckDBConnection::~DuckDBConnection() {
 
 Appender *DuckDBConnection::GetAppender(string table_name, string schema) {
 	if (appender) {
-		throw Exception(
-		    "Connection can only have one appender active at a time!");
+		throw Exception("Connection can only have one appender active at a time!");
 	}
 	// start a transaction if none is active at this point
 	if (context.transaction.IsAutoCommit()) {
@@ -30,8 +27,7 @@ Appender *DuckDBConnection::GetAppender(string table_name, string schema) {
 	// get the table catalog entry
 	TableCatalogEntry *table_entry;
 	try {
-		table_entry = db.catalog.GetTable(
-		    context.transaction.ActiveTransaction(), schema, table_name);
+		table_entry = db.catalog.GetTable(context.transaction.ActiveTransaction(), schema, table_name);
 	} catch (...) {
 		if (context.transaction.IsAutoCommit()) {
 			context.transaction.Rollback();
@@ -58,8 +54,7 @@ void DuckDBConnection::DestroyAppender(bool rollback) {
 	}
 }
 
-unique_ptr<DuckDBResult>
-DuckDBConnection::GetQueryResult(ClientContext &context, std::string query) {
+unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(ClientContext &context, std::string query) {
 	auto result = make_unique<DuckDBResult>();
 	result->success = false;
 
@@ -75,15 +70,12 @@ DuckDBConnection::GetQueryResult(ClientContext &context, std::string query) {
 		}
 
 		if (parser.statements.size() > 1) {
-			throw Exception(
-			    "More than one statement per query not supported yet!");
+			throw Exception("More than one statement per query not supported yet!");
 		}
 
 		auto &statement = parser.statements.back();
-		if (statement->type == StatementType::UPDATE ||
-		    statement->type == StatementType::DELETE ||
-		    statement->type == StatementType::ALTER ||
-		    statement->type == StatementType::CREATE_INDEX) {
+		if (statement->type == StatementType::UPDATE || statement->type == StatementType::DELETE ||
+		    statement->type == StatementType::ALTER || statement->type == StatementType::CREATE_INDEX) {
 			// log query in UNDO buffer so it can be saved in the WAL on commit
 			auto &transaction = context.transaction.ActiveTransaction();
 			transaction.PushQuery(query);
@@ -111,8 +103,7 @@ DuckDBConnection::GetQueryResult(ClientContext &context, std::string query) {
 
 		// finally execute the plan and return the result
 		Executor executor;
-		result->collection =
-		    executor.Execute(context, move(physical_planner.plan));
+		result->collection = executor.Execute(context, move(physical_planner.plan));
 		result->success = true;
 	} catch (Exception &ex) {
 		result->error = ex.GetMessage();
@@ -138,8 +129,7 @@ unique_ptr<DuckDBResult> DuckDBConnection::Query(std::string query) {
 		context.transaction.BeginTransaction();
 	}
 
-	context.ActiveTransaction().active_query =
-	    context.db.transaction_manager.GetQueryNumber();
+	context.ActiveTransaction().active_query = context.db.transaction_manager.GetQueryNumber();
 	auto result = GetQueryResult(query);
 
 	if (context.transaction.HasActiveTransaction()) {
@@ -157,8 +147,7 @@ unique_ptr<DuckDBResult> DuckDBConnection::Query(std::string query) {
 			result->error = ex.GetMessage();
 		} catch (...) {
 			result->success = false;
-			result->error =
-			    "UNHANDLED EXCEPTION TYPE THROWN IN TRANSACTION COMMIT!";
+			result->error = "UNHANDLED EXCEPTION TYPE THROWN IN TRANSACTION COMMIT!";
 		}
 	}
 	return result;

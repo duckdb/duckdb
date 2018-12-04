@@ -31,7 +31,7 @@ class DefaultExpression : public Expression {
 
 	//! Deserializes a blob back into an DefaultExpression
 	static std::unique_ptr<Expression>
-	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);
+	Deserialize(ExpressionDeserializeInfo *info, Deserializer &source);
 
 	std::string ToString() const override {
 		return "Default";

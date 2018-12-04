@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // planner/operator/logical_insert.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -16,9 +14,8 @@ namespace duckdb {
 
 //! LogicalInsert represents an insertion of data into a base table
 class LogicalInsert : public LogicalOperator {
-  public:
-	LogicalInsert(TableCatalogEntry *table)
-	    : LogicalOperator(LogicalOperatorType::INSERT), table(table) {
+	public:
+	LogicalInsert(TableCatalogEntry *table) : LogicalOperator(LogicalOperatorType::INSERT), table(table) {
 	}
 
 	std::vector<std::vector<std::unique_ptr<Expression>>> insert_values;
@@ -33,7 +30,8 @@ class LogicalInsert : public LogicalOperator {
 
 	//! The base table to insert into
 	TableCatalogEntry *table;
-  protected:
+
+	protected:
 	void ResolveTypes() override {
 		types.push_back(TypeId::BIGINT);
 	}

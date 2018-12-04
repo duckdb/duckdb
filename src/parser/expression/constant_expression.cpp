@@ -20,7 +20,7 @@ void ConstantExpression::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<Expression>
-ConstantExpression::Deserialize(ExpressionDeserializeInformation *info,
+ConstantExpression::Deserialize(ExpressionDeserializeInfo *info,
                                 Deserializer &source) {
 	if (info->children.size() > 0) {
 		throw SerializationException("Constant cannot have children!");

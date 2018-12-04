@@ -34,6 +34,6 @@ class ComparisonExpression : public Expression {
 
 	//! Deserializes a blob back into an OperatorExpression
 	static std::unique_ptr<Expression>
-	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);
+	Deserialize(ExpressionDeserializeInfo *info, Deserializer &source);
 };
 } // namespace duckdb

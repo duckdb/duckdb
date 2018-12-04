@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
-// parser/statement/drop_table_statement.hpp
-// 
-// 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// parser/statement/drop_index_statement.hpp
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -17,10 +15,8 @@
 namespace duckdb {
 
 class DropIndexStatement : public SQLStatement {
-  public:
-	DropIndexStatement()
-	    : SQLStatement(StatementType::DROP_INDEX),
-	      info(make_unique<DropIndexInformation>()){};
+	public:
+	DropIndexStatement() : SQLStatement(StatementType::DROP_INDEX), info(make_unique<DropIndexInformation>()){};
 	virtual ~DropIndexStatement() {
 	}
 

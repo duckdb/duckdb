@@ -1,8 +1,7 @@
-
 #include "optimizer/optimizer.hpp"
+
 #include "optimizer/expression_rules/rule_list.hpp"
 #include "optimizer/logical_rules/rule_list.hpp"
-
 #include "planner/operator/list.hpp"
 
 using namespace duckdb;
@@ -27,8 +26,7 @@ Optimizer::Optimizer(BindContext &context) : rewriter(context) {
 #endif
 }
 
-unique_ptr<LogicalOperator>
-Optimizer::Optimize(unique_ptr<LogicalOperator> plan) {
-    // then we optimize the logical tree
-    return rewriter.ApplyRules(move(plan));
+unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan) {
+	// then we optimize the logical tree
+	return rewriter.ApplyRules(move(plan));
 }

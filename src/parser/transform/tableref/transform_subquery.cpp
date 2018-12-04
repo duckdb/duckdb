@@ -8,7 +8,7 @@ using namespace std;
 
 unique_ptr<TableRef>
 Transformer::TransformRangeSubselect(RangeSubselect *root) {
-	auto subquery = TransformSelect(root->subquery);
+	auto subquery = TransformSelectNode((SelectStmt*)root->subquery);
 	if (!subquery) {
 		return nullptr;
 	}
@@ -20,10 +20,11 @@ Transformer::TransformRangeSubselect(RangeSubselect *root) {
 			result->column_name_alias.push_back(
 			    reinterpret_cast<value *>(node->data.ptr_value)->val.str);
 		}
-		if (result->column_name_alias.size() !=
-		    result->subquery->select_list.size()) {
-			throw ParserException("Column alias list count does not match");
-		}
+        // FIXME:
+		// if (result->column_name_alias.size() !=
+		//     result->subquery->select_list.size()) {
+		// 	throw ParserException("Column alias list count does not match");
+		// }
 	}
 	return move(result);
 }

@@ -14,7 +14,7 @@ unique_ptr<Expression> StarExpression::Copy() {
 }
 
 unique_ptr<Expression>
-StarExpression::Deserialize(ExpressionDeserializeInformation *info,
+StarExpression::Deserialize(ExpressionDeserializeInfo *info,
                             Deserializer &source) {
 	if (info->children.size() > 0) {
 		throw SerializationException("Star cannot have children!");

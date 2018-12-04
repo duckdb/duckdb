@@ -1,9 +1,7 @@
 //===----------------------------------------------------------------------===//
-//
 //                         DuckDB
 //
 // execution/operator/scan/physical_dummy_scan.hpp
-//
 //
 //
 //===----------------------------------------------------------------------===//
@@ -15,11 +13,10 @@
 namespace duckdb {
 
 class PhysicalDummyScan : public PhysicalOperator {
-  public:
+	public:
 	PhysicalDummyScan(std::vector<TypeId> types) : PhysicalOperator(PhysicalOperatorType::DUMMY_SCAN, types) {
 	}
 
-	void _GetChunk(ClientContext &context, DataChunk &chunk,
-	               PhysicalOperatorState *state) override;
+	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 };
 } // namespace duckdb

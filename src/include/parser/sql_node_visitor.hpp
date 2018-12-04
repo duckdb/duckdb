@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // parser/sql_node_visitor.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -23,7 +21,7 @@ namespace duckdb {
 //! recursively and call the Visit expression corresponding to the expression
 //! visited.
 class SQLNodeVisitor {
-  public:
+	public:
 	virtual ~SQLNodeVisitor(){};
 
 	virtual std::unique_ptr<SQLStatement> Visit(CopyStatement &) {
@@ -65,6 +63,9 @@ class SQLNodeVisitor {
 	virtual std::unique_ptr<SQLStatement> Visit(UpdateStatement &) {
 		return nullptr;
 	};
+
+    virtual void Visit(SelectNode& node) {}
+    virtual void Visit(SetOperationNode& node) {}
 
 	virtual std::unique_ptr<Expression> Visit(AggregateExpression &expr);
 	virtual std::unique_ptr<Expression> Visit(CaseExpression &expr);

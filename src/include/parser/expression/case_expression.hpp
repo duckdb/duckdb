@@ -33,7 +33,7 @@ class CaseExpression : public Expression {
 
 	//! Deserializes a blob back into an CaseExpression
 	static std::unique_ptr<Expression>
-	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);
+	Deserialize(ExpressionDeserializeInfo *info, Deserializer &source);
 
 	void ResolveType() override;
 };

@@ -1,9 +1,7 @@
 //===----------------------------------------------------------------------===//
-//
 //                         DuckDB
 //
 // execution/operator/helper/physical_explain.hpp
-//
 //
 //
 //===----------------------------------------------------------------------===//
@@ -16,17 +14,16 @@ namespace duckdb {
 
 //! PhysicalExplain represents the EXPLAIN operator
 class PhysicalExplain : public PhysicalOperator {
-  public:
+	public:
 	PhysicalExplain(LogicalOperator &op, vector<string> keys, vector<string> values)
 	    : PhysicalOperator(PhysicalOperatorType::EXPLAIN, op.types), keys(keys), values(values) {
-        assert(keys.size() == types.size());
+		assert(keys.size() == types.size());
 	}
 
-	void _GetChunk(ClientContext &context, DataChunk &chunk,
-	               PhysicalOperatorState *state) override;
+	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
-    vector<string> keys;
-    vector<string> values;
+	vector<string> keys;
+	vector<string> values;
 };
 
 } // namespace duckdb

@@ -1,11 +1,9 @@
-
 #include "execution/operator/join/physical_join.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-PhysicalJoin::PhysicalJoin(LogicalOperator &op, PhysicalOperatorType type,
-                           std::vector<JoinCondition> conditions_,
+PhysicalJoin::PhysicalJoin(LogicalOperator &op, PhysicalOperatorType type, std::vector<JoinCondition> conditions_,
                            JoinType join_type)
     : PhysicalOperator(type, op.types), type(join_type) {
 	conditions.resize(conditions_.size());

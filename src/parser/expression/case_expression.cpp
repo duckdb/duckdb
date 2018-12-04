@@ -20,7 +20,7 @@ unique_ptr<Expression> CaseExpression::Copy() {
 }
 
 unique_ptr<Expression>
-CaseExpression::Deserialize(ExpressionDeserializeInformation *info,
+CaseExpression::Deserialize(ExpressionDeserializeInfo *info,
                             Deserializer &source) {
 	if (info->children.size() != 3) {
 		// CASE requires three children

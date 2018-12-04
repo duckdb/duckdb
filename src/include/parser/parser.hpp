@@ -1,19 +1,17 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // parser/parser.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
+#include "parser/sql_statement.hpp"
+
 #include <string>
 #include <vector>
-
-#include "parser/sql_statement.hpp"
 
 namespace postgres {
 struct Node;
@@ -26,7 +24,7 @@ namespace duckdb {
 //! of parsed statements. The parsed statements can then be converted into a
 //! plan and executed.
 class Parser {
-  public:
+	public:
 	Parser();
 
 	//! Attempts to parse a query into a series of SQL statements. Returns
@@ -38,7 +36,7 @@ class Parser {
 	//! The parsed SQL statements from an invocation to ParseQuery.
 	std::vector<std::unique_ptr<SQLStatement>> statements;
 
-  private:
+	private:
 	//! Transform a Postgres parse tree into a set of SQL Statements
 	bool TransformList(postgres::List *tree);
 	//! Transform a single Postgres parse node into a SQL Statement.

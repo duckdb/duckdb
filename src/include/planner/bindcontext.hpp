@@ -24,7 +24,7 @@
 
 namespace duckdb {
 class SubqueryRef;
-class SelectStatement;
+class QueryNode;
 class ColumnRefExpression;
 
 enum class BindingType : uint8_t {
@@ -68,14 +68,14 @@ struct TableBinding : public Binding {
 };
 
 struct SubqueryBinding : public Binding {
-	SelectStatement *subquery;
+	QueryNode *subquery;
 	//! Column names of the subquery
 	std::vector<std::string> names;
 	//! Name -> index for the names
 	std::unordered_map<std::string, size_t> name_map;
 
 	SubqueryBinding(SubqueryRef &subquery_, size_t index);
-	SubqueryBinding(SelectStatement *select_, size_t index);
+	SubqueryBinding(QueryNode *select_, size_t index);
 
 	virtual ~SubqueryBinding() {
 	}

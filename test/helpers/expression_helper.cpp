@@ -1,11 +1,8 @@
-
 #include "expression_helper.hpp"
 
 #include "duckdb.hpp"
-
 #include "parser/parser.hpp"
 #include "parser/statement/select_statement.hpp"
-
 #include "planner/operator/logical_projection.hpp"
 #include "planner/planner.hpp"
 
@@ -14,8 +11,7 @@ using namespace std;
 namespace duckdb {
 
 //! Set column ref types to a specific type (faking binding them)
-static void SetColumnRefTypes(Expression &op,
-                              TypeId colref_type = TypeId::INTEGER) {
+static void SetColumnRefTypes(Expression &op, TypeId colref_type = TypeId::INTEGER) {
 	if (op.type == ExpressionType::COLUMN_REF) {
 		op.return_type = colref_type;
 	}
@@ -29,20 +25,19 @@ unique_ptr<Expression> ParseExpression(string expression) {
 
 	Parser parser;
 	parser.ParseQuery(query.c_str());
-	if (parser.statements.size() == 0 ||
-	    parser.statements[0]->type != StatementType::SELECT) {
+	if (parser.statements.size() == 0 || parser.statements[0]->type != StatementType::SELECT) {
 		return nullptr;
 	}
 	auto &select = *((SelectStatement *)parser.statements[0].get());
 
-	SetColumnRefTypes(*select.select_list[0]);
-	select.select_list[0]->ResolveType();
+    auto &select_list = select.node->GetSelectList();
+	SetColumnRefTypes(*select_list[0]);
+	select_list[0]->ResolveType();
 
-	return move(select.select_list[0]);
+	return move(select_list[0]);
 }
 
-unique_ptr<Expression> ApplyExprRule(Rewriter &rewriter,
-                                     unique_ptr<Expression> root) {
+unique_ptr<Expression> ApplyExprRule(Rewriter &rewriter, unique_ptr<Expression> root) {
 	vector<unique_ptr<Expression>> exprs;
 	exprs.push_back(move(root));
 

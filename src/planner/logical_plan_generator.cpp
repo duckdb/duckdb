@@ -5,6 +5,7 @@
 #include "parser/statement/list.hpp"
 
 #include "parser/tableref/list.hpp"
+#include "parser/query_node/list.hpp"
 
 #include "planner/operator/list.hpp"
 
@@ -155,6 +156,17 @@ transform_aggregates_into_colref(LogicalOperator *root,
 
 unique_ptr<SQLStatement>
 LogicalPlanGenerator::Visit(SelectStatement &statement) {
+    auto expected_column_count = statement.node->GetSelectList().size();
+    statement.node->Accept(this);
+    // prune the root node
+    assert(root);
+    auto prune = make_unique<LogicalPruneColumns>(expected_column_count);
+    prune->AddChild(move(root));
+    root = move(prune);
+    return nullptr;
+}
+
+void LogicalPlanGenerator::Visit(SelectNode &statement) {
 	for (auto &expr : statement.select_list) {
 		AcceptChild(&expr);
 	}
@@ -218,107 +230,6 @@ LogicalPlanGenerator::Visit(SelectStatement &statement) {
 		root = move(projection);
 	}
 
-	// special case handling for set ops
-	if (statement.setop_type != SetopType::NONE) {
-		LogicalPlanGenerator generator_left(context,
-		                                    *statement.setop_left_binder, true);
-		LogicalPlanGenerator generator_right(
-		    context, *statement.setop_right_binder, true);
-
-		statement.setop_left->Accept(&generator_left);
-		auto left_node = move(generator_left.root);
-
-		statement.setop_right->Accept(&generator_right);
-		auto right_node = move(generator_right.root);
-
-		assert(left_node);
-		assert(right_node);
-		// get the projections
-		auto left_select = GetProjection(left_node.get());
-		auto right_select = GetProjection(right_node.get());
-
-		if (!IsProjection(left_select->type) ||
-		    !IsProjection(right_select->type)) {
-			throw Exception(
-			    "Set operations can only apply to projection, set op or group");
-		}
-		if (left_select->expressions.size() !=
-		    right_select->expressions.size()) {
-			throw Exception(
-			    "Set operations can only apply to expressions with the "
-			    "same number of result columns");
-		}
-
-		vector<TypeId> union_types;
-
-		// figure out types of setop result
-		for (size_t i = 0; i < left_select->expressions.size(); i++) {
-			Expression *proj_ele = left_select->expressions[i].get();
-
-			TypeId union_expr_type = TypeId::INVALID;
-			auto left_expr_type = proj_ele->return_type;
-			auto right_expr_type = right_select->expressions[i]->return_type;
-			union_expr_type = left_expr_type;
-			if (right_expr_type > union_expr_type) {
-				union_expr_type = right_expr_type;
-			}
-
-			union_types.push_back(union_expr_type);
-		}
-
-		// project setop children to produce common type
-		// FIXME duplicated code
-		vector<unique_ptr<Expression>> proj_exprs_left;
-		for (size_t i = 0; i < union_types.size(); i++) {
-			auto ref_expr = make_unique<ColumnRefExpression>(
-			    left_select->expressions[i]->return_type, i);
-			auto cast_expr = make_unique_base<Expression, CastExpression>(
-			    union_types[i], move(ref_expr));
-			proj_exprs_left.push_back(move(cast_expr));
-		}
-		auto projection_left =
-		    make_unique<LogicalProjection>(move(proj_exprs_left));
-		projection_left->children.push_back(move(left_node));
-		left_node = move(projection_left);
-
-		vector<unique_ptr<Expression>> proj_exprs_right;
-		for (size_t i = 0; i < union_types.size(); i++) {
-			auto ref_expr = make_unique<ColumnRefExpression>(
-			    right_select->expressions[i]->return_type, i);
-			auto cast_expr = make_unique_base<Expression, CastExpression>(
-			    union_types[i], move(ref_expr));
-			proj_exprs_right.push_back(move(cast_expr));
-		}
-		auto projection_right =
-		    make_unique<LogicalProjection>(move(proj_exprs_right));
-		projection_right->children.push_back(move(right_node));
-		right_node = move(projection_right);
-
-		// create actual logical ops for setops
-		switch (statement.setop_type) {
-		case SetopType::UNION: {
-			auto union_op =
-			    make_unique<LogicalUnion>(move(left_node), move(right_node));
-			root = move(union_op);
-			break;
-		}
-		case SetopType::EXCEPT: {
-			auto except_op =
-			    make_unique<LogicalExcept>(move(left_node), move(right_node));
-			root = move(except_op);
-			break;
-		}
-		case SetopType::INTERSECT: {
-			auto intersect_op = make_unique<LogicalIntersect>(move(left_node),
-			                                                  move(right_node));
-			root = move(intersect_op);
-			break;
-		}
-		default:
-			throw NotImplementedException("Setop type");
-		}
-	}
-
 	if (statement.select_distinct) {
 		auto node = GetProjection(root.get());
 		if (!IsProjection(node->type)) {
@@ -357,14 +268,142 @@ LogicalPlanGenerator::Visit(SelectStatement &statement) {
 		limit->AddChild(move(root));
 		root = move(limit);
 	}
-	if (!is_subquery) {
-		// always prune the root node
-		auto prune =
-		    make_unique<LogicalPruneColumns>(statement.result_column_count);
-		prune->AddChild(move(root));
-		root = move(prune);
+}
+
+void LogicalPlanGenerator::Visit(SetOperationNode &statement) {
+    // Generate the logical plan for the left and right sides of the set operation
+    LogicalPlanGenerator generator_left(context, *statement.setop_left_binder);
+    LogicalPlanGenerator generator_right(context, *statement.setop_right_binder);
+
+    // get the projections
+    auto &left_select_list = statement.left->GetSelectList();
+    auto &right_select_list = statement.right->GetSelectList();
+    if (left_select_list.size() !=
+        right_select_list.size()) {
+        throw Exception(
+            "Set operations can only apply to expressions with the "
+            "same number of result columns");
+    }
+
+    vector<TypeId> union_types;
+    // figure out types of setop result
+    for (size_t i = 0; i < left_select_list.size(); i++) {
+        Expression *proj_ele = left_select_list[i].get();
+
+        TypeId union_expr_type = TypeId::INVALID;
+        auto left_expr_type = proj_ele->return_type;
+        auto right_expr_type = right_select_list[i]->return_type;
+        union_expr_type = left_expr_type;
+        if (right_expr_type > union_expr_type) {
+            union_expr_type = right_expr_type;
+        }
+
+        union_types.push_back(union_expr_type);
+    }
+
+    // project setop children to produce common type
+    // FIXME duplicated code
+    vector<unique_ptr<Expression>> proj_exprs_left;
+    for (size_t i = 0; i < union_types.size(); i++) {
+        auto ref_expr = make_unique<ColumnRefExpression>(
+            left_select_list[i]->return_type, i);
+        auto cast_expr = make_unique_base<Expression, CastExpression>(
+            union_types[i], move(ref_expr));
+        proj_exprs_left.push_back(move(cast_expr));
+    }
+    vector<unique_ptr<Expression>> proj_exprs_right;
+    for (size_t i = 0; i < union_types.size(); i++) {
+        auto ref_expr = make_unique<ColumnRefExpression>(
+            right_select_list[i]->return_type, i);
+        auto cast_expr = make_unique_base<Expression, CastExpression>(
+            union_types[i], move(ref_expr));
+        proj_exprs_right.push_back(move(cast_expr));
+    }
+
+    // now visit the expressions
+    statement.left->Accept(&generator_left);
+    auto left_node = move(generator_left.root);
+
+    statement.right->Accept(&generator_right);
+    auto right_node = move(generator_right.root);
+
+    assert(left_node);
+    assert(right_node);
+
+    // create a dummy projection on both sides to hold the casts
+    auto projection_left =
+        make_unique<LogicalProjection>(move(proj_exprs_left));
+    projection_left->children.push_back(move(left_node));
+    left_node = move(projection_left);
+
+    auto projection_right =
+        make_unique<LogicalProjection>(move(proj_exprs_right));
+    projection_right->children.push_back(move(right_node));
+    right_node = move(projection_right);
+
+    // create actual logical ops for setops
+    switch (statement.setop_type) {
+    case SetOperationType::UNION: {
+        auto union_op =
+            make_unique<LogicalUnion>(move(left_node), move(right_node));
+        root = move(union_op);
+        break;
+    }
+    case SetOperationType::EXCEPT: {
+        auto except_op =
+            make_unique<LogicalExcept>(move(left_node), move(right_node));
+        root = move(except_op);
+        break;
+    }
+    case SetOperationType::INTERSECT: {
+        auto intersect_op = make_unique<LogicalIntersect>(move(left_node),
+                                                            move(right_node));
+        root = move(intersect_op);
+        break;
+    }
+    default:
+        throw NotImplementedException("Set Operation type");
+    }
+
+    // FIXME: duplicate from above
+	if (statement.select_distinct) {
+		auto node = GetProjection(root.get());
+		if (!IsProjection(node->type)) {
+			throw Exception(
+			    "DISTINCT can only apply to projection, union or group");
+		}
+
+		vector<unique_ptr<Expression>> expressions;
+		vector<unique_ptr<Expression>> groups;
+
+		for (size_t i = 0; i < node->expressions.size(); i++) {
+			Expression *proj_ele = node->expressions[i].get();
+			auto group_ref = make_unique_base<Expression, GroupRefExpression>(
+			    proj_ele->return_type, i);
+			group_ref->alias = proj_ele->alias;
+			expressions.push_back(move(group_ref));
+			groups.push_back(make_unique_base<Expression, ColumnRefExpression>(
+			    proj_ele->return_type, i));
+		}
+		// this aggregate is superflous if all grouping columns are in aggr
+		// below
+		auto aggregate = make_unique<LogicalAggregate>(move(expressions));
+		aggregate->groups = move(groups);
+		aggregate->AddChild(move(root));
+		root = move(aggregate);
 	}
-	return nullptr;
+
+	if (statement.HasOrder()) {
+		auto order = make_unique<LogicalOrder>(move(statement.orderby));
+		order->AddChild(move(root));
+		root = move(order);
+	}
+	if (statement.HasLimit()) {
+		auto limit = make_unique<LogicalLimit>(statement.limit.limit,
+		                                       statement.limit.offset);
+		limit->AddChild(move(root));
+		root = move(limit);
+	}
 }
 
 static void cast_children_to_equal_types(Expression &expr,
@@ -455,7 +494,7 @@ unique_ptr<Expression> LogicalPlanGenerator::Visit(OperatorExpression &expr) {
 }
 
 unique_ptr<Expression> LogicalPlanGenerator::Visit(SubqueryExpression &expr) {
-	LogicalPlanGenerator generator(context, *expr.context, true);
+	LogicalPlanGenerator generator(context, *expr.context);
 	expr.subquery->Accept(&generator);
 	if (!generator.root) {
 		throw Exception("Can't plan subquery");
@@ -548,9 +587,9 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
 unique_ptr<TableRef> LogicalPlanGenerator::Visit(SubqueryRef &expr) {
 	// generate the logical plan for the subquery
 	// this happens separately from the current LogicalPlan generation
-	LogicalPlanGenerator generator(context, *expr.context, true);
+	LogicalPlanGenerator generator(context, *expr.context);
 
-	size_t column_count = expr.subquery->select_list.size();
+	size_t column_count = expr.subquery->GetSelectList().size();
 	expr.subquery->Accept(&generator);
 
 	auto index = bind_context.GetBindingIndex(expr.alias);
@@ -660,7 +699,7 @@ unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(CopyStatement &statement) {
 		    move(statement.file_path), move(statement.is_from),
 		    move(statement.delimiter), move(statement.quote),
 		    move(statement.escape));
-		AcceptChild(&statement.select_statement);
+        statement.select_statement->Accept(this);
 		assert(root);
 		copy->AddChild(move(root));
 		root = move(copy);

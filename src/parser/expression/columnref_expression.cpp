@@ -30,7 +30,7 @@ void ColumnRefExpression::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<Expression>
-ColumnRefExpression::Deserialize(ExpressionDeserializeInformation *info,
+ColumnRefExpression::Deserialize(ExpressionDeserializeInfo *info,
                                  Deserializer &source) {
 	auto table_name = source.Read<string>();
 	auto column_name = source.Read<string>();

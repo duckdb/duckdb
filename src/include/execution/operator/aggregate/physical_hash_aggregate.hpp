@@ -1,9 +1,7 @@
 //===----------------------------------------------------------------------===//
-//
 //                         DuckDB
 //
 // execution/operator/aggregate/physical_hash_aggregate.hpp
-//
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,7 +10,6 @@
 
 #include "execution/aggregate_hashtable.hpp"
 #include "execution/operator/aggregate/physical_aggregate.hpp"
-
 #include "storage/data_table.hpp"
 
 namespace duckdb {
@@ -20,28 +17,23 @@ namespace duckdb {
 //! PhysicalHashAggregate is an group-by and aggregate implementation that uses
 //! a hash table to perform the grouping
 class PhysicalHashAggregate : public PhysicalAggregate {
-  public:
+	public:
 	PhysicalHashAggregate(LogicalOperator &op, std::vector<std::unique_ptr<Expression>> expressions);
 	PhysicalHashAggregate(LogicalOperator &op, std::vector<std::unique_ptr<Expression>> expressions,
 	                      std::vector<std::unique_ptr<Expression>> groups);
 
 	void Initialize();
 
-	void _GetChunk(ClientContext &context, DataChunk &chunk,
-	               PhysicalOperatorState *state) override;
+	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
-	std::unique_ptr<PhysicalOperatorState>
-	GetOperatorState(ExpressionExecutor *parent) override;
+	std::unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent) override;
 };
 
-class PhysicalHashAggregateOperatorState
-    : public PhysicalAggregateOperatorState {
-  public:
-	PhysicalHashAggregateOperatorState(PhysicalAggregate *parent,
-	                                   PhysicalOperator *child,
+class PhysicalHashAggregateOperatorState : public PhysicalAggregateOperatorState {
+	public:
+	PhysicalHashAggregateOperatorState(PhysicalAggregate *parent, PhysicalOperator *child,
 	                                   ExpressionExecutor *parent_executor)
-	    : PhysicalAggregateOperatorState(parent, child, parent_executor),
-	      ht_scan_position(0) {
+	    : PhysicalAggregateOperatorState(parent, child, parent_executor), ht_scan_position(0) {
 	}
 
 	//! The current position to scan the HT for output tuples

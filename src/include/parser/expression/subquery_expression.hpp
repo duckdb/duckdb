@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // parser/expression/subquery_expression.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -23,10 +21,8 @@ namespace duckdb {
 
 //! Represents a subquery
 class SubqueryExpression : public Expression {
-  public:
-	SubqueryExpression()
-	    : Expression(ExpressionType::SELECT_SUBQUERY),
-	      subquery_type(SubqueryType::DEFAULT) {
+	public:
+	SubqueryExpression() : Expression(ExpressionType::SELECT_SUBQUERY), subquery_type(SubqueryType::DEFAULT) {
 	}
 
 	std::unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
@@ -41,8 +37,7 @@ class SubqueryExpression : public Expression {
 	//! Serializes an Expression to a stand-alone binary blob
 	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into an ConstantExpression
-	static std::unique_ptr<Expression>
-	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);
+	static std::unique_ptr<Expression> Deserialize(ExpressionDeserializeInfo *info, Deserializer &source);
 
 	bool Equals(const Expression *other) override;
 
@@ -53,7 +48,7 @@ class SubqueryExpression : public Expression {
 	bool is_correlated = false;
 	// FIXME
 
-	std::unique_ptr<SelectStatement> subquery;
+	std::unique_ptr<QueryNode> subquery;
 	SubqueryType subquery_type;
 
 	std::string ToString() const override {

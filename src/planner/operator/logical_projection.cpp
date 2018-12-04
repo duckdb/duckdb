@@ -1,4 +1,3 @@
-
 #include "planner/operator/logical_projection.hpp"
 
 using namespace duckdb;

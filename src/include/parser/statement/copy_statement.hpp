@@ -16,6 +16,7 @@
 
 #include "parser/expression.hpp"
 #include "parser/sql_node_visitor.hpp"
+#include "parser/query_node.hpp"
 
 namespace duckdb {
 
@@ -40,7 +41,7 @@ class CopyStatement : public SQLStatement {
 	std::string schema;
 
 	// The SQL statement used instead of a table when copying data out to a file
-	std::unique_ptr<SQLStatement> select_statement;
+	std::unique_ptr<QueryNode> select_statement;
 
 	std::string file_path;
 

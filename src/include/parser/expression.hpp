@@ -165,7 +165,7 @@ class Expression : public Printable {
 };
 
 //! Expression deserialize information
-struct ExpressionDeserializeInformation {
+struct ExpressionDeserializeInfo {
 	ExpressionType type;
 	TypeId return_type;
 	std::vector<std::unique_ptr<Expression>> children;

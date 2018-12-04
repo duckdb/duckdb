@@ -1,9 +1,7 @@
 //===----------------------------------------------------------------------===//
-//
 //                         DuckDB
 //
 // execution/operator/join/physical_merge_join.hpp
-//
 //
 //
 //===----------------------------------------------------------------------===//
@@ -11,34 +9,28 @@
 #pragma once
 
 #include "common/types/chunk_collection.hpp"
-
 #include "execution/operator/join/physical_join.hpp"
 
 namespace duckdb {
 
 //! PhysicalMergeJoin represents a merge loop join between two tables
 class PhysicalMergeJoin : public PhysicalJoin {
-  public:
+	public:
 	PhysicalMergeJoin(LogicalOperator &op, std::unique_ptr<PhysicalOperator> left,
-	                  std::unique_ptr<PhysicalOperator> right,
-	                  std::vector<JoinCondition> cond, JoinType join_type);
+	                  std::unique_ptr<PhysicalOperator> right, std::vector<JoinCondition> cond, JoinType join_type);
 
-	void _GetChunk(ClientContext &context, DataChunk &chunk,
-	               PhysicalOperatorState *state) override;
+	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
-	std::unique_ptr<PhysicalOperatorState>
-	GetOperatorState(ExpressionExecutor *parent_executor) override;
+	std::unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent_executor) override;
 
 	std::vector<TypeId> join_key_types;
 };
 
 class PhysicalMergeJoinOperatorState : public PhysicalOperatorState {
-  public:
-	PhysicalMergeJoinOperatorState(PhysicalOperator *left,
-	                               PhysicalOperator *right,
-	                               ExpressionExecutor *parent_executor)
-	    : PhysicalOperatorState(left, parent_executor), initialized(false),
-	      left_position(0), right_position(0), right_chunk_index(0) {
+	public:
+	PhysicalMergeJoinOperatorState(PhysicalOperator *left, PhysicalOperator *right, ExpressionExecutor *parent_executor)
+	    : PhysicalOperatorState(left, parent_executor), initialized(false), left_position(0), right_position(0),
+	      right_chunk_index(0) {
 		assert(left && right);
 		left_orders = std::unique_ptr<sel_t[]>(new sel_t[STANDARD_VECTOR_SIZE]);
 	}

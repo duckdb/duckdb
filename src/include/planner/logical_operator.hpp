@@ -1,27 +1,22 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // planner/logical_operator.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include <unordered_set>
-#include <vector>
-
 #include "catalog/catalog.hpp"
-
 #include "common/common.hpp"
 #include "common/printable.hpp"
-
 #include "parser/expression.hpp"
 #include "parser/statement/select_statement.hpp"
-
 #include "planner/logical_operator_visitor.hpp"
+
+#include <unordered_set>
+#include <vector>
 
 namespace duckdb {
 
@@ -33,12 +28,11 @@ LogicalOperator *GetProjection(LogicalOperator *);
 //! LogicalOperator is the base class of the logical operators present in the
 //! logical query tree
 class LogicalOperator : public Printable {
-  public:
+	public:
 	LogicalOperator(LogicalOperatorType type) : type(type) {
 	}
 
-	LogicalOperator(LogicalOperatorType type,
-	                std::vector<std::unique_ptr<Expression>> expressions)
+	LogicalOperator(LogicalOperatorType type, std::vector<std::unique_ptr<Expression>> expressions)
 	    : type(type), expressions(std::move(expressions)) {
 	}
 
@@ -56,7 +50,7 @@ class LogicalOperator : public Printable {
 			return;
 		}
 		// first resolve child types
-		for(auto &child : children) {
+		for (auto &child : children) {
 			child->ResolveOperatorTypes();
 		}
 		// now resolve the types for this operator
@@ -74,8 +68,7 @@ class LogicalOperator : public Printable {
 	}
 
 	void AddChild(std::unique_ptr<LogicalOperator> child) {
-		referenced_tables.insert(child->referenced_tables.begin(),
-		                         child->referenced_tables.end());
+		referenced_tables.insert(child->referenced_tables.begin(), child->referenced_tables.end());
 		children.push_back(move(child));
 	}
 
@@ -93,7 +86,8 @@ class LogicalOperator : public Printable {
 	virtual size_t ExpressionCount();
 	virtual Expression *GetExpression(size_t index);
 	virtual void SetExpression(size_t index, std::unique_ptr<Expression> expr);
-  protected:
+
+	protected:
 	//! Resolve types for this specific operator
 	virtual void ResolveTypes() = 0;
 };

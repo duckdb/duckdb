@@ -1,4 +1,3 @@
-
 #include "parser/parser.hpp"
 
 #include "parser/transformer.hpp"
@@ -8,41 +7,40 @@ using namespace postgres;
 using namespace duckdb;
 using namespace std;
 
-Parser::Parser()  {
+Parser::Parser() {
 }
 
 void Parser::ParseQuery(std::string query) {
 	void *context = nullptr;
 	PgQueryInternalParsetreeAndError result;
-    // first try to parse any PRAGMA statements
-    if (ParsePragma(query)) {
-        // query parsed as pragma statement
-        // if there was no error we were successful
-        goto wrapup;
-    }
+	// first try to parse any PRAGMA statements
+	if (ParsePragma(query)) {
+		// query parsed as pragma statement
+		// if there was no error we were successful
+		goto wrapup;
+	}
 
-    // use the postgres parser to parse the query
-    context = pg_query_parse_init();
-    result = pg_query_parse(query.c_str());
-    // check if it succeeded
-    if (result.error) {
-        throw ParserException(string(result.error->message) + "[" +
-                        to_string(result.error->lineno) + ":" +
-                        to_string(result.error->cursorpos) + "]");
-        goto wrapup;
-    }
+	// use the postgres parser to parse the query
+	context = pg_query_parse_init();
+	result = pg_query_parse(query.c_str());
+	// check if it succeeded
+	if (result.error) {
+		throw ParserException(string(result.error->message) + "[" + to_string(result.error->lineno) + ":" +
+		                      to_string(result.error->cursorpos) + "]");
+		goto wrapup;
+	}
 
-    if (!result.tree) {
-        // empty statement
-        goto wrapup;
-    }
+	if (!result.tree) {
+		// empty statement
+		goto wrapup;
+	}
 
-    // if it succeeded, we transform the Postgres parse tree into a list of
-    // SQLStatements
-    Transformer transformer;
-    if (!transformer.TransformParseTree(result.tree, statements)) {
-        goto wrapup;
-    }
+	// if it succeeded, we transform the Postgres parse tree into a list of
+	// SQLStatements
+	Transformer transformer;
+	if (!transformer.TransformParseTree(result.tree, statements)) {
+		goto wrapup;
+	}
 wrapup:
 	if (context) {
 		pg_query_parse_finish(context);
@@ -79,8 +77,7 @@ bool Parser::ParsePragma(std::string &query) {
 		pos++;
 	// now look for the keyword
 	size_t keyword_start = pos;
-	while (query_cstr[pos] && query_cstr[pos] != ';' &&
-	       query_cstr[pos] != '=' && query_cstr[pos] != '(' &&
+	while (query_cstr[pos] && query_cstr[pos] != ';' && query_cstr[pos] != '=' && query_cstr[pos] != '(' &&
 	       !isspace(query_cstr[pos]))
 		pos++;
 
@@ -108,13 +105,11 @@ bool Parser::ParsePragma(std::string &query) {
 
 	if (keyword == "table_info") {
 		if (type != PragmaType::CALL) {
-			throw ParserException(
-			    "Invalid PRAGMA table_info: expected table name");
+			throw ParserException("Invalid PRAGMA table_info: expected table name");
 		}
 		ParseQuery("SELECT * FROM pragma_" + query.substr(keyword_start));
 	} else {
-		throw ParserException("Unrecognized PRAGMA keyword: %s",
-		                      keyword.c_str());
+		throw ParserException("Unrecognized PRAGMA keyword: %s", keyword.c_str());
 	}
 
 	return true;

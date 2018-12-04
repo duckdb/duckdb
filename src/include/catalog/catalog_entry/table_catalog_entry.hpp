@@ -1,26 +1,22 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // catalog/catalog_entry/table_catalog_entry.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
+#include "catalog/catalog_entry.hpp"
+#include "common/types/statistics.hpp"
+#include "parser/column_definition.hpp"
+#include "parser/constraint.hpp"
+#include "parser/parsed_data.hpp"
+
 #include <string>
 #include <unordered_map>
 #include <vector>
-
-#include "catalog/catalog_entry.hpp"
-#include "parser/column_definition.hpp"
-
-#include "common/types/statistics.hpp"
-
-#include "parser/constraint.hpp"
-#include "parser/parsed_data.hpp"
 
 namespace duckdb {
 
@@ -30,12 +26,10 @@ class SchemaCatalogEntry;
 
 //! A table catalog entry
 class TableCatalogEntry : public CatalogEntry {
-  public:
+	public:
 	//! Create a real TableCatalogEntry and initialize storage for it
-	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
-	                  CreateTableInformation *info);
-	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
-	                  CreateTableInformation *info,
+	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableInformation *info);
+	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableInformation *info,
 	                  std::shared_ptr<DataTable> storage);
 
 	//! The schema the table belongs to
@@ -60,10 +54,10 @@ class TableCatalogEntry : public CatalogEntry {
 	ColumnDefinition &GetColumn(const std::string &name);
 	//! Returns a list of types of the table
 	std::vector<TypeId> GetTypes();
-    //! Returns a list of types of the specified columns of the table
-    std::vector<TypeId> GetTypes(const std::vector<column_t> &column_ids);
+	//! Returns a list of types of the specified columns of the table
+	std::vector<TypeId> GetTypes(const std::vector<column_t> &column_ids);
 
-  private:
+	private:
 	void Initialize(CreateTableInformation *info);
 };
 } // namespace duckdb

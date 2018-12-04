@@ -1,4 +1,3 @@
-
 #include "planner/operator/logical_cross_product.hpp"
 
 using namespace duckdb;

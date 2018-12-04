@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // planner/operator/logical_intersect.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -15,9 +13,8 @@
 namespace duckdb {
 
 class LogicalIntersect : public LogicalOperator {
-  public:
-	LogicalIntersect(std::unique_ptr<LogicalOperator> top_select,
-	                 std::unique_ptr<LogicalOperator> bottom_select)
+	public:
+	LogicalIntersect(std::unique_ptr<LogicalOperator> top_select, std::unique_ptr<LogicalOperator> bottom_select)
 	    : LogicalOperator(LogicalOperatorType::INTERSECT) {
 		AddChild(move(top_select));
 		AddChild(move(bottom_select));
@@ -29,7 +26,8 @@ class LogicalIntersect : public LogicalOperator {
 	std::vector<string> GetNames() override {
 		return children[0]->GetNames();
 	}
-  protected:
+
+	protected:
 	void ResolveTypes() override {
 		types = children[0]->types;
 	}

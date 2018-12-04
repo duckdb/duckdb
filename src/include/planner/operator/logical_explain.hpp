@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // planner/operator/logical_explain.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -15,9 +13,8 @@
 namespace duckdb {
 
 class LogicalExplain : public LogicalOperator {
-  public:
-	LogicalExplain(std::unique_ptr<LogicalOperator> plan)
-	    : LogicalOperator(LogicalOperatorType::EXPLAIN) {
+	public:
+	LogicalExplain(std::unique_ptr<LogicalOperator> plan) : LogicalOperator(LogicalOperatorType::EXPLAIN) {
 		children.push_back(move(plan));
 	}
 
@@ -33,7 +30,8 @@ class LogicalExplain : public LogicalOperator {
 	std::vector<string> GetNames() override {
 		return {"explain_key", "explain_value"};
 	}
-  protected:
+
+	protected:
 	void ResolveTypes() override {
 		types = {TypeId::VARCHAR, TypeId::VARCHAR};
 	}

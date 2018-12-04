@@ -1,9 +1,7 @@
 //===----------------------------------------------------------------------===//
-//
 //                         DuckDB
 //
 // execution/operator/aggregate/physical_aggregate.hpp
-//
 //
 //
 //===----------------------------------------------------------------------===//
@@ -17,16 +15,12 @@ namespace duckdb {
 //! PhysicalAggregate represents a group-by and aggregation operator. Note that
 //! it is an abstract class, its implementation is not defined here.
 class PhysicalAggregate : public PhysicalOperator {
-  public:
-	PhysicalAggregate(
-        LogicalOperator &op,
-	    std::vector<std::unique_ptr<Expression>> select_list,
-	    PhysicalOperatorType type = PhysicalOperatorType::BASE_GROUP_BY);
-	PhysicalAggregate(
-        LogicalOperator &op,
-	    std::vector<std::unique_ptr<Expression>> select_list,
-	    std::vector<std::unique_ptr<Expression>> groups,
-	    PhysicalOperatorType type = PhysicalOperatorType::BASE_GROUP_BY);
+	public:
+	PhysicalAggregate(LogicalOperator &op, std::vector<std::unique_ptr<Expression>> select_list,
+	                  PhysicalOperatorType type = PhysicalOperatorType::BASE_GROUP_BY);
+	PhysicalAggregate(LogicalOperator &op, std::vector<std::unique_ptr<Expression>> select_list,
+	                  std::vector<std::unique_ptr<Expression>> groups,
+	                  PhysicalOperatorType type = PhysicalOperatorType::BASE_GROUP_BY);
 
 	void Initialize();
 
@@ -42,10 +36,9 @@ class PhysicalAggregate : public PhysicalOperator {
 
 //! The operator state of the aggregate
 class PhysicalAggregateOperatorState : public PhysicalOperatorState {
-  public:
-	PhysicalAggregateOperatorState(
-	    PhysicalAggregate *parent, PhysicalOperator *child = nullptr,
-	    ExpressionExecutor *parent_executor = nullptr);
+	public:
+	PhysicalAggregateOperatorState(PhysicalAggregate *parent, PhysicalOperator *child = nullptr,
+	                               ExpressionExecutor *parent_executor = nullptr);
 
 	//! Aggregate values, used only for aggregates without GROUP BY
 	std::vector<Value> aggregates;

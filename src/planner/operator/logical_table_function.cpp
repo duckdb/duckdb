@@ -1,5 +1,3 @@
-
-
 #include "planner/operator/logical_table_function.hpp"
 
 using namespace duckdb;

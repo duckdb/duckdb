@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // planner/operator/logical_create.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -15,11 +13,9 @@
 namespace duckdb {
 
 class LogicalCreate : public LogicalOperator {
-  public:
-	LogicalCreate(SchemaCatalogEntry *schema,
-	              std::unique_ptr<CreateTableInformation> info)
-	    : LogicalOperator(LogicalOperatorType::CREATE), schema(schema),
-	      info(move(info)) {
+	public:
+	LogicalCreate(SchemaCatalogEntry *schema, std::unique_ptr<CreateTableInformation> info)
+	    : LogicalOperator(LogicalOperatorType::CREATE), schema(schema), info(move(info)) {
 	}
 
 	void Accept(LogicalOperatorVisitor *v) override {
@@ -33,7 +29,8 @@ class LogicalCreate : public LogicalOperator {
 	SchemaCatalogEntry *schema;
 	//! Create Table information
 	std::unique_ptr<CreateTableInformation> info;
-  protected:
+
+	protected:
 	void ResolveTypes() override {
 		types.push_back(TypeId::BIGINT);
 	}

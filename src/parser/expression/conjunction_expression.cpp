@@ -15,7 +15,7 @@ unique_ptr<Expression> ConjunctionExpression::Copy() {
 }
 
 unique_ptr<Expression>
-ConjunctionExpression::Deserialize(ExpressionDeserializeInformation *info,
+ConjunctionExpression::Deserialize(ExpressionDeserializeInfo *info,
                                    Deserializer &source) {
 	if (info->children.size() != 2) {
 		throw SerializationException("Conjunction needs two children!");

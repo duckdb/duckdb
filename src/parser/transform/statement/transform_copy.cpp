@@ -40,7 +40,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 			result->schema = table.schema_name;
 		} else {
 			// copy table into file, generate SELECT * FROM table;
-			auto statement = make_unique<SelectStatement>();
+			auto statement = make_unique<SelectNode>();
 			statement->from_table = move(ref);
 			if (stmt->attlist) {
 				for (size_t i = 0; i < result->select_list.size(); i++)
@@ -53,7 +53,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 			result->select_statement = move(statement);
 		}
 	} else {
-		result->select_statement = TransformSelect(stmt->query);
+		result->select_statement = TransformSelectNode((SelectStmt*)stmt->query);
 	}
 
 	// Handle options

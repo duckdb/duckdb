@@ -1,25 +1,23 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // planner/operator/logical_order.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
 #include "planner/logical_operator.hpp"
+#include "parser/query_node/select_node.hpp"
 
 namespace duckdb {
 
 //! LogicalOrder represents an ORDER BY clause, sorting the data
 class LogicalOrder : public LogicalOperator {
-  public:
+	public:
 	LogicalOrder(OrderByDescription description)
-	    : LogicalOperator(LogicalOperatorType::ORDER_BY),
-	      description(std::move(description)) {
+	    : LogicalOperator(LogicalOperatorType::ORDER_BY), description(std::move(description)) {
 	}
 
 	void Accept(LogicalOperatorVisitor *v) override {
@@ -30,7 +28,8 @@ class LogicalOrder : public LogicalOperator {
 	}
 
 	OrderByDescription description;
-  protected:
+
+	protected:
 	void ResolveTypes() override {
 		types = children[0]->types;
 	}

@@ -13,15 +13,16 @@ using namespace std;
 SubqueryBinding::SubqueryBinding(SubqueryRef &subquery_, size_t index)
     : Binding(BindingType::SUBQUERY, index),
       subquery(subquery_.subquery.get()) {
+    auto &select_list = subquery->GetSelectList();
 	if (subquery_.column_name_alias.size() > 0) {
 		assert(subquery_.column_name_alias.size() ==
-		       subquery->select_list.size());
+		       select_list.size());
 		for (auto &name : subquery_.column_name_alias) {
 			name_map[name] = names.size();
 			names.push_back(name);
 		}
 	} else {
-		for (auto &entry : subquery->select_list) {
+		for (auto &entry : select_list) {
 			auto name = entry->GetName();
 			name_map[name] = names.size();
 			names.push_back(name);
@@ -29,10 +30,11 @@ SubqueryBinding::SubqueryBinding(SubqueryRef &subquery_, size_t index)
 	}
 }
 
-SubqueryBinding::SubqueryBinding(SelectStatement *select_, size_t index)
+SubqueryBinding::SubqueryBinding(QueryNode *select_, size_t index)
     : Binding(BindingType::SUBQUERY, index), subquery(select_) {
 	// FIXME: double-check this
-	for (auto &entry : subquery->select_list) {
+    auto &select_list = subquery->GetSelectList();
+	for (auto &entry : select_list) {
 		auto name = entry->GetName();
 		name_map[name] = names.size();
 		names.push_back(name);
@@ -184,9 +186,9 @@ void BindContext::BindColumn(ColumnRefExpression &expr, size_t depth) {
 		expr.binding.table_index = subquery.index;
 		expr.binding.column_index = column_entry->second;
 		expr.depth = depth;
-		assert(column_entry->second < subquery.subquery->select_list.size());
-		expr.return_type =
-		    subquery.subquery->select_list[column_entry->second]->return_type;
+        auto &select_list = subquery.subquery->GetSelectList();
+		assert(column_entry->second < select_list.size());
+		expr.return_type = select_list[column_entry->second]->return_type;
 		break;
 	}
 	case BindingType::TABLE_FUNCTION: {

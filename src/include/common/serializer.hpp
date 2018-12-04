@@ -82,6 +82,20 @@ class Serializer {
 	BinaryData GetData() {
 		return std::move(blob);
 	}
+    
+    template <class T> void WriteList(vector<unique_ptr<T>>& list) {
+        Write<uint32_t>(list.size());
+        for (auto &child : list) {
+            child->Serialize(*this);
+        }
+    }
+
+    template<class T> void WriteOptional(unique_ptr<T>& element) {
+        Write<bool>(element ? true : false);
+        if (element) {
+            element->Serialize(*this);
+        }
+    }
 
   private:
 	size_t maximum_size;
@@ -120,6 +134,22 @@ class Deserializer {
 		ptr += data_size;
 		return dataptr;
 	}
+
+    template <class T> void ReadList(vector<unique_ptr<T>>& list) {
+        auto select_count = Read<uint32_t>();
+        for(size_t i = 0; i < select_count; i++) {
+            auto child = T::Deserialize(*this);
+            list.push_back(move(child));
+        }
+    }
+
+    template<class T> unique_ptr<T> ReadOptional() {
+        auto has_entry = Read<bool>();
+        if (has_entry) {
+            return T::Deserialize(*this);
+        }
+        return nullptr;
+    }
 
   private:
 	uint8_t *ptr;

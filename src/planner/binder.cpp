@@ -5,6 +5,7 @@
 #include "parser/expression/list.hpp"
 #include "parser/statement/list.hpp"
 #include "parser/tableref/list.hpp"
+#include "parser/query_node/list.hpp"
 
 #include "main/client_context.hpp"
 #include "main/database.hpp"
@@ -21,7 +22,12 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 	for (auto &cte_it : statement.cte_map) {
 		AddCTE(cte_it.first, cte_it.second.get());
 	}
+    // now visit the root node of the select statement
+    statement.node->Accept(this);
+    return nullptr;
+}
 
+void Binder::Visit(SelectNode &statement) {
 	if (statement.from_table) {
 		AcceptChild(&statement.from_table);
 	}
@@ -45,31 +51,6 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 		} else {
 			// regular statement, add it to the list
 			new_select_list.push_back(move(select_element));
-		}
-	}
-
-	// the set ops have an independent binder
-	if (statement.setop_type != SetopType::NONE) {
-		assert(statement.setop_left);
-		assert(statement.setop_right);
-
-		Binder binder_left(context, this);
-		Binder binder_right(context, this);
-
-		statement.setop_left->Accept(&binder_left);
-		statement.setop_left_binder = move(binder_left.bind_context);
-
-		statement.setop_right->Accept(&binder_right);
-		statement.setop_right_binder = move(binder_right.bind_context);
-
-		// FIXME: this seems quite ugly
-		// create a new select list for the dummy statement so code below works
-		// correctly
-		for (size_t i = 0; i < statement.setop_left->select_list.size(); i++) {
-			auto expr = make_unique<ColumnRefExpression>(
-			    statement.setop_left->select_list[i]->return_type, i);
-			expr->alias = statement.setop_left->select_list[i]->GetName();
-			new_select_list.push_back(move(expr));
 		}
 	}
 
@@ -257,9 +238,49 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 		AcceptChild(&statement.groupby.having);
 		statement.groupby.having->ResolveType();
 	}
-
-	return nullptr;
 }
+
+void Binder::Visit(SetOperationNode &statement) {
+    // first recursively visit the set operations
+    // both the left and right sides have an independent BindContext and Binder
+    assert(statement.left);
+    assert(statement.right);
+
+    Binder binder_left(context, this);
+    Binder binder_right(context, this);
+
+    statement.left->Accept(&binder_left);
+    statement.setop_left_binder = move(binder_left.bind_context);
+
+    statement.right->Accept(&binder_right);
+    statement.setop_right_binder = move(binder_right.bind_context);
+
+    // now handle the ORDER BY
+    // get the selection list from one of the children, since a SetOp does not have its own selection list
+    auto &select_list = statement.GetSelectList();
+	for (auto &order : statement.orderby.orders) {
+		AcceptChild(&order.expression);
+		if (order.expression->type == ExpressionType::COLUMN_REF) {
+			auto selection_ref = (ColumnRefExpression*) order.expression.get();
+			if (selection_ref->column_name.empty()) {
+				// this ORDER BY expression refers to a column in the select
+				// clause by index e.g. ORDER BY 1 assign the type of the SELECT
+				// clause
+				if (selection_ref->index < 1 ||
+				    selection_ref->index > select_list.size()) {
+					throw BinderException(
+					    "ORDER term out of range - should be between 1 and %d",
+					    (int)select_list.size());
+				}
+				selection_ref->return_type = select_list[selection_ref->index - 1]->return_type;
+                selection_ref->reference = select_list[selection_ref->index - 1].get();
+                selection_ref->index = selection_ref->index - 1;
+			}
+		}
+		order.expression->ResolveType();
+	}
+}
+
 
 unique_ptr<SQLStatement> Binder::Visit(InsertStatement &statement) {
 	if (statement.select_statement) {
@@ -276,7 +297,7 @@ unique_ptr<SQLStatement> Binder::Visit(InsertStatement &statement) {
 
 unique_ptr<SQLStatement> Binder::Visit(CopyStatement &stmt) {
 	if (stmt.select_statement) {
-		AcceptChild(&stmt.select_statement);
+		stmt.select_statement->Accept(this);
 	}
 	return nullptr;
 }
@@ -391,21 +412,22 @@ unique_ptr<Expression> Binder::Visit(SubqueryExpression &expr) {
 	binder.CTE_bindings = CTE_bindings;
 
 	expr.subquery->Accept(&binder);
-	if (expr.subquery->select_list.size() < 1) {
+    auto &select_list = expr.subquery->GetSelectList();
+	if (select_list.size() < 1) {
 		throw BinderException("Subquery has no projections");
 	}
-	if (expr.subquery->select_list[0]->return_type == TypeId::INVALID) {
+	if (select_list[0]->return_type == TypeId::INVALID) {
 		throw BinderException("Subquery has no type");
 	}
 	if (expr.subquery_type == SubqueryType::IN &&
-	    expr.subquery->select_list.size() != 1) {
+	    select_list.size() != 1) {
 		throw BinderException("Subquery returns %zu columns - expected 1",
-		                      expr.subquery->select_list.size());
+		                      select_list.size());
 	}
 
 	expr.return_type = expr.subquery_type == SubqueryType::EXISTS
 	                       ? TypeId::BOOLEAN
-	                       : expr.subquery->select_list[0]->return_type;
+	                       : select_list[0]->return_type;
 	expr.context = move(binder.bind_context);
 	expr.is_correlated = expr.context->GetMaxDepth() > 0;
 	return nullptr;
@@ -461,7 +483,7 @@ unique_ptr<TableRef> Binder::Visit(TableFunction &expr) {
 	return nullptr;
 }
 
-void Binder::AddCTE(const std::string &name, SelectStatement *cte) {
+void Binder::AddCTE(const std::string &name, QueryNode *cte) {
 	assert(cte);
 	assert(!name.empty());
 	auto entry = CTE_bindings.find(name);
@@ -470,7 +492,8 @@ void Binder::AddCTE(const std::string &name, SelectStatement *cte) {
 	}
 	CTE_bindings[name] = cte;
 }
-unique_ptr<SelectStatement> Binder::FindCTE(const std::string &name) {
+
+unique_ptr<QueryNode> Binder::FindCTE(const std::string &name) {
 	auto entry = CTE_bindings.find(name);
 	if (entry == CTE_bindings.end()) {
 		if (parent) {

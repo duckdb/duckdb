@@ -1,11 +1,9 @@
-
 #include "planner/operator/logical_filter.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-LogicalFilter::LogicalFilter(unique_ptr<Expression> expression)
-    : LogicalOperator(LogicalOperatorType::FILTER) {
+LogicalFilter::LogicalFilter(unique_ptr<Expression> expression) : LogicalOperator(LogicalOperatorType::FILTER) {
 	expressions.push_back(move(expression));
 	SplitPredicates();
 }

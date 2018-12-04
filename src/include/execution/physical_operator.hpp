@@ -1,25 +1,20 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // execution/physical_operator.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
 #include "catalog/catalog.hpp"
-
 #include "common/common.hpp"
 #include "common/printable.hpp"
 #include "common/types/data_chunk.hpp"
-
-#include "planner/logical_operator.hpp"
-
 #include "parser/expression.hpp"
 #include "parser/statement/select_statement.hpp"
+#include "planner/logical_operator.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -31,7 +26,7 @@ class PhysicalOperator;
 //! call the GetChunk function and get new batches of data everytime until the
 //! data source is exhausted.
 class PhysicalOperatorState {
-  public:
+	public:
 	PhysicalOperatorState(PhysicalOperator *child, ExpressionExecutor *parent);
 	virtual ~PhysicalOperatorState() {
 	}
@@ -57,7 +52,7 @@ class PhysicalOperatorState {
    operators subclass this state and add different properties).
 */
 class PhysicalOperator : public Printable {
-  public:
+	public:
 	PhysicalOperator(PhysicalOperatorType type, std::vector<TypeId> types) : type(type), types(types) {
 	}
 
@@ -68,7 +63,7 @@ class PhysicalOperator : public Printable {
 	std::string ToString() const override;
 
 	//! Return a vector of the types that will be returned by this operator
-	std::vector<TypeId>& GetTypes() {
+	std::vector<TypeId> &GetTypes() {
 		return types;
 	}
 	//! Initialize a given chunk to the types that will be returned by this
@@ -80,17 +75,14 @@ class PhysicalOperator : public Printable {
 	}
 	//! Retrieves a chunk from this operator and stores it in the chunk
 	//! variable.
-	virtual void _GetChunk(ClientContext &context, DataChunk &chunk,
-	                       PhysicalOperatorState *state) = 0;
+	virtual void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) = 0;
 
-	void GetChunk(ClientContext &context, DataChunk &chunk,
-	              PhysicalOperatorState *state);
+	void GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state);
 
 	//! Create a new empty instance of the operator state
-	virtual std::unique_ptr<PhysicalOperatorState>
-	GetOperatorState(ExpressionExecutor *parent) {
-	    return make_unique<PhysicalOperatorState>(children.size() == 0 ? nullptr : children[0].get(), parent);
-    }
+	virtual std::unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent) {
+		return make_unique<PhysicalOperatorState>(children.size() == 0 ? nullptr : children[0].get(), parent);
+	}
 
 	virtual std::string ExtraRenderInformation() {
 		return "";

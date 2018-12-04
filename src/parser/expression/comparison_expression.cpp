@@ -16,7 +16,7 @@ unique_ptr<Expression> ComparisonExpression::Copy() {
 }
 
 unique_ptr<Expression>
-ComparisonExpression::Deserialize(ExpressionDeserializeInformation *info,
+ComparisonExpression::Deserialize(ExpressionDeserializeInfo *info,
                                   Deserializer &source) {
 	if (info->children.size() != 2) {
 		throw SerializationException("Comparison needs two children!");

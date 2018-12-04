@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // planner/operator/logical_table_function.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -16,13 +14,11 @@ namespace duckdb {
 
 //! LogicalTableFunction represents a call to a table-producing function
 class LogicalTableFunction : public LogicalOperator {
-  public:
-	LogicalTableFunction(TableFunctionCatalogEntry *function,
-	                     size_t table_index,
+	public:
+	LogicalTableFunction(TableFunctionCatalogEntry *function, size_t table_index,
 	                     std::unique_ptr<Expression> function_call)
-	    : LogicalOperator(LogicalOperatorType::TABLE_FUNCTION),
-	      function(function), function_call(std::move(function_call)),
-	      table_index(table_index) {
+	    : LogicalOperator(LogicalOperatorType::TABLE_FUNCTION), function(function),
+	      function_call(std::move(function_call)), table_index(table_index) {
 		referenced_tables.insert(table_index);
 	}
 
@@ -37,7 +33,8 @@ class LogicalTableFunction : public LogicalOperator {
 		v->Visit(*this);
 	}
 	std::vector<string> GetNames() override;
-  protected:
+
+	protected:
 	void ResolveTypes() override;
 };
 } // namespace duckdb

@@ -1,19 +1,15 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // parser/parsed_data.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
 #include "common/common.hpp"
-
 #include "function/function.hpp"
-
 #include "parser/column_definition.hpp"
 #include "parser/constraint.hpp"
 
@@ -33,8 +29,7 @@ struct CreateTableInformation {
 
 	CreateTableInformation() : schema(DEFAULT_SCHEMA), if_not_exists(false) {
 	}
-	CreateTableInformation(std::string schema, std::string table,
-	                       std::vector<ColumnDefinition> columns)
+	CreateTableInformation(std::string schema, std::string table, std::vector<ColumnDefinition> columns)
 	    : schema(schema), table(table), columns(columns), if_not_exists(false) {
 	}
 };
@@ -50,8 +45,7 @@ struct DropTableInformation {
 	//! are any)
 	bool cascade = false;
 
-	DropTableInformation()
-	    : schema(DEFAULT_SCHEMA), if_exists(false), cascade(false) {
+	DropTableInformation() : schema(DEFAULT_SCHEMA), if_exists(false), cascade(false) {
 	}
 };
 
@@ -73,10 +67,8 @@ struct AlterTableInformation : public AlterInformation {
 	//! Table name to alter to
 	std::string table;
 
-	AlterTableInformation(AlterTableType type, std::string schema,
-	                      std::string table)
-	    : AlterInformation(AlterType::ALTER_TABLE), alter_table_type(type),
-	      schema(schema), table(table) {
+	AlterTableInformation(AlterTableType type, std::string schema, std::string table)
+	    : AlterInformation(AlterType::ALTER_TABLE), alter_table_type(type), schema(schema), table(table) {
 	}
 };
 
@@ -86,10 +78,8 @@ struct RenameColumnInformation : public AlterTableInformation {
 	//! Column new name
 	std::string new_name;
 
-	RenameColumnInformation(std::string schema, std::string table,
-	                        std::string name, std::string new_name)
-	    : AlterTableInformation(AlterTableType::RENAME_COLUMN, schema, table),
-	      name(name), new_name(new_name) {
+	RenameColumnInformation(std::string schema, std::string table, std::string name, std::string new_name)
+	    : AlterTableInformation(AlterTableType::RENAME_COLUMN, schema, table), name(name), new_name(new_name) {
 	}
 };
 
@@ -134,8 +124,7 @@ struct CreateTableFunctionInformation {
 	//! Final function pointer
 	table_function_final_t final;
 
-	CreateTableFunctionInformation()
-	    : schema(DEFAULT_SCHEMA), or_replace(false) {
+	CreateTableFunctionInformation() : schema(DEFAULT_SCHEMA), or_replace(false) {
 	}
 };
 
@@ -150,8 +139,7 @@ struct DropTableFunctionInformation {
 	//! are any)
 	bool cascade = false;
 
-	DropTableFunctionInformation()
-	    : schema(DEFAULT_SCHEMA), if_exists(false), cascade(false) {
+	DropTableFunctionInformation() : schema(DEFAULT_SCHEMA), if_exists(false), cascade(false) {
 	}
 };
 
@@ -170,8 +158,7 @@ struct CreateScalarFunctionInformation {
 	//! arguments
 	get_return_type_function_t return_type;
 
-	CreateScalarFunctionInformation()
-	    : schema(DEFAULT_SCHEMA), or_replace(false) {
+	CreateScalarFunctionInformation() : schema(DEFAULT_SCHEMA), or_replace(false) {
 	}
 };
 
@@ -191,15 +178,14 @@ struct CreateIndexInformation {
 };
 
 struct DropIndexInformation {
-    //! Schema name
-    std::string schema;
+	//! Schema name
+	std::string schema;
 	//! Index function name to drop
 	std::string name;
 	//! Ignore if the entry does not exist instead of failing
 	bool if_exists = false;
 
-	DropIndexInformation()
-			: schema(DEFAULT_SCHEMA),if_exists(false){
+	DropIndexInformation() : schema(DEFAULT_SCHEMA), if_exists(false) {
 	}
 };
 

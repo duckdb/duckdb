@@ -1,16 +1,14 @@
-
 #include "execution/operator/helper/physical_prune_columns.hpp"
+
 #include "execution/expression_executor.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-void PhysicalPruneColumns::_GetChunk(ClientContext &context, DataChunk &chunk,
-                                     PhysicalOperatorState *state_) {
+void PhysicalPruneColumns::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOperatorState *>(state_);
 
-	children[0]->GetChunk(context, state->child_chunk,
-	                      state->child_state.get());
+	children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 	if (state->child_chunk.size() == 0) {
 		return;
 	}

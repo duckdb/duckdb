@@ -26,10 +26,10 @@ void SubqueryExpression::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<Expression>
-SubqueryExpression::Deserialize(ExpressionDeserializeInformation *info,
+SubqueryExpression::Deserialize(ExpressionDeserializeInfo *info,
                                 Deserializer &source) {
 	auto subquery_type = source.Read<SubqueryType>();
-	auto subquery = SelectStatement::Deserialize(source);
+	auto subquery = QueryNode::Deserialize(source);
 	if (info->children.size() > 0) {
 		throw SerializationException("Subquery cannot have children!");
 	}

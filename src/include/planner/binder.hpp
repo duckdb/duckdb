@@ -43,6 +43,9 @@ class Binder : public SQLNodeVisitor {
 	std::unique_ptr<SQLStatement> Visit(CreateTableStatement &stmt);
 	std::unique_ptr<SQLStatement> Visit(CreateIndexStatement &stmt);
 
+    void Visit(SelectNode &node);
+    void Visit(SetOperationNode &node);
+
 	std::unique_ptr<Constraint> Visit(CheckConstraint &constraint);
 
 	std::unique_ptr<Expression> Visit(ColumnRefExpression &expr);
@@ -55,13 +58,13 @@ class Binder : public SQLNodeVisitor {
 	std::unique_ptr<TableRef> Visit(SubqueryRef &expr);
 	std::unique_ptr<TableRef> Visit(TableFunction &expr);
 
-	void AddCTE(const std::string &name, SelectStatement *cte);
-	std::unique_ptr<SelectStatement> FindCTE(const std::string &name);
+	void AddCTE(const std::string &name, QueryNode *cte);
+	std::unique_ptr<QueryNode> FindCTE(const std::string &name);
 
 	//! The BindContext created and used by the Binder.
 	std::unique_ptr<BindContext> bind_context;
 
-	std::unordered_map<std::string, SelectStatement *> CTE_bindings;
+	std::unordered_map<std::string, QueryNode *> CTE_bindings;
 
   private:
 	ClientContext &context;

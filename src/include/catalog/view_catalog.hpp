@@ -19,6 +19,7 @@
 
 #include "parser/constraint.hpp"
 #include "parser/parsed_data.hpp"
+#include "parser/query_node.hpp"
 
 namespace duckdb {
 
@@ -35,7 +36,7 @@ class ViewCatalogEntry : public CatalogEntry {
 	//! The schema the table belongs to
 	SchemaCatalogEntry *schema;
 	//! The statement that the view should execute
-	std::unique_ptr<SelectStatement> op;
+	std::unique_ptr<QueryNode> op;
 
 	//! Returns a list of types of the view
 	std::vector<TypeId> GetTypes();

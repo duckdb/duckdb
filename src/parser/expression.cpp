@@ -105,7 +105,7 @@ void Expression::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<Expression> Expression::Deserialize(Deserializer &source) {
-	ExpressionDeserializeInformation info;
+	ExpressionDeserializeInfo info;
 	auto expression_class = source.Read<ExpressionClass>();
 	info.type = source.Read<ExpressionType>();
 	info.return_type = source.Read<TypeId>();

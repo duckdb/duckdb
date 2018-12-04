@@ -81,7 +81,7 @@ class ColumnRefExpression : public Expression {
 	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into an ConstantExpression
 	static std::unique_ptr<Expression>
-	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);
+	Deserialize(ExpressionDeserializeInfo *info, Deserializer &source);
 
 	void ResolveType() override;
 

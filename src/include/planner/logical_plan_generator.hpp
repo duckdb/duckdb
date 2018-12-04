@@ -27,9 +27,8 @@ class ClientContext;
 //! statement
 class LogicalPlanGenerator : public SQLNodeVisitor {
   public:
-	LogicalPlanGenerator(ClientContext &context, BindContext &bind_context,
-	                     bool is_subquery)
-	    : is_subquery(is_subquery), require_row_id(false), context(context),
+	LogicalPlanGenerator(ClientContext &context, BindContext &bind_context)
+	    : require_row_id(false), context(context),
 	      bind_context(bind_context) {
 	}
 
@@ -40,6 +39,9 @@ class LogicalPlanGenerator : public SQLNodeVisitor {
 	std::unique_ptr<SQLStatement> Visit(UpdateStatement &statement);
 	std::unique_ptr<SQLStatement> Visit(CreateTableStatement &statement);
 	std::unique_ptr<SQLStatement> Visit(CreateIndexStatement &statement);
+
+	void Visit(SelectNode &statement);
+    void Visit(SetOperationNode &statement);
 
 	std::unique_ptr<Expression> Visit(AggregateExpression &expr);
 	std::unique_ptr<Expression> Visit(ComparisonExpression &expr);
@@ -62,8 +64,6 @@ class LogicalPlanGenerator : public SQLNodeVisitor {
 	std::unique_ptr<LogicalOperator> root;
 
   private:
-	//! Whether or not we are dealing with a subquery
-	bool is_subquery;
 	//! Whether or not we require row ids to be projected
 	bool require_row_id = false;
 	//! A reference to the catalog

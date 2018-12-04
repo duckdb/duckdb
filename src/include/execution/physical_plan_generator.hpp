@@ -1,25 +1,21 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // execution/physical_plan_generator.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include <vector>
-
 #include "common/common.hpp"
 #include "common/printable.hpp"
-
 #include "execution/physical_operator.hpp"
-
 #include "planner/bindcontext.hpp"
 #include "planner/logical_operator.hpp"
 #include "planner/logical_operator_visitor.hpp"
+
+#include <vector>
 
 namespace duckdb {
 class ClientContext;
@@ -27,9 +23,8 @@ class ClientContext;
 //! The physical plan generator generates a physical execution plan from a
 //! logical query plan
 class PhysicalPlanGenerator : public LogicalOperatorVisitor {
-  public:
-	PhysicalPlanGenerator(ClientContext &context,
-	                      PhysicalPlanGenerator *parent = nullptr)
+	public:
+	PhysicalPlanGenerator(ClientContext &context, PhysicalPlanGenerator *parent = nullptr)
 	    : parent(parent), context(context) {
 	}
 	using LogicalOperatorVisitor::Visit;
@@ -66,7 +61,8 @@ class PhysicalPlanGenerator : public LogicalOperatorVisitor {
 	std::unique_ptr<PhysicalOperator> plan;
 
 	PhysicalPlanGenerator *parent;
-  private:
+
+	private:
 	ClientContext &context;
 };
 } // namespace duckdb

@@ -14,7 +14,7 @@ unique_ptr<Expression> DefaultExpression::Copy() {
 }
 
 unique_ptr<Expression>
-DefaultExpression::Deserialize(ExpressionDeserializeInformation *info,
+DefaultExpression::Deserialize(ExpressionDeserializeInfo *info,
                                Deserializer &source) {
 	if (info->children.size() > 0) {
 		throw SerializationException("Default cannot have children!");

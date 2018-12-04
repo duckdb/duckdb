@@ -1,4 +1,3 @@
-
 #include "execution/physical_operator.hpp"
 
 #include "main/client_context.hpp"
@@ -23,8 +22,7 @@ string PhysicalOperator::ToString() const {
 	return result;
 }
 
-PhysicalOperatorState::PhysicalOperatorState(
-    PhysicalOperator *child, ExpressionExecutor *parent_executor)
+PhysicalOperatorState::PhysicalOperatorState(PhysicalOperator *child, ExpressionExecutor *parent_executor)
     : finished(false), parent(parent_executor) {
 	if (child) {
 		child->InitializeChunk(child_chunk);
@@ -32,12 +30,11 @@ PhysicalOperatorState::PhysicalOperatorState(
 	}
 }
 
-void PhysicalOperator::GetChunk(ClientContext &context, DataChunk &chunk,
-                                PhysicalOperatorState *state) {
+void PhysicalOperator::GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	if (context.interrupted) {
 		throw InterruptException();
 	}
-    // finished with this operator
+	// finished with this operator
 	chunk.Reset();
 	if (state->finished) {
 		return;

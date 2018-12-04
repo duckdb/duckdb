@@ -45,7 +45,7 @@ void Transformer::TransformCTE(WithClause *de_with_clause,
 			throw Exception("A CTE needs a SELECT");
 		}
 
-		auto cte_select = TransformSelect(cte->ctequery);
+		auto cte_select = TransformSelectNode((SelectStmt*)cte->ctequery);
 		if (!cte_select) {
 			throw Exception("A CTE needs a SELECT");
 		}

@@ -1,23 +1,20 @@
-
 #include "execution/operator/filter/physical_filter.hpp"
+
 #include "execution/expression_executor.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-void PhysicalFilter::_GetChunk(ClientContext &context, DataChunk &chunk,
-                               PhysicalOperatorState *state_) {
+void PhysicalFilter::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOperatorState *>(state_);
 	do {
-		children[0]->GetChunk(context, state->child_chunk,
-		                      state->child_state.get());
+		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 		if (state->child_chunk.size() == 0) {
 			return;
 		}
 
 		if (expressions.size() == 0) {
-			throw Exception(
-			    "Attempting to execute a filter without expressions");
+			throw Exception("Attempting to execute a filter without expressions");
 		}
 
 		Vector result(TypeId::BOOLEAN, true, false);

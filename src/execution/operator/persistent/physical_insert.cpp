@@ -1,18 +1,15 @@
 #include "execution/operator/persistent/physical_insert.hpp"
-#include "execution/expression_executor.hpp"
 
 #include "common/types/chunk_collection.hpp"
 #include "common/vector_operations/vector_operations.hpp"
-
+#include "execution/expression_executor.hpp"
 #include "main/client_context.hpp"
-
 #include "storage/data_table.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk,
-                               PhysicalOperatorState *state) {
+void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	int64_t insert_count = 0;
 	if (children.size() > 0) {
 		// insert from SELECT statement
@@ -22,8 +19,7 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk,
 		// infinite loop instead, buffer all the entries
 		ChunkCollection collection;
 		while (true) {
-			children[0]->GetChunk(context, state->child_chunk,
-			                      state->child_state.get());
+			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 			if (state->child_chunk.size() == 0) {
 				break;
 			}
@@ -43,22 +39,16 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk,
 					if (column_index_map[i] < 0) {
 						// insert default value
 						insert_chunk.data[i].count = chunk.size();
-						VectorOperations::Set(insert_chunk.data[i],
-						                      table->columns[i].default_value);
+						VectorOperations::Set(insert_chunk.data[i], table->columns[i].default_value);
 					} else {
 						// get value from child chunk
-						assert((size_t)column_index_map[i] <
-						       chunk.column_count);
-						if (insert_chunk.data[i].type ==
-						    chunk.data[column_index_map[i]].type) {
+						assert((size_t)column_index_map[i] < chunk.column_count);
+						if (insert_chunk.data[i].type == chunk.data[column_index_map[i]].type) {
 							// matching type, reference
-							insert_chunk.data[i].Reference(
-							    chunk.data[column_index_map[i]]);
+							insert_chunk.data[i].Reference(chunk.data[column_index_map[i]]);
 						} else {
 							// non-matching type, cast
-							VectorOperations::Cast(
-							    chunk.data[column_index_map[i]],
-							    insert_chunk.data[i]);
+							VectorOperations::Cast(chunk.data[column_index_map[i]], insert_chunk.data[i]);
 						}
 					}
 				}
@@ -70,8 +60,7 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk,
 						insert_chunk.data[i].Reference(chunk.data[i]);
 					} else {
 						// non-matching type, cast
-						VectorOperations::Cast(chunk.data[i],
-						                       insert_chunk.data[i]);
+						VectorOperations::Cast(chunk.data[i], insert_chunk.data[i]);
 					}
 				}
 			}
@@ -86,8 +75,7 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk,
 
 		insert_chunk.Initialize(types);
 		temp_chunk.Initialize(types);
-		ExpressionExecutor executor(children.size() == 0 ? nullptr : state,
-		                            context);
+		ExpressionExecutor executor(children.size() == 0 ? nullptr : state, context);
 
 		// loop over all the constants
 		for (auto &list : insert_values) {
@@ -97,14 +85,12 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk,
 					if (column_index_map[i] < 0) {
 						// insert default value
 						size_t index = insert_chunk.data[i].count++;
-						insert_chunk.data[i].SetValue(
-						    index, table->columns[i].default_value);
+						insert_chunk.data[i].SetValue(index, table->columns[i].default_value);
 					} else {
 						// get value from constants
 						assert(column_index_map[i] < (int)list.size());
 						auto &expr = list[column_index_map[i]];
-						executor.ExecuteExpression(expr.get(),
-						                           temp_chunk.data[i]);
+						executor.ExecuteExpression(expr.get(), temp_chunk.data[i]);
 						assert(temp_chunk.data[i].count == 1);
 						// append to the insert chunk
 						insert_chunk.data[i].Append(temp_chunk.data[i]);
@@ -117,11 +103,9 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk,
 					auto &expr = list[i];
 					if (expr->type == ExpressionType::VALUE_DEFAULT) {
 						temp_chunk.data[i].count = 1;
-						temp_chunk.data[i].SetValue(
-						    0, table->columns[i].default_value);
+						temp_chunk.data[i].SetValue(0, table->columns[i].default_value);
 					} else {
-						executor.ExecuteExpression(expr.get(),
-						                           temp_chunk.data[i]);
+						executor.ExecuteExpression(expr.get(), temp_chunk.data[i]);
 					}
 					assert(temp_chunk.data[i].count == 1);
 					// append to the insert chunk

@@ -12,7 +12,7 @@ unique_ptr<Expression> Transformer::TransformSubquery(SubLink *root) {
 		return nullptr;
 	}
 	auto subquery_expr = make_unique<SubqueryExpression>();
-	subquery_expr->subquery = TransformSelect(root->subselect);
+	subquery_expr->subquery = TransformSelectNode((SelectStmt*)root->subselect);
 	if (!subquery_expr->subquery) {
 		return nullptr;
 	}

@@ -15,6 +15,8 @@
 #include "main/result.hpp"
 #include "optimizer/rule.hpp"
 #include "parser/constraint.hpp"
+#include "parser/query_node/select_node.hpp"
+#include "parser/query_node.hpp"
 #include "parser/tableref/list.hpp"
 #include "planner/logical_operator.hpp"
 #include "planner/operator/list.hpp"
@@ -37,6 +39,7 @@ template class std::unique_ptr<sel_t[]>;
 template class std::unique_ptr<SQLStatement>;
 template class std::unique_ptr<StorageChunk>;
 template class std::unique_ptr<StringHeap>;
+template class std::unique_ptr<QueryNode>;
 template class std::unique_ptr<SuperLargeHashTable>;
 template class std::unique_ptr<TableRef>;
 template class std::unique_ptr<Transaction>;

@@ -1,5 +1,5 @@
-
 #include "execution/operator/set/physical_union.hpp"
+
 #include "common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
@@ -13,8 +13,7 @@ PhysicalUnion::PhysicalUnion(LogicalOperator &op, std::unique_ptr<PhysicalOperat
 }
 
 // first exhaust top, then exhaust bottom. state to remember which.
-void PhysicalUnion::_GetChunk(ClientContext &context, DataChunk &chunk,
-                              PhysicalOperatorState *state_) {
+void PhysicalUnion::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalUnionOperatorState *>(state_);
 	if (!state->top_done) {
 		children[0]->GetChunk(context, chunk, state->top_state.get());
@@ -30,8 +29,7 @@ void PhysicalUnion::_GetChunk(ClientContext &context, DataChunk &chunk,
 	}
 }
 
-std::unique_ptr<PhysicalOperatorState>
-PhysicalUnion::GetOperatorState(ExpressionExecutor *parent_executor) {
+std::unique_ptr<PhysicalOperatorState> PhysicalUnion::GetOperatorState(ExpressionExecutor *parent_executor) {
 	auto state = make_unique<PhysicalUnionOperatorState>(parent_executor);
 	state->top_state = children[0]->GetOperatorState(parent_executor);
 	state->bottom_state = children[1]->GetOperatorState(parent_executor);

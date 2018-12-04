@@ -1,41 +1,32 @@
-
 #include "execution/operator/aggregate/physical_hash_aggregate.hpp"
+
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
-
 #include "parser/expression/aggregate_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-PhysicalHashAggregate::PhysicalHashAggregate(
-    LogicalOperator &op,
-    vector<unique_ptr<Expression>> expressions)
-    : PhysicalAggregate(op, move(expressions),
-                        PhysicalOperatorType::HASH_GROUP_BY) {
+PhysicalHashAggregate::PhysicalHashAggregate(LogicalOperator &op, vector<unique_ptr<Expression>> expressions)
+    : PhysicalAggregate(op, move(expressions), PhysicalOperatorType::HASH_GROUP_BY) {
 	Initialize();
 }
 
-PhysicalHashAggregate::PhysicalHashAggregate(
-    LogicalOperator &op,
-    vector<unique_ptr<Expression>> expressions,
-    vector<unique_ptr<Expression>> groups)
-    : PhysicalAggregate(op, move(expressions), move(groups),
-                        PhysicalOperatorType::HASH_GROUP_BY) {
+PhysicalHashAggregate::PhysicalHashAggregate(LogicalOperator &op, vector<unique_ptr<Expression>> expressions,
+                                             vector<unique_ptr<Expression>> groups)
+    : PhysicalAggregate(op, move(expressions), move(groups), PhysicalOperatorType::HASH_GROUP_BY) {
 	Initialize();
 }
 
 void PhysicalHashAggregate::Initialize() {
 }
 
-void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk,
-                                      PhysicalOperatorState *state_) {
+void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalHashAggregateOperatorState *>(state_);
 	do {
 		if (children.size() > 0) {
 			// resolve the child chunk if there is one
-			children[0]->GetChunk(context, state->child_chunk,
-			                      state->child_state.get());
+			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 			if (state->child_chunk.size() == 0) {
 				break;
 			}
@@ -49,10 +40,8 @@ void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk,
 		executor.Execute(payload_chunk,
 		                 [&](size_t i) {
 			                 if (!state->payload_expressions[i]) {
-				                 state->payload_chunk.data[i].count =
-				                     group_chunk.size();
-				                 state->payload_chunk.data[i].sel_vector =
-				                     group_chunk.sel_vector;
+				                 state->payload_chunk.data[i].count = group_chunk.size();
+				                 state->payload_chunk.data[i].sel_vector = group_chunk.sel_vector;
 			                 }
 			                 return state->payload_expressions[i];
 		                 },
@@ -60,8 +49,7 @@ void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk,
 
 		group_chunk.Verify();
 		payload_chunk.Verify();
-		assert(payload_chunk.column_count == 0 ||
-		       group_chunk.size() == payload_chunk.size());
+		assert(payload_chunk.column_count == 0 || group_chunk.size() == payload_chunk.size());
 
 		// move the strings inside the groups to the string heap
 		group_chunk.MoveStringsToHeap(state->ht->string_heap);
@@ -73,8 +61,7 @@ void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk,
 
 	state->group_chunk.Reset();
 	state->aggregate_chunk.Reset();
-	size_t elements_found = state->ht->Scan(
-	    state->ht_scan_position, state->group_chunk, state->aggregate_chunk);
+	size_t elements_found = state->ht->Scan(state->ht_scan_position, state->group_chunk, state->aggregate_chunk);
 
 	// special case hack to sort out aggregating from empty intermediates
 	// for aggregations without groups
@@ -106,8 +93,7 @@ void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk,
 	executor.Execute(select_list, chunk);
 }
 
-unique_ptr<PhysicalOperatorState>
-PhysicalHashAggregate::GetOperatorState(ExpressionExecutor *parent) {
+unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState(ExpressionExecutor *parent) {
 	auto state = make_unique<PhysicalHashAggregateOperatorState>(
 	    this, children.size() == 0 ? nullptr : children[0].get(), parent);
 	state->tuples_scanned = 0;
@@ -130,7 +116,6 @@ PhysicalHashAggregate::GetOperatorState(ExpressionExecutor *parent) {
 	}
 	state->payload_chunk.Initialize(payload_types);
 
-	state->ht = make_unique<SuperLargeHashTable>(1024, group_types,
-	                                             payload_types, aggregate_kind);
+	state->ht = make_unique<SuperLargeHashTable>(1024, group_types, payload_types, aggregate_kind);
 	return move(state);
 }

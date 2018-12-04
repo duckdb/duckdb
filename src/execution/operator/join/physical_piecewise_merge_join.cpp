@@ -1,5 +1,5 @@
-
 #include "execution/operator/join/physical_piecewise_merge_join.hpp"
+
 #include "common/operator/comparison_operators.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
@@ -30,9 +30,7 @@ struct MergeJoinEquality {
 		auto rdata = (T *)r.v.data;
 		size_t result_count = 0;
 		while (true) {
-			if (r.pos == r.count ||
-			    LessThan::Operation(ldata[l.sel_vector[l.pos]],
-			                        rdata[r.sel_vector[r.pos]])) {
+			if (r.pos == r.count || LessThan::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos]])) {
 				// left side smaller: move left pointer forward
 				l.pos++;
 				if (l.pos >= l.count) {
@@ -42,13 +40,10 @@ struct MergeJoinEquality {
 				// we might need to go back on the right-side after going
 				// forward on the left side because the new tuple might have
 				// matches with the right side
-				while (r.pos > 0 &&
-				       Equals::Operation(ldata[l.sel_vector[l.pos]],
-				                         rdata[r.sel_vector[r.pos - 1]])) {
+				while (r.pos > 0 && Equals::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos - 1]])) {
 					r.pos--;
 				}
-			} else if (GreaterThan::Operation(ldata[l.sel_vector[l.pos]],
-			                                  rdata[r.sel_vector[r.pos]])) {
+			} else if (GreaterThan::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos]])) {
 				// right side smaller: move right pointer forward
 				r.pos++;
 			} else {
@@ -79,9 +74,7 @@ struct MergeJoinLessThan {
 		auto rdata = (T *)r.v.data;
 		size_t result_count = 0;
 		while (true) {
-			if (l.pos < l.count &&
-			    LessThan::Operation(ldata[l.sel_vector[l.pos]],
-			                        rdata[r.sel_vector[r.pos]])) {
+			if (l.pos < l.count && LessThan::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos]])) {
 				// left side smaller: found match
 				l.result[result_count] = l.sel_vector[l.pos];
 				r.result[result_count] = r.sel_vector[r.pos];
@@ -116,9 +109,7 @@ struct MergeJoinLessThanEquals {
 		auto rdata = (T *)r.v.data;
 		size_t result_count = 0;
 		while (true) {
-			if (l.pos < l.count &&
-			    LessThanEquals::Operation(ldata[l.sel_vector[l.pos]],
-			                              rdata[r.sel_vector[r.pos]])) {
+			if (l.pos < l.count && LessThanEquals::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos]])) {
 				// left side smaller: found match
 				l.result[result_count] = l.sel_vector[l.pos];
 				r.result[result_count] = r.sel_vector[r.pos];
@@ -168,8 +159,7 @@ template <class MJ> static size_t merge_join(MergeInfo &l, MergeInfo &r) {
 	}
 }
 
-static size_t MergeJoin(MergeInfo &l, MergeInfo &r,
-                        ExpressionType comparison_type) {
+static size_t MergeJoin(MergeInfo &l, MergeInfo &r, ExpressionType comparison_type) {
 	if (comparison_type == ExpressionType::COMPARE_EQUAL) {
 		return merge_join<MergeJoinEquality>(l, r);
 	} else if (comparison_type == ExpressionType::COMPARE_LESSTHAN) {
@@ -177,22 +167,18 @@ static size_t MergeJoin(MergeInfo &l, MergeInfo &r,
 	} else if (comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO) {
 		return merge_join<MergeJoinLessThanEquals>(l, r);
 	} else if (comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
-	           comparison_type ==
-	               ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
+	           comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
 		// simply flip the comparison type
-		return MergeJoin(
-		    r, l, LogicalJoin::FlipComparisionExpression(comparison_type));
+		return MergeJoin(r, l, LogicalJoin::FlipComparisionExpression(comparison_type));
 	} else {
 		throw Exception("Unimplemented comparison type for merge join!");
 	}
 }
 
-PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(
-    LogicalOperator &op, std::unique_ptr<PhysicalOperator> left,
-    std::unique_ptr<PhysicalOperator> right, std::vector<JoinCondition> cond,
-    JoinType join_type)
-    : PhysicalJoin(op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, move(cond),
-                   join_type) {
+PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, std::unique_ptr<PhysicalOperator> left,
+                                                       std::unique_ptr<PhysicalOperator> right,
+                                                       std::vector<JoinCondition> cond, JoinType join_type)
+    : PhysicalJoin(op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, move(cond), join_type) {
 	// for now we only support one condition!
 	assert(conditions.size() == 1);
 	for (auto &cond : conditions) {
@@ -205,8 +191,7 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(
 	children.push_back(move(right));
 }
 
-static void OrderVector(Vector &vector,
-                        PhysicalPiecewiseMergeJoin::MergeOrder &order) {
+static void OrderVector(Vector &vector, PhysicalPiecewiseMergeJoin::MergeOrder &order) {
 	// first remove any NULL values; they can never match anyway
 	sel_t *result_vector;
 	order.count = Vector::NotNullSelVector(vector, order.order, result_vector);
@@ -214,11 +199,8 @@ static void OrderVector(Vector &vector,
 	VectorOperations::Sort(vector, result_vector, order.count, order.order);
 }
 
-void PhysicalPiecewiseMergeJoin::_GetChunk(ClientContext &context,
-                                           DataChunk &chunk,
-                                           PhysicalOperatorState *state_) {
-	auto state =
-	    reinterpret_cast<PhysicalPiecewiseMergeJoinOperatorState *>(state_);
+void PhysicalPiecewiseMergeJoin::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+	auto state = reinterpret_cast<PhysicalPiecewiseMergeJoinOperatorState *>(state_);
 	assert(conditions.size() == 1);
 	if (!state->initialized) {
 		// create the sorted pieces
@@ -249,8 +231,7 @@ void PhysicalPiecewiseMergeJoin::_GetChunk(ClientContext &context,
 			ExpressionExecutor executor(chunk_to_order, context);
 			for (size_t k = 0; k < conditions.size(); k++) {
 				// resolve the join key
-				executor.ExecuteExpression(conditions[k].right.get(),
-				                           state->join_keys.data[k]);
+				executor.ExecuteExpression(conditions[k].right.get(), state->join_keys.data[k]);
 				OrderVector(state->join_keys.data[k], state->right_orders[i]);
 			}
 			state->right_conditions.Append(state->join_keys);
@@ -263,8 +244,7 @@ void PhysicalPiecewiseMergeJoin::_GetChunk(ClientContext &context,
 		// check if we have to fetch a child from the left side
 		if (state->right_chunk_index == state->right_orders.size()) {
 			// fetch the chunk from the left side
-			children[0]->GetChunk(context, state->child_chunk,
-			                      state->child_state.get());
+			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 			if (state->child_chunk.size() == 0) {
 				return;
 			}
@@ -274,8 +254,7 @@ void PhysicalPiecewiseMergeJoin::_GetChunk(ClientContext &context,
 			state->join_keys.Reset();
 			ExpressionExecutor executor(state->child_chunk, context);
 			for (size_t k = 0; k < conditions.size(); k++) {
-				executor.ExecuteExpression(conditions[k].left.get(),
-				                           state->join_keys.data[k]);
+				executor.ExecuteExpression(conditions[k].left.get(), state->join_keys.data[k]);
 				// sort by join key
 				OrderVector(state->join_keys.data[k], state->left_orders);
 			}
@@ -285,16 +264,13 @@ void PhysicalPiecewiseMergeJoin::_GetChunk(ClientContext &context,
 		}
 
 		// now perform the actual merge join
-		auto &right_chunk =
-		    *state->right_chunks.chunks[state->right_chunk_index];
-		auto &right_condition_chunk =
-		    *state->right_conditions.chunks[state->right_chunk_index];
+		auto &right_chunk = *state->right_chunks.chunks[state->right_chunk_index];
+		auto &right_condition_chunk = *state->right_conditions.chunks[state->right_chunk_index];
 		auto &right_orders = state->right_orders[state->right_chunk_index];
 
-		MergeInfo left(state->join_keys.data[0], state->left_orders.count,
-		               state->left_orders.order, state->left_position);
-		MergeInfo right(right_condition_chunk.data[0], right_orders.count,
-		                right_orders.order, state->right_position);
+		MergeInfo left(state->join_keys.data[0], state->left_orders.count, state->left_orders.order,
+		               state->left_position);
+		MergeInfo right(right_condition_chunk.data[0], right_orders.count, right_orders.order, state->right_position);
 		// perform the merge join
 		size_t result_count = MergeJoin(left, right, conditions[0].comparison);
 		if (result_count == 0) {
@@ -323,8 +299,6 @@ void PhysicalPiecewiseMergeJoin::_GetChunk(ClientContext &context,
 }
 
 std::unique_ptr<PhysicalOperatorState>
-PhysicalPiecewiseMergeJoin::GetOperatorState(
-    ExpressionExecutor *parent_executor) {
-	return make_unique<PhysicalPiecewiseMergeJoinOperatorState>(
-	    children[0].get(), children[1].get(), parent_executor);
+PhysicalPiecewiseMergeJoin::GetOperatorState(ExpressionExecutor *parent_executor) {
+	return make_unique<PhysicalPiecewiseMergeJoinOperatorState>(children[0].get(), children[1].get(), parent_executor);
 }

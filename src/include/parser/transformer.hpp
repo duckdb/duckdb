@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // parser/transformer.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -26,13 +24,11 @@ namespace duckdb {
 //! The transformer class is responsible for transforming the internal Postgres
 //! parser representation into the DuckDB representation
 class Transformer {
-  public:
+	public:
 	//! Transforms a Postgres parse tree into a set of SQL Statements
-	bool
-	TransformParseTree(postgres::List *tree,
-	                   std::vector<std::unique_ptr<SQLStatement>> &statements);
+	bool TransformParseTree(postgres::List *tree, std::vector<std::unique_ptr<SQLStatement>> &statements);
 
-  private:
+	private:
 	//! Transforms a Postgres statement into a single SQL statement
 	std::unique_ptr<SQLStatement> TransformStatement(postgres::Node *stmt);
 	//===--------------------------------------------------------------------===//
@@ -45,37 +41,36 @@ class Transformer {
 	//! Transform a Postgres T_RenameStmt node into a RenameStatement
 	std::unique_ptr<AlterTableStatement> TransformRename(postgres::Node *node);
 	//! Transform a Postgres T_CreateStmt node into a CreateTableStatement
-	std::unique_ptr<CreateTableStatement>
-	TransformCreateTable(postgres::Node *node);
+	std::unique_ptr<CreateTableStatement> TransformCreateTable(postgres::Node *node);
 	//! Transform a Postgres T_CreateSchemaStmt node into a
 	//! CreateSchemaStatement
-	std::unique_ptr<CreateSchemaStatement>
-	TransformCreateSchema(postgres::Node *node);
+	std::unique_ptr<CreateSchemaStatement> TransformCreateSchema(postgres::Node *node);
 	//! Transform a Postgres T_DropStmt node into a Drop[Table,Schema]Statement
 	std::unique_ptr<SQLStatement> TransformDrop(postgres::Node *node);
 	//! Transform a Postgres T_InsertStmt node into a InsertStatement
 	std::unique_ptr<InsertStatement> TransformInsert(postgres::Node *node);
 	//! Transform a Postgres T_IndexStmt node into CreateIndexStatement
-	std::unique_ptr<CreateIndexStatement>
-	TransformCreateIndex(postgres::Node *node);
+	std::unique_ptr<CreateIndexStatement> TransformCreateIndex(postgres::Node *node);
 	//! Transform a Postgres DropStmt node into a DropTableStatement
-	std::unique_ptr<DropTableStatement>
-	TransformDropTable(postgres::DropStmt *stmt);
+	std::unique_ptr<DropTableStatement> TransformDropTable(postgres::DropStmt *stmt);
 	//! Transform a Postgres DropStmt node into a DropIndexStatement
-	std::unique_ptr<DropIndexStatement>
-	TransformDropIndex(postgres::DropStmt *stmt);
+	std::unique_ptr<DropIndexStatement> TransformDropIndex(postgres::DropStmt *stmt);
 	//! Transform a Postgres DropStmt node into a DropSchemaStatement
-	std::unique_ptr<DropSchemaStatement>
-	TransformDropSchema(postgres::DropStmt *stmt);
+	std::unique_ptr<DropSchemaStatement> TransformDropSchema(postgres::DropStmt *stmt);
 	//! Transform a Postgres T_CopyStmt node into a CopyStatement
 	std::unique_ptr<CopyStatement> TransformCopy(postgres::Node *node);
 	//! Transform a Postgres T_TransactionStmt node into a TransactionStatement
-	std::unique_ptr<TransactionStatement>
-	TransformTransaction(postgres::Node *node);
+	std::unique_ptr<TransactionStatement> TransformTransaction(postgres::Node *node);
 	//! Transform a Postgres T_DeleteStatement node into a DeleteStatement
 	std::unique_ptr<DeleteStatement> TransformDelete(postgres::Node *node);
 	//! Transform a Postgres T_UpdateStmt node into a UpdateStatement
 	std::unique_ptr<UpdateStatement> TransformUpdate(postgres::Node *node);
+
+	//===--------------------------------------------------------------------===//
+	// Query Node Transform
+	//===--------------------------------------------------------------------===//
+	//! Transform a Postgres T_SelectStmt node into a QueryNode
+	std::unique_ptr<QueryNode> TransformSelectNode(postgres::SelectStmt *node);
 
 	//===--------------------------------------------------------------------===//
 	// Expression Transform
@@ -110,16 +105,13 @@ class Transformer {
 	//===--------------------------------------------------------------------===//
 	std::unique_ptr<Constraint> TransformConstraint(postgres::ListCell *cell);
 
-	std::unique_ptr<Constraint> TransformConstraint(postgres::ListCell *cell,
-	                                                ColumnDefinition column,
-	                                                size_t index);
+	std::unique_ptr<Constraint> TransformConstraint(postgres::ListCell *cell, ColumnDefinition column, size_t index);
 
 	//===--------------------------------------------------------------------===//
 	// Helpers
 	//===--------------------------------------------------------------------===//
 	std::string TransformAlias(postgres::Alias *root);
-	void TransformCTE(postgres::WithClause *de_with_clause,
-	                  SelectStatement &select);
+	void TransformCTE(postgres::WithClause *de_with_clause, SelectStatement &select);
 	//===--------------------------------------------------------------------===//
 	// TableRef transform
 	//===--------------------------------------------------------------------===//
@@ -130,29 +122,22 @@ class Transformer {
 	//! Transform a Postgres table reference into an Expression
 	std::unique_ptr<TableRef> TransformRangeVar(postgres::RangeVar *root);
 	//! Transform a Postgres table-producing function into a TableRef
-	std::unique_ptr<TableRef>
-	TransformRangeFunction(postgres::RangeFunction *root);
+	std::unique_ptr<TableRef> TransformRangeFunction(postgres::RangeFunction *root);
 	//! Transform a Postgres join node into a TableRef
 	std::unique_ptr<TableRef> TransformJoin(postgres::JoinExpr *root);
 	//! Transform a table producing subquery into a TableRef
-	std::unique_ptr<TableRef>
-	TransformRangeSubselect(postgres::RangeSubselect *root);
+	std::unique_ptr<TableRef> TransformRangeSubselect(postgres::RangeSubselect *root);
 
 	//! Transform a Postgres TypeName string into a TypeId
 	TypeId TransformStringToTypeId(char *str);
 
 	//! Transform a Postgres GROUP BY expression into a list of Expression
-	bool TransformGroupBy(postgres::List *group,
-	                      std::vector<std::unique_ptr<Expression>> &result);
+	bool TransformGroupBy(postgres::List *group, std::vector<std::unique_ptr<Expression>> &result);
 	//! Transform a Postgres ORDER BY expression into an OrderByDescription
 	bool TransformOrderBy(postgres::List *order, OrderByDescription &result);
 
 	//! Transform a Postgres SELECT clause into a list of Expression
-	bool
-	TransformExpressionList(postgres::List *list,
-	                        std::vector<std::unique_ptr<Expression>> &result);
-
-  private:
+	bool TransformExpressionList(postgres::List *list, std::vector<std::unique_ptr<Expression>> &result);
 };
 
 } // namespace duckdb

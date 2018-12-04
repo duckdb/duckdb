@@ -32,7 +32,7 @@ class StarExpression : public Expression {
 
 	//! Deserializes a blob back into a StarExpression
 	static std::unique_ptr<Expression>
-	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);
+	Deserialize(ExpressionDeserializeInfo *info, Deserializer &source);
 
 	std::string ToString() const override {
 		return "*";

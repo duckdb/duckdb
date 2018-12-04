@@ -50,7 +50,7 @@ void FunctionExpression::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<Expression>
-FunctionExpression::Deserialize(ExpressionDeserializeInformation *info,
+FunctionExpression::Deserialize(ExpressionDeserializeInfo *info,
                                 Deserializer &source) {
 	auto function_name = source.Read<string>();
 	auto function =

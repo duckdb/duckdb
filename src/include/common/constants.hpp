@@ -1,17 +1,16 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // common/constants.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
 #include <bitset>
 #include <cstdlib>
+#include <map>
 #include <memory>
 #include <vector>
 
@@ -52,9 +51,10 @@ extern sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE];
 extern nullmask_t ZERO_MASK;
 
 //! std directives that we use inside headers
+using std::map;
 using std::move;
-using std::unique_ptr;
 using std::string;
+using std::unique_ptr;
 using std::vector;
 
 } // namespace duckdb

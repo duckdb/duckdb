@@ -14,7 +14,7 @@ unique_ptr<Expression> CastExpression::Copy() {
 }
 
 unique_ptr<Expression>
-CastExpression::Deserialize(ExpressionDeserializeInformation *info,
+CastExpression::Deserialize(ExpressionDeserializeInfo *info,
                             Deserializer &source) {
 	if (info->children.size() != 1) {
 		return nullptr;

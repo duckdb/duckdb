@@ -60,7 +60,7 @@ unique_ptr<Expression> OperatorExpression::Copy() {
 }
 
 unique_ptr<Expression>
-OperatorExpression::Deserialize(ExpressionDeserializeInformation *info,
+OperatorExpression::Deserialize(ExpressionDeserializeInfo *info,
                                 Deserializer &source) {
 	auto expression =
 	    make_unique<OperatorExpression>(info->type, info->return_type);
