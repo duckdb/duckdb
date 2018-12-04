@@ -1,5 +1,5 @@
 
-#include "execution/operator/join/physical_union.hpp"
+#include "execution/operator/set/physical_union.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;

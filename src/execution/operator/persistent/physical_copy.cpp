@@ -1,7 +1,7 @@
 
 #include <algorithm>
 
-#include "execution/operator/data_modification/physical_copy.hpp"
+#include "execution/operator/persistent/physical_copy.hpp"
 
 #include "main/client_context.hpp"
 

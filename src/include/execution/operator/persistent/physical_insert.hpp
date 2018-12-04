@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// execution/operator/data_modification/physical_insert.hpp
+// execution/operator/persistent/physical_insert.hpp
 //
 //
 //

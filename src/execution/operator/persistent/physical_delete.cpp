@@ -1,4 +1,4 @@
-#include "execution/operator/data_modification/physical_delete.hpp"
+#include "execution/operator/persistent/physical_delete.hpp"
 #include "execution/expression_executor.hpp"
 
 #include "main/client_context.hpp"

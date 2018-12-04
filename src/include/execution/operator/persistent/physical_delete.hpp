@@ -2,7 +2,7 @@
 //
 //                         DuckDB
 //
-// execution/operator/data_modification/physical_delete.hpp
+// execution/operator/persistent/physical_delete.hpp
 //
 //
 //

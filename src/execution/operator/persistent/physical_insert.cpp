@@ -1,4 +1,4 @@
-#include "execution/operator/data_modification/physical_insert.hpp"
+#include "execution/operator/persistent/physical_insert.hpp"
 #include "execution/expression_executor.hpp"
 
 #include "common/types/chunk_collection.hpp"

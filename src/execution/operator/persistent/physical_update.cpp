@@ -1,4 +1,4 @@
-#include "execution/operator/data_modification/physical_update.hpp"
+#include "execution/operator/persistent/physical_update.hpp"
 #include "execution/expression_executor.hpp"
 
 #include "common/vector_operations/vector_operations.hpp"
