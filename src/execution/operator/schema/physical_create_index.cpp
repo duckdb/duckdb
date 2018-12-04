@@ -56,7 +56,7 @@ void PhysicalCreateIndex::_GetChunk(ClientContext &context, DataChunk &chunk,
 	table.storage->InitializeScan(ss);
 
 	DataChunk intermediate;
-	auto types = table.storage->GetTypes(column_ids);
+    auto types = table.GetTypes(column_ids);
 	intermediate.Initialize(types);
 
 	// FIXME: use estimated table size as initial index size

@@ -60,6 +60,8 @@ class TableCatalogEntry : public CatalogEntry {
 	ColumnDefinition &GetColumn(const std::string &name);
 	//! Returns a list of types of the table
 	std::vector<TypeId> GetTypes();
+    //! Returns a list of types of the specified columns of the table
+    std::vector<TypeId> GetTypes(const std::vector<column_t> &column_ids);
 
   private:
 	void Initialize(CreateTableInformation *info);

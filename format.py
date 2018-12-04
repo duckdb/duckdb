@@ -41,9 +41,9 @@ if not ignore_last_format:
 
 time.ctime(os.path.getmtime('tools/sqlite3_api_wrapper/include/sqlite3.h'))
 
-header_top = "//===----------------------------------------------------------------------===// \n"
-header_top +=  "// \n"+"//                         DuckDB \n"+ "// \n"
-header_bottom = "// \n" + "// \n" +  "// \n" 
+header_top = "//===----------------------------------------------------------------------===//\n"
+header_top +=  "//                         DuckDB\n"+ "//\n"
+header_bottom = "//\n" +  "//\n"
 header_bottom+= "//===----------------------------------------------------------------------===//\n\n"
 script_dir =  os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 script_dir = os.path.join(script_dir,'src/include')
@@ -97,6 +97,13 @@ def format_directory(directory, sort_includes=True):
 						cmd = format_command.replace("${FILE}", full_path).replace("${SORT_INCLUDES}", "1" if sort_includes else "0")
 						print(cmd)
 						os.system(cmd)
+						# remove empty lines at beginning and end of file
+						with open(full_path, 'r') as f:
+							text = f.read()
+							text = text.strip() + "\n"
+						with open(full_path, 'w+') as f:
+							f.write(text)
+
 					break
 				
 format_directory('src')

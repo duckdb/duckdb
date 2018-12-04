@@ -37,18 +37,6 @@ DataTable::DataTable(StorageManager &storage, std::string schema,
 	tail_chunk = chunk_list.get();
 }
 
-vector<TypeId> DataTable::GetTypes(const vector<column_t> &column_ids) {
-	vector<TypeId> result;
-	for (auto &index : column_ids) {
-		if (index == COLUMN_IDENTIFIER_ROW_ID) {
-			result.push_back(TypeId::POINTER);
-		} else {
-			result.push_back(types[index]);
-		}
-	}
-	return result;
-}
-
 void DataTable::InitializeScan(ScanStructure &structure) {
 	structure.chunk = chunk_list.get();
 	structure.offset = 0;

@@ -161,3 +161,15 @@ vector<TypeId> TableCatalogEntry::GetTypes() {
 	}
 	return types;
 }
+
+vector<TypeId> TableCatalogEntry::GetTypes(const vector<column_t> &column_ids) {
+    vector<TypeId> result;
+    for (auto &index : column_ids) {
+        if (index == COLUMN_IDENTIFIER_ROW_ID) {
+            result.push_back(TypeId::POINTER);
+        } else {
+            result.push_back(columns[index].type);
+        }
+    }
+    return result;
+}
