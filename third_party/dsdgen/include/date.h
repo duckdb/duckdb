@@ -54,7 +54,6 @@ date_t *mk_date(void);
 
 int jtodt(date_t *dest, int i);
 int strtodt(date_t *dest, char *s);
-date_t *strtodate(char *str);
 int strtotime(char *str);
 
 char *dttostr(date_t *d);

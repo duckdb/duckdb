@@ -70,7 +70,7 @@ int mk_w_promotion(void *info_arr, ds_key_t index) {
 	struct W_PROMOTION_TBL *r;
 
 	/* begin locals declarations */
-	static date_t *start_date;
+	static date_t start_date;
 	ds_key_t nTemp;
 	int nFlags;
 	tdef *pTdef = getSimpleTdefsByNumber(PROMOTION);
@@ -80,15 +80,15 @@ int mk_w_promotion(void *info_arr, ds_key_t index) {
 	if (!bInit) {
 		memset(&g_w_promotion, 0, sizeof(struct W_PROMOTION_TBL));
 		bInit = 1;
-		start_date = strtodate(DATE_MINIMUM);
+		strtodt(&start_date, DATE_MINIMUM);
 	}
 
 	nullSet(&pTdef->kNullBitMap, P_NULLS);
 	r->p_promo_sk = index;
 	mk_bkey(&r->p_promo_id[0], index, P_PROMO_ID);
 	nTemp = index;
-	r->p_start_date_id = start_date->julian + genrand_integer(NULL, DIST_UNIFORM, PROMO_START_MIN, PROMO_START_MAX,
-	                                                          PROMO_START_MEAN, P_START_DATE_ID);
+	r->p_start_date_id = start_date.julian + genrand_integer(NULL, DIST_UNIFORM, PROMO_START_MIN, PROMO_START_MAX,
+	                                                         PROMO_START_MEAN, P_START_DATE_ID);
 	r->p_end_date_id = r->p_start_date_id +
 	                   genrand_integer(NULL, DIST_UNIFORM, PROMO_LEN_MIN, PROMO_LEN_MAX, PROMO_LEN_MEAN, P_END_DATE_ID);
 	r->p_item_sk = mk_join(P_ITEM_SK, ITEM, 1);

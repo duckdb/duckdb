@@ -179,18 +179,18 @@ static ds_key_t cp_join(int tbl, int col, ds_key_t jDate) {
 	ds_key_t res;
 	static int init = 0, nPagePerCatalog;
 	int nType, nCount, nOffset, nPage;
-	static date_t *dTemp;
+	static date_t dTemp;
 	char *szTemp;
 
 	if (!init) {
 		nPagePerCatalog = ((int)get_rowcount(CATALOG_PAGE) / CP_CATALOGS_PER_YEAR) / (YEAR_MAXIMUM - YEAR_MINIMUM + 2);
-		dTemp = strtodate(DATA_START_DATE);
+		strtodt(&dTemp, DATA_START_DATE);
 		init = 1;
 	}
 
 	nType = pick_distribution(&szTemp, "catalog_page_type", 1, 2, col);
 	genrand_integer(&nPage, DIST_UNIFORM, 1, nPagePerCatalog, 0, col);
-	nOffset = (int)jDate - dTemp->julian - 1;
+	nOffset = (int)jDate - dTemp.julian - 1;
 	nCount = (nOffset / 365) * CP_CATALOGS_PER_YEAR;
 	nOffset %= 365;
 
@@ -259,24 +259,21 @@ ds_key_t getCatalogNumberFromPage(ds_key_t kPageNumber) {
 static ds_key_t web_join(int col, ds_key_t join_key) {
 	ds_key_t res = -1, kSite;
 	static int init = 0, nConcurrentSites, nSiteDuration, nOffset;
-	static date_t *dSiteOpen, /* open/close dates for current web site */
-	    *dSiteClose;
+	static date_t dSiteOpen, /* open/close dates for current web site */
+	    dSiteClose;
 	int nTemp;
 	tdef *pWS = getSimpleTdefsByNumber(WEB_SITE);
 	tdef *pWP = getSimpleTdefsByNumber(WEB_PAGE);
 
 	if (!init) {
-		dSiteClose = strtodate(WEB_END_DATE);
-		nSiteDuration = dSiteClose->julian;
+		strtodt(&dSiteClose, WEB_END_DATE);
+		nSiteDuration = dSiteClose.julian;
 		nConcurrentSites = (int)get_rowcount(CONCURRENT_WEB_SITES);
-		dSiteOpen = strtodate(WEB_START_DATE);
-		nSiteDuration -= dSiteOpen->julian;
+		strtodt(&dSiteOpen, WEB_START_DATE);
+		nSiteDuration -= dSiteOpen.julian;
 		nSiteDuration *= nConcurrentSites;
-		nOffset = (dSiteClose->julian - dSiteOpen->julian) / (2 * nSiteDuration);
+		nOffset = (dSiteClose.julian - dSiteOpen.julian) / (2 * nSiteDuration);
 		init = 1;
-
-		free(dSiteClose);
-		free(dSiteOpen);
 	}
 
 	switch (col) {
@@ -284,9 +281,8 @@ static ds_key_t web_join(int col, ds_key_t join_key) {
 		 * join_key is the xxx_sk value for a dimension
 		 */
 	case WEB_OPEN_DATE:
-		dSiteOpen = strtodate(DATE_MINIMUM);
-		res = dSiteOpen->julian - ((join_key * WEB_DATE_STAGGER) % nSiteDuration / 2);
-		free(dSiteOpen);
+		strtodt(&dSiteOpen, DATE_MINIMUM);
+		res = dSiteOpen.julian - ((join_key * WEB_DATE_STAGGER) % nSiteDuration / 2);
 		if (WEB_IS_REPLACED(join_key)) /* this site is completely replaced */
 		{
 			if (WEB_IS_REPLACEMENT(join_key)) /* this is the second site */
@@ -298,9 +294,8 @@ static ds_key_t web_join(int col, ds_key_t join_key) {
 		}
 		break;
 	case WEB_CLOSE_DATE:
-		dSiteOpen = strtodate(DATE_MINIMUM);
-		res = dSiteOpen->julian - ((join_key * WEB_DATE_STAGGER) % nSiteDuration / 2);
-		free(dSiteOpen);
+		strtodt(&dSiteOpen, DATE_MINIMUM);
+		res = dSiteOpen.julian - ((join_key * WEB_DATE_STAGGER) % nSiteDuration / 2);
 		res += pWS->nParam * nSiteDuration;
 		if (WEB_IS_REPLACED(join_key)) /* this site is completely replaced */
 		{
@@ -313,27 +308,23 @@ static ds_key_t web_join(int col, ds_key_t join_key) {
 		}
 		break;
 	case WEB_REC_START_DATE_ID:
-		dSiteOpen = strtodate(DATE_MINIMUM);
-		res = dSiteOpen->julian - (((join_key - 1) * WEB_DATE_STAGGER) % nSiteDuration / 2);
-		free(dSiteOpen);
+		strtodt(&dSiteOpen, DATE_MINIMUM);
+		res = dSiteOpen.julian - (((join_key - 1) * WEB_DATE_STAGGER) % nSiteDuration / 2);
 		res += (join_key % pWS->nParam) * nSiteDuration;
 		break;
 	case WEB_REC_END_DATE_ID:
-		dSiteOpen = strtodate(DATE_MINIMUM);
-		res = dSiteOpen->julian - ((join_key * WEB_DATE_STAGGER) % nSiteDuration / 2);
-		free(dSiteOpen);
+		strtodt(&dSiteOpen, DATE_MINIMUM);
+		res = dSiteOpen.julian - ((join_key * WEB_DATE_STAGGER) % nSiteDuration / 2);
 		res += ((join_key + 1) % pWS->nParam) * nSiteDuration * 5 - 1;
 		break;
 	case WP_REC_START_DATE_ID:
-		dSiteOpen = strtodate(DATE_MINIMUM);
-		res = dSiteOpen->julian - (((join_key - 1) * WEB_DATE_STAGGER) % nSiteDuration / 2);
-		free(dSiteOpen);
+		strtodt(&dSiteOpen, DATE_MINIMUM);
+		res = dSiteOpen.julian - (((join_key - 1) * WEB_DATE_STAGGER) % nSiteDuration / 2);
 		res += (join_key % pWP->nParam) * nSiteDuration * 5;
 		break;
 	case WP_REC_END_DATE_ID:
-		dSiteOpen = strtodate(DATE_MINIMUM);
-		res = dSiteOpen->julian - ((join_key * WEB_DATE_STAGGER) % nSiteDuration / 2);
-		free(dSiteOpen);
+		strtodt(&dSiteOpen, DATE_MINIMUM);
+		res = dSiteOpen.julian - ((join_key * WEB_DATE_STAGGER) % nSiteDuration / 2);
 		res += ((join_key + 1) % pWP->nParam) * nSiteDuration - 1;
 		break;
 	case WP_CREATION_DATE_SK:
@@ -343,15 +334,14 @@ static ds_key_t web_join(int col, ds_key_t join_key) {
 		 * in the time span of the data set, this will depend on whether they
 		 * are the first version or the second
 		 */
-		dSiteOpen = strtodate(DATE_MINIMUM);
+		strtodt(&dSiteOpen, DATE_MINIMUM);
 		kSite = join_key / WEB_PAGES_PER_SITE + 1;
-		res = dSiteOpen->julian - (((int)kSite * WEB_DATE_STAGGER) % nSiteDuration / 2);
+		res = dSiteOpen.julian - (((int)kSite * WEB_DATE_STAGGER) % nSiteDuration / 2);
 		if (((int)kSite % pWP->nParam) == 0) /* this is a site that gets replaced */
 		{
-			genrand_integer(&nTemp, DIST_UNIFORM, (int)res, dSiteOpen->julian, 0, col);
+			genrand_integer(&nTemp, DIST_UNIFORM, (int)res, dSiteOpen.julian, 0, col);
 			res = nTemp;
 		}
-		free(dSiteOpen);
 		break;
 		/*****************
 		 * join key from here on is a date for which a valid site/page must be

@@ -72,7 +72,8 @@ int mk_w_inventory(void *info_arr, ds_key_t index) {
 	static ds_key_t item_count;
 	static ds_key_t warehouse_count;
 	static int jDate;
-	date_t *base_date;
+	date_t base_date_storage;
+	date_t *base_date = &base_date_storage;
 	int nTemp;
 	tdef *pTdef = getSimpleTdefsByNumber(INVENTORY);
 
@@ -82,7 +83,7 @@ int mk_w_inventory(void *info_arr, ds_key_t index) {
 		memset(&g_w_inventory, 0, sizeof(struct W_INVENTORY_TBL));
 		item_count = getIDCount(ITEM);
 		warehouse_count = get_rowcount(WAREHOUSE);
-		base_date = strtodate(DATE_MINIMUM);
+		strtodt(base_date, DATE_MINIMUM);
 		jDate = base_date->julian;
 		set_dow(base_date);
 		/* Make exceptions to the 1-rng-call-per-row rule */

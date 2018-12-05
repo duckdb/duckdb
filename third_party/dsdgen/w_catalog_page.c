@@ -72,7 +72,7 @@ struct CATALOG_PAGE_TBL g_w_catalog_page;
  */
 int mk_w_catalog_page(void *info_arr, ds_key_t index) {
 	static date_t dStartDateStorage;
-	static date_t *dStartDate;
+	static date_t *dStartDate = &dStartDateStorage;
 	static int nCatalogPageMax;
 	int nDuration, nOffset, nType;
 	static int bInit = 0;
@@ -85,10 +85,7 @@ int mk_w_catalog_page(void *info_arr, ds_key_t index) {
 	if (!bInit) {
 		nCatalogPageMax = ((int)get_rowcount(CATALOG_PAGE) / CP_CATALOGS_PER_YEAR) / (YEAR_MAXIMUM - YEAR_MINIMUM + 2);
 
-		date_t *start_date = strtodate(DATA_START_DATE);
-		dStartDate = &dStartDateStorage;
-		*dStartDate = *start_date;
-		free(start_date);
+		strtodt(dStartDate, DATA_START_DATE);
 
 		/* columns that still need to be populated */
 		strcpy(r->cp_department, "DEPARTMENT");

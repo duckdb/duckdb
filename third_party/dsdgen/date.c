@@ -112,32 +112,6 @@ int strtotime(char *str) {
 }
 
 /*
- * Routine: strtodate(char *str)
- * Purpose: initialize a date_t
- * Algorithm:
- * Data Structures:
- * Params:
- * Returns: date_t *
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-date_t *strtodate(char *str) {
-	date_t *res;
-
-	res = (date_t *)malloc(sizeof(struct DATE_T));
-	MALLOC_CHECK(res);
-
-	if (sscanf(str, "%d-%d-%d", &res->year, &res->month, &res->day) != 3)
-		INTERNAL("Badly formed string in call to strtodate()");
-	res->flags = 0;
-	res->julian = dttoj(res);
-
-	return (res);
-}
-/*
  * Routine: jtodt(int src, date_t *dest)
  * Purpose: convert a number of julian days to a date_t
  * Algorithm: Fleigel and Van Flandern (CACM, vol 11, #10, Oct. 1968, p. 657)

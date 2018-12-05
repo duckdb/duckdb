@@ -11,24 +11,24 @@ struct PGParseContext {
 	void *context = nullptr;
 	PgQueryInternalParsetreeAndError result;
 
-    ~PGParseContext() {
-        if (context) {
-            pg_query_parse_finish(context);
-            pg_query_free_parse_result(result);
-        }
-    }
+	~PGParseContext() {
+		if (context) {
+			pg_query_parse_finish(context);
+			pg_query_free_parse_result(result);
+		}
+	}
 };
 
 Parser::Parser() {
 }
 
 void Parser::ParseQuery(string query) {
-    PGParseContext parse_context;
+	PGParseContext parse_context;
 	// first try to parse any PRAGMA statements
 	if (ParsePragma(query)) {
 		// query parsed as pragma statement
 		// if there was no error we were successful
-        return;
+		return;
 	}
 
 	// use the postgres parser to parse the query
@@ -36,14 +36,15 @@ void Parser::ParseQuery(string query) {
 	parse_context.result = pg_query_parse(query.c_str());
 	// check if it succeeded
 	if (parse_context.result.error) {
-		throw ParserException(string(parse_context.result.error->message) + "[" + to_string(parse_context.result.error->lineno) + ":" +
+		throw ParserException(string(parse_context.result.error->message) + "[" +
+		                      to_string(parse_context.result.error->lineno) + ":" +
 		                      to_string(parse_context.result.error->cursorpos) + "]");
-        return;
+		return;
 	}
 
 	if (!parse_context.result.tree) {
 		// empty statement
-        return;
+		return;
 	}
 
 	// if it succeeded, we transform the Postgres parse tree into a list of

@@ -79,9 +79,9 @@ int mk_w_customer(void *info_arr, ds_key_t index) {
 	r = &g_w_customer;
 
 	if (!bInit) {
-		date_t *min_date = strtodate(DATE_MINIMUM);
-		nBaseDate = dttoj(min_date);
-		free(min_date);
+		date_t min_date;
+		strtodt(&min_date, DATE_MINIMUM);
+		nBaseDate = dttoj(&min_date);
 
 		strtodt(&dtBirthMax, "1992-12-31");
 		strtodt(&dtBirthMin, "1924-01-01");

@@ -64,7 +64,7 @@ int mk_w_store(void *info_arr, ds_key_t index) {
 	static decimal_t dRevMin, dRevMax;
 	char *sName1, *sName2, *szTemp;
 	int32_t nHierarchyTotal, nStoreType, nPercentage, nDaysOpen, nMin, nMax;
-	static date_t *tDate;
+	static date_t tDate;
 	static decimal_t min_rev_growth, max_rev_growth, dMinTaxPercentage, dMaxTaxPercentage;
 	static int32_t bInit = 0;
 	struct W_STORE_TBL *r, *rOldValues = &g_OldValues;
@@ -75,7 +75,7 @@ int mk_w_store(void *info_arr, ds_key_t index) {
 	if (!bInit) {
 		nHierarchyTotal = (int)get_rowcount(DIVISIONS);
 		nHierarchyTotal *= (int)get_rowcount(COMPANY);
-		tDate = strtodate(DATE_MINIMUM);
+		strtodt(&tDate, DATE_MINIMUM);
 		strtodec(&min_rev_growth, STORE_MIN_REV_GROWTH);
 		strtodec(&max_rev_growth, STORE_MAX_REV_GROWTH);
 		strtodec(&dRevMin, "1.00");
@@ -112,7 +112,7 @@ int mk_w_store(void *info_arr, ds_key_t index) {
 	nDaysOpen =
 	    genrand_integer(NULL, DIST_UNIFORM, STORE_MIN_DAYS_OPEN, STORE_MAX_DAYS_OPEN, 0, W_STORE_CLOSED_DATE_ID);
 	if (nPercentage < STORE_CLOSED_PCT)
-		r->closed_date_id = tDate->julian + nDaysOpen;
+		r->closed_date_id = tDate.julian + nDaysOpen;
 	else
 		r->closed_date_id = -1;
 	changeSCD(SCD_KEY, &r->closed_date_id, &rOldValues->closed_date_id, &nFieldChangeFlags, bFirstRecord);
