@@ -147,6 +147,44 @@ unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(SelectStatement &statement)
 	return nullptr;
 }
 
+void LogicalPlanGenerator::VisitQueryNode(QueryNode &statement) {
+    assert(root);
+	if (statement.select_distinct) {
+		auto node = GetProjection(root.get());
+		if (!IsProjection(node->type)) {
+			throw Exception("DISTINCT can only apply to projection, union or group");
+		}
+
+		vector<unique_ptr<Expression>> expressions;
+		vector<unique_ptr<Expression>> groups;
+
+		for (size_t i = 0; i < node->expressions.size(); i++) {
+			Expression *proj_ele = node->expressions[i].get();
+			auto group_ref = make_unique_base<Expression, GroupRefExpression>(proj_ele->return_type, i);
+			group_ref->alias = proj_ele->alias;
+			expressions.push_back(move(group_ref));
+			groups.push_back(make_unique_base<Expression, ColumnRefExpression>(proj_ele->return_type, i));
+		}
+		// this aggregate is superflous if all grouping columns are in aggr
+		// below
+		auto aggregate = make_unique<LogicalAggregate>(move(expressions));
+		aggregate->groups = move(groups);
+		aggregate->AddChild(move(root));
+		root = move(aggregate);
+	}
+
+	if (statement.HasOrder()) {
+		auto order = make_unique<LogicalOrder>(move(statement.orderby));
+		order->AddChild(move(root));
+		root = move(order);
+	}
+	if (statement.HasLimit()) {
+		auto limit = make_unique<LogicalLimit>(statement.limit.limit, statement.limit.offset);
+		limit->AddChild(move(root));
+		root = move(limit);
+	}
+}
+
 void LogicalPlanGenerator::Visit(SelectNode &statement) {
 	for (auto &expr : statement.select_list) {
 		AcceptChild(&expr);
@@ -205,40 +243,7 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 		root = move(projection);
 	}
 
-	if (statement.select_distinct) {
-		auto node = GetProjection(root.get());
-		if (!IsProjection(node->type)) {
-			throw Exception("DISTINCT can only apply to projection, union or group");
-		}
-
-		vector<unique_ptr<Expression>> expressions;
-		vector<unique_ptr<Expression>> groups;
-
-		for (size_t i = 0; i < node->expressions.size(); i++) {
-			Expression *proj_ele = node->expressions[i].get();
-			auto group_ref = make_unique_base<Expression, GroupRefExpression>(proj_ele->return_type, i);
-			group_ref->alias = proj_ele->alias;
-			expressions.push_back(move(group_ref));
-			groups.push_back(make_unique_base<Expression, ColumnRefExpression>(proj_ele->return_type, i));
-		}
-		// this aggregate is superflous if all grouping columns are in aggr
-		// below
-		auto aggregate = make_unique<LogicalAggregate>(move(expressions));
-		aggregate->groups = move(groups);
-		aggregate->AddChild(move(root));
-		root = move(aggregate);
-	}
-
-	if (statement.HasOrder()) {
-		auto order = make_unique<LogicalOrder>(move(statement.orderby));
-		order->AddChild(move(root));
-		root = move(order);
-	}
-	if (statement.HasLimit()) {
-		auto limit = make_unique<LogicalLimit>(statement.limit.limit, statement.limit.offset);
-		limit->AddChild(move(root));
-		root = move(limit);
-	}
+    VisitQueryNode(statement);
 }
 
 void LogicalPlanGenerator::Visit(SetOperationNode &statement) {
@@ -325,41 +330,7 @@ void LogicalPlanGenerator::Visit(SetOperationNode &statement) {
 		throw NotImplementedException("Set Operation type");
 	}
 
-	// FIXME: duplicate from above
-	if (statement.select_distinct) {
-		auto node = GetProjection(root.get());
-		if (!IsProjection(node->type)) {
-			throw Exception("DISTINCT can only apply to projection, union or group");
-		}
-
-		vector<unique_ptr<Expression>> expressions;
-		vector<unique_ptr<Expression>> groups;
-
-		for (size_t i = 0; i < node->expressions.size(); i++) {
-			Expression *proj_ele = node->expressions[i].get();
-			auto group_ref = make_unique_base<Expression, GroupRefExpression>(proj_ele->return_type, i);
-			group_ref->alias = proj_ele->alias;
-			expressions.push_back(move(group_ref));
-			groups.push_back(make_unique_base<Expression, ColumnRefExpression>(proj_ele->return_type, i));
-		}
-		// this aggregate is superflous if all grouping columns are in aggr
-		// below
-		auto aggregate = make_unique<LogicalAggregate>(move(expressions));
-		aggregate->groups = move(groups);
-		aggregate->AddChild(move(root));
-		root = move(aggregate);
-	}
-
-	if (statement.HasOrder()) {
-		auto order = make_unique<LogicalOrder>(move(statement.orderby));
-		order->AddChild(move(root));
-		root = move(order);
-	}
-	if (statement.HasLimit()) {
-		auto limit = make_unique<LogicalLimit>(statement.limit.limit, statement.limit.offset);
-		limit->AddChild(move(root));
-		root = move(limit);
-	}
+    VisitQueryNode(statement);
 }
 
 static void cast_children_to_equal_types(Expression &expr, size_t start_idx = 0) {

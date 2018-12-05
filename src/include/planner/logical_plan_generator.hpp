@@ -35,6 +35,7 @@ public:
 	unique_ptr<SQLStatement> Visit(CreateTableStatement &statement);
 	unique_ptr<SQLStatement> Visit(CreateIndexStatement &statement);
 
+    void VisitQueryNode(QueryNode &statement);
 	void Visit(SelectNode &statement);
 	void Visit(SetOperationNode &statement);
 
