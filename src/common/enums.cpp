@@ -5,115 +5,9 @@
 
 using namespace std;
 
-namespace duckdb {
+#include <unordered_map>
 
-ExpressionType StringToExpressionType(const string &str) {
-	string upper_str = StringUtil::Upper(str);
-	if (upper_str == "INVALID") {
-		return ExpressionType::INVALID;
-	} else if (upper_str == "OPERATOR_PLUS" || upper_str == "+") {
-		return ExpressionType::OPERATOR_ADD;
-	} else if (upper_str == "OPERATOR_MINUS" || upper_str == "-") {
-		return ExpressionType::OPERATOR_SUBTRACT;
-	} else if (upper_str == "OPERATOR_MULTIPLY" || upper_str == "*") {
-		return ExpressionType::OPERATOR_MULTIPLY;
-	} else if (upper_str == "OPERATOR_DIVIDE" || upper_str == "/") {
-		return ExpressionType::OPERATOR_DIVIDE;
-	} else if (upper_str == "OPERATOR_CONCAT" || upper_str == "||") {
-		return ExpressionType::OPERATOR_CONCAT;
-	} else if (upper_str == "OPERATOR_MOD" || upper_str == "%") {
-		return ExpressionType::OPERATOR_MOD;
-	} else if (upper_str == "OPERATOR_CAST") {
-		return ExpressionType::OPERATOR_CAST;
-	} else if (upper_str == "OPERATOR_NOT") {
-		return ExpressionType::OPERATOR_NOT;
-	} else if (upper_str == "OPERATOR_IS_NULL") {
-		return ExpressionType::OPERATOR_IS_NULL;
-	} else if (upper_str == "OPERATOR_EXISTS") {
-		return ExpressionType::OPERATOR_EXISTS;
-	} else if (upper_str == "COMPARE_EQUAL" || upper_str == "=") {
-		return ExpressionType::COMPARE_EQUAL;
-	} else if (upper_str == "COMPARE_NOTEQUAL" || upper_str == "!=" || upper_str == "<>") {
-		return ExpressionType::COMPARE_NOTEQUAL;
-	} else if (upper_str == "COMPARE_LESSTHAN" || upper_str == "<") {
-		return ExpressionType::COMPARE_LESSTHAN;
-	} else if (upper_str == "COMPARE_GREATERTHAN" || upper_str == ">") {
-		return ExpressionType::COMPARE_GREATERTHAN;
-	} else if (upper_str == "COMPARE_LESSTHANOREQUALTO" || upper_str == "<=") {
-		return ExpressionType::COMPARE_LESSTHANOREQUALTO;
-	} else if (upper_str == "COMPARE_GREATERTHANOREQUALTO" || upper_str == ">=") {
-		return ExpressionType::COMPARE_GREATERTHANOREQUALTO;
-	} else if (upper_str == "COMPARE_LIKE" || upper_str == "~~") {
-		return ExpressionType::COMPARE_LIKE;
-	} else if (upper_str == "COMPARE_NOTLIKE" || upper_str == "!~~") {
-		return ExpressionType::COMPARE_NOTLIKE;
-	} else if (upper_str == "COMPARE_IN") {
-		return ExpressionType::COMPARE_IN;
-	} else if (upper_str == "COMPARE_DISTINCT_FROM") {
-		return ExpressionType::COMPARE_DISTINCT_FROM;
-	} else if (upper_str == "CONJUNCTION_AND") {
-		return ExpressionType::CONJUNCTION_AND;
-	} else if (upper_str == "CONJUNCTION_OR") {
-		return ExpressionType::CONJUNCTION_OR;
-	} else if (upper_str == "VALUE_CONSTANT") {
-		return ExpressionType::VALUE_CONSTANT;
-	} else if (upper_str == "VALUE_PARAMETER") {
-		return ExpressionType::VALUE_PARAMETER;
-	} else if (upper_str == "VALUE_TUPLE") {
-		return ExpressionType::VALUE_TUPLE;
-	} else if (upper_str == "VALUE_TUPLE_ADDRESS") {
-		return ExpressionType::VALUE_TUPLE_ADDRESS;
-	} else if (upper_str == "VALUE_NULL") {
-		return ExpressionType::VALUE_NULL;
-	} else if (upper_str == "VALUE_VECTOR") {
-		return ExpressionType::VALUE_VECTOR;
-	} else if (upper_str == "VALUE_SCALAR") {
-		return ExpressionType::VALUE_SCALAR;
-	} else if (upper_str == "AGGREGATE_COUNT") {
-		return ExpressionType::AGGREGATE_COUNT;
-	} else if (upper_str == "AGGREGATE_COUNT_STAR") {
-		return ExpressionType::AGGREGATE_COUNT_STAR;
-	} else if (upper_str == "AGGREGATE_SUM") {
-		return ExpressionType::AGGREGATE_SUM;
-	} else if (upper_str == "AGGREGATE_MIN") {
-		return ExpressionType::AGGREGATE_MIN;
-	} else if (upper_str == "AGGREGATE_MAX") {
-		return ExpressionType::AGGREGATE_MAX;
-	} else if (upper_str == "AGGREGATE_AVG") {
-		return ExpressionType::AGGREGATE_AVG;
-	} else if (upper_str == "AGGREGATE_FIRST") {
-		return ExpressionType::AGGREGATE_FIRST;
-	} else if (upper_str == "AGGREGATE_STDDEV_SAMP") {
-		return ExpressionType::AGGREGATE_STDDEV_SAMP;
-	} else if (upper_str == "FUNCTION") {
-		return ExpressionType::FUNCTION;
-	} else if (upper_str == "OPERATOR_CASE_EXPR") {
-		return ExpressionType::OPERATOR_CASE_EXPR;
-	} else if (upper_str == "OPERATOR_NULLIF") {
-		return ExpressionType::OPERATOR_NULLIF;
-	} else if (upper_str == "OPERATOR_COALESCE") {
-		return ExpressionType::OPERATOR_COALESCE;
-	} else if (upper_str == "ROW_SUBQUERY") {
-		return ExpressionType::ROW_SUBQUERY;
-	} else if (upper_str == "SELECT_SUBQUERY") {
-		return ExpressionType::SELECT_SUBQUERY;
-	} else if (upper_str == "STAR") {
-		return ExpressionType::STAR;
-	} else if (upper_str == "PLACEHOLDER") {
-		return ExpressionType::PLACEHOLDER;
-	} else if (upper_str == "COLUMN_REF") {
-		return ExpressionType::COLUMN_REF;
-	} else if (upper_str == "FUNCTION_REF") {
-		return ExpressionType::FUNCTION_REF;
-	} else if (upper_str == "CAST") {
-		return ExpressionType::CAST;
-	} else if (upper_str == "BETWEEN") {
-		return ExpressionType::COMPARE_BETWEEN;
-	} else if (upper_str == "NOT BETWEEN") {
-		return ExpressionType::COMPARE_NOT_BETWEEN;
-	}
-	return ExpressionType::INVALID;
-}
+namespace duckdb {
 
 //===--------------------------------------------------------------------===//
 // Value <--> String Utilities
@@ -121,8 +15,6 @@ ExpressionType StringToExpressionType(const string &str) {
 
 string TypeIdToString(TypeId type) {
 	switch (type) {
-	case TypeId::INVALID:
-		return "INVALID";
 	case TypeId::PARAMETER_OFFSET:
 		return "PARAMETER_OFFSET";
 	case TypeId::BOOLEAN:
@@ -151,6 +43,8 @@ string TypeIdToString(TypeId type) {
 		return "ARRAY";
 	case TypeId::UDT:
 		return "UDT";
+	case TypeId::INVALID:
+		break;
 	}
 	return "INVALID";
 }
@@ -201,9 +95,20 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "PRUNE";
 	case LogicalOperatorType::EXPORT_EXTERNAL_FILE:
 		return "EXPORT_EXTERNAL_FILE";
-	default:
-		return "INVALID";
+	case LogicalOperatorType::TABLE_FUNCTION:
+		return "TABLE_FUNCTION";
+	case LogicalOperatorType::CREATE_INDEX:
+		return "CREATE_INDEX";
+	case LogicalOperatorType::CREATE:
+		return "CREATE";
+	case LogicalOperatorType::EXPLAIN:
+		return "EXPLAIN";
+	case LogicalOperatorType::ALTER:
+		return "ALTER";
+	case LogicalOperatorType::INVALID:
+		break;
 	}
+	return "INVALID";
 }
 
 string PhysicalOperatorToString(PhysicalOperatorType type) {
@@ -260,15 +165,22 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "EXPORT_EXTERNAL_FILE";
 	case PhysicalOperatorType::PRUNE_COLUMNS:
 		return "PRUNE";
-	default:
-		return "INVALID";
+	case PhysicalOperatorType::TABLE_FUNCTION:
+		return "TABLE_FUNCTION";
+	case PhysicalOperatorType::CREATE:
+		return "CREATE";
+	case PhysicalOperatorType::CREATE_INDEX:
+		return "CREATE_INDEX";
+	case PhysicalOperatorType::EXPLAIN:
+		return "EXPLAIN";
+	case PhysicalOperatorType::INVALID:
+		break;
 	}
+	return "INVALID";
 }
 
 string ExpressionTypeToString(ExpressionType type) {
 	switch (type) {
-	case ExpressionType::INVALID:
-		return "INVALID";
 	case ExpressionType::OPERATOR_ADD:
 		return "ADD";
 	case ExpressionType::OPERATOR_SUBTRACT:
@@ -373,9 +285,22 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "GROUP_REF";
 	case ExpressionType::CAST:
 		return "CAST";
-	default:
-		return "UKNOWN_EXP_" + std::to_string((int)type);
+	case ExpressionType::OPERATOR_NOT_EXISTS:
+		return "OPERATOR_NOT_EXISTS";
+	case ExpressionType::COMPARE_NOT_IN:
+		return "COMPARE_NOT_IN";
+	case ExpressionType::COMPARE_BETWEEN:
+		return "COMPARE_BETWEEN";
+	case ExpressionType::COMPARE_NOT_BETWEEN:
+		return "COMPARE_NOT_BETWEEN";
+	case ExpressionType::VALUE_DEFAULT:
+		return "VALUE_DEFAULT";
+	case ExpressionType::AGGREGATE_STDDEV_SAMP:
+		return "AGGREGATE_STDDEV_SAMP";
+	case ExpressionType::INVALID:
+		break;
 	}
+	return "INVALID";
 }
 
 string ExpressionTypeToOperator(ExpressionType type) {
@@ -427,9 +352,10 @@ string JoinTypeToString(JoinType type) {
 		return "SEMI";
 	case JoinType::ANTI:
 		return "ANTI";
-	default:
-		return "INVALID";
+	case JoinType::INVALID:
+		break;
 	}
+	return "INVALID";
 }
 
 ExternalFileFormat StringToExternalFileFormat(const string &str) {

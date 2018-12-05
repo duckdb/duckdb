@@ -16,6 +16,27 @@ static bool IsAggregateFunction(const string &fun_name) {
 	return false;
 }
 
+static ExpressionType AggregateToExpressionType(string &fun_name) {
+	if (fun_name == "count") {
+		return ExpressionType::AGGREGATE_COUNT;
+	} else if (fun_name == "count") {
+		return ExpressionType::AGGREGATE_COUNT_STAR;
+	} else if (fun_name == "sum") {
+		return ExpressionType::AGGREGATE_SUM;
+	} else if (fun_name == "min") {
+		return ExpressionType::AGGREGATE_MIN;
+	} else if (fun_name == "max") {
+		return ExpressionType::AGGREGATE_MAX;
+	} else if (fun_name == "avg") {
+		return ExpressionType::AGGREGATE_AVG;
+	} else if (fun_name == "first") {
+		return ExpressionType::AGGREGATE_FIRST;
+	} else if (fun_name == "stddev_samp") {
+		return ExpressionType::AGGREGATE_STDDEV_SAMP;
+	}
+	return ExpressionType::INVALID;
+}
+
 unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 	auto name = root->funcname;
 	string schema, function_name;
@@ -42,7 +63,7 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 		return make_unique<FunctionExpression>(schema, function_name.c_str(), children);
 	} else {
 		// Aggregate function
-		auto agg_fun_type = StringToExpressionType("AGGREGATE_" + function_name);
+		auto agg_fun_type = AggregateToExpressionType(function_name);
 
 		if (root->over) {
 			throw NotImplementedException("Window functions (OVER/PARTITION BY)");

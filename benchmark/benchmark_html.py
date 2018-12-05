@@ -156,6 +156,7 @@ def create_html(results_folder):
 				benchmark_results[benchmark_name][result] = (result_html, table_class)
 		# now write the actual tables
 		# we create one table per group
+		groups.sort();
 		for group in groups:
 			# the header is all the commits
 			begin_row(f)

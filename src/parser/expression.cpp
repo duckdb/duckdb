@@ -95,10 +95,7 @@ void Expression::Serialize(Serializer &serializer) {
 	serializer.Write<ExpressionType>(type);
 	serializer.Write<TypeId>(return_type);
 	serializer.WriteString(alias);
-	serializer.Write<uint32_t>(children.size());
-	for (auto &children : children) {
-		children->Serialize(serializer);
-	}
+	serializer.WriteList<Expression>(children);
 }
 
 unique_ptr<Expression> Expression::Deserialize(Deserializer &source) {
@@ -107,12 +104,7 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &source) {
 	info.type = source.Read<ExpressionType>();
 	info.return_type = source.Read<TypeId>();
 	auto alias = source.Read<string>();
-	auto children_count = source.Read<uint32_t>();
-	// deserialize the children
-	for (size_t i = 0; i < children_count; i++) {
-		auto expression = Expression::Deserialize(source);
-		info.children.push_back(move(expression));
-	}
+	source.ReadList<Expression>(info.children);
 	unique_ptr<Expression> result;
 	switch (expression_class) {
 	case ExpressionClass::AGGREGATE:

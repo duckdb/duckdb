@@ -347,7 +347,6 @@ enum class LogicalOperatorType : uint8_t {
 	CREATE,
 	CREATE_INDEX,
 	ALTER,
-	ADD,
 
 	// -----------------------------
 	// Explain
@@ -436,8 +435,6 @@ enum class TransactionType : uint8_t { INVALID, BEGIN_TRANSACTION, COMMIT, ROLLB
 string TypeIdToString(TypeId type);
 string JoinTypeToString(JoinType type);
 IndexType StringToIndexType(const string &str);
-
-ExpressionType StringToExpressionType(const string &str);
 
 string LogicalOperatorToString(LogicalOperatorType type);
 string PhysicalOperatorToString(PhysicalOperatorType type);
