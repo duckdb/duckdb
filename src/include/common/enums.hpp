@@ -347,7 +347,6 @@ enum class LogicalOperatorType : uint8_t {
 	CREATE,
 	CREATE_INDEX,
 	ALTER,
-	ADD,
 
 	// -----------------------------
 	// Explain

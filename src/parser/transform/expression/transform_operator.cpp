@@ -38,8 +38,8 @@ static ExpressionType OperatorToExpressionType(string &op) {
 		return ExpressionType::COMPARE_LIKE;
 	} else if (op == "!~~") {
 		return ExpressionType::COMPARE_NOTLIKE;
-    }
-    return ExpressionType::INVALID;
+	}
+	return ExpressionType::INVALID;
 }
 
 unique_ptr<Expression> Transformer::TransformAExpr(A_Expr *root) {

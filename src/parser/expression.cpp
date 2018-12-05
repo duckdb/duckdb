@@ -95,7 +95,7 @@ void Expression::Serialize(Serializer &serializer) {
 	serializer.Write<ExpressionType>(type);
 	serializer.Write<TypeId>(return_type);
 	serializer.WriteString(alias);
-    serializer.WriteList<Expression>(children);
+	serializer.WriteList<Expression>(children);
 }
 
 unique_ptr<Expression> Expression::Deserialize(Deserializer &source) {
@@ -104,7 +104,7 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &source) {
 	info.type = source.Read<ExpressionType>();
 	info.return_type = source.Read<TypeId>();
 	auto alias = source.Read<string>();
-    source.ReadList<Expression>(info.children);
+	source.ReadList<Expression>(info.children);
 	unique_ptr<Expression> result;
 	switch (expression_class) {
 	case ExpressionClass::AGGREGATE:

@@ -15,8 +15,6 @@ namespace duckdb {
 
 string TypeIdToString(TypeId type) {
 	switch (type) {
-	case TypeId::INVALID:
-		return "INVALID";
 	case TypeId::PARAMETER_OFFSET:
 		return "PARAMETER_OFFSET";
 	case TypeId::BOOLEAN:
@@ -45,6 +43,8 @@ string TypeIdToString(TypeId type) {
 		return "ARRAY";
 	case TypeId::UDT:
 		return "UDT";
+	case TypeId::INVALID:
+		break;
 	}
 	return "INVALID";
 }
@@ -95,9 +95,20 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "PRUNE";
 	case LogicalOperatorType::EXPORT_EXTERNAL_FILE:
 		return "EXPORT_EXTERNAL_FILE";
-	default:
-		return "INVALID";
+	case LogicalOperatorType::TABLE_FUNCTION:
+		return "TABLE_FUNCTION";
+	case LogicalOperatorType::CREATE_INDEX:
+		return "CREATE_INDEX";
+	case LogicalOperatorType::CREATE:
+		return "CREATE";
+	case LogicalOperatorType::EXPLAIN:
+		return "EXPLAIN";
+	case LogicalOperatorType::ALTER:
+		return "ALTER";
+	case LogicalOperatorType::INVALID:
+		break;
 	}
+	return "INVALID";
 }
 
 string PhysicalOperatorToString(PhysicalOperatorType type) {
@@ -154,15 +165,22 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "EXPORT_EXTERNAL_FILE";
 	case PhysicalOperatorType::PRUNE_COLUMNS:
 		return "PRUNE";
-	default:
-		return "INVALID";
+	case PhysicalOperatorType::TABLE_FUNCTION:
+		return "TABLE_FUNCTION";
+	case PhysicalOperatorType::CREATE:
+		return "CREATE";
+	case PhysicalOperatorType::CREATE_INDEX:
+		return "CREATE_INDEX";
+	case PhysicalOperatorType::EXPLAIN:
+		return "EXPLAIN";
+	case PhysicalOperatorType::INVALID:
+		break;
 	}
+	return "INVALID";
 }
 
 string ExpressionTypeToString(ExpressionType type) {
 	switch (type) {
-	case ExpressionType::INVALID:
-		return "INVALID";
 	case ExpressionType::OPERATOR_ADD:
 		return "ADD";
 	case ExpressionType::OPERATOR_SUBTRACT:
@@ -267,9 +285,22 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "GROUP_REF";
 	case ExpressionType::CAST:
 		return "CAST";
-	default:
-		return "UKNOWN_EXP_" + std::to_string((int)type);
+	case ExpressionType::OPERATOR_NOT_EXISTS:
+		return "OPERATOR_NOT_EXISTS";
+	case ExpressionType::COMPARE_NOT_IN:
+		return "COMPARE_NOT_IN";
+	case ExpressionType::COMPARE_BETWEEN:
+		return "COMPARE_BETWEEN";
+	case ExpressionType::COMPARE_NOT_BETWEEN:
+		return "COMPARE_NOT_BETWEEN";
+	case ExpressionType::VALUE_DEFAULT:
+		return "VALUE_DEFAULT";
+	case ExpressionType::AGGREGATE_STDDEV_SAMP:
+		return "AGGREGATE_STDDEV_SAMP";
+	case ExpressionType::INVALID:
+		break;
 	}
+	return "INVALID";
 }
 
 string ExpressionTypeToOperator(ExpressionType type) {
@@ -321,9 +352,10 @@ string JoinTypeToString(JoinType type) {
 		return "SEMI";
 	case JoinType::ANTI:
 		return "ANTI";
-	default:
-		return "INVALID";
+	case JoinType::INVALID:
+		break;
 	}
+	return "INVALID";
 }
 
 ExternalFileFormat StringToExternalFileFormat(const string &str) {

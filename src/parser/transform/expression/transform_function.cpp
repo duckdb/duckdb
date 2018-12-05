@@ -33,8 +33,8 @@ static ExpressionType AggregateToExpressionType(string &fun_name) {
 		return ExpressionType::AGGREGATE_FIRST;
 	} else if (fun_name == "stddev_samp") {
 		return ExpressionType::AGGREGATE_STDDEV_SAMP;
-    }
-    return ExpressionType::INVALID;
+	}
+	return ExpressionType::INVALID;
 }
 
 unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
