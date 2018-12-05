@@ -437,8 +437,6 @@ string TypeIdToString(TypeId type);
 string JoinTypeToString(JoinType type);
 IndexType StringToIndexType(const string &str);
 
-ExpressionType StringToExpressionType(const string &str);
-
 string LogicalOperatorToString(LogicalOperatorType type);
 string PhysicalOperatorToString(PhysicalOperatorType type);
 string ExpressionTypeToString(ExpressionType type);

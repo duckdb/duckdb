@@ -9,6 +9,39 @@ using namespace duckdb;
 using namespace postgres;
 using namespace std;
 
+static ExpressionType OperatorToExpressionType(string &op) {
+	if (op == "+") {
+		return ExpressionType::OPERATOR_ADD;
+	} else if (op == "-") {
+		return ExpressionType::OPERATOR_SUBTRACT;
+	} else if (op == "*") {
+		return ExpressionType::OPERATOR_MULTIPLY;
+	} else if (op == "/") {
+		return ExpressionType::OPERATOR_DIVIDE;
+	} else if (op == "||") {
+		return ExpressionType::OPERATOR_CONCAT;
+	} else if (op == "%") {
+		return ExpressionType::OPERATOR_MOD;
+	} else if (op == "=") {
+		return ExpressionType::COMPARE_EQUAL;
+	} else if (op == "!=" || op == "<>") {
+		return ExpressionType::COMPARE_NOTEQUAL;
+	} else if (op == "<") {
+		return ExpressionType::COMPARE_LESSTHAN;
+	} else if (op == ">") {
+		return ExpressionType::COMPARE_GREATERTHAN;
+	} else if (op == "<=") {
+		return ExpressionType::COMPARE_LESSTHANOREQUALTO;
+	} else if (op == ">=") {
+		return ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+	} else if (op == "~~") {
+		return ExpressionType::COMPARE_LIKE;
+	} else if (op == "!~~") {
+		return ExpressionType::COMPARE_NOTLIKE;
+    }
+    return ExpressionType::INVALID;
+}
+
 unique_ptr<Expression> Transformer::TransformAExpr(A_Expr *root) {
 	if (!root) {
 		return nullptr;
@@ -73,7 +106,7 @@ unique_ptr<Expression> Transformer::TransformAExpr(A_Expr *root) {
 		}
 	} break;
 	default: {
-		target_type = StringToExpressionType(name);
+		target_type = OperatorToExpressionType(name);
 		if (target_type == ExpressionType::INVALID) {
 			throw NotImplementedException("A_Expr transform not implemented %s.", name.c_str());
 		}
