@@ -52,6 +52,11 @@ TEST_CASE("Test ORDER BY keyword", "[order]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {13}));
 	REQUIRE(CHECK_COLUMN(result, 1, {22}));
 
+	// Offset without limit
+	result = con.Query("SELECT a, b FROM test ORDER BY b, a DESC OFFSET 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {13, 11}));
+	REQUIRE(CHECK_COLUMN(result, 1, {22, 22}));
+
 	result = con.Query("SELECT a, b FROM test WHERE a < 13 ORDER BY b;");
 	REQUIRE(CHECK_COLUMN(result, 0, {12, 11}));
 	REQUIRE(CHECK_COLUMN(result, 1, {21, 22}));
