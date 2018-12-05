@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // planner/operator/logical_create_index.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -15,14 +13,11 @@
 namespace duckdb {
 
 class LogicalCreateIndex : public LogicalOperator {
-  public:
-	LogicalCreateIndex(TableCatalogEntry &table,
-	                   vector<column_t> column_ids,
-	                   vector<unique_ptr<Expression>> expressions,
-	                   unique_ptr<CreateIndexInformation> info)
-	    : LogicalOperator(LogicalOperatorType::CREATE_INDEX), table(table),
-	      column_ids(column_ids), expressions(std::move(expressions)),
-	      info(std::move(info)) {
+public:
+	LogicalCreateIndex(TableCatalogEntry &table, vector<column_t> column_ids,
+	                   vector<unique_ptr<Expression>> expressions, unique_ptr<CreateIndexInformation> info)
+	    : LogicalOperator(LogicalOperatorType::CREATE_INDEX), table(table), column_ids(column_ids),
+	      expressions(std::move(expressions)), info(std::move(info)) {
 	}
 
 	void Accept(LogicalOperatorVisitor *v) override {
@@ -40,7 +35,8 @@ class LogicalCreateIndex : public LogicalOperator {
 	vector<unique_ptr<Expression>> expressions;
 	// Info for index creation
 	unique_ptr<CreateIndexInformation> info;
-  protected:
+
+protected:
 	void ResolveTypes() override {
 		types.push_back(TypeId::BIGINT);
 	}

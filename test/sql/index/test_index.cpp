@@ -1,15 +1,12 @@
-
 #include "catch.hpp"
-#include "test_helpers.hpp"
-
 #include "common/file_system.hpp"
 #include "dbgen.hpp"
+#include "test_helpers.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test index creation statements with multiple connections",
-          "[join]") {
+TEST_CASE("Test index creation statements with multiple connections", "[join]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
@@ -19,9 +16,8 @@ TEST_CASE("Test index creation statements with multiple connections",
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 3)"));
 	for (size_t i = 0; i < 3000; i++) {
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" +
-		                          to_string(i + 10) + ", " + to_string(i + 12) +
-		                          ")"));
+		REQUIRE_NO_FAIL(
+		    con.Query("INSERT INTO integers VALUES (" + to_string(i + 10) + ", " + to_string(i + 12) + ")"));
 	}
 
 	// both con and con2 start a transaction
@@ -71,9 +67,8 @@ TEST_CASE("Index creation on an expression", "[join]") {
 	// create a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER)"));
 	for (size_t i = 0; i < 3000; i++) {
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" +
-		                          to_string((int)(i - 1500)) + ", " +
-		                          to_string(i + 12) + ")"));
+		REQUIRE_NO_FAIL(
+		    con.Query("INSERT INTO integers VALUES (" + to_string((int)(i - 1500)) + ", " + to_string(i + 12) + ")"));
 	}
 
 	result = con.Query("SELECT j FROM integers WHERE abs(i)=1");
@@ -110,4 +105,49 @@ TEST_CASE("Drop Index", "[drop]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
 	result = con.Query("SELECT * FROM integers WHERE i=2");
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+}
+
+TEST_CASE("Open Range Queries", "[openrange]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+
+	DuckDBConnection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	for (size_t i = 0; i < 10; i++) {
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(i) + ")"));
+	}
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
+	result = con.Query("SELECT sum(i) FROM integers WHERE i>9");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	result = con.Query("SELECT sum(i) FROM integers WHERE 9<i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	result = con.Query("SELECT sum(i) FROM integers WHERE i>=10");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	result = con.Query("SELECT sum(i) FROM integers WHERE i>7");
+	REQUIRE(CHECK_COLUMN(result, 0, {17}));
+	result = con.Query("SELECT sum(i) FROM integers WHERE i>=7");
+	REQUIRE(CHECK_COLUMN(result, 0, {24}));
+	result = con.Query("SELECT sum(i) FROM integers WHERE i<3");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	result = con.Query("SELECT sum(i) FROM integers WHERE i<=3");
+	REQUIRE(CHECK_COLUMN(result, 0, {6}));
+	result = con.Query("SELECT sum(i) FROM integers WHERE i<0");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	result = con.Query("SELECT sum(i) FROM integers WHERE i=0");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+}
+
+TEST_CASE("Closed Range Queries", "[closerange]") {
+    unique_ptr<DuckDBResult> result;
+    DuckDB db(nullptr);
+
+    DuckDBConnection con(db);
+    REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+    for (size_t i = 0; i < 10; i++) {
+        REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(i) + ")"));
+    }
+    REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
+    result = con.Query("SELECT sum(i) FROM integers WHERE i> 5 and i>9 ");
+    REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+
 }

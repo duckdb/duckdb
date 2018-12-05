@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // storage/order_index.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -14,7 +12,6 @@
 #include "common/types/data_chunk.hpp"
 #include "common/types/tuple.hpp"
 #include "common/types/vector.hpp"
-
 #include "parser/expression.hpp"
 #include "storage/data_table.hpp"
 #include "storage/index.hpp"
@@ -24,20 +21,17 @@ namespace duckdb {
 struct OrderIndexScanState : public IndexScanState {
 	Value value;
 	size_t current_index;
+	size_t final_index;
 
-	OrderIndexScanState(vector<column_t> column_ids,
-	                    Expression &expression)
-	    : IndexScanState(column_ids, expression) {
+	OrderIndexScanState(vector<column_t> column_ids, Expression &expression) : IndexScanState(column_ids, expression) {
 	}
 };
 
 //! OrderIndex is a simple sorted list index that can be binary searched
 class OrderIndex : public Index {
-  public:
-	OrderIndex(DataTable &table, vector<column_t> column_ids,
-	           vector<TypeId> types, vector<TypeId> expression_types,
-	           vector<unique_ptr<Expression>> expressions,
-	           size_t initial_capacity);
+public:
+	OrderIndex(DataTable &table, vector<column_t> column_ids, vector<TypeId> types, vector<TypeId> expression_types,
+	           vector<unique_ptr<Expression>> expressions, size_t initial_capacity);
 
 	//! Appends data into the index, but does not perform the sort yet! This can
 	//! be done separately by calling the OrderIndex::Sort() method
@@ -49,19 +43,16 @@ class OrderIndex : public Index {
 
 	//! Initialize a scan on the index with the given expression and column ids
 	//! to fetch from the base table
-	unique_ptr<IndexScanState>
-	InitializeScan(Transaction &transaction, vector<column_t> column_ids,
-	               Expression *expression) override;
+	unique_ptr<IndexScanState> InitializeScan(Transaction &transaction, vector<column_t> column_ids,
+	                                          Expression *expression, ExpressionType expressionType) override;
 	//! Perform a lookup on the index
-	void Scan(Transaction &transaction, IndexScanState *ss,
-	          DataChunk &result) override;
+	void Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) override;
 
 	// Append entries to the index
-	void Append(ClientContext &context, DataChunk &entries,
-	            size_t row_identifier_start) override;
+	void Append(ClientContext &context, DataChunk &entries, size_t row_identifier_start) override;
 	// Update entries in the index
-	void Update(ClientContext &context, vector<column_t> &column_ids,
-	            DataChunk &update_data, Vector &row_identifiers) override;
+	void Update(ClientContext &context, vector<column_t> &column_ids, DataChunk &update_data,
+	            Vector &row_identifiers) override;
 
 	//! Lock used for updating the index
 	std::mutex lock;
@@ -82,14 +73,20 @@ class OrderIndex : public Index {
 	//! The capacity of the index
 	size_t capacity;
 
-  private:
+private:
 	DataChunk expression_result;
 
-	//! Get the start position in the index for a constant value (point query)
-	size_t Search(Value value);
+	//! Get the start/end position in the index for a Less Than Equal Operator
+	size_t SearchLTE(Value value);
+	//! Get the start/end position in the index for a Greater Than Equal Operator
+	size_t SearchGTE(Value value);
+	//! Get the start/end position in the index for a Less Than Operator
+	size_t SearchLT(Value value);
+	//! Get the start/end position in the index for a Greater Than Operator
+	size_t SearchGT(Value value);
 	//! Scan the index starting from the position, updating the position.
 	//! Returns the amount of tuples scanned.
-	void Scan(size_t &position, Value value, Vector &result_identifiers);
+	void Scan(size_t &position_from, size_t &position_to, Value value, Vector &result_identifiers);
 };
 
 } // namespace duckdb
