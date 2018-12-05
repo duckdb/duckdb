@@ -69,8 +69,7 @@ void case_expr::accept(prod_visitor *v) {
 	false_expr->accept(v);
 }
 
-column_reference::column_reference(prod *p, sqltype *type_constraint)
-    : value_expr(p) {
+column_reference::column_reference(prod *p, sqltype *type_constraint) : value_expr(p) {
 	if (type_constraint) {
 		auto pairs = scope->refs_of_type(type_constraint);
 		auto picked = random_pick(pairs);
@@ -146,8 +145,7 @@ comparison_op::comparison_op(prod *p) : bool_binop(p) {
 	}
 }
 
-coalesce::coalesce(prod *p, sqltype *type_constraint, const char *abbrev)
-    : value_expr(p), abbrev_(abbrev) {
+coalesce::coalesce(prod *p, sqltype *type_constraint, const char *abbrev) : value_expr(p), abbrev_(abbrev) {
 	auto first_expr = value_expr::factory(this, type_constraint);
 	auto second_expr = value_expr::factory(this, first_expr->type);
 
@@ -176,31 +174,26 @@ void coalesce::out(std::ostream &out) {
 	out << " as " << type->name << ")";
 }
 
-const_expr::const_expr(prod *p, sqltype *type_constraint)
-    : value_expr(p), expr("") {
+const_expr::const_expr(prod *p, sqltype *type_constraint) : value_expr(p), expr("") {
 	type = type_constraint ? type_constraint : scope->schema->inttype;
 
 	if (type == scope->schema->inttype)
 		expr = to_string(d100());
 	else if (type == scope->schema->booltype)
-		expr += (d6() > 3) ? scope->schema->true_literal
-		                   : scope->schema->false_literal;
+		expr += (d6() > 3) ? scope->schema->true_literal : scope->schema->false_literal;
 	else if (dynamic_cast<insert_stmt *>(p) && (d6() > 3))
 		expr += "default";
 	else
 		expr += "cast(null as " + type->name + ")";
 }
 
-funcall::funcall(prod *p, sqltype *type_constraint, bool agg)
-    : value_expr(p), is_aggregate(agg) {
+funcall::funcall(prod *p, sqltype *type_constraint, bool agg) : value_expr(p), is_aggregate(agg) {
 	if (type_constraint == scope->schema->internaltype)
 		fail("cannot call functions involving internal type");
 
-	auto &idx =
-	    agg ? p->scope->schema->aggregates_returning_type
-	        : (4 < d6())
-	              ? p->scope->schema->routines_returning_type
-	              : p->scope->schema->parameterless_routines_returning_type;
+	auto &idx = agg ? p->scope->schema->aggregates_returning_type
+	                : (4 < d6()) ? p->scope->schema->routines_returning_type
+	                             : p->scope->schema->parameterless_routines_returning_type;
 
 retry:
 
@@ -231,8 +224,7 @@ retry:
 	}
 
 	for (auto type : proc->argtypes)
-		if (type == scope->schema->internaltype ||
-		    type == scope->schema->arraytype) {
+		if (type == scope->schema->internaltype || type == scope->schema->arraytype) {
 			retry();
 			goto retry;
 		}
@@ -336,8 +328,7 @@ void window_function::out(std::ostream &out) {
 	out << ")";
 }
 
-window_function::window_function(prod *p, sqltype *type_constraint)
-    : value_expr(p) {
+window_function::window_function(prod *p, sqltype *type_constraint) : value_expr(p) {
 	match();
 	aggregate = make_shared<funcall>(this, type_constraint, true);
 	type = aggregate->type;

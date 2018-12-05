@@ -26,7 +26,7 @@ struct OrderIndexScanState : public IndexScanState {
 	size_t current_index;
 	size_t final_index;
 
-	OrderIndexScanState(std::vector<column_t> column_ids,
+	OrderIndexScanState(vector<column_t> column_ids,
 	                    Expression &expression)
 	    : IndexScanState(column_ids, expression) {
 	}
@@ -35,9 +35,9 @@ struct OrderIndexScanState : public IndexScanState {
 //! OrderIndex is a simple sorted list index that can be binary searched
 class OrderIndex : public Index {
   public:
-	OrderIndex(DataTable &table, std::vector<column_t> column_ids,
-	           std::vector<TypeId> types, std::vector<TypeId> expression_types,
-	           std::vector<std::unique_ptr<Expression>> expressions,
+	OrderIndex(DataTable &table, vector<column_t> column_ids,
+	           vector<TypeId> types, vector<TypeId> expression_types,
+	           vector<unique_ptr<Expression>> expressions,
 	           size_t initial_capacity);
 
 	//! Appends data into the index, but does not perform the sort yet! This can
@@ -50,8 +50,8 @@ class OrderIndex : public Index {
 
 	//! Initialize a scan on the index with the given expression and column ids
 	//! to fetch from the base table
-	std::unique_ptr<IndexScanState>
-	InitializeScan(Transaction &transaction, std::vector<column_t> column_ids,
+	unique_ptr<IndexScanState>
+	InitializeScan(Transaction &transaction, vector<column_t> column_ids,
 	               Expression *expression, ExpressionType expressionType) override;
 	//! Perform a lookup on the index
 	void Scan(Transaction &transaction, IndexScanState *ss,
@@ -61,7 +61,7 @@ class OrderIndex : public Index {
 	void Append(ClientContext &context, DataChunk &entries,
 	            size_t row_identifier_start) override;
 	// Update entries in the index
-	void Update(ClientContext &context, std::vector<column_t> &column_ids,
+	void Update(ClientContext &context, vector<column_t> &column_ids,
 	            DataChunk &update_data, Vector &row_identifiers) override;
 
 	//! Lock used for updating the index
@@ -69,15 +69,15 @@ class OrderIndex : public Index {
 	//! The table
 	DataTable &table;
 	//! Column identifiers to extract from the base table
-	std::vector<column_t> column_ids;
+	vector<column_t> column_ids;
 	//! Types of the column identifiers
-	std::vector<TypeId> types;
+	vector<TypeId> types;
 	//! The expressions to evaluate
-	std::vector<std::unique_ptr<Expression>> expressions;
+	vector<unique_ptr<Expression>> expressions;
 	//! The size of one tuple
 	size_t tuple_size;
 	//! The big sorted list
-	std::unique_ptr<uint8_t[]> data;
+	unique_ptr<uint8_t[]> data;
 	//! The amount of entries in the index
 	size_t count;
 	//! The capacity of the index

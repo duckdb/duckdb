@@ -1,5 +1,5 @@
-
 #include "common/enums.hpp"
+
 #include "common/exception.hpp"
 #include "common/string_util.hpp"
 
@@ -33,8 +33,7 @@ ExpressionType StringToExpressionType(const string &str) {
 		return ExpressionType::OPERATOR_EXISTS;
 	} else if (upper_str == "COMPARE_EQUAL" || upper_str == "=") {
 		return ExpressionType::COMPARE_EQUAL;
-	} else if (upper_str == "COMPARE_NOTEQUAL" || upper_str == "!=" ||
-	           upper_str == "<>") {
+	} else if (upper_str == "COMPARE_NOTEQUAL" || upper_str == "!=" || upper_str == "<>") {
 		return ExpressionType::COMPARE_NOTEQUAL;
 	} else if (upper_str == "COMPARE_LESSTHAN" || upper_str == "<") {
 		return ExpressionType::COMPARE_LESSTHAN;
@@ -42,8 +41,7 @@ ExpressionType StringToExpressionType(const string &str) {
 		return ExpressionType::COMPARE_GREATERTHAN;
 	} else if (upper_str == "COMPARE_LESSTHANOREQUALTO" || upper_str == "<=") {
 		return ExpressionType::COMPARE_LESSTHANOREQUALTO;
-	} else if (upper_str == "COMPARE_GREATERTHANOREQUALTO" ||
-	           upper_str == ">=") {
+	} else if (upper_str == "COMPARE_GREATERTHANOREQUALTO" || upper_str == ">=") {
 		return ExpressionType::COMPARE_GREATERTHANOREQUALTO;
 	} else if (upper_str == "COMPARE_LIKE" || upper_str == "~~") {
 		return ExpressionType::COMPARE_LIKE;
@@ -121,7 +119,7 @@ ExpressionType StringToExpressionType(const string &str) {
 // Value <--> String Utilities
 //===--------------------------------------------------------------------===//
 
-std::string TypeIdToString(TypeId type) {
+string TypeIdToString(TypeId type) {
 	switch (type) {
 	case TypeId::INVALID:
 		return "INVALID";
@@ -434,24 +432,22 @@ string JoinTypeToString(JoinType type) {
 	}
 }
 
-ExternalFileFormat StringToExternalFileFormat(const std::string &str) {
+ExternalFileFormat StringToExternalFileFormat(const string &str) {
 	auto upper = StringUtil::Upper(str);
 	if (upper == "CSV") {
 		return ExternalFileFormat::CSV;
 	}
-	throw ConversionException("No ExternalFileFormat for input '%s'",
-	                          upper.c_str());
+	throw ConversionException("No ExternalFileFormat for input '%s'", upper.c_str());
 }
 
-IndexType StringToIndexType(const std::string &str) {
-	std::string upper_str = StringUtil::Upper(str);
+IndexType StringToIndexType(const string &str) {
+	string upper_str = StringUtil::Upper(str);
 	if (upper_str == "INVALID") {
 		return IndexType::INVALID;
 	} else if (upper_str == "BTREE") {
 		return IndexType::BTREE;
 	} else {
-		throw ConversionException(StringUtil::Format(
-		    "No IndexType conversion from string '%s'", upper_str.c_str()));
+		throw ConversionException(StringUtil::Format("No IndexType conversion from string '%s'", upper_str.c_str()));
 	}
 	return IndexType::INVALID;
 }

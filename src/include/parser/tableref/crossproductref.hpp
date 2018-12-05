@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // parser/tableref/crossproductref.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -16,11 +14,11 @@
 namespace duckdb {
 //! Represents a cross product
 class CrossProductRef : public TableRef {
-  public:
+public:
 	CrossProductRef() : TableRef(TableReferenceType::CROSS_PRODUCT) {
 	}
 
-	std::unique_ptr<TableRef> Accept(SQLNodeVisitor *v) override {
+	unique_ptr<TableRef> Accept(SQLNodeVisitor *v) override {
 		return v->Visit(*this);
 	}
 	bool Equals(const TableRef *other_) override {
@@ -28,20 +26,19 @@ class CrossProductRef : public TableRef {
 			return false;
 		}
 		auto other = (CrossProductRef *)other_;
-		return left->Equals(other->left.get()) &&
-		       right->Equals(other->right.get());
+		return left->Equals(other->left.get()) && right->Equals(other->right.get());
 	}
 
-	std::unique_ptr<TableRef> Copy() override;
+	unique_ptr<TableRef> Copy() override;
 
 	//! Serializes a blob into a CrossProductRef
 	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into a CrossProductRef
-	static std::unique_ptr<TableRef> Deserialize(Deserializer &source);
+	static unique_ptr<TableRef> Deserialize(Deserializer &source);
 
 	//! The left hand side of the cross product
-	std::unique_ptr<TableRef> left;
+	unique_ptr<TableRef> left;
 	//! The right hand side of the cross product
-	std::unique_ptr<TableRef> right;
+	unique_ptr<TableRef> right;
 };
 } // namespace duckdb

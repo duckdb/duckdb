@@ -40,8 +40,7 @@
 
 using namespace TPCE;
 
-CCommissionRateTable::CCommissionRateTable(
-    const CommissionRateDataFile_t &dataFile)
+CCommissionRateTable::CCommissionRateTable(const CommissionRateDataFile_t &dataFile)
     : FixedTable<CommissionRateDataFile_t, COMMISSION_RATE_ROW>(dataFile) {
 }
 
@@ -52,11 +51,9 @@ void CCommissionRateTable::LoadTableRow() {
 	const CommissionRateDataFileRecord &dataRecord(df[recordIdx]);
 
 	tableRow.CR_C_TIER = dataRecord.CR_C_TIER();
-	strncpy(tableRow.CR_EX_ID, dataRecord.CR_EX_ID_CSTR(),
-	        sizeof(tableRow.CR_EX_ID));
+	strncpy(tableRow.CR_EX_ID, dataRecord.CR_EX_ID_CSTR(), sizeof(tableRow.CR_EX_ID));
 	tableRow.CR_FROM_QTY = dataRecord.CR_FROM_QTY();
 	tableRow.CR_RATE = dataRecord.CR_RATE();
 	tableRow.CR_TO_QTY = dataRecord.CR_TO_QTY();
-	strncpy(tableRow.CR_TT_ID, dataRecord.CR_TT_ID_CSTR(),
-	        sizeof(tableRow.CR_TT_ID));
+	strncpy(tableRow.CR_TT_ID, dataRecord.CR_TT_ID_CSTR(), sizeof(tableRow.CR_TT_ID));
 }

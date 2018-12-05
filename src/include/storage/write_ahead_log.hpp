@@ -1,20 +1,18 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // storage/write_ahead_log.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include <vector>
-
 #include "common/exception.hpp"
 #include "common/helper.hpp"
 #include "common/types/data_chunk.hpp"
+
+#include <vector>
 
 namespace duckdb {
 
@@ -41,8 +39,7 @@ struct WALEntry {
 	static constexpr wal_type_t WAL_FLUSH = 100;
 
 	static bool TypeIsValid(wal_type_t type) {
-		return type == WALEntry::WAL_FLUSH ||
-		       (type >= WALEntry::DROP_TABLE && type <= WALEntry::QUERY);
+		return type == WALEntry::WAL_FLUSH || (type >= WALEntry::DROP_TABLE && type <= WALEntry::QUERY);
 	}
 
 	wal_type_t type;
@@ -51,7 +48,7 @@ struct WALEntry {
 
 struct WALEntryData {
 	WALEntry entry;
-	std::unique_ptr<uint8_t[]> data;
+	unique_ptr<uint8_t[]> data;
 };
 
 //! The WriteAheadLog (WAL) is a log that is used to provide durability. Prior
@@ -59,9 +56,8 @@ struct WALEntryData {
 //! the database to the log, which can then be replayed upon startup in case the
 //! server crashes or is shut down.
 class WriteAheadLog {
-  public:
-	WriteAheadLog(DuckDB &database)
-	    : initialized(false), database(database), wal_file(nullptr) {
+public:
+	WriteAheadLog(DuckDB &database) : initialized(false), database(database), wal_file(nullptr) {
 	}
 	~WriteAheadLog();
 
@@ -70,9 +66,9 @@ class WriteAheadLog {
 	}
 
 	//! Replay the WAL
-	void Replay(std::string &path);
+	void Replay(string &path);
 	//! Initialize the WAL in the specified directory
-	void Initialize(std::string &path);
+	void Initialize(string &path);
 
 	void WriteCreateTable(TableCatalogEntry *entry);
 	void WriteDropTable(TableCatalogEntry *entry);
@@ -80,12 +76,12 @@ class WriteAheadLog {
 	void WriteCreateSchema(SchemaCatalogEntry *entry);
 	void WriteDropSchema(SchemaCatalogEntry *entry);
 
-	void WriteInsert(std::string &schema, std::string &table, DataChunk &chunk);
-	void WriteQuery(std::string &query);
+	void WriteInsert(string &schema, string &table, DataChunk &chunk);
+	void WriteQuery(string &query);
 
 	void Flush();
 
-  private:
+private:
 	template <class T> void Write(T val);
 	void WriteData(uint8_t *dataptr, size_t data_size);
 

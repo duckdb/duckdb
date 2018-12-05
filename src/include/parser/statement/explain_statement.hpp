@@ -1,38 +1,34 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // parser/statement/explain_statement.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include <vector>
-
 #include "catalog/catalog.hpp"
-#include "parser/sql_statement.hpp"
-
 #include "parser/expression.hpp"
 #include "parser/sql_node_visitor.hpp"
+#include "parser/sql_statement.hpp"
+
+#include <vector>
 
 namespace duckdb {
 
 class ExplainStatement : public SQLStatement {
-  public:
-	ExplainStatement(std::unique_ptr<SQLStatement> stmt)
-	    : SQLStatement(StatementType::EXPLAIN), stmt(move(stmt)){};
-	std::unique_ptr<SQLStatement> stmt;
+public:
+	ExplainStatement(unique_ptr<SQLStatement> stmt) : SQLStatement(StatementType::EXPLAIN), stmt(move(stmt)){};
+	unique_ptr<SQLStatement> stmt;
 
 	virtual ~ExplainStatement() {
 	}
 
-	virtual std::string ToString() const {
+	virtual string ToString() const {
 		return "Explain";
 	}
-	virtual std::unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
+	virtual unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
 		return nullptr;
 	}
 

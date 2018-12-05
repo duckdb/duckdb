@@ -43,14 +43,13 @@
 namespace TPCE {
 
 template <class DataFileT, class TableRowT> class FixedTable {
-  protected:
+protected:
 	const DataFileT &df;
 	TableRowT tableRow;
 	int recordIdx;
 
-  public:
-	FixedTable(const DataFileT &dataFile)
-	    : df(dataFile), tableRow(), recordIdx(-1) {
+public:
+	FixedTable(const DataFileT &dataFile) : df(dataFile), tableRow(), recordIdx(-1) {
 	}
 
 	virtual ~FixedTable() {

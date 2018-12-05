@@ -47,7 +47,7 @@
 namespace TPCE {
 
 class CTradeTypeTable : public FixedTable<TradeTypeDataFile_t, TRADE_TYPE_ROW> {
-  public:
+public:
 	CTradeTypeTable(const TradeTypeDataFile_t &dataFile);
 	~CTradeTypeTable();
 

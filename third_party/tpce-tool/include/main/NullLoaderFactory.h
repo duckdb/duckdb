@@ -51,11 +51,10 @@ namespace TPCE {
 
 class CNullLoaderFactory : public CBaseLoaderFactory {
 
-  public:
+public:
 	// Functions to create loader classes for individual tables.
 
-	virtual CBaseLoader<ACCOUNT_PERMISSION_ROW> *
-	CreateAccountPermissionLoader() {
+	virtual CBaseLoader<ACCOUNT_PERMISSION_ROW> *CreateAccountPermissionLoader() {
 		return new CNullLoader<ACCOUNT_PERMISSION_ROW>();
 	};
 
@@ -79,8 +78,7 @@ class CNullLoaderFactory : public CBaseLoaderFactory {
 		return new CNullLoader<COMMISSION_RATE_ROW>();
 	};
 
-	virtual CBaseLoader<COMPANY_COMPETITOR_ROW> *
-	CreateCompanyCompetitorLoader() {
+	virtual CBaseLoader<COMPANY_COMPETITOR_ROW> *CreateCompanyCompetitorLoader() {
 		return new CNullLoader<COMPANY_COMPETITOR_ROW>();
 	};
 

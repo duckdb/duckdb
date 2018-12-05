@@ -1,12 +1,9 @@
-
 #include "transaction/undo_buffer.hpp"
-
-#include "common/exception.hpp"
 
 #include "catalog/catalog_entry.hpp"
 #include "catalog/catalog_entry/list.hpp"
 #include "catalog/catalog_set.hpp"
-
+#include "common/exception.hpp"
 #include "storage/data_table.hpp"
 #include "storage/storage_chunk.hpp"
 #include "storage/write_ahead_log.hpp"
@@ -59,8 +56,7 @@ void UndoBuffer::Cleanup() {
 				}
 			}
 		} else {
-			assert(entry.type == UndoFlags::EMPTY_ENTRY ||
-			       entry.type == UndoFlags::QUERY);
+			assert(entry.type == UndoFlags::EMPTY_ENTRY || entry.type == UndoFlags::QUERY);
 		}
 	}
 }
@@ -97,14 +93,11 @@ static void WriteCatalogEntry(WriteAheadLog *log, CatalogEntry *entry) {
 		}
 		break;
 	default:
-		throw NotImplementedException(
-		    "UndoBuffer - don't know how to write this entry to the WAL");
+		throw NotImplementedException("UndoBuffer - don't know how to write this entry to the WAL");
 	}
 }
 
-static void
-FlushAppends(WriteAheadLog *log,
-             unordered_map<DataTable *, unique_ptr<DataChunk>> &appends) {
+static void FlushAppends(WriteAheadLog *log, unordered_map<DataTable *, unique_ptr<DataChunk>> &appends) {
 	// write appends that were not flushed yet
 	assert(log);
 	if (appends.size() == 0) {
@@ -120,9 +113,8 @@ FlushAppends(WriteAheadLog *log,
 	appends.clear();
 }
 
-static void
-WriteTuple(WriteAheadLog *log, VersionInformation *entry,
-           unordered_map<DataTable *, unique_ptr<DataChunk>> &appends) {
+static void WriteTuple(WriteAheadLog *log, VersionInformation *entry,
+                       unordered_map<DataTable *, unique_ptr<DataChunk>> &appends) {
 	if (!log) {
 		return;
 	}
@@ -179,8 +171,7 @@ WriteTuple(WriteAheadLog *log, VersionInformation *entry,
 			auto type = chunk->data[i].type;
 			size_t value_size = GetTypeIdSize(type);
 			void *storage_pointer = storage->columns[i] + value_size * id;
-			memcpy(chunk->data[i].data + value_size * current_offset,
-			       storage_pointer, value_size);
+			memcpy(chunk->data[i].data + value_size * current_offset, storage_pointer, value_size);
 			chunk->data[i].count++;
 		}
 	} else {
@@ -191,8 +182,7 @@ WriteTuple(WriteAheadLog *log, VersionInformation *entry,
 		for (size_t i = 0; i < chunk->column_count; i++) {
 			auto type = chunk->data[i].type;
 			size_t value_size = GetTypeIdSize(type);
-			memcpy(chunk->data[i].data + value_size * current_offset,
-			       tuple_data, value_size);
+			memcpy(chunk->data[i].data + value_size * current_offset, tuple_data, value_size);
 			tuple_data += value_size;
 			chunk->data[i].count++;
 		}
@@ -227,8 +217,7 @@ void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) {
 				log->WriteQuery(query);
 			}
 		} else {
-			throw NotImplementedException(
-			    "UndoBuffer - don't know how to commit this type!");
+			throw NotImplementedException("UndoBuffer - don't know how to commit this type!");
 		}
 	}
 	if (log) {
@@ -263,8 +252,7 @@ void UndoBuffer::Rollback() {
 				}
 			}
 		} else {
-			assert(entry.type == UndoFlags::EMPTY_ENTRY ||
-			       entry.type == UndoFlags::QUERY);
+			assert(entry.type == UndoFlags::EMPTY_ENTRY || entry.type == UndoFlags::QUERY);
 		}
 		entry.type = UndoFlags::EMPTY_ENTRY;
 	}

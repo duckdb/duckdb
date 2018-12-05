@@ -48,14 +48,13 @@ namespace TPCE {
 const int iNumEMAIL_DOMAINs = 6;
 
 class CCustomerTable : public TableTemplate<CUSTOMER_ROW> {
-  private:
+private:
 	TIdent m_iRowsToGenerate; // total # of rows to generate
 	CPerson m_person;
 	const AreaCodeDataFile_t &m_Phones;
 	TIdent m_iStartFromCustomer;
 	TIdent m_iCustomerCount;
-	const StatusTypeDataFile_t
-	    &m_StatusTypeFile; // STATUS_TYPE table from the flat file
+	const StatusTypeDataFile_t &m_StatusTypeFile; // STATUS_TYPE table from the flat file
 	CCustomerSelection m_CustomerSelection;
 	TIdent m_iCompanyCount;        // number of Companies
 	unsigned int m_iExchangeCount; // number of Exchanges
@@ -83,7 +82,7 @@ class CCustomerTable : public TableTemplate<CUSTOMER_ROW> {
 	 */
 	void InitNextLoadUnit();
 
-  public:
+public:
 	/*
 	 *  Constructor for the CUSTOMER table class.
 	 *
@@ -93,18 +92,15 @@ class CCustomerTable : public TableTemplate<CUSTOMER_ROW> {
 	 *       IN  iStartFromCustomer  - ordinal position of the first customer in
 	 * the sequence (Note: 1-based)
 	 */
-	CCustomerTable(const DataFileManager &dfm, TIdent iCustomerCount,
-	               TIdent iStartFromCustomer);
+	CCustomerTable(const DataFileManager &dfm, TIdent iCustomerCount, TIdent iStartFromCustomer);
 
 	TIdent GenerateNextC_ID(); // generate C_ID and store state information;
 	                           // return false if all ids are generated
 	TIdent GetCurrentC_ID();   // return current customer id
 
-	void
-	GetC_TAX_ID(TIdent C_ID,
-	            char *szOutput); // return tax id (ala Social Security number)
-	eCustomerTier
-	GetC_TIER(TIdent C_ID); // returns unique C_TIER for a given customer id
+	void GetC_TAX_ID(TIdent C_ID,
+	                 char *szOutput);     // return tax id (ala Social Security number)
+	eCustomerTier GetC_TIER(TIdent C_ID); // returns unique C_TIER for a given customer id
 
 	bool GenerateNextRecord(); // generates the next table row
 };

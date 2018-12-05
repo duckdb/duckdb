@@ -52,25 +52,17 @@ void CMEETradingFloor::SetRNGSeed(RNGSEED RNGSeed) {
 }
 
 // Constructor - use default RNG seed
-CMEETradingFloor::CMEETradingFloor(CMEESUTInterface *pSUT,
-                                   CMEEPriceBoard *pPriceBoard,
-                                   CMEETickerTape *pTickerTape,
-                                   CDateTime *pBaseTime,
-                                   CDateTime *pCurrentTime)
-    : m_pSUT(pSUT), m_pPriceBoard(pPriceBoard), m_pTickerTape(pTickerTape),
-      m_pBaseTime(pBaseTime), m_pCurrentTime(pCurrentTime),
-      m_rnd(RNGSeedBaseMEETradingFloor), m_OrderProcessingDelayMean(1.0) {
+CMEETradingFloor::CMEETradingFloor(CMEESUTInterface *pSUT, CMEEPriceBoard *pPriceBoard, CMEETickerTape *pTickerTape,
+                                   CDateTime *pBaseTime, CDateTime *pCurrentTime)
+    : m_pSUT(pSUT), m_pPriceBoard(pPriceBoard), m_pTickerTape(pTickerTape), m_pBaseTime(pBaseTime),
+      m_pCurrentTime(pCurrentTime), m_rnd(RNGSeedBaseMEETradingFloor), m_OrderProcessingDelayMean(1.0) {
 }
 
 // Constructor - RNG seed provided
-CMEETradingFloor::CMEETradingFloor(CMEESUTInterface *pSUT,
-                                   CMEEPriceBoard *pPriceBoard,
-                                   CMEETickerTape *pTickerTape,
-                                   CDateTime *pBaseTime,
-                                   CDateTime *pCurrentTime, RNGSEED RNGSeed)
-    : m_pSUT(pSUT), m_pPriceBoard(pPriceBoard), m_pTickerTape(pTickerTape),
-      m_pBaseTime(pBaseTime), m_pCurrentTime(pCurrentTime), m_rnd(RNGSeed),
-      m_OrderProcessingDelayMean(1.0) {
+CMEETradingFloor::CMEETradingFloor(CMEESUTInterface *pSUT, CMEEPriceBoard *pPriceBoard, CMEETickerTape *pTickerTape,
+                                   CDateTime *pBaseTime, CDateTime *pCurrentTime, RNGSEED RNGSeed)
+    : m_pSUT(pSUT), m_pPriceBoard(pPriceBoard), m_pTickerTape(pTickerTape), m_pBaseTime(pBaseTime),
+      m_pCurrentTime(pCurrentTime), m_rnd(RNGSeed), m_OrderProcessingDelayMean(1.0) {
 }
 
 CMEETradingFloor::~CMEETradingFloor(void) {
@@ -96,9 +88,8 @@ INT32 CMEETradingFloor::SubmitTradeRequest(PTradeRequest pTradeRequest) {
 		// our control.
 		PTradeRequest pNewOrder = new TTradeRequest;
 		*pNewOrder = *pTradeRequest;
-		return (m_OrderTimers.StartTimer(
-		    GenProcessingDelay(m_OrderProcessingDelayMean), this,
-		    &CMEETradingFloor::SendTradeResult, pNewOrder));
+		return (m_OrderTimers.StartTimer(GenProcessingDelay(m_OrderProcessingDelayMean), this,
+		                                 &CMEETradingFloor::SendTradeResult, pNewOrder));
 	} // Use {...} to keep compiler from complaining that other cases/default
 	  // skip initialization of pNewOrder.
 	case eMEESetLimitOrderTrigger:
@@ -121,20 +112,16 @@ void CMEETradingFloor::SendTradeResult(PTradeRequest pTradeRequest) {
 	TTickerEntry TickerEntry;
 	double CurrentPrice = -1.0;
 
-	eTradeType =
-	    m_pTickerTape->ConvertTradeTypeIdToEnum(pTradeRequest->trade_type_id);
-	CurrentPrice =
-	    m_pPriceBoard->GetCurrentPrice(pTradeRequest->symbol).DollarAmount();
+	eTradeType = m_pTickerTape->ConvertTradeTypeIdToEnum(pTradeRequest->trade_type_id);
+	CurrentPrice = m_pPriceBoard->GetCurrentPrice(pTradeRequest->symbol).DollarAmount();
 
 	// Populate Trade-Result inputs, and send to SUT
 	TxnInput.trade_id = pTradeRequest->trade_id;
 
 	// Make sure the Trade-Result has the right price based on the type of
 	// trade.
-	if ((eTradeType == eLimitBuy &&
-	     pTradeRequest->price_quote < CurrentPrice) ||
-	    (eTradeType == eLimitSell &&
-	     pTradeRequest->price_quote > CurrentPrice)) {
+	if ((eTradeType == eLimitBuy && pTradeRequest->price_quote < CurrentPrice) ||
+	    (eTradeType == eLimitSell && pTradeRequest->price_quote > CurrentPrice)) {
 		TxnInput.trade_price = pTradeRequest->price_quote;
 	} else {
 		TxnInput.trade_price = CurrentPrice;
@@ -143,8 +130,7 @@ void CMEETradingFloor::SendTradeResult(PTradeRequest pTradeRequest) {
 	m_pSUT->TradeResult(&TxnInput);
 
 	// Populate Ticker Entry information
-	strncpy(TickerEntry.symbol, pTradeRequest->symbol,
-	        sizeof(TickerEntry.symbol));
+	strncpy(TickerEntry.symbol, pTradeRequest->symbol, sizeof(TickerEntry.symbol));
 	TickerEntry.trade_qty = pTradeRequest->trade_qty;
 
 	// Note that the Trade-Result sent out above does not always use

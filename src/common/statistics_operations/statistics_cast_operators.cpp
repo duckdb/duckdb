@@ -1,4 +1,3 @@
-
 #include "common/exception.hpp"
 #include "common/types/statistics.hpp"
 #include "common/value_operations/value_operations.hpp"
@@ -7,13 +6,11 @@
 using namespace duckdb;
 using namespace std;
 
-void ExpressionStatistics::Cast(ExpressionStatistics &source,
-                                ExpressionStatistics &result) {
+void ExpressionStatistics::Cast(ExpressionStatistics &source, ExpressionStatistics &result) {
 	result.has_stats = source.has_stats;
 	if (source.has_stats) {
 		result.can_have_null = source.can_have_null;
-		if (TypeIsNumeric(source.expression.return_type) &&
-		    TypeIsNumeric(result.expression.return_type)) {
+		if (TypeIsNumeric(source.expression.return_type) && TypeIsNumeric(result.expression.return_type)) {
 			// both are numeric, preserve numeric stats
 			result.min = source.min;
 			result.max = source.max;

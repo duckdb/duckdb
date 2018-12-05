@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // optimizer/expression_rules/distributivity.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -16,12 +14,11 @@ namespace duckdb {
 
 // (X AND B) OR (X AND C) OR (X AND D) = X AND (B OR C OR D)
 class DistributivityRule : public Rule {
-  public:
+public:
 	DistributivityRule();
 
-	std::unique_ptr<Expression> Apply(Rewriter &rewriter, Expression &root,
-	                                  std::vector<AbstractOperator> &bindings,
-	                                  bool &fixed_point);
+	unique_ptr<Expression> Apply(Rewriter &rewriter, Expression &root, vector<AbstractOperator> &bindings,
+	                             bool &fixed_point);
 };
 
 } // namespace duckdb

@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // common/serializer.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -22,7 +20,7 @@ namespace duckdb {
 class Serializer {
 	friend class Deserializer;
 
-  private:
+private:
 	inline void PotentialResize(size_t new_element_size) {
 		if (blob.size + new_element_size >= maximum_size) {
 			do {
@@ -31,16 +29,16 @@ class Serializer {
 			auto new_data = new uint8_t[maximum_size];
 			memcpy(new_data, data, blob.size);
 			data = new_data;
-			blob.data = std::unique_ptr<uint8_t[]>(new_data);
+			blob.data = unique_ptr<uint8_t[]>(new_data);
 		}
 	}
 
-  public:
+public:
 	//! Serializes to a buffer allocated by the serializer, will expand when
 	//! writing past the initial threshold
 	Serializer(size_t maximum_size = SERIALIZER_DEFAULT_SIZE);
 	//! Serializes to a provided (owned) data pointer
-	Serializer(std::unique_ptr<uint8_t[]> data, size_t size);
+	Serializer(unique_ptr<uint8_t[]> data, size_t size);
 	//! Serializes to a provided non-owned data pointer, bounds on writing are
 	//! not checked
 	Serializer(uint8_t *data);
@@ -52,7 +50,7 @@ class Serializer {
 		blob.size += sizeof(T);
 	}
 
-	void WriteString(const std::string &val) {
+	void WriteString(const string &val) {
 		Write<uint32_t>(val.size());
 		if (val.size() > 0) {
 			PotentialResize(val.size());
@@ -83,7 +81,21 @@ class Serializer {
 		return std::move(blob);
 	}
 
-  private:
+	template <class T> void WriteList(vector<unique_ptr<T>> &list) {
+		Write<uint32_t>(list.size());
+		for (auto &child : list) {
+			child->Serialize(*this);
+		}
+	}
+
+	template <class T> void WriteOptional(unique_ptr<T> &element) {
+		Write<bool>(element ? true : false);
+		if (element) {
+			element->Serialize(*this);
+		}
+	}
+
+private:
 	size_t maximum_size;
 	uint8_t *data;
 
@@ -93,9 +105,8 @@ class Serializer {
 //! The Deserializer class assists in deserializing a binary blob back into an
 //! object
 class Deserializer {
-  public:
-	Deserializer(Serializer &serializer)
-	    : Deserializer(serializer.data, serializer.blob.size) {
+public:
+	Deserializer(Serializer &serializer) : Deserializer(serializer.data, serializer.blob.size) {
 	}
 	Deserializer(uint8_t *ptr, size_t data);
 
@@ -121,11 +132,27 @@ class Deserializer {
 		return dataptr;
 	}
 
-  private:
+	template <class T> void ReadList(vector<unique_ptr<T>> &list) {
+		auto select_count = Read<uint32_t>();
+		for (size_t i = 0; i < select_count; i++) {
+			auto child = T::Deserialize(*this);
+			list.push_back(move(child));
+		}
+	}
+
+	template <class T> unique_ptr<T> ReadOptional() {
+		auto has_entry = Read<bool>();
+		if (has_entry) {
+			return T::Deserialize(*this);
+		}
+		return nullptr;
+	}
+
+private:
 	uint8_t *ptr;
 	uint8_t *endptr;
 };
 
-template <> std::string Deserializer::Read();
+template <> string Deserializer::Read();
 
 } // namespace duckdb

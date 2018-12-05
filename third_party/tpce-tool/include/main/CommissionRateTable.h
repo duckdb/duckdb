@@ -48,9 +48,8 @@
 
 namespace TPCE {
 
-class CCommissionRateTable
-    : public FixedTable<CommissionRateDataFile_t, COMMISSION_RATE_ROW> {
-  public:
+class CCommissionRateTable : public FixedTable<CommissionRateDataFile_t, COMMISSION_RATE_ROW> {
+public:
 	CCommissionRateTable(const CommissionRateDataFile_t &dataFile);
 	~CCommissionRateTable();
 

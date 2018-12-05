@@ -52,15 +52,12 @@ using namespace TPCE;
  *  RETURNS:
  *       not applicable.
  */
-CCompanyCompetitorFile::CCompanyCompetitorFile(
-    const CompanyCompetitorDataFile_t &dataFile,
-    TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount,
-    UINT baseCompanyCount)
+CCompanyCompetitorFile::CCompanyCompetitorFile(const CompanyCompetitorDataFile_t &dataFile,
+                                               TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount,
+                                               UINT baseCompanyCount)
     : m_dataFile(&dataFile),
-      m_iConfiguredCompanyCompetitorCount(
-          CalculateCompanyCompetitorCount(iConfiguredCustomerCount)),
-      m_iActiveCompanyCompetitorCount(
-          CalculateCompanyCompetitorCount(iActiveCustomerCount)),
+      m_iConfiguredCompanyCompetitorCount(CalculateCompanyCompetitorCount(iConfiguredCustomerCount)),
+      m_iActiveCompanyCompetitorCount(CalculateCompanyCompetitorCount(iActiveCustomerCount)),
       m_iBaseCompanyCount(baseCompanyCount) {
 }
 
@@ -75,10 +72,8 @@ CCompanyCompetitorFile::CCompanyCompetitorFile(
  *  RETURNS:
  *       number of company competitors.
  */
-TIdent CCompanyCompetitorFile::CalculateCompanyCompetitorCount(
-    TIdent iCustomerCount) const {
-	return iCustomerCount / iDefaultLoadUnitSize *
-	       iOneLoadUnitCompanyCompetitorCount;
+TIdent CCompanyCompetitorFile::CalculateCompanyCompetitorCount(TIdent iCustomerCount) const {
+	return iCustomerCount / iDefaultLoadUnitSize * iOneLoadUnitCompanyCompetitorCount;
 }
 
 /*
@@ -91,10 +86,8 @@ TIdent CCompanyCompetitorFile::CalculateCompanyCompetitorCount(
  *  RETURNS:
  *       company competitor id.
  */
-TIdent CCompanyCompetitorFile::CalculateStartFromCompanyCompetitor(
-    TIdent iStartFromCustomer) const {
-	return iStartFromCustomer / iDefaultLoadUnitSize *
-	       iOneLoadUnitCompanyCompetitorCount;
+TIdent CCompanyCompetitorFile::CalculateStartFromCompanyCompetitor(TIdent iStartFromCustomer) const {
+	return iStartFromCustomer / iDefaultLoadUnitSize * iOneLoadUnitCompanyCompetitorCount;
 }
 
 /*
@@ -110,8 +103,8 @@ TIdent CCompanyCompetitorFile::CalculateStartFromCompanyCompetitor(
 TIdent CCompanyCompetitorFile::GetCompanyId(TIdent iIndex) const {
 	// Index wraps around every 15000 companies.
 	//
-	return (*m_dataFile)[(int)(iIndex % m_dataFile->size())].CP_CO_ID() +
-	       iTIdentShift + iIndex / m_dataFile->size() * m_iBaseCompanyCount;
+	return (*m_dataFile)[(int)(iIndex % m_dataFile->size())].CP_CO_ID() + iTIdentShift +
+	       iIndex / m_dataFile->size() * m_iBaseCompanyCount;
 }
 
 /*
@@ -127,8 +120,8 @@ TIdent CCompanyCompetitorFile::GetCompanyId(TIdent iIndex) const {
 TIdent CCompanyCompetitorFile::GetCompanyCompetitorId(TIdent iIndex) const {
 	// Index wraps around every 5000 companies.
 	//
-	return (*m_dataFile)[(int)(iIndex % m_dataFile->size())].CP_COMP_CO_ID() +
-	       iTIdentShift + iIndex / m_dataFile->size() * m_iBaseCompanyCount;
+	return (*m_dataFile)[(int)(iIndex % m_dataFile->size())].CP_COMP_CO_ID() + iTIdentShift +
+	       iIndex / m_dataFile->size() * m_iBaseCompanyCount;
 }
 
 /*
@@ -191,7 +184,6 @@ TIdent CCompanyCompetitorFile::GetActiveCompanyCompetitorCount() const {
  *  RETURNS:
  *       reference to the row structure in the Company Competitor file.
  */
-const CompanyCompetitorDataFileRecord &
-CCompanyCompetitorFile::GetRecord(TIdent index) const {
+const CompanyCompetitorDataFileRecord &CCompanyCompetitorFile::GetRecord(TIdent index) const {
 	return (*m_dataFile)[(int)(index % m_dataFile->size())];
 }

@@ -1,4 +1,3 @@
-
 #include "main/TxnHarnessDBInterface.h"
 
 using namespace duckdb;
@@ -8,16 +7,14 @@ using namespace TPCE;
 // see:
 // http://hstore.cs.brown.edu/wordpress/wp-content/uploads/2011/05/TPCE-v0.32.2g.pdf
 
-void CTradeOrderDBInterface::DoTradeOrderFrame1(
-    const TTradeOrderFrame1Input *pIn, TTradeOrderFrame1Output *pOut) {
+void CTradeOrderDBInterface::DoTradeOrderFrame1(const TTradeOrderFrame1Input *pIn, TTradeOrderFrame1Output *pOut) {
 	auto id = pIn->acct_id;
 
 	con.Query("BEGIN TRANSACTION");
-	auto result = con.Query(
-	    "select CA_NAME, CA_B_ID, CA_C_ID, CA_TAX_ST, C_F_NAME, C_L_NAME, "
-	    "C_TIER, C_TAX_ID, B_NAME from CUSTOMER_ACCOUNT, CUSTOMER, BROKER "
-	    "where CA_C_ID=C_ID AND CA_B_ID=B_ID AND CA_ID = " +
-	    to_string(id));
+	auto result = con.Query("select CA_NAME, CA_B_ID, CA_C_ID, CA_TAX_ST, C_F_NAME, C_L_NAME, "
+	                        "C_TIER, C_TAX_ID, B_NAME from CUSTOMER_ACCOUNT, CUSTOMER, BROKER "
+	                        "where CA_C_ID=C_ID AND CA_B_ID=B_ID AND CA_ID = " +
+	                        to_string(id));
 	pOut->num_found = result->size();
 	if (pOut->num_found > 0) {
 		assert(pOut->num_found == 1);
@@ -34,13 +31,10 @@ void CTradeOrderDBInterface::DoTradeOrderFrame1(
 	}
 }
 
-void CTradeOrderDBInterface::DoTradeOrderFrame2(
-    const TTradeOrderFrame2Input *pIn, TTradeOrderFrame2Output *pOut) {
+void CTradeOrderDBInterface::DoTradeOrderFrame2(const TTradeOrderFrame2Input *pIn, TTradeOrderFrame2Output *pOut) {
 	auto result =
-	    con.Query("select AP_ACL from ACCOUNT_PERMISSION where AP_CA_ID = " +
-	              to_string(pIn->acct_id) +
-	              " and AP_F_NAME = " + string(pIn->exec_f_name) +
-	              " and AP_L_NAME = " + string(pIn->exec_l_name) +
+	    con.Query("select AP_ACL from ACCOUNT_PERMISSION where AP_CA_ID = " + to_string(pIn->acct_id) +
+	              " and AP_F_NAME = " + string(pIn->exec_f_name) + " and AP_L_NAME = " + string(pIn->exec_l_name) +
 	              " and AP_TAX_ID = " + string(pIn->exec_tax_id));
 	if (result->size() > 0) {
 		assert(result->size() == 1);
@@ -50,16 +44,14 @@ void CTradeOrderDBInterface::DoTradeOrderFrame2(
 	}
 }
 
-void CTradeOrderDBInterface::DoTradeOrderFrame3(
-    const TTradeOrderFrame3Input *pIn, TTradeOrderFrame3Output *pOut) {
+void CTradeOrderDBInterface::DoTradeOrderFrame3(const TTradeOrderFrame3Input *pIn, TTradeOrderFrame3Output *pOut) {
 	int exch_id;
 	string symbol;
 	if (pIn->symbol[0] == '\0') {
 		// empty symbol
 		auto result = con.Query("select S_EX_ID, S_NAME, S_SYMB from COMPANY, "
 		                        "SECURITY where S_CO_ID=CO_ID AND CO_NAME = " +
-		                        string(pIn->co_name) +
-		                        " AND S_ISSUE=" + string(pIn->issue));
+		                        string(pIn->co_name) + " AND S_ISSUE=" + string(pIn->issue));
 		assert(result->size() == 1);
 		exch_id = result->GetValue<int>(0, 0);
 		strcpy(pOut->s_name, result->GetValue<const char *>(1, 0));
@@ -68,25 +60,20 @@ void CTradeOrderDBInterface::DoTradeOrderFrame3(
 	} else {
 		symbol = string(pIn->symbol);
 
-		auto result =
-		    con.Query("select CO_NAME, S_EX_ID, S_NAME from SECURITY, COMPANY "
-		              "where CO_ID = S_CO_ID AND S_SYMB = " +
-		              symbol);
+		auto result = con.Query("select CO_NAME, S_EX_ID, S_NAME from SECURITY, COMPANY "
+		                        "where CO_ID = S_CO_ID AND S_SYMB = " +
+		                        symbol);
 		assert(result->size() == 1);
 		strcpy(pOut->co_name, result->GetValue<const char *>(0, 0));
 		exch_id = result->GetValue<int>(1, 0);
 		strcpy(pOut->s_name, result->GetValue<const char *>(2, 0));
 	}
 	// Get current pricing information for the security select
-	auto result = con.Query(
-	    "SELECT market_price = LT_PRICE from LAST_TRADE where LT_S_SYMB = " +
-	    symbol);
+	auto result = con.Query("SELECT market_price = LT_PRICE from LAST_TRADE where LT_S_SYMB = " + symbol);
 	pOut->market_price = result->GetValue<double>(0, 0);
 
 	// Set trade characteristics based on the type of trade. select
-	result = con.Query(
-	    "SELECT TT_IS_MRKT, TT_IS_SELL from TRADE_TYPE where TT_ID = " +
-	    string(pIn->trade_type_id));
+	result = con.Query("SELECT TT_IS_MRKT, TT_IS_SELL from TRADE_TYPE where TT_ID = " + string(pIn->trade_type_id));
 	pOut->type_is_market = result->GetValue<bool>(0, 0);
 	pOut->type_is_sell = result->GetValue<bool>(1, 0);
 
@@ -103,8 +90,8 @@ void CTradeOrderDBInterface::DoTradeOrderFrame3(
 	double sell_value = 0.0;
 	int needed_qty = pIn->trade_qty;
 
-	result = con.Query("select HS_QTY from HOLDING_SUMMARY where HS_CA_ID = " +
-	                   to_string(pIn->acct_id) + " and HS_S_SYMB = " + symbol);
+	result = con.Query("select HS_QTY from HOLDING_SUMMARY where HS_CA_ID = " + to_string(pIn->acct_id) +
+	                   " and HS_S_SYMB = " + symbol);
 	int hs_qty = result->GetValue<int>(0, 0);
 
 	if (pOut->type_is_sell) {
@@ -114,17 +101,13 @@ void CTradeOrderDBInterface::DoTradeOrderFrame3(
 			if (pIn->is_lifo) {
 				// Estimates will be based on closing most recently acquired
 				// holdings Could return 0, 1 or many rows
-				result = con.Query(
-				    "select H_QTY, H_PRICE from HOLDING where H_CA_ID = " +
-				    to_string(pIn->acct_id) + " and H_S_SYMB = " + symbol +
-				    " order by H_DTS desc");
+				result = con.Query("select H_QTY, H_PRICE from HOLDING where H_CA_ID = " + to_string(pIn->acct_id) +
+				                   " and H_S_SYMB = " + symbol + " order by H_DTS desc");
 			} else {
 				// Estimates will be based on closing oldest holdings
 				// Could return 0, 1 or many rows
-				result = con.Query(
-				    "select H_QTY, H_PRICE from HOLDING where H_CA_ID = " +
-				    to_string(pIn->acct_id) + " and H_S_SYMB = " + symbol +
-				    " order by H_DTS asc");
+				result = con.Query("select H_QTY, H_PRICE from HOLDING where H_CA_ID = " + to_string(pIn->acct_id) +
+				                   " and H_S_SYMB = " + symbol + " order by H_DTS asc");
 			}
 
 			// Estimate, based on the requested price, any profit that may be
@@ -162,17 +145,13 @@ void CTradeOrderDBInterface::DoTradeOrderFrame3(
 			if (pIn->is_lifo) {
 				// Estimates will be based on closing most recently acquired
 				// holdings Could return 0, 1 or many rows
-				result = con.Query(
-				    "select H_QTY, H_PRICE from HOLDING where H_CA_ID = " +
-				    to_string(pIn->acct_id) + " and H_S_SYMB = " + symbol +
-				    " order by H_DTS desc");
+				result = con.Query("select H_QTY, H_PRICE from HOLDING where H_CA_ID = " + to_string(pIn->acct_id) +
+				                   " and H_S_SYMB = " + symbol + " order by H_DTS desc");
 			} else {
 				// Estimates will be based on closing oldest holdings
 				// Could return 0, 1 or many rows
-				result = con.Query(
-				    "select H_QTY, H_PRICE from HOLDING where H_CA_ID = " +
-				    to_string(pIn->acct_id) + " and H_S_SYMB = " + symbol +
-				    " order by H_DTS asc");
+				result = con.Query("select H_QTY, H_PRICE from HOLDING where H_CA_ID = " + to_string(pIn->acct_id) +
+				                   " and H_S_SYMB = " + symbol + " order by H_DTS asc");
 			}
 			// Estimate, based on the requested price, any profit that may be
 			// realized by covering short postions currently held for this
@@ -208,48 +187,39 @@ void CTradeOrderDBInterface::DoTradeOrderFrame3(
 	// Estimate any capital gains tax that would be incurred as a result of this
 	// // transaction.
 	pOut->tax_amount = 0.0;
-	if ((sell_value > buy_value) &&
-	    ((pIn->tax_status == 1) || (pIn->tax_status == 2))) {
+	if ((sell_value > buy_value) && ((pIn->tax_status == 1) || (pIn->tax_status == 2))) {
 		// Customer’s can be (are) subject to more than one tax rate.
 		// For example, a state tax rate and a federal tax rate. Therefore,
 		// get all tax rates the customer is subject to, and estimate overall
 		// amount of tax that would result from this order.
-		auto result =
-		    con.Query("select sum(TX_RATE) from TAXRATE where TX_ID in ( "
-		              "select CX_TX_ID from CUSTOMER_TAXRATE where CX_C_ID = " +
-		              to_string(pIn->cust_id) + ")");
-		pOut->tax_amount =
-		    (sell_value - buy_value) * result->GetValue<double>(0, 0);
+		auto result = con.Query("select sum(TX_RATE) from TAXRATE where TX_ID in ( "
+		                        "select CX_TX_ID from CUSTOMER_TAXRATE where CX_C_ID = " +
+		                        to_string(pIn->cust_id) + ")");
+		pOut->tax_amount = (sell_value - buy_value) * result->GetValue<double>(0, 0);
 	}
 	// Get administrative fees (e.g. trading charge, commision rate)
-	result =
-	    con.Query("select CR_RATE from COMMISSION_RATE where CR_C_TIER = " +
-	              to_string(pIn->cust_tier) +
-	              " and CR_TT_ID = " + string(pIn->trade_type_id) +
-	              " and CR_EX_ID = " + to_string(exch_id) +
-	              " and CR_FROM_QTY <= " + to_string(pIn->trade_qty) +
-	              " and CR_TO_QTY >= " + to_string(pIn->trade_qty));
+	result = con.Query("select CR_RATE from COMMISSION_RATE where CR_C_TIER = " + to_string(pIn->cust_tier) +
+	                   " and CR_TT_ID = " + string(pIn->trade_type_id) + " and CR_EX_ID = " + to_string(exch_id) +
+	                   " and CR_FROM_QTY <= " + to_string(pIn->trade_qty) +
+	                   " and CR_TO_QTY >= " + to_string(pIn->trade_qty));
 	pOut->comm_rate = result->GetValue<double>(0, 0);
 
-	result = con.Query("select CH_CHRG from CHARGE where CH_C_TIER = " +
-	                   to_string(pIn->cust_tier) +
+	result = con.Query("select CH_CHRG from CHARGE where CH_C_TIER = " + to_string(pIn->cust_tier) +
 	                   " and CH_TT_ID = " + string(pIn->trade_type_id));
 	pOut->charge_amount = result->GetValue<double>(0, 0);
 
 	pOut->acct_assets = 0;
 	if (pIn->type_is_margin) {
 		// get the current account balance
-		result = con.Query(
-		    "select CA_BAL from CUSTOMER_ACCOUNT where CA_ID = acct_id");
+		result = con.Query("select CA_BAL from CUSTOMER_ACCOUNT where CA_ID = acct_id");
 		double acct_bal = 0;
 		if (result->size() > 0) {
 			assert(result->size() == 1);
 			acct_bal = result->GetValue<double>(0, 0);
 		}
 		// update the account balance with the new price
-		result = con.Query(
-		    "select sum(HS_QTY * LT_PRICE) from HOLDING_SUMMARY, LAST_TRADE "
-		    "where HS_CA_ID = acct_id and LT_S_SYMB = HS_S_SYMB");
+		result = con.Query("select sum(HS_QTY * LT_PRICE) from HOLDING_SUMMARY, LAST_TRADE "
+		                   "where HS_CA_ID = acct_id and LT_S_SYMB = HS_S_SYMB");
 		if (result->ValueIsNull(0, 0)) {
 			/* account currently has no holdings */
 			pOut->acct_assets = acct_bal;
@@ -264,21 +234,17 @@ void CTradeOrderDBInterface::DoTradeOrderFrame3(
 	}
 }
 
-void CTradeOrderDBInterface::DoTradeOrderFrame4(
-    const TTradeOrderFrame4Input *pIn, TTradeOrderFrame4Output *pOut) {
+void CTradeOrderDBInterface::DoTradeOrderFrame4(const TTradeOrderFrame4Input *pIn, TTradeOrderFrame4Output *pOut) {
 	// FIXME: auto increment column
 	// FIXME: NOW() function
 	// FIXME: get auto increment column value from insert?
-	con.Query(
-	    "insert into TRADE (T_DTS, T_ST_ID, T_TT_ID, T_IS_CASH, T_S_SYMB, "
-	    "T_QTY, T_BID_PRICE, T_CA_ID, T_EXEC_NAME, T_TRADE_PRICE, T_CHRG, "
-	    "T_COMM, T_TAX, T_LIFO) VALUES (NOW(), " +
-	    string(pIn->status_id) + ", " + string(pIn->trade_type_id) + ", " +
-	    to_string(pIn->is_cash) + ", " + string(pIn->symbol) + ", " +
-	    to_string(pIn->trade_qty) + ", " + to_string(pIn->requested_price) +
-	    ", " + to_string(pIn->acct_id) + ", " + string(pIn->exec_name) +
-	    ", NULL, " + to_string(pIn->charge_amount) + ", " +
-	    to_string(pIn->comm_amount) + ", 0, " + to_string(pIn->is_lifo) + ");");
+	con.Query("insert into TRADE (T_DTS, T_ST_ID, T_TT_ID, T_IS_CASH, T_S_SYMB, "
+	          "T_QTY, T_BID_PRICE, T_CA_ID, T_EXEC_NAME, T_TRADE_PRICE, T_CHRG, "
+	          "T_COMM, T_TAX, T_LIFO) VALUES (NOW(), " +
+	          string(pIn->status_id) + ", " + string(pIn->trade_type_id) + ", " + to_string(pIn->is_cash) + ", " +
+	          string(pIn->symbol) + ", " + to_string(pIn->trade_qty) + ", " + to_string(pIn->requested_price) + ", " +
+	          to_string(pIn->acct_id) + ", " + string(pIn->exec_name) + ", NULL, " + to_string(pIn->charge_amount) +
+	          ", " + to_string(pIn->comm_amount) + ", 0, " + to_string(pIn->is_lifo) + ");");
 	if (!pIn->type_is_market) {
 		// con.Query("INSERT INTO TRADE_REQUEST (TR_T_ID, TR_TT_ID, TR_S_SYMB,
 		// TR_QTY, TR_BID_PRICE, TR_CA_ID) VALUES ()");

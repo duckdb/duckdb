@@ -47,39 +47,30 @@ using namespace TPCE;
  *   Default constructor.
  */
 CCustomerSelection::CCustomerSelection()
-    : m_pRND(NULL), m_iStartFromCustomer(0 + iTIdentShift), m_iCustomerCount(0),
-      m_bPartitionByCID(false), m_iPartitionPercent(0),
-      m_iMyStartFromCustomer(0 + iTIdentShift), m_iMyCustomerCount(0) {
+    : m_pRND(NULL), m_iStartFromCustomer(0 + iTIdentShift), m_iCustomerCount(0), m_bPartitionByCID(false),
+      m_iPartitionPercent(0), m_iMyStartFromCustomer(0 + iTIdentShift), m_iMyCustomerCount(0) {
 }
 
 /*
  *   Constructor to set the customer range when not partitioining
  */
-CCustomerSelection::CCustomerSelection(CRandom *pRND, TIdent iStartFromCustomer,
-                                       TIdent iCustomerCount)
-    : m_pRND(pRND), m_iStartFromCustomer(iStartFromCustomer + iTIdentShift),
-      m_iCustomerCount(iCustomerCount), m_bPartitionByCID(false),
-      m_iPartitionPercent(0), m_iMyStartFromCustomer(0 + iTIdentShift),
+CCustomerSelection::CCustomerSelection(CRandom *pRND, TIdent iStartFromCustomer, TIdent iCustomerCount)
+    : m_pRND(pRND), m_iStartFromCustomer(iStartFromCustomer + iTIdentShift), m_iCustomerCount(iCustomerCount),
+      m_bPartitionByCID(false), m_iPartitionPercent(0), m_iMyStartFromCustomer(0 + iTIdentShift),
       m_iMyCustomerCount(0) {
 }
 
 /*
  *   Constructor to set subrange when partitioning by C_ID.
  */
-CCustomerSelection::CCustomerSelection(CRandom *pRND, TIdent iStartFromCustomer,
-                                       TIdent iCustomerCount,
-                                       int iPartitionPercent,
-                                       TIdent iMyStartFromCustomer,
-                                       TIdent iMyCustomerCount)
-    : m_pRND(pRND), m_iStartFromCustomer(iStartFromCustomer + iTIdentShift),
-      m_iCustomerCount(iCustomerCount)
+CCustomerSelection::CCustomerSelection(CRandom *pRND, TIdent iStartFromCustomer, TIdent iCustomerCount,
+                                       int iPartitionPercent, TIdent iMyStartFromCustomer, TIdent iMyCustomerCount)
+    : m_pRND(pRND), m_iStartFromCustomer(iStartFromCustomer + iTIdentShift), m_iCustomerCount(iCustomerCount)
 
       ,
       m_bPartitionByCID(true), m_iPartitionPercent(iPartitionPercent),
-      m_iMyStartFromCustomer(iMyStartFromCustomer + iTIdentShift),
-      m_iMyCustomerCount(iMyCustomerCount) {
-	if ((iStartFromCustomer == iMyStartFromCustomer) &&
-	    (iCustomerCount == iMyCustomerCount)) {
+      m_iMyStartFromCustomer(iMyStartFromCustomer + iTIdentShift), m_iMyCustomerCount(iMyCustomerCount) {
+	if ((iStartFromCustomer == iMyStartFromCustomer) && (iCustomerCount == iMyCustomerCount)) {
 		// Even though the partitioning constructor was called, we're apparently
 		// not really partitioning.
 		m_bPartitionByCID = false;
@@ -89,8 +80,7 @@ CCustomerSelection::CCustomerSelection(CRandom *pRND, TIdent iStartFromCustomer,
 /*
  *   Re-set the customer range for the partition.
  */
-void CCustomerSelection::SetPartitionRange(TIdent iStartFromCustomer,
-                                           TIdent iCustomerCount) {
+void CCustomerSelection::SetPartitionRange(TIdent iStartFromCustomer, TIdent iCustomerCount) {
 	if (m_bPartitionByCID) {
 		m_iMyStartFromCustomer = iStartFromCustomer;
 		m_iMyCustomerCount = iCustomerCount;
@@ -154,8 +144,7 @@ eCustomerTier CCustomerSelection::GetTier(TIdent C_ID) {
 /*
  *   Return a non-uniform random customer and the associated tier.
  */
-void CCustomerSelection::GenerateRandomCustomer(TIdent &C_ID,
-                                                eCustomerTier &C_TIER) {
+void CCustomerSelection::GenerateRandomCustomer(TIdent &C_ID, eCustomerTier &C_TIER) {
 	// Can't use this function if there is no external RNG.
 	//
 	if (m_pRND == NULL) {
@@ -170,15 +159,13 @@ void CCustomerSelection::GenerateRandomCustomer(TIdent &C_ID,
 	if (m_bPartitionByCID && m_pRND->RndPercent(m_iPartitionPercent)) {
 		// Generate a load unit inside the partition.
 		iCHigh = (m_pRND->RndInt64Range(m_iMyStartFromCustomer,
-		                                m_iMyStartFromCustomer +
-		                                    m_iMyCustomerCount - 1) -
+		                                m_iMyStartFromCustomer + m_iMyCustomerCount - 1) -
 		          1) // minus 1 for the upper boundary case
 		         / 1000;
 	} else {
 		// Generate a load unit across the entire range
 		iCHigh = (m_pRND->RndInt64Range(m_iStartFromCustomer,
-		                                m_iStartFromCustomer +
-		                                    m_iCustomerCount - 1) -
+		                                m_iStartFromCustomer + m_iCustomerCount - 1) -
 		          1) // minus 1 for the upper boundary case
 		         / 1000;
 	}

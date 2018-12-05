@@ -1,13 +1,11 @@
-
 #include "execution/operator/join/physical_join.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-PhysicalJoin::PhysicalJoin(PhysicalOperatorType type,
-                           std::vector<JoinCondition> conditions_,
+PhysicalJoin::PhysicalJoin(LogicalOperator &op, PhysicalOperatorType type, vector<JoinCondition> conditions_,
                            JoinType join_type)
-    : PhysicalOperator(type), type(join_type) {
+    : PhysicalOperator(type, op.types), type(join_type) {
 	conditions.resize(conditions_.size());
 	// we reorder conditions so the ones with COMPARE_EQUAL occur first
 	size_t equal_position = 0;
@@ -21,26 +19,6 @@ PhysicalJoin::PhysicalJoin(PhysicalOperatorType type,
 			conditions[other_position--] = std::move(conditions_[i]);
 		}
 	}
-}
-
-vector<string> PhysicalJoin::GetNames() {
-	auto left = children[0]->GetNames();
-	if (type != JoinType::SEMI && type != JoinType::ANTI) {
-		// for normal joins we project both sides
-		auto right = children[1]->GetNames();
-		left.insert(left.end(), right.begin(), right.end());
-	}
-	return left;
-}
-
-vector<TypeId> PhysicalJoin::GetTypes() {
-	auto types = children[0]->GetTypes();
-	if (type != JoinType::SEMI && type != JoinType::ANTI) {
-		// for normal joins we project both sides
-		auto right_types = children[1]->GetTypes();
-		types.insert(types.end(), right_types.begin(), right_types.end());
-	}
-	return types;
 }
 
 string PhysicalJoin::ExtraRenderInformation() {

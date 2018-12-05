@@ -65,12 +65,9 @@ int mk_w_household_demographics(void *info_arr, ds_key_t index) {
 	nTemp = r->hd_demo_sk;
 	r->hd_income_band_id = (nTemp % distsize("income_band")) + 1;
 	nTemp /= distsize("income_band");
-	bitmap_to_dist(&r->hd_buy_potential, "buy_potential", &nTemp, 1,
-	               HOUSEHOLD_DEMOGRAPHICS);
-	bitmap_to_dist(&r->hd_dep_count, "dependent_count", &nTemp, 1,
-	               HOUSEHOLD_DEMOGRAPHICS);
-	bitmap_to_dist(&r->hd_vehicle_count, "vehicle_count", &nTemp, 1,
-	               HOUSEHOLD_DEMOGRAPHICS);
+	bitmap_to_dist(&r->hd_buy_potential, "buy_potential", &nTemp, 1, HOUSEHOLD_DEMOGRAPHICS);
+	bitmap_to_dist(&r->hd_dep_count, "dependent_count", &nTemp, 1, HOUSEHOLD_DEMOGRAPHICS);
+	bitmap_to_dist(&r->hd_vehicle_count, "vehicle_count", &nTemp, 1, HOUSEHOLD_DEMOGRAPHICS);
 
 	void *info = append_info_get(info_arr, HOUSEHOLD_DEMOGRAPHICS);
 	append_row_start(info);

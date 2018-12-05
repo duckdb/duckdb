@@ -1,23 +1,31 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // common/constants.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
 #include <bitset>
 #include <cstdlib>
+#include <map>
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace duckdb {
 
+//! inline std directives that we use frequently
+using std::map;
+using std::move;
+using std::string;
+using std::unique_ptr;
+using std::vector;
+
 struct BinaryData {
-	std::unique_ptr<uint8_t[]> data;
+	unique_ptr<uint8_t[]> data;
 	size_t size;
 };
 

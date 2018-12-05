@@ -53,7 +53,7 @@ namespace TPCE {
 //
 
 class ZipCodeDataFileRecord {
-  private:
+private:
 	int divisionTaxKey;
 
 	static const int maxZc_codeLen = 12;
@@ -70,7 +70,7 @@ class ZipCodeDataFileRecord {
 
 	static const unsigned int fieldCount = 4;
 
-  public:
+public:
 	explicit ZipCodeDataFileRecord(const std::deque<std::string> &fields);
 
 	//

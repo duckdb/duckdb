@@ -45,8 +45,7 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	init_rand();   // no random numbers without this
 
 	// populate append info
-	auto append_info = unique_ptr<tpcds_append_information[]>(
-	    new tpcds_append_information[DBGEN_VERSION]);
+	auto append_info = unique_ptr<tpcds_append_information[]>(new tpcds_append_information[DBGEN_VERSION]);
 
 	int tmin = CALL_CENTER, tmax = DBGEN_VERSION; // because fuck dbgen_version
 
@@ -59,8 +58,7 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 		append_info[table_id].row = 0;
 		append_info[table_id].chunk.Reset();
 		append_info[table_id].context = &con.context;
-		append_info[table_id].table =
-		    db.catalog.GetTable(transaction, DEFAULT_SCHEMA, table_def->name);
+		append_info[table_id].table = db.catalog.GetTable(transaction, DEFAULT_SCHEMA, table_def->name);
 	}
 
 	// actually generate tables using modified data generator functions
@@ -98,9 +96,7 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 			if (append_info[table_id].chunk.size() > 0) {
 				append_info[table_id].chunk.Verify();
 				append_info[table_id].table->storage->Append(
-				    *append_info[table_id].table,
-				    *append_info[table_id].context,
-				    append_info[table_id].chunk);
+				    *append_info[table_id].table, *append_info[table_id].context, append_info[table_id].chunk);
 			}
 		}
 	}

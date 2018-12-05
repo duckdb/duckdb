@@ -93,15 +93,13 @@ StringBuffer_t *InitBuffer(int nSize, int nIncrement) {
  * TODO: None
  */
 int AddBuffer(StringBuffer_t *pBuf, char *pStr) {
-	int nRemaining = pBuf->nBytesAllocated - pBuf->nBytesUsed,
-	    nRequested = strlen(pStr);
+	int nRemaining = pBuf->nBytesAllocated - pBuf->nBytesUsed, nRequested = strlen(pStr);
 
 	if (!nRequested)
 		return (0);
 
 	while (nRequested >= nRemaining) {
-		pBuf->pText = (char *)realloc((void *)pBuf->pText,
-		                              pBuf->nBytesAllocated + pBuf->nIncrement);
+		pBuf->pText = (char *)realloc((void *)pBuf->pText, pBuf->nBytesAllocated + pBuf->nIncrement);
 		if (!pBuf->pText)
 			return (-1);
 		pBuf->nBytesAllocated += pBuf->nIncrement;

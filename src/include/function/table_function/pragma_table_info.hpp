@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // function/table_function/pragma_table_info.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -17,11 +15,10 @@ namespace duckdb {
 namespace function {
 
 TableFunctionData *pragma_table_info_init(ClientContext &);
-void pragma_table_info(ClientContext &, DataChunk &input, DataChunk &output,
-                       TableFunctionData *dataptr);
+void pragma_table_info(ClientContext &, DataChunk &input, DataChunk &output, TableFunctionData *dataptr);
 
 class PragmaTableInfo {
-  public:
+public:
 	static table_function_init_t GetInitFunction() {
 		return pragma_table_info_init;
 	}
@@ -36,10 +33,10 @@ class PragmaTableInfo {
 		return "pragma_table_info";
 	}
 
-	static void GetArguments(std::vector<TypeId> &arguments) {
+	static void GetArguments(vector<TypeId> &arguments) {
 		arguments.push_back(TypeId::VARCHAR);
 	}
-	static void GetReturnValues(std::vector<ColumnDefinition> &returns) {
+	static void GetReturnValues(vector<ColumnDefinition> &returns) {
 		returns.push_back(ColumnDefinition("cid", TypeId::INTEGER));
 		returns.push_back(ColumnDefinition("name", TypeId::VARCHAR));
 		returns.push_back(ColumnDefinition("type", TypeId::VARCHAR));

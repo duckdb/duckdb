@@ -50,8 +50,7 @@ namespace TPCE {
 
 const int iYearsForFins = 5;
 const int iQuartersInYear = 4;
-const int iFinsPerCompany =
-    iYearsForFins * iQuartersInYear; // 5 years of 4 quaters each year
+const int iFinsPerCompany = iYearsForFins * iQuartersInYear; // 5 years of 4 quaters each year
 
 // multiplier to get the diluted number of shares from outstanding
 const double fDilutedSharesMultiplier = 1.1;
@@ -109,8 +108,7 @@ class CFinancialTable : public TableTemplate<FINANCIAL_GEN_ROW> {
 		TIdent FI_CO_ID;
 		int iFinYear, iFinQuarter;
 		int i;
-		CMoney fRev, fEarn, fInvent, fAssets, fLiab, fBasicEPS, fDilutEPS,
-		    fMargin;
+		CMoney fRev, fEarn, fInvent, fAssets, fLiab, fBasicEPS, fDilutEPS, fMargin;
 		INT64 iOutBasic, iOutDilut;
 
 		// Set starting values for financial values
@@ -118,48 +116,31 @@ class CFinancialTable : public TableTemplate<FINANCIAL_GEN_ROW> {
 		iFinYear = m_iFinYear;
 		iFinQuarter = m_iFinQuarter;
 
-		fRev = m_rnd.RndDoubleIncrRange(fFinancialRevenueMin,
-		                                fFinancialRevenueMax, 0.01);
-		fEarn = m_rnd.RndDoubleIncrRange(fFinancialEarningsMin,
-		                                 fRev < fFinancialEarningsMax
-		                                     ? fRev.DollarAmount()
-		                                     : fFinancialEarningsMax,
-		                                 0.01);
-		iOutBasic =
-		    m_rnd.RndInt64Range(iFinancialOutBasicMin, iFinancialOutBasicMax);
+		fRev = m_rnd.RndDoubleIncrRange(fFinancialRevenueMin, fFinancialRevenueMax, 0.01);
+		fEarn = m_rnd.RndDoubleIncrRange(
+		    fFinancialEarningsMin, fRev < fFinancialEarningsMax ? fRev.DollarAmount() : fFinancialEarningsMax, 0.01);
+		iOutBasic = m_rnd.RndInt64Range(iFinancialOutBasicMin, iFinancialOutBasicMax);
 		iOutDilut = 0;
-		fInvent = m_rnd.RndDoubleIncrRange(fFinancialInventMin,
-		                                   fFinancialInventMax, 0.01);
-		fAssets = m_rnd.RndDoubleIncrRange(fFinancialAssetsMin,
-		                                   fFinancialAssetsMax, 0.01);
-		fLiab = m_rnd.RndDoubleIncrRange(fFinancialLiabMin, fFinancialLiabMax,
-		                                 0.01);
+		fInvent = m_rnd.RndDoubleIncrRange(fFinancialInventMin, fFinancialInventMax, 0.01);
+		fAssets = m_rnd.RndDoubleIncrRange(fFinancialAssetsMin, fFinancialAssetsMax, 0.01);
+		fLiab = m_rnd.RndDoubleIncrRange(fFinancialLiabMin, fFinancialLiabMax, 0.01);
 		fBasicEPS = 0.00;
 		fDilutEPS = 0.00;
 		fMargin = 0.00;
 
 		for (i = 0; i < iFinsPerCompany; ++i) {
 			// Compute values for this quarter
-			fRev = fRev * m_rnd.RndDoubleIncrRange(
-			                  fFinDataDownMult, fFinDataUpMult, fFinDataIncr);
-			fEarn = fEarn * m_rnd.RndDoubleIncrRange(
-			                    fFinDataDownMult, fFinDataUpMult, fFinDataIncr);
+			fRev = fRev * m_rnd.RndDoubleIncrRange(fFinDataDownMult, fFinDataUpMult, fFinDataIncr);
+			fEarn = fEarn * m_rnd.RndDoubleIncrRange(fFinDataDownMult, fFinDataUpMult, fFinDataIncr);
 			if (fEarn >= fRev) { // earnings cannot be greater than the revenue
 				fEarn = fEarn * fFinDataDownMult;
 			}
 			iOutBasic =
-			    (INT64)((double)iOutBasic *
-			            m_rnd.RndDoubleIncrRange(fFinDataDownMult,
-			                                     fFinDataUpMult, fFinDataIncr));
+			    (INT64)((double)iOutBasic * m_rnd.RndDoubleIncrRange(fFinDataDownMult, fFinDataUpMult, fFinDataIncr));
 			iOutDilut = (INT64)((double)iOutBasic * fDilutedSharesMultiplier);
-			fInvent = fInvent * m_rnd.RndDoubleIncrRange(fFinDataDownMult,
-			                                             fFinDataUpMult,
-			                                             fFinDataIncr);
-			fAssets = fAssets * m_rnd.RndDoubleIncrRange(fFinDataDownMult,
-			                                             fFinDataUpMult,
-			                                             fFinDataIncr);
-			fLiab = fLiab * m_rnd.RndDoubleIncrRange(
-			                    fFinDataDownMult, fFinDataUpMult, fFinDataIncr);
+			fInvent = fInvent * m_rnd.RndDoubleIncrRange(fFinDataDownMult, fFinDataUpMult, fFinDataIncr);
+			fAssets = fAssets * m_rnd.RndDoubleIncrRange(fFinDataDownMult, fFinDataUpMult, fFinDataIncr);
+			fLiab = fLiab * m_rnd.RndDoubleIncrRange(fFinDataDownMult, fFinDataUpMult, fFinDataIncr);
 			fBasicEPS = fEarn / (double)iOutBasic;
 			fDilutEPS = fEarn / (double)iOutDilut;
 			fMargin = fEarn / fRev.DollarAmount();
@@ -168,8 +149,7 @@ class CFinancialTable : public TableTemplate<FINANCIAL_GEN_ROW> {
 			m_row.m_financials[i].FI_CO_ID = FI_CO_ID;
 			m_row.m_financials[i].FI_YEAR = iFinYear;
 			m_row.m_financials[i].FI_QTR = iFinQuarter + 1;
-			m_row.m_financials[i].FI_QTR_START_DATE.Set(iFinYear,
-			                                            iFinQuarter * 3 + 1, 1);
+			m_row.m_financials[i].FI_QTR_START_DATE.Set(iFinYear, iFinQuarter * 3 + 1, 1);
 			m_row.m_financials[i].FI_REVENUE = fRev.DollarAmount();
 			m_row.m_financials[i].FI_NET_EARN = fEarn.DollarAmount();
 			m_row.m_financials[i].FI_OUT_BASIC = iOutBasic;
@@ -183,10 +163,9 @@ class CFinancialTable : public TableTemplate<FINANCIAL_GEN_ROW> {
 
 			// Increment quarter
 			iFinQuarter++;
-			if (iFinQuarter ==
-			    iQuartersInYear) { // reached the last quarter in the year
-				iFinQuarter = 0;   // start from the first quarter
-				++iFinYear;        // increment year
+			if (iFinQuarter == iQuartersInYear) { // reached the last quarter in the year
+				iFinQuarter = 0;                  // start from the first quarter
+				++iFinYear;                       // increment year
 			}
 		}
 
@@ -203,34 +182,26 @@ class CFinancialTable : public TableTemplate<FINANCIAL_GEN_ROW> {
 	 *           none.
 	 */
 	void InitNextLoadUnit() {
-		m_rnd.SetSeed(m_rnd.RndNthElement(RNGSeedTableDefault,
-		                                  (RNGSEED)m_iLastRowNumber *
-		                                      iRNGSkipOneRowFinancial));
+		m_rnd.SetSeed(m_rnd.RndNthElement(RNGSeedTableDefault, (RNGSEED)m_iLastRowNumber * iRNGSkipOneRowFinancial));
 
 		ClearRecord(); // this is needed for EGenTest to work
 	}
 
-  public:
-	CFinancialTable(const DataFileManager &dfm, TIdent iCustomerCount,
-	                TIdent iStartFromCustomer)
-	    : TableTemplate<FINANCIAL_GEN_ROW>(),
-	      m_CompanyTable(dfm, iCustomerCount, iStartFromCustomer),
+public:
+	CFinancialTable(const DataFileManager &dfm, TIdent iCustomerCount, TIdent iStartFromCustomer)
+	    : TableTemplate<FINANCIAL_GEN_ROW>(), m_CompanyTable(dfm, iCustomerCount, iStartFromCustomer),
 	      m_iRowsGeneratedPerCompany(iFinsPerCompany), m_bMoreCompanies(true) {
 		// Start year to generate financials.
 		// Count by quaters
-		m_iFinYear = iDailyMarketBaseYear; // first financial year
-		m_iFinQuarter = iDailyMarketBaseMonth /
-		                3; // first financial quarter in the year (0-based)
+		m_iFinYear = iDailyMarketBaseYear;         // first financial year
+		m_iFinQuarter = iDailyMarketBaseMonth / 3; // first financial quarter in the year (0-based)
 
 		m_bMoreRecords = true; // initialize once
 
 		m_iFinancialCountForOneLoadUnit =
-		    dfm.CompanyFile().CalculateCompanyCount(iDefaultLoadUnitSize) *
-		    iFinsPerCompany;
+		    dfm.CompanyFile().CalculateCompanyCount(iDefaultLoadUnitSize) * iFinsPerCompany;
 
-		m_iLastRowNumber =
-		    dfm.CompanyFile().CalculateStartFromCompany(iStartFromCustomer) *
-		    iFinsPerCompany;
+		m_iLastRowNumber = dfm.CompanyFile().CalculateStartFromCompany(iStartFromCustomer) * iFinsPerCompany;
 	};
 
 	bool GenerateNextRecord() {
@@ -255,8 +226,7 @@ class CFinancialTable : public TableTemplate<FINANCIAL_GEN_ROW> {
 		}
 
 		// Return false when generated the last row of the last company
-		if (!m_bMoreCompanies &&
-		    (m_iRowsGeneratedPerCompany == iFinsPerCompany - 1)) {
+		if (!m_bMoreCompanies && (m_iRowsGeneratedPerCompany == iFinsPerCompany - 1)) {
 			m_bMoreRecords = false;
 		}
 

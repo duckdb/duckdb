@@ -76,7 +76,7 @@ namespace TPCE {
 // Copying is disallowed.
 //
 class DataFileManager {
-  private:
+private:
 	// Disallow copying.
 	DataFileManager(const DataFileManager &);
 	DataFileManager &operator=(const DataFileManager &);
@@ -135,12 +135,11 @@ class DataFileManager {
 	// Centralized clean up of any allocated resources.
 	void CleanUp();
 
-  public:
+public:
 	// Constructor - default to lazy load from the current directory
 	//               for the default number of customers.
-	explicit DataFileManager(
-	    TIdent configuredCustomerCount = iDefaultCustomerCount,
-	    TIdent activeCustomerCount = iDefaultCustomerCount);
+	explicit DataFileManager(TIdent configuredCustomerCount = iDefaultCustomerCount,
+	                         TIdent activeCustomerCount = iDefaultCustomerCount);
 
 	~DataFileManager();
 
@@ -163,8 +162,7 @@ class DataFileManager {
 	const LastNameDataFile_t &LastNameDataFile() const;
 	const MaleFirstNameDataFile_t &MaleFirstNameDataFile() const;
 	const NewsDataFile_t &NewsDataFile() const;
-	const NonTaxableAccountNameDataFile_t &
-	NonTaxableAccountNameDataFile() const;
+	const NonTaxableAccountNameDataFile_t &NonTaxableAccountNameDataFile() const;
 	const SectorDataFile_t &SectorDataFile() const;
 	const SecurityDataFile_t &SecurityDataFile() const;
 	const StatusTypeDataFile_t &StatusTypeDataFile() const;

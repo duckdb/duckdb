@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // parser/expression/star_expression.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -17,24 +15,23 @@ namespace duckdb {
 
 //! Represents a * expression in the SELECT clause
 class StarExpression : public Expression {
-  public:
+public:
 	StarExpression() : Expression(ExpressionType::STAR) {
 	}
 
-	std::unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
+	unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
 		return v->Visit(*this);
 	}
 	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::STAR;
 	}
 
-	std::unique_ptr<Expression> Copy() override;
+	unique_ptr<Expression> Copy() override;
 
 	//! Deserializes a blob back into a StarExpression
-	static std::unique_ptr<Expression>
-	Deserialize(ExpressionDeserializeInformation *info, Deserializer &source);
+	static unique_ptr<Expression> Deserialize(ExpressionDeserializeInfo *info, Deserializer &source);
 
-	std::string ToString() const override {
+	string ToString() const override {
 		return "*";
 	}
 };

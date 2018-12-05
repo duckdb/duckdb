@@ -46,7 +46,7 @@ struct table_sample : table_ref {
 	}
 	struct table *t;
 
-  private:
+private:
 	string method;
 	double percent;
 };
@@ -66,8 +66,7 @@ struct lateral_subquery : table_subquery {
 };
 
 struct join_cond : prod {
-	static shared_ptr<join_cond> factory(prod *p, table_ref &lhs,
-	                                     table_ref &rhs);
+	static shared_ptr<join_cond> factory(prod *p, table_ref &lhs, table_ref &rhs);
 	join_cond(prod *p, table_ref &lhs, table_ref &rhs) : prod(p) {
 		(void)lhs;
 		(void)rhs;

@@ -1,5 +1,3 @@
-
-
 // this file is used to instantiate symbols for LLDB so e.g.
 // std::vector and std::unique_ptr can be accessed from the debugger
 
@@ -15,6 +13,8 @@
 #include "main/result.hpp"
 #include "optimizer/rule.hpp"
 #include "parser/constraint.hpp"
+#include "parser/query_node.hpp"
+#include "parser/query_node/select_node.hpp"
 #include "parser/tableref/list.hpp"
 #include "planner/logical_operator.hpp"
 #include "planner/operator/list.hpp"
@@ -37,6 +37,7 @@ template class std::unique_ptr<sel_t[]>;
 template class std::unique_ptr<SQLStatement>;
 template class std::unique_ptr<StorageChunk>;
 template class std::unique_ptr<StringHeap>;
+template class std::unique_ptr<QueryNode>;
 template class std::unique_ptr<SuperLargeHashTable>;
 template class std::unique_ptr<TableRef>;
 template class std::unique_ptr<Transaction>;
@@ -56,17 +57,13 @@ template class std::unique_ptr<LogicalFilter>;
 template class std::unique_ptr<LogicalJoin>;
 template class std::unique_ptr<SubqueryRef>;
 
-#define INSTANTIATE_VECTOR(VECTOR_DEFINITION)                                  \
-	template VECTOR_DEFINITION::size_type VECTOR_DEFINITION::size() const;     \
-	template VECTOR_DEFINITION::const_reference VECTOR_DEFINITION::operator[]( \
-	    VECTOR_DEFINITION::size_type n) const;                                 \
-	template VECTOR_DEFINITION::reference VECTOR_DEFINITION::operator[](       \
-	    VECTOR_DEFINITION::size_type n);                                       \
-	template VECTOR_DEFINITION::const_reference VECTOR_DEFINITION::back()      \
-	    const;                                                                 \
-	template VECTOR_DEFINITION::reference VECTOR_DEFINITION::back();           \
-	template VECTOR_DEFINITION::const_reference VECTOR_DEFINITION::front()     \
-	    const;                                                                 \
+#define INSTANTIATE_VECTOR(VECTOR_DEFINITION)                                                                          \
+	template VECTOR_DEFINITION::size_type VECTOR_DEFINITION::size() const;                                             \
+	template VECTOR_DEFINITION::const_reference VECTOR_DEFINITION::operator[](VECTOR_DEFINITION::size_type n) const;   \
+	template VECTOR_DEFINITION::reference VECTOR_DEFINITION::operator[](VECTOR_DEFINITION::size_type n);               \
+	template VECTOR_DEFINITION::const_reference VECTOR_DEFINITION::back() const;                                       \
+	template VECTOR_DEFINITION::reference VECTOR_DEFINITION::back();                                                   \
+	template VECTOR_DEFINITION::const_reference VECTOR_DEFINITION::front() const;                                      \
 	template VECTOR_DEFINITION::reference VECTOR_DEFINITION::front();
 
 template class std::vector<AggregateExpression *>;
@@ -77,7 +74,7 @@ INSTANTIATE_VECTOR(std::vector<JoinCondition>);
 INSTANTIATE_VECTOR(std::vector<OrderByNode>);
 template class std::vector<size_t>;
 INSTANTIATE_VECTOR(std::vector<ExpressionStatistics>);
-template class std::vector<std::string>;
+template class std::vector<string>;
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Expression>>)
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<AbstractRuleNode>>);
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<DataChunk>>);
@@ -90,21 +87,20 @@ template class std::vector<Value>;
 template class std::vector<int>;
 INSTANTIATE_VECTOR(std::vector<WALEntryData>);
 INSTANTIATE_VECTOR(std::vector<AbstractOperator>);
-template class std::vector<vector<Expression *>>;
+template class std::vector<std::vector<Expression *>>;
 
 template struct std::atomic<size_t>;
 template class std::bitset<STANDARD_VECTOR_SIZE>;
 template class std::bitset<STORAGE_CHUNK_SIZE>;
-template class std::unordered_map<PhysicalOperator *,
-                                  QueryProfiler::TreeNode *>;
+template class std::unordered_map<PhysicalOperator *, QueryProfiler::TreeNode *>;
 template class std::stack<PhysicalOperator *>;
 
-// template class std::unordered_map<std::string,
+// template class std::unordered_map<string,
 // std::unique_ptr<CatalogEntry>>;
-template class std::unordered_map<std::string, size_t>;
-template class std::unordered_map<std::string, std::vector<std::string>>;
-template class std::unordered_map<std::string, std::pair<size_t, Expression *>>;
-// template class std::unordered_map<std::string, TableBinding>;
-template class std::unordered_map<std::string, SelectStatement *>;
+template class std::unordered_map<string, size_t>;
+template class std::unordered_map<string, std::vector<string>>;
+template class std::unordered_map<string, std::pair<size_t, Expression *>>;
+// template class std::unordered_map<string, TableBinding>;
+template class std::unordered_map<string, SelectStatement *>;
 
 #endif

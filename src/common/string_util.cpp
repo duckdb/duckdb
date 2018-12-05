@@ -1,4 +1,3 @@
-
 #include "common/string_util.hpp"
 
 #include <algorithm>
@@ -11,36 +10,32 @@
 
 using namespace duckdb;
 
-bool StringUtil::Contains(const std::string &haystack,
-                          const std::string &needle) {
-	return (haystack.find(needle) != std::string::npos);
+bool StringUtil::Contains(const string &haystack, const string &needle) {
+	return (haystack.find(needle) != string::npos);
 }
 
 /*
  * Remove trailing ' ', '\f', '\n', '\r', '\t', '\v'
  */
-void StringUtil::RTrim(std::string &str) {
-	str.erase(std::find_if(str.rbegin(), str.rend(),
-	                       [](int ch) { return !std::isspace(ch); })
-	              .base(),
-	          str.end());
+void StringUtil::RTrim(string &str) {
+	str.erase(std::find_if(str.rbegin(), str.rend(), [](int ch) { return !std::isspace(ch); }).base(), str.end());
 }
 
-std::string StringUtil::Indent(int num_indent) {
-	return std::string(num_indent, ' ');
+string StringUtil::Indent(int num_indent) {
+	return string(num_indent, ' ');
 }
 
-bool StringUtil::StartsWith(const std::string &str, const std::string &prefix) {
+bool StringUtil::StartsWith(const string &str, const string &prefix) {
 	return std::equal(prefix.begin(), prefix.end(), str.begin());
 }
 
-bool StringUtil::EndsWith(const std::string &str, const std::string &suffix) {
+bool StringUtil::EndsWith(const string &str, const string &suffix) {
 	if (suffix.size() > str.size())
 		return (false);
 	return std::equal(suffix.rbegin(), suffix.rend(), str.rbegin());
 }
 
-std::string StringUtil::Repeat(const std::string &str, const std::size_t n) {
+string StringUtil::Repeat(const string &str, const std::size_t n) {
 	std::ostringstream os;
 	if (n == 0 || str.empty()) {
 		return (os.str());
@@ -51,21 +46,19 @@ std::string StringUtil::Repeat(const std::string &str, const std::size_t n) {
 	return (os.str());
 }
 
-std::vector<std::string> StringUtil::Split(const std::string &str,
-                                           char delimiter) {
+vector<string> StringUtil::Split(const string &str, char delimiter) {
 	std::stringstream ss(str);
-	std::vector<std::string> lines;
-	std::string temp;
+	vector<string> lines;
+	string temp;
 	while (std::getline(ss, temp, delimiter)) {
 		lines.push_back(temp);
 	} // WHILE
 	return (lines);
 }
 
-std::string StringUtil::Join(const std::vector<std::string> &input,
-                             const std::string &separator) {
+string StringUtil::Join(const vector<string> &input, const string &separator) {
 	// The result
-	std::string result;
+	string result;
 
 	// If the input isn't empty, append the first element. We do this so we
 	// don't
@@ -82,9 +75,8 @@ std::string StringUtil::Join(const std::vector<std::string> &input,
 	return result;
 }
 
-std::string StringUtil::Prefix(const std::string &str,
-                               const std::string &prefix) {
-	std::vector<std::string> lines = StringUtil::Split(str, '\n');
+string StringUtil::Prefix(const string &str, const string &prefix) {
+	vector<string> lines = StringUtil::Split(str, '\n');
 	if (lines.empty())
 		return ("");
 
@@ -97,7 +89,7 @@ std::string StringUtil::Prefix(const std::string &str,
 	return (os.str());
 }
 
-std::string StringUtil::FormatSize(long bytes) {
+string StringUtil::FormatSize(long bytes) {
 	double BASE = 1024;
 	double KB = BASE;
 	double MB = KB * BASE;
@@ -117,34 +109,32 @@ std::string StringUtil::FormatSize(long bytes) {
 	return (os.str());
 }
 
-std::string StringUtil::Bold(const std::string &str) {
-	std::string SET_PLAIN_TEXT = "\033[0;0m";
-	std::string SET_BOLD_TEXT = "\033[0;1m";
+string StringUtil::Bold(const string &str) {
+	string SET_PLAIN_TEXT = "\033[0;0m";
+	string SET_BOLD_TEXT = "\033[0;1m";
 
 	std::ostringstream os;
 	os << SET_BOLD_TEXT << str << SET_PLAIN_TEXT;
 	return (os.str());
 }
 
-std::string StringUtil::Upper(const std::string &str) {
-	std::string copy(str);
-	std::transform(copy.begin(), copy.end(), copy.begin(),
-	               [](unsigned char c) { return std::toupper(c); });
+string StringUtil::Upper(const string &str) {
+	string copy(str);
+	std::transform(copy.begin(), copy.end(), copy.begin(), [](unsigned char c) { return std::toupper(c); });
 	return (copy);
 }
 
-std::string StringUtil::Lower(const std::string &str) {
-	std::string copy(str);
-	std::transform(copy.begin(), copy.end(), copy.begin(),
-	               [](unsigned char c) { return std::tolower(c); });
+string StringUtil::Lower(const string &str) {
+	string copy(str);
+	std::transform(copy.begin(), copy.end(), copy.begin(), [](unsigned char c) { return std::tolower(c); });
 	return (copy);
 }
 
-std::string StringUtil::Format(const std::string fmt_str, ...) {
+string StringUtil::Format(const string fmt_str, ...) {
 	// Reserve two times as much as the length of the fmt_str
 	int final_n, n = ((int)fmt_str.size()) * 2;
-	std::string str;
-	std::unique_ptr<char[]> formatted;
+	string str;
+	unique_ptr<char[]> formatted;
 	va_list ap;
 
 	while (1) {
@@ -159,13 +149,13 @@ std::string StringUtil::Format(const std::string fmt_str, ...) {
 		else
 			break;
 	}
-	return std::string(formatted.get());
+	return string(formatted.get());
 }
 
-std::string StringUtil::VFormat(const std::string fmt_str, va_list args) {
+string StringUtil::VFormat(const string fmt_str, va_list args) {
 	va_list args_copy;
 
-	std::unique_ptr<char[]> formatted;
+	unique_ptr<char[]> formatted;
 	// make a copy of the args as we can only use it once
 	va_copy(args_copy, args);
 
@@ -175,24 +165,23 @@ std::string StringUtil::VFormat(const std::string fmt_str, va_list args) {
 	// now allocate the string and do the actual printing
 	formatted.reset(new char[n]);
 	(void)vsnprintf(&formatted[0], n, fmt_str.c_str(), args_copy);
-	return std::string(formatted.get());
+	return string(formatted.get());
 }
 
-std::vector<std::string> StringUtil::Split(const std::string &input,
-                                           const std::string &split) {
-	std::vector<std::string> splits;
+vector<string> StringUtil::Split(const string &input, const string &split) {
+	vector<string> splits;
 
 	size_t last = 0;
 	size_t input_len = input.size();
 	size_t split_len = split.size();
 	while (last <= input_len) {
 		size_t next = input.find(split, last);
-		if (next == std::string::npos) {
+		if (next == string::npos) {
 			next = input_len;
 		}
 
 		// Push the substring [last, next) on to splits
-		std::string substr = input.substr(last, next - last);
+		string substr = input.substr(last, next - last);
 		if (substr.empty() == false) {
 			splits.push_back(substr);
 		}
@@ -201,10 +190,10 @@ std::vector<std::string> StringUtil::Split(const std::string &input,
 	return splits;
 }
 
-std::string StringUtil::Strip(const std::string &str, char c) {
+string StringUtil::Strip(const string &str, char c) {
 	// There's a copy here which is wasteful, so don't use this in performance
 	// critical code!
-	std::string tmp = str;
+	string tmp = str;
 	tmp.erase(std::remove(tmp.begin(), tmp.end(), c), tmp.end());
 	return tmp;
 }

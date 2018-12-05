@@ -45,23 +45,20 @@
 namespace TPCE {
 
 class CFlatTaxRateLoad : public CFlatFileLoader<TAX_RATE_ROW> {
-  private:
+private:
 	const std::string TaxrateRowFmt;
 
-  public:
+public:
 	CFlatTaxRateLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
-	    : CFlatFileLoader<TAX_RATE_ROW>(szFileName, FlatFileOutputMode),
-	      TaxrateRowFmt("%s|%s|%.5f\n"){};
+	    : CFlatFileLoader<TAX_RATE_ROW>(szFileName, FlatFileOutputMode), TaxrateRowFmt("%s|%s|%.5f\n"){};
 
 	/*
 	 *   Writes a record to the file.
 	 */
 	void WriteNextRecord(const TAX_RATE_ROW &next_record) {
-		int rc = fprintf(hOutFile, TaxrateRowFmt.c_str(), next_record.TX_ID,
-		                 next_record.TX_NAME, next_record.TX_RATE);
+		int rc = fprintf(hOutFile, TaxrateRowFmt.c_str(), next_record.TX_ID, next_record.TX_NAME, next_record.TX_RATE);
 		if (rc < 0) {
-			throw CSystemErr(CSystemErr::eWriteFile,
-			                 "CFlatTaxRateLoad::WriteNextRecord");
+			throw CSystemErr(CSystemErr::eWriteFile, "CFlatTaxRateLoad::WriteNextRecord");
 		}
 	}
 };

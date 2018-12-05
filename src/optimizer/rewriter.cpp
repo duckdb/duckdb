@@ -1,14 +1,13 @@
 #include "optimizer/rewriter.hpp"
-#include "optimizer/rule.hpp"
 
 #include "common/exception.hpp"
+#include "optimizer/rule.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 namespace duckdb {
-unique_ptr<LogicalOperator>
-Rewriter::ApplyRules(unique_ptr<LogicalOperator> root) {
+unique_ptr<LogicalOperator> Rewriter::ApplyRules(unique_ptr<LogicalOperator> root) {
 	bool finished_iterating;
 
 	do {
@@ -25,8 +24,7 @@ Rewriter::ApplyRules(unique_ptr<LogicalOperator> root) {
 				}
 
 				if (vertex.type == AbstractOperatorType::LOGICAL_OPERATOR) {
-					auto new_vertex = rule->Apply(*this, *vertex.value.op,
-					                              bindings, finished_iterating);
+					auto new_vertex = rule->Apply(*this, *vertex.value.op, bindings, finished_iterating);
 					if (!new_vertex) {
 						continue;
 					}
@@ -41,8 +39,7 @@ Rewriter::ApplyRules(unique_ptr<LogicalOperator> root) {
 					}
 
 				} else { // AbstractOperatorType::ABSTRACT_EXPRESSION
-					auto new_vertex = rule->Apply(*this, *vertex.value.expr,
-					                              bindings, finished_iterating);
+					auto new_vertex = rule->Apply(*this, *vertex.value.expr, bindings, finished_iterating);
 					if (!new_vertex) {
 						continue;
 					}
@@ -62,8 +59,7 @@ Rewriter::ApplyRules(unique_ptr<LogicalOperator> root) {
 	return root;
 }
 
-bool Rewriter::MatchOperands(AbstractRuleNode *node, AbstractOperator rel,
-                             vector<AbstractOperator> &bindings) {
+bool Rewriter::MatchOperands(AbstractRuleNode *node, AbstractOperator rel, vector<AbstractOperator> &bindings) {
 	if (!node->Matches(rel)) {
 		return false;
 	}
@@ -126,8 +122,7 @@ bool Rewriter::MatchOperands(AbstractRuleNode *node, AbstractOperator rel,
 			return false;
 		}
 		for (size_t i = 0; i < n; i++) {
-			bool match = MatchOperands(node->children[i].get(), children[i],
-			                           current_bindings);
+			bool match = MatchOperands(node->children[i].get(), children[i], current_bindings);
 			if (!match) {
 				return false;
 			}
@@ -160,8 +155,7 @@ bool Rewriter::MatchOperands(AbstractRuleNode *node, AbstractOperator rel,
 		throw NotImplementedException("Unsupported Child Policy");
 	}
 
-	bindings.insert(bindings.end(), current_bindings.begin(),
-	                current_bindings.end());
+	bindings.insert(bindings.end(), current_bindings.begin(), current_bindings.end());
 	return true;
 }
 

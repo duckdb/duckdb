@@ -45,12 +45,11 @@
 namespace TPCE {
 
 class CFlatHoldingHistoryLoad : public CFlatFileLoader<HOLDING_HISTORY_ROW> {
-  private:
+private:
 	const std::string HoldingHistoryRowFmt;
 
-  public:
-	CFlatHoldingHistoryLoad(char *szFileName,
-	                        FlatFileOutputModes FlatFileOutputMode)
+public:
+	CFlatHoldingHistoryLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
 	    : CFlatFileLoader<HOLDING_HISTORY_ROW>(szFileName, FlatFileOutputMode),
 	      HoldingHistoryRowFmt("%" PRId64 "|%" PRId64 "|%d|%d\n"){};
 
@@ -58,12 +57,10 @@ class CFlatHoldingHistoryLoad : public CFlatFileLoader<HOLDING_HISTORY_ROW> {
 	 *   Writes a record to the file.
 	 */
 	void WriteNextRecord(const HOLDING_HISTORY_ROW &next_record) {
-		int rc = fprintf(hOutFile, HoldingHistoryRowFmt.c_str(),
-		                 next_record.HH_H_T_ID, next_record.HH_T_ID,
+		int rc = fprintf(hOutFile, HoldingHistoryRowFmt.c_str(), next_record.HH_H_T_ID, next_record.HH_T_ID,
 		                 next_record.HH_BEFORE_QTY, next_record.HH_AFTER_QTY);
 		if (rc < 0) {
-			throw CSystemErr(CSystemErr::eWriteFile,
-			                 "CFlatHoldingHistoryLoad::WriteNextRecord");
+			throw CSystemErr(CSystemErr::eWriteFile, "CFlatHoldingHistoryLoad::WriteNextRecord");
 		}
 	}
 };

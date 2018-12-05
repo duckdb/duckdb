@@ -49,9 +49,8 @@ class CTradeOrder {
 	CTradeOrderDBInterface *m_db;
 	CSendToMarketInterface *m_pSendToMarket;
 
-  public:
-	CTradeOrder(CTradeOrderDBInterface *pDB,
-	            CSendToMarketInterface *pSendToMarket)
+public:
+	CTradeOrder(CTradeOrderDBInterface *pDB, CSendToMarketInterface *pSendToMarket)
 	    : m_db(pDB), m_pSendToMarket(pSendToMarket){};
 
 	void DoTxn(PTradeOrderTxnInput pTxnInput, PTradeOrderTxnOutput pTxnOutput) {
@@ -95,12 +94,9 @@ class CTradeOrder {
 		    strcmp(pTxnInput->exec_tax_id, Frame1Output.tax_id)) {
 			// Copy Frame 2 Input
 			Frame2Input.acct_id = pTxnInput->acct_id;
-			strncpy(Frame2Input.exec_f_name, pTxnInput->exec_f_name,
-			        sizeof(Frame2Input.exec_f_name));
-			strncpy(Frame2Input.exec_l_name, pTxnInput->exec_l_name,
-			        sizeof(Frame2Input.exec_l_name));
-			strncpy(Frame2Input.exec_tax_id, pTxnInput->exec_tax_id,
-			        sizeof(Frame2Input.exec_tax_id));
+			strncpy(Frame2Input.exec_f_name, pTxnInput->exec_f_name, sizeof(Frame2Input.exec_f_name));
+			strncpy(Frame2Input.exec_l_name, pTxnInput->exec_l_name, sizeof(Frame2Input.exec_l_name));
+			strncpy(Frame2Input.exec_tax_id, pTxnInput->exec_tax_id, sizeof(Frame2Input.exec_tax_id));
 
 			// Execute Frame 2
 			m_db->DoTradeOrderFrame2(&Frame2Input, &Frame2Output);
@@ -127,28 +123,22 @@ class CTradeOrder {
 		Frame3Input.cust_tier = Frame1Output.cust_tier;
 		Frame3Input.is_lifo = pTxnInput->is_lifo;
 		strncpy(Frame3Input.issue, pTxnInput->issue, sizeof(Frame3Input.issue));
-		strncpy(Frame3Input.st_pending_id, pTxnInput->st_pending_id,
-		        sizeof(Frame3Input.st_pending_id));
-		strncpy(Frame3Input.st_submitted_id, pTxnInput->st_submitted_id,
-		        sizeof(Frame3Input.st_submitted_id));
+		strncpy(Frame3Input.st_pending_id, pTxnInput->st_pending_id, sizeof(Frame3Input.st_pending_id));
+		strncpy(Frame3Input.st_submitted_id, pTxnInput->st_submitted_id, sizeof(Frame3Input.st_submitted_id));
 		Frame3Input.tax_status = Frame1Output.tax_status;
 		Frame3Input.trade_qty = pTxnInput->trade_qty;
-		strncpy(Frame3Input.trade_type_id, pTxnInput->trade_type_id,
-		        sizeof(Frame3Input.trade_type_id));
+		strncpy(Frame3Input.trade_type_id, pTxnInput->trade_type_id, sizeof(Frame3Input.trade_type_id));
 		Frame3Input.type_is_margin = pTxnInput->type_is_margin;
-		strncpy(Frame3Input.co_name, pTxnInput->co_name,
-		        sizeof(Frame3Input.co_name));
+		strncpy(Frame3Input.co_name, pTxnInput->co_name, sizeof(Frame3Input.co_name));
 		Frame3Input.requested_price = pTxnInput->requested_price;
-		strncpy(Frame3Input.symbol, pTxnInput->symbol,
-		        sizeof(Frame3Input.symbol));
+		strncpy(Frame3Input.symbol, pTxnInput->symbol, sizeof(Frame3Input.symbol));
 
 		// Execute Frame 3
 		m_db->DoTradeOrderFrame3(&Frame3Input, &Frame3Output);
 
 		// Validate Frame 3 Output
 		if (Frame3Output.sell_value > Frame3Output.buy_value &&
-		    ((Frame3Input.tax_status == 1) || (Frame3Input.tax_status == 2)) &&
-		    Frame3Output.tax_amount <= 0.00) {
+		    ((Frame3Input.tax_status == 1) || (Frame3Input.tax_status == 2)) && Frame3Output.tax_amount <= 0.00) {
 			TXN_HARNESS_PROPAGATE_STATUS(CBaseTxnErr::TOF3_ERROR1);
 		}
 		if (Frame3Output.comm_rate <= 0.0000) {
@@ -173,25 +163,19 @@ class CTradeOrder {
 		Frame4Input.acct_id = pTxnInput->acct_id;
 		Frame4Input.broker_id = Frame1Output.broker_id;
 		Frame4Input.charge_amount = Frame3Output.charge_amount;
-		Frame4Input.comm_amount = Frame3Output.comm_rate / 100 *
-		                          pTxnInput->trade_qty *
-		                          Frame3Output.requested_price;
+		Frame4Input.comm_amount = Frame3Output.comm_rate / 100 * pTxnInput->trade_qty * Frame3Output.requested_price;
 		// round up for correct precision (cents only)
-		Frame4Input.comm_amount =
-		    (double)((int)(100.00 * Frame4Input.comm_amount + 0.5)) / 100.00;
+		Frame4Input.comm_amount = (double)((int)(100.00 * Frame4Input.comm_amount + 0.5)) / 100.00;
 
-		snprintf(Frame4Input.exec_name, sizeof(Frame4Input.exec_name), "%s %s",
-		         pTxnInput->exec_f_name, pTxnInput->exec_l_name);
+		snprintf(Frame4Input.exec_name, sizeof(Frame4Input.exec_name), "%s %s", pTxnInput->exec_f_name,
+		         pTxnInput->exec_l_name);
 		Frame4Input.is_cash = !Frame3Input.type_is_margin;
 		Frame4Input.is_lifo = pTxnInput->is_lifo;
 		Frame4Input.requested_price = Frame3Output.requested_price;
-		strncpy(Frame4Input.status_id, Frame3Output.status_id,
-		        sizeof(Frame4Input.status_id));
-		strncpy(Frame4Input.symbol, Frame3Output.symbol,
-		        sizeof(Frame4Input.symbol));
+		strncpy(Frame4Input.status_id, Frame3Output.status_id, sizeof(Frame4Input.status_id));
+		strncpy(Frame4Input.symbol, Frame3Output.symbol, sizeof(Frame4Input.symbol));
 		Frame4Input.trade_qty = pTxnInput->trade_qty;
-		strncpy(Frame4Input.trade_type_id, pTxnInput->trade_type_id,
-		        sizeof(Frame4Input.trade_type_id));
+		strncpy(Frame4Input.trade_type_id, pTxnInput->trade_type_id, sizeof(Frame4Input.trade_type_id));
 		Frame4Input.type_is_market = Frame3Output.type_is_market;
 
 		// Execute Frame 4
@@ -219,8 +203,7 @@ class CTradeOrder {
 			// Send to Market Exchange Emulator
 			//
 			TradeRequestForMEE.price_quote = Frame4Input.requested_price;
-			strncpy(TradeRequestForMEE.symbol, Frame4Input.symbol,
-			        sizeof(TradeRequestForMEE.symbol));
+			strncpy(TradeRequestForMEE.symbol, Frame4Input.symbol, sizeof(TradeRequestForMEE.symbol));
 			TradeRequestForMEE.trade_id = Frame4Output.trade_id;
 			TradeRequestForMEE.trade_qty = Frame4Input.trade_qty;
 			strncpy(TradeRequestForMEE.trade_type_id, pTxnInput->trade_type_id,
@@ -232,8 +215,7 @@ class CTradeOrder {
 				TradeRequestForMEE.eAction = eMEESetLimitOrderTrigger;
 			}
 
-			m_pSendToMarket->SendToMarketFromHarness(
-			    TradeRequestForMEE); // maybe should check the return code here
+			m_pSendToMarket->SendToMarketFromHarness(TradeRequestForMEE); // maybe should check the return code here
 		}
 	}
 };

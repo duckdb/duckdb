@@ -1,9 +1,7 @@
-
-#include "function/scalar_function/abs.hpp"
-
 #include "common/exception.hpp"
 #include "common/types/date.hpp"
 #include "common/vector_operations/vector_operations.hpp"
+#include "function/scalar_function/abs.hpp"
 
 using namespace std;
 
@@ -73,8 +71,7 @@ static SpecifierType GetSpecifierType(string specifier) {
 		// quarter of the year (1-4)
 		return SpecifierType::QUARTER;
 	} else {
-		throw ConversionException("extract specifier \"%s\" not recognized",
-		                          specifier.c_str());
+		throw ConversionException("extract specifier \"%s\" not recognized", specifier.c_str());
 	}
 }
 
@@ -124,36 +121,31 @@ void date_part_function(Vector inputs[], size_t input_count, Vector &result) {
 	result.count = inputs[1].count;
 	result.sel_vector = inputs[1].sel_vector;
 	if (inputs[1].type != TypeId::DATE) {
-		throw NotImplementedException(
-		    "For now only DATE is implemented in Extract");
+		throw NotImplementedException("For now only DATE is implemented in Extract");
 	}
 
 	auto result_data = (int64_t *)result.data;
 	if (inputs[0].IsConstant()) {
 		// constant specifier
-		auto specifier_type =
-		    GetSpecifierType(((const char **)inputs[0].data)[0]);
-		VectorOperations::ExecType<date_t>(
-		    inputs[1], [&](date_t element, size_t i, size_t k) {
-			    result_data[i] = extract_element(specifier_type, element);
-		    });
+		auto specifier_type = GetSpecifierType(((const char **)inputs[0].data)[0]);
+		VectorOperations::ExecType<date_t>(inputs[1], [&](date_t element, size_t i, size_t k) {
+			result_data[i] = extract_element(specifier_type, element);
+		});
 	} else {
 		// not constant specifier
 		auto specifiers = ((const char **)inputs[0].data);
-		VectorOperations::ExecType<date_t>(
-		    inputs[1], [&](date_t element, size_t i, size_t k) {
-			    result_data[i] =
-			        extract_element(GetSpecifierType(specifiers[i]), element);
-		    });
+		VectorOperations::ExecType<date_t>(inputs[1], [&](date_t element, size_t i, size_t k) {
+			result_data[i] = extract_element(GetSpecifierType(specifiers[i]), element);
+		});
 	}
 }
 
-bool date_part_matches_arguments(std::vector<TypeId> &arguments) {
+bool date_part_matches_arguments(vector<TypeId> &arguments) {
 	return arguments.size() == 2 && arguments[0] == TypeId::VARCHAR &&
 	       (arguments[1] == TypeId::DATE || arguments[1] == TypeId::TIMESTAMP);
 }
 
-TypeId date_part_get_return_type(std::vector<TypeId> &arguments) {
+TypeId date_part_get_return_type(vector<TypeId> &arguments) {
 	return TypeId::BIGINT;
 }
 

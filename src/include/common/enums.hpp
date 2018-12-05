@@ -1,18 +1,17 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // common/enums.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
+#include "common/constants.hpp"
+
 #include <cstdlib>
 #include <math.h>
-#include <string>
 
 namespace duckdb {
 
@@ -230,12 +229,7 @@ enum class CatalogType : uint8_t {
 //===--------------------------------------------------------------------===//
 // Subquery Types
 //===--------------------------------------------------------------------===//
-enum class SubqueryType : uint8_t {
-	INVALID = 0,
-	DEFAULT = 1,
-	EXISTS = 2,
-	IN = 3
-};
+enum class SubqueryType : uint8_t { INVALID = 0, DEFAULT = 1, EXISTS = 2, IN = 3 };
 
 //===--------------------------------------------------------------------===//
 // Statement Types
@@ -266,9 +260,9 @@ enum class StatementType : uint8_t {
 	// -----------------------------
 	// Drop Types
 	// -----------------------------
-	DROP_TABLE, // drop table statement type
+	DROP_TABLE,  // drop table statement type
 	DROP_SCHEMA, // drop table statement type
-	DROP_INDEX  // create index statement type
+	DROP_INDEX   // create index statement type
 };
 
 //===--------------------------------------------------------------------===//
@@ -311,12 +305,7 @@ enum class IndexType {
 //===--------------------------------------------------------------------===//
 enum class OrderType : uint8_t { INVALID = 0, ASCENDING = 1, DESCENDING = 2 };
 
-enum class SetopType : uint8_t {
-	NONE = 0,
-	UNION = 1,
-	EXCEPT = 2,
-	INTERSECT = 3
-};
+enum class SetOperationType : uint8_t { NONE = 0, UNION = 1, EXCEPT = 2, INTERSECT = 3 };
 
 //===--------------------------------------------------------------------===//
 // Logical Operator Types
@@ -418,7 +407,8 @@ enum class PhysicalOperatorType : uint8_t {
 	// -----------------------------
 	// Helpers
 	// -----------------------------
-	PRUNE_COLUMNS
+	PRUNE_COLUMNS,
+	EXPLAIN
 };
 
 //===--------------------------------------------------------------------===//
@@ -428,14 +418,7 @@ enum class MatchOrder : uint8_t { ARBITRARY, DEPTH_FIRST };
 //===--------------------------------------------------------------------===//
 // Child Match Policy
 //===--------------------------------------------------------------------===//
-enum class ChildPolicy : uint8_t {
-	ALWAYS_MATCH,
-	ANY,
-	LEAF,
-	SOME,
-	UNORDERED,
-	ORDERED
-};
+enum class ChildPolicy : uint8_t { ALWAYS_MATCH, ANY, LEAF, SOME, UNORDERED, ORDERED };
 
 //===--------------------------------------------------------------------===//
 // External File Format Types
@@ -445,27 +428,22 @@ enum class ExternalFileFormat : uint8_t { INVALID, CSV };
 //===--------------------------------------------------------------------===//
 // Transaction Operation Types
 //===--------------------------------------------------------------------===//
-enum class TransactionType : uint8_t {
-	INVALID,
-	BEGIN_TRANSACTION,
-	COMMIT,
-	ROLLBACK
-};
+enum class TransactionType : uint8_t { INVALID, BEGIN_TRANSACTION, COMMIT, ROLLBACK };
 
 //===--------------------------------------------------------------------===//
 // String <-> Enum conversion
 //===--------------------------------------------------------------------===//
-std::string TypeIdToString(TypeId type);
-std::string JoinTypeToString(JoinType type);
-IndexType StringToIndexType(const std::string &str);
+string TypeIdToString(TypeId type);
+string JoinTypeToString(JoinType type);
+IndexType StringToIndexType(const string &str);
 
-ExpressionType StringToExpressionType(const std::string &str);
+ExpressionType StringToExpressionType(const string &str);
 
-std::string LogicalOperatorToString(LogicalOperatorType type);
-std::string PhysicalOperatorToString(PhysicalOperatorType type);
-std::string ExpressionTypeToString(ExpressionType type);
-std::string ExpressionTypeToOperator(ExpressionType type);
+string LogicalOperatorToString(LogicalOperatorType type);
+string PhysicalOperatorToString(PhysicalOperatorType type);
+string ExpressionTypeToString(ExpressionType type);
+string ExpressionTypeToOperator(ExpressionType type);
 
-ExternalFileFormat StringToExternalFileFormat(const std::string &str);
+ExternalFileFormat StringToExternalFileFormat(const string &str);
 
 } // namespace duckdb

@@ -1,51 +1,29 @@
-
 #include "execution/operator/aggregate/physical_aggregate.hpp"
-#include "execution/expression_executor.hpp"
 
+#include "execution/expression_executor.hpp"
 #include "parser/expression/aggregate_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-PhysicalAggregate::PhysicalAggregate(
-    std::vector<std::unique_ptr<Expression>> select_list,
-    PhysicalOperatorType type)
-    : PhysicalOperator(type), select_list(std::move(select_list)) {
+PhysicalAggregate::PhysicalAggregate(LogicalOperator &op, vector<unique_ptr<Expression>> select_list,
+                                     PhysicalOperatorType type)
+    : PhysicalOperator(type, op.types), select_list(std::move(select_list)) {
 	Initialize();
 }
 
-PhysicalAggregate::PhysicalAggregate(
-    std::vector<std::unique_ptr<Expression>> select_list,
-    std::vector<std::unique_ptr<Expression>> groups, PhysicalOperatorType type)
-    : PhysicalOperator(type), select_list(std::move(select_list)),
-      groups(std::move(groups)) {
+PhysicalAggregate::PhysicalAggregate(LogicalOperator &op, vector<unique_ptr<Expression>> select_list,
+                                     vector<unique_ptr<Expression>> groups, PhysicalOperatorType type)
+    : PhysicalOperator(type, op.types), select_list(std::move(select_list)), groups(std::move(groups)) {
 	Initialize();
-}
-
-vector<string> PhysicalAggregate::GetNames() {
-	vector<string> names;
-	for (auto &exp : select_list) {
-		names.push_back(exp->GetName());
-	}
-	return names;
-}
-
-vector<TypeId> PhysicalAggregate::GetTypes() {
-	// get the chunk types from the projection list
-	vector<TypeId> types;
-	for (auto &expr : select_list) {
-		types.push_back(expr->return_type);
-	}
-	return types;
 }
 
 void PhysicalAggregate::Initialize() {
 	// get a list of all aggregates to be computed
 	// fake a single group with a constant value for aggregation without groups
 	if (groups.size() == 0) {
-		unique_ptr<Expression> ce =
-		    make_unique<ConstantExpression>(Value::TINYINT(42));
+		unique_ptr<Expression> ce = make_unique<ConstantExpression>(Value::TINYINT(42));
 		groups.push_back(move(ce));
 		is_implicit_aggr = true;
 	} else {
@@ -59,9 +37,8 @@ void PhysicalAggregate::Initialize() {
 	}
 }
 
-PhysicalAggregateOperatorState::PhysicalAggregateOperatorState(
-    PhysicalAggregate *parent, PhysicalOperator *child,
-    ExpressionExecutor *parent_executor)
+PhysicalAggregateOperatorState::PhysicalAggregateOperatorState(PhysicalAggregate *parent, PhysicalOperator *child,
+                                                               ExpressionExecutor *parent_executor)
     : PhysicalOperatorState(child, parent_executor) {
 	vector<TypeId> group_types, aggregate_types;
 	for (auto &expr : parent->groups) {

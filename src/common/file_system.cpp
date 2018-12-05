@@ -1,5 +1,5 @@
-
 #include "common/file_system.hpp"
+
 #include "common/exception.hpp"
 #include "common/string_util.hpp"
 
@@ -103,7 +103,7 @@ string GetWorkingDirectory() {
 	char current_path[FILENAME_MAX];
 
 	if (!GetCurrentDir(current_path, sizeof(current_path))) {
-		return std::string();
+		return string();
 	}
 	return string(current_path);
 }

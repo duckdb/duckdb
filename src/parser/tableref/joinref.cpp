@@ -1,4 +1,3 @@
-
 #include "parser/tableref/joinref.hpp"
 
 #include "common/serializer.hpp"

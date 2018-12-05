@@ -38,7 +38,6 @@
 
 namespace TPCE {
 
-void DFRStringInit(const std::string &src, std::string &dest, char *destCStr,
-                   int maxLen);
+void DFRStringInit(const std::string &src, std::string &dest, char *destCStr, int maxLen);
 
 } // namespace TPCE

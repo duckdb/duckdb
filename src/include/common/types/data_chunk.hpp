@@ -1,20 +1,18 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // common/types/data_chunk.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include <vector>
-
 #include "common/common.hpp"
 #include "common/printable.hpp"
 #include "common/types/vector.hpp"
+
+#include <vector>
 
 namespace duckdb {
 
@@ -37,11 +35,11 @@ namespace duckdb {
    selection vector that underlying vectors can point to.
 */
 class DataChunk : public Printable {
-  public:
+public:
 	//! The amount of vectors that are part of this DataChunk.
 	size_t column_count;
 	//! The vectors owned by the DataChunk.
-	std::unique_ptr<Vector[]> data;
+	unique_ptr<Vector[]> data;
 	//! The (optional) selection vector of the DataChunk. Each of the member
 	//! vectors reference this selection vector.
 	sel_t *sel_vector;
@@ -71,7 +69,7 @@ class DataChunk : public Printable {
 	//! types list. The vector will be referencing vector to the data owned by
 	//! the DataChunk.
 	//! If zero_data is set to true, the data is zero-initialized.
-	void Initialize(std::vector<TypeId> &types, bool zero_data = false);
+	void Initialize(vector<TypeId> &types, bool zero_data = false);
 	//! Append the other DataChunk to this one. The column count and types of
 	//! the two DataChunks have to match exactly. Throws an exception if there
 	//! is not enough space in the chunk.
@@ -84,8 +82,7 @@ class DataChunk : public Printable {
 
 	//! Merges the vector new_vector with an existing selection vector (i.e.
 	//! result[i] = current_vector[new_vector[i]];)
-	static void MergeSelVector(sel_t *current_vector, sel_t *new_vector,
-	                           sel_t *result, size_t new_count);
+	static void MergeSelVector(sel_t *current_vector, sel_t *new_vector, sel_t *result, size_t new_count);
 
 	//! Filters elements from the vector based on a boolean vector. [True] is
 	//! included, [False] and [NULL] excluded.
@@ -115,10 +112,10 @@ class DataChunk : public Printable {
 	void Hash(Vector &result);
 
 	//! Returns a list of types of the vectors of this data chunk
-	std::vector<TypeId> GetTypes();
+	vector<TypeId> GetTypes();
 
 	//! Converts this DataChunk to a printable string representation
-	std::string ToString() const;
+	string ToString() const;
 
 	Vector &GetVector(size_t index) {
 		return data[index];
@@ -131,9 +128,9 @@ class DataChunk : public Printable {
 	//! The selection vector of a chunk, if it owns it
 	sel_t owned_sel_vector[STANDARD_VECTOR_SIZE];
 
-  private:
+private:
 	//! The data owned by this DataChunk. This data is typically referenced by
 	//! the member vectors.
-	std::unique_ptr<char[]> owned_data;
+	unique_ptr<char[]> owned_data;
 };
 } // namespace duckdb

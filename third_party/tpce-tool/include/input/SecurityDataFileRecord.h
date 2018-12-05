@@ -55,7 +55,7 @@ namespace TPCE {
 //
 
 class SecurityDataFileRecord {
-  private:
+private:
 	TIdent s_id;
 
 	static const int maxS_st_idLen = 4;
@@ -78,7 +78,7 @@ class SecurityDataFileRecord {
 
 	static const unsigned int fieldCount = 6;
 
-  public:
+public:
 	explicit SecurityDataFileRecord(const std::deque<std::string> &fields);
 
 	//

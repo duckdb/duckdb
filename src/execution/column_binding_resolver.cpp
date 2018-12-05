@@ -1,16 +1,13 @@
 #include "execution/column_binding_resolver.hpp"
+
 #include "parser/expression/list.hpp"
 #include "planner/operator/list.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-void ColumnBindingResolver::AppendTables(
-    std::vector<BoundTable> &right_tables) {
-	size_t offset = bound_tables.size() == 0
-	                    ? 0
-	                    : bound_tables.back().column_offset +
-	                          bound_tables.back().column_count;
+void ColumnBindingResolver::AppendTables(vector<BoundTable> &right_tables) {
+	size_t offset = bound_tables.size() == 0 ? 0 : bound_tables.back().column_offset + bound_tables.back().column_count;
 	for (auto table : right_tables) {
 		table.column_offset += offset;
 		bound_tables.push_back(table);
@@ -29,8 +26,7 @@ void ColumnBindingResolver::Visit(LogicalCreateIndex &op) {
 	LogicalOperatorVisitor::Visit(op);
 }
 
-static void BindTablesBinaryOp(LogicalOperator &op, ColumnBindingResolver *res,
-                               bool append_right) {
+static void BindTablesBinaryOp(LogicalOperator &op, ColumnBindingResolver *res, bool append_right) {
 	assert(res);
 
 	// resolve the column indices of the left side
@@ -74,10 +70,8 @@ void ColumnBindingResolver::Visit(LogicalGet &op) {
 	BoundTable binding;
 	binding.table_index = op.table_index;
 	binding.column_count = op.column_ids.size();
-	binding.column_offset = bound_tables.size() == 0
-	                            ? 0
-	                            : bound_tables.back().column_offset +
-	                                  bound_tables.back().column_count;
+	binding.column_offset =
+	    bound_tables.size() == 0 ? 0 : bound_tables.back().column_offset + bound_tables.back().column_count;
 	bound_tables.push_back(binding);
 }
 
@@ -89,10 +83,8 @@ void ColumnBindingResolver::Visit(LogicalSubquery &op) {
 	BoundTable binding;
 	binding.table_index = op.table_index;
 	binding.column_count = op.column_count;
-	binding.column_offset = bound_tables.size() == 0
-	                            ? 0
-	                            : bound_tables.back().column_offset +
-	                                  bound_tables.back().column_count;
+	binding.column_offset =
+	    bound_tables.size() == 0 ? 0 : bound_tables.back().column_offset + bound_tables.back().column_count;
 	bound_tables.push_back(binding);
 }
 
@@ -100,10 +92,8 @@ void ColumnBindingResolver::Visit(LogicalTableFunction &op) {
 	BoundTable binding;
 	binding.table_index = op.table_index;
 	binding.column_count = op.function->return_values.size();
-	binding.column_offset = bound_tables.size() == 0
-	                            ? 0
-	                            : bound_tables.back().column_offset +
-	                                  bound_tables.back().column_count;
+	binding.column_offset =
+	    bound_tables.size() == 0 ? 0 : bound_tables.back().column_offset + bound_tables.back().column_count;
 	bound_tables.push_back(binding);
 }
 
@@ -135,8 +125,7 @@ void ColumnBindingResolver::Visit(LogicalJoin &op) {
 }
 
 unique_ptr<Expression> ColumnBindingResolver::Visit(ColumnRefExpression &expr) {
-	if (expr.index != (size_t)-1 || expr.reference ||
-	    expr.depth != current_depth) {
+	if (expr.index != (size_t)-1 || expr.reference || expr.depth != current_depth) {
 		// not a base table reference OR should not be resolved by the current
 		// resolver
 		return nullptr;

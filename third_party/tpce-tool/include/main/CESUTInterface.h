@@ -48,7 +48,7 @@
 namespace TPCE {
 
 class CCESUTInterface {
-  public:
+public:
 	/*
 	 *  Virtual destructor. Provided so that a sponsor-specific
 	 *  destructor can be called on destruction from the base-class pointer.
@@ -61,26 +61,15 @@ class CCESUTInterface {
 	 */
 	virtual ~CCESUTInterface(){};
 
-	virtual bool
-	BrokerVolume(PBrokerVolumeTxnInput
-	                 pTxnInput) = 0; // return whether it was successful
-	virtual bool
-	CustomerPosition(PCustomerPositionTxnInput
-	                     pTxnInput) = 0; // return whether it was successful
-	virtual bool MarketWatch(
-	    PMarketWatchTxnInput pTxnInput) = 0; // return whether it was successful
-	virtual bool
-	SecurityDetail(PSecurityDetailTxnInput
-	                   pTxnInput) = 0; // return whether it was successful
-	virtual bool TradeLookup(
-	    PTradeLookupTxnInput pTxnInput) = 0; // return whether it was successful
-	virtual bool TradeOrder(
-	    PTradeOrderTxnInput pTxnInput, INT32 iTradeType,
-	    bool bExecutorIsAccountOwner) = 0; // return whether it was successful
-	virtual bool TradeStatus(
-	    PTradeStatusTxnInput pTxnInput) = 0; // return whether it was successful
-	virtual bool TradeUpdate(
-	    PTradeUpdateTxnInput pTxnInput) = 0; // return whether it was successful
+	virtual bool BrokerVolume(PBrokerVolumeTxnInput pTxnInput) = 0;         // return whether it was successful
+	virtual bool CustomerPosition(PCustomerPositionTxnInput pTxnInput) = 0; // return whether it was successful
+	virtual bool MarketWatch(PMarketWatchTxnInput pTxnInput) = 0;           // return whether it was successful
+	virtual bool SecurityDetail(PSecurityDetailTxnInput pTxnInput) = 0;     // return whether it was successful
+	virtual bool TradeLookup(PTradeLookupTxnInput pTxnInput) = 0;           // return whether it was successful
+	virtual bool TradeOrder(PTradeOrderTxnInput pTxnInput, INT32 iTradeType,
+	                        bool bExecutorIsAccountOwner) = 0;    // return whether it was successful
+	virtual bool TradeStatus(PTradeStatusTxnInput pTxnInput) = 0; // return whether it was successful
+	virtual bool TradeUpdate(PTradeUpdateTxnInput pTxnInput) = 0; // return whether it was successful
 };
 
 } // namespace TPCE

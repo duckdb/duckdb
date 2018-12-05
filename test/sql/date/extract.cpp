@@ -1,4 +1,3 @@
-
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
@@ -12,8 +11,7 @@ TEST_CASE("Extract function", "[date]") {
 
 	// create and insert into table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE dates(i DATE)"));
-	REQUIRE_NO_FAIL(
-	    con.Query("INSERT INTO dates VALUES ('1993-08-14'), (NULL)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO dates VALUES ('1993-08-14'), (NULL)"));
 
 	// extract various parts of the date
 	// year
@@ -63,18 +61,14 @@ TEST_CASE("Extract function edge cases", "[date]") {
 	DuckDBConnection con(db);
 
 	// century changes in the year 1
-	result =
-	    con.Query("SELECT EXTRACT(century FROM cast('2000-10-10' AS DATE));");
+	result = con.Query("SELECT EXTRACT(century FROM cast('2000-10-10' AS DATE));");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(20)}));
-	result =
-	    con.Query("SELECT EXTRACT(century FROM cast('2001-10-10' AS DATE));");
+	result = con.Query("SELECT EXTRACT(century FROM cast('2001-10-10' AS DATE));");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(21)}));
 	// millennium changes in the year 1
-	result = con.Query(
-	    "SELECT EXTRACT(millennium FROM cast('2000-10-10' AS DATE));");
+	result = con.Query("SELECT EXTRACT(millennium FROM cast('2000-10-10' AS DATE));");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(2)}));
-	result = con.Query(
-	    "SELECT EXTRACT(millennium FROM cast('2001-10-10' AS DATE));");
+	result = con.Query("SELECT EXTRACT(millennium FROM cast('2001-10-10' AS DATE));");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(3)}));
 	// check DOW
 	// start from the epoch and go up/down, every time the day should go up/down
@@ -82,13 +76,9 @@ TEST_CASE("Extract function edge cases", "[date]") {
 	int epoch_day = 4;
 	int expected_day_up = epoch_day, expected_day_down = epoch_day;
 	for (size_t i = 0; i < 7; i++) {
-		result =
-		    con.Query("SELECT EXTRACT(dow FROM cast('1970-1-1' AS DATE) + " +
-		              to_string(i) + ");");
+		result = con.Query("SELECT EXTRACT(dow FROM cast('1970-1-1' AS DATE) + " + to_string(i) + ");");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(expected_day_up)}));
-		result =
-		    con.Query("SELECT EXTRACT(dow FROM cast('1970-1-1' AS DATE) - " +
-		              to_string(i) + ");");
+		result = con.Query("SELECT EXTRACT(dow FROM cast('1970-1-1' AS DATE) - " + to_string(i) + ");");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(expected_day_down)}));
 		expected_day_up = (expected_day_up + 1) % 7;
 		expected_day_down = expected_day_down == 0 ? 6 : expected_day_down - 1;
@@ -111,9 +101,7 @@ TEST_CASE("Extract function edge cases", "[date]") {
 	// every 7 days the week number should go up by 7
 	int expected_week = 1;
 	for (size_t i = 0; i < 40; i++) {
-		result =
-		    con.Query("SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + " +
-		              to_string(i * 7) + ");");
+		result = con.Query("SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + " + to_string(i * 7) + ");");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(expected_week)}));
 		expected_week++;
 	}

@@ -47,7 +47,7 @@ namespace TPCE {
 //
 
 class ITextSplitter {
-  public:
+public:
 	virtual ~ITextSplitter() {
 	}
 

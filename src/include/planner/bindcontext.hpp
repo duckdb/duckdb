@@ -1,38 +1,30 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // planner/bindcontext.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
+
+#include "catalog/catalog.hpp"
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
+#include "catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "parser/column_definition.hpp"
+#include "parser/expression.hpp"
+#include "parser/sql_statement.hpp"
 
 #include <string>
 #include <unordered_map>
 #include <vector>
 
-#include "catalog/catalog.hpp"
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "catalog/catalog_entry/table_function_catalog_entry.hpp"
-
-#include "parser/column_definition.hpp"
-#include "parser/expression.hpp"
-#include "parser/sql_statement.hpp"
-
 namespace duckdb {
 class SubqueryRef;
-class SelectStatement;
+class QueryNode;
 class ColumnRefExpression;
 
-enum class BindingType : uint8_t {
-	DUMMY = 0,
-	TABLE = 1,
-	SUBQUERY = 2,
-	TABLE_FUNCTION = 3
-};
+enum class BindingType : uint8_t { DUMMY = 0, TABLE = 1, SUBQUERY = 2, TABLE_FUNCTION = 3 };
 
 struct Binding {
 	Binding(BindingType type, size_t index) : type(type), index(index) {
@@ -45,10 +37,9 @@ struct Binding {
 };
 
 struct DummyTableBinding : public Binding {
-	std::unordered_map<std::string, ColumnDefinition *> bound_columns;
+	std::unordered_map<string, ColumnDefinition *> bound_columns;
 
-	DummyTableBinding(std::vector<ColumnDefinition> &columns)
-	    : Binding(BindingType::DUMMY, 0) {
+	DummyTableBinding(vector<ColumnDefinition> &columns) : Binding(BindingType::DUMMY, 0) {
 		for (auto &it : columns) {
 			bound_columns[it.name] = &it;
 		}
@@ -60,22 +51,21 @@ struct DummyTableBinding : public Binding {
 struct TableBinding : public Binding {
 	TableCatalogEntry *table;
 
-	TableBinding(TableCatalogEntry *table, size_t index)
-	    : Binding(BindingType::TABLE, index), table(table) {
+	TableBinding(TableCatalogEntry *table, size_t index) : Binding(BindingType::TABLE, index), table(table) {
 	}
 	virtual ~TableBinding() {
 	}
 };
 
 struct SubqueryBinding : public Binding {
-	SelectStatement *subquery;
+	QueryNode *subquery;
 	//! Column names of the subquery
-	std::vector<std::string> names;
+	vector<string> names;
 	//! Name -> index for the names
-	std::unordered_map<std::string, size_t> name_map;
+	std::unordered_map<string, size_t> name_map;
 
 	SubqueryBinding(SubqueryRef &subquery_, size_t index);
-	SubqueryBinding(SelectStatement *select_, size_t index);
+	SubqueryBinding(QueryNode *select_, size_t index);
 
 	virtual ~SubqueryBinding() {
 	}
@@ -92,13 +82,13 @@ struct TableFunctionBinding : public Binding {
 //! The BindContext object keeps track of all the tables and columns that are
 //! encountered during the binding process.
 class BindContext {
-  public:
+public:
 	BindContext() : bound_tables(0), max_depth(0) {
 	}
 
 	//! Given a column name, find the matching table it belongs to. Throws an
 	//! exception if no table has a column of the given name.
-	std::string GetMatchingBinding(const std::string &column_name);
+	string GetMatchingBinding(const string &column_name);
 	//! Binds a column expression to the base table. Returns the column catalog
 	//! entry or throws an exception if the column could not be bound.
 	void BindColumn(ColumnRefExpression &expr, size_t depth = 0);
@@ -106,57 +96,51 @@ class BindContext {
 	//! Generate column expressions for all columns that are present in the
 	//! referenced tables. This is used to resolve the * expression in a
 	//! selection list.
-	void GenerateAllColumnExpressions(
-	    std::vector<std::unique_ptr<Expression>> &new_select_list);
+	void GenerateAllColumnExpressions(vector<unique_ptr<Expression>> &new_select_list);
 
 	//! Adds a base table with the given alias to the BindContext.
-	size_t AddBaseTable(const std::string &alias,
-	                    TableCatalogEntry *table_entry);
+	size_t AddBaseTable(const string &alias, TableCatalogEntry *table_entry);
 	//! Adds a dummy table with the given set of columns to the BindContext.
-	void AddDummyTable(const std::string &alias,
-	                   std::vector<ColumnDefinition> &columns);
+	void AddDummyTable(const string &alias, vector<ColumnDefinition> &columns);
 	//! Adds a subquery with a given alias to the BindContext.
-	size_t AddSubquery(const std::string &alias, SubqueryRef &subquery);
+	size_t AddSubquery(const string &alias, SubqueryRef &subquery);
 
 	//! Adds a table function with a given alias to the BindContext
-	size_t AddTableFunction(const std::string &alias,
-	                        TableFunctionCatalogEntry *function_entry);
+	size_t AddTableFunction(const string &alias, TableFunctionCatalogEntry *function_entry);
 	//! Adds an expression that has an alias to the BindContext
-	void AddExpression(const std::string &alias, Expression *expression,
-	                   size_t i);
+	void AddExpression(const string &alias, Expression *expression, size_t i);
 
 	//! Returns true if the table/subquery alias exists, false otherwise.
-	bool HasAlias(const std::string &alias);
+	bool HasAlias(const string &alias);
 	//! Gets the binding index of a given alias. Throws an exception if the
 	//! alias was not found.
-	size_t GetBindingIndex(const std::string &alias);
+	size_t GetBindingIndex(const string &alias);
 	//! Returns the maximum depth of column references in the current context
 	size_t GetMaxDepth() {
 		return max_depth;
 	}
 
 	//! The set of columns that are bound for each table/subquery alias
-	std::unordered_map<std::string, std::vector<std::string>> bound_columns;
+	std::unordered_map<string, vector<string>> bound_columns;
 
 	BindContext *parent = nullptr;
 
 	//! Generates an unused alias
-	std::string GenerateAlias();
+	string GenerateAlias();
 	//! Generates an unused index for a table
 	size_t GenerateTableIndex();
 
-  private:
-	void AddBinding(const std::string &alias, std::unique_ptr<Binding> binding);
+private:
+	void AddBinding(const string &alias, unique_ptr<Binding> binding);
 
 	size_t bound_tables;
 	size_t max_depth;
 
 	//! The set of expression aliases
-	std::unordered_map<std::string, std::pair<size_t, Expression *>>
-	    expression_alias_map;
+	std::unordered_map<string, std::pair<size_t, Expression *>> expression_alias_map;
 	//! The set of bindings
-	std::unordered_map<std::string, std::unique_ptr<Binding>> bindings;
+	std::unordered_map<string, unique_ptr<Binding>> bindings;
 	//! The list of bindings in insertion order
-	std::vector<std::pair<std::string, Binding *>> bindings_list;
+	vector<std::pair<string, Binding *>> bindings_list;
 };
 } // namespace duckdb

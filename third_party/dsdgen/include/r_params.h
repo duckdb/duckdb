@@ -37,14 +37,13 @@
 #ifndef R_PARAMS_H
 #define R_PARAMS_H
 #define OPT_NONE 0x00
-#define OPT_FLG 0x01 /* option is a flag; no parameter */
-#define OPT_INT 0x02 /* argument is an integer */
-#define OPT_STR 0x04 /* argument is a string */
-#define OPT_NOP 0x08 /* flags non-operational options */
-#define OPT_SUB 0x10 /* sub-option defined */
-#define OPT_ADV 0x20 /* advanced option */
-#define OPT_SET                                                                \
-	0x40 /* not changeable -- used for default/file/command precedence */
+#define OPT_FLG 0x01    /* option is a flag; no parameter */
+#define OPT_INT 0x02    /* argument is an integer */
+#define OPT_STR 0x04    /* argument is a string */
+#define OPT_NOP 0x08    /* flags non-operational options */
+#define OPT_SUB 0x10    /* sub-option defined */
+#define OPT_ADV 0x20    /* advanced option */
+#define OPT_SET 0x40    /* not changeable -- used for default/file/command precedence */
 #define OPT_DFLT 0x80   /* param set to non-zero default */
 #define OPT_MULTI 0x100 /* param may be set repeatedly */
 #define OPT_HIDE 0x200  /* hidden option -- not listed in usage */

@@ -1,12 +1,9 @@
-
 #include "dbgen.hpp"
+
 #include "common/exception.hpp"
 #include "dbgen_gunk.hpp"
-
 #include "main/client_context.hpp"
-
 #include "storage/data_table.hpp"
-
 #include "tpch_constants.hpp"
 
 #define DECLARER /* EXTERN references get defined here */
@@ -42,18 +39,15 @@ struct tpch_append_information {
 	ClientContext *context;
 };
 
-void append_value(DataChunk &chunk, size_t index, size_t &column,
-                  int32_t value) {
+void append_value(DataChunk &chunk, size_t index, size_t &column, int32_t value) {
 	((int32_t *)chunk.data[column++].data)[index] = value;
 }
 
-void append_string(DataChunk &chunk, size_t index, size_t &column,
-                   const char *value) {
+void append_string(DataChunk &chunk, size_t index, size_t &column, const char *value) {
 	chunk.data[column++].SetStringValue(index, value);
 }
 
-void append_decimal(DataChunk &chunk, size_t index, size_t &column,
-                    int64_t value) {
+void append_decimal(DataChunk &chunk, size_t index, size_t &column, int64_t value) {
 	((double *)chunk.data[column++].data)[index] = (double)value / 100.0;
 }
 
@@ -364,96 +358,85 @@ string get_table_name(int num) {
 }
 
 static vector<ColumnDefinition> RegionColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("r_regionkey", TypeId::INTEGER, false),
-	    ColumnDefinition("r_name", TypeId::VARCHAR, false),
-	    ColumnDefinition("r_comment", TypeId::VARCHAR, false)};
+	return vector<ColumnDefinition>{ColumnDefinition("r_regionkey", TypeId::INTEGER, false),
+	                                ColumnDefinition("r_name", TypeId::VARCHAR, false),
+	                                ColumnDefinition("r_comment", TypeId::VARCHAR, false)};
 }
 
 static vector<ColumnDefinition> NationColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("n_nationkey", TypeId::INTEGER, false),
-	    ColumnDefinition("n_name", TypeId::VARCHAR, false),
-	    ColumnDefinition("n_regionkey", TypeId::INTEGER, false),
-	    ColumnDefinition("n_comment", TypeId::VARCHAR, false)};
+	    ColumnDefinition("n_nationkey", TypeId::INTEGER, false), ColumnDefinition("n_name", TypeId::VARCHAR, false),
+	    ColumnDefinition("n_regionkey", TypeId::INTEGER, false), ColumnDefinition("n_comment", TypeId::VARCHAR, false)};
 }
 
 static vector<ColumnDefinition> SupplierColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("s_suppkey", TypeId::INTEGER, false),
-	    ColumnDefinition("s_name", TypeId::VARCHAR, false),
-	    ColumnDefinition("s_address", TypeId::VARCHAR, false),
-	    ColumnDefinition("s_nationkey", TypeId::INTEGER, false),
-	    ColumnDefinition("s_phone", TypeId::VARCHAR, false),
-	    ColumnDefinition("s_acctbal", TypeId::DECIMAL, false),
+	    ColumnDefinition("s_suppkey", TypeId::INTEGER, false), ColumnDefinition("s_name", TypeId::VARCHAR, false),
+	    ColumnDefinition("s_address", TypeId::VARCHAR, false), ColumnDefinition("s_nationkey", TypeId::INTEGER, false),
+	    ColumnDefinition("s_phone", TypeId::VARCHAR, false),   ColumnDefinition("s_acctbal", TypeId::DECIMAL, false),
 	    ColumnDefinition("s_comment", TypeId::VARCHAR, false)};
 }
 
 static vector<ColumnDefinition> CustomerColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("c_custkey", TypeId::INTEGER, false),
-	    ColumnDefinition("c_name", TypeId::VARCHAR, false),
-	    ColumnDefinition("c_address", TypeId::VARCHAR, false),
-	    ColumnDefinition("c_nationkey", TypeId::INTEGER, false),
-	    ColumnDefinition("c_phone", TypeId::VARCHAR, false),
-	    ColumnDefinition("c_acctbal", TypeId::DECIMAL, false),
-	    ColumnDefinition("c_mktsegment", TypeId::VARCHAR, false),
-	    ColumnDefinition("c_comment", TypeId::VARCHAR, false)};
+	return vector<ColumnDefinition>{ColumnDefinition("c_custkey", TypeId::INTEGER, false),
+	                                ColumnDefinition("c_name", TypeId::VARCHAR, false),
+	                                ColumnDefinition("c_address", TypeId::VARCHAR, false),
+	                                ColumnDefinition("c_nationkey", TypeId::INTEGER, false),
+	                                ColumnDefinition("c_phone", TypeId::VARCHAR, false),
+	                                ColumnDefinition("c_acctbal", TypeId::DECIMAL, false),
+	                                ColumnDefinition("c_mktsegment", TypeId::VARCHAR, false),
+	                                ColumnDefinition("c_comment", TypeId::VARCHAR, false)};
 }
 
 static vector<ColumnDefinition> PartColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("p_partkey", TypeId::INTEGER, false),
-	    ColumnDefinition("p_name", TypeId::VARCHAR, false),
-	    ColumnDefinition("p_mfgr", TypeId::VARCHAR, false),
-	    ColumnDefinition("p_brand", TypeId::VARCHAR, false),
-	    ColumnDefinition("p_type", TypeId::VARCHAR, false),
-	    ColumnDefinition("p_size", TypeId::INTEGER, false),
-	    ColumnDefinition("p_container", TypeId::VARCHAR, false),
-	    ColumnDefinition("p_retailprice", TypeId::DECIMAL, false),
-	    ColumnDefinition("p_comment", TypeId::VARCHAR, false)};
+	return vector<ColumnDefinition>{ColumnDefinition("p_partkey", TypeId::INTEGER, false),
+	                                ColumnDefinition("p_name", TypeId::VARCHAR, false),
+	                                ColumnDefinition("p_mfgr", TypeId::VARCHAR, false),
+	                                ColumnDefinition("p_brand", TypeId::VARCHAR, false),
+	                                ColumnDefinition("p_type", TypeId::VARCHAR, false),
+	                                ColumnDefinition("p_size", TypeId::INTEGER, false),
+	                                ColumnDefinition("p_container", TypeId::VARCHAR, false),
+	                                ColumnDefinition("p_retailprice", TypeId::DECIMAL, false),
+	                                ColumnDefinition("p_comment", TypeId::VARCHAR, false)};
 }
 
 static vector<ColumnDefinition> PartSuppColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("ps_partkey", TypeId::INTEGER, false),
-	    ColumnDefinition("ps_suppkey", TypeId::INTEGER, false),
-	    ColumnDefinition("ps_availqty", TypeId::INTEGER, false),
-	    ColumnDefinition("ps_supplycost", TypeId::DECIMAL, false),
-	    ColumnDefinition("ps_comment", TypeId::VARCHAR, false)};
+	return vector<ColumnDefinition>{ColumnDefinition("ps_partkey", TypeId::INTEGER, false),
+	                                ColumnDefinition("ps_suppkey", TypeId::INTEGER, false),
+	                                ColumnDefinition("ps_availqty", TypeId::INTEGER, false),
+	                                ColumnDefinition("ps_supplycost", TypeId::DECIMAL, false),
+	                                ColumnDefinition("ps_comment", TypeId::VARCHAR, false)};
 }
 
 static vector<ColumnDefinition> OrdersColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("o_orderkey", TypeId::INTEGER, false),
-	    ColumnDefinition("o_custkey", TypeId::INTEGER, false),
-	    ColumnDefinition("o_orderstatus", TypeId::VARCHAR, false),
-	    ColumnDefinition("o_totalprice", TypeId::DECIMAL, false),
-	    ColumnDefinition("o_orderdate", TypeId::DATE, false),
-	    ColumnDefinition("o_orderpriority", TypeId::VARCHAR, false),
-	    ColumnDefinition("o_clerk", TypeId::VARCHAR, false),
-	    ColumnDefinition("o_shippriority", TypeId::INTEGER, false),
-	    ColumnDefinition("o_comment", TypeId::VARCHAR, false)};
+	return vector<ColumnDefinition>{ColumnDefinition("o_orderkey", TypeId::INTEGER, false),
+	                                ColumnDefinition("o_custkey", TypeId::INTEGER, false),
+	                                ColumnDefinition("o_orderstatus", TypeId::VARCHAR, false),
+	                                ColumnDefinition("o_totalprice", TypeId::DECIMAL, false),
+	                                ColumnDefinition("o_orderdate", TypeId::DATE, false),
+	                                ColumnDefinition("o_orderpriority", TypeId::VARCHAR, false),
+	                                ColumnDefinition("o_clerk", TypeId::VARCHAR, false),
+	                                ColumnDefinition("o_shippriority", TypeId::INTEGER, false),
+	                                ColumnDefinition("o_comment", TypeId::VARCHAR, false)};
 }
 
 static vector<ColumnDefinition> LineitemColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("l_orderkey", TypeId::INTEGER, false),
-	    ColumnDefinition("l_partkey", TypeId::INTEGER, false),
-	    ColumnDefinition("l_suppkey", TypeId::INTEGER, false),
-	    ColumnDefinition("l_linenumber", TypeId::INTEGER, false),
-	    ColumnDefinition("l_quantity", TypeId::INTEGER, false),
-	    ColumnDefinition("l_extendedprice", TypeId::DECIMAL, false),
-	    ColumnDefinition("l_discount", TypeId::DECIMAL, false),
-	    ColumnDefinition("l_tax", TypeId::DECIMAL, false),
-	    ColumnDefinition("l_returnflag", TypeId::VARCHAR, false),
-	    ColumnDefinition("l_linestatus", TypeId::VARCHAR, false),
-	    ColumnDefinition("l_shipdate", TypeId::DATE, false),
-	    ColumnDefinition("l_commitdate", TypeId::DATE, false),
-	    ColumnDefinition("l_receiptdate", TypeId::DATE, false),
-	    ColumnDefinition("l_shipinstruct", TypeId::VARCHAR, false),
-	    ColumnDefinition("l_shipmode", TypeId::VARCHAR, false),
-	    ColumnDefinition("l_comment", TypeId::VARCHAR, false)};
+	return vector<ColumnDefinition>{ColumnDefinition("l_orderkey", TypeId::INTEGER, false),
+	                                ColumnDefinition("l_partkey", TypeId::INTEGER, false),
+	                                ColumnDefinition("l_suppkey", TypeId::INTEGER, false),
+	                                ColumnDefinition("l_linenumber", TypeId::INTEGER, false),
+	                                ColumnDefinition("l_quantity", TypeId::INTEGER, false),
+	                                ColumnDefinition("l_extendedprice", TypeId::DECIMAL, false),
+	                                ColumnDefinition("l_discount", TypeId::DECIMAL, false),
+	                                ColumnDefinition("l_tax", TypeId::DECIMAL, false),
+	                                ColumnDefinition("l_returnflag", TypeId::VARCHAR, false),
+	                                ColumnDefinition("l_linestatus", TypeId::VARCHAR, false),
+	                                ColumnDefinition("l_shipdate", TypeId::DATE, false),
+	                                ColumnDefinition("l_commitdate", TypeId::DATE, false),
+	                                ColumnDefinition("l_receiptdate", TypeId::DATE, false),
+	                                ColumnDefinition("l_shipinstruct", TypeId::VARCHAR, false),
+	                                ColumnDefinition("l_shipmode", TypeId::VARCHAR, false),
+	                                ColumnDefinition("l_comment", TypeId::VARCHAR, false)};
 }
 
 void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
@@ -463,17 +446,13 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	auto &transaction = context.ActiveTransaction();
 
 	CreateTableInformation region(schema, "region" + suffix, RegionColumns());
-	CreateTableInformation supplier(schema, "supplier" + suffix,
-	                                SupplierColumns());
-	CreateTableInformation customer(schema, "customer" + suffix,
-	                                CustomerColumns());
+	CreateTableInformation supplier(schema, "supplier" + suffix, SupplierColumns());
+	CreateTableInformation customer(schema, "customer" + suffix, CustomerColumns());
 	CreateTableInformation nation(schema, "nation" + suffix, NationColumns());
 	CreateTableInformation part(schema, "part" + suffix, PartColumns());
-	CreateTableInformation partsupp(schema, "partsupp" + suffix,
-	                                PartSuppColumns());
+	CreateTableInformation partsupp(schema, "partsupp" + suffix, PartSuppColumns());
 	CreateTableInformation orders(schema, "orders" + suffix, OrdersColumns());
-	CreateTableInformation lineitem(schema, "lineitem" + suffix,
-	                                LineitemColumns());
+	CreateTableInformation lineitem(schema, "lineitem" + suffix, LineitemColumns());
 
 	db.catalog.CreateTable(transaction, &region);
 	db.catalog.CreateTable(transaction, &supplier);
@@ -494,8 +473,7 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	DSS_HUGE rowcnt = 0;
 	DSS_HUGE i;
 	// all tables
-	table = (1 << CUST) | (1 << SUPP) | (1 << NATION) | (1 << REGION) |
-	        (1 << PART_PSUPP) | (1 << ORDER_LINE);
+	table = (1 << CUST) | (1 << SUPP) | (1 << NATION) | (1 << REGION) | (1 << PART_PSUPP) | (1 << ORDER_LINE);
 	force = 0;
 	insert_segments = 0;
 	delete_segments = 0;
@@ -551,13 +529,11 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	tdefs[NATION].base = nations.count;
 	tdefs[REGION].base = regions.count;
 
-	auto append_info = unique_ptr<tpch_append_information[]>(
-	    new tpch_append_information[REGION + 1]);
+	auto append_info = unique_ptr<tpch_append_information[]>(new tpch_append_information[REGION + 1]);
 	for (size_t i = PART; i <= REGION; i++) {
 		auto tname = get_table_name(i);
 		if (!tname.empty()) {
-			append_info[i].table =
-			    db.catalog.GetTable(transaction, schema, tname + suffix);
+			append_info[i].table = db.catalog.GetTable(transaction, schema, tname + suffix);
 		}
 		append_info[i].context = &context;
 	}
@@ -577,8 +553,7 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	for (size_t i = PART; i <= REGION; i++) {
 		if (append_info[i].table) {
 			if (append_info[i].chunk.size() > 0) {
-				append_info[i].table->storage->Append(*append_info[i].table,
-				                                      *append_info[i].context,
+				append_info[i].table->storage->Append(*append_info[i].table, *append_info[i].context,
 				                                      append_info[i].chunk);
 			}
 		}
@@ -605,8 +580,7 @@ string get_answer(double sf, int query) {
 	} else if (sf == 1) {
 		answer = TPCH_ANSWERS_SF1[query - 1];
 	} else {
-		throw NotImplementedException("Don't have TPC-H answers for SF %llf!",
-		                              sf);
+		throw NotImplementedException("Don't have TPC-H answers for SF %llf!", sf);
 	}
 	return answer;
 }

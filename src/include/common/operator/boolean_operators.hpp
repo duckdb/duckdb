@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // common/operator/boolean_operators.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -43,8 +41,7 @@ struct And {
 };
 
 struct AndMask {
-	static inline bool Operation(bool left, bool right, bool left_null,
-	                             bool right_null) {
+	static inline bool Operation(bool left, bool right, bool left_null, bool right_null) {
 		return (left_null && (right_null || right)) || (right_null && left);
 	}
 };
@@ -75,8 +72,7 @@ struct Or {
 };
 
 struct OrMask {
-	static inline bool Operation(bool left, bool right, bool left_null,
-	                             bool right_null) {
+	static inline bool Operation(bool left, bool right, bool left_null, bool right_null) {
 		return (left_null && (right_null || !right)) || (right_null && !left);
 	}
 };

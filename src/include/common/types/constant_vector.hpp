@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // common/types/constant_vector.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -18,12 +16,12 @@ namespace duckdb {
 
 //! The ConstantVector is a vector that references a single constant value
 class ConstantVector : public Vector {
-  public:
+public:
 	ConstantVector(Value value_) : value(value_) {
 		Reference(value);
 	}
 
-  private:
+private:
 	Value value;
 };
 

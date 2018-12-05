@@ -55,7 +55,7 @@
 namespace TPCE {
 
 class CMEESecurity {
-  private:
+private:
 	CRandom m_rnd;
 	CMoney m_fRangeLow;       // price range start
 	CMoney m_fRangeHigh;      // price range end
@@ -118,10 +118,9 @@ class CMEESecurity {
 	 *   RETURNS:
 	 *           seconds required to move from the start price to the end price
 	 */
-	double CalculateTime(CMoney fStartPrice, CMoney fEndPrice,
-	                     int iStartDirection);
+	double CalculateTime(CMoney fStartPrice, CMoney fEndPrice, int iStartDirection);
 
-  public:
+public:
 	/*
 	 *  Default constructor (no parameters) to be able
 	 *   to allocate an array of security objects.
@@ -151,8 +150,8 @@ class CMEESecurity {
 	 *  RETURNS:
 	 *           none
 	 */
-	void Init(INT32 TradingTimeSoFar, CDateTime *pBaseTime,
-	          CDateTime *pCurrentTime, double fMeanInTheMoneySubmissionDelay);
+	void Init(INT32 TradingTimeSoFar, CDateTime *pBaseTime, CDateTime *pCurrentTime,
+	          double fMeanInTheMoneySubmissionDelay);
 
 	/*
 	 *   Calculate price at a certain point in time.
@@ -213,8 +212,7 @@ class CMEESecurity {
 	 *   RETURNS:
 	 *           the expected submission time
 	 */
-	double GetSubmissionTime(TIdent SecurityIndex, double fPendingTime,
-	                         CMoney fLimitPrice, eTradeTypeID TradeType);
+	double GetSubmissionTime(TIdent SecurityIndex, double fPendingTime, CMoney fLimitPrice, eTradeTypeID TradeType);
 
 	/*
 	 *   Return the expected completion time and the completion price.

@@ -1,25 +1,18 @@
 //===----------------------------------------------------------------------===//
-//
 //                         DuckDB
 //
 // execution/expression_executor.hpp
-//
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include <vector>
-
 #include "common/common.hpp"
-#include "common/printable.hpp"
 #include "common/types/data_chunk.hpp"
-
+#include "execution/physical_operator.hpp"
 #include "parser/expression.hpp"
 #include "parser/sql_node_visitor.hpp"
-
-#include "execution/physical_operator.hpp"
 
 namespace duckdb {
 
@@ -33,34 +26,26 @@ class ClientContext;
    recursively using a visitor pattern.
 */
 class ExpressionExecutor : public SQLNodeVisitor {
-  public:
-	ExpressionExecutor(PhysicalOperatorState *state, ClientContext &context,
-	                   bool scalar_executor = true)
-	    : context(context), scalar_executor(scalar_executor),
-	      chunk(state ? &state->child_chunk : nullptr),
+public:
+	ExpressionExecutor(PhysicalOperatorState *state, ClientContext &context, bool scalar_executor = true)
+	    : context(context), scalar_executor(scalar_executor), chunk(state ? &state->child_chunk : nullptr),
 	      parent(state ? state->parent : nullptr), state(state) {
 	}
 
-	ExpressionExecutor(DataChunk &child_chunk, ClientContext &context,
-	                   ExpressionExecutor *parent = nullptr)
-	    : context(context), scalar_executor(true), chunk(&child_chunk),
-	      parent(parent), state(nullptr) {
+	ExpressionExecutor(DataChunk &child_chunk, ClientContext &context, ExpressionExecutor *parent = nullptr)
+	    : context(context), scalar_executor(true), chunk(&child_chunk), parent(parent), state(nullptr) {
 	}
 
 	void Reset();
 
-	void Execute(DataChunk &result,
-	             std::function<Expression *(size_t i)> callback, size_t count);
+	void Execute(DataChunk &result, std::function<Expression *(size_t i)> callback, size_t count);
 	//! Executes a set of expressions and stores them in the result chunk
-	void Execute(std::vector<std::unique_ptr<Expression>> &expressions,
-	             DataChunk &result) {
-		Execute(result, [&](size_t i) { return expressions[i].get(); },
-		        expressions.size());
+	void Execute(vector<unique_ptr<Expression>> &expressions, DataChunk &result) {
+		Execute(result, [&](size_t i) { return expressions[i].get(); }, expressions.size());
 	}
 	//! Executes a set of column expresions and merges them using the logical
 	//! AND operator
-	void Merge(std::vector<std::unique_ptr<Expression>> &expressions,
-	           Vector &result);
+	void Merge(std::vector<std::unique_ptr<Expression>> &expressions, Vector &result);
 
 	//! Execute a single abstract expression and store the result in result
 	void ExecuteExpression(Expression *expr, Vector &result);
@@ -70,23 +55,22 @@ class ExpressionExecutor : public SQLNodeVisitor {
 	//! Execute the given aggregate expression for the current chunk
 	Value ExecuteAggregate(AggregateExpression &expr);
 
-	std::unique_ptr<Expression> Visit(AggregateExpression &expr);
-	std::unique_ptr<Expression> Visit(CaseExpression &expr);
-	std::unique_ptr<Expression> Visit(CastExpression &expr);
-	std::unique_ptr<Expression> Visit(ColumnRefExpression &expr);
-	std::unique_ptr<Expression> Visit(ComparisonExpression &expr);
-	std::unique_ptr<Expression> Visit(ConjunctionExpression &expr);
-	std::unique_ptr<Expression> Visit(ConstantExpression &expr);
-	std::unique_ptr<Expression> Visit(DefaultExpression &expr) {
-		throw NotImplementedException(
-		    "Cannot execute DEFAULT expression in ExpressionExecutor");
+	unique_ptr<Expression> Visit(AggregateExpression &expr);
+	unique_ptr<Expression> Visit(CaseExpression &expr);
+	unique_ptr<Expression> Visit(CastExpression &expr);
+	unique_ptr<Expression> Visit(ColumnRefExpression &expr);
+	unique_ptr<Expression> Visit(ComparisonExpression &expr);
+	unique_ptr<Expression> Visit(ConjunctionExpression &expr);
+	unique_ptr<Expression> Visit(ConstantExpression &expr);
+	unique_ptr<Expression> Visit(DefaultExpression &expr) {
+		throw NotImplementedException("Cannot execute DEFAULT expression in ExpressionExecutor");
 	}
-	std::unique_ptr<Expression> Visit(FunctionExpression &expr);
-	std::unique_ptr<Expression> Visit(GroupRefExpression &expr);
-	std::unique_ptr<Expression> Visit(OperatorExpression &expr);
-	std::unique_ptr<Expression> Visit(SubqueryExpression &expr);
+	unique_ptr<Expression> Visit(FunctionExpression &expr);
+	unique_ptr<Expression> Visit(GroupRefExpression &expr);
+	unique_ptr<Expression> Visit(OperatorExpression &expr);
+	unique_ptr<Expression> Visit(SubqueryExpression &expr);
 
-  private:
+private:
 	ClientContext &context;
 
 	//! Whether or not the ExpressionExecutor is a scalar executor (i.e. output

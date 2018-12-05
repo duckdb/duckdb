@@ -55,7 +55,7 @@ const int TaxIDFmt_len = 14;
 const char TaxIDFmt[TaxIDFmt_len + 1] = "nnnaannnnaannn";
 
 class CPerson {
-  private:
+private:
 	const LastNameDataFile_t &m_LastNames;
 	const MaleFirstNameDataFile_t &m_MaleFirstNames;
 	const FemaleFirstNameDataFile_t &m_FemaleFirstNames;
@@ -70,9 +70,7 @@ class CPerson {
 	const int INVALID_NAME_CACHE_ENTRY;
 	const char INVALID_GENDER_CACHE_ENTRY;
 
-	template <class DataFileT>
-	const string &getName(TIdent CID, const DataFileT &df, int *cache,
-	                      RNGSEED seedBase) {
+	template <class DataFileT> const string &getName(TIdent CID, const DataFileT &df, int *cache, RNGSEED seedBase) {
 		// It is possible (and expected) to get CID values that are oustide the
 		// current load unit. For example, AccountPermission CIDs and Broker IDs
 		// can be outside the current load unit. These "out of bounds" CIDs are
@@ -81,8 +79,7 @@ class CPerson {
 		bool bCheckCache = (index >= 0 && index < m_iCacheSize);
 
 		// Use the cache if we can.
-		if (m_bCacheEnabled && bCheckCache &&
-		    (INVALID_NAME_CACHE_ENTRY != cache[index])) {
+		if (m_bCacheEnabled && bCheckCache && (INVALID_NAME_CACHE_ENTRY != cache[index])) {
 			return df[cache[index]].NAME();
 		}
 
@@ -108,9 +105,8 @@ class CPerson {
 		return df[iThreshold].NAME();
 	};
 
-  public:
-	CPerson(const DataFileManager &dfm, TIdent iStartFromCustomer,
-	        bool bCacheEnabled = false);
+public:
+	CPerson(const DataFileManager &dfm, TIdent iStartFromCustomer, bool bCacheEnabled = false);
 
 	~CPerson();
 	void InitNextLoadUnit(TIdent iCacheOffsetIncrement = iDefaultLoadUnitSize);
@@ -123,8 +119,7 @@ class CPerson {
 	void GetTaxID(TIdent CID, char *buf);
 
 	// get first name, last name, and tax id
-	void GetFirstLastAndTaxID(TIdent C_ID, char *szFirstName, char *szLastName,
-	                          char *szTaxID);
+	void GetFirstLastAndTaxID(TIdent C_ID, char *szFirstName, char *szLastName, char *szTaxID);
 };
 
 } // namespace TPCE

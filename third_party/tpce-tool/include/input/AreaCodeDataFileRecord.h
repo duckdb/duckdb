@@ -53,14 +53,14 @@ namespace TPCE {
 //
 
 class AreaCodeDataFileRecord {
-  private:
+private:
 	static const int maxAreaCodeLen = 3;
 	char areaCodeCStr[maxAreaCodeLen + 1];
 	std::string areaCode;
 
 	static const unsigned int fieldCount = 1;
 
-  public:
+public:
 	explicit AreaCodeDataFileRecord(const std::deque<std::string> &fields);
 
 	//

@@ -1,4 +1,3 @@
-
 #include "parser/expression/default_expression.hpp"
 #include "parser/transformer.hpp"
 
@@ -53,13 +52,11 @@ unique_ptr<Expression> Transformer::TransformExpression(Node *node) {
 	case T_ParamRef:
 
 	default:
-		throw NotImplementedException("Expr of type %d not implemented\n",
-		                              (int)node->type);
+		throw NotImplementedException("Expr of type %d not implemented\n", (int)node->type);
 	}
 }
 
-bool Transformer::TransformExpressionList(
-    List *list, vector<unique_ptr<Expression>> &result) {
+bool Transformer::TransformExpressionList(List *list, vector<unique_ptr<Expression>> &result) {
 	if (!list) {
 		return false;
 	}

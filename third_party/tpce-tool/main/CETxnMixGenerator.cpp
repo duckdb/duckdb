@@ -43,20 +43,16 @@
 
 using namespace TPCE;
 
-CCETxnMixGenerator::CCETxnMixGenerator(
-    const PDriverCETxnSettings pDriverCETxnSettings, CBaseLogger *pLogger)
-    : m_pDriverCETxnSettings(pDriverCETxnSettings),
-      m_rnd(RNGSeedBaseTxnMixGenerator) // initialize with default seed
+CCETxnMixGenerator::CCETxnMixGenerator(const PDriverCETxnSettings pDriverCETxnSettings, CBaseLogger *pLogger)
+    : m_pDriverCETxnSettings(pDriverCETxnSettings), m_rnd(RNGSeedBaseTxnMixGenerator) // initialize with default seed
       ,
       m_pLogger(pLogger), m_iTxnArrayCurrentIndex(0), m_pTxnArray(NULL) {
 	// UpdateTunables() is called from CCE constructor (Initialize)
 }
 
-CCETxnMixGenerator::CCETxnMixGenerator(
-    const PDriverCETxnSettings pDriverCETxnSettings, RNGSEED RNGSeed,
-    CBaseLogger *pLogger)
-    : m_pDriverCETxnSettings(pDriverCETxnSettings),
-      m_rnd(RNGSeed) // seed is provided for us
+CCETxnMixGenerator::CCETxnMixGenerator(const PDriverCETxnSettings pDriverCETxnSettings, RNGSEED RNGSeed,
+                                       CBaseLogger *pLogger)
+    : m_pDriverCETxnSettings(pDriverCETxnSettings), m_rnd(RNGSeed) // seed is provided for us
       ,
       m_pLogger(pLogger), m_iTxnArrayCurrentIndex(0), m_pTxnArray(NULL) {
 	// UpdateTunables() is called from CCE constructor (Initialize)
@@ -89,46 +85,29 @@ void CCETxnMixGenerator::UpdateTunables(void) {
 	INT32 TradeUpdateMixLimit;
 
 	// Add all the weights together
-	m_CETransactionMixTotal = m_pDriverCETxnSettings->TxnMixGenerator_settings
-	                              .cur.BrokerVolumeMixLevel +
-	                          m_pDriverCETxnSettings->TxnMixGenerator_settings
-	                              .cur.CustomerPositionMixLevel +
-	                          m_pDriverCETxnSettings->TxnMixGenerator_settings
-	                              .cur.MarketWatchMixLevel +
-	                          m_pDriverCETxnSettings->TxnMixGenerator_settings
-	                              .cur.SecurityDetailMixLevel +
-	                          m_pDriverCETxnSettings->TxnMixGenerator_settings
-	                              .cur.TradeLookupMixLevel +
-	                          m_pDriverCETxnSettings->TxnMixGenerator_settings
-	                              .cur.TradeOrderMixLevel +
-	                          m_pDriverCETxnSettings->TxnMixGenerator_settings
-	                              .cur.TradeStatusMixLevel +
-	                          m_pDriverCETxnSettings->TxnMixGenerator_settings
-	                              .cur.TradeUpdateMixLevel;
+	m_CETransactionMixTotal = m_pDriverCETxnSettings->TxnMixGenerator_settings.cur.BrokerVolumeMixLevel +
+	                          m_pDriverCETxnSettings->TxnMixGenerator_settings.cur.CustomerPositionMixLevel +
+	                          m_pDriverCETxnSettings->TxnMixGenerator_settings.cur.MarketWatchMixLevel +
+	                          m_pDriverCETxnSettings->TxnMixGenerator_settings.cur.SecurityDetailMixLevel +
+	                          m_pDriverCETxnSettings->TxnMixGenerator_settings.cur.TradeLookupMixLevel +
+	                          m_pDriverCETxnSettings->TxnMixGenerator_settings.cur.TradeOrderMixLevel +
+	                          m_pDriverCETxnSettings->TxnMixGenerator_settings.cur.TradeStatusMixLevel +
+	                          m_pDriverCETxnSettings->TxnMixGenerator_settings.cur.TradeUpdateMixLevel;
 
-	TradeStatusMixLimit = m_pDriverCETxnSettings->TxnMixGenerator_settings.cur
-	                          .TradeStatusMixLevel;
-	MarketWatchMixLimit = m_pDriverCETxnSettings->TxnMixGenerator_settings.cur
-	                          .MarketWatchMixLevel +
-	                      TradeStatusMixLimit;
-	SecurityDetailMixLimit = m_pDriverCETxnSettings->TxnMixGenerator_settings
-	                             .cur.SecurityDetailMixLevel +
-	                         MarketWatchMixLimit;
-	CustomerPositionMixLimit = m_pDriverCETxnSettings->TxnMixGenerator_settings
-	                               .cur.CustomerPositionMixLevel +
-	                           SecurityDetailMixLimit;
-	TradeOrderMixLimit = m_pDriverCETxnSettings->TxnMixGenerator_settings.cur
-	                         .TradeOrderMixLevel +
-	                     CustomerPositionMixLimit;
-	TradeLookupMixLimit = m_pDriverCETxnSettings->TxnMixGenerator_settings.cur
-	                          .TradeLookupMixLevel +
-	                      TradeOrderMixLimit;
-	TradeUpdateMixLimit = m_pDriverCETxnSettings->TxnMixGenerator_settings.cur
-	                          .TradeUpdateMixLevel +
-	                      TradeLookupMixLimit;
-	BrokerVolumeMixLimit = m_pDriverCETxnSettings->TxnMixGenerator_settings.cur
-	                           .BrokerVolumeMixLevel +
-	                       TradeUpdateMixLimit;
+	TradeStatusMixLimit = m_pDriverCETxnSettings->TxnMixGenerator_settings.cur.TradeStatusMixLevel;
+	MarketWatchMixLimit =
+	    m_pDriverCETxnSettings->TxnMixGenerator_settings.cur.MarketWatchMixLevel + TradeStatusMixLimit;
+	SecurityDetailMixLimit =
+	    m_pDriverCETxnSettings->TxnMixGenerator_settings.cur.SecurityDetailMixLevel + MarketWatchMixLimit;
+	CustomerPositionMixLimit =
+	    m_pDriverCETxnSettings->TxnMixGenerator_settings.cur.CustomerPositionMixLevel + SecurityDetailMixLimit;
+	TradeOrderMixLimit =
+	    m_pDriverCETxnSettings->TxnMixGenerator_settings.cur.TradeOrderMixLevel + CustomerPositionMixLimit;
+	TradeLookupMixLimit = m_pDriverCETxnSettings->TxnMixGenerator_settings.cur.TradeLookupMixLevel + TradeOrderMixLimit;
+	TradeUpdateMixLimit =
+	    m_pDriverCETxnSettings->TxnMixGenerator_settings.cur.TradeUpdateMixLevel + TradeLookupMixLimit;
+	BrokerVolumeMixLimit =
+	    m_pDriverCETxnSettings->TxnMixGenerator_settings.cur.BrokerVolumeMixLevel + TradeUpdateMixLimit;
 
 	// Reset the random transaction array.
 	//
@@ -185,8 +164,7 @@ int CCETxnMixGenerator::GenerateNextTxnType() {
 	//  4) Increment m_iTxnArrayCurrentIndex to remove the returned
 	//  transaction type from further consideration.
 	//
-	INT32 rnd =
-	    m_rnd.RndIntRange(m_iTxnArrayCurrentIndex, m_CETransactionMixTotal - 1);
+	INT32 rnd = m_rnd.RndIntRange(m_iTxnArrayCurrentIndex, m_CETransactionMixTotal - 1);
 
 	char iTxnType = m_pTxnArray[rnd];
 
@@ -195,8 +173,7 @@ int CCETxnMixGenerator::GenerateNextTxnType() {
 	m_pTxnArray[rnd] = m_pTxnArray[m_iTxnArrayCurrentIndex];
 	m_pTxnArray[m_iTxnArrayCurrentIndex] = iTxnType;
 
-	m_iTxnArrayCurrentIndex =
-	    (m_iTxnArrayCurrentIndex + 1) % m_CETransactionMixTotal;
+	m_iTxnArrayCurrentIndex = (m_iTxnArrayCurrentIndex + 1) % m_CETransactionMixTotal;
 
 	return iTxnType;
 }

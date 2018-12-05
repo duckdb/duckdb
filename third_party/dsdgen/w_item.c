@@ -59,8 +59,7 @@ int mk_w_item(void *info_arr, ds_key_t index) {
 	/* begin locals declarations */
 	decimal_t dMinPrice, dMaxPrice, dMarkdown;
 	static decimal_t dMinMarkdown, dMaxMarkdown;
-	int32_t bUseSize, bFirstRecord = 0, nFieldChangeFlags, nMin, nMax, nIndex,
-	                  nTemp;
+	int32_t bUseSize, bFirstRecord = 0, nFieldChangeFlags, nMin, nMax, nIndex, nTemp;
 	char *cp;
 	struct W_ITEM_TBL *r;
 	static int32_t bInit = 0;
@@ -86,15 +85,13 @@ int mk_w_item(void *info_arr, ds_key_t index) {
 
 	nIndex = pick_distribution(&nMin, "i_manager_id", 2, 1, I_MANAGER_ID);
 	dist_member(&nMax, "i_manager_id", nIndex, 3);
-	genrand_key(&r->i_manager_id, DIST_UNIFORM, (ds_key_t)nMin, (ds_key_t)nMax,
-	            0, I_MANAGER_ID);
+	genrand_key(&r->i_manager_id, DIST_UNIFORM, (ds_key_t)nMin, (ds_key_t)nMax, 0, I_MANAGER_ID);
 
 	/* if we have generated the required history for this business key and
 	 * generate a new one then reset associated fields (e.g., rec_start_date
 	 * minimums)
 	 */
-	if (setSCDKeys(I_ITEM_ID, index, r->i_item_id, &r->i_rec_start_date_id,
-	               &r->i_rec_end_date_id)) {
+	if (setSCDKeys(I_ITEM_ID, index, r->i_item_id, &r->i_rec_start_date_id, &r->i_rec_end_date_id)) {
 		/*
 		 * some fields are not changed, even when a new version of the row is
 		 * written
@@ -113,25 +110,18 @@ int mk_w_item(void *info_arr, ds_key_t index) {
 	 * which fields to replace and which to retain
 	 */
 	gen_text(r->i_item_desc, 1, RS_I_ITEM_DESC, I_ITEM_DESC);
-	changeSCD(SCD_CHAR, &r->i_item_desc, &rOldValues->i_item_desc,
-	          &nFieldChangeFlags, bFirstRecord);
+	changeSCD(SCD_CHAR, &r->i_item_desc, &rOldValues->i_item_desc, &nFieldChangeFlags, bFirstRecord);
 
-	nIndex = pick_distribution(&szMinPrice, "i_current_price", 2, 1,
-	                           I_CURRENT_PRICE);
+	nIndex = pick_distribution(&szMinPrice, "i_current_price", 2, 1, I_CURRENT_PRICE);
 	dist_member(&szMaxPrice, "i_current_price", nIndex, 3);
 	strtodec(&dMinPrice, szMinPrice);
 	strtodec(&dMaxPrice, szMaxPrice);
-	genrand_decimal(&r->i_current_price, DIST_UNIFORM, &dMinPrice, &dMaxPrice,
-	                NULL, I_CURRENT_PRICE);
-	changeSCD(SCD_INT, &r->i_current_price, &rOldValues->i_current_price,
-	          &nFieldChangeFlags, bFirstRecord);
+	genrand_decimal(&r->i_current_price, DIST_UNIFORM, &dMinPrice, &dMaxPrice, NULL, I_CURRENT_PRICE);
+	changeSCD(SCD_INT, &r->i_current_price, &rOldValues->i_current_price, &nFieldChangeFlags, bFirstRecord);
 
-	genrand_decimal(&dMarkdown, DIST_UNIFORM, &dMinMarkdown, &dMaxMarkdown,
-	                NULL, I_WHOLESALE_COST);
-	decimal_t_op(&r->i_wholesale_cost, OP_MULT, &r->i_current_price,
-	             &dMarkdown);
-	changeSCD(SCD_DEC, &r->i_wholesale_cost, &rOldValues->i_wholesale_cost,
-	          &nFieldChangeFlags, bFirstRecord);
+	genrand_decimal(&dMarkdown, DIST_UNIFORM, &dMinMarkdown, &dMaxMarkdown, NULL, I_WHOLESALE_COST);
+	decimal_t_op(&r->i_wholesale_cost, OP_MULT, &r->i_current_price, &dMarkdown);
+	changeSCD(SCD_DEC, &r->i_wholesale_cost, &rOldValues->i_wholesale_cost, &nFieldChangeFlags, bFirstRecord);
 
 	hierarchy_item(I_CATEGORY, &r->i_category_id, &r->i_category, index);
 	/*
@@ -140,58 +130,44 @@ int mk_w_item(void *info_arr, ds_key_t index) {
 	 */
 
 	hierarchy_item(I_CLASS, &r->i_class_id, &r->i_class, index);
-	changeSCD(SCD_KEY, &r->i_class_id, &rOldValues->i_class_id,
-	          &nFieldChangeFlags, bFirstRecord);
+	changeSCD(SCD_KEY, &r->i_class_id, &rOldValues->i_class_id, &nFieldChangeFlags, bFirstRecord);
 
 	cp = &r->i_brand[0];
 	hierarchy_item(I_BRAND, &r->i_brand_id, &cp, index);
-	changeSCD(SCD_KEY, &r->i_brand_id, &rOldValues->i_brand_id,
-	          &nFieldChangeFlags, bFirstRecord);
+	changeSCD(SCD_KEY, &r->i_brand_id, &rOldValues->i_brand_id, &nFieldChangeFlags, bFirstRecord);
 
 	/* some categories have meaningful sizes, some don't */
 	if (r->i_category_id) {
 		dist_member(&bUseSize, "categories", (int)r->i_category_id, 3);
 		pick_distribution(&r->i_size, "sizes", 1, bUseSize + 2, I_SIZE);
-		changeSCD(SCD_PTR, &r->i_size, &rOldValues->i_size, &nFieldChangeFlags,
-		          bFirstRecord);
+		changeSCD(SCD_PTR, &r->i_size, &rOldValues->i_size, &nFieldChangeFlags, bFirstRecord);
 	} else {
 		bUseSize = 0;
 		r->i_size = NULL;
 	}
 
 	nIndex = pick_distribution(&nMin, "i_manufact_id", 2, 1, I_MANUFACT_ID);
-	genrand_integer(&nTemp, DIST_UNIFORM, nMin,
-	                dist_member(NULL, "i_manufact_id", nIndex, 3), 0,
-	                I_MANUFACT_ID);
+	genrand_integer(&nTemp, DIST_UNIFORM, nMin, dist_member(NULL, "i_manufact_id", nIndex, 3), 0, I_MANUFACT_ID);
 	r->i_manufact_id = nTemp;
-	changeSCD(SCD_KEY, &r->i_manufact_id, &rOldValues->i_manufact_id,
-	          &nFieldChangeFlags, bFirstRecord);
+	changeSCD(SCD_KEY, &r->i_manufact_id, &rOldValues->i_manufact_id, &nFieldChangeFlags, bFirstRecord);
 
-	mk_word(r->i_manufact, "syllables", (int)r->i_manufact_id, RS_I_MANUFACT,
-	        ITEM);
-	changeSCD(SCD_CHAR, &r->i_manufact, &rOldValues->i_manufact,
-	          &nFieldChangeFlags, bFirstRecord);
+	mk_word(r->i_manufact, "syllables", (int)r->i_manufact_id, RS_I_MANUFACT, ITEM);
+	changeSCD(SCD_CHAR, &r->i_manufact, &rOldValues->i_manufact, &nFieldChangeFlags, bFirstRecord);
 
-	gen_charset(r->i_formulation, DIGITS, RS_I_FORMULATION, RS_I_FORMULATION,
-	            I_FORMULATION);
+	gen_charset(r->i_formulation, DIGITS, RS_I_FORMULATION, RS_I_FORMULATION, I_FORMULATION);
 	embed_string(r->i_formulation, "colors", 1, 2, I_FORMULATION);
-	changeSCD(SCD_CHAR, &r->i_formulation, &rOldValues->i_formulation,
-	          &nFieldChangeFlags, bFirstRecord);
+	changeSCD(SCD_CHAR, &r->i_formulation, &rOldValues->i_formulation, &nFieldChangeFlags, bFirstRecord);
 
 	pick_distribution(&r->i_color, "colors", 1, 2, I_COLOR);
-	changeSCD(SCD_PTR, &r->i_color, &rOldValues->i_color, &nFieldChangeFlags,
-	          bFirstRecord);
+	changeSCD(SCD_PTR, &r->i_color, &rOldValues->i_color, &nFieldChangeFlags, bFirstRecord);
 
 	pick_distribution(&r->i_units, "units", 1, 1, I_UNITS);
-	changeSCD(SCD_PTR, &r->i_units, &rOldValues->i_units, &nFieldChangeFlags,
-	          bFirstRecord);
+	changeSCD(SCD_PTR, &r->i_units, &rOldValues->i_units, &nFieldChangeFlags, bFirstRecord);
 
 	pick_distribution(&r->i_container, "container", 1, 1, ITEM);
-	changeSCD(SCD_PTR, &r->i_container, &rOldValues->i_container,
-	          &nFieldChangeFlags, bFirstRecord);
+	changeSCD(SCD_PTR, &r->i_container, &rOldValues->i_container, &nFieldChangeFlags, bFirstRecord);
 
-	mk_word(r->i_product_name, "syllables", (int)index, RS_I_PRODUCT_NAME,
-	        ITEM);
+	mk_word(r->i_product_name, "syllables", (int)index, RS_I_PRODUCT_NAME, ITEM);
 
 	r->i_promo_sk = mk_join(I_PROMO_SK, PROMOTION, 1);
 	genrand_integer(&nTemp, DIST_UNIFORM, 1, 100, 0, I_PROMO_SK);

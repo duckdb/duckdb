@@ -51,6 +51,5 @@ void CStatusTypeTable::LoadTableRow() {
 	const StatusTypeDataFileRecord &dataRecord(df[recordIdx]);
 
 	strncpy(tableRow.ST_ID, dataRecord.ST_ID_CSTR(), sizeof(tableRow.ST_ID));
-	strncpy(tableRow.ST_NAME, dataRecord.ST_NAME_CSTR(),
-	        sizeof(tableRow.ST_NAME));
+	strncpy(tableRow.ST_NAME, dataRecord.ST_NAME_CSTR(), sizeof(tableRow.ST_NAME));
 }

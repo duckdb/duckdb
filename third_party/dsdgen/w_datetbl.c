@@ -115,8 +115,7 @@ int mk_w_date(void *info_arr, ds_key_t index) {
 	else
 		r->d_weekend = 0;
 	if (day_index == 1)
-		dist_member(&r->d_following_holiday, "calendar",
-		            365 + is_leap(r->d_year - 1), 8);
+		dist_member(&r->d_following_holiday, "calendar", 365 + is_leap(r->d_year - 1), 8);
 	else
 		dist_member(&r->d_following_holiday, "calendar", day_index - 1, 8);
 	date_t_op(&dTemp2, OP_FIRST_DOM, &temp_date, 0);

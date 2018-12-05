@@ -53,7 +53,7 @@ namespace TPCE {
 //
 
 class SectorDataFileRecord {
-  private:
+private:
 	static const int maxSc_idLen = 2;
 	char sc_idCStr[maxSc_idLen + 1];
 	std::string sc_id;
@@ -64,7 +64,7 @@ class SectorDataFileRecord {
 
 	static const unsigned int fieldCount = 2;
 
-  public:
+public:
 	explicit SectorDataFileRecord(const std::deque<std::string> &fields);
 
 	//

@@ -59,11 +59,11 @@ namespace TPCE {
 // Copying is allowed.
 //
 template <class RecordType> class DataFile {
-  private:
+private:
 	typedef std::vector<RecordType> Records; // For convenience and readability
 	Records records;
 
-  public:
+public:
 	// Leverage the size type of our underlying storage container but
 	// insulate clients from the implementation particulars by creating
 	// our own type.

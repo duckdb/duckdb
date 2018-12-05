@@ -1,9 +1,7 @@
-
 #include "function/table_function/sqlite_master.hpp"
 
 #include "catalog/catalog.hpp"
 #include "common/exception.hpp"
-
 #include "main/client_context.hpp"
 #include "main/database.hpp"
 
@@ -49,17 +47,14 @@ string GenerateQuery(CatalogEntry *entry) {
 	}
 }
 
-void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output,
-                   TableFunctionData *dataptr) {
+void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, TableFunctionData *dataptr) {
 	auto &data = *((SQLiteMasterData *)dataptr);
 	if (!data.initialized) {
 		// scan all the schemas
 		auto &transaction = context.ActiveTransaction();
 		context.db.catalog.schemas.Scan(transaction, [&](CatalogEntry *entry) {
 			auto schema = (SchemaCatalogEntry *)entry;
-			schema->tables.Scan(transaction, [&](CatalogEntry *entry) {
-				data.entries.push_back(entry);
-			});
+			schema->tables.Scan(transaction, [&](CatalogEntry *entry) { data.entries.push_back(entry); });
 		});
 		data.initialized = true;
 	}

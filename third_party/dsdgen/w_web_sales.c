@@ -106,10 +106,8 @@ static void mk_master(void *info_arr, ds_key_t index) {
 	genrand_integer(&nGiftPct, DIST_UNIFORM, 0, 99, 0, WS_SHIP_CUSTOMER_SK);
 	if (nGiftPct > WS_GIFT_PCT) {
 		r->ws_ship_customer_sk = mk_join(WS_SHIP_CUSTOMER_SK, CUSTOMER, 2);
-		r->ws_ship_cdemo_sk =
-		    mk_join(WS_SHIP_CDEMO_SK, CUSTOMER_DEMOGRAPHICS, 2);
-		r->ws_ship_hdemo_sk =
-		    mk_join(WS_SHIP_HDEMO_SK, HOUSEHOLD_DEMOGRAPHICS, 2);
+		r->ws_ship_cdemo_sk = mk_join(WS_SHIP_CDEMO_SK, CUSTOMER_DEMOGRAPHICS, 2);
+		r->ws_ship_hdemo_sk = mk_join(WS_SHIP_HDEMO_SK, HOUSEHOLD_DEMOGRAPHICS, 2);
 		r->ws_ship_addr_sk = mk_join(WS_SHIP_ADDR_SK, CUSTOMER_ADDRESS, 2);
 	} else {
 		r->ws_ship_customer_sk = r->ws_bill_customer_sk;
@@ -133,8 +131,7 @@ static void mk_detail(void *info_arr, int bPrint) {
 
 	if (!bInit) {
 		jDate = skipDays(WEB_SALES, &kNewDateIndex);
-		pItemPermutation = makePermutation(
-		    NULL, nItemCount = (int)getIDCount(ITEM), WS_PERMUTATION);
+		pItemPermutation = makePermutation(NULL, nItemCount = (int)getIDCount(ITEM), WS_PERMUTATION);
 
 		bInit = 1;
 	}
@@ -146,15 +143,12 @@ static void mk_detail(void *info_arr, int bPrint) {
 	/* orders are shipped some number of days after they are ordered,
 	 * and not all lineitems ship at the same time
 	 */
-	genrand_integer(&nShipLag, DIST_UNIFORM, WS_MIN_SHIP_DELAY,
-	                WS_MAX_SHIP_DELAY, 0, WS_SHIP_DATE_SK);
+	genrand_integer(&nShipLag, DIST_UNIFORM, WS_MIN_SHIP_DELAY, WS_MAX_SHIP_DELAY, 0, WS_SHIP_DATE_SK);
 	r->ws_ship_date_sk = r->ws_sold_date_sk + nShipLag;
 
 	if (++nItemIndex > nItemCount)
 		nItemIndex = 1;
-	r->ws_item_sk =
-	    matchSCDSK(getPermutationEntry(pItemPermutation, nItemIndex),
-	               r->ws_sold_date_sk, ITEM);
+	r->ws_item_sk = matchSCDSK(getPermutationEntry(pItemPermutation, nItemIndex), r->ws_sold_date_sk, ITEM);
 
 	/* the web page needs to be valid for the sale date */
 	r->ws_web_page_sk = mk_join(WS_WEB_PAGE_SK, WEB_PAGE, r->ws_sold_date_sk);
@@ -292,8 +286,7 @@ int vld_web_sales(int nTable, ds_key_t kRow, int *Permutation) {
 	jDate = skipDays(WEB_SALES, &kNewDateIndex);
 	mk_master(NULL, kRow);
 	genrand_integer(&nMaxLineitem, DIST_UNIFORM, 8, 16, 9, WS_ORDER_NUMBER);
-	genrand_integer(&nLineitem, DIST_UNIFORM, 1, nMaxLineitem, 0,
-	                WS_PRICING_QUANTITY);
+	genrand_integer(&nLineitem, DIST_UNIFORM, 1, nMaxLineitem, 0, WS_PRICING_QUANTITY);
 	for (i = 1; i < nLineitem; i++) {
 		mk_detail(NULL, 0);
 	}

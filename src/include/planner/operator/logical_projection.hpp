@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // planner/operator/logical_projection.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -16,14 +14,17 @@ namespace duckdb {
 
 //! LogicalProjection represents the projection list in a SELECT clause
 class LogicalProjection : public LogicalOperator {
-  public:
-	LogicalProjection(std::vector<std::unique_ptr<Expression>> select_list)
-	    : LogicalOperator(LogicalOperatorType::PROJECTION,
-	                      std::move(select_list)) {
+public:
+	LogicalProjection(vector<unique_ptr<Expression>> select_list)
+	    : LogicalOperator(LogicalOperatorType::PROJECTION, std::move(select_list)) {
 	}
 
 	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
+	vector<string> GetNames() override;
+
+protected:
+	void ResolveTypes() override;
 };
 } // namespace duckdb

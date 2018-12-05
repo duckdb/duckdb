@@ -55,7 +55,7 @@ namespace TPCE {
 //
 
 class ExchangeDataFileRecord {
-  private:
+private:
 	static const int maxEx_idLen = 6;
 	char ex_idCStr[maxEx_idLen + 1];
 	std::string ex_id;
@@ -75,7 +75,7 @@ class ExchangeDataFileRecord {
 
 	static const int unsigned fieldCount = 6;
 
-  public:
+public:
 	explicit ExchangeDataFileRecord(const std::deque<std::string> &fields);
 
 	//

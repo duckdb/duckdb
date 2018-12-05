@@ -1,21 +1,18 @@
-
 #include "execution/join_hashtable.hpp"
-#include "common/exception.hpp"
-#include "common/vector_operations/vector_operations.hpp"
 
+#include "common/exception.hpp"
 #include "common/types/static_vector.hpp"
+#include "common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 using ScanStructure = JoinHashTable::ScanStructure;
 
-JoinHashTable::JoinHashTable(std::vector<JoinCondition> &conditions,
-                             std::vector<TypeId> build_types, JoinType type,
+JoinHashTable::JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> build_types, JoinType type,
                              size_t initial_capacity, bool parallel)
-    : build_serializer(build_types), build_types(build_types), equality_size(0),
-      condition_size(0), build_size(0), tuple_size(0), join_type(type),
-      capacity(0), count(0), parallel(parallel) {
+    : build_serializer(build_types), build_types(build_types), equality_size(0), condition_size(0), build_size(0),
+      tuple_size(0), join_type(type), capacity(0), count(0), parallel(parallel) {
 	for (auto &condition : conditions) {
 		assert(condition.left->return_type == condition.right->return_type);
 		auto type = condition.left->return_type;
@@ -316,22 +313,19 @@ void ScanStructure::ResolvePredicates(DataChunk &keys, Vector &final_result) {
 			VectorOperations::GreaterThan(keys.data[i], ht_data, final_result);
 			break;
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			VectorOperations::GreaterThanEquals(keys.data[i], ht_data,
-			                                    final_result);
+			VectorOperations::GreaterThanEquals(keys.data[i], ht_data, final_result);
 			break;
 		case ExpressionType::COMPARE_LESSTHAN:
 			VectorOperations::LessThan(keys.data[i], ht_data, final_result);
 			break;
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			VectorOperations::LessThanEquals(keys.data[i], ht_data,
-			                                 final_result);
+			VectorOperations::LessThanEquals(keys.data[i], ht_data, final_result);
 			break;
 		case ExpressionType::COMPARE_NOTEQUAL:
 			VectorOperations::NotEquals(keys.data[i], ht_data, final_result);
 			break;
 		default:
-			throw NotImplementedException(
-			    "Unimplemented comparison type for join");
+			throw NotImplementedException("Unimplemented comparison type for join");
 		}
 		// reset the selection vector
 		keys.data[i].sel_vector = nullptr;
@@ -341,25 +335,22 @@ void ScanStructure::ResolvePredicates(DataChunk &keys, Vector &final_result) {
 		// step so we can skip unnecessary comparisons in the next phase
 		if (i != ht.predicates.size() - 1) {
 			size_t new_count = 0;
-			VectorOperations::ExecType<bool>(
-			    final_result, [&](bool match, size_t index, size_t k) {
-				    if (match) {
-					    temporary_selection_vector[new_count++] = index;
-				    }
-			    });
+			VectorOperations::ExecType<bool>(final_result, [&](bool match, size_t index, size_t k) {
+				if (match) {
+					temporary_selection_vector[new_count++] = index;
+				}
+			});
 			current_pointers.sel_vector = temporary_selection_vector;
 			current_pointers.count = new_count;
 		}
 		// move all the pointers to the next element
-		VectorOperations::AddInPlace(pointers,
-		                             GetTypeIdSize(keys.data[i].type));
+		VectorOperations::AddInPlace(pointers, GetTypeIdSize(keys.data[i].type));
 	}
 	final_result.sel_vector = old_sel_vector;
 	final_result.count = old_count;
 }
 
-void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left,
-                                  DataChunk &result) {
+void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	assert(result.column_count == left.column_count + ht.build_types.size());
 	if (pointers.count == 0) {
 		// no pointers left to chase
@@ -379,15 +370,14 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left,
 		// after doing all the comparisons we loop to find all the actual
 		// matches
 		result_count = 0;
-		VectorOperations::ExecType<bool>(
-		    comparison_result, [&](bool match, size_t index, size_t k) {
-			    if (match) {
-				    found_match[index] = true;
-				    result.owned_sel_vector[result_count] = index;
-				    build_pointers[result_count] = ptrs[index];
-				    result_count++;
-			    }
-		    });
+		VectorOperations::ExecType<bool>(comparison_result, [&](bool match, size_t index, size_t k) {
+			if (match) {
+				found_match[index] = true;
+				result.owned_sel_vector[result_count] = index;
+				build_pointers[result_count] = ptrs[index];
+				result_count++;
+			}
+		});
 
 		// finally we chase the pointers for the next iteration
 		size_t new_count = 0;
@@ -421,16 +411,13 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left,
 			auto &vector = result.data[left.column_count + i];
 			vector.sel_vector = result.sel_vector;
 			vector.count = result_count;
-			ht.build_serializer.DeserializeColumn(
-			    build_pointer_vector, i, result.data[left.column_count + i]);
+			ht.build_serializer.DeserializeColumn(build_pointer_vector, i, result.data[left.column_count + i]);
 		}
 	}
 }
 
 //! Implementation for semi (MATCH=true) or anti (MATCH=false) joins
-template <bool MATCH>
-void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left,
-                                       DataChunk &result) {
+template <bool MATCH> void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	assert(left.column_count == result.column_count);
 	// the semi-join and anti-join we handle a differently from the inner join
 	// since there can be at most STANDARD_VECTOR_SIZE results
@@ -446,24 +433,22 @@ void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left,
 		// after doing all the comparisons we loop to find all the matches
 		auto ptrs = (uint8_t **)pointers.data;
 		size_t new_count = 0;
-		VectorOperations::ExecType<bool>(
-		    comparison_result, [&](bool match, size_t index, size_t k) {
-			    if (match) {
-				    // found a match, set the entry to true
-				    // after this we no longer need to check this entry
-				    found_match[index] = true;
-			    } else {
-				    // did not find a match, keep on looking for this entry
-				    // first check if there is a next entry
-				    auto prev_pointer =
-				        (uint8_t **)(ptrs[index] + ht.build_size);
-				    ptrs[index] = *prev_pointer;
-				    if (ptrs[index]) {
-					    // if there is a next pointer, we keep this entry
-					    sel_vector[new_count++] = index;
-				    }
-			    }
-		    });
+		VectorOperations::ExecType<bool>(comparison_result, [&](bool match, size_t index, size_t k) {
+			if (match) {
+				// found a match, set the entry to true
+				// after this we no longer need to check this entry
+				found_match[index] = true;
+			} else {
+				// did not find a match, keep on looking for this entry
+				// first check if there is a next entry
+				auto prev_pointer = (uint8_t **)(ptrs[index] + ht.build_size);
+				ptrs[index] = *prev_pointer;
+				if (ptrs[index]) {
+					// if there is a next pointer, we keep this entry
+					sel_vector[new_count++] = index;
+				}
+			}
+		});
 		pointers.count = new_count;
 	}
 	assert(keys.size() == left.size());
@@ -493,18 +478,15 @@ void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left,
 	finished = true;
 }
 
-void ScanStructure::NextSemiJoin(DataChunk &keys, DataChunk &left,
-                                 DataChunk &result) {
+void ScanStructure::NextSemiJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	NextSemiOrAntiJoin<true>(keys, left, result);
 }
 
-void ScanStructure::NextAntiJoin(DataChunk &keys, DataChunk &left,
-                                 DataChunk &result) {
+void ScanStructure::NextAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	NextSemiOrAntiJoin<false>(keys, left, result);
 }
 
-void ScanStructure::NextLeftJoin(DataChunk &keys, DataChunk &left,
-                                 DataChunk &result) {
+void ScanStructure::NextLeftJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	// a LEFT OUTER JOIN is identical to an INNER JOIN except all tuples that do
 	// not have a match must return at least one tuple (with the right side set
 	// to NULL in every column)

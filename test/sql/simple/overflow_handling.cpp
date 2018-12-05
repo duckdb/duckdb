@@ -1,4 +1,3 @@
-
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
@@ -15,8 +14,7 @@ TEST_CASE("Test handling of overflows in basic types", "[overflowhandling]") {
 	// insert too large value for domain should cause error
 	REQUIRE_FAIL(con.Query("INSERT INTO test VALUES (-1099511627776, 3)"));
 
-	REQUIRE_NO_FAIL(
-	    con.Query("INSERT INTO test VALUES (11, 22), (12, 21), (14, 22)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (12, 21), (14, 22)"));
 
 	//! Casting NULL should still work though
 	REQUIRE_NO_FAIL(con.Query("SELECT ALL CAST ( - SUM ( DISTINCT - CAST ( "
@@ -40,8 +38,7 @@ TEST_CASE("Test handling of overflows in basic types", "[overflowhandling]") {
 
 	// also with tables
 	result = con.Query("CREATE TABLE test2 (a INTEGER, b TINYINT);");
-	result =
-	    con.Query("INSERT INTO test2 VALUES (200, 60), (12, 60), (14, 60)");
+	result = con.Query("INSERT INTO test2 VALUES (200, 60), (12, 60), (14, 60)");
 
 	// cast to bigger type if it will overflow
 	result = con.Query("SELECT cast(a AS TINYINT) FROM test2");

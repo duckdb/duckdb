@@ -1,8 +1,7 @@
+#include "transaction/transaction_context.hpp"
 
 #include "common/exception.hpp"
-
 #include "transaction/transaction.hpp"
-#include "transaction/transaction_context.hpp"
 #include "transaction/transaction_manager.hpp"
 
 using namespace duckdb;
@@ -26,8 +25,7 @@ void TransactionContext::BeginTransaction() {
 
 void TransactionContext::Commit() {
 	if (!current_transaction) {
-		throw TransactionException(
-		    "No transaction is currently active - cannot commit!");
+		throw TransactionException("No transaction is currently active - cannot commit!");
 	}
 	transaction_manager.CommitTransaction(current_transaction);
 	current_transaction = nullptr;
@@ -35,8 +33,7 @@ void TransactionContext::Commit() {
 
 void TransactionContext::Rollback() {
 	if (!current_transaction) {
-		throw TransactionException(
-		    "No transaction is currently active - cannot rollback!");
+		throw TransactionException("No transaction is currently active - cannot rollback!");
 	}
 	transaction_manager.RollbackTransaction(current_transaction);
 	current_transaction = nullptr;

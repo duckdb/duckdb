@@ -10,12 +10,12 @@
 
 #pragma once
 
+#include "benchmark.hpp"
+
 #include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
-
-#include "benchmark.hpp"
 
 namespace duckdb {
 
@@ -24,7 +24,7 @@ class BenchmarkRunner {
 	BenchmarkRunner() {
 	}
 
-  public:
+public:
 	static BenchmarkRunner &GetInstance() {
 		static BenchmarkRunner instance;
 		return instance;
@@ -34,15 +34,15 @@ class BenchmarkRunner {
 	//! as long as the proper macro's are used
 	static void RegisterBenchmark(Benchmark *benchmark);
 
-	void Log(std::string message);
-	void LogLine(std::string message);
-	void LogResult(std::string message);
-	void LogOutput(std::string message);
+	void Log(string message);
+	void LogLine(string message);
+	void LogResult(string message);
+	void LogOutput(string message);
 
 	void RunBenchmark(Benchmark *benchmark);
 	void RunBenchmarks();
 
-	std::vector<Benchmark *> benchmarks;
+	vector<Benchmark *> benchmarks;
 	std::ofstream out_file;
 	std::ofstream log_file;
 };

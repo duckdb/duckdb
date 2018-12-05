@@ -52,19 +52,17 @@ namespace TPCE {
  * ************************************/
 
 class CBaseLogger {
-  private:
+private:
 	char m_Prefix[64];
 	CBaseLogFormatter *m_pLogFormatter;
 
 	bool SendToLogger(const char *szPrefix, const char *szMsg);
 
-  protected:
-	CBaseLogger(eDriverType drvType, INT32 UniqueId,
-	            CBaseLogFormatter *pFormatter);
-	virtual bool SendToLoggerImpl(const char *szPrefix, const char *szTimestamp,
-	                              const char *szMsg) = 0;
+protected:
+	CBaseLogger(eDriverType drvType, INT32 UniqueId, CBaseLogFormatter *pFormatter);
+	virtual bool SendToLoggerImpl(const char *szPrefix, const char *szTimestamp, const char *szMsg) = 0;
 
-  public:
+public:
 	// Destructor
 	virtual ~CBaseLogger() {
 	}

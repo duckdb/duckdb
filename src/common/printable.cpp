@@ -1,7 +1,6 @@
+#include "common/printable.hpp"
 
 #include <stdio.h>
-
-#include "common/printable.hpp"
 
 using namespace duckdb;
 

@@ -26,9 +26,7 @@ static void strtolower(char *str) {
 	}
 }
 
-static void caseconvert_function(Vector inputs[], size_t input_count,
-                                 Vector &result,
-                                 CaseconvertDirection direction) {
+static void caseconvert_function(Vector inputs[], size_t input_count, Vector &result, CaseconvertDirection direction) {
 	assert(input_count == 1);
 	auto &input = inputs[0];
 	assert(input.type == TypeId::VARCHAR);
@@ -63,23 +61,19 @@ static void caseconvert_function(Vector inputs[], size_t input_count,
 	});
 }
 
-void caseconvert_upper_function(Vector inputs[], size_t input_count,
-                                Vector &result) {
-	caseconvert_function(inputs, input_count, result,
-	                     CaseconvertDirection::UPPER);
+void caseconvert_upper_function(Vector inputs[], size_t input_count, Vector &result) {
+	caseconvert_function(inputs, input_count, result, CaseconvertDirection::UPPER);
 }
 
-void caseconvert_lower_function(Vector inputs[], size_t input_count,
-                                Vector &result) {
-	caseconvert_function(inputs, input_count, result,
-	                     CaseconvertDirection::LOWER);
+void caseconvert_lower_function(Vector inputs[], size_t input_count, Vector &result) {
+	caseconvert_function(inputs, input_count, result, CaseconvertDirection::LOWER);
 }
 
-bool caseconvert_matches_arguments(std::vector<TypeId> &arguments) {
+bool caseconvert_matches_arguments(vector<TypeId> &arguments) {
 	return arguments.size() == 1 && arguments[0] == TypeId::VARCHAR;
 }
 
-TypeId caseconvert_get_return_type(std::vector<TypeId> &arguments) {
+TypeId caseconvert_get_return_type(vector<TypeId> &arguments) {
 	return TypeId::VARCHAR;
 }
 

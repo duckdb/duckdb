@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // planner/operator/logical_limit.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -16,19 +14,26 @@ namespace duckdb {
 
 //! LogicalLimit represents a LIMIT clause
 class LogicalLimit : public LogicalOperator {
-  public:
+public:
 	LogicalLimit(int64_t limit, int64_t offset)
-	    : LogicalOperator(LogicalOperatorType::LIMIT), limit(limit),
-	      offset(offset) {
+	    : LogicalOperator(LogicalOperatorType::LIMIT), limit(limit), offset(offset) {
 	}
 
 	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
+	}
+	vector<string> GetNames() override {
+		return children[0]->GetNames();
 	}
 
 	//! The maximum amount of elements to emit
 	int64_t limit;
 	//! The offset from the start to begin emitting elements
 	int64_t offset;
+
+protected:
+	void ResolveTypes() override {
+		types = children[0]->types;
+	}
 };
 } // namespace duckdb

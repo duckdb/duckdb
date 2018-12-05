@@ -1,4 +1,3 @@
-
 #include "parser/expression/case_expression.hpp"
 #include "parser/expression/comparison_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
@@ -18,8 +17,7 @@ unique_ptr<Expression> Transformer::TransformCase(CaseExpr *root) {
 
 	unique_ptr<Expression> def_res;
 	if (root->defresult) {
-		def_res =
-		    TransformExpression(reinterpret_cast<Node *>(root->defresult));
+		def_res = TransformExpression(reinterpret_cast<Node *>(root->defresult));
 	} else {
 		def_res = unique_ptr<Expression>(new ConstantExpression(Value()));
 	}
@@ -41,14 +39,13 @@ unique_ptr<Expression> Transformer::TransformCase(CaseExpr *root) {
 		auto arg = TransformExpression(reinterpret_cast<Node *>(root->arg));
 
 		if (arg) {
-			test = unique_ptr<Expression>(new ComparisonExpression(
-			    ExpressionType::COMPARE_EQUAL, move(arg), move(test_raw)));
+			test = unique_ptr<Expression>(
+			    new ComparisonExpression(ExpressionType::COMPARE_EQUAL, move(arg), move(test_raw)));
 		} else {
 			test = move(test_raw);
 		}
 
-		auto res_true =
-		    TransformExpression(reinterpret_cast<Node *>(w->result));
+		auto res_true = TransformExpression(reinterpret_cast<Node *>(w->result));
 
 		unique_ptr<Expression> res_false;
 		if (cell->next == nullptr) {

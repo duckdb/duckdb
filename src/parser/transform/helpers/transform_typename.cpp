@@ -1,4 +1,3 @@
-
 #include "parser/transformer.hpp"
 
 using namespace duckdb;
@@ -10,8 +9,7 @@ TypeId Transformer::TransformStringToTypeId(char *str) {
 	// Transform column type
 	if (lower_str == "int" || lower_str == "int4" || lower_str == "signed") {
 		return TypeId::INTEGER;
-	} else if (lower_str == "varchar" || lower_str == "bpchar" ||
-	           lower_str == "text" || lower_str == "string") {
+	} else if (lower_str == "varchar" || lower_str == "bpchar" || lower_str == "text" || lower_str == "string") {
 		return TypeId::VARCHAR;
 	} else if (lower_str == "int8") {
 		return TypeId::BIGINT;
@@ -21,8 +19,7 @@ TypeId Transformer::TransformStringToTypeId(char *str) {
 		return TypeId::TIMESTAMP;
 	} else if (lower_str == "bool") {
 		return TypeId::BOOLEAN;
-	} else if (lower_str == "double" || lower_str == "float8" ||
-	           lower_str == "real" || lower_str == "float4" ||
+	} else if (lower_str == "double" || lower_str == "float8" || lower_str == "real" || lower_str == "float4" ||
 	           lower_str == "numeric") {
 		return TypeId::DECIMAL;
 	} else if (lower_str == "tinyint") {
@@ -32,7 +29,6 @@ TypeId Transformer::TransformStringToTypeId(char *str) {
 	} else if (lower_str == "date") {
 		return TypeId::DATE;
 	} else {
-		throw NotImplementedException("DataType %s not supported yet...\n",
-		                              str);
+		throw NotImplementedException("DataType %s not supported yet...\n", str);
 	}
 }

@@ -57,7 +57,7 @@ namespace TPCE {
 //
 
 class TextFileSplitter : public ITextSplitter {
-  private:
+private:
 	std::istringstream file;
 	StreamSplitter splitter;
 
@@ -65,14 +65,11 @@ class TextFileSplitter : public ITextSplitter {
 	TextFileSplitter(const TextFileSplitter &);
 	TextFileSplitter &operator=(const TextFileSplitter &);
 
-  public:
-	static const char DEFAULT_RECORD_DELIMITER =
-	    StreamSplitter::DEFAULT_RECORD_DELIMITER;
-	static const char DEFAULT_FIELD_DELIMITER =
-	    StreamSplitter::DEFAULT_FIELD_DELIMITER;
+public:
+	static const char DEFAULT_RECORD_DELIMITER = StreamSplitter::DEFAULT_RECORD_DELIMITER;
+	static const char DEFAULT_FIELD_DELIMITER = StreamSplitter::DEFAULT_FIELD_DELIMITER;
 
-	explicit TextFileSplitter(const std::string &string,
-	                          char recordDelimiter = DEFAULT_RECORD_DELIMITER,
+	explicit TextFileSplitter(const std::string &string, char recordDelimiter = DEFAULT_RECORD_DELIMITER,
 	                          char fieldDelimiter = DEFAULT_FIELD_DELIMITER);
 	~TextFileSplitter();
 

@@ -53,14 +53,14 @@ namespace TPCE {
 //
 
 class NewsDataFileRecord {
-  private:
+private:
 	static const int maxWordLen = 25; // News uses LastNames for words.
 	char wordCStr[maxWordLen + 1];
 	std::string word;
 
 	static const unsigned int fieldCount = 1;
 
-  public:
+public:
 	explicit NewsDataFileRecord(const std::deque<std::string> &fields);
 
 	//

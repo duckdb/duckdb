@@ -1,5 +1,5 @@
-
 #include "common/types/chunk_collection.hpp"
+
 #include "common/exception.hpp"
 
 using namespace duckdb;
@@ -31,8 +31,7 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 
 		// first append data to the current chunk
 		DataChunk &last_chunk = *chunks.back();
-		size_t added_data =
-		    std::min(remaining_data, STANDARD_VECTOR_SIZE - last_chunk.size());
+		size_t added_data = std::min(remaining_data, STANDARD_VECTOR_SIZE - last_chunk.size());
 		if (added_data > 0) {
 			// copy <added_data> elements to the last chunk
 			size_t old_count = new_chunk.size();
@@ -59,11 +58,9 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 }
 
 Value ChunkCollection::GetValue(size_t column, size_t index) {
-	return chunks[LocateChunk(index)]->data[column].GetValue(
-	    index % STANDARD_VECTOR_SIZE);
+	return chunks[LocateChunk(index)]->data[column].GetValue(index % STANDARD_VECTOR_SIZE);
 }
 
 void ChunkCollection::SetValue(size_t column, size_t index, Value value) {
-	chunks[LocateChunk(index)]->data[column].SetValue(
-	    index % STANDARD_VECTOR_SIZE, value);
+	chunks[LocateChunk(index)]->data[column].SetValue(index % STANDARD_VECTOR_SIZE, value);
 }

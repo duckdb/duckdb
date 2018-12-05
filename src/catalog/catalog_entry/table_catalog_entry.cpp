@@ -1,10 +1,8 @@
-
 #include "catalog/catalog_entry/table_catalog_entry.hpp"
+
 #include "catalog/catalog.hpp"
 #include "common/exception.hpp"
-
 #include "parser/constraints/list.hpp"
-
 #include "storage/storage_manager.hpp"
 
 #include <algorithm>
@@ -15,8 +13,7 @@ using namespace std;
 void TableCatalogEntry::Initialize(CreateTableInformation *info) {
 	for (auto entry : info->columns) {
 		if (ColumnExists(entry.name)) {
-			throw CatalogException("Column with name %s already exists!",
-			                       entry.name.c_str());
+			throw CatalogException("Column with name %s already exists!", entry.name.c_str());
 		}
 
 		column_t oid = columns.size();
@@ -26,13 +23,10 @@ void TableCatalogEntry::Initialize(CreateTableInformation *info) {
 	}
 }
 
-TableCatalogEntry::TableCatalogEntry(Catalog *catalog,
-                                     SchemaCatalogEntry *schema,
-                                     CreateTableInformation *info)
+TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableInformation *info)
     : CatalogEntry(CatalogType::TABLE, catalog, info->table), schema(schema) {
 	Initialize(info);
-	storage = make_shared<DataTable>(catalog->storage, schema->name, name,
-	                                 GetTypes());
+	storage = make_shared<DataTable>(catalog->storage, schema->name, name, GetTypes());
 	// resolve the constraints
 	// we have to parse the DUMMY constraints and initialize the indices
 	bool has_primary_key = false;
@@ -51,12 +45,9 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog,
 				for (auto &keyname : c->columns) {
 					auto entry = name_map.find(keyname);
 					if (entry == name_map.end()) {
-						throw ParserException(
-						    "column \"%s\" named in key does not exist",
-						    keyname.c_str());
+						throw ParserException("column \"%s\" named in key does not exist", keyname.c_str());
 					}
-					if (find(keys.begin(), keys.end(), entry->second) !=
-					    keys.end()) {
+					if (find(keys.begin(), keys.end(), entry->second) != keys.end()) {
 						throw ParserException("column \"%s\" appears twice in "
 						                      "primary key constraint",
 						                      keyname.c_str());
@@ -69,9 +60,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog,
 			bool allow_null = true;
 			if (c->ctype == ConstraintType::PRIMARY_KEY) {
 				if (has_primary_key) {
-					throw ParserException(
-					    "table \"%s\" has more than one primary key",
-					    name.c_str());
+					throw ParserException("table \"%s\" has more than one primary key", name.c_str());
 				}
 				has_primary_key = true;
 				// PRIMARY KEY constraints do not allow NULLs
@@ -80,19 +69,15 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog,
 				assert(c->ctype == ConstraintType::UNIQUE);
 			}
 			// initialize the index with the parsed data
-			storage->unique_indexes.push_back(
-			    make_unique<UniqueIndex>(*storage, types, keys, allow_null));
+			storage->unique_indexes.push_back(make_unique<UniqueIndex>(*storage, types, keys, allow_null));
 		}
 		constraints.push_back(move(constraint));
 	}
 }
 
-TableCatalogEntry::TableCatalogEntry(Catalog *catalog,
-                                     SchemaCatalogEntry *schema,
-                                     CreateTableInformation *info,
+TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableInformation *info,
                                      shared_ptr<DataTable> storage)
-    : CatalogEntry(CatalogType::TABLE, catalog, info->table), schema(schema),
-      storage(storage) {
+    : CatalogEntry(CatalogType::TABLE, catalog, info->table), schema(schema), storage(storage) {
 	Initialize(info);
 	for (auto &constraint : info->constraints) {
 		assert(constraint->type != ConstraintType::DUMMY);
@@ -106,8 +91,7 @@ bool TableCatalogEntry::ColumnExists(const string &name) {
 
 unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(AlterInformation *info) {
 	if (info->type != AlterType::ALTER_TABLE) {
-		throw CatalogException(
-		    "Can only modify table with ALTER TABLE statement");
+		throw CatalogException("Can only modify table with ALTER TABLE statement");
 	}
 	auto table_info = (AlterTableInformation *)info;
 	switch (table_info->alter_table_type) {
@@ -126,16 +110,13 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(AlterInformation *info) {
 			}
 		}
 		if (!found) {
-			throw CatalogException(
-			    "Table does not have a column with name \"%s\"",
-			    rename_info->name.c_str());
+			throw CatalogException("Table does not have a column with name \"%s\"", rename_info->name.c_str());
 		}
 		create_info.constraints.resize(constraints.size());
 		for (size_t i = 0; i < constraints.size(); i++) {
 			create_info.constraints[i] = constraints[i]->Copy();
 		}
-		return make_unique<TableCatalogEntry>(catalog, schema, &create_info,
-		                                      storage);
+		return make_unique<TableCatalogEntry>(catalog, schema, &create_info, storage);
 	}
 	default:
 		throw CatalogException("Unrecognized alter table type!");
@@ -144,8 +125,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(AlterInformation *info) {
 
 ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) {
 	if (!ColumnExists(name)) {
-		throw CatalogException("Column with name %s does not exist!",
-		                       name.c_str());
+		throw CatalogException("Column with name %s does not exist!", name.c_str());
 	}
 	return columns[name_map[name]];
 }
@@ -160,4 +140,16 @@ vector<TypeId> TableCatalogEntry::GetTypes() {
 		types.push_back(it.type);
 	}
 	return types;
+}
+
+vector<TypeId> TableCatalogEntry::GetTypes(const vector<column_t> &column_ids) {
+	vector<TypeId> result;
+	for (auto &index : column_ids) {
+		if (index == COLUMN_IDENTIFIER_ROW_ID) {
+			result.push_back(TypeId::POINTER);
+		} else {
+			result.push_back(columns[index].type);
+		}
+	}
+	return result;
 }

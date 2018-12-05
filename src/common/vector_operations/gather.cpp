@@ -11,8 +11,7 @@
 using namespace duckdb;
 using namespace std;
 
-template <class T, class OP>
-void gather_templated_loop(Vector &src, Vector &result) {
+template <class T, class OP> void gather_templated_loop(Vector &src, Vector &result) {
 	auto source = (T **)src.data;
 	auto ldata = (T *)result.data;
 	if (result.sel_vector) {
@@ -20,8 +19,7 @@ void gather_templated_loop(Vector &src, Vector &result) {
 			if (IsNullValue<T>(source[i][0])) {
 				result.nullmask.set(result.sel_vector[k]);
 			} else {
-				ldata[result.sel_vector[k]] =
-				    OP::Operation(source[i][0], ldata[i]);
+				ldata[result.sel_vector[k]] = OP::Operation(source[i][0], ldata[i]);
 			}
 		});
 	} else {
@@ -35,11 +33,9 @@ void gather_templated_loop(Vector &src, Vector &result) {
 	}
 }
 
-template <class OP>
-static void generic_gather_loop(Vector &source, Vector &dest) {
+template <class OP> static void generic_gather_loop(Vector &source, Vector &dest) {
 	if (source.type != TypeId::POINTER) {
-		throw InvalidTypeException(source.type,
-		                           "Cannot gather from non-pointer type!");
+		throw InvalidTypeException(source.type, "Cannot gather from non-pointer type!");
 	}
 	switch (dest.type) {
 	case TypeId::TINYINT:

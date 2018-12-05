@@ -49,8 +49,7 @@
 
 namespace TPCE {
 
-const TIdent iBrokerNameIDShift =
-    1000 * 1000; // starting ID to generate names from for brokers
+const TIdent iBrokerNameIDShift = 1000 * 1000; // starting ID to generate names from for brokers
 
 const int iBrokerInitialTradesYTDMin = 10000;
 const int iBrokerInitialTradesYTDMax = 100000;
@@ -63,12 +62,11 @@ class CBrokersTable : public TableTemplate<BROKER_ROW> {
 	TIdent m_iStartFromBroker;
 	TIdent m_iStartFromCustomer;
 	CPerson m_person;
-	const StatusTypeDataFile_t
-	    &m_StatusTypeFile; // STATUS_TYPE table from the flat file
-	int *m_pNumTrades;     // array of B_NUM_TRADES values
-	double *m_pCommTotal;  // array of B_COMM_TOTAL values
+	const StatusTypeDataFile_t &m_StatusTypeFile; // STATUS_TYPE table from the flat file
+	int *m_pNumTrades;                            // array of B_NUM_TRADES values
+	double *m_pCommTotal;                         // array of B_COMM_TOTAL values
 
-  public:
+public:
 	/*
 	 *  Constructor for the BROKER table class.
 	 *
@@ -80,16 +78,11 @@ class CBrokersTable : public TableTemplate<BROKER_ROW> {
 	 *  RETURNS:
 	 *       not applicable.
 	 */
-	CBrokersTable(const DataFileManager &dfm, TIdent iCustomerCount,
-	              TIdent iStartFromCustomer)
-	    : TableTemplate<BROKER_ROW>(),
-	      m_iTotalBrokers(iCustomerCount / iBrokersDiv),
-	      m_iStartFromBroker((iStartFromCustomer / iBrokersDiv) +
-	                         iStartingBrokerID + iTIdentShift),
-	      m_iStartFromCustomer(iStartFromCustomer),
-	      m_person(dfm, iBrokerNameIDShift, true),
-	      m_StatusTypeFile(dfm.StatusTypeDataFile()), m_pNumTrades(NULL),
-	      m_pCommTotal(NULL){};
+	CBrokersTable(const DataFileManager &dfm, TIdent iCustomerCount, TIdent iStartFromCustomer)
+	    : TableTemplate<BROKER_ROW>(), m_iTotalBrokers(iCustomerCount / iBrokersDiv),
+	      m_iStartFromBroker((iStartFromCustomer / iBrokersDiv) + iStartingBrokerID + iTIdentShift),
+	      m_iStartFromCustomer(iStartFromCustomer), m_person(dfm, iBrokerNameIDShift, true),
+	      m_StatusTypeFile(dfm.StatusTypeDataFile()), m_pNumTrades(NULL), m_pCommTotal(NULL){};
 
 	/*
 	 *  Destructor.
@@ -126,8 +119,7 @@ class CBrokersTable : public TableTemplate<BROKER_ROW> {
 	void InitForGen(TIdent iCustomerCount, TIdent iStartFromCustomer) {
 		TIdent i;
 
-		if (m_iTotalBrokers != iCustomerCount / iBrokersDiv ||
-		    m_pNumTrades == NULL || m_pCommTotal == NULL)
+		if (m_iTotalBrokers != iCustomerCount / iBrokersDiv || m_pNumTrades == NULL || m_pCommTotal == NULL)
 
 		{
 			//  Reallocate arrays for the new number of brokers
@@ -164,16 +156,14 @@ class CBrokersTable : public TableTemplate<BROKER_ROW> {
 			}
 		}
 
-		if (m_iStartFromBroker != ((iStartFromCustomer / iBrokersDiv) +
-		                           iStartingBrokerID + iTIdentShift)) {
+		if (m_iStartFromBroker != ((iStartFromCustomer / iBrokersDiv) + iStartingBrokerID + iTIdentShift)) {
 			// Multiplying by iBrokersDiv again to get 64-bit broker ids
 			// with 4.3bln IDENT_T shift value.
 			// Removing shift factor prior to arithmetic so that contiguous
 			// B_IDs values are obtained, and then add it back so that we
 			// get shifted values.
 			//
-			m_iStartFromBroker = (iStartFromCustomer / iBrokersDiv) +
-			                     iStartingBrokerID + iTIdentShift;
+			m_iStartFromBroker = (iStartFromCustomer / iBrokersDiv) + iStartingBrokerID + iTIdentShift;
 		}
 
 		m_iLastRowNumber = 0;
@@ -198,10 +188,8 @@ class CBrokersTable : public TableTemplate<BROKER_ROW> {
 	 *   RETURNS:
 	 *           none.
 	 */
-	void UpdateTradeAndCommissionYTD(TIdent B_ID, int iTradeIncrement,
-	                                 double fCommissionIncrement) {
-		if ((B_ID >= m_iStartFromBroker) &&
-		    (B_ID < (m_iStartFromBroker + m_iTotalBrokers))) {
+	void UpdateTradeAndCommissionYTD(TIdent B_ID, int iTradeIncrement, double fCommissionIncrement) {
+		if ((B_ID >= m_iStartFromBroker) && (B_ID < (m_iStartFromBroker + m_iTotalBrokers))) {
 			m_pNumTrades[B_ID - m_iStartFromBroker] += iTradeIncrement;
 			m_pCommTotal[B_ID - m_iStartFromBroker] += fCommissionIncrement;
 		}
@@ -220,8 +208,7 @@ class CBrokersTable : public TableTemplate<BROKER_ROW> {
 	 *           random broker id
 	 */
 	TIdent GenerateRandomBrokerId(CRandom *pRnd) {
-		return pRnd->RndInt64Range(m_iStartFromBroker,
-		                           m_iStartFromBroker + m_iTotalBrokers - 1);
+		return pRnd->RndInt64Range(m_iStartFromBroker, m_iStartFromBroker + m_iTotalBrokers - 1);
 	}
 
 	/*
@@ -237,8 +224,7 @@ class CBrokersTable : public TableTemplate<BROKER_ROW> {
 	 *           none.
 	 */
 	void GenerateBrokerName(TIdent B_ID, char *B_NAME, size_t B_NAME_len) {
-		snprintf(B_NAME, B_NAME_len, "%s %c. %s",
-		         m_person.GetFirstName(B_ID + iBrokerNameIDShift).c_str(),
+		snprintf(B_NAME, B_NAME_len, "%s %c. %s", m_person.GetFirstName(B_ID + iBrokerNameIDShift).c_str(),
 		         m_person.GetMiddleName(B_ID + iBrokerNameIDShift),
 		         m_person.GetLastName(B_ID + iBrokerNameIDShift).c_str());
 	}
@@ -271,11 +257,9 @@ class CBrokersTable : public TableTemplate<BROKER_ROW> {
 	 */
 	bool GenerateNextRecord() {
 		m_row.B_ID = m_iStartFromBroker + m_iLastRowNumber;
-		strncpy(m_row.B_ST_ID, m_StatusTypeFile[eActive].ST_ID_CSTR(),
-		        sizeof(m_row.B_ST_ID));
+		strncpy(m_row.B_ST_ID, m_StatusTypeFile[eActive].ST_ID_CSTR(), sizeof(m_row.B_ST_ID));
 
-		GenerateBrokerName(m_row.B_ID, m_row.B_NAME,
-		                   static_cast<int>(sizeof(m_row.B_NAME)));
+		GenerateBrokerName(m_row.B_ID, m_row.B_NAME, static_cast<int>(sizeof(m_row.B_NAME)));
 
 		m_row.B_NUM_TRADES = m_pNumTrades[m_row.B_ID - m_iStartFromBroker];
 		m_row.B_COMM_TOTAL = m_pCommTotal[m_row.B_ID - m_iStartFromBroker];

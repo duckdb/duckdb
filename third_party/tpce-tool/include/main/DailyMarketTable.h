@@ -48,9 +48,8 @@
 
 namespace TPCE {
 
-const int iTradeDaysInYear =
-    261; // the number of trading days in a year (for DAILY_MARKET)
-const int iDailyMarketYears = 5; // number of years of history in DAILY_MARKET
+const int iTradeDaysInYear = 261; // the number of trading days in a year (for DAILY_MARKET)
+const int iDailyMarketYears = 5;  // number of years of history in DAILY_MARKET
 const int iDailyMarketTotalRows = iDailyMarketYears * iTradeDaysInYear;
 
 const double fDailyMarketCloseMin = fMinSecPrice;
@@ -93,29 +92,24 @@ class CDailyMarketTable : public TableTemplate<DAILY_MARKET_GEN_ROW> {
 
 		// Create symbol only once.
 		//
-		m_SecurityFile.CreateSymbol(m_iLastRowNumber, szSymbol,
-		                            static_cast<int>(sizeof(szSymbol)));
+		m_SecurityFile.CreateSymbol(m_iLastRowNumber, szSymbol, static_cast<int>(sizeof(szSymbol)));
 
 		for (i = 0; i < m_iDailyMarketTotalRows; ++i) {
 			// copy the symbol
-			strncpy(m_row.m_daily_market[i].DM_S_SYMB, szSymbol,
-			        sizeof(m_row.m_daily_market[i].DM_S_SYMB));
+			strncpy(m_row.m_daily_market[i].DM_S_SYMB, szSymbol, sizeof(m_row.m_daily_market[i].DM_S_SYMB));
 
 			// generate trade date
 			m_row.m_daily_market[i].DM_DATE = m_StartFromDate;
 			m_row.m_daily_market[i].DM_DATE.Add(iDayNo, 0);
 
 			// generate prices
-			m_row.m_daily_market[i].DM_CLOSE = m_rnd.RndDoubleIncrRange(
-			    fDailyMarketCloseMin, fDailyMarketCloseMax, 0.01);
-			m_row.m_daily_market[i].DM_HIGH = m_row.m_daily_market[i].DM_CLOSE *
-			                                  fDailyMarketHighRelativeToClose;
-			m_row.m_daily_market[i].DM_LOW = m_row.m_daily_market[i].DM_CLOSE *
-			                                 fDailyMarketLowRelativeToClose;
+			m_row.m_daily_market[i].DM_CLOSE =
+			    m_rnd.RndDoubleIncrRange(fDailyMarketCloseMin, fDailyMarketCloseMax, 0.01);
+			m_row.m_daily_market[i].DM_HIGH = m_row.m_daily_market[i].DM_CLOSE * fDailyMarketHighRelativeToClose;
+			m_row.m_daily_market[i].DM_LOW = m_row.m_daily_market[i].DM_CLOSE * fDailyMarketLowRelativeToClose;
 
 			// generate volume
-			m_row.m_daily_market[i].DM_VOL = m_rnd.RndInt64Range(
-			    iDailyMarketVolumeMin, iDailyMarketVolumeMax);
+			m_row.m_daily_market[i].DM_VOL = m_rnd.RndInt64Range(iDailyMarketVolumeMin, iDailyMarketVolumeMax);
 
 			++iDayNo; // go one day forward for the next row
 
@@ -134,43 +128,32 @@ class CDailyMarketTable : public TableTemplate<DAILY_MARKET_GEN_ROW> {
 	 *           none.
 	 */
 	void InitNextLoadUnit() {
-		m_rnd.SetSeed(m_rnd.RndNthElement(RNGSeedTableDefault,
-		                                  (RNGSEED)m_iLastRowNumber *
-		                                      iRNGSkipOneRowDailyMarket));
+		m_rnd.SetSeed(m_rnd.RndNthElement(RNGSeedTableDefault, (RNGSEED)m_iLastRowNumber * iRNGSkipOneRowDailyMarket));
 
 		ClearRecord(); // this is needed for EGenTest to work
 	}
 
-  public:
+public:
 	/*
 	 *   Constructor.
 	 */
-	CDailyMarketTable(const DataFileManager &dfm, TIdent iCustomerCount,
-	                  TIdent iStartFromCustomer)
-	    : TableTemplate<DAILY_MARKET_GEN_ROW>(),
-	      m_SecurityFile(dfm.SecurityFile()),
-	      m_iDailyMarketTotalRows(sizeof(m_row.m_daily_market) /
-	                              sizeof(m_row.m_daily_market[0])),
-	      m_iRowsGeneratedPerSecurity(sizeof(m_row.m_daily_market) /
-	                                  sizeof(m_row.m_daily_market[0])),
+	CDailyMarketTable(const DataFileManager &dfm, TIdent iCustomerCount, TIdent iStartFromCustomer)
+	    : TableTemplate<DAILY_MARKET_GEN_ROW>(), m_SecurityFile(dfm.SecurityFile()),
+	      m_iDailyMarketTotalRows(sizeof(m_row.m_daily_market) / sizeof(m_row.m_daily_market[0])),
+	      m_iRowsGeneratedPerSecurity(sizeof(m_row.m_daily_market) / sizeof(m_row.m_daily_market[0])),
 	      m_bMoreSecurities(true) // initialize once
 	{
 		//  Set DAILY_MARKET start date to Jan 03, 2000.
 		//
-		m_StartFromDate.Set(iDailyMarketBaseYear, iDailyMarketBaseMonth,
-		                    iDailyMarketBaseDay, iDailyMarketBaseHour,
-		                    iDailyMarketBaseMinute, iDailyMarketBaseSecond,
-		                    iDailyMarketBaseMsec);
+		m_StartFromDate.Set(iDailyMarketBaseYear, iDailyMarketBaseMonth, iDailyMarketBaseDay, iDailyMarketBaseHour,
+		                    iDailyMarketBaseMinute, iDailyMarketBaseSecond, iDailyMarketBaseMsec);
 
 		m_bMoreRecords = true; // initialize once
 
-		m_iSecurityCount =
-		    m_SecurityFile.CalculateSecurityCount(iCustomerCount);
-		m_iStartFromSecurity =
-		    m_SecurityFile.CalculateStartFromSecurity(iStartFromCustomer);
+		m_iSecurityCount = m_SecurityFile.CalculateSecurityCount(iCustomerCount);
+		m_iStartFromSecurity = m_SecurityFile.CalculateStartFromSecurity(iStartFromCustomer);
 
-		m_iSecurityCountForOneLoadUnit =
-		    m_SecurityFile.CalculateSecurityCount(iDefaultLoadUnitSize);
+		m_iSecurityCountForOneLoadUnit = m_SecurityFile.CalculateSecurityCount(iDefaultLoadUnitSize);
 
 		m_iLastRowNumber = m_iStartFromSecurity;
 	};
@@ -193,16 +176,14 @@ class CDailyMarketTable : public TableTemplate<DAILY_MARKET_GEN_ROW> {
 				++m_iLastRowNumber;
 
 				// Update state info
-				m_bMoreSecurities = m_iLastRowNumber <
-				                    (m_iStartFromSecurity + m_iSecurityCount);
+				m_bMoreSecurities = m_iLastRowNumber < (m_iStartFromSecurity + m_iSecurityCount);
 
 				m_iRowsGeneratedPerSecurity = 0;
 			}
 		}
 
 		// Return false when generated the last row of the last security
-		if (!m_bMoreSecurities &&
-		    (m_iRowsGeneratedPerSecurity == m_iDailyMarketTotalRows - 1)) {
+		if (!m_bMoreSecurities && (m_iRowsGeneratedPerSecurity == m_iDailyMarketTotalRows - 1)) {
 			m_bMoreRecords = false;
 		}
 

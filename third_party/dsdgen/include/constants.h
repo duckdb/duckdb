@@ -40,8 +40,7 @@
 ***/
 #define DATA_START_DATE "1998-01-01" /* earliest date in the data set */
 #define DATA_END_DATE "2003-12-31"   /* latest date in the data set */
-#define LINES_PER_ORDER                                                        \
-	16 /* max number of lineitems per order for all channels */
+#define LINES_PER_ORDER 16           /* max number of lineitems per order for all channels */
 
 /***
 *** C_xxx Cutomer Defines
@@ -106,8 +105,7 @@
  ***/
 #define ITEM_DESC_LEN 5
 #define ITEM_NAME_LEN 10
-#define ITEM_MANFACTURER_COUNT                                                 \
-	1000 /* number of brands handled by a particular manufacturer */
+#define ITEM_MANFACTURER_COUNT 1000 /* number of brands handled by a particular manufacturer */
 
 /***
  *** PROMO_xxx Promotions Defines
@@ -148,8 +146,8 @@
 #define WP_IMAGE_MAX 7
 #define WP_AD_MIN 0
 #define WP_AD_MAX 4
-#define WP_MAX_REC_DURATION                                                    \
-	1000                     /* maximum time from start to end of record       \
+#define WP_MAX_REC_DURATION                                                                                            \
+	1000                     /* maximum time from start to end of record                                               \
 	                          */
 #define WP_IDLE_TIME_MAX 100 /* maximum time since last page access */
 
@@ -171,20 +169,16 @@
 /***
 *** WEB_xxx Web Site Defines
 ***/
-#define WEB_START_DATE                                                         \
-	DATE_MINIMUM /* range of open/close dates; actual dates can exceed these   \
-	                values */
+#define WEB_START_DATE                                                                                                 \
+	DATE_MINIMUM                  /* range of open/close dates; actual dates can exceed these                          \
+	                                 values */
 #define WEB_END_DATE DATE_MAXIMUM /* due to staggered start of each site */
-#define WEB_DATE_STAGGER                                                       \
-	17 /* time between site creation on leading/trailing edge */
-#define WEB_PAGES_PER_SITE 123 /* number of pages on a web site */
+#define WEB_DATE_STAGGER 17       /* time between site creation on leading/trailing edge */
+#define WEB_PAGES_PER_SITE 123    /* number of pages on a web site */
 /* some of the web sites are completely replaced in the date range. */
-#define WEB_MORTALITY                                                          \
-	50 /* percentage of sites that "die" between start and end */
-#define WEB_IS_REPLACED(j)                                                     \
-	((j % (100 / WEB_MORTALITY)) == 0) /* does this site get replaced? */
-#define WEB_IS_REPLACEMENT(j)                                                  \
-	((j / (100 / WEB_MORTALITY)) % 2) /* is this the replacement? */
+#define WEB_MORTALITY 50                                      /* percentage of sites that "die" between start and end */
+#define WEB_IS_REPLACED(j) ((j % (100 / WEB_MORTALITY)) == 0) /* does this site get replaced? */
+#define WEB_IS_REPLACEMENT(j) ((j / (100 / WEB_MORTALITY)) % 2) /* is this the replacement? */
 
 /***
  *** SOURCE SCHEMA CONSTANTS

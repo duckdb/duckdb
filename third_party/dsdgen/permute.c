@@ -93,8 +93,7 @@ int *makePermutation(int *nNumberSet, int nSize, int nStream) {
  * Side Effects:
  * TODO: None
  */
-ds_key_t *makeKeyPermutation(ds_key_t *nNumberSet, ds_key_t nSize,
-                             int nStream) {
+ds_key_t *makeKeyPermutation(ds_key_t *nNumberSet, ds_key_t nSize, int nStream) {
 	ds_key_t i, nTemp, nIndex, *pInt;
 	if (nSize <= 0)
 		return (NULL);

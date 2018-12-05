@@ -1,6 +1,6 @@
-
 #include "benchmark_runner.hpp"
 #include "duckdb_benchmark.hpp"
+
 #include <random>
 
 using namespace duckdb;
@@ -27,22 +27,21 @@ virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.DestroyAppender();
 }
 
-virtual std::string GetQuery() {
+virtual string GetQuery() {
 	return "SELECT * FROM integers a, integers b WHERE (a.i / 1000) > b.j;";
 }
 
-virtual std::string VerifyResult(DuckDBResult *result) {
+virtual string VerifyResult(DuckDBResult *result) {
 	if (!result->GetSuccess()) {
 		return result->GetErrorMessage();
 	}
-	return std::string();
+	return string();
 }
 
-virtual std::string BenchmarkInfo() {
-	return StringUtil::Format(
-	    "Runs the following query: \"SELECT * FROM "
-	    "integers a, integers b WHERE (a.i / 1000) > b.j;\""
-	    " on %d rows",
-	    RANGEJOIN_COUNT);
+virtual string BenchmarkInfo() {
+	return StringUtil::Format("Runs the following query: \"SELECT * FROM "
+	                          "integers a, integers b WHERE (a.i / 1000) > b.j;\""
+	                          " on %d rows",
+	                          RANGEJOIN_COUNT);
 }
 FINISH_BENCHMARK(RangeJoin)

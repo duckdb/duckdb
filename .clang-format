@@ -5,3 +5,7 @@ UseTab: ForIndentation
 DerivePointerAlignment: false
 PointerAlignment: Right
 AllowShortFunctionsOnASingleLine: false
+ColumnLimit: 120
+IncludeBlocks: Regroup
+Language: Cpp
+AccessModifierOffset: -4

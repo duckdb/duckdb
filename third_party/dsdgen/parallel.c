@@ -132,8 +132,7 @@ int checkSeeds(tdef *pTdef) {
 			genrand_integer(&res, DIST_UNIFORM, 1, 100, 0, i);
 		if (bSetSeeds) {
 			if (Streams[i].nUsed > Streams[i].nUsedPerRow) {
-				fprintf(stderr, "Seed overrun on column %d. Used: %d\n", i,
-				        Streams[i].nUsed);
+				fprintf(stderr, "Seed overrun on column %d. Used: %d\n", i, Streams[i].nUsed);
 				Streams[i].nUsedPerRow = Streams[i].nUsed;
 				nReturnCode = 1;
 			}
@@ -200,11 +199,9 @@ int row_skip(int tbl, ds_key_t count) {
 			Streams[i].nTotal = count * Streams[i].nUsedPerRow;
 		}
 		if (Streams[i].nDuplicateOf && (Streams[i].nDuplicateOf != i)) {
-			skip_random(Streams[i].nDuplicateOf,
-			            count * Streams[Streams[i].nDuplicateOf].nUsedPerRow);
+			skip_random(Streams[i].nDuplicateOf, count * Streams[Streams[i].nDuplicateOf].nUsedPerRow);
 			Streams[Streams[i].nDuplicateOf].nUsed = 0;
-			Streams[Streams[i].nDuplicateOf].nTotal =
-			    count * Streams[i].nUsedPerRow;
+			Streams[Streams[i].nDuplicateOf].nTotal = count * Streams[i].nUsedPerRow;
 		}
 	}
 

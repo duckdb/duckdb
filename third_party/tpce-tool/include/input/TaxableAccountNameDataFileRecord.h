@@ -53,16 +53,15 @@ namespace TPCE {
 //
 
 class TaxableAccountNameDataFileRecord {
-  private:
+private:
 	static const int maxNameLen = 50;
 	char nameCStr[maxNameLen + 1];
 	std::string name;
 
 	static const unsigned int fieldCount = 1;
 
-  public:
-	explicit TaxableAccountNameDataFileRecord(
-	    const std::deque<std::string> &fields);
+public:
+	explicit TaxableAccountNameDataFileRecord(const std::deque<std::string> &fields);
 
 	//
 	// Default copies and destructor are ok.

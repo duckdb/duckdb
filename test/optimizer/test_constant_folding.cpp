@@ -1,14 +1,11 @@
-
 #include "catch.hpp"
-
-#include <vector>
-
+#include "common/helper.hpp"
 #include "expression_helper.hpp"
 #include "optimizer/expression_rules/rule_list.hpp"
 #include "optimizer/rewriter.hpp"
 #include "parser/expression/list.hpp"
 
-#include "common/helper.hpp"
+#include <vector>
 
 using namespace duckdb;
 using namespace std;
@@ -23,8 +20,8 @@ TEST_CASE("Constant folding does something", "[optimizer]") {
 	auto left = make_unique<ConstantExpression>(Value::INTEGER(42));
 	auto right = make_unique<ConstantExpression>(Value::INTEGER(1));
 
-	auto root = make_unique_base<Expression, OperatorExpression>(
-	    ExpressionType::OPERATOR_ADD, TypeId::INTEGER, move(left), move(right));
+	auto root = make_unique_base<Expression, OperatorExpression>(ExpressionType::OPERATOR_ADD, TypeId::INTEGER,
+	                                                             move(left), move(right));
 
 	auto result = ApplyExprRule(rewriter, move(root));
 
@@ -47,11 +44,11 @@ TEST_CASE("Constant folding finishes in fixpoint", "[optimizer]") {
 	auto ll = make_unique<ConstantExpression>(Value::INTEGER(42));
 	auto lr = make_unique<ConstantExpression>(Value::INTEGER(1));
 
-	unique_ptr<Expression> il = make_unique<OperatorExpression>(
-	    ExpressionType::OPERATOR_ADD, TypeId::INTEGER, move(ll), move(lr));
+	unique_ptr<Expression> il =
+	    make_unique<OperatorExpression>(ExpressionType::OPERATOR_ADD, TypeId::INTEGER, move(ll), move(lr));
 	auto ir = make_unique<ConstantExpression>(Value::INTEGER(10));
-	unique_ptr<Expression> root = make_unique<OperatorExpression>(
-	    ExpressionType::OPERATOR_ADD, TypeId::INTEGER, move(il), move(ir));
+	unique_ptr<Expression> root =
+	    make_unique<OperatorExpression>(ExpressionType::OPERATOR_ADD, TypeId::INTEGER, move(il), move(ir));
 
 	auto result = ApplyExprRule(rewriter, move(root));
 
@@ -74,11 +71,11 @@ TEST_CASE("Constant folding reduces complex expression", "[optimizer]") {
 	auto ll = make_unique<ConstantExpression>(Value::INTEGER(10));
 	auto lr = make_unique<ConstantExpression>(Value::INTEGER(9));
 
-	unique_ptr<Expression> ir = make_unique<OperatorExpression>(
-	    ExpressionType::OPERATOR_SUBTRACT, TypeId::INTEGER, move(ll), move(lr));
+	unique_ptr<Expression> ir =
+	    make_unique<OperatorExpression>(ExpressionType::OPERATOR_SUBTRACT, TypeId::INTEGER, move(ll), move(lr));
 	auto il = make_unique<ConstantExpression>(Value::INTEGER(42));
-	unique_ptr<Expression> root = make_unique<OperatorExpression>(
-	    ExpressionType::OPERATOR_MULTIPLY, TypeId::INTEGER, move(il), move(ir));
+	unique_ptr<Expression> root =
+	    make_unique<OperatorExpression>(ExpressionType::OPERATOR_MULTIPLY, TypeId::INTEGER, move(il), move(ir));
 
 	auto result = ApplyExprRule(rewriter, move(root));
 
@@ -171,8 +168,7 @@ TEST_CASE("Constant casting does something", "[optimizer]") {
 	rules.push_back(unique_ptr<Rule>(new ConstantCastRule()));
 	auto rewriter = Rewriter(context, move(rules), MatchOrder::DEPTH_FIRST);
 	auto child = make_unique<ConstantExpression>(Value(42.0));
-	unique_ptr<Expression> root =
-	    make_unique<CastExpression>(TypeId::INTEGER, move(child));
+	unique_ptr<Expression> root = make_unique<CastExpression>(TypeId::INTEGER, move(child));
 
 	auto result = ApplyExprRule(rewriter, move(root));
 	REQUIRE(result->type == ExpressionType::VALUE_CONSTANT);

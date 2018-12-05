@@ -96,8 +96,7 @@ int mk_w_web_returns(void *row, ds_key_t index) {
 	sale = &g_w_web_sales;
 	r->wr_item_sk = sale->ws_item_sk;
 	r->wr_order_number = sale->ws_order_number;
-	memcpy((void *)&r->wr_pricing, (void *)&sale->ws_pricing,
-	       sizeof(ds_pricing_t));
+	memcpy((void *)&r->wr_pricing, (void *)&sale->ws_pricing, sizeof(ds_pricing_t));
 	r->wr_web_page_sk = sale->ws_web_page_sk;
 
 	/*
@@ -105,21 +104,17 @@ int mk_w_web_returns(void *row, ds_key_t index) {
 	 */
 	/* the items cannot be returned until they are shipped; offset is handled in
 	 * mk_join, based on sales date */
-	r->wr_returned_date_sk =
-	    mk_join(WR_RETURNED_DATE_SK, DATET, sale->ws_ship_date_sk);
+	r->wr_returned_date_sk = mk_join(WR_RETURNED_DATE_SK, DATET, sale->ws_ship_date_sk);
 	r->wr_returned_time_sk = mk_join(WR_RETURNED_TIME_SK, TIME, 1);
 
 	/* most items are returned by the people they were shipped to, but some are
 	 * returned by other folks
 	 */
 	r->wr_refunded_customer_sk = mk_join(WR_REFUNDED_CUSTOMER_SK, CUSTOMER, 1);
-	r->wr_refunded_cdemo_sk =
-	    mk_join(WR_REFUNDED_CDEMO_SK, CUSTOMER_DEMOGRAPHICS, 1);
-	r->wr_refunded_hdemo_sk =
-	    mk_join(WR_REFUNDED_HDEMO_SK, HOUSEHOLD_DEMOGRAPHICS, 1);
+	r->wr_refunded_cdemo_sk = mk_join(WR_REFUNDED_CDEMO_SK, CUSTOMER_DEMOGRAPHICS, 1);
+	r->wr_refunded_hdemo_sk = mk_join(WR_REFUNDED_HDEMO_SK, HOUSEHOLD_DEMOGRAPHICS, 1);
 	r->wr_refunded_addr_sk = mk_join(WR_REFUNDED_ADDR_SK, CUSTOMER_ADDRESS, 1);
-	if (genrand_integer(NULL, DIST_UNIFORM, 0, 99, 0,
-	                    WR_RETURNING_CUSTOMER_SK) < WS_GIFT_PCT) {
+	if (genrand_integer(NULL, DIST_UNIFORM, 0, 99, 0, WR_RETURNING_CUSTOMER_SK) < WS_GIFT_PCT) {
 		r->wr_refunded_customer_sk = sale->ws_ship_customer_sk;
 		r->wr_refunded_cdemo_sk = sale->ws_ship_cdemo_sk;
 		r->wr_refunded_hdemo_sk = sale->ws_ship_hdemo_sk;
@@ -131,8 +126,7 @@ int mk_w_web_returns(void *row, ds_key_t index) {
 	r->wr_returning_addr_sk = r->wr_refunded_addr_sk;
 
 	r->wr_reason_sk = mk_join(WR_REASON_SK, REASON, 1);
-	genrand_integer(&r->wr_pricing.quantity, DIST_UNIFORM, 1,
-	                sale->ws_pricing.quantity, 0, WR_PRICING);
+	genrand_integer(&r->wr_pricing.quantity, DIST_UNIFORM, 1, sale->ws_pricing.quantity, 0, WR_PRICING);
 	set_pricing(WR_PRICING, &r->wr_pricing);
 
 	return (res);

@@ -43,11 +43,10 @@
 
 using namespace TPCE;
 
-CMEEPriceBoard::CMEEPriceBoard(INT32 TradingTimeSoFar, CDateTime *pBaseTime,
-                               CDateTime *pCurrentTime,
+CMEEPriceBoard::CMEEPriceBoard(INT32 TradingTimeSoFar, CDateTime *pBaseTime, CDateTime *pCurrentTime,
                                const DataFileManager &dfm)
-    : m_fMeanInTheMoneySubmissionDelay(1.0), m_Security(),
-      m_SecurityFile(dfm.SecurityFile()), m_iNumberOfSecurities(0) {
+    : m_fMeanInTheMoneySubmissionDelay(1.0), m_Security(), m_SecurityFile(dfm.SecurityFile()),
+      m_iNumberOfSecurities(0) {
 	// Number of securities is based on "active" customers, as per sub-committee
 	// decision to have a scaled-down database look as much as possible as the
 	// smaller database.
@@ -61,18 +60,16 @@ CMEEPriceBoard::CMEEPriceBoard(INT32 TradingTimeSoFar, CDateTime *pBaseTime,
 	// the MEE to run using "configured" securities.
 
 	m_iNumberOfSecurities = m_SecurityFile.GetActiveSecurityCount();
-	m_Security.Init(TradingTimeSoFar, pBaseTime, pCurrentTime,
-	                m_fMeanInTheMoneySubmissionDelay);
+	m_Security.Init(TradingTimeSoFar, pBaseTime, pCurrentTime, m_fMeanInTheMoneySubmissionDelay);
 	m_SecurityFile.LoadSymbolToIdMap();
 }
 
 CMEEPriceBoard::~CMEEPriceBoard(void) {
 }
 
-void CMEEPriceBoard::GetSymbol(
-    TIdent SecurityIndex,
-    char *szOutput,    // output buffer
-    size_t iOutputLen) // size of the output buffer (including null));
+void CMEEPriceBoard::GetSymbol(TIdent SecurityIndex,
+                               char *szOutput,    // output buffer
+                               size_t iOutputLen) // size of the output buffer (including null));
 {
 	return (m_SecurityFile.CreateSymbol(SecurityIndex, szOutput, iOutputLen));
 }
@@ -90,36 +87,26 @@ CMoney CMEEPriceBoard::GetCurrentPrice(TIdent SecurityIndex) {
 }
 
 CMoney CMEEPriceBoard::GetCurrentPrice(char *pSecuritySymbol) {
-	return (
-	    m_Security.GetCurrentPrice(m_SecurityFile.GetIndex(pSecuritySymbol)));
+	return (m_Security.GetCurrentPrice(m_SecurityFile.GetIndex(pSecuritySymbol)));
 }
 
 CMoney CMEEPriceBoard::CalculatePrice(char *pSecuritySymbol, double fTime) {
-	return (m_Security.CalculatePrice(m_SecurityFile.GetIndex(pSecuritySymbol),
-	                                  fTime));
+	return (m_Security.CalculatePrice(m_SecurityFile.GetIndex(pSecuritySymbol), fTime));
 }
 
-double CMEEPriceBoard::GetSubmissionTime(char *pSecuritySymbol,
-                                         double fPendingTime,
-                                         CMoney fLimitPrice,
+double CMEEPriceBoard::GetSubmissionTime(char *pSecuritySymbol, double fPendingTime, CMoney fLimitPrice,
                                          eTradeTypeID TradeType) {
 	return (
-	    m_Security.GetSubmissionTime(m_SecurityFile.GetIndex(pSecuritySymbol),
-	                                 fPendingTime, fLimitPrice, TradeType));
+	    m_Security.GetSubmissionTime(m_SecurityFile.GetIndex(pSecuritySymbol), fPendingTime, fLimitPrice, TradeType));
 }
 
-double CMEEPriceBoard::GetSubmissionTime(TIdent SecurityIndex,
-                                         double fPendingTime,
-                                         CMoney fLimitPrice,
+double CMEEPriceBoard::GetSubmissionTime(TIdent SecurityIndex, double fPendingTime, CMoney fLimitPrice,
                                          eTradeTypeID TradeType) {
-	return (m_Security.GetSubmissionTime(SecurityIndex, fPendingTime,
-	                                     fLimitPrice, TradeType));
+	return (m_Security.GetSubmissionTime(SecurityIndex, fPendingTime, fLimitPrice, TradeType));
 }
 
-double
-CMEEPriceBoard::GetCompletionTime(TIdent SecurityIndex, double fSubmissionTime,
-                                  CMoney *pCompletionPrice // output parameter
+double CMEEPriceBoard::GetCompletionTime(TIdent SecurityIndex, double fSubmissionTime,
+                                         CMoney *pCompletionPrice // output parameter
 ) {
-	return (m_Security.GetCompletionTime(SecurityIndex, fSubmissionTime,
-	                                     pCompletionPrice));
+	return (m_Security.GetCompletionTime(SecurityIndex, fSubmissionTime, pCompletionPrice));
 }

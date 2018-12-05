@@ -1,4 +1,3 @@
-
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
@@ -15,8 +14,7 @@ TEST_CASE("CONCAT test", "[function]") {
 	                          "('HuLlD', NULL), ('MotörHead','RÄcks')"));
 
 	result = con.Query("select CONCAT(a, 'SUFFIX') FROM strings");
-	REQUIRE(CHECK_COLUMN(result, 0,
-	                     {"HelloSUFFIX", "HuLlDSUFFIX", "MotörHeadSUFFIX"}));
+	REQUIRE(CHECK_COLUMN(result, 0, {"HelloSUFFIX", "HuLlDSUFFIX", "MotörHeadSUFFIX"}));
 
 	result = con.Query("select CONCAT('PREFIX', b) FROM strings");
 	REQUIRE(CHECK_COLUMN(result, 0, {"PREFIXWorld", Value(), "PREFIXRÄcks"}));

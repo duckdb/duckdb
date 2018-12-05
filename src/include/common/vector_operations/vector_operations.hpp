@@ -1,18 +1,16 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // common/vector_operations/vector_operations.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include <functional>
-
 #include "common/types/vector.hpp"
+
+#include <functional>
 
 namespace duckdb {
 
@@ -178,8 +176,7 @@ struct VectorOperations {
 	static void Sort(Vector &vector, sel_t result[]);
 	// Sort the vector, setting the given selection vector to a sorted state
 	// while ignoring NULL values.
-	static void Sort(Vector &vector, sel_t *result_vector, size_t count,
-	                 sel_t result[]);
+	static void Sort(Vector &vector, sel_t *result_vector, size_t count, sel_t result[]);
 	//===--------------------------------------------------------------------===//
 	// Hash functions
 	//===--------------------------------------------------------------------===//
@@ -191,22 +188,19 @@ struct VectorOperations {
 	//===--------------------------------------------------------------------===//
 	// Generate functions
 	//===--------------------------------------------------------------------===//
-	static void GenerateSequence(Vector &source, int64_t start = 0,
-	                             int64_t increment = 1);
+	static void GenerateSequence(Vector &source, int64_t start = 0, int64_t increment = 1);
 	//===--------------------------------------------------------------------===//
 	// Helpers
 	//===--------------------------------------------------------------------===//
 	// Copy the data from source to target, casting if the types don't match
 	static void Cast(Vector &source, Vector &result);
 	// Copy the data of <source> to the target location
-	static void Copy(Vector &source, void *target, size_t offset = 0,
-	                 size_t element_count = 0);
+	static void Copy(Vector &source, void *target, size_t offset = 0, size_t element_count = 0);
 	// Copy the data of <source> to the target vector
 	static void Copy(Vector &source, Vector &target, size_t offset = 0);
 	// Copy the data of <source> to the target location, setting null values to
 	// NullValue<T>. Used to store data without separate NULL mask.
-	static void CopyToStorage(Vector &source, void *target, size_t offset = 0,
-	                          size_t element_count = 0);
+	static void CopyToStorage(Vector &source, void *target, size_t offset = 0, size_t element_count = 0);
 	// Appends the data of <source> to the target vector, setting the nullmask
 	// for any NullValue<T> of source. Used to go back from storage to a
 	// nullmask.
@@ -217,9 +211,7 @@ struct VectorOperations {
 	//===--------------------------------------------------------------------===//
 	// Exec
 	//===--------------------------------------------------------------------===//
-	template <class T>
-	static void Exec(sel_t *sel_vector, size_t count, T &&fun,
-	                 size_t offset = 0) {
+	template <class T> static void Exec(sel_t *sel_vector, size_t count, T &&fun, size_t offset = 0) {
 		size_t i = offset;
 		if (sel_vector) {
 			//#pragma GCC ivdep
@@ -235,9 +227,7 @@ struct VectorOperations {
 	}
 	//! Exec over the set of indexes, calls the callback function with (i) =
 	//! index, dependent on selection vector and (k) = count
-	template <class T>
-	static void Exec(const Vector &vector, T &&fun, size_t offset = 0,
-	                 size_t count = 0) {
+	template <class T> static void Exec(const Vector &vector, T &&fun, size_t offset = 0, size_t count = 0) {
 		if (count == 0) {
 			count = vector.count;
 		} else {
@@ -251,15 +241,11 @@ struct VectorOperations {
 	//! is equivalent to calling ::Exec() and performing data[i] for
 	//! every entry
 	template <typename T, class FUNC>
-	static void ExecType(Vector &vector, FUNC &&fun, size_t offset = 0,
-	                     size_t limit = 0) {
+	static void ExecType(Vector &vector, FUNC &&fun, size_t offset = 0, size_t limit = 0) {
 		auto data = (T *)vector.data;
-		VectorOperations::Exec(vector,
-		                       [&](size_t i, size_t k) { fun(data[i], i, k); },
-		                       offset, limit);
+		VectorOperations::Exec(vector, [&](size_t i, size_t k) { fun(data[i], i, k); }, offset, limit);
 	}
-	template <class FUNC>
-	static void BinaryExec(Vector &a, Vector &b, Vector &result, FUNC &&fun) {
+	template <class FUNC> static void BinaryExec(Vector &a, Vector &b, Vector &result, FUNC &&fun) {
 		// it might be the case that not everything has a selection vector
 		// as constants do not need a selection vector
 		// check if we are using a selection vector
@@ -283,12 +269,9 @@ struct VectorOperations {
 		assert(a.IsConstant() || a.count == result.count);
 		assert(b.IsConstant() || b.count == result.count);
 
-		VectorOperations::Exec(
-		    result, [&](size_t i, size_t k) { fun(a_mul * i, b_mul * i, i); });
+		VectorOperations::Exec(result, [&](size_t i, size_t k) { fun(a_mul * i, b_mul * i, i); });
 	}
-	template <class FUNC>
-	static void TernaryExec(Vector &a, Vector &b, Vector &c, Vector &result,
-	                        FUNC &&fun) {
+	template <class FUNC> static void TernaryExec(Vector &a, Vector &b, Vector &c, Vector &result, FUNC &&fun) {
 		// it might be the case that not everything has a selection vector
 		// as constants do not need a selection vector
 		// check if we are using a selection vector
@@ -317,9 +300,7 @@ struct VectorOperations {
 		assert(b.IsConstant() || b.count == result.count);
 		assert(c.IsConstant() || c.count == result.count);
 
-		VectorOperations::Exec(result, [&](size_t i, size_t k) {
-			fun(a_mul * i, b_mul * i, c_mul * i, i);
-		});
+		VectorOperations::Exec(result, [&](size_t i, size_t k) { fun(a_mul * i, b_mul * i, c_mul * i, i); });
 	}
 };
 } // namespace duckdb

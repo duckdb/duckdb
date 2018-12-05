@@ -44,12 +44,11 @@ namespace TPCE {
 class CTradeStatus {
 	CTradeStatusDBInterface *m_db;
 
-  public:
+public:
 	CTradeStatus(CTradeStatusDBInterface *pDB) : m_db(pDB) {
 	}
 
-	void DoTxn(PTradeStatusTxnInput pTxnInput,
-	           PTradeStatusTxnOutput pTxnOutput) {
+	void DoTxn(PTradeStatusTxnInput pTxnInput, PTradeStatusTxnOutput pTxnOutput) {
 		// Initialization
 		TTradeStatusFrame1Output Frame1Output;
 
@@ -64,10 +63,8 @@ class CTradeStatus {
 		}
 
 		// Copy Frame 1 Output
-		for (int i = 0; i < Frame1Output.num_found && i < max_trade_status_len;
-		     i++) {
-			strncpy(pTxnOutput->status_name[i], Frame1Output.status_name[i],
-			        sizeof(pTxnOutput->status_name[i]));
+		for (int i = 0; i < Frame1Output.num_found && i < max_trade_status_len; i++) {
+			strncpy(pTxnOutput->status_name[i], Frame1Output.status_name[i], sizeof(pTxnOutput->status_name[i]));
 			pTxnOutput->trade_id[i] = Frame1Output.trade_id[i];
 		}
 	}

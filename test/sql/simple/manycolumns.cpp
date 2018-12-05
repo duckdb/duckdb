@@ -1,4 +1,3 @@
-
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
@@ -27,8 +26,7 @@ TEST_CASE("Test many columns", "[create][.]") {
 	// big insert
 	REQUIRE_NO_FAIL(con.Query(query));
 
-	REQUIRE_NO_FAIL(con.Query(
-	    "INSERT INTO integers (i0, j) VALUES (2, 3), (3, 4), (5, 6)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers (i0, j) VALUES (2, 3), (3, 4), (5, 6)"));
 
 	result = con.Query("SELECT i0, j, i1 FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 5}));

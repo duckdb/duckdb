@@ -99,7 +99,7 @@
 namespace TPCE {
 
 class CMEE {
-  private:
+private:
 	CDriverMEESettings m_DriverMEESettings;
 
 	CMEESUTInterface *m_pSUT;
@@ -115,18 +115,16 @@ class CMEE {
 	// Automatically generate unique RNG seeds
 	void AutoSetRNGSeeds(UINT32 UniqueId);
 
-  public:
-	static const INT32 NO_OUTSTANDING_TRADES =
-	    CMEETradingFloor::NO_OUTSTANDING_TRADES;
+public:
+	static const INT32 NO_OUTSTANDING_TRADES = CMEETradingFloor::NO_OUTSTANDING_TRADES;
 
 	// Constructor - automatic RNG seed generation
-	CMEE(INT32 TradingTimeSoFar, CMEESUTInterface *pSUT, CBaseLogger *pLogger,
-	     const DataFileManager &inputFiles, UINT32 UniqueId);
+	CMEE(INT32 TradingTimeSoFar, CMEESUTInterface *pSUT, CBaseLogger *pLogger, const DataFileManager &inputFiles,
+	     UINT32 UniqueId);
 
 	// Constructor - RNG seed provided
-	CMEE(INT32 TradingTimeSoFar, CMEESUTInterface *pSUT, CBaseLogger *pLogger,
-	     const DataFileManager &inputFiles, UINT32 UniqueId,
-	     RNGSEED TickerTapeRNGSeed, RNGSEED TradingFloorRNGSeed);
+	CMEE(INT32 TradingTimeSoFar, CMEESUTInterface *pSUT, CBaseLogger *pLogger, const DataFileManager &inputFiles,
+	     UINT32 UniqueId, RNGSEED TickerTapeRNGSeed, RNGSEED TradingFloorRNGSeed);
 
 	~CMEE(void);
 

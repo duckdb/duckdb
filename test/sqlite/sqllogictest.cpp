@@ -23,9 +23,10 @@
 **
 ** This main driver for the sqllogictest program.
 */
+#include "sqllogictest.hpp"
+
 #include "catch.hpp"
 
-#include "sqllogictest.hpp"
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,15 +34,14 @@
 #include <unistd.h>
 #define stricmp strcasecmp
 #endif
-#include <string.h>
+#include "slt_duckdb.hpp"
 
 #include <algorithm>
 #include <dirent.h>
 #include <functional>
+#include <string.h>
 #include <string>
 #include <vector>
-
-#include "slt_duckdb.hpp"
 
 using namespace std;
 
@@ -288,40 +288,40 @@ static int checkValue(const char *zKey, const char *zHash) {
 	return 0;
 }
 
-#define IFAIL()                                                                \
-	{                                                                          \
-		if (zScript)                                                           \
-			free(zScript);                                                     \
-		if (pConn)                                                             \
-			pEngine->xDisconnect(pConn);                                       \
-		REQUIRE(false);                                                        \
-		return;                                                                \
+#define IFAIL()                                                                                                        \
+	{                                                                                                                  \
+		if (zScript)                                                                                                   \
+			free(zScript);                                                                                             \
+		if (pConn)                                                                                                     \
+			pEngine->xDisconnect(pConn);                                                                               \
+		REQUIRE(false);                                                                                                \
+		return;                                                                                                        \
 	}
 
 static void execute_file(string script) {
-	int haltOnError = 0;              /* Stop on first error if true */
-	int enableTrace = 0;              /* Trace SQL statements if true */
-	const char *zScriptFile = 0;      /* Input script filename */
-	const char *zDbEngine = "DuckDB"; /* Name of database engine */
-	const char *zConnection = 0;      /* Connection string on DB engine */
-	const DbEngine *pEngine = 0;      /* Pointer to DbEngine object */
-	int i;                            /* Loop counter */
-	char *zScript;                    /* Content of the script */
-	long nScript;                     /* Size of the script in bytes */
-	long nGot;                        /* Number of bytes read */
-	void *pConn = nullptr;            /* Connection to the database engine */
-	int rc;                           /* Result code from subroutine call */
-	int nErr = 0;                     /* Number of errors */
-	int nCmd = 0;                     /* Number of SQL statements processed */
-	int nSkipped = 0;                 /* Number of SQL statements skipped */
-	int nResult;                      /* Number of query results */
-	char **azResult;                  /* Query result vector */
-	Script sScript;                   /* Script parsing status */
-	FILE *in;                         /* For reading script */
-	char zHash[100];                  /* Storage space for hash results */
+	int haltOnError = 0;                        /* Stop on first error if true */
+	int enableTrace = 0;                        /* Trace SQL statements if true */
+	const char *zScriptFile = 0;                /* Input script filename */
+	const char *zDbEngine = "DuckDB";           /* Name of database engine */
+	const char *zConnection = 0;                /* Connection string on DB engine */
+	const DbEngine *pEngine = 0;                /* Pointer to DbEngine object */
+	int i;                                      /* Loop counter */
+	char *zScript;                              /* Content of the script */
+	long nScript;                               /* Size of the script in bytes */
+	long nGot;                                  /* Number of bytes read */
+	void *pConn = nullptr;                      /* Connection to the database engine */
+	int rc;                                     /* Result code from subroutine call */
+	int nErr = 0;                               /* Number of errors */
+	int nCmd = 0;                               /* Number of SQL statements processed */
+	int nSkipped = 0;                           /* Number of SQL statements skipped */
+	int nResult;                                /* Number of query results */
+	char **azResult;                            /* Query result vector */
+	Script sScript;                             /* Script parsing status */
+	FILE *in;                                   /* For reading script */
+	char zHash[100];                            /* Storage space for hash results */
 	int hashThreshold = DEFAULT_HASH_THRESHOLD; /* Threshold for hashing res */
-	int bHt = 0;            /* True if -ht command-line option */
-	const char *zParam = 0; /* Argument to -parameters */
+	int bHt = 0;                                /* True if -ht command-line option */
+	const char *zParam = 0;                     /* Argument to -parameters */
 
 	const DbEngine duckdbEngine = {
 	    "DuckDB",            /* zName */
@@ -343,8 +343,7 @@ static void execute_file(string script) {
 	zScriptFile = script.c_str();
 	in = fopen(zScriptFile, "rb");
 	if (!in) {
-		FAIL("Could not find test script '" + script +
-		     "'. Perhaps run `make sqlite`. ");
+		FAIL("Could not find test script '" + script + "'. Perhaps run `make sqlite`. ");
 	}
 	REQUIRE(in);
 	fseek(in, 0L, SEEK_END);
@@ -386,8 +385,7 @@ static void execute_file(string script) {
 		tokenizeLine(&sScript);
 
 		bSkip = false;
-		while (strcmp(sScript.azToken[0], "skipif") == 0 ||
-		       strcmp(sScript.azToken[0], "onlyif") == 0) {
+		while (strcmp(sScript.azToken[0], "skipif") == 0 || strcmp(sScript.azToken[0], "onlyif") == 0) {
 			int bMatch;
 			/* The "skipif" and "onlyif" modifiers allow skipping or using
 			** statement or query record for a particular database engine.
@@ -427,8 +425,7 @@ static void execute_file(string script) {
 			 *check
 			 ** the hash of the result.
 			 */
-			while (!nextIsBlank(&sScript) && nextLine(&sScript) &&
-			       strcmp(sScript.zLine, "----") != 0) {
+			while (!nextIsBlank(&sScript) && nextLine(&sScript) && strcmp(sScript.zLine, "----") != 0) {
 				/* Skip over the SQL text */
 			}
 			if (strcmp(sScript.zLine, "----") == 0)
@@ -491,16 +488,14 @@ static void execute_file(string script) {
 				/* Invert the result if we expect failure */
 				rc = !rc;
 			} else {
-				fprintf(stderr,
-				        "%s:%d: statement argument should be 'ok' or 'error'\n",
-				        zScriptFile, sScript.startLine);
+				fprintf(stderr, "%s:%d: statement argument should be 'ok' or 'error'\n", zScriptFile,
+				        sScript.startLine);
 				IFAIL();
 			}
 
 			/* Report an error if the results do not match expectation */
 			if (rc) {
-				fprintf(stderr, "%s:%d: statement error\n", zScriptFile,
-				        sScript.startLine);
+				fprintf(stderr, "%s:%d: statement error\n", zScriptFile, sScript.startLine);
 				IFAIL();
 			}
 		} else if (strcmp(sScript.azToken[0], "query") == 0) {
@@ -523,8 +518,7 @@ static void execute_file(string script) {
 			if (c != 0)
 				continue;
 			if (k <= 0) {
-				fprintf(stderr, "%s:%d: missing type string\n", zScriptFile,
-				        sScript.startLine);
+				fprintf(stderr, "%s:%d: missing type string\n", zScriptFile, sScript.startLine);
 				IFAIL();
 			}
 
@@ -533,8 +527,8 @@ static void execute_file(string script) {
 			 ** until the first "----" line or until end of record.
 			 */
 			k = 0;
-			while (!nextIsBlank(&sScript) && nextLine(&sScript) &&
-			       sScript.zLine[0] && strcmp(sScript.zLine, "----") != 0) {
+			while (!nextIsBlank(&sScript) && nextLine(&sScript) && sScript.zLine[0] &&
+			       strcmp(sScript.zLine, "----") != 0) {
 				if (k > 0)
 					zScript[k++] = '\n';
 				memmove(&zScript[k], sScript.zLine, sScript.len);
@@ -547,49 +541,42 @@ static void execute_file(string script) {
 			azResult = 0;
 			if (enableTrace)
 				printf("%s;\n", zScript);
-			rc = pEngine->xQuery(pConn, zScript, sScript.azToken[1], &azResult,
-			                     &nResult);
+			rc = pEngine->xQuery(pConn, zScript, sScript.azToken[1], &azResult, &nResult);
 			nCmd++;
 			if (rc) {
-				fprintf(stderr, "%s:%d: query failed\n", zScriptFile,
-				        sScript.startLine);
+				fprintf(stderr, "%s:%d: query failed\n", zScriptFile, sScript.startLine);
 				pEngine->xFreeResults(pConn, azResult, nResult);
 				IFAIL();
 			}
 
 			/* Do any required sorting of query results */
-			if (sScript.azToken[2][0] == 0 ||
-			    strcmp(sScript.azToken[2], "nosort") == 0) {
+			if (sScript.azToken[2][0] == 0 || strcmp(sScript.azToken[2], "nosort") == 0) {
 				/* Do no sorting */
 			} else if (strcmp(sScript.azToken[2], "rowsort") == 0) {
 				/* Row-oriented sorting */
 				nColumn = (int)strlen(sScript.azToken[1]);
-				qsort(azResult, nResult / nColumn,
-				      sizeof(azResult[0]) * nColumn, rowCompare);
+				qsort(azResult, nResult / nColumn, sizeof(azResult[0]) * nColumn, rowCompare);
 			} else if (strcmp(sScript.azToken[2], "valuesort") == 0) {
 				/* Sort all values independently */
 				nColumn = 1;
 				qsort(azResult, nResult, sizeof(azResult[0]), rowCompare);
 			} else {
-				fprintf(stderr, "%s:%d: unknown sort method: '%s'\n",
-				        zScriptFile, sScript.startLine, sScript.azToken[2]);
+				fprintf(stderr, "%s:%d: unknown sort method: '%s'\n", zScriptFile, sScript.startLine,
+				        sScript.azToken[2]);
 				IFAIL();
 			}
 
 			/* Hash the results if we are over the hash threshold or if we
 			** there is a hash label */
-			if (sScript.azToken[3][0] ||
-			    (hashThreshold > 0 && nResult > hashThreshold)) {
+			if (sScript.azToken[3][0] || (hashThreshold > 0 && nResult > hashThreshold)) {
 				md5_add(""); /* make sure md5 is reset, even if no results */
 				for (i = 0; i < nResult; i++) {
 					md5_add(azResult[i]);
 					md5_add("\n");
 				}
-				snprintf(zHash, sizeof(zHash), "%d values hashing to %s",
-				         nResult, md5_finish());
+				snprintf(zHash, sizeof(zHash), "%d values hashing to %s", nResult, md5_finish());
 				sScript.azToken[3][20] = 0;
-				if (sScript.azToken[3][0] &&
-				    checkValue(sScript.azToken[3], md5_finish())) {
+				if (sScript.azToken[3][0] && checkValue(sScript.azToken[3], md5_finish())) {
 					fprintf(stderr,
 					        "%s:%d: labeled result [%s] does not agree with "
 					        "previous values\n",
@@ -610,14 +597,11 @@ static void execute_file(string script) {
 			 *found.
 			 */
 			if (hashThreshold == 0 || nResult <= hashThreshold) {
-				for (i = 0; i < nResult && sScript.zLine[0];
-				     nextLine(&sScript), i++) {
+				for (i = 0; i < nResult && sScript.zLine[0]; nextLine(&sScript), i++) {
 					if (strcmp(sScript.zLine, azResult[i]) != 0) {
-						fprintf(stderr, "%s:%d: wrong result\n", zScriptFile,
-						        sScript.nLine);
+						fprintf(stderr, "%s:%d: wrong result\n", zScriptFile, sScript.nLine);
 
-						fprintf(stderr, "%s <> %s\n", sScript.zLine,
-						        azResult[i]);
+						fprintf(stderr, "%s <> %s\n", sScript.zLine, azResult[i]);
 						IFAIL();
 					}
 					// we check this already but this inflates the test
@@ -626,8 +610,7 @@ static void execute_file(string script) {
 				}
 			} else {
 				if (strcmp(sScript.zLine, zHash) != 0) {
-					fprintf(stderr, "%s:%d: wrong result hash\n", zScriptFile,
-					        sScript.nLine);
+					fprintf(stderr, "%s:%d: wrong result hash\n", zScriptFile, sScript.nLine);
 					IFAIL();
 				}
 			}
@@ -662,8 +645,7 @@ static void execute_file(string script) {
 			break;
 		} else {
 			/* An unrecognized record type is an error */
-			fprintf(stderr, "%s:%d: unknown record type: '%s'\n", zScriptFile,
-			        sScript.startLine, sScript.azToken[0]);
+			fprintf(stderr, "%s:%d: unknown record type: '%s'\n", zScriptFile, sScript.startLine, sScript.azToken[0]);
 			IFAIL();
 		}
 	}
@@ -676,8 +658,7 @@ static void execute_file(string script) {
 
 // code below traverses the test directory and makes individual test cases out
 // of each script
-static void listFiles(const std::string &path,
-                      std::function<void(const std::string &)> cb) {
+static void listFiles(const string &path, std::function<void(const string &)> cb) {
 	if (auto dir = opendir(path.c_str())) {
 		while (auto f = readdir(dir)) {
 			if (f->d_name[0] == '.')
@@ -692,10 +673,9 @@ static void listFiles(const std::string &path,
 	}
 }
 
-static bool endsWith(const std::string &mainStr, const std::string &toMatch) {
+static bool endsWith(const string &mainStr, const string &toMatch) {
 	return (mainStr.size() >= toMatch.size() &&
-	        mainStr.compare(mainStr.size() - toMatch.size(), toMatch.size(),
-	                        toMatch) == 0);
+	        mainStr.compare(mainStr.size() - toMatch.size(), toMatch.size(), toMatch) == 0);
 }
 
 static void testRunner() {
@@ -727,57 +707,39 @@ struct AutoRegTests {
 		vector<string> excludes = {
 		    "test/select1.test", // tested separately
 		    "test/select2.test", "test/select3.test", "test/select4.test",
-		    "test/select5.test", // joins too slow
-		    "test/index",        // no index yet
-		    "random/groupby/",   // having column binding issue with first
+		    "test/select5.test",              // joins too slow
+		    "test/index",                     // no index yet
+		    "random/groupby/",                // having column binding issue with first
 		    "random/select/slt_good_70.test", // join on not between
 		    "random/expr/slt_good_10.test",   // these all fail because the AVG
 		                                      // decimal rewrite
-		    "random/expr/slt_good_102.test", "random/expr/slt_good_107.test",
-		    "random/expr/slt_good_108.test", "random/expr/slt_good_109.test",
-		    "random/expr/slt_good_111.test", "random/expr/slt_good_112.test",
-		    "random/expr/slt_good_113.test", "random/expr/slt_good_115.test",
-		    "random/expr/slt_good_116.test", "random/expr/slt_good_117.test",
-		    "random/expr/slt_good_13.test", "random/expr/slt_good_15.test",
-		    "random/expr/slt_good_16.test", "random/expr/slt_good_17.test",
-		    "random/expr/slt_good_19.test", "random/expr/slt_good_21.test",
-		    "random/expr/slt_good_22.test", "random/expr/slt_good_24.test",
-		    "random/expr/slt_good_28.test", "random/expr/slt_good_29.test",
-		    "random/expr/slt_good_3.test", "random/expr/slt_good_30.test",
-		    "random/expr/slt_good_34.test", "random/expr/slt_good_38.test",
-		    "random/expr/slt_good_4.test", "random/expr/slt_good_41.test",
-		    "random/expr/slt_good_44.test", "random/expr/slt_good_45.test",
-		    "random/expr/slt_good_49.test", "random/expr/slt_good_52.test",
-		    "random/expr/slt_good_53.test", "random/expr/slt_good_55.test",
-		    "random/expr/slt_good_59.test", "random/expr/slt_good_6.test",
-		    "random/expr/slt_good_60.test", "random/expr/slt_good_63.test",
-		    "random/expr/slt_good_64.test", "random/expr/slt_good_67.test",
-		    "random/expr/slt_good_69.test", "random/expr/slt_good_7.test",
-		    "random/expr/slt_good_71.test", "random/expr/slt_good_72.test",
-		    "random/expr/slt_good_8.test", "random/expr/slt_good_80.test",
-		    "random/expr/slt_good_82.test", "random/expr/slt_good_85.test",
-		    "random/expr/slt_good_9.test", "random/expr/slt_good_90.test",
-		    "random/expr/slt_good_91.test", "random/expr/slt_good_94.test",
-		    "random/expr/slt_good_95.test", "random/expr/slt_good_96.test",
-		    "random/expr/slt_good_99.test", "random/aggregates/slt_good_2.test",
-		    "random/aggregates/slt_good_5.test",
-		    "random/aggregates/slt_good_7.test",
-		    "random/aggregates/slt_good_9.test",
-		    "random/aggregates/slt_good_17.test",
-		    "random/aggregates/slt_good_28.test",
-		    "random/aggregates/slt_good_45.test",
-		    "random/aggregates/slt_good_50.test",
-		    "random/aggregates/slt_good_52.test",
-		    "random/aggregates/slt_good_58.test",
-		    "random/aggregates/slt_good_65.test",
-		    "random/aggregates/slt_good_66.test",
-		    "random/aggregates/slt_good_76.test",
-		    "random/aggregates/slt_good_81.test",
-		    "random/aggregates/slt_good_90.test",
-		    "random/aggregates/slt_good_96.test",
-		    "random/aggregates/slt_good_102.test",
-		    "random/aggregates/slt_good_106.test",
-		    "random/aggregates/slt_good_112.test",
+		    "random/expr/slt_good_102.test", "random/expr/slt_good_107.test", "random/expr/slt_good_108.test",
+		    "random/expr/slt_good_109.test", "random/expr/slt_good_111.test", "random/expr/slt_good_112.test",
+		    "random/expr/slt_good_113.test", "random/expr/slt_good_115.test", "random/expr/slt_good_116.test",
+		    "random/expr/slt_good_117.test", "random/expr/slt_good_13.test", "random/expr/slt_good_15.test",
+		    "random/expr/slt_good_16.test", "random/expr/slt_good_17.test", "random/expr/slt_good_19.test",
+		    "random/expr/slt_good_21.test", "random/expr/slt_good_22.test", "random/expr/slt_good_24.test",
+		    "random/expr/slt_good_28.test", "random/expr/slt_good_29.test", "random/expr/slt_good_3.test",
+		    "random/expr/slt_good_30.test", "random/expr/slt_good_34.test", "random/expr/slt_good_38.test",
+		    "random/expr/slt_good_4.test", "random/expr/slt_good_41.test", "random/expr/slt_good_44.test",
+		    "random/expr/slt_good_45.test", "random/expr/slt_good_49.test", "random/expr/slt_good_52.test",
+		    "random/expr/slt_good_53.test", "random/expr/slt_good_55.test", "random/expr/slt_good_59.test",
+		    "random/expr/slt_good_6.test", "random/expr/slt_good_60.test", "random/expr/slt_good_63.test",
+		    "random/expr/slt_good_64.test", "random/expr/slt_good_67.test", "random/expr/slt_good_69.test",
+		    "random/expr/slt_good_7.test", "random/expr/slt_good_71.test", "random/expr/slt_good_72.test",
+		    "random/expr/slt_good_8.test", "random/expr/slt_good_80.test", "random/expr/slt_good_82.test",
+		    "random/expr/slt_good_85.test", "random/expr/slt_good_9.test", "random/expr/slt_good_90.test",
+		    "random/expr/slt_good_91.test", "random/expr/slt_good_94.test", "random/expr/slt_good_95.test",
+		    "random/expr/slt_good_96.test", "random/expr/slt_good_99.test", "random/aggregates/slt_good_2.test",
+		    "random/aggregates/slt_good_5.test", "random/aggregates/slt_good_7.test",
+		    "random/aggregates/slt_good_9.test", "random/aggregates/slt_good_17.test",
+		    "random/aggregates/slt_good_28.test", "random/aggregates/slt_good_45.test",
+		    "random/aggregates/slt_good_50.test", "random/aggregates/slt_good_52.test",
+		    "random/aggregates/slt_good_58.test", "random/aggregates/slt_good_65.test",
+		    "random/aggregates/slt_good_66.test", "random/aggregates/slt_good_76.test",
+		    "random/aggregates/slt_good_81.test", "random/aggregates/slt_good_90.test",
+		    "random/aggregates/slt_good_96.test", "random/aggregates/slt_good_102.test",
+		    "random/aggregates/slt_good_106.test", "random/aggregates/slt_good_112.test",
 		    "random/aggregates/slt_good_118.test",
 		    "evidence/slt_lang_replace.test",       // feature not supported
 		    "evidence/slt_lang_createview.test",    // "
@@ -789,18 +751,16 @@ struct AutoRegTests {
 		    "evidence/slt_lang_droptable.test",     // DROP TABLE IF EXISTS not
 		                                            // supported
 		};
-		listFiles("third_party/sqllogictest/test/",
-		          [excludes](const std::string &path) {
-			          if (endsWith(path, ".test")) {
-				          for (auto excl : excludes) {
-					          if (path.find(excl) != std::string::npos) {
-						          return;
-					          }
-				          }
-				          REGISTER_TEST_CASE(testRunner, path,
-				                             "[sqlitelogic][.]");
-			          }
-		          });
+		listFiles("third_party/sqllogictest/test/", [excludes](const string &path) {
+			if (endsWith(path, ".test")) {
+				for (auto excl : excludes) {
+					if (path.find(excl) != string::npos) {
+						return;
+					}
+				}
+				REGISTER_TEST_CASE(testRunner, path, "[sqlitelogic][.]");
+			}
+		});
 	}
 };
 AutoRegTests autoreg;

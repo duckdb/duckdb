@@ -83,8 +83,7 @@ static void mk_master(void *info_arr, ds_key_t index) {
 		strtodec(&dOne, "1.00");
 		strtodec(&dOneHalf, "0.50");
 		jDate = skipDays(CATALOG_SALES, &kNewDateIndex);
-		pItemPermutation = makePermutation(
-		    NULL, (nItemCount = (int)getIDCount(ITEM)), CS_PERMUTE);
+		pItemPermutation = makePermutation(NULL, (nItemCount = (int)getIDCount(ITEM)), CS_PERMUTE);
 
 		bInit = 1;
 	}
@@ -109,9 +108,7 @@ static void mk_master(void *info_arr, ds_key_t index) {
 	r->cs_sold_date_sk = jDate;
 	r->cs_sold_time_sk = mk_join(CS_SOLD_TIME_SK, TIME, r->cs_call_center_sk);
 	r->cs_call_center_sk =
-	    (r->cs_sold_date_sk == -1)
-	        ? -1
-	        : mk_join(CS_CALL_CENTER_SK, CALL_CENTER, r->cs_sold_date_sk);
+	    (r->cs_sold_date_sk == -1) ? -1 : mk_join(CS_CALL_CENTER_SK, CALL_CENTER, r->cs_sold_date_sk);
 
 	r->cs_bill_customer_sk = mk_join(CS_BILL_CUSTOMER_SK, CUSTOMER, 1);
 	r->cs_bill_cdemo_sk = mk_join(CS_BILL_CDEMO_SK, CUSTOMER_DEMOGRAPHICS, 1);
@@ -122,10 +119,8 @@ static void mk_master(void *info_arr, ds_key_t index) {
 	genrand_integer(&nGiftPct, DIST_UNIFORM, 0, 99, 0, CS_SHIP_CUSTOMER_SK);
 	if (nGiftPct <= CS_GIFT_PCT) {
 		r->cs_ship_customer_sk = mk_join(CS_SHIP_CUSTOMER_SK, CUSTOMER, 2);
-		r->cs_ship_cdemo_sk =
-		    mk_join(CS_SHIP_CDEMO_SK, CUSTOMER_DEMOGRAPHICS, 2);
-		r->cs_ship_hdemo_sk =
-		    mk_join(CS_SHIP_HDEMO_SK, HOUSEHOLD_DEMOGRAPHICS, 2);
+		r->cs_ship_cdemo_sk = mk_join(CS_SHIP_CDEMO_SK, CUSTOMER_DEMOGRAPHICS, 2);
+		r->cs_ship_hdemo_sk = mk_join(CS_SHIP_HDEMO_SK, HOUSEHOLD_DEMOGRAPHICS, 2);
 		r->cs_ship_addr_sk = mk_join(CS_SHIP_ADDR_SK, CUSTOMER_ADDRESS, 2);
 	} else {
 		r->cs_ship_customer_sk = r->cs_bill_customer_sk;
@@ -135,8 +130,7 @@ static void mk_master(void *info_arr, ds_key_t index) {
 	}
 
 	r->cs_order_number = index;
-	genrand_integer(&nTicketItemBase, DIST_UNIFORM, 1, nItemCount, 0,
-	                CS_SOLD_ITEM_SK);
+	genrand_integer(&nTicketItemBase, DIST_UNIFORM, 1, nItemCount, 0, CS_SOLD_ITEM_SK);
 
 	return;
 }
@@ -166,10 +160,8 @@ static void mk_detail(void *info_arr, int bPrint) {
 	nullSet(&pTdef->kNullBitMap, CS_NULLS);
 
 	/* orders are shipped some number of days after they are ordered */
-	genrand_integer(&nShipLag, DIST_UNIFORM, CS_MIN_SHIP_DELAY,
-	                CS_MAX_SHIP_DELAY, 0, CS_SHIP_DATE_SK);
-	r->cs_ship_date_sk =
-	    (r->cs_sold_date_sk == -1) ? -1 : r->cs_sold_date_sk + nShipLag;
+	genrand_integer(&nShipLag, DIST_UNIFORM, CS_MIN_SHIP_DELAY, CS_MAX_SHIP_DELAY, 0, CS_SHIP_DATE_SK);
+	r->cs_ship_date_sk = (r->cs_sold_date_sk == -1) ? -1 : r->cs_sold_date_sk + nShipLag;
 
 	/*
 	 * items need to be unique within an order
@@ -183,9 +175,7 @@ static void mk_detail(void *info_arr, int bPrint) {
 
 	/* catalog page needs to be from a catlog active at the time of the sale */
 	r->cs_catalog_page_sk =
-	    (r->cs_sold_date_sk == -1)
-	        ? -1
-	        : mk_join(CS_CATALOG_PAGE_SK, CATALOG_PAGE, r->cs_sold_date_sk);
+	    (r->cs_sold_date_sk == -1) ? -1 : mk_join(CS_CATALOG_PAGE_SK, CATALOG_PAGE, r->cs_sold_date_sk);
 
 	r->cs_ship_mode_sk = mk_join(CS_SHIP_MODE_SK, SHIP_MODE, 1);
 	r->cs_warehouse_sk = mk_join(CS_WAREHOUSE_SK, WAREHOUSE, 1);
@@ -337,8 +327,7 @@ int vld_w_catalog_sales(int nTable, ds_key_t kRow, int *Permutation) {
 	jDate = skipDays(CATALOG_SALES, &kNewDateIndex);
 	mk_master(NULL, kRow);
 	genrand_integer(&nMaxLineitem, DIST_UNIFORM, 4, 14, 9, CS_ORDER_NUMBER);
-	genrand_integer(&nLineitem, DIST_UNIFORM, 1, nMaxLineitem, 0,
-	                CS_PRICING_QUANTITY);
+	genrand_integer(&nLineitem, DIST_UNIFORM, 1, nMaxLineitem, 0, CS_PRICING_QUANTITY);
 	for (i = 1; i < nLineitem; i++) {
 		mk_detail(NULL, 0);
 	}

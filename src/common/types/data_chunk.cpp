@@ -1,11 +1,10 @@
-
 #include "common/types/data_chunk.hpp"
-#include "common/types/null_value.hpp"
-#include "common/vector_operations/vector_operations.hpp"
 
 #include "common/exception.hpp"
 #include "common/helper.hpp"
 #include "common/serializer.hpp"
+#include "common/types/null_value.hpp"
+#include "common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -13,7 +12,7 @@ using namespace std;
 DataChunk::DataChunk() : column_count(0), data(nullptr), sel_vector(nullptr) {
 }
 
-void DataChunk::Initialize(std::vector<TypeId> &types, bool zero_data) {
+void DataChunk::Initialize(vector<TypeId> &types, bool zero_data) {
 	column_count = types.size();
 	size_t size = 0;
 	for (auto &type : types) {
@@ -76,8 +75,7 @@ void DataChunk::Move(DataChunk &other) {
 		other.sel_vector = sel_vector;
 		if (sel_vector == owned_sel_vector) {
 			// copy the owned selection vector
-			memcpy(other.owned_sel_vector, owned_sel_vector,
-			       STANDARD_VECTOR_SIZE * sizeof(sel_t));
+			memcpy(other.owned_sel_vector, owned_sel_vector, STANDARD_VECTOR_SIZE * sizeof(sel_t));
 		}
 	}
 	Destroy();
@@ -99,16 +97,14 @@ void DataChunk::Append(DataChunk &other) {
 		return;
 	}
 	if (column_count != other.column_count) {
-		throw OutOfRangeException(
-		    "Column counts of appending chunk doesn't match!");
+		throw OutOfRangeException("Column counts of appending chunk doesn't match!");
 	}
 	for (size_t i = 0; i < column_count; i++) {
 		data[i].Append(other.data[i]);
 	}
 }
 
-void DataChunk::MergeSelVector(sel_t *current_vector, sel_t *new_vector,
-                               sel_t *result, size_t new_count) {
+void DataChunk::MergeSelVector(sel_t *current_vector, sel_t *new_vector, sel_t *result, size_t new_count) {
 	for (size_t i = 0; i < new_count; i++) {
 		result[i] = current_vector[new_vector[i]];
 	}
@@ -116,9 +112,7 @@ void DataChunk::MergeSelVector(sel_t *current_vector, sel_t *new_vector,
 
 void DataChunk::SetSelectionVector(Vector &matches) {
 	if (matches.type != TypeId::BOOLEAN) {
-		throw InvalidTypeException(
-		    matches.type,
-		    "Can only set selection vector using a boolean vector!");
+		throw InvalidTypeException(matches.type, "Can only set selection vector using a boolean vector!");
 	}
 	bool *match_data = (bool *)matches.data;
 	size_t match_count = 0;
@@ -186,8 +180,7 @@ void DataChunk::Serialize(Serializer &serializer) {
 			// we use null-padding to store them
 			const char **strings = (const char **)data[i].data;
 			for (size_t j = 0; j < size(); j++) {
-				auto source =
-				    strings[j] ? strings[j] : NullValue<const char *>();
+				auto source = strings[j] ? strings[j] : NullValue<const char *>();
 				serializer.WriteString(source);
 			}
 		}
@@ -198,7 +191,7 @@ void DataChunk::Deserialize(Deserializer &source) {
 	auto rows = source.Read<sel_t>();
 	column_count = source.Read<uint64_t>();
 
-	std::vector<TypeId> types;
+	vector<TypeId> types;
 	for (size_t i = 0; i < column_count; i++) {
 		types.push_back((TypeId)source.Read<int>());
 	}
@@ -238,12 +231,11 @@ void DataChunk::MoveStringsToHeap(StringHeap &heap) {
 		if (data[c].type == TypeId::VARCHAR) {
 			// move strings of this chunk to the specified heap
 			auto strings = (const char **)data[c].data;
-			VectorOperations::ExecType<const char *>(
-			    data[c], [&](const char *str, size_t i, size_t k) {
-				    if (!data[c].nullmask[i]) {
-					    strings[i] = heap.AddString(strings[i]);
-				    }
-			    });
+			VectorOperations::ExecType<const char *>(data[c], [&](const char *str, size_t i, size_t k) {
+				if (!data[c].nullmask[i]) {
+					strings[i] = heap.AddString(strings[i]);
+				}
+			});
 		}
 	}
 }

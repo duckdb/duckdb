@@ -82,23 +82,20 @@ const int iMaxHoldingHistoryRowsPerTrade = 800 / 100;
 //
 typedef struct TTradeInfo {
 	TTrade iTradeId;
-	eTradeTypeID eTradeType; // integer representation of the TRADE row T_TT_ID
-	eStatusTypeID
-	    eTradeStatus;      // integer representation of the TRADE row T_ST_ID
-	double PendingTime;    // seconds from StartTime; only for limit orders
-	double SubmissionTime; // seconds from StartTime
-	double CompletionTime; // seconds from StartTime
-	TIdent iSymbolIndex;   // stock symbol index in the input flat file
-	UINT iSymbolIndexInAccount; // stock symbol index in the account basket
-	int iTradeQty;              // number of shares in the trade
-	CMoney
-	    fBidPrice; // bid price for market orders or limit price for limit ones
-	CMoney fTradePrice; // price that the trade completed at
-	TIdent iCustomer;   // customer executing this trade
-	eCustomerTier
-	    iCustomerTier; // customer tier for the customer executing this trade
-	TIdent iCustomerAccount; // customer account in which the trade executes
-	bool bIsLifo;            // needed to update holdings
+	eTradeTypeID eTradeType;     // integer representation of the TRADE row T_TT_ID
+	eStatusTypeID eTradeStatus;  // integer representation of the TRADE row T_ST_ID
+	double PendingTime;          // seconds from StartTime; only for limit orders
+	double SubmissionTime;       // seconds from StartTime
+	double CompletionTime;       // seconds from StartTime
+	TIdent iSymbolIndex;         // stock symbol index in the input flat file
+	UINT iSymbolIndexInAccount;  // stock symbol index in the account basket
+	int iTradeQty;               // number of shares in the trade
+	CMoney fBidPrice;            // bid price for market orders or limit price for limit ones
+	CMoney fTradePrice;          // price that the trade completed at
+	TIdent iCustomer;            // customer executing this trade
+	eCustomerTier iCustomerTier; // customer tier for the customer executing this trade
+	TIdent iCustomerAccount;     // customer account in which the trade executes
+	bool bIsLifo;                // needed to update holdings
 } * PTradeInfo;
 
 // Information about completed trade that is generated once
@@ -204,15 +201,11 @@ class CTradeGen {
 	//
 	const CCompanyFile &m_CompanyFile;
 	const CSecurityFile &m_SecurityFile;
-	const ChargeDataFile_t &m_ChargeFile; // CHARGE table from the flat file
-	const CommissionRateDataFile_t
-	    &m_CommissionRateFile; // COMMISSION_RATE table from the flat file
-	const StatusTypeDataFile_t
-	    &m_StatusTypeFile; // STATUS_TYPE table from the flat file
-	const TradeTypeDataFile_t
-	    &m_TradeTypeFile; // TRADE_TYPE table from the flat file
-	const ExchangeDataFile_t
-	    &m_ExchangeFile; // EXCHANGE table from the flat file
+	const ChargeDataFile_t &m_ChargeFile;                 // CHARGE table from the flat file
+	const CommissionRateDataFile_t &m_CommissionRateFile; // COMMISSION_RATE table from the flat file
+	const StatusTypeDataFile_t &m_StatusTypeFile;         // STATUS_TYPE table from the flat file
+	const TradeTypeDataFile_t &m_TradeTypeFile;           // TRADE_TYPE table from the flat file
+	const ExchangeDataFile_t &m_ExchangeFile;             // EXCHANGE table from the flat file
 
 	//  The first customer to generate for this class instance
 	//
@@ -277,8 +270,7 @@ class CTradeGen {
 	// but we need the smallest (earliest) one. This is
 	// why we specify greater<> for the template comparison
 	// parameter instead of the default less<>
-	priority_queue<TTradeInfo, vector<TTradeInfo>, greater<TTradeInfo>>
-	    m_CurrentTrades;
+	priority_queue<TTradeInfo, vector<TTradeInfo>, greater<TTradeInfo>> m_CurrentTrades;
 
 	// Number of trades completed up to now.
 	// Does not include aborted trades.
@@ -406,8 +398,7 @@ class CTradeGen {
 	//  Return position before the first or the last element
 	//  in the holding list (depending on IsLifo flag)
 	//
-	list<THoldingInfo>::iterator
-	PositionAtHoldingList(THoldingList *pHoldingList, int IsLifo);
+	list<THoldingInfo>::iterator PositionAtHoldingList(THoldingList *pHoldingList, int IsLifo);
 	// Update holding information for the customer and trade
 	// contained in the internal trade row structure.
 	// Set internal buy and sell values.
@@ -468,11 +459,10 @@ class CTradeGen {
 
 	// Generate HOLDING_HISTORY row
 	//
-	void GenerateHoldingHistoryRow(
-	    TTrade iHoldingTradeID, // trade id of the original trade
-	    TTrade iTradeTradeID,   // trade id of the modifying trade
-	    int iBeforeQty,         // holding qty now
-	    int iAfterQty);         // holding qty after modification
+	void GenerateHoldingHistoryRow(TTrade iHoldingTradeID, // trade id of the original trade
+	                               TTrade iTradeTradeID,   // trade id of the modifying trade
+	                               int iBeforeQty,         // holding qty now
+	                               int iAfterQty);         // holding qty after modification
 
 	// Helper function to get the current customer id
 	TIdent GetCurrentCustID() {
@@ -531,8 +521,7 @@ class CTradeGen {
 		// submit days separately to avoid int32 overflow in ms after 25 days
 
 		iDays = (int)(m_NewTrade.PendingTime / SecondsPerDay);
-		iMs = (int)((m_NewTrade.PendingTime - iDays * SecondsPerDay) *
-		            MsPerSecond);
+		iMs = (int)((m_NewTrade.PendingTime - iDays * SecondsPerDay) * MsPerSecond);
 		ReturnTime.Add(iDays, iMs,
 		               true); // add days and msec and adjust for weekend
 
@@ -546,8 +535,7 @@ class CTradeGen {
 		// submit days separately to avoid int32 overflow in ms after 25 days
 
 		iDays = (int)(m_NewTrade.SubmissionTime / SecondsPerDay);
-		iMs = (int)((m_NewTrade.SubmissionTime - iDays * SecondsPerDay) *
-		            MsPerSecond);
+		iMs = (int)((m_NewTrade.SubmissionTime - iDays * SecondsPerDay) * MsPerSecond);
 		ReturnTime.Add(iDays, iMs,
 		               true); // add days and msec and adjust for weekend
 
@@ -562,8 +550,7 @@ class CTradeGen {
 		// submit days separately to avoid int32 overflow in ms after 25 days
 
 		iDays = (int)(m_NewTrade.CompletionTime / SecondsPerDay);
-		iMs = (int)((m_NewTrade.CompletionTime - iDays * SecondsPerDay) *
-		            MsPerSecond);
+		iMs = (int)((m_NewTrade.CompletionTime - iDays * SecondsPerDay) * MsPerSecond);
 		ReturnTime.Add(iDays, iMs,
 		               true); // add days and msec and adjust for weekend
 
@@ -606,13 +593,11 @@ class CTradeGen {
 		return m_CompletedTradeInfo.SettlementAmount;
 	}
 
-  public:
+public:
 	// Constructor
 	//
-	CTradeGen(const DataFileManager &dfm, TIdent iCustomerCount,
-	          TIdent iStartFromCustomer, TIdent iTotalCustomers,
-	          UINT iLoadUnitSize, UINT iScaleFactor, UINT iHoursOfInitialTrades,
-	          bool bCacheEnabled = false);
+	CTradeGen(const DataFileManager &dfm, TIdent iCustomerCount, TIdent iStartFromCustomer, TIdent iTotalCustomers,
+	          UINT iLoadUnitSize, UINT iScaleFactor, UINT iHoursOfInitialTrades, bool bCacheEnabled = false);
 
 	// Destructor
 	//

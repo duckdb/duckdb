@@ -1,24 +1,20 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // planner/logical_plan_generator.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include <vector>
-
 #include "common/common.hpp"
 #include "common/printable.hpp"
-
 #include "parser/sql_node_visitor.hpp"
-
 #include "planner/bindcontext.hpp"
 #include "planner/logical_operator.hpp"
+
+#include <vector>
 
 namespace duckdb {
 class ClientContext;
@@ -26,44 +22,43 @@ class ClientContext;
 //! The logical plan generator generates a logical query plan from a parsed SQL
 //! statement
 class LogicalPlanGenerator : public SQLNodeVisitor {
-  public:
-	LogicalPlanGenerator(ClientContext &context, BindContext &bind_context,
-	                     bool is_subquery)
-	    : is_subquery(is_subquery), require_row_id(false), context(context),
-	      bind_context(bind_context) {
+public:
+	LogicalPlanGenerator(ClientContext &context, BindContext &bind_context)
+	    : require_row_id(false), context(context), bind_context(bind_context) {
 	}
 
-	std::unique_ptr<SQLStatement> Visit(SelectStatement &statement);
-	std::unique_ptr<SQLStatement> Visit(InsertStatement &statement);
-	std::unique_ptr<SQLStatement> Visit(CopyStatement &statement);
-	std::unique_ptr<SQLStatement> Visit(DeleteStatement &statement);
-	std::unique_ptr<SQLStatement> Visit(UpdateStatement &statement);
-	std::unique_ptr<SQLStatement> Visit(CreateTableStatement &statement);
-	std::unique_ptr<SQLStatement> Visit(CreateIndexStatement &statement);
+	unique_ptr<SQLStatement> Visit(SelectStatement &statement);
+	unique_ptr<SQLStatement> Visit(InsertStatement &statement);
+	unique_ptr<SQLStatement> Visit(CopyStatement &statement);
+	unique_ptr<SQLStatement> Visit(DeleteStatement &statement);
+	unique_ptr<SQLStatement> Visit(UpdateStatement &statement);
+	unique_ptr<SQLStatement> Visit(CreateTableStatement &statement);
+	unique_ptr<SQLStatement> Visit(CreateIndexStatement &statement);
 
-	std::unique_ptr<Expression> Visit(AggregateExpression &expr);
-	std::unique_ptr<Expression> Visit(ComparisonExpression &expr);
-	std::unique_ptr<Expression> Visit(CaseExpression &expr);
-	std::unique_ptr<Expression> Visit(ConjunctionExpression &expr);
-	std::unique_ptr<Expression> Visit(OperatorExpression &expr);
-	std::unique_ptr<Expression> Visit(SubqueryExpression &expr);
+	void Visit(SelectNode &statement);
+	void Visit(SetOperationNode &statement);
 
-	std::unique_ptr<TableRef> Visit(BaseTableRef &expr);
-	std::unique_ptr<TableRef> Visit(CrossProductRef &expr);
-	std::unique_ptr<TableRef> Visit(JoinRef &expr);
-	std::unique_ptr<TableRef> Visit(SubqueryRef &expr);
-	std::unique_ptr<TableRef> Visit(TableFunction &expr);
+	unique_ptr<Expression> Visit(AggregateExpression &expr);
+	unique_ptr<Expression> Visit(ComparisonExpression &expr);
+	unique_ptr<Expression> Visit(CaseExpression &expr);
+	unique_ptr<Expression> Visit(ConjunctionExpression &expr);
+	unique_ptr<Expression> Visit(OperatorExpression &expr);
+	unique_ptr<Expression> Visit(SubqueryExpression &expr);
+
+	unique_ptr<TableRef> Visit(BaseTableRef &expr);
+	unique_ptr<TableRef> Visit(CrossProductRef &expr);
+	unique_ptr<TableRef> Visit(JoinRef &expr);
+	unique_ptr<TableRef> Visit(SubqueryRef &expr);
+	unique_ptr<TableRef> Visit(TableFunction &expr);
 
 	void Print() {
 		root->Print();
 	}
 
 	//! The resulting plan
-	std::unique_ptr<LogicalOperator> root;
+	unique_ptr<LogicalOperator> root;
 
-  private:
-	//! Whether or not we are dealing with a subquery
-	bool is_subquery;
+private:
 	//! Whether or not we require row ids to be projected
 	bool require_row_id = false;
 	//! A reference to the catalog

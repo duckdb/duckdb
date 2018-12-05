@@ -53,14 +53,14 @@ namespace TPCE {
 //
 
 class StreetNameDataFileRecord {
-  private:
+private:
 	static const int maxStreetLen = 80;
 	char streetCStr[maxStreetLen + 1];
 	std::string street;
 
 	static const unsigned int fieldCount = 1;
 
-  public:
+public:
 	explicit StreetNameDataFileRecord(const std::deque<std::string> &fields);
 
 	//

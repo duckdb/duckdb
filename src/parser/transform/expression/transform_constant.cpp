@@ -1,4 +1,3 @@
-
 #include "parser/expression/constant_expression.hpp"
 #include "parser/transformer.hpp"
 
@@ -14,8 +13,7 @@ unique_ptr<Expression> Transformer::TransformValue(value val) {
 	case T_String:
 		return make_unique<ConstantExpression>(Value(string(val.val.str)));
 	case T_Float:
-		return make_unique<ConstantExpression>(
-		    Value(stod(string(val.val.str))));
+		return make_unique<ConstantExpression>(Value(stod(string(val.val.str))));
 	case T_Null:
 		return make_unique<ConstantExpression>();
 	default:

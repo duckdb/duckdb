@@ -16,15 +16,14 @@ TEST_CASE("Single thread update", "[transactions]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
-	std::vector<std::unique_ptr<DuckDBConnection>> connections;
+	vector<unique_ptr<DuckDBConnection>> connections;
 
 	// initialize the database
 	con.Query("CREATE TABLE integers(i INTEGER);");
 	int sum = 0;
 	for (size_t i = 0; i < TOTAL_ACCOUNTS; i++) {
 		for (size_t j = 0; j < 10; j++) {
-			con.Query("INSERT INTO integers VALUES (" + to_string(j + 1) +
-			          ");");
+			con.Query("INSERT INTO integers VALUES (" + to_string(j + 1) + ");");
 			sum += j + 1;
 		}
 	}
@@ -71,8 +70,7 @@ TEST_CASE("Concurrent update", "[updates][.]") {
 	// initialize the database
 	con.Query("CREATE TABLE accounts(id INTEGER, money INTEGER)");
 	for (size_t i = 0; i < TOTAL_ACCOUNTS; i++) {
-		con.Query("INSERT INTO accounts VALUES (" + to_string(i) + ", " +
-		          to_string(MONEY_PER_ACCOUNT) + ");");
+		con.Query("INSERT INTO accounts VALUES (" + to_string(i) + ", " + to_string(MONEY_PER_ACCOUNT) + ");");
 	}
 
 	// launch separate thread for reading aggregate
@@ -88,25 +86,19 @@ TEST_CASE("Concurrent update", "[updates][.]") {
 		int amount = random_amount();
 
 		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-		result =
-		    con.Query("SELECT money FROM accounts WHERE id=" + to_string(from));
+		result = con.Query("SELECT money FROM accounts WHERE id=" + to_string(from));
 		Value money_from = result->collection.GetValue(0, 0);
-		result =
-		    con.Query("SELECT money FROM accounts WHERE id=" + to_string(to));
+		result = con.Query("SELECT money FROM accounts WHERE id=" + to_string(to));
 		Value money_to = result->collection.GetValue(0, 0);
 
-		REQUIRE_NO_FAIL(con.Query("UPDATE accounts SET money = money - " +
-		                          to_string(amount) +
-		                          " WHERE id = " + to_string(from)));
-		REQUIRE_NO_FAIL(con.Query("UPDATE accounts SET money = money + " +
-		                          to_string(amount) +
-		                          " WHERE id = " + to_string(to)));
+		REQUIRE_NO_FAIL(
+		    con.Query("UPDATE accounts SET money = money - " + to_string(amount) + " WHERE id = " + to_string(from)));
+		REQUIRE_NO_FAIL(
+		    con.Query("UPDATE accounts SET money = money + " + to_string(amount) + " WHERE id = " + to_string(to)));
 
-		result =
-		    con.Query("SELECT money FROM accounts WHERE id=" + to_string(from));
+		result = con.Query("SELECT money FROM accounts WHERE id=" + to_string(from));
 		Value new_money_from = result->collection.GetValue(0, 0);
-		result =
-		    con.Query("SELECT money FROM accounts WHERE id=" + to_string(to));
+		result = con.Query("SELECT money FROM accounts WHERE id=" + to_string(to));
 		Value new_money_to = result->collection.GetValue(0, 0);
 
 		Value expected_money_from, expected_money_to;
@@ -132,18 +124,14 @@ static void write_random_numbers_to_account(DuckDB *db, size_t nr) {
 		// just make some changes to the total
 		// the total amount of money after the commit is the same
 		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-		REQUIRE_NO_FAIL(con.Query("UPDATE accounts SET money = money + " +
-		                          to_string(i * 2) +
-		                          " WHERE id = " + to_string(nr)));
-		REQUIRE_NO_FAIL(con.Query("UPDATE accounts SET money = money - " +
-		                          to_string(i) +
-		                          " WHERE id = " + to_string(nr)));
-		REQUIRE_NO_FAIL(con.Query("UPDATE accounts SET money = money - " +
-		                          to_string(i * 2) +
-		                          " WHERE id = " + to_string(nr)));
-		REQUIRE_NO_FAIL(con.Query("UPDATE accounts SET money = money + " +
-		                          to_string(i) +
-		                          " WHERE id = " + to_string(nr)));
+		REQUIRE_NO_FAIL(
+		    con.Query("UPDATE accounts SET money = money + " + to_string(i * 2) + " WHERE id = " + to_string(nr)));
+		REQUIRE_NO_FAIL(
+		    con.Query("UPDATE accounts SET money = money - " + to_string(i) + " WHERE id = " + to_string(nr)));
+		REQUIRE_NO_FAIL(
+		    con.Query("UPDATE accounts SET money = money - " + to_string(i * 2) + " WHERE id = " + to_string(nr)));
+		REQUIRE_NO_FAIL(
+		    con.Query("UPDATE accounts SET money = money + " + to_string(i) + " WHERE id = " + to_string(nr)));
 		// we test both commit and rollback
 		// the result of both should be the same since the updates have a
 		// net-zero effect
@@ -165,8 +153,7 @@ TEST_CASE("Multiple concurrent updaters", "[updates][.]") {
 	// initialize the database
 	con.Query("CREATE TABLE accounts(id INTEGER, money INTEGER)");
 	for (size_t i = 0; i < TOTAL_ACCOUNTS; i++) {
-		con.Query("INSERT INTO accounts VALUES (" + to_string(i) + ", " +
-		          to_string(MONEY_PER_ACCOUNT) + ");");
+		con.Query("INSERT INTO accounts VALUES (" + to_string(i) + ", " + to_string(MONEY_PER_ACCOUNT) + ");");
 	}
 
 	std::thread write_threads[TOTAL_ACCOUNTS];

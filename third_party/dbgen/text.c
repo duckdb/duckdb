@@ -10,6 +10,7 @@
 #endif /* TEST */
 
 #include "config.h"
+
 #include <stdlib.h>
 #if (defined(_POSIX_) || !defined(WIN32)) /* Change for Windows NT */
 #include <unistd.h>
@@ -179,8 +180,7 @@ static int txt_sentence(char *dest, int sd) {
 	pick_str(&grammar, sd, syntax);
 	cptr = syntax;
 
-next_token
-    : /* I hate goto's, but can't seem to have parent and child use strtok() */
+next_token: /* I hate goto's, but can't seem to have parent and child use strtok() */
 	while (*cptr && *cptr == ' ')
 		cptr++;
 	if (*cptr == '\0')
@@ -200,8 +200,7 @@ next_token
 		len += txt_np(dest + len, sd);
 		break;
 	case 'T':
-		i = pick_str(&terminators, sd,
-		             --dest); /*terminators should abut previous word */
+		i = pick_str(&terminators, sd, --dest); /*terminators should abut previous word */
 		len = (int)strlen(DIST_MEMBER(&terminators, i));
 		break;
 	} /* end of POS switch statement */
@@ -424,8 +423,7 @@ void dbg_text(char *tgt, int min, int max, int sd) {
 
 #ifdef TEXT_TEST
 tdef tdefs[1] = {NULL};
-distribution nouns, verbs, adjectives, adverbs, auxillaries, terminators,
-    articles, prepositions, grammar, np, vp;
+distribution nouns, verbs, adjectives, adverbs, auxillaries, terminators, articles, prepositions, grammar, np, vp;
 
 int main() {
 	char prattle[401];

@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // planner/operator/logical_filter.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -16,17 +14,20 @@ namespace duckdb {
 
 //! LogicalFilter represents a filter operation (e.g. WHERE or HAVING clause)
 class LogicalFilter : public LogicalOperator {
-  public:
-	LogicalFilter(std::unique_ptr<Expression> expression);
+public:
+	LogicalFilter(unique_ptr<Expression> expression);
 	LogicalFilter();
 
 	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
-
+	vector<string> GetNames() override;
 	//! Splits up the predicates of the LogicalFilter into a set of predicates
 	//! separated by AND Returns whether or not any splits were made
 	bool SplitPredicates();
+
+protected:
+	void ResolveTypes() override;
 };
 
 } // namespace duckdb

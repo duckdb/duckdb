@@ -10,8 +10,7 @@ static map<const char *, long> retries;
 static map<const char *, long> limited;
 static map<const char *, long> failed;
 
-impedance_visitor::impedance_visitor(map<const char *, long> &occured)
-    : _occured(occured) {
+impedance_visitor::impedance_visitor(map<const char *, long> &occured) : _occured(occured) {
 }
 
 void impedance_visitor::visit(struct prod *p) {
@@ -40,8 +39,7 @@ bool matched(const char *name) {
 	if (100 > occurances_in_failed_query[name])
 		return true;
 	double error_rate =
-	    (double)occurances_in_failed_query[name] /
-	    (occurances_in_failed_query[name] + occurances_in_ok_query[name]);
+	    (double)occurances_in_failed_query[name] / (occurances_in_failed_query[name] + occurances_in_ok_query[name]);
 	if (error_rate > 0.99)
 		return false;
 	return true;
@@ -50,8 +48,8 @@ bool matched(const char *name) {
 void report() {
 	cerr << "impedance report: " << endl;
 	for (auto pair : occurances_in_failed_query) {
-		cerr << "  " << pretty_type(pair.first) << ": " << pair.second << "/"
-		     << occurances_in_ok_query[pair.first] << " (bad/ok)";
+		cerr << "  " << pretty_type(pair.first) << ": " << pair.second << "/" << occurances_in_ok_query[pair.first]
+		     << " (bad/ok)";
 		if (!matched(pair.first))
 			cerr << " -> BLACKLISTED";
 		cerr << endl;
@@ -61,8 +59,7 @@ void report() {
 void report(std::ostream &out) {
 	out << "{\"impedance\": [ " << endl;
 
-	for (auto pair = occurances_in_failed_query.begin();
-	     pair != occurances_in_failed_query.end(); ++pair) {
+	for (auto pair = occurances_in_failed_query.begin(); pair != occurances_in_failed_query.end(); ++pair) {
 		out << "{\"prod\": \"" << pretty_type(pair->first) << "\","
 		    << "\"bad\": " << pair->second << ", "
 		    << "\"ok\": " << occurances_in_ok_query[pair->first] << ", "

@@ -1,7 +1,6 @@
+#include "parser/expression.hpp"
 
 #include "common/serializer.hpp"
-
-#include "parser/expression.hpp"
 #include "parser/expression/list.hpp"
 
 using namespace duckdb;
@@ -32,8 +31,7 @@ bool Expression::IsScalar() {
 	return is_scalar;
 }
 
-void Expression::GetAggregates(
-    std::vector<AggregateExpression *> &expressions) {
+void Expression::GetAggregates(vector<AggregateExpression *> &expressions) {
 	for (auto &child : children) {
 		child->GetAggregates(expressions);
 	}
@@ -74,8 +72,7 @@ string Expression::ToString() const {
 		} else if (children.size() == 1) {
 			return "(" + op + children[0]->ToString() + ")";
 		} else if (children.size() == 2) {
-			return "(" + children[0]->ToString() + " " + op + " " +
-			       children[1]->ToString() + ")";
+			return "(" + children[0]->ToString() + " " + op + " " + children[1]->ToString() + ")";
 		}
 	}
 	string result = ExpressionTypeToString(type);
@@ -105,7 +102,7 @@ void Expression::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<Expression> Expression::Deserialize(Deserializer &source) {
-	ExpressionDeserializeInformation info;
+	ExpressionDeserializeInfo info;
 	auto expression_class = source.Read<ExpressionClass>();
 	info.type = source.Read<ExpressionType>();
 	info.return_type = source.Read<TypeId>();
@@ -155,8 +152,7 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &source) {
 		result = SubqueryExpression::Deserialize(&info, source);
 		break;
 	default:
-		throw SerializationException(
-		    "Unsupported type for aggregation deserialization!");
+		throw SerializationException("Unsupported type for aggregation deserialization!");
 	}
 	result->return_type = info.return_type;
 	result->alias = alias;

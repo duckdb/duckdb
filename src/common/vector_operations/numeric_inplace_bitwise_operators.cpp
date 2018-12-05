@@ -5,14 +5,14 @@
 //===--------------------------------------------------------------------===//
 
 #include "common/operator/numeric_inplace_bitwise_operators.hpp"
+
 #include "common/vector_operations/inplace_loops.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-template <class OP>
-static void templated_inplace_bitwise_operation(Vector &result, Vector &input) {
+template <class OP> static void templated_inplace_bitwise_operation(Vector &result, Vector &input) {
 	INPLACE_TYPE_CHECK(input, result);
 	// the inplace loops take the result as the last parameter
 	switch (input.type) {
@@ -41,6 +41,5 @@ static void templated_inplace_bitwise_operation(Vector &result, Vector &input) {
 //===--------------------------------------------------------------------===//
 // left ^= right
 void VectorOperations::BitwiseXORInPlace(Vector &result, Vector &input) {
-	templated_inplace_bitwise_operation<operators::BitwiseXORInPlace>(result,
-	                                                                  input);
+	templated_inplace_bitwise_operation<operators::BitwiseXORInPlace>(result, input);
 }

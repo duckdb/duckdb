@@ -1,4 +1,3 @@
-
 #pragma once
 
 void load_dists(void);

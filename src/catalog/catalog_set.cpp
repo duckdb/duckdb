@@ -1,15 +1,12 @@
-
 #include "catalog/catalog_set.hpp"
 
 #include "common/exception.hpp"
-
 #include "transaction/transaction_manager.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-bool CatalogSet::CreateEntry(Transaction &transaction, const string &name,
-                             unique_ptr<CatalogEntry> value) {
+bool CatalogSet::CreateEntry(Transaction &transaction, const string &name, unique_ptr<CatalogEntry> value) {
 	lock_guard<mutex> lock(catalog_lock);
 
 	// first check if the entry exists in the unordered set
@@ -20,8 +17,7 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name,
 		// first create a dummy deleted entry for this entry
 		// so transactions started before the commit of this transaction don't
 		// see it yet
-		auto dummy_node = make_unique<CatalogEntry>(CatalogType::INVALID,
-		                                            value->catalog, name);
+		auto dummy_node = make_unique<CatalogEntry>(CatalogType::INVALID, value->catalog, name);
 		dummy_node->timestamp = 0;
 		dummy_node->deleted = true;
 		dummy_node->set = this;
@@ -29,8 +25,7 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name,
 	} else {
 		// if it does, we have to check version numbers
 		CatalogEntry &current = *entry->second;
-		if (current.timestamp >= TRANSACTION_ID_START &&
-		    current.timestamp != transaction.transaction_id) {
+		if (current.timestamp >= TRANSACTION_ID_START && current.timestamp != transaction.transaction_id) {
 			// current version has been written to by a currently active
 			// transaction
 			throw TransactionException("Catalog write-write conflict!");
@@ -54,8 +49,7 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name,
 	return true;
 }
 
-bool CatalogSet::AlterEntry(Transaction &transaction, const string &name,
-                            AlterInformation *alter_info) {
+bool CatalogSet::AlterEntry(Transaction &transaction, const string &name, AlterInformation *alter_info) {
 	lock_guard<mutex> lock(catalog_lock);
 	// first check if the entry exists in the unordered set
 	auto entry = data.find(name);
@@ -66,8 +60,7 @@ bool CatalogSet::AlterEntry(Transaction &transaction, const string &name,
 	// if it does: we have to retrieve the entry and to check version numbers
 	CatalogEntry &current = *entry->second;
 
-	if (current.timestamp >= TRANSACTION_ID_START &&
-	    current.timestamp != transaction.transaction_id) {
+	if (current.timestamp >= TRANSACTION_ID_START && current.timestamp != transaction.transaction_id) {
 		// current version has been written to by a currently active
 		// transaction
 		throw TransactionException("Catalog write-write conflict!");
@@ -89,10 +82,8 @@ bool CatalogSet::AlterEntry(Transaction &transaction, const string &name,
 	return true;
 }
 
-bool CatalogSet::DropEntry(Transaction &transaction, CatalogEntry &current,
-                           bool cascade) {
-	if (current.timestamp >= TRANSACTION_ID_START &&
-	    current.timestamp != transaction.transaction_id) {
+bool CatalogSet::DropEntry(Transaction &transaction, CatalogEntry &current, bool cascade) {
+	if (current.timestamp >= TRANSACTION_ID_START && current.timestamp != transaction.transaction_id) {
 		// current version has been written to by a currently active
 		// transaction
 		throw TransactionException("Catalog write-write conflict!");
@@ -108,15 +99,13 @@ bool CatalogSet::DropEntry(Transaction &transaction, CatalogEntry &current,
 		current.DropDependents(transaction);
 	} else {
 		if (current.HasDependents(transaction)) {
-			throw CatalogException(
-			    "Cannot drop entry \"%s\" because there are entries that "
-			    "depend on it. Use DROP...CASCADE to drop all dependents.",
-			    current.name.c_str());
+			throw CatalogException("Cannot drop entry \"%s\" because there are entries that "
+			                       "depend on it. Use DROP...CASCADE to drop all dependents.",
+			                       current.name.c_str());
 		}
 	}
 
-	auto value = make_unique<CatalogEntry>(CatalogType::DELETED_ENTRY,
-	                                       current.catalog, current.name);
+	auto value = make_unique<CatalogEntry>(CatalogType::DELETED_ENTRY, current.catalog, current.name);
 
 	// create a new entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction
@@ -133,8 +122,7 @@ bool CatalogSet::DropEntry(Transaction &transaction, CatalogEntry &current,
 	return true;
 }
 
-bool CatalogSet::DropEntry(Transaction &transaction, const string &name,
-                           bool cascade) {
+bool CatalogSet::DropEntry(Transaction &transaction, const string &name, bool cascade) {
 	lock_guard<mutex> lock(catalog_lock);
 	// we can only delete a table that exists
 	auto entry = data.find(name);
@@ -145,8 +133,7 @@ bool CatalogSet::DropEntry(Transaction &transaction, const string &name,
 	return DropEntry(transaction, *entry->second, cascade);
 }
 
-CatalogEntry *CatalogSet::GetEntryForTransaction(Transaction &transaction,
-                                                 CatalogEntry *current) {
+CatalogEntry *CatalogSet::GetEntryForTransaction(Transaction &transaction, CatalogEntry *current) {
 	while (current->child) {
 		if (current->timestamp == transaction.transaction_id) {
 			// we created this version
@@ -172,14 +159,12 @@ bool CatalogSet::EntryExists(Transaction &transaction, const string &name) {
 		return false;
 	}
 	// if it does, we have to check version numbers
-	CatalogEntry *current =
-	    GetEntryForTransaction(transaction, data[name].get());
+	CatalogEntry *current = GetEntryForTransaction(transaction, data[name].get());
 
 	return !current->deleted;
 }
 
-CatalogEntry *CatalogSet::GetEntry(Transaction &transaction,
-                                   const string &name) {
+CatalogEntry *CatalogSet::GetEntry(Transaction &transaction, const string &name) {
 	lock_guard<mutex> lock(catalog_lock);
 
 	auto entry = data.find(name);
@@ -187,8 +172,7 @@ CatalogEntry *CatalogSet::GetEntry(Transaction &transaction,
 		return nullptr;
 	}
 	// if it does, we have to check version numbers
-	CatalogEntry *current =
-	    GetEntryForTransaction(transaction, data[name].get());
+	CatalogEntry *current = GetEntryForTransaction(transaction, data[name].get());
 	if (current->deleted) {
 		return nullptr;
 	}

@@ -1,31 +1,29 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // parser/statement/copy_statement.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include <vector>
-
+#include "parser/expression.hpp"
+#include "parser/query_node.hpp"
+#include "parser/sql_node_visitor.hpp"
 #include "parser/sql_statement.hpp"
 
-#include "parser/expression.hpp"
-#include "parser/sql_node_visitor.hpp"
+#include <vector>
 
 namespace duckdb {
 
 class CopyStatement : public SQLStatement {
-  public:
+public:
 	CopyStatement() : SQLStatement(StatementType::COPY){};
 	virtual ~CopyStatement() {
 	}
-	virtual std::string ToString() const;
-	virtual std::unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
+	virtual string ToString() const;
+	virtual unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
 		return v->Visit(*this);
 	}
 
@@ -36,16 +34,16 @@ class CopyStatement : public SQLStatement {
 		throw NotImplementedException("Equality not implemented!");
 	}
 
-	std::string table;
-	std::string schema;
+	string table;
+	string schema;
 
 	// The SQL statement used instead of a table when copying data out to a file
-	std::unique_ptr<SQLStatement> select_statement;
+	unique_ptr<QueryNode> select_statement;
 
-	std::string file_path;
+	string file_path;
 
 	// List of Columns that will be copied from/to.
-	std::vector<std::string> select_list;
+	vector<string> select_list;
 
 	// File Format
 	ExternalFileFormat format = ExternalFileFormat::CSV;

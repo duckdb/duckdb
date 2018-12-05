@@ -43,8 +43,7 @@
 
 using namespace TPCE;
 
-StreetNameDataFileRecord::StreetNameDataFileRecord(
-    const std::deque<std::string> &fields) {
+StreetNameDataFileRecord::StreetNameDataFileRecord(const std::deque<std::string> &fields) {
 	if (fieldCount != fields.size()) {
 		throw std::runtime_error("Incorrect field count.");
 	}

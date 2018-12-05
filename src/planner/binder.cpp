@@ -1,13 +1,12 @@
-
 #include "planner/binder.hpp"
-
-#include "parser/constraints/list.hpp"
-#include "parser/expression/list.hpp"
-#include "parser/statement/list.hpp"
-#include "parser/tableref/list.hpp"
 
 #include "main/client_context.hpp"
 #include "main/database.hpp"
+#include "parser/constraints/list.hpp"
+#include "parser/expression/list.hpp"
+#include "parser/query_node/list.hpp"
+#include "parser/statement/list.hpp"
+#include "parser/tableref/list.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -21,7 +20,12 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 	for (auto &cte_it : statement.cte_map) {
 		AddCTE(cte_it.first, cte_it.second.get());
 	}
+	// now visit the root node of the select statement
+	statement.node->Accept(this);
+	return nullptr;
+}
 
+void Binder::Visit(SelectNode &statement) {
 	if (statement.from_table) {
 		AcceptChild(&statement.from_table);
 	}
@@ -48,31 +52,6 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 		}
 	}
 
-	// the set ops have an independent binder
-	if (statement.setop_type != SetopType::NONE) {
-		assert(statement.setop_left);
-		assert(statement.setop_right);
-
-		Binder binder_left(context, this);
-		Binder binder_right(context, this);
-
-		statement.setop_left->Accept(&binder_left);
-		statement.setop_left_binder = move(binder_left.bind_context);
-
-		statement.setop_right->Accept(&binder_right);
-		statement.setop_right_binder = move(binder_right.bind_context);
-
-		// FIXME: this seems quite ugly
-		// create a new select list for the dummy statement so code below works
-		// correctly
-		for (size_t i = 0; i < statement.setop_left->select_list.size(); i++) {
-			auto expr = make_unique<ColumnRefExpression>(
-			    statement.setop_left->select_list[i]->return_type, i);
-			expr->alias = statement.setop_left->select_list[i]->GetName();
-			new_select_list.push_back(move(expr));
-		}
-	}
-
 	statement.result_column_count = new_select_list.size();
 
 	for (size_t i = 0; i < new_select_list.size(); i++) {
@@ -80,35 +59,28 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 		AcceptChild(&select_element);
 		select_element->ResolveType();
 		if (select_element->return_type == TypeId::INVALID) {
-			throw BinderException(
-			    "Could not resolve type of projection element!");
+			throw BinderException("Could not resolve type of projection element!");
 		}
 
 		if (!select_element->alias.empty()) {
-			bind_context->AddExpression(select_element->alias,
-			                            select_element.get(), i);
+			bind_context->AddExpression(select_element->alias, select_element.get(), i);
 		}
 	}
 
 	for (auto &order : statement.orderby.orders) {
 		AcceptChild(&order.expression);
 		if (order.expression->type == ExpressionType::COLUMN_REF) {
-			auto selection_ref =
-			    reinterpret_cast<ColumnRefExpression *>(order.expression.get());
+			auto selection_ref = reinterpret_cast<ColumnRefExpression *>(order.expression.get());
 			if (selection_ref->column_name.empty()) {
 				// this ORDER BY expression refers to a column in the select
 				// clause by index e.g. ORDER BY 1 assign the type of the SELECT
 				// clause
-				if (selection_ref->index < 1 ||
-				    selection_ref->index > statement.result_column_count) {
-					throw BinderException(
-					    "ORDER term out of range - should be between 1 and %d",
-					    (int)new_select_list.size());
+				if (selection_ref->index < 1 || selection_ref->index > statement.result_column_count) {
+					throw BinderException("ORDER term out of range - should be between 1 and %d",
+					                      (int)new_select_list.size());
 				}
-				selection_ref->return_type =
-				    new_select_list[selection_ref->index - 1]->return_type;
-				selection_ref->reference =
-				    new_select_list[selection_ref->index - 1].get();
+				selection_ref->return_type = new_select_list[selection_ref->index - 1]->return_type;
+				selection_ref->reference = new_select_list[selection_ref->index - 1].get();
 			}
 		}
 		order.expression->ResolveType();
@@ -121,33 +93,27 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 		TypeId type = TypeId::INVALID;
 		for (; j < new_select_list.size(); j++) {
 			// check if the expression matches exactly
-			if (statement.orderby.orders[i].expression->Equals(
-			        new_select_list[j].get())) {
+			if (statement.orderby.orders[i].expression->Equals(new_select_list[j].get())) {
 				// in this case, we can just create a reference in the ORDER BY
 				break;
 			}
 			// if the ORDER BY is an alias reference, check if the alias matches
-			if (statement.orderby.orders[i].expression->type ==
-			        ExpressionType::COLUMN_REF &&
-			    reinterpret_cast<ColumnRefExpression *>(
-			        statement.orderby.orders[i].expression.get())
-			            ->reference == new_select_list[j].get()) {
+			if (statement.orderby.orders[i].expression->type == ExpressionType::COLUMN_REF &&
+			    reinterpret_cast<ColumnRefExpression *>(statement.orderby.orders[i].expression.get())->reference ==
+			        new_select_list[j].get()) {
 				break;
 			}
 		}
 		if (j == new_select_list.size()) {
 			// if we didn't find a matching projection clause, we add it to the
 			// projection list
-			new_select_list.push_back(
-			    move(statement.orderby.orders[i].expression));
+			new_select_list.push_back(move(statement.orderby.orders[i].expression));
 		}
 		type = new_select_list[j]->return_type;
 		if (type == TypeId::INVALID) {
-			throw Exception(
-			    "Could not deduce return type of ORDER BY expression");
+			throw Exception("Could not deduce return type of ORDER BY expression");
 		}
-		statement.orderby.orders[i].expression =
-		    make_unique<ColumnRefExpression>(type, j);
+		statement.orderby.orders[i].expression = make_unique<ColumnRefExpression>(type, j);
 	}
 	statement.select_list = move(new_select_list);
 
@@ -166,20 +132,16 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 		for (size_t i = 0; i < statement.groupby.groups.size(); i++) {
 			auto &group = statement.groupby.groups[i];
 			if (group->type != ExpressionType::COLUMN_REF) {
-				throw BinderException(
-				    "GROUP BY clause needs to be a column or alias reference.");
+				throw BinderException("GROUP BY clause needs to be a column or alias reference.");
 			}
-			auto group_column =
-			    reinterpret_cast<ColumnRefExpression *>(group.get());
+			auto group_column = reinterpret_cast<ColumnRefExpression *>(group.get());
 			if (group_column->reference) {
 				// alias reference
 				// move the computation here from the SELECT clause
 				size_t select_index = group_column->index;
-				auto group_ref = make_unique<GroupRefExpression>(
-				    statement.groupby.groups[i]->return_type, i);
+				auto group_ref = make_unique<GroupRefExpression>(statement.groupby.groups[i]->return_type, i);
 				group_ref->alias = string(group_column->column_name);
-				statement.groupby.groups[i] =
-				    move(statement.select_list[select_index]);
+				statement.groupby.groups[i] = move(statement.select_list[select_index]);
 				// and add a GROUP REF expression to the SELECT clause
 				statement.select_list[select_index] = move(group_ref);
 			}
@@ -196,37 +158,28 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 			// not an aggregate or existing GROUP REF
 			if (select->type == ExpressionType::COLUMN_REF) {
 				// column reference: check if it points to a GROUP BY column
-				auto select_column =
-				    reinterpret_cast<ColumnRefExpression *>(select.get());
+				auto select_column = reinterpret_cast<ColumnRefExpression *>(select.get());
 				bool found_matching = false;
 				for (size_t j = 0; j < statement.groupby.groups.size(); j++) {
 					auto &group = statement.groupby.groups[j];
 					if (select_column->reference) {
 						if (select_column->reference == group.get()) {
 							// group reference!
-							auto group_ref = make_unique<GroupRefExpression>(
-							    statement.select_list[i]->return_type, j);
-							group_ref->alias =
-							    string(select_column->column_name);
+							auto group_ref = make_unique<GroupRefExpression>(statement.select_list[i]->return_type, j);
+							group_ref->alias = string(select_column->column_name);
 							statement.select_list[i] = move(group_ref);
 							found_matching = true;
 							break;
 						}
 					} else {
 						if (group->type == ExpressionType::COLUMN_REF) {
-							auto group_column =
-							    reinterpret_cast<ColumnRefExpression *>(
-							        group.get());
-							if (group_column->binding ==
-							    select_column->binding) {
+							auto group_column = reinterpret_cast<ColumnRefExpression *>(group.get());
+							if (group_column->binding == select_column->binding) {
 								auto group_ref =
-								    make_unique<GroupRefExpression>(
-								        statement.select_list[i]->return_type,
-								        j);
-								group_ref->alias =
-								    statement.select_list[i]->alias.empty()
-								        ? select_column->column_name
-								        : statement.select_list[i]->alias;
+								    make_unique<GroupRefExpression>(statement.select_list[i]->return_type, j);
+								group_ref->alias = statement.select_list[i]->alias.empty()
+								                       ? select_column->column_name
+								                       : statement.select_list[i]->alias;
 								statement.select_list[i] = move(group_ref);
 								found_matching = true;
 								break;
@@ -243,9 +196,8 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 			// not a group by column or aggregate
 			// create a FIRST aggregate around this aggregate
 			string stmt_alias = statement.select_list[i]->alias;
-			statement.select_list[i] = make_unique<AggregateExpression>(
-			    ExpressionType::AGGREGATE_FIRST,
-			    move(statement.select_list[i]));
+			statement.select_list[i] =
+			    make_unique<AggregateExpression>(ExpressionType::AGGREGATE_FIRST, move(statement.select_list[i]));
 			statement.select_list[i]->alias = stmt_alias;
 			statement.select_list[i]->ResolveType();
 			// throw Exception("SELECT with GROUP BY can only contain "
@@ -257,8 +209,45 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 		AcceptChild(&statement.groupby.having);
 		statement.groupby.having->ResolveType();
 	}
+}
 
-	return nullptr;
+void Binder::Visit(SetOperationNode &statement) {
+	// first recursively visit the set operations
+	// both the left and right sides have an independent BindContext and Binder
+	assert(statement.left);
+	assert(statement.right);
+
+	Binder binder_left(context, this);
+	Binder binder_right(context, this);
+
+	statement.left->Accept(&binder_left);
+	statement.setop_left_binder = move(binder_left.bind_context);
+
+	statement.right->Accept(&binder_right);
+	statement.setop_right_binder = move(binder_right.bind_context);
+
+	// now handle the ORDER BY
+	// get the selection list from one of the children, since a SetOp does not have its own selection list
+	auto &select_list = statement.GetSelectList();
+	for (auto &order : statement.orderby.orders) {
+		AcceptChild(&order.expression);
+		if (order.expression->type == ExpressionType::COLUMN_REF) {
+			auto selection_ref = (ColumnRefExpression *)order.expression.get();
+			if (selection_ref->column_name.empty()) {
+				// this ORDER BY expression refers to a column in the select
+				// clause by index e.g. ORDER BY 1 assign the type of the SELECT
+				// clause
+				if (selection_ref->index < 1 || selection_ref->index > select_list.size()) {
+					throw BinderException("ORDER term out of range - should be between 1 and %d",
+					                      (int)select_list.size());
+				}
+				selection_ref->return_type = select_list[selection_ref->index - 1]->return_type;
+				selection_ref->reference = select_list[selection_ref->index - 1].get();
+				selection_ref->index = selection_ref->index - 1;
+			}
+		}
+		order.expression->ResolveType();
+	}
 }
 
 unique_ptr<SQLStatement> Binder::Visit(InsertStatement &statement) {
@@ -276,7 +265,7 @@ unique_ptr<SQLStatement> Binder::Visit(InsertStatement &statement) {
 
 unique_ptr<SQLStatement> Binder::Visit(CopyStatement &stmt) {
 	if (stmt.select_statement) {
-		AcceptChild(&stmt.select_statement);
+		stmt.select_statement->Accept(this);
 	}
 	return nullptr;
 }
@@ -289,8 +278,7 @@ unique_ptr<SQLStatement> Binder::Visit(CreateIndexStatement &stmt) {
 		AcceptChild(&expr);
 		expr->ResolveType();
 		if (expr->return_type == TypeId::INVALID) {
-			throw BinderException(
-			    "Could not resolve type of projection element!");
+			throw BinderException("Could not resolve type of projection element!");
 		}
 		expr->ClearStatistics();
 	}
@@ -328,8 +316,7 @@ unique_ptr<SQLStatement> Binder::Visit(UpdateStatement &stmt) {
 		}
 		expression->ResolveType();
 		if (expression->return_type == TypeId::INVALID) {
-			throw BinderException(
-			    "Could not resolve type of projection element!");
+			throw BinderException("Could not resolve type of projection element!");
 		}
 	}
 	return nullptr;
@@ -354,8 +341,7 @@ unique_ptr<Constraint> Binder::Visit(CheckConstraint &constraint) {
 	}
 	// the CHECK constraint should always return an INTEGER value
 	if (constraint.expression->return_type != TypeId::INTEGER) {
-		constraint.expression = make_unique<CastExpression>(
-		    TypeId::INTEGER, move(constraint.expression));
+		constraint.expression = make_unique<CastExpression>(TypeId::INTEGER, move(constraint.expression));
 	}
 	return nullptr;
 }
@@ -377,8 +363,8 @@ unique_ptr<Expression> Binder::Visit(ColumnRefExpression &expr) {
 
 unique_ptr<Expression> Binder::Visit(FunctionExpression &expr) {
 	SQLNodeVisitor::Visit(expr);
-	expr.bound_function = context.db.catalog.GetScalarFunction(
-	    context.ActiveTransaction(), expr.schema, expr.function_name);
+	expr.bound_function =
+	    context.db.catalog.GetScalarFunction(context.ActiveTransaction(), expr.schema, expr.function_name);
 	return nullptr;
 }
 
@@ -391,21 +377,18 @@ unique_ptr<Expression> Binder::Visit(SubqueryExpression &expr) {
 	binder.CTE_bindings = CTE_bindings;
 
 	expr.subquery->Accept(&binder);
-	if (expr.subquery->select_list.size() < 1) {
+	auto &select_list = expr.subquery->GetSelectList();
+	if (select_list.size() < 1) {
 		throw BinderException("Subquery has no projections");
 	}
-	if (expr.subquery->select_list[0]->return_type == TypeId::INVALID) {
+	if (select_list[0]->return_type == TypeId::INVALID) {
 		throw BinderException("Subquery has no type");
 	}
-	if (expr.subquery_type == SubqueryType::IN &&
-	    expr.subquery->select_list.size() != 1) {
-		throw BinderException("Subquery returns %zu columns - expected 1",
-		                      expr.subquery->select_list.size());
+	if (expr.subquery_type == SubqueryType::IN && select_list.size() != 1) {
+		throw BinderException("Subquery returns %zu columns - expected 1", select_list.size());
 	}
 
-	expr.return_type = expr.subquery_type == SubqueryType::EXISTS
-	                       ? TypeId::BOOLEAN
-	                       : expr.subquery->select_list[0]->return_type;
+	expr.return_type = expr.subquery_type == SubqueryType::EXISTS ? TypeId::BOOLEAN : select_list[0]->return_type;
 	expr.context = move(binder.bind_context);
 	expr.is_correlated = expr.context->GetMaxDepth() > 0;
 	return nullptr;
@@ -421,10 +404,8 @@ unique_ptr<TableRef> Binder::Visit(BaseTableRef &expr) {
 		return move(subquery);
 	}
 
-	auto table = context.db.catalog.GetTable(context.ActiveTransaction(),
-	                                         expr.schema_name, expr.table_name);
-	bind_context->AddBaseTable(
-	    expr.alias.empty() ? expr.table_name : expr.alias, table);
+	auto table = context.db.catalog.GetTable(context.ActiveTransaction(), expr.schema_name, expr.table_name);
+	bind_context->AddBaseTable(expr.alias.empty() ? expr.table_name : expr.alias, table);
 	return nullptr;
 }
 
@@ -453,15 +434,12 @@ unique_ptr<TableRef> Binder::Visit(SubqueryRef &expr) {
 
 unique_ptr<TableRef> Binder::Visit(TableFunction &expr) {
 	auto function_definition = (FunctionExpression *)expr.function.get();
-	auto function = context.db.catalog.GetTableFunction(
-	    context.ActiveTransaction(), function_definition);
-	bind_context->AddTableFunction(
-	    expr.alias.empty() ? function_definition->function_name : expr.alias,
-	    function);
+	auto function = context.db.catalog.GetTableFunction(context.ActiveTransaction(), function_definition);
+	bind_context->AddTableFunction(expr.alias.empty() ? function_definition->function_name : expr.alias, function);
 	return nullptr;
 }
 
-void Binder::AddCTE(const std::string &name, SelectStatement *cte) {
+void Binder::AddCTE(const string &name, QueryNode *cte) {
 	assert(cte);
 	assert(!name.empty());
 	auto entry = CTE_bindings.find(name);
@@ -470,7 +448,8 @@ void Binder::AddCTE(const std::string &name, SelectStatement *cte) {
 	}
 	CTE_bindings[name] = cte;
 }
-unique_ptr<SelectStatement> Binder::FindCTE(const std::string &name) {
+
+unique_ptr<QueryNode> Binder::FindCTE(const string &name) {
 	auto entry = CTE_bindings.find(name);
 	if (entry == CTE_bindings.end()) {
 		if (parent) {

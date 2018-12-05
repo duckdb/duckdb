@@ -43,14 +43,7 @@
 
 namespace TPCE {
 
-enum eDriverType {
-	eDriverEGenLoader,
-	eDriverAll,
-	eDriverCE,
-	eDriverMEE,
-	eDriverDM,
-	eDriverMax
-};
+enum eDriverType { eDriverEGenLoader, eDriverAll, eDriverCE, eDriverMEE, eDriverDM, eDriverMax };
 
 extern char szDriverTypeNames[eDriverMax][14];
 } // namespace TPCE

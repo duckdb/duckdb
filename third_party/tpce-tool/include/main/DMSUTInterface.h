@@ -47,7 +47,7 @@
 namespace TPCE {
 
 class CDMSUTInterface {
-  public:
+public:
 	/*
 	 *  Virtual destructor. Provided so that a sponsor-specific
 	 *  destructor can be called on destruction from the base-class pointer.
@@ -60,12 +60,8 @@ class CDMSUTInterface {
 	 */
 	virtual ~CDMSUTInterface(){};
 
-	virtual bool
-	DataMaintenance(PDataMaintenanceTxnInput
-	                    pTxnInput) = 0; // return whether it was successful
-	virtual bool
-	TradeCleanup(PTradeCleanupTxnInput
-	                 pTxnInput) = 0; // return whether it was successful
+	virtual bool DataMaintenance(PDataMaintenanceTxnInput pTxnInput) = 0; // return whether it was successful
+	virtual bool TradeCleanup(PTradeCleanupTxnInput pTxnInput) = 0;       // return whether it was successful
 };
 
 } // namespace TPCE

@@ -15,7 +15,7 @@ TEST_CASE("Sequential append", "[transactions]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
-	std::vector<std::unique_ptr<DuckDBConnection>> connections;
+	vector<unique_ptr<DuckDBConnection>> connections;
 
 	// initialize the database
 	con.Query("CREATE TABLE integers(i INTEGER);");

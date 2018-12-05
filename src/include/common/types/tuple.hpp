@@ -1,40 +1,36 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // common/types/tuple.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
+#include "common/types/data_chunk.hpp"
+
 #include <memory>
 #include <set>
-
-#include "common/types/data_chunk.hpp"
 
 namespace duckdb {
 
 //! A tuple contains a byte reprensetation of a single tuple stored row-wise
 struct Tuple {
 	size_t size;
-	std::unique_ptr<uint8_t[]> data;
+	unique_ptr<uint8_t[]> data;
 };
 
 class TupleSerializer {
 	friend class TupleComparer;
 
-  public:
+public:
 	TupleSerializer();
-	TupleSerializer(const std::vector<TypeId> &types,
-	                std::vector<size_t> columns = {});
+	TupleSerializer(const vector<TypeId> &types, vector<size_t> columns = {});
 
 	//! Initialize the TupleSerializer, should only be called if the empty
 	//! constructor is used
-	void Initialize(const std::vector<TypeId> &types,
-	                std::vector<size_t> columns = {});
+	void Initialize(const vector<TypeId> &types, vector<size_t> columns = {});
 
 	//! Serialize a DataChunk to a set of tuples. Memory is allocated for the
 	//! tuple data.
@@ -42,26 +38,21 @@ class TupleSerializer {
 	//! Serialize a DataChunk to a set of memory locations
 	void Serialize(DataChunk &chunk, uint8_t *targets[]);
 	//! Serializes a tuple from a set of columns to a single memory location
-	void Serialize(std::vector<char *> &columns, size_t offset,
-	               uint8_t *target);
+	void Serialize(vector<char *> &columns, size_t offset, uint8_t *target);
 	//! Deserialize a DataChunk from a set of memory locations
 	void Deserialize(Vector &source, DataChunk &chunk);
 
 	//! Deserialize a tuple from a single memory location to a set of columns
-	void Deserialize(std::vector<char *> &columns, size_t offset,
-	                 uint8_t *target);
+	void Deserialize(vector<char *> &columns, size_t offset, uint8_t *target);
 	//! Serializes a set of tuples (specified by the indices vector) to a set of
 	//! memory location. Targets[] should have enough spaces to hold
 	//! indices.count tuples
-	void Serialize(std::vector<char *> &columns, Vector &indices,
-	               uint8_t *targets[]);
+	void Serialize(vector<char *> &columns, Vector &indices, uint8_t *targets[]);
 	//! Serializes a set of tuples with updates. The base tuples are specified
 	//! by the index vector, the updated values are specified by update_chunk.
 	//! affected_columns signifies
-	void SerializeUpdate(std::vector<char *> &column_data,
-	                     std::vector<column_t> &affected_columns,
-	                     DataChunk &update_chunk, Vector &index_vector,
-	                     size_t index_offset, Tuple targets[]);
+	void SerializeUpdate(vector<char *> &column_data, vector<column_t> &affected_columns, DataChunk &update_chunk,
+	                     Vector &index_vector, size_t index_offset, Tuple targets[]);
 
 	//! Returns the constant per-tuple size (only if the size is constant)
 	inline size_t TupleSize() {
@@ -77,29 +68,28 @@ class TupleSerializer {
 	int Compare(const uint8_t *a, const uint8_t *b);
 
 	//! Serialize a single column of a chunk
-	void SerializeColumn(DataChunk &chunk, uint8_t *targets[],
-	                     size_t column_index, size_t &offset);
+	void SerializeColumn(DataChunk &chunk, uint8_t *targets[], size_t column_index, size_t &offset);
 	//! Deserialize a single column of a chunk
 	void DeserializeColumn(Vector &source, size_t column_index, Vector &target);
 
-  private:
+private:
 	//! Types of the generated tuples
-	std::vector<TypeId> types;
+	vector<TypeId> types;
 	//! The type sizes
-	std::vector<size_t> type_sizes;
+	vector<size_t> type_sizes;
 	//! The column indexes of the chunks
-	std::vector<size_t> columns;
+	vector<size_t> columns;
 	//! Base size of tuples
 	size_t base_size;
 	//! Set of variable-length columns included in the set
-	std::vector<bool> is_variable;
+	vector<bool> is_variable;
 	//! Whether or not the Serializer contains variable-length columns
 	bool has_variable_columns;
 };
 
 //! Compare tuples created through different TupleSerializers
 class TupleComparer {
-  public:
+public:
 	//! Create a tuple comparer that compares tuples created with the left
 	//! serializer to tuples created with the right serializer. The columns of
 	//! the left serializer must be a subset of the columns of the right
@@ -109,21 +99,20 @@ class TupleComparer {
 	//! serializer with each other
 	int Compare(const uint8_t *left, const uint8_t *right);
 
-  private:
+private:
 	//! Left tuple serializer
 	TupleSerializer &left;
 	//! The left offsets used for comparison
-	std::vector<size_t> left_offsets;
+	vector<size_t> left_offsets;
 	//! The right offsets used for comparison
-	std::vector<size_t> right_offsets;
+	vector<size_t> right_offsets;
 };
 
 struct TupleReference {
 	Tuple *tuple;
 	TupleSerializer &serializer;
 
-	TupleReference(Tuple *tuple, TupleSerializer &serializer)
-	    : tuple(tuple), serializer(serializer) {
+	TupleReference(Tuple *tuple, TupleSerializer &serializer) : tuple(tuple), serializer(serializer) {
 		// NULL tuple not allowed
 		assert(tuple);
 	}

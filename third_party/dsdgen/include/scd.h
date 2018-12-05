@@ -38,8 +38,7 @@
 #include "decimal.h"
 
 extern char arBKeys[MAX_TABLE][17];
-int setSCDKeys(int nTableID, ds_key_t hgIndex, char *szBKey,
-               ds_key_t *hgBeginDateKey, ds_key_t *hgEndDateKey);
+int setSCDKeys(int nTableID, ds_key_t hgIndex, char *szBKey, ds_key_t *hgBeginDateKey, ds_key_t *hgEndDateKey);
 ds_key_t scd_join(int tbl, int col, ds_key_t jDate);
 ds_key_t matchSCDSK(ds_key_t kUnique, ds_key_t jDate, int nTable);
 ds_key_t getSKFromID(ds_key_t kID, int nColumn);
@@ -53,8 +52,7 @@ ds_key_t getFirstSK(ds_key_t kID);
 #define SCD_DEC 2
 #define SCD_KEY 3
 #define SCD_PTR 4
-void changeSCD(int nDataType, void *pNewData, void *pOldData, int *nFlags,
-               int bFirst);
+void changeSCD(int nDataType, void *pNewData, void *pOldData, int *nFlags, int bFirst);
 int validateSCD(int nTable, ds_key_t kRow, int *Permutation);
 void printValidation(int nTable, ds_key_t kRow);
 #endif

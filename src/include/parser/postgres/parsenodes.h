@@ -12,17 +12,12 @@
 
 #pragma once
 
-#include <cstdint>
-
 #include "nodes.h"
 #include "pg_list.h"
 
-typedef enum SetOperation {
-	SETOP_NONE = 0,
-	SETOP_UNION,
-	SETOP_INTERSECT,
-	SETOP_EXCEPT
-} SetOperation;
+#include <cstdint>
+
+typedef enum SetOperation { SETOP_NONE = 0, SETOP_UNION, SETOP_INTERSECT, SETOP_EXCEPT } SetOperation;
 
 typedef struct Alias {
 	NodeTag type;
@@ -268,11 +263,7 @@ typedef enum SortByDir {
 	SORTBY_USING /* not allowed in CREATE INDEX ... */
 } SortByDir;
 
-typedef enum SortByNulls {
-	SORTBY_NULLS_DEFAULT,
-	SORTBY_NULLS_FIRST,
-	SORTBY_NULLS_LAST
-} SortByNulls;
+typedef enum SortByNulls { SORTBY_NULLS_DEFAULT, SORTBY_NULLS_FIRST, SORTBY_NULLS_LAST } SortByNulls;
 
 typedef struct SortBy {
 	NodeTag type;
@@ -302,9 +293,9 @@ typedef struct OnConflictClause {
 
 typedef struct InsertStmt {
 	NodeTag type;
-	RangeVar *relation; /* relation to insert into */
-	List *cols;         /* optional: names of the target columns */
-	Node *selectStmt;   /* the source SELECT/VALUES, or NULL */
+	RangeVar *relation;                 /* relation to insert into */
+	List *cols;                         /* optional: names of the target columns */
+	Node *selectStmt;                   /* the source SELECT/VALUES, or NULL */
 	OnConflictClause *onConflictClause; /* ON CONFLICT clause */
 	List *returningList;                /* list of expressions to return */
 	WithClause *withClause;             /* WITH clause */
@@ -353,7 +344,7 @@ typedef struct SelectStmt {
 	bool all;                /* ALL specified? */
 	struct SelectStmt *larg; /* left child */
 	struct SelectStmt *rarg; /* right child */
-	/* Eventually add fields for CORRESPONDING spec here */
+	                         /* Eventually add fields for CORRESPONDING spec here */
 } SelectStmt;
 
 /*
@@ -910,11 +901,7 @@ typedef struct RoleSpec {
 	int location;          /* token location, or -1 if unknown */
 } RoleSpec;
 
-typedef enum ViewCheckOption {
-	NO_CHECK_OPTION,
-	LOCAL_CHECK_OPTION,
-	CASCADED_CHECK_OPTION
-} ViewCheckOption;
+typedef enum ViewCheckOption { NO_CHECK_OPTION, LOCAL_CHECK_OPTION, CASCADED_CHECK_OPTION } ViewCheckOption;
 
 typedef struct ViewStmt {
 	NodeTag type;

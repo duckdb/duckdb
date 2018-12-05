@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // common/types/statistics.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -21,7 +19,7 @@ class Vector;
 //! The ExpressionStatistics object holds statistics relating to a specific
 //! Expression, and can be propagated throughout a chain of expressions
 class ExpressionStatistics : public Printable {
-  public:
+public:
 	ExpressionStatistics(Expression &expression) : expression(expression) {
 		Reset();
 	}
@@ -57,7 +55,7 @@ class ExpressionStatistics : public Printable {
 	}
 #endif
 
-	virtual std::string ToString() const;
+	virtual string ToString() const;
 
 	//! Update the statistics with a new vector that is appended to the dataset
 	void Update(Vector &vector);
@@ -73,22 +71,15 @@ class ExpressionStatistics : public Printable {
 	// Numeric Operations
 	//===--------------------------------------------------------------------===//
 	// A + B
-	static void Add(ExpressionStatistics &left, ExpressionStatistics &right,
-	                ExpressionStatistics &result);
+	static void Add(ExpressionStatistics &left, ExpressionStatistics &right, ExpressionStatistics &result);
 	// A - B
-	static void Subtract(ExpressionStatistics &left,
-	                     ExpressionStatistics &right,
-	                     ExpressionStatistics &result);
+	static void Subtract(ExpressionStatistics &left, ExpressionStatistics &right, ExpressionStatistics &result);
 	// A * B
-	static void Multiply(ExpressionStatistics &left,
-	                     ExpressionStatistics &right,
-	                     ExpressionStatistics &result);
+	static void Multiply(ExpressionStatistics &left, ExpressionStatistics &right, ExpressionStatistics &result);
 	// A / B
-	static void Divide(ExpressionStatistics &left, ExpressionStatistics &right,
-	                   ExpressionStatistics &result);
+	static void Divide(ExpressionStatistics &left, ExpressionStatistics &right, ExpressionStatistics &result);
 	// A % B
-	static void Modulo(ExpressionStatistics &left, ExpressionStatistics &right,
-	                   ExpressionStatistics &result);
+	static void Modulo(ExpressionStatistics &left, ExpressionStatistics &right, ExpressionStatistics &result);
 
 	//===--------------------------------------------------------------------===//
 	// Aggregates
@@ -96,8 +87,7 @@ class ExpressionStatistics : public Printable {
 	// SUM(A)
 	static void Sum(ExpressionStatistics &source, ExpressionStatistics &result);
 	// COUNT(A)
-	static void Count(ExpressionStatistics &source,
-	                  ExpressionStatistics &result);
+	static void Count(ExpressionStatistics &source, ExpressionStatistics &result);
 	// MAX(A)
 	static void Max(ExpressionStatistics &source, ExpressionStatistics &result);
 	// MIN(A)
@@ -107,12 +97,10 @@ class ExpressionStatistics : public Printable {
 	// Helpers
 	//===--------------------------------------------------------------------===//
 	//! Cast statistics from one type to another
-	static void Cast(ExpressionStatistics &source,
-	                 ExpressionStatistics &result);
+	static void Cast(ExpressionStatistics &source, ExpressionStatistics &result);
 	//! Case operator, we don't need the CHECK column but only the LEFT and
 	//! RIGHT side to combine statistics
-	static void Case(ExpressionStatistics &A, ExpressionStatistics &B,
-	                 ExpressionStatistics &result);
+	static void Case(ExpressionStatistics &A, ExpressionStatistics &B, ExpressionStatistics &result);
 };
 
 } // namespace duckdb

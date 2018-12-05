@@ -67,23 +67,16 @@ class CCompanyCompetitorTable : public TableTemplate<COMPANY_COMPETITOR_ROW> {
 		ClearRecord(); // this is needed for EGenTest to work
 	}
 
-  public:
-	CCompanyCompetitorTable(const DataFileManager &dfm, TIdent iCustomerCount,
-	                        TIdent iStartFromCustomer)
-	    : TableTemplate<COMPANY_COMPETITOR_ROW>(),
-	      m_CompanyCompetitorFile(dfm.CompanyCompetitorFile()) {
-		m_iCompanyCompetitorCount =
-		    m_CompanyCompetitorFile.CalculateCompanyCompetitorCount(
-		        iCustomerCount);
-		m_iStartFromCompanyCompetitor =
-		    m_CompanyCompetitorFile.CalculateStartFromCompanyCompetitor(
-		        iStartFromCustomer);
+public:
+	CCompanyCompetitorTable(const DataFileManager &dfm, TIdent iCustomerCount, TIdent iStartFromCustomer)
+	    : TableTemplate<COMPANY_COMPETITOR_ROW>(), m_CompanyCompetitorFile(dfm.CompanyCompetitorFile()) {
+		m_iCompanyCompetitorCount = m_CompanyCompetitorFile.CalculateCompanyCompetitorCount(iCustomerCount);
+		m_iStartFromCompanyCompetitor = m_CompanyCompetitorFile.CalculateStartFromCompanyCompetitor(iStartFromCustomer);
 
 		m_iLastRowNumber = m_iStartFromCompanyCompetitor;
 
 		m_iCompanyCompetitorCountForOneLoadUnit =
-		    m_CompanyCompetitorFile.CalculateCompanyCompetitorCount(
-		        iDefaultLoadUnitSize);
+		    m_CompanyCompetitorFile.CalculateCompanyCompetitorCount(iDefaultLoadUnitSize);
 	};
 
 	/*
@@ -96,17 +89,13 @@ class CCompanyCompetitorTable : public TableTemplate<COMPANY_COMPETITOR_ROW> {
 
 		m_row.CP_CO_ID = m_CompanyCompetitorFile.GetCompanyId(m_iLastRowNumber);
 
-		m_row.CP_COMP_CO_ID =
-		    m_CompanyCompetitorFile.GetCompanyCompetitorId(m_iLastRowNumber);
+		m_row.CP_COMP_CO_ID = m_CompanyCompetitorFile.GetCompanyCompetitorId(m_iLastRowNumber);
 
-		strncpy(m_row.CP_IN_ID,
-		        m_CompanyCompetitorFile.GetIndustryIdCSTR(m_iLastRowNumber),
-		        sizeof(m_row.CP_IN_ID));
+		strncpy(m_row.CP_IN_ID, m_CompanyCompetitorFile.GetIndustryIdCSTR(m_iLastRowNumber), sizeof(m_row.CP_IN_ID));
 
 		++m_iLastRowNumber;
 
-		m_bMoreRecords = m_iLastRowNumber < m_iStartFromCompanyCompetitor +
-		                                        m_iCompanyCompetitorCount;
+		m_bMoreRecords = m_iLastRowNumber < m_iStartFromCompanyCompetitor + m_iCompanyCompetitorCount;
 
 		return (MoreRecords());
 	}

@@ -372,48 +372,27 @@ struct ShellText {
 static char quoteChar(const char *zName) {
 	/* All SQLite keywords, in alphabetical order */
 	static const char *azKeywords[] = {
-	    "ABORT",        "ACTION",       "ADD",
-	    "AFTER",        "ALL",          "ALTER",
-	    "ANALYZE",      "AND",          "AS",
-	    "ASC",          "ATTACH",       "AUTOINCREMENT",
-	    "BEFORE",       "BEGIN",        "BETWEEN",
-	    "BY",           "CASCADE",      "CASE",
-	    "CAST",         "CHECK",        "COLLATE",
-	    "COLUMN",       "COMMIT",       "CONFLICT",
-	    "CONSTRAINT",   "CREATE",       "CROSS",
-	    "CURRENT_DATE", "CURRENT_TIME", "CURRENT_TIMESTAMP",
-	    "DATABASE",     "DEFAULT",      "DEFERRABLE",
-	    "DEFERRED",     "DELETE",       "DESC",
-	    "DETACH",       "DISTINCT",     "DROP",
-	    "EACH",         "ELSE",         "END",
-	    "ESCAPE",       "EXCEPT",       "EXCLUSIVE",
-	    "EXISTS",       "EXPLAIN",      "FAIL",
-	    "FOR",          "FOREIGN",      "FROM",
-	    "FULL",         "GLOB",         "GROUP",
-	    "HAVING",       "IF",           "IGNORE",
-	    "IMMEDIATE",    "IN",           "INDEX",
-	    "INDEXED",      "INITIALLY",    "INNER",
-	    "INSERT",       "INSTEAD",      "INTERSECT",
-	    "INTO",         "IS",           "ISNULL",
-	    "JOIN",         "KEY",          "LEFT",
-	    "LIKE",         "LIMIT",        "MATCH",
-	    "NATURAL",      "NO",           "NOT",
-	    "NOTNULL",      "NULL",         "OF",
-	    "OFFSET",       "ON",           "OR",
-	    "ORDER",        "OUTER",        "PLAN",
-	    "PRAGMA",       "PRIMARY",      "QUERY",
-	    "RAISE",        "RECURSIVE",    "REFERENCES",
-	    "REGEXP",       "REINDEX",      "RELEASE",
-	    "RENAME",       "REPLACE",      "RESTRICT",
-	    "RIGHT",        "ROLLBACK",     "ROW",
-	    "SAVEPOINT",    "SELECT",       "SET",
-	    "TABLE",        "TEMP",         "TEMPORARY",
-	    "THEN",         "TO",           "TRANSACTION",
-	    "TRIGGER",      "UNION",        "UNIQUE",
-	    "UPDATE",       "USING",        "VACUUM",
-	    "VALUES",       "VIEW",         "VIRTUAL",
-	    "WHEN",         "WHERE",        "WITH",
-	    "WITHOUT",
+	    "ABORT",      "ACTION",    "ADD",         "AFTER",        "ALL",          "ALTER",
+	    "ANALYZE",    "AND",       "AS",          "ASC",          "ATTACH",       "AUTOINCREMENT",
+	    "BEFORE",     "BEGIN",     "BETWEEN",     "BY",           "CASCADE",      "CASE",
+	    "CAST",       "CHECK",     "COLLATE",     "COLUMN",       "COMMIT",       "CONFLICT",
+	    "CONSTRAINT", "CREATE",    "CROSS",       "CURRENT_DATE", "CURRENT_TIME", "CURRENT_TIMESTAMP",
+	    "DATABASE",   "DEFAULT",   "DEFERRABLE",  "DEFERRED",     "DELETE",       "DESC",
+	    "DETACH",     "DISTINCT",  "DROP",        "EACH",         "ELSE",         "END",
+	    "ESCAPE",     "EXCEPT",    "EXCLUSIVE",   "EXISTS",       "EXPLAIN",      "FAIL",
+	    "FOR",        "FOREIGN",   "FROM",        "FULL",         "GLOB",         "GROUP",
+	    "HAVING",     "IF",        "IGNORE",      "IMMEDIATE",    "IN",           "INDEX",
+	    "INDEXED",    "INITIALLY", "INNER",       "INSERT",       "INSTEAD",      "INTERSECT",
+	    "INTO",       "IS",        "ISNULL",      "JOIN",         "KEY",          "LEFT",
+	    "LIKE",       "LIMIT",     "MATCH",       "NATURAL",      "NO",           "NOT",
+	    "NOTNULL",    "NULL",      "OF",          "OFFSET",       "ON",           "OR",
+	    "ORDER",      "OUTER",     "PLAN",        "PRAGMA",       "PRIMARY",      "QUERY",
+	    "RAISE",      "RECURSIVE", "REFERENCES",  "REGEXP",       "REINDEX",      "RELEASE",
+	    "RENAME",     "REPLACE",   "RESTRICT",    "RIGHT",        "ROLLBACK",     "ROW",
+	    "SAVEPOINT",  "SELECT",    "SET",         "TABLE",        "TEMP",         "TEMPORARY",
+	    "THEN",       "TO",        "TRANSACTION", "TRIGGER",      "UNION",        "UNIQUE",
+	    "UPDATE",     "USING",     "VACUUM",      "VALUES",       "VIEW",         "VIRTUAL",
+	    "WHEN",       "WHERE",     "WITH",        "WITHOUT",
 	};
 	int i, lwr, upr, mid, c;
 	if (!isalpha((unsigned char)zName[0]) && zName[0] != '_')
@@ -444,34 +423,34 @@ static char quoteChar(const char *zName) {
 */
 typedef struct ShellState ShellState;
 struct ShellState {
-	sqlite3 *db;        /* The database */
-	u8 autoExplain;     /* Automatically turn on .explain mode */
-	u8 autoEQP;         /* Run EXPLAIN QUERY PLAN prior to seach SQL stmt */
-	u8 statsOn;         /* True to display memory stats before each finalize */
-	u8 scanstatsOn;     /* True to display scan stats before each finalize */
-	u8 openMode;        /* SHELL_OPEN_NORMAL, _APPENDVFS, or _ZIPFILE */
-	u8 doXdgOpen;       /* Invoke start/open/xdg-open in output_reset() */
-	int outCount;       /* Revert to stdout when reaching zero */
-	int cnt;            /* Number of records displayed so far */
-	FILE *out;          /* Write results here */
-	FILE *traceOut;     /* Output for sqlite3_trace() */
-	int nErr;           /* Number of errors seen */
-	int mode;           /* An output mode setting */
-	int modePrior;      /* Saved mode */
-	int cMode;          /* temporary output mode for the current query */
-	int normalMode;     /* Output mode before ".explain on" */
-	int writableSchema; /* True if PRAGMA writable_schema=ON */
-	int showHeader;     /* True to show column names in List or Column mode */
-	int nCheck;         /* Number of ".check" commands run */
-	unsigned shellFlgs; /* Various flags */
-	char *zDestTable;   /* Name of destination table when MODE_Insert */
-	char *zTempFile;    /* Temporary file that might need deleting */
-	char zTestcase[30]; /* Name of current test case */
-	char colSeparator[20]; /* Column separator character for several modes */
-	char rowSeparator[20]; /* Row separator character for MODE_Ascii */
-	char colSepPrior[20];  /* Saved column separator */
-	char rowSepPrior[20];  /* Saved row separator */
-	int colWidth[100]; /* Requested width of each column when in column mode*/
+	sqlite3 *db;                /* The database */
+	u8 autoExplain;             /* Automatically turn on .explain mode */
+	u8 autoEQP;                 /* Run EXPLAIN QUERY PLAN prior to seach SQL stmt */
+	u8 statsOn;                 /* True to display memory stats before each finalize */
+	u8 scanstatsOn;             /* True to display scan stats before each finalize */
+	u8 openMode;                /* SHELL_OPEN_NORMAL, _APPENDVFS, or _ZIPFILE */
+	u8 doXdgOpen;               /* Invoke start/open/xdg-open in output_reset() */
+	int outCount;               /* Revert to stdout when reaching zero */
+	int cnt;                    /* Number of records displayed so far */
+	FILE *out;                  /* Write results here */
+	FILE *traceOut;             /* Output for sqlite3_trace() */
+	int nErr;                   /* Number of errors seen */
+	int mode;                   /* An output mode setting */
+	int modePrior;              /* Saved mode */
+	int cMode;                  /* temporary output mode for the current query */
+	int normalMode;             /* Output mode before ".explain on" */
+	int writableSchema;         /* True if PRAGMA writable_schema=ON */
+	int showHeader;             /* True to show column names in List or Column mode */
+	int nCheck;                 /* Number of ".check" commands run */
+	unsigned shellFlgs;         /* Various flags */
+	char *zDestTable;           /* Name of destination table when MODE_Insert */
+	char *zTempFile;            /* Temporary file that might need deleting */
+	char zTestcase[30];         /* Name of current test case */
+	char colSeparator[20];      /* Column separator character for several modes */
+	char rowSeparator[20];      /* Row separator character for MODE_Ascii */
+	char colSepPrior[20];       /* Saved column separator */
+	char rowSepPrior[20];       /* Saved row separator */
+	int colWidth[100];          /* Requested width of each column when in column mode*/
 	int actualWidth[100];       /* Actual width of each column */
 	char nullValue[20];         /* The text to print when a NULL comes back from
 	                             ** the database */
@@ -540,8 +519,7 @@ struct ShellState {
 #define MODE_Pretty 11 /* Pretty-print schemas */
 
 static const char *modeDescr[] = {
-    "line",  "column", "list", "semi",    "html",  "insert",
-    "quote", "tcl",    "csv",  "explain", "ascii", "prettyprint",
+    "line", "column", "list", "semi", "html", "insert", "quote", "tcl", "csv", "explain", "ascii", "prettyprint",
 };
 
 /*
@@ -577,9 +555,7 @@ static void output_html_string(FILE *out, const char *z) {
 	if (z == 0)
 		z = "";
 	while (*z) {
-		for (i = 0; z[i] && z[i] != '<' && z[i] != '&' && z[i] != '>' &&
-		            z[i] != '\"' && z[i] != '\'';
-		     i++) {
+		for (i = 0; z[i] && z[i] != '<' && z[i] != '&' && z[i] != '>' && z[i] != '\"' && z[i] != '\''; i++) {
 		}
 		if (i > 0) {
 			utf8_printf(out, "%.*s", i, z);
@@ -606,17 +582,13 @@ static void output_html_string(FILE *out, const char *z) {
 ** array, then the string must be quoted for CSV.
 */
 static const char needCsvQuote[] = {
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0,
+    0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
 };
 
 /*
@@ -634,8 +606,7 @@ static void output_csv(ShellState *p, const char *z, int bSep) {
 		int nSep = strlen30(p->colSeparator);
 		for (i = 0; z[i]; i++) {
 			if (needCsvQuote[((unsigned char *)z)[i]] ||
-			    (z[i] == p->colSeparator[0] &&
-			     (nSep == 1 || memcmp(z, p->colSeparator, nSep) == 0))) {
+			    (z[i] == p->colSeparator[0] && (nSep == 1 || memcmp(z, p->colSeparator, nSep) == 0))) {
 				i = 0;
 				break;
 			}
@@ -692,8 +663,7 @@ static int shell_callback(void *pArg, int nArg, /* Number of result columns */
 		if (p->cnt++ > 0)
 			utf8_printf(p->out, "%s", p->rowSeparator);
 		for (i = 0; i < nArg; i++) {
-			utf8_printf(p->out, "%*s = %s%s", w, azCol[i],
-			            azArg[i] ? azArg[i] : p->nullValue, p->rowSeparator);
+			utf8_printf(p->out, "%*s = %s%s", w, azCol[i], azArg[i] ? azArg[i] : p->nullValue, p->rowSeparator);
 		}
 		break;
 	}
@@ -764,8 +734,7 @@ static int shell_callback(void *pArg, int nArg, /* Number of result columns */
 			} else {
 				w = 10;
 			}
-			if (p->cMode == MODE_Explain && azArg[i] &&
-			    strlenChar(azArg[i]) > w) {
+			if (p->cMode == MODE_Explain && azArg[i] && strlenChar(azArg[i]) > w) {
 				w = strlenChar(azArg[i]);
 			}
 			if (i == 1 && p->aiIndent && p->pStmt) {
@@ -782,8 +751,7 @@ static int shell_callback(void *pArg, int nArg, /* Number of result columns */
 	case MODE_List: {
 		if (p->cnt++ == 0 && p->showHeader) {
 			for (i = 0; i < nArg; i++) {
-				utf8_printf(p->out, "%s%s", azCol[i],
-				            i == nArg - 1 ? p->rowSeparator : p->colSeparator);
+				utf8_printf(p->out, "%s%s", azCol[i], i == nArg - 1 ? p->rowSeparator : p->colSeparator);
 			}
 		}
 		if (azArg == 0)
@@ -1012,10 +980,9 @@ static char *save_err_msg(sqlite3 *db /* Database to query */
 /*
 ** Run a prepared statement
 */
-static void exec_prepared_stmt(ShellState *pArg,    /* Pointer to ShellState */
-                               sqlite3_stmt *pStmt, /* Statment to run */
-                               int (*xCallback)(void *, int, char **, char **,
-                                                int *) /* Callback function */
+static void exec_prepared_stmt(ShellState *pArg,                                      /* Pointer to ShellState */
+                               sqlite3_stmt *pStmt,                                   /* Statment to run */
+                               int (*xCallback)(void *, int, char **, char **, int *) /* Callback function */
 ) {
 	int rc;
 
@@ -1033,8 +1000,8 @@ static void exec_prepared_stmt(ShellState *pArg,    /* Pointer to ShellState */
 			if (!pData) {
 				rc = SQLITE_NOMEM;
 			} else {
-				char **azCols = (char **)pData; /* Names of result columns */
-				char **azVals = &azCols[nCol];  /* Results */
+				char **azCols = (char **)pData;      /* Names of result columns */
+				char **azVals = &azCols[nCol];       /* Results */
 				int *aiTypes = (int *)&azVals[nCol]; /* Result types */
 				int i, x;
 				assert(sizeof(int) <= sizeof(char *));
@@ -1046,8 +1013,7 @@ static void exec_prepared_stmt(ShellState *pArg,    /* Pointer to ShellState */
 					/* extract the data and data types */
 					for (i = 0; i < nCol; i++) {
 						aiTypes[i] = x = sqlite3_column_type(pStmt, i);
-						if (x == SQLITE_BLOB && pArg &&
-						    pArg->cMode == MODE_Insert) {
+						if (x == SQLITE_BLOB && pArg && pArg->cMode == MODE_Insert) {
 							azVals[i] = "";
 						} else {
 							azVals[i] = (char *)sqlite3_column_text(pStmt, i);
@@ -1088,10 +1054,9 @@ static void exec_prepared_stmt(ShellState *pArg,    /* Pointer to ShellState */
 ** function except it takes a slightly different callback
 ** and callback data argument.
 */
-static int shell_exec(sqlite3 *db,      /* An open database */
-                      const char *zSql, /* SQL to be evaluated */
-                      int (*xCallback)(void *, int, char **, char **,
-                                       int *), /* Callback function */
+static int shell_exec(sqlite3 *db,                                            /* An open database */
+                      const char *zSql,                                       /* SQL to be evaluated */
+                      int (*xCallback)(void *, int, char **, char **, int *), /* Callback function */
                       /* (not the same as sqlite3_exec) */
                       ShellState *pArg, /* Pointer to ShellState */
                       char **pzErrMsg   /* Error msg written here */
@@ -1166,29 +1131,28 @@ static int shell_exec(sqlite3 *db,      /* An open database */
 /*
 ** Text of a help message
 */
-static char zHelp[] =
-    ".cd DIRECTORY          Change the working directory to DIRECTORY\n"
-    ".echo on|off           Turn command echo on or off\n"
-    ".headers on|off        Turn display of headers on or off\n"
-    ".help                  Show this message\n"
-    ".mode MODE ?TABLE?     Set output mode where MODE is one of:\n"
-    "                         ascii    Columns/rows delimited by 0x1F and "
-    "0x1E\n"
-    "                         csv      Comma-separated values\n"
-    "                         column   Left-aligned columns.  (See .width)\n"
-    "                         html     HTML <table> code\n"
-    "                         line     One value per line\n"
-    "                         list     Values delimited by \"|\"\n"
-    "                         tabs     Tab-separated values\n"
-    ".print STRING...       Print literal STRING\n"
-    ".exit                  Exit this program\n"
-    ".quit                  Exit this program\n"
-    ".read FILENAME         Execute SQL in FILENAME\n"
-    ".separator COL ?ROW?   Change the column separator and optionally the "
-    "row\n"
-    "                         separator for both the output mode and .import\n"
-    ".width NUM1 NUM2 ...   Set column widths for \"column\" mode\n"
-    "                         Negative values right-justify\n";
+static char zHelp[] = ".cd DIRECTORY          Change the working directory to DIRECTORY\n"
+                      ".echo on|off           Turn command echo on or off\n"
+                      ".headers on|off        Turn display of headers on or off\n"
+                      ".help                  Show this message\n"
+                      ".mode MODE ?TABLE?     Set output mode where MODE is one of:\n"
+                      "                         ascii    Columns/rows delimited by 0x1F and "
+                      "0x1E\n"
+                      "                         csv      Comma-separated values\n"
+                      "                         column   Left-aligned columns.  (See .width)\n"
+                      "                         html     HTML <table> code\n"
+                      "                         line     One value per line\n"
+                      "                         list     Values delimited by \"|\"\n"
+                      "                         tabs     Tab-separated values\n"
+                      ".print STRING...       Print literal STRING\n"
+                      ".exit                  Exit this program\n"
+                      ".quit                  Exit this program\n"
+                      ".read FILENAME         Execute SQL in FILENAME\n"
+                      ".separator COL ?ROW?   Change the column separator and optionally the "
+                      "row\n"
+                      "                         separator for both the output mode and .import\n"
+                      ".width NUM1 NUM2 ...   Set column widths for \"column\" mode\n"
+                      "                         Negative values right-justify\n";
 
 /* Forward reference */
 static int process_input(ShellState *p, FILE *in);
@@ -1209,8 +1173,7 @@ static void open_db(ShellState *p, int keepAlive) {
 		}
 		globalDb = p->db;
 		if (p->db == 0 || SQLITE_OK != sqlite3_errcode(p->db)) {
-			utf8_printf(stderr, "Error: unable to open database \"%s\": %s\n",
-			            p->zDbFilename, sqlite3_errmsg(p->db));
+			utf8_printf(stderr, "Error: unable to open database \"%s\": %s\n", p->zDbFilename, sqlite3_errmsg(p->db));
 			if (keepAlive)
 				return;
 			exit(1);
@@ -1370,8 +1333,7 @@ static int booleanValue(const char *zArg) {
 	if (sqlite3_stricmp(zArg, "off") == 0 || sqlite3_stricmp(zArg, "no") == 0) {
 		return 0;
 	}
-	utf8_printf(stderr,
-	            "ERROR: Not a boolean value: \"%s\". Assuming \"no\".\n", zArg);
+	utf8_printf(stderr, "ERROR: Not a boolean value: \"%s\". Assuming \"no\".\n", zArg);
 	return 0;
 }
 
@@ -1578,8 +1540,7 @@ static int do_meta_command(char *zLine, ShellState *p) {
 		if (nArg == 2) {
 			rc = chdir(azArg[1]);
 			if (rc) {
-				utf8_printf(stderr, "Cannot change to directory \"%s\"\n",
-				            azArg[1]);
+				utf8_printf(stderr, "Cannot change to directory \"%s\"\n", azArg[1]);
 				rc = 1;
 			}
 		} else {
@@ -1597,8 +1558,7 @@ static int do_meta_command(char *zLine, ShellState *p) {
 		data.cMode = data.mode = MODE_List;
 		sqlite3_snprintf(sizeof(data.colSeparator), data.colSeparator, ": ");
 		data.cnt = 0;
-		sqlite3_exec(p->db, "SELECT name, file FROM pragma_database_list",
-		             callback, &data, &zErrMsg);
+		sqlite3_exec(p->db, "SELECT name, file FROM pragma_database_list", callback, &data, &zErrMsg);
 		if (zErrMsg) {
 			utf8_printf(stderr, "Error: %s\n", zErrMsg);
 			sqlite3_free(zErrMsg);
@@ -1863,17 +1823,14 @@ static int do_meta_command(char *zLine, ShellState *p) {
 			sqlite3_snprintf(sizeof(p->rowSeparator), p->rowSeparator, SEP_Row);
 		} else if (c2 == 'l' && n2 > 2 && strncmp(azArg[1], "list", n2) == 0) {
 			p->mode = MODE_List;
-			sqlite3_snprintf(sizeof(p->colSeparator), p->colSeparator,
-			                 SEP_Column);
+			sqlite3_snprintf(sizeof(p->colSeparator), p->colSeparator, SEP_Column);
 			sqlite3_snprintf(sizeof(p->rowSeparator), p->rowSeparator, SEP_Row);
 		} else if (c2 == 'h' && strncmp(azArg[1], "html", n2) == 0) {
 			p->mode = MODE_Html;
 		} else if (c2 == 'c' && strncmp(azArg[1], "csv", n2) == 0) {
 			p->mode = MODE_Csv;
-			sqlite3_snprintf(sizeof(p->colSeparator), p->colSeparator,
-			                 SEP_Comma);
-			sqlite3_snprintf(sizeof(p->rowSeparator), p->rowSeparator,
-			                 SEP_CrLf);
+			sqlite3_snprintf(sizeof(p->colSeparator), p->colSeparator, SEP_Comma);
+			sqlite3_snprintf(sizeof(p->rowSeparator), p->rowSeparator, SEP_CrLf);
 		} else if (c2 == 't' && strncmp(azArg[1], "tabs", n2) == 0) {
 			p->mode = MODE_List;
 			sqlite3_snprintf(sizeof(p->colSeparator), p->colSeparator, SEP_Tab);
@@ -1884,17 +1841,13 @@ static int do_meta_command(char *zLine, ShellState *p) {
 			p->mode = MODE_Quote;
 		} else if (c2 == 'a' && strncmp(azArg[1], "ascii", n2) == 0) {
 			p->mode = MODE_Ascii;
-			sqlite3_snprintf(sizeof(p->colSeparator), p->colSeparator,
-			                 SEP_Unit);
-			sqlite3_snprintf(sizeof(p->rowSeparator), p->rowSeparator,
-			                 SEP_Record);
+			sqlite3_snprintf(sizeof(p->colSeparator), p->colSeparator, SEP_Unit);
+			sqlite3_snprintf(sizeof(p->rowSeparator), p->rowSeparator, SEP_Record);
 		} else if (nArg == 1) {
 			raw_printf(p->out, "current output mode: %s\n", modeDescr[p->mode]);
 		} else {
-			raw_printf(
-			    stderr,
-			    "Error: mode should be one of: "
-			    "ascii column csv html insert line list quote tabs tcl\n");
+			raw_printf(stderr, "Error: mode should be one of: "
+			                   "ascii column csv html insert line list quote tabs tcl\n");
 			rc = 1;
 		}
 		p->cMode = p->mode;
@@ -1902,8 +1855,7 @@ static int do_meta_command(char *zLine, ShellState *p) {
 
 	    if (c == 'n' && strncmp(azArg[0], "nullvalue", n) == 0) {
 		if (nArg == 2) {
-			sqlite3_snprintf(sizeof(p->nullValue), p->nullValue, "%.*s",
-			                 (int)ArraySize(p->nullValue) - 1, azArg[1]);
+			sqlite3_snprintf(sizeof(p->nullValue), p->nullValue, "%.*s", (int)ArraySize(p->nullValue) - 1, azArg[1]);
 		} else {
 			raw_printf(stderr, "Usage: .nullvalue STRING\n");
 			rc = 1;
@@ -2037,8 +1989,7 @@ static int do_meta_command(char *zLine, ShellState *p) {
 			strncpy(mainPrompt, azArg[1], (int)ArraySize(mainPrompt) - 1);
 		}
 		if (nArg >= 3) {
-			strncpy(continuePrompt, azArg[2],
-			        (int)ArraySize(continuePrompt) - 1);
+			strncpy(continuePrompt, azArg[2], (int)ArraySize(continuePrompt) - 1);
 		}
 	} else
 
@@ -2069,12 +2020,12 @@ static int do_meta_command(char *zLine, ShellState *p) {
 			rc = 1;
 		}
 		if (nArg >= 2) {
-			sqlite3_snprintf(sizeof(p->colSeparator), p->colSeparator, "%.*s",
-			                 (int)ArraySize(p->colSeparator) - 1, azArg[1]);
+			sqlite3_snprintf(sizeof(p->colSeparator), p->colSeparator, "%.*s", (int)ArraySize(p->colSeparator) - 1,
+			                 azArg[1]);
 		}
 		if (nArg >= 3) {
-			sqlite3_snprintf(sizeof(p->rowSeparator), p->rowSeparator, "%.*s",
-			                 (int)ArraySize(p->rowSeparator) - 1, azArg[2]);
+			sqlite3_snprintf(sizeof(p->rowSeparator), p->rowSeparator, "%.*s", (int)ArraySize(p->rowSeparator) - 1,
+			                 azArg[2]);
 		}
 	} else
 
@@ -2178,8 +2129,7 @@ static int line_is_command_terminator(const char *zLine) {
 	if (zLine[0] == '/' && _all_whitespace(&zLine[1])) {
 		return 1; /* Oracle */
 	}
-	if (ToLower(zLine[0]) == 'g' && ToLower(zLine[1]) == 'o' &&
-	    _all_whitespace(&zLine[2])) {
+	if (ToLower(zLine[0]) == 'g' && ToLower(zLine[1]) == 'o' && _all_whitespace(&zLine[2])) {
 		return 1; /* SQL Server */
 	}
 	return 0;
@@ -2226,8 +2176,7 @@ static int runOneSqlLine(ShellState *p, char *zSql, FILE *in, int startline) {
 	if (rc || zErrMsg) {
 		char zPrefix[100];
 		if (in != 0 || !stdin_is_interactive) {
-			sqlite3_snprintf(sizeof(zPrefix), zPrefix,
-			                 "Error: near line %d:", startline);
+			sqlite3_snprintf(sizeof(zPrefix), zPrefix, "Error: near line %d:", startline);
 		} else {
 			sqlite3_snprintf(sizeof(zPrefix), zPrefix, "Error:");
 		}
@@ -2321,9 +2270,7 @@ static int process_input(ShellState *p, FILE *in) {
 			memcpy(zSql + nSql, zLine, nLine + 1);
 			nSql += nLine;
 		}
-		if (nSql &&
-		    line_contains_semicolon(&zSql[nSqlPrior], nSql - nSqlPrior) &&
-		    sqlite3_complete(zSql)) {
+		if (nSql && line_contains_semicolon(&zSql[nSqlPrior], nSql - nSqlPrior) && sqlite3_complete(zSql)) {
 			errCnt += runOneSqlLine(p, zSql, in, startline);
 			nSql = 0;
 			if (p->outCount) {
@@ -2386,22 +2333,21 @@ static char *find_home_dir(int clearFlag) {
 /*
 ** Show available command line options
 */
-static const char zOptions[] =
-    "   -ascii               set output mode to 'ascii'\n"
-    "   -column              set output mode to 'column'\n"
-    "   -cmd COMMAND         run \"COMMAND\" before reading stdin\n"
-    "   -csv                 set output mode to 'csv'\n"
-    "   -echo                print commands before execution\n"
-    "   -init FILENAME       read/process named file\n"
-    "   -[no]header          turn headers on or off\n"
-    "   -help                show this message\n"
-    "   -html                set output mode to HTML\n"
-    "   -line                set output mode to 'line'\n"
-    "   -list                set output mode to 'list'\n"
-    "   -newline SEP         set output row separator. Default: '\\n'\n"
-    "   -nullvalue TEXT      set text string for NULL values. Default ''\n"
-    "   -separator SEP       set output column separator. Default: '|'\n"
-    "   -version             show SQLite version\n";
+static const char zOptions[] = "   -ascii               set output mode to 'ascii'\n"
+                               "   -column              set output mode to 'column'\n"
+                               "   -cmd COMMAND         run \"COMMAND\" before reading stdin\n"
+                               "   -csv                 set output mode to 'csv'\n"
+                               "   -echo                print commands before execution\n"
+                               "   -init FILENAME       read/process named file\n"
+                               "   -[no]header          turn headers on or off\n"
+                               "   -help                show this message\n"
+                               "   -html                set output mode to HTML\n"
+                               "   -line                set output mode to 'line'\n"
+                               "   -list                set output mode to 'list'\n"
+                               "   -newline SEP         set output row separator. Default: '\\n'\n"
+                               "   -nullvalue TEXT      set text string for NULL values. Default ''\n"
+                               "   -separator SEP       set output column separator. Default: '|'\n"
+                               "   -version             show SQLite version\n";
 static void usage(int showDetail) {
 	//    utf8_printf(stderr,
 	//                "Usage: %s [OPTIONS] FILENAME [SQL]\n"
@@ -2449,16 +2395,14 @@ static void printBold(const char *zText) {
 */
 static char *cmdline_option_value(int argc, char **argv, int i) {
 	if (i == argc) {
-		utf8_printf(stderr, "%s: Error: missing argument to %s\n", argv[0],
-		            argv[argc - 1]);
+		utf8_printf(stderr, "%s: Error: missing argument to %s\n", argv[0], argv[argc - 1]);
 		exit(1);
 	}
 	return argv[i];
 }
 
-static void process_rc(
-    ShellState *p,                /* Configuration data */
-    const char *sqliterc_override /* Name of config file. NULL to use default */
+static void process_rc(ShellState *p,                /* Configuration data */
+                       const char *sqliterc_override /* Name of config file. NULL to use default */
 ) {
 	char *home_dir = NULL;
 	const char *sqliterc = sqliterc_override;
@@ -2539,8 +2483,8 @@ int main(int argc, char **argv) {
 		}
 		if (z[1] == '-')
 			z++;
-		if (strcmp(z, "-separator") == 0 || strcmp(z, "-nullvalue") == 0 ||
-		    strcmp(z, "-newline") == 0 || strcmp(z, "-cmd") == 0) {
+		if (strcmp(z, "-separator") == 0 || strcmp(z, "-nullvalue") == 0 || strcmp(z, "-newline") == 0 ||
+		    strcmp(z, "-cmd") == 0) {
 			(void)cmdline_option_value(argc, argv, ++i);
 		} else if (strcmp(z, "-init") == 0) {
 			zInitFile = cmdline_option_value(argc, argv, ++i);
@@ -2551,8 +2495,7 @@ int main(int argc, char **argv) {
 		data.zDbFilename = ":memory:";
 		warnInmemoryDb = argc == 1;
 #else
-		utf8_printf(stderr, "%s: Error: no database filename specified\n",
-		            Argv0);
+		utf8_printf(stderr, "%s: Error: no database filename specified\n", Argv0);
 		return 1;
 #endif
 	}
@@ -2596,19 +2539,14 @@ int main(int argc, char **argv) {
 			memcpy(data.colSeparator, ",", 2);
 		} else if (strcmp(z, "-ascii") == 0) {
 			data.mode = MODE_Ascii;
-			sqlite3_snprintf(sizeof(data.colSeparator), data.colSeparator,
-			                 SEP_Unit);
-			sqlite3_snprintf(sizeof(data.rowSeparator), data.rowSeparator,
-			                 SEP_Record);
+			sqlite3_snprintf(sizeof(data.colSeparator), data.colSeparator, SEP_Unit);
+			sqlite3_snprintf(sizeof(data.rowSeparator), data.rowSeparator, SEP_Record);
 		} else if (strcmp(z, "-separator") == 0) {
-			sqlite3_snprintf(sizeof(data.colSeparator), data.colSeparator, "%s",
-			                 cmdline_option_value(argc, argv, ++i));
+			sqlite3_snprintf(sizeof(data.colSeparator), data.colSeparator, "%s", cmdline_option_value(argc, argv, ++i));
 		} else if (strcmp(z, "-newline") == 0) {
-			sqlite3_snprintf(sizeof(data.rowSeparator), data.rowSeparator, "%s",
-			                 cmdline_option_value(argc, argv, ++i));
+			sqlite3_snprintf(sizeof(data.rowSeparator), data.rowSeparator, "%s", cmdline_option_value(argc, argv, ++i));
 		} else if (strcmp(z, "-nullvalue") == 0) {
-			sqlite3_snprintf(sizeof(data.nullValue), data.nullValue, "%s",
-			                 cmdline_option_value(argc, argv, ++i));
+			sqlite3_snprintf(sizeof(data.nullValue), data.nullValue, "%s", cmdline_option_value(argc, argv, ++i));
 		} else if (strcmp(z, "-header") == 0) {
 			data.showHeader = 1;
 		} else if (strcmp(z, "-noheader") == 0) {
@@ -2643,8 +2581,7 @@ int main(int argc, char **argv) {
 					if (bail_on_error)
 						return rc != 0 ? rc : 1;
 				} else if (rc != 0) {
-					utf8_printf(stderr, "Error: unable to process SQL \"%s\"\n",
-					            z);
+					utf8_printf(stderr, "Error: unable to process SQL \"%s\"\n", z);
 					if (bail_on_error)
 						return rc;
 				}
@@ -2670,14 +2607,12 @@ int main(int argc, char **argv) {
 					return rc == 2 ? 0 : rc;
 			} else {
 				open_db(&data, 0);
-				rc = shell_exec(data.db, azCmd[i], shell_callback, &data,
-				                &zErrMsg);
+				rc = shell_exec(data.db, azCmd[i], shell_callback, &data, &zErrMsg);
 				if (zErrMsg != 0) {
 					utf8_printf(stderr, "Error: %s\n", zErrMsg);
 					return rc != 0 ? rc : 1;
 				} else if (rc != 0) {
-					utf8_printf(stderr, "Error: unable to process SQL: %s\n",
-					            azCmd[i]);
+					utf8_printf(stderr, "Error: unable to process SQL: %s\n", azCmd[i]);
 					return rc;
 				}
 			}
@@ -2701,8 +2636,7 @@ int main(int argc, char **argv) {
 			if (zHome) {
 				nHistory = strlen30(zHome) + 20;
 				if ((zHistory = malloc(nHistory)) != 0) {
-					sqlite3_snprintf(nHistory, zHistory, "%s/.duckdb_history",
-					                 zHome);
+					sqlite3_snprintf(nHistory, zHistory, "%s/.duckdb_history", zHome);
 				}
 			}
 			if (zHistory) {

@@ -49,7 +49,7 @@ class CODBCLoaderFactory : public CBaseLoaderFactory {
 	char m_szDB[iMaxDBName];       // database name
 	char m_szLoaderParams[1024];   // optional parameters
 
-  public:
+public:
 	// Constructor
 	CODBCLoaderFactory(char *szServer, char *szDatabase, char *szLoaderParams) {
 		assert(szServer);
@@ -62,10 +62,8 @@ class CODBCLoaderFactory : public CBaseLoaderFactory {
 
 	// Functions to create loader classes for individual tables.
 
-	virtual CBaseLoader<ACCOUNT_PERMISSION_ROW> *
-	CreateAccountPermissionLoader() {
-		return new CODBCAccountPermissionLoad(m_szServer, m_szDB,
-		                                      m_szLoaderParams);
+	virtual CBaseLoader<ACCOUNT_PERMISSION_ROW> *CreateAccountPermissionLoader() {
+		return new CODBCAccountPermissionLoad(m_szServer, m_szDB, m_szLoaderParams);
 	};
 	virtual CBaseLoader<ADDRESS_ROW> *CreateAddressLoader() {
 		return new CODBCAddressLoad(m_szServer, m_szDB, m_szLoaderParams);
@@ -74,34 +72,28 @@ class CODBCLoaderFactory : public CBaseLoaderFactory {
 		return new CODBCBrokerLoad(m_szServer, m_szDB, m_szLoaderParams);
 	};
 	virtual CBaseLoader<CASH_TRANSACTION_ROW> *CreateCashTransactionLoader() {
-		return new CODBCCashTransactionLoad(m_szServer, m_szDB,
-		                                    m_szLoaderParams);
+		return new CODBCCashTransactionLoad(m_szServer, m_szDB, m_szLoaderParams);
 	};
 	virtual CBaseLoader<CHARGE_ROW> *CreateChargeLoader() {
 		return new CODBCChargeLoad(m_szServer, m_szDB, m_szLoaderParams);
 	};
 	virtual CBaseLoader<COMMISSION_RATE_ROW> *CreateCommissionRateLoader() {
-		return new CODBCCommissionRateLoad(m_szServer, m_szDB,
-		                                   m_szLoaderParams);
+		return new CODBCCommissionRateLoad(m_szServer, m_szDB, m_szLoaderParams);
 	};
-	virtual CBaseLoader<COMPANY_COMPETITOR_ROW> *
-	CreateCompanyCompetitorLoader() {
-		return new CODBCCompanyCompetitorLoad(m_szServer, m_szDB,
-		                                      m_szLoaderParams);
+	virtual CBaseLoader<COMPANY_COMPETITOR_ROW> *CreateCompanyCompetitorLoader() {
+		return new CODBCCompanyCompetitorLoad(m_szServer, m_szDB, m_szLoaderParams);
 	};
 	virtual CBaseLoader<COMPANY_ROW> *CreateCompanyLoader() {
 		return new CODBCCompanyLoad(m_szServer, m_szDB, m_szLoaderParams);
 	};
 	virtual CBaseLoader<CUSTOMER_ACCOUNT_ROW> *CreateCustomerAccountLoader() {
-		return new CODBCCustomerAccountLoad(m_szServer, m_szDB,
-		                                    m_szLoaderParams);
+		return new CODBCCustomerAccountLoad(m_szServer, m_szDB, m_szLoaderParams);
 	};
 	virtual CBaseLoader<CUSTOMER_ROW> *CreateCustomerLoader() {
 		return new CODBCCustomerLoad(m_szServer, m_szDB, m_szLoaderParams);
 	};
 	virtual CBaseLoader<CUSTOMER_TAXRATE_ROW> *CreateCustomerTaxrateLoader() {
-		return new CODBCCustomerTaxRateLoad(m_szServer, m_szDB,
-		                                    m_szLoaderParams);
+		return new CODBCCustomerTaxRateLoad(m_szServer, m_szDB, m_szLoaderParams);
 	};
 	virtual CBaseLoader<DAILY_MARKET_ROW> *CreateDailyMarketLoader() {
 		return new CODBCDailyMarketLoad(m_szServer, m_szDB, m_szLoaderParams);
@@ -116,12 +108,10 @@ class CODBCLoaderFactory : public CBaseLoaderFactory {
 		return new CODBCHoldingLoad(m_szServer, m_szDB, m_szLoaderParams);
 	};
 	virtual CBaseLoader<HOLDING_HISTORY_ROW> *CreateHoldingHistoryLoader() {
-		return new CODBCHoldingHistoryLoad(m_szServer, m_szDB,
-		                                   m_szLoaderParams);
+		return new CODBCHoldingHistoryLoad(m_szServer, m_szDB, m_szLoaderParams);
 	};
 	virtual CBaseLoader<HOLDING_SUMMARY_ROW> *CreateHoldingSummaryLoader() {
-		return new CODBCHoldingSummaryLoad(m_szServer, m_szDB,
-		                                   m_szLoaderParams);
+		return new CODBCHoldingSummaryLoad(m_szServer, m_szDB, m_szLoaderParams);
 	};
 	virtual CBaseLoader<INDUSTRY_ROW> *CreateIndustryLoader() {
 		return new CODBCIndustryLoad(m_szServer, m_szDB, m_szLoaderParams);

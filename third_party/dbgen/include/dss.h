@@ -60,19 +60,17 @@ extern "C" {
 #define INTERNAL_ERROR(p) // {fprintf(stderr,"%s", p);abort();}
 #define LN_CNT 4
 // static char lnoise[4] = {'|', '/', '-', '\\' };
-#define LIFENOISE(n, var)                                                      \
-	// if (verbose > 0) fprintf(stderr, "%c\b", lnoise[(var%LN_CNT)])
+#define LIFENOISE(n, var) // if (verbose > 0) fprintf(stderr, "%c\b", lnoise[(var%LN_CNT)])
 
-#define MALLOC_CHECK(var)                                                      \
-	if ((var) == NULL) {                                                       \
-		fprintf(stderr, "Malloc failed at %s:%d\n", __FILE__, __LINE__);       \
-		exit(1);                                                               \
+#define MALLOC_CHECK(var)                                                                                              \
+	if ((var) == NULL) {                                                                                               \
+		fprintf(stderr, "Malloc failed at %s:%d\n", __FILE__, __LINE__);                                               \
+		exit(1);                                                                                                       \
 	}
-#define OPEN_CHECK(var, path)                                                  \
-	if ((var) == NULL) {                                                       \
-		fprintf(stderr, "Open failed for %s at %s:%d\n", path, __FILE__,       \
-		        __LINE__);                                                     \
-		exit(1);                                                               \
+#define OPEN_CHECK(var, path)                                                                                          \
+	if ((var) == NULL) {                                                                                               \
+		fprintf(stderr, "Open failed for %s at %s:%d\n", path, __FILE__, __LINE__);                                    \
+		exit(1);                                                                                                       \
 	}
 #ifndef MAX_CHILDREN
 #define MAX_CHILDREN 1000
@@ -89,12 +87,10 @@ extern "C" {
 #endif /* BITS_PER_LONG */
 #define SPARSE_BITS 2
 #define SPARSE_KEEP 3
-#define MK_SPARSE(key, seq)                                                    \
-	(((((key >> 3) << 2) | (seq & 0x0003)) << 3) | (key & 0x0007))
+#define MK_SPARSE(key, seq) (((((key >> 3) << 2) | (seq & 0x0003)) << 3) | (key & 0x0007))
 
 #define RANDOM(tgt, lower, upper, stream) dss_random(&tgt, lower, upper, stream)
-#define RANDOM64(tgt, lower, upper, stream)                                    \
-	dss_random64(&tgt, lower, upper, stream)
+#define RANDOM64(tgt, lower, upper, stream) dss_random64(&tgt, lower, upper, stream)
 
 typedef struct {
 	long weight;
@@ -151,15 +147,12 @@ long dssncasecmp PROTO((const char *s1, const char *s2, int n));
 long dsscasecmp PROTO((const char *s1, const char *s2));
 int pick_str PROTO((distribution * s, int c, char *target));
 void agg_str PROTO((distribution * set, long count, long col, char *dest));
-void read_dist PROTO((const char *path, const char *name,
-                      distribution *target));
-void embed_str PROTO((distribution * d, int min, int max, int stream,
-                      char *dest));
+void read_dist PROTO((const char *path, const char *name, distribution *target));
+void embed_str PROTO((distribution * d, int min, int max, int stream, char *dest));
 #ifndef STDLIB_HAS_GETOPT
 int getopt PROTO((int arg_cnt, char **arg_vect, char *oprions));
 #endif /* STDLIB_HAS_GETOPT */
-DSS_HUGE set_state PROTO((int t, long scale, long procs, long step,
-                          DSS_HUGE *e));
+DSS_HUGE set_state PROTO((int t, long scale, long procs, long step, DSS_HUGE *e));
 
 /* rnd.c */
 DSS_HUGE NextRand PROTO((DSS_HUGE nSeed));
@@ -425,11 +418,11 @@ int dbg_print(int dt, FILE *tgt, void *data, int len, int eol);
 /*
  * verification macros
  */
-#define VRF_STR(t, d)                                                          \
-	{                                                                          \
-		char *xx = d;                                                          \
-		while (*xx)                                                            \
-			tdefs[t].vtotal += *xx++;                                          \
+#define VRF_STR(t, d)                                                                                                  \
+	{                                                                                                                  \
+		char *xx = d;                                                                                                  \
+		while (*xx)                                                                                                    \
+			tdefs[t].vtotal += *xx++;                                                                                  \
 	}
 #define VRF_INT(t, d) tdefs[t].vtotal += d
 #define VRF_HUGE(t, d) tdefs[t].vtotal = *((long *)&d) + *((long *)(&d + 1))

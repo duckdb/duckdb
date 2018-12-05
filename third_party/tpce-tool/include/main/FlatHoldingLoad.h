@@ -45,11 +45,11 @@
 namespace TPCE {
 
 class CFlatHoldingLoad : public CFlatFileLoader<HOLDING_ROW> {
-  private:
+private:
 	CDateTime Flat_H_DTS;
 	const std::string HoldingRowFmt;
 
-  public:
+public:
 	CFlatHoldingLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
 	    : CFlatFileLoader<HOLDING_ROW>(szFileName, FlatFileOutputMode),
 	      HoldingRowFmt("%" PRId64 "|%" PRId64 "|%s|%s|%.2f|%d\n"){};
@@ -59,13 +59,10 @@ class CFlatHoldingLoad : public CFlatFileLoader<HOLDING_ROW> {
 	 */
 	void WriteNextRecord(const HOLDING_ROW &next_record) {
 		Flat_H_DTS = next_record.H_DTS;
-		int rc = fprintf(hOutFile, HoldingRowFmt.c_str(), next_record.H_T_ID,
-		                 next_record.H_CA_ID, next_record.H_S_SYMB,
-		                 Flat_H_DTS.ToStr(FlatFileDateTimeFormat),
-		                 next_record.H_PRICE, next_record.H_QTY);
+		int rc = fprintf(hOutFile, HoldingRowFmt.c_str(), next_record.H_T_ID, next_record.H_CA_ID, next_record.H_S_SYMB,
+		                 Flat_H_DTS.ToStr(FlatFileDateTimeFormat), next_record.H_PRICE, next_record.H_QTY);
 		if (rc < 0) {
-			throw CSystemErr(CSystemErr::eWriteFile,
-			                 "CFlatHoldingLoad::WriteNextRecord");
+			throw CSystemErr(CSystemErr::eWriteFile, "CFlatHoldingLoad::WriteNextRecord");
 		}
 	}
 };

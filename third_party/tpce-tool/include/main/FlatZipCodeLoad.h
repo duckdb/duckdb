@@ -45,23 +45,20 @@
 namespace TPCE {
 
 class CFlatZipCodeLoad : public CFlatFileLoader<ZIP_CODE_ROW> {
-  private:
+private:
 	const std::string ZipCodeRowFmt;
 
-  public:
+public:
 	CFlatZipCodeLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
-	    : CFlatFileLoader<ZIP_CODE_ROW>(szFileName, FlatFileOutputMode),
-	      ZipCodeRowFmt("%s|%s|%s\n"){};
+	    : CFlatFileLoader<ZIP_CODE_ROW>(szFileName, FlatFileOutputMode), ZipCodeRowFmt("%s|%s|%s\n"){};
 
 	/*
 	 *   Writes a record to the file.
 	 */
 	void WriteNextRecord(const ZIP_CODE_ROW &next_record) {
-		int rc = fprintf(hOutFile, ZipCodeRowFmt.c_str(), next_record.ZC_CODE,
-		                 next_record.ZC_TOWN, next_record.ZC_DIV);
+		int rc = fprintf(hOutFile, ZipCodeRowFmt.c_str(), next_record.ZC_CODE, next_record.ZC_TOWN, next_record.ZC_DIV);
 		if (rc < 0) {
-			throw CSystemErr(CSystemErr::eWriteFile,
-			                 "CFlatZipCodeLoad::WriteNextRecord");
+			throw CSystemErr(CSystemErr::eWriteFile, "CFlatZipCodeLoad::WriteNextRecord");
 		}
 	}
 };

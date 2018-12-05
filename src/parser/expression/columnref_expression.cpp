@@ -1,4 +1,3 @@
-
 #include "parser/expression/columnref_expression.hpp"
 
 #include "common/exception.hpp"
@@ -29,9 +28,7 @@ void ColumnRefExpression::Serialize(Serializer &serializer) {
 	serializer.Write<size_t>(index);
 }
 
-unique_ptr<Expression>
-ColumnRefExpression::Deserialize(ExpressionDeserializeInformation *info,
-                                 Deserializer &source) {
+unique_ptr<Expression> ColumnRefExpression::Deserialize(ExpressionDeserializeInfo *info, Deserializer &source) {
 	auto table_name = source.Read<string>();
 	auto column_name = source.Read<string>();
 	auto index = source.Read<size_t>();
@@ -67,6 +64,5 @@ string ColumnRefExpression::ToString() const {
 	if (column_name.empty() && index != (size_t)-1) {
 		return "#" + std::to_string(index);
 	}
-	return column_name.empty() ? std::to_string(binding.column_index)
-	                           : column_name;
+	return column_name.empty() ? std::to_string(binding.column_index) : column_name;
 }

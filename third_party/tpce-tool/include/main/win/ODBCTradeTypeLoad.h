@@ -45,23 +45,17 @@
 namespace TPCE {
 
 class CODBCTradeTypeLoad : public CDBLoader<TRADE_TYPE_ROW> {
-  public:
-	CODBCTradeTypeLoad(char *szServer, char *szDatabase, char *szLoaderParams,
-	                   char *szTable = "TRADE_TYPE")
-	    : CDBLoader<TRADE_TYPE_ROW>(szServer, szDatabase, szLoaderParams,
-	                                szTable){};
+public:
+	CODBCTradeTypeLoad(char *szServer, char *szDatabase, char *szLoaderParams, char *szTable = "TRADE_TYPE")
+	    : CDBLoader<TRADE_TYPE_ROW>(szServer, szDatabase, szLoaderParams, szTable){};
 
 	virtual void BindColumns() {
 		// Binding function we have to implement.
 		int i = 0;
-		if (bcp_bind(m_hdbc, (BYTE *)&m_row.TT_ID, 0, SQL_VARLEN_DATA,
-		             (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
-		    bcp_bind(m_hdbc, (BYTE *)&m_row.TT_NAME, 0, SQL_VARLEN_DATA,
-		             (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
-		    bcp_bind(m_hdbc, (BYTE *)&m_row.TT_IS_SELL, 0, SQL_VARLEN_DATA,
-		             NULL, 0, SQLINT1, ++i) != SUCCEED ||
-		    bcp_bind(m_hdbc, (BYTE *)&m_row.TT_IS_MRKT, 0, SQL_VARLEN_DATA,
-		             NULL, 0, SQLINT1, ++i) != SUCCEED)
+		if (bcp_bind(m_hdbc, (BYTE *)&m_row.TT_ID, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.TT_NAME, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.TT_IS_SELL, 0, SQL_VARLEN_DATA, NULL, 0, SQLINT1, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.TT_IS_MRKT, 0, SQL_VARLEN_DATA, NULL, 0, SQLINT1, ++i) != SUCCEED)
 			ThrowError(CODBCERR::eBcpBind);
 
 		//      if ( bcp_control(m_hdbc, BCPHINTS, "TABLOCK" ) != SUCCEED )

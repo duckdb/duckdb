@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // parser/column_definition.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -17,17 +15,15 @@ namespace duckdb {
 
 //! A column of a table.
 class ColumnDefinition {
-  public:
-	ColumnDefinition(std::string name, TypeId type)
-	    : name(name), type(type), has_default(false) {
+public:
+	ColumnDefinition(string name, TypeId type) : name(name), type(type), has_default(false) {
 	}
-	ColumnDefinition(std::string name, TypeId type, Value default_value)
-	    : name(name), type(type), has_default(true),
-	      default_value(default_value) {
+	ColumnDefinition(string name, TypeId type, Value default_value)
+	    : name(name), type(type), has_default(true), default_value(default_value) {
 	}
 
 	//! The name of the entry
-	std::string name;
+	string name;
 	//! The index of the column in the table
 	size_t oid;
 	//! The type of the column

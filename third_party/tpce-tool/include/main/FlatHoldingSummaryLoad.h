@@ -45,12 +45,11 @@
 namespace TPCE {
 
 class CFlatHoldingSummaryLoad : public CFlatFileLoader<HOLDING_SUMMARY_ROW> {
-  private:
+private:
 	const std::string HoldingSummaryRowFmt;
 
-  public:
-	CFlatHoldingSummaryLoad(char *szFileName,
-	                        FlatFileOutputModes FlatFileOutputMode)
+public:
+	CFlatHoldingSummaryLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
 	    : CFlatFileLoader<HOLDING_SUMMARY_ROW>(szFileName, FlatFileOutputMode),
 	      HoldingSummaryRowFmt("%" PRId64 "|%s|%d\n"){};
 
@@ -58,12 +57,10 @@ class CFlatHoldingSummaryLoad : public CFlatFileLoader<HOLDING_SUMMARY_ROW> {
 	 *   Writes a record to the file.
 	 */
 	void WriteNextRecord(const HOLDING_SUMMARY_ROW &next_record) {
-		int rc = fprintf(hOutFile, HoldingSummaryRowFmt.c_str(),
-		                 next_record.HS_CA_ID, next_record.HS_S_SYMB,
+		int rc = fprintf(hOutFile, HoldingSummaryRowFmt.c_str(), next_record.HS_CA_ID, next_record.HS_S_SYMB,
 		                 next_record.HS_QTY);
 		if (rc < 0) {
-			throw CSystemErr(CSystemErr::eWriteFile,
-			                 "CFlatHoldingSummaryLoad::WriteNextRecord");
+			throw CSystemErr(CSystemErr::eWriteFile, "CFlatHoldingSummaryLoad::WriteNextRecord");
 		}
 	}
 };

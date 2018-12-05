@@ -53,14 +53,14 @@ namespace TPCE {
 //
 
 class MaleFirstNameDataFileRecord {
-  private:
+private:
 	static const int maxNameLen = 20;
 	char nameCStr[maxNameLen + 1];
 	std::string name;
 
 	static const unsigned int fieldCount = 1;
 
-  public:
+public:
 	explicit MaleFirstNameDataFileRecord(const std::deque<std::string> &fields);
 
 	//

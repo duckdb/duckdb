@@ -5,23 +5,9 @@
 using namespace duckdb;
 using namespace std;
 
-vector<string> PhysicalIndexScan::GetNames() {
-	vector<string> names;
-	for (auto &column : tableref.columns) {
-		names.push_back(column.name);
-	}
-	return names;
-}
-
-vector<TypeId> PhysicalIndexScan::GetTypes() {
-	return table.GetTypes(column_ids);
-}
-
 void PhysicalIndexScan::_GetChunk(ClientContext &context, DataChunk &chunk,
                                   PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalIndexScanOperatorState *>(state_);
-	chunk.Reset();
-
 	if (column_ids.size() == 0)
 		return;
 

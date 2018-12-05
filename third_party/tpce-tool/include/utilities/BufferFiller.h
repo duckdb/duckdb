@@ -46,7 +46,7 @@
 namespace TPCE {
 
 class BufferFiller {
-  public:
+public:
 	static inline void Fill(void *c, int filler, std::size_t size) {
 		std::memset(c, filler, size);
 	}

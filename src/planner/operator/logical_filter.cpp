@@ -1,16 +1,22 @@
-
 #include "planner/operator/logical_filter.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-LogicalFilter::LogicalFilter(unique_ptr<Expression> expression)
-    : LogicalOperator(LogicalOperatorType::FILTER) {
+LogicalFilter::LogicalFilter(unique_ptr<Expression> expression) : LogicalOperator(LogicalOperatorType::FILTER) {
 	expressions.push_back(move(expression));
 	SplitPredicates();
 }
 
 LogicalFilter::LogicalFilter() : LogicalOperator(LogicalOperatorType::FILTER) {
+}
+
+vector<string> LogicalFilter::GetNames() {
+	return children[0]->GetNames();
+}
+
+void LogicalFilter::ResolveTypes() {
+	types = children[0]->types;
 }
 
 // Split the predicates separated by AND statements

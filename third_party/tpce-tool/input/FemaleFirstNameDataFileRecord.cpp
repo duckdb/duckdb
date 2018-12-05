@@ -43,8 +43,7 @@
 
 using namespace TPCE;
 
-FemaleFirstNameDataFileRecord::FemaleFirstNameDataFileRecord(
-    const std::deque<std::string> &fields) {
+FemaleFirstNameDataFileRecord::FemaleFirstNameDataFileRecord(const std::deque<std::string> &fields) {
 	if (fieldCount != fields.size()) {
 		throw std::runtime_error("Incorrect field count.");
 	}

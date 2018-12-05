@@ -1,4 +1,3 @@
-
 #include "parser/statement/create_table_statement.hpp"
 #include "parser/transformer.hpp"
 
@@ -29,17 +28,12 @@ unique_ptr<CreateTableStatement> Transformer::TransformCreateTable(Node *node) {
 		switch (node->type) {
 		case T_ColumnDef: {
 			auto cdef = (ColumnDef *)c->data.ptr_value;
-			char *name = (reinterpret_cast<value *>(
-			                  cdef->typeName->names->tail->data.ptr_value)
-			                  ->val.str);
-			auto centry =
-			    ColumnDefinition(cdef->colname, TransformStringToTypeId(name));
+			char *name = (reinterpret_cast<value *>(cdef->typeName->names->tail->data.ptr_value)->val.str);
+			auto centry = ColumnDefinition(cdef->colname, TransformStringToTypeId(name));
 
 			if (cdef->constraints) {
-				for (auto constr = cdef->constraints->head; constr != nullptr;
-				     constr = constr->next) {
-					info.constraints.push_back(TransformConstraint(
-					    constr, centry, info.columns.size()));
+				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {
+					info.constraints.push_back(TransformConstraint(constr, centry, info.columns.size()));
 				}
 			}
 			info.columns.push_back(centry);

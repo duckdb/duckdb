@@ -1,22 +1,16 @@
-
-#include "catalog/catalog.hpp"
-
-#include "common/exception.hpp"
-#include "common/file_system.hpp"
-
-#include "function/function.hpp"
-
-#include "main/database.hpp"
-
 #include "storage/storage_manager.hpp"
 
+#include "catalog/catalog.hpp"
+#include "common/exception.hpp"
+#include "common/file_system.hpp"
+#include "function/function.hpp"
+#include "main/database.hpp"
 #include "transaction/transaction_manager.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-StorageManager::StorageManager(DuckDB &database, std::string path)
-    : path(path), database(database), wal(database) {
+StorageManager::StorageManager(DuckDB &database, string path) : path(path), database(database), wal(database) {
 }
 
 void StorageManager::Initialize() {
@@ -43,7 +37,7 @@ void StorageManager::Initialize() {
 	}
 }
 
-void StorageManager::LoadDatabase(std::string &path) {
+void StorageManager::LoadDatabase(string &path) {
 	// first check if the database exists
 	auto wal_path = JoinPath(path, WAL_FILE);
 	if (!DirectoryExists(path)) {
@@ -53,8 +47,7 @@ void StorageManager::LoadDatabase(std::string &path) {
 		// directory already exists
 		// verify that it is an existing database
 		if (!FileExists(wal_path)) {
-			throw IOException(
-			    "Database directory exists, but could not find WAL file!");
+			throw IOException("Database directory exists, but could not find WAL file!");
 		}
 		// replay the WAL
 		wal.Replay(wal_path);

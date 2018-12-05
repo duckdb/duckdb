@@ -1,7 +1,6 @@
-
 #include "optimizer/logical_rules/in_clause_rewrite.hpp"
-#include "optimizer/rewriter.hpp"
 
+#include "optimizer/rewriter.hpp"
 #include "parser/expression/list.hpp"
 #include "planner/operator/list.hpp"
 
@@ -9,29 +8,23 @@ using namespace duckdb;
 using namespace std;
 
 InClauseRewriteRule::InClauseRewriteRule() {
-	auto subquery = make_unique_base<AbstractRuleNode, ExpressionNodeType>(
-	    ExpressionType::SELECT_SUBQUERY);
+	auto subquery = make_unique_base<AbstractRuleNode, ExpressionNodeType>(ExpressionType::SELECT_SUBQUERY);
 
-	vector<ExpressionType> types = {ExpressionType::COMPARE_IN,
-	                                ExpressionType::COMPARE_NOT_IN};
-	auto in_expression =
-	    make_unique_base<AbstractRuleNode, ExpressionNodeSet>(types);
+	vector<ExpressionType> types = {ExpressionType::COMPARE_IN, ExpressionType::COMPARE_NOT_IN};
+	auto in_expression = make_unique_base<AbstractRuleNode, ExpressionNodeSet>(types);
 
 	in_expression->children.push_back(make_unique<ExpressionNodeAny>());
 	in_expression->children.push_back(move(subquery));
 	in_expression->child_policy = ChildPolicy::ORDERED;
 
-	root = make_unique_base<AbstractRuleNode, LogicalNodeType>(
-	    LogicalOperatorType::FILTER);
+	root = make_unique_base<AbstractRuleNode, LogicalNodeType>(LogicalOperatorType::FILTER);
 
 	root->children.push_back(move(in_expression));
 	root->child_policy = ChildPolicy::SOME;
 }
 
-unique_ptr<LogicalOperator>
-InClauseRewriteRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
-                           vector<AbstractOperator> &bindings,
-                           bool &fixed_point) {
+unique_ptr<LogicalOperator> InClauseRewriteRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
+                                                       vector<AbstractOperator> &bindings, bool &fixed_point) {
 	auto *filter = (LogicalFilter *)bindings[0].value.op;
 	auto *operator_expression = (OperatorExpression *)bindings[1].value.expr;
 	auto *subquery = (SubqueryExpression *)bindings[3].value.expr;
@@ -65,14 +58,12 @@ InClauseRewriteRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
 	condition.left = move(operator_expression->children[0]);
 	// and the first column of the subquery
 	assert(node->expressions.size() > 0);
-	condition.right = make_unique<ColumnRefExpression>(
-	    node->expressions[0]->return_type,
-	    ColumnBinding(subquery_table_index, 0));
+	condition.right =
+	    make_unique<ColumnRefExpression>(node->expressions[0]->return_type, ColumnBinding(subquery_table_index, 0));
 	condition.comparison = ExpressionType::COMPARE_EQUAL;
 
 	// now convert the subquery expression into a proper subquery
-	auto table_subquery = make_unique<LogicalSubquery>(
-	    subquery_table_index, node->expressions.size());
+	auto table_subquery = make_unique<LogicalSubquery>(subquery_table_index, node->expressions.size());
 	table_subquery->children.push_back(move(subquery->op));
 
 	// create the join between the new subquery and the child of the filter

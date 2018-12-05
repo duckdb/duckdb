@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // common/operator/like_operators.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -15,13 +13,11 @@
 namespace operators {
 
 struct Like {
-	static bool Operation(const char *left, const char *right,
-	                      const char *escape = nullptr);
+	static bool Operation(const char *left, const char *right, const char *escape = nullptr);
 };
 
 struct NotLike {
-	static inline bool Operation(const char *left, const char *right,
-	                             const char *escape = nullptr) {
+	static inline bool Operation(const char *left, const char *right, const char *escape = nullptr) {
 		return !Like::Operation(left, right, escape);
 	}
 };

@@ -56,7 +56,7 @@ class CMoney {
 	friend CMoney operator*(double l_f, CMoney r_m);
 	friend double operator/(double l_f, CMoney r_m);
 
-  public:
+public:
 	// Default constructor - initialize to $0
 	//
 	CMoney() : m_iAmountInCents(0) {
@@ -70,8 +70,7 @@ class CMoney {
 	// Initialize CMoney from double
 	//
 	CMoney(double fAmount)
-	    : m_iAmountInCents((INT64)(
-	          100.0 * fAmount + 0.5)) // round floating-point number correctly
+	    : m_iAmountInCents((INT64)(100.0 * fAmount + 0.5)) // round floating-point number correctly
 	{
 	}
 

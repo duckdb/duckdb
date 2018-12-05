@@ -1,19 +1,14 @@
-
-#include "storage/data_table.hpp"
-
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "common/exception.hpp"
 #include "common/helper.hpp"
 #include "common/vector_operations/vector_operations.hpp"
-
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-
+#include "storage/data_table.hpp"
 #include "transaction/transaction.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-StorageChunk::StorageChunk(DataTable &_table, size_t start)
-    : table(_table), count(0), start(start), read_count(0) {
+StorageChunk::StorageChunk(DataTable &_table, size_t start) : table(_table), count(0), start(start), read_count(0) {
 	columns.resize(table.types.size());
 	size_t tuple_size = 0;
 	for (auto &type : table.types) {

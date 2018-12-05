@@ -1,26 +1,20 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // execution/physical_operator.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include <chrono>
-#include <vector>
-
 #include "catalog/catalog.hpp"
-
 #include "common/common.hpp"
 #include "common/printable.hpp"
 #include "common/types/data_chunk.hpp"
-
 #include "parser/expression.hpp"
 #include "parser/statement/select_statement.hpp"
+#include "planner/logical_operator.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -32,7 +26,7 @@ class PhysicalOperator;
 //! call the GetChunk function and get new batches of data everytime until the
 //! data source is exhausted.
 class PhysicalOperatorState {
-  public:
+public:
 	PhysicalOperatorState(PhysicalOperator *child, ExpressionExecutor *parent);
 	virtual ~PhysicalOperatorState() {
 	}
@@ -43,7 +37,7 @@ class PhysicalOperatorState {
 	//! DataChunk that stores data from the child of this operator
 	DataChunk child_chunk;
 	//! State of the child of this operator
-	std::unique_ptr<PhysicalOperatorState> child_state;
+	unique_ptr<PhysicalOperatorState> child_state;
 
 	ExpressionExecutor *parent;
 };
@@ -58,47 +52,47 @@ class PhysicalOperatorState {
    operators subclass this state and add different properties).
 */
 class PhysicalOperator : public Printable {
-  public:
-	PhysicalOperator(PhysicalOperatorType type) : type(type) {
+public:
+	PhysicalOperator(PhysicalOperatorType type, vector<TypeId> types) : type(type), types(types) {
 	}
 
 	PhysicalOperatorType GetOperatorType() {
 		return type;
 	}
 
-	std::string ToString() const override;
+	string ToString() const override;
 
-	//! Return a vector of the column names that will be returned by this
-	//! operator
-	virtual std::vector<std::string> GetNames() = 0;
 	//! Return a vector of the types that will be returned by this operator
-	virtual std::vector<TypeId> GetTypes() = 0;
+	vector<TypeId> &GetTypes() {
+		return types;
+	}
 	//! Initialize a given chunk to the types that will be returned by this
 	//! operator, this will prepare chunk for a call to GetChunk. This method
 	//! only has to be called once for any amount of calls to GetChunk.
 	virtual void InitializeChunk(DataChunk &chunk) {
-		auto types = GetTypes();
+		auto &types = GetTypes();
 		chunk.Initialize(types);
 	}
 	//! Retrieves a chunk from this operator and stores it in the chunk
 	//! variable.
-	virtual void _GetChunk(ClientContext &context, DataChunk &chunk,
-	                       PhysicalOperatorState *state) = 0;
+	virtual void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) = 0;
 
-	void GetChunk(ClientContext &context, DataChunk &chunk,
-	              PhysicalOperatorState *state);
+	void GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state);
 
 	//! Create a new empty instance of the operator state
-	virtual std::unique_ptr<PhysicalOperatorState>
-	GetOperatorState(ExpressionExecutor *executor) = 0;
+	virtual unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent) {
+		return make_unique<PhysicalOperatorState>(children.size() == 0 ? nullptr : children[0].get(), parent);
+	}
 
-	virtual std::string ExtraRenderInformation() {
+	virtual string ExtraRenderInformation() {
 		return "";
 	}
 
 	//! The physical operator type
 	PhysicalOperatorType type;
 	//! The set of children of the operator
-	std::vector<std::unique_ptr<PhysicalOperator>> children;
+	vector<unique_ptr<PhysicalOperator>> children;
+	//! The types returned by this physical operator
+	vector<TypeId> types;
 };
 } // namespace duckdb

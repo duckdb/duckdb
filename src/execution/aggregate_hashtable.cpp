@@ -1,10 +1,9 @@
-
 #include "execution/aggregate_hashtable.hpp"
+
 #include "common/exception.hpp"
 #include "common/types/null_value.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-
 #include "common/types/static_vector.hpp"
+#include "common/vector_operations/vector_operations.hpp"
 
 #include <map>
 
@@ -21,14 +20,12 @@ static size_t GetAggrPayloadSize(ExpressionType expr_type, TypeId return_type) {
 	}
 }
 
-SuperLargeHashTable::SuperLargeHashTable(size_t initial_capacity,
-                                         vector<TypeId> group_types,
-                                         vector<TypeId> payload_types,
-                                         vector<ExpressionType> aggregate_types,
+SuperLargeHashTable::SuperLargeHashTable(size_t initial_capacity, vector<TypeId> group_types,
+                                         vector<TypeId> payload_types, vector<ExpressionType> aggregate_types,
                                          bool parallel)
-    : group_serializer(group_types), aggregate_types(aggregate_types),
-      group_types(group_types), payload_types(payload_types), payload_width(0),
-      capacity(0), entries(0), data(nullptr), max_chain(0), parallel(parallel) {
+    : group_serializer(group_types), aggregate_types(aggregate_types), group_types(group_types),
+      payload_types(payload_types), payload_width(0), capacity(0), entries(0), data(nullptr), max_chain(0),
+      parallel(parallel) {
 	// HT tuple layout is as follows:
 	// [FLAG][NULLMASK][GROUPS][PAYLOAD][COUNT]
 	// [FLAG] is the state of the tuple in memory
@@ -36,8 +33,7 @@ SuperLargeHashTable::SuperLargeHashTable(size_t initial_capacity,
 	// [PAYLOAD] is the payload (i.e. the aggregates)
 	// [COUNT] is an 8-byte count for each element
 	for (size_t i = 0; i < payload_types.size(); i++) {
-		payload_width +=
-		    GetAggrPayloadSize(aggregate_types[i], payload_types[i]);
+		payload_width += GetAggrPayloadSize(aggregate_types[i], payload_types[i]);
 	}
 	empty_payload_data = unique_ptr<uint8_t[]>(new uint8_t[payload_width]);
 	// initialize the aggregates to the NULL value
@@ -50,8 +46,7 @@ SuperLargeHashTable::SuperLargeHashTable(size_t initial_capacity,
 		case ExpressionType::AGGREGATE_COUNT_DISTINCT:
 		case ExpressionType::AGGREGATE_COUNT_STAR:
 		case ExpressionType::AGGREGATE_STDDEV_SAMP:
-			memset(pointer, 0,
-			       GetAggrPayloadSize(aggregate_types[i], payload_types[i]));
+			memset(pointer, 0, GetAggrPayloadSize(aggregate_types[i], payload_types[i]));
 			break;
 		default:
 			SetNullValue(pointer, payload_types[i]);
@@ -75,9 +70,8 @@ SuperLargeHashTable::SuperLargeHashTable(size_t initial_capacity,
 			vector<TypeId> distinct_payload_types;
 			vector<ExpressionType> distinct_aggregate_types;
 			distinct_group_types.push_back(payload_types[i]);
-			distinct_hashes[i] = make_unique<SuperLargeHashTable>(
-			    initial_capacity, distinct_group_types, distinct_payload_types,
-			    distinct_aggregate_types);
+			distinct_hashes[i] = make_unique<SuperLargeHashTable>(initial_capacity, distinct_group_types,
+			                                                      distinct_payload_types, distinct_aggregate_types);
 			break;
 		}
 		default:
@@ -99,8 +93,7 @@ void SuperLargeHashTable::Resize(size_t size) {
 	}
 
 	if (entries > 0) {
-		auto new_table = make_unique<SuperLargeHashTable>(
-		    size, group_types, payload_types, aggregate_types, parallel);
+		auto new_table = make_unique<SuperLargeHashTable>(size, group_types, payload_types, aggregate_types, parallel);
 
 		DataChunk groups;
 		groups.Initialize(group_types, false);
@@ -118,8 +111,7 @@ void SuperLargeHashTable::Resize(size_t size) {
 
 			// scan the table for full cells starting from the scan position
 			size_t entry = 0;
-			for (; ptr < end && entry < STANDARD_VECTOR_SIZE;
-			     ptr += tuple_size) {
+			for (; ptr < end && entry < STANDARD_VECTOR_SIZE; ptr += tuple_size) {
 				if (*ptr == FULL_CELL) {
 					// found entry
 					data_pointers[entry++] = ptr + FLAG_SIZE;
@@ -134,26 +126,22 @@ void SuperLargeHashTable::Resize(size_t size) {
 				auto &column = groups.data[i];
 				column.count = entry;
 				VectorOperations::Gather::Set(addresses, column);
-				VectorOperations::AddInPlace(addresses,
-				                             GetTypeIdSize(column.type));
+				VectorOperations::AddInPlace(addresses, GetTypeIdSize(column.type));
 			}
 
 			groups.Verify();
 			assert(groups.size() == entry);
 			StaticVector<uint64_t> new_addresses;
 			StaticVector<bool> new_group_dummy;
-			new_table->FindOrCreateGroups(groups, new_addresses,
-			                              new_group_dummy);
+			new_table->FindOrCreateGroups(groups, new_addresses, new_group_dummy);
 
 			// NB: both address vectors already point to the payload start
-			assert(addresses.type == new_addresses.type &&
-			       addresses.type == TypeId::POINTER);
+			assert(addresses.type == new_addresses.type && addresses.type == TypeId::POINTER);
 			assert(addresses.count == new_addresses.count);
 			assert(addresses.sel_vector == new_addresses.sel_vector);
 
 			VectorOperations::Exec(addresses, [&](size_t i, size_t k) {
-				memcpy(((uint8_t **)new_addresses.data)[i], data_pointers[i],
-				       payload_width);
+				memcpy(((uint8_t **)new_addresses.data)[i], data_pointers[i], payload_width);
 			});
 		}
 
@@ -195,50 +183,42 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 
 		// for any entries for which a group was found, update the aggregate
 		switch (aggregate_types[aggr_idx]) {
-
 		case ExpressionType::AGGREGATE_COUNT_STAR:
 			// add one to each address, regardless of if the value is NULL
 			VectorOperations::Scatter::Add(one, addresses);
 			break;
 		case ExpressionType::AGGREGATE_COUNT:
-			VectorOperations::Scatter::AddOne(payload.data[payload_idx],
-			                                  addresses);
+			VectorOperations::Scatter::AddOne(payload.data[payload_idx], addresses);
 			break;
 		case ExpressionType::AGGREGATE_SUM:
 			// addition
-			VectorOperations::Scatter::Add(payload.data[payload_idx],
-			                               addresses);
+			VectorOperations::Scatter::Add(payload.data[payload_idx], addresses);
 			break;
 		case ExpressionType::AGGREGATE_MIN:
 			// min
-			VectorOperations::Scatter::Min(payload.data[payload_idx],
-			                               addresses);
+			VectorOperations::Scatter::Min(payload.data[payload_idx], addresses);
 			break;
 		case ExpressionType::AGGREGATE_MAX:
 			// max
-			VectorOperations::Scatter::Max(payload.data[payload_idx],
-			                               addresses);
+			VectorOperations::Scatter::Max(payload.data[payload_idx], addresses);
 			break;
 		case ExpressionType::AGGREGATE_FIRST:
 			// first
-			VectorOperations::Scatter::SetFirst(payload.data[payload_idx],
-			                                    addresses);
+			VectorOperations::Scatter::SetFirst(payload.data[payload_idx], addresses);
 			break;
 		case ExpressionType::AGGREGATE_SUM_DISTINCT:
 		case ExpressionType::AGGREGATE_COUNT_DISTINCT: {
 			assert(groups.sel_vector == payload.sel_vector);
 
 			// construct chunk for secondary hash table probing
-			std::vector<TypeId> probe_types(group_types);
+			vector<TypeId> probe_types(group_types);
 			probe_types.push_back(payload_types[aggr_idx]);
 			DataChunk probe_chunk;
 			probe_chunk.Initialize(probe_types, false);
-			for (size_t group_idx = 0; group_idx < group_types.size();
-			     group_idx++) {
+			for (size_t group_idx = 0; group_idx < group_types.size(); group_idx++) {
 				probe_chunk.data[group_idx].Reference(groups.data[group_idx]);
 			}
-			probe_chunk.data[group_types.size()].Reference(
-			    payload.data[payload_idx]);
+			probe_chunk.data[group_types.size()].Reference(payload.data[payload_idx]);
 			probe_chunk.sel_vector = groups.sel_vector;
 			probe_chunk.Verify();
 
@@ -247,18 +227,14 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			probe_result.count = payload.data[payload_idx].count;
 			// this is the actual meat, find out which groups plus payload
 			// value have not been seen yet
-			distinct_hashes[aggr_idx]->FindOrCreateGroups(
-			    probe_chunk, dummy_addresses, probe_result);
+			distinct_hashes[aggr_idx]->FindOrCreateGroups(probe_chunk, dummy_addresses, probe_result);
 
 			// now fix up the payload and addresses accordingly by creating
 			// a selection vector
 			sel_t distinct_sel_vector[STANDARD_VECTOR_SIZE];
 			size_t match_count = 0;
-			for (size_t probe_idx = 0; probe_idx < probe_result.count;
-			     probe_idx++) {
-				size_t sel_idx = payload.sel_vector
-				                     ? payload.sel_vector[probe_idx]
-				                     : probe_idx;
+			for (size_t probe_idx = 0; probe_idx < probe_result.count; probe_idx++) {
+				size_t sel_idx = payload.sel_vector ? payload.sel_vector[probe_idx] : probe_idx;
 				if (probe_result.data[sel_idx]) {
 					distinct_sel_vector[match_count++] = sel_idx;
 				}
@@ -275,13 +251,10 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			distinct_addresses.count = match_count;
 			distinct_addresses.Verify();
 
-			if (aggregate_types[aggr_idx] ==
-			    ExpressionType::AGGREGATE_COUNT_DISTINCT) {
-				VectorOperations::Scatter::AddOne(distinct_payload,
-				                                  distinct_addresses);
+			if (aggregate_types[aggr_idx] == ExpressionType::AGGREGATE_COUNT_DISTINCT) {
+				VectorOperations::Scatter::AddOne(distinct_payload, distinct_addresses);
 			} else {
-				VectorOperations::Scatter::Add(distinct_payload,
-				                               distinct_addresses);
+				VectorOperations::Scatter::Add(distinct_payload, distinct_addresses);
 			}
 
 			break;
@@ -294,8 +267,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			Vector payload_double;
 			if (payload.data[payload_idx].type != TypeId::DECIMAL) {
 				payload_double.Initialize(TypeId::DECIMAL);
-				VectorOperations::Cast(payload.data[payload_idx],
-				                       payload_double);
+				VectorOperations::Cast(payload.data[payload_idx], payload_double);
 			} else {
 				payload_double.Reference(payload.data[payload_idx]);
 			}
@@ -310,19 +282,15 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 				auto base_ptr = ((uint8_t **)addresses.data)[i];
 				auto count_ptr = (uint64_t *)base_ptr;
 				auto mean_ptr = (double *)(base_ptr + sizeof(uint64_t));
-				auto dsquared_ptr =
-				    (double *)(base_ptr + sizeof(uint64_t) + sizeof(double));
+				auto dsquared_ptr = (double *)(base_ptr + sizeof(uint64_t) + sizeof(double));
 
 				// update running mean and d^2
 				(*count_ptr)++;
 				const double new_value = ((double *)payload_double.data)[i];
-				const double mean_differential =
-				    (new_value - (*mean_ptr)) / (*count_ptr);
+				const double mean_differential = (new_value - (*mean_ptr)) / (*count_ptr);
 				const double new_mean = (*mean_ptr) + mean_differential;
-				const double dsquared_increment =
-				    (new_value - new_mean) * (new_value - (*mean_ptr));
-				const double new_dsquared =
-				    (*dsquared_ptr) + dsquared_increment;
+				const double dsquared_increment = (new_value - new_mean) * (new_value - (*mean_ptr));
+				const double new_dsquared = (*dsquared_ptr) + dsquared_increment;
 
 				*mean_ptr = new_mean;
 				*dsquared_ptr = new_dsquared;
@@ -336,18 +304,15 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		}
 
 		// move to the next aggregate
-		VectorOperations::AddInPlace(
-		    addresses, GetAggrPayloadSize(aggregate_types[aggr_idx],
-		                                  payload.data[payload_idx].type));
+		VectorOperations::AddInPlace(addresses,
+		                             GetAggrPayloadSize(aggregate_types[aggr_idx], payload.data[payload_idx].type));
 		payload_idx++;
 	}
 }
 
 // this is to support distinct aggregations where we need to record whether we
 // have already seen a value for a group
-void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups,
-                                             Vector &addresses,
-                                             Vector &new_group) {
+void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresses, Vector &new_group) {
 	// resize at 50% capacity, also need to fit the entire vector
 	if (entries > capacity / 2 || capacity - entries <= STANDARD_VECTOR_SIZE) {
 		Resize(capacity * 2);
@@ -368,10 +333,9 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups,
 	auto data_pointers = (uint8_t **)addresses.data;
 	// now compute the entry in the table based on the hash using a modulo
 	// multiply the position by the tuple size and add the base address
-	VectorOperations::ExecType<uint64_t>(
-	    addresses, [&](uint64_t element, size_t i, size_t k) {
-		    data_pointers[i] = data + ((element % capacity) * tuple_size);
-	    });
+	VectorOperations::ExecType<uint64_t>(addresses, [&](uint64_t element, size_t i, size_t k) {
+		data_pointers[i] = data + ((element % capacity) * tuple_size);
+	});
 
 	assert(addresses.sel_vector == groups.sel_vector);
 	if (parallel) {
@@ -404,14 +368,12 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups,
 				// entry
 				*entry = FULL_CELL;
 				memcpy(entry + FLAG_SIZE, group_elements[i], group_width);
-				memcpy(entry + FLAG_SIZE + group_width,
-				       empty_payload_data.get(), payload_width);
+				memcpy(entry + FLAG_SIZE + group_width, empty_payload_data.get(), payload_width);
 				entries++;
 				new_group.data[index] = 1;
 				break;
 			}
-			if (group_serializer.Compare(group_elements[i],
-			                             entry + FLAG_SIZE) == 0) {
+			if (group_serializer.Compare(group_elements[i], entry + FLAG_SIZE) == 0) {
 				// cell has the current group, just point to this cell
 				new_group.data[index] = 0;
 				break;
@@ -431,8 +393,7 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups,
 	}
 }
 
-size_t SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &groups,
-                                 DataChunk &result) {
+size_t SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &groups, DataChunk &result) {
 	uint8_t *ptr;
 	uint8_t *start = data + scan_position;
 	uint8_t *end = data + capacity * tuple_size;
@@ -444,8 +405,7 @@ size_t SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &groups,
 
 	// scan the table for full cells starting from the scan position
 	size_t entry = 0;
-	for (ptr = start; ptr < end && entry < STANDARD_VECTOR_SIZE;
-	     ptr += tuple_size) {
+	for (ptr = start; ptr < end && entry < STANDARD_VECTOR_SIZE; ptr += tuple_size) {
 		if (*ptr == FULL_CELL) {
 			// found entry
 			data_pointers[entry++] = ptr + FLAG_SIZE;
@@ -472,15 +432,13 @@ size_t SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &groups,
 			VectorOperations::Exec(addresses, [&](size_t i, size_t k) {
 				auto base_ptr = ((uint8_t **)addresses.data)[i];
 				auto count_ptr = (uint64_t *)base_ptr;
-				auto dsquared_ptr =
-				    (double *)(base_ptr + sizeof(uint64_t) + sizeof(double));
+				auto dsquared_ptr = (double *)(base_ptr + sizeof(uint64_t) + sizeof(double));
 
 				if (*count_ptr == 0) {
 					target.nullmask[i] = true;
 					return;
 				}
-				double res =
-				    *count_ptr > 1 ? sqrt(*dsquared_ptr / (*count_ptr - 1)) : 0;
+				double res = *count_ptr > 1 ? sqrt(*dsquared_ptr / (*count_ptr - 1)) : 0;
 
 				((double *)target.data)[i] = res;
 			});
@@ -492,8 +450,7 @@ size_t SuperLargeHashTable::Scan(size_t &scan_position, DataChunk &groups,
 			break;
 		}
 
-		VectorOperations::AddInPlace(
-		    addresses, GetAggrPayloadSize(aggregate_types[i], target.type));
+		VectorOperations::AddInPlace(addresses, GetAggrPayloadSize(aggregate_types[i], target.type));
 	}
 	scan_position = ptr - data;
 	return entry;

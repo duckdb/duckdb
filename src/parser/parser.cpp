@@ -1,4 +1,3 @@
-
 #include "parser/parser.hpp"
 
 #include "parser/transformer.hpp"
@@ -8,63 +7,55 @@ using namespace postgres;
 using namespace duckdb;
 using namespace std;
 
-Parser::Parser() : success(false) {
-}
-
-bool Parser::ParseQuery(std::string query) {
+struct PGParseContext {
 	void *context = nullptr;
 	PgQueryInternalParsetreeAndError result;
-	try {
-		// first try to parse any PRAGMA statements
-		if (ParsePragma(query)) {
-			// query parsed as pragma statement
-			// if there was no error we were successful
-			this->success = this->message.empty();
-			goto wrapup;
-		}
 
-		// use the postgres parser to parse the query
-		context = pg_query_parse_init();
-		result = pg_query_parse(query.c_str());
-
-		// check if it succeeded
-		this->success = false;
-		if (result.error) {
-			this->message = string(result.error->message) + "[" +
-			                to_string(result.error->lineno) + ":" +
-			                to_string(result.error->cursorpos) + "]";
-			goto wrapup;
+	~PGParseContext() {
+		if (context) {
+			pg_query_parse_finish(context);
+			pg_query_free_parse_result(result);
 		}
-
-		if (!result.tree) {
-			// empty statement
-			this->success = true;
-			goto wrapup;
-		}
-
-		// if it succeeded, we transform the Postgres parse tree into a list of
-		// SQLStatements
-		Transformer transformer;
-		if (!transformer.TransformParseTree(result.tree, statements)) {
-			goto wrapup;
-		}
-		this->success = true;
-	} catch (Exception &ex) {
-		this->message = ex.GetMessage();
-	} catch (...) {
-		this->message = "UNHANDLED EXCEPTION TYPE THROWN IN PARSER!";
 	}
-wrapup:
-	if (context) {
-		pg_query_parse_finish(context);
-		pg_query_free_parse_result(result);
+};
+
+Parser::Parser() {
+}
+
+void Parser::ParseQuery(string query) {
+	PGParseContext parse_context;
+	// first try to parse any PRAGMA statements
+	if (ParsePragma(query)) {
+		// query parsed as pragma statement
+		// if there was no error we were successful
+		return;
 	}
-	return this->success;
+
+	// use the postgres parser to parse the query
+	parse_context.context = pg_query_parse_init();
+	parse_context.result = pg_query_parse(query.c_str());
+	// check if it succeeded
+	if (parse_context.result.error) {
+		throw ParserException(string(parse_context.result.error->message) + "[" +
+		                      to_string(parse_context.result.error->lineno) + ":" +
+		                      to_string(parse_context.result.error->cursorpos) + "]");
+		return;
+	}
+
+	if (!parse_context.result.tree) {
+		// empty statement
+		return;
+	}
+
+	// if it succeeded, we transform the Postgres parse tree into a list of
+	// SQLStatements
+	Transformer transformer;
+	transformer.TransformParseTree(parse_context.result.tree, statements);
 }
 
 enum class PragmaType : uint8_t { NOTHING, ASSIGNMENT, CALL };
 
-bool Parser::ParsePragma(std::string &query) {
+bool Parser::ParsePragma(string &query) {
 	// check if there is a PRAGMA statement, this is done before calling the
 	// postgres parser
 	static const string pragma_string = "PRAGMA";
@@ -91,8 +82,7 @@ bool Parser::ParsePragma(std::string &query) {
 		pos++;
 	// now look for the keyword
 	size_t keyword_start = pos;
-	while (query_cstr[pos] && query_cstr[pos] != ';' &&
-	       query_cstr[pos] != '=' && query_cstr[pos] != '(' &&
+	while (query_cstr[pos] && query_cstr[pos] != ';' && query_cstr[pos] != '=' && query_cstr[pos] != '(' &&
 	       !isspace(query_cstr[pos]))
 		pos++;
 
@@ -120,13 +110,11 @@ bool Parser::ParsePragma(std::string &query) {
 
 	if (keyword == "table_info") {
 		if (type != PragmaType::CALL) {
-			throw ParserException(
-			    "Invalid PRAGMA table_info: expected table name");
+			throw ParserException("Invalid PRAGMA table_info: expected table name");
 		}
 		ParseQuery("SELECT * FROM pragma_" + query.substr(keyword_start));
 	} else {
-		throw ParserException("Unrecognized PRAGMA keyword: %s",
-		                      keyword.c_str());
+		throw ParserException("Unrecognized PRAGMA keyword: %s", keyword.c_str());
 	}
 
 	return true;

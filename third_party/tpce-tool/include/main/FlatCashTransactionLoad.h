@@ -45,13 +45,12 @@
 namespace TPCE {
 
 class CFlatCashTransactionLoad : public CFlatFileLoader<CASH_TRANSACTION_ROW> {
-  private:
+private:
 	CDateTime Flat_CT_DTS;
 	const std::string CashTransactionRowFmt;
 
-  public:
-	CFlatCashTransactionLoad(char *szFileName,
-	                         FlatFileOutputModes FlatFileOutputMode)
+public:
+	CFlatCashTransactionLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
 	    : CFlatFileLoader<CASH_TRANSACTION_ROW>(szFileName, FlatFileOutputMode),
 	      CashTransactionRowFmt("%" PRId64 "|%s|%.2f|%s\n"){};
 
@@ -60,14 +59,11 @@ class CFlatCashTransactionLoad : public CFlatFileLoader<CASH_TRANSACTION_ROW> {
 	 */
 	void WriteNextRecord(const CASH_TRANSACTION_ROW &next_record) {
 		Flat_CT_DTS = next_record.CT_DTS;
-		int rc = fprintf(hOutFile, CashTransactionRowFmt.c_str(),
-		                 next_record.CT_T_ID,
-		                 Flat_CT_DTS.ToStr(FlatFileDateTimeFormat),
-		                 next_record.CT_AMT, next_record.CT_NAME);
+		int rc = fprintf(hOutFile, CashTransactionRowFmt.c_str(), next_record.CT_T_ID,
+		                 Flat_CT_DTS.ToStr(FlatFileDateTimeFormat), next_record.CT_AMT, next_record.CT_NAME);
 
 		if (rc < 0) {
-			throw CSystemErr(CSystemErr::eWriteFile,
-			                 "CFlatCashTransactionLoad::WriteNextRecord");
+			throw CSystemErr(CSystemErr::eWriteFile, "CFlatCashTransactionLoad::WriteNextRecord");
 		}
 	}
 };

@@ -1,7 +1,5 @@
-
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
-
 #include "parser/expression/comparison_expression.hpp"
 
 using namespace duckdb;
@@ -41,8 +39,7 @@ unique_ptr<Expression> ExpressionExecutor::Visit(ComparisonExpression &expr) {
 		VectorOperations::NotLike(l, r, vector);
 		break;
 	case ExpressionType::COMPARE_DISTINCT_FROM:
-		throw NotImplementedException(
-		    "Unimplemented compare: COMPARE_DISTINCT_FROM");
+		throw NotImplementedException("Unimplemented compare: COMPARE_DISTINCT_FROM");
 	default:
 		throw NotImplementedException("Unknown comparison type!");
 	}

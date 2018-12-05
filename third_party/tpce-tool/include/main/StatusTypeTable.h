@@ -46,9 +46,8 @@
 
 namespace TPCE {
 
-class CStatusTypeTable
-    : public FixedTable<StatusTypeDataFile_t, STATUS_TYPE_ROW> {
-  public:
+class CStatusTypeTable : public FixedTable<StatusTypeDataFile_t, STATUS_TYPE_ROW> {
+public:
 	CStatusTypeTable(const StatusTypeDataFile_t &dataFile);
 	~CStatusTypeTable();
 

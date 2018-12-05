@@ -1,4 +1,3 @@
-
 #include "common/exception.hpp"
 #include "common/limits.hpp"
 #include "common/operator/aggregate_operators.hpp"
@@ -8,8 +7,7 @@
 using namespace duckdb;
 using namespace std;
 
-template <class OP, bool IGNORE_NULL>
-static Value templated_binary_operation(const Value &left, const Value &right) {
+template <class OP, bool IGNORE_NULL> static Value templated_binary_operation(const Value &left, const Value &right) {
 	Value result;
 	if (left.is_null || right.is_null) {
 		if (IGNORE_NULL) {
@@ -30,13 +28,11 @@ static Value templated_binary_operation(const Value &left, const Value &right) {
 		// upcast integer types if necessary
 		Value left_cast = left.CastAs(TypeId::BIGINT);
 		Value right_cast = right.CastAs(TypeId::BIGINT);
-		result =
-		    templated_binary_operation<OP, IGNORE_NULL>(left_cast, right_cast);
+		result = templated_binary_operation<OP, IGNORE_NULL>(left_cast, right_cast);
 		if (result.is_null) {
 			result.type = max(left.type, right.type);
 		} else {
-			auto type = max(MinimalType(result.GetNumericValue()),
-			                max(left.type, right.type));
+			auto type = max(MinimalType(result.GetNumericValue()), max(left.type, right.type));
 			result = result.CastAs(type);
 		}
 		return result;
@@ -50,46 +46,36 @@ static Value templated_binary_operation(const Value &left, const Value &right) {
 		return templated_binary_operation<OP, IGNORE_NULL>(left, right_cast);
 	}
 	if (left.type != right.type) {
-		throw TypeMismatchException(
-		    left.type, right.type,
-		    "Cannot perform binary operation on these two types");
+		throw TypeMismatchException(left.type, right.type, "Cannot perform binary operation on these two types");
 	}
 	result.type = left.type;
 	switch (left.type) {
 	case TypeId::BOOLEAN:
-		result.value_.boolean =
-		    OP::Operation(left.value_.boolean, right.value_.boolean);
+		result.value_.boolean = OP::Operation(left.value_.boolean, right.value_.boolean);
 		break;
 	case TypeId::TINYINT:
-		result.value_.tinyint =
-		    OP::Operation(left.value_.tinyint, right.value_.tinyint);
+		result.value_.tinyint = OP::Operation(left.value_.tinyint, right.value_.tinyint);
 		break;
 	case TypeId::SMALLINT:
-		result.value_.smallint =
-		    OP::Operation(left.value_.smallint, right.value_.smallint);
+		result.value_.smallint = OP::Operation(left.value_.smallint, right.value_.smallint);
 		break;
 	case TypeId::INTEGER:
-		result.value_.integer =
-		    OP::Operation(left.value_.integer, right.value_.integer);
+		result.value_.integer = OP::Operation(left.value_.integer, right.value_.integer);
 		break;
 	case TypeId::BIGINT:
-		result.value_.bigint =
-		    OP::Operation(left.value_.bigint, right.value_.bigint);
+		result.value_.bigint = OP::Operation(left.value_.bigint, right.value_.bigint);
 		break;
 	case TypeId::DATE:
 		result.value_.date = OP::Operation(left.value_.date, right.value_.date);
 		break;
 	case TypeId::TIMESTAMP:
-		result.value_.timestamp =
-		    OP::Operation(left.value_.timestamp, right.value_.timestamp);
+		result.value_.timestamp = OP::Operation(left.value_.timestamp, right.value_.timestamp);
 		break;
 	case TypeId::DECIMAL:
-		result.value_.decimal =
-		    OP::Operation(left.value_.decimal, right.value_.decimal);
+		result.value_.decimal = OP::Operation(left.value_.decimal, right.value_.decimal);
 		break;
 	case TypeId::POINTER:
-		result.value_.pointer =
-		    OP::Operation(left.value_.pointer, right.value_.pointer);
+		result.value_.pointer = OP::Operation(left.value_.pointer, right.value_.pointer);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type");
@@ -125,8 +111,7 @@ Value ValueOperations::Divide(const Value &left, const Value &right) {
 		result.is_null = true;
 		return result;
 	} else {
-		return templated_binary_operation<operators::Divide, false>(left,
-		                                                            right);
+		return templated_binary_operation<operators::Divide, false>(left, right);
 	}
 }
 

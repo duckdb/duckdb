@@ -47,7 +47,7 @@
 namespace TPCE {
 
 class CChargeTable : public FixedTable<ChargeDataFile_t, CHARGE_ROW> {
-  public:
+public:
 	CChargeTable(const ChargeDataFile_t &dataFile);
 	~CChargeTable();
 

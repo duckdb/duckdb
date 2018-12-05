@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // planner/operator/logical_get.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -16,32 +14,34 @@ namespace duckdb {
 
 //! LogicalGet represents a scan operation from a data source
 class LogicalGet : public LogicalOperator {
-  public:
+public:
 	LogicalGet() : LogicalOperator(LogicalOperatorType::GET), table(nullptr) {
 	}
-	LogicalGet(TableCatalogEntry *table, size_t table_index,
-	           std::vector<column_t> column_ids)
-	    : LogicalOperator(LogicalOperatorType::GET), table(table),
-	      table_index(table_index), column_ids(column_ids) {
+	LogicalGet(TableCatalogEntry *table, size_t table_index, vector<column_t> column_ids)
+	    : LogicalOperator(LogicalOperatorType::GET), table(table), table_index(table_index), column_ids(column_ids) {
 		referenced_tables.insert(table_index);
 	}
 
 	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
+	vector<string> GetNames() override;
 
 	//! The base table to retrieve data from
 	TableCatalogEntry *table;
 	//! The table index in the current bind context
 	size_t table_index;
 	//! Bound column IDs
-	std::vector<column_t> column_ids;
+	vector<column_t> column_ids;
 
-	std::string ParamsToString() const override {
+	string ParamsToString() const override {
 		if (!table) {
 			return "";
 		}
 		return "(" + table->name + ")";
 	}
+
+protected:
+	void ResolveTypes() override;
 };
 } // namespace duckdb

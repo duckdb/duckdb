@@ -50,7 +50,7 @@ using namespace std;
 namespace TPCE {
 
 class CGenerateAndLoadStandardOutput : public CGenerateAndLoadBaseOutput {
-  public:
+public:
 	/*
 	 *  Output beginning of table generation.
 	 *

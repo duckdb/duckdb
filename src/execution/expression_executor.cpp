@@ -1,7 +1,6 @@
-
 #include "execution/expression_executor.hpp"
-#include "common/vector_operations/vector_operations.hpp"
 
+#include "common/vector_operations/vector_operations.hpp"
 #include "main/client_context.hpp"
 
 using namespace duckdb;
@@ -11,9 +10,7 @@ void ExpressionExecutor::Reset() {
 	vector.Destroy();
 }
 
-void ExpressionExecutor::Execute(DataChunk &result,
-                                 std::function<Expression *(size_t i)> callback,
-                                 size_t count) {
+void ExpressionExecutor::Execute(DataChunk &result, std::function<Expression *(size_t i)> callback, size_t count) {
 	assert(count == result.column_count);
 	if (count == 0) {
 		return;
@@ -28,8 +25,7 @@ void ExpressionExecutor::Execute(DataChunk &result,
 	}
 }
 
-void ExpressionExecutor::Merge(
-    std::vector<std::unique_ptr<Expression>> &expressions, Vector &result) {
+void ExpressionExecutor::Merge(std::vector<std::unique_ptr<Expression>> &expressions, Vector &result) {
 	if (expressions.size() == 0) {
 		return;
 	}
@@ -45,8 +41,7 @@ void ExpressionExecutor::ExecuteExpression(Expression *expr, Vector &result) {
 	expr->Accept(this);
 
 	if (chunk && scalar_executor) {
-		if (vector.count == 1 &&
-		    (chunk->size() > 1 || vector.sel_vector != chunk->sel_vector)) {
+		if (vector.count == 1 && (chunk->size() > 1 || vector.sel_vector != chunk->sel_vector)) {
 			// have to duplicate the constant value to match the rows in the
 			// other columns
 			result.count = chunk->size();
@@ -54,8 +49,7 @@ void ExpressionExecutor::ExecuteExpression(Expression *expr, Vector &result) {
 			VectorOperations::Set(result, vector.GetValue(0));
 			result.Move(vector);
 		} else if (vector.count != chunk->size()) {
-			throw Exception(
-			    "Computed vector length does not match expected length!");
+			throw Exception("Computed vector length does not match expected length!");
 		}
 		assert(vector.sel_vector == chunk->sel_vector);
 	}

@@ -1,4 +1,3 @@
-
 #include "parser/transformer.hpp"
 
 using namespace duckdb;
@@ -16,7 +15,6 @@ unique_ptr<TableRef> Transformer::TransformTableRefNode(Node *n) {
 	case T_RangeFunction:
 		return TransformRangeFunction(reinterpret_cast<RangeFunction *>(n));
 	default:
-		throw NotImplementedException("From Type %d not supported yet...",
-		                              n->type);
+		throw NotImplementedException("From Type %d not supported yet...", n->type);
 	}
 }

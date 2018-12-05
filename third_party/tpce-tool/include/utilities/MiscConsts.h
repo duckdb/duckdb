@@ -52,8 +52,7 @@ static const TIdent iDefaultStartFromCustomer = 1;
 //
 const TIdent iDefaultCustomerCount = 5000;
 
-const TIdent iBrokersDiv =
-    100; // by what number to divide the customer count to get the broker count
+const TIdent iBrokersDiv = 100; // by what number to divide the customer count to get the broker count
 
 // Number of customers in default load unit.
 // Note: this value must not be changed. EGen code depends
@@ -63,9 +62,8 @@ const TIdent iDefaultLoadUnitSize = 1000;
 
 // Base counts for scaling companines and securities.
 //
-const int iBaseCompanyCount = 5000; // number of base companies in the flat file
-const int iBaseCompanyCompetitorCount =
-    3 * iBaseCompanyCount; // number of base company competitor rows
+const int iBaseCompanyCount = 5000;                            // number of base companies in the flat file
+const int iBaseCompanyCompetitorCount = 3 * iBaseCompanyCount; // number of base company competitor rows
 const int iOneLoadUnitCompanyCount = 500;
 const int iOneLoadUnitSecurityCount = 685;
 const int iOneLoadUnitCompanyCompetitorCount = 3 * iOneLoadUnitCompanyCount;
@@ -76,8 +74,7 @@ const TIdent iTIdentShift = INT64_CONST(4300000000); // 4.3 billion
 
 // Number by which all TRADE_T columns (T_ID, TH_T_ID, etc.) are shifted.
 //
-const TTrade iTTradeShift =
-    INT64_CONST(200000000000000); // 200 trillion (2 * 10^14)
+const TTrade iTTradeShift = INT64_CONST(200000000000000); // 200 trillion (2 * 10^14)
 
 const int iMaxHostname = 64;
 const int iMaxDBName = 64;
@@ -121,7 +118,7 @@ const int iSecurityDetailMaxRows = 20; // max_fin_len
 
 // Trade-Lookup constants
 const INT32 TradeLookupMaxTradeHistoryRowsReturned =
-    3; // Based on the maximum number of status changes a trade can go through.
+    3;                               // Based on the maximum number of status changes a trade can go through.
 const INT32 TradeLookupMaxRows = 20; // Max number of rows for the frames
 const INT32 TradeLookupFrame1MaxRows = TradeLookupMaxRows;
 const INT32 TradeLookupFrame2MaxRows = TradeLookupMaxRows;
@@ -130,7 +127,7 @@ const INT32 TradeLookupFrame4MaxRows = TradeLookupMaxRows;
 
 // Trade-Update constants
 const INT32 TradeUpdateMaxTradeHistoryRowsReturned =
-    3; // Based on the maximum number of status changes a trade can go through.
+    3;                               // Based on the maximum number of status changes a trade can go through.
 const INT32 TradeUpdateMaxRows = 20; // Max number of rows for the frames
 const INT32 TradeUpdateFrame1MaxRows = TradeUpdateMaxRows;
 const INT32 TradeUpdateFrame2MaxRows = TradeUpdateMaxRows;

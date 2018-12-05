@@ -53,7 +53,7 @@ namespace TPCE {
 //
 
 class IndustryDataFileRecord {
-  private:
+private:
 	static const int maxIn_idLen = 2;
 	char in_idCStr[maxIn_idLen + 1];
 	std::string in_id;
@@ -68,7 +68,7 @@ class IndustryDataFileRecord {
 
 	static const unsigned int fieldCount = 3;
 
-  public:
+public:
 	explicit IndustryDataFileRecord(const std::deque<std::string> &fields);
 
 	//

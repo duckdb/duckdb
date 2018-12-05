@@ -1,4 +1,3 @@
-
 #include "common/constants.hpp"
 
 using namespace duckdb;

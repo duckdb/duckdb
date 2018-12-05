@@ -55,8 +55,7 @@ typedef struct TWheelConfig {
 	                       // resolution)
 	INT32 WheelResolution; // Expressed in milliseconds
 
-	TWheelConfig(INT32 Size, INT32 Resolution)
-	    : WheelSize(Size), WheelResolution(Resolution){};
+	TWheelConfig(INT32 Size, INT32 Resolution) : WheelSize(Size), WheelResolution(Resolution){};
 } * PWheelConfig;
 
 } // namespace TPCE

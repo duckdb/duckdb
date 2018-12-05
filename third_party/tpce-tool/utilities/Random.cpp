@@ -214,8 +214,7 @@ double CRandom::RndDoubleIncrRange(double min, double max, double incr) {
 // returns a random double value from a negative exponential distribution with
 // the given mean
 double CRandom::RndDoubleNegExp(double mean) {
-	return ((-1.0 * std::log(RndDoubleIncrRange(0.0, 1.0, 0.000000000001))) *
-	        mean);
+	return ((-1.0 * std::log(RndDoubleIncrRange(0.0, 1.0, 0.000000000001))) * mean);
 }
 
 /* Returns a non-uniform random 64-bit integer in range of [P .. Q].
@@ -240,8 +239,7 @@ double CRandom::RndDoubleNegExp(double mean) {
  *  the desired amount of skew at effectively one-minute resolution.
  */
 INT64 CRandom::NURnd(INT64 P, INT64 Q, INT32 A, INT32 s) {
-	return (((RndInt64Range(P, Q) | (RndInt64Range(0, A) << s)) % (Q - P + 1)) +
-	        P);
+	return (((RndInt64Range(P, Q) | (RndInt64Range(0, A) << s)) % (Q - P + 1)) + P);
 }
 
 /*
@@ -252,8 +250,7 @@ void CRandom::RndAlphaNumFormatted(char *szReturnString, const char *szFormat) {
 	while (szFormat && *szFormat) {
 		switch (*szFormat) {
 		case 'a':
-			*szReturnString =
-			    UpperCaseLetters[RndIntRange(0, 25)]; // only uppercase
+			*szReturnString = UpperCaseLetters[RndIntRange(0, 25)]; // only uppercase
 			break;
 		case 'n':
 			*szReturnString = Numerals[RndIntRange(0, 9)];

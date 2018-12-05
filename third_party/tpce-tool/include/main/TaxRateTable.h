@@ -48,7 +48,7 @@
 namespace TPCE {
 
 class TaxRateTable : public FixedTable<CTaxRateFile, TAX_RATE_ROW> {
-  public:
+public:
 	TaxRateTable(const CTaxRateFile &dataFile);
 	~TaxRateTable();
 

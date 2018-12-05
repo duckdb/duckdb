@@ -1,6 +1,6 @@
-
 #include "benchmark_runner.hpp"
 #include "duckdb_benchmark.hpp"
+
 #include <random>
 
 using namespace duckdb;
@@ -28,21 +28,21 @@ virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.DestroyAppender();
 }
 
-virtual std::string GetQuery() {
+virtual string GetQuery() {
 	return "SELECT i, SUM(j) FROM integers GROUP BY i";
 }
 
-virtual std::string VerifyResult(DuckDBResult *result) {
+virtual string VerifyResult(DuckDBResult *result) {
 	if (!result->GetSuccess()) {
 		return result->GetErrorMessage();
 	}
 	if (result->size() != GROUP_COUNT) {
 		return "Incorrect amount of rows in result";
 	}
-	return std::string();
+	return string();
 }
 
-virtual std::string BenchmarkInfo() {
+virtual string BenchmarkInfo() {
 	return StringUtil::Format("Runs the following query: \"SELECT i, SUM(j) "
 	                          "FROM integers GROUP BY i\""
 	                          " on %d rows with %d unique groups",

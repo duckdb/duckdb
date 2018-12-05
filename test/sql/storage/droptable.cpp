@@ -1,9 +1,7 @@
-
 #include "catch.hpp"
-#include "test_helpers.hpp"
-
 #include "common/file_system.hpp"
 #include "dbgen.hpp"
+#include "test_helpers.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -21,18 +19,14 @@ TEST_CASE("Create and drop a schema+table over different runs", "[storage]") {
 		DuckDB db(storage_database);
 		DuckDBConnection con(db);
 		REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA test;"));
-		REQUIRE_NO_FAIL(
-		    con.Query("CREATE TABLE test.test (a INTEGER, b INTEGER);"));
-		REQUIRE_NO_FAIL(
-		    con.Query("INSERT INTO test.test VALUES (11, 22), (13, 22);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test.test (a INTEGER, b INTEGER);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test.test VALUES (11, 22), (13, 22);"));
 		REQUIRE_NO_FAIL(con.Query("DROP TABLE test.test"));
 		REQUIRE_NO_FAIL(con.Query("DROP SCHEMA test"));
 
 		REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA test;"));
-		REQUIRE_NO_FAIL(
-		    con.Query("CREATE TABLE test.test (a INTEGER, b INTEGER);"));
-		REQUIRE_NO_FAIL(
-		    con.Query("INSERT INTO test.test VALUES (11, 22), (13, 22);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test.test (a INTEGER, b INTEGER);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test.test VALUES (11, 22), (13, 22);"));
 	}
 	// reload the database from disk
 	{

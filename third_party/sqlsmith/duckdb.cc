@@ -28,14 +28,12 @@ void duckdb_connection::q(const char *query) {
 	}
 }
 
-schema_duckdb::schema_duckdb(std::string &conninfo, bool no_catalog)
-    : duckdb_connection(conninfo) {
+schema_duckdb::schema_duckdb(std::string &conninfo, bool no_catalog) : duckdb_connection(conninfo) {
 	// generate empty TPC-H schema
 	tpch::dbgen(0, *database);
 
 	cerr << "Loading tables...";
-	auto result = connection->Query(
-	    "SELECT * FROM sqlite_master() WHERE type IN ('table', 'view')");
+	auto result = connection->Query("SELECT * FROM sqlite_master() WHERE type IN ('table', 'view')");
 	if (!result->GetSuccess()) {
 		throw runtime_error(result->GetErrorMessage());
 	}
@@ -69,10 +67,10 @@ schema_duckdb::schema_duckdb(std::string &conninfo, bool no_catalog)
 
 	cerr << "done." << endl;
 
-#define BINOP(n, t)                                                            \
-	do {                                                                       \
-		op o(#n, sqltype::get(#t), sqltype::get(#t), sqltype::get(#t));        \
-		register_operator(o);                                                  \
+#define BINOP(n, t)                                                                                                    \
+	do {                                                                                                               \
+		op o(#n, sqltype::get(#t), sqltype::get(#t), sqltype::get(#t));                                                \
+		register_operator(o);                                                                                          \
 	} while (0)
 
 	// BINOP(||, TEXT);
@@ -101,34 +99,34 @@ schema_duckdb::schema_duckdb(std::string &conninfo, bool no_catalog)
 	BINOP(AND, INTEGER);
 	BINOP(OR, INTEGER);
 
-#define FUNC(n, r)                                                             \
-	do {                                                                       \
-		routine proc("", "", sqltype::get(#r), #n);                            \
-		register_routine(proc);                                                \
+#define FUNC(n, r)                                                                                                     \
+	do {                                                                                                               \
+		routine proc("", "", sqltype::get(#r), #n);                                                                    \
+		register_routine(proc);                                                                                        \
 	} while (0)
 
-#define FUNC1(n, r, a)                                                         \
-	do {                                                                       \
-		routine proc("", "", sqltype::get(#r), #n);                            \
-		proc.argtypes.push_back(sqltype::get(#a));                             \
-		register_routine(proc);                                                \
+#define FUNC1(n, r, a)                                                                                                 \
+	do {                                                                                                               \
+		routine proc("", "", sqltype::get(#r), #n);                                                                    \
+		proc.argtypes.push_back(sqltype::get(#a));                                                                     \
+		register_routine(proc);                                                                                        \
 	} while (0)
 
-#define FUNC2(n, r, a, b)                                                      \
-	do {                                                                       \
-		routine proc("", "", sqltype::get(#r), #n);                            \
-		proc.argtypes.push_back(sqltype::get(#a));                             \
-		proc.argtypes.push_back(sqltype::get(#b));                             \
-		register_routine(proc);                                                \
+#define FUNC2(n, r, a, b)                                                                                              \
+	do {                                                                                                               \
+		routine proc("", "", sqltype::get(#r), #n);                                                                    \
+		proc.argtypes.push_back(sqltype::get(#a));                                                                     \
+		proc.argtypes.push_back(sqltype::get(#b));                                                                     \
+		register_routine(proc);                                                                                        \
 	} while (0)
 
-#define FUNC3(n, r, a, b, c)                                                   \
-	do {                                                                       \
-		routine proc("", "", sqltype::get(#r), #n);                            \
-		proc.argtypes.push_back(sqltype::get(#a));                             \
-		proc.argtypes.push_back(sqltype::get(#b));                             \
-		proc.argtypes.push_back(sqltype::get(#c));                             \
-		register_routine(proc);                                                \
+#define FUNC3(n, r, a, b, c)                                                                                           \
+	do {                                                                                                               \
+		routine proc("", "", sqltype::get(#r), #n);                                                                    \
+		proc.argtypes.push_back(sqltype::get(#a));                                                                     \
+		proc.argtypes.push_back(sqltype::get(#b));                                                                     \
+		proc.argtypes.push_back(sqltype::get(#c));                                                                     \
+		register_routine(proc);                                                                                        \
 	} while (0)
 
 	// FUNC(last_insert_rowid, INTEGER);
@@ -170,11 +168,11 @@ schema_duckdb::schema_duckdb(std::string &conninfo, bool no_catalog)
 	// FUNC3(substr, TEXT, TEXT, INTEGER, INTEGER);
 	// FUNC3(replace, TEXT, TEXT, TEXT, TEXT);
 
-#define AGG(n, r, a)                                                           \
-	do {                                                                       \
-		routine proc("", "", sqltype::get(#r), #n);                            \
-		proc.argtypes.push_back(sqltype::get(#a));                             \
-		register_aggregate(proc);                                              \
+#define AGG(n, r, a)                                                                                                   \
+	do {                                                                                                               \
+		routine proc("", "", sqltype::get(#r), #n);                                                                    \
+		proc.argtypes.push_back(sqltype::get(#a));                                                                     \
+		register_aggregate(proc);                                                                                      \
 	} while (0)
 
 	AGG(avg, INTEGER, INTEGER);

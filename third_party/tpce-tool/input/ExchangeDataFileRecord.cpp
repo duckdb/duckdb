@@ -46,8 +46,7 @@
 
 using namespace TPCE;
 
-ExchangeDataFileRecord::ExchangeDataFileRecord(
-    const std::deque<std::string> &fields) {
+ExchangeDataFileRecord::ExchangeDataFileRecord(const std::deque<std::string> &fields) {
 	if (fieldCount != fields.size()) {
 		throw std::runtime_error("Incorrect field count.");
 	}
@@ -106,9 +105,8 @@ TIdent ExchangeDataFileRecord::EX_AD_ID() const {
 std::string ExchangeDataFileRecord::ToString(char fieldSeparator) const {
 	// Facilitate encapsulation by using public interface to fields.
 	std::ostringstream msg;
-	msg << EX_ID() << fieldSeparator << EX_NAME() << fieldSeparator
-	    << std::setfill('0') << std::setw(4) << EX_OPEN() << fieldSeparator
-	    << std::setfill('0') << std::setw(4) << EX_CLOSE() << fieldSeparator
-	    << EX_DESC() << fieldSeparator << EX_AD_ID();
+	msg << EX_ID() << fieldSeparator << EX_NAME() << fieldSeparator << std::setfill('0') << std::setw(4) << EX_OPEN()
+	    << fieldSeparator << std::setfill('0') << std::setw(4) << EX_CLOSE() << fieldSeparator << EX_DESC()
+	    << fieldSeparator << EX_AD_ID();
 	return msg.str();
 }

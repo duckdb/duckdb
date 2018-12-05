@@ -1,5 +1,5 @@
-
 #include "common/types/value.hpp"
+
 #include "common/exception.hpp"
 #include "common/limits.hpp"
 #include "common/operator/aggregate_operators.hpp"
@@ -12,8 +12,7 @@
 using namespace duckdb;
 using namespace std;
 
-Value::Value(const Value &other)
-    : type(other.type), is_null(other.is_null), str_value(other.str_value) {
+Value::Value(const Value &other) : type(other.type), is_null(other.is_null), str_value(other.str_value) {
 	this->value_ = other.value_;
 }
 
@@ -132,8 +131,7 @@ Value Value::DATE(date_t value) {
 }
 
 Value Value::Numeric(TypeId type, int64_t value) {
-	assert(!TypeIsIntegral(type) || (value >= duckdb::MinimumValue(type) &&
-	                                 value <= duckdb::MaximumValue(type)));
+	assert(!TypeIsIntegral(type) || (value >= duckdb::MinimumValue(type) && value <= duckdb::MaximumValue(type)));
 	Value val(type);
 	val.is_null = false;
 	switch (type) {
@@ -177,8 +175,7 @@ int64_t Value::GetNumericValue() {
 	case TypeId::POINTER:
 		return value_.pointer;
 	default:
-		throw InvalidTypeException(type,
-		                           "GetNumericValue requires numeric type");
+		throw InvalidTypeException(type, "GetNumericValue requires numeric type");
 	}
 }
 
@@ -351,7 +348,7 @@ Value Value::CastAs(TypeId new_type) const {
 		new_value.value_.date = _cast<date_t, operators::CastToDate>(*this);
 		break;
 	case TypeId::VARCHAR: {
-		new_value.str_value = _cast<std::string, operators::Cast>(*this);
+		new_value.str_value = _cast<string, operators::Cast>(*this);
 		break;
 	}
 	default:
@@ -396,8 +393,7 @@ void Value::Serialize(Serializer &serializer) {
 			serializer.WriteString(str_value);
 			break;
 		default:
-			throw NotImplementedException(
-			    "Value type not implemented for serialization!");
+			throw NotImplementedException("Value type not implemented for serialization!");
 		}
 	}
 }
@@ -442,8 +438,7 @@ Value Value::Deserialize(Deserializer &source) {
 		new_value.str_value = source.Read<string>();
 		break;
 	default:
-		throw NotImplementedException(
-		    "Value type not implemented for deserialization");
+		throw NotImplementedException("Value type not implemented for deserialization");
 	}
 	return new_value;
 }

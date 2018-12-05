@@ -89,8 +89,7 @@ list_t *addList(list_t *pList, void *pData) {
 		while (pInsertPoint) {
 			if (pList->pSortFunc(pInsertPoint->pData, pData) < 0)
 				break;
-			pInsertPoint =
-			    (bMoveForward) ? pInsertPoint->pNext : pInsertPoint->pPrev;
+			pInsertPoint = (bMoveForward) ? pInsertPoint->pNext : pInsertPoint->pPrev;
 		}
 		if (pInsertPoint) /* mid-list insert */
 		{

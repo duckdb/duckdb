@@ -1,19 +1,16 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // execution/column_binding_resolver.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
+#include "duckdb.hpp"
 #include "planner/logical_operator.hpp"
 #include "planner/logical_operator_visitor.hpp"
-
-#include "duckdb.hpp"
 
 namespace duckdb {
 
@@ -27,7 +24,7 @@ struct BoundTable {
 //! (table_index, column_index) into physical indices into the DataChunks that
 //! are used within the execution engine
 class ColumnBindingResolver : public LogicalOperatorVisitor {
-  public:
+public:
 	ColumnBindingResolver() : current_depth(0) {
 	}
 	using LogicalOperatorVisitor::Visit;
@@ -41,12 +38,12 @@ class ColumnBindingResolver : public LogicalOperatorVisitor {
 	void Visit(LogicalSubquery &op);
 	void Visit(LogicalTableFunction &op);
 
-	std::unique_ptr<Expression> Visit(ColumnRefExpression &expr);
-	std::unique_ptr<Expression> Visit(SubqueryExpression &expr);
+	unique_ptr<Expression> Visit(ColumnRefExpression &expr);
+	unique_ptr<Expression> Visit(SubqueryExpression &expr);
 
-	std::vector<BoundTable> bound_tables;
+	vector<BoundTable> bound_tables;
 	size_t current_depth;
 	//! Append a list of tables to the current set of bound tables
-	void AppendTables(std::vector<BoundTable> &right_tables);
+	void AppendTables(vector<BoundTable> &right_tables);
 };
 } // namespace duckdb

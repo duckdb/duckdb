@@ -81,16 +81,14 @@ const INT32 DaysPerWeek = 7;
 
 const INT32 SecondsPerHour = SecondsPerMinute * MinutesPerHour;
 const INT32 SecondsPerDay = SecondsPerMinute * MinutesPerHour * HoursPerDay;
-const INT32 SecondsPerWorkDay =
-    SecondsPerMinute * MinutesPerHour * HoursPerWorkDay;
+const INT32 SecondsPerWorkDay = SecondsPerMinute * MinutesPerHour * HoursPerWorkDay;
 const INT32 MsPerDay = SecondsPerDay * MsPerSecond;
 const INT32 MsPerWorkDay = SecondsPerWorkDay * MsPerSecond;
 
-#define RoundToNearestNsec(d_Seconds)                                          \
-	(((INT64)(((d_Seconds)*NsPerSecond) + 0.5)) / NsPerSecondDivisor)
+#define RoundToNearestNsec(d_Seconds) (((INT64)(((d_Seconds)*NsPerSecond) + 0.5)) / NsPerSecondDivisor)
 
 class CDateTime {
-  private:
+private:
 	INT32 m_dayno;  // absolute day number since 1-Jan-0001, starting from zero
 	INT32 m_msec;   // milliseconds from the beginning of the day
 	char *m_szText; // text representation; only allocated if needed
@@ -143,10 +141,8 @@ class CDateTime {
 	//
 	// Validation routines used to check inputs to constructors and Set methods.
 	//
-	static bool IsValid(INT32 year, INT32 month, INT32 day, INT32 hour,
-	                    INT32 minute, INT32 second, INT32 msec);
-	static void Validate(INT32 year, INT32 month, INT32 day, INT32 hour,
-	                     INT32 minute, INT32 second, INT32 msec);
+	static bool IsValid(INT32 year, INT32 month, INT32 day, INT32 hour, INT32 minute, INT32 second, INT32 msec);
+	static void Validate(INT32 year, INT32 month, INT32 day, INT32 hour, INT32 minute, INT32 second, INT32 msec);
 	static void Validate(INT32 dayNumber);
 	static void Validate(INT32 dayNumber, INT32 msecSoFarToday);
 
@@ -155,29 +151,25 @@ class CDateTime {
 	//
 	static bool IsLeapYear(INT32 year);
 
-  public:
+public:
 	CDateTime(void);        // current local date/time
 	CDateTime(INT32 dayno); // date as specified; time set to 0:00:00 (midnight)
 	CDateTime(INT32 year, INT32 month,
 	          INT32 day); // date as specified; time set to 0:00:00 (midnight)
-	CDateTime(INT32 year, INT32 month, INT32 day, INT32 hour, INT32 minute,
-	          INT32 second, INT32 msec);
+	CDateTime(INT32 year, INT32 month, INT32 day, INT32 hour, INT32 minute, INT32 second, INT32 msec);
 
 	CDateTime(TIMESTAMP_STRUCT *ts); // date specified in the TIMESTAMP struct
 
-	CDateTime(const CDateTime
-	              &dt); // proper copy constructor - does not copy m_szText
+	CDateTime(const CDateTime &dt); // proper copy constructor - does not copy m_szText
 	~CDateTime(void);
 
 	void Set(void);        // set to current local date/time
 	void Set(INT32 dayno); // set to specified day number
-	void
-	Set(INT32 year, INT32 month,
-	    INT32 day); // set to specified date; time set to 0:00:00 (midnight)
+	void Set(INT32 year, INT32 month,
+	         INT32 day); // set to specified date; time set to 0:00:00 (midnight)
 	void Set(INT32 hour, INT32 minute, INT32 second,
 	         INT32 msec); // set to specified time, date not changed.
-	void Set(INT32 year, INT32 month, INT32 day, INT32 hour, INT32 minute,
-	         INT32 second, INT32 msec);
+	void Set(INT32 year, INT32 month, INT32 day, INT32 hour, INT32 minute, INT32 second, INT32 msec);
 
 	inline INT32 DayNo(void) {
 		return m_dayno;
@@ -186,8 +178,7 @@ class CDateTime {
 		return m_msec;
 	};
 	void GetYMD(INT32 *year, INT32 *month, INT32 *day);
-	void GetYMDHMS(INT32 *year, INT32 *month, INT32 *day, INT32 *hour,
-	               INT32 *minute, INT32 *second, INT32 *msec);
+	void GetYMDHMS(INT32 *year, INT32 *month, INT32 *day, INT32 *hour, INT32 *minute, INT32 *second, INT32 *msec);
 	void GetHMS(INT32 *hour, INT32 *minute, INT32 *second, INT32 *msec);
 
 	void GetTimeStamp(TIMESTAMP_STRUCT *ts);

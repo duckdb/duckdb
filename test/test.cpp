@@ -1,7 +1,5 @@
-
-#include "duckdb.hpp"
-
 #include "compare_result.hpp"
+#include "duckdb.hpp"
 
 #include <fstream>
 
@@ -32,8 +30,7 @@ int main() {
 			fprintf(stderr, "%s\n", line.c_str());
 			result = con.Query(line.substr(2));
 			if (!result->GetSuccess()) {
-				fprintf(stderr, "Query failed with answer: %s\n",
-				        result->GetErrorMessage().c_str());
+				fprintf(stderr, "Query failed with answer: %s\n", result->GetErrorMessage().c_str());
 			}
 			queryline = linenr;
 		} else {
@@ -45,10 +42,8 @@ int main() {
 			if (line.substr(0, 2) == "Q:") {
 				// query, compare previous results
 				if (!csv.empty()) {
-					if (!compare_result(csv.c_str(), result->collection, false,
-					                    error_message)) {
-						fprintf(stderr, "Failed at query on line %zu: %s\n",
-						        queryline, error_message.c_str());
+					if (!compare_result(csv.c_str(), result->collection, false, error_message)) {
+						fprintf(stderr, "Failed at query on line %zu: %s\n", queryline, error_message.c_str());
 						return 1;
 					}
 				}
@@ -56,8 +51,7 @@ int main() {
 				fprintf(stderr, "%s\n", line.c_str());
 				result = con.Query(line.substr(2));
 				if (!result->GetSuccess()) {
-					fprintf(stderr, "Query failed with answer: %s\n",
-					        result->GetErrorMessage().c_str());
+					fprintf(stderr, "Query failed with answer: %s\n", result->GetErrorMessage().c_str());
 				}
 				queryline = linenr;
 				csv = "";
@@ -71,10 +65,8 @@ int main() {
 	}
 	// final comparison
 	if (!csv.empty() && result) {
-		if (!compare_result(csv.c_str(), result->collection, false,
-		                    error_message)) {
-			fprintf(stderr, "Failed at query on line %zu: %s\n", queryline,
-			        error_message.c_str());
+		if (!compare_result(csv.c_str(), result->collection, false, error_message)) {
+			fprintf(stderr, "Failed at query on line %zu: %s\n", queryline, error_message.c_str());
 			return 1;
 		}
 	}

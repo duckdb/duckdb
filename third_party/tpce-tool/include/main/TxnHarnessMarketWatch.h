@@ -44,15 +44,13 @@ namespace TPCE {
 class CMarketWatch {
 	CMarketWatchDBInterface *m_db;
 
-  public:
+public:
 	CMarketWatch(CMarketWatchDBInterface *pDB) : m_db(pDB){};
 
-	void DoTxn(PMarketWatchTxnInput pTxnInput,
-	           PMarketWatchTxnOutput pTxnOutput) {
+	void DoTxn(PMarketWatchTxnInput pTxnInput, PMarketWatchTxnOutput pTxnOutput) {
 		TXN_HARNESS_SET_STATUS_SUCCESS;
 
-		if (pTxnInput->acct_id != 0 || pTxnInput->c_id != 0 ||
-		    pTxnInput->industry_name[0] != '\0') {
+		if (pTxnInput->acct_id != 0 || pTxnInput->c_id != 0 || pTxnInput->industry_name[0] != '\0') {
 			// Initialization
 			TMarketWatchFrame1Output Frame1Output;
 

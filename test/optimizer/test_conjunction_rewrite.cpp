@@ -1,14 +1,11 @@
-
 #include "catch.hpp"
-
-#include <vector>
-
+#include "common/helper.hpp"
 #include "expression_helper.hpp"
 #include "optimizer/expression_rules/rule_list.hpp"
 #include "optimizer/rewriter.hpp"
 #include "parser/expression/list.hpp"
 
-#include "common/helper.hpp"
+#include <vector>
 
 using namespace duckdb;
 using namespace std;
@@ -22,8 +19,7 @@ TEST_CASE("Distributivity test", "[optimizer]") {
 
 	// (X AND A AND B) OR (A AND X AND C) OR (X AND B AND D) => X AND ((A AND (B
 	// OR C)) OR (B AND D))
-	root = ParseExpression(
-	    "(X AND A AND B) OR (A AND X AND C) OR (X AND B AND D)");
+	root = ParseExpression("(X AND A AND B) OR (A AND X AND C) OR (X AND B AND D)");
 	result = ApplyExprRule(rewriter, move(root));
 	expected_result = ParseExpression("X AND ((A AND (B OR C)) OR (B AND D))");
 	REQUIRE(result->Equals(expected_result.get()));
@@ -54,8 +50,7 @@ TEST_CASE("Distributivity test", "[optimizer]") {
 
 	// ((X AND A) OR (X AND B)) OR ((Y AND C) OR (Y AND D)) => (X AND (A OR B))
 	// OR (Y AND (C OR D))
-	root =
-	    ParseExpression("((X AND A) OR (X AND B)) OR ((Y AND C) OR (Y AND D))");
+	root = ParseExpression("((X AND A) OR (X AND B)) OR ((Y AND C) OR (Y AND D))");
 	result = ApplyExprRule(rewriter, move(root));
 	expected_result = ParseExpression("(X AND (A OR B)) OR (Y AND (C OR D))");
 	REQUIRE(result->Equals(expected_result.get()));

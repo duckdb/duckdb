@@ -45,9 +45,8 @@ namespace TPCE {
 
 // total - The total number of tasks to complete before the job is done.
 ProgressMeter::ProgressMeter(int total_in, int verbosity, std::ostream *output)
-    : m_total(total_in), m_current(0), m_display_interval(10), m_start_time(),
-      m_last_time(m_start_time), m_output(output), m_verbosity(verbosity),
-      m_mutex() {
+    : m_total(total_in), m_current(0), m_display_interval(10), m_start_time(), m_last_time(m_start_time),
+      m_output(output), m_verbosity(verbosity), m_mutex() {
 }
 
 // val - minimum number of seconds between automatic display updates
@@ -76,12 +75,9 @@ void ProgressMeter::display() const {
 void ProgressMeter::display_message(std::ostream &out) const {
 	CDateTime now;
 	INT32 elapsed_in_ms = now.DiffInMilliSeconds(m_start_time);
-	double rate = static_cast<double>(elapsed_in_ms) /
-	              static_cast<double>(m_current) / 1000.0;
-	out << m_current << "/" << m_total << " (" << m_current * 100 / m_total
-	    << "%)"
-	    << " [Remain: "
-	    << int64totimestr((int)(rate * (double)(m_total - m_current))) << ", "
+	double rate = static_cast<double>(elapsed_in_ms) / static_cast<double>(m_current) / 1000.0;
+	out << m_current << "/" << m_total << " (" << m_current * 100 / m_total << "%)"
+	    << " [Remain: " << int64totimestr((int)(rate * (double)(m_total - m_current))) << ", "
 	    << "Elapsed: " << int64totimestr(elapsed_in_ms / 1000) << "]";
 }
 

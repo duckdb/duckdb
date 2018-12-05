@@ -47,24 +47,20 @@
 namespace TPCE {
 
 class CFlatStatusTypeLoad : public CFlatFileLoader<STATUS_TYPE_ROW> {
-  private:
+private:
 	const std::string StatusTypeRowFmt;
 
-  public:
-	CFlatStatusTypeLoad(char *szFileName,
-	                    FlatFileOutputModes FlatFileOutputMode)
-	    : CFlatFileLoader<STATUS_TYPE_ROW>(szFileName, FlatFileOutputMode),
-	      StatusTypeRowFmt("%s|%s\n"){};
+public:
+	CFlatStatusTypeLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
+	    : CFlatFileLoader<STATUS_TYPE_ROW>(szFileName, FlatFileOutputMode), StatusTypeRowFmt("%s|%s\n"){};
 
 	/*
 	 *   Writes a record to the file.
 	 */
 	void WriteNextRecord(const STATUS_TYPE_ROW &next_record) {
-		int rc = fprintf(hOutFile, StatusTypeRowFmt.c_str(), next_record.ST_ID,
-		                 next_record.ST_NAME);
+		int rc = fprintf(hOutFile, StatusTypeRowFmt.c_str(), next_record.ST_ID, next_record.ST_NAME);
 		if (rc < 0) {
-			throw CSystemErr(CSystemErr::eWriteFile,
-			                 "CFlatStatusType::WriteNextRecord");
+			throw CSystemErr(CSystemErr::eWriteFile, "CFlatStatusType::WriteNextRecord");
 		}
 	}
 };

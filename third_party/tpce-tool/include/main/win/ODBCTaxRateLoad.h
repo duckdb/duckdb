@@ -45,21 +45,16 @@
 namespace TPCE {
 
 class CODBCTaxRateLoad : public CDBLoader<TAX_RATE_ROW> {
-  public:
-	CODBCTaxRateLoad(char *szServer, char *szDatabase, char *szLoaderParams,
-	                 char *szTable = "TAXRATE")
-	    : CDBLoader<TAX_RATE_ROW>(szServer, szDatabase, szLoaderParams,
-	                              szTable){};
+public:
+	CODBCTaxRateLoad(char *szServer, char *szDatabase, char *szLoaderParams, char *szTable = "TAXRATE")
+	    : CDBLoader<TAX_RATE_ROW>(szServer, szDatabase, szLoaderParams, szTable){};
 
 	virtual void BindColumns() {
 		// Binding function we have to implement.
 		int i = 0;
-		if (bcp_bind(m_hdbc, (BYTE *)&m_row.TX_ID, 0, SQL_VARLEN_DATA,
-		             (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
-		    bcp_bind(m_hdbc, (BYTE *)&m_row.TX_NAME, 0, SQL_VARLEN_DATA,
-		             (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
-		    bcp_bind(m_hdbc, (BYTE *)&m_row.TX_RATE, 0, SQL_VARLEN_DATA, NULL,
-		             0, SQLFLT8, ++i) != SUCCEED)
+		if (bcp_bind(m_hdbc, (BYTE *)&m_row.TX_ID, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.TX_NAME, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.TX_RATE, 0, SQL_VARLEN_DATA, NULL, 0, SQLFLT8, ++i) != SUCCEED)
 			ThrowError(CODBCERR::eBcpBind);
 
 		//      if ( bcp_control(m_hdbc, BCPHINTS, "TABLOCK" ) != SUCCEED )

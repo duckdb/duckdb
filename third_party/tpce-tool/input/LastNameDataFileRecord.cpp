@@ -43,8 +43,7 @@
 
 using namespace TPCE;
 
-LastNameDataFileRecord::LastNameDataFileRecord(
-    const std::deque<std::string> &fields) {
+LastNameDataFileRecord::LastNameDataFileRecord(const std::deque<std::string> &fields) {
 	if (fieldCount != fields.size()) {
 		throw std::runtime_error("Incorrect field count.");
 	}

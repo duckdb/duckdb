@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // parser/statement/create_schema_statement.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -17,17 +15,16 @@
 namespace duckdb {
 
 class CreateSchemaStatement : public SQLStatement {
-  public:
+public:
 	CreateSchemaStatement()
-	    : SQLStatement(StatementType::CREATE_SCHEMA),
-	      info(make_unique<CreateSchemaInformation>()){};
+	    : SQLStatement(StatementType::CREATE_SCHEMA), info(make_unique<CreateSchemaInformation>()){};
 	virtual ~CreateSchemaStatement() {
 	}
 
-	virtual std::string ToString() const {
+	virtual string ToString() const {
 		return "CREATE SCHEMA";
 	}
-	virtual std::unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
+	virtual unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
 		return v->Visit(*this);
 	}
 
@@ -38,7 +35,7 @@ class CreateSchemaStatement : public SQLStatement {
 		throw NotImplementedException("Equality not implemented!");
 	}
 
-	std::unique_ptr<CreateSchemaInformation> info;
+	unique_ptr<CreateSchemaInformation> info;
 };
 
 } // namespace duckdb

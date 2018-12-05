@@ -16,7 +16,8 @@ FROM (
             90 AS c3,
             ref_1.n_regionkey AS c4,
             ref_1.n_name AS c5,
-            ref_1.n_name AS c6, (
+            ref_1.n_name AS c6,
+            (
                 SELECT
                     o_comment
                 FROM

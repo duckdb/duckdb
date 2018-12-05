@@ -49,23 +49,21 @@
 namespace TPCE {
 
 class CAddressTable : public TableTemplate<ADDRESS_ROW> {
-  private:
+private:
 	CDateTime m_date_time;
 	const CCompanyFile &m_companies;
 	const StreetNameDataFile_t &m_Street;
 	const StreetSuffixDataFile_t &m_StreetSuffix;
 	const ZipCodeDataFile_t &m_ZipCode;
 	TIdent m_iStartFromCustomer;
-	TIdent
-	    m_iCustomerCount; // total # of customers for whom to generate addresses
+	TIdent m_iCustomerCount;       // total # of customers for whom to generate addresses
 	bool m_bCustomerAddressesOnly; // whether generating only customer addresses
-	bool m_bCustomerAddress; // whether the currently generated row is for a
-	                         // customer
-	TIdent
-	    m_iCompanyCount; // total # of companies for which to generate addresses
-	UINT m_iExchangeCount;       // total # of exchanges for which to generate
-	                             // addresses
-	TIdent m_iTotalAddressCount; // total # of address rows to generate
+	bool m_bCustomerAddress;       // whether the currently generated row is for a
+	                               // customer
+	TIdent m_iCompanyCount;        // total # of companies for which to generate addresses
+	UINT m_iExchangeCount;         // total # of exchanges for which to generate
+	                               // addresses
+	TIdent m_iTotalAddressCount;   // total # of address rows to generate
 	bool m_bCacheEnabled;
 	int m_iCacheSize;
 	TIdent m_iCacheOffset;
@@ -130,7 +128,7 @@ class CAddressTable : public TableTemplate<ADDRESS_ROW> {
 	 */
 	void GenerateAD_ZC_CODE_CTRY();
 
-  public:
+public:
 	/*
 	 *  Constructor for the ADDRESS table class.
 	 *
@@ -144,10 +142,8 @@ class CAddressTable : public TableTemplate<ADDRESS_ROW> {
 	 * false, generate exchange, company, and customer addresses (always start
 	 * from the first customer in this case) RETURNS: not applicable.
 	 */
-	CAddressTable(const DataFileManager &dfm, TIdent iCustomerCount,
-	              TIdent iStartFromCustomer,
-	              bool bCustomerAddressesOnly = false,
-	              bool bCacheEnabled = false);
+	CAddressTable(const DataFileManager &dfm, TIdent iCustomerCount, TIdent iStartFromCustomer,
+	              bool bCustomerAddressesOnly = false, bool bCacheEnabled = false);
 
 	/*
 	 *  Destructor for the ADDRESS table class.
@@ -194,8 +190,7 @@ class CAddressTable : public TableTemplate<ADDRESS_ROW> {
 	 *   RETURNS:
 	 *           address id.
 	 */
-	TIdent
-	GetAD_IDForCustomer(TIdent C_ID); // return address id for the customer id
+	TIdent GetAD_IDForCustomer(TIdent C_ID); // return address id for the customer id
 
 	/*
 	 *   Return a certain division/country code (from the input file) for a
@@ -210,8 +205,7 @@ class CAddressTable : public TableTemplate<ADDRESS_ROW> {
 	 *   RETURNS:
 	 *           none.
 	 */
-	void GetDivisionAndCountryCodesForAddress(TIdent AD_ID, UINT &iDivCode,
-	                                          UINT &iCtryCode);
+	void GetDivisionAndCountryCodesForAddress(TIdent AD_ID, UINT &iDivCode, UINT &iCtryCode);
 
 	/*
 	 *   Return division and country codes for current address.

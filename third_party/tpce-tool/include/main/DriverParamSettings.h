@@ -55,44 +55,43 @@ namespace TPCE {
 // CHECK tests for CheckValid and CheckCompliant, use macros so we can get a
 // textual representation of the tested values, these tests could be
 // significantly condensed but we're trying for readibility here...
-#define DRIVERPARAM_CHECK_EQUAL(name, lhs, rhs)                                \
-	if ((lhs) != (rhs)) {                                                      \
-		std::ostringstream strm;                                               \
-		strm << #lhs << "(" << (lhs) << ") != " << #rhs << "(" << (rhs)        \
-		     << ")";                                                           \
-		throw CCheckErr(name, strm.str());                                     \
+#define DRIVERPARAM_CHECK_EQUAL(name, lhs, rhs)                                                                        \
+	if ((lhs) != (rhs)) {                                                                                              \
+		std::ostringstream strm;                                                                                       \
+		strm << #lhs << "(" << (lhs) << ") != " << #rhs << "(" << (rhs) << ")";                                        \
+		throw CCheckErr(name, strm.str());                                                                             \
 	}
 
-#define DRIVERPARAM_CHECK_GE(name, lhs, rhs)                                   \
-	if ((lhs) < (rhs)) {                                                       \
-		std::ostringstream strm;                                               \
-		strm << #lhs << "(" << (lhs) << ") < " << #rhs << "(" << (rhs) << ")"; \
-		throw CCheckErr(name, strm.str());                                     \
+#define DRIVERPARAM_CHECK_GE(name, lhs, rhs)                                                                           \
+	if ((lhs) < (rhs)) {                                                                                               \
+		std::ostringstream strm;                                                                                       \
+		strm << #lhs << "(" << (lhs) << ") < " << #rhs << "(" << (rhs) << ")";                                         \
+		throw CCheckErr(name, strm.str());                                                                             \
 	}
 
-#define DRIVERPARAM_CHECK_LE(name, lhs, rhs)                                   \
-	if ((lhs) > (rhs)) {                                                       \
-		std::ostringstream strm;                                               \
-		strm << #lhs << "(" << (lhs) << ") > " << #rhs << "(" << (rhs) << ")"; \
-		throw CCheckErr(name, strm.str());                                     \
+#define DRIVERPARAM_CHECK_LE(name, lhs, rhs)                                                                           \
+	if ((lhs) > (rhs)) {                                                                                               \
+		std::ostringstream strm;                                                                                       \
+		strm << #lhs << "(" << (lhs) << ") > " << #rhs << "(" << (rhs) << ")";                                         \
+		throw CCheckErr(name, strm.str());                                                                             \
 	}
 
-#define DRIVERPARAM_CHECK_BETWEEN(name, lhs, minval, maxval)                   \
-	DRIVERPARAM_CHECK_GE(name, lhs, minval)                                    \
+#define DRIVERPARAM_CHECK_BETWEEN(name, lhs, minval, maxval)                                                           \
+	DRIVERPARAM_CHECK_GE(name, lhs, minval)                                                                            \
 	DRIVERPARAM_CHECK_LE(name, lhs, maxval)
 
-#define DRIVERPARAM_CHECK_DEFAULT(name)                                        \
-	if (cur.name != dft.name) {                                                \
-		std::ostringstream strm;                                               \
-		strm << #name << "(" << cur.name << ") != " << dft.name;               \
-		throw CCheckErr(#name, strm.str());                                    \
+#define DRIVERPARAM_CHECK_DEFAULT(name)                                                                                \
+	if (cur.name != dft.name) {                                                                                        \
+		std::ostringstream strm;                                                                                       \
+		strm << #name << "(" << cur.name << ") != " << dft.name;                                                       \
+		throw CCheckErr(#name, strm.str());                                                                            \
 	}
 
 /******************************************************************************
  *   Parameter Base Class Template
  ******************************************************************************/
 template <typename T> class CParametersWithoutDefaults {
-  public:
+public:
 	T cur;
 
 	CParametersWithoutDefaults() {
@@ -135,11 +134,11 @@ template <typename T> class CParametersWithoutDefaults {
 
 template <typename T, typename T2> class CParametersWithDefaults {
 	// protected:
-  public:
+public:
 	T dft;
 	T2 state;
 
-  public:
+public:
 	T cur;
 
 	CParametersWithDefaults() {
@@ -430,9 +429,8 @@ struct TDriverGlobalSettingsState {
  *   Parameter Derived Class / Template Instantiation
  ******************************************************************************/
 class CBrokerVolumeSettings
-    : public CParametersWithDefaults<struct TBrokerVolumeSettings,
-                                     struct TBrokerVolumeSettingsState> {
-  public:
+    : public CParametersWithDefaults<struct TBrokerVolumeSettings, struct TBrokerVolumeSettingsState> {
+public:
 	CBrokerVolumeSettings() {
 		Initialize();
 	}
@@ -451,9 +449,8 @@ class CBrokerVolumeSettings
 };
 
 class CCustomerPositionSettings
-    : public CParametersWithDefaults<struct TCustomerPositionSettings,
-                                     struct TCustomerPositionSettingsState> {
-  public:
+    : public CParametersWithDefaults<struct TCustomerPositionSettings, struct TCustomerPositionSettingsState> {
+public:
 	CCustomerPositionSettings() {
 		Initialize();
 	}
@@ -473,8 +470,7 @@ class CCustomerPositionSettings
 	void CheckValid(void) {
 		DRIVERPARAM_CHECK_BETWEEN("by_cust_id", cur.by_cust_id, 0, 100);
 		DRIVERPARAM_CHECK_BETWEEN("by_tax_id", cur.by_tax_id, 0, 100);
-		DRIVERPARAM_CHECK_EQUAL("by_*_id total", cur.by_cust_id + cur.by_tax_id,
-		                        100);
+		DRIVERPARAM_CHECK_EQUAL("by_*_id total", cur.by_cust_id + cur.by_tax_id, 100);
 		DRIVERPARAM_CHECK_BETWEEN("get_history", cur.get_history, 0, 100);
 	}
 
@@ -487,9 +483,8 @@ class CCustomerPositionSettings
 };
 
 class CMarketWatchSettings
-    : public CParametersWithDefaults<struct TMarketWatchSettings,
-                                     struct TMarketWatchSettingsState> {
-  public:
+    : public CParametersWithDefaults<struct TMarketWatchSettings, struct TMarketWatchSettingsState> {
+public:
 	CMarketWatchSettings() {
 		Initialize();
 	}
@@ -510,9 +505,7 @@ class CMarketWatchSettings
 		DRIVERPARAM_CHECK_BETWEEN("by_acct_id", cur.by_acct_id, 0, 100);
 		DRIVERPARAM_CHECK_BETWEEN("by_industry", cur.by_industry, 0, 100);
 		DRIVERPARAM_CHECK_BETWEEN("by_watch_list", cur.by_watch_list, 0, 100);
-		DRIVERPARAM_CHECK_EQUAL(
-		    "by_* total", cur.by_acct_id + cur.by_industry + cur.by_watch_list,
-		    100);
+		DRIVERPARAM_CHECK_EQUAL("by_* total", cur.by_acct_id + cur.by_industry + cur.by_watch_list, 100);
 	}
 
 	void CheckCompliant(void) {
@@ -524,9 +517,8 @@ class CMarketWatchSettings
 };
 
 class CSecurityDetailSettings
-    : public CParametersWithDefaults<struct TSecurityDetailSettings,
-                                     struct TSecurityDetailSettingsState> {
-  public:
+    : public CParametersWithDefaults<struct TSecurityDetailSettings, struct TSecurityDetailSettingsState> {
+public:
 	CSecurityDetailSettings() {
 		Initialize();
 	}
@@ -536,13 +528,11 @@ class CSecurityDetailSettings
 	}
 
 	void CheckDefaults(void) {
-		state.LOBAccessPercentage =
-		    (cur.LOBAccessPercentage == dft.LOBAccessPercentage);
+		state.LOBAccessPercentage = (cur.LOBAccessPercentage == dft.LOBAccessPercentage);
 	}
 
 	void CheckValid(void) {
-		DRIVERPARAM_CHECK_BETWEEN("LOBAccessPercentage",
-		                          cur.LOBAccessPercentage, 0, 100);
+		DRIVERPARAM_CHECK_BETWEEN("LOBAccessPercentage", cur.LOBAccessPercentage, 0, 100);
 	}
 
 	void CheckCompliant(void) {
@@ -552,9 +542,8 @@ class CSecurityDetailSettings
 };
 
 class CTradeLookupSettings
-    : public CParametersWithDefaults<struct TTradeLookupSettings,
-                                     struct TTradeLookupSettingsState> {
-  public:
+    : public CParametersWithDefaults<struct TTradeLookupSettings, struct TTradeLookupSettingsState> {
+public:
 	CTradeLookupSettings() {
 		Initialize();
 	}
@@ -565,8 +554,7 @@ class CTradeLookupSettings
 		dft.do_frame3 = 30;
 		dft.do_frame4 = 10;
 		dft.MaxRowsFrame1 = 20;
-		dft.BackOffFromEndTimeFrame2 =
-		    4 * 8 * 3600; // four 8-hour days or 32 hours
+		dft.BackOffFromEndTimeFrame2 = 4 * 8 * 3600; // four 8-hour days or 32 hours
 		dft.MaxRowsFrame2 = 20;
 		dft.BackOffFromEndTimeFrame3 = 200 * 60; // 200 minutes
 		dft.MaxRowsFrame3 = 20;
@@ -580,14 +568,11 @@ class CTradeLookupSettings
 		state.do_frame3 = (cur.do_frame3 == dft.do_frame3);
 		state.do_frame4 = (cur.do_frame4 == dft.do_frame4);
 		state.MaxRowsFrame1 = (cur.MaxRowsFrame1 == dft.MaxRowsFrame1);
-		state.BackOffFromEndTimeFrame2 =
-		    (cur.BackOffFromEndTimeFrame2 == dft.BackOffFromEndTimeFrame2);
+		state.BackOffFromEndTimeFrame2 = (cur.BackOffFromEndTimeFrame2 == dft.BackOffFromEndTimeFrame2);
 		state.MaxRowsFrame2 = (cur.MaxRowsFrame2 == dft.MaxRowsFrame2);
-		state.BackOffFromEndTimeFrame3 =
-		    (cur.BackOffFromEndTimeFrame3 == dft.BackOffFromEndTimeFrame3);
+		state.BackOffFromEndTimeFrame3 = (cur.BackOffFromEndTimeFrame3 == dft.BackOffFromEndTimeFrame3);
 		state.MaxRowsFrame3 = (cur.MaxRowsFrame3 == dft.MaxRowsFrame3);
-		state.BackOffFromEndTimeFrame4 =
-		    (cur.BackOffFromEndTimeFrame4 == dft.BackOffFromEndTimeFrame4);
+		state.BackOffFromEndTimeFrame4 = (cur.BackOffFromEndTimeFrame4 == dft.BackOffFromEndTimeFrame4);
 		state.MaxRowsFrame4 = (cur.MaxRowsFrame4 == dft.MaxRowsFrame4);
 	}
 
@@ -596,17 +581,11 @@ class CTradeLookupSettings
 		DRIVERPARAM_CHECK_BETWEEN("do_frame2", cur.do_frame2, 0, 100);
 		DRIVERPARAM_CHECK_BETWEEN("do_frame3", cur.do_frame3, 0, 100);
 		DRIVERPARAM_CHECK_BETWEEN("do_frame4", cur.do_frame4, 0, 100);
-		DRIVERPARAM_CHECK_EQUAL(
-		    "do_frame* total",
-		    cur.do_frame1 + cur.do_frame2 + cur.do_frame3 + cur.do_frame4, 100);
-		DRIVERPARAM_CHECK_LE("MaxRowsFrame1", cur.MaxRowsFrame1,
-		                     TradeLookupFrame1MaxRows);
-		DRIVERPARAM_CHECK_LE("MaxRowsFrame2", cur.MaxRowsFrame2,
-		                     TradeLookupFrame2MaxRows);
-		DRIVERPARAM_CHECK_LE("MaxRowsFrame3", cur.MaxRowsFrame3,
-		                     TradeLookupFrame3MaxRows);
-		DRIVERPARAM_CHECK_LE("MaxRowsFrame4", cur.MaxRowsFrame4,
-		                     TradeLookupFrame4MaxRows);
+		DRIVERPARAM_CHECK_EQUAL("do_frame* total", cur.do_frame1 + cur.do_frame2 + cur.do_frame3 + cur.do_frame4, 100);
+		DRIVERPARAM_CHECK_LE("MaxRowsFrame1", cur.MaxRowsFrame1, TradeLookupFrame1MaxRows);
+		DRIVERPARAM_CHECK_LE("MaxRowsFrame2", cur.MaxRowsFrame2, TradeLookupFrame2MaxRows);
+		DRIVERPARAM_CHECK_LE("MaxRowsFrame3", cur.MaxRowsFrame3, TradeLookupFrame3MaxRows);
+		DRIVERPARAM_CHECK_LE("MaxRowsFrame4", cur.MaxRowsFrame4, TradeLookupFrame4MaxRows);
 	}
 
 	void CheckCompliant(void) {
@@ -626,9 +605,8 @@ class CTradeLookupSettings
 };
 
 class CTradeOrderSettings
-    : public CParametersWithDefaults<struct TTradeOrderSettings,
-                                     struct TTradeOrderSettingsState> {
-  public:
+    : public CParametersWithDefaults<struct TTradeOrderSettings, struct TTradeOrderSettingsState> {
+public:
 	CTradeOrderSettings() {
 		Initialize();
 	}
@@ -652,8 +630,7 @@ class CTradeOrderSettings
 		state.limit = (cur.limit == dft.limit);
 		state.stop_loss = (cur.stop_loss == dft.stop_loss);
 		state.security_by_name = (cur.security_by_name == dft.security_by_name);
-		state.security_by_symbol =
-		    (cur.security_by_symbol == dft.security_by_symbol);
+		state.security_by_symbol = (cur.security_by_symbol == dft.security_by_symbol);
 		state.buy_orders = (cur.buy_orders == dft.buy_orders);
 		state.sell_orders = (cur.sell_orders == dft.sell_orders);
 		state.lifo = (cur.lifo == dft.lifo);
@@ -665,20 +642,14 @@ class CTradeOrderSettings
 	void CheckValid(void) {
 		DRIVERPARAM_CHECK_BETWEEN("market", cur.market, 0, 100);
 		DRIVERPARAM_CHECK_BETWEEN("limit", cur.limit, 0, 100);
-		DRIVERPARAM_CHECK_EQUAL("market or limit total", cur.market + cur.limit,
-		                        100);
+		DRIVERPARAM_CHECK_EQUAL("market or limit total", cur.market + cur.limit, 100);
 		DRIVERPARAM_CHECK_BETWEEN("stop_loss", cur.stop_loss, 0, 100);
-		DRIVERPARAM_CHECK_BETWEEN("security_by_name", cur.security_by_name, 0,
-		                          100);
-		DRIVERPARAM_CHECK_BETWEEN("security_by_symbol", cur.security_by_symbol,
-		                          0, 100);
-		DRIVERPARAM_CHECK_EQUAL("security_by_* total",
-		                        cur.security_by_name + cur.security_by_symbol,
-		                        100);
+		DRIVERPARAM_CHECK_BETWEEN("security_by_name", cur.security_by_name, 0, 100);
+		DRIVERPARAM_CHECK_BETWEEN("security_by_symbol", cur.security_by_symbol, 0, 100);
+		DRIVERPARAM_CHECK_EQUAL("security_by_* total", cur.security_by_name + cur.security_by_symbol, 100);
 		DRIVERPARAM_CHECK_BETWEEN("buy_orders", cur.buy_orders, 0, 100);
 		DRIVERPARAM_CHECK_BETWEEN("sell_orders", cur.sell_orders, 0, 100);
-		DRIVERPARAM_CHECK_EQUAL("*_orders total",
-		                        cur.buy_orders + cur.sell_orders, 100);
+		DRIVERPARAM_CHECK_EQUAL("*_orders total", cur.buy_orders + cur.sell_orders, 100);
 		DRIVERPARAM_CHECK_BETWEEN("lifo", cur.lifo, 0, 100);
 		DRIVERPARAM_CHECK_BETWEEN("exec_is_owner", cur.exec_is_owner, 0, 100);
 		DRIVERPARAM_CHECK_BETWEEN("rollback", cur.rollback, 0, 100);
@@ -703,9 +674,8 @@ class CTradeOrderSettings
 };
 
 class CTradeUpdateSettings
-    : public CParametersWithDefaults<struct TTradeUpdateSettings,
-                                     struct TTradeUpdateSettingsState> {
-  public:
+    : public CParametersWithDefaults<struct TTradeUpdateSettings, struct TTradeUpdateSettingsState> {
+public:
 	CTradeUpdateSettings() {
 		Initialize();
 	}
@@ -718,8 +688,7 @@ class CTradeUpdateSettings
 		dft.MaxRowsToUpdateFrame1 = 20;
 		dft.MaxRowsFrame2 = 20;
 		dft.MaxRowsToUpdateFrame2 = 20;
-		dft.BackOffFromEndTimeFrame2 =
-		    4 * 8 * 3600; // four 8-hour days or 32 hours
+		dft.BackOffFromEndTimeFrame2 = 4 * 8 * 3600; // four 8-hour days or 32 hours
 		dft.MaxRowsFrame3 = 20;
 		dft.MaxRowsToUpdateFrame3 = 20;
 		dft.BackOffFromEndTimeFrame3 = 200 * 60; // 200 minutes
@@ -730,39 +699,26 @@ class CTradeUpdateSettings
 		state.do_frame2 = (cur.do_frame2 == dft.do_frame2);
 		state.do_frame3 = (cur.do_frame3 == dft.do_frame3);
 		state.MaxRowsFrame1 = (cur.MaxRowsFrame1 == dft.MaxRowsFrame1);
-		state.MaxRowsToUpdateFrame1 =
-		    (cur.MaxRowsToUpdateFrame1 == dft.MaxRowsToUpdateFrame1);
+		state.MaxRowsToUpdateFrame1 = (cur.MaxRowsToUpdateFrame1 == dft.MaxRowsToUpdateFrame1);
 		state.MaxRowsFrame2 = (cur.MaxRowsFrame2 == dft.MaxRowsFrame2);
-		state.MaxRowsToUpdateFrame2 =
-		    (cur.MaxRowsToUpdateFrame2 == dft.MaxRowsToUpdateFrame2);
-		state.BackOffFromEndTimeFrame2 =
-		    (cur.BackOffFromEndTimeFrame2 == dft.BackOffFromEndTimeFrame2);
+		state.MaxRowsToUpdateFrame2 = (cur.MaxRowsToUpdateFrame2 == dft.MaxRowsToUpdateFrame2);
+		state.BackOffFromEndTimeFrame2 = (cur.BackOffFromEndTimeFrame2 == dft.BackOffFromEndTimeFrame2);
 		state.MaxRowsFrame3 = (cur.MaxRowsFrame3 == dft.MaxRowsFrame3);
-		state.MaxRowsToUpdateFrame3 =
-		    (cur.MaxRowsToUpdateFrame3 == dft.MaxRowsToUpdateFrame3);
-		state.BackOffFromEndTimeFrame3 =
-		    (cur.BackOffFromEndTimeFrame3 == dft.BackOffFromEndTimeFrame3);
+		state.MaxRowsToUpdateFrame3 = (cur.MaxRowsToUpdateFrame3 == dft.MaxRowsToUpdateFrame3);
+		state.BackOffFromEndTimeFrame3 = (cur.BackOffFromEndTimeFrame3 == dft.BackOffFromEndTimeFrame3);
 	}
 
 	void CheckValid(void) {
 		DRIVERPARAM_CHECK_BETWEEN("do_frame1", cur.do_frame1, 0, 100);
 		DRIVERPARAM_CHECK_BETWEEN("do_frame2", cur.do_frame2, 0, 100);
 		DRIVERPARAM_CHECK_BETWEEN("do_frame3", cur.do_frame3, 0, 100);
-		DRIVERPARAM_CHECK_EQUAL("do_frame* total",
-		                        cur.do_frame1 + cur.do_frame2 + cur.do_frame3,
-		                        100);
-		DRIVERPARAM_CHECK_LE("MaxRowsFrame1", cur.MaxRowsFrame1,
-		                     TradeUpdateFrame1MaxRows);
-		DRIVERPARAM_CHECK_LE("MaxRowsFrame2", cur.MaxRowsFrame2,
-		                     TradeUpdateFrame2MaxRows);
-		DRIVERPARAM_CHECK_LE("MaxRowsFrame3", cur.MaxRowsFrame3,
-		                     TradeUpdateFrame3MaxRows);
-		DRIVERPARAM_CHECK_LE("MaxRowsToUpdateFrame1", cur.MaxRowsToUpdateFrame1,
-		                     TradeUpdateFrame1MaxRows);
-		DRIVERPARAM_CHECK_LE("MaxRowsToUpdateFrame2", cur.MaxRowsToUpdateFrame2,
-		                     TradeUpdateFrame2MaxRows);
-		DRIVERPARAM_CHECK_LE("MaxRowsToUpdateFrame3", cur.MaxRowsToUpdateFrame3,
-		                     TradeUpdateFrame3MaxRows);
+		DRIVERPARAM_CHECK_EQUAL("do_frame* total", cur.do_frame1 + cur.do_frame2 + cur.do_frame3, 100);
+		DRIVERPARAM_CHECK_LE("MaxRowsFrame1", cur.MaxRowsFrame1, TradeUpdateFrame1MaxRows);
+		DRIVERPARAM_CHECK_LE("MaxRowsFrame2", cur.MaxRowsFrame2, TradeUpdateFrame2MaxRows);
+		DRIVERPARAM_CHECK_LE("MaxRowsFrame3", cur.MaxRowsFrame3, TradeUpdateFrame3MaxRows);
+		DRIVERPARAM_CHECK_LE("MaxRowsToUpdateFrame1", cur.MaxRowsToUpdateFrame1, TradeUpdateFrame1MaxRows);
+		DRIVERPARAM_CHECK_LE("MaxRowsToUpdateFrame2", cur.MaxRowsToUpdateFrame2, TradeUpdateFrame2MaxRows);
+		DRIVERPARAM_CHECK_LE("MaxRowsToUpdateFrame3", cur.MaxRowsToUpdateFrame3, TradeUpdateFrame3MaxRows);
 	}
 
 	void CheckCompliant(void) {
@@ -783,9 +739,8 @@ class CTradeUpdateSettings
 };
 
 class CTxnMixGeneratorSettings
-    : public CParametersWithDefaults<struct TTxnMixGeneratorSettings,
-                                     struct TTxnMixGeneratorSettingsState> {
-  public:
+    : public CParametersWithDefaults<struct TTxnMixGeneratorSettings, struct TTxnMixGeneratorSettingsState> {
+public:
 	CTxnMixGeneratorSettings() {
 		Initialize();
 	}
@@ -802,32 +757,21 @@ class CTxnMixGeneratorSettings
 	}
 
 	void CheckDefaults(void) {
-		state.BrokerVolumeMixLevel =
-		    (cur.BrokerVolumeMixLevel == dft.BrokerVolumeMixLevel);
-		state.CustomerPositionMixLevel =
-		    (cur.CustomerPositionMixLevel == dft.CustomerPositionMixLevel);
-		state.MarketWatchMixLevel =
-		    (cur.MarketWatchMixLevel == dft.MarketWatchMixLevel);
-		state.SecurityDetailMixLevel =
-		    (cur.SecurityDetailMixLevel == dft.SecurityDetailMixLevel);
-		state.TradeLookupMixLevel =
-		    (cur.TradeLookupMixLevel == dft.TradeLookupMixLevel);
-		state.TradeOrderMixLevel =
-		    (cur.TradeOrderMixLevel == dft.TradeOrderMixLevel);
-		state.TradeStatusMixLevel =
-		    (cur.TradeStatusMixLevel == dft.TradeStatusMixLevel);
-		state.TradeUpdateMixLevel =
-		    (cur.TradeUpdateMixLevel == dft.TradeUpdateMixLevel);
+		state.BrokerVolumeMixLevel = (cur.BrokerVolumeMixLevel == dft.BrokerVolumeMixLevel);
+		state.CustomerPositionMixLevel = (cur.CustomerPositionMixLevel == dft.CustomerPositionMixLevel);
+		state.MarketWatchMixLevel = (cur.MarketWatchMixLevel == dft.MarketWatchMixLevel);
+		state.SecurityDetailMixLevel = (cur.SecurityDetailMixLevel == dft.SecurityDetailMixLevel);
+		state.TradeLookupMixLevel = (cur.TradeLookupMixLevel == dft.TradeLookupMixLevel);
+		state.TradeOrderMixLevel = (cur.TradeOrderMixLevel == dft.TradeOrderMixLevel);
+		state.TradeStatusMixLevel = (cur.TradeStatusMixLevel == dft.TradeStatusMixLevel);
+		state.TradeUpdateMixLevel = (cur.TradeUpdateMixLevel == dft.TradeUpdateMixLevel);
 	}
 
 	void CheckValid(void) {
-		DRIVERPARAM_CHECK_GE("BrokerVolumeMixLevel", cur.BrokerVolumeMixLevel,
-		                     0);
-		DRIVERPARAM_CHECK_GE("CustomerPositionMixLevel",
-		                     cur.CustomerPositionMixLevel, 0);
+		DRIVERPARAM_CHECK_GE("BrokerVolumeMixLevel", cur.BrokerVolumeMixLevel, 0);
+		DRIVERPARAM_CHECK_GE("CustomerPositionMixLevel", cur.CustomerPositionMixLevel, 0);
 		DRIVERPARAM_CHECK_GE("MarketWatchMixLevel", cur.MarketWatchMixLevel, 0);
-		DRIVERPARAM_CHECK_GE("SecurityDetailMixLevel",
-		                     cur.SecurityDetailMixLevel, 0);
+		DRIVERPARAM_CHECK_GE("SecurityDetailMixLevel", cur.SecurityDetailMixLevel, 0);
 		DRIVERPARAM_CHECK_GE("TradeLookupMixLevel", cur.TradeLookupMixLevel, 0);
 		DRIVERPARAM_CHECK_GE("TradeOrderMixLevel", cur.TradeOrderMixLevel, 0);
 		DRIVERPARAM_CHECK_GE("TradeStatusMixLevel", cur.TradeStatusMixLevel, 0);
@@ -847,14 +791,10 @@ class CTxnMixGeneratorSettings
 	}
 };
 
-class CLoaderSettings
-    : public CParametersWithDefaults<struct TLoaderSettings,
-                                     struct TLoaderSettingsState> {
-  public:
-	CLoaderSettings(TIdent iConfiguredCustomerCount,
-	                TIdent iActiveCustomerCount, TIdent iStartingCustomer,
-	                TIdent iCustomerCount, INT32 iScaleFactor,
-	                INT32 iDaysOfInitialTrades) {
+class CLoaderSettings : public CParametersWithDefaults<struct TLoaderSettings, struct TLoaderSettingsState> {
+public:
+	CLoaderSettings(TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount, TIdent iStartingCustomer,
+	                TIdent iCustomerCount, INT32 iScaleFactor, INT32 iDaysOfInitialTrades) {
 		Initialize();
 
 		cur.iConfiguredCustomerCount = iConfiguredCustomerCount;
@@ -888,48 +828,35 @@ class CLoaderSettings
 		state.iStartingCustomer = true;
 		state.iCustomerCount = true;
 		state.iScaleFactor = (cur.iScaleFactor == dft.iScaleFactor);
-		state.iDaysOfInitialTrades =
-		    (cur.iDaysOfInitialTrades == dft.iDaysOfInitialTrades);
+		state.iDaysOfInitialTrades = (cur.iDaysOfInitialTrades == dft.iDaysOfInitialTrades);
 	}
 
 	void CheckValid(void) {
-		DRIVERPARAM_CHECK_GE("iConfiguredCustomerCount",
-		                     cur.iConfiguredCustomerCount, 1000);
-		DRIVERPARAM_CHECK_GE("iActiveCustomerCount", cur.iActiveCustomerCount,
-		                     1000);
-		DRIVERPARAM_CHECK_LE("iActiveCustomerCount", cur.iActiveCustomerCount,
-		                     cur.iConfiguredCustomerCount);
-		DRIVERPARAM_CHECK_EQUAL("iConfiguredCustomerCount",
-		                        cur.iConfiguredCustomerCount % 1000, 0);
+		DRIVERPARAM_CHECK_GE("iConfiguredCustomerCount", cur.iConfiguredCustomerCount, 1000);
+		DRIVERPARAM_CHECK_GE("iActiveCustomerCount", cur.iActiveCustomerCount, 1000);
+		DRIVERPARAM_CHECK_LE("iActiveCustomerCount", cur.iActiveCustomerCount, cur.iConfiguredCustomerCount);
+		DRIVERPARAM_CHECK_EQUAL("iConfiguredCustomerCount", cur.iConfiguredCustomerCount % 1000, 0);
 		DRIVERPARAM_CHECK_GE("iStartingCustomer", cur.iStartingCustomer, 1)
-		DRIVERPARAM_CHECK_EQUAL("iStartingCustomer",
-		                        cur.iStartingCustomer % 1000, 1);
+		DRIVERPARAM_CHECK_EQUAL("iStartingCustomer", cur.iStartingCustomer % 1000, 1);
 		DRIVERPARAM_CHECK_EQUAL("iCustomerCount", cur.iCustomerCount % 1000, 0);
-		DRIVERPARAM_CHECK_LE("iCustomerCount",
-		                     cur.iCustomerCount + cur.iStartingCustomer - 1,
+		DRIVERPARAM_CHECK_LE("iCustomerCount", cur.iCustomerCount + cur.iStartingCustomer - 1,
 		                     cur.iConfiguredCustomerCount);
 	}
 
 	void CheckCompliant(void) {
 		CheckValid();
-		DRIVERPARAM_CHECK_GE("iConfiguredCustomerCount",
-		                     cur.iConfiguredCustomerCount, 5000);
-		DRIVERPARAM_CHECK_GE("iActiveCustomerCount", cur.iActiveCustomerCount,
-		                     5000);
-		DRIVERPARAM_CHECK_EQUAL("iActiveCustomerCount",
-		                        cur.iActiveCustomerCount,
-		                        cur.iConfiguredCustomerCount);
+		DRIVERPARAM_CHECK_GE("iConfiguredCustomerCount", cur.iConfiguredCustomerCount, 5000);
+		DRIVERPARAM_CHECK_GE("iActiveCustomerCount", cur.iActiveCustomerCount, 5000);
+		DRIVERPARAM_CHECK_EQUAL("iActiveCustomerCount", cur.iActiveCustomerCount, cur.iConfiguredCustomerCount);
 		DRIVERPARAM_CHECK_DEFAULT(iScaleFactor);
 		DRIVERPARAM_CHECK_DEFAULT(iDaysOfInitialTrades);
 	}
 };
 
 class CDriverGlobalSettings
-    : public CParametersWithDefaults<struct TDriverGlobalSettings,
-                                     struct TDriverGlobalSettingsState> {
-  public:
-	CDriverGlobalSettings(TIdent iConfiguredCustomerCount,
-	                      TIdent iActiveCustomerCount, INT32 iScaleFactor,
+    : public CParametersWithDefaults<struct TDriverGlobalSettings, struct TDriverGlobalSettingsState> {
+public:
+	CDriverGlobalSettings(TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount, INT32 iScaleFactor,
 	                      INT32 iDaysOfInitialTrades) {
 		Initialize();
 
@@ -959,40 +886,29 @@ class CDriverGlobalSettings
 		state.iConfiguredCustomerCount = true;
 		state.iActiveCustomerCount = true;
 		state.iScaleFactor = (cur.iScaleFactor == dft.iScaleFactor);
-		state.iDaysOfInitialTrades =
-		    (cur.iDaysOfInitialTrades == dft.iDaysOfInitialTrades);
+		state.iDaysOfInitialTrades = (cur.iDaysOfInitialTrades == dft.iDaysOfInitialTrades);
 	}
 
 	void CheckValid(void) {
-		DRIVERPARAM_CHECK_GE("iConfiguredCustomerCount",
-		                     cur.iConfiguredCustomerCount, 1000);
-		DRIVERPARAM_CHECK_GE("iActiveCustomerCount", cur.iActiveCustomerCount,
-		                     1000);
-		DRIVERPARAM_CHECK_LE("iActiveCustomerCount", cur.iActiveCustomerCount,
-		                     cur.iConfiguredCustomerCount);
-		DRIVERPARAM_CHECK_EQUAL("iConfiguredCustomerCount",
-		                        cur.iConfiguredCustomerCount % 1000, 0);
+		DRIVERPARAM_CHECK_GE("iConfiguredCustomerCount", cur.iConfiguredCustomerCount, 1000);
+		DRIVERPARAM_CHECK_GE("iActiveCustomerCount", cur.iActiveCustomerCount, 1000);
+		DRIVERPARAM_CHECK_LE("iActiveCustomerCount", cur.iActiveCustomerCount, cur.iConfiguredCustomerCount);
+		DRIVERPARAM_CHECK_EQUAL("iConfiguredCustomerCount", cur.iConfiguredCustomerCount % 1000, 0);
 	}
 
 	void CheckCompliant(void) {
 		CheckValid();
-		DRIVERPARAM_CHECK_GE("iConfiguredCustomerCount",
-		                     cur.iConfiguredCustomerCount, 5000);
-		DRIVERPARAM_CHECK_GE("iActiveCustomerCount", cur.iActiveCustomerCount,
-		                     5000);
-		DRIVERPARAM_CHECK_EQUAL("iActiveCustomerCount",
-		                        cur.iActiveCustomerCount,
-		                        cur.iConfiguredCustomerCount);
+		DRIVERPARAM_CHECK_GE("iConfiguredCustomerCount", cur.iConfiguredCustomerCount, 5000);
+		DRIVERPARAM_CHECK_GE("iActiveCustomerCount", cur.iActiveCustomerCount, 5000);
+		DRIVERPARAM_CHECK_EQUAL("iActiveCustomerCount", cur.iActiveCustomerCount, cur.iConfiguredCustomerCount);
 		DRIVERPARAM_CHECK_DEFAULT(iScaleFactor);
 		DRIVERPARAM_CHECK_DEFAULT(iDaysOfInitialTrades);
 	}
 };
 
-class CDriverCESettings
-    : public CParametersWithoutDefaults<struct TDriverCESettings> {
-  public:
-	CDriverCESettings(UINT32 UniqueId, RNGSEED TxnMixRNGSeed,
-	                  RNGSEED TxnInputRNGSeed) {
+class CDriverCESettings : public CParametersWithoutDefaults<struct TDriverCESettings> {
+public:
+	CDriverCESettings(UINT32 UniqueId, RNGSEED TxnMixRNGSeed, RNGSEED TxnInputRNGSeed) {
 		cur.UniqueId = UniqueId;
 		cur.TxnMixRNGSeed = TxnMixRNGSeed;
 		cur.TxnInputRNGSeed = TxnInputRNGSeed;
@@ -1008,12 +924,9 @@ class CDriverCESettings
 };
 
 class CDriverCEPartitionSettings
-    : public CParametersWithDefaults<struct TDriverCEPartitionSettings,
-                                     struct TDriverCEPartitionSettingsState> {
-  public:
-	CDriverCEPartitionSettings(TIdent iMyStartingCustomerId,
-	                           TIdent iMyCustomerCount,
-	                           INT32 iPartitionPercent) {
+    : public CParametersWithDefaults<struct TDriverCEPartitionSettings, struct TDriverCEPartitionSettingsState> {
+public:
+	CDriverCEPartitionSettings(TIdent iMyStartingCustomerId, TIdent iMyCustomerCount, INT32 iPartitionPercent) {
 		Initialize();
 
 		cur.iMyStartingCustomerId = iMyStartingCustomerId;
@@ -1037,23 +950,18 @@ class CDriverCEPartitionSettings
 	}
 
 	void InitializeDefaults(void) {
-		dft.iMyStartingCustomerId =
-		    1; // Spec 6.4.3.1: Minimum possible starting C_ID
-		dft.iMyCustomerCount = 5000; // Spec 6.4.3.1: Minimum partition size
-		dft.iPartitionPercent =
-		    50; // Spec 6.4.3.1: Required partition percentage
+		dft.iMyStartingCustomerId = 1; // Spec 6.4.3.1: Minimum possible starting C_ID
+		dft.iMyCustomerCount = 5000;   // Spec 6.4.3.1: Minimum partition size
+		dft.iPartitionPercent = 50;    // Spec 6.4.3.1: Required partition percentage
 	}
 
 	void CheckDefaults(void) {
-		state.iPartitionPercent =
-		    (cur.iPartitionPercent == dft.iPartitionPercent);
+		state.iPartitionPercent = (cur.iPartitionPercent == dft.iPartitionPercent);
 	}
 
 	void CheckValid(void) {
-		DRIVERPARAM_CHECK_BETWEEN("iPartitionPercent", cur.iPartitionPercent, 0,
-		                          100);
-		if (cur.iMyStartingCustomerId == 0 && cur.iMyCustomerCount == 0 &&
-		    cur.iPartitionPercent == 0) {
+		DRIVERPARAM_CHECK_BETWEEN("iPartitionPercent", cur.iPartitionPercent, 0, 100);
+		if (cur.iMyStartingCustomerId == 0 && cur.iMyCustomerCount == 0 && cur.iPartitionPercent == 0) {
 			// Partitioning Disabled:
 			// - in this case, the default constructor would have been used and
 			// all values
@@ -1065,20 +973,16 @@ class CDriverCEPartitionSettings
 			// - minimum C_ID in a subrange is the starting C_ID for a LU
 			// - minimum C_ID size of a subrange is 5000
 			// - size of a subrange must be an integral multiple of LU
-			DRIVERPARAM_CHECK_EQUAL("iMyStartingCustomerId",
-			                        cur.iMyStartingCustomerId % 1000, 1);
-			DRIVERPARAM_CHECK_GE("iMyCustomerCount", cur.iMyCustomerCount,
-			                     1000);
-			DRIVERPARAM_CHECK_EQUAL("iMyCustomerCount",
-			                        cur.iMyCustomerCount % 1000, 0);
+			DRIVERPARAM_CHECK_EQUAL("iMyStartingCustomerId", cur.iMyStartingCustomerId % 1000, 1);
+			DRIVERPARAM_CHECK_GE("iMyCustomerCount", cur.iMyCustomerCount, 1000);
+			DRIVERPARAM_CHECK_EQUAL("iMyCustomerCount", cur.iMyCustomerCount % 1000, 0);
 		}
 	}
 
 	void CheckCompliant(void) {
 		CheckValid();
 
-		if (cur.iMyStartingCustomerId == 0 && cur.iMyCustomerCount == 0 &&
-		    cur.iPartitionPercent == 0) {
+		if (cur.iMyStartingCustomerId == 0 && cur.iMyCustomerCount == 0 && cur.iPartitionPercent == 0) {
 			// Partitioning Disabled
 		} else {
 			// - CE partition is used 50% of the time
@@ -1087,11 +991,9 @@ class CDriverCEPartitionSettings
 	}
 };
 
-class CDriverMEESettings
-    : public CParametersWithoutDefaults<struct TDriverMEESettings> {
-  public:
-	CDriverMEESettings(UINT32 UniqueId, RNGSEED RNGSeed,
-	                   RNGSEED TickerTapeRNGSeed, RNGSEED TradingFloorRNGSeed) {
+class CDriverMEESettings : public CParametersWithoutDefaults<struct TDriverMEESettings> {
+public:
+	CDriverMEESettings(UINT32 UniqueId, RNGSEED RNGSeed, RNGSEED TickerTapeRNGSeed, RNGSEED TradingFloorRNGSeed) {
 		cur.UniqueId = UniqueId;
 		cur.RNGSeed = RNGSeed;
 		cur.TickerTapeRNGSeed = TickerTapeRNGSeed;
@@ -1107,9 +1009,8 @@ class CDriverMEESettings
 	}
 };
 
-class CDriverDMSettings
-    : public CParametersWithoutDefaults<struct TDriverDMSettings> {
-  public:
+class CDriverDMSettings : public CParametersWithoutDefaults<struct TDriverDMSettings> {
+public:
 	CDriverDMSettings(UINT32 UniqueId, RNGSEED RNGSeed) {
 		cur.UniqueId = UniqueId;
 		cur.RNGSeed = RNGSeed;

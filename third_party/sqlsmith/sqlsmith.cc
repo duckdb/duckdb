@@ -1,4 +1,3 @@
-
 #include <chrono>
 #include <iostream>
 
@@ -60,13 +59,11 @@ int main(int argc, char *argv[]) {
 	}
 
 	if (options.count("help")) {
-		cerr << "    --duckdb=URI         SQLite database to send queries to"
-		     << endl
+		cerr << "    --duckdb=URI         SQLite database to send queries to" << endl
 		     << "    --seed=int           seed RNG with specified int instead "
 		        "of PID"
 		     << endl
-		     << "    --dump-all-queries   print queries as they are generated"
-		     << endl
+		     << "    --dump-all-queries   print queries as they are generated" << endl
 		     << "    --dump-all-graphs    dump generated ASTs" << endl
 		     << "    --dry-run            print queries instead of executing "
 		        "them"
@@ -79,8 +76,7 @@ int main(int argc, char *argv[]) {
 		     << endl
 		     << "    --rng-state=string    deserialize dumped rng state" << endl
 		     << "    --verbose            emit progress output" << endl
-		     << "    --version            print version information and exit"
-		     << endl
+		     << "    --version            print version information and exit" << endl
 		     << "    --help               print available command line options "
 		        "and exit"
 		     << endl;
@@ -92,8 +88,7 @@ int main(int argc, char *argv[]) {
 	try {
 		shared_ptr<schema> schema;
 		if (options.count("duckdb")) {
-			schema = make_shared<schema_duckdb>(
-			    options["duckdb"], options.count("exclude-catalog"));
+			schema = make_shared<schema_duckdb>(options["duckdb"], options.count("exclude-catalog"));
 		} else {
 			cerr << "No DuckDB database specified!" << endl;
 			return 1;
@@ -106,8 +101,7 @@ int main(int argc, char *argv[]) {
 		if (options.count("rng-state")) {
 			istringstream(options["rng-state"]) >> smith::rng;
 		} else {
-			smith::rng.seed(options.count("seed") ? stoi(options["seed"])
-			                                      : getpid());
+			smith::rng.seed(options.count("seed") ? stoi(options["seed"]) : getpid());
 		}
 
 		vector<shared_ptr<logger>> loggers;
@@ -136,8 +130,7 @@ int main(int argc, char *argv[]) {
 				cout << ";" << endl;
 				queries_generated++;
 
-				if (options.count("max-queries") &&
-				    (queries_generated >= stol(options["max-queries"])))
+				if (options.count("max-queries") && (queries_generated >= stol(options["max-queries"])))
 					return 0;
 			}
 		}
@@ -160,8 +153,7 @@ int main(int argc, char *argv[]) {
 			try {
 				while (1) { /* Main loop */
 
-					if (options.count("max-queries") &&
-					    (++queries_generated > stol(options["max-queries"]))) {
+					if (options.count("max-queries") && (++queries_generated > stol(options["max-queries"]))) {
 						if (global_cerr_logger)
 							global_cerr_logger->report();
 						return 0;
@@ -198,9 +190,7 @@ int main(int argc, char *argv[]) {
 							try {
 								l->error(*gen, e);
 							} catch (runtime_error &e) {
-								cerr << endl
-								     << "log failed: " << typeid(*l).name()
-								     << ": " << e.what() << endl;
+								cerr << endl << "log failed: " << typeid(*l).name() << ": " << e.what() << endl;
 							}
 						if ((dynamic_cast<const dut::broken *>(&e))) {
 							/* re-throw to outer loop to recover session. */

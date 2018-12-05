@@ -1,14 +1,13 @@
 #include "function/function.hpp"
-#include "function/scalar_function/list.hpp"
-#include "function/table_function/list.hpp"
 
 #include "catalog/catalog.hpp"
+#include "function/scalar_function/list.hpp"
+#include "function/table_function/list.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-template <class T>
-static void AddTableFunction(Transaction &transaction, Catalog &catalog) {
+template <class T> static void AddTableFunction(Transaction &transaction, Catalog &catalog) {
 	CreateTableFunctionInformation info;
 
 	info.schema = DEFAULT_SCHEMA;
@@ -22,8 +21,7 @@ static void AddTableFunction(Transaction &transaction, Catalog &catalog) {
 	catalog.CreateTableFunction(transaction, &info);
 }
 
-template <class T>
-static void AddScalarFunction(Transaction &transaction, Catalog &catalog) {
+template <class T> static void AddScalarFunction(Transaction &transaction, Catalog &catalog) {
 	CreateScalarFunctionInformation info;
 
 	info.schema = DEFAULT_SCHEMA;

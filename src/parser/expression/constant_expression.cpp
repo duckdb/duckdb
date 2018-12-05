@@ -1,8 +1,7 @@
-
 #include "parser/expression/constant_expression.hpp"
-#include "common/value_operations/value_operations.hpp"
 
 #include "common/exception.hpp"
+#include "common/value_operations/value_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -19,9 +18,7 @@ void ConstantExpression::Serialize(Serializer &serializer) {
 	value.Serialize(serializer);
 }
 
-unique_ptr<Expression>
-ConstantExpression::Deserialize(ExpressionDeserializeInformation *info,
-                                Deserializer &source) {
+unique_ptr<Expression> ConstantExpression::Deserialize(ExpressionDeserializeInfo *info, Deserializer &source) {
 	if (info->children.size() > 0) {
 		throw SerializationException("Constant cannot have children!");
 	}

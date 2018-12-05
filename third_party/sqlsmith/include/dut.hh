@@ -16,28 +16,24 @@ struct failure : public std::exception {
 	const char *what() const throw() {
 		return errstr.c_str();
 	}
-	failure(const char *s, const char *sqlstate_ = "") throw()
-	    : errstr(), sqlstate() {
+	failure(const char *s, const char *sqlstate_ = "") throw() : errstr(), sqlstate() {
 		errstr = s;
 		sqlstate = sqlstate_;
 	};
 };
 
 struct broken : failure {
-	broken(const char *s, const char *sqlstate_ = "") throw()
-	    : failure(s, sqlstate_) {
+	broken(const char *s, const char *sqlstate_ = "") throw() : failure(s, sqlstate_) {
 	}
 };
 
 struct timeout : failure {
-	timeout(const char *s, const char *sqlstate_ = "") throw()
-	    : failure(s, sqlstate_) {
+	timeout(const char *s, const char *sqlstate_ = "") throw() : failure(s, sqlstate_) {
 	}
 };
 
 struct syntax : failure {
-	syntax(const char *s, const char *sqlstate_ = "") throw()
-	    : failure(s, sqlstate_) {
+	syntax(const char *s, const char *sqlstate_ = "") throw() : failure(s, sqlstate_) {
 	}
 };
 

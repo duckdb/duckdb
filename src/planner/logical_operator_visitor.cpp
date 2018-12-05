@@ -1,4 +1,3 @@
-
 #include "planner/logical_operator_visitor.hpp"
 
 #include "planner/operator/list.hpp"

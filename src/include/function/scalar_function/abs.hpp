@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // function/scalar_function/abs.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -17,11 +15,11 @@ namespace duckdb {
 namespace function {
 
 void abs_function(Vector inputs[], size_t input_count, Vector &result);
-bool abs_matches_arguments(std::vector<TypeId> &arguments);
-TypeId abs_get_return_type(std::vector<TypeId> &arguments);
+bool abs_matches_arguments(vector<TypeId> &arguments);
+TypeId abs_get_return_type(vector<TypeId> &arguments);
 
 class AbsFunction {
-  public:
+public:
 	static const char *GetName() {
 		return "abs";
 	}

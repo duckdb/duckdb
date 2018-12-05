@@ -1,6 +1,6 @@
-
 #include "benchmark_runner.hpp"
 #include "duckdb_benchmark.hpp"
+
 #include <random>
 
 using namespace duckdb;
@@ -27,24 +27,23 @@ virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.DestroyAppender();
 }
 
-virtual std::string GetQuery() {
+virtual string GetQuery() {
 	return "SELECT * FROM integers ORDER BY i";
 }
 
-virtual std::string VerifyResult(DuckDBResult *result) {
+virtual string VerifyResult(DuckDBResult *result) {
 	if (!result->GetSuccess()) {
 		return result->GetErrorMessage();
 	}
 	if (result->size() != ORDER_BY_ROW_COUNT) {
 		return "Incorrect amount of rows in result";
 	}
-	return std::string();
+	return string();
 }
 
-virtual std::string BenchmarkInfo() {
-	return StringUtil::Format(
-	    "Runs the following query: \"SELECT * FROM integers ORDER BY i\""
-	    " on %d rows",
-	    ORDER_BY_ROW_COUNT);
+virtual string BenchmarkInfo() {
+	return StringUtil::Format("Runs the following query: \"SELECT * FROM integers ORDER BY i\""
+	                          " on %d rows",
+	                          ORDER_BY_ROW_COUNT);
 }
 FINISH_BENCHMARK(OrderBySingleColumn)

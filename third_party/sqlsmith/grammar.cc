@@ -40,15 +40,13 @@ void table_or_query_name::out(std::ostream &out) {
 }
 
 target_table::target_table(prod *p, table *victim) : table_ref(p) {
-	while (!victim || victim->schema == "pg_catalog" ||
-	       !victim->is_base_table || !victim->columns().size()) {
+	while (!victim || victim->schema == "pg_catalog" || !victim->is_base_table || !victim->columns().size()) {
 		struct named_relation *pick = random_pick(scope->tables);
 		victim = dynamic_cast<table *>(pick);
 		retry();
 	}
 	victim_ = victim;
-	refs.push_back(
-	    make_shared<aliased_relation>(scope->stmt_uid("target"), victim));
+	refs.push_back(make_shared<aliased_relation>(scope->stmt_uid("target"), victim));
 }
 
 void target_table::out(std::ostream &out) {
@@ -70,12 +68,10 @@ table_sample::table_sample(prod *p) : table_ref(p) {
 }
 
 void table_sample::out(std::ostream &out) {
-	out << t->ident() << " as " << refs[0]->ident() << " tablesample " << method
-	    << " (" << percent << ") ";
+	out << t->ident() << " as " << refs[0]->ident() << " tablesample " << method << " (" << percent << ") ";
 }
 
-table_subquery::table_subquery(prod *p, bool lateral)
-    : table_ref(p), is_lateral(lateral) {
+table_subquery::table_subquery(prod *p, bool lateral) : table_ref(p), is_lateral(lateral) {
 	query = make_shared<query_spec>(this, scope, lateral);
 	string alias = scope->stmt_uid("subq");
 	relation *aliased_rel = &query->select_list->derived_table;
@@ -90,8 +86,7 @@ void table_subquery::accept(prod_visitor *v) {
 	v->visit(this);
 }
 
-shared_ptr<join_cond> join_cond::factory(prod *p, table_ref &lhs,
-                                         table_ref &rhs) {
+shared_ptr<join_cond> join_cond::factory(prod *p, table_ref &lhs, table_ref &rhs) {
 	try {
 		if (d6() < 6)
 			return make_shared<expr_join_cond>(p, lhs, rhs);
@@ -103,8 +98,7 @@ shared_ptr<join_cond> join_cond::factory(prod *p, table_ref &lhs,
 	return factory(p, lhs, rhs);
 }
 
-simple_join_cond::simple_join_cond(prod *p, table_ref &lhs, table_ref &rhs)
-    : join_cond(p, lhs, rhs) {
+simple_join_cond::simple_join_cond(prod *p, table_ref &lhs, table_ref &rhs) : join_cond(p, lhs, rhs) {
 retry:
 	named_relation *left_rel = &*random_pick(lhs.refs);
 
@@ -119,8 +113,7 @@ retry:
 
 	for (auto c2 : right_rel->columns()) {
 		if (c1.type == c2.type) {
-			condition += left_rel->ident() + "." + c1.name + " = " +
-			             right_rel->ident() + "." + c2.name + " ";
+			condition += left_rel->ident() + "." + c1.name + " = " + right_rel->ident() + "." + c2.name + " ";
 			break;
 		}
 	}
@@ -134,8 +127,7 @@ void simple_join_cond::out(std::ostream &out) {
 	out << condition;
 }
 
-expr_join_cond::expr_join_cond(prod *p, table_ref &lhs, table_ref &rhs)
-    : join_cond(p, lhs, rhs), joinscope(p->scope) {
+expr_join_cond::expr_join_cond(prod *p, table_ref &lhs, table_ref &rhs) : join_cond(p, lhs, rhs), joinscope(p->scope) {
 	scope = &joinscope;
 	for (auto ref : lhs.refs)
 		joinscope.refs.push_back(&*ref);
@@ -275,8 +267,7 @@ struct for_update_verify : prod_visitor {
 	};
 };
 
-select_for_update::select_for_update(prod *p, struct scope *s, bool lateral)
-    : query_spec(p, s, lateral) {
+select_for_update::select_for_update(prod *p, struct scope *s, bool lateral) : query_spec(p, s, lateral) {
 	static const char *modes[] = {
 	    "update",
 	    "share",
@@ -304,8 +295,7 @@ void select_for_update::out(std::ostream &out) {
 	}
 }
 
-query_spec::query_spec(prod *p, struct scope *s, bool lateral)
-    : prod(p), myscope(s) {
+query_spec::query_spec(prod *p, struct scope *s, bool lateral) : prod(p), myscope(s) {
 	scope = &myscope;
 	scope->tables = s->tables;
 
@@ -333,12 +323,10 @@ void modifying_stmt::pick_victim() {
 		struct named_relation *pick = random_pick(scope->tables);
 		victim = dynamic_cast<struct table *>(pick);
 		retry();
-	} while (!victim || victim->schema == "pg_catalog" ||
-	         !victim->is_base_table || !victim->columns().size());
+	} while (!victim || victim->schema == "pg_catalog" || !victim->is_base_table || !victim->columns().size());
 }
 
-modifying_stmt::modifying_stmt(prod *p, struct scope *s, table *victim)
-    : prod(p), myscope(s) {
+modifying_stmt::modifying_stmt(prod *p, struct scope *s, table *victim) : prod(p), myscope(s) {
 	scope = &myscope;
 	scope->tables = s->tables;
 
@@ -346,20 +334,17 @@ modifying_stmt::modifying_stmt(prod *p, struct scope *s, table *victim)
 		pick_victim();
 }
 
-delete_stmt::delete_stmt(prod *p, struct scope *s, table *v)
-    : modifying_stmt(p, s, v) {
+delete_stmt::delete_stmt(prod *p, struct scope *s, table *v) : modifying_stmt(p, s, v) {
 	scope->refs.push_back(victim);
 	search = bool_expr::factory(this);
 }
 
-delete_returning::delete_returning(prod *p, struct scope *s, table *victim)
-    : delete_stmt(p, s, victim) {
+delete_returning::delete_returning(prod *p, struct scope *s, table *victim) : delete_stmt(p, s, victim) {
 	match();
 	select_list = make_shared<struct select_list>(this);
 }
 
-insert_stmt::insert_stmt(prod *p, struct scope *s, table *v)
-    : modifying_stmt(p, s, v) {
+insert_stmt::insert_stmt(prod *p, struct scope *s, table *v) : modifying_stmt(p, s, v) {
 	match();
 
 	for (auto col : victim->columns()) {
@@ -411,8 +396,7 @@ void set_list::out(std::ostream &out) {
 	}
 }
 
-update_stmt::update_stmt(prod *p, struct scope *s, table *v)
-    : modifying_stmt(p, s, v) {
+update_stmt::update_stmt(prod *p, struct scope *s, table *v) : modifying_stmt(p, s, v) {
 	scope->refs.push_back(victim);
 	search = bool_expr::factory(this);
 	set_list = make_shared<struct set_list>(this, victim);
@@ -422,15 +406,13 @@ void update_stmt::out(std::ostream &out) {
 	out << "update " << victim->ident() << *set_list;
 }
 
-update_returning::update_returning(prod *p, struct scope *s, table *v)
-    : update_stmt(p, s, v) {
+update_returning::update_returning(prod *p, struct scope *s, table *v) : update_stmt(p, s, v) {
 	match();
 
 	select_list = make_shared<struct select_list>(this);
 }
 
-upsert_stmt::upsert_stmt(prod *p, struct scope *s, table *v)
-    : insert_stmt(p, s, v) {
+upsert_stmt::upsert_stmt(prod *p, struct scope *s, table *v) : insert_stmt(p, s, v) {
 	match();
 
 	if (!victim->constraints.size())
@@ -471,8 +453,7 @@ void common_table_expression::accept(prod_visitor *v) {
 	query->accept(v);
 }
 
-common_table_expression::common_table_expression(prod *parent, struct scope *s)
-    : prod(parent), myscope(s) {
+common_table_expression::common_table_expression(prod *parent, struct scope *s) : prod(parent), myscope(s) {
 	scope = &myscope;
 	do {
 		shared_ptr<query_spec> query = make_shared<query_spec>(this, s);
@@ -512,15 +493,13 @@ void common_table_expression::out(std::ostream &out) {
 	indent(out);
 }
 
-merge_stmt::merge_stmt(prod *p, struct scope *s, table *v)
-    : modifying_stmt(p, s, v) {
+merge_stmt::merge_stmt(prod *p, struct scope *s, table *v) : modifying_stmt(p, s, v) {
 	match();
 	target_table_ = make_shared<target_table>(this, victim);
 	data_source = table_ref::factory(this);
 	//   join_condition = join_cond::factory(this, *target_table_,
 	//   *data_source);
-	join_condition =
-	    make_shared<simple_join_cond>(this, *target_table_, *data_source);
+	join_condition = make_shared<simple_join_cond>(this, *target_table_, *data_source);
 
 	/* Put data_source into scope but not target_table.  Visibility of
 	   the latter varies depending on kind of when clause. */
@@ -573,8 +552,7 @@ void when_clause::accept(prod_visitor *v) {
 	condition->accept(v);
 }
 
-when_clause_update::when_clause_update(merge_stmt *p)
-    : when_clause(p), myscope(p->scope) {
+when_clause_update::when_clause_update(merge_stmt *p) : when_clause(p), myscope(p->scope) {
 	myscope.tables = scope->tables;
 	myscope.refs = scope->refs;
 	scope = &myscope;

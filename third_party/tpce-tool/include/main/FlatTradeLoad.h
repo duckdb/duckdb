@@ -45,34 +45,28 @@
 namespace TPCE {
 
 class CFlatTradeLoad : public CFlatFileLoader<TRADE_ROW> {
-  private:
+private:
 	CDateTime Flat_T_DTS;
 	const std::string TradeRowFmt;
 
-  public:
+public:
 	CFlatTradeLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
 	    : CFlatFileLoader<TRADE_ROW>(szFileName, FlatFileOutputMode),
-	      TradeRowFmt("%" PRId64 "|%s|%s|%s|%s|%s|%d|%.2f|%" PRId64
-	                  "|%s|%.2f|%.2f|%.2f|%.2f|%s\n"){};
+	      TradeRowFmt("%" PRId64 "|%s|%s|%s|%s|%s|%d|%.2f|%" PRId64 "|%s|%.2f|%.2f|%.2f|%.2f|%s\n"){};
 
 	/*
 	 *   Writes a record to the file.
 	 */
 	void WriteNextRecord(const TRADE_ROW &next_record) {
 		Flat_T_DTS = next_record.T_DTS;
-		int rc = fprintf(
-		    hOutFile, TradeRowFmt.c_str(), next_record.T_ID,
-		    Flat_T_DTS.ToStr(FlatFileDateTimeFormat), next_record.T_ST_ID,
-		    next_record.T_TT_ID,
-		    (next_record.T_IS_CASH ? FlatFileBoolTrue : FlatFileBoolFalse),
-		    next_record.T_S_SYMB, next_record.T_QTY, next_record.T_BID_PRICE,
-		    next_record.T_CA_ID, next_record.T_EXEC_NAME,
-		    next_record.T_TRADE_PRICE, next_record.T_CHRG, next_record.T_COMM,
-		    next_record.T_TAX,
-		    (next_record.T_LIFO ? FlatFileBoolTrue : FlatFileBoolFalse));
+		int rc = fprintf(hOutFile, TradeRowFmt.c_str(), next_record.T_ID, Flat_T_DTS.ToStr(FlatFileDateTimeFormat),
+		                 next_record.T_ST_ID, next_record.T_TT_ID,
+		                 (next_record.T_IS_CASH ? FlatFileBoolTrue : FlatFileBoolFalse), next_record.T_S_SYMB,
+		                 next_record.T_QTY, next_record.T_BID_PRICE, next_record.T_CA_ID, next_record.T_EXEC_NAME,
+		                 next_record.T_TRADE_PRICE, next_record.T_CHRG, next_record.T_COMM, next_record.T_TAX,
+		                 (next_record.T_LIFO ? FlatFileBoolTrue : FlatFileBoolFalse));
 		if (rc < 0) {
-			throw CSystemErr(CSystemErr::eWriteFile,
-			                 "CFlatTradeLoad::WriteNextRecord");
+			throw CSystemErr(CSystemErr::eWriteFile, "CFlatTradeLoad::WriteNextRecord");
 		}
 	}
 };

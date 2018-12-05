@@ -1,36 +1,17 @@
-
 #include "execution/operator/schema/physical_create_index.hpp"
-#include "execution/expression_executor.hpp"
 
 #include "catalog/catalog_entry/schema_catalog_entry.hpp"
-
-#include "storage/data_table.hpp"
-
+#include "execution/expression_executor.hpp"
 #include "main/client_context.hpp"
-
+#include "storage/data_table.hpp"
 #include "storage/order_index.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-vector<string> PhysicalCreateIndex::GetNames() {
-	return {"Count"};
-}
-vector<TypeId> PhysicalCreateIndex::GetTypes() {
-	return {TypeId::BIGINT};
-}
-
-void PhysicalCreateIndex::_GetChunk(ClientContext &context, DataChunk &chunk,
-                                    PhysicalOperatorState *state) {
-	chunk.Reset();
-
-	if (state->finished) {
-		return;
-	}
-
+void PhysicalCreateIndex::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	if (column_ids.size() == 0) {
-		throw NotImplementedException(
-		    "CREATE INDEX does not refer to any columns in the base table!");
+		throw NotImplementedException("CREATE INDEX does not refer to any columns in the base table!");
 	}
 
 	auto &schema = *table.schema;
@@ -42,8 +23,7 @@ void PhysicalCreateIndex::_GetChunk(ClientContext &context, DataChunk &chunk,
 
 	// create the chunk to hold intermediate expression results
 	if (expressions.size() > 1) {
-		throw NotImplementedException(
-		    "Multidimensional indexes not supported yet");
+		throw NotImplementedException("Multidimensional indexes not supported yet");
 	}
 
 	DataChunk result;
@@ -59,13 +39,12 @@ void PhysicalCreateIndex::_GetChunk(ClientContext &context, DataChunk &chunk,
 	table.storage->InitializeScan(ss);
 
 	DataChunk intermediate;
-	auto types = table.storage->GetTypes(column_ids);
+	auto types = table.GetTypes(column_ids);
 	intermediate.Initialize(types);
 
 	// FIXME: use estimated table size as initial index size
-	auto order_index =
-	    make_unique<OrderIndex>(*table.storage, column_ids, types, result_types,
-	                            move(expressions), STANDARD_VECTOR_SIZE);
+	auto order_index = make_unique<OrderIndex>(*table.storage, column_ids, types, result_types, move(expressions),
+	                                           STANDARD_VECTOR_SIZE);
 	// now we start incrementally building the index
 	while (true) {
 		intermediate.Reset();
@@ -81,8 +60,7 @@ void PhysicalCreateIndex::_GetChunk(ClientContext &context, DataChunk &chunk,
 		ExpressionExecutor executor(intermediate, context);
 		executor.Execute(order_index->expressions, result);
 
-		order_index->Insert(result,
-		                    intermediate.data[intermediate.column_count - 1]);
+		order_index->Insert(result, intermediate.data[intermediate.column_count - 1]);
 	}
 	// after we have finished inserting everything we sort the index
 	order_index->Sort();
@@ -94,9 +72,4 @@ void PhysicalCreateIndex::_GetChunk(ClientContext &context, DataChunk &chunk,
 	chunk.data[0].SetValue(0, Value::BIGINT(0));
 
 	state->finished = true;
-}
-
-unique_ptr<PhysicalOperatorState>
-PhysicalCreateIndex::GetOperatorState(ExpressionExecutor *parent_executor) {
-	return make_unique<PhysicalOperatorState>(nullptr, parent_executor);
 }

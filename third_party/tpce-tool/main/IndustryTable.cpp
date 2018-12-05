@@ -51,8 +51,6 @@ void CIndustryTable::LoadTableRow() {
 	const IndustryDataFileRecord &dataRecord(df[recordIdx]);
 
 	strncpy(tableRow.IN_ID, dataRecord.IN_ID_CSTR(), sizeof(tableRow.IN_ID));
-	strncpy(tableRow.IN_NAME, dataRecord.IN_NAME_CSTR(),
-	        sizeof(tableRow.IN_NAME));
-	strncpy(tableRow.IN_SC_ID, dataRecord.IN_SC_ID_CSTR(),
-	        sizeof(tableRow.IN_SC_ID));
+	strncpy(tableRow.IN_NAME, dataRecord.IN_NAME_CSTR(), sizeof(tableRow.IN_NAME));
+	strncpy(tableRow.IN_SC_ID, dataRecord.IN_SC_ID_CSTR(), sizeof(tableRow.IN_SC_ID));
 }

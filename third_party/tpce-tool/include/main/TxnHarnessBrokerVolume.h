@@ -44,11 +44,10 @@ namespace TPCE {
 class CBrokerVolume {
 	CBrokerVolumeDBInterface *m_db;
 
-  public:
+public:
 	CBrokerVolume(CBrokerVolumeDBInterface *pDB) : m_db(pDB){};
 
-	void DoTxn(PBrokerVolumeTxnInput pTxnInput,
-	           PBrokerVolumeTxnOutput pTxnOutput) {
+	void DoTxn(PBrokerVolumeTxnInput pTxnInput, PBrokerVolumeTxnOutput pTxnOutput) {
 		// Initialize
 		TBrokerVolumeFrame1Output Frame1Output;
 
@@ -58,15 +57,13 @@ class CBrokerVolume {
 		m_db->DoBrokerVolumeFrame1(pTxnInput, &Frame1Output);
 
 		// Validate Frame 1 Output
-		if (Frame1Output.list_len < 0 ||
-		    Frame1Output.list_len > max_broker_list_len) {
+		if (Frame1Output.list_len < 0 || Frame1Output.list_len > max_broker_list_len) {
 			TXN_HARNESS_PROPAGATE_STATUS(CBaseTxnErr::BVF1_ERROR1);
 		}
 
 		// Copy Frame 1 Output
 		pTxnOutput->list_len = Frame1Output.list_len;
-		for (int i = 0; i < Frame1Output.list_len && i < max_broker_list_len;
-		     i++) {
+		for (int i = 0; i < Frame1Output.list_len && i < max_broker_list_len; i++) {
 			pTxnOutput->volume[i] = Frame1Output.volume[i];
 		}
 	}

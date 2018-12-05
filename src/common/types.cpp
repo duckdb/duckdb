@@ -1,5 +1,5 @@
-
 #include "common/types.hpp"
+
 #include "common/exception.hpp"
 
 using namespace std;

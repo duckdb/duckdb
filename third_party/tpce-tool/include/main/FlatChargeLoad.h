@@ -47,24 +47,22 @@
 namespace TPCE {
 
 class CFlatChargeLoad : public CFlatFileLoader<CHARGE_ROW> {
-  private:
+private:
 	const std::string ChargeRowFmt;
 
-  public:
+public:
 	CFlatChargeLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
-	    : CFlatFileLoader<CHARGE_ROW>(szFileName, FlatFileOutputMode),
-	      ChargeRowFmt("%s|%d|%.2f\n"){};
+	    : CFlatFileLoader<CHARGE_ROW>(szFileName, FlatFileOutputMode), ChargeRowFmt("%s|%d|%.2f\n"){};
 
 	/*
 	 *   Writes a record to the file.
 	 */
 	void WriteNextRecord(const CHARGE_ROW &next_record) {
 		// fprintf(hOutFile, "%s\n", next_record.ToString('|').c_str());
-		int rc = fprintf(hOutFile, ChargeRowFmt.c_str(), next_record.CH_TT_ID,
-		                 next_record.CH_C_TIER, next_record.CH_CHRG);
+		int rc =
+		    fprintf(hOutFile, ChargeRowFmt.c_str(), next_record.CH_TT_ID, next_record.CH_C_TIER, next_record.CH_CHRG);
 		if (rc < 0) {
-			throw CSystemErr(CSystemErr::eWriteFile,
-			                 "CFlatChargeLoad::WriteNextRecord");
+			throw CSystemErr(CSystemErr::eWriteFile, "CFlatChargeLoad::WriteNextRecord");
 		}
 	}
 };

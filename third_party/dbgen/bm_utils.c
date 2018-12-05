@@ -20,6 +20,7 @@
 
 #include "config.h"
 #include "dss.h"
+
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
@@ -66,8 +67,7 @@
 /* End of lines added by Chuck McDevitt for WIN32 support */
 #include "dsstypes.h"
 
-static char alpha_num[65] =
-    "0123456789abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ,";
+static char alpha_num[65] = "0123456789abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ,";
 
 #if defined(__STDC__) || defined(__cplusplus)
 #define PROTO(s) s
@@ -226,8 +226,7 @@ long julian(long date) {
 
 #include "dists_dss.h"
 
-static char read_line_into_buffer(char *buffer, size_t bufsiz,
-                                  const char **src) {
+static char read_line_into_buffer(char *buffer, size_t bufsiz, const char **src) {
 	size_t count = 0;
 	while (**src && count < bufsiz - 1) {
 		buffer[count++] = **src;
@@ -276,14 +275,12 @@ void read_dist(const char *path, const char *name, distribution *target) {
 
 		if (!dsscasecmp(token, "count")) {
 			target->count = weight;
-			target->list =
-			    (set_member *)malloc((size_t)(weight * sizeof(set_member)));
+			target->list = (set_member *)malloc((size_t)(weight * sizeof(set_member)));
 			MALLOC_CHECK(target->list);
 			target->max = 0;
 			continue;
 		}
-		target->list[count].text =
-		    (char *)malloc((size_t)((int)strlen(token) + 1));
+		target->list[count].text = (char *)malloc((size_t)((int)strlen(token) + 1));
 		MALLOC_CHECK(target->list[count].text);
 		strcpy(target->list[count].text, token);
 		target->max += weight;

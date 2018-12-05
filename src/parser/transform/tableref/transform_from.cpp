@@ -1,4 +1,3 @@
-
 #include "parser/tableref/crossproductref.hpp"
 #include "parser/transformer.hpp"
 

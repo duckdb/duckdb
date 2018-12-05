@@ -38,8 +38,7 @@
 
 using namespace TPCE;
 
-StringSplitter::StringSplitter(const std::string &textString,
-                               char recordDelimiter, char fieldDelimiter)
+StringSplitter::StringSplitter(const std::string &textString, char recordDelimiter, char fieldDelimiter)
     : stream(textString), splitter(stream, recordDelimiter, fieldDelimiter) {
 }
 

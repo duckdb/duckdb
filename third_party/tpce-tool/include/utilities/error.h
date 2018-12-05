@@ -47,7 +47,7 @@ namespace TPCE {
 #define ERR_TYPE_MEMORY 12      // memory allocation error
 #define ERR_TYPE_FIXED_MAP 27   // Error from CFixedMap
 #define ERR_TYPE_FIXED_ARRAY 28 // Error from CFixedArray
-#define ERR_TYPE_CHECK 29 // Check assertion error (from DriverParamSettings)
+#define ERR_TYPE_CHECK 29       // Check assertion error (from DriverParamSettings)
 
 #define ERR_INS_MEMORY "Insufficient Memory to continue."
 #define ERR_UNKNOWN "Unknown error."
@@ -55,11 +55,11 @@ namespace TPCE {
 #define INV_ERROR_CODE -1
 
 class CBaseErr : public std::exception {
-  protected:
+protected:
 	std::string m_location;
 	int m_idMsg;
 
-  public:
+public:
 	CBaseErr() : m_location(), m_idMsg(INV_ERROR_CODE) {
 	}
 
@@ -85,16 +85,15 @@ class CBaseErr : public std::exception {
 	virtual int ErrorType() = 0; // a value which distinguishes the kind of
 	                             // error that occurred
 
-	virtual const char *
-	ErrorText() const = 0; // a string (i.e., human readable) representation of
-	                       // the error
+	virtual const char *ErrorText() const = 0; // a string (i.e., human readable) representation of
+	                                           // the error
 	virtual const char *ErrorLoc() {
 		return m_location.c_str();
 	}
 };
 
 class CMemoryErr : public CBaseErr {
-  public:
+public:
 	CMemoryErr() : CBaseErr() {
 	}
 
@@ -110,7 +109,7 @@ class CMemoryErr : public CBaseErr {
 };
 
 class CSystemErr : public CBaseErr {
-  public:
+public:
 	enum Action {
 		eNone = 0,
 		eTransactNamedPipe,
@@ -167,7 +166,7 @@ class CSystemErr : public CBaseErr {
 };
 
 class CBaseTxnErr {
-  public:
+public:
 	enum {
 		// Expected Transaction Status Values
 		SUCCESS = 0,
@@ -224,19 +223,18 @@ class CBaseTxnErr {
 };
 
 class CCheckErr : public CBaseErr {
-  private:
+private:
 	std::string name_;
 	std::string msg_;
 
-  public:
+public:
 	CCheckErr() : CBaseErr() {
 	}
 
 	~CCheckErr() throw() {
 	}
 
-	CCheckErr(const char *name, const std::string &msg)
-	    : CBaseErr(name), msg_(msg) {
+	CCheckErr(const char *name, const std::string &msg) : CBaseErr(name), msg_(msg) {
 	}
 
 	int ErrorType() {

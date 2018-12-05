@@ -1,4 +1,5 @@
 #include "sqlite3.h"
+
 #include <ctype.h>
 #include <duckdb.h>
 #include <err.h>
@@ -9,11 +10,10 @@
 #define SOURCE_ID __DATE__ " "__TIME__
 #define LIB_VERSION "0.01"
 
-#define NOT_IMPLEMENTED(func_decl)                                             \
-	func_decl {                                                                \
-		fprintf(stderr, "The function " #func_decl                             \
-		                " of the sqlite3 api has not been implemented!\n");    \
-		exit(1);                                                               \
+#define NOT_IMPLEMENTED(func_decl)                                                                                     \
+	func_decl {                                                                                                        \
+		fprintf(stderr, "The function " #func_decl " of the sqlite3 api has not been implemented!\n");                 \
+		exit(1);                                                                                                       \
 	}
 
 struct sqlite3_stmt {
@@ -61,12 +61,11 @@ int sqlite3_open(const char *filename, /* Database filename (UTF-8) */
 /* In SQLite this function compiles the query into VDBE bytecode,
  * in the implementation it currently executes the query */
 // TODO: prepare the statement instead of executing right away
-int sqlite3_prepare_v2(
-    sqlite3 *db,           /* Database handle */
-    const char *zSql,      /* SQL statement, UTF-8 encoded */
-    int nByte,             /* Maximum length of zSql in bytes. */
-    sqlite3_stmt **ppStmt, /* OUT: Statement handle */
-    const char **pzTail    /* OUT: Pointer to unused portion of zSql */
+int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
+                       const char *zSql,      /* SQL statement, UTF-8 encoded */
+                       int nByte,             /* Maximum length of zSql in bytes. */
+                       sqlite3_stmt **ppStmt, /* OUT: Statement handle */
+                       const char **pzTail    /* OUT: Pointer to unused portion of zSql */
 ) {
 	sqlite3_stmt *pStmt = malloc(sizeof(sqlite3_stmt));
 	if (pStmt == NULL)
@@ -111,8 +110,8 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 /* Execute multiple semicolon separated SQL statements
  * and execute the passed callback for each produced result,
  * largely copied from the original sqlite3 source */
-int sqlite3_exec(sqlite3 *db,      /* The database on which the SQL executes */
-                 const char *zSql, /* The SQL to be executed */
+int sqlite3_exec(sqlite3 *db,                /* The database on which the SQL executes */
+                 const char *zSql,           /* The SQL to be executed */
                  sqlite3_callback xCallback, /* Invoke this callback routine */
                  void *pArg,                 /* First argument to xCallback() */
                  char **pzErrMsg             /* Write error messages here */
@@ -153,8 +152,7 @@ int sqlite3_exec(sqlite3 *db,      /* The database on which the SQL executes */
 			rc = sqlite3_step(pStmt);
 
 			/* Invoke the callback function if required */
-			if (xCallback &&
-			    (SQLITE_ROW == rc || (SQLITE_DONE == rc && !callbackIsInit))) {
+			if (xCallback && (SQLITE_ROW == rc || (SQLITE_DONE == rc && !callbackIsInit))) {
 				if (!callbackIsInit) {
 					azCols = malloc((2 * nCol + 1) * sizeof(const char *));
 					if (azCols == NULL) {
@@ -169,8 +167,7 @@ int sqlite3_exec(sqlite3 *db,      /* The database on which the SQL executes */
 					azVals = &azCols[nCol];
 					for (i = 0; i < nCol; i++) {
 						azVals[i] = (char *)sqlite3_column_text(pStmt, i);
-						if (!azVals[i] &&
-						    sqlite3_column_type(pStmt, i) != SQLITE_NULL) {
+						if (!azVals[i] && sqlite3_column_type(pStmt, i) != SQLITE_NULL) {
 							fprintf(stderr, "sqlite3_exec: out of memory.\n");
 							goto exec_out;
 						}
@@ -219,8 +216,7 @@ exec_out:
 }
 
 int sqlite3_close(sqlite3 *db) {
-	if (duckdb_disconnect(db->pCon) != DuckDBSuccess ||
-	    duckdb_close(db->pDuckDB) != DuckDBSuccess)
+	if (duckdb_disconnect(db->pCon) != DuckDBSuccess || duckdb_close(db->pDuckDB) != DuckDBSuccess)
 		return SQLITE_ERROR;
 
 	return SQLITE_OK;
@@ -273,8 +269,7 @@ const unsigned char *sqlite3_column_text(sqlite3_stmt *pStmt, int iCol) {
 	if (duckdb_value_is_null(pStmt->result.columns[iCol], pStmt->curr_row)) {
 		return NULL;
 	}
-	return (unsigned char *)duckdb_get_value_str(pStmt->result.columns[iCol],
-	                                             pStmt->curr_row);
+	return (unsigned char *)duckdb_get_value_str(pStmt->result.columns[iCol], pStmt->curr_row);
 }
 
 int sqlite3_initialize(void) {

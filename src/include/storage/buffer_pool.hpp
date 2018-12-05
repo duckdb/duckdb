@@ -1,20 +1,18 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // storage/buffer_pool.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
+#include "storage/page.hpp"
+
 #include <atomic>
 #include <mutex>
 #include <vector>
-
-#include "storage/page.hpp"
 
 namespace duckdb {
 

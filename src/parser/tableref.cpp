@@ -1,8 +1,7 @@
-
 #include "parser/tableref.hpp"
-#include "parser/tableref/list.hpp"
 
 #include "common/serializer.hpp"
+#include "parser/tableref/list.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
-// parser/statement/drop_table_statement.hpp
-// 
-// 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// parser/statement/drop_index_statement.hpp
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -17,17 +15,15 @@
 namespace duckdb {
 
 class DropIndexStatement : public SQLStatement {
-  public:
-	DropIndexStatement()
-	    : SQLStatement(StatementType::DROP_INDEX),
-	      info(make_unique<DropIndexInformation>()){};
+public:
+	DropIndexStatement() : SQLStatement(StatementType::DROP_INDEX), info(make_unique<DropIndexInformation>()){};
 	virtual ~DropIndexStatement() {
 	}
 
-	virtual std::string ToString() const {
+	virtual string ToString() const {
 		return "DROP Index";
 	}
-	virtual std::unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
+	virtual unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
 		return v->Visit(*this);
 	}
 
@@ -37,7 +33,7 @@ class DropIndexStatement : public SQLStatement {
 		}
 		throw NotImplementedException("Equality not implemented!");
 	}
-	std::unique_ptr<DropIndexInformation> info;
+	unique_ptr<DropIndexInformation> info;
 };
 
 } // namespace duckdb

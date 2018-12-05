@@ -63,8 +63,7 @@ int initSparseKeys(int nTable) {
 	kRowcount = get_rowcount(nTable);
 	pTdef = getTdefsByNumber(nTable);
 
-	pTdef->arSparseKeys =
-	    (ds_key_t *)malloc((long)kRowcount * sizeof(ds_key_t));
+	pTdef->arSparseKeys = (ds_key_t *)malloc((long)kRowcount * sizeof(ds_key_t));
 	MALLOC_CHECK(pTdef->arSparseKeys);
 	if (pTdef->arSparseKeys == NULL)
 		ReportError(QERR_NO_MEMORY, "initSparseKeys()", 1);
@@ -72,8 +71,7 @@ int initSparseKeys(int nTable) {
 
 	kOldSeed = setSeed(0, nTable);
 	for (k = 0; k < kRowcount; k++)
-		genrand_key(&pTdef->arSparseKeys[k], DIST_UNIFORM, 1, pTdef->nParam, 0,
-		            0);
+		genrand_key(&pTdef->arSparseKeys[k], DIST_UNIFORM, 1, pTdef->nParam, 0, 0);
 	setSeed(0, (int)kOldSeed);
 
 	return (0);

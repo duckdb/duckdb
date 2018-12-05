@@ -53,7 +53,7 @@ namespace TPCE {
 //
 
 class TradeTypeDataFileRecord {
-  private:
+private:
 	static const int maxTt_idLen = 3;
 	char tt_idCStr[maxTt_idLen + 1];
 	std::string tt_id;
@@ -67,7 +67,7 @@ class TradeTypeDataFileRecord {
 
 	static const unsigned int fieldCount = 4;
 
-  public:
+public:
 	explicit TradeTypeDataFileRecord(const std::deque<std::string> &fields);
 
 	//

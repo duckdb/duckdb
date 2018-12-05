@@ -1,4 +1,3 @@
-
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
@@ -22,15 +21,13 @@ TEST_CASE("Test DISTINCT keyword", "[distinct]") {
 	result = con.Query("SELECT DISTINCT b FROM test ORDER BY b");
 	REQUIRE(CHECK_COLUMN(result, 0, {21, 22}));
 
-	result =
-	    con.Query("SELECT DISTINCT a, SUM(B) FROM test GROUP BY a ORDER BY a");
+	result = con.Query("SELECT DISTINCT a, SUM(B) FROM test GROUP BY a ORDER BY a");
 	REQUIRE(CHECK_COLUMN(result, 0, {11, 13}));
 	REQUIRE(CHECK_COLUMN(result, 1, {65, 22}));
 
 	result = con.Query("SELECT DISTINCT MAX(b) FROM test GROUP BY a");
 	REQUIRE(CHECK_COLUMN(result, 0, {22}));
 
-	result = con.Query(
-	    "SELECT DISTINCT CASE WHEN a > 11 THEN 11 ELSE a END FROM test");
+	result = con.Query("SELECT DISTINCT CASE WHEN a > 11 THEN 11 ELSE a END FROM test");
 	REQUIRE(CHECK_COLUMN(result, 0, {11}));
 }

@@ -1,25 +1,21 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // execution/physical_plan_generator.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include <vector>
-
 #include "common/common.hpp"
 #include "common/printable.hpp"
-
 #include "execution/physical_operator.hpp"
-
 #include "planner/bindcontext.hpp"
 #include "planner/logical_operator.hpp"
 #include "planner/logical_operator_visitor.hpp"
+
+#include <vector>
 
 namespace duckdb {
 class ClientContext;
@@ -27,21 +23,13 @@ class ClientContext;
 //! The physical plan generator generates a physical execution plan from a
 //! logical query plan
 class PhysicalPlanGenerator : public LogicalOperatorVisitor {
-  public:
-	PhysicalPlanGenerator(ClientContext &context,
-	                      PhysicalPlanGenerator *parent = nullptr)
+public:
+	PhysicalPlanGenerator(ClientContext &context, PhysicalPlanGenerator *parent = nullptr)
 	    : parent(parent), context(context) {
 	}
 	using LogicalOperatorVisitor::Visit;
 
-	bool CreatePlan(std::unique_ptr<LogicalOperator> logical);
-
-	bool GetSuccess() const {
-		return success;
-	}
-	const std::string &GetErrorMessage() const {
-		return message;
-	}
+	void CreatePlan(unique_ptr<LogicalOperator> logical);
 
 	virtual void Visit(LogicalAggregate &op);
 	virtual void Visit(LogicalCreate &op);
@@ -64,20 +52,17 @@ class PhysicalPlanGenerator : public LogicalOperatorVisitor {
 	virtual void Visit(LogicalTableFunction &expr);
 	virtual void Visit(LogicalPruneColumns &expr);
 
-	virtual std::unique_ptr<Expression> Visit(SubqueryExpression &expr);
+	virtual unique_ptr<Expression> Visit(SubqueryExpression &expr);
 
 	void Print() {
 		plan->Print();
 	}
 
-	std::unique_ptr<PhysicalOperator> plan;
+	unique_ptr<PhysicalOperator> plan;
 
 	PhysicalPlanGenerator *parent;
 
-	bool success;
-	std::string message;
-
-  private:
+private:
 	ClientContext &context;
 };
 } // namespace duckdb

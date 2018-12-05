@@ -44,7 +44,7 @@ namespace TPCE {
 // Interface to provide a simple progress indicator
 // Also an interface to display messages through.
 class ProgressMeterInterface {
-  public:
+public:
 	virtual ~ProgressMeterInterface();
 
 	// Display the current work status.

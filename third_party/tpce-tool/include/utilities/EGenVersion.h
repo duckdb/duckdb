@@ -47,8 +47,7 @@
 namespace TPCE {
 
 extern "C" {
-void GetEGenVersion_C(INT32 &iMajorVersion, INT32 &iMinorVersion,
-                      INT32 &iRevisionNumber, INT32 &iBetaLevel);
+void GetEGenVersion_C(INT32 &iMajorVersion, INT32 &iMinorVersion, INT32 &iRevisionNumber, INT32 &iBetaLevel);
 void GetEGenVersionString_C(char *szOutput, size_t iOutputBufferLen);
 void PrintEGenVersion_C();
 void GetEGenVersionUpdateTimestamp_C(char *szOutput, size_t iOutputBufferLen);
@@ -66,8 +65,7 @@ void GetEGenVersionUpdateTimestamp_C(char *szOutput, size_t iOutputBufferLen);
 //  revision    0
 //  beta level  0
 //
-void GetEGenVersion(INT32 &iMajorVersion, INT32 &iMinorVersion,
-                    INT32 &iRevisionNumber, INT32 &iBetaLevel);
+void GetEGenVersion(INT32 &iMajorVersion, INT32 &iMinorVersion, INT32 &iRevisionNumber, INT32 &iBetaLevel);
 
 // Return versioning information formated as a string
 //

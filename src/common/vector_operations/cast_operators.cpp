@@ -4,6 +4,7 @@
 //===--------------------------------------------------------------------===//
 
 #include "common/operator/cast_operators.hpp"
+
 #include "common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
@@ -14,15 +15,12 @@ void templated_cast_loop(Vector &source, Vector &result) {
 	auto ldata = (SRC_TYPE *)source.data;
 	auto result_data = (DST_TYPE *)result.data;
 	if (!IGNORE_NULL || !result.nullmask.any()) {
-		VectorOperations::Exec(source, [&](size_t i, size_t k) {
-			result_data[i] =
-			    OP::template Operation<SRC_TYPE, DST_TYPE>(ldata[i]);
-		});
+		VectorOperations::Exec(
+		    source, [&](size_t i, size_t k) { result_data[i] = OP::template Operation<SRC_TYPE, DST_TYPE>(ldata[i]); });
 	} else {
 		VectorOperations::Exec(source, [&](size_t i, size_t k) {
 			if (!result.nullmask[i]) {
-				result_data[i] =
-				    OP::template Operation<SRC_TYPE, DST_TYPE>(ldata[i]);
+				result_data[i] = OP::template Operation<SRC_TYPE, DST_TYPE>(ldata[i]);
 			}
 		});
 	}
@@ -30,8 +28,7 @@ void templated_cast_loop(Vector &source, Vector &result) {
 	result.count = source.count;
 }
 
-template <class SRC, class OP, bool IGNORE_NULL>
-static void result_cast_switch(Vector &source, Vector &result) {
+template <class SRC, class OP, bool IGNORE_NULL> static void result_cast_switch(Vector &source, Vector &result) {
 	// now switch on the result type
 	switch (result.type) {
 	case TypeId::TINYINT:
@@ -61,7 +58,7 @@ static void result_cast_switch(Vector &source, Vector &result) {
 			if (source.nullmask[i]) {
 				result_data[i] = nullptr;
 			} else {
-				auto str = OP::template Operation<SRC, std::string>(ldata[i]);
+				auto str = OP::template Operation<SRC, string>(ldata[i]);
 				result_data[i] = result.string_heap.AddString(str);
 			}
 		});
@@ -70,8 +67,7 @@ static void result_cast_switch(Vector &source, Vector &result) {
 		break;
 	}
 	case TypeId::DATE:
-		templated_cast_loop<SRC, date_t, operators::CastToDate, true>(source,
-		                                                              result);
+		templated_cast_loop<SRC, date_t, operators::CastToDate, true>(source, result);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for cast");
@@ -108,8 +104,7 @@ void VectorOperations::Cast(Vector &source, Vector &result) {
 		result_cast_switch<const char *, operators::Cast, true>(source, result);
 		break;
 	case TypeId::DATE:
-		result_cast_switch<date_t, operators::CastFromDate, true>(source,
-		                                                          result);
+		result_cast_switch<date_t, operators::CastFromDate, true>(source, result);
 		break;
 	case TypeId::TIMESTAMP:
 		if (result.type == TypeId::VARCHAR) {

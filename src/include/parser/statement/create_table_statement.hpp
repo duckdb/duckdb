@@ -1,17 +1,14 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // parser/statement/create_table_statement.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
 #include "parser/column_definition.hpp"
-
 #include "parser/parsed_data.hpp"
 #include "parser/sql_node_visitor.hpp"
 #include "parser/sql_statement.hpp"
@@ -19,17 +16,15 @@
 namespace duckdb {
 
 class CreateTableStatement : public SQLStatement {
-  public:
-	CreateTableStatement()
-	    : SQLStatement(StatementType::CREATE_TABLE),
-	      info(make_unique<CreateTableInformation>()){};
+public:
+	CreateTableStatement() : SQLStatement(StatementType::CREATE_TABLE), info(make_unique<CreateTableInformation>()){};
 	virtual ~CreateTableStatement() {
 	}
 
-	virtual std::string ToString() const {
+	virtual string ToString() const {
 		return "CREATE TABLE";
 	}
-	virtual std::unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
+	virtual unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
 		return v->Visit(*this);
 	}
 
@@ -40,7 +35,7 @@ class CreateTableStatement : public SQLStatement {
 		throw NotImplementedException("Equality not implemented!");
 	}
 
-	std::unique_ptr<CreateTableInformation> info;
+	unique_ptr<CreateTableInformation> info;
 };
 
 } // namespace duckdb

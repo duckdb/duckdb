@@ -54,7 +54,6 @@ date_t *mk_date(void);
 
 int jtodt(date_t *dest, int i);
 int strtodt(date_t *dest, char *s);
-date_t *strtodate(char *str);
 int strtotime(char *str);
 
 char *dttostr(date_t *d);
@@ -72,10 +71,9 @@ int getDateWeightFromJulian(int jDay, int nDistribution);
  * DATE OPERATORS
  */
 #define OP_FIRST_DOM 0x01 /* get date of first day of current month */
-#define OP_LAST_DOM                                                            \
-	0x02                /* get date of last day of current month; LY == 2/28) */
-#define OP_SAME_LY 0x03 /* get date for same day/month, last year */
-#define OP_SAME_LQ 0x04 /* get date for same offset in the prior quarter */
+#define OP_LAST_DOM 0x02  /* get date of last day of current month; LY == 2/28) */
+#define OP_SAME_LY 0x03   /* get date for same day/month, last year */
+#define OP_SAME_LQ 0x04   /* get date for same offset in the prior quarter */
 
 extern char *weekday_names[];
 

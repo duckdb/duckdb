@@ -46,12 +46,10 @@ using namespace TPCE;
 
 // Driver Defaults
 TIdent iStartFromCustomer = iDefaultStartFromCustomer;
-TIdent iCustomerCount =
-    iDefaultCustomerCount; // # of customers for this instance
-TIdent iTotalCustomerCount =
-    iDefaultCustomerCount; // total number of customers in the database
-UINT iLoadUnitSize = iDefaultLoadUnitSize; // # of customers in one load unit
-UINT iScaleFactor = 500;                   // # of customers for 1 tpsE
+TIdent iCustomerCount = iDefaultCustomerCount;      // # of customers for this instance
+TIdent iTotalCustomerCount = iDefaultCustomerCount; // total number of customers in the database
+UINT iLoadUnitSize = iDefaultLoadUnitSize;          // # of customers in one load unit
+UINT iScaleFactor = 500;                            // # of customers for 1 tpsE
 UINT iDaysOfInitialTrades = 300;
 
 // These flags are used to control which tables get generated and loaded.
@@ -108,17 +106,11 @@ void Usage() {
 	fprintf(stderr, "EGenLoader [options] \n\n");
 	fprintf(stderr, " Where\n");
 	fprintf(stderr, "  Option                       Default     Description\n");
-	fprintf(stderr,
-	        "   -b number                   %" PRId64
-	        "           Beginning customer ordinal position\n",
+	fprintf(stderr, "   -b number                   %" PRId64 "           Beginning customer ordinal position\n",
 	        iStartFromCustomer);
-	fprintf(stderr,
-	        "   -c number                   %" PRId64
-	        "        Number of customers (for this instance)\n",
+	fprintf(stderr, "   -c number                   %" PRId64 "        Number of customers (for this instance)\n",
 	        iCustomerCount);
-	fprintf(stderr,
-	        "   -t number                   %" PRId64
-	        "        Number of customers (total in the database)\n",
+	fprintf(stderr, "   -t number                   %" PRId64 "        Number of customers (total in the database)\n",
 	        iTotalCustomerCount);
 	fprintf(stderr,
 	        "   -f number                   %d         Scale factor (customers "
@@ -130,44 +122,29 @@ void Usage() {
 	        iDaysOfInitialTrades);
 	fprintf(stderr, "                                           initial trades "
 	                "to populate\n");
-	fprintf(stderr,
-	        "   -i dir                      %-11s Directory for input files\n",
-	        FLAT_IN_PATH);
-	fprintf(stderr,
-	        "   -l [FLAT|ODBC|CUSTOM|NULL]  FLAT        Type of load\n");
+	fprintf(stderr, "   -i dir                      %-11s Directory for input files\n", FLAT_IN_PATH);
+	fprintf(stderr, "   -l [FLAT|ODBC|CUSTOM|NULL]  FLAT        Type of load\n");
 #ifdef COMPILE_FLAT_FILE_LOAD
-	fprintf(
-	    stderr,
-	    "   -m [APPEND|OVERWRITE]       OVERWRITE   Flat File output mode\n");
-	fprintf(stderr,
-	        "   -o dir                      %-11s Directory for output files\n",
-	        FLAT_OUT_PATH);
+	fprintf(stderr, "   -m [APPEND|OVERWRITE]       OVERWRITE   Flat File output mode\n");
+	fprintf(stderr, "   -o dir                      %-11s Directory for output files\n", FLAT_OUT_PATH);
 #endif
 #ifdef COMPILE_ODBC_LOAD
-	fprintf(stderr,
-	        "   -s string                   localhost   Database server\n");
-	fprintf(stderr,
-	        "   -d string                   tpce        Database name\n");
+	fprintf(stderr, "   -s string                   localhost   Database server\n");
+	fprintf(stderr, "   -d string                   tpce        Database name\n");
 #endif
 #if defined(COMPILE_ODBC_LOAD) || defined(COMPILE_CUSTOM_LOAD)
 	fprintf(stderr, "   -p string                               Additional "
 	                "parameters to loader\n");
 #endif
 	fprintf(stderr, "\n");
-	fprintf(stderr,
-	        "   -x                          -x          Generate all tables\n");
+	fprintf(stderr, "   -x                          -x          Generate all tables\n");
 	fprintf(stderr, "   -xf                                     Generate all "
 	                "fixed-size tables\n");
 	fprintf(stderr, "   -xd                                     Generate all "
 	                "scaling and growing tables\n");
-	fprintf(
-	    stderr,
-	    "                                           (equivalent to -xs -xg)\n");
-	fprintf(
-	    stderr,
-	    "   -xs                                     Generate scaling tables\n");
-	fprintf(stderr,
-	        "                                           (except BROKER)\n");
+	fprintf(stderr, "                                           (equivalent to -xs -xg)\n");
+	fprintf(stderr, "   -xs                                     Generate scaling tables\n");
+	fprintf(stderr, "                                           (except BROKER)\n");
 	fprintf(stderr, "   -xg                                     Generate "
 	                "growing tables and BROKER\n");
 	fprintf(stderr, "   -g                                      Disable "
@@ -233,8 +210,7 @@ void ParseCommandLine(int argc, char *argv[]) {
 
 		case 'i': // Location of input files.
 			strncpy(szInDir, vp, sizeof(szInDir));
-			if (('/' != szInDir[strlen(szInDir) - 1]) &&
-			    ('\\' != szInDir[strlen(szInDir) - 1])) {
+			if (('/' != szInDir[strlen(szInDir) - 1]) && ('\\' != szInDir[strlen(szInDir) - 1])) {
 				strncat(szInDir, "/", sizeof(szInDir) - strlen(szInDir) - 1);
 			}
 			break;
@@ -280,8 +256,7 @@ void ParseCommandLine(int argc, char *argv[]) {
 
 		case 'o': // Location for output files.
 			strncpy(szOutDir, vp, sizeof(szOutDir));
-			if (('/' != szOutDir[strlen(szOutDir) - 1]) &&
-			    ('\\' != szOutDir[strlen(szOutDir) - 1])) {
+			if (('/' != szOutDir[strlen(szOutDir) - 1]) && ('\\' != szOutDir[strlen(szOutDir) - 1])) {
 				strncat(szOutDir, "/", sizeof(szOutDir) - strlen(szOutDir) - 1);
 			}
 			break;
@@ -355,8 +330,7 @@ bool ValidateParameters() {
 	//
 	if ((iStartFromCustomer % iLoadUnitSize) != 1) {
 		cout << "The specified starting customer (-b " << iStartFromCustomer
-		     << ") must be a non-zero integral multiple of the load unit size ("
-		     << iLoadUnitSize << ") + 1." << endl;
+		     << ") must be a non-zero integral multiple of the load unit size (" << iLoadUnitSize << ") + 1." << endl;
 
 		bRet = false;
 	}
@@ -370,11 +344,9 @@ bool ValidateParameters() {
 
 	// Customer count must be a non-zero integral multiple of load unit size.
 	//
-	if ((iLoadUnitSize > iCustomerCount) ||
-	    (0 != iCustomerCount % iLoadUnitSize)) {
+	if ((iLoadUnitSize > iCustomerCount) || (0 != iCustomerCount % iLoadUnitSize)) {
 		cout << "The specified customer count (-c " << iCustomerCount
-		     << ") must be a non-zero integral multiple of the load unit size ("
-		     << iLoadUnitSize << ")." << endl;
+		     << ") must be a non-zero integral multiple of the load unit size (" << iLoadUnitSize << ")." << endl;
 
 		bRet = false;
 	}
@@ -382,11 +354,9 @@ bool ValidateParameters() {
 	// Total customer count must be a non-zero integral multiple of load unit
 	// size.
 	//
-	if ((iLoadUnitSize > iTotalCustomerCount) ||
-	    (0 != iTotalCustomerCount % iLoadUnitSize)) {
+	if ((iLoadUnitSize > iTotalCustomerCount) || (0 != iTotalCustomerCount % iLoadUnitSize)) {
 		cout << "The total customer count (-t " << iTotalCustomerCount
-		     << ") must be a non-zero integral multiple of the load unit size ("
-		     << iLoadUnitSize << ")." << endl;
+		     << ") must be a non-zero integral multiple of the load unit size (" << iLoadUnitSize << ")." << endl;
 
 		bRet = false;
 	}
@@ -394,21 +364,17 @@ bool ValidateParameters() {
 	// Completed trades in 8 hours must be a non-zero integral multiple of 100
 	// so that exactly 1% extra trade ids can be assigned to simulate aborts.
 	//
-	if ((INT64)(HoursPerWorkDay * SecondsPerHour * iLoadUnitSize /
-	            iScaleFactor) %
-	        100 !=
-	    0) {
+	if ((INT64)(HoursPerWorkDay * SecondsPerHour * iLoadUnitSize / iScaleFactor) % 100 != 0) {
 		cout << "Incompatible value for Scale Factor (-f) specified." << endl;
-		cout << HoursPerWorkDay << " * " << SecondsPerHour
-		     << " * Load Unit Size (" << iLoadUnitSize << ") / Scale Factor ("
-		     << iScaleFactor << ") must be integral multiple of 100." << endl;
+		cout << HoursPerWorkDay << " * " << SecondsPerHour << " * Load Unit Size (" << iLoadUnitSize
+		     << ") / Scale Factor (" << iScaleFactor << ") must be integral multiple of 100." << endl;
 
 		bRet = false;
 	}
 
 	if (iDaysOfInitialTrades == 0) {
-		cout << "The specified number of 8-Hour Workdays (-w "
-		     << (iDaysOfInitialTrades) << ") must be non-zero." << endl;
+		cout << "The specified number of 8-Hour Workdays (-w " << (iDaysOfInitialTrades) << ") must be non-zero."
+		     << endl;
 
 		bRet = false;
 	}
@@ -448,8 +414,7 @@ CBaseLoaderFactory *CreateLoaderFactory(eLoadImplementation eLoadType) {
 }
 
 int main(int argc, char *argv[]) {
-	CBaseLoaderFactory
-	    *pLoaderFactory; // class factory that creates table loaders
+	CBaseLoaderFactory *pLoaderFactory; // class factory that creates table loaders
 	CGenerateAndLoadStandardOutput Output;
 	CGenerateAndLoad *pGenerateAndLoad;
 	CDateTime StartTime, EndTime, LoadTime; // to time the database load
@@ -522,8 +487,7 @@ int main(int argc, char *argv[]) {
 	cout << "\tLoad Unit:\t\t" << iLoadUnitSize << endl;
 	cout << "\tScale Factor:\t\t" << iScaleFactor << endl;
 	cout << "\tInitial Trade Days:\t" << iDaysOfInitialTrades << endl;
-	cout << "\tCaching Enabled:\t" << (bGenerateUsingCache ? "true" : "false")
-	     << endl;
+	cout << "\tCaching Enabled:\t" << (bGenerateUsingCache ? "true" : "false") << endl;
 	cout << endl << endl;
 
 	// Know the load type => create the loader factory.
@@ -538,8 +502,7 @@ int main(int argc, char *argv[]) {
 		//
 		char szLogFileName[64];
 
-		snprintf(&szLogFileName[0], sizeof(szLogFileName),
-		         "EGenLoaderFrom%" PRId64 "To%" PRId64 ".log",
+		snprintf(&szLogFileName[0], sizeof(szLogFileName), "EGenLoaderFrom%" PRId64 "To%" PRId64 ".log",
 		         iStartFromCustomer, (iStartFromCustomer + iCustomerCount) - 1);
 
 		// Create log formatter and logger instance
@@ -547,22 +510,19 @@ int main(int argc, char *argv[]) {
 		CEGenLogger logger(eDriverEGenLoader, 0, szLogFileName, &fmt);
 
 		// Set up data file manager for lazy load.
-		const DataFileManager dfm(std::string(szInDir), iTotalCustomerCount,
-		                          iTotalCustomerCount);
+		const DataFileManager dfm(std::string(szInDir), iTotalCustomerCount, iTotalCustomerCount);
 
 		// Create the main class instance
-		pGenerateAndLoad = new CGenerateAndLoad(
-		    dfm, iCustomerCount, iStartFromCustomer, iTotalCustomerCount,
-		    iLoadUnitSize, iScaleFactor, iDaysOfInitialTrades, pLoaderFactory,
-		    &logger, &Output, szInDir, bGenerateUsingCache);
+		pGenerateAndLoad = new CGenerateAndLoad(dfm, iCustomerCount, iStartFromCustomer, iTotalCustomerCount,
+		                                        iLoadUnitSize, iScaleFactor, iDaysOfInitialTrades, pLoaderFactory,
+		                                        &logger, &Output, szInDir, bGenerateUsingCache);
 
 		//  The generate and load phase starts here.
 		//
 		StartTime.Set();
 
 		// Generate static tables if appropriate.
-		if ((bTableGenerationFlagNotSpecified &&
-		     (iStartFromCustomer == iDefaultStartFromCustomer)) ||
+		if ((bTableGenerationFlagNotSpecified && (iStartFromCustomer == iDefaultStartFromCustomer)) ||
 		    bGenerateFixedTables) {
 			pGenerateAndLoad->GenerateAndLoadFixedTables();
 		}
@@ -580,12 +540,10 @@ int main(int argc, char *argv[]) {
 		//
 		EndTime.Set();
 
-		LoadTime.Set(0); // clear time
+		LoadTime.Set(0);                                             // clear time
 		LoadTime.Add(0, (int)((EndTime - StartTime) * MsPerSecond)); // add ms
 
-		cout << endl
-		     << "Generate and load time: " << LoadTime.ToStr(01) << endl
-		     << endl;
+		cout << endl << "Generate and load time: " << LoadTime.ToStr(01) << endl << endl;
 
 		delete pGenerateAndLoad; // don't really need to do that, but just for
 		                         // good style

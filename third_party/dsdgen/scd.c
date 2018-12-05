@@ -67,12 +67,10 @@ char arBKeys[MAX_TABLE][17];
  *would be more difficult. Side Effects:
  * TODO: None
  */
-int setSCDKeys(int nColumnID, ds_key_t kIndex, char *szBKey,
-               ds_key_t *pkBeginDateKey, ds_key_t *pkEndDateKey) {
+int setSCDKeys(int nColumnID, ds_key_t kIndex, char *szBKey, ds_key_t *pkBeginDateKey, ds_key_t *pkEndDateKey) {
 	int bNewBKey = 0, nModulo;
 	static int bInit = 0;
-	static ds_key_t jMinimumDataDate, jMaximumDataDate, jH1DataDate,
-	    jT1DataDate, jT2DataDate;
+	static ds_key_t jMinimumDataDate, jMaximumDataDate, jH1DataDate, jT1DataDate, jT2DataDate;
 	date_t dtTemp;
 	int nTableID;
 
@@ -81,8 +79,7 @@ int setSCDKeys(int nColumnID, ds_key_t kIndex, char *szBKey,
 		jMinimumDataDate = dtTemp.julian;
 		strtodt(&dtTemp, DATA_END_DATE);
 		jMaximumDataDate = dtTemp.julian;
-		jH1DataDate =
-		    jMinimumDataDate + (jMaximumDataDate - jMinimumDataDate) / 2;
+		jH1DataDate = jMinimumDataDate + (jMaximumDataDate - jMinimumDataDate) / 2;
 		jT2DataDate = (jMaximumDataDate - jMinimumDataDate) / 3;
 		jT1DataDate = jMinimumDataDate + jT2DataDate;
 		jT2DataDate += jT1DataDate;
@@ -151,8 +148,7 @@ int setSCDKeys(int nColumnID, ds_key_t kIndex, char *szBKey,
  */
 ds_key_t scd_join(int tbl, int col, ds_key_t jDate) {
 	ds_key_t res, kRowcount;
-	static int bInit = 0, jMinimumDataDate, jMaximumDataDate, jH1DataDate,
-	           jT1DataDate, jT2DataDate;
+	static int bInit = 0, jMinimumDataDate, jMaximumDataDate, jH1DataDate, jT1DataDate, jT2DataDate;
 	date_t dtTemp;
 
 	if (!bInit) {
@@ -160,8 +156,7 @@ ds_key_t scd_join(int tbl, int col, ds_key_t jDate) {
 		jMinimumDataDate = dtTemp.julian;
 		strtodt(&dtTemp, DATA_END_DATE);
 		jMaximumDataDate = dtTemp.julian;
-		jH1DataDate =
-		    jMinimumDataDate + (jMaximumDataDate - jMinimumDataDate) / 2;
+		jH1DataDate = jMinimumDataDate + (jMaximumDataDate - jMinimumDataDate) / 2;
 		jT2DataDate = (jMaximumDataDate - jMinimumDataDate) / 3;
 		jT1DataDate = jMinimumDataDate + jT2DataDate;
 		jT2DataDate += jT1DataDate;
@@ -170,8 +165,7 @@ ds_key_t scd_join(int tbl, int col, ds_key_t jDate) {
 
 	kRowcount = getIDCount(tbl);
 	genrand_key(&res, DIST_UNIFORM, 1, kRowcount, 0, col); /* pick the id */
-	res = matchSCDSK(res, jDate,
-	                 tbl); /* map to the date-sensitive surrogate key */
+	res = matchSCDSK(res, jDate, tbl);                     /* map to the date-sensitive surrogate key */
 
 	/* can't have a revision in the future, per bug 114 */
 	if (jDate > jMaximumDataDate)
@@ -206,8 +200,7 @@ ds_key_t matchSCDSK(ds_key_t kUnique, ds_key_t jDate, int nTable) {
 		jMinimumDataDate = dtTemp.julian;
 		strtodt(&dtTemp, DATA_END_DATE);
 		jMaximumDataDate = dtTemp.julian;
-		jH1DataDate =
-		    jMinimumDataDate + (jMaximumDataDate - jMinimumDataDate) / 2;
+		jH1DataDate = jMinimumDataDate + (jMaximumDataDate - jMinimumDataDate) / 2;
 		jT2DataDate = (jMaximumDataDate - jMinimumDataDate) / 3;
 		jT1DataDate = jMinimumDataDate + jT2DataDate;
 		jT2DataDate += jT1DataDate;
@@ -334,8 +327,7 @@ ds_key_t getFirstSK(ds_key_t kID) {
  * Side Effects:
  * TODO: None
  */
-void changeSCD(int nDataType, void *pNewData, void *pOldData, int *nFlags,
-               int bFirst) {
+void changeSCD(int nDataType, void *pNewData, void *pOldData, int *nFlags, int bFirst) {
 
 	/**
 	 * if nFlags is odd, then this value will be retained

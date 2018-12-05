@@ -1,9 +1,7 @@
 //===----------------------------------------------------------------------===//
-//
 //                         DuckDB
 //
 // main/client_context.hpp
-//
 //
 //
 //===----------------------------------------------------------------------===//
@@ -11,10 +9,8 @@
 #pragma once
 
 #include "common/allocator.hpp"
-
 #include "main/appender.hpp"
 #include "main/query_profiler.hpp"
-
 #include "transaction/transaction_context.hpp"
 
 namespace duckdb {
@@ -23,7 +19,7 @@ class DuckDB;
 //! The ClientContext holds information relevant to the current client session
 //! during execution
 class ClientContext {
-  public:
+public:
 	ClientContext(DuckDB &database);
 
 	Transaction &ActiveTransaction() {

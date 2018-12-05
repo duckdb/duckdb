@@ -45,8 +45,7 @@
 
 using namespace TPCE;
 
-SecurityDataFileRecord::SecurityDataFileRecord(
-    const std::deque<std::string> &fields) {
+SecurityDataFileRecord::SecurityDataFileRecord(const std::deque<std::string> &fields) {
 	if (fieldCount != fields.size()) {
 		throw std::runtime_error("Incorrect field count.");
 	}
@@ -109,8 +108,7 @@ TIdent SecurityDataFileRecord::S_CO_ID() const {
 std::string SecurityDataFileRecord::ToString(char fieldSeparator) const {
 	// Facilitate encapsulation by using public interface to fields.
 	std::ostringstream msg;
-	msg << S_ID() << fieldSeparator << S_ST_ID() << fieldSeparator << S_SYMB()
-	    << fieldSeparator << S_ISSUE() << fieldSeparator << S_EX_ID()
-	    << fieldSeparator << S_CO_ID();
+	msg << S_ID() << fieldSeparator << S_ST_ID() << fieldSeparator << S_SYMB() << fieldSeparator << S_ISSUE()
+	    << fieldSeparator << S_EX_ID() << fieldSeparator << S_CO_ID();
 	return msg.str();
 }

@@ -1,9 +1,7 @@
-
 #include "catch.hpp"
-#include "test_helpers.hpp"
-
 #include "common/file_system.hpp"
 #include "dbgen.hpp"
+#include "test_helpers.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -21,8 +19,7 @@ TEST_CASE("Test simple storage", "[storage]") {
 		DuckDB db(storage_database);
 		DuckDBConnection con(db);
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
-		REQUIRE_NO_FAIL(
-		    con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)"));
 	}
 	// reload the database from disk
 	{
@@ -76,8 +73,7 @@ TEST_CASE("Test updates with storage", "[storage]") {
 		DuckDBConnection con(db);
 		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
-		REQUIRE_NO_FAIL(
-		    con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)"));
 		for (size_t i = 0; i < 1000; i++) {
 			REQUIRE_NO_FAIL(con.Query("UPDATE test SET b=b+1 WHERE a=11"));
 		}

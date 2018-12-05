@@ -45,10 +45,10 @@
 namespace TPCE {
 
 class CFlatExchangeLoad : public CFlatFileLoader<EXCHANGE_ROW> {
-  private:
+private:
 	const std::string ExchangeRowFmt;
 
-  public:
+public:
 	CFlatExchangeLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
 	    : CFlatFileLoader<EXCHANGE_ROW>(szFileName, FlatFileOutputMode),
 	      ExchangeRowFmt("%s|%s|%d|%d|%d|%s|%" PRId64 "\n"){};
@@ -57,14 +57,12 @@ class CFlatExchangeLoad : public CFlatFileLoader<EXCHANGE_ROW> {
 	 *   Writes a record to the file.
 	 */
 	void WriteNextRecord(const EXCHANGE_ROW &next_record) {
-		int rc = fprintf(hOutFile, ExchangeRowFmt.c_str(), next_record.EX_ID,
-		                 next_record.EX_NAME, next_record.EX_NUM_SYMB,
-		                 next_record.EX_OPEN, next_record.EX_CLOSE,
-		                 next_record.EX_DESC, next_record.EX_AD_ID);
+		int rc =
+		    fprintf(hOutFile, ExchangeRowFmt.c_str(), next_record.EX_ID, next_record.EX_NAME, next_record.EX_NUM_SYMB,
+		            next_record.EX_OPEN, next_record.EX_CLOSE, next_record.EX_DESC, next_record.EX_AD_ID);
 
 		if (rc < 0) {
-			throw CSystemErr(CSystemErr::eWriteFile,
-			                 "CFlatExchangeLoad::WriteNextRecord");
+			throw CSystemErr(CSystemErr::eWriteFile, "CFlatExchangeLoad::WriteNextRecord");
 		}
 	}
 };

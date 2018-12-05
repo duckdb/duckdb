@@ -1,5 +1,5 @@
-
 #include "benchmark_runner.hpp"
+
 #include "common/profiler.hpp"
 #include "common/string_util.hpp"
 
@@ -12,16 +12,14 @@ void BenchmarkRunner::RegisterBenchmark(Benchmark *benchmark) {
 	GetInstance().benchmarks.push_back(benchmark);
 }
 
-Benchmark::Benchmark(std::string name, std::string group)
-    : name(name), group(group) {
+Benchmark::Benchmark(string name, string group) : name(name), group(group) {
 	BenchmarkRunner::RegisterBenchmark(this);
 }
 
 volatile bool is_active = false;
 volatile bool timeout = false;
 
-void sleep_thread(Benchmark *benchmark, BenchmarkState *state,
-                  int timeout_duration) {
+void sleep_thread(Benchmark *benchmark, BenchmarkState *state, int timeout_duration) {
 	// timeout is given in seconds
 	// we wait 10ms per iteration, so timeout * 100 gives us the amount of
 	// iterations
@@ -37,15 +35,15 @@ void sleep_thread(Benchmark *benchmark, BenchmarkState *state,
 	}
 }
 
-void BenchmarkRunner::Log(std::string message) {
+void BenchmarkRunner::Log(string message) {
 	fprintf(stderr, "%s", message.c_str());
 }
 
-void BenchmarkRunner::LogLine(std::string message) {
+void BenchmarkRunner::LogLine(string message) {
 	fprintf(stderr, "%s\n", message.c_str());
 }
 
-void BenchmarkRunner::LogResult(std::string message) {
+void BenchmarkRunner::LogResult(string message) {
 	LogLine(message);
 	if (out_file.good()) {
 		out_file << message << endl;
@@ -53,7 +51,7 @@ void BenchmarkRunner::LogResult(std::string message) {
 	}
 }
 
-void BenchmarkRunner::LogOutput(std::string message) {
+void BenchmarkRunner::LogOutput(string message) {
 	if (log_file.good()) {
 		log_file << message << endl;
 		log_file.flush();
@@ -79,8 +77,7 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 		}
 		is_active = true;
 		timeout = false;
-		thread interrupt_thread(sleep_thread, benchmark, state.get(),
-		                        benchmark->Timeout());
+		thread interrupt_thread(sleep_thread, benchmark, state.get(), benchmark->Timeout());
 
 		profiler.Start();
 		benchmark->Run(state.get());
@@ -122,13 +119,10 @@ void BenchmarkRunner::RunBenchmarks() {
 
 void print_help() {
 	fprintf(stderr, "Usage: benchmark_runner\n");
-	fprintf(stderr,
-	        "              --list       Show a list of all benchmarks\n");
-	fprintf(stderr,
-	        "              --out=[file] Move benchmark output to file\n");
+	fprintf(stderr, "              --list       Show a list of all benchmarks\n");
+	fprintf(stderr, "              --out=[file] Move benchmark output to file\n");
 	fprintf(stderr, "              --log=[file] Move log output to file\n");
-	fprintf(stderr,
-	        "              --info       Prints info about the benchmark\n");
+	fprintf(stderr, "              --info       Prints info about the benchmark\n");
 	fprintf(stderr, "              [name]       Run only the benchmark of the "
 	                "specified name\n");
 }
@@ -150,20 +144,16 @@ int main(int argc, char **argv) {
 		} else if (arg == "--info") {
 			// write info of benchmark
 			info = true;
-		} else if (StringUtil::StartsWith(arg, "--out=") ||
-		           StringUtil::StartsWith(arg, "--log=")) {
+		} else if (StringUtil::StartsWith(arg, "--out=") || StringUtil::StartsWith(arg, "--log=")) {
 			auto splits = StringUtil::Split(arg, '=');
 			if (splits.size() != 2) {
 				print_help();
 				exit(1);
 			}
-			auto &file = StringUtil::StartsWith(arg, "--out=")
-			                 ? instance.out_file
-			                 : instance.log_file;
+			auto &file = StringUtil::StartsWith(arg, "--out=") ? instance.out_file : instance.log_file;
 			file.open(splits[1]);
 			if (!file.good()) {
-				fprintf(stderr, "Could not open file %s for writing\n",
-				        splits[1].c_str());
+				fprintf(stderr, "Could not open file %s for writing\n", splits[1].c_str());
 				exit(1);
 			}
 		} else {

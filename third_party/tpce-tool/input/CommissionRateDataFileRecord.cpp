@@ -45,8 +45,7 @@
 
 using namespace TPCE;
 
-CommissionRateDataFileRecord::CommissionRateDataFileRecord(
-    const std::deque<std::string> &fields) {
+CommissionRateDataFileRecord::CommissionRateDataFileRecord(const std::deque<std::string> &fields) {
 	if (fieldCount != fields.size()) {
 		throw std::runtime_error("Incorrect field count.");
 	}
@@ -101,8 +100,7 @@ double CommissionRateDataFileRecord::CR_RATE() const {
 std::string CommissionRateDataFileRecord::ToString(char fieldSeparator) const {
 	// Facilitate encapsulation by using public interface to fields.
 	std::ostringstream msg;
-	msg << CR_C_TIER() << fieldSeparator << CR_TT_ID() << fieldSeparator
-	    << CR_EX_ID() << fieldSeparator << CR_FROM_QTY() << fieldSeparator
-	    << CR_TO_QTY() << fieldSeparator << CR_RATE();
+	msg << CR_C_TIER() << fieldSeparator << CR_TT_ID() << fieldSeparator << CR_EX_ID() << fieldSeparator
+	    << CR_FROM_QTY() << fieldSeparator << CR_TO_QTY() << fieldSeparator << CR_RATE();
 	return msg.str();
 }

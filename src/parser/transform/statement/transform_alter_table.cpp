@@ -1,4 +1,3 @@
-
 #include "parser/statement/alter_table_statement.hpp"
 #include "parser/transformer.hpp"
 

@@ -46,25 +46,22 @@
 namespace TPCE {
 
 class CFlatAddressLoad : public CFlatFileLoader<ADDRESS_ROW> {
-  private:
+private:
 	const std::string AddressRowFmt;
 
-  public:
+public:
 	CFlatAddressLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
-	    : CFlatFileLoader<ADDRESS_ROW>(szFileName, FlatFileOutputMode),
-	      AddressRowFmt("%" PRId64 "|%s|%s|%s|%s\n"){};
+	    : CFlatFileLoader<ADDRESS_ROW>(szFileName, FlatFileOutputMode), AddressRowFmt("%" PRId64 "|%s|%s|%s|%s\n"){};
 
 	/*
 	 *   Writes a record to the file.
 	 */
 	void WriteNextRecord(const ADDRESS_ROW &next_record) {
-		int rc = fprintf(hOutFile, AddressRowFmt.c_str(), next_record.AD_ID,
-		                 next_record.AD_LINE1, next_record.AD_LINE2,
+		int rc = fprintf(hOutFile, AddressRowFmt.c_str(), next_record.AD_ID, next_record.AD_LINE1, next_record.AD_LINE2,
 		                 next_record.AD_ZC_CODE, next_record.AD_CTRY);
 
 		if (rc < 0) {
-			throw CSystemErr(CSystemErr::eWriteFile,
-			                 "CFlatAddressLoad::WriteNextRecord");
+			throw CSystemErr(CSystemErr::eWriteFile, "CFlatAddressLoad::WriteNextRecord");
 		}
 	}
 };

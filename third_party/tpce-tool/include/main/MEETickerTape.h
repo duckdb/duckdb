@@ -57,7 +57,7 @@
 namespace TPCE {
 
 class CMEETickerTape {
-  private:
+private:
 	CMEESUTInterface *m_pSUT;
 	CMEEPriceBoard *m_pPriceBoard;
 	TMarketFeedTxnInput m_TxnInput;
@@ -72,9 +72,8 @@ class CMEETickerTape {
 	static const int RANDOM_TRADE_QTY_1;
 	static const int RANDOM_TRADE_QTY_2;
 
-	CTimerWheel<TTickerEntry, CMEETickerTape, 900, 1000>
-	    m_LimitOrderTimers; // Size wheel for 900 seconds with 1,000 millisecond
-	                        // resolution.
+	CTimerWheel<TTickerEntry, CMEETickerTape, 900, 1000> m_LimitOrderTimers; // Size wheel for 900 seconds with 1,000
+	                                                                         // millisecond resolution.
 	queue<PTickerEntry> m_InTheMoneyLimitOrderQ;
 
 	CDateTime *m_pBaseTime;
@@ -87,15 +86,13 @@ class CMEETickerTape {
 	// Performs initialization common to all constructors.
 	void Initialize(void);
 
-  public:
+public:
 	// Constructor - use default RNG seed
-	CMEETickerTape(CMEESUTInterface *pSUT, CMEEPriceBoard *pPriceBoard,
-	               CDateTime *pBaseTime, CDateTime *pCurrentTime,
+	CMEETickerTape(CMEESUTInterface *pSUT, CMEEPriceBoard *pPriceBoard, CDateTime *pBaseTime, CDateTime *pCurrentTime,
 	               const DataFileManager &inputFiles);
 
 	// Constructor - RNG seed provided
-	CMEETickerTape(CMEESUTInterface *pSUT, CMEEPriceBoard *pPriceBoard,
-	               CDateTime *pBaseTime, CDateTime *pCurrentTime,
+	CMEETickerTape(CMEESUTInterface *pSUT, CMEEPriceBoard *pPriceBoard, CDateTime *pBaseTime, CDateTime *pCurrentTime,
 	               RNGSEED RNGSeed, const DataFileManager &inputFiles);
 
 	~CMEETickerTape(void);

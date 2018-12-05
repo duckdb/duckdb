@@ -1,4 +1,3 @@
-
 #include "parser/transformer.hpp"
 
 using namespace duckdb;
@@ -6,8 +5,7 @@ using namespace postgres;
 using namespace std;
 
 // FIXME: what is the difference between GroupBy and expression list?
-bool Transformer::TransformGroupBy(List *group,
-                                   vector<unique_ptr<Expression>> &result) {
+bool Transformer::TransformGroupBy(List *group, vector<unique_ptr<Expression>> &result) {
 	if (!group) {
 		return false;
 	}

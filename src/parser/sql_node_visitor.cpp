@@ -1,4 +1,3 @@
-
 #include "parser/sql_node_visitor.hpp"
 
 #include "parser/constraints/list.hpp"

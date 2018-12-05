@@ -20,6 +20,7 @@
 namespace duckdb {
 
 class DataTable;
+class StorageChunk;
 class Transaction;
 
 struct UniqueIndexNode {
@@ -27,8 +28,8 @@ struct UniqueIndexNode {
 	size_t row_identifier;
 
 	UniqueIndexNode *parent;
-	std::unique_ptr<UniqueIndexNode> left;
-	std::unique_ptr<UniqueIndexNode> right;
+	unique_ptr<UniqueIndexNode> left;
+	unique_ptr<UniqueIndexNode> right;
 
 	UniqueIndexNode(Tuple tuple, size_t row_identifier)
 	    : tuple(std::move(tuple)), row_identifier(row_identifier),
@@ -41,22 +42,22 @@ struct UniqueIndexNode {
 //! UNIQUE constraints.
 class UniqueIndex {
   public:
-	UniqueIndex(DataTable &table, std::vector<TypeId> types,
-	            std::vector<size_t> keys, bool allow_nulls);
+	UniqueIndex(DataTable &table, vector<TypeId> types,
+	            vector<size_t> keys, bool allow_nulls);
 
 	static std::string
 	Append(Transaction &transaction,
-	       std::vector<std::unique_ptr<UniqueIndex>> &indexes, DataChunk &chunk,
+	       vector<unique_ptr<UniqueIndex>> &indexes, DataChunk &chunk,
 	       size_t row_identifier_start);
 
 	static std::string
 	Update(Transaction &transaction, StorageChunk *storage,
-	       std::vector<std::unique_ptr<UniqueIndex>> &indexes,
-	       std::vector<column_t> &column_ids, DataChunk &update_chunk,
+	       vector<unique_ptr<UniqueIndex>> &indexes,
+	       vector<column_t> &column_ids, DataChunk &update_chunk,
 	       Vector &row_identifiers);
 
   private:
-	std::string AddEntries(Transaction &transaction,
+	string AddEntries(Transaction &transaction,
 	                       UniqueIndexNode *added_nodes[], Tuple tuples[],
 	                       bool has_null[], Vector &row_identifiers,
 	                       std::unordered_set<size_t> &ignored_identifiers);
@@ -73,9 +74,9 @@ class UniqueIndex {
 	//! A reference to the table this Unique constraint relates to
 	DataTable &table;
 	//! Types of the UniqueIndex
-	std::vector<TypeId> types;
+	vector<TypeId> types;
 	//! The set of keys that must be collectively unique
-	std::vector<size_t> keys;
+	vector<size_t> keys;
 	//! Lock on the index
 	std::mutex index_lock;
 	//! Whether or not NULL values are allowed by the constraint (false for
@@ -83,7 +84,7 @@ class UniqueIndex {
 	bool allow_nulls;
 
 	//! Root node of the index
-	std::unique_ptr<UniqueIndexNode> root;
+	unique_ptr<UniqueIndexNode> root;
 };
 
 } // namespace duckdb

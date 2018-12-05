@@ -72,7 +72,7 @@ static struct W_WEB_PAGE_TBL g_OldValues;
  */
 int mk_w_web_page(void *info_arr, ds_key_t index) {
 	int32_t bFirstRecord = 0, nFieldChangeFlags;
-	static date_t *dToday;
+	static date_t dToday;
 	static ds_key_t nConcurrent, nRevisions;
 
 	/* begin locals declarations */
@@ -87,7 +87,7 @@ int mk_w_web_page(void *info_arr, ds_key_t index) {
 	if (!bInit) {
 		/* setup invariant values */
 		sprintf(szTemp, "%d-%d-%d", CURRENT_YEAR, CURRENT_MONTH, CURRENT_DAY);
-		dToday = strtodate(szTemp);
+		strtodt(&dToday, szTemp);
 
 		/* set up for the SCD handling */
 		nConcurrent = (int)get_rowcount(CONCURRENT_WEB_SITES);
@@ -103,8 +103,7 @@ int mk_w_web_page(void *info_arr, ds_key_t index) {
 	 * generate a new one then reset associate fields (e.g., rec_start_date
 	 * minimums)
 	 */
-	if (setSCDKeys(WP_PAGE_ID, index, r->wp_page_id, &r->wp_rec_start_date_id,
-	               &r->wp_rec_end_date_id)) {
+	if (setSCDKeys(WP_PAGE_ID, index, r->wp_page_id, &r->wp_rec_start_date_id, &r->wp_rec_end_date_id)) {
 
 		/*
 		 * some fields are not changed, even when a new version of the row is
@@ -120,59 +119,42 @@ int mk_w_web_page(void *info_arr, ds_key_t index) {
 	nFieldChangeFlags = next_random(WP_SCD);
 
 	r->wp_creation_date_sk = mk_join(WP_CREATION_DATE_SK, DATET, index);
-	changeSCD(SCD_KEY, &r->wp_creation_date_sk,
-	          &rOldValues->wp_creation_date_sk, &nFieldChangeFlags,
-	          bFirstRecord);
+	changeSCD(SCD_KEY, &r->wp_creation_date_sk, &rOldValues->wp_creation_date_sk, &nFieldChangeFlags, bFirstRecord);
 
-	genrand_integer(&nAccess, DIST_UNIFORM, 0, WP_IDLE_TIME_MAX, 0,
-	                WP_ACCESS_DATE_SK);
-	r->wp_access_date_sk = dToday->julian - nAccess;
-	changeSCD(SCD_KEY, &r->wp_access_date_sk, &rOldValues->wp_access_date_sk,
-	          &nFieldChangeFlags, bFirstRecord);
+	genrand_integer(&nAccess, DIST_UNIFORM, 0, WP_IDLE_TIME_MAX, 0, WP_ACCESS_DATE_SK);
+	r->wp_access_date_sk = dToday.julian - nAccess;
+	changeSCD(SCD_KEY, &r->wp_access_date_sk, &rOldValues->wp_access_date_sk, &nFieldChangeFlags, bFirstRecord);
 	if (r->wp_access_date_sk == 0)
 		r->wp_access_date_sk = -1; /* special case for dates */
 
 	genrand_integer(&nTemp, DIST_UNIFORM, 0, 99, 0, WP_AUTOGEN_FLAG);
 	r->wp_autogen_flag = (nTemp < WP_AUTOGEN_PCT) ? 1 : 0;
-	changeSCD(SCD_INT, &r->wp_autogen_flag, &rOldValues->wp_autogen_flag,
-	          &nFieldChangeFlags, bFirstRecord);
+	changeSCD(SCD_INT, &r->wp_autogen_flag, &rOldValues->wp_autogen_flag, &nFieldChangeFlags, bFirstRecord);
 
 	r->wp_customer_sk = mk_join(WP_CUSTOMER_SK, CUSTOMER, 1);
-	changeSCD(SCD_KEY, &r->wp_customer_sk, &rOldValues->wp_customer_sk,
-	          &nFieldChangeFlags, bFirstRecord);
+	changeSCD(SCD_KEY, &r->wp_customer_sk, &rOldValues->wp_customer_sk, &nFieldChangeFlags, bFirstRecord);
 
 	if (!r->wp_autogen_flag)
 		r->wp_customer_sk = -1;
 
 	genrand_url(r->wp_url, WP_URL);
-	changeSCD(SCD_CHAR, &r->wp_url, &rOldValues->wp_url, &nFieldChangeFlags,
-	          bFirstRecord);
+	changeSCD(SCD_CHAR, &r->wp_url, &rOldValues->wp_url, &nFieldChangeFlags, bFirstRecord);
 
 	pick_distribution(&r->wp_type, "web_page_use", 1, 1, WP_TYPE);
-	changeSCD(SCD_PTR, &r->wp_type, &rOldValues->wp_type, &nFieldChangeFlags,
-	          bFirstRecord);
+	changeSCD(SCD_PTR, &r->wp_type, &rOldValues->wp_type, &nFieldChangeFlags, bFirstRecord);
 
-	genrand_integer(&r->wp_link_count, DIST_UNIFORM, WP_LINK_MIN, WP_LINK_MAX,
-	                0, WP_LINK_COUNT);
-	changeSCD(SCD_INT, &r->wp_link_count, &rOldValues->wp_link_count,
-	          &nFieldChangeFlags, bFirstRecord);
+	genrand_integer(&r->wp_link_count, DIST_UNIFORM, WP_LINK_MIN, WP_LINK_MAX, 0, WP_LINK_COUNT);
+	changeSCD(SCD_INT, &r->wp_link_count, &rOldValues->wp_link_count, &nFieldChangeFlags, bFirstRecord);
 
-	genrand_integer(&r->wp_image_count, DIST_UNIFORM, WP_IMAGE_MIN,
-	                WP_IMAGE_MAX, 0, WP_IMAGE_COUNT);
-	changeSCD(SCD_INT, &r->wp_image_count, &rOldValues->wp_image_count,
-	          &nFieldChangeFlags, bFirstRecord);
+	genrand_integer(&r->wp_image_count, DIST_UNIFORM, WP_IMAGE_MIN, WP_IMAGE_MAX, 0, WP_IMAGE_COUNT);
+	changeSCD(SCD_INT, &r->wp_image_count, &rOldValues->wp_image_count, &nFieldChangeFlags, bFirstRecord);
 
-	genrand_integer(&r->wp_max_ad_count, DIST_UNIFORM, WP_AD_MIN, WP_AD_MAX, 0,
-	                WP_MAX_AD_COUNT);
-	changeSCD(SCD_INT, &r->wp_max_ad_count, &rOldValues->wp_max_ad_count,
-	          &nFieldChangeFlags, bFirstRecord);
+	genrand_integer(&r->wp_max_ad_count, DIST_UNIFORM, WP_AD_MIN, WP_AD_MAX, 0, WP_MAX_AD_COUNT);
+	changeSCD(SCD_INT, &r->wp_max_ad_count, &rOldValues->wp_max_ad_count, &nFieldChangeFlags, bFirstRecord);
 
-	genrand_integer(&r->wp_char_count, DIST_UNIFORM,
-	                r->wp_link_count * 125 + r->wp_image_count * 50,
-	                r->wp_link_count * 300 + r->wp_image_count * 150, 0,
-	                WP_CHAR_COUNT);
-	changeSCD(SCD_INT, &r->wp_char_count, &rOldValues->wp_char_count,
-	          &nFieldChangeFlags, bFirstRecord);
+	genrand_integer(&r->wp_char_count, DIST_UNIFORM, r->wp_link_count * 125 + r->wp_image_count * 50,
+	                r->wp_link_count * 300 + r->wp_image_count * 150, 0, WP_CHAR_COUNT);
+	changeSCD(SCD_INT, &r->wp_char_count, &rOldValues->wp_char_count, &nFieldChangeFlags, bFirstRecord);
 
 	void *info = append_info_get(info_arr, WEB_PAGE);
 	append_row_start(info);

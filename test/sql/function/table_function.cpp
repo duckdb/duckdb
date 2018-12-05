@@ -1,4 +1,3 @@
-
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
@@ -26,18 +25,14 @@ TEST_CASE("Table functions", "[function]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {"i", "j"}));
 
 	// project column that is not in function return
-	REQUIRE_FAIL(
-	    con.Query("SELECT blablabla FROM pragma_table_info('integers');"));
+	REQUIRE_FAIL(con.Query("SELECT blablabla FROM pragma_table_info('integers');"));
 
 	// join with table function
-	REQUIRE_NO_FAIL(
-	    con.Query("CREATE TABLE join_table(name VARCHAR, value INTEGER);"));
-	REQUIRE_NO_FAIL(
-	    con.Query("INSERT INTO join_table VALUES ('i', 33), ('j', 44)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE join_table(name VARCHAR, value INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO join_table VALUES ('i', 33), ('j', 44)"));
 
-	result = con.Query(
-	    "SELECT a.name, cid, value FROM pragma_table_info('integers') AS a "
-	    "INNER JOIN join_table ON a.name=join_table.name ORDER BY a.name;");
+	result = con.Query("SELECT a.name, cid, value FROM pragma_table_info('integers') AS a "
+	                   "INNER JOIN join_table ON a.name=join_table.name ORDER BY a.name;");
 	REQUIRE(CHECK_COLUMN(result, 0, {"i", "j"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {0, 1}));
 	REQUIRE(CHECK_COLUMN(result, 2, {33, 44}));

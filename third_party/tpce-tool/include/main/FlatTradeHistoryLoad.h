@@ -45,13 +45,12 @@
 namespace TPCE {
 
 class CFlatTradeHistoryLoad : public CFlatFileLoader<TRADE_HISTORY_ROW> {
-  private:
+private:
 	CDateTime Flat_TH_DTS;
 	const std::string TradeHistoryRowFmt;
 
-  public:
-	CFlatTradeHistoryLoad(char *szFileName,
-	                      FlatFileOutputModes FlatFileOutputMode)
+public:
+	CFlatTradeHistoryLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
 	    : CFlatFileLoader<TRADE_HISTORY_ROW>(szFileName, FlatFileOutputMode),
 	      TradeHistoryRowFmt("%" PRId64 "|%s|%s\n"){};
 
@@ -60,12 +59,10 @@ class CFlatTradeHistoryLoad : public CFlatFileLoader<TRADE_HISTORY_ROW> {
 	 */
 	void WriteNextRecord(const TRADE_HISTORY_ROW &next_record) {
 		Flat_TH_DTS = next_record.TH_DTS;
-		int rc = fprintf(
-		    hOutFile, TradeHistoryRowFmt.c_str(), next_record.TH_T_ID,
-		    Flat_TH_DTS.ToStr(FlatFileDateTimeFormat), next_record.TH_ST_ID);
+		int rc = fprintf(hOutFile, TradeHistoryRowFmt.c_str(), next_record.TH_T_ID,
+		                 Flat_TH_DTS.ToStr(FlatFileDateTimeFormat), next_record.TH_ST_ID);
 		if (rc < 0) {
-			throw CSystemErr(CSystemErr::eWriteFile,
-			                 "CFlatTradeHistory::WriteNextRecord");
+			throw CSystemErr(CSystemErr::eWriteFile, "CFlatTradeHistory::WriteNextRecord");
 		}
 	}
 };

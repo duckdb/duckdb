@@ -43,16 +43,14 @@ TEST_CASE("Booleans and NULLs", "[sql]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {Value()}));
 
 	// IS NULL
-	result = con.Query(
-	    "SELECT NULL IS NULL, NULL IS NOT NULL, 42 IS NULL, 42 IS NOT NULL");
+	result = con.Query("SELECT NULL IS NULL, NULL IS NOT NULL, 42 IS NULL, 42 IS NOT NULL");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {0}));
 	REQUIRE(CHECK_COLUMN(result, 2, {0}));
 	REQUIRE(CHECK_COLUMN(result, 3, {1}));
 
 	// Comparisions
-	result =
-	    con.Query("SELECT NULL = NULL, NULL <> NULL, 42 = NULL, 42 <> NULL");
+	result = con.Query("SELECT NULL = NULL, NULL <> NULL, 42 = NULL, 42 <> NULL");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
 	REQUIRE(CHECK_COLUMN(result, 2, {Value()}));

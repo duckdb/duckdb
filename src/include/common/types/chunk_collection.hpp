@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // common/types/chunk_collection.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -23,16 +21,16 @@ namespace duckdb {
    direct access.
 */
 class ChunkCollection : public Printable {
-  public:
+public:
 	ChunkCollection() : count(0) {
 	}
 
 	//! The total amount of elements in the collection
 	size_t count;
 	//! The set of data chunks in the collection
-	std::vector<std::unique_ptr<DataChunk>> chunks;
+	vector<unique_ptr<DataChunk>> chunks;
 	//! The types of the ChunkCollection
-	std::vector<TypeId> types;
+	vector<TypeId> types;
 
 	//! The amount of columns in the ChunkCollection
 	size_t column_count() {
@@ -47,18 +45,16 @@ class ChunkCollection : public Printable {
 	//! Sets the value of the column at the specified index
 	void SetValue(size_t column, size_t index, Value value);
 
-	std::string ToString() const {
-		return chunks.size() == 0
-		           ? "ChunkCollection [ 0 ]"
-		           : "ChunkCollection [ " + std::to_string(count) + " ]: \n" +
-		                 chunks[0]->ToString();
+	string ToString() const {
+		return chunks.size() == 0 ? "ChunkCollection [ 0 ]"
+		                          : "ChunkCollection [ " + std::to_string(count) + " ]: \n" + chunks[0]->ToString();
 	}
 	//! Gets a reference to the chunk at the given index
 	DataChunk &GetChunk(size_t index) {
 		return *chunks[LocateChunk(index)];
 	}
 
-  private:
+private:
 	//! Locates the chunk that belongs to the specific index
 	size_t LocateChunk(size_t index) {
 		size_t result = index / STANDARD_VECTOR_SIZE;

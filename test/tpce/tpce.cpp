@@ -1,8 +1,7 @@
+#include "tpce.hpp"
 
 #include "catch.hpp"
-
 #include "test_helpers.hpp"
-#include "tpce.hpp"
 
 #include <chrono>
 #include <iostream>
@@ -27,8 +26,7 @@ TEST_CASE("Test TPC-E", "[tpce][.]") {
 		auto table_name = result->collection.GetValue(1, i);
 
 		fprintf(stderr, "%s\n\n", table_name.str_value.c_str());
-		auto result2 =
-		    con.Query("SELECT COUNT(*) FROM " + table_name.str_value);
+		auto result2 = con.Query("SELECT COUNT(*) FROM " + table_name.str_value);
 		// result2->Print();
 
 		REQUIRE(1 == 1);

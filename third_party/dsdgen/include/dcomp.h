@@ -65,20 +65,19 @@ int ProcessSet(char *s, token_t *t);
 int ProcessAdd(char *s, token_t *t);
 
 #ifdef DECLARER
-token_t dcomp_tokens[MAX_TOKEN + 2] = {
-    {TKN_UNKNOWN, "", NULL},
-    {TKN_CREATE, "create", ProcessDistribution},
-    {TKN_WEIGHTS, "weights", NULL},
-    {TKN_TYPES, "types", NULL},
-    {TKN_INCLUDE, "#include", ProcessInclude},
-    {TKN_SET, "set", ProcessSet},
-    {TKN_VARCHAR, "varchar", NULL},
-    {TKN_INT, "int", NULL},
-    {TKN_ADD, "add", ProcessAdd},
-    {TKN_DATE, "date", NULL},
-    {TKN_DECIMAL, "decimal", NULL},
-    {TKN_NAMES, "names", NULL},
-    {-1, "", NULL}};
+token_t dcomp_tokens[MAX_TOKEN + 2] = {{TKN_UNKNOWN, "", NULL},
+                                       {TKN_CREATE, "create", ProcessDistribution},
+                                       {TKN_WEIGHTS, "weights", NULL},
+                                       {TKN_TYPES, "types", NULL},
+                                       {TKN_INCLUDE, "#include", ProcessInclude},
+                                       {TKN_SET, "set", ProcessSet},
+                                       {TKN_VARCHAR, "varchar", NULL},
+                                       {TKN_INT, "int", NULL},
+                                       {TKN_ADD, "add", ProcessAdd},
+                                       {TKN_DATE, "date", NULL},
+                                       {TKN_DECIMAL, "decimal", NULL},
+                                       {TKN_NAMES, "names", NULL},
+                                       {-1, "", NULL}};
 #else
 extern token_t tokens[];
 #endif

@@ -1,5 +1,5 @@
-
 #include "common/operator/numeric_functions.hpp"
+
 #include "common/exception.hpp"
 #include "common/value_operations/value_operations.hpp"
 

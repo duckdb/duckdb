@@ -1,4 +1,3 @@
-
 #include "common/operator/like_operators.hpp"
 
 namespace operators {

@@ -76,11 +76,10 @@ class CSecurityFile {
 	void CreateSuffix(TIdent Multiplier, char *pBuf, size_t BufSize) const;
 	INT64 ParseSuffix(const char *pSymbol) const;
 
-  public:
+public:
 	// Constructor.
 	//
-	CSecurityFile(const SecurityDataFile_t &dataFile,
-	              TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount,
+	CSecurityFile(const SecurityDataFile_t &dataFile, TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount,
 	              UINT baseCompanyCount);
 
 	// Calculate total security count for the specified number of customers.
@@ -98,11 +97,10 @@ class CSecurityFile {
 	// This function is needed to scale unique security
 	// symbols with the database size.
 	//
-	void
-	CreateSymbol(TIdent iIndex,    // row number
-	             char *szOutput,   // output buffer
-	             size_t iOutputLen // size of the output buffer (including null)
-	             ) const;
+	void CreateSymbol(TIdent iIndex,    // row number
+	                  char *szOutput,   // output buffer
+	                  size_t iOutputLen // size of the output buffer (including null)
+	                  ) const;
 
 	// Return company id for the specified row of the SECURITY table.
 	// Index can exceed the size of the Security flat file.

@@ -33,11 +33,9 @@ struct stats_visitor : prod_visitor {
 		vector<pair<const char *, long>> report;
 		for (auto p : production_stats)
 			report.push_back(p);
-		stable_sort(report.begin(), report.end(),
-		            [](const pair<std::string, long> &a,
-		               const pair<std::string, long> &b) {
-			            return a.second > b.second;
-		            });
+		stable_sort(
+		    report.begin(), report.end(),
+		    [](const pair<std::string, long> &a, const pair<std::string, long> &b) { return a.second > b.second; });
 		for (auto p : report) {
 			cerr << p.second << "\t" << p.first << endl;
 		}
@@ -59,18 +57,14 @@ void cerr_logger::report() {
 	cerr << endl << "queries: " << queries << endl;
 	// 	 << " (" << 1000.0*query_count/gen_time.count() << " gen/s, "
 	// 	 << 1000.0*query_count/query_time.count() << " exec/s)" << endl;
-	cerr << "AST stats (avg): height = " << sum_height / queries
-	     << " nodes = " << sum_nodes / queries << endl;
+	cerr << "AST stats (avg): height = " << sum_height / queries << " nodes = " << sum_nodes / queries << endl;
 
 	vector<pair<std::string, long>> report;
 	for (auto e : errors) {
 		report.push_back(e);
 	}
-	stable_sort(
-	    report.begin(), report.end(),
-	    [](const pair<std::string, long> &a, const pair<std::string, long> &b) {
-		    return a.second > b.second;
-	    });
+	stable_sort(report.begin(), report.end(),
+	            [](const pair<std::string, long> &a, const pair<std::string, long> &b) { return a.second > b.second; });
 	long err_count = 0;
 	for (auto e : report) {
 		err_count += e.second;

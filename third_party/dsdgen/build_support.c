@@ -88,8 +88,7 @@ void hierarchy_item(int h_level, ds_key_t *id, char **name, ds_key_t kIndex) {
 		break;
 	case I_CLASS:
 		if (nLastCategory == -1)
-			ReportErrorNoLine(DBGEN_ERROR_HIERACHY_ORDER,
-			                  "I_CLASS before I_CATEGORY", 1);
+			ReportErrorNoLine(DBGEN_ERROR_HIERACHY_ORDER, "I_CLASS before I_CATEGORY", 1);
 		dist_member(&szClassDistName, "categories", nLastCategory, 2);
 		nLastClass = pick_distribution(name, szClassDistName, 1, 1, h_level);
 		nLastCategory = -1;
@@ -97,19 +96,16 @@ void hierarchy_item(int h_level, ds_key_t *id, char **name, ds_key_t kIndex) {
 		break;
 	case I_BRAND:
 		if (nLastClass == -1)
-			ReportErrorNoLine(DBGEN_ERROR_HIERACHY_ORDER,
-			                  "I_BRAND before I_CLASS", 1);
+			ReportErrorNoLine(DBGEN_ERROR_HIERACHY_ORDER, "I_BRAND before I_CLASS", 1);
 		dist_member(&nBrandCount, szClassDistName, nLastClass, 2);
 		*id = kIndex % nBrandCount + 1;
-		mk_word(*name, "brand_syllables", nBrandBase * 10 + nLastClass, 45,
-		        I_BRAND);
+		mk_word(*name, "brand_syllables", nBrandBase * 10 + nLastClass, 45, I_BRAND);
 		sprintf(sTemp, " #%d", (int)*id);
 		strcat(*name, sTemp);
 		*id += (nBrandBase * 1000 + nLastClass) * 1000;
 		break;
 	default:
-		printf("ERROR: Invalid call to hierarchy_item with argument '%d'\n",
-		       h_level);
+		printf("ERROR: Invalid call to hierarchy_item with argument '%d'\n", h_level);
 		exit(1);
 	}
 
@@ -187,8 +183,7 @@ int set_locale(int nRegion, decimal_t *longitude, decimal_t *latitude) {
  * Side Effects:
  * TODO: None
  */
-void bitmap_to_dist(void *pDest, char *distname, ds_key_t *modulus, int vset,
-                    int stream) {
+void bitmap_to_dist(void *pDest, char *distname, ds_key_t *modulus, int vset, int stream) {
 	int32_t m, s;
 	char msg[80];
 
@@ -217,8 +212,7 @@ void bitmap_to_dist(void *pDest, char *distname, ds_key_t *modulus, int vset,
  * Side Effects:
  * TODO: None
  */
-void dist_to_bitmap(int *pDest, char *szDistName, int nValue, int nWeight,
-                    int nStream) {
+void dist_to_bitmap(int *pDest, char *szDistName, int nValue, int nWeight, int nStream) {
 	*pDest *= distsize(szDistName);
 	*pDest += pick_distribution(NULL, szDistName, nValue, nWeight, nStream);
 
@@ -238,8 +232,7 @@ void dist_to_bitmap(int *pDest, char *szDistName, int nValue, int nWeight,
  * Side Effects:
  * TODO: None
  */
-void random_to_bitmap(int *pDest, int nDist, int nMin, int nMax, int nMean,
-                      int nStream) {
+void random_to_bitmap(int *pDest, int nDist, int nMin, int nMax, int nMean, int nStream) {
 	*pDest *= nMax;
 	*pDest += genrand_integer(NULL, nDist, nMin, nMax, nMean, nStream);
 
@@ -333,14 +326,12 @@ void mk_bkey(char *szDest, ds_key_t kPrimary, int nStream) {
  * Side Effects:
  * TODO: None
  */
-int embed_string(char *szDest, char *szDist, int nValue, int nWeight,
-                 int nStream) {
+int embed_string(char *szDest, char *szDist, int nValue, int nWeight, int nStream) {
 	int nPosition;
 	char *szWord = NULL;
 
 	pick_distribution(&szWord, szDist, nValue, nWeight, nStream);
-	nPosition = genrand_integer(
-	    NULL, DIST_UNIFORM, 0, strlen(szDest) - strlen(szWord) - 1, 0, nStream);
+	nPosition = genrand_integer(NULL, DIST_UNIFORM, 0, strlen(szDest) - strlen(szWord) - 1, 0, nStream);
 	strncpy(&szDest[nPosition], szWord, strlen(szWord));
 
 	return (0);

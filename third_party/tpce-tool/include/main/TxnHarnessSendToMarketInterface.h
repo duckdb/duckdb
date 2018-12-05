@@ -48,7 +48,7 @@
 namespace TPCE {
 
 class CSendToMarketInterface {
-  public:
+public:
 	/*
 	 *  Virtual destructor. Provided so that a sponsor-specific
 	 *  destructor can be called on destruction from the base-class pointer.
@@ -70,7 +70,7 @@ class CSendToMarketInterface {
 		return SendToMarket(trade_mes);
 	}
 
-  protected:
+protected:
 	virtual bool SendToMarket(TTradeRequest &trade_mes) = 0;
 };
 

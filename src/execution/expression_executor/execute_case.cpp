@@ -1,7 +1,5 @@
-
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
-
 #include "parser/expression/case_expression.hpp"
 
 using namespace duckdb;

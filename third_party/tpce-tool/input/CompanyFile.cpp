@@ -56,11 +56,9 @@ using namespace TPCE;
  *  RETURNS:
  *       not applicable.
  */
-CCompanyFile::CCompanyFile(const CompanyDataFile_t &dataFile,
-                           TIdent iConfiguredCustomerCount,
+CCompanyFile::CCompanyFile(const CompanyDataFile_t &dataFile, TIdent iConfiguredCustomerCount,
                            TIdent iActiveCustomerCount)
-    : m_dataFile(&dataFile), m_iConfiguredCompanyCount(CalculateCompanyCount(
-                                 iConfiguredCustomerCount)),
+    : m_dataFile(&dataFile), m_iConfiguredCompanyCount(CalculateCompanyCount(iConfiguredCustomerCount)),
       m_iActiveCompanyCount(CalculateCompanyCount(iActiveCustomerCount)) {
 }
 
@@ -88,8 +86,7 @@ TIdent CCompanyFile::CalculateCompanyCount(TIdent iCustomerCount) const {
  *  RETURNS:
  *       company competitor id.
  */
-TIdent
-CCompanyFile::CalculateStartFromCompany(TIdent iStartFromCustomer) const {
+TIdent CCompanyFile::CalculateStartFromCompany(TIdent iStartFromCustomer) const {
 	return iStartFromCustomer / iDefaultLoadUnitSize * iOneLoadUnitCompanyCount;
 }
 
@@ -113,8 +110,7 @@ void CCompanyFile::CreateName(TIdent iIndex,     // row number
 	TIdent iAdd = iIndex / m_dataFile->size();
 
 	if (iAdd > 0) {
-		snprintf(szOutput, iOutputLen, "%s #%" PRId64,
-		         GetRecord(iFileIndex).CO_NAME_CSTR(), iAdd);
+		snprintf(szOutput, iOutputLen, "%s #%" PRId64, GetRecord(iFileIndex).CO_NAME_CSTR(), iAdd);
 	} else {
 		strncpy(szOutput, GetRecord(iFileIndex).CO_NAME_CSTR(), iOutputLen);
 	}
@@ -133,8 +129,8 @@ void CCompanyFile::CreateName(TIdent iIndex,     // row number
 TIdent CCompanyFile::GetCompanyId(TIdent iIndex) const {
 	// Index wraps around every 5000 companies.
 	//
-	return (*m_dataFile)[(int)(iIndex % m_dataFile->size())].CO_ID() +
-	       iTIdentShift + iIndex / m_dataFile->size() * m_dataFile->size();
+	return (*m_dataFile)[(int)(iIndex % m_dataFile->size())].CO_ID() + iTIdentShift +
+	       iIndex / m_dataFile->size() * m_dataFile->size();
 }
 
 /*

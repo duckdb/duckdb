@@ -1,8 +1,7 @@
-
 #include "optimizer/logical_rules/exists_rewrite.hpp"
+
 #include "optimizer/logical_rules/subquery_rewrite.hpp"
 #include "optimizer/rewriter.hpp"
-
 #include "parser/expression/list.hpp"
 #include "planner/operator/list.hpp"
 
@@ -10,27 +9,22 @@ using namespace duckdb;
 using namespace std;
 
 ExistsRewriteRule::ExistsRewriteRule() {
-	auto subquery = make_unique_base<AbstractRuleNode, ExpressionNodeType>(
-	    ExpressionType::SELECT_SUBQUERY);
+	auto subquery = make_unique_base<AbstractRuleNode, ExpressionNodeType>(ExpressionType::SELECT_SUBQUERY);
 
-	vector<ExpressionType> types = {ExpressionType::OPERATOR_EXISTS,
-	                                ExpressionType::OPERATOR_NOT_EXISTS};
+	vector<ExpressionType> types = {ExpressionType::OPERATOR_EXISTS, ExpressionType::OPERATOR_NOT_EXISTS};
 	auto exists = make_unique_base<AbstractRuleNode, ExpressionNodeSet>(types);
 
 	exists->children.push_back(move(subquery));
 	exists->child_policy = ChildPolicy::ORDERED;
 
-	root = make_unique_base<AbstractRuleNode, LogicalNodeType>(
-	    LogicalOperatorType::FILTER);
+	root = make_unique_base<AbstractRuleNode, LogicalNodeType>(LogicalOperatorType::FILTER);
 
 	root->children.push_back(move(exists));
 	root->child_policy = ChildPolicy::SOME;
 }
 
-unique_ptr<LogicalOperator>
-ExistsRewriteRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
-                         vector<AbstractOperator> &bindings,
-                         bool &fixed_point) {
+unique_ptr<LogicalOperator> ExistsRewriteRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
+                                                     vector<AbstractOperator> &bindings, bool &fixed_point) {
 	auto *filter = (LogicalFilter *)bindings[0].value.op;
 	auto *exists = (OperatorExpression *)bindings[1].value.expr;
 	auto *subquery = (SubqueryExpression *)bindings[2].value.expr;
@@ -64,8 +58,7 @@ ExistsRewriteRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
 
 	// step 2: find correlations to add to the list of join conditions
 	vector<JoinCondition> join_conditions;
-	ExtractCorrelatedExpressions(node, subquery, subquery_table_index,
-	                             join_conditions);
+	ExtractCorrelatedExpressions(node, subquery, subquery_table_index, join_conditions);
 
 	// unlike equality comparison with subquery we only have the correlated
 	// expressions as join condition
@@ -96,8 +89,7 @@ ExistsRewriteRule::Apply(Rewriter &rewriter, LogicalOperator &op_root,
 	// now we add join between the filter and the subquery
 	assert(filter->children.size() == 1);
 
-	auto table_subquery = make_unique<LogicalSubquery>(
-	    subquery_table_index, node->expressions.size());
+	auto table_subquery = make_unique<LogicalSubquery>(subquery_table_index, node->expressions.size());
 	table_subquery->children.push_back(move(subquery->op));
 
 	auto join = make_unique<LogicalJoin>(type);

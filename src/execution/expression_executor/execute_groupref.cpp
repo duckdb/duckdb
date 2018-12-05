@@ -1,7 +1,5 @@
-
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
-
 #include "execution/operator/aggregate/physical_aggregate.hpp"
 #include "parser/expression/groupref_expression.hpp"
 
@@ -9,8 +7,7 @@ using namespace duckdb;
 using namespace std;
 
 unique_ptr<Expression> ExpressionExecutor::Visit(GroupRefExpression &expr) {
-	auto state =
-	    reinterpret_cast<PhysicalAggregateOperatorState *>(this->state);
+	auto state = reinterpret_cast<PhysicalAggregateOperatorState *>(this->state);
 	if (!state) {
 		throw NotImplementedException("Aggregate node without aggregate state");
 	}

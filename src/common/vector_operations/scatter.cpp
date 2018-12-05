@@ -3,21 +3,18 @@
 // Description: This file contains the implementation of the scatter operations
 //===--------------------------------------------------------------------===//
 
-#include "common/vector_operations/scatter_loops.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-
 #include "common/operator/aggregate_operators.hpp"
 #include "common/operator/constant_operators.hpp"
 #include "common/operator/numeric_binary_operators.hpp"
+#include "common/vector_operations/scatter_loops.hpp"
+#include "common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-template <class OP>
-static void generic_scatter_loop(Vector &source, Vector &dest) {
+template <class OP> static void generic_scatter_loop(Vector &source, Vector &dest) {
 	if (dest.type != TypeId::POINTER) {
-		throw InvalidTypeException(dest.type,
-		                           "Cannot scatter to non-pointer type!");
+		throw InvalidTypeException(dest.type, "Cannot scatter to non-pointer type!");
 	}
 	switch (source.type) {
 	case TypeId::TINYINT:

@@ -56,32 +56,22 @@ using namespace TPCE;
  *  RETURNS:
  *           not applicable.
  */
-CCETxnInputGenerator::CCETxnInputGenerator(
-    const DataFileManager &dfm, TIdent iConfiguredCustomerCount,
-    TIdent iActiveCustomerCount, INT32 iScaleFactor,
-    INT32 iHoursOfInitialTrades, CBaseLogger *pLogger,
-    const PDriverCETxnSettings pDriverCETxnSettings)
+CCETxnInputGenerator::CCETxnInputGenerator(const DataFileManager &dfm, TIdent iConfiguredCustomerCount,
+                                           TIdent iActiveCustomerCount, INT32 iScaleFactor, INT32 iHoursOfInitialTrades,
+                                           CBaseLogger *pLogger,
+                                           const PDriverCETxnSettings pDriverCETxnSettings)
     : m_rnd(RNGSeedBaseTxnInputGenerator) // initialize with a default seed
       ,
-      m_Person(dfm, 0, false),
-      m_CustomerSelection(&m_rnd, iDefaultStartFromCustomer,
-                          iActiveCustomerCount),
-      m_AccsAndPerms(dfm, iDefaultLoadUnitSize, iActiveCustomerCount,
-                     iDefaultStartFromCustomer),
-      m_Holdings(dfm, iDefaultLoadUnitSize, iActiveCustomerCount,
-                 iDefaultStartFromCustomer),
-      m_Brokers(dfm, iActiveCustomerCount, iDefaultStartFromCustomer),
-      m_pCompanies(dfm.CompanyFile()), m_pSecurities(dfm.SecurityFile()),
-      m_pIndustries(dfm.IndustryDataFile()), m_pSectors(dfm.SectorDataFile()),
-      m_pStatusType(dfm.StatusTypeDataFile()),
-      m_pTradeType(dfm.TradeTypeDataFile()),
+      m_Person(dfm, 0, false), m_CustomerSelection(&m_rnd, iDefaultStartFromCustomer, iActiveCustomerCount),
+      m_AccsAndPerms(dfm, iDefaultLoadUnitSize, iActiveCustomerCount, iDefaultStartFromCustomer),
+      m_Holdings(dfm, iDefaultLoadUnitSize, iActiveCustomerCount, iDefaultStartFromCustomer),
+      m_Brokers(dfm, iActiveCustomerCount, iDefaultStartFromCustomer), m_pCompanies(dfm.CompanyFile()),
+      m_pSecurities(dfm.SecurityFile()), m_pIndustries(dfm.IndustryDataFile()), m_pSectors(dfm.SectorDataFile()),
+      m_pStatusType(dfm.StatusTypeDataFile()), m_pTradeType(dfm.TradeTypeDataFile()),
       m_pDriverCETxnSettings(pDriverCETxnSettings), m_pLogger(pLogger),
-      m_iConfiguredCustomerCount(iConfiguredCustomerCount),
-      m_iActiveCustomerCount(iActiveCustomerCount),
-      m_iMyStartingCustomerId(iDefaultStartFromCustomer),
-      m_iMyCustomerCount(iActiveCustomerCount), m_iPartitionPercent(100),
-      m_iScaleFactor(iScaleFactor),
-      m_iHoursOfInitialTrades(iHoursOfInitialTrades) {
+      m_iConfiguredCustomerCount(iConfiguredCustomerCount), m_iActiveCustomerCount(iActiveCustomerCount),
+      m_iMyStartingCustomerId(iDefaultStartFromCustomer), m_iMyCustomerCount(iActiveCustomerCount),
+      m_iPartitionPercent(100), m_iScaleFactor(iScaleFactor), m_iHoursOfInitialTrades(iHoursOfInitialTrades) {
 	Initialize();
 }
 
@@ -105,32 +95,22 @@ CCETxnInputGenerator::CCETxnInputGenerator(
  *  RETURNS:
  *           not applicable.
  */
-CCETxnInputGenerator::CCETxnInputGenerator(
-    const DataFileManager &dfm, TIdent iConfiguredCustomerCount,
-    TIdent iActiveCustomerCount, INT32 iScaleFactor,
-    INT32 iHoursOfInitialTrades, RNGSEED RNGSeed, CBaseLogger *pLogger,
-    const PDriverCETxnSettings pDriverCETxnSettings)
+CCETxnInputGenerator::CCETxnInputGenerator(const DataFileManager &dfm, TIdent iConfiguredCustomerCount,
+                                           TIdent iActiveCustomerCount, INT32 iScaleFactor, INT32 iHoursOfInitialTrades,
+                                           RNGSEED RNGSeed, CBaseLogger *pLogger,
+                                           const PDriverCETxnSettings pDriverCETxnSettings)
     : m_rnd(RNGSeed) // to be predictable
       ,
-      m_Person(dfm, 0, false),
-      m_CustomerSelection(&m_rnd, iDefaultStartFromCustomer,
-                          iActiveCustomerCount),
-      m_AccsAndPerms(dfm, iDefaultLoadUnitSize, iActiveCustomerCount,
-                     iDefaultStartFromCustomer),
-      m_Holdings(dfm, iDefaultLoadUnitSize, iActiveCustomerCount,
-                 iDefaultStartFromCustomer),
-      m_Brokers(dfm, iActiveCustomerCount, iDefaultStartFromCustomer),
-      m_pCompanies(dfm.CompanyFile()), m_pSecurities(dfm.SecurityFile()),
-      m_pIndustries(dfm.IndustryDataFile()), m_pSectors(dfm.SectorDataFile()),
-      m_pStatusType(dfm.StatusTypeDataFile()),
-      m_pTradeType(dfm.TradeTypeDataFile()),
+      m_Person(dfm, 0, false), m_CustomerSelection(&m_rnd, iDefaultStartFromCustomer, iActiveCustomerCount),
+      m_AccsAndPerms(dfm, iDefaultLoadUnitSize, iActiveCustomerCount, iDefaultStartFromCustomer),
+      m_Holdings(dfm, iDefaultLoadUnitSize, iActiveCustomerCount, iDefaultStartFromCustomer),
+      m_Brokers(dfm, iActiveCustomerCount, iDefaultStartFromCustomer), m_pCompanies(dfm.CompanyFile()),
+      m_pSecurities(dfm.SecurityFile()), m_pIndustries(dfm.IndustryDataFile()), m_pSectors(dfm.SectorDataFile()),
+      m_pStatusType(dfm.StatusTypeDataFile()), m_pTradeType(dfm.TradeTypeDataFile()),
       m_pDriverCETxnSettings(pDriverCETxnSettings), m_pLogger(pLogger),
-      m_iConfiguredCustomerCount(iConfiguredCustomerCount),
-      m_iActiveCustomerCount(iActiveCustomerCount),
-      m_iMyStartingCustomerId(iDefaultStartFromCustomer),
-      m_iMyCustomerCount(iActiveCustomerCount), m_iPartitionPercent(100),
-      m_iScaleFactor(iScaleFactor),
-      m_iHoursOfInitialTrades(iHoursOfInitialTrades) {
+      m_iConfiguredCustomerCount(iConfiguredCustomerCount), m_iActiveCustomerCount(iActiveCustomerCount),
+      m_iMyStartingCustomerId(iDefaultStartFromCustomer), m_iMyCustomerCount(iActiveCustomerCount),
+      m_iPartitionPercent(100), m_iScaleFactor(iScaleFactor), m_iHoursOfInitialTrades(iHoursOfInitialTrades) {
 	Initialize();
 }
 
@@ -154,32 +134,23 @@ CCETxnInputGenerator::CCETxnInputGenerator(
  *  RETURNS:
  *           not applicable.
  */
-CCETxnInputGenerator::CCETxnInputGenerator(
-    const DataFileManager &dfm, TIdent iConfiguredCustomerCount,
-    TIdent iActiveCustomerCount, INT32 iScaleFactor,
-    INT32 iHoursOfInitialTrades, TIdent iMyStartingCustomerId,
-    TIdent iMyCustomerCount, INT32 iPartitionPercent, CBaseLogger *pLogger,
-    const PDriverCETxnSettings pDriverCETxnSettings)
+CCETxnInputGenerator::CCETxnInputGenerator(const DataFileManager &dfm, TIdent iConfiguredCustomerCount,
+                                           TIdent iActiveCustomerCount, INT32 iScaleFactor, INT32 iHoursOfInitialTrades,
+                                           TIdent iMyStartingCustomerId, TIdent iMyCustomerCount,
+                                           INT32 iPartitionPercent, CBaseLogger *pLogger,
+                                           const PDriverCETxnSettings pDriverCETxnSettings)
     : m_rnd(RNGSeedBaseTxnInputGenerator) // initialize with a default seed
       ,
-      m_Person(dfm, 0, false),
-      m_CustomerSelection(&m_rnd, iDefaultStartFromCustomer,
-                          iActiveCustomerCount, iPartitionPercent,
-                          iMyStartingCustomerId, iMyCustomerCount),
-      m_AccsAndPerms(dfm, iDefaultLoadUnitSize, iActiveCustomerCount,
-                     iDefaultStartFromCustomer),
-      m_Holdings(dfm, iDefaultLoadUnitSize, iActiveCustomerCount,
-                 iDefaultStartFromCustomer),
-      m_Brokers(dfm, iActiveCustomerCount, iDefaultStartFromCustomer),
-      m_pCompanies(dfm.CompanyFile()), m_pSecurities(dfm.SecurityFile()),
-      m_pIndustries(dfm.IndustryDataFile()), m_pSectors(dfm.SectorDataFile()),
-      m_pStatusType(dfm.StatusTypeDataFile()),
-      m_pTradeType(dfm.TradeTypeDataFile()),
+      m_Person(dfm, 0, false), m_CustomerSelection(&m_rnd, iDefaultStartFromCustomer, iActiveCustomerCount,
+                                                   iPartitionPercent, iMyStartingCustomerId, iMyCustomerCount),
+      m_AccsAndPerms(dfm, iDefaultLoadUnitSize, iActiveCustomerCount, iDefaultStartFromCustomer),
+      m_Holdings(dfm, iDefaultLoadUnitSize, iActiveCustomerCount, iDefaultStartFromCustomer),
+      m_Brokers(dfm, iActiveCustomerCount, iDefaultStartFromCustomer), m_pCompanies(dfm.CompanyFile()),
+      m_pSecurities(dfm.SecurityFile()), m_pIndustries(dfm.IndustryDataFile()), m_pSectors(dfm.SectorDataFile()),
+      m_pStatusType(dfm.StatusTypeDataFile()), m_pTradeType(dfm.TradeTypeDataFile()),
       m_pDriverCETxnSettings(pDriverCETxnSettings), m_pLogger(pLogger),
-      m_iConfiguredCustomerCount(iConfiguredCustomerCount),
-      m_iActiveCustomerCount(iActiveCustomerCount),
-      m_iMyStartingCustomerId(iMyStartingCustomerId),
-      m_iMyCustomerCount(iMyCustomerCount),
+      m_iConfiguredCustomerCount(iConfiguredCustomerCount), m_iActiveCustomerCount(iActiveCustomerCount),
+      m_iMyStartingCustomerId(iMyStartingCustomerId), m_iMyCustomerCount(iMyCustomerCount),
       m_iPartitionPercent(iPartitionPercent), m_iScaleFactor(iScaleFactor),
       m_iHoursOfInitialTrades(iHoursOfInitialTrades) {
 	Initialize();
@@ -208,33 +179,23 @@ CCETxnInputGenerator::CCETxnInputGenerator(
  *  RETURNS:
  *           not applicable.
  */
-CCETxnInputGenerator::CCETxnInputGenerator(
-    const DataFileManager &dfm, TIdent iConfiguredCustomerCount,
-    TIdent iActiveCustomerCount, INT32 iScaleFactor,
-    INT32 iHoursOfInitialTrades, TIdent iMyStartingCustomerId,
-    TIdent iMyCustomerCount, INT32 iPartitionPercent, RNGSEED RNGSeed,
-    CBaseLogger *pLogger,
-    const PDriverCETxnSettings pDriverCETxnSettings)
+CCETxnInputGenerator::CCETxnInputGenerator(const DataFileManager &dfm, TIdent iConfiguredCustomerCount,
+                                           TIdent iActiveCustomerCount, INT32 iScaleFactor, INT32 iHoursOfInitialTrades,
+                                           TIdent iMyStartingCustomerId, TIdent iMyCustomerCount,
+                                           INT32 iPartitionPercent, RNGSEED RNGSeed, CBaseLogger *pLogger,
+                                           const PDriverCETxnSettings pDriverCETxnSettings)
     : m_rnd(RNGSeed) // to be predictable
       ,
-      m_Person(dfm, 0, false),
-      m_CustomerSelection(&m_rnd, iDefaultStartFromCustomer,
-                          iActiveCustomerCount, iPartitionPercent,
-                          iMyStartingCustomerId, iMyCustomerCount),
-      m_AccsAndPerms(dfm, iDefaultLoadUnitSize, iActiveCustomerCount,
-                     iDefaultStartFromCustomer),
-      m_Holdings(dfm, iDefaultLoadUnitSize, iActiveCustomerCount,
-                 iDefaultStartFromCustomer),
-      m_Brokers(dfm, iActiveCustomerCount, iDefaultStartFromCustomer),
-      m_pCompanies(dfm.CompanyFile()), m_pSecurities(dfm.SecurityFile()),
-      m_pIndustries(dfm.IndustryDataFile()), m_pSectors(dfm.SectorDataFile()),
-      m_pStatusType(dfm.StatusTypeDataFile()),
-      m_pTradeType(dfm.TradeTypeDataFile()),
+      m_Person(dfm, 0, false), m_CustomerSelection(&m_rnd, iDefaultStartFromCustomer, iActiveCustomerCount,
+                                                   iPartitionPercent, iMyStartingCustomerId, iMyCustomerCount),
+      m_AccsAndPerms(dfm, iDefaultLoadUnitSize, iActiveCustomerCount, iDefaultStartFromCustomer),
+      m_Holdings(dfm, iDefaultLoadUnitSize, iActiveCustomerCount, iDefaultStartFromCustomer),
+      m_Brokers(dfm, iActiveCustomerCount, iDefaultStartFromCustomer), m_pCompanies(dfm.CompanyFile()),
+      m_pSecurities(dfm.SecurityFile()), m_pIndustries(dfm.IndustryDataFile()), m_pSectors(dfm.SectorDataFile()),
+      m_pStatusType(dfm.StatusTypeDataFile()), m_pTradeType(dfm.TradeTypeDataFile()),
       m_pDriverCETxnSettings(pDriverCETxnSettings), m_pLogger(pLogger),
-      m_iConfiguredCustomerCount(iConfiguredCustomerCount),
-      m_iActiveCustomerCount(iActiveCustomerCount),
-      m_iMyStartingCustomerId(iMyStartingCustomerId),
-      m_iMyCustomerCount(iMyCustomerCount),
+      m_iConfiguredCustomerCount(iConfiguredCustomerCount), m_iActiveCustomerCount(iActiveCustomerCount),
+      m_iMyStartingCustomerId(iMyStartingCustomerId), m_iMyCustomerCount(iMyCustomerCount),
       m_iPartitionPercent(iPartitionPercent), m_iScaleFactor(iScaleFactor),
       m_iHoursOfInitialTrades(iHoursOfInitialTrades) {
 	Initialize();
@@ -255,8 +216,7 @@ void CCETxnInputGenerator::Initialize() {
 	m_iActiveSecurityCount = m_pSecurities.GetActiveSecurityCount();
 	m_iIndustryCount = m_pIndustries.size();
 	m_iSectorCount = m_pSectors.size();
-	m_iStartFromCompany =
-	    m_pCompanies.GetCompanyId(0); // from the first company
+	m_iStartFromCompany = m_pCompanies.GetCompanyId(0); // from the first company
 
 	// In order for this computation to overflow an INT64, assuming that all
 	// multiplications are executed before divisions and the default value
@@ -272,11 +232,9 @@ void CCETxnInputGenerator::Initialize() {
 	m_iMaxActivePrePopulatedTradeID /= 100;
 
 	//  Set the start time (time 0) to the base time
-	m_StartTime.Set(
-	    InitialTradePopulationBaseYear, InitialTradePopulationBaseMonth,
-	    InitialTradePopulationBaseDay, InitialTradePopulationBaseHour,
-	    InitialTradePopulationBaseMinute, InitialTradePopulationBaseSecond,
-	    InitialTradePopulationBaseFraction);
+	m_StartTime.Set(InitialTradePopulationBaseYear, InitialTradePopulationBaseMonth, InitialTradePopulationBaseDay,
+	                InitialTradePopulationBaseHour, InitialTradePopulationBaseMinute, InitialTradePopulationBaseSecond,
+	                InitialTradePopulationBaseFraction);
 
 	// UpdateTunables() is called from CCE constructor (Initialize)
 }
@@ -319,52 +277,38 @@ void CCETxnInputGenerator::SetRNGSeed(RNGSEED RNGSeed) {
  *           none.
  */
 void CCETxnInputGenerator::UpdateTunables(void) {
-	INT64 secondsOfInitialTrades =
-	    (INT64)m_iHoursOfInitialTrades * SecondsPerHour;
+	INT64 secondsOfInitialTrades = (INT64)m_iHoursOfInitialTrades * SecondsPerHour;
 
 	m_iTradeLookupFrame2MaxTimeInMilliSeconds =
-	    (INT64)(secondsOfInitialTrades -
-	            ((INT64)m_pDriverCETxnSettings->TL_settings.cur
-	                 .BackOffFromEndTimeFrame2)) *
+	    (INT64)(secondsOfInitialTrades - ((INT64)m_pDriverCETxnSettings->TL_settings.cur.BackOffFromEndTimeFrame2)) *
 	    MsPerSecond;
 
 	m_iTradeLookupFrame3MaxTimeInMilliSeconds =
-	    (INT64)(secondsOfInitialTrades -
-	            ((INT64)m_pDriverCETxnSettings->TL_settings.cur
-	                 .BackOffFromEndTimeFrame3)) *
+	    (INT64)(secondsOfInitialTrades - ((INT64)m_pDriverCETxnSettings->TL_settings.cur.BackOffFromEndTimeFrame3)) *
 	    MsPerSecond;
 
 	m_iTradeLookupFrame4MaxTimeInMilliSeconds =
-	    (INT64)(secondsOfInitialTrades -
-	            ((INT64)m_pDriverCETxnSettings->TL_settings.cur
-	                 .BackOffFromEndTimeFrame4)) *
+	    (INT64)(secondsOfInitialTrades - ((INT64)m_pDriverCETxnSettings->TL_settings.cur.BackOffFromEndTimeFrame4)) *
 	    MsPerSecond;
 
 	m_iTradeUpdateFrame2MaxTimeInMilliSeconds =
-	    (INT64)(secondsOfInitialTrades -
-	            ((INT64)m_pDriverCETxnSettings->TU_settings.cur
-	                 .BackOffFromEndTimeFrame2)) *
+	    (INT64)(secondsOfInitialTrades - ((INT64)m_pDriverCETxnSettings->TU_settings.cur.BackOffFromEndTimeFrame2)) *
 	    MsPerSecond;
 
 	m_iTradeUpdateFrame3MaxTimeInMilliSeconds =
-	    (INT64)(secondsOfInitialTrades -
-	            ((INT64)m_pDriverCETxnSettings->TU_settings.cur
-	                 .BackOffFromEndTimeFrame3)) *
+	    (INT64)(secondsOfInitialTrades - ((INT64)m_pDriverCETxnSettings->TU_settings.cur.BackOffFromEndTimeFrame3)) *
 	    MsPerSecond;
 
 	// Set the completion time of the last initial trade.
 	// 15 minutes are added at the end of hours of initial trades for pending
 	// trades.
 	m_EndTime = m_StartTime;
-	m_EndTime.AddWorkMs(
-	    (INT64)(secondsOfInitialTrades + 15 * SecondsPerMinute) * MsPerSecond);
+	m_EndTime.AddWorkMs((INT64)(secondsOfInitialTrades + 15 * SecondsPerMinute) * MsPerSecond);
 
 	// Based on 10 * Trade-Order transaction mix percentage.
 	// This is currently how the mix levels are set, so use that.
-	m_iTradeOrderRollbackLimit =
-	    m_pDriverCETxnSettings->TxnMixGenerator_settings.cur.TradeOrderMixLevel;
-	m_iTradeOrderRollbackLevel =
-	    m_pDriverCETxnSettings->TO_settings.cur.rollback;
+	m_iTradeOrderRollbackLimit = m_pDriverCETxnSettings->TxnMixGenerator_settings.cur.TradeOrderMixLevel;
+	m_iTradeOrderRollbackLevel = m_pDriverCETxnSettings->TO_settings.cur.rollback;
 
 	// Log Tunables
 	m_pLogger->SendToLogger(m_pDriverCETxnSettings->BV_settings);
@@ -386,8 +330,8 @@ void CCETxnInputGenerator::UpdateTunables(void) {
  *  RETURNS:
  *           none.
  */
-inline void CCETxnInputGenerator::GenerateNonUniformRandomCustomerId(
-    TIdent &iCustomerId, eCustomerTier &iCustomerTier) {
+inline void CCETxnInputGenerator::GenerateNonUniformRandomCustomerId(TIdent &iCustomerId,
+                                                                     eCustomerTier &iCustomerTier) {
 	m_CustomerSelection.GenerateRandomCustomer(iCustomerId, iCustomerTier);
 }
 
@@ -406,8 +350,7 @@ TIdent CCETxnInputGenerator::GenerateRandomCustomerAccountId() {
 	eCustomerTier iCustomerTier;
 
 	m_CustomerSelection.GenerateRandomCustomer(iCustomerId, iCustomerTier);
-	iCustomerAccountId = m_AccsAndPerms.GenerateRandomAccountId(
-	    m_rnd, iCustomerId, iCustomerTier);
+	iCustomerAccountId = m_AccsAndPerms.GenerateRandomAccountId(m_rnd, iCustomerId, iCustomerTier);
 
 	return (iCustomerAccountId);
 }
@@ -422,8 +365,7 @@ TIdent CCETxnInputGenerator::GenerateRandomCustomerAccountId() {
  *  RETURNS:
  *           T_ID, distributed non-uniformly.
  */
-TTrade CCETxnInputGenerator::GenerateNonUniformTradeID(INT32 AValue,
-                                                       INT32 SValue) {
+TTrade CCETxnInputGenerator::GenerateNonUniformTradeID(INT32 AValue, INT32 SValue) {
 	TTrade TradeId;
 
 	TradeId = m_rnd.NURnd(1, m_iMaxActivePrePopulatedTradeID, AValue, SValue);
@@ -451,16 +393,14 @@ TTrade CCETxnInputGenerator::GenerateNonUniformTradeID(INT32 AValue,
  *  RETURNS:
  *           none.
  */
-void CCETxnInputGenerator::GenerateNonUniformTradeDTS(
-    TPCE::TIMESTAMP_STRUCT &dts, INT64 MaxTimeInMilliSeconds, INT32 AValue,
-    INT32 SValue) {
-	CDateTime TradeTime(
-	    InitialTradePopulationBaseYear, InitialTradePopulationBaseMonth,
-	    InitialTradePopulationBaseDay, InitialTradePopulationBaseHour,
-	    InitialTradePopulationBaseMinute, InitialTradePopulationBaseSecond,
-	    InitialTradePopulationBaseFraction); // NOTE: Interpretting Fraction as
-	                                         // milliseconds,
-	                                         // probably 0 anyway.
+void CCETxnInputGenerator::GenerateNonUniformTradeDTS(TPCE::TIMESTAMP_STRUCT &dts, INT64 MaxTimeInMilliSeconds,
+                                                      INT32 AValue, INT32 SValue) {
+	CDateTime TradeTime(InitialTradePopulationBaseYear, InitialTradePopulationBaseMonth, InitialTradePopulationBaseDay,
+	                    InitialTradePopulationBaseHour, InitialTradePopulationBaseMinute,
+	                    InitialTradePopulationBaseSecond,
+	                    InitialTradePopulationBaseFraction); // NOTE: Interpretting Fraction as
+	                                                         // milliseconds,
+	                                                         // probably 0 anyway.
 	INT64 TradeTimeOffset;
 
 	// Generate random number of seconds from the base time.
@@ -485,8 +425,7 @@ void CCETxnInputGenerator::GenerateNonUniformTradeDTS(
  *  RETURNS:
  *           the number of brokers generated.
  */
-void CCETxnInputGenerator::GenerateBrokerVolumeInput(
-    TBrokerVolumeTxnInput &TxnReq) {
+void CCETxnInputGenerator::GenerateBrokerVolumeInput(TBrokerVolumeTxnInput &TxnReq) {
 	INT32 iNumBrokers;
 	INT32 iCount, i;
 	TIdent B_ID[max_broker_list_len];
@@ -504,8 +443,7 @@ void CCETxnInputGenerator::GenerateBrokerVolumeInput(
 	// brokers. Broker names for Broker Volume are unique, so need to re-adjust
 	// or be caught in an infinite loop below.
 	if (iNumBrokers > m_Brokers.GetBrokerCount()) {
-		iNumBrokers =
-		    (INT32)m_Brokers.GetBrokerCount(); // adjust for small databases
+		iNumBrokers = (INT32)m_Brokers.GetBrokerCount(); // adjust for small databases
 	}
 
 	iCount = 0;
@@ -519,9 +457,8 @@ void CCETxnInputGenerator::GenerateBrokerVolumeInput(
 		if (i == iCount) // make sure brokers are distinct
 		{
 			// put the broker name into the input parameter
-			m_Brokers.GenerateBrokerName(
-			    B_ID[iCount], TxnReq.broker_list[iCount],
-			    static_cast<int>(sizeof(TxnReq.broker_list[iCount])));
+			m_Brokers.GenerateBrokerName(B_ID[iCount], TxnReq.broker_list[iCount],
+			                             static_cast<int>(sizeof(TxnReq.broker_list[iCount])));
 			++iCount;
 		}
 
@@ -530,8 +467,7 @@ void CCETxnInputGenerator::GenerateBrokerVolumeInput(
 	// select sector name
 	iSectorIndex = m_rnd.RndIntRange(0, m_iSectorCount - 1);
 
-	strncpy(TxnReq.sector_name, m_pSectors[iSectorIndex].SC_NAME_CSTR(),
-	        sizeof(TxnReq.sector_name));
+	strncpy(TxnReq.sector_name, m_pSectors[iSectorIndex].SC_NAME_CSTR(), sizeof(TxnReq.sector_name));
 }
 
 /*
@@ -544,8 +480,7 @@ void CCETxnInputGenerator::GenerateBrokerVolumeInput(
  *  RETURNS:
  *           none.
  */
-void CCETxnInputGenerator::GenerateCustomerPositionInput(
-    TCustomerPositionTxnInput &TxnReq) {
+void CCETxnInputGenerator::GenerateCustomerPositionInput(TCustomerPositionTxnInput &TxnReq) {
 	TIdent iCustomerId;
 	eCustomerTier iCustomerTier;
 
@@ -562,12 +497,9 @@ void CCETxnInputGenerator::GenerateCustomerPositionInput(
 		TxnReq.cust_id = iCustomerId;
 	}
 
-	TxnReq.get_history =
-	    m_rnd.RndPercent(m_pDriverCETxnSettings->CP_settings.cur.get_history);
+	TxnReq.get_history = m_rnd.RndPercent(m_pDriverCETxnSettings->CP_settings.cur.get_history);
 	if (TxnReq.get_history) {
-		TxnReq.acct_id_idx = m_rnd.RndIntRange(
-		    0,
-		    m_AccsAndPerms.GetNumberOfAccounts(iCustomerId, iCustomerTier) - 1);
+		TxnReq.acct_id_idx = m_rnd.RndIntRange(0, m_AccsAndPerms.GetNumberOfAccounts(iCustomerId, iCustomerTier) - 1);
 	} else {
 		TxnReq.acct_id_idx = -1;
 	}
@@ -583,17 +515,14 @@ void CCETxnInputGenerator::GenerateCustomerPositionInput(
  *  RETURNS:
  *           none.
  */
-void CCETxnInputGenerator::GenerateMarketWatchInput(
-    TMarketWatchTxnInput &TxnReq) {
+void CCETxnInputGenerator::GenerateMarketWatchInput(TMarketWatchTxnInput &TxnReq) {
 	TIdent iCustomerId;
 	eCustomerTier iCustomerTier;
 	INT32 iThreshold;
 	INT32 iWeek;
 	INT32 iDailyMarketDay;
-	CDateTime StartDate(iDailyMarketBaseYear, iDailyMarketBaseMonth,
-	                    iDailyMarketBaseDay, iDailyMarketBaseHour,
-	                    iDailyMarketBaseMinute, iDailyMarketBaseSecond,
-	                    iDailyMarketBaseMsec);
+	CDateTime StartDate(iDailyMarketBaseYear, iDailyMarketBaseMonth, iDailyMarketBaseDay, iDailyMarketBaseHour,
+	                    iDailyMarketBaseMinute, iDailyMarketBaseSecond, iDailyMarketBaseMsec);
 
 	// Make sure we're starting with a clean object.
 	TxnReq.Clear();
@@ -603,34 +532,26 @@ void CCETxnInputGenerator::GenerateMarketWatchInput(
 	// have some distribution on what inputs to send
 	if (iThreshold <= m_pDriverCETxnSettings->MW_settings.cur.by_industry) {
 		// send industry name
-		strncpy(TxnReq.industry_name,
-		        m_pIndustries[m_rnd.RndIntRange(0, m_iIndustryCount - 1)]
-		            .IN_NAME_CSTR(),
+		strncpy(TxnReq.industry_name, m_pIndustries[m_rnd.RndIntRange(0, m_iIndustryCount - 1)].IN_NAME_CSTR(),
 		        sizeof(TxnReq.industry_name));
 
 		if (iBaseCompanyCount < m_iActiveCompanyCount) {
 			TxnReq.starting_co_id = m_rnd.RndInt64Range(
-			    m_iStartFromCompany, m_iStartFromCompany +
-			                             m_iActiveCompanyCount -
-			                             (iBaseCompanyCount - 1));
-			TxnReq.ending_co_id =
-			    TxnReq.starting_co_id + (iBaseCompanyCount - 1);
+			    m_iStartFromCompany, m_iStartFromCompany + m_iActiveCompanyCount - (iBaseCompanyCount - 1));
+			TxnReq.ending_co_id = TxnReq.starting_co_id + (iBaseCompanyCount - 1);
 		} else {
 			TxnReq.starting_co_id = m_iStartFromCompany;
-			TxnReq.ending_co_id =
-			    m_iStartFromCompany + m_iActiveCompanyCount - 1;
+			TxnReq.ending_co_id = m_iStartFromCompany + m_iActiveCompanyCount - 1;
 		}
 	} else {
-		if (iThreshold <=
-		    (m_pDriverCETxnSettings->MW_settings.cur.by_industry +
-		     m_pDriverCETxnSettings->MW_settings.cur.by_watch_list)) {
+		if (iThreshold <= (m_pDriverCETxnSettings->MW_settings.cur.by_industry +
+		                   m_pDriverCETxnSettings->MW_settings.cur.by_watch_list)) {
 			// Send customer id
 			GenerateNonUniformRandomCustomerId(TxnReq.c_id, iCustomerTier);
 		} else {
 			// Send account id
 			GenerateNonUniformRandomCustomerId(iCustomerId, iCustomerTier);
-			m_AccsAndPerms.GenerateRandomAccountId(
-			    m_rnd, iCustomerId, iCustomerTier, &TxnReq.acct_id, NULL);
+			m_AccsAndPerms.GenerateRandomAccountId(m_rnd, iCustomerId, iCustomerTier, &TxnReq.acct_id, NULL);
 		}
 	}
 
@@ -677,32 +598,25 @@ void CCETxnInputGenerator::GenerateMarketWatchInput(
  *  RETURNS:
  *           none.
  */
-void CCETxnInputGenerator::GenerateSecurityDetailInput(
-    TSecurityDetailTxnInput &TxnReq) {
-	CDateTime StartDate(iDailyMarketBaseYear, iDailyMarketBaseMonth,
-	                    iDailyMarketBaseDay, iDailyMarketBaseHour,
-	                    iDailyMarketBaseMinute, iDailyMarketBaseSecond,
-	                    iDailyMarketBaseMsec);
+void CCETxnInputGenerator::GenerateSecurityDetailInput(TSecurityDetailTxnInput &TxnReq) {
+	CDateTime StartDate(iDailyMarketBaseYear, iDailyMarketBaseMonth, iDailyMarketBaseDay, iDailyMarketBaseHour,
+	                    iDailyMarketBaseMinute, iDailyMarketBaseSecond, iDailyMarketBaseMsec);
 	INT32 iStartDay; // day from the StartDate
 
 	// Make sure we're starting with a clean object.
 	TxnReq.Clear();
 
 	// random symbol
-	m_pSecurities.CreateSymbol(
-	    m_rnd.RndInt64Range(0, m_iActiveSecurityCount - 1), TxnReq.symbol,
-	    static_cast<int>(sizeof(TxnReq.symbol)));
+	m_pSecurities.CreateSymbol(m_rnd.RndInt64Range(0, m_iActiveSecurityCount - 1), TxnReq.symbol,
+	                           static_cast<int>(sizeof(TxnReq.symbol)));
 
 	// Whether or not to access the LOB.
-	TxnReq.access_lob_flag = m_rnd.RndPercent(
-	    m_pDriverCETxnSettings->SD_settings.cur.LOBAccessPercentage);
+	TxnReq.access_lob_flag = m_rnd.RndPercent(m_pDriverCETxnSettings->SD_settings.cur.LOBAccessPercentage);
 
 	// random number of financial rows to return
-	TxnReq.max_rows_to_return =
-	    m_rnd.RndIntRange(iSecurityDetailMinRows, iSecurityDetailMaxRows);
+	TxnReq.max_rows_to_return = m_rnd.RndIntRange(iSecurityDetailMinRows, iSecurityDetailMaxRows);
 
-	iStartDay =
-	    m_rnd.RndIntRange(0, iDailyMarketTotalRows - TxnReq.max_rows_to_return);
+	iStartDay = m_rnd.RndIntRange(0, iDailyMarketTotalRows - TxnReq.max_rows_to_return);
 
 	// add the offset
 	StartDate.Add(iStartDay, 0);
@@ -720,8 +634,7 @@ void CCETxnInputGenerator::GenerateSecurityDetailInput(
  *  RETURNS:
  *           none.
  */
-void CCETxnInputGenerator::GenerateTradeLookupInput(
-    TTradeLookupTxnInput &TxnReq) {
+void CCETxnInputGenerator::GenerateTradeLookupInput(TTradeLookupTxnInput &TxnReq) {
 	INT32 iThreshold;
 
 	// Make sure we're starting with a clean object.
@@ -732,8 +645,7 @@ void CCETxnInputGenerator::GenerateTradeLookupInput(
 	if (iThreshold <= m_pDriverCETxnSettings->TL_settings.cur.do_frame1) {
 		// Frame 1
 		TxnReq.frame_to_execute = 1;
-		TxnReq.max_trades =
-		    m_pDriverCETxnSettings->TL_settings.cur.MaxRowsFrame1;
+		TxnReq.max_trades = m_pDriverCETxnSettings->TL_settings.cur.MaxRowsFrame1;
 
 		// Generate list of unique trade id's
 		int ii, jj;
@@ -743,9 +655,8 @@ void CCETxnInputGenerator::GenerateTradeLookupInput(
 		for (ii = 0; ii < TxnReq.max_trades; ii++) {
 			Accepted = false;
 			while (!Accepted) {
-				TID = GenerateNonUniformTradeID(
-				    TradeLookupAValueForTradeIDGenFrame1,
-				    TradeLookupSValueForTradeIDGenFrame1);
+				TID = GenerateNonUniformTradeID(TradeLookupAValueForTradeIDGenFrame1,
+				                                TradeLookupSValueForTradeIDGenFrame1);
 				jj = 0;
 				while (jj < ii && TxnReq.trade_id[jj] != TID) {
 					jj++;
@@ -758,54 +669,41 @@ void CCETxnInputGenerator::GenerateTradeLookupInput(
 			}
 		}
 	} else if (iThreshold <=
-	           m_pDriverCETxnSettings->TL_settings.cur.do_frame1 +
-	               m_pDriverCETxnSettings->TL_settings.cur.do_frame2) {
+	           m_pDriverCETxnSettings->TL_settings.cur.do_frame1 + m_pDriverCETxnSettings->TL_settings.cur.do_frame2) {
 		// Frame 2
 		TxnReq.frame_to_execute = 2;
 		TxnReq.acct_id = GenerateRandomCustomerAccountId();
-		TxnReq.max_trades =
-		    m_pDriverCETxnSettings->TL_settings.cur.MaxRowsFrame2;
+		TxnReq.max_trades = m_pDriverCETxnSettings->TL_settings.cur.MaxRowsFrame2;
 
-		GenerateNonUniformTradeDTS(TxnReq.start_trade_dts,
-		                           m_iTradeLookupFrame2MaxTimeInMilliSeconds,
-		                           TradeLookupAValueForTimeGenFrame2,
-		                           TradeLookupSValueForTimeGenFrame2);
+		GenerateNonUniformTradeDTS(TxnReq.start_trade_dts, m_iTradeLookupFrame2MaxTimeInMilliSeconds,
+		                           TradeLookupAValueForTimeGenFrame2, TradeLookupSValueForTimeGenFrame2);
 
 		// Set to the end of initial trades.
 		m_EndTime.GetTimeStamp(&TxnReq.end_trade_dts);
-	} else if (iThreshold <=
-	           m_pDriverCETxnSettings->TL_settings.cur.do_frame1 +
-	               m_pDriverCETxnSettings->TL_settings.cur.do_frame2 +
-	               m_pDriverCETxnSettings->TL_settings.cur.do_frame3) {
+	} else if (iThreshold <= m_pDriverCETxnSettings->TL_settings.cur.do_frame1 +
+	                             m_pDriverCETxnSettings->TL_settings.cur.do_frame2 +
+	                             m_pDriverCETxnSettings->TL_settings.cur.do_frame3) {
 		// Frame 3
 		TxnReq.frame_to_execute = 3;
-		TxnReq.max_trades =
-		    m_pDriverCETxnSettings->TL_settings.cur.MaxRowsFrame3;
+		TxnReq.max_trades = m_pDriverCETxnSettings->TL_settings.cur.MaxRowsFrame3;
 
-		m_pSecurities.CreateSymbol(
-		    m_rnd.NURnd(0, m_iActiveSecurityCount - 1,
-		                TradeLookupAValueForSymbolFrame3,
-		                TradeLookupSValueForSymbolFrame3),
-		    TxnReq.symbol, static_cast<int>(sizeof(TxnReq.symbol)));
+		m_pSecurities.CreateSymbol(m_rnd.NURnd(0, m_iActiveSecurityCount - 1, TradeLookupAValueForSymbolFrame3,
+		                                       TradeLookupSValueForSymbolFrame3),
+		                           TxnReq.symbol, static_cast<int>(sizeof(TxnReq.symbol)));
 
-		GenerateNonUniformTradeDTS(TxnReq.start_trade_dts,
-		                           m_iTradeLookupFrame3MaxTimeInMilliSeconds,
-		                           TradeLookupAValueForTimeGenFrame3,
-		                           TradeLookupSValueForTimeGenFrame3);
+		GenerateNonUniformTradeDTS(TxnReq.start_trade_dts, m_iTradeLookupFrame3MaxTimeInMilliSeconds,
+		                           TradeLookupAValueForTimeGenFrame3, TradeLookupSValueForTimeGenFrame3);
 
 		// Set to the end of initial trades.
 		m_EndTime.GetTimeStamp(&TxnReq.end_trade_dts);
 
-		TxnReq.max_acct_id =
-		    m_AccsAndPerms.GetEndingCA_ID(m_iActiveCustomerCount);
+		TxnReq.max_acct_id = m_AccsAndPerms.GetEndingCA_ID(m_iActiveCustomerCount);
 	} else {
 		// Frame 4
 		TxnReq.frame_to_execute = 4;
 		TxnReq.acct_id = GenerateRandomCustomerAccountId();
-		GenerateNonUniformTradeDTS(TxnReq.start_trade_dts,
-		                           m_iTradeLookupFrame4MaxTimeInMilliSeconds,
-		                           TradeLookupAValueForTimeGenFrame4,
-		                           TradeLookupSValueForTimeGenFrame4);
+		GenerateNonUniformTradeDTS(TxnReq.start_trade_dts, m_iTradeLookupFrame4MaxTimeInMilliSeconds,
+		                           TradeLookupAValueForTimeGenFrame4, TradeLookupSValueForTimeGenFrame4);
 	}
 }
 
@@ -821,9 +719,8 @@ void CCETxnInputGenerator::GenerateTradeLookupInput(
  *  RETURNS:
  *           none.
  */
-void CCETxnInputGenerator::GenerateTradeOrderInput(
-    TTradeOrderTxnInput &TxnReq, INT32 &iTradeType,
-    bool &bExecutorIsAccountOwner) {
+void CCETxnInputGenerator::GenerateTradeOrderInput(TTradeOrderTxnInput &TxnReq, INT32 &iTradeType,
+                                                   bool &bExecutorIsAccountOwner) {
 	TIdent iCustomerId; // owner
 	eCustomerTier iCustomerTier;
 	TIdent CID_1, CID_2;
@@ -842,17 +739,15 @@ void CCETxnInputGenerator::GenerateTradeOrderInput(
 
 	// Generate random account id and security index
 	//
-	m_Holdings.GenerateRandomAccountSecurity(iCustomerId, iCustomerTier,
-	                                         &TxnReq.acct_id,
-	                                         &iFlatFileSymbIndex, &iSymbIndex);
+	m_Holdings.GenerateRandomAccountSecurity(iCustomerId, iCustomerTier, &TxnReq.acct_id, &iFlatFileSymbIndex,
+	                                         &iSymbIndex);
 
 	// find out how many permission rows there are for this account (in addition
 	// to the owner's)
 	iAdditionalPerms = m_AccsAndPerms.GetNumPermsForCA(TxnReq.acct_id);
 	// distribution same as in the loader for now
 	if (iAdditionalPerms == 0) { // select the owner
-		m_Person.GetFirstLastAndTaxID(iCustomerId, TxnReq.exec_f_name,
-		                              TxnReq.exec_l_name, TxnReq.exec_tax_id);
+		m_Person.GetFirstLastAndTaxID(iCustomerId, TxnReq.exec_f_name, TxnReq.exec_l_name, TxnReq.exec_tax_id);
 
 		bExecutorIsAccountOwner = true;
 	} else {
@@ -866,33 +761,24 @@ void CCETxnInputGenerator::GenerateTradeOrderInput(
 		// and must be factored out here.
 
 		int exec_is_owner =
-		    (m_pDriverCETxnSettings->TO_settings.cur.exec_is_owner -
-		     iPercentAccountAdditionalPermissions_0) *
-		    100 / (100 - iPercentAccountAdditionalPermissions_0);
+		    (m_pDriverCETxnSettings->TO_settings.cur.exec_is_owner - iPercentAccountAdditionalPermissions_0) * 100 /
+		    (100 - iPercentAccountAdditionalPermissions_0);
 
 		if (m_rnd.RndPercent(exec_is_owner)) {
-			m_Person.GetFirstLastAndTaxID(iCustomerId, TxnReq.exec_f_name,
-			                              TxnReq.exec_l_name,
-			                              TxnReq.exec_tax_id);
+			m_Person.GetFirstLastAndTaxID(iCustomerId, TxnReq.exec_f_name, TxnReq.exec_l_name, TxnReq.exec_tax_id);
 
 			bExecutorIsAccountOwner = true;
 		} else {
 			if (iAdditionalPerms == 1) {
 				// select the first non-owner
-				m_AccsAndPerms.GetCIDsForPermissions(TxnReq.acct_id,
-				                                     iCustomerId, &CID_1, NULL);
+				m_AccsAndPerms.GetCIDsForPermissions(TxnReq.acct_id, iCustomerId, &CID_1, NULL);
 
-				m_Person.GetFirstLastAndTaxID(CID_1, TxnReq.exec_f_name,
-				                              TxnReq.exec_l_name,
-				                              TxnReq.exec_tax_id);
+				m_Person.GetFirstLastAndTaxID(CID_1, TxnReq.exec_f_name, TxnReq.exec_l_name, TxnReq.exec_tax_id);
 			} else {
 				// select the second non-owner
-				m_AccsAndPerms.GetCIDsForPermissions(
-				    TxnReq.acct_id, iCustomerId, &CID_1, &CID_2);
+				m_AccsAndPerms.GetCIDsForPermissions(TxnReq.acct_id, iCustomerId, &CID_1, &CID_2);
 				// generate third account permission row
-				m_Person.GetFirstLastAndTaxID(CID_2, TxnReq.exec_f_name,
-				                              TxnReq.exec_l_name,
-				                              TxnReq.exec_tax_id);
+				m_Person.GetFirstLastAndTaxID(CID_2, TxnReq.exec_f_name, TxnReq.exec_l_name, TxnReq.exec_tax_id);
 			}
 
 			bExecutorIsAccountOwner = false;
@@ -903,26 +789,19 @@ void CCETxnInputGenerator::GenerateTradeOrderInput(
 	//
 
 	// have some distribution on the company/symbol input preference
-	if (m_rnd.RndPercent(
-	        m_pDriverCETxnSettings->TO_settings.cur.security_by_symbol)) {
+	if (m_rnd.RndPercent(m_pDriverCETxnSettings->TO_settings.cur.security_by_symbol)) {
 		// Submit the symbol
-		m_pSecurities.CreateSymbol(iFlatFileSymbIndex, TxnReq.symbol,
-		                           static_cast<int>(sizeof(TxnReq.symbol)));
+		m_pSecurities.CreateSymbol(iFlatFileSymbIndex, TxnReq.symbol, static_cast<int>(sizeof(TxnReq.symbol)));
 	} else {
 		// Submit the company name
-		m_pCompanies.CreateName(
-		    m_pSecurities.GetCompanyIndex(iFlatFileSymbIndex), TxnReq.co_name,
-		    static_cast<int>(sizeof(TxnReq.co_name)));
+		m_pCompanies.CreateName(m_pSecurities.GetCompanyIndex(iFlatFileSymbIndex), TxnReq.co_name,
+		                        static_cast<int>(sizeof(TxnReq.co_name)));
 
-		strncpy(TxnReq.issue,
-		        m_pSecurities.GetRecord(iFlatFileSymbIndex).S_ISSUE_CSTR(),
-		        sizeof(TxnReq.issue));
+		strncpy(TxnReq.issue, m_pSecurities.GetRecord(iFlatFileSymbIndex).S_ISSUE_CSTR(), sizeof(TxnReq.issue));
 	}
 
-	TxnReq.trade_qty =
-	    cTRADE_QTY_SIZES[m_rnd.RndIntRange(0, cNUM_TRADE_QTY_SIZES - 1)];
-	TxnReq.requested_price =
-	    m_rnd.RndDoubleIncrRange(fMinSecPrice, fMaxSecPrice, 0.01);
+	TxnReq.trade_qty = cTRADE_QTY_SIZES[m_rnd.RndIntRange(0, cNUM_TRADE_QTY_SIZES - 1)];
+	TxnReq.requested_price = m_rnd.RndDoubleIncrRange(fMinSecPrice, fMaxSecPrice, 0.01);
 
 	// Determine whether Market or Limit order
 	bMarket = m_rnd.RndPercent(m_pDriverCETxnSettings->TO_settings.cur.market);
@@ -949,8 +828,7 @@ void CCETxnInputGenerator::GenerateTradeOrderInput(
 			eTradeType = eMarketSell;
 		} else {
 			// determine whether the Limit Sell is a Stop Loss
-			if (m_rnd.RndPercent(
-			        m_pDriverCETxnSettings->TO_settings.cur.stop_loss)) {
+			if (m_rnd.RndPercent(m_pDriverCETxnSettings->TO_settings.cur.stop_loss)) {
 				// Stop Loss
 				eTradeType = eStopLoss;
 			} else {
@@ -964,21 +842,16 @@ void CCETxnInputGenerator::GenerateTradeOrderInput(
 	iTradeType = eTradeType;
 
 	// Distribution of last-in-first-out flag
-	TxnReq.is_lifo =
-	    m_rnd.RndPercent(m_pDriverCETxnSettings->TO_settings.cur.lifo);
+	TxnReq.is_lifo = m_rnd.RndPercent(m_pDriverCETxnSettings->TO_settings.cur.lifo);
 
 	// Copy the trade type id from the flat file
-	strncpy(TxnReq.trade_type_id, m_pTradeType[eTradeType].TT_ID_CSTR(),
-	        sizeof(TxnReq.trade_type_id));
+	strncpy(TxnReq.trade_type_id, m_pTradeType[eTradeType].TT_ID_CSTR(), sizeof(TxnReq.trade_type_id));
 
 	// Copy the status type id's from the flat file
-	strncpy(TxnReq.st_pending_id, m_pStatusType[ePending].ST_ID_CSTR(),
-	        sizeof(TxnReq.st_pending_id));
-	strncpy(TxnReq.st_submitted_id, m_pStatusType[eSubmitted].ST_ID_CSTR(),
-	        sizeof(TxnReq.st_submitted_id));
+	strncpy(TxnReq.st_pending_id, m_pStatusType[ePending].ST_ID_CSTR(), sizeof(TxnReq.st_pending_id));
+	strncpy(TxnReq.st_submitted_id, m_pStatusType[eSubmitted].ST_ID_CSTR(), sizeof(TxnReq.st_submitted_id));
 
-	TxnReq.roll_it_back = (m_iTradeOrderRollbackLevel >=
-	                       m_rnd.RndIntRange(1, m_iTradeOrderRollbackLimit));
+	TxnReq.roll_it_back = (m_iTradeOrderRollbackLevel >= m_rnd.RndIntRange(1, m_iTradeOrderRollbackLimit));
 
 	// Need to address logging more comprehensively.
 	// return eTradeType;
@@ -994,8 +867,7 @@ void CCETxnInputGenerator::GenerateTradeOrderInput(
  *  RETURNS:
  *           none.
  */
-void CCETxnInputGenerator::GenerateTradeStatusInput(
-    TTradeStatusTxnInput &TxnReq) {
+void CCETxnInputGenerator::GenerateTradeStatusInput(TTradeStatusTxnInput &TxnReq) {
 	TIdent iCustomerId;
 	eCustomerTier iCustomerTier;
 
@@ -1006,8 +878,7 @@ void CCETxnInputGenerator::GenerateTradeStatusInput(
 	GenerateNonUniformRandomCustomerId(iCustomerId, iCustomerTier);
 
 	// select random account id
-	m_AccsAndPerms.GenerateRandomAccountId(m_rnd, iCustomerId, iCustomerTier,
-	                                       &TxnReq.acct_id, NULL);
+	m_AccsAndPerms.GenerateRandomAccountId(m_rnd, iCustomerId, iCustomerTier, &TxnReq.acct_id, NULL);
 }
 
 /*
@@ -1020,8 +891,7 @@ void CCETxnInputGenerator::GenerateTradeStatusInput(
  *  RETURNS:
  *           none.
  */
-void CCETxnInputGenerator::GenerateTradeUpdateInput(
-    TTradeUpdateTxnInput &TxnReq) {
+void CCETxnInputGenerator::GenerateTradeUpdateInput(TTradeUpdateTxnInput &TxnReq) {
 	INT32 iThreshold;
 
 	// Make sure we're starting with a clean object.
@@ -1032,10 +902,8 @@ void CCETxnInputGenerator::GenerateTradeUpdateInput(
 	if (iThreshold <= m_pDriverCETxnSettings->TU_settings.cur.do_frame1) {
 		// Frame 1
 		TxnReq.frame_to_execute = 1;
-		TxnReq.max_trades =
-		    m_pDriverCETxnSettings->TU_settings.cur.MaxRowsFrame1;
-		TxnReq.max_updates =
-		    m_pDriverCETxnSettings->TU_settings.cur.MaxRowsToUpdateFrame1;
+		TxnReq.max_trades = m_pDriverCETxnSettings->TU_settings.cur.MaxRowsFrame1;
+		TxnReq.max_updates = m_pDriverCETxnSettings->TU_settings.cur.MaxRowsToUpdateFrame1;
 
 		// Generate list of unique trade id's
 		int ii, jj;
@@ -1045,9 +913,8 @@ void CCETxnInputGenerator::GenerateTradeUpdateInput(
 		for (ii = 0; ii < TxnReq.max_trades; ii++) {
 			Accepted = false;
 			while (!Accepted) {
-				TID = GenerateNonUniformTradeID(
-				    TradeUpdateAValueForTradeIDGenFrame1,
-				    TradeUpdateSValueForTradeIDGenFrame1);
+				TID = GenerateNonUniformTradeID(TradeUpdateAValueForTradeIDGenFrame1,
+				                                TradeUpdateSValueForTradeIDGenFrame1);
 				jj = 0;
 				while (jj < ii && TxnReq.trade_id[jj] != TID) {
 					jj++;
@@ -1060,46 +927,34 @@ void CCETxnInputGenerator::GenerateTradeUpdateInput(
 			}
 		}
 	} else if (iThreshold <=
-	           m_pDriverCETxnSettings->TU_settings.cur.do_frame1 +
-	               m_pDriverCETxnSettings->TU_settings.cur.do_frame2) {
+	           m_pDriverCETxnSettings->TU_settings.cur.do_frame1 + m_pDriverCETxnSettings->TU_settings.cur.do_frame2) {
 		// Frame 2
 		TxnReq.frame_to_execute = 2;
-		TxnReq.max_trades =
-		    m_pDriverCETxnSettings->TU_settings.cur.MaxRowsFrame2;
-		TxnReq.max_updates =
-		    m_pDriverCETxnSettings->TU_settings.cur.MaxRowsToUpdateFrame2;
+		TxnReq.max_trades = m_pDriverCETxnSettings->TU_settings.cur.MaxRowsFrame2;
+		TxnReq.max_updates = m_pDriverCETxnSettings->TU_settings.cur.MaxRowsToUpdateFrame2;
 		TxnReq.acct_id = GenerateRandomCustomerAccountId();
 
-		GenerateNonUniformTradeDTS(TxnReq.start_trade_dts,
-		                           m_iTradeUpdateFrame2MaxTimeInMilliSeconds,
-		                           TradeUpdateAValueForTimeGenFrame2,
-		                           TradeUpdateSValueForTimeGenFrame2);
+		GenerateNonUniformTradeDTS(TxnReq.start_trade_dts, m_iTradeUpdateFrame2MaxTimeInMilliSeconds,
+		                           TradeUpdateAValueForTimeGenFrame2, TradeUpdateSValueForTimeGenFrame2);
 
 		// Set to the end of initial trades.
 		m_EndTime.GetTimeStamp(&TxnReq.end_trade_dts);
 	} else {
 		// Frame 3
 		TxnReq.frame_to_execute = 3;
-		TxnReq.max_trades =
-		    m_pDriverCETxnSettings->TU_settings.cur.MaxRowsFrame3;
-		TxnReq.max_updates =
-		    m_pDriverCETxnSettings->TU_settings.cur.MaxRowsToUpdateFrame3;
+		TxnReq.max_trades = m_pDriverCETxnSettings->TU_settings.cur.MaxRowsFrame3;
+		TxnReq.max_updates = m_pDriverCETxnSettings->TU_settings.cur.MaxRowsToUpdateFrame3;
 
-		m_pSecurities.CreateSymbol(
-		    m_rnd.NURnd(0, m_iActiveSecurityCount - 1,
-		                TradeUpdateAValueForSymbolFrame3,
-		                TradeUpdateSValueForSymbolFrame3),
-		    TxnReq.symbol, static_cast<int>(sizeof(TxnReq.symbol)));
+		m_pSecurities.CreateSymbol(m_rnd.NURnd(0, m_iActiveSecurityCount - 1, TradeUpdateAValueForSymbolFrame3,
+		                                       TradeUpdateSValueForSymbolFrame3),
+		                           TxnReq.symbol, static_cast<int>(sizeof(TxnReq.symbol)));
 
-		GenerateNonUniformTradeDTS(TxnReq.start_trade_dts,
-		                           m_iTradeUpdateFrame3MaxTimeInMilliSeconds,
-		                           TradeUpdateAValueForTimeGenFrame3,
-		                           TradeUpdateSValueForTimeGenFrame3);
+		GenerateNonUniformTradeDTS(TxnReq.start_trade_dts, m_iTradeUpdateFrame3MaxTimeInMilliSeconds,
+		                           TradeUpdateAValueForTimeGenFrame3, TradeUpdateSValueForTimeGenFrame3);
 
 		// Set to the end of initial trades.
 		m_EndTime.GetTimeStamp(&TxnReq.end_trade_dts);
 
-		TxnReq.max_acct_id =
-		    m_AccsAndPerms.GetEndingCA_ID(m_iActiveCustomerCount);
+		TxnReq.max_acct_id = m_AccsAndPerms.GetEndingCA_ID(m_iActiveCustomerCount);
 	}
 }

@@ -65,14 +65,10 @@ int mk_w_customer_demographics(void *info_arr, ds_key_t index) {
 	r->cd_demo_sk = index;
 	kTemp = r->cd_demo_sk - 1;
 	bitmap_to_dist(&r->cd_gender, "gender", &kTemp, 1, CUSTOMER_DEMOGRAPHICS);
-	bitmap_to_dist(&r->cd_marital_status, "marital_status", &kTemp, 1,
-	               CUSTOMER_DEMOGRAPHICS);
-	bitmap_to_dist(&r->cd_education_status, "education", &kTemp, 1,
-	               CUSTOMER_DEMOGRAPHICS);
-	bitmap_to_dist(&r->cd_purchase_estimate, "purchase_band", &kTemp, 1,
-	               CUSTOMER_DEMOGRAPHICS);
-	bitmap_to_dist(&r->cd_credit_rating, "credit_rating", &kTemp, 1,
-	               CUSTOMER_DEMOGRAPHICS);
+	bitmap_to_dist(&r->cd_marital_status, "marital_status", &kTemp, 1, CUSTOMER_DEMOGRAPHICS);
+	bitmap_to_dist(&r->cd_education_status, "education", &kTemp, 1, CUSTOMER_DEMOGRAPHICS);
+	bitmap_to_dist(&r->cd_purchase_estimate, "purchase_band", &kTemp, 1, CUSTOMER_DEMOGRAPHICS);
+	bitmap_to_dist(&r->cd_credit_rating, "credit_rating", &kTemp, 1, CUSTOMER_DEMOGRAPHICS);
 	r->cd_dep_count = (int)(kTemp % (ds_key_t)CD_MAX_CHILDREN);
 	kTemp /= (ds_key_t)CD_MAX_CHILDREN;
 	r->cd_dep_employed_count = (int)(kTemp % (ds_key_t)CD_MAX_EMPLOYED);

@@ -45,8 +45,7 @@
 
 using namespace TPCE;
 
-ZipCodeDataFileRecord::ZipCodeDataFileRecord(
-    const std::deque<std::string> &fields) {
+ZipCodeDataFileRecord::ZipCodeDataFileRecord(const std::deque<std::string> &fields) {
 	if (fieldCount != fields.size()) {
 		throw std::runtime_error("Incorrect field count.");
 	}
@@ -92,7 +91,6 @@ const char *ZipCodeDataFileRecord::ZC_DIV_CSTR() const {
 std::string ZipCodeDataFileRecord::ToString(char fieldSeparator) const {
 	// Facilitate encapsulation by using public interface to fields.
 	std::ostringstream msg;
-	msg << DivisionTaxKey() << fieldSeparator << ZC_CODE() << fieldSeparator
-	    << ZC_TOWN() << fieldSeparator << ZC_DIV();
+	msg << DivisionTaxKey() << fieldSeparator << ZC_CODE() << fieldSeparator << ZC_TOWN() << fieldSeparator << ZC_DIV();
 	return msg.str();
 }

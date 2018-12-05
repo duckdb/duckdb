@@ -1,9 +1,7 @@
 //===----------------------------------------------------------------------===//
-//
 //                         DuckDB
 //
 // main/database.hpp
-//
 //
 //
 //===----------------------------------------------------------------------===//
@@ -19,9 +17,9 @@ namespace duckdb {
 //! The database object. This object holds the catalog and all the
 //! database-specific meta information.
 class DuckDB {
-  public:
+public:
 	DuckDB(const char *path = nullptr);
-	DuckDB(const std::string &path) : DuckDB(path.c_str()) {
+	DuckDB(const string &path) : DuckDB(path.c_str()) {
 	}
 
 	StorageManager storage;

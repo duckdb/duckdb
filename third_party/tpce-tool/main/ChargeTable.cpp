@@ -40,8 +40,7 @@
 
 using namespace TPCE;
 
-CChargeTable::CChargeTable(const ChargeDataFile_t &dataFile)
-    : FixedTable<ChargeDataFile_t, CHARGE_ROW>(dataFile) {
+CChargeTable::CChargeTable(const ChargeDataFile_t &dataFile) : FixedTable<ChargeDataFile_t, CHARGE_ROW>(dataFile) {
 }
 
 CChargeTable::~CChargeTable() {
@@ -52,6 +51,5 @@ void CChargeTable::LoadTableRow() {
 
 	tableRow.CH_CHRG = dataRecord.CH_CHRG();
 	tableRow.CH_C_TIER = dataRecord.CH_C_TIER();
-	strncpy(tableRow.CH_TT_ID, dataRecord.CH_TT_ID_CSTR(),
-	        sizeof(tableRow.CH_TT_ID));
+	strncpy(tableRow.CH_TT_ID, dataRecord.CH_TT_ID_CSTR(), sizeof(tableRow.CH_TT_ID));
 }

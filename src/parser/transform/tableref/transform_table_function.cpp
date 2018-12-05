@@ -1,4 +1,3 @@
-
 #include "parser/tableref/table_function.hpp"
 #include "parser/transformer.hpp"
 
@@ -26,8 +25,7 @@ unique_ptr<TableRef> Transformer::TransformRangeFunction(RangeFunction *root) {
 
 	assert(call_tree->type == T_FuncCall);
 	if (coldef) {
-		throw NotImplementedException(
-		    "Explicit column definition not supported yet");
+		throw NotImplementedException("Explicit column definition not supported yet");
 	}
 	// transform the function call
 	auto result = make_unique<TableFunction>();

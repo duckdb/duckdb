@@ -1,14 +1,16 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // catalog/catalog_set.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
+
+#include "catalog/catalog_entry.hpp"
+#include "common/common.hpp"
+#include "transaction/transaction.hpp"
 
 #include <functional>
 #include <memory>
@@ -16,33 +18,24 @@
 #include <string>
 #include <unordered_map>
 
-#include "common/common.hpp"
-
-#include "catalog/catalog_entry.hpp"
-
-#include "transaction/transaction.hpp"
-
 namespace duckdb {
 
 struct AlterInformation;
 
 //! The Catalog Set stores (key, value) map of a set of AbstractCatalogEntries
 class CatalogSet {
-  public:
+public:
 	//! Create an entry in the catalog set. Returns whether or not it was
 	//! successful.
-	bool CreateEntry(Transaction &transaction, const std::string &name,
-	                 std::unique_ptr<CatalogEntry> value);
+	bool CreateEntry(Transaction &transaction, const string &name, unique_ptr<CatalogEntry> value);
 
-	bool AlterEntry(Transaction &transaction, const std::string &name,
-	                AlterInformation *alter_info);
+	bool AlterEntry(Transaction &transaction, const string &name, AlterInformation *alter_info);
 
-	bool DropEntry(Transaction &transaction, const std::string &name,
-	               bool cascade);
+	bool DropEntry(Transaction &transaction, const string &name, bool cascade);
 	//! Returns whether or not an entry exists
-	bool EntryExists(Transaction &transaction, const std::string &name);
+	bool EntryExists(Transaction &transaction, const string &name);
 	//! Returns the entry with the specified name
-	CatalogEntry *GetEntry(Transaction &transaction, const std::string &name);
+	CatalogEntry *GetEntry(Transaction &transaction, const string &name);
 
 	//! Rollback <entry> to be the currently valid entry for a certain catalog
 	//! entry
@@ -67,17 +60,16 @@ class CatalogSet {
 		}
 	}
 
-  private:
+private:
 	//! Drops an entry from the catalog set; must hold the catalog_lock to
 	//! safely call this
 	bool DropEntry(Transaction &transaction, CatalogEntry &entry, bool cascade);
 	//! Given a root entry, gets the entry valid for this transaction
-	CatalogEntry *GetEntryForTransaction(Transaction &transaction,
-	                                     CatalogEntry *current);
+	CatalogEntry *GetEntryForTransaction(Transaction &transaction, CatalogEntry *current);
 	//! The catalog lock is used to make changes to the data
 	std::mutex catalog_lock;
 	//! The set of entries present in the CatalogSet.
-	std::unordered_map<std::string, std::unique_ptr<CatalogEntry>> data;
+	std::unordered_map<string, unique_ptr<CatalogEntry>> data;
 };
 
 } // namespace duckdb

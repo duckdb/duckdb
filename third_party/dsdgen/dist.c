@@ -62,10 +62,7 @@
 #include "r_params.h"
 #include "dcomp.h"
 #ifdef TEST
-option_t options[] = {{"DISTRIBUTIONS", OPT_STR, 2,
-                       "read distributions from file <s>", NULL,
-                       "tester_dist.idx"},
-                      NULL};
+option_t options[] = {{"DISTRIBUTIONS", OPT_STR, 2, "read distributions from file <s>", NULL, "tester_dist.idx"}, NULL};
 
 char params[2];
 struct {
@@ -140,8 +137,7 @@ d_idx_t *find_dist(char *name) {
 			entry_count = ntohl(temp);
 			if ((temp = fseek(ifp, -entry_count * IDX_SIZE, SEEK_END)) < 0) {
 				fprintf(stderr, "Error: lseek to index failed: ");
-				fprintf(stderr, "attempting to reach %d\nSystem error: ",
-				        (int)(-entry_count * IDX_SIZE));
+				fprintf(stderr, "attempting to reach %d\nSystem error: ", (int)(-entry_count * IDX_SIZE));
 				perror(get_str("DISTRIBUTIONS"));
 				exit(3);
 			}
@@ -209,8 +205,7 @@ d_idx_t *find_dist(char *name) {
 
 	/* find the distribution, if it exists and move to it */
 	strcpy(key.name, name);
-	id = (d_idx_t *)bsearch((void *)&key, (void *)idx, entry_count,
-	                        sizeof(d_idx_t), di_compare);
+	id = (d_idx_t *)bsearch((void *)&key, (void *)idx, entry_count, sizeof(d_idx_t), di_compare);
 	if (id != NULL)                 /* found a valid distribution */
 		if (id->flags != FL_LOADED) /* but it needs to be loaded */
 			load_dist(id);
@@ -263,8 +258,7 @@ static int load_dist(d_idx_t *di) {
 		MALLOC_CHECK(d->type_vector);
 		for (i = 0; i < di->v_width; i++) {
 			if (fread(&temp, 1, sizeof(int32_t), ifp) != sizeof(int32_t)) {
-				fprintf(stderr, "Error: read of type vector failed for '%s': ",
-				        di->name);
+				fprintf(stderr, "Error: read of type vector failed for '%s': ", di->name);
 				perror("load_dist()");
 				exit(3);
 			}
@@ -495,8 +489,7 @@ int dist_op(void *dest, int op, char *d_name, int vset, int wset, int stream) {
 	dist = d->dist;
 
 	if (op == 0) {
-		genrand_integer(&level, DIST_UNIFORM, 1, dist->maximums[wset - 1], 0,
-		                stream);
+		genrand_integer(&level, DIST_UNIFORM, 1, dist->maximums[wset - 1], 0, stream);
 		while (level > dist->weight_sets[wset - 1][index] && index < d->length)
 			index += 1;
 		dt = vset - 1;
@@ -508,9 +501,7 @@ int dist_op(void *dest, int op, char *d_name, int vset, int wset, int stream) {
 		dt = wset - 1;
 		if (index >= d->length || index < 0) {
 			fprintf(stderr, "Runtime ERROR: Distribution over-run/under-run\n");
-			fprintf(stderr,
-			        "Check distribution definitions and usage for %s.\n",
-			        d->name);
+			fprintf(stderr, "Check distribution definitions and usage for %s.\n", d->name);
 			fprintf(stderr, "index = %d, length=%d.\n", index, d->length);
 			exit(1);
 		}
@@ -543,9 +534,7 @@ int dist_op(void *dest, int op, char *d_name, int vset, int wset, int stream) {
 		break;
 	}
 
-	return ((dest == NULL)
-	            ? i_res
-	            : index + 1); /* shift back to the 1-based indexing scheme */
+	return ((dest == NULL) ? i_res : index + 1); /* shift back to the 1-based indexing scheme */
 }
 
 /*
@@ -858,8 +847,7 @@ int DistSizeToShiftWidth(char *szDist, int nWeightSet) {
  * Side Effects:
  * TODO: None
  */
-int MatchDistWeight(void *dest, char *szDist, int nWeight, int nWeightSet,
-                    int ValueSet) {
+int MatchDistWeight(void *dest, char *szDist, int nWeight, int nWeightSet, int ValueSet) {
 	d_idx_t *d;
 	dist_t *dist;
 	int index = 0, dt, i_res, nRetcode;
@@ -874,8 +862,7 @@ int MatchDistWeight(void *dest, char *szDist, int nWeight, int nWeightSet,
 	dist = d->dist;
 	nWeight %= dist->maximums[nWeightSet - 1];
 
-	while (nWeight > dist->weight_sets[nWeightSet - 1][index] &&
-	       index < d->length)
+	while (nWeight > dist->weight_sets[nWeightSet - 1][index] && index < d->length)
 		index += 1;
 	dt = ValueSet - 1;
 	if (index >= d->length)
@@ -975,8 +962,7 @@ main() {
 	}
 	dist_member((void *)&dec_res, "test_dist", 1, 4);
 	if (strcmp(dec_res.number, "1") || strcmp(dec_res.fraction, "23")) {
-		printf("dist_member(\"test_dist\", 1, 4): %s.%s != 1.23\n",
-		       dec_res.number, dec_res.fraction);
+		printf("dist_member(\"test_dist\", 1, 4): %s.%s != 1.23\n", dec_res.number, dec_res.fraction);
 		exit(1);
 	}
 	dist_weight(&i_res, "test_dist", 2, 2);

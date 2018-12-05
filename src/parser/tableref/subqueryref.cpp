@@ -1,4 +1,3 @@
-
 #include "parser/tableref/subqueryref.hpp"
 
 #include "common/serializer.hpp"
@@ -6,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-SubqueryRef::SubqueryRef(unique_ptr<SelectStatement> subquery_)
+SubqueryRef::SubqueryRef(unique_ptr<QueryNode> subquery_)
     : TableRef(TableReferenceType::SUBQUERY), subquery(move(subquery_)) {
 }
 
@@ -30,7 +29,7 @@ void SubqueryRef::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<TableRef> SubqueryRef::Deserialize(Deserializer &source) {
-	auto subquery = SelectStatement::Deserialize(source);
+	auto subquery = QueryNode::Deserialize(source);
 	if (!subquery) {
 		return nullptr;
 	}

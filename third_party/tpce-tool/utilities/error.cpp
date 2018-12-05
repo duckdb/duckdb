@@ -46,8 +46,7 @@
 
 using namespace TPCE;
 
-CSystemErr::CSystemErr(Action eAction, char const *szLocation)
-    : CBaseErr(szLocation), m_eAction(eAction) {
+CSystemErr::CSystemErr(Action eAction, char const *szLocation) : CBaseErr(szLocation), m_eAction(eAction) {
 #ifdef WIN32
 	m_idMsg = GetLastError(); // for Windows
 #else
@@ -55,8 +54,7 @@ CSystemErr::CSystemErr(Action eAction, char const *szLocation)
 #endif
 }
 
-CSystemErr::CSystemErr(int iError, Action eAction, char const *szLocation)
-    : CBaseErr(szLocation), m_eAction(eAction) {
+CSystemErr::CSystemErr(int iError, Action eAction, char const *szLocation) : CBaseErr(szLocation), m_eAction(eAction) {
 	// This constructor is provided for registry functions where the function
 	// return code is the error code.
 	m_idMsg = iError;

@@ -55,7 +55,7 @@ namespace TPCE {
 //
 
 class CompanyDataFileRecord {
-  private:
+private:
 	TIdent co_id;
 
 	static const int maxCo_st_idLen = 4;
@@ -76,7 +76,7 @@ class CompanyDataFileRecord {
 
 	static const unsigned int fieldCount = 5;
 
-  public:
+public:
 	explicit CompanyDataFileRecord(const std::deque<std::string> &fields);
 
 	//

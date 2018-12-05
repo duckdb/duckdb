@@ -58,8 +58,7 @@
 #include "r_params.h"
 #include "genrand.h"
 
-static char alpha_num[65] =
-    "0123456789abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ,";
+static char alpha_num[65] = "0123456789abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ,";
 
 char *getenv(const char *name);
 int print_separator(int sep);

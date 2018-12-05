@@ -54,8 +54,7 @@ static INT32 iEGenRevisionNumber = 0; // third-tier revision number
 static INT32 iEGenBetaLevel = 0;      // beta version (for maintenance only)
 
 extern "C" {
-void GetEGenVersion_C(INT32 &iMajorVersion, INT32 &iMinorVersion,
-                      INT32 &iRevisionNumber, INT32 &iBetaLevel) {
+void GetEGenVersion_C(INT32 &iMajorVersion, INT32 &iMinorVersion, INT32 &iRevisionNumber, INT32 &iBetaLevel) {
 	GetEGenVersion(iMajorVersion, iMinorVersion, iRevisionNumber, iBetaLevel);
 }
 
@@ -75,8 +74,7 @@ void GetEGenVersionUpdateTimestamp_C(char *szOutput, size_t iOutputBufferLen) {
 
 // Retrieve major, minor, revision, and beta level numbers for EGen.
 //
-void GetEGenVersion(INT32 &iMajorVersion, INT32 &iMinorVersion,
-                    INT32 &iRevisionNumber, INT32 &iBetaLevel) {
+void GetEGenVersion(INT32 &iMajorVersion, INT32 &iMinorVersion, INT32 &iRevisionNumber, INT32 &iBetaLevel) {
 	iMajorVersion = iEGenMajorVersion;
 	iMinorVersion = iEGenMinorVersion;
 	iRevisionNumber = iEGenRevisionNumber;
@@ -87,12 +85,11 @@ void GetEGenVersion(INT32 &iMajorVersion, INT32 &iMinorVersion,
 //
 void GetEGenVersionString(char *szOutput, size_t iOutputBufferLen) {
 	if (iEGenBetaLevel == 0) {
-		snprintf(szOutput, iOutputBufferLen, "EGen v%d.%d.%d",
-		         iEGenMajorVersion, iEGenMinorVersion, iEGenRevisionNumber);
+		snprintf(szOutput, iOutputBufferLen, "EGen v%d.%d.%d", iEGenMajorVersion, iEGenMinorVersion,
+		         iEGenRevisionNumber);
 	} else {
-		snprintf(szOutput, iOutputBufferLen, "EGen v%d.%d.%d beta %d",
-		         iEGenMajorVersion, iEGenMinorVersion, iEGenRevisionNumber,
-		         iEGenBetaLevel);
+		snprintf(szOutput, iOutputBufferLen, "EGen v%d.%d.%d beta %d", iEGenMajorVersion, iEGenMinorVersion,
+		         iEGenRevisionNumber, iEGenBetaLevel);
 	}
 }
 

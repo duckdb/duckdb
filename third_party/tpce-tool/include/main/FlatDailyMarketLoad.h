@@ -45,13 +45,12 @@
 namespace TPCE {
 
 class CFlatDailyMarketLoad : public CFlatFileLoader<DAILY_MARKET_ROW> {
-  private:
+private:
 	CDateTime Flat_DM_DATE;
 	const std::string DailyMarketRowFmt;
 
-  public:
-	CFlatDailyMarketLoad(char *szFileName,
-	                     FlatFileOutputModes FlatFileOutputMode)
+public:
+	CFlatDailyMarketLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
 	    : CFlatFileLoader<DAILY_MARKET_ROW>(szFileName, FlatFileOutputMode),
 	      DailyMarketRowFmt("%s|%s|%.2f|%.2f|%.2f|%" PRId64 "\n"){};
 
@@ -60,15 +59,12 @@ class CFlatDailyMarketLoad : public CFlatFileLoader<DAILY_MARKET_ROW> {
 	 */
 	void WriteNextRecord(const DAILY_MARKET_ROW &next_record) {
 		Flat_DM_DATE = next_record.DM_DATE;
-		int rc = fprintf(hOutFile, DailyMarketRowFmt.c_str(),
-		                 Flat_DM_DATE.ToStr(FlatFileDateFormat),
-		                 next_record.DM_S_SYMB, next_record.DM_CLOSE,
-		                 next_record.DM_HIGH, next_record.DM_LOW,
-		                 next_record.DM_VOL);
+		int rc =
+		    fprintf(hOutFile, DailyMarketRowFmt.c_str(), Flat_DM_DATE.ToStr(FlatFileDateFormat), next_record.DM_S_SYMB,
+		            next_record.DM_CLOSE, next_record.DM_HIGH, next_record.DM_LOW, next_record.DM_VOL);
 
 		if (rc < 0) {
-			throw CSystemErr(CSystemErr::eWriteFile,
-			                 "CFlatDailyMarketLoad::WriteNextRecord");
+			throw CSystemErr(CSystemErr::eWriteFile, "CFlatDailyMarketLoad::WriteNextRecord");
 		}
 	}
 };

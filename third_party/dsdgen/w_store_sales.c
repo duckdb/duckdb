@@ -77,8 +77,7 @@ static void mk_master(void *info_arr, ds_key_t index) {
 		strtodec(&dMax, "100000.00");
 		nMaxItemCount = 20;
 		jDate = skipDays(STORE_SALES, &kNewDateIndex);
-		pItemPermutation = makePermutation(
-		    NULL, nItemCount = (int)getIDCount(ITEM), SS_PERMUTATION);
+		pItemPermutation = makePermutation(NULL, nItemCount = (int)getIDCount(ITEM), SS_PERMUTATION);
 
 		bInit = 1;
 	}
@@ -96,8 +95,7 @@ static void mk_master(void *info_arr, ds_key_t index) {
 	r->ss_sold_hdemo_sk = mk_join(SS_SOLD_HDEMO_SK, HOUSEHOLD_DEMOGRAPHICS, 1);
 	r->ss_sold_addr_sk = mk_join(SS_SOLD_ADDR_SK, CUSTOMER_ADDRESS, 1);
 	r->ss_ticket_number = index;
-	genrand_integer(&nItemIndex, DIST_UNIFORM, 1, nItemCount, 0,
-	                SS_SOLD_ITEM_SK);
+	genrand_integer(&nItemIndex, DIST_UNIFORM, 1, nItemCount, 0, SS_SOLD_ITEM_SK);
 
 	return;
 }
@@ -116,9 +114,7 @@ static void mk_detail(void *info_arr, int bPrint) {
 	 */
 	if (++nItemIndex > nItemCount)
 		nItemIndex = 1;
-	r->ss_sold_item_sk =
-	    matchSCDSK(getPermutationEntry(pItemPermutation, nItemIndex),
-	               r->ss_sold_date_sk, ITEM);
+	r->ss_sold_item_sk = matchSCDSK(getPermutationEntry(pItemPermutation, nItemIndex), r->ss_sold_date_sk, ITEM);
 	r->ss_sold_promo_sk = mk_join(SS_SOLD_PROMO_SK, PROMOTION, 1);
 	set_pricing(SS_PRICING, &r->ss_pricing);
 
@@ -233,8 +229,7 @@ int vld_w_store_sales(int nTable, ds_key_t kRow, int *Permutation) {
 	jDate = skipDays(STORE_SALES, &kNewDateIndex);
 	mk_master(NULL, kRow);
 	genrand_integer(&nMaxLineitem, DIST_UNIFORM, 8, 16, 9, SS_TICKET_NUMBER);
-	genrand_integer(&nLineitem, DIST_UNIFORM, 1, nMaxLineitem, 0,
-	                SS_PRICING_QUANTITY);
+	genrand_integer(&nLineitem, DIST_UNIFORM, 1, nMaxLineitem, 0, SS_PRICING_QUANTITY);
 	for (i = 1; i < nLineitem; i++) {
 		mk_detail(NULL, 0);
 	}

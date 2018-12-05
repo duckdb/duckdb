@@ -1,4 +1,3 @@
-
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
@@ -120,21 +119,18 @@ TEST_CASE("Joins in subqueries", "[subqueries]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 
-	REQUIRE_NO_FAIL(
-	    con.Query("CREATE TABLE test (id INTEGER, test_value INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (id INTEGER, test_value INTEGER);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1, 22)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1, 21)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (2, 22)"));
 
-	REQUIRE_NO_FAIL(
-	    con.Query("CREATE TABLE test2 (id INTEGER, test2_value INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test2 (id INTEGER, test2_value INTEGER);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (1, 44)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (2, 42)"));
 
-	result = con.Query(
-	    "SELECT * FROM test, test2 WHERE test.id=test2.id AND "
-	    "test_value*test2_value=(SELECT MIN(test_value*test2_value) FROM test "
-	    "AS a, test2 WHERE a.id=test.id AND a.id=test2.id)");
+	result = con.Query("SELECT * FROM test, test2 WHERE test.id=test2.id AND "
+	                   "test_value*test2_value=(SELECT MIN(test_value*test2_value) FROM test "
+	                   "AS a, test2 WHERE a.id=test.id AND a.id=test2.id)");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {21, 22}));
 	REQUIRE(CHECK_COLUMN(result, 2, {1, 2}));
@@ -160,12 +156,10 @@ TEST_CASE("Aliasing and aggregation in subqueries", "[subqueries]") {
 	REQUIRE_NO_FAIL(con.Query("insert into a values (42)"));
 
 	// this is logical
-	result = con.Query(
-	    "select * from (select i as j from a group by j) sq1 where j = 42");
+	result = con.Query("select * from (select i as j from a group by j) sq1 where j = 42");
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
 
 	// this is not but still allowed
-	result = con.Query(
-	    "select * from (select i as j from a group by i) sq1 where j = 42");
+	result = con.Query("select * from (select i as j from a group by i) sq1 where j = 42");
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
 }

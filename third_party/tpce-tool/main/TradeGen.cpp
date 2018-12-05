@@ -42,8 +42,7 @@ using namespace TPCE;
 
 // Price change function period in seconds
 //
-const int iSecPricePeriod =
-    15 * SecondsPerMinute; // set to 15 minutes, in seconds
+const int iSecPricePeriod = 15 * SecondsPerMinute; // set to 15 minutes, in seconds
 
 // Number of RNG calls for one simulated trade
 const int iRNGSkipOneTrade = 11; // average count for v3.5: 6.5
@@ -65,74 +64,52 @@ bool operator>(const TTradeInfo &l, const TTradeInfo &r) {
  *   Creates priority queue.
  *
  */
-CTradeGen::CTradeGen(const DataFileManager &dfm, TIdent iCustomerCount,
-                     TIdent iStartFromCustomer, TIdent iTotalCustomers,
-                     UINT iLoadUnitSize, UINT iScaleFactor,
-                     UINT iHoursOfInitialTrades, bool bCacheEnabled)
-    : m_rnd(RNGSeedTradeGen),
-      m_AddressTable(dfm, iCustomerCount, iStartFromCustomer, true,
-                     bCacheEnabled) // only customer addresses
+CTradeGen::CTradeGen(const DataFileManager &dfm, TIdent iCustomerCount, TIdent iStartFromCustomer,
+                     TIdent iTotalCustomers, UINT iLoadUnitSize, UINT iScaleFactor, UINT iHoursOfInitialTrades,
+                     bool bCacheEnabled)
+    : m_rnd(RNGSeedTradeGen), m_AddressTable(dfm, iCustomerCount, iStartFromCustomer, true,
+                                             bCacheEnabled) // only customer addresses
       ,
-      m_CustomerSelection(
-          &m_rnd, 0, 0, 100, iStartFromCustomer,
-          iLoadUnitSize) // only generate customer within partition
+      m_CustomerSelection(&m_rnd, 0, 0, 100, iStartFromCustomer,
+                          iLoadUnitSize) // only generate customer within partition
       ,
       m_CustomerTable(dfm, iCustomerCount, iStartFromCustomer),
-      m_CustTaxrateTable(dfm, iCustomerCount, iStartFromCustomer,
-                         bCacheEnabled),
-      m_CustomerAccountTable(dfm, iLoadUnitSize, iCustomerCount,
-                             iStartFromCustomer, bCacheEnabled),
-      m_HoldingTable(dfm, iLoadUnitSize, iCustomerCount, iStartFromCustomer,
-                     bCacheEnabled),
-      m_BrokerTable(dfm, iCustomerCount, iStartFromCustomer),
-      m_SecurityTable(dfm, iCustomerCount, iStartFromCustomer),
-      m_Person(dfm, iStartFromCustomer, bCacheEnabled),
-      m_CompanyFile(dfm.CompanyFile()), m_SecurityFile(dfm.SecurityFile()),
-      m_ChargeFile(dfm.ChargeDataFile()),
-      m_CommissionRateFile(dfm.CommissionRateDataFile()),
-      m_StatusTypeFile(dfm.StatusTypeDataFile()),
-      m_TradeTypeFile(dfm.TradeTypeDataFile()),
-      m_ExchangeFile(dfm.ExchangeDataFile()),
-      m_iStartFromCustomer(iStartFromCustomer + iTIdentShift),
-      m_iCustomerCount(iCustomerCount), m_iTotalCustomers(iTotalCustomers),
-      m_iLoadUnitSize(iLoadUnitSize),
-      m_iLoadUnitAccountCount(iLoadUnitSize * iMaxAccountsPerCust),
-      m_iScaleFactor(iScaleFactor),
+      m_CustTaxrateTable(dfm, iCustomerCount, iStartFromCustomer, bCacheEnabled),
+      m_CustomerAccountTable(dfm, iLoadUnitSize, iCustomerCount, iStartFromCustomer, bCacheEnabled),
+      m_HoldingTable(dfm, iLoadUnitSize, iCustomerCount, iStartFromCustomer, bCacheEnabled),
+      m_BrokerTable(dfm, iCustomerCount, iStartFromCustomer), m_SecurityTable(dfm, iCustomerCount, iStartFromCustomer),
+      m_Person(dfm, iStartFromCustomer, bCacheEnabled), m_CompanyFile(dfm.CompanyFile()),
+      m_SecurityFile(dfm.SecurityFile()), m_ChargeFile(dfm.ChargeDataFile()),
+      m_CommissionRateFile(dfm.CommissionRateDataFile()), m_StatusTypeFile(dfm.StatusTypeDataFile()),
+      m_TradeTypeFile(dfm.TradeTypeDataFile()), m_ExchangeFile(dfm.ExchangeDataFile()),
+      m_iStartFromCustomer(iStartFromCustomer + iTIdentShift), m_iCustomerCount(iCustomerCount),
+      m_iTotalCustomers(iTotalCustomers), m_iLoadUnitSize(iLoadUnitSize),
+      m_iLoadUnitAccountCount(iLoadUnitSize * iMaxAccountsPerCust), m_iScaleFactor(iScaleFactor),
       m_iHoursOfInitialTrades(iHoursOfInitialTrades),
-      m_fMeanTimeBetweenTrades(100.0 / iAbortTrade * (double)iScaleFactor /
-                               iLoadUnitSize),
-      m_fMeanInTheMoneySubmissionDelay(1.0), m_CurrentSimulatedTime(0),
-      m_iCurrentCompletedTrades(0),
-      m_iTotalTrades((TTrade)iHoursOfInitialTrades * SecondsPerHour *
-                     iLoadUnitSize / iScaleFactor),
+      m_fMeanTimeBetweenTrades(100.0 / iAbortTrade * (double)iScaleFactor / iLoadUnitSize),
+      m_fMeanInTheMoneySubmissionDelay(1.0), m_CurrentSimulatedTime(0), m_iCurrentCompletedTrades(0),
+      m_iTotalTrades((TTrade)iHoursOfInitialTrades * SecondsPerHour * iLoadUnitSize / iScaleFactor),
       m_iCurrentInitiatedTrades(0),
-      m_iTradesPerWorkDay(HoursPerWorkDay * SecondsPerHour * iLoadUnitSize /
-                          iScaleFactor * iAbortTrade / 100),
-      m_MEESecurity(), m_iCurrentAccountForHolding(0),
-      m_iCurrentSecurityForHolding(0), m_pCurrentSecurityHolding(),
+      m_iTradesPerWorkDay(HoursPerWorkDay * SecondsPerHour * iLoadUnitSize / iScaleFactor * iAbortTrade / 100),
+      m_MEESecurity(), m_iCurrentAccountForHolding(0), m_iCurrentSecurityForHolding(0), m_pCurrentSecurityHolding(),
       m_iCurrentAccountForHoldingSummary(0),
-      m_iCurrentSecurityForHoldingSummary(
-          -1) // incremented in FindNextHoldingList()
+      m_iCurrentSecurityForHoldingSummary(-1) // incremented in FindNextHoldingList()
       ,
       m_iCurrentLoadUnit(0) {
 	RNGSEED RNGSkipCount;
 
 	//  Set the start time (time 0) to the base time
-	m_StartTime.Set(
-	    InitialTradePopulationBaseYear, InitialTradePopulationBaseMonth,
-	    InitialTradePopulationBaseDay, InitialTradePopulationBaseHour,
-	    InitialTradePopulationBaseMinute, InitialTradePopulationBaseSecond,
-	    InitialTradePopulationBaseFraction);
+	m_StartTime.Set(InitialTradePopulationBaseYear, InitialTradePopulationBaseMonth, InitialTradePopulationBaseDay,
+	                InitialTradePopulationBaseHour, InitialTradePopulationBaseMinute, InitialTradePopulationBaseSecond,
+	                InitialTradePopulationBaseFraction);
 
 	//  Get the first account number
 	//
-	m_iStartFromAccount =
-	    m_CustomerAccountTable.GetStartingCA_ID(m_iStartFromCustomer);
+	m_iStartFromAccount = m_CustomerAccountTable.GetStartingCA_ID(m_iStartFromCustomer);
 
 	// Create an array of customer holding lists
 	//
-	m_pCustomerHoldings =
-	    new THoldingList[m_iLoadUnitAccountCount][iMaxSecuritiesPerAccount];
+	m_pCustomerHoldings = new THoldingList[m_iLoadUnitAccountCount][iMaxSecuritiesPerAccount];
 
 	// Clear row structures
 	//
@@ -152,14 +129,11 @@ CTradeGen::CTradeGen(const DataFileManager &dfm, TIdent iCustomerCount,
 
 	// Initialize BROKER table
 	//
-	m_BrokerTable.InitForGen(iLoadUnitSize,
-	                         m_iStartFromCustomer - iTIdentShift);
+	m_BrokerTable.InitForGen(iLoadUnitSize, m_iStartFromCustomer - iTIdentShift);
 
-	RNGSkipCount =
-	    (RNGSEED)(m_iStartFromCustomer / m_iLoadUnitSize * m_iTotalTrades);
+	RNGSkipCount = (RNGSEED)(m_iStartFromCustomer / m_iLoadUnitSize * m_iTotalTrades);
 
-	m_rnd.SetSeed(
-	    m_rnd.RndNthElement(RNGSeedTradeGen, RNGSkipCount * iRNGSkipOneTrade));
+	m_rnd.SetSeed(m_rnd.RndNthElement(RNGSeedTradeGen, RNGSkipCount * iRNGSkipOneTrade));
 
 	m_HoldingTable.InitNextLoadUnit(RNGSkipCount, m_iStartFromAccount);
 
@@ -200,8 +174,7 @@ bool CTradeGen::InitNextLoadUnit() {
 	delete[] m_pCustomerHoldings;
 	// Create an array of customer holding lists
 	//
-	m_pCustomerHoldings =
-	    new THoldingList[m_iLoadUnitAccountCount][iMaxSecuritiesPerAccount];
+	m_pCustomerHoldings = new THoldingList[m_iLoadUnitAccountCount][iMaxSecuritiesPerAccount];
 	m_iCurrentAccountForHolding = 0;
 	m_iCurrentSecurityForHolding = 0;
 
@@ -210,26 +183,21 @@ bool CTradeGen::InitNextLoadUnit() {
 
 	m_iStartFromCustomer += m_iLoadUnitSize;
 
-	m_iStartFromAccount =
-	    m_CustomerAccountTable.GetStartingCA_ID(m_iStartFromCustomer);
+	m_iStartFromAccount = m_CustomerAccountTable.GetStartingCA_ID(m_iStartFromCustomer);
 
 	m_CurrentSimulatedTime = 0;
 
 	m_iCurrentInitiatedTrades = 0;
 
-	m_BrokerTable.InitForGen(m_iLoadUnitSize,
-	                         m_iStartFromCustomer - iTIdentShift);
+	m_BrokerTable.InitForGen(m_iLoadUnitSize, m_iStartFromCustomer - iTIdentShift);
 
-	RNGSkipCount =
-	    (RNGSEED)(m_iStartFromCustomer / m_iLoadUnitSize * m_iTotalTrades);
+	RNGSkipCount = (RNGSEED)(m_iStartFromCustomer / m_iLoadUnitSize * m_iTotalTrades);
 
-	m_rnd.SetSeed(
-	    m_rnd.RndNthElement(RNGSeedTradeGen, RNGSkipCount * iRNGSkipOneTrade));
+	m_rnd.SetSeed(m_rnd.RndNthElement(RNGSeedTradeGen, RNGSkipCount * iRNGSkipOneTrade));
 
 	// Move customer range for the next load unit.
 	//
-	m_CustomerSelection.SetPartitionRange(m_iStartFromCustomer,
-	                                      m_iLoadUnitSize);
+	m_CustomerSelection.SetPartitionRange(m_iStartFromCustomer, m_iLoadUnitSize);
 
 	m_HoldingTable.InitNextLoadUnit(RNGSkipCount, m_iStartFromAccount);
 
@@ -270,19 +238,13 @@ bool CTradeGen::GenerateNextTrade() {
 		// incomplete trades putting them on the queue and
 		// incrementing the current simulated time.
 		//
-		while (
-		    (m_iCurrentCompletedTrades + (int)m_CurrentTrades.size() <
-		     m_iTotalTrades) &&
-		    (m_CurrentTrades.empty() ||
-		     (m_CurrentSimulatedTime < m_CurrentTrades.top().CompletionTime))) {
-			m_CurrentSimulatedTime =
-			    (m_iCurrentInitiatedTrades /
-			     m_iTradesPerWorkDay) // number of days
-			        * SecondsPerDay   // number of seconds in a day
-			    // now add the offset in the day
-			    + (m_iCurrentInitiatedTrades % m_iTradesPerWorkDay) *
-			          m_fMeanTimeBetweenTrades +
-			    GenerateDelayBetweenTrades();
+		while ((m_iCurrentCompletedTrades + (int)m_CurrentTrades.size() < m_iTotalTrades) &&
+		       (m_CurrentTrades.empty() || (m_CurrentSimulatedTime < m_CurrentTrades.top().CompletionTime))) {
+			m_CurrentSimulatedTime = (m_iCurrentInitiatedTrades / m_iTradesPerWorkDay) // number of days
+			                             * SecondsPerDay                               // number of seconds in a day
+			                         // now add the offset in the day
+			                         + (m_iCurrentInitiatedTrades % m_iTradesPerWorkDay) * m_fMeanTimeBetweenTrades +
+			                         GenerateDelayBetweenTrades();
 
 			// Generate new Trade Order; CMEESecurity
 			// is used by this function.
@@ -332,9 +294,7 @@ bool CTradeGen::GenerateNextTrade() {
 		// holding iterator for GenerateNextHolding()
 		//
 		m_pCurrentSecurityHolding =
-		    m_pCustomerHoldings[m_iCurrentAccountForHolding]
-		                       [m_iCurrentSecurityForHolding]
-		                           .begin();
+		    m_pCustomerHoldings[m_iCurrentAccountForHolding][m_iCurrentSecurityForHolding].begin();
 		FindNextHolding();
 
 		// Set up for GenerateNextHoldingSummary
@@ -362,8 +322,7 @@ bool CTradeGen::GenerateNextTrade() {
 inline double CTradeGen::GenerateDelayBetweenTrades() {
 	//  Return a random number between 0 and 1ms less than the mean.
 	//
-	return m_rnd.RndDoubleIncrRange(0.0, m_fMeanTimeBetweenTrades - 0.001,
-	                                0.001);
+	return m_rnd.RndDoubleIncrRange(0.0, m_fMeanTimeBetweenTrades - 0.001, 0.001);
 }
 
 /*
@@ -374,8 +333,7 @@ inline double CTradeGen::GenerateDelayBetweenTrades() {
  *           reference to the list of holdings
  */
 inline THoldingList *CTradeGen::GetHoldingListForCurrentTrade() {
-	return &m_pCustomerHoldings[GetCurrentAccID() - m_iStartFromAccount]
-	                           [GetCurrentSecurityAccountIndex() - 1];
+	return &m_pCustomerHoldings[GetCurrentAccID() - m_iStartFromAccount][GetCurrentSecurityAccountIndex() - 1];
 }
 
 /*
@@ -385,11 +343,9 @@ inline THoldingList *CTradeGen::GetHoldingListForCurrentTrade() {
  *   RETURNS:
  *           iterator positined at the first element or at the last element
  */
-list<THoldingInfo>::iterator
-CTradeGen::PositionAtHoldingList(THoldingList *pHoldingList, int IsLifo) {
+list<THoldingInfo>::iterator CTradeGen::PositionAtHoldingList(THoldingList *pHoldingList, int IsLifo) {
 	if (pHoldingList->empty()) {
-		return pHoldingList
-		    ->end(); // iterator positioned after the last element
+		return pHoldingList->end(); // iterator positioned after the last element
 	} else {
 
 		if (IsLifo) {
@@ -430,14 +386,12 @@ void CTradeGen::UpdateHoldings() {
 
 	pHolding = PositionAtHoldingList(pHoldingList, GetCurrentTradeIsLifo());
 
-	if (GetCurrentTradeType() == eMarketBuy ||
-	    GetCurrentTradeType() == eLimitBuy) {
+	if (GetCurrentTradeType() == eMarketBuy || GetCurrentTradeType() == eLimitBuy) {
 		// Buy trade
 
 		// Liquidate negative (short) holdings
 		//
-		while (!pHoldingList->empty() && pHolding->iTradeQty < 0 &&
-		       iNeededQty > 0) {
+		while (!pHoldingList->empty() && pHolding->iTradeQty < 0 && iNeededQty > 0) {
 			iHoldQty = pHolding->iTradeQty;
 
 			pHolding->iTradeQty += iNeededQty;
@@ -447,31 +401,24 @@ void CTradeGen::UpdateHoldings() {
 				//
 				pHolding->iTradeQty = 0; // holding fully closed
 
-				m_CompletedTradeInfo.fSellValue +=
-				    -iHoldQty * pHolding->fTradePrice;
-				m_CompletedTradeInfo.fBuyValue +=
-				    -iHoldQty * GetCurrentTradePrice();
+				m_CompletedTradeInfo.fSellValue += -iHoldQty * pHolding->fTradePrice;
+				m_CompletedTradeInfo.fBuyValue += -iHoldQty * GetCurrentTradePrice();
 			} else {
-				m_CompletedTradeInfo.fSellValue +=
-				    iNeededQty * pHolding->fTradePrice;
-				m_CompletedTradeInfo.fBuyValue +=
-				    iNeededQty * GetCurrentTradePrice();
+				m_CompletedTradeInfo.fSellValue += iNeededQty * pHolding->fTradePrice;
+				m_CompletedTradeInfo.fBuyValue += iNeededQty * GetCurrentTradePrice();
 			}
 
-			GenerateHoldingHistoryRow(pHolding->iTradeId, GetCurrentTradeID(),
-			                          iHoldQty, pHolding->iTradeQty);
+			GenerateHoldingHistoryRow(pHolding->iTradeId, GetCurrentTradeID(), iHoldQty, pHolding->iTradeQty);
 
 			if (pHolding->iTradeQty == 0) {
 				// There was enough new quantity to fully close the old holding
 				//
-				pHolding = pHoldingList->erase(
-				    pHolding); // erase the old and return next holding
+				pHolding = pHoldingList->erase(pHolding); // erase the old and return next holding
 			}
 
 			//  Reposition at proper end
 			//
-			pHolding =
-			    PositionAtHoldingList(pHoldingList, GetCurrentTradeIsLifo());
+			pHolding = PositionAtHoldingList(pHoldingList, GetCurrentTradeIsLifo());
 
 			iNeededQty += iHoldQty;
 		}
@@ -479,9 +426,8 @@ void CTradeGen::UpdateHoldings() {
 		if (iNeededQty > 0) {
 			// Still shares left after closing positions => create a new holding
 			//
-			THoldingInfo NewHolding = {
-			    GetCurrentTradeID(), iNeededQty, GetCurrentTradePrice(),
-			    GetCurrentTradeCompletionTime(), GetCurrentSecurityIndex()};
+			THoldingInfo NewHolding = {GetCurrentTradeID(), iNeededQty, GetCurrentTradePrice(),
+			                           GetCurrentTradeCompletionTime(), GetCurrentSecurityIndex()};
 
 			//  Note: insert should be at the same end all the time
 			//  provided delete (PositionAtHoldingList()) is different
@@ -492,8 +438,7 @@ void CTradeGen::UpdateHoldings() {
 			//
 			pHoldingList->push_back(NewHolding);
 
-			GenerateHoldingHistoryRow(GetCurrentTradeID(), GetCurrentTradeID(),
-			                          0, iNeededQty);
+			GenerateHoldingHistoryRow(GetCurrentTradeID(), GetCurrentTradeID(), 0, iNeededQty);
 		}
 	} else {
 		// Sell trade
@@ -502,8 +447,7 @@ void CTradeGen::UpdateHoldings() {
 
 		// Liquidate positive (long) holdings
 		//
-		while (!pHoldingList->empty() && pHolding->iTradeQty > 0 &&
-		       iNeededQty > 0) {
+		while (!pHoldingList->empty() && pHolding->iTradeQty > 0 && iNeededQty > 0) {
 			iHoldQty = pHolding->iTradeQty;
 
 			pHolding->iTradeQty -= iNeededQty;
@@ -513,31 +457,24 @@ void CTradeGen::UpdateHoldings() {
 				//
 				pHolding->iTradeQty = 0; // holding fully closed
 
-				m_CompletedTradeInfo.fSellValue +=
-				    iHoldQty * GetCurrentTradePrice();
-				m_CompletedTradeInfo.fBuyValue +=
-				    iHoldQty * pHolding->fTradePrice;
+				m_CompletedTradeInfo.fSellValue += iHoldQty * GetCurrentTradePrice();
+				m_CompletedTradeInfo.fBuyValue += iHoldQty * pHolding->fTradePrice;
 			} else {
-				m_CompletedTradeInfo.fSellValue +=
-				    iNeededQty * GetCurrentTradePrice();
-				m_CompletedTradeInfo.fBuyValue +=
-				    iNeededQty * pHolding->fTradePrice;
+				m_CompletedTradeInfo.fSellValue += iNeededQty * GetCurrentTradePrice();
+				m_CompletedTradeInfo.fBuyValue += iNeededQty * pHolding->fTradePrice;
 			}
 
-			GenerateHoldingHistoryRow(pHolding->iTradeId, GetCurrentTradeID(),
-			                          iHoldQty, pHolding->iTradeQty);
+			GenerateHoldingHistoryRow(pHolding->iTradeId, GetCurrentTradeID(), iHoldQty, pHolding->iTradeQty);
 
 			if (pHolding->iTradeQty == 0) {
 				// There was enough new quantity to fully close the old holding
 				//
-				pHolding = pHoldingList->erase(
-				    pHolding); // erase the old and return next holding
+				pHolding = pHoldingList->erase(pHolding); // erase the old and return next holding
 			}
 
 			//  Reposition at proper end
 			//
-			pHolding =
-			    PositionAtHoldingList(pHoldingList, GetCurrentTradeIsLifo());
+			pHolding = PositionAtHoldingList(pHoldingList, GetCurrentTradeIsLifo());
 
 			iNeededQty -= iHoldQty;
 		}
@@ -545,9 +482,8 @@ void CTradeGen::UpdateHoldings() {
 		if (iNeededQty > 0) {
 			// Still shares left after closing positions => create a new holding
 			//
-			THoldingInfo NewHolding = {
-			    GetCurrentTradeID(), -iNeededQty, GetCurrentTradePrice(),
-			    GetCurrentTradeCompletionTime(), GetCurrentSecurityIndex()};
+			THoldingInfo NewHolding = {GetCurrentTradeID(), -iNeededQty, GetCurrentTradePrice(),
+			                           GetCurrentTradeCompletionTime(), GetCurrentSecurityIndex()};
 
 			//  Note: insert should be at the same end all the time
 			//  provided delete (PositionAtHoldingList()) is different
@@ -558,8 +494,7 @@ void CTradeGen::UpdateHoldings() {
 			//
 			pHoldingList->push_back(NewHolding);
 
-			GenerateHoldingHistoryRow(GetCurrentTradeID(), GetCurrentTradeID(),
-			                          0, -iNeededQty);
+			GenerateHoldingHistoryRow(GetCurrentTradeID(), GetCurrentTradeID(), 0, -iNeededQty);
 		}
 	}
 }
@@ -593,9 +528,7 @@ bool CTradeGen::FindNextHoldingList() {
 
 		//  Set list pointer
 		//
-		pHoldingList =
-		    &m_pCustomerHoldings[m_iCurrentAccountForHoldingSummary]
-		                        [m_iCurrentSecurityForHoldingSummary];
+		pHoldingList = &m_pCustomerHoldings[m_iCurrentAccountForHoldingSummary][m_iCurrentSecurityForHoldingSummary];
 	} while (pHoldingList->empty()); // test for empty HoldingList
 
 	return true;
@@ -611,8 +544,7 @@ bool CTradeGen::FindNextHoldingList() {
 bool CTradeGen::FindNextHolding() {
 	THoldingList *pHoldingList;
 
-	pHoldingList = &m_pCustomerHoldings[m_iCurrentAccountForHolding]
-	                                   [m_iCurrentSecurityForHolding];
+	pHoldingList = &m_pCustomerHoldings[m_iCurrentAccountForHolding][m_iCurrentSecurityForHolding];
 
 	//  Make sure the holding iterator points to a valid holding
 	//
@@ -641,14 +573,12 @@ bool CTradeGen::FindNextHolding() {
 
 			//  Holding list has changed => reinitialize
 			//
-			pHoldingList = &m_pCustomerHoldings[m_iCurrentAccountForHolding]
-			                                   [m_iCurrentSecurityForHolding];
+			pHoldingList = &m_pCustomerHoldings[m_iCurrentAccountForHolding][m_iCurrentSecurityForHolding];
 			//  Select the first holding in the new list
 			//
 			m_pCurrentSecurityHolding = pHoldingList->begin();
 		}
-	} while (m_pCurrentSecurityHolding ==
-	         pHoldingList->end()); // test for empty HoldingList
+	} while (m_pCurrentSecurityHolding == pHoldingList->end()); // test for empty HoldingList
 
 	return true;
 }
@@ -666,8 +596,7 @@ bool CTradeGen::FindNextHolding() {
  *               false   - if there are no more holding lists
  */
 bool CTradeGen::GenerateNextHoldingSummaryRow() {
-	TIdent
-	    iSecurityFlatFileIndex; // index of the security in the input flat file
+	TIdent iSecurityFlatFileIndex; // index of the security in the input flat file
 
 	if (m_iCurrentAccountForHoldingSummary < m_iLoadUnitAccountCount) {
 		// There is always a valid holding list when this function
@@ -675,23 +604,18 @@ bool CTradeGen::GenerateNextHoldingSummaryRow() {
 		// m_iCurrentAccountForHoldingSummary and
 		// m_iCurrentSecurityForHoldingSummary.
 		//
-		m_HoldingSummaryRow.HS_CA_ID =
-		    m_iCurrentAccountForHoldingSummary + m_iStartFromAccount;
+		m_HoldingSummaryRow.HS_CA_ID = m_iCurrentAccountForHoldingSummary + m_iStartFromAccount;
 		iSecurityFlatFileIndex = m_HoldingTable.GetSecurityFlatFileIndex(
-		    m_iCurrentAccountForHoldingSummary + m_iStartFromAccount,
-		    (UINT)(m_iCurrentSecurityForHoldingSummary + 1));
+		    m_iCurrentAccountForHoldingSummary + m_iStartFromAccount, (UINT)(m_iCurrentSecurityForHoldingSummary + 1));
 
-		m_SecurityFile.CreateSymbol(
-		    iSecurityFlatFileIndex, m_HoldingSummaryRow.HS_S_SYMB,
-		    static_cast<int>(sizeof(m_HoldingSummaryRow.HS_S_SYMB)));
+		m_SecurityFile.CreateSymbol(iSecurityFlatFileIndex, m_HoldingSummaryRow.HS_S_SYMB,
+		                            static_cast<int>(sizeof(m_HoldingSummaryRow.HS_S_SYMB)));
 
 		// Sum up the quantities for the holding list
 		THoldingList *pHoldingList;
 		list<THoldingInfo>::iterator pHolding;
 
-		pHoldingList =
-		    &m_pCustomerHoldings[m_iCurrentAccountForHoldingSummary]
-		                        [m_iCurrentSecurityForHoldingSummary];
+		pHoldingList = &m_pCustomerHoldings[m_iCurrentAccountForHoldingSummary][m_iCurrentSecurityForHoldingSummary];
 		pHolding = pHoldingList->begin();
 		m_HoldingSummaryRow.HS_QTY = 0;
 
@@ -712,21 +636,16 @@ bool CTradeGen::GenerateNextHoldingSummaryRow() {
  *   RETURNS:
  *               none
  */
-void CTradeGen::GenerateHoldingHistoryRow(
-    TTrade iHoldingTradeID, // trade id of the original trade
-    TTrade iTradeTradeID,   // trade id of the modifying trade
-    int iBeforeQty,         // holding qty now
-    int iAfterQty)          // holding qty after modification
+void CTradeGen::GenerateHoldingHistoryRow(TTrade iHoldingTradeID, // trade id of the original trade
+                                          TTrade iTradeTradeID,   // trade id of the modifying trade
+                                          int iBeforeQty,         // holding qty now
+                                          int iAfterQty)          // holding qty after modification
 {
 	if (m_iHoldingHistoryRowCount < iMaxHoldingHistoryRowsPerTrade) {
-		m_TradeRow.m_HoldingHistory[m_iHoldingHistoryRowCount].HH_H_T_ID =
-		    iHoldingTradeID;
-		m_TradeRow.m_HoldingHistory[m_iHoldingHistoryRowCount].HH_T_ID =
-		    iTradeTradeID;
-		m_TradeRow.m_HoldingHistory[m_iHoldingHistoryRowCount].HH_BEFORE_QTY =
-		    iBeforeQty;
-		m_TradeRow.m_HoldingHistory[m_iHoldingHistoryRowCount].HH_AFTER_QTY =
-		    iAfterQty;
+		m_TradeRow.m_HoldingHistory[m_iHoldingHistoryRowCount].HH_H_T_ID = iHoldingTradeID;
+		m_TradeRow.m_HoldingHistory[m_iHoldingHistoryRowCount].HH_T_ID = iTradeTradeID;
+		m_TradeRow.m_HoldingHistory[m_iHoldingHistoryRowCount].HH_BEFORE_QTY = iBeforeQty;
+		m_TradeRow.m_HoldingHistory[m_iHoldingHistoryRowCount].HH_AFTER_QTY = iAfterQty;
 
 		++m_iHoldingHistoryRowCount;
 	}
@@ -750,16 +669,14 @@ void CTradeGen::GenerateHoldingHistoryRow(
  *               false   - if there are no more holdings to return
  */
 bool CTradeGen::GenerateNextHolding() {
-	TIdent
-	    iSecurityFlatFileIndex; // index of the security in the input flat file
+	TIdent iSecurityFlatFileIndex; // index of the security in the input flat file
 
 	if (m_iCurrentAccountForHolding < m_iLoadUnitAccountCount) {
 		// There is always a valid holding when this function
 		// is called. The holding to put into the HOLDING row
 		// is pointed to by m_pCurrentSecurityHolding.
 		//
-		m_HoldingRow.H_CA_ID =
-		    m_iCurrentAccountForHolding + m_iStartFromAccount;
+		m_HoldingRow.H_CA_ID = m_iCurrentAccountForHolding + m_iStartFromAccount;
 		// iSecurityFlatFileIndex = m_HoldingTable.GetSecurityFlatFileIndex(
 		//                                          m_iCurrentAccountForHolding
 		//                                          + m_iStartFromAccount,
@@ -768,14 +685,12 @@ bool CTradeGen::GenerateNextHolding() {
 
 		iSecurityFlatFileIndex = m_pCurrentSecurityHolding->iSymbolIndex;
 
-		m_SecurityFile.CreateSymbol(
-		    iSecurityFlatFileIndex, m_HoldingRow.H_S_SYMB,
-		    static_cast<int>(sizeof(m_HoldingRow.H_S_SYMB)));
+		m_SecurityFile.CreateSymbol(iSecurityFlatFileIndex, m_HoldingRow.H_S_SYMB,
+		                            static_cast<int>(sizeof(m_HoldingRow.H_S_SYMB)));
 
 		m_HoldingRow.H_T_ID = m_pCurrentSecurityHolding->iTradeId;
 		m_HoldingRow.H_QTY = m_pCurrentSecurityHolding->iTradeQty;
-		m_HoldingRow.H_PRICE =
-		    m_pCurrentSecurityHolding->fTradePrice.DollarAmount();
+		m_HoldingRow.H_PRICE = m_pCurrentSecurityHolding->fTradePrice.DollarAmount();
 		m_HoldingRow.H_DTS = m_pCurrentSecurityHolding->BuyDTS;
 
 		// Delete the holding and move to the next one in the account
@@ -859,15 +774,13 @@ void CTradeGen::GenerateNewTrade() {
 
 	// Select random customer
 	//
-	m_CustomerSelection.GenerateRandomCustomer(m_NewTrade.iCustomer,
-	                                           m_NewTrade.iCustomerTier);
+	m_CustomerSelection.GenerateRandomCustomer(m_NewTrade.iCustomer, m_NewTrade.iCustomerTier);
 
 	// Select random customer, account, and security within the account
 	//
-	m_HoldingTable.GenerateRandomAccountSecurity(
-	    m_NewTrade.iCustomer, m_NewTrade.iCustomerTier,
-	    &m_NewTrade.iCustomerAccount, &m_NewTrade.iSymbolIndex,
-	    &m_NewTrade.iSymbolIndexInAccount);
+	m_HoldingTable.GenerateRandomAccountSecurity(m_NewTrade.iCustomer, m_NewTrade.iCustomerTier,
+	                                             &m_NewTrade.iCustomerAccount, &m_NewTrade.iSymbolIndex,
+	                                             &m_NewTrade.iSymbolIndexInAccount);
 
 	m_NewTrade.eTradeType = GenerateTradeType();
 
@@ -875,28 +788,23 @@ void CTradeGen::GenerateNewTrade() {
 	//
 	m_NewTrade.eTradeStatus = eCompleted;
 
-	m_NewTrade.fBidPrice =
-	    m_rnd.RndDoubleIncrRange(fMinSecPrice, fMaxSecPrice, 0.01);
+	m_NewTrade.fBidPrice = m_rnd.RndDoubleIncrRange(fMinSecPrice, fMaxSecPrice, 0.01);
 
-	m_NewTrade.iTradeQty =
-	    cTRADE_QTY_SIZES[m_rnd.RndIntRange(0, cNUM_TRADE_QTY_SIZES - 1)];
+	m_NewTrade.iTradeQty = cTRADE_QTY_SIZES[m_rnd.RndIntRange(0, cNUM_TRADE_QTY_SIZES - 1)];
 
-	if (m_NewTrade.eTradeType == eMarketBuy ||
-	    m_NewTrade.eTradeType == eMarketSell) { // A Market order
+	if (m_NewTrade.eTradeType == eMarketBuy || m_NewTrade.eTradeType == eMarketSell) { // A Market order
 		//
 		m_NewTrade.SubmissionTime = m_CurrentSimulatedTime;
 
 		// Update the bid price to the current market price (like runtime)
 		//
-		m_NewTrade.fBidPrice = m_MEESecurity.CalculatePrice(
-		    m_NewTrade.iSymbolIndex, m_CurrentSimulatedTime);
+		m_NewTrade.fBidPrice = m_MEESecurity.CalculatePrice(m_NewTrade.iSymbolIndex, m_CurrentSimulatedTime);
 	} else { // a Limit Order => need to calculate the Submission time
 		//
 		m_NewTrade.PendingTime = m_CurrentSimulatedTime;
 
-		m_NewTrade.SubmissionTime = m_MEESecurity.GetSubmissionTime(
-		    m_NewTrade.iSymbolIndex, m_NewTrade.PendingTime,
-		    m_NewTrade.fBidPrice, m_NewTrade.eTradeType);
+		m_NewTrade.SubmissionTime = m_MEESecurity.GetSubmissionTime(m_NewTrade.iSymbolIndex, m_NewTrade.PendingTime,
+		                                                            m_NewTrade.fBidPrice, m_NewTrade.eTradeType);
 
 		// Move orders that would submit after market close (5pm)
 		// to the beginning of the next day.
@@ -905,29 +813,22 @@ void CTradeGen::GenerateNewTrade() {
 		// though it is later output to the database starting from 9am. So time
 		// 0h corresponds to 9am, time 8hours corresponds to 5pm.
 		//
-		if ((((INT32)(m_NewTrade.SubmissionTime / SecondsPerHour)) %
-		         HoursPerDay ==
-		     HoursPerWorkDay) && // >=5pm
-		    ((m_NewTrade.SubmissionTime / SecondsPerHour) -
-		         ((INT32)(m_NewTrade.SubmissionTime / SecondsPerHour)) >
+		if ((((INT32)(m_NewTrade.SubmissionTime / SecondsPerHour)) % HoursPerDay == HoursPerWorkDay) && // >=5pm
+		    ((m_NewTrade.SubmissionTime / SecondsPerHour) - ((INT32)(m_NewTrade.SubmissionTime / SecondsPerHour)) >
 		     0 // fractional seconds exist, e.g. not 5:00pm
 		     )) {
-			m_NewTrade.SubmissionTime +=
-			    16 * SecondsPerHour; // add 16 hours to move to 9am next day
+			m_NewTrade.SubmissionTime += 16 * SecondsPerHour; // add 16 hours to move to 9am next day
 		}
 	}
 
 	// Calculate Completion time and price
 	//
-	m_NewTrade.CompletionTime = m_MEESecurity.GetCompletionTime(
-	    m_NewTrade.iSymbolIndex, m_NewTrade.SubmissionTime,
-	    &m_NewTrade.fTradePrice);
+	m_NewTrade.CompletionTime =
+	    m_MEESecurity.GetCompletionTime(m_NewTrade.iSymbolIndex, m_NewTrade.SubmissionTime, &m_NewTrade.fTradePrice);
 
 	// Make sure the trade has the right price based on the type of trade.
-	if ((m_NewTrade.eTradeType == eLimitBuy &&
-	     m_NewTrade.fBidPrice < m_NewTrade.fTradePrice) ||
-	    (m_NewTrade.eTradeType == eLimitSell &&
-	     m_NewTrade.fBidPrice > m_NewTrade.fTradePrice)) {
+	if ((m_NewTrade.eTradeType == eLimitBuy && m_NewTrade.fBidPrice < m_NewTrade.fTradePrice) ||
+	    (m_NewTrade.eTradeType == eLimitSell && m_NewTrade.fBidPrice > m_NewTrade.fTradePrice)) {
 		m_NewTrade.fTradePrice = m_NewTrade.fBidPrice;
 	}
 
@@ -961,8 +862,7 @@ void CTradeGen::GenerateCompleteTrade() {
 	GenerateCashTransactionRow();
 	GenerateSettlementRow();
 
-	m_BrokerTable.UpdateTradeAndCommissionYTD(GetCurrentBrokerId(), 1,
-	                                          m_TradeRow.m_Trade.T_COMM);
+	m_BrokerTable.UpdateTradeAndCommissionYTD(GetCurrentBrokerId(), 1, m_TradeRow.m_Trade.T_COMM);
 
 	++m_iCurrentCompletedTrades;
 }
@@ -982,8 +882,7 @@ void CTradeGen::GenerateCompleteTrade() {
  *
  */
 void CTradeGen::GenerateCompletedTradeInfo() {
-	m_CompletedTradeInfo.eAccountTaxStatus =
-	    m_CustomerAccountTable.GetAccountTaxStatus(GetCurrentAccID());
+	m_CompletedTradeInfo.eAccountTaxStatus = m_CustomerAccountTable.GetAccountTaxStatus(GetCurrentAccID());
 
 	m_CompletedTradeInfo.iCurrentBrokerId = // not needed anymore?
 	    m_CustomerAccountTable.GenerateBrokerIdForAccount(GetCurrentAccID());
@@ -1012,12 +911,10 @@ void CTradeGen::GenerateTradeRow() {
 
 	m_TradeRow.m_Trade.T_CA_ID = GetCurrentAccID();
 
-	strncpy(m_TradeRow.m_Trade.T_TT_ID,
-	        m_TradeTypeFile[GetCurrentTradeType()].TT_ID_CSTR(),
+	strncpy(m_TradeRow.m_Trade.T_TT_ID, m_TradeTypeFile[GetCurrentTradeType()].TT_ID_CSTR(),
 	        sizeof(m_TradeRow.m_Trade.T_TT_ID));
 
-	strncpy(m_TradeRow.m_Trade.T_ST_ID,
-	        m_StatusTypeFile[GetCurrentTradeStatus()].ST_ID_CSTR(),
+	strncpy(m_TradeRow.m_Trade.T_ST_ID, m_StatusTypeFile[GetCurrentTradeStatus()].ST_ID_CSTR(),
 	        sizeof(m_TradeRow.m_Trade.T_ST_ID));
 
 	// Generate whether the trade is cash trade. All sells are cash. 84% of buys
@@ -1025,20 +922,16 @@ void CTradeGen::GenerateTradeRow() {
 	//
 	m_TradeRow.m_Trade.T_IS_CASH = 1; // changed later if needed
 
-	if (((GetCurrentTradeType() == eMarketBuy) ||
-	     (GetCurrentTradeType() == eLimitBuy)) &&
+	if (((GetCurrentTradeType() == eMarketBuy) || (GetCurrentTradeType() == eLimitBuy)) &&
 	    m_rnd.RndPercent(iPercentBuysOnMargin)) {
 		m_TradeRow.m_Trade.T_IS_CASH = 0;
 	}
 
-	snprintf(m_TradeRow.m_Trade.T_EXEC_NAME,
-	         sizeof(m_TradeRow.m_Trade.T_EXEC_NAME), "%s %s",
-	         m_Person.GetFirstName(GetCurrentCustID()).c_str(),
-	         m_Person.GetLastName(GetCurrentCustID()).c_str());
+	snprintf(m_TradeRow.m_Trade.T_EXEC_NAME, sizeof(m_TradeRow.m_Trade.T_EXEC_NAME), "%s %s",
+	         m_Person.GetFirstName(GetCurrentCustID()).c_str(), m_Person.GetLastName(GetCurrentCustID()).c_str());
 
-	m_SecurityFile.CreateSymbol(
-	    GetCurrentSecurityIndex(), m_TradeRow.m_Trade.T_S_SYMB,
-	    static_cast<int>(sizeof(m_TradeRow.m_Trade.T_S_SYMB)));
+	m_SecurityFile.CreateSymbol(GetCurrentSecurityIndex(), m_TradeRow.m_Trade.T_S_SYMB,
+	                            static_cast<int>(sizeof(m_TradeRow.m_Trade.T_S_SYMB)));
 
 	m_TradeRow.m_Trade.T_BID_PRICE = GetCurrentBidPrice().DollarAmount();
 
@@ -1046,11 +939,9 @@ void CTradeGen::GenerateTradeRow() {
 
 	m_TradeRow.m_Trade.T_QTY = GetCurrentTradeQty();
 
-	m_TradeRow.m_Trade.T_CHRG =
-	    m_CompletedTradeInfo.Charge.DollarAmount(); // get charge
+	m_TradeRow.m_Trade.T_CHRG = m_CompletedTradeInfo.Charge.DollarAmount(); // get charge
 
-	m_TradeRow.m_Trade.T_COMM =
-	    m_CompletedTradeInfo.Commission.DollarAmount(); // get commission
+	m_TradeRow.m_Trade.T_COMM = m_CompletedTradeInfo.Commission.DollarAmount(); // get commission
 
 	// Get the tax amount. The check for positive capital gain is
 	// in GenerateTradeTax(). If there is no capital gain, tax amount
@@ -1095,8 +986,7 @@ void CTradeGen::GenerateTradeCharge() {
 		const ChargeDataFileRecord &chargeRow = m_ChargeFile[i];
 		// search for the customer tier
 		if (GetCurrentCustTier() == chargeRow.CH_C_TIER()) {
-			const TradeTypeDataFileRecord &tradeTypeRow =
-			    m_TradeTypeFile[GetCurrentTradeType()];
+			const TradeTypeDataFileRecord &tradeTypeRow = m_TradeTypeFile[GetCurrentTradeType()];
 			// search for the trade type
 			// if (!strcmp(tradeTypeRow.TT_ID_CSTR(),
 			// chargeRow.CH_TT_ID_CSTR()))
@@ -1126,11 +1016,9 @@ void CTradeGen::GenerateTradeCommission() {
 	int iCustTier = GetCurrentCustTier();
 	int iTradeQty = GetCurrentTradeQty();
 	eTradeTypeID eTradeType = GetCurrentTradeType();
-	eExchangeID eExchange =
-	    m_SecurityFile.GetExchangeIndex(GetCurrentSecurityIndex());
+	eExchangeID eExchange = m_SecurityFile.GetExchangeIndex(GetCurrentSecurityIndex());
 	const TradeTypeDataFileRecord &tradeTypeRow = m_TradeTypeFile[eTradeType];
-	const SecurityDataFileRecord &securityRow =
-	    m_SecurityFile.GetRecord(GetCurrentSecurityIndex());
+	const SecurityDataFileRecord &securityRow = m_SecurityFile.GetRecord(GetCurrentSecurityIndex());
 
 	// Some extra logic to reduce looping in the CommissionRate file.
 	// It is organized by tier, then trade type, then exchange.
@@ -1151,31 +1039,25 @@ void CTradeGen::GenerateTradeCommission() {
 	UINT iExchangeRecords = iTradeTypeRecords / m_ExchangeFile.size();
 
 	// Compute starting and ending bounds of scan
-	UINT iStartIndex = ((iCustTier - 1) * iCustomerTierRecords) +
-	                   ((int)eTradeType * iTradeTypeRecords) +
+	UINT iStartIndex = ((iCustTier - 1) * iCustomerTierRecords) + ((int)eTradeType * iTradeTypeRecords) +
 	                   ((int)eExchange * iExchangeRecords);
 	UINT iEndIndex = iStartIndex + iExchangeRecords;
 
 	// Scan for the proper commission rate
 	for (UINT i = iStartIndex; i < iEndIndex; i++) {
-		const CommissionRateDataFileRecord &commissionRow =
-		    m_CommissionRateFile[i];
+		const CommissionRateDataFileRecord &commissionRow = m_CommissionRateFile[i];
 
 		// sanity checking: tier, trade-type and exchange must match
 		// otherwise; abort loop and fail
-		if ((iCustTier != commissionRow.CR_C_TIER()) ||
-		    (tradeTypeRow.TT_ID().compare(commissionRow.CR_TT_ID())) ||
+		if ((iCustTier != commissionRow.CR_C_TIER()) || (tradeTypeRow.TT_ID().compare(commissionRow.CR_TT_ID())) ||
 		    (securityRow.S_EX_ID().compare(commissionRow.CR_EX_ID()))) {
 			break;
 		}
 
 		// check for proper quantity
-		if (iTradeQty >= commissionRow.CR_FROM_QTY() &&
-		    iTradeQty <= commissionRow.CR_TO_QTY()) {
+		if (iTradeQty >= commissionRow.CR_FROM_QTY() && iTradeQty <= commissionRow.CR_TO_QTY()) {
 			// found the correct commission rate
-			m_CompletedTradeInfo.Commission =
-			    (iTradeQty * GetCurrentTradePrice()) * commissionRow.CR_RATE() /
-			    100.0;
+			m_CompletedTradeInfo.Commission = (iTradeQty * GetCurrentTradePrice()) * commissionRow.CR_RATE() / 100.0;
 			return;
 		}
 	}
@@ -1210,17 +1092,12 @@ void CTradeGen::GenerateTradeTax() {
 
 	CustomerAD_ID = m_AddressTable.GetAD_IDForCustomer(GetCurrentCustID());
 
-	m_AddressTable.GetDivisionAndCountryCodesForAddress(CustomerAD_ID, iDivCode,
-	                                                    iCtryCode);
+	m_AddressTable.GetDivisionAndCountryCodesForAddress(CustomerAD_ID, iDivCode, iCtryCode);
 
 	fProceeds = GetCurrentTradeSellValue() - GetCurrentTradeBuyValue();
 
-	fCtryRate =
-	    m_CustTaxrateTable.GetCountryTaxRow(GetCurrentCustID(), iCtryCode)
-	        .TX_RATE();
-	fDivRate =
-	    m_CustTaxrateTable.GetDivisionTaxRow(GetCurrentCustID(), iDivCode)
-	        .TX_RATE();
+	fCtryRate = m_CustTaxrateTable.GetCountryTaxRow(GetCurrentCustID(), iCtryCode).TX_RATE();
+	fDivRate = m_CustTaxrateTable.GetDivisionTaxRow(GetCurrentCustID(), iDivCode).TX_RATE();
 
 	// Do a trick for proper rounding of resulting tax amount.
 	// Txn rates (fCtryRate and fDivRate) have 4 digits after a floating point
@@ -1232,9 +1109,7 @@ void CTradeGen::GenerateTradeTax() {
 	// This is all to match the database calculation of T_TAX done by runtime
 	// transactions.
 	//
-	m_CompletedTradeInfo.Tax =
-	    fProceeds *
-	    ((double)((int)(10000.0 * (fCtryRate + fDivRate) + 0.5)) / 10000.0);
+	m_CompletedTradeInfo.Tax = fProceeds * ((double)((int)(10000.0 * (fCtryRate + fDivRate) + 0.5)) / 10000.0);
 }
 
 /*
@@ -1248,29 +1123,25 @@ void CTradeGen::GenerateTradeTax() {
  *
  */
 void CTradeGen::GenerateTradeHistoryRow() {
-	if (GetCurrentTradeType() == eStopLoss ||
-	    GetCurrentTradeType() == eLimitSell ||
+	if (GetCurrentTradeType() == eStopLoss || GetCurrentTradeType() == eLimitSell ||
 	    GetCurrentTradeType() == eLimitBuy) {
 		m_iTradeHistoryRowCount = 3; // insert 3 rows
 
 		// insert Pending record
 		m_TradeRow.m_TradeHistory[0].TH_T_ID = GetCurrentTradeID();
-		strncpy(m_TradeRow.m_TradeHistory[0].TH_ST_ID,
-		        m_StatusTypeFile[ePending].ST_ID_CSTR(),
+		strncpy(m_TradeRow.m_TradeHistory[0].TH_ST_ID, m_StatusTypeFile[ePending].ST_ID_CSTR(),
 		        sizeof(m_TradeRow.m_TradeHistory[0].TH_ST_ID));
 		m_TradeRow.m_TradeHistory[0].TH_DTS = GetCurrentTradePendingTime();
 
 		// insert Submitted record
 		m_TradeRow.m_TradeHistory[1].TH_T_ID = GetCurrentTradeID();
-		strncpy(m_TradeRow.m_TradeHistory[1].TH_ST_ID,
-		        m_StatusTypeFile[eSubmitted].ST_ID_CSTR(),
+		strncpy(m_TradeRow.m_TradeHistory[1].TH_ST_ID, m_StatusTypeFile[eSubmitted].ST_ID_CSTR(),
 		        sizeof(m_TradeRow.m_TradeHistory[1].TH_ST_ID));
 		m_TradeRow.m_TradeHistory[1].TH_DTS = GetCurrentTradeSubmissionTime();
 
 		// insert Completed record
 		m_TradeRow.m_TradeHistory[2].TH_T_ID = GetCurrentTradeID();
-		strncpy(m_TradeRow.m_TradeHistory[2].TH_ST_ID,
-		        m_StatusTypeFile[eCompleted].ST_ID_CSTR(),
+		strncpy(m_TradeRow.m_TradeHistory[2].TH_ST_ID, m_StatusTypeFile[eCompleted].ST_ID_CSTR(),
 		        sizeof(m_TradeRow.m_TradeHistory[2].TH_ST_ID));
 		m_TradeRow.m_TradeHistory[2].TH_DTS = GetCurrentTradeCompletionTime();
 	} else {
@@ -1278,15 +1149,13 @@ void CTradeGen::GenerateTradeHistoryRow() {
 
 		// insert Submitted record
 		m_TradeRow.m_TradeHistory[0].TH_T_ID = GetCurrentTradeID();
-		strncpy(m_TradeRow.m_TradeHistory[0].TH_ST_ID,
-		        m_StatusTypeFile[eSubmitted].ST_ID_CSTR(),
+		strncpy(m_TradeRow.m_TradeHistory[0].TH_ST_ID, m_StatusTypeFile[eSubmitted].ST_ID_CSTR(),
 		        sizeof(m_TradeRow.m_TradeHistory[0].TH_ST_ID));
 		m_TradeRow.m_TradeHistory[0].TH_DTS = GetCurrentTradeSubmissionTime();
 
 		// insert Completed record
 		m_TradeRow.m_TradeHistory[1].TH_T_ID = GetCurrentTradeID();
-		strncpy(m_TradeRow.m_TradeHistory[1].TH_ST_ID,
-		        m_StatusTypeFile[eCompleted].ST_ID_CSTR(),
+		strncpy(m_TradeRow.m_TradeHistory[1].TH_ST_ID, m_StatusTypeFile[eCompleted].ST_ID_CSTR(),
 		        sizeof(m_TradeRow.m_TradeHistory[1].TH_ST_ID));
 		m_TradeRow.m_TradeHistory[1].TH_DTS = GetCurrentTradeCompletionTime();
 	}
@@ -1307,14 +1176,11 @@ void CTradeGen::GenerateSettlementAmount() {
 	//  Settlement amount calculation matching Trade Result Frame 6.
 	//
 	if (m_TradeTypeFile[GetCurrentTradeType()].TT_IS_SELL()) {
-		m_CompletedTradeInfo.SettlementAmount =
-		    GetCurrentTradeQty() * GetCurrentTradePrice() -
-		    m_CompletedTradeInfo.Charge - m_CompletedTradeInfo.Commission;
+		m_CompletedTradeInfo.SettlementAmount = GetCurrentTradeQty() * GetCurrentTradePrice() -
+		                                        m_CompletedTradeInfo.Charge - m_CompletedTradeInfo.Commission;
 	} else {
-		m_CompletedTradeInfo.SettlementAmount =
-		    -1 *
-		    (GetCurrentTradeQty() * GetCurrentTradePrice() +
-		     m_CompletedTradeInfo.Charge + m_CompletedTradeInfo.Commission);
+		m_CompletedTradeInfo.SettlementAmount = -1 * (GetCurrentTradeQty() * GetCurrentTradePrice() +
+		                                              m_CompletedTradeInfo.Charge + m_CompletedTradeInfo.Commission);
 	}
 
 	switch (GetCurrentTaxStatus()) {
@@ -1348,17 +1214,13 @@ void CTradeGen::GenerateCashTransactionRow() {
 
 		m_TradeRow.m_CashTransaction.CT_DTS = GetCurrentTradeCompletionTime();
 		m_TradeRow.m_CashTransaction.CT_T_ID = GetCurrentTradeID();
-		m_TradeRow.m_CashTransaction.CT_AMT =
-		    GetCurrentSettlementAmount().DollarAmount();
+		m_TradeRow.m_CashTransaction.CT_AMT = GetCurrentSettlementAmount().DollarAmount();
 
-		m_SecurityTable.CreateName(GetCurrentSecurityIndex(), S_NAME,
-		                           static_cast<int>(sizeof(S_NAME)));
+		m_SecurityTable.CreateName(GetCurrentSecurityIndex(), S_NAME, static_cast<int>(sizeof(S_NAME)));
 
-		snprintf(m_TradeRow.m_CashTransaction.CT_NAME,
-		         sizeof(m_TradeRow.m_CashTransaction.CT_NAME),
-		         "%s %d shares of %s",
-		         m_TradeTypeFile[GetCurrentTradeType()].TT_NAME_CSTR(),
-		         GetCurrentTradeQty(), S_NAME);
+		snprintf(m_TradeRow.m_CashTransaction.CT_NAME, sizeof(m_TradeRow.m_CashTransaction.CT_NAME),
+		         "%s %d shares of %s", m_TradeTypeFile[GetCurrentTradeType()].TT_NAME_CSTR(), GetCurrentTradeQty(),
+		         S_NAME);
 	} else {
 		m_iCashTransactionRowCount = 0; // no rows to insert
 	}
@@ -1380,17 +1242,14 @@ void CTradeGen::GenerateSettlementRow() {
 	m_TradeRow.m_Settlement.SE_T_ID = GetCurrentTradeID();
 
 	if (GetCurrentTradeIsCash()) {
-		strncpy(m_TradeRow.m_Settlement.SE_CASH_TYPE, "Cash Account",
-		        sizeof(m_TradeRow.m_Settlement.SE_CASH_TYPE));
+		strncpy(m_TradeRow.m_Settlement.SE_CASH_TYPE, "Cash Account", sizeof(m_TradeRow.m_Settlement.SE_CASH_TYPE));
 	} else {
-		strncpy(m_TradeRow.m_Settlement.SE_CASH_TYPE, "Margin",
-		        sizeof(m_TradeRow.m_Settlement.SE_CASH_TYPE));
+		strncpy(m_TradeRow.m_Settlement.SE_CASH_TYPE, "Margin", sizeof(m_TradeRow.m_Settlement.SE_CASH_TYPE));
 	}
 
 	m_TradeRow.m_Settlement.SE_CASH_DUE_DATE = GetCurrentTradeCompletionTime();
 	m_TradeRow.m_Settlement.SE_CASH_DUE_DATE.Add(2, 0); // add two days
 	m_TradeRow.m_Settlement.SE_CASH_DUE_DATE.Set(0, 0, 0,
 	                                             0); // zero out time portion
-	m_TradeRow.m_Settlement.SE_AMT =
-	    GetCurrentSettlementAmount().DollarAmount();
+	m_TradeRow.m_Settlement.SE_AMT = GetCurrentSettlementAmount().DollarAmount();
 }

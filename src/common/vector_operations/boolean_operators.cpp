@@ -5,10 +5,10 @@
 //===--------------------------------------------------------------------===//
 
 #include "common/operator/boolean_operators.hpp"
-#include "common/vector_operations/vector_operations.hpp"
 
 #include "common/vector_operations/binary_loops.hpp"
 #include "common/vector_operations/unary_loops.hpp"
+#include "common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -16,12 +16,9 @@ using namespace std;
 //===--------------------------------------------------------------------===//
 // AND/OR
 //===--------------------------------------------------------------------===//
-template <class OP, class NULLOP>
-void templated_boolean_nullmask(Vector &left, Vector &right, Vector &result) {
+template <class OP, class NULLOP> void templated_boolean_nullmask(Vector &left, Vector &right, Vector &result) {
 	if (left.type != TypeId::BOOLEAN || right.type != TypeId::BOOLEAN) {
-		throw TypeMismatchException(
-		    left.type, right.type,
-		    "Conjunction can only be applied on boolean values");
+		throw TypeMismatchException(left.type, right.type, "Conjunction can only be applied on boolean values");
 	}
 
 	auto ldata = (bool *)left.data;
@@ -33,8 +30,7 @@ void templated_boolean_nullmask(Vector &left, Vector &right, Vector &result) {
 		bool constant = ldata[0];
 		VectorOperations::Exec(right, [&](size_t i, size_t k) {
 			result_data[i] = OP::Operation(constant, rdata[i]);
-			result.nullmask[i] = NULLOP::Operation(
-			    constant, rdata[i], left_null, right.nullmask[i]);
+			result.nullmask[i] = NULLOP::Operation(constant, rdata[i], left_null, right.nullmask[i]);
 		});
 		result.sel_vector = right.sel_vector;
 		result.count = right.count;
@@ -45,8 +41,7 @@ void templated_boolean_nullmask(Vector &left, Vector &right, Vector &result) {
 		assert(left.sel_vector == right.sel_vector);
 		VectorOperations::Exec(left, [&](size_t i, size_t k) {
 			result_data[i] = OP::Operation(ldata[i], rdata[i]);
-			result.nullmask[i] = NULLOP::Operation(
-			    ldata[i], rdata[i], left.nullmask[i], right.nullmask[i]);
+			result.nullmask[i] = NULLOP::Operation(ldata[i], rdata[i], left.nullmask[i], right.nullmask[i]);
 		});
 		result.sel_vector = left.sel_vector;
 		result.count = left.count;
@@ -56,13 +51,11 @@ void templated_boolean_nullmask(Vector &left, Vector &right, Vector &result) {
 }
 
 void VectorOperations::And(Vector &left, Vector &right, Vector &result) {
-	templated_boolean_nullmask<operators::And, operators::AndMask>(left, right,
-	                                                               result);
+	templated_boolean_nullmask<operators::And, operators::AndMask>(left, right, result);
 }
 
 void VectorOperations::Or(Vector &left, Vector &right, Vector &result) {
-	templated_boolean_nullmask<operators::Or, operators::OrMask>(left, right,
-	                                                             result);
+	templated_boolean_nullmask<operators::Or, operators::OrMask>(left, right, result);
 }
 
 void VectorOperations::Not(Vector &left, Vector &result) {

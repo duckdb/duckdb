@@ -1,4 +1,3 @@
-
 #include "parser/tableref/basetableref.hpp"
 #include "parser/transformer.hpp"
 

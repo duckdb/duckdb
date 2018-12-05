@@ -42,8 +42,8 @@ static size_t GetTupleSize(TypeId type) {
 }
 
 OrderIndex::OrderIndex(DataTable &table, vector<column_t> column_ids,
-                       std::vector<TypeId> types,
-                       std::vector<TypeId> expression_types,
+                       vector<TypeId> types,
+                       vector<TypeId> expression_types,
                        vector<unique_ptr<Expression>> expressions,
                        size_t initial_capacity)
     : Index(IndexType::ORDER_INDEX), table(table), column_ids(column_ids),

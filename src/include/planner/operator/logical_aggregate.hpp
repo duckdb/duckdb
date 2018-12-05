@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // planner/operator/logical_aggregate.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -17,62 +15,27 @@ namespace duckdb {
 //! LogicalAggregate represents an aggregate operation with (optional) GROUP BY
 //! operator.
 class LogicalAggregate : public LogicalOperator {
-  public:
-	LogicalAggregate(std::vector<std::unique_ptr<Expression>> select_list)
-	    : LogicalOperator(LogicalOperatorType::AGGREGATE_AND_GROUP_BY,
-	                      std::move(select_list)) {
+public:
+	LogicalAggregate(vector<unique_ptr<Expression>> select_list)
+	    : LogicalOperator(LogicalOperatorType::AGGREGATE_AND_GROUP_BY, std::move(select_list)) {
 	}
 
 	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
 
+	vector<string> GetNames() override;
+
 	//! The set of groups (optional).
-	std::vector<std::unique_ptr<Expression>> groups;
+	vector<unique_ptr<Expression>> groups;
 
-	size_t ExpressionCount() override {
-		return expressions.size() + groups.size();
-	}
+	size_t ExpressionCount() override;
+	Expression *GetExpression(size_t index) override;
+	void SetExpression(size_t index, unique_ptr<Expression> expr) override;
 
-	Expression *GetExpression(size_t index) override {
-		if (index >= ExpressionCount()) {
-			throw OutOfRangeException(
-			    "GetExpression(): Expression index out of range!");
-		}
-		if (index >= expressions.size()) {
-			return groups[index - expressions.size()].get();
-		}
-		return expressions[index].get();
-	}
+	string ParamsToString() const override;
 
-	void SetExpression(size_t index,
-	                   std::unique_ptr<Expression> expr) override {
-		if (index >= ExpressionCount()) {
-			throw OutOfRangeException(
-			    "SetExpression(): Expression index out of range!");
-		}
-		if (index >= expressions.size()) {
-			groups[index - expressions.size()] = std::move(expr);
-		} else {
-			expressions[index] = std::move(expr);
-		}
-	}
-
-	std::string ParamsToString() const override {
-		std::string result = LogicalOperator::ParamsToString();
-		if (groups.size() > 0) {
-			result += "[";
-			for (size_t i = 0; i < groups.size(); i++) {
-				auto &child = groups[i];
-				result += child->ToString();
-				if (i < groups.size() - 1) {
-					result += ", ";
-				}
-			}
-			result += "]";
-		}
-
-		return result;
-	}
+protected:
+	void ResolveTypes() override;
 };
 } // namespace duckdb

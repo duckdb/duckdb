@@ -1,4 +1,3 @@
-
 #include "parser/expression/case_expression.hpp"
 
 #include "common/exception.hpp"
@@ -19,9 +18,7 @@ unique_ptr<Expression> CaseExpression::Copy() {
 	return copy;
 }
 
-unique_ptr<Expression>
-CaseExpression::Deserialize(ExpressionDeserializeInformation *info,
-                            Deserializer &source) {
+unique_ptr<Expression> CaseExpression::Deserialize(ExpressionDeserializeInfo *info, Deserializer &source) {
 	if (info->children.size() != 3) {
 		// CASE requires three children
 		throw SerializationException("CASE requires three children!");

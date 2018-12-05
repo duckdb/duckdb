@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // function/scalar_function/year.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -17,11 +15,11 @@ namespace duckdb {
 namespace function {
 
 void year_function(Vector inputs[], size_t input_count, Vector &result);
-bool year_matches_arguments(std::vector<TypeId> &arguments);
-TypeId year_get_return_type(std::vector<TypeId> &arguments);
+bool year_matches_arguments(vector<TypeId> &arguments);
+TypeId year_get_return_type(vector<TypeId> &arguments);
 
 class YearFunction {
-  public:
+public:
 	static const char *GetName() {
 		return "year";
 	}

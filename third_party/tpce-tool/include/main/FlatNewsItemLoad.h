@@ -45,11 +45,11 @@
 namespace TPCE {
 
 class CFlatNewsItemLoad : public CFlatFileLoader<NEWS_ITEM_ROW> {
-  private:
+private:
 	CDateTime Flat_NI_DTS;
 	const std::string NewsItemRowFmt;
 
-  public:
+public:
 	CFlatNewsItemLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
 	    : CFlatFileLoader<NEWS_ITEM_ROW>(szFileName, FlatFileOutputMode),
 	      NewsItemRowFmt("%" PRId64 "|%s|%s|%s|%s|%s|%s\n"){};
@@ -59,14 +59,11 @@ class CFlatNewsItemLoad : public CFlatFileLoader<NEWS_ITEM_ROW> {
 	 */
 	void WriteNextRecord(const NEWS_ITEM_ROW &next_record) {
 		Flat_NI_DTS = next_record.NI_DTS;
-		int rc = fprintf(hOutFile, NewsItemRowFmt.c_str(), next_record.NI_ID,
-		                 next_record.NI_HEADLINE, next_record.NI_SUMMARY,
-		                 next_record.NI_ITEM,
-		                 Flat_NI_DTS.ToStr(FlatFileDateTimeFormat),
+		int rc = fprintf(hOutFile, NewsItemRowFmt.c_str(), next_record.NI_ID, next_record.NI_HEADLINE,
+		                 next_record.NI_SUMMARY, next_record.NI_ITEM, Flat_NI_DTS.ToStr(FlatFileDateTimeFormat),
 		                 next_record.NI_SOURCE, next_record.NI_AUTHOR);
 		if (rc < 0) {
-			throw CSystemErr(CSystemErr::eWriteFile,
-			                 "CFlatNewsItemLoad::WriteNextRecord");
+			throw CSystemErr(CSystemErr::eWriteFile, "CFlatNewsItemLoad::WriteNextRecord");
 		}
 	}
 };

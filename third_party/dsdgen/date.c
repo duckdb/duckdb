@@ -50,12 +50,10 @@
 #define D_CHARS "ymdYMD24" /* valid characters in a DBGDATE setting */
 #define MIN_DATE_INT 18000101
 
-static int m_days[2][13] = {
-    {0, 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334},
-    {0, 0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335}};
+static int m_days[2][13] = {{0, 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334},
+                            {0, 0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335}};
 static char *qtr_start[5] = {NULL, "01-01", "04-01", "07-01", "10-01"};
-char *weekday_names[8] = {NULL,        "Sunday",   "Monday", "Tuesday",
-                          "Wednesday", "Thursday", "Friday", "Saturday"};
+char *weekday_names[8] = {NULL, "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 /*
  * Routine: mk_date(void)
  * Purpose: initialize a date_t
@@ -113,32 +111,6 @@ int strtotime(char *str) {
 	return (res);
 }
 
-/*
- * Routine: strtodate(char *str)
- * Purpose: initialize a date_t
- * Algorithm:
- * Data Structures:
- * Params:
- * Returns: date_t *
- * Called By:
- * Calls:
- * Assumptions:
- * Side Effects:
- * TODO: None
- */
-date_t *strtodate(char *str) {
-	date_t *res;
-
-	res = (date_t *)malloc(sizeof(struct DATE_T));
-	MALLOC_CHECK(res);
-
-	if (sscanf(str, "%d-%d-%d", &res->year, &res->month, &res->day) != 3)
-		INTERNAL("Badly formed string in call to strtodate()");
-	res->flags = 0;
-	res->julian = dttoj(res);
-
-	return (res);
-}
 /*
  * Routine: jtodt(int src, date_t *dest)
  * Purpose: convert a number of julian days to a date_t
@@ -201,8 +173,8 @@ int dttoj(date_t *dt) {
 	/*
 	 * added 1 to get dttoj and jtodt to match
 	 */
-	res = dt->day + (153 * m - 457) / 5 + 365 * y + (int)floor(y / 4) -
-	      (int)floor(y / 100) + (int)floor(y / 400) + 1721118 + 1;
+	res = dt->day + (153 * m - 457) / 5 + 365 * y + (int)floor(y / 4) - (int)floor(y / 100) + (int)floor(y / 400) +
+	      1721118 + 1;
 
 	return (res);
 }
@@ -230,8 +202,7 @@ int strtodt(date_t *dest, char *s) {
 	}
 
 	if (sscanf(s, "%4d-%d-%d", &dest->year, &dest->month, &dest->day) != 3) {
-		fprintf(stderr,
-		        "ERROR: Invalid string to date conversion in strtodt\n");
+		fprintf(stderr, "ERROR: Invalid string to date conversion in strtodt\n");
 		nRetCode = -1;
 	}
 
@@ -478,8 +449,7 @@ int set_dow(date_t *d) {
  */
 int is_leap(int year) {
 
-	return (((year % 100) == 0) ? ((((year % 400) % 2) == 0) ? 1 : 0)
-	                            : ((year % 4) == 0) ? 1 : 0);
+	return (((year % 100) == 0) ? ((((year % 400) % 2) == 0) ? 1 : 0) : ((year % 4) == 0) ? 1 : 0);
 }
 
 /*
@@ -521,8 +491,7 @@ int getDateWeightFromJulian(jDay, nDistribution) {
 	jtodt(&dTemp, jDay);
 	nDay = day_number(&dTemp);
 
-	return (dist_weight(NULL, "calendar", nDay,
-	                    nDistribution + is_leap(dTemp.year)));
+	return (dist_weight(NULL, "calendar", nDay, nDistribution + is_leap(dTemp.year)));
 }
 
 /*

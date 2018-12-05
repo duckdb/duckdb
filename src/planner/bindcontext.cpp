@@ -1,27 +1,23 @@
-
-
 #include "planner/bindcontext.hpp"
 
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/tableref/subqueryref.hpp"
-
 #include "storage/column_statistics.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 SubqueryBinding::SubqueryBinding(SubqueryRef &subquery_, size_t index)
-    : Binding(BindingType::SUBQUERY, index),
-      subquery(subquery_.subquery.get()) {
+    : Binding(BindingType::SUBQUERY, index), subquery(subquery_.subquery.get()) {
+	auto &select_list = subquery->GetSelectList();
 	if (subquery_.column_name_alias.size() > 0) {
-		assert(subquery_.column_name_alias.size() ==
-		       subquery->select_list.size());
+		assert(subquery_.column_name_alias.size() == select_list.size());
 		for (auto &name : subquery_.column_name_alias) {
 			name_map[name] = names.size();
 			names.push_back(name);
 		}
 	} else {
-		for (auto &entry : subquery->select_list) {
+		for (auto &entry : select_list) {
 			auto name = entry->GetName();
 			name_map[name] = names.size();
 			names.push_back(name);
@@ -29,10 +25,11 @@ SubqueryBinding::SubqueryBinding(SubqueryRef &subquery_, size_t index)
 	}
 }
 
-SubqueryBinding::SubqueryBinding(SelectStatement *select_, size_t index)
+SubqueryBinding::SubqueryBinding(QueryNode *select_, size_t index)
     : Binding(BindingType::SUBQUERY, index), subquery(select_) {
 	// FIXME: double-check this
-	for (auto &entry : subquery->select_list) {
+	auto &select_list = subquery->GetSelectList();
+	for (auto &entry : select_list) {
 		auto name = entry->GetName();
 		name_map[name] = names.size();
 		names.push_back(name);
@@ -69,18 +66,16 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 		auto binding = kv.second.get();
 		if (HasMatchingBinding(binding, column_name)) {
 			if (!result.empty()) {
-				throw BinderException(
-				    "Ambiguous reference to column name \"%s\" (use: \"%s.%s\" "
-				    "or \"%s.%s\")",
-				    column_name.c_str(), result.c_str(), column_name.c_str(),
-				    kv.first.c_str(), column_name.c_str());
+				throw BinderException("Ambiguous reference to column name \"%s\" (use: \"%s.%s\" "
+				                      "or \"%s.%s\")",
+				                      column_name.c_str(), result.c_str(), column_name.c_str(), kv.first.c_str(),
+				                      column_name.c_str());
 			}
 			result = kv.first;
 		}
 	}
 
-	if (result.empty() &&
-	    expression_alias_map.find(column_name) != expression_alias_map.end()) {
+	if (result.empty() && expression_alias_map.find(column_name) != expression_alias_map.end()) {
 		return result; // empty result, will be bound to alias
 	}
 
@@ -88,9 +83,7 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 		if (parent) {
 			return parent->GetMatchingBinding(column_name);
 		}
-		throw BinderException(
-		    "Referenced column \"%s\" not found in FROM clause!",
-		    column_name.c_str());
+		throw BinderException("Referenced column \"%s\" not found in FROM clause!", column_name.c_str());
 	}
 	return result;
 }
@@ -100,8 +93,7 @@ void BindContext::BindColumn(ColumnRefExpression &expr, size_t depth) {
 		// empty table name, bind
 		auto entry = expression_alias_map.find(expr.column_name);
 		if (entry == expression_alias_map.end()) {
-			throw BinderException("Could not bind alias \"%s\"!",
-			                      expr.column_name.c_str());
+			throw BinderException("Could not bind alias \"%s\"!", expr.column_name.c_str());
 		}
 		expr.index = entry->second.first;
 		expr.reference = entry->second.second;
@@ -118,8 +110,7 @@ void BindContext::BindColumn(ColumnRefExpression &expr, size_t depth) {
 			max_depth = max(expr.depth, max_depth);
 			return;
 		}
-		throw BinderException("Referenced table \"%s\" not found!",
-		                      expr.table_name.c_str());
+		throw BinderException("Referenced table \"%s\" not found!", expr.table_name.c_str());
 	}
 	auto binding = match->second.get();
 	switch (binding->type) {
@@ -127,8 +118,7 @@ void BindContext::BindColumn(ColumnRefExpression &expr, size_t depth) {
 		auto dummy = (DummyTableBinding *)binding;
 		auto entry = dummy->bound_columns.find(expr.column_name);
 		if (entry == dummy->bound_columns.end()) {
-			throw BinderException("Referenced column \"%s\" not found table!",
-			                      expr.column_name.c_str());
+			throw BinderException("Referenced column \"%s\" not found table!", expr.column_name.c_str());
 		}
 		expr.index = entry->second->oid;
 		expr.return_type = entry->second->type;
@@ -138,9 +128,8 @@ void BindContext::BindColumn(ColumnRefExpression &expr, size_t depth) {
 		// base table
 		auto &table = *((TableBinding *)binding);
 		if (!table.table->ColumnExists(expr.column_name)) {
-			throw BinderException(
-			    "Table \"%s\" does not have a column named \"%s\"",
-			    expr.table_name.c_str(), expr.column_name.c_str());
+			throw BinderException("Table \"%s\" does not have a column named \"%s\"", expr.table_name.c_str(),
+			                      expr.column_name.c_str());
 		}
 		auto table_index = table.index;
 		auto entry = &table.table->GetColumn(expr.column_name);
@@ -176,41 +165,36 @@ void BindContext::BindColumn(ColumnRefExpression &expr, size_t depth) {
 		auto &subquery = *((SubqueryBinding *)binding);
 		auto column_entry = subquery.name_map.find(expr.column_name);
 		if (column_entry == subquery.name_map.end()) {
-			throw BinderException(
-			    "Subquery \"%s\" does not have a column named \"%s\"",
-			    match->first.c_str(), expr.column_name.c_str());
+			throw BinderException("Subquery \"%s\" does not have a column named \"%s\"", match->first.c_str(),
+			                      expr.column_name.c_str());
 		}
 
 		expr.binding.table_index = subquery.index;
 		expr.binding.column_index = column_entry->second;
 		expr.depth = depth;
-		assert(column_entry->second < subquery.subquery->select_list.size());
-		expr.return_type =
-		    subquery.subquery->select_list[column_entry->second]->return_type;
+		auto &select_list = subquery.subquery->GetSelectList();
+		assert(column_entry->second < select_list.size());
+		expr.return_type = select_list[column_entry->second]->return_type;
 		break;
 	}
 	case BindingType::TABLE_FUNCTION: {
 		auto &table_function = *((TableFunctionBinding *)binding);
-		auto column_entry =
-		    table_function.function->name_map.find(expr.column_name);
+		auto column_entry = table_function.function->name_map.find(expr.column_name);
 		if (column_entry == table_function.function->name_map.end()) {
-			throw BinderException(
-			    "Table Function \"%s\" does not have a column named \"%s\"",
-			    match->first.c_str(), expr.column_name.c_str());
+			throw BinderException("Table Function \"%s\" does not have a column named \"%s\"", match->first.c_str(),
+			                      expr.column_name.c_str());
 		}
 
 		expr.binding.table_index = table_function.index;
 		expr.binding.column_index = column_entry->second;
 		expr.depth = depth;
-		expr.return_type =
-		    table_function.function->return_values[column_entry->second].type;
+		expr.return_type = table_function.function->return_values[column_entry->second].type;
 		break;
 	}
 	}
 }
 
-void BindContext::GenerateAllColumnExpressions(
-    vector<unique_ptr<Expression>> &new_select_list) {
+void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<Expression>> &new_select_list) {
 	if (bindings_list.size() == 0) {
 		throw BinderException("SELECT * expression without FROM clause!");
 	}
@@ -226,24 +210,21 @@ void BindContext::GenerateAllColumnExpressions(
 		case BindingType::TABLE: {
 			auto &table = *((TableBinding *)binding);
 			for (auto &column : table.table->columns) {
-				new_select_list.push_back(
-				    make_unique<ColumnRefExpression>(column.name, name));
+				new_select_list.push_back(make_unique<ColumnRefExpression>(column.name, name));
 			}
 			break;
 		}
 		case BindingType::SUBQUERY: {
 			auto &subquery = *((SubqueryBinding *)binding);
 			for (auto &column_name : subquery.names) {
-				new_select_list.push_back(
-				    make_unique<ColumnRefExpression>(column_name, name));
+				new_select_list.push_back(make_unique<ColumnRefExpression>(column_name, name));
 			}
 			break;
 		}
 		case BindingType::TABLE_FUNCTION: {
 			auto &table_function = *((TableFunctionBinding *)binding);
 			for (auto &column : table_function.function->return_values) {
-				new_select_list.push_back(
-				    make_unique<ColumnRefExpression>(column.name, name));
+				new_select_list.push_back(make_unique<ColumnRefExpression>(column.name, name));
 			}
 			break;
 		}
@@ -253,21 +234,18 @@ void BindContext::GenerateAllColumnExpressions(
 
 void BindContext::AddBinding(const string &alias, unique_ptr<Binding> binding) {
 	if (HasAlias(alias)) {
-		throw BinderException("Duplicate alias \"%s\" in query!",
-		                      alias.c_str());
+		throw BinderException("Duplicate alias \"%s\" in query!", alias.c_str());
 	}
 	bindings_list.push_back(make_pair(alias, binding.get()));
 	bindings[alias] = move(binding);
 }
-size_t BindContext::AddBaseTable(const string &alias,
-                                 TableCatalogEntry *table_entry) {
+size_t BindContext::AddBaseTable(const string &alias, TableCatalogEntry *table_entry) {
 	size_t index = GenerateTableIndex();
 	AddBinding(alias, make_unique<TableBinding>(table_entry, index));
 	return index;
 }
 
-void BindContext::AddDummyTable(const string &alias,
-                                vector<ColumnDefinition> &columns) {
+void BindContext::AddDummyTable(const string &alias, vector<ColumnDefinition> &columns) {
 	// alias is empty for dummy table
 	// initialize the OIDs of the column definitions
 	for (size_t i = 0; i < columns.size(); i++) {
@@ -282,16 +260,13 @@ size_t BindContext::AddSubquery(const string &alias, SubqueryRef &subquery) {
 	return index;
 }
 
-size_t
-BindContext::AddTableFunction(const string &alias,
-                              TableFunctionCatalogEntry *function_entry) {
+size_t BindContext::AddTableFunction(const string &alias, TableFunctionCatalogEntry *function_entry) {
 	size_t index = GenerateTableIndex();
 	AddBinding(alias, make_unique<TableFunctionBinding>(function_entry, index));
 	return index;
 }
 
-void BindContext::AddExpression(const string &alias, Expression *expression,
-                                size_t i) {
+void BindContext::AddExpression(const string &alias, Expression *expression, size_t i) {
 	expression_alias_map[alias] = make_pair(i, expression);
 }
 

@@ -1,28 +1,20 @@
-
 #include "storage/data_table.hpp"
 
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "common/exception.hpp"
 #include "common/helper.hpp"
 #include "common/vector_operations/vector_operations.hpp"
-
 #include "execution/expression_executor.hpp"
-
 #include "main/client_context.hpp"
-
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-
+#include "parser/constraints/list.hpp"
 #include "transaction/transaction.hpp"
 #include "transaction/transaction_manager.hpp"
-
-#include "parser/constraints/list.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-DataTable::DataTable(StorageManager &storage, std::string schema,
-                     std::string table, std::vector<TypeId> types_)
-    : schema(schema), table(table), types(types_), serializer(types),
-      storage(storage) {
+DataTable::DataTable(StorageManager &storage, string schema, string table, vector<TypeId> types_)
+    : schema(schema), table(table), types(types_), serializer(types), storage(storage) {
 	size_t accumulative_size = 0;
 	for (size_t i = 0; i < types.size(); i++) {
 		accumulative_tuple_size.push_back(accumulative_size);
@@ -30,23 +22,10 @@ DataTable::DataTable(StorageManager &storage, std::string schema,
 	}
 	tuple_size = accumulative_size;
 	// create empty statistics for the table
-	statistics =
-	    unique_ptr<ColumnStatistics[]>(new ColumnStatistics[types.size()]);
+	statistics = unique_ptr<ColumnStatistics[]>(new ColumnStatistics[types.size()]);
 	// initialize the table with an empty data chunk
 	chunk_list = make_unique<StorageChunk>(*this, 0);
 	tail_chunk = chunk_list.get();
-}
-
-vector<TypeId> DataTable::GetTypes(const vector<column_t> &column_ids) {
-	vector<TypeId> result;
-	for (auto &index : column_ids) {
-		if (index == COLUMN_IDENTIFIER_ROW_ID) {
-			result.push_back(TypeId::POINTER);
-		} else {
-			result.push_back(types[index]);
-		}
-	}
-	return result;
 }
 
 void DataTable::InitializeScan(ScanStructure &structure) {
@@ -61,8 +40,7 @@ StorageChunk *DataTable::GetChunk(size_t row_number) {
 	// has exactly STORAGE_CHUNK_SIZE elements
 	StorageChunk *chunk = chunk_list.get();
 	while (chunk) {
-		if (row_number >= chunk->start &&
-		    row_number < chunk->start + chunk->count) {
+		if (row_number >= chunk->start && row_number < chunk->start + chunk->count) {
 			return chunk;
 		}
 		chunk = chunk->next.get();
@@ -70,44 +48,36 @@ StorageChunk *DataTable::GetChunk(size_t row_number) {
 	throw OutOfRangeException("Row identifiers out of bounds!");
 }
 
-void DataTable::VerifyConstraints(TableCatalogEntry &table,
-                                  ClientContext &context, DataChunk &chunk) {
+void DataTable::VerifyConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
 	for (auto &constraint : table.constraints) {
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
-			auto &not_null =
-			    *reinterpret_cast<NotNullConstraint *>(constraint.get());
+			auto &not_null = *reinterpret_cast<NotNullConstraint *>(constraint.get());
 			if (VectorOperations::HasNull(chunk.data[not_null.index])) {
-				throw ConstraintException(
-				    "NOT NULL constraint failed: %s.%s", table.name.c_str(),
-				    table.columns[not_null.index].name.c_str());
+				throw ConstraintException("NOT NULL constraint failed: %s.%s", table.name.c_str(),
+				                          table.columns[not_null.index].name.c_str());
 			}
 			break;
 		}
 		case ConstraintType::CHECK: {
-			auto &check =
-			    *reinterpret_cast<CheckConstraint *>(constraint.get());
+			auto &check = *reinterpret_cast<CheckConstraint *>(constraint.get());
 			ExpressionExecutor executor(chunk, context);
 
 			Vector result(TypeId::INTEGER, true, false);
 			try {
 				executor.ExecuteExpression(check.expression.get(), result);
 			} catch (Exception &ex) {
-				throw ConstraintException(
-				    "CHECK constraint failed: %s (Error: %s)",
-				    table.name.c_str(), ex.GetMessage().c_str());
+				throw ConstraintException("CHECK constraint failed: %s (Error: %s)", table.name.c_str(),
+				                          ex.GetMessage().c_str());
 			} catch (...) {
-				throw ConstraintException(
-				    "CHECK constraint failed: %s (Unknown Error)",
-				    table.name.c_str());
+				throw ConstraintException("CHECK constraint failed: %s (Unknown Error)", table.name.c_str());
 			}
 
 			int *dataptr = (int *)result.data;
 			for (size_t i = 0; i < result.count; i++) {
 				size_t index = result.sel_vector ? result.sel_vector[i] : i;
 				if (!result.nullmask[index] && dataptr[index] == 0) {
-					throw ConstraintException("CHECK constraint failed: %s",
-					                          table.name.c_str());
+					throw ConstraintException("CHECK constraint failed: %s", table.name.c_str());
 				}
 			}
 			break;
@@ -127,8 +97,7 @@ void DataTable::VerifyConstraints(TableCatalogEntry &table,
 	}
 }
 
-void DataTable::Append(TableCatalogEntry &table, ClientContext &context,
-                       DataChunk &chunk) {
+void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
 	if (chunk.size() == 0) {
 		return;
 	}
@@ -158,8 +127,7 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context,
 
 	// first we handle any PRIMARY KEY and UNIQUE constraints
 	auto error =
-	    UniqueIndex::Append(context.ActiveTransaction(), unique_indexes, chunk,
-	                        last_chunk->start + last_chunk->count);
+	    UniqueIndex::Append(context.ActiveTransaction(), unique_indexes, chunk, last_chunk->start + last_chunk->count);
 	if (!error.empty()) {
 		last_chunk->ReleaseExclusiveLock();
 		throw ConstraintException(error);
@@ -179,22 +147,17 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context,
 	Transaction &transaction = context.ActiveTransaction();
 
 	// first copy as much as can fit into the current chunk
-	size_t current_count =
-	    min(STORAGE_CHUNK_SIZE - last_chunk->count, chunk.size());
+	size_t current_count = min(STORAGE_CHUNK_SIZE - last_chunk->count, chunk.size());
 	if (current_count > 0) {
 		// in the undo buffer, create entries with the "deleted" flag for each
 		// tuple so other transactions see the deleted entries before these
 		// changes are committed
-		transaction.PushDeletedEntries(
-		    last_chunk->count, current_count, last_chunk,
-		    last_chunk->version_pointers + last_chunk->count);
+		transaction.PushDeletedEntries(last_chunk->count, current_count, last_chunk,
+		                               last_chunk->version_pointers + last_chunk->count);
 		// now insert the elements into the vector
 		for (size_t i = 0; i < chunk.column_count; i++) {
-			char *target =
-			    last_chunk->columns[i] +
-			    last_chunk->count * GetTypeIdSize(table.columns[i].type);
-			VectorOperations::CopyToStorage(chunk.data[i], target, 0,
-			                                current_count);
+			char *target = last_chunk->columns[i] + last_chunk->count * GetTypeIdSize(table.columns[i].type);
+			VectorOperations::CopyToStorage(chunk.data[i], target, 0, current_count);
 		}
 		// now increase the count of the chunk
 		last_chunk->count += current_count;
@@ -204,8 +167,7 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context,
 	if (current_count != chunk.size()) {
 		// we need to append more entries
 		// first create a new chunk and lock it
-		auto new_chunk = make_unique<StorageChunk>(
-		    *this, last_chunk->start + last_chunk->count);
+		auto new_chunk = make_unique<StorageChunk>(*this, last_chunk->start + last_chunk->count);
 		new_chunk->GetExclusiveLock();
 		auto new_chunk_pointer = new_chunk.get();
 		assert(!last_chunk->next);
@@ -215,13 +177,11 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context,
 		// now append the remainder
 		size_t remainder = chunk.size() - current_count;
 		// first push the deleted entries
-		transaction.PushDeletedEntries(0, remainder, new_chunk_pointer,
-		                               new_chunk_pointer->version_pointers);
+		transaction.PushDeletedEntries(0, remainder, new_chunk_pointer, new_chunk_pointer->version_pointers);
 		// now insert the elements into the vector
 		for (size_t i = 0; i < chunk.column_count; i++) {
 			char *target = new_chunk_pointer->columns[i];
-			VectorOperations::CopyToStorage(chunk.data[i], target,
-			                                current_count, remainder);
+			VectorOperations::CopyToStorage(chunk.data[i], target, current_count, remainder);
 		}
 		new_chunk_pointer->count = remainder;
 		new_chunk_pointer->ReleaseExclusiveLock();
@@ -232,11 +192,9 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context,
 	last_chunk->ReleaseExclusiveLock();
 }
 
-void DataTable::Delete(TableCatalogEntry &table, ClientContext &context,
-                       Vector &row_identifiers) {
+void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_identifiers) {
 	if (row_identifiers.type != TypeId::POINTER) {
-		throw InvalidTypeException(row_identifiers.type,
-		                           "Row identifiers must be POINTER type!");
+		throw InvalidTypeException(row_identifiers.type, "Row identifiers must be POINTER type!");
 	}
 	if (row_identifiers.count == 0) {
 		return;
@@ -275,12 +233,10 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context,
 	chunk->ReleaseExclusiveLock();
 }
 
-void DataTable::Update(TableCatalogEntry &table, ClientContext &context,
-                       Vector &row_identifiers, vector<column_t> &column_ids,
-                       DataChunk &updates) {
+void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector &row_identifiers,
+                       vector<column_t> &column_ids, DataChunk &updates) {
 	if (row_identifiers.type != TypeId::POINTER) {
-		throw InvalidTypeException(row_identifiers.type,
-		                           "Row identifiers must be POINTER type!");
+		throw InvalidTypeException(row_identifiers.type, "Row identifiers must be POINTER type!");
 	}
 	updates.Verify();
 	if (row_identifiers.count == 0) {
@@ -306,8 +262,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context,
 
 	// first we handle any PRIMARY KEY and UNIQUE constraints
 	if (unique_indexes.size() > 0) {
-		auto error = UniqueIndex::Update(context.ActiveTransaction(), chunk,
-		                                 unique_indexes, column_ids, updates,
+		auto error = UniqueIndex::Update(context.ActiveTransaction(), chunk, unique_indexes, column_ids, updates,
 		                                 row_identifiers);
 		if (!error.empty()) {
 			chunk->ReleaseExclusiveLock();
@@ -358,8 +313,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context,
 		VectorOperations::Exec(row_identifiers, [&](size_t i, size_t k) {
 			auto id = ids[i] - chunk->start;
 			auto dataptr = base_data + id * size;
-			auto update_index =
-			    update_vector->sel_vector ? update_vector->sel_vector[k] : k;
+			auto update_index = update_vector->sel_vector ? update_vector->sel_vector[k] : k;
 			memcpy(dataptr, update_vector->data + update_index * size, size);
 		});
 
@@ -371,10 +325,8 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context,
 	chunk->ReleaseExclusiveLock();
 }
 
-void DataTable::RetrieveVersionedData(DataChunk &result,
-                                      const vector<column_t> &column_ids,
-                                      uint8_t *alternate_version_pointers[],
-                                      size_t alternate_version_index[],
+void DataTable::RetrieveVersionedData(DataChunk &result, const vector<column_t> &column_ids,
+                                      uint8_t *alternate_version_pointers[], size_t alternate_version_index[],
                                       size_t alternate_version_count) {
 	if (alternate_version_count == 0) {
 		return;
@@ -383,16 +335,14 @@ void DataTable::RetrieveVersionedData(DataChunk &result,
 	for (size_t j = 0; j < column_ids.size(); j++) {
 		if (column_ids[j] == COLUMN_IDENTIFIER_ROW_ID) {
 			// assign the row identifiers
-			auto data =
-			    ((uint64_t *)result.data[j].data) + result.data[j].count;
+			auto data = ((uint64_t *)result.data[j].data) + result.data[j].count;
 			for (size_t k = 0; k < alternate_version_count; k++) {
 				data[k] = alternate_version_index[k];
 			}
 		} else {
 			// grab data from the stored tuple for each column
 			size_t tuple_size = GetTypeIdSize(result.data[j].type);
-			auto res_data =
-			    result.data[j].data + result.data[j].count * tuple_size;
+			auto res_data = result.data[j].data + result.data[j].count * tuple_size;
 			size_t offset = accumulative_tuple_size[column_ids[j]];
 			for (size_t k = 0; k < alternate_version_count; k++) {
 				auto base_data = alternate_version_pointers[k] + offset;
@@ -404,12 +354,8 @@ void DataTable::RetrieveVersionedData(DataChunk &result,
 	}
 }
 
-void DataTable::RetrieveBaseTableData(DataChunk &result,
-                                      const vector<column_t> &column_ids,
-                                      sel_t regular_entries[],
-                                      size_t regular_count,
-                                      StorageChunk *current_chunk,
-                                      size_t current_offset) {
+void DataTable::RetrieveBaseTableData(DataChunk &result, const vector<column_t> &column_ids, sel_t regular_entries[],
+                                      size_t regular_count, StorageChunk *current_chunk, size_t current_offset) {
 	if (regular_count == 0) {
 		return;
 	}
@@ -418,18 +364,15 @@ void DataTable::RetrieveBaseTableData(DataChunk &result,
 			// generate the row identifiers
 			// first generate a sequence of identifiers
 			assert(result.data[j].type == TypeId::POINTER);
-			auto column_indexes =
-			    ((uint64_t *)result.data[j].data + result.data[j].count);
+			auto column_indexes = ((uint64_t *)result.data[j].data + result.data[j].count);
 			for (size_t i = 0; i < regular_count; i++) {
-				column_indexes[i] =
-				    current_chunk->start + current_offset + regular_entries[i];
+				column_indexes[i] = current_chunk->start + current_offset + regular_entries[i];
 			}
 			result.data[j].count += regular_count;
 		} else {
 			// normal column
 			// grab the data from the source using a selection vector
-			char *dataptr = current_chunk->columns[column_ids[j]] +
-			                GetTypeIdSize(result.data[j].type) * current_offset;
+			char *dataptr = current_chunk->columns[column_ids[j]] + GetTypeIdSize(result.data[j].type) * current_offset;
 			Vector source(result.data[j].type, dataptr);
 			source.sel_vector = regular_entries;
 			source.count = regular_count;
@@ -439,8 +382,7 @@ void DataTable::RetrieveBaseTableData(DataChunk &result,
 	}
 }
 
-void DataTable::Scan(Transaction &transaction, DataChunk &result,
-                     const vector<column_t> &column_ids,
+void DataTable::Scan(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids,
                      ScanStructure &structure) {
 	// scan the base table
 	while (structure.chunk) {
@@ -449,15 +391,12 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result,
 		current_chunk->GetSharedLock();
 		// now scan the chunk until we find enough pieces to fill a vector or
 		// reach the end
-		sel_t regular_entries[STANDARD_VECTOR_SIZE],
-		    version_entries[STANDARD_VECTOR_SIZE];
+		sel_t regular_entries[STANDARD_VECTOR_SIZE], version_entries[STANDARD_VECTOR_SIZE];
 		size_t regular_count = 0, version_count = 0;
-		size_t end = min((size_t)STANDARD_VECTOR_SIZE,
-		                 current_chunk->count - structure.offset);
+		size_t end = min((size_t)STANDARD_VECTOR_SIZE, current_chunk->count - structure.offset);
 		for (size_t i = 0; i < end; i++) {
 			version_entries[version_count] = regular_entries[regular_count] = i;
-			bool has_version =
-			    current_chunk->version_pointers[structure.offset + i];
+			bool has_version = current_chunk->version_pointers[structure.offset + i];
 			bool is_deleted = current_chunk->deleted[structure.offset + i];
 			version_count += has_version;
 			regular_count += !(is_deleted || has_version);
@@ -470,15 +409,11 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result,
 			size_t alternate_version_count = 0;
 
 			for (size_t i = 0; i < version_count; i++) {
-				auto version =
-				    current_chunk->version_pointers[structure.offset +
-				                                    version_entries[i]];
-				if (!version ||
-				    (version->version_number == transaction.transaction_id ||
-				     version->version_number < transaction.start_time)) {
+				auto version = current_chunk->version_pointers[structure.offset + version_entries[i]];
+				if (!version || (version->version_number == transaction.transaction_id ||
+				                 version->version_number < transaction.start_time)) {
 					// use the data in the original table
-					if (!current_chunk
-					         ->deleted[structure.offset + version_entries[i]]) {
+					if (!current_chunk->deleted[structure.offset + version_entries[i]]) {
 						regular_entries[regular_count++] = version_entries[i];
 					}
 				} else {
@@ -489,8 +424,7 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result,
 							// use this version: no predecessor
 							break;
 						}
-						if (next->version_number ==
-						    transaction.transaction_id) {
+						if (next->version_number == transaction.transaction_id) {
 							// use this version: it was created by us
 							break;
 						}
@@ -503,21 +437,17 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result,
 					if (!version->tuple_data) {
 						continue;
 					} else {
-						alternate_version_pointers[alternate_version_count] =
-						    version->tuple_data;
-						alternate_version_index[alternate_version_count] =
-						    structure.offset + version_entries[i];
+						alternate_version_pointers[alternate_version_count] = version->tuple_data;
+						alternate_version_index[alternate_version_count] = structure.offset + version_entries[i];
 						alternate_version_count++;
 					}
 				}
 			}
-			RetrieveVersionedData(
-			    result, column_ids, alternate_version_pointers,
-			    alternate_version_index, alternate_version_count);
+			RetrieveVersionedData(result, column_ids, alternate_version_pointers, alternate_version_index,
+			                      alternate_version_count);
 		}
 		// copy the regular entries
-		RetrieveBaseTableData(result, column_ids, regular_entries,
-		                      regular_count, current_chunk, structure.offset);
+		RetrieveBaseTableData(result, column_ids, regular_entries, regular_count, current_chunk, structure.offset);
 		// release the read lock
 		structure.offset += STANDARD_VECTOR_SIZE;
 		if (structure.offset >= current_chunk->count) {
@@ -531,8 +461,7 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result,
 	}
 }
 
-void DataTable::Fetch(Transaction &transaction, DataChunk &result,
-                      std::vector<column_t> &column_ids,
+void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids,
                       Vector &row_identifiers) {
 	assert(row_identifiers.type == TypeId::POINTER);
 	auto row_ids = (uint64_t *)row_identifiers.data;
@@ -565,7 +494,7 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result,
 			// tuple is versioned
 			// check which tuple to retrieve
 			if (version->version_number == transaction.transaction_id ||
-			      version->version_number < transaction.start_time) {
+			    version->version_number < transaction.start_time) {
 				// use the data in the original table
 				retrieve_base_version = true;
 			} else {
@@ -598,9 +527,7 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result,
 					alternate_version_pointer = version->tuple_data;
 					alternate_version_index = row_id;
 
-					RetrieveVersionedData(result, column_ids,
-					                      &alternate_version_pointer,
-					                      &alternate_version_index, 1);
+					RetrieveVersionedData(result, column_ids, &alternate_version_pointer, &alternate_version_index, 1);
 				}
 			}
 		}
@@ -609,17 +536,14 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result,
 			if (!chunk->deleted[index]) {
 				sel_t regular_entry = index;
 				// not versioned, just retrieve the base info
-				RetrieveBaseTableData(result, column_ids, &regular_entry, 1,
-				                      chunk);
+				RetrieveBaseTableData(result, column_ids, &regular_entry, 1, chunk);
 			}
 		}
 	}
 	current_chunk->ReleaseSharedLock();
 }
 
-void DataTable::CreateIndexScan(ScanStructure &structure,
-                                std::vector<column_t> &column_ids,
-                                DataChunk &result) {
+void DataTable::CreateIndexScan(ScanStructure &structure, vector<column_t> &column_ids, DataChunk &result) {
 	// scan the base table
 	size_t result_count = 0;
 	while (structure.chunk) {
@@ -642,8 +566,7 @@ void DataTable::CreateIndexScan(ScanStructure &structure,
 
 			if (!structure.version_chain) {
 				// first extract the current information, if not deleted
-				structure.version_chain =
-				    current_chunk->version_pointers[index];
+				structure.version_chain = current_chunk->version_pointers[index];
 				if (!current_chunk->deleted[index]) {
 					regular_entries[regular_count++] = index;
 					result_count++;
@@ -659,10 +582,8 @@ void DataTable::CreateIndexScan(ScanStructure &structure,
 			// now chase the version pointer, if any
 			while (structure.version_chain) {
 				if (structure.version_chain->tuple_data) {
-					alternate_version_pointers[alternate_version_count] =
-					    structure.version_chain->tuple_data;
-					alternate_version_index[alternate_version_count] =
-					    structure.offset;
+					alternate_version_pointers[alternate_version_count] = structure.version_chain->tuple_data;
+					alternate_version_index[alternate_version_count] = structure.offset;
 					alternate_version_count++;
 					result_count++;
 				}
@@ -686,12 +607,10 @@ void DataTable::CreateIndexScan(ScanStructure &structure,
 		}
 		if (result_count > 0) {
 			// first retrieve the versioned data
-			RetrieveVersionedData(
-			    result, column_ids, alternate_version_pointers,
-			    alternate_version_index, alternate_version_count);
+			RetrieveVersionedData(result, column_ids, alternate_version_pointers, alternate_version_index,
+			                      alternate_version_count);
 			// now retrieve the base column data
-			RetrieveBaseTableData(result, column_ids, regular_entries,
-			                      regular_count, current_chunk);
+			RetrieveBaseTableData(result, column_ids, regular_entries, regular_count, current_chunk);
 			return;
 		}
 	}

@@ -52,7 +52,7 @@ namespace TPCE {
 
 template <class T, class T2, INT32 Period, INT32 Resolution> class CTimerWheel {
 
-  private:
+private:
 	CDateTime m_BaseTime;
 
 	CWheelTime m_LastTime;
@@ -61,8 +61,7 @@ template <class T, class T2, INT32 Period, INT32 Resolution> class CTimerWheel {
 
 	TWheelConfig m_WheelConfig;
 
-	list<CTimerWheelTimer<T, T2> *>
-	    m_TimerWheel[(Period * (MsPerSecond / Resolution))];
+	list<CTimerWheelTimer<T, T2> *> m_TimerWheel[(Period * (MsPerSecond / Resolution))];
 
 	INT32 m_NumberOfTimers;
 
@@ -70,7 +69,7 @@ template <class T, class T2, INT32 Period, INT32 Resolution> class CTimerWheel {
 	void ProcessTimerList(list<CTimerWheelTimer<T, T2> *> *pList);
 	INT32 SetNextTime(void);
 
-  public:
+public:
 	static const INT32 NO_OUTSTANDING_TIMERS = -1;
 
 	CTimerWheel();
@@ -78,19 +77,15 @@ template <class T, class T2, INT32 Period, INT32 Resolution> class CTimerWheel {
 
 	bool Empty(void);
 	INT32 ProcessExpiredTimers(void);
-	INT32 StartTimer(double Offset, T2 *pExpiryObject,
-	                 void (T2::*pExpiryFunction)(T *), T *pExpiryData);
+	INT32 StartTimer(double Offset, T2 *pExpiryObject, void (T2::*pExpiryFunction)(T *), T *pExpiryData);
 
 }; // class CTimerWheel
 
 template <class T, class T2, INT32 Period, INT32 Resolution>
 CTimerWheel<T, T2, Period, Resolution>::CTimerWheel()
-    : m_BaseTime(), m_LastTime(&m_WheelConfig, 0, 0),
-      m_CurrentTime(&m_WheelConfig, 0, 0),
-      m_NextTime(&m_WheelConfig, MaxWheelCycles,
-                 (Period * (MsPerSecond / Resolution)) - 1),
-      m_WheelConfig((Period * (MsPerSecond / Resolution)), Resolution),
-      m_NumberOfTimers(0) {
+    : m_BaseTime(), m_LastTime(&m_WheelConfig, 0, 0), m_CurrentTime(&m_WheelConfig, 0, 0),
+      m_NextTime(&m_WheelConfig, MaxWheelCycles, (Period * (MsPerSecond / Resolution)) - 1),
+      m_WheelConfig((Period * (MsPerSecond / Resolution)), Resolution), m_NumberOfTimers(0) {
 	m_BaseTime.Set();
 }
 
@@ -111,20 +106,16 @@ CTimerWheel<T, T2, Period, Resolution>::~CTimerWheel(void) {
 	}
 }
 
-template <class T, class T2, INT32 Period, INT32 Resolution>
-bool CTimerWheel<T, T2, Period, Resolution>::Empty(void) {
+template <class T, class T2, INT32 Period, INT32 Resolution> bool CTimerWheel<T, T2, Period, Resolution>::Empty(void) {
 	return (m_NumberOfTimers == 0 ? true : false);
 }
 
 template <class T, class T2, INT32 Period, INT32 Resolution>
-INT32 CTimerWheel<T, T2, Period, Resolution>::StartTimer(
-    double Offset, T2 *pExpiryObject, void (T2::*pExpiryFunction)(T *),
-    T *pExpiryData) {
+INT32 CTimerWheel<T, T2, Period, Resolution>::StartTimer(double Offset, T2 *pExpiryObject,
+                                                         void (T2::*pExpiryFunction)(T *), T *pExpiryData) {
 	CDateTime Now;
-	CWheelTime RequestedTime(&m_WheelConfig, m_BaseTime, Now,
-	                         (INT32)(Offset * (MsPerSecond / Resolution)));
-	CTimerWheelTimer<T, T2> *pNewTimer = new CTimerWheelTimer<T, T2>(
-	    pExpiryObject, pExpiryFunction, pExpiryData);
+	CWheelTime RequestedTime(&m_WheelConfig, m_BaseTime, Now, (INT32)(Offset * (MsPerSecond / Resolution)));
+	CTimerWheelTimer<T, T2> *pNewTimer = new CTimerWheelTimer<T, T2>(pExpiryObject, pExpiryFunction, pExpiryData);
 
 	// Update current wheel position
 	m_CurrentTime.Set(m_BaseTime, Now);
@@ -165,15 +156,12 @@ INT32 CTimerWheel<T, T2, Period, Resolution>::ExpiryProcessing(void) {
 }
 
 template <class T, class T2, INT32 Period, INT32 Resolution>
-void CTimerWheel<T, T2, Period, Resolution>::ProcessTimerList(
-    list<CTimerWheelTimer<T, T2> *> *pList) {
+void CTimerWheel<T, T2, Period, Resolution>::ProcessTimerList(list<CTimerWheelTimer<T, T2> *> *pList) {
 	typename list<CTimerWheelTimer<T, T2> *>::iterator ExpiredTimer;
 
 	ExpiredTimer = pList->begin();
 	while (ExpiredTimer != pList->end()) {
-		(((*ExpiredTimer)->m_pExpiryObject)
-		     ->*((*ExpiredTimer)->m_pExpiryFunction))(
-		    (*ExpiredTimer)->m_pExpiryData);
+		(((*ExpiredTimer)->m_pExpiryObject)->*((*ExpiredTimer)->m_pExpiryFunction))((*ExpiredTimer)->m_pExpiryData);
 		delete *ExpiredTimer;
 		m_NumberOfTimers--;
 		ExpiredTimer++;
@@ -184,8 +172,7 @@ void CTimerWheel<T, T2, Period, Resolution>::ProcessTimerList(
 template <class T, class T2, INT32 Period, INT32 Resolution>
 INT32 CTimerWheel<T, T2, Period, Resolution>::SetNextTime(void) {
 	if (0 == m_NumberOfTimers) {
-		m_NextTime.Set(MaxWheelCycles,
-		               (Period * (MsPerSecond / Resolution)) - 1);
+		m_NextTime.Set(MaxWheelCycles, (Period * (MsPerSecond / Resolution)) - 1);
 		return (NO_OUTSTANDING_TIMERS);
 	} else {
 		m_NextTime = m_CurrentTime;
