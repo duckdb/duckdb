@@ -16,44 +16,6 @@ DuckDBConnection::DuckDBConnection(DuckDB &database) : db(database), context(dat
 DuckDBConnection::~DuckDBConnection() {
 }
 
-Appender *DuckDBConnection::GetAppender(string table_name, string schema) {
-	if (appender) {
-		throw Exception("Connection can only have one appender active at a time!");
-	}
-	// start a transaction if none is active at this point
-	if (context.transaction.IsAutoCommit()) {
-		context.transaction.BeginTransaction();
-	}
-	// get the table catalog entry
-	TableCatalogEntry *table_entry;
-	try {
-		table_entry = db.catalog.GetTable(context.transaction.ActiveTransaction(), schema, table_name);
-	} catch (...) {
-		if (context.transaction.IsAutoCommit()) {
-			context.transaction.Rollback();
-		}
-		throw;
-	}
-	// found the table, create the appender for the table
-	this->appender = make_unique<Appender>(*this, context, table_entry);
-	return appender.get();
-}
-
-void DuckDBConnection::DestroyAppender(bool rollback) {
-	if (!appender) {
-		throw Exception("No appender active to destroy");
-	}
-	this->appender->flush();
-	this->appender = nullptr;
-	if (context.transaction.IsAutoCommit()) {
-		if (!rollback) {
-			context.transaction.Commit();
-		} else {
-			context.transaction.Rollback();
-		}
-	}
-}
-
 unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(ClientContext &context, string query) {
 	auto result = make_unique<DuckDBResult>();
 	result->success = false;
@@ -121,10 +83,6 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(string query) {
 }
 
 unique_ptr<DuckDBResult> DuckDBConnection::Query(string query) {
-	if (appender) {
-		throw Exception("Cannot query connection while an appender is active!");
-	}
-
 	if (context.transaction.IsAutoCommit()) {
 		context.transaction.BeginTransaction();
 	}

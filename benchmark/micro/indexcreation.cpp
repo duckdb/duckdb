@@ -1,5 +1,6 @@
 #include "benchmark_runner.hpp"
 #include "duckdb_benchmark.hpp"
+#include "main/appender.hpp"
 
 #include <random>
 
@@ -13,14 +14,14 @@ using namespace std;
 DUCKDB_BENCHMARK(IndexCreationUniformRandomData, "[micro]")
 virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.Query("CREATE TABLE integers(i INTEGER);");
-	auto appender = state->conn.GetAppender("integers");
+	Appender appender(state->db, DEFAULT_SCHEMA, "integers");
 	// insert the elements into the database
 	for (size_t i = 0; i < ROW_COUNT; i++) {
-		appender->begin_append_row();
-		appender->append_int(rand() % UPPERBOUND);
-		appender->end_append_row();
+		appender.BeginRow();
+		appender.AppendInteger(rand() % UPPERBOUND);
+		appender.EndRow();
 	}
-	state->conn.DestroyAppender();
+	appender.Commit();
 }
 
 virtual string GetQuery() {
