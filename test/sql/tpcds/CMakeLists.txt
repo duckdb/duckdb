@@ -1,4 +1,4 @@
 include_directories(../../../third_party/dsdgen/include)
 
-add_library(test_sql_tpcds OBJECT tpcds.cpp)
+add_library(test_sql_tpcds OBJECT test_tpcds.cpp)
 set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_sql_tpcds> PARENT_SCOPE)

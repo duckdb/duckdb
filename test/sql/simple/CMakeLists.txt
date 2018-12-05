@@ -1,3 +1,3 @@
 
-add_library(test_sql_simple OBJECT case.cpp column_names.cpp conjunctions.cpp cte.cpp distinct.cpp expressions.cpp groupby.cpp having.cpp inserts.cpp join.cpp like.cpp manycolumns.cpp null_handling.cpp nullboolean.cpp orderby.cpp overflow_handling.cpp scalar_projections.cpp simple_projections.cpp subquery.cpp setops.cpp table_subquery.cpp update.cpp)
+add_library(test_sql_simple OBJECT test_case.cpp test_column_names.cpp test_conjunctions.cpp test_cte.cpp test_distinct.cpp test_expressions.cpp test_groupby.cpp test_having.cpp test_inserts.cpp test_join.cpp test_like.cpp test_manycolumns.cpp test_null_handling.cpp test_nullboolean.cpp test_orderby.cpp test_overflow_handling.cpp test_scalar_projections.cpp test_simple_projections.cpp test_subquery.cpp test_setops.cpp test_update.cpp)
 set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_sql_simple> PARENT_SCOPE)
