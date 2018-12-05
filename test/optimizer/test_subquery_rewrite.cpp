@@ -1,15 +1,11 @@
-
 #include "catch.hpp"
-
-#include <vector>
-
-#include "optimizer/rewriter.hpp"
-
 #include "common/helper.hpp"
+#include "duckdb.hpp"
 #include "expression_helper.hpp"
 #include "optimizer/logical_rules/rule_list.hpp"
+#include "optimizer/rewriter.hpp"
 
-#include "duckdb.hpp"
+#include <vector>
 
 using namespace duckdb;
 using namespace std;
@@ -34,9 +30,8 @@ TEST_CASE("Subquery rewriting", "[subquery_rewrite]") {
 	con.Query("CREATE TABLE t1 (a INTEGER, b INTEGER)");
 	con.Query("INSERT INTO t1 VALUES (1, 10), (2, 20), (3, 30), (3, 42)");
 
-	auto planner = ParseLogicalPlan(
-	    con, "SELECT t1.a, t1.b FROM t1 WHERE b = (SELECT MIN(b) "
-	         "FROM t1 ts WHERE t1.a=ts.a)");
+	auto planner = ParseLogicalPlan(con, "SELECT t1.a, t1.b FROM t1 WHERE b = (SELECT MIN(b) "
+	                                     "FROM t1 ts WHERE t1.a=ts.a)");
 
 	Rewriter rewriter(*planner->context);
 	rewriter.rules.push_back(make_unique_base<Rule, SubqueryRewritingRule>());
@@ -55,9 +50,8 @@ TEST_CASE("(NOT) IN clause rewriting", "[subquery_rewrite]") {
 
 	// anti join
 	{
-		auto planner = ParseLogicalPlan(
-		    con, "SELECT t1.a, t1.b FROM t1 WHERE b NOT IN (SELECT b "
-		         "FROM t1 WHERE t1.a < 20)");
+		auto planner = ParseLogicalPlan(con, "SELECT t1.a, t1.b FROM t1 WHERE b NOT IN (SELECT b "
+		                                     "FROM t1 WHERE t1.a < 20)");
 
 		Rewriter rewriter(*planner->context);
 		rewriter.rules.push_back(make_unique_base<Rule, InClauseRewriteRule>());
@@ -67,9 +61,8 @@ TEST_CASE("(NOT) IN clause rewriting", "[subquery_rewrite]") {
 	}
 	// semi join
 	{
-		auto planner = ParseLogicalPlan(
-		    con, "SELECT t1.a, t1.b FROM t1 WHERE b IN (SELECT b "
-		         "FROM t1 WHERE t1.a < 20)");
+		auto planner = ParseLogicalPlan(con, "SELECT t1.a, t1.b FROM t1 WHERE b IN (SELECT b "
+		                                     "FROM t1 WHERE t1.a < 20)");
 
 		Rewriter rewriter(*planner->context);
 		rewriter.rules.push_back(make_unique_base<Rule, InClauseRewriteRule>());

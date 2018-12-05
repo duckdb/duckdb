@@ -28,11 +28,11 @@ LogicalOperator *GetProjection(LogicalOperator *);
 //! LogicalOperator is the base class of the logical operators present in the
 //! logical query tree
 class LogicalOperator : public Printable {
-	public:
+public:
 	LogicalOperator(LogicalOperatorType type) : type(type) {
 	}
 
-	LogicalOperator(LogicalOperatorType type, std::vector<std::unique_ptr<Expression>> expressions)
+	LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions)
 	    : type(type), expressions(std::move(expressions)) {
 	}
 
@@ -42,7 +42,7 @@ class LogicalOperator : public Printable {
 
 	//! Return a vector of the column names that will be returned by this
 	//! operator
-	virtual std::vector<std::string> GetNames() = 0;
+	virtual vector<string> GetNames() = 0;
 	//! Resolve the types of the logical operator and its children
 	void ResolveOperatorTypes() {
 		if (types.size() > 0) {
@@ -57,8 +57,8 @@ class LogicalOperator : public Printable {
 		ResolveTypes();
 	}
 
-	virtual std::string ParamsToString() const;
-	std::string ToString() const override;
+	virtual string ParamsToString() const;
+	string ToString() const override;
 
 	virtual void Accept(LogicalOperatorVisitor *) = 0;
 	virtual void AcceptChildren(LogicalOperatorVisitor *v) {
@@ -67,7 +67,7 @@ class LogicalOperator : public Printable {
 		}
 	}
 
-	void AddChild(std::unique_ptr<LogicalOperator> child) {
+	void AddChild(unique_ptr<LogicalOperator> child) {
 		referenced_tables.insert(child->referenced_tables.begin(), child->referenced_tables.end());
 		children.push_back(move(child));
 	}
@@ -77,17 +77,17 @@ class LogicalOperator : public Printable {
 	//! The set of tables that is accessible from this operator
 	std::unordered_set<size_t> referenced_tables;
 	//! The set of children of the operator
-	std::vector<std::unique_ptr<LogicalOperator>> children;
+	vector<unique_ptr<LogicalOperator>> children;
 	//! The set of expressions contained within the operator, if any
-	std::vector<std::unique_ptr<Expression>> expressions;
+	vector<unique_ptr<Expression>> expressions;
 	//! The types returned by this logical operator. Set by calling LogicalOperator::ResolveTypes.
-	std::vector<TypeId> types;
+	vector<TypeId> types;
 
 	virtual size_t ExpressionCount();
 	virtual Expression *GetExpression(size_t index);
-	virtual void SetExpression(size_t index, std::unique_ptr<Expression> expr);
+	virtual void SetExpression(size_t index, unique_ptr<Expression> expr);
 
-	protected:
+protected:
 	//! Resolve types for this specific operator
 	virtual void ResolveTypes() = 0;
 };

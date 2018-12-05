@@ -1,4 +1,3 @@
-
 #include "parser/tableref/crossproductref.hpp"
 #include "parser/tableref/joinref.hpp"
 #include "parser/transformer.hpp"
@@ -30,10 +29,7 @@ unique_ptr<TableRef> Transformer::TransformJoin(JoinExpr *root) {
 		result->type = duckdb::JoinType::SEMI;
 		break;
 	}
-	default: {
-		throw NotImplementedException("Join type %d not supported yet...\n",
-		                              root->jointype);
-	}
+	default: { throw NotImplementedException("Join type %d not supported yet...\n", root->jointype); }
 	}
 
 	// Check the type of left arg and right arg before transform
@@ -55,8 +51,7 @@ unique_ptr<TableRef> Transformer::TransformJoin(JoinExpr *root) {
 		break;
 
 	default:
-		throw NotImplementedException(
-		    "Join quals type %d not supported yet...\n", root->larg->type);
+		throw NotImplementedException("Join quals type %d not supported yet...\n", root->larg->type);
 	}
 	return move(result);
 }

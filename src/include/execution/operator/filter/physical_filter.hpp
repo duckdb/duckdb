@@ -16,15 +16,15 @@ namespace duckdb {
 //! from the result. Note that it does not physically change the data, it only
 //! adds a selection vector to the chunk.
 class PhysicalFilter : public PhysicalOperator {
-	public:
-	PhysicalFilter(LogicalOperator &op, std::vector<std::unique_ptr<Expression>> select_list)
+public:
+	PhysicalFilter(LogicalOperator &op, vector<unique_ptr<Expression>> select_list)
 	    : PhysicalOperator(PhysicalOperatorType::FILTER, op.types), expressions(std::move(select_list)) {
 	}
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
-	std::string ExtraRenderInformation() override;
+	string ExtraRenderInformation() override;
 
-	std::vector<std::unique_ptr<Expression>> expressions;
+	vector<unique_ptr<Expression>> expressions;
 };
 } // namespace duckdb

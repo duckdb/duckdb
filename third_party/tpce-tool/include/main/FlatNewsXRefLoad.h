@@ -45,23 +45,20 @@
 namespace TPCE {
 
 class CFlatNewsXRefLoad : public CFlatFileLoader<NEWS_XREF_ROW> {
-  private:
+private:
 	const std::string NewsXRefRowFmt;
 
-  public:
+public:
 	CFlatNewsXRefLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
-	    : CFlatFileLoader<NEWS_XREF_ROW>(szFileName, FlatFileOutputMode),
-	      NewsXRefRowFmt("%" PRId64 "|%" PRId64 "\n"){};
+	    : CFlatFileLoader<NEWS_XREF_ROW>(szFileName, FlatFileOutputMode), NewsXRefRowFmt("%" PRId64 "|%" PRId64 "\n"){};
 
 	/*
 	 *   Writes a record to the file.
 	 */
 	void WriteNextRecord(const NEWS_XREF_ROW &next_record) {
-		int rc = fprintf(hOutFile, NewsXRefRowFmt.c_str(), next_record.NX_NI_ID,
-		                 next_record.NX_CO_ID);
+		int rc = fprintf(hOutFile, NewsXRefRowFmt.c_str(), next_record.NX_NI_ID, next_record.NX_CO_ID);
 		if (rc < 0) {
-			throw CSystemErr(CSystemErr::eWriteFile,
-			                 "CFlatNewsXRefLoad::WriteNextRecord");
+			throw CSystemErr(CSystemErr::eWriteFile, "CFlatNewsXRefLoad::WriteNextRecord");
 		}
 	}
 };

@@ -1,20 +1,18 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // storage/storage_chunk.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
+#include "common/types/string_heap.hpp"
+
 #include <atomic>
 #include <mutex>
 #include <vector>
-
-#include "common/types/string_heap.hpp"
 
 namespace duckdb {
 class ColumnDefinition;
@@ -24,13 +22,13 @@ class StorageManager;
 struct VersionInformation;
 
 class StorageChunk {
-  public:
+public:
 	StorageChunk(DataTable &table, size_t start);
 
 	DataTable &table;
 	bool deleted[STORAGE_CHUNK_SIZE] = {0};
 	VersionInformation *version_pointers[STORAGE_CHUNK_SIZE] = {nullptr};
-	std::vector<char *> columns;
+	vector<char *> columns;
 	size_t count;
 	size_t start;
 
@@ -63,11 +61,11 @@ class StorageChunk {
 		read_count--;
 	}
 
-	std::unique_ptr<StorageChunk> next;
+	unique_ptr<StorageChunk> next;
 	StringHeap string_heap;
 
-  private:
-	std::unique_ptr<char[]> owned_data;
+private:
+	unique_ptr<char[]> owned_data;
 	std::mutex exclusive_lock;
 	std::atomic<size_t> read_count;
 };

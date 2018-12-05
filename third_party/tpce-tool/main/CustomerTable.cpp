@@ -41,16 +41,14 @@ using namespace TPCE;
 
 namespace TPCE {
 const char *szUSAreaCode = "011"; // USA/Canada phone area code
-char EMAIL_DOMAINs[iNumEMAIL_DOMAINs][15] = {"@msn.com",       "@hotmail.com",
-                                             "@rr.com",        "@netzero.com",
-                                             "@earthlink.com", "@attbi.com"};
+char EMAIL_DOMAINs[iNumEMAIL_DOMAINs][15] = {"@msn.com",     "@hotmail.com",   "@rr.com",
+                                             "@netzero.com", "@earthlink.com", "@attbi.com"};
 } // namespace TPCE
 
 // Percentages used when generating C_TIER
 const int iPercentCustomersInC_TIER_1 = 20;
 const int iPercentCustomersInC_TIER_2 = 60;
-const int iPercentCustomersInC_TIER_3 =
-    100 - iPercentCustomersInC_TIER_1 - iPercentCustomersInC_TIER_2;
+const int iPercentCustomersInC_TIER_3 = 100 - iPercentCustomersInC_TIER_1 - iPercentCustomersInC_TIER_2;
 
 // Percentages used when generating C_DOB
 const int iPercentUnder18 = 5;
@@ -70,12 +68,9 @@ const int iRNGSkipOneRowCustomer = 35; // real max count in v3.5: 29
 /*
  *   CCustomerTable constructor
  */
-CCustomerTable::CCustomerTable(const DataFileManager &dfm,
-                               TIdent iCustomerCount, TIdent iStartFromCustomer)
-    : TableTemplate<CUSTOMER_ROW>(), m_iRowsToGenerate(iCustomerCount),
-      m_person(dfm, iStartFromCustomer, true), m_Phones(dfm.AreaCodeDataFile()),
-      m_iStartFromCustomer(iStartFromCustomer),
-      m_iCustomerCount(iCustomerCount),
+CCustomerTable::CCustomerTable(const DataFileManager &dfm, TIdent iCustomerCount, TIdent iStartFromCustomer)
+    : TableTemplate<CUSTOMER_ROW>(), m_iRowsToGenerate(iCustomerCount), m_person(dfm, iStartFromCustomer, true),
+      m_Phones(dfm.AreaCodeDataFile()), m_iStartFromCustomer(iStartFromCustomer), m_iCustomerCount(iCustomerCount),
       m_StatusTypeFile(dfm.StatusTypeDataFile()), m_CustomerSelection() {
 	m_iCompanyCount = dfm.CompanyFile().GetSize();
 	m_iExchangeCount = dfm.ExchangeDataFile().size();
@@ -85,10 +80,8 @@ CCustomerTable::CCustomerTable(const DataFileManager &dfm,
  *   Reset the state for the next load unit
  */
 void CCustomerTable::InitNextLoadUnit() {
-	m_rnd.SetSeed(m_rnd.RndNthElement(
-	    RNGSeedTableDefault,
-	    ((RNGSEED)m_iLastRowNumber + m_iStartFromCustomer - 1) *
-	        iRNGSkipOneRowCustomer));
+	m_rnd.SetSeed(m_rnd.RndNthElement(RNGSeedTableDefault,
+	                                  ((RNGSEED)m_iLastRowNumber + m_iStartFromCustomer - 1) * iRNGSkipOneRowCustomer));
 
 	ClearRecord(); // this is needed for EGenTest to work
 
@@ -128,8 +121,7 @@ void CCustomerTable::GetC_TAX_ID(TIdent C_ID, char *szOutput) {
  *   Generate C_ST_ID.
  */
 void CCustomerTable::GenerateC_ST_ID() {
-	strncpy(m_row.C_ST_ID, m_StatusTypeFile[eActive].ST_ID_CSTR(),
-	        sizeof(m_row.C_ST_ID));
+	strncpy(m_row.C_ST_ID, m_StatusTypeFile[eActive].ST_ID_CSTR(), sizeof(m_row.C_ST_ID));
 }
 
 /*
@@ -137,8 +129,7 @@ void CCustomerTable::GenerateC_ST_ID() {
  */
 void CCustomerTable::GeneratePersonInfo() {
 	// Fill in the first name, last name, and the tax id
-	m_person.GetFirstLastAndTaxID(m_row.C_ID, m_row.C_F_NAME, m_row.C_L_NAME,
-	                              m_row.C_TAX_ID);
+	m_person.GetFirstLastAndTaxID(m_row.C_ID, m_row.C_F_NAME, m_row.C_L_NAME, m_row.C_TAX_ID);
 	// Fill in the gender
 	m_row.C_GNDR = m_person.GetGender(m_row.C_ID);
 	// Fill in the middle name
@@ -161,7 +152,7 @@ void CCustomerTable::GenerateC_DOB() {
 	static int age_brackets[] = {10, 19, 25, 35, 45, 55, 65, 75, 85, 100};
 	int age_bracket;
 	int dob_daysno_min, dob_daysno_max; // min and max date of birth in days
-	int dob_in_days; // generated random date of birth in days
+	int dob_in_days;                    // generated random date of birth in days
 
 	int iThreshold = m_rnd.RndGenerateIntegerPercentage();
 
@@ -170,44 +161,33 @@ void CCustomerTable::GenerateC_DOB() {
 		age_bracket = 0;
 	else if (iThreshold <= iPercentUnder18 + iPercentBetween19And24)
 		age_bracket = 1;
-	else if (iThreshold <=
-	         iPercentUnder18 + iPercentBetween19And24 + iPercentBetween25And34)
+	else if (iThreshold <= iPercentUnder18 + iPercentBetween19And24 + iPercentBetween25And34)
 		age_bracket = 2;
-	else if (iThreshold <= iPercentUnder18 + iPercentBetween19And24 +
-	                           iPercentBetween25And34 + iPercentBetween35And44)
+	else if (iThreshold <= iPercentUnder18 + iPercentBetween19And24 + iPercentBetween25And34 + iPercentBetween35And44)
 		age_bracket = 3;
-	else if (iThreshold <= iPercentUnder18 + iPercentBetween19And24 +
-	                           iPercentBetween25And34 + iPercentBetween35And44 +
+	else if (iThreshold <= iPercentUnder18 + iPercentBetween19And24 + iPercentBetween25And34 + iPercentBetween35And44 +
 	                           iPercentBetween45And54)
 		age_bracket = 4;
-	else if (iThreshold <= iPercentUnder18 + iPercentBetween19And24 +
-	                           iPercentBetween25And34 + iPercentBetween35And44 +
+	else if (iThreshold <= iPercentUnder18 + iPercentBetween19And24 + iPercentBetween25And34 + iPercentBetween35And44 +
 	                           iPercentBetween45And54 + iPercentBetween55And64)
 		age_bracket = 5;
-	else if (iThreshold <= iPercentUnder18 + iPercentBetween19And24 +
-	                           iPercentBetween25And34 + iPercentBetween35And44 +
-	                           iPercentBetween45And54 + iPercentBetween55And64 +
-	                           iPercentBetween65And74)
+	else if (iThreshold <= iPercentUnder18 + iPercentBetween19And24 + iPercentBetween25And34 + iPercentBetween35And44 +
+	                           iPercentBetween45And54 + iPercentBetween55And64 + iPercentBetween65And74)
 		age_bracket = 6;
-	else if (iThreshold <= iPercentUnder18 + iPercentBetween19And24 +
-	                           iPercentBetween25And34 + iPercentBetween35And44 +
-	                           iPercentBetween45And54 + iPercentBetween55And64 +
-	                           iPercentBetween65And74 + iPercentBetween75And84)
+	else if (iThreshold <= iPercentUnder18 + iPercentBetween19And24 + iPercentBetween25And34 + iPercentBetween35And44 +
+	                           iPercentBetween45And54 + iPercentBetween55And64 + iPercentBetween65And74 +
+	                           iPercentBetween75And84)
 		age_bracket = 7;
 	else
 		age_bracket = 8;
-	assert(age_bracket <
-	       static_cast<int>(sizeof(age_brackets) / sizeof(age_brackets[0])));
+	assert(age_bracket < static_cast<int>(sizeof(age_brackets) / sizeof(age_brackets[0])));
 
 	// Determine the range of valid day numbers for this person's birthday.
-	dob_daysno_min = CDateTime::YMDtoDayno(InitialTradePopulationBaseYear -
-	                                           age_brackets[age_bracket + 1],
-	                                       InitialTradePopulationBaseMonth,
-	                                       InitialTradePopulationBaseDay) +
+	dob_daysno_min = CDateTime::YMDtoDayno(InitialTradePopulationBaseYear - age_brackets[age_bracket + 1],
+	                                       InitialTradePopulationBaseMonth, InitialTradePopulationBaseDay) +
 	                 1;
-	dob_daysno_max = CDateTime::YMDtoDayno(
-	    InitialTradePopulationBaseYear - age_brackets[age_bracket],
-	    InitialTradePopulationBaseMonth, InitialTradePopulationBaseDay);
+	dob_daysno_max = CDateTime::YMDtoDayno(InitialTradePopulationBaseYear - age_brackets[age_bracket],
+	                                       InitialTradePopulationBaseMonth, InitialTradePopulationBaseDay);
 
 	// Generate the random age expressed in days that falls into the particular
 	// range.
@@ -255,16 +235,14 @@ void CCustomerTable::GenerateC_AREA_1() {
 
 	OldSeed = m_rnd.GetSeed();
 
-	m_rnd.SetSeed(
-	    m_rnd.RndNthElement(RNGSeedBaseC_AREA_1, (RNGSEED)m_row.C_ID));
+	m_rnd.SetSeed(m_rnd.RndNthElement(RNGSeedBaseC_AREA_1, (RNGSEED)m_row.C_ID));
 
 	// generate Threshold up to the value of the last key (first member in a
 	// pair)
 	iThreshold = m_rnd.RndIntRange(0, m_Phones.size() - 1);
 
 	// copy the area code that corresponds to the Threshold
-	strncpy(m_row.C_AREA_1, m_Phones[iThreshold].AREA_CODE_CSTR(),
-	        sizeof(m_row.C_AREA_1));
+	strncpy(m_row.C_AREA_1, m_Phones[iThreshold].AREA_CODE_CSTR(), sizeof(m_row.C_AREA_1));
 
 	m_rnd.SetSeed(OldSeed);
 }
@@ -278,16 +256,14 @@ void CCustomerTable::GenerateC_AREA_2() {
 
 	OldSeed = m_rnd.GetSeed();
 
-	m_rnd.SetSeed(
-	    m_rnd.RndNthElement(RNGSeedBaseC_AREA_2, (RNGSEED)m_row.C_ID));
+	m_rnd.SetSeed(m_rnd.RndNthElement(RNGSeedBaseC_AREA_2, (RNGSEED)m_row.C_ID));
 
 	// generate Threshold up to the value of the last key (first member in a
 	// pair)
 	iThreshold = m_rnd.RndIntRange(0, m_Phones.size() - 1);
 
 	// copy the area code that corresponds to the Threshold
-	strncpy(m_row.C_AREA_2, m_Phones[iThreshold].AREA_CODE_CSTR(),
-	        sizeof(m_row.C_AREA_2));
+	strncpy(m_row.C_AREA_2, m_Phones[iThreshold].AREA_CODE_CSTR(), sizeof(m_row.C_AREA_2));
 
 	m_rnd.SetSeed(OldSeed);
 }
@@ -301,16 +277,14 @@ void CCustomerTable::GenerateC_AREA_3() {
 
 	OldSeed = m_rnd.GetSeed();
 
-	m_rnd.SetSeed(
-	    m_rnd.RndNthElement(RNGSeedBaseC_AREA_3, (RNGSEED)m_row.C_ID));
+	m_rnd.SetSeed(m_rnd.RndNthElement(RNGSeedBaseC_AREA_3, (RNGSEED)m_row.C_ID));
 
 	// generate Threshold up to the value of the last key (first member in a
 	// pair)
 	iThreshold = m_rnd.RndIntRange(0, m_Phones.size() - 1);
 
 	// copy the area code that corresponds to the Threshold
-	strncpy(m_row.C_AREA_3, m_Phones[iThreshold].AREA_CODE_CSTR(),
-	        sizeof(m_row.C_AREA_3));
+	strncpy(m_row.C_AREA_3, m_Phones[iThreshold].AREA_CODE_CSTR(), sizeof(m_row.C_AREA_3));
 
 	m_rnd.SetSeed(OldSeed);
 }
@@ -404,8 +378,7 @@ void CCustomerTable::GenerateC_EMAIL_1_and_C_EMAIL_2() {
 	strncpy(&m_row.C_EMAIL_2[1], m_row.C_L_NAME,
 	        sizeof(m_row.C_EMAIL_2) - 1); // last name
 	strncpy(&m_row.C_EMAIL_2[1 + iLen],
-	        EMAIL_DOMAINs[m_rnd.RndIntRangeExclude(
-	            0, iNumEMAIL_DOMAINs - 1, iEmail1Index)], // domain name
+	        EMAIL_DOMAINs[m_rnd.RndIntRangeExclude(0, iNumEMAIL_DOMAINs - 1, iEmail1Index)], // domain name
 	        sizeof(m_row.C_EMAIL_2) - iLen - 1);
 }
 

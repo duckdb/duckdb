@@ -1,9 +1,7 @@
 //===----------------------------------------------------------------------===//
-//
 //                         DuckDB
 //
 // main/result.hpp
-//
 //
 //
 //===----------------------------------------------------------------------===//
@@ -17,14 +15,14 @@ namespace duckdb {
 //! The result object holds the result of a query. It can either hold an error
 //! message or a DataChunk that represents the return value of the column.
 class DuckDBResult {
-  public:
+public:
 	DuckDBResult();
-	DuckDBResult(std::string error);
+	DuckDBResult(string error);
 
 	bool GetSuccess() const {
 		return success;
 	}
-	const std::string &GetErrorMessage() const {
+	const string &GetErrorMessage() const {
 		return error;
 	}
 
@@ -39,7 +37,7 @@ class DuckDBResult {
 		return collection.count;
 	}
 	//! Returns a list of types of the result
-	std::vector<TypeId> &types() {
+	vector<TypeId> &types() {
 		return collection.types;
 	}
 
@@ -66,13 +64,13 @@ class DuckDBResult {
 	}
 
 	//! The names of the result
-	std::vector<std::string> names;
+	vector<string> names;
 	ChunkCollection collection;
 
 	bool success;
-	std::string error;
+	string error;
 
-  private:
+private:
 	DuckDBResult(const DuckDBResult &) = delete;
 };
 

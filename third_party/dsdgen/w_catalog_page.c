@@ -82,9 +82,7 @@ int mk_w_catalog_page(void *info_arr, ds_key_t index) {
 	r = &g_w_catalog_page;
 
 	if (!bInit) {
-		nCatalogPageMax =
-		    ((int)get_rowcount(CATALOG_PAGE) / CP_CATALOGS_PER_YEAR) /
-		    (YEAR_MAXIMUM - YEAR_MINIMUM + 2);
+		nCatalogPageMax = ((int)get_rowcount(CATALOG_PAGE) / CP_CATALOGS_PER_YEAR) / (YEAR_MAXIMUM - YEAR_MINIMUM + 2);
 		dStartDate = strtodate(DATA_START_DATE);
 
 		/* columns that still need to be populated */
@@ -98,8 +96,7 @@ int mk_w_catalog_page(void *info_arr, ds_key_t index) {
 	mk_bkey(&r->cp_catalog_page_id[0], index, CP_CATALOG_PAGE_ID);
 	r->cp_catalog_number = (long)(index - 1) / nCatalogPageMax + 1;
 	r->cp_catalog_page_number = (long)(index - 1) % nCatalogPageMax + 1;
-	switch (nCatalogInterval =
-	            ((r->cp_catalog_number - 1) % CP_CATALOGS_PER_YEAR)) {
+	switch (nCatalogInterval = ((r->cp_catalog_number - 1) % CP_CATALOGS_PER_YEAR)) {
 	case 0: /* bi-annual */
 	case 1:
 		nType = 1;
@@ -120,12 +117,10 @@ int mk_w_catalog_page(void *info_arr, ds_key_t index) {
 		nType = 3; /* monthly */
 	}
 	r->cp_start_date_id = dStartDate->julian + nOffset;
-	r->cp_start_date_id +=
-	    ((r->cp_catalog_number - 1) / CP_CATALOGS_PER_YEAR) * 365;
+	r->cp_start_date_id += ((r->cp_catalog_number - 1) / CP_CATALOGS_PER_YEAR) * 365;
 	r->cp_end_date_id = r->cp_start_date_id + nDuration - 1;
 	dist_member(&r->cp_type, "catalog_page_type", nType, 1);
-	gen_text(&r->cp_description[0], RS_CP_DESCRIPTION / 2,
-	         RS_CP_DESCRIPTION - 1, CP_DESCRIPTION);
+	gen_text(&r->cp_description[0], RS_CP_DESCRIPTION / 2, RS_CP_DESCRIPTION - 1, CP_DESCRIPTION);
 
 	void *info = append_info_get(info_arr, CATALOG_PAGE);
 

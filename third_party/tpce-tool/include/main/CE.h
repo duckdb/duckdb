@@ -119,7 +119,7 @@
 namespace TPCE {
 
 class CCE {
-  private:
+private:
 	CDriverGlobalSettings m_DriverGlobalSettings;
 	CDriverCESettings m_DriverCESettings;
 	CDriverCEPartitionSettings m_DriverCEPartitionSettings;
@@ -156,13 +156,11 @@ class CCE {
 	 */
 	void ZeroInputBuffer(int iTxnType);
 
-  public:
-	static const INT32 INVALID_TRANSACTION_TYPE =
-	    CCETxnMixGenerator::INVALID_TRANSACTION_TYPE;
+public:
+	static const INT32 INVALID_TRANSACTION_TYPE = CCETxnMixGenerator::INVALID_TRANSACTION_TYPE;
 	static const INT32 SECURITY_DETAIL = CCETxnMixGenerator::SECURITY_DETAIL;
 	static const INT32 BROKER_VOLUME = CCETxnMixGenerator::BROKER_VOLUME;
-	static const INT32 CUSTOMER_POSITION =
-	    CCETxnMixGenerator::CUSTOMER_POSITION;
+	static const INT32 CUSTOMER_POSITION = CCETxnMixGenerator::CUSTOMER_POSITION;
 	static const INT32 MARKET_WATCH = CCETxnMixGenerator::MARKET_WATCH;
 	static const INT32 TRADE_STATUS = CCETxnMixGenerator::TRADE_STATUS;
 	static const INT32 TRADE_LOOKUP = CCETxnMixGenerator::TRADE_LOOKUP;
@@ -174,32 +172,26 @@ class CCE {
 
 	// Constructor - no partitioning by C_ID, automatic RNG seed generation
 	// (requires unique input)
-	CCE(CCESUTInterface *pSUT, CBaseLogger *pLogger, const DataFileManager &dfm,
-	    TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount,
-	    INT32 iScaleFactor, INT32 iDaysOfInitialTrades, UINT32 UniqueId,
+	CCE(CCESUTInterface *pSUT, CBaseLogger *pLogger, const DataFileManager &dfm, TIdent iConfiguredCustomerCount,
+	    TIdent iActiveCustomerCount, INT32 iScaleFactor, INT32 iDaysOfInitialTrades, UINT32 UniqueId,
 	    const PDriverCETxnSettings pParameterSettings = NULL);
 
 	// Constructor - no partitioning by C_ID, RNG seeds provided
-	CCE(CCESUTInterface *pSUT, CBaseLogger *pLogger, const DataFileManager &dfm,
-	    TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount,
-	    INT32 iScaleFactor, INT32 iDaysOfInitialTrades, UINT32 UniqueId,
-	    RNGSEED TxnMixRNGSeed, RNGSEED TxnInputRNGSeed,
-	    const PDriverCETxnSettings pParameterSettings = NULL);
+	CCE(CCESUTInterface *pSUT, CBaseLogger *pLogger, const DataFileManager &dfm, TIdent iConfiguredCustomerCount,
+	    TIdent iActiveCustomerCount, INT32 iScaleFactor, INT32 iDaysOfInitialTrades, UINT32 UniqueId,
+	    RNGSEED TxnMixRNGSeed, RNGSEED TxnInputRNGSeed, const PDriverCETxnSettings pParameterSettings = NULL);
 
 	// Constructor - partitioning by C_ID, automatic RNG seed generation
 	// (requires unique input)
-	CCE(CCESUTInterface *pSUT, CBaseLogger *pLogger, const DataFileManager &dfm,
-	    TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount,
-	    TIdent iMyStartingCustomerId, TIdent iMyCustomerCount,
-	    INT32 iPartitionPercent, INT32 iScaleFactor, INT32 iDaysOfInitialTrades,
-	    UINT32 UniqueId, const PDriverCETxnSettings pParameterSettings = NULL);
+	CCE(CCESUTInterface *pSUT, CBaseLogger *pLogger, const DataFileManager &dfm, TIdent iConfiguredCustomerCount,
+	    TIdent iActiveCustomerCount, TIdent iMyStartingCustomerId, TIdent iMyCustomerCount, INT32 iPartitionPercent,
+	    INT32 iScaleFactor, INT32 iDaysOfInitialTrades, UINT32 UniqueId,
+	    const PDriverCETxnSettings pParameterSettings = NULL);
 
 	// Constructor - partitioning by C_ID, RNG seeds provided
-	CCE(CCESUTInterface *pSUT, CBaseLogger *pLogger, const DataFileManager &dfm,
-	    TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount,
-	    TIdent iMyStartingCustomerId, TIdent iMyCustomerCount,
-	    INT32 iPartitionPercent, INT32 iScaleFactor, INT32 iDaysOfInitialTrades,
-	    UINT32 UniqueId, RNGSEED TxnMixRNGSeed, RNGSEED TxnInputRNGSeed,
+	CCE(CCESUTInterface *pSUT, CBaseLogger *pLogger, const DataFileManager &dfm, TIdent iConfiguredCustomerCount,
+	    TIdent iActiveCustomerCount, TIdent iMyStartingCustomerId, TIdent iMyCustomerCount, INT32 iPartitionPercent,
+	    INT32 iScaleFactor, INT32 iDaysOfInitialTrades, UINT32 UniqueId, RNGSEED TxnMixRNGSeed, RNGSEED TxnInputRNGSeed,
 	    const PDriverCETxnSettings pParameterSettings = NULL);
 
 	~CCE(void);

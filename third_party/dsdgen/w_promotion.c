@@ -87,19 +87,14 @@ int mk_w_promotion(void *info_arr, ds_key_t index) {
 	r->p_promo_sk = index;
 	mk_bkey(&r->p_promo_id[0], index, P_PROMO_ID);
 	nTemp = index;
-	r->p_start_date_id =
-	    start_date->julian + genrand_integer(NULL, DIST_UNIFORM,
-	                                         PROMO_START_MIN, PROMO_START_MAX,
-	                                         PROMO_START_MEAN, P_START_DATE_ID);
-	r->p_end_date_id =
-	    r->p_start_date_id + genrand_integer(NULL, DIST_UNIFORM, PROMO_LEN_MIN,
-	                                         PROMO_LEN_MAX, PROMO_LEN_MEAN,
-	                                         P_END_DATE_ID);
+	r->p_start_date_id = start_date->julian + genrand_integer(NULL, DIST_UNIFORM, PROMO_START_MIN, PROMO_START_MAX,
+	                                                          PROMO_START_MEAN, P_START_DATE_ID);
+	r->p_end_date_id = r->p_start_date_id +
+	                   genrand_integer(NULL, DIST_UNIFORM, PROMO_LEN_MIN, PROMO_LEN_MAX, PROMO_LEN_MEAN, P_END_DATE_ID);
 	r->p_item_sk = mk_join(P_ITEM_SK, ITEM, 1);
 	strtodec(&r->p_cost, "1000.00");
 	r->p_response_target = 1;
-	mk_word(&r->p_promo_name[0], "syllables", (int)index, PROMO_NAME_LEN,
-	        P_PROMO_NAME);
+	mk_word(&r->p_promo_name[0], "syllables", (int)index, PROMO_NAME_LEN, P_PROMO_NAME);
 	nFlags = genrand_integer(NULL, DIST_UNIFORM, 0, 511, 0, P_CHANNEL_DMAIL);
 	r->p_channel_dmail = nFlags & 0x01;
 	nFlags <<= 1;
@@ -118,8 +113,7 @@ int mk_w_promotion(void *info_arr, ds_key_t index) {
 	r->p_channel_demo = nFlags & 0x01;
 	nFlags <<= 1;
 	r->p_discount_active = nFlags & 0x01;
-	gen_text(&r->p_channel_details[0], PROMO_DETAIL_LEN_MIN,
-	         PROMO_DETAIL_LEN_MAX, P_CHANNEL_DETAILS);
+	gen_text(&r->p_channel_details[0], PROMO_DETAIL_LEN_MIN, PROMO_DETAIL_LEN_MAX, P_CHANNEL_DETAILS);
 	pick_distribution(&r->p_purpose, "promo_purpose", 1, 1, P_PURPOSE);
 
 	void *info = append_info_get(info_arr, PROMOTION);

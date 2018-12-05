@@ -1,35 +1,32 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // parser/statement/delete_statement.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include <vector>
-
-#include "parser/sql_statement.hpp"
-
 #include "parser/expression.hpp"
 #include "parser/sql_node_visitor.hpp"
+#include "parser/sql_statement.hpp"
+
+#include <vector>
 
 namespace duckdb {
 
 class DeleteStatement : public SQLStatement {
-  public:
+public:
 	DeleteStatement() : SQLStatement(StatementType::DELETE) {
 	}
 	virtual ~DeleteStatement() {
 	}
 
-	virtual std::string ToString() const {
+	virtual string ToString() const {
 		return "Delete";
 	}
-	virtual std::unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
+	virtual unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
 		return v->Visit(*this);
 	}
 
@@ -40,7 +37,7 @@ class DeleteStatement : public SQLStatement {
 		throw NotImplementedException("Equality not implemented!");
 	}
 
-	std::unique_ptr<Expression> condition;
-	std::unique_ptr<TableRef> table;
+	unique_ptr<Expression> condition;
+	unique_ptr<TableRef> table;
 };
 } // namespace duckdb

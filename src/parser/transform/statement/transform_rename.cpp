@@ -1,4 +1,3 @@
-
 #include "parser/statement/alter_table_statement.hpp"
 #include "parser/transformer.hpp"
 
@@ -31,8 +30,7 @@ unique_ptr<AlterTableStatement> Transformer::TransformRename(Node *node) {
 		// get the old name and the new name
 		string old_name = stmt->subname;
 		string new_name = stmt->newname;
-		info = make_unique<RenameColumnInformation>(schema, table, old_name,
-		                                            new_name);
+		info = make_unique<RenameColumnInformation>(schema, table, old_name, new_name);
 		break;
 	}
 	case OBJECT_DATABASE:

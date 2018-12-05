@@ -15,12 +15,12 @@ namespace duckdb {
 
 //! PhysicalJoin represents the base class of the join operators
 class PhysicalJoin : public PhysicalOperator {
-	public:
-	PhysicalJoin(LogicalOperator &op, PhysicalOperatorType type, std::vector<JoinCondition> cond, JoinType join_type);
+public:
+	PhysicalJoin(LogicalOperator &op, PhysicalOperatorType type, vector<JoinCondition> cond, JoinType join_type);
 
-	std::string ExtraRenderInformation() override;
+	string ExtraRenderInformation() override;
 
-	std::vector<JoinCondition> conditions;
+	vector<JoinCondition> conditions;
 	JoinType type;
 };
 } // namespace duckdb

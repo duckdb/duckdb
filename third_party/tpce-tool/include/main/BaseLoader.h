@@ -46,7 +46,7 @@ namespace TPCE {
 
 template <typename T> class CBaseLoader {
 
-  public:
+public:
 	/*
 	 *  Virtual destructor. Provided so that a sponsor-specific
 	 *  destructor can be called on destruction from the base-class pointer.

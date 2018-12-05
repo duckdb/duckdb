@@ -8,23 +8,22 @@ using namespace std;
 
 #define SF 1
 
-#define TPCDS_QUERY_BODY(QNR)                                                  \
-	virtual void Load(DuckDBBenchmarkState *state) {                           \
-		tpcds::dbgen(SF, state->db);                                           \
-	}                                                                          \
-	virtual std::string GetQuery() {                                           \
-		return tpcds::get_query(QNR);                                          \
-	}                                                                          \
-	virtual std::string VerifyResult(DuckDBResult *result) {                   \
-		if (!result->GetSuccess()) {                                           \
-			return result->GetErrorMessage();                                  \
-		}                                                                      \
-		return ""; /*return compare_csv(*result, tpch::get_answer(SF, QNR),    \
-		              true);  */                                               \
-	}                                                                          \
-	virtual std::string BenchmarkInfo() {                                      \
-		return StringUtil::Format("TPC-DS Q%d SF%d: %s", QNR, SF,              \
-		                          tpcds::get_query(QNR).c_str());              \
+#define TPCDS_QUERY_BODY(QNR)                                                                                          \
+	virtual void Load(DuckDBBenchmarkState *state) {                                                                   \
+		tpcds::dbgen(SF, state->db);                                                                                   \
+	}                                                                                                                  \
+	virtual string GetQuery() {                                                                                        \
+		return tpcds::get_query(QNR);                                                                                  \
+	}                                                                                                                  \
+	virtual string VerifyResult(DuckDBResult *result) {                                                                \
+		if (!result->GetSuccess()) {                                                                                   \
+			return result->GetErrorMessage();                                                                          \
+		}                                                                                                              \
+		return ""; /*return compare_csv(*result, tpch::get_answer(SF, QNR),                                            \
+		              true);  */                                                                                       \
+	}                                                                                                                  \
+	virtual string BenchmarkInfo() {                                                                                   \
+		return StringUtil::Format("TPC-DS Q%d SF%d: %s", QNR, SF, tpcds::get_query(QNR).c_str());                      \
 	}
 
 DUCKDB_BENCHMARK(DSQ001, "[tpcds-sf1]")

@@ -21,18 +21,17 @@ size_t nested_loop_comparison(ExpressionType op, Vector &left, Vector &right, se
 //! PhysicalNestedLoopJoinInner represents an inner nested loop join between two
 //! tables
 class PhysicalNestedLoopJoinInner : public PhysicalJoin {
-	public:
-	PhysicalNestedLoopJoinInner(LogicalOperator &op, std::unique_ptr<PhysicalOperator> left,
-	                            std::unique_ptr<PhysicalOperator> right, std::vector<JoinCondition> cond,
-	                            JoinType join_type);
+public:
+	PhysicalNestedLoopJoinInner(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
+	                            unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type);
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
-	std::unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent_executor) override;
+	unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent_executor) override;
 };
 
 class PhysicalNestedLoopJoinInnerOperatorState : public PhysicalOperatorState {
-	public:
+public:
 	PhysicalNestedLoopJoinInnerOperatorState(PhysicalOperator *left, PhysicalOperator *right,
 	                                         ExpressionExecutor *parent_executor)
 	    : PhysicalOperatorState(left, parent_executor), right_chunk(0), left_tuple(0), right_tuple(0) {

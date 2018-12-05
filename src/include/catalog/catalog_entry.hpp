@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // catalog/catalog_entry.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -23,10 +21,9 @@ class Transaction;
 
 //! Abstract base class of an entry in the catalog
 class CatalogEntry {
-  public:
-	CatalogEntry(CatalogType type, Catalog *catalog, std::string name)
-	    : type(type), catalog(catalog), set(nullptr), name(name),
-	      deleted(false), parent(nullptr) {
+public:
+	CatalogEntry(CatalogType type, Catalog *catalog, string name)
+	    : type(type), catalog(catalog), set(nullptr), name(name), deleted(false), parent(nullptr) {
 	}
 
 	virtual ~CatalogEntry() {
@@ -40,7 +37,7 @@ class CatalogEntry {
 	virtual void DropDependents(Transaction &transaction) {
 	}
 
-	virtual std::unique_ptr<CatalogEntry> AlterEntry(AlterInformation *info) {
+	virtual unique_ptr<CatalogEntry> AlterEntry(AlterInformation *info) {
 		throw CatalogException("Unsupported alter type for catalog entry!");
 	}
 
@@ -51,13 +48,13 @@ class CatalogEntry {
 	//! Reference to the catalog set this entry is stored in
 	CatalogSet *set;
 	//! The name of the entry
-	std::string name;
+	string name;
 	//! Whether or not the object is deleted
 	bool deleted;
 	//! Timestamp at which the catalog entry was created
 	transaction_t timestamp;
 	//! Child entry
-	std::unique_ptr<CatalogEntry> child;
+	unique_ptr<CatalogEntry> child;
 	//! Parent entry (the node that owns this node)
 	CatalogEntry *parent;
 };

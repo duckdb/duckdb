@@ -49,8 +49,7 @@ typedef ChargeDataFileRecord ChargeTableRecord_t;
 typedef FixedTable<ChargeDataFile_t, ChargeTableRecord_t> ChargeTable_t;
 
 typedef CommissionRateDataFileRecord CommissionRateTableRecord_t;
-typedef FixedTable<CommissionRateDataFile_t, CommissionRateTableRecord_t>
-    CommissionRateTable_t;
+typedef FixedTable<CommissionRateDataFile_t, CommissionRateTableRecord_t> CommissionRateTable_t;
 
 typedef IndustryDataFileRecord IndustryTableRecord_t;
 typedef FixedTable<IndustryDataFile_t, IndustryTableRecord_t> IndustryTable_t;
@@ -59,12 +58,10 @@ typedef SectorDataFileRecord SectorTableRecord_t;
 typedef FixedTable<SectorDataFile_t, SectorTableRecord_t> SectorTable_t;
 
 typedef StatusTypeDataFileRecord StatusTypeTableRecord_t;
-typedef FixedTable<StatusTypeDataFile_t, StatusTypeTableRecord_t>
-    StatusTypeTable_t;
+typedef FixedTable<StatusTypeDataFile_t, StatusTypeTableRecord_t> StatusTypeTable_t;
 
 typedef TradeTypeDataFileRecord TradeTypeTableRecord_t;
-typedef FixedTable<TradeTypeDataFile_t, TradeTypeTableRecord_t>
-    TradeTypeTable_t;
+typedef FixedTable<TradeTypeDataFile_t, TradeTypeTableRecord_t> TradeTypeTable_t;
 
 typedef ITaxRateFileRecord TaxRateTableRecord_t;
 typedef FixedTable<CTaxRateFile, TaxRateTableRecord_t> TaxRateTable_t;

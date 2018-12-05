@@ -53,7 +53,7 @@ namespace TPCE {
 //
 
 class StatusTypeDataFileRecord {
-  private:
+private:
 	static const int maxSt_idLen = 4;
 	char st_idCStr[maxSt_idLen + 1];
 	std::string st_id;
@@ -64,7 +64,7 @@ class StatusTypeDataFileRecord {
 
 	static const unsigned int fieldCount = 2;
 
-  public:
+public:
 	explicit StatusTypeDataFileRecord(const std::deque<std::string> &fields);
 
 	//

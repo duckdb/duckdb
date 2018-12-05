@@ -53,14 +53,14 @@ namespace TPCE {
 //
 
 class CompanySPRateDataFileRecord {
-  private:
+private:
 	static const int maxCo_sp_rateLen = 4;
 	char co_sp_rateCStr[maxCo_sp_rateLen + 1];
 	std::string co_sp_rate;
 
 	static const unsigned int fieldCount = 1;
 
-  public:
+public:
 	explicit CompanySPRateDataFileRecord(const std::deque<std::string> &fields);
 
 	//

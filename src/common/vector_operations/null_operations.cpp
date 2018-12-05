@@ -12,15 +12,13 @@ using namespace std;
 
 template <bool INVERSE> void is_null_loop(Vector &input, Vector &result) {
 	if (result.type != TypeId::BOOLEAN) {
-		throw InvalidTypeException(result.type,
-		                           "IS (NOT) NULL returns a boolean!");
+		throw InvalidTypeException(result.type, "IS (NOT) NULL returns a boolean!");
 	}
 	auto result_data = (bool *)result.data;
 	result.nullmask.reset();
-	VectorOperations::Exec(
-	    input.sel_vector, input.count, [&](size_t i, size_t k) {
-		    result_data[i] = INVERSE ? !input.nullmask[i] : input.nullmask[i];
-	    });
+	VectorOperations::Exec(input.sel_vector, input.count, [&](size_t i, size_t k) {
+		result_data[i] = INVERSE ? !input.nullmask[i] : input.nullmask[i];
+	});
 	result.sel_vector = input.sel_vector;
 	result.count = input.count;
 }

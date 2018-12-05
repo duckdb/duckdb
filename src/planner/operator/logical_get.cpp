@@ -3,7 +3,7 @@
 using namespace duckdb;
 using namespace std;
 
-std::vector<string> LogicalGet::GetNames() {
+vector<string> LogicalGet::GetNames() {
 	assert(table);
 	vector<string> names;
 	for (auto &column : table->columns) {

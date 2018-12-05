@@ -1,4 +1,3 @@
-
 #include "parser/expression/case_expression.hpp"
 #include "parser/expression/comparison_expression.hpp"
 #include "parser/expression/conjunction_expression.hpp"
@@ -15,8 +14,7 @@ unique_ptr<Expression> Transformer::TransformAExpr(A_Expr *root) {
 		return nullptr;
 	}
 	ExpressionType target_type;
-	auto name = string(
-	    (reinterpret_cast<value *>(root->name->head->data.ptr_value))->val.str);
+	auto name = string((reinterpret_cast<value *>(root->name->head->data.ptr_value))->val.str);
 
 	switch (root->kind) {
 	case AEXPR_DISTINCT:
@@ -33,8 +31,7 @@ unique_ptr<Expression> Transformer::TransformAExpr(A_Expr *root) {
 			// IN
 			operator_type = ExpressionType::COMPARE_IN;
 		}
-		auto result = make_unique<OperatorExpression>(
-		    operator_type, TypeId::BOOLEAN, move(left_expr));
+		auto result = make_unique<OperatorExpression>(operator_type, TypeId::BOOLEAN, move(left_expr));
 		TransformExpressionList((List *)root->rexpr, result->children);
 		return move(result);
 	} break;
@@ -42,11 +39,9 @@ unique_ptr<Expression> Transformer::TransformAExpr(A_Expr *root) {
 	case AEXPR_NULLIF: {
 		auto case_expr = unique_ptr<Expression>(new CaseExpression());
 		auto test_expr = unique_ptr<Expression>(new ComparisonExpression(
-		    ExpressionType::COMPARE_EQUAL, TransformExpression(root->lexpr),
-		    TransformExpression(root->rexpr)));
+		    ExpressionType::COMPARE_EQUAL, TransformExpression(root->lexpr), TransformExpression(root->rexpr)));
 		case_expr->AddChild(move(test_expr));
-		auto null_expr =
-		    unique_ptr<Expression>(new ConstantExpression(Value()));
+		auto null_expr = unique_ptr<Expression>(new ConstantExpression(Value()));
 		case_expr->AddChild(move(null_expr));
 		case_expr->AddChild(TransformExpression(root->lexpr));
 		return case_expr;
@@ -57,38 +52,30 @@ unique_ptr<Expression> Transformer::TransformAExpr(A_Expr *root) {
 	case AEXPR_NOT_BETWEEN: {
 		auto between_args = reinterpret_cast<List *>(root->rexpr);
 
-		if (between_args->length != 2 || !between_args->head->data.ptr_value ||
-		    !between_args->tail->data.ptr_value) {
+		if (between_args->length != 2 || !between_args->head->data.ptr_value || !between_args->tail->data.ptr_value) {
 			throw Exception("(NOT) BETWEEN needs two args");
 		}
 
-		auto between_left = TransformExpression(
-		    reinterpret_cast<Node *>(between_args->head->data.ptr_value));
-		auto between_right = TransformExpression(
-		    reinterpret_cast<Node *>(between_args->tail->data.ptr_value));
+		auto between_left = TransformExpression(reinterpret_cast<Node *>(between_args->head->data.ptr_value));
+		auto between_right = TransformExpression(reinterpret_cast<Node *>(between_args->tail->data.ptr_value));
 
-		auto compare_left = make_unique<ComparisonExpression>(
-		    ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-		    TransformExpression(root->lexpr), move(between_left));
-		auto compare_right = make_unique<ComparisonExpression>(
-		    ExpressionType::COMPARE_LESSTHANOREQUALTO,
-		    TransformExpression(root->lexpr), move(between_right));
-		auto compare_between = make_unique<ConjunctionExpression>(
-		    ExpressionType::CONJUNCTION_AND, move(compare_left),
-		    move(compare_right));
+		auto compare_left = make_unique<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+		                                                      TransformExpression(root->lexpr), move(between_left));
+		auto compare_right = make_unique<ComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
+		                                                       TransformExpression(root->lexpr), move(between_right));
+		auto compare_between = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(compare_left),
+		                                                          move(compare_right));
 		if (root->kind == AEXPR_BETWEEN) {
 			return move(compare_between);
 		} else {
-			return make_unique<OperatorExpression>(
-			    ExpressionType::OPERATOR_NOT, TypeId::BOOLEAN,
-			    move(compare_between), nullptr);
+			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, TypeId::BOOLEAN, move(compare_between),
+			                                       nullptr);
 		}
 	} break;
 	default: {
 		target_type = StringToExpressionType(name);
 		if (target_type == ExpressionType::INVALID) {
-			throw NotImplementedException(
-			    "A_Expr transform not implemented %s.", name.c_str());
+			throw NotImplementedException("A_Expr transform not implemented %s.", name.c_str());
 		}
 	}
 	}
@@ -114,14 +101,10 @@ unique_ptr<Expression> Transformer::TransformAExpr(A_Expr *root) {
 	if (type_id >= static_cast<int>(ExpressionType::BINOP_BOUNDARY_START) &&
 	    type_id <= static_cast<int>(ExpressionType::BINOP_BOUNDARY_END)) {
 		// binary operator
-		result = make_unique<OperatorExpression>(
-		    target_type, TypeId::INVALID, move(left_expr), move(right_expr));
-	} else if (type_id >=
-	               static_cast<int>(ExpressionType::COMPARE_BOUNDARY_START) &&
-	           type_id <=
-	               static_cast<int>(ExpressionType::COMPARE_BOUNDARY_END)) {
-		result = make_unique<ComparisonExpression>(target_type, move(left_expr),
-		                                           move(right_expr));
+		result = make_unique<OperatorExpression>(target_type, TypeId::INVALID, move(left_expr), move(right_expr));
+	} else if (type_id >= static_cast<int>(ExpressionType::COMPARE_BOUNDARY_START) &&
+	           type_id <= static_cast<int>(ExpressionType::COMPARE_BOUNDARY_END)) {
+		result = make_unique<ComparisonExpression>(target_type, move(left_expr), move(right_expr));
 	} else {
 		throw NotImplementedException("A_Expr transform not implemented.");
 	}

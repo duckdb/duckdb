@@ -1,4 +1,3 @@
-
 #include "parser/query_node/select_node.hpp"
 
 using namespace duckdb;
@@ -16,19 +15,16 @@ bool SelectNode::HasAggregation() {
 	return false;
 }
 
-
 bool SelectNode::Equals(const QueryNode *other_) {
-    if (!QueryNode::Equals(other_)) {
-        return false;
-    }
-    auto other = (SelectNode*) other_;
+	if (!QueryNode::Equals(other_)) {
+		return false;
+	}
+	auto other = (SelectNode *)other_;
 
 	// first check counts of all lists and such
-	if (select_list.size() != other->select_list.size() ||
-	    select_distinct != other->select_distinct ||
+	if (select_list.size() != other->select_list.size() || select_distinct != other->select_distinct ||
 	    orderby.orders.size() != other->orderby.orders.size() ||
-	    groupby.groups.size() != other->groupby.groups.size() ||
-	    limit.limit != other->limit.limit ||
+	    groupby.groups.size() != other->groupby.groups.size() || limit.limit != other->limit.limit ||
 	    limit.offset != other->limit.offset) {
 		return false;
 	}
@@ -78,12 +74,11 @@ bool SelectNode::Equals(const QueryNode *other_) {
 	// ORDERS
 	for (size_t i = 0; i < orderby.orders.size(); i++) {
 		if (orderby.orders[i].type != orderby.orders[i].type ||
-		    !orderby.orders[i].expression->Equals(
-		        other->orderby.orders[i].expression.get())) {
+		    !orderby.orders[i].expression->Equals(other->orderby.orders[i].expression.get())) {
 			return false;
 		}
 	}
-    return true;
+	return true;
 }
 
 unique_ptr<QueryNode> SelectNode::Copy() {
@@ -99,33 +94,31 @@ unique_ptr<QueryNode> SelectNode::Copy() {
 	for (auto &group : groupby.groups) {
 		result->groupby.groups.push_back(group->Copy());
 	}
-	result->groupby.having =
-	    groupby.having ? groupby.having->Copy() : nullptr;
+	result->groupby.having = groupby.having ? groupby.having->Copy() : nullptr;
 	// order
 	for (auto &order : orderby.orders) {
-		result->orderby.orders.push_back(
-		    OrderByNode(order.type, order.expression->Copy()));
+		result->orderby.orders.push_back(OrderByNode(order.type, order.expression->Copy()));
 	}
 	// limit
 	result->limit.limit = limit.limit;
 	result->limit.offset = limit.offset;
-    return result;
+	return result;
 }
 
 void SelectNode::Serialize(Serializer &serializer) {
-    QueryNode::Serialize(serializer);
+	QueryNode::Serialize(serializer);
 	// select_list
-    serializer.WriteList(select_list);
+	serializer.WriteList(select_list);
 	// from clause
-    serializer.WriteOptional(from_table);
+	serializer.WriteOptional(from_table);
 	// where_clause
-    serializer.WriteOptional(where_clause);
+	serializer.WriteOptional(where_clause);
 	// select_distinct
 	serializer.Write<bool>(select_distinct);
 	// group by
-    serializer.WriteList(groupby.groups);
+	serializer.WriteList(groupby.groups);
 	// having
-    serializer.WriteOptional(groupby.having);
+	serializer.WriteOptional(groupby.having);
 	// order by
 	serializer.Write<uint32_t>(orderby.orders.size());
 	for (auto &order : orderby.orders) {
@@ -138,29 +131,28 @@ void SelectNode::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<QueryNode> SelectNode::Deserialize(Deserializer &source) {
-    auto result = make_unique<SelectNode>();
+	auto result = make_unique<SelectNode>();
 	// select_list
-    source.ReadList<Expression>(result->select_list);
+	source.ReadList<Expression>(result->select_list);
 	// from clause
-    result->from_table = source.ReadOptional<TableRef>();
+	result->from_table = source.ReadOptional<TableRef>();
 	// where_clause
-    result->where_clause = source.ReadOptional<Expression>();
+	result->where_clause = source.ReadOptional<Expression>();
 	// select_distinct
 	result->select_distinct = source.Read<bool>();
 	// group by
-    source.ReadList<Expression>(result->groupby.groups);
+	source.ReadList<Expression>(result->groupby.groups);
 	// having
-    result->groupby.having = source.ReadOptional<Expression>();
+	result->groupby.having = source.ReadOptional<Expression>();
 	// order by
 	auto order_count = source.Read<uint32_t>();
 	for (size_t i = 0; i < order_count; i++) {
 		auto order_type = source.Read<OrderType>();
 		auto expression = Expression::Deserialize(source);
-		result->orderby.orders.push_back(
-		    OrderByNode(order_type, move(expression)));
+		result->orderby.orders.push_back(OrderByNode(order_type, move(expression)));
 	}
 	// limit
 	result->limit.limit = source.Read<int64_t>();
 	result->limit.offset = source.Read<int64_t>();
-    return result;
+	return result;
 }

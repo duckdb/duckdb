@@ -8,9 +8,10 @@
 
 #pragma once
 
+#include "common/constants.hpp"
+
 #include <cstdlib>
 #include <math.h>
-#include <string>
 
 namespace duckdb {
 
@@ -432,17 +433,17 @@ enum class TransactionType : uint8_t { INVALID, BEGIN_TRANSACTION, COMMIT, ROLLB
 //===--------------------------------------------------------------------===//
 // String <-> Enum conversion
 //===--------------------------------------------------------------------===//
-std::string TypeIdToString(TypeId type);
-std::string JoinTypeToString(JoinType type);
-IndexType StringToIndexType(const std::string &str);
+string TypeIdToString(TypeId type);
+string JoinTypeToString(JoinType type);
+IndexType StringToIndexType(const string &str);
 
-ExpressionType StringToExpressionType(const std::string &str);
+ExpressionType StringToExpressionType(const string &str);
 
-std::string LogicalOperatorToString(LogicalOperatorType type);
-std::string PhysicalOperatorToString(PhysicalOperatorType type);
-std::string ExpressionTypeToString(ExpressionType type);
-std::string ExpressionTypeToOperator(ExpressionType type);
+string LogicalOperatorToString(LogicalOperatorType type);
+string PhysicalOperatorToString(PhysicalOperatorType type);
+string ExpressionTypeToString(ExpressionType type);
+string ExpressionTypeToOperator(ExpressionType type);
 
-ExternalFileFormat StringToExternalFileFormat(const std::string &str);
+ExternalFileFormat StringToExternalFileFormat(const string &str);
 
 } // namespace duckdb

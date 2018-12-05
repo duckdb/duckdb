@@ -39,8 +39,7 @@
 
 using namespace TPCE;
 
-void TPCE::DFRStringInit(const std::string &src, std::string &dest,
-                         char *destCStr, int maxLen) {
+void TPCE::DFRStringInit(const std::string &src, std::string &dest, char *destCStr, int maxLen) {
 	dest = src;
 	shrink_to_fit<std::string>(dest);
 	size_t len = dest.copy(destCStr, maxLen);

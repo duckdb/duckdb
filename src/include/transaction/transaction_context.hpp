@@ -1,14 +1,14 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // transaction/transaction_context.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
+
+#include "common/common.hpp"
 
 namespace duckdb {
 
@@ -18,10 +18,9 @@ class TransactionManager;
 //! The transaction context keeps track of all the information relating to the
 //! current transaction
 class TransactionContext {
-  public:
+public:
 	TransactionContext(TransactionManager &transaction_manager)
-	    : transaction_manager(transaction_manager), auto_commit(true),
-	      current_transaction(nullptr) {
+	    : transaction_manager(transaction_manager), auto_commit(true), current_transaction(nullptr) {
 	}
 	~TransactionContext();
 
@@ -34,7 +33,7 @@ class TransactionContext {
 		return !!current_transaction;
 	}
 
-	void RecordQuery(std::string query);
+	void RecordQuery(string query);
 	void BeginTransaction();
 	void Commit();
 	void Rollback();
@@ -46,7 +45,7 @@ class TransactionContext {
 		return auto_commit;
 	}
 
-  private:
+private:
 	TransactionManager &transaction_manager;
 	bool auto_commit;
 

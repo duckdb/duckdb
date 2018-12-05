@@ -44,12 +44,11 @@ namespace TPCE {
 class CTradeCleanup {
 	CTradeCleanupDBInterface *m_db;
 
-  public:
+public:
 	CTradeCleanup(CTradeCleanupDBInterface *pDB) : m_db(pDB) {
 	}
 
-	void DoTxn(PTradeCleanupTxnInput pTxnInput,
-	           PTradeCleanupTxnOutput pTxnOutput) {
+	void DoTxn(PTradeCleanupTxnInput pTxnInput, PTradeCleanupTxnOutput pTxnOutput) {
 		TXN_HARNESS_SET_STATUS_SUCCESS;
 
 		m_db->DoTradeCleanupFrame1(pTxnInput);

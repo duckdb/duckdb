@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // common/types/vector.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -44,7 +42,7 @@ namespace duckdb {
 class Vector : public Printable {
 	friend class DataChunk;
 
-  public:
+public:
 	//! The type of the elements stored in the vector.
 	TypeId type;
 	//! The amount of elements in the vector.
@@ -120,12 +118,11 @@ class Vector : public Printable {
 	//! given null mask. Returns the amount of not-null values.
 	//! result_assignment will be set to either result_vector (if there are null
 	//! values) or to nullptr (if there are no null values)
-	static size_t NotNullSelVector(const Vector &vector, sel_t *not_null_vector,
-	                               sel_t *&result_assignment,
+	static size_t NotNullSelVector(const Vector &vector, sel_t *not_null_vector, sel_t *&result_assignment,
 	                               sel_t *null_vector = nullptr);
 
 	//! Converts this Vector to a printable string representation
-	std::string ToString() const;
+	string ToString() const;
 
 	//! Returns true the vector holds only a single constant value and does not
 	//! have a selection vector
@@ -147,8 +144,8 @@ class Vector : public Printable {
 	//! The stringheap of the vector
 	StringHeap string_heap;
 
-  protected:
+protected:
 	//! If the vector owns data, this is the unique_ptr holds the actual data.
-	std::unique_ptr<char[]> owned_data;
+	unique_ptr<char[]> owned_data;
 };
 } // namespace duckdb

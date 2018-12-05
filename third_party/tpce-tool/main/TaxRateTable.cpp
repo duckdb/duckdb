@@ -40,8 +40,7 @@
 
 using namespace TPCE;
 
-TaxRateTable::TaxRateTable(const CTaxRateFile &dataFile)
-    : FixedTable<CTaxRateFile, TAX_RATE_ROW>(dataFile) {
+TaxRateTable::TaxRateTable(const CTaxRateFile &dataFile) : FixedTable<CTaxRateFile, TAX_RATE_ROW>(dataFile) {
 }
 
 TaxRateTable::~TaxRateTable() {
@@ -51,7 +50,6 @@ void TaxRateTable::LoadTableRow() {
 	const ITaxRateFileRecord &dataRecord(df[recordIdx]);
 
 	strncpy(tableRow.TX_ID, dataRecord.TX_ID_CSTR(), sizeof(tableRow.TX_ID));
-	strncpy(tableRow.TX_NAME, dataRecord.TX_NAME_CSTR(),
-	        sizeof(tableRow.TX_NAME));
+	strncpy(tableRow.TX_NAME, dataRecord.TX_NAME_CSTR(), sizeof(tableRow.TX_NAME));
 	tableRow.TX_RATE = dataRecord.TX_RATE();
 }

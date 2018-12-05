@@ -9,8 +9,7 @@ TEST_CASE("Complex Expressions", "[sql]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 	con.Query("CREATE TABLE exprtest (a INTEGER, b INTEGER)");
-	con.Query(
-	    "INSERT INTO exprtest VALUES (42, 10), (43, 100), (NULL, 1), (45, -1)");
+	con.Query("INSERT INTO exprtest VALUES (42, 10), (43, 100), (NULL, 1), (45, -1)");
 
 	result = con.Query("SELECT * FROM exprtest");
 	REQUIRE(CHECK_COLUMN(result, 0, {42, 43, Value(), 45}));
@@ -67,8 +66,7 @@ TEST_CASE("Complex Expressions", "[sql]") {
 
 	con.Query("CREATE TABLE intest (a INTEGER, b INTEGER, c INTEGER)");
 
-	con.Query(
-	    "INSERT INTO intest VALUES (42, 42, 42), (43, 42, 42), (44, 41, 44);");
+	con.Query("INSERT INTO intest VALUES (42, 42, 42), (43, 42, 42), (44, 41, 44);");
 
 	result = con.Query("SELECT * FROM intest WHERE a IN (42, 43)");
 	REQUIRE(CHECK_COLUMN(result, 0, {42, 43}));
@@ -83,8 +81,7 @@ TEST_CASE("Complex Expressions", "[sql]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {}));
 	REQUIRE(CHECK_COLUMN(result, 2, {}));
 
-	result =
-	    con.Query("SELECT * FROM intest WHERE a IN (NULL, NULL, NULL, NULL)");
+	result = con.Query("SELECT * FROM intest WHERE a IN (NULL, NULL, NULL, NULL)");
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 	REQUIRE(CHECK_COLUMN(result, 1, {}));
 	REQUIRE(CHECK_COLUMN(result, 2, {}));

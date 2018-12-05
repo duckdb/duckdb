@@ -104,8 +104,8 @@ int mk_w_inventory(void *info_arr, ds_key_t index) {
 	 */
 	r->inv_item_sk = matchSCDSK(r->inv_item_sk, r->inv_date_sk, ITEM);
 
-	genrand_integer(&r->inv_quantity_on_hand, DIST_UNIFORM, INV_QUANTITY_MIN,
-	                INV_QUANTITY_MAX, 0, INV_QUANTITY_ON_HAND);
+	genrand_integer(&r->inv_quantity_on_hand, DIST_UNIFORM, INV_QUANTITY_MIN, INV_QUANTITY_MAX, 0,
+	                INV_QUANTITY_ON_HAND);
 
 	void *info = append_info_get(info_arr, INVENTORY);
 	append_row_start(info);

@@ -70,8 +70,7 @@ static ds_key_t web_join(int col, ds_key_t join_key);
  * TODO: Relies on existing RNG code, which isn't really 64bit; will probably
  * requre a rework of the genrand_xx routines
  */
-static ds_key_t date_join(int from_tbl, int from_col, ds_key_t join_count,
-                          int nYear) {
+static ds_key_t date_join(int from_tbl, int from_col, ds_key_t join_count, int nYear) {
 	int nDay, nTemp, nMin = -1, nMax = -1, nResult;
 	static int bInit = 0, jToday;
 	date_t TempDate;
@@ -86,8 +85,7 @@ static ds_key_t date_join(int from_tbl, int from_col, ds_key_t join_count,
 	case STORE_SALES:
 	case CATALOG_SALES:
 	case WEB_SALES:
-		pick_distribution(&nDay, "calendar", 1, calendar_sales + is_leap(nYear),
-		                  from_col);
+		pick_distribution(&nDay, "calendar", 1, calendar_sales + is_leap(nYear), from_col);
 		break;
 
 	/*
@@ -185,9 +183,7 @@ static ds_key_t cp_join(int tbl, int col, ds_key_t jDate) {
 	char *szTemp;
 
 	if (!init) {
-		nPagePerCatalog =
-		    ((int)get_rowcount(CATALOG_PAGE) / CP_CATALOGS_PER_YEAR) /
-		    (YEAR_MAXIMUM - YEAR_MINIMUM + 2);
+		nPagePerCatalog = ((int)get_rowcount(CATALOG_PAGE) / CP_CATALOGS_PER_YEAR) / (YEAR_MAXIMUM - YEAR_MINIMUM + 2);
 		dTemp = strtodate(DATA_START_DATE);
 		init = 1;
 	}
@@ -234,9 +230,7 @@ ds_key_t getCatalogNumberFromPage(ds_key_t kPageNumber) {
 	static int nPagePerCatalog;
 
 	if (!bInit) {
-		nPagePerCatalog =
-		    ((int)get_rowcount(CATALOG_PAGE) / CP_CATALOGS_PER_YEAR) /
-		    (YEAR_MAXIMUM - YEAR_MINIMUM + 2);
+		nPagePerCatalog = ((int)get_rowcount(CATALOG_PAGE) / CP_CATALOGS_PER_YEAR) / (YEAR_MAXIMUM - YEAR_MINIMUM + 2);
 		bInit = 1;
 	}
 
@@ -278,8 +272,7 @@ static ds_key_t web_join(int col, ds_key_t join_key) {
 		dSiteOpen = strtodate(WEB_START_DATE);
 		nSiteDuration -= dSiteOpen->julian;
 		nSiteDuration *= nConcurrentSites;
-		nOffset =
-		    (dSiteClose->julian - dSiteOpen->julian) / (2 * nSiteDuration);
+		nOffset = (dSiteClose->julian - dSiteOpen->julian) / (2 * nSiteDuration);
 		init = 1;
 
 		free(dSiteClose);
@@ -292,8 +285,7 @@ static ds_key_t web_join(int col, ds_key_t join_key) {
 		 */
 	case WEB_OPEN_DATE:
 		dSiteOpen = strtodate(DATE_MINIMUM);
-		res = dSiteOpen->julian -
-		      ((join_key * WEB_DATE_STAGGER) % nSiteDuration / 2);
+		res = dSiteOpen->julian - ((join_key * WEB_DATE_STAGGER) % nSiteDuration / 2);
 		free(dSiteOpen);
 		if (WEB_IS_REPLACED(join_key)) /* this site is completely replaced */
 		{
@@ -307,8 +299,7 @@ static ds_key_t web_join(int col, ds_key_t join_key) {
 		break;
 	case WEB_CLOSE_DATE:
 		dSiteOpen = strtodate(DATE_MINIMUM);
-		res = dSiteOpen->julian -
-		      ((join_key * WEB_DATE_STAGGER) % nSiteDuration / 2);
+		res = dSiteOpen->julian - ((join_key * WEB_DATE_STAGGER) % nSiteDuration / 2);
 		free(dSiteOpen);
 		res += pWS->nParam * nSiteDuration;
 		if (WEB_IS_REPLACED(join_key)) /* this site is completely replaced */
@@ -323,29 +314,25 @@ static ds_key_t web_join(int col, ds_key_t join_key) {
 		break;
 	case WEB_REC_START_DATE_ID:
 		dSiteOpen = strtodate(DATE_MINIMUM);
-		res = dSiteOpen->julian -
-		      (((join_key - 1) * WEB_DATE_STAGGER) % nSiteDuration / 2);
+		res = dSiteOpen->julian - (((join_key - 1) * WEB_DATE_STAGGER) % nSiteDuration / 2);
 		free(dSiteOpen);
 		res += (join_key % pWS->nParam) * nSiteDuration;
 		break;
 	case WEB_REC_END_DATE_ID:
 		dSiteOpen = strtodate(DATE_MINIMUM);
-		res = dSiteOpen->julian -
-		      ((join_key * WEB_DATE_STAGGER) % nSiteDuration / 2);
+		res = dSiteOpen->julian - ((join_key * WEB_DATE_STAGGER) % nSiteDuration / 2);
 		free(dSiteOpen);
 		res += ((join_key + 1) % pWS->nParam) * nSiteDuration * 5 - 1;
 		break;
 	case WP_REC_START_DATE_ID:
 		dSiteOpen = strtodate(DATE_MINIMUM);
-		res = dSiteOpen->julian -
-		      (((join_key - 1) * WEB_DATE_STAGGER) % nSiteDuration / 2);
+		res = dSiteOpen->julian - (((join_key - 1) * WEB_DATE_STAGGER) % nSiteDuration / 2);
 		free(dSiteOpen);
 		res += (join_key % pWP->nParam) * nSiteDuration * 5;
 		break;
 	case WP_REC_END_DATE_ID:
 		dSiteOpen = strtodate(DATE_MINIMUM);
-		res = dSiteOpen->julian -
-		      ((join_key * WEB_DATE_STAGGER) % nSiteDuration / 2);
+		res = dSiteOpen->julian - ((join_key * WEB_DATE_STAGGER) % nSiteDuration / 2);
 		free(dSiteOpen);
 		res += ((join_key + 1) % pWP->nParam) * nSiteDuration - 1;
 		break;
@@ -358,13 +345,10 @@ static ds_key_t web_join(int col, ds_key_t join_key) {
 		 */
 		dSiteOpen = strtodate(DATE_MINIMUM);
 		kSite = join_key / WEB_PAGES_PER_SITE + 1;
-		res = dSiteOpen->julian -
-		      (((int)kSite * WEB_DATE_STAGGER) % nSiteDuration / 2);
-		if (((int)kSite % pWP->nParam) ==
-		    0) /* this is a site that gets replaced */
+		res = dSiteOpen->julian - (((int)kSite * WEB_DATE_STAGGER) % nSiteDuration / 2);
+		if (((int)kSite % pWP->nParam) == 0) /* this is a site that gets replaced */
 		{
-			genrand_integer(&nTemp, DIST_UNIFORM, (int)res, dSiteOpen->julian,
-			                0, col);
+			genrand_integer(&nTemp, DIST_UNIFORM, (int)res, dSiteOpen->julian, 0, col);
 			res = nTemp;
 		}
 		free(dSiteOpen);
@@ -377,8 +361,7 @@ static ds_key_t web_join(int col, ds_key_t join_key) {
 		 */
 	case WR_WEB_PAGE_SK:
 	case WS_WEB_PAGE_SK:
-		res =
-		    genrand_integer(NULL, DIST_UNIFORM, 1, WEB_PAGES_PER_SITE, 0, col);
+		res = genrand_integer(NULL, DIST_UNIFORM, 1, WEB_PAGES_PER_SITE, 0, col);
 		break;
 	}
 
@@ -423,8 +406,7 @@ ds_key_t mk_join(int from_col, int to_tbl, ds_key_t join_count) {
 	case CATALOG_PAGE:
 		return (cp_join(nFromTable, from_col, join_count));
 	case DATET:
-		genrand_integer(&nYear, DIST_UNIFORM, YEAR_MINIMUM, YEAR_MAXIMUM, 0,
-		                from_col);
+		genrand_integer(&nYear, DIST_UNIFORM, YEAR_MINIMUM, YEAR_MAXIMUM, 0, from_col);
 		return (date_join(nFromTable, from_col, join_count, nYear));
 	case TIME:
 		return (time_join(nFromTable, from_col, join_count));
@@ -440,8 +422,7 @@ ds_key_t mk_join(int from_col, int to_tbl, ds_key_t join_count) {
 		if (pTdef->flags & FL_SPARSE)
 			return (randomSparseKey(nTableIndex, from_col));
 
-		genrand_key(&res, DIST_UNIFORM, (ds_key_t)1, get_rowcount(nTableIndex),
-		            (ds_key_t)0, from_col);
+		genrand_key(&res, DIST_UNIFORM, (ds_key_t)1, get_rowcount(nTableIndex), (ds_key_t)0, from_col);
 		break;
 	}
 

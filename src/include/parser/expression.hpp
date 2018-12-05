@@ -1,22 +1,20 @@
 //===----------------------------------------------------------------------===//
-//
 //                         DuckDB
 //
 // parser/expression.hpp
-//
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include <memory>
-#include <stack>
-#include <vector>
-
 #include "common/common.hpp"
 #include "common/printable.hpp"
 #include "common/types/statistics.hpp"
+
+#include <memory>
+#include <stack>
+#include <vector>
 
 namespace duckdb {
 class SQLNodeVisitor;
@@ -34,15 +32,14 @@ class AggregateExpression;
  Vectors as input (but in most cases the amount of input vectors is 0-2).
  */
 class Expression : public Printable {
-  public:
+public:
 	//! Create an Expression
 	Expression(ExpressionType type) : type(type), stats(*this) {
 	}
 	//! Create an Expression with zero, one or two children with the
 	//! specified return type
-	Expression(ExpressionType type, TypeId return_type,
-	           std::unique_ptr<Expression> left = nullptr,
-	           std::unique_ptr<Expression> right = nullptr)
+	Expression(ExpressionType type, TypeId return_type, unique_ptr<Expression> left = nullptr,
+	           unique_ptr<Expression> right = nullptr)
 	    : type(type), return_type(return_type), stats(*this) {
 		if (left)
 			AddChild(std::move(left));
@@ -50,7 +47,7 @@ class Expression : public Printable {
 			AddChild(std::move(right));
 	}
 
-	virtual std::unique_ptr<Expression> Accept(SQLNodeVisitor *) = 0;
+	virtual unique_ptr<Expression> Accept(SQLNodeVisitor *) = 0;
 	virtual void AcceptChildren(SQLNodeVisitor *v);
 
 	//! Resolves the type for this expression based on its children
@@ -62,7 +59,7 @@ class Expression : public Printable {
 
 	//! Add a child node to the Expression. Note that the order of
 	//! adding children is important in most cases
-	void AddChild(std::unique_ptr<Expression> child) {
+	void AddChild(unique_ptr<Expression> child) {
 		children.push_back(std::move(child));
 	}
 
@@ -78,7 +75,7 @@ class Expression : public Printable {
 
 	 (2) SELECT COUNT(SUM(a)) FROM table; (One aggregate, SUM(a))
 	 */
-	virtual void GetAggregates(std::vector<AggregateExpression *> &expressions);
+	virtual void GetAggregates(vector<AggregateExpression *> &expressions);
 	//! Returns true if this Expression is an aggregate or not.
 	/*!
 	 Examples:
@@ -107,21 +104,21 @@ class Expression : public Printable {
 		return this->Equals(&rhs);
 	}
 
-	std::string ToString() const override;
+	string ToString() const override;
 
-	virtual std::string GetName() {
+	virtual string GetName() {
 		return !alias.empty() ? alias : "Unknown";
 	}
 	virtual ExpressionClass GetExpressionClass() = 0;
 
 	//! Create a copy of this expression
-	virtual std::unique_ptr<Expression> Copy() = 0;
+	virtual unique_ptr<Expression> Copy() = 0;
 
 	//! Serializes an Expression to a stand-alone binary blob
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes a blob back into an Expression [CAN THROW:
 	//! SerializationException]
-	static std::unique_ptr<Expression> Deserialize(Deserializer &source);
+	static unique_ptr<Expression> Deserialize(Deserializer &source);
 
 	//! Clears the statistics of this expression and all child expressions
 	void ClearStatistics() {
@@ -142,12 +139,12 @@ class Expression : public Printable {
 
 	//! The alias of the expression, used in the SELECT clause (e.g. SELECT x +
 	//! 1 AS f)
-	std::string alias;
+	string alias;
 
 	//! A list of children of the expression
-	std::vector<std::unique_ptr<Expression>> children;
+	vector<unique_ptr<Expression>> children;
 
-  protected:
+protected:
 	//! Copy base Expression properties from another expression to this one,
 	//! used in Copy method
 	void CopyProperties(Expression &other) {
@@ -168,7 +165,7 @@ class Expression : public Printable {
 struct ExpressionDeserializeInfo {
 	ExpressionType type;
 	TypeId return_type;
-	std::vector<std::unique_ptr<Expression>> children;
+	vector<unique_ptr<Expression>> children;
 };
 
 } // namespace duckdb

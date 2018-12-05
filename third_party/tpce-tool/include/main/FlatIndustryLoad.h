@@ -47,23 +47,21 @@
 namespace TPCE {
 
 class CFlatIndustryLoad : public CFlatFileLoader<INDUSTRY_ROW> {
-  private:
+private:
 	const std::string IndustryRowFmt;
 
-  public:
+public:
 	CFlatIndustryLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
-	    : CFlatFileLoader<INDUSTRY_ROW>(szFileName, FlatFileOutputMode),
-	      IndustryRowFmt("%s|%s|%s\n"){};
+	    : CFlatFileLoader<INDUSTRY_ROW>(szFileName, FlatFileOutputMode), IndustryRowFmt("%s|%s|%s\n"){};
 
 	/*
 	 *   Writes a record to the file.
 	 */
 	void WriteNextRecord(const INDUSTRY_ROW &next_record) {
-		int rc = fprintf(hOutFile, IndustryRowFmt.c_str(), next_record.IN_ID,
-		                 next_record.IN_NAME, next_record.IN_SC_ID);
+		int rc =
+		    fprintf(hOutFile, IndustryRowFmt.c_str(), next_record.IN_ID, next_record.IN_NAME, next_record.IN_SC_ID);
 		if (rc < 0) {
-			throw CSystemErr(CSystemErr::eWriteFile,
-			                 "CFlatIndustryLoad::WriteNextRecord");
+			throw CSystemErr(CSystemErr::eWriteFile, "CFlatIndustryLoad::WriteNextRecord");
 		}
 	}
 };

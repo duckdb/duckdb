@@ -1,14 +1,13 @@
 #include "dss.h"
 #include "rng64.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 
 /*  _tal long RandSeed = "Random^SeedFromTimestamp" (void); */
 
-#define ADVANCE_STREAM(stream_id, num_calls)                                   \
-	advanceStream(stream_id, num_calls, 0)
-#define ADVANCE_STREAM64(stream_id, num_calls)                                 \
-	advanceStream(stream_id, num_calls, 1)
+#define ADVANCE_STREAM(stream_id, num_calls) advanceStream(stream_id, num_calls, 0)
+#define ADVANCE_STREAM64(stream_id, num_calls) advanceStream(stream_id, num_calls, 1)
 #define MAX_COLOR 92
 long name_bits[MAX_COLOR / BITS_PER_LONG];
 extern seed_t Seed[];

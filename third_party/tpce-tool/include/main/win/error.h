@@ -44,7 +44,7 @@ namespace TPCE {
 #define ERR_TYPE_ODBC 6 // odbc generated error
 
 class CODBCERR : public CBaseErr {
-  public:
+public:
 	enum ACTION {
 		eNone,
 		eUnknown,

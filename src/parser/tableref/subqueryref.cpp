@@ -1,4 +1,3 @@
-
 #include "parser/tableref/subqueryref.hpp"
 
 #include "common/serializer.hpp"

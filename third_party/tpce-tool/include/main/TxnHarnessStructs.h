@@ -87,28 +87,27 @@ const INT32 max_table_name = 30;
  * Macros for harness validation
  */
 
-#define TXN_HARNESS_PROPAGATE_STATUS(code)                                     \
-	if ((pTxnOutput->status >= 0) && ((code) < 0)) {                           \
-		/* propagate error over existing ok/warn status */                     \
-		pTxnOutput->status = (code);                                           \
-	} else if ((pTxnOutput->status == 0) && ((code) > 0)) {                    \
-		/* propagate warning over existing ok status */                        \
-		pTxnOutput->status = (code);                                           \
+#define TXN_HARNESS_PROPAGATE_STATUS(code)                                                                             \
+	if ((pTxnOutput->status >= 0) && ((code) < 0)) {                                                                   \
+		/* propagate error over existing ok/warn status */                                                             \
+		pTxnOutput->status = (code);                                                                                   \
+	} else if ((pTxnOutput->status == 0) && ((code) > 0)) {                                                            \
+		/* propagate warning over existing ok status */                                                                \
+		pTxnOutput->status = (code);                                                                                   \
 	}
 
-#define TXN_HARNESS_SET_STATUS_SUCCESS                                         \
-	pTxnOutput->status = CBaseTxnErr::SUCCESS;
+#define TXN_HARNESS_SET_STATUS_SUCCESS pTxnOutput->status = CBaseTxnErr::SUCCESS;
 
-#define TXN_HARNESS_EARLY_EXIT_ON_ERROR                                        \
-	if (pTxnOutput->status < 0) {                                              \
-		return;                                                                \
+#define TXN_HARNESS_EARLY_EXIT_ON_ERROR                                                                                \
+	if (pTxnOutput->status < 0) {                                                                                      \
+		return;                                                                                                        \
 	}
 
 /*
  *   Broker-Volume
  */
 typedef class TBrokerVolumeTxnInput {
-  public:
+public:
 	// Transaction level inputs
 	char broker_list[max_broker_list_len][cB_NAME_len + 1];
 	char sector_name[cSC_NAME_len + 1];
@@ -128,7 +127,7 @@ typedef class TBrokerVolumeTxnInput {
     *PBrokerVolumeFrame1Input; // Single-Frame transaction
 
 typedef class TBrokerVolumeTxnOutput {
-  public:
+public:
 	// Transaction level outputs
 	double volume[max_broker_list_len];
 	INT32 list_len;
@@ -147,7 +146,7 @@ typedef class TBrokerVolumeTxnOutput {
 } * PBrokerVolumeTxnOutput;
 
 typedef class TBrokerVolumeFrame1Output {
-  public:
+public:
 	// Frame level outputs
 	double volume[max_broker_list_len];
 	INT32 list_len;
@@ -167,7 +166,7 @@ typedef class TBrokerVolumeFrame1Output {
  *   Customer-Position
  */
 typedef class TCustomerPositionTxnInput {
-  public:
+public:
 	TIdent acct_id_idx;
 	TIdent cust_id;
 	bool get_history;
@@ -186,7 +185,7 @@ typedef class TCustomerPositionTxnInput {
 } * PCustomerPositionTxnInput;
 
 typedef class TCustomerPositionTxnOutput {
-  public:
+public:
 	double asset_total[max_acct_len];
 	double cash_bal[max_acct_len];
 	TIdent acct_id[max_acct_len];
@@ -234,7 +233,7 @@ typedef class TCustomerPositionTxnOutput {
 } * PCustomerPositionTxnOutput;
 
 typedef class TCustomerPositionFrame1Input {
-  public:
+public:
 	TIdent cust_id;
 	char tax_id[cTAX_ID_len + 1];
 
@@ -249,7 +248,7 @@ typedef class TCustomerPositionFrame1Input {
 } * PCustomerPositionFrame1Input;
 
 typedef class TCustomerPositionFrame1Output {
-  public:
+public:
 	double asset_total[max_acct_len];
 	double cash_bal[max_acct_len];
 	TIdent acct_id[max_acct_len];
@@ -289,7 +288,7 @@ typedef class TCustomerPositionFrame1Output {
 } * PCustomerPositionFrame1Output;
 
 typedef class TCustomerPositionFrame2Input {
-  public:
+public:
 	TIdent acct_id;
 
 	TCustomerPositionFrame2Input() {
@@ -303,7 +302,7 @@ typedef class TCustomerPositionFrame2Input {
 } * PCustomerPositionFrame2Input;
 
 typedef class TCustomerPositionFrame2Output {
-  public:
+public:
 	TTrade trade_id[max_hist_len];
 	INT32 qty[max_hist_len];
 	INT32 hist_len;
@@ -325,7 +324,7 @@ typedef class TCustomerPositionFrame2Output {
  *   Data-Maintenance
  */
 typedef class TDataMaintenanceTxnInput {
-  public:
+public:
 	TIdent acct_id;
 	TIdent c_id;
 	TIdent co_id;
@@ -350,7 +349,7 @@ typedef class TDataMaintenanceTxnInput {
     *PDataMaintenanceFrame1Input; // Single-Frame transaction
 
 typedef class TDataMaintenanceTxnOutput {
-  public:
+public:
 	INT32 status;
 
 #ifdef ENABLE_DEFAULT_CONSTRUCTOR_ON_TXN_INPUT_OUTPUT
@@ -370,7 +369,7 @@ typedef class TDataMaintenanceTxnOutput {
  */
 // MEE populates this class
 typedef class TStatusAndTradeType {
-  public:
+public:
 	char status_submitted[cST_ID_len + 1];
 	char type_limit_buy[cTT_ID_len + 1];
 	char type_limit_sell[cTT_ID_len + 1];
@@ -390,7 +389,7 @@ typedef class TStatusAndTradeType {
 
 // Incoming order from SendToMarket interface.
 typedef class TTradeRequest {
-  public:
+public:
 	double price_quote;
 	TTrade trade_id;
 	INT32 trade_qty;
@@ -412,7 +411,7 @@ typedef class TTradeRequest {
 
 // A single entry on the ticker tape feed.
 typedef class TTickerEntry {
-  public:
+public:
 	double price_quote;
 	INT32 trade_qty;
 	char symbol[cSYMBOL_len + 1];
@@ -431,7 +430,7 @@ typedef class TTickerEntry {
 
 // Market-Feed data sent from MEE to sponsor provided SUT interface
 typedef class TMarketFeedTxnInput {
-  public:
+public:
 	INT32 unique_symbols;
 	char zz_padding1[4];
 	TStatusAndTradeType StatusAndTradeType;
@@ -451,7 +450,7 @@ typedef class TMarketFeedTxnInput {
 } * PMarketFeedTxnInput;
 
 typedef class TMarketFeedTxnOutput {
-  public:
+public:
 	INT32 send_len;
 	INT32 status;
 
@@ -468,7 +467,7 @@ typedef class TMarketFeedTxnOutput {
 } * PMarketFeedTxnOutput;
 
 typedef class TMarketFeedFrame1Input {
-  public:
+public:
 	TStatusAndTradeType StatusAndTradeType;
 	char zz_padding[4];
 	TTickerEntry Entries[max_feed_len];
@@ -484,7 +483,7 @@ typedef class TMarketFeedFrame1Input {
 } * PMarketFeedFrame1Input;
 
 typedef class TMarketFeedFrame1Output {
-  public:
+public:
 	INT32 num_updated;
 	INT32 send_len;
 
@@ -502,7 +501,7 @@ typedef class TMarketFeedFrame1Output {
  *   Market-Watch
  */
 typedef class TMarketWatchTxnInput {
-  public:
+public:
 	TIdent acct_id;
 	TIdent c_id;
 	TIdent ending_co_id;
@@ -525,7 +524,7 @@ typedef class TMarketWatchTxnInput {
     *PMarketWatchFrame1Input; // Single-Frame transaction
 
 typedef class TMarketWatchTxnOutput {
-  public:
+public:
 	double pct_change;
 	INT32 status;
 
@@ -542,7 +541,7 @@ typedef class TMarketWatchTxnOutput {
 } * PMarketWatchTxnOutput;
 
 typedef class TMarketWatchFrame1Output {
-  public:
+public:
 	double pct_change;
 
 	TMarketWatchFrame1Output() {
@@ -559,7 +558,7 @@ typedef class TMarketWatchFrame1Output {
  *   Security-Detail
  */
 typedef class TFinInfo {
-  public:
+public:
 	double assets;
 	double basic_eps;
 	double dilut_eps;
@@ -598,7 +597,7 @@ typedef class TFinInfo {
 } * PFinInfo;
 
 typedef class TDailyHistory {
-  public:
+public:
 	double close;
 	double high;
 	double low;
@@ -621,7 +620,7 @@ typedef class TDailyHistory {
 } * PDailyHistory;
 
 typedef class TNews {
-  public:
+public:
 	TIMESTAMP_STRUCT dts;
 	char auth[cNI_AUTHOR_len + 1];
 	char headline[cNI_HEADLINE_len + 1];
@@ -650,7 +649,7 @@ typedef class TNews {
 } * PNews;
 
 typedef class TSecurityDetailTxnInput {
-  public:
+public:
 	INT32 max_rows_to_return;
 	bool access_lob_flag;
 	TIMESTAMP_STRUCT start_day;
@@ -671,7 +670,7 @@ typedef class TSecurityDetailTxnInput {
     *PSecurityDetailFrame1Input; // Single-Frame transaction
 
 typedef class TSecurityDetailTxnOutput {
-  public:
+public:
 	INT64 last_vol;
 	INT32 news_len;
 	INT32 status;
@@ -689,7 +688,7 @@ typedef class TSecurityDetailTxnOutput {
 } * PSecurityDetailTxnOutput;
 
 typedef class TSecurityDetailFrame1Output {
-  public:
+public:
 	double divid;
 	double last_open;
 	double last_price;
@@ -800,7 +799,7 @@ typedef class TSecurityDetailFrame1Output {
  *   Trade-Lookup
  */
 typedef class TTradeLookupTxnInput {
-  public:
+public:
 	TTrade trade_id[TradeLookupFrame1MaxRows];
 	TIdent acct_id;
 	TIdent max_acct_id;
@@ -823,7 +822,7 @@ typedef class TTradeLookupTxnInput {
 } * PTradeLookupTxnInput;
 
 typedef class TTradeLookupTxnOutput {
-  public:
+public:
 	TTrade trade_list[TradeLookupMaxRows];
 	INT32 frame_executed; // confirmation of which frame was executed
 	INT32 num_found;
@@ -844,7 +843,7 @@ typedef class TTradeLookupTxnOutput {
 } * PTradeLookupTxnOutput;
 
 typedef class TTradeLookupFrame1Input {
-  public:
+public:
 	TTrade trade_id[TradeLookupFrame1MaxRows];
 	INT32 max_trades;
 
@@ -861,7 +860,7 @@ typedef class TTradeLookupFrame1Input {
 // Class to hold one trade information row
 //
 typedef class TTradeLookupFrame1TradeInfo {
-  public:
+public:
 	double bid_price;
 	double cash_transaction_amount;
 	double settlement_amount;
@@ -871,8 +870,7 @@ typedef class TTradeLookupFrame1TradeInfo {
 	TIMESTAMP_STRUCT trade_history_dts[TradeLookupMaxTradeHistoryRowsReturned];
 	TIMESTAMP_STRUCT cash_transaction_dts;
 	TIMESTAMP_STRUCT settlement_cash_due_date;
-	char trade_history_status_id[TradeLookupMaxTradeHistoryRowsReturned]
-	                            [cTH_ST_ID_len + 1];
+	char trade_history_status_id[TradeLookupMaxTradeHistoryRowsReturned][cTH_ST_ID_len + 1];
 	char cash_transaction_name[cCT_NAME_len + 1];
 	char exec_name[cEXEC_NAME_len + 1];
 	char settlement_cash_type[cSE_CASH_TYPE_len + 1];
@@ -902,7 +900,7 @@ typedef class TTradeLookupFrame1TradeInfo {
 } * PTradeLookupFrame1TradeInfo;
 
 typedef class TTradeLookupFrame1Output {
-  public:
+public:
 	INT32 num_found;
 	TTradeLookupFrame1TradeInfo trade_info[TradeLookupFrame1MaxRows];
 
@@ -917,7 +915,7 @@ typedef class TTradeLookupFrame1Output {
 } * PTradeLookupFrame1Output;
 
 typedef class TTradeLookupFrame2Input {
-  public:
+public:
 	TIdent acct_id;
 	INT32 max_trades;
 	TIMESTAMP_STRUCT end_trade_dts;
@@ -936,7 +934,7 @@ typedef class TTradeLookupFrame2Input {
 // Class to hold one trade information row
 //
 typedef class TTradeLookupFrame2TradeInfo {
-  public:
+public:
 	double bid_price;
 	double cash_transaction_amount;
 	double settlement_amount;
@@ -946,8 +944,7 @@ typedef class TTradeLookupFrame2TradeInfo {
 	TIMESTAMP_STRUCT trade_history_dts[TradeLookupMaxTradeHistoryRowsReturned];
 	TIMESTAMP_STRUCT cash_transaction_dts;
 	TIMESTAMP_STRUCT settlement_cash_due_date;
-	char trade_history_status_id[TradeLookupMaxTradeHistoryRowsReturned]
-	                            [cTH_ST_ID_len + 1];
+	char trade_history_status_id[TradeLookupMaxTradeHistoryRowsReturned][cTH_ST_ID_len + 1];
 	char cash_transaction_name[cCT_NAME_len + 1];
 	char exec_name[cEXEC_NAME_len + 1];
 	char settlement_cash_type[cSE_CASH_TYPE_len + 1];
@@ -977,7 +974,7 @@ typedef class TTradeLookupFrame2TradeInfo {
 } * PTradeLookupFrame2TradeInfo;
 
 typedef class TTradeLookupFrame2Output {
-  public:
+public:
 	INT32 num_found;
 	TTradeLookupFrame2TradeInfo trade_info[TradeLookupFrame2MaxRows];
 
@@ -992,7 +989,7 @@ typedef class TTradeLookupFrame2Output {
 } * PTradeLookupFrame2Output;
 
 typedef class TTradeLookupFrame3Input {
-  public:
+public:
 	TIdent max_acct_id;
 	INT32 max_trades;
 	TIMESTAMP_STRUCT end_trade_dts;
@@ -1012,7 +1009,7 @@ typedef class TTradeLookupFrame3Input {
 // Class to hold one trade information row
 //
 typedef class TTradeLookupFrame3TradeInfo {
-  public:
+public:
 	double cash_transaction_amount;
 	double price;
 	double settlement_amount;
@@ -1024,8 +1021,7 @@ typedef class TTradeLookupFrame3TradeInfo {
 	TIMESTAMP_STRUCT cash_transaction_dts;
 	TIMESTAMP_STRUCT settlement_cash_due_date;
 	TIMESTAMP_STRUCT trade_dts;
-	char trade_history_status_id[TradeLookupMaxTradeHistoryRowsReturned]
-	                            [cTH_ST_ID_len + 1];
+	char trade_history_status_id[TradeLookupMaxTradeHistoryRowsReturned][cTH_ST_ID_len + 1];
 	char cash_transaction_name[cCT_NAME_len + 1];
 	char exec_name[cEXEC_NAME_len + 1];
 	char settlement_cash_type[cSE_CASH_TYPE_len + 1];
@@ -1059,7 +1055,7 @@ typedef class TTradeLookupFrame3TradeInfo {
 } * PTradeLookupFrame3TradeInfo;
 
 typedef class TTradeLookupFrame3Output {
-  public:
+public:
 	INT32 num_found;
 	TTradeLookupFrame3TradeInfo trade_info[TradeLookupFrame3MaxRows];
 
@@ -1074,7 +1070,7 @@ typedef class TTradeLookupFrame3Output {
 } * PTradeLookupFrame3Output;
 
 typedef class TTradeLookupFrame4Input {
-  public:
+public:
 	TIdent acct_id;
 	TIMESTAMP_STRUCT trade_dts;
 
@@ -1091,7 +1087,7 @@ typedef class TTradeLookupFrame4Input {
 // Class to hold one trade information row
 //
 typedef class TTradeLookupFrame4TradeInfo {
-  public:
+public:
 	TTrade holding_history_id;
 	TTrade holding_history_trade_id;
 	INT32 quantity_after;
@@ -1112,7 +1108,7 @@ typedef class TTradeLookupFrame4TradeInfo {
 } * PTradeLookupFrame4TradeInfo;
 
 typedef class TTradeLookupFrame4Output {
-  public:
+public:
 	TTrade trade_id;
 	INT32 num_found;
 	INT32 num_trades_found;
@@ -1132,7 +1128,7 @@ typedef class TTradeLookupFrame4Output {
  *   Trade-Order
  */
 typedef class TTradeOrderTxnInput {
-  public:
+public:
 	double requested_price;
 	TIdent acct_id;
 	INT32 is_lifo;
@@ -1162,7 +1158,7 @@ typedef class TTradeOrderTxnInput {
 } * PTradeOrderTxnInput;
 
 typedef class TTradeOrderTxnOutput {
-  public:
+public:
 	double buy_value;
 	double sell_value;
 	double tax_amount;
@@ -1182,7 +1178,7 @@ typedef class TTradeOrderTxnOutput {
 } * PTradeOrderTxnOutput;
 
 typedef class TTradeOrderFrame1Input {
-  public:
+public:
 	TIdent acct_id;
 
 	TTradeOrderFrame1Input() {
@@ -1196,7 +1192,7 @@ typedef class TTradeOrderFrame1Input {
 } * PTradeOrderFrame1Input;
 
 typedef class TTradeOrderFrame1Output {
-  public:
+public:
 	TIdent broker_id;
 	TIdent cust_id;
 	INT32 cust_tier;
@@ -1219,7 +1215,7 @@ typedef class TTradeOrderFrame1Output {
 } * PTradeOrderFrame1Output;
 
 typedef class TTradeOrderFrame2Input {
-  public:
+public:
 	TIdent acct_id;
 	char exec_f_name[cF_NAME_len + 1];
 	char exec_l_name[cL_NAME_len + 1];
@@ -1236,7 +1232,7 @@ typedef class TTradeOrderFrame2Input {
 } * PTradeOrderFrame2Input;
 
 typedef class TTradeOrderFrame2Output {
-  public:
+public:
 	char ap_acl[cACL_len + 1];
 
 	TTradeOrderFrame2Output() {
@@ -1250,7 +1246,7 @@ typedef class TTradeOrderFrame2Output {
 } * PTradeOrderFrame2Output;
 
 typedef class TTradeOrderFrame3Input {
-  public:
+public:
 	double requested_price; // IN-OUT parameter
 	TIdent acct_id;
 	TIdent cust_id;
@@ -1277,7 +1273,7 @@ typedef class TTradeOrderFrame3Input {
 } * PTradeOrderFrame3Input;
 
 typedef class TTradeOrderFrame3Output {
-  public:
+public:
 	double acct_assets;
 	double buy_value;
 	double charge_amount;
@@ -1304,7 +1300,7 @@ typedef class TTradeOrderFrame3Output {
 } * PTradeOrderFrame3Output;
 
 typedef class TTradeOrderFrame4Input {
-  public:
+public:
 	double charge_amount;
 	double comm_amount;
 	double requested_price;
@@ -1330,7 +1326,7 @@ typedef class TTradeOrderFrame4Input {
 } * PTradeOrderFrame4Input;
 
 typedef class TTradeOrderFrame4Output {
-  public:
+public:
 	TTrade trade_id;
 
 	TTradeOrderFrame4Output() {
@@ -1348,7 +1344,7 @@ typedef class TTradeOrderFrame4Output {
  */
 // Trade-Result data sent from MEE to sponsor provided SUT interface
 typedef class TTradeResultTxnInput {
-  public:
+public:
 	double trade_price;
 	TTrade trade_id;
 
@@ -1365,7 +1361,7 @@ typedef class TTradeResultTxnInput {
 } * PTradeResultTxnInput;
 
 typedef class TTradeResultTxnOutput {
-  public:
+public:
 	double acct_bal;
 	TIdent acct_id;
 	INT32 load_unit;
@@ -1384,7 +1380,7 @@ typedef class TTradeResultTxnOutput {
 } * PTradeResultTxnOutput;
 
 typedef class TTradeResultFrame1Input {
-  public:
+public:
 	TTrade trade_id;
 
 	TTradeResultFrame1Input() {
@@ -1398,7 +1394,7 @@ typedef class TTradeResultFrame1Input {
 } * PTradeResultFrame1Input;
 
 typedef class TTradeResultFrame1Output {
-  public:
+public:
 	double charge;
 	TIdent acct_id;
 	INT32 hs_qty;
@@ -1423,7 +1419,7 @@ typedef class TTradeResultFrame1Output {
 } * PTradeResultFrame1Output;
 
 typedef class TTradeResultFrame2Input {
-  public:
+public:
 	double trade_price;
 	TIdent acct_id;
 	TTrade trade_id;
@@ -1444,7 +1440,7 @@ typedef class TTradeResultFrame2Input {
 } * PTradeResultFrame2Input;
 
 typedef class TTradeResultFrame2Output {
-  public:
+public:
 	double buy_value;
 	double sell_value;
 	TIdent broker_id;
@@ -1463,7 +1459,7 @@ typedef class TTradeResultFrame2Output {
 } * PTradeResultFrame2Output;
 
 typedef class TTradeResultFrame3Input {
-  public:
+public:
 	double buy_value;
 	double sell_value;
 	TIdent cust_id;
@@ -1480,7 +1476,7 @@ typedef class TTradeResultFrame3Input {
 } * PTradeResultFrame3Input;
 
 typedef class TTradeResultFrame3Output {
-  public:
+public:
 	double tax_amount;
 
 	TTradeResultFrame3Output() {
@@ -1494,7 +1490,7 @@ typedef class TTradeResultFrame3Output {
 } * PTradeResultFrame3Output;
 
 typedef class TTradeResultFrame4Input {
-  public:
+public:
 	TIdent cust_id;
 	INT32 trade_qty;
 	char symbol[cSYMBOL_len + 1];
@@ -1511,7 +1507,7 @@ typedef class TTradeResultFrame4Input {
 } * PTradeResultFrame4Input;
 
 typedef class TTradeResultFrame4Output {
-  public:
+public:
 	double comm_rate;
 	char s_name[cS_NAME_len + 1];
 
@@ -1526,7 +1522,7 @@ typedef class TTradeResultFrame4Output {
 } * PTradeResultFrame4Output;
 
 typedef class TTradeResultFrame5Input {
-  public:
+public:
 	double comm_amount;
 	double trade_price;
 	TIdent broker_id;
@@ -1545,7 +1541,7 @@ typedef class TTradeResultFrame5Input {
 } * PTradeResultFrame5Input;
 
 typedef class TTradeResultFrame6Input {
-  public:
+public:
 	double se_amount;
 	TIdent acct_id;
 	TTrade trade_id;
@@ -1567,7 +1563,7 @@ typedef class TTradeResultFrame6Input {
 } * PTradeResultFrame6Input;
 
 typedef class TTradeResultFrame6Output {
-  public:
+public:
 	double acct_bal;
 
 	TTradeResultFrame6Output() {
@@ -1584,7 +1580,7 @@ typedef class TTradeResultFrame6Output {
  *   Trade-Status
  */
 typedef class TTradeStatusTxnInput {
-  public:
+public:
 	TIdent acct_id;
 
 #ifdef ENABLE_DEFAULT_CONSTRUCTOR_ON_TXN_INPUT_OUTPUT
@@ -1602,7 +1598,7 @@ typedef class TTradeStatusTxnInput {
     *PTradeStatusFrame1Input; // Single-Frame transaction
 
 typedef class TTradeStatusTxnOutput {
-  public:
+public:
 	TTrade trade_id[max_trade_status_len];
 	INT32 status;
 	char status_name[max_trade_status_len][cST_NAME_len + 1];
@@ -1620,7 +1616,7 @@ typedef class TTradeStatusTxnOutput {
 } * PTradeStatusTxnOutput;
 
 typedef class TTradeStatusFrame1Output {
-  public:
+public:
 	double charge[max_trade_status_len];
 	TTrade trade_id[max_trade_status_len];
 	INT32 trade_qty[max_trade_status_len];
@@ -1650,7 +1646,7 @@ typedef class TTradeStatusFrame1Output {
  *   Trade-Update
  */
 typedef class TTradeUpdateTxnInput {
-  public:
+public:
 	TTrade trade_id[TradeUpdateFrame1MaxRows];
 	TIdent acct_id;
 	TIdent max_acct_id;
@@ -1674,7 +1670,7 @@ typedef class TTradeUpdateTxnInput {
 } * PTradeUpdateTxnInput;
 
 typedef class TTradeUpdateTxnOutput {
-  public:
+public:
 	TTrade trade_list[TradeUpdateMaxRows];
 	INT32 frame_executed; // confirmation of which frame was executed
 	INT32 num_found;
@@ -1696,7 +1692,7 @@ typedef class TTradeUpdateTxnOutput {
 } * PTradeUpdateTxnOutput;
 
 typedef class TTradeUpdateFrame1Input {
-  public:
+public:
 	TTrade trade_id[TradeUpdateFrame1MaxRows];
 	INT32 max_trades;
 	INT32 max_updates;
@@ -1712,7 +1708,7 @@ typedef class TTradeUpdateFrame1Input {
 } * PTradeUpdateFrame1Input;
 
 typedef class TTradeUpdateFrame1TradeInfo {
-  public:
+public:
 	double bid_price;
 	double cash_transaction_amount;
 	double settlement_amount;
@@ -1722,8 +1718,7 @@ typedef class TTradeUpdateFrame1TradeInfo {
 	TIMESTAMP_STRUCT trade_history_dts[TradeUpdateMaxTradeHistoryRowsReturned];
 	TIMESTAMP_STRUCT cash_transaction_dts;
 	TIMESTAMP_STRUCT settlement_cash_due_date;
-	char trade_history_status_id[TradeUpdateMaxTradeHistoryRowsReturned]
-	                            [cTH_ST_ID_len + 1];
+	char trade_history_status_id[TradeUpdateMaxTradeHistoryRowsReturned][cTH_ST_ID_len + 1];
 	char cash_transaction_name[cCT_NAME_len + 1];
 	char exec_name[cEXEC_NAME_len + 1];
 	char settlement_cash_type[cSE_CASH_TYPE_len + 1];
@@ -1753,7 +1748,7 @@ typedef class TTradeUpdateFrame1TradeInfo {
 } * PTradeUpdateFrame1TradeInfo;
 
 typedef class TTradeUpdateFrame1Output {
-  public:
+public:
 	INT32 num_found;
 	INT32 num_updated;
 	TTradeUpdateFrame1TradeInfo trade_info[TradeUpdateFrame1MaxRows];
@@ -1769,7 +1764,7 @@ typedef class TTradeUpdateFrame1Output {
 } * PTradeUpdateFrame1Output;
 
 typedef class TTradeUpdateFrame2Input {
-  public:
+public:
 	TIdent acct_id;
 	INT32 max_trades;
 	INT32 max_updates;
@@ -1787,7 +1782,7 @@ typedef class TTradeUpdateFrame2Input {
 } * PTradeUpdateFrame2Input;
 
 typedef class TTradeUpdateFrame2TradeInfo {
-  public:
+public:
 	double bid_price;
 	double cash_transaction_amount;
 	double settlement_amount;
@@ -1797,8 +1792,7 @@ typedef class TTradeUpdateFrame2TradeInfo {
 	TIMESTAMP_STRUCT trade_history_dts[TradeUpdateMaxTradeHistoryRowsReturned];
 	TIMESTAMP_STRUCT cash_transaction_dts;
 	TIMESTAMP_STRUCT settlement_cash_due_date;
-	char trade_history_status_id[TradeUpdateMaxTradeHistoryRowsReturned]
-	                            [cTH_ST_ID_len + 1];
+	char trade_history_status_id[TradeUpdateMaxTradeHistoryRowsReturned][cTH_ST_ID_len + 1];
 	char cash_transaction_name[cCT_NAME_len + 1];
 	char exec_name[cEXEC_NAME_len + 1];
 	char settlement_cash_type[cSE_CASH_TYPE_len + 1];
@@ -1828,7 +1822,7 @@ typedef class TTradeUpdateFrame2TradeInfo {
 } * PTradeUpdateFrame2TradeInfo;
 
 typedef class TTradeUpdateFrame2Output {
-  public:
+public:
 	INT32 num_found;
 	INT32 num_updated;
 	TTradeUpdateFrame2TradeInfo trade_info[TradeUpdateFrame2MaxRows];
@@ -1844,7 +1838,7 @@ typedef class TTradeUpdateFrame2Output {
 } * PTradeUpdateFrame2Output;
 
 typedef class TTradeUpdateFrame3Input {
-  public:
+public:
 	TIdent max_acct_id;
 	INT32 max_trades;
 	INT32 max_updates;
@@ -1863,7 +1857,7 @@ typedef class TTradeUpdateFrame3Input {
 } * PTradeUpdateFrame3Input;
 
 typedef class TTradeUpdateFrame3TradeInfo {
-  public:
+public:
 	double cash_transaction_amount;
 	double price;
 	double settlement_amount;
@@ -1875,8 +1869,7 @@ typedef class TTradeUpdateFrame3TradeInfo {
 	TIMESTAMP_STRUCT cash_transaction_dts;
 	TIMESTAMP_STRUCT settlement_cash_due_date;
 	TIMESTAMP_STRUCT trade_dts;
-	char trade_history_status_id[TradeUpdateMaxTradeHistoryRowsReturned]
-	                            [cTH_ST_ID_len + 1];
+	char trade_history_status_id[TradeUpdateMaxTradeHistoryRowsReturned][cTH_ST_ID_len + 1];
 	char cash_transaction_name[cCT_NAME_len + 1];
 	char exec_name[cEXEC_NAME_len + 1];
 	char s_name[cS_NAME_len + 1];
@@ -1914,7 +1907,7 @@ typedef class TTradeUpdateFrame3TradeInfo {
 } * PTradeUpdateFrame3TradeInfo;
 
 typedef class TTradeUpdateFrame3Output {
-  public:
+public:
 	INT32 num_found;
 	INT32 num_updated;
 	TTradeUpdateFrame3TradeInfo trade_info[TradeUpdateFrame3MaxRows];
@@ -1933,7 +1926,7 @@ typedef class TTradeUpdateFrame3Output {
  *   Trade-Cleanup
  */
 typedef class TTradeCleanupTxnInput {
-  public:
+public:
 	TTrade start_trade_id;
 	char st_canceled_id[cST_ID_len + 1];
 	char st_pending_id[cST_ID_len + 1];
@@ -1954,7 +1947,7 @@ typedef class TTradeCleanupTxnInput {
     *PTradeCleanupFrame1Input; // Single-Frame transaction
 
 typedef class TTradeCleanupTxnOutput {
-  public:
+public:
 	INT32 status;
 
 #ifdef ENABLE_DEFAULT_CONSTRUCTOR_ON_TXN_INPUT_OUTPUT

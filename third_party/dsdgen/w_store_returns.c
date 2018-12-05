@@ -90,15 +90,13 @@ int mk_w_store_returns(void *row, ds_key_t index) {
 	 */
 	r->sr_ticket_number = sale->ss_ticket_number;
 	r->sr_item_sk = sale->ss_sold_item_sk;
-	memcpy((void *)&r->sr_pricing, (void *)&sale->ss_pricing,
-	       sizeof(ds_pricing_t));
+	memcpy((void *)&r->sr_pricing, (void *)&sale->ss_pricing, sizeof(ds_pricing_t));
 
 	/*
 	 * some of the fields are conditionally taken from the sale
 	 */
 	r->sr_customer_sk = mk_join(SR_CUSTOMER_SK, CUSTOMER, 1);
-	if (genrand_integer(NULL, DIST_UNIFORM, 1, 100, 0, SR_TICKET_NUMBER) <
-	    SR_SAME_CUSTOMER)
+	if (genrand_integer(NULL, DIST_UNIFORM, 1, 100, 0, SR_TICKET_NUMBER) < SR_SAME_CUSTOMER)
 		r->sr_customer_sk = sale->ss_sold_customer_sk;
 
 	/*
@@ -106,18 +104,15 @@ int mk_w_store_returns(void *row, ds_key_t index) {
 	 */
 	/* the items cannot be returned until they are sold; offset is handled in
 	 * mk_join, based on sales date */
-	r->sr_returned_date_sk =
-	    mk_join(SR_RETURNED_DATE_SK, DATET, sale->ss_sold_date_sk);
-	genrand_integer(&nTemp, DIST_UNIFORM, (8 * 3600) - 1, (17 * 3600) - 1, 0,
-	                SR_RETURNED_TIME_SK);
+	r->sr_returned_date_sk = mk_join(SR_RETURNED_DATE_SK, DATET, sale->ss_sold_date_sk);
+	genrand_integer(&nTemp, DIST_UNIFORM, (8 * 3600) - 1, (17 * 3600) - 1, 0, SR_RETURNED_TIME_SK);
 	r->sr_returned_time_sk = nTemp;
 	r->sr_cdemo_sk = mk_join(SR_CDEMO_SK, CUSTOMER_DEMOGRAPHICS, 1);
 	r->sr_hdemo_sk = mk_join(SR_HDEMO_SK, HOUSEHOLD_DEMOGRAPHICS, 1);
 	r->sr_addr_sk = mk_join(SR_ADDR_SK, CUSTOMER_ADDRESS, 1);
 	r->sr_store_sk = mk_join(SR_STORE_SK, STORE, 1);
 	r->sr_reason_sk = mk_join(SR_REASON_SK, REASON, 1);
-	genrand_integer(&r->sr_pricing.quantity, DIST_UNIFORM, 1,
-	                sale->ss_pricing.quantity, 0, SR_PRICING);
+	genrand_integer(&r->sr_pricing.quantity, DIST_UNIFORM, 1, sale->ss_pricing.quantity, 0, SR_PRICING);
 	set_pricing(SR_PRICING, &r->sr_pricing);
 
 	return (res);

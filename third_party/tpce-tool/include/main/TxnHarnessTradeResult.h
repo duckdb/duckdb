@@ -48,11 +48,10 @@ namespace TPCE {
 class CTradeResult {
 	CTradeResultDBInterface *m_db;
 
-  public:
+public:
 	CTradeResult(CTradeResultDBInterface *pDB) : m_db(pDB){};
 
-	void DoTxn(PTradeResultTxnInput pTxnInput,
-	           PTradeResultTxnOutput pTxnOutput) {
+	void DoTxn(PTradeResultTxnInput pTxnInput, PTradeResultTxnOutput pTxnOutput) {
 		// Initialization
 		TTradeResultFrame1Input Frame1Input;
 		TTradeResultFrame1Output Frame1Output;
@@ -93,8 +92,7 @@ class CTradeResult {
 		Frame2Input.acct_id = Frame1Output.acct_id;
 		Frame2Input.hs_qty = Frame1Output.hs_qty;
 		Frame2Input.is_lifo = Frame1Output.is_lifo;
-		strncpy(Frame2Input.symbol, Frame1Output.symbol,
-		        sizeof(Frame2Input.symbol));
+		strncpy(Frame2Input.symbol, Frame1Output.symbol, sizeof(Frame2Input.symbol));
 		Frame2Input.trade_id = pTxnInput->trade_id;
 		Frame2Input.trade_price = pTxnInput->trade_price;
 		Frame2Input.trade_qty = Frame1Output.trade_qty;
@@ -135,11 +133,9 @@ class CTradeResult {
 
 		// Copy Frame 4 Input
 		Frame4Input.cust_id = Frame2Output.cust_id;
-		strncpy(Frame4Input.symbol, Frame1Output.symbol,
-		        sizeof(Frame4Input.symbol));
+		strncpy(Frame4Input.symbol, Frame1Output.symbol, sizeof(Frame4Input.symbol));
 		Frame4Input.trade_qty = Frame1Output.trade_qty;
-		strncpy(Frame4Input.type_id, Frame1Output.type_id,
-		        sizeof(Frame4Input.type_id));
+		strncpy(Frame4Input.type_id, Frame1Output.type_id, sizeof(Frame4Input.type_id));
 
 		// Execute Frame 4
 		m_db->DoTradeResultFrame4(&Frame4Input, &Frame4Output);
@@ -157,15 +153,11 @@ class CTradeResult {
 
 		// Copy Frame 5 Input
 		Frame5Input.broker_id = Frame2Output.broker_id;
-		Frame5Input.comm_amount =
-		    (Frame4Output.comm_rate / 100.00) *
-		    (Frame1Output.trade_qty * pTxnInput->trade_price);
+		Frame5Input.comm_amount = (Frame4Output.comm_rate / 100.00) * (Frame1Output.trade_qty * pTxnInput->trade_price);
 		// round up for correct precision (cents only)
-		Frame5Input.comm_amount =
-		    (double)((int)(100.00 * Frame5Input.comm_amount + 0.5)) / 100.00;
+		Frame5Input.comm_amount = (double)((int)(100.00 * Frame5Input.comm_amount + 0.5)) / 100.00;
 		// ToDo: Need to get completed ID from constant struct!!
-		strncpy(Frame5Input.st_completed_id, "CMPT",
-		        sizeof(Frame5Input.st_completed_id));
+		strncpy(Frame5Input.st_completed_id, "CMPT", sizeof(Frame5Input.st_completed_id));
 		Frame5Input.trade_dts = Frame2Output.trade_dts;
 		Frame5Input.trade_id = pTxnInput->trade_id;
 		Frame5Input.trade_price = pTxnInput->trade_price;
@@ -186,12 +178,10 @@ class CTradeResult {
 
 		if (Frame1Output.type_is_sell) {
 			Frame6Input.se_amount =
-			    Frame1Output.trade_qty * pTxnInput->trade_price -
-			    Frame1Output.charge - Frame5Input.comm_amount;
+			    Frame1Output.trade_qty * pTxnInput->trade_price - Frame1Output.charge - Frame5Input.comm_amount;
 		} else {
 			Frame6Input.se_amount =
-			    -1 * (Frame1Output.trade_qty * pTxnInput->trade_price +
-			          Frame1Output.charge + Frame5Input.comm_amount);
+			    -1 * (Frame1Output.trade_qty * pTxnInput->trade_price + Frame1Output.charge + Frame5Input.comm_amount);
 		}
 
 		// withhold tax only for certain account tax status
@@ -202,14 +192,12 @@ class CTradeResult {
 		// Copy Frame 6 Input
 		Frame6Input.acct_id = Frame1Output.acct_id;
 		due_date_time.GetTimeStamp(&Frame6Input.due_date);
-		strncpy(Frame6Input.s_name, Frame4Output.s_name,
-		        sizeof(Frame6Input.s_name));
+		strncpy(Frame6Input.s_name, Frame4Output.s_name, sizeof(Frame6Input.s_name));
 		Frame6Input.trade_dts = Frame2Output.trade_dts;
 		Frame6Input.trade_id = pTxnInput->trade_id;
 		Frame6Input.trade_is_cash = Frame1Output.trade_is_cash;
 		Frame6Input.trade_qty = Frame1Output.trade_qty;
-		strncpy(Frame6Input.type_name, Frame1Output.type_name,
-		        sizeof(Frame6Input.type_name));
+		strncpy(Frame6Input.type_name, Frame1Output.type_name, sizeof(Frame6Input.type_name));
 
 		// Execute Frame 6
 		m_db->DoTradeResultFrame6(&Frame6Input, &Frame6Output);
@@ -217,10 +205,7 @@ class CTradeResult {
 		// Copy Frame 6 Output
 		pTxnOutput->acct_id = Frame1Output.acct_id;
 		pTxnOutput->acct_bal = Frame6Output.acct_bal;
-		pTxnOutput->load_unit =
-		    (INT32)((Frame2Output.cust_id - iTIdentShift - 1) /
-		            iDefaultLoadUnitSize) +
-		    1;
+		pTxnOutput->load_unit = (INT32)((Frame2Output.cust_id - iTIdentShift - 1) / iDefaultLoadUnitSize) + 1;
 	}
 };
 

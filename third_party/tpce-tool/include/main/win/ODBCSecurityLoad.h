@@ -57,49 +57,32 @@ class CODBCSecurityLoad : public CDBLoader<SECURITY_ROW> {
 		m_row.S_52WK_HIGH_DATE.GetDBDATETIME(&ODBC_S_52WK_HIGH_DATE);
 	};
 
-  public:
-	CODBCSecurityLoad(char *szServer, char *szDatabase, char *szLoaderParams,
-	                  char *szTable = "SECURITY")
-	    : CDBLoader<SECURITY_ROW>(szServer, szDatabase, szLoaderParams,
-	                              szTable){};
+public:
+	CODBCSecurityLoad(char *szServer, char *szDatabase, char *szLoaderParams, char *szTable = "SECURITY")
+	    : CDBLoader<SECURITY_ROW>(szServer, szDatabase, szLoaderParams, szTable){};
 
 	virtual void BindColumns() {
 		// Binding function we have to implement.
 		int i = 0;
 		if ( // bcp_bind(m_hdbc, (BYTE *) &m_row.S_ID, 0, SQL_VARLEN_DATA, NULL,
 		     // 0, SQLINT4, ++i) != SUCCEED
-		    bcp_bind(m_hdbc, (BYTE *)&m_row.S_SYMB, 0, SQL_VARLEN_DATA,
-		             (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
-		    bcp_bind(m_hdbc, (BYTE *)&m_row.S_ISSUE, 0, SQL_VARLEN_DATA,
-		             (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
-		    bcp_bind(m_hdbc, (BYTE *)&m_row.S_ST_ID, 0, SQL_VARLEN_DATA,
-		             (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
-		    bcp_bind(m_hdbc, (BYTE *)&m_row.S_NAME, 0, SQL_VARLEN_DATA,
-		             (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
-		    bcp_bind(m_hdbc, (BYTE *)&m_row.S_EX_ID, 0, SQL_VARLEN_DATA,
-		             (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
-		    bcp_bind(m_hdbc, (BYTE *)&m_row.S_CO_ID, 0, SQL_VARLEN_DATA, NULL,
-		             0, IDENT_BIND, ++i) != SUCCEED ||
-		    bcp_bind(m_hdbc, (BYTE *)&m_row.S_NUM_OUT, 0, SQL_VARLEN_DATA, NULL,
-		             0, SQLINT8, ++i) != SUCCEED ||
-		    bcp_bind(m_hdbc, (BYTE *)&ODBC_S_START_DATE, 0, SQL_VARLEN_DATA,
-		             NULL, 0, SQLDATETIME, ++i) != SUCCEED ||
-		    bcp_bind(m_hdbc, (BYTE *)&ODBC_S_EXCH_DATE, 0, SQL_VARLEN_DATA,
-		             NULL, 0, SQLDATETIME, ++i) != SUCCEED ||
-		    bcp_bind(m_hdbc, (BYTE *)&m_row.S_PE, 0, SQL_VARLEN_DATA, NULL, 0,
-		             SQLFLT8, ++i) != SUCCEED ||
-		    bcp_bind(m_hdbc, (BYTE *)&m_row.S_52WK_HIGH, 0, SQL_VARLEN_DATA,
-		             NULL, 0, SQLFLT4, ++i) != SUCCEED ||
-		    bcp_bind(m_hdbc, (BYTE *)&ODBC_S_52WK_HIGH_DATE, 0, SQL_VARLEN_DATA,
-		             NULL, 0, SQLDATETIME, ++i) != SUCCEED ||
-		    bcp_bind(m_hdbc, (BYTE *)&m_row.S_52WK_LOW, 0, SQL_VARLEN_DATA,
-		             NULL, 0, SQLFLT4, ++i) != SUCCEED ||
-		    bcp_bind(m_hdbc, (BYTE *)&ODBC_S_52WK_LOW_DATE, 0, SQL_VARLEN_DATA,
-		             NULL, 0, SQLDATETIME, ++i) != SUCCEED ||
-		    bcp_bind(m_hdbc, (BYTE *)&m_row.S_DIVIDEND, 0, SQL_VARLEN_DATA,
-		             NULL, 0, SQLFLT8, ++i) != SUCCEED ||
-		    bcp_bind(m_hdbc, (BYTE *)&m_row.S_YIELD, 0, SQL_VARLEN_DATA, NULL,
-		             0, SQLFLT8, ++i) != SUCCEED)
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.S_SYMB, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.S_ISSUE, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.S_ST_ID, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.S_NAME, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.S_EX_ID, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.S_CO_ID, 0, SQL_VARLEN_DATA, NULL, 0, IDENT_BIND, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.S_NUM_OUT, 0, SQL_VARLEN_DATA, NULL, 0, SQLINT8, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&ODBC_S_START_DATE, 0, SQL_VARLEN_DATA, NULL, 0, SQLDATETIME, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&ODBC_S_EXCH_DATE, 0, SQL_VARLEN_DATA, NULL, 0, SQLDATETIME, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.S_PE, 0, SQL_VARLEN_DATA, NULL, 0, SQLFLT8, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.S_52WK_HIGH, 0, SQL_VARLEN_DATA, NULL, 0, SQLFLT4, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&ODBC_S_52WK_HIGH_DATE, 0, SQL_VARLEN_DATA, NULL, 0, SQLDATETIME, ++i) !=
+		        SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.S_52WK_LOW, 0, SQL_VARLEN_DATA, NULL, 0, SQLFLT4, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&ODBC_S_52WK_LOW_DATE, 0, SQL_VARLEN_DATA, NULL, 0, SQLDATETIME, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.S_DIVIDEND, 0, SQL_VARLEN_DATA, NULL, 0, SQLFLT8, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.S_YIELD, 0, SQL_VARLEN_DATA, NULL, 0, SQLFLT8, ++i) != SUCCEED)
 			ThrowError(CODBCERR::eBcpBind);
 
 		// if ( bcp_control(m_hdbc, BCPHINTS, "TABLOCK" ) != SUCCEED )

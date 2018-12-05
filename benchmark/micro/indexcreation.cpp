@@ -23,7 +23,7 @@ virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.DestroyAppender();
 }
 
-virtual std::string GetQuery() {
+virtual string GetQuery() {
 	return "CREATE INDEX i_index ON integers(i)";
 }
 
@@ -31,7 +31,7 @@ virtual void Cleanup(DuckDBBenchmarkState *state) {
 	state->conn.Query("DROP INDEX i_index;");
 }
 
-virtual std::string VerifyResult(DuckDBResult *result) {
+virtual string VerifyResult(DuckDBResult *result) {
 	if (!result->GetSuccess()) {
 		return result->GetErrorMessage();
 	}
@@ -44,10 +44,10 @@ virtual std::string VerifyResult(DuckDBResult *result) {
 	if (result->GetValue<int>(0, 0) != SUCCESS) {
 		return "Incorrect result returned, expected " + to_string(result->GetValue<int>(0, 0));
 	}
-	return std::string();
+	return string();
 }
 
-virtual std::string BenchmarkInfo() {
+virtual string BenchmarkInfo() {
 	return StringUtil::Format("Creates an Index on a Uniform Random Column");
 }
 

@@ -1,4 +1,3 @@
-
 #include "parser/statement/delete_statement.hpp"
 #include "parser/transformer.hpp"
 

@@ -71,9 +71,8 @@ class CCustomerTaxRateTable : public TableTemplate<CUSTOMER_TAXRATE_ROWS> {
 	 *   Reset the state for the next load unit
 	 */
 	void InitNextLoadUnit() {
-		m_rnd.SetSeed(m_rnd.RndNthElement(RNGSeedTableDefault,
-		                                  (RNGSEED)m_cust.GetCurrentC_ID() *
-		                                      iRNGSkipOneRowCustomerTaxrate));
+		m_rnd.SetSeed(
+		    m_rnd.RndNthElement(RNGSeedTableDefault, (RNGSEED)m_cust.GetCurrentC_ID() * iRNGSkipOneRowCustomerTaxrate));
 
 		ClearRecord(); // this is needed for EGenTest to work
 	}
@@ -86,32 +85,27 @@ class CCustomerTaxRateTable : public TableTemplate<CUSTOMER_TAXRATE_ROWS> {
 		// const vector<TTaxRateInputRow>  *pRates;
 
 		OldSeed = m_rnd.GetSeed();
-		m_rnd.SetSeed(
-		    m_rnd.RndNthElement(RNGSeedBaseTaxRateRow, (RNGSEED)C_ID));
+		m_rnd.SetSeed(m_rnd.RndNthElement(RNGSeedBaseTaxRateRow, (RNGSEED)C_ID));
 
 		if (bCtry) {
 			// Return appropriate country record.
-			iThreshold = (UINT)m_rnd.RndIntRange(
-			    0, m_country_rates.getBucket(iCode).size() - 1);
+			iThreshold = (UINT)m_rnd.RndIntRange(0, m_country_rates.getBucket(iCode).size() - 1);
 			m_rnd.SetSeed(OldSeed);
 			return m_country_rates.getBucket(iCode)[iThreshold];
 		}
 
 		// It's not a country so return the appropriate division record.
-		iThreshold = (UINT)m_rnd.RndIntRange(
-		    0, m_division_rates.getBucket(iCode).size() - 1);
+		iThreshold = (UINT)m_rnd.RndIntRange(0, m_division_rates.getBucket(iCode).size() - 1);
 		m_rnd.SetSeed(OldSeed);
 		return m_division_rates.getBucket(iCode)[iThreshold];
 	}
 
-  public:
-	CCustomerTaxRateTable(const DataFileManager &dfm, TIdent iCustomerCount,
-	                      TIdent iStartFromCustomer, bool bCacheEnabled = false)
-	    : TableTemplate<CUSTOMER_TAXRATE_ROWS>(),
-	      m_cust(dfm, iCustomerCount, iStartFromCustomer),
+public:
+	CCustomerTaxRateTable(const DataFileManager &dfm, TIdent iCustomerCount, TIdent iStartFromCustomer,
+	                      bool bCacheEnabled = false)
+	    : TableTemplate<CUSTOMER_TAXRATE_ROWS>(), m_cust(dfm, iCustomerCount, iStartFromCustomer),
 	      m_addr(dfm, iCustomerCount, iStartFromCustomer, true, bCacheEnabled),
-	      m_division_rates(dfm.TaxRateDivisionDataFile()),
-	      m_country_rates(dfm.TaxRateCountryDataFile()){};
+	      m_division_rates(dfm.TaxRateDivisionDataFile()), m_country_rates(dfm.TaxRateCountryDataFile()){};
 
 	/*
 	 *   Generates all column values for the next row.
@@ -133,19 +127,15 @@ class CCustomerTaxRateTable : public TableTemplate<CUSTOMER_TAXRATE_ROWS> {
 		m_row.m_row[0].CX_C_ID = m_cust.GetCurrentC_ID(); // fill the customer
 		                                                  // id
 		// Select the country rate
-		strncpy(
-		    m_row.m_row[0].CX_TX_ID,
-		    GetCountryTaxRow(m_cust.GetCurrentC_ID(), iCtryCode).TX_ID_CSTR(),
-		    sizeof(m_row.m_row[0].CX_TX_ID));
+		strncpy(m_row.m_row[0].CX_TX_ID, GetCountryTaxRow(m_cust.GetCurrentC_ID(), iCtryCode).TX_ID_CSTR(),
+		        sizeof(m_row.m_row[0].CX_TX_ID));
 
 		// Fill the division tax rate row
 		m_row.m_row[1].CX_C_ID = m_cust.GetCurrentC_ID(); // fill the customer
 		                                                  // id
 		// Select the division rate
-		strncpy(
-		    m_row.m_row[1].CX_TX_ID,
-		    GetDivisionTaxRow(m_cust.GetCurrentC_ID(), iDivCode).TX_ID_CSTR(),
-		    sizeof(m_row.m_row[0].CX_TX_ID));
+		strncpy(m_row.m_row[1].CX_TX_ID, GetDivisionTaxRow(m_cust.GetCurrentC_ID(), iDivCode).TX_ID_CSTR(),
+		        sizeof(m_row.m_row[0].CX_TX_ID));
 
 		m_bMoreRecords = m_cust.MoreRecords();
 

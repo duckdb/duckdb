@@ -39,8 +39,7 @@ void graphml_dumper::visit(struct prod *p) {
 	o << "<data key=\"scope\">" << p->scope << "</data>";
 	o << "</node>" << endl;
 	if (p->pprod) {
-		o << "<edge source=\"" << id(p) << "\" target=\"" << id(p->pprod)
-		  << "\"/>";
+		o << "<edge source=\"" << id(p) << "\" target=\"" << id(p->pprod) << "\"/>";
 	}
 	o << endl;
 }

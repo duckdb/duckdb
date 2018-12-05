@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // common/vector_operations/scatter_loops.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -18,8 +16,7 @@
 namespace duckdb {
 
 template <class T, class OP>
-static inline void scatter_loop_constant(T constant, T **__restrict destination,
-                                         size_t count,
+static inline void scatter_loop_constant(T constant, T **__restrict destination, size_t count,
                                          sel_t *__restrict sel_vector) {
 	VectorOperations::Exec(sel_vector, count, [&](size_t i, size_t k) {
 		if (!IsNullValue<T>(*destination[i])) {
@@ -31,9 +28,8 @@ static inline void scatter_loop_constant(T constant, T **__restrict destination,
 }
 
 template <class T, class OP>
-static inline void scatter_loop(T *__restrict ldata, T **__restrict destination,
-                                size_t count, sel_t *__restrict sel_vector,
-                                nullmask_t &nullmask) {
+static inline void scatter_loop(T *__restrict ldata, T **__restrict destination, size_t count,
+                                sel_t *__restrict sel_vector, nullmask_t &nullmask) {
 	ASSERT_RESTRICT(ldata, ldata + count, destination, destination + count);
 	VectorOperations::Exec(sel_vector, count, [&](size_t i, size_t k) {
 		if (!nullmask[i]) {
@@ -46,8 +42,7 @@ static inline void scatter_loop(T *__restrict ldata, T **__restrict destination,
 	});
 }
 
-template <class T, class OP>
-void scatter_templated_loop(Vector &source, Vector &dest) {
+template <class T, class OP> void scatter_templated_loop(Vector &source, Vector &dest) {
 	auto ldata = (T *)source.data;
 	auto destination = (T **)dest.data;
 	if (source.IsConstant()) {
@@ -58,13 +53,11 @@ void scatter_templated_loop(Vector &source, Vector &dest) {
 		}
 
 		auto constant = ldata[0];
-		scatter_loop_constant<T, OP>(constant, destination, dest.count,
-		                             dest.sel_vector);
+		scatter_loop_constant<T, OP>(constant, destination, dest.count, dest.sel_vector);
 	} else {
 		// source and dest are equal-length vectors
 		assert(dest.sel_vector == source.sel_vector);
-		scatter_loop<T, OP>(ldata, destination, dest.count, dest.sel_vector,
-		                    source.nullmask);
+		scatter_loop<T, OP>(ldata, destination, dest.count, dest.sel_vector, source.nullmask);
 	}
 }
 

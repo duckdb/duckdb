@@ -53,7 +53,7 @@ namespace TPCE {
 // This is required because under pthreads we have to provide an interface
 // through a C ABI call, which we can't do with templated classes.
 class ThreadBase {
-  public:
+public:
 	virtual ~ThreadBase();
 	virtual void invoke() = 0;
 };
@@ -68,7 +68,7 @@ extern "C" void *start_thread(void *arg);
 // Template to wrap around a class that has a ThreadBase::run() method and
 // spawn it in a thread of its own.
 template <typename T> class Thread : public ThreadBase {
-  private:
+private:
 	std::unique_ptr<T> obj_;
 	TThread tid_;
 #ifndef WIN32
@@ -76,7 +76,7 @@ template <typename T> class Thread : public ThreadBase {
 #endif
 	int stacksize_;
 
-  public:
+public:
 	Thread(std::unique_ptr<T> throbj)
 	    : obj_(throbj), tid_()
 #ifndef WIN32
@@ -148,8 +148,7 @@ template <typename T> void Thread<T>::start() {
 		rc = pthread_attr_setstacksize(&attr_, stacksize_);
 		if (rc != 0) {
 			std::ostringstream strm;
-			strm << "pthread_attr_setstacksize error: " << strerror(rc) << "("
-			     << rc << ")";
+			strm << "pthread_attr_setstacksize error: " << strerror(rc) << "(" << rc << ")";
 			throw std::runtime_error(strm.str());
 		}
 	}

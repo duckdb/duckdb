@@ -49,11 +49,9 @@
 namespace TPCE {
 
 const int iNewsItemsPerCompany = 2;
-const int iNewsItemMaxDaysAgo =
-    50; // how many days ago can a news item be dated
+const int iNewsItemMaxDaysAgo = 50; // how many days ago can a news item be dated
 
-const int iRNGSkipOneRowNews =
-    4 + cNI_ITEM_len; // number of RNG calls for one row
+const int iRNGSkipOneRowNews = 4 + cNI_ITEM_len; // number of RNG calls for one row
 
 typedef struct NEWS_ITEM_AND_XREF_ROW {
 	NEWS_ITEM_ROW news_item;
@@ -78,15 +76,12 @@ class CNewsItemAndXRefTable : public TableTemplate<NEWS_ITEM_AND_XREF_ROW> {
 
 			szWord = m_News[iThreshold].WORD_CSTR();
 
-			while (szWord && *szWord &&
-			       (iLen < sizeof(news_item.NI_ITEM) - 1)) {
-				news_item.NI_ITEM[iLen++] =
-				    *szWord++; // copy one letter at a time
+			while (szWord && *szWord && (iLen < sizeof(news_item.NI_ITEM) - 1)) {
+				news_item.NI_ITEM[iLen++] = *szWord++; // copy one letter at a time
 			}
 
 			if (iLen < sizeof(news_item.NI_ITEM) - 1) {
-				news_item.NI_ITEM[iLen++] =
-				    ' '; // add space at the end of a word
+				news_item.NI_ITEM[iLen++] = ' '; // add space at the end of a word
 			}
 		}
 
@@ -94,15 +89,13 @@ class CNewsItemAndXRefTable : public TableTemplate<NEWS_ITEM_AND_XREF_ROW> {
 		                                // word was copied only partially
 
 		// Now copy the headline and summary from the generated item.
-		memcpy(news_item.NI_HEADLINE, news_item.NI_ITEM,
-		       sizeof(news_item.NI_HEADLINE) - 1);
+		memcpy(news_item.NI_HEADLINE, news_item.NI_ITEM, sizeof(news_item.NI_HEADLINE) - 1);
 		// news_item.NI_HEADLINE will be zero-terminated because it is
 		// initialized to all 0s in TableTemplate constructor and the last
 		// character is not overwritten.
 
 		// Now copy the headline and summary from the generated item.
-		memcpy(news_item.NI_SUMMARY, news_item.NI_ITEM,
-		       sizeof(news_item.NI_SUMMARY) - 1);
+		memcpy(news_item.NI_SUMMARY, news_item.NI_ITEM, sizeof(news_item.NI_SUMMARY) - 1);
 		// news_item.NI_SUMMARY will be zero-terminated because it is
 		// initialized to all 0s in TableTemplate constructor and the last
 		// character is not overwritten.
@@ -118,38 +111,30 @@ class CNewsItemAndXRefTable : public TableTemplate<NEWS_ITEM_AND_XREF_ROW> {
 	 *           none.
 	 */
 	void InitNextLoadUnit() {
-		m_rnd.SetSeed(
-		    m_rnd.RndNthElement(RNGSeedTableDefault, (RNGSEED)m_iLastRowNumber *
-		                                                 iRNGSkipOneRowNews));
+		m_rnd.SetSeed(m_rnd.RndNthElement(RNGSeedTableDefault, (RNGSEED)m_iLastRowNumber * iRNGSkipOneRowNews));
 
 		ClearRecord(); // this is needed for EGenTest to work
 	}
 
-  public:
-	CNewsItemAndXRefTable(const DataFileManager &dfm, TIdent iCustomerCount,
-	                      TIdent iStartFromCustomer,
+public:
+	CNewsItemAndXRefTable(const DataFileManager &dfm, TIdent iCustomerCount, TIdent iStartFromCustomer,
 	                      INT32 iHoursOfInitialTrades)
-	    : m_CompanyTable(dfm, iCustomerCount, iStartFromCustomer),
-	      m_News(dfm.NewsDataFile()), m_LastNames(dfm.LastNameDataFile()),
-	      m_iNewsItemsGeneratedForCompany(0) {
-		m_iLastRowNumber =
-		    iNewsItemsPerCompany *
-		    dfm.CompanyFile().CalculateStartFromCompany(iStartFromCustomer);
+	    : m_CompanyTable(dfm, iCustomerCount, iStartFromCustomer), m_News(dfm.NewsDataFile()),
+	      m_LastNames(dfm.LastNameDataFile()), m_iNewsItemsGeneratedForCompany(0) {
+		m_iLastRowNumber = iNewsItemsPerCompany * dfm.CompanyFile().CalculateStartFromCompany(iStartFromCustomer);
 
 		//  Go to the last day of initial trades.
 		//  News items will be dated up to iNewsItemMaxDaysAgo days back from
 		//  that day.
 		//
-		m_NewsBaseDate.Set(
-		    InitialTradePopulationBaseYear, InitialTradePopulationBaseMonth,
-		    InitialTradePopulationBaseDay, InitialTradePopulationBaseHour,
-		    InitialTradePopulationBaseMinute, InitialTradePopulationBaseSecond,
-		    InitialTradePopulationBaseFraction);
+		m_NewsBaseDate.Set(InitialTradePopulationBaseYear, InitialTradePopulationBaseMonth,
+		                   InitialTradePopulationBaseDay, InitialTradePopulationBaseHour,
+		                   InitialTradePopulationBaseMinute, InitialTradePopulationBaseSecond,
+		                   InitialTradePopulationBaseFraction);
 		m_NewsBaseDate.Add(iHoursOfInitialTrades / HoursPerWorkDay, 0, true);
 
 		m_iNewsCountForOneLoadUnit =
-		    dfm.CompanyFile().CalculateCompanyCount(iDefaultLoadUnitSize) *
-		    iNewsItemsPerCompany;
+		    dfm.CompanyFile().CalculateCompanyCount(iDefaultLoadUnitSize) * iNewsItemsPerCompany;
 	};
 
 	/*
@@ -165,8 +150,7 @@ class CNewsItemAndXRefTable : public TableTemplate<NEWS_ITEM_AND_XREF_ROW> {
 		}
 
 		// Generate NEWS_ITEM row
-		m_row.news_item.NI_ID =
-		    m_iLastRowNumber + 1; // row number starts from 0
+		m_row.news_item.NI_ID = m_iLastRowNumber + 1; // row number starts from 0
 		GenerateNewsItemHeadlineAndSummary(m_row.news_item);
 		iAddDayNo = m_rnd.RndIntRange(0, iNewsItemMaxDaysAgo);
 		iAddMSec = m_rnd.RndIntRange(0, MsPerDay);
@@ -174,12 +158,10 @@ class CNewsItemAndXRefTable : public TableTemplate<NEWS_ITEM_AND_XREF_ROW> {
 		m_row.news_item.NI_DTS.Add((-1) * iAddDayNo, (-1) * iAddMSec);
 
 		iThreshold = m_rnd.RndIntRange(0, m_LastNames.size() - 1);
-		strncpy(m_row.news_item.NI_AUTHOR, m_LastNames[iThreshold].NAME_CSTR(),
-		        sizeof(m_row.news_item.NI_AUTHOR));
+		strncpy(m_row.news_item.NI_AUTHOR, m_LastNames[iThreshold].NAME_CSTR(), sizeof(m_row.news_item.NI_AUTHOR));
 
 		iThreshold = m_rnd.RndIntRange(0, m_LastNames.size() - 1);
-		strncpy(m_row.news_item.NI_SOURCE, m_LastNames[iThreshold].NAME_CSTR(),
-		        sizeof(m_row.news_item.NI_SOURCE));
+		strncpy(m_row.news_item.NI_SOURCE, m_LastNames[iThreshold].NAME_CSTR(), sizeof(m_row.news_item.NI_SOURCE));
 
 		// Generate NEWS_XREF row
 		m_row.news_xref.NX_NI_ID = m_row.news_item.NI_ID;

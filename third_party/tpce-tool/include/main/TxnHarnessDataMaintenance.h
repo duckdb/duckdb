@@ -44,11 +44,10 @@ namespace TPCE {
 class CDataMaintenance {
 	CDataMaintenanceDBInterface *m_db;
 
-  public:
+public:
 	CDataMaintenance(CDataMaintenanceDBInterface *pDB) : m_db(pDB){};
 
-	void DoTxn(PDataMaintenanceTxnInput pTxnInput,
-	           PDataMaintenanceTxnOutput pTxnOutput) {
+	void DoTxn(PDataMaintenanceTxnInput pTxnInput, PDataMaintenanceTxnOutput pTxnOutput) {
 		TXN_HARNESS_SET_STATUS_SUCCESS;
 
 		// Execute Frame 1

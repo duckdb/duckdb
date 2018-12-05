@@ -159,8 +159,7 @@ void skip_random(int nStream, ds_key_t N) {
  * Assumptions:
  * Side Effects:
  */
-int genrand_integer(int *dest, int dist, int min, int max, int mean,
-                    int stream) {
+int genrand_integer(int *dest, int dist, int min, int max, int mean, int stream) {
 	int res = 0, i;
 	double fres = 0;
 
@@ -202,8 +201,7 @@ int genrand_integer(int *dest, int dist, int min, int max, int mean,
  * TODO: Need to rework to rely on RNG routines that will work for 64 bit return
  * values
  */
-ds_key_t genrand_key(ds_key_t *dest, int dist, ds_key_t min, ds_key_t max,
-                     ds_key_t mean, int stream) {
+ds_key_t genrand_key(ds_key_t *dest, int dist, ds_key_t min, ds_key_t max, ds_key_t mean, int stream) {
 	int res = 0, i;
 	double fres = 0;
 
@@ -246,8 +244,7 @@ ds_key_t genrand_key(ds_key_t *dest, int dist, ds_key_t min, ds_key_t max,
  * Side Effects:
  * TODO: None
  */
-int genrand_decimal(decimal_t *dest, int dist, decimal_t *min, decimal_t *max,
-                    decimal_t *mean, int stream) {
+int genrand_decimal(decimal_t *dest, int dist, decimal_t *min, decimal_t *max, decimal_t *mean, int stream) {
 	int i;
 	decimal_t res;
 	double fres = 0.0;
@@ -266,11 +263,9 @@ int genrand_decimal(decimal_t *dest, int dist, decimal_t *min, decimal_t *max,
 	case DIST_EXPONENTIAL:
 		for (i = 0; i < 12; i++) {
 			fres /= 2.0;
-			fres +=
-			    (double)((double)next_random(stream) / (double)MAXINT) - 0.5;
+			fres += (double)((double)next_random(stream) / (double)MAXINT) - 0.5;
 		}
-		res.number =
-		    mean->number + (int)((max->number - min->number + 1) * fres);
+		res.number = mean->number + (int)((max->number - min->number + 1) * fres);
 		break;
 	default:
 		INTERNAL("Undefined distribution");
@@ -387,8 +382,7 @@ int dump_seeds_ds(int tbl) {
 
 	for (i = 0; Streams[i].nColumn != -1; i++)
 		if (Streams[i].nTable == tbl)
-			printf("%04d\t%09d\t%09ld\n", i, Streams[i].nUsed,
-			       Streams[i].nSeed);
+			printf("%04d\t%09d\t%09ld\n", i, Streams[i].nUsed, Streams[i].nSeed);
 	return (0);
 }
 
@@ -440,8 +434,7 @@ int gen_charset(char *dest, char *set, int min, int max, int stream) {
  * Side Effects:
  * TODO: None
  */
-int genrand_date(date_t *dest, int dist, date_t *min, date_t *max, date_t *mean,
-                 int stream) {
+int genrand_date(date_t *dest, int dist, date_t *min, date_t *max, date_t *mean, int stream) {
 	int range, imean = 0, temp, idt, nYear, nTotalWeight = 0, nDayCount;
 
 	idt = dttoj(min);
@@ -455,8 +448,7 @@ int genrand_date(date_t *dest, int dist, date_t *min, date_t *max, date_t *mean,
 	case DIST_RETURNS:
 		/* walk from min to max to "integrate" the distribution */
 		while (range -= 1) {
-			nTotalWeight +=
-			    dist_weight(NULL, "calendar", nDayCount, dist + is_leap(nYear));
+			nTotalWeight += dist_weight(NULL, "calendar", nDayCount, dist + is_leap(nYear));
 			if (nDayCount == 365 + is_leap(nYear)) {
 				nYear += 1;
 				nDayCount = 1;
@@ -470,8 +462,7 @@ int genrand_date(date_t *dest, int dist, date_t *min, date_t *max, date_t *mean,
 		idt = min->julian;
 		nYear = min->year;
 		while (temp >= 0) {
-			temp -=
-			    dist_weight(NULL, "calendar", nDayCount, dist + is_leap(nYear));
+			temp -= dist_weight(NULL, "calendar", nDayCount, dist + is_leap(nYear));
 			nDayCount += 1;
 			idt += 1;
 			if (nDayCount > 365 + is_leap(nYear)) {
@@ -597,8 +588,7 @@ void genrand_ipaddr(char *pDest, int nColumn) {
 
 	for (i = 0; i < 4; i++)
 		genrand_integer(&arQuads[i], DIST_UNIFORM, 1, 255, 0, nColumn);
-	sprintf(pDest, "%03d.%03d.%03d.%03d", arQuads[0], arQuads[1], arQuads[2],
-	        arQuads[3]);
+	sprintf(pDest, "%03d.%03d.%03d.%03d", arQuads[0], arQuads[1], arQuads[2], arQuads[3]);
 
 	return;
 }

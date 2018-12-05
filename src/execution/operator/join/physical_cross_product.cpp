@@ -5,8 +5,8 @@
 using namespace duckdb;
 using namespace std;
 
-PhysicalCrossProduct::PhysicalCrossProduct(LogicalOperator &op, std::unique_ptr<PhysicalOperator> left,
-                                           std::unique_ptr<PhysicalOperator> right)
+PhysicalCrossProduct::PhysicalCrossProduct(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
+                                           unique_ptr<PhysicalOperator> right)
     : PhysicalOperator(PhysicalOperatorType::CROSS_PRODUCT, op.types) {
 	children.push_back(move(left));
 	children.push_back(move(right));
@@ -60,6 +60,6 @@ void PhysicalCrossProduct::_GetChunk(ClientContext &context, DataChunk &chunk, P
 	state->left_position++;
 }
 
-std::unique_ptr<PhysicalOperatorState> PhysicalCrossProduct::GetOperatorState(ExpressionExecutor *parent_executor) {
+unique_ptr<PhysicalOperatorState> PhysicalCrossProduct::GetOperatorState(ExpressionExecutor *parent_executor) {
 	return make_unique<PhysicalCrossProductOperatorState>(children[0].get(), children[1].get(), parent_executor);
 }

@@ -44,7 +44,7 @@ namespace TPCE {
 //
 
 class ITaxRateFileRecord {
-  public:
+public:
 	virtual ~ITaxRateFileRecord() {
 	}
 

@@ -16,25 +16,24 @@ namespace duckdb {
 //! PhysicalPiecewiseMergeJoin represents a piecewise merge loop join between
 //! two tables
 class PhysicalPiecewiseMergeJoin : public PhysicalJoin {
-	public:
+public:
 	struct MergeOrder {
 		sel_t order[STANDARD_VECTOR_SIZE];
 		size_t count;
 	};
 
-	PhysicalPiecewiseMergeJoin(LogicalOperator &op, std::unique_ptr<PhysicalOperator> left,
-	                           std::unique_ptr<PhysicalOperator> right, std::vector<JoinCondition> cond,
-	                           JoinType join_type);
+	PhysicalPiecewiseMergeJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
+	                           unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type);
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
-	std::unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent_executor) override;
+	unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent_executor) override;
 
-	std::vector<TypeId> join_key_types;
+	vector<TypeId> join_key_types;
 };
 
 class PhysicalPiecewiseMergeJoinOperatorState : public PhysicalOperatorState {
-	public:
+public:
 	PhysicalPiecewiseMergeJoinOperatorState(PhysicalOperator *left, PhysicalOperator *right,
 	                                        ExpressionExecutor *parent_executor)
 	    : PhysicalOperatorState(left, parent_executor), initialized(false), left_position(0), right_position(0),
@@ -51,6 +50,6 @@ class PhysicalPiecewiseMergeJoinOperatorState : public PhysicalOperatorState {
 	PhysicalPiecewiseMergeJoin::MergeOrder left_orders;
 	ChunkCollection right_chunks;
 	ChunkCollection right_conditions;
-	std::vector<PhysicalPiecewiseMergeJoin::MergeOrder> right_orders;
+	vector<PhysicalPiecewiseMergeJoin::MergeOrder> right_orders;
 };
 } // namespace duckdb

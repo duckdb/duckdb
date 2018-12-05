@@ -24,25 +24,25 @@ namespace duckdb {
 //! of parsed statements. The parsed statements can then be converted into a
 //! plan and executed.
 class Parser {
-	public:
+public:
 	Parser();
 
 	//! Attempts to parse a query into a series of SQL statements. Returns
 	//! whether or not the parsing was successful. If the parsing was
 	//! successful, the parsed statements will be stored in the statements
 	//! variable.
-	void ParseQuery(std::string query);
+	void ParseQuery(string query);
 
 	//! The parsed SQL statements from an invocation to ParseQuery.
-	std::vector<std::unique_ptr<SQLStatement>> statements;
+	vector<unique_ptr<SQLStatement>> statements;
 
-	private:
+private:
 	//! Transform a Postgres parse tree into a set of SQL Statements
 	bool TransformList(postgres::List *tree);
 	//! Transform a single Postgres parse node into a SQL Statement.
-	std::unique_ptr<SQLStatement> TransformNode(postgres::Node *stmt);
+	unique_ptr<SQLStatement> TransformNode(postgres::Node *stmt);
 	//! Attempts to parse a PRAGMA statement, returns true if successfully
 	//! parsed
-	bool ParsePragma(std::string &query);
+	bool ParsePragma(string &query);
 };
 } // namespace duckdb

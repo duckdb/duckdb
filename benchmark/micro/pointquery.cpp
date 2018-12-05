@@ -1,6 +1,6 @@
-
 #include "benchmark_runner.hpp"
 #include "duckdb_benchmark.hpp"
+
 #include <random>
 
 using namespace duckdb;
@@ -23,11 +23,11 @@ virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.DestroyAppender();
 }
 
-virtual std::string GetQuery() {
+virtual string GetQuery() {
 	return "SELECT j FROM integers WHERE i=" + to_string(POINT_QUERY_ENTRY);
 }
 
-virtual std::string VerifyResult(DuckDBResult *result) {
+virtual string VerifyResult(DuckDBResult *result) {
 	if (!result->GetSuccess()) {
 		return result->GetErrorMessage();
 	}
@@ -38,15 +38,13 @@ virtual std::string VerifyResult(DuckDBResult *result) {
 		return "Incorrect amount of columns";
 	}
 	if (result->GetValue<int>(0, 0) != POINT_QUERY_ENTRY + 2) {
-		return "Incorrect result returned, expected " +
-		       to_string(POINT_QUERY_ENTRY + 2);
+		return "Incorrect result returned, expected " + to_string(POINT_QUERY_ENTRY + 2);
 	}
-	return std::string();
+	return string();
 }
 
-virtual std::string BenchmarkInfo() {
-	return StringUtil::Format("Runs the following query: \"" + GetQuery() +
-	                          "\" without an index");
+virtual string BenchmarkInfo() {
+	return StringUtil::Format("Runs the following query: \"" + GetQuery() + "\" without an index");
 }
 FINISH_BENCHMARK(PointQueryWithoutIndex)
 
@@ -65,11 +63,11 @@ virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.Query("CREATE INDEX i_index ON integers(i)");
 }
 
-virtual std::string GetQuery() {
+virtual string GetQuery() {
 	return "SELECT j FROM integers WHERE i=" + to_string(POINT_QUERY_ENTRY);
 }
 
-virtual std::string VerifyResult(DuckDBResult *result) {
+virtual string VerifyResult(DuckDBResult *result) {
 	if (!result->GetSuccess()) {
 		return result->GetErrorMessage();
 	}
@@ -80,14 +78,12 @@ virtual std::string VerifyResult(DuckDBResult *result) {
 		return "Incorrect amount of columns";
 	}
 	if (result->GetValue<int>(0, 0) != POINT_QUERY_ENTRY + 2) {
-		return "Incorrect result returned, expected " +
-		       to_string(POINT_QUERY_ENTRY + 2);
+		return "Incorrect result returned, expected " + to_string(POINT_QUERY_ENTRY + 2);
 	}
-	return std::string();
+	return string();
 }
 
-virtual std::string BenchmarkInfo() {
-	return StringUtil::Format("Runs the following query: \"" + GetQuery() +
-	                          "\" with an index");
+virtual string BenchmarkInfo() {
+	return StringUtil::Format("Runs the following query: \"" + GetQuery() + "\" with an index");
 }
 FINISH_BENCHMARK(PointQueryWithIndex)

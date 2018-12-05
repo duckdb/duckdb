@@ -1,16 +1,15 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // common/types.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
 #include "common/assert.hpp"
+#include "common/constants.hpp"
 #include "common/enums.hpp"
 
 #include <type_traits>
@@ -18,9 +17,8 @@
 namespace duckdb {
 
 template <class T> constexpr bool IsValidType() {
-	return std::is_same<T, bool>() || std::is_same<T, int8_t>() ||
-	       std::is_same<T, int16_t>() || std::is_same<T, int32_t>() ||
-	       std::is_same<T, int64_t>() || std::is_same<T, uint64_t>() ||
+	return std::is_same<T, bool>() || std::is_same<T, int8_t>() || std::is_same<T, int16_t>() ||
+	       std::is_same<T, int32_t>() || std::is_same<T, int64_t>() || std::is_same<T, uint64_t>() ||
 	       std::is_same<T, double>() || std::is_same<T, const char *>();
 }
 
@@ -49,7 +47,7 @@ template <class T> TypeId GetTypeId() {
 	}
 }
 
-std::string TypeIdToString(TypeId type);
+string TypeIdToString(TypeId type);
 size_t GetTypeIdSize(TypeId type);
 bool TypeIsConstantSize(TypeId type);
 bool TypeIsIntegral(TypeId type);

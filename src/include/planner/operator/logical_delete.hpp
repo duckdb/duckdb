@@ -13,20 +13,20 @@
 namespace duckdb {
 
 class LogicalDelete : public LogicalOperator {
-	public:
+public:
 	LogicalDelete(TableCatalogEntry *table) : LogicalOperator(LogicalOperatorType::DELETE), table(table) {
 	}
 
 	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
-	std::vector<string> GetNames() override {
+	vector<string> GetNames() override {
 		return {"Count"};
 	}
 
 	TableCatalogEntry *table;
 
-	protected:
+protected:
 	void ResolveTypes() override {
 		types.push_back(TypeId::BIGINT);
 	}

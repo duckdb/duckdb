@@ -1,9 +1,7 @@
-
+#include "capi_helpers.hpp"
 #include "catch.hpp"
 
 #include <vector>
-
-#include "capi_helpers.hpp"
 
 using namespace std;
 
@@ -27,8 +25,7 @@ TEST_CASE("Multiple In-Memory DB Start Up and Shutdown", "[multiplestartup]") {
 	for (size_t i = 0; i < 10; i++) {
 		REQUIRE(duckdb_open(NULL, &database[i]) == DuckDBSuccess);
 		for (size_t j = 0; j < 10; j++) {
-			REQUIRE(duckdb_connect(database[i], &connection[i * 10 + j]) ==
-			        DuckDBSuccess);
+			REQUIRE(duckdb_connect(database[i], &connection[i * 10 + j]) == DuckDBSuccess);
 		}
 	}
 	for (size_t i = 0; i < 10; i++) {

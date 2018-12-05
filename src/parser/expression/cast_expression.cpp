@@ -1,4 +1,3 @@
-
 #include "parser/expression/cast_expression.hpp"
 
 #include "common/exception.hpp"
@@ -13,12 +12,9 @@ unique_ptr<Expression> CastExpression::Copy() {
 	return copy;
 }
 
-unique_ptr<Expression>
-CastExpression::Deserialize(ExpressionDeserializeInfo *info,
-                            Deserializer &source) {
+unique_ptr<Expression> CastExpression::Deserialize(ExpressionDeserializeInfo *info, Deserializer &source) {
 	if (info->children.size() != 1) {
 		return nullptr;
 	}
-	return make_unique_base<Expression, CastExpression>(
-	    info->return_type, move(info->children[0]));
+	return make_unique_base<Expression, CastExpression>(info->return_type, move(info->children[0]));
 }

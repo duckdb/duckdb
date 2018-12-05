@@ -18,8 +18,7 @@ struct value_expr : prod {
 	}
 	value_expr(prod *p) : prod(p) {
 	}
-	static shared_ptr<value_expr> factory(prod *p,
-	                                      sqltype *type_constraint = 0);
+	static shared_ptr<value_expr> factory(prod *p, sqltype *type_constraint = 0);
 };
 
 struct case_expr : value_expr {
@@ -79,8 +78,7 @@ struct coalesce : value_expr {
 	const char *abbrev_;
 	vector<shared_ptr<value_expr>> value_exprs;
 	virtual ~coalesce(){};
-	coalesce(prod *p, sqltype *type_constraint = 0,
-	         const char *abbrev = "coalesce");
+	coalesce(prod *p, sqltype *type_constraint = 0, const char *abbrev = "coalesce");
 	virtual void out(std::ostream &out);
 	virtual void accept(prod_visitor *v) {
 		v->visit(this);
@@ -91,8 +89,7 @@ struct coalesce : value_expr {
 
 struct nullif : coalesce {
 	virtual ~nullif(){};
-	nullif(prod *p, sqltype *type_constraint = 0)
-	    : coalesce(p, type_constraint, "nullif"){};
+	nullif(prod *p, sqltype *type_constraint = 0) : coalesce(p, type_constraint, "nullif"){};
 };
 
 struct bool_expr : value_expr {
@@ -112,8 +109,7 @@ struct truth_value : bool_expr {
 		out << op;
 	}
 	truth_value(prod *p) : bool_expr(p) {
-		op = ((d6() < 4) ? scope->schema->true_literal
-		                 : scope->schema->false_literal);
+		op = ((d6() < 4) ? scope->schema->true_literal : scope->schema->false_literal);
 	}
 };
 

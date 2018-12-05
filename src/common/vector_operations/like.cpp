@@ -10,22 +10,17 @@
 using namespace duckdb;
 using namespace std;
 
-template <class OP>
-void templated_like(Vector &left, Vector &right, Vector &result) {
+template <class OP> void templated_like(Vector &left, Vector &right, Vector &result) {
 	if (left.type != TypeId::VARCHAR) {
-		throw InvalidTypeException(left.type,
-		                           "Input of (NOT) LIKE must be VARCHAR");
+		throw InvalidTypeException(left.type, "Input of (NOT) LIKE must be VARCHAR");
 	}
 	if (right.type != TypeId::VARCHAR) {
-		throw InvalidTypeException(right.type,
-		                           "Input of (NOT) LIKE must be VARCHAR");
+		throw InvalidTypeException(right.type, "Input of (NOT) LIKE must be VARCHAR");
 	}
 	if (result.type != TypeId::BOOLEAN) {
-		throw InvalidTypeException(result.type,
-		                           "Result of (NOT) LIKE must be VARCHAR");
+		throw InvalidTypeException(result.type, "Result of (NOT) LIKE must be VARCHAR");
 	}
-	templated_binary_loop<const char *, const char *, bool, OP, true>(
-	    left, right, result);
+	templated_binary_loop<const char *, const char *, bool, OP, true>(left, right, result);
 }
 
 void VectorOperations::Like(Vector &left, Vector &right, Vector &result) {

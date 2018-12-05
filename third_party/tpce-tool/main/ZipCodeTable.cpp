@@ -54,9 +54,7 @@ unsigned int CZipCodeTable::MaxRecordIdx() const {
 void CZipCodeTable::LoadTableRow() {
 	const ZipCodeDataFileRecord &dataRecord(df.getUniqueRecord(recordIdx));
 
-	strncpy(tableRow.ZC_CODE, dataRecord.ZC_CODE_CSTR(),
-	        sizeof(tableRow.ZC_CODE));
+	strncpy(tableRow.ZC_CODE, dataRecord.ZC_CODE_CSTR(), sizeof(tableRow.ZC_CODE));
 	strncpy(tableRow.ZC_DIV, dataRecord.ZC_DIV_CSTR(), sizeof(tableRow.ZC_DIV));
-	strncpy(tableRow.ZC_TOWN, dataRecord.ZC_TOWN_CSTR(),
-	        sizeof(tableRow.ZC_TOWN));
+	strncpy(tableRow.ZC_TOWN, dataRecord.ZC_TOWN_CSTR(), sizeof(tableRow.ZC_TOWN));
 }

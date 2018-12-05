@@ -14,7 +14,7 @@ namespace duckdb {
 
 //! PhysicalExplain represents the EXPLAIN operator
 class PhysicalExplain : public PhysicalOperator {
-	public:
+public:
 	PhysicalExplain(LogicalOperator &op, vector<string> keys, vector<string> values)
 	    : PhysicalOperator(PhysicalOperatorType::EXPLAIN, op.types), keys(keys), values(values) {
 		assert(keys.size() == types.size());

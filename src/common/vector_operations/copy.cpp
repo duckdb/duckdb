@@ -12,19 +12,15 @@ using namespace duckdb;
 using namespace std;
 
 template <class T>
-static void copy_function(T *__restrict source, T *__restrict target,
-                          size_t offset, size_t count,
+static void copy_function(T *__restrict source, T *__restrict target, size_t offset, size_t count,
                           sel_t *__restrict sel_vector) {
-	VectorOperations::Exec(
-	    sel_vector, count + offset,
-	    [&](size_t i, size_t k) { target[k - offset] = source[i]; }, offset);
+	VectorOperations::Exec(sel_vector, count + offset, [&](size_t i, size_t k) { target[k - offset] = source[i]; },
+	                       offset);
 }
 
 template <class T>
-static void copy_function_set_null(T *__restrict source, T *__restrict target,
-                                   size_t offset, size_t count,
-                                   sel_t *__restrict sel_vector,
-                                   nullmask_t &nullmask) {
+static void copy_function_set_null(T *__restrict source, T *__restrict target, size_t offset, size_t count,
+                                   sel_t *__restrict sel_vector, nullmask_t &nullmask) {
 	if (nullmask.any()) {
 		// null values, have to check the NULL values in the mask
 		VectorOperations::Exec(sel_vector, count + offset,
@@ -43,22 +39,17 @@ static void copy_function_set_null(T *__restrict source, T *__restrict target,
 }
 
 template <class T, bool SET_NULL>
-static void copy_loop(Vector &input, void *target, size_t offset,
-                      size_t element_count) {
+static void copy_loop(Vector &input, void *target, size_t offset, size_t element_count) {
 	auto ldata = (T *)input.data;
 	auto result_data = (T *)target;
 	if (SET_NULL) {
-		copy_function_set_null(ldata, result_data, offset, element_count,
-		                       input.sel_vector, input.nullmask);
+		copy_function_set_null(ldata, result_data, offset, element_count, input.sel_vector, input.nullmask);
 	} else {
-		copy_function(ldata, result_data, offset, element_count,
-		              input.sel_vector);
+		copy_function(ldata, result_data, offset, element_count, input.sel_vector);
 	}
 }
 
-template <bool SET_NULL>
-void generic_copy_loop(Vector &source, void *target, size_t offset,
-                       size_t element_count) {
+template <bool SET_NULL> void generic_copy_loop(Vector &source, void *target, size_t offset, size_t element_count) {
 	if (source.count == 0)
 		return;
 	if (element_count == 0) {
@@ -89,8 +80,7 @@ void generic_copy_loop(Vector &source, void *target, size_t offset,
 		copy_loop<uint64_t, SET_NULL>(source, target, offset, element_count);
 		break;
 	case TypeId::VARCHAR:
-		copy_loop<const char *, SET_NULL>(source, target, offset,
-		                                  element_count);
+		copy_loop<const char *, SET_NULL>(source, target, offset, element_count);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for copy");
@@ -100,32 +90,24 @@ void generic_copy_loop(Vector &source, void *target, size_t offset,
 //===--------------------------------------------------------------------===//
 // Copy data from vector
 //===--------------------------------------------------------------------===//
-void VectorOperations::Copy(Vector &source, void *target, size_t offset,
-                            size_t element_count) {
+void VectorOperations::Copy(Vector &source, void *target, size_t offset, size_t element_count) {
 	if (!TypeIsConstantSize(source.type)) {
-		throw InvalidTypeException(
-		    source.type,
-		    "Cannot copy non-constant size types using this method!");
+		throw InvalidTypeException(source.type, "Cannot copy non-constant size types using this method!");
 	}
 	generic_copy_loop<false>(source, target, offset, element_count);
 }
 
-void VectorOperations::CopyToStorage(Vector &source, void *target,
-                                     size_t offset, size_t element_count) {
+void VectorOperations::CopyToStorage(Vector &source, void *target, size_t offset, size_t element_count) {
 	generic_copy_loop<true>(source, target, offset, element_count);
 }
 
 void VectorOperations::Copy(Vector &source, Vector &target, size_t offset) {
 	if (source.type != target.type) {
-		throw TypeMismatchException(source.type, target.type,
-		                            "Copy types don't match!");
+		throw TypeMismatchException(source.type, target.type, "Copy types don't match!");
 	}
 	assert(offset <= source.count);
 	target.count = source.count - offset;
-	VectorOperations::Exec(source,
-	                       [&](size_t i, size_t k) {
-		                       target.nullmask[k - offset] = source.nullmask[i];
-	                       },
+	VectorOperations::Exec(source, [&](size_t i, size_t k) { target.nullmask[k - offset] = source.nullmask[i]; },
 	                       offset);
 	VectorOperations::Copy(source, target.data, offset, target.count);
 }

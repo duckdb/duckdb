@@ -7,25 +7,25 @@ SELECT
                 FROM
                     main.partsupp
                 LIMIT 1 offset 3)
-            IS NULL THEN
-            subq_0.c8
-        ELSE
-            subq_0.c8
-        END
+    IS NULL THEN
+    subq_0.c8
+ELSE
+    subq_0.c8
+END
+ELSE
+    CASE WHEN (
+            SELECT
+                ps_supplycost
+            FROM
+                main.partsupp
+            LIMIT 1 offset 3)
+        IS NULL THEN
+        subq_0.c8
     ELSE
-        CASE WHEN (
-                SELECT
-                    ps_supplycost
-                FROM
-                    main.partsupp
-                LIMIT 1 offset 3)
-            IS NULL THEN
-            subq_0.c8
-        ELSE
-            subq_0.c8
-        END
-    END AS c1,
-    subq_0.c1 AS c2
+        subq_0.c8
+    END
+END AS c1,
+subq_0.c1 AS c2
 FROM (
     SELECT
         ref_0.o_orderdate AS c0,
@@ -42,7 +42,8 @@ FROM (
         ref_0.o_custkey AS c11,
         ref_0.o_orderstatus AS c12,
         ref_0.o_orderstatus AS c13,
-        ref_0.o_clerk AS c14, (
+        ref_0.o_clerk AS c14,
+        (
             SELECT
                 s_comment
             FROM

@@ -14,7 +14,7 @@ namespace duckdb {
 
 //! PhysicalPruneColumns prunes (removes) columns from its input
 class PhysicalPruneColumns : public PhysicalOperator {
-	public:
+public:
 	PhysicalPruneColumns(LogicalOperator &op, size_t column_limit)
 	    : PhysicalOperator(PhysicalOperatorType::PRUNE_COLUMNS, op.types), column_limit(column_limit) {
 	}

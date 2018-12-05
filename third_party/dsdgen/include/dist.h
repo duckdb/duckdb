@@ -89,8 +89,7 @@ void dump_dist(char *szName);
 int dist_active(char *szName, int nWeightSet);
 int DistNameIndex(char *szDist, int nNameType, char *szName);
 int DistSizeToShiftWidth(char *szDist, int nWeightSet);
-int MatchDistWeight(void *dest, char *szDist, int nWeight, int nWeightSet,
-                    int ValueSet);
+int MatchDistWeight(void *dest, char *szDist, int nWeight, int nWeightSet, int ValueSet);
 int findDistValue(char *szValue, char *szDistName, int ValueSet);
 int di_compare(const void *op1, const void *op2);
 

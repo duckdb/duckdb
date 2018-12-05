@@ -21,8 +21,8 @@ namespace duckdb {
 class PhysicalIndexScan : public PhysicalOperator {
   public:
 	PhysicalIndexScan(LogicalOperator &op, TableCatalogEntry &tableref, DataTable &table,
-	                  Index &index, std::vector<column_t> column_ids,
-	                  std::unique_ptr<Expression> expression)
+	                  Index &index, vector<column_t> column_ids,
+	                  unique_ptr<Expression> expression)
 	    : PhysicalOperator(PhysicalOperatorType::INDEX_SCAN, op.types),
 	      tableref(tableref), table(table), index(index),
 	      column_ids(column_ids), expression(move(expression)) {
@@ -35,17 +35,17 @@ class PhysicalIndexScan : public PhysicalOperator {
 	//! The index to use for the scan
 	Index &index;
 	//! The column ids to project
-	std::vector<column_t> column_ids;
+	vector<column_t> column_ids;
 	//! The expression that must be fulfilled (i.e. the value looked up in the
 	//! index)
-	std::unique_ptr<Expression> expression;
+	unique_ptr<Expression> expression;
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk,
 	               PhysicalOperatorState *state) override;
 
-	std::string ExtraRenderInformation() override;
+	string ExtraRenderInformation() override;
 
-	std::unique_ptr<PhysicalOperatorState>
+	unique_ptr<PhysicalOperatorState>
 	GetOperatorState(ExpressionExecutor *parent_executor) override;
 };
 
@@ -55,6 +55,6 @@ class PhysicalIndexScanOperatorState : public PhysicalOperatorState {
 	    : PhysicalOperatorState(nullptr, parent_executor), scan_state(nullptr) {
 	}
 
-	std::unique_ptr<IndexScanState> scan_state;
+	unique_ptr<IndexScanState> scan_state;
 };
 } // namespace duckdb

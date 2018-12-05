@@ -117,16 +117,11 @@ int mk_w_catalog_returns(void *row, ds_key_t index) {
 	/*
 	 * some of the fields are conditionally taken from the sale
 	 */
-	r->cr_returning_customer_sk =
-	    mk_join(CR_RETURNING_CUSTOMER_SK, CUSTOMER, 2);
-	r->cr_returning_cdemo_sk =
-	    mk_join(CR_RETURNING_CDEMO_SK, CUSTOMER_DEMOGRAPHICS, 2);
-	r->cr_returning_hdemo_sk =
-	    mk_join(CR_RETURNING_HDEMO_SK, HOUSEHOLD_DEMOGRAPHICS, 2);
-	r->cr_returning_addr_sk =
-	    mk_join(CR_RETURNING_ADDR_SK, CUSTOMER_ADDRESS, 2);
-	if (genrand_integer(NULL, DIST_UNIFORM, 0, 99, 0,
-	                    CR_RETURNING_CUSTOMER_SK) < CS_GIFT_PCT) {
+	r->cr_returning_customer_sk = mk_join(CR_RETURNING_CUSTOMER_SK, CUSTOMER, 2);
+	r->cr_returning_cdemo_sk = mk_join(CR_RETURNING_CDEMO_SK, CUSTOMER_DEMOGRAPHICS, 2);
+	r->cr_returning_hdemo_sk = mk_join(CR_RETURNING_HDEMO_SK, HOUSEHOLD_DEMOGRAPHICS, 2);
+	r->cr_returning_addr_sk = mk_join(CR_RETURNING_ADDR_SK, CUSTOMER_ADDRESS, 2);
+	if (genrand_integer(NULL, DIST_UNIFORM, 0, 99, 0, CR_RETURNING_CUSTOMER_SK) < CS_GIFT_PCT) {
 		r->cr_returning_customer_sk = sale->cs_ship_customer_sk;
 		r->cr_returning_cdemo_sk = sale->cs_ship_cdemo_sk;
 		/* cr_returning_hdemo_sk removed, since it doesn't exist on the sales
@@ -139,8 +134,7 @@ int mk_w_catalog_returns(void *row, ds_key_t index) {
 	 */
 	/* the items cannot be returned until they are shipped; offset is handled in
 	 * mk_join, based on sales date */
-	r->cr_returned_date_sk =
-	    mk_join(CR_RETURNED_DATE_SK, DATET, sale->cs_ship_date_sk);
+	r->cr_returned_date_sk = mk_join(CR_RETURNED_DATE_SK, DATET, sale->cs_ship_date_sk);
 
 	/* the call center determines the time of the return */
 	r->cr_returned_time_sk = mk_join(CR_RETURNED_TIME_SK, TIME, 1);
@@ -149,8 +143,7 @@ int mk_w_catalog_returns(void *row, ds_key_t index) {
 	r->cr_warehouse_sk = mk_join(CR_WAREHOUSE_SK, WAREHOUSE, 1);
 	r->cr_reason_sk = mk_join(CR_REASON_SK, REASON, 1);
 	if (sale->cs_pricing.quantity != -1)
-		genrand_integer(&r->cr_pricing.quantity, DIST_UNIFORM, 1,
-		                sale->cs_pricing.quantity, 0, CR_PRICING);
+		genrand_integer(&r->cr_pricing.quantity, DIST_UNIFORM, 1, sale->cs_pricing.quantity, 0, CR_PRICING);
 	else
 		r->cr_pricing.quantity = -1;
 	set_pricing(CR_PRICING, &r->cr_pricing);

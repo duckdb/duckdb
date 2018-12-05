@@ -104,19 +104,16 @@ const char *const FlatFileOpenModeOverwrite = FILE_OPEN_MODE_OVERWRITE;
 const char *const FlatFileOpenModeAppend = FILE_OPEN_MODE_APPEND;
 
 // Overwrite vs. append functionality for output flat files.
-enum FlatFileOutputModes {
-	FLAT_FILE_OUTPUT_APPEND = 0,
-	FLAT_FILE_OUTPUT_OVERWRITE
-};
+enum FlatFileOutputModes { FLAT_FILE_OUTPUT_APPEND = 0, FLAT_FILE_OUTPUT_OVERWRITE };
 
 /*
  *   FlatLoader class.
  */
 template <typename T> class CFlatFileLoader : public CBaseLoader<T> {
-  protected:
+protected:
 	FILE *hOutFile;
 
-  public:
+public:
 	CFlatFileLoader(char *szFileName, FlatFileOutputModes FlatFileOutputMode);
 	~CFlatFileLoader(void);
 
@@ -128,9 +125,7 @@ template <typename T> class CFlatFileLoader : public CBaseLoader<T> {
 /*
  *       The constructor.
  */
-template <typename T>
-CFlatFileLoader<T>::CFlatFileLoader(char *szFileName,
-                                    FlatFileOutputModes flatFileOutputMode) {
+template <typename T> CFlatFileLoader<T>::CFlatFileLoader(char *szFileName, FlatFileOutputModes flatFileOutputMode) {
 	if (FLAT_FILE_OUTPUT_APPEND == flatFileOutputMode) {
 		hOutFile = fopen(szFileName, FlatFileOpenModeAppend);
 	} else if (FLAT_FILE_OUTPUT_OVERWRITE == flatFileOutputMode) {
@@ -138,14 +133,12 @@ CFlatFileLoader<T>::CFlatFileLoader(char *szFileName,
 	}
 
 	if (!hOutFile) {
-		throw CSystemErr(CSystemErr::eCreateFile,
-		                 "CFlatFileLoader<T>::CFlatFileLoader");
+		throw CSystemErr(CSystemErr::eCreateFile, "CFlatFileLoader<T>::CFlatFileLoader");
 	}
 
 	if (FlatFileBufferSize > 0) {
 		if (setvbuf(hOutFile, NULL, _IOFBF, FlatFileBufferSize)) {
-			throw CSystemErr(CSystemErr::eCreateFile,
-			                 "CFlatFileLoader<T>::CFlatFileLoader");
+			throw CSystemErr(CSystemErr::eCreateFile, "CFlatFileLoader<T>::CFlatFileLoader");
 		}
 	}
 }

@@ -1,4 +1,3 @@
-
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
@@ -24,8 +23,7 @@ TEST_CASE("CHECK constraint", "[constraints]") {
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers;"));
 
 	// constraint on multiple columns
-	REQUIRE_NO_FAIL(con.Query(
-	    "CREATE TABLE integers(i INTEGER CHECK(i + j < 10), j INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER CHECK(i + j < 10), j INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (3, 3)"));
 	// some values pass some values don't
 	REQUIRE_FAIL(con.Query("INSERT INTO integers VALUES (5, 5)"));
@@ -36,9 +34,7 @@ TEST_CASE("CHECK constraint", "[constraints]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {3}));
 
 	// subquery not allowed in CHECK
-	REQUIRE_FAIL(con.Query(
-	    "CREATE TABLE integers2(i INTEGER CHECK(i > (SELECT 42)), j INTEGER)"));
+	REQUIRE_FAIL(con.Query("CREATE TABLE integers2(i INTEGER CHECK(i > (SELECT 42)), j INTEGER)"));
 	// aggregate not allowed in CHECK
-	REQUIRE_FAIL(con.Query(
-	    "CREATE TABLE integers2(i INTEGER CHECK(i > SUM(j)), j INTEGER)"));
+	REQUIRE_FAIL(con.Query("CREATE TABLE integers2(i INTEGER CHECK(i > SUM(j)), j INTEGER)"));
 }

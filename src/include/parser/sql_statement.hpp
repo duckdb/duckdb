@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // parser/sql_statement.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -20,12 +18,12 @@ class SQLNodeVisitor;
 
 //! SQLStatement is the base class of any type of SQL statement.
 class SQLStatement : public Printable {
-  public:
+public:
 	SQLStatement(StatementType type) : type(type){};
 	virtual ~SQLStatement() {
 	}
 
-	virtual std::unique_ptr<SQLStatement> Accept(SQLNodeVisitor *) = 0;
+	virtual unique_ptr<SQLStatement> Accept(SQLNodeVisitor *) = 0;
 	virtual bool Equals(const SQLStatement *other) {
 		return other && type == other->type;
 	}

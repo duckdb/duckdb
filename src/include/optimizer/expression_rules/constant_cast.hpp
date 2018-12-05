@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // optimizer/expression_rules/constant_cast.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -15,12 +13,11 @@
 namespace duckdb {
 
 class ConstantCastRule : public Rule {
-  public:
+public:
 	ConstantCastRule();
 
-	std::unique_ptr<Expression> Apply(Rewriter &rewriter, Expression &root,
-	                                  std::vector<AbstractOperator> &bindings,
-	                                  bool &fixed_point);
+	unique_ptr<Expression> Apply(Rewriter &rewriter, Expression &root, vector<AbstractOperator> &bindings,
+	                             bool &fixed_point);
 };
 
 } // namespace duckdb

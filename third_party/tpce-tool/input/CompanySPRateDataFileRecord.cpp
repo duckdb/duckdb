@@ -42,8 +42,7 @@
 
 using namespace TPCE;
 
-CompanySPRateDataFileRecord::CompanySPRateDataFileRecord(
-    const std::deque<std::string> &fields) {
+CompanySPRateDataFileRecord::CompanySPRateDataFileRecord(const std::deque<std::string> &fields) {
 	if (fieldCount != fields.size()) {
 		throw std::runtime_error("Incorrect field count.");
 	}

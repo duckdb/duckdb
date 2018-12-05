@@ -45,9 +45,8 @@ class CMarketFeed {
 	CMarketFeedDBInterface *m_db;
 	CSendToMarketInterface *m_pSendToMarket;
 
-  public:
-	CMarketFeed(CMarketFeedDBInterface *pDB,
-	            CSendToMarketInterface *pSendToMarket)
+public:
+	CMarketFeed(CMarketFeedDBInterface *pDB, CSendToMarketInterface *pSendToMarket)
 	    : m_db(pDB), m_pSendToMarket(pSendToMarket){};
 
 	void DoTxn(PMarketFeedTxnInput pTxnInput, PMarketFeedTxnOutput pTxnOutput) {

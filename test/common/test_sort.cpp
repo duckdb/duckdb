@@ -1,10 +1,8 @@
-
 #include "catch.hpp"
-
-#include <vector>
-
 #include "common/operator/comparison_operators.hpp"
 #include "common/vector_operations/vector_operations.hpp"
+
+#include <vector>
 
 using namespace duckdb;
 using namespace std;
@@ -20,8 +18,7 @@ template <class T> bool IsSorted(Vector &v) {
 		} else if (left_null) {
 			continue;
 		} else {
-			if (!operators::LessThanEquals::Operation<T>(data[lindex],
-			                                             data[rindex])) {
+			if (!operators::LessThanEquals::Operation<T>(data[lindex], data[rindex])) {
 				return false;
 			}
 		}

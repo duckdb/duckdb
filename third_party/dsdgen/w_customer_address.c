@@ -64,8 +64,7 @@ int mk_w_customer_address(void *info_arr, ds_key_t index) {
 	nullSet(&pTdef->kNullBitMap, CA_NULLS);
 	r->ca_addr_sk = index;
 	mk_bkey(&r->ca_addr_id[0], index, CA_ADDRESS_ID);
-	pick_distribution(&r->ca_location_type, "location_type", 1, 1,
-	                  CA_LOCATION_TYPE);
+	pick_distribution(&r->ca_location_type, "location_type", 1, 1, CA_LOCATION_TYPE);
 	mk_address(&r->ca_address, CA_ADDRESS);
 
 	void *info = append_info_get(info_arr, CUSTOMER_ADDRESS);
@@ -77,8 +76,7 @@ int mk_w_customer_address(void *info_arr, ds_key_t index) {
 	append_varchar(info, r->ca_addr_id);
 	append_integer(info, r->ca_address.street_num);
 	if (r->ca_address.street_name2) {
-		sprintf(szTemp, "%s %s", r->ca_address.street_name1,
-		        r->ca_address.street_name2);
+		sprintf(szTemp, "%s %s", r->ca_address.street_name1, r->ca_address.street_name2);
 		append_varchar(info, szTemp);
 	} else
 		append_varchar(info, r->ca_address.street_name1);

@@ -1,18 +1,14 @@
-
 #include "storage/write_ahead_log.hpp"
 
 #include "catalog/catalog.hpp"
 #include "catalog/catalog_entry/schema_catalog_entry.hpp"
-
+#include "common/file_system.hpp"
+#include "common/serializer.hpp"
 #include "main/client_context.hpp"
 #include "main/connection.hpp"
 #include "main/database.hpp"
-
 #include "transaction/transaction.hpp"
 #include "transaction/transaction_manager.hpp"
-
-#include "common/file_system.hpp"
-#include "common/serializer.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -34,8 +30,7 @@ static bool ReadEntry(WALEntry &entry, FILE *wal_file) {
 //===--------------------------------------------------------------------===//
 // Replay & Initialize Log
 //===--------------------------------------------------------------------===//
-static bool ReplayEntry(ClientContext &context, DuckDB &database,
-                        WALEntry entry, Deserializer &source);
+static bool ReplayEntry(ClientContext &context, DuckDB &database, WALEntry entry, Deserializer &source);
 
 void WriteAheadLog::Replay(string &path) {
 	auto wal_file = fopen(path.c_str(), "r");
@@ -53,11 +48,9 @@ void WriteAheadLog::Replay(string &path) {
 			bool failed = false;
 			context.transaction.BeginTransaction();
 			for (auto &stored_entry : stored_entries) {
-				Deserializer deserializer(stored_entry.data.get(),
-				                          stored_entry.entry.size);
+				Deserializer deserializer(stored_entry.data.get(), stored_entry.entry.size);
 
-				if (!ReplayEntry(context, database, stored_entry.entry,
-				                 deserializer)) {
+				if (!ReplayEntry(context, database, stored_entry.entry, deserializer)) {
 					// failed to replay entry in log
 					context.transaction.Rollback();
 					failed = true;
@@ -92,7 +85,7 @@ void WriteAheadLog::Replay(string &path) {
 	fclose(wal_file);
 }
 
-void WriteAheadLog::Initialize(std::string &path) {
+void WriteAheadLog::Initialize(string &path) {
 	wal_file = fopen(path.c_str(), "a+");
 	initialized = true;
 }
@@ -100,33 +93,23 @@ void WriteAheadLog::Initialize(std::string &path) {
 //===--------------------------------------------------------------------===//
 // Replay Entries
 //===--------------------------------------------------------------------===//
-bool ReplayDropTable(Transaction &transaction, Catalog &catalog,
-                     Deserializer &source);
-bool ReplayCreateTable(Transaction &transaction, Catalog &catalog,
-                       Deserializer &source);
-bool ReplayDropSchema(Transaction &transaction, Catalog &catalog,
-                      Deserializer &source);
-bool ReplayCreateSchema(Transaction &transaction, Catalog &catalog,
-                        Deserializer &source);
-bool ReplayInsert(ClientContext &context, Catalog &catalog,
-                  Deserializer &source);
+bool ReplayDropTable(Transaction &transaction, Catalog &catalog, Deserializer &source);
+bool ReplayCreateTable(Transaction &transaction, Catalog &catalog, Deserializer &source);
+bool ReplayDropSchema(Transaction &transaction, Catalog &catalog, Deserializer &source);
+bool ReplayCreateSchema(Transaction &transaction, Catalog &catalog, Deserializer &source);
+bool ReplayInsert(ClientContext &context, Catalog &catalog, Deserializer &source);
 bool ReplayQuery(ClientContext &context, Deserializer &source);
 
-bool ReplayEntry(ClientContext &context, DuckDB &database, WALEntry entry,
-                 Deserializer &source) {
+bool ReplayEntry(ClientContext &context, DuckDB &database, WALEntry entry, Deserializer &source) {
 	switch (entry.type) {
 	case WALEntry::DROP_TABLE:
-		return ReplayDropTable(context.ActiveTransaction(), database.catalog,
-		                       source);
+		return ReplayDropTable(context.ActiveTransaction(), database.catalog, source);
 	case WALEntry::CREATE_TABLE:
-		return ReplayCreateTable(context.ActiveTransaction(), database.catalog,
-		                         source);
+		return ReplayCreateTable(context.ActiveTransaction(), database.catalog, source);
 	case WALEntry::DROP_SCHEMA:
-		return ReplayDropSchema(context.ActiveTransaction(), database.catalog,
-		                        source);
+		return ReplayDropSchema(context.ActiveTransaction(), database.catalog, source);
 	case WALEntry::CREATE_SCHEMA:
-		return ReplayCreateSchema(context.ActiveTransaction(), database.catalog,
-		                          source);
+		return ReplayCreateSchema(context.ActiveTransaction(), database.catalog, source);
 	case WALEntry::INSERT_TUPLE:
 		return ReplayInsert(context, database.catalog, source);
 	case WALEntry::QUERY:
@@ -187,8 +170,7 @@ void WriteAheadLog::WriteCreateTable(TableCatalogEntry *entry) {
 	WriteEntry(WALEntry::CREATE_TABLE, serializer);
 }
 
-bool ReplayCreateTable(Transaction &transaction, Catalog &catalog,
-                       Deserializer &source) {
+bool ReplayCreateTable(Transaction &transaction, Catalog &catalog, Deserializer &source) {
 	CreateTableInformation info;
 
 	info.schema = source.Read<string>();
@@ -198,8 +180,7 @@ bool ReplayCreateTable(Transaction &transaction, Catalog &catalog,
 	for (size_t i = 0; i < column_count; i++) {
 		auto column_name = source.Read<string>();
 		auto column_type = (TypeId)source.Read<int>();
-		info.columns.push_back(
-		    ColumnDefinition(column_name, column_type, false));
+		info.columns.push_back(ColumnDefinition(column_name, column_type, false));
 	}
 	auto constraint_count = source.Read<uint32_t>();
 
@@ -227,8 +208,7 @@ void WriteAheadLog::WriteDropTable(TableCatalogEntry *entry) {
 	WriteEntry(WALEntry::DROP_TABLE, serializer);
 }
 
-bool ReplayDropTable(Transaction &transaction, Catalog &catalog,
-                     Deserializer &source) {
+bool ReplayDropTable(Transaction &transaction, Catalog &catalog, Deserializer &source) {
 	DropTableInformation info;
 
 	info.schema = source.Read<string>();
@@ -252,8 +232,7 @@ void WriteAheadLog::WriteCreateSchema(SchemaCatalogEntry *entry) {
 	WriteEntry(WALEntry::CREATE_SCHEMA, serializer);
 }
 
-bool ReplayCreateSchema(Transaction &transaction, Catalog &catalog,
-                        Deserializer &source) {
+bool ReplayCreateSchema(Transaction &transaction, Catalog &catalog, Deserializer &source) {
 	CreateSchemaInformation info;
 	info.schema = source.Read<string>();
 
@@ -275,8 +254,7 @@ void WriteAheadLog::WriteDropSchema(SchemaCatalogEntry *entry) {
 	WriteEntry(WALEntry::DROP_SCHEMA, serializer);
 }
 
-bool ReplayDropSchema(Transaction &transaction, Catalog &catalog,
-                      Deserializer &source) {
+bool ReplayDropSchema(Transaction &transaction, Catalog &catalog, Deserializer &source) {
 	DropSchemaInformation info;
 
 	info.schema = source.Read<string>();
@@ -292,15 +270,13 @@ bool ReplayDropSchema(Transaction &transaction, Catalog &catalog,
 //===--------------------------------------------------------------------===//
 // INSERT
 //===--------------------------------------------------------------------===//
-void WriteAheadLog::WriteInsert(std::string &schema, std::string &table,
-                                DataChunk &chunk) {
+void WriteAheadLog::WriteInsert(string &schema, string &table, DataChunk &chunk) {
 	if (chunk.size() == 0) {
 		return;
 	}
 	chunk.Verify();
 	if (chunk.sel_vector) {
-		throw NotImplementedException(
-		    "Cannot insert into WAL from chunk with SEL vector");
+		throw NotImplementedException("Cannot insert into WAL from chunk with SEL vector");
 	}
 
 	Serializer serializer;
@@ -311,8 +287,7 @@ void WriteAheadLog::WriteInsert(std::string &schema, std::string &table,
 	WriteEntry(WALEntry::INSERT_TUPLE, serializer);
 }
 
-bool ReplayInsert(ClientContext &context, Catalog &catalog,
-                  Deserializer &source) {
+bool ReplayInsert(ClientContext &context, Catalog &catalog, Deserializer &source) {
 	auto schema_name = source.Read<string>();
 	auto table_name = source.Read<string>();
 	DataChunk chunk;
@@ -335,7 +310,7 @@ bool ReplayInsert(ClientContext &context, Catalog &catalog,
 //===--------------------------------------------------------------------===//
 // QUERY
 //===--------------------------------------------------------------------===//
-void WriteAheadLog::WriteQuery(std::string &query) {
+void WriteAheadLog::WriteQuery(string &query) {
 	Serializer serializer;
 	serializer.WriteString(query);
 

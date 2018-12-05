@@ -57,8 +57,7 @@ typedef struct LIST_T {
 
 #define length(list) list->nMembers
 
-list_t *makeList(int nFlags,
-                 int (*pSortFunc)(const void *pD1, const void *pD2));
+list_t *makeList(int nFlags, int (*pSortFunc)(const void *pD1, const void *pD2));
 list_t *addList(list_t *pList, void *pData);
 void *findList(list_t *pList, void *pData);
 void *removeItem(list_t *pList, int bFromHead);

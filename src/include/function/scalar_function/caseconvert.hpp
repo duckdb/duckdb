@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // function/scalar_function/caseconvert.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -15,16 +13,14 @@
 namespace duckdb {
 namespace function {
 
-void caseconvert_upper_function(Vector inputs[], size_t input_count,
-                                Vector &result);
-void caseconvert_lower_function(Vector inputs[], size_t input_count,
-                                Vector &result);
+void caseconvert_upper_function(Vector inputs[], size_t input_count, Vector &result);
+void caseconvert_lower_function(Vector inputs[], size_t input_count, Vector &result);
 
-bool caseconvert_matches_arguments(std::vector<TypeId> &arguments);
-TypeId caseconvert_get_return_type(std::vector<TypeId> &arguments);
+bool caseconvert_matches_arguments(vector<TypeId> &arguments);
+TypeId caseconvert_get_return_type(vector<TypeId> &arguments);
 
 class UpperFunction {
-  public:
+public:
 	static const char *GetName() {
 		return "upper";
 	}
@@ -43,7 +39,7 @@ class UpperFunction {
 };
 
 class LowerFunction {
-  public:
+public:
 	static const char *GetName() {
 		return "lower";
 	}

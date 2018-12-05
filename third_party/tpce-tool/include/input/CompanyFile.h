@@ -57,7 +57,7 @@ class CCompanyFile {
 	TIdent m_iConfiguredCompanyCount;
 	TIdent m_iActiveCompanyCount;
 
-  public:
+public:
 	/*
 	 *  Constructor.
 	 *
@@ -71,8 +71,7 @@ class CCompanyFile {
 	 *  RETURNS:
 	 *       not applicable.
 	 */
-	CCompanyFile(const CompanyDataFile_t &dataFile,
-	             TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount);
+	CCompanyFile(const CompanyDataFile_t &dataFile, TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount);
 
 	/*
 	 *  Calculate company count for the specified number of customers.

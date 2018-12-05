@@ -50,13 +50,13 @@
 namespace TPCE {
 
 template <typename T> class TableTemplate {
-  protected:
+protected:
 	T m_row;                 // private row for generation
 	TIdent m_iLastRowNumber; // sequential last row number
 	bool m_bMoreRecords;     // true if more records can be generated, otherwise
 	                         // false
 	CRandom m_rnd;           // random generator - present in all tables
-  public:
+public:
 	/*
 	 *  The Constructor - just initializes member variables.
 	 *

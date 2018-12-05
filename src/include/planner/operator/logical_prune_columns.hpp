@@ -15,7 +15,7 @@ namespace duckdb {
 //! LogicalPruneColumns represents a node that prunes extra columns from its
 //! children
 class LogicalPruneColumns : public LogicalOperator {
-	public:
+public:
 	LogicalPruneColumns(size_t column_limit)
 	    : LogicalOperator(LogicalOperatorType::PRUNE_COLUMNS), column_limit(column_limit) {
 	}
@@ -23,11 +23,11 @@ class LogicalPruneColumns : public LogicalOperator {
 	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
-	std::vector<string> GetNames() override;
+	vector<string> GetNames() override;
 
 	size_t column_limit;
 
-	protected:
+protected:
 	void ResolveTypes() override;
 };
 

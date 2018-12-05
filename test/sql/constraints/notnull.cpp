@@ -1,4 +1,3 @@
-
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
@@ -22,12 +21,10 @@ TEST_CASE("NOT NULL constraint", "[constraints]") {
 	REQUIRE_FAIL(con.Query("UPDATE integers SET i=NULL"));
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers_with_null(i INTEGER)"));
-	REQUIRE_NO_FAIL(con.Query(
-	    "INSERT INTO integers_with_null VALUES (3), (4), (5), (NULL);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers_with_null VALUES (3), (4), (5), (NULL);"));
 
 	//! INSERT from SELECT with NULL
-	REQUIRE_FAIL(
-	    con.Query("INSERT INTO integers (i) SELECT * FROM integers_with_null"));
+	REQUIRE_FAIL(con.Query("INSERT INTO integers (i) SELECT * FROM integers_with_null"));
 	//! INSERT from SELECT without NULL
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers (i) SELECT * FROM "
 	                          "integers_with_null WHERE i IS NOT NULL"));

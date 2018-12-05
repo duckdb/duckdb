@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // parser/statement/drop_schema_statement.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -17,17 +15,15 @@
 namespace duckdb {
 
 class DropSchemaStatement : public SQLStatement {
-  public:
-	DropSchemaStatement()
-	    : SQLStatement(StatementType::DROP_SCHEMA),
-	      info(make_unique<DropSchemaInformation>()){};
+public:
+	DropSchemaStatement() : SQLStatement(StatementType::DROP_SCHEMA), info(make_unique<DropSchemaInformation>()){};
 	virtual ~DropSchemaStatement() {
 	}
 
-	virtual std::string ToString() const {
+	virtual string ToString() const {
 		return "DROP SCHEMA";
 	}
-	virtual std::unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
+	virtual unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
 		return v->Visit(*this);
 	}
 
@@ -38,7 +34,7 @@ class DropSchemaStatement : public SQLStatement {
 		throw NotImplementedException("Equality not implemented!");
 	}
 
-	std::unique_ptr<DropSchemaInformation> info;
+	unique_ptr<DropSchemaInformation> info;
 };
 
 } // namespace duckdb

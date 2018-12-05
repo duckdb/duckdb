@@ -1,15 +1,13 @@
-
-#include <algorithm>
+#include "optimizer/logical_rules/selection_pushdown.hpp"
 
 #include "common/common.hpp"
 #include "common/exception.hpp"
-
-#include "optimizer/logical_rules/selection_pushdown.hpp"
-
 #include "parser/expression/cast_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
 #include "planner/logical_operator_visitor.hpp"
 #include "planner/operator/logical_filter.hpp"
+
+#include <algorithm>
 
 using namespace duckdb;
 using namespace std;
@@ -21,8 +19,7 @@ static bool CheckEval(LogicalOperator *op, Expression *expr) {
 	}
 	if (expr->type == ExpressionType::COLUMN_REF) {
 		auto colref = (ColumnRefExpression *)expr;
-		if (op->referenced_tables.find(colref->binding.table_index) !=
-		    op->referenced_tables.end()) {
+		if (op->referenced_tables.find(colref->binding.table_index) != op->referenced_tables.end()) {
 			return true;
 		}
 		return false;
@@ -40,8 +37,7 @@ static bool CheckEval(LogicalOperator *op, Expression *expr) {
 	return false;
 }
 
-static unique_ptr<Expression> RewritePushdown(unique_ptr<Expression> expr,
-                                              LogicalOperator *op) {
+static unique_ptr<Expression> RewritePushdown(unique_ptr<Expression> expr, LogicalOperator *op) {
 	assert(op);
 
 	bool moved = false;
@@ -79,17 +75,14 @@ static unique_ptr<Expression> RewritePushdown(unique_ptr<Expression> expr,
 		}
 		if (push_index > -1) {
 			// if the child is not yet a filter, make it one
-			if (op->children[i]->children[push_index]->type !=
-			    LogicalOperatorType::FILTER) {
+			if (op->children[i]->children[push_index]->type != LogicalOperatorType::FILTER) {
 				auto filter = make_unique<LogicalFilter>();
 				filter->AddChild(move(op->children[i]->children[push_index]));
 				op->children[i]->children[push_index] = move(filter);
 			}
-			assert(op->children[i]->children[push_index]->type ==
-			       LogicalOperatorType::FILTER);
+			assert(op->children[i]->children[push_index]->type == LogicalOperatorType::FILTER);
 			// push filter cond
-			auto filter_op = reinterpret_cast<LogicalFilter *>(
-			    op->children[i]->children[push_index].get());
+			auto filter_op = reinterpret_cast<LogicalFilter *>(op->children[i]->children[push_index].get());
 			filter_op->expressions.push_back(move(expr));
 			moved = true;
 		}
@@ -103,15 +96,12 @@ static unique_ptr<Expression> RewritePushdown(unique_ptr<Expression> expr,
 }
 
 SelectionPushdownRule::SelectionPushdownRule() {
-	root = make_unique_base<AbstractRuleNode, LogicalNodeType>(
-	    LogicalOperatorType::FILTER);
+	root = make_unique_base<AbstractRuleNode, LogicalNodeType>(LogicalOperatorType::FILTER);
 	root->child_policy = ChildPolicy::ANY;
 }
 
-unique_ptr<LogicalOperator>
-SelectionPushdownRule::Apply(Rewriter &rewriter, LogicalOperator &root,
-                             vector<AbstractOperator> &bindings,
-                             bool &fixed_point) {
+unique_ptr<LogicalOperator> SelectionPushdownRule::Apply(Rewriter &rewriter, LogicalOperator &root,
+                                                         vector<AbstractOperator> &bindings, bool &fixed_point) {
 	auto &filter = (LogicalFilter &)root;
 	assert(filter.children.size() == 1);
 	// for each filter condition, check if they can be a join condition

@@ -53,6 +53,5 @@ void CTradeTypeTable::LoadTableRow() {
 	strncpy(tableRow.TT_ID, dataRecord.TT_ID_CSTR(), sizeof(tableRow.TT_ID));
 	tableRow.TT_IS_MRKT = dataRecord.TT_IS_MRKT();
 	tableRow.TT_IS_SELL = dataRecord.TT_IS_SELL();
-	strncpy(tableRow.TT_NAME, dataRecord.TT_NAME_CSTR(),
-	        sizeof(tableRow.TT_NAME));
+	strncpy(tableRow.TT_NAME, dataRecord.TT_NAME_CSTR(), sizeof(tableRow.TT_NAME));
 }

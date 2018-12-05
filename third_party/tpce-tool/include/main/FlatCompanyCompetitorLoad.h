@@ -44,28 +44,23 @@
 
 namespace TPCE {
 
-class CFlatCompanyCompetitorLoad
-    : public CFlatFileLoader<COMPANY_COMPETITOR_ROW> {
-  private:
+class CFlatCompanyCompetitorLoad : public CFlatFileLoader<COMPANY_COMPETITOR_ROW> {
+private:
 	const std::string CompanyCompetitorRowFmt;
 
-  public:
-	CFlatCompanyCompetitorLoad(char *szFileName,
-	                           FlatFileOutputModes FlatFileOutputMode)
-	    : CFlatFileLoader<COMPANY_COMPETITOR_ROW>(szFileName,
-	                                              FlatFileOutputMode),
+public:
+	CFlatCompanyCompetitorLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
+	    : CFlatFileLoader<COMPANY_COMPETITOR_ROW>(szFileName, FlatFileOutputMode),
 	      CompanyCompetitorRowFmt("%" PRId64 "|%" PRId64 "|%s\n"){};
 
 	/*
 	 *   Writes a record to the file.
 	 */
 	void WriteNextRecord(const COMPANY_COMPETITOR_ROW &next_record) {
-		int rc = fprintf(hOutFile, CompanyCompetitorRowFmt.c_str(),
-		                 next_record.CP_CO_ID, next_record.CP_COMP_CO_ID,
+		int rc = fprintf(hOutFile, CompanyCompetitorRowFmt.c_str(), next_record.CP_CO_ID, next_record.CP_COMP_CO_ID,
 		                 next_record.CP_IN_ID);
 		if (rc < 0) {
-			throw CSystemErr(CSystemErr::eWriteFile,
-			                 "CFlatCompanyCompetitorLoad::WriteNextRecord");
+			throw CSystemErr(CSystemErr::eWriteFile, "CFlatCompanyCompetitorLoad::WriteNextRecord");
 		}
 	}
 };

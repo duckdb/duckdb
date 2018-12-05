@@ -16,8 +16,8 @@ namespace duckdb {
 
 //! Physically CREATE TABLE statement
 class PhysicalCreate : public PhysicalOperator {
-	public:
-	PhysicalCreate(LogicalOperator &op, SchemaCatalogEntry *schema, std::unique_ptr<CreateTableInformation> info)
+public:
+	PhysicalCreate(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<CreateTableInformation> info)
 	    : PhysicalOperator(PhysicalOperatorType::CREATE, op.types), schema(schema), info(move(info)) {
 	}
 
@@ -26,6 +26,6 @@ class PhysicalCreate : public PhysicalOperator {
 	//! Schema to insert to
 	SchemaCatalogEntry *schema;
 	//! Table name to create
-	std::unique_ptr<CreateTableInformation> info;
+	unique_ptr<CreateTableInformation> info;
 };
 } // namespace duckdb

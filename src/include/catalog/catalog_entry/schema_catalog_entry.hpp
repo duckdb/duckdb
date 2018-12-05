@@ -25,14 +25,14 @@ class Constraint;
 
 //! A schema in the catalog
 class SchemaCatalogEntry : public CatalogEntry {
-	public:
-	SchemaCatalogEntry(Catalog *catalog, std::string name);
+public:
+	SchemaCatalogEntry(Catalog *catalog, string name);
 
 	//! Returns true if a table with the given name exists in the schema
-	bool TableExists(Transaction &transaction, const std::string &table_name);
+	bool TableExists(Transaction &transaction, const string &table_name);
 	//! Returns a pointer to a table of the given name. Throws an exception if
 	//! the table does not exist.
-	TableCatalogEntry *GetTable(Transaction &transaction, const std::string &table);
+	TableCatalogEntry *GetTable(Transaction &transaction, const string &table);
 
 	//! Creates a table with the given name in the schema
 	void CreateTable(Transaction &transaction, CreateTableInformation *info);
@@ -58,7 +58,7 @@ class SchemaCatalogEntry : public CatalogEntry {
 	void CreateScalarFunction(Transaction &transaction, CreateScalarFunctionInformation *info);
 
 	//! Gets a scalar function with the given name
-	ScalarFunctionCatalogEntry *GetScalarFunction(Transaction &transaction, const std::string &name);
+	ScalarFunctionCatalogEntry *GetScalarFunction(Transaction &transaction, const string &name);
 
 	//! Returns true if other objects depend on this object
 	virtual bool HasDependents(Transaction &transaction);

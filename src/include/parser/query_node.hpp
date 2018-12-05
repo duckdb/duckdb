@@ -1,3 +1,10 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// parser/query_node.hpp
+//
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
@@ -14,19 +21,18 @@ struct OrderByNode {
 	//! Sort order, ASC or DESC
 	OrderType type;
 	//! Expression to order by
-	std::unique_ptr<Expression> expression;
+	unique_ptr<Expression> expression;
 
 	OrderByNode() {
 	}
-	OrderByNode(OrderType type, std::unique_ptr<Expression> expression)
-	    : type(type), expression(std::move(expression)) {
+	OrderByNode(OrderType type, unique_ptr<Expression> expression) : type(type), expression(std::move(expression)) {
 	}
 };
 
 //! ORDER BY description
 struct OrderByDescription {
 	//! List of order nodes
-	std::vector<OrderByNode> orders;
+	vector<OrderByNode> orders;
 };
 
 //! LIMIT description
@@ -45,7 +51,7 @@ public:
 	}
 
 	virtual void Accept(SQLNodeVisitor *) = 0;
-    
+
 	virtual bool Equals(const QueryNode *other) {
 		if (!other) {
 			return false;
@@ -54,14 +60,14 @@ public:
 	}
 
 	//! Create a copy of this QueryNode
-	virtual std::unique_ptr<QueryNode> Copy() = 0;
+	virtual unique_ptr<QueryNode> Copy() = 0;
 	//! Serializes a QueryNode to a stand-alone binary blob
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes a blob back into a QueryNode, returns nullptr if
 	//! deserialization is not possible
-	static std::unique_ptr<QueryNode> Deserialize(Deserializer &source);
+	static unique_ptr<QueryNode> Deserialize(Deserializer &source);
 
-    virtual vector<unique_ptr<Expression>>& GetSelectList() = 0;
+	virtual vector<unique_ptr<Expression>> &GetSelectList() = 0;
 
 	//! The type of the query node, either SetOperation or Select
 	QueryNodeType type;
@@ -82,4 +88,4 @@ public:
 	}
 };
 
-};
+}; // namespace duckdb

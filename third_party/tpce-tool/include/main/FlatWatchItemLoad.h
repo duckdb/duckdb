@@ -45,23 +45,20 @@
 namespace TPCE {
 
 class CFlatWatchItemLoad : public CFlatFileLoader<WATCH_ITEM_ROW> {
-  private:
+private:
 	const std::string WatchItemRowFmt;
 
-  public:
+public:
 	CFlatWatchItemLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
-	    : CFlatFileLoader<WATCH_ITEM_ROW>(szFileName, FlatFileOutputMode),
-	      WatchItemRowFmt("%" PRId64 "|%s\n"){};
+	    : CFlatFileLoader<WATCH_ITEM_ROW>(szFileName, FlatFileOutputMode), WatchItemRowFmt("%" PRId64 "|%s\n"){};
 
 	/*
 	 *   Writes a record to the file.
 	 */
 	void WriteNextRecord(const WATCH_ITEM_ROW &next_record) {
-		int rc = fprintf(hOutFile, WatchItemRowFmt.c_str(),
-		                 next_record.WI_WL_ID, next_record.WI_S_SYMB);
+		int rc = fprintf(hOutFile, WatchItemRowFmt.c_str(), next_record.WI_WL_ID, next_record.WI_S_SYMB);
 		if (rc < 0) {
-			throw CSystemErr(CSystemErr::eWriteFile,
-			                 "CFlatWatchItemLoad::WriteNextRecord");
+			throw CSystemErr(CSystemErr::eWriteFile, "CFlatWatchItemLoad::WriteNextRecord");
 		}
 	}
 };

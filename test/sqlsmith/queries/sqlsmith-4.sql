@@ -3,7 +3,8 @@ SELECT
     subq_1.c0 AS c1,
     subq_1.c0 AS c2,
     43 AS c3,
-    subq_1.c0 AS c4, (
+    subq_1.c0 AS c4,
+    (
         SELECT
             l_linestatus
         FROM

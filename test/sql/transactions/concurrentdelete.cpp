@@ -15,15 +15,14 @@ TEST_CASE("Single thread delete", "[transactions]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
-	std::vector<std::unique_ptr<DuckDBConnection>> connections;
+	vector<unique_ptr<DuckDBConnection>> connections;
 
 	// initialize the database
 	con.Query("CREATE TABLE integers(i INTEGER);");
 	int sum = 0;
 	for (size_t i = 0; i < INSERT_ELEMENTS; i++) {
 		for (size_t j = 0; j < 10; j++) {
-			con.Query("INSERT INTO integers VALUES (" + to_string(j + 1) +
-			          ");");
+			con.Query("INSERT INTO integers VALUES (" + to_string(j + 1) + ");");
 			sum += j + 1;
 		}
 	}
@@ -45,7 +44,7 @@ TEST_CASE("Sequential delete", "[transactions]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
-	std::vector<std::unique_ptr<DuckDBConnection>> connections;
+	vector<unique_ptr<DuckDBConnection>> connections;
 	Value count;
 
 	// initialize the database
@@ -54,8 +53,7 @@ TEST_CASE("Sequential delete", "[transactions]") {
 	int sum = 0;
 	for (size_t i = 0; i < INSERT_ELEMENTS; i++) {
 		for (size_t j = 0; j < 10; j++) {
-			con.Query("INSERT INTO integers VALUES (" + to_string(j + 1) +
-			          ");");
+			con.Query("INSERT INTO integers VALUES (" + to_string(j + 1) + ");");
 			sum += j + 1;
 		}
 	}
@@ -67,16 +65,13 @@ TEST_CASE("Sequential delete", "[transactions]") {
 
 	for (size_t i = 0; i < THREAD_COUNT; i++) {
 		// check the current count
-		REQUIRE_NO_FAIL(
-		    result = connections[i]->Query("SELECT SUM(i) FROM integers"));
+		REQUIRE_NO_FAIL(result = connections[i]->Query("SELECT SUM(i) FROM integers"));
 		count = result->collection.chunks[0]->data[0].GetValue(0);
 		REQUIRE(count == sum);
 		// delete the elements for this thread
-		REQUIRE_NO_FAIL(connections[i]->Query("DELETE FROM integers WHERE i=" +
-		                                      to_string(i + 1)));
+		REQUIRE_NO_FAIL(connections[i]->Query("DELETE FROM integers WHERE i=" + to_string(i + 1)));
 		// check the updated count
-		REQUIRE_NO_FAIL(
-		    result = connections[i]->Query("SELECT SUM(i) FROM integers"));
+		REQUIRE_NO_FAIL(result = connections[i]->Query("SELECT SUM(i) FROM integers"));
 		count = result->collection.chunks[0]->data[0].GetValue(0);
 		REQUIRE(count == sum - (i + 1) * INSERT_ELEMENTS);
 	}
@@ -100,15 +95,14 @@ TEST_CASE("Rollback delete", "[transactions]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
-	std::vector<std::unique_ptr<DuckDBConnection>> connections;
+	vector<unique_ptr<DuckDBConnection>> connections;
 
 	// initialize the database
 	con.Query("CREATE TABLE integers(i INTEGER);");
 	int sum = 0;
 	for (size_t i = 0; i < INSERT_ELEMENTS; i++) {
 		for (size_t j = 0; j < 10; j++) {
-			con.Query("INSERT INTO integers VALUES (" + to_string(j + 1) +
-			          ");");
+			con.Query("INSERT INTO integers VALUES (" + to_string(j + 1) + ");");
 			sum += j + 1;
 		}
 	}
@@ -150,8 +144,7 @@ static void _delete_elements(DuckDB *db, size_t threadnr) {
 	for (size_t i = 0; i < INSERT_ELEMENTS; i++) {
 		// count should decrease by one for every delete we do
 		auto element = INSERT_ELEMENTS * threadnr + i;
-		REQUIRE_NO_FAIL(
-		    con.Query("DELETE FROM integers WHERE i=" + to_string(element)));
+		REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=" + to_string(element)));
 		REQUIRE_NO_FAIL(result = con.Query("SELECT COUNT(*) FROM integers"));
 		Value new_count = result->collection.chunks[0]->data[0].GetValue(0);
 		REQUIRE(new_count == start_count - (i + 1));
@@ -173,8 +166,7 @@ TEST_CASE("Concurrent delete", "[transactions][.]") {
 	for (size_t i = 0; i < INSERT_ELEMENTS; i++) {
 		for (size_t j = 0; j < THREAD_COUNT; j++) {
 			auto element = INSERT_ELEMENTS * j + i;
-			con.Query("INSERT INTO integers VALUES (" + to_string(element) +
-			          ");");
+			con.Query("INSERT INTO integers VALUES (" + to_string(element) + ");");
 		}
 	}
 

@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // execution/join_hashtable.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -14,7 +12,6 @@
 #include "common/types/data_chunk.hpp"
 #include "common/types/tuple.hpp"
 #include "common/types/vector.hpp"
-
 #include "planner/operator/logical_join.hpp"
 
 #include <mutex>
@@ -35,7 +32,7 @@ namespace duckdb {
    The pointers are either NULL
 */
 class JoinHashTable {
-  public:
+public:
 	//! Scan structure that can be used to resume scans, as a single probe can
 	//! return 1024*N values (where N is the size of the HT). This is
 	//! returned by the JoinHashTable::Scan function and can be used to resume a
@@ -54,7 +51,7 @@ class JoinHashTable {
 		//! Get the next batch of data from the scan structure
 		void Next(DataChunk &keys, DataChunk &left, DataChunk &result);
 
-	  private:
+	private:
 		//! Next operator for the inner join
 		void NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 		//! Next operator for the semi join
@@ -64,34 +61,29 @@ class JoinHashTable {
 		//! Next operator for the left outer join
 		void NextLeftJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 
-		template <bool MATCH>
-		void NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left,
-		                        DataChunk &result);
+		template <bool MATCH> void NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 
 		void ResolvePredicates(DataChunk &keys, Vector &comparison_result);
 	};
 
-  private:
+private:
 	//! Nodes store the actual data of the tuples inside the HT as a linked list
 	struct Node {
 		size_t count;
 		size_t capacity;
-		std::unique_ptr<uint8_t[]> data;
-		std::unique_ptr<Node> prev;
+		unique_ptr<uint8_t[]> data;
+		unique_ptr<Node> prev;
 
-		Node(size_t tuple_size, size_t capacity)
-		    : count(0), capacity(capacity) {
-			data =
-			    std::unique_ptr<uint8_t[]>(new uint8_t[tuple_size * capacity]);
+		Node(size_t tuple_size, size_t capacity) : count(0), capacity(capacity) {
+			data = unique_ptr<uint8_t[]>(new uint8_t[tuple_size * capacity]);
 			memset(data.get(), 0, tuple_size * capacity);
 		}
 	};
 
 	void Hash(DataChunk &keys, Vector &hashes);
 
-  public:
-	JoinHashTable(std::vector<JoinCondition> &conditions,
-	              std::vector<TypeId> build_types, JoinType type,
+public:
+	JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> build_types, JoinType type,
 	              size_t initial_capacity = 32768, bool parallel = false);
 	//! Resize the HT to the specified size. Must be larger than the current
 	//! size.
@@ -99,7 +91,7 @@ class JoinHashTable {
 	//! Add the given data to the HT
 	void Build(DataChunk &keys, DataChunk &input);
 	//! Probe the HT with the given input chunk, resulting in the given result
-	std::unique_ptr<ScanStructure> Probe(DataChunk &keys);
+	unique_ptr<ScanStructure> Probe(DataChunk &keys);
 
 	//! The stringheap of the JoinHashTable
 	StringHeap string_heap;
@@ -115,13 +107,13 @@ class JoinHashTable {
 	//! Serializer for the build side
 	TupleSerializer build_serializer;
 	//! The types of the keys used in equality comparison
-	std::vector<TypeId> equality_types;
+	vector<TypeId> equality_types;
 	//! The types of the keys
-	std::vector<TypeId> condition_types;
+	vector<TypeId> condition_types;
 	//! The types of all conditions
-	std::vector<TypeId> build_types;
+	vector<TypeId> build_types;
 	//! The comparison predicates
-	std::vector<ExpressionType> predicates;
+	vector<ExpressionType> predicates;
 	//! Size of condition keys
 	size_t equality_size;
 	//! Size of condition keys
@@ -135,7 +127,7 @@ class JoinHashTable {
 	//! The join type of the HT
 	JoinType join_type;
 
-  private:
+private:
 	//! Insert the given set of locations into the HT with the given set of
 	//! hashes. Caller should hold lock in parallel HT.
 	void InsertHashes(Vector &hashes, uint8_t *key_locations[]);
@@ -145,9 +137,9 @@ class JoinHashTable {
 	//! The amount of entries stored in the HT currently
 	size_t count;
 	//! The data of the HT
-	std::unique_ptr<Node> head;
+	unique_ptr<Node> head;
 	//! The hash map of the HT
-	std::unique_ptr<uint8_t *[]> hashed_pointers;
+	unique_ptr<uint8_t *[]> hashed_pointers;
 	//! Whether or not the HT has to support parallel build
 	bool parallel = false;
 	//! Mutex used for parallelism

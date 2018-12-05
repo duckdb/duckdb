@@ -50,7 +50,7 @@
 namespace TPCE {
 
 class ProgressMeter : public ProgressMeterInterface {
-  private:
+private:
 	int m_total;
 	int m_current;
 	int m_display_interval;
@@ -60,10 +60,9 @@ class ProgressMeter : public ProgressMeterInterface {
 	int m_verbosity;
 	mutable CMutex m_mutex;
 
-  public:
+public:
 	// total - The total number of tasks to complete before the job is done.
-	ProgressMeter(int total, int verbosity = 0,
-	              std::ostream *output = &std::cout);
+	ProgressMeter(int total, int verbosity = 0, std::ostream *output = &std::cout);
 
 	// val - minimum number of seconds between automatic display updates
 	//       set to -1 to disable automatic displays

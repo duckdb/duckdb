@@ -1,4 +1,3 @@
-
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
@@ -30,8 +29,7 @@ TEST_CASE("Test simple NULL handling", "[nullhandling]") {
 
 	// multiple insertions
 	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
-	result =
-	    con.Query("INSERT INTO test VALUES (11, 22), (NULL, 21), (13, 22)");
+	result = con.Query("INSERT INTO test VALUES (11, 22), (NULL, 21), (13, 22)");
 
 	// NULL selection
 	result = con.Query("SELECT a FROM test");
@@ -61,8 +59,7 @@ TEST_CASE("Test NULL handling in aggregations", "[nullhandling]") {
 
 	// multiple insertions
 	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
-	result =
-	    con.Query("INSERT INTO test VALUES (11, 22), (NULL, 21), (13, 22)");
+	result = con.Query("INSERT INTO test VALUES (11, 22), (NULL, 21), (13, 22)");
 
 	// aggregations should ignore NULLs
 	result = con.Query("SELECT SUM(a), MIN(a), MAX(a) FROM test");

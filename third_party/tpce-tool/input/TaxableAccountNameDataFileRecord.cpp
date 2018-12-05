@@ -43,8 +43,7 @@
 
 using namespace TPCE;
 
-TaxableAccountNameDataFileRecord::TaxableAccountNameDataFileRecord(
-    const std::deque<std::string> &fields) {
+TaxableAccountNameDataFileRecord::TaxableAccountNameDataFileRecord(const std::deque<std::string> &fields) {
 	if (fieldCount != fields.size()) {
 		throw std::runtime_error("Incorrect field count.");
 	}

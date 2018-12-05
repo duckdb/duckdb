@@ -47,7 +47,7 @@
 namespace TPCE {
 
 class CSectorTable : public FixedTable<SectorDataFile_t, SECTOR_ROW> {
-  public:
+public:
 	CSectorTable(const SectorDataFile_t &dataFile);
 	~CSectorTable();
 

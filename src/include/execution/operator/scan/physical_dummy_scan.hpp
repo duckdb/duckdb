@@ -13,8 +13,8 @@
 namespace duckdb {
 
 class PhysicalDummyScan : public PhysicalOperator {
-	public:
-	PhysicalDummyScan(std::vector<TypeId> types) : PhysicalOperator(PhysicalOperatorType::DUMMY_SCAN, types) {
+public:
+	PhysicalDummyScan(vector<TypeId> types) : PhysicalOperator(PhysicalOperatorType::DUMMY_SCAN, types) {
 	}
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;

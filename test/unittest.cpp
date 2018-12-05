@@ -1,10 +1,7 @@
-
 #define CATCH_CONFIG_RUNNER
 #include "catch.hpp"
-
-#include "test_helpers.hpp"
-
 #include "common/file_system.hpp"
+#include "test_helpers.hpp"
 
 using namespace duckdb;
 

@@ -46,8 +46,7 @@ struct schema {
 	virtual std::string quote_name(const std::string &id) = 0;
 
 	void summary() {
-		std::cout << "Found " << tables.size()
-		          << " user table(s) in information schema." << std::endl;
+		std::cout << "Found " << tables.size() << " user table(s) in information schema." << std::endl;
 	}
 	void fill_scope(struct scope &s) {
 		for (auto &t : tables)
@@ -65,8 +64,7 @@ struct schema {
 	virtual void register_aggregate(routine &r) {
 		aggregates.push_back(r);
 	}
-	virtual op_iterator find_operator(sqltype *left, sqltype *right,
-	                                  sqltype *res) {
+	virtual op_iterator find_operator(sqltype *left, sqltype *right, sqltype *res) {
 		typekey t(left, right, res);
 		auto cons = index.equal_range(t);
 		if (cons.first == cons.second)

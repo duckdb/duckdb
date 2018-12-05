@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // common/types/static_vector.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -18,10 +16,9 @@ namespace duckdb {
 
 //! The StaticVector is an alias for creating a vector of a specific type
 template <class T> class StaticVector : public Vector {
-  public:
+public:
 	StaticVector() {
-		owned_data =
-		    std::unique_ptr<char[]>(new char[sizeof(T) * STANDARD_VECTOR_SIZE]);
+		owned_data = unique_ptr<char[]>(new char[sizeof(T) * STANDARD_VECTOR_SIZE]);
 		data = owned_data.get();
 		if (std::is_same<T, bool>::value) {
 			type = TypeId::BOOLEAN;

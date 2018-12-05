@@ -8,6 +8,5 @@ AbstractOperator::iterator AbstractOperator::begin() {
 
 AbstractOperator::iterator AbstractOperator::end() {
 	assert(type == AbstractOperatorType::LOGICAL_OPERATOR);
-	return iterator(value.op, value.op->children.size(),
-	                value.op->ExpressionCount());
+	return iterator(value.op, value.op->children.size(), value.op->ExpressionCount());
 }

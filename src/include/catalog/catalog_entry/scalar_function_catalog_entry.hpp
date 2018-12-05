@@ -1,25 +1,21 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // catalog/catalog_entry/scalar_function_catalog_entry.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include <string>
-#include <unordered_map>
-
 #include "catalog/catalog_entry.hpp"
 #include "catalog/catalog_set.hpp"
-
-#include "transaction/transaction.hpp"
-
 #include "function/function.hpp"
 #include "parser/parsed_data.hpp"
+#include "transaction/transaction.hpp"
+
+#include <string>
+#include <unordered_map>
 
 namespace duckdb {
 
@@ -27,12 +23,10 @@ class SchemaCatalogEntry;
 
 //! A table function in the catalog
 class ScalarFunctionCatalogEntry : public CatalogEntry {
-  public:
-	ScalarFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
-	                           CreateScalarFunctionInformation *info)
-	    : CatalogEntry(CatalogType::SCALAR_FUNCTION, catalog, info->name),
-	      schema(schema), function(info->function), matches(info->matches),
-	      return_type(info->return_type) {
+public:
+	ScalarFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateScalarFunctionInformation *info)
+	    : CatalogEntry(CatalogType::SCALAR_FUNCTION, catalog, info->name), schema(schema), function(info->function),
+	      matches(info->matches), return_type(info->return_type) {
 	}
 
 	//! The schema the table belongs to

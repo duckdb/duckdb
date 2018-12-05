@@ -1,4 +1,3 @@
-
 #include "parser/expression/operator_expression.hpp"
 #include "parser/transformer.hpp"
 
@@ -14,10 +13,8 @@ unique_ptr<Expression> Transformer::TransformNullTest(NullTest *root) {
 	if (root->argisrow) {
 		throw NotImplementedException("IS NULL argisrow");
 	}
-	ExpressionType expr_type = (root->nulltesttype == IS_NULL)
-	                               ? ExpressionType::OPERATOR_IS_NULL
-	                               : ExpressionType::OPERATOR_IS_NOT_NULL;
+	ExpressionType expr_type =
+	    (root->nulltesttype == IS_NULL) ? ExpressionType::OPERATOR_IS_NULL : ExpressionType::OPERATOR_IS_NOT_NULL;
 
-	return unique_ptr<Expression>(
-	    new OperatorExpression(expr_type, TypeId::BOOLEAN, move(arg)));
+	return unique_ptr<Expression>(new OperatorExpression(expr_type, TypeId::BOOLEAN, move(arg)));
 }

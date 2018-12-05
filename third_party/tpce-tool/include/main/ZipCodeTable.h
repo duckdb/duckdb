@@ -47,7 +47,7 @@
 namespace TPCE {
 
 class CZipCodeTable : public FixedTable<ZipCodeDataFile_t, ZIP_CODE_ROW> {
-  public:
+public:
 	CZipCodeTable(const ZipCodeDataFile_t &dataFile);
 	~CZipCodeTable();
 

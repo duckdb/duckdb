@@ -45,30 +45,24 @@
 
 namespace TPCE {
 
-class CFlatAccountPermissionLoad
-    : public CFlatFileLoader<ACCOUNT_PERMISSION_ROW> {
-  private:
+class CFlatAccountPermissionLoad : public CFlatFileLoader<ACCOUNT_PERMISSION_ROW> {
+private:
 	const std::string AccountPermissionRowFmt;
 
-  public:
-	CFlatAccountPermissionLoad(char *szFileName,
-	                           FlatFileOutputModes FlatFileOutputMode)
-	    : CFlatFileLoader<ACCOUNT_PERMISSION_ROW>(szFileName,
-	                                              FlatFileOutputMode),
+public:
+	CFlatAccountPermissionLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
+	    : CFlatFileLoader<ACCOUNT_PERMISSION_ROW>(szFileName, FlatFileOutputMode),
 	      AccountPermissionRowFmt("%" PRId64 "|%s|%s|%s|%s\n"){};
 
 	/*
 	 *   Writes a record to the file.
 	 */
 	void WriteNextRecord(const ACCOUNT_PERMISSION_ROW &next_record) {
-		int rc = fprintf(hOutFile, AccountPermissionRowFmt.c_str(),
-		                 next_record.AP_CA_ID, next_record.AP_ACL,
-		                 next_record.AP_TAX_ID, next_record.AP_L_NAME,
-		                 next_record.AP_F_NAME);
+		int rc = fprintf(hOutFile, AccountPermissionRowFmt.c_str(), next_record.AP_CA_ID, next_record.AP_ACL,
+		                 next_record.AP_TAX_ID, next_record.AP_L_NAME, next_record.AP_F_NAME);
 
 		if (rc < 0) {
-			throw CSystemErr(CSystemErr::eWriteFile,
-			                 "CFlatAccountPermissionLoad::WriteNextRecord");
+			throw CSystemErr(CSystemErr::eWriteFile, "CFlatAccountPermissionLoad::WriteNextRecord");
 		}
 	}
 };

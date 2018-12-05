@@ -105,8 +105,7 @@ int mk_address(ds_addr_t *pAddr, int nColumn) {
 	/* city is picked from a distribution which maps to large/medium/small */
 	if (pTdef->flags & FL_SMALL) {
 		i = (int)get_rowcount(getTableFromColumn(nColumn));
-		genrand_integer(&i, DIST_UNIFORM, 1, (nMaxCities > i) ? i : nMaxCities,
-		                0, nColumn);
+		genrand_integer(&i, DIST_UNIFORM, 1, (nMaxCities > i) ? i : nMaxCities, 0, nColumn);
 		dist_member(&pAddr->city, "cities", i, 1);
 	} else
 		pick_distribution(&pAddr->city, "cities", 1, 6, nColumn);
@@ -115,12 +114,10 @@ int mk_address(ds_addr_t *pAddr, int nColumn) {
 	 * rest */
 	if (pTdef->flags & FL_SMALL) {
 		i = (int)get_rowcount(getTableFromColumn(nColumn));
-		genrand_integer(&nRegion, DIST_UNIFORM, 1,
-		                (nMaxCounties > i) ? i : nMaxCounties, 0, nColumn);
+		genrand_integer(&nRegion, DIST_UNIFORM, 1, (nMaxCounties > i) ? i : nMaxCounties, 0, nColumn);
 		dist_member(&pAddr->county, "fips_county", nRegion, 2);
 	} else
-		nRegion =
-		    pick_distribution(&pAddr->county, "fips_county", 2, 1, nColumn);
+		nRegion = pick_distribution(&pAddr->county, "fips_county", 2, 1, nColumn);
 
 	/* match state with the selected region/county */
 	dist_member(&pAddr->state, "fips_county", nRegion, 3);
@@ -133,8 +130,7 @@ int mk_address(ds_addr_t *pAddr, int nColumn) {
 		pAddr->zip += 600;
 	pAddr->zip += (szZipPrefix[0] - '0') * 10000;
 
-	sprintf(szAddr, "%d %s %s %s", pAddr->street_num, pAddr->street_name1,
-	        pAddr->street_name2, pAddr->street_type);
+	sprintf(szAddr, "%d %s %s %s", pAddr->street_num, pAddr->street_name1, pAddr->street_name2, pAddr->street_type);
 	pAddr->plus4 = city_hash(0, szAddr);
 	dist_member(&pAddr->gmt_offset, "fips_county", nRegion, 6);
 	strcpy(pAddr->country, "United States");
@@ -237,8 +233,7 @@ int mk_streetname(int nTable, char *dest) {
  * TODO: 20030423 jms should be replaced if there is no per-table variation
  */
 int mk_city(int nTable, char **dest) {
-	pick_distribution((void *)dest, "cities", (int)1,
-	                  (int)get_int("_SCALE_INDEX"), 11);
+	pick_distribution((void *)dest, "cities", (int)1, (int)get_int("_SCALE_INDEX"), 11);
 
 	return (0);
 }

@@ -1,16 +1,13 @@
-
 #include "common/serializer.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 Serializer::Serializer(size_t maximum_size)
-    : Serializer(unique_ptr<uint8_t[]>(new uint8_t[maximum_size]),
-                 maximum_size) {
+    : Serializer(unique_ptr<uint8_t[]>(new uint8_t[maximum_size]), maximum_size) {
 }
 
-Serializer::Serializer(unique_ptr<uint8_t[]> data, size_t size)
-    : maximum_size(size), data(data.get()) {
+Serializer::Serializer(unique_ptr<uint8_t[]> data, size_t size) : maximum_size(size), data(data.get()) {
 	blob.size = 0;
 	blob.data = move(data);
 }
@@ -19,8 +16,7 @@ Serializer::Serializer(uint8_t *data) : maximum_size((size_t)-1), data(data) {
 	blob.size = 0;
 }
 
-Deserializer::Deserializer(uint8_t *ptr, size_t data)
-    : ptr(ptr), endptr(ptr + data) {
+Deserializer::Deserializer(uint8_t *ptr, size_t data) : ptr(ptr), endptr(ptr + data) {
 }
 
 template <> string Deserializer::Read() {

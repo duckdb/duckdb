@@ -63,7 +63,7 @@ typedef struct BCPDBDATETIME {
  *   DBLoader class.
  */
 template <typename T> class CDBLoader : public CBaseLoader<T> {
-  protected:
+protected:
 	T m_row;
 	int m_cnt;
 	SQLHENV m_henv; // ODBC environment handle
@@ -79,23 +79,20 @@ template <typename T> class CDBLoader : public CBaseLoader<T> {
 		memcpy(&m_row, &row, sizeof(m_row));
 	};
 
-  public:
-	CDBLoader(char *szServer, char *szDatabase, char *szLoaderParams,
-	          char *szTable);
+public:
+	CDBLoader(char *szServer, char *szDatabase, char *szLoaderParams, char *szTable);
 	~CDBLoader(void);
 
-	virtual void
-	BindColumns() = 0;     // column binding function subclasses must implement
-	virtual void Init();   // resets to clean state; needed after FinishLoad to
-	                       // continue loading
-	virtual void Commit(); // commit rows sent so far
-	virtual void FinishLoad(); // finish load
-	void Connect();            // connect to SQL Server
-	void Disconnect(); // disconnect - should not throw any exceptions (to put
-	                   // into the destructor)
+	virtual void BindColumns() = 0; // column binding function subclasses must implement
+	virtual void Init();            // resets to clean state; needed after FinishLoad to
+	                                // continue loading
+	virtual void Commit();          // commit rows sent so far
+	virtual void FinishLoad();      // finish load
+	void Connect();                 // connect to SQL Server
+	void Disconnect();              // disconnect - should not throw any exceptions (to put
+	                                // into the destructor)
 
-	void ThrowError(CODBCERR::ACTION eAction, SQLSMALLINT HandleType = 0,
-	                SQLHANDLE Handle = SQL_NULL_HANDLE);
+	void ThrowError(CODBCERR::ACTION eAction, SQLSMALLINT HandleType = 0, SQLHANDLE Handle = SQL_NULL_HANDLE);
 	virtual void WriteNextRecord(const T &next_record);
 };
 

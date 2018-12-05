@@ -62,7 +62,7 @@ class CCompanyCompetitorFile {
 	//
 	UINT m_iBaseCompanyCount;
 
-  public:
+public:
 	/*
 	 *  Constructor.
 	 *
@@ -75,8 +75,7 @@ class CCompanyCompetitorFile {
 	 *  RETURNS:
 	 *       not applicable.
 	 */
-	CCompanyCompetitorFile(const CompanyCompetitorDataFile_t &dataFile,
-	                       TIdent iConfiguredCustomerCount,
+	CCompanyCompetitorFile(const CompanyCompetitorDataFile_t &dataFile, TIdent iConfiguredCustomerCount,
 	                       TIdent iActiveCustomerCount, UINT baseCompanyCount);
 
 	/*

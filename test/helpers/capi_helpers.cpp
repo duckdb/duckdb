@@ -1,5 +1,5 @@
-
 #include "capi_helpers.hpp"
+
 #include <limits>
 
 using namespace std;
@@ -28,8 +28,7 @@ int64_t get_numeric(duckdb_column column, size_t row) {
 	}
 }
 
-bool CHECK_NUMERIC_COLUMN(duckdb_result result, size_t column,
-                          vector<int64_t> values) {
+bool CHECK_NUMERIC_COLUMN(duckdb_result result, size_t column, vector<int64_t> values) {
 	if (result.column_count <= column) {
 		// out of bounds
 		return false;
@@ -57,8 +56,7 @@ bool CHECK_NUMERIC_COLUMN(duckdb_result result, size_t column,
 	return true;
 }
 
-bool CHECK_DECIMAL_COLUMN(duckdb_result result, size_t column,
-                          vector<double> values) {
+bool CHECK_DECIMAL_COLUMN(duckdb_result result, size_t column, vector<double> values) {
 	if (result.column_count <= column) {
 		// out of bounds
 		return false;
@@ -87,8 +85,7 @@ bool CHECK_DECIMAL_COLUMN(duckdb_result result, size_t column,
 	return true;
 }
 
-bool CHECK_NUMERIC(duckdb_result result, size_t row, size_t column,
-                   int64_t value) {
+bool CHECK_NUMERIC(duckdb_result result, size_t row, size_t column, int64_t value) {
 	if (result.column_count <= column || result.row_count <= row) {
 		// out of bounds
 		return false;
@@ -106,8 +103,7 @@ bool CHECK_NUMERIC(duckdb_result result, size_t row, size_t column,
 	}
 }
 
-bool CHECK_STRING(duckdb_result result, size_t row, size_t column,
-                  string value) {
+bool CHECK_STRING(duckdb_result result, size_t row, size_t column, string value) {
 	if (result.column_count < column || result.row_count < row) {
 		// out of bounds
 		return false;
@@ -121,8 +117,7 @@ bool CHECK_STRING(duckdb_result result, size_t row, size_t column,
 	return string(ptr[row]) == value;
 }
 
-bool CHECK_STRING_COLUMN(duckdb_result result, size_t column,
-                         vector<string> values) {
+bool CHECK_STRING_COLUMN(duckdb_result result, size_t column, vector<string> values) {
 	if (result.column_count <= column) {
 		// out of bounds
 		return false;

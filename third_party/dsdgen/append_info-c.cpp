@@ -53,11 +53,9 @@ void append_varchar(append_info *info, const char *value) {
 		throw duckdb::Exception("Out-of-bounds column update");
 	}
 	if (!nullCheck(append_info->col)) {
-		append_info->chunk.data[append_info->col].SetStringValue(
-		    append_info->row, value);
+		append_info->chunk.data[append_info->col].SetStringValue(append_info->row, value);
 	} else {
-		append_info->chunk.data[append_info->col].SetNull(append_info->row,
-		                                                  true);
+		append_info->chunk.data[append_info->col].SetNull(append_info->row, true);
 	}
 	append_info->col++;
 }
@@ -71,8 +69,7 @@ static void append_value(append_info *info, duckdb::Value v) {
 	if (!nullCheck(append_info->col)) {
 		append_info->chunk.data[append_info->col].SetValue(append_info->row, v);
 	} else {
-		append_info->chunk.data[append_info->col].SetNull(append_info->row,
-		                                                  true);
+		append_info->chunk.data[append_info->col].SetNull(append_info->row, true);
 	}
 	append_info->col++;
 }

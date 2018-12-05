@@ -43,8 +43,7 @@
 
 using namespace TPCE;
 
-IndustryDataFileRecord::IndustryDataFileRecord(
-    const std::deque<std::string> &fields) {
+IndustryDataFileRecord::IndustryDataFileRecord(const std::deque<std::string> &fields) {
 	if (fieldCount != fields.size()) {
 		throw std::runtime_error("Incorrect field count.");
 	}
@@ -83,7 +82,6 @@ const char *IndustryDataFileRecord::IN_SC_ID_CSTR() const {
 std::string IndustryDataFileRecord::ToString(char fieldSeparator) const {
 	// Facilitate encapsulation by using public interface to fields.
 	std::ostringstream msg;
-	msg << IN_ID() << fieldSeparator << IN_NAME() << fieldSeparator
-	    << IN_SC_ID();
+	msg << IN_ID() << fieldSeparator << IN_NAME() << fieldSeparator << IN_SC_ID();
 	return msg.str();
 }

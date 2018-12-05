@@ -14,7 +14,7 @@ namespace duckdb {
 
 //! Physically delete data from a table
 class PhysicalDelete : public PhysicalOperator {
-	public:
+public:
 	PhysicalDelete(LogicalOperator &op, TableCatalogEntry &tableref, DataTable &table)
 	    : PhysicalOperator(PhysicalOperatorType::DELETE, op.types), tableref(tableref), table(table) {
 	}

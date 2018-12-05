@@ -1,23 +1,19 @@
+#include "transaction/transaction_manager.hpp"
 
 #include "common/exception.hpp"
 #include "common/helper.hpp"
-
 #include "storage/storage_manager.hpp"
-
 #include "transaction/transaction.hpp"
-#include "transaction/transaction_manager.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 namespace duckdb {
-transaction_t TRANSACTION_ID_START = 4294967296ULL; // 2^32
-transaction_t MAXIMUM_QUERY_ID =
-    std::numeric_limits<transaction_t>::max(); // 2^64
+transaction_t TRANSACTION_ID_START = 4294967296ULL;                         // 2^32
+transaction_t MAXIMUM_QUERY_ID = std::numeric_limits<transaction_t>::max(); // 2^64
 } // namespace duckdb
 
-TransactionManager::TransactionManager(StorageManager &storage)
-    : storage(storage) {
+TransactionManager::TransactionManager(StorageManager &storage) : storage(storage) {
 	// start timestamp starts at zero
 	current_start_timestamp = 0;
 	// transaction ID starts very high:
@@ -88,10 +84,8 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) {
 		if (active_transactions[i].get() == transaction) {
 			t_index = i;
 		} else {
-			lowest_start_time =
-			    std::min(lowest_start_time, active_transactions[i]->start_time);
-			lowest_active_query = std::min(
-			    lowest_active_query, active_transactions[i]->active_query);
+			lowest_start_time = std::min(lowest_start_time, active_transactions[i]->start_time);
+			lowest_active_query = std::min(lowest_active_query, active_transactions[i]->active_query);
 		}
 	}
 	assert(t_index != active_transactions.size());
@@ -127,11 +121,9 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) {
 			// when all the currently active scans have finished running...)
 			recently_committed_transactions[i]->Cleanup();
 			// store the current highest active query
-			recently_committed_transactions[i]->highest_active_query =
-			    current_query_number;
+			recently_committed_transactions[i]->highest_active_query = current_query_number;
 			// move it to the list of transactions awaiting GC
-			old_transactions.push_back(
-			    move(recently_committed_transactions[i]));
+			old_transactions.push_back(move(recently_committed_transactions[i]));
 		} else {
 			// recently_committed_transactions is ordered on commit_id
 			// implicitly thus if the current one is bigger than
@@ -141,9 +133,8 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) {
 	}
 	if (i > 0) {
 		// we garbage collected transactions: remove them from the list
-		recently_committed_transactions.erase(
-		    recently_committed_transactions.begin(),
-		    recently_committed_transactions.begin() + i);
+		recently_committed_transactions.erase(recently_committed_transactions.begin(),
+		                                      recently_committed_transactions.begin() + i);
 	}
 	// check if we can free the memory of any old transactions
 	i = active_transactions.size() == 0 ? old_transactions.size() : 0;
@@ -158,7 +149,6 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) {
 	}
 	if (i > 0) {
 		// we garbage collected transactions: remove them from the list
-		old_transactions.erase(old_transactions.begin(),
-		                       old_transactions.begin() + i);
+		old_transactions.erase(old_transactions.begin(), old_transactions.begin() + i);
 	}
 }

@@ -1,38 +1,36 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // common/file_system.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
+#include "common/constants.hpp"
+
 #include <functional>
-#include <string>
 
 namespace duckdb {
 //! Check if a directory exists
-bool DirectoryExists(const std::string &directory);
+bool DirectoryExists(const string &directory);
 //! Create a directory if it does not exist
-void CreateDirectory(const std::string &directory);
+void CreateDirectory(const string &directory);
 //! Recursively remove a directory and all files in it
-void RemoveDirectory(const std::string &directory);
+void RemoveDirectory(const string &directory);
 //! List files in a directory, invoking the callback method for each one
-bool ListFiles(const std::string &directory,
-               std::function<void(std::string)> callback);
+bool ListFiles(const string &directory, std::function<void(string)> callback);
 //! Sets the current working directory
-void SetWorkingDirectory(const std::string &directory);
+void SetWorkingDirectory(const string &directory);
 //! Gets the current working directory
-std::string GetWorkingDirectory();
+string GetWorkingDirectory();
 //! Check if a file exists
-bool FileExists(const std::string &filename);
+bool FileExists(const string &filename);
 //! Path separator for the current file system
-std::string PathSeparator();
+string PathSeparator();
 //! Join two paths together
-std::string JoinPath(const std::string &a, const std::string &path);
+string JoinPath(const string &a, const string &path);
 //! Sync a file descriptor to disk
 void FileSync(FILE *file);
 

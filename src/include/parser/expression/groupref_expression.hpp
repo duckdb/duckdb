@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // parser/expression/groupref_expression.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -16,17 +14,17 @@
 namespace duckdb {
 //! Represents a reference to one of the GROUP BY columns
 class GroupRefExpression : public Expression {
-  public:
+public:
 	GroupRefExpression(TypeId return_type, size_t group_index);
 
-	std::unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
+	unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
 		return v->Visit(*this);
 	}
 	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::GROUP_REF;
 	}
 
-	std::unique_ptr<Expression> Copy() override;
+	unique_ptr<Expression> Copy() override;
 
 	bool Equals(const Expression *other_) override;
 

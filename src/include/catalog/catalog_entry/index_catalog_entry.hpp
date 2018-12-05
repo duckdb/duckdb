@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // catalog/catalog_entry/index_catalog_entry.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -19,12 +17,10 @@ class SchemaCatalogEntry;
 
 //! A table catalog entry
 class IndexCatalogEntry : public CatalogEntry {
-  public:
+public:
 	//! Create a real TableCatalogEntry and initialize storage for it
-	IndexCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
-	                  CreateIndexInformation *info)
-	    : CatalogEntry(CatalogType::INDEX, catalog, info->index_name),
-	      schema(schema) {
+	IndexCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateIndexInformation *info)
+	    : CatalogEntry(CatalogType::INDEX, catalog, info->index_name), schema(schema) {
 		// FIXME: add more information for drop index support
 	}
 

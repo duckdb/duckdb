@@ -43,8 +43,7 @@
 
 using namespace TPCE;
 
-TradeTypeDataFileRecord::TradeTypeDataFileRecord(
-    const std::deque<std::string> &fields) {
+TradeTypeDataFileRecord::TradeTypeDataFileRecord(const std::deque<std::string> &fields) {
 	if (fieldCount != fields.size()) {
 		throw std::runtime_error("Incorrect field count.");
 	}
@@ -84,7 +83,6 @@ bool TradeTypeDataFileRecord::TT_IS_MRKT() const {
 std::string TradeTypeDataFileRecord::ToString(char fieldSeparator) const {
 	// Facilitate encapsulation by using public interface to fields.
 	std::ostringstream msg;
-	msg << TT_ID() << fieldSeparator << TT_NAME() << fieldSeparator
-	    << TT_IS_SELL() << fieldSeparator << TT_IS_MRKT();
+	msg << TT_ID() << fieldSeparator << TT_NAME() << fieldSeparator << TT_IS_SELL() << fieldSeparator << TT_IS_MRKT();
 	return msg.str();
 }

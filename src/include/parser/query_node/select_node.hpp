@@ -1,20 +1,27 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// parser/query_node/select_node.hpp
+//
+//
+//===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "parser/query_node.hpp"
 #include "parser/expression.hpp"
+#include "parser/query_node.hpp"
+#include "parser/sql_node_visitor.hpp"
 #include "parser/sql_statement.hpp"
 #include "parser/tableref.hpp"
-#include "parser/sql_node_visitor.hpp"
 
 namespace duckdb {
 
 //! GROUP BY description
 struct GroupByDescription {
 	//! List of groups
-	std::vector<std::unique_ptr<Expression>> groups;
+	vector<unique_ptr<Expression>> groups;
 	//! HAVING clause
-	std::unique_ptr<Expression> having;
+	unique_ptr<Expression> having;
 };
 
 //! SelectNode represents a standard SELECT statement
@@ -28,11 +35,11 @@ public:
 	}
 
 	//! The projection list
-	std::vector<std::unique_ptr<Expression>> select_list;
+	vector<unique_ptr<Expression>> select_list;
 	//! The FROM clause
-	std::unique_ptr<TableRef> from_table;
+	unique_ptr<TableRef> from_table;
 	//! The WHERE clause
-	std::unique_ptr<Expression> where_clause;
+	unique_ptr<Expression> where_clause;
 	//! The amount of columns in the result
 	size_t result_column_count;
 
@@ -50,14 +57,16 @@ public:
 	//! Whether or not the query has an AGGREGATION
 	bool HasAggregation();
 
-    vector<unique_ptr<Expression>>& GetSelectList() override { return select_list; }
-    
+	vector<unique_ptr<Expression>> &GetSelectList() override {
+		return select_list;
+	}
+
 	bool Equals(const QueryNode *other) override;
 	//! Create a copy of this SelectNode
-	std::unique_ptr<QueryNode> Copy() override;
+	unique_ptr<QueryNode> Copy() override;
 	//! Serializes a SelectNode to a stand-alone binary blob
 	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into a SelectNode
-	static std::unique_ptr<QueryNode> Deserialize(Deserializer &source);
+	static unique_ptr<QueryNode> Deserialize(Deserializer &source);
 };
-};
+}; // namespace duckdb

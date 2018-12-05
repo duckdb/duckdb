@@ -1,14 +1,14 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // transaction/transaction_manager.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
+
+#include "common/common.hpp"
 
 #include <atomic>
 #include <memory>
@@ -22,7 +22,7 @@ class Transaction;
 //! The Transaction Manager is responsible for creating and managing
 //! transactions
 class TransactionManager {
-  public:
+public:
 	TransactionManager(StorageManager &storage);
 	//! Start a new transaction
 	Transaction *StartTransaction();
@@ -35,7 +35,7 @@ class TransactionManager {
 		return current_query_number++;
 	}
 
-  private:
+private:
 	//! Remove the given transaction from the list of active transactions
 	void RemoveTransaction(Transaction *transaction);
 
@@ -46,11 +46,11 @@ class TransactionManager {
 	//! The current transaction ID used by transactions
 	transaction_t current_transaction_id;
 	//! Set of currently running transactions
-	std::vector<std::unique_ptr<Transaction>> active_transactions;
+	vector<unique_ptr<Transaction>> active_transactions;
 	//! Set of recently committed transactions
-	std::vector<std::unique_ptr<Transaction>> recently_committed_transactions;
+	vector<unique_ptr<Transaction>> recently_committed_transactions;
 	//! Transactions awaiting GC
-	std::vector<std::unique_ptr<Transaction>> old_transactions;
+	vector<unique_ptr<Transaction>> old_transactions;
 	//! The lock used for transaction operations
 	std::mutex transaction_lock;
 	//! The storage manager

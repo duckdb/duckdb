@@ -45,22 +45,17 @@
 
 namespace TPCE {
 
-BucketSimulator::BucketSimulator(int iterstart, int itercount,
-                                 TIdent iCustomerCount, INT64 simorders,
-                                 TPCE::RNGSEED base_seed,
-                                 BucketProgress &progress)
-    : m_rnd(), m_buckets(NULL), m_custcount(iCustomerCount),
-      m_iterstart(iterstart), m_itercount(itercount), m_baseseed(base_seed),
-      m_simorders(simorders),
-      m_maxbucket(static_cast<int>(iCustomerCount / iDefaultLoadUnitSize)),
-      m_progress(progress) {
+BucketSimulator::BucketSimulator(int iterstart, int itercount, TIdent iCustomerCount, INT64 simorders,
+                                 TPCE::RNGSEED base_seed, BucketProgress &progress)
+    : m_rnd(), m_buckets(NULL), m_custcount(iCustomerCount), m_iterstart(iterstart), m_itercount(itercount),
+      m_baseseed(base_seed), m_simorders(simorders),
+      m_maxbucket(static_cast<int>(iCustomerCount / iDefaultLoadUnitSize)), m_progress(progress) {
 	if (iCustomerCount % iDefaultLoadUnitSize != 0) {
 		throw std::range_error("The customer count must be an integral "
 		                       "multiple of the load unit size!");
 	}
 	if (m_maxbucket < 2) {
-		throw std::range_error(
-		    "Bucket simulator must have at least 2 buckets!");
+		throw std::range_error("Bucket simulator must have at least 2 buckets!");
 	}
 	m_buckets = new INT64[m_maxbucket];
 }
@@ -96,9 +91,7 @@ double BucketSimulator::simulate_onerun(INT64 iorders) {
 	memset(m_buckets, 0, sizeof(m_buckets[0]) * m_maxbucket);
 
 	for (INT64 i = 0; i < iorders; ++i) {
-		bucket = m_rnd.RndIntRange(
-		    0, static_cast<int>((m_custcount - 1) /
-		                        static_cast<TIdent>(iDefaultLoadUnitSize)));
+		bucket = m_rnd.RndIntRange(0, static_cast<int>((m_custcount - 1) / static_cast<TIdent>(iDefaultLoadUnitSize)));
 		m_buckets[bucket] += 1;
 	}
 
@@ -109,17 +102,15 @@ double BucketSimulator::simulate_onerun(INT64 iorders) {
 // the maximum standard deviation
 double BucketSimulator::simulate() {
 	double max_stddev = 0;
-	TPCE::RNGSEED seed = m_rnd.RndNthElement(
-	    m_baseseed, (RNGSEED)(m_iterstart * m_simorders * RND_STEP_PER_ORDER));
+	TPCE::RNGSEED seed = m_rnd.RndNthElement(m_baseseed, (RNGSEED)(m_iterstart * m_simorders * RND_STEP_PER_ORDER));
 	m_rnd.SetSeed(seed);
 	for (int i = 0; i < m_itercount; ++i) {
 		TPCE::RNGSEED current_seed = m_rnd.GetSeed();
 		double stddev = simulate_onerun(m_simorders);
 
 		std::ostringstream strm;
-		strm << "StdDev for run " << i + m_iterstart << " is "
-		     << std::setprecision(3) << std::fixed << stddev << ", seed was "
-		     << current_seed;
+		strm << "StdDev for run " << i + m_iterstart << " is " << std::setprecision(3) << std::fixed << stddev
+		     << ", seed was " << current_seed;
 		m_progress.message(strm.str(), 1);
 
 		if (max_stddev < stddev) {
@@ -139,10 +130,8 @@ void BucketSimulator::run(void *thread UNUSED) {
 
 //////////////////////////////////////////////////////////////////////////////
 
-BucketProgress::BucketProgress(double acceptable_stddev, int total_in,
-                               int verbosity, std::ostream *output)
-    : ProgressMeter(total_in, verbosity, output),
-      acceptable_stddev_(acceptable_stddev), max_stddev_(0) {
+BucketProgress::BucketProgress(double acceptable_stddev, int total_in, int verbosity, std::ostream *output)
+    : ProgressMeter(total_in, verbosity, output), acceptable_stddev_(acceptable_stddev), max_stddev_(0) {
 }
 
 void BucketProgress::display_message(std::ostream &out) const {

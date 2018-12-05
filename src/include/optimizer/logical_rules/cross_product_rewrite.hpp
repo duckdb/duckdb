@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // optimizer/logical_rules/cross_product_rewrite.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -19,12 +17,11 @@ namespace duckdb {
 // times instead of this mess
 
 class CrossProductRewrite : public Rule {
-  public:
+public:
 	CrossProductRewrite();
 
-	std::unique_ptr<LogicalOperator>
-	Apply(Rewriter &rewriter, LogicalOperator &root,
-	      std::vector<AbstractOperator> &bindings, bool &fixed_point);
+	unique_ptr<LogicalOperator> Apply(Rewriter &rewriter, LogicalOperator &root, vector<AbstractOperator> &bindings,
+	                                  bool &fixed_point);
 };
 
 } // namespace duckdb

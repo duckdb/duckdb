@@ -1,4 +1,3 @@
-
 #include "common/exception.hpp"
 #include "common/operator/comparison_operators.hpp"
 #include "common/value_operations/value_operations.hpp"
@@ -9,8 +8,7 @@ using namespace std;
 //===--------------------------------------------------------------------===//
 // Comparison Operations
 //===--------------------------------------------------------------------===//
-template <class OP>
-static bool templated_boolean_operation(const Value &left, const Value &right) {
+template <class OP> static bool templated_boolean_operation(const Value &left, const Value &right) {
 	if (left.type != right.type) {
 		if (TypeIsNumeric(left.type) && TypeIsNumeric(right.type)) {
 			if (left.type < right.type) {
@@ -21,9 +19,7 @@ static bool templated_boolean_operation(const Value &left, const Value &right) {
 				return templated_boolean_operation<OP>(left, right_cast);
 			}
 		}
-		throw TypeMismatchException(
-		    left.type, right.type,
-		    "Cannot perform boolean operation on these two types");
+		throw TypeMismatchException(left.type, right.type, "Cannot perform boolean operation on these two types");
 	}
 	switch (left.type) {
 	case TypeId::BOOLEAN:
@@ -84,8 +80,7 @@ bool ValueOperations::GreaterThanEquals(const Value &left, const Value &right) {
 	} else if (left.is_null) {
 		return false;
 	}
-	return templated_boolean_operation<operators::GreaterThanEquals>(left,
-	                                                                 right);
+	return templated_boolean_operation<operators::GreaterThanEquals>(left, right);
 }
 
 bool ValueOperations::LessThan(const Value &left, const Value &right) {

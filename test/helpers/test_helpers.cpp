@@ -1,4 +1,3 @@
-
 #include "common/value_operations/value_operations.hpp"
 #include "compare_result.hpp"
 
@@ -6,11 +5,9 @@ using namespace std;
 
 namespace duckdb {
 
-bool CHECK_COLUMN(unique_ptr<duckdb::DuckDBResult> &result,
-                  size_t column_number, vector<duckdb::Value> values) {
+bool CHECK_COLUMN(unique_ptr<duckdb::DuckDBResult> &result, size_t column_number, vector<duckdb::Value> values) {
 	if (!result->GetSuccess()) {
-		fprintf(stderr, "Query failed with message: %s\n",
-		        result->GetErrorMessage().c_str());
+		fprintf(stderr, "Query failed with message: %s\n", result->GetErrorMessage().c_str());
 		// FAIL(result->GetErrorMessage().c_str());
 		return false;
 	}
@@ -47,8 +44,7 @@ bool CHECK_COLUMN(unique_ptr<duckdb::DuckDBResult> &result,
 			// FAIL("Data size does not match value size!");
 		}
 		// check this vector
-		auto &vector =
-		    result->collection.chunks[chunk_index]->data[column_number];
+		auto &vector = result->collection.chunks[chunk_index]->data[column_number];
 		if (i + vector.count > values.size()) {
 			// too many values in this vector
 			// FAIL("Too many values in result!");
@@ -76,8 +72,7 @@ bool CHECK_COLUMN(unique_ptr<duckdb::DuckDBResult> &result,
 
 string compare_csv(duckdb::DuckDBResult &result, string csv, bool header) {
 	if (!result.GetSuccess()) {
-		fprintf(stderr, "Query failed with message: %s\n",
-		        result.GetErrorMessage().c_str());
+		fprintf(stderr, "Query failed with message: %s\n", result.GetErrorMessage().c_str());
 		return result.GetErrorMessage().c_str();
 	}
 	string error;
@@ -176,23 +171,18 @@ static bool ValuesAreEqual(Value result_value, Value value) {
 
 string show_diff(DataChunk &left, DataChunk &right) {
 	if (left.column_count != right.column_count) {
-		return StringUtil::Format("Different column counts: %d vs %d",
-		                          (int)left.column_count,
-		                          (int)right.column_count);
+		return StringUtil::Format("Different column counts: %d vs %d", (int)left.column_count, (int)right.column_count);
 	}
 	if (left.size() != right.size()) {
-		return StringUtil::Format("Different sizes: %zu vs %zu", left.size(),
-		                          right.size());
+		return StringUtil::Format("Different sizes: %zu vs %zu", left.size(), right.size());
 	}
 	string difference;
 	for (size_t i = 0; i < left.column_count; i++) {
 		bool has_differences = false;
 		auto &left_vector = left.data[i];
 		auto &right_vector = right.data[i];
-		string left_column = StringUtil::Format(
-		    "Result\n------\n%s [", TypeIdToString(left_vector.type).c_str());
-		string right_column = StringUtil::Format(
-		    "Expect\n------\n%s [", TypeIdToString(right_vector.type).c_str());
+		string left_column = StringUtil::Format("Result\n------\n%s [", TypeIdToString(left_vector.type).c_str());
+		string right_column = StringUtil::Format("Expect\n------\n%s [", TypeIdToString(right_vector.type).c_str());
 		if (left_vector.type == right_vector.type) {
 			for (size_t j = 0; j < left_vector.count; j++) {
 				auto left_value = left_vector.GetValue(j);
@@ -229,8 +219,7 @@ string show_diff(ChunkCollection &collection, DataChunk &chunk) {
 
 //! Compares the result of a pipe-delimited CSV with the given DataChunk
 //! Returns true if they are equal, and stores an error_message otherwise
-bool compare_result(string csv, ChunkCollection &collection, bool has_header,
-                    string &error_message) {
+bool compare_result(string csv, ChunkCollection &collection, bool has_header, string &error_message) {
 	auto types = collection.types;
 	DataChunk correct_result;
 
@@ -290,14 +279,11 @@ bool compare_result(string csv, ChunkCollection &collection, bool has_header,
 incorrect:
 	correct_result.Initialize(types);
 	if (!parse_datachunk(csv, correct_result, has_header)) {
-		error_message = "Incorrect answer for query!\nProvided answer:\n" +
-		                collection.ToString() +
-		                "\nExpected answer [could not parse]:\n" + string(csv) +
-		                "\n";
+		error_message = "Incorrect answer for query!\nProvided answer:\n" + collection.ToString() +
+		                "\nExpected answer [could not parse]:\n" + string(csv) + "\n";
 	} else {
-		error_message = "Incorrect answer for query!\nProvided answer:\n" +
-		                collection.ToString() + "\nExpected answer:\n" +
-		                correct_result.ToString() + "\n" +
+		error_message = "Incorrect answer for query!\nProvided answer:\n" + collection.ToString() +
+		                "\nExpected answer:\n" + correct_result.ToString() + "\n" +
 		                show_diff(collection, correct_result);
 	}
 	return false;

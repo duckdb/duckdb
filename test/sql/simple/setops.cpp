@@ -1,4 +1,3 @@
-
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
@@ -119,7 +118,6 @@ TEST_CASE("Test nested EXCEPT", "[setop]") {
 	REQUIRE_NO_FAIL(con.Query("insert into b values(43)"));
 	REQUIRE_NO_FAIL(con.Query("insert into c values(44)"));
 
-	result = con.Query(
-	    "select * from a except select * from b except select * from c");
+	result = con.Query("select * from a except select * from b except select * from c");
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
 }

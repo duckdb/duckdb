@@ -18,19 +18,19 @@ namespace duckdb {
 
 //! PhysicalHashJoin represents a hash loop join between two tables
 class PhysicalHashJoin : public PhysicalJoin {
-	public:
-	PhysicalHashJoin(LogicalOperator &op, std::unique_ptr<PhysicalOperator> left,
-	                 std::unique_ptr<PhysicalOperator> right, std::vector<JoinCondition> cond, JoinType join_type);
+public:
+	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
+	                 vector<JoinCondition> cond, JoinType join_type);
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
-	std::unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent_executor) override;
+	unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent_executor) override;
 
-	std::unique_ptr<JoinHashTable> hash_table;
+	unique_ptr<JoinHashTable> hash_table;
 };
 
 class PhysicalHashJoinOperatorState : public PhysicalOperatorState {
-	public:
+public:
 	PhysicalHashJoinOperatorState(PhysicalOperator *left, PhysicalOperator *right, ExpressionExecutor *parent_executor)
 	    : PhysicalOperatorState(left, parent_executor), initialized(false) {
 		assert(left && right);
@@ -38,6 +38,6 @@ class PhysicalHashJoinOperatorState : public PhysicalOperatorState {
 
 	bool initialized;
 	DataChunk join_keys;
-	std::unique_ptr<JoinHashTable::ScanStructure> scan_structure;
+	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
 };
 } // namespace duckdb

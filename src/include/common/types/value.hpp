@@ -1,21 +1,18 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // common/types/value.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include <memory.h>
-
 #include "common/common.hpp"
 #include "common/printable.hpp"
-
 #include "common/types/date.hpp"
+
+#include <memory.h>
 
 namespace duckdb {
 
@@ -24,7 +21,7 @@ namespace duckdb {
 class Value : public Printable {
 	friend class Vector;
 
-  public:
+public:
 	//! Create an empty NULL value of the specified type
 	Value(TypeId type = TypeId::INTEGER) : type(type), is_null(true) {
 	}
@@ -37,11 +34,10 @@ class Value : public Printable {
 		value_.decimal = val;
 	}
 	//! Create a VARCHAR value
-	Value(const char *val) : Value(val ? std::string(val) : std::string()) {
+	Value(const char *val) : Value(val ? string(val) : string()) {
 	}
 	//! Create a VARCHAR value
-	Value(std::string val)
-	    : type(TypeId::VARCHAR), is_null(false), str_value(val) {
+	Value(string val) : type(TypeId::VARCHAR), is_null(false), str_value(val) {
 	}
 	Value(const Value &other);
 
@@ -75,7 +71,7 @@ class Value : public Printable {
 	}
 
 	//! Convert this value to a string
-	virtual std::string ToString() const;
+	virtual string ToString() const;
 
 	//! Cast this value to another type
 	Value CastAs(TypeId new_type) const;
@@ -99,7 +95,7 @@ class Value : public Printable {
 	} value_;
 
 	//! The value of the object, if it is of a variable size Type
-	std::string str_value;
+	string str_value;
 
 	//! Serializes a Value to a stand-alone binary blob
 	void Serialize(Serializer &serializer);
@@ -132,19 +128,15 @@ class Value : public Printable {
 	bool operator<=(const int64_t &rhs) const;
 	bool operator>=(const int64_t &rhs) const;
 
-  private:
+private:
 	//! Templated helper function for casting
 	template <class DST, class OP> static DST _cast(const Value &v);
 
 	//! Templated helper function for binary operations
 	template <class OP>
-	static void _templated_binary_operation(const Value &left,
-	                                        const Value &right, Value &result,
-	                                        bool ignore_null);
+	static void _templated_binary_operation(const Value &left, const Value &right, Value &result, bool ignore_null);
 
 	//! Templated helper function for boolean operations
-	template <class OP>
-	static bool _templated_boolean_operation(const Value &left,
-	                                         const Value &right);
+	template <class OP> static bool _templated_boolean_operation(const Value &left, const Value &right);
 };
 } // namespace duckdb

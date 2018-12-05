@@ -81,7 +81,7 @@
 namespace TPCE {
 
 class CDM {
-  private:
+private:
 	CDriverGlobalSettings m_DriverGlobalSettings;
 	CDriverDMSettings m_DriverDMSettings;
 
@@ -119,17 +119,14 @@ class CDM {
 	// Initialization that is common for all constructors.
 	void Initialize();
 
-  public:
+public:
 	// Constructor - automatice RNG seed generation
-	CDM(CDMSUTInterface *pSUT, CBaseLogger *pLogger, const DataFileManager &dfm,
-	    TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount,
-	    INT32 iScaleFactor, INT32 iDaysOfInitialTrades, UINT32 UniqueId);
+	CDM(CDMSUTInterface *pSUT, CBaseLogger *pLogger, const DataFileManager &dfm, TIdent iConfiguredCustomerCount,
+	    TIdent iActiveCustomerCount, INT32 iScaleFactor, INT32 iDaysOfInitialTrades, UINT32 UniqueId);
 
 	// Constructor - RNG seed provided
-	CDM(CDMSUTInterface *pSUT, CBaseLogger *pLogger, const DataFileManager &dfm,
-	    TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount,
-	    INT32 iScaleFactor, INT32 iDaysOfInitialTrades, UINT32 UniqueId,
-	    RNGSEED RNGSeed);
+	CDM(CDMSUTInterface *pSUT, CBaseLogger *pLogger, const DataFileManager &dfm, TIdent iConfiguredCustomerCount,
+	    TIdent iActiveCustomerCount, INT32 iScaleFactor, INT32 iDaysOfInitialTrades, UINT32 UniqueId, RNGSEED RNGSeed);
 
 	~CDM(void);
 

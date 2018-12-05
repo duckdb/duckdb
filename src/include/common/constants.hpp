@@ -12,12 +12,20 @@
 #include <cstdlib>
 #include <map>
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace duckdb {
 
+//! inline std directives that we use frequently
+using std::map;
+using std::move;
+using std::string;
+using std::unique_ptr;
+using std::vector;
+
 struct BinaryData {
-	std::unique_ptr<uint8_t[]> data;
+	unique_ptr<uint8_t[]> data;
 	size_t size;
 };
 
@@ -49,12 +57,5 @@ extern column_t COLUMN_IDENTIFIER_ROW_ID;
 extern sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE];
 //! Zero NULL mask: filled with the value 0 [READ ONLY]
 extern nullmask_t ZERO_MASK;
-
-//! std directives that we use inside headers
-using std::map;
-using std::move;
-using std::string;
-using std::unique_ptr;
-using std::vector;
 
 } // namespace duckdb

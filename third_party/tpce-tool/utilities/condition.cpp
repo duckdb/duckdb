@@ -107,8 +107,7 @@ bool CCondition::timedwait(long timeout /*us*/) const {
 			return false;
 		} else {
 			std::ostringstream strm;
-			strm << "SleepConditionVariableCS error: " << strerror(rc) << "("
-			     << rc << ")";
+			strm << "SleepConditionVariableCS error: " << strerror(rc) << "(" << rc << ")";
 			throw std::runtime_error(strm.str());
 		}
 	}
@@ -130,8 +129,7 @@ void CCondition::signal() {
 	int rc = pthread_cond_signal(&cond_);
 	if (rc != 0) {
 		std::ostringstream strm;
-		strm << "pthread_cond_signal error: " << strerror(rc) << "(" << rc
-		     << ")";
+		strm << "pthread_cond_signal error: " << strerror(rc) << "(" << rc << ")";
 		throw std::runtime_error(strm.str());
 	}
 }
@@ -140,8 +138,7 @@ void CCondition::broadcast() {
 	int rc = pthread_cond_broadcast(&cond_);
 	if (rc != 0) {
 		std::ostringstream strm;
-		strm << "pthread_cond_broadcast error: " << strerror(rc) << "(" << rc
-		     << ")";
+		strm << "pthread_cond_broadcast error: " << strerror(rc) << "(" << rc << ")";
 		throw std::runtime_error(strm.str());
 	}
 }
@@ -152,8 +149,7 @@ bool CCondition::timedwait(const struct timespec &timeout) const {
 		return false;
 	} else if (rc != 0) {
 		std::ostringstream strm;
-		strm << "pthread_cond_timedwait error: " << strerror(rc) << "(" << rc
-		     << ")";
+		strm << "pthread_cond_timedwait error: " << strerror(rc) << "(" << rc << ")";
 		throw std::runtime_error(strm.str());
 	}
 	return true;
@@ -174,8 +170,7 @@ bool CCondition::timedwait(long timeout /*us*/) const {
 	gettimeofday(&tv, NULL);
 
 	ts.tv_sec = tv.tv_sec + static_cast<long>(timeout / usec_in_sec);
-	ts.tv_nsec =
-	    (tv.tv_usec + static_cast<long>(timeout % usec_in_sec) * usec_in_nsec);
+	ts.tv_nsec = (tv.tv_usec + static_cast<long>(timeout % usec_in_sec) * usec_in_nsec);
 	if (ts.tv_nsec > nsec_in_sec) {
 		ts.tv_sec += ts.tv_nsec / nsec_in_sec;
 		ts.tv_nsec = ts.tv_nsec % nsec_in_sec;

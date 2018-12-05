@@ -55,11 +55,11 @@ namespace TPCE {
 class CLogFormatTab : public CBaseLogFormatter {
 	friend class EGenLogger;
 
-  private:
+private:
 	ostringstream logmsg;
 	string emptyString;
 
-  public:
+public:
 	////////////////////////////////////////////////////////////////
 	// Constructor
 	////////////////////////////////////////////////////////////////

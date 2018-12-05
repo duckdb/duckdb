@@ -101,16 +101,13 @@ void CMEE::AutoSetRNGSeeds(UINT32 UniqueId) {
 }
 
 // Constructor - automatic RNG seed generation
-CMEE::CMEE(INT32 TradingTimeSoFar, CMEESUTInterface *pSUT, CBaseLogger *pLogger,
-           const DataFileManager &dfm, UINT32 UniqueId)
+CMEE::CMEE(INT32 TradingTimeSoFar, CMEESUTInterface *pSUT, CBaseLogger *pLogger, const DataFileManager &dfm,
+           UINT32 UniqueId)
     : m_DriverMEESettings(UniqueId, 0, 0, 0), m_pSUT(pSUT), m_pLogger(pLogger),
       m_PriceBoard(TradingTimeSoFar, &m_BaseTime, &m_CurrentTime, dfm),
       m_TickerTape(pSUT, &m_PriceBoard, &m_BaseTime, &m_CurrentTime, dfm),
-      m_TradingFloor(pSUT, &m_PriceBoard, &m_TickerTape, &m_BaseTime,
-                     &m_CurrentTime),
-      m_MEELock() {
-	m_pLogger->SendToLogger(
-	    "MEE object constructed using c'tor 1 (valid for publication: YES).");
+      m_TradingFloor(pSUT, &m_PriceBoard, &m_TickerTape, &m_BaseTime, &m_CurrentTime), m_MEELock() {
+	m_pLogger->SendToLogger("MEE object constructed using c'tor 1 (valid for publication: YES).");
 
 	AutoSetRNGSeeds(UniqueId);
 
@@ -118,19 +115,14 @@ CMEE::CMEE(INT32 TradingTimeSoFar, CMEESUTInterface *pSUT, CBaseLogger *pLogger,
 }
 
 // Constructor - RNG seed provided
-CMEE::CMEE(INT32 TradingTimeSoFar, CMEESUTInterface *pSUT, CBaseLogger *pLogger,
-           const DataFileManager &dfm, UINT32 UniqueId,
-           RNGSEED TickerTapeRNGSeed, RNGSEED TradingFloorRNGSeed)
-    : m_DriverMEESettings(UniqueId, 0, TickerTapeRNGSeed, TradingFloorRNGSeed),
-      m_pSUT(pSUT), m_pLogger(pLogger),
+CMEE::CMEE(INT32 TradingTimeSoFar, CMEESUTInterface *pSUT, CBaseLogger *pLogger, const DataFileManager &dfm,
+           UINT32 UniqueId, RNGSEED TickerTapeRNGSeed, RNGSEED TradingFloorRNGSeed)
+    : m_DriverMEESettings(UniqueId, 0, TickerTapeRNGSeed, TradingFloorRNGSeed), m_pSUT(pSUT), m_pLogger(pLogger),
       m_PriceBoard(TradingTimeSoFar, &m_BaseTime, &m_CurrentTime, dfm),
-      m_TickerTape(pSUT, &m_PriceBoard, &m_BaseTime, &m_CurrentTime,
-                   TickerTapeRNGSeed, dfm),
-      m_TradingFloor(pSUT, &m_PriceBoard, &m_TickerTape, &m_BaseTime,
-                     &m_CurrentTime, TradingFloorRNGSeed),
+      m_TickerTape(pSUT, &m_PriceBoard, &m_BaseTime, &m_CurrentTime, TickerTapeRNGSeed, dfm),
+      m_TradingFloor(pSUT, &m_PriceBoard, &m_TickerTape, &m_BaseTime, &m_CurrentTime, TradingFloorRNGSeed),
       m_MEELock() {
-	m_pLogger->SendToLogger(
-	    "MEE object constructed using c'tor 2 (valid for publication: NO).");
+	m_pLogger->SendToLogger("MEE object constructed using c'tor 2 (valid for publication: NO).");
 	m_pLogger->SendToLogger(m_DriverMEESettings);
 }
 

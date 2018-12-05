@@ -63,18 +63,18 @@ namespace TPCE {
 // - records are sorted by bucket ID smallest to largest.
 //
 template <class T> class BucketedDataFile {
-  public:
+public:
 	// Leverage the size type of our underlying storage container but
 	// insulate clients from the implementation particulars by creating
 	// our own type.
 	// Set this first so we can use it for recordCount.
 	typedef typename std::vector<T>::size_type size_type;
 
-  private:
+private:
 	std::vector<std::vector<T>> buckets;
 	size_type recordCount;
 
-  public:
+public:
 	enum SizeFilter { AllRecords, BucketsOnly };
 
 	explicit BucketedDataFile(ITextSplitter &splitter) : recordCount(0) {
@@ -138,8 +138,7 @@ template <class T> class BucketedDataFile {
 	}
 
 	// Provide range-checked bucket-ID-based access by to the buckets.
-	const std::vector<T> &getBucket(size_type bucketID,
-	                                bool rangeCheckedAccess = false) const {
+	const std::vector<T> &getBucket(size_type bucketID, bool rangeCheckedAccess = false) const {
 		size_type idx = bucketID - 1;
 		return (rangeCheckedAccess ? buckets.at(idx) : buckets[idx]);
 	}

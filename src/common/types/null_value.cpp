@@ -1,5 +1,5 @@
-
 #include "common/types/null_value.hpp"
+
 #include "common/exception.hpp"
 
 using namespace std;
@@ -40,8 +40,7 @@ void SetNullValue(uint8_t *ptr, TypeId type) {
 		*((const char **)ptr) = NullValue<const char *>();
 		break;
 	default:
-		throw InvalidTypeException(type,
-		                           "Non-integer type in HT initialization!");
+		throw InvalidTypeException(type, "Non-integer type in HT initialization!");
 	}
 }
 

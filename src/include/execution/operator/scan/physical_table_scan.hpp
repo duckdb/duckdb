@@ -15,9 +15,8 @@ namespace duckdb {
 
 //! Represents a scan of a base table
 class PhysicalTableScan : public PhysicalOperator {
-	public:
-	PhysicalTableScan(LogicalOperator &op, TableCatalogEntry &tableref, DataTable &table,
-	                  std::vector<column_t> column_ids)
+public:
+	PhysicalTableScan(LogicalOperator &op, TableCatalogEntry &tableref, DataTable &table, vector<column_t> column_ids)
 	    : PhysicalOperator(PhysicalOperatorType::SEQ_SCAN, op.types), tableref(tableref), table(table),
 	      column_ids(column_ids) {
 	}
@@ -27,17 +26,17 @@ class PhysicalTableScan : public PhysicalOperator {
 	//! The physical data table to scan
 	DataTable &table;
 	//! The column ids to project
-	std::vector<column_t> column_ids;
+	vector<column_t> column_ids;
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
-	std::string ExtraRenderInformation() override;
+	string ExtraRenderInformation() override;
 
-	std::unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent_executor) override;
+	unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent_executor) override;
 };
 
 class PhysicalTableScanOperatorState : public PhysicalOperatorState {
-	public:
+public:
 	PhysicalTableScanOperatorState(DataTable &table, ExpressionExecutor *parent_executor)
 	    : PhysicalOperatorState(nullptr, parent_executor) {
 		table.InitializeScan(scan_offset);

@@ -1,16 +1,14 @@
-
-#include <algorithm>
-#include <vector>
+#include "optimizer/logical_rules/cross_product_rewrite.hpp"
 
 #include "common/common.hpp"
 #include "common/exception.hpp"
-
-#include "optimizer/logical_rules/cross_product_rewrite.hpp"
-
 #include "parser/expression/cast_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
 #include "planner/operator/logical_filter.hpp"
 #include "planner/operator/logical_join.hpp"
+
+#include <algorithm>
+#include <vector>
 
 using namespace duckdb;
 using namespace std;
@@ -18,8 +16,7 @@ using namespace std;
 // TODO, this passing ex back and forth is kind of annoying. better ideas?
 // we start with op being the parent filter which contains a crossprod or join
 // which in turn contain other crossprods or joins
-static unique_ptr<Expression> RewriteCP(unique_ptr<Expression> expr,
-                                        LogicalOperator *op) {
+static unique_ptr<Expression> RewriteCP(unique_ptr<Expression> expr, LogicalOperator *op) {
 	assert(op);
 	assert(expr->children.size() == 2);
 
@@ -45,10 +42,8 @@ static unique_ptr<Expression> RewriteCP(unique_ptr<Expression> expr,
 
 		// no? well lets try ourselves then
 		// NB: 'children' mean different things for op and expr
-		JoinSide left_side =
-		    LogicalJoin::GetJoinSide(op->children[i].get(), expr->children[0]);
-		JoinSide right_side =
-		    LogicalJoin::GetJoinSide(op->children[i].get(), expr->children[1]);
+		JoinSide left_side = LogicalJoin::GetJoinSide(op->children[i].get(), expr->children[0]);
+		JoinSide right_side = LogicalJoin::GetJoinSide(op->children[i].get(), expr->children[1]);
 
 		if ((left_side == JoinSide::LEFT && right_side == JoinSide::RIGHT) ||
 		    (left_side == JoinSide::RIGHT && right_side == JoinSide::LEFT)) {
@@ -61,8 +56,7 @@ static unique_ptr<Expression> RewriteCP(unique_ptr<Expression> expr,
 			}
 			assert(op->children[i]->type == LogicalOperatorType::JOIN);
 
-			auto join_op =
-			    reinterpret_cast<LogicalJoin *>(op->children[i].get());
+			auto join_op = reinterpret_cast<LogicalJoin *>(op->children[i].get());
 			// push condition into join and remove from filter
 			join_op->SetJoinCondition(move(expr));
 			moved = true;
@@ -77,18 +71,13 @@ static unique_ptr<Expression> RewriteCP(unique_ptr<Expression> expr,
 }
 
 CrossProductRewrite::CrossProductRewrite() {
-	root = make_unique_base<AbstractRuleNode, LogicalNodeType>(
-	    LogicalOperatorType::FILTER);
-	root->children.push_back(
-	    make_unique_base<AbstractRuleNode, LogicalNodeType>(
-	        LogicalOperatorType::CROSS_PRODUCT));
+	root = make_unique_base<AbstractRuleNode, LogicalNodeType>(LogicalOperatorType::FILTER);
+	root->children.push_back(make_unique_base<AbstractRuleNode, LogicalNodeType>(LogicalOperatorType::CROSS_PRODUCT));
 	root->child_policy = ChildPolicy::SOME;
 }
 
-unique_ptr<LogicalOperator>
-CrossProductRewrite::Apply(Rewriter &rewriter, LogicalOperator &root,
-                           vector<AbstractOperator> &bindings,
-                           bool &fixed_point) {
+unique_ptr<LogicalOperator> CrossProductRewrite::Apply(Rewriter &rewriter, LogicalOperator &root,
+                                                       vector<AbstractOperator> &bindings, bool &fixed_point) {
 	auto &filter = (LogicalFilter &)root;
 	assert(filter.children.size() == 1);
 	// for each filter condition, check if they can be a join condition
@@ -98,8 +87,7 @@ CrossProductRewrite::Apply(Rewriter &rewriter, LogicalOperator &root,
 		auto &expr = filter.expressions[i];
 
 		// only consider comparisions a=b or the like
-		if (expr->children.size() == 2 &&
-		    expr->type >= ExpressionType::COMPARE_EQUAL &&
+		if (expr->children.size() == 2 && expr->type >= ExpressionType::COMPARE_EQUAL &&
 		    expr->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
 			auto ex_again = RewriteCP(move(expr), &root);
 			if (ex_again) {

@@ -1,9 +1,7 @@
-
 #include "catch.hpp"
-#include "test_helpers.hpp"
-
 #include "common/file_system.hpp"
 #include "dbgen.hpp"
+#include "test_helpers.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -21,8 +19,7 @@ TEST_CASE("Shutdown with running transaction", "[storage]") {
 		DuckDB db(storage_database);
 		DuckDBConnection con(db);
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
-		REQUIRE_NO_FAIL(
-		    con.Query("INSERT INTO test VALUES (11, 22), (13, 22);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22);"));
 
 		// we start a transaction, but shutdown the DB before committing
 		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
@@ -51,10 +48,8 @@ TEST_CASE("UNIQUE INDEX after shutdown", "[storage]") {
 		// create a database and insert values
 		DuckDB db(storage_database);
 		DuckDBConnection con(db);
-		REQUIRE_NO_FAIL(
-		    con.Query("CREATE TABLE test (a INTEGER PRIMARY KEY, b INTEGER);"));
-		REQUIRE_NO_FAIL(
-		    con.Query("INSERT INTO test VALUES (11, 22), (13, 22);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER PRIMARY KEY, b INTEGER);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22);"));
 	}
 	// reload the database from disk
 	{

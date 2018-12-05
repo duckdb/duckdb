@@ -1,7 +1,5 @@
-
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
-
 #include "parser/expression/function_expression.hpp"
 
 using namespace duckdb;
@@ -16,8 +14,7 @@ unique_ptr<Expression> ExpressionExecutor::Visit(FunctionExpression &expr) {
 		vector.Move(arguments[i]);
 	}
 	vector.Destroy();
-	expr.bound_function->function(arguments.get(), expr.children.size(),
-	                              vector);
+	expr.bound_function->function(arguments.get(), expr.children.size(), vector);
 	if (vector.type != expr.return_type) {
 		throw TypeMismatchException(expr.return_type, vector.type,
 		                            "expected function to return the former "

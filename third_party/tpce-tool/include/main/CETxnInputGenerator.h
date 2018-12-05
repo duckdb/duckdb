@@ -124,8 +124,7 @@ class CCETxnInputGenerator {
 	 *  RETURNS:
 	 *           none.
 	 */
-	void GenerateNonUniformRandomCustomerId(TIdent &iCustomerId,
-	                                        eCustomerTier &iCustomerTier);
+	void GenerateNonUniformRandomCustomerId(TIdent &iCustomerId, eCustomerTier &iCustomerTier);
 
 	/*
 	 *  Generate customer account ID (uniformly distributed).
@@ -163,11 +162,9 @@ class CCETxnInputGenerator {
 	 *  RETURNS:
 	 *           none.
 	 */
-	void GenerateNonUniformTradeDTS(TIMESTAMP_STRUCT &dts,
-	                                INT64 MaxTimeInMilliSeconds, INT32 AValue,
-	                                INT32 SValue);
+	void GenerateNonUniformTradeDTS(TIMESTAMP_STRUCT &dts, INT64 MaxTimeInMilliSeconds, INT32 AValue, INT32 SValue);
 
-  public:
+public:
 	/*
 	 *  Constructor - no partitioning by C_ID.
 	 *
@@ -185,10 +182,8 @@ class CCETxnInputGenerator {
 	 *  RETURNS:
 	 *           not applicable.
 	 */
-	CCETxnInputGenerator(const DataFileManager &dfm,
-	                     TIdent iConfiguredCustomerCount,
-	                     TIdent iActiveCustomerCount, INT32 iScaleFactor,
-	                     INT32 iHoursOfInitialTrades, CBaseLogger *pLogger,
+	CCETxnInputGenerator(const DataFileManager &dfm, TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount,
+	                     INT32 iScaleFactor, INT32 iHoursOfInitialTrades, CBaseLogger *pLogger,
 	                     const PDriverCETxnSettings pDriverCETxnTunables);
 
 	/*
@@ -213,11 +208,8 @@ class CCETxnInputGenerator {
 	 *  RETURNS:
 	 *           not applicable.
 	 */
-	CCETxnInputGenerator(const DataFileManager &dfm,
-	                     TIdent iConfiguredCustomerCount,
-	                     TIdent iActiveCustomerCount, INT32 iScaleFactor,
-	                     INT32 iHoursOfInitialTrades, RNGSEED RNGSeed,
-	                     CBaseLogger *pLogger,
+	CCETxnInputGenerator(const DataFileManager &dfm, TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount,
+	                     INT32 iScaleFactor, INT32 iHoursOfInitialTrades, RNGSEED RNGSeed, CBaseLogger *pLogger,
 	                     const PDriverCETxnSettings pDriverCETxnTunables);
 
 	/*
@@ -241,12 +233,9 @@ class CCETxnInputGenerator {
 	 *  RETURNS:
 	 *           not applicable.
 	 */
-	CCETxnInputGenerator(const DataFileManager &dfm,
-	                     TIdent iConfiguredCustomerCount,
-	                     TIdent iActiveCustomerCount, INT32 iScaleFactor,
-	                     INT32 iHoursOfInitialTrades,
-	                     TIdent iMyStartingCustomerId, TIdent iMyCustomerCount,
-	                     INT32 iPartitionPercent, CBaseLogger *pLogger,
+	CCETxnInputGenerator(const DataFileManager &dfm, TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount,
+	                     INT32 iScaleFactor, INT32 iHoursOfInitialTrades, TIdent iMyStartingCustomerId,
+	                     TIdent iMyCustomerCount, INT32 iPartitionPercent, CBaseLogger *pLogger,
 	                     const PDriverCETxnSettings pDriverCETxnTunables);
 
 	/*
@@ -274,13 +263,9 @@ class CCETxnInputGenerator {
 	 *  RETURNS:
 	 *           not applicable.
 	 */
-	CCETxnInputGenerator(const DataFileManager &dfm,
-	                     TIdent iConfiguredCustomerCount,
-	                     TIdent iActiveCustomerCount, INT32 iScaleFactor,
-	                     INT32 iHoursOfInitialTrades,
-	                     TIdent iMyStartingCustomerId, TIdent iMyCustomerCount,
-	                     INT32 iPartitionPercent, RNGSEED RNGSeed,
-	                     CBaseLogger *pLogger,
+	CCETxnInputGenerator(const DataFileManager &dfm, TIdent iConfiguredCustomerCount, TIdent iActiveCustomerCount,
+	                     INT32 iScaleFactor, INT32 iHoursOfInitialTrades, TIdent iMyStartingCustomerId,
+	                     TIdent iMyCustomerCount, INT32 iPartitionPercent, RNGSEED RNGSeed, CBaseLogger *pLogger,
 	                     const PDriverCETxnSettings pDriverCETxnTunables);
 
 	/*
@@ -391,8 +376,7 @@ class CCETxnInputGenerator {
 	 *  RETURNS:
 	 *           none.
 	 */
-	void GenerateTradeOrderInput(TTradeOrderTxnInput &TxnReq, INT32 &iTradeType,
-	                             bool &bExecutorIsAccountOwner);
+	void GenerateTradeOrderInput(TTradeOrderTxnInput &TxnReq, INT32 &iTradeType, bool &bExecutorIsAccountOwner);
 
 	/*
 	 *  Generate Trade-Status transaction input.

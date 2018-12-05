@@ -1,35 +1,32 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // parser/statement/update_statement.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include <vector>
-
+#include "parser/expression.hpp"
 #include "parser/sql_node_visitor.hpp"
 #include "parser/sql_statement.hpp"
 
-#include "parser/expression.hpp"
+#include <vector>
 
 namespace duckdb {
 
 class UpdateStatement : public SQLStatement {
-  public:
+public:
 	UpdateStatement() : SQLStatement(StatementType::UPDATE) {
 	}
 	virtual ~UpdateStatement() {
 	}
 
-	virtual std::string ToString() const {
+	virtual string ToString() const {
 		return "Update";
 	}
-	virtual std::unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
+	virtual unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
 		return v->Visit(*this);
 	}
 
@@ -40,10 +37,10 @@ class UpdateStatement : public SQLStatement {
 		throw NotImplementedException("Equality not implemented!");
 	}
 
-	std::unique_ptr<Expression> condition;
-	std::unique_ptr<TableRef> table;
+	unique_ptr<Expression> condition;
+	unique_ptr<TableRef> table;
 
-	std::vector<std::string> columns;
-	std::vector<std::unique_ptr<Expression>> expressions;
+	vector<string> columns;
+	vector<unique_ptr<Expression>> expressions;
 };
 } // namespace duckdb

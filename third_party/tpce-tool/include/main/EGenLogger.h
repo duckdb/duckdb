@@ -54,13 +54,12 @@
 namespace TPCE {
 
 class CEGenLogger : public CBaseLogger {
-  private:
+private:
 	char m_Filename[iMaxPath];
 	ofstream m_Log;
 	CMutex m_LogLock;
 
-	bool SendToLoggerImpl(const char *szPrefix, const char *szTimestamp,
-	                      const char *szMsg) {
+	bool SendToLoggerImpl(const char *szPrefix, const char *szTimestamp, const char *szMsg) {
 		// m_LogLock.lock();
 		// cerr << szPrefix << " " << szTimestamp << " " << szMsg << endl;
 		// // m_Log.flush();
@@ -73,9 +72,8 @@ class CEGenLogger : public CBaseLogger {
 		return true;
 	}
 
-  public:
-	CEGenLogger(eDriverType drvType, UINT32 UniqueId, const char *szFilename,
-	            CBaseLogFormatter *pLogFormatter)
+public:
+	CEGenLogger(eDriverType drvType, UINT32 UniqueId, const char *szFilename, CBaseLogFormatter *pLogFormatter)
 	    : CBaseLogger(drvType, UniqueId, pLogFormatter){
 	          // Copy Log Filename
 	          // strncpy(m_Filename, szFilename, sizeof(m_Filename));

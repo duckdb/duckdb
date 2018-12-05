@@ -114,19 +114,15 @@ int mk_w_call_center(void *info_arr, ds_key_t index) {
 	 * generate a new one then reset associate fields (e.g., rec_start_date
 	 * minimums)
 	 */
-	if (setSCDKeys(CC_CALL_CENTER_ID, index, r->cc_call_center_id,
-	               &r->cc_rec_start_date_id, &r->cc_rec_end_date_id)) {
-		r->cc_open_date_id =
-		    jDateStart -
-		    genrand_integer(NULL, DIST_UNIFORM, -365, 0, 0, CC_OPEN_DATE_ID);
+	if (setSCDKeys(CC_CALL_CENTER_ID, index, r->cc_call_center_id, &r->cc_rec_start_date_id, &r->cc_rec_end_date_id)) {
+		r->cc_open_date_id = jDateStart - genrand_integer(NULL, DIST_UNIFORM, -365, 0, 0, CC_OPEN_DATE_ID);
 
 		/*
 		 * some fields are not changed, even when a new version of the row is
 		 * written
 		 */
 		nSuffix = (int)index / distsize("call_centers");
-		dist_member(&cp, "call_centers",
-		            (int)(index % distsize("call_centers")) + 1, 1);
+		dist_member(&cp, "call_centers", (int)(index % distsize("call_centers")) + 1, 1);
 		if (nSuffix > 0)
 			sprintf(r->cc_name, "%s_%d", cp, nSuffix);
 		else
@@ -147,68 +143,52 @@ int mk_w_call_center(void *info_arr, ds_key_t index) {
 	 * which fields to replace and which to retain
 	 */
 	pick_distribution(&r->cc_class, "call_center_class", 1, 1, CC_CLASS);
-	changeSCD(SCD_PTR, &r->cc_class, &rOldValues->cc_class, &nFieldChangeFlags,
-	          bFirstRecord);
+	changeSCD(SCD_PTR, &r->cc_class, &rOldValues->cc_class, &nFieldChangeFlags, bFirstRecord);
 
-	genrand_integer(&r->cc_employees, DIST_UNIFORM, 1,
-	                CC_EMPLOYEE_MAX * nScale * nScale, 0, CC_EMPLOYEES);
-	changeSCD(SCD_INT, &r->cc_employees, &rOldValues->cc_employees,
-	          &nFieldChangeFlags, bFirstRecord);
+	genrand_integer(&r->cc_employees, DIST_UNIFORM, 1, CC_EMPLOYEE_MAX * nScale * nScale, 0, CC_EMPLOYEES);
+	changeSCD(SCD_INT, &r->cc_employees, &rOldValues->cc_employees, &nFieldChangeFlags, bFirstRecord);
 
 	genrand_integer(&r->cc_sq_ft, DIST_UNIFORM, 100, 700, 0, CC_SQ_FT);
 	r->cc_sq_ft *= r->cc_employees;
-	changeSCD(SCD_INT, &r->cc_sq_ft, &rOldValues->cc_sq_ft, &nFieldChangeFlags,
-	          bFirstRecord);
+	changeSCD(SCD_INT, &r->cc_sq_ft, &rOldValues->cc_sq_ft, &nFieldChangeFlags, bFirstRecord);
 
 	pick_distribution(&r->cc_hours, "call_center_hours", 1, 1, CC_HOURS);
-	changeSCD(SCD_PTR, &r->cc_hours, &rOldValues->cc_hours, &nFieldChangeFlags,
-	          bFirstRecord);
+	changeSCD(SCD_PTR, &r->cc_hours, &rOldValues->cc_hours, &nFieldChangeFlags, bFirstRecord);
 
 	pick_distribution(&sName1, "first_names", 1, 1, CC_MANAGER);
 	pick_distribution(&sName2, "last_names", 1, 1, CC_MANAGER);
 	sprintf(&r->cc_manager[0], "%s %s", sName1, sName2);
-	changeSCD(SCD_CHAR, &r->cc_manager, &rOldValues->cc_manager,
-	          &nFieldChangeFlags, bFirstRecord);
+	changeSCD(SCD_CHAR, &r->cc_manager, &rOldValues->cc_manager, &nFieldChangeFlags, bFirstRecord);
 
 	genrand_integer(&r->cc_market_id, DIST_UNIFORM, 1, 6, 0, CC_MARKET_ID);
-	changeSCD(SCD_INT, &r->cc_market_id, &rOldValues->cc_market_id,
-	          &nFieldChangeFlags, bFirstRecord);
+	changeSCD(SCD_INT, &r->cc_market_id, &rOldValues->cc_market_id, &nFieldChangeFlags, bFirstRecord);
 
 	gen_text(r->cc_market_class, 20, RS_CC_MARKET_CLASS, CC_MARKET_CLASS);
-	changeSCD(SCD_CHAR, &r->cc_market_class, &rOldValues->cc_market_class,
-	          &nFieldChangeFlags, bFirstRecord);
+	changeSCD(SCD_CHAR, &r->cc_market_class, &rOldValues->cc_market_class, &nFieldChangeFlags, bFirstRecord);
 
 	gen_text(r->cc_market_desc, 20, RS_CC_MARKET_DESC, CC_MARKET_DESC);
-	changeSCD(SCD_CHAR, &r->cc_market_desc, &rOldValues->cc_market_desc,
-	          &nFieldChangeFlags, bFirstRecord);
+	changeSCD(SCD_CHAR, &r->cc_market_desc, &rOldValues->cc_market_desc, &nFieldChangeFlags, bFirstRecord);
 
 	pick_distribution(&sName1, "first_names", 1, 1, CC_MARKET_MANAGER);
 	pick_distribution(&sName2, "last_names", 1, 1, CC_MARKET_MANAGER);
 	sprintf(&r->cc_market_manager[0], "%s %s", sName1, sName2);
-	changeSCD(SCD_CHAR, &r->cc_market_manager, &rOldValues->cc_market_manager,
-	          &nFieldChangeFlags, bFirstRecord);
+	changeSCD(SCD_CHAR, &r->cc_market_manager, &rOldValues->cc_market_manager, &nFieldChangeFlags, bFirstRecord);
 
 	genrand_integer(&r->cc_company, DIST_UNIFORM, 1, 6, 0, CC_COMPANY);
-	changeSCD(SCD_INT, &r->cc_company, &rOldValues->cc_company,
-	          &nFieldChangeFlags, bFirstRecord);
+	changeSCD(SCD_INT, &r->cc_company, &rOldValues->cc_company, &nFieldChangeFlags, bFirstRecord);
 
 	genrand_integer(&r->cc_division_id, DIST_UNIFORM, 1, 6, 0, CC_COMPANY);
-	changeSCD(SCD_INT, &r->cc_division_id, &rOldValues->cc_division_id,
-	          &nFieldChangeFlags, bFirstRecord);
+	changeSCD(SCD_INT, &r->cc_division_id, &rOldValues->cc_division_id, &nFieldChangeFlags, bFirstRecord);
 
-	mk_word(r->cc_division_name, "syllables", r->cc_division_id,
-	        RS_CC_DIVISION_NAME, CC_DIVISION_NAME);
-	changeSCD(SCD_CHAR, &r->cc_division_name, &rOldValues->cc_division_name,
-	          &nFieldChangeFlags, bFirstRecord);
+	mk_word(r->cc_division_name, "syllables", r->cc_division_id, RS_CC_DIVISION_NAME, CC_DIVISION_NAME);
+	changeSCD(SCD_CHAR, &r->cc_division_name, &rOldValues->cc_division_name, &nFieldChangeFlags, bFirstRecord);
 
 	mk_companyname(r->cc_company_name, CC_COMPANY_NAME, r->cc_company);
-	changeSCD(SCD_CHAR, &r->cc_company_name, &rOldValues->cc_company_name,
-	          &nFieldChangeFlags, bFirstRecord);
+	changeSCD(SCD_CHAR, &r->cc_company_name, &rOldValues->cc_company_name, &nFieldChangeFlags, bFirstRecord);
 
-	genrand_decimal(&r->cc_tax_percentage, DIST_UNIFORM, &dMinTaxPercentage,
-	                &dMaxTaxPercentage, NULL, CC_TAX_PERCENTAGE);
-	changeSCD(SCD_DEC, &r->cc_tax_percentage, &rOldValues->cc_tax_percentage,
-	          &nFieldChangeFlags, bFirstRecord);
+	genrand_decimal(&r->cc_tax_percentage, DIST_UNIFORM, &dMinTaxPercentage, &dMaxTaxPercentage, NULL,
+	                CC_TAX_PERCENTAGE);
+	changeSCD(SCD_DEC, &r->cc_tax_percentage, &rOldValues->cc_tax_percentage, &nFieldChangeFlags, bFirstRecord);
 
 	// append the newly created row
 	char szTemp[128];
@@ -240,8 +220,7 @@ int mk_w_call_center(void *info_arr, ds_key_t index) {
 	append_integer(info, r->cc_address.street_num);
 
 	if (r->cc_address.street_name2) {
-		sprintf(szTemp, "%s %s", r->cc_address.street_name1,
-		        r->cc_address.street_name2);
+		sprintf(szTemp, "%s %s", r->cc_address.street_name1, r->cc_address.street_name2);
 		append_varchar(info, szTemp);
 	} else {
 		append_varchar(info, r->cc_address.street_name1);

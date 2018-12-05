@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // parser/statement/alter_table_statement.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -20,16 +18,16 @@
 namespace duckdb {
 
 class AlterTableStatement : public SQLStatement {
-  public:
-	AlterTableStatement(std::unique_ptr<AlterTableInformation> info)
+public:
+	AlterTableStatement(unique_ptr<AlterTableInformation> info)
 	    : SQLStatement(StatementType::ALTER), info(std::move(info)){};
 	virtual ~AlterTableStatement() {
 	}
 
-	virtual std::string ToString() const {
+	virtual string ToString() const {
 		return "ALTER TABLE";
 	}
-	virtual std::unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
+	virtual unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
 		return v->Visit(*this);
 	}
 
@@ -40,8 +38,8 @@ class AlterTableStatement : public SQLStatement {
 		throw NotImplementedException("Equality not implemented!");
 	}
 
-	std::unique_ptr<TableRef> table;
-	std::unique_ptr<AlterTableInformation> info;
+	unique_ptr<TableRef> table;
+	unique_ptr<AlterTableInformation> info;
 };
 
 } // namespace duckdb

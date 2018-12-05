@@ -82,7 +82,7 @@ class CGenerateAndLoad {
 	// Whether to use cache when generating initial population
 	bool m_bCacheEnabled;
 
-  public:
+public:
 	/*
 	 *   Constructor.
 	 *
@@ -104,12 +104,9 @@ class CGenerateAndLoad {
 	 *  RETURNS:
 	 *           not applicable.
 	 */
-	CGenerateAndLoad(const DataFileManager &dfm, TIdent iCustomerCount,
-	                 TIdent iStartFromCustomer, TIdent iTotalCustomers,
-	                 UINT iLoadUnitSize, UINT iScaleFactor,
-	                 UINT iDaysOfInitialTrades,
-	                 CBaseLoaderFactory *pLoaderFactory, CBaseLogger *pLogger,
-	                 CGenerateAndLoadBaseOutput *pOutput,
+	CGenerateAndLoad(const DataFileManager &dfm, TIdent iCustomerCount, TIdent iStartFromCustomer,
+	                 TIdent iTotalCustomers, UINT iLoadUnitSize, UINT iScaleFactor, UINT iDaysOfInitialTrades,
+	                 CBaseLoaderFactory *pLoaderFactory, CBaseLogger *pLogger, CGenerateAndLoadBaseOutput *pOutput,
 	                 bool bCacheEnabled = false);
 
 	/*

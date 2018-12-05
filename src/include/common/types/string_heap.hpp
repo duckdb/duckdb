@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // common/types/string_heap.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -18,7 +16,7 @@ namespace duckdb {
 //! it On every insert, a pointer to the inserted string is returned The
 //! returned pointer will remain valid until the StringHeap is destroyed
 class StringHeap {
-  public:
+public:
 	StringHeap();
 
 	void Destroy() {
@@ -38,23 +36,23 @@ class StringHeap {
 	//! Add a string to the string heap, returns a pointer to the string
 	const char *AddString(const char *data);
 	//! Add a string to the string heap, returns a pointer to the string
-	const char *AddString(const std::string &data);
+	const char *AddString(const string &data);
 	//! Add all strings from a different string heap to this string heap
 	void MergeHeap(StringHeap &heap);
 
-  private:
+private:
 	struct StringChunk {
 		StringChunk(size_t size) : current_position(0), maximum_size(size) {
-			data = std::unique_ptr<char[]>(new char[maximum_size]);
+			data = unique_ptr<char[]>(new char[maximum_size]);
 		}
 
-		std::unique_ptr<char[]> data;
+		unique_ptr<char[]> data;
 		size_t current_position;
 		size_t maximum_size;
-		std::unique_ptr<StringChunk> prev;
+		unique_ptr<StringChunk> prev;
 	};
 	StringChunk *tail;
-	std::unique_ptr<StringChunk> chunk;
+	unique_ptr<StringChunk> chunk;
 };
 
 } // namespace duckdb

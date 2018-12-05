@@ -14,7 +14,7 @@ namespace duckdb {
 
 //! LogicalCrossProduct represents a cross product between two relations
 class LogicalCrossProduct : public LogicalOperator {
-	public:
+public:
 	LogicalCrossProduct() : LogicalOperator(LogicalOperatorType::CROSS_PRODUCT) {
 	}
 
@@ -22,9 +22,9 @@ class LogicalCrossProduct : public LogicalOperator {
 		v->Visit(*this);
 	}
 
-	std::vector<string> GetNames() override;
+	vector<string> GetNames() override;
 
-	protected:
+protected:
 	void ResolveTypes() override;
 };
 } // namespace duckdb

@@ -53,7 +53,7 @@ namespace TPCE {
 //
 
 class CommissionRateDataFileRecord {
-  private:
+private:
 	int cr_c_tier;
 
 	static const int maxCr_tt_idLen = 3;
@@ -70,9 +70,8 @@ class CommissionRateDataFileRecord {
 
 	static const unsigned int fieldCount = 6;
 
-  public:
-	explicit CommissionRateDataFileRecord(
-	    const std::deque<std::string> &fields);
+public:
+	explicit CommissionRateDataFileRecord(const std::deque<std::string> &fields);
 
 	//
 	// Default copies and destructor are ok.

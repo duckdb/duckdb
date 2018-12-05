@@ -45,12 +45,11 @@
 namespace TPCE {
 
 class CFlatCustomerTaxrateLoad : public CFlatFileLoader<CUSTOMER_TAXRATE_ROW> {
-  private:
+private:
 	const std::string CustomerTaxrateRowFmt;
 
-  public:
-	CFlatCustomerTaxrateLoad(char *szFileName,
-	                         FlatFileOutputModes FlatFileOutputMode)
+public:
+	CFlatCustomerTaxrateLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
 	    : CFlatFileLoader<CUSTOMER_TAXRATE_ROW>(szFileName, FlatFileOutputMode),
 	      CustomerTaxrateRowFmt("%s|%" PRId64 "\n"){};
 
@@ -58,11 +57,9 @@ class CFlatCustomerTaxrateLoad : public CFlatFileLoader<CUSTOMER_TAXRATE_ROW> {
 	 *   Writes a record to the file.
 	 */
 	void WriteNextRecord(const CUSTOMER_TAXRATE_ROW &next_record) {
-		int rc = fprintf(hOutFile, CustomerTaxrateRowFmt.c_str(),
-		                 next_record.CX_TX_ID, next_record.CX_C_ID);
+		int rc = fprintf(hOutFile, CustomerTaxrateRowFmt.c_str(), next_record.CX_TX_ID, next_record.CX_C_ID);
 		if (rc < 0) {
-			throw CSystemErr(CSystemErr::eWriteFile,
-			                 "CFlatCustomerTaxrateLoad::WriteNextRecord");
+			throw CSystemErr(CSystemErr::eWriteFile, "CFlatCustomerTaxrateLoad::WriteNextRecord");
 		}
 	}
 };

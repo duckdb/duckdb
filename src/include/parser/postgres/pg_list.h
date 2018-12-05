@@ -150,16 +150,14 @@ STATIC_IF_INLINE int list_length(const List *l) {
  * foreach -
  *	  a convenience macro which loops through the list
  */
-#define foreach                                                                \
-	(cell, l) for ((cell) = list_head(l); (cell) != NULL; (cell) = lnext(cell))
+#define foreach (cell, l) for ((cell) = list_head(l); (cell) != NULL; (cell) = lnext(cell))
 
 /*
  * for_each_cell -
  *	  a convenience macro which loops through a list starting from a
  *	  specified cell
  */
-#define for_each_cell(cell, initcell)                                          \
-	for ((cell) = (initcell); (cell) != NULL; (cell) = lnext(cell))
+#define for_each_cell(cell, initcell) for ((cell) = (initcell); (cell) != NULL; (cell) = lnext(cell))
 
 /*
  * forboth -
@@ -169,21 +167,18 @@ STATIC_IF_INLINE int list_length(const List *l) {
  *	  on the requirements of the call site, it may also be wise to
  *	  assert that the lengths of the two lists are equal.
  */
-#define forboth(cell1, list1, cell2, list2)                                    \
-	for ((cell1) = list_head(list1), (cell2) = list_head(list2);               \
-	     (cell1) != NULL && (cell2) != NULL;                                   \
+#define forboth(cell1, list1, cell2, list2)                                                                            \
+	for ((cell1) = list_head(list1), (cell2) = list_head(list2); (cell1) != NULL && (cell2) != NULL;                   \
 	     (cell1) = lnext(cell1), (cell2) = lnext(cell2))
 
 /*
  * forthree -
  *	  the same for three lists
  */
-#define forthree(cell1, list1, cell2, list2, cell3, list3)                     \
-	for ((cell1) = list_head(list1), (cell2) = list_head(list2),               \
-	    (cell3) = list_head(list3);                                            \
-	     (cell1) != NULL && (cell2) != NULL && (cell3) != NULL;                \
-	     (cell1) = lnext(cell1), (cell2) = lnext(cell2),                       \
-	    (cell3) = lnext(cell3))
+#define forthree(cell1, list1, cell2, list2, cell3, list3)                                                             \
+	for ((cell1) = list_head(list1), (cell2) = list_head(list2), (cell3) = list_head(list3);                           \
+	     (cell1) != NULL && (cell2) != NULL && (cell3) != NULL;                                                        \
+	     (cell1) = lnext(cell1), (cell2) = lnext(cell2), (cell3) = lnext(cell3))
 
 extern List *lappend(List *list, void *datum);
 extern List *lappend_int(List *list, int datum);

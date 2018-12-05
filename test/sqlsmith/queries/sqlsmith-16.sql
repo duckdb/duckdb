@@ -17,7 +17,8 @@ SELECT
             OR (subq_1.c0 IS NOT NULL)))
     OR ((EXISTS (
                 SELECT
-                    ref_8.l_linenumber AS c0, (
+                    ref_8.l_linenumber AS c0,
+                    (
                         SELECT
                             o_custkey
                         FROM

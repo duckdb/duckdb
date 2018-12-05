@@ -47,13 +47,12 @@ namespace TPCE {
 class CRandom;
 
 class BucketProgress : public ProgressMeter {
-  private:
+private:
 	double acceptable_stddev_;
 	double max_stddev_;
 
-  public:
-	BucketProgress(double acceptable_stddev, int total, int verbosity = 0,
-	               std::ostream *output = &std::cout);
+public:
+	BucketProgress(double acceptable_stddev, int total, int verbosity = 0, std::ostream *output = &std::cout);
 	virtual void display_message(std::ostream &out) const;
 	bool report(double stddev);
 	double max_stddev();
@@ -64,7 +63,7 @@ class BucketProgress : public ProgressMeter {
 // Instantiate the class and then call simulate() to perform the actual
 // simulation.
 class BucketSimulator {
-  private:
+private:
 	CRandom m_rnd;
 	INT64 *m_buckets;
 	TIdent m_custcount;
@@ -75,16 +74,14 @@ class BucketSimulator {
 	int m_maxbucket;
 	BucketProgress &m_progress;
 
-	static const UINT RND_STEP_PER_ORDER =
-	    1; // Number of random number generator calls
+	static const UINT RND_STEP_PER_ORDER = 1; // Number of random number generator calls
 
-  public:
+public:
 	// iStartFromCustomer  - Customer number to start with
 	// iCustomerCount      - Number of customers to simulate
 	// CRandom *rnd        - Pointer to random generator to use
 	// UINT uiLoadUnit     - Size of the TPCE "Load Unit"
-	BucketSimulator(int iterstart, int itercount, TIdent iCustomerCount,
-	                TTrade m_simorders, TPCE::RNGSEED base_seed,
+	BucketSimulator(int iterstart, int itercount, TIdent iCustomerCount, TTrade m_simorders, TPCE::RNGSEED base_seed,
 	                BucketProgress &prog);
 	~BucketSimulator();
 

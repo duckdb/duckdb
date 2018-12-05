@@ -97,33 +97,24 @@ int mk_w_customer(void *info_arr, ds_key_t index) {
 
 	/* demographic keys are a composite of values. rebuild them a la
 	 * bitmap_to_dist */
-	r->c_current_hdemo_sk =
-	    mk_join(C_CURRENT_HDEMO_SK, HOUSEHOLD_DEMOGRAPHICS, 1);
+	r->c_current_hdemo_sk = mk_join(C_CURRENT_HDEMO_SK, HOUSEHOLD_DEMOGRAPHICS, 1);
 
-	r->c_current_cdemo_sk =
-	    mk_join(C_CURRENT_CDEMO_SK, CUSTOMER_DEMOGRAPHICS, 1);
+	r->c_current_cdemo_sk = mk_join(C_CURRENT_CDEMO_SK, CUSTOMER_DEMOGRAPHICS, 1);
 
-	r->c_current_addr_sk =
-	    mk_join(C_CURRENT_ADDR_SK, CUSTOMER_ADDRESS, r->c_customer_sk);
-	nNameIndex =
-	    pick_distribution(&r->c_first_name, "first_names", 1, 3, C_FIRST_NAME);
+	r->c_current_addr_sk = mk_join(C_CURRENT_ADDR_SK, CUSTOMER_ADDRESS, r->c_customer_sk);
+	nNameIndex = pick_distribution(&r->c_first_name, "first_names", 1, 3, C_FIRST_NAME);
 	pick_distribution(&r->c_last_name, "last_names", 1, 1, C_LAST_NAME);
 	dist_weight(&nGender, "first_names", nNameIndex, 2);
-	pick_distribution(&r->c_salutation, "salutations", 1,
-	                  (nGender == 0) ? 2 : 3, C_SALUTATION);
+	pick_distribution(&r->c_salutation, "salutations", 1, (nGender == 0) ? 2 : 3, C_SALUTATION);
 
-	genrand_date(&dtTemp, DIST_UNIFORM, &dtBirthMin, &dtBirthMax, NULL,
-	             C_BIRTH_DAY);
+	genrand_date(&dtTemp, DIST_UNIFORM, &dtBirthMin, &dtBirthMax, NULL, C_BIRTH_DAY);
 	r->c_birth_day = dtTemp.day;
 	r->c_birth_month = dtTemp.month;
 	r->c_birth_year = dtTemp.year;
-	genrand_email(r->c_email_address, r->c_first_name, r->c_last_name,
-	              C_EMAIL_ADDRESS);
-	genrand_date(&dtTemp, DIST_UNIFORM, &dt1YearAgo, &dtToday, NULL,
-	             C_LAST_REVIEW_DATE);
+	genrand_email(r->c_email_address, r->c_first_name, r->c_last_name, C_EMAIL_ADDRESS);
+	genrand_date(&dtTemp, DIST_UNIFORM, &dt1YearAgo, &dtToday, NULL, C_LAST_REVIEW_DATE);
 	r->c_last_review_date = dtTemp.julian;
-	genrand_date(&dtTemp, DIST_UNIFORM, &dt10YearsAgo, &dtToday, NULL,
-	             C_FIRST_SALES_DATE_ID);
+	genrand_date(&dtTemp, DIST_UNIFORM, &dt10YearsAgo, &dtToday, NULL, C_FIRST_SALES_DATE_ID);
 	r->c_first_sales_date_id = dtTemp.julian;
 	r->c_first_shipto_date_id = r->c_first_sales_date_id + 30;
 

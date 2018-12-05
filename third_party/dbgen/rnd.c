@@ -11,6 +11,7 @@
  */
 
 #include "config.h"
+
 #include <math.h>
 #include <stdio.h>
 #if (defined(LINUX) || defined(_POSIX_SOURCE))
@@ -62,9 +63,7 @@ void row_stop_h(int t) {
 	for (i = 0; i <= MAX_STREAM; i++)
 		if ((Seed[i].table == t) || (Seed[i].table == tdefs[t].child)) {
 			if (set_seeds && (Seed[i].usage > Seed[i].boundary)) {
-				fprintf(stderr,
-				        "\nSEED CHANGE: seed[%d].usage = " HUGE_FORMAT "\n", i,
-				        Seed[i].usage);
+				fprintf(stderr, "\nSEED CHANGE: seed[%d].usage = " HUGE_FORMAT "\n", i, Seed[i].usage);
 				Seed[i].boundary = Seed[i].usage;
 			} else {
 				NthElement((Seed[i].boundary - Seed[i].usage), &Seed[i].value);
@@ -82,8 +81,7 @@ void dump_seeds(int tbl) {
 	for (i = 0; i <= MAX_STREAM; i++)
 		if (Seed[i].table == tbl)
 #ifdef RNG_TEST
-			printf("%d(" HUGE_FORMAT "):\t" HUGE_FORMAT "\n", i, Seed[i].nCalls,
-			       Seed[i].value);
+			printf("%d(" HUGE_FORMAT "):\t" HUGE_FORMAT "\n", i, Seed[i].nCalls, Seed[i].value);
 #else
 			printf("%d:\t" HUGE_FORMAT "\n", i, Seed[i].value);
 #endif

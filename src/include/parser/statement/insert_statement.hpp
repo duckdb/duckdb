@@ -1,33 +1,29 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // parser/statement/insert_statement.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include <vector>
-
-#include "parser/statement/select_statement.hpp"
-
 #include "parser/expression.hpp"
 #include "parser/sql_node_visitor.hpp"
+#include "parser/statement/select_statement.hpp"
+
+#include <vector>
 
 namespace duckdb {
 
 class InsertStatement : public SQLStatement {
-  public:
-	InsertStatement()
-	    : SQLStatement(StatementType::INSERT), schema(DEFAULT_SCHEMA){};
+public:
+	InsertStatement() : SQLStatement(StatementType::INSERT), schema(DEFAULT_SCHEMA){};
 	virtual ~InsertStatement() {
 	}
 
-	virtual std::string ToString() const;
-	virtual std::unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
+	virtual string ToString() const;
+	virtual unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
 		return v->Visit(*this);
 	}
 
@@ -39,18 +35,18 @@ class InsertStatement : public SQLStatement {
 	}
 
 	//! The select statement to insert from
-	std::unique_ptr<SelectStatement> select_statement;
+	unique_ptr<SelectStatement> select_statement;
 
 	//! List of values to insert
-	std::vector<std::vector<std::unique_ptr<Expression>>> values;
+	vector<vector<unique_ptr<Expression>>> values;
 
 	//! Column names to insert into
-	std::vector<std::string> columns;
+	vector<string> columns;
 
 	//! Table name to insert to
-	std::string table;
+	string table;
 	//! Schema name to insert to
-	std::string schema;
+	string schema;
 };
 
 } // namespace duckdb

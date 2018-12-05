@@ -47,7 +47,7 @@
 namespace TPCE {
 
 class CExchangeTable : public FixedTable<ExchangeDataFile_t, EXCHANGE_ROW> {
-  private:
+private:
 	INT32 securityCount[4];
 
 	/*
@@ -58,9 +58,8 @@ class CExchangeTable : public FixedTable<ExchangeDataFile_t, EXCHANGE_ROW> {
 	 */
 	void ComputeNumSecurities(TIdent iCustomerCount);
 
-  public:
-	CExchangeTable(const ExchangeDataFile_t &dataFile,
-	               TIdent configuredCustomers);
+public:
+	CExchangeTable(const ExchangeDataFile_t &dataFile, TIdent configuredCustomers);
 	~CExchangeTable();
 
 	virtual void LoadTableRow();

@@ -49,7 +49,7 @@
 namespace TPCE {
 
 class CCETxnMixGenerator {
-  private:
+private:
 	const PDriverCETxnSettings m_pDriverCETxnSettings;
 	CRandom m_rnd;
 	CBaseLogger *m_pLogger;
@@ -77,7 +77,7 @@ class CCETxnMixGenerator {
 	INT32 m_iTxnArrayCurrentIndex;
 	char *m_pTxnArray;
 
-  public:
+public:
 	static const INT32 INVALID_TRANSACTION_TYPE = -1;
 	static const INT32 SECURITY_DETAIL = 0;
 	static const INT32 BROKER_VOLUME = 1;
@@ -91,10 +91,8 @@ class CCETxnMixGenerator {
 	static const INT32 MARKET_FEED = 8;
 	static const INT32 TRADE_RESULT = 9;
 
-	CCETxnMixGenerator(const PDriverCETxnSettings pTxnParamSettings,
-	                   CBaseLogger *pLogger);
-	CCETxnMixGenerator(const PDriverCETxnSettings pTxnParamSettings,
-	                   RNGSEED RNGSeed, CBaseLogger *pLogger);
+	CCETxnMixGenerator(const PDriverCETxnSettings pTxnParamSettings, CBaseLogger *pLogger);
+	CCETxnMixGenerator(const PDriverCETxnSettings pTxnParamSettings, RNGSEED RNGSeed, CBaseLogger *pLogger);
 	~CCETxnMixGenerator();
 
 	RNGSEED GetRNGSeed(void);

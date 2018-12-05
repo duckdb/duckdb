@@ -5,8 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-PhysicalUnion::PhysicalUnion(LogicalOperator &op, std::unique_ptr<PhysicalOperator> top,
-                             std::unique_ptr<PhysicalOperator> bottom)
+PhysicalUnion::PhysicalUnion(LogicalOperator &op, unique_ptr<PhysicalOperator> top, unique_ptr<PhysicalOperator> bottom)
     : PhysicalOperator(PhysicalOperatorType::UNION, op.types) {
 	children.push_back(move(top));
 	children.push_back(move(bottom));
@@ -29,7 +28,7 @@ void PhysicalUnion::_GetChunk(ClientContext &context, DataChunk &chunk, Physical
 	}
 }
 
-std::unique_ptr<PhysicalOperatorState> PhysicalUnion::GetOperatorState(ExpressionExecutor *parent_executor) {
+unique_ptr<PhysicalOperatorState> PhysicalUnion::GetOperatorState(ExpressionExecutor *parent_executor) {
 	auto state = make_unique<PhysicalUnionOperatorState>(parent_executor);
 	state->top_state = children[0]->GetOperatorState(parent_executor);
 	state->bottom_state = children[1]->GetOperatorState(parent_executor);

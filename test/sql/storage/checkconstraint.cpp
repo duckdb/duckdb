@@ -1,9 +1,7 @@
-
 #include "catch.hpp"
-#include "test_helpers.hpp"
-
 #include "common/file_system.hpp"
 #include "dbgen.hpp"
+#include "test_helpers.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -20,9 +18,8 @@ TEST_CASE("Test serialization of CHECK constraint", "[storage]") {
 		// create a database and insert values
 		DuckDB db(storage_database);
 		DuckDBConnection con(db);
-		REQUIRE_NO_FAIL(con.Query(
-		    "CREATE TABLE test(a INTEGER CHECK (a<10), b INTEGER CHECK(CASE "
-		    "WHEN b < 10 THEN a < b ELSE a + b < 100 END));"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(a INTEGER CHECK (a<10), b INTEGER CHECK(CASE "
+		                          "WHEN b < 10 THEN a < b ELSE a + b < 100 END));"));
 	}
 	// reload the database from disk
 	{

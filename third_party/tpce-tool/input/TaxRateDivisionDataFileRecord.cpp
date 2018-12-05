@@ -44,8 +44,7 @@
 
 using namespace TPCE;
 
-TaxRateDivisionDataFileRecord::TaxRateDivisionDataFileRecord(
-    const std::deque<std::string> &fields) {
+TaxRateDivisionDataFileRecord::TaxRateDivisionDataFileRecord(const std::deque<std::string> &fields) {
 	if (fieldCount != fields.size()) {
 		throw std::runtime_error("Incorrect field count.");
 	}
@@ -80,7 +79,6 @@ double TaxRateDivisionDataFileRecord::TX_RATE() const {
 std::string TaxRateDivisionDataFileRecord::ToString(char fieldSeparator) const {
 	// Facilitate encapsulation by using public interface to fields.
 	std::ostringstream msg;
-	msg << TX_ID() << fieldSeparator << TX_NAME() << fieldSeparator
-	    << TX_RATE();
+	msg << TX_ID() << fieldSeparator << TX_NAME() << fieldSeparator << TX_RATE();
 	return msg.str();
 }

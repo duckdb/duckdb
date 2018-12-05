@@ -39,10 +39,8 @@
 
 using namespace TPCE;
 
-const UINT iUSACtryCode =
-    1; // must be the same as the code in country tax rates file
-const UINT iCanadaCtryCode =
-    2; // must be the same as the code in country tax rates file
+const UINT iUSACtryCode = 1;    // must be the same as the code in country tax rates file
+const UINT iCanadaCtryCode = 2; // must be the same as the code in country tax rates file
 
 // Minimum and maximum to use when generating address street numbers.
 const int iStreetNumberMin = 100;
@@ -79,29 +77,20 @@ const int iRNGSkipOneRowAddress = 10; // real number in 3.5: 7
  * generate only customer addresses if false, generate exchange, company, and
  * customer addresses (always start from the first customer in this case)
  */
-CAddressTable::CAddressTable(const DataFileManager &dfm, TIdent iCustomerCount,
-                             TIdent iStartFromCustomer,
+CAddressTable::CAddressTable(const DataFileManager &dfm, TIdent iCustomerCount, TIdent iStartFromCustomer,
                              bool bCustomerAddressesOnly, bool bCacheEnabled)
-    : TableTemplate<ADDRESS_ROW>(), m_companies(dfm.CompanyFile()),
-      m_Street(dfm.StreetNameDataFile()),
-      m_StreetSuffix(dfm.StreetSuffixDataFile()),
-      m_ZipCode(dfm.ZipCodeDataFile()),
-      m_iStartFromCustomer(iStartFromCustomer),
-      m_iCustomerCount(iCustomerCount),
-      m_bCustomerAddressesOnly(bCustomerAddressesOnly),
-      m_bCustomerAddress(bCustomerAddressesOnly),
+    : TableTemplate<ADDRESS_ROW>(), m_companies(dfm.CompanyFile()), m_Street(dfm.StreetNameDataFile()),
+      m_StreetSuffix(dfm.StreetSuffixDataFile()), m_ZipCode(dfm.ZipCodeDataFile()),
+      m_iStartFromCustomer(iStartFromCustomer), m_iCustomerCount(iCustomerCount),
+      m_bCustomerAddressesOnly(bCustomerAddressesOnly), m_bCustomerAddress(bCustomerAddressesOnly),
       m_bCacheEnabled(bCacheEnabled), INVALID_CACHE_ENTRY(-1) {
-	m_iExchangeCount =
-	    dfm.ExchangeDataFile().size(); // number of rows in Exchange
-	m_iCompanyCount =
-	    m_companies
-	        .GetConfiguredCompanyCount(); // number of configured companies
+	m_iExchangeCount = dfm.ExchangeDataFile().size();          // number of rows in Exchange
+	m_iCompanyCount = m_companies.GetConfiguredCompanyCount(); // number of configured companies
 
 	// Generate customer addresses only (used for CUSTOMER_TAXRATE)
 	if (bCustomerAddressesOnly) {
 		// skip exchanges and companies
-		m_iLastRowNumber =
-		    m_iExchangeCount + m_iCompanyCount + iStartFromCustomer - 1;
+		m_iLastRowNumber = m_iExchangeCount + m_iCompanyCount + iStartFromCustomer - 1;
 
 		//  This is not really a count, but the last address row to generate.
 		//
@@ -112,17 +101,14 @@ CAddressTable::CAddressTable(const DataFileManager &dfm, TIdent iCustomerCount,
 
 		//  This is not really a count, but the last address row to generate.
 		//
-		m_iTotalAddressCount = m_iLastRowNumber + m_iCustomerCount +
-		                       m_iExchangeCount + m_iCompanyCount;
+		m_iTotalAddressCount = m_iLastRowNumber + m_iCustomerCount + m_iExchangeCount + m_iCompanyCount;
 	}
 
-	m_row.AD_ID =
-	    m_iLastRowNumber + iTIdentShift; // extend to 64 bits for address id
+	m_row.AD_ID = m_iLastRowNumber + iTIdentShift; // extend to 64 bits for address id
 
 	if (m_bCacheEnabled) {
 		m_iCacheSize = (int)iDefaultLoadUnitSize;
-		m_iCacheOffset = iTIdentShift + m_iExchangeCount + m_iCompanyCount +
-		                 m_iStartFromCustomer;
+		m_iCacheOffset = iTIdentShift + m_iExchangeCount + m_iCompanyCount + m_iStartFromCustomer;
 		m_CacheZipCode = new int[m_iCacheSize];
 		for (int i = 0; i < m_iCacheSize; i++) {
 			m_CacheZipCode[i] = INVALID_CACHE_ENTRY;
@@ -146,9 +132,7 @@ CAddressTable::~CAddressTable() {
  *           none.
  */
 void CAddressTable::InitNextLoadUnit() {
-	m_rnd.SetSeed(
-	    m_rnd.RndNthElement(RNGSeedTableDefault,
-	                        (RNGSEED)m_iLastRowNumber * iRNGSkipOneRowAddress));
+	m_rnd.SetSeed(m_rnd.RndNthElement(RNGSeedTableDefault, (RNGSEED)m_iLastRowNumber * iRNGSkipOneRowAddress));
 
 	ClearRecord(); // this is needed for EGenTest to work
 
@@ -176,9 +160,7 @@ TIdent CAddressTable::GenerateNextAD_ID() {
 	// Reset RNG at Load Unit boundary, so that all data is repeatable.
 	//
 	if (m_iLastRowNumber > (m_iExchangeCount + m_iCompanyCount) &&
-	    ((m_iLastRowNumber - (m_iExchangeCount + m_iCompanyCount)) %
-	         iDefaultLoadUnitSize ==
-	     0)) {
+	    ((m_iLastRowNumber - (m_iExchangeCount + m_iCompanyCount)) % iDefaultLoadUnitSize == 0)) {
 		InitNextLoadUnit();
 	}
 
@@ -224,11 +206,9 @@ void CAddressTable::GenerateAD_LINE_1() {
 	// int iStreetThreshold = m_rnd.RndIntRange(0,
 	// m_Street->GetGreatestKey()-2);
 	int iStreetThreshold = m_rnd.RndIntRange(0, m_Street.size() - 2);
-	int iStreetSuffixThreshold =
-	    m_rnd.RndIntRange(0, m_StreetSuffix.size() - 1);
+	int iStreetSuffixThreshold = m_rnd.RndIntRange(0, m_StreetSuffix.size() - 1);
 
-	snprintf(m_row.AD_LINE1, sizeof(m_row.AD_LINE1), "%d %s %s", iStreetNum,
-	         m_Street[iStreetThreshold].STREET_CSTR(),
+	snprintf(m_row.AD_LINE1, sizeof(m_row.AD_LINE1), "%d %s %s", iStreetNum, m_Street[iStreetThreshold].STREET_CSTR(),
 	         m_StreetSuffix[iStreetSuffixThreshold].SUFFIX_CSTR());
 }
 
@@ -243,17 +223,14 @@ void CAddressTable::GenerateAD_LINE_1() {
  *           none.
  */
 void CAddressTable::GenerateAD_LINE_2() {
-	if (!m_bCustomerAddress ||
-	    m_rnd.RndPercent(
-	        iPctCustomersWithNullAD_LINE_2)) { // Generate second address line
-		                                       // only for customers (not
-		                                       // companies)
+	if (!m_bCustomerAddress || m_rnd.RndPercent(iPctCustomersWithNullAD_LINE_2)) { // Generate second address line
+		                                                                           // only for customers (not
+		                                                                           // companies)
 		m_row.AD_LINE2[0] = '\0';
 	} else {
 		if (m_rnd.RndPercent(iPctCustomersWithAptAD_LINE_2)) {
-			snprintf(
-			    m_row.AD_LINE2, sizeof(m_row.AD_LINE2), "Apt. %d",
-			    m_rnd.RndIntRange(iApartmentNumberMin, iApartmentNumberMax));
+			snprintf(m_row.AD_LINE2, sizeof(m_row.AD_LINE2), "Apt. %d",
+			         m_rnd.RndIntRange(iApartmentNumberMin, iApartmentNumberMax));
 		} else {
 			snprintf(m_row.AD_LINE2, sizeof(m_row.AD_LINE2), "Suite %d",
 			         m_rnd.RndIntRange(iSuiteNumberMin, iSuiteNumberMax));
@@ -316,9 +293,7 @@ UINT CAddressTable::GetCountryCode(const char *szZipCode) {
  *   RETURNS:
  *           none.
  */
-void CAddressTable::GetDivisionAndCountryCodesForAddress(TIdent AD_ID,
-                                                         UINT &iDivCode,
-                                                         UINT &iCtryCode) {
+void CAddressTable::GetDivisionAndCountryCodesForAddress(TIdent AD_ID, UINT &iDivCode, UINT &iCtryCode) {
 	// const TZipCodeInputRow* pZipCodeInputRow = NULL;
 
 	// We will sometimes get AD_ID values that are outside the current
@@ -327,12 +302,10 @@ void CAddressTable::GetDivisionAndCountryCodesForAddress(TIdent AD_ID,
 	TIdent index = AD_ID - m_iCacheOffset;
 	bool bCheckCache = (index >= 0 && index <= m_iCacheSize);
 
-	if (m_bCacheEnabled && bCheckCache &&
-	    (INVALID_CACHE_ENTRY != m_CacheZipCode[index])) {
+	if (m_bCacheEnabled && bCheckCache && (INVALID_CACHE_ENTRY != m_CacheZipCode[index])) {
 		// Make use of the cache to get the data.
 		iDivCode = m_ZipCode[m_CacheZipCode[index]].DivisionTaxKey();
-		iCtryCode =
-		    GetCountryCode(m_ZipCode[m_CacheZipCode[index]].ZC_CODE_CSTR());
+		iCtryCode = GetCountryCode(m_ZipCode[m_CacheZipCode[index]].ZC_CODE_CSTR());
 
 		// We're done, so bail out.
 		return;

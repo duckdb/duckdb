@@ -13,7 +13,7 @@
 using namespace duckdb;
 using namespace std;
 
-DataTable::DataTable(StorageManager &storage, std::string schema, std::string table, std::vector<TypeId> types_)
+DataTable::DataTable(StorageManager &storage, string schema, string table, vector<TypeId> types_)
     : schema(schema), table(table), types(types_), serializer(types), storage(storage) {
 	size_t accumulative_size = 0;
 	for (size_t i = 0; i < types.size(); i++) {
@@ -461,7 +461,7 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, const vector<c
 	}
 }
 
-void DataTable::Fetch(Transaction &transaction, DataChunk &result, std::vector<column_t> &column_ids,
+void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids,
                       Vector &row_identifiers) {
 	assert(row_identifiers.type == TypeId::POINTER);
 	auto row_ids = (uint64_t *)row_identifiers.data;
@@ -543,7 +543,7 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, std::vector<c
 	current_chunk->ReleaseSharedLock();
 }
 
-void DataTable::CreateIndexScan(ScanStructure &structure, std::vector<column_t> &column_ids, DataChunk &result) {
+void DataTable::CreateIndexScan(ScanStructure &structure, vector<column_t> &column_ids, DataChunk &result) {
 	// scan the base table
 	size_t result_count = 0;
 	while (structure.chunk) {

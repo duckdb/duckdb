@@ -1,4 +1,3 @@
-
 #include "parser/transformer.hpp"
 
 using namespace duckdb;

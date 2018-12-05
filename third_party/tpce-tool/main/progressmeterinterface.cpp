@@ -49,8 +49,7 @@ void ProgressMeterInterface::display() const {
 void ProgressMeterInterface::inc(int count UNUSED) {
 }
 
-void ProgressMeterInterface::message(const std::string &mesg UNUSED,
-                                     int level UNUSED) {
+void ProgressMeterInterface::message(const std::string &mesg UNUSED, int level UNUSED) {
 }
 
 } // namespace TPCE

@@ -1,4 +1,3 @@
-
 #include "parser/expression/aggregate_expression.hpp"
 
 #include "common/serializer.hpp"
@@ -6,8 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-AggregateExpression::AggregateExpression(ExpressionType type,
-                                         unique_ptr<Expression> child)
+AggregateExpression::AggregateExpression(ExpressionType type, unique_ptr<Expression> child)
     : Expression(type), index(0) {
 
 	// translate COUNT(*) into AGGREGATE_COUNT_STAR
@@ -96,8 +94,7 @@ void AggregateExpression::ResolveType() {
 	}
 }
 
-void AggregateExpression::GetAggregates(
-    vector<AggregateExpression *> &expressions) {
+void AggregateExpression::GetAggregates(vector<AggregateExpression *> &expressions) {
 	size_t size = expressions.size();
 	Expression::GetAggregates(expressions);
 	if (size == expressions.size()) {
@@ -122,12 +119,9 @@ void AggregateExpression::Serialize(Serializer &serializer) {
 	Expression::Serialize(serializer);
 }
 
-unique_ptr<Expression>
-AggregateExpression::Deserialize(ExpressionDeserializeInfo *info,
-                                 Deserializer &source) {
+unique_ptr<Expression> AggregateExpression::Deserialize(ExpressionDeserializeInfo *info, Deserializer &source) {
 	if (info->children.size() > 1) {
-		throw SerializationException(
-		    "More than one child for aggregate expression!");
+		throw SerializationException("More than one child for aggregate expression!");
 	}
 
 	auto child = info->children.size() == 0 ? nullptr : move(info->children[0]);

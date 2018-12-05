@@ -133,25 +133,18 @@ void DataFileManager::CleanUp() {
 	}
 }
 
-DataFileManager::DataFileManager(TIdent configuredCustomerCount,
-                                 TIdent activeCustomerCount)
-    : configuredCustomers(configuredCustomerCount),
-      activeCustomers(activeCustomerCount), areaCodeDataFile(0),
-      chargeDataFile(0), commissionRateDataFile(0),
-      companyCompetitorDataFile(0), companyDataFile(0),
-      companySPRateDataFile(0), exchangeDataFile(0), femaleFirstNameDataFile(0),
-      industryDataFile(0), lastNameDataFile(0), maleFirstNameDataFile(0),
-      newsDataFile(0), nonTaxableAccountNameDataFile(0), sectorDataFile(0),
-      securityDataFile(0), statusTypeDataFile(0), streetNameDataFile(0),
-      streetSuffixDataFile(0), taxableAccountNameDataFile(0),
-      taxRateCountryDataFile(0), taxRateDivisionDataFile(0),
-      tradeTypeDataFile(0), zipCodeDataFile(0), companyCompetitorFile(0),
-      companyFile(0), securityFile(0), taxRateFile(0) {
+DataFileManager::DataFileManager(TIdent configuredCustomerCount, TIdent activeCustomerCount)
+    : configuredCustomers(configuredCustomerCount), activeCustomers(activeCustomerCount), areaCodeDataFile(0),
+      chargeDataFile(0), commissionRateDataFile(0), companyCompetitorDataFile(0), companyDataFile(0),
+      companySPRateDataFile(0), exchangeDataFile(0), femaleFirstNameDataFile(0), industryDataFile(0),
+      lastNameDataFile(0), maleFirstNameDataFile(0), newsDataFile(0), nonTaxableAccountNameDataFile(0),
+      sectorDataFile(0), securityDataFile(0), statusTypeDataFile(0), streetNameDataFile(0), streetSuffixDataFile(0),
+      taxableAccountNameDataFile(0), taxRateCountryDataFile(0), taxRateDivisionDataFile(0), tradeTypeDataFile(0),
+      zipCodeDataFile(0), companyCompetitorFile(0), companyFile(0), securityFile(0), taxRateFile(0) {
 
 	// WARNING: This code is "brittle" since it is highly dependant on
 	// the enum definition.
-	for (int fileType = AREA_CODE_DATA_FILE; fileType <= ZIPCODE_DATA_FILE;
-	     ++fileType) {
+	for (int fileType = AREA_CODE_DATA_FILE; fileType <= ZIPCODE_DATA_FILE; ++fileType) {
 		loadFile((DataFileType)fileType);
 	}
 }
@@ -164,102 +157,78 @@ DataFileManager::~DataFileManager() {
 void DataFileManager::loadFile(std::istream &source, DataFileType fileType) {
 	switch (fileType) {
 	case AREA_CODE_DATA_FILE:
-		loadFile<std::istream &, StreamSplitter, AreaCodeDataFile_t>(
-		    source, &areaCodeDataFile);
+		loadFile<std::istream &, StreamSplitter, AreaCodeDataFile_t>(source, &areaCodeDataFile);
 		break;
 	case CHARGE_DATA_FILE:
-		loadFile<std::istream &, StreamSplitter, ChargeDataFile_t>(
-		    source, &chargeDataFile);
+		loadFile<std::istream &, StreamSplitter, ChargeDataFile_t>(source, &chargeDataFile);
 		break;
 	case COMMISSION_RATE_DATA_FILE:
-		loadFile<std::istream &, StreamSplitter, CommissionRateDataFile_t>(
-		    source, &commissionRateDataFile);
+		loadFile<std::istream &, StreamSplitter, CommissionRateDataFile_t>(source, &commissionRateDataFile);
 		break;
 	case COMPANY_COMPETITOR_DATA_FILE:
-		loadFile<std::istream &, StreamSplitter, CompanyCompetitorDataFile_t>(
-		    source, &companyCompetitorDataFile);
+		loadFile<std::istream &, StreamSplitter, CompanyCompetitorDataFile_t>(source, &companyCompetitorDataFile);
 		break;
 	case COMPANY_DATA_FILE:
-		loadFile<std::istream &, StreamSplitter, CompanyDataFile_t>(
-		    source, &companyDataFile);
+		loadFile<std::istream &, StreamSplitter, CompanyDataFile_t>(source, &companyDataFile);
 		break;
 	case COMPANY_SP_RATE_DATA_FILE:
-		loadFile<std::istream &, StreamSplitter, CompanySPRateDataFile_t>(
-		    source, &companySPRateDataFile);
+		loadFile<std::istream &, StreamSplitter, CompanySPRateDataFile_t>(source, &companySPRateDataFile);
 		break;
 	case EXCHANGE_DATA_FILE:
-		loadFile<std::istream &, StreamSplitter, ExchangeDataFile_t>(
-		    source, &exchangeDataFile);
+		loadFile<std::istream &, StreamSplitter, ExchangeDataFile_t>(source, &exchangeDataFile);
 		break;
 	case FEMALE_FIRST_NAME_DATA_FILE:
-		loadFile<std::istream &, StreamSplitter, FemaleFirstNameDataFile_t>(
-		    source, &femaleFirstNameDataFile);
+		loadFile<std::istream &, StreamSplitter, FemaleFirstNameDataFile_t>(source, &femaleFirstNameDataFile);
 		break;
 	case INDUSTRY_DATA_FILE:
-		loadFile<std::istream &, StreamSplitter, IndustryDataFile_t>(
-		    source, &industryDataFile);
+		loadFile<std::istream &, StreamSplitter, IndustryDataFile_t>(source, &industryDataFile);
 		break;
 	case LAST_NAME_DATA_FILE:
-		loadFile<std::istream &, StreamSplitter, LastNameDataFile_t>(
-		    source, &lastNameDataFile);
+		loadFile<std::istream &, StreamSplitter, LastNameDataFile_t>(source, &lastNameDataFile);
 		break;
 	case MALE_FIRST_NAME_DATA_FILE:
-		loadFile<std::istream &, StreamSplitter, MaleFirstNameDataFile_t>(
-		    source, &maleFirstNameDataFile);
+		loadFile<std::istream &, StreamSplitter, MaleFirstNameDataFile_t>(source, &maleFirstNameDataFile);
 		break;
 	case NEWS_DATA_FILE:
-		loadFile<std::istream &, StreamSplitter, NewsDataFile_t>(source,
-		                                                         &newsDataFile);
+		loadFile<std::istream &, StreamSplitter, NewsDataFile_t>(source, &newsDataFile);
 		break;
 	case NON_TAXABLE_ACCOUNT_NAME_DATA_FILE:
-		loadFile<std::istream &, StreamSplitter,
-		         NonTaxableAccountNameDataFile_t>(
-		    source, &nonTaxableAccountNameDataFile);
+		loadFile<std::istream &, StreamSplitter, NonTaxableAccountNameDataFile_t>(source,
+		                                                                          &nonTaxableAccountNameDataFile);
 		break;
 	case SECTOR_DATA_FILE:
-		loadFile<std::istream &, StreamSplitter, SectorDataFile_t>(
-		    source, &sectorDataFile);
+		loadFile<std::istream &, StreamSplitter, SectorDataFile_t>(source, &sectorDataFile);
 		break;
 	case SECURITY_DATA_FILE:
-		loadFile<std::istream &, StreamSplitter, SecurityDataFile_t>(
-		    source, &securityDataFile);
+		loadFile<std::istream &, StreamSplitter, SecurityDataFile_t>(source, &securityDataFile);
 		break;
 	case STATUS_TYPE_DATA_FILE:
-		loadFile<std::istream &, StreamSplitter, StatusTypeDataFile_t>(
-		    source, &statusTypeDataFile);
+		loadFile<std::istream &, StreamSplitter, StatusTypeDataFile_t>(source, &statusTypeDataFile);
 		break;
 	case STREET_NAME_DATA_FILE:
-		loadFile<std::istream &, StreamSplitter, StreetNameDataFile_t>(
-		    source, &streetNameDataFile);
+		loadFile<std::istream &, StreamSplitter, StreetNameDataFile_t>(source, &streetNameDataFile);
 		break;
 	case STREET_SUFFIX_DATA_FILE:
-		loadFile<std::istream &, StreamSplitter, StreetSuffixDataFile_t>(
-		    source, &streetSuffixDataFile);
+		loadFile<std::istream &, StreamSplitter, StreetSuffixDataFile_t>(source, &streetSuffixDataFile);
 		break;
 	case TAXABLE_ACCOUNT_NAME_DATA_FILE:
-		loadFile<std::istream &, StreamSplitter, TaxableAccountNameDataFile_t>(
-		    source, &taxableAccountNameDataFile);
+		loadFile<std::istream &, StreamSplitter, TaxableAccountNameDataFile_t>(source, &taxableAccountNameDataFile);
 		break;
 	case TAX_RATE_COUNTRY_DATA_FILE:
-		loadFile<std::istream &, StreamSplitter, TaxRateCountryDataFile_t>(
-		    source, &taxRateCountryDataFile);
+		loadFile<std::istream &, StreamSplitter, TaxRateCountryDataFile_t>(source, &taxRateCountryDataFile);
 		break;
 	case TAX_RATE_DIVISION_DATA_FILE:
-		loadFile<std::istream &, StreamSplitter, TaxRateDivisionDataFile_t>(
-		    source, &taxRateDivisionDataFile);
+		loadFile<std::istream &, StreamSplitter, TaxRateDivisionDataFile_t>(source, &taxRateDivisionDataFile);
 		break;
 	case TRADE_TYPE_DATA_FILE:
-		loadFile<std::istream &, StreamSplitter, TradeTypeDataFile_t>(
-		    source, &tradeTypeDataFile);
+		loadFile<std::istream &, StreamSplitter, TradeTypeDataFile_t>(source, &tradeTypeDataFile);
 		break;
 	case ZIPCODE_DATA_FILE:
-		loadFile<std::istream &, StreamSplitter, ZipCodeDataFile_t>(
-		    source, &zipCodeDataFile);
+		loadFile<std::istream &, StreamSplitter, ZipCodeDataFile_t>(source, &zipCodeDataFile);
 		break;
 	default:
 		// Should never get here.
-		throw std::logic_error(
-		    "Attempt to load by istream an unrecognized data file type.");
+		throw std::logic_error("Attempt to load by istream an unrecognized data file type.");
 	}
 }
 
@@ -274,98 +243,83 @@ void DataFileManager::loadFile(DataFileType fileType) const {
 	// Set up the appropriate file name.
 	switch (fileType) {
 	case AREA_CODE_DATA_FILE:
-		loadFile<std::string &, TextFileSplitter, AreaCodeDataFile_t>(
-		    AreaCodeConstantString, &areaCodeDataFile);
+		loadFile<std::string &, TextFileSplitter, AreaCodeDataFile_t>(AreaCodeConstantString, &areaCodeDataFile);
 		break;
 	case CHARGE_DATA_FILE:
-		loadFile<std::string &, TextFileSplitter, ChargeDataFile_t>(
-		    ChargeConstantString, &chargeDataFile);
+		loadFile<std::string &, TextFileSplitter, ChargeDataFile_t>(ChargeConstantString, &chargeDataFile);
 		break;
 	case COMMISSION_RATE_DATA_FILE:
-		loadFile<std::string &, TextFileSplitter, CommissionRateDataFile_t>(
-		    CommissionRateConstantString, &commissionRateDataFile);
+		loadFile<std::string &, TextFileSplitter, CommissionRateDataFile_t>(CommissionRateConstantString,
+		                                                                    &commissionRateDataFile);
 		break;
 	case COMPANY_COMPETITOR_DATA_FILE:
-		loadFile<std::string &, TextFileSplitter, CompanyCompetitorDataFile_t>(
-		    CompanyCompetitorConstantString, &companyCompetitorDataFile);
+		loadFile<std::string &, TextFileSplitter, CompanyCompetitorDataFile_t>(CompanyCompetitorConstantString,
+		                                                                       &companyCompetitorDataFile);
 		break;
 	case COMPANY_DATA_FILE:
-		loadFile<std::string &, TextFileSplitter, CompanyDataFile_t>(
-		    CompanyConstantString, &companyDataFile);
+		loadFile<std::string &, TextFileSplitter, CompanyDataFile_t>(CompanyConstantString, &companyDataFile);
 		break;
 	case COMPANY_SP_RATE_DATA_FILE:
-		loadFile<std::string &, TextFileSplitter, CompanySPRateDataFile_t>(
-		    CompanySPRateConstantString, &companySPRateDataFile);
+		loadFile<std::string &, TextFileSplitter, CompanySPRateDataFile_t>(CompanySPRateConstantString,
+		                                                                   &companySPRateDataFile);
 		break;
 	case EXCHANGE_DATA_FILE:
-		loadFile<std::string &, TextFileSplitter, ExchangeDataFile_t>(
-		    ExchangeConstantString, &exchangeDataFile);
+		loadFile<std::string &, TextFileSplitter, ExchangeDataFile_t>(ExchangeConstantString, &exchangeDataFile);
 		break;
 	case FEMALE_FIRST_NAME_DATA_FILE:
-		loadFile<std::string &, TextFileSplitter, FemaleFirstNameDataFile_t>(
-		    FemaleFirstNameConstantString, &femaleFirstNameDataFile);
+		loadFile<std::string &, TextFileSplitter, FemaleFirstNameDataFile_t>(FemaleFirstNameConstantString,
+		                                                                     &femaleFirstNameDataFile);
 		break;
 	case INDUSTRY_DATA_FILE:
-		loadFile<std::string &, TextFileSplitter, IndustryDataFile_t>(
-		    IndustryConstantString, &industryDataFile);
+		loadFile<std::string &, TextFileSplitter, IndustryDataFile_t>(IndustryConstantString, &industryDataFile);
 		break;
 	case LAST_NAME_DATA_FILE:
-		loadFile<std::string &, TextFileSplitter, LastNameDataFile_t>(
-		    LastNameConstantString, &lastNameDataFile);
+		loadFile<std::string &, TextFileSplitter, LastNameDataFile_t>(LastNameConstantString, &lastNameDataFile);
 		break;
 	case MALE_FIRST_NAME_DATA_FILE:
-		loadFile<std::string &, TextFileSplitter, MaleFirstNameDataFile_t>(
-		    MaleFirstNameConstantString, &maleFirstNameDataFile);
+		loadFile<std::string &, TextFileSplitter, MaleFirstNameDataFile_t>(MaleFirstNameConstantString,
+		                                                                   &maleFirstNameDataFile);
 		break;
 	case NEWS_DATA_FILE:
-		loadFile<std::string &, TextFileSplitter, NewsDataFile_t>(
-		    LastNameConstantString, &newsDataFile);
+		loadFile<std::string &, TextFileSplitter, NewsDataFile_t>(LastNameConstantString, &newsDataFile);
 		break;
 	case NON_TAXABLE_ACCOUNT_NAME_DATA_FILE:
-		loadFile<std::string &, TextFileSplitter,
-		         NonTaxableAccountNameDataFile_t>(
-		    NonTaxableAccountNameConstantString,
-		    &nonTaxableAccountNameDataFile);
+		loadFile<std::string &, TextFileSplitter, NonTaxableAccountNameDataFile_t>(NonTaxableAccountNameConstantString,
+		                                                                           &nonTaxableAccountNameDataFile);
 		break;
 	case SECTOR_DATA_FILE:
-		loadFile<std::string &, TextFileSplitter, SectorDataFile_t>(
-		    SectorConstantString, &sectorDataFile);
+		loadFile<std::string &, TextFileSplitter, SectorDataFile_t>(SectorConstantString, &sectorDataFile);
 		break;
 	case SECURITY_DATA_FILE:
-		loadFile<std::string &, TextFileSplitter, SecurityDataFile_t>(
-		    SecurityConstantString, &securityDataFile);
+		loadFile<std::string &, TextFileSplitter, SecurityDataFile_t>(SecurityConstantString, &securityDataFile);
 		break;
 	case STATUS_TYPE_DATA_FILE:
-		loadFile<std::string &, TextFileSplitter, StatusTypeDataFile_t>(
-		    StatusTypeConstantString, &statusTypeDataFile);
+		loadFile<std::string &, TextFileSplitter, StatusTypeDataFile_t>(StatusTypeConstantString, &statusTypeDataFile);
 		break;
 	case STREET_NAME_DATA_FILE:
-		loadFile<std::string &, TextFileSplitter, StreetNameDataFile_t>(
-		    StreetNameConstantString, &streetNameDataFile);
+		loadFile<std::string &, TextFileSplitter, StreetNameDataFile_t>(StreetNameConstantString, &streetNameDataFile);
 		break;
 	case STREET_SUFFIX_DATA_FILE:
-		loadFile<std::string &, TextFileSplitter, StreetSuffixDataFile_t>(
-		    StreetSuffixConstantString, &streetSuffixDataFile);
+		loadFile<std::string &, TextFileSplitter, StreetSuffixDataFile_t>(StreetSuffixConstantString,
+		                                                                  &streetSuffixDataFile);
 		break;
 	case TAXABLE_ACCOUNT_NAME_DATA_FILE:
-		loadFile<std::string &, TextFileSplitter, TaxableAccountNameDataFile_t>(
-		    TaxableAccountNameConstantString, &taxableAccountNameDataFile);
+		loadFile<std::string &, TextFileSplitter, TaxableAccountNameDataFile_t>(TaxableAccountNameConstantString,
+		                                                                        &taxableAccountNameDataFile);
 		break;
 	case TAX_RATE_COUNTRY_DATA_FILE:
-		loadFile<std::string &, TextFileSplitter, TaxRateCountryDataFile_t>(
-		    TaxRatesCountryConstantString, &taxRateCountryDataFile);
+		loadFile<std::string &, TextFileSplitter, TaxRateCountryDataFile_t>(TaxRatesCountryConstantString,
+		                                                                    &taxRateCountryDataFile);
 		break;
 	case TAX_RATE_DIVISION_DATA_FILE:
-		loadFile<std::string &, TextFileSplitter, TaxRateDivisionDataFile_t>(
-		    TaxRatesDivisionConstantString, &taxRateDivisionDataFile);
+		loadFile<std::string &, TextFileSplitter, TaxRateDivisionDataFile_t>(TaxRatesDivisionConstantString,
+		                                                                     &taxRateDivisionDataFile);
 		break;
 	case TRADE_TYPE_DATA_FILE:
-		loadFile<std::string &, TextFileSplitter, TradeTypeDataFile_t>(
-		    TradeTypeConstantString, &tradeTypeDataFile);
+		loadFile<std::string &, TextFileSplitter, TradeTypeDataFile_t>(TradeTypeConstantString, &tradeTypeDataFile);
 		break;
 	case ZIPCODE_DATA_FILE:
-		loadFile<std::string &, TextFileSplitter, ZipCodeDataFile_t>(
-		    ZipCodeConstantString, &zipCodeDataFile);
+		loadFile<std::string &, TextFileSplitter, ZipCodeDataFile_t>(ZipCodeConstantString, &zipCodeDataFile);
 		break;
 	default:
 		// Should never get here.
@@ -390,8 +344,7 @@ const ChargeDataFile_t &DataFileManager::ChargeDataFile() const {
 	return *chargeDataFile;
 }
 
-const CommissionRateDataFile_t &
-DataFileManager::CommissionRateDataFile() const {
+const CommissionRateDataFile_t &DataFileManager::CommissionRateDataFile() const {
 	if (!commissionRateDataFile) {
 		// Need to load the file.
 		loadFile(COMMISSION_RATE_DATA_FILE);
@@ -399,8 +352,7 @@ DataFileManager::CommissionRateDataFile() const {
 	return *commissionRateDataFile;
 }
 
-const CompanyCompetitorDataFile_t &
-DataFileManager::CompanyCompetitorDataFile() const {
+const CompanyCompetitorDataFile_t &DataFileManager::CompanyCompetitorDataFile() const {
 	if (!companyCompetitorDataFile) {
 		// Need to load the file.
 		loadFile(COMPANY_COMPETITOR_DATA_FILE);
@@ -432,8 +384,7 @@ const ExchangeDataFile_t &DataFileManager::ExchangeDataFile() const {
 	return *exchangeDataFile;
 }
 
-const FemaleFirstNameDataFile_t &
-DataFileManager::FemaleFirstNameDataFile() const {
+const FemaleFirstNameDataFile_t &DataFileManager::FemaleFirstNameDataFile() const {
 	if (!femaleFirstNameDataFile) {
 		// Need to load the file.
 		loadFile(FEMALE_FIRST_NAME_DATA_FILE);
@@ -473,8 +424,7 @@ const NewsDataFile_t &DataFileManager::NewsDataFile() const {
 	return *newsDataFile;
 }
 
-const NonTaxableAccountNameDataFile_t &
-DataFileManager::NonTaxableAccountNameDataFile() const {
+const NonTaxableAccountNameDataFile_t &DataFileManager::NonTaxableAccountNameDataFile() const {
 	if (!nonTaxableAccountNameDataFile) {
 		// Need to load the file.
 		loadFile(NON_TAXABLE_ACCOUNT_NAME_DATA_FILE);
@@ -522,8 +472,7 @@ const StreetSuffixDataFile_t &DataFileManager::StreetSuffixDataFile() const {
 	return *streetSuffixDataFile;
 }
 
-const TaxableAccountNameDataFile_t &
-DataFileManager::TaxableAccountNameDataFile() const {
+const TaxableAccountNameDataFile_t &DataFileManager::TaxableAccountNameDataFile() const {
 	if (!taxableAccountNameDataFile) {
 		// Need to load the file.
 		loadFile(TAXABLE_ACCOUNT_NAME_DATA_FILE);
@@ -531,8 +480,7 @@ DataFileManager::TaxableAccountNameDataFile() const {
 	return *taxableAccountNameDataFile;
 }
 
-const TaxRateCountryDataFile_t &
-DataFileManager::TaxRateCountryDataFile() const {
+const TaxRateCountryDataFile_t &DataFileManager::TaxRateCountryDataFile() const {
 	if (!taxRateCountryDataFile) {
 		// Need to load the file.
 		loadFile(TAX_RATE_COUNTRY_DATA_FILE);
@@ -540,8 +488,7 @@ DataFileManager::TaxRateCountryDataFile() const {
 	return *taxRateCountryDataFile;
 }
 
-const TaxRateDivisionDataFile_t &
-DataFileManager::TaxRateDivisionDataFile() const {
+const TaxRateDivisionDataFile_t &DataFileManager::TaxRateDivisionDataFile() const {
 	if (!taxRateDivisionDataFile) {
 		// Need to load the file.
 		loadFile(TAX_RATE_DIVISION_DATA_FILE);
@@ -569,9 +516,8 @@ const CCompanyCompetitorFile &DataFileManager::CompanyCompetitorFile() const {
 	if (!companyCompetitorFile) {
 		// Need to create the "file". Fully qualify constructor to distinquish
 		// from this method.
-		companyCompetitorFile = new CCompanyCompetitorFile(
-		    CompanyCompetitorDataFile(), configuredCustomers, activeCustomers,
-		    CompanyDataFile().size());
+		companyCompetitorFile = new CCompanyCompetitorFile(CompanyCompetitorDataFile(), configuredCustomers,
+		                                                   activeCustomers, CompanyDataFile().size());
 	}
 	return *companyCompetitorFile;
 }
@@ -580,8 +526,7 @@ const CCompanyFile &DataFileManager::CompanyFile() const {
 	if (!companyFile) {
 		// Need to create the "file". Fully qualify constructor to distinquish
 		// from this method.
-		companyFile = new CCompanyFile(CompanyDataFile(), configuredCustomers,
-		                               activeCustomers);
+		companyFile = new CCompanyFile(CompanyDataFile(), configuredCustomers, activeCustomers);
 	}
 	return *companyFile;
 }
@@ -591,8 +536,7 @@ const CSecurityFile &DataFileManager::SecurityFile() const {
 		// Need to create the "file". Fully qualify constructor to distinquish
 		// from this method.
 		securityFile =
-		    new CSecurityFile(SecurityDataFile(), configuredCustomers,
-		                      activeCustomers, CompanyDataFile().size());
+		    new CSecurityFile(SecurityDataFile(), configuredCustomers, activeCustomers, CompanyDataFile().size());
 	}
 	return *securityFile;
 }
@@ -601,8 +545,7 @@ const CTaxRateFile &DataFileManager::TaxRateFile() const {
 	if (!taxRateFile) {
 		// Need to create the "file". Fully qualify constructor to distinquish
 		// from this method.
-		taxRateFile = new CTaxRateFile(TaxRateCountryDataFile(),
-		                               TaxRateDivisionDataFile());
+		taxRateFile = new CTaxRateFile(TaxRateCountryDataFile(), TaxRateDivisionDataFile());
 	}
 	return *taxRateFile;
 }

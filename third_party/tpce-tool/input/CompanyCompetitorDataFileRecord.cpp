@@ -45,8 +45,7 @@
 
 using namespace TPCE;
 
-CompanyCompetitorDataFileRecord::CompanyCompetitorDataFileRecord(
-    const std::deque<std::string> &fields) {
+CompanyCompetitorDataFileRecord::CompanyCompetitorDataFileRecord(const std::deque<std::string> &fields) {
 	if (fieldCount != fields.size()) {
 		throw std::runtime_error("Incorrect field count.");
 	}
@@ -75,11 +74,9 @@ const char *CompanyCompetitorDataFileRecord::CP_IN_ID_CSTR() const {
 	return cp_in_idCStr;
 }
 
-std::string
-CompanyCompetitorDataFileRecord::ToString(char fieldSeparator) const {
+std::string CompanyCompetitorDataFileRecord::ToString(char fieldSeparator) const {
 	// Facilitate encapsulation by using public interface to fields.
 	std::ostringstream msg;
-	msg << CP_CO_ID() << fieldSeparator << CP_COMP_CO_ID() << fieldSeparator
-	    << CP_IN_ID();
+	msg << CP_CO_ID() << fieldSeparator << CP_COMP_CO_ID() << fieldSeparator << CP_IN_ID();
 	return msg.str();
 }

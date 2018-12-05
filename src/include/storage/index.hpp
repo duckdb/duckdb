@@ -21,10 +21,10 @@ class ClientContext;
 class Transaction;
 
 struct IndexScanState {
-	std::vector<column_t> column_ids;
+	vector<column_t> column_ids;
 	Expression &expression;
 
-	IndexScanState(std::vector<column_t> column_ids, Expression &expression)
+	IndexScanState(vector<column_t> column_ids, Expression &expression)
 	    : column_ids(column_ids), expression(expression) {
 	}
 	virtual ~IndexScanState() {
@@ -43,8 +43,8 @@ class Index {
 
 	//! Initialize a scan on the index with the given expression and column ids
 	//! to fetch from the base table
-	virtual std::unique_ptr<IndexScanState>
-	InitializeScan(Transaction &transaction, std::vector<column_t> column_ids,
+	virtual unique_ptr<IndexScanState>
+	InitializeScan(Transaction &transaction, vector<column_t> column_ids,
 	               Expression *expression) = 0;
 	//! Perform a lookup on the index
 	virtual void Scan(Transaction &transaction, IndexScanState *ss,
@@ -55,7 +55,7 @@ class Index {
 	                    size_t row_identifier_start) = 0;
 	//! Called when data inside the index is updated
 	virtual void Update(ClientContext &context,
-	                    std::vector<column_t> &column_ids,
+	                    vector<column_t> &column_ids,
 	                    DataChunk &update_data, Vector &row_identifiers) = 0;
 
 	// FIXME: what about delete?

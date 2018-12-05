@@ -99,8 +99,7 @@ int mk_w_web_site(void *info_arr, ds_key_t index) {
 	 * generate a new one then reset associate fields (e.g., rec_start_date
 	 * minimums)
 	 */
-	if (setSCDKeys(WEB_SITE_ID, index, r->web_site_id,
-	               &r->web_rec_start_date_id, &r->web_rec_end_date_id)) {
+	if (setSCDKeys(WEB_SITE_ID, index, r->web_site_id, &r->web_rec_start_date_id, &r->web_rec_end_date_id)) {
 		r->web_open_date = mk_join(WEB_OPEN_DATE, DATET, index);
 		r->web_close_date = mk_join(WEB_CLOSE_DATE, DATET, index);
 		if (r->web_close_date > r->web_rec_end_date_id)
@@ -122,65 +121,47 @@ int mk_w_web_site(void *info_arr, ds_key_t index) {
 	pick_distribution(&sName1, "first_names", 1, 1, WEB_MANAGER);
 	pick_distribution(&sName2, "last_names", 1, 1, WEB_MANAGER);
 	sprintf(r->web_manager, "%s %s", sName1, sName2);
-	changeSCD(SCD_CHAR, &r->web_manager, &rOldValues->web_manager,
-	          &nFieldChangeFlags, bFirstRecord);
+	changeSCD(SCD_CHAR, &r->web_manager, &rOldValues->web_manager, &nFieldChangeFlags, bFirstRecord);
 
 	genrand_integer(&r->web_market_id, DIST_UNIFORM, 1, 6, 0, WEB_MARKET_ID);
-	changeSCD(SCD_INT, &r->web_market_id, &rOldValues->web_market_id,
-	          &nFieldChangeFlags, bFirstRecord);
+	changeSCD(SCD_INT, &r->web_market_id, &rOldValues->web_market_id, &nFieldChangeFlags, bFirstRecord);
 
 	gen_text(r->web_market_class, 20, RS_WEB_MARKET_CLASS, WEB_MARKET_CLASS);
-	changeSCD(SCD_CHAR, &r->web_market_class, &rOldValues->web_market_class,
-	          &nFieldChangeFlags, bFirstRecord);
+	changeSCD(SCD_CHAR, &r->web_market_class, &rOldValues->web_market_class, &nFieldChangeFlags, bFirstRecord);
 
 	gen_text(r->web_market_desc, 20, RS_WEB_MARKET_DESC, WEB_MARKET_DESC);
-	changeSCD(SCD_CHAR, &r->web_market_desc, &rOldValues->web_market_desc,
-	          &nFieldChangeFlags, bFirstRecord);
+	changeSCD(SCD_CHAR, &r->web_market_desc, &rOldValues->web_market_desc, &nFieldChangeFlags, bFirstRecord);
 
 	pick_distribution(&sName1, "first_names", 1, 1, WEB_MARKET_MANAGER);
 	pick_distribution(&sName2, "last_names", 1, 1, WEB_MARKET_MANAGER);
 	sprintf(r->web_market_manager, "%s %s", sName1, sName2);
-	changeSCD(SCD_CHAR, &r->web_market_manager, &rOldValues->web_market_manager,
-	          &nFieldChangeFlags, bFirstRecord);
+	changeSCD(SCD_CHAR, &r->web_market_manager, &rOldValues->web_market_manager, &nFieldChangeFlags, bFirstRecord);
 
 	genrand_integer(&r->web_company_id, DIST_UNIFORM, 1, 6, 0, WEB_COMPANY_ID);
-	changeSCD(SCD_INT, &r->web_company_id, &rOldValues->web_company_id,
-	          &nFieldChangeFlags, bFirstRecord);
+	changeSCD(SCD_INT, &r->web_company_id, &rOldValues->web_company_id, &nFieldChangeFlags, bFirstRecord);
 
-	mk_word(r->web_company_name, "Syllables", r->web_company_id,
-	        RS_WEB_COMPANY_NAME, WEB_COMPANY_NAME);
-	changeSCD(SCD_CHAR, &r->web_company_name, &rOldValues->web_company_name,
-	          &nFieldChangeFlags, bFirstRecord);
+	mk_word(r->web_company_name, "Syllables", r->web_company_id, RS_WEB_COMPANY_NAME, WEB_COMPANY_NAME);
+	changeSCD(SCD_CHAR, &r->web_company_name, &rOldValues->web_company_name, &nFieldChangeFlags, bFirstRecord);
 
 	mk_address(&r->web_address, WEB_ADDRESS);
-	changeSCD(SCD_PTR, &r->web_address.city, &rOldValues->web_address.city,
-	          &nFieldChangeFlags, bFirstRecord);
-	changeSCD(SCD_PTR, &r->web_address.county, &rOldValues->web_address.county,
-	          &nFieldChangeFlags, bFirstRecord);
-	changeSCD(SCD_INT, &r->web_address.gmt_offset,
-	          &rOldValues->web_address.gmt_offset, &nFieldChangeFlags,
+	changeSCD(SCD_PTR, &r->web_address.city, &rOldValues->web_address.city, &nFieldChangeFlags, bFirstRecord);
+	changeSCD(SCD_PTR, &r->web_address.county, &rOldValues->web_address.county, &nFieldChangeFlags, bFirstRecord);
+	changeSCD(SCD_INT, &r->web_address.gmt_offset, &rOldValues->web_address.gmt_offset, &nFieldChangeFlags,
 	          bFirstRecord);
-	changeSCD(SCD_PTR, &r->web_address.state, &rOldValues->web_address.state,
-	          &nFieldChangeFlags, bFirstRecord);
-	changeSCD(SCD_PTR, &r->web_address.street_type,
-	          &rOldValues->web_address.street_type, &nFieldChangeFlags,
+	changeSCD(SCD_PTR, &r->web_address.state, &rOldValues->web_address.state, &nFieldChangeFlags, bFirstRecord);
+	changeSCD(SCD_PTR, &r->web_address.street_type, &rOldValues->web_address.street_type, &nFieldChangeFlags,
 	          bFirstRecord);
-	changeSCD(SCD_PTR, &r->web_address.street_name1,
-	          &rOldValues->web_address.street_name1, &nFieldChangeFlags,
+	changeSCD(SCD_PTR, &r->web_address.street_name1, &rOldValues->web_address.street_name1, &nFieldChangeFlags,
 	          bFirstRecord);
-	changeSCD(SCD_PTR, &r->web_address.street_name2,
-	          &rOldValues->web_address.street_name2, &nFieldChangeFlags,
+	changeSCD(SCD_PTR, &r->web_address.street_name2, &rOldValues->web_address.street_name2, &nFieldChangeFlags,
 	          bFirstRecord);
-	changeSCD(SCD_INT, &r->web_address.street_num,
-	          &rOldValues->web_address.street_num, &nFieldChangeFlags,
+	changeSCD(SCD_INT, &r->web_address.street_num, &rOldValues->web_address.street_num, &nFieldChangeFlags,
 	          bFirstRecord);
-	changeSCD(SCD_INT, &r->web_address.zip, &rOldValues->web_address.zip,
-	          &nFieldChangeFlags, bFirstRecord);
+	changeSCD(SCD_INT, &r->web_address.zip, &rOldValues->web_address.zip, &nFieldChangeFlags, bFirstRecord);
 
-	genrand_decimal(&r->web_tax_percentage, DIST_UNIFORM, &dMinTaxPercentage,
-	                &dMaxTaxPercentage, NULL, WEB_TAX_PERCENTAGE);
-	changeSCD(SCD_DEC, &r->web_tax_percentage, &rOldValues->web_tax_percentage,
-	          &nFieldChangeFlags, bFirstRecord);
+	genrand_decimal(&r->web_tax_percentage, DIST_UNIFORM, &dMinTaxPercentage, &dMaxTaxPercentage, NULL,
+	                WEB_TAX_PERCENTAGE);
+	changeSCD(SCD_DEC, &r->web_tax_percentage, &rOldValues->web_tax_percentage, &nFieldChangeFlags, bFirstRecord);
 
 	void *info = append_info_get(info_arr, WEB_SITE);
 	append_row_start(info);
@@ -204,8 +185,7 @@ int mk_w_web_site(void *info_arr, ds_key_t index) {
 	append_varchar(info, &r->web_company_name[0]);
 	append_integer(info, r->web_address.street_num);
 	if (r->web_address.street_name2) {
-		sprintf(szStreetName, "%s %s", r->web_address.street_name1,
-		        r->web_address.street_name2);
+		sprintf(szStreetName, "%s %s", r->web_address.street_name1, r->web_address.street_name2);
 		append_varchar(info, szStreetName);
 	} else
 		append_varchar(info, r->web_address.street_name1);

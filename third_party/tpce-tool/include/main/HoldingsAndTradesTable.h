@@ -58,15 +58,11 @@ namespace TPCE {
 // that tier.
 //
 const int iMinSecuritiesPerAccountRange[3][10] = {
-    {6, 4, 2, 2, 0, 0, 0, 0, 0, 0},
-    {0, 7, 5, 4, 3, 2, 2, 2, 0, 0},
-    {0, 0, 0, 0, 4, 4, 3, 3, 2, 2}};
-const int iMaxSecuritiesPerAccountRange[3][10] = {
-    {14, 16, 18, 18, 00, 00, 00, 00, 00, 00},
-    {00, 13, 15, 16, 17, 18, 18, 18, 00, 00},
-    {00, 00, 00, 00, 16, 16, 17, 17, 18, 18}};
-const int iMaxSecuritiesPerAccount =
-    18; // maximum number of securities in a customer account
+    {6, 4, 2, 2, 0, 0, 0, 0, 0, 0}, {0, 7, 5, 4, 3, 2, 2, 2, 0, 0}, {0, 0, 0, 0, 4, 4, 3, 3, 2, 2}};
+const int iMaxSecuritiesPerAccountRange[3][10] = {{14, 16, 18, 18, 00, 00, 00, 00, 00, 00},
+                                                  {00, 13, 15, 16, 17, 18, 18, 18, 00, 00},
+                                                  {00, 00, 00, 00, 16, 16, 17, 17, 18, 18}};
+const int iMaxSecuritiesPerAccount = 18; // maximum number of securities in a customer account
 
 // const double fMinSecPrice = 20;
 // const double fMaxSecPrice = 30;
@@ -107,17 +103,14 @@ class CHoldingsAndTradesTable {
 	int m_iCacheSizeSFFI;
 	TIdent *m_CacheSFFI;
 
-  public:
+public:
 	// Constructor.
-	CHoldingsAndTradesTable(
-	    const DataFileManager &dfm,
-	    UINT iLoadUnitSize, // # of customers in one load unit
-	    TIdent iCustomerCount,
-	    TIdent iStartFromCustomer = iDefaultStartFromCustomer,
-	    bool bCacheEnabled = false)
+	CHoldingsAndTradesTable(const DataFileManager &dfm,
+	                        UINT iLoadUnitSize, // # of customers in one load unit
+	                        TIdent iCustomerCount, TIdent iStartFromCustomer = iDefaultStartFromCustomer,
+	                        bool bCacheEnabled = false)
 	    : m_rnd(RNGSeedTableDefault),
-	      m_CustomerAccountTable(dfm, iLoadUnitSize, iCustomerCount,
-	                             iStartFromCustomer, bCacheEnabled),
+	      m_CustomerAccountTable(dfm, iLoadUnitSize, iCustomerCount, iStartFromCustomer, bCacheEnabled),
 	      m_bCacheEnabled(bCacheEnabled) {
 		m_iSecCount = dfm.SecurityFile().GetConfiguredSecurityCount();
 
@@ -129,18 +122,15 @@ class CHoldingsAndTradesTable {
 		if (m_bCacheEnabled) {
 			m_iCacheSizeNS = iDefaultLoadUnitSize * iMaxAccountsPerCust;
 			m_iCacheOffsetNS =
-			    m_CustomerAccountTable.GetStartingCA_ID(iStartFromCustomer) +
-			    (iTIdentShift * iMaxAccountsPerCust);
+			    m_CustomerAccountTable.GetStartingCA_ID(iStartFromCustomer) + (iTIdentShift * iMaxAccountsPerCust);
 			m_CacheNS = new int[m_iCacheSizeNS];
 			for (int i = 0; i < m_iCacheSizeNS; i++) {
 				m_CacheNS[i] = 0;
 			}
 
-			m_iCacheSizeSFFI = iDefaultLoadUnitSize * iMaxAccountsPerCust *
-			                   iMaxSecuritiesPerAccount;
+			m_iCacheSizeSFFI = iDefaultLoadUnitSize * iMaxAccountsPerCust * iMaxSecuritiesPerAccount;
 			m_iCacheOffsetSFFI =
-			    m_CustomerAccountTable.GetStartingCA_ID(iStartFromCustomer) +
-			    (iTIdentShift * iMaxAccountsPerCust);
+			    m_CustomerAccountTable.GetStartingCA_ID(iStartFromCustomer) + (iTIdentShift * iMaxAccountsPerCust);
 			m_CacheSFFI = new TIdent[m_iCacheSizeSFFI];
 			for (int i = 0; i < m_iCacheSizeSFFI; i++) {
 				m_CacheSFFI[i] = -1;
@@ -161,10 +151,9 @@ class CHoldingsAndTradesTable {
 	 *   Called only from the loader (CTradeGen), not the driver.
 	 */
 	void InitNextLoadUnit(INT64 TradesToSkip, TIdent iStartingAccountID) {
-		m_rnd.SetSeed(
-		    m_rnd.RndNthElement(RNGSeedTableDefault,
-		                        // there is only 1 call to this RNG per trade
-		                        (RNGSEED)TradesToSkip));
+		m_rnd.SetSeed(m_rnd.RndNthElement(RNGSeedTableDefault,
+		                                  // there is only 1 call to this RNG per trade
+		                                  (RNGSEED)TradesToSkip));
 		if (m_bCacheEnabled) {
 			m_iCacheOffsetNS = iStartingAccountID;
 			for (int i = 0; i < m_iCacheSizeNS; i++) {
@@ -183,8 +172,7 @@ class CHoldingsAndTradesTable {
 	/*
 	 *   Generate the number of securities for a given customer account.
 	 */
-	int GetNumberOfSecurities(TIdent iCA_ID, eCustomerTier iTier,
-	                          int iAccountCount) {
+	int GetNumberOfSecurities(TIdent iCA_ID, eCustomerTier iTier, int iAccountCount) {
 		int iNumberOfSecurities = 0;
 
 		// We will sometimes get CA_ID values that are outside the current
@@ -200,14 +188,11 @@ class CHoldingsAndTradesTable {
 			RNGSEED OldSeed;
 			int iMinRange, iMaxRange;
 
-			iMinRange = iMinSecuritiesPerAccountRange[iTier - eCustomerTierOne]
-			                                         [iAccountCount - 1];
-			iMaxRange = iMaxSecuritiesPerAccountRange[iTier - eCustomerTierOne]
-			                                         [iAccountCount - 1];
+			iMinRange = iMinSecuritiesPerAccountRange[iTier - eCustomerTierOne][iAccountCount - 1];
+			iMaxRange = iMaxSecuritiesPerAccountRange[iTier - eCustomerTierOne][iAccountCount - 1];
 
 			OldSeed = m_rnd.GetSeed();
-			m_rnd.SetSeed(m_rnd.RndNthElement(RNGSeedBaseNumberOfSecurities,
-			                                  (RNGSEED)iCA_ID));
+			m_rnd.SetSeed(m_rnd.RndNthElement(RNGSeedBaseNumberOfSecurities, (RNGSEED)iCA_ID));
 			iNumberOfSecurities = m_rnd.RndIntRange(iMinRange, iMaxRange);
 			m_rnd.SetSeed(OldSeed);
 
@@ -222,8 +207,7 @@ class CHoldingsAndTradesTable {
 	 *   Get seed for the starting security ID seed for a given customer id.
 	 */
 	RNGSEED GetStartingSecIDSeed(TIdent iCA_ID) {
-		return (m_rnd.RndNthElement(RNGSeedBaseStartingSecurityID,
-		                            (RNGSEED)iCA_ID * m_iMaxSecuritiesPerCA));
+		return (m_rnd.RndNthElement(RNGSeedBaseStartingSecurityID, (RNGSEED)iCA_ID * m_iMaxSecuritiesPerCA));
 	}
 
 	/*
@@ -237,16 +221,13 @@ class CHoldingsAndTradesTable {
 	 *   RETURNS:
 	 *           security index within the input file (0-based)
 	 */
-	TIdent GetSecurityFlatFileIndex(TIdent iCustomerAccount,
-	                                UINT iSecurityAccountIndex) {
+	TIdent GetSecurityFlatFileIndex(TIdent iCustomerAccount, UINT iSecurityAccountIndex) {
 		TIdent iSecurityFlatFileIndex = -1;
 
 		// We will sometimes get CA_ID values that are outside the current
 		// load unit (cached range).  We need to check for this case
 		// and avoid the lookup (as we will segfault or get bogus data.)
-		TIdent index =
-		    (iCustomerAccount - m_iCacheOffsetSFFI) * iMaxSecuritiesPerAccount +
-		    iSecurityAccountIndex - 1;
+		TIdent index = (iCustomerAccount - m_iCacheOffsetSFFI) * iMaxSecuritiesPerAccount + iSecurityAccountIndex - 1;
 		bool bCheckCache = (index >= 0 && index < m_iCacheSizeSFFI);
 		if (m_bCacheEnabled && bCheckCache) {
 			iSecurityFlatFileIndex = m_CacheSFFI[index];
@@ -254,8 +235,7 @@ class CHoldingsAndTradesTable {
 
 		if (iSecurityFlatFileIndex == -1) {
 			RNGSEED OldSeed;
-			UINT iGeneratedIndexCount =
-			    0; // number of currently generated unique flat file indexes
+			UINT iGeneratedIndexCount = 0; // number of currently generated unique flat file indexes
 			UINT i;
 
 			OldSeed = m_rnd.GetSeed();
@@ -264,8 +244,7 @@ class CHoldingsAndTradesTable {
 			iGeneratedIndexCount = 0;
 
 			while (iGeneratedIndexCount < iSecurityAccountIndex) {
-				iSecurityFlatFileIndex =
-				    m_rnd.RndInt64Range(0, m_iSecCount - 1);
+				iSecurityFlatFileIndex = m_rnd.RndInt64Range(0, m_iSecCount - 1);
 
 				for (i = 0; i < iGeneratedIndexCount; ++i) {
 					if (m_SecurityIds[i] == iSecurityFlatFileIndex)
@@ -315,19 +294,15 @@ class CHoldingsAndTradesTable {
 
 		// Select random account for the customer
 		//
-		m_CustomerAccountTable.GenerateRandomAccountId(
-		    m_rnd, iCustomer, iTier, &iCustomerAccount, &iAccountCount);
+		m_CustomerAccountTable.GenerateRandomAccountId(m_rnd, iCustomer, iTier, &iCustomerAccount, &iAccountCount);
 
-		iTotalAccountSecurities =
-		    GetNumberOfSecurities(iCustomerAccount, iTier, iAccountCount);
+		iTotalAccountSecurities = GetNumberOfSecurities(iCustomerAccount, iTier, iAccountCount);
 
 		// Select random security in the account
 		//
-		iSecurityAccountIndex =
-		    (UINT)m_rnd.RndIntRange(1, iTotalAccountSecurities);
+		iSecurityAccountIndex = (UINT)m_rnd.RndIntRange(1, iTotalAccountSecurities);
 
-		iSecurityFlatFileIndex =
-		    GetSecurityFlatFileIndex(iCustomerAccount, iSecurityAccountIndex);
+		iSecurityFlatFileIndex = GetSecurityFlatFileIndex(iCustomerAccount, iSecurityAccountIndex);
 
 		// Return data
 		//

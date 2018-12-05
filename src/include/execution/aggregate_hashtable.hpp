@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // execution/aggregate_hashtable.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -26,12 +24,9 @@ namespace duckdb {
    supports both parallel and sequential modes.
 */
 class SuperLargeHashTable {
-  public:
-	SuperLargeHashTable(size_t initial_capacity,
-	                    std::vector<TypeId> group_types,
-	                    std::vector<TypeId> payload_types,
-	                    std::vector<ExpressionType> aggregate_types,
-	                    bool parallel = false);
+public:
+	SuperLargeHashTable(size_t initial_capacity, vector<TypeId> group_types, vector<TypeId> payload_types,
+	                    vector<ExpressionType> aggregate_types, bool parallel = false);
 	~SuperLargeHashTable();
 
 	//! Resize the HT to the specified size. Must be larger than the current
@@ -46,22 +41,21 @@ class SuperLargeHashTable {
 	//! Returns the amount of elements found.
 	size_t Scan(size_t &scan_position, DataChunk &group, DataChunk &result);
 
-	void FindOrCreateGroups(DataChunk &groups, Vector &addresses,
-	                        Vector &new_group);
+	void FindOrCreateGroups(DataChunk &groups, Vector &addresses, Vector &new_group);
 
 	//! The stringheap of the AggregateHashTable
 	StringHeap string_heap;
 
-  private:
+private:
 	TupleSerializer group_serializer;
 
 	//! The aggregate types to be computed
-	std::vector<ExpressionType> aggregate_types;
+	vector<ExpressionType> aggregate_types;
 
 	//! The types of the group columns stored in the hashtable
-	std::vector<TypeId> group_types;
+	vector<TypeId> group_types;
 	//! The types of the payload columns stored in the hashtable
-	std::vector<TypeId> payload_types;
+	vector<TypeId> payload_types;
 	//! The size of the payload (aggregations) in bytes
 	size_t payload_width;
 	//! The total tuple size
@@ -78,9 +72,9 @@ class SuperLargeHashTable {
 	//! Whether or not the HT has to support parallel insertion operations
 	bool parallel = false;
 	//! The empty payload data
-	std::unique_ptr<uint8_t[]> empty_payload_data;
+	unique_ptr<uint8_t[]> empty_payload_data;
 
-	std::vector<std::unique_ptr<SuperLargeHashTable>> distinct_hashes;
+	vector<unique_ptr<SuperLargeHashTable>> distinct_hashes;
 
 	//! The size of the initial flag for each cell
 	static constexpr int FLAG_SIZE = sizeof(uint8_t);
@@ -92,7 +86,7 @@ class SuperLargeHashTable {
 	SuperLargeHashTable(const SuperLargeHashTable &) = delete;
 
 	//! unique_ptr to indicate the ownership
-	std::unique_ptr<uint8_t[]> owned_data;
+	unique_ptr<uint8_t[]> owned_data;
 };
 
 } // namespace duckdb

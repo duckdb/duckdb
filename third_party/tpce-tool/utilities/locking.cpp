@@ -90,8 +90,7 @@ CMutex::CMutex() : mutex_() {
 	int rc = pthread_mutex_init(&mutex_, NULL);
 	if (rc != 0) {
 		std::ostringstream strm;
-		strm << "pthread_mutex_init error: " << strerror(rc) << "(" << rc
-		     << ")";
+		strm << "pthread_mutex_init error: " << strerror(rc) << "(" << rc << ")";
 		throw std::runtime_error(strm.str());
 	}
 }
@@ -100,8 +99,7 @@ CMutex::~CMutex() {
 	int rc = pthread_mutex_destroy(&mutex_);
 	if (rc != 0) {
 		std::ostringstream strm;
-		strm << "pthread_mutex_destroy error: " << strerror(rc) << "(" << rc
-		     << ")";
+		strm << "pthread_mutex_destroy error: " << strerror(rc) << "(" << rc << ")";
 	}
 }
 

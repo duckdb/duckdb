@@ -1,5 +1,5 @@
-
 #include "storage/column_statistics.hpp"
+
 #include "common/value_operations/value_operations.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 
@@ -25,10 +25,8 @@ void ColumnStatistics::Update(Vector &new_vector) {
 		max = ValueOperations::Max(max, new_max);
 	}
 	if (new_vector.type == TypeId::VARCHAR) {
-		Value new_max_strlen =
-		    VectorOperations::MaximumStringLength(new_vector);
-		maximum_string_length =
-		    std::max(maximum_string_length, new_max_strlen.value_.pointer);
+		Value new_max_strlen = VectorOperations::MaximumStringLength(new_vector);
+		maximum_string_length = std::max(maximum_string_length, new_max_strlen.value_.pointer);
 	}
 }
 

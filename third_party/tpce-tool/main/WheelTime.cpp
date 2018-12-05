@@ -43,16 +43,14 @@
 
 using namespace TPCE;
 
-CWheelTime::CWheelTime(PWheelConfig pWheelConfig)
-    : m_pWheelConfig(pWheelConfig), m_Cycles(0), m_Index(0) {
+CWheelTime::CWheelTime(PWheelConfig pWheelConfig) : m_pWheelConfig(pWheelConfig), m_Cycles(0), m_Index(0) {
 }
 
 CWheelTime::CWheelTime(PWheelConfig pWheelConfig, INT32 cycles, INT32 index)
     : m_pWheelConfig(pWheelConfig), m_Cycles(cycles), m_Index(index) {
 }
 
-CWheelTime::CWheelTime(PWheelConfig pWheelConfig, CDateTime &Base,
-                       CDateTime &Now, INT32 offset)
+CWheelTime::CWheelTime(PWheelConfig pWheelConfig, CDateTime &Base, CDateTime &Now, INT32 offset)
     : m_pWheelConfig(pWheelConfig) {
 	Set(Base, Now);
 	Add(offset);
@@ -83,8 +81,7 @@ INT32 CWheelTime::Offset(const CWheelTime &Time) {
 
 void CWheelTime::Set(INT32 cycles, INT32 index) {
 	m_Cycles = cycles;
-	m_Index =
-	    index; // DJ - should throw error if Index >= m_pWheelConfig->WheelSize
+	m_Index = index; // DJ - should throw error if Index >= m_pWheelConfig->WheelSize
 }
 
 // Set is overloaded. This version is used by the timer wheel.
@@ -93,9 +90,7 @@ void CWheelTime::Set(CDateTime &Base, CDateTime &Now) {
 
 	// DJ - If Now < Base, then we should probably throw an exception
 
-	offset =
-	    Now.DiffInMilliSeconds(Base) /
-	    m_pWheelConfig->WheelResolution; // convert based on wheel resolution
+	offset = Now.DiffInMilliSeconds(Base) / m_pWheelConfig->WheelResolution; // convert based on wheel resolution
 	m_Cycles = offset / m_pWheelConfig->WheelSize;
 	m_Index = offset % m_pWheelConfig->WheelSize;
 }
@@ -106,16 +101,13 @@ void CWheelTime::Set(CDateTime *pBase, CDateTime *pNow) {
 
 	// DJ - If Now < Base, then we should probably throw an exception
 
-	offset =
-	    pNow->DiffInMilliSeconds(pBase) /
-	    m_pWheelConfig->WheelResolution; // convert based on wheel resolution
+	offset = pNow->DiffInMilliSeconds(pBase) / m_pWheelConfig->WheelResolution; // convert based on wheel resolution
 	m_Cycles = offset / m_pWheelConfig->WheelSize;
 	m_Index = offset % m_pWheelConfig->WheelSize;
 }
 
 bool CWheelTime::operator<(const CWheelTime &Time) {
-	return (m_Cycles == Time.m_Cycles) ? (m_Index < Time.m_Index)
-	                                   : (m_Cycles < Time.m_Cycles);
+	return (m_Cycles == Time.m_Cycles) ? (m_Index < Time.m_Index) : (m_Cycles < Time.m_Cycles);
 }
 
 CWheelTime &CWheelTime::operator=(const CWheelTime &Time) {

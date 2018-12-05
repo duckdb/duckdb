@@ -1,7 +1,6 @@
+#include "parser/constraints/check_constraint.hpp"
 
 #include "common/serializer.hpp"
-
-#include "parser/constraints/check_constraint.hpp"
 
 using namespace std;
 using namespace duckdb;

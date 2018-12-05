@@ -40,8 +40,7 @@
 
 using namespace TPCE;
 
-CSectorTable::CSectorTable(const SectorDataFile_t &dataFile)
-    : FixedTable<SectorDataFile_t, SECTOR_ROW>(dataFile) {
+CSectorTable::CSectorTable(const SectorDataFile_t &dataFile) : FixedTable<SectorDataFile_t, SECTOR_ROW>(dataFile) {
 }
 
 CSectorTable::~CSectorTable() {
@@ -51,6 +50,5 @@ void CSectorTable::LoadTableRow() {
 	const SectorDataFileRecord &dataRecord(df[recordIdx]);
 
 	strncpy(tableRow.SC_ID, dataRecord.SC_ID_CSTR(), sizeof(tableRow.SC_ID));
-	strncpy(tableRow.SC_NAME, dataRecord.SC_NAME_CSTR(),
-	        sizeof(tableRow.SC_NAME));
+	strncpy(tableRow.SC_NAME, dataRecord.SC_NAME_CSTR(), sizeof(tableRow.SC_NAME));
 }

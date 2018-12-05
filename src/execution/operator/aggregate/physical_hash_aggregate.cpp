@@ -98,7 +98,7 @@ unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState(Expres
 	    this, children.size() == 0 ? nullptr : children[0].get(), parent);
 	state->tuples_scanned = 0;
 	vector<TypeId> group_types, payload_types;
-	std::vector<ExpressionType> aggregate_kind;
+	vector<ExpressionType> aggregate_kind;
 	for (auto &expr : groups) {
 		group_types.push_back(expr->return_type);
 	}

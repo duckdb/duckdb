@@ -48,11 +48,10 @@ namespace TPCE {
 class CCustomerPosition {
 	CCustomerPositionDBInterface *m_db;
 
-  public:
+public:
 	CCustomerPosition(CCustomerPositionDBInterface *pDB) : m_db(pDB){};
 
-	void DoTxn(PCustomerPositionTxnInput pTxnInput,
-	           PCustomerPositionTxnOutput pTxnOutput) {
+	void DoTxn(PCustomerPositionTxnInput pTxnInput, PCustomerPositionTxnOutput pTxnOutput) {
 		// Initialization
 		TCustomerPositionFrame1Input Frame1Input;
 		TCustomerPositionFrame1Output Frame1Output;
@@ -63,60 +62,39 @@ class CCustomerPosition {
 
 		// Copy Frame 1 Input
 		Frame1Input.cust_id = pTxnInput->cust_id;
-		strncpy(Frame1Input.tax_id, pTxnInput->tax_id,
-		        sizeof(Frame1Input.tax_id));
+		strncpy(Frame1Input.tax_id, pTxnInput->tax_id, sizeof(Frame1Input.tax_id));
 
 		// Execute Frame 1
 		m_db->DoCustomerPositionFrame1(&Frame1Input, &Frame1Output);
 
 		// Validate Frame 1 Output
-		if ((Frame1Output.acct_len < 1) ||
-		    (Frame1Output.acct_len > max_acct_len)) {
+		if ((Frame1Output.acct_len < 1) || (Frame1Output.acct_len > max_acct_len)) {
 			TXN_HARNESS_PROPAGATE_STATUS(CBaseTxnErr::CPF1_ERROR1);
 		}
 
 		// Copy Frame 1 Output
 		pTxnOutput->acct_len = Frame1Output.acct_len;
 		pTxnOutput->c_ad_id = Frame1Output.c_ad_id;
-		strncpy(pTxnOutput->c_area_1, Frame1Output.c_area_1,
-		        sizeof(pTxnOutput->c_area_1));
-		strncpy(pTxnOutput->c_area_2, Frame1Output.c_area_2,
-		        sizeof(pTxnOutput->c_area_2));
-		strncpy(pTxnOutput->c_area_3, Frame1Output.c_area_3,
-		        sizeof(pTxnOutput->c_area_3));
-		strncpy(pTxnOutput->c_ctry_1, Frame1Output.c_ctry_1,
-		        sizeof(pTxnOutput->c_ctry_1));
-		strncpy(pTxnOutput->c_ctry_2, Frame1Output.c_ctry_2,
-		        sizeof(pTxnOutput->c_ctry_2));
-		strncpy(pTxnOutput->c_ctry_3, Frame1Output.c_ctry_3,
-		        sizeof(pTxnOutput->c_ctry_3));
+		strncpy(pTxnOutput->c_area_1, Frame1Output.c_area_1, sizeof(pTxnOutput->c_area_1));
+		strncpy(pTxnOutput->c_area_2, Frame1Output.c_area_2, sizeof(pTxnOutput->c_area_2));
+		strncpy(pTxnOutput->c_area_3, Frame1Output.c_area_3, sizeof(pTxnOutput->c_area_3));
+		strncpy(pTxnOutput->c_ctry_1, Frame1Output.c_ctry_1, sizeof(pTxnOutput->c_ctry_1));
+		strncpy(pTxnOutput->c_ctry_2, Frame1Output.c_ctry_2, sizeof(pTxnOutput->c_ctry_2));
+		strncpy(pTxnOutput->c_ctry_3, Frame1Output.c_ctry_3, sizeof(pTxnOutput->c_ctry_3));
 		pTxnOutput->c_dob = Frame1Output.c_dob;
-		strncpy(pTxnOutput->c_email_1, Frame1Output.c_email_1,
-		        sizeof(pTxnOutput->c_email_1));
-		strncpy(pTxnOutput->c_email_2, Frame1Output.c_email_2,
-		        sizeof(pTxnOutput->c_email_2));
-		strncpy(pTxnOutput->c_ext_1, Frame1Output.c_ext_1,
-		        sizeof(pTxnOutput->c_ext_1));
-		strncpy(pTxnOutput->c_ext_2, Frame1Output.c_ext_2,
-		        sizeof(pTxnOutput->c_ext_2));
-		strncpy(pTxnOutput->c_ext_3, Frame1Output.c_ext_3,
-		        sizeof(pTxnOutput->c_ext_3));
-		strncpy(pTxnOutput->c_f_name, Frame1Output.c_f_name,
-		        sizeof(pTxnOutput->c_f_name));
-		strncpy(pTxnOutput->c_gndr, Frame1Output.c_gndr,
-		        sizeof(pTxnOutput->c_gndr));
-		strncpy(pTxnOutput->c_l_name, Frame1Output.c_l_name,
-		        sizeof(pTxnOutput->c_l_name));
-		strncpy(pTxnOutput->c_local_1, Frame1Output.c_local_1,
-		        sizeof(pTxnOutput->c_local_1));
-		strncpy(pTxnOutput->c_local_2, Frame1Output.c_local_2,
-		        sizeof(pTxnOutput->c_local_2));
-		strncpy(pTxnOutput->c_local_3, Frame1Output.c_local_3,
-		        sizeof(pTxnOutput->c_local_3));
-		strncpy(pTxnOutput->c_m_name, Frame1Output.c_m_name,
-		        sizeof(pTxnOutput->c_m_name));
-		strncpy(pTxnOutput->c_st_id, Frame1Output.c_st_id,
-		        sizeof(pTxnOutput->c_st_id));
+		strncpy(pTxnOutput->c_email_1, Frame1Output.c_email_1, sizeof(pTxnOutput->c_email_1));
+		strncpy(pTxnOutput->c_email_2, Frame1Output.c_email_2, sizeof(pTxnOutput->c_email_2));
+		strncpy(pTxnOutput->c_ext_1, Frame1Output.c_ext_1, sizeof(pTxnOutput->c_ext_1));
+		strncpy(pTxnOutput->c_ext_2, Frame1Output.c_ext_2, sizeof(pTxnOutput->c_ext_2));
+		strncpy(pTxnOutput->c_ext_3, Frame1Output.c_ext_3, sizeof(pTxnOutput->c_ext_3));
+		strncpy(pTxnOutput->c_f_name, Frame1Output.c_f_name, sizeof(pTxnOutput->c_f_name));
+		strncpy(pTxnOutput->c_gndr, Frame1Output.c_gndr, sizeof(pTxnOutput->c_gndr));
+		strncpy(pTxnOutput->c_l_name, Frame1Output.c_l_name, sizeof(pTxnOutput->c_l_name));
+		strncpy(pTxnOutput->c_local_1, Frame1Output.c_local_1, sizeof(pTxnOutput->c_local_1));
+		strncpy(pTxnOutput->c_local_2, Frame1Output.c_local_2, sizeof(pTxnOutput->c_local_2));
+		strncpy(pTxnOutput->c_local_3, Frame1Output.c_local_3, sizeof(pTxnOutput->c_local_3));
+		strncpy(pTxnOutput->c_m_name, Frame1Output.c_m_name, sizeof(pTxnOutput->c_m_name));
+		strncpy(pTxnOutput->c_st_id, Frame1Output.c_st_id, sizeof(pTxnOutput->c_st_id));
 		pTxnOutput->c_tier = Frame1Output.c_tier;
 		// pTxnOutput->cust_id = Frame1Output.cust_id;
 
@@ -136,23 +114,18 @@ class CCustomerPosition {
 			m_db->DoCustomerPositionFrame2(&Frame2Input, &Frame2Output);
 
 			// Validate Frame 2 Output
-			if ((Frame2Output.hist_len < min_hist_len) ||
-			    (Frame2Output.hist_len > max_hist_len)) {
+			if ((Frame2Output.hist_len < min_hist_len) || (Frame2Output.hist_len > max_hist_len)) {
 				TXN_HARNESS_PROPAGATE_STATUS(CBaseTxnErr::CPF2_ERROR1);
 			}
 
 			// Copy Frame 2 Output
 			pTxnOutput->hist_len = Frame2Output.hist_len;
-			for (int i = 0; i < Frame2Output.hist_len && i < max_hist_len;
-			     i++) {
+			for (int i = 0; i < Frame2Output.hist_len && i < max_hist_len; i++) {
 				pTxnOutput->hist_dts[i] = Frame2Output.hist_dts[i];
 				pTxnOutput->qty[i] = Frame2Output.qty[i];
-				strncpy(pTxnOutput->symbol[i], Frame2Output.symbol[i],
-				        sizeof(pTxnOutput->symbol[i]));
+				strncpy(pTxnOutput->symbol[i], Frame2Output.symbol[i], sizeof(pTxnOutput->symbol[i]));
 				pTxnOutput->trade_id[i] = Frame2Output.trade_id[i];
-				strncpy(pTxnOutput->trade_status[i],
-				        Frame2Output.trade_status[i],
-				        sizeof(pTxnOutput->trade_status[i]));
+				strncpy(pTxnOutput->trade_status[i], Frame2Output.trade_status[i], sizeof(pTxnOutput->trade_status[i]));
 			}
 		} else {
 			// Execute Frame 3

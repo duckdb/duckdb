@@ -15,8 +15,8 @@ namespace duckdb {
 //! LogicalAggregate represents an aggregate operation with (optional) GROUP BY
 //! operator.
 class LogicalAggregate : public LogicalOperator {
-	public:
-	LogicalAggregate(std::vector<std::unique_ptr<Expression>> select_list)
+public:
+	LogicalAggregate(vector<unique_ptr<Expression>> select_list)
 	    : LogicalOperator(LogicalOperatorType::AGGREGATE_AND_GROUP_BY, std::move(select_list)) {
 	}
 
@@ -24,18 +24,18 @@ class LogicalAggregate : public LogicalOperator {
 		v->Visit(*this);
 	}
 
-	std::vector<string> GetNames() override;
+	vector<string> GetNames() override;
 
 	//! The set of groups (optional).
-	std::vector<std::unique_ptr<Expression>> groups;
+	vector<unique_ptr<Expression>> groups;
 
 	size_t ExpressionCount() override;
 	Expression *GetExpression(size_t index) override;
-	void SetExpression(size_t index, std::unique_ptr<Expression> expr) override;
+	void SetExpression(size_t index, unique_ptr<Expression> expr) override;
 
-	std::string ParamsToString() const override;
+	string ParamsToString() const override;
 
-	protected:
+protected:
 	void ResolveTypes() override;
 };
 } // namespace duckdb

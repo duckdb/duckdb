@@ -1,4 +1,3 @@
-
 #include "parser/statement/update_statement.hpp"
 #include "parser/transformer.hpp"
 

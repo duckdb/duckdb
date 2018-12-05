@@ -45,27 +45,22 @@
 namespace TPCE {
 
 class CFlatCustomerAccountLoad : public CFlatFileLoader<CUSTOMER_ACCOUNT_ROW> {
-  private:
+private:
 	const std::string CustomerAccountRowFmt;
 
-  public:
-	CFlatCustomerAccountLoad(char *szFileName,
-	                         FlatFileOutputModes FlatFileOutputMode)
+public:
+	CFlatCustomerAccountLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
 	    : CFlatFileLoader<CUSTOMER_ACCOUNT_ROW>(szFileName, FlatFileOutputMode),
-	      CustomerAccountRowFmt("%" PRId64 "|%" PRId64 "|%" PRId64
-	                            "|%s|%d|%.2f\n"){};
+	      CustomerAccountRowFmt("%" PRId64 "|%" PRId64 "|%" PRId64 "|%s|%d|%.2f\n"){};
 
 	/*
 	 *   Writes a record to the file.
 	 */
 	void WriteNextRecord(const CUSTOMER_ACCOUNT_ROW &next_record) {
-		int rc = fprintf(hOutFile, CustomerAccountRowFmt.c_str(),
-		                 next_record.CA_ID, next_record.CA_B_ID,
-		                 next_record.CA_C_ID, next_record.CA_NAME,
-		                 (int)next_record.CA_TAX_ST, next_record.CA_BAL);
+		int rc = fprintf(hOutFile, CustomerAccountRowFmt.c_str(), next_record.CA_ID, next_record.CA_B_ID,
+		                 next_record.CA_C_ID, next_record.CA_NAME, (int)next_record.CA_TAX_ST, next_record.CA_BAL);
 		if (rc < 0) {
-			throw CSystemErr(CSystemErr::eWriteFile,
-			                 "CFlatCustomerAccountLoad::WriteNextRecord");
+			throw CSystemErr(CSystemErr::eWriteFile, "CFlatCustomerAccountLoad::WriteNextRecord");
 		}
 	}
 };

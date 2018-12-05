@@ -14,7 +14,7 @@ namespace duckdb {
 
 //! LogicalLimit represents a LIMIT clause
 class LogicalLimit : public LogicalOperator {
-	public:
+public:
 	LogicalLimit(int64_t limit, int64_t offset)
 	    : LogicalOperator(LogicalOperatorType::LIMIT), limit(limit), offset(offset) {
 	}
@@ -22,7 +22,7 @@ class LogicalLimit : public LogicalOperator {
 	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
-	std::vector<string> GetNames() override {
+	vector<string> GetNames() override {
 		return children[0]->GetNames();
 	}
 
@@ -31,7 +31,7 @@ class LogicalLimit : public LogicalOperator {
 	//! The offset from the start to begin emitting elements
 	int64_t offset;
 
-	protected:
+protected:
 	void ResolveTypes() override {
 		types = children[0]->types;
 	}

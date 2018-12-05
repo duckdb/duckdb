@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // function/scalar_function/substring.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -17,11 +15,11 @@ namespace duckdb {
 namespace function {
 
 void substring_function(Vector inputs[], size_t input_count, Vector &result);
-bool substring_matches_arguments(std::vector<TypeId> &arguments);
-TypeId substring_get_return_type(std::vector<TypeId> &arguments);
+bool substring_matches_arguments(vector<TypeId> &arguments);
+TypeId substring_get_return_type(vector<TypeId> &arguments);
 
 class SubstringFunction {
-  public:
+public:
 	static const char *GetName() {
 		return "substring";
 	}

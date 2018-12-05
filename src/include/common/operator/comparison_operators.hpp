@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // common/operator/comparison_operators.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -30,8 +28,7 @@ struct NotEquals {
 		return left != right;
 	}
 };
-template <>
-inline bool NotEquals::Operation(const char *left, const char *right) {
+template <> inline bool NotEquals::Operation(const char *left, const char *right) {
 	return strcmp(left, right) != 0;
 }
 struct GreaterThan {
@@ -39,8 +36,7 @@ struct GreaterThan {
 		return left > right;
 	}
 };
-template <>
-inline bool GreaterThan::Operation(const char *left, const char *right) {
+template <> inline bool GreaterThan::Operation(const char *left, const char *right) {
 	return strcmp(left, right) > 0;
 }
 struct GreaterThanEquals {
@@ -48,8 +44,7 @@ struct GreaterThanEquals {
 		return left >= right;
 	}
 };
-template <>
-inline bool GreaterThanEquals::Operation(const char *left, const char *right) {
+template <> inline bool GreaterThanEquals::Operation(const char *left, const char *right) {
 	return strcmp(left, right) >= 0;
 }
 struct LessThan {
@@ -57,8 +52,7 @@ struct LessThan {
 		return left < right;
 	}
 };
-template <>
-inline bool LessThan::Operation(const char *left, const char *right) {
+template <> inline bool LessThan::Operation(const char *left, const char *right) {
 	return strcmp(left, right) < 0;
 }
 struct LessThanEquals {
@@ -66,8 +60,7 @@ struct LessThanEquals {
 		return left <= right;
 	}
 };
-template <>
-inline bool LessThanEquals::Operation(const char *left, const char *right) {
+template <> inline bool LessThanEquals::Operation(const char *left, const char *right) {
 	return strcmp(left, right) <= 0;
 }
 } // namespace operators

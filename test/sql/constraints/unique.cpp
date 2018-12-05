@@ -1,4 +1,3 @@
-
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
@@ -10,8 +9,7 @@ TEST_CASE("Single UNIQUE constraint", "[constraints]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 
-	REQUIRE_NO_FAIL(
-	    con.Query("CREATE TABLE integers(i INTEGER UNIQUE, j INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER UNIQUE, j INTEGER)"));
 
 	// insert unique values
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (3, 4), (2, 5)"));
@@ -24,8 +22,7 @@ TEST_CASE("Single UNIQUE constraint", "[constraints]") {
 	REQUIRE_FAIL(con.Query("INSERT INTO integers VALUES (6, 6), (3, 4);"));
 
 	// unique constraints accept NULL values, unlike PRIMARY KEY columns
-	REQUIRE_NO_FAIL(
-	    con.Query("INSERT INTO integers VALUES (NULL, 3), (NULL, 3)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (NULL, 3), (NULL, 3)"));
 
 	// but if we try to replace them like this it's going to fail
 	REQUIRE_FAIL(con.Query("UPDATE integers SET i=77 WHERE i IS NULL"));
@@ -43,8 +40,7 @@ TEST_CASE("Multiple constraints", "[constraints]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 
-	REQUIRE_NO_FAIL(con.Query(
-	    "CREATE TABLE integers(i INTEGER PRIMARY KEY, j INTEGER UNIQUE)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY, j INTEGER UNIQUE)"));
 
 	// no constraints are violated
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 1), (2, 2)"));

@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // parser/expression/cast_expression.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -16,8 +14,8 @@
 namespace duckdb {
 //! Represents a type cast from one type to another type
 class CastExpression : public Expression {
-  public:
-	CastExpression(TypeId target, std::unique_ptr<Expression> child)
+public:
+	CastExpression(TypeId target, unique_ptr<Expression> child)
 	    : Expression(ExpressionType::OPERATOR_CAST, target, std::move(child)) {
 	}
 
@@ -29,18 +27,16 @@ class CastExpression : public Expression {
 		}
 	}
 
-	std::unique_ptr<Expression> Copy() override;
+	unique_ptr<Expression> Copy() override;
 
 	//! Deserializes a blob back into an CastExpression
-	static std::unique_ptr<Expression>
-	Deserialize(ExpressionDeserializeInfo *info, Deserializer &source);
+	static unique_ptr<Expression> Deserialize(ExpressionDeserializeInfo *info, Deserializer &source);
 
-	std::string ToString() const override {
-		return "CAST[" + TypeIdToString(return_type) + "](" +
-		       children[0]->ToString() + ")";
+	string ToString() const override {
+		return "CAST[" + TypeIdToString(return_type) + "](" + children[0]->ToString() + ")";
 	}
 
-	std::unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
+	unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
 		return v->Visit(*this);
 	}
 	ExpressionClass GetExpressionClass() override {

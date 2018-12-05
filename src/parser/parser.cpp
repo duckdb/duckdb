@@ -10,7 +10,7 @@ using namespace std;
 Parser::Parser() {
 }
 
-void Parser::ParseQuery(std::string query) {
+void Parser::ParseQuery(string query) {
 	void *context = nullptr;
 	PgQueryInternalParsetreeAndError result;
 	// first try to parse any PRAGMA statements
@@ -50,7 +50,7 @@ wrapup:
 
 enum class PragmaType : uint8_t { NOTHING, ASSIGNMENT, CALL };
 
-bool Parser::ParsePragma(std::string &query) {
+bool Parser::ParsePragma(string &query) {
 	// check if there is a PRAGMA statement, this is done before calling the
 	// postgres parser
 	static const string pragma_string = "PRAGMA";

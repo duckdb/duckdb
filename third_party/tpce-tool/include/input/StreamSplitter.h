@@ -58,7 +58,7 @@ namespace TPCE {
 //
 
 class StreamSplitter : public ITextSplitter {
-  private:
+private:
 	char recordDelim;
 	char fieldDelim;
 	std::istream &stream;
@@ -67,12 +67,11 @@ class StreamSplitter : public ITextSplitter {
 	StreamSplitter(const StreamSplitter &);
 	StreamSplitter &operator=(const StreamSplitter &);
 
-  public:
+public:
 	static const char DEFAULT_RECORD_DELIMITER = '\n';
 	static const char DEFAULT_FIELD_DELIMITER = '\t';
 
-	explicit StreamSplitter(std::istream &textStream,
-	                        char recordDelimiter = DEFAULT_RECORD_DELIMITER,
+	explicit StreamSplitter(std::istream &textStream, char recordDelimiter = DEFAULT_RECORD_DELIMITER,
 	                        char fieldDelimiter = DEFAULT_FIELD_DELIMITER);
 	//~StreamSplitter() - default destructor is ok.
 

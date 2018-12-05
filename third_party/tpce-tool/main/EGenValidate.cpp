@@ -78,7 +78,7 @@ using std::endl;
 
 // Helper class to contain the run configuration options
 class BucketSimOptions {
-  public:
+public:
 	int verbose;
 	int helplevel;
 	RNGSEED base_seed;
@@ -98,37 +98,27 @@ class BucketSimOptions {
 	}
 
 	BucketSimOptions()
-	    : verbose(0), helplevel(0),
-	      base_seed(TPCE::RNGSeedBaseTxnInputGenerator), cust_count(0),
-	      tpse(10), use_stddev(false), stddev(0), run_length(7200),
-	      sim_count(10000), sim_first(0), num_threads(1), interval_time(10) {
+	    : verbose(0), helplevel(0), base_seed(TPCE::RNGSeedBaseTxnInputGenerator), cust_count(0), tpse(10),
+	      use_stddev(false), stddev(0), run_length(7200), sim_count(10000), sim_first(0), num_threads(1),
+	      interval_time(10) {
 	}
 };
 
 // Usage message
-void usage(const char *progname, BucketSimOptions &options,
-           bool usage_error = true) {
-	cout << "Usage: " << progname
-	     << " [options] stddev custcount [TPS-E] [runtime]" << endl
+void usage(const char *progname, BucketSimOptions &options, bool usage_error = true) {
+	cout << "Usage: " << progname << " [options] stddev custcount [TPS-E] [runtime]" << endl
 	     << "    -h          This help message (-hh for more options)" << endl
 	     << "    -v          Increase verbosity" << endl
-	     << "    -c num      Number of customers to simulate ("
-	     << options.cust_count << ")" << endl
-	     << "    -r runtime  Runtime to simulate (" << options.run_length << ")"
-	     << endl
+	     << "    -c num      Number of customers to simulate (" << options.cust_count << ")" << endl
+	     << "    -r runtime  Runtime to simulate (" << options.run_length << ")" << endl
 	     << "    -e tpsE     tpsE to simulate (" << options.tpse << ")" << endl
 	     << "    -s stddev   Standard Deviation to check against (none)" << endl
-	     << "    -t threads  Number of threads to use (" << options.num_threads
-	     << ")" << endl;
+	     << "    -t threads  Number of threads to use (" << options.num_threads << ")" << endl;
 	if (options.helplevel > 1) {
-		cout << "    -S seed     Base Seed for random number generation ("
-		     << options.base_seed << ")" << endl
-		     << "    -n num      Number of simulations to perform ("
-		     << options.sim_count << ")" << endl
-		     << "    -i num      Initial simulation number to start with ("
-		     << options.sim_first << ")" << endl
-		     << "    -u num      Progress report interval ("
-		     << options.interval_time << ")" << endl;
+		cout << "    -S seed     Base Seed for random number generation (" << options.base_seed << ")" << endl
+		     << "    -n num      Number of simulations to perform (" << options.sim_count << ")" << endl
+		     << "    -i num      Initial simulation number to start with (" << options.sim_first << ")" << endl
+		     << "    -u num      Progress report interval (" << options.interval_time << ")" << endl;
 	}
 	exit(usage_error ? ERROR_BAD_OPTION : 0);
 }
@@ -202,8 +192,7 @@ void parseCommandLine(int argc, const char *argv[], BucketSimOptions &options) {
 					options.stddev = strtodbl(arg);
 					break;
 				case 'u':
-					options.interval_time =
-					    static_cast<UINT>(timestrtoint64(arg));
+					options.interval_time = static_cast<UINT>(timestrtoint64(arg));
 					options.verbose += 1;
 					break;
 				default:
@@ -236,8 +225,7 @@ void parseCommandLine(int argc, const char *argv[], BucketSimOptions &options) {
 		}
 		if (argnum < argc) {
 			flag = 'r';
-			options.run_length =
-			    static_cast<UINT>(timestrtoint64(argv[argnum++]));
+			options.run_length = static_cast<UINT>(timestrtoint64(argv[argnum++]));
 		}
 		if (argnum < argc) {
 			cout << "Too many command line arguments!" << endl;
@@ -250,13 +238,11 @@ void parseCommandLine(int argc, const char *argv[], BucketSimOptions &options) {
 
 		// If no customers were specified that probably means the user
 		// didn't know how to invoke us.
-		if (options.helplevel || options.cust_count == 0 ||
-		    !options.use_stddev) {
+		if (options.helplevel || options.cust_count == 0 || !options.use_stddev) {
 			usage(argv[0], options, false);
 		}
 	} catch (std::exception &e) {
-		cout << "Error parsing command line option '" << flag
-		     << "': " << e.what() << endl;
+		cout << "Error parsing command line option '" << flag << "': " << e.what() << endl;
 		usage(argv[0], options);
 		exit(ERROR_BAD_OPTION);
 	}
@@ -273,14 +259,12 @@ int main(int argc, const char *argv[]) {
 
 		parseCommandLine(argc, argv, options);
 
-		TPCE::BucketProgress progress(options.stddev, options.sim_count,
-		                              options.verbose);
+		TPCE::BucketProgress progress(options.stddev, options.sim_count, options.verbose);
 		progress.set_display_interval(options.interval_time);
 
 		// Start up simulation threads
 		unsigned int sim_idx = 0;
-		unsigned int sims_per_thread =
-		    options.sim_count / options.num_threads + 1;
+		unsigned int sims_per_thread = options.sim_count / options.num_threads + 1;
 
 		while (sim_idx < options.sim_count) {
 			// Last thread only processes however many are left over
@@ -288,12 +272,9 @@ int main(int argc, const char *argv[]) {
 				sims_per_thread = options.sim_count - sim_idx;
 			}
 			TPCE::Thread<TPCE::BucketSimulator> *thr =
-			    new TPCE::Thread<TPCE::BucketSimulator>(
-			        std::unique_ptr<TPCE::BucketSimulator>(
-			            new TPCE::BucketSimulator(
-			                options.sim_first + sim_idx, sims_per_thread,
-			                options.cust_count, options.calc_simorders(),
-			                options.base_seed, progress)));
+			    new TPCE::Thread<TPCE::BucketSimulator>(std::unique_ptr<TPCE::BucketSimulator>(
+			        new TPCE::BucketSimulator(options.sim_first + sim_idx, sims_per_thread, options.cust_count,
+			                                  options.calc_simorders(), options.base_seed, progress)));
 			;
 			thr->start();
 			threads.push_back(thr);
@@ -309,8 +290,7 @@ int main(int argc, const char *argv[]) {
 		}
 
 		TPCE::CDateTime now;
-		cout << "Maximum Standard Deviation   = " << progress.max_stddev()
-		     << endl;
+		cout << "Maximum Standard Deviation   = " << progress.max_stddev() << endl;
 		cout << "Requested Standard Deviation = " << options.stddev << endl;
 		cout << "Customer Count               = " << options.cust_count << endl;
 		cout << "Iteration Count              = " << options.sim_count << endl;
@@ -319,9 +299,7 @@ int main(int argc, const char *argv[]) {
 		cout << "Base Seed                    = " << options.base_seed << endl;
 		cout << "Simulation Duration          = " << options.run_length << endl;
 		cout << "tpsE                         = " << options.tpse << endl;
-		cout << "Simulation Duration          = "
-		     << int64totimestr(now.DiffInMilliSeconds(start_time) / 1000)
-		     << endl;
+		cout << "Simulation Duration          = " << int64totimestr(now.DiffInMilliSeconds(start_time) / 1000) << endl;
 		cout << "Simulation completed at      = " << now.ToStr(11) << endl;
 		cout << endl;
 

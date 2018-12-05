@@ -1,9 +1,7 @@
 //===----------------------------------------------------------------------===//
-//
 //                         DuckDB
 //
 // main/appender.hpp
-//
 //
 //
 //===----------------------------------------------------------------------===//
@@ -32,9 +30,8 @@ class Appender {
 	//! The current column to append to
 	size_t column = 0;
 
-  public:
-	Appender(DuckDBConnection &connection, ClientContext &context,
-	         TableCatalogEntry *table_entry);
+public:
+	Appender(DuckDBConnection &connection, ClientContext &context, TableCatalogEntry *table_entry);
 
 	//! Begins a new row append, after calling this the other append_x functions
 	//! should be called the correct amount of times. After that,
@@ -68,7 +65,7 @@ class Appender {
 	//! Destroy the appender. It cannot be used after this point.
 	void destroy();
 
-  private:
+private:
 	void check_append(TypeId type = TypeId::INVALID);
 	//! Flushes all appends to the base table.
 	void flush();

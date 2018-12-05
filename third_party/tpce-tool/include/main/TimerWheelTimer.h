@@ -45,23 +45,20 @@ namespace TPCE {
 
 template <class T, class T2> class CTimerWheelTimer {
 
-  private:
-  public:
-	T *m_pExpiryData;    // The data to be passed back
-	T2 *m_pExpiryObject; // The object on which to call the function
+private:
+public:
+	T *m_pExpiryData;                   // The data to be passed back
+	T2 *m_pExpiryObject;                // The object on which to call the function
 	void (T2::*m_pExpiryFunction)(T *); // The function to call at expiration
 
-	CTimerWheelTimer(T2 *pExpiryObject, void (T2::*pExpiryFunction)(T *),
-	                 T *pExpiryData);
+	CTimerWheelTimer(T2 *pExpiryObject, void (T2::*pExpiryFunction)(T *), T *pExpiryData);
 
 	~CTimerWheelTimer(void);
 
 }; // class CTimerWheelTimer
 
 template <class T, class T2>
-CTimerWheelTimer<T, T2>::CTimerWheelTimer(T2 *pExpiryObject,
-                                          void (T2::*pExpiryFunction)(T *),
-                                          T *pExpiryData) {
+CTimerWheelTimer<T, T2>::CTimerWheelTimer(T2 *pExpiryObject, void (T2::*pExpiryFunction)(T *), T *pExpiryData) {
 	m_pExpiryData = pExpiryData;
 	m_pExpiryObject = pExpiryObject;
 	m_pExpiryFunction = pExpiryFunction;

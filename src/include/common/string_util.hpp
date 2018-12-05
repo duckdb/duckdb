@@ -1,17 +1,14 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // common/string_util.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include <string>
-#include <vector>
+#include "common/constants.hpp"
 
 namespace duckdb {
 /**
@@ -21,47 +18,43 @@ namespace duckdb {
  * such things.
  */
 class StringUtil {
-  public:
+public:
 	/**
 	 * Returns true if the needle string exists in the haystack
 	 */
-	static bool Contains(const std::string &haystack,
-	                     const std::string &needle);
+	static bool Contains(const string &haystack, const string &needle);
 
 	/**
 	 * Returns true if the target string starts with the given prefix
 	 */
-	static bool StartsWith(const std::string &str, const std::string &prefix);
+	static bool StartsWith(const string &str, const string &prefix);
 
 	/**
 	 * Returns true if the target string <b>ends</b> with the given suffix.
 	 * http://stackoverflow.com/a/2072890
 	 */
-	static bool EndsWith(const std::string &str, const std::string &suffix);
+	static bool EndsWith(const string &str, const string &suffix);
 
 	/**
 	 * Repeat a string multiple times
 	 */
-	static std::string Repeat(const std::string &str, const std::size_t n);
+	static string Repeat(const string &str, const std::size_t n);
 
 	/**
 	 * Split the input string based on newline char
 	 */
-	static std::vector<std::string> Split(const std::string &str,
-	                                      char delimiter);
+	static vector<string> Split(const string &str, char delimiter);
 
 	/**
 	 * Join multiple strings into one string. Components are concatenated by the
 	 * given separator
 	 */
-	static std::string Join(const std::vector<std::string> &input,
-	                        const std::string &separator);
+	static string Join(const vector<string> &input, const string &separator);
 
 	/**
 	 * Append the prefix to the beginning of each line in str
 	 */
-	static std::string Prefix(const std::string &str,
-	                          const std::string &prefix);
+	static string Prefix(const string &str, const string &prefix);
 
 	/**
 	 * Return a string that formats the give number of bytes into the
@@ -69,30 +62,30 @@ class StringUtil {
 	 * kilobyte, megabyte, gigabyte representation.
 	 * http://ubuntuforums.org/showpost.php?p=10215516&postcount=5
 	 */
-	static std::string FormatSize(long bytes);
+	static string FormatSize(long bytes);
 
 	/**
 	 * Wrap the given string with the control characters
 	 * to make the text appear bold in the console
 	 */
-	static std::string Bold(const std::string &str);
+	static string Bold(const string &str);
 
 	/**
 	 * Convert a string to its uppercase form
 	 */
-	static std::string Upper(const std::string &str);
+	static string Upper(const string &str);
 
 	/**
 	 * Convert a string to its uppercase form
 	 */
-	static std::string Lower(const std::string &str);
+	static string Lower(const string &str);
 
 	/**
 	 * Format a string using printf semantics
 	 * http://stackoverflow.com/a/8098080
 	 */
-	static std::string Format(const std::string fmt_str, ...);
-	static std::string VFormat(const std::string fmt_str, va_list ap);
+	static string Format(const string fmt_str, ...);
+	static string VFormat(const string fmt_str, va_list ap);
 
 	/**
 	 * Split the input string into a vector of strings based on
@@ -101,15 +94,14 @@ class StringUtil {
 	 * @param split
 	 * @return
 	 */
-	static std::vector<std::string> Split(const std::string &input,
-	                                      const std::string &split);
+	static vector<string> Split(const string &input, const string &split);
 
 	/**
 	 * Remove the whitespace char in the right end of the string
 	 */
-	static void RTrim(std::string &str);
+	static void RTrim(string &str);
 
-	static std::string Indent(const int num_indent);
+	static string Indent(const int num_indent);
 
 	/**
 	 * Return a new string that has stripped all occurrences of the provided
@@ -122,16 +114,14 @@ class StringUtil {
 	 * @param c The character we want to remove
 	 * @return A new string with no occurrences of the provided character
 	 */
-	static std::string Strip(const std::string &str, char c);
+	static string Strip(const string &str, char c);
 
-	static std::string Replace(std::string source, const std::string &from,
-	                           const std::string &to) {
+	static string Replace(string source, const string &from, const string &to) {
 		if (from.empty())
 			return source;
 		;
 		size_t start_pos = 0;
-		while ((start_pos = source.find(from, start_pos)) !=
-		       std::string::npos) {
+		while ((start_pos = source.find(from, start_pos)) != string::npos) {
 			source.replace(start_pos, from.length(), to);
 			start_pos += to.length(); // In case 'to' contains 'from', like
 			                          // replacing 'x' with 'yx'

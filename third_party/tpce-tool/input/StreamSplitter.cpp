@@ -41,10 +41,8 @@
 
 using namespace TPCE;
 
-StreamSplitter::StreamSplitter(std::istream &textStream, char recordDelimiter,
-                               char fieldDelimiter)
-    : recordDelim(recordDelimiter), fieldDelim(fieldDelimiter),
-      stream(textStream) {
+StreamSplitter::StreamSplitter(std::istream &textStream, char recordDelimiter, char fieldDelimiter)
+    : recordDelim(recordDelimiter), fieldDelim(fieldDelimiter), stream(textStream) {
 }
 
 //

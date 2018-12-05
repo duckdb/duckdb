@@ -49,16 +49,12 @@
 using namespace TPCE;
 
 // Initialize static const member arrays.
-const INT32 CDateTime::monthArray[12] = {31, 28, 31, 30, 31, 30,
-                                         31, 31, 30, 31, 30, 31};
-const INT32 CDateTime::monthArrayLY[12] = {31, 29, 31, 30, 31, 30,
-                                           31, 31, 30, 31, 30, 31};
-const INT32 CDateTime::cumulativeMonthArray[] = {0,   31,  59,  90,  120, 151,
-                                                 181, 212, 243, 273, 304, 334};
+const INT32 CDateTime::monthArray[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+const INT32 CDateTime::monthArrayLY[12] = {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+const INT32 CDateTime::cumulativeMonthArray[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
 
 bool CDateTime::IsLeapYear(INT32 year) {
-	if ((year % 4) !=
-	    0) // only years which are multiples of 4 can be leap years
+	if ((year % 4) != 0) // only years which are multiples of 4 can be leap years
 	{
 		return false;
 	}
@@ -68,8 +64,7 @@ bool CDateTime::IsLeapYear(INT32 year) {
 		return true;
 	}
 
-	if ((year % 100) ==
-	    0) // years divisible by 100 but not 400 are not leap years
+	if ((year % 100) == 0) // years divisible by 100 but not 400 are not leap years
 	{
 		return false;
 	}
@@ -79,15 +74,12 @@ bool CDateTime::IsLeapYear(INT32 year) {
 }
 
 // Checks whether the date/time is valid.
-bool CDateTime::IsValid(INT32 year, INT32 month, INT32 day, INT32 hour,
-                        INT32 minute, INT32 second, INT32 msec) {
+bool CDateTime::IsValid(INT32 year, INT32 month, INT32 day, INT32 hour, INT32 minute, INT32 second, INT32 msec) {
 	// check all values that have static, absolute bounds
-	if (hour < minValidHour || maxValidHour < hour || minute < minValidMinute ||
-	    maxValidMinute < minute || second < minValidSecond ||
-	    maxValidSecond < second || msec < minValidMilliSecond ||
-	    maxValidMilliSecond < msec || year < minValidYear ||
-	    maxValidYear < year || month < minValidMonth || maxValidMonth < month ||
-	    day < minValidDay) {
+	if (hour < minValidHour || maxValidHour < hour || minute < minValidMinute || maxValidMinute < minute ||
+	    second < minValidSecond || maxValidSecond < second || msec < minValidMilliSecond ||
+	    maxValidMilliSecond < msec || year < minValidYear || maxValidYear < year || month < minValidMonth ||
+	    maxValidMonth < month || day < minValidDay) {
 		return false;
 	}
 
@@ -109,8 +101,7 @@ bool CDateTime::IsValid(INT32 year, INT32 month, INT32 day, INT32 hour,
 
 // Validate the specified date/time and throw an out_of_range exception if it
 // isn't valid.
-void CDateTime::Validate(INT32 year, INT32 month, INT32 day, INT32 hour,
-                         INT32 minute, INT32 second, INT32 msec) {
+void CDateTime::Validate(INT32 year, INT32 month, INT32 day, INT32 hour, INT32 minute, INT32 second, INT32 msec) {
 	if (!IsValid(year, month, day, hour, minute, second, msec)) {
 		std::ostringstream msg;
 		msg << "The specified Date/Time is not valid.";
@@ -121,9 +112,7 @@ void CDateTime::Validate(INT32 year, INT32 month, INT32 day, INT32 hour,
 // Validate the specified day number and throw an out_of_range exception if it
 // isn't valid.
 void CDateTime::Validate(INT32 dayNumber) {
-	if ((dayNumber < minValidDayNumber) ||
-	    (CalculateDayNumber(maxValidYear, maxValidMonth, maxValidDay) <
-	     dayNumber)) {
+	if ((dayNumber < minValidDayNumber) || (CalculateDayNumber(maxValidYear, maxValidMonth, maxValidDay) < dayNumber)) {
 		std::ostringstream msg;
 		msg << "The specified day-number is not valid.";
 		throw std::out_of_range(msg.str());
@@ -132,11 +121,8 @@ void CDateTime::Validate(INT32 dayNumber) {
 
 // Validate a day-number/msec pair.
 void CDateTime::Validate(INT32 dayNumber, INT32 msecSoFarToday) {
-	if ((msecSoFarToday < minValidMilliSecond) ||
-	    (maxValidMilliSecond < msecSoFarToday) ||
-	    (dayNumber < minValidDayNumber) ||
-	    (CalculateDayNumber(maxValidYear, maxValidMonth, maxValidDay) <
-	     dayNumber)) {
+	if ((msecSoFarToday < minValidMilliSecond) || (maxValidMilliSecond < msecSoFarToday) ||
+	    (dayNumber < minValidDayNumber) || (CalculateDayNumber(maxValidYear, maxValidMonth, maxValidDay) < dayNumber)) {
 		std::ostringstream msg;
 		msg << "The specified (day-number, msec) pair is not valid.";
 		throw std::out_of_range(msg.str());
@@ -170,8 +156,7 @@ INT32 CDateTime::CalculateDayNumber(INT32 yr, INT32 mm, INT32 dd) {
 INT32 CDateTime::YMDtoDayno(INT32 yr, INT32 mm, INT32 dd) {
 	// Validate year, month and day (use known safe values for hours -
 	// milliseconds).
-	Validate(yr, mm, dd, minValidHour, minValidMinute, minValidSecond,
-	         minValidMilliSecond);
+	Validate(yr, mm, dd, minValidHour, minValidMinute, minValidSecond, minValidMilliSecond);
 
 	return CalculateDayNumber(yr, mm, dd);
 }
@@ -195,16 +180,13 @@ INT32 CDateTime::YMDtoDayno(INT32 yr, INT32 mm, INT32 dd) {
 //      8       Month DD, YYYY
 //
 char *CDateTime::ToStr(INT32 style = 11) {
-	static const char *szMonthsShort[] = {"JAN", "FEB", "MAR", "APR",
-	                                      "MAY", "JUN", "JUL", "AUG",
-	                                      "SEP", "OCT", "NOV", "DEC"};
-	static const char *szMonthsFull[] = {
-	    "January", "February", "March",     "April",   "May",      "June",
-	    "July",    "August",   "September", "October", "November", "December"};
+	static const char *szMonthsShort[] = {"JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+	                                      "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"};
+	static const char *szMonthsFull[] = {"January", "February", "March",     "April",   "May",      "June",
+	                                     "July",    "August",   "September", "October", "November", "December"};
 	static const char *szAmPm[] = {"AM", "PM"};
 	// the following array is used to map from 24-hour to 12-hour time
-	static const INT32 iHr12[] = {12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
-	                              12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
+	static const INT32 iHr12[] = {12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
 
 	INT32 year, month, day, hour, minute, second, msec;
 	INT32 p = 0;
@@ -227,8 +209,7 @@ char *CDateTime::ToStr(INT32 style = 11) {
 		break;
 	case 2:
 		// MM/DD/YY
-		p = snprintf(pszText, lengthTotal, "%02d/%02d/%02d ", month, day,
-		             year % 100);
+		p = snprintf(pszText, lengthTotal, "%02d/%02d/%02d ", month, day, year % 100);
 		break;
 	case 3:
 		// MM/DD/YYYY
@@ -236,28 +217,23 @@ char *CDateTime::ToStr(INT32 style = 11) {
 		break;
 	case 4:
 		// DD-MON-YYYY
-		p = snprintf(pszText, lengthTotal, "%02d-%s-%04d ", day,
-		             szMonthsShort[month - 1], year);
+		p = snprintf(pszText, lengthTotal, "%02d-%s-%04d ", day, szMonthsShort[month - 1], year);
 		break;
 	case 5:
 		// DD-MON-YY
-		p = snprintf(pszText, lengthTotal, "%02d-%s-%02d ", day,
-		             szMonthsShort[month - 1], year % 100);
+		p = snprintf(pszText, lengthTotal, "%02d-%s-%02d ", day, szMonthsShort[month - 1], year % 100);
 		break;
 	case 6:
 		// MM-DD-YY
-		p = snprintf(pszText, lengthTotal, "%02d-%02d-%02d ", month, day,
-		             year % 100);
+		p = snprintf(pszText, lengthTotal, "%02d-%02d-%02d ", month, day, year % 100);
 		break;
 	case 7:
 		// MON DD YYYY
-		p = snprintf(pszText, lengthTotal, "%s %02d %04d ",
-		             szMonthsShort[month - 1], day, year);
+		p = snprintf(pszText, lengthTotal, "%s %02d %04d ", szMonthsShort[month - 1], day, year);
 		break;
 	case 8:
 		// Month DD, YYYY
-		p = snprintf(pszText, lengthTotal, "%s %02d, %04d ",
-		             szMonthsFull[month - 1], day, year);
+		p = snprintf(pszText, lengthTotal, "%s %02d, %04d ", szMonthsFull[month - 1], day, year);
 		break;
 	}
 
@@ -268,13 +244,11 @@ char *CDateTime::ToStr(INT32 style = 11) {
 	switch (style % 10) {
 	case 1:
 		// HH:MM:SS     (24hr)
-		p += snprintf(pszText, lengthRemaining, "%02d:%02d:%02d", hour, minute,
-		              second);
+		p += snprintf(pszText, lengthRemaining, "%02d:%02d:%02d", hour, minute, second);
 		break;
 	case 2:
 		// HH:MM:SS.mmm (24hr)
-		p += snprintf(pszText, lengthRemaining, "%02d:%02d:%02d.%03d", hour,
-		              minute, second, msec);
+		p += snprintf(pszText, lengthRemaining, "%02d:%02d:%02d.%03d", hour, minute, second, msec);
 		break;
 	case 3:
 		// HH:MM        (24hr)
@@ -282,18 +256,16 @@ char *CDateTime::ToStr(INT32 style = 11) {
 		break;
 	case 4:
 		// HH:MM:SS [AM|PM]
-		p += snprintf(pszText, lengthRemaining, "%02d:%02d:%02d %s",
-		              iHr12[hour], minute, second, szAmPm[hour / 12]);
+		p += snprintf(pszText, lengthRemaining, "%02d:%02d:%02d %s", iHr12[hour], minute, second, szAmPm[hour / 12]);
 		break;
 	case 5:
 		// HHH:MM:SS.mmm [AM|PM]
-		p += snprintf(pszText, lengthRemaining, "%02d:%02d:%02d.%03d %s",
-		              iHr12[hour], minute, second, msec, szAmPm[hour / 12]);
+		p += snprintf(pszText, lengthRemaining, "%02d:%02d:%02d.%03d %s", iHr12[hour], minute, second, msec,
+		              szAmPm[hour / 12]);
 		break;
 	case 6:
 		// HH:MM [AM|PM]
-		p += snprintf(pszText, lengthRemaining, "%02d:%02d %s", iHr12[hour],
-		              minute, szAmPm[hour / 12]);
+		p += snprintf(pszText, lengthRemaining, "%02d:%02d %s", iHr12[hour], minute, szAmPm[hour / 12]);
 		break;
 	}
 
@@ -318,8 +290,7 @@ CDateTime::CDateTime(INT32 dayno) {
 }
 
 CDateTime::CDateTime(INT32 year, INT32 month, INT32 day) {
-	Validate(year, month, day, minValidHour, minValidMinute, minValidSecond,
-	         minValidMilliSecond);
+	Validate(year, month, day, minValidHour, minValidMinute, minValidSecond, minValidMilliSecond);
 	m_dayno = CalculateDayNumber(year, month, day);
 	m_szText = NULL;
 	m_msec = 0;
@@ -339,27 +310,21 @@ CDateTime::~CDateTime(void) {
 		delete[] m_szText;
 }
 
-CDateTime::CDateTime(INT32 year, INT32 month, INT32 day, INT32 hour,
-                     INT32 minute, INT32 second, INT32 msec) {
+CDateTime::CDateTime(INT32 year, INT32 month, INT32 day, INT32 hour, INT32 minute, INT32 second, INT32 msec) {
 	// Validate specified date/time
 	Validate(year, month, day, hour, minute, second, msec);
 
 	m_szText = NULL;
 	m_dayno = CalculateDayNumber(year, month, day);
-	m_msec = ((hour * MinutesPerHour + minute) * SecondsPerMinute + second) *
-	             MsPerSecond +
-	         msec;
+	m_msec = ((hour * MinutesPerHour + minute) * SecondsPerMinute + second) * MsPerSecond + msec;
 }
 
 CDateTime::CDateTime(TPCE::TIMESTAMP_STRUCT *ts) {
-	Validate(ts->year, ts->month, ts->day, ts->hour, ts->minute, ts->second,
-	         ts->fraction / 1000000);
+	Validate(ts->year, ts->month, ts->day, ts->hour, ts->minute, ts->second, ts->fraction / 1000000);
 
 	m_szText = NULL;
 	m_dayno = CalculateDayNumber(ts->year, ts->month, ts->day);
-	m_msec = ((ts->hour * MinutesPerHour + ts->minute) * SecondsPerMinute +
-	          ts->second) *
-	             MsPerSecond +
+	m_msec = ((ts->hour * MinutesPerHour + ts->minute) * SecondsPerMinute + ts->second) * MsPerSecond +
 	         ts->fraction / 1000000;
 }
 
@@ -392,30 +357,23 @@ void CDateTime::Set(INT32 dayno) {
 }
 
 void CDateTime::Set(INT32 year, INT32 month, INT32 day) {
-	Validate(year, month, day, minValidHour, minValidMinute, minValidSecond,
-	         minValidMilliSecond);
+	Validate(year, month, day, minValidHour, minValidMinute, minValidSecond, minValidMilliSecond);
 
 	m_dayno = CalculateDayNumber(year, month, day);
 	m_msec = 0;
 }
 
 void CDateTime::Set(INT32 hour, INT32 minute, INT32 second, INT32 msec) {
-	Validate(minValidYear, minValidMonth, minValidDay, hour, minute, second,
-	         msec);
+	Validate(minValidYear, minValidMonth, minValidDay, hour, minute, second, msec);
 
-	m_msec = ((hour * MinutesPerHour + minute) * SecondsPerMinute + second) *
-	             MsPerSecond +
-	         msec;
+	m_msec = ((hour * MinutesPerHour + minute) * SecondsPerMinute + second) * MsPerSecond + msec;
 }
 
-void CDateTime::Set(INT32 year, INT32 month, INT32 day, INT32 hour,
-                    INT32 minute, INT32 second, INT32 msec) {
+void CDateTime::Set(INT32 year, INT32 month, INT32 day, INT32 hour, INT32 minute, INT32 second, INT32 msec) {
 	Validate(year, month, day, hour, minute, second, msec);
 
 	m_dayno = CalculateDayNumber(year, month, day);
-	m_msec = ((hour * MinutesPerHour + minute) * SecondsPerMinute + second) *
-	             MsPerSecond +
-	         msec;
+	m_msec = ((hour * MinutesPerHour + minute) * SecondsPerMinute + second) * MsPerSecond + msec;
 }
 
 // DaynoToYMD converts a day index to
@@ -468,8 +426,8 @@ void CDateTime::GetYMD(INT32 *year, INT32 *month, INT32 *day) {
 	*day = dayno;
 }
 
-void CDateTime::GetYMDHMS(INT32 *year, INT32 *month, INT32 *day, INT32 *hour,
-                          INT32 *minute, INT32 *second, INT32 *msec) {
+void CDateTime::GetYMDHMS(INT32 *year, INT32 *month, INT32 *day, INT32 *hour, INT32 *minute, INT32 *second,
+                          INT32 *msec) {
 	GetYMD(year, month, day);
 	GetHMS(hour, minute, second, msec);
 }
@@ -495,8 +453,7 @@ void CDateTime::GetTimeStamp(TPCE::TIMESTAMP_STRUCT *ts) {
 	ts->hour = (UINT16)hour;
 	ts->minute = (UINT16)minute;
 	ts->second = (UINT16)second;
-	ts->fraction = (UINT32)msec *
-	               1000000; // because "fraction" is 1/billion'th of a second
+	ts->fraction = (UINT32)msec * 1000000; // because "fraction" is 1/billion'th of a second
 }
 
 #ifdef COMPILE_ODBC_LOAD
@@ -510,8 +467,7 @@ void CDateTime::GetDBDATETIME(DBDATETIME *dt) {
 
 void CDateTime::Add(INT32 days, INT32 msec, bool adjust_weekend /* =false */) {
 	if (adjust_weekend) {
-		days =
-		    ((days / DaysPerWorkWeek) * DaysPerWeek) + (days % DaysPerWorkWeek);
+		days = ((days / DaysPerWorkWeek) * DaysPerWeek) + (days % DaysPerWorkWeek);
 	}
 
 	m_dayno += days;
@@ -532,28 +488,24 @@ void CDateTime::AddWorkMs(INT64 WorkMs) {
 	Add(WorkDays, (INT32)(WorkMs % MsPerWorkDay), true);
 }
 bool CDateTime::operator<(const CDateTime &dt) {
-	return (m_dayno == dt.m_dayno) ? (m_msec < dt.m_msec)
-	                               : (m_dayno < dt.m_dayno);
+	return (m_dayno == dt.m_dayno) ? (m_msec < dt.m_msec) : (m_dayno < dt.m_dayno);
 }
 
 bool CDateTime::operator<=(const CDateTime &dt) {
-	return (m_dayno == dt.m_dayno) ? (m_msec <= dt.m_msec)
-	                               : (m_dayno <= dt.m_dayno);
+	return (m_dayno == dt.m_dayno) ? (m_msec <= dt.m_msec) : (m_dayno <= dt.m_dayno);
 }
 
 namespace TPCE {
 
 // Need const reference left argument for greater<CDateTime> comparison function
 bool operator>(const CDateTime &l_dt, const CDateTime &r_dt) {
-	return (l_dt.m_dayno == r_dt.m_dayno) ? (l_dt.m_msec > r_dt.m_msec)
-	                                      : (l_dt.m_dayno > r_dt.m_dayno);
+	return (l_dt.m_dayno == r_dt.m_dayno) ? (l_dt.m_msec > r_dt.m_msec) : (l_dt.m_dayno > r_dt.m_dayno);
 }
 
 } // namespace TPCE
 
 bool CDateTime::operator>=(const CDateTime &dt) {
-	return (m_dayno == dt.m_dayno) ? (m_msec >= dt.m_msec)
-	                               : (m_dayno >= dt.m_dayno);
+	return (m_dayno == dt.m_dayno) ? (m_msec >= dt.m_msec) : (m_dayno >= dt.m_dayno);
 }
 
 bool CDateTime::operator==(const CDateTime &dt) {
@@ -564,24 +516,21 @@ bool CDateTime::operator==(const CDateTime &dt) {
 // result in seconds
 double CDateTime::operator-(const CDateTime &dt) {
 	double dSecs;
-	dSecs = (double)((m_dayno - dt.m_dayno) * SecondsPerMinute *
-	                 MinutesPerHour * HoursPerDay);
+	dSecs = (double)((m_dayno - dt.m_dayno) * SecondsPerMinute * MinutesPerHour * HoursPerDay);
 	dSecs += (double)(m_msec - dt.m_msec) / MsPerSecondDivisor;
 	return dSecs;
 }
 
 INT32 CDateTime::DiffInMilliSeconds(const CDateTime &BaseTime) {
 	INT32 mSecs;
-	mSecs = (m_dayno - BaseTime.m_dayno) * MsPerSecond * SecondsPerMinute *
-	        MinutesPerHour * HoursPerDay;
+	mSecs = (m_dayno - BaseTime.m_dayno) * MsPerSecond * SecondsPerMinute * MinutesPerHour * HoursPerDay;
 	mSecs += (m_msec - BaseTime.m_msec);
 	return mSecs;
 }
 
 INT32 CDateTime::DiffInMilliSeconds(CDateTime *pBaseTime) {
 	INT32 mSecs;
-	mSecs = (m_dayno - pBaseTime->m_dayno) * MsPerSecond * SecondsPerMinute *
-	        MinutesPerHour * HoursPerDay;
+	mSecs = (m_dayno - pBaseTime->m_dayno) * MsPerSecond * SecondsPerMinute * MinutesPerHour * HoursPerDay;
 	mSecs += (m_msec - pBaseTime->m_msec);
 	return mSecs;
 }

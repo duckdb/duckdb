@@ -81,10 +81,8 @@ class CCompanyTable : public TableTemplate<COMPANY_ROW> {
 		int iCompanySPRateThreshold;
 
 		OldSeed = m_rnd.GetSeed();
-		m_rnd.SetSeed(
-		    m_rnd.RndNthElement(RNGSeedBaseSPRate, (RNGSEED)m_row.CO_ID));
-		iCompanySPRateThreshold =
-		    m_rnd.RndIntRange(0, m_CompanySPRateFile.size() - 1);
+		m_rnd.SetSeed(m_rnd.RndNthElement(RNGSeedBaseSPRate, (RNGSEED)m_row.CO_ID));
+		iCompanySPRateThreshold = m_rnd.RndIntRange(0, m_CompanySPRateFile.size() - 1);
 		m_rnd.SetSeed(OldSeed);
 		return (iCompanySPRateThreshold);
 	}
@@ -103,9 +101,7 @@ class CCompanyTable : public TableTemplate<COMPANY_ROW> {
 		int iThreshold = GetCompanySPRateThreshold();
 
 		// Select the row in the input file
-		strncpy(m_row.CO_SP_RATE,
-		        m_CompanySPRateFile[iThreshold].CO_SP_RATE_CSTR(),
-		        sizeof(m_row.CO_SP_RATE));
+		strncpy(m_row.CO_SP_RATE, m_CompanySPRateFile[iThreshold].CO_SP_RATE_CSTR(), sizeof(m_row.CO_SP_RATE));
 	}
 
 	/*
@@ -118,14 +114,12 @@ class CCompanyTable : public TableTemplate<COMPANY_ROW> {
 	 *           none.
 	 */
 	void InitNextLoadUnit() {
-		m_rnd.SetSeed(m_rnd.RndNthElement(RNGSeedTableDefault,
-		                                  (RNGSEED)m_iLastRowNumber *
-		                                      iRNGSkipOneRowCompany));
+		m_rnd.SetSeed(m_rnd.RndNthElement(RNGSeedTableDefault, (RNGSEED)m_iLastRowNumber * iRNGSkipOneRowCompany));
 
 		ClearRecord(); // this is needed for EGenTest to work
 	}
 
-  public:
+public:
 	/*
 	 *  Constructor.
 	 *
@@ -138,29 +132,22 @@ class CCompanyTable : public TableTemplate<COMPANY_ROW> {
 	 *  RETURNS:
 	 *       not applicable.
 	 */
-	CCompanyTable(const DataFileManager &dfm, TIdent iCustomerCount,
-	              TIdent iStartFromCustomer)
+	CCompanyTable(const DataFileManager &dfm, TIdent iCustomerCount, TIdent iStartFromCustomer)
 	    : TableTemplate<COMPANY_ROW>(), m_CompanyFile(dfm.CompanyFile()),
-	      m_CompanySPRateFile(dfm.CompanySPRateDataFile()),
-	      m_person(dfm, 0, false) {
-		m_iJan1_1800_DayNo =
-		    CDateTime::YMDtoDayno(1800, 1, 1); // days number for Jan 1, 1800
-		m_iJan2_2000_DayNo =
-		    CDateTime::YMDtoDayno(2000, 1, 2); // days number for Jan 2, 2000
-		m_iCurrentDayNo = m_date.DayNo();      // today's days number
+	      m_CompanySPRateFile(dfm.CompanySPRateDataFile()), m_person(dfm, 0, false) {
+		m_iJan1_1800_DayNo = CDateTime::YMDtoDayno(1800, 1, 1); // days number for Jan 1, 1800
+		m_iJan2_2000_DayNo = CDateTime::YMDtoDayno(2000, 1, 2); // days number for Jan 2, 2000
+		m_iCurrentDayNo = m_date.DayNo();                       // today's days number
 
-		m_iCompanyCountForOneLoadUnit =
-		    m_CompanyFile.CalculateCompanyCount(iDefaultLoadUnitSize);
+		m_iCompanyCountForOneLoadUnit = m_CompanyFile.CalculateCompanyCount(iDefaultLoadUnitSize);
 
 		m_iCompanyCount = m_CompanyFile.CalculateCompanyCount(iCustomerCount);
-		m_iStartFromCompany =
-		    m_CompanyFile.CalculateStartFromCompany(iStartFromCustomer);
+		m_iStartFromCompany = m_CompanyFile.CalculateStartFromCompany(iStartFromCustomer);
 
 		m_iLastRowNumber = m_iStartFromCompany;
 		// Start Company addresses immediately after Exchange addresses,
 		// and company addresses for prior companies
-		m_iCO_AD_ID_START =
-		    dfm.ExchangeDataFile().size() + m_iStartFromCompany + iTIdentShift;
+		m_iCO_AD_ID_START = dfm.ExchangeDataFile().size() + m_iStartFromCompany + iTIdentShift;
 	};
 
 	/*
@@ -176,8 +163,7 @@ class CCompanyTable : public TableTemplate<COMPANY_ROW> {
 	 */
 	bool GenerateNextCO_ID() {
 		++m_iLastRowNumber;
-		m_bMoreRecords =
-		    m_iLastRowNumber < (m_iStartFromCompany + m_iCompanyCount);
+		m_bMoreRecords = m_iLastRowNumber < (m_iStartFromCompany + m_iCompanyCount);
 
 		return (MoreRecords());
 	}
@@ -219,26 +205,18 @@ class CCompanyTable : public TableTemplate<COMPANY_ROW> {
 
 		m_row.CO_ID = GetCurrentCO_ID();
 
-		strncpy(m_row.CO_ST_ID,
-		        m_CompanyFile.GetRecord(m_iLastRowNumber).CO_ST_ID_CSTR(),
-		        sizeof(m_row.CO_ST_ID));
+		strncpy(m_row.CO_ST_ID, m_CompanyFile.GetRecord(m_iLastRowNumber).CO_ST_ID_CSTR(), sizeof(m_row.CO_ST_ID));
 
-		m_CompanyFile.CreateName(m_iLastRowNumber, m_row.CO_NAME,
-		                         static_cast<int>(sizeof(m_row.CO_NAME)));
+		m_CompanyFile.CreateName(m_iLastRowNumber, m_row.CO_NAME, static_cast<int>(sizeof(m_row.CO_NAME)));
 
-		strncpy(m_row.CO_IN_ID,
-		        m_CompanyFile.GetRecord(m_iLastRowNumber).CO_IN_ID_CSTR(),
-		        sizeof(m_row.CO_IN_ID));
+		strncpy(m_row.CO_IN_ID, m_CompanyFile.GetRecord(m_iLastRowNumber).CO_IN_ID_CSTR(), sizeof(m_row.CO_IN_ID));
 
 		GenerateCompanySPRate();
 
-		snprintf(m_row.CO_CEO, sizeof(m_row.CO_CEO), "%s %s",
-		         m_person.GetFirstName(iCEOMult * m_row.CO_ID).c_str(),
+		snprintf(m_row.CO_CEO, sizeof(m_row.CO_CEO), "%s %s", m_person.GetFirstName(iCEOMult * m_row.CO_ID).c_str(),
 		         m_person.GetLastName(iCEOMult * m_row.CO_ID).c_str());
 
-		strncpy(m_row.CO_DESC,
-		        m_CompanyFile.GetRecord(m_iLastRowNumber).CO_DESC_CSTR(),
-		        sizeof(m_row.CO_DESC));
+		strncpy(m_row.CO_DESC, m_CompanyFile.GetRecord(m_iLastRowNumber).CO_DESC_CSTR(), sizeof(m_row.CO_DESC));
 
 		m_row.CO_AD_ID = ++m_iCO_AD_ID_START;
 

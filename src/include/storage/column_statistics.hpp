@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // storage/column_statistics.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -22,7 +20,7 @@ namespace duckdb {
 //! The ColumnStatistics object holds statistics related to a physical column of
 //! a table
 class ColumnStatistics {
-  public:
+public:
 	ColumnStatistics() {
 		can_have_null = false;
 		min.is_null = true;
@@ -44,7 +42,7 @@ class ColumnStatistics {
 	//! The maximum string length of a character column [VARCHAR only]
 	uint64_t maximum_string_length;
 
-  private:
+private:
 	//! The lock used to update the statistics of the column
 	std::mutex stats_lock;
 };

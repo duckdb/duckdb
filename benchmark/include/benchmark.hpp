@@ -11,8 +11,13 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 namespace duckdb {
+
+using std::string;
+using std::unique_ptr;
+using std::vector;
 
 //! Base class for any state that has to be kept by a Benchmark
 struct BenchmarkState {
@@ -26,35 +31,35 @@ class Benchmark {
 	constexpr static size_t DEFAULT_NRUNS = 5;
 	constexpr static size_t DEFAULT_TIMEOUT = 30;
 
-  public:
+public:
 	//! The name of the benchmark
-	std::string name;
+	string name;
 	//! The benchmark group this benchmark belongs to
-	std::string group;
+	string group;
 
-	Benchmark(std::string name, std::string group);
+	Benchmark(string name, string group);
 
 	//! Initialize the benchmark state
-	virtual std::unique_ptr<BenchmarkState> Initialize() {
+	virtual unique_ptr<BenchmarkState> Initialize() {
 		return nullptr;
 	}
 	//! Run the benchmark
 	virtual void Run(BenchmarkState *state) = 0;
 	//! Verify that the output of the benchmark was correct
-	virtual std::string Verify(BenchmarkState *state) = 0;
+	virtual string Verify(BenchmarkState *state) = 0;
 	//! Finalize the benchmark runner
 	virtual void Finalize() {
 	}
 	//! Interrupt the benchmark because of a timeout
 	virtual void Interrupt(BenchmarkState *state) = 0;
 	//! Returns information about the benchmark
-	virtual std::string BenchmarkInfo() = 0;
+	virtual string BenchmarkInfo() = 0;
 
-	std::string GetInfo() {
+	string GetInfo() {
 		return name + " - " + group + "\n" + BenchmarkInfo();
 	}
 
-	virtual std::string GetLogOutput(BenchmarkState *state) = 0;
+	virtual string GetLogOutput(BenchmarkState *state) = 0;
 
 	//! Whether or not Initialize() should be called once for every run or just
 	//! once

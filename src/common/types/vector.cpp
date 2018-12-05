@@ -1,8 +1,7 @@
-
 #include "common/types/vector.hpp"
+
 #include "common/assert.hpp"
 #include "common/exception.hpp"
-
 #include "common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
@@ -15,11 +14,9 @@ Vector::Vector(TypeId type, bool create_data, bool zero_data)
 	}
 }
 
-Vector::Vector(TypeId type, char *dataptr)
-    : type(type), count(0), data(dataptr), sel_vector(nullptr) {
+Vector::Vector(TypeId type, char *dataptr) : type(type), count(0), data(dataptr), sel_vector(nullptr) {
 	if (dataptr && type == TypeId::INVALID) {
-		throw InvalidTypeException(type,
-		                           "Cannot create a vector of type INVALID!");
+		throw InvalidTypeException(type, "Cannot create a vector of type INVALID!");
 	}
 }
 
@@ -28,8 +25,7 @@ Vector::Vector(Value value) : Vector(value.type, true, false) {
 	SetValue(0, value);
 }
 
-Vector::Vector()
-    : type(TypeId::INVALID), count(0), data(nullptr), sel_vector(nullptr) {
+Vector::Vector() : type(TypeId::INVALID), count(0), data(nullptr), sel_vector(nullptr) {
 }
 
 Vector::~Vector() {
@@ -87,8 +83,7 @@ void Vector::Initialize(TypeId new_type, bool zero_data) {
 		type = new_type;
 	}
 	string_heap.Destroy();
-	owned_data = unique_ptr<char[]>(
-	    new char[STANDARD_VECTOR_SIZE * GetTypeIdSize(type)]);
+	owned_data = unique_ptr<char[]>(new char[STANDARD_VECTOR_SIZE * GetTypeIdSize(type)]);
 	data = owned_data.get();
 	if (zero_data) {
 		memset(data, 0, STANDARD_VECTOR_SIZE * GetTypeIdSize(type));
@@ -142,8 +137,7 @@ void Vector::SetValue(size_t index_, Value val) {
 		if (newVal.is_null) {
 			((const char **)data)[index] = nullptr;
 		} else {
-			((const char **)data)[index] =
-			    string_heap.AddString(newVal.str_value);
+			((const char **)data)[index] = string_heap.AddString(newVal.str_value);
 		}
 		break;
 	}
@@ -154,8 +148,7 @@ void Vector::SetValue(size_t index_, Value val) {
 
 void Vector::SetStringValue(size_t index, const char *value) {
 	if (type != TypeId::VARCHAR) {
-		throw InvalidTypeException(
-		    type, "Can only set string value of VARCHAR vectors!");
+		throw InvalidTypeException(type, "Can only set string value of VARCHAR vectors!");
 	}
 	SetNull(index, value ? false : true);
 	if (value) {
@@ -239,8 +232,7 @@ void Vector::Copy(Vector &other, size_t offset) {
 		                            "supported! Call Cast instead!");
 	}
 	if (other.sel_vector) {
-		throw NotImplementedException(
-		    "Copy to vector with sel_vector not supported!");
+		throw NotImplementedException("Copy to vector with sel_vector not supported!");
 	}
 
 	other.nullmask.reset();
@@ -249,17 +241,16 @@ void Vector::Copy(Vector &other, size_t offset) {
 		other.count = count - offset;
 		auto source = (const char **)data;
 		auto target = (const char **)other.data;
-		VectorOperations::Exec(
-		    *this,
-		    [&](size_t i, size_t k) {
-			    if (nullmask[i]) {
-				    other.nullmask[k - offset] = true;
-				    target[k - offset] = nullptr;
-			    } else {
-				    target[k - offset] = other.string_heap.AddString(source[i]);
-			    }
-		    },
-		    offset);
+		VectorOperations::Exec(*this,
+		                       [&](size_t i, size_t k) {
+			                       if (nullmask[i]) {
+				                       other.nullmask[k - offset] = true;
+				                       target[k - offset] = nullptr;
+			                       } else {
+				                       target[k - offset] = other.string_heap.AddString(source[i]);
+			                       }
+		                       },
+		                       offset);
 	} else {
 		VectorOperations::Copy(*this, other, offset);
 	}
@@ -267,8 +258,7 @@ void Vector::Copy(Vector &other, size_t offset) {
 
 void Vector::Cast(TypeId new_type) {
 	if (new_type == TypeId::INVALID) {
-		throw InvalidTypeException(new_type,
-		                           "Cannot create a vector of type invalid!");
+		throw InvalidTypeException(new_type, "Cannot create a vector of type invalid!");
 	}
 	if (type == new_type) {
 		return;
@@ -280,12 +270,10 @@ void Vector::Cast(TypeId new_type) {
 
 void Vector::Append(Vector &other) {
 	if (sel_vector) {
-		throw NotImplementedException(
-		    "Append to vector with selection vector not supported!");
+		throw NotImplementedException("Append to vector with selection vector not supported!");
 	}
 	if (other.type != type) {
-		throw TypeMismatchException(type, other.type,
-		                            "Can only append vectors of similar types");
+		throw TypeMismatchException(type, other.type, "Can only append vectors of similar types");
 	}
 	if (count + other.count > STANDARD_VECTOR_SIZE) {
 		throw OutOfRangeException("Cannot append to vector: vector is full!");
@@ -293,9 +281,7 @@ void Vector::Append(Vector &other) {
 	size_t old_count = count;
 	count += other.count;
 	// merge NULL mask
-	VectorOperations::Exec(other, [&](size_t i, size_t k) {
-		nullmask[old_count + k] = other.nullmask[i];
-	});
+	VectorOperations::Exec(other, [&](size_t i, size_t k) { nullmask[old_count + k] = other.nullmask[i]; });
 	if (!TypeIsConstantSize(type)) {
 		assert(type == TypeId::VARCHAR);
 		auto source = (const char **)other.data;
@@ -312,18 +298,17 @@ void Vector::Append(Vector &other) {
 	}
 }
 
-size_t Vector::NotNullSelVector(const Vector &vector, sel_t *not_null_vector,
-                                sel_t *&result_assignment, sel_t *null_vector) {
+size_t Vector::NotNullSelVector(const Vector &vector, sel_t *not_null_vector, sel_t *&result_assignment,
+                                sel_t *null_vector) {
 	if (vector.nullmask.any()) {
 		size_t result_count = 0, null_count = 0;
-		VectorOperations::Exec(vector.sel_vector, vector.count,
-		                       [&](size_t i, size_t k) {
-			                       if (!vector.nullmask[i]) {
-				                       not_null_vector[result_count++] = i;
-			                       } else if (null_vector) {
-				                       null_vector[null_count++] = i;
-			                       }
-		                       });
+		VectorOperations::Exec(vector.sel_vector, vector.count, [&](size_t i, size_t k) {
+			if (!vector.nullmask[i]) {
+				not_null_vector[result_count++] = i;
+			} else if (null_vector) {
+				null_vector[null_count++] = i;
+			}
+		});
 		result_assignment = not_null_vector;
 		return result_count;
 	} else {
@@ -346,13 +331,12 @@ void Vector::Verify() {
 	if (type == TypeId::VARCHAR) {
 		// we just touch all the strings and let the sanitizer figure out if any
 		// of them are deallocated/corrupt
-		VectorOperations::ExecType<const char *>(
-		    *this, [&](const char *string, size_t i, size_t k) {
-			    if (!nullmask[i]) {
-				    assert(string);
-				    assert(strlen(string) != (size_t)-1);
-			    }
-		    });
+		VectorOperations::ExecType<const char *>(*this, [&](const char *string, size_t i, size_t k) {
+			if (!nullmask[i]) {
+				assert(string);
+				assert(strlen(string) != (size_t)-1);
+			}
+		});
 	}
 }
 #endif

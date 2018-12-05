@@ -79,14 +79,12 @@ typedef DataFile<CompanyCompetitorDataFileRecord> CompanyCompetitorDataFile_t;
 typedef DataFile<CompanyDataFileRecord> CompanyDataFile_t;
 typedef WeightedDataFile<CompanySPRateDataFileRecord> CompanySPRateDataFile_t;
 typedef DataFile<ExchangeDataFileRecord> ExchangeDataFile_t;
-typedef WeightedDataFile<FemaleFirstNameDataFileRecord>
-    FemaleFirstNameDataFile_t;
+typedef WeightedDataFile<FemaleFirstNameDataFileRecord> FemaleFirstNameDataFile_t;
 typedef DataFile<IndustryDataFileRecord> IndustryDataFile_t;
 typedef WeightedDataFile<LastNameDataFileRecord> LastNameDataFile_t;
 typedef WeightedDataFile<MaleFirstNameDataFileRecord> MaleFirstNameDataFile_t;
 typedef WeightedDataFile<NewsDataFileRecord> NewsDataFile_t;
-typedef DataFile<NonTaxableAccountNameDataFileRecord>
-    NonTaxableAccountNameDataFile_t;
+typedef DataFile<NonTaxableAccountNameDataFileRecord> NonTaxableAccountNameDataFile_t;
 typedef DataFile<SectorDataFileRecord> SectorDataFile_t;
 typedef DataFile<SecurityDataFileRecord> SecurityDataFile_t;
 typedef DataFile<StatusTypeDataFileRecord> StatusTypeDataFile_t;
@@ -94,8 +92,7 @@ typedef WeightedDataFile<StreetNameDataFileRecord> StreetNameDataFile_t;
 typedef WeightedDataFile<StreetSuffixDataFileRecord> StreetSuffixDataFile_t;
 typedef DataFile<TaxableAccountNameDataFileRecord> TaxableAccountNameDataFile_t;
 typedef BucketedDataFile<TaxRateCountryDataFileRecord> TaxRateCountryDataFile_t;
-typedef BucketedDataFile<TaxRateDivisionDataFileRecord>
-    TaxRateDivisionDataFile_t;
+typedef BucketedDataFile<TaxRateDivisionDataFileRecord> TaxRateDivisionDataFile_t;
 typedef DataFile<TradeTypeDataFileRecord> TradeTypeDataFile_t;
 typedef WeightedDataFile<ZipCodeDataFileRecord> ZipCodeDataFile_t;
 
@@ -128,30 +125,29 @@ enum DataFileType {
 };
 
 // Default data file names.
-static const char *const DataFileNames[] = {
-    "AreaCode",
-    "Charge",
-    "CommissionRate",
-    "CompanyCompetitor",
-    "Company",
-    "CompanySPRate",
-    "Exchange",
-    "FemaleFirstName",
-    "Industry",
-    "LastName",
-    "MaleFirstName",
-    "LastName", // News uses last names as a source of words.
-    "NonTaxableAccountName",
-    "Sector",
-    "Security",
-    "StatusType",
-    "StreetName",
-    "StreetSuffix",
-    "TaxableAccountName",
-    "TaxRatesCountry",
-    "TaxRatesDivision",
-    "TradeType",
-    "ZipCode"};
+static const char *const DataFileNames[] = {"AreaCode",
+                                            "Charge",
+                                            "CommissionRate",
+                                            "CompanyCompetitor",
+                                            "Company",
+                                            "CompanySPRate",
+                                            "Exchange",
+                                            "FemaleFirstName",
+                                            "Industry",
+                                            "LastName",
+                                            "MaleFirstName",
+                                            "LastName", // News uses last names as a source of words.
+                                            "NonTaxableAccountName",
+                                            "Sector",
+                                            "Security",
+                                            "StatusType",
+                                            "StreetName",
+                                            "StreetSuffix",
+                                            "TaxableAccountName",
+                                            "TaxRatesCountry",
+                                            "TaxRatesDivision",
+                                            "TradeType",
+                                            "ZipCode"};
 
 // Default data file extension.
 static const std::string DataFileExtension(".txt");

@@ -54,14 +54,12 @@ class CFlatLoaderFactory : public CBaseLoaderFactory {
 	FlatFileOutputModes m_eOutputMode; // overwrite/append
 
 	void SetFileName(const char *szFileName) {
-		snprintf(m_szFullFileName, sizeof(m_szFullFileName), "%s%s", m_szOutDir,
-		         szFileName);
+		snprintf(m_szFullFileName, sizeof(m_szFullFileName), "%s%s", m_szOutDir, szFileName);
 	}
 
-  public:
+public:
 	// Constructor
-	CFlatLoaderFactory(char *szOutDir, FlatFileOutputModes eOutputMode)
-	    : m_eOutputMode(eOutputMode) {
+	CFlatLoaderFactory(char *szOutDir, FlatFileOutputModes eOutputMode) : m_eOutputMode(eOutputMode) {
 		assert(szOutDir);
 
 		strncpy(m_szOutDir, szOutDir, sizeof(m_szOutDir));
@@ -69,8 +67,7 @@ class CFlatLoaderFactory : public CBaseLoaderFactory {
 
 	// Functions to create loader classes for individual tables.
 
-	virtual CBaseLoader<ACCOUNT_PERMISSION_ROW> *
-	CreateAccountPermissionLoader() {
+	virtual CBaseLoader<ACCOUNT_PERMISSION_ROW> *CreateAccountPermissionLoader() {
 		SetFileName("AccountPermission.txt");
 
 		return new CFlatAccountPermissionLoad(m_szFullFileName, m_eOutputMode);
@@ -102,8 +99,7 @@ class CFlatLoaderFactory : public CBaseLoaderFactory {
 		return new CFlatCommissionRateLoad(m_szFullFileName, m_eOutputMode);
 	};
 
-	virtual CBaseLoader<COMPANY_COMPETITOR_ROW> *
-	CreateCompanyCompetitorLoader() {
+	virtual CBaseLoader<COMPANY_COMPETITOR_ROW> *CreateCompanyCompetitorLoader() {
 		SetFileName("CompanyCompetitor.txt");
 
 		return new CFlatCompanyCompetitorLoad(m_szFullFileName, m_eOutputMode);

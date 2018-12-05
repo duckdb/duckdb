@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // parser/tableref/table_function.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -17,11 +15,11 @@
 namespace duckdb {
 //! Represents a Table producing function
 class TableFunction : public TableRef {
-  public:
+public:
 	TableFunction() : TableRef(TableReferenceType::TABLE_FUNCTION) {
 	}
 
-	std::unique_ptr<TableRef> Accept(SQLNodeVisitor *v) override {
+	unique_ptr<TableRef> Accept(SQLNodeVisitor *v) override {
 		return v->Visit(*this);
 	}
 	bool Equals(const TableRef *other_) override {
@@ -32,17 +30,17 @@ class TableFunction : public TableRef {
 		return function->Equals(other->function.get());
 	}
 
-	std::unique_ptr<TableRef> Copy() override;
+	unique_ptr<TableRef> Copy() override;
 
 	//! Serializes a blob into a BaseTableRef
 	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into a BaseTableRef
-	static std::unique_ptr<TableRef> Deserialize(Deserializer &source);
+	static unique_ptr<TableRef> Deserialize(Deserializer &source);
 
-	std::string ToString() const override {
+	string ToString() const override {
 		return function->ToString();
 	}
 
-	std::unique_ptr<Expression> function;
+	unique_ptr<Expression> function;
 };
 } // namespace duckdb

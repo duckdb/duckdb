@@ -45,12 +45,11 @@
 namespace TPCE {
 
 class CFlatTradeRequestLoad : public CFlatFileLoader<TRADE_REQUEST_ROW> {
-  private:
+private:
 	const std::string TradeRequestRowFmt;
 
-  public:
-	CFlatTradeRequestLoad(char *szFileName,
-	                      FlatFileOutputModes FlatFileOutputMode)
+public:
+	CFlatTradeRequestLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
 	    : CFlatFileLoader<TRADE_REQUEST_ROW>(szFileName, FlatFileOutputMode),
 	      TradeRequestRowFmt("%" PRId64 "|%s|%s|%d|%.2f|%" PRId64 "\n"){};
 
@@ -58,13 +57,10 @@ class CFlatTradeRequestLoad : public CFlatFileLoader<TRADE_REQUEST_ROW> {
 	 *   Writes a record to the file.
 	 */
 	void WriteNextRecord(const TRADE_REQUEST_ROW &next_record) {
-		int rc = fprintf(hOutFile, TradeRequestRowFmt.c_str(),
-		                 next_record.TR_T_ID, next_record.TR_TT_ID,
-		                 next_record.TR_S_SYMB, next_record.TR_QTY,
-		                 next_record.TR_BID_PRICE, next_record.TR_B_ID);
+		int rc = fprintf(hOutFile, TradeRequestRowFmt.c_str(), next_record.TR_T_ID, next_record.TR_TT_ID,
+		                 next_record.TR_S_SYMB, next_record.TR_QTY, next_record.TR_BID_PRICE, next_record.TR_B_ID);
 		if (rc < 0) {
-			throw CSystemErr(CSystemErr::eWriteFile,
-			                 "CFlatTradeRequestLoad::WriteNextRecord");
+			throw CSystemErr(CSystemErr::eWriteFile, "CFlatTradeRequestLoad::WriteNextRecord");
 		}
 	}
 };

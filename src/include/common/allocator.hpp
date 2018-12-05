@@ -1,20 +1,18 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // common/allocator.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
+#include "common/helper.hpp"
+
 #include <limits>
 #include <memory>
 #include <sstream>
-
-#include "common/helper.hpp"
 
 namespace duckdb {
 
@@ -28,7 +26,7 @@ namespace duckdb {
 //! destructors because they will leak! NOTE! Allocator is not thread safe
 //! either
 class Allocator {
-  public:
+public:
 	void Destroy() {
 		chunk = nullptr;
 	}
@@ -59,8 +57,7 @@ class Allocator {
 			return ptr;
 		} else {
 			// make a block of MINIMUM_ALLOCATOR_BLOCK_SIZE
-			auto new_chunk =
-			    make_unique<AllocatorRegion>(MINIMUM_ALLOCATOR_BLOCK_SIZE);
+			auto new_chunk = make_unique<AllocatorRegion>(MINIMUM_ALLOCATOR_BLOCK_SIZE);
 			// allocate the space
 			auto ptr = new_chunk->data.get();
 			new_chunk->current_position = size;
@@ -71,16 +68,16 @@ class Allocator {
 		}
 	}
 
-  private:
+private:
 	struct AllocatorRegion {
 		AllocatorRegion(size_t size) : current_position(0), maximum_size(size) {
-			data = std::unique_ptr<char[]>(new char[maximum_size]);
+			data = unique_ptr<char[]>(new char[maximum_size]);
 		}
-		std::unique_ptr<char[]> data;
+		unique_ptr<char[]> data;
 		size_t current_position;
 		size_t maximum_size;
-		std::unique_ptr<AllocatorRegion> prev;
+		unique_ptr<AllocatorRegion> prev;
 	};
-	std::unique_ptr<AllocatorRegion> chunk;
+	unique_ptr<AllocatorRegion> chunk;
 };
 } // namespace duckdb

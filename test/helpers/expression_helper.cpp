@@ -30,7 +30,7 @@ unique_ptr<Expression> ParseExpression(string expression) {
 	}
 	auto &select = *((SelectStatement *)parser.statements[0].get());
 
-    auto &select_list = select.node->GetSelectList();
+	auto &select_list = select.node->GetSelectList();
 	SetColumnRefTypes(*select_list[0]);
 	select_list[0]->ResolveType();
 

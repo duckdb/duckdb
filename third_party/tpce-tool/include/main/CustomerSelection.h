@@ -54,11 +54,7 @@ namespace TPCE {
 /*
  *   Define customer tier type.
  */
-enum eCustomerTier {
-	eCustomerTierOne = 1,
-	eCustomerTierTwo,
-	eCustomerTierThree
-};
+enum eCustomerTier { eCustomerTierOne = 1, eCustomerTierTwo, eCustomerTierThree };
 
 class CCustomerSelection {
 	CRandom *m_pRND; // external random number generator
@@ -99,7 +95,7 @@ class CCustomerSelection {
 		return ((C_ID - 1) / 1000);
 	}
 
-  public:
+public:
 	/*
 	 *   Default constructor.
 	 */
@@ -108,14 +104,12 @@ class CCustomerSelection {
 	/*
 	 *   Constructor to set the customer range.
 	 */
-	CCustomerSelection(CRandom *pRND, TIdent iStartFromCustomer,
-	                   TIdent iCustomerCount);
+	CCustomerSelection(CRandom *pRND, TIdent iStartFromCustomer, TIdent iCustomerCount);
 
 	/*
 	 *   Constructor to set subrange when paritioning by C_ID.
 	 */
-	CCustomerSelection(CRandom *pRND, TIdent iStartFromCustomer,
-	                   TIdent iCustomerCount, int iPartitionPercent,
+	CCustomerSelection(CRandom *pRND, TIdent iStartFromCustomer, TIdent iCustomerCount, int iPartitionPercent,
 	                   TIdent iMyStartFromCustomer, TIdent iMyCustomerCount);
 
 	/*

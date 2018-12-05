@@ -1,4 +1,3 @@
-
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/expression/star_expression.hpp"
 #include "parser/statement/copy_statement.hpp"
@@ -44,16 +43,14 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 			statement->from_table = move(ref);
 			if (stmt->attlist) {
 				for (size_t i = 0; i < result->select_list.size(); i++)
-					statement->select_list.push_back(
-					    make_unique<ColumnRefExpression>(
-					        result->select_list[i]));
+					statement->select_list.push_back(make_unique<ColumnRefExpression>(result->select_list[i]));
 			} else {
 				statement->select_list.push_back(make_unique<StarExpression>());
 			}
 			result->select_statement = move(statement);
 		}
 	} else {
-		result->select_statement = TransformSelectNode((SelectStmt*)stmt->query);
+		result->select_statement = TransformSelectNode((SelectStmt *)stmt->query);
 	}
 
 	// Handle options
@@ -71,8 +68,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 			// Check format
 			if (def_elem->defname == kFormatTok) {
 				auto *format_val = reinterpret_cast<value *>(def_elem->arg);
-				result->format =
-				    StringToExternalFileFormat(format_val->val.str);
+				result->format = StringToExternalFileFormat(format_val->val.str);
 			}
 
 			// Check quote

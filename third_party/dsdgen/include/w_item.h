@@ -37,8 +37,7 @@
 #define W_ITEM_H
 #include "constants.h"
 
-#define I_PROMO_PERCENTAGE                                                     \
-	20 /* percent of items that have associated promotions */
+#define I_PROMO_PERCENTAGE 20 /* percent of items that have associated promotions */
 #define MIN_ITEM_MARKDOWN_PCT "0.30"
 #define MAX_ITEM_MARKDOWN_PCT "0.90"
 

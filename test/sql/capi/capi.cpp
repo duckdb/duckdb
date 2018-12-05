@@ -1,9 +1,7 @@
-
+#include "capi_helpers.hpp"
 #include "catch.hpp"
 
 #include <vector>
-
-#include "capi_helpers.hpp"
 
 using namespace std;
 
@@ -27,19 +25,13 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	duckdb_destroy_result(result);
 
 	// multiple insertions
-	REQUIRE(duckdb_query(connection,
-	                     "CREATE TABLE test (a INTEGER, b INTEGER);",
-	                     NULL) == DuckDBSuccess);
-	REQUIRE(duckdb_query(connection, "INSERT INTO test VALUES (11, 22)",
-	                     NULL) == DuckDBSuccess);
-	REQUIRE(duckdb_query(connection, "INSERT INTO test VALUES (NULL, 21)",
-	                     NULL) == DuckDBSuccess);
-	REQUIRE(duckdb_query(connection, "INSERT INTO test VALUES (13, 22)",
-	                     NULL) == DuckDBSuccess);
+	REQUIRE(duckdb_query(connection, "CREATE TABLE test (a INTEGER, b INTEGER);", NULL) == DuckDBSuccess);
+	REQUIRE(duckdb_query(connection, "INSERT INTO test VALUES (11, 22)", NULL) == DuckDBSuccess);
+	REQUIRE(duckdb_query(connection, "INSERT INTO test VALUES (NULL, 21)", NULL) == DuckDBSuccess);
+	REQUIRE(duckdb_query(connection, "INSERT INTO test VALUES (13, 22)", NULL) == DuckDBSuccess);
 
 	// NULL selection
-	REQUIRE(duckdb_query(connection, "SELECT a FROM test", &result) ==
-	        DuckDBSuccess);
+	REQUIRE(duckdb_query(connection, "SELECT a FROM test", &result) == DuckDBSuccess);
 	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {11, NULL_NUMERIC, 13}));
 	duckdb_destroy_result(result);
 

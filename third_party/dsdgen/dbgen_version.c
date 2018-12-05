@@ -79,10 +79,8 @@ int mk_dbgen_version(void *pDest, ds_key_t kIndex) {
 	time(&ltime);                   /* Get time in seconds */
 	pTimeStamp = localtime(&ltime); /* Convert time to struct */
 
-	sprintf(r->szDate, "%4d-%02d-%02d", pTimeStamp->tm_year + 1900,
-	        pTimeStamp->tm_mon + 1, pTimeStamp->tm_mday);
-	sprintf(r->szTime, "%02d:%02d:%02d", pTimeStamp->tm_hour,
-	        pTimeStamp->tm_min, pTimeStamp->tm_sec);
+	sprintf(r->szDate, "%4d-%02d-%02d", pTimeStamp->tm_year + 1900, pTimeStamp->tm_mon + 1, pTimeStamp->tm_mday);
+	sprintf(r->szTime, "%02d:%02d:%02d", pTimeStamp->tm_hour, pTimeStamp->tm_min, pTimeStamp->tm_sec);
 	sprintf(r->szVersion, "%d.%d.%d%s", VERSION, RELEASE, MODIFICATION, PATCH);
 	strcpy(r->szCmdLineArgs, "--this_table_is_rather_pointless");
 

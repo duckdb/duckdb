@@ -23,13 +23,13 @@ class ClientContext;
 //! The physical plan generator generates a physical execution plan from a
 //! logical query plan
 class PhysicalPlanGenerator : public LogicalOperatorVisitor {
-	public:
+public:
 	PhysicalPlanGenerator(ClientContext &context, PhysicalPlanGenerator *parent = nullptr)
 	    : parent(parent), context(context) {
 	}
 	using LogicalOperatorVisitor::Visit;
 
-	void CreatePlan(std::unique_ptr<LogicalOperator> logical);
+	void CreatePlan(unique_ptr<LogicalOperator> logical);
 
 	virtual void Visit(LogicalAggregate &op);
 	virtual void Visit(LogicalCreate &op);
@@ -52,17 +52,17 @@ class PhysicalPlanGenerator : public LogicalOperatorVisitor {
 	virtual void Visit(LogicalTableFunction &expr);
 	virtual void Visit(LogicalPruneColumns &expr);
 
-	virtual std::unique_ptr<Expression> Visit(SubqueryExpression &expr);
+	virtual unique_ptr<Expression> Visit(SubqueryExpression &expr);
 
 	void Print() {
 		plan->Print();
 	}
 
-	std::unique_ptr<PhysicalOperator> plan;
+	unique_ptr<PhysicalOperator> plan;
 
 	PhysicalPlanGenerator *parent;
 
-	private:
+private:
 	ClientContext &context;
 };
 } // namespace duckdb

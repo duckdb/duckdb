@@ -1,4 +1,3 @@
-
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
@@ -19,8 +18,7 @@ TEST_CASE("Test Copy statement", "[copystatement]") {
 	from_csv_file.close();
 
 	// Loading CSV into a table
-	result =
-	    con.Query("CREATE TABLE test (a INTEGER, b INTEGER,c VARCHAR(10));");
+	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER,c VARCHAR(10));");
 	result = con.Query("COPY test FROM 'test.csv';");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 
@@ -33,8 +31,7 @@ TEST_CASE("Test Copy statement", "[copystatement]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 
 	//  Creating CSV from Query
-	result =
-	    con.Query("COPY (select a,b from test where a < 4000) to 'test3.csv';");
+	result = con.Query("COPY (select a,b from test where a < 4000) to 'test3.csv';");
 	REQUIRE(CHECK_COLUMN(result, 0, {4000}));
 
 	// Exporting selected columns from a table to a CSV.
@@ -42,8 +39,7 @@ TEST_CASE("Test Copy statement", "[copystatement]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 
 	// Importing CSV to Selected Columns
-	result =
-	    con.Query("CREATE TABLE test2 (a INTEGER, b INTEGER,c VARCHAR(10));");
+	result = con.Query("CREATE TABLE test2 (a INTEGER, b INTEGER,c VARCHAR(10));");
 	result = con.Query("COPY test2(a,c) from 'test4.csv';");
 
 	// use a different delimiter
@@ -52,8 +48,7 @@ TEST_CASE("Test Copy statement", "[copystatement]") {
 		from_csv_file_pipe << i << "|" << i << "|test" << endl;
 	from_csv_file_pipe.close();
 
-	result =
-	    con.Query("CREATE TABLE test (a INTEGER, b INTEGER,c VARCHAR(10));");
+	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER,c VARCHAR(10));");
 	result = con.Query("COPY test FROM 'test_pipe.csv' DELIMITER '|';");
 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
 

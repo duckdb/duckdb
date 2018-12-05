@@ -60,45 +60,33 @@ void CMEETickerTape::Initialize(void) {
 	// Set up status and trade types for Market-Feed input
 	//
 	// Submitted
-	strncpy(m_TxnInput.StatusAndTradeType.status_submitted,
-	        m_StatusType[eSubmitted].ST_ID_CSTR(),
+	strncpy(m_TxnInput.StatusAndTradeType.status_submitted, m_StatusType[eSubmitted].ST_ID_CSTR(),
 	        sizeof(m_TxnInput.StatusAndTradeType.status_submitted));
 	// Limit-Buy
-	strncpy(m_TxnInput.StatusAndTradeType.type_limit_buy,
-	        m_TradeType[eLimitBuy].TT_ID_CSTR(),
+	strncpy(m_TxnInput.StatusAndTradeType.type_limit_buy, m_TradeType[eLimitBuy].TT_ID_CSTR(),
 	        sizeof(m_TxnInput.StatusAndTradeType.type_limit_buy));
 	// Limit-Sell
-	strncpy(m_TxnInput.StatusAndTradeType.type_limit_sell,
-	        m_TradeType[eLimitSell].TT_ID_CSTR(),
+	strncpy(m_TxnInput.StatusAndTradeType.type_limit_sell, m_TradeType[eLimitSell].TT_ID_CSTR(),
 	        sizeof(m_TxnInput.StatusAndTradeType.type_limit_sell));
 	// Stop-Loss
-	strncpy(m_TxnInput.StatusAndTradeType.type_stop_loss,
-	        m_TradeType[eStopLoss].TT_ID_CSTR(),
+	strncpy(m_TxnInput.StatusAndTradeType.type_stop_loss, m_TradeType[eStopLoss].TT_ID_CSTR(),
 	        sizeof(m_TxnInput.StatusAndTradeType.type_stop_loss));
 }
 
 // Constructor - use default RNG seed
-CMEETickerTape::CMEETickerTape(CMEESUTInterface *pSUT,
-                               CMEEPriceBoard *pPriceBoard,
-                               CDateTime *pBaseTime, CDateTime *pCurrentTime,
-                               const DataFileManager &dfm)
-    : m_pSUT(pSUT), m_pPriceBoard(pPriceBoard), m_BatchIndex(0),
-      m_BatchDuplicates(0), m_rnd(RNGSeedBaseMEETickerTape), m_Enabled(true),
-      m_pBaseTime(pBaseTime), m_pCurrentTime(pCurrentTime),
-      m_StatusType(dfm.StatusTypeDataFile()),
+CMEETickerTape::CMEETickerTape(CMEESUTInterface *pSUT, CMEEPriceBoard *pPriceBoard, CDateTime *pBaseTime,
+                               CDateTime *pCurrentTime, const DataFileManager &dfm)
+    : m_pSUT(pSUT), m_pPriceBoard(pPriceBoard), m_BatchIndex(0), m_BatchDuplicates(0), m_rnd(RNGSeedBaseMEETickerTape),
+      m_Enabled(true), m_pBaseTime(pBaseTime), m_pCurrentTime(pCurrentTime), m_StatusType(dfm.StatusTypeDataFile()),
       m_TradeType(dfm.TradeTypeDataFile()) {
 	Initialize();
 }
 
 // Constructor - RNG seed provided
-CMEETickerTape::CMEETickerTape(CMEESUTInterface *pSUT,
-                               CMEEPriceBoard *pPriceBoard,
-                               CDateTime *pBaseTime, CDateTime *pCurrentTime,
-                               RNGSEED RNGSeed, const DataFileManager &dfm)
-    : m_pSUT(pSUT), m_pPriceBoard(pPriceBoard), m_BatchIndex(0),
-      m_BatchDuplicates(0), m_rnd(RNGSeed), m_Enabled(true),
-      m_pBaseTime(pBaseTime), m_pCurrentTime(pCurrentTime),
-      m_StatusType(dfm.StatusTypeDataFile()),
+CMEETickerTape::CMEETickerTape(CMEESUTInterface *pSUT, CMEEPriceBoard *pPriceBoard, CDateTime *pBaseTime,
+                               CDateTime *pCurrentTime, RNGSEED RNGSeed, const DataFileManager &dfm)
+    : m_pSUT(pSUT), m_pPriceBoard(pPriceBoard), m_BatchIndex(0), m_BatchDuplicates(0), m_rnd(RNGSeed), m_Enabled(true),
+      m_pBaseTime(pBaseTime), m_pCurrentTime(pCurrentTime), m_StatusType(dfm.StatusTypeDataFile()),
       m_TradeType(dfm.TradeTypeDataFile()) {
 	Initialize();
 }
@@ -131,17 +119,13 @@ void CMEETickerTape::PostLimitOrder(PTradeRequest pTradeRequest) {
 	eTradeType = ConvertTradeTypeIdToEnum(pTradeRequest->trade_type_id);
 
 	pNewEntry->price_quote = pTradeRequest->price_quote;
-	strncpy(pNewEntry->symbol, pTradeRequest->symbol,
-	        sizeof(pNewEntry->symbol));
+	strncpy(pNewEntry->symbol, pTradeRequest->symbol, sizeof(pNewEntry->symbol));
 	pNewEntry->trade_qty = LIMIT_TRIGGER_TRADE_QTY;
 
-	CurrentPrice =
-	    m_pPriceBoard->GetCurrentPrice(pTradeRequest->symbol).DollarAmount();
+	CurrentPrice = m_pPriceBoard->GetCurrentPrice(pTradeRequest->symbol).DollarAmount();
 
-	if (((eTradeType == eLimitBuy || eTradeType == eStopLoss) &&
-	     CurrentPrice <= pTradeRequest->price_quote) ||
-	    ((eTradeType == eLimitSell) &&
-	     CurrentPrice >= pTradeRequest->price_quote)) {
+	if (((eTradeType == eLimitBuy || eTradeType == eStopLoss) && CurrentPrice <= pTradeRequest->price_quote) ||
+	    ((eTradeType == eLimitSell) && CurrentPrice >= pTradeRequest->price_quote)) {
 		// Limit Order is in-the-money.
 		pNewEntry->price_quote = CurrentPrice;
 		// Make sure everything is up to date.
@@ -157,13 +141,10 @@ void CMEETickerTape::PostLimitOrder(PTradeRequest pTradeRequest) {
 		// GetSubmissionTime returns a value relative to time 0, so we
 		// need to substract off the value for the current time to get
 		// the delay time relative to now.
-		TriggerTimeDelay = m_pPriceBoard->GetSubmissionTime(
-		                       pNewEntry->symbol, fCurrentTime,
-		                       pNewEntry->price_quote, eTradeType) -
-		                   fCurrentTime;
-		m_LimitOrderTimers.StartTimer(TriggerTimeDelay, this,
-		                              &CMEETickerTape::AddLimitTrigger,
-		                              pNewEntry);
+		TriggerTimeDelay =
+		    m_pPriceBoard->GetSubmissionTime(pNewEntry->symbol, fCurrentTime, pNewEntry->price_quote, eTradeType) -
+		    fCurrentTime;
+		m_LimitOrderTimers.StartTimer(TriggerTimeDelay, this, &CMEETickerTape::AddLimitTrigger, pNewEntry);
 	}
 }
 
@@ -176,15 +157,11 @@ void CMEETickerTape::AddArtificialEntries(void) {
 	TTickerEntry TickerEntry;
 	int TotalEntryCount = 0;
 	static const int PaddingLimit =
-	    (max_feed_len / 10) -
-	    1; // NOTE: 10 here represents the ratio of TR to MF transactions
-	static const int PaddingLimitForAll =
-	    PaddingLimit; // MAX (trigger+artificial) entries
-	static const int PaddingLimitForTriggers =
-	    PaddingLimit; // MAX (triggered) entries
+	    (max_feed_len / 10) - 1;                        // NOTE: 10 here represents the ratio of TR to MF transactions
+	static const int PaddingLimitForAll = PaddingLimit; // MAX (trigger+artificial) entries
+	static const int PaddingLimitForTriggers = PaddingLimit; // MAX (triggered) entries
 
-	while (TotalEntryCount < PaddingLimitForTriggers &&
-	       !m_InTheMoneyLimitOrderQ.empty()) {
+	while (TotalEntryCount < PaddingLimitForTriggers && !m_InTheMoneyLimitOrderQ.empty()) {
 		PTickerEntry pEntry = m_InTheMoneyLimitOrderQ.front();
 		AddToBatch(pEntry);
 		delete pEntry;
@@ -193,16 +170,11 @@ void CMEETickerTape::AddArtificialEntries(void) {
 	}
 
 	while (TotalEntryCount < PaddingLimitForAll) {
-		TickerEntry.trade_qty =
-		    (m_rnd.RndPercent(50)) ? RANDOM_TRADE_QTY_1 : RANDOM_TRADE_QTY_2;
+		TickerEntry.trade_qty = (m_rnd.RndPercent(50)) ? RANDOM_TRADE_QTY_1 : RANDOM_TRADE_QTY_2;
 
-		SecurityIndex =
-		    m_rnd.RndInt64Range(0, m_pPriceBoard->m_iNumberOfSecurities - 1);
-		TickerEntry.price_quote =
-		    (m_pPriceBoard->GetCurrentPrice(SecurityIndex)).DollarAmount();
-		m_pPriceBoard->GetSymbol(
-		    SecurityIndex, TickerEntry.symbol,
-		    static_cast<INT32>(sizeof(TickerEntry.symbol)));
+		SecurityIndex = m_rnd.RndInt64Range(0, m_pPriceBoard->m_iNumberOfSecurities - 1);
+		TickerEntry.price_quote = (m_pPriceBoard->GetCurrentPrice(SecurityIndex)).DollarAmount();
+		m_pPriceBoard->GetSymbol(SecurityIndex, TickerEntry.symbol, static_cast<INT32>(sizeof(TickerEntry.symbol)));
 
 		AddToBatch(&TickerEntry);
 		TotalEntryCount++;
@@ -212,8 +184,7 @@ void CMEETickerTape::AddArtificialEntries(void) {
 void CMEETickerTape::AddToBatch(PTickerEntry pTickerEntry) {
 	// Check to see if this symbol already exists in the batch
 	for (int i = 0; i < m_BatchIndex; i++) {
-		if (strncmp(pTickerEntry->symbol, m_TxnInput.Entries[i].symbol,
-		            cSYMBOL_len) == 0) {
+		if (strncmp(pTickerEntry->symbol, m_TxnInput.Entries[i].symbol, cSYMBOL_len) == 0) {
 			m_BatchDuplicates++;
 			break;
 		}

@@ -52,16 +52,14 @@
 extern option_t options[];
 extern char *params[];
 #else
-option_t options[] = {
-    {"PROG", OPT_STR | OPT_HIDE, 0, NULL, NULL, "tester"},
-    {"PARAMS", OPT_STR, 1, "read parameters from file <s>", read_file, ""},
-    {"DISTRIBUTIONS", OPT_STR, 2, "read distributions from file <s>", NULL,
-     "tester_dist.idx"},
-    {"OUTDIR", OPT_STR, 3, "generate files in directory <s>", NULL, "./"},
-    {"VERBOSE", OPT_FLG, 4, "enable verbose output", NULL, "N"},
-    {"HELP", OPT_FLG, 5, "display this message", usage, "N"},
-    {"scale", OPT_INT, 6, "set scale to <i>", NULL, "1"},
-    NULL};
+option_t options[] = {{"PROG", OPT_STR | OPT_HIDE, 0, NULL, NULL, "tester"},
+                      {"PARAMS", OPT_STR, 1, "read parameters from file <s>", read_file, ""},
+                      {"DISTRIBUTIONS", OPT_STR, 2, "read distributions from file <s>", NULL, "tester_dist.idx"},
+                      {"OUTDIR", OPT_STR, 3, "generate files in directory <s>", NULL, "./"},
+                      {"VERBOSE", OPT_FLG, 4, "enable verbose output", NULL, "N"},
+                      {"HELP", OPT_FLG, 5, "display this message", usage, "N"},
+                      {"scale", OPT_INT, 6, "set scale to <i>", NULL, "1"},
+                      NULL};
 char *params[9];
 #endif
 
@@ -177,8 +175,7 @@ int is_set(char *flag) {
 		if ((options[nParam].flags & TYPE_MASK) == OPT_FLG)
 			bIsSet = (params[options[nParam].index][0] == 'Y') ? 1 : 0;
 		else
-			bIsSet = (options[nParam].flags & OPT_SET) ||
-			         (strlen(options[nParam].dflt) > 0);
+			bIsSet = (options[nParam].flags & OPT_SET) || (strlen(options[nParam].dflt) > 0);
 	}
 
 	return (bIsSet); /* better a false negative than a false positive ? */
@@ -402,8 +399,7 @@ int save_file(char *path) {
 	if ((ofp = fopen(path, "w")) == NULL)
 		return (-1);
 
-	fprintf(ofp, "--\n-- %s Benchmark Parameter File\n-- Created: %s",
-	        get_str("PROG"), ctime(&timestamp));
+	fprintf(ofp, "--\n-- %s Benchmark Parameter File\n-- Created: %s", get_str("PROG"), ctime(&timestamp));
 	fprintf(ofp, "--\n-- Each entry is of the form: '<parameter> = <value> -- "
 	             "optional comment'\n");
 	fprintf(ofp, "-- Refer to benchmark documentation for more details\n--\n");
@@ -451,8 +447,8 @@ int save_file(char *path) {
 int usage(char *param_name, char *msg) {
 	init_params();
 
-	fprintf(stderr, "%s Population Generator (Version %d.%d.%d%s)\n",
-	        get_str("PROG"), VERSION, RELEASE, MODIFICATION, PATCH);
+	fprintf(stderr, "%s Population Generator (Version %d.%d.%d%s)\n", get_str("PROG"), VERSION, RELEASE, MODIFICATION,
+	        PATCH);
 	fprintf(stderr, "Copyright %s %s\n", COPYRIGHT, C_DATES);
 
 	if (msg != NULL)
@@ -461,13 +457,10 @@ int usage(char *param_name, char *msg) {
 	printf("\n\nUSAGE: %s [options]\n", get_str("PROG"));
 	printf("\nNote: When defined in a parameter file (using -p), parmeters "
 	       "should\n");
-	printf(
-	    "use the form below. Each option can also be set from the command\n");
-	printf("line, using a form of '%cparam [optional argument]'\n",
-	       OPTION_START);
+	printf("use the form below. Each option can also be set from the command\n");
+	printf("line, using a form of '%cparam [optional argument]'\n", OPTION_START);
 	printf("Unique anchored substrings of options are also recognized, and \n");
-	printf("case is ignored, so '%csc' is equivalent to '%cSCALE'\n\n",
-	       OPTION_START, OPTION_START);
+	printf("case is ignored, so '%csc' is equivalent to '%cSCALE'\n\n", OPTION_START, OPTION_START);
 	printf("General Options\n===============\n");
 	print_options(options, 0);
 	printf("\n");
@@ -515,9 +508,7 @@ int set_option(char *name, char *param) {
 
 	switch (o->flags & TYPE_MASK) {
 	case OPT_FLG:
-		if ((param &&
-		     (*param == 'Y' || *param == 'Y' || *param == OPTION_START)) ||
-		    (param == NULL)) {
+		if ((param && (*param == 'Y' || *param == 'Y' || *param == OPTION_START)) || (param == NULL)) {
 			if (o->action)
 				if (o->action(o->name, NULL) < 0)
 					usage(o->name, "Cannot process option");
@@ -555,8 +546,7 @@ int set_option(char *name, char *param) {
 		res = 2;
 		break;
 	default:
-		fprintf(stderr, "Invalid option/type (%d/%s)\n", o->flags & TYPE_MASK,
-		        o->name);
+		fprintf(stderr, "Invalid option/type (%d/%s)\n", o->flags & TYPE_MASK, o->name);
 		exit(0);
 		break;
 	}
@@ -590,13 +580,11 @@ int process_options(int count, char **vector) {
 			if (option_num == (count - 1))
 				res = set_option(vector[option_num] + 1, NULL);
 			else
-				res =
-				    set_option(vector[option_num] + 1, vector[option_num + 1]);
+				res = set_option(vector[option_num] + 1, vector[option_num + 1]);
 		}
 
 		if (res < 0) {
-			printf("ERROR: option '%s' or its argument unknown.\n",
-			       (vector[option_num] + 1));
+			printf("ERROR: option '%s' or its argument unknown.\n", (vector[option_num] + 1));
 			usage(NULL, NULL);
 			exit(1);
 		} else

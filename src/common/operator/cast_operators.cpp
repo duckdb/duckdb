@@ -1,5 +1,5 @@
-
 #include "common/operator/cast_operators.hpp"
+
 #include "common/exception.hpp"
 #include "common/limits.hpp"
 #include "common/types/date.hpp"
@@ -13,25 +13,21 @@ namespace operators {
 
 template <class SRC, class DST> static DST cast_with_overflow_check(SRC value) {
 	if (value < MinimumValue<DST>() || value > MaximumValue<DST>()) {
-		throw ValueOutOfRangeException((int64_t)value, GetTypeId<SRC>(),
-		                               GetTypeId<DST>());
+		throw ValueOutOfRangeException((int64_t)value, GetTypeId<SRC>(), GetTypeId<DST>());
 	}
 	return (DST)value;
 }
 
 template <class SRC> static uint64_t cast_to_uint64_overflow_check(SRC value) {
 	if (value < 0) {
-		throw ValueOutOfRangeException((int64_t)value, GetTypeId<SRC>(),
-		                               TypeId::POINTER);
+		throw ValueOutOfRangeException((int64_t)value, GetTypeId<SRC>(), TypeId::POINTER);
 	}
 	return (uint64_t)value;
 }
 
-template <class DST>
-static DST cast_from_uint64_overflow_check(uint64_t value) {
+template <class DST> static DST cast_from_uint64_overflow_check(uint64_t value) {
 	if (value > MaximumValue<DST>()) {
-		throw ValueOutOfRangeException((int64_t)value, TypeId::POINTER,
-		                               GetTypeId<DST>());
+		throw ValueOutOfRangeException((int64_t)value, TypeId::POINTER, GetTypeId<DST>());
 	}
 	return (DST)value;
 }
@@ -145,34 +141,34 @@ template <> double Cast::Operation(const char *left) {
 //===--------------------------------------------------------------------===//
 // Cast Numeric -> String
 //===--------------------------------------------------------------------===//
-template <> std::string Cast::Operation(int8_t left) {
+template <> string Cast::Operation(int8_t left) {
 	return to_string(left);
 }
 
-template <> std::string Cast::Operation(int16_t left) {
+template <> string Cast::Operation(int16_t left) {
 	return to_string(left);
 }
 
-template <> std::string Cast::Operation(int left) {
+template <> string Cast::Operation(int left) {
 	return to_string(left);
 }
 
-template <> std::string Cast::Operation(int64_t left) {
+template <> string Cast::Operation(int64_t left) {
 	return to_string(left);
 }
 
-template <> std::string Cast::Operation(uint64_t left) {
+template <> string Cast::Operation(uint64_t left) {
 	return to_string(left);
 }
 
-template <> std::string Cast::Operation(double left) {
+template <> string Cast::Operation(double left) {
 	return to_string(left);
 }
 
 //===--------------------------------------------------------------------===//
 // Cast From Date
 //===--------------------------------------------------------------------===//
-template <> std::string CastFromDate::Operation(duckdb::date_t left) {
+template <> string CastFromDate::Operation(duckdb::date_t left) {
 	return Date::ToString(left);
 }
 

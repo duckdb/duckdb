@@ -61,14 +61,14 @@ namespace TPCE {
 // Copying is allowed.
 //
 template <class RecordType> class WeightedDataFile {
-  private:
+private:
 	typedef std::vector<RecordType> Records; // For convenience and readability
 	Records records;
 
 	typedef std::vector<int> Weights; // For convenience and readability
 	Weights weightedIndexes;
 
-  public:
+public:
 	// Leverage the size type of our underlying storage container but
 	// insulate clients from the implementation particulars by creating
 	// our own type.
@@ -133,8 +133,7 @@ template <class RecordType> class WeightedDataFile {
 		return records.at(weightedIndexes.at(weightedIndex));
 	}
 
-	const RecordType &getUniqueRecord(size_type idx,
-	                                  bool rangeCheckedAccess = false) const {
+	const RecordType &getUniqueRecord(size_type idx, bool rangeCheckedAccess = false) const {
 		return (rangeCheckedAccess ? records.at(idx) : records[idx]);
 	}
 };

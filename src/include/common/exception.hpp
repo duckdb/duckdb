@@ -1,14 +1,15 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // common/exception.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
+
+#include "common/string_util.hpp"
+#include "common/types.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -22,13 +23,9 @@
 #include <stdexcept>
 #include <string>
 
-#include "common/string_util.hpp"
-#include "common/types.hpp"
-
 namespace duckdb {
 
-inline void ASSERT_RESTRICT(void *left_start, void *left_end, void *right_start,
-                            void *right_end) {
+inline void ASSERT_RESTRICT(void *left_start, void *left_end, void *right_start, void *right_end) {
 	// assert that the two pointers do not overlap
 	assert(left_end < right_start || right_end < left_start);
 }
@@ -70,36 +67,33 @@ enum class ExceptionType {
 	INTERRUPT = 29        // interrupt
 };
 
-#define FORMAT_CONSTRUCTOR(msg)                                                \
-	va_list ap;                                                                \
-	va_start(ap, msg);                                                         \
-	Format(ap);                                                                \
+#define FORMAT_CONSTRUCTOR(msg)                                                                                        \
+	va_list ap;                                                                                                        \
+	va_start(ap, msg);                                                                                                 \
+	Format(ap);                                                                                                        \
 	va_end(ap);
 
 class Exception : public std::runtime_error {
-  public:
-	Exception(std::string message)
-	    : std::runtime_error(message), type(ExceptionType::INVALID) {
+public:
+	Exception(string message) : std::runtime_error(message), type(ExceptionType::INVALID) {
 		exception_message_ = message;
 	}
 
-	Exception(ExceptionType exception_type, std::string message)
-	    : std::runtime_error(message), type(exception_type) {
-		exception_message_ =
-		    ExceptionTypeToString(exception_type) + ": " + message;
+	Exception(ExceptionType exception_type, string message) : std::runtime_error(message), type(exception_type) {
+		exception_message_ = ExceptionTypeToString(exception_type) + ": " + message;
 	}
 
-  protected:
+protected:
 	void Format(va_list ap) {
 		exception_message_ = StringUtil::VFormat(exception_message_, ap);
 	}
 
-  public:
-	std::string GetMessage() {
+public:
+	string GetMessage() {
 		return exception_message_;
 	}
 
-	std::string ExceptionTypeToString(ExceptionType type) {
+	string ExceptionTypeToString(ExceptionType type) {
 		switch (type) {
 		case ExceptionType::INVALID:
 			return "Invalid";
@@ -163,8 +157,7 @@ class Exception : public std::runtime_error {
 	}
 
 	// Based on :: http://panthema.net/2008/0901-stacktrace-demangled/
-	static void PrintStackTrace(FILE *out = ::stderr,
-	                            unsigned int max_frames = 63) {
+	static void PrintStackTrace(FILE *out = ::stderr, unsigned int max_frames = 63) {
 		::fprintf(out, "Stack Trace:\n");
 
 		/// storage array for stack trace address data
@@ -185,7 +178,7 @@ class Exception : public std::runtime_error {
 		/// allocate string which will be filled with the demangled function
 		/// name
 		size_t func_name_size = 1024;
-		std::unique_ptr<char> func_name(new char[func_name_size]);
+		unique_ptr<char> func_name(new char[func_name_size]);
 
 		/// iterate over the returned symbol lines. skip the first, it is the
 		/// address of this function.
@@ -206,8 +199,7 @@ class Exception : public std::runtime_error {
 				}
 			}
 
-			if (begin_name && begin_offset && end_offset &&
-			    begin_name < begin_offset) {
+			if (begin_name && begin_offset && end_offset && begin_name < begin_offset) {
 				*begin_name++ = '\0';
 				*begin_offset++ = '\0';
 				*end_offset = '\0';
@@ -216,18 +208,15 @@ class Exception : public std::runtime_error {
 				/// offset in [begin_offset, end_offset). now apply
 				/// __cxa_demangle():
 				int status;
-				char *ret = abi::__cxa_demangle(begin_name, func_name.get(),
-				                                &func_name_size, &status);
+				char *ret = abi::__cxa_demangle(begin_name, func_name.get(), &func_name_size, &status);
 				if (status == 0) {
 					func_name.reset(ret); // use possibly realloc()-ed string
-					::fprintf(out, "  %s : %s+%s\n", symbol_list[i],
-					          func_name.get(), begin_offset);
+					::fprintf(out, "  %s : %s+%s\n", symbol_list[i], func_name.get(), begin_offset);
 				} else {
 					/// demangling failed. Output function name as a C function
 					/// with
 					/// no arguments.
-					::fprintf(out, "  %s : %s()+%s\n", symbol_list[i],
-					          begin_name, begin_offset);
+					::fprintf(out, "  %s : %s()+%s\n", symbol_list[i], begin_name, begin_offset);
 				}
 			} else {
 				/// couldn't parse the line ? print the whole line.
@@ -238,10 +227,10 @@ class Exception : public std::runtime_error {
 
 	friend std::ostream &operator<<(std::ostream &os, const Exception &e);
 
-  private:
+private:
 	// type
 	ExceptionType type;
-	std::string exception_message_;
+	string exception_message_;
 };
 
 //===--------------------------------------------------------------------===//
@@ -251,52 +240,42 @@ class Exception : public std::runtime_error {
 class CastException : public Exception {
 	CastException() = delete;
 
-  public:
+public:
 	CastException(const TypeId origType, const TypeId newType)
 	    : Exception(ExceptionType::CONVERSION,
-	                "Type " + TypeIdToString(origType) + " can't be cast as " +
-	                    TypeIdToString(newType)) {
+	                "Type " + TypeIdToString(origType) + " can't be cast as " + TypeIdToString(newType)) {
 	}
 };
 
 class ValueOutOfRangeException : public Exception {
 	ValueOutOfRangeException() = delete;
 
-  public:
-	ValueOutOfRangeException(const int64_t value, const TypeId origType,
-	                         const TypeId newType)
-	    : Exception(
-	          ExceptionType::CONVERSION,
-	          "Type " + TypeIdToString(origType) + " with value " +
-	              std::to_string((intmax_t)value) +
-	              " can't be cast as %s because the value is out of range "
-	              "for the destination type " +
-	              TypeIdToString(newType)) {
+public:
+	ValueOutOfRangeException(const int64_t value, const TypeId origType, const TypeId newType)
+	    : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(origType) + " with value " +
+	                                               std::to_string((intmax_t)value) +
+	                                               " can't be cast as %s because the value is out of range "
+	                                               "for the destination type " +
+	                                               TypeIdToString(newType)) {
 	}
 
-	ValueOutOfRangeException(const double value, const TypeId origType,
-	                         const TypeId newType)
-	    : Exception(
-	          ExceptionType::CONVERSION,
-	          "Type " + TypeIdToString(origType) + " with value " +
-	              std::to_string(value) +
-	              " can't be cast as %s because the value is out of range "
-	              "for the destination type " +
-	              TypeIdToString(newType)) {
+	ValueOutOfRangeException(const double value, const TypeId origType, const TypeId newType)
+	    : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(origType) + " with value " +
+	                                               std::to_string(value) +
+	                                               " can't be cast as %s because the value is out of range "
+	                                               "for the destination type " +
+	                                               TypeIdToString(newType)) {
 	}
 	ValueOutOfRangeException(const TypeId varType, const size_t length)
-	    : Exception(ExceptionType::OUT_OF_RANGE,
-	                "The value is too long to fit into type " +
-	                    TypeIdToString(varType) + "(" + std::to_string(length) +
-	                    ")"){};
+	    : Exception(ExceptionType::OUT_OF_RANGE, "The value is too long to fit into type " + TypeIdToString(varType) +
+	                                                 "(" + std::to_string(length) + ")"){};
 };
 
 class ConversionException : public Exception {
 	ConversionException() = delete;
 
-  public:
-	ConversionException(std::string msg, ...)
-	    : Exception(ExceptionType::CONVERSION, msg) {
+public:
+	ConversionException(string msg, ...) : Exception(ExceptionType::CONVERSION, msg) {
 		FORMAT_CONSTRUCTOR(msg);
 	}
 };
@@ -304,40 +283,35 @@ class ConversionException : public Exception {
 class InvalidTypeException : public Exception {
 	InvalidTypeException() = delete;
 
-  public:
-	InvalidTypeException(TypeId type, std::string msg)
-	    : Exception(ExceptionType::INVALID_TYPE,
-	                "Invalid Type [" + TypeIdToString(type) + "]: " + msg) {
+public:
+	InvalidTypeException(TypeId type, string msg)
+	    : Exception(ExceptionType::INVALID_TYPE, "Invalid Type [" + TypeIdToString(type) + "]: " + msg) {
 	}
 };
 
 class TypeMismatchException : public Exception {
 	TypeMismatchException() = delete;
 
-  public:
-	TypeMismatchException(const TypeId type_1, const TypeId type_2,
-	                      std::string msg)
+public:
+	TypeMismatchException(const TypeId type_1, const TypeId type_2, string msg)
 	    : Exception(ExceptionType::MISMATCH_TYPE,
-	                "Type " + TypeIdToString(type_1) + " does not match with " +
-	                    TypeIdToString(type_2) + ". " + msg) {
+	                "Type " + TypeIdToString(type_1) + " does not match with " + TypeIdToString(type_2) + ". " + msg) {
 	}
 };
 
 class TransactionException : public Exception {
 	TransactionException() = delete;
 
-  public:
-	TransactionException(std::string msg)
-	    : Exception(ExceptionType::TRANSACTION, msg) {
+public:
+	TransactionException(string msg) : Exception(ExceptionType::TRANSACTION, msg) {
 	}
 };
 
 class NotImplementedException : public Exception {
 	NotImplementedException() = delete;
 
-  public:
-	NotImplementedException(std::string msg, ...)
-	    : Exception(ExceptionType::NOT_IMPLEMENTED, msg) {
+public:
+	NotImplementedException(string msg, ...) : Exception(ExceptionType::NOT_IMPLEMENTED, msg) {
 		FORMAT_CONSTRUCTOR(msg);
 	}
 };
@@ -345,9 +319,8 @@ class NotImplementedException : public Exception {
 class OutOfRangeException : public Exception {
 	OutOfRangeException() = delete;
 
-  public:
-	OutOfRangeException(std::string msg, ...)
-	    : Exception(ExceptionType::OUT_OF_RANGE, msg) {
+public:
+	OutOfRangeException(string msg, ...) : Exception(ExceptionType::OUT_OF_RANGE, msg) {
 		FORMAT_CONSTRUCTOR(msg);
 	}
 };
@@ -355,9 +328,8 @@ class OutOfRangeException : public Exception {
 class CatalogException : public Exception {
 	CatalogException() = delete;
 
-  public:
-	CatalogException(std::string msg, ...)
-	    : Exception(ExceptionType::CATALOG, msg) {
+public:
+	CatalogException(string msg, ...) : Exception(ExceptionType::CATALOG, msg) {
 		FORMAT_CONSTRUCTOR(msg);
 	}
 };
@@ -365,9 +337,8 @@ class CatalogException : public Exception {
 class ParserException : public Exception {
 	ParserException() = delete;
 
-  public:
-	ParserException(std::string msg, ...)
-	    : Exception(ExceptionType::PARSER, msg) {
+public:
+	ParserException(string msg, ...) : Exception(ExceptionType::PARSER, msg) {
 		FORMAT_CONSTRUCTOR(msg);
 	}
 };
@@ -375,9 +346,8 @@ class ParserException : public Exception {
 class SyntaxException : public Exception {
 	SyntaxException() = delete;
 
-  public:
-	SyntaxException(std::string msg, ...)
-	    : Exception(ExceptionType::SYNTAX, msg) {
+public:
+	SyntaxException(string msg, ...) : Exception(ExceptionType::SYNTAX, msg) {
 		FORMAT_CONSTRUCTOR(msg);
 	}
 };
@@ -385,9 +355,8 @@ class SyntaxException : public Exception {
 class ConstraintException : public Exception {
 	ConstraintException() = delete;
 
-  public:
-	ConstraintException(std::string msg, ...)
-	    : Exception(ExceptionType::CONSTRAINT, msg) {
+public:
+	ConstraintException(string msg, ...) : Exception(ExceptionType::CONSTRAINT, msg) {
 		FORMAT_CONSTRUCTOR(msg);
 	}
 };
@@ -395,9 +364,8 @@ class ConstraintException : public Exception {
 class BinderException : public Exception {
 	BinderException() = delete;
 
-  public:
-	BinderException(std::string msg, ...)
-	    : Exception(ExceptionType::BINDER, msg) {
+public:
+	BinderException(string msg, ...) : Exception(ExceptionType::BINDER, msg) {
 		FORMAT_CONSTRUCTOR(msg);
 	}
 };
@@ -405,8 +373,8 @@ class BinderException : public Exception {
 class IOException : public Exception {
 	IOException() = delete;
 
-  public:
-	IOException(std::string msg, ...) : Exception(ExceptionType::IO, msg) {
+public:
+	IOException(string msg, ...) : Exception(ExceptionType::IO, msg) {
 		FORMAT_CONSTRUCTOR(msg);
 	}
 };
@@ -414,15 +382,14 @@ class IOException : public Exception {
 class SerializationException : public Exception {
 	SerializationException() = delete;
 
-  public:
-	SerializationException(std::string msg, ...)
-	    : Exception(ExceptionType::SERIALIZATION, msg) {
+public:
+	SerializationException(string msg, ...) : Exception(ExceptionType::SERIALIZATION, msg) {
 		FORMAT_CONSTRUCTOR(msg);
 	}
 };
 
 class InterruptException : public Exception {
-  public:
+public:
 	InterruptException() : Exception(ExceptionType::INTERRUPT, "Interrupted!") {
 	}
 };

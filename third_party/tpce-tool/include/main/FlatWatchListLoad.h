@@ -45,10 +45,10 @@
 namespace TPCE {
 
 class CFlatWatchListLoad : public CFlatFileLoader<WATCH_LIST_ROW> {
-  private:
+private:
 	const std::string WatchListRowFmt;
 
-  public:
+public:
 	CFlatWatchListLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
 	    : CFlatFileLoader<WATCH_LIST_ROW>(szFileName, FlatFileOutputMode),
 	      WatchListRowFmt("%" PRId64 "|%" PRId64 "\n"){};
@@ -57,11 +57,9 @@ class CFlatWatchListLoad : public CFlatFileLoader<WATCH_LIST_ROW> {
 	 *   Writes a record to the file.
 	 */
 	void WriteNextRecord(const WATCH_LIST_ROW &next_record) {
-		int rc = fprintf(hOutFile, WatchListRowFmt.c_str(), next_record.WL_ID,
-		                 next_record.WL_C_ID);
+		int rc = fprintf(hOutFile, WatchListRowFmt.c_str(), next_record.WL_ID, next_record.WL_C_ID);
 		if (rc < 0) {
-			throw CSystemErr(CSystemErr::eWriteFile,
-			                 "CFlatWatchListLoad::WriteNextRecord");
+			throw CSystemErr(CSystemErr::eWriteFile, "CFlatWatchListLoad::WriteNextRecord");
 		}
 	}
 };

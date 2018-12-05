@@ -47,7 +47,7 @@
 namespace TPCE {
 
 class CIndustryTable : public FixedTable<IndustryDataFile_t, INDUSTRY_ROW> {
-  public:
+public:
 	CIndustryTable(const IndustryDataFile_t &dataFile);
 	~CIndustryTable();
 

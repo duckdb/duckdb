@@ -1,4 +1,3 @@
-
 #include "common/exception.hpp"
 #include "common/types/statistics.hpp"
 #include "common/value_operations/value_operations.hpp"
@@ -8,8 +7,7 @@ using namespace duckdb;
 using namespace std;
 
 //! Extract the min and max value from four possible combinations
-static void GetMaxAndMin(Value &o1, Value &o2, Value &o3, Value &o4, Value &min,
-                         Value &max) {
+static void GetMaxAndMin(Value &o1, Value &o2, Value &o3, Value &o4, Value &min, Value &max) {
 	if (o1 > o2) {
 		// o1 bigger
 		min = o2;
@@ -31,9 +29,7 @@ static void GetMaxAndMin(Value &o1, Value &o2, Value &o3, Value &o4, Value &min,
 	}
 }
 
-void ExpressionStatistics::Add(ExpressionStatistics &left,
-                               ExpressionStatistics &right,
-                               ExpressionStatistics &result) {
+void ExpressionStatistics::Add(ExpressionStatistics &left, ExpressionStatistics &right, ExpressionStatistics &result) {
 	result.has_stats = left.has_stats && right.has_stats;
 	if (result.has_stats) {
 		result.can_have_null = left.can_have_null || right.can_have_null;
@@ -48,8 +44,7 @@ void ExpressionStatistics::Add(ExpressionStatistics &left,
 	}
 }
 
-void ExpressionStatistics::Subtract(ExpressionStatistics &left,
-                                    ExpressionStatistics &right,
+void ExpressionStatistics::Subtract(ExpressionStatistics &left, ExpressionStatistics &right,
                                     ExpressionStatistics &result) {
 	result.has_stats = left.has_stats && right.has_stats;
 	if (result.has_stats) {
@@ -65,8 +60,7 @@ void ExpressionStatistics::Subtract(ExpressionStatistics &left,
 	}
 }
 
-void ExpressionStatistics::Multiply(ExpressionStatistics &left,
-                                    ExpressionStatistics &right,
+void ExpressionStatistics::Multiply(ExpressionStatistics &left, ExpressionStatistics &right,
                                     ExpressionStatistics &result) {
 	result.has_stats = left.has_stats && right.has_stats;
 	if (result.has_stats) {
@@ -82,13 +76,11 @@ void ExpressionStatistics::Multiply(ExpressionStatistics &left,
 	}
 }
 
-void ExpressionStatistics::Divide(ExpressionStatistics &left,
-                                  ExpressionStatistics &right,
+void ExpressionStatistics::Divide(ExpressionStatistics &left, ExpressionStatistics &right,
                                   ExpressionStatistics &result) {
 	result.has_stats = left.has_stats && right.has_stats;
 	if (result.has_stats) {
-		if (!TypeIsIntegral(left.expression.return_type) ||
-		    !TypeIsIntegral(right.expression.return_type)) {
+		if (!TypeIsIntegral(left.expression.return_type) || !TypeIsIntegral(right.expression.return_type)) {
 			// divide is weird with doubles
 			// e.g. if MIN = -1 and MAX = 1, the new MAX could be 1 /
 			// 0.000000001 = big for this reason we just erase stats on doubles
@@ -108,14 +100,12 @@ void ExpressionStatistics::Divide(ExpressionStatistics &left,
 		// signs if there are negative numbers) we set the max value to the
 		// biggest positive value (given by dividing by -1) and the min value to
 		// the biggest negative value (given by dividing by -1)
-		result.max = ValueOperations::Max(ValueOperations::Abs(left.min),
-		                                  ValueOperations::Abs(left.max));
+		result.max = ValueOperations::Max(ValueOperations::Abs(left.min), ValueOperations::Abs(left.max));
 		result.min = result.max * -1;
 	}
 }
 
-void ExpressionStatistics::Modulo(ExpressionStatistics &left,
-                                  ExpressionStatistics &right,
+void ExpressionStatistics::Modulo(ExpressionStatistics &left, ExpressionStatistics &right,
                                   ExpressionStatistics &result) {
 	result.has_stats = left.has_stats && right.has_stats;
 	if (result.has_stats) {

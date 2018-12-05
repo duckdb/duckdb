@@ -1,7 +1,5 @@
-
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
-
 #include "parser/expression/operator_expression.hpp"
 #include "parser/expression/subquery_expression.hpp"
 
@@ -11,8 +9,7 @@ using namespace std;
 unique_ptr<Expression> ExpressionExecutor::Visit(OperatorExpression &expr) {
 	// special handling for special snowflake 'IN'
 	// IN has n children
-	if (expr.type == ExpressionType::COMPARE_IN ||
-	    expr.type == ExpressionType::COMPARE_NOT_IN) {
+	if (expr.type == ExpressionType::COMPARE_IN || expr.type == ExpressionType::COMPARE_NOT_IN) {
 		if (expr.children.size() < 2) {
 			throw Exception("IN needs at least two children");
 		}
@@ -33,8 +30,7 @@ unique_ptr<Expression> ExpressionExecutor::Visit(OperatorExpression &expr) {
 		if (expr.children[1]->type == ExpressionType::SELECT_SUBQUERY) {
 			assert(expr.children.size() == 2);
 
-			auto subquery =
-			    reinterpret_cast<SubqueryExpression *>(expr.children[1].get());
+			auto subquery = reinterpret_cast<SubqueryExpression *>(expr.children[1].get());
 			assert(subquery->subquery_type == SubqueryType::IN);
 
 			DataChunk *old_chunk = chunk;
@@ -62,8 +58,7 @@ unique_ptr<Expression> ExpressionExecutor::Visit(OperatorExpression &expr) {
 
 			for (size_t r = 0; r < old_chunk->size(); r++) {
 				for (size_t c = 0; c < old_chunk->column_count; c++) {
-					row_chunk.data[c].SetValue(0,
-					                           old_chunk->data[c].GetValue(r));
+					row_chunk.data[c].SetValue(0, old_chunk->data[c].GetValue(r));
 				}
 				auto state = plan->GetOperatorState(this);
 				DataChunk s_chunk;
@@ -76,8 +71,7 @@ unique_ptr<Expression> ExpressionExecutor::Visit(OperatorExpression &expr) {
 					continue;
 				}
 				if (s_chunk.column_count != 1) {
-					throw Exception(
-					    "IN subquery needs to return exactly one column");
+					throw Exception("IN subquery needs to return exactly one column");
 				}
 				assert(s_chunk.column_count == 1);
 				Value res = Value(false);
@@ -165,8 +159,7 @@ unique_ptr<Expression> ExpressionExecutor::Visit(OperatorExpression &expr) {
 			break;
 		}
 		default:
-			throw NotImplementedException(
-			    "Unsupported operator type with 1 child!");
+			throw NotImplementedException("Unsupported operator type with 1 child!");
 		}
 	} else if (expr.children.size() == 2) {
 		Vector l, r;
@@ -194,8 +187,7 @@ unique_ptr<Expression> ExpressionExecutor::Visit(OperatorExpression &expr) {
 			VectorOperations::Modulo(l, r, vector);
 			break;
 		default:
-			throw NotImplementedException(
-			    "Unsupported operator type with 2 children!");
+			throw NotImplementedException("Unsupported operator type with 2 children!");
 		}
 	} else {
 		throw NotImplementedException("operator");

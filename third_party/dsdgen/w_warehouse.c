@@ -67,10 +67,8 @@ int mk_w_warehouse(void *info_arr, ds_key_t index) {
 	nullSet(&pT->kNullBitMap, W_NULLS);
 	r->w_warehouse_sk = index;
 	mk_bkey(&r->w_warehouse_id[0], index, W_WAREHOUSE_ID);
-	gen_text(&r->w_warehouse_name[0], W_NAME_MIN, RS_W_WAREHOUSE_NAME,
-	         W_WAREHOUSE_NAME);
-	r->w_warehouse_sq_ft = genrand_integer(NULL, DIST_UNIFORM, W_SQFT_MIN,
-	                                       W_SQFT_MAX, 0, W_WAREHOUSE_SQ_FT);
+	gen_text(&r->w_warehouse_name[0], W_NAME_MIN, RS_W_WAREHOUSE_NAME, W_WAREHOUSE_NAME);
+	r->w_warehouse_sq_ft = genrand_integer(NULL, DIST_UNIFORM, W_SQFT_MIN, W_SQFT_MAX, 0, W_WAREHOUSE_SQ_FT);
 
 	mk_address(&r->w_address, W_WAREHOUSE_ADDRESS);
 
@@ -85,8 +83,7 @@ int mk_w_warehouse(void *info_arr, ds_key_t index) {
 	append_integer(info, r->w_warehouse_sq_ft);
 	append_integer(info, r->w_address.street_num);
 	if (r->w_address.street_name2 != NULL) {
-		sprintf(szTemp, "%s %s", r->w_address.street_name1,
-		        r->w_address.street_name2);
+		sprintf(szTemp, "%s %s", r->w_address.street_name1, r->w_address.street_name2);
 		append_varchar(info, szTemp);
 	} else
 		append_varchar(info, r->w_address.street_name1);

@@ -1,11 +1,8 @@
-
 #include "catch.hpp"
-
-#include "expression_helper.hpp"
-
 #include "common/serializer.hpp"
 #include "common/types/data_chunk.hpp"
 #include "common/value_operations/value_operations.hpp"
+#include "expression_helper.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -115,17 +112,15 @@ TEST_CASE("Expression serializer", "[serializer]") {
 		auto data = serializer.GetData();
 		Deserializer source(data.data.get(), data.size);
 		unique_ptr<Expression> deserialized_expression;
-		REQUIRE_NOTHROW(deserialized_expression =
-		                    Expression::Deserialize(source));
+		REQUIRE_NOTHROW(deserialized_expression = Expression::Deserialize(source));
 		REQUIRE(deserialized_expression.get());
 		REQUIRE(expression->Equals(deserialized_expression.get()));
 	}
 
 	{
 		// case, columnref, comparison, cast, conjunction
-		auto expression =
-		    ParseExpression("cast(a >= 2 as integer) OR CASE WHEN a >= b THEN "
-		                    "a >= 5 ELSE a >= 7 END");
+		auto expression = ParseExpression("cast(a >= 2 as integer) OR CASE WHEN a >= b THEN "
+		                                  "a >= 5 ELSE a >= 7 END");
 		REQUIRE(expression.get());
 
 		Serializer serializer;
@@ -134,16 +129,14 @@ TEST_CASE("Expression serializer", "[serializer]") {
 		auto data = serializer.GetData();
 		Deserializer source(data.data.get(), data.size);
 		unique_ptr<Expression> deserialized_expression;
-		REQUIRE_NOTHROW(deserialized_expression =
-		                    Expression::Deserialize(source));
+		REQUIRE_NOTHROW(deserialized_expression = Expression::Deserialize(source));
 		REQUIRE(deserialized_expression.get());
 		REQUIRE(expression->Equals(deserialized_expression.get()));
 	}
 	{
 		// subquery, function, aggregate, case, negation
-		auto expression =
-		    ParseExpression("(SELECT 42) - COUNT(*) + + 33 - (CASE "
-		                    "WHEN NOT 0 THEN 33 ELSE 22 END)");
+		auto expression = ParseExpression("(SELECT 42) - COUNT(*) + + 33 - (CASE "
+		                                  "WHEN NOT 0 THEN 33 ELSE 22 END)");
 		REQUIRE(expression.get());
 
 		Serializer serializer;
@@ -152,19 +145,16 @@ TEST_CASE("Expression serializer", "[serializer]") {
 		auto data = serializer.GetData();
 		Deserializer source(data.data.get(), data.size);
 		unique_ptr<Expression> deserialized_expression;
-		REQUIRE_NOTHROW(deserialized_expression =
-		                    Expression::Deserialize(source));
+		REQUIRE_NOTHROW(deserialized_expression = Expression::Deserialize(source));
 		REQUIRE(deserialized_expression.get());
 		REQUIRE(expression->Equals(deserialized_expression.get()));
 	}
 	{
 		// subtle differences should result in different results
-		auto expression =
-		    ParseExpression("(SELECT 42) - COUNT(*) + + 33 - (CASE "
-		                    "WHEN NOT 0 THEN 33 ELSE 22 END)");
-		auto expression2 =
-		    ParseExpression("(SELECT 43) - COUNT(*) + + 33 - (CASE "
-		                    "WHEN NOT 0 THEN 33 ELSE 22 END)");
+		auto expression = ParseExpression("(SELECT 42) - COUNT(*) + + 33 - (CASE "
+		                                  "WHEN NOT 0 THEN 33 ELSE 22 END)");
+		auto expression2 = ParseExpression("(SELECT 43) - COUNT(*) + + 33 - (CASE "
+		                                   "WHEN NOT 0 THEN 33 ELSE 22 END)");
 		REQUIRE(expression.get());
 		REQUIRE(expression2.get());
 

@@ -1,4 +1,3 @@
-
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
@@ -10,8 +9,7 @@ TEST_CASE("Substring test", "[function]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 
-	REQUIRE_NO_FAIL(con.Query(
-	    "CREATE TABLE strings(s VARCHAR, off INTEGER, length INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(s VARCHAR, off INTEGER, length INTEGER);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('hello', 1, 2), "
 	                          "('world', 2, 3), ('b', 1, 1), (NULL, 2, 2)"));
 
@@ -34,7 +32,6 @@ TEST_CASE("Substring test", "[function]") {
 	result = con.Query("SELECT substring(s from 1 for length) FROM strings");
 	REQUIRE(CHECK_COLUMN(result, 0, {"he", "wor", "b", Value()}));
 
-	result =
-	    con.Query("SELECT substring('hello' from off for length) FROM strings");
+	result = con.Query("SELECT substring('hello' from off for length) FROM strings");
 	REQUIRE(CHECK_COLUMN(result, 0, {"he", "ell", "h", "el"}));
 }

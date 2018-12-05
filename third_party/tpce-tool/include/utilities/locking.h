@@ -43,11 +43,11 @@ namespace TPCE {
 
 // Standard mutex
 class CMutex {
-  private:
+private:
 	TMutex mutex_;
 	TMutex *mutex();
 
-  public:
+public:
 	CMutex();
 	~CMutex();
 	void lock();
@@ -59,10 +59,10 @@ class CMutex {
 // Provide a RAII style lock for any class which supports
 // lock() and unlock()
 template <typename T> class Locker {
-  private:
+private:
 	T &mutex_;
 
-  public:
+public:
 	explicit Locker<T>(T &mutex) : mutex_(mutex) {
 		mutex_.lock();
 	}

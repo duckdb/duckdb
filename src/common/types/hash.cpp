@@ -1,5 +1,5 @@
-
 #include "common/types/hash.hpp"
+
 #include "common/exception.hpp"
 
 using namespace std;

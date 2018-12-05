@@ -66,8 +66,7 @@ static const UINT iWatchListIdOffset = 97;
 
 // Number of RNG calls to skip for one row in order
 // to not use any of the random values from the previous row.
-const UINT iRNGSkipOneRowWatchListAndWatchItem =
-    15; // real max count in v3.5: 13
+const UINT iRNGSkipOneRowWatchListAndWatchItem = 15; // real max count in v3.5: 13
 
 // Structure combining watch list row and watch items rows.
 typedef struct WATCH_LIST_AND_ITEM_ROW {
@@ -92,14 +91,11 @@ class CWatchListsAndItemsTable : public TableTemplate<WATCH_LIST_AND_ITEM_ROW> {
 	 *   Generate next Watch List ID
 	 */
 	void GenerateNextWL_ID() {
-		TIdent iCustomerIdForCalc =
-		    m_cust.GetCurrentC_ID() - iDefaultStartFromCustomer;
+		TIdent iCustomerIdForCalc = m_cust.GetCurrentC_ID() - iDefaultStartFromCustomer;
 
 		m_row.m_watch_list.WL_ID =
-		    (iCustomerIdForCalc / iDefaultLoadUnitSize) *
-		        iDefaultLoadUnitSize + // strip last 3 digits
-		    (iCustomerIdForCalc * iWatchListIdPrime + iWatchListIdOffset) %
-		        iDefaultLoadUnitSize +
+		    (iCustomerIdForCalc / iDefaultLoadUnitSize) * iDefaultLoadUnitSize + // strip last 3 digits
+		    (iCustomerIdForCalc * iWatchListIdPrime + iWatchListIdOffset) % iDefaultLoadUnitSize +
 		    iDefaultStartFromCustomer;
 	}
 
@@ -107,31 +103,25 @@ class CWatchListsAndItemsTable : public TableTemplate<WATCH_LIST_AND_ITEM_ROW> {
 	 *   Reset the state for the next load unit
 	 */
 	void InitNextLoadUnit() {
-		m_rnd.SetSeed(m_rnd.RndNthElement(
-		    RNGSeedTableDefault, (RNGSEED)m_cust.GetCurrentC_ID() *
-		                             iRNGSkipOneRowWatchListAndWatchItem));
+		m_rnd.SetSeed(m_rnd.RndNthElement(RNGSeedTableDefault,
+		                                  (RNGSEED)m_cust.GetCurrentC_ID() * iRNGSkipOneRowWatchListAndWatchItem));
 
 		ClearRecord(); // this is needed for EGenTest to work
 	}
 
-  public:
-	CWatchListsAndItemsTable(const DataFileManager &dfm, TIdent iCustomerCount,
-	                         TIdent iStartFromCustomer)
-	    : TableTemplate<WATCH_LIST_AND_ITEM_ROW>(), m_iRowsToGenForWL(0),
-	      m_iRowsGeneratedForWL(0),
-	      m_cust(dfm, iCustomerCount, iStartFromCustomer), m_iWICount(0),
-	      m_iMinSecIdx(iMinSecIdx), m_SecurityFile(dfm.SecurityFile()),
-	      m_bInitNextLoadUnit(false) {
-		m_iMaxSecIdx = m_SecurityFile.GetConfiguredSecurityCount() -
-		               1; // -1 because security indexes are 0-based
+public:
+	CWatchListsAndItemsTable(const DataFileManager &dfm, TIdent iCustomerCount, TIdent iStartFromCustomer)
+	    : TableTemplate<WATCH_LIST_AND_ITEM_ROW>(), m_iRowsToGenForWL(0), m_iRowsGeneratedForWL(0),
+	      m_cust(dfm, iCustomerCount, iStartFromCustomer), m_iWICount(0), m_iMinSecIdx(iMinSecIdx),
+	      m_SecurityFile(dfm.SecurityFile()), m_bInitNextLoadUnit(false) {
+		m_iMaxSecIdx = m_SecurityFile.GetConfiguredSecurityCount() - 1; // -1 because security indexes are 0-based
 
 		// Initialize customer for the starting watch list id.
 		// Iterate through customers to find the next one with a watch list
 		do {
 			if (m_cust.GetCurrentC_ID() % iDefaultLoadUnitSize == 0) {
-				m_bInitNextLoadUnit =
-				    true; // delay calling InitNextLoadUnit until the start of
-				          // the row generation
+				m_bInitNextLoadUnit = true; // delay calling InitNextLoadUnit until the start of
+				                            // the row generation
 			}
 
 			m_cust.GenerateNextC_ID();
@@ -162,13 +152,11 @@ class CWatchListsAndItemsTable : public TableTemplate<WATCH_LIST_AND_ITEM_ROW> {
 		m_row.m_watch_list.WL_C_ID = iCustomerId;
 
 		// Now generate Watch Items for this Watch List
-		m_iWICount = (UINT)m_rnd.RndIntRange(
-		    iMinItemsInWL,
-		    iMaxItemsInWL); // number of items in the watch list
+		m_iWICount = (UINT)m_rnd.RndIntRange(iMinItemsInWL,
+		                                     iMaxItemsInWL); // number of items in the watch list
 		for (m_set.clear(); m_set.size() < m_iWICount;) {
 			// Generate random security id and insert into the set
-			TIdent iSecurityIndex =
-			    m_rnd.RndInt64Range(m_iMinSecIdx, m_iMaxSecIdx);
+			TIdent iSecurityIndex = m_rnd.RndInt64Range(m_iMinSecIdx, m_iMaxSecIdx);
 			m_set.insert(iSecurityIndex);
 		}
 
@@ -176,12 +164,10 @@ class CWatchListsAndItemsTable : public TableTemplate<WATCH_LIST_AND_ITEM_ROW> {
 		IntSet::iterator pos;
 		// Now remove from the set and fill watch items rows
 		for (i = 0, pos = m_set.begin(); pos != m_set.end(); ++i, ++pos) {
-			m_row.m_watch_items[i].WI_WL_ID =
-			    m_row.m_watch_list.WL_ID; // same watch list id for all items
+			m_row.m_watch_items[i].WI_WL_ID = m_row.m_watch_list.WL_ID; // same watch list id for all items
 			// get the next element from the set
-			m_SecurityFile.CreateSymbol(
-			    *pos, m_row.m_watch_items[i].WI_S_SYMB,
-			    static_cast<int>(sizeof(m_row.m_watch_items[i].WI_S_SYMB)));
+			m_SecurityFile.CreateSymbol(*pos, m_row.m_watch_items[i].WI_S_SYMB,
+			                            static_cast<int>(sizeof(m_row.m_watch_items[i].WI_S_SYMB)));
 		}
 
 		bRet = false; // initialize for the case of currently processing the
@@ -190,9 +176,8 @@ class CWatchListsAndItemsTable : public TableTemplate<WATCH_LIST_AND_ITEM_ROW> {
 		// Iterate through customers to find the next one with a watch list
 		while (!bRet && m_cust.MoreRecords()) {
 			if (m_cust.GetCurrentC_ID() % iDefaultLoadUnitSize == 0) {
-				m_bInitNextLoadUnit =
-				    true; // delay calling InitNextLoadUnit until the start of
-				          // the row generation
+				m_bInitNextLoadUnit = true; // delay calling InitNextLoadUnit until the start of
+				                            // the row generation
 			}
 
 			m_cust.GenerateNextC_ID();

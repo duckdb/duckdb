@@ -211,7 +211,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			assert(groups.sel_vector == payload.sel_vector);
 
 			// construct chunk for secondary hash table probing
-			std::vector<TypeId> probe_types(group_types);
+			vector<TypeId> probe_types(group_types);
 			probe_types.push_back(payload_types[aggr_idx]);
 			DataChunk probe_chunk;
 			probe_chunk.Initialize(probe_types, false);

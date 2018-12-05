@@ -43,7 +43,7 @@
 namespace TPCE {
 
 class CODBCLastTradeLoad : public CDBLoader<LAST_TRADE_ROW> {
-  private:
+private:
 	DBDATETIME ODBC_LT_DTS;
 
 	virtual inline void CopyRow(const LAST_TRADE_ROW &row) {
@@ -52,25 +52,19 @@ class CODBCLastTradeLoad : public CDBLoader<LAST_TRADE_ROW> {
 		m_row.LT_DTS.GetDBDATETIME(&ODBC_LT_DTS);
 	};
 
-  public:
-	CODBCLastTradeLoad(char *szServer, char *szDatabase, char *szLoaderParams,
-	                   char *szTable = "LAST_TRADE")
-	    : CDBLoader<LAST_TRADE_ROW>(szServer, szDatabase, szLoaderParams,
-	                                szTable){};
+public:
+	CODBCLastTradeLoad(char *szServer, char *szDatabase, char *szLoaderParams, char *szTable = "LAST_TRADE")
+	    : CDBLoader<LAST_TRADE_ROW>(szServer, szDatabase, szLoaderParams, szTable){};
 
 	virtual void BindColumns() {
 		// Binding function we have to implement.
 		int i = 0;
-		if (bcp_bind(m_hdbc, (BYTE *)&m_row.LT_S_SYMB, 0, SQL_VARLEN_DATA,
-		             (BYTE *)"", 1, SQLCHARACTER, ++i) != SUCCEED ||
-		    bcp_bind(m_hdbc, (BYTE *)&ODBC_LT_DTS, 0, SQL_VARLEN_DATA, NULL, 0,
-		             SQLDATETIME, ++i) != SUCCEED ||
-		    bcp_bind(m_hdbc, (BYTE *)&m_row.LT_PRICE, 0, SQL_VARLEN_DATA, NULL,
-		             0, SQLFLT8, ++i) != SUCCEED ||
-		    bcp_bind(m_hdbc, (BYTE *)&m_row.LT_OPEN_PRICE, 0, SQL_VARLEN_DATA,
-		             NULL, 0, SQLFLT8, ++i) != SUCCEED ||
-		    bcp_bind(m_hdbc, (BYTE *)&m_row.LT_VOL, 0, SQL_VARLEN_DATA, NULL, 0,
-		             SQLINT8, ++i) != SUCCEED)
+		if (bcp_bind(m_hdbc, (BYTE *)&m_row.LT_S_SYMB, 0, SQL_VARLEN_DATA, (BYTE *)"", 1, SQLCHARACTER, ++i) !=
+		        SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&ODBC_LT_DTS, 0, SQL_VARLEN_DATA, NULL, 0, SQLDATETIME, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.LT_PRICE, 0, SQL_VARLEN_DATA, NULL, 0, SQLFLT8, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.LT_OPEN_PRICE, 0, SQL_VARLEN_DATA, NULL, 0, SQLFLT8, ++i) != SUCCEED ||
+		    bcp_bind(m_hdbc, (BYTE *)&m_row.LT_VOL, 0, SQL_VARLEN_DATA, NULL, 0, SQLINT8, ++i) != SUCCEED)
 			ThrowError(CODBCERR::eBcpBind);
 
 		// if ( bcp_control(m_hdbc, BCPHINTS, "TABLOCK" ) != SUCCEED )

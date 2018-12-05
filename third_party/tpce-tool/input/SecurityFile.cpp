@@ -50,15 +50,11 @@ namespace TPCE {
 static const UINT Power26[] = {1, 26, 676, 17576, 456976, 11881376, 308915776};
 
 // For index i > 0, this array holds the sum of 26^0 ... 26^(i-1)
-static const UINT64 Power26Sum[] = {
-    0,        1,         27,
-    703,      18279,     475255,
-    12356631, 321272407, UINT64_CONST(8353082583)};
+static const UINT64 Power26Sum[] = {0, 1, 27, 703, 18279, 475255, 12356631, 321272407, UINT64_CONST(8353082583)};
 
 } // namespace TPCE
 
-void CSecurityFile::CreateSuffix(TIdent Multiplier, char *pBuf,
-                                 size_t BufSize) const {
+void CSecurityFile::CreateSuffix(TIdent Multiplier, char *pBuf, size_t BufSize) const {
 	size_t CharCount(0);
 	INT64 Offset(0);
 	INT64 LCLIndex(0); // LowerCaseLetter array index
@@ -67,8 +63,7 @@ void CSecurityFile::CreateSuffix(TIdent Multiplier, char *pBuf,
 		CharCount++;
 	}
 
-	if (CharCount + 2 <=
-	    BufSize) // 1 extra for separator and 1 extra for terminating NULL
+	if (CharCount + 2 <= BufSize) // 1 extra for separator and 1 extra for terminating NULL
 	{
 		*pBuf = m_SUFFIX_SEPARATOR;
 		pBuf++;
@@ -108,22 +103,18 @@ INT64 CSecurityFile::ParseSuffix(const char *pSymbol) const {
 	Multiplier = Power26Sum[CharCount];
 
 	while (CharCount > 0) {
-		Multiplier +=
-		    (INT64)Power26[CharCount - 1] * m_LowerCaseLetterToIntMap[*pSymbol];
+		Multiplier += (INT64)Power26[CharCount - 1] * m_LowerCaseLetterToIntMap[*pSymbol];
 		CharCount--;
 		pSymbol++;
 	}
 	return (Multiplier);
 }
 
-CSecurityFile::CSecurityFile(const SecurityDataFile_t &dataFile,
-                             TIdent iConfiguredCustomerCount,
+CSecurityFile::CSecurityFile(const SecurityDataFile_t &dataFile, TIdent iConfiguredCustomerCount,
                              TIdent iActiveCustomerCount, UINT baseCompanyCount)
-    : m_dataFile(&dataFile), m_iConfiguredSecurityCount(CalculateSecurityCount(
-                                 iConfiguredCustomerCount)),
-      m_iActiveSecurityCount(CalculateSecurityCount(iActiveCustomerCount)),
-      m_iBaseCompanyCount(baseCompanyCount), m_SymbolToIdMapIsLoaded(false),
-      m_SUFFIX_SEPARATOR('-') {
+    : m_dataFile(&dataFile), m_iConfiguredSecurityCount(CalculateSecurityCount(iConfiguredCustomerCount)),
+      m_iActiveSecurityCount(CalculateSecurityCount(iActiveCustomerCount)), m_iBaseCompanyCount(baseCompanyCount),
+      m_SymbolToIdMapIsLoaded(false), m_SUFFIX_SEPARATOR('-') {
 }
 
 // Calculate total security count for the specified number of customers.
@@ -136,10 +127,8 @@ TIdent CSecurityFile::CalculateSecurityCount(TIdent iCustomerCount) const {
 
 // Calculate the first security id (0-based) for the specified customer id
 //
-TIdent
-CSecurityFile::CalculateStartFromSecurity(TIdent iStartFromCustomer) const {
-	return iStartFromCustomer / iDefaultLoadUnitSize *
-	       iOneLoadUnitSecurityCount;
+TIdent CSecurityFile::CalculateStartFromSecurity(TIdent iStartFromCustomer) const {
+	return iStartFromCustomer / iDefaultLoadUnitSize * iOneLoadUnitSecurityCount;
 }
 
 // Create security symbol with mod/div magic.
@@ -147,10 +136,9 @@ CSecurityFile::CalculateStartFromSecurity(TIdent iStartFromCustomer) const {
 // This function is needed to scale unique security
 // symbols with the database size.
 //
-void CSecurityFile::CreateSymbol(
-    TIdent iIndex,     // row number
-    char *szOutput,    // output buffer
-    size_t iOutputLen) // size of the output buffer (including null)
+void CSecurityFile::CreateSymbol(TIdent iIndex,     // row number
+                                 char *szOutput,    // output buffer
+                                 size_t iOutputLen) // size of the output buffer (including null)
     const {
 	TIdent iFileIndex = iIndex % m_dataFile->size();
 	TIdent iAdd = iIndex / m_dataFile->size();
@@ -174,8 +162,8 @@ void CSecurityFile::CreateSymbol(
 TIdent CSecurityFile::GetCompanyId(TIdent iIndex) const {
 	// Index wraps around every 6850 securities (5000 companies).
 	//
-	return (*m_dataFile)[(int)(iIndex % m_dataFile->size())].S_CO_ID() +
-	       iTIdentShift + iIndex / m_dataFile->size() * m_iBaseCompanyCount;
+	return (*m_dataFile)[(int)(iIndex % m_dataFile->size())].S_CO_ID() + iTIdentShift +
+	       iIndex / m_dataFile->size() * m_iBaseCompanyCount;
 }
 
 TIdent CSecurityFile::GetCompanyIndex(TIdent Index) const {
@@ -251,11 +239,9 @@ TIdent CSecurityFile::GetId(char *pSymbol) const {
 		string sSymbol(pSymbol, static_cast<size_t>(pSeparator - pSymbol));
 		BaseId = m_SymbolToIdMap[sSymbol];
 
-		pSuffix = pSeparator +
-		          1; // The suffix starts right after the separator character
-		Multiplier = (int)ParseSuffix(
-		    pSuffix); // For now, suffix values fit in an int, cast ParseSuffix
-		              // to avoid compiler warning
+		pSuffix = pSeparator + 1;               // The suffix starts right after the separator character
+		Multiplier = (int)ParseSuffix(pSuffix); // For now, suffix values fit in an int, cast ParseSuffix
+		                                        // to avoid compiler warning
 
 		return ((Multiplier * m_dataFile->size()) + BaseId);
 	}
@@ -268,8 +254,7 @@ TIdent CSecurityFile::GetIndex(char *pSymbol) const {
 
 eExchangeID CSecurityFile::GetExchangeIndex(TIdent index) const {
 	// The mod converts a scaled security index into a base security index
-	const char *pExchange =
-	    (*m_dataFile)[(int)(index % m_dataFile->size())].S_EX_ID_CSTR();
+	const char *pExchange = (*m_dataFile)[(int)(index % m_dataFile->size())].S_EX_ID_CSTR();
 	eExchangeID eExchangeIndex;
 
 	if (!strcmp(pExchange, "NYSE")) {

@@ -1,4 +1,3 @@
-
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/statement/create_index_statement.hpp"
 #include "parser/tableref/basetableref.hpp"
@@ -16,31 +15,26 @@ unique_ptr<CreateIndexStatement> Transformer::TransformCreateIndex(Node *node) {
 
 	info.unique = stmt->unique;
 
-	for (auto cell = stmt->indexParams->head; cell != nullptr;
-	     cell = cell->next) {
+	for (auto cell = stmt->indexParams->head; cell != nullptr; cell = cell->next) {
 		auto index_element = (IndexElem *)cell->data.ptr_value;
 		if (index_element->collation) {
-			throw NotImplementedException(
-			    "Index with collation not supported yet!");
+			throw NotImplementedException("Index with collation not supported yet!");
 		}
 		if (index_element->opclass) {
-			throw NotImplementedException(
-			    "Index with opclass not supported yet!");
+			throw NotImplementedException("Index with opclass not supported yet!");
 		}
 
 		if (index_element->name) {
 			// create a column reference expression
-			result->expressions.push_back(
-			    make_unique<ColumnRefExpression>(index_element->name));
+			result->expressions.push_back(make_unique<ColumnRefExpression>(index_element->name));
 		} else {
 			// parse the index expression
 			assert(index_element->expr);
-			result->expressions.push_back(
-			    TransformExpression(index_element->expr));
+			result->expressions.push_back(TransformExpression(index_element->expr));
 		}
 	}
 
-	info.index_type = StringToIndexType(std::string(stmt->accessMethod));
+	info.index_type = StringToIndexType(string(stmt->accessMethod));
 	auto tableref = make_unique<BaseTableRef>();
 	tableref->table_name = stmt->relation->relname;
 	if (stmt->relation->schemaname) {

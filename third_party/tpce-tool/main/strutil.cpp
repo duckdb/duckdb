@@ -82,14 +82,12 @@ INT64 strtoint64(const char *ptr) {
 		break;
 	default:
 		std::ostringstream strm;
-		strm << "Unable to parse invalid scale factor on integer '" << ptr
-		     << "'" << std::endl;
+		strm << "Unable to parse invalid scale factor on integer '" << ptr << "'" << std::endl;
 		throw std::runtime_error(strm.str());
 	}
 	if (*++endp != '\0') {
 		std::ostringstream strm;
-		strm << "Unable to parse trailing characters on integer '" << ptr << "'"
-		     << std::endl;
+		strm << "Unable to parse trailing characters on integer '" << ptr << "'" << std::endl;
 		throw std::runtime_error(strm.str());
 	}
 	return val;
@@ -106,8 +104,7 @@ double strtodbl(const char *ptr) {
 	val = strtod(ptr, &endp);
 	if (errno != 0) {
 		std::ostringstream strm;
-		strm << "Unable to parse floating point number '" << ptr << "'"
-		     << std::endl;
+		strm << "Unable to parse floating point number '" << ptr << "'" << std::endl;
 		throw std::runtime_error(strm.str());
 	}
 	switch (*endp) {
@@ -125,15 +122,12 @@ double strtodbl(const char *ptr) {
 		break;
 	default:
 		std::ostringstream strm;
-		strm
-		    << "Unable to parse invalid scale factor on floating point number '"
-		    << ptr << "'" << std::endl;
+		strm << "Unable to parse invalid scale factor on floating point number '" << ptr << "'" << std::endl;
 		throw std::runtime_error(strm.str());
 	}
 	if (*++endp != '\0') {
 		std::ostringstream strm;
-		strm << "Unable to parse trailing characters on floating point number '"
-		     << ptr << "'" << std::endl;
+		strm << "Unable to parse trailing characters on floating point number '" << ptr << "'" << std::endl;
 		throw std::runtime_error(strm.str());
 	}
 	return val;

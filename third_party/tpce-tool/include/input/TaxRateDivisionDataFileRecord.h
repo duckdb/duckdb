@@ -55,7 +55,7 @@ namespace TPCE {
 //
 
 class TaxRateDivisionDataFileRecord : public ITaxRateFileRecord {
-  private:
+private:
 	static const int maxTx_idLen = 4;
 	char tx_idCStr[maxTx_idLen + 1];
 	std::string tx_id;
@@ -68,9 +68,8 @@ class TaxRateDivisionDataFileRecord : public ITaxRateFileRecord {
 
 	static const unsigned int fieldCount = 3;
 
-  public:
-	explicit TaxRateDivisionDataFileRecord(
-	    const std::deque<std::string> &fields);
+public:
+	explicit TaxRateDivisionDataFileRecord(const std::deque<std::string> &fields);
 
 	//
 	// Default copies and destructor are ok.

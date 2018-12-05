@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // parser/tableref/joinref.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -17,11 +15,11 @@
 namespace duckdb {
 //! Represents a JOIN between two expressions
 class JoinRef : public TableRef {
-  public:
+public:
 	JoinRef() : TableRef(TableReferenceType::JOIN) {
 	}
 
-	std::unique_ptr<TableRef> Accept(SQLNodeVisitor *v) override {
+	unique_ptr<TableRef> Accept(SQLNodeVisitor *v) override {
 		return v->Visit(*this);
 	}
 	bool Equals(const TableRef *other_) override {
@@ -29,24 +27,23 @@ class JoinRef : public TableRef {
 			return false;
 		}
 		auto other = (JoinRef *)other_;
-		return left->Equals(other->left.get()) &&
-		       right->Equals(other->right.get()) &&
+		return left->Equals(other->left.get()) && right->Equals(other->right.get()) &&
 		       condition->Equals(other->condition.get()) && type == other->type;
 	}
 
-	std::unique_ptr<TableRef> Copy() override;
+	unique_ptr<TableRef> Copy() override;
 
 	//! Serializes a blob into a JoinRef
 	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into a JoinRef
-	static std::unique_ptr<TableRef> Deserialize(Deserializer &source);
+	static unique_ptr<TableRef> Deserialize(Deserializer &source);
 
 	//! The left hand side of the join
-	std::unique_ptr<TableRef> left;
+	unique_ptr<TableRef> left;
 	//! The right hand side of the join
-	std::unique_ptr<TableRef> right;
+	unique_ptr<TableRef> right;
 	//! The join condition
-	std::unique_ptr<Expression> condition;
+	unique_ptr<Expression> condition;
 	//! The join type
 	JoinType type;
 };

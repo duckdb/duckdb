@@ -175,9 +175,9 @@ static size_t MergeJoin(MergeInfo &l, MergeInfo &r, ExpressionType comparison_ty
 	}
 }
 
-PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, std::unique_ptr<PhysicalOperator> left,
-                                                       std::unique_ptr<PhysicalOperator> right,
-                                                       std::vector<JoinCondition> cond, JoinType join_type)
+PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
+                                                       unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond,
+                                                       JoinType join_type)
     : PhysicalJoin(op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, move(cond), join_type) {
 	// for now we only support one condition!
 	assert(conditions.size() == 1);
@@ -298,7 +298,6 @@ void PhysicalPiecewiseMergeJoin::_GetChunk(ClientContext &context, DataChunk &ch
 	} while (chunk.size() == 0);
 }
 
-std::unique_ptr<PhysicalOperatorState>
-PhysicalPiecewiseMergeJoin::GetOperatorState(ExpressionExecutor *parent_executor) {
+unique_ptr<PhysicalOperatorState> PhysicalPiecewiseMergeJoin::GetOperatorState(ExpressionExecutor *parent_executor) {
 	return make_unique<PhysicalPiecewiseMergeJoinOperatorState>(children[0].get(), children[1].get(), parent_executor);
 }

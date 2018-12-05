@@ -44,11 +44,10 @@ namespace TPCE {
 class CTradeLookup {
 	CTradeLookupDBInterface *m_db;
 
-  public:
+public:
 	CTradeLookup(CTradeLookupDBInterface *pDB) : m_db(pDB){};
 
-	void DoTxn(PTradeLookupTxnInput pTxnInput,
-	           PTradeLookupTxnOutput pTxnOutput) {
+	void DoTxn(PTradeLookupTxnInput pTxnInput, PTradeLookupTxnOutput pTxnOutput) {
 		TXN_HARNESS_SET_STATUS_SUCCESS;
 
 		switch (pTxnInput->frame_to_execute) {
@@ -59,8 +58,7 @@ class CTradeLookup {
 
 			// Copy Frame 1 Input
 			Frame1Input.max_trades = pTxnInput->max_trades;
-			memcpy(Frame1Input.trade_id, pTxnInput->trade_id,
-			       sizeof(Frame1Input.trade_id));
+			memcpy(Frame1Input.trade_id, pTxnInput->trade_id, sizeof(Frame1Input.trade_id));
 
 			// Execute Frame 1
 			m_db->DoTradeLookupFrame1(&Frame1Input, &Frame1Output);
@@ -72,9 +70,7 @@ class CTradeLookup {
 
 			// Copy Frame 1 Output
 			pTxnOutput->frame_executed = 1;
-			for (int i = 0;
-			     i < Frame1Output.num_found && i < TradeLookupFrame1MaxRows;
-			     i++) {
+			for (int i = 0; i < Frame1Output.num_found && i < TradeLookupFrame1MaxRows; i++) {
 				pTxnOutput->is_cash[i] = Frame1Output.trade_info[i].is_cash;
 				pTxnOutput->is_market[i] = Frame1Output.trade_info[i].is_market;
 			}
@@ -98,8 +94,7 @@ class CTradeLookup {
 			m_db->DoTradeLookupFrame2(&Frame2Input, &Frame2Output);
 
 			// Validate Frame 2 Output
-			if (Frame2Output.num_found < 0 ||
-			    Frame2Output.num_found > Frame2Input.max_trades) {
+			if (Frame2Output.num_found < 0 || Frame2Output.num_found > Frame2Input.max_trades) {
 				TXN_HARNESS_PROPAGATE_STATUS(CBaseTxnErr::TLF2_ERROR1);
 			}
 			if (Frame2Output.num_found == 0) {
@@ -108,9 +103,7 @@ class CTradeLookup {
 
 			// Copy Frame 2 Output
 			pTxnOutput->frame_executed = 2;
-			for (int i = 0;
-			     i < Frame2Output.num_found && i < TradeLookupFrame2MaxRows;
-			     i++) {
+			for (int i = 0; i < Frame2Output.num_found && i < TradeLookupFrame2MaxRows; i++) {
 				pTxnOutput->is_cash[i] = Frame2Output.trade_info[i].is_cash;
 				pTxnOutput->trade_list[i] = Frame2Output.trade_info[i].trade_id;
 			}
@@ -126,8 +119,7 @@ class CTradeLookup {
 
 			// Copy Frame 3 Input
 			Frame3Input.max_trades = pTxnInput->max_trades;
-			strncpy(Frame3Input.symbol, pTxnInput->symbol,
-			        sizeof(Frame3Input.symbol));
+			strncpy(Frame3Input.symbol, pTxnInput->symbol, sizeof(Frame3Input.symbol));
 			Frame3Input.start_trade_dts = pTxnInput->start_trade_dts;
 			Frame3Input.end_trade_dts = pTxnInput->end_trade_dts;
 			Frame3Input.max_acct_id = pTxnInput->max_acct_id;
@@ -136,8 +128,7 @@ class CTradeLookup {
 			m_db->DoTradeLookupFrame3(&Frame3Input, &Frame3Output);
 
 			// Validate Frame 3 Output
-			if (Frame3Output.num_found < 0 ||
-			    Frame3Output.num_found > Frame3Input.max_trades) {
+			if (Frame3Output.num_found < 0 || Frame3Output.num_found > Frame3Input.max_trades) {
 				TXN_HARNESS_PROPAGATE_STATUS(CBaseTxnErr::TLF3_ERROR1);
 			}
 			if (Frame3Output.num_found == 0) {
@@ -147,9 +138,7 @@ class CTradeLookup {
 			// Copy Frame 3 Output
 			pTxnOutput->frame_executed = 3;
 			pTxnOutput->num_found = Frame3Output.num_found;
-			for (int i = 0;
-			     i < Frame3Output.num_found && i < TradeLookupFrame3MaxRows;
-			     i++) {
+			for (int i = 0; i < Frame3Output.num_found && i < TradeLookupFrame3MaxRows; i++) {
 				pTxnOutput->is_cash[i] = Frame3Output.trade_info[i].is_cash;
 				pTxnOutput->trade_list[i] = Frame3Output.trade_info[i].trade_id;
 			}
@@ -174,8 +163,7 @@ class CTradeLookup {
 				TXN_HARNESS_PROPAGATE_STATUS(CBaseTxnErr::TLF4_WARN1);
 			} else if (Frame4Output.num_trades_found != 1) {
 				TXN_HARNESS_PROPAGATE_STATUS(CBaseTxnErr::TLF4_ERROR1);
-			} else if (Frame4Output.num_found < 1 ||
-			           Frame4Output.num_found > 20) {
+			} else if (Frame4Output.num_found < 1 || Frame4Output.num_found > 20) {
 				TXN_HARNESS_PROPAGATE_STATUS(CBaseTxnErr::TLF4_ERROR2);
 			}
 

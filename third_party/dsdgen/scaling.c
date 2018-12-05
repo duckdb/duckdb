@@ -64,8 +64,7 @@ static struct SCALING_T {
 static int arUpdateDates[6];
 static int arInventoryUpdateDates[6];
 
-static int arScaleVolume[9] = {1,    10,    100,   300,   1000,
-                               3000, 10000, 30000, 100000};
+static int arScaleVolume[9] = {1, 10, 100, 300, 1000, 3000, 10000, 30000, 100000};
 
 void setUpdateScaling(int table);
 int row_skip(int tbl, ds_key_t count);
@@ -114,10 +113,8 @@ static ds_key_t LogScale(int nTable, int nTargetGB) {
 
 	i = getScaleSlot(nTargetGB);
 
-	nDelta = dist_weight(NULL, "rowcounts", nTable + 1, i + 1) -
-	         dist_weight(NULL, "rowcounts", nTable + 1, i);
-	fOffset = (float)(nTargetGB - arScaleVolume[i - 1]) /
-	          (float)(arScaleVolume[i] - arScaleVolume[i - 1]);
+	nDelta = dist_weight(NULL, "rowcounts", nTable + 1, i + 1) - dist_weight(NULL, "rowcounts", nTable + 1, i);
+	fOffset = (float)(nTargetGB - arScaleVolume[i - 1]) / (float)(arScaleVolume[i] - arScaleVolume[i - 1]);
 
 	hgRowcount = (int)(fOffset * (float)nDelta);
 	hgRowcount += dist_weight(NULL, "rowcounts", nTable + 1, nIndex);
@@ -247,59 +244,47 @@ ds_key_t get_rowcount(int table) {
 		for (nTable = CALL_CENTER; nTable <= MAX_TABLE; nTable++) {
 			switch (nScale) {
 			case 100000:
-				arRowcount[nTable].kBaseRowcount = dist_weight(
-				    NULL, "rowcounts", nTable + nRowcountOffset + 1, 9);
+				arRowcount[nTable].kBaseRowcount = dist_weight(NULL, "rowcounts", nTable + nRowcountOffset + 1, 9);
 				break;
 			case 30000:
-				arRowcount[nTable].kBaseRowcount = dist_weight(
-				    NULL, "rowcounts", nTable + nRowcountOffset + 1, 8);
+				arRowcount[nTable].kBaseRowcount = dist_weight(NULL, "rowcounts", nTable + nRowcountOffset + 1, 8);
 				break;
 			case 10000:
-				arRowcount[nTable].kBaseRowcount = dist_weight(
-				    NULL, "rowcounts", nTable + nRowcountOffset + 1, 7);
+				arRowcount[nTable].kBaseRowcount = dist_weight(NULL, "rowcounts", nTable + nRowcountOffset + 1, 7);
 				break;
 			case 3000:
-				arRowcount[nTable].kBaseRowcount = dist_weight(
-				    NULL, "rowcounts", nTable + nRowcountOffset + 1, 6);
+				arRowcount[nTable].kBaseRowcount = dist_weight(NULL, "rowcounts", nTable + nRowcountOffset + 1, 6);
 				break;
 			case 1000:
-				arRowcount[nTable].kBaseRowcount = dist_weight(
-				    NULL, "rowcounts", nTable + nRowcountOffset + 1, 5);
+				arRowcount[nTable].kBaseRowcount = dist_weight(NULL, "rowcounts", nTable + nRowcountOffset + 1, 5);
 				break;
 			case 300:
 				nBadScale = QERR_BAD_SCALE;
-				arRowcount[nTable].kBaseRowcount = dist_weight(
-				    NULL, "rowcounts", nTable + nRowcountOffset + 1, 4);
+				arRowcount[nTable].kBaseRowcount = dist_weight(NULL, "rowcounts", nTable + nRowcountOffset + 1, 4);
 				break;
 			case 100:
 				nBadScale = QERR_BAD_SCALE;
-				arRowcount[nTable].kBaseRowcount = dist_weight(
-				    NULL, "rowcounts", nTable + nRowcountOffset + 1, 3);
+				arRowcount[nTable].kBaseRowcount = dist_weight(NULL, "rowcounts", nTable + nRowcountOffset + 1, 3);
 				break;
 			case 10:
 				nBadScale = QERR_BAD_SCALE;
-				arRowcount[nTable].kBaseRowcount = dist_weight(
-				    NULL, "rowcounts", nTable + nRowcountOffset + 1, 2);
+				arRowcount[nTable].kBaseRowcount = dist_weight(NULL, "rowcounts", nTable + nRowcountOffset + 1, 2);
 				break;
 			case 1:
 				nBadScale = QERR_QUALIFICATION_SCALE;
-				arRowcount[nTable].kBaseRowcount = dist_weight(
-				    NULL, "rowcounts", nTable + nRowcountOffset + 1, 1);
+				arRowcount[nTable].kBaseRowcount = dist_weight(NULL, "rowcounts", nTable + nRowcountOffset + 1, 1);
 				break;
 			default:
 				nBadScale = QERR_BAD_SCALE;
 				switch (dist_member(NULL, "rowcounts", nTable + 1, 3)) {
 				case 2:
-					arRowcount[nTable].kBaseRowcount =
-					    LinearScale(nTable + nRowcountOffset, nScale);
+					arRowcount[nTable].kBaseRowcount = LinearScale(nTable + nRowcountOffset, nScale);
 					break;
 				case 1:
-					arRowcount[nTable].kBaseRowcount =
-					    StaticScale(nTable + nRowcountOffset, nScale);
+					arRowcount[nTable].kBaseRowcount = StaticScale(nTable + nRowcountOffset, nScale);
 					break;
 				case 3:
-					arRowcount[nTable].kBaseRowcount =
-					    LogScale(nTable + nRowcountOffset, nScale);
+					arRowcount[nTable].kBaseRowcount = LogScale(nTable + nRowcountOffset, nScale);
 					break;
 				} /* switch(FL_SCALE_MASK) */
 				break;
@@ -387,8 +372,7 @@ void setUpdateDates(void) {
 		/* repeat for medium calendar zone */
 		arUpdateDates[2] = getSkewedJulianDate(calendar_medium, 0);
 		jtodt(&dtTemp, arUpdateDates[2]);
-		dist_weight(&nDay, "calendar", day_number(&dtTemp) + 1,
-		            calendar_medium);
+		dist_weight(&nDay, "calendar", day_number(&dtTemp) + 1, calendar_medium);
 		if (nDay)
 			arUpdateDates[3] = arUpdateDates[2] + 1;
 		else
@@ -400,8 +384,7 @@ void setUpdateDates(void) {
 		if (!nDay) {
 			jtodt(&dtTemp, dtTemp.julian - 7);
 			arInventoryUpdateDates[2] = dtTemp.julian;
-			dist_weight(&nDay, "calendar", day_number(&dtTemp),
-			            calendar_medium);
+			dist_weight(&nDay, "calendar", day_number(&dtTemp), calendar_medium);
 			if (!nDay)
 				arInventoryUpdateDates[2] += 14;
 		}
@@ -480,8 +463,7 @@ int getUpdateDate(int nTable, ds_key_t kRowcount) {
 		nIndex = 0;
 	}
 
-	for (nIndex = 0; kRowcount > arRowcount[nTable].kDayRowcount[nIndex];
-	     nIndex++)
+	for (nIndex = 0; kRowcount > arRowcount[nTable].kDayRowcount[nIndex]; nIndex++)
 		if (nIndex == 5)
 			break;
 
@@ -550,8 +532,7 @@ int getSkewedJulianDate(int nWeight, int nColumn) {
 	date_t Date;
 
 	pick_distribution(&i, "calendar", 1, nWeight, nColumn);
-	genrand_integer(&Date.year, DIST_UNIFORM, YEAR_MINIMUM, YEAR_MAXIMUM, 0,
-	                nColumn);
+	genrand_integer(&Date.year, DIST_UNIFORM, YEAR_MINIMUM, YEAR_MAXIMUM, 0, nColumn);
 	dist_member(&Date.day, "calendar", i, 3);
 	dist_member(&Date.month, "calendar", i, 5);
 	return (dttoj(&Date));
@@ -665,8 +646,7 @@ ds_key_t dateScaling(int nTable, ds_key_t jDate) {
 		break;
 	}
 
-	if (nTable !=
-	    INVENTORY) /* inventory rowcount is uniform thorughout the year */
+	if (nTable != INVENTORY) /* inventory rowcount is uniform thorughout the year */
 	{
 		if (is_leap(Date.year))
 			nDateWeight += 1;
@@ -720,8 +700,7 @@ void setUpdateScaling(int nTable) {
 	ds_key_t kNewRowcount = 0;
 
 	pTdef = getSimpleTdefsByNumber(nTable);
-	if (!(pTdef->flags & FL_SOURCE_DDL) || !(pTdef->flags & FL_DATE_BASED) ||
-	    (pTdef->flags & FL_NOP))
+	if (!(pTdef->flags & FL_SOURCE_DDL) || !(pTdef->flags & FL_DATE_BASED) || (pTdef->flags & FL_NOP))
 		return;
 
 	switch (nTable) {
@@ -751,8 +730,7 @@ void setUpdateScaling(int nTable) {
 	}
 
 	arRowcount[nTable].kBaseRowcount = kNewRowcount;
-	arRowcount[nTable].kNextInsertValue +=
-	    kNewRowcount * (get_int("update") - 1);
+	arRowcount[nTable].kNextInsertValue += kNewRowcount * (get_int("update") - 1);
 
 	return;
 }

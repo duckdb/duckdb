@@ -17,7 +17,8 @@ FROM (
     SELECT
         ref_0.r_regionkey AS c0,
         ref_0.r_regionkey AS c1,
-        ref_0.r_name AS c2, (
+        ref_0.r_name AS c2,
+        (
             SELECT
                 r_regionkey
             FROM

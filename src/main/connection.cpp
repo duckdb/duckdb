@@ -54,7 +54,7 @@ void DuckDBConnection::DestroyAppender(bool rollback) {
 	}
 }
 
-unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(ClientContext &context, std::string query) {
+unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(ClientContext &context, string query) {
 	auto result = make_unique<DuckDBResult>();
 	result->success = false;
 
@@ -116,11 +116,11 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(ClientContext &context
 	return result;
 }
 
-unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(std::string query) {
+unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(string query) {
 	return GetQueryResult(context, query);
 }
 
-unique_ptr<DuckDBResult> DuckDBConnection::Query(std::string query) {
+unique_ptr<DuckDBResult> DuckDBConnection::Query(string query) {
 	if (appender) {
 		throw Exception("Cannot query connection while an appender is active!");
 	}

@@ -1,4 +1,3 @@
-
 #include "parser/expression/case_expression.hpp"
 #include "parser/expression/operator_expression.hpp"
 #include "parser/transformer.hpp"
@@ -20,24 +19,19 @@ unique_ptr<Expression> Transformer::TransformCoalesce(A_Expr *root) {
 	Expression *cur_root = exp_root.get();
 	Expression *next_root = nullptr;
 
-	for (auto cell = coalesce_args->head; cell && cell->next;
-	     cell = cell->next) {
+	for (auto cell = coalesce_args->head; cell && cell->next; cell = cell->next) {
 		// we need this twice
-		auto value_expr =
-		    TransformExpression(reinterpret_cast<Node *>(cell->data.ptr_value));
-		auto res_true =
-		    TransformExpression(reinterpret_cast<Node *>(cell->data.ptr_value));
+		auto value_expr = TransformExpression(reinterpret_cast<Node *>(cell->data.ptr_value));
+		auto res_true = TransformExpression(reinterpret_cast<Node *>(cell->data.ptr_value));
 
 		auto test = unique_ptr<Expression>(
-		    new OperatorExpression(ExpressionType::OPERATOR_IS_NOT_NULL,
-		                           TypeId::BOOLEAN, move(value_expr)));
+		    new OperatorExpression(ExpressionType::OPERATOR_IS_NOT_NULL, TypeId::BOOLEAN, move(value_expr)));
 
 		// the last argument does not need its own CASE because if we get there
 		// we might as well return it directly
 		unique_ptr<Expression> res_false;
 		if (cell->next->next == nullptr) {
-			res_false = TransformExpression(
-			    reinterpret_cast<Node *>(cell->next->data.ptr_value));
+			res_false = TransformExpression(reinterpret_cast<Node *>(cell->next->data.ptr_value));
 		} else {
 			res_false = unique_ptr<Expression>(new CaseExpression());
 			next_root = res_false.get();

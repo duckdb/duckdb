@@ -1,4 +1,3 @@
-
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
@@ -12,8 +11,7 @@ TEST_CASE("Test case statement", "[case]") {
 	con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
 	con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)");
 
-	result =
-	    con.Query("SELECT CASE WHEN test.a=11 THEN b ELSE NULL END FROM test");
+	result = con.Query("SELECT CASE WHEN test.a=11 THEN b ELSE NULL END FROM test");
 	REQUIRE(CHECK_COLUMN(result, 0, {22, Value(), Value()}));
 }
 
@@ -35,8 +33,7 @@ TEST_CASE("Test NULL IF statement", "[case]") {
 
 	result = con.Query("SELECT NULLIF(NULLIF ((SELECT a FROM test "
 	                   "LIMIT 1 offset 1), a), b) FROM test2");
-	REQUIRE(CHECK_COLUMN(result, 0,
-	                     {Value("world"), Value("world"), Value("world")}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value("world"), Value("world"), Value("world")}));
 
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE test;"));
 }
@@ -47,8 +44,7 @@ TEST_CASE("NULL IF with strings", "[case]") {
 	DuckDBConnection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
-	REQUIRE_NO_FAIL(
-	    con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)"));
 
 	result = con.Query("SELECT NULLIF(CAST(a AS VARCHAR), 11) FROM test;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value("13"), Value("12")}));

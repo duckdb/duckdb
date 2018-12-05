@@ -1,4 +1,3 @@
-
 #include "parser/expression/subquery_expression.hpp"
 
 #include "common/exception.hpp"
@@ -25,9 +24,7 @@ void SubqueryExpression::Serialize(Serializer &serializer) {
 	subquery->Serialize(serializer);
 }
 
-unique_ptr<Expression>
-SubqueryExpression::Deserialize(ExpressionDeserializeInfo *info,
-                                Deserializer &source) {
+unique_ptr<Expression> SubqueryExpression::Deserialize(ExpressionDeserializeInfo *info, Deserializer &source) {
 	auto subquery_type = source.Read<SubqueryType>();
 	auto subquery = QueryNode::Deserialize(source);
 	if (info->children.size() > 0) {
@@ -48,6 +45,5 @@ bool SubqueryExpression::Equals(const Expression *other_) {
 	if (!other) {
 		return false;
 	}
-	return subquery_type == other->subquery_type &&
-	       subquery->Equals(other->subquery.get());
+	return subquery_type == other->subquery_type && subquery->Equals(other->subquery.get());
 }

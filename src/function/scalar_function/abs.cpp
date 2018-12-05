@@ -1,4 +1,3 @@
-
 #include "function/scalar_function/abs.hpp"
 
 #include "common/exception.hpp"
@@ -14,11 +13,11 @@ void abs_function(Vector inputs[], size_t input_count, Vector &result) {
 	VectorOperations::Abs(inputs[0], result);
 }
 
-bool abs_matches_arguments(std::vector<TypeId> &arguments) {
+bool abs_matches_arguments(vector<TypeId> &arguments) {
 	return arguments.size() == 1 && TypeIsNumeric(arguments[0]);
 }
 
-TypeId abs_get_return_type(std::vector<TypeId> &arguments) {
+TypeId abs_get_return_type(vector<TypeId> &arguments) {
 	return arguments[0];
 }
 

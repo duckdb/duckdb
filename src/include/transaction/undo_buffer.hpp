@@ -1,43 +1,35 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // transaction/undo_buffer.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
+#include "common/common.hpp"
+
 #include <memory>
 #include <vector>
-
-#include "common/common.hpp"
 
 namespace duckdb {
 
 class WriteAheadLog;
 
-enum class UndoFlags {
-	INVALID = 0,
-	EMPTY_ENTRY = 1,
-	CATALOG_ENTRY = 2,
-	TUPLE_ENTRY = 3,
-	QUERY = 4
-};
+enum class UndoFlags { INVALID = 0, EMPTY_ENTRY = 1, CATALOG_ENTRY = 2, TUPLE_ENTRY = 3, QUERY = 4 };
 
 struct UndoEntry {
 	UndoFlags type;
 	size_t length;
-	std::unique_ptr<uint8_t[]> data;
+	unique_ptr<uint8_t[]> data;
 };
 
 //! The undo buffer of a transaction is used to hold previous versions of tuples
 //! that might be required in the future (because of rollbacks or previous
 //! transactions accessing them)
 class UndoBuffer {
-  public:
+public:
 	UndoBuffer() {
 	}
 
@@ -53,9 +45,9 @@ class UndoBuffer {
 	//! rollback
 	void Rollback();
 
-  private:
+private:
 	// List of UndoEntries, FIXME: this can be more efficient
-	std::vector<UndoEntry> entries;
+	vector<UndoEntry> entries;
 
 	UndoBuffer(const UndoBuffer &) = delete;
 };

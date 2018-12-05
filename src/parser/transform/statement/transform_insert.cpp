@@ -1,4 +1,3 @@
-
 #include "parser/statement/insert_statement.hpp"
 #include "parser/tableref/basetableref.hpp"
 #include "parser/transformer.hpp"
@@ -17,7 +16,7 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(Node *node) {
 	if (stmt->cols) {
 		for (ListCell *c = stmt->cols->head; c != NULL; c = lnext(c)) {
 			ResTarget *target = (ResTarget *)(c->data.ptr_value);
-			result->columns.push_back(std::string(target->name));
+			result->columns.push_back(string(target->name));
 		}
 	}
 
@@ -28,8 +27,7 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(Node *node) {
 	} else {
 		// transform the insert list
 		auto list = select_stmt->valuesLists;
-		for (auto value_list = list->head; value_list != NULL;
-		     value_list = value_list->next) {
+		for (auto value_list = list->head; value_list != NULL; value_list = value_list->next) {
 			List *target = (List *)(value_list->data.ptr_value);
 
 			vector<unique_ptr<Expression>> insert_values;
@@ -38,8 +36,7 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(Node *node) {
 			}
 			if (result->values.size() > 0) {
 				if (result->values[0].size() != insert_values.size()) {
-					throw ParserException(
-					    "Insert VALUES lists must all be the same length");
+					throw ParserException("Insert VALUES lists must all be the same length");
 				}
 			}
 			result->values.push_back(move(insert_values));

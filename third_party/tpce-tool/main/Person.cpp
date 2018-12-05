@@ -45,13 +45,10 @@ const int iPercentGenderIsMale = 49;
 /*
  *   Initializes in-memory representation of names files.
  */
-CPerson::CPerson(const DataFileManager &dfm, TIdent iStartFromCustomer,
-                 bool bCacheEnabled)
-    : m_LastNames(dfm.LastNameDataFile()),
-      m_MaleFirstNames(dfm.MaleFirstNameDataFile()),
-      m_FemaleFirstNames(dfm.FemaleFirstNameDataFile()),
-      m_bCacheEnabled(bCacheEnabled), m_iCacheSize(0), m_iCacheOffset(0),
-      INVALID_NAME_CACHE_ENTRY(-1), INVALID_GENDER_CACHE_ENTRY('X') {
+CPerson::CPerson(const DataFileManager &dfm, TIdent iStartFromCustomer, bool bCacheEnabled)
+    : m_LastNames(dfm.LastNameDataFile()), m_MaleFirstNames(dfm.MaleFirstNameDataFile()),
+      m_FemaleFirstNames(dfm.FemaleFirstNameDataFile()), m_bCacheEnabled(bCacheEnabled), m_iCacheSize(0),
+      m_iCacheOffset(0), INVALID_NAME_CACHE_ENTRY(-1), INVALID_GENDER_CACHE_ENTRY('X') {
 	if (m_bCacheEnabled) {
 		m_iCacheSize = iDefaultLoadUnitSize;
 		m_iCacheOffset = iTIdentShift + iStartFromCustomer;
@@ -96,8 +93,7 @@ void CPerson::InitNextLoadUnit(TIdent iCacheOffsetIncrement) {
  *   It'll always be the same for the same customer id.
  */
 const string &CPerson::GetLastName(TIdent CID) {
-	return getName<LastNameDataFile_t>(CID, m_LastNames, m_LastNameCache,
-	                                   RNGSeedBaseLastName);
+	return getName<LastNameDataFile_t>(CID, m_LastNames, m_LastNameCache, RNGSeedBaseLastName);
 }
 
 /*
@@ -106,11 +102,9 @@ const string &CPerson::GetLastName(TIdent CID) {
  */
 const string &CPerson::GetFirstName(TIdent CID) {
 	if (IsMaleGender(CID)) {
-		return getName<MaleFirstNameDataFile_t>(
-		    CID, m_MaleFirstNames, m_FirstNameCache, RNGSeedBaseFirstName);
+		return getName<MaleFirstNameDataFile_t>(CID, m_MaleFirstNames, m_FirstNameCache, RNGSeedBaseFirstName);
 	} else {
-		return getName<FemaleFirstNameDataFile_t>(
-		    CID, m_FemaleFirstNames, m_FirstNameCache, RNGSeedBaseFirstName);
+		return getName<FemaleFirstNameDataFile_t>(CID, m_FemaleFirstNames, m_FirstNameCache, RNGSeedBaseFirstName);
 	}
 }
 /*
@@ -143,8 +137,7 @@ char CPerson::GetGender(TIdent CID) {
 	bool bCheckCache = (index >= 0 && index < m_iCacheSize);
 
 	// Use the cache if we can.
-	if (m_bCacheEnabled && bCheckCache &&
-	    (INVALID_GENDER_CACHE_ENTRY != m_GenderCache[index])) {
+	if (m_bCacheEnabled && bCheckCache && (INVALID_GENDER_CACHE_ENTRY != m_GenderCache[index])) {
 		return m_GenderCache[index];
 	}
 
@@ -189,8 +182,7 @@ void CPerson::GetTaxID(TIdent CID, char *buf) {
 	// for EACH character in the format string. Therefore, to avoid getting
 	// tax ID's that overlap N-1 out of N characters, multiply the offset into
 	// the sequence by N to get a unique range of values.
-	m_rnd.SetSeed(
-	    m_rnd.RndNthElement(RNGSeedBaseTaxID, ((RNGSEED)CID * TaxIDFmt_len)));
+	m_rnd.SetSeed(m_rnd.RndNthElement(RNGSeedBaseTaxID, ((RNGSEED)CID * TaxIDFmt_len)));
 	m_rnd.RndAlphaNumFormatted(buf, TaxIDFmt);
 	m_rnd.SetSeed(OldSeed);
 }
@@ -198,8 +190,7 @@ void CPerson::GetTaxID(TIdent CID, char *buf) {
 /*
  *   Get first name, last name, and tax id.
  */
-void CPerson::GetFirstLastAndTaxID(TIdent C_ID, char *szFirstName,
-                                   char *szLastName, char *szTaxID) {
+void CPerson::GetFirstLastAndTaxID(TIdent C_ID, char *szFirstName, char *szLastName, char *szTaxID) {
 	// Fill in the last name
 	strncpy(szLastName, GetLastName(C_ID).c_str(), cL_NAME_len);
 	// Fill in the first name

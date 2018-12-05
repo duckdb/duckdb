@@ -19,10 +19,10 @@
 namespace duckdb {
 
 class Optimizer {
-	public:
+public:
 	Optimizer(BindContext &context);
 
-	std::unique_ptr<LogicalOperator> Optimize(std::unique_ptr<LogicalOperator> plan);
+	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
 
 	Rewriter rewriter;
 };

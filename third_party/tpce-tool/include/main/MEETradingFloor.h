@@ -56,7 +56,7 @@
 namespace TPCE {
 
 class CMEETradingFloor {
-  private:
+private:
 	CMEESUTInterface *m_pSUT;
 	CMEEPriceBoard *m_pPriceBoard;
 	CMEETickerTape *m_pTickerTape;
@@ -64,9 +64,8 @@ class CMEETradingFloor {
 	CDateTime *m_pBaseTime;
 	CDateTime *m_pCurrentTime;
 
-	CTimerWheel<TTradeRequest, CMEETradingFloor, 5, 1>
-	    m_OrderTimers; // Size wheel for 5 seconds with 1 millisecond
-	                   // resolution.
+	CTimerWheel<TTradeRequest, CMEETradingFloor, 5, 1> m_OrderTimers; // Size wheel for 5 seconds with 1 millisecond
+	                                                                  // resolution.
 	CRandom m_rnd;
 	double m_OrderProcessingDelayMean;
 	static const INT32 m_MaxOrderProcessingDelay = 5;
@@ -74,20 +73,17 @@ class CMEETradingFloor {
 	double GenProcessingDelay(double fMean);
 	void SendTradeResult(PTradeRequest pTradeRequest);
 
-  public:
+public:
 	static const INT32 NO_OUTSTANDING_TRADES =
-	    CTimerWheel<TTradeRequest, CMEETradingFloor, 5,
-	                1>::NO_OUTSTANDING_TIMERS;
+	    CTimerWheel<TTradeRequest, CMEETradingFloor, 5, 1>::NO_OUTSTANDING_TIMERS;
 
 	// Constructor - use default RNG seed
-	CMEETradingFloor(CMEESUTInterface *pSUT, CMEEPriceBoard *pPriceBoard,
-	                 CMEETickerTape *pTickerTape, CDateTime *pBaseTime,
-	                 CDateTime *pCurrentTime);
+	CMEETradingFloor(CMEESUTInterface *pSUT, CMEEPriceBoard *pPriceBoard, CMEETickerTape *pTickerTape,
+	                 CDateTime *pBaseTime, CDateTime *pCurrentTime);
 
 	// Constructor - RNG seed provided
-	CMEETradingFloor(CMEESUTInterface *pSUT, CMEEPriceBoard *pPriceBoard,
-	                 CMEETickerTape *pTickerTape, CDateTime *pBaseTime,
-	                 CDateTime *pCurrentTime, RNGSEED RNGSeed);
+	CMEETradingFloor(CMEESUTInterface *pSUT, CMEEPriceBoard *pPriceBoard, CMEETickerTape *pTickerTape,
+	                 CDateTime *pBaseTime, CDateTime *pCurrentTime, RNGSEED RNGSeed);
 
 	~CMEETradingFloor(void);
 

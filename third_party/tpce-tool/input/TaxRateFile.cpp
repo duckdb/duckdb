@@ -71,8 +71,7 @@ const ITaxRateFileRecord &CTaxRateFile::operator[](unsigned int idx) const {
 
 	if (maxIdx < idx) {
 		std::ostringstream msg;
-		msg << "Provided index (" << idx
-		    << ") is outside the legal range (0:" << maxIdx << ").";
+		msg << "Provided index (" << idx << ") is outside the legal range (0:" << maxIdx << ").";
 		throw std::out_of_range(msg.str());
 	}
 

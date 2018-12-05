@@ -82,8 +82,7 @@ struct table : named_relation {
 	bool is_base_table;
 	vector<string> constraints;
 	table(string name, string schema, bool insertable, bool base_table)
-	    : named_relation(name), schema(schema), is_insertable(insertable),
-	      is_base_table(base_table) {
+	    : named_relation(name), schema(schema), is_insertable(insertable), is_base_table(base_table) {
 	}
 	virtual string ident() {
 		return schema + "." + name;
@@ -134,8 +133,7 @@ struct op {
 	sqltype *left;
 	sqltype *right;
 	sqltype *result;
-	op(string n, sqltype *l, sqltype *r, sqltype *res)
-	    : name(n), left(l), right(r), result(res) {
+	op(string n, sqltype *l, sqltype *r, sqltype *res) : name(n), left(l), right(r), result(res) {
 	}
 	op() {
 	}
@@ -147,10 +145,8 @@ struct routine {
 	vector<sqltype *> argtypes;
 	sqltype *restype;
 	string name;
-	routine(string schema, string specific_name, sqltype *data_type,
-	        string name)
-	    : specific_name(specific_name), schema(schema), restype(data_type),
-	      name(name) {
+	routine(string schema, string specific_name, sqltype *data_type, string name)
+	    : specific_name(specific_name), schema(schema), restype(data_type), name(name) {
 		assert(data_type);
 	}
 	virtual ~routine() {

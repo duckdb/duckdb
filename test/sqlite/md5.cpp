@@ -47,8 +47,7 @@ typedef struct Context MD5Context;
 static void byteReverse(unsigned char *buf, unsigned longs) {
 	uint32 t;
 	do {
-		t = (uint32)((unsigned)buf[3] << 8 | buf[2]) << 16 |
-		    ((unsigned)buf[1] << 8 | buf[0]);
+		t = (uint32)((unsigned)buf[3] << 8 | buf[2]) << 16 | ((unsigned)buf[1] << 8 | buf[0]);
 		*(uint32 *)buf = t;
 		buf += 4;
 	} while (--longs);
@@ -62,8 +61,7 @@ static void byteReverse(unsigned char *buf, unsigned longs) {
 #define F4(x, y, z) (y ^ (x | ~z))
 
 /* This is the central step in the MD5 algorithm. */
-#define MD5STEP(f, w, x, y, z, data, s)                                        \
-	(w += f(x, y, z) + data, w = w << s | w >> (32 - s), w += x)
+#define MD5STEP(f, w, x, y, z, data, s) (w += f(x, y, z) + data, w = w << s | w >> (32 - s), w += x)
 
 /*
  * The core of the MD5 algorithm, this alters an existing MD5 hash to
@@ -170,8 +168,7 @@ static void MD5Init(MD5Context *ctx) {
  * Update context to reflect the concatenation of another buffer full
  * of bytes.
  */
-static void MD5Update(MD5Context *pCtx, const unsigned char *buf,
-                      unsigned int len) {
+static void MD5Update(MD5Context *pCtx, const unsigned char *buf, unsigned int len) {
 	struct Context *ctx = (struct Context *)pCtx;
 	uint32 t;
 

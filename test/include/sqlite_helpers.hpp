@@ -1,4 +1,3 @@
-
 #include "duckdb.hpp"
 #include "sqlite3.h"
 
@@ -9,7 +8,6 @@ bool TransferDatabase(duckdb::DuckDBConnection &con, sqlite3 *sqlite);
 
 //! Fires a query against both DuckDB and sqlite and compares the results of the
 //! two
-bool CompareQuery(duckdb::DuckDBConnection &con, sqlite3 *sqlite,
-                  std::string query);
+bool CompareQuery(duckdb::DuckDBConnection &con, sqlite3 *sqlite, std::string query);
 
 }; // namespace sqlite

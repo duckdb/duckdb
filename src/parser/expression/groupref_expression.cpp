@@ -1,4 +1,3 @@
-
 #include "parser/expression/groupref_expression.hpp"
 
 #include "common/exception.hpp"
@@ -7,8 +6,7 @@ using namespace duckdb;
 using namespace std;
 
 GroupRefExpression::GroupRefExpression(TypeId return_type, size_t group_index)
-    : Expression(ExpressionType::GROUP_REF, return_type),
-      group_index(group_index) {
+    : Expression(ExpressionType::GROUP_REF, return_type), group_index(group_index) {
 }
 
 unique_ptr<Expression> GroupRefExpression::Copy() {

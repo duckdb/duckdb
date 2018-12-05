@@ -41,79 +41,74 @@
 static int *LN;
 static char *FN;
 
-err_msg_t Errors[MAX_ERROR + 2] = {
-    {
-        EFLG_NO_ARG,
-        "",
-    },
-    {EFLG_STR_ARG, "File '%s' not found"},
-    {EFLG_NO_ARG, "Line exceeds maximum length"},
-    {EFLG_STR_ARG, "Memory allocation failed %s"},
-    {EFLG_STR_ARG, "Syntax Error: \n'%s'"},
-    {EFLG_NO_ARG, "Invalid/Out-of-range Argument"},
-    {EFLG_STR_ARG, "'%s' is not a unique name"},
-    {EFLG_STR_ARG, "'%s' is not a valid name"},
-    {EFLG_NO_ARG, "Command parse failed"},
-    {EFLG_NO_ARG, "Invalid tag found"},
-    {EFLG_STR_ARG, "Read failed on '%s'"},
-    {EFLG_NO_ARG, "Too Many Templates!"},
-    {EFLG_NO_ARG, "Each workload definition must be in its own file"},
-    {EFLG_NO_ARG,
-     "Query Class name must be unique within a workload definition"},
-    {EFLG_NO_ARG, "Query Template must be unique within a query class"},
-    {EFLG_STR_ARG | EFLG_SYSTEM, "Open failed on '%s'"},
-    {EFLG_STR_ARG, "%s  not yet implemented"}, /* QERR_NOT_IMPLEMENTED */
-    {EFLG_STR_ARG, "string trucated to '%s'"},
-    {EFLG_NO_ARG, "Non-terminated string"},
-    {EFLG_STR_ARG, "failed to write to '%s'"},
-    {EFLG_NO_ARG, "No type vector defined for distribution"},
-    {EFLG_NO_ARG, "No weight count defined for distribution"},
-    {EFLG_NO_ARG, "No limits defined for pricing calculations"},
-    {EFLG_STR_ARG, "Percentage is out of bounds in substitution '%s'"},
-    {EFLG_STR_ARG, "Name is not a distribution or table name: '%s'"},
-    {EFLG_NO_ARG, "Cannot evaluate expression"},
-    {EFLG_STR_ARG,
-     "Substitution'%s' is used before being initialized"}, /* QERR_NO_INIT
-                                                            */
-    {EFLG_NO_ARG, "RANGE()/LIST()/ULIST() not supported for NORMAL "
-                  "distributions"},
-    {EFLG_STR_ARG, "Bad Nesting; '%s' not found"},
-    {EFLG_STR_ARG, "Include stack overflow when opening '%s'"},
-    {EFLG_STR_ARG, "Bad function call: '%s'"},
-    {EFLG_STR_ARG, "Bad Hierarchy Call: '%s'"},
-    {EFLG_NO_ARG, "Must set types and weights before defining names"},
-    {EFLG_NO_ARG, "More than 20 arguments in definition"},
-    {EFLG_NO_ARG, "Argument type mismatch"},
-    {EFLG_NO_ARG, "RANGE()/LIST()/ULIST() cannot be used in the "
-                  "same expression"}, /* QERR_RANGE_LIST
-                                       */
-    {EFLG_NO_ARG, "Selected scale factor is NOT valid for result publication"},
-    {EFLG_STR_ARG, "Parameter setting failed for '%s'"},
-    {EFLG_STR_ARG, "Table %s is being joined without an explicit rule"},
-    {EFLG_STR_ARG, "Table %s is not yet fully defined"},
-    {EFLG_STR_ARG, "Table %s is a child; it is populated during the build of "
-                   "its parent (e.g., catalog_sales builds catalog returns)"},
-    {EFLG_NO_ARG, "Command line arguments for dbgen_version exceed 200 "
-                  "characters; truncated"},
-    {EFLG_NO_ARG, "A query template list must be supplied using the "
-                  "INPUT option"}, /* QERR_NO_QUERYLIST
-                                    */
-    {EFLG_NO_ARG,
-     "Invalid query number found in permutation!"}, /* QERR_QUERY_RANGE
-                                                     */
-    {EFLG_NO_ARG, "RANGE/LIST/ULIST expressions not valid as "
-                  "function parameters"}, /* QERR_MODIFIED_PARAM
-                                           */
-    {EFLG_NO_ARG, "RANGE/LIST/ULIST truncated to available "
-                  "values"}, /* QERR_MODIFIED_PARAM
-                              */
-    {EFLG_NO_ARG, "This scale factor is valid for QUALIFICATION "
-                  "ONLY"}, /* QERR_QUALIFICATION_SCALE
-                            */
-    {EFLG_STR_ARG,
-     "Generating %s requires the '-update' option"}, /* QERR_TABLE_UPDATE
-                                                      */
-    {0, NULL}};
+err_msg_t Errors[MAX_ERROR + 2] = {{
+                                       EFLG_NO_ARG,
+                                       "",
+                                   },
+                                   {EFLG_STR_ARG, "File '%s' not found"},
+                                   {EFLG_NO_ARG, "Line exceeds maximum length"},
+                                   {EFLG_STR_ARG, "Memory allocation failed %s"},
+                                   {EFLG_STR_ARG, "Syntax Error: \n'%s'"},
+                                   {EFLG_NO_ARG, "Invalid/Out-of-range Argument"},
+                                   {EFLG_STR_ARG, "'%s' is not a unique name"},
+                                   {EFLG_STR_ARG, "'%s' is not a valid name"},
+                                   {EFLG_NO_ARG, "Command parse failed"},
+                                   {EFLG_NO_ARG, "Invalid tag found"},
+                                   {EFLG_STR_ARG, "Read failed on '%s'"},
+                                   {EFLG_NO_ARG, "Too Many Templates!"},
+                                   {EFLG_NO_ARG, "Each workload definition must be in its own file"},
+                                   {EFLG_NO_ARG, "Query Class name must be unique within a workload definition"},
+                                   {EFLG_NO_ARG, "Query Template must be unique within a query class"},
+                                   {EFLG_STR_ARG | EFLG_SYSTEM, "Open failed on '%s'"},
+                                   {EFLG_STR_ARG, "%s  not yet implemented"}, /* QERR_NOT_IMPLEMENTED */
+                                   {EFLG_STR_ARG, "string trucated to '%s'"},
+                                   {EFLG_NO_ARG, "Non-terminated string"},
+                                   {EFLG_STR_ARG, "failed to write to '%s'"},
+                                   {EFLG_NO_ARG, "No type vector defined for distribution"},
+                                   {EFLG_NO_ARG, "No weight count defined for distribution"},
+                                   {EFLG_NO_ARG, "No limits defined for pricing calculations"},
+                                   {EFLG_STR_ARG, "Percentage is out of bounds in substitution '%s'"},
+                                   {EFLG_STR_ARG, "Name is not a distribution or table name: '%s'"},
+                                   {EFLG_NO_ARG, "Cannot evaluate expression"},
+                                   {EFLG_STR_ARG, "Substitution'%s' is used before being initialized"}, /* QERR_NO_INIT
+                                                                                                         */
+                                   {EFLG_NO_ARG, "RANGE()/LIST()/ULIST() not supported for NORMAL "
+                                                 "distributions"},
+                                   {EFLG_STR_ARG, "Bad Nesting; '%s' not found"},
+                                   {EFLG_STR_ARG, "Include stack overflow when opening '%s'"},
+                                   {EFLG_STR_ARG, "Bad function call: '%s'"},
+                                   {EFLG_STR_ARG, "Bad Hierarchy Call: '%s'"},
+                                   {EFLG_NO_ARG, "Must set types and weights before defining names"},
+                                   {EFLG_NO_ARG, "More than 20 arguments in definition"},
+                                   {EFLG_NO_ARG, "Argument type mismatch"},
+                                   {EFLG_NO_ARG, "RANGE()/LIST()/ULIST() cannot be used in the "
+                                                 "same expression"}, /* QERR_RANGE_LIST
+                                                                      */
+                                   {EFLG_NO_ARG, "Selected scale factor is NOT valid for result publication"},
+                                   {EFLG_STR_ARG, "Parameter setting failed for '%s'"},
+                                   {EFLG_STR_ARG, "Table %s is being joined without an explicit rule"},
+                                   {EFLG_STR_ARG, "Table %s is not yet fully defined"},
+                                   {EFLG_STR_ARG, "Table %s is a child; it is populated during the build of "
+                                                  "its parent (e.g., catalog_sales builds catalog returns)"},
+                                   {EFLG_NO_ARG, "Command line arguments for dbgen_version exceed 200 "
+                                                 "characters; truncated"},
+                                   {EFLG_NO_ARG, "A query template list must be supplied using the "
+                                                 "INPUT option"},                               /* QERR_NO_QUERYLIST
+                                                                                                 */
+                                   {EFLG_NO_ARG, "Invalid query number found in permutation!"}, /* QERR_QUERY_RANGE
+                                                                                                 */
+                                   {EFLG_NO_ARG, "RANGE/LIST/ULIST expressions not valid as "
+                                                 "function parameters"}, /* QERR_MODIFIED_PARAM
+                                                                          */
+                                   {EFLG_NO_ARG, "RANGE/LIST/ULIST truncated to available "
+                                                 "values"}, /* QERR_MODIFIED_PARAM
+                                                             */
+                                   {EFLG_NO_ARG, "This scale factor is valid for QUALIFICATION "
+                                                 "ONLY"}, /* QERR_QUALIFICATION_SCALE
+                                                           */
+                                   {EFLG_STR_ARG, "Generating %s requires the '-update' option"}, /* QERR_TABLE_UPDATE
+                                                                                                   */
+                                   {0, NULL}};
 
 /*
  * Routine:
@@ -129,8 +124,7 @@ err_msg_t Errors[MAX_ERROR + 2] = {
  * Side Effects:
  * TODO: None
  */
-void ProcessErrorCode(int nErrorCode, char *szRoutineName, char *szParam,
-                      int nParam) {
+void ProcessErrorCode(int nErrorCode, char *szRoutineName, char *szParam, int nParam) {
 	switch (nErrorCode) {
 	case QERR_NO_FILE:
 		ReportError(QERR_NO_FILE, szParam, 1);
@@ -189,8 +183,7 @@ int ReportErrorNoLine(int nError, char *msg, int bExit) {
 	if (nError < MAX_ERROR) {
 		switch (Errors[-nError].flags & EFLG_ARG_MASK) {
 		case EFLG_NO_ARG:
-			fprintf(stderr, "%s: %s\n", (bExit) ? "ERROR" : "Warning",
-			        Errors[-nError].prompt);
+			fprintf(stderr, "%s: %s\n", (bExit) ? "ERROR" : "Warning", Errors[-nError].prompt);
 			break;
 		case EFLG_STR_ARG:
 			sprintf(e_msg, Errors[-nError].prompt, msg);

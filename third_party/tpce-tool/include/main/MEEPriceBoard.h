@@ -53,7 +53,7 @@ namespace TPCE {
 
 class CMEEPriceBoard {
 
-  private:
+private:
 	// Mean delay between Pending and Submission times
 	// for an immediatelly triggered (in-the-money) limit order.
 	//
@@ -61,17 +61,15 @@ class CMEEPriceBoard {
 	CMEESecurity m_Security;
 	const CSecurityFile &m_SecurityFile;
 
-  public:
+public:
 	TIdent m_iNumberOfSecurities;
 
-	CMEEPriceBoard(INT32 TradingTimeSoFar, CDateTime *pBaseTime,
-	               CDateTime *pCurrentTime, const DataFileManager &dfm);
+	CMEEPriceBoard(INT32 TradingTimeSoFar, CDateTime *pBaseTime, CDateTime *pCurrentTime, const DataFileManager &dfm);
 	~CMEEPriceBoard(void);
 
-	void GetSymbol(
-	    TIdent SecurityIndex,
-	    char *szOutput,     // output buffer
-	    size_t iOutputLen); // size of the output buffer (including null));
+	void GetSymbol(TIdent SecurityIndex,
+	               char *szOutput,     // output buffer
+	               size_t iOutputLen); // size of the output buffer (including null));
 
 	CMoney GetMinPrice();
 
@@ -82,10 +80,8 @@ class CMEEPriceBoard {
 
 	CMoney CalculatePrice(char *pSecuritySymbol, double fTime);
 
-	double GetSubmissionTime(char *pSecuritySymbol, double fPendingTime,
-	                         CMoney fLimitPrice, eTradeTypeID TradeType);
-	double GetSubmissionTime(TIdent SecurityIndex, double fPendingTime,
-	                         CMoney fLimitPrice, eTradeTypeID TradeType);
+	double GetSubmissionTime(char *pSecuritySymbol, double fPendingTime, CMoney fLimitPrice, eTradeTypeID TradeType);
+	double GetSubmissionTime(TIdent SecurityIndex, double fPendingTime, CMoney fLimitPrice, eTradeTypeID TradeType);
 	double GetCompletionTime(TIdent SecurityIndex, double fSubmissionTime,
 	                         CMoney *pCompletionPrice // output param
 	);

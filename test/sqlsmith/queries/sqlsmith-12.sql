@@ -5,7 +5,8 @@ SELECT
     ref_0.ps_partkey AS c3,
     CAST(coalesce(ref_0.ps_supplycost, ref_0.ps_supplycost) AS DECIMAL) AS c4,
     ref_0.ps_supplycost AS c5,
-    ref_0.ps_partkey AS c6, (
+    ref_0.ps_partkey AS c6,
+    (
         SELECT
             l_linestatus
         FROM
@@ -20,7 +21,8 @@ SELECT
     ref_0.ps_supplycost AS c14,
     ref_0.ps_availqty AS c15,
     ref_0.ps_partkey AS c16,
-    14 AS c17, (
+    14 AS c17,
+    (
         SELECT
             c_name
         FROM

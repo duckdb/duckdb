@@ -45,8 +45,7 @@
 
 using namespace TPCE;
 
-ChargeDataFileRecord::ChargeDataFileRecord(
-    const std::deque<std::string> &fields) {
+ChargeDataFileRecord::ChargeDataFileRecord(const std::deque<std::string> &fields) {
 	if (fieldCount != fields.size()) {
 		throw std::runtime_error("Incorrect field count.");
 	}
@@ -79,7 +78,6 @@ double ChargeDataFileRecord::CH_CHRG() const {
 std::string ChargeDataFileRecord::ToString(char fieldSeparator) const {
 	// Facilitate encapsulation by using public interface to fields.
 	std::ostringstream msg;
-	msg << CH_TT_ID() << fieldSeparator << CH_C_TIER() << fieldSeparator
-	    << CH_CHRG();
+	msg << CH_TT_ID() << fieldSeparator << CH_C_TIER() << fieldSeparator << CH_CHRG();
 	return msg.str();
 }

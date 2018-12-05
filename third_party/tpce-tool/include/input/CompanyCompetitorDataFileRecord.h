@@ -55,7 +55,7 @@ namespace TPCE {
 //
 
 class CompanyCompetitorDataFileRecord {
-  private:
+private:
 	TIdent cp_co_id;
 	TIdent cp_comp_co_id;
 
@@ -65,9 +65,8 @@ class CompanyCompetitorDataFileRecord {
 
 	static const int unsigned fieldCount = 3;
 
-  public:
-	explicit CompanyCompetitorDataFileRecord(
-	    const std::deque<std::string> &fields);
+public:
+	explicit CompanyCompetitorDataFileRecord(const std::deque<std::string> &fields);
 
 	//
 	// Default copies and destructor are ok.

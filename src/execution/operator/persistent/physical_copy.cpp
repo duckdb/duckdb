@@ -47,7 +47,7 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalO
 		DataChunk insert_chunk;
 		auto types = table->GetTypes();
 		insert_chunk.Initialize(types);
-		std::vector<size_t> select_list_oid;
+		vector<size_t> select_list_oid;
 		for (size_t i = 0; i < select_list.size(); i++) {
 			auto column = table->GetColumn(select_list[i]);
 			select_list_oid.push_back(column.oid);

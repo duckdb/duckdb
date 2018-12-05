@@ -78,8 +78,7 @@ const int cEXT_len = 5;
 const int cEMAIL_len = 50;
 
 // BROKER table
-const int cB_NAME_len =
-    cF_NAME_len + cM_NAME_len + cL_NAME_len + 3; // two spaces and one period
+const int cB_NAME_len = cF_NAME_len + cM_NAME_len + cL_NAME_len + 3; // two spaces and one period
 
 // COMPANY table
 const int cCO_NAME_len = 60;
@@ -133,8 +132,7 @@ const int cTX_ID_len = 4;
 const int cTX_NAME_len = 50;
 
 // TRADE table
-const int cEXEC_NAME_len =
-    cF_NAME_len + cM_NAME_len + cL_NAME_len + 3; // two spaces and one extra
+const int cEXEC_NAME_len = cF_NAME_len + cM_NAME_len + cL_NAME_len + 3; // two spaces and one extra
 
 // TRADE_HISTORY table
 const int cTH_ST_ID_len = cST_ID_len;

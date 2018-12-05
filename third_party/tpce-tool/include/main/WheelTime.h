@@ -49,16 +49,15 @@ namespace TPCE {
 
 class CWheelTime {
 
-  private:
+private:
 	PWheelConfig m_pWheelConfig; // Pointer to configuration info for the wheel
 	INT32 m_Cycles;              // Number of completed cycles so far
 	INT32 m_Index;               // Index into the current cycle
 
-  public:
+public:
 	CWheelTime(PWheelConfig pWheelConfig);
 	CWheelTime(PWheelConfig pWheelConfig, INT32 cycles, INT32 index);
-	CWheelTime(PWheelConfig pWheelConfig, CDateTime &Base, CDateTime &Now,
-	           INT32 Offset);
+	CWheelTime(PWheelConfig pWheelConfig, CDateTime &Base, CDateTime &Now, INT32 Offset);
 	~CWheelTime(void);
 
 	inline INT32 Cycles(void) {

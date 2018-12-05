@@ -49,13 +49,11 @@
 
 using namespace TPCE;
 
-char TPCE::szDriverTypeNames[eDriverMax][14] = {"EGenLoader", "EGenDriverAll",
-                                                "EGenDriverCE", "EGenDriverMEE",
+char TPCE::szDriverTypeNames[eDriverMax][14] = {"EGenLoader", "EGenDriverAll", "EGenDriverCE", "EGenDriverMEE",
                                                 "EGenDriverDM"};
 
 /* Constructor */
-CBaseLogger::CBaseLogger(eDriverType drvType, INT32 UniqueId,
-                         CBaseLogFormatter *pFormatter)
+CBaseLogger::CBaseLogger(eDriverType drvType, INT32 UniqueId, CBaseLogFormatter *pFormatter)
     : m_pLogFormatter(pFormatter) {
 	char m_Version[32];
 
@@ -63,8 +61,7 @@ CBaseLogger::CBaseLogger(eDriverType drvType, INT32 UniqueId,
 	GetEGenVersionString(m_Version, sizeof(m_Version));
 
 	// Generate Log Prefix String
-	snprintf(&m_Prefix[0], sizeof(m_Prefix), "%s (%s) %d",
-	         szDriverTypeNames[drvType], m_Version, UniqueId);
+	snprintf(&m_Prefix[0], sizeof(m_Prefix), "%s (%s) %d", szDriverTypeNames[drvType], m_Version, UniqueId);
 }
 
 /* Methods */
@@ -147,8 +144,7 @@ bool CBaseLogger::SendToLogger(TDriverCETxnSettings &parms) {
 	result |= SendToLogger(m_pLogFormatter->GetLogOutput(parms.TL_settings));
 	result |= SendToLogger(m_pLogFormatter->GetLogOutput(parms.TO_settings));
 	result |= SendToLogger(m_pLogFormatter->GetLogOutput(parms.TU_settings));
-	result |= SendToLogger(
-	    m_pLogFormatter->GetLogOutput(parms.TxnMixGenerator_settings));
+	result |= SendToLogger(m_pLogFormatter->GetLogOutput(parms.TxnMixGenerator_settings));
 
 	return result;
 }

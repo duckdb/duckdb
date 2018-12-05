@@ -106,8 +106,7 @@ static char *mk_sentence(int stream) {
 			word_len = strlen(word);
 
 		if (used_space + word_len >= allocated_space) {
-			verbiage =
-			    (char *)realloc(verbiage, allocated_space + SPACE_INCREMENT);
+			verbiage = (char *)realloc(verbiage, allocated_space + SPACE_INCREMENT);
 			MALLOC_CHECK(verbiage);
 			allocated_space += SPACE_INCREMENT;
 		}

@@ -17,7 +17,7 @@ namespace duckdb {
 //! transformed into a physical operator (only its children will be transformed
 //! into the actual subquery).
 class LogicalSubquery : public LogicalOperator {
-	public:
+public:
 	LogicalSubquery(size_t table_index, size_t column_count)
 	    : LogicalOperator(LogicalOperatorType::SUBQUERY), table_index(table_index), column_count(column_count) {
 		referenced_tables.insert(table_index);
@@ -29,11 +29,11 @@ class LogicalSubquery : public LogicalOperator {
 	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
-	std::vector<string> GetNames() override {
+	vector<string> GetNames() override {
 		return children[0]->GetNames();
 	}
 
-	protected:
+protected:
 	void ResolveTypes() override {
 		types = children[0]->types;
 	}

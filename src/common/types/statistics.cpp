@@ -1,5 +1,5 @@
-
 #include "common/types/statistics.hpp"
+
 #include "common/exception.hpp"
 #include "common/limits.hpp"
 #include "common/types/vector.hpp"
@@ -27,8 +27,7 @@ void ExpressionStatistics::Verify(Vector &vector) {
 	}
 	if (vector.type == TypeId::VARCHAR) {
 		Value actual_max_strlen = VectorOperations::MaximumStringLength(vector);
-		Value stats_max_strlen =
-		    Value::Numeric(actual_max_strlen.type, maximum_string_length);
+		Value stats_max_strlen = Value::Numeric(actual_max_strlen.type, maximum_string_length);
 		assert(actual_max_strlen <= stats_max_strlen);
 	}
 }
@@ -37,8 +36,7 @@ void ExpressionStatistics::Verify(Vector &vector) {
 void ExpressionStatistics::SetFromValue(Value value) {
 	has_stats = true;
 	can_have_null = value.is_null;
-	maximum_string_length =
-	    value.type == TypeId::VARCHAR ? value.str_value.size() : 0;
+	maximum_string_length = value.type == TypeId::VARCHAR ? value.str_value.size() : 0;
 	if (TypeIsIntegral(value.type) && value.type != TypeId::BIGINT) {
 		// upcast to biggest integral type
 		max = min = value.CastAs(TypeId::BIGINT);
@@ -47,8 +45,7 @@ void ExpressionStatistics::SetFromValue(Value value) {
 	}
 }
 
-ExpressionStatistics &ExpressionStatistics::
-operator=(const ExpressionStatistics &other) {
+ExpressionStatistics &ExpressionStatistics::operator=(const ExpressionStatistics &other) {
 	this->has_stats = other.has_stats;
 	this->can_have_null = other.can_have_null;
 	this->min = other.min;
@@ -81,8 +78,7 @@ bool ExpressionStatistics::FitsInType(TypeId type) {
 	}
 	auto min_value = MinimumValue(type);
 	auto max_value = MaximumValue(type);
-	return min_value <= min.GetNumericValue() &&
-	       max_value >= max.GetNumericValue();
+	return min_value <= min.GetNumericValue() && max_value >= max.GetNumericValue();
 }
 
 TypeId ExpressionStatistics::MinimalType() {
@@ -90,6 +86,5 @@ TypeId ExpressionStatistics::MinimalType() {
 		return min.type;
 	}
 	assert(TypeIsIntegral(min.type) && TypeIsIntegral(max.type));
-	return std::max(duckdb::MinimalType(min.GetNumericValue()),
-	                duckdb::MinimalType(max.GetNumericValue()));
+	return std::max(duckdb::MinimalType(min.GetNumericValue()), duckdb::MinimalType(max.GetNumericValue()));
 }

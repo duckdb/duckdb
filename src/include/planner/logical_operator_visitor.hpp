@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // planner/logical_operator_visitor.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -40,7 +38,7 @@ class LogicalPruneColumns;
 //! The LogicalOperatorVisitor is an abstract base class that implements the
 //! Visitor pattern on LogicalOperator.
 class LogicalOperatorVisitor : public SQLNodeVisitor {
-  public:
+public:
 	virtual ~LogicalOperatorVisitor(){};
 
 	virtual void VisitOperator(LogicalOperator &op);

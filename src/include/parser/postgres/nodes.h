@@ -492,13 +492,13 @@ typedef struct value {
 #ifdef __GNUC__
 
 /* With GCC, we can use a compound statement within an expression */
-#define newNode(size, tag)                                                     \
-	({                                                                         \
-		Node *_result;                                                         \
-		AssertMacro((size) >= sizeof(Node)); /* need the tag, at least */      \
-		_result = (Node *)palloc0fast(size);                                   \
-		_result->type = (tag);                                                 \
-		_result;                                                               \
+#define newNode(size, tag)                                                                                             \
+	({                                                                                                                 \
+		Node *_result;                                                                                                 \
+		AssertMacro((size) >= sizeof(Node)); /* need the tag, at least */                                              \
+		_result = (Node *)palloc0fast(size);                                                                           \
+		_result->type = (tag);                                                                                         \
+		_result;                                                                                                       \
 	})
 #else
 
@@ -510,10 +510,9 @@ typedef struct value {
  */
 extern PGDLLIMPORT Node *newNodeMacroHolder;
 
-#define newNode(size, tag)                                                     \
-	(AssertMacro((size) >= sizeof(Node)), /* need the tag, at least */         \
-	 newNodeMacroHolder = (Node *)palloc0fast(size),                           \
-	 newNodeMacroHolder->type = (tag), newNodeMacroHolder)
+#define newNode(size, tag)                                                                                             \
+	(AssertMacro((size) >= sizeof(Node)), /* need the tag, at least */                                                 \
+	 newNodeMacroHolder = (Node *)palloc0fast(size), newNodeMacroHolder->type = (tag), newNodeMacroHolder)
 #endif /* __GNUC__ */
 
 #define makeNode(_type_) ((_type_ *)newNode(sizeof(_type_), T_##_type_))
@@ -633,9 +632,8 @@ typedef enum JoinType {
  * pushed-down quals.  This is convenient because for almost all purposes,
  * quals attached to a semijoin can be treated the same as innerjoin quals.
  */
-#define IS_OUTER_JOIN(jointype)                                                \
-	(((1 << (jointype)) & ((1 << JOIN_LEFT) | (1 << JOIN_FULL) |               \
-	                       (1 << JOIN_RIGHT) | (1 << JOIN_ANTI))) != 0)
+#define IS_OUTER_JOIN(jointype)                                                                                        \
+	(((1 << (jointype)) & ((1 << JOIN_LEFT) | (1 << JOIN_FULL) | (1 << JOIN_RIGHT) | (1 << JOIN_ANTI))) != 0)
 
 /*
  * OnConflictAction -

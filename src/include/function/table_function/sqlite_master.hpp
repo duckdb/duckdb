@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // function/table_function/sqlite_master.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -17,11 +15,10 @@ namespace duckdb {
 namespace function {
 
 TableFunctionData *sqlite_master_init(ClientContext &);
-void sqlite_master(ClientContext &, DataChunk &input, DataChunk &output,
-                   TableFunctionData *dataptr);
+void sqlite_master(ClientContext &, DataChunk &input, DataChunk &output, TableFunctionData *dataptr);
 
 class SQLiteMaster {
-  public:
+public:
 	static table_function_init_t GetInitFunction() {
 		return sqlite_master_init;
 	}
@@ -36,12 +33,12 @@ class SQLiteMaster {
 		return "sqlite_master";
 	}
 
-	static void GetArguments(std::vector<TypeId> &arguments) {
+	static void GetArguments(vector<TypeId> &arguments) {
 		// no arguments
 		(void)arguments;
 	}
 
-	static void GetReturnValues(std::vector<ColumnDefinition> &returns) {
+	static void GetReturnValues(vector<ColumnDefinition> &returns) {
 		returns.push_back(ColumnDefinition("type", TypeId::VARCHAR));
 		returns.push_back(ColumnDefinition("name", TypeId::VARCHAR));
 		returns.push_back(ColumnDefinition("tbl_name", TypeId::VARCHAR));

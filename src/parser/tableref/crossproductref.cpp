@@ -1,4 +1,3 @@
-
 #include "parser/tableref/crossproductref.hpp"
 
 #include "common/serializer.hpp"

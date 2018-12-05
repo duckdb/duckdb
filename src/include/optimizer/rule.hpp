@@ -1,54 +1,45 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // optimizer/rule.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
+
+#include "common/exception.hpp"
+#include "parser/expression/list.hpp"
+#include "planner/logical_operator.hpp"
 
 #include <algorithm>
 #include <string>
 #include <vector>
 
-#include "common/exception.hpp"
-
-#include "parser/expression/list.hpp"
-
-#include "planner/logical_operator.hpp"
-
 namespace duckdb {
 
-enum class AbstractOperatorType {
-	LOGICAL_OPERATOR = 0,
-	ABSTRACT_EXPRESSION = 1
-};
+enum class AbstractOperatorType { LOGICAL_OPERATOR = 0, ABSTRACT_EXPRESSION = 1 };
 
 class AbstractOperatorIterator;
 class Rewriter;
 
 class AbstractOperator : public Printable {
-  public:
+public:
 	AbstractOperatorType type;
 	union {
 		LogicalOperator *op;
 		Expression *expr;
 	} value;
-	AbstractOperator(LogicalOperator *op)
-	    : type(AbstractOperatorType::LOGICAL_OPERATOR) {
+	AbstractOperator(LogicalOperator *op) : type(AbstractOperatorType::LOGICAL_OPERATOR) {
 		value.op = op;
 	}
 
-	AbstractOperator(Expression *expr)
-	    : type(AbstractOperatorType::ABSTRACT_EXPRESSION) {
+	AbstractOperator(Expression *expr) : type(AbstractOperatorType::ABSTRACT_EXPRESSION) {
 		value.expr = expr;
 	}
 
-	std::vector<AbstractOperator> GetAllChildren() {
-		std::vector<AbstractOperator> result;
+	vector<AbstractOperator> GetAllChildren() {
+		vector<AbstractOperator> result;
 		if (type == AbstractOperatorType::LOGICAL_OPERATOR) {
 			for (size_t i = 0; i < value.op->ExpressionCount(); i++) {
 				result.push_back(AbstractOperator(value.op->GetExpression(i)));
@@ -70,7 +61,7 @@ class AbstractOperator : public Printable {
 
 	iterator end();
 
-	std::string ToString() const override {
+	string ToString() const override {
 		if (type == AbstractOperatorType::LOGICAL_OPERATOR) {
 			return value.op->ToString();
 		} else {
@@ -80,15 +71,14 @@ class AbstractOperator : public Printable {
 };
 
 class AbstractOperatorIterator {
-  public:
+public:
 	typedef AbstractOperatorIterator self_type;
 	typedef AbstractOperator value_type;
 	typedef AbstractOperator &reference;
 	typedef AbstractOperator *pointer;
 	typedef std::forward_iterator_tag iterator_category;
 	typedef int difference_type;
-	AbstractOperatorIterator(LogicalOperator *root, size_t op_index = 0,
-	                         size_t expr_index = 0) {
+	AbstractOperatorIterator(LogicalOperator *root, size_t op_index = 0, size_t expr_index = 0) {
 		nodes.push(Node(root, op_index, expr_index));
 	}
 
@@ -115,8 +105,7 @@ class AbstractOperatorIterator {
 			if (child.expr_index < expr->children.size()) {
 				nodes.push(Node(expr->children[child.expr_index].get(), 0));
 				child.expr_index++;
-			} else if (expr->type == ExpressionType::SELECT_SUBQUERY &&
-			           child.op_index == 0) {
+			} else if (expr->type == ExpressionType::SELECT_SUBQUERY && child.op_index == 0) {
 				auto subquery = (SubqueryExpression *)expr;
 				nodes.push(Node(subquery->op.get(), 0, 0));
 				child.op_index++;
@@ -142,15 +131,14 @@ class AbstractOperatorIterator {
 		return &nodes.top().node;
 	}
 	bool operator==(const self_type &rhs) {
-		return nodes.size() == rhs.nodes.size() &&
-		       nodes.top().op_index == rhs.nodes.top().op_index &&
+		return nodes.size() == rhs.nodes.size() && nodes.top().op_index == rhs.nodes.top().op_index &&
 		       nodes.top().expr_index == rhs.nodes.top().expr_index;
 	}
 	bool operator!=(const self_type &rhs) {
 		return !(*this == rhs);
 	}
 
-	void replace(std::unique_ptr<LogicalOperator> new_op) {
+	void replace(unique_ptr<LogicalOperator> new_op) {
 		assert(nodes.top().node.type == AbstractOperatorType::LOGICAL_OPERATOR);
 		nodes.pop();
 		auto &parent = nodes.top();
@@ -165,44 +153,38 @@ class AbstractOperatorIterator {
 		}
 	}
 
-	void replace(std::unique_ptr<Expression> new_exp) {
-		assert(nodes.top().node.type ==
-		       AbstractOperatorType::ABSTRACT_EXPRESSION);
+	void replace(unique_ptr<Expression> new_exp) {
+		assert(nodes.top().node.type == AbstractOperatorType::ABSTRACT_EXPRESSION);
 		nodes.pop();
 		auto &parent = nodes.top();
 		parent.expr_index--;
 
 		if (parent.node.type == AbstractOperatorType::LOGICAL_OPERATOR) {
-			parent.node.value.op->SetExpression(parent.expr_index,
-			                                    std::move(new_exp));
+			parent.node.value.op->SetExpression(parent.expr_index, std::move(new_exp));
 		} else { // AbstractOperatorType::ABSTRACT_EXPRESSION
-			parent.node.value.expr->children[parent.expr_index] =
-			    std::move(new_exp);
+			parent.node.value.expr->children[parent.expr_index] = std::move(new_exp);
 		}
 	}
 
-  private:
+private:
 	struct Node {
 		AbstractOperator node;
 		size_t op_index;
 		size_t expr_index;
 
 		Node(LogicalOperator *op, size_t op_index, size_t expr_index)
-		    : node(AbstractOperator(op)), op_index(op_index),
-		      expr_index(expr_index) {
+		    : node(AbstractOperator(op)), op_index(op_index), expr_index(expr_index) {
 		}
 
-		Node(Expression *expr, size_t expr_index)
-		    : node(AbstractOperator(expr)), op_index(0),
-		      expr_index(expr_index) {
+		Node(Expression *expr, size_t expr_index) : node(AbstractOperator(expr)), op_index(0), expr_index(expr_index) {
 		}
 	};
 	std::stack<Node> nodes;
 };
 
 class AbstractRuleNode {
-  public:
-	std::vector<std::unique_ptr<AbstractRuleNode>> children;
+public:
+	vector<unique_ptr<AbstractRuleNode>> children;
 	ChildPolicy child_policy;
 
 	AbstractRuleNode() : child_policy(ChildPolicy::ANY) {
@@ -213,30 +195,28 @@ class AbstractRuleNode {
 };
 
 class ExpressionNodeSet : public AbstractRuleNode {
-  public:
-	std::vector<ExpressionType> types;
-	ExpressionNodeSet(std::vector<ExpressionType> types) : types(types) {
+public:
+	vector<ExpressionType> types;
+	ExpressionNodeSet(vector<ExpressionType> types) : types(types) {
 	}
 	virtual bool Matches(AbstractOperator &rel) {
 		return rel.type == AbstractOperatorType::ABSTRACT_EXPRESSION &&
-		       std::find(types.begin(), types.end(), rel.value.expr->type) !=
-		           types.end();
+		       std::find(types.begin(), types.end(), rel.value.expr->type) != types.end();
 	}
 };
 
 class ExpressionNodeType : public AbstractRuleNode {
-  public:
+public:
 	ExpressionType type;
 	ExpressionNodeType(ExpressionType type) : type(type) {
 	}
 	virtual bool Matches(AbstractOperator &rel) {
-		return rel.type == AbstractOperatorType::ABSTRACT_EXPRESSION &&
-		       rel.value.expr->type == type;
+		return rel.type == AbstractOperatorType::ABSTRACT_EXPRESSION && rel.value.expr->type == type;
 	}
 };
 
 class ComparisonNodeType : public AbstractRuleNode {
-  public:
+public:
 	ComparisonNodeType() {
 	}
 	virtual bool Matches(AbstractOperator &rel) {
@@ -247,65 +227,59 @@ class ComparisonNodeType : public AbstractRuleNode {
 };
 
 class ColumnRefNodeDepth : public ExpressionNodeType {
-  public:
+public:
 	size_t depth;
-	ColumnRefNodeDepth(size_t depth)
-	    : ExpressionNodeType(ExpressionType::COLUMN_REF), depth(depth) {
+	ColumnRefNodeDepth(size_t depth) : ExpressionNodeType(ExpressionType::COLUMN_REF), depth(depth) {
 	}
 	virtual bool Matches(AbstractOperator &rel) {
-		return ExpressionNodeType::Matches(rel) &&
-		       ((ColumnRefExpression *)rel.value.expr)->depth == depth;
+		return ExpressionNodeType::Matches(rel) && ((ColumnRefExpression *)rel.value.expr)->depth == depth;
 	}
 };
 
 class ExpressionNodeAny : public AbstractRuleNode {
-  public:
+public:
 	virtual bool Matches(AbstractOperator &rel) {
 		return rel.type == AbstractOperatorType::ABSTRACT_EXPRESSION;
 	}
 };
 
 class LogicalNodeSet : public AbstractRuleNode {
-  public:
-	std::vector<LogicalOperatorType> types;
-	LogicalNodeSet(std::vector<LogicalOperatorType> types) : types(types) {
+public:
+	vector<LogicalOperatorType> types;
+	LogicalNodeSet(vector<LogicalOperatorType> types) : types(types) {
 	}
 	virtual bool Matches(AbstractOperator &rel) {
 		return rel.type == AbstractOperatorType::LOGICAL_OPERATOR &&
-		       std::find(types.begin(), types.end(), rel.value.op->type) !=
-		           types.end();
+		       std::find(types.begin(), types.end(), rel.value.op->type) != types.end();
 	}
 };
 
 class LogicalNodeType : public AbstractRuleNode {
-  public:
+public:
 	LogicalOperatorType type;
 	LogicalNodeType(LogicalOperatorType type) : type(type) {
 	}
 	virtual bool Matches(AbstractOperator &rel) {
-		return rel.type == AbstractOperatorType::LOGICAL_OPERATOR &&
-		       rel.value.op->type == type;
+		return rel.type == AbstractOperatorType::LOGICAL_OPERATOR && rel.value.op->type == type;
 	}
 };
 
 class LogicalNodeAny : public AbstractRuleNode {
-  public:
+public:
 	virtual bool Matches(AbstractOperator &rel) {
 		return rel.type == AbstractOperatorType::LOGICAL_OPERATOR;
 	}
 };
 
 class Rule {
-  public:
-	std::unique_ptr<AbstractRuleNode> root;
-	virtual std::unique_ptr<Expression>
-	Apply(Rewriter &rewriter, Expression &root,
-	      std::vector<AbstractOperator> &bindings, bool &fixed_point) {
+public:
+	unique_ptr<AbstractRuleNode> root;
+	virtual unique_ptr<Expression> Apply(Rewriter &rewriter, Expression &root, vector<AbstractOperator> &bindings,
+	                                     bool &fixed_point) {
 		throw NotImplementedException("Apply Expression");
 	};
-	virtual std::unique_ptr<LogicalOperator>
-	Apply(Rewriter &rewriter, LogicalOperator &root,
-	      std::vector<AbstractOperator> &bindings, bool &fixed_point) {
+	virtual unique_ptr<LogicalOperator> Apply(Rewriter &rewriter, LogicalOperator &root,
+	                                          vector<AbstractOperator> &bindings, bool &fixed_point) {
 		throw NotImplementedException("Apply LogicalOperator");
 	};
 	virtual ~Rule() {

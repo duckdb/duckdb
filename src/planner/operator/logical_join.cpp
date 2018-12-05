@@ -24,8 +24,8 @@ void LogicalJoin::ResolveTypes() {
 	}
 }
 
-std::string LogicalJoin::ParamsToString() const {
-	std::string result = "";
+string LogicalJoin::ParamsToString() const {
+	string result = "";
 	if (conditions.size() > 0) {
 		result += "[";
 		for (size_t i = 0; i < conditions.size(); i++) {
@@ -42,7 +42,7 @@ std::string LogicalJoin::ParamsToString() const {
 	return result;
 }
 
-JoinSide LogicalJoin::GetJoinSide(LogicalOperator *op, std::unique_ptr<Expression> &expr) {
+JoinSide LogicalJoin::GetJoinSide(LogicalOperator *op, unique_ptr<Expression> &expr) {
 	if (expr->type == ExpressionType::SELECT_SUBQUERY) {
 		return JoinSide::BOTH;
 	}
@@ -125,7 +125,7 @@ ExpressionType LogicalJoin::FlipComparisionExpression(ExpressionType type) {
 	return flipped_type;
 }
 
-void LogicalJoin::SetJoinCondition(std::unique_ptr<Expression> condition) {
+void LogicalJoin::SetJoinCondition(unique_ptr<Expression> condition) {
 	assert(children.size() == 2);
 	if (condition->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		// traverse down the expression tree along conjunction

@@ -1,38 +1,38 @@
-#include "parser/statement/select_statement.hpp"
-#include "parser/transformer.hpp"
 #include "common/exception.hpp"
 #include "parser/query_node/list.hpp"
+#include "parser/statement/select_statement.hpp"
+#include "parser/transformer.hpp"
 
 using namespace duckdb;
 using namespace postgres;
 using namespace std;
 
 unique_ptr<QueryNode> Transformer::TransformSelectNode(postgres::SelectStmt *stmt) {
-    unique_ptr<QueryNode> node;
+	unique_ptr<QueryNode> node;
 	switch (stmt->op) {
 	case SETOP_NONE: {
 		node = make_unique<SelectNode>();
-        auto result = (SelectNode*) node.get();
-        // distinct clause
-        result->select_distinct = stmt->distinctClause != NULL ? true : false;
-        // from table
+		auto result = (SelectNode *)node.get();
+		// distinct clause
+		result->select_distinct = stmt->distinctClause != NULL ? true : false;
+		// from table
 		result->from_table = TransformFrom(stmt->fromClause);
-        // group by
+		// group by
 		TransformGroupBy(stmt->groupClause, result->groupby.groups);
 		result->groupby.having = TransformExpression(stmt->havingClause);
-        // where
+		// where
 		result->where_clause = TransformExpression(stmt->whereClause);
-        // select list
+		// select list
 		if (!TransformExpressionList(stmt->targetList, result->select_list)) {
 			throw Exception("Failed to transform expression list.");
 		}
-        break;
+		break;
 	}
 	case SETOP_UNION:
 	case SETOP_EXCEPT:
 	case SETOP_INTERSECT: {
 		node = make_unique<SetOperationNode>();
-        auto result = (SetOperationNode*) node.get();
+		auto result = (SetOperationNode *)node.get();
 		result->left = TransformSelectNode(stmt->larg);
 		result->right = TransformSelectNode(stmt->rarg);
 		if (!result->left || !result->right) {
@@ -60,23 +60,23 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(postgres::SelectStmt *stm
 			result->left->select_distinct = false;
 			result->right->select_distinct = false;
 		}
-        break;
+		break;
 	}
 	default:
 		throw NotImplementedException("Statement type %d not implemented!", stmt->op);
 	}
-    // transform the common properties
-    // both the set operations and the regular select can have an ORDER BY/LIMIT attached to them
-    TransformOrderBy(stmt->sortClause, node->orderby);
-    if (stmt->limitCount) {
-        node->limit.limit = ((A_Const *)stmt->limitCount)->val.val.ival;
-        node->limit.offset = 0;
-    }
-    if (stmt->limitOffset) {
-        node->limit.offset = ((A_Const *)stmt->limitOffset)->val.val.ival;
-        if (!stmt->limitCount) {
-            node->limit.limit = std::numeric_limits<int64_t>::max();
-        }
-    }
-    return node;
+	// transform the common properties
+	// both the set operations and the regular select can have an ORDER BY/LIMIT attached to them
+	TransformOrderBy(stmt->sortClause, node->orderby);
+	if (stmt->limitCount) {
+		node->limit.limit = ((A_Const *)stmt->limitCount)->val.val.ival;
+		node->limit.offset = 0;
+	}
+	if (stmt->limitOffset) {
+		node->limit.offset = ((A_Const *)stmt->limitOffset)->val.val.ival;
+		if (!stmt->limitCount) {
+			node->limit.limit = std::numeric_limits<int64_t>::max();
+		}
+	}
+	return node;
 }

@@ -13,8 +13,8 @@
 namespace duckdb {
 
 struct JoinCondition {
-	std::unique_ptr<Expression> left;
-	std::unique_ptr<Expression> right;
+	unique_ptr<Expression> left;
+	unique_ptr<Expression> right;
 	ExpressionType comparison;
 };
 
@@ -22,28 +22,28 @@ enum JoinSide { NONE, LEFT, RIGHT, BOTH };
 
 //! LogicalJoin represents a join between two relations
 class LogicalJoin : public LogicalOperator {
-	public:
+public:
 	LogicalJoin(JoinType type) : LogicalOperator(LogicalOperatorType::JOIN), type(type) {
 	}
 
 	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
-	std::vector<string> GetNames() override;
+	vector<string> GetNames() override;
 
 	//! Creates the join condition for this node from the given expression
-	void SetJoinCondition(std::unique_ptr<Expression> condition);
+	void SetJoinCondition(unique_ptr<Expression> condition);
 
-	std::vector<JoinCondition> conditions;
+	vector<JoinCondition> conditions;
 	JoinType type;
-	static JoinSide GetJoinSide(LogicalOperator *op, std::unique_ptr<Expression> &expr);
+	static JoinSide GetJoinSide(LogicalOperator *op, unique_ptr<Expression> &expr);
 
 	static ExpressionType NegateComparisionExpression(ExpressionType type);
 	static ExpressionType FlipComparisionExpression(ExpressionType type);
 
-	std::string ParamsToString() const override;
+	string ParamsToString() const override;
 
-	protected:
+protected:
 	void ResolveTypes() override;
 };
 } // namespace duckdb

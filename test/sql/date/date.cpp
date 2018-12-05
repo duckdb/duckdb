@@ -1,4 +1,3 @@
-
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
@@ -12,13 +11,11 @@ TEST_CASE("Test basic DATE functionality", "[date]") {
 
 	// create and insert into table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE dates(i DATE)"));
-	REQUIRE_NO_FAIL(
-	    con.Query("INSERT INTO dates VALUES ('1993-08-14'), (NULL)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO dates VALUES ('1993-08-14'), (NULL)"));
 
 	// check that we can select dates
 	result = con.Query("SELECT * FROM dates");
-	REQUIRE(CHECK_COLUMN(result, 0,
-	                     {Value::DATE(Date::FromDate(1993, 8, 14)), Value()}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(Date::FromDate(1993, 8, 14)), Value()}));
 
 	// YEAR function
 	result = con.Query("SELECT year(i) FROM dates");
@@ -30,13 +27,11 @@ TEST_CASE("Test basic DATE functionality", "[date]") {
 
 	// check that we can add days to a date
 	result = con.Query("SELECT i + 5 FROM dates");
-	REQUIRE(CHECK_COLUMN(result, 0,
-	                     {Value::DATE(Date::FromDate(1993, 8, 19)), Value()}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(Date::FromDate(1993, 8, 19)), Value()}));
 
 	// check that we can subtract days from a date
 	result = con.Query("SELECT i - 5 FROM dates");
-	REQUIRE(CHECK_COLUMN(result, 0,
-	                     {Value::DATE(Date::FromDate(1993, 8, 9)), Value()}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(Date::FromDate(1993, 8, 9)), Value()}));
 
 	// HOWEVER, we can't divide or multiply or modulo
 	REQUIRE_FAIL(con.Query("SELECT i * 3 FROM dates"));

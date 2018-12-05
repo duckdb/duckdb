@@ -44,11 +44,10 @@ namespace TPCE {
 class CSecurityDetail {
 	CSecurityDetailDBInterface *m_db;
 
-  public:
+public:
 	CSecurityDetail(CSecurityDetailDBInterface *pDB) : m_db(pDB){};
 
-	void DoTxn(PSecurityDetailTxnInput pTxnInput,
-	           PSecurityDetailTxnOutput pTxnOutput) {
+	void DoTxn(PSecurityDetailTxnInput pTxnInput, PSecurityDetailTxnOutput pTxnOutput) {
 		// Initialize
 		TSecurityDetailFrame1Output Frame1Output;
 		// We purposely do not memset the whole structure to 0
@@ -63,8 +62,7 @@ class CSecurityDetail {
 		m_db->DoSecurityDetailFrame1(pTxnInput, &Frame1Output);
 
 		// Validate Frame 1 Output
-		if ((Frame1Output.day_len < min_day_len) ||
-		    (Frame1Output.day_len > max_day_len)) {
+		if ((Frame1Output.day_len < min_day_len) || (Frame1Output.day_len > max_day_len)) {
 			TXN_HARNESS_PROPAGATE_STATUS(CBaseTxnErr::SDF1_ERROR1);
 		}
 		if (Frame1Output.fin_len != max_fin_len) {

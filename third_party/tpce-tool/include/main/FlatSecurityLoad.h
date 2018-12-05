@@ -45,18 +45,17 @@
 namespace TPCE {
 
 class CFlatSecurityLoad : public CFlatFileLoader<SECURITY_ROW> {
-  private:
+private:
 	CDateTime Flat_S_START_DATE;
 	CDateTime Flat_S_EXCH_DATE;
 	CDateTime Flat_S_52WK_HIGH_DATE;
 	CDateTime Flat_S_52WK_LOW_DATE;
 	const std::string SecurityRowFmt;
 
-  public:
+public:
 	CFlatSecurityLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
 	    : CFlatFileLoader<SECURITY_ROW>(szFileName, FlatFileOutputMode),
-	      SecurityRowFmt("%s|%s|%s|%s|%s|%" PRId64 "|%" PRId64
-	                     "|%s|%s|%.2f|%.2f|%s|%.2f|%s|%.2f|%.2f\n"){};
+	      SecurityRowFmt("%s|%s|%s|%s|%s|%" PRId64 "|%" PRId64 "|%s|%s|%.2f|%.2f|%s|%.2f|%s|%.2f|%.2f\n"){};
 
 	/*
 	 *   Writes a record to the file.
@@ -66,21 +65,15 @@ class CFlatSecurityLoad : public CFlatFileLoader<SECURITY_ROW> {
 		Flat_S_EXCH_DATE = next_record.S_EXCH_DATE;
 		Flat_S_52WK_HIGH_DATE = next_record.S_52WK_HIGH_DATE;
 		Flat_S_52WK_LOW_DATE = next_record.S_52WK_LOW_DATE;
-		int rc = fprintf(hOutFile, SecurityRowFmt.c_str(), next_record.S_SYMB,
-		                 next_record.S_ISSUE, next_record.S_ST_ID,
-		                 next_record.S_NAME, next_record.S_EX_ID,
-		                 next_record.S_CO_ID, next_record.S_NUM_OUT,
-		                 Flat_S_START_DATE.ToStr(FlatFileDateFormat),
-		                 Flat_S_EXCH_DATE.ToStr(FlatFileDateFormat),
-		                 next_record.S_PE, next_record.S_52WK_HIGH,
-		                 Flat_S_52WK_HIGH_DATE.ToStr(FlatFileDateFormat),
-		                 next_record.S_52WK_LOW,
-		                 Flat_S_52WK_LOW_DATE.ToStr(FlatFileDateFormat),
-		                 next_record.S_DIVIDEND, next_record.S_YIELD);
+		int rc = fprintf(hOutFile, SecurityRowFmt.c_str(), next_record.S_SYMB, next_record.S_ISSUE, next_record.S_ST_ID,
+		                 next_record.S_NAME, next_record.S_EX_ID, next_record.S_CO_ID, next_record.S_NUM_OUT,
+		                 Flat_S_START_DATE.ToStr(FlatFileDateFormat), Flat_S_EXCH_DATE.ToStr(FlatFileDateFormat),
+		                 next_record.S_PE, next_record.S_52WK_HIGH, Flat_S_52WK_HIGH_DATE.ToStr(FlatFileDateFormat),
+		                 next_record.S_52WK_LOW, Flat_S_52WK_LOW_DATE.ToStr(FlatFileDateFormat), next_record.S_DIVIDEND,
+		                 next_record.S_YIELD);
 
 		if (rc < 0) {
-			throw CSystemErr(CSystemErr::eWriteFile,
-			                 "CFlatSecurityLoad::WriteNextRecord");
+			throw CSystemErr(CSystemErr::eWriteFile, "CFlatSecurityLoad::WriteNextRecord");
 		}
 	}
 };

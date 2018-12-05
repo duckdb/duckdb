@@ -12,10 +12,8 @@ using namespace duckdb;
 using namespace std;
 
 template <class T>
-static inline void set_loop(T *__restrict result_data, T value, size_t count,
-                            sel_t *__restrict sel_vector) {
-	VectorOperations::Exec(sel_vector, count,
-	                       [&](size_t i, size_t k) { result_data[i] = value; });
+static inline void set_loop(T *__restrict result_data, T value, size_t count, sel_t *__restrict sel_vector) {
+	VectorOperations::Exec(sel_vector, count, [&](size_t i, size_t k) { result_data[i] = value; });
 }
 
 template <class T> void templated_set_loop(Vector &result, T value) {
@@ -67,9 +65,7 @@ void VectorOperations::Set(Vector &result, Value value) {
 		case TypeId::VARCHAR: {
 			auto str = result.string_heap.AddString(value.str_value);
 			auto dataptr = (const char **)result.data;
-			VectorOperations::Exec(
-			    result.sel_vector, result.count,
-			    [&](size_t i, size_t k) { dataptr[i] = str; });
+			VectorOperations::Exec(result.sel_vector, result.count, [&](size_t i, size_t k) { dataptr[i] = str; });
 			break;
 		}
 		default:

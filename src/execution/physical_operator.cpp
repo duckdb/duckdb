@@ -6,7 +6,7 @@ using namespace duckdb;
 using namespace std;
 
 string PhysicalOperator::ToString() const {
-	std::string result = PhysicalOperatorToString(type);
+	string result = PhysicalOperatorToString(type);
 	if (children.size() > 0) {
 		result += "(";
 		for (size_t i = 0; i < children.size(); i++) {

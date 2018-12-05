@@ -1,7 +1,7 @@
-
 #include "common/vector_operations/vector_operations.hpp"
 #include "duckdb.h"
 #include "duckdb.hpp"
+
 #include <cstring>
 
 using namespace duckdb;
@@ -129,7 +129,7 @@ static Value _duckdb_c_get_value(duckdb_column column, size_t index) {
 	case DUCKDB_TYPE_DATE:
 		return Value::DATE(get_value<date_t>(column, index));
 	case DUCKDB_TYPE_VARCHAR:
-		return Value(std::string(get_value<char *>(column, index)));
+		return Value(string(get_value<char *>(column, index)));
 	default:
 		throw std::runtime_error("Invalid value for C to C++ conversion!");
 	}
@@ -141,7 +141,7 @@ int duckdb_value_is_null(duckdb_column column, size_t index) {
 
 const char *duckdb_get_value_str(duckdb_column column, size_t index) {
 	Value v = _duckdb_c_get_value(column, index);
-	std::string str = v.ToString();
+	string str = v.ToString();
 	char *cstr = new char[str.length() + 1];
 	std::strcpy(cstr, str.c_str());
 	return cstr;
@@ -151,9 +151,7 @@ void duckdb_print_result(duckdb_result result) {
 	// print the result
 	// first print the header
 	for (size_t i = 0; i < result.column_count; i++) {
-		printf("%s\t",
-		       TypeIdToString(_convert_type_c_to_cpp(result.columns[i].type))
-		           .c_str());
+		printf("%s\t", TypeIdToString(_convert_type_c_to_cpp(result.columns[i].type)).c_str());
 	}
 	printf(" [ %zu ]\n", result.row_count);
 	for (size_t j = 0; j < result.row_count; j++) {
@@ -170,8 +168,7 @@ void duckdb_print_result(duckdb_result result) {
 	printf("\n");
 }
 
-duckdb_state duckdb_query(duckdb_connection connection, const char *query,
-                          duckdb_result *out) {
+duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckdb_result *out) {
 	if (out) {
 		memset(out, 0, sizeof(duckdb_result));
 	}
@@ -192,8 +189,7 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query,
 	}
 	out->row_count = result->size();
 	out->column_count = result->column_count();
-	out->columns =
-	    (duckdb_column *)malloc(out->column_count * sizeof(duckdb_column));
+	out->columns = (duckdb_column *)malloc(out->column_count * sizeof(duckdb_column));
 	if (!out->columns)
 		goto mallocfail;
 	memset(out->columns, 0, out->column_count * sizeof(duckdb_column));
@@ -244,8 +240,7 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query,
 				}
 			} else {
 				// not supported yet
-				printf(
-				    "Copy of non-string varlength values not supported yet!\n");
+				printf("Copy of non-string varlength values not supported yet!\n");
 				goto mallocfail;
 			}
 		}

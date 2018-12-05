@@ -89,11 +89,11 @@ typedef UINT64 RNGSEED;
 #endif // EGEN_USE_DEPRECATED_CODE
 
 class CRandom {
-  private:
+private:
 	RNGSEED m_seed;
 	inline RNGSEED UInt64Rand(void);
 
-  public:
+public:
 	CRandom(void);
 	CRandom(RNGSEED seed);
 	~CRandom(void){};

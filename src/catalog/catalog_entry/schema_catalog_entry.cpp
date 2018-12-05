@@ -131,7 +131,7 @@ void SchemaCatalogEntry::CreateScalarFunction(Transaction &transaction, CreateSc
 	}
 }
 
-ScalarFunctionCatalogEntry *SchemaCatalogEntry::GetScalarFunction(Transaction &transaction, const std::string &name) {
+ScalarFunctionCatalogEntry *SchemaCatalogEntry::GetScalarFunction(Transaction &transaction, const string &name) {
 	auto entry = scalar_functions.GetEntry(transaction, name);
 	if (!entry) {
 		throw CatalogException("Scalar Function with name %s does not exist!", name.c_str());

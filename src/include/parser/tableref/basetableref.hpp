@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // parser/tableref/basetableref.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -16,13 +14,11 @@
 namespace duckdb {
 //! Represents a TableReference to a base table in the schema
 class BaseTableRef : public TableRef {
-  public:
-	BaseTableRef()
-	    : TableRef(TableReferenceType::BASE_TABLE),
-	      schema_name(DEFAULT_SCHEMA) {
+public:
+	BaseTableRef() : TableRef(TableReferenceType::BASE_TABLE), schema_name(DEFAULT_SCHEMA) {
 	}
 
-	std::unique_ptr<TableRef> Accept(SQLNodeVisitor *v) override {
+	unique_ptr<TableRef> Accept(SQLNodeVisitor *v) override {
 		return v->Visit(*this);
 	}
 	bool Equals(const TableRef *other_) override {
@@ -30,24 +26,23 @@ class BaseTableRef : public TableRef {
 			return false;
 		}
 		auto other = (BaseTableRef *)other_;
-		return other->schema_name == schema_name &&
-		       other->table_name == table_name;
+		return other->schema_name == schema_name && other->table_name == table_name;
 	}
 
-	std::unique_ptr<TableRef> Copy() override;
+	unique_ptr<TableRef> Copy() override;
 
 	//! Serializes a blob into a BaseTableRef
 	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into a BaseTableRef
-	static std::unique_ptr<TableRef> Deserialize(Deserializer &source);
+	static unique_ptr<TableRef> Deserialize(Deserializer &source);
 
-	std::string ToString() const override {
+	string ToString() const override {
 		return "GET(" + schema_name + "." + table_name + ")";
 	}
 
 	//! Schema name
-	std::string schema_name;
+	string schema_name;
 	//! Table name
-	std::string table_name;
+	string table_name;
 };
 } // namespace duckdb

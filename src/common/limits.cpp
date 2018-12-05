@@ -1,5 +1,5 @@
-
 #include "common/limits.hpp"
+
 #include "common/exception.hpp"
 
 using namespace std;
@@ -47,16 +47,13 @@ int64_t MaximumValue(TypeId type) {
 }
 
 TypeId MinimalType(int64_t value) {
-	if (value >= MinimumValue(TypeId::TINYINT) &&
-	    value <= MaximumValue(TypeId::TINYINT)) {
+	if (value >= MinimumValue(TypeId::TINYINT) && value <= MaximumValue(TypeId::TINYINT)) {
 		return TypeId::TINYINT;
 	}
-	if (value >= MinimumValue(TypeId::SMALLINT) &&
-	    value <= MaximumValue(TypeId::SMALLINT)) {
+	if (value >= MinimumValue(TypeId::SMALLINT) && value <= MaximumValue(TypeId::SMALLINT)) {
 		return TypeId::SMALLINT;
 	}
-	if (value >= MinimumValue(TypeId::INTEGER) &&
-	    value <= MaximumValue(TypeId::INTEGER)) {
+	if (value >= MinimumValue(TypeId::INTEGER) && value <= MaximumValue(TypeId::INTEGER)) {
 		return TypeId::INTEGER;
 	}
 	return TypeId::BIGINT;

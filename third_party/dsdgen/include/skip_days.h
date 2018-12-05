@@ -1,4 +1,3 @@
-
 #ifndef R_SKIP_DAYS_H
 #define R_SKIP_DAYS_H
 

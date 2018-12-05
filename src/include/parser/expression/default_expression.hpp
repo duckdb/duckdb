@@ -1,11 +1,9 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // parser/expression/default_expression.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
@@ -16,24 +14,23 @@
 namespace duckdb {
 //! Represents the default value of a column
 class DefaultExpression : public Expression {
-  public:
+public:
 	DefaultExpression() : Expression(ExpressionType::VALUE_DEFAULT) {
 	}
 
-	std::unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
+	unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
 		return v->Visit(*this);
 	}
 	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::DEFAULT;
 	}
 
-	std::unique_ptr<Expression> Copy() override;
+	unique_ptr<Expression> Copy() override;
 
 	//! Deserializes a blob back into an DefaultExpression
-	static std::unique_ptr<Expression>
-	Deserialize(ExpressionDeserializeInfo *info, Deserializer &source);
+	static unique_ptr<Expression> Deserialize(ExpressionDeserializeInfo *info, Deserializer &source);
 
-	std::string ToString() const override {
+	string ToString() const override {
 		return "Default";
 	}
 };

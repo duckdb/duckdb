@@ -5,6 +5,7 @@
 //===--------------------------------------------------------------------===//
 
 #include "common/operator/numeric_functions.hpp"
+
 #include "common/vector_operations/binary_loops.hpp"
 #include "common/vector_operations/unary_loops.hpp"
 #include "common/vector_operations/vector_operations.hpp"
@@ -44,8 +45,7 @@ void VectorOperations::Abs(Vector &input, Vector &result) {
 void VectorOperations::Round(Vector &input, Vector &precision, Vector &result) {
 	UNARY_TYPE_CHECK(input, result);
 	if (!TypeIsInteger(precision.type)) {
-		throw InvalidTypeException(precision.type,
-		                           "Invalid type for rounding precision");
+		throw InvalidTypeException(precision.type, "Invalid type for rounding precision");
 	}
 
 	switch (input.type) {
@@ -57,8 +57,7 @@ void VectorOperations::Round(Vector &input, Vector &precision, Vector &result) {
 		break;
 	case TypeId::DECIMAL:
 		precision.Cast(TypeId::TINYINT);
-		templated_binary_loop<double, int8_t, double, operators::Round>(
-		    input, precision, result);
+		templated_binary_loop<double, int8_t, double, operators::Round>(input, precision, result);
 		break;
 	default:
 		throw InvalidTypeException(input.type, "Invalid type for round");

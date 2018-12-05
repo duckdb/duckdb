@@ -1,25 +1,20 @@
-
-#include "common/exception.hpp"
+#include "transaction/transaction.hpp"
 
 #include "catalog/catalog_entry/table_catalog_entry.hpp"
+#include "common/exception.hpp"
 #include "parser/column_definition.hpp"
-
 #include "storage/data_table.hpp"
-
-#include "transaction/transaction.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 void Transaction::PushCatalogEntry(CatalogEntry *entry) {
 	// store only the pointer to the catalog entry
-	CatalogEntry **blob = (CatalogEntry **)undo_buffer.CreateEntry(
-	    UndoFlags::CATALOG_ENTRY, sizeof(CatalogEntry *));
+	CatalogEntry **blob = (CatalogEntry **)undo_buffer.CreateEntry(UndoFlags::CATALOG_ENTRY, sizeof(CatalogEntry *));
 	*blob = entry;
 }
 
-void Transaction::PushDeletedEntries(size_t offset, size_t count,
-                                     StorageChunk *storage,
+void Transaction::PushDeletedEntries(size_t offset, size_t count, StorageChunk *storage,
                                      VersionInformation *version_pointers[]) {
 	for (size_t i = 0; i < count; i++) {
 		auto ptr = PushTuple(0);
@@ -58,14 +53,12 @@ void Transaction::PushTuple(size_t offset, StorageChunk *storage) {
 }
 
 void Transaction::PushQuery(string query) {
-	char *blob =
-	    (char *)undo_buffer.CreateEntry(UndoFlags::QUERY, query.size() + 1);
+	char *blob = (char *)undo_buffer.CreateEntry(UndoFlags::QUERY, query.size() + 1);
 	strcpy(blob, query.c_str());
 }
 
 uint8_t *Transaction::PushTuple(size_t data_size) {
-	return undo_buffer.CreateEntry(UndoFlags::TUPLE_ENTRY,
-	                               sizeof(VersionInformation) + data_size);
+	return undo_buffer.CreateEntry(UndoFlags::TUPLE_ENTRY, sizeof(VersionInformation) + data_size);
 }
 
 void Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) {

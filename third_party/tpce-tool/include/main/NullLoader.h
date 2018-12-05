@@ -49,7 +49,7 @@ namespace TPCE {
 
 template <typename T> class CNullLoader : public CBaseLoader<T> {
 
-  public:
+public:
 	/*
 	 *  Routine to write a new record into the database.
 	 *  Since this is a NULL loader, it does nothing.

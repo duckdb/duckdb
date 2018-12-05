@@ -27,11 +27,11 @@ void Catalog::DropSchema(Transaction &transaction, DropSchemaInformation *info) 
 	}
 }
 
-bool Catalog::SchemaExists(Transaction &transaction, const std::string &name) {
+bool Catalog::SchemaExists(Transaction &transaction, const string &name) {
 	return schemas.EntryExists(transaction, name);
 }
 
-SchemaCatalogEntry *Catalog::GetSchema(Transaction &transaction, const std::string &schema_name) {
+SchemaCatalogEntry *Catalog::GetSchema(Transaction &transaction, const string &schema_name) {
 	auto entry = schemas.GetEntry(transaction, schema_name);
 	if (!entry) {
 		throw CatalogException("Schema with name %s does not exist!", schema_name.c_str());
@@ -39,7 +39,7 @@ SchemaCatalogEntry *Catalog::GetSchema(Transaction &transaction, const std::stri
 	return (SchemaCatalogEntry *)entry;
 }
 
-bool Catalog::TableExists(Transaction &transaction, const std::string &schema_name, const std::string &table_name) {
+bool Catalog::TableExists(Transaction &transaction, const string &schema_name, const string &table_name) {
 	auto entry = schemas.GetEntry(transaction, schema_name);
 	if (!entry) {
 		return false;
@@ -83,8 +83,8 @@ void Catalog::CreateScalarFunction(Transaction &transaction, CreateScalarFunctio
 	schema->CreateScalarFunction(transaction, info);
 }
 
-ScalarFunctionCatalogEntry *Catalog::GetScalarFunction(Transaction &transaction, const std::string &schema_name,
-                                                       const std::string &name) {
+ScalarFunctionCatalogEntry *Catalog::GetScalarFunction(Transaction &transaction, const string &schema_name,
+                                                       const string &name) {
 	auto schema = GetSchema(transaction, schema_name);
 	return schema->GetScalarFunction(transaction, name);
 }

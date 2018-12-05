@@ -1,11 +1,8 @@
-
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
-
-#include "parser/expression/aggregate_expression.hpp"
-
 #include "execution/operator/aggregate/physical_aggregate.hpp"
 #include "execution/operator/aggregate/physical_hash_aggregate.hpp"
+#include "parser/expression/aggregate_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -52,8 +49,7 @@ Value ExpressionExecutor::ExecuteAggregate(AggregateExpression &expr) {
 }
 
 static bool IsScalarAggr(Expression *expr) {
-	if (expr->type == ExpressionType::COLUMN_REF ||
-	    expr->type == ExpressionType::GROUP_REF ||
+	if (expr->type == ExpressionType::COLUMN_REF || expr->type == ExpressionType::GROUP_REF ||
 	    expr->type == ExpressionType::AGGREGATE_COUNT_STAR) {
 		return false;
 	}
@@ -66,14 +62,12 @@ static bool IsScalarAggr(Expression *expr) {
 }
 
 unique_ptr<Expression> ExpressionExecutor::Visit(AggregateExpression &expr) {
-	auto state =
-	    reinterpret_cast<PhysicalAggregateOperatorState *>(this->state);
+	auto state = reinterpret_cast<PhysicalAggregateOperatorState *>(this->state);
 	if (!state) {
 		throw NotImplementedException("Aggregate node without aggregate state");
 	}
 	if (state->aggregates.size() == 0) {
-		if (state->aggregate_chunk.column_count &&
-		    state->aggregate_chunk.data[expr.index].count) {
+		if (state->aggregate_chunk.column_count && state->aggregate_chunk.data[expr.index].count) {
 			vector.Reference(state->aggregate_chunk.data[expr.index]);
 		} else {
 			if (IsScalarAggr(&expr)) { // even if we do not scan rows, we can
@@ -83,8 +77,7 @@ unique_ptr<Expression> ExpressionExecutor::Visit(AggregateExpression &expr) {
 				// the subquery scanned no rows, therefore the aggr is empty.
 				// return something reasonable depending on aggr type.
 				Value val;
-				if (expr.type == ExpressionType::AGGREGATE_COUNT ||
-				    expr.type == ExpressionType::AGGREGATE_COUNT_STAR) {
+				if (expr.type == ExpressionType::AGGREGATE_COUNT || expr.type == ExpressionType::AGGREGATE_COUNT_STAR) {
 					val = Value(0).CastAs(expr.return_type); // ZERO
 				} else {
 					val = Value().CastAs(expr.return_type); // NULL

@@ -53,7 +53,7 @@ namespace TPCE {
 //
 
 class ChargeDataFileRecord {
-  private:
+private:
 	static const int maxCh_tt_idLen = 3;
 	char ch_tt_idCStr[maxCh_tt_idLen + 1];
 	std::string ch_tt_id;
@@ -63,7 +63,7 @@ class ChargeDataFileRecord {
 
 	static const unsigned int fieldCount = 3;
 
-  public:
+public:
 	explicit ChargeDataFileRecord(const std::deque<std::string> &fields);
 
 	//

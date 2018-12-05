@@ -47,12 +47,11 @@
 namespace TPCE {
 
 class CFlatCommissionRateLoad : public CFlatFileLoader<COMMISSION_RATE_ROW> {
-  private:
+private:
 	const std::string CommissionRateRowFmt;
 
-  public:
-	CFlatCommissionRateLoad(char *szFileName,
-	                        FlatFileOutputModes FlatFileOutputMode)
+public:
+	CFlatCommissionRateLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
 	    : CFlatFileLoader<COMMISSION_RATE_ROW>(szFileName, FlatFileOutputMode),
 	      CommissionRateRowFmt("%d|%s|%s|%d|%d|%.2f\n"){};
 
@@ -60,13 +59,10 @@ class CFlatCommissionRateLoad : public CFlatFileLoader<COMMISSION_RATE_ROW> {
 	 *   Writes a record to the file.
 	 */
 	void WriteNextRecord(const COMMISSION_RATE_ROW &next_record) {
-		int rc = fprintf(hOutFile, CommissionRateRowFmt.c_str(),
-		                 next_record.CR_C_TIER, next_record.CR_TT_ID,
-		                 next_record.CR_EX_ID, next_record.CR_FROM_QTY,
-		                 next_record.CR_TO_QTY, next_record.CR_RATE);
+		int rc = fprintf(hOutFile, CommissionRateRowFmt.c_str(), next_record.CR_C_TIER, next_record.CR_TT_ID,
+		                 next_record.CR_EX_ID, next_record.CR_FROM_QTY, next_record.CR_TO_QTY, next_record.CR_RATE);
 		if (rc < 0) {
-			throw CSystemErr(CSystemErr::eWriteFile,
-			                 "CFlatCommissionRateLoad::WriteNextRecord");
+			throw CSystemErr(CSystemErr::eWriteFile, "CFlatCommissionRateLoad::WriteNextRecord");
 		}
 	}
 };

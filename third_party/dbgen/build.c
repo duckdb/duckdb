@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <string.h>
 #ifndef VMS
@@ -7,10 +6,10 @@
 #if defined(SUN)
 #include <unistd.h>
 #endif
-#include <math.h>
-
 #include "dss.h"
 #include "dsstypes.h"
+
+#include <math.h>
 #ifdef ADHOC
 #include "adhoc.h"
 extern adhoc_t adhocs[];
@@ -21,18 +20,13 @@ extern adhoc_t adhocs[];
 #define JDAY_BASE 8035        /* start from 1/1/70 a la unix */
 #define JMNTH_BASE (-70 * 12) /* start from 1/1/70 a la unix */
 #define JDAY(date) ((date)-STARTDATE + JDAY_BASE + 1)
-#define PART_SUPP_BRIDGE(tgt, p, s)                                            \
-	{                                                                          \
-		DSS_HUGE tot_scnt = tdefs[SUPP].base * scale;                          \
-		tgt = (p +                                                             \
-		       s * (tot_scnt / SUPP_PER_PART + (long)((p - 1) / tot_scnt))) %  \
-		          tot_scnt +                                                   \
-		      1;                                                               \
+#define PART_SUPP_BRIDGE(tgt, p, s)                                                                                    \
+	{                                                                                                                  \
+		DSS_HUGE tot_scnt = tdefs[SUPP].base * scale;                                                                  \
+		tgt = (p + s * (tot_scnt / SUPP_PER_PART + (long)((p - 1) / tot_scnt))) % tot_scnt + 1;                        \
 	}
-#define V_STR(avg, sd, tgt)                                                    \
-	a_rnd((int)(avg * V_STR_LOW), (int)(avg * V_STR_HGH), sd, tgt)
-#define TEXT(avg, sd, tgt)                                                     \
-	dbg_text(tgt, (int)(avg * V_STR_LOW), (int)(avg * V_STR_HGH), sd)
+#define V_STR(avg, sd, tgt) a_rnd((int)(avg * V_STR_LOW), (int)(avg * V_STR_HGH), sd, tgt)
+#define TEXT(avg, sd, tgt) dbg_text(tgt, (int)(avg * V_STR_LOW), (int)(avg * V_STR_HGH), sd)
 static void gen_phone PROTO((DSS_HUGE ind, char *target, long seed));
 
 DSS_HUGE
@@ -126,8 +120,7 @@ long mk_order(DSS_HUGE index, order_t *o, long upd_num) {
 	}
 	if (asc_date == NULL)
 		asc_date = mk_ascdate();
-	mk_sparse(index, &o->okey,
-	          (upd_num == 0) ? 0 : 1 + upd_num / (10000 / UPD_PCT));
+	mk_sparse(index, &o->okey, (upd_num == 0) ? 0 : 1 + upd_num / (10000 / UPD_PCT));
 	if (scale >= 30000)
 		RANDOM64(o->custkey, O_CKEY_MIN, O_CKEY_MAX, O_CKEY_SD);
 	else
@@ -177,10 +170,8 @@ long mk_order(DSS_HUGE index, order_t *o, long upd_num) {
 		PART_SUPP_BRIDGE(o->l[lcnt].suppkey, o->l[lcnt].partkey, supp_num);
 		o->l[lcnt].eprice = rprice * o->l[lcnt].quantity;
 
-		o->totalprice +=
-		    ((o->l[lcnt].eprice * ((long)100 - o->l[lcnt].discount)) /
-		     (long)PENNIES) *
-		    ((long)100 + o->l[lcnt].tax) / (long)PENNIES;
+		o->totalprice += ((o->l[lcnt].eprice * ((long)100 - o->l[lcnt].discount)) / (long)PENNIES) *
+		                 ((long)100 + o->l[lcnt].tax) / (long)PENNIES;
 
 		RANDOM(s_date, L_SDTE_MIN, L_SDTE_MAX, L_SDTE_SD);
 		s_date += tmp_date;
@@ -284,11 +275,9 @@ long mk_supp(DSS_HUGE index, supplier_t *s) {
 		type = (type < BBB_DEADBEATS) ? 0 : 1;
 		memcpy(s->comment + offset, BBB_BASE, BBB_BASE_LEN);
 		if (type == 0)
-			memcpy(s->comment + BBB_BASE_LEN + offset + noise, BBB_COMPLAIN,
-			       BBB_TYPE_LEN);
+			memcpy(s->comment + BBB_BASE_LEN + offset + noise, BBB_COMPLAIN, BBB_TYPE_LEN);
 		else
-			memcpy(s->comment + BBB_BASE_LEN + offset + noise, BBB_COMMEND,
-			       BBB_TYPE_LEN);
+			memcpy(s->comment + BBB_BASE_LEN + offset + noise, BBB_COMMEND, BBB_TYPE_LEN);
 	}
 	return (0);
 }
@@ -299,10 +288,9 @@ struct {
 	long dcnt;
 } months[] =
 
-    {{NULL, 0, 0},     {"JAN", 31, 31},  {"FEB", 28, 59},  {"MAR", 31, 90},
-     {"APR", 30, 120}, {"MAY", 31, 151}, {"JUN", 30, 181}, {"JUL", 31, 212},
-     {"AUG", 31, 243}, {"SEP", 30, 273}, {"OCT", 31, 304}, {"NOV", 30, 334},
-     {"DEC", 31, 365}};
+    {{NULL, 0, 0},     {"JAN", 31, 31},  {"FEB", 28, 59},  {"MAR", 31, 90},  {"APR", 30, 120},
+     {"MAY", 31, 151}, {"JUN", 30, 181}, {"JUL", 31, 212}, {"AUG", 31, 243}, {"SEP", 30, 273},
+     {"OCT", 31, 304}, {"NOV", 30, 334}, {"DEC", 31, 365}};
 
 long mk_time(DSS_HUGE index, dss_time_t *t) {
 	long m = 0;
@@ -314,8 +302,7 @@ long mk_time(DSS_HUGE index, dss_time_t *t) {
 	d = julian(index + STARTDATE - 1) % 1000;
 	while (d > months[m].dcnt + LEAP_ADJ(y, m))
 		m++;
-	PR_DATE(t->alpha, y, m,
-	        d - months[m - 1].dcnt - ((LEAP(y) && m > 2) ? 1 : 0));
+	PR_DATE(t->alpha, y, m, d - months[m - 1].dcnt - ((LEAP(y) && m > 2) ? 1 : 0));
 	t->year = 1900 + y;
 	t->month = m + 12 * y + JMNTH_BASE;
 	t->week = (d + T_START_DAY - 1) / 7 + 1;

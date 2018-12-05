@@ -47,7 +47,7 @@ namespace TPCE {
 
 // Condition class, requires a separate mutex to pair with.
 class CCondition {
-  private:
+private:
 	CMutex &mutex_;
 #ifdef WIN32
 	mutable CONDITION_VARIABLE cond_;
@@ -55,10 +55,10 @@ class CCondition {
 	mutable pthread_cond_t cond_;
 	bool timedwait(const struct timespec &timeout) const;
 #endif
-  protected:
+protected:
 	CMutex &mutex();
 
-  public:
+public:
 	CCondition(CMutex &mutex);
 	void wait() const;
 	bool timedwait(long timeout = -1 /*us*/) const;

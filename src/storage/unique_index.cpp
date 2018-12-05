@@ -1,10 +1,8 @@
+#include "storage/unique_index.hpp"
 
 #include "common/exception.hpp"
 #include "common/vector_operations/vector_operations.hpp"
-
 #include "storage/data_table.hpp"
-#include "storage/unique_index.hpp"
-
 #include "transaction/transaction.hpp"
 
 #include <algorithm>
@@ -12,16 +10,13 @@
 using namespace duckdb;
 using namespace std;
 
-UniqueIndex::UniqueIndex(DataTable &table, std::vector<TypeId> types,
-                         std::vector<size_t> keys, bool allow_nulls)
-    : serializer(types, keys), comparer(serializer, table.serializer),
-      table(table), types(types), keys(keys), allow_nulls(allow_nulls) {
+UniqueIndex::UniqueIndex(DataTable &table, vector<TypeId> types, vector<size_t> keys, bool allow_nulls)
+    : serializer(types, keys), comparer(serializer, table.serializer), table(table), types(types), keys(keys),
+      allow_nulls(allow_nulls) {
 }
 
-UniqueIndexNode *
-UniqueIndex::AddEntry(Transaction &transaction, Tuple tuple,
-                      size_t row_identifier,
-                      unordered_set<size_t> &ignored_identifiers) {
+UniqueIndexNode *UniqueIndex::AddEntry(Transaction &transaction, Tuple tuple, size_t row_identifier,
+                                       unordered_set<size_t> &ignored_identifiers) {
 	auto new_node = make_unique<UniqueIndexNode>(move(tuple), row_identifier);
 	if (!root) {
 		// no root, make this entry the root
@@ -56,21 +51,18 @@ UniqueIndex::AddEntry(Transaction &transaction, Tuple tuple,
 			// check if this row is one of the rows that will be updated
 			// if it is, we ignore the base table versions (as they will be
 			// overwritten)
-			if (ignored_identifiers.find(entry->row_identifier) ==
-			    ignored_identifiers.end()) {
+			if (ignored_identifiers.find(entry->row_identifier) == ignored_identifiers.end()) {
 				// compare to base table version to verify there is a conflict
 				if (chunk->deleted[offset]) {
 					conflict = false;
 				} else {
 					// first serialize to tuple
 					uint8_t tuple_data[chunk->table.serializer.TupleSize()];
-					chunk->table.serializer.Serialize(chunk->columns, offset,
-					                                  tuple_data);
+					chunk->table.serializer.Serialize(chunk->columns, offset, tuple_data);
 					// now compare them
 					// we use the TupleComparer because the tuple is serialized
 					// from the base table
-					conflict = comparer.Compare(new_node->tuple.data.get(),
-					                            tuple_data) == 0;
+					conflict = comparer.Compare(new_node->tuple.data.get(), tuple_data) == 0;
 				}
 			} else {
 				conflict = false;
@@ -88,9 +80,7 @@ UniqueIndex::AddEntry(Transaction &transaction, Tuple tuple,
 							// our entry was deleted, no conflict
 							conflict = false;
 						} else {
-							conflict =
-							    comparer.Compare(new_node->tuple.data.get(),
-							                     version->tuple_data) == 0;
+							conflict = comparer.Compare(new_node->tuple.data.get(), version->tuple_data) == 0;
 							if (conflict) {
 								break;
 							}
@@ -101,8 +91,7 @@ UniqueIndex::AddEntry(Transaction &transaction, Tuple tuple,
 							// use this version: no predecessor
 							break;
 						}
-						if (next->version_number ==
-						    transaction.transaction_id) {
+						if (next->version_number == transaction.transaction_id) {
 							// use this version: it was created by us
 							break;
 						}
@@ -191,10 +180,8 @@ void UniqueIndex::RemoveEntry(UniqueIndexNode *entry) {
 	}
 }
 
-string UniqueIndex::AddEntries(Transaction &transaction,
-                               UniqueIndexNode *added_nodes[], Tuple tuples[],
-                               bool has_null[], Vector &row_identifiers,
-                               unordered_set<size_t> &ignored_identifiers) {
+string UniqueIndex::AddEntries(Transaction &transaction, UniqueIndexNode *added_nodes[], Tuple tuples[],
+                               bool has_null[], Vector &row_identifiers, unordered_set<size_t> &ignored_identifiers) {
 	string error;
 
 	lock_guard<mutex> guard(index_lock);
@@ -203,9 +190,7 @@ string UniqueIndex::AddEntries(Transaction &transaction,
 
 	auto identifiers = (uint64_t *)row_identifiers.data;
 	for (size_t i = 0; i < row_identifiers.count; i++) {
-		auto row_identifier = row_identifiers.sel_vector
-		                          ? identifiers[row_identifiers.sel_vector[i]]
-		                          : identifiers[i];
+		auto row_identifier = row_identifiers.sel_vector ? identifiers[row_identifiers.sel_vector[i]] : identifiers[i];
 		UniqueIndexNode *entry = nullptr;
 		if (has_null[i]) {
 			if (allow_nulls) {
@@ -217,8 +202,7 @@ string UniqueIndex::AddEntries(Transaction &transaction,
 				error = "PRIMARY KEY column cannot contain NULL values!";
 			}
 		} else {
-			entry = AddEntry(transaction, move(tuples[i]), row_identifier,
-			                 ignored_identifiers);
+			entry = AddEntry(transaction, move(tuples[i]), row_identifier, ignored_identifiers);
 			if (!entry) {
 				// could not add entry: constraint violation
 				error = "PRIMARY KEY or UNIQUE constraint violated: "
@@ -240,8 +224,7 @@ string UniqueIndex::AddEntries(Transaction &transaction,
 	return error;
 }
 
-static bool boolean_array_from_nullmask(sel_t *sel_vector, size_t count,
-                                        nullmask_t &mask, bool array[],
+static bool boolean_array_from_nullmask(sel_t *sel_vector, size_t count, nullmask_t &mask, bool array[],
                                         bool allow_nulls) {
 	bool success = true;
 	VectorOperations::Exec(sel_vector, count, [&](size_t i, size_t k) {
@@ -254,9 +237,8 @@ static bool boolean_array_from_nullmask(sel_t *sel_vector, size_t count,
 	return success;
 }
 
-string UniqueIndex::Append(Transaction &transaction,
-                           vector<unique_ptr<UniqueIndex>> &indexes,
-                           DataChunk &chunk, size_t row_identifier_start) {
+string UniqueIndex::Append(Transaction &transaction, vector<unique_ptr<UniqueIndex>> &indexes, DataChunk &chunk,
+                           size_t row_identifier_start) {
 	if (indexes.size() == 0) {
 		return string();
 	}
@@ -280,8 +262,7 @@ string UniqueIndex::Append(Transaction &transaction,
 		for (auto &key : index.keys) {
 			nulls |= chunk.data[key].nullmask;
 		}
-		if (!boolean_array_from_nullmask(chunk.sel_vector, chunk.size(), nulls,
-		                                 has_null, index.allow_nulls)) {
+		if (!boolean_array_from_nullmask(chunk.sel_vector, chunk.size(), nulls, has_null, index.allow_nulls)) {
 			error = "PRIMARY KEY column cannot contain NULL values!";
 			break;
 		}
@@ -293,8 +274,7 @@ string UniqueIndex::Append(Transaction &transaction,
 		VectorOperations::GenerateSequence(row_numbers, row_identifier_start);
 
 		// now actually add the entries to this index
-		error = index.AddEntries(transaction, added_nodes[current_index],
-		                         tuples, has_null, row_numbers, dummy);
+		error = index.AddEntries(transaction, added_nodes[current_index], tuples, has_null, row_numbers, dummy);
 
 		if (!error.empty()) {
 			break;
@@ -324,10 +304,8 @@ string UniqueIndex::Append(Transaction &transaction,
 // 12}: 11 already exists ERROR For this reason we check separately for
 // conflicts WITHIN the update_chunk and ignore any of these entries when
 // checking inside the actual index
-string UniqueIndex::Update(Transaction &transaction, StorageChunk *storage,
-                           std::vector<std::unique_ptr<UniqueIndex>> &indexes,
-                           std::vector<column_t> &updated_columns,
-                           DataChunk &update_chunk, Vector &row_identifiers) {
+string UniqueIndex::Update(Transaction &transaction, StorageChunk *storage, vector<unique_ptr<UniqueIndex>> &indexes,
+                           vector<column_t> &updated_columns, DataChunk &update_chunk, Vector &row_identifiers) {
 	if (indexes.size() == 0) {
 		return string();
 	}
@@ -338,10 +316,8 @@ string UniqueIndex::Update(Transaction &transaction, StorageChunk *storage,
 	size_t added_nodes_count[indexes.size()];
 	unordered_set<size_t> ignored_entries;
 
-	VectorOperations::ExecType<uint64_t>(
-	    row_identifiers, [&](uint64_t &entry, size_t i, size_t k) {
-		    ignored_entries.insert(entry);
-	    });
+	VectorOperations::ExecType<uint64_t>(row_identifiers,
+	                                     [&](uint64_t &entry, size_t i, size_t k) { ignored_entries.insert(entry); });
 
 	for (current_index = 0; current_index < indexes.size(); current_index++) {
 		auto &index = *indexes[current_index];
@@ -353,8 +329,7 @@ string UniqueIndex::Update(Transaction &transaction, StorageChunk *storage,
 		vector<column_t> affected_columns;
 		for (size_t i = 0; i < index.keys.size(); i++) {
 			auto column = index.keys[i];
-			auto entry =
-			    find(updated_columns.begin(), updated_columns.end(), column);
+			auto entry = find(updated_columns.begin(), updated_columns.end(), column);
 			if (entry != updated_columns.end()) {
 				affected_columns.push_back(entry - updated_columns.begin());
 				index_affected = true;
@@ -382,15 +357,13 @@ string UniqueIndex::Update(Transaction &transaction, StorageChunk *storage,
 				nulls |= update_chunk.data[affected_columns[i]].nullmask;
 			}
 		}
-		if (!boolean_array_from_nullmask(update_chunk.sel_vector,
-		                                 update_chunk.size(), nulls, has_null,
+		if (!boolean_array_from_nullmask(update_chunk.sel_vector, update_chunk.size(), nulls, has_null,
 		                                 index.allow_nulls)) {
 			error = "PRIMARY KEY column cannot contain NULL values!";
 			break;
 		}
 
-		index.serializer.SerializeUpdate(storage->columns, affected_columns,
-		                                 update_chunk, row_identifiers,
+		index.serializer.SerializeUpdate(storage->columns, affected_columns, update_chunk, row_identifiers,
 		                                 storage->start, tuples);
 
 		// check if there are duplicates in the tuples themselves
@@ -410,9 +383,8 @@ string UniqueIndex::Update(Transaction &transaction, StorageChunk *storage,
 		}
 
 		// now actually add the entries to this index
-		error =
-		    index.AddEntries(transaction, added_nodes[current_index], tuples,
-		                     has_null, row_identifiers, ignored_entries);
+		error = index.AddEntries(transaction, added_nodes[current_index], tuples, has_null, row_identifiers,
+		                         ignored_entries);
 		if (!error.empty()) {
 			break;
 		}

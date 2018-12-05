@@ -26,7 +26,7 @@ class PhysicalOperator;
 //! call the GetChunk function and get new batches of data everytime until the
 //! data source is exhausted.
 class PhysicalOperatorState {
-	public:
+public:
 	PhysicalOperatorState(PhysicalOperator *child, ExpressionExecutor *parent);
 	virtual ~PhysicalOperatorState() {
 	}
@@ -37,7 +37,7 @@ class PhysicalOperatorState {
 	//! DataChunk that stores data from the child of this operator
 	DataChunk child_chunk;
 	//! State of the child of this operator
-	std::unique_ptr<PhysicalOperatorState> child_state;
+	unique_ptr<PhysicalOperatorState> child_state;
 
 	ExpressionExecutor *parent;
 };
@@ -52,18 +52,18 @@ class PhysicalOperatorState {
    operators subclass this state and add different properties).
 */
 class PhysicalOperator : public Printable {
-	public:
-	PhysicalOperator(PhysicalOperatorType type, std::vector<TypeId> types) : type(type), types(types) {
+public:
+	PhysicalOperator(PhysicalOperatorType type, vector<TypeId> types) : type(type), types(types) {
 	}
 
 	PhysicalOperatorType GetOperatorType() {
 		return type;
 	}
 
-	std::string ToString() const override;
+	string ToString() const override;
 
 	//! Return a vector of the types that will be returned by this operator
-	std::vector<TypeId> &GetTypes() {
+	vector<TypeId> &GetTypes() {
 		return types;
 	}
 	//! Initialize a given chunk to the types that will be returned by this
@@ -80,19 +80,19 @@ class PhysicalOperator : public Printable {
 	void GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state);
 
 	//! Create a new empty instance of the operator state
-	virtual std::unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent) {
+	virtual unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent) {
 		return make_unique<PhysicalOperatorState>(children.size() == 0 ? nullptr : children[0].get(), parent);
 	}
 
-	virtual std::string ExtraRenderInformation() {
+	virtual string ExtraRenderInformation() {
 		return "";
 	}
 
 	//! The physical operator type
 	PhysicalOperatorType type;
 	//! The set of children of the operator
-	std::vector<std::unique_ptr<PhysicalOperator>> children;
+	vector<unique_ptr<PhysicalOperator>> children;
 	//! The types returned by this physical operator
-	std::vector<TypeId> types;
+	vector<TypeId> types;
 };
 } // namespace duckdb

@@ -1,5 +1,5 @@
-
 #include "sqlite_helpers.hpp"
+
 #include "common/types/date.hpp"
 
 using namespace duckdb;
@@ -10,8 +10,7 @@ namespace sqlite {
 bool TransferDatabase(DuckDBConnection &con, sqlite3 *sqlite) {
 	char *error;
 	// start the SQLite transaction
-	if (sqlite3_exec(sqlite, "BEGIN TRANSACTION", nullptr, nullptr, &error) !=
-	    SQLITE_OK) {
+	if (sqlite3_exec(sqlite, "BEGIN TRANSACTION", nullptr, nullptr, &error) != SQLITE_OK) {
 		return false;
 	}
 
@@ -50,8 +49,7 @@ bool TransferDatabase(DuckDBConnection &con, sqlite3 *sqlite) {
 
 		auto insert_statement = prepared.str();
 		sqlite3_stmt *stmt;
-		if (sqlite3_prepare_v2(sqlite, insert_statement.c_str(), -1, &stmt,
-		                       nullptr) != SQLITE_OK) {
+		if (sqlite3_prepare_v2(sqlite, insert_statement.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
 			return false;
 		}
 
@@ -66,56 +64,39 @@ bool TransferDatabase(DuckDBConnection &con, sqlite3 *sqlite) {
 					// bind based on the type
 					switch (types[j]) {
 					case TypeId::BOOLEAN:
-						rc =
-						    sqlite3_bind_int(stmt, bind_index,
-						                     (int)result->GetValue<bool>(j, k));
+						rc = sqlite3_bind_int(stmt, bind_index, (int)result->GetValue<bool>(j, k));
 						break;
 					case TypeId::TINYINT:
-						rc = sqlite3_bind_int(
-						    stmt, bind_index,
-						    (int)result->GetValue<int8_t>(j, k));
+						rc = sqlite3_bind_int(stmt, bind_index, (int)result->GetValue<int8_t>(j, k));
 						break;
 					case TypeId::SMALLINT:
-						rc = sqlite3_bind_int(
-						    stmt, bind_index,
-						    (int)result->GetValue<int16_t>(j, k));
+						rc = sqlite3_bind_int(stmt, bind_index, (int)result->GetValue<int16_t>(j, k));
 						break;
 					case TypeId::INTEGER:
-						rc = sqlite3_bind_int(
-						    stmt, bind_index,
-						    (int)result->GetValue<int32_t>(j, k));
+						rc = sqlite3_bind_int(stmt, bind_index, (int)result->GetValue<int32_t>(j, k));
 						break;
 					case TypeId::BIGINT:
-						rc = sqlite3_bind_int64(
-						    stmt, bind_index,
-						    (sqlite3_int64)result->GetValue<int64_t>(j, k));
+						rc = sqlite3_bind_int64(stmt, bind_index, (sqlite3_int64)result->GetValue<int64_t>(j, k));
 						break;
 					case TypeId::POINTER:
-						rc = sqlite3_bind_int64(
-						    stmt, bind_index,
-						    (sqlite3_int64)result->GetValue<uint64_t>(j, k));
+						rc = sqlite3_bind_int64(stmt, bind_index, (sqlite3_int64)result->GetValue<uint64_t>(j, k));
 						break;
 					case TypeId::DATE: {
 						auto date = result->GetValue<date_t>(j, k);
 						auto date_str = Date::ToString(date) + " 00:00:00";
 
-						rc = sqlite3_bind_text(stmt, bind_index,
-						                       date_str.c_str(), -1,
-						                       SQLITE_TRANSIENT);
+						rc = sqlite3_bind_text(stmt, bind_index, date_str.c_str(), -1, SQLITE_TRANSIENT);
 						break;
 					}
 					case TypeId::TIMESTAMP:
 						// TODO
 						break;
 					case TypeId::DECIMAL:
-						rc = sqlite3_bind_double(
-						    stmt, bind_index, result->GetValue<double>(j, k));
+						rc = sqlite3_bind_double(stmt, bind_index, result->GetValue<double>(j, k));
 						break;
 					case TypeId::VARCHAR:
-						rc = sqlite3_bind_text(
-						    stmt, bind_index,
-						    result->GetValue<const char *>(j, k), -1,
-						    SQLITE_TRANSIENT);
+						rc = sqlite3_bind_text(stmt, bind_index, result->GetValue<const char *>(j, k), -1,
+						                       SQLITE_TRANSIENT);
 						break;
 					default:
 						break;

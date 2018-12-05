@@ -47,23 +47,20 @@
 namespace TPCE {
 
 class CFlatSectorLoad : public CFlatFileLoader<SECTOR_ROW> {
-  private:
+private:
 	const std::string SectorRowFmt;
 
-  public:
+public:
 	CFlatSectorLoad(char *szFileName, FlatFileOutputModes FlatFileOutputMode)
-	    : CFlatFileLoader<SECTOR_ROW>(szFileName, FlatFileOutputMode),
-	      SectorRowFmt("%s|%s\n"){};
+	    : CFlatFileLoader<SECTOR_ROW>(szFileName, FlatFileOutputMode), SectorRowFmt("%s|%s\n"){};
 
 	/*
 	 *   Writes a record to the file.
 	 */
 	void WriteNextRecord(const SECTOR_ROW &next_record) {
-		int rc = fprintf(hOutFile, SectorRowFmt.c_str(), next_record.SC_ID,
-		                 next_record.SC_NAME);
+		int rc = fprintf(hOutFile, SectorRowFmt.c_str(), next_record.SC_ID, next_record.SC_NAME);
 		if (rc < 0) {
-			throw CSystemErr(CSystemErr::eWriteFile,
-			                 "CFlatSectorLoad::WriteNextRecord");
+			throw CSystemErr(CSystemErr::eWriteFile, "CFlatSectorLoad::WriteNextRecord");
 		}
 	}
 };

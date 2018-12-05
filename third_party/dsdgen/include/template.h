@@ -59,8 +59,7 @@ extern template_t *pCurrentQuery;
 
 void PrintQuery(FILE *fp, template_t *t);
 int AddQuerySegment(template_t *pQuery, char *szSQL);
-int AddQuerySubstitution(template_t *Query, char *szSubName, int nUse,
-                         int nSubPart);
+int AddQuerySubstitution(template_t *Query, char *szSubName, int nUse, int nSubPart);
 int AddSubstitution(template_t *t, char *s, expr_t *pExpr);
 int SetSegmentFlag(template_t *Query, int nSegmentNumber, int nFlag);
 substitution_t *FindSubstitution(template_t *t, char *stmt, int *nUse);

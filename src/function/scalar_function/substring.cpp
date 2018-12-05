@@ -1,4 +1,3 @@
-
 #include "function/scalar_function/substring.hpp"
 
 #include "common/exception.hpp"
@@ -26,8 +25,7 @@ void substring_function(Vector inputs[], size_t input_count, Vector &result) {
 
 	VectorOperations::TernaryExec(
 	    input, offset, length, result,
-	    [&](size_t input_index, size_t offset_index, size_t length_index,
-	        size_t result_index) {
+	    [&](size_t input_index, size_t offset_index, size_t length_index, size_t result_index) {
 		    auto input = input_data[input_index];
 		    auto offset = offset_data[offset_index] - 1;
 		    auto length = length_data[length_index];
@@ -44,8 +42,7 @@ void substring_function(Vector inputs[], size_t input_count, Vector &result) {
 		    } else {
 			    // now limit the string
 			    size_t write_offset = 0;
-			    while (input[input_offset + write_offset] &&
-			           write_offset < length) {
+			    while (input[input_offset + write_offset] && write_offset < length) {
 				    output[write_offset] = input[input_offset + write_offset];
 				    write_offset++;
 			    }
@@ -56,12 +53,12 @@ void substring_function(Vector inputs[], size_t input_count, Vector &result) {
 	    });
 }
 
-bool substring_matches_arguments(std::vector<TypeId> &arguments) {
-	return arguments.size() == 3 && arguments[0] == TypeId::VARCHAR &&
-	       arguments[1] == TypeId::INTEGER && arguments[2] == TypeId::INTEGER;
+bool substring_matches_arguments(vector<TypeId> &arguments) {
+	return arguments.size() == 3 && arguments[0] == TypeId::VARCHAR && arguments[1] == TypeId::INTEGER &&
+	       arguments[2] == TypeId::INTEGER;
 }
 
-TypeId substring_get_return_type(std::vector<TypeId> &arguments) {
+TypeId substring_get_return_type(vector<TypeId> &arguments) {
 	return TypeId::VARCHAR;
 }
 

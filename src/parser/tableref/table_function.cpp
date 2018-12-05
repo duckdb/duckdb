@@ -1,4 +1,3 @@
-
 #include "parser/tableref/table_function.hpp"
 
 #include "common/serializer.hpp"

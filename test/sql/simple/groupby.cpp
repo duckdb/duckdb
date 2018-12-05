@@ -1,4 +1,3 @@
-
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
@@ -38,8 +37,7 @@ TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {42}));
 
 	// aggregations with group by
-	result = con.Query(
-	    "SELECT b, SUM(a), SUM(a+2), AVG(a) FROM test GROUP BY b ORDER BY b;");
+	result = con.Query("SELECT b, SUM(a), SUM(a+2), AVG(a) FROM test GROUP BY b ORDER BY b;");
 	REQUIRE(CHECK_COLUMN(result, 0, {21, 22}));
 	REQUIRE(CHECK_COLUMN(result, 1, {12, 24}));
 	REQUIRE(CHECK_COLUMN(result, 2, {14, 28}));
@@ -79,8 +77,7 @@ TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
 
 	// group by with filter and multiple values per groups
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER);"));
-	REQUIRE_NO_FAIL(
-	    con.Query("INSERT INTO integers VALUES (3, 4), (3, 4), (2, 4);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (3, 4), (3, 4), (2, 4);"));
 
 	// use GROUP BY column in math operator
 	result = con.Query("SELECT i, i + 10 FROM integers GROUP BY i ORDER BY i");
@@ -89,8 +86,7 @@ TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
 
 	// using non-group column and non-aggregate should translate to the FIRST()
 	// aggregate
-	result =
-	    con.Query("SELECT i, SUM(j), j FROM integers GROUP BY i ORDER BY i");
+	result = con.Query("SELECT i, SUM(j), j FROM integers GROUP BY i ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {4, 8}));
 	REQUIRE(CHECK_COLUMN(result, 2, {4, 4}));
@@ -115,11 +111,9 @@ TEST_CASE("Aggregate only COUNT STAR", "[aggregations]") {
 	DuckDBConnection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER);"));
-	REQUIRE_NO_FAIL(
-	    con.Query("INSERT INTO integers VALUES (3, 4), (3, 4), (2, 4);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (3, 4), (3, 4), (2, 4);"));
 
-	result =
-	    con.Query("SELECT i, COUNT(*) FROM integers GROUP BY i ORDER BY i");
+	result = con.Query("SELECT i, COUNT(*) FROM integers GROUP BY i ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
 }
@@ -134,9 +128,8 @@ TEST_CASE("Aggregating from empty table", "[aggregations]") {
 	result = con.Query("SELECT COUNT(*) FROM emptyaggr");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 
-	result = con.Query(
-	    "SELECT SUM(i), COUNT(i), COUNT(DISTINCT i), COUNT(*), AVG(i), "
-	    "COUNT(*)+1, COUNT(i)+1, MIN(i), MIN(i+1), MIN(i)+1 FROM emptyaggr");
+	result = con.Query("SELECT SUM(i), COUNT(i), COUNT(DISTINCT i), COUNT(*), AVG(i), "
+	                   "COUNT(*)+1, COUNT(i)+1, MIN(i), MIN(i+1), MIN(i)+1 FROM emptyaggr");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 	REQUIRE(CHECK_COLUMN(result, 1, {0}));
 	REQUIRE(CHECK_COLUMN(result, 2, {0}));
@@ -154,10 +147,8 @@ TEST_CASE("DISTINCT aggregations", "[aggregations]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 
-	REQUIRE_NO_FAIL(
-	    con.Query("CREATE TABLE distinctagg(i INTEGER, j INTEGER);"));
-	REQUIRE_NO_FAIL(
-	    con.Query("INSERT INTO distinctagg VALUES (1,1),(1,1),(2,2), (1,2)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE distinctagg(i INTEGER, j INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO distinctagg VALUES (1,1),(1,1),(2,2), (1,2)"));
 
 	result = con.Query("SELECT COUNT(i), COUNT(DISTINCT i), SUM(i), "
 	                   "SUM(DISTINCT i) FROM distinctagg");
@@ -167,9 +158,8 @@ TEST_CASE("DISTINCT aggregations", "[aggregations]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {5}));
 	REQUIRE(CHECK_COLUMN(result, 3, {3}));
 
-	result =
-	    con.Query("SELECT COUNT(i), COUNT(DISTINCT i), SUM(i), SUM(DISTINCT i) "
-	              "FROM distinctagg GROUP BY j ORDER BY j");
+	result = con.Query("SELECT COUNT(i), COUNT(DISTINCT i), SUM(i), SUM(DISTINCT i) "
+	                   "FROM distinctagg GROUP BY j ORDER BY j");
 
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
@@ -182,8 +172,7 @@ TEST_CASE("STDDEV_SAMP aggregations", "[aggregations]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 
-	REQUIRE_NO_FAIL(
-	    con.Query("create table stddev_test(val integer, grp integer)"));
+	REQUIRE_NO_FAIL(con.Query("create table stddev_test(val integer, grp integer)"));
 	REQUIRE_NO_FAIL(con.Query("insert into stddev_test values (42, 1), (43, "
 	                          "1), (42, 2), (1000, 2), (NULL, 1), (NULL, 3)"));
 
@@ -201,9 +190,8 @@ TEST_CASE("STDDEV_SAMP aggregations", "[aggregations]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {0.7, 677.4, Value()}));
 	REQUIRE(CHECK_COLUMN(result, 3, {42, 42, Value()}));
 
-	result = con.Query(
-	    "select grp, sum(val), round(stddev_samp(val), 1), min(val) from "
-	    "stddev_test where val is not null group by grp order by grp");
+	result = con.Query("select grp, sum(val), round(stddev_samp(val), 1), min(val) from "
+	                   "stddev_test where val is not null group by grp order by grp");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {85, 1042}));
 	REQUIRE(CHECK_COLUMN(result, 2, {0.7, 677.4}));

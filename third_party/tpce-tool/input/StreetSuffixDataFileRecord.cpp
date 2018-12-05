@@ -43,8 +43,7 @@
 
 using namespace TPCE;
 
-StreetSuffixDataFileRecord::StreetSuffixDataFileRecord(
-    const std::deque<std::string> &fields) {
+StreetSuffixDataFileRecord::StreetSuffixDataFileRecord(const std::deque<std::string> &fields) {
 	if (fieldCount != fields.size()) {
 		throw std::runtime_error("Incorrect field count.");
 	}

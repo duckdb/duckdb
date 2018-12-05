@@ -1,24 +1,22 @@
-//===----------------------------------------------------------------------===// 
-// 
-//                         DuckDB 
-// 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // common/profiler.hpp
-// 
-// 
-// 
+//
+//
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include <chrono>
-
 #include "common/helper.hpp"
+
+#include <chrono>
 
 namespace duckdb {
 
 //! The profiler can be used to measure elapsed time
 class Profiler {
-  public:
+public:
 	//! Starts the timer
 	void Start() {
 		finished = false;
@@ -35,12 +33,10 @@ class Profiler {
 	//! right now.
 	double Elapsed() const {
 		auto _end = finished ? end : Tick();
-		return std::chrono::duration_cast<std::chrono::duration<double>>(_end -
-		                                                                 start)
-		    .count();
+		return std::chrono::duration_cast<std::chrono::duration<double>>(_end - start).count();
 	}
 
-  private:
+private:
 	std::chrono::time_point<std::chrono::system_clock> Tick() const {
 		return std::chrono::system_clock::now();
 	}

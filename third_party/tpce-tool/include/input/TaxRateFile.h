@@ -42,24 +42,22 @@
 
 namespace TPCE {
 class CTaxRateFile {
-  private:
+private:
 	TaxRateCountryDataFile_t const *cdf;
 	TaxRateDivisionDataFile_t const *ddf;
 
 	struct RecordLocation {
 		int bucketIdx;
 		int recordIdx;
-		RecordLocation(int bIdx = -1, int rIdx = -1)
-		    : bucketIdx(bIdx), recordIdx(rIdx){};
+		RecordLocation(int bIdx = -1, int rIdx = -1) : bucketIdx(bIdx), recordIdx(rIdx){};
 	};
 
 	std::vector<RecordLocation> locations;
 
-  public:
+public:
 	typedef std::vector<int>::size_type size_type;
 
-	CTaxRateFile(const TaxRateCountryDataFile_t &countryDataFile,
-	             const TaxRateDivisionDataFile_t &divisionDataFile);
+	CTaxRateFile(const TaxRateCountryDataFile_t &countryDataFile, const TaxRateDivisionDataFile_t &divisionDataFile);
 
 	// Provide range-checked access to the records.
 	const ITaxRateFileRecord &operator[](unsigned int idx) const;

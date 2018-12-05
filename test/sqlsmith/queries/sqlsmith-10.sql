@@ -22,23 +22,23 @@ FROM (
         RIGHT JOIN main.nation AS ref_1 ON (ref_0.s_phone = ref_1.n_name)
         INNER JOIN main.customer AS ref_2 ON ((ref_0.s_name IS NOT NULL)
                 OR (0))
-        WHERE ((EXISTS (
-                    SELECT
-                        ref_2.c_acctbal AS c0, ref_3.c_address AS c1, ref_0.s_phone AS c2
-                    FROM
-                        main.customer AS ref_3
-                    WHERE
-                        ref_1.n_nationkey IS NULL
-                    LIMIT 115))
-            AND ((
-                    SELECT
-                        ps_availqty
-                    FROM
-                        main.partsupp
-                    LIMIT 1 offset 5)
-                IS NOT NULL))
-        OR (ref_1.n_regionkey IS NOT NULL)
-    LIMIT 67) AS subq_0
+    WHERE ((EXISTS (
+                SELECT
+                    ref_2.c_acctbal AS c0, ref_3.c_address AS c1, ref_0.s_phone AS c2
+                FROM
+                    main.customer AS ref_3
+                WHERE
+                    ref_1.n_nationkey IS NULL
+                LIMIT 115))
+        AND ((
+                SELECT
+                    ps_availqty
+                FROM
+                    main.partsupp
+                LIMIT 1 offset 5)
+            IS NOT NULL))
+    OR (ref_1.n_regionkey IS NOT NULL)
+LIMIT 67) AS subq_0
 WHERE
     subq_0.c7 IS NOT NULL) AS subq_1
 WHERE ((subq_1.c0 IS NULL)

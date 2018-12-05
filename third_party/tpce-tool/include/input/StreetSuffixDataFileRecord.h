@@ -53,14 +53,14 @@ namespace TPCE {
 //
 
 class StreetSuffixDataFileRecord {
-  private:
+private:
 	static const int maxSuffixLen = 80;
 	char suffixCStr[maxSuffixLen + 1];
 	std::string suffix;
 
 	static const unsigned int fieldCount = 1;
 
-  public:
+public:
 	explicit StreetSuffixDataFileRecord(const std::deque<std::string> &fields);
 
 	//
