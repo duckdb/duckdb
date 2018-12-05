@@ -2,6 +2,7 @@
 
 #include "catalog/catalog.hpp"
 #include "common/exception.hpp"
+#include "common/serializer.hpp"
 #include "parser/constraints/list.hpp"
 #include "storage/storage_manager.hpp"
 
@@ -152,4 +153,39 @@ vector<TypeId> TableCatalogEntry::GetTypes(const vector<column_t> &column_ids) {
 		}
 	}
 	return result;
+}
+
+void TableCatalogEntry::Serialize(Serializer &serializer) {
+	serializer.WriteString(schema->name);
+	serializer.WriteString(name);
+	serializer.Write<uint32_t>(columns.size());
+	for (auto &column : columns) {
+		serializer.WriteString(column.name);
+		serializer.Write<int>((int)column.type);
+	}
+	serializer.Write<uint32_t>(constraints.size());
+	for (auto &constraint : constraints) {
+		constraint->Serialize(serializer);
+	}
+}
+
+unique_ptr<CreateTableInformation> TableCatalogEntry::Deserialize(Deserializer &source) {
+	auto info = make_unique<CreateTableInformation>();
+
+	info->schema = source.Read<string>();
+	info->table = source.Read<string>();
+	auto column_count = source.Read<uint32_t>();
+
+	for (size_t i = 0; i < column_count; i++) {
+		auto column_name = source.Read<string>();
+		auto column_type = (TypeId)source.Read<int>();
+		info->columns.push_back(ColumnDefinition(column_name, column_type, false));
+	}
+	auto constraint_count = source.Read<uint32_t>();
+
+	for (size_t i = 0; i < constraint_count; i++) {
+		auto constraint = Constraint::Deserialize(source);
+		info->constraints.push_back(move(constraint));
+	}
+	return info;
 }

@@ -29,6 +29,15 @@ TEST_CASE("Test simple storage", "[storage]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
 		REQUIRE(CHECK_COLUMN(result, 1, {22, 21, 22}));
 	}
+	// reload the database from disk, we do this again because checkpointing at startup causes this to follow a
+	// different code path
+	{
+		DuckDB db(storage_database);
+		DuckDBConnection con(db);
+		result = con.Query("SELECT * FROM test ORDER BY a");
+		REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
+		REQUIRE(CHECK_COLUMN(result, 1, {22, 21, 22}));
+	}
 	RemoveDirectory(storage_database);
 }
 
@@ -49,6 +58,15 @@ TEST_CASE("Test storing NULLs and strings", "[storage]") {
 		                          "(13, 'abcdefgh'), (12, NULL)"));
 	}
 	// reload the database from disk
+	{
+		DuckDB db(storage_database);
+		DuckDBConnection con(db);
+		result = con.Query("SELECT a, b FROM test ORDER BY a");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 12, 13}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"hello", Value(), "abcdefgh"}));
+	}
+	// reload the database from disk, we do this again because checkpointing at startup causes this to follow a
+	// different code path
 	{
 		DuckDB db(storage_database);
 		DuckDBConnection con(db);
@@ -88,6 +106,14 @@ TEST_CASE("Test updates with storage", "[storage]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {11, 13}));
 		REQUIRE(CHECK_COLUMN(result, 1, {1022, 22}));
 	}
+	// reload the database from disk again
+	{
+		DuckDB db(storage_database);
+		DuckDBConnection con(db);
+		result = con.Query("SELECT a, b FROM test ORDER BY a");
+		REQUIRE(CHECK_COLUMN(result, 0, {11, 13}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1022, 22}));
+	}
 	RemoveDirectory(storage_database);
 }
 
@@ -107,6 +133,28 @@ TEST_CASE("Test storing TPC-H", "[storage][.]") {
 		tpch::dbgen(sf, db);
 	}
 	// reload the database from disk
+	{
+		DuckDB db(storage_database);
+		DuckDBConnection con(db);
+		// check if all the counts are correct
+		result = con.Query("SELECT COUNT(*) FROM orders");
+		REQUIRE(CHECK_COLUMN(result, 0, {150000}));
+		result = con.Query("SELECT COUNT(*) FROM lineitem");
+		REQUIRE(CHECK_COLUMN(result, 0, {600572}));
+		result = con.Query("SELECT COUNT(*) FROM part");
+		REQUIRE(CHECK_COLUMN(result, 0, {20000}));
+		result = con.Query("SELECT COUNT(*) FROM partsupp");
+		REQUIRE(CHECK_COLUMN(result, 0, {80000}));
+		result = con.Query("SELECT COUNT(*) FROM supplier");
+		REQUIRE(CHECK_COLUMN(result, 0, {1000}));
+		result = con.Query("SELECT COUNT(*) FROM customer");
+		REQUIRE(CHECK_COLUMN(result, 0, {15000}));
+		result = con.Query("SELECT COUNT(*) FROM nation");
+		REQUIRE(CHECK_COLUMN(result, 0, {25}));
+		result = con.Query("SELECT COUNT(*) FROM region");
+		REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	}
+	// reload the database from disk again
 	{
 		DuckDB db(storage_database);
 		DuckDBConnection con(db);

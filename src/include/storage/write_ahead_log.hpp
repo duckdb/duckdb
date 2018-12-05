@@ -23,8 +23,6 @@ class TableCatalogEntry;
 class Transaction;
 class TransactionManager;
 
-#define WAL_FILE "duckdb.wal"
-
 //! The type of WAL entry
 typedef uint8_t wal_type_t;
 

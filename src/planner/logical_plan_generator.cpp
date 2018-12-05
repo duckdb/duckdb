@@ -148,7 +148,7 @@ unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(SelectStatement &statement)
 }
 
 void LogicalPlanGenerator::VisitQueryNode(QueryNode &statement) {
-    assert(root);
+	assert(root);
 	if (statement.select_distinct) {
 		auto node = GetProjection(root.get());
 		if (!IsProjection(node->type)) {
@@ -243,7 +243,7 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 		root = move(projection);
 	}
 
-    VisitQueryNode(statement);
+	VisitQueryNode(statement);
 }
 
 void LogicalPlanGenerator::Visit(SetOperationNode &statement) {
@@ -330,7 +330,7 @@ void LogicalPlanGenerator::Visit(SetOperationNode &statement) {
 		throw NotImplementedException("Set Operation type");
 	}
 
-    VisitQueryNode(statement);
+	VisitQueryNode(statement);
 }
 
 static void cast_children_to_equal_types(Expression &expr, size_t start_idx = 0) {

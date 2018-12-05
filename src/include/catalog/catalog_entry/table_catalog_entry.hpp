@@ -57,6 +57,11 @@ public:
 	//! Returns a list of types of the specified columns of the table
 	vector<TypeId> GetTypes(const vector<column_t> &column_ids);
 
+	//! Serialize the meta information of the TableCatalogEntry a serializer
+	virtual void Serialize(Serializer &serializer);
+	//! Deserializes to a CreateTableInfo
+	static unique_ptr<CreateTableInformation> Deserialize(Deserializer &source);
+
 private:
 	void Initialize(CreateTableInformation *info);
 };

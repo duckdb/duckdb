@@ -81,8 +81,8 @@ template <class T> static size_t binary_search_lt(uint8_t *data, T key, size_t c
 		while (pos > 0 && array[pos].value == key) {
 			pos--;
 		}
-		if (pos !=0)
-		pos++;
+		if (pos != 0)
+			pos++;
 		return pos;
 	} else {
 		return pos;
