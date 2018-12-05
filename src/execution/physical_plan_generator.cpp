@@ -149,7 +149,12 @@ static unique_ptr<PhysicalOperator> CreateIndexScan(LogicalFilter &filter,
 		for (size_t i = 0; i < filter.expressions.size(); i++) {
 			auto expr = filter.expressions[i].get();
 			// equality predicate
-			if (expr->type == ExpressionType::COMPARE_EQUAL) {
+			if (expr->type == ExpressionType::COMPARE_EQUAL
+			|| expr->type == ExpressionType::COMPARE_GREATERTHANOREQUALTO
+															   || expr->type == ExpressionType::COMPARE_LESSTHANOREQUALTO
+																  || expr->type == ExpressionType::COMPARE_LESSTHAN
+																	 || expr->type == ExpressionType::COMPARE_GREATERTHAN
+																	 ) {
 				auto comparison = (ComparisonExpression *)expr;
 				int child = -1;
 				// check if any of the two children is an index
@@ -171,6 +176,7 @@ static unique_ptr<PhysicalOperator> CreateIndexScan(LogicalFilter &filter,
 					auto index_scan = make_unique<PhysicalIndexScan>(
 					    *scan.table, *scan.table->storage, *order_index,
 					    scan.column_ids, move(comparison->children[1 - child]));
+					index_scan->expression_type = expr->type;
 					// remove the original expression from the filter
 					filter.expressions.erase(filter.expressions.begin() + i);
 					return move(index_scan);

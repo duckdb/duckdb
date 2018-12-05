@@ -24,6 +24,7 @@ namespace duckdb {
 struct OrderIndexScanState : public IndexScanState {
 	Value value;
 	size_t current_index;
+	size_t final_index;
 
 	OrderIndexScanState(std::vector<column_t> column_ids,
 	                    Expression &expression)
@@ -51,7 +52,7 @@ class OrderIndex : public Index {
 	//! to fetch from the base table
 	std::unique_ptr<IndexScanState>
 	InitializeScan(Transaction &transaction, std::vector<column_t> column_ids,
-	               Expression *expression) override;
+	               Expression *expression, ExpressionType expressionType) override;
 	//! Perform a lookup on the index
 	void Scan(Transaction &transaction, IndexScanState *ss,
 	          DataChunk &result) override;
@@ -85,11 +86,17 @@ class OrderIndex : public Index {
   private:
 	DataChunk expression_result;
 
-	//! Get the start position in the index for a constant value (point query)
-	size_t Search(Value value);
+	//! Get the start/end position in the index for a Less Than Equal Operator
+	size_t SearchLTE(Value value);
+	//! Get the start/end position in the index for a Greater Than Equal Operator
+	size_t SearchGTE(Value value);
+	//! Get the start/end position in the index for a Less Than Operator
+	size_t SearchLT(Value value);
+	//! Get the start/end position in the index for a Greater Than Operator
+	size_t SearchGT(Value value);
 	//! Scan the index starting from the position, updating the position.
 	//! Returns the amount of tuples scanned.
-	void Scan(size_t &position, Value value, Vector &result_identifiers);
+	void Scan(size_t &position_from,size_t &position_to, Value value, Vector &result_identifiers);
 };
 
 } // namespace duckdb

@@ -111,3 +111,32 @@ TEST_CASE("Drop Index", "[drop]") {
 	result = con.Query("SELECT * FROM integers WHERE i=2");
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
 }
+
+TEST_CASE("Open Range Queries", "[openrange]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+
+	DuckDBConnection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	for (size_t i = 0; i < 10; i++) {
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" +
+								  to_string(i) + ")"));
+	}
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
+    result = con.Query("SELECT sum(i) FROM integers WHERE i>9");
+    REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+    result = con.Query("SELECT sum(i) FROM integers WHERE i>=10");
+    REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	result = con.Query("SELECT sum(i) FROM integers WHERE i>7");
+	REQUIRE(CHECK_COLUMN(result, 0, {17}));
+	result = con.Query("SELECT sum(i) FROM integers WHERE i>=7");
+	REQUIRE(CHECK_COLUMN(result, 0, {24}));
+	result = con.Query("SELECT sum(i) FROM integers WHERE i<3");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	result = con.Query("SELECT sum(i) FROM integers WHERE i<=3");
+	REQUIRE(CHECK_COLUMN(result, 0, {6}));
+    result = con.Query("SELECT sum(i) FROM integers WHERE i<0");
+    REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	result = con.Query("SELECT sum(i) FROM integers WHERE i=0");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+}

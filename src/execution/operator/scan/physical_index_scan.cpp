@@ -28,7 +28,7 @@ void PhysicalIndexScan::_GetChunk(ClientContext &context, DataChunk &chunk,
 	if (!state->scan_state) {
 		// initialize the scan state of the index
 		state->scan_state = index.InitializeScan(context.ActiveTransaction(),
-		                                         column_ids, expression.get());
+		                                         column_ids, expression.get(),expression_type);
 	}
 
 	//! Continue the scan of the index

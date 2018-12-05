@@ -45,7 +45,7 @@ class Index {
 	//! to fetch from the base table
 	virtual std::unique_ptr<IndexScanState>
 	InitializeScan(Transaction &transaction, std::vector<column_t> column_ids,
-	               Expression *expression) = 0;
+	               Expression *expression,ExpressionType expressionType) = 0;
 	//! Perform a lookup on the index
 	virtual void Scan(Transaction &transaction, IndexScanState *ss,
 	                  DataChunk &result) = 0;

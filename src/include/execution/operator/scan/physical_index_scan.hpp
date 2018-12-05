@@ -36,9 +36,13 @@ class PhysicalIndexScan : public PhysicalOperator {
 	Index &index;
 	//! The column ids to project
 	std::vector<column_t> column_ids;
-	//! The expression that must be fulfilled (i.e. the value looked up in the
-	//! index)
-	std::unique_ptr<Expression> expression;
+    //! The expression that must be fulfilled (i.e. the value looked up in the
+    //! index)
+    std::unique_ptr<Expression> expression;
+	//! The expression type (e.g., >, <, >=, <=, =)
+	ExpressionType expression_type;
+
+
 
 	std::vector<std::string> GetNames() override;
 	std::vector<TypeId> GetTypes() override;

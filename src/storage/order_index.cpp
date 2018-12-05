@@ -87,54 +87,165 @@ static size_t binary_search_lt(uint8_t *data, T key, size_t count) {
 	bool found = false;
 	size_t pos = binary_search(array, key, 0, count, found);
 	if (found) {
-		while (pos > 0 && array[pos - 1].value == key) {
+		while (pos > 0 && array[pos].value == key) {
 			pos--;
 		}
 		return pos;
 	} else {
-		return count;
+		return pos;
 	}
 }
 
-size_t OrderIndex::Search(Value value) {
+template <class T>
+static size_t binary_search_gt(uint8_t *data, T key, size_t count) {
+	auto array = (SortChunk<T> *)data;
+	bool found = false;
+	size_t pos = binary_search(array, key, 0, count, found);
+		while (pos > 0 && array[pos].value == key) {
+			pos++;
+		}
+		return pos;
+}
+
+template <class T>
+int64_t binary_search_lte(uint8_t *data, T key, size_t count) {
+	auto array = (SortChunk<T> *)data;
+	bool found = false;
+	int pos = binary_search(array, key, 0, count, found);
+	while (array[pos].value<=key)
+		pos++;
+	pos--;
+	return pos;
+}
+
+template <class T>
+int64_t binary_search_gte(uint8_t *data, T key, size_t count) {
+	auto array = (SortChunk<T> *)data;
+	bool found = false;
+	int pos = binary_search(array, key, 0, count, found);
+	if(found)
+	{
+		while(pos >= 0 && array[pos].value == key)
+		    pos--;
+		pos++;
+	}
+	return pos;
+}
+
+size_t OrderIndex::SearchLTE(Value value) {
 	assert(value.type == types[0]);
 
-	// perform the templated search to find the start location
+	// perform the templated search to find the start location"SELECT sum(a) FROM test where a = 4 ;"
 	switch (types[0]) {
 	case TypeId::TINYINT:
-		return binary_search_lt<int8_t>(data.get(), value.value_.tinyint,
+		return binary_search_lte<int8_t>(data.get(), value.value_.tinyint,
 		                                count);
 	case TypeId::SMALLINT:
-		return binary_search_lt<int16_t>(data.get(), value.value_.smallint,
+		return binary_search_lte<int16_t>(data.get(), value.value_.smallint,
 		                                 count);
 	case TypeId::DATE:
 	case TypeId::INTEGER:
-		return binary_search_lt<int32_t>(data.get(), value.value_.integer,
+		return binary_search_lte<int32_t>(data.get(), value.value_.integer,
 		                                 count);
 	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
-		return binary_search_lt<int64_t>(data.get(), value.value_.bigint,
+		return binary_search_lte<int64_t>(data.get(), value.value_.bigint,
 		                                 count);
 	case TypeId::DECIMAL:
-		return binary_search_lt<double>(data.get(), value.value_.decimal,
+		return binary_search_lte<double>(data.get(), value.value_.decimal,
 		                                count);
 	default:
 		throw NotImplementedException("Unimplemented type for index search");
 	}
 }
 
+size_t OrderIndex::SearchGTE(Value value) {
+	assert(value.type == types[0]);
+
+	// perform the templated search to find the start location"SELECT sum(a) FROM test where a = 4 ;"
+	switch (types[0]) {
+		case TypeId::TINYINT:
+			return binary_search_gte<int8_t>(data.get(), value.value_.tinyint,
+											 count);
+		case TypeId::SMALLINT:
+			return binary_search_gte<int16_t>(data.get(), value.value_.smallint,
+											  count);
+		case TypeId::DATE:
+		case TypeId::INTEGER:
+			return binary_search_gte<int32_t>(data.get(), value.value_.integer,
+											  count);
+		case TypeId::TIMESTAMP:
+		case TypeId::BIGINT:
+			return binary_search_gte<int64_t>(data.get(), value.value_.bigint,
+											  count);
+		case TypeId::DECIMAL:
+			return binary_search_gte<double>(data.get(), value.value_.decimal,
+											 count);
+		default:
+			throw NotImplementedException("Unimplemented type for index search");
+	}
+}
+
+size_t OrderIndex::SearchLT(Value value) {
+	assert(value.type == types[0]);
+
+	// perform the templated search to find the start location"SELECT sum(a) FROM test where a = 4 ;"
+	switch (types[0]) {
+		case TypeId::TINYINT:
+			return binary_search_lt<int8_t>(data.get(), value.value_.tinyint,
+											 count);
+		case TypeId::SMALLINT:
+			return binary_search_lt<int16_t>(data.get(), value.value_.smallint,
+											  count);
+		case TypeId::DATE:
+		case TypeId::INTEGER:
+			return binary_search_lt<int32_t>(data.get(), value.value_.integer,
+											  count);
+		case TypeId::TIMESTAMP:
+		case TypeId::BIGINT:
+			return binary_search_lt<int64_t>(data.get(), value.value_.bigint,
+											  count);
+		case TypeId::DECIMAL:
+			return binary_search_lt<double>(data.get(), value.value_.decimal,
+											 count);
+		default:
+			throw NotImplementedException("Unimplemented type for index search");
+	}
+}
+
+size_t OrderIndex::SearchGT(Value value) {
+	assert(value.type == types[0]);
+
+	// perform the templated search to find the start location"SELECT sum(a) FROM test where a = 4 ;"
+	switch (types[0]) {
+		case TypeId::TINYINT:
+			return binary_search_gt<int8_t>(data.get(), value.value_.tinyint,
+											 count);
+		case TypeId::SMALLINT:
+			return binary_search_gt<int16_t>(data.get(), value.value_.smallint,
+											  count);
+		case TypeId::DATE:
+		case TypeId::INTEGER:
+			return binary_search_gt<int32_t>(data.get(), value.value_.integer,
+											  count);
+		case TypeId::TIMESTAMP:
+		case TypeId::BIGINT:
+			return binary_search_gt<int64_t>(data.get(), value.value_.bigint,
+											  count);
+		case TypeId::DECIMAL:
+			return binary_search_gt<double>(data.get(), value.value_.decimal,
+											 count);
+		default:
+			throw NotImplementedException("Unimplemented type for index search");
+	}
+}
+
 template <class T>
-static size_t templated_scan(size_t &position, uint8_t *data, T key,
-                             size_t count, uint64_t *result_ids) {
+static size_t templated_scan(size_t &from,size_t &to, uint8_t *data, uint64_t *result_ids) {
 	auto array = (SortChunk<T> *)data;
 	size_t result_count = 0;
-	for (; position < count; position++) {
-		if (array[position].value != key) {
-			// finished the scan
-			position = count;
-			break;
-		}
-		result_ids[result_count++] = array[position].row_id;
+	for (; from <= to; from++) {
+		result_ids[result_count++] = array[from].row_id;
 		if (result_count == STANDARD_VECTOR_SIZE) {
 			break;
 		}
@@ -142,36 +253,33 @@ static size_t templated_scan(size_t &position, uint8_t *data, T key,
 	return result_count;
 }
 
-void OrderIndex::Scan(size_t &position, Value value,
+void OrderIndex::Scan(size_t &position_from,size_t &position_to, Value value,
                       Vector &result_identifiers) {
-	if (position == count) {
-		return;
-	}
 	assert(result_identifiers.type == TypeId::POINTER);
 	auto row_ids = (uint64_t *)result_identifiers.data;
 	// perform the templated scan to find the tuples to extract
 	switch (types[0]) {
 	case TypeId::TINYINT:
 		result_identifiers.count = templated_scan<int8_t>(
-		    position, data.get(), value.value_.tinyint, count, row_ids);
+		    position_from,position_to, data.get(), row_ids);
 		break;
 	case TypeId::SMALLINT:
 		result_identifiers.count = templated_scan<int16_t>(
-		    position, data.get(), value.value_.smallint, count, row_ids);
+		    position_from, position_to, data.get(), row_ids);
 		break;
 	case TypeId::DATE:
 	case TypeId::INTEGER:
 		result_identifiers.count = templated_scan<int32_t>(
-		    position, data.get(), value.value_.integer, count, row_ids);
+				position_from, position_to, data.get(), row_ids);
 		break;
 	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		result_identifiers.count = templated_scan<int64_t>(
-		    position, data.get(), value.value_.bigint, count, row_ids);
+				position_from, position_to, data.get(), row_ids);
 		break;
 	case TypeId::DECIMAL:
 		result_identifiers.count = templated_scan<double>(
-		    position, data.get(), value.value_.decimal, count, row_ids);
+				position_from, position_to, data.get(), row_ids);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for index scan");
@@ -181,12 +289,31 @@ void OrderIndex::Scan(size_t &position, Value value,
 unique_ptr<IndexScanState>
 OrderIndex::InitializeScan(Transaction &transaction,
                            vector<column_t> column_ids,
-                           Expression *expression) {
+                           Expression *expression, ExpressionType expression_type) {
 	auto result = make_unique<OrderIndexScanState>(column_ids, *expression);
 	assert(expression->type == ExpressionType::VALUE_CONSTANT);
 	// search inside the index for the constant value
 	result->value = ((ConstantExpression *)expression)->value.CastAs(types[0]);
-	result->current_index = Search(result->value);
+	if (expression_type == ExpressionType::COMPARE_EQUAL){
+		result->current_index = SearchGTE(result->value);
+		result->final_index = SearchLTE(result->value);
+	}
+	else if (expression_type == ExpressionType::COMPARE_GREATERTHAN){
+		result->current_index = SearchGT(result->value);
+		result->final_index = count-1;
+	}
+	else if (expression_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO){
+		result->current_index = SearchGTE(result->value);
+		result->final_index = count-1;
+	}
+	else if (expression_type == ExpressionType::COMPARE_LESSTHAN){
+		result->current_index = 0;
+		result->final_index = SearchLT(result->value);
+	}
+	else if (expression_type == ExpressionType::COMPARE_LESSTHANOREQUALTO){
+		result->current_index = 0;
+		result->final_index = SearchLTE(result->value);
+	}
 	return move(result);
 }
 
@@ -196,7 +323,7 @@ void OrderIndex::Scan(Transaction &transaction, IndexScanState *ss,
 	// scan the index
 	StaticVector<uint64_t> result_identifiers;
 	do {
-		Scan(state->current_index, state->value, result_identifiers);
+		Scan(state->current_index,state->final_index, state->value, result_identifiers);
 		if (result_identifiers.count == 0) {
 			return;
 		}
