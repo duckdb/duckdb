@@ -4,13 +4,12 @@
 #include "catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "common/exception.hpp"
 #include "common/file_system.hpp"
+#include "common/fstream_util.hpp"
 #include "common/serializer.hpp"
 #include "function/function.hpp"
 #include "main/client_context.hpp"
 #include "main/database.hpp"
 #include "transaction/transaction_manager.hpp"
-
-#include <fstream>
 
 using namespace duckdb;
 using namespace std;
@@ -70,6 +69,7 @@ void StorageManager::LoadDatabase() {
 
 int StorageManager::LoadFromStorage() {
 	ClientContext context(database);
+	FstreamUtil file_util;
 
 	auto meta_info_path = JoinPath(path, DATABASE_INFO_FILE);
 	// read the meta information, if there is any
@@ -80,11 +80,7 @@ int StorageManager::LoadFromStorage() {
 
 	context.transaction.BeginTransaction();
 	// first read the meta information
-	ifstream meta_info;
-	meta_info.open(meta_info_path);
-	if (!meta_info.good()) {
-		throw IOException("Could not open meta file for writing!");
-	}
+	auto meta_info = file_util.OpenFile(meta_info_path);
 	int64_t storage_version;
 	int iteration;
 
@@ -96,13 +92,9 @@ int StorageManager::LoadFromStorage() {
 	auto schema_path = JoinPath(storage_path_base, SCHEMA_FILE);
 
 	// read the list of schemas
-	// FIXME: turn into function Open()
-	ifstream schema_file;
-	schema_file.open(schema_path);
-	if (!schema_file.good()) {
-		throw IOException("Could not open schema for writing!");
-	}
-	// END OF FIXME
+
+	auto schema_file = file_util.OpenFile(schema_path);
+
 	string schema_name;
 	while (getline(schema_file, schema_name)) {
 		// create the schema in the catalog
@@ -117,11 +109,7 @@ int StorageManager::LoadFromStorage() {
 
 		// read the list of schemas
 		// FIXME: turn into function Open()
-		ifstream table_list_file;
-		table_list_file.open(table_list_path);
-		if (!table_list_file.good()) {
-			throw IOException("Could not open schema for writing!");
-		}
+		auto table_list_file = file_util.OpenFile(table_list_path);
 		// END OF FIXME
 		string table_name;
 		while (getline(table_list_file, table_name)) {
@@ -130,21 +118,14 @@ int StorageManager::LoadFromStorage() {
 			auto table_meta_name = JoinPath(table_directory_path, TABLE_FILE);
 
 			// FIXME: turn into function Open()
-			ifstream table_file;
-			table_file.open(table_meta_name, ifstream::binary);
-			if (!table_file.good()) {
-				throw IOException("Could not open table file for writing!");
-			}
+			auto table_file = file_util.OpenFile(table_meta_name);
 			// END OF FIXME
 			// FIXME: turn into function ReadBinary()
-			table_file.seekg(0, ios::end);
-			size_t table_file_size = table_file.tellg();
-			auto result = unique_ptr<char[]>(new char[table_file_size]);
-			table_file.seekg(0, ios::beg);
-			table_file.read(result.get(), table_file_size);
+			auto result = file_util.ReadBinary(table_file);
 			// END OF FIXME
 
 			// deserialize the CreateTableInformation
+			auto table_file_size = file_util.GetFileSize(table_file);
 			Deserializer source((uint8_t *)result.get(), table_file_size);
 			auto info = TableCatalogEntry::Deserialize(source);
 			// create the table inside the catalog
@@ -164,21 +145,14 @@ int StorageManager::LoadFromStorage() {
 				}
 
 				// FIXME: turn into function Open()
-				ifstream chunk_file;
-				chunk_file.open(chunk_name, ifstream::binary);
-				if (!chunk_file.good()) {
-					throw IOException("Could not open table file for writing!");
-				}
+				auto chunk_file = file_util.OpenFile(chunk_name);
 				// END OF FIXME
 				// FIXME: turn into function ReadBinary()
-				chunk_file.seekg(0, ios::end);
-				auto chunk_file_size = chunk_file.tellg();
-				auto result = unique_ptr<char[]>(new char[chunk_file_size]);
-				chunk_file.seekg(0, ios::beg);
-				chunk_file.read(result.get(), chunk_file_size);
+				auto result = file_util.ReadBinary(chunk_file);
 				// END OF FIXME
 				// deserialize the chunk
 				DataChunk insert_chunk;
+				auto chunk_file_size = file_util.GetFileSize(chunk_file);
 				Deserializer source((uint8_t *)result.get(), chunk_file_size);
 				insert_chunk.Deserialize(source);
 				// insert the chunk into the table

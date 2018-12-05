@@ -5,6 +5,7 @@
 
 #include <cstdio>
 #include <dirent.h>
+#include <fstream>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -115,5 +116,4 @@ void MoveFile(const string &source, const string &target) {
 		throw IOException("Could not rename file!");
 	}
 }
-
 } // namespace duckdb
