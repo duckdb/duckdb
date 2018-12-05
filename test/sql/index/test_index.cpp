@@ -135,6 +135,12 @@ TEST_CASE("Open Range Queries", "[openrange]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 	result = con.Query("SELECT sum(i) FROM integers WHERE i=0");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	result = con.Query("SELECT sum(i) FROM integers WHERE i > 7 and  i>3");
+	REQUIRE(CHECK_COLUMN(result, 0, {17}));
+	result = con.Query("SELECT sum(i) FROM integers WHERE  i >= 7 and i > 7");
+	REQUIRE(CHECK_COLUMN(result, 0, {24}));
+	result = con.Query("SELECT sum(i) FROM integers WHERE i<=3 and i < 3");
+	REQUIRE(CHECK_COLUMN(result, 0, {6}));
 }
 
 TEST_CASE("Closed Range Queries", "[closerange]") {

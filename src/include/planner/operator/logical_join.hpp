@@ -38,9 +38,6 @@ public:
 	JoinType type;
 	static JoinSide GetJoinSide(LogicalOperator *op, unique_ptr<Expression> &expr);
 
-	static ExpressionType NegateComparisionExpression(ExpressionType type);
-	static ExpressionType FlipComparisionExpression(ExpressionType type);
-
 	string ParamsToString() const override;
 
 protected:

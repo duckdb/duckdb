@@ -167,7 +167,7 @@ void ExtractCorrelatedExpressions(LogicalOperator *op, SubqueryExpression *subqu
 		condition.comparison = comparison_type;
 		if (uncorrelated_index == 0) {
 			// flip the comparison
-			condition.comparison = LogicalJoin::FlipComparisionExpression(condition.comparison);
+			condition.comparison = ComparisonExpression::FlipComparisionExpression(condition.comparison);
 		}
 
 		// add the join condition

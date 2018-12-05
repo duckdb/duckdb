@@ -18,9 +18,10 @@ namespace duckdb {
 class PhysicalIndexScan : public PhysicalOperator {
 public:
 	PhysicalIndexScan(LogicalOperator &op, TableCatalogEntry &tableref, DataTable &table, Index &index,
-	                  vector<column_t> column_ids, unique_ptr<Expression> expression)
+	                  vector<column_t> column_ids, unique_ptr<Expression> low_expression,
+	                  unique_ptr<Expression> high_expression)
 	    : PhysicalOperator(PhysicalOperatorType::INDEX_SCAN, op.types), tableref(tableref), table(table), index(index),
-	      column_ids(column_ids), expression(move(expression)) {
+	      column_ids(column_ids), low_expression(move(low_expression)), high_expression(move(high_expression)) {
 	}
 
 	//! The table to scan
@@ -33,9 +34,12 @@ public:
 	vector<column_t> column_ids;
 	//! The expression that must be fulfilled (i.e. the value looked up in the
 	//! index)
-	unique_ptr<Expression> expression;
+	unique_ptr<Expression> low_expression;
+	unique_ptr<Expression> high_expression;
+
 	//! The expression type (e.g., >, <, >=, <=, =)
-	ExpressionType expression_type;
+	ExpressionType low_expression_type;
+	ExpressionType high_expression_type;
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 

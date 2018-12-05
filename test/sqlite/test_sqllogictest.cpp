@@ -23,9 +23,8 @@
 **
 ** This main driver for the sqllogictest program.
 */
-#include "sqllogictest.hpp"
-
 #include "catch.hpp"
+#include "sqllogictest.hpp"
 
 #include <ctype.h>
 #include <stdio.h>
