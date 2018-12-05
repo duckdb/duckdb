@@ -81,6 +81,8 @@ template <class T> static size_t binary_search_lt(uint8_t *data, T key, size_t c
 		while (pos > 0 && array[pos].value == key) {
 			pos--;
 		}
+		if (pos !=0)
+		pos++;
 		return pos;
 	} else {
 		return pos;
@@ -103,7 +105,6 @@ template <class T> int64_t binary_search_lte(uint8_t *data, T key, size_t count)
 	int pos = binary_search(array, key, 0, count, found);
 	while (array[pos].value <= key)
 		pos++;
-	pos--;
 	return pos;
 }
 
@@ -210,7 +211,7 @@ size_t OrderIndex::SearchGT(Value value) {
 template <class T> static size_t templated_scan(size_t &from, size_t &to, uint8_t *data, uint64_t *result_ids) {
 	auto array = (SortChunk<T> *)data;
 	size_t result_count = 0;
-	for (; from <= to; from++) {
+	for (; from < to; from++) {
 		result_ids[result_count++] = array[from].row_id;
 		if (result_count == STANDARD_VECTOR_SIZE) {
 			break;
@@ -257,10 +258,10 @@ unique_ptr<IndexScanState> OrderIndex::InitializeScan(Transaction &transaction, 
 		result->final_index = SearchLTE(result->value);
 	} else if (expression_type == ExpressionType::COMPARE_GREATERTHAN) {
 		result->current_index = SearchGT(result->value);
-		result->final_index = count - 1;
+		result->final_index = count;
 	} else if (expression_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
 		result->current_index = SearchGTE(result->value);
-		result->final_index = count - 1;
+		result->final_index = count;
 	} else if (expression_type == ExpressionType::COMPARE_LESSTHAN) {
 		result->current_index = 0;
 		result->final_index = SearchLT(result->value);
