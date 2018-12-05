@@ -1,7 +1,6 @@
-#include "tpce.hpp"
-
 #include "catch.hpp"
 #include "test_helpers.hpp"
+#include "tpce.hpp"
 
 #include <chrono>
 #include <iostream>

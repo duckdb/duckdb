@@ -31,5 +31,7 @@ public:
 
 	//! Deserializes a blob back into an OperatorExpression
 	static unique_ptr<Expression> Deserialize(ExpressionDeserializeInfo *info, Deserializer &source);
+	static ExpressionType NegateComparisionExpression(ExpressionType type);
+	static ExpressionType FlipComparisionExpression(ExpressionType type);
 };
 } // namespace duckdb

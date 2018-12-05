@@ -3,6 +3,7 @@
 #include "common/operator/comparison_operators.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
+#include "parser/expression/comparison_expression.hpp"
 
 using namespace duckdb;
 using namespace operators;
@@ -169,7 +170,7 @@ static size_t MergeJoin(MergeInfo &l, MergeInfo &r, ExpressionType comparison_ty
 	} else if (comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
 	           comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
 		// simply flip the comparison type
-		return MergeJoin(r, l, LogicalJoin::FlipComparisionExpression(comparison_type));
+		return MergeJoin(r, l, ComparisonExpression::FlipComparisionExpression(comparison_type));
 	} else {
 		throw Exception("Unimplemented comparison type for merge join!");
 	}

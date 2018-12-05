@@ -122,7 +122,6 @@ static unique_ptr<PhysicalOperator> CreateIndexScan(LogicalFilter &filter, Logic
 		// no indexes on the table, can't rewrite
 		return nullptr;
 	}
-
 	// check all the indexes
 	for (size_t j = 0; j < storage.indexes.size(); j++) {
 		auto &index = storage.indexes[j];
@@ -138,48 +137,86 @@ static unique_ptr<PhysicalOperator> CreateIndexScan(LogicalFilter &filter, Logic
 			    expr->type == ExpressionType::COMPARE_LESSTHANOREQUALTO ||
 			    expr->type == ExpressionType::COMPARE_LESSTHAN || expr->type == ExpressionType::COMPARE_GREATERTHAN) {
 				auto comparison = (ComparisonExpression *)expr;
-				int child = -1;
+				unique_ptr<Expression> value;
 				// check if any of the two children is an index
 				if (order_index->expressions[0]->Equals(comparison->children[0].get()) &&
 				    comparison->children[1]->type == ExpressionType::VALUE_CONSTANT) {
-					child = 0;
+					value = move(comparison->children[1]);
 				} else if (order_index->expressions[0]->Equals(comparison->children[1].get()) &&
 				           comparison->children[0]->type == ExpressionType::VALUE_CONSTANT) {
-					child = 1;
+					value = move(comparison->children[0]);
+					expr->type = ComparisonExpression::FlipComparisionExpression(expr->type);
 				}
-				if (child == 0) {
+				if (value) {
 					// we can use the index here!
 					// create an index scan
 					// FIXME: use statistics to see if it is worth it
+					unique_ptr<Expression> low_value, high_value;
+					auto expr_low = expr->type;
+					auto expr_high = expr->type;
+					if (expr->type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
+					    expr->type == ExpressionType::COMPARE_GREATERTHAN ||
+					    expr->type == ExpressionType::COMPARE_EQUAL) {
+						low_value = move(value);
+					} else if (expr->type == ExpressionType::COMPARE_LESSTHANOREQUALTO ||
+					           expr->type == ExpressionType::COMPARE_LESSTHAN) {
+						high_value = move(value);
+					}
+					filter.expressions.erase(filter.expressions.begin() + i);
+					if (!(expr_low == ExpressionType::COMPARE_EQUAL)) {
+						for (size_t k = i; k < filter.expressions.size(); k++) {
+							expr = filter.expressions[k].get();
+							comparison = (ComparisonExpression *)expr;
+							value = nullptr;
+							if (order_index->expressions[0]->Equals(comparison->children[0].get()) &&
+							    comparison->children[1]->type == ExpressionType::VALUE_CONSTANT) {
+								value = move(comparison->children[1]);
+							} else if (order_index->expressions[0]->Equals(comparison->children[1].get()) &&
+							           comparison->children[0]->type == ExpressionType::VALUE_CONSTANT) {
+								value = move(comparison->children[0]);
+								expr->type = ComparisonExpression::FlipComparisionExpression(expr->type);
+							}
+							if (value) {
+								if ((expr->type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
+								     expr->type == ExpressionType::COMPARE_GREATERTHAN) &&
+								    ((ConstantExpression *)value.get())->value >=
+								        ((ConstantExpression *)low_value.get())->value) {
+									if (((ConstantExpression *)value.get())->value ==
+									        ((ConstantExpression *)low_value.get())->value &&
+									    (expr_low == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
+									     expr->type == ExpressionType::COMPARE_GREATERTHANOREQUALTO)) {
+										expr_low = ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+									} else {
+										low_value = move(value);
+										expr_low = expr->type;
+									}
+
+								} else if ((expr->type == ExpressionType::COMPARE_LESSTHANOREQUALTO ||
+								            expr->type == ExpressionType::COMPARE_LESSTHAN) &&
+								           ((ConstantExpression *)value.get())->value <=
+								               ((ConstantExpression *)high_value.get())->value) {
+									if (((ConstantExpression *)value.get())->value ==
+									        ((ConstantExpression *)high_value.get())->value &&
+									    (expr_high == ExpressionType::COMPARE_LESSTHANOREQUALTO ||
+									     expr->type == ExpressionType::COMPARE_LESSTHANOREQUALTO)) {
+										expr_high = ExpressionType::COMPARE_LESSTHANOREQUALTO;
+									} else {
+										high_value = move(value);
+										expr_high = expr->type;
+									}
+								}
+								filter.expressions.erase(filter.expressions.begin() + k);
+								k--;
+							}
+						}
+					}
 					auto index_scan =
 					    make_unique<PhysicalIndexScan>(scan, *scan.table, *scan.table->storage, *order_index,
-					                                   scan.column_ids, move(comparison->children[1 - child]));
-					index_scan->expression_type = expr->type;
-					// remove the original expression from the filter
-					filter.expressions.erase(filter.expressions.begin() + i);
+					                                   scan.column_ids, move(low_value), move(high_value));
+					index_scan->low_expression_type = expr_low;
+					index_scan->high_expression_type = expr_high;
 					return move(index_scan);
 				}
-				else if (child == 1) {
-                        // we can use the index here!
-                        // create an index scan
-                        // FIXME: use statistics to see if it is worth it
-                        auto index_scan =
-                                make_unique<PhysicalIndexScan>(scan, *scan.table, *scan.table->storage, *order_index,
-                                                               scan.column_ids, move(comparison->children[1 - child]));
-                        if (expr->type == ExpressionType::COMPARE_GREATERTHANOREQUALTO)
-                            index_scan->expression_type = ExpressionType::COMPARE_LESSTHANOREQUALTO;
-                        else if (expr->type == ExpressionType::COMPARE_LESSTHANOREQUALTO)
-                            index_scan->expression_type = ExpressionType::COMPARE_GREATERTHANOREQUALTO;
-                        else if (expr->type == ExpressionType::COMPARE_GREATERTHAN)
-                            index_scan->expression_type = ExpressionType::COMPARE_LESSTHAN;
-                        else if (expr->type == ExpressionType::COMPARE_LESSTHAN)
-                            index_scan->expression_type = ExpressionType::COMPARE_GREATERTHAN;
-                        else
-                        index_scan->expression_type = expr->type;
-                        // remove the original expression from the filter
-                        filter.expressions.erase(filter.expressions.begin() + i);
-                        return move(index_scan);
-                    }
 			}
 		}
 	}
