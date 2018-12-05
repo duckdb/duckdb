@@ -3,6 +3,7 @@
 #include "common/exception.hpp"
 #include "common/string_util.hpp"
 
+#include <cstdio>
 #include <dirent.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -106,6 +107,13 @@ string GetWorkingDirectory() {
 		return string();
 	}
 	return string(current_path);
+}
+
+void MoveFile(const string &source, const string &target) {
+	//! FIXME: rename does not guarantee atomicity or overwriting target file if it exists
+	if (rename(source.c_str(), target.c_str()) != 0) {
+		throw IOException("Could not rename file!");
+	}
 }
 
 } // namespace duckdb

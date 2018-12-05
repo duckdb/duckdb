@@ -21,6 +21,8 @@ void CreateDirectory(const string &directory);
 void RemoveDirectory(const string &directory);
 //! List files in a directory, invoking the callback method for each one
 bool ListFiles(const string &directory, std::function<void(string)> callback);
+//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID properties
+void MoveFile(const string &source, const string &target);
 //! Sets the current working directory
 void SetWorkingDirectory(const string &directory);
 //! Gets the current working directory

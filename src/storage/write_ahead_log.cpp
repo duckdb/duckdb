@@ -155,42 +155,16 @@ void WriteAheadLog::WriteEntry(wal_type_t type, Serializer &serializer) {
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateTable(TableCatalogEntry *entry) {
 	Serializer serializer;
-	serializer.WriteString(entry->schema->name);
-	serializer.WriteString(entry->name);
-	serializer.Write<uint32_t>(entry->columns.size());
-	for (auto &column : entry->columns) {
-		serializer.WriteString(column.name);
-		serializer.Write<int>((int)column.type);
-	}
-	serializer.Write<uint32_t>(entry->constraints.size());
-	for (auto &constraint : entry->constraints) {
-		constraint->Serialize(serializer);
-	}
+	entry->Serialize(serializer);
 
 	WriteEntry(WALEntry::CREATE_TABLE, serializer);
 }
 
 bool ReplayCreateTable(Transaction &transaction, Catalog &catalog, Deserializer &source) {
-	CreateTableInformation info;
-
-	info.schema = source.Read<string>();
-	info.table = source.Read<string>();
-	auto column_count = source.Read<uint32_t>();
-
-	for (size_t i = 0; i < column_count; i++) {
-		auto column_name = source.Read<string>();
-		auto column_type = (TypeId)source.Read<int>();
-		info.columns.push_back(ColumnDefinition(column_name, column_type, false));
-	}
-	auto constraint_count = source.Read<uint32_t>();
-
-	for (size_t i = 0; i < constraint_count; i++) {
-		auto constraint = Constraint::Deserialize(source);
-		info.constraints.push_back(move(constraint));
-	}
+	auto info = TableCatalogEntry::Deserialize(source);
 
 	// try {
-	catalog.CreateTable(transaction, &info);
+	catalog.CreateTable(transaction, info.get());
 	// catch(...) {
 	//	return false
 	//}
