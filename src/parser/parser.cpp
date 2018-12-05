@@ -7,45 +7,49 @@ using namespace postgres;
 using namespace duckdb;
 using namespace std;
 
+struct PGParseContext {
+	void *context = nullptr;
+	PgQueryInternalParsetreeAndError result;
+
+    ~PGParseContext() {
+        if (context) {
+            pg_query_parse_finish(context);
+            pg_query_free_parse_result(result);
+        }
+    }
+};
+
 Parser::Parser() {
 }
 
 void Parser::ParseQuery(string query) {
-	void *context = nullptr;
-	PgQueryInternalParsetreeAndError result;
+    PGParseContext parse_context;
 	// first try to parse any PRAGMA statements
 	if (ParsePragma(query)) {
 		// query parsed as pragma statement
 		// if there was no error we were successful
-		goto wrapup;
+        return;
 	}
 
 	// use the postgres parser to parse the query
-	context = pg_query_parse_init();
-	result = pg_query_parse(query.c_str());
+	parse_context.context = pg_query_parse_init();
+	parse_context.result = pg_query_parse(query.c_str());
 	// check if it succeeded
-	if (result.error) {
-		throw ParserException(string(result.error->message) + "[" + to_string(result.error->lineno) + ":" +
-		                      to_string(result.error->cursorpos) + "]");
-		goto wrapup;
+	if (parse_context.result.error) {
+		throw ParserException(string(parse_context.result.error->message) + "[" + to_string(parse_context.result.error->lineno) + ":" +
+		                      to_string(parse_context.result.error->cursorpos) + "]");
+        return;
 	}
 
-	if (!result.tree) {
+	if (!parse_context.result.tree) {
 		// empty statement
-		goto wrapup;
+        return;
 	}
 
 	// if it succeeded, we transform the Postgres parse tree into a list of
 	// SQLStatements
 	Transformer transformer;
-	if (!transformer.TransformParseTree(result.tree, statements)) {
-		goto wrapup;
-	}
-wrapup:
-	if (context) {
-		pg_query_parse_finish(context);
-		pg_query_free_parse_result(result);
-	}
+	transformer.TransformParseTree(parse_context.result.tree, statements);
 }
 
 enum class PragmaType : uint8_t { NOTHING, ASSIGNMENT, CALL };

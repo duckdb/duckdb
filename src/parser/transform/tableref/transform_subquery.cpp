@@ -16,11 +16,10 @@ unique_ptr<TableRef> Transformer::TransformRangeSubselect(RangeSubselect *root) 
 		for (auto node = root->alias->colnames->head; node != nullptr; node = node->next) {
 			result->column_name_alias.push_back(reinterpret_cast<value *>(node->data.ptr_value)->val.str);
 		}
-		// FIXME:
-		// if (result->column_name_alias.size() !=
-		//     result->subquery->select_list.size()) {
-		// 	throw ParserException("Column alias list count does not match");
-		// }
+		if (result->column_name_alias.size() !=
+		    result->subquery->GetSelectList().size()) {
+			throw ParserException("Column alias list count does not match");
+		}
 	}
 	return move(result);
 }
