@@ -71,6 +71,7 @@ struct CATALOG_PAGE_TBL g_w_catalog_page;
  * 20020903 jms cp_description needs to be randomized
  */
 int mk_w_catalog_page(void *info_arr, ds_key_t index) {
+	static date_t dStartDateStorage;
 	static date_t *dStartDate;
 	static int nCatalogPageMax;
 	int nDuration, nOffset, nType;
@@ -83,7 +84,11 @@ int mk_w_catalog_page(void *info_arr, ds_key_t index) {
 
 	if (!bInit) {
 		nCatalogPageMax = ((int)get_rowcount(CATALOG_PAGE) / CP_CATALOGS_PER_YEAR) / (YEAR_MAXIMUM - YEAR_MINIMUM + 2);
-		dStartDate = strtodate(DATA_START_DATE);
+
+		date_t *start_date = strtodate(DATA_START_DATE);
+		dStartDate = &dStartDateStorage;
+		*dStartDate = *start_date;
+		free(start_date);
 
 		/* columns that still need to be populated */
 		strcpy(r->cp_department, "DEPARTMENT");
