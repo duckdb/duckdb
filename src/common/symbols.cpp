@@ -56,6 +56,7 @@ template class std::unique_ptr<Rule>;
 template class std::unique_ptr<LogicalFilter>;
 template class std::unique_ptr<LogicalJoin>;
 template class std::unique_ptr<SubqueryRef>;
+template class std::unique_ptr<WindowExpression>;
 
 #define INSTANTIATE_VECTOR(VECTOR_DEFINITION)                                                                          \
 	template VECTOR_DEFINITION::size_type VECTOR_DEFINITION::size() const;                                             \

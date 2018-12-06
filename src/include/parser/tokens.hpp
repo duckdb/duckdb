@@ -54,6 +54,7 @@ class GroupRefExpression;
 class OperatorExpression;
 class StarExpression;
 class SubqueryExpression;
+class WindowExpression;
 
 //===--------------------------------------------------------------------===//
 // Constraints

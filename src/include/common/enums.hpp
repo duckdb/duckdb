@@ -195,7 +195,8 @@ enum class ExpressionClass : uint8_t {
 	GROUP_REF = 11,
 	OPERATOR = 12,
 	STAR = 13,
-	SUBQUERY = 14
+	SUBQUERY = 14,
+	WINDOW = 15
 };
 
 //===--------------------------------------------------------------------===//
@@ -319,6 +320,7 @@ enum class LogicalOperatorType : uint8_t {
 	PROJECTION,
 	FILTER,
 	AGGREGATE_AND_GROUP_BY,
+	WINDOW,
 	LIMIT,
 	ORDER_BY,
 	COPY,
@@ -373,6 +375,7 @@ enum class PhysicalOperatorType : uint8_t {
 	ORDER_BY,
 	LIMIT,
 	AGGREGATE,
+	WINDOW,
 	HASH_GROUP_BY,
 	SORT_GROUP_BY,
 	FILTER,

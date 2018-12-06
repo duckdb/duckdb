@@ -65,6 +65,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "FILTER";
 	case LogicalOperatorType::AGGREGATE_AND_GROUP_BY:
 		return "AGGREGATE_AND_GROUP_BY";
+	case LogicalOperatorType::WINDOW:
+		return "WINDOW";
 	case LogicalOperatorType::LIMIT:
 		return "LIMIT";
 	case LogicalOperatorType::ORDER_BY:
@@ -131,6 +133,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "LIMIT";
 	case PhysicalOperatorType::AGGREGATE:
 		return "AGGREGATE";
+	case PhysicalOperatorType::WINDOW:
+		return "WINDOW";
 	case PhysicalOperatorType::HASH_GROUP_BY:
 		return "HASH_GROUP_BY";
 	case PhysicalOperatorType::SORT_GROUP_BY:

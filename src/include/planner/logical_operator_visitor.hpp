@@ -34,6 +34,7 @@ class LogicalSubquery;
 class LogicalUpdate;
 class LogicalTableFunction;
 class LogicalPruneColumns;
+class LogicalWindow;
 
 //! The LogicalOperatorVisitor is an abstract base class that implements the
 //! Visitor pattern on LogicalOperator.
@@ -65,5 +66,7 @@ public:
 	virtual void Visit(LogicalExcept &op);
 	virtual void Visit(LogicalUpdate &op);
 	virtual void Visit(LogicalTableFunction &op);
+	virtual void Visit(LogicalWindow &op);
+
 };
 } // namespace duckdb

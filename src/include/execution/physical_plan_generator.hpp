@@ -51,6 +51,7 @@ public:
 	virtual void Visit(LogicalUpdate &op);
 	virtual void Visit(LogicalTableFunction &expr);
 	virtual void Visit(LogicalPruneColumns &expr);
+	virtual void Visit(LogicalWindow &expr);
 
 	virtual unique_ptr<Expression> Visit(SubqueryExpression &expr);
 

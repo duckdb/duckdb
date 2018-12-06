@@ -1,4 +1,5 @@
 #include "parser/query_node/select_node.hpp"
+#include "common/enums.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -14,6 +15,16 @@ bool SelectNode::HasAggregation() {
 	}
 	return false;
 }
+
+bool SelectNode::HasWindow() {
+	for (auto &expr : select_list) {
+		if (expr->GetExpressionClass() == ExpressionClass::WINDOW) {
+			return true;
+		}
+	}
+	return false;
+}
+
 
 bool SelectNode::Equals(const QueryNode *other_) {
 	if (!QueryNode::Equals(other_)) {

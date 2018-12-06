@@ -463,6 +463,15 @@ void PhysicalPlanGenerator::Visit(LogicalIntersect &op) {
 	GenerateExceptIntersect(this, op, JoinType::SEMI);
 }
 
+
+void PhysicalPlanGenerator::Visit(LogicalWindow &op) {
+	auto window = make_unique<PhysicalWindow>(op, move(op.expressions));
+	if (plan) {
+		window->children.push_back(move(plan));
+	}
+	this->plan = move(window);
+}
+
 unique_ptr<Expression> PhysicalPlanGenerator::Visit(SubqueryExpression &expr) {
 	PhysicalPlanGenerator generator(context, this);
 	generator.CreatePlan(move(expr.op));
