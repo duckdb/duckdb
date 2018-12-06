@@ -69,7 +69,6 @@ void StorageManager::LoadDatabase() {
 
 int StorageManager::LoadFromStorage() {
 	ClientContext context(database);
-	FstreamUtil file_util;
 
 	auto meta_info_path = JoinPath(path, DATABASE_INFO_FILE);
 	// read the meta information, if there is any
@@ -80,7 +79,7 @@ int StorageManager::LoadFromStorage() {
 
 	context.transaction.BeginTransaction();
 	// first read the meta information
-	auto meta_info = file_util.OpenFile(meta_info_path);
+	auto meta_info = FstreamUtil::OpenFile(meta_info_path, ios_base::in);
 	int64_t storage_version;
 	int iteration;
 
@@ -92,8 +91,7 @@ int StorageManager::LoadFromStorage() {
 	auto schema_path = JoinPath(storage_path_base, SCHEMA_FILE);
 
 	// read the list of schemas
-
-	auto schema_file = file_util.OpenFile(schema_path);
+	auto schema_file = FstreamUtil::OpenFile(schema_path, ios_base::in);
 
 	string schema_name;
 	while (getline(schema_file, schema_name)) {
@@ -108,24 +106,18 @@ int StorageManager::LoadFromStorage() {
 		auto table_list_path = JoinPath(schema_directory_path, TABLE_LIST_FILE);
 
 		// read the list of schemas
-		// FIXME: turn into function Open()
-		auto table_list_file = file_util.OpenFile(table_list_path);
-		// END OF FIXME
+		auto table_list_file = FstreamUtil::OpenFile(table_list_path, ios_base::in);
 		string table_name;
 		while (getline(table_list_file, table_name)) {
 			// get the information of the table
 			auto table_directory_path = JoinPath(schema_directory_path, table_name);
 			auto table_meta_name = JoinPath(table_directory_path, TABLE_FILE);
 
-			// FIXME: turn into function Open()
-			auto table_file = file_util.OpenFile(table_meta_name);
-			// END OF FIXME
-			// FIXME: turn into function ReadBinary()
-			auto result = file_util.ReadBinary(table_file);
-			// END OF FIXME
+			auto table_file = FstreamUtil::OpenFile(table_meta_name, ios_base::binary | ios_base::in);
+			auto result = FstreamUtil::ReadBinary(table_file);
 
 			// deserialize the CreateTableInformation
-			auto table_file_size = file_util.GetFileSize(table_file);
+			auto table_file_size = FstreamUtil::GetFileSize(table_file);
 			Deserializer source((uint8_t *)result.get(), table_file_size);
 			auto info = TableCatalogEntry::Deserialize(source);
 			// create the table inside the catalog
@@ -144,15 +136,11 @@ int StorageManager::LoadFromStorage() {
 					break;
 				}
 
-				// FIXME: turn into function Open()
-				auto chunk_file = file_util.OpenFile(chunk_name);
-				// END OF FIXME
-				// FIXME: turn into function ReadBinary()
-				auto result = file_util.ReadBinary(chunk_file);
-				// END OF FIXME
+				auto chunk_file = FstreamUtil::OpenFile(chunk_name, ios_base::binary | ios_base::in);
+				auto result = FstreamUtil::ReadBinary(chunk_file);
 				// deserialize the chunk
 				DataChunk insert_chunk;
-				auto chunk_file_size = file_util.GetFileSize(chunk_file);
+				auto chunk_file_size = FstreamUtil::GetFileSize(chunk_file);
 				Deserializer source((uint8_t *)result.get(), chunk_file_size);
 				insert_chunk.Deserialize(source);
 				// insert the chunk into the table
@@ -180,26 +168,16 @@ void StorageManager::CreateCheckpoint(int iteration) {
 
 	// first we have to access the schemas
 	auto schema_path = JoinPath(storage_path_base, SCHEMA_FILE);
-	// FIXME
-	ofstream schema_file;
-	schema_file.open(schema_path);
-	if (!schema_file.good()) {
-		throw IOException("Could not open schemas file for writing!");
-	}
-	// END OF FIXME
+
+	auto schema_file = FstreamUtil::OpenFile(schema_path, ios_base::out);
+
 	vector<SchemaCatalogEntry *> schemas;
 	// scan the schemas and write them to the schemas.csv file
 	database.catalog.schemas.Scan(*transaction, [&](CatalogEntry *entry) {
-		schema_file << entry->name << "\n";
+		schema_file << entry->name << '\n';
 		schemas.push_back((SchemaCatalogEntry *)entry);
 	});
-	// FIXME: turn into function Close()
-	schema_file.close();
-	// check the success of the write
-	if (schema_file.fail()) {
-		throw IOException("Failed to write to schema!");
-	}
-	// END OF FIXME
+	FstreamUtil::CloseFile(schema_file);
 
 	// now for each schema create a directory
 	for (auto &schema : schemas) {
@@ -210,27 +188,15 @@ void StorageManager::CreateCheckpoint(int iteration) {
 		CreateDirectory(schema_directory_path);
 		// create the file holding the list of tables for the schema
 		auto table_list_path = JoinPath(schema_directory_path, TABLE_LIST_FILE);
-		ofstream table_list_file;
-		// FIXME
-		table_list_file.open(table_list_path);
-		if (!table_list_file.good()) {
-			throw IOException("Could not open table list file for writing!");
-		}
-		// END OF FIXME
+		auto table_list_file = FstreamUtil::OpenFile(table_list_path, ios_base::out);
 
 		// create the list of tables for the schema
 		vector<TableCatalogEntry *> tables;
 		schema->tables.Scan(*transaction, [&](CatalogEntry *entry) {
-			table_list_file << entry->name << "\n";
+			table_list_file << entry->name << '\n';
 			tables.push_back((TableCatalogEntry *)entry);
 		});
-		// FIXME
-		table_list_file.close();
-		// check the success of the write
-		if (table_list_file.fail()) {
-			throw IOException("Failed to write to table list!");
-		}
-		// END OF FIXME
+		FstreamUtil::CloseFile(table_list_file);
 
 		// now for each table, write the column meta information and the actual data
 		for (auto &table : tables) {
@@ -242,27 +208,14 @@ void StorageManager::CreateCheckpoint(int iteration) {
 			CreateDirectory(table_directory_path);
 
 			auto table_meta_name = JoinPath(table_directory_path, TABLE_FILE);
-			// FIXME
-			ofstream table_file;
-			table_file.open(table_meta_name, std::ofstream::binary);
-			if (!table_file.good()) {
-				throw IOException("Could not open table file for writing!");
-			}
-			// END OF FIXME
+			auto table_file = FstreamUtil::OpenFile(table_meta_name, ios_base::binary | ios_base::out);
 
 			// serialize the table information to a file
 			Serializer serializer;
 			table->Serialize(serializer);
 			auto data = serializer.GetData();
 			table_file.write((char *)data.data.get(), data.size);
-
-			// FIXME
-			table_file.close();
-			// check the success of the write
-			if (table_file.fail()) {
-				throw IOException("Failed to write to table meta info!");
-			}
-			// END OF FIXME
+			FstreamUtil::CloseFile(table_file);
 
 			// now we have to write the actual binary
 			// we do this by performing a scan of the table
@@ -285,25 +238,14 @@ void StorageManager::CreateCheckpoint(int iteration) {
 					break;
 				}
 				auto chunk_name = JoinPath(table_directory_path, "chunk-" + to_string(chunk_count) + ".bin");
-				// FIXME
-				ofstream chunk_file;
-				chunk_file.open(chunk_name, std::ofstream::binary);
-				if (!chunk_file.good()) {
-					throw IOException("Could not open DataChunk for writing!");
-				}
-				// END OF FIXME
+				auto chunk_file = FstreamUtil::OpenFile(chunk_name, ios_base::binary | ios_base::out);
+
 				Serializer serializer;
 				chunk.Serialize(serializer);
 				auto data = serializer.GetData();
 				chunk_file.write((char *)data.data.get(), data.size);
+				FstreamUtil::CloseFile(chunk_file);
 
-				// FIXME
-				chunk_file.close();
-				// check the success of the write
-				if (chunk_file.fail()) {
-					throw IOException("Failed to write to chunk file!");
-				}
-				// END OF FIXME
 				chunk_count++;
 			}
 		}
@@ -311,21 +253,12 @@ void StorageManager::CreateCheckpoint(int iteration) {
 	// all the writes have been flushed and the entire database has been written
 	// now we create the temporary meta information file
 	auto meta_path = JoinPath(path, DATABASE_TEMP_INFO_FILE);
-	ofstream meta_file;
-	meta_file.open(meta_path);
-	if (!meta_file.good()) {
-		throw IOException("Could not open meta file for writing!");
-	}
+	auto meta_file = FstreamUtil::OpenFile(meta_path, ios_base::out);
 
 	//! Write information to the meta file
-	meta_file << STORAGE_VERSION << "\n";
-	meta_file << iteration << "\n";
-
-	meta_file.close();
-	// check the success of the write
-	if (meta_file.fail()) {
-		throw IOException("Failed to write to meta file!");
-	}
+	meta_file << STORAGE_VERSION << '\n';
+	meta_file << iteration << '\n';
+	FstreamUtil::CloseFile(meta_file);
 
 	// now we move the meta information file over the old meta information file
 	// this signifies a "completion" of the checkpoint

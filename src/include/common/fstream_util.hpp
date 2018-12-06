@@ -11,9 +11,6 @@
 #include "common/constants.hpp"
 #include "common/exception.hpp"
 
-#include <fstream>
-#include <iostream>
-
 namespace duckdb {
 /**
  * Fstream Utility Functions
@@ -21,10 +18,23 @@ namespace duckdb {
 class FstreamUtil {
 public:
 	/**
-	 * Returns true if the needle string exists in the haystack
+	 * Opens a file for the given name and returns it (default mode : ios_base::in | ios_base::out)
 	 */
-	std::fstream OpenFile(const string &file_path);
-	size_t GetFileSize(std::fstream &file);
-	unique_ptr<char[]> ReadBinary(std::fstream &file);
+	static fstream OpenFile(const string &, ios_base::openmode mode = ios_base::in | ios_base::out);
+
+	/**
+	 * Closes the given file or throws an exception otherwise
+	 */
+	static void CloseFile(fstream &);
+
+	/**
+	 * Returns the size in bytes of the given file
+	 */
+	static size_t GetFileSize(fstream &);
+
+	/**
+	 * Reads the given file as a binary
+	 */
+	static data_ptr ReadBinary(fstream &);
 };
 } // namespace duckdb
