@@ -38,8 +38,7 @@ unique_ptr<Expression> ParseExpression(string expression) {
 }
 
 unique_ptr<LogicalOperator> ApplyLogicalRule(Rewriter &rewriter, unique_ptr<LogicalOperator> op) {
-	auto result = rewriter.ApplyRules(move(op));
-	return move(result);
+	return rewriter.ApplyRules(move(op));
 }
 
 unique_ptr<Expression> ApplyExprRule(Rewriter &rewriter, unique_ptr<Expression> root) {
@@ -50,7 +49,6 @@ unique_ptr<Expression> ApplyExprRule(Rewriter &rewriter, unique_ptr<Expression> 
 
 	return move(ApplyLogicalRule(rewriter, move(op))->expressions[0]);
 }
-
 
 unique_ptr<Planner> ParseLogicalPlan(DuckDBConnection &con, string query) {
 	Parser parser;
