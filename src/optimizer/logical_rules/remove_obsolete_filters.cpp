@@ -99,7 +99,6 @@ unique_ptr<LogicalOperator> RemoveObsoleteFilterRule::Apply(Rewriter &rewriter, 
 		} else {
 			discard = 0;
 		}
-
 	} else if (IsLessThan(compare_type_left) && IsLessThan(compare_type_right)) {
 		// both expressions point the same way, we can eliminate one of them
 		// pick the lowest expression
