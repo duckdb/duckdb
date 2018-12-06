@@ -10,6 +10,8 @@
 
 #include <bitset>
 #include <cstdlib>
+#include <fstream>
+#include <iostream>
 #include <map>
 #include <memory>
 #include <string>
@@ -18,11 +20,15 @@
 namespace duckdb {
 
 //! inline std directives that we use frequently
+using std::fstream;
+using std::ios;
+using std::ios_base;
 using std::map;
 using std::move;
 using std::string;
 using std::unique_ptr;
 using std::vector;
+using data_ptr = unique_ptr<char[]>;
 
 struct BinaryData {
 	unique_ptr<uint8_t[]> data;
