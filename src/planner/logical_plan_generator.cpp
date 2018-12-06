@@ -227,9 +227,6 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 			}
 		}
 	}
-
-
-
 	size_t original_column_count = select_list.size();
 	if (has_aggr) {
 		auto aggregate = make_unique<LogicalAggregate>(move(select_list));
