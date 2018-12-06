@@ -17,7 +17,7 @@ Optimizer::Optimizer(BindContext &context) : rewriter(context) {
 	rewriter.rules.push_back(make_unique<SubqueryRewritingRule>());
 	rewriter.rules.push_back(make_unique<CrossProductRewrite>());
 	rewriter.rules.push_back(make_unique<SelectionPushdownRule>());
-	rewriter.rules.push_back(make_unique<RemoveObsoleteFilterRule>());
+	//rewriter.rules.push_back(make_unique<RemoveObsoleteFilterRule>());
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {
