@@ -1,7 +1,7 @@
 #include "catch.hpp"
 #include "common/helper.hpp"
 #include "expression_helper.hpp"
-#include "optimizer/expression_rules/rule_list.hpp"
+#include "optimizer/expression_rules/list.hpp"
 #include "optimizer/rewriter.hpp"
 #include "parser/expression/list.hpp"
 

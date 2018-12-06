@@ -1,7 +1,7 @@
 #include "optimizer/optimizer.hpp"
 
-#include "optimizer/expression_rules/rule_list.hpp"
-#include "optimizer/logical_rules/rule_list.hpp"
+#include "optimizer/expression_rules/list.hpp"
+#include "optimizer/logical_rules/list.hpp"
 #include "planner/operator/list.hpp"
 
 using namespace duckdb;
@@ -17,6 +17,7 @@ Optimizer::Optimizer(BindContext &context) : rewriter(context) {
 	rewriter.rules.push_back(make_unique<SubqueryRewritingRule>());
 	rewriter.rules.push_back(make_unique<CrossProductRewrite>());
 	rewriter.rules.push_back(make_unique<SelectionPushdownRule>());
+	rewriter.rules.push_back(make_unique<RemoveObsoleteFilterRule>());
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {
