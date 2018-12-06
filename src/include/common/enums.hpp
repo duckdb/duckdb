@@ -195,7 +195,8 @@ enum class ExpressionClass : uint8_t {
 	GROUP_REF = 11,
 	OPERATOR = 12,
 	STAR = 13,
-	SUBQUERY = 14
+	SUBQUERY = 14,
+	WINDOW = 15
 };
 
 //===--------------------------------------------------------------------===//

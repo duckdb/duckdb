@@ -206,6 +206,8 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 		root = move(filter);
 	}
 
+
+
 	size_t original_column_count = statement.select_list.size();
 	if (statement.HasAggregation()) {
 		auto aggregate = make_unique<LogicalAggregate>(move(statement.select_list));
@@ -241,6 +243,18 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 		auto projection = make_unique<LogicalProjection>(move(statement.select_list));
 		projection->AddChild(move(root));
 		root = move(projection);
+	}
+
+	// window statements here
+	// if any exprs in select list are window expressions, push a window node
+	// in the select list below those become columnrefs
+	// they cannot be grouping columns, or can they?
+	// aggr below needs to ignore those somehow
+	if (statement.HasWindow()) {
+//		auto window = make_unique<LogicalWindow>();
+//		window->AddChild(move(root));
+//		root - move(window);
+		throw NotImplementedException("eek");
 	}
 
 	VisitQueryNode(statement);

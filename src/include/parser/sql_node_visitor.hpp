@@ -82,6 +82,7 @@ public:
 	virtual unique_ptr<Expression> Visit(OperatorExpression &expr);
 	virtual unique_ptr<Expression> Visit(StarExpression &expr);
 	virtual unique_ptr<Expression> Visit(SubqueryExpression &expr);
+	virtual unique_ptr<Expression> Visit(WindowExpression &expr);
 
 	virtual unique_ptr<Constraint> Visit(NotNullConstraint &expr) {
 		return nullptr;

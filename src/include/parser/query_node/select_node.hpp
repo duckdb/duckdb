@@ -57,6 +57,9 @@ public:
 	//! Whether or not the query has an AGGREGATION
 	bool HasAggregation();
 
+	//! Whether or not the query has a window function
+	bool HasWindow();
+
 	vector<unique_ptr<Expression>> &GetSelectList() override {
 		return select_list;
 	}

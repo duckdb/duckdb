@@ -1,4 +1,5 @@
 #include "parser/expression/aggregate_expression.hpp"
+#include "parser/expression/window_expression.hpp"
 #include "parser/expression/cast_expression.hpp"
 #include "parser/expression/function_expression.hpp"
 #include "parser/expression/operator_expression.hpp"
@@ -8,13 +9,6 @@
 using namespace duckdb;
 using namespace postgres;
 using namespace std;
-
-static bool IsAggregateFunction(const string &fun_name) {
-	if (fun_name == "min" || fun_name == "max" || fun_name == "count" || fun_name == "avg" || fun_name == "sum" ||
-	    fun_name == "first" || fun_name == "stddev_samp")
-		return true;
-	return false;
-}
 
 static ExpressionType AggregateToExpressionType(string &fun_name) {
 	if (fun_name == "count") {
@@ -51,7 +45,41 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 	}
 
 	auto lowercase_name = StringUtil::Lower(function_name);
-	if (!IsAggregateFunction(lowercase_name)) {
+	auto agg_fun_type = AggregateToExpressionType(lowercase_name);
+
+	if (root->over) {
+		auto window_spec = reinterpret_cast<WindowDef *>(root->over);
+		if (window_spec->refname) {
+			// FIXME: implement named window specs, not now
+			throw NotImplementedException("Named Windows");
+		}
+		// FIXME support window-specific aggs such as lag()
+		// first up: actual aggr expr
+		if (agg_fun_type == ExpressionType::INVALID) {
+			throw Exception("Unknown/unsupported window function");
+		}
+
+		auto child = TransformExpression((Node *)root->args->head->data.ptr_value);
+		if (!child) {
+			throw Exception("Failed to transform window argument");
+		}
+
+		auto expr = make_unique<WindowExpression>(agg_fun_type, move(child));
+
+		// next: partitioning/ordering expressions
+//
+		TransformExpressionList(window_spec->partitionClause, expr->partitions);
+		TransformOrderBy(window_spec->orderClause, expr->ordering);
+
+		// finally: specifics of bounds
+		// FIXME: actually interpret those
+//		auto bound_start = TransformExpression(window_spec->startOffset);
+//		auto bound_end = TransformExpression(window_spec->endOffset);
+		// FIXME: interpret frameOptions
+		return expr;
+	}
+
+	if (agg_fun_type == ExpressionType::INVALID) {
 		// Normal functions (i.e. built-in functions or UDFs)
 		vector<unique_ptr<Expression>> children;
 		if (root->args != nullptr) {
@@ -60,10 +88,9 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 				children.push_back(move(child_expr));
 			}
 		}
-		return make_unique<FunctionExpression>(schema, function_name.c_str(), children);
+		return make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children);
 	} else {
 		// Aggregate function
-		auto agg_fun_type = AggregateToExpressionType(function_name);
 
 		if (root->over) {
 			throw NotImplementedException("Window functions (OVER/PARTITION BY)");

@@ -11,6 +11,11 @@ unique_ptr<Expression> SQLNodeVisitor::Visit(AggregateExpression &expr) {
 	expr.AcceptChildren(this);
 	return nullptr;
 }
+unique_ptr<Expression> SQLNodeVisitor::Visit(WindowExpression &expr) {
+	// FIXME is this enough?
+	expr.AcceptChildren(this);
+	return nullptr;
+}
 unique_ptr<Expression> SQLNodeVisitor::Visit(CaseExpression &expr) {
 	expr.AcceptChildren(this);
 	return nullptr;
