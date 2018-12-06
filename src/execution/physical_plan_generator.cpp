@@ -465,6 +465,7 @@ void PhysicalPlanGenerator::Visit(LogicalIntersect &op) {
 
 
 void PhysicalPlanGenerator::Visit(LogicalWindow &op) {
+	LogicalOperatorVisitor::Visit(op);
 	auto window = make_unique<PhysicalWindow>(op, move(op.expressions));
 	if (plan) {
 		window->children.push_back(move(plan));

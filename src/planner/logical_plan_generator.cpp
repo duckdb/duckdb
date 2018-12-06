@@ -215,12 +215,11 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 	vector<unique_ptr<Expression>> window_select_list;
 	if (has_window) {
 		window_select_list.resize(select_list.size());
-
 		for (size_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
 			if (select_list[expr_idx]->GetExpressionClass() == ExpressionClass::WINDOW) {
 				window_select_list[expr_idx] = move(select_list[expr_idx]);
 				// TODO: does this need to be a groupref if we have an aggr below?
-				select_list[expr_idx] = make_unique_base<Expression, ColumnRefExpression>(window_select_list[expr_idx]->return_type, expr_idx);
+				select_list[expr_idx] = make_unique_base<Expression, ConstantExpression>(Value(42));
 			} else {
 				// leave select_list alone
 				window_select_list[expr_idx] = make_unique_base<Expression, ColumnRefExpression>(select_list[expr_idx]->return_type, expr_idx);
@@ -257,7 +256,7 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 				root = move(prune);
 			}
 		}
-	} else if (statement.select_list.size() > 0) {
+	} else if (select_list.size() > 0) {
 		auto projection = make_unique<LogicalProjection>(move(select_list));
 		projection->AddChild(move(root));
 		root = move(projection);
