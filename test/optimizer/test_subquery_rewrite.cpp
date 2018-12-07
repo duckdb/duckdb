@@ -2,7 +2,7 @@
 #include "common/helper.hpp"
 #include "duckdb.hpp"
 #include "expression_helper.hpp"
-#include "optimizer/logical_rules/rule_list.hpp"
+#include "optimizer/logical_rules/list.hpp"
 #include "optimizer/rewriter.hpp"
 
 #include <vector>

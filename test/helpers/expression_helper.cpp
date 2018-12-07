@@ -37,14 +37,17 @@ unique_ptr<Expression> ParseExpression(string expression) {
 	return move(select_list[0]);
 }
 
+unique_ptr<LogicalOperator> ApplyLogicalRule(Rewriter &rewriter, unique_ptr<LogicalOperator> op) {
+	return rewriter.ApplyRules(move(op));
+}
+
 unique_ptr<Expression> ApplyExprRule(Rewriter &rewriter, unique_ptr<Expression> root) {
 	vector<unique_ptr<Expression>> exprs;
 	exprs.push_back(move(root));
 
 	auto op = make_unique<LogicalProjection>(move(exprs));
 
-	auto result = rewriter.ApplyRules(move(op));
-	return move(result->expressions[0]);
+	return move(ApplyLogicalRule(rewriter, move(op))->expressions[0]);
 }
 
 unique_ptr<Planner> ParseLogicalPlan(DuckDBConnection &con, string query) {
