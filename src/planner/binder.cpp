@@ -289,7 +289,9 @@ unique_ptr<SQLStatement> Binder::Visit(DeleteStatement &stmt) {
 	// visit the table reference
 	AcceptChild(&stmt.table);
 	// project any additional columns required for the condition
-	AcceptChild(&stmt.condition);
+	if (stmt.condition) {
+		AcceptChild(&stmt.condition);
+	}
 	return nullptr;
 }
 
