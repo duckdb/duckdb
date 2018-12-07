@@ -14,7 +14,7 @@ using namespace duckdb;
 using namespace std;
 
 DataTable::DataTable(StorageManager &storage, string schema, string table, vector<TypeId> types_)
-    : schema(schema), table(table), types(types_), serializer(types), storage(storage) {
+    : cardinality(0), schema(schema), table(table), types(types_), serializer(types), storage(storage) {
 	size_t accumulative_size = 0;
 	for (size_t i = 0; i < types.size(); i++) {
 		accumulative_tuple_size.push_back(accumulative_size);
@@ -226,7 +226,7 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 			}
 		}
 		// no conflict, move the current tuple data into the undo buffer
-		transaction.PushTuple(id, chunk);
+		transaction.PushTuple(UndoFlags::DELETE_TUPLE, id, chunk);
 		// and set the deleted flag
 		chunk->deleted[id] = true;
 	});
@@ -290,7 +290,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 			}
 		}
 		// no conflict, move the current tuple data into the undo buffer
-		transaction.PushTuple(id, chunk);
+		transaction.PushTuple(UndoFlags::UPDATE_TUPLE, id, chunk);
 	});
 
 	// now update the columns in the base table

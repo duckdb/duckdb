@@ -40,7 +40,8 @@ void UndoBuffer::Cleanup() {
 			if (catalog_entry->parent->type != CatalogType::UPDATED_ENTRY) {
 				catalog_entry->parent->child = move(catalog_entry->child);
 			}
-		} else if (entry.type == UndoFlags::TUPLE_ENTRY) {
+		} else if (entry.type == UndoFlags::INSERT_TUPLE || entry.type == UndoFlags::DELETE_TUPLE ||
+		           entry.type == UndoFlags::UPDATE_TUPLE) {
 			// undo this entry
 			auto info = (VersionInformation *)entry.data.get();
 			if (info->chunk) {
@@ -98,7 +99,7 @@ static void WriteCatalogEntry(WriteAheadLog *log, CatalogEntry *entry) {
 }
 
 static void FlushAppends(WriteAheadLog *log, unordered_map<DataTable *, unique_ptr<DataChunk>> &appends) {
-	// write appends that were not flushed yet
+	// write appends that were not flushed yet to the WAL
 	assert(log);
 	if (appends.size() == 0) {
 		return;
@@ -201,10 +202,20 @@ void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) {
 
 			// push the catalog update to the WAL
 			WriteCatalogEntry(log, catalog_entry);
-		} else if (entry.type == UndoFlags::TUPLE_ENTRY) {
+		} else if (entry.type == UndoFlags::INSERT_TUPLE || entry.type == UndoFlags::DELETE_TUPLE ||
+		           entry.type == UndoFlags::UPDATE_TUPLE) {
 			// set the commit timestamp of the entry
 			auto info = (VersionInformation *)entry.data.get();
 			info->version_number = commit_id;
+
+			// update the cardinality of the base table
+			if (entry.type == UndoFlags::INSERT_TUPLE) {
+				// insertion
+				info->table->cardinality++;
+			} else if (entry.type == UndoFlags::DELETE_TUPLE) {
+				// deletion?
+				info->table->cardinality--;
+			}
 
 			// push the tuple update to the WAL
 			WriteTuple(log, info, appends);
@@ -235,7 +246,8 @@ void UndoBuffer::Rollback() {
 			CatalogEntry *catalog_entry = *((CatalogEntry **)entry.data.get());
 			assert(catalog_entry->set);
 			catalog_entry->set->Undo(catalog_entry);
-		} else if (entry.type == UndoFlags::TUPLE_ENTRY) {
+		} else if (entry.type == UndoFlags::INSERT_TUPLE || entry.type == UndoFlags::DELETE_TUPLE ||
+		           entry.type == UndoFlags::UPDATE_TUPLE) {
 			// undo this entry
 			auto info = (VersionInformation *)entry.data.get();
 			if (info->chunk) {
