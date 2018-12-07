@@ -12,9 +12,9 @@ TEST_CASE("Test Deletions", "[delete]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a(i INTEGER);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO a VALUES (42);"));
 
-    // delete everything
+	// delete everything
 	REQUIRE_NO_FAIL(con.Query("DELETE FROM a;"));
 
-    result = con.Query("SELECT COUNT(*) FROM a;");
-    REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	result = con.Query("SELECT COUNT(*) FROM a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 }

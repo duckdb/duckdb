@@ -45,14 +45,14 @@ private:
 		StringChunk(size_t size) : current_position(0), maximum_size(size) {
 			data = unique_ptr<char[]>(new char[maximum_size]);
 		}
-        ~StringChunk() {
+		~StringChunk() {
 			if (prev) {
 				auto current_prev = move(prev);
 				while (current_prev) {
 					current_prev = move(current_prev->prev);
 				}
 			}
-        }
+		}
 
 		unique_ptr<char[]> data;
 		size_t current_position;
