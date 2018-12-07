@@ -9,6 +9,7 @@
 #pragma once
 
 #include "common/types/data_chunk.hpp"
+#include "parser/query_node.hpp"
 
 namespace duckdb {
 
@@ -53,6 +54,8 @@ public:
 	DataChunk &GetChunk(size_t index) {
 		return *chunks[LocateChunk(index)];
 	}
+
+	void Sort(OrderByDescription &desc, uint64_t result[]);
 
 private:
 	//! Locates the chunk that belongs to the specific index
