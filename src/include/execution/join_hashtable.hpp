@@ -82,8 +82,7 @@ private:
 			if (prev) {
 				auto current_prev = move(prev);
 				while (current_prev) {
-					auto next_node = move(current_prev->prev);
-					current_prev = move(next_node);
+					current_prev = move(current_prev->prev);
 				}
 			}
 		}
