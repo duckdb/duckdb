@@ -161,6 +161,10 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		parallel_lock.unlock();
 	}
 
+	// move strings to the string heap
+	keys.MoveStringsToHeap(string_heap);
+	payload.MoveStringsToHeap(string_heap);
+
 	// get the locations of where to serialize the keys and payload columns
 	uint8_t *key_locations[STANDARD_VECTOR_SIZE];
 	uint8_t *tuple_locations[STANDARD_VECTOR_SIZE];
@@ -197,12 +201,6 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	head = move(node);
 	if (parallel) {
 		parallel_lock.unlock();
-	}
-
-	// finally move strings to the string heap
-	keys.MoveStringsToHeap(string_heap);
-	if (build_size > 0) {
-		payload.MoveStringsToHeap(string_heap);
 	}
 }
 
