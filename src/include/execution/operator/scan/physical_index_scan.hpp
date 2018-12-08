@@ -38,9 +38,9 @@ public:
 	Value equal_value;
 
 	//! If the predicate is low, high or equal
-	bool low_index;
-	bool high_index;
-	bool equal_index;
+	bool low_index = false;
+	bool high_index = false;
+	bool equal_index = false;
 
 	//! The expression type (e.g., >, <, >=, <=)
 	ExpressionType low_expression_type;
