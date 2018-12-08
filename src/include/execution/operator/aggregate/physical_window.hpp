@@ -9,31 +9,34 @@
 #pragma once
 
 #include "execution/physical_operator.hpp"
+#include "common/types/chunk_collection.hpp"
 
 namespace duckdb {
 
-//! PhysicalAggregate represents a group-by and aggregation operator. Note that
-//! it is an abstract class, its implementation is not defined here.
+//! PhysicalWindow implements window functions
 class PhysicalWindow : public PhysicalOperator {
 public:
 	PhysicalWindow(LogicalOperator &op, vector<unique_ptr<Expression>> select_list,
 	                  PhysicalOperatorType type = PhysicalOperatorType::WINDOW);
 
-	void Initialize();
-
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+
+	unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent) override;
 
 	//! The projection list of the SELECT statement (that contains aggregates)
 	vector<unique_ptr<Expression>> select_list;
 };
 
-//! The operator state of the aggregate
+//! The operator state of the window
 class PhysicalWindowOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalWindowOperatorState(PhysicalWindow *parent, PhysicalOperator *child = nullptr,
-	                               ExpressionExecutor *parent_executor = nullptr);
+	PhysicalWindowOperatorState(PhysicalOperator *child, ExpressionExecutor *parent_executor)
+		    : PhysicalOperatorState(child, parent_executor), position(0) {
+		}
 
-	// TODO
+	size_t position;
+	ChunkCollection tuples;
+	unique_ptr<uint64_t[]> sorted_vector;
 };
 
 } // namespace duckdb

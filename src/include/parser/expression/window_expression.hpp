@@ -20,10 +20,6 @@ class WindowExpression : public AggregateExpression {
 public:
 	WindowExpression(ExpressionType type, unique_ptr<Expression> child);
 
-// FIXME ?
-//	unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
-//		return v->Visit(*this);
-//	}
 	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::WINDOW;
 	}
@@ -32,6 +28,8 @@ public:
 		// fixme this is dirty, perhaps this should not inherit from aggregateexpression after all
 			return false;
 		}
+
+	unique_ptr<Expression> Accept(SQLNodeVisitor *v) override;
 
 	unique_ptr<Expression> Copy() override;
 

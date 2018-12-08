@@ -39,10 +39,7 @@ void PhysicalOrder::_GetChunk(ClientContext &context, DataChunk &chunk, Physical
 			sort_collection.Append(sort_chunk);
 		}
 
-		if (sort_collection.count != big_data.count) {
-			throw Exception("Cardinalities of ORDER BY columns and input "
-			                "columns don't match [?]");
-		}
+		assert(sort_collection.count == big_data.count);
 
 		// now perform the actual sort
 		state->sorted_vector = unique_ptr<uint64_t[]>(new uint64_t[sort_collection.count]);

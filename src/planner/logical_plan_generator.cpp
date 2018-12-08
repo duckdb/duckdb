@@ -206,7 +206,6 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 		root = move(filter);
 	}
 
-	// FIXME: these need to get pulled out because the list is lost in the move
 	bool has_aggr = statement.HasAggregation();
 	bool has_window = statement.HasWindow();
 
@@ -220,6 +219,7 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 				window_select_list[expr_idx] = move(select_list[expr_idx]);
 				// TODO: does this need to be a groupref if we have an aggr below?
 				select_list[expr_idx] = make_unique_base<Expression, ConstantExpression>(Value(42));
+
 			} else {
 				// leave select_list alone
 				window_select_list[expr_idx] = make_unique_base<Expression, ColumnRefExpression>(select_list[expr_idx]->return_type, expr_idx);
@@ -262,6 +262,7 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 		root = move(projection);
 	}
 
+	// TODO: we will need to compute additional aggregates if partition by or order by clause contain them
 	// window statements here
 	if (has_window) {
 		assert(window_select_list.size() > 0);
