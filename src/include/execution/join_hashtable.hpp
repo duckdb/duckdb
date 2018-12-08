@@ -78,6 +78,14 @@ private:
 			data = unique_ptr<uint8_t[]>(new uint8_t[tuple_size * capacity]);
 			memset(data.get(), 0, tuple_size * capacity);
 		}
+		~Node() {
+			if (prev) {
+				auto current_prev = move(prev);
+				while (current_prev) {
+					current_prev = move(current_prev->prev);
+				}
+			}
+		}
 	};
 
 	void Hash(DataChunk &keys, Vector &hashes);

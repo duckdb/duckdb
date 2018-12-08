@@ -11,11 +11,11 @@
 #include "optimizer/rule.hpp"
 
 namespace duckdb {
-    class RemoveObsoleteFilterRule : public Rule {
-    public:
-        RemoveObsoleteFilterRule();
+class RemoveObsoleteFilterRule : public Rule {
+public:
+	RemoveObsoleteFilterRule();
 
-        unique_ptr<LogicalOperator> Apply(Rewriter &rewriter, LogicalOperator &op_root, vector<AbstractOperator> &bindings,
-                                          bool &fixed_point);
-    };
+	unique_ptr<LogicalOperator> Apply(Rewriter &rewriter, LogicalOperator &op_root, vector<AbstractOperator> &bindings,
+	                                  bool &fixed_point);
+};
 } // namespace duckdb

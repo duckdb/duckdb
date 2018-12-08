@@ -12,7 +12,7 @@ using ScanStructure = JoinHashTable::ScanStructure;
 JoinHashTable::JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> build_types, JoinType type,
                              size_t initial_capacity, bool parallel)
     : build_serializer(build_types), build_types(build_types), equality_size(0), condition_size(0), build_size(0),
-      tuple_size(0), join_type(type), capacity(0), count(0), parallel(parallel) {
+      entry_size(0), tuple_size(0), join_type(type), capacity(0), count(0), parallel(parallel) {
 	for (auto &condition : conditions) {
 		assert(condition.left->return_type == condition.right->return_type);
 		auto type = condition.left->return_type;
@@ -161,6 +161,10 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		parallel_lock.unlock();
 	}
 
+	// move strings to the string heap
+	keys.MoveStringsToHeap(string_heap);
+	payload.MoveStringsToHeap(string_heap);
+
 	// get the locations of where to serialize the keys and payload columns
 	uint8_t *key_locations[STANDARD_VECTOR_SIZE];
 	uint8_t *tuple_locations[STANDARD_VECTOR_SIZE];
@@ -197,12 +201,6 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	head = move(node);
 	if (parallel) {
 		parallel_lock.unlock();
-	}
-
-	// finally move strings to the string heap
-	keys.MoveStringsToHeap(string_heap);
-	if (build_size > 0) {
-		payload.MoveStringsToHeap(string_heap);
 	}
 }
 

@@ -136,11 +136,20 @@ bool Rewriter::MatchOperands(AbstractRuleNode *node, AbstractOperator rel, vecto
 		if (children.size() < node->children.size()) {
 			return false;
 		}
+		bool child_is_matched[children.size()];
+		memset(child_is_matched, 0, sizeof(child_is_matched));
+
 		for (auto &co : node->children) {
 			bool match = false;
-			for (auto &c : children) {
-				match = MatchOperands(co.get(), c, current_bindings);
+			for (size_t i = 0; i < children.size(); i++) {
+				if (child_is_matched[i]) {
+					// if this node has already been matched we can't match it again
+					continue;
+				}
+				match = MatchOperands(co.get(), children[i], current_bindings);
 				if (match) {
+					// found a match, set the node to already matched
+					child_is_matched[i] = true;
 					break;
 				}
 			}

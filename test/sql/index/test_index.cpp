@@ -116,7 +116,7 @@ TEST_CASE("Open Range Queries", "[openrange]") {
 	for (size_t i = 0; i < 10; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(i) + ")"));
 	}
-	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
+	// REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
 	result = con.Query("SELECT sum(i) FROM integers WHERE i>9");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 	result = con.Query("SELECT sum(i) FROM integers WHERE 9<i");

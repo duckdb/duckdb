@@ -1,11 +1,3 @@
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// optimizer/logical_rules/rule_list.hpp
-//
-//
-//===----------------------------------------------------------------------===//
-
 #include "optimizer/logical_rules/cross_product_rewrite.hpp"
 #include "optimizer/logical_rules/exists_rewrite.hpp"
 #include "optimizer/logical_rules/in_clause_rewrite.hpp"

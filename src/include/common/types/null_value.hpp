@@ -34,7 +34,7 @@ template <class T> inline bool IsNullValue(T value) {
 }
 
 template <> inline bool IsNullValue(const char *value) {
-	return !value || strcmp(value, NullValue<const char *>()) == 0;
+	return strcmp(value, NullValue<const char *>()) == 0;
 }
 
 template <> inline bool IsNullValue(char *value) {
