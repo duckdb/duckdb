@@ -12,11 +12,16 @@ void PhysicalIndexScan::_GetChunk(ClientContext &context, DataChunk &chunk, Phys
 
 	if (!state->scan_state) {
 		// initialize the scan state of the index
-		if (low_expression)
-			state->scan_state = index.InitializeScan(context.ActiveTransaction(), column_ids, low_expression.get(),
-			                                         low_expression_type);
-		else
-			state->scan_state = index.InitializeScan(context.ActiveTransaction(), column_ids, high_expression.get(),
+		// We have a query with two predicates
+//		if(low_value && high_value){
+//			state->scan_state = index.InitializeScanTwoPredicates(context.ActiveTransaction(), column_ids, low_expression.get(),
+//																	low_expression_type, high_expression.get(), high_expression_type);
+//		}
+//		else if (low_expression)
+//			state->scan_state = index.InitializeScanSinglePredicate(context.ActiveTransaction(), column_ids, low_expression.get(),
+//			                                         low_expression_type);
+//		else
+			state->scan_state = index.InitializeScanSinglePredicate(context.ActiveTransaction(), column_ids, low_value,
 			                                         high_expression_type);
 	}
 
@@ -25,7 +30,7 @@ void PhysicalIndexScan::_GetChunk(ClientContext &context, DataChunk &chunk, Phys
 }
 
 string PhysicalIndexScan::ExtraRenderInformation() {
-	return tableref.name + "[" + low_expression->ToString() + "]";
+	return tableref.name + "[" + low_value.ToString() + "]";
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalIndexScan::GetOperatorState(ExpressionExecutor *parent_executor) {

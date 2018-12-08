@@ -138,9 +138,9 @@ TEST_CASE("Open Range Queries", "[openrange]") {
 	result = con.Query("SELECT sum(i) FROM integers WHERE i > 7 and  i>3");
 	REQUIRE(CHECK_COLUMN(result, 0, {17}));
 	result = con.Query("SELECT sum(i) FROM integers WHERE  i >= 7 and i > 7");
-	REQUIRE(CHECK_COLUMN(result, 0, {24}));
+	REQUIRE(CHECK_COLUMN(result, 0, {17}));
 	result = con.Query("SELECT sum(i) FROM integers WHERE i<=3 and i < 3");
-	REQUIRE(CHECK_COLUMN(result, 0, {6}));
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 }
 
 TEST_CASE("Closed Range Queries", "[closerange]") {
@@ -153,6 +153,6 @@ TEST_CASE("Closed Range Queries", "[closerange]") {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(i) + ")"));
 	}
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
-	result = con.Query("SELECT sum(i) FROM integers WHERE i> 5 and i>9 ");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	result = con.Query("SELECT sum(i) FROM integers WHERE i> 5 and i<9 ");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(21)}));
 }

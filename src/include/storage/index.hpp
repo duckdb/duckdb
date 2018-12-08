@@ -19,10 +19,9 @@ class Transaction;
 
 struct IndexScanState {
 	vector<column_t> column_ids;
-	Expression &expression;
 
-	IndexScanState(vector<column_t> column_ids, Expression &expression)
-	    : column_ids(column_ids), expression(expression) {
+	IndexScanState(vector<column_t> column_ids)
+	    : column_ids(column_ids) {
 	}
 	virtual ~IndexScanState() {
 	}
@@ -39,9 +38,13 @@ public:
 	IndexType type;
 
 	//! Initialize a scan on the index with the given expression and column ids
-	//! to fetch from the base table
-	virtual unique_ptr<IndexScanState> InitializeScan(Transaction &transaction, vector<column_t> column_ids,
-	                                                  Expression *expression, ExpressionType expressionType) = 0;
+	//! to fetch from the base table when we only have one query predicate
+	virtual unique_ptr<IndexScanState> InitializeScanSinglePredicate(Transaction &transaction, vector<column_t> column_ids,
+	                                                  Value value, ExpressionType expressionType) = 0;
+    //! Initialize a scan on the index with the given expression and column ids
+    //! to fetch from the base table for two query predicates
+    virtual unique_ptr<IndexScanState> InitializeScanTwoPredicates(Transaction &transaction, vector<column_t> column_ids,
+                                                                       Expression *low_expression, ExpressionType low_expression_type, Expression *high_expression, ExpressionType high_expression_type) = 0;
 	//! Perform a lookup on the index
 	virtual void Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) = 0;
 

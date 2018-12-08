@@ -18,10 +18,9 @@ namespace duckdb {
 class PhysicalIndexScan : public PhysicalOperator {
 public:
 	PhysicalIndexScan(LogicalOperator &op, TableCatalogEntry &tableref, DataTable &table, Index &index,
-	                  vector<column_t> column_ids, unique_ptr<Expression> low_expression,
-	                  unique_ptr<Expression> high_expression)
+	                  vector<column_t> column_ids)
 	    : PhysicalOperator(PhysicalOperatorType::INDEX_SCAN, op.types), tableref(tableref), table(table), index(index),
-	      column_ids(column_ids), low_expression(move(low_expression)), high_expression(move(high_expression)) {
+	      column_ids(column_ids) {
 	}
 
 	//! The table to scan
@@ -32,10 +31,11 @@ public:
 	Index &index;
 	//! The column ids to project
 	vector<column_t> column_ids;
+
 	//! The expression that must be fulfilled (i.e. the value looked up in the
 	//! index)
-	unique_ptr<Expression> low_expression;
-	unique_ptr<Expression> high_expression;
+	Value low_value;
+	Value high_value;
 
 	//! The expression type (e.g., >, <, >=, <=, =)
 	ExpressionType low_expression_type;
