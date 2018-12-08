@@ -13,16 +13,23 @@ void PhysicalIndexScan::_GetChunk(ClientContext &context, DataChunk &chunk, Phys
 	if (!state->scan_state) {
 		// initialize the scan state of the index
 		// We have a query with two predicates
-//		if(low_value && high_value){
-//			state->scan_state = index.InitializeScanTwoPredicates(context.ActiveTransaction(), column_ids, low_expression.get(),
-//																	low_expression_type, high_expression.get(), high_expression_type);
-//		}
-//		else if (low_expression)
-//			state->scan_state = index.InitializeScanSinglePredicate(context.ActiveTransaction(), column_ids, low_expression.get(),
-//			                                         low_expression_type);
-//		else
-			state->scan_state = index.InitializeScanSinglePredicate(context.ActiveTransaction(), column_ids, low_value,
-			                                         high_expression_type);
+		if (low_index && high_index) {
+			state->scan_state =
+			    index.InitializeScanTwoPredicates(context.ActiveTransaction(), column_ids, low_value,
+			                                      low_expression_type, high_value, high_expression_type);
+		}
+		// Our query has only one predicate
+		else {
+			if (low_index)
+				state->scan_state = index.InitializeScanSinglePredicate(context.ActiveTransaction(), column_ids,
+				                                                        low_value, low_expression_type);
+			else if (high_index)
+				state->scan_state = index.InitializeScanSinglePredicate(context.ActiveTransaction(), column_ids,
+				                                                        high_value, high_expression_type);
+			else if (equal_index)
+				state->scan_state = index.InitializeScanSinglePredicate(context.ActiveTransaction(), column_ids,
+				                                                        equal_value, ExpressionType::COMPARE_EQUAL);
+		}
 	}
 
 	//! Continue the scan of the index

@@ -111,11 +111,9 @@ void PhysicalPlanGenerator::Visit(LogicalCreateIndex &op) {
 }
 
 static bool IsComparison(ExpressionType type) {
-    return type == ExpressionType::COMPARE_EQUAL ||
-           type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
-           type == ExpressionType::COMPARE_LESSTHANOREQUALTO ||
-           type == ExpressionType::COMPARE_LESSTHAN ||
-           type == ExpressionType::COMPARE_GREATERTHAN;
+	return type == ExpressionType::COMPARE_EQUAL || type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
+	       type == ExpressionType::COMPARE_LESSTHANOREQUALTO || type == ExpressionType::COMPARE_LESSTHAN ||
+	       type == ExpressionType::COMPARE_GREATERTHAN;
 }
 
 //! Attempt to create an index scan from a filter + get, if possible
@@ -132,8 +130,8 @@ static unique_ptr<PhysicalOperator> CreateIndexScan(LogicalFilter &filter, Logic
 	}
 	// check all the indexes
 	for (size_t j = 0; j < storage.indexes.size(); j++) {
-        Value low_value, high_value, equal_value;
-        int low_index = -1, high_index = -1, equal_index = -1;
+		Value low_value, high_value, equal_value;
+		int low_index = -1, high_index = -1, equal_index = -1;
 		auto &index = storage.indexes[j];
 		// FIXME: assume every index is order index currently
 		assert(index->type == IndexType::ORDER_INDEX);
@@ -141,62 +139,71 @@ static unique_ptr<PhysicalOperator> CreateIndexScan(LogicalFilter &filter, Logic
 		// try to find a matching index for any of the filter expressions
 		auto expr = filter.expressions[0].get();
 		auto comparison_type = expr->type;
+		auto low_comparison_type = expr->type;
+		auto high_comparison_type = expr->type;
 		for (size_t i = 0; i < filter.expressions.size(); i++) {
 			expr = filter.expressions[i].get();
 			comparison_type = expr->type;
-			if (IsComparison(comparison_type) &&
-			   (expr->children[0]->type == ExpressionType::VALUE_CONSTANT ||
-			    expr->children[1]->type == ExpressionType::VALUE_CONSTANT)) {
-                auto comparison = (ComparisonExpression *)expr;
+			if (IsComparison(comparison_type) && (expr->children[0]->type == ExpressionType::VALUE_CONSTANT ||
+			                                      expr->children[1]->type == ExpressionType::VALUE_CONSTANT)) {
+				auto comparison = (ComparisonExpression *)expr;
 
-                // range or equality comparison with constant value
-			    // we can use our index here
-			    // figure out if the expression matches the expression of the index
-			    int child_side = expr->children[0]->type == ExpressionType::VALUE_CONSTANT ? 1 : 0;
-			    int constant_side = 1 - child_side;
-			    if (!order_index->expressions[0]->Equals(comparison->children[child_side].get())) {
-			        // the expression is not indexed by this index so we cannot use it
-			        continue;
-			    }
+				// range or equality comparison with constant value
+				// we can use our index here
+				// figure out if the expression matches the expression of the index
+				int child_side = expr->children[0]->type == ExpressionType::VALUE_CONSTANT ? 1 : 0;
+				int constant_side = 1 - child_side;
+				if (!order_index->expressions[0]->Equals(comparison->children[child_side].get())) {
+					// the expression is not indexed by this index so we cannot use it
+					continue;
+				}
 
-			    auto constant_value = ((ConstantExpression*) expr->children[constant_side].get())->value;
-			    if (child_side == 1) {
-                    // the expression is on the right side, we flip them around
-                    comparison_type = ComparisonExpression::FlipComparisionExpression(comparison_type);
-			    }
-			    if (comparison_type == ExpressionType::COMPARE_EQUAL) {
-			        // equality value
-			        // equality overrides any other bounds so we just break here
-                    equal_index = i;
-                    equal_value = constant_value;
-                    break;
-			    } else if (comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
-                           comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
-			        // greater than means this is a lower bound
-                    low_index = i;
-                    low_value = constant_value;
-			    } else {
-			        // smaller than means this is an upper bound
-                    high_index = i;
-                    high_value = constant_value;
-			    }
+				auto constant_value = ((ConstantExpression *)expr->children[constant_side].get())->value;
+				if (child_side == 1) {
+					// the expression is on the right side, we flip them around
+					comparison_type = ComparisonExpression::FlipComparisionExpression(comparison_type);
+				}
+				if (comparison_type == ExpressionType::COMPARE_EQUAL) {
+					// equality value
+					// equality overrides any other bounds so we just break here
+					equal_index = i;
+					equal_value = constant_value;
+					break;
+				} else if (comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
+				           comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
+					// greater than means this is a lower bound
+					low_index = i;
+					low_value = constant_value;
+					low_comparison_type = comparison_type;
+				} else {
+					// smaller than means this is an upper bound
+					high_index = i;
+					high_value = constant_value;
+					high_comparison_type = comparison_type;
+				}
 			}
 		}
 		if (equal_index >= 0 || low_index >= 0 || high_index >= 0) {
-            auto index_scan =
-                    make_unique<PhysicalIndexScan>(scan, *scan.table, *scan.table->storage, *order_index,
-                                                   scan.column_ids);
-			if (equal_index >=0){
+			auto index_scan =
+			    make_unique<PhysicalIndexScan>(scan, *scan.table, *scan.table->storage, *order_index, scan.column_ids);
+			if (equal_index >= 0) {
+				index_scan->equal_value = equal_value;
+				index_scan->equal_index = true;
+				filter.expressions.erase(filter.expressions.begin() + equal_index);
 			}
-			else if (low_index >=0){
+			if (low_index >= 0) {
+				index_scan->low_value = low_value;
+				index_scan->low_index = true;
+				index_scan->low_expression_type = low_comparison_type;
+				filter.expressions.erase(filter.expressions.begin() + low_index);
 			}
-			else if (high_index >=0){
+			if (high_index >= 0) {
+				index_scan->high_value = high_value;
+				index_scan->high_index = true;
+				index_scan->high_expression_type = high_comparison_type;
+				filter.expressions.erase(filter.expressions.begin() + high_index);
 			}
-
-            index_scan->low_expression_type = comparison_type;
-            filter.expressions.erase(filter.expressions.begin() + equal_index);
-            return move(index_scan);
-
+			return move(index_scan);
 		}
 	}
 	return nullptr;

@@ -116,7 +116,7 @@ TEST_CASE("Open Range Queries", "[openrange]") {
 	for (size_t i = 0; i < 10; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(i) + ")"));
 	}
-	// REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
 	result = con.Query("SELECT sum(i) FROM integers WHERE i>9");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 	result = con.Query("SELECT sum(i) FROM integers WHERE 9<i");
@@ -149,10 +149,18 @@ TEST_CASE("Closed Range Queries", "[closerange]") {
 
 	DuckDBConnection con(db);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
-	for (size_t i = 0; i < 10; i++) {
+	for (size_t i = 0; i < 3000; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(i) + ")"));
 	}
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
 	result = con.Query("SELECT sum(i) FROM integers WHERE i> 5 and i<9 ");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(21)}));
+	REQUIRE(CHECK_COLUMN(result, 0, {21}));
+	result = con.Query("SELECT sum(i) FROM integers WHERE i>=5 and i<9 ");
+	REQUIRE(CHECK_COLUMN(result, 0, {26}));
+	result = con.Query("SELECT sum(i) FROM integers WHERE i>=5 and i<=9 ");
+	REQUIRE(CHECK_COLUMN(result, 0, {35}));
+	result = con.Query("SELECT sum(i) FROM integers WHERE i>=5 and i<=4 ");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	result = con.Query("SELECT sum(i) FROM integers WHERE i>=5 and i<=2000 ");
+	REQUIRE(CHECK_COLUMN(result, 0, {2000990}));
 }

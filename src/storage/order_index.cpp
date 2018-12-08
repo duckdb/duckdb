@@ -105,7 +105,7 @@ template <class T> int64_t binary_search_lte(uint8_t *data, T key, size_t count)
 	auto array = (SortChunk<T> *)data;
 	bool found = false;
 	int pos = binary_search(array, key, 0, count, found);
-	while (array[pos].value <= key)
+	while (array[pos].value <= key && pos < count)
 		pos++;
 	return pos;
 }
@@ -210,6 +210,7 @@ template <class T> static size_t templated_scan(size_t &from, size_t &to, uint8_
 	for (; from < to; from++) {
 		result_ids[result_count++] = array[from].row_id;
 		if (result_count == STANDARD_VECTOR_SIZE) {
+			from++;
 			break;
 		}
 	}
@@ -243,8 +244,9 @@ void OrderIndex::Scan(size_t &position_from, size_t &position_to, Value value, V
 	}
 }
 
-unique_ptr<IndexScanState> OrderIndex::InitializeScanSinglePredicate(Transaction &transaction, vector<column_t> column_ids,
-                                                      Value value, ExpressionType expression_type) {
+unique_ptr<IndexScanState> OrderIndex::InitializeScanSinglePredicate(Transaction &transaction,
+                                                                     vector<column_t> column_ids, Value value,
+                                                                     ExpressionType expression_type) {
 	auto result = make_unique<OrderIndexScanState>(column_ids);
 	// search inside the index for the constant value
 	if (expression_type == ExpressionType::COMPARE_EQUAL) {
@@ -266,22 +268,24 @@ unique_ptr<IndexScanState> OrderIndex::InitializeScanSinglePredicate(Transaction
 	return move(result);
 }
 
-unique_ptr<IndexScanState> OrderIndex::InitializeScanTwoPredicates(Transaction &transaction, vector<column_t> column_ids,
-																   Expression *low_expression, ExpressionType low_expression_type, Expression *high_expression, ExpressionType high_expression_type) {
+unique_ptr<IndexScanState> OrderIndex::InitializeScanTwoPredicates(Transaction &transaction,
+                                                                   vector<column_t> column_ids, Value low_value,
+                                                                   ExpressionType low_expression_type, Value high_value,
+                                                                   ExpressionType high_expression_type) {
 	auto result = make_unique<OrderIndexScanState>(column_ids);
-	assert(low_expression->type == ExpressionType::VALUE_CONSTANT);
-	assert(high_expression->type == ExpressionType::VALUE_CONSTANT);
-	assert(low_expression_type== ExpressionType::COMPARE_GREATERTHAN||low_expression_type== ExpressionType::COMPARE_GREATERTHANOREQUALTO);
-	assert(high_expression_type== ExpressionType::COMPARE_LESSTHAN||high_expression_type== ExpressionType::COMPARE_LESSTHANOREQUALTO);
+	assert(low_expression_type == ExpressionType::COMPARE_GREATERTHAN ||
+	       low_expression_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO);
+	assert(high_expression_type == ExpressionType::COMPARE_LESSTHAN ||
+	       high_expression_type == ExpressionType::COMPARE_LESSTHANOREQUALTO);
 	// search inside the index for the constant value
 	if (low_expression_type == ExpressionType::COMPARE_GREATERTHAN)
-		result->current_index =  SearchGT(((ConstantExpression *)low_expression)->value.CastAs(types[0]));
+		result->current_index = SearchGT(low_value);
 	else if (low_expression_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO)
-		result->current_index =  SearchGTE(((ConstantExpression *)low_expression)->value.CastAs(types[0]));
+		result->current_index = SearchGTE(low_value);
 	if (high_expression_type == ExpressionType::COMPARE_LESSTHAN)
-		result->final_index =  SearchLT(((ConstantExpression *)low_expression)->value.CastAs(types[0]));
+		result->final_index = SearchLT(high_value);
 	else if (high_expression_type == ExpressionType::COMPARE_LESSTHANOREQUALTO)
-		result->final_index =  SearchLTE(((ConstantExpression *)low_expression)->value.CastAs(types[0]));
+		result->final_index = SearchLTE(high_value);
 	return move(result);
 }
 

@@ -32,12 +32,17 @@ public:
 	//! The column ids to project
 	vector<column_t> column_ids;
 
-	//! The expression that must be fulfilled (i.e. the value looked up in the
-	//! index)
+	//! The value for the query predicate
 	Value low_value;
 	Value high_value;
+	Value equal_value;
 
-	//! The expression type (e.g., >, <, >=, <=, =)
+	//! If the predicate is low, high or equal
+	bool low_index;
+	bool high_index;
+	bool equal_index;
+
+	//! The expression type (e.g., >, <, >=, <=)
 	ExpressionType low_expression_type;
 	ExpressionType high_expression_type;
 

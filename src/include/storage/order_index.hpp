@@ -44,12 +44,14 @@ public:
 	//! Initialize a scan on the index with the given expression and column ids
 	//! to fetch from the base table for a single predicate
 	unique_ptr<IndexScanState> InitializeScanSinglePredicate(Transaction &transaction, vector<column_t> column_ids,
-	                                          Value value, ExpressionType expressionType) override;
+	                                                         Value value, ExpressionType expressionType) override;
 
 	//! Initialize a scan on the index with the given expression and column ids
 	//! to fetch from the base table for two predicates
 	unique_ptr<IndexScanState> InitializeScanTwoPredicates(Transaction &transaction, vector<column_t> column_ids,
-														   Expression *low_expression, ExpressionType low_expression_type, Expression *high_expression, ExpressionType high_expression_type) override;
+	                                                       Value low_value, ExpressionType low_expression_type,
+	                                                       Value high_value,
+	                                                       ExpressionType high_expression_type) override;
 	//! Perform a lookup on the index
 	void Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) override;
 
