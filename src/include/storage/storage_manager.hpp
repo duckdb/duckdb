@@ -48,6 +48,8 @@ private:
 	//! Checkpoint the current state of the WAL and flush it to the main storage. This should be called BEFORE any
 	//! connction is available because right now the checkpointing cannot be done online. (TODO)
 	void CreateCheckpoint(int iteration);
+	//! Builds the data blocks for physical storage
+	void BuildDataBlocks();
 
 	//! The path of the database
 	string path;
