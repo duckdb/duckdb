@@ -488,16 +488,19 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
 	join->AddChild(move(root));
 	root = nullptr;
 
-	join->SetJoinCondition(move(expr.condition));
-	if (join->conditions.size() > 0) {
-		root = move(join);
-	} else { // the conditions were not comparisions between left on right,
-		     // cross product
-		auto cp = make_unique<LogicalCrossProduct>();
-		cp->AddChild(move(join->children[0]));
-		cp->AddChild(move(join->children[1]));
-		root = move(cp);
-	}
+	join->expressions.push_back(move(expr.condition));
+	LogicalFilter::SplitPredicates(join->expressions);
+
+	// join->SetJoinCondition(move(expr.condition));
+	// if (join->conditions.size() > 0) {
+	root = move(join);
+	// } else { // the conditions were not comparisions between left on right,
+	// 	     // cross product
+	// 	auto cp = make_unique<LogicalCrossProduct>();
+	// 	cp->AddChild(move(join->children[0]));
+	// 	cp->AddChild(move(join->children[1]));
+	// 	root = move(cp);
+	// }
 	return nullptr;
 }
 

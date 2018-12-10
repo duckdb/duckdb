@@ -83,6 +83,15 @@ public:
 	//! The types returned by this logical operator. Set by calling LogicalOperator::ResolveTypes.
 	vector<TypeId> types;
 
+	virtual size_t EstimateCardinality() {
+		// simple estimator, just take the max of the children
+		size_t max_cardinality = 0;
+		for(auto &child : children) {
+			max_cardinality = std::max(child->EstimateCardinality(), max_cardinality);
+		}
+		return max_cardinality;
+	}
+
 	virtual size_t ExpressionCount();
 	virtual Expression *GetExpression(size_t index);
 	virtual void SetExpression(size_t index, unique_ptr<Expression> expr);

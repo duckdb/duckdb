@@ -1,6 +1,7 @@
 #include "optimizer/optimizer.hpp"
 
 #include "optimizer/expression_rules/list.hpp"
+#include "optimizer/join_order_optimizer.hpp"
 #include "optimizer/logical_rules/list.hpp"
 #include "planner/operator/list.hpp"
 
@@ -15,7 +16,6 @@ Optimizer::Optimizer(BindContext &context) : rewriter(context) {
 	rewriter.rules.push_back(make_unique<InClauseRewriteRule>());
 	rewriter.rules.push_back(make_unique<ExistsRewriteRule>());
 	rewriter.rules.push_back(make_unique<SubqueryRewritingRule>());
-	rewriter.rules.push_back(make_unique<CrossProductRewrite>());
 	rewriter.rules.push_back(make_unique<SelectionPushdownRule>());
 	rewriter.rules.push_back(make_unique<RemoveObsoleteFilterRule>());
 
@@ -28,6 +28,9 @@ Optimizer::Optimizer(BindContext &context) : rewriter(context) {
 }
 
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan) {
-	// then we optimize the logical tree
-	return rewriter.ApplyRules(move(plan));
+	// first we optimize the logical tree using the rewrite rules
+	auto new_plan = rewriter.ApplyRules(move(plan));
+	// then we optimize the join ordering
+	JoinOrderOptimizer optimizer;
+	return optimizer.Optimize(move(new_plan));
 }

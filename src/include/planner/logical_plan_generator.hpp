@@ -14,8 +14,6 @@
 #include "planner/bindcontext.hpp"
 #include "planner/logical_operator.hpp"
 
-#include <vector>
-
 namespace duckdb {
 class ClientContext;
 

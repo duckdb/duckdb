@@ -27,6 +27,8 @@ public:
 	}
 	vector<string> GetNames() override;
 
+	size_t EstimateCardinality() override;
+
 	//! The base table to retrieve data from
 	TableCatalogEntry *table;
 	//! The table index in the current bind context
