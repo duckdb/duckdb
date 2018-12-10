@@ -36,7 +36,7 @@ public:
 
 	size_t position;
 	ChunkCollection tuples;
-	unique_ptr<uint64_t[]> sorted_vector;
+	vector<unique_ptr<uint64_t[]>> sorted_vector;
 };
 
 } // namespace duckdb
