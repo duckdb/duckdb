@@ -262,13 +262,15 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 		root = move(projection);
 	}
 
-	// TODO: we will need to compute additional aggregates if partition by or order by clause contain them
-	// window statements here
 	if (has_window) {
 		assert(window_select_list.size() > 0);
 		auto window = make_unique<LogicalWindow>(move(window_select_list));
 		window->AddChild(move(root));
 		root = move(window);
+		// FIXME
+//		auto prune = make_unique<LogicalPruneColumns>(window_select_list.size());
+//		prune->AddChild(move(root));
+//		root = move(prune);
 	}
 
 	VisitQueryNode(statement);

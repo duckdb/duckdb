@@ -10,6 +10,7 @@
 
 #include "execution/physical_operator.hpp"
 #include "common/types/chunk_collection.hpp"
+#include "common/types/tuple.hpp"
 
 namespace duckdb {
 
@@ -37,6 +38,9 @@ public:
 	size_t position;
 	ChunkCollection tuples;
 	vector<unique_ptr<uint64_t[]>> sorted_vector;
+	vector<unique_ptr<uint64_t[]>> partition_ids;
+
+	vector<TupleSerializer> serializers;
 };
 
 } // namespace duckdb

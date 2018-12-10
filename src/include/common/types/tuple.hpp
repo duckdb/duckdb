@@ -59,6 +59,10 @@ public:
 		return base_size;
 	}
 
+	inline size_t TypeSize() {
+		return type_sizes.size();
+	}
+
 	//! Compares two tuples. Returns 0 if they are equal, or else returns an
 	//! ordering of the tuples. Both should have been constructed by this
 	//! TupleSerializer.
