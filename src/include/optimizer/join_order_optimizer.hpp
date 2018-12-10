@@ -86,7 +86,6 @@ private:
 	unordered_map<size_t, EdgeInfo> edge_set;
 	unordered_map<RelationSet*, unique_ptr<JoinNode>> plans;
 
-
 	//! Extract the bindings referred to by an Expression
 	void ExtractBindings(Expression &expression, std::unordered_set<size_t> &bindings);
 	//! Create an edge in the edge_set
@@ -117,6 +116,8 @@ private:
 	void EmitCSG(RelationSet *node);
 	//! Enumerate the possible connected subgraphs that can be joined together in the join graph
 	void EnumerateCSGRecursive(RelationSet *node, std::unordered_set<size_t> &exclusion_set);
+	//! Rewrite a logical query plan given the join plan
+	unique_ptr<LogicalOperator> RewritePlan(unique_ptr<LogicalOperator> plan, JoinNode* node);
 };
 
 } // namespace duckdb

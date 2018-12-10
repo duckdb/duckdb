@@ -59,6 +59,14 @@ static void PrintPlans(unordered_map<RelationSet*, unique_ptr<JoinNode>>& plans)
 	}
 }
 
+static void PrintJoinNode(JoinNode *node) {
+	if (node->left) {
+		fprintf(stderr, "[%s JOIN %s] [Estimated Cardinality: %zu]\n", node->left->set->ToString().c_str(), node->right->set->ToString().c_str(), node->cardinality);
+		PrintJoinNode(node->left);
+		PrintJoinNode(node->right);
+	}
+}
+
 // FIXME: don't get just the LogicalGet, get everything underneath any join (i.e. JOIN(FILTER(GET), FILTER(GET)) should return the two FILTER nodes)
 // FIXME: also get everything that happens BEFORE the first join (i.e. LIMIT(JOIN(...))) should store the LIMIT as well, because this will still be the root node after the reordering
 // FIXME: should take Filter etc into account when reordering
@@ -242,18 +250,12 @@ static unique_ptr<JoinNode> CreateJoinTree(RelationSet *set, JoinNode *left, Joi
 	size_t expected_cardinality = std::max(left->cardinality, right->cardinality);
 	// cost is expected_cardinality plus the cost of the previous plans
 	size_t cost = expected_cardinality + left->cost + right->cost;
-	fprintf(stderr, "%s - %s [Cost: %zu][Cardinality: %zu]\n", left->set->ToString().c_str(), right->set->ToString().c_str(), cost, expected_cardinality);
 	return make_unique<JoinNode>(set, left, right, expected_cardinality, cost);
 }
 
 //! Returns true if a RelationSet is banned by the list of exclusion_set, false otherwise
 static bool RelationSetIsExcluded(RelationSet *node, unordered_set<size_t> &exclusion_set) {
-	for(size_t i = 0; i < node->count; i++) {
-		if (exclusion_set.find(node->relations[i]) != exclusion_set.end()) {
-			return true;
-		}
-	}
-	return false;
+	return exclusion_set.find(node->relations[0]) != exclusion_set.end();
 }
 
 //! Update the exclusion set with all entries in the subgraph
@@ -264,36 +266,40 @@ static void UpdateExclusionSet(RelationSet *node, unordered_set<size_t> &exclusi
 }
 
 void JoinOrderOptimizer::EnumerateNeighbors(RelationSet *node, function<bool(RelationSet*)> callback) {
-	auto *edges = &edge_set;
-	for(size_t i = 0; i < node->count; i++) {
-		auto entry = edges->find(node->relations[i]);
-		if (entry == edges->end()) {
-			// node not found
-			return;
-		}
-		// check if any subset of the other set is in this sets neighbors
-		auto info = &entry->second;
-		for(auto neighbor : info->neighbors) {
-			if (callback(neighbor)) {
-				return;
+	for(size_t j = 0; j < node->count; j++) {
+		auto *edges = &edge_set;
+		for(size_t i = j; i < node->count; i++) {
+			auto entry = edges->find(node->relations[i]);
+			if (entry == edges->end()) {
+				// node not found
+				break;
 			}
-		}
+			// check if any subset of the other set is in this sets neighbors
+			auto info = &entry->second;
+			for(auto neighbor : info->neighbors) {
+				if (callback(neighbor)) {
+					return;
+				}
+			}
 
-		// move to the next node
-		edges = &info->children;
+			// move to the next node
+			edges = &info->children;
+		}
 	}
 }
 
 vector<size_t> JoinOrderOptimizer::GetNeighbors(RelationSet *node, unordered_set<size_t> &exclusion_set) {
-	vector<size_t> result;
+	unordered_set<size_t> result;
 	EnumerateNeighbors(node, [&](RelationSet *neighbor) -> bool {
 		if (!RelationSetIsExcluded(neighbor, exclusion_set)) {
 			// add the smallest node of the neighbor to the set
-			result.push_back(neighbor->relations[0]);
+			result.insert(neighbor->relations[0]);
 		}
 		return false;
 	});
-	return result;
+	vector<size_t> neighbors;
+	neighbors.insert(neighbors.end(), result.begin(), result.end());
+	return neighbors;
 }
 
 //! Returns true if sub is a subset of super
@@ -380,12 +386,13 @@ void JoinOrderOptimizer::EnumerateCmpRecursive(RelationSet *left, RelationSet *r
 			EmitPair(left, combined_set);
 		}
 		union_sets[i] = combined_set;
-		// updated the set of excluded entries with this neighbor
-		exclusion_set.insert(neighbors[i]);
 	}
-	// recursively enumerate the sets, with the new exclusion sets
+	// recursively enumerate the sets
 	for(size_t i = 0; i < neighbors.size(); i++) {
-		EnumerateCmpRecursive(left, union_sets[i], exclusion_set);
+		// updated the set of excluded entries with this neighbor
+		unordered_set<size_t> new_exclusion_set = exclusion_set;
+		new_exclusion_set.insert(neighbors[i]);
+		EnumerateCmpRecursive(left, union_sets[i], new_exclusion_set);
 	}
 }
 
@@ -406,13 +413,19 @@ void JoinOrderOptimizer::EnumerateCSGRecursive(RelationSet *node, unordered_set<
 			EmitCSG(new_set);
 		}
 		union_sets[i] = new_set;
-		// updated the set of excluded entries with this neighbor
-		exclusion_set.insert(neighbors[i]);
 	}
-	// recursively enumerate the sets, with the new exclusion sets
+	// recursively enumerate the sets
 	for(size_t i = 0; i < neighbors.size(); i++) {
-		EnumerateCSGRecursive(union_sets[i] , exclusion_set);
+		// updated the set of excluded entries with this neighbor
+		unordered_set<size_t> new_exclusion_set = exclusion_set;
+		new_exclusion_set.insert(neighbors[i]);
+		EnumerateCSGRecursive(union_sets[i] , new_exclusion_set);
 	}
+}
+
+unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOperator> plan, JoinNode* node) {
+	// now we have to rewrite the plan
+	throw NotImplementedException("Rewrite join plan");
 }
 
 // the join ordering is pretty much a straight implementation of the paper "Dynamic Programming Strikes Back" by Guido Moerkotte and Thomas Neumannn, see that paper for additional info/documentation
@@ -462,7 +475,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 			// as only one side has a set of bindings
 		}
 	}
-	PrintEdgeSet(edge_set);
 	// now use dynamic programming to figure out the optimal join order
 	// note: we can just use pointers to RelationSet* here because the CreateRelation/GetRelation function ensures that a unique combination of relations will have a unique RelationSet object
 	// initialize each of the single-node plans with themselves and with their cardinalities
@@ -487,7 +499,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		// then we recursively search for neighbors that do not belong to the banned entries
 		EnumerateCSGRecursive(start_node, exclusion_set);
 	}
-	PrintPlans(plans);
 	// now the optimal join path should have been found
 	// get it from the node
 	unordered_set<size_t> bindings;
@@ -497,9 +508,14 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	auto total_relation = GetRelation(bindings);
 	assert(plans.find(total_relation) != plans.end());
 
-	
-
-
-
-	throw NotImplementedException("Join order optimization!");
+	auto final_plan = plans.find(total_relation);
+	if (final_plan == plans.end()) {
+		// could not find the final plan
+		// FIXME: this should only happen in case the sets are actually disjunct!
+		// in this case we need to generate a cross product between the disjoint sets
+		// for now we just don't do anything
+		return plan;
+	}
+	// now perform the actual reordering
+	return RewritePlan(move(plan), final_plan->second.get());
 }
