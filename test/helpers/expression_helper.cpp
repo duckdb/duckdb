@@ -23,7 +23,9 @@ static void SetColumnRefTypes(Expression &op, TypeId colref_type = TypeId::INTEG
 unique_ptr<Expression> ParseExpression(string expression) {
 	string query = "SELECT " + expression;
 
-	Parser parser;
+	DuckDB db;
+	ClientContext context(db);
+	Parser parser(context);
 	parser.ParseQuery(query.c_str());
 	if (parser.statements.size() == 0 || parser.statements[0]->type != StatementType::SELECT) {
 		return nullptr;
@@ -51,7 +53,9 @@ unique_ptr<Expression> ApplyExprRule(Rewriter &rewriter, unique_ptr<Expression> 
 }
 
 unique_ptr<Planner> ParseLogicalPlan(DuckDBConnection &con, string query) {
-	Parser parser;
+	DuckDB db;
+	ClientContext context(db);
+	Parser parser(context);
 	parser.ParseQuery(query);
 
 	auto planner = make_unique<Planner>();

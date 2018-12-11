@@ -9,9 +9,7 @@
 #pragma once
 
 #include "parser/sql_statement.hpp"
-
-#include <string>
-#include <vector>
+#include "main/client_context.hpp"
 
 namespace postgres {
 struct Node;
@@ -25,7 +23,7 @@ namespace duckdb {
 //! plan and executed.
 class Parser {
 public:
-	Parser();
+	Parser(ClientContext &context);
 
 	//! Attempts to parse a query into a series of SQL statements. Returns
 	//! whether or not the parsing was successful. If the parsing was
@@ -37,6 +35,7 @@ public:
 	vector<unique_ptr<SQLStatement>> statements;
 
 private:
+	ClientContext &context;
 	//! Transform a Postgres parse tree into a set of SQL Statements
 	bool TransformList(postgres::List *tree);
 	//! Transform a single Postgres parse node into a SQL Statement.

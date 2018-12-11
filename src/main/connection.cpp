@@ -24,7 +24,7 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(ClientContext &context
 	context.interrupted = false;
 	try {
 		// parse the query and transform it into a set of statements
-		Parser parser;
+		Parser parser(context);
 		parser.ParseQuery(query.c_str());
 		if (parser.statements.size() == 0) {
 			// empty query
@@ -73,6 +73,9 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(ClientContext &context
 		result->error = "UNHANDLED EXCEPTION TYPE THROWN!";
 	}
 	context.profiler.EndQuery();
+	if (context.profiler.IsEnabled() && context.profiler.automatic_printing) {
+		cout << context.profiler.ToString() << "\n";
+	}
 	// destroy any data held in the query allocator
 	context.allocator.Destroy();
 	return result;
