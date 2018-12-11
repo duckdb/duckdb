@@ -81,9 +81,6 @@ static void ExtractFilters(LogicalOperator *op, vector<unique_ptr<FilterInfo>>& 
 	}
 }
 
-// FIXME: don't get just the LogicalGet, get everything underneath any join (i.e. JOIN(FILTER(GET), FILTER(GET)) should return the two FILTER nodes)
-// FIXME: also get everything that happens BEFORE the first join (i.e. LIMIT(JOIN(...))) should store the LIMIT as well, because this will still be the root node after the reordering
-// FIXME: should take Filter etc into account when reordering
 bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<unique_ptr<FilterInfo>>& filters, LogicalOperator *parent) {
 	LogicalOperator *op = &input_op;
 	while(op->children.size() == 1 && op->type != LogicalOperatorType::SUBQUERY) {
@@ -93,11 +90,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		}
 		op = op->children[0].get();
 	}
-	if (op->type == LogicalOperatorType::SUBQUERY || 
-		op->type == LogicalOperatorType::TABLE_FUNCTION) {
-		// not supported yet!
-		return false;
-	}
+	
 	if (op->type == LogicalOperatorType::JOIN) {
 		if (((LogicalJoin*)op)->type != JoinType::INNER) {
 			// non-inner join not supported yet
@@ -125,26 +118,87 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		r.parent = parent;
 		relations[r.index] = r;
 		return true;
+	} else if (op->type == LogicalOperatorType::SUBQUERY) {
+		auto subquery = (LogicalSubquery*) op;
+		assert(op->children.size() == 1);
+		// we run the join order optimizer witin the subquery as well
+		JoinOrderOptimizer optimizer;
+		op->children[0] = optimizer.Optimize(move(op->children[0]));
+		// now we add the subquery to the set of relations
+		Relation r;
+		r.index = subquery->table_index;
+		r.op = &input_op;
+		r.parent = parent;
+		relations[r.index] = r;
+		return true;
+	} else if (op->type == LogicalOperatorType::TABLE_FUNCTION) {
+		// table function call, add to set of relations
+		auto get = (LogicalTableFunction*) op;
+		Relation r;
+		r.index = get->table_index;
+		r.op = &input_op;
+		r.parent = parent;
+		relations[r.index] = r;
+		return true;
 	}
 	return false;
 }
 
-RelationSet *JoinOrderOptimizer::GetRelation(unique_ptr<size_t[]> relations, size_t count) {
-	// now look it up in the tree
-	auto *node = &relation_set;
-	RelationInfo *info = nullptr;
-	for(size_t i = 0; i < count; i++) {
-		auto entry = node->find(relations[i]);
-		if (entry == node->end()) {
+
+void JoinOrderOptimizer::AddPushdownFilter(RelationSet *set, FilterInfo* filter) {
+	// look it up in the tree
+	FilterNode* info = &pushdown_filters;
+	for(size_t i = 0; i < set->count; i++) {
+		auto entry = info->children.find(set->relations[i]);
+		if (entry == info->children.end()) {
 			// node not found, create it
-			auto insert_it = node->insert(make_pair(relations[i], RelationInfo()));
+			auto insert_it = info->children.insert(make_pair(set->relations[i], FilterNode()));
 			entry = insert_it.first;
 		}
 		// move to the next node
 		info = &entry->second;
-		node = &info->children;
 	}
-	assert(info);
+	info->filters.push_back(filter);
+}
+
+void JoinOrderOptimizer::EnumeratePushdownFilters(RelationSet *node, function<bool(FilterInfo*)> callback) {
+	for(size_t j = 0; j < node->count; j++) {
+		FilterNode *info = &pushdown_filters;
+		for(size_t i = j; ; i++) {
+			// check if any subset of the other set is in this sets neighbors
+			for(size_t k = 0; k < info->filters.size(); k++) {
+				if (callback(info->filters[k])) {
+					// remove the filter from the set of filters
+					info->filters.erase(info->filters.begin() + k);
+					k--;
+				}
+			}
+			if (i == node->count) {
+				break;
+			}
+			auto entry = info->children.find(node->relations[i]);
+			if (entry == info->children.end()) {
+				// node not found
+				break;
+			}
+			info = &entry->second;
+		}
+	}
+}
+
+RelationSet *JoinOrderOptimizer::GetRelation(unique_ptr<size_t[]> relations, size_t count) {
+	// now look it up in the tree
+	RelationInfo *info = &relation_set;
+	for(size_t i = 0; i < count; i++) {
+		auto entry = info->children.find(relations[i]);
+		if (entry == info->children.end()) {
+			// node not found, create it
+			auto insert_it = info->children.insert(make_pair(relations[i], RelationInfo()));
+			entry = insert_it.first;
+		}
+		// move to the next node
+		info = &entry->second;
+	}
 	// now check if the RelationSet has already been created
 	if (!info->relation) {
 		// if it hasn't we need to create it
@@ -163,9 +217,8 @@ RelationSet *JoinOrderOptimizer::GetRelation(size_t index) {
 }
 
 RelationSet* JoinOrderOptimizer::GetRelation(unordered_set<size_t> &bindings) {
-	assert(bindings.size() > 0);
 	// create a sorted vector of the relations
-	auto relations = unique_ptr<size_t[]>(new size_t[bindings.size()]);
+	unique_ptr<size_t[]> relations = bindings.size() == 0 ? nullptr : unique_ptr<size_t[]>(new size_t[bindings.size()]);
 	size_t count = 0;
 	for(auto &entry : bindings) {
 		relations[count++] = entry;
@@ -244,20 +297,17 @@ RelationSet* JoinOrderOptimizer::Difference(RelationSet *left, RelationSet *righ
 EdgeInfo* JoinOrderOptimizer::GetEdgeInfo(RelationSet *left) {
 	assert(left && left->count > 0);
 	// find the EdgeInfo corresponding to the left set
-	auto *node = &edge_set;
-	EdgeInfo *info = nullptr;
+	EdgeInfo *info = &edge_set;
 	for(size_t i = 0; i < left->count; i++) {
-		auto entry = node->find(left->relations[i]);
-		if (entry == node->end()) {
+		auto entry = info->children.find(left->relations[i]);
+		if (entry == info->children.end()) {
 			// node not found, create it
-			auto insert_it = node->insert(make_pair(left->relations[i], EdgeInfo()));
+			auto insert_it = info->children.insert(make_pair(left->relations[i], EdgeInfo()));
 			entry = insert_it.first;
 		}
 		// move to the next node
 		info = &entry->second;
-		node = &info->children;
 	}
-	assert(info);
 	return(info);
 }
 
@@ -294,23 +344,20 @@ static void UpdateExclusionSet(RelationSet *node, unordered_set<size_t> &exclusi
 
 void JoinOrderOptimizer::EnumerateNeighbors(RelationSet *node, function<bool(NeighborInfo*)> callback) {
 	for(size_t j = 0; j < node->count; j++) {
-		auto *edges = &edge_set;
+		EdgeInfo *info = &edge_set;
 		for(size_t i = j; i < node->count; i++) {
-			auto entry = edges->find(node->relations[i]);
-			if (entry == edges->end()) {
+			auto entry = info->children.find(node->relations[i]);
+			if (entry == info->children.end()) {
 				// node not found
 				break;
 			}
 			// check if any subset of the other set is in this sets neighbors
-			auto info = &entry->second;
+			info = &entry->second;
 			for(auto &neighbor : info->neighbors) {
 				if (callback(neighbor.get())) {
 					return;
 				}
 			}
-
-			// move to the next node
-			edges = &info->children;
 		}
 	}
 }
@@ -497,6 +544,8 @@ static unique_ptr<Expression> ExtractFilter(FilterInfo *info) {
 }
 
 pair<RelationSet*, unique_ptr<LogicalOperator>> JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>>& extracted_relations, JoinNode* node) {
+	RelationSet *result_relation;
+	unique_ptr<LogicalOperator> result_operator;
 	if (node->left && node->right) {
 		// generate the left and right children
 		auto left = GenerateJoins(extracted_relations, node->left);
@@ -506,7 +555,6 @@ pair<RelationSet*, unique_ptr<LogicalOperator>> JoinOrderOptimizer::GenerateJoin
 		auto join = make_unique<LogicalJoin>(JoinType::INNER);
 		join->children.push_back(move(left.second));
 		join->children.push_back(move(right.second));
-		PrintJoinNode(node);
 		// set the join conditions from the join node
 		for(auto &f : node->info->filters) {
 			// extract the filter from the operator it originally belonged to
@@ -521,18 +569,37 @@ pair<RelationSet*, unique_ptr<LogicalOperator>> JoinOrderOptimizer::GenerateJoin
 			cond.left = move(condition->children[left_child]);
 			cond.right = move(condition->children[right_child]);
 			cond.comparison = condition->type;
-			fprintf(stderr, "[%s <> %s]\n", cond.left->ToString().c_str(), cond.right->ToString().c_str());
-			fprintf(stderr, "[%s <> %s]\n\n", join->children[0]->ToString().c_str(), join->children[1]->ToString().c_str());
 			join->conditions.push_back(move(cond));
 		}
 		assert(join->conditions.size() > 0);
-		return make_pair(Union(left.first, right.first), move(join));
+		result_relation = Union(left.first, right.first);
+		result_operator = move(join);
 	} else {
 		// base node, get the entry from the list of extracted relations
 		assert(node->set->count == 1);
 		assert(extracted_relations[node->set->relations[0]]);
-		return make_pair(node->set, move(extracted_relations[node->set->relations[0]]));
+		result_relation = node->set;
+		result_operator = move(extracted_relations[node->set->relations[0]]);
 	}
+	// check if we can pushdown any filters to here
+	EnumeratePushdownFilters(result_relation, [&](FilterInfo *info) -> bool {
+		// found a relation to pushdown!
+		// check if we already have a logical filter
+		if (result_operator->type != LogicalOperatorType::FILTER) {
+			// we don't, we need to create one
+			auto filter = make_unique<LogicalFilter>();
+			filter->children.push_back(move(result_operator));
+			result_operator = move(filter);
+		}
+		// now push the filter into the LogicalFilter
+		assert(result_operator->type == LogicalOperatorType::FILTER);
+		auto filter = (LogicalFilter*) result_operator.get();
+		filter->expressions.push_back(ExtractFilter(info));
+		// successfully pushed down, remove it from consideration for future nodes
+		return true;
+	});
+
+	return make_pair(result_relation, move(result_operator));
 }
 
 unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOperator> plan, JoinNode* node) {
@@ -544,8 +611,24 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 	}
 	// now we generate the actual joins
 	auto join_tree = GenerateJoins(extracted_relations, node);
-	// FIXME: deal with limit, etc... underneath this
-	return move(join_tree.second);
+	// find the first join in the relation to know where to place this node
+	if (plan->children.size() > 1) {
+		// first node is the join, return it immediately
+		return move(join_tree.second);
+	}
+	assert(plan->children.size() == 1);
+	// have to move up through the relations
+	auto op = plan.get();
+	auto parent = plan.get();
+	while(op->type != LogicalOperatorType::CROSS_PRODUCT && 
+	      op->type != LogicalOperatorType::JOIN) {
+		assert(op->children.size() == 1);
+		parent = op;
+		op = op->children[0].get();
+	}
+	// have to replace at this node
+	parent->children[0] = move(join_tree.second);
+	return plan;
 }
 
 // the join ordering is pretty much a straight implementation of the paper "Dynamic Programming Strikes Back" by Guido Moerkotte and Thomas Neumannn, see that paper for additional info/documentation
@@ -603,8 +686,13 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 				}
 			}
 		}
-		// this filter condition could not be turned into an edge because either (1) it was not a comparison, (2) it was not connecting disjoint sets
-
+		// this filter condition could not be turned into an edge because either (1) it was not a comparison, (2) it was not comparing different relations
+		// in this case, we might still be able to push it down
+		// get the set of bindings referenced in the expression and create a RelationSet
+		unordered_set<size_t> bindings;
+		ExtractBindings(*filter->filter, bindings);
+		auto relation = GetRelation(bindings);
+		AddPushdownFilter(relation, filter.get());
 	}
 	// now use dynamic programming to figure out the optimal join order
 	// note: we can just use pointers to RelationSet* here because the CreateRelation/GetRelation function ensures that a unique combination of relations will have a unique RelationSet object
@@ -637,14 +725,12 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		bindings.insert(i);
 	}
 	auto total_relation = GetRelation(bindings);
-	assert(plans.find(total_relation) != plans.end());
-
 	auto final_plan = plans.find(total_relation);
 	if (final_plan == plans.end()) {
 		// could not find the final plan
-		// FIXME: this should only happen in case the sets are actually disjunct!
+		// this should only happen in case the sets are actually disjunct!
 		// in this case we need to generate a cross product between the disjoint sets
-		// for now we just don't do anything
+		// FIXME: for now we just don't do anything because the base plan is always "correct" but we could generate joins if there are joins
 		return plan;
 	}
 	// now perform the actual reordering

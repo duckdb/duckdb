@@ -60,6 +60,11 @@ public:
 		RelationSet *right_set;
 	};
 
+	struct FilterNode {
+		vector<FilterInfo*> filters;
+		unordered_map<size_t, FilterNode> children;
+	};
+
 	struct NeighborInfo {
 		RelationSet* neighbor;
 		vector<FilterInfo*> filters;
@@ -95,10 +100,17 @@ public:
 private:
 	unordered_map<size_t, size_t> relation_mapping;
 	unordered_map<size_t, Relation> relations;
-	unordered_map<size_t, RelationInfo> relation_set;
+	RelationInfo relation_set;
 	vector<unique_ptr<FilterInfo>> filters;
-	unordered_map<size_t, EdgeInfo> edge_set;
+	FilterNode pushdown_filters;
+	EdgeInfo edge_set;
 	unordered_map<RelationSet*, unique_ptr<JoinNode>> plans;
+
+	// Add a filter to the set of to-be-pushed-down filters, where the filter needs columns from the given RelationSet to be evaluated
+	void AddPushdownFilter(RelationSet *set, FilterInfo* filter);
+	//! Enumerate all pushdown filters that can be fulfilled by a given RelationSet node (i.e. all entries in pushdown_filters where the given RelationSet is a subset of [[node]]). Return true in the callback to remove the filter from the set of pushdown filters.
+	void EnumeratePushdownFilters(RelationSet *node, std::function<bool(FilterInfo*)> callback);
+
 
 	//! Union two sets of relations together and create a new relation set
 	RelationSet* Union(RelationSet *left, RelationSet *right);
@@ -121,7 +133,7 @@ private:
 	bool ExtractJoinRelations(LogicalOperator &input_op, vector<unique_ptr<FilterInfo>>& filters, LogicalOperator *parent = nullptr);
 	//! Enumerate the neighbors of a specific node that do not belong to any of the exclusion_set. Note that if a neighbor has multiple nodes, this function will return the lowest entry in that set.
 	vector<size_t> GetNeighbors(RelationSet *node, std::unordered_set<size_t> &exclusion_set);
-
+	//! Enumerate all neighbors of a given RelationSet node
 	void EnumerateNeighbors(RelationSet *node, std::function<bool(NeighborInfo*)> callback);
 	//! Emit a pair as a potential join candidate
 	void EmitPair(RelationSet *left, RelationSet *right, NeighborInfo *info);
