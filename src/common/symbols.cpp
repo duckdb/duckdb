@@ -20,6 +20,7 @@
 #include "planner/operator/list.hpp"
 #include "planner/operator/logical_join.hpp"
 #include "storage/data_table.hpp"
+#include "optimizer/join_order_optimizer.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -56,6 +57,8 @@ template class std::unique_ptr<Rule>;
 template class std::unique_ptr<LogicalFilter>;
 template class std::unique_ptr<LogicalJoin>;
 template class std::unique_ptr<SubqueryRef>;
+template class std::unique_ptr<JoinOrderOptimizer::FilterInfo>;
+template class std::unique_ptr<JoinOrderOptimizer::JoinNode>;
 
 #define INSTANTIATE_VECTOR(VECTOR_DEFINITION)                                                                          \
 	template VECTOR_DEFINITION::size_type VECTOR_DEFINITION::size() const;                                             \
@@ -82,6 +85,7 @@ INSTANTIATE_VECTOR(std::vector<std::unique_ptr<SQLStatement>>);
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<PhysicalOperator>>);
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<LogicalOperator>>);
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Transaction>>);
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<JoinOrderOptimizer::JoinNode>>);
 template class std::vector<TypeId>;
 template class std::vector<Value>;
 template class std::vector<int>;
@@ -102,5 +106,7 @@ template class std::unordered_map<string, std::vector<string>>;
 template class std::unordered_map<string, std::pair<size_t, Expression *>>;
 // template class std::unordered_map<string, TableBinding>;
 template class std::unordered_map<string, SelectStatement *>;
+template class std::unordered_map<size_t, size_t>;
+template class std::unordered_map<size_t, JoinOrderOptimizer::Relation>;
 
 #endif

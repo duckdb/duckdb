@@ -51,6 +51,9 @@ static void PrintEdgeSet(unordered_map<size_t, EdgeInfo>& tree, vector<size_t> p
 				fprintf(stderr, "%s -> %s\n", source.c_str(), dest.c_str());
 			}
 		}
+		vector<size_t> pr = prefix;
+		pr.push_back(entry.first);
+		PrintEdgeSet(entry.second.children, pr);
 	}
 }
 
@@ -71,14 +74,10 @@ static void PrintJoinNode(JoinNode *node) {
 
 static void ExtractFilters(LogicalOperator *op, vector<unique_ptr<FilterInfo>>& filters) {
 	for(size_t i = 0; i < op->expressions.size(); i++) {
-		auto &expr = op->expressions[i];
-		if (expr->GetExpressionClass() == ExpressionClass::COMPARISON) {
-			// comparison, can be used as join condition
-			auto info = make_unique<FilterInfo>();
-			info->filter = expr.get();
-			info->parent = op;
-			filters.push_back(move(info));
-		}
+		auto info = make_unique<FilterInfo>();
+		info->filter = op->expressions[i].get();
+		info->parent = op;
+		filters.push_back(move(info));
 	}
 }
 
@@ -175,7 +174,6 @@ RelationSet* JoinOrderOptimizer::GetRelation(unordered_set<size_t> &bindings) {
 	return GetRelation(move(relations), count);
 }
 
-//! Create a RelationSet that is the union of the left and right relations
 RelationSet* JoinOrderOptimizer::Union(RelationSet *left, RelationSet *right) {
 	auto relations = unique_ptr<size_t[]>(new size_t[left->count + right->count]);
 	size_t count = 0;
@@ -206,6 +204,37 @@ RelationSet* JoinOrderOptimizer::Union(RelationSet *left, RelationSet *right) {
 		} else {
 			// right is smaller, progress right and add it to the set
 			relations[count++] = right->relations[j];
+			j++;
+		}
+	}
+	return GetRelation(move(relations), count);
+}
+
+RelationSet* JoinOrderOptimizer::Difference(RelationSet *left, RelationSet *right) {
+	auto relations = unique_ptr<size_t[]>(new size_t[left->count]);
+	size_t count = 0;
+	// move through the left and right relations
+	size_t i = 0, j = 0;
+	while(true) {
+		if (i == left->count) {
+			// exhausted left relation, we are done
+			break;
+		} else if (j == right->count) {
+			// exhausted right relation, add remaining of left
+			for(; i < left->count; i++) {
+				relations[count++] = left->relations[i];
+			}
+			break;
+		} else if (left->relations[i] == right->relations[j]) {
+			// equivalent, add nothing
+			i++;
+			j++;
+		} else if (left->relations[i] < right->relations[j]) {
+			// left is smaller, progress left and add it to the set
+			relations[count++] = left->relations[i];
+			i++;
+		} else {
+			// right is smaller, progress right
 			j++;
 		}
 	}
@@ -521,7 +550,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 
 // the join ordering is pretty much a straight implementation of the paper "Dynamic Programming Strikes Back" by Guido Moerkotte and Thomas Neumannn, see that paper for additional info/documentation
 // bonus slides: https://db.in.tum.de/teaching/ws1415/queryopt/chapter3.pdf?lang=de
-// FIXME: this should also do filter pushdown (should it?)
 // FIXME: incorporate cardinality estimation into the plans, possibly by pushing samples?
 unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOperator> plan) {
 	// first extract a list of all relations that have to be joined together
@@ -542,30 +570,41 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	// create potential edges from the comparisons
 	for(size_t i = 0; i < filters.size(); i++) {
 		auto &filter = filters[i];
-		auto comparison = (ComparisonExpression*) filter->filter;
-		// extract the bindings that are required for the left and right side of the comparison
-		unordered_set<size_t> left_bindings, right_bindings;
-		ExtractBindings(*comparison->children[0], left_bindings);
-		ExtractBindings(*comparison->children[1], right_bindings);
-		if (left_bindings.size() > 0 && right_bindings.size() > 0) {
-			// both the left and the right side have bindings
-			// check if they are disjoint
-			if (Disjoint(left_bindings, right_bindings)) {
-				// they are disjoint, create the edges in the join graph
+		if (filter->filter->GetExpressionClass() == ExpressionClass::COMPARISON) {
+			auto comparison = (ComparisonExpression*) filter->filter;
+			// extract the bindings that are required for the left and right side of the comparison
+			unordered_set<size_t> left_bindings, right_bindings;
+			ExtractBindings(*comparison->children[0], left_bindings);
+			ExtractBindings(*comparison->children[1], right_bindings);
+			if (left_bindings.size() > 0 && right_bindings.size() > 0) {
+				// both the left and the right side have bindings
 				// first create the relation sets, if they do not exist
 				filter->left_set  =  GetRelation(left_bindings);
 				filter->right_set =  GetRelation(right_bindings);
-
-				// add the edges to the edge set
-				CreateEdge(filter->left_set, filter->right_set, filter.get());
-				CreateEdge(filter->right_set, filter->left_set, filter.get());
-			} else {
-				// FIXME: they are not disjoint, but maybe they can still be pushed down?
+				// we can only create a meaningful edge if the sets are not exactly the same
+				if (filter->left_set != filter->right_set) {
+					// check if the sets are disjoint
+					if (Disjoint(left_bindings, right_bindings)) {
+						// they are disjoint, we only need to create one set of edges in the join graph
+						CreateEdge(filter->left_set, filter->right_set, filter.get());
+						CreateEdge(filter->right_set, filter->left_set, filter.get());
+					} else {
+						// the sets are not disjoint, we create two sets of edges
+						auto left_difference  = Difference(filter->left_set, filter->right_set);
+						auto right_difference = Difference(filter->right_set, filter->left_set);
+						// -> LEFT <-> RIGHT \ LEFT
+						CreateEdge(filter->left_set, right_difference, filter.get());
+						CreateEdge(right_difference, filter->left_set, filter.get());
+						// -> RIGHT <-> LEFT \ RIGHT
+						CreateEdge(left_difference, filter->right_set, filter.get());
+						CreateEdge(filter->right_set, left_difference, filter.get());
+					}
+					continue;
+				}
 			}
-		} else {
-			// FIXME: this comparison can be pushed down into a base relation
-			// as only one side has a set of bindings
 		}
+		// this filter condition could not be turned into an edge because either (1) it was not a comparison, (2) it was not connecting disjoint sets
+
 	}
 	// now use dynamic programming to figure out the optimal join order
 	// note: we can just use pointers to RelationSet* here because the CreateRelation/GetRelation function ensures that a unique combination of relations will have a unique RelationSet object

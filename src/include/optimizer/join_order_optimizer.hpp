@@ -100,14 +100,17 @@ private:
 	unordered_map<size_t, EdgeInfo> edge_set;
 	unordered_map<RelationSet*, unique_ptr<JoinNode>> plans;
 
+	//! Union two sets of relations together and create a new relation set
+	RelationSet* Union(RelationSet *left, RelationSet *right);
+	//! Create the set difference of left \ right (i.e. all elements in left that are not in right)
+	RelationSet* Difference(RelationSet *left, RelationSet *right);
+
 	//! Extract the bindings referred to by an Expression
 	void ExtractBindings(Expression &expression, std::unordered_set<size_t> &bindings);
 	//! Create an edge in the edge_set
 	void CreateEdge(RelationSet *left, RelationSet *right, FilterInfo* info);
 	//! Get the EdgeInfo of a specific node
 	EdgeInfo* GetEdgeInfo(RelationSet *left);
-	//! Union two sets of relations together and create a new relation set
-	RelationSet* Union(RelationSet *left, RelationSet *right);
 	//! Create or get a RelationSet from a single node with the given index
 	RelationSet *GetRelation(size_t index);
 	//! Create or get a RelationSet from a set of relation bindings
