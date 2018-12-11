@@ -16,7 +16,6 @@ Optimizer::Optimizer(BindContext &context) : rewriter(context) {
 	rewriter.rules.push_back(make_unique<InClauseRewriteRule>());
 	rewriter.rules.push_back(make_unique<ExistsRewriteRule>());
 	rewriter.rules.push_back(make_unique<SubqueryRewritingRule>());
-	rewriter.rules.push_back(make_unique<SelectionPushdownRule>());
 	rewriter.rules.push_back(make_unique<RemoveObsoleteFilterRule>());
 
 #ifdef DEBUG

@@ -22,6 +22,7 @@ public:
 	struct Relation {
 		size_t index;
 		LogicalOperator *op;
+		LogicalOperator *parent;
 	};
 
 	//! Set of relations, used in the join graph
@@ -52,15 +53,28 @@ public:
 		unordered_map<size_t, RelationInfo> children;
 	};
 
+	struct FilterInfo {
+		Expression *filter;
+		LogicalOperator *parent;
+		RelationSet *left_set;
+		RelationSet *right_set;
+	};
+
+	struct NeighborInfo {
+		RelationSet* neighbor;
+		vector<FilterInfo*> filters;
+	};
+
 	//! Contains a node with info about neighboring relations and child edge infos
 	struct EdgeInfo {
-		vector<RelationSet*> neighbors;
+		vector<unique_ptr<NeighborInfo>> neighbors;
 		unordered_map<size_t, EdgeInfo> children;
 	};
 
 	//! Represents a node in the join plan
 	struct JoinNode {
 		RelationSet *set;
+		NeighborInfo *info;
 		size_t cardinality;
 		size_t cost;
 		JoinNode *left;
@@ -68,11 +82,11 @@ public:
 
 		//! Create a leaf node in the join tree
 		JoinNode(RelationSet *set, size_t cardinality) : 
-			set(set), cardinality(cardinality), cost(cardinality), left(nullptr), right(nullptr) {
+			set(set), info(nullptr), cardinality(cardinality), cost(cardinality), left(nullptr), right(nullptr) {
 		}
 		//! Create an intermediate node in the join tree
-		JoinNode(RelationSet *set, JoinNode *left, JoinNode* right, size_t cardinality, size_t cost) : 
-			set(set), cardinality(cardinality), cost(cost), left(left), right(right) {
+		JoinNode(RelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode* right, size_t cardinality, size_t cost) : 
+			set(set), info(info), cardinality(cardinality), cost(cost), left(left), right(right) {
 		}
 	};
 public:
@@ -81,15 +95,15 @@ public:
 private:
 	unordered_map<size_t, size_t> relation_mapping;
 	unordered_map<size_t, Relation> relations;
-	vector<Expression*> filters;
 	unordered_map<size_t, RelationInfo> relation_set;
+	vector<unique_ptr<FilterInfo>> filters;
 	unordered_map<size_t, EdgeInfo> edge_set;
 	unordered_map<RelationSet*, unique_ptr<JoinNode>> plans;
 
 	//! Extract the bindings referred to by an Expression
 	void ExtractBindings(Expression &expression, std::unordered_set<size_t> &bindings);
 	//! Create an edge in the edge_set
-	void CreateEdge(RelationSet *left, RelationSet *right);
+	void CreateEdge(RelationSet *left, RelationSet *right, FilterInfo* info);
 	//! Get the EdgeInfo of a specific node
 	EdgeInfo* GetEdgeInfo(RelationSet *left);
 	//! Union two sets of relations together and create a new relation set
@@ -101,16 +115,16 @@ private:
 	//! Create or get a RelationSet from a (sorted, duplicate-free!) list of relations
 	RelationSet *GetRelation(unique_ptr<size_t[]> relations, size_t count);
 	//! Traverse the query tree to find (1) base relations, (2) existing join conditions and (3) filters that can be rewritten into joins. Returns true if there are joins in the tree that can be reordered, false otherwise.
-	bool ExtractJoinRelations(LogicalOperator &input_op);
+	bool ExtractJoinRelations(LogicalOperator &input_op, vector<unique_ptr<FilterInfo>>& filters, LogicalOperator *parent = nullptr);
 	//! Enumerate the neighbors of a specific node that do not belong to any of the exclusion_set. Note that if a neighbor has multiple nodes, this function will return the lowest entry in that set.
 	vector<size_t> GetNeighbors(RelationSet *node, std::unordered_set<size_t> &exclusion_set);
 
-	void EnumerateNeighbors(RelationSet *node, std::function<bool(RelationSet*)> callback);
+	void EnumerateNeighbors(RelationSet *node, std::function<bool(NeighborInfo*)> callback);
 	//! Emit a pair as a potential join candidate
-	void EmitPair(RelationSet *left, RelationSet *right);
+	void EmitPair(RelationSet *left, RelationSet *right, NeighborInfo *info);
 
-	//! Returns true if there is an edge that connects these two sets
-	bool IsConnected(RelationSet *node, RelationSet *other);
+	//! Returns a connection if there is an edge that connects these two sets, or nullptr otherwise
+	NeighborInfo* GetConnection(RelationSet *node, RelationSet *other);
 	void EnumerateCmpRecursive(RelationSet *left, RelationSet *right, std::unordered_set<size_t> exclusion_set);
 	//! Emit a relation set node
 	void EmitCSG(RelationSet *node);
@@ -118,6 +132,8 @@ private:
 	void EnumerateCSGRecursive(RelationSet *node, std::unordered_set<size_t> &exclusion_set);
 	//! Rewrite a logical query plan given the join plan
 	unique_ptr<LogicalOperator> RewritePlan(unique_ptr<LogicalOperator> plan, JoinNode* node);
+
+	std::pair<RelationSet*, unique_ptr<LogicalOperator>> GenerateJoins(vector<unique_ptr<LogicalOperator>>& extracted_relations, JoinNode* node);
 };
 
 } // namespace duckdb
