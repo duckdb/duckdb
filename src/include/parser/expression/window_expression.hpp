@@ -25,11 +25,13 @@ public:
 	}
 
 	bool IsAggregate() override {
-		// fixme this is dirty, perhaps this should not inherit from aggregateexpression after all
-			return false;
-		}
+	// fixme this is dirty, perhaps this should not inherit from aggregateexpression after all
+		return false;
+	}
 
-	unique_ptr<Expression> Accept(SQLNodeVisitor *v) override;
+	unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
+		return v->Visit(*this);
+	}
 
 	unique_ptr<Expression> Copy() override;
 

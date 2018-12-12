@@ -56,6 +56,9 @@ public:
 	}
 
 	void Sort(OrderByDescription &desc, uint64_t result[]);
+	//! Reorders the rows in the collection according to the given indices. NB: order is changed!
+	void Reorder(uint64_t order[]);
+
 
 private:
 	//! Locates the chunk that belongs to the specific index

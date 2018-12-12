@@ -136,6 +136,39 @@ void ChunkCollection::Sort(OrderByDescription &desc, uint64_t result[]) {
 }
 
 
+// FIXME make this more efficient by not using the Value API
+// since the types are the same a memcpy should do!
+void ChunkCollection::Reorder(uint64_t order[]) {
+	// adapted from https://stackoverflow.com/a/7366196/2652376
+
+	auto val_buf = vector<Value>();
+	val_buf.resize(column_count());
+
+	size_t j, k;
+	for (size_t i = 0; i < count; i++) {
+		for (size_t col_idx = 0; col_idx < column_count(); col_idx++) {
+			val_buf[col_idx] = GetValue(col_idx, i);
+		}
+		j = i;
+		while(true) {
+			k = order[j];
+			order[j] = j;
+			if (k == i) {
+				break;
+			}
+			for (size_t col_idx = 0; col_idx < column_count(); col_idx++) {
+				SetValue(col_idx, j, GetValue(col_idx, k));
+			}
+			j = k;
+		}
+		for (size_t col_idx = 0; col_idx < column_count(); col_idx++) {
+			SetValue(col_idx, j, val_buf[col_idx]);
+		}
+	}
+}
+
+
+
 Value ChunkCollection::GetValue(size_t column, size_t index) {
 	return chunks[LocateChunk(index)]->data[column].GetValue(index % STANDARD_VECTOR_SIZE);
 }

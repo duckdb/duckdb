@@ -15,7 +15,7 @@
 
 namespace duckdb {
 
-//! A tuple contains a byte reprensetation of a single tuple stored row-wise
+//! A tuple contains a byte representation of a single tuple stored row-wise
 struct Tuple {
 	size_t size;
 	unique_ptr<uint8_t[]> data;

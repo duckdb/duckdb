@@ -219,7 +219,7 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 				window_select_list[expr_idx] = move(select_list[expr_idx]);
 				// TODO: does this need to be a groupref if we have an aggr below?
 				select_list[expr_idx] = make_unique_base<Expression, ConstantExpression>(Value(42));
-
+				// FIXME: add the columns from the partition/order in the window spec to select_list
 			} else {
 				// leave select_list alone
 				window_select_list[expr_idx] = make_unique_base<Expression, ColumnRefExpression>(select_list[expr_idx]->return_type, expr_idx);
