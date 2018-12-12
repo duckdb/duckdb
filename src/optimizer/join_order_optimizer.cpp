@@ -33,6 +33,16 @@ void JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<s
 		assert(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
 		bindings.insert(relation_mapping[colref.binding.table_index]);
 	}
+	if (expression.type == ExpressionType::SELECT_SUBQUERY) {
+		auto &subquery = (SubqueryExpression&) expression;
+		// we perform join reordering within the subquery expression as well
+		JoinOrderOptimizer optimizer;
+		subquery.op = optimizer.Optimize(move(subquery.op));
+		if (subquery.is_correlated) {
+			// FIXME:
+			throw NotImplementedException("Not handling correlated subqueries properly yet");
+		}
+	}
 	for(auto &child : expression.children) {
 		ExtractBindings(*child, bindings);
 	}
@@ -93,11 +103,22 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 	
 	if (op->type == LogicalOperatorType::JOIN) {
 		if (((LogicalJoin*)op)->type != JoinType::INNER) {
-			// non-inner join not supported yet
+			// non-inner join
+			// we do not reorder non-inner joins yet, however we do want to expand the potential join graph around them
+			// non-inner joins are also tricky because we can't freely make conditions through them
+			// e.g. suppose we have (left LEFT OUTER JOIN right WHERE right IS NOT NULL), the join can generate
+			// new NULL values in the right side, so pushing this condition through the join leads to incorrect results
+			// for this reason, we just start a new JoinOptimizer pass in each of the children of the join
+			JoinOrderOptimizer optimizer_left, optimizer_right;
+			op->children[0] = optimizer_left.Optimize(move(op->children[0]));
+			op->children[1] = optimizer_right.Optimize(move(op->children[1]));
+			// after this we want to treat this node as one  "end node" (like we would treat a base relation)
+			// FIXME: 
 			return false;
+		} else {
+			// extract join conditions
+			ExtractFilters(op, filters);
 		}
-		// extract join conditions
-		ExtractFilters(op, filters);
 	}
 	if (op->type == LogicalOperatorType::JOIN ||
 	    op->type == LogicalOperatorType::CROSS_PRODUCT) {

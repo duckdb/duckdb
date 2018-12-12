@@ -2,20 +2,21 @@
 
 #include "optimizer/expression_rules/list.hpp"
 #include "optimizer/join_order_optimizer.hpp"
+#include "optimizer/subquery_rewriter.hpp"
 #include "optimizer/logical_rules/list.hpp"
 #include "planner/operator/list.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-Optimizer::Optimizer(BindContext &context) : rewriter(context) {
+Optimizer::Optimizer(BindContext &context) : context(context), rewriter(context) {
 	rewriter.rules.push_back(make_unique<ConstantCastRule>());
 	rewriter.rules.push_back(make_unique<ConstantFoldingRule>());
 	rewriter.rules.push_back(make_unique<DistributivityRule>());
 	rewriter.rules.push_back(make_unique<SplitFilterConjunctionRule>());
-	rewriter.rules.push_back(make_unique<InClauseRewriteRule>());
-	rewriter.rules.push_back(make_unique<ExistsRewriteRule>());
-	rewriter.rules.push_back(make_unique<SubqueryRewritingRule>());
+	// rewriter.rules.push_back(make_unique<InClauseRewriteRule>());
+	// rewriter.rules.push_back(make_unique<ExistsRewriteRule>());
+	// rewriter.rules.push_back(make_unique<SubqueryRewritingRule>());
 	rewriter.rules.push_back(make_unique<RemoveObsoleteFilterRule>());
 
 #ifdef DEBUG
@@ -27,9 +28,14 @@ Optimizer::Optimizer(BindContext &context) : rewriter(context) {
 }
 
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan) {
-	// first we optimize the logical tree using the rewrite rules
+	// first we perform expression rewrites
+	// this does not change the logical plan structure yet, but only simplifies expression trees
 	auto new_plan = rewriter.ApplyRules(move(plan));
-	// then we optimize the join ordering
+	// then we perform the join ordering optimization
+	// this also rewrites cross products + filters into joins and performs filter pushdowns
 	JoinOrderOptimizer optimizer;
-	return optimizer.Optimize(move(new_plan));
+	auto join_order = optimizer.Optimize(move(new_plan));
+	// finally we rewrite subqueries
+	SubqueryRewriter subquery_rewriter(context);
+	return subquery_rewriter.Rewrite(move(join_order));
 }

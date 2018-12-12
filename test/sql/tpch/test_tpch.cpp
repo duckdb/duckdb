@@ -20,9 +20,9 @@ TEST_CASE("Test TPC-H SF0.1", "[tpch][.]") {
 
 	con.EnableProfiling();
 
-	result = con.Query(tpch::get_query(9));
+	result = con.Query(tpch::get_query(18));
 	cout << con.GetProfilingInformation();
-	COMPARE_CSV(result, tpch::get_answer(sf, 9), true);
+	COMPARE_CSV(result, tpch::get_answer(sf, 18), true);
 
 	// check if all the counts are correct
 	result = con.Query("SELECT COUNT(*) FROM orders");

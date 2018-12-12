@@ -21,6 +21,8 @@ public:
 
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
 
+private:
+	BindContext &context;
 	Rewriter rewriter;
 };
 
