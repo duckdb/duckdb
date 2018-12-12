@@ -102,7 +102,6 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 				partition_elements[prt_idx] = partition_data[prt_idx];
 			}
 			size_t partition_offset = 0;
-
 			for (size_t i = 0; i < sort_collection.chunks.size(); i++) {
 
 				// serialize the partition columns into bytes so we can compute partition ids below efficiently
@@ -114,6 +113,25 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 				partition_offset += STANDARD_VECTOR_SIZE;
 			}
 
+			// evaluate inner expressions of window functions, could be more complex
+
+			// FIXME assert this?
+			ChunkCollection payload_collection;
+			assert(wexpr->children.size() == 1);
+			vector<TypeId> inner_types = {wexpr->children[0]->return_type};
+			for (size_t i = 0; i < big_data.chunks.size(); i++) {
+				DataChunk payload_chunk;
+				payload_chunk.Initialize(inner_types);
+
+				ExpressionExecutor executor(*big_data.chunks[i], context);
+				executor.ExecuteExpression(wexpr->children[0].get(), payload_chunk.data[0]);
+
+				payload_chunk.Verify();
+				payload_collection.Append(payload_chunk);
+			}
+
+			// actual computation of windows, naively
+			// FIXME: implement TUM method here (!)
 			size_t window_start = 0;
 			size_t window_end = 0;
 			uint8_t *prev = partition_elements[0];
@@ -126,13 +144,13 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 				}
 				window_end = row_idx + 1;
 
-				// TODO suuper ugly, vector ops
+				// TODO suuper ugly
 				switch (wexpr->type) {
 				case ExpressionType::AGGREGATE_SUM: {
 					Value sum = Value::BIGINT(0).CastAs(wexpr->return_type);
-					//					for (size_t row_idx_w = window_start; row_idx_w < window_end; row_idx_w++) {
-					//
-					//					}
+					for (size_t row_idx_w = window_start; row_idx_w < window_end; row_idx_w++) {
+						sum = sum + payload_collection.GetValue(0, row_idx_w);
+					}
 					big_data.SetValue(expr_idx, row_idx, sum);
 					break;
 				}

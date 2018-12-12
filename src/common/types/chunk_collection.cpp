@@ -137,6 +137,7 @@ void ChunkCollection::Sort(OrderByDescription &desc, uint64_t result[]) {
 
 
 // FIXME make this more efficient by not using the Value API
+// FIXME: this destroys the order vector, should probably not be doing that
 // since the types are the same a memcpy should do!
 void ChunkCollection::Reorder(uint64_t order[]) {
 	// adapted from https://stackoverflow.com/a/7366196/2652376
