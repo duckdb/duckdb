@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "execution/physical_operator.hpp"
 #include "common/types/chunk_collection.hpp"
 #include "common/types/tuple.hpp"
+#include "execution/physical_operator.hpp"
 
 namespace duckdb {
 
@@ -18,7 +18,7 @@ namespace duckdb {
 class PhysicalWindow : public PhysicalOperator {
 public:
 	PhysicalWindow(LogicalOperator &op, vector<unique_ptr<Expression>> select_list,
-	                  PhysicalOperatorType type = PhysicalOperatorType::WINDOW);
+	               PhysicalOperatorType type = PhysicalOperatorType::WINDOW);
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
@@ -32,8 +32,8 @@ public:
 class PhysicalWindowOperatorState : public PhysicalOperatorState {
 public:
 	PhysicalWindowOperatorState(PhysicalOperator *child, ExpressionExecutor *parent_executor)
-		    : PhysicalOperatorState(child, parent_executor), position(0) {
-		}
+	    : PhysicalOperatorState(child, parent_executor), position(0) {
+	}
 
 	size_t position;
 	ChunkCollection tuples;

@@ -132,6 +132,7 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 
 			// actual computation of windows, naively
 			// FIXME: implement TUM method here (!)
+			// build tree based on payload collection
 			size_t window_start = 0;
 			size_t window_end = 0;
 			uint8_t *prev = partition_elements[0];

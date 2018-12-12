@@ -449,7 +449,6 @@ void PhysicalPlanGenerator::Visit(LogicalIntersect &op) {
 	GenerateExceptIntersect(this, op, JoinType::SEMI);
 }
 
-
 void PhysicalPlanGenerator::Visit(LogicalWindow &op) {
 	LogicalOperatorVisitor::Visit(op);
 	auto window = make_unique<PhysicalWindow>(op, move(op.expressions));

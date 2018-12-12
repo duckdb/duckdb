@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/operator/logical_aggregate.hpp
+// planner/operator/logical_window.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -21,11 +21,11 @@ public:
 	}
 
 	void Accept(LogicalOperatorVisitor *v) override {
-			v->Visit(*this);
-		}
-		vector<string> GetNames() override;
+		v->Visit(*this);
+	}
+	vector<string> GetNames() override;
 
-	protected:
-		void ResolveTypes() override;
-	};
-	} // namespace duckdb
+protected:
+	void ResolveTypes() override;
+};
+} // namespace duckdb

@@ -1,4 +1,5 @@
 #include "parser/query_node/select_node.hpp"
+
 #include "common/enums.hpp"
 
 using namespace duckdb;
@@ -24,7 +25,6 @@ bool SelectNode::HasWindow() {
 	}
 	return false;
 }
-
 
 bool SelectNode::Equals(const QueryNode *other_) {
 	if (!QueryNode::Equals(other_)) {

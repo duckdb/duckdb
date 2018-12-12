@@ -222,7 +222,8 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 				// FIXME: add the columns from the partition/order in the window spec to select_list
 			} else {
 				// leave select_list alone
-				window_select_list[expr_idx] = make_unique_base<Expression, ColumnRefExpression>(select_list[expr_idx]->return_type, expr_idx);
+				window_select_list[expr_idx] =
+				    make_unique_base<Expression, ColumnRefExpression>(select_list[expr_idx]->return_type, expr_idx);
 			}
 		}
 	}
@@ -268,9 +269,9 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 		window->AddChild(move(root));
 		root = move(window);
 		// FIXME
-//		auto prune = make_unique<LogicalPruneColumns>(window_select_list.size());
-//		prune->AddChild(move(root));
-//		root = move(prune);
+		//		auto prune = make_unique<LogicalPruneColumns>(window_select_list.size());
+		//		prune->AddChild(move(root));
+		//		root = move(prune);
 	}
 
 	VisitQueryNode(statement);

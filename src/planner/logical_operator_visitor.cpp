@@ -132,6 +132,6 @@ void LogicalOperatorVisitor::Visit(LogicalExplain &op) {
 void LogicalOperatorVisitor::Visit(LogicalWindow &op) {
 	VisitOperator(op);
 	for (auto &exp : op.expressions) {
-			exp->Accept(this);
-		}
+		exp->Accept(this);
+	}
 }

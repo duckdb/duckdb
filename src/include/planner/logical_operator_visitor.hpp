@@ -67,6 +67,5 @@ public:
 	virtual void Visit(LogicalUpdate &op);
 	virtual void Visit(LogicalTableFunction &op);
 	virtual void Visit(LogicalWindow &op);
-
 };
 } // namespace duckdb

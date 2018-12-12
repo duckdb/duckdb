@@ -20,4 +20,3 @@ void WindowExpression::Serialize(Serializer &serializer) {
 unique_ptr<Expression> WindowExpression::Deserialize(ExpressionDeserializeInfo *info, Deserializer &source) {
 	throw NotImplementedException("eek");
 }
-

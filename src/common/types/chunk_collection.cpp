@@ -58,8 +58,6 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 	}
 }
 
-
-
 static int compare_tuple(ChunkCollection *sort_by, OrderByDescription &desc, size_t left, size_t right) {
 	for (size_t i = 0; i < desc.orders.size(); i++) {
 		Value left_value = sort_by->GetValue(i, left);
@@ -124,17 +122,15 @@ static void _quicksort_inplace(ChunkCollection *sort_by, OrderByDescription &des
 	_quicksort_inplace(sort_by, desc, result, part + 1, right);
 }
 
-
 void ChunkCollection::Sort(OrderByDescription &desc, uint64_t result[]) {
 	assert(result);
 	if (count == 0)
-			return;
+		return;
 	// quicksort
 	int64_t part = _quicksort_initial(this, desc, result);
 	_quicksort_inplace(this, desc, result, 0, part);
 	_quicksort_inplace(this, desc, result, part + 1, count - 1);
 }
-
 
 // FIXME make this more efficient by not using the Value API
 // FIXME: this destroys the order vector, should probably not be doing that
@@ -151,7 +147,7 @@ void ChunkCollection::Reorder(uint64_t order[]) {
 			val_buf[col_idx] = GetValue(col_idx, i);
 		}
 		j = i;
-		while(true) {
+		while (true) {
 			k = order[j];
 			order[j] = j;
 			if (k == i) {
@@ -167,8 +163,6 @@ void ChunkCollection::Reorder(uint64_t order[]) {
 		}
 	}
 }
-
-
 
 Value ChunkCollection::GetValue(size_t column, size_t index) {
 	return chunks[LocateChunk(index)]->data[column].GetValue(index % STANDARD_VECTOR_SIZE);
