@@ -9,6 +9,7 @@
 #pragma once
 
 #include "execution/physical_operator.hpp"
+#include "common/types/chunk_collection.hpp"
 
 namespace duckdb {
 //! PhysicalCrossProduct represents a cross product between two tables
@@ -30,7 +31,7 @@ public:
 	}
 
 	size_t left_position;
-	DataChunk right_chunk;
-	unique_ptr<PhysicalOperatorState> right_state;
+	size_t right_position;
+	ChunkCollection right_data;
 };
 } // namespace duckdb

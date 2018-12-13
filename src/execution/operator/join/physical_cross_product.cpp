@@ -14,36 +14,38 @@ PhysicalCrossProduct::PhysicalCrossProduct(LogicalOperator &op, unique_ptr<Physi
 
 void PhysicalCrossProduct::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalCrossProductOperatorState *>(state_);
-	if (state->right_state && state->left_position >= state->child_chunk.size()) {
-		// ran out of this chunk
-		// move to the next chunk on the right side
-		state->left_position = 0;
-		children[1]->GetChunk(context, state->right_chunk, state->right_state.get());
-		if (state->right_chunk.size() == 0) {
-			// ran out of chunks on the right side
-			// move to the next left chunk and start over on the right hand side
-			state->right_state = nullptr;
+	// first we fully materialize the right child, if we haven't done that yet
+	if (state->right_data.column_count() == 0) {
+		auto right_state = children[1]->GetOperatorState(state->parent);
+		auto types = children[1]->GetTypes();
+
+		DataChunk new_chunk;
+		new_chunk.Initialize(types);
+		do {
+			children[1]->GetChunk(context, new_chunk, right_state.get());
+			if (new_chunk.size() == 0) {
+				break;
+			}
+			// resolve the join expression of the right side
+			state->right_data.Append(new_chunk);
+		} while (new_chunk.size() > 0);
+
+		if (state->right_data.count == 0) {
+			return;
 		}
-	}
-	if (!state->right_state) {
-		// no right state: initialize right and left chunks
-		// left chunk
+		state->right_position = 0;
 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 		if (state->child_chunk.size() == 0) {
 			return;
 		}
-		state->left_position = 0;
-		// right chunk: start over from beginning
-		children[1]->InitializeChunk(state->right_chunk);
-		state->right_state = children[1]->GetOperatorState(state->parent);
-		children[1]->GetChunk(context, state->right_chunk, state->right_state.get());
+	}
+
+	if (state->left_position >= state->child_chunk.size()) {
+		return;
 	}
 
 	auto &left_chunk = state->child_chunk;
-	auto &right_chunk = state->right_chunk;
-	if (right_chunk.sel_vector) {
-		right_chunk.Flatten();
-	}
+	auto &right_chunk = *state->right_data.chunks[state->right_position];
 	// now match the current row of the left relation with the current chunk
 	// from the right relation
 	for (size_t i = 0; i < left_chunk.column_count; i++) {
@@ -58,6 +60,17 @@ void PhysicalCrossProduct::_GetChunk(ClientContext &context, DataChunk &chunk, P
 
 	// for the next iteration, move to the next position on the left side
 	state->left_position++;
+	if (state->left_position >= state->child_chunk.size()) {
+		// ran out of this chunk
+		// move to the next chunk on the right side
+		state->left_position = 0;
+		state->right_position++;
+		if (state->right_position >= state->right_data.chunks.size()) {
+			state->right_position = 0;
+			// move to the next chunk on the left side
+			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+		}
+	}
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalCrossProduct::GetOperatorState(ExpressionExecutor *parent_executor) {
