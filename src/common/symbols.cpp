@@ -57,8 +57,9 @@ template class std::unique_ptr<Rule>;
 template class std::unique_ptr<LogicalFilter>;
 template class std::unique_ptr<LogicalJoin>;
 template class std::unique_ptr<SubqueryRef>;
-template class std::unique_ptr<JoinOrderOptimizer::FilterInfo>;
+template class std::unique_ptr<FilterInfo>;
 template class std::unique_ptr<JoinOrderOptimizer::JoinNode>;
+template class std::unique_ptr<Relation>;
 
 #define INSTANTIATE_VECTOR(VECTOR_DEFINITION)                                                                          \
 	template VECTOR_DEFINITION::size_type VECTOR_DEFINITION::size() const;                                             \
@@ -107,6 +108,5 @@ template class std::unordered_map<string, std::pair<size_t, Expression *>>;
 // template class std::unordered_map<string, TableBinding>;
 template class std::unordered_map<string, SelectStatement *>;
 template class std::unordered_map<size_t, size_t>;
-template class std::unordered_map<size_t, JoinOrderOptimizer::Relation>;
 
 #endif

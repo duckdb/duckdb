@@ -33,11 +33,9 @@ void PhysicalCrossProduct::_GetChunk(ClientContext &context, DataChunk &chunk, P
 		if (state->right_data.count == 0) {
 			return;
 		}
+		state->left_position = 0;
 		state->right_position = 0;
 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-		if (state->child_chunk.size() == 0) {
-			return;
-		}
 	}
 
 	if (state->left_position >= state->child_chunk.size()) {

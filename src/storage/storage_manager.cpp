@@ -11,6 +11,14 @@
 #include "main/database.hpp"
 #include "transaction/transaction_manager.hpp"
 
+constexpr const char *DATABASE_INFO_FILE = "meta.info";
+constexpr const char *DATABASE_TEMP_INFO_FILE = "meta.info.tmp";
+constexpr const char *STORAGE_FILES[] = {"data-a", "data-b"};
+constexpr const char *WAL_FILES[] = {"duckdb-a.wal", "duckdb-b.wal"};
+constexpr const char *SCHEMA_FILE = "schemas.csv";
+constexpr const char *TABLE_LIST_FILE = "tables.csv";
+constexpr const char *TABLE_FILE = "tableinfo.duck";
+
 using namespace duckdb;
 using namespace std;
 
