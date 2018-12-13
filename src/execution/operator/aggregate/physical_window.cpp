@@ -43,6 +43,8 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 			vector<Expression *> exprs;
 			OrderByDescription odesc;
 
+			size_t n_part_col = 0;
+
 			for (size_t prt_idx = 0; prt_idx < wexpr->partitions.size(); prt_idx++) {
 				auto &pexpr = wexpr->partitions[prt_idx];
 				sort_types.push_back(pexpr->return_type);
@@ -50,9 +52,8 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 				odesc.orders.push_back(OrderByNode(
 				    OrderType::ASCENDING,
 				    make_unique_base<Expression, ColumnRefExpression>(pexpr->return_type, exprs.size() - 1)));
+				n_part_col++;
 			}
-			// create this here before the order keys are added
-			auto serializer = TupleSerializer(sort_types);
 
 			for (size_t ord_idx = 0; ord_idx < wexpr->ordering.orders.size(); ord_idx++) {
 				auto &oexpr = wexpr->ordering.orders[ord_idx].expression;
@@ -80,38 +81,9 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 			// sort by the window def using the expression result collection
 			auto sorted_vector = new uint64_t[big_data.count];
 			sort_collection.Sort(odesc, sorted_vector);
-
-			auto sorted_vector2 = new uint64_t[big_data.count];
-			memcpy(sorted_vector2, sorted_vector, sizeof(uint64_t) * big_data.count);
-
 			// inplace reorder of big_data according to sorted_vector
 			big_data.Reorder(sorted_vector);
-			sorted_vector = nullptr;
-
-			sort_collection.Reorder(sorted_vector2);
-			sorted_vector2 = nullptr;
-
-			// serialize partitions
-			// FIXME: this is again lots of intermediate data, we can do this comparision in the loop below too
-			// we need to fetch this from sort_collection though, so keep sorted_vector around?
-			// FIXME how do we serialize single values? Chunk-Wise?
-
-			uint8_t partition_data[sort_collection.count][serializer.TupleSize()];
-			uint8_t *partition_elements[sort_collection.count];
-			for (size_t prt_idx = 0; prt_idx < sort_collection.count; prt_idx++) {
-				partition_elements[prt_idx] = partition_data[prt_idx];
-			}
-			size_t partition_offset = 0;
-			for (size_t i = 0; i < sort_collection.chunks.size(); i++) {
-
-				// serialize the partition columns into bytes so we can compute partition ids below efficiently
-				size_t ser_offset = 0;
-				for (size_t ser_col = 0; ser_col < serializer.TypeSize(); ser_col++) {
-					serializer.SerializeColumn(*sort_collection.chunks[i], &partition_elements[partition_offset],
-					                           ser_col, ser_offset);
-				}
-				partition_offset += STANDARD_VECTOR_SIZE;
-			}
+			sort_collection.Reorder(sorted_vector);
 
 			// evaluate inner expressions of window functions, could be more complex
 
@@ -135,14 +107,24 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 			// build tree based on payload collection
 			size_t window_start = 0;
 			size_t window_end = 0;
-			uint8_t *prev = partition_elements[0];
+
+			vector<Value> prev;
+			prev.resize(n_part_col);
+			for (size_t p_idx = 0; p_idx < prev.size(); p_idx++) {
+				prev[p_idx] = sort_collection.GetValue(p_idx, 0);
+			}
 
 			for (size_t row_idx = 0; row_idx < big_data.count; row_idx++) {
 				// FIXME handle other window types
-
-				if (serializer.Compare(prev, partition_elements[row_idx]) != 0) {
-					window_start = row_idx;
+				for (size_t p_idx = 0; p_idx < prev.size(); p_idx++) {
+					prev[p_idx].Print();
+					sort_collection.GetValue(p_idx, row_idx).Print();
+					if (prev[p_idx] != sort_collection.GetValue(p_idx, row_idx)) {
+						window_start = row_idx;
+					}
+					prev[p_idx] = sort_collection.GetValue(p_idx, row_idx);
 				}
+
 				window_end = row_idx + 1;
 
 				// TODO suuper ugly
@@ -159,8 +141,6 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 					throw NotImplementedException("Window aggregate type %s",
 					                              ExpressionTypeToString(wexpr->type).c_str());
 				}
-
-				prev = partition_elements[row_idx];
 			}
 		}
 	}
