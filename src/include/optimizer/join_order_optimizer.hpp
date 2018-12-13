@@ -16,13 +16,15 @@
 
 namespace duckdb {
 
-class JoinOrderOptimizer {
+class JoinOrderOptimizer : public LogicalOperatorVisitor {
 public:
 	//! Represents a single relation and any metadata accompanying that relation
 	struct Relation {
-		size_t index;
 		LogicalOperator *op;
 		LogicalOperator *parent;
+
+		Relation() {}
+		Relation(LogicalOperator *op, LogicalOperator *parent) : op(op), parent(parent) { }
 	};
 
 	//! Set of relations, used in the join graph
@@ -97,13 +99,21 @@ public:
 public:
 	//! Perform join reordering inside a plan
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
+
+	using LogicalOperatorVisitor::Visit;
+	unique_ptr<Expression> Visit(SubqueryExpression &expr) override;
 private:
+	//! Set of all relations considered in the join optimizer
+	vector<unique_ptr<Relation>> relations;
+	//! A mapping of base table index -> index into relations array (relation number)
 	unordered_map<size_t, size_t> relation_mapping;
-	unordered_map<size_t, Relation> relations;
+	//! A structure holding all the created RelationSet objects and allowing fast lookup on to them
 	RelationInfo relation_set;
-	vector<unique_ptr<FilterInfo>> filters;
+	//! The set of filters that we want to push down
 	FilterNode pushdown_filters;
+	//! The set of edges used in the join optimizer
 	EdgeInfo edge_set;
+	//! The optimal join plan found for the specific RelationSet*
 	unordered_map<RelationSet*, unique_ptr<JoinNode>> plans;
 
 	// Add a filter to the set of to-be-pushed-down filters, where the filter needs columns from the given RelationSet to be evaluated
@@ -111,14 +121,13 @@ private:
 	//! Enumerate all pushdown filters that can be fulfilled by a given RelationSet node (i.e. all entries in pushdown_filters where the given RelationSet is a subset of [[node]]). Return true in the callback to remove the filter from the set of pushdown filters.
 	void EnumeratePushdownFilters(RelationSet *node, std::function<bool(FilterInfo*)> callback);
 
-
 	//! Union two sets of relations together and create a new relation set
 	RelationSet* Union(RelationSet *left, RelationSet *right);
 	//! Create the set difference of left \ right (i.e. all elements in left that are not in right)
 	RelationSet* Difference(RelationSet *left, RelationSet *right);
 
 	//! Extract the bindings referred to by an Expression
-	void ExtractBindings(Expression &expression, std::unordered_set<size_t> &bindings);
+	bool ExtractBindings(Expression &expression, std::unordered_set<size_t> &bindings);
 	//! Create an edge in the edge_set
 	void CreateEdge(RelationSet *left, RelationSet *right, FilterInfo* info);
 	//! Get the EdgeInfo of a specific node

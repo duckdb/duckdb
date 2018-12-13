@@ -23,7 +23,10 @@ unique_ptr<LogicalOperator> SubqueryRewriter::Rewrite(unique_ptr<LogicalOperator
 			case ExpressionType::COMPARE_IN:
 			case ExpressionType::COMPARE_NOT_IN:
 				// (NOT) IN, check if we are dealing with a subquery
-				assert(expr.children.size() == 2);
+				if (expr.children.size() != 2) {
+					// only constant lists have multiple elements
+					break;
+				}
 				if (expr.children[1]->type == ExpressionType::SELECT_SUBQUERY) {
 					// IN (SUBQUERY), rewrite
 					if (RewriteInClause(filter, (OperatorExpression*) filter.expressions[i].get(), (SubqueryExpression*) expr.children[1].get())) {
@@ -46,6 +49,7 @@ unique_ptr<LogicalOperator> SubqueryRewriter::Rewrite(unique_ptr<LogicalOperator
 					}
 				}
 				break;
+			case ExpressionType::COMPARE_EQUAL:
 			case ExpressionType::COMPARE_NOTEQUAL:
 			case ExpressionType::COMPARE_LESSTHAN:
 			case ExpressionType::COMPARE_GREATERTHAN:
