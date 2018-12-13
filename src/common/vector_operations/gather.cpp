@@ -38,6 +38,7 @@ template <class OP> static void generic_gather_loop(Vector &source, Vector &dest
 		throw InvalidTypeException(source.type, "Cannot gather from non-pointer type!");
 	}
 	switch (dest.type) {
+	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
 		gather_templated_loop<int8_t, OP>(source, dest);
 		break;
