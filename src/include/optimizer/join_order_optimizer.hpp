@@ -156,6 +156,10 @@ private:
 	void EnumerateCSGRecursive(RelationSet *node, std::unordered_set<size_t> &exclusion_set);
 	//! Rewrite a logical query plan given the join plan
 	unique_ptr<LogicalOperator> RewritePlan(unique_ptr<LogicalOperator> plan, JoinNode* node);
+	//! Generate cross product edges inside the side
+	void GenerateCrossProducts();
+	//! Perform the join order solving
+	void SolveJoinOrder();
 
 	std::pair<RelationSet*, unique_ptr<LogicalOperator>> GenerateJoins(vector<unique_ptr<LogicalOperator>>& extracted_relations, JoinNode* node);
 };

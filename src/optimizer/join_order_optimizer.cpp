@@ -497,14 +497,18 @@ void JoinOrderOptimizer::CreateEdge(RelationSet *left, RelationSet *right, Filte
 	// now insert the edge to the right relation, if it does not exist
 	for(size_t i = 0; i < info->neighbors.size(); i++) {
 		if (info->neighbors[i]->neighbor == right) {
-			// neighbor already exists, just add the filter
-			info->neighbors[i]->filters.push_back(filter_info);
+			if (filter_info) {
+				// neighbor already exists just add the filter, if we have any
+				info->neighbors[i]->filters.push_back(filter_info);
+			}
 			return;
 		}
 	}
 	// neighbor does not exist, create it
 	auto n = make_unique<NeighborInfo>();
-	n->filters.push_back(filter_info);
+	if (filter_info) {
+		n->filters.push_back(filter_info);
+	}
 	n->neighbor = right;
 	info->neighbors.push_back(move(n));
 }
@@ -596,7 +600,14 @@ static unique_ptr<JoinNode> CreateJoinTree(RelationSet *set, NeighborInfo *info,
 	// the expected cardinality is the max of the child cardinalities
 	// FIXME: we should obviously use better cardinality estimation here
 	// but for now we just assume foreign key joins only
-	size_t expected_cardinality = std::max(left->cardinality, right->cardinality);
+	size_t expected_cardinality;
+	if (info->filters.size() == 0) {
+		// cross product
+		expected_cardinality = left->cardinality * right->cardinality;
+	} else {
+		// normal join, expect foreign key join
+		expected_cardinality = std::max(left->cardinality, right->cardinality);
+	}
 	// cost is expected_cardinality plus the cost of the previous plans
 	size_t cost = expected_cardinality + left->cost + right->cost;
 	return make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
@@ -697,6 +708,39 @@ void JoinOrderOptimizer::EnumerateCSGRecursive(RelationSet *node, unordered_set<
 	}
 }
 
+void JoinOrderOptimizer::SolveJoinOrder() {
+	// now we perform the actual dynamic programming to compute the final result
+	// we enumerate over all the possible pairs in the neighborhood
+	for(size_t i = relations.size(); i > 0; i--) {
+		// for every node in the set, we consider it as the start node once
+		auto start_node = GetRelation(i - 1);
+		// emit the start node
+		EmitCSG(start_node);
+		// initialize the set of exclusion_set as all the nodes with a number below this
+		unordered_set<size_t> exclusion_set;
+		for(size_t j = 0; j < i - 1; j++) {
+			exclusion_set.insert(j);
+		}
+		// then we recursively search for neighbors that do not belong to the banned entries
+		EnumerateCSGRecursive(start_node, exclusion_set);
+	}
+}
+
+void JoinOrderOptimizer::GenerateCrossProducts() {
+	// generate a set of cross products to combine the currently available plans into a full join plan
+	// we create edges between every relation with a high cost
+	for(size_t i = 0; i < relations.size(); i++) {
+		auto left = GetRelation(i);
+		for(size_t j = 0; j < relations.size(); j++) {
+			if (i != j) {
+				auto right =  GetRelation(j);
+				CreateEdge(left, right, nullptr);
+				CreateEdge(right, left, nullptr);
+			}
+		}
+	}
+}
+
 static unique_ptr<LogicalOperator> ExtractRelation(Relation &rel) {
 	auto &children = rel.parent->children;
 	for(size_t i = 0; i < children.size(); i++) {
@@ -730,29 +774,37 @@ pair<RelationSet*, unique_ptr<LogicalOperator>> JoinOrderOptimizer::GenerateJoin
 		auto left = GenerateJoins(extracted_relations, node->left);
 		auto right = GenerateJoins(extracted_relations, node->right);
 		
-		// now create the join node
-		auto join = make_unique<LogicalJoin>(JoinType::INNER);
-		join->children.push_back(move(left.second));
-		join->children.push_back(move(right.second));
-		// set the join conditions from the join node
-		for(auto &f : node->info->filters) {
-			// extract the filter from the operator it originally belonged to
-			auto condition = ExtractFilter(f);
-			// now create the actual join condition
-			assert((IsSubset(left.first, f->left_set)  && IsSubset(right.first, f->right_set)) || 
-			       (IsSubset(left.first, f->right_set) && IsSubset(right.first, f->left_set))) ;
-			JoinCondition cond;
-			// we need to figure out which side is which by looking at the relations available to us
-			int left_child = IsSubset(left.first, f->left_set) ? 0 : 1;
-			int right_child = 1 - left_child;
-			cond.left = move(condition->children[left_child]);
-			cond.right = move(condition->children[right_child]);
-			cond.comparison = condition->type;
-			join->conditions.push_back(move(cond));
+		if (node->info->filters.size() == 0) {
+			// no filters, create a cross product
+			auto join = make_unique<LogicalCrossProduct>();
+			join->children.push_back(move(left.second));
+			join->children.push_back(move(right.second));
+			result_operator = move(join);
+		} else {
+			// we have filters, create a join node
+			auto join = make_unique<LogicalJoin>(JoinType::INNER);
+			join->children.push_back(move(left.second));
+			join->children.push_back(move(right.second));
+			// set the join conditions from the join node
+			for(auto &f : node->info->filters) {
+				// extract the filter from the operator it originally belonged to
+				auto condition = ExtractFilter(f);
+				// now create the actual join condition
+				assert((IsSubset(left.first, f->left_set)  && IsSubset(right.first, f->right_set)) || 
+					(IsSubset(left.first, f->right_set) && IsSubset(right.first, f->left_set))) ;
+				JoinCondition cond;
+				// we need to figure out which side is which by looking at the relations available to us
+				int left_child = IsSubset(left.first, f->left_set) ? 0 : 1;
+				int right_child = 1 - left_child;
+				cond.left = move(condition->children[left_child]);
+				cond.right = move(condition->children[right_child]);
+				cond.comparison = condition->type;
+				join->conditions.push_back(move(cond));
+			}
+			assert(join->conditions.size() > 0);
+			result_operator = move(join);
 		}
-		assert(join->conditions.size() > 0);
 		result_relation = Union(left.first, right.first);
-		result_operator = move(join);
 	} else {
 		// base node, get the entry from the list of extracted relations
 		assert(node->set->count == 1);
@@ -885,20 +937,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		plans[node] = make_unique<JoinNode>(node, rel.op->EstimateCardinality());
 	}
 	// now we perform the actual dynamic programming to compute the final result
-	// we enumerate over all the possible pairs in the neighborhood
-	for(size_t i = relations.size(); i > 0; i--) {
-		// for every node in the set, we consider it as the start node once
-		auto start_node = GetRelation(i - 1);
-		// emit the start node
-		EmitCSG(start_node);
-		// initialize the set of exclusion_set as all the nodes with a number below this
-		unordered_set<size_t> exclusion_set;
-		for(size_t j = 0; j < i - 1; j++) {
-			exclusion_set.insert(j);
-		}
-		// then we recursively search for neighbors that do not belong to the banned entries
-		EnumerateCSGRecursive(start_node, exclusion_set);
-	}
+	SolveJoinOrder();
 	// now the optimal join path should have been found
 	// get it from the node
 	unordered_set<size_t> bindings;
@@ -909,10 +948,14 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	auto final_plan = plans.find(total_relation);
 	if (final_plan == plans.end()) {
 		// could not find the final plan
-		// this should only happen in case the sets are actually disjunct!
-		// in this case we need to generate a cross product between the disjoint sets
-		// FIXME: for now we just don't do anything because the base plan is always "correct" but we could generate joins if there are joins
-		return plan;
+		// this should only happen in case the sets are actually disjunct
+		// in this case we need to generate cross product to connect the disjoint sets
+		GenerateCrossProducts();
+		//! solve the join order again
+		SolveJoinOrder();
+		// now we can obtain the final plan!
+		final_plan = plans.find(total_relation);
+		assert(final_plan != plans.end());
 	}
 	// now perform the actual reordering
 	return RewritePlan(move(plan), final_plan->second.get());
