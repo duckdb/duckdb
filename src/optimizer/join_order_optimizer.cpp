@@ -189,8 +189,7 @@ static JoinSide GetJoinSide(Expression &expression, unordered_set<size_t> &left_
 	return join_side;
 }
 
-static void CreateJoinCondition(LogicalJoin *join, unique_ptr<Expression> expr, unordered_set<size_t>& left_bindings, unordered_set<size_t>& right_bindings) {
-	unordered_set<size_t> left_expr_bindings, right_expr_bindings;
+static unique_ptr<LogicalOperator> CreateJoinCondition(unique_ptr<LogicalOperator> op, LogicalJoin &join, unique_ptr<Expression> expr, unordered_set<size_t>& left_bindings, unordered_set<size_t>& right_bindings) {
 	if (expr->type >= ExpressionType::COMPARE_EQUAL &&
 		expr->type <= ExpressionType::COMPARE_NOTLIKE) {
 		// comparison
@@ -200,7 +199,7 @@ static void CreateJoinCondition(LogicalJoin *join, unique_ptr<Expression> expr, 
 		if (total_side != JoinSide::BOTH) {
 			// join condition does not reference both sides, add it as filter under the join
 			int push_side = total_side == JoinSide::LEFT ? 0 : 1;
-			join->children[push_side] = PushFilter(move(join->children[push_side]), move(expr));
+			join.children[push_side] = PushFilter(move(join.children[push_side]), move(expr));
 		} else {
 			// assert both
 			assert(left_side != JoinSide::BOTH && right_side != JoinSide::BOTH);
@@ -214,7 +213,7 @@ static void CreateJoinCondition(LogicalJoin *join, unique_ptr<Expression> expr, 
 			}
 			condition.left = move(expr->children[left_side]);
 			condition.right = move(expr->children[1 - left_side]);
-			join->conditions.push_back(move(condition));
+			join.conditions.push_back(move(condition));
 		}
 	} else if (expr->type == ExpressionType::OPERATOR_NOT) {
 		assert(expr->children.size() == 1);
@@ -229,12 +228,36 @@ static void CreateJoinCondition(LogicalJoin *join, unique_ptr<Expression> expr, 
 		// invert the condition to express NOT, this way we can still use
 		// equi-joins
 		expr->children[0]->type = ComparisonExpression::NegateComparisionExpression(child_type);
-		CreateJoinCondition(join, move(expr->children[0]), left_bindings, right_bindings);
+		return CreateJoinCondition(move(op), join, move(expr->children[0]), left_bindings, right_bindings);
 	} else {
-		// unrecognized type
-		throw Exception("Unrecognized operator type for join!");
+		// unrecognized type for join condition
+		// push as filter under the join
+		op = PushFilter(move(op), move(expr));
 	}
+	return op;
+}
 
+//! Resolve join conditions for non-inner joins
+unique_ptr<LogicalOperator> JoinOrderOptimizer::ResolveJoinConditions(unique_ptr<LogicalOperator> op) {
+	// first resolve the join conditions of any children
+	for(size_t i = 0; i < op->children.size(); i++) {
+		op->children[i] = ResolveJoinConditions(move(op->children[i]));
+	}
+	if (op->type == LogicalOperatorType::JOIN) {
+		LogicalJoin &join = (LogicalJoin&) *op;
+		if (join.type != JoinType::INNER) {
+			// non-inner join, turn expressions into proper join conditions
+			unordered_set<size_t> left_bindings, right_bindings;
+			GetTableReferences(join.children[0].get(), left_bindings);
+			GetTableReferences(join.children[1].get(), right_bindings);
+			// now for each expression turn it into a proper JoinCondition
+			for(size_t i = 0; i < join.expressions.size(); i++) {
+				op = CreateJoinCondition(move(op), join, move(join.expressions[i]), left_bindings, right_bindings);
+			}
+			join.expressions.clear();
+		}
+	}
+	return op;
 }
 
 bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<unique_ptr<FilterInfo>>& filters, LogicalOperator *parent) {
@@ -264,20 +287,11 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 			// enumerate all base relations obtained from this join and add them to the relation mapping
 			// also, we have to resolve the join conditions for the joins here
 			// get the left and right bindings
-			unordered_set<size_t> left_bindings, right_bindings;
-			GetTableReferences(join->children[0].get(), left_bindings);
-			GetTableReferences(join->children[1].get(), right_bindings);
-			// now for each expression turn it into a proper JoinCondition
-			for(size_t i = 0; i < join->expressions.size(); i++) {
-				CreateJoinCondition(join, move(join->expressions[i]), left_bindings, right_bindings);
-			}
-			join->expressions.clear();
+			unordered_set<size_t> bindings;
+			GetTableReferences(join, bindings);
 			// now create the relation that refers to all these bindings
 			auto relation = make_unique<Relation>(&input_op, parent);
-			for(size_t it : left_bindings) {
-				relation_mapping[it] = relations.size();
-			}
-			for(size_t it : right_bindings) {
+			for(size_t it : bindings) {
 				relation_mapping[it] = relations.size();
 			}
 			relations.push_back(move(relation));
@@ -863,6 +877,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	// first we visit the plan in order to optimize subqueries
 	plan->Accept(this);
 	// now we optimize the current plan
+	// first resolve join conditions for non-inner joins
+	plan = ResolveJoinConditions(move(plan));
 	// first we skip past until we find the first projection, we do this because the HAVING clause inserts a Filter AFTER the group by
 	// and this filter cannot be reordered
 	LogicalOperator *op = plan.get();
@@ -936,6 +952,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		auto node = GetRelation(i);
 		plans[node] = make_unique<JoinNode>(node, rel.op->EstimateCardinality());
 	}
+	// printf("Edge set\n");
+	// PrintEdgeSet(edge_set.children);
 	// now we perform the actual dynamic programming to compute the final result
 	SolveJoinOrder();
 	// now the optimal join path should have been found

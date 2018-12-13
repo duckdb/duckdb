@@ -161,6 +161,7 @@ private:
 	//! Perform the join order solving
 	void SolveJoinOrder();
 
+	unique_ptr<LogicalOperator> ResolveJoinConditions(unique_ptr<LogicalOperator> op);
 	std::pair<RelationSet*, unique_ptr<LogicalOperator>> GenerateJoins(vector<unique_ptr<LogicalOperator>>& extracted_relations, JoinNode* node);
 };
 

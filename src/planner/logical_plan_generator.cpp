@@ -475,8 +475,10 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
 	auto join = make_unique<LogicalJoin>(expr.type);
 
 	if (root) {
-		throw Exception("Cross product cannot have children!");
+		throw Exception("Joins product cannot have children!");
 	}
+
+	// we do not generate joins here
 
 	AcceptChild(&expr.left);
 	assert(root);
@@ -492,6 +494,7 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
 	LogicalFilter::SplitPredicates(join->expressions);
 
 	root = move(join);
+
 	return nullptr;
 }
 

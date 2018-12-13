@@ -275,12 +275,17 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 
 	// now visit the children
 	assert(op.children.size() == 2);
-	assert(op.conditions.size() > 0);
 	
 	op.children[0]->Accept(this);
 	auto left = move(plan);
 	op.children[1]->Accept(this);
 	auto right = move(plan);
+
+	if (op.conditions.size() == 0) {
+		plan = make_unique<PhysicalCrossProduct>(op, move(left), move(right));
+		return;
+	}
+	assert(op.conditions.size() > 0);
 
 	bool has_equality = false;
 	bool has_inequality = false;
