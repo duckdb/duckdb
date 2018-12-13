@@ -308,11 +308,11 @@ void JoinOrderOptimizer::AddPushdownFilter(RelationSet *set, FilterInfo* filter)
 		auto entry = info->children.find(set->relations[i]);
 		if (entry == info->children.end()) {
 			// node not found, create it
-			auto insert_it = info->children.insert(make_pair(set->relations[i], FilterNode()));
+			auto insert_it = info->children.insert(make_pair(set->relations[i], make_unique<FilterNode>()));
 			entry = insert_it.first;
 		}
 		// move to the next node
-		info = &entry->second;
+		info = entry->second.get();
 	}
 	info->filters.push_back(filter);
 }
@@ -326,7 +326,7 @@ void JoinOrderOptimizer::EnumeratePushdownFilters(RelationSet *node, function<bo
 				// node not found
 				break;
 			}
-			info = &entry->second;
+			info = entry->second.get();
 			// check if any subset of the other set is in this sets neighbors
 			for(size_t k = 0; k < info->filters.size(); k++) {
 				if (callback(info->filters[k])) {

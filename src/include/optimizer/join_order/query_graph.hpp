@@ -25,7 +25,7 @@ struct FilterInfo {
 
 struct FilterNode {
 	vector<FilterInfo*> filters;
-	unordered_map<size_t, FilterNode> children;
+	unordered_map<size_t, unique_ptr<FilterNode>> children;
 };
 
 struct NeighborInfo {
