@@ -38,7 +38,6 @@ public:
 	size_t position;
 	ChunkCollection tuples;
 	ChunkCollection window_results;
-
 };
 
 } // namespace duckdb

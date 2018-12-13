@@ -137,7 +137,7 @@ static unique_ptr<Expression> transform_aggregates_into_colref(LogicalOperator *
 }
 
 unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(SelectStatement &statement) {
-	auto expected_column_count = statement.node->GetSelectList().size();
+	auto expected_column_count = statement.node->GetSelectCount();
 	statement.node->Accept(this);
 	// prune the root node
 	assert(root);
@@ -211,22 +211,6 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 
 	// separate projection/aggr and window functions into two selection lists if req.
 	auto select_list = move(statement.select_list);
-	vector<unique_ptr<Expression>> window_select_list;
-	if (has_window) {
-		window_select_list.resize(select_list.size());
-		for (size_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
-			if (select_list[expr_idx]->GetExpressionClass() == ExpressionClass::WINDOW) {
-				window_select_list[expr_idx] = move(select_list[expr_idx]);
-				// TODO: does this need to be a groupref if we have an aggr below?
-				select_list[expr_idx] = make_unique_base<Expression, ConstantExpression>(Value(42));
-				// FIXME: add the columns from the partition/order in the window spec to select_list
-			} else {
-				// leave select_list alone
-				window_select_list[expr_idx] =
-				    make_unique_base<Expression, ColumnRefExpression>(select_list[expr_idx]->return_type, expr_idx);
-			}
-		}
-	}
 	size_t original_column_count = select_list.size();
 	if (has_aggr) {
 		auto aggregate = make_unique<LogicalAggregate>(move(select_list));
@@ -258,20 +242,16 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 			}
 		}
 	} else if (has_window) {
-		assert(window_select_list.size() > 0);
-		auto window = make_unique<LogicalWindow>(move(window_select_list));
+		assert(select_list.size() > 0);
+		auto window = make_unique<LogicalWindow>(move(select_list));
 		window->AddChild(move(root));
 		root = move(window);
-		// FIXME
-		//		auto prune = make_unique<LogicalPruneColumns>(window_select_list.size());
-		//		prune->AddChild(move(root));
-		//		root = move(prune);
+
 	} else if (select_list.size() > 0) {
 		auto projection = make_unique<LogicalProjection>(move(select_list));
 		projection->AddChild(move(root));
 		root = move(projection);
 	}
-
 
 	VisitQueryNode(statement);
 }

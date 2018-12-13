@@ -1,12 +1,12 @@
 #include "execution/operator/aggregate/physical_window.hpp"
 
+#include "common/types/chunk_collection.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
 #include "parser/expression/aggregate_expression.hpp"
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
 #include "parser/expression/window_expression.hpp"
-#include "common/types/chunk_collection.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -23,17 +23,14 @@ PhysicalWindow::PhysicalWindow(LogicalOperator &op, vector<unique_ptr<Expression
 
 void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalWindowOperatorState *>(state_);
-	// we kind of need to materialize the intermediate here.
 	ChunkCollection &big_data = state->tuples;
 	ChunkCollection &window_results = state->window_results;
 
 	if (state->position == 0) {
-		// materialize intermediate
 		do {
 			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 			big_data.Append(state->child_chunk);
 		} while (state->child_chunk.size() != 0);
-
 
 		vector<TypeId> window_types;
 		for (size_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
@@ -51,7 +48,6 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 			window_chunk.Verify();
 			window_results.Append(window_chunk);
 		}
-
 
 		size_t window_output_idx = 0;
 		for (size_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
@@ -161,7 +157,6 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 					                              ExpressionTypeToString(wexpr->type).c_str());
 				}
 			}
-
 			window_output_idx++;
 		}
 	}

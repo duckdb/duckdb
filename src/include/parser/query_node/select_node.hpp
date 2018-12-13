@@ -64,6 +64,10 @@ public:
 		return select_list;
 	}
 
+	size_t GetSelectCount() override {
+		return result_column_count;
+	}
+
 	bool Equals(const QueryNode *other) override;
 	//! Create a copy of this SelectNode
 	unique_ptr<QueryNode> Copy() override;

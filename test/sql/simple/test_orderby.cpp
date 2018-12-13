@@ -15,6 +15,7 @@ TEST_CASE("Test ORDER BY keyword", "[order]") {
 	// simple ORDER BY
 	result = con.Query("SELECT b FROM test ORDER BY a DESC;");
 	REQUIRE(CHECK_COLUMN(result, 0, {22, 21, 22}));
+	REQUIRE(result->column_count() == 1);
 
 	result = con.Query("SELECT a, b FROM test ORDER BY a;");
 	REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
