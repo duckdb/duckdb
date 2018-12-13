@@ -146,11 +146,13 @@ enum class ExpressionType : uint8_t {
 	WINDOW_SUM = 115,
 	WINDOW_RANK = 116,
 	WINDOW_ROW_NUMBER = 117,
+	WINDOW_FIRST_VALUE = 118,
+	WINDOW_LAST_VALUE = 119,
 
 	// -----------------------------
 	// Functions
 	// -----------------------------
-	FUNCTION = 125,
+	FUNCTION = 140,
 
 	// -----------------------------
 	// Operators

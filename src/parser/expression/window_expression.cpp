@@ -8,8 +8,9 @@ using namespace std;
 WindowExpression::WindowExpression(ExpressionType type, unique_ptr<Expression> child) : Expression(type) {
 	switch (type) {
 	case ExpressionType::WINDOW_SUM:
-	case ExpressionType::WINDOW_RANK:
 	case ExpressionType::WINDOW_ROW_NUMBER:
+	case ExpressionType::WINDOW_FIRST_VALUE:
+	case ExpressionType::WINDOW_LAST_VALUE:
 
 		break;
 	default:
@@ -62,6 +63,13 @@ void WindowExpression::ResolveType() {
 	case ExpressionType::WINDOW_ROW_NUMBER:
 	case ExpressionType::WINDOW_RANK:
 		return_type = TypeId::BIGINT;
+		break;
+	case ExpressionType::WINDOW_FIRST_VALUE:
+	case ExpressionType::WINDOW_LAST_VALUE:
+		if (children.size() != 1) {
+			throw Exception("Window functions FIRST_VALUE and LAST_VALUE need an expression");
+		}
+		return_type = children[0]->return_type;
 		break;
 	default:
 		throw NotImplementedException("Unsupported window type!");

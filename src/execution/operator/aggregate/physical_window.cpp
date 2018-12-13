@@ -161,12 +161,8 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 					window_results.SetValue(window_output_idx, row_idx, rowno);
 					break;
 				}
-				case ExpressionType::WINDOW_RANK: {
-					Value rank = Value::Numeric(wexpr->return_type, 0);
-					//					for (size_t row_idx_w = window_start; row_idx_w < window_end; row_idx_w++) {
-					//						rank = rank + Value::TINYINT(1).CastAs(wexpr->return_type);
-					//					}
-					window_results.SetValue(window_output_idx, row_idx, rank);
+				case ExpressionType::WINDOW_FIRST_VALUE: {
+					window_results.SetValue(window_output_idx, row_idx, payload_collection.GetValue(0, window_start));
 					break;
 				}
 				default:

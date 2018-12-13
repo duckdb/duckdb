@@ -271,6 +271,10 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "RANK";
 	case ExpressionType::WINDOW_ROW_NUMBER:
 		return "ROW_NUMBER";
+	case ExpressionType::WINDOW_FIRST_VALUE:
+		return "FIRST_VALUE";
+	case ExpressionType::WINDOW_LAST_VALUE:
+		return "LAST_VALUE";
 	case ExpressionType::FUNCTION:
 		return "FUNCTION";
 	case ExpressionType::OPERATOR_CASE_EXPR:
