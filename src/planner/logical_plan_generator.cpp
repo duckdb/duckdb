@@ -257,13 +257,7 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 				root = move(prune);
 			}
 		}
-	} else if (select_list.size() > 0) {
-		auto projection = make_unique<LogicalProjection>(move(select_list));
-		projection->AddChild(move(root));
-		root = move(projection);
-	}
-
-	if (has_window) {
+	} else if (has_window) {
 		assert(window_select_list.size() > 0);
 		auto window = make_unique<LogicalWindow>(move(window_select_list));
 		window->AddChild(move(root));
@@ -272,7 +266,12 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 		//		auto prune = make_unique<LogicalPruneColumns>(window_select_list.size());
 		//		prune->AddChild(move(root));
 		//		root = move(prune);
+	} else if (select_list.size() > 0) {
+		auto projection = make_unique<LogicalProjection>(move(select_list));
+		projection->AddChild(move(root));
+		root = move(projection);
 	}
+
 
 	VisitQueryNode(statement);
 }

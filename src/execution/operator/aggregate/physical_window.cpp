@@ -6,6 +6,7 @@
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
 #include "parser/expression/window_expression.hpp"
+#include "common/types/chunk_collection.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -24,6 +25,7 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 	auto state = reinterpret_cast<PhysicalWindowOperatorState *>(state_);
 	// we kind of need to materialize the intermediate here.
 	ChunkCollection &big_data = state->tuples;
+	ChunkCollection &window_results = state->window_results;
 
 	if (state->position == 0) {
 		// materialize intermediate
@@ -32,6 +34,26 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 			big_data.Append(state->child_chunk);
 		} while (state->child_chunk.size() != 0);
 
+
+		vector<TypeId> window_types;
+		for (size_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
+			if (select_list[expr_idx]->GetExpressionClass() == ExpressionClass::WINDOW) {
+				window_types.push_back(select_list[expr_idx]->return_type);
+			}
+		}
+
+		for (size_t i = 0; i < big_data.chunks.size(); i++) {
+			DataChunk window_chunk;
+			window_chunk.Initialize(window_types);
+			for (size_t col_idx = 0; col_idx < window_chunk.column_count; col_idx++) {
+				window_chunk.data[col_idx].count = big_data.chunks[i]->size();
+			}
+			window_chunk.Verify();
+			window_results.Append(window_chunk);
+		}
+
+
+		size_t window_output_idx = 0;
 		for (size_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
 			if (select_list[expr_idx]->GetExpressionClass() != ExpressionClass::WINDOW) {
 				continue;
@@ -86,8 +108,6 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 			sort_collection.Reorder(sorted_vector);
 
 			// evaluate inner expressions of window functions, could be more complex
-
-			// FIXME assert this?
 			ChunkCollection payload_collection;
 			assert(wexpr->children.size() == 1);
 			vector<TypeId> inner_types = {wexpr->children[0]->return_type};
@@ -108,6 +128,7 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 			size_t window_start = 0;
 			size_t window_end = 0;
 
+			// initialize current partition to first row
 			vector<Value> prev;
 			prev.resize(n_part_col);
 			for (size_t p_idx = 0; p_idx < prev.size(); p_idx++) {
@@ -117,24 +138,22 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 			for (size_t row_idx = 0; row_idx < big_data.count; row_idx++) {
 				// FIXME handle other window types
 				for (size_t p_idx = 0; p_idx < prev.size(); p_idx++) {
-					prev[p_idx].Print();
-					sort_collection.GetValue(p_idx, row_idx).Print();
-					if (prev[p_idx] != sort_collection.GetValue(p_idx, row_idx)) {
+					Value s_val = sort_collection.GetValue(p_idx, row_idx);
+					if (prev[p_idx] != s_val) {
 						window_start = row_idx;
 					}
-					prev[p_idx] = sort_collection.GetValue(p_idx, row_idx);
+					// always overwrite because whatever
+					prev[p_idx] = s_val;
 				}
-
 				window_end = row_idx + 1;
 
-				// TODO suuper ugly
 				switch (wexpr->type) {
 				case ExpressionType::AGGREGATE_SUM: {
 					Value sum = Value::BIGINT(0).CastAs(wexpr->return_type);
 					for (size_t row_idx_w = window_start; row_idx_w < window_end; row_idx_w++) {
 						sum = sum + payload_collection.GetValue(0, row_idx_w);
 					}
-					big_data.SetValue(expr_idx, row_idx, sum);
+					window_results.SetValue(window_output_idx, row_idx, sum);
 					break;
 				}
 				default:
@@ -142,6 +161,8 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 					                              ExpressionTypeToString(wexpr->type).c_str());
 				}
 			}
+
+			window_output_idx++;
 		}
 	}
 
@@ -150,8 +171,20 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 	}
 
 	// just return what was computed before
-	auto &ret_ch = big_data.GetChunk(state->position);
-	ret_ch.Copy(chunk);
+	auto &proj_ch = big_data.GetChunk(state->position);
+	auto &wind_ch = window_results.GetChunk(state->position);
+
+	size_t window_output_idx = 0;
+	for (size_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
+		if (select_list[expr_idx]->GetExpressionClass() == ExpressionClass::WINDOW) {
+			chunk.data[expr_idx].Reference(wind_ch.data[window_output_idx]);
+			window_output_idx++;
+		} else {
+			ExpressionExecutor executor(proj_ch, context);
+			executor.ExecuteExpression(select_list[expr_idx].get(), chunk.data[expr_idx]);
+		}
+	}
+
 	state->position += STANDARD_VECTOR_SIZE;
 }
 
