@@ -9,6 +9,7 @@
 #pragma once
 
 #include "common/common.hpp"
+#include "common/printable.hpp"
 #include "optimizer/join_order/relation.hpp"
 
 #include <unordered_set>
@@ -36,7 +37,7 @@ struct NeighborInfo {
 };
 
 //! The QueryGraph contains edges between relations and allows edges to be created/queried
-class QueryGraph {
+class QueryGraph : public Printable {
 public:
 	//! Contains a node with info about neighboring relations and child edge infos
 	struct QueryEdge {
@@ -44,6 +45,8 @@ public:
 		unordered_map<size_t, unique_ptr<QueryEdge>> children;
 	};
 public:
+	string ToString() const override;
+
 	//! Create an edge in the edge_set
 	void CreateEdge(RelationSet *left, RelationSet *right, FilterInfo* info);
 	//! Returns a connection if there is an edge that connects these two sets, or nullptr otherwise

@@ -1,9 +1,32 @@
 #include "optimizer/join_order/query_graph.hpp"
+#include "common/string_util.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 using QueryEdge = QueryGraph::QueryEdge;
+
+static string QueryEdgeToString(const QueryEdge *info, vector<size_t> prefix) {
+	string result = "";
+	string source = "[";
+	for(size_t i = 0; i < prefix.size(); i++) {
+		source += to_string(prefix[i]) + (i < prefix.size() - 1 ? ", " : "");
+	}
+	source += "]";
+	for(auto &entry : info->neighbors) {
+		result += StringUtil::Format("%s -> %s\n", source.c_str(), entry->neighbor->ToString().c_str());
+	}
+	for (auto &entry : info->children) {
+		vector<size_t> new_prefix = prefix;
+		new_prefix.push_back(entry.first);
+		result += QueryEdgeToString(entry.second.get(), new_prefix);
+	}
+	return result;
+}
+
+string QueryGraph::ToString() const {
+	return QueryEdgeToString(&root, {});
+}
 
 QueryEdge* QueryGraph::GetQueryEdge(RelationSet *left) {
 	assert(left && left->count > 0);

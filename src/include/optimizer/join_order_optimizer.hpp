@@ -29,6 +29,16 @@ public:
 		JoinNode *left;
 		JoinNode *right;
 
+		string ToString() {
+			string result = "";
+			if (left) {
+				result = StringUtil::Format("[%s JOIN %s] [Estimated Cardinality: %zu]\n", left->set->ToString().c_str(), right->set->ToString().c_str(), cardinality);
+				result += left->ToString();
+				result += right->ToString();
+			}
+			return result;
+		}
+
 		//! Create a leaf node in the join tree
 		JoinNode(RelationSet *set, size_t cardinality) : 
 			set(set), info(nullptr), cardinality(cardinality), cost(cardinality), left(nullptr), right(nullptr) {
