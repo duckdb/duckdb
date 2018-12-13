@@ -10,7 +10,9 @@
 
 #include "common/common.hpp"
 #include "optimizer/join_order/relation.hpp"
+
 #include <unordered_set>
+#include <functional>
 
 namespace duckdb {
 class Expression;

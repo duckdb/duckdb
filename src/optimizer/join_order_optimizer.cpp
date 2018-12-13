@@ -2,6 +2,8 @@
 #include "planner/operator/list.hpp"
 #include "parser/expression/list.hpp"
 
+#include <algorithm>
+
 using namespace duckdb;
 using namespace std;
 

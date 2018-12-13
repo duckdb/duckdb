@@ -1,4 +1,5 @@
 #include "optimizer/join_order/relation.hpp"
+#include <algorithm>
 
 using namespace duckdb;
 using namespace std;
