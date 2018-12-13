@@ -144,6 +144,7 @@ enum class ExpressionType : uint8_t {
 	AGGREGATE_STDDEV_SAMP = 109,
 
 	WINDOW_SUM = 115,
+	WINDOW_RANK = 116,
 
 	// -----------------------------
 	// Functions

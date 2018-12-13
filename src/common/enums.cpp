@@ -263,6 +263,10 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "AVG";
 	case ExpressionType::AGGREGATE_FIRST:
 		return "FIRST";
+	case ExpressionType::WINDOW_SUM:
+		return "SUM";
+	case ExpressionType::WINDOW_RANK:
+		return "RANK";
 	case ExpressionType::FUNCTION:
 		return "FUNCTION";
 	case ExpressionType::OPERATOR_CASE_EXPR:

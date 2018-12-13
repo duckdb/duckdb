@@ -10,7 +10,7 @@ WindowExpression::WindowExpression(ExpressionType type, unique_ptr<Expression> c
 	case ExpressionType::WINDOW_SUM:
 		break;
 	default:
-		throw NotImplementedException("Window aggregate type %s not supported",  ExpressionTypeToString(type).c_str());
+		throw NotImplementedException("Window aggregate type %s not supported", ExpressionTypeToString(type).c_str());
 	}
 	if (child) {
 		AddChild(move(child));
@@ -56,7 +56,9 @@ void WindowExpression::ResolveType() {
 		}
 
 		break;
-
+	case ExpressionType::WINDOW_RANK:
+		return_type = TypeId::BIGINT;
+		break;
 	default:
 		throw NotImplementedException("Unsupported window type!");
 	}

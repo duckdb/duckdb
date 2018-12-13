@@ -61,8 +61,6 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 		}
 
 		auto win_fun_type = WindowToExpressionType(lowercase_name);
-		// FIXME support window-specific aggs such as lag()
-		// first up: actual aggr expr
 		if (win_fun_type == ExpressionType::INVALID) {
 			throw Exception("Unknown/unsupported window function");
 		}
