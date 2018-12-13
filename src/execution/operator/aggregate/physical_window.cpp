@@ -105,17 +105,18 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 
 			// evaluate inner expressions of window functions, could be more complex
 			ChunkCollection payload_collection;
-			assert(wexpr->children.size() == 1);
-			vector<TypeId> inner_types = {wexpr->children[0]->return_type};
-			for (size_t i = 0; i < big_data.chunks.size(); i++) {
-				DataChunk payload_chunk;
-				payload_chunk.Initialize(inner_types);
+			if (wexpr->children.size() > 0) {
+				vector<TypeId> inner_types = {wexpr->children[0]->return_type};
+				for (size_t i = 0; i < big_data.chunks.size(); i++) {
+					DataChunk payload_chunk;
+					payload_chunk.Initialize(inner_types);
 
-				ExpressionExecutor executor(*big_data.chunks[i], context);
-				executor.ExecuteExpression(wexpr->children[0].get(), payload_chunk.data[0]);
+					ExpressionExecutor executor(*big_data.chunks[i], context);
+					executor.ExecuteExpression(wexpr->children[0].get(), payload_chunk.data[0]);
 
-				payload_chunk.Verify();
-				payload_collection.Append(payload_chunk);
+					payload_chunk.Verify();
+					payload_collection.Append(payload_chunk);
+				}
 			}
 
 			// actual computation of windows, naively
@@ -145,11 +146,27 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 
 				switch (wexpr->type) {
 				case ExpressionType::WINDOW_SUM: {
-					Value sum = Value::BIGINT(0).CastAs(wexpr->return_type);
+					Value sum = Value::Numeric(wexpr->return_type, 0);
 					for (size_t row_idx_w = window_start; row_idx_w < window_end; row_idx_w++) {
 						sum = sum + payload_collection.GetValue(0, row_idx_w);
 					}
 					window_results.SetValue(window_output_idx, row_idx, sum);
+					break;
+				}
+				case ExpressionType::WINDOW_ROW_NUMBER: {
+					Value rowno = Value::Numeric(wexpr->return_type, 0);
+					for (size_t row_idx_w = window_start; row_idx_w < window_end; row_idx_w++) {
+						rowno = rowno + 1;
+					}
+					window_results.SetValue(window_output_idx, row_idx, rowno);
+					break;
+				}
+				case ExpressionType::WINDOW_RANK: {
+					Value rank = Value::Numeric(wexpr->return_type, 0);
+					//					for (size_t row_idx_w = window_start; row_idx_w < window_end; row_idx_w++) {
+					//						rank = rank + Value::TINYINT(1).CastAs(wexpr->return_type);
+					//					}
+					window_results.SetValue(window_output_idx, row_idx, rank);
 					break;
 				}
 				default:

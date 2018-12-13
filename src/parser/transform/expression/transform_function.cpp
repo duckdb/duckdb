@@ -34,7 +34,12 @@ static ExpressionType AggregateToExpressionType(string &fun_name) {
 static ExpressionType WindowToExpressionType(string &fun_name) {
 	if (fun_name == "sum") {
 		return ExpressionType::WINDOW_SUM;
+	} else if (fun_name == "rank") {
+		return ExpressionType::WINDOW_RANK;
+	} else if (fun_name == "row_number") {
+		return ExpressionType::WINDOW_ROW_NUMBER;
 	}
+
 	return ExpressionType::INVALID;
 }
 
@@ -65,12 +70,14 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 			throw Exception("Unknown/unsupported window function");
 		}
 
-		auto child = TransformExpression((Node *)root->args->head->data.ptr_value);
-		if (!child) {
-			throw Exception("Failed to transform window argument");
+		unique_ptr<Expression> child = nullptr;
+		if (root->args) {
+			child = TransformExpression((Node *)root->args->head->data.ptr_value);
+			if (!child) {
+				throw Exception("Failed to transform window argument");
+			}
 		}
-
-		auto expr = make_unique<WindowExpression>(win_fun_type, move(child));
+		auto expr = make_unique<WindowExpression>(win_fun_type, child ? move(child) : nullptr);
 
 		// next: partitioning/ordering expressions
 		TransformExpressionList(window_spec->partitionClause, expr->partitions);

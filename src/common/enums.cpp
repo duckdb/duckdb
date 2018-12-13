@@ -263,10 +263,14 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "AVG";
 	case ExpressionType::AGGREGATE_FIRST:
 		return "FIRST";
+	case ExpressionType::AGGREGATE_STDDEV_SAMP:
+		return "AGGREGATE_STDDEV_SAMP";
 	case ExpressionType::WINDOW_SUM:
 		return "SUM";
 	case ExpressionType::WINDOW_RANK:
 		return "RANK";
+	case ExpressionType::WINDOW_ROW_NUMBER:
+		return "ROW_NUMBER";
 	case ExpressionType::FUNCTION:
 		return "FUNCTION";
 	case ExpressionType::OPERATOR_CASE_EXPR:
@@ -303,8 +307,6 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "COMPARE_NOT_BETWEEN";
 	case ExpressionType::VALUE_DEFAULT:
 		return "VALUE_DEFAULT";
-	case ExpressionType::AGGREGATE_STDDEV_SAMP:
-		return "AGGREGATE_STDDEV_SAMP";
 	case ExpressionType::INVALID:
 		break;
 	}

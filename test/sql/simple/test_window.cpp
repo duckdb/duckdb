@@ -28,4 +28,9 @@ TEST_CASE("Most basic window function", "[window]") {
 	    "SELECT sum(salary) OVER (PARTITION BY depname ORDER BY salary) ss FROM empsalary ORDER BY depname, ss");
 	REQUIRE(result->column_count() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {4200, 8700, 13900, 19100, 25100, 3500, 7400, 4800, 9600, 14600}));
+
+	result = con.Query(
+	    "SELECT row_number() OVER (PARTITION BY depname ORDER BY salary) rn FROM empsalary ORDER BY depname, rn");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, 5, 1, 2, 1, 2, 3}));
 }

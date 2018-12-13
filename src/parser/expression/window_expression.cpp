@@ -8,6 +8,9 @@ using namespace std;
 WindowExpression::WindowExpression(ExpressionType type, unique_ptr<Expression> child) : Expression(type) {
 	switch (type) {
 	case ExpressionType::WINDOW_SUM:
+	case ExpressionType::WINDOW_RANK:
+	case ExpressionType::WINDOW_ROW_NUMBER:
+
 		break;
 	default:
 		throw NotImplementedException("Window aggregate type %s not supported", ExpressionTypeToString(type).c_str());
@@ -56,6 +59,7 @@ void WindowExpression::ResolveType() {
 		}
 
 		break;
+	case ExpressionType::WINDOW_ROW_NUMBER:
 	case ExpressionType::WINDOW_RANK:
 		return_type = TypeId::BIGINT;
 		break;
