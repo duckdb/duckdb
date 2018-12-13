@@ -17,7 +17,7 @@
 namespace duckdb {
 //! The WindowExpression represents a window function in the query. They are a special case of aggregates which is why
 //! they inherit from them.
-class WindowExpression : public AggregateExpression {
+class WindowExpression : public Expression {
 public:
 	WindowExpression(ExpressionType type, unique_ptr<Expression> child);
 
@@ -25,10 +25,7 @@ public:
 		return ExpressionClass::WINDOW;
 	}
 
-	bool IsAggregate() override {
-		// fixme this is dirty, perhaps this should not inherit from aggregateexpression after all
-		return false;
-	}
+	void ResolveType() override;
 
 	unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
 		return v->Visit(*this);

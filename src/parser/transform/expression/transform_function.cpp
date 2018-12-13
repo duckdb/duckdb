@@ -31,6 +31,13 @@ static ExpressionType AggregateToExpressionType(string &fun_name) {
 	return ExpressionType::INVALID;
 }
 
+static ExpressionType WindowToExpressionType(string &fun_name) {
+	if (fun_name == "sum") {
+		return ExpressionType::WINDOW_SUM;
+	}
+	return ExpressionType::INVALID;
+}
+
 unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 	auto name = root->funcname;
 	string schema, function_name;
@@ -45,7 +52,6 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 	}
 
 	auto lowercase_name = StringUtil::Lower(function_name);
-	auto agg_fun_type = AggregateToExpressionType(lowercase_name);
 
 	if (root->over) {
 		auto window_spec = reinterpret_cast<WindowDef *>(root->over);
@@ -53,9 +59,11 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 			// FIXME: implement named window specs, not now
 			throw NotImplementedException("Named Windows");
 		}
+
+		auto win_fun_type = WindowToExpressionType(lowercase_name);
 		// FIXME support window-specific aggs such as lag()
 		// first up: actual aggr expr
-		if (agg_fun_type == ExpressionType::INVALID) {
+		if (win_fun_type == ExpressionType::INVALID) {
 			throw Exception("Unknown/unsupported window function");
 		}
 
@@ -64,7 +72,7 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 			throw Exception("Failed to transform window argument");
 		}
 
-		auto expr = make_unique<WindowExpression>(agg_fun_type, move(child));
+		auto expr = make_unique<WindowExpression>(win_fun_type, move(child));
 
 		// next: partitioning/ordering expressions
 		TransformExpressionList(window_spec->partitionClause, expr->partitions);
@@ -78,6 +86,7 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 		return expr;
 	}
 
+	auto agg_fun_type = AggregateToExpressionType(lowercase_name);
 	if (agg_fun_type == ExpressionType::INVALID) {
 		// Normal functions (i.e. built-in functions or UDFs)
 		vector<unique_ptr<Expression>> children;

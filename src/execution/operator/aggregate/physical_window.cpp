@@ -144,7 +144,7 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 				window_end = row_idx + 1;
 
 				switch (wexpr->type) {
-				case ExpressionType::AGGREGATE_SUM: {
+				case ExpressionType::WINDOW_SUM: {
 					Value sum = Value::BIGINT(0).CastAs(wexpr->return_type);
 					for (size_t row_idx_w = window_start; row_idx_w < window_end; row_idx_w++) {
 						sum = sum + payload_collection.GetValue(0, row_idx_w);
