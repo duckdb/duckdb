@@ -706,7 +706,6 @@ struct AutoRegTests {
 		vector<string> excludes = {
 		    "test/select1.test", // tested separately
 		    "test/select2.test", "test/select3.test", "test/select4.test",
-		    "test/select5.test",              // joins too slow
 		    "test/index",                     // no index yet
 		    "random/groupby/",                // having column binding issue with first
 		    "random/select/slt_good_70.test", // join on not between
