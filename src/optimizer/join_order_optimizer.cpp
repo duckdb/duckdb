@@ -686,7 +686,7 @@ pair<RelationSet*, unique_ptr<LogicalOperator>> JoinOrderOptimizer::GenerateJoin
 				cond.comparison = condition->type;
 				if (left_child != 0) {
 					// reverse comparison expression if we reverse the order of the children
-					cond.comparison = ComparisonExpression::NegateComparisionExpression(cond.comparison);
+					cond.comparison = ComparisonExpression::FlipComparisionExpression(cond.comparison);
 				}
 				join->conditions.push_back(move(cond));
 			}
