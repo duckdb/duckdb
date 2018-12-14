@@ -76,55 +76,36 @@ static int duckdbQuery(void *pConn,       /* Connection created by xConnect */
 			duckdb_column actual_column = result.columns[c];
 			char *buffer = (char *)malloc(BUFSIZ);
 
-			switch (actual_column.type) {
-			case DUCKDB_TYPE_BOOLEAN:
-			case DUCKDB_TYPE_TINYINT: {
-				if (duckdb_value_is_null(actual_column, r)) {
-					snprintf(buffer, BUFSIZ, "%s", "NULL");
-				} else {
+			if (duckdb_value_is_null(actual_column, r)) {
+				snprintf(buffer, BUFSIZ, "%s", "NULL");
+			} else {
+				switch (actual_column.type) {
+				case DUCKDB_TYPE_BOOLEAN:
+					snprintf(buffer, BUFSIZ, "%s", ((bool *)actual_column.data)[r] ? "1" : "0");
+					break;
+				case DUCKDB_TYPE_TINYINT:
 					snprintf(buffer, BUFSIZ, "%d", (int)((int8_t *)actual_column.data)[r]);
-				}
-				break;
-			}
-			case DUCKDB_TYPE_SMALLINT: {
-				if (duckdb_value_is_null(actual_column, r)) {
-					snprintf(buffer, BUFSIZ, "%s", "NULL");
-				} else {
+					break;
+				case DUCKDB_TYPE_SMALLINT:
 					snprintf(buffer, BUFSIZ, "%d", (int)((int16_t *)actual_column.data)[r]);
-				}
-				break;
-			}
-			case DUCKDB_TYPE_INTEGER: {
-				if (duckdb_value_is_null(actual_column, r)) {
-					snprintf(buffer, BUFSIZ, "%s", "NULL");
-				} else {
+					break;
+				case DUCKDB_TYPE_INTEGER:
 					snprintf(buffer, BUFSIZ, "%d", (int)((int32_t *)actual_column.data)[r]);
-				}
-				break;
-			}
-			case DUCKDB_TYPE_BIGINT: {
-				if (duckdb_value_is_null(actual_column, r)) {
-					snprintf(buffer, BUFSIZ, "%s", "NULL");
-				} else {
+					break;
+				case DUCKDB_TYPE_BIGINT:
 					snprintf(buffer, BUFSIZ, "%d", (int)((int64_t *)actual_column.data)[r]);
-				}
-				break;
-			}
-			case DUCKDB_TYPE_DECIMAL: {
-				if (duckdb_value_is_null(actual_column, r)) {
-					snprintf(buffer, BUFSIZ, "%s", "NULL");
-				} else {
+					break;
+				case DUCKDB_TYPE_DECIMAL:
 					// cast to INT seems to be the trick here
 					snprintf(buffer, BUFSIZ, "%d", (int)((double *)actual_column.data)[r]);
+					break;
+				case DUCKDB_TYPE_VARCHAR: {
+					char *str = ((char **)actual_column.data)[r];
+					snprintf(buffer, BUFSIZ, "%s", str ? (str == 0 ? "(empty)" : str) : "NULL");
+					break;
 				}
-				break;
-			}
-			case DUCKDB_TYPE_VARCHAR: {
-				char *str = ((char **)actual_column.data)[r];
-				snprintf(buffer, BUFSIZ, "%s", str ? (str == 0 ? "(empty)" : str) : "NULL");
-				break;
-			}
-			default: { fprintf(stderr, "%s\n", "UNKNOWN"); }
+				default: { fprintf(stderr, "%s\n", "UNKNOWN"); }
+				}
 			}
 			(*pazResult)[r * result.column_count + c] = buffer;
 		}
