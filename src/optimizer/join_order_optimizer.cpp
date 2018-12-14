@@ -684,6 +684,10 @@ pair<RelationSet*, unique_ptr<LogicalOperator>> JoinOrderOptimizer::GenerateJoin
 				cond.left = move(condition->children[left_child]);
 				cond.right = move(condition->children[right_child]);
 				cond.comparison = condition->type;
+				if (left_child != 0) {
+					// reverse comparison expression if we reverse the order of the children
+					cond.comparison = ComparisonExpression::NegateComparisionExpression(cond.comparison);
+				}
 				join->conditions.push_back(move(cond));
 			}
 			assert(join->conditions.size() > 0);
