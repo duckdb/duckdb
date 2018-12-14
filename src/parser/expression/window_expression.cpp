@@ -12,6 +12,8 @@ WindowExpression::WindowExpression(ExpressionType type, unique_ptr<Expression> c
 	case ExpressionType::WINDOW_FIRST_VALUE:
 	case ExpressionType::WINDOW_LAST_VALUE:
 	case ExpressionType::WINDOW_RANK:
+	case ExpressionType::WINDOW_RANK_DENSE:
+
 		break;
 	default:
 		throw NotImplementedException("Window aggregate type %s not supported", ExpressionTypeToString(type).c_str());
@@ -62,6 +64,7 @@ void WindowExpression::ResolveType() {
 		break;
 	case ExpressionType::WINDOW_ROW_NUMBER:
 	case ExpressionType::WINDOW_RANK:
+	case ExpressionType::WINDOW_RANK_DENSE:
 		return_type = TypeId::BIGINT;
 		break;
 	case ExpressionType::WINDOW_FIRST_VALUE:

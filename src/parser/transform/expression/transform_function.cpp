@@ -36,6 +36,8 @@ static ExpressionType WindowToExpressionType(string &fun_name) {
 		return ExpressionType::WINDOW_SUM;
 	} else if (fun_name == "rank") {
 		return ExpressionType::WINDOW_RANK;
+	} else if (fun_name == "rank_dense" || fun_name == "dense_rank") {
+		return ExpressionType::WINDOW_RANK_DENSE;
 	} else if (fun_name == "row_number") {
 		return ExpressionType::WINDOW_ROW_NUMBER;
 	} else if (fun_name == "first_value" || fun_name == "first") {

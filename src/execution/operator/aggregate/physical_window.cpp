@@ -121,7 +121,7 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 			// build tree based on payload collection
 			size_t window_start = 0;
 			size_t window_end = 0;
-			size_t rank = 0;
+			size_t dense_rank = 1;
 
 			// initialize current partition to first row
 			vector<Value> prev;
@@ -134,17 +134,19 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 				// FIXME handle other window types
 				for (size_t p_idx = 0; p_idx < prev.size(); p_idx++) {
 					Value s_val = sort_collection.GetValue(p_idx, row_idx);
-					if (prev[p_idx] != s_val && p_idx < wexpr->partitions.size()) {
+					Value p_val = prev[p_idx];
+
+					if (p_val != s_val && p_idx < wexpr->partitions.size()) {
 						window_start = row_idx;
-						rank = 0;
+						dense_rank = 1;
+						break;
 					}
-					// TODO: only do this check with RANK functions
-					if (prev[p_idx] != s_val) {
-						rank++;
+					if (p_val != s_val) {
+						dense_rank++;
+						break;
 					}
-					// always overwrite because whatever
-					prev[p_idx] = s_val;
 				}
+
 				window_end = row_idx + 1;
 
 				switch (wexpr->type) {
@@ -164,8 +166,8 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 					window_results.SetValue(window_output_idx, row_idx, rowno);
 					break;
 				}
-				case ExpressionType::WINDOW_RANK: {
-					Value rank_val = Value::Numeric(wexpr->return_type, rank);
+				case ExpressionType::WINDOW_RANK_DENSE: {
+					Value rank_val = Value::Numeric(wexpr->return_type, dense_rank);
 					window_results.SetValue(window_output_idx, row_idx, rank_val);
 					break;
 				}
@@ -176,6 +178,10 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 				default:
 					throw NotImplementedException("Window aggregate type %s",
 					                              ExpressionTypeToString(wexpr->type).c_str());
+				}
+
+				for (size_t p_idx = 0; p_idx < prev.size(); p_idx++) {
+					prev[p_idx] = sort_collection.GetValue(p_idx, row_idx);
 				}
 			}
 			window_output_idx++;
