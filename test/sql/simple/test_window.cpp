@@ -53,4 +53,14 @@ TEST_CASE("Most basic window function", "[window]") {
 	    {"develop", "develop", "develop", "develop", "develop", "personnel", "personnel", "sales", "sales", "sales"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {4200, 4500, 5200, 5200, 6000, 3500, 3900, 4800, 4800, 5000}));
 	REQUIRE(CHECK_COLUMN(result, 2, {1, 2, 3, 3, 4, 1, 2, 1, 1, 2}));
+
+	// rank
+	result = con.Query("SELECT depname, salary, rank() OVER (PARTITION BY depname ORDER BY salary) FROM "
+	                   "empsalary order by depname, salary");
+	REQUIRE(result->column_count() == 3);
+	REQUIRE(CHECK_COLUMN(
+	    result, 0,
+	    {"develop", "develop", "develop", "develop", "develop", "personnel", "personnel", "sales", "sales", "sales"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {4200, 4500, 5200, 5200, 6000, 3500, 3900, 4800, 4800, 5000}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1, 2, 3, 3, 5, 1, 2, 1, 1, 3}));
 }

@@ -122,6 +122,8 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 			size_t window_start = 0;
 			size_t window_end = 0;
 			size_t dense_rank = 1;
+			size_t rank_equal = 0;
+			size_t rank = 1;
 
 			// initialize current partition to first row
 			vector<Value> prev;
@@ -132,6 +134,7 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 
 			for (size_t row_idx = 0; row_idx < big_data.count; row_idx++) {
 				// FIXME handle other window types
+				bool increment_rank = false;
 				for (size_t p_idx = 0; p_idx < prev.size(); p_idx++) {
 					Value s_val = sort_collection.GetValue(p_idx, row_idx);
 					Value p_val = prev[p_idx];
@@ -139,12 +142,19 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 					if (p_val != s_val && p_idx < wexpr->partitions.size()) {
 						window_start = row_idx;
 						dense_rank = 1;
+						rank = 1;
+						rank_equal = 0;
 						break;
 					}
 					if (p_val != s_val) {
-						dense_rank++;
+						increment_rank = true;
 						break;
 					}
+				}
+				if (increment_rank) {
+					dense_rank++;
+					rank += rank_equal;
+					rank_equal = 0;
 				}
 
 				window_end = row_idx + 1;
@@ -167,8 +177,12 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 					break;
 				}
 				case ExpressionType::WINDOW_RANK_DENSE: {
-					Value rank_val = Value::Numeric(wexpr->return_type, dense_rank);
-					window_results.SetValue(window_output_idx, row_idx, rank_val);
+					window_results.SetValue(window_output_idx, row_idx, Value::Numeric(wexpr->return_type, dense_rank));
+					break;
+				}
+				case ExpressionType::WINDOW_RANK: {
+					window_results.SetValue(window_output_idx, row_idx, Value::Numeric(wexpr->return_type, rank));
+					rank_equal++;
 					break;
 				}
 				case ExpressionType::WINDOW_FIRST_VALUE: {
