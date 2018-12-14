@@ -11,7 +11,7 @@ WindowExpression::WindowExpression(ExpressionType type, unique_ptr<Expression> c
 	case ExpressionType::WINDOW_ROW_NUMBER:
 	case ExpressionType::WINDOW_FIRST_VALUE:
 	case ExpressionType::WINDOW_LAST_VALUE:
-
+	case ExpressionType::WINDOW_RANK:
 		break;
 	default:
 		throw NotImplementedException("Window aggregate type %s not supported", ExpressionTypeToString(type).c_str());
