@@ -68,20 +68,26 @@ public:
 	}
 
 	void AddChild(unique_ptr<LogicalOperator> child) {
-		referenced_tables.insert(child->referenced_tables.begin(), child->referenced_tables.end());
 		children.push_back(move(child));
 	}
 
 	//! The type of the logical operator
 	LogicalOperatorType type;
-	//! The set of tables that is accessible from this operator
-	std::unordered_set<size_t> referenced_tables;
 	//! The set of children of the operator
 	vector<unique_ptr<LogicalOperator>> children;
 	//! The set of expressions contained within the operator, if any
 	vector<unique_ptr<Expression>> expressions;
 	//! The types returned by this logical operator. Set by calling LogicalOperator::ResolveTypes.
 	vector<TypeId> types;
+
+	virtual size_t EstimateCardinality() {
+		// simple estimator, just take the max of the children
+		size_t max_cardinality = 0;
+		for (auto &child : children) {
+			max_cardinality = std::max(child->EstimateCardinality(), max_cardinality);
+		}
+		return max_cardinality;
+	}
 
 	virtual size_t ExpressionCount();
 	virtual Expression *GetExpression(size_t index);

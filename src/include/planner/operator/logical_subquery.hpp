@@ -20,7 +20,6 @@ class LogicalSubquery : public LogicalOperator {
 public:
 	LogicalSubquery(size_t table_index, size_t column_count)
 	    : LogicalOperator(LogicalOperatorType::SUBQUERY), table_index(table_index), column_count(column_count) {
-		referenced_tables.insert(table_index);
 	}
 
 	size_t table_index;

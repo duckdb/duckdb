@@ -19,13 +19,14 @@ public:
 	}
 	LogicalGet(TableCatalogEntry *table, size_t table_index, vector<column_t> column_ids)
 	    : LogicalOperator(LogicalOperatorType::GET), table(table), table_index(table_index), column_ids(column_ids) {
-		referenced_tables.insert(table_index);
 	}
 
 	void Accept(LogicalOperatorVisitor *v) override {
 		v->Visit(*this);
 	}
 	vector<string> GetNames() override;
+
+	size_t EstimateCardinality() override;
 
 	//! The base table to retrieve data from
 	TableCatalogEntry *table;

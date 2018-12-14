@@ -17,7 +17,14 @@ namespace duckdb {
 
 class WriteAheadLog;
 
-enum class UndoFlags { INVALID = 0, EMPTY_ENTRY = 1, CATALOG_ENTRY = 2, TUPLE_ENTRY = 3, QUERY = 4 };
+enum class UndoFlags : uint8_t {
+	EMPTY_ENTRY = 0,
+	CATALOG_ENTRY = 1,
+	INSERT_TUPLE = 2,
+	DELETE_TUPLE = 3,
+	UPDATE_TUPLE = 4,
+	QUERY = 5
+};
 
 struct UndoEntry {
 	UndoFlags type;

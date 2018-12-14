@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "common/types/chunk_collection.hpp"
 #include "execution/physical_operator.hpp"
 
 namespace duckdb {
@@ -30,7 +31,7 @@ public:
 	}
 
 	size_t left_position;
-	DataChunk right_chunk;
-	unique_ptr<PhysicalOperatorState> right_state;
+	size_t right_position;
+	ChunkCollection right_data;
 };
 } // namespace duckdb

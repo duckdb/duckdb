@@ -20,8 +20,7 @@ TEST_CASE("Test TPC-DS SF0 Query Compilation", "[tpcds]") {
 	                                    65, 66, 68, 69, 70, 72, 73, 75, 76, 77, 78, 79, 80,  81,  82, 83, 84, 85,
 	                                    86, 87, 88, 89, 91, 92, 94, 95, 96, 97, 98, 99, 100, 101, 103};
 	for (size_t q : compiling_queries) {
-		result = con.Query(tpcds::get_query(q));
-		REQUIRE(result->success);
+		REQUIRE_NO_FAIL(con.Query(tpcds::get_query(q)));
 	}
 }
 

@@ -47,7 +47,7 @@ private:
 	static string RenderTree(TreeNode &node);
 
 public:
-	QueryProfiler() : enabled(false) {
+	QueryProfiler() : automatic_printing(false), enabled(false) {
 	}
 
 	void Enable() {
@@ -58,6 +58,10 @@ public:
 		enabled = false;
 	}
 
+	bool IsEnabled() {
+		return enabled;
+	}
+
 	void StartQuery(string query);
 	void EndQuery();
 
@@ -65,6 +69,8 @@ public:
 	void EndOperator(DataChunk &chunk);
 
 	string ToString() const override;
+
+	bool automatic_printing;
 
 private:
 	bool enabled;

@@ -17,8 +17,9 @@ void Transaction::PushCatalogEntry(CatalogEntry *entry) {
 void Transaction::PushDeletedEntries(size_t offset, size_t count, StorageChunk *storage,
                                      VersionInformation *version_pointers[]) {
 	for (size_t i = 0; i < count; i++) {
-		auto ptr = PushTuple(0);
+		auto ptr = PushTuple(UndoFlags::INSERT_TUPLE, 0);
 		auto meta = (VersionInformation *)ptr;
+		meta->table = &storage->table;
 		meta->tuple_data = nullptr;
 		meta->version_number = transaction_id;
 		meta->prev.entry = offset + i;
@@ -28,14 +29,15 @@ void Transaction::PushDeletedEntries(size_t offset, size_t count, StorageChunk *
 	}
 }
 
-void Transaction::PushTuple(size_t offset, StorageChunk *storage) {
+void Transaction::PushTuple(UndoFlags flags, size_t offset, StorageChunk *storage) {
 	// push the tuple into the undo buffer
-	auto ptr = PushTuple(storage->table.tuple_size);
+	auto ptr = PushTuple(flags, storage->table.tuple_size);
 
 	auto meta = (VersionInformation *)ptr;
 	auto tuple_data = ptr + sizeof(VersionInformation);
 
 	// fill in the meta data for the tuple
+	meta->table = &storage->table;
 	meta->tuple_data = tuple_data;
 	meta->version_number = transaction_id;
 	meta->prev.entry = offset;
@@ -57,8 +59,8 @@ void Transaction::PushQuery(string query) {
 	strcpy(blob, query.c_str());
 }
 
-uint8_t *Transaction::PushTuple(size_t data_size) {
-	return undo_buffer.CreateEntry(UndoFlags::TUPLE_ENTRY, sizeof(VersionInformation) + data_size);
+uint8_t *Transaction::PushTuple(UndoFlags flags, size_t data_size) {
+	return undo_buffer.CreateEntry(flags, sizeof(VersionInformation) + data_size);
 }
 
 void Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) {

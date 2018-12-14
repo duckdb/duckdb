@@ -13,6 +13,7 @@
 #include "storage/column_statistics.hpp"
 #include "storage/index.hpp"
 #include "storage/storage_chunk.hpp"
+#include "storage/table_statistics.hpp"
 #include "storage/unique_index.hpp"
 
 #include <atomic>
@@ -73,6 +74,9 @@ public:
 		return statistics[oid];
 	}
 
+	//! The amount of elements in the table. Note that this number signifies the amount of COMMITTED entries in the
+	//! table. It can be inaccurate inside of transactions. More work is needed to properly support that.
+	std::atomic<size_t> cardinality;
 	//! Total per-tuple size of the table
 	size_t tuple_size;
 	//! Accumulative per-tuple size
@@ -115,6 +119,8 @@ private:
 	unique_ptr<StorageChunk> chunk_list;
 	//! A reference to the last entry in the chunk list
 	StorageChunk *tail_chunk;
+	//! The table statistics
+	TableStatistics table_statistics;
 	//! Row ID statistics
 	ColumnStatistics rowid_statistics;
 	//! The statistics of each of the columns

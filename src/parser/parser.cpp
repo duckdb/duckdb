@@ -19,7 +19,7 @@ struct PGParseContext {
 	}
 };
 
-Parser::Parser() {
+Parser::Parser(ClientContext &context) : context(context) {
 }
 
 void Parser::ParseQuery(string query) {
@@ -113,6 +113,14 @@ bool Parser::ParsePragma(string &query) {
 			throw ParserException("Invalid PRAGMA table_info: expected table name");
 		}
 		ParseQuery("SELECT * FROM pragma_" + query.substr(keyword_start));
+	} else if (keyword == "enable_profile" || keyword == "enable_profiling") {
+		// enable profiling
+		context.profiler.Enable();
+		context.profiler.automatic_printing = true;
+	} else if (keyword == "disable_profile" || keyword == "disable_profiling") {
+		// enable profiling
+		context.profiler.Disable();
+		context.profiler.automatic_printing = false;
 	} else {
 		throw ParserException("Unrecognized PRAGMA keyword: %s", keyword.c_str());
 	}
