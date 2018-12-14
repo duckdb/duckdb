@@ -105,7 +105,7 @@ template <class T> int64_t binary_search_lte(uint8_t *data, T key, size_t count)
 	auto array = (SortChunk<T> *)data;
 	bool found = false;
 	int pos = binary_search(array, key, 0, count, found);
-	while (array[pos].value <= key)
+	while (array[pos].value <= key && pos < count)
 		pos++;
 	return pos;
 }
@@ -126,8 +126,6 @@ template <class T> int64_t binary_search_gte(uint8_t *data, T key, size_t count)
 
 size_t OrderIndex::SearchLTE(Value value) {
 	assert(value.type == types[0]);
-
-	// perform the templated search to find the start location"SELECT sum(a) FROM test where a = 4 ;"
 	switch (types[0]) {
 	case TypeId::TINYINT:
 		return binary_search_lte<int8_t>(data.get(), value.value_.tinyint, count);
@@ -148,8 +146,6 @@ size_t OrderIndex::SearchLTE(Value value) {
 
 size_t OrderIndex::SearchGTE(Value value) {
 	assert(value.type == types[0]);
-
-	// perform the templated search to find the start location"SELECT sum(a) FROM test where a = 4 ;"
 	switch (types[0]) {
 	case TypeId::TINYINT:
 		return binary_search_gte<int8_t>(data.get(), value.value_.tinyint, count);
@@ -170,8 +166,6 @@ size_t OrderIndex::SearchGTE(Value value) {
 
 size_t OrderIndex::SearchLT(Value value) {
 	assert(value.type == types[0]);
-
-	// perform the templated search to find the start location"SELECT sum(a) FROM test where a = 4 ;"
 	switch (types[0]) {
 	case TypeId::TINYINT:
 		return binary_search_lt<int8_t>(data.get(), value.value_.tinyint, count);
@@ -192,8 +186,6 @@ size_t OrderIndex::SearchLT(Value value) {
 
 size_t OrderIndex::SearchGT(Value value) {
 	assert(value.type == types[0]);
-
-	// perform the templated search to find the start location"SELECT sum(a) FROM test where a = 4 ;"
 	switch (types[0]) {
 	case TypeId::TINYINT:
 		return binary_search_gt<int8_t>(data.get(), value.value_.tinyint, count);
@@ -218,6 +210,7 @@ template <class T> static size_t templated_scan(size_t &from, size_t &to, uint8_
 	for (; from < to; from++) {
 		result_ids[result_count++] = array[from].row_id;
 		if (result_count == STANDARD_VECTOR_SIZE) {
+			from++;
 			break;
 		}
 	}
@@ -251,28 +244,48 @@ void OrderIndex::Scan(size_t &position_from, size_t &position_to, Value value, V
 	}
 }
 
-unique_ptr<IndexScanState> OrderIndex::InitializeScan(Transaction &transaction, vector<column_t> column_ids,
-                                                      Expression *expression, ExpressionType expression_type) {
-	auto result = make_unique<OrderIndexScanState>(column_ids, *expression);
-	assert(expression->type == ExpressionType::VALUE_CONSTANT);
+unique_ptr<IndexScanState> OrderIndex::InitializeScanSinglePredicate(Transaction &transaction,
+                                                                     vector<column_t> column_ids, Value value,
+                                                                     ExpressionType expression_type) {
+	auto result = make_unique<OrderIndexScanState>(column_ids);
 	// search inside the index for the constant value
-	result->value = ((ConstantExpression *)expression)->value.CastAs(types[0]);
 	if (expression_type == ExpressionType::COMPARE_EQUAL) {
-		result->current_index = SearchGTE(result->value);
-		result->final_index = SearchLTE(result->value);
+		result->current_index = SearchGTE(value);
+		result->final_index = SearchLTE(value);
 	} else if (expression_type == ExpressionType::COMPARE_GREATERTHAN) {
-		result->current_index = SearchGT(result->value);
+		result->current_index = SearchGT(value);
 		result->final_index = count;
 	} else if (expression_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
-		result->current_index = SearchGTE(result->value);
+		result->current_index = SearchGTE(value);
 		result->final_index = count;
 	} else if (expression_type == ExpressionType::COMPARE_LESSTHAN) {
 		result->current_index = 0;
-		result->final_index = SearchLT(result->value);
+		result->final_index = SearchLT(value);
 	} else if (expression_type == ExpressionType::COMPARE_LESSTHANOREQUALTO) {
 		result->current_index = 0;
-		result->final_index = SearchLTE(result->value);
+		result->final_index = SearchLTE(value);
 	}
+	return move(result);
+}
+
+unique_ptr<IndexScanState> OrderIndex::InitializeScanTwoPredicates(Transaction &transaction,
+                                                                   vector<column_t> column_ids, Value low_value,
+                                                                   ExpressionType low_expression_type, Value high_value,
+                                                                   ExpressionType high_expression_type) {
+	auto result = make_unique<OrderIndexScanState>(column_ids);
+	assert(low_expression_type == ExpressionType::COMPARE_GREATERTHAN ||
+	       low_expression_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO);
+	assert(high_expression_type == ExpressionType::COMPARE_LESSTHAN ||
+	       high_expression_type == ExpressionType::COMPARE_LESSTHANOREQUALTO);
+	// search inside the index for the constant value
+	if (low_expression_type == ExpressionType::COMPARE_GREATERTHAN)
+		result->current_index = SearchGT(low_value);
+	else if (low_expression_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO)
+		result->current_index = SearchGTE(low_value);
+	if (high_expression_type == ExpressionType::COMPARE_LESSTHAN)
+		result->final_index = SearchLT(high_value);
+	else if (high_expression_type == ExpressionType::COMPARE_LESSTHANOREQUALTO)
+		result->final_index = SearchLTE(high_value);
 	return move(result);
 }
 

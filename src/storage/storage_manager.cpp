@@ -285,3 +285,9 @@ void StorageManager::CreateCheckpoint(int iteration) {
 	}
 	transaction->Rollback();
 }
+
+void StorageManager::BuildDataBlocks() {
+
+	// First we have to define how many chuncks we fit in a block
+	// We need #tuples, #columns and data type to calculate the size of a block
+}
