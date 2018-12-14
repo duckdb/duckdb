@@ -235,6 +235,16 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		}
 		op = op->children[0].get();
 	}
+	if (op->type == LogicalOperatorType::UNION ||
+	    op->type == LogicalOperatorType::EXCEPT ||
+		op->type == LogicalOperatorType::INTERSECT) {
+		// set operation, optimize separately in children
+		for(size_t i = 0; i < op->children.size(); i++) {
+			JoinOrderOptimizer optimizer;
+			op->children[i] = optimizer.Optimize(move(op->children[i]));
+		}
+		return false;
+	}
 
 	if (op->type == LogicalOperatorType::JOIN) {
 		LogicalJoin *join = (LogicalJoin *)op;
@@ -753,14 +763,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 // https://db.in.tum.de/teaching/ws1415/queryopt/chapter3.pdf?lang=de
 // FIXME: incorporate cardinality estimation into the plans, possibly by pushing samples?
 unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOperator> plan) {
-	vector<unique_ptr<FilterInfo>> filters;
-	// first we visit the plan in order to optimize subqueries
-	plan->Accept(this);
-	// first resolve join conditions for non-inner joins
-	plan = ResolveJoinConditions(move(plan));
-	// now we optimize the current plan
-	// we skip past until we find the first projection, we do this because the HAVING clause inserts a Filter AFTER the
-	// group by and this filter cannot be reordered
 	LogicalOperator *op = plan.get();
 	while (!IsProjection(op->type)) {
 		if (op->children.size() != 1) {
@@ -769,6 +771,14 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		}
 		op = op->children[0].get();
 	}
+	vector<unique_ptr<FilterInfo>> filters;
+	// first we visit the plan in order to optimize subqueries
+	plan->Accept(this);
+	// first resolve join conditions for non-inner joins
+	plan = ResolveJoinConditions(move(plan));
+	// now we optimize the current plan
+	// we skip past until we find the first projection, we do this because the HAVING clause inserts a Filter AFTER the
+	// group by and this filter cannot be reordered
 	// extract a list of all relations that have to be joined together
 	// and a list of all conditions that is applied to them
 	if (!ExtractJoinRelations(*op, filters)) {
