@@ -475,8 +475,10 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
 	auto join = make_unique<LogicalJoin>(expr.type);
 
 	if (root) {
-		throw Exception("Cross product cannot have children!");
+		throw Exception("Joins product cannot have children!");
 	}
+
+	// we do not generate joins here
 
 	AcceptChild(&expr.left);
 	assert(root);
@@ -488,16 +490,11 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
 	join->AddChild(move(root));
 	root = nullptr;
 
-	join->SetJoinCondition(move(expr.condition));
-	if (join->conditions.size() > 0) {
-		root = move(join);
-	} else { // the conditions were not comparisions between left on right,
-		     // cross product
-		auto cp = make_unique<LogicalCrossProduct>();
-		cp->AddChild(move(join->children[0]));
-		cp->AddChild(move(join->children[1]));
-		root = move(cp);
-	}
+	join->expressions.push_back(move(expr.condition));
+	LogicalFilter::SplitPredicates(join->expressions);
+
+	root = move(join);
+
 	return nullptr;
 }
 
@@ -515,9 +512,6 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(SubqueryRef &expr) {
 		throw Exception("Subquery cannot have children");
 	}
 	root = make_unique<LogicalSubquery>(index, column_count);
-	// this intentionally does a push_back directly instead of using AddChild
-	// because the Subquery is stand-alone, we do not copy the referenced_tables
-	// of the children
 	root->children.push_back(move(generator.root));
 	return nullptr;
 }

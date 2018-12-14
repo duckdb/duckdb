@@ -15,6 +15,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace duckdb {
@@ -27,6 +28,7 @@ using std::map;
 using std::move;
 using std::string;
 using std::unique_ptr;
+using std::unordered_map;
 using std::vector;
 using data_ptr = unique_ptr<char[]>;
 

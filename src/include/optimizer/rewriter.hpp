@@ -10,9 +10,6 @@
 
 #include "optimizer/rule.hpp"
 
-#include <string>
-#include <vector>
-
 namespace duckdb {
 
 class Rewriter {

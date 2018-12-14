@@ -18,11 +18,7 @@ TEST_CASE("Test TPC-H SF0.1", "[tpch][.]") {
 	DuckDBConnection con(db);
 	tpch::dbgen(sf, db);
 
-	// con.EnableProfiling();
-
-	// result = con.Query(tpch::get_query(21));
-	// cout << con.GetProfilingInformation();
-	// COMPARE_CSV(result, tpch::get_answer(sf, 21), true);
+	con.EnableProfiling();
 
 	// check if all the counts are correct
 	result = con.Query("SELECT COUNT(*) FROM orders");

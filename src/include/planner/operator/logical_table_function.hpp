@@ -18,7 +18,6 @@ public:
 	LogicalTableFunction(TableFunctionCatalogEntry *function, size_t table_index, unique_ptr<Expression> function_call)
 	    : LogicalOperator(LogicalOperatorType::TABLE_FUNCTION), function(function),
 	      function_call(std::move(function_call)), table_index(table_index) {
-		referenced_tables.insert(table_index);
 	}
 
 	//! The function

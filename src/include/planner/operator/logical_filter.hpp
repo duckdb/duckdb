@@ -22,9 +22,12 @@ public:
 		v->Visit(*this);
 	}
 	vector<string> GetNames() override;
+	bool SplitPredicates() {
+		return SplitPredicates(expressions);
+	}
 	//! Splits up the predicates of the LogicalFilter into a set of predicates
 	//! separated by AND Returns whether or not any splits were made
-	bool SplitPredicates();
+	static bool SplitPredicates(vector<unique_ptr<Expression>> &expressions);
 
 protected:
 	void ResolveTypes() override;

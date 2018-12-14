@@ -31,12 +31,8 @@ public:
 	}
 	vector<string> GetNames() override;
 
-	//! Creates the join condition for this node from the given expression
-	void SetJoinCondition(unique_ptr<Expression> condition);
-
 	vector<JoinCondition> conditions;
 	JoinType type;
-	static JoinSide GetJoinSide(LogicalOperator *op, unique_ptr<Expression> &expr);
 
 	string ParamsToString() const override;
 

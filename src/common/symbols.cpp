@@ -11,6 +11,7 @@
 #include "execution/physical_operator.hpp"
 #include "main/query_profiler.hpp"
 #include "main/result.hpp"
+#include "optimizer/join_order_optimizer.hpp"
 #include "optimizer/rule.hpp"
 #include "parser/constraint.hpp"
 #include "parser/query_node.hpp"
@@ -56,6 +57,9 @@ template class std::unique_ptr<Rule>;
 template class std::unique_ptr<LogicalFilter>;
 template class std::unique_ptr<LogicalJoin>;
 template class std::unique_ptr<SubqueryRef>;
+template class std::unique_ptr<FilterInfo>;
+template class std::unique_ptr<JoinOrderOptimizer::JoinNode>;
+template class std::unique_ptr<Relation>;
 
 #define INSTANTIATE_VECTOR(VECTOR_DEFINITION)                                                                          \
 	template VECTOR_DEFINITION::size_type VECTOR_DEFINITION::size() const;                                             \
@@ -82,6 +86,7 @@ INSTANTIATE_VECTOR(std::vector<std::unique_ptr<SQLStatement>>);
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<PhysicalOperator>>);
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<LogicalOperator>>);
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Transaction>>);
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<JoinOrderOptimizer::JoinNode>>);
 template class std::vector<TypeId>;
 template class std::vector<Value>;
 template class std::vector<int>;
@@ -102,5 +107,6 @@ template class std::unordered_map<string, std::vector<string>>;
 template class std::unordered_map<string, std::pair<size_t, Expression *>>;
 // template class std::unordered_map<string, TableBinding>;
 template class std::unordered_map<string, SelectStatement *>;
+template class std::unordered_map<size_t, size_t>;
 
 #endif
