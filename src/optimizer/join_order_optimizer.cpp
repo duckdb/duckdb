@@ -177,25 +177,26 @@ static unique_ptr<LogicalOperator> CreateJoinCondition(unique_ptr<LogicalOperato
 			condition.right = move(expr->children[1 - left_index]);
 			join.conditions.push_back(move(condition));
 		}
+		return op;
 	} else if (expr->type == ExpressionType::OPERATOR_NOT) {
 		assert(expr->children.size() == 1);
 		ExpressionType child_type = expr->children[0]->GetExpressionType();
 
-		if (child_type < ExpressionType::COMPARE_EQUAL ||
-			child_type > ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
-			throw Exception("ON NOT only supports comparision operators");
+		// ON NOT (X = 3) can be turned into ON (X <> 3)
+		// for non-comparison operators here we just push the filter
+		if (child_type >= ExpressionType::COMPARE_EQUAL &&
+			child_type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
+			// switcheroo the child condition
+			// our join needs to compare explicit left and right sides. So we
+			// invert the condition to express NOT, this way we can still use
+			// equi-joins
+			expr->children[0]->type = ComparisonExpression::NegateComparisionExpression(child_type);
+			return CreateJoinCondition(move(op), join, move(expr->children[0]), left_bindings, right_bindings);
 		}
-		// switcheroo the child condition
-		// our join needs to compare explicit left and right sides. So we
-		// invert the condition to express NOT, this way we can still use
-		// equi-joins
-		expr->children[0]->type = ComparisonExpression::NegateComparisionExpression(child_type);
-		return CreateJoinCondition(move(op), join, move(expr->children[0]), left_bindings, right_bindings);
-	} else {
-		// unrecognized type for join condition
-		// push as filter under the join
-		op = PushFilter(move(op), move(expr));
 	}
+	// unrecognized type for join condition
+	// push as filter under the join
+	op = PushFilter(move(op), move(expr));
 	return op;
 }
 
