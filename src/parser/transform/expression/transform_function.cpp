@@ -70,6 +70,9 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 			// FIXME: implement named window specs, not now
 			throw NotImplementedException("Named Windows");
 		}
+		if (window_spec->frameOptions != FRAMEOPTION_DEFAULTS) {
+			throw NotImplementedException("Non-default window spec");
+		}
 
 		auto win_fun_type = WindowToExpressionType(lowercase_name);
 		if (win_fun_type == ExpressionType::INVALID) {
