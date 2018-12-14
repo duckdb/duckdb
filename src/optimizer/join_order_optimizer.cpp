@@ -167,14 +167,14 @@ static unique_ptr<LogicalOperator> CreateJoinCondition(unique_ptr<LogicalOperato
 			assert(left_side != JoinSide::BOTH && right_side != JoinSide::BOTH);
 			JoinCondition condition;
 			condition.comparison = expr->type;
-			int left_side = 0;
+			int left_index = 0;
 			if (left_side == JoinSide::RIGHT) {
 				// left = right, right = left, flip the comparison symbol and reverse sides
-				left_side = 1;
+				left_index = 1;
 				condition.comparison = ComparisonExpression::FlipComparisionExpression(expr->type);
 			}
-			condition.left = move(expr->children[left_side]);
-			condition.right = move(expr->children[1 - left_side]);
+			condition.left = move(expr->children[left_index]);
+			condition.right = move(expr->children[1 - left_index]);
 			join.conditions.push_back(move(condition));
 		}
 	} else if (expr->type == ExpressionType::OPERATOR_NOT) {
