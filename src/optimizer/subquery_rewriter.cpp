@@ -1,12 +1,12 @@
 #include "optimizer/subquery_rewriter.hpp"
-#include "planner/operator/logical_filter.hpp"
+
+#include "optimizer/rewriter.hpp"
 #include "parser/expression/list.hpp"
 #include "planner/operator/list.hpp"
-#include "optimizer/rewriter.hpp"
+#include "planner/operator/logical_filter.hpp"
 
 using namespace duckdb;
 using namespace std;
-
 
 void ExtractCorrelatedExpressions(LogicalOperator *op, SubqueryExpression *subquery, size_t subquery_table_index,
                                   vector<JoinCondition> &join_conditions);
@@ -14,12 +14,12 @@ void ExtractCorrelatedExpressions(LogicalOperator *op, SubqueryExpression *subqu
 unique_ptr<LogicalOperator> SubqueryRewriter::Rewrite(unique_ptr<LogicalOperator> plan) {
 	if (plan->type == LogicalOperatorType::FILTER) {
 		// rewrite subqueries within a filter
-		auto& filter = (LogicalFilter&) *plan;
+		auto &filter = (LogicalFilter &)*plan;
 		// now rewrite subqueries within the filter
-		for(size_t i = 0; i < filter.expressions.size(); i++) {
+		for (size_t i = 0; i < filter.expressions.size(); i++) {
 			auto &expr = *filter.expressions[i];
 			// check if we know how to rewrite this type of subquery
-			switch(expr.type) {
+			switch (expr.type) {
 			case ExpressionType::COMPARE_IN:
 			case ExpressionType::COMPARE_NOT_IN:
 				// (NOT) IN, check if we are dealing with a subquery
@@ -29,7 +29,8 @@ unique_ptr<LogicalOperator> SubqueryRewriter::Rewrite(unique_ptr<LogicalOperator
 				}
 				if (expr.children[1]->type == ExpressionType::SELECT_SUBQUERY) {
 					// IN (SUBQUERY), rewrite
-					if (RewriteInClause(filter, (OperatorExpression*) filter.expressions[i].get(), (SubqueryExpression*) expr.children[1].get())) {
+					if (RewriteInClause(filter, (OperatorExpression *)filter.expressions[i].get(),
+					                    (SubqueryExpression *)expr.children[1].get())) {
 						// successful rewrite, remove the expression from the set of filter expressions
 						filter.expressions.erase(filter.expressions.begin() + i);
 						i--;
@@ -42,7 +43,8 @@ unique_ptr<LogicalOperator> SubqueryRewriter::Rewrite(unique_ptr<LogicalOperator
 				assert(expr.children.size() == 1);
 				if (expr.children[0]->type == ExpressionType::SELECT_SUBQUERY) {
 					// EXISTS (SUBQUERY), rewrite
-					if (RewriteExistsClause(filter, (OperatorExpression*) filter.expressions[i].get(), (SubqueryExpression*) expr.children[0].get())) {
+					if (RewriteExistsClause(filter, (OperatorExpression *)filter.expressions[i].get(),
+					                        (SubqueryExpression *)expr.children[0].get())) {
 						// successful rewrite, remove the expression from the set of filter expressions
 						filter.expressions.erase(filter.expressions.begin() + i);
 						i--;
@@ -61,7 +63,8 @@ unique_ptr<LogicalOperator> SubqueryRewriter::Rewrite(unique_ptr<LogicalOperator
 				    expr.children[1]->type == ExpressionType::SELECT_SUBQUERY) {
 					int subquery_index = expr.children[0]->type == ExpressionType::SELECT_SUBQUERY ? 0 : 1;
 					// Comparison with subquery, rewrite
-					if (RewriteSubqueryComparison(filter, (ComparisonExpression*) filter.expressions[i].get(), (SubqueryExpression*) expr.children[subquery_index].get())) {
+					if (RewriteSubqueryComparison(filter, (ComparisonExpression *)filter.expressions[i].get(),
+					                              (SubqueryExpression *)expr.children[subquery_index].get())) {
 						// successful rewrite, remove the expression from the set of filter expressions
 						filter.expressions.erase(filter.expressions.begin() + i);
 						i--;
@@ -78,13 +81,14 @@ unique_ptr<LogicalOperator> SubqueryRewriter::Rewrite(unique_ptr<LogicalOperator
 		}
 	}
 	// recursively rewrite the children of the current node as well
-	for(size_t i = 0; i < plan->children.size(); i++) {
+	for (size_t i = 0; i < plan->children.size(); i++) {
 		plan->children[i] = Rewrite(move(plan->children[i]));
 	}
 	return plan;
 }
 
-bool SubqueryRewriter::RewriteInClause(LogicalFilter& filter, OperatorExpression *operator_expression, SubqueryExpression *subquery) {
+bool SubqueryRewriter::RewriteInClause(LogicalFilter &filter, OperatorExpression *operator_expression,
+                                       SubqueryExpression *subquery) {
 	// we found a COMPARE_IN/COMPARE_NOT_IN with a subquery
 	if (subquery->is_correlated) {
 		// correlated subqueries not handled yet for in clause rewrite
@@ -131,7 +135,8 @@ bool SubqueryRewriter::RewriteInClause(LogicalFilter& filter, OperatorExpression
 	return true;
 }
 
-bool SubqueryRewriter::RewriteExistsClause(LogicalFilter& filter, OperatorExpression *exists, SubqueryExpression *subquery) {
+bool SubqueryRewriter::RewriteExistsClause(LogicalFilter &filter, OperatorExpression *exists,
+                                           SubqueryExpression *subquery) {
 	// Only rewrite correlated exists
 	// Non-correlated exists should be rewritten in a different way
 	// Because either (1) the whole result is empty, or (2) it's a NOP operation
@@ -206,7 +211,8 @@ bool SubqueryRewriter::RewriteExistsClause(LogicalFilter& filter, OperatorExpres
 	return true;
 }
 
-bool SubqueryRewriter::RewriteSubqueryComparison(LogicalFilter& filter, ComparisonExpression *comparison, SubqueryExpression *subquery) {
+bool SubqueryRewriter::RewriteSubqueryComparison(LogicalFilter &filter, ComparisonExpression *comparison,
+                                                 SubqueryExpression *subquery) {
 	// rewrite a comparison with a subquery (e.g. A == (SUBQUERY))
 	// step 1: check that subquery is an aggregation
 	auto node = GetProjection(subquery->op.get());

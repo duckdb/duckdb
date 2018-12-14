@@ -11,6 +11,7 @@
 #include "execution/physical_operator.hpp"
 #include "main/query_profiler.hpp"
 #include "main/result.hpp"
+#include "optimizer/join_order_optimizer.hpp"
 #include "optimizer/rule.hpp"
 #include "parser/constraint.hpp"
 #include "parser/query_node.hpp"
@@ -20,7 +21,6 @@
 #include "planner/operator/list.hpp"
 #include "planner/operator/logical_join.hpp"
 #include "storage/data_table.hpp"
-#include "optimizer/join_order_optimizer.hpp"
 
 using namespace duckdb;
 using namespace std;

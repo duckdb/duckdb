@@ -71,6 +71,7 @@ public:
 	string ToString() const override;
 
 	bool automatic_printing;
+
 private:
 	bool enabled;
 

@@ -12,7 +12,7 @@ int main() {
 	DuckDBConnection con(db);
 
 	con.EnableProfiling();
-	
+
 	string input_file = "test.sql";
 	ifstream infile(input_file);
 	if (!infile.good()) {

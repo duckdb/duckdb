@@ -1,4 +1,5 @@
 #include "optimizer/join_order/relation.hpp"
+
 #include <algorithm>
 
 using namespace duckdb;
@@ -8,7 +9,7 @@ using RelationTreeNode = RelationSetManager::RelationTreeNode;
 
 string RelationSet::ToString() {
 	string result = "[";
-	for(size_t i = 0; i < count; i++) {
+	for (size_t i = 0; i < count; i++) {
 		result += std::to_string(relations[i]);
 		if (i != count - 1) {
 			result += ", ";
@@ -24,7 +25,7 @@ bool RelationSet::IsSubset(RelationSet *super, RelationSet *sub) {
 		return false;
 	}
 	size_t j = 0;
-	for(size_t i = 0; i < super->count; i++) {
+	for (size_t i = 0; i < super->count; i++) {
 		if (sub->relations[j] == super->relations[i]) {
 			j++;
 			if (j == sub->count) {
@@ -35,11 +36,10 @@ bool RelationSet::IsSubset(RelationSet *super, RelationSet *sub) {
 	return false;
 }
 
-
 RelationSet *RelationSetManager::GetRelation(unique_ptr<size_t[]> relations, size_t count) {
 	// now look it up in the tree
 	RelationTreeNode *info = &root;
-	for(size_t i = 0; i < count; i++) {
+	for (size_t i = 0; i < count; i++) {
 		auto entry = info->children.find(relations[i]);
 		if (entry == info->children.end()) {
 			// node not found, create it
@@ -66,32 +66,32 @@ RelationSet *RelationSetManager::GetRelation(size_t index) {
 	return GetRelation(move(relations), count);
 }
 
-RelationSet* RelationSetManager::GetRelation(unordered_set<size_t> &bindings) {
+RelationSet *RelationSetManager::GetRelation(unordered_set<size_t> &bindings) {
 	// create a sorted vector of the relations
 	unique_ptr<size_t[]> relations = bindings.size() == 0 ? nullptr : unique_ptr<size_t[]>(new size_t[bindings.size()]);
 	size_t count = 0;
-	for(auto &entry : bindings) {
+	for (auto &entry : bindings) {
 		relations[count++] = entry;
 	}
 	sort(relations.get(), relations.get() + count);
 	return GetRelation(move(relations), count);
 }
 
-RelationSet* RelationSetManager::Union(RelationSet *left, RelationSet *right) {
+RelationSet *RelationSetManager::Union(RelationSet *left, RelationSet *right) {
 	auto relations = unique_ptr<size_t[]>(new size_t[left->count + right->count]);
 	size_t count = 0;
 	// move through the left and right relations, eliminating duplicates
 	size_t i = 0, j = 0;
-	while(true) {
+	while (true) {
 		if (i == left->count) {
 			// exhausted left relation, add remaining of right relation
-			for(; j < right->count; j++) {
+			for (; j < right->count; j++) {
 				relations[count++] = right->relations[j];
 			}
 			break;
 		} else if (j == right->count) {
 			// exhausted right relation, add remaining of left
-			for(; i < left->count; i++) {
+			for (; i < left->count; i++) {
 				relations[count++] = left->relations[i];
 			}
 			break;
@@ -113,18 +113,18 @@ RelationSet* RelationSetManager::Union(RelationSet *left, RelationSet *right) {
 	return GetRelation(move(relations), count);
 }
 
-RelationSet* RelationSetManager::Difference(RelationSet *left, RelationSet *right) {
+RelationSet *RelationSetManager::Difference(RelationSet *left, RelationSet *right) {
 	auto relations = unique_ptr<size_t[]>(new size_t[left->count]);
 	size_t count = 0;
 	// move through the left and right relations
 	size_t i = 0, j = 0;
-	while(true) {
+	while (true) {
 		if (i == left->count) {
 			// exhausted left relation, we are done
 			break;
 		} else if (j == right->count) {
 			// exhausted right relation, add remaining of left
-			for(; i < left->count; i++) {
+			for (; i < left->count; i++) {
 				relations[count++] = left->relations[i];
 			}
 			break;

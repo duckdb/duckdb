@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "parser/sql_statement.hpp"
 #include "main/client_context.hpp"
+#include "parser/sql_statement.hpp"
 
 namespace postgres {
 struct Node;

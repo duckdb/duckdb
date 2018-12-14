@@ -1,4 +1,5 @@
 #include "optimizer/join_order/query_graph.hpp"
+
 #include "common/string_util.hpp"
 
 using namespace duckdb;
@@ -9,11 +10,11 @@ using QueryEdge = QueryGraph::QueryEdge;
 static string QueryEdgeToString(const QueryEdge *info, vector<size_t> prefix) {
 	string result = "";
 	string source = "[";
-	for(size_t i = 0; i < prefix.size(); i++) {
+	for (size_t i = 0; i < prefix.size(); i++) {
 		source += to_string(prefix[i]) + (i < prefix.size() - 1 ? ", " : "");
 	}
 	source += "]";
-	for(auto &entry : info->neighbors) {
+	for (auto &entry : info->neighbors) {
 		result += StringUtil::Format("%s -> %s\n", source.c_str(), entry->neighbor->ToString().c_str());
 	}
 	for (auto &entry : info->children) {
@@ -28,11 +29,11 @@ string QueryGraph::ToString() const {
 	return QueryEdgeToString(&root, {});
 }
 
-QueryEdge* QueryGraph::GetQueryEdge(RelationSet *left) {
+QueryEdge *QueryGraph::GetQueryEdge(RelationSet *left) {
 	assert(left && left->count > 0);
 	// find the EdgeInfo corresponding to the left set
 	QueryEdge *info = &root;
-	for(size_t i = 0; i < left->count; i++) {
+	for (size_t i = 0; i < left->count; i++) {
 		auto entry = info->children.find(left->relations[i]);
 		if (entry == info->children.end()) {
 			// node not found, create it
@@ -42,15 +43,15 @@ QueryEdge* QueryGraph::GetQueryEdge(RelationSet *left) {
 		// move to the next node
 		info = entry->second.get();
 	}
-	return(info);
+	return (info);
 }
 
-void QueryGraph::CreateEdge(RelationSet *left, RelationSet *right, FilterInfo* filter_info) {
+void QueryGraph::CreateEdge(RelationSet *left, RelationSet *right, FilterInfo *filter_info) {
 	assert(left && right && left->count > 0 && right->count > 0);
 	// find the EdgeInfo corresponding to the left set
 	auto info = GetQueryEdge(left);
 	// now insert the edge to the right relation, if it does not exist
-	for(size_t i = 0; i < info->neighbors.size(); i++) {
+	for (size_t i = 0; i < info->neighbors.size(); i++) {
 		if (info->neighbors[i]->neighbor == right) {
 			if (filter_info) {
 				// neighbor already exists just add the filter, if we have any
@@ -68,10 +69,10 @@ void QueryGraph::CreateEdge(RelationSet *left, RelationSet *right, FilterInfo* f
 	info->neighbors.push_back(move(n));
 }
 
-void QueryGraph::EnumerateNeighbors(RelationSet *node, function<bool(NeighborInfo*)> callback) {
-	for(size_t j = 0; j < node->count; j++) {
+void QueryGraph::EnumerateNeighbors(RelationSet *node, function<bool(NeighborInfo *)> callback) {
+	for (size_t j = 0; j < node->count; j++) {
 		QueryEdge *info = &root;
-		for(size_t i = j; i < node->count; i++) {
+		for (size_t i = j; i < node->count; i++) {
 			auto entry = info->children.find(node->relations[i]);
 			if (entry == info->children.end()) {
 				// node not found
@@ -79,7 +80,7 @@ void QueryGraph::EnumerateNeighbors(RelationSet *node, function<bool(NeighborInf
 			}
 			// check if any subset of the other set is in this sets neighbors
 			info = entry->second.get();
-			for(auto &neighbor : info->neighbors) {
+			for (auto &neighbor : info->neighbors) {
 				if (callback(neighbor.get())) {
 					return;
 				}
@@ -95,7 +96,7 @@ static bool RelationSetIsExcluded(RelationSet *node, unordered_set<size_t> &excl
 
 vector<size_t> QueryGraph::GetNeighbors(RelationSet *node, unordered_set<size_t> &exclusion_set) {
 	unordered_set<size_t> result;
-	EnumerateNeighbors(node, [&](NeighborInfo* info) -> bool {
+	EnumerateNeighbors(node, [&](NeighborInfo *info) -> bool {
 		if (!RelationSetIsExcluded(info->neighbor, exclusion_set)) {
 			// add the smallest node of the neighbor to the set
 			result.insert(info->neighbor->relations[0]);
@@ -107,13 +108,13 @@ vector<size_t> QueryGraph::GetNeighbors(RelationSet *node, unordered_set<size_t>
 	return neighbors;
 }
 
-NeighborInfo* QueryGraph::GetConnection(RelationSet *node, RelationSet *other) {
+NeighborInfo *QueryGraph::GetConnection(RelationSet *node, RelationSet *other) {
 	NeighborInfo *connection = nullptr;
 	EnumerateNeighbors(node, [&](NeighborInfo *info) -> bool {
 		if (RelationSet::IsSubset(other, info->neighbor)) {
 			connection = info;
 			return true;
-		} 
+		}
 		return false;
 	});
 	return connection;

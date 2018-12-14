@@ -83,7 +83,7 @@ public:
 	virtual size_t EstimateCardinality() {
 		// simple estimator, just take the max of the children
 		size_t max_cardinality = 0;
-		for(auto &child : children) {
+		for (auto &child : children) {
 			max_cardinality = std::max(child->EstimateCardinality(), max_cardinality);
 		}
 		return max_cardinality;

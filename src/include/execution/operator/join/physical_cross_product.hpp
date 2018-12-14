@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "execution/physical_operator.hpp"
 #include "common/types/chunk_collection.hpp"
+#include "execution/physical_operator.hpp"
 
 namespace duckdb {
 //! PhysicalCrossProduct represents a cross product between two tables

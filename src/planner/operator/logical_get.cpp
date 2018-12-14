@@ -1,4 +1,5 @@
 #include "planner/operator/logical_get.hpp"
+
 #include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "storage/data_table.hpp"
 
