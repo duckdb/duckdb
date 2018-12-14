@@ -55,6 +55,8 @@ public:
 	using LogicalOperatorVisitor::Visit;
 	unique_ptr<Expression> Visit(SubqueryExpression &expr) override;
 private:
+	//! The total amount of pairs currently considered
+	size_t pairs = 0;
 	//! Set of all relations considered in the join optimizer
 	vector<unique_ptr<Relation>> relations;
 	//! A mapping of base table index -> index into relations array (relation number)
@@ -77,20 +79,27 @@ private:
 	bool ExtractBindings(Expression &expression, std::unordered_set<size_t> &bindings);
 	//! Traverse the query tree to find (1) base relations, (2) existing join conditions and (3) filters that can be rewritten into joins. Returns true if there are joins in the tree that can be reordered, false otherwise.
 	bool ExtractJoinRelations(LogicalOperator &input_op, vector<unique_ptr<FilterInfo>>& filters, LogicalOperator *parent = nullptr);
-	//! Emit a pair as a potential join candidate
-	void EmitPair(RelationSet *left, RelationSet *right, NeighborInfo *info);
+	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection (either the newly created plan, or an existing plan)
+	JoinNode* EmitPair(RelationSet *left, RelationSet *right, NeighborInfo *info);
+	//! Tries to emit a potential join candidate pair. Returns false if too many pairs have already been emitted, cancelling the dynamic programming step.
+	bool TryEmitPair(RelationSet *left, RelationSet *right, NeighborInfo *info);
 
-	void EnumerateCmpRecursive(RelationSet *left, RelationSet *right, std::unordered_set<size_t> exclusion_set);
+	bool EnumerateCmpRecursive(RelationSet *left, RelationSet *right, std::unordered_set<size_t> exclusion_set);
 	//! Emit a relation set node
-	void EmitCSG(RelationSet *node);
+	bool EmitCSG(RelationSet *node);
 	//! Enumerate the possible connected subgraphs that can be joined together in the join graph
-	void EnumerateCSGRecursive(RelationSet *node, std::unordered_set<size_t> &exclusion_set);
+	bool EnumerateCSGRecursive(RelationSet *node, std::unordered_set<size_t> &exclusion_set);
 	//! Rewrite a logical query plan given the join plan
 	unique_ptr<LogicalOperator> RewritePlan(unique_ptr<LogicalOperator> plan, JoinNode* node);
 	//! Generate cross product edges inside the side
 	void GenerateCrossProducts();
 	//! Perform the join order solving
 	void SolveJoinOrder();
+	//! Solve the join order exactly using dynamic programming. Returns true if it was completed successfully (i.e. did not time-out)
+	bool SolveJoinOrderExactly();
+	//! Solve the join order approximately using a greedy algorithm
+	void SolveJoinOrderApproximately();
+
 
 	unique_ptr<LogicalOperator> ResolveJoinConditions(unique_ptr<LogicalOperator> op);
 	std::pair<RelationSet*, unique_ptr<LogicalOperator>> GenerateJoins(vector<unique_ptr<LogicalOperator>>& extracted_relations, JoinNode* node);

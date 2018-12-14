@@ -373,7 +373,7 @@ static unique_ptr<JoinNode> CreateJoinTree(RelationSet *set, NeighborInfo *info,
 	return make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
 }
 
-void JoinOrderOptimizer::EmitPair(RelationSet *left, RelationSet *right, NeighborInfo *info) {
+JoinNode* JoinOrderOptimizer::EmitPair(RelationSet *left, RelationSet *right, NeighborInfo *info) {
 	// get the left and right join plans
 	auto &left_plan = plans[left];
 	auto &right_plan = plans[right];
@@ -383,11 +383,27 @@ void JoinOrderOptimizer::EmitPair(RelationSet *left, RelationSet *right, Neighbo
 	// check if this plan is the optimal plan we found for this set of relations
 	auto entry = plans.find(new_set);
 	if (entry == plans.end() || new_plan->cost < entry->second->cost) {
+		// the plan is the optimal plan, move it into the dynamic programming tree
+		auto result = new_plan.get();
 		plans[new_set] = move(new_plan);
+		return result;
 	}
+	return entry->second.get();
 }
 
-void JoinOrderOptimizer::EmitCSG(RelationSet *node) {
+bool JoinOrderOptimizer::TryEmitPair(RelationSet *left, RelationSet *right, NeighborInfo *info) {
+	pairs++;
+	if (pairs >= 10000) {
+		// when the amount of pairs gets too large we exit the dynamic programming and resort to a greedy algorithm
+		// FIXME: simple heuristic currently
+		// at 10K pairs stop searching exactly and switch to heuristic
+		return false;
+	}
+	EmitPair(left, right, info);
+	return true;
+}
+
+bool JoinOrderOptimizer::EmitCSG(RelationSet *node) {
 	// create the exclusion set as everything inside the subgraph AND anything with members BELOW it
 	unordered_set<size_t> exclusion_set;
 	for(size_t i = 0; i < node->relations[0]; i++) {
@@ -397,7 +413,7 @@ void JoinOrderOptimizer::EmitCSG(RelationSet *node) {
 	// find the neighbors given this exclusion set
 	auto neighbors = query_graph.GetNeighbors(node, exclusion_set);
 	if (neighbors.size() == 0) {
-		return;
+		return true;
 	}
 	// we iterate over the neighbors ordered by their first node
 	sort(neighbors.begin(), neighbors.end());
@@ -406,17 +422,22 @@ void JoinOrderOptimizer::EmitCSG(RelationSet *node) {
 		auto neighbor_relation = set_manager.GetRelation(neighbor);
 		auto connection = query_graph.GetConnection(node, neighbor_relation);
 		if (connection) {
-			EmitPair(node, neighbor_relation, connection);
+			if (!TryEmitPair(node, neighbor_relation, connection)) {
+				return false;
+			}
 		}
-		EnumerateCmpRecursive(node, neighbor_relation, exclusion_set);
+		if (!EnumerateCmpRecursive(node, neighbor_relation, exclusion_set)) {
+			return false;
+		}
 	}
+	return true;
 }
 
-void JoinOrderOptimizer::EnumerateCmpRecursive(RelationSet *left, RelationSet *right, unordered_set<size_t> exclusion_set) {
+bool JoinOrderOptimizer::EnumerateCmpRecursive(RelationSet *left, RelationSet *right, unordered_set<size_t> exclusion_set) {
 	// get the neighbors of the second relation under the exclusion set
 	auto neighbors = query_graph.GetNeighbors(right, exclusion_set);
 	if (neighbors.size() == 0) {
-		return;
+		return true;
 	}
 	vector<RelationSet*> union_sets;
 	union_sets.resize(neighbors.size());
@@ -427,7 +448,9 @@ void JoinOrderOptimizer::EnumerateCmpRecursive(RelationSet *left, RelationSet *r
 		if (plans.find(combined_set) != plans.end()) {
 			auto connection = query_graph.GetConnection(left, combined_set);
 			if (connection) {
-				EmitPair(left, combined_set, connection);
+				if (!TryEmitPair(left, combined_set, connection)) {
+					return false;
+				}
 			}
 		}
 		union_sets[i] = combined_set;
@@ -437,15 +460,18 @@ void JoinOrderOptimizer::EnumerateCmpRecursive(RelationSet *left, RelationSet *r
 		// updated the set of excluded entries with this neighbor
 		unordered_set<size_t> new_exclusion_set = exclusion_set;
 		new_exclusion_set.insert(neighbors[i]);
-		EnumerateCmpRecursive(left, union_sets[i], new_exclusion_set);
+		if (!EnumerateCmpRecursive(left, union_sets[i], new_exclusion_set)) {
+			return false;
+		}
 	}
+	return true;
 }
 
-void JoinOrderOptimizer::EnumerateCSGRecursive(RelationSet *node, unordered_set<size_t> &exclusion_set) {
+bool JoinOrderOptimizer::EnumerateCSGRecursive(RelationSet *node, unordered_set<size_t> &exclusion_set) {
 	// find neighbors of S under the exlusion set
 	auto neighbors = query_graph.GetNeighbors(node, exclusion_set);
 	if (neighbors.size() == 0) {
-		return;
+		return true;
 	}
 	// now first emit the connected subgraphs of the neighbors
 	vector<RelationSet*> union_sets;
@@ -455,7 +481,9 @@ void JoinOrderOptimizer::EnumerateCSGRecursive(RelationSet *node, unordered_set<
 		// emit the combinations of this node and its neighbors
 		auto new_set = set_manager.Union(node, neighbor);
 		if (plans.find(new_set) != plans.end()) {
-			EmitCSG(new_set);
+			if (!EmitCSG(new_set)) {
+				return false;
+			}
 		}
 		union_sets[i] = new_set;
 	}
@@ -464,25 +492,121 @@ void JoinOrderOptimizer::EnumerateCSGRecursive(RelationSet *node, unordered_set<
 		// updated the set of excluded entries with this neighbor
 		unordered_set<size_t> new_exclusion_set = exclusion_set;
 		new_exclusion_set.insert(neighbors[i]);
-		EnumerateCSGRecursive(union_sets[i] , new_exclusion_set);
+		if (!EnumerateCSGRecursive(union_sets[i] , new_exclusion_set)) {
+			return false;
+		}
 	}
+	return true;
 }
 
-void JoinOrderOptimizer::SolveJoinOrder() {
+
+bool JoinOrderOptimizer::SolveJoinOrderExactly() {
 	// now we perform the actual dynamic programming to compute the final result
 	// we enumerate over all the possible pairs in the neighborhood
 	for(size_t i = relations.size(); i > 0; i--) {
 		// for every node in the set, we consider it as the start node once
 		auto start_node = set_manager.GetRelation(i - 1);
 		// emit the start node
-		EmitCSG(start_node);
+		if (!EmitCSG(start_node)) {
+			return false;
+		}
 		// initialize the set of exclusion_set as all the nodes with a number below this
 		unordered_set<size_t> exclusion_set;
 		for(size_t j = 0; j < i - 1; j++) {
 			exclusion_set.insert(j);
 		}
 		// then we recursively search for neighbors that do not belong to the banned entries
-		EnumerateCSGRecursive(start_node, exclusion_set);
+		if (!EnumerateCSGRecursive(start_node, exclusion_set)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+void JoinOrderOptimizer::SolveJoinOrderApproximately() {
+	// at this point, we exited the dynamic programming but did not compute the final join order because it took too long
+	// instead, we use a greedy heuristic to obtain a join ordering now
+	// we use Greedy Operator Ordering to construct the result tree
+	// first we start out with all the base relations (the to-be-joined relations)
+	vector<RelationSet*> T;
+	for(size_t i = 0; i < relations.size(); i++) {
+		T.push_back(set_manager.GetRelation(i));
+	}
+	while(T.size() > 1) {
+		// now in every step of the algorithm, we greedily pick the join between the to-be-joined relations that has the smallest cost
+		// this is O(r^2) per step, and every step will reduce the total amount of relations to-be-joined by 1, so the total cost is O(r^3) in the amount of relations
+		size_t best_left = 0, best_right = 0;
+		JoinNode* best_connection = nullptr;
+		for(size_t i = 0; i < T.size(); i++) {
+			auto left = T[i];
+			for(size_t j = i + 1; j < T.size(); j++) {
+				auto right = T[j];
+				// check if we can connect these two relations
+				auto connection = query_graph.GetConnection(left, right);
+				if (connection) {
+					// we can! check the cost of this connection
+					auto node = EmitPair(left, right, connection);
+					if (!best_connection || node->cost < best_connection->cost) {
+						// best pair found so far
+						best_connection = node;
+						best_left = i;
+						best_right = j;
+					}
+				}
+			}
+		}
+		if (!best_connection) {
+			// could not find a connection, but we were not done with finding a completed plan
+			// we have to add a cross product; we add it between the two smallest relations
+			JoinNode *smallest_plans[2] = { nullptr };
+			size_t smallest_index[2];
+			for(size_t i = 0; i < T.size(); i++) {
+				// get the plan for this relation
+				auto current_plan = plans[T[i]].get();
+				// check if the cardinality is smaller than the smallest two found so far
+				for(size_t j = 0; j < 2; j++) {
+					if (!smallest_plans[j] || smallest_plans[j]->cardinality > current_plan->cardinality) {
+						smallest_plans[j] = current_plan;
+						smallest_index[j] = i;
+						break;
+					}
+				}
+			}
+			assert(smallest_plans[0] && smallest_plans[1]);
+			assert(smallest_index[0] != smallest_index[1]);
+			auto left = smallest_plans[0]->set, right = smallest_plans[1]->set;
+			// create a cross product edge (i.e. edge with empty filter) between these two sets in the query graph
+			query_graph.CreateEdge(left, right, nullptr);
+			// now emit the pair and continue with the algorithm
+			auto connection = query_graph.GetConnection(left, right);
+			assert(connection);
+
+			best_connection = EmitPair(left, right, connection);
+			best_left = smallest_index[0];
+			best_right = smallest_index[1];
+			// the code below assumes best_right > best_left
+			if (best_left > best_right) {
+				swap(best_left, best_right);
+			}
+		}
+		// now update the to-be-checked pairs
+		// remove left and right, and add the combination
+
+		// important to erase the biggest element first
+		// if we erase the smallest element first the index of the biggest element changes
+		assert(best_right > best_left);
+		T.erase(T.begin() + best_right);
+		T.erase(T.begin() + best_left);
+		T.push_back(best_connection->set);
+	}
+}
+
+
+void JoinOrderOptimizer::SolveJoinOrder() {
+	// first try to solve the join order exactly
+	if (!SolveJoinOrderExactly()) {
+		// otherwise, if that times out we resort to a greedy algorithm
+		SolveJoinOrderApproximately();
 	}
 }
 
@@ -622,10 +746,10 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	vector<unique_ptr<FilterInfo>> filters;
 	// first we visit the plan in order to optimize subqueries
 	plan->Accept(this);
-	// now we optimize the current plan
 	// first resolve join conditions for non-inner joins
 	plan = ResolveJoinConditions(move(plan));
-	// first we skip past until we find the first projection, we do this because the HAVING clause inserts a Filter AFTER the group by
+	// now we optimize the current plan
+	// we skip past until we find the first projection, we do this because the HAVING clause inserts a Filter AFTER the group by
 	// and this filter cannot be reordered
 	LogicalOperator *op = plan.get();
 	while(!IsProjection(op->type)) {
