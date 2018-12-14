@@ -4,7 +4,6 @@ using namespace std;
 using namespace duckdb;
 
 fstream FstreamUtil::OpenFile(const string &file_path, ios_base::openmode mode) {
-
 	fstream new_file;
 	new_file.open(file_path, mode);
 	if (!new_file.good()) {

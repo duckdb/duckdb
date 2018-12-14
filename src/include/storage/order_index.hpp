@@ -23,7 +23,7 @@ struct OrderIndexScanState : public IndexScanState {
 	size_t current_index;
 	size_t final_index;
 
-	OrderIndexScanState(vector<column_t> column_ids, Expression &expression) : IndexScanState(column_ids, expression) {
+	OrderIndexScanState(vector<column_t> column_ids) : IndexScanState(column_ids) {
 	}
 };
 
@@ -42,9 +42,16 @@ public:
 	void Print();
 
 	//! Initialize a scan on the index with the given expression and column ids
-	//! to fetch from the base table
-	unique_ptr<IndexScanState> InitializeScan(Transaction &transaction, vector<column_t> column_ids,
-	                                          Expression *expression, ExpressionType expressionType) override;
+	//! to fetch from the base table for a single predicate
+	unique_ptr<IndexScanState> InitializeScanSinglePredicate(Transaction &transaction, vector<column_t> column_ids,
+	                                                         Value value, ExpressionType expressionType) override;
+
+	//! Initialize a scan on the index with the given expression and column ids
+	//! to fetch from the base table for two predicates
+	unique_ptr<IndexScanState> InitializeScanTwoPredicates(Transaction &transaction, vector<column_t> column_ids,
+	                                                       Value low_value, ExpressionType low_expression_type,
+	                                                       Value high_value,
+	                                                       ExpressionType high_expression_type) override;
 	//! Perform a lookup on the index
 	void Scan(Transaction &transaction, IndexScanState *ss, DataChunk &result) override;
 
