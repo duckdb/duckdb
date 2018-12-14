@@ -78,27 +78,30 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 				    wexpr->ordering.orders[ord_idx].type,
 				    make_unique_base<Expression, ColumnRefExpression>(oexpr->return_type, exprs.size() - 1)));
 			}
-			assert(sort_types.size() > 0);
-
-			// create a chunkcollection for the results of the expressions in the window definitions
 			ChunkCollection sort_collection;
-			for (size_t i = 0; i < big_data.chunks.size(); i++) {
-				DataChunk sort_chunk;
-				sort_chunk.Initialize(sort_types);
+			// if we have no sort nor order by we don't have to sort and the window is everything
+			if (sort_types.size() > 0) {
+				assert(sort_types.size() > 0);
 
-				ExpressionExecutor executor(*big_data.chunks[i], context);
-				executor.Execute(sort_chunk, [&](size_t i) { return exprs[i]; }, exprs.size());
-				sort_chunk.Verify();
-				sort_collection.Append(sort_chunk);
+				// create a chunkcollection for the results of the expressions in the window definitions
+				for (size_t i = 0; i < big_data.chunks.size(); i++) {
+					DataChunk sort_chunk;
+					sort_chunk.Initialize(sort_types);
+
+					ExpressionExecutor executor(*big_data.chunks[i], context);
+					executor.Execute(sort_chunk, [&](size_t i) { return exprs[i]; }, exprs.size());
+					sort_chunk.Verify();
+					sort_collection.Append(sort_chunk);
+				}
+
+				assert(sort_collection.count == big_data.count);
+				// sort by the window def using the expression result collection
+				auto sorted_vector = new uint64_t[big_data.count];
+				sort_collection.Sort(odesc, sorted_vector);
+				// inplace reorder of big_data according to sorted_vector
+				big_data.Reorder(sorted_vector);
+				sort_collection.Reorder(sorted_vector);
 			}
-
-			assert(sort_collection.count == big_data.count);
-			// sort by the window def using the expression result collection
-			auto sorted_vector = new uint64_t[big_data.count];
-			sort_collection.Sort(odesc, sorted_vector);
-			// inplace reorder of big_data according to sorted_vector
-			big_data.Reorder(sorted_vector);
-			sort_collection.Reorder(sorted_vector);
 
 			// evaluate inner expressions of window functions, could be more complex
 			ChunkCollection payload_collection;
@@ -121,6 +124,7 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 			// build tree based on payload collection
 			size_t window_start = 0;
 			size_t window_end = 0;
+
 			size_t dense_rank = 1;
 			size_t rank_equal = 0;
 			size_t rank = 1;
@@ -220,7 +224,7 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 			executor.ExecuteExpression(select_list[expr_idx].get(), chunk.data[expr_idx]);
 		}
 	}
-
+	chunk.Verify();
 	state->position += STANDARD_VECTOR_SIZE;
 }
 

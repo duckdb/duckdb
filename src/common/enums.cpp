@@ -267,6 +267,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "AGGREGATE_STDDEV_SAMP";
 	case ExpressionType::WINDOW_SUM:
 		return "SUM";
+	case ExpressionType::WINDOW_COUNT_STAR:
+		return "COUNT_STAR";
 	case ExpressionType::WINDOW_RANK:
 		return "RANK";
 	case ExpressionType::WINDOW_RANK_DENSE:

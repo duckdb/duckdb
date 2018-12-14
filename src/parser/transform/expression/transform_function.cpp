@@ -13,8 +13,6 @@ using namespace std;
 static ExpressionType AggregateToExpressionType(string &fun_name) {
 	if (fun_name == "count") {
 		return ExpressionType::AGGREGATE_COUNT;
-	} else if (fun_name == "count") {
-		return ExpressionType::AGGREGATE_COUNT_STAR;
 	} else if (fun_name == "sum") {
 		return ExpressionType::AGGREGATE_SUM;
 	} else if (fun_name == "min") {
@@ -34,6 +32,8 @@ static ExpressionType AggregateToExpressionType(string &fun_name) {
 static ExpressionType WindowToExpressionType(string &fun_name) {
 	if (fun_name == "sum") {
 		return ExpressionType::WINDOW_SUM;
+	} else if (fun_name == "count") {
+		return ExpressionType::WINDOW_COUNT_STAR;
 	} else if (fun_name == "rank") {
 		return ExpressionType::WINDOW_RANK;
 	} else if (fun_name == "rank_dense" || fun_name == "dense_rank") {
