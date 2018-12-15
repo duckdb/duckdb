@@ -7,6 +7,6 @@ using namespace std;
 
 unique_ptr<Expression> ExpressionExecutor::Visit(ConstantExpression &expr) {
 	vector.Reference(expr.value);
-	expr.stats.Verify(vector);
+	Verify(expr);
 	return nullptr;
 }

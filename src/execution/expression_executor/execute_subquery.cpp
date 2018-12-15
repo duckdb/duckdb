@@ -54,6 +54,6 @@ unique_ptr<Expression> ExpressionExecutor::Visit(SubqueryExpression &expr) {
 		}
 	}
 	chunk = old_chunk;
-	expr.stats.Verify(vector);
+	Verify(expr);
 	return nullptr;
 }

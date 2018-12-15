@@ -23,6 +23,6 @@ unique_ptr<Expression> ExpressionExecutor::Visit(ColumnRefExpression &expr) {
 		throw Exception("Column reference index out of range!");
 	}
 	vector.Reference(cur_exec->chunk->data[expr.index]);
-	expr.stats.Verify(vector);
+	Verify(expr);
 	return nullptr;
 }

@@ -25,6 +25,6 @@ unique_ptr<Expression> ExpressionExecutor::Visit(ConjunctionExpression &expr) {
 	default:
 		throw NotImplementedException("Unknown conjunction type!");
 	}
-	expr.stats.Verify(vector);
+	Verify(expr);
 	return nullptr;
 }

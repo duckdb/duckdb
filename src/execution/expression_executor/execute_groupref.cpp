@@ -12,6 +12,6 @@ unique_ptr<Expression> ExpressionExecutor::Visit(GroupRefExpression &expr) {
 		throw NotImplementedException("Aggregate node without aggregate state");
 	}
 	vector.Reference(state->group_chunk.data[expr.group_index]);
-	expr.stats.Verify(vector);
+	Verify(expr);
 	return nullptr;
 }

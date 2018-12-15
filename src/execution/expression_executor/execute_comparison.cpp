@@ -43,6 +43,6 @@ unique_ptr<Expression> ExpressionExecutor::Visit(ComparisonExpression &expr) {
 	default:
 		throw NotImplementedException("Unknown comparison type!");
 	}
-	expr.stats.Verify(vector);
+	Verify(expr);
 	return nullptr;
 }

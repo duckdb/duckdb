@@ -19,6 +19,6 @@ unique_ptr<Expression> ExpressionExecutor::Visit(CaseExpression &expr) {
 
 	vector.Initialize(res_true.type);
 	VectorOperations::Case(check, res_true, res_false, vector);
-	expr.stats.Verify(vector);
+	Verify(expr);
 	return nullptr;
 }
