@@ -34,6 +34,7 @@ static void caseconvert_function(Vector inputs[], size_t input_count, Vector &re
 	result.Initialize(TypeId::VARCHAR);
 	result.nullmask = input.nullmask;
 	result.count = input.count;
+	result.sel_vector = input.sel_vector;
 
 	auto result_data = (const char **)result.data;
 	auto input_data = (const char **)input.data;

@@ -185,7 +185,8 @@ Value Vector::GetValue(size_t index) const {
 		return Value::DATE(((date_t *)data)[entry]);
 	case TypeId::VARCHAR: {
 		char *str = ((char **)data)[entry];
-		return !str ? Value(TypeId::VARCHAR) : Value(string(str));
+		assert(str);
+		return Value(string(str));
 	}
 	default:
 		throw NotImplementedException("Unimplemented type for conversion");
