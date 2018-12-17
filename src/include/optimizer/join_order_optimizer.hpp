@@ -66,26 +66,20 @@ private:
 	unordered_map<size_t, size_t> relation_mapping;
 	//! A structure holding all the created RelationSet objects
 	RelationSetManager set_manager;
-	//! The set of filters that we want to push down
-	FilterNode pushdown_filters;
 	//! The set of edges used in the join optimizer
 	QueryGraph query_graph;
 	//! The optimal join plan found for the specific RelationSet*
 	unordered_map<RelationSet *, unique_ptr<JoinNode>> plans;
-
-	// Add a filter to the set of to-be-pushed-down filters, where the filter needs columns from the given RelationSet
-	// to be evaluated
-	void AddPushdownFilter(RelationSet *set, FilterInfo *filter);
-	//! Enumerate all pushdown filters that can be fulfilled by a given RelationSet node (i.e. all entries in
-	//! pushdown_filters where the given RelationSet is a subset of [[node]]). Return true in the callback to remove the
-	//! filter from the set of pushdown filters.
-	void EnumeratePushdownFilters(RelationSet *node, std::function<bool(FilterInfo *)> callback);
+	//! The set of filters extracted from the query graph
+	vector<unique_ptr<Expression>> filters;
+	//! The set of filter infos created from the extracted filters
+	vector<unique_ptr<FilterInfo>> filter_infos;
 
 	//! Extract the bindings referred to by an Expression
 	bool ExtractBindings(Expression &expression, std::unordered_set<size_t> &bindings);
 	//! Traverse the query tree to find (1) base relations, (2) existing join conditions and (3) filters that can be
 	//! rewritten into joins. Returns true if there are joins in the tree that can be reordered, false otherwise.
-	bool ExtractJoinRelations(LogicalOperator &input_op, vector<unique_ptr<FilterInfo>> &filters,
+	bool ExtractJoinRelations(LogicalOperator &input_op, vector<LogicalOperator *> &filter_operators,
 	                          LogicalOperator *parent = nullptr);
 	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection (either
 	//! the newly created plan, or an existing plan)

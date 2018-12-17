@@ -21,6 +21,9 @@ string RelationSet::ToString() {
 
 //! Returns true if sub is a subset of super
 bool RelationSet::IsSubset(RelationSet *super, RelationSet *sub) {
+	if (sub->count == 0) {
+		return false;
+	}
 	if (sub->count > super->count) {
 		return false;
 	}
