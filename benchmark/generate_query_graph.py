@@ -234,8 +234,8 @@ def generate(input_file, output_file):
 		</style>
 	</head>
 	<body>
-		<script src="raphael.js"></script>
-		<script src="treant.js"></script>
+		<script src="../../raphael.js"></script>
+		<script src="../../treant.js"></script>
 		<script>
 		${CHART_SCRIPT}
 		</script>
