@@ -75,8 +75,9 @@ private:
 	//! The set of filter infos created from the extracted filters
 	vector<unique_ptr<FilterInfo>> filter_infos;
 	//! A map of all expressions a given expression has to be equivalent to. This is used to add "implied join edges".
-	//! i.e. in the join A=B AND B=C, the equivalence set of {B} is {A, C}, thus we can add an implied join edge {A <-> C}
-	unordered_map<Expression*, vector<FilterInfo*>, ExpressionHashFunction, ExpressionEquality> equivalence_sets;
+	//! i.e. in the join A=B AND B=C, the equivalence set of {B} is {A, C}, thus we can add an implied join edge {A <->
+	//! C}
+	unordered_map<Expression *, vector<FilterInfo *>, ExpressionHashFunction, ExpressionEquality> equivalence_sets;
 
 	//! Extract the bindings referred to by an Expression
 	bool ExtractBindings(Expression &expression, std::unordered_set<size_t> &bindings);

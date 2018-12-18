@@ -27,7 +27,7 @@ public:
 	}
 
 	unique_ptr<Expression> Copy() override;
-	
+
 	bool Equals(const Expression *other) const override;
 
 	//! Deserializes a blob back into a ConjunctionExpression

@@ -11,4 +11,4 @@ add_subdirectory(optimizer)
 add_subdirectory(transaction)
 
 add_library(duckdb SHARED ${ALL_OBJECT_FILES})
-target_link_libraries(duckdb pg_query Threads::Threads)
+target_link_libraries(duckdb pg_query hyperloglog Threads::Threads)

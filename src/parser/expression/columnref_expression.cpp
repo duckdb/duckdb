@@ -60,8 +60,8 @@ bool ColumnRefExpression::Equals(const Expression *other_) const {
 
 uint64_t ColumnRefExpression::Hash() const {
 	uint64_t result = Expression::Hash();
-	result = CombineHash(result, duckdb::Hash<const char*>(column_name.c_str()));
-	result = CombineHash(result, duckdb::Hash<const char*>(table_name.c_str()));
+	result = CombineHash(result, duckdb::Hash<const char *>(column_name.c_str()));
+	result = CombineHash(result, duckdb::Hash<const char *>(table_name.c_str()));
 	return result;
 }
 

@@ -41,8 +41,8 @@ unique_ptr<Expression> FunctionExpression::Copy() {
 
 uint64_t FunctionExpression::Hash() const {
 	uint64_t result = Expression::Hash();
-	result = CombineHash(result, duckdb::Hash<const char*>(schema.c_str()));
-	result = CombineHash(result, duckdb::Hash<const char*>(function_name.c_str()));
+	result = CombineHash(result, duckdb::Hash<const char *>(schema.c_str()));
+	result = CombineHash(result, duckdb::Hash<const char *>(function_name.c_str()));
 	return result;
 }
 
@@ -50,7 +50,7 @@ bool FunctionExpression::Equals(const Expression *other_) const {
 	if (!Expression::Equals(other_)) {
 		return false;
 	}
-	auto other = (FunctionExpression*) other_;
+	auto other = (FunctionExpression *)other_;
 	return schema == other->schema && function_name == other->function_name;
 }
 

@@ -107,7 +107,7 @@ static string ToJSONRecursive(QueryProfiler::TreeNode &node) {
 	result += "\"extra_info\": \"" + StringUtil::Replace(node.extra_info, "\n", "\\n") + "\",\n";
 	result += "\"children\": [";
 
-	for(size_t i = 0; i < node.children.size(); i++) {
+	for (size_t i = 0; i < node.children.size(); i++) {
 		result += ToJSONRecursive(*node.children[i]);
 		if (i + 1 < node.children.size()) {
 			result += ",\n";

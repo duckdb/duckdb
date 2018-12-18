@@ -25,7 +25,7 @@ public:
 	}
 
 	unique_ptr<Expression> Copy() override;
-	
+
 	uint64_t Hash() const override;
 	bool Equals(const Expression *other_) const override;
 

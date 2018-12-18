@@ -98,7 +98,8 @@ public:
 		return type;
 	}
 
-	//! Creates a hash value of this expression. It is important that if two expressions are identical (i.e. Expression::Equals() returns true), that their hash value is identical as well.
+	//! Creates a hash value of this expression. It is important that if two expressions are identical (i.e.
+	//! Expression::Equals() returns true), that their hash value is identical as well.
 	virtual uint64_t Hash() const;
 	//! Returns true if this expression is equal to another expression
 	virtual bool Equals(const Expression *other) const;
@@ -172,13 +173,13 @@ struct ExpressionDeserializeInfo {
 };
 
 struct ExpressionHashFunction {
-	size_t operator()(const Expression* const&expr) const {
+	size_t operator()(const Expression *const &expr) const {
 		return expr->Hash();
 	}
 };
 
 struct ExpressionEquality {
-    bool operator ()(const Expression* const&a, const Expression* const&b) const {
+	bool operator()(const Expression *const &a, const Expression *const &b) const {
 		return a->Equals(b);
 	}
 };

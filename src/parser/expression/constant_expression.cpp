@@ -1,8 +1,8 @@
 #include "parser/expression/constant_expression.hpp"
 
 #include "common/exception.hpp"
-#include "common/value_operations/value_operations.hpp"
 #include "common/types/hash.hpp"
+#include "common/value_operations/value_operations.hpp"
 
 using namespace duckdb;
 using namespace std;

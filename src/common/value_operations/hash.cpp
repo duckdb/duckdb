@@ -1,8 +1,8 @@
-#include "common/operator/numeric_functions.hpp"
+#include "common/types/hash.hpp"
 
 #include "common/exception.hpp"
+#include "common/operator/numeric_functions.hpp"
 #include "common/value_operations/value_operations.hpp"
-#include "common/types/hash.hpp"
 
 using namespace duckdb;
 using namespace operators;

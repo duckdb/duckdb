@@ -1,7 +1,8 @@
 #include "parser/expression.hpp"
-#include "parser/expression/list.hpp"
-#include "common/types/hash.hpp"
+
 #include "common/serializer.hpp"
+#include "common/types/hash.hpp"
+#include "parser/expression/list.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -152,8 +153,8 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &source) {
 }
 
 uint64_t Expression::Hash() const {
-	uint64_t hash = duckdb::Hash<uint32_t>((uint32_t) type);
-	for(auto &child : children) {
+	uint64_t hash = duckdb::Hash<uint32_t>((uint32_t)type);
+	for (auto &child : children) {
 		hash = CombineHash(child->Hash(), hash);
 	}
 	return hash;
