@@ -17,6 +17,6 @@ unique_ptr<Expression> ExpressionExecutor::Visit(CastExpression &expr) {
 	// now cast it to the type specified by the cast expression
 	vector.Initialize(expr.return_type);
 	VectorOperations::Cast(l, vector);
-	expr.stats.Verify(vector);
+	Verify(expr);
 	return nullptr;
 }

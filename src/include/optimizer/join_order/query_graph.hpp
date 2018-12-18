@@ -20,10 +20,10 @@ class Expression;
 class LogicalOperator;
 
 struct FilterInfo {
-	Expression *filter;
-	LogicalOperator *parent;
-	RelationSet *left_set;
-	RelationSet *right_set;
+	size_t filter_index;
+	RelationSet *left_set = nullptr;
+	RelationSet *right_set = nullptr;
+	RelationSet *set = nullptr;
 };
 
 struct FilterNode {

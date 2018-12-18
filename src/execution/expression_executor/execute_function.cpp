@@ -20,5 +20,6 @@ unique_ptr<Expression> ExpressionExecutor::Visit(FunctionExpression &expr) {
 		                            "expected function to return the former "
 		                            "but the function returned the latter");
 	}
+	Verify(expr);
 	return nullptr;
 }

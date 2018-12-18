@@ -54,6 +54,8 @@ public:
 	void MergeExpression(Expression *expr, Vector &result);
 	//! Execute the given aggregate expression for the current chunk
 	Value ExecuteAggregate(AggregateExpression &expr);
+	//! Verify that the output of a step in the ExpressionExecutor is correct
+	void Verify(Expression &expr);
 
 	unique_ptr<Expression> Visit(AggregateExpression &expr);
 	unique_ptr<Expression> Visit(CaseExpression &expr);

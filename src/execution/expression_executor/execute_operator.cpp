@@ -192,6 +192,6 @@ unique_ptr<Expression> ExpressionExecutor::Visit(OperatorExpression &expr) {
 	} else {
 		throw NotImplementedException("operator");
 	}
-	expr.stats.Verify(vector);
+	Verify(expr);
 	return nullptr;
 }

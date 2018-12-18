@@ -91,6 +91,6 @@ unique_ptr<Expression> ExpressionExecutor::Visit(AggregateExpression &expr) {
 		Vector v(state->aggregates[expr.index]);
 		v.Move(vector);
 	}
-	expr.stats.Verify(vector);
+	Verify(expr);
 	return nullptr;
 }

@@ -74,3 +74,11 @@ void ExpressionExecutor::MergeExpression(Expression *expr, Vector &result) {
 	}
 	VectorOperations::And(vector, result, result);
 }
+
+void ExpressionExecutor::Verify(Expression &expr) {
+	expr.stats.Verify(vector);
+	// if (chunk) {
+	// 	assert(vector.IsConstant() || vector.sel_vector == chunk->sel_vector);
+	// }
+	vector.Verify();
+}
