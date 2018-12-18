@@ -32,7 +32,8 @@ public:
 	};
 	struct TreeNode {
 		string name;
-		vector<string> extra_info;
+		string extra_info;
+		vector<string> split_extra_info;
 		TimingInformation info;
 		vector<unique_ptr<TreeNode>> children;
 		size_t depth = 0;
@@ -69,6 +70,7 @@ public:
 	void EndOperator(DataChunk &chunk);
 
 	string ToString() const override;
+	string ToJSON() const;
 
 	bool automatic_printing;
 
