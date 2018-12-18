@@ -1,6 +1,7 @@
 import json
 
 def generate(input_file, output_file):
+	global current_tone
 	with open(input_file) as f:
 		text = f.read()
 		# we only render the first tree, extract it
@@ -45,11 +46,7 @@ def generate(input_file, output_file):
 
 	current_tone = 0
 	# first parse the total time
-	try:
-		total_time = float(parsed_json["result"])
-	except:
-		exit(1)
-	print(total_time)
+	total_time = float(parsed_json["result"])
 
 	# assign an impact factor to nodes
 	# this is used for rendering opacity
