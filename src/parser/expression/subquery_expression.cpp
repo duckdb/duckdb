@@ -37,7 +37,7 @@ unique_ptr<Expression> SubqueryExpression::Deserialize(ExpressionDeserializeInfo
 	return expression;
 }
 
-bool SubqueryExpression::Equals(const Expression *other_) {
+bool SubqueryExpression::Equals(const Expression *other_) const {
 	if (!Expression::Equals(other_)) {
 		return false;
 	}

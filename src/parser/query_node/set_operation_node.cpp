@@ -3,7 +3,7 @@
 using namespace duckdb;
 using namespace std;
 
-bool SetOperationNode::Equals(const QueryNode *other_) {
+bool SetOperationNode::Equals(const QueryNode *other_) const {
 	if (!QueryNode::Equals(other_)) {
 		return false;
 	}

@@ -160,6 +160,7 @@ static unique_ptr<LogicalOperator> CreateJoinCondition(unique_ptr<LogicalOperato
 		auto left_side = GetJoinSide(*expr->children[0], left_bindings, right_bindings);
 		auto right_side = GetJoinSide(*expr->children[1], left_bindings, right_bindings);
 		auto total_side = CombineJoinSide(left_side, right_side);
+		// check if we can use this condition as a join condition
 		if (total_side != JoinSide::BOTH) {
 			// join condition does not reference both sides, add it as filter under the join
 			int push_side = total_side == JoinSide::LEFT ? 0 : 1;
@@ -506,7 +507,7 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 	}
 	while (T.size() > 1) {
 		// now in every step of the algorithm, we greedily pick the join between the to-be-joined relations that has the
-		// smallest cost this is O(r^2) per step, and every step will reduce the total amount of relations to-be-joined
+		// smallest cost. This is O(r^2) per step, and every step will reduce the total amount of relations to-be-joined
 		// by 1, so the total cost is O(r^3) in the amount of relations
 		size_t best_left = 0, best_right = 0;
 		JoinNode *best_connection = nullptr;

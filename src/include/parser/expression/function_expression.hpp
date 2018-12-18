@@ -33,6 +33,9 @@ public:
 
 	unique_ptr<Expression> Copy() override;
 
+	uint64_t Hash() const override;
+	bool Equals(const Expression *other) const override;
+
 	//! Serializes an Expression to a stand-alone binary blob
 	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into an ConstantExpression

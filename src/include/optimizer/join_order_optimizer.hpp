@@ -58,7 +58,7 @@ public:
 	unique_ptr<Expression> Visit(SubqueryExpression &expr) override;
 
 private:
-	//! The total amount of pairs currently considered
+	//! The total amount of join pairs that have been considered
 	size_t pairs = 0;
 	//! Set of all relations considered in the join optimizer
 	vector<unique_ptr<Relation>> relations;
@@ -74,6 +74,9 @@ private:
 	vector<unique_ptr<Expression>> filters;
 	//! The set of filter infos created from the extracted filters
 	vector<unique_ptr<FilterInfo>> filter_infos;
+	//! A map of all expressions a given expression has to be equivalent to. This is used to add "implied join edges".
+	//! i.e. in the join A=B AND B=C, the equivalence set of {B} is {A, C}, thus we can add an implied join edge {A <-> C}
+	unordered_map<Expression*, vector<FilterInfo*>, ExpressionHashFunction, ExpressionEquality> equivalence_sets;
 
 	//! Extract the bindings referred to by an Expression
 	bool ExtractBindings(Expression &expression, std::unordered_set<size_t> &bindings);

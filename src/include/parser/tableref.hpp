@@ -20,7 +20,7 @@ public:
 	}
 
 	virtual unique_ptr<TableRef> Accept(SQLNodeVisitor *v) = 0;
-	virtual bool Equals(const TableRef *other) {
+	virtual bool Equals(const TableRef *other) const {
 		return other && type == other->type && alias == other->alias;
 	}
 

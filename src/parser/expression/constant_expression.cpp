@@ -2,6 +2,7 @@
 
 #include "common/exception.hpp"
 #include "common/value_operations/value_operations.hpp"
+#include "common/types/hash.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -33,13 +34,15 @@ void ConstantExpression::ResolveType() {
 	stats.SetFromValue(value);
 }
 
-bool ConstantExpression::Equals(const Expression *other_) {
+bool ConstantExpression::Equals(const Expression *other_) const {
 	if (!Expression::Equals(other_)) {
 		return false;
 	}
-	auto other = reinterpret_cast<const ConstantExpression *>(other_);
-	if (!other) {
-		return false;
-	}
+	auto other = (ConstantExpression *)other_;
 	return value == other->value;
+}
+
+uint64_t ConstantExpression::Hash() const {
+	uint64_t result = Expression::Hash();
+	return CombineHash(ValueOperations::Hash(value), result);
 }

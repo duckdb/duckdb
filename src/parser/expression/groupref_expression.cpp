@@ -1,6 +1,7 @@
 #include "parser/expression/groupref_expression.hpp"
 
 #include "common/exception.hpp"
+#include "common/types/hash.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -16,13 +17,15 @@ unique_ptr<Expression> GroupRefExpression::Copy() {
 	return copy;
 }
 
-bool GroupRefExpression::Equals(const Expression *other_) {
+bool GroupRefExpression::Equals(const Expression *other_) const {
 	if (!Expression::Equals(other_)) {
 		return false;
 	}
-	auto other = reinterpret_cast<const GroupRefExpression *>(other_);
-	if (!other) {
-		return false;
-	}
+	auto other = (GroupRefExpression *)other_;
 	return group_index == other->group_index;
+}
+
+uint64_t GroupRefExpression::Hash() const {
+	uint64_t result = Expression::Hash();
+	return CombineHash(result, duckdb::Hash(group_index));
 }

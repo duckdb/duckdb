@@ -77,8 +77,9 @@ public:
 	static unique_ptr<Expression> Deserialize(ExpressionDeserializeInfo *info, Deserializer &source);
 
 	void ResolveType() override;
-
-	bool Equals(const Expression *other) override;
+	
+	uint64_t Hash() const override;
+	bool Equals(const Expression *other) const override;
 
 	// FIXME: move these
 

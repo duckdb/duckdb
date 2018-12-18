@@ -132,6 +132,7 @@ TEST_CASE("Expression serializer", "[serializer]") {
 		REQUIRE_NOTHROW(deserialized_expression = Expression::Deserialize(source));
 		REQUIRE(deserialized_expression.get());
 		REQUIRE(expression->Equals(deserialized_expression.get()));
+		REQUIRE(expression->Hash() == deserialized_expression->Hash());
 	}
 	{
 		// subquery, function, aggregate, case, negation
@@ -148,6 +149,7 @@ TEST_CASE("Expression serializer", "[serializer]") {
 		REQUIRE_NOTHROW(deserialized_expression = Expression::Deserialize(source));
 		REQUIRE(deserialized_expression.get());
 		REQUIRE(expression->Equals(deserialized_expression.get()));
+		REQUIRE(expression->Hash() == deserialized_expression->Hash());
 	}
 	{
 		// subtle differences should result in different results
@@ -169,7 +171,20 @@ TEST_CASE("Expression serializer", "[serializer]") {
 		REQUIRE_NOTHROW(deserialized2 = Expression::Deserialize(source));
 		REQUIRE(deserialized.get());
 		REQUIRE(expression->Equals(deserialized.get()));
+		REQUIRE(expression->Hash() == deserialized->Hash());
 		REQUIRE(expression2->Equals(deserialized2.get()));
+		REQUIRE(expression2->Hash() == deserialized2->Hash());
 		REQUIRE(!deserialized->Equals(deserialized2.get()));
+	}
+	{
+		// conjunctions are commutative
+		auto expression = ParseExpression("(A = 42) AND (B = 43)");
+		auto expression2 = ParseExpression("(B = 43) AND (A = 42)");
+
+		REQUIRE(expression.get());
+		REQUIRE(expression2.get());
+
+		REQUIRE(expression->Equals(expression2.get()));
+		REQUIRE(expression->Hash() == expression2->Hash());
 	}
 }

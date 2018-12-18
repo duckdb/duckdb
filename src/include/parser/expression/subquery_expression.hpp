@@ -39,7 +39,7 @@ public:
 	//! Deserializes a blob back into an ConstantExpression
 	static unique_ptr<Expression> Deserialize(ExpressionDeserializeInfo *info, Deserializer &source);
 
-	bool Equals(const Expression *other) override;
+	bool Equals(const Expression *other) const override;
 
 	// FIXME: move these, not related to parser but to execution!
 	unique_ptr<LogicalOperator> op;

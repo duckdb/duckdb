@@ -38,6 +38,11 @@ template <class T> uint64_t Hash(T value) {
 	return murmurhash32(value);
 }
 
+//! Combine two hashes by XORing them
+inline uint64_t CombineHash(uint64_t left, uint64_t right) {
+	return left ^ right;
+}
+
 template <> uint64_t Hash(uint64_t val);
 template <> uint64_t Hash(int64_t val);
 template <> uint64_t Hash(double val);
