@@ -121,6 +121,12 @@ string QueryProfiler::ToJSON() const {
 	if (!enabled) {
 		return "{ \"result\": \"disabled\" }\n";
 	}
+	if (query.empty()) {
+		return "{ \"result\": \"empty\" }\n";
+	}
+	if (!root) {
+		return "{ \"result\": \"error\" }\n";
+	}
 	string result = "{ \"result\": " + to_string(main_query.Elapsed()) + ",\n\"tree\": ";
 	result += ToJSONRecursive(*root);
 	return result + "}";

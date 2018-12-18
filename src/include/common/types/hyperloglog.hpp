@@ -17,6 +17,8 @@ class HyperLogLog {
 public:
 	HyperLogLog();
 	~HyperLogLog();
+	// implicit copying of HyperLogLog is not allowed
+	HyperLogLog(const HyperLogLog &) = delete;
 
 	//! Adds an element of the specified size to the HyperLogLog counter
 	void Add(uint8_t *element, size_t size);
