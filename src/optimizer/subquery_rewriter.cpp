@@ -214,12 +214,12 @@ bool SubqueryRewriter::RewriteExistsClause(LogicalFilter &filter, OperatorExpres
 bool SubqueryRewriter::RewriteSubqueryComparison(LogicalFilter &filter, ComparisonExpression *comparison,
                                                  SubqueryExpression *subquery) {
 	// rewrite a comparison with a subquery (e.g. A == (SUBQUERY))
-	// step 1: check that subquery is an aggregation
+	// step 1: check that subquery is a projection
 	auto node = GetProjection(subquery->op.get());
-	if (node->type != LogicalOperatorType::AGGREGATE_AND_GROUP_BY) {
+	if (node->type != LogicalOperatorType::PROJECTION) {
 		return false;
 	}
-	auto aggr = (LogicalAggregate *)node;
+	auto proj = (LogicalProjection *)node;
 
 	// now we turn a subquery in the WHERE clause into a "proper" subquery
 	// hence we need to get a new table index from the BindContext
@@ -227,7 +227,7 @@ bool SubqueryRewriter::RewriteSubqueryComparison(LogicalFilter &filter, Comparis
 
 	// step 2: find correlations to add to the list of join conditions
 	vector<JoinCondition> join_conditions;
-	ExtractCorrelatedExpressions(aggr, subquery, subquery_table_index, join_conditions);
+	ExtractCorrelatedExpressions(proj, subquery, subquery_table_index, join_conditions);
 
 	// create the join conditions
 	// first is the original condition
@@ -235,15 +235,14 @@ bool SubqueryRewriter::RewriteSubqueryComparison(LogicalFilter &filter, Comparis
 	condition.left =
 	    subquery == comparison->children[0].get() ? move(comparison->children[1]) : move(comparison->children[0]);
 	// the right condition is the first column of the subquery
-	auto &first_column = aggr->expressions[0];
 	condition.right =
-	    make_unique<ColumnRefExpression>(first_column->return_type, ColumnBinding(subquery_table_index, 0));
+	    make_unique<ColumnRefExpression>(proj->expressions[0]->return_type, ColumnBinding(subquery_table_index, 0));
 	condition.comparison = comparison->type;
 
 	// now we add join between the filter and the subquery
 	assert(filter.children.size() == 1);
 
-	auto table_subquery = make_unique<LogicalSubquery>(subquery_table_index, aggr->expressions.size());
+	auto table_subquery = make_unique<LogicalSubquery>(subquery_table_index, proj->expressions.size());
 	table_subquery->children.push_back(move(subquery->op));
 
 	auto join = make_unique<LogicalJoin>(JoinType::INNER);

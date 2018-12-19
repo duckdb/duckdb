@@ -109,33 +109,6 @@ unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(DeleteStatement &statement)
 	return nullptr;
 }
 
-static unique_ptr<Expression> transform_aggregates_into_colref(LogicalOperator *root, unique_ptr<Expression> expr) {
-	if (expr->GetExpressionClass() == ExpressionClass::AGGREGATE) {
-		// the current expression is an aggregate node!
-		// first check if the aggregate is already computed in the GROUP BY
-		size_t match_index = root->expressions.size();
-		for (size_t j = 0; j < root->expressions.size(); j++) {
-			if (expr->Equals(root->expressions[j].get())) {
-				match_index = j;
-				break;
-			}
-		}
-		auto type = expr->return_type;
-		if (match_index == root->expressions.size()) {
-			// the expression is not computed yet!
-			// add it to the list of aggregates to compute
-			root->expressions.push_back(move(expr));
-		}
-		// now turn this node into a reference
-		return make_unique<ColumnRefExpression>(type, match_index);
-	} else {
-		for (size_t i = 0; i < expr->children.size(); i++) {
-			expr->children[i] = transform_aggregates_into_colref(root, move(expr->children[i]));
-		}
-		return expr;
-	}
-}
-
 unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(SelectStatement &statement) {
 	auto expected_column_count = statement.node->GetSelectList().size();
 	statement.node->Accept(this);
@@ -156,14 +129,17 @@ void LogicalPlanGenerator::VisitQueryNode(QueryNode &statement) {
 		}
 
 		vector<unique_ptr<Expression>> expressions;
+		vector<unique_ptr<Expression>> projections;
 		vector<unique_ptr<Expression>> groups;
 
 		for (size_t i = 0; i < node->expressions.size(); i++) {
 			Expression *proj_ele = node->expressions[i].get();
-			auto group_ref = make_unique_base<Expression, GroupRefExpression>(proj_ele->return_type, i);
-			group_ref->alias = proj_ele->alias;
-			expressions.push_back(move(group_ref));
+
 			groups.push_back(make_unique_base<Expression, ColumnRefExpression>(proj_ele->return_type, i));
+			auto colref = make_unique_base<Expression, ColumnRefExpression>(proj_ele->return_type, i);
+			colref->alias = proj_ele->alias;
+			;
+			projections.push_back(move(colref));
 		}
 		// this aggregate is superflous if all grouping columns are in aggr
 		// below
@@ -171,6 +147,10 @@ void LogicalPlanGenerator::VisitQueryNode(QueryNode &statement) {
 		aggregate->groups = move(groups);
 		aggregate->AddChild(move(root));
 		root = move(aggregate);
+
+		auto proj = make_unique<LogicalProjection>(move(projections));
+		proj->AddChild(move(root));
+		root = move(proj);
 	}
 
 	if (statement.HasOrder()) {
@@ -183,6 +163,23 @@ void LogicalPlanGenerator::VisitQueryNode(QueryNode &statement) {
 		limit->AddChild(move(root));
 		root = move(limit);
 	}
+}
+
+static unique_ptr<Expression> extract_aggregates(unique_ptr<Expression> expr, vector<unique_ptr<Expression>> &result,
+                                                 size_t ngroups) {
+	if (expr->GetExpressionClass() == ExpressionClass::AGGREGATE) {
+		auto colref_expr = make_unique<ColumnRefExpression>(expr->return_type, ngroups + result.size());
+		result.push_back(move(expr));
+		return colref_expr;
+	}
+	if (expr->GetExpressionType() == ExpressionType::GROUP_REF) {
+		auto &gexpr = (GroupRefExpression &)*expr;
+		return make_unique<ColumnRefExpression>(gexpr.return_type, gexpr.group_index);
+	}
+	for (size_t expr_idx = 0; expr_idx < expr->children.size(); expr_idx++) {
+		expr->children[expr_idx] = extract_aggregates(move(expr->children[expr_idx]), result, ngroups);
+	}
+	return expr;
 }
 
 void LogicalPlanGenerator::Visit(SelectNode &statement) {
@@ -206,10 +203,23 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 		root = move(filter);
 	}
 
-	size_t original_column_count = statement.select_list.size();
 	if (statement.HasAggregation()) {
-		auto aggregate = make_unique<LogicalAggregate>(move(statement.select_list));
+		vector<unique_ptr<Expression>> aggregates;
 
+		for (size_t expr_idx = 0; expr_idx < statement.select_list.size(); expr_idx++) {
+			statement.select_list[expr_idx] =
+			    extract_aggregates(move(statement.select_list[expr_idx]), aggregates, statement.groupby.groups.size());
+		}
+
+		if (statement.HasHaving()) {
+			AcceptChild(&statement.groupby.having);
+			// the HAVING child cannot contain aggregates itself
+			// turn them into Column References
+			statement.groupby.having =
+			    extract_aggregates(move(statement.groupby.having), aggregates, statement.groupby.groups.size());
+		}
+
+		auto aggregate = make_unique<LogicalAggregate>(move(aggregates));
 		if (statement.HasGroup()) {
 			// have to add group by columns
 			aggregate->groups = move(statement.groupby.groups);
@@ -219,30 +229,14 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 		root = move(aggregate);
 
 		if (statement.HasHaving()) {
-			AcceptChild(&statement.groupby.having);
 			auto having = make_unique<LogicalFilter>(move(statement.groupby.having));
-			// the HAVING child cannot contain aggregates itself
-			// turn them into Column References
-			for (size_t i = 0; i < having->expressions.size(); i++) {
-				having->expressions[i] = transform_aggregates_into_colref(root.get(), move(having->expressions[i]));
-			}
-			bool require_prune = root->expressions.size() > original_column_count;
 			having->AddChild(move(root));
 			root = move(having);
-			if (require_prune) {
-				// we added extra aggregates for the HAVING clause
-				// we need to prune them after
-				auto prune = make_unique<LogicalPruneColumns>(original_column_count);
-				prune->AddChild(move(root));
-				root = move(prune);
-			}
 		}
-	} else if (statement.select_list.size() > 0) {
-		auto projection = make_unique<LogicalProjection>(move(statement.select_list));
-		projection->AddChild(move(root));
-		root = move(projection);
 	}
-
+	auto proj = make_unique<LogicalProjection>(move(statement.select_list));
+	proj->AddChild(move(root));
+	root = move(proj);
 	VisitQueryNode(statement);
 }
 
