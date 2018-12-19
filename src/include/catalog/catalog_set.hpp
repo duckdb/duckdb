@@ -32,8 +32,6 @@ public:
 	bool AlterEntry(Transaction &transaction, const string &name, AlterInformation *alter_info);
 
 	bool DropEntry(Transaction &transaction, const string &name, bool cascade);
-	//! Returns whether or not an entry exists
-	bool EntryExists(Transaction &transaction, const string &name);
 	//! Returns the entry with the specified name
 	CatalogEntry *GetEntry(Transaction &transaction, const string &name);
 

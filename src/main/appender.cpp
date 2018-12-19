@@ -45,7 +45,7 @@ void Appender::BeginRow() {
 void Appender::EndRow() {
 	// check that all rows have been appended to
 	if (column != chunk.column_count) {
-		throw Exception("Call to end_append_row() without all rows having been "
+		throw Exception("Call to Appender::EndRow() without all rows having been "
 		                "appended to!");
 	}
 	if (chunk.size() >= STANDARD_VECTOR_SIZE) {
@@ -79,8 +79,7 @@ void Appender::AppendBigInt(int64_t value) {
 
 void Appender::AppendString(const char *value) {
 	CheckAppend(TypeId::VARCHAR);
-	auto &col = chunk.data[column++];
-	((const char **)col.data)[col.count++] = value;
+	AppendValue(Value(value));
 }
 
 void Appender::AppendDouble(double value) {

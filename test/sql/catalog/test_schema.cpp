@@ -41,6 +41,8 @@ TEST_CASE("Schema creation/deletion", "[catalog]") {
 	REQUIRE_NO_FAIL(con.Query("DROP SCHEMA test CASCADE;"));
 	// drop schema if exists should not fail if schema does not exist
 	REQUIRE_NO_FAIL(con.Query("DROP SCHEMA IF EXISTS test;"));
+	// but drop schema without it should fail
+	REQUIRE_FAIL(con.Query("DROP SCHEMA test;"));
 }
 
 TEST_CASE("Schema creation/deletion with transactions", "[catalog]") {
@@ -82,4 +84,36 @@ TEST_CASE("Schema creation/deletion with transactions", "[catalog]") {
 	// now con2 finishes the transaction and tries again
 	REQUIRE_NO_FAIL(con2.Query("ROLLBACK;"));
 	REQUIRE_FAIL(con2.Query("SELECT * FROM test.hello"));
+}
+
+TEST_CASE("Catalog conflicts", "[catalog]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db), con2(db);
+
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
+	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION;"));
+
+	// create the same schema in both connections
+	REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA test;"));
+	// this should cause a conflict
+	REQUIRE_FAIL(con2.Query("CREATE SCHEMA test;"));
+
+	REQUIRE_NO_FAIL(con.Query("COMMIT"));
+	REQUIRE_NO_FAIL(con2.Query("ROLLBACK"));
+
+	// now try the same with DROP SCHEMA
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
+	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION;"));
+
+	REQUIRE_NO_FAIL(con.Query("DROP SCHEMA test;"));
+	// this should cause a conflict
+	REQUIRE_FAIL(con2.Query("DROP SCHEMA test;"));
+
+	// rollback the drop
+	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+	REQUIRE_NO_FAIL(con2.Query("ROLLBACK"));
+
+	// now the schema should still exist, so we can drop it again
+	REQUIRE_NO_FAIL(con.Query("DROP SCHEMA test;"));
 }

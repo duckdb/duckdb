@@ -109,15 +109,13 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 	VerifyConstraints(table, context, chunk);
 
 	auto last_chunk = tail_chunk;
-	do {
-		last_chunk->GetExclusiveLock();
-		if (last_chunk != tail_chunk) {
+	auto lock = last_chunk->GetExclusiveLock();
+	while(last_chunk != tail_chunk) {
 			// new chunk was added, have to obtain lock of last chunk
-			last_chunk->ReleaseExclusiveLock();
-			last_chunk = tail_chunk;
-			continue;
-		}
-	} while (false);
+		last_chunk = tail_chunk;
+		lock = last_chunk->GetExclusiveLock();
+	}
+	assert(!last_chunk->next);
 
 	StringHeap heap;
 	chunk.MoveStringsToHeap(heap);
@@ -129,7 +127,6 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 	auto error =
 	    UniqueIndex::Append(context.ActiveTransaction(), unique_indexes, chunk, last_chunk->start + last_chunk->count);
 	if (!error.empty()) {
-		last_chunk->ReleaseExclusiveLock();
 		throw ConstraintException(error);
 	}
 
@@ -168,7 +165,7 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 		// we need to append more entries
 		// first create a new chunk and lock it
 		auto new_chunk = make_unique<StorageChunk>(*this, last_chunk->start + last_chunk->count);
-		new_chunk->GetExclusiveLock();
+		auto new_chunk_lock = new_chunk->GetExclusiveLock();
 		auto new_chunk_pointer = new_chunk.get();
 		assert(!last_chunk->next);
 		last_chunk->next = move(new_chunk);
@@ -184,12 +181,9 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 			VectorOperations::CopyToStorage(chunk.data[i], target, current_count, remainder);
 		}
 		new_chunk_pointer->count = remainder;
-		new_chunk_pointer->ReleaseExclusiveLock();
 	}
 	// after a successful append move the strings to the chunk
 	last_chunk->string_heap.MergeHeap(heap);
-	// everything has been appended: release lock
-	last_chunk->ReleaseExclusiveLock();
 }
 
 void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_identifiers) {
@@ -209,7 +203,7 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 	auto chunk = GetChunk(first_id);
 
 	// get an exclusive lock on the chunk
-	chunk->GetExclusiveLock();
+	auto lock = chunk->GetExclusiveLock();
 
 	// now delete the entries
 	VectorOperations::Exec(row_identifiers, [&](size_t i, size_t k) {
@@ -230,7 +224,6 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 		// and set the deleted flag
 		chunk->deleted[id] = true;
 	});
-	chunk->ReleaseExclusiveLock();
 }
 
 void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector &row_identifiers,
@@ -258,14 +251,13 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	auto chunk = GetChunk(first_id);
 
 	// get an exclusive lock on the chunk
-	chunk->GetExclusiveLock();
+	auto lock = chunk->GetExclusiveLock();
 
 	// first we handle any PRIMARY KEY and UNIQUE constraints
 	if (unique_indexes.size() > 0) {
 		auto error = UniqueIndex::Update(context.ActiveTransaction(), chunk, unique_indexes, column_ids, updates,
 		                                 row_identifiers);
 		if (!error.empty()) {
-			chunk->ReleaseExclusiveLock();
 			throw ConstraintException(error);
 		}
 	}
@@ -322,7 +314,6 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	}
 	// after a successful update move the strings into the chunk
 	chunk->string_heap.MergeHeap(heap);
-	chunk->ReleaseExclusiveLock();
 }
 
 void DataTable::RetrieveVersionedData(DataChunk &result, const vector<column_t> &column_ids,

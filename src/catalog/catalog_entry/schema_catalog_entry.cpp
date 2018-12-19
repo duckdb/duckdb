@@ -56,10 +56,6 @@ void SchemaCatalogEntry::AlterTable(Transaction &transaction, AlterTableInformat
 	}
 }
 
-bool SchemaCatalogEntry::TableExists(Transaction &transaction, const string &table_name) {
-	return tables.EntryExists(transaction, table_name);
-}
-
 TableCatalogEntry *SchemaCatalogEntry::GetTable(Transaction &transaction, const string &table_name) {
 	auto entry = tables.GetEntry(transaction, table_name);
 	if (!entry) {

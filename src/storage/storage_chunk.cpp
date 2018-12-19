@@ -48,3 +48,28 @@ void StorageChunk::Undo(VersionInformation *info) {
 		version_pointers[entry]->chunk = this;
 	}
 }
+
+unique_ptr<ExclusiveStorageChunkLock> StorageChunk::GetExclusiveLock() {
+	exclusive_lock.lock();
+	while (read_count != 0)
+		;
+	return make_unique<ExclusiveStorageChunkLock>(this);
+}
+
+void StorageChunk::ReleaseExclusiveLock() {
+	exclusive_lock.unlock();
+}
+
+void StorageChunk::GetSharedLock() {
+	exclusive_lock.lock();
+	read_count++;
+	exclusive_lock.unlock();
+}
+
+void StorageChunk::ReleaseSharedLock() {
+	read_count--;
+}
+
+ExclusiveStorageChunkLock::~ExclusiveStorageChunkLock() {
+	chunk->ReleaseExclusiveLock();
+}

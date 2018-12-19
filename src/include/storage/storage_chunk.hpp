@@ -18,13 +18,23 @@ namespace duckdb {
 class ColumnDefinition;
 class DataTable;
 class StorageManager;
+class StorageChunk;
 
 struct VersionInformation;
 
+class ExclusiveStorageChunkLock {
+public:
+	ExclusiveStorageChunkLock(StorageChunk* chunk) : chunk(chunk) { }
+	~ExclusiveStorageChunkLock();
+private:
+	StorageChunk* chunk;
+};
+
 class StorageChunk {
+	friend class ExclusiveStorageChunkLock;
 public:
 	StorageChunk(DataTable &table, size_t start);
-
+	
 	DataTable &table;
 	bool deleted[STORAGE_CHUNK_SIZE] = {0};
 	VersionInformation *version_pointers[STORAGE_CHUNK_SIZE] = {nullptr};
@@ -38,29 +48,12 @@ public:
 	void Undo(VersionInformation *info);
 
 	//! Get an exclusive lock
-	void GetExclusiveLock() {
-		exclusive_lock.lock();
-		while (read_count != 0)
-			;
-	}
-
-	//! Release an exclusive lock on the chunk
-	void ReleaseExclusiveLock() {
-		exclusive_lock.unlock();
-	}
-
+	unique_ptr<ExclusiveStorageChunkLock> GetExclusiveLock();
 	//! Get a shared lock on the chunk
-	void GetSharedLock() {
-		exclusive_lock.lock();
-		read_count++;
-		exclusive_lock.unlock();
-	}
-
+	void GetSharedLock();
 	//! Release a shared lock on the chunk
-	void ReleaseSharedLock() {
-		read_count--;
-	}
-
+	void ReleaseSharedLock();
+	
 	unique_ptr<StorageChunk> next;
 	StringHeap string_heap;
 
@@ -68,6 +61,9 @@ private:
 	unique_ptr<char[]> owned_data;
 	std::mutex exclusive_lock;
 	std::atomic<size_t> read_count;
+
+	//! Release an exclusive lock on the chunk
+	void ReleaseExclusiveLock();
 };
 
 } // namespace duckdb

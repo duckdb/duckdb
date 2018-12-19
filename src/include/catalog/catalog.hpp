@@ -36,12 +36,6 @@ public:
 	//! Create a scalar function in the catalog
 	void CreateScalarFunction(Transaction &transaction, CreateScalarFunctionInformation *info);
 
-	//! Returns true if the schema exists, and false otherwise.
-	bool SchemaExists(Transaction &transaction, const string &name = DEFAULT_SCHEMA);
-	//! Returns true if the table exists in the given schema, and false
-	//! otherwise.
-	bool TableExists(Transaction &transaction, const string &schema, const string &table);
-
 	//! Returns a pointer to the schema of the specified name. Throws an
 	//! exception if it does not exist.
 	SchemaCatalogEntry *GetSchema(Transaction &transaction, const string &name = DEFAULT_SCHEMA);

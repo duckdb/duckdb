@@ -27,25 +27,12 @@ void Catalog::DropSchema(Transaction &transaction, DropSchemaInformation *info) 
 	}
 }
 
-bool Catalog::SchemaExists(Transaction &transaction, const string &name) {
-	return schemas.EntryExists(transaction, name);
-}
-
 SchemaCatalogEntry *Catalog::GetSchema(Transaction &transaction, const string &schema_name) {
 	auto entry = schemas.GetEntry(transaction, schema_name);
 	if (!entry) {
 		throw CatalogException("Schema with name %s does not exist!", schema_name.c_str());
 	}
 	return (SchemaCatalogEntry *)entry;
-}
-
-bool Catalog::TableExists(Transaction &transaction, const string &schema_name, const string &table_name) {
-	auto entry = schemas.GetEntry(transaction, schema_name);
-	if (!entry) {
-		return false;
-	}
-	SchemaCatalogEntry *schema = (SchemaCatalogEntry *)entry;
-	return schema->TableExists(transaction, table_name);
 }
 
 void Catalog::CreateTable(Transaction &transaction, CreateTableInformation *info) {
