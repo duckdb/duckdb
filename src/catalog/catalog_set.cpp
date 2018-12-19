@@ -149,21 +149,6 @@ CatalogEntry *CatalogSet::GetEntryForTransaction(Transaction &transaction, Catal
 	return current;
 }
 
-bool CatalogSet::EntryExists(Transaction &transaction, const string &name) {
-	lock_guard<mutex> lock(catalog_lock);
-
-	// first check if the entry exists in the unordered set
-	auto entry = data.find(name);
-	if (entry == data.end()) {
-		// entry has never been created
-		return false;
-	}
-	// if it does, we have to check version numbers
-	CatalogEntry *current = GetEntryForTransaction(transaction, data[name].get());
-
-	return !current->deleted;
-}
-
 CatalogEntry *CatalogSet::GetEntry(Transaction &transaction, const string &name) {
 	lock_guard<mutex> lock(catalog_lock);
 

@@ -28,8 +28,6 @@ class SchemaCatalogEntry : public CatalogEntry {
 public:
 	SchemaCatalogEntry(Catalog *catalog, string name);
 
-	//! Returns true if a table with the given name exists in the schema
-	bool TableExists(Transaction &transaction, const string &table_name);
 	//! Returns a pointer to a table of the given name. Throws an exception if
 	//! the table does not exist.
 	TableCatalogEntry *GetTable(Transaction &transaction, const string &table);
