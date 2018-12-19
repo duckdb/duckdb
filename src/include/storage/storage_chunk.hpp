@@ -26,17 +26,21 @@ enum class StorageLockType { SHARED = 0, EXCLUSIVE = 1 };
 
 class StorageLock {
 	friend class StorageChunk;
+
 public:
 	~StorageLock();
+
 private:
-	StorageLock(StorageChunk* chunk, StorageLockType type) : type(type), chunk(chunk) { }
+	StorageLock(StorageChunk *chunk, StorageLockType type) : type(type), chunk(chunk) {
+	}
 
 	StorageLockType type;
-	StorageChunk* chunk;
+	StorageChunk *chunk;
 };
 
 class StorageChunk {
 	friend class StorageLock;
+
 public:
 	StorageChunk(DataTable &table, size_t start);
 
@@ -59,6 +63,7 @@ public:
 
 	unique_ptr<StorageChunk> next;
 	StringHeap string_heap;
+
 private:
 	unique_ptr<char[]> owned_data;
 	std::mutex exclusive_lock;

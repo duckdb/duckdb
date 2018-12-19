@@ -239,6 +239,7 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 			chunk.data[expr_idx].Reference(wind_ch.data[window_output_idx]);
 			window_output_idx++;
 		} else {
+			// TODO do we need an executor here? Reference should be enough.
 			ExpressionExecutor executor(proj_ch, context);
 			executor.ExecuteExpression(select_list[expr_idx].get(), chunk.data[expr_idx]);
 		}

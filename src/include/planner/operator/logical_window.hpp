@@ -16,8 +16,7 @@ namespace duckdb {
 //! operator.
 class LogicalWindow : public LogicalOperator {
 public:
-	LogicalWindow(vector<unique_ptr<Expression>> select_list)
-	    : LogicalOperator(LogicalOperatorType::WINDOW, std::move(select_list)) {
+	LogicalWindow() : LogicalOperator(LogicalOperatorType::WINDOW) {
 	}
 
 	void Accept(LogicalOperatorVisitor *v) override {

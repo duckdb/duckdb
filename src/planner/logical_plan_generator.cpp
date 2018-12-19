@@ -109,21 +109,6 @@ unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(DeleteStatement &statement)
 	return nullptr;
 }
 
-
-static unique_ptr<Expression> extract_aggregates(unique_ptr<Expression> expr, vector<unique_ptr<Expression>>& result) {
-	if (expr->GetExpressionClass() == ExpressionClass::AGGREGATE) {
-		auto colref_expr = make_unique<ColumnRefExpression>(expr->return_type, result.size());
-		result.push_back(move(expr));
-		return colref_expr;
-	}
-	for (size_t i = 0; i < expr->children.size(); i++) {
-		expr->children[i] = extract_aggregates(move(expr->children[i]), result);
-	}
-	return expr;
-
-}
-
-
 unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(SelectStatement &statement) {
 	auto expected_column_count = statement.node->GetSelectCount();
 	statement.node->Accept(this);
@@ -218,7 +203,6 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 		root = move(filter);
 	}
 
-
 	if (statement.HasAggregation()) {
 		vector<unique_ptr<Expression>> aggregates;
 
@@ -251,6 +235,30 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 			root = move(having);
 		}
 	}
+
+	// FIXME: remove window ops from select list and add a colref instead. push the window op into window
+	if (statement.HasWindow()) {
+		auto win = make_unique<LogicalWindow>();
+		win->AddChild(move(root));
+
+		// TODO: handle window ops as children
+		// TODO: how to do this without the column refs? append the results of window ops?
+		for (size_t expr_idx = 0; expr_idx < statement.select_list.size(); expr_idx++) {
+			auto colref = make_unique<ColumnRefExpression>(statement.select_list[expr_idx]->return_type, expr_idx);
+
+			if (statement.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::WINDOW) {
+				win->expressions.push_back(move(statement.select_list[expr_idx]));
+				statement.select_list[expr_idx] = move(colref);
+			} else {
+				win->expressions.push_back(move(colref));
+			}
+		}
+
+		//
+
+		root = move(win);
+	}
+
 	auto proj = make_unique<LogicalProjection>(move(statement.select_list));
 	proj->AddChild(move(root));
 	root = move(proj);
