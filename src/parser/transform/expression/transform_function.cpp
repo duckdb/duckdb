@@ -70,9 +70,6 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 			// FIXME: implement named window specs, not now
 			throw NotImplementedException("Named Windows");
 		}
-		if (window_spec->frameOptions != FRAMEOPTION_DEFAULTS) {
-			throw NotImplementedException("Non-default window spec");
-		}
 
 		auto win_fun_type = WindowToExpressionType(lowercase_name);
 		if (win_fun_type == ExpressionType::INVALID) {
@@ -93,10 +90,48 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 		TransformOrderBy(window_spec->orderClause, expr->ordering);
 
 		// finally: specifics of bounds
-		// FIXME: actually interpret those
-		auto bound_start = TransformExpression(window_spec->startOffset);
-		auto bound_end = TransformExpression(window_spec->endOffset);
-		// FIXME: interpret frameOptions
+		expr->start_expr = TransformExpression(window_spec->startOffset);
+		expr->end_expr = TransformExpression(window_spec->endOffset);
+
+		if ((window_spec->frameOptions & FRAMEOPTION_END_UNBOUNDED_PRECEDING) ||
+		    (window_spec->frameOptions & FRAMEOPTION_START_UNBOUNDED_FOLLOWING)) {
+			throw Exception(
+			    "Window frames ending in unbounded preceding or starting with unbounded following make no sense");
+		}
+
+		if (window_spec->frameOptions & FRAMEOPTION_START_UNBOUNDED_PRECEDING) {
+			expr->start = WindowBoundary::UNBOUNDED_PRECEDING;
+		} else if (window_spec->frameOptions & FRAMEOPTION_START_UNBOUNDED_FOLLOWING) {
+			expr->start = WindowBoundary::UNBOUNDED_FOLLOWING;
+		} else if (window_spec->frameOptions & FRAMEOPTION_START_CURRENT_ROW) {
+			expr->start = WindowBoundary::CURRENT_ROW;
+		} else if (window_spec->frameOptions & FRAMEOPTION_START_VALUE_PRECEDING) {
+			expr->start = WindowBoundary::EXPR_PRECEDING;
+		} else if (window_spec->frameOptions & FRAMEOPTION_START_VALUE_FOLLOWING) {
+			expr->start = WindowBoundary::EXPR_FOLLOWING;
+		}
+
+		if (window_spec->frameOptions & FRAMEOPTION_END_UNBOUNDED_PRECEDING) {
+			expr->end = WindowBoundary::UNBOUNDED_PRECEDING;
+		} else if (window_spec->frameOptions & FRAMEOPTION_END_UNBOUNDED_FOLLOWING) {
+			expr->end = WindowBoundary::UNBOUNDED_FOLLOWING;
+		} else if (window_spec->frameOptions & FRAMEOPTION_END_CURRENT_ROW) {
+			expr->end = WindowBoundary::CURRENT_ROW;
+		} else if (window_spec->frameOptions & FRAMEOPTION_END_VALUE_PRECEDING) {
+			expr->end = WindowBoundary::EXPR_PRECEDING;
+		} else if (window_spec->frameOptions & FRAMEOPTION_END_VALUE_FOLLOWING) {
+			expr->end = WindowBoundary::EXPR_FOLLOWING;
+		}
+
+		assert(expr->start != WindowBoundary::INVALID && expr->end != WindowBoundary::INVALID);
+
+		if (((expr->start == WindowBoundary::EXPR_PRECEDING || expr->start == WindowBoundary::EXPR_PRECEDING) &&
+		     !expr->start_expr) ||
+		    ((expr->end == WindowBoundary::EXPR_PRECEDING || expr->end == WindowBoundary::EXPR_PRECEDING) &&
+		     !expr->end_expr)) {
+			throw Exception("Failed to transform window boundary expression");
+		}
+
 		return expr;
 	}
 
