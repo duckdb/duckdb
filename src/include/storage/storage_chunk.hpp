@@ -22,16 +22,21 @@ class StorageChunk;
 
 struct VersionInformation;
 
-class ExclusiveStorageChunkLock {
+enum class StorageLockType { SHARED = 0, EXCLUSIVE = 1 };
+
+class StorageLock {
+	friend class StorageChunk;
 public:
-	ExclusiveStorageChunkLock(StorageChunk* chunk) : chunk(chunk) { }
-	~ExclusiveStorageChunkLock();
+	~StorageLock();
 private:
+	StorageLock(StorageChunk* chunk, StorageLockType type) : type(type), chunk(chunk) { }
+
+	StorageLockType type;
 	StorageChunk* chunk;
 };
 
 class StorageChunk {
-	friend class ExclusiveStorageChunkLock;
+	friend class StorageLock;
 public:
 	StorageChunk(DataTable &table, size_t start);
 	
@@ -48,15 +53,12 @@ public:
 	void Undo(VersionInformation *info);
 
 	//! Get an exclusive lock
-	unique_ptr<ExclusiveStorageChunkLock> GetExclusiveLock();
+	unique_ptr<StorageLock> GetExclusiveLock();
 	//! Get a shared lock on the chunk
-	void GetSharedLock();
-	//! Release a shared lock on the chunk
-	void ReleaseSharedLock();
+	unique_ptr<StorageLock> GetSharedLock();
 	
 	unique_ptr<StorageChunk> next;
 	StringHeap string_heap;
-
 private:
 	unique_ptr<char[]> owned_data;
 	std::mutex exclusive_lock;
@@ -64,6 +66,8 @@ private:
 
 	//! Release an exclusive lock on the chunk
 	void ReleaseExclusiveLock();
+	//! Release a shared lock on the chunk
+	void ReleaseSharedLock();
 };
 
 } // namespace duckdb

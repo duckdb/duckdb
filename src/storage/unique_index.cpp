@@ -43,8 +43,9 @@ UniqueIndexNode *UniqueIndex::AddEntry(Transaction &transaction, Tuple tuple, si
 			// the row identifiers are correct
 			// for this reason locking it again here will cause a
 			// deadlock. We only need to lock chunks that are not the last
+			unique_ptr<StorageLock> lock;
 			if (chunk != table.tail_chunk) {
-				chunk->GetSharedLock();
+				lock = chunk->GetSharedLock();
 			}
 			bool conflict = true;
 
@@ -105,9 +106,6 @@ UniqueIndexNode *UniqueIndex::AddEntry(Transaction &transaction, Tuple tuple, si
 			}
 
 			if (conflict) {
-				if (chunk != table.tail_chunk) {
-					chunk->ReleaseSharedLock();
-				}
 				return nullptr;
 			}
 		}

@@ -66,7 +66,6 @@ void PhysicalCreateIndex::_GetChunk(ClientContext &context, DataChunk &chunk, Ph
 	order_index->Sort();
 
 	table.storage->indexes.push_back(move(order_index));
-	table.storage->ReleaseIndexLocks();
 
 	chunk.data[0].count = 1;
 	chunk.data[0].SetValue(0, Value::BIGINT(0));
