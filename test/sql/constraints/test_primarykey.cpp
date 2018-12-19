@@ -11,6 +11,9 @@ TEST_CASE("Single PRIMARY KEY constraint", "[constraints]") {
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY, j INTEGER)"));
 
+	// insert two conflicting pairs at the same time
+	REQUIRE_FAIL(con.Query("INSERT INTO integers VALUES (3, 4), (3, 5)"));
+
 	// insert unique values
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (3, 4), (2, 5)"));
 
@@ -30,6 +33,9 @@ TEST_CASE("Single PRIMARY KEY constraint", "[constraints]") {
 
 	// insert NULL value in PRIMARY KEY is not allowed
 	REQUIRE_FAIL(con.Query("INSERT INTO integers VALUES (NULL, 4);"));
+
+	// update NULL is also not allowed
+	REQUIRE_FAIL(con.Query("UPDATE integers SET i=NULL;"));
 
 	// insert the same value from multiple connections
 	DuckDBConnection con2(db);
@@ -103,7 +109,7 @@ TEST_CASE("PRIMARY KEY and update/delete", "[constraints]") {
 	REQUIRE_NO_FAIL(con.Query("UPDATE test SET b=4;"));
 	//! Set every key one higher, should also work without conflicts
 	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=a+1;"));
-	//! Set only the first key higher, should work as this introduces a
+	//! Set only the first key higher, should not work as this introduces a
 	//! duplicate key!
 	REQUIRE_FAIL(con.Query("UPDATE test SET a=a+1 WHERE a<=12;"));
 	//! Set all keys to 4, results in a conflict!
@@ -140,11 +146,11 @@ TEST_CASE("PRIMARY KEY and update/delete on multiple columns", "[constraints]") 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR, PRIMARY KEY(a, b));"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 'hello'), (12, "
 	                          "'world'), (13, 'blablabla')"));
-	// update one of the columns, should work as it does not introduce
+	// update one of the columns, should work as it does not introduce duplicates
 	REQUIRE_NO_FAIL(con.Query("UPDATE test SET b='hello';"));
 	//! Set every key one higher, should also work without conflicts
 	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=a+1;"));
-	//! Set only the first key higher, should work as this introduces a
+	//! Set only the first key higher, should not work as this introduces a
 	//! duplicate key!
 	REQUIRE_FAIL(con.Query("UPDATE test SET a=a+1 WHERE a<=12;"));
 	//! Set all keys to 4, results in a conflict!

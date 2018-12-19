@@ -110,8 +110,8 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 
 	auto last_chunk = tail_chunk;
 	auto lock = last_chunk->GetExclusiveLock();
-	while(last_chunk != tail_chunk) {
-			// new chunk was added, have to obtain lock of last chunk
+	while (last_chunk != tail_chunk) {
+		// new chunk was added, have to obtain lock of last chunk
 		last_chunk = tail_chunk;
 		lock = last_chunk->GetExclusiveLock();
 	}
@@ -124,11 +124,7 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 	// now we can append the elements
 
 	// first we handle any PRIMARY KEY and UNIQUE constraints
-	auto error =
-	    UniqueIndex::Append(context.ActiveTransaction(), unique_indexes, chunk, last_chunk->start + last_chunk->count);
-	if (!error.empty()) {
-		throw ConstraintException(error);
-	}
+	UniqueIndex::Append(context.ActiveTransaction(), unique_indexes, chunk, last_chunk->start + last_chunk->count);
 
 	// update the statistics with the new data
 	for (size_t i = 0; i < types.size(); i++) {
@@ -254,13 +250,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	auto lock = chunk->GetExclusiveLock();
 
 	// first we handle any PRIMARY KEY and UNIQUE constraints
-	if (unique_indexes.size() > 0) {
-		auto error = UniqueIndex::Update(context.ActiveTransaction(), chunk, unique_indexes, column_ids, updates,
-		                                 row_identifiers);
-		if (!error.empty()) {
-			throw ConstraintException(error);
-		}
-	}
+	UniqueIndex::Update(context.ActiveTransaction(), chunk, unique_indexes, column_ids, updates, row_identifiers);
 
 	// no constraints are violated
 	// first update any indexes

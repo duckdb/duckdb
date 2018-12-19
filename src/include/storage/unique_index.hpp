@@ -38,18 +38,46 @@ struct UniqueIndexNode {
 //! same value. It is used to efficiently enforce PRIMARY KEY, FOREIGN KEY and
 //! UNIQUE constraints.
 class UniqueIndex {
+	//! This structure contains a set of entries that were added to a unique index. In case of a conflict these might
+	//! have to be removed again.
+	struct UniqueIndexAddedEntries {
+		UniqueIndex &index;
+		UniqueIndexNode *nodes[STANDARD_VECTOR_SIZE];
+		size_t count;
+		unique_ptr<UniqueIndexAddedEntries> next;
+
+		UniqueIndexAddedEntries(UniqueIndex &index) : index(index), count(0) {
+		}
+		~UniqueIndexAddedEntries() {
+			for (size_t j = count; j > 0; j--) {
+				if (nodes[j - 1]) {
+					index.RemoveEntry(nodes[j - 1]);
+				}
+			}
+		}
+		void AddEntry(UniqueIndexNode *entry) {
+			nodes[count++] = entry;
+		}
+		void Flush() {
+			count = 0;
+			if (next) {
+				next->Flush();
+			}
+		}
+	};
+
 public:
 	UniqueIndex(DataTable &table, vector<TypeId> types, vector<size_t> keys, bool allow_nulls);
 
-	static std::string Append(Transaction &transaction, vector<unique_ptr<UniqueIndex>> &indexes, DataChunk &chunk,
-	                          size_t row_identifier_start);
+	static void Append(Transaction &transaction, vector<unique_ptr<UniqueIndex>> &indexes, DataChunk &chunk,
+	                   size_t row_identifier_start);
 
-	static std::string Update(Transaction &transaction, StorageChunk *storage, vector<unique_ptr<UniqueIndex>> &indexes,
-	                          vector<column_t> &column_ids, DataChunk &update_chunk, Vector &row_identifiers);
+	static void Update(Transaction &transaction, StorageChunk *storage, vector<unique_ptr<UniqueIndex>> &indexes,
+	                   vector<column_t> &column_ids, DataChunk &update_chunk, Vector &row_identifiers);
 
 private:
-	string AddEntries(Transaction &transaction, UniqueIndexNode *added_nodes[], Tuple tuples[], bool has_null[],
-	                  Vector &row_identifiers, std::unordered_set<size_t> &ignored_identifiers);
+	void AddEntries(Transaction &transaction, UniqueIndexAddedEntries &nodes, Tuple tuples[], bool has_null[],
+	                Vector &row_identifiers, std::unordered_set<size_t> &ignored_identifiers);
 	UniqueIndexNode *AddEntry(Transaction &transaction, Tuple tuple, size_t row_identifier,
 	                          std::unordered_set<size_t> &ignored_identifiers);
 	void RemoveEntry(UniqueIndexNode *entry);

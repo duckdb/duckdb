@@ -1,9 +1,8 @@
 #include "catch.hpp"
-#include "test_helpers.hpp"
 #include "main/appender.hpp"
+#include "test_helpers.hpp"
 
 #include <thread>
-
 #include <vector>
 
 using namespace duckdb;
@@ -18,7 +17,7 @@ static void read_from_integers(DuckDB *db, size_t threadnr) {
 	REQUIRE(db);
 	DuckDBConnection con(*db);
 
-	while(!is_finished) {
+	while (!is_finished) {
 		auto result = con.Query("SELECT i FROM integers WHERE i = " + to_string(threadnr * 10000));
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(threadnr * 10000)}));
 	}
@@ -28,12 +27,12 @@ TEST_CASE("Concurrent reads during index creation", "[index][.]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
-	
+
 	// create a single table to append to
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	// append a bunch of entries
 	Appender appender(db, DEFAULT_SCHEMA, "integers");
-	for(size_t i = 0; i < 1000000; i++) {
+	for (size_t i = 0; i < 1000000; i++) {
 		appender.BeginRow();
 		appender.AppendInteger(i);
 		appender.EndRow();
@@ -77,12 +76,12 @@ TEST_CASE("Concurrent writes during index creation", "[index][.]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
-	
+
 	// create a single table to append to
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	// append a bunch of entries
 	Appender appender(db, DEFAULT_SCHEMA, "integers");
-	for(size_t i = 0; i < 1000000; i++) {
+	for (size_t i = 0; i < 1000000; i++) {
 		appender.BeginRow();
 		appender.AppendInteger(i);
 		appender.EndRow();
