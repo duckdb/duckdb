@@ -379,7 +379,7 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, const vector<c
 	while (structure.chunk) {
 		auto current_chunk = structure.chunk;
 		// first obtain a shared lock on the current chunk
-		current_chunk->GetSharedLock();
+		auto lock = current_chunk->GetSharedLock();
 		// now scan the chunk until we find enough pieces to fill a vector or
 		// reach the end
 		sel_t regular_entries[STANDARD_VECTOR_SIZE], version_entries[STANDARD_VECTOR_SIZE];
@@ -445,7 +445,6 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, const vector<c
 			structure.offset = 0;
 			structure.chunk = current_chunk->next.get();
 		}
-		current_chunk->ReleaseSharedLock();
 		if (result.size() > 0) {
 			return;
 		}
@@ -462,17 +461,14 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 	VectorOperations::Sort(row_identifiers, sort_vector);
 
 	StorageChunk *current_chunk = nullptr;
+	unique_ptr<StorageLock> lock;
 	for (size_t i = 0; i < row_identifiers.count; i++) {
 		auto row_id = row_ids[sort_vector[i]];
 		auto chunk = GetChunk(row_id);
 		if (chunk != current_chunk) {
 			// chunk is not locked yet
-			// release the current lock, if any
-			if (current_chunk) {
-				current_chunk->ReleaseSharedLock();
-			}
 			// get the lock on the current chunk
-			chunk->GetSharedLock();
+			lock = chunk->GetSharedLock();
 			current_chunk = chunk;
 		}
 		assert(row_id >= chunk->start && row_id < chunk->start + chunk->count);
@@ -531,7 +527,6 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 			}
 		}
 	}
-	current_chunk->ReleaseSharedLock();
 }
 
 void DataTable::CreateIndexScan(ScanStructure &structure, vector<column_t> &column_ids, DataChunk &result) {
@@ -542,7 +537,7 @@ void DataTable::CreateIndexScan(ScanStructure &structure, vector<column_t> &colu
 		if (structure.offset == 0 && !structure.version_chain) {
 			// first obtain a shared lock on the current chunk, if we don't have
 			// it already
-			current_chunk->GetSharedLock();
+			structure.locks.push_back(current_chunk->GetSharedLock());
 		}
 
 		uint8_t *alternate_version_pointers[STANDARD_VECTOR_SIZE];
@@ -604,15 +599,5 @@ void DataTable::CreateIndexScan(ScanStructure &structure, vector<column_t> &colu
 			RetrieveBaseTableData(result, column_ids, regular_entries, regular_count, current_chunk);
 			return;
 		}
-	}
-}
-
-void DataTable::ReleaseIndexLocks() {
-	// release all the locks on the base table that we held
-	auto initial = chunk_list.get();
-	while (initial) {
-		auto next = initial->next.get();
-		initial->ReleaseSharedLock();
-		initial = next;
 	}
 }

@@ -89,8 +89,21 @@ void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk, 
 	}
 	// we finished the child chunk
 	// actually compute the final projection list now
-	ExpressionExecutor executor(state, context, false);
-	executor.Execute(select_list, chunk);
+	//	ExpressionExecutor executor(state, context, false);
+	//	executor.Execute(select_list, chunk);
+
+	size_t chunk_index = 0;
+	if (state->group_chunk.column_count + state->aggregate_chunk.column_count == chunk.column_count) {
+		for (size_t col_idx = 0; col_idx < state->group_chunk.column_count; col_idx++) {
+			chunk.data[chunk_index++].Reference(state->group_chunk.data[col_idx]);
+		}
+	} else {
+		assert(state->aggregate_chunk.column_count == chunk.column_count);
+	}
+
+	for (size_t col_idx = 0; col_idx < state->aggregate_chunk.column_count; col_idx++) {
+		chunk.data[chunk_index++].Reference(state->aggregate_chunk.data[col_idx]);
+	}
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState(ExpressionExecutor *parent) {

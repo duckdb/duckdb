@@ -49,20 +49,21 @@ void StorageChunk::Undo(VersionInformation *info) {
 	}
 }
 
-unique_ptr<ExclusiveStorageChunkLock> StorageChunk::GetExclusiveLock() {
+unique_ptr<StorageLock> StorageChunk::GetExclusiveLock() {
 	exclusive_lock.lock();
 	while (read_count != 0)
 		;
-	return make_unique<ExclusiveStorageChunkLock>(this);
+	return unique_ptr<StorageLock>(new StorageLock(this, StorageLockType::EXCLUSIVE));
+}
+
+unique_ptr<StorageLock> StorageChunk::GetSharedLock() {
+	exclusive_lock.lock();
+	read_count++;
+	exclusive_lock.unlock();
+	return unique_ptr<StorageLock>(new StorageLock(this, StorageLockType::SHARED));
 }
 
 void StorageChunk::ReleaseExclusiveLock() {
-	exclusive_lock.unlock();
-}
-
-void StorageChunk::GetSharedLock() {
-	exclusive_lock.lock();
-	read_count++;
 	exclusive_lock.unlock();
 }
 
@@ -70,6 +71,11 @@ void StorageChunk::ReleaseSharedLock() {
 	read_count--;
 }
 
-ExclusiveStorageChunkLock::~ExclusiveStorageChunkLock() {
-	chunk->ReleaseExclusiveLock();
+StorageLock::~StorageLock() {
+	if (type == StorageLockType::EXCLUSIVE) {
+		chunk->ReleaseExclusiveLock();
+	} else {
+		assert(type == StorageLockType::SHARED);
+		chunk->ReleaseSharedLock();
+	}
 }

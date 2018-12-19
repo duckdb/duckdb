@@ -33,6 +33,7 @@ struct ScanStructure {
 	StorageChunk *chunk;
 	size_t offset;
 	VersionInformation *version_chain;
+	vector<unique_ptr<StorageLock>> locks;
 };
 
 //! DataTable represents a physical table on disk
@@ -61,10 +62,6 @@ public:
 
 	//! Scan used for creating an index, incrementally locks all storage chunks
 	void CreateIndexScan(ScanStructure &structure, vector<column_t> &column_ids, DataChunk &result);
-
-	//! After finishing the CreateIndexScan, releases all locks acquired during
-	//! the scan
-	void ReleaseIndexLocks();
 
 	//! Get statistics of the specified column
 	ColumnStatistics &GetStatistics(column_t oid) {
