@@ -110,8 +110,8 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 
 	auto last_chunk = tail_chunk;
 	auto lock = last_chunk->GetExclusiveLock();
-	while(last_chunk != tail_chunk) {
-			// new chunk was added, have to obtain lock of last chunk
+	while (last_chunk != tail_chunk) {
+		// new chunk was added, have to obtain lock of last chunk
 		last_chunk = tail_chunk;
 		lock = last_chunk->GetExclusiveLock();
 	}

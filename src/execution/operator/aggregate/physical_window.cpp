@@ -125,6 +125,9 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 			size_t window_start = 0;
 			size_t window_end = 0;
 
+			size_t partition_start = 0;
+			size_t partition_end = 0;
+
 			size_t dense_rank = 1;
 			size_t rank_equal = 0;
 			size_t rank = 1;
@@ -144,7 +147,7 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 					Value p_val = prev[p_idx];
 
 					if (p_val != s_val && p_idx < wexpr->partitions.size()) {
-						window_start = row_idx;
+						partition_start = row_idx;
 						dense_rank = 1;
 						rank = 1;
 						rank_equal = 0;
@@ -159,6 +162,22 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 					dense_rank++;
 					rank += rank_equal;
 					rank_equal = 0;
+				}
+
+				window_start = 0;
+				// todo get unbounded following index
+
+				if (wexpr->start == WindowBoundary::UNBOUNDED_PRECEDING) {
+					window_start = partition_start;
+				}
+				if (wexpr->start == WindowBoundary::UNBOUNDED_FOLLOWING) {
+					window_start = partition_end;
+				}
+				if (wexpr->start == WindowBoundary::CURRENT_ROW) {
+					window_start = row_idx;
+				}
+				if (wexpr->end == WindowBoundary::CURRENT_ROW) {
+					window_end = row_idx;
 				}
 
 				window_end = row_idx + 1;

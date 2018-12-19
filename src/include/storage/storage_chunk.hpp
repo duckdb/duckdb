@@ -24,17 +24,20 @@ struct VersionInformation;
 
 class ExclusiveStorageChunkLock {
 public:
-	ExclusiveStorageChunkLock(StorageChunk* chunk) : chunk(chunk) { }
+	ExclusiveStorageChunkLock(StorageChunk *chunk) : chunk(chunk) {
+	}
 	~ExclusiveStorageChunkLock();
+
 private:
-	StorageChunk* chunk;
+	StorageChunk *chunk;
 };
 
 class StorageChunk {
 	friend class ExclusiveStorageChunkLock;
+
 public:
 	StorageChunk(DataTable &table, size_t start);
-	
+
 	DataTable &table;
 	bool deleted[STORAGE_CHUNK_SIZE] = {0};
 	VersionInformation *version_pointers[STORAGE_CHUNK_SIZE] = {nullptr};
@@ -53,7 +56,7 @@ public:
 	void GetSharedLock();
 	//! Release a shared lock on the chunk
 	void ReleaseSharedLock();
-	
+
 	unique_ptr<StorageChunk> next;
 	StringHeap string_heap;
 

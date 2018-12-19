@@ -136,6 +136,21 @@ static unique_ptr<Expression> transform_aggregates_into_colref(LogicalOperator *
 	}
 }
 
+
+static unique_ptr<Expression> extract_aggregates(unique_ptr<Expression> expr, vector<unique_ptr<Expression>>& result) {
+	if (expr->GetExpressionClass() == ExpressionClass::AGGREGATE) {
+		auto colref_expr = make_unique<ColumnRefExpression>(expr->return_type, result.size());
+		result.push_back(move(expr));
+		return colref_expr;
+	}
+	for (size_t i = 0; i < expr->children.size(); i++) {
+		expr->children[i] = extract_aggregates(move(expr->children[i]), result);
+	}
+	return expr;
+
+}
+
+
 unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(SelectStatement &statement) {
 	auto expected_column_count = statement.node->GetSelectCount();
 	statement.node->Accept(this);
@@ -212,7 +227,28 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 	// separate projection/aggr and window functions into two selection lists if req.
 	auto select_list = move(statement.select_list);
 	size_t original_column_count = select_list.size();
+
+
 	if (has_aggr) {
+
+		if (has_window) {
+			vector<unique_ptr<Expression>> aggregate_select_list;
+			size_t max_idx = select_list.size();
+			for (size_t expr_idx = 0; expr_idx < max_idx; expr_idx++) {
+				select_list[expr_idx] = extract_aggregates(move(select_list[expr_idx]), aggregate_select_list);
+
+				// call extract_aggregates for the partition/order
+
+//				if (select_list[expr_idx]->GetExpressionClass() == ExpressionClass::WINDOW) {
+//
+//				} else {
+//
+//				}
+			}
+		}
+
+
+
 		auto aggregate = make_unique<LogicalAggregate>(move(select_list));
 		if (statement.HasGroup()) {
 			// have to add group by columns
@@ -222,31 +258,33 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 		aggregate->AddChild(move(root));
 		root = move(aggregate);
 
+
+
 		if (statement.HasHaving()) {
 			AcceptChild(&statement.groupby.having);
 			auto having = make_unique<LogicalFilter>(move(statement.groupby.having));
 			// the HAVING child cannot contain aggregates itself
 			// turn them into Column References
+			LogicalProjection proj;
 			for (size_t i = 0; i < having->expressions.size(); i++) {
-				having->expressions[i] = transform_aggregates_into_colref(root.get(), move(having->expressions[i]));
+				having->expressions[i] = transform_aggregates_into_colref(&proj, move(having->expressions[i]));
 			}
-			bool require_prune = root->expressions.size() > original_column_count;
+//			bool require_prune = root->expressions.size() > original_column_count;
 			having->AddChild(move(root));
 			root = move(having);
-			if (require_prune) {
-				// we added extra aggregates for the HAVING clause
-				// we need to prune them after
-				auto prune = make_unique<LogicalPruneColumns>(original_column_count);
-				prune->AddChild(move(root));
-				root = move(prune);
-			}
+//			if (require_prune) {
+//				// we added extra aggregates for the HAVING clause
+//				// we need to prune them after
+//				auto prune = make_unique<LogicalPruneColumns>(original_column_count);
+//				prune->AddChild(move(root));
+//				root = move(prune);
+//			}
 		}
 	} else if (has_window) {
 		assert(select_list.size() > 0);
 		auto window = make_unique<LogicalWindow>(move(select_list));
 		window->AddChild(move(root));
 		root = move(window);
-
 	} else if (select_list.size() > 0) {
 		auto projection = make_unique<LogicalProjection>(move(select_list));
 		projection->AddChild(move(root));
