@@ -1,5 +1,6 @@
 add_subdirectory(dbgen)
 add_subdirectory(dsdgen)
+add_subdirectory(hyperloglog)
 add_subdirectory(libpg_query)
 add_subdirectory(sqlsmith)
 add_subdirectory(sqlite)

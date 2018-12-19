@@ -79,7 +79,7 @@ public:
 
 	string GetLogOutput(BenchmarkState *state_) override {
 		auto state = (DuckDBBenchmarkState *)state_;
-		return state->conn.GetProfilingInformation();
+		return state->conn.context.profiler.ToJSON();
 	}
 
 	//! Interrupt the benchmark because of a timeout

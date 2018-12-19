@@ -26,7 +26,8 @@ public:
 
 	unique_ptr<Expression> Copy() override;
 
-	bool Equals(const Expression *other_) override;
+	uint64_t Hash() const override;
+	bool Equals(const Expression *other_) const override;
 
 	bool IsScalar() override {
 		return false;

@@ -22,6 +22,7 @@ if (NOT CMAKE_BUILD_TYPE)
 endif()
 
 include_directories(src/include)
+include_directories(third_party/hyperloglog)
 
 add_subdirectory(src)
 add_subdirectory(third_party)

@@ -1,6 +1,7 @@
 #include "parser/expression.hpp"
 
 #include "common/serializer.hpp"
+#include "common/types/hash.hpp"
 #include "parser/expression/list.hpp"
 
 using namespace duckdb;
@@ -46,7 +47,7 @@ bool Expression::HasSubquery() {
 	return false;
 }
 
-bool Expression::Equals(const Expression *other) {
+bool Expression::Equals(const Expression *other) const {
 	if (!other) {
 		return false;
 	}
@@ -149,4 +150,12 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &source) {
 	result->return_type = info.return_type;
 	result->alias = alias;
 	return result;
+}
+
+uint64_t Expression::Hash() const {
+	uint64_t hash = duckdb::Hash<uint32_t>((uint32_t)type);
+	for (auto &child : children) {
+		hash = CombineHash(child->Hash(), hash);
+	}
+	return hash;
 }

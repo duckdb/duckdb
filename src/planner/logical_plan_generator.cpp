@@ -599,7 +599,7 @@ unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(InsertStatement &statement)
 }
 
 unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(CopyStatement &statement) {
-	if (statement.table[0] != '\0') {
+	if (!statement.table.empty()) {
 		auto table = context.db.catalog.GetTable(context.ActiveTransaction(), statement.schema, statement.table);
 		auto copy = make_unique<LogicalCopy>(table, move(statement.file_path), move(statement.is_from),
 		                                     move(statement.delimiter), move(statement.quote), move(statement.escape),

@@ -21,7 +21,7 @@ unique_ptr<Expression> ConjunctionExpression::Deserialize(ExpressionDeserializeI
 	                                                           move(info->children[1]));
 }
 
-bool ConjunctionExpression::Equals(const Expression *other) {
+bool ConjunctionExpression::Equals(const Expression *other) const {
 	if (!other) {
 		return false;
 	}

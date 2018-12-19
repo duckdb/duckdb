@@ -98,7 +98,11 @@ public:
 		return type;
 	}
 
-	virtual bool Equals(const Expression *other);
+	//! Creates a hash value of this expression. It is important that if two expressions are identical (i.e.
+	//! Expression::Equals() returns true), that their hash value is identical as well.
+	virtual uint64_t Hash() const;
+	//! Returns true if this expression is equal to another expression
+	virtual bool Equals(const Expression *other) const;
 
 	bool operator==(const Expression &rhs) {
 		return this->Equals(&rhs);
@@ -166,6 +170,18 @@ struct ExpressionDeserializeInfo {
 	ExpressionType type;
 	TypeId return_type;
 	vector<unique_ptr<Expression>> children;
+};
+
+struct ExpressionHashFunction {
+	size_t operator()(const Expression *const &expr) const {
+		return expr->Hash();
+	}
+};
+
+struct ExpressionEquality {
+	bool operator()(const Expression *const &a, const Expression *const &b) const {
+		return a->Equals(b);
+	}
 };
 
 } // namespace duckdb

@@ -43,7 +43,7 @@ QueryEdge *QueryGraph::GetQueryEdge(RelationSet *left) {
 		// move to the next node
 		info = entry->second.get();
 	}
-	return (info);
+	return info;
 }
 
 void QueryGraph::CreateEdge(RelationSet *left, RelationSet *right, FilterInfo *filter_info) {

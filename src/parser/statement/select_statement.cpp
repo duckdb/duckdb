@@ -41,7 +41,7 @@ unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &source) {
 	return result;
 }
 
-bool SelectStatement::Equals(const SQLStatement *other_) {
+bool SelectStatement::Equals(const SQLStatement *other_) const {
 	if (!SQLStatement::Equals(other_)) {
 		return false;
 	}

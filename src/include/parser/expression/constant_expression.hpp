@@ -38,7 +38,8 @@ public:
 	//! Resolve the type of the constant
 	void ResolveType() override;
 
-	bool Equals(const Expression *other_) override;
+	uint64_t Hash() const override;
+	bool Equals(const Expression *other_) const override;
 	string ToString() const override {
 		return value.ToString();
 	}

@@ -21,7 +21,7 @@ public:
 	unique_ptr<TableRef> Accept(SQLNodeVisitor *v) override {
 		return v->Visit(*this);
 	}
-	bool Equals(const TableRef *other_) override {
+	bool Equals(const TableRef *other_) const override {
 		if (!TableRef::Equals(other_)) {
 			return false;
 		}

@@ -52,7 +52,7 @@ public:
 
 	virtual void Accept(SQLNodeVisitor *) = 0;
 
-	virtual bool Equals(const QueryNode *other) {
+	virtual bool Equals(const QueryNode *other) const {
 		if (!other) {
 			return false;
 		}

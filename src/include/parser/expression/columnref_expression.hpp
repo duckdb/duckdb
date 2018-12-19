@@ -78,7 +78,8 @@ public:
 
 	void ResolveType() override;
 
-	bool Equals(const Expression *other) override;
+	uint64_t Hash() const override;
+	bool Equals(const Expression *other) const override;
 
 	// FIXME: move these
 

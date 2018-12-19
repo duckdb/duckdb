@@ -28,7 +28,7 @@ public:
 		return v->Visit(*this);
 	}
 
-	virtual bool Equals(const SQLStatement *other);
+	virtual bool Equals(const SQLStatement *other) const;
 
 	//! CTEs
 	std::map<string, unique_ptr<QueryNode>> cte_map;

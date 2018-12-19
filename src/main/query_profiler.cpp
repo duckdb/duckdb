@@ -100,6 +100,38 @@ string QueryProfiler::ToString() const {
 	return result;
 }
 
+static string ToJSONRecursive(QueryProfiler::TreeNode &node) {
+	string result = "{ \"name\": \"" + node.name + "\",\n";
+	result += "\"timing\":" + StringUtil::Format("%.2f", node.info.time) + ",\n";
+	result += "\"cardinality\":" + to_string(node.info.elements) + ",\n";
+	result += "\"extra_info\": \"" + StringUtil::Replace(node.extra_info, "\n", "\\n") + "\",\n";
+	result += "\"children\": [";
+
+	for (size_t i = 0; i < node.children.size(); i++) {
+		result += ToJSONRecursive(*node.children[i]);
+		if (i + 1 < node.children.size()) {
+			result += ",\n";
+		}
+	}
+	result += "]\n}\n";
+	return result;
+}
+
+string QueryProfiler::ToJSON() const {
+	if (!enabled) {
+		return "{ \"result\": \"disabled\" }\n";
+	}
+	if (query.empty()) {
+		return "{ \"result\": \"empty\" }\n";
+	}
+	if (!root) {
+		return "{ \"result\": \"error\" }\n";
+	}
+	string result = "{ \"result\": " + to_string(main_query.Elapsed()) + ",\n\"tree\": ";
+	result += ToJSONRecursive(*root);
+	return result + "}";
+}
+
 static bool is_non_split_char(char l) {
 	return (l >= 65 && l <= 90) || (l >= 97 && l <= 122) || l == 95 || l == ']' || l == ')';
 }
@@ -122,14 +154,14 @@ static string remove_padding(string l) {
 unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *root, size_t depth) {
 	auto node = make_unique<QueryProfiler::TreeNode>();
 	node->name = PhysicalOperatorToString(root->type);
-	auto extra_info = root->ExtraRenderInformation();
-	if (!extra_info.empty()) {
-		auto splits = StringUtil::Split(extra_info, '\n');
+	node->extra_info = root->ExtraRenderInformation();
+	if (!node->extra_info.empty()) {
+		auto splits = StringUtil::Split(node->extra_info, '\n');
 		for (auto &split : splits) {
 			string str = remove_padding(split);
 			constexpr size_t max_segment_size = REMAINING_RENDER_WIDTH - 2;
 			size_t location = 0;
-			while (location < str.size() && node->extra_info.size() < MAX_EXTRA_LINES) {
+			while (location < str.size() && node->split_extra_info.size() < MAX_EXTRA_LINES) {
 				bool has_to_split = (str.size() - location) > max_segment_size;
 				if (has_to_split) {
 					// look for a split character
@@ -140,10 +172,10 @@ unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *
 							break;
 						}
 					}
-					node->extra_info.push_back(str.substr(location, i));
+					node->split_extra_info.push_back(str.substr(location, i));
 					location += i;
 				} else {
-					node->extra_info.push_back(str.substr(location));
+					node->split_extra_info.push_back(str.substr(location));
 					break;
 				}
 			}
@@ -196,7 +228,7 @@ size_t QueryProfiler::RenderTreeRecursive(QueryProfiler::TreeNode &node, vector<
 	// draw extra information
 	for (size_t i = 2; i < render_height - 3; i++) {
 		size_t split_index = i - 2;
-		string string = split_index < node.extra_info.size() ? node.extra_info[split_index] : "";
+		string string = split_index < node.split_extra_info.size() ? node.split_extra_info[split_index] : "";
 		render[start_depth + i] += DrawPadded(string);
 	}
 	// draw the timing information
@@ -226,7 +258,7 @@ size_t QueryProfiler::GetDepth(QueryProfiler::TreeNode &node) {
 }
 
 static void GetRenderHeight(QueryProfiler::TreeNode &node, vector<int> &render_heights, int depth = 0) {
-	render_heights[depth] = max((int)render_heights[depth], (int)(5 + node.extra_info.size()));
+	render_heights[depth] = max((int)render_heights[depth], (int)(5 + node.split_extra_info.size()));
 	for (auto &child : node.children) {
 		GetRenderHeight(*child, render_heights, depth + 1);
 	}

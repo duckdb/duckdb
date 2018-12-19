@@ -26,7 +26,7 @@ bool SelectNode::HasWindow() {
 	return false;
 }
 
-bool SelectNode::Equals(const QueryNode *other_) {
+bool SelectNode::Equals(const QueryNode *other_) const {
 	if (!QueryNode::Equals(other_)) {
 		return false;
 	}

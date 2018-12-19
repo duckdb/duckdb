@@ -27,7 +27,7 @@ public:
 		return v->Visit(*this);
 	}
 
-	virtual bool Equals(const SQLStatement *other_) {
+	virtual bool Equals(const SQLStatement *other_) const {
 		if (!SQLStatement::Equals(other_)) {
 			return false;
 		}

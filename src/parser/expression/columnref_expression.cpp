@@ -2,6 +2,7 @@
 
 #include "common/exception.hpp"
 #include "common/serializer.hpp"
+#include "common/types/hash.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -49,15 +50,19 @@ void ColumnRefExpression::ResolveType() {
 	}
 }
 
-bool ColumnRefExpression::Equals(const Expression *other_) {
+bool ColumnRefExpression::Equals(const Expression *other_) const {
 	if (!Expression::Equals(other_)) {
 		return false;
 	}
-	auto other = reinterpret_cast<const ColumnRefExpression *>(other_);
-	if (!other) {
-		return false;
-	}
+	auto other = (ColumnRefExpression *)other_;
 	return column_name == other->column_name && table_name == other->table_name;
+}
+
+uint64_t ColumnRefExpression::Hash() const {
+	uint64_t result = Expression::Hash();
+	result = CombineHash(result, duckdb::Hash<const char *>(column_name.c_str()));
+	result = CombineHash(result, duckdb::Hash<const char *>(table_name.c_str()));
+	return result;
 }
 
 string ColumnRefExpression::ToString() const {

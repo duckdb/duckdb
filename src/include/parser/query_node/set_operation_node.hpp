@@ -44,7 +44,7 @@ public:
 		return left->GetSelectCount();
 	}
 
-	bool Equals(const QueryNode *other) override;
+	bool Equals(const QueryNode *other) const override;
 	//! Create a copy of this SelectNode
 	unique_ptr<QueryNode> Copy() override;
 	//! Serializes a SelectNode to a stand-alone binary blob
