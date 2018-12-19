@@ -34,9 +34,7 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 
 		vector<TypeId> window_types;
 		for (size_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
-			if (select_list[expr_idx]->GetExpressionClass() == ExpressionClass::WINDOW) {
-				window_types.push_back(select_list[expr_idx]->return_type);
-			}
+			window_types.push_back(select_list[expr_idx]->return_type);
 		}
 
 		for (size_t i = 0; i < big_data.chunks.size(); i++) {
@@ -51,10 +49,7 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 
 		size_t window_output_idx = 0;
 		for (size_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
-			if (select_list[expr_idx]->GetExpressionClass() != ExpressionClass::WINDOW) {
-				continue;
-			}
-
+			assert(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::WINDOW);
 			// sort by partition and order clause in window def
 			auto wexpr = reinterpret_cast<WindowExpression *>(select_list[expr_idx].get());
 			vector<TypeId> sort_types;
@@ -229,22 +224,17 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 		return;
 	}
 
-	// just return what was computed before
+	// just return what was computed before, appending the result cols of the window expressions at the end
 	auto &proj_ch = big_data.GetChunk(state->position);
 	auto &wind_ch = window_results.GetChunk(state->position);
 
-	size_t window_output_idx = 0;
-	for (size_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
-		if (select_list[expr_idx]->GetExpressionClass() == ExpressionClass::WINDOW) {
-			chunk.data[expr_idx].Reference(wind_ch.data[window_output_idx]);
-			window_output_idx++;
-		} else {
-			// TODO do we need an executor here? Reference should be enough.
-			ExpressionExecutor executor(proj_ch, context);
-			executor.ExecuteExpression(select_list[expr_idx].get(), chunk.data[expr_idx]);
-		}
+	size_t out_idx = 0;
+	for (size_t col_idx = 0; col_idx < proj_ch.column_count; col_idx++) {
+		chunk.data[out_idx++].Reference(proj_ch.data[col_idx]);
 	}
-	chunk.Verify();
+	for (size_t col_idx = 0; col_idx < wind_ch.column_count; col_idx++) {
+		chunk.data[out_idx++].Reference(wind_ch.data[col_idx]);
+	}
 	state->position += STANDARD_VECTOR_SIZE;
 }
 

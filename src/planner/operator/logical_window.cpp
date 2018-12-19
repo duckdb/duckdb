@@ -4,7 +4,7 @@ using namespace duckdb;
 using namespace std;
 
 vector<string> LogicalWindow::GetNames() {
-	vector<string> names;
+	auto names = children[0]->GetNames();
 	for (auto &exp : expressions) {
 		names.push_back(exp->GetName());
 	}
@@ -12,6 +12,7 @@ vector<string> LogicalWindow::GetNames() {
 }
 
 void LogicalWindow::ResolveTypes() {
+	types.insert(types.end(), children[0]->types.begin(), children[0]->types.end());
 	for (auto &expr : expressions) {
 		types.push_back(expr->return_type);
 	}
