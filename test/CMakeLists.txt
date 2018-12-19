@@ -5,6 +5,7 @@ include_directories(../third_party/tpce-tool/include)
 include_directories(../third_party/sqlite/include)
 include_directories(include)
 
+add_subdirectory(appender)
 add_subdirectory(common)
 add_subdirectory(helpers)
 add_subdirectory(sql)
