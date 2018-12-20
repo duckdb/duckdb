@@ -55,7 +55,9 @@ public:
 	//! Verify that the output of a step in the ExpressionExecutor is correct
 	void Verify(Expression &expr);
 
-	unique_ptr<Expression> Visit(AggregateExpression &expr);
+	unique_ptr<Expression> Visit(AggregateExpression &expr) {
+		throw NotImplementedException("Cannot execute AGGREGATE expression in ExpressionExecutor");
+	}
 	unique_ptr<Expression> Visit(CaseExpression &expr);
 	unique_ptr<Expression> Visit(CastExpression &expr);
 	unique_ptr<Expression> Visit(ColumnRefExpression &expr);

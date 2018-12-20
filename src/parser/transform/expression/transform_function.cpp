@@ -87,16 +87,20 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 			if (!root->args) {
 				throw NotImplementedException("Aggregation over zero columns not supported!");
 			} else if (root->args->length < 2) {
+				auto child = TransformExpression((Node *)root->args->head->data.ptr_value);
+				if (child->IsAggregate()) {
+					throw ParserException("aggregate function calls cannot be nested");
+				}
 				if (agg_fun_type == ExpressionType::AGGREGATE_AVG) {
 					// rewrite AVG(a) to SUM(a) / COUNT(a)
 					// first create the SUM
 					auto sum = make_unique<AggregateExpression>(
 					    root->agg_distinct ? ExpressionType::AGGREGATE_SUM_DISTINCT : ExpressionType::AGGREGATE_SUM,
-					    TransformExpression((Node *)root->args->head->data.ptr_value));
+					    child->Copy());
 					// now create the count
 					auto count = make_unique<AggregateExpression>(
 					    root->agg_distinct ? ExpressionType::AGGREGATE_COUNT_DISTINCT : ExpressionType::AGGREGATE_COUNT,
-					    TransformExpression((Node *)root->args->head->data.ptr_value));
+					    move(child));
 					// cast both to decimal
 					auto sum_cast = make_unique<CastExpression>(TypeId::DECIMAL, move(sum));
 					auto count_cast = make_unique<CastExpression>(TypeId::DECIMAL, move(count));
@@ -104,7 +108,6 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 					return make_unique<OperatorExpression>(ExpressionType::OPERATOR_DIVIDE, TypeId::DECIMAL,
 					                                       move(sum_cast), move(count_cast));
 				} else {
-					auto child = TransformExpression((Node *)root->args->head->data.ptr_value);
 					return make_unique<AggregateExpression>(agg_fun_type, move(child));
 				}
 			} else {

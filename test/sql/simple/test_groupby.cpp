@@ -15,6 +15,9 @@ TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {41}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1}));
 
+	// aggregates cannot be nested
+	REQUIRE_FAIL(con.Query("SELECT SUM(SUM(41)), COUNT(*);"));
+
 	result = con.Query("SELECT SUM(a), COUNT(*), AVG(a) FROM test;");
 	REQUIRE(CHECK_COLUMN(result, 0, {36}));
 	REQUIRE(CHECK_COLUMN(result, 1, {3}));
@@ -63,6 +66,9 @@ TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {12, 11}));
 	REQUIRE(CHECK_COLUMN(result, 2, {1, 1}));
 	REQUIRE(CHECK_COLUMN(result, 3, {14, 13}));
+
+	// nested aggregate in group by
+	REQUIRE_FAIL(con.Query("SELECT b % 2 AS f, COUNT(SUM(a)) FROM test GROUP BY f;"));
 
 	con.Query("INSERT INTO test VALUES (12, 21), (12, 21), (12, 21)");
 
