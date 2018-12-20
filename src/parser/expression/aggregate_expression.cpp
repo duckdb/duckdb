@@ -94,15 +94,6 @@ void AggregateExpression::ResolveType() {
 	}
 }
 
-void AggregateExpression::GetAggregates(vector<AggregateExpression *> &expressions) {
-	size_t size = expressions.size();
-	Expression::GetAggregates(expressions);
-	if (size == expressions.size()) {
-		// we only want the lowest level aggregates
-		expressions.push_back(this);
-	}
-}
-
 unique_ptr<Expression> AggregateExpression::Copy() {
 	if (children.size() > 1) {
 		assert(0);

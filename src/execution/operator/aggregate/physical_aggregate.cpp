@@ -30,7 +30,8 @@ void PhysicalAggregate::Initialize() {
 		is_implicit_aggr = false;
 	}
 	for (auto &expr : select_list) {
-		expr->GetAggregates(aggregates);
+		assert(expr->GetExpressionClass() == ExpressionClass::AGGREGATE);
+		aggregates.push_back((AggregateExpression*) expr.get());
 	}
 	for (size_t i = 0; i < aggregates.size(); i++) {
 		aggregates[i]->index = i;

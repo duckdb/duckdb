@@ -10,8 +10,6 @@
 using namespace duckdb;
 using namespace std;
 
-#define FILE_COUNT
-
 constexpr const char *QUERY_DIRECTORY = "test/sqlsmith/queries";
 
 static void test_runner() {

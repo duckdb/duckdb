@@ -64,19 +64,6 @@ public:
 		children.push_back(std::move(child));
 	}
 
-	//! Return a list of the deepest aggregates that are present in the
-	//! Expression (if any).
-	/*!
-	 This function is used by the execution engine to figure out which
-	 aggregates/groupings have to be computed.
-
-	 Examples:
-
-	 (1) SELECT SUM(a) + SUM(b) FROM table; (Two aggregates, SUM(a) and SUM(b))
-
-	 (2) SELECT COUNT(SUM(a)) FROM table; (One aggregate, SUM(a))
-	 */
-	virtual void GetAggregates(vector<AggregateExpression *> &expressions);
 	//! Returns true if this Expression is an aggregate or not.
 	/*!
 	 Examples:

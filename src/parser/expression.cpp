@@ -32,12 +32,6 @@ bool Expression::IsScalar() {
 	return is_scalar;
 }
 
-void Expression::GetAggregates(vector<AggregateExpression *> &expressions) {
-	for (auto &child : children) {
-		child->GetAggregates(expressions);
-	}
-}
-
 bool Expression::HasSubquery() {
 	for (auto &child : children) {
 		if (child->HasSubquery()) {
