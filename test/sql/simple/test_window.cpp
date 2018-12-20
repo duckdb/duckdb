@@ -63,6 +63,20 @@ TEST_CASE("Most basic window function", "[window]") {
 	    {"develop", "develop", "develop", "develop", "develop", "personnel", "personnel", "sales", "sales", "sales"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {4200, 4500, 5200, 5200, 6000, 3500, 3900, 4800, 4800, 5000}));
 	REQUIRE(CHECK_COLUMN(result, 2, {1, 2, 3, 3, 5, 1, 2, 1, 1, 3}));
+
+	// min/max/avg
+	result = con.Query("SELECT depname, min(salary) OVER (PARTITION BY depname ORDER BY salary, empno) m1, max(salary) "
+	                   "OVER (PARTITION BY depname ORDER BY salary, empno) m2, avg(salary) OVER (PARTITION BY depname "
+	                   "ORDER BY salary, empno) m3 FROM empsalary ORDER BY depname, empno");
+	REQUIRE(result->column_count() == 4);
+	REQUIRE(CHECK_COLUMN(
+	    result, 0,
+	    {"develop", "develop", "develop", "develop", "develop", "personnel", "personnel", "sales", "sales", "sales"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {4200, 4200, 4200, 4200, 4200, 3500, 3500, 4800, 4800, 4800}));
+	REQUIRE(CHECK_COLUMN(result, 2, {4200, 6000, 4500, 5200, 5200, 3900, 3500, 5000, 4800, 4800}));
+	REQUIRE(CHECK_COLUMN(
+	    result, 3,
+	    {4200.0, 5020.0, 4350.0, 4633.33333333333, 4775.0, 3700.0, 3500.0, 4866.66666666667, 4800.0, 4800.0}));
 }
 
 TEST_CASE("More evil cases", "[window]") {

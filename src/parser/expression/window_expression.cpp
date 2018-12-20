@@ -9,6 +9,9 @@ WindowExpression::WindowExpression(ExpressionType type, unique_ptr<Expression> c
 	switch (type) {
 	case ExpressionType::WINDOW_SUM:
 	case ExpressionType::WINDOW_COUNT_STAR:
+	case ExpressionType::WINDOW_MIN:
+	case ExpressionType::WINDOW_MAX:
+	case ExpressionType::WINDOW_AVG:
 	case ExpressionType::WINDOW_ROW_NUMBER:
 	case ExpressionType::WINDOW_FIRST_VALUE:
 	case ExpressionType::WINDOW_LAST_VALUE:
@@ -67,12 +70,17 @@ void WindowExpression::ResolveType() {
 		}
 
 		break;
+	case ExpressionType::WINDOW_AVG:
+		return_type = TypeId::DECIMAL;
+		break;
 	case ExpressionType::WINDOW_ROW_NUMBER:
 	case ExpressionType::WINDOW_COUNT_STAR:
 	case ExpressionType::WINDOW_RANK:
 	case ExpressionType::WINDOW_RANK_DENSE:
 		return_type = TypeId::BIGINT;
 		break;
+	case ExpressionType::WINDOW_MIN:
+	case ExpressionType::WINDOW_MAX:
 	case ExpressionType::WINDOW_FIRST_VALUE:
 	case ExpressionType::WINDOW_LAST_VALUE:
 		if (children.size() != 1) {
