@@ -19,7 +19,7 @@ bool SelectNode::HasAggregation() {
 
 bool SelectNode::HasWindow() {
 	for (auto &expr : select_list) {
-		if (expr->GetExpressionClass() == ExpressionClass::WINDOW) {
+		if (expr->IsWindow()) {
 			return true;
 		}
 	}

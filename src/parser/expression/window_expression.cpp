@@ -24,6 +24,10 @@ WindowExpression::WindowExpression(ExpressionType type, unique_ptr<Expression> c
 	}
 }
 
+bool WindowExpression::IsWindow() {
+	return true;
+}
+
 unique_ptr<Expression> WindowExpression::Copy() {
 	throw NotImplementedException("eek");
 }

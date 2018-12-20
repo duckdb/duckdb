@@ -32,6 +32,10 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 			big_data.Append(state->child_chunk);
 		} while (state->child_chunk.size() != 0);
 
+		if (big_data.count == 0) {
+			return;
+		}
+
 		vector<TypeId> window_types;
 		for (size_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
 			window_types.push_back(select_list[expr_idx]->return_type);

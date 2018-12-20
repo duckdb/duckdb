@@ -5,6 +5,41 @@ using namespace std;
 
 namespace duckdb {
 
+static bool ValuesAreEqual(Value result_value, Value value) {
+	if (result_value.is_null && value.is_null) {
+		// NULL = NULL in checking code
+		return true;
+	}
+	if (value.type == TypeId::DECIMAL) {
+		// round to two decimals
+		auto left = StringUtil::Format("%.2f", value.value_.decimal);
+		auto right = StringUtil::Format("%.2f", result_value.value_.decimal);
+		if (left != right) {
+			double ldecimal = value.value_.decimal;
+			double rdecimal = result_value.value_.decimal;
+			if (ldecimal < 0.99 * rdecimal || ldecimal > 1.01 * rdecimal) {
+				return false;
+			}
+		}
+	} else if (value.type == TypeId::VARCHAR) {
+		// some results might contain padding spaces, e.g. when rendering
+		// VARCHAR(10) and the string only has 6 characters, they will be padded
+		// with spaces to 10 in the rendering. We don't do that here yet as we
+		// are looking at internal structures. So just ignore any extra spaces
+		// on the right
+		string left = result_value.str_value;
+		string right = value.str_value;
+		StringUtil::RTrim(left);
+		StringUtil::RTrim(right);
+		return left == right;
+	} else {
+		if (value != result_value) {
+			return false;
+		}
+	}
+	return true;
+}
+
 bool CHECK_COLUMN(unique_ptr<duckdb::DuckDBResult> &result, size_t column_number, vector<duckdb::Value> values) {
 	if (!result->GetSuccess()) {
 		fprintf(stderr, "Query failed with message: %s\n", result->GetErrorMessage().c_str());
@@ -56,7 +91,8 @@ bool CHECK_COLUMN(unique_ptr<duckdb::DuckDBResult> &result, size_t column_number
 			if (vector.GetValue(j).is_null && values[i + j].is_null) {
 				continue;
 			}
-			if (vector.GetValue(j) != values[i + j]) {
+
+			if (!ValuesAreEqual(vector.GetValue(j), values[i + j])) {
 				// FAIL("Incorrect result! Got " + vector.GetValue(j).ToString()
 				// +
 				//      " but expected " + values[i + j].ToString());
@@ -130,41 +166,6 @@ bool parse_datachunk(string csv, DataChunk &result, bool has_header) {
 			result.data[i].SetValue(row, value);
 		}
 		row++;
-	}
-	return true;
-}
-
-static bool ValuesAreEqual(Value result_value, Value value) {
-	if (result_value.is_null && value.is_null) {
-		// NULL = NULL in checking code
-		return true;
-	}
-	if (value.type == TypeId::DECIMAL) {
-		// round to two decimals
-		auto left = StringUtil::Format("%.2f", value.value_.decimal);
-		auto right = StringUtil::Format("%.2f", result_value.value_.decimal);
-		if (left != right) {
-			double ldecimal = value.value_.decimal;
-			double rdecimal = result_value.value_.decimal;
-			if (ldecimal < 0.99 * rdecimal || ldecimal > 1.01 * rdecimal) {
-				return false;
-			}
-		}
-	} else if (value.type == TypeId::VARCHAR) {
-		// some results might contain padding spaces, e.g. when rendering
-		// VARCHAR(10) and the string only has 6 characters, they will be padded
-		// with spaces to 10 in the rendering. We don't do that here yet as we
-		// are looking at internal structures. So just ignore any extra spaces
-		// on the right
-		string left = result_value.str_value;
-		string right = value.str_value;
-		StringUtil::RTrim(left);
-		StringUtil::RTrim(right);
-		return left == right;
-	} else {
-		if (value != result_value) {
-			return false;
-		}
 	}
 	return true;
 }
