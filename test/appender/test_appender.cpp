@@ -1,6 +1,6 @@
 #include "catch.hpp"
-#include "test_helpers.hpp"
 #include "main/appender.hpp"
+#include "test_helpers.hpp"
 
 #include <vector>
 
@@ -18,7 +18,7 @@ TEST_CASE("Basic appender tests", "[appender]") {
 	// append a bunch of values
 	{
 		Appender appender(db, DEFAULT_SCHEMA, "integers");
-		for(size_t i = 0; i < 2000; i++) {
+		for (size_t i = 0; i < 2000; i++) {
 			appender.BeginRow();
 			appender.AppendInteger(1);
 			appender.EndRow();
@@ -34,7 +34,7 @@ TEST_CASE("Basic appender tests", "[appender]") {
 	{
 		Appender appender2(db, DEFAULT_SCHEMA, "integers");
 		// now append a bunch of values
-		for(size_t i = 0; i < 2000; i++) {
+		for (size_t i = 0; i < 2000; i++) {
 			appender2.BeginRow();
 			appender2.AppendInteger(1);
 			appender2.EndRow();
@@ -52,7 +52,7 @@ TEST_CASE("Basic appender tests", "[appender]") {
 	// now append a bunch of values
 	{
 		Appender appender(db, DEFAULT_SCHEMA, "vals");
-		for(size_t i = 0; i < 2000; i++) {
+		for (size_t i = 0; i < 2000; i++) {
 			appender.BeginRow();
 			appender.AppendTinyInt(1);
 			appender.AppendSmallInt(1);
@@ -68,7 +68,6 @@ TEST_CASE("Basic appender tests", "[appender]") {
 	result = con.Query("SELECT l, SUM(k) FROM vals GROUP BY l");
 	REQUIRE(CHECK_COLUMN(result, 0, {"hello"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {2000}));
-
 
 	// now test various error conditions
 	// too few values per row
@@ -87,4 +86,3 @@ TEST_CASE("Basic appender tests", "[appender]") {
 		appender.Rollback();
 	}
 }
-

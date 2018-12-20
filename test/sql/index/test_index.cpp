@@ -6,7 +6,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test index creation statements with multiple connections", "[join]") {
+TEST_CASE("Test index creation statements with multiple connections", "[index]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
@@ -58,7 +58,7 @@ TEST_CASE("Test index creation statements with multiple connections", "[join]") 
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 }
 
-TEST_CASE("Index creation on an expression", "[join]") {
+TEST_CASE("Index creation on an expression", "[index]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 
