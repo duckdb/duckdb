@@ -255,8 +255,10 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 	if (statement.HasWindow()) {
 		auto win = make_unique<LogicalWindow>();
 		for (size_t expr_idx = 0; expr_idx < statement.select_list.size(); expr_idx++) {
+			// FIXME find a better way of getting colcount of logical ops
+			root->ResolveOperatorTypes();
 			statement.select_list[expr_idx] =
-			    extract_windows(move(statement.select_list[expr_idx]), win->expressions, statement.select_list.size());
+			    extract_windows(move(statement.select_list[expr_idx]), win->expressions, root->types.size());
 		}
 		assert(win->expressions.size() > 0);
 		win->AddChild(move(root));

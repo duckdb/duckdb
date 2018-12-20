@@ -30,6 +30,8 @@ public:
 
 	void ResolveType() override;
 
+	bool IsWindow() override;
+
 	unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
 		return v->Visit(*this);
 	}

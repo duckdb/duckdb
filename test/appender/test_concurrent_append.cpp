@@ -1,9 +1,8 @@
 #include "catch.hpp"
-#include "test_helpers.hpp"
 #include "main/appender.hpp"
+#include "test_helpers.hpp"
 
 #include <thread>
-
 #include <vector>
 
 using namespace duckdb;
@@ -34,7 +33,7 @@ TEST_CASE("Test concurrent appends", "[appender][.]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
-	
+
 	// create a single table to append to
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 
@@ -52,4 +51,3 @@ TEST_CASE("Test concurrent appends", "[appender][.]") {
 	result = con.Query("SELECT COUNT(*) FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {THREAD_COUNT * INSERT_ELEMENTS}));
 }
-

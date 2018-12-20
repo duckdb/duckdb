@@ -269,6 +269,12 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "SUM";
 	case ExpressionType::WINDOW_COUNT_STAR:
 		return "COUNT_STAR";
+	case ExpressionType::WINDOW_MIN:
+		return "MIN";
+	case ExpressionType::WINDOW_MAX:
+		return "MAX";
+	case ExpressionType::WINDOW_AVG:
+		return "AVG";
 	case ExpressionType::WINDOW_RANK:
 		return "RANK";
 	case ExpressionType::WINDOW_RANK_DENSE:

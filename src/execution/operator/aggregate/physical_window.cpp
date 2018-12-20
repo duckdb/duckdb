@@ -14,8 +14,6 @@ using namespace std;
 PhysicalWindow::PhysicalWindow(LogicalOperator &op, vector<unique_ptr<Expression>> select_list,
                                PhysicalOperatorType type)
     : PhysicalOperator(type, op.types), select_list(std::move(select_list)) {
-
-	// TODO: check we have at least one window aggr in the select list otherwise this is pointless
 }
 
 // TODO what if we have no PARTITION BY/ORDER?
@@ -31,6 +29,10 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 			big_data.Append(state->child_chunk);
 		} while (state->child_chunk.size() != 0);
+
+		if (big_data.count == 0) {
+			return;
+		}
 
 		vector<TypeId> window_types;
 		for (size_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
@@ -184,6 +186,37 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 						sum = sum + payload_collection.GetValue(0, row_idx_w);
 					}
 					window_results.SetValue(window_output_idx, row_idx, sum);
+					break;
+				}
+				case ExpressionType::WINDOW_MIN: {
+					Value min = Value::MaximumValue(wexpr->return_type);
+					for (size_t row_idx_w = window_start; row_idx_w < window_end; row_idx_w++) {
+						auto val = payload_collection.GetValue(0, row_idx_w);
+						if (val < min) {
+							min = val;
+						}
+					}
+					window_results.SetValue(window_output_idx, row_idx, min);
+					break;
+				}
+				case ExpressionType::WINDOW_MAX: {
+					Value max = Value::MinimumValue(wexpr->return_type);
+					for (size_t row_idx_w = window_start; row_idx_w < window_end; row_idx_w++) {
+						auto val = payload_collection.GetValue(0, row_idx_w);
+						if (val > max) {
+							max = val;
+						}
+					}
+					window_results.SetValue(window_output_idx, row_idx, max);
+					break;
+				}
+				case ExpressionType::WINDOW_AVG: {
+					double sum = 0;
+					for (size_t row_idx_w = window_start; row_idx_w < window_end; row_idx_w++) {
+						sum += payload_collection.GetValue(0, row_idx_w).CastAs(TypeId::DECIMAL).value_.decimal;
+					}
+					sum = sum / (window_end - window_start);
+					window_results.SetValue(window_output_idx, row_idx, Value(sum));
 					break;
 				}
 				case ExpressionType::WINDOW_ROW_NUMBER: {

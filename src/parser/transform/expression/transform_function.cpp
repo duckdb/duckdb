@@ -34,6 +34,12 @@ static ExpressionType WindowToExpressionType(string &fun_name) {
 		return ExpressionType::WINDOW_SUM;
 	} else if (fun_name == "count") {
 		return ExpressionType::WINDOW_COUNT_STAR;
+	} else if (fun_name == "min") {
+		return ExpressionType::WINDOW_MIN;
+	} else if (fun_name == "max") {
+		return ExpressionType::WINDOW_MAX;
+	} else if (fun_name == "avg") {
+		return ExpressionType::WINDOW_AVG;
 	} else if (fun_name == "rank") {
 		return ExpressionType::WINDOW_RANK;
 	} else if (fun_name == "rank_dense" || fun_name == "dense_rank") {
