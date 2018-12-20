@@ -32,7 +32,32 @@ bool WindowExpression::IsWindow() {
 }
 
 unique_ptr<Expression> WindowExpression::Copy() {
-	throw NotImplementedException("eek");
+	if (children.size() > 1) {
+		assert(0);
+		return nullptr;
+	}
+
+	auto child = children.size() == 1 ? children[0]->Copy() : nullptr;
+	auto new_window = make_unique<WindowExpression>(type, move(child));
+	new_window->CopyProperties(*this);
+
+	new_window->start = start;
+	new_window->end = end;
+	new_window->start_expr = start_expr ? start_expr->Copy() : nullptr;
+	new_window->end_expr = end_expr ? end_expr->Copy() : nullptr;
+
+	for (auto &o : ordering.orders) {
+		OrderByNode node;
+		node.type = o.type;
+		node.expression = o.expression->Copy();
+		new_window->ordering.orders.push_back(move(node));
+	}
+
+	for (auto &e : partitions) {
+		new_window->partitions.push_back(e->Copy());
+	}
+	// TODO copy range/rows
+	return new_window;
 }
 
 void WindowExpression::Serialize(Serializer &serializer) {
