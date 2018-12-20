@@ -233,6 +233,12 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 			// extract join conditions from filter
 			filter_operators.push_back(op);
 		}
+		if (op->type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY) {
+			// don't push filters through aggregate and group by
+			JoinOrderOptimizer optimizer;
+			op->children[0] = optimizer.Optimize(move(op->children[0]));
+			return false;
+		}
 		op = op->children[0].get();
 	}
 	if (op->type == LogicalOperatorType::UNION || op->type == LogicalOperatorType::EXCEPT ||
@@ -711,6 +717,8 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 
 unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOperator> plan, JoinNode *node) {
 	// now we have to rewrite the plan
+	bool root_is_join = plan->children.size() > 1;
+
 	// first we will extract all relations from the main plan
 	vector<unique_ptr<LogicalOperator>> extracted_relations;
 	for (size_t i = 0; i < relations.size(); i++) {
@@ -728,7 +736,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 	}
 
 	// find the first join in the relation to know where to place this node
-	if (plan->children.size() > 1) {
+	if (root_is_join) {
 		// first node is the join, return it immediately
 		return move(join_tree.second);
 	}
@@ -753,13 +761,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOperator> plan) {
 	assert(filters.size() == 0 && relations.size() == 0); // assert that the JoinOrderOptimizer has not been used before
 	LogicalOperator *op = plan.get();
-	while (!IsProjection(op->type)) {
-		if (op->children.size() != 1) {
-			// no projection found in plan
-			return plan;
-		}
-		op = op->children[0].get();
-	}
 	// first we visit the plan in order to optimize subqueries
 	plan->Accept(this);
 	// now we optimize the current plan

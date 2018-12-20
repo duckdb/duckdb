@@ -12,6 +12,7 @@
 #include "common/printable.hpp"
 #include "common/types/statistics.hpp"
 
+#include <functional>
 #include <memory>
 #include <stack>
 #include <vector>
@@ -123,6 +124,11 @@ public:
 	//! Deserializes a blob back into an Expression [CAN THROW:
 	//! SerializationException]
 	static unique_ptr<Expression> Deserialize(Deserializer &source);
+
+	//! Enumerate over all child expressions of a given type, invoking the callback for every one. The return value of
+	//! the callback indicates the replacement of that node.
+	static void EnumerateExpressions(unique_ptr<Expression> *parent, ExpressionType type,
+	                                 std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback);
 
 	//! Clears the statistics of this expression and all child expressions
 	void ClearStatistics() {

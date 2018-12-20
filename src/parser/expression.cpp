@@ -159,3 +159,14 @@ uint64_t Expression::Hash() const {
 	}
 	return hash;
 }
+
+void Expression::EnumerateExpressions(
+    unique_ptr<Expression> *parent, ExpressionType type,
+    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
+	for (size_t i = 0; i < (*parent)->children.size(); i++) {
+		EnumerateExpressions(&(*parent)->children[i], type, callback);
+	}
+	if ((*parent)->type == type) {
+		*parent = callback(move(*parent));
+	}
+}
