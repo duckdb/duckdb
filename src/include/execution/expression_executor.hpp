@@ -52,8 +52,6 @@ public:
 	//! Execute the abstract expression, and "logical AND" the result together
 	//! with result
 	void MergeExpression(Expression *expr, Vector &result);
-	//! Execute the given aggregate expression for the current chunk
-	Value ExecuteAggregate(AggregateExpression &expr);
 	//! Verify that the output of a step in the ExpressionExecutor is correct
 	void Verify(Expression &expr);
 
