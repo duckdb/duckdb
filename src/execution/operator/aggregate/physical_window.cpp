@@ -109,7 +109,7 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 
 				assert(sort_collection.count == big_data.count);
 				// sort by the window def using the expression result collection
-				auto sorted_vector = new uint64_t[big_data.count];
+				uint64_t sorted_vector[big_data.count];
 				sort_collection.Sort(odesc, sorted_vector);
 				// inplace reorder of big_data according to sorted_vector
 				big_data.Reorder(sorted_vector);
