@@ -18,7 +18,7 @@
 
 namespace duckdb {
 
-class JoinOrderOptimizer : public LogicalOperatorVisitor {
+class JoinOrderOptimizer {
 public:
 	//! Represents a node in the join plan
 	struct JoinNode {
@@ -53,9 +53,6 @@ public:
 public:
 	//! Perform join reordering inside a plan
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
-
-	using LogicalOperatorVisitor::Visit;
-	unique_ptr<Expression> Visit(SubqueryExpression &expr) override;
 
 private:
 	//! The total amount of join pairs that have been considered

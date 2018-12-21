@@ -20,13 +20,6 @@ template <class T> static bool Disjoint(unordered_set<T> &a, unordered_set<T> &b
 	return true;
 }
 
-unique_ptr<Expression> JoinOrderOptimizer::Visit(SubqueryExpression &subquery) {
-	// we perform join reordering within the subquery expression
-	JoinOrderOptimizer optimizer;
-	subquery.op = optimizer.Optimize(move(subquery.op));
-	return nullptr;
-}
-
 //! Extract the set of relations referred to inside an expression
 bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<size_t> &bindings) {
 	if (expression.type == ExpressionType::COLUMN_REF) {
@@ -761,8 +754,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOperator> plan) {
 	assert(filters.size() == 0 && relations.size() == 0); // assert that the JoinOrderOptimizer has not been used before
 	LogicalOperator *op = plan.get();
-	// first we visit the plan in order to optimize subqueries
-	plan->Accept(this);
 	// now we optimize the current plan
 	// we skip past until we find the first projection, we do this because the HAVING clause inserts a Filter AFTER the
 	// group by and this filter cannot be reordered
