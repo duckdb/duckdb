@@ -2,12 +2,19 @@
 [![Build Status](http://jenkins.u0d.de/buildStatus/icon?job=duckdb)](http://jenkins.u0d.de/job/duckdb) [![Coverage](http://www.duckdb.org/coverage/badge.svg)](http://www.duckdb.org/coverage/) 
 [![CodeFactor](https://www.codefactor.io/repository/github/cwida/duckdb/badge)](https://www.codefactor.io/repository/github/cwida/duckdb)
 
-## Compiling and Testing
-DuckDB does not require additional libraries to be installed. Hence, only GCC (`g++`) or clang and [CMake](https://cmake.org) need to be installed to build. To run all tests, a `git` installation is also required. 
-Clone the repository, then run `make` to compile the sources into a debug version. Use `make opt` to create a release build, which is *critical to get best performance*. Once compilation is done, you may run `make unit` to verify that your version works properly. You should now have several artifacts in the `build/debug` or `build/release` directory:
-* A shared library, `src/libduckdb.[so|dylib|dll]`. This is the database-as-a-library file and contains everything required to run DuckDB
-* A shell based on the `sqlite3` command line utility, in `tools/shell/shell`. 
-* Various test drivers in the `test` folder.
+# Requirements
+DuckDB requires [CMake](https://cmake.org) to be installed and a `C++11` compliant compiler. To run all tests, a `git` installation is also required.
+
+## Compiling
+Run `make` in the root directory to compile the sources into a debug version. Use `make opt` to create a release build, which is *critical to get best performance*. Once compilation is done, you may run `make unit` and `make allunit` to verify that your version works properly.
+
+# Usage
+A command line utility based on `sqlite3` can be found in either `build/debug/tools/shell/shell` (debug) or `build/release/tools/shell/shell` (release).
+
+# Embedding
+As DuckDB is an embedded database, there is no database server to launch or client to connect to a running server. However, the database server can be embedded directly into an application using the C or C++ bindings. The main build process creates the shared library `build/release/src/libduckdb.[so|dylib|dll]` that can be linked against. A static library can be build by changing the `SHARED` text in `src/CMakeLists.txt` to `STATIC`.
+
+For examples on how to embed DuckDB into your application, see the [examples](https://github.com/cwida/duckdb/tree/master/examples) folder.
 
 ## Standing on the Shoulders of Giants
 DuckDB is implemented in C++ 11, should compile with GCC and clang, uses CMake to build and [Catch2](https://github.com/catchorg/Catch2) for testing. In addition, we use [Jenkins](https://jenkins.io) as a CI platform. DuckDB uses some components from various Open-Source databases and draws inspiration from scientific publications. Here is an overview:
