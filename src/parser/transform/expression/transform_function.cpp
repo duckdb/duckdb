@@ -102,7 +102,7 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 		if ((window_spec->frameOptions & FRAMEOPTION_END_UNBOUNDED_PRECEDING) ||
 		    (window_spec->frameOptions & FRAMEOPTION_START_UNBOUNDED_FOLLOWING)) {
 			throw Exception(
-			    "Window frames ending in unbounded preceding or starting with unbounded following make no sense");
+			    "Window frames starting with unbounded following or ending in unbounded preceding make no sense");
 		}
 
 		if (window_spec->frameOptions & FRAMEOPTION_START_UNBOUNDED_PRECEDING) {
@@ -130,12 +130,16 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 		}
 
 		assert(expr->start != WindowBoundary::INVALID && expr->end != WindowBoundary::INVALID);
-
 		if (((expr->start == WindowBoundary::EXPR_PRECEDING || expr->start == WindowBoundary::EXPR_PRECEDING) &&
 		     !expr->start_expr) ||
 		    ((expr->end == WindowBoundary::EXPR_PRECEDING || expr->end == WindowBoundary::EXPR_PRECEDING) &&
 		     !expr->end_expr)) {
 			throw Exception("Failed to transform window boundary expression");
+		}
+
+		// TODO
+		if (expr->start_expr || expr->end_expr) {
+			throw NotImplementedException("Window boundaries with expressions");
 		}
 
 		return expr;

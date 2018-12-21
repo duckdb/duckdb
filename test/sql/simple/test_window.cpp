@@ -171,3 +171,41 @@ TEST_CASE("Wiscosin-derived window test cases", "[window]") {
 	REQUIRE(result->column_count() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 0, 1, 1, 1, 1, 0, 1, 1}));
 }
+
+TEST_CASE("Non-default window specs", "[window]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+	REQUIRE_NO_FAIL(con.Query("create table tenk1d(ten int4, four int4)"));
+	REQUIRE_NO_FAIL(con.Query("insert into tenk1d values (0,0), (1,1), (3,3), (2,2), (4,2), (9,1), (4,0), (7,3), "
+	                          "(0,2), (2,0), (5,1), (1,3), (3,1), (6,0), (8,0), (9,3), (8,2), (6,2), (7,1), (5,3)"));
+
+	// BASIC
+	result = con.Query("SELECT four, ten, sum(ten) over (partition by four order by ten) st, last_value(ten) over "
+	                   "(partition by four order by ten) lt FROM tenk1d ORDER BY four, ten");
+	REQUIRE(result->column_count() == 4);
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0, 2, 4, 6, 8, 1, 3, 5, 7, 9, 0, 2, 4, 6, 8, 1, 3, 5, 7, 9}));
+	REQUIRE(CHECK_COLUMN(result, 2, {0, 2, 6, 12, 20, 1, 4, 9, 16, 25, 0, 2, 6, 12, 20, 1, 4, 9, 16, 25}));
+	REQUIRE(CHECK_COLUMN(result, 3, {0, 2, 4, 6, 8, 1, 3, 5, 7, 9, 0, 2, 4, 6, 8, 1, 3, 5, 7, 9}));
+
+	// same but with explicit window def
+	result = con.Query("SELECT four, ten, sum(ten) over (partition by four order by ten range between unbounded "
+	                   "preceding and current row) st, last_value(ten) over (partition by four order by ten range "
+	                   "between unbounded preceding and current row) lt FROM tenk1d order by four, ten");
+	REQUIRE(result->column_count() == 4);
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0, 2, 4, 6, 8, 1, 3, 5, 7, 9, 0, 2, 4, 6, 8, 1, 3, 5, 7, 9}));
+	REQUIRE(CHECK_COLUMN(result, 2, {0, 2, 6, 12, 20, 1, 4, 9, 16, 25, 0, 2, 6, 12, 20, 1, 4, 9, 16, 25}));
+	REQUIRE(CHECK_COLUMN(result, 3, {0, 2, 4, 6, 8, 1, 3, 5, 7, 9, 0, 2, 4, 6, 8, 1, 3, 5, 7, 9}));
+
+	// unbounded following
+	result = con.Query("SELECT four, ten, sum(ten) over (partition by four order by ten range between unbounded "
+	                   "preceding and unbounded following) st, last_value(ten) over (partition by four order by ten "
+	                   "range between unbounded preceding and unbounded following) lt FROM tenk1d order by four, ten");
+	REQUIRE(result->column_count() == 4);
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0, 2, 4, 6, 8, 1, 3, 5, 7, 9, 0, 2, 4, 6, 8, 1, 3, 5, 7, 9}));
+	// REQUIRE(CHECK_COLUMN(result, 2, {20, 20, 20, 20, 20, 25, 25, 25, 25, 25, 20, 20, 20, 20, 20, 25, 25, 25, 25,
+	// 25})); REQUIRE(CHECK_COLUMN(result, 3, {8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9}));
+}

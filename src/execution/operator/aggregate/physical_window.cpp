@@ -136,9 +136,9 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 				prev[p_idx] = sort_collection.GetValue(p_idx, 0);
 			}
 
+			// TODO handle expressions in preceding/following
+
 			for (size_t row_idx = 0; row_idx < big_data.count; row_idx++) {
-				// FIXME handle other window types
-				bool increment_rank = false;
 				for (size_t p_idx = 0; p_idx < prev.size(); p_idx++) {
 					Value s_val = sort_collection.GetValue(p_idx, row_idx);
 					Value p_val = prev[p_idx];
@@ -151,14 +151,11 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 						break;
 					}
 					if (p_val != s_val) {
-						increment_rank = true;
+						dense_rank++;
+						rank += rank_equal;
+						rank_equal = 0;
 						break;
 					}
-				}
-				if (increment_rank) {
-					dense_rank++;
-					rank += rank_equal;
-					rank_equal = 0;
 				}
 
 				window_start = 0;
@@ -167,15 +164,18 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 				if (wexpr->start == WindowBoundary::UNBOUNDED_PRECEDING) {
 					window_start = partition_start;
 				}
-				if (wexpr->start == WindowBoundary::UNBOUNDED_FOLLOWING) {
-					window_start = partition_end;
-				}
 				if (wexpr->start == WindowBoundary::CURRENT_ROW) {
 					window_start = row_idx;
 				}
+				assert(wexpr->start != WindowBoundary::UNBOUNDED_FOLLOWING);
+
 				if (wexpr->end == WindowBoundary::CURRENT_ROW) {
 					window_end = row_idx;
 				}
+				if (wexpr->end == WindowBoundary::UNBOUNDED_FOLLOWING) {
+					window_end = partition_end;
+				}
+				assert(wexpr->end != WindowBoundary::UNBOUNDED_PRECEDING);
 
 				window_end = row_idx + 1;
 
@@ -238,6 +238,11 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 				}
 				case ExpressionType::WINDOW_FIRST_VALUE: {
 					window_results.SetValue(window_output_idx, row_idx, payload_collection.GetValue(0, window_start));
+					break;
+				}
+				case ExpressionType::WINDOW_LAST_VALUE: {
+
+					window_results.SetValue(window_output_idx, row_idx, payload_collection.GetValue(0, window_end - 1));
 					break;
 				}
 				default:
