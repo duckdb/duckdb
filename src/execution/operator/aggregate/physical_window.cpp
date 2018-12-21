@@ -124,9 +124,13 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 			size_t partition_start = 0;
 			size_t partition_end = 0;
 
+			size_t peer_start = 0;
+			size_t peer_end = 0;
+
 			size_t dense_rank = 1;
 			size_t rank_equal = 0;
 			size_t rank = 1;
+			size_t row_no = 1;
 
 			// initialize current partition to first row
 			vector<Value> prev;
@@ -134,8 +138,8 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 			for (size_t p_idx = 0; p_idx < prev.size(); p_idx++) {
 				prev[p_idx] = sort_collection.GetValue(p_idx, 0);
 			}
-			bool partition_change = true;
 
+			// FIXME this ungodly mess below
 			for (size_t row_idx = 0; row_idx < big_data.count; row_idx++) {
 				for (size_t p_idx = 0; p_idx < prev.size(); p_idx++) {
 					Value s_val = sort_collection.GetValue(p_idx, row_idx);
@@ -143,16 +147,18 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 
 					if (p_val != s_val && p_idx < wexpr->partitions.size()) {
 						partition_start = row_idx;
-						partition_change = true;
 						dense_rank = 1;
 						rank = 1;
+						row_no = 1;
 						rank_equal = 0;
+						peer_start = row_idx;
 						break;
 					}
 					if (p_val != s_val) {
 						dense_rank++;
 						rank += rank_equal;
 						rank_equal = 0;
+						peer_start = row_idx;
 						break;
 					}
 				}
@@ -160,23 +166,29 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 					prev[p_idx] = sort_collection.GetValue(p_idx, row_idx);
 				}
 				// find end of new partition
-				if (partition_change) {
-					for (size_t row_idx_e = partition_start + 1; row_idx_e < big_data.count; row_idx_e++) {
-						bool next_p = false;
-						for (size_t p_idx = 0; p_idx < prev.size(); p_idx++) {
-							if (prev[p_idx] != sort_collection.GetValue(p_idx, row_idx_e) &&
-							    p_idx < wexpr->partitions.size()) {
-								next_p = true;
-								break;
-							}
-						}
+				for (size_t row_idx_e = partition_start; row_idx_e < big_data.count; row_idx_e++) {
+					bool next_partition = false;
+					bool is_peer = true;
 
-						if (next_p) {
+					for (size_t p_idx = 0; p_idx < prev.size(); p_idx++) {
+						Value s_val = sort_collection.GetValue(p_idx, row_idx_e);
+						Value p_val = prev[p_idx];
+						if (p_val != s_val && p_idx < wexpr->partitions.size()) {
+							next_partition = true;
 							break;
 						}
-						partition_end = row_idx_e + 1;
+						if (p_val != s_val) {
+							is_peer = false;
+							break;
+						}
 					}
-					partition_change = false;
+					if (next_partition) {
+						break;
+					}
+					if (is_peer) {
+						peer_end = row_idx_e + 1;
+					}
+					partition_end = row_idx_e + 1;
 				}
 
 				// TODO handle expressions in preceding/following
@@ -187,18 +199,27 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 				if (wexpr->start == WindowBoundary::UNBOUNDED_PRECEDING) {
 					window_start = partition_start;
 				}
-				if (wexpr->start == WindowBoundary::CURRENT_ROW) {
+				if (wexpr->window_type == WindowType::ROWS && wexpr->start == WindowBoundary::CURRENT_ROW) {
 					window_start = row_idx;
+				}
+				if (wexpr->window_type == WindowType::RANGE && wexpr->start == WindowBoundary::CURRENT_ROW) {
+					window_start = peer_start;
 				}
 				assert(wexpr->start != WindowBoundary::UNBOUNDED_FOLLOWING);
 
-				if (wexpr->end == WindowBoundary::CURRENT_ROW) {
+				if (wexpr->window_type == WindowType::ROWS && wexpr->end == WindowBoundary::CURRENT_ROW) {
 					window_end = row_idx + 1;
+				}
+				if (wexpr->window_type == WindowType::RANGE && wexpr->end == WindowBoundary::CURRENT_ROW) {
+					window_end = peer_end;
 				}
 				if (wexpr->end == WindowBoundary::UNBOUNDED_FOLLOWING) {
 					window_end = partition_end;
 				}
 				assert(wexpr->end != WindowBoundary::UNBOUNDED_PRECEDING);
+
+				//				printf("[%zu [%zu %zu] %zu]\n", partition_start, window_start, window_end,
+				//partition_end);
 
 				switch (wexpr->type) {
 				case ExpressionType::WINDOW_SUM: {
@@ -241,11 +262,7 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 					break;
 				}
 				case ExpressionType::WINDOW_ROW_NUMBER: {
-					Value rowno = Value::Numeric(wexpr->return_type, 0);
-					for (size_t row_idx_w = window_start; row_idx_w < window_end; row_idx_w++) {
-						rowno = rowno + 1;
-					}
-					window_results.SetValue(window_output_idx, row_idx, rowno);
+					window_results.SetValue(window_output_idx, row_idx, Value::Numeric(wexpr->return_type, row_no));
 					break;
 				}
 				case ExpressionType::WINDOW_RANK_DENSE: {
@@ -270,6 +287,7 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 					throw NotImplementedException("Window aggregate type %s",
 					                              ExpressionTypeToString(wexpr->type).c_str());
 				}
+				row_no++;
 			}
 			window_output_idx++;
 		}

@@ -29,7 +29,7 @@ TEST_CASE("Most basic window function", "[window]") {
 	result = con.Query(
 	    "SELECT sum(salary) OVER (PARTITION BY depname ORDER BY salary) ss FROM empsalary ORDER BY depname, ss");
 	REQUIRE(result->column_count() == 1);
-	REQUIRE(CHECK_COLUMN(result, 0, {4200, 8700, 13900, 19100, 25100, 3500, 7400, 4800, 9600, 14600}));
+	REQUIRE(CHECK_COLUMN(result, 0, {4200, 8700, 19100, 19100, 25100, 3500, 7400, 9600, 9600, 14600}));
 
 	// row_number
 	result = con.Query(
@@ -216,7 +216,7 @@ TEST_CASE("Non-default window specs", "[window]") {
 	REQUIRE(result->column_count() == 4);
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {0, 0, 1, 1, 2, 0, 0, 1, 1, 2, 0, 0, 1, 1, 2, 0, 0, 1, 1, 2}));
-	REQUIRE(CHECK_COLUMN(result, 2, {0, 0, 2, 1, 4, 0, 0, 2, 1, 4, 0, 0, 1, 2, 4, 0, 0, 2, 1, 4}));
+	REQUIRE(CHECK_COLUMN(result, 2, {0, 0, 2, 2, 4, 0, 0, 2, 2, 4, 0, 0, 2, 2, 4, 0, 0, 2, 2, 4}));
 	REQUIRE(CHECK_COLUMN(result, 3, {0, 0, 1, 1, 2, 0, 0, 1, 1, 2, 0, 0, 1, 1, 2, 0, 0, 1, 1, 2}));
 }
 
