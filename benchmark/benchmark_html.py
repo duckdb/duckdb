@@ -135,17 +135,22 @@ def create_html(results_folder):
 
 				result_html = bold_output(result_html)
 
+				extra_info = []
+				try:
+					generate_query_graph.generate(log_name, graph_html)
+				except:
+					pass
+				if os.path.isfile(graph_html):
+					extra_info.append(['Q', graph_html])
 				if os.path.isfile(log_name):
-					# generate the query graph from the log
-					try:
-						generate_query_graph.generate(log_name, graph_html)
-					except:
-						pass
+					extra_info.append(['L', log_name])
+				if os.path.isfile(stderr_name):
+					extra_info.append(['E', stderr_name])
+				if len(extra_info) > 0:
 					result_html += " ["
-					result_html += '<a href="%s">Q</a>' % (graph_html,)
-					result_html += '/<a href="%s">L</a>' % (log_name,)
-					result_html += '/<a href="%s">E</a>' % (stderr_name,)
-					result_html += "]"
+					for i in range(len(extra_info) - 1):
+						result_html += '<a href="%s">%s</a>/' % (extra_info[i][1], extra_info[i][0])
+					result_html += '<a href="%s">%s</a>]' % (extra_info[-1][1], extra_info[-1][0])
 				table_class = None
 				if result_type == 'Crash' or result_type == 'Incorrect':
 					table_class = 'table-danger'
