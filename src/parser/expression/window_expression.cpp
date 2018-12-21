@@ -52,8 +52,6 @@ unique_ptr<Expression> WindowExpression::Copy() {
 		new_window->ordering.orders.push_back(move(node));
 	}
 
-	new_window->window_type = window_type;
-
 	new_window->start = start;
 	new_window->end = end;
 	new_window->start_expr = start_expr ? start_expr->Copy() : nullptr;
@@ -71,7 +69,6 @@ void WindowExpression::Serialize(Serializer &serializer) {
 		serializer.Write<OrderType>(order.type);
 		order.expression->Serialize(serializer);
 	}
-	serializer.Write<uint8_t>(window_type);
 	serializer.Write<uint8_t>(start);
 	serializer.Write<uint8_t>(end);
 
@@ -90,7 +87,6 @@ unique_ptr<Expression> WindowExpression::Deserialize(ExpressionDeserializeInfo *
 		auto expression = Expression::Deserialize(source);
 		expr->ordering.orders.push_back(OrderByNode(order_type, move(expression)));
 	}
-	expr->window_type = (WindowType)source.Read<uint8_t>();
 	expr->start = (WindowBoundary)source.Read<uint8_t>();
 	expr->end = (WindowBoundary)source.Read<uint8_t>();
 

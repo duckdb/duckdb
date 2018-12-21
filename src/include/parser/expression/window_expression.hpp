@@ -18,8 +18,15 @@ namespace duckdb {
 //! The WindowExpression represents a window function in the query. They are a special case of aggregates which is why
 //! they inherit from them.
 
-enum WindowBoundary { INVALID, UNBOUNDED_PRECEDING, UNBOUNDED_FOLLOWING, CURRENT_ROW, EXPR_PRECEDING, EXPR_FOLLOWING };
-enum WindowType { RANGE, ROWS };
+enum WindowBoundary {
+	INVALID,
+	UNBOUNDED_PRECEDING,
+	UNBOUNDED_FOLLOWING,
+	CURRENT_ROW_RANGE,
+	CURRENT_ROW_ROWS,
+	EXPR_PRECEDING,
+	EXPR_FOLLOWING
+};
 
 class WindowExpression : public Expression {
 public:
@@ -46,7 +53,6 @@ public:
 
 	vector<unique_ptr<Expression>> partitions;
 	OrderByDescription ordering;
-	WindowType window_type = WindowType::RANGE;
 	WindowBoundary start = WindowBoundary::INVALID, end = WindowBoundary::INVALID;
 	unique_ptr<Expression> start_expr = nullptr, end_expr = nullptr;
 

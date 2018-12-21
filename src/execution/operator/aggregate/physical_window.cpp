@@ -19,6 +19,22 @@ PhysicalWindow::PhysicalWindow(LogicalOperator &op, vector<unique_ptr<Expression
 // TODO what if we have no PARTITION BY/ORDER?
 // this implements a sorted window functions variant
 
+static void MaterializeExpression(ClientContext &context, Expression *expr, ChunkCollection &input,
+                                  ChunkCollection &output) {
+	ChunkCollection boundary_start_collection;
+	vector<TypeId> types = {expr->return_type};
+	for (size_t i = 0; i < input.chunks.size(); i++) {
+		DataChunk chunk;
+		chunk.Initialize(types);
+
+		ExpressionExecutor executor(*input.chunks[i], context);
+		executor.ExecuteExpression(expr, chunk.data[0]);
+
+		chunk.Verify();
+		output.Append(chunk);
+	}
+}
+
 void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalWindowOperatorState *>(state_);
 	ChunkCollection &big_data = state->tuples;
@@ -103,23 +119,26 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 			// evaluate inner expressions of window functions, could be more complex
 			ChunkCollection payload_collection;
 			if (wexpr->children.size() > 0) {
-				vector<TypeId> inner_types = {wexpr->children[0]->return_type};
-				for (size_t i = 0; i < big_data.chunks.size(); i++) {
-					DataChunk payload_chunk;
-					payload_chunk.Initialize(inner_types);
+				MaterializeExpression(context, wexpr->children[0].get(), big_data, payload_collection);
+			}
 
-					ExpressionExecutor executor(*big_data.chunks[i], context);
-					executor.ExecuteExpression(wexpr->children[0].get(), payload_chunk.data[0]);
-
-					payload_chunk.Verify();
-					payload_collection.Append(payload_chunk);
-				}
+			// evaluate boundaries if present.
+			// TODO optimization if those are constants we can just use those
+			ChunkCollection boundary_start_collection;
+			if (wexpr->start_expr &&
+			    (wexpr->start == WindowBoundary::EXPR_PRECEDING || wexpr->start == WindowBoundary::EXPR_FOLLOWING)) {
+				MaterializeExpression(context, wexpr->start_expr.get(), big_data, boundary_start_collection);
+			}
+			ChunkCollection boundary_end_collection;
+			if (wexpr->end_expr &&
+			    (wexpr->end == WindowBoundary::EXPR_PRECEDING || wexpr->end == WindowBoundary::EXPR_FOLLOWING)) {
+				MaterializeExpression(context, wexpr->end_expr.get(), big_data, boundary_end_collection);
 			}
 
 			// actual computation of windows, naively
 			// FIXME: implement TUM method here instead
-			size_t window_start = 0;
-			size_t window_end = 0;
+			ssize_t window_start = 0;
+			ssize_t window_end = 0;
 
 			size_t partition_start = 0;
 			size_t partition_end = 0;
@@ -191,35 +210,79 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 					partition_end = row_idx_e + 1;
 				}
 
-				// TODO handle expressions in preceding/following
+				window_start = -1;
+				window_end = -1;
 
-				window_start = 0;
-				window_end = 0;
+				switch (wexpr->start) {
+				case WindowBoundary::UNBOUNDED_PRECEDING:
+					window_start = partition_start;
+					break;
+				case WindowBoundary::CURRENT_ROW_ROWS:
+					window_start = row_idx;
+					break;
+				case WindowBoundary::CURRENT_ROW_RANGE:
+					window_start = peer_start;
+					break;
+				case WindowBoundary::UNBOUNDED_FOLLOWING:
+					assert(0); // disallowed
+					break;
+				case WindowBoundary::EXPR_PRECEDING: {
+					assert(boundary_start_collection.column_count() > 0);
+					window_start = (ssize_t)row_idx - boundary_start_collection.GetValue(0, row_idx).GetNumericValue();
+					break;
+				}
+				case WindowBoundary::EXPR_FOLLOWING: {
+					assert(boundary_start_collection.column_count() > 0);
+					window_start = row_idx + boundary_start_collection.GetValue(0, row_idx).GetNumericValue();
+					break;
+				}
 
-				if (wexpr->start == WindowBoundary::UNBOUNDED_PRECEDING) {
+				default:
+					throw NotImplementedException("Unsupported boundary");
+				}
+
+				switch (wexpr->end) {
+				case WindowBoundary::UNBOUNDED_PRECEDING:
+					assert(0); // disallowed
+					break;
+				case WindowBoundary::CURRENT_ROW_ROWS:
+					window_end = row_idx + 1;
+					break;
+				case WindowBoundary::CURRENT_ROW_RANGE:
+					window_end = peer_end;
+					break;
+				case WindowBoundary::UNBOUNDED_FOLLOWING:
+					window_end = partition_end;
+					break;
+				case WindowBoundary::EXPR_PRECEDING:
+					assert(boundary_end_collection.column_count() > 0);
+					window_end = (ssize_t)row_idx - boundary_end_collection.GetValue(0, row_idx).GetNumericValue() + 1;
+					break;
+				case WindowBoundary::EXPR_FOLLOWING:
+					assert(boundary_end_collection.column_count() > 0);
+					window_end = row_idx + boundary_end_collection.GetValue(0, row_idx).GetNumericValue() + 1;
+
+					break;
+				default:
+					throw NotImplementedException("Unsupported boundary");
+				}
+
+				if (window_start < (ssize_t)partition_start) {
 					window_start = partition_start;
 				}
-				if (wexpr->window_type == WindowType::ROWS && wexpr->start == WindowBoundary::CURRENT_ROW) {
-					window_start = row_idx;
-				}
-				if (wexpr->window_type == WindowType::RANGE && wexpr->start == WindowBoundary::CURRENT_ROW) {
-					window_start = peer_start;
-				}
-				assert(wexpr->start != WindowBoundary::UNBOUNDED_FOLLOWING);
-
-				if (wexpr->window_type == WindowType::ROWS && wexpr->end == WindowBoundary::CURRENT_ROW) {
-					window_end = row_idx + 1;
-				}
-				if (wexpr->window_type == WindowType::RANGE && wexpr->end == WindowBoundary::CURRENT_ROW) {
-					window_end = peer_end;
-				}
-				if (wexpr->end == WindowBoundary::UNBOUNDED_FOLLOWING) {
+				if (window_end > partition_end) {
 					window_end = partition_end;
 				}
-				assert(wexpr->end != WindowBoundary::UNBOUNDED_PRECEDING);
 
-				//				printf("[%zu [%zu %zu] %zu]\n", partition_start, window_start, window_end,
-				//partition_end);
+				if (window_start < 0 || window_end < 0) {
+					throw Exception("Failed to compute window boundaries");
+				}
+
+				if (window_start >= window_end) {
+					window_results.SetValue(window_output_idx, row_idx, Value());
+					row_no++;
+					continue;
+				}
 
 				switch (wexpr->type) {
 				case ExpressionType::WINDOW_SUM: {
@@ -255,10 +318,15 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 				case ExpressionType::WINDOW_AVG: {
 					double sum = 0;
 					for (size_t row_idx_w = window_start; row_idx_w < window_end; row_idx_w++) {
-						sum += payload_collection.GetValue(0, row_idx_w).CastAs(TypeId::DECIMAL).value_.decimal;
+						sum += payload_collection.GetValue(0, row_idx_w).GetNumericValue();
 					}
 					sum = sum / (window_end - window_start);
 					window_results.SetValue(window_output_idx, row_idx, Value(sum));
+					break;
+				}
+				case ExpressionType::WINDOW_COUNT_STAR: {
+					window_results.SetValue(window_output_idx, row_idx,
+					                        Value::Numeric(wexpr->return_type, window_end - window_start));
 					break;
 				}
 				case ExpressionType::WINDOW_ROW_NUMBER: {
