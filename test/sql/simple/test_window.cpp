@@ -208,4 +208,43 @@ TEST_CASE("Non-default window specs", "[window]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {0, 2, 4, 6, 8, 1, 3, 5, 7, 9, 0, 2, 4, 6, 8, 1, 3, 5, 7, 9}));
 	REQUIRE(CHECK_COLUMN(result, 2, {20, 20, 20, 20, 20, 25, 25, 25, 25, 25, 20, 20, 20, 20, 20, 25, 25, 25, 25, 25}));
 	REQUIRE(CHECK_COLUMN(result, 3, {8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9}));
+
+	// unbounded following with expressions
+	result = con.Query("SELECT four, ten/4 as two, 	sum(ten/4) over (partition by four order by ten/4 range between "
+	                   "unbounded preceding and current row) st, last_value(ten/4) over (partition by four order by "
+	                   "ten/4 range between unbounded preceding and current row) lt FROM tenk1d order by four, ten/4");
+	REQUIRE(result->column_count() == 4);
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0, 0, 1, 1, 2, 0, 0, 1, 1, 2, 0, 0, 1, 1, 2, 0, 0, 1, 1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {0, 0, 2, 1, 4, 0, 0, 2, 1, 4, 0, 0, 1, 2, 4, 0, 0, 2, 1, 4}));
+	REQUIRE(CHECK_COLUMN(result, 3, {0, 0, 1, 1, 2, 0, 0, 1, 1, 2, 0, 0, 1, 1, 2, 0, 0, 1, 1, 2}));
 }
+
+/*
+TEST_CASE("RANGE vs ROWS", "[window]") {
+    unique_ptr<DuckDBResult> result;
+    DuckDB db(nullptr);
+    DuckDBConnection con(db);
+
+    REQUIRE_NO_FAIL(con.Query("CREATE TABLE tenk1 ( unique1 int4, unique2 int4, two int4, four int4, ten int4, twenty
+int4, hundred int4, thousand int4, twothousand int4, fivethous int4, tenthous int4, odd int4, even int4, stringu1
+string, stringu2 string, string4 string )")); REQUIRE_NO_FAIL(con.Query("insert into tenk1 values (4, 1621, 0, 0, 4, 4,
+4, 4, 4, 4, 4, 8 ,9 ,'EAAAAA', 'JKCAAA', 'HHHHxx'), (2, 2716, 0, 2, 2, 2, 2, 2, 2, 2, 2, 4 ,5 ,'CAAAAA', 'MAEAAA',
+'AAAAxx'), (1, 2838, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2 ,3 ,'BAAAAA', 'EFEAAA', 'OOOOxx'), (6, 2855, 0, 2, 6, 6, 6, 6, 6, 6,
+6, 12 ,13 ,'GAAAAA', 'VFEAAA', 'VVVVxx'), (9, 4463, 1, 1, 9, 9, 9, 9, 9, 9, 9, 18 ,19 ,'JAAAAA', 'RPGAAA', 'VVVVxx'),
+(8, 5435, 0, 0, 8, 8, 8, 8, 8, 8, 8, 16 ,17 ,'IAAAAA', 'BBIAAA', 'VVVVxx'), (5, 5557, 1, 1, 5, 5, 5, 5, 5, 5, 5, 10 ,11
+,'FAAAAA', 'TFIAAA', 'HHHHxx'), (3, 5679, 1, 3, 3, 3, 3, 3, 3, 3, 3, 6 ,7 ,'DAAAAA', 'LKIAAA', 'VVVVxx'), (7, 8518, 1,
+3, 7, 7, 7, 7, 7, 7, 7, 14 ,15 ,'HAAAAA', 'QPMAAA', 'OOOOxx'), (0, 9998, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ,1 ,'AAAAAA',
+'OUOAAA', 'OOOOxx')"));
+
+    result = con.Query("SELECT sum(unique1) over (order by four range between current row and unbounded following) s,
+unique1, four FROM tenk1 order by four, unique1");
+
+    REQUIRE(result->column_count() == 3);
+    REQUIRE(CHECK_COLUMN(result, 0, {45, 45, 45, 33, 33, 33, 18, 18, 10, 10}));
+    REQUIRE(CHECK_COLUMN(result, 1, {0, 4, 8, 1, 5, 9, 2, 6, 3, 7}));
+    REQUIRE(CHECK_COLUMN(result, 2, {0, 0, 0, 1, 1, 1, 2, 2, 3, 3}));
+
+
+}
+*/
