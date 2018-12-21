@@ -270,6 +270,22 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 	VisitQueryNode(statement);
 }
 
+static void CastProjectionToTypes(vector<TypeId> &types, LogicalOperator *node) {
+	while (!IsProjection(node->type)) {
+		node = node->children[0].get();
+	}
+	// there should always be a projection before we hit a join or aggregate
+	assert(node->type == LogicalOperatorType::PROJECTION);
+	assert(node->expressions.size() == types.size());
+	// add the casts to the selection list
+	for (size_t i = 0; i < types.size(); i++) {
+		if (node->expressions[i]->return_type != types[i]) {
+			// differing types, have to add a cast
+			node->expressions[i] = make_unique<CastExpression>(types[i], move(node->expressions[i]));
+		}
+	}
+}
+
 void LogicalPlanGenerator::Visit(SetOperationNode &statement) {
 	// Generate the logical plan for the left and right sides of the set operation
 	LogicalPlanGenerator generator_left(context, *statement.setop_left_binder);
@@ -284,13 +300,15 @@ void LogicalPlanGenerator::Visit(SetOperationNode &statement) {
 	}
 
 	vector<TypeId> union_types;
-	// figure out types of setop result
+	// figure out the types of the setop result from the selection lists
 	for (size_t i = 0; i < left_select_list.size(); i++) {
 		Expression *proj_ele = left_select_list[i].get();
 
 		TypeId union_expr_type = TypeId::INVALID;
 		auto left_expr_type = proj_ele->return_type;
 		auto right_expr_type = right_select_list[i]->return_type;
+		// the type is the biggest of the two types
+		// we might need to cast one of the sides
 		union_expr_type = left_expr_type;
 		if (right_expr_type > union_expr_type) {
 			union_expr_type = right_expr_type;
@@ -299,22 +317,7 @@ void LogicalPlanGenerator::Visit(SetOperationNode &statement) {
 		union_types.push_back(union_expr_type);
 	}
 
-	// project setop children to produce common type
-	// FIXME duplicated code
-	vector<unique_ptr<Expression>> proj_exprs_left;
-	for (size_t i = 0; i < union_types.size(); i++) {
-		auto ref_expr = make_unique<ColumnRefExpression>(left_select_list[i]->return_type, i);
-		auto cast_expr = make_unique_base<Expression, CastExpression>(union_types[i], move(ref_expr));
-		proj_exprs_left.push_back(move(cast_expr));
-	}
-	vector<unique_ptr<Expression>> proj_exprs_right;
-	for (size_t i = 0; i < union_types.size(); i++) {
-		auto ref_expr = make_unique<ColumnRefExpression>(right_select_list[i]->return_type, i);
-		auto cast_expr = make_unique_base<Expression, CastExpression>(union_types[i], move(ref_expr));
-		proj_exprs_right.push_back(move(cast_expr));
-	}
-
-	// now visit the expressions
+	// now visit the expressions to generate the plans
 	statement.left->Accept(&generator_left);
 	auto left_node = move(generator_left.root);
 
@@ -324,14 +327,9 @@ void LogicalPlanGenerator::Visit(SetOperationNode &statement) {
 	assert(left_node);
 	assert(right_node);
 
-	// create a dummy projection on both sides to hold the casts
-	auto projection_left = make_unique<LogicalProjection>(move(proj_exprs_left));
-	projection_left->children.push_back(move(left_node));
-	left_node = move(projection_left);
-
-	auto projection_right = make_unique<LogicalProjection>(move(proj_exprs_right));
-	projection_right->children.push_back(move(right_node));
-	right_node = move(projection_right);
+	// check for each node if we need to cast any of the columns
+	CastProjectionToTypes(union_types, left_node.get());
+	CastProjectionToTypes(union_types, right_node.get());
 
 	// create actual logical ops for setops
 	switch (statement.setop_type) {
