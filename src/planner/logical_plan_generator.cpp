@@ -220,8 +220,7 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 	if (statement.HasAggregation()) {
 		vector<unique_ptr<Expression>> aggregates;
 
-		// TODO: what about the aggregates in window partition/order/boundaries?
-
+		// TODO: what about the aggregates in window partition/order/boundaries? use a visitor here?
 		for (size_t expr_idx = 0; expr_idx < statement.select_list.size(); expr_idx++) {
 			statement.select_list[expr_idx] =
 			    extract_aggregates(move(statement.select_list[expr_idx]), aggregates, statement.groupby.groups.size());
