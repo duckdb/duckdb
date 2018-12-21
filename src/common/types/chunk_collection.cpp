@@ -136,7 +136,7 @@ void ChunkCollection::Sort(OrderByDescription &desc, uint64_t result[]) {
 // just use memcpy in the vectors
 // assert that there is no selection list
 void ChunkCollection::Reorder(uint64_t order_org[]) {
-	auto order = new uint64_t[count];
+	uint64_t order[count];
 	memcpy(order, order_org, sizeof(uint64_t) * count);
 
 	// adapted from https://stackoverflow.com/a/7366196/2652376
