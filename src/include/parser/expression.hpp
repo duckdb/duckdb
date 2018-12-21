@@ -12,6 +12,7 @@
 #include "common/printable.hpp"
 #include "common/types/statistics.hpp"
 
+#include <functional>
 #include <memory>
 #include <stack>
 #include <vector>
@@ -63,19 +64,6 @@ public:
 		children.push_back(std::move(child));
 	}
 
-	//! Return a list of the deepest aggregates that are present in the
-	//! Expression (if any).
-	/*!
-	 This function is used by the execution engine to figure out which
-	 aggregates/groupings have to be computed.
-
-	 Examples:
-
-	 (1) SELECT SUM(a) + SUM(b) FROM table; (Two aggregates, SUM(a) and SUM(b))
-
-	 (2) SELECT COUNT(SUM(a)) FROM table; (One aggregate, SUM(a))
-	 */
-	virtual void GetAggregates(vector<AggregateExpression *> &expressions);
 	//! Returns true if this Expression is an aggregate or not.
 	/*!
 	 Examples:
@@ -125,6 +113,11 @@ public:
 	//! Deserializes a blob back into an Expression [CAN THROW:
 	//! SerializationException]
 	static unique_ptr<Expression> Deserialize(Deserializer &source);
+
+	//! Enumerate over all child expressions of a given type, invoking the callback for every one. The return value of
+	//! the callback indicates the replacement of that node.
+	static void EnumerateExpressions(unique_ptr<Expression> *parent, ExpressionType type,
+	                                 std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback);
 
 	//! Clears the statistics of this expression and all child expressions
 	void ClearStatistics() {

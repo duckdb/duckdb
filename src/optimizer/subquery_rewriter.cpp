@@ -219,22 +219,50 @@ bool SubqueryRewriter::RewriteSubqueryComparison(LogicalFilter &filter, Comparis
 	if (node->type != LogicalOperatorType::PROJECTION) {
 		return false;
 	}
+	if (node->children[0]->type != LogicalOperatorType::AGGREGATE_AND_GROUP_BY) {
+		return false;
+	}
 	auto proj = (LogicalProjection *)node;
+	auto aggr = (LogicalAggregate *)node->children[0].get();
 
 	// now we turn a subquery in the WHERE clause into a "proper" subquery
 	// hence we need to get a new table index from the BindContext
 	auto subquery_table_index = context.GenerateTableIndex();
 
+	size_t old_groups = aggr->groups.size();
 	// step 2: find correlations to add to the list of join conditions
 	vector<JoinCondition> join_conditions;
-	ExtractCorrelatedExpressions(proj, subquery, subquery_table_index, join_conditions);
+	ExtractCorrelatedExpressions(aggr, subquery, subquery_table_index, join_conditions);
 
-	// create the join conditions
+	// we might have added new groups
+	// since groups occur BEFORE aggregates in the output of the aggregate, we need to shift column references to
+	// aggregates by the amount of new groups we added
+	Expression::EnumerateExpressions(&proj->expressions[0], ExpressionType::COLUMN_REF,
+	                                 [&](unique_ptr<Expression> expr) -> unique_ptr<Expression> {
+		                                 auto colref = (ColumnRefExpression *)expr.get();
+		                                 if (colref->index >= old_groups) {
+			                                 colref->index += aggr->groups.size() - old_groups;
+		                                 }
+		                                 return expr;
+	                                 });
+	// for each of the new join conditions with correlated expressions we added we have to:
+	// (1) project the group column in the projection
+	// (2) set the right join condition so it references the group column
+	for (size_t i = 0; i < join_conditions.size(); i++) {
+		auto type = aggr->groups[old_groups + i]->return_type;
+		// create the grouping column
+		proj->expressions.push_back(make_unique<ColumnRefExpression>(type, old_groups + i));
+		// now make the join condition reference this column
+		join_conditions[i].right =
+		    make_unique<ColumnRefExpression>(type, ColumnBinding(subquery_table_index, proj->expressions.size() - 1));
+	}
+
+	// create the join condition based on the equality expression
 	// first is the original condition
 	JoinCondition condition;
 	condition.left =
 	    subquery == comparison->children[0].get() ? move(comparison->children[1]) : move(comparison->children[0]);
-	// the right condition is the first column of the subquery
+	// the right condition is the aggregate of the subquery
 	condition.right =
 	    make_unique<ColumnRefExpression>(proj->expressions[0]->return_type, ColumnBinding(subquery_table_index, 0));
 	condition.comparison = comparison->type;
@@ -311,8 +339,6 @@ void ExtractCorrelatedExpressions(LogicalOperator *op, SubqueryExpression *subqu
 			auto aggr = (LogicalAggregate *)op;
 			// now inside the aggregation, we use the uncorrelated column used
 			// in the comparison as both projection and grouping col in subquery
-			aggr->expressions.push_back(make_unique_base<Expression, GroupRefExpression>(
-			    uncorrelated_expression->return_type, aggr->groups.size()));
 			aggr->groups.push_back(move(uncorrelated_expression));
 		} else {
 			// push the expression into the select list
@@ -336,10 +362,16 @@ void ExtractCorrelatedExpressions(LogicalOperator *op, SubqueryExpression *subqu
 		// to 0
 		((ColumnRefExpression *)correlated_expression.get())->depth = 0;
 		condition.left = move(correlated_expression);
-		// on the right side is the newly added aggregate in the original
-		// subquery
-		condition.right = make_unique<ColumnRefExpression>(
-		    op->expressions.back()->return_type, ColumnBinding(subquery_table_index, op->expressions.size() - 1));
+		// on the right side is the newly added group in the original subquery
+		if (op->type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY) {
+			// in the case of the AGGREGATE_AND_GROUP_BY, we will add the right condition later on, as we need to
+			// reference an expression in the PROJECTION above the AGGREGATE
+			condition.right = nullptr;
+		} else {
+			condition.right = make_unique<ColumnRefExpression>(
+			    op->expressions.back()->return_type, ColumnBinding(subquery_table_index, op->expressions.size() - 1));
+			assert(condition.left->return_type == condition.right->return_type);
+		}
 		condition.comparison = comparison_type;
 		if (uncorrelated_index == 0) {
 			// flip the comparison

@@ -4,6 +4,7 @@
 #include "expression_helper.hpp"
 #include "optimizer/logical_rules/list.hpp"
 #include "optimizer/rewriter.hpp"
+#include "optimizer/subquery_rewriter.hpp"
 
 #include <vector>
 
@@ -32,10 +33,8 @@ TEST_CASE("Subquery rewriting", "[subquery_rewrite]") {
 
 	auto planner = ParseLogicalPlan(con, "SELECT t1.a, t1.b FROM t1 WHERE b = (SELECT MIN(b) "
 	                                     "FROM t1 ts WHERE t1.a=ts.a)");
-
-	Rewriter rewriter(*planner->context);
-	rewriter.rules.push_back(make_unique_base<Rule, SubqueryRewritingRule>());
-	auto plan = rewriter.ApplyRules(move(planner->plan));
+	SubqueryRewriter rewriter(*planner->context);
+	auto plan = rewriter.Rewrite(move(planner->plan));
 	// now we expect a subquery
 	REQUIRE(FindLogicalNode(plan.get(), LogicalOperatorType::SUBQUERY));
 };
@@ -53,9 +52,8 @@ TEST_CASE("(NOT) IN clause rewriting", "[subquery_rewrite]") {
 		auto planner = ParseLogicalPlan(con, "SELECT t1.a, t1.b FROM t1 WHERE b NOT IN (SELECT b "
 		                                     "FROM t1 WHERE t1.a < 20)");
 
-		Rewriter rewriter(*planner->context);
-		rewriter.rules.push_back(make_unique_base<Rule, InClauseRewriteRule>());
-		auto plan = rewriter.ApplyRules(move(planner->plan));
+		SubqueryRewriter rewriter(*planner->context);
+		auto plan = rewriter.Rewrite(move(planner->plan));
 		// now we expect a subquery
 		REQUIRE(FindLogicalNode(plan.get(), LogicalOperatorType::SUBQUERY));
 	}
@@ -64,9 +62,8 @@ TEST_CASE("(NOT) IN clause rewriting", "[subquery_rewrite]") {
 		auto planner = ParseLogicalPlan(con, "SELECT t1.a, t1.b FROM t1 WHERE b IN (SELECT b "
 		                                     "FROM t1 WHERE t1.a < 20)");
 
-		Rewriter rewriter(*planner->context);
-		rewriter.rules.push_back(make_unique_base<Rule, InClauseRewriteRule>());
-		auto plan = rewriter.ApplyRules(move(planner->plan));
+		SubqueryRewriter rewriter(*planner->context);
+		auto plan = rewriter.Rewrite(move(planner->plan));
 		// now we expect a subquery
 		REQUIRE(FindLogicalNode(plan.get(), LogicalOperatorType::SUBQUERY));
 	}

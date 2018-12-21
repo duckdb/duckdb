@@ -21,7 +21,6 @@ public:
 	//! Resolve the type of the aggregate
 	void ResolveType() override;
 
-	void GetAggregates(vector<AggregateExpression *> &expressions) override;
 	bool IsAggregate() override {
 		return true;
 	}
