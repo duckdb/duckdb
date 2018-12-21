@@ -19,6 +19,7 @@ namespace duckdb {
 //! they inherit from them.
 
 enum WindowBoundary { INVALID, UNBOUNDED_PRECEDING, UNBOUNDED_FOLLOWING, CURRENT_ROW, EXPR_PRECEDING, EXPR_FOLLOWING };
+enum WindowType { RANGE, ROWS };
 
 class WindowExpression : public Expression {
 public:
@@ -45,7 +46,7 @@ public:
 
 	vector<unique_ptr<Expression>> partitions;
 	OrderByDescription ordering;
-
+	WindowType window_type = WindowType::RANGE;
 	WindowBoundary start = WindowBoundary::INVALID, end = WindowBoundary::INVALID;
 	unique_ptr<Expression> start_expr = nullptr, end_expr = nullptr;
 

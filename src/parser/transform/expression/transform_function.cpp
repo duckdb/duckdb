@@ -73,7 +73,7 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 	if (root->over) {
 		auto window_spec = reinterpret_cast<WindowDef *>(root->over);
 		if (window_spec->refname) {
-			// FIXME: implement named window specs, not now
+			// TODO
 			throw NotImplementedException("Named Windows");
 		}
 
@@ -127,6 +127,12 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 			expr->end = WindowBoundary::EXPR_PRECEDING;
 		} else if (window_spec->frameOptions & FRAMEOPTION_END_VALUE_FOLLOWING) {
 			expr->end = WindowBoundary::EXPR_FOLLOWING;
+		}
+
+		if (window_spec->frameOptions & FRAMEOPTION_RANGE) {
+			expr->window_type = WindowType::RANGE;
+		} else if (window_spec->frameOptions & FRAMEOPTION_ROWS) {
+			expr->window_type = WindowType::ROWS;
 		}
 
 		assert(expr->start != WindowBoundary::INVALID && expr->end != WindowBoundary::INVALID);

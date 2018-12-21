@@ -41,10 +41,9 @@ unique_ptr<Expression> WindowExpression::Copy() {
 	auto new_window = make_unique<WindowExpression>(type, move(child));
 	new_window->CopyProperties(*this);
 
-	new_window->start = start;
-	new_window->end = end;
-	new_window->start_expr = start_expr ? start_expr->Copy() : nullptr;
-	new_window->end_expr = end_expr ? end_expr->Copy() : nullptr;
+	for (auto &e : partitions) {
+		new_window->partitions.push_back(e->Copy());
+	}
 
 	for (auto &o : ordering.orders) {
 		OrderByNode node;
@@ -53,27 +52,58 @@ unique_ptr<Expression> WindowExpression::Copy() {
 		new_window->ordering.orders.push_back(move(node));
 	}
 
-	for (auto &e : partitions) {
-		new_window->partitions.push_back(e->Copy());
-	}
-	// TODO copy range/rows
+	new_window->window_type = window_type;
+
+	new_window->start = start;
+	new_window->end = end;
+	new_window->start_expr = start_expr ? start_expr->Copy() : nullptr;
+	new_window->end_expr = end_expr ? end_expr->Copy() : nullptr;
+
 	return new_window;
 }
 
 void WindowExpression::Serialize(Serializer &serializer) {
-	throw NotImplementedException("eek");
+	Expression::Serialize(serializer);
+	serializer.WriteList(partitions);
+	//	auto order_count = source.Read<uint32_t>();
+	serializer.Write<uint32_t>(ordering.orders.size());
+	for (auto &order : ordering.orders) {
+		serializer.Write<OrderType>(order.type);
+		order.expression->Serialize(serializer);
+	}
+	serializer.Write<uint8_t>(window_type);
+	serializer.Write<uint8_t>(start);
+	serializer.Write<uint8_t>(end);
+
+	serializer.WriteOptional(start_expr);
+	serializer.WriteOptional(end_expr);
 }
 
 unique_ptr<Expression> WindowExpression::Deserialize(ExpressionDeserializeInfo *info, Deserializer &source) {
-	throw NotImplementedException("eek");
+	auto child = info->children.size() == 0 ? nullptr : move(info->children[0]);
+	auto expr = make_unique<WindowExpression>(info->type, move(child));
+	source.ReadList<Expression>(expr->partitions);
+
+	auto order_count = source.Read<uint32_t>();
+	for (size_t i = 0; i < order_count; i++) {
+		auto order_type = source.Read<OrderType>();
+		auto expression = Expression::Deserialize(source);
+		expr->ordering.orders.push_back(OrderByNode(order_type, move(expression)));
+	}
+	expr->window_type = (WindowType)source.Read<uint8_t>();
+	expr->start = (WindowBoundary)source.Read<uint8_t>();
+	expr->end = (WindowBoundary)source.Read<uint8_t>();
+
+	expr->start_expr = source.ReadOptional<Expression>();
+	expr->end_expr = source.ReadOptional<Expression>();
+	return expr;
 }
 
-//! Resolve the type of the aggregate
+//! Resolve the type of the window function
 void WindowExpression::ResolveType() {
 	Expression::ResolveType();
 	switch (type) {
 
-	// TODO: this is copied pretty verbatim from aggregate_expression.cpp, avoid duplication
 	case ExpressionType::WINDOW_SUM:
 		if (children[0]->IsScalar()) {
 			stats.has_stats = false;
