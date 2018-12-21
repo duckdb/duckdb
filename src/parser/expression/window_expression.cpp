@@ -102,6 +102,22 @@ unique_ptr<Expression> WindowExpression::Deserialize(ExpressionDeserializeInfo *
 //! Resolve the type of the window function
 void WindowExpression::ResolveType() {
 	Expression::ResolveType();
+
+	if (start_expr) {
+		start_expr->ResolveType();
+	}
+	if (end_expr) {
+		end_expr->ResolveType();
+	}
+
+	for (auto &order : ordering.orders) {
+		order.expression->ResolveType();
+	}
+
+	for (auto &part : partitions) {
+		part->ResolveType();
+	}
+
 	switch (type) {
 
 	case ExpressionType::WINDOW_SUM:
