@@ -11,6 +11,17 @@ unique_ptr<Expression> SQLNodeVisitor::Visit(AggregateExpression &expr) {
 	expr.AcceptChildren(this);
 	return nullptr;
 }
+unique_ptr<Expression> SQLNodeVisitor::Visit(WindowExpression &expr) {
+	// FIXME is this enough?
+	expr.AcceptChildren(this);
+	for (size_t expr_idx = 0; expr_idx < expr.partitions.size(); expr_idx++) {
+		AcceptChild(&expr.partitions[expr_idx]);
+	}
+	for (size_t expr_idx = 0; expr_idx < expr.ordering.orders.size(); expr_idx++) {
+		AcceptChild(&expr.ordering.orders[expr_idx].expression);
+	}
+	return nullptr;
+}
 unique_ptr<Expression> SQLNodeVisitor::Visit(CaseExpression &expr) {
 	expr.AcceptChildren(this);
 	return nullptr;

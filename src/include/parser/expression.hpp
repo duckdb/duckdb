@@ -74,6 +74,8 @@ public:
 	 */
 	virtual bool IsAggregate();
 
+	virtual bool IsWindow();
+
 	//! Returns true if the query contains a subquery
 	virtual bool HasSubquery();
 

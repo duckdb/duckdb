@@ -69,6 +69,8 @@ public:
 
 	virtual vector<unique_ptr<Expression>> &GetSelectList() = 0;
 
+	virtual size_t GetSelectCount() = 0;
+
 	//! The type of the query node, either SetOperation or Select
 	QueryNodeType type;
 	//! DISTINCT or not

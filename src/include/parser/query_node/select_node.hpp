@@ -57,8 +57,15 @@ public:
 	//! Whether or not the query has an AGGREGATION
 	bool HasAggregation();
 
+	//! Whether or not the query has a window function
+	bool HasWindow();
+
 	vector<unique_ptr<Expression>> &GetSelectList() override {
 		return select_list;
+	}
+
+	size_t GetSelectCount() override {
+		return result_column_count;
 	}
 
 	bool Equals(const QueryNode *other) const override;

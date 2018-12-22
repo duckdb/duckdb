@@ -128,3 +128,10 @@ void LogicalOperatorVisitor::Visit(LogicalCopy &op) {
 void LogicalOperatorVisitor::Visit(LogicalExplain &op) {
 	VisitOperator(op);
 }
+
+void LogicalOperatorVisitor::Visit(LogicalWindow &op) {
+	VisitOperator(op);
+	for (auto &exp : op.expressions) {
+		exp->Accept(this);
+	}
+}

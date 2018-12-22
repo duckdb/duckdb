@@ -40,6 +40,10 @@ public:
 		return left->GetSelectList();
 	}
 
+	size_t GetSelectCount() override {
+		return left->GetSelectCount();
+	}
+
 	bool Equals(const QueryNode *other) const override;
 	//! Create a copy of this SelectNode
 	unique_ptr<QueryNode> Copy() override;

@@ -9,79 +9,6 @@
 using namespace duckdb;
 using namespace std;
 
-int compare_tuple(ChunkCollection &sort_by, OrderByDescription &desc, size_t left, size_t right) {
-	for (size_t i = 0; i < desc.orders.size(); i++) {
-		Value left_value = sort_by.GetValue(i, left);
-		Value right_value = sort_by.GetValue(i, right);
-		if (ValueOperations::Equals(left_value, right_value)) {
-			continue;
-		}
-		auto order_type = desc.orders[i].type;
-		return ValueOperations::LessThan(left_value, right_value) ? (order_type == OrderType::ASCENDING ? -1 : 1)
-		                                                          : (order_type == OrderType::ASCENDING ? 1 : -1);
-	}
-	return 0;
-}
-
-static int64_t _quicksort_initial(ChunkCollection &sort_by, OrderByDescription &desc, uint64_t *result) {
-	// select pivot
-	int64_t pivot = 0;
-	int64_t low = 0, high = sort_by.count - 1;
-	// now insert elements
-	for (size_t i = 1; i < sort_by.count; i++) {
-		if (compare_tuple(sort_by, desc, i, pivot) <= 0) {
-			result[low++] = i;
-		} else {
-			result[high--] = i;
-		}
-	}
-	assert(low == high);
-	result[low] = pivot;
-	return low;
-}
-
-static void _quicksort_inplace(ChunkCollection &sort_by, OrderByDescription &desc, uint64_t *result, int64_t left,
-                               int64_t right) {
-	if (left >= right) {
-		return;
-	}
-
-	int64_t middle = left + (right - left) / 2;
-	int64_t pivot = result[middle];
-	// move the mid point value to the front.
-	int64_t i = left + 1;
-	int64_t j = right;
-
-	std::swap(result[middle], result[left]);
-	while (i <= j) {
-		while (i <= j && compare_tuple(sort_by, desc, result[i], pivot) <= 0) {
-			i++;
-		}
-
-		while (i <= j && compare_tuple(sort_by, desc, result[j], pivot) > 0) {
-			j--;
-		}
-
-		if (i < j) {
-			std::swap(result[i], result[j]);
-		}
-	}
-	std::swap(result[i - 1], result[left]);
-	int64_t part = i - 1;
-
-	_quicksort_inplace(sort_by, desc, result, left, part - 1);
-	_quicksort_inplace(sort_by, desc, result, part + 1, right);
-}
-
-static void quicksort(ChunkCollection &sort_by, OrderByDescription &desc, uint64_t *result) {
-	if (sort_by.count == 0)
-		return;
-	// quicksort
-	int64_t part = _quicksort_initial(sort_by, desc, result);
-	_quicksort_inplace(sort_by, desc, result, 0, part);
-	_quicksort_inplace(sort_by, desc, result, part + 1, sort_by.count - 1);
-}
-
 void PhysicalOrder::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOrderOperatorState *>(state_);
 	ChunkCollection &big_data = state->sorted_data;
@@ -111,14 +38,11 @@ void PhysicalOrder::_GetChunk(ClientContext &context, DataChunk &chunk, Physical
 			sort_collection.Append(sort_chunk);
 		}
 
-		if (sort_collection.count != big_data.count) {
-			throw Exception("Cardinalities of ORDER BY columns and input "
-			                "columns don't match [?]");
-		}
+		assert(sort_collection.count == big_data.count);
 
 		// now perform the actual sort
 		state->sorted_vector = unique_ptr<uint64_t[]>(new uint64_t[sort_collection.count]);
-		quicksort(sort_collection, description, state->sorted_vector.get());
+		sort_collection.Sort(description, state->sorted_vector.get());
 	}
 
 	if (state->position >= big_data.count) {

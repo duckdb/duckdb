@@ -110,7 +110,7 @@ unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(DeleteStatement &statement)
 }
 
 unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(SelectStatement &statement) {
-	auto expected_column_count = statement.node->GetSelectList().size();
+	auto expected_column_count = statement.node->GetSelectCount();
 	statement.node->Accept(this);
 	// prune the root node
 	assert(root);
@@ -182,6 +182,20 @@ static unique_ptr<Expression> extract_aggregates(unique_ptr<Expression> expr, ve
 	return expr;
 }
 
+static unique_ptr<Expression> extract_windows(unique_ptr<Expression> expr, vector<unique_ptr<Expression>> &result,
+                                              size_t ngroups) {
+	if (expr->GetExpressionClass() == ExpressionClass::WINDOW) {
+		auto colref_expr = make_unique<ColumnRefExpression>(expr->return_type, ngroups + result.size());
+		result.push_back(move(expr));
+		return colref_expr;
+	}
+
+	for (size_t expr_idx = 0; expr_idx < expr->children.size(); expr_idx++) {
+		expr->children[expr_idx] = extract_windows(move(expr->children[expr_idx]), result, ngroups);
+	}
+	return expr;
+}
+
 void LogicalPlanGenerator::Visit(SelectNode &statement) {
 	for (auto &expr : statement.select_list) {
 		AcceptChild(&expr);
@@ -206,6 +220,7 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 	if (statement.HasAggregation()) {
 		vector<unique_ptr<Expression>> aggregates;
 
+		// TODO: what about the aggregates in window partition/order/boundaries? use a visitor here?
 		for (size_t expr_idx = 0; expr_idx < statement.select_list.size(); expr_idx++) {
 			statement.select_list[expr_idx] =
 			    extract_aggregates(move(statement.select_list[expr_idx]), aggregates, statement.groupby.groups.size());
@@ -230,10 +245,25 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 
 		if (statement.HasHaving()) {
 			auto having = make_unique<LogicalFilter>(move(statement.groupby.having));
+
 			having->AddChild(move(root));
 			root = move(having);
 		}
 	}
+
+	if (statement.HasWindow()) {
+		auto win = make_unique<LogicalWindow>();
+		for (size_t expr_idx = 0; expr_idx < statement.select_list.size(); expr_idx++) {
+			// FIXME find a better way of getting colcount of logical ops
+			root->ResolveOperatorTypes();
+			statement.select_list[expr_idx] =
+			    extract_windows(move(statement.select_list[expr_idx]), win->expressions, root->types.size());
+		}
+		assert(win->expressions.size() > 0);
+		win->AddChild(move(root));
+		root = move(win);
+	}
+
 	auto proj = make_unique<LogicalProjection>(move(statement.select_list));
 	proj->AddChild(move(root));
 	root = move(proj);

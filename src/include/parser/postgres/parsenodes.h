@@ -577,6 +577,29 @@ typedef struct WindowDef {
 	int location;          /* parse location, or -1 if none/unknown */
 } WindowDef;
 
+#define FRAMEOPTION_NONDEFAULT 0x00001 /* any specified? */
+#define FRAMEOPTION_RANGE 0x00002      /* RANGE behavior */
+#define FRAMEOPTION_ROWS 0x00004       /* ROWS behavior */
+#define FRAMEOPTION_BETWEEN 0x00008    /* BETWEEN given? */
+
+#define FRAMEOPTION_START_UNBOUNDED_PRECEDING 0x00010 /* start is U. P. */
+#define FRAMEOPTION_END_UNBOUNDED_PRECEDING 0x00020   /* (disallowed) */
+#define FRAMEOPTION_START_UNBOUNDED_FOLLOWING 0x00040 /* (disallowed) */
+#define FRAMEOPTION_END_UNBOUNDED_FOLLOWING 0x00080   /* end is U. F. */
+
+#define FRAMEOPTION_START_CURRENT_ROW 0x00100 /* start is C. R. */
+#define FRAMEOPTION_END_CURRENT_ROW 0x00200   /* end is C. R. */
+
+#define FRAMEOPTION_START_VALUE_PRECEDING 0x00400 /* start is V. P. */
+#define FRAMEOPTION_END_VALUE_PRECEDING 0x00800   /* end is V. P. */
+#define FRAMEOPTION_START_VALUE_FOLLOWING 0x01000 /* start is V. F. */
+#define FRAMEOPTION_END_VALUE_FOLLOWING 0x02000   /* end is V. F. */
+
+#define FRAMEOPTION_START_VALUE (FRAMEOPTION_START_VALUE_PRECEDING | FRAMEOPTION_START_VALUE_FOLLOWING)
+#define FRAMEOPTION_END_VALUE (FRAMEOPTION_END_VALUE_PRECEDING | FRAMEOPTION_END_VALUE_FOLLOWING)
+
+#define FRAMEOPTION_DEFAULTS (FRAMEOPTION_RANGE | FRAMEOPTION_START_UNBOUNDED_PRECEDING | FRAMEOPTION_END_CURRENT_ROW)
+
 typedef struct FuncCall {
 	NodeTag type;
 	List *funcname;         /* qualified name of function */

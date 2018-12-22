@@ -15,7 +15,7 @@
 
 namespace duckdb {
 
-//! A tuple contains a byte reprensetation of a single tuple stored row-wise
+//! A tuple contains a byte representation of a single tuple stored row-wise
 struct Tuple {
 	size_t size;
 	unique_ptr<uint8_t[]> data;
@@ -57,6 +57,10 @@ public:
 	//! Returns the constant per-tuple size (only if the size is constant)
 	inline size_t TupleSize() {
 		return base_size;
+	}
+
+	inline size_t TypeSize() {
+		return type_sizes.size();
 	}
 
 	//! Compares two tuples. Returns 0 if they are equal, or else returns an

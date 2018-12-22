@@ -19,3 +19,4 @@
 #include "planner/operator/logical_table_function.hpp"
 #include "planner/operator/logical_union.hpp"
 #include "planner/operator/logical_update.hpp"
+#include "planner/operator/logical_window.hpp"

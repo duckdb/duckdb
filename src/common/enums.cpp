@@ -65,6 +65,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "FILTER";
 	case LogicalOperatorType::AGGREGATE_AND_GROUP_BY:
 		return "AGGREGATE_AND_GROUP_BY";
+	case LogicalOperatorType::WINDOW:
+		return "WINDOW";
 	case LogicalOperatorType::LIMIT:
 		return "LIMIT";
 	case LogicalOperatorType::ORDER_BY:
@@ -131,6 +133,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "LIMIT";
 	case PhysicalOperatorType::AGGREGATE:
 		return "AGGREGATE";
+	case PhysicalOperatorType::WINDOW:
+		return "WINDOW";
 	case PhysicalOperatorType::HASH_GROUP_BY:
 		return "HASH_GROUP_BY";
 	case PhysicalOperatorType::SORT_GROUP_BY:
@@ -259,6 +263,28 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "AVG";
 	case ExpressionType::AGGREGATE_FIRST:
 		return "FIRST";
+	case ExpressionType::AGGREGATE_STDDEV_SAMP:
+		return "AGGREGATE_STDDEV_SAMP";
+	case ExpressionType::WINDOW_SUM:
+		return "SUM";
+	case ExpressionType::WINDOW_COUNT_STAR:
+		return "COUNT_STAR";
+	case ExpressionType::WINDOW_MIN:
+		return "MIN";
+	case ExpressionType::WINDOW_MAX:
+		return "MAX";
+	case ExpressionType::WINDOW_AVG:
+		return "AVG";
+	case ExpressionType::WINDOW_RANK:
+		return "RANK";
+	case ExpressionType::WINDOW_RANK_DENSE:
+		return "RANK_DENSE";
+	case ExpressionType::WINDOW_ROW_NUMBER:
+		return "ROW_NUMBER";
+	case ExpressionType::WINDOW_FIRST_VALUE:
+		return "FIRST_VALUE";
+	case ExpressionType::WINDOW_LAST_VALUE:
+		return "LAST_VALUE";
 	case ExpressionType::FUNCTION:
 		return "FUNCTION";
 	case ExpressionType::OPERATOR_CASE_EXPR:
@@ -295,8 +321,6 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "COMPARE_NOT_BETWEEN";
 	case ExpressionType::VALUE_DEFAULT:
 		return "VALUE_DEFAULT";
-	case ExpressionType::AGGREGATE_STDDEV_SAMP:
-		return "AGGREGATE_STDDEV_SAMP";
 	case ExpressionType::INVALID:
 		break;
 	}

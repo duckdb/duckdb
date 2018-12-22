@@ -24,6 +24,14 @@ bool Expression::IsAggregate() {
 	return is_aggregate;
 }
 
+bool Expression::IsWindow() {
+	bool is_window = false;
+	for (auto &child : children) {
+		is_window |= child->IsWindow();
+	}
+	return is_window;
+}
+
 bool Expression::IsScalar() {
 	bool is_scalar = true;
 	for (auto &child : children) {

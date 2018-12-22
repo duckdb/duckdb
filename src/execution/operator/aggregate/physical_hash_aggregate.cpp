@@ -89,8 +89,6 @@ void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk, 
 	}
 	// we finished the child chunk
 	// actually compute the final projection list now
-	//	ExpressionExecutor executor(state, context, false);
-	//	executor.Execute(select_list, chunk);
 
 	size_t chunk_index = 0;
 	if (state->group_chunk.column_count + state->aggregate_chunk.column_count == chunk.column_count) {
