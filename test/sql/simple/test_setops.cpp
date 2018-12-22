@@ -121,3 +121,20 @@ TEST_CASE("Test nested EXCEPT", "[setop]") {
 	result = con.Query("select * from a except select * from b except select * from c");
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
 }
+
+TEST_CASE("Test UNION type casting", "[setop]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	// type casting in single union
+	result = con.Query("SELECT 1 UNION SELECT 1.0");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	// type casting in nested union
+	result = con.Query("SELECT 1 UNION (SELECT 1.0 UNION SELECT 1.0 UNION SELECT 1.0) UNION SELECT 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	result = con.Query("SELECT 1 UNION (SELECT '1' UNION SELECT '1' UNION SELECT '1') UNION SELECT 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+}

@@ -11,6 +11,7 @@ using namespace std;
 void ExtractCorrelatedExpressions(LogicalOperator *op, SubqueryExpression *subquery, size_t subquery_table_index,
                                   vector<JoinCondition> &join_conditions);
 
+
 unique_ptr<LogicalOperator> SubqueryRewriter::Rewrite(unique_ptr<LogicalOperator> plan) {
 	if (plan->type == LogicalOperatorType::FILTER) {
 		// rewrite subqueries within a filter

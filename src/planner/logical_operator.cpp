@@ -36,6 +36,20 @@ string LogicalOperator::ParamsToString() const {
 	return result;
 }
 
+void LogicalOperator::ResolveOperatorTypes() {
+	// if (types.size() > 0) {
+	// 	// types already resolved for this node
+	// 	return;
+	// }
+	types.clear();
+	// first resolve child types
+	for (auto &child : children) {
+		child->ResolveOperatorTypes();
+	}
+	// now resolve the types for this operator
+	ResolveTypes();
+}
+
 string LogicalOperator::ToString() const {
 	string result = LogicalOperatorToString(type);
 	result += ParamsToString();

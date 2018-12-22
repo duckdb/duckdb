@@ -44,18 +44,7 @@ public:
 	//! operator
 	virtual vector<string> GetNames() = 0;
 	//! Resolve the types of the logical operator and its children
-	void ResolveOperatorTypes() {
-		if (types.size() > 0) {
-			// types already resolved for this node
-			return;
-		}
-		// first resolve child types
-		for (auto &child : children) {
-			child->ResolveOperatorTypes();
-		}
-		// now resolve the types for this operator
-		ResolveTypes();
-	}
+	void ResolveOperatorTypes();
 
 	virtual string ParamsToString() const;
 	string ToString() const override;
