@@ -16,6 +16,7 @@ unique_ptr<Expression> ColumnRefExpression::Copy() {
 	auto copy = make_unique<ColumnRefExpression>(column_name, table_name);
 	copy->CopyProperties(*this);
 	copy->binding = binding;
+	copy->depth = depth;
 	copy->index = index;
 	copy->reference = reference;
 	return copy;
@@ -27,12 +28,14 @@ void ColumnRefExpression::Serialize(Serializer &serializer) {
 	serializer.WriteString(table_name);
 	serializer.WriteString(column_name);
 	serializer.Write<size_t>(index);
+	serializer.Write<size_t>(depth);
 }
 
 unique_ptr<Expression> ColumnRefExpression::Deserialize(ExpressionDeserializeInfo *info, Deserializer &source) {
 	auto table_name = source.Read<string>();
 	auto column_name = source.Read<string>();
 	auto index = source.Read<size_t>();
+	auto depth = source.Read<size_t>();
 
 	if (info->children.size() > 0) {
 		throw SerializationException("ColumnRef cannot have children!");
@@ -40,6 +43,7 @@ unique_ptr<Expression> ColumnRefExpression::Deserialize(ExpressionDeserializeInf
 
 	auto expression = make_unique<ColumnRefExpression>(column_name, table_name);
 	expression->index = index;
+	expression->depth = depth;
 	return expression;
 }
 

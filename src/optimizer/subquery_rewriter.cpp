@@ -8,9 +8,8 @@
 using namespace duckdb;
 using namespace std;
 
-void ExtractCorrelatedExpressions(LogicalOperator *op, SubqueryExpression *subquery, size_t subquery_table_index,
+bool ExtractCorrelatedExpressions(LogicalOperator *op, SubqueryExpression *subquery, size_t subquery_table_index,
                                   vector<JoinCondition> &join_conditions);
-
 
 unique_ptr<LogicalOperator> SubqueryRewriter::Rewrite(unique_ptr<LogicalOperator> plan) {
 	if (plan->type == LogicalOperatorType::FILTER) {
@@ -167,7 +166,9 @@ bool SubqueryRewriter::RewriteExistsClause(LogicalFilter &filter, OperatorExpres
 
 	// step 2: find correlations to add to the list of join conditions
 	vector<JoinCondition> join_conditions;
-	ExtractCorrelatedExpressions(node, subquery, subquery_table_index, join_conditions);
+	if (!ExtractCorrelatedExpressions(node, subquery, subquery_table_index, join_conditions)) {
+		return false;
+	}
 
 	// unlike equality comparison with subquery we only have the correlated
 	// expressions as join condition
@@ -233,7 +234,9 @@ bool SubqueryRewriter::RewriteSubqueryComparison(LogicalFilter &filter, Comparis
 	size_t old_groups = aggr->groups.size();
 	// step 2: find correlations to add to the list of join conditions
 	vector<JoinCondition> join_conditions;
-	ExtractCorrelatedExpressions(aggr, subquery, subquery_table_index, join_conditions);
+	if (!ExtractCorrelatedExpressions(aggr, subquery, subquery_table_index, join_conditions)) {
+		return false;
+	}
 
 	// we might have added new groups
 	// since groups occur BEFORE aggregates in the output of the aggregate, we need to shift column references to
@@ -287,7 +290,7 @@ bool SubqueryRewriter::RewriteSubqueryComparison(LogicalFilter &filter, Comparis
 	return true;
 }
 
-void ExtractCorrelatedExpressions(LogicalOperator *op, SubqueryExpression *subquery, size_t subquery_table_index,
+bool ExtractCorrelatedExpressions(LogicalOperator *op, SubqueryExpression *subquery, size_t subquery_table_index,
                                   vector<JoinCondition> &join_conditions) {
 	// we look through the subquery to find the matching correlation expression
 	// using the Column Depth a correlating expression will have a column ref
@@ -382,4 +385,19 @@ void ExtractCorrelatedExpressions(LogicalOperator *op, SubqueryExpression *subqu
 		// add the join condition
 		join_conditions.push_back(move(condition));
 	}
+
+	// check if there are any correlated column references left
+	// if there are any we couldn't extract then the subquery cannot be rewritten
+	auto subquery_op = AbstractOperator(op);
+	for (auto it = subquery_op.begin(); it != subquery_op.end(); it++) {
+		if (it->type == AbstractOperatorType::ABSTRACT_EXPRESSION) {
+			if (it->value.expr->type == ExpressionType::COLUMN_REF) {
+				auto colref = (ColumnRefExpression *)it->value.expr;
+				if (colref->depth > 0) {
+					return false;
+				}
+			}
+		}
+	}
+	return true;
 }

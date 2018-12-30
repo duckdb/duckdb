@@ -294,7 +294,7 @@ static unique_ptr<LogicalOperator> CastSetOpToTypes(vector<TypeId> &types, uniqu
 		node->ResolveOperatorTypes();
 		assert(types.size() == node->types.size());
 		bool require_cast = false;
-		for(size_t i = 0; i < types.size(); i++) {
+		for (size_t i = 0; i < types.size(); i++) {
 			if (node->types[i] != types[i]) {
 				require_cast = true;
 				break;
@@ -307,7 +307,7 @@ static unique_ptr<LogicalOperator> CastSetOpToTypes(vector<TypeId> &types, uniqu
 		// need to perform a cast, push a projection
 		vector<unique_ptr<Expression>> select_list;
 		select_list.reserve(types.size());
-		for(size_t i = 0; i < types.size(); i++) {
+		for (size_t i = 0; i < types.size(); i++) {
 			unique_ptr<Expression> result = make_unique<ColumnRefExpression>(node->types[i], i);
 			if (node->types[i] != types[i]) {
 				result = make_unique<CastExpression>(types[i], move(result));
