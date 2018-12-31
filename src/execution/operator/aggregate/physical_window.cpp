@@ -17,6 +17,16 @@ PhysicalWindow::PhysicalWindow(LogicalOperator &op, vector<unique_ptr<Expression
     : PhysicalOperator(type, op.types), select_list(std::move(select_list)) {
 }
 
+static bool EqualsSubset(vector<Value> &a, vector<Value> &b, size_t start, size_t end) {
+	assert(start <= end);
+	for (size_t i = start; i < end; i++) {
+		if (a[i] != b[i]) {
+			return false;
+		}
+	}
+	return true;
+}
+
 static void MaterializeExpression(ClientContext &context, Expression *expr, ChunkCollection &input,
                                   ChunkCollection &output) {
 	ChunkCollection boundary_start_collection;
@@ -33,14 +43,315 @@ static void MaterializeExpression(ClientContext &context, Expression *expr, Chun
 	}
 }
 
-static bool EqualsSubset(vector<Value> &a, vector<Value> &b, size_t start, size_t end) {
-	assert(start <= end);
-	for (size_t i = start; i < end; i++) {
-		if (a[i] != b[i]) {
-			return false;
+static void SortCollectionForWindow(ClientContext &context, WindowExpression *wexpr, ChunkCollection &input,
+                                    ChunkCollection &output) {
+	vector<TypeId> sort_types;
+	vector<Expression *> exprs;
+	OrderByDescription odesc;
+
+	// we sort by both 1) partition by expression list and 2) order by expressions
+	for (size_t prt_idx = 0; prt_idx < wexpr->partitions.size(); prt_idx++) {
+		auto &pexpr = wexpr->partitions[prt_idx];
+		sort_types.push_back(pexpr->return_type);
+		exprs.push_back(pexpr.get());
+		odesc.orders.push_back(OrderByNode(OrderType::ASCENDING, make_unique_base<Expression, ColumnRefExpression>(
+		                                                             pexpr->return_type, exprs.size() - 1)));
+	}
+
+	for (size_t ord_idx = 0; ord_idx < wexpr->ordering.orders.size(); ord_idx++) {
+		auto &oexpr = wexpr->ordering.orders[ord_idx].expression;
+		sort_types.push_back(oexpr->return_type);
+		exprs.push_back(oexpr.get());
+		odesc.orders.push_back(
+		    OrderByNode(wexpr->ordering.orders[ord_idx].type,
+		                make_unique_base<Expression, ColumnRefExpression>(oexpr->return_type, exprs.size() - 1)));
+	}
+
+	assert(sort_types.size() > 0);
+
+	// create a chunkcollection for the results of the expressions in the window definitions
+	for (size_t i = 0; i < input.chunks.size(); i++) {
+		DataChunk sort_chunk;
+		sort_chunk.Initialize(sort_types);
+
+		ExpressionExecutor executor(*input.chunks[i], context);
+		executor.Execute(sort_chunk, [&](size_t i) { return exprs[i]; }, exprs.size());
+		sort_chunk.Verify();
+		output.Append(sort_chunk);
+	}
+
+	assert(input.count == output.count);
+
+	auto sorted_vector = unique_ptr<uint64_t[]>(new uint64_t[input.count]);
+	output.Sort(odesc, sorted_vector.get());
+
+	input.Reorder(sorted_vector.get());
+	output.Reorder(sorted_vector.get());
+}
+
+struct WindowBoundariesState {
+	size_t partition_start = 0;
+	size_t partition_end = 0;
+	size_t peer_start = 0;
+	size_t peer_end = 0;
+	ssize_t window_start = -1;
+	ssize_t window_end = -1;
+	bool is_same_partition = false;
+	bool is_peer = false;
+	vector<Value> row_prev;
+};
+
+static void UpdateWindowBoundaries(WindowExpression *wexpr, ChunkCollection &input, size_t row_idx,
+                                   ChunkCollection &boundary_start_collection, ChunkCollection &boundary_end_collection,
+                                   WindowBoundariesState &bounds) {
+	vector<Value> row_cur = input.GetRow(row_idx);
+	size_t sort_col_count = wexpr->partitions.size() + wexpr->ordering.orders.size();
+
+	// determine partition and peer group boundaries to ultimately figure out window size
+	bounds.is_same_partition = EqualsSubset(bounds.row_prev, row_cur, 0, wexpr->partitions.size());
+	bounds.is_peer = EqualsSubset(bounds.row_prev, row_cur, wexpr->partitions.size(), sort_col_count);
+	bounds.row_prev = row_cur;
+
+	if (!bounds.is_same_partition || row_idx == 0) { // special case for first row, need to init
+		bounds.partition_start = row_idx;
+		bounds.peer_start = row_idx;
+
+		// find end of partition
+		// TODO: use binary search rightmost here
+		// TODO: only do this if we need to (unbounded following, what about LAST?)
+		for (size_t row_idx_e = bounds.partition_start; row_idx_e < input.count; row_idx_e++) {
+			auto next_row = input.GetRow(row_idx_e);
+			if (!EqualsSubset(next_row, row_cur, 0, wexpr->partitions.size())) {
+				break;
+			}
+			bounds.partition_end = row_idx_e + 1;
+		}
+
+	} else if (!bounds.is_peer) {
+		bounds.peer_start = row_idx;
+	}
+
+	// TODO: we can use binary search here!
+	if (wexpr->end == WindowBoundary::CURRENT_ROW_RANGE) {
+		for (size_t row_idx_e = row_idx; row_idx_e < bounds.partition_end; row_idx_e++) {
+			auto next_row = input.GetRow(row_idx_e);
+			if (!EqualsSubset(next_row, row_cur, wexpr->partitions.size(), sort_col_count)) {
+				break;
+			}
+			bounds.peer_end = row_idx_e + 1;
 		}
 	}
-	return true;
+
+	// determine window boundaries depending on the type of expression
+	bounds.window_start = -1;
+	bounds.window_end = -1;
+
+	switch (wexpr->start) {
+	case WindowBoundary::UNBOUNDED_PRECEDING:
+		bounds.window_start = bounds.partition_start;
+		break;
+	case WindowBoundary::CURRENT_ROW_ROWS:
+		bounds.window_start = row_idx;
+		break;
+	case WindowBoundary::CURRENT_ROW_RANGE:
+		bounds.window_start = bounds.peer_start;
+		break;
+	case WindowBoundary::UNBOUNDED_FOLLOWING:
+		assert(0); // disallowed
+		break;
+	case WindowBoundary::EXPR_PRECEDING: {
+		assert(boundary_start_collection.column_count() > 0);
+		bounds.window_start = (ssize_t)row_idx - boundary_start_collection.GetValue(0, row_idx).GetNumericValue();
+		break;
+	}
+	case WindowBoundary::EXPR_FOLLOWING: {
+		assert(boundary_start_collection.column_count() > 0);
+		bounds.window_start = row_idx + boundary_start_collection.GetValue(0, row_idx).GetNumericValue();
+		break;
+	}
+
+	default:
+		throw NotImplementedException("Unsupported boundary");
+	}
+
+	switch (wexpr->end) {
+	case WindowBoundary::UNBOUNDED_PRECEDING:
+		assert(0); // disallowed
+		break;
+	case WindowBoundary::CURRENT_ROW_ROWS:
+		bounds.window_end = row_idx + 1;
+		break;
+	case WindowBoundary::CURRENT_ROW_RANGE:
+		bounds.window_end = bounds.peer_end;
+		break;
+	case WindowBoundary::UNBOUNDED_FOLLOWING:
+		bounds.window_end = bounds.partition_end;
+		break;
+	case WindowBoundary::EXPR_PRECEDING:
+		assert(boundary_end_collection.column_count() > 0);
+		bounds.window_end = (ssize_t)row_idx - boundary_end_collection.GetValue(0, row_idx).GetNumericValue() + 1;
+		break;
+	case WindowBoundary::EXPR_FOLLOWING:
+		assert(boundary_end_collection.column_count() > 0);
+		bounds.window_end = row_idx + boundary_end_collection.GetValue(0, row_idx).GetNumericValue() + 1;
+
+		break;
+	default:
+		throw NotImplementedException("Unsupported boundary");
+	}
+
+	// clamp windows to partitions if they should exceed
+	if (bounds.window_start < (ssize_t)bounds.partition_start) {
+		bounds.window_start = bounds.partition_start;
+	}
+	if (bounds.window_end > bounds.partition_end) {
+		bounds.window_end = bounds.partition_end;
+	}
+
+	if (bounds.window_start < 0 || bounds.window_end < 0) {
+		throw Exception("Failed to compute window boundaries");
+	}
+}
+
+static void ComputeWindowExpression(ClientContext &context, WindowExpression *wexpr, ChunkCollection &input,
+                                    ChunkCollection &output, size_t output_idx) {
+
+	// TODO: if we have no sort nor order by we don't have to sort and the window is everything
+	ChunkCollection sort_collection;
+	size_t sort_col_count = wexpr->partitions.size() + wexpr->ordering.orders.size();
+	if (sort_col_count > 0) {
+		SortCollectionForWindow(context, wexpr, input, sort_collection);
+	}
+
+	// evaluate inner expressions of window functions, could be more complex
+	ChunkCollection payload_collection;
+	if (wexpr->children.size() > 0) {
+		MaterializeExpression(context, wexpr->children[0].get(), input, payload_collection);
+	}
+
+	// evaluate boundaries if present.
+	// TODO optimization if those are scalars we can just use those directly
+	ChunkCollection boundary_start_collection;
+	if (wexpr->start_expr &&
+	    (wexpr->start == WindowBoundary::EXPR_PRECEDING || wexpr->start == WindowBoundary::EXPR_FOLLOWING)) {
+		MaterializeExpression(context, wexpr->start_expr.get(), input, boundary_start_collection);
+	}
+	ChunkCollection boundary_end_collection;
+	if (wexpr->end_expr &&
+	    (wexpr->end == WindowBoundary::EXPR_PRECEDING || wexpr->end == WindowBoundary::EXPR_FOLLOWING)) {
+		MaterializeExpression(context, wexpr->end_expr.get(), input, boundary_end_collection);
+	}
+
+	WindowBoundariesState bounds;
+
+	// FIXME somewhat dirty to have those all in the outer scope
+	size_t dense_rank, rank_equal, rank, row_no;
+
+	bounds.row_prev = sort_collection.GetRow(0);
+
+	// this is the main loop, go through all sorted rows and compute window function result
+	for (size_t row_idx = 0; row_idx < input.count; row_idx++) {
+
+		// now we have window start and end indices and can compute the actual aggregation
+		UpdateWindowBoundaries(wexpr, sort_collection, row_idx, boundary_start_collection, boundary_end_collection,
+		                       bounds);
+
+		if (!bounds.is_same_partition || row_idx == 0) { // special case for first row, need to init
+			dense_rank = 1;
+			rank = 1;
+			row_no = 1;
+			rank_equal = 0;
+		} else if (!bounds.is_peer) {
+			dense_rank++;
+			rank += rank_equal;
+			rank_equal = 0;
+		}
+
+		auto res = Value();
+
+		// if no values are read for window, result is NULL
+		if (bounds.window_start >= bounds.window_end) {
+			output.SetValue(output_idx, row_idx, res);
+			row_no++;
+			continue;
+		}
+
+		switch (wexpr->type) {
+		// FIXME: implement TUM method here instead
+		case ExpressionType::WINDOW_SUM: {
+			Value sum = Value::Numeric(wexpr->return_type, 0);
+			for (size_t row_idx_w = bounds.window_start; row_idx_w < bounds.window_end; row_idx_w++) {
+				sum = sum + payload_collection.GetValue(0, row_idx_w);
+			}
+			res = sum;
+			break;
+		}
+		// FIXME: implement TUM method here instead
+		case ExpressionType::WINDOW_MIN: {
+			Value min = Value::MaximumValue(wexpr->return_type);
+			for (size_t row_idx_w = bounds.window_start; row_idx_w < bounds.window_end; row_idx_w++) {
+				auto val = payload_collection.GetValue(0, row_idx_w);
+				if (val < min) {
+					min = val;
+				}
+			}
+			res = min;
+			break;
+		}
+		// FIXME: implement TUM method here instead
+		case ExpressionType::WINDOW_MAX: {
+			Value max = Value::MinimumValue(wexpr->return_type);
+			for (size_t row_idx_w = bounds.window_start; row_idx_w < bounds.window_end; row_idx_w++) {
+				auto val = payload_collection.GetValue(0, row_idx_w);
+				if (val > max) {
+					max = val;
+				}
+			}
+			res = max;
+			break;
+		}
+		// FIXME: implement TUM method here instead
+		case ExpressionType::WINDOW_AVG: {
+			double sum = 0;
+			for (size_t row_idx_w = bounds.window_start; row_idx_w < bounds.window_end; row_idx_w++) {
+				sum += payload_collection.GetValue(0, row_idx_w).GetNumericValue();
+			}
+			sum = sum / (bounds.window_end - bounds.window_start);
+			res = Value(sum);
+			break;
+		}
+		case ExpressionType::WINDOW_COUNT_STAR: {
+			res = Value::Numeric(wexpr->return_type, bounds.window_end - bounds.window_start);
+			break;
+		}
+		case ExpressionType::WINDOW_ROW_NUMBER: {
+			res = Value::Numeric(wexpr->return_type, row_no);
+			break;
+		}
+		case ExpressionType::WINDOW_RANK_DENSE: {
+			res = Value::Numeric(wexpr->return_type, dense_rank);
+			break;
+		}
+		case ExpressionType::WINDOW_RANK: {
+			res = Value::Numeric(wexpr->return_type, rank);
+			rank_equal++;
+			break;
+		}
+		case ExpressionType::WINDOW_FIRST_VALUE: {
+			res = payload_collection.GetValue(0, bounds.window_start);
+			break;
+		}
+		case ExpressionType::WINDOW_LAST_VALUE: {
+
+			res = payload_collection.GetValue(0, bounds.window_end - 1);
+			break;
+		}
+		default:
+			throw NotImplementedException("Window aggregate type %s", ExpressionTypeToString(wexpr->type).c_str());
+		}
+		output.SetValue(output_idx, row_idx, res);
+		row_no++;
+	}
 }
 
 void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
@@ -75,293 +386,12 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 		}
 
 		size_t window_output_idx = 0;
+		// we can have multiple window functions
 		for (size_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
 			assert(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::WINDOW);
 			// sort by partition and order clause in window def
 			auto wexpr = reinterpret_cast<WindowExpression *>(select_list[expr_idx].get());
-			vector<TypeId> sort_types;
-			vector<Expression *> exprs;
-			OrderByDescription odesc;
-
-			for (size_t prt_idx = 0; prt_idx < wexpr->partitions.size(); prt_idx++) {
-				auto &pexpr = wexpr->partitions[prt_idx];
-				sort_types.push_back(pexpr->return_type);
-				exprs.push_back(pexpr.get());
-				odesc.orders.push_back(OrderByNode(
-				    OrderType::ASCENDING,
-				    make_unique_base<Expression, ColumnRefExpression>(pexpr->return_type, exprs.size() - 1)));
-			}
-
-			for (size_t ord_idx = 0; ord_idx < wexpr->ordering.orders.size(); ord_idx++) {
-				auto &oexpr = wexpr->ordering.orders[ord_idx].expression;
-				sort_types.push_back(oexpr->return_type);
-				exprs.push_back(oexpr.get());
-				odesc.orders.push_back(OrderByNode(
-				    wexpr->ordering.orders[ord_idx].type,
-				    make_unique_base<Expression, ColumnRefExpression>(oexpr->return_type, exprs.size() - 1)));
-			}
-			ChunkCollection sort_collection;
-			// if we have no sort nor order by we don't have to sort and the window is everything
-			if (sort_types.size() > 0) {
-				assert(sort_types.size() > 0);
-
-				// create a chunkcollection for the results of the expressions in the window definitions
-				for (size_t i = 0; i < big_data.chunks.size(); i++) {
-					DataChunk sort_chunk;
-					sort_chunk.Initialize(sort_types);
-
-					ExpressionExecutor executor(*big_data.chunks[i], context);
-					executor.Execute(sort_chunk, [&](size_t i) { return exprs[i]; }, exprs.size());
-					sort_chunk.Verify();
-					sort_collection.Append(sort_chunk);
-				}
-
-				assert(sort_collection.count == big_data.count);
-				// sort by the window def using the expression result collection
-				auto sorted_vector = unique_ptr<uint64_t[]>(new uint64_t[big_data.count]);
-				sort_collection.Sort(odesc, sorted_vector.get());
-				// inplace reorder of big_data according to sorted_vector
-				big_data.Reorder(sorted_vector.get());
-				sort_collection.Reorder(sorted_vector.get());
-			}
-
-			// evaluate inner expressions of window functions, could be more complex
-			ChunkCollection payload_collection;
-			if (wexpr->children.size() > 0) {
-				MaterializeExpression(context, wexpr->children[0].get(), big_data, payload_collection);
-			}
-
-			// evaluate boundaries if present.
-			// TODO optimization if those are scalars we can just use those
-			ChunkCollection boundary_start_collection;
-			if (wexpr->start_expr &&
-			    (wexpr->start == WindowBoundary::EXPR_PRECEDING || wexpr->start == WindowBoundary::EXPR_FOLLOWING)) {
-				MaterializeExpression(context, wexpr->start_expr.get(), big_data, boundary_start_collection);
-			}
-			ChunkCollection boundary_end_collection;
-			if (wexpr->end_expr &&
-			    (wexpr->end == WindowBoundary::EXPR_PRECEDING || wexpr->end == WindowBoundary::EXPR_FOLLOWING)) {
-				MaterializeExpression(context, wexpr->end_expr.get(), big_data, boundary_end_collection);
-			}
-
-			// actual computation of windows, naively
-			// FIXME: implement TUM method here instead
-			ssize_t window_start = 0;
-			ssize_t window_end = 0;
-
-			size_t partition_start = 0;
-			size_t partition_end = 0;
-
-			size_t peer_start = 0;
-			size_t peer_end = 0;
-
-			// FIXME
-			size_t dense_rank = 1;
-			size_t rank_equal = 0;
-			size_t rank = 1;
-			size_t row_no = 1;
-
-			vector<Value> row_prev = sort_collection.GetRow(0);
-
-			// this is the main loop, go through all sorted rows and compute window function result
-			for (size_t row_idx = 0; row_idx < big_data.count; row_idx++) {
-				vector<Value> row_cur = sort_collection.GetRow(row_idx);
-
-				// determine partition and peer group boundaries to ultimately figure out window size
-				bool is_same_partition = EqualsSubset(row_prev, row_cur, 0, wexpr->partitions.size());
-				bool is_peer = EqualsSubset(row_prev, row_cur, wexpr->partitions.size(), sort_types.size());
-
-				if (!is_same_partition || row_idx == 0) {
-					partition_start = row_idx;
-
-					dense_rank = 1;
-					rank = 1;
-					row_no = 1;
-					rank_equal = 0;
-					peer_start = row_idx;
-
-					// find end of partition
-					// TODO: use binary search here
-					for (size_t row_idx_e = partition_start; row_idx_e < big_data.count; row_idx_e++) {
-						auto next_row = sort_collection.GetRow(row_idx_e);
-						if (!EqualsSubset(next_row, row_cur, 0, wexpr->partitions.size())) {
-							break;
-						}
-						partition_end = row_idx_e + 1;
-					}
-
-				} else if (!is_peer) {
-					peer_start = row_idx;
-
-					dense_rank++;
-					rank += rank_equal;
-					rank_equal = 0;
-				}
-
-				// TODO: we can use binary search here!
-				if (wexpr->end == WindowBoundary::CURRENT_ROW_RANGE) {
-					for (size_t row_idx_e = row_idx; row_idx_e < partition_end; row_idx_e++) {
-						auto next_row = sort_collection.GetRow(row_idx_e);
-						if (!EqualsSubset(next_row, row_cur, wexpr->partitions.size(), sort_types.size())) {
-							break;
-						}
-						peer_end = row_idx_e + 1;
-					}
-				}
-
-				row_prev = row_cur;
-
-				window_start = -1;
-				window_end = -1;
-
-				switch (wexpr->start) {
-				case WindowBoundary::UNBOUNDED_PRECEDING:
-					window_start = partition_start;
-					break;
-				case WindowBoundary::CURRENT_ROW_ROWS:
-					window_start = row_idx;
-					break;
-				case WindowBoundary::CURRENT_ROW_RANGE:
-					window_start = peer_start;
-					break;
-				case WindowBoundary::UNBOUNDED_FOLLOWING:
-					assert(0); // disallowed
-					break;
-				case WindowBoundary::EXPR_PRECEDING: {
-					assert(boundary_start_collection.column_count() > 0);
-					window_start = (ssize_t)row_idx - boundary_start_collection.GetValue(0, row_idx).GetNumericValue();
-					break;
-				}
-				case WindowBoundary::EXPR_FOLLOWING: {
-					assert(boundary_start_collection.column_count() > 0);
-					window_start = row_idx + boundary_start_collection.GetValue(0, row_idx).GetNumericValue();
-					break;
-				}
-
-				default:
-					throw NotImplementedException("Unsupported boundary");
-				}
-
-				switch (wexpr->end) {
-				case WindowBoundary::UNBOUNDED_PRECEDING:
-					assert(0); // disallowed
-					break;
-				case WindowBoundary::CURRENT_ROW_ROWS:
-					window_end = row_idx + 1;
-					break;
-				case WindowBoundary::CURRENT_ROW_RANGE:
-					window_end = peer_end;
-					break;
-				case WindowBoundary::UNBOUNDED_FOLLOWING:
-					window_end = partition_end;
-					break;
-				case WindowBoundary::EXPR_PRECEDING:
-					assert(boundary_end_collection.column_count() > 0);
-					window_end = (ssize_t)row_idx - boundary_end_collection.GetValue(0, row_idx).GetNumericValue() + 1;
-					break;
-				case WindowBoundary::EXPR_FOLLOWING:
-					assert(boundary_end_collection.column_count() > 0);
-					window_end = row_idx + boundary_end_collection.GetValue(0, row_idx).GetNumericValue() + 1;
-
-					break;
-				default:
-					throw NotImplementedException("Unsupported boundary");
-				}
-
-				// clamp windows to partitions if they should exceed
-				if (window_start < (ssize_t)partition_start) {
-					window_start = partition_start;
-				}
-				if (window_end > partition_end) {
-					window_end = partition_end;
-				}
-
-				if (window_start < 0 || window_end < 0) {
-					throw Exception("Failed to compute window boundaries");
-				}
-
-				// now we have window start and end indices and can compute the actual aggregation
-
-				// if no values are read for window, result is NULL
-				if (window_start >= window_end) {
-					window_results.SetValue(window_output_idx, row_idx, Value());
-					row_no++;
-					continue;
-				}
-
-				switch (wexpr->type) {
-				case ExpressionType::WINDOW_SUM: {
-					Value sum = Value::Numeric(wexpr->return_type, 0);
-					for (size_t row_idx_w = window_start; row_idx_w < window_end; row_idx_w++) {
-						sum = sum + payload_collection.GetValue(0, row_idx_w);
-					}
-					window_results.SetValue(window_output_idx, row_idx, sum);
-					break;
-				}
-				case ExpressionType::WINDOW_MIN: {
-					Value min = Value::MaximumValue(wexpr->return_type);
-					for (size_t row_idx_w = window_start; row_idx_w < window_end; row_idx_w++) {
-						auto val = payload_collection.GetValue(0, row_idx_w);
-						if (val < min) {
-							min = val;
-						}
-					}
-					window_results.SetValue(window_output_idx, row_idx, min);
-					break;
-				}
-				case ExpressionType::WINDOW_MAX: {
-					Value max = Value::MinimumValue(wexpr->return_type);
-					for (size_t row_idx_w = window_start; row_idx_w < window_end; row_idx_w++) {
-						auto val = payload_collection.GetValue(0, row_idx_w);
-						if (val > max) {
-							max = val;
-						}
-					}
-					window_results.SetValue(window_output_idx, row_idx, max);
-					break;
-				}
-				case ExpressionType::WINDOW_AVG: {
-					double sum = 0;
-					for (size_t row_idx_w = window_start; row_idx_w < window_end; row_idx_w++) {
-						sum += payload_collection.GetValue(0, row_idx_w).GetNumericValue();
-					}
-					sum = sum / (window_end - window_start);
-					window_results.SetValue(window_output_idx, row_idx, Value(sum));
-					break;
-				}
-				case ExpressionType::WINDOW_COUNT_STAR: {
-					window_results.SetValue(window_output_idx, row_idx,
-					                        Value::Numeric(wexpr->return_type, window_end - window_start));
-					break;
-				}
-				case ExpressionType::WINDOW_ROW_NUMBER: {
-					window_results.SetValue(window_output_idx, row_idx, Value::Numeric(wexpr->return_type, row_no));
-					break;
-				}
-				case ExpressionType::WINDOW_RANK_DENSE: {
-					window_results.SetValue(window_output_idx, row_idx, Value::Numeric(wexpr->return_type, dense_rank));
-					break;
-				}
-				case ExpressionType::WINDOW_RANK: {
-					window_results.SetValue(window_output_idx, row_idx, Value::Numeric(wexpr->return_type, rank));
-					rank_equal++;
-					break;
-				}
-				case ExpressionType::WINDOW_FIRST_VALUE: {
-					window_results.SetValue(window_output_idx, row_idx, payload_collection.GetValue(0, window_start));
-					break;
-				}
-				case ExpressionType::WINDOW_LAST_VALUE: {
-
-					window_results.SetValue(window_output_idx, row_idx, payload_collection.GetValue(0, window_end - 1));
-					break;
-				}
-				default:
-					throw NotImplementedException("Window aggregate type %s",
-					                              ExpressionTypeToString(wexpr->type).c_str());
-				}
-				row_no++;
-			}
+			ComputeWindowExpression(context, wexpr, big_data, window_results, window_output_idx);
 			window_output_idx++;
 		}
 	}
