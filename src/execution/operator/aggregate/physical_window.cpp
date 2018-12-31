@@ -28,18 +28,21 @@ static bool EqualsSubset(vector<Value> &a, vector<Value> &b, size_t start, size_
 }
 
 static void MaterializeExpression(ClientContext &context, Expression *expr, ChunkCollection &input,
-                                  ChunkCollection &output) {
+                                  ChunkCollection &output, bool scalar = false) {
 	ChunkCollection boundary_start_collection;
 	vector<TypeId> types = {expr->return_type};
 	for (size_t i = 0; i < input.chunks.size(); i++) {
 		DataChunk chunk;
 		chunk.Initialize(types);
-
 		ExpressionExecutor executor(*input.chunks[i], context);
 		executor.ExecuteExpression(expr, chunk.data[0]);
 
 		chunk.Verify();
 		output.Append(chunk);
+
+		if (scalar) {
+			break;
+		}
 	}
 }
 
@@ -101,6 +104,28 @@ struct WindowBoundariesState {
 	vector<Value> row_prev;
 };
 
+static size_t BinarySearchRightmost(ChunkCollection &input, vector<Value> row, size_t l, size_t r, size_t comp_cols) {
+	if (comp_cols == 0) {
+		return r - 1;
+	}
+	while (l < r) {
+		size_t m = floor((l + r) / 2);
+		bool less_than_equals = true;
+		for (size_t i = 0; i < comp_cols; i++) {
+			if (input.GetRow(m)[i] > row[i]) {
+				less_than_equals = false;
+				break;
+			}
+		}
+		if (less_than_equals) {
+			l = m + 1;
+		} else {
+			r = m;
+		}
+	}
+	return l - 1;
+}
+
 static void UpdateWindowBoundaries(WindowExpression *wexpr, ChunkCollection &input, size_t row_idx,
                                    ChunkCollection &boundary_start_collection, ChunkCollection &boundary_end_collection,
                                    WindowBoundariesState &bounds) {
@@ -112,34 +137,21 @@ static void UpdateWindowBoundaries(WindowExpression *wexpr, ChunkCollection &inp
 	bounds.is_peer = EqualsSubset(bounds.row_prev, row_cur, wexpr->partitions.size(), sort_col_count);
 	bounds.row_prev = row_cur;
 
+	// when the partition changes, recompute the boundaries
 	if (!bounds.is_same_partition || row_idx == 0) { // special case for first row, need to init
 		bounds.partition_start = row_idx;
 		bounds.peer_start = row_idx;
 
 		// find end of partition
-		// TODO: use binary search rightmost here
-		// TODO: only do this if we need to (unbounded following, what about LAST?)
-		for (size_t row_idx_e = bounds.partition_start; row_idx_e < input.count; row_idx_e++) {
-			auto next_row = input.GetRow(row_idx_e);
-			if (!EqualsSubset(next_row, row_cur, 0, wexpr->partitions.size())) {
-				break;
-			}
-			bounds.partition_end = row_idx_e + 1;
-		}
+		bounds.partition_end =
+		    BinarySearchRightmost(input, row_cur, bounds.partition_start, input.count, wexpr->partitions.size()) + 1;
 
 	} else if (!bounds.is_peer) {
 		bounds.peer_start = row_idx;
 	}
 
-	// TODO: we can use binary search here!
 	if (wexpr->end == WindowBoundary::CURRENT_ROW_RANGE) {
-		for (size_t row_idx_e = row_idx; row_idx_e < bounds.partition_end; row_idx_e++) {
-			auto next_row = input.GetRow(row_idx_e);
-			if (!EqualsSubset(next_row, row_cur, wexpr->partitions.size(), sort_col_count)) {
-				break;
-			}
-			bounds.peer_end = row_idx_e + 1;
-		}
+		bounds.peer_end = BinarySearchRightmost(input, row_cur, row_idx, bounds.partition_end, sort_col_count) + 1;
 	}
 
 	// determine window boundaries depending on the type of expression
@@ -161,12 +173,16 @@ static void UpdateWindowBoundaries(WindowExpression *wexpr, ChunkCollection &inp
 		break;
 	case WindowBoundary::EXPR_PRECEDING: {
 		assert(boundary_start_collection.column_count() > 0);
-		bounds.window_start = (ssize_t)row_idx - boundary_start_collection.GetValue(0, row_idx).GetNumericValue();
+		bounds.window_start =
+		    (ssize_t)row_idx -
+		    boundary_start_collection.GetValue(0, wexpr->start_expr->IsScalar() ? 0 : row_idx).GetNumericValue();
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING: {
 		assert(boundary_start_collection.column_count() > 0);
-		bounds.window_start = row_idx + boundary_start_collection.GetValue(0, row_idx).GetNumericValue();
+		bounds.window_start =
+		    row_idx +
+		    boundary_start_collection.GetValue(0, wexpr->start_expr->IsScalar() ? 0 : row_idx).GetNumericValue();
 		break;
 	}
 
@@ -189,11 +205,15 @@ static void UpdateWindowBoundaries(WindowExpression *wexpr, ChunkCollection &inp
 		break;
 	case WindowBoundary::EXPR_PRECEDING:
 		assert(boundary_end_collection.column_count() > 0);
-		bounds.window_end = (ssize_t)row_idx - boundary_end_collection.GetValue(0, row_idx).GetNumericValue() + 1;
+		bounds.window_end =
+		    (ssize_t)row_idx -
+		    boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : row_idx).GetNumericValue() + 1;
 		break;
 	case WindowBoundary::EXPR_FOLLOWING:
 		assert(boundary_end_collection.column_count() > 0);
-		bounds.window_end = row_idx + boundary_end_collection.GetValue(0, row_idx).GetNumericValue() + 1;
+		bounds.window_end =
+		    row_idx + boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : row_idx).GetNumericValue() +
+		    1;
 
 		break;
 	default:
@@ -226,20 +246,22 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 	// evaluate inner expressions of window functions, could be more complex
 	ChunkCollection payload_collection;
 	if (wexpr->children.size() > 0) {
+		// TODO: child[0] may be a scalar, don't need to materialize the whole collection then
 		MaterializeExpression(context, wexpr->children[0].get(), input, payload_collection);
 	}
 
 	// evaluate boundaries if present.
-	// TODO optimization if those are scalars we can just use those directly
 	ChunkCollection boundary_start_collection;
 	if (wexpr->start_expr &&
 	    (wexpr->start == WindowBoundary::EXPR_PRECEDING || wexpr->start == WindowBoundary::EXPR_FOLLOWING)) {
-		MaterializeExpression(context, wexpr->start_expr.get(), input, boundary_start_collection);
+		MaterializeExpression(context, wexpr->start_expr.get(), input, boundary_start_collection,
+		                      wexpr->start_expr->IsScalar());
 	}
 	ChunkCollection boundary_end_collection;
 	if (wexpr->end_expr &&
 	    (wexpr->end == WindowBoundary::EXPR_PRECEDING || wexpr->end == WindowBoundary::EXPR_FOLLOWING)) {
-		MaterializeExpression(context, wexpr->end_expr.get(), input, boundary_end_collection);
+		MaterializeExpression(context, wexpr->end_expr.get(), input, boundary_end_collection,
+		                      wexpr->end_expr->IsScalar());
 	}
 
 	WindowBoundariesState bounds;
