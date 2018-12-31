@@ -11,13 +11,11 @@
 using namespace duckdb;
 using namespace std;
 
+// this implements a sorted window functions variant
 PhysicalWindow::PhysicalWindow(LogicalOperator &op, vector<unique_ptr<Expression>> select_list,
                                PhysicalOperatorType type)
     : PhysicalOperator(type, op.types), select_list(std::move(select_list)) {
 }
-
-// TODO what if we have no PARTITION BY/ORDER?
-// this implements a sorted window functions variant
 
 static void MaterializeExpression(ClientContext &context, Expression *expr, ChunkCollection &input,
                                   ChunkCollection &output) {
@@ -35,11 +33,22 @@ static void MaterializeExpression(ClientContext &context, Expression *expr, Chun
 	}
 }
 
+static bool EqualsSubset(vector<Value> &a, vector<Value> &b, size_t start, size_t end) {
+	assert(start <= end);
+	for (size_t i = start; i < end; i++) {
+		if (a[i] != b[i]) {
+			return false;
+		}
+	}
+	return true;
+}
+
 void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalWindowOperatorState *>(state_);
 	ChunkCollection &big_data = state->tuples;
 	ChunkCollection &window_results = state->window_results;
 
+	// this is a blocking operator, so compute complete result on first invocation
 	if (state->position == 0) {
 		do {
 			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
@@ -123,7 +132,7 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 			}
 
 			// evaluate boundaries if present.
-			// TODO optimization if those are constants we can just use those
+			// TODO optimization if those are scalars we can just use those
 			ChunkCollection boundary_start_collection;
 			if (wexpr->start_expr &&
 			    (wexpr->start == WindowBoundary::EXPR_PRECEDING || wexpr->start == WindowBoundary::EXPR_FOLLOWING)) {
@@ -146,69 +155,61 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 			size_t peer_start = 0;
 			size_t peer_end = 0;
 
+			// FIXME
 			size_t dense_rank = 1;
 			size_t rank_equal = 0;
 			size_t rank = 1;
 			size_t row_no = 1;
 
-			// initialize current partition to first row
-			vector<Value> prev;
-			prev.resize(sort_types.size());
-			for (size_t p_idx = 0; p_idx < prev.size(); p_idx++) {
-				prev[p_idx] = sort_collection.GetValue(p_idx, 0);
-			}
+			vector<Value> row_prev = sort_collection.GetRow(0);
 
-			// FIXME this ungodly mess below
+			// this is the main loop, go through all sorted rows and compute window function result
 			for (size_t row_idx = 0; row_idx < big_data.count; row_idx++) {
-				for (size_t p_idx = 0; p_idx < prev.size(); p_idx++) {
-					Value s_val = sort_collection.GetValue(p_idx, row_idx);
-					Value p_val = prev[p_idx];
+				vector<Value> row_cur = sort_collection.GetRow(row_idx);
 
-					if (p_val != s_val && p_idx < wexpr->partitions.size()) {
-						partition_start = row_idx;
-						dense_rank = 1;
-						rank = 1;
-						row_no = 1;
-						rank_equal = 0;
-						peer_start = row_idx;
-						break;
-					}
-					if (p_val != s_val) {
-						dense_rank++;
-						rank += rank_equal;
-						rank_equal = 0;
-						peer_start = row_idx;
-						break;
-					}
-				}
-				for (size_t p_idx = 0; p_idx < prev.size(); p_idx++) {
-					prev[p_idx] = sort_collection.GetValue(p_idx, row_idx);
-				}
-				// find end of new partition
-				for (size_t row_idx_e = partition_start; row_idx_e < big_data.count; row_idx_e++) {
-					bool next_partition = false;
-					bool is_peer = true;
+				// determine partition and peer group boundaries to ultimately figure out window size
+				bool is_same_partition = EqualsSubset(row_prev, row_cur, 0, wexpr->partitions.size());
+				bool is_peer = EqualsSubset(row_prev, row_cur, wexpr->partitions.size(), sort_types.size());
 
-					for (size_t p_idx = 0; p_idx < prev.size(); p_idx++) {
-						Value s_val = sort_collection.GetValue(p_idx, row_idx_e);
-						Value p_val = prev[p_idx];
-						if (p_val != s_val && p_idx < wexpr->partitions.size()) {
-							next_partition = true;
+				if (!is_same_partition || row_idx == 0) {
+					partition_start = row_idx;
+
+					dense_rank = 1;
+					rank = 1;
+					row_no = 1;
+					rank_equal = 0;
+					peer_start = row_idx;
+
+					// find end of partition
+					// TODO: use binary search here
+					for (size_t row_idx_e = partition_start; row_idx_e < big_data.count; row_idx_e++) {
+						auto next_row = sort_collection.GetRow(row_idx_e);
+						if (!EqualsSubset(next_row, row_cur, 0, wexpr->partitions.size())) {
 							break;
 						}
-						if (p_val != s_val) {
-							is_peer = false;
+						partition_end = row_idx_e + 1;
+					}
+
+				} else if (!is_peer) {
+					peer_start = row_idx;
+
+					dense_rank++;
+					rank += rank_equal;
+					rank_equal = 0;
+				}
+
+				// TODO: we can use binary search here!
+				if (wexpr->end == WindowBoundary::CURRENT_ROW_RANGE) {
+					for (size_t row_idx_e = row_idx; row_idx_e < partition_end; row_idx_e++) {
+						auto next_row = sort_collection.GetRow(row_idx_e);
+						if (!EqualsSubset(next_row, row_cur, wexpr->partitions.size(), sort_types.size())) {
 							break;
 						}
-					}
-					if (next_partition) {
-						break;
-					}
-					if (is_peer) {
 						peer_end = row_idx_e + 1;
 					}
-					partition_end = row_idx_e + 1;
 				}
+
+				row_prev = row_cur;
 
 				window_start = -1;
 				window_end = -1;
@@ -267,6 +268,7 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 					throw NotImplementedException("Unsupported boundary");
 				}
 
+				// clamp windows to partitions if they should exceed
 				if (window_start < (ssize_t)partition_start) {
 					window_start = partition_start;
 				}
@@ -278,6 +280,9 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 					throw Exception("Failed to compute window boundaries");
 				}
 
+				// now we have window start and end indices and can compute the actual aggregation
+
+				// if no values are read for window, result is NULL
 				if (window_start >= window_end) {
 					window_results.SetValue(window_output_idx, row_idx, Value());
 					row_no++;

@@ -46,6 +46,8 @@ public:
 	//! Sets the value of the column at the specified index
 	void SetValue(size_t column, size_t index, Value value);
 
+	vector<Value> GetRow(size_t index);
+
 	string ToString() const {
 		return chunks.size() == 0 ? "ChunkCollection [ 0 ]"
 		                          : "ChunkCollection [ " + std::to_string(count) + " ]: \n" + chunks[0]->ToString();

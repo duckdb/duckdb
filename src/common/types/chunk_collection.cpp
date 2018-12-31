@@ -171,6 +171,16 @@ Value ChunkCollection::GetValue(size_t column, size_t index) {
 	return chunks[LocateChunk(index)]->data[column].GetValue(index % STANDARD_VECTOR_SIZE);
 }
 
+vector<Value> ChunkCollection::GetRow(size_t index) {
+	vector<Value> values;
+	values.resize(column_count());
+
+	for (size_t p_idx = 0; p_idx < column_count(); p_idx++) {
+		values[p_idx] = GetValue(p_idx, index);
+	}
+	return values;
+}
+
 void ChunkCollection::SetValue(size_t column, size_t index, Value value) {
 	chunks[LocateChunk(index)]->data[column].SetValue(index % STANDARD_VECTOR_SIZE, value);
 }
