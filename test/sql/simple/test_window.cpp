@@ -222,6 +222,16 @@ TEST_CASE("Non-default window specs", "[window]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {0, 0, 1, 1, 2, 0, 0, 1, 1, 2, 0, 0, 1, 1, 2, 0, 0, 1, 1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 2, {0, 0, 2, 2, 4, 0, 0, 2, 2, 4, 0, 0, 2, 2, 4, 0, 0, 2, 2, 4}));
 	REQUIRE(CHECK_COLUMN(result, 3, {0, 0, 1, 1, 2, 0, 0, 1, 1, 2, 0, 0, 1, 1, 2, 0, 0, 1, 1, 2}));
+
+	// unbounded following with named windows
+	result = con.Query(
+	    "SELECT four, ten/4 as two, sum(ten/4) OVER w st, last_value(ten/4) OVER w lt FROM tenk1d WINDOW w AS "
+	    "(partition by four order by ten/4 range between unbounded preceding and current row) order by four, ten/4 ");
+	REQUIRE(result->column_count() == 4);
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0, 0, 1, 1, 2, 0, 0, 1, 1, 2, 0, 0, 1, 1, 2, 0, 0, 1, 1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {0, 0, 2, 2, 4, 0, 0, 2, 2, 4, 0, 0, 2, 2, 4, 0, 0, 2, 2, 4}));
+	REQUIRE(CHECK_COLUMN(result, 3, {0, 0, 1, 1, 2, 0, 0, 1, 1, 2, 0, 0, 1, 1, 2, 0, 0, 1, 1, 2}));
 }
 
 TEST_CASE("Expressions in boundaries", "[window]") {

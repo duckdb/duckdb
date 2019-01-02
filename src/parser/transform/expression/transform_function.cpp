@@ -55,6 +55,61 @@ static ExpressionType WindowToExpressionType(string &fun_name) {
 	return ExpressionType::INVALID;
 }
 
+void Transformer::TransformWindowDef(WindowDef *window_spec, WindowExpression *expr) {
+	assert(window_spec);
+	assert(expr);
+
+	// next: partitioning/ordering expressions
+	TransformExpressionList(window_spec->partitionClause, expr->partitions);
+	TransformOrderBy(window_spec->orderClause, expr->ordering);
+
+	// finally: specifics of bounds
+	expr->start_expr = TransformExpression(window_spec->startOffset);
+	expr->end_expr = TransformExpression(window_spec->endOffset);
+
+	if ((window_spec->frameOptions & FRAMEOPTION_END_UNBOUNDED_PRECEDING) ||
+	    (window_spec->frameOptions & FRAMEOPTION_START_UNBOUNDED_FOLLOWING)) {
+		throw Exception(
+		    "Window frames starting with unbounded following or ending in unbounded preceding make no sense");
+	}
+
+	if (window_spec->frameOptions & FRAMEOPTION_START_UNBOUNDED_PRECEDING) {
+		expr->start = WindowBoundary::UNBOUNDED_PRECEDING;
+	} else if (window_spec->frameOptions & FRAMEOPTION_START_UNBOUNDED_FOLLOWING) {
+		expr->start = WindowBoundary::UNBOUNDED_FOLLOWING;
+	} else if (window_spec->frameOptions & FRAMEOPTION_START_VALUE_PRECEDING) {
+		expr->start = WindowBoundary::EXPR_PRECEDING;
+	} else if (window_spec->frameOptions & FRAMEOPTION_START_VALUE_FOLLOWING) {
+		expr->start = WindowBoundary::EXPR_FOLLOWING;
+	} else if (window_spec->frameOptions & (FRAMEOPTION_START_CURRENT_ROW | FRAMEOPTION_RANGE)) {
+		expr->start = WindowBoundary::CURRENT_ROW_RANGE;
+	} else if (window_spec->frameOptions & (FRAMEOPTION_START_CURRENT_ROW | FRAMEOPTION_ROWS)) {
+		expr->start = WindowBoundary::CURRENT_ROW_ROWS;
+	}
+
+	if (window_spec->frameOptions & FRAMEOPTION_END_UNBOUNDED_PRECEDING) {
+		expr->end = WindowBoundary::UNBOUNDED_PRECEDING;
+	} else if (window_spec->frameOptions & FRAMEOPTION_END_UNBOUNDED_FOLLOWING) {
+		expr->end = WindowBoundary::UNBOUNDED_FOLLOWING;
+	} else if (window_spec->frameOptions & FRAMEOPTION_END_VALUE_PRECEDING) {
+		expr->end = WindowBoundary::EXPR_PRECEDING;
+	} else if (window_spec->frameOptions & FRAMEOPTION_END_VALUE_FOLLOWING) {
+		expr->end = WindowBoundary::EXPR_FOLLOWING;
+	} else if (window_spec->frameOptions & (FRAMEOPTION_END_CURRENT_ROW | FRAMEOPTION_RANGE)) {
+		expr->end = WindowBoundary::CURRENT_ROW_RANGE;
+	} else if (window_spec->frameOptions & (FRAMEOPTION_END_CURRENT_ROW | FRAMEOPTION_ROWS)) {
+		expr->end = WindowBoundary::CURRENT_ROW_ROWS;
+	}
+
+	assert(expr->start != WindowBoundary::INVALID && expr->end != WindowBoundary::INVALID);
+	if (((expr->start == WindowBoundary::EXPR_PRECEDING || expr->start == WindowBoundary::EXPR_PRECEDING) &&
+	     !expr->start_expr) ||
+	    ((expr->end == WindowBoundary::EXPR_PRECEDING || expr->end == WindowBoundary::EXPR_PRECEDING) &&
+	     !expr->end_expr)) {
+		throw Exception("Failed to transform window boundary expression");
+	}
+}
+
 unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 	auto name = root->funcname;
 	string schema, function_name;
@@ -71,11 +126,6 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 	auto lowercase_name = StringUtil::Lower(function_name);
 
 	if (root->over) {
-		auto window_spec = reinterpret_cast<WindowDef *>(root->over);
-		if (window_spec->refname) {
-			// TODO
-			throw NotImplementedException("Named Windows");
-		}
 
 		auto win_fun_type = WindowToExpressionType(lowercase_name);
 		if (win_fun_type == ExpressionType::INVALID) {
@@ -90,56 +140,17 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 			}
 		}
 		auto expr = make_unique<WindowExpression>(win_fun_type, child ? move(child) : nullptr);
+		auto window_spec = reinterpret_cast<WindowDef *>(root->over);
 
-		// next: partitioning/ordering expressions
-		TransformExpressionList(window_spec->partitionClause, expr->partitions);
-		TransformOrderBy(window_spec->orderClause, expr->ordering);
-
-		// finally: specifics of bounds
-		expr->start_expr = TransformExpression(window_spec->startOffset);
-		expr->end_expr = TransformExpression(window_spec->endOffset);
-
-		if ((window_spec->frameOptions & FRAMEOPTION_END_UNBOUNDED_PRECEDING) ||
-		    (window_spec->frameOptions & FRAMEOPTION_START_UNBOUNDED_FOLLOWING)) {
-			throw Exception(
-			    "Window frames starting with unbounded following or ending in unbounded preceding make no sense");
+		if (window_spec->name) {
+			auto it = window_clauses.find(StringUtil::Lower(string(window_spec->name)));
+			if (it == window_clauses.end()) {
+				throw Exception("Could not find named window specification");
+			}
+			window_spec = it->second;
+			assert(window_spec);
 		}
-
-		if (window_spec->frameOptions & FRAMEOPTION_START_UNBOUNDED_PRECEDING) {
-			expr->start = WindowBoundary::UNBOUNDED_PRECEDING;
-		} else if (window_spec->frameOptions & FRAMEOPTION_START_UNBOUNDED_FOLLOWING) {
-			expr->start = WindowBoundary::UNBOUNDED_FOLLOWING;
-		} else if (window_spec->frameOptions & FRAMEOPTION_START_VALUE_PRECEDING) {
-			expr->start = WindowBoundary::EXPR_PRECEDING;
-		} else if (window_spec->frameOptions & FRAMEOPTION_START_VALUE_FOLLOWING) {
-			expr->start = WindowBoundary::EXPR_FOLLOWING;
-		} else if (window_spec->frameOptions & (FRAMEOPTION_START_CURRENT_ROW | FRAMEOPTION_RANGE)) {
-			expr->start = WindowBoundary::CURRENT_ROW_RANGE;
-		} else if (window_spec->frameOptions & (FRAMEOPTION_START_CURRENT_ROW | FRAMEOPTION_ROWS)) {
-			expr->start = WindowBoundary::CURRENT_ROW_ROWS;
-		}
-
-		if (window_spec->frameOptions & FRAMEOPTION_END_UNBOUNDED_PRECEDING) {
-			expr->end = WindowBoundary::UNBOUNDED_PRECEDING;
-		} else if (window_spec->frameOptions & FRAMEOPTION_END_UNBOUNDED_FOLLOWING) {
-			expr->end = WindowBoundary::UNBOUNDED_FOLLOWING;
-		} else if (window_spec->frameOptions & FRAMEOPTION_END_VALUE_PRECEDING) {
-			expr->end = WindowBoundary::EXPR_PRECEDING;
-		} else if (window_spec->frameOptions & FRAMEOPTION_END_VALUE_FOLLOWING) {
-			expr->end = WindowBoundary::EXPR_FOLLOWING;
-		} else if (window_spec->frameOptions & (FRAMEOPTION_END_CURRENT_ROW | FRAMEOPTION_RANGE)) {
-			expr->end = WindowBoundary::CURRENT_ROW_RANGE;
-		} else if (window_spec->frameOptions & (FRAMEOPTION_END_CURRENT_ROW | FRAMEOPTION_ROWS)) {
-			expr->end = WindowBoundary::CURRENT_ROW_ROWS;
-		}
-
-		assert(expr->start != WindowBoundary::INVALID && expr->end != WindowBoundary::INVALID);
-		if (((expr->start == WindowBoundary::EXPR_PRECEDING || expr->start == WindowBoundary::EXPR_PRECEDING) &&
-		     !expr->start_expr) ||
-		    ((expr->end == WindowBoundary::EXPR_PRECEDING || expr->end == WindowBoundary::EXPR_PRECEDING) &&
-		     !expr->end_expr)) {
-			throw Exception("Failed to transform window boundary expression");
-		}
+		TransformWindowDef(window_spec, expr.get());
 
 		return expr;
 	}
@@ -157,10 +168,7 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 		return make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children);
 	} else {
 		// Aggregate function
-
-		if (root->over) {
-			throw NotImplementedException("Window functions (OVER/PARTITION BY)");
-		}
+		assert(!root->over); // see above
 		if (root->agg_star) {
 			return make_unique<AggregateExpression>(agg_fun_type, make_unique<StarExpression>());
 		} else {

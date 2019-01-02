@@ -93,6 +93,7 @@ private:
 	unique_ptr<Expression> TransformExpression(postgres::Node *node);
 	//! Transform a Postgres function call into an Expression
 	unique_ptr<Expression> TransformFuncCall(postgres::FuncCall *root);
+
 	//! Transform a Postgres constant value into an Expression
 	unique_ptr<Expression> TransformConstant(postgres::A_Const *c);
 
@@ -138,6 +139,11 @@ private:
 
 	//! Transform a Postgres SELECT clause into a list of Expression
 	bool TransformExpressionList(postgres::List *list, vector<unique_ptr<Expression>> &result);
+
+	void TransformWindowDef(postgres::WindowDef *window_spec, WindowExpression *expr);
+
+	//! Holds window expressions defined by name. We need those when transforming the expressions referring to them.
+	map<string, postgres::WindowDef *> window_clauses;
 };
 
 } // namespace duckdb
