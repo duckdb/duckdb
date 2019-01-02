@@ -262,3 +262,17 @@ TEST_CASE("Expressions in boundaries", "[window]") {
 	REQUIRE(result->column_count() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 3, 6, 10, 15, 21, 28, 36, 45, 45}));
 }
+
+TEST_CASE("Window with GROUP BY", "[window]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE item(i_category VARCHAR, i_brand VARCHAR, i_price INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO item VALUES ('toys', 'fisher-price', 100)"));
+	result = con.Query("SELECT i_category, i_brand, avg(sum(i_price)) OVER (PARTITION BY i_category), rank() OVER (PARTITION BY i_category ORDER BY i_category, i_brand) rn FROM item GROUP BY i_category, i_brand;");
+	REQUIRE(CHECK_COLUMN(result, 0, {"toys"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"fisher-price"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {100}));
+	REQUIRE(CHECK_COLUMN(result, 3, {1}));
+}
