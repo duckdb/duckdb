@@ -18,6 +18,10 @@ WindowExpression::WindowExpression(ExpressionType type, unique_ptr<Expression> c
 	case ExpressionType::WINDOW_RANK:
 	case ExpressionType::WINDOW_RANK_DENSE:
 	case ExpressionType::WINDOW_PERCENT_RANK:
+	case ExpressionType::WINDOW_CUME_DIST:
+	case ExpressionType::WINDOW_LEAD:
+	case ExpressionType::WINDOW_LAG:
+	case ExpressionType::WINDOW_NTILE:
 
 		break;
 	default:
@@ -140,12 +144,14 @@ void WindowExpression::ResolveType() {
 		break;
 	case ExpressionType::WINDOW_AVG:
 	case ExpressionType::WINDOW_PERCENT_RANK:
+	case ExpressionType::WINDOW_CUME_DIST:
 		return_type = TypeId::DECIMAL;
 		break;
 	case ExpressionType::WINDOW_ROW_NUMBER:
 	case ExpressionType::WINDOW_COUNT_STAR:
 	case ExpressionType::WINDOW_RANK:
 	case ExpressionType::WINDOW_RANK_DENSE:
+	case ExpressionType::WINDOW_NTILE:
 		return_type = TypeId::BIGINT;
 		break;
 	case ExpressionType::WINDOW_MIN:
@@ -153,7 +159,14 @@ void WindowExpression::ResolveType() {
 	case ExpressionType::WINDOW_FIRST_VALUE:
 	case ExpressionType::WINDOW_LAST_VALUE:
 		if (children.size() != 1) {
-			throw Exception("Window functions FIRST_VALUE and LAST_VALUE need an expression");
+			throw Exception("Window function needs an expression");
+		}
+		return_type = children[0]->return_type;
+		break;
+	case ExpressionType::WINDOW_LEAD:
+	case ExpressionType::WINDOW_LAG:
+		if (children.size() < 1) {
+			throw Exception("Window function LEAD/LAG needs at least one expression");
 		}
 		return_type = children[0]->return_type;
 		break;

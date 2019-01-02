@@ -180,6 +180,44 @@ TEST_CASE("Wiscosin-derived window test cases", "[window]") {
 	                   "ORDER BY four, ten");
 	REQUIRE(result->column_count() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 10, 0, 0, 6, 10, 0, 0, 10}));
+
+	//	// cume_dist
+	//	result = con.Query("SELECT cast(cume_dist() OVER (PARTITION BY four ORDER BY ten)*10 as integer) FROM tenk1
+	//WHERE " 	                   "unique2 < 10 order by four, ten"); 	REQUIRE(result->column_count() == 1); 	REQUIRE(CHECK_COLUMN(result, 0,
+	//{6, 6, 10, 5, 5, 7, 10, 10, 5, 10}));
+
+	// lead/lag
+	result = con.Query("SELECT lag(ten) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 0, 0, Value(), 1, 1, 7, Value(), Value(), 1}));
+
+	result = con.Query("SELECT lead(ten) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 4, Value(), 1, 7, 9, Value(), Value(), 3, Value()}));
+
+	result =
+	    con.Query("SELECT lag(ten, four) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 4, Value(), 1, 1, 7, Value(), Value(), Value()}));
+
+	result = con.Query(
+	    "SELECT lag(ten, four, 0) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 4, 0, 1, 1, 7, 0, 0, 0}));
+
+	result = con.Query("SELECT lead(ten) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 4, Value(), 1, 7, 9, Value(), Value(), 3, Value()}));
+
+	result =
+	    con.Query("SELECT lead(ten * 2, 1) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 8, Value(), 2, 14, 18, Value(), Value(), 6, Value()}));
+
+	result = con.Query(
+	    "SELECT lead(ten * 2, 1, -1) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 8, -1, 2, 14, 18, -1, -1, 6, -1}));
 }
 
 TEST_CASE("Non-default window specs", "[window]") {

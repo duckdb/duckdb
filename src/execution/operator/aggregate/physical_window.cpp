@@ -126,6 +126,11 @@ struct WindowBoundariesState {
 	vector<Value> row_prev;
 };
 
+static bool WindowNeedsRank(WindowExpression *wexpr) {
+	return wexpr->type == ExpressionType::WINDOW_PERCENT_RANK || wexpr->type == ExpressionType::WINDOW_RANK ||
+	       wexpr->type == ExpressionType::WINDOW_RANK_DENSE;
+}
+
 static void UpdateWindowBoundaries(WindowExpression *wexpr, ChunkCollection &input, size_t row_idx,
                                    ChunkCollection &boundary_start_collection, ChunkCollection &boundary_end_collection,
                                    WindowBoundariesState &bounds) {
@@ -151,7 +156,7 @@ static void UpdateWindowBoundaries(WindowExpression *wexpr, ChunkCollection &inp
 		bounds.peer_start = row_idx;
 	}
 
-	if (wexpr->end == WindowBoundary::CURRENT_ROW_RANGE) {
+	if (wexpr->end == WindowBoundary::CURRENT_ROW_RANGE || wexpr->type == ExpressionType::WINDOW_CUME_DIST) {
 		bounds.peer_end = BinarySearchRightmost(input, row_cur, row_idx, bounds.partition_end, sort_col_count) + 1;
 	}
 
@@ -251,6 +256,19 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 		MaterializeExpression(context, wexpr->children[0].get(), input, payload_collection);
 	}
 
+	ChunkCollection leadlag_offset_collection;
+	ChunkCollection leadlag_default_collection;
+	if (wexpr->type == ExpressionType::WINDOW_LEAD || wexpr->type == ExpressionType::WINDOW_LAG) {
+		if (wexpr->children.size() > 1) {
+			MaterializeExpression(context, wexpr->children[1].get(), input, leadlag_offset_collection,
+			                      wexpr->children[1]->IsScalar());
+		}
+		if (wexpr->children.size() > 2) {
+			MaterializeExpression(context, wexpr->children[2].get(), input, leadlag_default_collection,
+			                      wexpr->children[2]->IsScalar());
+		}
+	}
+
 	// evaluate boundaries if present.
 	ChunkCollection boundary_start_collection;
 	if (wexpr->start_expr &&
@@ -292,16 +310,18 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 		UpdateWindowBoundaries(wexpr, sort_collection, row_idx, boundary_start_collection, boundary_end_collection,
 		                       bounds);
 
-		if (!bounds.is_same_partition || row_idx == 0) { // special case for first row, need to init
-			dense_rank = 1;
-			rank = 1;
-			rank_equal = 0;
-		} else if (!bounds.is_peer) {
-			dense_rank++;
-			rank += rank_equal;
-			rank_equal = 0;
+		if (WindowNeedsRank(wexpr)) {
+			if (!bounds.is_same_partition || row_idx == 0) { // special case for first row, need to init
+				dense_rank = 1;
+				rank = 1;
+				rank_equal = 0;
+			} else if (!bounds.is_peer) {
+				dense_rank++;
+				rank += rank_equal;
+				rank_equal = 0;
+			}
+			rank_equal++;
 		}
-		rank_equal++;
 
 		auto res = Value();
 
@@ -340,6 +360,35 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 			ssize_t denom = (ssize_t)bounds.partition_end - bounds.partition_start - 1;
 			double percent_rank = denom > 0 ? ((double)rank - 1) / denom : 0;
 			res = Value(percent_rank);
+			break;
+		}
+		case ExpressionType::WINDOW_LEAD:
+		case ExpressionType::WINDOW_LAG: {
+			Value def_val = Value().CastAs(wexpr->return_type);
+			size_t offset = 1;
+			if (wexpr->children.size() > 1) {
+				offset = leadlag_offset_collection.GetValue(0, wexpr->children[1]->IsScalar() ? 0 : row_idx)
+				             .GetNumericValue();
+			}
+			if (wexpr->children.size() > 2) {
+				def_val = leadlag_default_collection.GetValue(0, wexpr->children[2]->IsScalar() ? 0 : row_idx);
+			}
+			if (wexpr->type == ExpressionType::WINDOW_LEAD) {
+				ssize_t lead_idx = (ssize_t)row_idx + 1;
+				if (lead_idx < bounds.partition_end) {
+					res = payload_collection.GetValue(0, lead_idx);
+				} else {
+					res = def_val;
+				}
+			} else {
+				ssize_t lag_idx = (ssize_t)row_idx - offset;
+				if (lag_idx >= 0 && lag_idx >= bounds.partition_start) {
+					res = payload_collection.GetValue(0, lag_idx);
+				} else {
+					res = def_val;
+				}
+			}
+
 			break;
 		}
 		case ExpressionType::WINDOW_FIRST_VALUE: {

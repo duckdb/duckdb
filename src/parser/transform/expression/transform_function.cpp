@@ -52,6 +52,14 @@ static ExpressionType WindowToExpressionType(string &fun_name) {
 		return ExpressionType::WINDOW_FIRST_VALUE;
 	} else if (fun_name == "last_value" || fun_name == "last") {
 		return ExpressionType::WINDOW_LAST_VALUE;
+	} else if (fun_name == "cume_dist") {
+		return ExpressionType::WINDOW_CUME_DIST;
+	} else if (fun_name == "lead") {
+		return ExpressionType::WINDOW_LEAD;
+	} else if (fun_name == "lag") {
+		return ExpressionType::WINDOW_LAG;
+	} else if (fun_name == "ntile") {
+		return ExpressionType::WINDOW_NTILE;
 	}
 
 	return ExpressionType::INVALID;
@@ -134,14 +142,14 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 			throw Exception("Unknown/unsupported window function");
 		}
 
-		unique_ptr<Expression> child = nullptr;
+		auto expr = make_unique<WindowExpression>(win_fun_type, nullptr);
+
 		if (root->args) {
-			child = TransformExpression((Node *)root->args->head->data.ptr_value);
-			if (!child) {
-				throw Exception("Failed to transform window argument");
+			auto res = TransformExpressionList(root->args, expr->children);
+			if (!res) {
+				throw Exception("Failed to transform window function children");
 			}
 		}
-		auto expr = make_unique<WindowExpression>(win_fun_type, child ? move(child) : nullptr);
 		auto window_spec = reinterpret_cast<WindowDef *>(root->over);
 
 		if (window_spec->name) {
