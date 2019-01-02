@@ -50,6 +50,7 @@ public:
 	Value Compute(size_t start, size_t end);
 
 private:
+	void WindowSegmentValue(size_t l_idx, size_t begin, size_t end);
 	void AggregateInit();
 	void AggregateAccum(Value val);
 	Value AggegateFinal();

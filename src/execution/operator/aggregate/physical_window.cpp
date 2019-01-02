@@ -134,7 +134,8 @@ static void UpdateWindowBoundaries(WindowExpression *wexpr, ChunkCollection &inp
 
 	// determine partition and peer group boundaries to ultimately figure out window size
 	bounds.is_same_partition = EqualsSubset(bounds.row_prev, row_cur, 0, wexpr->partitions.size());
-	bounds.is_peer = EqualsSubset(bounds.row_prev, row_cur, wexpr->partitions.size(), sort_col_count);
+	bounds.is_peer =
+	    bounds.is_same_partition && EqualsSubset(bounds.row_prev, row_cur, wexpr->partitions.size(), sort_col_count);
 	bounds.row_prev = row_cur;
 
 	// when the partition changes, recompute the boundaries
@@ -266,10 +267,6 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 
 	WindowBoundariesState bounds;
 
-	// FIXME somewhat dirty to have those all in the outer scope
-	size_t dense_rank, rank_equal, rank, row_no;
-	bounds.row_prev = sort_collection.GetRow(0);
-
 	// build a segment tree for frame-adhering aggregates
 	// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
 	unique_ptr<WindowSegmentTree> segment_tree = nullptr;
@@ -286,17 +283,18 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 		// nothing
 	}
 
+	size_t dense_rank, rank_equal, rank;
+	bounds.row_prev = sort_collection.GetRow(0);
+
 	// this is the main loop, go through all sorted rows and compute window function result
 	for (size_t row_idx = 0; row_idx < input.count; row_idx++) {
 
-		// now we have window start and end indices and can compute the actual aggregation
 		UpdateWindowBoundaries(wexpr, sort_collection, row_idx, boundary_start_collection, boundary_end_collection,
 		                       bounds);
 
 		if (!bounds.is_same_partition || row_idx == 0) { // special case for first row, need to init
 			dense_rank = 1;
 			rank = 1;
-			row_no = 1;
 			rank_equal = 0;
 		} else if (!bounds.is_peer) {
 			dense_rank++;
@@ -309,7 +307,6 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 		// if no values are read for window, result is NULL
 		if (bounds.window_start >= bounds.window_end) {
 			output.SetValue(output_idx, row_idx, res);
-			row_no++;
 			continue;
 		}
 
@@ -327,7 +324,7 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 			break;
 		}
 		case ExpressionType::WINDOW_ROW_NUMBER: {
-			res = Value::Numeric(wexpr->return_type, row_no);
+			res = Value::Numeric(wexpr->return_type, row_idx - bounds.window_start + 1);
 			break;
 		}
 		case ExpressionType::WINDOW_RANK_DENSE: {
@@ -344,7 +341,6 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 			break;
 		}
 		case ExpressionType::WINDOW_LAST_VALUE: {
-
 			res = payload_collection.GetValue(0, bounds.window_end - 1);
 			break;
 		}
@@ -352,7 +348,6 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 			throw NotImplementedException("Window aggregate type %s", ExpressionTypeToString(wexpr->type).c_str());
 		}
 		output.SetValue(output_idx, row_idx, res);
-		row_no++;
 	}
 }
 
@@ -503,6 +498,13 @@ void WindowSegmentTree::Construct(ChunkCollection &input) {
 	}
 }
 
+void WindowSegmentTree::WindowSegmentValue(size_t l_idx, size_t begin, size_t end) {
+	assert(begin <= end);
+	for (size_t pos = begin; pos < end; pos++) {
+		AggregateAccum(l_idx == 0 ? input_ref->GetValue(0, pos) : levels[l_idx - 1][pos]);
+	}
+}
+
 Value WindowSegmentTree::Compute(size_t begin, size_t end) {
 	assert(input_ref);
 	AggregateInit();
@@ -510,24 +512,17 @@ Value WindowSegmentTree::Compute(size_t begin, size_t end) {
 		size_t parent_begin = begin / fanout;
 		size_t parent_end = end / fanout;
 		if (parent_begin == parent_end) {
-			for (size_t pos = begin; pos < end; pos++) {
-				AggregateAccum(l_idx == 0 ? input_ref->GetValue(0, pos) : levels[l_idx - 1][pos]);
-			}
+			WindowSegmentValue(l_idx, begin, end);
 			return AggegateFinal();
 		}
 		size_t group_begin = parent_begin * fanout;
 		if (begin != group_begin) {
-			size_t limit = group_begin + fanout;
-			for (size_t pos = begin; pos < limit; pos++) {
-				AggregateAccum(l_idx == 0 ? input_ref->GetValue(0, pos) : levels[l_idx - 1][pos]);
-			}
+			WindowSegmentValue(l_idx, begin, group_begin + fanout);
 			parent_begin++;
 		}
 		size_t group_end = parent_end * fanout;
 		if (end != group_end) {
-			for (size_t pos = group_end; pos < end; pos++) {
-				AggregateAccum(l_idx == 0 ? input_ref->GetValue(0, pos) : levels[l_idx - 1][pos]);
-			}
+			WindowSegmentValue(l_idx, group_end, end);
 		}
 		begin = parent_begin;
 		end = parent_end;
