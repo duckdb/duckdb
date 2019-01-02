@@ -279,6 +279,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "RANK";
 	case ExpressionType::WINDOW_RANK_DENSE:
 		return "RANK_DENSE";
+	case ExpressionType::WINDOW_PERCENT_RANK:
+		return "PERCENT_RANK";
 	case ExpressionType::WINDOW_ROW_NUMBER:
 		return "ROW_NUMBER";
 	case ExpressionType::WINDOW_FIRST_VALUE:

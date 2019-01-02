@@ -174,6 +174,12 @@ TEST_CASE("Wiscosin-derived window test cases", "[window]") {
 	                   "order by four, ten");
 	REQUIRE(result->column_count() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 0, 1, 1, 1, 1, 0, 1, 1}));
+
+	// percent_rank
+	result = con.Query("SELECT cast(percent_rank() OVER (PARTITION BY four ORDER BY ten)*10 as INTEGER) FROM tenk1 "
+	                   "ORDER BY four, ten");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 10, 0, 0, 6, 10, 0, 0, 10}));
 }
 
 TEST_CASE("Non-default window specs", "[window]") {

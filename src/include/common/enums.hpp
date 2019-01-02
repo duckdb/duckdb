@@ -151,9 +151,10 @@ enum class ExpressionType : uint8_t {
 
 	WINDOW_RANK = 120,
 	WINDOW_RANK_DENSE = 121,
-	WINDOW_ROW_NUMBER = 122,
-	WINDOW_FIRST_VALUE = 123,
-	WINDOW_LAST_VALUE = 124,
+	WINDOW_PERCENT_RANK = 122,
+	WINDOW_ROW_NUMBER = 123,
+	WINDOW_FIRST_VALUE = 124,
+	WINDOW_LAST_VALUE = 125,
 
 	// -----------------------------
 	// Functions

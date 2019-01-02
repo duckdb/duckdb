@@ -17,6 +17,7 @@ WindowExpression::WindowExpression(ExpressionType type, unique_ptr<Expression> c
 	case ExpressionType::WINDOW_LAST_VALUE:
 	case ExpressionType::WINDOW_RANK:
 	case ExpressionType::WINDOW_RANK_DENSE:
+	case ExpressionType::WINDOW_PERCENT_RANK:
 
 		break;
 	default:
@@ -138,6 +139,7 @@ void WindowExpression::ResolveType() {
 
 		break;
 	case ExpressionType::WINDOW_AVG:
+	case ExpressionType::WINDOW_PERCENT_RANK:
 		return_type = TypeId::DECIMAL;
 		break;
 	case ExpressionType::WINDOW_ROW_NUMBER:

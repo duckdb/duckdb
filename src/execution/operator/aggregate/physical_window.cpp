@@ -301,6 +301,7 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 			rank += rank_equal;
 			rank_equal = 0;
 		}
+		rank_equal++;
 
 		auto res = Value();
 
@@ -333,7 +334,12 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 		}
 		case ExpressionType::WINDOW_RANK: {
 			res = Value::Numeric(wexpr->return_type, rank);
-			rank_equal++;
+			break;
+		}
+		case ExpressionType::WINDOW_PERCENT_RANK: {
+			ssize_t denom = (ssize_t)bounds.partition_end - bounds.partition_start - 1;
+			double percent_rank = denom > 0 ? ((double)rank - 1) / denom : 0;
+			res = Value(percent_rank);
 			break;
 		}
 		case ExpressionType::WINDOW_FIRST_VALUE: {
@@ -347,6 +353,7 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 		default:
 			throw NotImplementedException("Window aggregate type %s", ExpressionTypeToString(wexpr->type).c_str());
 		}
+
 		output.SetValue(output_idx, row_idx, res);
 	}
 }
