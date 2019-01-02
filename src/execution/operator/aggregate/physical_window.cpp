@@ -27,6 +27,28 @@ static bool EqualsSubset(vector<Value> &a, vector<Value> &b, size_t start, size_
 	return true;
 }
 
+static size_t BinarySearchRightmost(ChunkCollection &input, vector<Value> row, size_t l, size_t r, size_t comp_cols) {
+	if (comp_cols == 0) {
+		return r - 1;
+	}
+	while (l < r) {
+		size_t m = floor((l + r) / 2);
+		bool less_than_equals = true;
+		for (size_t i = 0; i < comp_cols; i++) {
+			if (input.GetRow(m)[i] > row[i]) {
+				less_than_equals = false;
+				break;
+			}
+		}
+		if (less_than_equals) {
+			l = m + 1;
+		} else {
+			r = m;
+		}
+	}
+	return l - 1;
+}
+
 static void MaterializeExpression(ClientContext &context, Expression *expr, ChunkCollection &input,
                                   ChunkCollection &output, bool scalar = false) {
 	ChunkCollection boundary_start_collection;
@@ -103,28 +125,6 @@ struct WindowBoundariesState {
 	bool is_peer = false;
 	vector<Value> row_prev;
 };
-
-static size_t BinarySearchRightmost(ChunkCollection &input, vector<Value> row, size_t l, size_t r, size_t comp_cols) {
-	if (comp_cols == 0) {
-		return r - 1;
-	}
-	while (l < r) {
-		size_t m = floor((l + r) / 2);
-		bool less_than_equals = true;
-		for (size_t i = 0; i < comp_cols; i++) {
-			if (input.GetRow(m)[i] > row[i]) {
-				less_than_equals = false;
-				break;
-			}
-		}
-		if (less_than_equals) {
-			l = m + 1;
-		} else {
-			r = m;
-		}
-	}
-	return l - 1;
-}
 
 static void UpdateWindowBoundaries(WindowExpression *wexpr, ChunkCollection &input, size_t row_idx,
                                    ChunkCollection &boundary_start_collection, ChunkCollection &boundary_end_collection,
@@ -268,8 +268,23 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 
 	// FIXME somewhat dirty to have those all in the outer scope
 	size_t dense_rank, rank_equal, rank, row_no;
-
 	bounds.row_prev = sort_collection.GetRow(0);
+
+	// build a segment tree for frame-adhering aggregates
+	// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
+	unique_ptr<WindowSegmentTree> segment_tree = nullptr;
+	switch (wexpr->type) {
+	case ExpressionType::WINDOW_SUM:
+	case ExpressionType::WINDOW_MIN:
+	case ExpressionType::WINDOW_MAX:
+	case ExpressionType::WINDOW_AVG:
+		segment_tree = make_unique<WindowSegmentTree>(wexpr->type, wexpr->return_type, 16);
+		segment_tree->Construct(payload_collection);
+		break;
+	default:
+		break;
+		// nothing
+	}
 
 	// this is the main loop, go through all sorted rows and compute window function result
 	for (size_t row_idx = 0; row_idx < input.count; row_idx++) {
@@ -299,49 +314,14 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 		}
 
 		switch (wexpr->type) {
-		// FIXME: implement TUM method here instead
-		case ExpressionType::WINDOW_SUM: {
-			Value sum = Value::Numeric(wexpr->return_type, 0);
-			for (size_t row_idx_w = bounds.window_start; row_idx_w < bounds.window_end; row_idx_w++) {
-				sum = sum + payload_collection.GetValue(0, row_idx_w);
-			}
-			res = sum;
+		case ExpressionType::WINDOW_SUM:
+		case ExpressionType::WINDOW_MIN:
+		case ExpressionType::WINDOW_MAX:
+		case ExpressionType::WINDOW_AVG:
+			assert(segment_tree);
+			res = segment_tree->Compute(bounds.window_start, bounds.window_end);
 			break;
-		}
-		// FIXME: implement TUM method here instead
-		case ExpressionType::WINDOW_MIN: {
-			Value min = Value::MaximumValue(wexpr->return_type);
-			for (size_t row_idx_w = bounds.window_start; row_idx_w < bounds.window_end; row_idx_w++) {
-				auto val = payload_collection.GetValue(0, row_idx_w);
-				if (val < min) {
-					min = val;
-				}
-			}
-			res = min;
-			break;
-		}
-		// FIXME: implement TUM method here instead
-		case ExpressionType::WINDOW_MAX: {
-			Value max = Value::MinimumValue(wexpr->return_type);
-			for (size_t row_idx_w = bounds.window_start; row_idx_w < bounds.window_end; row_idx_w++) {
-				auto val = payload_collection.GetValue(0, row_idx_w);
-				if (val > max) {
-					max = val;
-				}
-			}
-			res = max;
-			break;
-		}
-		// FIXME: implement TUM method here instead
-		case ExpressionType::WINDOW_AVG: {
-			double sum = 0;
-			for (size_t row_idx_w = bounds.window_start; row_idx_w < bounds.window_end; row_idx_w++) {
-				sum += payload_collection.GetValue(0, row_idx_w).GetNumericValue();
-			}
-			sum = sum / (bounds.window_end - bounds.window_start);
-			res = Value(sum);
-			break;
-		}
+
 		case ExpressionType::WINDOW_COUNT_STAR: {
 			res = Value::Numeric(wexpr->return_type, bounds.window_end - bounds.window_start);
 			break;
@@ -407,14 +387,14 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 			window_results.Append(window_chunk);
 		}
 
+		assert(window_results.column_count() == select_list.size());
 		size_t window_output_idx = 0;
 		// we can have multiple window functions
 		for (size_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
 			assert(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::WINDOW);
 			// sort by partition and order clause in window def
 			auto wexpr = reinterpret_cast<WindowExpression *>(select_list[expr_idx].get());
-			ComputeWindowExpression(context, wexpr, big_data, window_results, window_output_idx);
-			window_output_idx++;
+			ComputeWindowExpression(context, wexpr, big_data, window_results, window_output_idx++);
 		}
 	}
 
@@ -438,4 +418,120 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 
 unique_ptr<PhysicalOperatorState> PhysicalWindow::GetOperatorState(ExpressionExecutor *parent) {
 	return make_unique<PhysicalWindowOperatorState>(children[0].get(), parent);
+}
+
+void WindowSegmentTree::AggregateInit() {
+	switch (window_type) {
+	case ExpressionType::WINDOW_SUM:
+	case ExpressionType::WINDOW_AVG:
+		aggregate = Value::Numeric(payload_type, 0);
+		break;
+	case ExpressionType::WINDOW_MIN:
+		aggregate = Value::MaximumValue(payload_type);
+		break;
+	case ExpressionType::WINDOW_MAX:
+		aggregate = Value::MinimumValue(payload_type);
+		break;
+	default:
+		throw NotImplementedException("Window Type");
+	}
+	n_aggregated = 0;
+}
+
+void WindowSegmentTree::AggregateAccum(Value val) {
+	switch (window_type) {
+	case ExpressionType::WINDOW_SUM:
+	case ExpressionType::WINDOW_AVG:
+		aggregate = aggregate + val;
+		break;
+	case ExpressionType::WINDOW_MIN:
+		if (val < aggregate) {
+			aggregate = val;
+		}
+		break;
+	case ExpressionType::WINDOW_MAX:
+		if (val > aggregate) {
+			aggregate = val;
+		}
+		break;
+	default:
+		throw NotImplementedException("Window Type");
+	}
+	n_aggregated++;
+}
+
+Value WindowSegmentTree::AggegateFinal() {
+	if (n_aggregated == 0) {
+		return Value().CastAs(payload_type);
+	}
+	switch (window_type) {
+	case ExpressionType::WINDOW_SUM:
+	case ExpressionType::WINDOW_MIN:
+	case ExpressionType::WINDOW_MAX:
+		return aggregate;
+	case ExpressionType::WINDOW_AVG:
+		return aggregate / Value::Numeric(payload_type, n_aggregated);
+	default:
+		throw NotImplementedException("Window Type");
+	}
+
+	return aggregate;
+}
+
+void WindowSegmentTree::Construct(ChunkCollection &input) {
+	assert(input.column_count() == 1);
+	AggregateInit();
+	input_ref = &input;
+	// level 0 is data itself
+	size_t level_size;
+	while ((level_size = (levels.size() == 0 ? input_ref->count : levels[levels.size() - 1].size())) > 1) {
+		vector<Value> nl;
+		size_t fanout_count = 0;
+		for (size_t pos = 0; pos < level_size; pos++) {
+			AggregateAccum((levels.size() == 0 ? input_ref->GetValue(0, pos) : levels[levels.size() - 1][pos]));
+			fanout_count++;
+			if (fanout_count == fanout) {
+				nl.push_back(AggegateFinal());
+				AggregateInit();
+				fanout_count = 0;
+			}
+		}
+		if (fanout_count > 0) {
+			nl.push_back(AggegateFinal());
+		}
+		levels.push_back(nl);
+	}
+}
+
+Value WindowSegmentTree::Compute(size_t begin, size_t end) {
+	assert(input_ref);
+	AggregateInit();
+	for (size_t l_idx = 0; l_idx < levels.size() + 1; l_idx++) {
+		size_t parent_begin = begin / fanout;
+		size_t parent_end = end / fanout;
+		if (parent_begin == parent_end) {
+			for (size_t pos = begin; pos < end; pos++) {
+				AggregateAccum(l_idx == 0 ? input_ref->GetValue(0, pos) : levels[l_idx - 1][pos]);
+			}
+			return AggegateFinal();
+		}
+		size_t group_begin = parent_begin * fanout;
+		if (begin != group_begin) {
+			size_t limit = group_begin + fanout;
+			for (size_t pos = begin; pos < limit; pos++) {
+				AggregateAccum(l_idx == 0 ? input_ref->GetValue(0, pos) : levels[l_idx - 1][pos]);
+			}
+			parent_begin++;
+		}
+		size_t group_end = parent_end * fanout;
+		if (end != group_end) {
+			for (size_t pos = group_end; pos < end; pos++) {
+				AggregateAccum(l_idx == 0 ? input_ref->GetValue(0, pos) : levels[l_idx - 1][pos]);
+			}
+		}
+		begin = parent_begin;
+		end = parent_end;
+	}
+
+	return AggegateFinal();
 }
