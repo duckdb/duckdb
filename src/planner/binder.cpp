@@ -154,6 +154,8 @@ void Binder::Visit(SelectNode &statement) {
 				continue;
 			if (select->IsAggregate())
 				continue;
+			if (select->IsWindow())
+				continue;
 
 			// not an aggregate or existing GROUP REF
 			if (select->type == ExpressionType::COLUMN_REF) {
