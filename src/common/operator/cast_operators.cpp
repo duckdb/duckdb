@@ -123,19 +123,35 @@ template <> int16_t Cast::Operation(const char *left) {
 }
 
 template <> int Cast::Operation(const char *left) {
-	return stoi(left, NULL, 10);
+	try {
+		return stoi(left, NULL, 10);
+	} catch(...) {
+		throw ConversionException("Could not convert string '%s' to numeric", left);
+	}
 }
 
 template <> int64_t Cast::Operation(const char *left) {
-	return stoll(left, NULL, 10);
+	try {
+		return stoll(left, NULL, 10);
+	} catch(...) {
+		throw ConversionException("Could not convert string '%s' to numeric", left);
+	}
 }
 
 template <> uint64_t Cast::Operation(const char *left) {
-	return stoull(left, NULL, 10);
+	try {
+		return stoull(left, NULL, 10);
+	} catch(...) {
+		throw ConversionException("Could not convert string '%s' to numeric", left);
+	}
 }
 
 template <> double Cast::Operation(const char *left) {
-	return stod(left, NULL);
+	try {
+		return stod(left, NULL);
+	} catch(...) {
+		throw ConversionException("Could not convert string '%s' to numeric", left);
+	}
 }
 
 //===--------------------------------------------------------------------===//
