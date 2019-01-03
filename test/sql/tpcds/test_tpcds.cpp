@@ -13,6 +13,8 @@ TEST_CASE("Test TPC-DS SF0 Query Compilation", "[tpcds]") {
 	// create schema only
 	tpcds::dbgen(0, db);
 
+	// vector<size_t> compiling_queries = {51};
+	
 	// this is to make sure we do not get regressions in query compilation
 	vector<size_t> compiling_queries = {
 	    1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,  22,  23,  24, 25,

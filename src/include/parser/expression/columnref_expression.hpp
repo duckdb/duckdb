@@ -62,7 +62,7 @@ public:
 		return v->Visit(*this);
 	}
 
-	string GetName() override {
+	string GetName() const override {
 		return !alias.empty() ? alias : column_name;
 	}
 	ExpressionClass GetExpressionClass() override {
@@ -71,10 +71,13 @@ public:
 
 	unique_ptr<Expression> Copy() override;
 
+	void EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) override {}
+	void EnumerateChildren(std::function<void(Expression* expression)> callback) const override {}
+
 	//! Serializes an Expression to a stand-alone binary blob
 	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into an ConstantExpression
-	static unique_ptr<Expression> Deserialize(ExpressionDeserializeInfo *info, Deserializer &source);
+	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
 
 	void ResolveType() override;
 

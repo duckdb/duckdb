@@ -15,8 +15,7 @@ namespace duckdb {
 
 class CaseExpression : public Expression {
 public:
-	// this expression has 3 children, the test and the result if the test
-	// evaluates to 1 and the result if it does not
+	// this expression has 3 children, (1) the check, (2) the result if the test is true, and (3) the result if the test is false
 	CaseExpression() : Expression(ExpressionType::OPERATOR_CASE_EXPR) {
 	}
 
@@ -29,9 +28,18 @@ public:
 
 	unique_ptr<Expression> Copy() override;
 
+	void EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) override;
+	void EnumerateChildren(std::function<void(Expression* expression)> callback) const override;
+
+	//! Serializes a CaseExpression to a stand-alone binary blob
+	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into an CaseExpression
-	static unique_ptr<Expression> Deserialize(ExpressionDeserializeInfo *info, Deserializer &source);
+	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
 
 	void ResolveType() override;
+
+	unique_ptr<Expression> check;
+	unique_ptr<Expression> result_if_true;
+	unique_ptr<Expression> result_if_false;
 };
 } // namespace duckdb

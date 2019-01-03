@@ -187,7 +187,6 @@ enum class ExpressionType : uint8_t {
 	COLUMN_REF = 202,
 	FUNCTION_REF = 203,
 	TABLE_REF = 204,
-	GROUP_REF = 205,
 
 	// -----------------------------
 	// Miscellaneous
@@ -210,7 +209,6 @@ enum class ExpressionClass : uint8_t {
 	CONSTANT = 8,
 	DEFAULT = 9,
 	FUNCTION = 10,
-	GROUP_REF = 11,
 	OPERATOR = 12,
 	STAR = 13,
 	SUBQUERY = 14,

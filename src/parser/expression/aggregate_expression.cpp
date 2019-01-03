@@ -27,14 +27,11 @@ AggregateExpression::AggregateExpression(ExpressionType type, unique_ptr<Express
 	case ExpressionType::AGGREGATE_MAX:
 	case ExpressionType::AGGREGATE_FIRST:
 	case ExpressionType::AGGREGATE_STDDEV_SAMP:
-
 		break;
 	default:
 		throw NotImplementedException("Aggregate type not supported");
 	}
-	if (child) {
-		AddChild(move(child));
-	}
+	this->child = move(child);
 }
 
 //! Resolve the type of the aggregate
@@ -46,26 +43,26 @@ void AggregateExpression::ResolveType() {
 		break;
 	case ExpressionType::AGGREGATE_COUNT:
 	case ExpressionType::AGGREGATE_COUNT_DISTINCT:
-		if (children[0]->IsScalar()) {
+		if (child->IsScalar()) {
 			stats.has_stats = false;
 		} else {
-			ExpressionStatistics::Count(children[0]->stats, stats);
+			ExpressionStatistics::Count(child->stats, stats);
 		}
 		return_type = TypeId::BIGINT;
 		break;
 	case ExpressionType::AGGREGATE_MAX:
-		ExpressionStatistics::Max(children[0]->stats, stats);
-		return_type = max(children[0]->return_type, stats.MinimalType());
+		ExpressionStatistics::Max(child->stats, stats);
+		return_type = max(child->return_type, stats.MinimalType());
 		break;
 	case ExpressionType::AGGREGATE_MIN:
-		ExpressionStatistics::Min(children[0]->stats, stats);
-		return_type = max(children[0]->return_type, stats.MinimalType());
+		ExpressionStatistics::Min(child->stats, stats);
+		return_type = max(child->return_type, stats.MinimalType());
 		break;
 	case ExpressionType::AGGREGATE_SUM:
 	case ExpressionType::AGGREGATE_SUM_DISTINCT:
-		if (children[0]->IsScalar()) {
+		if (child->IsScalar()) {
 			stats.has_stats = false;
-			switch (children[0]->return_type) {
+			switch (child->return_type) {
 			case TypeId::BOOLEAN:
 			case TypeId::TINYINT:
 			case TypeId::SMALLINT:
@@ -74,17 +71,17 @@ void AggregateExpression::ResolveType() {
 				return_type = TypeId::BIGINT;
 				break;
 			default:
-				return_type = children[0]->return_type;
+				return_type = child->return_type;
 			}
 		} else {
-			ExpressionStatistics::Count(children[0]->stats, stats);
-			ExpressionStatistics::Sum(children[0]->stats, stats);
-			return_type = max(children[0]->return_type, stats.MinimalType());
+			ExpressionStatistics::Count(child->stats, stats);
+			ExpressionStatistics::Sum(child->stats, stats);
+			return_type = max(child->return_type, stats.MinimalType());
 		}
 
 		break;
 	case ExpressionType::AGGREGATE_FIRST:
-		return_type = children[0]->return_type;
+		return_type = child->return_type;
 		break;
 	case ExpressionType::AGGREGATE_STDDEV_SAMP:
 		return_type = TypeId::DECIMAL;
@@ -95,12 +92,8 @@ void AggregateExpression::ResolveType() {
 }
 
 unique_ptr<Expression> AggregateExpression::Copy() {
-	if (children.size() > 1) {
-		assert(0);
-		return nullptr;
-	}
-	auto child = children.size() == 1 ? children[0]->Copy() : nullptr;
-	auto new_aggregate = make_unique<AggregateExpression>(type, move(child));
+	auto new_child = child ? child->Copy() : nullptr;
+	auto new_aggregate = make_unique<AggregateExpression>(type, move(new_child));
 	new_aggregate->index = index;
 	new_aggregate->CopyProperties(*this);
 	return new_aggregate;
@@ -108,18 +101,15 @@ unique_ptr<Expression> AggregateExpression::Copy() {
 
 void AggregateExpression::Serialize(Serializer &serializer) {
 	Expression::Serialize(serializer);
+	serializer.WriteOptional(child);
 }
 
-unique_ptr<Expression> AggregateExpression::Deserialize(ExpressionDeserializeInfo *info, Deserializer &source) {
-	if (info->children.size() > 1) {
-		throw SerializationException("More than one child for aggregate expression!");
-	}
-
-	auto child = info->children.size() == 0 ? nullptr : move(info->children[0]);
-	return make_unique<AggregateExpression>(info->type, move(child));
+unique_ptr<Expression> AggregateExpression::Deserialize(ExpressionType type, TypeId return_type, Deserializer &source) {
+	auto child = source.ReadOptional<Expression>();
+	return make_unique<AggregateExpression>(type, move(child));
 }
 
-string AggregateExpression::GetName() {
+string AggregateExpression::GetName() const {
 	if (!alias.empty()) {
 		return alias;
 	}
@@ -141,5 +131,17 @@ string AggregateExpression::GetName() {
 		return "STDDEV_SAMP";
 	default:
 		return "UNKNOWN";
+	}
+}
+
+void AggregateExpression::EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
+	if (child) {
+		child = callback(move(child));
+	}
+}
+
+void AggregateExpression::EnumerateChildren(std::function<void(Expression* expression)> callback) const {
+	if (child) {
+		callback(child.get());
 	}
 }

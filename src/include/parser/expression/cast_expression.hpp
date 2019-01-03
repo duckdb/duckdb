@@ -16,12 +16,14 @@ namespace duckdb {
 class CastExpression : public Expression {
 public:
 	CastExpression(TypeId target, unique_ptr<Expression> child)
-	    : Expression(ExpressionType::OPERATOR_CAST, target, std::move(child)) {
+	    : Expression(ExpressionType::OPERATOR_CAST, target) {
+		assert(child);
+		this->child = move(child);
 	}
 
 	void ResolveType() override {
 		Expression::ResolveType();
-		ExpressionStatistics::Cast(children[0]->stats, stats);
+		ExpressionStatistics::Cast(child->stats, stats);
 		if (!stats.FitsInType(return_type)) {
 			return_type = stats.MinimalType();
 		}
@@ -29,11 +31,16 @@ public:
 
 	unique_ptr<Expression> Copy() override;
 
+	void EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) override;
+	void EnumerateChildren(std::function<void(Expression* expression)> callback) const override;
+
+	//! Serializes a CastExpression to a stand-alone binary blob
+	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into an CastExpression
-	static unique_ptr<Expression> Deserialize(ExpressionDeserializeInfo *info, Deserializer &source);
+	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
 
 	string ToString() const override {
-		return "CAST[" + TypeIdToString(return_type) + "](" + children[0]->ToString() + ")";
+		return "CAST[" + TypeIdToString(return_type) + "](" + child->ToString() + ")";
 	}
 
 	unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
@@ -42,5 +49,7 @@ public:
 	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::CAST;
 	}
+	//! The child of the cast expression
+	unique_ptr<Expression> child;
 };
 } // namespace duckdb

@@ -7,7 +7,6 @@
 #include "parser/expression/constant_expression.hpp"
 #include "parser/expression/default_expression.hpp"
 #include "parser/expression/function_expression.hpp"
-#include "parser/expression/groupref_expression.hpp"
 #include "parser/expression/operator_expression.hpp"
 #include "parser/expression/star_expression.hpp"
 #include "parser/expression/subquery_expression.hpp"

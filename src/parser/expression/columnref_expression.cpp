@@ -31,15 +31,11 @@ void ColumnRefExpression::Serialize(Serializer &serializer) {
 	serializer.Write<size_t>(depth);
 }
 
-unique_ptr<Expression> ColumnRefExpression::Deserialize(ExpressionDeserializeInfo *info, Deserializer &source) {
+unique_ptr<Expression> ColumnRefExpression::Deserialize(ExpressionType type, TypeId return_type, Deserializer &source) {
 	auto table_name = source.Read<string>();
 	auto column_name = source.Read<string>();
 	auto index = source.Read<size_t>();
 	auto depth = source.Read<size_t>();
-
-	if (info->children.size() > 0) {
-		throw SerializationException("ColumnRef cannot have children!");
-	}
 
 	auto expression = make_unique<ColumnRefExpression>(column_name, table_name);
 	expression->index = index;

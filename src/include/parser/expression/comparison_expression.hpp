@@ -17,7 +17,9 @@ namespace duckdb {
 class ComparisonExpression : public Expression {
 public:
 	ComparisonExpression(ExpressionType type, unique_ptr<Expression> left, unique_ptr<Expression> right)
-	    : Expression(type, TypeId::BOOLEAN, std::move(left), std::move(right)) {
+	    : Expression(type, TypeId::BOOLEAN) {
+		this->left = move(left);
+		this->right = move(right);
 	}
 
 	unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
@@ -29,9 +31,22 @@ public:
 
 	unique_ptr<Expression> Copy() override;
 
-	//! Deserializes a blob back into an OperatorExpression
-	static unique_ptr<Expression> Deserialize(ExpressionDeserializeInfo *info, Deserializer &source);
+	void EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) override;
+	void EnumerateChildren(std::function<void(Expression* expression)> callback) const override;
+	
+	//! Serializes a CastExpression to a stand-alone binary blob
+	void Serialize(Serializer &serializer) override;
+	//! Deserializes a blob back into an ComparisonExpression
+	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
+
+	string ToString() const override {
+		return left->ToString() + ExpressionTypeToOperator(type) + right->ToString();
+	}
+
 	static ExpressionType NegateComparisionExpression(ExpressionType type);
 	static ExpressionType FlipComparisionExpression(ExpressionType type);
+
+	unique_ptr<Expression> left;
+	unique_ptr<Expression> right;
 };
 } // namespace duckdb

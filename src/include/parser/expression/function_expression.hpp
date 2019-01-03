@@ -36,15 +36,22 @@ public:
 	uint64_t Hash() const override;
 	bool Equals(const Expression *other) const override;
 
-	//! Serializes an Expression to a stand-alone binary blob
-	void Serialize(Serializer &serializer) override;
-	//! Deserializes a blob back into an ConstantExpression
-	static unique_ptr<Expression> Deserialize(ExpressionDeserializeInfo *info, Deserializer &source);
+	void EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) override;
+	void EnumerateChildren(std::function<void(Expression* expression)> callback) const override;
 
+	//! Serializes a FunctionExpression to a stand-alone binary blob
+	void Serialize(Serializer &serializer) override;
+	//! Deserializes a blob back into an FunctionExpression
+	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
+
+	string ToString() const override;
+	
 	//! Schema of the function
 	string schema;
 	//! Function name
 	string function_name;
+	//! List of arguments to the function
+	vector<unique_ptr<Expression>> children;
 
 	// FIXME: remove this
 	ScalarFunctionCatalogEntry *bound_function;

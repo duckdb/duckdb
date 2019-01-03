@@ -7,7 +7,6 @@ using namespace duckdb;
 using namespace std;
 
 unique_ptr<Expression> SubqueryExpression::Copy() {
-	assert(children.size() == 0);
 	assert(!op);
 	assert(!context);
 	assert(!plan);
@@ -24,12 +23,9 @@ void SubqueryExpression::Serialize(Serializer &serializer) {
 	subquery->Serialize(serializer);
 }
 
-unique_ptr<Expression> SubqueryExpression::Deserialize(ExpressionDeserializeInfo *info, Deserializer &source) {
+unique_ptr<Expression> SubqueryExpression::Deserialize(ExpressionType type, TypeId return_type, Deserializer &source) {
 	auto subquery_type = source.Read<SubqueryType>();
 	auto subquery = QueryNode::Deserialize(source);
-	if (info->children.size() > 0) {
-		throw SerializationException("Subquery cannot have children!");
-	}
 
 	auto expression = make_unique<SubqueryExpression>();
 	expression->subquery_type = subquery_type;

@@ -12,7 +12,7 @@ FunctionExpression::FunctionExpression(string schema, string function_name, vect
     : Expression(ExpressionType::FUNCTION), schema(schema), function_name(StringUtil::Lower(function_name)),
       bound_function(nullptr) {
 	for (auto &child : children) {
-		AddChild(move(child));
+		children.push_back(move(child));
 	}
 }
 
@@ -51,18 +51,43 @@ bool FunctionExpression::Equals(const Expression *other_) const {
 		return false;
 	}
 	auto other = (FunctionExpression *)other_;
-	return schema == other->schema && function_name == other->function_name;
+	if (schema != other->schema && function_name != other->function_name) {
+		return false;
+	}
+	if (other->children.size() != children.size()) {
+		return false;
+	}
+	for(size_t i = 0; i < children.size(); i++) {
+		if (!children[i]->Equals(other->children[i].get())) {
+			return false;
+		}
+	}
+	return true;
 }
 
 void FunctionExpression::Serialize(Serializer &serializer) {
 	Expression::Serialize(serializer);
 	serializer.WriteString(function_name);
 	serializer.WriteString(schema);
+	serializer.WriteList(children);
 }
 
-unique_ptr<Expression> FunctionExpression::Deserialize(ExpressionDeserializeInfo *info, Deserializer &source) {
+unique_ptr<Expression> FunctionExpression::Deserialize(ExpressionType type, TypeId return_type, Deserializer &source) {
+	vector<unique_ptr<Expression>> children;
 	auto function_name = source.Read<string>();
-	auto function = make_unique<FunctionExpression>(function_name, info->children);
-	function->schema = source.Read<string>();
+	auto schema = source.Read<string>();
+	source.ReadList<Expression>(children);
+
+	auto function = make_unique<FunctionExpression>(function_name, children);
+	function->schema = schema;
 	return function;
 }
+
+string FunctionExpression::ToString() const {
+	string result = function_name + "(";
+	for(size_t i = 0; i < children.size(); i++) {
+		result += children[i]->ToString() + (i + 1 == children.size() ? ")" : ",");
+	}
+	return result;
+}
+	

@@ -37,15 +37,9 @@ public:
 	//! Create an Expression
 	Expression(ExpressionType type) : type(type), stats(*this) {
 	}
-	//! Create an Expression with zero, one or two children with the
-	//! specified return type
-	Expression(ExpressionType type, TypeId return_type, unique_ptr<Expression> left = nullptr,
-	           unique_ptr<Expression> right = nullptr)
+	//! Create an Expression with the specified return type
+	Expression(ExpressionType type, TypeId return_type)
 	    : type(type), return_type(return_type), stats(*this) {
-		if (left)
-			AddChild(std::move(left));
-		if (right)
-			AddChild(std::move(right));
 	}
 
 	virtual unique_ptr<Expression> Accept(SQLNodeVisitor *) = 0;
@@ -53,15 +47,9 @@ public:
 
 	//! Resolves the type for this expression based on its children
 	virtual void ResolveType() {
-		for (auto &child : children) {
+		EnumerateChildren([](Expression *child) {
 			child->ResolveType();
-		}
-	}
-
-	//! Add a child node to the Expression. Note that the order of
-	//! adding children is important in most cases
-	void AddChild(unique_ptr<Expression> child) {
-		children.push_back(std::move(child));
+		});
 	}
 
 	//! Returns true if this Expression is an aggregate or not.
@@ -98,9 +86,7 @@ public:
 		return this->Equals(&rhs);
 	}
 
-	string ToString() const override;
-
-	virtual string GetName() {
+	virtual string GetName() const {
 		return !alias.empty() ? alias : "Unknown";
 	}
 	virtual ExpressionClass GetExpressionClass() = 0;
@@ -114,17 +100,17 @@ public:
 	//! SerializationException]
 	static unique_ptr<Expression> Deserialize(Deserializer &source);
 
-	//! Enumerate over all child expressions of a given type, invoking the callback for every one. The return value of
-	//! the callback indicates the replacement of that node.
-	static void EnumerateExpressions(unique_ptr<Expression> *parent, ExpressionType type,
-	                                 std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback);
+	//! Enumerate over all children of this node, invoking the callback for each child. This method allows replacing the children using the return value.
+	virtual void EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) = 0;
+	//! Enumerate over all children of this node, invoking the callback for each child.
+	virtual void EnumerateChildren(std::function<void(Expression* expression)> callback) const = 0;
 
 	//! Clears the statistics of this expression and all child expressions
 	void ClearStatistics() {
 		stats.has_stats = false;
-		for (auto &child : children) {
+		EnumerateChildren([](Expression *child) {
 			child->ClearStatistics();
-		}
+		});
 	}
 
 	//! Type of the expression
@@ -139,10 +125,6 @@ public:
 	//! The alias of the expression, used in the SELECT clause (e.g. SELECT x +
 	//! 1 AS f)
 	string alias;
-
-	//! A list of children of the expression
-	vector<unique_ptr<Expression>> children;
-
 protected:
 	//! Copy base Expression properties from another expression to this one,
 	//! used in Copy method
@@ -152,19 +134,6 @@ protected:
 		stats = other.stats;
 		alias = other.alias;
 	}
-	void CopyChildren(Expression &other) {
-		for (auto &child : other.children) {
-			assert(child);
-			children.push_back(child->Copy());
-		}
-	}
-};
-
-//! Expression deserialize information
-struct ExpressionDeserializeInfo {
-	ExpressionType type;
-	TypeId return_type;
-	vector<unique_ptr<Expression>> children;
 };
 
 struct ExpressionHashFunction {

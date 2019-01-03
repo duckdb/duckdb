@@ -50,7 +50,6 @@ class ConjunctionExpression;
 class ConstantExpression;
 class DefaultExpression;
 class FunctionExpression;
-class GroupRefExpression;
 class OperatorExpression;
 class StarExpression;
 class SubqueryExpression;

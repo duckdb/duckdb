@@ -317,8 +317,6 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "FUNCTION_REF";
 	case ExpressionType::TABLE_REF:
 		return "TABLE_REF";
-	case ExpressionType::GROUP_REF:
-		return "GROUP_REF";
 	case ExpressionType::CAST:
 		return "CAST";
 	case ExpressionType::OPERATOR_NOT_EXISTS:
@@ -365,6 +363,10 @@ string ExpressionTypeToOperator(ExpressionType type) {
 		return "<=";
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		return ">=";
+	case ExpressionType::CONJUNCTION_AND:
+		return "AND";
+	case ExpressionType::CONJUNCTION_OR:
+		return "OR";
 	case ExpressionType::STAR:
 		return "*";
 	default:

@@ -30,10 +30,13 @@ public:
 
 	unique_ptr<Expression> Copy() override;
 
-	//! Serializes an Expression to a stand-alone binary blob
+	void EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) override {}
+	void EnumerateChildren(std::function<void(Expression* expression)> callback) const override {}
+
+	//! Serializes a ConstantExpression to a stand-alone binary blob
 	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into an ConstantExpression
-	static unique_ptr<Expression> Deserialize(ExpressionDeserializeInfo *info, Deserializer &source);
+	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
 
 	//! Resolve the type of the constant
 	void ResolveType() override;

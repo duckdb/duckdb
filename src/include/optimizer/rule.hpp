@@ -48,9 +48,9 @@ public:
 				result.push_back(AbstractOperator(op.get()));
 			}
 		} else { // AbstractOperatorType::ABSTRACT_EXPRESSION
-			for (auto &op : value.expr->children) {
-				result.push_back(AbstractOperator(op.get()));
-			}
+			value.expr->EnumerateChildren([&](Expression* expr) {
+				result.push_back(AbstractOperator(expr));
+			});
 		}
 		return result;
 	}

@@ -317,11 +317,12 @@ TEST_CASE("Expressions in boundaries", "[window]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 3, 6, 10, 15, 21, 28, 36, 45, 45}));
 }
 
-TEST_CASE("Window with GROUP BY", "[window]") {
+TEST_CASE("TPC-DS inspired micro benchmarks", "[window]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE item(i_category VARCHAR, i_brand VARCHAR, i_price INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO item VALUES ('toys', 'fisher-price', 100)"));
 	result = con.Query("SELECT i_category, i_brand, avg(sum(i_price)) OVER (PARTITION BY i_category), rank() OVER (PARTITION BY i_category ORDER BY i_category, i_brand) rn FROM item GROUP BY i_category, i_brand;");
@@ -329,4 +330,26 @@ TEST_CASE("Window with GROUP BY", "[window]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {"fisher-price"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {100}));
 	REQUIRE(CHECK_COLUMN(result, 3, {1}));
+	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+
+	// REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	// REQUIRE_NO_FAIL(con.Query("CREATE TABLE item(i_category VARCHAR, i_brand VARCHAR, i_item_sk INTEGER);"));
+	// REQUIRE_NO_FAIL(con.Query("CREATE TABLE store(s_store_name VARCHAR, s_company_name VARCHAR, s_store_sk INTEGER);"));
+	// REQUIRE_NO_FAIL(con.Query("CREATE TABLE date_dim(d_year INTEGER, d_moy INTEGER, d_date_sk INTEGER);"));
+	// REQUIRE_NO_FAIL(con.Query("CREATE TABLE store_sales(ss_sales_price DECIMAL, ss_item_sk INTEGER, ss_sold_date_sk INTEGER, ss_store_sk INTEGER);"));
+	// REQUIRE_NO_FAIL(con.Query("INSERT INTO item VALUES ('Music', 'exportischolar', 1);"));
+	// REQUIRE_NO_FAIL(con.Query("INSERT INTO store VALUES ('ought', 'Unknown', 1);"));
+	// REQUIRE_NO_FAIL(con.Query("INSERT INTO date_dim VALUES (1999, 1, 1);"));
+	// REQUIRE_NO_FAIL(con.Query("INSERT INTO store_sales VALUES (2.8, 1, 1, 1);"));
+	// result = con.Query("SELECT i_category, i_brand, s_store_name, s_company_name, d_year, d_moy, sum(ss_sales_price) sum_sales, avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year) avg_monthly_sales, rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year, d_moy) rn FROM item, store_sales, date_dim, store WHERE ss_item_sk = i_item_sk AND ss_sold_date_sk = d_date_sk AND ss_store_sk = s_store_sk AND (d_year = 1999 OR (d_year = 1999-1 AND d_moy =12) OR (d_year = 1999+1 AND d_moy =1)) GROUP BY i_category, i_brand, s_store_name, s_company_name, d_year, d_moy;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {"Music"}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {"exportischolar"}));
+	// REQUIRE(CHECK_COLUMN(result, 2, {"ought"}));
+	// REQUIRE(CHECK_COLUMN(result, 3, {"Unknown"}));
+	// REQUIRE(CHECK_COLUMN(result, 4, {1999}));
+	// REQUIRE(CHECK_COLUMN(result, 5, {1}));
+	// REQUIRE(CHECK_COLUMN(result, 6, {22.4}));
+	// REQUIRE(CHECK_COLUMN(result, 7, {22.4}));
+	// REQUIRE(CHECK_COLUMN(result, 8, {1}));
+	// REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
 }

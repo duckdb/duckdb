@@ -54,10 +54,6 @@ unique_ptr<Expression> SQLNodeVisitor::Visit(FunctionExpression &expr) {
 	expr.AcceptChildren(this);
 	return nullptr;
 }
-unique_ptr<Expression> SQLNodeVisitor::Visit(GroupRefExpression &expr) {
-	expr.AcceptChildren(this);
-	return nullptr;
-}
 unique_ptr<Expression> SQLNodeVisitor::Visit(OperatorExpression &expr) {
 	expr.AcceptChildren(this);
 	return nullptr;

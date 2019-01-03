@@ -68,7 +68,6 @@ public:
 		throw NotImplementedException("Cannot execute DEFAULT expression in ExpressionExecutor");
 	}
 	unique_ptr<Expression> Visit(FunctionExpression &expr);
-	unique_ptr<Expression> Visit(GroupRefExpression &expr);
 	unique_ptr<Expression> Visit(OperatorExpression &expr);
 	unique_ptr<Expression> Visit(SubqueryExpression &expr);
 

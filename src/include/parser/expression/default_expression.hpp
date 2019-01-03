@@ -27,11 +27,13 @@ public:
 
 	unique_ptr<Expression> Copy() override;
 
+	void EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) override {}
+	void EnumerateChildren(std::function<void(Expression* expression)> callback) const override {}
 	//! Deserializes a blob back into an DefaultExpression
-	static unique_ptr<Expression> Deserialize(ExpressionDeserializeInfo *info, Deserializer &source);
+	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
 
 	string ToString() const override {
-		return "Default";
+		return "DEFAULT";
 	}
 };
 } // namespace duckdb

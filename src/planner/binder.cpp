@@ -139,7 +139,7 @@ void Binder::Visit(SelectNode &statement) {
 				// alias reference
 				// move the computation here from the SELECT clause
 				size_t select_index = group_column->index;
-				auto group_ref = make_unique<GroupRefExpression>(statement.groupby.groups[i]->return_type, i);
+				auto group_ref = make_unique<ColumnRefExpression>(statement.groupby.groups[i]->return_type, i);
 				group_ref->alias = string(group_column->column_name);
 				statement.groupby.groups[i] = move(statement.select_list[select_index]);
 				// and add a GROUP REF expression to the SELECT clause
@@ -150,8 +150,6 @@ void Binder::Visit(SelectNode &statement) {
 		// handle GROUP BY columns in the select clause
 		for (size_t i = 0; i < statement.select_list.size(); i++) {
 			auto &select = statement.select_list[i];
-			if (select->type == ExpressionType::GROUP_REF)
-				continue;
 			if (select->IsAggregate())
 				continue;
 			if (select->IsWindow())
@@ -161,13 +159,17 @@ void Binder::Visit(SelectNode &statement) {
 			if (select->type == ExpressionType::COLUMN_REF) {
 				// column reference: check if it points to a GROUP BY column
 				auto select_column = reinterpret_cast<ColumnRefExpression *>(select.get());
+				if (select_column->index != (size_t) -1) {
+					// index already assigned, references a GROUP BY column
+					continue;
+				}
 				bool found_matching = false;
 				for (size_t j = 0; j < statement.groupby.groups.size(); j++) {
 					auto &group = statement.groupby.groups[j];
 					if (select_column->reference) {
 						if (select_column->reference == group.get()) {
 							// group reference!
-							auto group_ref = make_unique<GroupRefExpression>(statement.select_list[i]->return_type, j);
+							auto group_ref = make_unique<ColumnRefExpression>(statement.select_list[i]->return_type, j);
 							group_ref->alias = string(select_column->column_name);
 							statement.select_list[i] = move(group_ref);
 							found_matching = true;
@@ -178,7 +180,7 @@ void Binder::Visit(SelectNode &statement) {
 							auto group_column = reinterpret_cast<ColumnRefExpression *>(group.get());
 							if (group_column->binding == select_column->binding) {
 								auto group_ref =
-								    make_unique<GroupRefExpression>(statement.select_list[i]->return_type, j);
+								    make_unique<ColumnRefExpression>(statement.select_list[i]->return_type, j);
 								group_ref->alias = statement.select_list[i]->alias.empty()
 								                       ? select_column->column_name
 								                       : statement.select_list[i]->alias;

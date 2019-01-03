@@ -16,7 +16,9 @@ namespace duckdb {
 class ConjunctionExpression : public Expression {
 public:
 	ConjunctionExpression(ExpressionType type, unique_ptr<Expression> left, unique_ptr<Expression> right)
-	    : Expression(type, TypeId::BOOLEAN, std::move(left), std::move(right)) {
+	    : Expression(type, TypeId::BOOLEAN) {
+		this->left = move(left);
+		this->right = move(right);
 	}
 
 	unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
@@ -30,7 +32,19 @@ public:
 
 	bool Equals(const Expression *other) const override;
 
+	void EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) override;
+	void EnumerateChildren(std::function<void(Expression* expression)> callback) const override;
+
+	//! Serializes a ConjunctionExpression to a stand-alone binary blob
+	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into a ConjunctionExpression
-	static unique_ptr<Expression> Deserialize(ExpressionDeserializeInfo *info, Deserializer &source);
+	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
+
+	string ToString() const override {
+		return left->ToString() + ExpressionTypeToOperator(type) + right->ToString();
+	}
+	
+	unique_ptr<Expression> left;
+	unique_ptr<Expression> right;
 };
 } // namespace duckdb

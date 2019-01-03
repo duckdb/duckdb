@@ -78,7 +78,6 @@ public:
 	virtual unique_ptr<Expression> Visit(ConstantExpression &expr);
 	virtual unique_ptr<Expression> Visit(DefaultExpression &expr);
 	virtual unique_ptr<Expression> Visit(FunctionExpression &expr);
-	virtual unique_ptr<Expression> Visit(GroupRefExpression &expr);
 	virtual unique_ptr<Expression> Visit(OperatorExpression &expr);
 	virtual unique_ptr<Expression> Visit(StarExpression &expr);
 	virtual unique_ptr<Expression> Visit(SubqueryExpression &expr);

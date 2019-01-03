@@ -172,10 +172,6 @@ static unique_ptr<Expression> extract_aggregates(unique_ptr<Expression> expr, ve
 		result.push_back(move(expr));
 		return colref_expr;
 	}
-	if (expr->GetExpressionType() == ExpressionType::GROUP_REF) {
-		auto &gexpr = (GroupRefExpression &)*expr;
-		return make_unique<ColumnRefExpression>(gexpr.return_type, gexpr.group_index);
-	}
 	for (size_t expr_idx = 0; expr_idx < expr->children.size(); expr_idx++) {
 		expr->children[expr_idx] = extract_aggregates(move(expr->children[expr_idx]), result, ngroups);
 	}

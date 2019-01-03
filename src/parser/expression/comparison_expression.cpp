@@ -7,18 +7,31 @@ using namespace duckdb;
 using namespace std;
 
 unique_ptr<Expression> ComparisonExpression::Copy() {
-	assert(children.size() == 2);
-	auto copy = make_unique<ComparisonExpression>(type, children[0]->Copy(), children[1]->Copy());
+	auto copy = make_unique<ComparisonExpression>(type, left->Copy(), right->Copy());
 	copy->CopyProperties(*this);
 	return copy;
 }
 
-unique_ptr<Expression> ComparisonExpression::Deserialize(ExpressionDeserializeInfo *info, Deserializer &source) {
-	if (info->children.size() != 2) {
-		throw SerializationException("Comparison needs two children!");
-	}
+void ComparisonExpression::Serialize(Serializer &serializer) {
+	Expression::Serialize(serializer);
+	left->Serialize(serializer);
+	right->Serialize(serializer);
+}
 
-	return make_unique<ComparisonExpression>(info->type, move(info->children[0]), move(info->children[1]));
+unique_ptr<Expression> ComparisonExpression::Deserialize(ExpressionType type, TypeId return_type, Deserializer &source) {
+	auto left_child = Expression::Deserialize(source);
+	auto right_child = Expression::Deserialize(source);
+	return make_unique<ComparisonExpression>(type, move(left_child), move(right_child));
+}
+
+void ComparisonExpression::EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
+	left = callback(move(left));
+	right = callback(move(right));
+}
+
+void ComparisonExpression::EnumerateChildren(std::function<void(Expression* expression)> callback) const {
+	callback(left.get());
+	callback(right.get());
 }
 
 ExpressionType ComparisonExpression::NegateComparisionExpression(ExpressionType type) {

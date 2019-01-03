@@ -28,22 +28,13 @@ WindowExpression::WindowExpression(ExpressionType type, unique_ptr<Expression> c
 		throw NotImplementedException("Window aggregate type %s not supported", ExpressionTypeToString(type).c_str());
 	}
 	if (child) {
-		AddChild(move(child));
+		this->child = move(child);
 	}
-}
-
-bool WindowExpression::IsWindow() {
-	return true;
 }
 
 unique_ptr<Expression> WindowExpression::Copy() {
-	if (children.size() > 1) {
-		assert(0);
-		return nullptr;
-	}
-
-	auto child = children.size() == 1 ? children[0]->Copy() : nullptr;
-	auto new_window = make_unique<WindowExpression>(type, move(child));
+	auto child_copy = child ? child->Copy() : nullptr;
+	auto new_window = make_unique<WindowExpression>(type, move(child_copy));
 	new_window->CopyProperties(*this);
 
 	for (auto &e : partitions) {
@@ -67,6 +58,7 @@ unique_ptr<Expression> WindowExpression::Copy() {
 
 void WindowExpression::Serialize(Serializer &serializer) {
 	Expression::Serialize(serializer);
+	serializer.WriteOptional(child);
 	serializer.WriteList(partitions);
 	//	auto order_count = source.Read<uint32_t>();
 	serializer.Write<uint32_t>(ordering.orders.size());
@@ -76,14 +68,14 @@ void WindowExpression::Serialize(Serializer &serializer) {
 	}
 	serializer.Write<uint8_t>(start);
 	serializer.Write<uint8_t>(end);
-
+	
 	serializer.WriteOptional(start_expr);
 	serializer.WriteOptional(end_expr);
 }
 
-unique_ptr<Expression> WindowExpression::Deserialize(ExpressionDeserializeInfo *info, Deserializer &source) {
-	auto child = info->children.size() == 0 ? nullptr : move(info->children[0]);
-	auto expr = make_unique<WindowExpression>(info->type, move(child));
+unique_ptr<Expression> WindowExpression::Deserialize(ExpressionType type, TypeId return_type, Deserializer &source) {
+	auto child = source.ReadOptional<Expression>();
+	auto expr = make_unique<WindowExpression>(type, move(child));
 	source.ReadList<Expression>(expr->partitions);
 
 	auto order_count = source.Read<uint32_t>();
@@ -120,11 +112,10 @@ void WindowExpression::ResolveType() {
 	}
 
 	switch (type) {
-
 	case ExpressionType::WINDOW_SUM:
-		if (children[0]->IsScalar()) {
+		if (child->IsScalar()) {
 			stats.has_stats = false;
-			switch (children[0]->return_type) {
+			switch (child->return_type) {
 			case TypeId::BOOLEAN:
 			case TypeId::TINYINT:
 			case TypeId::SMALLINT:
@@ -133,12 +124,12 @@ void WindowExpression::ResolveType() {
 				return_type = TypeId::BIGINT;
 				break;
 			default:
-				return_type = children[0]->return_type;
+				return_type = child->return_type;
 			}
 		} else {
-			ExpressionStatistics::Count(children[0]->stats, stats);
-			ExpressionStatistics::Sum(children[0]->stats, stats);
-			return_type = max(children[0]->return_type, stats.MinimalType());
+			ExpressionStatistics::Count(child->stats, stats);
+			ExpressionStatistics::Sum(child->stats, stats);
+			return_type = max(child->return_type, stats.MinimalType());
 		}
 
 		break;
@@ -158,17 +149,17 @@ void WindowExpression::ResolveType() {
 	case ExpressionType::WINDOW_MAX:
 	case ExpressionType::WINDOW_FIRST_VALUE:
 	case ExpressionType::WINDOW_LAST_VALUE:
-		if (children.size() != 1) {
+		if (!child) {
 			throw Exception("Window function needs an expression");
 		}
-		return_type = children[0]->return_type;
+		return_type = child->return_type;
 		break;
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
-		if (children.size() < 1) {
+		if (!child) {
 			throw Exception("Window function LEAD/LAG needs at least one expression");
 		}
-		return_type = children[0]->return_type;
+		return_type = child->return_type;
 		break;
 	default:
 		throw NotImplementedException("Unsupported window type!");

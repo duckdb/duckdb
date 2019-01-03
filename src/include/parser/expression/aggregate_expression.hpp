@@ -36,13 +36,20 @@ public:
 
 	//! Serializes an Expression to a stand-alone binary blob
 	void Serialize(Serializer &serializer) override;
-	//! Deserializes a blob back into an ConstantExpression
-	static unique_ptr<Expression> Deserialize(ExpressionDeserializeInfo *info, Deserializer &source);
+	//! Deserializes a blob back into an AggregateExpression
+	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
 
-	string GetName() override;
+	string ToString() const override {
+		return GetName() + "(" + child->ToString() + ")";
+	}
+
+	string GetName() const override;
+
+	void EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) override;
+	void EnumerateChildren(std::function<void(Expression* expression)> callback) const override;
 
 	size_t index;
-
-private:
+	//! The child of the aggregate expression
+	unique_ptr<Expression> child;
 };
 } // namespace duckdb
