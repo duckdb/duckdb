@@ -288,13 +288,13 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 	// build a segment tree for frame-adhering aggregates
 	// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
 	unique_ptr<WindowSegmentTree> segment_tree = nullptr;
+
 	switch (wexpr->type) {
 	case ExpressionType::WINDOW_SUM:
 	case ExpressionType::WINDOW_MIN:
 	case ExpressionType::WINDOW_MAX:
 	case ExpressionType::WINDOW_AVG:
-		segment_tree = make_unique<WindowSegmentTree>(wexpr->type, wexpr->return_type, 16);
-		segment_tree->Construct(payload_collection);
+		segment_tree = make_unique<WindowSegmentTree>(wexpr->type, wexpr->return_type, &payload_collection);
 		break;
 	default:
 		break;
@@ -335,11 +335,11 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 		case ExpressionType::WINDOW_SUM:
 		case ExpressionType::WINDOW_MIN:
 		case ExpressionType::WINDOW_MAX:
-		case ExpressionType::WINDOW_AVG:
+		case ExpressionType::WINDOW_AVG: {
 			assert(segment_tree);
 			res = segment_tree->Compute(bounds.window_start, bounds.window_end);
 			break;
-
+		}
 		case ExpressionType::WINDOW_COUNT_STAR: {
 			res = Value::Numeric(wexpr->return_type, bounds.window_end - bounds.window_start);
 			break;
@@ -486,29 +486,30 @@ void WindowSegmentTree::AggregateInit() {
 	default:
 		throw NotImplementedException("Window Type");
 	}
+	assert(aggregate.type == payload_type);
 	n_aggregated = 0;
 }
 
 void WindowSegmentTree::AggregateAccum(Value val) {
+	if (val.type != payload_type) {
+		val = val.CastAs(payload_type);
+	}
+	assert(val.type == payload_type);
+
 	switch (window_type) {
 	case ExpressionType::WINDOW_SUM:
 	case ExpressionType::WINDOW_AVG:
 		aggregate = aggregate + val;
 		break;
 	case ExpressionType::WINDOW_MIN:
-		if (val < aggregate) {
-			aggregate = val;
-		}
+		aggregate = aggregate > val ? val : aggregate;
 		break;
 	case ExpressionType::WINDOW_MAX:
-		if (val > aggregate) {
-			aggregate = val;
-		}
+		aggregate = aggregate < val ? val : aggregate;
 		break;
 	default:
 		throw NotImplementedException("Window Type");
 	}
-	n_aggregated++;
 }
 
 Value WindowSegmentTree::AggegateFinal() {
@@ -516,55 +517,65 @@ Value WindowSegmentTree::AggegateFinal() {
 		return Value().CastAs(payload_type);
 	}
 	switch (window_type) {
-	case ExpressionType::WINDOW_SUM:
-	case ExpressionType::WINDOW_MIN:
-	case ExpressionType::WINDOW_MAX:
-		return aggregate;
 	case ExpressionType::WINDOW_AVG:
 		return aggregate / Value::Numeric(payload_type, n_aggregated);
 	default:
-		throw NotImplementedException("Window Type");
+		return aggregate;
 	}
 
 	return aggregate;
 }
 
-void WindowSegmentTree::Construct(ChunkCollection &input) {
-	assert(input.column_count() == 1);
-	AggregateInit();
-	input_ref = &input;
-	// level 0 is data itself
-	size_t level_size;
-	while ((level_size = (levels.size() == 0 ? input_ref->count : levels[levels.size() - 1].size())) > 1) {
-		vector<Value> nl;
-		size_t fanout_count = 0;
-		for (size_t pos = 0; pos < level_size; pos++) {
-			AggregateAccum((levels.size() == 0 ? input_ref->GetValue(0, pos) : levels[levels.size() - 1][pos]));
-			fanout_count++;
-			if (fanout_count == fanout) {
-				nl.push_back(AggegateFinal());
-				AggregateInit();
-				fanout_count = 0;
-			}
-		}
-		if (fanout_count > 0) {
-			nl.push_back(AggegateFinal());
-		}
-		levels.push_back(nl);
-	}
-}
-
 void WindowSegmentTree::WindowSegmentValue(size_t l_idx, size_t begin, size_t end) {
 	assert(begin <= end);
-	for (size_t pos = begin; pos < end; pos++) {
-		AggregateAccum(l_idx == 0 ? input_ref->GetValue(0, pos) : levels[l_idx - 1][pos]);
+	if (l_idx == 0) {
+		for (size_t pos = begin; pos < end; pos++) {
+			// fetch actual vectors and call accum on raw array
+			AggregateAccum(input_ref->GetValue(0, pos)); // type checks only here
+		}
+	} else {
+		for (size_t pos = begin; pos < end; pos++) {
+			// directly accum on raw array
+			AggregateAccum(levels_flat[levels_flat_start[l_idx - 1] + pos]);
+		}
+	}
+	n_aggregated += end - begin;
+}
+
+void WindowSegmentTree::ConstructTree() {
+	assert(input_ref);
+	assert(input_ref->column_count() == 1);
+
+	// compute space required to store internal nodes of segment tree
+	size_t internal_nodes = 0;
+	size_t level_nodes = input_ref->count;
+	do {
+		level_nodes = (size_t)ceil((double)level_nodes / fanout);
+		internal_nodes += level_nodes;
+	} while (level_nodes > 1);
+	levels_flat.resize(internal_nodes);
+	levels_flat_start.push_back(0);
+
+	size_t levels_flat_offset = 0;
+	size_t level_current = 0;
+	// level 0 is data itself
+	size_t level_size;
+	while ((level_size = (level_current == 0 ? input_ref->count
+	                                         : levels_flat_offset - levels_flat_start[level_current - 1])) > 1) {
+		for (size_t pos = 0; pos < level_size; pos += fanout) {
+			AggregateInit();
+			WindowSegmentValue(level_current, pos, min(level_size, pos + fanout));
+			levels_flat[levels_flat_offset++] = AggegateFinal();
+		}
+		levels_flat_start.push_back(levels_flat_offset);
+		level_current++;
 	}
 }
 
 Value WindowSegmentTree::Compute(size_t begin, size_t end) {
 	assert(input_ref);
 	AggregateInit();
-	for (size_t l_idx = 0; l_idx < levels.size() + 1; l_idx++) {
+	for (size_t l_idx = 0; l_idx < levels_flat_start.size() + 1; l_idx++) {
 		size_t parent_begin = begin / fanout;
 		size_t parent_end = end / fanout;
 		if (parent_begin == parent_end) {
