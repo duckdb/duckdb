@@ -1,6 +1,7 @@
 #include "execution/operator/aggregate/physical_window.hpp"
 
 #include "common/types/chunk_collection.hpp"
+#include "common/types/constant_vector.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
 #include "parser/expression/aggregate_expression.hpp"
@@ -364,7 +365,7 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 		}
 		case ExpressionType::WINDOW_LEAD:
 		case ExpressionType::WINDOW_LAG: {
-			Value def_val = Value().CastAs(wexpr->return_type);
+			Value def_val = Value(wexpr->return_type);
 			size_t offset = 1;
 			if (wexpr->children.size() > 1) {
 				offset = leadlag_offset_collection.GetValue(0, wexpr->children[1]->IsScalar() ? 0 : row_idx)
@@ -490,31 +491,9 @@ void WindowSegmentTree::AggregateInit() {
 	n_aggregated = 0;
 }
 
-void WindowSegmentTree::AggregateAccum(Value val) {
-	if (val.type != payload_type) {
-		val = val.CastAs(payload_type);
-	}
-	assert(val.type == payload_type);
-
-	switch (window_type) {
-	case ExpressionType::WINDOW_SUM:
-	case ExpressionType::WINDOW_AVG:
-		aggregate = aggregate + val;
-		break;
-	case ExpressionType::WINDOW_MIN:
-		aggregate = aggregate > val ? val : aggregate;
-		break;
-	case ExpressionType::WINDOW_MAX:
-		aggregate = aggregate < val ? val : aggregate;
-		break;
-	default:
-		throw NotImplementedException("Window Type");
-	}
-}
-
 Value WindowSegmentTree::AggegateFinal() {
 	if (n_aggregated == 0) {
-		return Value().CastAs(payload_type);
+		return Value(payload_type);
 	}
 	switch (window_type) {
 	case ExpressionType::WINDOW_AVG:
@@ -528,17 +507,48 @@ Value WindowSegmentTree::AggegateFinal() {
 
 void WindowSegmentTree::WindowSegmentValue(size_t l_idx, size_t begin, size_t end) {
 	assert(begin <= end);
-	if (l_idx == 0) {
-		for (size_t pos = begin; pos < end; pos++) {
-			// fetch actual vectors and call accum on raw array
-			AggregateAccum(input_ref->GetValue(0, pos)); // type checks only here
-		}
-	} else {
-		for (size_t pos = begin; pos < end; pos++) {
-			// directly accum on raw array
-			AggregateAccum(levels_flat[levels_flat_start[l_idx - 1] + pos]);
-		}
+	if (begin == end) {
+		return;
 	}
+	Vector v;
+	if (l_idx == 0) {
+		auto &vec = input_ref->GetChunk(begin).data[0];
+		v.Reference(vec);
+		size_t start_in_vector = begin % STANDARD_VECTOR_SIZE;
+		v.data = v.data + GetTypeIdSize(v.type) * start_in_vector;
+		v.count = end - begin;
+		v.nullmask <<= start_in_vector;
+		assert(v.count + start_in_vector <=
+		       vec.count); // if STANDARD_VECTOR_SIZE is not divisible by fanout this will trip
+	} else {
+		assert(end - begin < STANDARD_VECTOR_SIZE);
+		v.data = levels_flat_native.get() + GetTypeIdSize(payload_type) * (begin + levels_flat_start[l_idx - 1]);
+		v.count = end - begin;
+		v.type = payload_type;
+	}
+
+	assert(!v.sel_vector);
+	v.Verify();
+
+	switch (window_type) {
+	case ExpressionType::WINDOW_SUM:
+	case ExpressionType::WINDOW_AVG:
+		aggregate = aggregate + VectorOperations::Sum(v);
+		break;
+	case ExpressionType::WINDOW_MIN: {
+		auto val = VectorOperations::Min(v);
+		aggregate = aggregate > val ? val : aggregate;
+		break;
+	}
+	case ExpressionType::WINDOW_MAX: {
+		auto val = VectorOperations::Max(v);
+		aggregate = aggregate < val ? val : aggregate;
+		break;
+	}
+	default:
+		throw NotImplementedException("Window Type");
+	}
+
 	n_aggregated += end - begin;
 }
 
@@ -553,7 +563,7 @@ void WindowSegmentTree::ConstructTree() {
 		level_nodes = (size_t)ceil((double)level_nodes / fanout);
 		internal_nodes += level_nodes;
 	} while (level_nodes > 1);
-	levels_flat.resize(internal_nodes);
+	levels_flat_native = unique_ptr<char[]>(new char[internal_nodes * GetTypeIdSize(payload_type)]);
 	levels_flat_start.push_back(0);
 
 	size_t levels_flat_offset = 0;
@@ -565,8 +575,16 @@ void WindowSegmentTree::ConstructTree() {
 		for (size_t pos = 0; pos < level_size; pos += fanout) {
 			AggregateInit();
 			WindowSegmentValue(level_current, pos, min(level_size, pos + fanout));
-			levels_flat[levels_flat_offset++] = AggegateFinal();
+
+			ConstantVector res_vec(AggegateFinal());
+			assert(res_vec.type == payload_type);
+			ConstantVector ptr_vec(Value::POINTER(
+			    (uint64_t)(levels_flat_native.get() + (levels_flat_offset * GetTypeIdSize(payload_type)))));
+			VectorOperations::Scatter::Set(res_vec, ptr_vec);
+
+			levels_flat_offset++;
 		}
+
 		levels_flat_start.push_back(levels_flat_offset);
 		level_current++;
 	}

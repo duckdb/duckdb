@@ -66,7 +66,7 @@ TEST_CASE("Most basic window function", "[window]") {
 
 	// min/max/avg
 	result = con.Query("SELECT depname, min(salary) OVER (PARTITION BY depname ORDER BY salary, empno) m1, max(salary) "
-	                   "OVER (PARTITION BY depname ORDER BY salary, empno) m2, avg(salary) OVER (PARTITION BY depname "
+	                   "OVER (PARTITION BY depname ORDER BY salary, empno) m2, AVG(salary) OVER (PARTITION BY depname "
 	                   "ORDER BY salary, empno) m3 FROM empsalary ORDER BY depname, empno");
 	REQUIRE(result->column_count() == 4);
 	REQUIRE(CHECK_COLUMN(
@@ -183,8 +183,8 @@ TEST_CASE("Wiscosin-derived window test cases", "[window]") {
 
 	//	// cume_dist
 	//	result = con.Query("SELECT cast(cume_dist() OVER (PARTITION BY four ORDER BY ten)*10 as integer) FROM tenk1
-	//WHERE " 	                   "unique2 < 10 order by four, ten"); 	REQUIRE(result->column_count() == 1); 	REQUIRE(CHECK_COLUMN(result, 0,
-	//{6, 6, 10, 5, 5, 7, 10, 10, 5, 10}));
+	// WHERE " 	                   "unique2 < 10 order by four, ten"); 	REQUIRE(result->column_count() == 1);
+	// REQUIRE(CHECK_COLUMN(result, 0, {6, 6, 10, 5, 5, 7, 10, 10, 5, 10}));
 
 	// lead/lag
 	result = con.Query("SELECT lag(ten) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt");

@@ -7,7 +7,7 @@
 using namespace duckdb;
 using namespace std;
 
-#define ORDER_BY_ROW_COUNT 100000
+#define WINDOW_ROW_COUNT 100000
 
 DUCKDB_BENCHMARK(Window, "[micro]")
 virtual void Load(DuckDBBenchmarkState *state) {
@@ -19,7 +19,7 @@ virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.Query("CREATE TABLE integers(i INTEGER);");
 	Appender appender(state->db, DEFAULT_SCHEMA, "integers");
 	// insert the elements into the database
-	for (size_t i = 0; i < ORDER_BY_ROW_COUNT; i++) {
+	for (size_t i = 0; i < WINDOW_ROW_COUNT; i++) {
 		appender.BeginRow();
 		appender.AppendInteger(distribution(gen));
 		appender.EndRow();
@@ -28,23 +28,22 @@ virtual void Load(DuckDBBenchmarkState *state) {
 }
 
 virtual string GetQuery() {
-	return "SELECT SUM(i) OVER(order by i rows between 100 preceding and 100 following) FROM integers";
+	return "SELECT SUM(i) OVER(order by i rows between 1000 preceding and 1000 following) FROM integers";
 }
 
 virtual string VerifyResult(DuckDBResult *result) {
 	if (!result->GetSuccess()) {
 		return result->GetErrorMessage();
 	}
-	if (result->size() != ORDER_BY_ROW_COUNT) {
+	if (result->size() != WINDOW_ROW_COUNT) {
 		return "Incorrect amount of rows in result";
 	}
 	return string();
 }
 
 virtual string BenchmarkInfo() {
-	return StringUtil::Format("Runs the following query: \"SELECT SUM(i) OVER(order by i rows between 10 preceding and "
-	                          "10 following) FROM integers\""
+	return StringUtil::Format("Runs the following query: \"%s\""
 	                          " on %d rows",
-	                          ORDER_BY_ROW_COUNT);
+	                          GetQuery().c_str(), WINDOW_ROW_COUNT);
 }
 FINISH_BENCHMARK(Window)
