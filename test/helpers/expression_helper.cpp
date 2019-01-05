@@ -15,9 +15,9 @@ static void SetColumnRefTypes(Expression &op, TypeId colref_type = TypeId::INTEG
 	if (op.type == ExpressionType::COLUMN_REF) {
 		op.return_type = colref_type;
 	}
-	for (auto &child : op.children) {
+	op.EnumerateChildren([&](Expression *child) {
 		SetColumnRefTypes(*child, colref_type);
-	}
+	});
 }
 
 unique_ptr<Expression> ParseExpression(string expression) {
@@ -39,18 +39,18 @@ unique_ptr<Expression> ParseExpression(string expression) {
 	return move(select_list[0]);
 }
 
-unique_ptr<LogicalOperator> ApplyLogicalRule(Rewriter &rewriter, unique_ptr<LogicalOperator> op) {
-	return rewriter.ApplyRules(move(op));
-}
+// unique_ptr<LogicalOperator> ApplyLogicalRule(Rewriter &rewriter, unique_ptr<LogicalOperator> op) {
+// 	return rewriter.ApplyRules(move(op));
+// }
 
-unique_ptr<Expression> ApplyExprRule(Rewriter &rewriter, unique_ptr<Expression> root) {
-	vector<unique_ptr<Expression>> exprs;
-	exprs.push_back(move(root));
+// unique_ptr<Expression> ApplyExprRule(Rewriter &rewriter, unique_ptr<Expression> root) {
+// 	vector<unique_ptr<Expression>> exprs;
+// 	exprs.push_back(move(root));
 
-	auto op = make_unique<LogicalProjection>(move(exprs));
+// 	auto op = make_unique<LogicalProjection>(move(exprs));
 
-	return move(ApplyLogicalRule(rewriter, move(op))->expressions[0]);
-}
+// 	return move(ApplyLogicalRule(rewriter, move(op))->expressions[0]);
+// }
 
 unique_ptr<Planner> ParseLogicalPlan(DuckDBConnection &con, string query) {
 	DuckDB db;

@@ -115,10 +115,9 @@ unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState(Expres
 	}
 	for (auto &expr : aggregates) {
 		aggregate_kind.push_back(expr->type);
-		if (expr->children.size() > 0) {
-			auto &child = expr->children[0];
-			payload_types.push_back(child->return_type);
-			state->payload_expressions.push_back(child.get());
+		if (expr->child) {
+			payload_types.push_back(expr->child->return_type);
+			state->payload_expressions.push_back(expr->child.get());
 		} else {
 			// COUNT(*)
 			payload_types.push_back(TypeId::BIGINT);

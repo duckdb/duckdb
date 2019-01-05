@@ -70,13 +70,15 @@ unique_ptr<Expression> Transformer::TransformAExpr(A_Expr *root) {
 	} break;
 	// rewrite NULLIF(a, b) into CASE WHEN a=b THEN NULL ELSE a END
 	case AEXPR_NULLIF: {
-		auto case_expr = unique_ptr<Expression>(new CaseExpression());
-		auto test_expr = unique_ptr<Expression>(new ComparisonExpression(
-		    ExpressionType::COMPARE_EQUAL, TransformExpression(root->lexpr), TransformExpression(root->rexpr)));
-		case_expr->AddChild(move(test_expr));
-		auto null_expr = unique_ptr<Expression>(new ConstantExpression(Value()));
-		case_expr->AddChild(move(null_expr));
-		case_expr->AddChild(TransformExpression(root->lexpr));
+		auto case_expr = make_unique<CaseExpression>();
+		auto value = TransformExpression(root->lexpr);
+		// the check (A = B)
+		case_expr->check = make_unique<ComparisonExpression>(
+		    ExpressionType::COMPARE_EQUAL, value->Copy(), TransformExpression(root->rexpr));
+		// if A = B, then constant NULL
+		case_expr->result_if_true = make_unique<ConstantExpression>(Value());
+		// else A
+		case_expr->result_if_false = move(value);
 		return case_expr;
 	} break;
 	// rewrite (NOT) X BETWEEN A AND B into (NOT) AND(GREATERTHANOREQUALTO(X,

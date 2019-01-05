@@ -39,6 +39,8 @@ public:
 	//! Deserializes a blob back into an ComparisonExpression
 	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
 
+	bool Equals(const Expression *other) const override;
+
 	string ToString() const override {
 		return left->ToString() + ExpressionTypeToOperator(type) + right->ToString();
 	}

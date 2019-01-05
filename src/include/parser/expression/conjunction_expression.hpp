@@ -30,8 +30,6 @@ public:
 
 	unique_ptr<Expression> Copy() override;
 
-	bool Equals(const Expression *other) const override;
-
 	void EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) override;
 	void EnumerateChildren(std::function<void(Expression* expression)> callback) const override;
 
@@ -39,6 +37,8 @@ public:
 	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into a ConjunctionExpression
 	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
+
+	bool Equals(const Expression *other) const override;
 
 	string ToString() const override {
 		return left->ToString() + ExpressionTypeToOperator(type) + right->ToString();

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "optimizer/rewriter.hpp"
+#include "optimizer/expression_rewriter.hpp"
 #include "planner/bindcontext.hpp"
 #include "planner/logical_operator.hpp"
 #include "planner/logical_operator_visitor.hpp"
@@ -23,7 +23,7 @@ public:
 
 private:
 	BindContext &context;
-	Rewriter rewriter;
+	ExpressionRewriter rewriter;
 };
 
 } // namespace duckdb

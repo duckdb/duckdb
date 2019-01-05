@@ -20,8 +20,12 @@ public:
 	OperatorExpression(ExpressionType type, TypeId type_id, unique_ptr<Expression> left,
 	                   unique_ptr<Expression> right = nullptr)
 	   : Expression(type, type_id) {
-		this->left = move(left);
-		this->right = move(right);
+		if (left) {
+			children.push_back(move(left));
+		}
+		if (right) {
+			children.push_back(move(right));
+		}
 	}
 
 	void ResolveType() override;
@@ -42,11 +46,12 @@ public:
 	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into an OperatorExpression
 	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
+	bool Equals(const Expression *other) const override;
+
 	string ToString() const override {
-		return left->ToString() + ExpressionTypeToOperator(type) + right->ToString();
+		return "OPERATOR";
 	}
 
-	unique_ptr<Expression> left;
-	unique_ptr<Expression> right;
+	vector<unique_ptr<Expression>> children;
 };
 } // namespace duckdb

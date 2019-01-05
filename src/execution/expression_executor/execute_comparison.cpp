@@ -7,9 +7,9 @@ using namespace std;
 
 unique_ptr<Expression> ExpressionExecutor::Visit(ComparisonExpression &expr) {
 	Vector l, r;
-	expr.children[0]->Accept(this);
+	expr.left->Accept(this);
 	vector.Move(l);
-	expr.children[1]->Accept(this);
+	expr.right->Accept(this);
 	vector.Move(r);
 	vector.Initialize(TypeId::BOOLEAN);
 

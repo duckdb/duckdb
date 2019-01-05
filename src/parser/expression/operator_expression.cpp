@@ -16,22 +16,22 @@ void OperatorExpression::ResolveType() {
 		return_type = TypeId::BOOLEAN;
 		return;
 	}
-	return_type = std::max(left->return_type, right->return_type);
+	return_type = std::max(children[0]->return_type, children[1]->return_type);
 	switch (type) {
 	case ExpressionType::OPERATOR_ADD:
-		ExpressionStatistics::Add(left->stats, right->stats, stats);
+		ExpressionStatistics::Add(children[0]->stats, children[1]->stats, stats);
 		break;
 	case ExpressionType::OPERATOR_SUBTRACT:
-		ExpressionStatistics::Subtract(left->stats, right->stats, stats);
+		ExpressionStatistics::Subtract(children[0]->stats, children[1]->stats, stats);
 		break;
 	case ExpressionType::OPERATOR_MULTIPLY:
-		ExpressionStatistics::Multiply(left->stats, right->stats, stats);
+		ExpressionStatistics::Multiply(children[0]->stats, children[1]->stats, stats);
 		break;
 	case ExpressionType::OPERATOR_DIVIDE:
-		ExpressionStatistics::Divide(left->stats, right->stats, stats);
+		ExpressionStatistics::Divide(children[0]->stats, children[1]->stats, stats);
 		break;
 	case ExpressionType::OPERATOR_MOD:
-		ExpressionStatistics::Modulo(left->stats, right->stats, stats);
+		ExpressionStatistics::Modulo(children[0]->stats, children[1]->stats, stats);
 		break;
 	default:
 		throw NotImplementedException("Unsupported operator type for statistics!");
@@ -46,39 +46,48 @@ void OperatorExpression::ResolveType() {
 unique_ptr<Expression> OperatorExpression::Copy() {
 	auto copy = make_unique<OperatorExpression>(type, return_type);
 	copy->CopyProperties(*this);
-	copy->left = left->Copy();
-	copy->right = right->Copy();
+	for(auto &it : children) {
+		copy->children.push_back(it->Copy());
+	}
 	return copy;
 }
 
 void OperatorExpression::Serialize(Serializer &serializer) {
 	Expression::Serialize(serializer);
-	serializer.WriteOptional(left);
-	serializer.WriteOptional(right);
+	serializer.WriteList(children);
 }
 
 unique_ptr<Expression> OperatorExpression::Deserialize(ExpressionType type, TypeId return_type, Deserializer &source) {
 	auto expression = make_unique<OperatorExpression>(type, return_type);
-	expression->left = source.ReadOptional<Expression>();
-	expression->right = source.ReadOptional<Expression>();
+	source.ReadList<Expression>(expression->children);
 	return expression;
 }
 
-void OperatorExpression::EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
-	if (left) {
-		left = callback(move(left));
+bool OperatorExpression::Equals(const Expression *other_) const {
+	if (!Expression::Equals(other_)) {
+		return false;
 	}
-	if (right) {
-		right = callback(move(right));
+	auto other = (OperatorExpression*) other_;
+	if (children.size() != other->children.size()) {
+		return false;
+	}
+	for(size_t i = 0; i < children.size(); i++) {
+		if (!children[i]->Equals(other->children[i].get())) {
+			return false;
+		}
+	}
+	return true;
+}
+
+void OperatorExpression::EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
+	for(size_t i = 0; i < children.size(); i++) {
+		children[i] = callback(move(children[i]));
 	}
 }
 
 void OperatorExpression::EnumerateChildren(std::function<void(Expression* expression)> callback) const {
-	if (left) {
-		callback(left.get());
-	}
-	if (right) {
-		callback(right.get());
+	for(size_t i = 0; i < children.size(); i++) {
+		callback(children[i].get());
 	}
 }
 

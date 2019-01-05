@@ -56,6 +56,30 @@ unique_ptr<Expression> WindowExpression::Copy() {
 	return new_window;
 }
 
+void WindowExpression::EnumerateChildren(function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
+	if (child) {
+		child = callback(move(child));
+	}
+	for(size_t i = 0; i < partitions.size(); i++) {
+		partitions[i] = callback(move(partitions[i]));
+	}
+	for(size_t i = 0; i < ordering.orders.size(); i++) {
+		ordering.orders[i].expression = callback(move(ordering.orders[i].expression));
+	}
+}
+
+void WindowExpression::EnumerateChildren(function<void(Expression* expression)> callback) const {
+	if (child) {
+		callback(child.get());
+	}
+	for(size_t i = 0; i < partitions.size(); i++) {
+		callback(partitions[i].get());
+	}
+	for(size_t i = 0; i < ordering.orders.size(); i++) {
+		callback(ordering.orders[i].expression.get());
+	}
+}
+
 void WindowExpression::Serialize(Serializer &serializer) {
 	Expression::Serialize(serializer);
 	serializer.WriteOptional(child);
@@ -90,6 +114,49 @@ unique_ptr<Expression> WindowExpression::Deserialize(ExpressionType type, TypeId
 	expr->start_expr = source.ReadOptional<Expression>();
 	expr->end_expr = source.ReadOptional<Expression>();
 	return expr;
+}
+
+bool WindowExpression::Equals(const Expression *other_) const {
+	if (!Expression::Equals(other_)) {
+		return false;
+	}
+	auto other = (WindowExpression*) other_;
+
+	if (start != other->start || end != other->end) {
+		return false;
+	}
+	// check if the child expressions are equivalent
+	if (child) {
+		// we have a child, check if it is equivalent to the other child
+		if (!child->Equals(other->child.get())) {
+			return false;
+		}
+	} else if (other->child) {
+		// we don't have a child but the other does: not equal
+		return false;
+	}
+	// check if the partitions are equivalent
+	if (partitions.size() != other->partitions.size()) {
+		return false;
+	}
+	for(size_t i = 0; i < partitions.size(); i++) {
+		if (!partitions[i]->Equals(other->partitions[i].get())) {
+			return false;
+		}
+	}
+	// check if the orderings are equivalent
+	if (ordering.orders.size() != other->ordering.orders.size()) {
+		return false;
+	}
+	for(size_t i = 0; i < ordering.orders.size(); i++) {
+		if (ordering.orders[i].type != other->ordering.orders[i].type) {
+			return false;
+		}
+		if (!ordering.orders[i].expression->Equals(other->ordering.orders[i].expression.get())) {
+			return false;
+		}
+	}
+	return true;
 }
 
 //! Resolve the type of the window function

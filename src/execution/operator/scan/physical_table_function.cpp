@@ -3,6 +3,7 @@
 #include "catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "execution/expression_executor.hpp"
 #include "main/client_context.hpp"
+#include "parser/expression/function_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -24,7 +25,8 @@ void PhysicalTableFunction::_GetChunk(ClientContext &context, DataChunk &chunk, 
 	input.Initialize(function->arguments);
 
 	ExpressionExecutor executor(nullptr, context);
-	executor.Execute(function_call->children, input);
+	assert(function_call->type == ExpressionType::FUNCTION);
+	executor.Execute(((FunctionExpression*)function_call.get())->children, input);
 
 	// run main code
 	function->function(context, input, chunk, state->function_data.get());

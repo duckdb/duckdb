@@ -1,6 +1,6 @@
 #include "optimizer/subquery_rewriter.hpp"
 
-#include "optimizer/rewriter.hpp"
+#include "optimizer/expression_rewriter.hpp"
 #include "parser/expression/list.hpp"
 #include "planner/operator/list.hpp"
 #include "planner/operator/logical_filter.hpp"
@@ -21,56 +21,62 @@ unique_ptr<LogicalOperator> SubqueryRewriter::Rewrite(unique_ptr<LogicalOperator
 			// check if we know how to rewrite this type of subquery
 			switch (expr.type) {
 			case ExpressionType::COMPARE_IN:
-			case ExpressionType::COMPARE_NOT_IN:
+			case ExpressionType::COMPARE_NOT_IN: {
+				auto &op_expr = (OperatorExpression&) expr;
 				// (NOT) IN, check if we are dealing with a subquery
-				if (expr.children.size() != 2) {
+				if (op_expr.children.size() != 2) {
 					// only constant lists have multiple elements
 					break;
 				}
-				if (expr.children[1]->type == ExpressionType::SELECT_SUBQUERY) {
+				if (op_expr.children[1]->type == ExpressionType::SELECT_SUBQUERY) {
 					// IN (SUBQUERY), rewrite
 					if (RewriteInClause(filter, (OperatorExpression *)filter.expressions[i].get(),
-					                    (SubqueryExpression *)expr.children[1].get())) {
+					                    (SubqueryExpression *)op_expr.children[1].get())) {
 						// successful rewrite, remove the expression from the set of filter expressions
 						filter.expressions.erase(filter.expressions.begin() + i);
 						i--;
 					}
 				}
 				break;
+			}
 			case ExpressionType::OPERATOR_EXISTS:
-			case ExpressionType::OPERATOR_NOT_EXISTS:
+			case ExpressionType::OPERATOR_NOT_EXISTS: {
+				auto &op_expr = (OperatorExpression&) expr;
 				// NOT (EXISTS), check if we are dealing with a subquery
-				assert(expr.children.size() == 1);
-				if (expr.children[0]->type == ExpressionType::SELECT_SUBQUERY) {
+				assert(op_expr.children.size() == 1);
+				if (op_expr.children[0]->type == ExpressionType::SELECT_SUBQUERY) {
 					// EXISTS (SUBQUERY), rewrite
 					if (RewriteExistsClause(filter, (OperatorExpression *)filter.expressions[i].get(),
-					                        (SubqueryExpression *)expr.children[0].get())) {
+					                        (SubqueryExpression *)op_expr.children[0].get())) {
 						// successful rewrite, remove the expression from the set of filter expressions
 						filter.expressions.erase(filter.expressions.begin() + i);
 						i--;
 					}
 				}
 				break;
+			}
 			case ExpressionType::COMPARE_EQUAL:
 			case ExpressionType::COMPARE_NOTEQUAL:
 			case ExpressionType::COMPARE_LESSTHAN:
 			case ExpressionType::COMPARE_GREATERTHAN:
 			case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
+				auto &comp_expr = (ComparisonExpression&) expr;
 				// comparison, check if we are dealing with a subquery
-				assert(expr.children.size() == 2);
-				if (expr.children[0]->type == ExpressionType::SELECT_SUBQUERY ||
-				    expr.children[1]->type == ExpressionType::SELECT_SUBQUERY) {
-					int subquery_index = expr.children[0]->type == ExpressionType::SELECT_SUBQUERY ? 0 : 1;
+				if (comp_expr.left->type == ExpressionType::SELECT_SUBQUERY ||
+				    comp_expr.right->type == ExpressionType::SELECT_SUBQUERY) {
+					int subquery_index = comp_expr.left->type == ExpressionType::SELECT_SUBQUERY ? 0 : 1;
+					auto subquery = (SubqueryExpression*) (subquery_index == 0 ? comp_expr.left.get() : comp_expr.right.get());
 					// Comparison with subquery, rewrite
 					if (RewriteSubqueryComparison(filter, (ComparisonExpression *)filter.expressions[i].get(),
-					                              (SubqueryExpression *)expr.children[subquery_index].get())) {
+					                              subquery)) {
 						// successful rewrite, remove the expression from the set of filter expressions
 						filter.expressions.erase(filter.expressions.begin() + i);
 						i--;
 					}
 				}
 				break;
+			}
 			default:
 				break;
 			}
@@ -213,6 +219,19 @@ bool SubqueryRewriter::RewriteExistsClause(LogicalFilter &filter, OperatorExpres
 	return true;
 }
 
+static void AddColumnIndex(Expression *expr, size_t old_groups, size_t aggr_groups_size) {
+	if (expr->type == ExpressionType::COLUMN_REF) {
+		auto colref = (ColumnRefExpression *)expr;
+		if (colref->index >= old_groups) {
+			colref->index += aggr_groups_size - old_groups;
+		}
+	}
+	expr->EnumerateChildren([&](Expression *child) {
+		AddColumnIndex(child, old_groups, aggr_groups_size);
+	});
+
+}
+
 bool SubqueryRewriter::RewriteSubqueryComparison(LogicalFilter &filter, ComparisonExpression *comparison,
                                                  SubqueryExpression *subquery) {
 	// rewrite a comparison with a subquery (e.g. A == (SUBQUERY))
@@ -241,14 +260,7 @@ bool SubqueryRewriter::RewriteSubqueryComparison(LogicalFilter &filter, Comparis
 	// we might have added new groups
 	// since groups occur BEFORE aggregates in the output of the aggregate, we need to shift column references to
 	// aggregates by the amount of new groups we added
-	Expression::EnumerateExpressions(&proj->expressions[0], ExpressionType::COLUMN_REF,
-	                                 [&](unique_ptr<Expression> expr) -> unique_ptr<Expression> {
-		                                 auto colref = (ColumnRefExpression *)expr.get();
-		                                 if (colref->index >= old_groups) {
-			                                 colref->index += aggr->groups.size() - old_groups;
-		                                 }
-		                                 return expr;
-	                                 });
+	AddColumnIndex(proj->expressions[0].get(), old_groups, aggr->groups.size());
 	// for each of the new join conditions with correlated expressions we added we have to:
 	// (1) project the group column in the projection
 	// (2) set the right join condition so it references the group column
@@ -265,7 +277,7 @@ bool SubqueryRewriter::RewriteSubqueryComparison(LogicalFilter &filter, Comparis
 	// first is the original condition
 	JoinCondition condition;
 	condition.left =
-	    subquery == comparison->children[0].get() ? move(comparison->children[1]) : move(comparison->children[0]);
+	    subquery == comparison->left.get() ? move(comparison->right) : move(comparison->left);
 	// the right condition is the aggregate of the subquery
 	condition.right =
 	    make_unique<ColumnRefExpression>(proj->expressions[0]->return_type, ColumnBinding(subquery_table_index, 0));
@@ -290,6 +302,23 @@ bool SubqueryRewriter::RewriteSubqueryComparison(LogicalFilter &filter, Comparis
 	return true;
 }
 
+bool ContainsCorrelatedExpressions(Expression &expr) {
+	if (expr.type == ExpressionType::COLUMN_REF) {
+		auto &colref = (ColumnRefExpression&) expr;
+		if (colref.depth > 0) {
+			return true;
+		}
+	}
+	bool contains_correlated_expressions = false;
+	expr.EnumerateChildren([&](Expression *child) {
+		if (ContainsCorrelatedExpressions(*child)) {
+			contains_correlated_expressions = true;
+			return;
+		}
+	});
+	return contains_correlated_expressions;
+}
+
 bool ExtractCorrelatedExpressions(LogicalOperator *op, SubqueryExpression *subquery, size_t subquery_table_index,
                                   vector<JoinCondition> &join_conditions) {
 	// we look through the subquery to find the matching correlation expression
@@ -297,47 +326,70 @@ bool ExtractCorrelatedExpressions(LogicalOperator *op, SubqueryExpression *subqu
 	// with depth == 0 (belonging to the subquery) and a correlating expression
 	// with depth == 1 (belonging to the main expression) we use the matcher to
 	// find this comparison
-	auto equality_rule = make_unique_base<AbstractRuleNode, ComparisonNodeType>();
-	equality_rule->children.push_back(make_unique<ColumnRefNodeDepth>(0));
-	equality_rule->children.push_back(make_unique<ColumnRefNodeDepth>(1));
-	equality_rule->child_policy = ChildPolicy::SOME;
-
-	auto filter_rule = make_unique<LogicalNodeType>(LogicalOperatorType::FILTER);
-	filter_rule->children.push_back(move(equality_rule));
-	filter_rule->child_policy = ChildPolicy::SOME;
-
-	while (true) {
-		// search for a correlating comparison
-		// this is a comparison like e.g. a.A = b.A
-		// where "a" is from the subquery, and "b" from the outer layer
-		vector<AbstractOperator> sq_bindings;
-		auto subquery_op = AbstractOperator(op);
-		for (auto it = subquery_op.begin(); it != subquery_op.end(); it++) {
-			if (Rewriter::MatchOperands(filter_rule.get(), *it, sq_bindings)) {
-				break;
+	if (op->type != LogicalOperatorType::FILTER) {
+		// not a filter, cannot extract from here
+		// first check if there are any correlated expressions here
+		// if there are we abandon the subquery rewriting
+		for(auto &expr : op->expressions) {
+			if (ContainsCorrelatedExpressions(*expr)) {
+				return false;
 			}
 		}
-		if (sq_bindings.size() == 0) {
-			// correlated comparison operator not found inside subquery anymore
-			break;
+		// if there are not 
+		for(auto &child : op->children) {
+			if (!ExtractCorrelatedExpressions(child.get(), subquery, subquery_table_index, join_conditions)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	// filter, check for each expression if it is a comparison between a correlated and non-correlated expression
+	for(size_t i = 0; i < op->expressions.size(); i++) {
+		auto &expr = op->expressions[i];
+		if (expr->GetExpressionClass() != ExpressionClass::COMPARISON) {
+			// not a comparison, skip this entry
+			continue;
+		}
+		auto sq_comp = (ComparisonExpression *)expr.get();
+		if (sq_comp->left->type != ExpressionType::COLUMN_REF ||
+			sq_comp->right->type != ExpressionType::COLUMN_REF) {
+			// not a comparison between column refs, skip it
+			continue;
+		}
+		auto sq_colref_left = (ColumnRefExpression *) sq_comp->left.get();
+		auto sq_colref_right = (ColumnRefExpression *) sq_comp->right.get();
+		if (sq_colref_left->depth == 0 && sq_colref_right->depth == 0) {
+			// not a correlated comparison
+			continue;
+		}
+		if (sq_colref_left->depth > 0 && sq_colref_right->depth > 0) {
+			// comparison only between correlated columns
+			continue;
+		}
+		bool is_inverted = false;
+		ColumnRefExpression *sq_colref_inner, *sq_colref_outer;
+		if (sq_colref_left->depth == 1) {
+			sq_colref_inner = sq_colref_right;
+			sq_colref_outer = sq_colref_left;
+			is_inverted = true;
+		} else if (sq_colref_right->depth == 1) {
+			sq_colref_inner = sq_colref_left;
+			sq_colref_outer = sq_colref_right;
+		} else {
+			// correlation goes up more than one level, abort
+			continue;
 		}
 
-		auto *sq_filter = (LogicalFilter *)sq_bindings[0].value.op;
-		auto *sq_comp = (ComparisonExpression *)sq_bindings[1].value.expr;
-		auto *sq_colref_inner = (ColumnRefExpression *)sq_bindings[2].value.expr;
-		auto *sq_colref_outer = (ColumnRefExpression *)sq_bindings[3].value.expr;
+
 		auto comparison_type = sq_comp->type;
 
-		auto comp_left =
-		    make_unique_base<Expression, ColumnRefExpression>(sq_colref_inner->return_type, sq_colref_inner->binding);
-		auto comp_right =
-		    make_unique_base<Expression, ColumnRefExpression>(sq_colref_outer->return_type, sq_colref_outer->binding);
+		auto comp_left = make_unique<ColumnRefExpression>(sq_colref_inner->return_type, sq_colref_inner->binding);
+		auto comp_right = make_unique<ColumnRefExpression>(sq_colref_outer->return_type, sq_colref_outer->binding);
 
-		// index of uncorrelated expression (0 or 1)
-		size_t uncorrelated_index = sq_comp->children[0].get() == sq_colref_inner ? 0 : 1;
-		auto uncorrelated_expression = move(sq_comp->children[uncorrelated_index]);
-		// correlated expression
-		auto correlated_expression = move(sq_comp->children[1 - uncorrelated_index]);
+		// uncorrelated expression (depth = 0)
+		auto uncorrelated_expression = !is_inverted ? move(sq_comp->left) : move(sq_comp->right);
+		// correlated expression (depth = 1)
+		auto correlated_expression = !is_inverted ? move(sq_comp->right) : move(sq_comp->left);
 
 		if (op->type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY) {
 			auto aggr = (LogicalAggregate *)op;
@@ -351,12 +403,7 @@ bool ExtractCorrelatedExpressions(LogicalOperator *op, SubqueryExpression *subqu
 		}
 
 		// remove the correlated expression from the filter in the subquery
-		for (size_t i = 0; i < sq_filter->expressions.size(); i++) {
-			if (sq_filter->expressions[i].get() == sq_comp) {
-				sq_filter->expressions.erase(sq_filter->expressions.begin() + i);
-				break;
-			}
-		}
+		op->expressions.erase(op->expressions.begin() + i);
 
 		// now we introduce a new join condition based on this correlated
 		// expression
@@ -377,26 +424,21 @@ bool ExtractCorrelatedExpressions(LogicalOperator *op, SubqueryExpression *subqu
 			assert(condition.left->return_type == condition.right->return_type);
 		}
 		condition.comparison = comparison_type;
-		if (uncorrelated_index == 0) {
+		if (is_inverted) {
 			// flip the comparison
 			condition.comparison = ComparisonExpression::FlipComparisionExpression(condition.comparison);
 		}
 
 		// add the join condition
 		join_conditions.push_back(move(condition));
+		i--;
 	}
 
 	// check if there are any correlated column references left
 	// if there are any we couldn't extract then the subquery cannot be rewritten
-	auto subquery_op = AbstractOperator(op);
-	for (auto it = subquery_op.begin(); it != subquery_op.end(); it++) {
-		if (it->type == AbstractOperatorType::ABSTRACT_EXPRESSION) {
-			if (it->value.expr->type == ExpressionType::COLUMN_REF) {
-				auto colref = (ColumnRefExpression *)it->value.expr;
-				if (colref->depth > 0) {
-					return false;
-				}
-			}
+	for(auto &expr : op->expressions) {
+		if (ContainsCorrelatedExpressions(*expr)) {
+			return false;
 		}
 	}
 	return true;

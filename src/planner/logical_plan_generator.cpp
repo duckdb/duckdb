@@ -172,9 +172,9 @@ static unique_ptr<Expression> extract_aggregates(unique_ptr<Expression> expr, ve
 		result.push_back(move(expr));
 		return colref_expr;
 	}
-	for (size_t expr_idx = 0; expr_idx < expr->children.size(); expr_idx++) {
-		expr->children[expr_idx] = extract_aggregates(move(expr->children[expr_idx]), result, ngroups);
-	}
+	expr->EnumerateChildren([&](unique_ptr<Expression> expr) -> unique_ptr<Expression> {
+		return extract_aggregates(move(expr), result, ngroups);
+	});
 	return expr;
 }
 
@@ -186,9 +186,9 @@ static unique_ptr<Expression> extract_windows(unique_ptr<Expression> expr, vecto
 		return colref_expr;
 	}
 
-	for (size_t expr_idx = 0; expr_idx < expr->children.size(); expr_idx++) {
-		expr->children[expr_idx] = extract_windows(move(expr->children[expr_idx]), result, ngroups);
-	}
+	expr->EnumerateChildren([&](unique_ptr<Expression> expr) -> unique_ptr<Expression> {
+		return extract_windows(move(expr), result, ngroups);
+	});
 	return expr;
 }
 
@@ -386,80 +386,76 @@ void LogicalPlanGenerator::Visit(SetOperationNode &statement) {
 	VisitQueryNode(statement);
 }
 
-static void cast_children_to_equal_types(Expression &expr, size_t start_idx = 0) {
-	// first figure out the widest type
-	TypeId max_type = expr.return_type;
-	for (size_t i = start_idx; i < expr.children.size(); i++) {
-		TypeId child_type = expr.children[i]->return_type;
-		if (child_type > max_type) {
-			max_type = child_type;
+//! Get the combined type of a set of types
+static TypeId GetMaxType(vector<TypeId> types) {
+	TypeId result_type = TypeId::INVALID;
+	for(auto &type : types) {
+		if (type > result_type) {
+			result_type = type;
 		}
 	}
-	// now add casts where appropriate
-	for (size_t i = start_idx; i < expr.children.size(); i++) {
-		TypeId child_type = expr.children[i]->return_type;
-		if (child_type != max_type) {
-			auto cast = make_unique<CastExpression>(max_type, move(expr.children[i]));
-			cast->ResolveType();
-			expr.children[i] = move(cast);
-		}
+	return result_type;
+}
+
+//! Add an optional cast to a set of types
+static unique_ptr<Expression> AddCastToType(TypeId type, unique_ptr<Expression> expr) {
+	if (expr->return_type != type) {
+		return make_unique<CastExpression>(type, move(expr));
 	}
+	return expr;
 }
 
 unique_ptr<Expression> LogicalPlanGenerator::Visit(AggregateExpression &expr) {
 	SQLNodeVisitor::Visit(expr);
-	// add cast if types don't match
-	for (size_t i = 0; i < expr.children.size(); i++) {
-		auto &child = expr.children[i];
-		if (child->return_type != expr.return_type) {
-			auto cast = make_unique<CastExpression>(expr.return_type, move(expr.children[i]));
-			expr.children[i] = move(cast);
-		}
-	}
+	// add cast to child of aggregate if types don't match
+	expr.child = AddCastToType(expr.return_type, move(expr.child));
 	return nullptr;
 }
 
 unique_ptr<Expression> LogicalPlanGenerator::Visit(CaseExpression &expr) {
 	SQLNodeVisitor::Visit(expr);
-	assert(expr.children.size() == 3);
 	// check needs to be bool
-	if (expr.children[0]->return_type != TypeId::BOOLEAN) {
-		auto cast = make_unique<CastExpression>(TypeId::BOOLEAN, move(expr.children[0]));
-		expr.children[0] = move(cast);
-	}
-	// others need same type
-	cast_children_to_equal_types(expr, 1);
+	expr.check = AddCastToType(TypeId::BOOLEAN, move(expr.check));
+	// res_if_true and res_if_false need the same type
+	auto result_type = GetMaxType({expr.result_if_true->return_type, expr.result_if_false->return_type});
+	expr.result_if_true = AddCastToType(result_type, move(expr.result_if_true));
+	expr.result_if_false = AddCastToType(result_type, move(expr.result_if_false));
+	assert(result_type == expr.return_type);
 	return nullptr;
 }
 
 unique_ptr<Expression> LogicalPlanGenerator::Visit(ComparisonExpression &expr) {
 	SQLNodeVisitor::Visit(expr);
-	cast_children_to_equal_types(expr);
+	if (expr.left->return_type != expr.right->return_type) {
+		// add a cast if the types don't match
+		auto result_type = GetMaxType({expr.left->return_type, expr.right->return_type});
+		expr.left = AddCastToType(result_type, move(expr.left));
+		expr.right = AddCastToType(result_type, move(expr.right));
+	}
 	return nullptr;
 }
 
 // TODO: this is ugly, generify functionality
 unique_ptr<Expression> LogicalPlanGenerator::Visit(ConjunctionExpression &expr) {
 	SQLNodeVisitor::Visit(expr);
-
-	if (expr.children[0]->return_type != TypeId::BOOLEAN) {
-		auto cast = make_unique<CastExpression>(TypeId::BOOLEAN, move(expr.children[0]));
-		expr.children[0] = move(cast);
-	}
-	if (expr.children[1]->return_type != TypeId::BOOLEAN) {
-		auto cast = make_unique<CastExpression>(TypeId::BOOLEAN, move(expr.children[1]));
-		expr.children[1] = move(cast);
-	}
+	expr.left = AddCastToType(TypeId::BOOLEAN, move(expr.left));
+	expr.right = AddCastToType(TypeId::BOOLEAN, move(expr.right));
 	return nullptr;
 }
 
 unique_ptr<Expression> LogicalPlanGenerator::Visit(OperatorExpression &expr) {
 	SQLNodeVisitor::Visit(expr);
 	if (expr.type == ExpressionType::OPERATOR_NOT && expr.children[0]->return_type != TypeId::BOOLEAN) {
-		auto cast = make_unique<CastExpression>(TypeId::BOOLEAN, move(expr.children[0]));
-		expr.children[0] = move(cast);
+		expr.children[0] = AddCastToType(TypeId::BOOLEAN, move(expr.children[0]));
 	} else {
-		cast_children_to_equal_types(expr);
+		vector<TypeId> types;
+		for(auto &child : expr.children) {
+			types.push_back(child->return_type);
+		}
+		auto result_type = GetMaxType(types);
+		for(size_t i = 0; i < expr.children.size(); i++) {
+			expr.children[i] = AddCastToType(result_type, move(expr.children[i]));
+		}
 	}
 	return nullptr;
 }

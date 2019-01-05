@@ -110,13 +110,10 @@ void PhysicalPlanGenerator::Visit(LogicalCreateIndex &op) {
 	this->plan = make_unique<PhysicalCreateIndex>(op, op.table, op.column_ids, move(op.expressions), move(op.info));
 }
 
-static bool IsComparison(ExpressionType type) {
-	return type == ExpressionType::COMPARE_EQUAL || type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
-	       type == ExpressionType::COMPARE_LESSTHANOREQUALTO || type == ExpressionType::COMPARE_LESSTHAN ||
-	       type == ExpressionType::COMPARE_GREATERTHAN;
-}
+#include "optimizer/matcher/expression_matcher.hpp"
 
 //! Attempt to create an index scan from a filter + get, if possible
+// FIXME: this should not be done here
 static unique_ptr<PhysicalOperator> CreateIndexScan(LogicalFilter &filter, LogicalGet &scan) {
 	if (!scan.table) {
 		return nullptr;
@@ -143,23 +140,30 @@ static unique_ptr<PhysicalOperator> CreateIndexScan(LogicalFilter &filter, Logic
 		auto high_comparison_type = expr->type;
 		for (size_t i = 0; i < filter.expressions.size(); i++) {
 			expr = filter.expressions[i].get();
-			comparison_type = expr->type;
-			if (IsComparison(comparison_type) && (expr->children[0]->type == ExpressionType::VALUE_CONSTANT ||
-			                                      expr->children[1]->type == ExpressionType::VALUE_CONSTANT)) {
-				auto comparison = (ComparisonExpression *)expr;
+			// create a matcher for a comparison with a constant
+			ComparisonExpressionMatcher matcher;
+			// match on a comparison type
+			matcher.expr_type = make_unique<ComparisonExpressionTypeMatcher>();
+			// match on a constant comparison with the indexed expression
+			matcher.matchers.push_back(make_unique<ExpressionEqualityMatcher>(order_index->expressions[0].get()));
+			matcher.matchers.push_back(make_unique<ConstantExpressionMatcher>());
+			matcher.policy = SetMatcher::Policy::UNORDERED;
 
+			vector<Expression*> bindings;
+			
+			if (matcher.Match(expr, bindings)) {
 				// range or equality comparison with constant value
 				// we can use our index here
-				// figure out if the expression matches the expression of the index
-				int child_side = expr->children[0]->type == ExpressionType::VALUE_CONSTANT ? 1 : 0;
-				int constant_side = 1 - child_side;
-				if (!order_index->expressions[0]->Equals(comparison->children[child_side].get())) {
-					// the expression is not indexed by this index so we cannot use it
-					continue;
-				}
+				// bindings[0] = the expression
+				// bindings[1] = the index expression
+				// bindings[2] = the constant
+				auto comparison = (ComparisonExpression*) bindings[0];
+				assert(bindings[0]->GetExpressionClass() == ExpressionClass::COMPARISON);
+				assert(bindings[1]->Equals(order_index->expressions[0].get()));
+				assert(bindings[2]->type == ExpressionType::VALUE_CONSTANT);
 
-				auto constant_value = ((ConstantExpression *)expr->children[constant_side].get())->value;
-				if (child_side == 1) {
+				auto constant_value = ((ConstantExpression *)bindings[2])->value;
+				if (comparison->right.get() == bindings[1]) {
 					// the expression is on the right side, we flip them around
 					comparison_type = ComparisonExpression::FlipComparisionExpression(comparison_type);
 				}

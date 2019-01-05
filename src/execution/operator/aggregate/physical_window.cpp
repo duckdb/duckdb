@@ -252,9 +252,9 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 
 	// evaluate inner expressions of window functions, could be more complex
 	ChunkCollection payload_collection;
-	if (wexpr->children.size() > 0) {
+	if (wexpr->child) {
 		// TODO: child[0] may be a scalar, don't need to materialize the whole collection then
-		MaterializeExpression(context, wexpr->children[0].get(), input, payload_collection);
+		MaterializeExpression(context, wexpr->child.get(), input, payload_collection);
 	}
 
 	ChunkCollection leadlag_offset_collection;

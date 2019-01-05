@@ -24,6 +24,20 @@ unique_ptr<Expression> ComparisonExpression::Deserialize(ExpressionType type, Ty
 	return make_unique<ComparisonExpression>(type, move(left_child), move(right_child));
 }
 
+bool ComparisonExpression::Equals(const Expression *other_) const {
+	if (!Expression::Equals(other_)) {
+		return false;
+	}
+	auto other = (ComparisonExpression*) other_;
+	if (!left->Equals(other->left.get())) {
+		return false;
+	}
+	if (!right->Equals(other->right.get())) {
+		return false;
+	}
+	return true;
+}
+
 void ComparisonExpression::EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
 	left = callback(move(left));
 	right = callback(move(right));

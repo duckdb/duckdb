@@ -27,7 +27,6 @@ using namespace std;
 
 template class std::unique_ptr<CatalogEntry>;
 template class std::unique_ptr<Expression>;
-template class std::unique_ptr<AbstractRuleNode>;
 template class std::unique_ptr<BindContext>;
 template class std::unique_ptr<char[]>;
 template class std::unique_ptr<DuckDBResult>;
@@ -81,7 +80,6 @@ template class std::vector<size_t>;
 INSTANTIATE_VECTOR(std::vector<ExpressionStatistics>);
 template class std::vector<string>;
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Expression>>)
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<AbstractRuleNode>>);
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<DataChunk>>);
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<SQLStatement>>);
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<PhysicalOperator>>);
@@ -92,7 +90,6 @@ template class std::vector<TypeId>;
 template class std::vector<Value>;
 template class std::vector<int>;
 INSTANTIATE_VECTOR(std::vector<WALEntryData>);
-INSTANTIATE_VECTOR(std::vector<AbstractOperator>);
 template class std::vector<std::vector<Expression *>>;
 
 template struct std::atomic<size_t>;

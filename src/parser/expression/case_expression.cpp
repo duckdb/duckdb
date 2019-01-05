@@ -36,6 +36,23 @@ unique_ptr<Expression> CaseExpression::Deserialize(ExpressionType type, TypeId r
 	return expression;
 }
 
+bool CaseExpression::Equals(const Expression *other_) const {
+	if (!Expression::Equals(other_)) {
+		return false;
+	}
+	auto other = (CaseExpression*) other_;
+	if (!check->Equals(other->check.get())) {
+		return false;
+	}
+	if (!result_if_true->Equals(other->result_if_true.get())) {
+		return false;
+	}
+	if (!result_if_false->Equals(other->result_if_false.get())) {
+		return false;
+	}
+	return true;
+}
+
 void CaseExpression::EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
 	check           = callback(move(check));
 	result_if_true  = callback(move(result_if_true));

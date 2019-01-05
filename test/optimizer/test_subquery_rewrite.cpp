@@ -2,8 +2,8 @@
 #include "common/helper.hpp"
 #include "duckdb.hpp"
 #include "expression_helper.hpp"
-#include "optimizer/logical_rules/list.hpp"
-#include "optimizer/rewriter.hpp"
+// #include "optimizer/logical_rules/list.hpp"
+// #include "optimizer/rewriter.hpp"
 #include "optimizer/subquery_rewriter.hpp"
 
 #include <vector>
@@ -35,7 +35,7 @@ TEST_CASE("Subquery rewriting", "[subquery_rewrite]") {
 	                                     "FROM t1 ts WHERE t1.a=ts.a)");
 	SubqueryRewriter rewriter(*planner->context);
 	auto plan = rewriter.Rewrite(move(planner->plan));
-	// now we expect a subquery
+	// now we expect the subquery to be flattened
 	REQUIRE(FindLogicalNode(plan.get(), LogicalOperatorType::SUBQUERY));
 };
 
@@ -54,7 +54,7 @@ TEST_CASE("(NOT) IN clause rewriting", "[subquery_rewrite]") {
 
 		SubqueryRewriter rewriter(*planner->context);
 		auto plan = rewriter.Rewrite(move(planner->plan));
-		// now we expect a subquery
+		// now we expect the subquery to be flattened
 		REQUIRE(FindLogicalNode(plan.get(), LogicalOperatorType::SUBQUERY));
 	}
 	// semi join
@@ -64,7 +64,7 @@ TEST_CASE("(NOT) IN clause rewriting", "[subquery_rewrite]") {
 
 		SubqueryRewriter rewriter(*planner->context);
 		auto plan = rewriter.Rewrite(move(planner->plan));
-		// now we expect a subquery
+		// now we expect the subquery to be flattened
 		REQUIRE(FindLogicalNode(plan.get(), LogicalOperatorType::SUBQUERY));
 	}
 };

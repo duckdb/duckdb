@@ -45,6 +45,8 @@ public:
 
 	string GetName() const override;
 
+	bool Equals(const Expression *other) const override;
+
 	void EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) override;
 	void EnumerateChildren(std::function<void(Expression* expression)> callback) const override;
 

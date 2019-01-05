@@ -13,33 +13,26 @@ unique_ptr<Expression> Transformer::TransformCoalesce(A_Expr *root) {
 		return nullptr;
 	}
 	auto coalesce_args = reinterpret_cast<List *>(root->lexpr);
-	// TODO: this is somewhat duplicated from the CASE rewrite below, perhaps
-	// they can be merged
-	auto exp_root = unique_ptr<Expression>(new CaseExpression());
-	Expression *cur_root = exp_root.get();
-	Expression *next_root = nullptr;
 
+	auto exp_root = make_unique<CaseExpression>();
+	auto cur_root = exp_root.get();
 	for (auto cell = coalesce_args->head; cell && cell->next; cell = cell->next) {
-		// we need this twice
+		// get the value of the COALESCE
 		auto value_expr = TransformExpression(reinterpret_cast<Node *>(cell->data.ptr_value));
-		auto res_true = TransformExpression(reinterpret_cast<Node *>(cell->data.ptr_value));
-
-		auto test = unique_ptr<Expression>(
-		    new OperatorExpression(ExpressionType::OPERATOR_IS_NOT_NULL, TypeId::BOOLEAN, move(value_expr)));
-
-		// the last argument does not need its own CASE because if we get there
-		// we might as well return it directly
-		unique_ptr<Expression> res_false;
+		// perform an IS NOT NULL comparison with the value here
+		cur_root->check = make_unique<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, TypeId::BOOLEAN, value_expr->Copy());
+		// if IS NOT NULL, we output the value
+		cur_root->result_if_true = move(value_expr);
 		if (cell->next->next == nullptr) {
-			res_false = TransformExpression(reinterpret_cast<Node *>(cell->next->data.ptr_value));
+			// if there is no next in the chain, the COALESCE ends there
+			cur_root->result_if_false = TransformExpression(reinterpret_cast<Node *>(cell->next->data.ptr_value));
 		} else {
-			res_false = unique_ptr<Expression>(new CaseExpression());
-			next_root = res_false.get();
+			// more COALESCE parameters remain, create a nested CASE statement
+			auto next_case = make_unique<CaseExpression>();
+			auto case_ptr = next_case.get();
+			cur_root->result_if_false = move(next_case);
+			cur_root = case_ptr;
 		}
-		cur_root->AddChild(move(test));
-		cur_root->AddChild(move(res_true));
-		cur_root->AddChild(move(res_false));
-		cur_root = next_root;
 	}
 	return exp_root;
 }

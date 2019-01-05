@@ -36,7 +36,13 @@ public:
 	//! Deserializes a blob back into an CaseExpression
 	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
 
+	bool Equals(const Expression *other) const override;
+
 	void ResolveType() override;
+
+	string ToString() const override {
+		return "CASE WHEN (" + check->ToString() + ") THEN (" + result_if_true->ToString() + ") ELSE (" + result_if_false->ToString() + ")";
+	}
 
 	unique_ptr<Expression> check;
 	unique_ptr<Expression> result_if_true;

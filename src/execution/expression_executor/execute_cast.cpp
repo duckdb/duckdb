@@ -8,7 +8,7 @@ using namespace std;
 unique_ptr<Expression> ExpressionExecutor::Visit(CastExpression &expr) {
 	// resolve the child
 	Vector l;
-	expr.children[0]->Accept(this);
+	expr.child->Accept(this);
 	if (vector.type == expr.return_type) {
 		// NOP cast
 		return nullptr;

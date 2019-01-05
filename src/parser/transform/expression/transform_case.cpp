@@ -19,47 +19,40 @@ unique_ptr<Expression> Transformer::TransformCase(CaseExpr *root) {
 	if (root->defresult) {
 		def_res = TransformExpression(reinterpret_cast<Node *>(root->defresult));
 	} else {
-		def_res = unique_ptr<Expression>(new ConstantExpression(Value()));
+		def_res = make_unique<ConstantExpression>(Value());
 	}
 	// def_res will be the else part of the innermost case expression
 
 	// CASE WHEN e1 THEN r1 WHEN w2 THEN r2 ELSE r3 is rewritten to
 	// CASE WHEN e1 THEN r1 ELSE CASE WHEN e2 THEN r2 ELSE r3
 
-	auto exp_root = unique_ptr<Expression>(new CaseExpression());
-	Expression *cur_root = exp_root.get();
-	Expression *next_root = nullptr;
-
+	auto exp_root = make_unique<CaseExpression>();
+	auto cur_root = exp_root.get();
 	for (auto cell = root->args->head; cell != nullptr; cell = cell->next) {
 		CaseWhen *w = reinterpret_cast<CaseWhen *>(cell->data.ptr_value);
 
 		auto test_raw = TransformExpression(reinterpret_cast<Node *>(w->expr));
 		unique_ptr<Expression> test;
-		// TODO: how do we copy those things?
 		auto arg = TransformExpression(reinterpret_cast<Node *>(root->arg));
-
 		if (arg) {
-			test = unique_ptr<Expression>(
-			    new ComparisonExpression(ExpressionType::COMPARE_EQUAL, move(arg), move(test_raw)));
+			test = make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(arg), move(test_raw));
 		} else {
 			test = move(test_raw);
 		}
 
-		auto res_true = TransformExpression(reinterpret_cast<Node *>(w->result));
-
-		unique_ptr<Expression> res_false;
+		cur_root->check = move(test);
+		cur_root->result_if_true = TransformExpression(reinterpret_cast<Node *>(w->result));
 		if (cell->next == nullptr) {
-			res_false = move(def_res);
+			// finished all cases
+			// res_false is the default result
+			cur_root->result_if_false = move(def_res);
 		} else {
-			res_false = unique_ptr<Expression>(new CaseExpression());
-			next_root = res_false.get();
+			// more cases remain, create a case statement within the FALSE branch
+			auto next_case = make_unique<CaseExpression>();
+			auto case_ptr = next_case.get();
+			cur_root->result_if_false = move(next_case);
+			cur_root = case_ptr;
 		}
-
-		cur_root->AddChild(move(test));
-		cur_root->AddChild(move(res_true));
-		cur_root->AddChild(move(res_false));
-
-		cur_root = next_root;
 	}
 
 	return exp_root;

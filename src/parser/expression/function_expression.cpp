@@ -46,23 +46,16 @@ uint64_t FunctionExpression::Hash() const {
 	return result;
 }
 
-bool FunctionExpression::Equals(const Expression *other_) const {
-	if (!Expression::Equals(other_)) {
-		return false;
-	}
-	auto other = (FunctionExpression *)other_;
-	if (schema != other->schema && function_name != other->function_name) {
-		return false;
-	}
-	if (other->children.size() != children.size()) {
-		return false;
-	}
+void FunctionExpression::EnumerateChildren(function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
 	for(size_t i = 0; i < children.size(); i++) {
-		if (!children[i]->Equals(other->children[i].get())) {
-			return false;
-		}
+		children[i] = callback(move(children[i]));
 	}
-	return true;
+}
+
+void FunctionExpression::EnumerateChildren(function<void(Expression* expression)> callback) const {
+	for(size_t i = 0; i < children.size(); i++) {
+		callback(children[i].get());
+	}
 }
 
 void FunctionExpression::Serialize(Serializer &serializer) {
@@ -81,6 +74,25 @@ unique_ptr<Expression> FunctionExpression::Deserialize(ExpressionType type, Type
 	auto function = make_unique<FunctionExpression>(function_name, children);
 	function->schema = schema;
 	return function;
+}
+
+bool FunctionExpression::Equals(const Expression *other_) const {
+	if (!Expression::Equals(other_)) {
+		return false;
+	}
+	auto other = (FunctionExpression *)other_;
+	if (schema != other->schema && function_name != other->function_name) {
+		return false;
+	}
+	if (other->children.size() != children.size()) {
+		return false;
+	}
+	for(size_t i = 0; i < children.size(); i++) {
+		if (!children[i]->Equals(other->children[i].get())) {
+			return false;
+		}
+	}
+	return true;
 }
 
 string FunctionExpression::ToString() const {

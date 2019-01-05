@@ -49,12 +49,14 @@ bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<s
 			return false;
 		}
 	}
-	for (auto &child : expression.children) {
-		if (!ExtractBindings(*child, bindings)) {
-			return false;
+	bool can_reorder = true;
+	expression.EnumerateChildren([&](Expression *expr) {
+		if (!ExtractBindings(*expr, bindings)) {
+			can_reorder = false;
+			return;
 		}
-	}
-	return true;
+	});
+	return can_reorder;
 }
 
 static void ExtractFilters(LogicalOperator *op, vector<unique_ptr<Expression>> &filters) {
@@ -137,10 +139,10 @@ static JoinSide GetJoinSide(Expression &expression, unordered_set<size_t> &left_
 		return JoinSide::BOTH;
 	}
 	JoinSide join_side = JoinSide::NONE;
-	for (auto &child : expression.children) {
+	expression.EnumerateChildren([&](Expression *child) {
 		auto child_side = GetJoinSide(*child, left_bindings, right_bindings);
 		join_side = CombineJoinSide(child_side, join_side);
-	}
+	});
 	return join_side;
 }
 
@@ -150,8 +152,9 @@ static unique_ptr<LogicalOperator> CreateJoinCondition(unique_ptr<LogicalOperato
                                                        unordered_set<size_t> &right_bindings) {
 	if (expr->type >= ExpressionType::COMPARE_EQUAL && expr->type <= ExpressionType::COMPARE_NOTLIKE) {
 		// comparison
-		auto left_side = GetJoinSide(*expr->children[0], left_bindings, right_bindings);
-		auto right_side = GetJoinSide(*expr->children[1], left_bindings, right_bindings);
+		auto &comparison = (ComparisonExpression&) *expr;
+		auto left_side = GetJoinSide(*comparison.left, left_bindings, right_bindings);
+		auto right_side = GetJoinSide(*comparison.right, left_bindings, right_bindings);
 		auto total_side = CombineJoinSide(left_side, right_side);
 		// check if we can use this condition as a join condition
 		if (total_side != JoinSide::BOTH) {
@@ -163,30 +166,36 @@ static unique_ptr<LogicalOperator> CreateJoinCondition(unique_ptr<LogicalOperato
 			// join condition can be divided in a left/right side
 			JoinCondition condition;
 			condition.comparison = expr->type;
-			int left_index = 0;
+			auto left = move(comparison.left);
+			auto right = move(comparison.right);
 			if (left_side == JoinSide::RIGHT) {
 				// left = right, right = left, flip the comparison symbol and reverse sides
-				left_index = 1;
+				swap(left, right);
 				condition.comparison = ComparisonExpression::FlipComparisionExpression(expr->type);
 			}
-			condition.left = move(expr->children[left_index]);
-			condition.right = move(expr->children[1 - left_index]);
+			condition.left = move(left);
+			condition.right = move(right);
 			join.conditions.push_back(move(condition));
 			return op;
 		}
 	} else if (expr->type == ExpressionType::OPERATOR_NOT) {
-		assert(expr->children.size() == 1);
-		ExpressionType child_type = expr->children[0]->GetExpressionType();
+		auto &op_expr = (OperatorExpression&) *expr;
+		assert(op_expr.children.size() == 1);
+		ExpressionType child_type = op_expr.children[0]->GetExpressionType();
 
+		// the condition is ON NOT (EXPRESSION)
+		// we can transform this to remove the NOT if the child is a Comparison
+		// e.g.:
 		// ON NOT (X = 3) can be turned into ON (X <> 3)
+		// ON NOT (X > 3) can be turned into ON (X <= 3)
 		// for non-comparison operators here we just push the filter
 		if (child_type >= ExpressionType::COMPARE_EQUAL && child_type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
 			// switcheroo the child condition
 			// our join needs to compare explicit left and right sides. So we
 			// invert the condition to express NOT, this way we can still use
 			// equi-joins
-			expr->children[0]->type = ComparisonExpression::NegateComparisionExpression(child_type);
-			return CreateJoinCondition(move(op), join, move(expr->children[0]), left_bindings, right_bindings);
+			op_expr.children[0]->type = ComparisonExpression::NegateComparisionExpression(child_type);
+			return CreateJoinCondition(move(op), join, move(op_expr.children[0]), left_bindings, right_bindings);
 		}
 	}
 	// unrecognized type for join condition
@@ -641,13 +650,14 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 				       (RelationSet::IsSubset(left.first, f->right_set) &&
 				        RelationSet::IsSubset(right.first, f->left_set)));
 				JoinCondition cond;
+				assert(condition->GetExpressionClass() == ExpressionClass::COMPARISON);
+				auto &comparison = (ComparisonExpression&) *condition;
 				// we need to figure out which side is which by looking at the relations available to us
-				int left_child = RelationSet::IsSubset(left.first, f->left_set) ? 0 : 1;
-				int right_child = 1 - left_child;
-				cond.left = move(condition->children[left_child]);
-				cond.right = move(condition->children[right_child]);
+				bool invert = RelationSet::IsSubset(left.first, f->left_set) ? false : true;
+				cond.left = !invert ? move(comparison.left) : move(comparison.right);
+				cond.right = !invert ? move(comparison.right) : move(comparison.left);
 				cond.comparison = condition->type;
-				if (left_child != 0) {
+				if (invert) {
 					// reverse comparison expression if we reverse the order of the children
 					cond.comparison = ComparisonExpression::FlipComparisionExpression(cond.comparison);
 				}
@@ -788,8 +798,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 			auto comparison = (ComparisonExpression *)filter.get();
 			// extract the bindings that are required for the left and right side of the comparison
 			unordered_set<size_t> left_bindings, right_bindings;
-			ExtractBindings(*comparison->children[0], left_bindings);
-			ExtractBindings(*comparison->children[1], right_bindings);
+			ExtractBindings(*comparison->left, left_bindings);
+			ExtractBindings(*comparison->right, right_bindings);
 			if (left_bindings.size() > 0 && right_bindings.size() > 0) {
 				// both the left and the right side have bindings
 				// first create the relation sets, if they do not exist

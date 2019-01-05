@@ -19,7 +19,7 @@ public:
 	PhysicalTableFunction(LogicalOperator &op, TableFunctionCatalogEntry *function,
 	                      unique_ptr<Expression> function_call)
 	    : PhysicalOperator(PhysicalOperatorType::TABLE_FUNCTION, op.types), function(function),
-	      function_call(std::move(function_call)) {
+	      function_call(move(function_call)) {
 	}
 
 	//! Function to call

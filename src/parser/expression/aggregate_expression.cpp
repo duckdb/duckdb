@@ -109,6 +109,21 @@ unique_ptr<Expression> AggregateExpression::Deserialize(ExpressionType type, Typ
 	return make_unique<AggregateExpression>(type, move(child));
 }
 
+bool AggregateExpression::Equals(const Expression *other_) const {
+	if (!Expression::Equals(other_)) {
+		return false;
+	}
+	auto other = (AggregateExpression*) other_;
+	if (child) {
+		if (!child->Equals(other->child.get())) {
+			return false;
+		}
+	} else if (other->child) {
+		return false;
+	}
+	return true;
+}
+
 string AggregateExpression::GetName() const {
 	if (!alias.empty()) {
 		return alias;

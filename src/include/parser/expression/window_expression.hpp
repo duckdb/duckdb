@@ -55,6 +55,7 @@ public:
 	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into an WindowExpression
 	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
+	bool Equals(const Expression *other) const override;
 
 	string ToString() const override {
 		return "WINDOW";

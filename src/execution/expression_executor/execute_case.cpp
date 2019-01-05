@@ -6,15 +6,12 @@ using namespace duckdb;
 using namespace std;
 
 unique_ptr<Expression> ExpressionExecutor::Visit(CaseExpression &expr) {
-	if (expr.children.size() != 3) {
-		throw Exception("Cast needs three child nodes");
-	}
 	Vector check, res_true, res_false;
-	expr.children[0]->Accept(this);
+	expr.check->Accept(this);
 	vector.Move(check);
-	expr.children[1]->Accept(this);
+	expr.result_if_true->Accept(this);
 	vector.Move(res_true);
-	expr.children[2]->Accept(this);
+	expr.result_if_false->Accept(this);
 	vector.Move(res_false);
 
 	vector.Initialize(res_true.type);
