@@ -33,6 +33,12 @@
 #ifndef __SDS_H
 #define __SDS_H
 
+
+#ifdef _MSC_VER
+#define __attribute__(A)
+#define ssize_t int64_t
+#endif
+
 #define SDS_MAX_PREALLOC (1024*1024)
 const char *SDS_NOINIT;
 
