@@ -8,7 +8,7 @@
 using namespace duckdb;
 using namespace std;
 
-bool ExtractCorrelatedExpressions(LogicalOperator *op, SubqueryExpression *subquery, size_t subquery_table_index,
+bool ExtractCorrelatedExpressions(LogicalOperator *op, LogicalOperator *current_op, SubqueryExpression *subquery, size_t subquery_table_index,
                                   vector<JoinCondition> &join_conditions);
 
 unique_ptr<LogicalOperator> SubqueryRewriter::Rewrite(unique_ptr<LogicalOperator> plan) {
@@ -172,7 +172,7 @@ bool SubqueryRewriter::RewriteExistsClause(LogicalFilter &filter, OperatorExpres
 
 	// step 2: find correlations to add to the list of join conditions
 	vector<JoinCondition> join_conditions;
-	if (!ExtractCorrelatedExpressions(node, subquery, subquery_table_index, join_conditions)) {
+	if (!ExtractCorrelatedExpressions(node, node, subquery, subquery_table_index, join_conditions)) {
 		return false;
 	}
 
@@ -253,7 +253,7 @@ bool SubqueryRewriter::RewriteSubqueryComparison(LogicalFilter &filter, Comparis
 	size_t old_groups = aggr->groups.size();
 	// step 2: find correlations to add to the list of join conditions
 	vector<JoinCondition> join_conditions;
-	if (!ExtractCorrelatedExpressions(aggr, subquery, subquery_table_index, join_conditions)) {
+	if (!ExtractCorrelatedExpressions(aggr, aggr, subquery, subquery_table_index, join_conditions)) {
 		return false;
 	}
 
@@ -319,33 +319,34 @@ bool ContainsCorrelatedExpressions(Expression &expr) {
 	return contains_correlated_expressions;
 }
 
-bool ExtractCorrelatedExpressions(LogicalOperator *op, SubqueryExpression *subquery, size_t subquery_table_index,
+bool ExtractCorrelatedExpressions(LogicalOperator *op, LogicalOperator *current_op, SubqueryExpression *subquery, size_t subquery_table_index,
                                   vector<JoinCondition> &join_conditions) {
 	// we look through the subquery to find the matching correlation expression
 	// using the Column Depth a correlating expression will have a column ref
 	// with depth == 0 (belonging to the subquery) and a correlating expression
 	// with depth == 1 (belonging to the main expression) we use the matcher to
 	// find this comparison
-	if (op->type != LogicalOperatorType::FILTER) {
+	
+	if (current_op->type != LogicalOperatorType::FILTER) {
 		// not a filter, cannot extract from here
 		// first check if there are any correlated expressions here
 		// if there are we abandon the subquery rewriting
-		for(auto &expr : op->expressions) {
+		for(auto &expr : current_op->expressions) {
 			if (ContainsCorrelatedExpressions(*expr)) {
 				return false;
 			}
 		}
 		// if there are not 
-		for(auto &child : op->children) {
-			if (!ExtractCorrelatedExpressions(child.get(), subquery, subquery_table_index, join_conditions)) {
+		for(auto &child : current_op->children) {
+			if (!ExtractCorrelatedExpressions(op, child.get(), subquery, subquery_table_index, join_conditions)) {
 				return false;
 			}
 		}
 		return true;
 	}
 	// filter, check for each expression if it is a comparison between a correlated and non-correlated expression
-	for(size_t i = 0; i < op->expressions.size(); i++) {
-		auto &expr = op->expressions[i];
+	for(size_t i = 0; i < current_op->expressions.size(); i++) {
+		auto &expr = current_op->expressions[i];
 		if (expr->GetExpressionClass() != ExpressionClass::COMPARISON) {
 			// not a comparison, skip this entry
 			continue;
@@ -403,7 +404,7 @@ bool ExtractCorrelatedExpressions(LogicalOperator *op, SubqueryExpression *subqu
 		}
 
 		// remove the correlated expression from the filter in the subquery
-		op->expressions.erase(op->expressions.begin() + i);
+		current_op->expressions.erase(current_op->expressions.begin() + i);
 
 		// now we introduce a new join condition based on this correlated
 		// expression
@@ -436,7 +437,7 @@ bool ExtractCorrelatedExpressions(LogicalOperator *op, SubqueryExpression *subqu
 
 	// check if there are any correlated column references left
 	// if there are any we couldn't extract then the subquery cannot be rewritten
-	for(auto &expr : op->expressions) {
+	for(auto &expr : current_op->expressions) {
 		if (ContainsCorrelatedExpressions(*expr)) {
 			return false;
 		}
