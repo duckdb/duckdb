@@ -12,7 +12,7 @@ FunctionExpression::FunctionExpression(string schema, string function_name, vect
     : Expression(ExpressionType::FUNCTION), schema(schema), function_name(StringUtil::Lower(function_name)),
       bound_function(nullptr) {
 	for (auto &child : children) {
-		children.push_back(move(child));
+		this->children.push_back(move(child));
 	}
 }
 
