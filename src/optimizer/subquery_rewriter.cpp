@@ -425,7 +425,7 @@ bool ExtractCorrelatedExpressions(LogicalOperator *op, LogicalOperator *current_
 			assert(condition.left->return_type == condition.right->return_type);
 		}
 		condition.comparison = comparison_type;
-		if (is_inverted) {
+		if (!is_inverted) {
 			// flip the comparison
 			condition.comparison = ComparisonExpression::FlipComparisionExpression(condition.comparison);
 		}
