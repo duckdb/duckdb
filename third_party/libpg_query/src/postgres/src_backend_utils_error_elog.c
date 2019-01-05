@@ -338,7 +338,7 @@ errstart(int elevel, const char *filename, int lineno,
 		 * reasons and because many clients can't handle NOTICE messages
 		 * during authentication.
 		 */
-		if (ClientAuthInProgress)
+		if (false)
 			output_to_client = (elevel >= ERROR);
 		else
 			output_to_client = (elevel >= client_min_messages ||
@@ -513,8 +513,8 @@ errfinish(int dummy,...)
 	 * we must do this even if client is fool enough to have set
 	 * client_min_messages above FATAL, so don't look at output_to_client.
 	 */
-	if (elevel >= FATAL && whereToSendOutput == DestRemote)
-		pq_endcopyout(true);
+	//if (elevel >= FATAL && whereToSendOutput == DestRemote)
+	//	pq_endcopyout(true);
 
 	/* Emit the message to the right places */
 	EmitErrorReport();
@@ -1388,7 +1388,7 @@ pg_re_throw(void)
 			edata->output_to_server = (FATAL >= log_min_messages);
 		if (whereToSendOutput == DestRemote)
 		{
-			if (ClientAuthInProgress)
+			if (false)
 				edata->output_to_client = true;
 			else
 				edata->output_to_client = (FATAL >= client_min_messages);

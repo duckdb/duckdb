@@ -228,7 +228,8 @@ public:
 		}
 	}
 #else
-	static void PrintStackTrace(FILE *out, unsigned int max_frames) {}
+	static void PrintStackTrace(FILE *out, unsigned int max_frames) {
+	}
 #endif
 	friend std::ostream &operator<<(std::ostream &os, const Exception &e);
 

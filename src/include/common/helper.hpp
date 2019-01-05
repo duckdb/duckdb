@@ -10,9 +10,9 @@
 
 #include "common/constants.hpp"
 
+#include <algorithm>
 #include <limits>
 #include <sstream>
-#include <algorithm>
 
 #ifdef _MSC_VER
 #define ssize_t int64_t
