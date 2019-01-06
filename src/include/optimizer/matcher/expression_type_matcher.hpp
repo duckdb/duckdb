@@ -9,6 +9,7 @@
 #pragma once
 
 #include "common/common.hpp"
+#include <algorithm>
 
 namespace duckdb {
 
