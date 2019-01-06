@@ -427,14 +427,14 @@ extern void srandom(unsigned int seed);
 extern char *pqStrerror(int errnum, char *strerrbuf, size_t buflen);
 
 #ifndef WIN32
-extern int pqGetpwuid(uid_t uid, struct passwd * resultbuf, char *buffer,
-		   size_t buflen, struct passwd ** result);
+extern int pqGetpwuid(uid_t uid, void * resultbuf, char *buffer,
+		   size_t buflen, void ** result);
 #endif
 
 extern int pqGethostbyname(const char *name,
-				struct hostent * resultbuf,
+				void * resultbuf,
 				char *buffer, size_t buflen,
-				struct hostent ** result,
+				void ** result,
 				int *herrno);
 
 extern void pg_qsort(void *base, size_t nel, size_t elsize,
