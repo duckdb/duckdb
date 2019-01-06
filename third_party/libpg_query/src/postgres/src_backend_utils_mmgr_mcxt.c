@@ -71,7 +71,7 @@ typedef struct PGThreadContext {
   MemoryContext CurrentMemoryContext;
 } PGThreadContext;
 
-static pthread_key_t thread_ctx_key;
+static void* thread_ctx_key;
 
 /*
  * CurrentMemoryContext

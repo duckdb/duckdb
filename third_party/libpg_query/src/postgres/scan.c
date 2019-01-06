@@ -8568,7 +8568,7 @@ static yyconst struct yy_trans_info *yy_start_state_list[27] =
 #include "postgres.h"
 
 #include <ctype.h>
-#include <unistd.h>
+//#include <unistd.h>
 
 #include "parser/parser.h"				/* only needed for GUC variables */
 #include "parser/scanner.h"
@@ -8831,7 +8831,7 @@ extern void core_yyset_column(int column_no, yyscan_t yyscanner);
  * down here because we want the user's section 1 to have been scanned first.
  * The user has a chance to override it with an option.
  */
-#include <unistd.h>
+//#include <unistd.h>
 #endif
 
 #ifndef YY_EXTRA_TYPE

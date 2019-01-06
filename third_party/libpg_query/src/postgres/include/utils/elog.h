@@ -249,6 +249,10 @@ typedef struct ErrorContextCallback
 	void	   *arg;
 } ErrorContextCallback;
 
+#ifdef _MSC_VER
+#define __thread
+#endif
+
 extern PGDLLIMPORT __thread  ErrorContextCallback *error_context_stack;
 
 
@@ -322,6 +326,10 @@ extern PGDLLIMPORT __thread  ErrorContextCallback *error_context_stack;
 #else
 #define PG_RE_THROW()  \
 	(pg_re_throw(), pg_unreachable())
+#endif
+
+#ifdef _MSC_VER
+#define sigjmp_buf _JUMP_BUFFER
 #endif
 
 extern PGDLLIMPORT __thread  sigjmp_buf *PG_exception_stack;

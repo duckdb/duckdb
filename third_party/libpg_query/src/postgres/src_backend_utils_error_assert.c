@@ -23,7 +23,7 @@
  */
 #include "postgres.h"
 
-#include <unistd.h>
+//#include <unistd.h>
 
 /*
  * ExceptionalCondition - Handles the failure of an Assert()

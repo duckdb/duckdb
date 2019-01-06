@@ -14,8 +14,8 @@
 #define PG_PORT_H
 
 #include <ctype.h>
-#include <netdb.h>
-#include <pwd.h>
+//#include <netdb.h>
+//#include <pwd.h>
 
 /* socket has a different definition on WIN32 */
 #ifndef WIN32
@@ -23,7 +23,14 @@ typedef int pgsocket;
 
 #define PGINVALID_SOCKET (-1)
 #else
+#define PGASC ASC
+#undef ASC
+#include <windows.h>
+#define ASC PGASC
+#undef ERROR
+typedef int pid_t;
 typedef SOCKET pgsocket;
+#define __builtin_constant_p(A) A
 
 #define PGINVALID_SOCKET INVALID_SOCKET
 #endif

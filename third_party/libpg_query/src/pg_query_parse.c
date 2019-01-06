@@ -6,7 +6,7 @@
 #include "parser/scanner.h"
 #include "parser/scansup.h"
 
-#include <unistd.h>
+//#include <unistd.h>
 #include <fcntl.h>
 
 PgQueryInternalParsetreeAndError pg_query_raw_parse(const char* input)

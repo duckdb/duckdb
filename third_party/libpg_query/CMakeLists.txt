@@ -7,6 +7,7 @@ file(GLOB_RECURSE pg_query_srcs ${CMAKE_CURRENT_SOURCE_DIR}/src/*.c)
 list(REMOVE_ITEM pg_query_srcs
         "${CMAKE_CURRENT_SOURCE_DIR}/src/pg_query_fingerprint_defs.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/pg_query_fingerprint_conds.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/pg_query_fingerprint.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/pg_query_json_defs.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/pg_query_json_conds.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/pg_query_json_helper.c"

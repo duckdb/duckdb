@@ -2019,3 +2019,6 @@ is_log_level_output(int elevel, int log_min_level)
  * hard-to-explain kluge.
  */
 
+#ifdef _MSC_VER
+static void write_console (const char* a, int b) {}
+#endif

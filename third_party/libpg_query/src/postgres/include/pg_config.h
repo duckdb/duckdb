@@ -454,7 +454,7 @@
 #define HAVE_SNPRINTF 1
 
 /* Define to 1 if you have spinlocks. */
-#define HAVE_SPINLOCKS 1
+//#define HAVE_SPINLOCKS 1
 
 /* Define to 1 if you have the `srandom' function. */
 #define HAVE_SRANDOM 1

@@ -15,7 +15,7 @@
 #define LIBPQ_H
 
 #include <sys/types.h>
-#include <netinet/in.h>
+//#include <netinet/in.h>
 
 #include "lib/stringinfo.h"
 #include "libpq/libpq-be.h"
