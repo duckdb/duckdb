@@ -417,7 +417,7 @@ unique_ptr<Expression> LogicalPlanGenerator::Visit(CaseExpression &expr) {
 	// check needs to be bool
 	expr.check = AddCastToType(TypeId::BOOLEAN, move(expr.check));
 	// res_if_true and res_if_false need the same type
-	auto result_type = GetMaxType({expr.result_if_true->return_type, expr.result_if_false->return_type});
+	auto result_type = GetMaxType({expr.return_type, expr.result_if_true->return_type, expr.result_if_false->return_type});
 	expr.result_if_true = AddCastToType(result_type, move(expr.result_if_true));
 	expr.result_if_false = AddCastToType(result_type, move(expr.result_if_false));
 	assert(result_type == expr.return_type);
@@ -448,7 +448,7 @@ unique_ptr<Expression> LogicalPlanGenerator::Visit(OperatorExpression &expr) {
 	if (expr.type == ExpressionType::OPERATOR_NOT && expr.children[0]->return_type != TypeId::BOOLEAN) {
 		expr.children[0] = AddCastToType(TypeId::BOOLEAN, move(expr.children[0]));
 	} else {
-		vector<TypeId> types;
+		vector<TypeId> types = { expr.return_type };
 		for(auto &child : expr.children) {
 			types.push_back(child->return_type);
 		}

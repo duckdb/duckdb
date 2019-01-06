@@ -79,6 +79,30 @@ bool OperatorExpression::Equals(const Expression *other_) const {
 	return true;
 }
 
+string OperatorExpression::ToString() const {
+	auto op = ExpressionTypeToOperator(type);
+	if (!op.empty()) {
+		// use the operator string to represent the operator
+		if (children.size() == 1) {
+			return op + children[0]->ToString();
+		} else if (children.size() == 2) {
+			return children[0]->ToString() + op + children[1]->ToString();
+		}
+	}
+	// if there is no operator we render it as a function
+	auto result = ExpressionTypeToString(type) + "(";
+	for(size_t i = 0; i < children.size(); i++) {
+		result += children[i]->ToString();
+		if (i + 1 == children.size()) {
+			result += ", ";
+		} else {
+			result += ")";
+		}
+	}
+	return result;
+}
+
+
 void OperatorExpression::EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
 	for(size_t i = 0; i < children.size(); i++) {
 		children[i] = callback(move(children[i]));

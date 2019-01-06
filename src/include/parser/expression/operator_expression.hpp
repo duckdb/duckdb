@@ -48,9 +48,7 @@ public:
 	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
 	bool Equals(const Expression *other) const override;
 
-	string ToString() const override {
-		return "OPERATOR";
-	}
+	string ToString() const override;
 
 	vector<unique_ptr<Expression>> children;
 };
