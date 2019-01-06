@@ -256,6 +256,8 @@ bool SubqueryRewriter::RewriteSubqueryComparison(LogicalFilter &filter, Comparis
 	if (!ExtractCorrelatedExpressions(aggr, aggr, subquery, subquery_table_index, join_conditions)) {
 		return false;
 	}
+	assert((subquery->is_correlated && join_conditions.size() > 0) || 
+		(!subquery->is_correlated && join_conditions.size() == 0));
 
 	// we might have added new groups
 	// since groups occur BEFORE aggregates in the output of the aggregate, we need to shift column references to
@@ -327,118 +329,107 @@ bool ExtractCorrelatedExpressions(LogicalOperator *op, LogicalOperator *current_
 	// with depth == 1 (belonging to the main expression) we use the matcher to
 	// find this comparison
 	
-	if (current_op->type != LogicalOperatorType::FILTER) {
-		// not a filter, cannot extract from here
-		// first check if there are any correlated expressions here
-		// if there are we abandon the subquery rewriting
-		for(auto &expr : current_op->expressions) {
-			if (ContainsCorrelatedExpressions(*expr)) {
-				return false;
+	if (current_op->type == LogicalOperatorType::FILTER) {
+		// filter, check for each expression if it is a comparison between a correlated and non-correlated expression
+		for(size_t i = 0; i < current_op->expressions.size(); i++) {
+			auto &expr = current_op->expressions[i];
+			if (expr->GetExpressionClass() != ExpressionClass::COMPARISON) {
+				// not a comparison, skip this entry
+				continue;
 			}
-		}
-		// if there are not 
-		for(auto &child : current_op->children) {
-			if (!ExtractCorrelatedExpressions(op, child.get(), subquery, subquery_table_index, join_conditions)) {
-				return false;
+			auto sq_comp = (ComparisonExpression *)expr.get();
+			if (sq_comp->left->type != ExpressionType::COLUMN_REF ||
+				sq_comp->right->type != ExpressionType::COLUMN_REF) {
+				// not a comparison between column refs, skip it
+				continue;
 			}
+			auto sq_colref_left = (ColumnRefExpression *) sq_comp->left.get();
+			auto sq_colref_right = (ColumnRefExpression *) sq_comp->right.get();
+			if (sq_colref_left->depth == 0 && sq_colref_right->depth == 0) {
+				// not a correlated comparison
+				continue;
+			}
+			if (sq_colref_left->depth > 0 && sq_colref_right->depth > 0) {
+				// comparison only between correlated columns
+				continue;
+			}
+			bool is_inverted = false;
+			ColumnRefExpression *sq_colref_inner, *sq_colref_outer;
+			if (sq_colref_left->depth == 1) {
+				sq_colref_inner = sq_colref_right;
+				sq_colref_outer = sq_colref_left;
+				is_inverted = true;
+			} else if (sq_colref_right->depth == 1) {
+				sq_colref_inner = sq_colref_left;
+				sq_colref_outer = sq_colref_right;
+			} else {
+				// correlation goes up more than one level, abort
+				continue;
+			}
+
+
+			auto comparison_type = sq_comp->type;
+
+			auto comp_left = make_unique<ColumnRefExpression>(sq_colref_inner->return_type, sq_colref_inner->binding);
+			auto comp_right = make_unique<ColumnRefExpression>(sq_colref_outer->return_type, sq_colref_outer->binding);
+
+			// uncorrelated expression (depth = 0)
+			auto uncorrelated_expression = !is_inverted ? move(sq_comp->left) : move(sq_comp->right);
+			// correlated expression (depth = 1)
+			auto correlated_expression = !is_inverted ? move(sq_comp->right) : move(sq_comp->left);
+
+			if (op->type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY) {
+				auto aggr = (LogicalAggregate *)op;
+				// now inside the aggregation, we use the uncorrelated column used
+				// in the comparison as both projection and grouping col in subquery
+				aggr->groups.push_back(move(uncorrelated_expression));
+			} else {
+				// push the expression into the select list
+				assert(op->type == LogicalOperatorType::PROJECTION);
+				op->expressions.push_back(move(uncorrelated_expression));
+			}
+
+			// remove the correlated expression from the filter in the subquery
+			current_op->expressions.erase(current_op->expressions.begin() + i);
+
+			// now we introduce a new join condition based on this correlated
+			// expression
+			JoinCondition condition;
+			// on the left side is the original correlated expression
+			// however, since there is no longer a subquery, its depth has changed
+			// to 0
+			((ColumnRefExpression *)correlated_expression.get())->depth = 0;
+			condition.left = move(correlated_expression);
+			// on the right side is the newly added group in the original subquery
+			if (op->type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY) {
+				// in the case of the AGGREGATE_AND_GROUP_BY, we will add the right condition later on, as we need to
+				// reference an expression in the PROJECTION above the AGGREGATE
+				condition.right = nullptr;
+			} else {
+				condition.right = make_unique<ColumnRefExpression>(
+					op->expressions.back()->return_type, ColumnBinding(subquery_table_index, op->expressions.size() - 1));
+				assert(condition.left->return_type == condition.right->return_type);
+			}
+			condition.comparison = comparison_type;
+			if (!is_inverted) {
+				// flip the comparison
+				condition.comparison = ComparisonExpression::FlipComparisionExpression(condition.comparison);
+			}
+
+			// add the join condition
+			join_conditions.push_back(move(condition));
+			i--;
 		}
-		return true;
 	}
-	// filter, check for each expression if it is a comparison between a correlated and non-correlated expression
-	for(size_t i = 0; i < current_op->expressions.size(); i++) {
-		auto &expr = current_op->expressions[i];
-		if (expr->GetExpressionClass() != ExpressionClass::COMPARISON) {
-			// not a comparison, skip this entry
-			continue;
-		}
-		auto sq_comp = (ComparisonExpression *)expr.get();
-		if (sq_comp->left->type != ExpressionType::COLUMN_REF ||
-			sq_comp->right->type != ExpressionType::COLUMN_REF) {
-			// not a comparison between column refs, skip it
-			continue;
-		}
-		auto sq_colref_left = (ColumnRefExpression *) sq_comp->left.get();
-		auto sq_colref_right = (ColumnRefExpression *) sq_comp->right.get();
-		if (sq_colref_left->depth == 0 && sq_colref_right->depth == 0) {
-			// not a correlated comparison
-			continue;
-		}
-		if (sq_colref_left->depth > 0 && sq_colref_right->depth > 0) {
-			// comparison only between correlated columns
-			continue;
-		}
-		bool is_inverted = false;
-		ColumnRefExpression *sq_colref_inner, *sq_colref_outer;
-		if (sq_colref_left->depth == 1) {
-			sq_colref_inner = sq_colref_right;
-			sq_colref_outer = sq_colref_left;
-			is_inverted = true;
-		} else if (sq_colref_right->depth == 1) {
-			sq_colref_inner = sq_colref_left;
-			sq_colref_outer = sq_colref_right;
-		} else {
-			// correlation goes up more than one level, abort
-			continue;
-		}
-
-
-		auto comparison_type = sq_comp->type;
-
-		auto comp_left = make_unique<ColumnRefExpression>(sq_colref_inner->return_type, sq_colref_inner->binding);
-		auto comp_right = make_unique<ColumnRefExpression>(sq_colref_outer->return_type, sq_colref_outer->binding);
-
-		// uncorrelated expression (depth = 0)
-		auto uncorrelated_expression = !is_inverted ? move(sq_comp->left) : move(sq_comp->right);
-		// correlated expression (depth = 1)
-		auto correlated_expression = !is_inverted ? move(sq_comp->right) : move(sq_comp->left);
-
-		if (op->type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY) {
-			auto aggr = (LogicalAggregate *)op;
-			// now inside the aggregation, we use the uncorrelated column used
-			// in the comparison as both projection and grouping col in subquery
-			aggr->groups.push_back(move(uncorrelated_expression));
-		} else {
-			// push the expression into the select list
-			assert(op->type == LogicalOperatorType::PROJECTION);
-			op->expressions.push_back(move(uncorrelated_expression));
-		}
-
-		// remove the correlated expression from the filter in the subquery
-		current_op->expressions.erase(current_op->expressions.begin() + i);
-
-		// now we introduce a new join condition based on this correlated
-		// expression
-		JoinCondition condition;
-		// on the left side is the original correlated expression
-		// however, since there is no longer a subquery, its depth has changed
-		// to 0
-		((ColumnRefExpression *)correlated_expression.get())->depth = 0;
-		condition.left = move(correlated_expression);
-		// on the right side is the newly added group in the original subquery
-		if (op->type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY) {
-			// in the case of the AGGREGATE_AND_GROUP_BY, we will add the right condition later on, as we need to
-			// reference an expression in the PROJECTION above the AGGREGATE
-			condition.right = nullptr;
-		} else {
-			condition.right = make_unique<ColumnRefExpression>(
-			    op->expressions.back()->return_type, ColumnBinding(subquery_table_index, op->expressions.size() - 1));
-			assert(condition.left->return_type == condition.right->return_type);
-		}
-		condition.comparison = comparison_type;
-		if (!is_inverted) {
-			// flip the comparison
-			condition.comparison = ComparisonExpression::FlipComparisionExpression(condition.comparison);
-		}
-
-		// add the join condition
-		join_conditions.push_back(move(condition));
-		i--;
-	}
-
-	// check if there are any correlated column references left
-	// if there are any we couldn't extract then the subquery cannot be rewritten
+	// check if there are still any correlated expressions left
 	for(auto &expr : current_op->expressions) {
 		if (ContainsCorrelatedExpressions(*expr)) {
+			return false;
+		}
+	}
+	// if there are not, extract from the children of this operator
+	for(auto &child : current_op->children) {
+		if (!ExtractCorrelatedExpressions(op, child.get(), subquery, subquery_table_index, join_conditions)) {
 			return false;
 		}
 	}
