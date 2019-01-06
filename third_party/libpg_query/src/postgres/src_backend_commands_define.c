@@ -41,12 +41,12 @@
 #include <ctype.h>
 #include <math.h>
 
-#include "catalog/namespace.h"
-#include "commands/defrem.h"
+//#include "catalog/namespace.h"
+//#include "commands/defrem.h"
 #include "nodes/makefuncs.h"
-#include "parser/parse_type.h"
-#include "parser/scansup.h"
-#include "utils/int8.h"
+//#include "parser/parse_type.h"
+//#include "parser/scansup.h"
+//#include "utils/int8.h"
 
 /*
  * Extract a string value (otherwise uninterpreted) from a DefElem.

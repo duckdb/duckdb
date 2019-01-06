@@ -13,6 +13,8 @@ list(REMOVE_ITEM pg_query_srcs
         "${CMAKE_CURRENT_SOURCE_DIR}/src/postgres/scan.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/postgres/src_backend_libpq_pqcomm.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/postgres/src_backend_postmaster_postmaster.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/postgres/src_backend_storage_ipc_ipc.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/postgres/src_backend_utils_misc_guc.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/pg_query_json_helper.c")   
 
 include_directories(.)

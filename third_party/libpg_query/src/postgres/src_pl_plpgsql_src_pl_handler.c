@@ -22,18 +22,18 @@
 
 #include "plpgsql.h"
 
-#include "access/htup_details.h"
-#include "catalog/pg_proc.h"
-#include "catalog/pg_type.h"
-#include "funcapi.h"
-#include "miscadmin.h"
-#include "utils/builtins.h"
-#include "utils/guc.h"
-#include "utils/lsyscache.h"
-#include "utils/syscache.h"
+//#include "access/htup_details.h"
+//#include "catalog/pg_proc.h"
+//#include "catalog/pg_type.h"
+//#include "funcapi.h"
+//#include "miscadmin.h"
+//#include "utils/builtins.h"
+//#include "utils/guc.h"
+//#include "utils/lsyscache.h"
+//#include "utils/syscache.h"
 
 
-static bool plpgsql_extra_checks_check_hook(char **newvalue, void **extra, GucSource source);
+static bool plpgsql_extra_checks_check_hook(char **newvalue, void **extra, void* source);
 static void plpgsql_extra_warnings_assign_hook(const char *newvalue, void *extra);
 static void plpgsql_extra_errors_assign_hook(const char *newvalue, void *extra);
 

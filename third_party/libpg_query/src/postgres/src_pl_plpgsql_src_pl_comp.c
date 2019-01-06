@@ -51,20 +51,20 @@
 
 #include <ctype.h>
 
-#include "access/htup_details.h"
-#include "catalog/namespace.h"
+//#include "access/htup_details.h"
+//#include "catalog/namespace.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_proc_fn.h"
 #include "catalog/pg_type.h"
-#include "funcapi.h"
-#include "nodes/makefuncs.h"
+//#include "funcapi.h"
+//#include "nodes/makefuncs.h"
 #include "parser/parse_type.h"
 #include "utils/builtins.h"
-#include "utils/guc.h"
-#include "utils/lsyscache.h"
+//#include "utils/guc.h"
+//#include "utils/lsyscache.h"
 #include "utils/memutils.h"
-#include "utils/rel.h"
-#include "utils/syscache.h"
+//#include "utils/rel.h"
+//#include "utils/syscache.h"
 
 
 /* ----------
@@ -235,7 +235,7 @@ plpgsql_compile_inline(char *proc_source)
 	error_context_stack = &plerrcontext;
 
 	/* Do extra syntax checking if check_function_bodies is on */
-	plpgsql_check_syntax = check_function_bodies;
+	plpgsql_check_syntax = true;
 
 	/* Function struct does not live past current statement */
 	function = (PLpgSQL_function *) palloc0(sizeof(PLpgSQL_function));

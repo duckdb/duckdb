@@ -49,7 +49,7 @@
 
 #include "postgres.h"
 
-#include <sys/param.h>
+//#include <sys/param.h>
 
 #include "sha1.h"
 
