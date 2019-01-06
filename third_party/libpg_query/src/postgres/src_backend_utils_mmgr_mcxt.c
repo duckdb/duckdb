@@ -194,10 +194,10 @@ MemoryContextInit(void)
 										 0);
 	MemoryContextAllowInCriticalSection(ErrorContext, true);
 
-	PGThreadContext *thread_context = malloc(sizeof(PGThreadContext));
-	thread_context->TopMemoryContext = TopMemoryContext;
-	thread_context->ErrorContext = ErrorContext;
-	thread_context->CurrentMemoryContext = CurrentMemoryContext;
+//	PGThreadContext *thread_context = malloc(sizeof(PGThreadContext));
+//	thread_context->TopMemoryContext = TopMemoryContext;
+//	thread_context->ErrorContext = ErrorContext;
+//	thread_context->CurrentMemoryContext = CurrentMemoryContext;
 
 	//pthread_setspecific(thread_ctx_key, thread_context);
 }
