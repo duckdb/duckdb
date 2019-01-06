@@ -59,7 +59,7 @@
 #include "utils/memdebug.h"
 #include "utils/memutils.h"
 
-#include <pthread.h>
+//#include <pthread.h>
 
 /*****************************************************************************
  *	  GLOBAL MEMORY															 *
@@ -154,7 +154,7 @@ MemoryContextInit(void)
 {
 	AssertState(TopMemoryContext == NULL);
 
-  pthread_key_create(&thread_ctx_key, MemoryContextShutdown);
+//  pthread_key_create(&thread_ctx_key, MemoryContextShutdown);
 
 	/*
 	 * Initialize TopMemoryContext as an AllocSetContext with slow growth rate
@@ -199,7 +199,7 @@ MemoryContextInit(void)
 	thread_context->ErrorContext = ErrorContext;
 	thread_context->CurrentMemoryContext = CurrentMemoryContext;
 
-	pthread_setspecific(thread_ctx_key, thread_context);
+	//pthread_setspecific(thread_ctx_key, thread_context);
 }
 
 /*
