@@ -22,7 +22,7 @@ public:
 	void Apply(LogicalOperator& root);
 private:
 	//! Apply a set of rules to a specific expression
-	static unique_ptr<Expression> ApplyRules(const vector<Rule*> &rules, unique_ptr<Expression> expr);
+	static unique_ptr<Expression> ApplyRules(LogicalOperator &op, const vector<Rule*> &rules, unique_ptr<Expression> expr);
 };
 
 } // namespace duckdb

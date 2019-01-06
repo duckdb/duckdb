@@ -30,7 +30,7 @@ ConstantFoldingRule::ConstantFoldingRule() {
 	root = move(op);
 }
 
-unique_ptr<Expression> ConstantFoldingRule::Apply(vector<Expression*> &bindings, bool &fixed_point) {
+unique_ptr<Expression> ConstantFoldingRule::Apply(LogicalOperator &op, vector<Expression*> &bindings, bool &changes_made) {
 	auto root = bindings[0];
 	auto left = (ConstantExpression*) bindings[1];
 	auto right = (ConstantExpression*) bindings[2];

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// optimizer/rule/constant_cast.hpp
+// optimizer/rule/distributivity.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,10 +12,10 @@
 
 namespace duckdb {
 
-// CAST(X) => X
-class ConstantCastRule : public Rule {
+// (X AND B) OR (X AND C) OR (X AND D) = X AND (B OR C OR D)
+class DistributivityRule : public Rule {
 public:
-	ConstantCastRule();
+	DistributivityRule();
 
 	unique_ptr<Expression> Apply(LogicalOperator &op, vector<Expression*> &bindings, bool &changes_made) override;
 };

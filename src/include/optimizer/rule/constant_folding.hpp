@@ -12,11 +12,12 @@
 
 namespace duckdb {
 
+// X + Y => Z
 class ConstantFoldingRule : public Rule {
 public:
 	ConstantFoldingRule();
 
-	unique_ptr<Expression> Apply(vector<Expression*> &bindings, bool &fixed_point) override;
+	unique_ptr<Expression> Apply(LogicalOperator &op, vector<Expression*> &bindings, bool &changes_made) override;
 };
 
 } // namespace duckdb

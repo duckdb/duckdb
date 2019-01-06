@@ -11,8 +11,7 @@ using namespace std;
 Optimizer::Optimizer(BindContext &context) : context(context) {
 	rewriter.rules.push_back(make_unique<ConstantCastRule>());
 	rewriter.rules.push_back(make_unique<ConstantFoldingRule>());
-	// rewriter.rules.push_back(make_unique<DistributivityRule>());
-	// rewriter.rules.push_back(make_unique<SplitFilterConjunctionRule>());
+	rewriter.rules.push_back(make_unique<DistributivityRule>());
 	// rewriter.rules.push_back(make_unique<RemoveObsoleteFilterRule>());
 
 #ifdef DEBUG

@@ -22,7 +22,7 @@ public:
 	//! The expression matcher of the rule
 	unique_ptr<ExpressionMatcher> root;
 
-	virtual unique_ptr<Expression> Apply(vector<Expression*>& bindings, bool &fixed_point) = 0;
+	virtual unique_ptr<Expression> Apply(LogicalOperator &op, vector<Expression*>& bindings, bool &fixed_point) = 0;
 };
 
 } // namespace duckdb

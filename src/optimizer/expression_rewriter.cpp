@@ -1,24 +1,25 @@
 #include "optimizer/expression_rewriter.hpp"
 
 #include "common/exception.hpp"
+#include "planner/operator/logical_filter.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> ExpressionRewriter::ApplyRules(const vector<Rule*> &rules, unique_ptr<Expression> expr) {
+unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const vector<Rule*> &rules, unique_ptr<Expression> expr) {
 	for(auto &rule : rules) {
 		vector<Expression*> bindings;
 		if (rule->root->Match(expr.get(), bindings)) {
 			// the rule matches! try to apply it
 			bool changes_made = false;
-			auto result = rule->Apply(bindings, changes_made);
+			auto result = rule->Apply(op, bindings, changes_made);
 			if (result) {
 				// the base node changed: the rule applied changes
 				// rerun on the new node
-				return ExpressionRewriter::ApplyRules(rules, move(result));
+				return ExpressionRewriter::ApplyRules(op, rules, move(result));
 			} else if (changes_made) {
 				// the base node didn't change, but changes were made, rerun
-				return ExpressionRewriter::ApplyRules(rules, move(expr));
+				return ExpressionRewriter::ApplyRules(op, rules, move(expr));
 			}
 			// else nothing changed, continue to the next rule
 			continue;
@@ -27,7 +28,7 @@ unique_ptr<Expression> ExpressionRewriter::ApplyRules(const vector<Rule*> &rules
 	// no changes could be made to this node
 	// recursively run on the children of this node
 	expr->EnumerateChildren([&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
-		return ExpressionRewriter::ApplyRules(rules, move(child));
+		return ExpressionRewriter::ApplyRules(op, rules, move(child));
 	});
 	return expr;
 }
@@ -55,6 +56,12 @@ void ExpressionRewriter::Apply(LogicalOperator& root) {
 		return;
 	}
 	for(size_t i = 0; i < root.expressions.size(); i++) {
-		root.expressions[i] = ExpressionRewriter::ApplyRules(to_apply_rules, move(root.expressions[i]));
+		root.expressions[i] = ExpressionRewriter::ApplyRules(root, to_apply_rules, move(root.expressions[i]));
+	}
+
+	// if it is a LogicalFilter, we split up filter conjunctions again
+	if (root.type == LogicalOperatorType::FILTER) {
+		auto &filter = (LogicalFilter &) root;
+		filter.SplitPredicates();
 	}
 }
