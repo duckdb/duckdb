@@ -475,7 +475,7 @@
 #define HAVE_STRERROR_R 1
 
 /* Define to 1 if you have the <strings.h> header file. */
-#define HAVE_STRINGS_H 1
+// #define HAVE_STRINGS_H 1
 
 /* Define to 1 if you have the <string.h> header file. */
 #define HAVE_STRING_H 1
@@ -722,7 +722,7 @@
 #define PACKAGE_VERSION "9.5.3"
 
 /* Define to the name of a signed 128-bit integer type. */
-#define PG_INT128_TYPE __int128
+// #define PG_INT128_TYPE __int128
 
 /* Define to the name of a signed 64-bit integer type. */
 #define PG_INT64_TYPE long int

@@ -95,9 +95,9 @@ PgQueryInternalParsetreeAndError pg_query_parse(const char* input)
 
 // DEBUG: print the json representation of parse tree
 void print_pg_parse_tree(List* tree) {
-  char* tree_json = pg_query_nodes_to_json(tree);
-  printf("%s\n", tree_json);
-  pfree(tree_json);
+//  char* tree_json = pg_query_nodes_to_json(tree);
+//  printf("%s\n", tree_json);
+  //pfree(tree_json);
 }
 
 // This should be called after pg_query_parse
