@@ -14,7 +14,7 @@
 namespace duckdb {
 namespace function {
 
-void abs_function(Vector inputs[], size_t input_count, Vector &result);
+void abs_function(Vector inputs[], size_t input_count, Expression &expr, Vector &result);
 bool abs_matches_arguments(vector<TypeId> &arguments);
 TypeId abs_get_return_type(vector<TypeId> &arguments);
 

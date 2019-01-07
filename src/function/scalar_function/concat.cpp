@@ -11,7 +11,7 @@ using namespace std;
 namespace duckdb {
 namespace function {
 
-void concat_function(Vector inputs[], size_t input_count, Vector &result) {
+void concat_function(Vector inputs[], size_t input_count, Expression &expr, Vector &result) {
 	assert(input_count == 2);
 	auto &input1 = inputs[0];
 	auto &input2 = inputs[1];
@@ -24,6 +24,10 @@ void concat_function(Vector inputs[], size_t input_count, Vector &result) {
 	auto result_data = (const char **)result.data;
 	auto input1_data = (const char **)input1.data;
 	auto input2_data = (const char **)input2.data;
+	size_t max_result_len =
+	    expr.children[0]->stats.maximum_string_length + expr.children[1]->stats.maximum_string_length;
+	auto output_uptr = unique_ptr<char[]>{new char[max_result_len + 1]};
+	char *output = output_uptr.get();
 
 	VectorOperations::BinaryExec(input1, input2, result,
 	                             [&](size_t input1_index, size_t input2_index, size_t result_index) {
@@ -32,7 +36,7 @@ void concat_function(Vector inputs[], size_t input_count, Vector &result) {
 		                             }
 		                             auto input1 = input1_data[input1_index];
 		                             auto input2 = input2_data[input2_index];
-		                             char output[strlen(input1) + strlen(input2) + 1];
+		                             assert(strlen(input1) + strlen(input2) <= max_result_len);
 		                             strncpy(output, input1, strlen(input1));
 		                             strncpy(output + strlen(input1), input2, strlen(input2));
 		                             output[strlen(input1) + strlen(input2)] = '\0';
