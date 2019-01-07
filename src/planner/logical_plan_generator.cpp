@@ -435,7 +435,6 @@ unique_ptr<Expression> LogicalPlanGenerator::Visit(ComparisonExpression &expr) {
 	return nullptr;
 }
 
-// TODO: this is ugly, generify functionality
 unique_ptr<Expression> LogicalPlanGenerator::Visit(ConjunctionExpression &expr) {
 	SQLNodeVisitor::Visit(expr);
 	expr.left = AddCastToType(TypeId::BOOLEAN, move(expr.left));
