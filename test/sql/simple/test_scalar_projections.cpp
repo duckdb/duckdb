@@ -8,6 +8,7 @@ TEST_CASE("Test scalar queries", "[scalarquery]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	con.EnableQueryVerification();
 
 	result = con.Query("SELECT 42");
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));

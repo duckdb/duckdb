@@ -8,6 +8,7 @@ TEST_CASE("Table subquery", "[subquery]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	con.EnableQueryVerification();
 
 	con.Query("CREATE TABLE test (i INTEGER, j INTEGER)");
 	con.Query("INSERT INTO test VALUES (3, 4), (4, 5), (5, 6);");
@@ -51,6 +52,7 @@ TEST_CASE("Nested table subquery", "[subquery]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	con.EnableQueryVerification();
 
 	con.Query("CREATE TABLE test (i INTEGER, j INTEGER)");
 	con.Query("INSERT INTO test VALUES (3, 4), (4, 5), (5, 6);");

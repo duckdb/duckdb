@@ -63,6 +63,8 @@ public:
 		return data.nullmask[offset_in_chunk];
 	}
 
+	bool Equals(DuckDBResult *other);
+
 	//! The names of the result
 	vector<string> names;
 	ChunkCollection collection;

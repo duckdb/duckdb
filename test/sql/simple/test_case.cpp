@@ -8,6 +8,7 @@ TEST_CASE("Test case statement", "[case]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	con.EnableQueryVerification();
 	con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
 	con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)");
 
@@ -19,6 +20,7 @@ TEST_CASE("Test NULL IF statement", "[case]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	con.EnableQueryVerification();
 	// NULL IF
 	result = con.Query("SELECT NULLIF(NULLIF ('hello', 'world'), 'blabla');");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value("hello")}));
@@ -42,6 +44,7 @@ TEST_CASE("NULL IF with strings", "[case]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)"));
