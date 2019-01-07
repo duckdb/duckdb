@@ -47,7 +47,7 @@ unique_ptr<Expression> WindowExpression::Copy() {
 		node.expression = o.expression->Copy();
 		new_window->ordering.orders.push_back(move(node));
 	}
-	
+
 	new_window->start = start;
 	new_window->end = end;
 	new_window->start_expr = start_expr ? start_expr->Copy() : nullptr;
@@ -68,15 +68,15 @@ void WindowExpression::EnumerateChildren(function<unique_ptr<Expression>(unique_
 	if (default_expr) {
 		default_expr = callback(move(default_expr));
 	}
-	for(size_t i = 0; i < partitions.size(); i++) {
+	for (size_t i = 0; i < partitions.size(); i++) {
 		partitions[i] = callback(move(partitions[i]));
 	}
-	for(size_t i = 0; i < ordering.orders.size(); i++) {
+	for (size_t i = 0; i < ordering.orders.size(); i++) {
 		ordering.orders[i].expression = callback(move(ordering.orders[i].expression));
 	}
 }
 
-void WindowExpression::EnumerateChildren(function<void(Expression* expression)> callback) const {
+void WindowExpression::EnumerateChildren(function<void(Expression *expression)> callback) const {
 	if (child) {
 		callback(child.get());
 	}
@@ -86,10 +86,10 @@ void WindowExpression::EnumerateChildren(function<void(Expression* expression)> 
 	if (default_expr) {
 		callback(default_expr.get());
 	}
-	for(size_t i = 0; i < partitions.size(); i++) {
+	for (size_t i = 0; i < partitions.size(); i++) {
 		callback(partitions[i].get());
 	}
-	for(size_t i = 0; i < ordering.orders.size(); i++) {
+	for (size_t i = 0; i < ordering.orders.size(); i++) {
 		callback(ordering.orders[i].expression.get());
 	}
 }
@@ -106,7 +106,7 @@ void WindowExpression::Serialize(Serializer &serializer) {
 	}
 	serializer.Write<uint8_t>(start);
 	serializer.Write<uint8_t>(end);
-	
+
 	serializer.WriteOptional(start_expr);
 	serializer.WriteOptional(end_expr);
 	serializer.WriteOptional(offset_expr);
@@ -125,11 +125,11 @@ unique_ptr<Expression> WindowExpression::Deserialize(ExpressionType type, TypeId
 		expr->ordering.orders.push_back(OrderByNode(order_type, move(expression)));
 	}
 	expr->start = (WindowBoundary)source.Read<uint8_t>();
-	expr->end   = (WindowBoundary)source.Read<uint8_t>();
+	expr->end = (WindowBoundary)source.Read<uint8_t>();
 
-	expr->start_expr   = source.ReadOptional<Expression>();
-	expr->end_expr     = source.ReadOptional<Expression>();
-	expr->offset_expr  = source.ReadOptional<Expression>();
+	expr->start_expr = source.ReadOptional<Expression>();
+	expr->end_expr = source.ReadOptional<Expression>();
+	expr->offset_expr = source.ReadOptional<Expression>();
 	expr->default_expr = source.ReadOptional<Expression>();
 	return expr;
 }
@@ -138,7 +138,7 @@ bool WindowExpression::Equals(const Expression *other_) const {
 	if (!Expression::Equals(other_)) {
 		return false;
 	}
-	auto other = (WindowExpression*) other_;
+	auto other = (WindowExpression *)other_;
 
 	if (start != other->start || end != other->end) {
 		return false;
@@ -151,12 +151,12 @@ bool WindowExpression::Equals(const Expression *other_) const {
 	    !Expression::Equals(default_expr.get(), other->default_expr.get())) {
 		return false;
 	}
-	
+
 	// check if the partitions are equivalent
 	if (partitions.size() != other->partitions.size()) {
 		return false;
 	}
-	for(size_t i = 0; i < partitions.size(); i++) {
+	for (size_t i = 0; i < partitions.size(); i++) {
 		if (!partitions[i]->Equals(other->partitions[i].get())) {
 			return false;
 		}
@@ -165,7 +165,7 @@ bool WindowExpression::Equals(const Expression *other_) const {
 	if (ordering.orders.size() != other->ordering.orders.size()) {
 		return false;
 	}
-	for(size_t i = 0; i < ordering.orders.size(); i++) {
+	for (size_t i = 0; i < ordering.orders.size(); i++) {
 		if (ordering.orders[i].type != other->ordering.orders[i].type) {
 			return false;
 		}

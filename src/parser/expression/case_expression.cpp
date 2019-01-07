@@ -14,8 +14,8 @@ void CaseExpression::ResolveType() {
 unique_ptr<Expression> CaseExpression::Copy() {
 	auto copy = make_unique<CaseExpression>();
 	copy->CopyProperties(*this);
-	copy->check           = check->Copy();
-	copy->result_if_true  = result_if_true->Copy();
+	copy->check = check->Copy();
+	copy->result_if_true = result_if_true->Copy();
 	copy->result_if_false = result_if_false->Copy();
 	return copy;
 }
@@ -40,7 +40,7 @@ bool CaseExpression::Equals(const Expression *other_) const {
 	if (!Expression::Equals(other_)) {
 		return false;
 	}
-	auto other = (CaseExpression*) other_;
+	auto other = (CaseExpression *)other_;
 	if (!check->Equals(other->check.get())) {
 		return false;
 	}
@@ -53,15 +53,15 @@ bool CaseExpression::Equals(const Expression *other_) const {
 	return true;
 }
 
-void CaseExpression::EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
-	check           = callback(move(check));
-	result_if_true  = callback(move(result_if_true));
+void CaseExpression::EnumerateChildren(
+    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
+	check = callback(move(check));
+	result_if_true = callback(move(result_if_true));
 	result_if_false = callback(move(result_if_false));
 }
 
-void CaseExpression::EnumerateChildren(std::function<void(Expression* expression)> callback) const {
+void CaseExpression::EnumerateChildren(std::function<void(Expression *expression)> callback) const {
 	callback(check.get());
 	callback(result_if_true.get());
 	callback(result_if_false.get());
 }
-

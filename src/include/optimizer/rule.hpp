@@ -15,14 +15,15 @@ namespace duckdb {
 
 class Rule {
 public:
-	virtual ~Rule() {}
-	
+	virtual ~Rule() {
+	}
+
 	//! The root
 	unique_ptr<LogicalOperatorMatcher> logical_root;
 	//! The expression matcher of the rule
 	unique_ptr<ExpressionMatcher> root;
 
-	virtual unique_ptr<Expression> Apply(LogicalOperator &op, vector<Expression*>& bindings, bool &fixed_point) = 0;
+	virtual unique_ptr<Expression> Apply(LogicalOperator &op, vector<Expression *> &bindings, bool &fixed_point) = 0;
 };
 
 } // namespace duckdb

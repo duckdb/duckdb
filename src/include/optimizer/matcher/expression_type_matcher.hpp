@@ -9,6 +9,7 @@
 #pragma once
 
 #include "common/common.hpp"
+
 #include <algorithm>
 
 namespace duckdb {
@@ -16,19 +17,22 @@ namespace duckdb {
 //! The ExpressionTypeMatcher class contains a set of matchers that can be used to pattern match ExpressionTypes
 class ExpressionTypeMatcher {
 public:
-	virtual ~ExpressionTypeMatcher(){}
-	
+	virtual ~ExpressionTypeMatcher() {
+	}
+
 	virtual bool Match(ExpressionType type) = 0;
 };
 
 //! The SpecificExpressionTypeMatcher class matches a single specified Expression type
 class SpecificExpressionTypeMatcher : public ExpressionTypeMatcher {
 public:
-	SpecificExpressionTypeMatcher(ExpressionType type) : type(type) { }
+	SpecificExpressionTypeMatcher(ExpressionType type) : type(type) {
+	}
 
 	bool Match(ExpressionType type) override {
 		return type == this->type;
 	}
+
 private:
 	ExpressionType type;
 };
@@ -40,8 +44,9 @@ public:
 	}
 
 	bool Match(ExpressionType type) override {
-		return std::find(types.begin(), types.end(), type) !=  types.end();
+		return std::find(types.begin(), types.end(), type) != types.end();
 	}
+
 private:
 	vector<ExpressionType> types;
 };
@@ -51,8 +56,8 @@ class ComparisonExpressionTypeMatcher : public ExpressionTypeMatcher {
 public:
 	bool Match(ExpressionType type) override {
 		return type == ExpressionType::COMPARE_EQUAL || type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
-	       type == ExpressionType::COMPARE_LESSTHANOREQUALTO || type == ExpressionType::COMPARE_LESSTHAN ||
-	       type == ExpressionType::COMPARE_GREATERTHAN;
+		       type == ExpressionType::COMPARE_LESSTHANOREQUALTO || type == ExpressionType::COMPARE_LESSTHAN ||
+		       type == ExpressionType::COMPARE_GREATERTHAN;
 	}
 };
-}
+} // namespace duckdb

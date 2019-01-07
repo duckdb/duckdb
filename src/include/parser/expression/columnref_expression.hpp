@@ -71,8 +71,10 @@ public:
 
 	unique_ptr<Expression> Copy() override;
 
-	void EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) override {}
-	void EnumerateChildren(std::function<void(Expression* expression)> callback) const override {}
+	void EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) override {
+	}
+	void EnumerateChildren(std::function<void(Expression *expression)> callback) const override {
+	}
 
 	//! Serializes an Expression to a stand-alone binary blob
 	void Serialize(Serializer &serializer) override;

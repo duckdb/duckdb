@@ -15,7 +15,8 @@ namespace duckdb {
 //! The TypeMatcher class contains a set of matchers that can be used to pattern match TypeIds for Rules
 class TypeMatcher {
 public:
-	virtual ~TypeMatcher(){}
+	virtual ~TypeMatcher() {
+	}
 
 	virtual bool Match(TypeId type) = 0;
 };
@@ -23,11 +24,13 @@ public:
 //! The SpecificTypeMatcher class matches only a single specified type
 class SpecificTypeMatcher : public TypeMatcher {
 public:
-	SpecificTypeMatcher(TypeId type) : type(type) { }
+	SpecificTypeMatcher(TypeId type) : type(type) {
+	}
 
 	bool Match(TypeId type) override {
 		return type == this->type;
 	}
+
 private:
 	TypeId type;
 };
@@ -48,4 +51,4 @@ public:
 	}
 };
 
-}
+} // namespace duckdb

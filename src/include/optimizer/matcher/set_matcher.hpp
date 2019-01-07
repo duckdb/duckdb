@@ -26,15 +26,16 @@ public:
 		SOME,
 	};
 
-	template<class T, class MATCHER>
-	static bool MatchRecursive(vector<unique_ptr<MATCHER>>& matchers, vector<T*>& entries, vector<T*>& bindings, std::unordered_set<size_t> excluded_entries = {}, size_t m_idx = 0) {
+	template <class T, class MATCHER>
+	static bool MatchRecursive(vector<unique_ptr<MATCHER>> &matchers, vector<T *> &entries, vector<T *> &bindings,
+	                           std::unordered_set<size_t> excluded_entries = {}, size_t m_idx = 0) {
 		if (m_idx == matchers.size()) {
-			// matched all matchers! 
+			// matched all matchers!
 			return true;
 		}
 		// try to find a match for the current matcher (m_idx)
 		size_t previous_binding_count = bindings.size();
-		for(size_t e_idx = 0; e_idx < entries.size(); e_idx++) {
+		for (size_t e_idx = 0; e_idx < entries.size(); e_idx++) {
 			// first check if this entry has already been matched
 			if (excluded_entries.find(e_idx) == excluded_entries.end()) {
 				// it has been matched: skip this entry
@@ -61,15 +62,16 @@ public:
 		return false;
 	}
 
-	template<class T, class MATCHER>
-	static bool Match(vector<unique_ptr<MATCHER>>& matchers, vector<T*>& entries, vector<T*>& bindings, Policy policy) {
+	template <class T, class MATCHER>
+	static bool Match(vector<unique_ptr<MATCHER>> &matchers, vector<T *> &entries, vector<T *> &bindings,
+	                  Policy policy) {
 		if (policy == Policy::ORDERED) {
 			// ordered policy, count has to match
 			if (matchers.size() != entries.size()) {
 				return false;
 			}
 			// now entries have to match in order
-			for(size_t i = 0; i < matchers.size(); i++) {
+			for (size_t i = 0; i < matchers.size(); i++) {
 				if (!matchers[i]->Match(entries[i], bindings)) {
 					return false;
 				}
@@ -94,11 +96,12 @@ public:
 		}
 	}
 
-	template<class T, class MATCHER>
-	static bool Match(vector<unique_ptr<MATCHER>>& matchers, vector<unique_ptr<T>>& entries, vector<T*>& bindings, Policy policy) {
+	template <class T, class MATCHER>
+	static bool Match(vector<unique_ptr<MATCHER>> &matchers, vector<unique_ptr<T>> &entries, vector<T *> &bindings,
+	                  Policy policy) {
 		// convert vector of unique_ptr to vector of normal pointers
-		vector<T*> ptr_entries;
-		for(auto &entry : entries) {
+		vector<T *> ptr_entries;
+		for (auto &entry : entries) {
 			ptr_entries.push_back(entry.get());
 		}
 		// then just call the normal match function
@@ -106,4 +109,4 @@ public:
 	}
 };
 
-}
+} // namespace duckdb

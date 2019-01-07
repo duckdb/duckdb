@@ -73,8 +73,8 @@ unique_ptr<Expression> Transformer::TransformAExpr(A_Expr *root) {
 		auto case_expr = make_unique<CaseExpression>();
 		auto value = TransformExpression(root->lexpr);
 		// the check (A = B)
-		case_expr->check = make_unique<ComparisonExpression>(
-		    ExpressionType::COMPARE_EQUAL, value->Copy(), TransformExpression(root->rexpr));
+		case_expr->check = make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, value->Copy(),
+		                                                     TransformExpression(root->rexpr));
 		// if A = B, then constant NULL
 		case_expr->result_if_true = make_unique<ConstantExpression>(Value());
 		// else A

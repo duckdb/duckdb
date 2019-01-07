@@ -25,7 +25,8 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 	return nullptr;
 }
 
-static unique_ptr<Expression> replace_columns_with_group_refs(unique_ptr<Expression> expr, unordered_map<Expression*, size_t>& groups) {
+static unique_ptr<Expression> replace_columns_with_group_refs(unique_ptr<Expression> expr,
+                                                              unordered_map<Expression *, size_t> &groups) {
 	if (expr->GetExpressionClass() == ExpressionClass::AGGREGATE) {
 		// already an aggregate, move it back
 		return expr;
@@ -33,8 +34,8 @@ static unique_ptr<Expression> replace_columns_with_group_refs(unique_ptr<Express
 	if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		// a column reference that is not contained inside an aggrgate
 		// check if it points to a GROUP BY column
-		auto select_column = (ColumnRefExpression*) expr.get();
-		if (select_column->index != (size_t) -1) {
+		auto select_column = (ColumnRefExpression *)expr.get();
+		if (select_column->index != (size_t)-1) {
 			// index already assigned, references a GROUP BY column
 			return expr;
 		}
@@ -51,15 +52,13 @@ static unique_ptr<Expression> replace_columns_with_group_refs(unique_ptr<Express
 		} else {
 			// no existing reference
 			// check if the column matches any of the grouping columns
-			for(auto &entry : groups) {
+			for (auto &entry : groups) {
 				if (entry.first->type == ExpressionType::COLUMN_REF) {
-					auto group_column = (ColumnRefExpression*) entry.first;
+					auto group_column = (ColumnRefExpression *)entry.first;
 					if (group_column->binding == select_column->binding) {
-						auto group_ref =
-							make_unique<ColumnRefExpression>(entry.first->return_type, entry.second);
-						group_ref->alias = select_column->alias.empty()
-												? select_column->column_name
-												: select_column->alias;
+						auto group_ref = make_unique<ColumnRefExpression>(entry.first->return_type, entry.second);
+						group_ref->alias =
+						    select_column->alias.empty() ? select_column->column_name : select_column->alias;
 						return group_ref;
 					}
 				}
@@ -68,8 +67,7 @@ static unique_ptr<Expression> replace_columns_with_group_refs(unique_ptr<Express
 		// not a GROUP BY column and not part of an aggregate
 		// create a FIRST aggregate around this aggregate
 		string stmt_alias = expr->alias;
-		auto first_aggregate =
-			make_unique<AggregateExpression>(ExpressionType::AGGREGATE_FIRST, move(expr));
+		auto first_aggregate = make_unique<AggregateExpression>(ExpressionType::AGGREGATE_FIRST, move(expr));
 		first_aggregate->alias = stmt_alias;
 		first_aggregate->ResolveType();
 		return first_aggregate;
@@ -186,7 +184,7 @@ void Binder::Visit(SelectNode &statement) {
 		}
 
 		// handle aliases in the GROUP BY columns
-		unordered_map<Expression*, size_t> groups;
+		unordered_map<Expression *, size_t> groups;
 		for (size_t i = 0; i < statement.groupby.groups.size(); i++) {
 			auto &group = statement.groupby.groups[i];
 			if (group->type != ExpressionType::COLUMN_REF) {

@@ -125,7 +125,7 @@ template <> int16_t Cast::Operation(const char *left) {
 template <> int Cast::Operation(const char *left) {
 	try {
 		return stoi(left, NULL, 10);
-	} catch(...) {
+	} catch (...) {
 		throw ConversionException("Could not convert string '%s' to numeric", left);
 	}
 }
@@ -133,7 +133,7 @@ template <> int Cast::Operation(const char *left) {
 template <> int64_t Cast::Operation(const char *left) {
 	try {
 		return stoll(left, NULL, 10);
-	} catch(...) {
+	} catch (...) {
 		throw ConversionException("Could not convert string '%s' to numeric", left);
 	}
 }
@@ -141,7 +141,7 @@ template <> int64_t Cast::Operation(const char *left) {
 template <> uint64_t Cast::Operation(const char *left) {
 	try {
 		return stoull(left, NULL, 10);
-	} catch(...) {
+	} catch (...) {
 		throw ConversionException("Could not convert string '%s' to numeric", left);
 	}
 }
@@ -149,7 +149,7 @@ template <> uint64_t Cast::Operation(const char *left) {
 template <> double Cast::Operation(const char *left) {
 	try {
 		return stod(left, NULL);
-	} catch(...) {
+	} catch (...) {
 		throw ConversionException("Could not convert string '%s' to numeric", left);
 	}
 }

@@ -15,9 +15,7 @@ static void SetColumnRefTypes(Expression &op, TypeId colref_type = TypeId::INTEG
 	if (op.type == ExpressionType::COLUMN_REF) {
 		op.return_type = colref_type;
 	}
-	op.EnumerateChildren([&](Expression *child) {
-		SetColumnRefTypes(*child, colref_type);
-	});
+	op.EnumerateChildren([&](Expression *child) { SetColumnRefTypes(*child, colref_type); });
 }
 
 unique_ptr<Expression> ParseExpression(string expression) {

@@ -46,7 +46,7 @@ void OperatorExpression::ResolveType() {
 unique_ptr<Expression> OperatorExpression::Copy() {
 	auto copy = make_unique<OperatorExpression>(type, return_type);
 	copy->CopyProperties(*this);
-	for(auto &it : children) {
+	for (auto &it : children) {
 		copy->children.push_back(it->Copy());
 	}
 	return copy;
@@ -67,11 +67,11 @@ bool OperatorExpression::Equals(const Expression *other_) const {
 	if (!Expression::Equals(other_)) {
 		return false;
 	}
-	auto other = (OperatorExpression*) other_;
+	auto other = (OperatorExpression *)other_;
 	if (children.size() != other->children.size()) {
 		return false;
 	}
-	for(size_t i = 0; i < children.size(); i++) {
+	for (size_t i = 0; i < children.size(); i++) {
 		if (!children[i]->Equals(other->children[i].get())) {
 			return false;
 		}
@@ -91,7 +91,7 @@ string OperatorExpression::ToString() const {
 	}
 	// if there is no operator we render it as a function
 	auto result = ExpressionTypeToString(type) + "(";
-	for(size_t i = 0; i < children.size(); i++) {
+	for (size_t i = 0; i < children.size(); i++) {
 		result += children[i]->ToString();
 		if (i + 1 == children.size()) {
 			result += ", ";
@@ -102,17 +102,15 @@ string OperatorExpression::ToString() const {
 	return result;
 }
 
-
-void OperatorExpression::EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
-	for(size_t i = 0; i < children.size(); i++) {
+void OperatorExpression::EnumerateChildren(
+    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
+	for (size_t i = 0; i < children.size(); i++) {
 		children[i] = callback(move(children[i]));
 	}
 }
 
-void OperatorExpression::EnumerateChildren(std::function<void(Expression* expression)> callback) const {
-	for(size_t i = 0; i < children.size(); i++) {
+void OperatorExpression::EnumerateChildren(std::function<void(Expression *expression)> callback) const {
+	for (size_t i = 0; i < children.size(); i++) {
 		callback(children[i].get());
 	}
 }
-
-

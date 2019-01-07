@@ -25,18 +25,18 @@ bool CastExpression::Equals(const Expression *other_) const {
 	if (!Expression::Equals(other_)) {
 		return false;
 	}
-	auto other = (CastExpression*) other_;
+	auto other = (CastExpression *)other_;
 	if (!child->Equals(other->child.get())) {
 		return false;
 	}
 	return true;
 }
 
-void CastExpression::EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
+void CastExpression::EnumerateChildren(
+    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
 	child = callback(move(child));
 }
 
-void CastExpression::EnumerateChildren(std::function<void(Expression* expression)> callback) const {
+void CastExpression::EnumerateChildren(std::function<void(Expression *expression)> callback) const {
 	callback(child.get());
 }
-

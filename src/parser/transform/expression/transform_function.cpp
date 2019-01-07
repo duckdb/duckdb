@@ -154,13 +154,11 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 				expr->child = move(function_list[0]);
 			}
 			if (function_list.size() > 1) {
-				assert(win_fun_type == ExpressionType::WINDOW_LEAD ||
-				       win_fun_type == ExpressionType::WINDOW_LAG);
+				assert(win_fun_type == ExpressionType::WINDOW_LEAD || win_fun_type == ExpressionType::WINDOW_LAG);
 				expr->offset_expr = move(function_list[1]);
 			}
 			if (function_list.size() > 2) {
-				assert(win_fun_type == ExpressionType::WINDOW_LEAD ||
-				       win_fun_type == ExpressionType::WINDOW_LAG);
+				assert(win_fun_type == ExpressionType::WINDOW_LEAD || win_fun_type == ExpressionType::WINDOW_LAG);
 				expr->default_expr = move(function_list[2]);
 			}
 			assert(function_list.size() <= 3);

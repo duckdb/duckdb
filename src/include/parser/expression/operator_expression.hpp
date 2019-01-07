@@ -19,7 +19,7 @@ public:
 	}
 	OperatorExpression(ExpressionType type, TypeId type_id, unique_ptr<Expression> left,
 	                   unique_ptr<Expression> right = nullptr)
-	   : Expression(type, type_id) {
+	    : Expression(type, type_id) {
 		if (left) {
 			children.push_back(move(left));
 		}
@@ -40,8 +40,8 @@ public:
 	unique_ptr<Expression> Copy() override;
 
 	void EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) override;
-	void EnumerateChildren(std::function<void(Expression* expression)> callback) const override;
-	
+	void EnumerateChildren(std::function<void(Expression *expression)> callback) const override;
+
 	//! Serializes a OperatorExpression to a stand-alone binary blob
 	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into an OperatorExpression

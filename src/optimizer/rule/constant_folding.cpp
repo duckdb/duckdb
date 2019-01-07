@@ -16,24 +16,22 @@ ConstantFoldingRule::ConstantFoldingRule() {
 	op->matchers.push_back(make_unique<ConstantExpressionMatcher>());
 	op->policy = SetMatcher::Policy::ORDERED;
 	// we match the following operators for constant folding
-	vector<ExpressionType> supported_operations = {
-	    ExpressionType::OPERATOR_ADD,
-	    ExpressionType::OPERATOR_SUBTRACT,
-	    ExpressionType::OPERATOR_MULTIPLY,
-	    ExpressionType::OPERATOR_DIVIDE,
-	    ExpressionType::OPERATOR_MOD};
+	vector<ExpressionType> supported_operations = {ExpressionType::OPERATOR_ADD, ExpressionType::OPERATOR_SUBTRACT,
+	                                               ExpressionType::OPERATOR_MULTIPLY, ExpressionType::OPERATOR_DIVIDE,
+	                                               ExpressionType::OPERATOR_MOD};
 	op->expr_type = make_unique<ManyExpressionTypeMatcher>(supported_operations);
 	// for now we only support folding numeric constants
 	op->matchers[0]->type = make_unique<NumericTypeMatcher>();
 	op->matchers[1]->type = make_unique<NumericTypeMatcher>();
-	
+
 	root = move(op);
 }
 
-unique_ptr<Expression> ConstantFoldingRule::Apply(LogicalOperator &op, vector<Expression*> &bindings, bool &changes_made) {
+unique_ptr<Expression> ConstantFoldingRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
+                                                  bool &changes_made) {
 	auto root = bindings[0];
-	auto left = (ConstantExpression*) bindings[1];
-	auto right = (ConstantExpression*) bindings[2];
+	auto left = (ConstantExpression *)bindings[1];
+	auto right = (ConstantExpression *)bindings[2];
 
 	assert(TypeIsNumeric(left->return_type) && TypeIsNumeric(right->return_type));
 

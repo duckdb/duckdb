@@ -15,8 +15,7 @@ namespace duckdb {
 //! Represents a type cast from one type to another type
 class CastExpression : public Expression {
 public:
-	CastExpression(TypeId target, unique_ptr<Expression> child)
-	    : Expression(ExpressionType::OPERATOR_CAST, target) {
+	CastExpression(TypeId target, unique_ptr<Expression> child) : Expression(ExpressionType::OPERATOR_CAST, target) {
 		assert(child);
 		this->child = move(child);
 	}
@@ -32,7 +31,7 @@ public:
 	unique_ptr<Expression> Copy() override;
 
 	void EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) override;
-	void EnumerateChildren(std::function<void(Expression* expression)> callback) const override;
+	void EnumerateChildren(std::function<void(Expression *expression)> callback) const override;
 
 	//! Serializes a CastExpression to a stand-alone binary blob
 	void Serialize(Serializer &serializer) override;

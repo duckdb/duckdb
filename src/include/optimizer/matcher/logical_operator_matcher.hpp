@@ -15,7 +15,8 @@ namespace duckdb {
 //! The LogicalOperatorMatcher class contains a set of matchers that can be used to match LogicalOperators
 class LogicalOperatorMatcher {
 public:
-	virtual ~LogicalOperatorMatcher(){}
+	virtual ~LogicalOperatorMatcher() {
+	}
 
 	virtual bool Match(LogicalOperatorType type) = 0;
 };
@@ -23,13 +24,15 @@ public:
 //! The SpecificLogicalTypeMatcher class matches only a single specified LogicalOperatorType
 class SpecificLogicalTypeMatcher : public LogicalOperatorMatcher {
 public:
-	SpecificLogicalTypeMatcher(LogicalOperatorType type) : type(type) { }
+	SpecificLogicalTypeMatcher(LogicalOperatorType type) : type(type) {
+	}
 
 	bool Match(LogicalOperatorType type) override {
 		return type == this->type;
 	}
+
 private:
 	LogicalOperatorType type;
 };
 
-}
+} // namespace duckdb

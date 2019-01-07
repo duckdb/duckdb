@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// optimizer/rule/constant_fold.hpp
+// optimizer/rule/constant_folding.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -17,7 +17,7 @@ class ConstantFoldingRule : public Rule {
 public:
 	ConstantFoldingRule();
 
-	unique_ptr<Expression> Apply(LogicalOperator &op, vector<Expression*> &bindings, bool &changes_made) override;
+	unique_ptr<Expression> Apply(LogicalOperator &op, vector<Expression *> &bindings, bool &changes_made) override;
 };
 
 } // namespace duckdb

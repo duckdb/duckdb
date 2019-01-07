@@ -149,15 +149,15 @@ static unique_ptr<PhysicalOperator> CreateIndexScan(LogicalFilter &filter, Logic
 			matcher.matchers.push_back(make_unique<ConstantExpressionMatcher>());
 			matcher.policy = SetMatcher::Policy::UNORDERED;
 
-			vector<Expression*> bindings;
-			
+			vector<Expression *> bindings;
+
 			if (matcher.Match(expr, bindings)) {
 				// range or equality comparison with constant value
 				// we can use our index here
 				// bindings[0] = the expression
 				// bindings[1] = the index expression
 				// bindings[2] = the constant
-				auto comparison = (ComparisonExpression*) bindings[0];
+				auto comparison = (ComparisonExpression *)bindings[0];
 				assert(bindings[0]->GetExpressionClass() == ExpressionClass::COMPARISON);
 				assert(bindings[1]->Equals(order_index->expressions[0].get()));
 				assert(bindings[2]->type == ExpressionType::VALUE_CONSTANT);

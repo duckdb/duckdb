@@ -8,11 +8,11 @@ using namespace std;
 namespace duckdb {
 namespace function {
 
-typedef void (*str_function)(const char* input, char *output);
+typedef void (*str_function)(const char *input, char *output);
 
 // TODO: this does not handle UTF characters yet.
-static void strtoupper(const char* input, char *output) {
-	while(*input) {
+static void strtoupper(const char *input, char *output) {
+	while (*input) {
 		*output = toupper((unsigned char)*input);
 		input++;
 		output++;
@@ -20,8 +20,8 @@ static void strtoupper(const char* input, char *output) {
 	*output = '\0';
 }
 
-static void strtolower(const char* input, char *output) {
-	while(*input) {
+static void strtolower(const char *input, char *output) {
+	while (*input) {
 		*output = tolower((unsigned char)*input);
 		input++;
 		output++;
@@ -29,7 +29,7 @@ static void strtolower(const char* input, char *output) {
 	*output = '\0';
 }
 
-template<str_function CASE_FUNCTION>
+template <str_function CASE_FUNCTION>
 static void caseconvert_function(Vector inputs[], FunctionExpression &expr, Vector &result) {
 	auto &input = inputs[0];
 	assert(input.type == TypeId::VARCHAR);
@@ -48,7 +48,7 @@ static void caseconvert_function(Vector inputs[], FunctionExpression &expr, Vect
 	if (has_stats) {
 		// stats available, pre-allocate the result chunk
 		current_len = expr.children[0]->stats.maximum_string_length + 1;
-		output = unique_ptr<char[]>{new char[current_len]}; 
+		output = unique_ptr<char[]>{new char[current_len]};
 	}
 
 	VectorOperations::Exec(input, [&](size_t i, size_t k) {
@@ -60,7 +60,7 @@ static void caseconvert_function(Vector inputs[], FunctionExpression &expr, Vect
 			size_t required_len = strlen(input_data[i]) + 1;
 			if (required_len > current_len) {
 				current_len = required_len + 1;
-				output = unique_ptr<char[]>{new char[current_len]}; 
+				output = unique_ptr<char[]>{new char[current_len]};
 			}
 		}
 		assert(strlen(input_data[i]) < current_len);

@@ -26,7 +26,7 @@ void PhysicalTableFunction::_GetChunk(ClientContext &context, DataChunk &chunk, 
 
 	ExpressionExecutor executor(nullptr, context);
 	assert(function_call->type == ExpressionType::FUNCTION);
-	executor.Execute(((FunctionExpression*)function_call.get())->children, input);
+	executor.Execute(((FunctionExpression *)function_call.get())->children, input);
 
 	// run main code
 	function->function(context, input, chunk, state->function_data.get());

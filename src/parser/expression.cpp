@@ -20,33 +20,25 @@ void Expression::AcceptChildren(SQLNodeVisitor *v) {
 
 bool Expression::IsAggregate() {
 	bool is_aggregate = false;
-	EnumerateChildren([&](Expression *child) {
-		is_aggregate |= child->IsAggregate();
-	});
+	EnumerateChildren([&](Expression *child) { is_aggregate |= child->IsAggregate(); });
 	return is_aggregate;
 }
 
 bool Expression::IsWindow() {
 	bool is_window = false;
-	EnumerateChildren([&](Expression *child) {
-		is_window |= child->IsWindow();
-	});
+	EnumerateChildren([&](Expression *child) { is_window |= child->IsWindow(); });
 	return is_window;
 }
 
 bool Expression::IsScalar() {
 	bool is_scalar = true;
-	EnumerateChildren([&](Expression *child) {
-		is_scalar |= child->IsScalar();
-	});
+	EnumerateChildren([&](Expression *child) { is_scalar |= child->IsScalar(); });
 	return is_scalar;
 }
 
 bool Expression::HasSubquery() {
 	bool has_subquery = false;
-	EnumerateChildren([&](Expression *child) {
-		has_subquery |= child->HasSubquery();
-	});
+	EnumerateChildren([&](Expression *child) { has_subquery |= child->HasSubquery(); });
 	return has_subquery;
 }
 
@@ -120,8 +112,6 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &source) {
 
 uint64_t Expression::Hash() const {
 	uint64_t hash = duckdb::Hash<uint32_t>((uint32_t)type);
-	EnumerateChildren([&](Expression *child) {
-		hash = CombineHash(child->Hash(), hash);
-	});
+	EnumerateChildren([&](Expression *child) { hash = CombineHash(child->Hash(), hash); });
 	return hash;
 }

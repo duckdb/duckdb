@@ -18,7 +18,8 @@ void ComparisonExpression::Serialize(Serializer &serializer) {
 	right->Serialize(serializer);
 }
 
-unique_ptr<Expression> ComparisonExpression::Deserialize(ExpressionType type, TypeId return_type, Deserializer &source) {
+unique_ptr<Expression> ComparisonExpression::Deserialize(ExpressionType type, TypeId return_type,
+                                                         Deserializer &source) {
 	auto left_child = Expression::Deserialize(source);
 	auto right_child = Expression::Deserialize(source);
 	return make_unique<ComparisonExpression>(type, move(left_child), move(right_child));
@@ -28,7 +29,7 @@ bool ComparisonExpression::Equals(const Expression *other_) const {
 	if (!Expression::Equals(other_)) {
 		return false;
 	}
-	auto other = (ComparisonExpression*) other_;
+	auto other = (ComparisonExpression *)other_;
 	if (!left->Equals(other->left.get())) {
 		return false;
 	}
@@ -38,12 +39,13 @@ bool ComparisonExpression::Equals(const Expression *other_) const {
 	return true;
 }
 
-void ComparisonExpression::EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
+void ComparisonExpression::EnumerateChildren(
+    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
 	left = callback(move(left));
 	right = callback(move(right));
 }
 
-void ComparisonExpression::EnumerateChildren(std::function<void(Expression* expression)> callback) const {
+void ComparisonExpression::EnumerateChildren(std::function<void(Expression *expression)> callback) const {
 	callback(left.get());
 	callback(right.get());
 }

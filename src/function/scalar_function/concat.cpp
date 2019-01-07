@@ -24,14 +24,13 @@ void concat_function(Vector inputs[], size_t input_count, FunctionExpression &ex
 	auto result_data = (const char **)result.data;
 	auto input1_data = (const char **)input1.data;
 	auto input2_data = (const char **)input2.data;
-	
+
 	bool has_stats = expr.children[0]->stats.has_stats && expr.children[1]->stats.has_stats;
 	size_t current_len = 0;
 	unique_ptr<char[]> output;
 	if (has_stats) {
 		// stats available, pre-allocate the result chunk
-		current_len =
-			expr.children[0]->stats.maximum_string_length + expr.children[1]->stats.maximum_string_length + 1;
+		current_len = expr.children[0]->stats.maximum_string_length + expr.children[1]->stats.maximum_string_length + 1;
 		output = unique_ptr<char[]>{new char[current_len]};
 	}
 
@@ -42,12 +41,12 @@ void concat_function(Vector inputs[], size_t input_count, FunctionExpression &ex
 		                             }
 		                             auto input1 = input1_data[input1_index];
 		                             auto input2 = input2_data[input2_index];
-									 size_t len1 = strlen(input1), len2 = strlen(input2);
-									 size_t required_len = len1 + len2 + 1;
-									 if (required_len > current_len) {
-										current_len = required_len;
-										output = unique_ptr<char[]>{new char[required_len]}; 
-									 }
+		                             size_t len1 = strlen(input1), len2 = strlen(input2);
+		                             size_t required_len = len1 + len2 + 1;
+		                             if (required_len > current_len) {
+			                             current_len = required_len;
+			                             output = unique_ptr<char[]>{new char[required_len]};
+		                             }
 		                             strcpy(output.get(), input1);
 		                             strcpy(output.get() + len1, input2);
 		                             output[len1 + len2] = '\0';

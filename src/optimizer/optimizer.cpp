@@ -1,8 +1,8 @@
 #include "optimizer/optimizer.hpp"
 
 #include "optimizer/join_order_optimizer.hpp"
-#include "optimizer/subquery_rewriter.hpp"
 #include "optimizer/rule/list.hpp"
+#include "optimizer/subquery_rewriter.hpp"
 #include "planner/operator/list.hpp"
 
 using namespace duckdb;

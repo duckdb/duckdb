@@ -6,9 +6,10 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const vector<Rule*> &rules, unique_ptr<Expression> expr) {
-	for(auto &rule : rules) {
-		vector<Expression*> bindings;
+unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const vector<Rule *> &rules,
+                                                      unique_ptr<Expression> expr) {
+	for (auto &rule : rules) {
+		vector<Expression *> bindings;
 		if (rule->root->Match(expr.get(), bindings)) {
 			// the rule matches! try to apply it
 			bool changes_made = false;
@@ -33,9 +34,9 @@ unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const
 	return expr;
 }
 
-void ExpressionRewriter::Apply(LogicalOperator& root) {
+void ExpressionRewriter::Apply(LogicalOperator &root) {
 	// first apply the rules to child operators of this node (if any)
-	for(auto &child : root.children) {
+	for (auto &child : root.children) {
 		Apply(*child);
 	}
 	// apply the rules to this node
@@ -43,8 +44,8 @@ void ExpressionRewriter::Apply(LogicalOperator& root) {
 		// no expressions to apply rules on: return
 		return;
 	}
-	vector<Rule*> to_apply_rules;
-	for(auto &rule : rules) {
+	vector<Rule *> to_apply_rules;
+	for (auto &rule : rules) {
 		if (rule->logical_root && !rule->logical_root->Match(root.type)) {
 			// this rule does not apply to this type of LogicalOperator
 			continue;
@@ -55,13 +56,13 @@ void ExpressionRewriter::Apply(LogicalOperator& root) {
 		// no rules to apply on this node
 		return;
 	}
-	for(size_t i = 0; i < root.expressions.size(); i++) {
+	for (size_t i = 0; i < root.expressions.size(); i++) {
 		root.expressions[i] = ExpressionRewriter::ApplyRules(root, to_apply_rules, move(root.expressions[i]));
 	}
 
 	// if it is a LogicalFilter, we split up filter conjunctions again
 	if (root.type == LogicalOperatorType::FILTER) {
-		auto &filter = (LogicalFilter &) root;
+		auto &filter = (LogicalFilter &)root;
 		filter.SplitPredicates();
 	}
 }

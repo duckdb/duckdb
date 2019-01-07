@@ -37,7 +37,7 @@ public:
 	bool Equals(const Expression *other) const override;
 
 	void EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) override;
-	void EnumerateChildren(std::function<void(Expression* expression)> callback) const override;
+	void EnumerateChildren(std::function<void(Expression *expression)> callback) const override;
 
 	//! Serializes a FunctionExpression to a stand-alone binary blob
 	void Serialize(Serializer &serializer) override;
@@ -45,7 +45,7 @@ public:
 	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
 
 	string ToString() const override;
-	
+
 	//! Schema of the function
 	string schema;
 	//! Function name

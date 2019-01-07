@@ -46,14 +46,15 @@ uint64_t FunctionExpression::Hash() const {
 	return result;
 }
 
-void FunctionExpression::EnumerateChildren(function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
-	for(size_t i = 0; i < children.size(); i++) {
+void FunctionExpression::EnumerateChildren(
+    function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
+	for (size_t i = 0; i < children.size(); i++) {
 		children[i] = callback(move(children[i]));
 	}
 }
 
-void FunctionExpression::EnumerateChildren(function<void(Expression* expression)> callback) const {
-	for(size_t i = 0; i < children.size(); i++) {
+void FunctionExpression::EnumerateChildren(function<void(Expression *expression)> callback) const {
+	for (size_t i = 0; i < children.size(); i++) {
 		callback(children[i].get());
 	}
 }
@@ -87,7 +88,7 @@ bool FunctionExpression::Equals(const Expression *other_) const {
 	if (other->children.size() != children.size()) {
 		return false;
 	}
-	for(size_t i = 0; i < children.size(); i++) {
+	for (size_t i = 0; i < children.size(); i++) {
 		if (!children[i]->Equals(other->children[i].get())) {
 			return false;
 		}
@@ -97,9 +98,8 @@ bool FunctionExpression::Equals(const Expression *other_) const {
 
 string FunctionExpression::ToString() const {
 	string result = function_name + "(";
-	for(size_t i = 0; i < children.size(); i++) {
+	for (size_t i = 0; i < children.size(); i++) {
 		result += children[i]->ToString() + (i + 1 == children.size() ? ")" : ",");
 	}
 	return result;
 }
-	

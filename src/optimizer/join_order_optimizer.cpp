@@ -152,7 +152,7 @@ static unique_ptr<LogicalOperator> CreateJoinCondition(unique_ptr<LogicalOperato
                                                        unordered_set<size_t> &right_bindings) {
 	if (expr->type >= ExpressionType::COMPARE_EQUAL && expr->type <= ExpressionType::COMPARE_NOTLIKE) {
 		// comparison
-		auto &comparison = (ComparisonExpression&) *expr;
+		auto &comparison = (ComparisonExpression &)*expr;
 		auto left_side = GetJoinSide(*comparison.left, left_bindings, right_bindings);
 		auto right_side = GetJoinSide(*comparison.right, left_bindings, right_bindings);
 		auto total_side = CombineJoinSide(left_side, right_side);
@@ -179,7 +179,7 @@ static unique_ptr<LogicalOperator> CreateJoinCondition(unique_ptr<LogicalOperato
 			return op;
 		}
 	} else if (expr->type == ExpressionType::OPERATOR_NOT) {
-		auto &op_expr = (OperatorExpression&) *expr;
+		auto &op_expr = (OperatorExpression &)*expr;
 		assert(op_expr.children.size() == 1);
 		ExpressionType child_type = op_expr.children[0]->GetExpressionType();
 
@@ -651,7 +651,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 				        RelationSet::IsSubset(right.first, f->left_set)));
 				JoinCondition cond;
 				assert(condition->GetExpressionClass() == ExpressionClass::COMPARISON);
-				auto &comparison = (ComparisonExpression&) *condition;
+				auto &comparison = (ComparisonExpression &)*condition;
 				// we need to figure out which side is which by looking at the relations available to us
 				bool invert = RelationSet::IsSubset(left.first, f->left_set) ? false : true;
 				cond.left = !invert ? move(comparison.left) : move(comparison.right);

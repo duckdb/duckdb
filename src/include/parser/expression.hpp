@@ -38,8 +38,7 @@ public:
 	Expression(ExpressionType type) : type(type), stats(*this) {
 	}
 	//! Create an Expression with the specified return type
-	Expression(ExpressionType type, TypeId return_type)
-	    : type(type), return_type(return_type), stats(*this) {
+	Expression(ExpressionType type, TypeId return_type) : type(type), return_type(return_type), stats(*this) {
 	}
 
 	virtual unique_ptr<Expression> Accept(SQLNodeVisitor *) = 0;
@@ -47,9 +46,7 @@ public:
 
 	//! Resolves the type for this expression based on its children
 	virtual void ResolveType() {
-		EnumerateChildren([](Expression *child) {
-			child->ResolveType();
-		});
+		EnumerateChildren([](Expression *child) { child->ResolveType(); });
 	}
 
 	//! Returns true if this Expression is an aggregate or not.
@@ -100,17 +97,17 @@ public:
 	//! SerializationException]
 	static unique_ptr<Expression> Deserialize(Deserializer &source);
 
-	//! Enumerate over all children of this node, invoking the callback for each child. This method allows replacing the children using the return value.
-	virtual void EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) = 0;
+	//! Enumerate over all children of this node, invoking the callback for each child. This method allows replacing the
+	//! children using the return value.
+	virtual void
+	EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) = 0;
 	//! Enumerate over all children of this node, invoking the callback for each child.
-	virtual void EnumerateChildren(std::function<void(Expression* expression)> callback) const = 0;
+	virtual void EnumerateChildren(std::function<void(Expression *expression)> callback) const = 0;
 
 	//! Clears the statistics of this expression and all child expressions
 	void ClearStatistics() {
 		stats.has_stats = false;
-		EnumerateChildren([](Expression *child) {
-			child->ClearStatistics();
-		});
+		EnumerateChildren([](Expression *child) { child->ClearStatistics(); });
 	}
 
 	static bool Equals(Expression *left, Expression *right) {
@@ -139,6 +136,7 @@ public:
 	//! The alias of the expression, used in the SELECT clause (e.g. SELECT x +
 	//! 1 AS f)
 	string alias;
+
 protected:
 	//! Copy base Expression properties from another expression to this one,
 	//! used in Copy method

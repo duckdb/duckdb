@@ -20,7 +20,8 @@ unique_ptr<Expression> Transformer::TransformCoalesce(A_Expr *root) {
 		// get the value of the COALESCE
 		auto value_expr = TransformExpression(reinterpret_cast<Node *>(cell->data.ptr_value));
 		// perform an IS NOT NULL comparison with the value here
-		cur_root->check = make_unique<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, TypeId::BOOLEAN, value_expr->Copy());
+		cur_root->check =
+		    make_unique<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, TypeId::BOOLEAN, value_expr->Copy());
 		// if IS NOT NULL, we output the value
 		cur_root->result_if_true = move(value_expr);
 		if (cell->next->next == nullptr) {

@@ -17,7 +17,8 @@ void ConjunctionExpression::Serialize(Serializer &serializer) {
 	right->Serialize(serializer);
 }
 
-unique_ptr<Expression> ConjunctionExpression::Deserialize(ExpressionType type, TypeId return_type, Deserializer &source) {
+unique_ptr<Expression> ConjunctionExpression::Deserialize(ExpressionType type, TypeId return_type,
+                                                          Deserializer &source) {
 	auto left_child = Expression::Deserialize(source);
 	auto right_child = Expression::Deserialize(source);
 	return make_unique<ConjunctionExpression>(type, move(left_child), move(right_child));
@@ -27,7 +28,7 @@ bool ConjunctionExpression::Equals(const Expression *other_) const {
 	if (!Expression::Equals(other_)) {
 		return false;
 	}
-	auto other = (ConjunctionExpression*) other_;
+	auto other = (ConjunctionExpression *)other_;
 	// conjunctions are Commutative
 	if (left->Equals(other->left.get()) && right->Equals(other->right.get())) {
 		return true;
@@ -38,12 +39,13 @@ bool ConjunctionExpression::Equals(const Expression *other_) const {
 	return false;
 }
 
-void ConjunctionExpression::EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
+void ConjunctionExpression::EnumerateChildren(
+    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
 	left = callback(move(left));
 	right = callback(move(right));
 }
 
-void ConjunctionExpression::EnumerateChildren(std::function<void(Expression* expression)> callback) const {
+void ConjunctionExpression::EnumerateChildren(std::function<void(Expression *expression)> callback) const {
 	callback(left.get());
 	callback(right.get());
 }

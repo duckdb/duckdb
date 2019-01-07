@@ -17,7 +17,7 @@ class DistributivityRule : public Rule {
 public:
 	DistributivityRule();
 
-	unique_ptr<Expression> Apply(LogicalOperator &op, vector<Expression*> &bindings, bool &changes_made) override;
+	unique_ptr<Expression> Apply(LogicalOperator &op, vector<Expression *> &bindings, bool &changes_made) override;
 };
 
 } // namespace duckdb
