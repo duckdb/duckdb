@@ -24,10 +24,16 @@ void concat_function(Vector inputs[], size_t input_count, FunctionExpression &ex
 	auto result_data = (const char **)result.data;
 	auto input1_data = (const char **)input1.data;
 	auto input2_data = (const char **)input2.data;
-	size_t max_result_len =
-	    expr.children[0]->stats.maximum_string_length + expr.children[1]->stats.maximum_string_length;
-	auto output_uptr = unique_ptr<char[]>{new char[max_result_len + 1]};
-	char *output = output_uptr.get();
+	
+	bool has_stats = expr.children[0]->stats.has_stats && expr.children[1]->stats.has_stats;
+	size_t current_len = 0;
+	unique_ptr<char[]> output;
+	if (has_stats) {
+		// stats available, pre-allocate the result chunk
+		current_len =
+			expr.children[0]->stats.maximum_string_length + expr.children[1]->stats.maximum_string_length + 1;
+		output = unique_ptr<char[]>{new char[current_len]};
+	}
 
 	VectorOperations::BinaryExec(input1, input2, result,
 	                             [&](size_t input1_index, size_t input2_index, size_t result_index) {
@@ -36,11 +42,16 @@ void concat_function(Vector inputs[], size_t input_count, FunctionExpression &ex
 		                             }
 		                             auto input1 = input1_data[input1_index];
 		                             auto input2 = input2_data[input2_index];
-		                             assert(strlen(input1) + strlen(input2) <= max_result_len);
-		                             strncpy(output, input1, strlen(input1));
-		                             strncpy(output + strlen(input1), input2, strlen(input2));
-		                             output[strlen(input1) + strlen(input2)] = '\0';
-		                             result_data[result_index] = result.string_heap.AddString(output);
+									 size_t len1 = strlen(input1), len2 = strlen(input2);
+									 size_t required_len = len1 + len2 + 1;
+									 if (required_len > current_len) {
+										current_len = required_len;
+										output = unique_ptr<char[]>{new char[required_len]}; 
+									 }
+		                             strcpy(output.get(), input1);
+		                             strcpy(output.get() + len1, input2);
+		                             output[len1 + len2] = '\0';
+		                             result_data[result_index] = result.string_heap.AddString(output.get());
 	                             });
 }
 

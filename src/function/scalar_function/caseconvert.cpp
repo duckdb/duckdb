@@ -8,24 +8,29 @@ using namespace std;
 namespace duckdb {
 namespace function {
 
-enum CaseconvertDirection { UPPER, LOWER };
+typedef void (*str_function)(const char* input, char *output);
 
 // TODO: this does not handle UTF characters yet.
-static void strtoupper(char *str) {
-	while (*str) {
-		*(str) = toupper((unsigned char)*str);
-		str++;
+static void strtoupper(const char* input, char *output) {
+	while(*input) {
+		*output = toupper((unsigned char)*input);
+		input++;
+		output++;
 	}
+	*output = '\0';
 }
 
-static void strtolower(char *str) {
-	while (*str) {
-		*(str) = tolower((unsigned char)*str);
-		str++;
+static void strtolower(const char* input, char *output) {
+	while(*input) {
+		*output = tolower((unsigned char)*input);
+		input++;
+		output++;
 	}
+	*output = '\0';
 }
 
-static void caseconvert_function(Vector inputs[], CaseconvertDirection direction, size_t max_str_len, Vector &result) {
+template<str_function CASE_FUNCTION>
+static void caseconvert_function(Vector inputs[], FunctionExpression &expr, Vector &result) {
 	auto &input = inputs[0];
 	assert(input.type == TypeId::VARCHAR);
 
@@ -36,43 +41,43 @@ static void caseconvert_function(Vector inputs[], CaseconvertDirection direction
 
 	auto result_data = (const char **)result.data;
 	auto input_data = (const char **)input.data;
-	auto output_uptr = unique_ptr<char[]>{new char[max_str_len + 1]};
-	char *output = output_uptr.get();
+
+	bool has_stats = expr.children[0]->stats.has_stats;
+	size_t current_len = 0;
+	unique_ptr<char[]> output;
+	if (has_stats) {
+		// stats available, pre-allocate the result chunk
+		current_len = expr.children[0]->stats.maximum_string_length + 1;
+		output = unique_ptr<char[]>{new char[current_len]}; 
+	}
 
 	VectorOperations::Exec(input, [&](size_t i, size_t k) {
 		if (input.nullmask[i]) {
 			return;
 		}
-		assert(strlen(input_data[i]) <= max_str_len);
-
-		strncpy(output, input_data[i], strlen(input_data[i]));
-		output[strlen(input_data[i])] = '\0';
-
-		switch (direction) {
-		case CaseconvertDirection::UPPER:
-			strtoupper(output);
-			break;
-		case CaseconvertDirection::LOWER:
-			strtolower(output);
-			break;
-		default:
-			throw Exception("Unknown direction");
+		if (!has_stats) {
+			// no stats available, might need to reallocate
+			size_t required_len = strlen(input_data[i]) + 1;
+			if (required_len > current_len) {
+				current_len = required_len + 1;
+				output = unique_ptr<char[]>{new char[current_len]}; 
+			}
 		}
+		assert(strlen(input_data[i]) < current_len);
+		CASE_FUNCTION(input_data[i], output.get());
 
-		result_data[i] = result.string_heap.AddString(output);
+		result_data[i] = result.string_heap.AddString(output.get());
 	});
 }
 
 void caseconvert_upper_function(Vector inputs[], size_t input_count, FunctionExpression &expr, Vector &result) {
 	assert(input_count == 1);
-	assert(expr.children[0]->stats.has_stats);
-	caseconvert_function(inputs, CaseconvertDirection::UPPER, expr.children[0]->stats.maximum_string_length, result);
+	caseconvert_function<strtoupper>(inputs, expr, result);
 }
 
 void caseconvert_lower_function(Vector inputs[], size_t input_count, FunctionExpression &expr, Vector &result) {
 	assert(input_count == 1);
-	assert(expr.children[0]->stats.has_stats);
-	caseconvert_function(inputs, CaseconvertDirection::LOWER, expr.children[0]->stats.maximum_string_length, result);
+	caseconvert_function<strtolower>(inputs, expr, result);
 }
 
 bool caseconvert_matches_arguments(vector<TypeId> &arguments) {
