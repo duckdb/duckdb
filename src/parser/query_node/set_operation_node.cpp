@@ -25,6 +25,7 @@ unique_ptr<QueryNode> SetOperationNode::Copy() {
 	result->setop_type = setop_type;
 	result->left = left->Copy();
 	result->right = right->Copy();
+	this->CopyProperties(*result);
 	return result;
 }
 

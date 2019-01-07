@@ -57,14 +57,7 @@ bool SelectNode::Equals(const QueryNode *other_) const {
 		return false;
 	}
 	// WHERE
-	if (where_clause) {
-		// we have a WHERE clause, compare to the other one
-		if (!where_clause->Equals(other->where_clause.get())) {
-			return false;
-		}
-	} else if (other->where_clause) {
-		// we don't have a WHERE clause, if the other statement has one they are
-		// not equal
+	if (!Expression::Equals(where_clause.get(), other->where_clause.get())) {
 		return false;
 	}
 	// GROUP BY
@@ -74,11 +67,7 @@ bool SelectNode::Equals(const QueryNode *other_) const {
 		}
 	}
 	// HAVING
-	if (groupby.having) {
-		if (!groupby.having->Equals(other->groupby.having.get())) {
-			return false;
-		}
-	} else if (other->groupby.having) {
+	if (!Expression::Equals(groupby.having.get(), other->groupby.having.get())) {
 		return false;
 	}
 
@@ -99,20 +88,12 @@ unique_ptr<QueryNode> SelectNode::Copy() {
 	}
 	result->from_table = from_table ? from_table->Copy() : nullptr;
 	result->where_clause = where_clause ? where_clause->Copy() : nullptr;
-	result->select_distinct = select_distinct;
-
 	// groups
 	for (auto &group : groupby.groups) {
 		result->groupby.groups.push_back(group->Copy());
 	}
 	result->groupby.having = groupby.having ? groupby.having->Copy() : nullptr;
-	// order
-	for (auto &order : orderby.orders) {
-		result->orderby.orders.push_back(OrderByNode(order.type, order.expression->Copy()));
-	}
-	// limit
-	result->limit.limit = limit.limit;
-	result->limit.offset = limit.offset;
+	this->CopyProperties(*result);
 	return result;
 }
 

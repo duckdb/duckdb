@@ -52,12 +52,7 @@ public:
 
 	virtual void Accept(SQLNodeVisitor *) = 0;
 
-	virtual bool Equals(const QueryNode *other) const {
-		if (!other) {
-			return false;
-		}
-		return other->type == type;
-	}
+	virtual bool Equals(const QueryNode *other) const;
 
 	//! Create a copy of this QueryNode
 	virtual unique_ptr<QueryNode> Copy() = 0;
@@ -88,6 +83,9 @@ public:
 	bool HasOrder() {
 		return orderby.orders.size() > 0;
 	}
+
+protected:
+	void CopyProperties(QueryNode &other);
 };
 
 }; // namespace duckdb

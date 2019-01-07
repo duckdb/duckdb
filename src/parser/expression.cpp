@@ -102,8 +102,11 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &source) {
 	case ExpressionClass::SUBQUERY:
 		result = SubqueryExpression::Deserialize(type, return_type, source);
 		break;
+	case ExpressionClass::WINDOW:
+		result = WindowExpression::Deserialize(type, return_type, source);
+		break;
 	default:
-		throw SerializationException("Unsupported type for aggregation deserialization!");
+		throw SerializationException("Unsupported type for expression deserialization!");
 	}
 	result->return_type = return_type;
 	result->alias = alias;

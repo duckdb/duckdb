@@ -29,18 +29,22 @@ void Planner::CreatePlan(ClientContext &context, unique_ptr<SQLStatement> statem
 	assert(statement);
 	switch (statement->type) {
 	case StatementType::SELECT:
-		// #ifdef DEBUG
-		// 	{
-		// 		// in debug mode we test the serialization/deserialization and copying of arbitrary SQL statements
-		// 		Serializer serializer;
-		// 		((SelectStatement *)statement.get())->Serialize(serializer);
-		// 		Deserializer source(serializer);
-		// 		auto new_statement = SelectStatement::Deserialize(source);
-		// 		statement.reset();
-		// 		CreatePlan(context, *new_statement);
-		// 		break;
-		// 	}
-		// #endif
+#ifdef DEBUG
+	{
+		auto select_stmt = (SelectStatement *)statement.get();
+		// in debug mode we test the serialization/deserialization and copying of arbitrary SQL statements
+		auto copied_statement = select_stmt->Copy();
+		Serializer serializer;
+		select_stmt->Serialize(serializer);
+		Deserializer source(serializer);
+		auto new_statement = SelectStatement::Deserialize(source);
+		assert(copied_statement->Equals(statement.get()));
+		assert(new_statement->Equals(statement.get()));
+		assert(copied_statement->Equals(new_statement.get()));
+		CreatePlan(context, *new_statement);
+		break;
+	}
+#endif
 	case StatementType::INSERT:
 	case StatementType::COPY:
 	case StatementType::DELETE:
