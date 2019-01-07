@@ -344,11 +344,10 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 
 	auto group_width = group_serializer.TupleSize();
 
-	// serialize the elements from the group to a tuple-wide format
-	uint8_t group_data[STANDARD_VECTOR_SIZE][group_width];
+	auto group_data = unique_ptr<uint8_t[]>{new uint8_t[STANDARD_VECTOR_SIZE * group_width]};
 	uint8_t *group_elements[STANDARD_VECTOR_SIZE];
 	for (size_t i = 0; i < groups.size(); i++) {
-		group_elements[i] = group_data[i];
+		group_elements[i] = &(group_data.get()[i * group_width]);
 	}
 	group_serializer.Serialize(groups, group_elements);
 

@@ -57,12 +57,13 @@ UniqueIndexNode *UniqueIndex::AddEntry(Transaction &transaction, Tuple tuple, si
 					conflict = false;
 				} else {
 					// first serialize to tuple
-					uint8_t tuple_data[chunk->table.serializer.TupleSize()];
-					chunk->table.serializer.Serialize(chunk->columns, offset, tuple_data);
+					auto tuple_data = unique_ptr<uint8_t[]>{new uint8_t[chunk->table.serializer.TupleSize()]};
+
+					chunk->table.serializer.Serialize(chunk->columns, offset, tuple_data.get());
 					// now compare them
 					// we use the TupleComparer because the tuple is serialized
 					// from the base table
-					conflict = comparer.Compare(new_node->tuple.data.get(), tuple_data) == 0;
+					conflict = comparer.Compare(new_node->tuple.data.get(), tuple_data.get()) == 0;
 				}
 			} else {
 				conflict = false;

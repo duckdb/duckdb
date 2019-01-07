@@ -43,7 +43,8 @@ unique_ptr<HyperLogLog> HyperLogLog::Merge(HyperLogLog &other) {
 }
 
 unique_ptr<HyperLogLog> HyperLogLog::Merge(HyperLogLog logs[], size_t count) {
-	robj *hlls[count];
+	auto hlls_uptr = unique_ptr<robj *[]> { new robj *[count] };
+	auto hlls = hlls_uptr.get();
 	for (size_t i = 0; i < count; i++) {
 		hlls[i] = (robj *)logs[i].hll;
 	}

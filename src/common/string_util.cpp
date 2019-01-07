@@ -1,6 +1,7 @@
 #include "common/string_util.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <iomanip>
 #include <memory>
 #include <sstream>
