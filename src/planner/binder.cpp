@@ -116,9 +116,12 @@ void Binder::Visit(SelectNode &statement) {
 		if (select_element->return_type == TypeId::INVALID) {
 			throw BinderException("Could not resolve type of projection element!");
 		}
+	}
 
-		if (!select_element->alias.empty()) {
-			bind_context->AddExpression(select_element->alias, select_element.get(), i);
+	// add alias references from SELECT list so they can be used in the ORDER BY clause
+	for (size_t i = 0; i < new_select_list.size(); i++) {
+		if (!new_select_list[i]->alias.empty()) {
+			bind_context->AddExpression(new_select_list[i]->alias, new_select_list[i].get(), i);
 		}
 	}
 

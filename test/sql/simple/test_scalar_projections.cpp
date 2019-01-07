@@ -30,4 +30,7 @@ TEST_CASE("Test scalar queries", "[scalarquery]") {
 
 	result = con.Query("SELECT CASE WHEN 43 > 33 THEN 43 ELSE 33 END;");
 	REQUIRE(CHECK_COLUMN(result, 0, {43}));
+
+	// cannot reference columns like this
+	REQUIRE_FAIL(con.Query("SELECT 1 AS a, a * 2"));
 }
