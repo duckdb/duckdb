@@ -8,6 +8,7 @@ TEST_CASE("Test basic joins of tables", "[joins]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 	unique_ptr<DuckDBResult> result;
+	con.EnableQueryVerification();
 
 	// create tables
 	con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
@@ -80,6 +81,7 @@ TEST_CASE("Test join with > STANDARD_VECTOR_SIZE duplicates", "[joins]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 	unique_ptr<DuckDBResult> result;
+	con.EnableQueryVerification();
 
 	size_t element_count = STANDARD_VECTOR_SIZE * 10;
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
@@ -103,6 +105,7 @@ TEST_CASE("Equality + inequality joins", "[joins]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 	unique_ptr<DuckDBResult> result;
+	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 1), (12, 2), (13, 3)"));
@@ -145,6 +148,7 @@ TEST_CASE("Equality + inequality anti and semi joins", "[joins]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 	unique_ptr<DuckDBResult> result;
+	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER, str VARCHAR);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 1, 'a'), (12, 2, 'b'), (13, 3, 'c')"));
@@ -189,6 +193,7 @@ TEST_CASE("Equality + inequality anti and semi joins with selection vector", "[j
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 	unique_ptr<DuckDBResult> result;
+	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER, str VARCHAR);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 1, 'a'), (12, 2, 'b'), (13, 3, 'c')"));
@@ -223,6 +228,7 @@ TEST_CASE("Test range joins", "[joins]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 	unique_ptr<DuckDBResult> result;
+	con.EnableQueryVerification();
 
 	// create tables
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));

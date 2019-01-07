@@ -8,6 +8,7 @@ TEST_CASE("Extract function", "[date]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	con.EnableQueryVerification();
 
 	// create and insert into table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE dates(i DATE)"));
