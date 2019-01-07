@@ -14,7 +14,7 @@
 namespace duckdb {
 namespace function {
 
-void round_function(Vector inputs[], size_t input_count, Expression &expr, Vector &result);
+void round_function(Vector inputs[], size_t input_count, FunctionExpression &expr, Vector &result);
 bool round_matches_arguments(vector<TypeId> &arguments);
 TypeId round_get_return_type(vector<TypeId> &arguments);
 

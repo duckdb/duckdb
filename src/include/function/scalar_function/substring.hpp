@@ -14,7 +14,7 @@
 namespace duckdb {
 namespace function {
 
-void substring_function(Vector inputs[], size_t input_count, Expression &expr, Vector &result);
+void substring_function(Vector inputs[], size_t input_count, FunctionExpression &expr, Vector &result);
 bool substring_matches_arguments(vector<TypeId> &arguments);
 TypeId substring_get_return_type(vector<TypeId> &arguments);
 

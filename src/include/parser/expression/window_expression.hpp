@@ -70,6 +70,8 @@ public:
 	//! The window boundaries
 	WindowBoundary start = WindowBoundary::INVALID, end = WindowBoundary::INVALID;
 	unique_ptr<Expression> start_expr = nullptr, end_expr = nullptr;
+	//! Offset and default expressions for WINDOW_LEAD and WINDOW_LAG functions
+	unique_ptr<Expression> offset_expr = nullptr, default_expr = nullptr;
 
 private:
 };

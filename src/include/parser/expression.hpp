@@ -113,6 +113,20 @@ public:
 		});
 	}
 
+	static bool Equals(Expression *left, Expression *right) {
+		if (left == right) {
+			// if pointers are equivalent, they are equivalent
+			return true;
+		}
+		if (!left || !right) {
+			// otherwise if one of them is nullptr, they are not equivalent
+			// because the other one cannot be nullptr then
+			return false;
+		}
+		// otherwise we use the normal equality
+		return left->Equals(right);
+	}
+
 	//! Type of the expression
 	ExpressionType type;
 	//! Return type of the expression. This must be known in the execution

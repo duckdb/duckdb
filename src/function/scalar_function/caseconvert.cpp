@@ -11,7 +11,6 @@ namespace function {
 enum CaseconvertDirection { UPPER, LOWER };
 
 // TODO: this does not handle UTF characters yet.
-
 static void strtoupper(char *str) {
 	while (*str) {
 		*(str) = toupper((unsigned char)*str);
@@ -64,13 +63,15 @@ static void caseconvert_function(Vector inputs[], CaseconvertDirection direction
 	});
 }
 
-void caseconvert_upper_function(Vector inputs[], size_t input_count, Expression &expr, Vector &result) {
+void caseconvert_upper_function(Vector inputs[], size_t input_count, FunctionExpression &expr, Vector &result) {
 	assert(input_count == 1);
+	assert(expr.children[0]->stats.has_stats);
 	caseconvert_function(inputs, CaseconvertDirection::UPPER, expr.children[0]->stats.maximum_string_length, result);
 }
 
-void caseconvert_lower_function(Vector inputs[], size_t input_count, Expression &expr, Vector &result) {
+void caseconvert_lower_function(Vector inputs[], size_t input_count, FunctionExpression &expr, Vector &result) {
 	assert(input_count == 1);
+	assert(expr.children[0]->stats.has_stats);
 	caseconvert_function(inputs, CaseconvertDirection::LOWER, expr.children[0]->stats.maximum_string_length, result);
 }
 

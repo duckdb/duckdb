@@ -9,7 +9,7 @@ using namespace std;
 namespace duckdb {
 namespace function {
 
-void year_function(Vector inputs[], size_t input_count, Expression &expr, Vector &result) {
+void year_function(Vector inputs[], size_t input_count, FunctionExpression &expr, Vector &result) {
 	assert(input_count == 1);
 	auto &input = inputs[0];
 	assert(input.type == TypeId::DATE);

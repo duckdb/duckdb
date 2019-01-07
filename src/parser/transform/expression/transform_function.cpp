@@ -145,10 +145,25 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 		auto expr = make_unique<WindowExpression>(win_fun_type, nullptr);
 
 		if (root->args) {
-			auto res = TransformExpressionList(root->args, expr->children);
+			vector<unique_ptr<Expression>> function_list;
+			auto res = TransformExpressionList(root->args, function_list);
 			if (!res) {
 				throw Exception("Failed to transform window function children");
 			}
+			if (function_list.size() > 0) {
+				expr->child = move(function_list[0]);
+			}
+			if (function_list.size() > 1) {
+				assert(win_fun_type == ExpressionType::WINDOW_LEAD ||
+				       win_fun_type == ExpressionType::WINDOW_LAG);
+				expr->offset_expr = move(function_list[1]);
+			}
+			if (function_list.size() > 2) {
+				assert(win_fun_type == ExpressionType::WINDOW_LEAD ||
+				       win_fun_type == ExpressionType::WINDOW_LAG);
+				expr->default_expr = move(function_list[2]);
+			}
+			assert(function_list.size() <= 3);
 		}
 		auto window_spec = reinterpret_cast<WindowDef *>(root->over);
 

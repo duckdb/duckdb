@@ -260,13 +260,13 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 	ChunkCollection leadlag_offset_collection;
 	ChunkCollection leadlag_default_collection;
 	if (wexpr->type == ExpressionType::WINDOW_LEAD || wexpr->type == ExpressionType::WINDOW_LAG) {
-		if (wexpr->children.size() > 1) {
-			MaterializeExpression(context, wexpr->children[1].get(), input, leadlag_offset_collection,
-			                      wexpr->children[1]->IsScalar());
+		if (wexpr->offset_expr) {
+			MaterializeExpression(context, wexpr->offset_expr.get(), input, leadlag_offset_collection,
+			                      wexpr->offset_expr->IsScalar());
 		}
-		if (wexpr->children.size() > 2) {
-			MaterializeExpression(context, wexpr->children[2].get(), input, leadlag_default_collection,
-			                      wexpr->children[2]->IsScalar());
+		if (wexpr->default_expr) {
+			MaterializeExpression(context, wexpr->default_expr.get(), input, leadlag_default_collection,
+			                      wexpr->default_expr->IsScalar());
 		}
 	}
 
@@ -367,12 +367,12 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 		case ExpressionType::WINDOW_LAG: {
 			Value def_val = Value(wexpr->return_type);
 			size_t offset = 1;
-			if (wexpr->children.size() > 1) {
-				offset = leadlag_offset_collection.GetValue(0, wexpr->children[1]->IsScalar() ? 0 : row_idx)
+			if (wexpr->offset_expr) {
+				offset = leadlag_offset_collection.GetValue(0, wexpr->offset_expr->IsScalar() ? 0 : row_idx)
 				             .GetNumericValue();
 			}
-			if (wexpr->children.size() > 2) {
-				def_val = leadlag_default_collection.GetValue(0, wexpr->children[2]->IsScalar() ? 0 : row_idx);
+			if (wexpr->default_expr) {
+				def_val = leadlag_default_collection.GetValue(0, wexpr->default_expr->IsScalar() ? 0 : row_idx);
 			}
 			if (wexpr->type == ExpressionType::WINDOW_LEAD) {
 				ssize_t lead_idx = (ssize_t)row_idx + 1;
