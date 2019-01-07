@@ -2,7 +2,10 @@
 
 #include "common/exception.hpp"
 
-#include <time.h>
+#include <iomanip>
+#include <iostream>
+#include <locale>
+#include <sstream>
 
 using namespace duckdb;
 using namespace std;
@@ -97,13 +100,14 @@ static inline int32_t date_to_number(int32_t year, int32_t month, int32_t day) {
 }
 
 int32_t Date::FromString(string str) {
-	struct tm tm;
-	// TODO use std::get_time here for portability
-	char *ptr = strptime(str.c_str(), "%Y-%m-%d", &tm);
-	int32_t year = 1900 + tm.tm_year;
-	int32_t month = 1 + tm.tm_mon;
-	int32_t day = tm.tm_mday;
-	if (!ptr || *ptr || !IsValidDay(year, month, day)) {
+	tm t = {};
+	istringstream ss(str);
+	ss >> get_time(&t, "%Y-%m-%d");
+
+	int32_t year = 1900 + t.tm_year;
+	int32_t month = 1 + t.tm_mon;
+	int32_t day = t.tm_mday;
+	if (ss.fail() || !IsValidDay(year, month, day)) {
 		throw Exception(StringUtil::Format("date/time field value out of range: \"%s\", "
 		                                   "expected format is (YYYY-MM-DD)",
 		                                   str.c_str()));
@@ -112,28 +116,22 @@ int32_t Date::FromString(string str) {
 }
 
 string Date::ToString(int32_t date) {
-	struct tm tm;
-	char buffer[100];
+	tm t = {};
+
 	int32_t year, month, day;
 	number_to_date(date, year, month, day);
 
-	tm.tm_year = year - 1900;
-	tm.tm_mon = month - 1;
-	tm.tm_mday = day;
-	strftime(buffer, 100, "%Y-%m-%d", &tm);
-	return string(buffer);
+	t.tm_year = year - 1900;
+	t.tm_mon = month - 1;
+	t.tm_mday = day;
+
+	stringstream ss;
+	ss << put_time(&t, "%Y-%m-%d");
+	return ss.str();
 }
 
 string Date::Format(int32_t year, int32_t month, int32_t day) {
-	struct tm tm;
-	char buffer[100];
-
-	tm.tm_year = year - 1900;
-	tm.tm_mon = month - 1;
-	tm.tm_mday = day;
-
-	strftime(buffer, 100, "%Y-%m-%d", &tm);
-	return string(buffer);
+	return ToString(Date::FromDate(year, month, day));
 }
 
 void Date::Convert(int32_t date, int32_t &out_year, int32_t &out_month, int32_t &out_day) {
