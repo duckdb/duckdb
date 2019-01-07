@@ -86,7 +86,7 @@
 /* #undef HAVE_APPEND_HISTORY */
 
 /* Define to 1 if you want to use atomics if available. */
-#define HAVE_ATOMICS 1
+// #define HAVE_ATOMICS 1
 
 /* Define to 1 if you have the <atomic.h> header file. */
 /* #undef HAVE_ATOMIC_H */

@@ -26,6 +26,7 @@ configure_file (
 )
 include_directories(include)
 include_directories(${CMAKE_BINARY_DIR}/tools/shell/include)
+include_directories(../sqlite3_api_wrapper/include)
 
 add_executable(shell shell.c)
 target_link_libraries(shell ${LINE_LIB} sqlite3_api_wrapper)
