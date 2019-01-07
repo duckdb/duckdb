@@ -98,6 +98,7 @@ static inline int32_t date_to_number(int32_t year, int32_t month, int32_t day) {
 
 int32_t Date::FromString(string str) {
 	struct tm tm;
+	// TODO use std::get_time here for portability
 	char *ptr = strptime(str.c_str(), "%Y-%m-%d", &tm);
 	int32_t year = 1900 + tm.tm_year;
 	int32_t month = 1 + tm.tm_mon;

@@ -1,6 +1,7 @@
 #include "execution/operator/aggregate/physical_window.hpp"
 
 #include "common/types/chunk_collection.hpp"
+#include "common/types/constant_vector.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
 #include "parser/expression/aggregate_expression.hpp"
@@ -126,6 +127,11 @@ struct WindowBoundariesState {
 	vector<Value> row_prev;
 };
 
+static bool WindowNeedsRank(WindowExpression *wexpr) {
+	return wexpr->type == ExpressionType::WINDOW_PERCENT_RANK || wexpr->type == ExpressionType::WINDOW_RANK ||
+	       wexpr->type == ExpressionType::WINDOW_RANK_DENSE;
+}
+
 static void UpdateWindowBoundaries(WindowExpression *wexpr, ChunkCollection &input, size_t row_idx,
                                    ChunkCollection &boundary_start_collection, ChunkCollection &boundary_end_collection,
                                    WindowBoundariesState &bounds) {
@@ -151,7 +157,7 @@ static void UpdateWindowBoundaries(WindowExpression *wexpr, ChunkCollection &inp
 		bounds.peer_start = row_idx;
 	}
 
-	if (wexpr->end == WindowBoundary::CURRENT_ROW_RANGE) {
+	if (wexpr->end == WindowBoundary::CURRENT_ROW_RANGE || wexpr->type == ExpressionType::WINDOW_CUME_DIST) {
 		bounds.peer_end = BinarySearchRightmost(input, row_cur, row_idx, bounds.partition_end, sort_col_count) + 1;
 	}
 
@@ -251,6 +257,19 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 		MaterializeExpression(context, wexpr->children[0].get(), input, payload_collection);
 	}
 
+	ChunkCollection leadlag_offset_collection;
+	ChunkCollection leadlag_default_collection;
+	if (wexpr->type == ExpressionType::WINDOW_LEAD || wexpr->type == ExpressionType::WINDOW_LAG) {
+		if (wexpr->children.size() > 1) {
+			MaterializeExpression(context, wexpr->children[1].get(), input, leadlag_offset_collection,
+			                      wexpr->children[1]->IsScalar());
+		}
+		if (wexpr->children.size() > 2) {
+			MaterializeExpression(context, wexpr->children[2].get(), input, leadlag_default_collection,
+			                      wexpr->children[2]->IsScalar());
+		}
+	}
+
 	// evaluate boundaries if present.
 	ChunkCollection boundary_start_collection;
 	if (wexpr->start_expr &&
@@ -270,13 +289,13 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 	// build a segment tree for frame-adhering aggregates
 	// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
 	unique_ptr<WindowSegmentTree> segment_tree = nullptr;
+
 	switch (wexpr->type) {
 	case ExpressionType::WINDOW_SUM:
 	case ExpressionType::WINDOW_MIN:
 	case ExpressionType::WINDOW_MAX:
 	case ExpressionType::WINDOW_AVG:
-		segment_tree = make_unique<WindowSegmentTree>(wexpr->type, wexpr->return_type, 16);
-		segment_tree->Construct(payload_collection);
+		segment_tree = make_unique<WindowSegmentTree>(wexpr->type, wexpr->return_type, &payload_collection);
 		break;
 	default:
 		break;
@@ -292,14 +311,17 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 		UpdateWindowBoundaries(wexpr, sort_collection, row_idx, boundary_start_collection, boundary_end_collection,
 		                       bounds);
 
-		if (!bounds.is_same_partition || row_idx == 0) { // special case for first row, need to init
-			dense_rank = 1;
-			rank = 1;
-			rank_equal = 0;
-		} else if (!bounds.is_peer) {
-			dense_rank++;
-			rank += rank_equal;
-			rank_equal = 0;
+		if (WindowNeedsRank(wexpr)) {
+			if (!bounds.is_same_partition || row_idx == 0) { // special case for first row, need to init
+				dense_rank = 1;
+				rank = 1;
+				rank_equal = 0;
+			} else if (!bounds.is_peer) {
+				dense_rank++;
+				rank += rank_equal;
+				rank_equal = 0;
+			}
+			rank_equal++;
 		}
 
 		auto res = Value();
@@ -314,11 +336,11 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 		case ExpressionType::WINDOW_SUM:
 		case ExpressionType::WINDOW_MIN:
 		case ExpressionType::WINDOW_MAX:
-		case ExpressionType::WINDOW_AVG:
+		case ExpressionType::WINDOW_AVG: {
 			assert(segment_tree);
 			res = segment_tree->Compute(bounds.window_start, bounds.window_end);
 			break;
-
+		}
 		case ExpressionType::WINDOW_COUNT_STAR: {
 			res = Value::Numeric(wexpr->return_type, bounds.window_end - bounds.window_start);
 			break;
@@ -333,7 +355,41 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 		}
 		case ExpressionType::WINDOW_RANK: {
 			res = Value::Numeric(wexpr->return_type, rank);
-			rank_equal++;
+			break;
+		}
+		case ExpressionType::WINDOW_PERCENT_RANK: {
+			ssize_t denom = (ssize_t)bounds.partition_end - bounds.partition_start - 1;
+			double percent_rank = denom > 0 ? ((double)rank - 1) / denom : 0;
+			res = Value(percent_rank);
+			break;
+		}
+		case ExpressionType::WINDOW_LEAD:
+		case ExpressionType::WINDOW_LAG: {
+			Value def_val = Value(wexpr->return_type);
+			size_t offset = 1;
+			if (wexpr->children.size() > 1) {
+				offset = leadlag_offset_collection.GetValue(0, wexpr->children[1]->IsScalar() ? 0 : row_idx)
+				             .GetNumericValue();
+			}
+			if (wexpr->children.size() > 2) {
+				def_val = leadlag_default_collection.GetValue(0, wexpr->children[2]->IsScalar() ? 0 : row_idx);
+			}
+			if (wexpr->type == ExpressionType::WINDOW_LEAD) {
+				ssize_t lead_idx = (ssize_t)row_idx + 1;
+				if (lead_idx < bounds.partition_end) {
+					res = payload_collection.GetValue(0, lead_idx);
+				} else {
+					res = def_val;
+				}
+			} else {
+				ssize_t lag_idx = (ssize_t)row_idx - offset;
+				if (lag_idx >= 0 && lag_idx >= bounds.partition_start) {
+					res = payload_collection.GetValue(0, lag_idx);
+				} else {
+					res = def_val;
+				}
+			}
+
 			break;
 		}
 		case ExpressionType::WINDOW_FIRST_VALUE: {
@@ -347,6 +403,7 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 		default:
 			throw NotImplementedException("Window aggregate type %s", ExpressionTypeToString(wexpr->type).c_str());
 		}
+
 		output.SetValue(output_idx, row_idx, res);
 	}
 }
@@ -430,85 +487,113 @@ void WindowSegmentTree::AggregateInit() {
 	default:
 		throw NotImplementedException("Window Type");
 	}
+	assert(aggregate.type == payload_type);
 	n_aggregated = 0;
-}
-
-void WindowSegmentTree::AggregateAccum(Value val) {
-	switch (window_type) {
-	case ExpressionType::WINDOW_SUM:
-	case ExpressionType::WINDOW_AVG:
-		aggregate = aggregate + val;
-		break;
-	case ExpressionType::WINDOW_MIN:
-		if (val < aggregate) {
-			aggregate = val;
-		}
-		break;
-	case ExpressionType::WINDOW_MAX:
-		if (val > aggregate) {
-			aggregate = val;
-		}
-		break;
-	default:
-		throw NotImplementedException("Window Type");
-	}
-	n_aggregated++;
 }
 
 Value WindowSegmentTree::AggegateFinal() {
 	if (n_aggregated == 0) {
-		return Value().CastAs(payload_type);
+		return Value(payload_type);
 	}
 	switch (window_type) {
-	case ExpressionType::WINDOW_SUM:
-	case ExpressionType::WINDOW_MIN:
-	case ExpressionType::WINDOW_MAX:
-		return aggregate;
 	case ExpressionType::WINDOW_AVG:
 		return aggregate / Value::Numeric(payload_type, n_aggregated);
 	default:
-		throw NotImplementedException("Window Type");
+		return aggregate;
 	}
 
 	return aggregate;
 }
 
-void WindowSegmentTree::Construct(ChunkCollection &input) {
-	assert(input.column_count() == 1);
-	AggregateInit();
-	input_ref = &input;
-	// level 0 is data itself
-	size_t level_size;
-	while ((level_size = (levels.size() == 0 ? input_ref->count : levels[levels.size() - 1].size())) > 1) {
-		vector<Value> nl;
-		size_t fanout_count = 0;
-		for (size_t pos = 0; pos < level_size; pos++) {
-			AggregateAccum((levels.size() == 0 ? input_ref->GetValue(0, pos) : levels[levels.size() - 1][pos]));
-			fanout_count++;
-			if (fanout_count == fanout) {
-				nl.push_back(AggegateFinal());
-				AggregateInit();
-				fanout_count = 0;
-			}
-		}
-		if (fanout_count > 0) {
-			nl.push_back(AggegateFinal());
-		}
-		levels.push_back(nl);
-	}
-}
-
 void WindowSegmentTree::WindowSegmentValue(size_t l_idx, size_t begin, size_t end) {
 	assert(begin <= end);
-	for (size_t pos = begin; pos < end; pos++) {
-		AggregateAccum(l_idx == 0 ? input_ref->GetValue(0, pos) : levels[l_idx - 1][pos]);
+	if (begin == end) {
+		return;
+	}
+	Vector v;
+	if (l_idx == 0) {
+		auto &vec = input_ref->GetChunk(begin).data[0];
+		v.Reference(vec);
+		size_t start_in_vector = begin % STANDARD_VECTOR_SIZE;
+		v.data = v.data + GetTypeIdSize(v.type) * start_in_vector;
+		v.count = end - begin;
+		v.nullmask <<= start_in_vector;
+		assert(v.count + start_in_vector <=
+		       vec.count); // if STANDARD_VECTOR_SIZE is not divisible by fanout this will trip
+	} else {
+		assert(end - begin < STANDARD_VECTOR_SIZE);
+		v.data = levels_flat_native.get() + GetTypeIdSize(payload_type) * (begin + levels_flat_start[l_idx - 1]);
+		v.count = end - begin;
+		v.type = payload_type;
+	}
+
+	assert(!v.sel_vector);
+	v.Verify();
+
+	switch (window_type) {
+	case ExpressionType::WINDOW_SUM:
+	case ExpressionType::WINDOW_AVG:
+		aggregate = aggregate + VectorOperations::Sum(v);
+		break;
+	case ExpressionType::WINDOW_MIN: {
+		auto val = VectorOperations::Min(v);
+		aggregate = aggregate > val ? val : aggregate;
+		break;
+	}
+	case ExpressionType::WINDOW_MAX: {
+		auto val = VectorOperations::Max(v);
+		aggregate = aggregate < val ? val : aggregate;
+		break;
+	}
+	default:
+		throw NotImplementedException("Window Type");
+	}
+
+	n_aggregated += end - begin;
+}
+
+void WindowSegmentTree::ConstructTree() {
+	assert(input_ref);
+	assert(input_ref->column_count() == 1);
+
+	// compute space required to store internal nodes of segment tree
+	size_t internal_nodes = 0;
+	size_t level_nodes = input_ref->count;
+	do {
+		level_nodes = (size_t)ceil((double)level_nodes / fanout);
+		internal_nodes += level_nodes;
+	} while (level_nodes > 1);
+	levels_flat_native = unique_ptr<char[]>(new char[internal_nodes * GetTypeIdSize(payload_type)]);
+	levels_flat_start.push_back(0);
+
+	size_t levels_flat_offset = 0;
+	size_t level_current = 0;
+	// level 0 is data itself
+	size_t level_size;
+	while ((level_size = (level_current == 0 ? input_ref->count
+	                                         : levels_flat_offset - levels_flat_start[level_current - 1])) > 1) {
+		for (size_t pos = 0; pos < level_size; pos += fanout) {
+			AggregateInit();
+			WindowSegmentValue(level_current, pos, min(level_size, pos + fanout));
+
+			ConstantVector res_vec(AggegateFinal());
+			assert(res_vec.type == payload_type);
+			ConstantVector ptr_vec(Value::POINTER(
+			    (uint64_t)(levels_flat_native.get() + (levels_flat_offset * GetTypeIdSize(payload_type)))));
+			VectorOperations::Scatter::Set(res_vec, ptr_vec);
+
+			levels_flat_offset++;
+		}
+
+		levels_flat_start.push_back(levels_flat_offset);
+		level_current++;
 	}
 }
 
 Value WindowSegmentTree::Compute(size_t begin, size_t end) {
 	assert(input_ref);
 	AggregateInit();
-	for (size_t l_idx = 0; l_idx < levels.size() + 1; l_idx++) {
+	for (size_t l_idx = 0; l_idx < levels_flat_start.size() + 1; l_idx++) {
 		size_t parent_begin = begin / fanout;
 		size_t parent_end = end / fanout;
 		if (parent_begin == parent_end) {

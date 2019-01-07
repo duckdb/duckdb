@@ -22,7 +22,7 @@
 #include "nodes/params.h"
 #include "nodes/parsenodes.h"
 #include "nodes/plannodes.h"
-#include "storage/procsignal.h"
+//#include "storage/procsignal.h"
 #include "utils/guc.h"
 
 
@@ -65,8 +65,8 @@ extern void die(SIGNAL_ARGS);
 extern void quickdie(SIGNAL_ARGS) pg_attribute_noreturn();
 extern void StatementCancelHandler(SIGNAL_ARGS);
 extern void FloatExceptionHandler(SIGNAL_ARGS) pg_attribute_noreturn();
-extern void RecoveryConflictInterrupt(ProcSignalReason reason); /* called from SIGUSR1
-																 * handler */
+//extern void RecoveryConflictInterrupt(v reason); /* called from SIGUSR1
+//																 * handler */
 extern void ProcessClientReadInterrupt(bool blocked);
 extern void ProcessClientWriteInterrupt(bool blocked);
 

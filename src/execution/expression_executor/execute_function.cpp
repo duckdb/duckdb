@@ -14,7 +14,7 @@ unique_ptr<Expression> ExpressionExecutor::Visit(FunctionExpression &expr) {
 		vector.Move(arguments[i]);
 	}
 	vector.Destroy();
-	expr.bound_function->function(arguments.get(), expr.children.size(), vector);
+	expr.bound_function->function(arguments.get(), expr.children.size(), expr, vector);
 	if (vector.type != expr.return_type) {
 		throw TypeMismatchException(expr.return_type, vector.type,
 		                            "expected function to return the former "

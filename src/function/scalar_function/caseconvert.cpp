@@ -10,7 +10,7 @@ namespace function {
 
 enum CaseconvertDirection { UPPER, LOWER };
 
-// TODO: this does not handle UTF characters yet.s
+// TODO: this does not handle UTF characters yet.
 
 static void strtoupper(char *str) {
 	while (*str) {
@@ -26,8 +26,7 @@ static void strtolower(char *str) {
 	}
 }
 
-static void caseconvert_function(Vector inputs[], size_t input_count, Vector &result, CaseconvertDirection direction) {
-	assert(input_count == 1);
+static void caseconvert_function(Vector inputs[], CaseconvertDirection direction, size_t max_str_len, Vector &result) {
 	auto &input = inputs[0];
 	assert(input.type == TypeId::VARCHAR);
 
@@ -38,12 +37,15 @@ static void caseconvert_function(Vector inputs[], size_t input_count, Vector &re
 
 	auto result_data = (const char **)result.data;
 	auto input_data = (const char **)input.data;
+	auto output_uptr = unique_ptr<char[]>{new char[max_str_len + 1]};
+	char *output = output_uptr.get();
 
 	VectorOperations::Exec(input, [&](size_t i, size_t k) {
 		if (input.nullmask[i]) {
 			return;
 		}
-		char output[strlen(input_data[i]) + 1];
+		assert(strlen(input_data[i]) <= max_str_len);
+
 		strncpy(output, input_data[i], strlen(input_data[i]));
 		output[strlen(input_data[i])] = '\0';
 
@@ -62,12 +64,14 @@ static void caseconvert_function(Vector inputs[], size_t input_count, Vector &re
 	});
 }
 
-void caseconvert_upper_function(Vector inputs[], size_t input_count, Vector &result) {
-	caseconvert_function(inputs, input_count, result, CaseconvertDirection::UPPER);
+void caseconvert_upper_function(Vector inputs[], size_t input_count, Expression &expr, Vector &result) {
+	assert(input_count == 1);
+	caseconvert_function(inputs, CaseconvertDirection::UPPER, expr.children[0]->stats.maximum_string_length, result);
 }
 
-void caseconvert_lower_function(Vector inputs[], size_t input_count, Vector &result) {
-	caseconvert_function(inputs, input_count, result, CaseconvertDirection::LOWER);
+void caseconvert_lower_function(Vector inputs[], size_t input_count, Expression &expr, Vector &result) {
+	assert(input_count == 1);
+	caseconvert_function(inputs, CaseconvertDirection::LOWER, expr.children[0]->stats.maximum_string_length, result);
 }
 
 bool caseconvert_matches_arguments(vector<TypeId> &arguments) {

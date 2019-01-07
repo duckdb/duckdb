@@ -49,12 +49,12 @@
  */
 #include "postgres.h"
 
-#include "access/xact.h"
-#include "catalog/namespace.h"
+//#include "access/xact.h"
+//#include "catalog/namespace.h"
 #include "mb/pg_wchar.h"
 #include "utils/builtins.h"
-#include "utils/memutils.h"
-#include "utils/syscache.h"
+//#include "utils/memutils.h"
+//#include "utils/syscache.h"
 
 /*
  * When converting strings between different encodings, we assume that space

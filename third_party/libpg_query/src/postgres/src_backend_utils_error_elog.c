@@ -94,29 +94,29 @@
  */
 #include "postgres.h"
 
-#include <fcntl.h>
-#include <time.h>
-#include <unistd.h>
-#include <signal.h>
-#include <ctype.h>
-#ifdef HAVE_SYSLOG
-#include <syslog.h>
-#endif
+//#include <fcntl.h>
+//#include <time.h>
+//#include <unistd.h>
+//#include <signal.h>
+//#include <ctype.h>
+//#ifdef HAVE_SYSLOG
+//#include <syslog.h>
+//#endif
 
-#include "access/transam.h"
-#include "access/xact.h"
-#include "libpq/libpq.h"
-#include "libpq/pqformat.h"
-#include "mb/pg_wchar.h"
+//#include "access/transam.h"
+//#include "access/xact.h"
+//#include "libpq/libpq.h"
+//#include "libpq/pqformat.h"
+//#include "mb/pg_wchar.h"
 #include "miscadmin.h"
-#include "postmaster/postmaster.h"
-#include "postmaster/syslogger.h"
-#include "storage/ipc.h"
-#include "storage/proc.h"
+//#include "postmaster/postmaster.h"
+//#include "postmaster/syslogger.h"
+//#include "storage/ipc.h"
+//#include "storage/proc.h"
 #include "tcop/tcopprot.h"
-#include "utils/guc.h"
+//#include "utils/guc.h"
 #include "utils/memutils.h"
-#include "utils/ps_status.h"
+//#include "utils/ps_status.h"
 
 
 #undef _
@@ -304,7 +304,7 @@ errstart(int elevel, const char *filename, int lineno,
 		{
 			if (PG_exception_stack == NULL ||
 				ExitOnAnyError ||
-				proc_exit_inprogress)
+				false)
 				elevel = FATAL;
 		}
 
@@ -327,7 +327,7 @@ errstart(int elevel, const char *filename, int lineno,
 	 */
 
 	/* Determine whether message is enabled for server log output */
-	output_to_server = is_log_level_output(elevel, log_min_messages);
+	output_to_server = is_log_level_output(elevel, WARNING);
 
 	/* Determine whether message is enabled for client output */
 	if (whereToSendOutput == DestRemote && elevel != COMMERROR)
@@ -338,10 +338,10 @@ errstart(int elevel, const char *filename, int lineno,
 		 * reasons and because many clients can't handle NOTICE messages
 		 * during authentication.
 		 */
-		if (ClientAuthInProgress)
+		if (false)
 			output_to_client = (elevel >= ERROR);
 		else
-			output_to_client = (elevel >= client_min_messages ||
+			output_to_client = (elevel >= NOTICE ||
 								elevel == INFO);
 	}
 
@@ -513,8 +513,8 @@ errfinish(int dummy,...)
 	 * we must do this even if client is fool enough to have set
 	 * client_min_messages above FATAL, so don't look at output_to_client.
 	 */
-	if (elevel >= FATAL && whereToSendOutput == DestRemote)
-		pq_endcopyout(true);
+	//if (elevel >= FATAL && whereToSendOutput == DestRemote)
+	//	pq_endcopyout(true);
 
 	/* Emit the message to the right places */
 	EmitErrorReport();
@@ -577,7 +577,7 @@ errfinish(int dummy,...)
 		 * FATAL termination.  The postmaster may or may not consider this
 		 * worthy of panic, depending on which subprocess returns it.
 		 */
-		proc_exit(1);
+		//proc_exit(1);
 	}
 
 	if (elevel >= PANIC)
@@ -1383,15 +1383,15 @@ pg_re_throw(void)
 		 */
 		if (IsPostmasterEnvironment)
 			edata->output_to_server = is_log_level_output(FATAL,
-														  log_min_messages);
+					WARNING);
 		else
-			edata->output_to_server = (FATAL >= log_min_messages);
+			edata->output_to_server = (FATAL >= WARNING);
 		if (whereToSendOutput == DestRemote)
 		{
-			if (ClientAuthInProgress)
+			if (false)
 				edata->output_to_client = true;
 			else
-				edata->output_to_client = (FATAL >= client_min_messages);
+				edata->output_to_client = (FATAL >= NOTICE);
 		}
 
 		/*
@@ -2019,3 +2019,6 @@ is_log_level_output(int elevel, int log_min_level)
  * hard-to-explain kluge.
  */
 
+#ifdef _MSC_VER
+static void write_console (const char* a, int b) {}
+#endif

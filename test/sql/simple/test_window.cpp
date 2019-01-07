@@ -66,7 +66,7 @@ TEST_CASE("Most basic window function", "[window]") {
 
 	// min/max/avg
 	result = con.Query("SELECT depname, min(salary) OVER (PARTITION BY depname ORDER BY salary, empno) m1, max(salary) "
-	                   "OVER (PARTITION BY depname ORDER BY salary, empno) m2, avg(salary) OVER (PARTITION BY depname "
+	                   "OVER (PARTITION BY depname ORDER BY salary, empno) m2, AVG(salary) OVER (PARTITION BY depname "
 	                   "ORDER BY salary, empno) m3 FROM empsalary ORDER BY depname, empno");
 	REQUIRE(result->column_count() == 4);
 	REQUIRE(CHECK_COLUMN(
@@ -174,6 +174,50 @@ TEST_CASE("Wiscosin-derived window test cases", "[window]") {
 	                   "order by four, ten");
 	REQUIRE(result->column_count() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 0, 1, 1, 1, 1, 0, 1, 1}));
+
+	// percent_rank
+	result = con.Query("SELECT cast(percent_rank() OVER (PARTITION BY four ORDER BY ten)*10 as INTEGER) FROM tenk1 "
+	                   "ORDER BY four, ten");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 10, 0, 0, 6, 10, 0, 0, 10}));
+
+	//	// cume_dist
+	//	result = con.Query("SELECT cast(cume_dist() OVER (PARTITION BY four ORDER BY ten)*10 as integer) FROM tenk1
+	// WHERE " 	                   "unique2 < 10 order by four, ten"); 	REQUIRE(result->column_count() == 1);
+	// REQUIRE(CHECK_COLUMN(result, 0, {6, 6, 10, 5, 5, 7, 10, 10, 5, 10}));
+
+	// lead/lag
+	result = con.Query("SELECT lag(ten) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 0, 0, Value(), 1, 1, 7, Value(), Value(), 1}));
+
+	result = con.Query("SELECT lead(ten) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 4, Value(), 1, 7, 9, Value(), Value(), 3, Value()}));
+
+	result =
+	    con.Query("SELECT lag(ten, four) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 4, Value(), 1, 1, 7, Value(), Value(), Value()}));
+
+	result = con.Query(
+	    "SELECT lag(ten, four, 0) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 4, 0, 1, 1, 7, 0, 0, 0}));
+
+	result = con.Query("SELECT lead(ten) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 4, Value(), 1, 7, 9, Value(), Value(), 3, Value()}));
+
+	result =
+	    con.Query("SELECT lead(ten * 2, 1) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 8, Value(), 2, 14, 18, Value(), Value(), 6, Value()}));
+
+	result = con.Query(
+	    "SELECT lead(ten * 2, 1, -1) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 8, -1, 2, 14, 18, -1, -1, 6, -1}));
 }
 
 TEST_CASE("Non-default window specs", "[window]") {
@@ -217,6 +261,16 @@ TEST_CASE("Non-default window specs", "[window]") {
 	result = con.Query("SELECT four, ten/4 as two, 	sum(ten/4) over (partition by four order by ten/4 range between "
 	                   "unbounded preceding and current row) st, last_value(ten/4) over (partition by four order by "
 	                   "ten/4 range between unbounded preceding and current row) lt FROM tenk1d order by four, ten/4");
+	REQUIRE(result->column_count() == 4);
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0, 0, 1, 1, 2, 0, 0, 1, 1, 2, 0, 0, 1, 1, 2, 0, 0, 1, 1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {0, 0, 2, 2, 4, 0, 0, 2, 2, 4, 0, 0, 2, 2, 4, 0, 0, 2, 2, 4}));
+	REQUIRE(CHECK_COLUMN(result, 3, {0, 0, 1, 1, 2, 0, 0, 1, 1, 2, 0, 0, 1, 1, 2, 0, 0, 1, 1, 2}));
+
+	// unbounded following with named windows
+	result = con.Query(
+	    "SELECT four, ten/4 as two, sum(ten/4) OVER w st, last_value(ten/4) OVER w lt FROM tenk1d WINDOW w AS "
+	    "(partition by four order by ten/4 range between unbounded preceding and current row) order by four, ten/4 ");
 	REQUIRE(result->column_count() == 4);
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {0, 0, 1, 1, 2, 0, 0, 1, 1, 2, 0, 0, 1, 1, 2, 0, 0, 1, 1, 2}));

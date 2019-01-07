@@ -14,11 +14,11 @@
 #include "postgres_fe.h"
 #else
 #include "postgres.h"
-#include "utils/builtins.h"
+//#include "utils/builtins.h"
 #endif
 
-#include <ctype.h>
-#include <unistd.h>
+//#include <ctype.h>
+//#include <unistd.h>
 
 #include "mb/pg_wchar.h"
 

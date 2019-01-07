@@ -23,7 +23,7 @@
 #include "postgres.h"
 
 #include <ctype.h>
-#include <unistd.h>
+//#include <unistd.h>
 #include <fcntl.h>
 
 #include "access/htup_details.h"

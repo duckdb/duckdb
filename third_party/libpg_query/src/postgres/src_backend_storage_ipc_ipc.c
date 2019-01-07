@@ -34,9 +34,9 @@
 #ifdef PROFILE_PID_DIR
 #include "postmaster/autovacuum.h"
 #endif
-#include "storage/dsm.h"
+//#include "storage/dsm.h"
 #include "storage/ipc.h"
-#include "tcop/tcopprot.h"
+//#include "tcop/tcopprot.h"
 
 
 /*

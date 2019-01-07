@@ -279,12 +279,22 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "RANK";
 	case ExpressionType::WINDOW_RANK_DENSE:
 		return "RANK_DENSE";
+	case ExpressionType::WINDOW_PERCENT_RANK:
+		return "PERCENT_RANK";
 	case ExpressionType::WINDOW_ROW_NUMBER:
 		return "ROW_NUMBER";
 	case ExpressionType::WINDOW_FIRST_VALUE:
 		return "FIRST_VALUE";
 	case ExpressionType::WINDOW_LAST_VALUE:
 		return "LAST_VALUE";
+	case ExpressionType::WINDOW_CUME_DIST:
+		return "CUME_DIST";
+	case ExpressionType::WINDOW_LEAD:
+		return "LEAD";
+	case ExpressionType::WINDOW_LAG:
+		return "LAG";
+	case ExpressionType::WINDOW_NTILE:
+		return "NTILE";
 	case ExpressionType::FUNCTION:
 		return "FUNCTION";
 	case ExpressionType::OPERATOR_CASE_EXPR:

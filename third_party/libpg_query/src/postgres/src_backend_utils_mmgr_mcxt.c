@@ -55,11 +55,11 @@
 
 #include "postgres.h"
 
-#include "miscadmin.h"
+//#include "miscadmin.h"
 #include "utils/memdebug.h"
 #include "utils/memutils.h"
 
-#include <pthread.h>
+//#include <pthread.h>
 
 /*****************************************************************************
  *	  GLOBAL MEMORY															 *
@@ -71,7 +71,7 @@ typedef struct PGThreadContext {
   MemoryContext CurrentMemoryContext;
 } PGThreadContext;
 
-static pthread_key_t thread_ctx_key;
+static void* thread_ctx_key;
 
 /*
  * CurrentMemoryContext
@@ -154,7 +154,7 @@ MemoryContextInit(void)
 {
 	AssertState(TopMemoryContext == NULL);
 
-  pthread_key_create(&thread_ctx_key, MemoryContextShutdown);
+//  pthread_key_create(&thread_ctx_key, MemoryContextShutdown);
 
 	/*
 	 * Initialize TopMemoryContext as an AllocSetContext with slow growth rate
@@ -194,12 +194,12 @@ MemoryContextInit(void)
 										 0);
 	MemoryContextAllowInCriticalSection(ErrorContext, true);
 
-	PGThreadContext *thread_context = malloc(sizeof(PGThreadContext));
-	thread_context->TopMemoryContext = TopMemoryContext;
-	thread_context->ErrorContext = ErrorContext;
-	thread_context->CurrentMemoryContext = CurrentMemoryContext;
+//	PGThreadContext *thread_context = malloc(sizeof(PGThreadContext));
+//	thread_context->TopMemoryContext = TopMemoryContext;
+//	thread_context->ErrorContext = ErrorContext;
+//	thread_context->CurrentMemoryContext = CurrentMemoryContext;
 
-	pthread_setspecific(thread_ctx_key, thread_context);
+	//pthread_setspecific(thread_ctx_key, thread_context);
 }
 
 /*

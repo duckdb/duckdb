@@ -13,8 +13,8 @@
 namespace duckdb {
 namespace function {
 
-void caseconvert_upper_function(Vector inputs[], size_t input_count, Vector &result);
-void caseconvert_lower_function(Vector inputs[], size_t input_count, Vector &result);
+void caseconvert_upper_function(Vector inputs[], size_t input_count, Expression &expr, Vector &result);
+void caseconvert_lower_function(Vector inputs[], size_t input_count, Expression &expr, Vector &result);
 
 bool caseconvert_matches_arguments(vector<TypeId> &arguments);
 TypeId caseconvert_get_return_type(vector<TypeId> &arguments);

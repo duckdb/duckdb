@@ -22,14 +22,14 @@
  */
 #include "postgres.h"
 
-#include "catalog/pg_collation.h"
-#include "catalog/pg_type.h"
+//#include "catalog/pg_collation.h"
+//#include "catalog/pg_type.h"
 #include "miscadmin.h"
-#include "nodes/makefuncs.h"
-#include "nodes/nodeFuncs.h"
+//#include "nodes/makefuncs.h"
+//#include "nodes/nodeFuncs.h"
 #include "nodes/relation.h"
-#include "utils/builtins.h"
-#include "utils/lsyscache.h"
+//#include "utils/builtins.h"
+//#include "utils/lsyscache.h"
 
 
 static bool expression_returns_set_walker(Node *node, void *context);

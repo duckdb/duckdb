@@ -13,9 +13,11 @@
 
 #include <cstdio>
 #include <cstdlib>
+#ifndef _MSC_VER
 #include <cxxabi.h>
-#include <errno.h>
 #include <execinfo.h>
+#endif
+#include <errno.h>
 #include <iostream>
 #include <memory>
 #include <signal.h>
@@ -156,6 +158,7 @@ public:
 		}
 	}
 
+#ifndef _MSC_VER
 	// Based on :: http://panthema.net/2008/0901-stacktrace-demangled/
 	static void PrintStackTrace(FILE *out = ::stderr, unsigned int max_frames = 63) {
 		::fprintf(out, "Stack Trace:\n");
@@ -224,7 +227,10 @@ public:
 			}
 		}
 	}
-
+#else
+	static void PrintStackTrace(FILE *out, unsigned int max_frames) {
+	}
+#endif
 	friend std::ostream &operator<<(std::ostream &os, const Exception &e);
 
 private:
