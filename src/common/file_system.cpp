@@ -10,7 +10,7 @@ using namespace std;
 #include <dirent.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-
+#include <unistd.h>
 
 namespace duckdb {
 bool DirectoryExists(const string &directory) {
@@ -95,7 +95,7 @@ void FileSync(FILE *file) {
 string GetWorkingDirectory() {
 	char current_path[FILENAME_MAX];
 
-	if (!GetCurrentDir(current_path, sizeof(current_path))) {
+	if (!getcwd(current_path, sizeof(current_path))) {
 		return string();
 	}
 	return string(current_path);
