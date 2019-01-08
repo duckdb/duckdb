@@ -13,9 +13,7 @@ void PhysicalFilter::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 			return;
 		}
 
-		if (expressions.size() == 0) {
-			throw Exception("Attempting to execute a filter without expressions");
-		}
+		assert(expressions.size() > 0);
 
 		Vector result(TypeId::BOOLEAN, true, false);
 		ExpressionExecutor executor(state, context);

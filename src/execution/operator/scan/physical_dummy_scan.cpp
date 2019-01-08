@@ -5,5 +5,6 @@ using namespace std;
 
 void PhysicalDummyScan::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	state->finished = true;
+	// return a single row on the first call to the dummy scan
 	chunk.data[0].count = 1;
 }

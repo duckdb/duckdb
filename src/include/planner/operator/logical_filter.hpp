@@ -29,6 +29,9 @@ public:
 	//! separated by AND Returns whether or not any splits were made
 	static bool SplitPredicates(vector<unique_ptr<Expression>> &expressions);
 
+	//! True if the filter is guaranteed to produce an empty result. This flag is set by the optimizer
+	bool empty_result = false;
+
 protected:
 	void ResolveTypes() override;
 };

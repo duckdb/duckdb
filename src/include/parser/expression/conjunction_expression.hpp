@@ -41,7 +41,7 @@ public:
 	bool Equals(const Expression *other) const override;
 
 	string ToString() const override {
-		return left->ToString() + ExpressionTypeToOperator(type) + right->ToString();
+		return left->ToString() + " " + ExpressionTypeToOperator(type) + " " + right->ToString();
 	}
 
 	unique_ptr<Expression> left;

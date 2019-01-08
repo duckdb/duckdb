@@ -18,9 +18,7 @@ void PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> logical) {
 	logical->ResolveOperatorTypes();
 	// then create the physical plan
 	logical->Accept(this);
-	if (!this->plan) {
-		throw Exception("Unknown error in physical plan generation");
-	}
+	assert(plan); // Unknown error in physical plan generation"
 }
 
 void PhysicalPlanGenerator::Visit(LogicalAggregate &op) {
@@ -52,9 +50,7 @@ void PhysicalPlanGenerator::Visit(LogicalAggregate &op) {
 }
 
 void PhysicalPlanGenerator::Visit(LogicalCrossProduct &op) {
-	if (plan) {
-		throw Exception("Cross product should be the first node of a plan!");
-	}
+	assert(!plan); // Cross product should be the first node of a plan!
 
 	assert(op.children.size() == 2);
 
@@ -69,9 +65,7 @@ void PhysicalPlanGenerator::Visit(LogicalCrossProduct &op) {
 void PhysicalPlanGenerator::Visit(LogicalDelete &op) {
 	LogicalOperatorVisitor::Visit(op);
 
-	if (!plan) {
-		throw Exception("Delete node cannot be the first node of a plan!");
-	}
+	assert(plan); // Delete node cannot be the first node of a plan!
 
 	auto del = make_unique<PhysicalDelete>(op, *op.table, *op.table->storage);
 	del->children.push_back(move(plan));
@@ -81,9 +75,7 @@ void PhysicalPlanGenerator::Visit(LogicalDelete &op) {
 void PhysicalPlanGenerator::Visit(LogicalUpdate &op) {
 	LogicalOperatorVisitor::Visit(op);
 
-	if (!plan) {
-		throw Exception("Update node cannot be the first node of a plan!");
-	}
+	assert(plan); // Update node cannot be the first node of a plan!
 
 	auto update = make_unique<PhysicalUpdate>(op, *op.table, *op.table->storage, op.columns, move(op.expressions));
 	update->children.push_back(move(plan));
@@ -93,9 +85,7 @@ void PhysicalPlanGenerator::Visit(LogicalUpdate &op) {
 void PhysicalPlanGenerator::Visit(LogicalCreate &op) {
 	LogicalOperatorVisitor::Visit(op);
 
-	if (plan) {
-		throw Exception("CREATE node must be first node of the plan!");
-	}
+	assert(!plan); // CREATE node must be first node of the plan!
 
 	this->plan = make_unique<PhysicalCreate>(op, op.schema, move(op.info));
 }
@@ -103,9 +93,7 @@ void PhysicalPlanGenerator::Visit(LogicalCreate &op) {
 void PhysicalPlanGenerator::Visit(LogicalCreateIndex &op) {
 	LogicalOperatorVisitor::Visit(op);
 
-	if (plan) {
-		throw Exception("CREATE INDEX node must be first node of the plan!");
-	}
+	assert(!plan); // CREATE INDEX node must be first node of the plan!
 
 	this->plan = make_unique<PhysicalCreateIndex>(op, op.table, op.column_ids, move(op.expressions), move(op.info));
 }
@@ -214,6 +202,12 @@ static unique_ptr<PhysicalOperator> CreateIndexScan(LogicalFilter &filter, Logic
 }
 
 void PhysicalPlanGenerator::Visit(LogicalFilter &op) {
+	if (op.empty_result) {
+		// the filter is guaranteed to produce an empty result
+		// create a node that returns an empty result instead of generating the rest of the plan
+		this->plan = make_unique<PhysicalEmptyResult>(op.types);
+		return;
+	}
 	if (op.children[0]->type == LogicalOperatorType::GET) {
 		// filter + get
 		// check if we can transform this into an index scan
@@ -231,10 +225,7 @@ void PhysicalPlanGenerator::Visit(LogicalFilter &op) {
 		LogicalOperatorVisitor::Visit(op);
 	}
 
-	if (!plan) {
-		throw Exception("Filter cannot be the first node of a plan!");
-	}
-
+	assert(plan); // Filter cannot be the first node of a plan!"
 	if (op.expressions.size() > 0) {
 		// create a filter if there is anything to filter
 		auto filter = make_unique<PhysicalFilter>(op, move(op.expressions));
@@ -252,16 +243,12 @@ void PhysicalPlanGenerator::Visit(LogicalGet &op) {
 		return;
 	}
 	auto scan = make_unique<PhysicalTableScan>(op, *op.table, *op.table->storage, op.column_ids);
-	if (plan) {
-		throw Exception("Scan has to be the first node of a plan!");
-	}
+	assert(!plan); // Scan has to be the first node of a plan!
 	this->plan = move(scan);
 }
 
 void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
-	if (plan) {
-		throw Exception("Cross product should be the first node of a plan!");
-	}
+	assert(!plan); // Cross product should be the first node of a plan!
 
 	// now visit the children
 	assert(op.children.size() == 2);
@@ -318,9 +305,7 @@ void PhysicalPlanGenerator::Visit(LogicalLimit &op) {
 	LogicalOperatorVisitor::Visit(op);
 
 	auto limit = make_unique<PhysicalLimit>(op, op.limit, op.offset);
-	if (!plan) {
-		throw Exception("Limit cannot be the first node of a plan!");
-	}
+	assert(plan); // Limit cannot be the first node of a plan!
 	limit->children.push_back(move(plan));
 	this->plan = move(limit);
 }
@@ -328,9 +313,7 @@ void PhysicalPlanGenerator::Visit(LogicalLimit &op) {
 void PhysicalPlanGenerator::Visit(LogicalOrder &op) {
 	LogicalOperatorVisitor::Visit(op);
 
-	if (!plan) {
-		throw Exception("Order cannot be the first node of a plan!");
-	}
+	assert(plan); // Order cannot be the first node of a plan!
 
 	auto order = make_unique<PhysicalOrder>(op, move(op.description));
 	order->children.push_back(move(plan));
@@ -360,9 +343,7 @@ void PhysicalPlanGenerator::Visit(LogicalInsert &op) {
 void PhysicalPlanGenerator::Visit(LogicalPruneColumns &op) {
 	LogicalOperatorVisitor::Visit(op);
 
-	if (!plan) {
-		throw Exception("Prune columns cannot be the first node of a plan!");
-	}
+	assert(plan); // Prune columns cannot be the first node of a plan!"
 	if (plan->GetTypes().size() > op.column_limit) {
 		// only prune if we need to
 		auto node = make_unique<PhysicalPruneColumns>(op, op.column_limit);
@@ -374,9 +355,7 @@ void PhysicalPlanGenerator::Visit(LogicalPruneColumns &op) {
 void PhysicalPlanGenerator::Visit(LogicalTableFunction &op) {
 	LogicalOperatorVisitor::Visit(op);
 
-	if (plan) {
-		throw Exception("Table function has to be first node of the plan!");
-	}
+	assert(!plan); // Table function has to be first node of the plan!
 	this->plan = make_unique<PhysicalTableFunction>(op, op.function, move(op.function_call));
 }
 
