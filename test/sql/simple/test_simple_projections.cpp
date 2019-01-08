@@ -8,6 +8,7 @@ TEST_CASE("Test simple projection statements", "[simpleprojection]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	con.EnableQueryVerification();
 
 	// create table
 	result = con.Query("CREATE TABLE a (i integer, j integer);");

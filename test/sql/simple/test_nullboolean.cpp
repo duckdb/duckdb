@@ -8,6 +8,7 @@ TEST_CASE("Booleans and NULLs", "[sql]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	con.EnableQueryVerification();
 
 	// AND
 	result = con.Query("SELECT 0 AND 0, 0 AND 1, 1 AND 0, 1 AND 1, NULL AND "

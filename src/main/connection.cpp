@@ -16,6 +16,35 @@ DuckDBConnection::DuckDBConnection(DuckDB &database) : db(database), context(dat
 DuckDBConnection::~DuckDBConnection() {
 }
 
+static void ExecuteStatement(ClientContext &context, unique_ptr<SQLStatement> statement, DuckDBResult &result) {
+	Planner planner;
+	planner.CreatePlan(context, move(statement));
+	if (!planner.plan) {
+		result.success = true;
+		return;
+	}
+
+	auto plan = move(planner.plan);
+	Optimizer optimizer(*planner.context);
+	plan = optimizer.Optimize(move(plan));
+	if (!plan) {
+		result.success = true;
+		return;
+	}
+
+	// extract the result column names from the plan
+	result.names = plan->GetNames();
+
+	// now convert logical query plan into a physical query plan
+	PhysicalPlanGenerator physical_planner(context);
+	physical_planner.CreatePlan(move(plan));
+
+	// finally execute the plan and return the result
+	Executor executor;
+	result.collection = executor.Execute(context, move(physical_planner.plan));
+	result.success = true;
+}
+
 unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(ClientContext &context, string query) {
 	auto result = make_unique<DuckDBResult>();
 	result->success = false;
@@ -42,31 +71,76 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(ClientContext &context
 			auto &transaction = context.transaction.ActiveTransaction();
 			transaction.PushQuery(query);
 		}
+#ifdef DEBUG
+		if (statement->type == StatementType::SELECT && context.query_verification_enabled) {
+			// aggressive query verification
+			// copy the statement
+			auto select_stmt = (SelectStatement *)statement.get();
+			auto copied_stmt = select_stmt->Copy();
+			Serializer serializer;
+			select_stmt->Serialize(serializer);
+			Deserializer source(serializer);
+			auto deserialized_stmt = SelectStatement::Deserialize(source);
+			// all the statements should be equal
+			assert(copied_stmt->Equals(statement.get()));
+			assert(deserialized_stmt->Equals(statement.get()));
+			assert(copied_stmt->Equals(deserialized_stmt.get()));
+			DuckDBResult copied_result, deserialized_result;
+			copied_result.success = false;
+			deserialized_result.success = false;
 
-		Planner planner;
-		planner.CreatePlan(context, move(statement));
-		if (!planner.plan) {
-			return make_unique<DuckDBResult>();
-		}
+			// now perform checking on the expressions
+			auto &orig_expr_list = select_stmt->node->GetSelectList();
+			auto &de_expr_list = ((SelectStatement *)deserialized_stmt.get())->node->GetSelectList();
+			auto &cp_expr_list = ((SelectStatement *)copied_stmt.get())->node->GetSelectList();
+			assert(orig_expr_list.size() == de_expr_list.size() && cp_expr_list.size() == de_expr_list.size());
+			for (size_t i = 0; i < orig_expr_list.size(); i++) {
+				// check that the expressions are equivalent
+				assert(orig_expr_list[i]->Equals(de_expr_list[i].get()));
+				assert(orig_expr_list[i]->Equals(cp_expr_list[i].get()));
+				assert(de_expr_list[i]->Equals(cp_expr_list[i].get()));
+				// check that the hashes are equivalent too
+				assert(orig_expr_list[i]->Hash() == de_expr_list[i]->Hash());
+				assert(orig_expr_list[i]->Hash() == cp_expr_list[i]->Hash());
+			}
+			// now perform additional checking within the expressions
+			for (size_t outer_idx = 0; outer_idx < orig_expr_list.size(); outer_idx++) {
+				auto hash = orig_expr_list[outer_idx]->Hash();
+				for (size_t inner_idx = 0; inner_idx < orig_expr_list.size(); inner_idx++) {
+					auto hash2 = orig_expr_list[inner_idx]->Hash();
+					if (hash != hash2) {
+						// if the hashes are not equivalent, the expressions should not be equivalent
+						assert(!orig_expr_list[outer_idx]->Equals(orig_expr_list[inner_idx].get()));
+					}
+				}
+			}
 
-		auto plan = move(planner.plan);
-		Optimizer optimizer(*planner.context);
-		plan = optimizer.Optimize(move(plan));
-		if (!plan) {
-			return make_unique<DuckDBResult>();
-		}
-
-		// extract the result column names from the plan
-		result->names = plan->GetNames();
-
-		// now convert logical query plan into a physical query plan
-		PhysicalPlanGenerator physical_planner(context);
-		physical_planner.CreatePlan(move(plan));
-
-		// finally execute the plan and return the result
-		Executor executor;
-		result->collection = executor.Execute(context, move(physical_planner.plan));
-		result->success = true;
+			// execute the original statement
+			try {
+				ExecuteStatement(context, move(statement), *result);
+			} catch (Exception &ex) {
+				result->error = ex.GetMessage();
+			}
+			// now execute the copied statement
+			try {
+				ExecuteStatement(context, move(copied_stmt), copied_result);
+			} catch (Exception &ex) {
+				copied_result.error = ex.GetMessage();
+			}
+			// now execute the copied statement
+			try {
+				ExecuteStatement(context, move(deserialized_stmt), deserialized_result);
+			} catch (Exception &ex) {
+				deserialized_result.error = ex.GetMessage();
+			}
+			// now compare the results
+			// the results of all three expressions should be identical
+			assert(result->Equals(&copied_result));
+			assert(result->Equals(&deserialized_result));
+			assert(copied_result.Equals(&deserialized_result));
+		} else
+#endif
+			ExecuteStatement(context, move(statement), *result);
 	} catch (Exception &ex) {
 		result->error = ex.GetMessage();
 	} catch (...) {

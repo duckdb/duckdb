@@ -8,6 +8,7 @@ TEST_CASE("Check if column names are correctly set in the result", "[sql]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	con.EnableQueryVerification();
 
 	con.Query("CREATE TABLE test (a INTEGER, b INTEGER)");
 	con.Query("INSERT INTO test VALUES (42, 10), (43, 100);");

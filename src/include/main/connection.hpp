@@ -39,6 +39,13 @@ public:
 		context.profiler.Disable();
 	}
 
+	//! Enable aggressive verification/testing of queries, should only be used in testing
+	void EnableQueryVerification() {
+#ifdef DEBUG
+		context.query_verification_enabled = true;
+#endif
+	}
+
 	static unique_ptr<DuckDBResult> GetQueryResult(ClientContext &context, string query);
 
 	//! Queries the database using the transaction context of this connection

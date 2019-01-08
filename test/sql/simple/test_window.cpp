@@ -8,6 +8,8 @@ TEST_CASE("Most basic window function", "[window]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	con.EnableQueryVerification();
+
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE empsalary (depname varchar, empno bigint, salary int, enroll_date date)"));
 	REQUIRE_NO_FAIL(
 	    con.Query("INSERT INTO empsalary VALUES ('develop', 10, 5200, '2007-08-01'), ('sales', 1, 5000, '2006-10-01'), "
@@ -83,6 +85,8 @@ TEST_CASE("More evil cases", "[window]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	con.EnableQueryVerification();
+
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE empsalary (depname varchar, empno bigint, salary int, enroll_date date)"));
 	REQUIRE_NO_FAIL(
 	    con.Query("INSERT INTO empsalary VALUES ('develop', 10, 5200, '2007-08-01'), ('sales', 1, 5000, '2006-10-01'), "
@@ -127,6 +131,8 @@ TEST_CASE("Wiscosin-derived window test cases", "[window]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	con.EnableQueryVerification();
+
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tenk1 (unique1 int4, unique2 int4, two int4, four int4, ten int4, twenty "
 	                          "int4, hundred int4, thousand int4, twothousand int4, fivethous int4, tenthous int4, odd "
 	                          "int4, even int4, stringu1 varchar, stringu2 varchar, string4 varchar)"));
@@ -224,6 +230,8 @@ TEST_CASE("Non-default window specs", "[window]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	con.EnableQueryVerification();
+
 	REQUIRE_NO_FAIL(con.Query("create table tenk1d(ten int4, four int4)"));
 	REQUIRE_NO_FAIL(con.Query("insert into tenk1d values (0,0), (1,1), (3,3), (2,2), (4,2), (9,1), (4,0), (7,3), "
 	                          "(0,2), (2,0), (5,1), (1,3), (3,1), (6,0), (8,0), (9,3), (8,2), (6,2), (7,1), (5,3)"));
@@ -282,6 +290,7 @@ TEST_CASE("Expressions in boundaries", "[window]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tenk1 ( unique1 int4, unique2 int4, two int4, four int4, ten int4, twenty "
 	                          "int4, hundred int4, thousand int4, twothousand int4, fivethous int4, tenthous int4, odd "
@@ -321,6 +330,7 @@ TEST_CASE("TPC-DS inspired micro benchmarks", "[window]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE item(i_category VARCHAR, i_brand VARCHAR, i_price INTEGER)"));

@@ -8,6 +8,7 @@ TEST_CASE("NOW function", "[timestamp]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	con.EnableQueryVerification();
 
 	// get the millenium of the current date
 	// FIXME: this needs to be updated in 982 years

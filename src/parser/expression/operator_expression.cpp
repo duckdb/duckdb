@@ -86,7 +86,7 @@ string OperatorExpression::ToString() const {
 		if (children.size() == 1) {
 			return op + children[0]->ToString();
 		} else if (children.size() == 2) {
-			return children[0]->ToString() + op + children[1]->ToString();
+			return children[0]->ToString() + " " + op + " " + children[1]->ToString();
 		}
 	}
 	// if there is no operator we render it as a function

@@ -5,12 +5,13 @@
 using namespace duckdb;
 using namespace std;
 
-LogicalFilter::LogicalFilter(unique_ptr<Expression> expression) : LogicalOperator(LogicalOperatorType::FILTER) {
+LogicalFilter::LogicalFilter(unique_ptr<Expression> expression)
+    : LogicalOperator(LogicalOperatorType::FILTER), empty_result(false) {
 	expressions.push_back(move(expression));
 	SplitPredicates(expressions);
 }
 
-LogicalFilter::LogicalFilter() : LogicalOperator(LogicalOperatorType::FILTER) {
+LogicalFilter::LogicalFilter() : LogicalOperator(LogicalOperatorType::FILTER), empty_result(false) {
 }
 
 vector<string> LogicalFilter::GetNames() {

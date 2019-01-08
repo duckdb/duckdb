@@ -8,6 +8,7 @@ TEST_CASE("Test ORDER BY keyword", "[order]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	con.EnableQueryVerification();
 
 	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
 	result = con.Query("INSERT INTO test VALUES (11, 22), (12, 21), (13, 22)");

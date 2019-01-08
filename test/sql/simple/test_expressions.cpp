@@ -8,6 +8,8 @@ TEST_CASE("Complex Expressions", "[sql]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	con.EnableQueryVerification();
+
 	con.Query("CREATE TABLE exprtest (a INTEGER, b INTEGER)");
 	con.Query("INSERT INTO exprtest VALUES (42, 10), (43, 100), (NULL, 1), (45, -1)");
 

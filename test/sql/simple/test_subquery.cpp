@@ -8,6 +8,7 @@ TEST_CASE("Test subqueries", "[subqueries]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	con.EnableQueryVerification();
 
 	// scalar subquery
 	result = con.Query("SELECT (SELECT 42)");
@@ -73,6 +74,7 @@ TEST_CASE("Test subqueries with (NOT) IN clause", "[subqueries]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (id INTEGER, b INTEGER);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1, 22)"));
@@ -94,6 +96,7 @@ TEST_CASE("Test correlated subqueries in WHERE clause", "[subqueries]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (id INTEGER, b INTEGER);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1, 22)"));
@@ -118,6 +121,7 @@ TEST_CASE("Joins in subqueries", "[subqueries]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (id INTEGER, test_value INTEGER);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1, 22)"));
@@ -141,6 +145,7 @@ TEST_CASE("UNIONS of subqueries", "[subqueries]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	con.EnableQueryVerification();
 
 	result = con.Query("select * from (select 42) sq1 union all select * from "
 	                   "(select 43) sq2;");
@@ -151,6 +156,7 @@ TEST_CASE("Aliasing and aggregation in subqueries", "[subqueries]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
+	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("create table a(i integer)"));
 	REQUIRE_NO_FAIL(con.Query("insert into a values (42)"));

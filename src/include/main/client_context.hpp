@@ -39,5 +39,9 @@ public:
 	TransactionContext transaction;
 	//! Whether or not the query is interrupted
 	bool interrupted;
+#ifdef DEBUG
+	// Whether or not aggressive query verification is enabled
+	bool query_verification_enabled = false;
+#endif
 };
 } // namespace duckdb

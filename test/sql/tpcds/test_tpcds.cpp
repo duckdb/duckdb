@@ -9,6 +9,7 @@ TEST_CASE("Test TPC-DS SF0 Query Compilation", "[tpcds]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 	unique_ptr<DuckDBResult> result;
+	con.EnableQueryVerification();
 
 	// create schema only
 	tpcds::dbgen(0, db);

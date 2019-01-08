@@ -1,6 +1,7 @@
 #include "optimizer/optimizer.hpp"
 
 #include "optimizer/join_order_optimizer.hpp"
+#include "optimizer/obsolete_filter_rewriter.hpp"
 #include "optimizer/rule/list.hpp"
 #include "optimizer/subquery_rewriter.hpp"
 #include "planner/operator/list.hpp"
@@ -37,14 +38,17 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	// first we perform expression rewrites using the ExpressionRewriter
 	// this does not change the logical plan structure, but only simplifies the expression trees
 	rewriter.Apply(*plan);
+	// now perform obsolete filter removal
+	ObsoleteFilterRewriter obsolete_filter;
+	plan = obsolete_filter.Rewrite(move(plan));
 	// then we perform the join ordering optimization
 	// this also rewrites cross products + filters into joins and performs filter pushdowns
 	JoinOrderOptimizer optimizer;
-	auto join_order = optimizer.Optimize(move(plan));
+	plan = optimizer.Optimize(move(plan));
 	// perform join order optimization in subqueries as well
 	OptimizeSubqueries opt;
-	join_order->Accept(&opt);
+	plan->Accept(&opt);
 	// finally we rewrite subqueries
 	SubqueryRewriter subquery_rewriter(context);
-	return subquery_rewriter.Rewrite(move(join_order));
+	return subquery_rewriter.Rewrite(move(plan));
 }

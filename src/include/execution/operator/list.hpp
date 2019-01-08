@@ -19,6 +19,7 @@
 #include "execution/operator/persistent/physical_update.hpp"
 #include "execution/operator/projection/physical_projection.hpp"
 #include "execution/operator/scan/physical_dummy_scan.hpp"
+#include "execution/operator/scan/physical_empty_result.hpp"
 #include "execution/operator/scan/physical_index_scan.hpp"
 #include "execution/operator/scan/physical_table_function.hpp"
 #include "execution/operator/scan/physical_table_scan.hpp"
