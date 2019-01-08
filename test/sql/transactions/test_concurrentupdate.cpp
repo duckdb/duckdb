@@ -1,11 +1,11 @@
 #include "catch.hpp"
+
 #include <random>
 #include <thread>
 
 // needs to happen after the <thread> include since we redefine make_unique
 #include "common/value_operations/value_operations.hpp"
 #include "test_helpers.hpp"
-
 
 using namespace duckdb;
 using namespace std;

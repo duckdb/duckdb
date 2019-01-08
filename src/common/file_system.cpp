@@ -112,59 +112,59 @@ void MoveFile(const string &source, const string &target) {
 #else
 
 namespace duckdb {
-	bool DirectoryExists(const string &directory) {
-		if (!directory.empty()) {
-			// TODO
-		}
-		// if any condition fails
-		return false;
-	}
-
-	bool FileExists(const string &filename) {
-		if (!filename.empty()) {
-			// TODO
-		}
-		// if any condition fails
-		return false;
-	}
-
-	void CreateDirectory(const string &directory) {
+bool DirectoryExists(const string &directory) {
+	if (!directory.empty()) {
 		// TODO
 	}
+	// if any condition fails
+	return false;
+}
 
-	void RemoveDirectory(const string &directory) {
+bool FileExists(const string &filename) {
+	if (!filename.empty()) {
 		// TODO
 	}
+	// if any condition fails
+	return false;
+}
 
-	bool ListFiles(const string &directory, function<void(string)> callback) {
-		// TODO
-		return false;
-	}
+void CreateDirectory(const string &directory) {
+	// TODO
+}
 
-	void SetWorkingDirectory(const string &directory) {
-		// TODO
-	}
+void RemoveDirectory(const string &directory) {
+	// TODO
+}
 
-	string PathSeparator() {
-		return "/";
-	}
+bool ListFiles(const string &directory, function<void(string)> callback) {
+	// TODO
+	return false;
+}
 
-	string JoinPath(const string &a, const string &b) {
-		// FIXME: sanitize paths
-		return a + PathSeparator() + b;
-	}
+void SetWorkingDirectory(const string &directory) {
+	// TODO
+}
 
-	void FileSync(FILE *file) {
-		// TODO
-	}
+string PathSeparator() {
+	return "/";
+}
 
-	string GetWorkingDirectory() {
-		// TODO
-		return "";
-	}
+string JoinPath(const string &a, const string &b) {
+	// FIXME: sanitize paths
+	return a + PathSeparator() + b;
+}
 
-	void MoveFile(const string &source, const string &target) {
-		// TODO
-	}
+void FileSync(FILE *file) {
+	// TODO
+}
+
+string GetWorkingDirectory() {
+	// TODO
+	return "";
+}
+
+void MoveFile(const string &source, const string &target) {
+	// TODO
+}
 } // namespace duckdb
 #endif
