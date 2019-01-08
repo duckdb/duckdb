@@ -232,8 +232,8 @@ unique_ptr<LogicalOperator> ObsoleteFilterRewriter::Rewrite(unique_ptr<LogicalOp
 			if (child->type == ExpressionType::VALUE_CONSTANT) {
 				auto &constant = (ConstantExpression &)*child;
 				auto constant_value = constant.value.CastAs(TypeId::BOOLEAN);
-				if (!constant_value.value_.boolean) {
-					// FALSE, we can prune entire filter
+				if (constant_value.is_null || !constant_value.value_.boolean) {
+					// FALSE or NULL, we can prune entire filter
 					prune_filter = true;
 					break;
 				} else {
