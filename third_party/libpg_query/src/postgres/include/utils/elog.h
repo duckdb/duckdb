@@ -329,7 +329,12 @@ extern PGDLLIMPORT __thread  ErrorContextCallback *error_context_stack;
 #endif
 
 #ifdef _MSC_VER
-#define sigjmp_buf _JUMP_BUFFER
+
+#define sigjmp_buf jmp_buf
+
+#define sigsetjmp(env, savemask) setjmp(env)
+
+#define siglongjmp(env, val) longjmp(env, val)
 #endif
 
 extern PGDLLIMPORT __thread  sigjmp_buf *PG_exception_stack;

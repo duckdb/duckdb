@@ -25,6 +25,9 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/postgres/include)
 
 add_library(pg_query STATIC ${pg_query_srcs})
 
-set_target_properties(pg_query PROPERTIES COMPILE_FLAGS "-Wno-unused-function -Wno-unused-variable")
+IF (NOT MSVC)
+  set_target_properties(pg_query PROPERTIES COMPILE_FLAGS "-Wno-unused-function -Wno-unused-variable")
+ENDIF()
+
 set_target_properties(pg_query PROPERTIES LINKER_LANGUAGE C)
 set_target_properties(pg_query PROPERTIES POSITION_INDEPENDENT_CODE ON)

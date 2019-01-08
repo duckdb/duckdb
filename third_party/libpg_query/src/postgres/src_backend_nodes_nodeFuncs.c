@@ -31,6 +31,7 @@
 //#include "utils/builtins.h"
 //#include "utils/lsyscache.h"
 
+Node	   *newNodeMacroHolder;
 
 static bool expression_returns_set_walker(Node *node, void *context);
 static int	leftmostLoc(int loc1, int loc2);

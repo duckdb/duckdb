@@ -1,4 +1,3 @@
-
 add_subdirectory(catalog)
 add_subdirectory(common)
 add_subdirectory(execution)
@@ -10,5 +9,10 @@ add_subdirectory(storage)
 add_subdirectory(optimizer)
 add_subdirectory(transaction)
 
+set(DUCKDB_LINK_LIBS pg_query hyperloglog Threads::Threads)
+
 add_library(duckdb SHARED ${ALL_OBJECT_FILES})
-target_link_libraries(duckdb pg_query hyperloglog Threads::Threads)
+target_link_libraries(duckdb ${DUCKDB_LINK_LIBS})
+
+add_library(duckdb_static ${ALL_OBJECT_FILES})
+target_link_libraries(duckdb_static ${DUCKDB_LINK_LIBS})

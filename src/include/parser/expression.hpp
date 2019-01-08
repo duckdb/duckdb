@@ -150,7 +150,7 @@ protected:
 
 struct ExpressionHashFunction {
 	size_t operator()(const Expression *const &expr) const {
-		return expr->Hash();
+		return (size_t)expr->Hash();
 	}
 };
 

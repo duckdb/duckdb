@@ -668,16 +668,16 @@
 /* #undef HAVE_WINLDAP_H */
 
 /* Define to 1 if your compiler understands __builtin_bswap32. */
-#define HAVE__BUILTIN_BSWAP32 1
+//#define HAVE__BUILTIN_BSWAP32 1
 
 /* Define to 1 if your compiler understands __builtin_constant_p. */
-#define HAVE__BUILTIN_CONSTANT_P 1
+//#define HAVE__BUILTIN_CONSTANT_P 1
 
 /* Define to 1 if your compiler understands __builtin_types_compatible_p. */
-#define HAVE__BUILTIN_TYPES_COMPATIBLE_P 1
+//#define HAVE__BUILTIN_TYPES_COMPATIBLE_P 1
 
 /* Define to 1 if your compiler understands __builtin_unreachable. */
-#define HAVE__BUILTIN_UNREACHABLE 1
+//#define HAVE__BUILTIN_UNREACHABLE 1
 
 /* Define to 1 if you have __cpuid. */
 /* #undef HAVE__CPUID */
@@ -686,7 +686,7 @@
 #define HAVE__GET_CPUID 1
 
 /* Define to 1 if your compiler understands _Static_assert. */
-#define HAVE__STATIC_ASSERT 1
+//#define HAVE__STATIC_ASSERT 1
 
 /* Define to 1 if your compiler understands __VA_ARGS__ in macros. */
 #define HAVE__VA_ARGS 1

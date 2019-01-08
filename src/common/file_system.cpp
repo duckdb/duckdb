@@ -4,13 +4,13 @@
 #include "common/string_util.hpp"
 
 #include <cstdio>
+using namespace std;
+
+#ifndef _MSC_VER
 #include <dirent.h>
-#include <fstream>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-
-using namespace std;
 
 namespace duckdb {
 bool DirectoryExists(const string &directory) {
@@ -92,19 +92,10 @@ void FileSync(FILE *file) {
 	fsync(fileno(file));
 }
 
-#include <stdio.h> /* defines FILENAME_MAX */
-#ifdef WINDOWS
-#include <direct.h>
-#define GetCurrentDir _getcwd
-#else
-#include <unistd.h>
-#define GetCurrentDir getcwd
-#endif
-
 string GetWorkingDirectory() {
 	char current_path[FILENAME_MAX];
 
-	if (!GetCurrentDir(current_path, sizeof(current_path))) {
+	if (!getcwd(current_path, sizeof(current_path))) {
 		return string();
 	}
 	return string(current_path);
@@ -117,3 +108,63 @@ void MoveFile(const string &source, const string &target) {
 	}
 }
 } // namespace duckdb
+
+#else
+
+namespace duckdb {
+bool DirectoryExists(const string &directory) {
+	if (!directory.empty()) {
+		// TODO
+	}
+	// if any condition fails
+	return false;
+}
+
+bool FileExists(const string &filename) {
+	if (!filename.empty()) {
+		// TODO
+	}
+	// if any condition fails
+	return false;
+}
+
+void CreateDirectory(const string &directory) {
+	// TODO
+}
+
+void RemoveDirectory(const string &directory) {
+	// TODO
+}
+
+bool ListFiles(const string &directory, function<void(string)> callback) {
+	// TODO
+	return false;
+}
+
+void SetWorkingDirectory(const string &directory) {
+	// TODO
+}
+
+string PathSeparator() {
+	return "/";
+}
+
+string JoinPath(const string &a, const string &b) {
+	// FIXME: sanitize paths
+	return a + PathSeparator() + b;
+}
+
+void FileSync(FILE *file) {
+	// TODO
+}
+
+string GetWorkingDirectory() {
+	// TODO
+	return "";
+}
+
+void MoveFile(const string &source, const string &target) {
+	// TODO
+}
+} // namespace duckdb
+#endif
