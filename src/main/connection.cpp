@@ -121,6 +121,10 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(ClientContext &context
 			} catch (Exception &ex) {
 				result->error = ex.GetMessage();
 			}
+			bool profiling = context.profiler.IsEnabled();
+			if (profiling) {
+				context.profiler.Disable();
+			}
 			// now execute the copied statement
 			try {
 				ExecuteStatement(context, move(copied_stmt), copied_result);
@@ -132,6 +136,9 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(ClientContext &context
 				ExecuteStatement(context, move(deserialized_stmt), deserialized_result);
 			} catch (Exception &ex) {
 				deserialized_result.error = ex.GetMessage();
+			}
+			if (profiling) {
+				context.profiler.Enable();
 			}
 			// now compare the results
 			// the results of all three expressions should be identical

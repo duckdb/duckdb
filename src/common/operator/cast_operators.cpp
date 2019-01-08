@@ -110,9 +110,9 @@ template <> uint64_t Cast::Operation(double left) {
 //===--------------------------------------------------------------------===//
 
 template <> bool Cast::Operation(const char *left) {
-	if (strcmp(left, "true") == 0) {
+	if (left[0] == 't' || left[0] == 'T') {
 		return true;
-	} else if (strcmp(left, "false") == 0) {
+	} else if (left[0] == 'f' || left[0] == 'F') {
 		return false;
 	} else {
 		throw ConversionException("Could not convert string '%s' to boolean", left);

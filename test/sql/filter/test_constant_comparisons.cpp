@@ -51,3 +51,34 @@ TEST_CASE("Test expressions with constant comparisons", "[filter]") {
 	result = con.Query("SELECT * FROM integers WHERE 2<=1");
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 }
+
+TEST_CASE("More complex constant expressions", "[filter]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(a INTEGER, b INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (2, 12)"));
+
+	// Test constant comparisons
+	// IN expressions
+	result = con.Query("SELECT * FROM integers WHERE 2 IN (2, 3, 4, 5)");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {12}));
+	result = con.Query("SELECT * FROM integers WHERE 2 NOT IN (2, 3, 4, 5)");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT * FROM integers WHERE 2 IN (((1*2)+(1*0))*1, 3, 4, 5)");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {12}));
+	result = con.Query("SELECT * FROM integers WHERE 2 IN ((1+1)*2, 3, 4, 5)");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	// CASE expressions
+	result = con.Query("SELECT CASE WHEN 1 THEN 13 ELSE 12 END;");
+	REQUIRE(CHECK_COLUMN(result, 0, {13}));
+	result = con.Query("SELECT * FROM integers WHERE CASE WHEN 2=2 THEN true ELSE false END;");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {12}));
+	result = con.Query("SELECT * FROM integers WHERE CASE WHEN 2=3 THEN true ELSE false END;");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+}

@@ -18,7 +18,15 @@ TEST_CASE("Test boolean casts", "[cast]") {
 	// string -> boolean casts
 	result = con.Query("SELECT CAST('true' AS BOOLEAN)");
 	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+	result = con.Query("SELECT CAST('t' AS BOOLEAN)");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+	result = con.Query("SELECT CAST('TRUE' AS BOOLEAN)");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
 	result = con.Query("SELECT CAST('false' AS BOOLEAN)");
+	REQUIRE(CHECK_COLUMN(result, 0, {false}));
+	result = con.Query("SELECT CAST('f' AS BOOLEAN)");
+	REQUIRE(CHECK_COLUMN(result, 0, {false}));
+	result = con.Query("SELECT CAST('FALSE' AS BOOLEAN)");
 	REQUIRE(CHECK_COLUMN(result, 0, {false}));
 	REQUIRE_FAIL(con.Query("SELECT CAST('12345' AS BOOLEAN)"));
 

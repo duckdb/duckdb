@@ -225,17 +225,20 @@ unique_ptr<LogicalOperator> ObsoleteFilterRewriter::Rewrite(unique_ptr<LogicalOp
 				}
 			}
 		}
-		// check if any of the filter expressions are a constant FALSE
+		// check if any of the filter expressions are a constant FALSE or a constant TRUE
 		// if there are then we can prune the entire filter
-		for (auto &child : node->expressions) {
+		for (size_t expr_idx = 0; expr_idx < node->expressions.size(); expr_idx++) {
+			auto &child = node->expressions[expr_idx];
 			if (child->type == ExpressionType::VALUE_CONSTANT) {
 				auto &constant = (ConstantExpression &)*child;
-				if (!TypeIsInteger(constant.value.type)) {
-					continue;
-				}
-				if (constant.value == 0) {
+				auto constant_value = constant.value.CastAs(TypeId::BOOLEAN);
+				if (!constant_value.value_.boolean) {
+					// FALSE, we can prune entire filter
 					prune_filter = true;
 					break;
+				} else {
+					// TRUE, we can prune this node from the filter
+					prune_set.push_back(expr_idx);
 				}
 			}
 		}
