@@ -285,7 +285,7 @@ bool Value::operator>=(const int64_t &rhs) const {
 template <class DST, class OP> DST Value::_cast(const Value &v) {
 	switch (v.type) {
 	case TypeId::BOOLEAN:
-		return OP::template Operation<int8_t, DST>(v.value_.boolean);
+		return OP::template Operation<bool, DST>(v.value_.boolean);
 	case TypeId::TINYINT:
 		return OP::template Operation<int8_t, DST>(v.value_.tinyint);
 	case TypeId::SMALLINT:
@@ -324,7 +324,7 @@ Value Value::CastAs(TypeId new_type) const {
 
 	switch (new_value.type) {
 	case TypeId::BOOLEAN:
-		new_value.value_.boolean = _cast<int8_t, operators::Cast>(*this);
+		new_value.value_.boolean = _cast<bool, operators::Cast>(*this);
 		break;
 	case TypeId::TINYINT:
 		new_value.value_.tinyint = _cast<int8_t, operators::Cast>(*this);

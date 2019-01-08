@@ -32,7 +32,11 @@ bool Expression::IsWindow() {
 
 bool Expression::IsScalar() {
 	bool is_scalar = true;
-	EnumerateChildren([&](Expression *child) { is_scalar |= child->IsScalar(); });
+	EnumerateChildren([&](Expression *child) {
+		if (!child->IsScalar()) {
+			is_scalar = false;
+		}
+	});
 	return is_scalar;
 }
 

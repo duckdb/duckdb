@@ -31,6 +31,9 @@ void templated_cast_loop(Vector &source, Vector &result) {
 template <class SRC, class OP, bool IGNORE_NULL> static void result_cast_switch(Vector &source, Vector &result) {
 	// now switch on the result type
 	switch (result.type) {
+	case TypeId::BOOLEAN:
+		templated_cast_loop<SRC, bool, OP, IGNORE_NULL>(source, result);
+		break;
 	case TypeId::TINYINT:
 		templated_cast_loop<SRC, int8_t, OP, IGNORE_NULL>(source, result);
 		break;
@@ -82,6 +85,8 @@ void VectorOperations::Cast(Vector &source, Vector &result) {
 	// first switch on source type
 	switch (source.type) {
 	case TypeId::BOOLEAN:
+		result_cast_switch<bool, operators::Cast, true>(source, result);
+		break;
 	case TypeId::TINYINT:
 		result_cast_switch<int8_t, operators::Cast, true>(source, result);
 		break;

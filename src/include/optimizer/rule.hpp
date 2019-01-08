@@ -12,12 +12,17 @@
 #include "optimizer/matcher/logical_operator_matcher.hpp"
 
 namespace duckdb {
+class ExpressionRewriter;
 
 class Rule {
 public:
+	Rule(ExpressionRewriter &rewriter) : rewriter(rewriter) {
+	}
 	virtual ~Rule() {
 	}
 
+	//! The expression rewriter this rule belongs to
+	ExpressionRewriter &rewriter;
 	//! The root
 	unique_ptr<LogicalOperatorMatcher> logical_root;
 	//! The expression matcher of the rule

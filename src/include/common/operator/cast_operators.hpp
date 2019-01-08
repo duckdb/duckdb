@@ -57,6 +57,7 @@ template <> uint64_t Cast::Operation(double left);
 //===--------------------------------------------------------------------===//
 // String -> Numeric Casts
 //===--------------------------------------------------------------------===//
+template <> bool Cast::Operation(const char *left);
 template <> int8_t Cast::Operation(const char *left);
 template <> int16_t Cast::Operation(const char *left);
 template <> int32_t Cast::Operation(const char *left);
@@ -66,6 +67,7 @@ template <> double Cast::Operation(const char *left);
 //===--------------------------------------------------------------------===//
 // Numeric -> String Casts
 //===--------------------------------------------------------------------===//
+template <> duckdb::string Cast::Operation(bool left);
 template <> duckdb::string Cast::Operation(int8_t left);
 template <> duckdb::string Cast::Operation(int16_t left);
 template <> duckdb::string Cast::Operation(int32_t left);

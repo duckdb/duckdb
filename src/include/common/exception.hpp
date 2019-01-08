@@ -260,7 +260,7 @@ public:
 	ValueOutOfRangeException(const int64_t value, const TypeId origType, const TypeId newType)
 	    : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(origType) + " with value " +
 	                                               std::to_string((intmax_t)value) +
-	                                               " can't be cast as %s because the value is out of range "
+	                                               " can't be cast because the value is out of range "
 	                                               "for the destination type " +
 	                                               TypeIdToString(newType)) {
 	}
@@ -268,7 +268,7 @@ public:
 	ValueOutOfRangeException(const double value, const TypeId origType, const TypeId newType)
 	    : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(origType) + " with value " +
 	                                               std::to_string(value) +
-	                                               " can't be cast as %s because the value is out of range "
+	                                               " can't be cast because the value is out of range "
 	                                               "for the destination type " +
 	                                               TypeIdToString(newType)) {
 	}

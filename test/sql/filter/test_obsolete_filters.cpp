@@ -4,7 +4,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test expressions with obsolete filters", "[function]") {
+TEST_CASE("Test expressions with obsolete filters", "[filter]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);

@@ -17,7 +17,7 @@ namespace duckdb {
 
 class Optimizer {
 public:
-	Optimizer(BindContext &context);
+	Optimizer(ClientContext &client_context, BindContext &context);
 
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
 

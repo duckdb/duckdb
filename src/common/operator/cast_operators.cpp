@@ -108,26 +108,36 @@ template <> uint64_t Cast::Operation(double left) {
 //===--------------------------------------------------------------------===//
 // Cast String -> Numeric
 //===--------------------------------------------------------------------===//
+
+template <> bool Cast::Operation(const char *left) {
+	if (strcmp(left, "true") == 0) {
+		return true;
+	} else if (strcmp(left, "false") == 0) {
+		return false;
+	} else {
+		throw ConversionException("Could not convert string '%s' to boolean", left);
+	}
+}
+
 template <> int8_t Cast::Operation(const char *left) {
 	int64_t value = Cast::Operation<const char *, int64_t>(left);
 	if (in_bounds<int8_t>(value))
 		return (int8_t)value;
-	throw std::out_of_range("Cannot convert to TINYINT");
+	throw ValueOutOfRangeException(value, TypeId::VARCHAR, TypeId::TINYINT);
 }
 
 template <> int16_t Cast::Operation(const char *left) {
 	int64_t value = Cast::Operation<const char *, int64_t>(left);
 	if (in_bounds<int16_t>(value))
 		return (int16_t)value;
-	throw std::out_of_range("Cannot convert to SMALLINT");
+	throw ValueOutOfRangeException(value, TypeId::VARCHAR, TypeId::SMALLINT);
 }
 
 template <> int Cast::Operation(const char *left) {
-	try {
-		return stoi(left, NULL, 10);
-	} catch (...) {
-		throw ConversionException("Could not convert string '%s' to numeric", left);
-	}
+	int64_t value = Cast::Operation<const char *, int64_t>(left);
+	if (in_bounds<int32_t>(value))
+		return (int32_t)value;
+	throw ValueOutOfRangeException(value, TypeId::VARCHAR, TypeId::INTEGER);
 }
 
 template <> int64_t Cast::Operation(const char *left) {
@@ -157,6 +167,14 @@ template <> double Cast::Operation(const char *left) {
 //===--------------------------------------------------------------------===//
 // Cast Numeric -> String
 //===--------------------------------------------------------------------===//
+template <> string Cast::Operation(bool left) {
+	if (left) {
+		return "true";
+	} else {
+		return "false";
+	}
+}
+
 template <> string Cast::Operation(int8_t left) {
 	return to_string(left);
 }

@@ -12,10 +12,10 @@
 
 namespace duckdb {
 
-// X + Y => Z
+// Fold any constant scalar expressions into a single constant (i.e. [2 + 2] => [4], [2 = 2] => [True], etc...)
 class ConstantFoldingRule : public Rule {
 public:
-	ConstantFoldingRule();
+	ConstantFoldingRule(ExpressionRewriter &rewriter);
 
 	unique_ptr<Expression> Apply(LogicalOperator &op, vector<Expression *> &bindings, bool &changes_made) override;
 };
