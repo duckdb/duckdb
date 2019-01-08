@@ -77,9 +77,9 @@ TEST_CASE("Extract function edge cases", "[date]") {
 	int epoch_day = 4;
 	int expected_day_up = epoch_day, expected_day_down = epoch_day;
 	for (size_t i = 0; i < 7; i++) {
-		result = con.Query("SELECT EXTRACT(dow FROM cast('1970-1-1' AS DATE) + " + to_string(i) + ");");
+		result = con.Query("SELECT EXTRACT(dow FROM cast('1970-01-01' AS DATE) + " + to_string(i) + ");");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(expected_day_up)}));
-		result = con.Query("SELECT EXTRACT(dow FROM cast('1970-1-1' AS DATE) - " + to_string(i) + ");");
+		result = con.Query("SELECT EXTRACT(dow FROM cast('1970-01-01' AS DATE) - " + to_string(i) + ");");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(expected_day_down)}));
 		expected_day_up = (expected_day_up + 1) % 7;
 		expected_day_down = expected_day_down == 0 ? 6 : expected_day_down - 1;
