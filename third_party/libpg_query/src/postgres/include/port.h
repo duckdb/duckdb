@@ -30,7 +30,6 @@ typedef int pgsocket;
 #undef ERROR
 typedef int pid_t;
 typedef SOCKET pgsocket;
-#define __builtin_constant_p(A) A
 
 #define PGINVALID_SOCKET INVALID_SOCKET
 #endif

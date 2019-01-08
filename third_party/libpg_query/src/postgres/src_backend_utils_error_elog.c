@@ -172,10 +172,10 @@ static void write_syslog(int level, const char *line);
 
 static void write_console(const char *line, int len);
 
-#ifdef WIN32
-extern char *event_source;
-static void write_eventlog(int level, const char *line, int len);
-#endif
+//#ifdef WIN32
+//extern char *event_source;
+//static void write_eventlog(int level, const char *line, int len);
+//#endif
 
 /* We provide a small stack of ErrorData records for re-entrant cases */
 #define ERRORDATA_STACK_SIZE  5
@@ -1444,113 +1444,6 @@ pg_re_throw(void)
 
 #endif   /* HAVE_SYSLOG */
 
-#ifdef WIN32
-/*
- * Get the PostgreSQL equivalent of the Windows ANSI code page.  "ANSI" system
- * interfaces (e.g. CreateFileA()) expect string arguments in this encoding.
- * Every process in a given system will find the same value at all times.
- */
-static int
-GetACPEncoding(void)
-{
-	static int	encoding = -2;
-
-	if (encoding == -2)
-		encoding = pg_codepage_to_encoding(GetACP());
-
-	return encoding;
-}
-
-/*
- * Write a message line to the windows event log
- */
-static void
-write_eventlog(int level, const char *line, int len)
-{
-	WCHAR	   *utf16;
-	int			eventlevel = EVENTLOG_ERROR_TYPE;
-	static HANDLE evtHandle = INVALID_HANDLE_VALUE;
-
-	if (evtHandle == INVALID_HANDLE_VALUE)
-	{
-		evtHandle = RegisterEventSource(NULL,
-						 event_source ? event_source : DEFAULT_EVENT_SOURCE);
-		if (evtHandle == NULL)
-		{
-			evtHandle = INVALID_HANDLE_VALUE;
-			return;
-		}
-	}
-
-	switch (level)
-	{
-		case DEBUG5:
-		case DEBUG4:
-		case DEBUG3:
-		case DEBUG2:
-		case DEBUG1:
-		case LOG:
-		case COMMERROR:
-		case INFO:
-		case NOTICE:
-			eventlevel = EVENTLOG_INFORMATION_TYPE;
-			break;
-		case WARNING:
-			eventlevel = EVENTLOG_WARNING_TYPE;
-			break;
-		case ERROR:
-		case FATAL:
-		case PANIC:
-		default:
-			eventlevel = EVENTLOG_ERROR_TYPE;
-			break;
-	}
-
-	/*
-	 * If message character encoding matches the encoding expected by
-	 * ReportEventA(), call it to avoid the hazards of conversion.  Otherwise,
-	 * try to convert the message to UTF16 and write it with ReportEventW().
-	 * Fall back on ReportEventA() if conversion failed.
-	 *
-	 * Also verify that we are not on our way into error recursion trouble due
-	 * to error messages thrown deep inside pgwin32_message_to_UTF16().
-	 */
-	if (!in_error_recursion_trouble() &&
-		GetMessageEncoding() != GetACPEncoding())
-	{
-		utf16 = pgwin32_message_to_UTF16(line, len, NULL);
-		if (utf16)
-		{
-			ReportEventW(evtHandle,
-						 eventlevel,
-						 0,
-						 0,		/* All events are Id 0 */
-						 NULL,
-						 1,
-						 0,
-						 (LPCWSTR *) &utf16,
-						 NULL);
-			/* XXX Try ReportEventA() when ReportEventW() fails? */
-
-			pfree(utf16);
-			return;
-		}
-	}
-	ReportEventA(evtHandle,
-				 eventlevel,
-				 0,
-				 0,				/* All events are Id 0 */
-				 NULL,
-				 1,
-				 0,
-				 &line,
-				 NULL);
-}
-#endif   /* WIN32 */
-
-#ifdef WIN32
-#else
-#endif
 
 /*
  * setup formatted_log_time, for consistent times between CSV and regular logs
@@ -1713,11 +1606,11 @@ useful_strerror(int errnum)
 	static char errorstr_buf[48];
 	const char *str;
 
-#ifdef WIN32
-	/* Winsock error code range, per WinError.h */
-	if (errnum >= 10000 && errnum <= 11999)
-		return pgwin32_socket_strerror(errnum);
-#endif
+//#ifdef WIN32
+//	/* Winsock error code range, per WinError.h */
+//	if (errnum >= 10000 && errnum <= 11999)
+//		return pgwin32_socket_strerror(errnum);
+//#endif
 	str = strerror(errnum);
 
 	/*
@@ -1959,16 +1852,16 @@ write_stderr(const char *fmt,...)
 	 * On Win32, we print to stderr if running on a console, or write to
 	 * eventlog if running as a service
 	 */
-	if (pgwin32_is_service())	/* Running as a service */
-	{
-		write_eventlog(ERROR, errbuf, strlen(errbuf));
-	}
-	else
-	{
+//	if (pgwin32_is_service())	/* Running as a service */
+//	{
+//		write_eventlog(ERROR, errbuf, strlen(errbuf));
+//	}
+//	else
+//	{
 		/* Not running as service, write to stderr */
 		write_console(errbuf, strlen(errbuf));
 		fflush(stderr);
-	}
+//	}
 #endif
 	va_end(ap);
 }

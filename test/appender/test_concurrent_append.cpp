@@ -1,9 +1,11 @@
 #include "catch.hpp"
-#include "main/appender.hpp"
-#include "test_helpers.hpp"
 
 #include <thread>
 #include <vector>
+
+#include "main/appender.hpp"
+#include "test_helpers.hpp"
+
 
 using namespace duckdb;
 using namespace std;

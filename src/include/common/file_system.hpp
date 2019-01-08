@@ -9,7 +9,6 @@
 #pragma once
 
 #include "common/constants.hpp"
-
 #include <functional>
 
 namespace duckdb {

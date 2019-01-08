@@ -1,9 +1,15 @@
 #include "catch.hpp"
-#include "main/appender.hpp"
-#include "test_helpers.hpp"
 
 #include <thread>
 #include <vector>
+
+// needs to happen after the <thread> include since we redefine make_unique
+#include "main/appender.hpp"
+#include "test_helpers.hpp"
+
+
+
+
 
 using namespace duckdb;
 using namespace std;
