@@ -47,6 +47,7 @@ unique_ptr<Expression> ConstantFoldingRule::Apply(LogicalOperator &op, vector<Ex
 	Vector result(root->return_type, true, false);
 	executor.ExecuteExpression(root, result);
 	assert(result.count == 1);
+	auto result_value = result.GetValue(0).CastAs(root->return_type);
 	// now get the value from the result vector and insert it back into the plan as a constant expression
-	return make_unique<ConstantExpression>(result.GetValue(0));
+	return make_unique<ConstantExpression>(result_value);
 }
