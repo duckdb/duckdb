@@ -44,9 +44,6 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 		if (constant->value == 1) {
 			// multiply with 1, replace with non-constant child
 			return move(root->children[1 - constant_child]);
-		} else if (constant->value == 0) {
-			// multiply by 0, replace with zero
-			return move(root->children[constant_child]);
 		}
 		break;
 	default:
@@ -58,11 +55,6 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 			} else if (constant->value == 0) {
 				// divide by 0, replace with NULL
 				return make_unique<ConstantExpression>(Value(root->return_type));
-			}
-		} else {
-			if (constant->value == 0) {
-				// 0 divided by X, replace with 0
-				return move(root->children[constant_child]);
 			}
 		}
 		break;

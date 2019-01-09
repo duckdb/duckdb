@@ -4,7 +4,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test NOP arithmetic expressions", "[sql]") {
+TEST_CASE("Test NOP arithmetic expressions", "[arithmetic]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
@@ -52,4 +52,15 @@ TEST_CASE("Test NOP arithmetic expressions", "[sql]") {
 	// 0 / a => 0
 	result = con.Query("SELECT 0 / a FROM test");
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 0}));
+
+	// test expressions involving NULL as well
+	REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=NULL"));
+
+	// NULL * 0 = NULL
+	result = con.Query("SELECT a * 0 FROM test");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value()}));
+
+	// 0 / NULL = NULL
+	result = con.Query("SELECT 0 / a FROM test");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value()}));
 }
