@@ -58,6 +58,9 @@ void RemoveDirectory(const string &directory) {
 }
 
 bool ListFiles(const string &directory, function<void(string)> callback) {
+	if (!DirectoryExists(directory)) {
+		return false;
+	}
 	DIR *dir;
 	struct dirent *ent;
 	if ((dir = opendir(directory.c_str())) != NULL) {
@@ -75,25 +78,12 @@ bool ListFiles(const string &directory, function<void(string)> callback) {
 	return true;
 }
 
-void SetWorkingDirectory(const string &directory) {
-	chdir(directory.c_str());
-}
-
 string PathSeparator() {
 	return "/";
 }
 
 void FileSync(FILE *file) {
 	fsync(fileno(file));
-}
-
-string GetWorkingDirectory() {
-	char current_path[FILENAME_MAX];
-
-	if (!getcwd(current_path, sizeof(current_path))) {
-		return string();
-	}
-	return string(current_path);
 }
 
 void MoveFile(const string &source, const string &target) {
@@ -115,32 +105,20 @@ void MoveFile(const string &source, const string &target) {
 
 namespace duckdb {
 
-static bool path_has_attr(const char *pathname, DWORD attr) {
-	DWORD attrs = GetFileAttributesA(pathname);
-	if (attrs == INVALID_FILE_ATTRIBUTES) {
-		return false;
-	}
-	if (attrs & attr) {
-		return true;
-	}
-	return false;
-}
-
 bool DirectoryExists(const string &directory) {
-	if (!directory.empty()) {
-		return path_has_attr(directory.c_str(), FILE_ATTRIBUTE_DIRECTORY);
-	}
-	return false;
+	DWORD attrs = GetFileAttributesA(directory.c_str());
+	return (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY));
 }
 
 bool FileExists(const string &filename) {
-	if (!filename.empty()) {
-		return path_has_attr(filename.c_str(), FILE_ATTRIBUTE_NORMAL);
-	}
-	return false;
+	DWORD attrs = GetFileAttributesA(filename.c_str());
+	return (attrs != INVALID_FILE_ATTRIBUTES && !(attrs & FILE_ATTRIBUTE_DIRECTORY));
 }
 
 void CreateDirectory(const string &directory) {
+	if (DirectoryExists(directory)) {
+		return;
+	}
 	if (directory.empty() || !CreateDirectoryA(directory.c_str(), NULL) || !DirectoryExists(directory)) {
 		throw IOException("Could not create directory!");
 	}
@@ -170,6 +148,10 @@ bool ListFiles(const string &directory, function<void(string)> callback) {
 		return false;
 	}
 	do {
+		if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+			continue;
+		}
+
 		callback(string(ffd.cFileName));
 	} while (FindNextFile(hFind, &ffd) != 0);
 
@@ -181,10 +163,6 @@ bool ListFiles(const string &directory, function<void(string)> callback) {
 
 	FindClose(hFind);
 	return true;
-}
-
-void SetWorkingDirectory(const string &directory) {
-	SetCurrentDirectory(directory.c_str());
 }
 
 string PathSeparator() {
@@ -205,13 +183,6 @@ void FileSync(FILE *file) {
 	}
 	CloseHandle(hdl);
 	*/
-}
-
-string GetWorkingDirectory() {
-	string s;
-	s.resize(MAX_PATH);
-	GetCurrentDirectory(MAX_PATH, (LPSTR)s.c_str());
-	return s;
 }
 
 void MoveFile(const string &source, const string &target) {

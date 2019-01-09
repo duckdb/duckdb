@@ -23,10 +23,6 @@ void RemoveDirectory(const string &directory);
 bool ListFiles(const string &directory, std::function<void(string)> callback);
 //! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID properties
 void MoveFile(const string &source, const string &target);
-//! Sets the current working directory
-void SetWorkingDirectory(const string &directory);
-//! Gets the current working directory
-string GetWorkingDirectory();
 //! Check if a file exists
 bool FileExists(const string &filename);
 //! Path separator for the current file system
