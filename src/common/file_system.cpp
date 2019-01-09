@@ -83,7 +83,6 @@ string PathSeparator() {
 	return "/";
 }
 
-
 void FileSync(FILE *file) {
 	fsync(fileno(file));
 }
@@ -110,25 +109,22 @@ void MoveFile(const string &source, const string &target) {
 #include <string>
 #include <windows.h>
 
-
 #undef CreateDirectory
 #undef MoveFile
 #undef RemoveDirectory
 
 namespace duckdb {
 
-	static bool path_has_attr(const char* pathname, DWORD attr) {
-		DWORD attrs = GetFileAttributesA(pathname);
-		if (attrs == INVALID_FILE_ATTRIBUTES) {
-			return false;
-		}
-		if (attrs & attr) {
-			return true;
-		}
+static bool path_has_attr(const char *pathname, DWORD attr) {
+	DWORD attrs = GetFileAttributesA(pathname);
+	if (attrs == INVALID_FILE_ATTRIBUTES) {
 		return false;
 	}
-
-
+	if (attrs & attr) {
+		return true;
+	}
+	return false;
+}
 
 bool DirectoryExists(const string &directory) {
 	if (!directory.empty()) {
@@ -153,19 +149,12 @@ void CreateDirectory(const string &directory) {
 void RemoveDirectory(const string &directory) {
 	// SHFileOperation needs a double-NULL-terminated string as input
 	string path(directory);
-	path.resize(path.size()+2);
+	path.resize(path.size() + 2);
 	path[path.size() - 1] = 0;
 	path[path.size() - 2] = 0;
 
-	SHFILEOPSTRUCT shfo = {
-		NULL,
-		FO_DELETE,
-		path.c_str(),
-		NULL,
-		FOF_SILENT | FOF_NOERRORUI | FOF_NOCONFIRMATION,
-		FALSE,
-		NULL,
-		NULL };
+	SHFILEOPSTRUCT shfo = {NULL,  FO_DELETE, path.c_str(), NULL, FOF_SILENT | FOF_NOERRORUI | FOF_NOCONFIRMATION,
+	                       FALSE, NULL,      NULL};
 
 	if (!SHFileOperation(&shfo) == 0) {
 		throw IOException("Could not delete directory!");
@@ -208,11 +197,11 @@ void FileSync(FILE *file) {
 	/* // this is the correct way but we need a file name or Windows HANDLE
 	HANDLE hdl = CreateFileA(lpFileName, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (hdl == INVALID_HANDLE_VALUE) {
-		//error
+	    //error
 	}
 
 	if (FlushFileBuffers(hdl) == 0) {
-		//error
+	    //error
 	}
 	CloseHandle(hdl);
 	*/
@@ -221,7 +210,7 @@ void FileSync(FILE *file) {
 string GetWorkingDirectory() {
 	string s;
 	s.resize(MAX_PATH);
-	GetCurrentDirectory(MAX_PATH, (LPSTR) s.c_str());
+	GetCurrentDirectory(MAX_PATH, (LPSTR)s.c_str());
 	return s;
 }
 
@@ -234,8 +223,8 @@ void MoveFile(const string &source, const string &target) {
 #endif
 
 namespace duckdb {
-	string JoinPath(const string &a, const string &b) {
-		// FIXME: sanitize paths
-		return a + PathSeparator() + b;
-	}
+string JoinPath(const string &a, const string &b) {
+	// FIXME: sanitize paths
+	return a + PathSeparator() + b;
+}
 } // namespace duckdb
