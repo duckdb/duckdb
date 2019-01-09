@@ -3,10 +3,10 @@
 #include "common/exception.hpp"
 #include "common/string_util.hpp"
 
-#include <cstdio>
 using namespace std;
 
 #ifndef _MSC_VER
+#include <cstdio>
 #include <dirent.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -83,10 +83,6 @@ string PathSeparator() {
 	return "/";
 }
 
-string JoinPath(const string &a, const string &b) {
-	// FIXME: sanitize paths
-	return a + PathSeparator() + b;
-}
 
 void FileSync(FILE *file) {
 	fsync(fileno(file));
@@ -111,60 +107,135 @@ void MoveFile(const string &source, const string &target) {
 
 #else
 
+#include <string>
+#include <windows.h>
+
+
+#undef CreateDirectory
+#undef MoveFile
+#undef RemoveDirectory
+
 namespace duckdb {
+
+	static bool path_has_attr(const char* pathname, DWORD attr) {
+		DWORD attrs = GetFileAttributesA(pathname);
+		if (attrs == INVALID_FILE_ATTRIBUTES) {
+			return false;
+		}
+		if (attrs & attr) {
+			return true;
+		}
+		return false;
+	}
+
+
+
 bool DirectoryExists(const string &directory) {
 	if (!directory.empty()) {
-		// TODO
+		return path_has_attr(directory.c_str(), FILE_ATTRIBUTE_DIRECTORY);
 	}
-	// if any condition fails
 	return false;
 }
 
 bool FileExists(const string &filename) {
 	if (!filename.empty()) {
-		// TODO
+		return path_has_attr(filename.c_str(), FILE_ATTRIBUTE_NORMAL);
 	}
-	// if any condition fails
 	return false;
 }
 
 void CreateDirectory(const string &directory) {
-	// TODO
+	if (directory.empty() || !CreateDirectoryA(directory.c_str(), NULL) || !DirectoryExists(directory)) {
+		throw IOException("Could not create directory!");
+	}
 }
 
 void RemoveDirectory(const string &directory) {
-	// TODO
+	// SHFileOperation needs a double-NULL-terminated string as input
+	string path(directory);
+	path.resize(path.size()+2);
+	path[path.size() - 1] = 0;
+	path[path.size() - 2] = 0;
+
+	SHFILEOPSTRUCT shfo = {
+		NULL,
+		FO_DELETE,
+		path.c_str(),
+		NULL,
+		FOF_SILENT | FOF_NOERRORUI | FOF_NOCONFIRMATION,
+		FALSE,
+		NULL,
+		NULL };
+
+	if (!SHFileOperation(&shfo) == 0) {
+		throw IOException("Could not delete directory!");
+	}
 }
 
 bool ListFiles(const string &directory, function<void(string)> callback) {
-	// TODO
-	return false;
+	string search_dir = JoinPath(directory, "*");
+
+	WIN32_FIND_DATA ffd;
+	HANDLE hFind = FindFirstFile(search_dir.c_str(), &ffd);
+	if (hFind == INVALID_HANDLE_VALUE) {
+		return false;
+	}
+	do {
+		callback(string(ffd.cFileName));
+	} while (FindNextFile(hFind, &ffd) != 0);
+
+	DWORD dwError = GetLastError();
+	if (dwError != ERROR_NO_MORE_FILES) {
+		FindClose(hFind);
+		return false;
+	}
+
+	FindClose(hFind);
+	return true;
 }
 
 void SetWorkingDirectory(const string &directory) {
-	// TODO
+	SetCurrentDirectory(directory.c_str());
 }
 
 string PathSeparator() {
-	return "/";
-}
-
-string JoinPath(const string &a, const string &b) {
-	// FIXME: sanitize paths
-	return a + PathSeparator() + b;
+	return "\\";
 }
 
 void FileSync(FILE *file) {
-	// TODO
+	throw NotImplementedException("Can't sync FILE* on Windows");
+
+	/* // this is the correct way but we need a file name or Windows HANDLE
+	HANDLE hdl = CreateFileA(lpFileName, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (hdl == INVALID_HANDLE_VALUE) {
+		//error
+	}
+
+	if (FlushFileBuffers(hdl) == 0) {
+		//error
+	}
+	CloseHandle(hdl);
+	*/
 }
 
 string GetWorkingDirectory() {
-	// TODO
-	return "";
+	string s;
+	s.resize(MAX_PATH);
+	GetCurrentDirectory(MAX_PATH, (LPSTR) s.c_str());
+	return s;
 }
 
 void MoveFile(const string &source, const string &target) {
-	// TODO
+	if (!MoveFileA(source.c_str(), target.c_str())) {
+		throw IOException("Could not move file");
+	}
 }
 } // namespace duckdb
 #endif
+
+namespace duckdb {
+	string JoinPath(const string &a, const string &b) {
+		// FIXME: sanitize paths
+		return a + PathSeparator() + b;
+	}
+} // namespace duckdb
