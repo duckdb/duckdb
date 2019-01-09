@@ -52,11 +52,11 @@ public:
 //! The ExpressionEqualityMatcher matches on equality with another (given) expression
 class ExpressionEqualityMatcher : public ExpressionMatcher {
 public:
-	ExpressionEqualityMatcher(Expression *expr) : ExpressionMatcher(ExpressionClass::INVALID), expr(expr) {
+	ExpressionEqualityMatcher(Expression *expr) : ExpressionMatcher(ExpressionClass::INVALID), expression(expr) {
 	}
 
-	bool Match(Expression *expr_, vector<Expression *> &bindings) override {
-		if (!this->expr->Equals(expr)) {
+	bool Match(Expression *expr, vector<Expression *> &bindings) override {
+		if (!expression->Equals(expr)) {
 			return false;
 		}
 		bindings.push_back(expr);
@@ -64,7 +64,7 @@ public:
 	}
 
 private:
-	Expression *expr;
+	Expression *expression;
 };
 
 class ConstantExpressionMatcher : public ExpressionMatcher {

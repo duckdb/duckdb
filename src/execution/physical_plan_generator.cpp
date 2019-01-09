@@ -123,7 +123,6 @@ static unique_ptr<PhysicalOperator> CreateIndexScan(LogicalFilter &filter, Logic
 		auto order_index = (OrderIndex *)index.get();
 		// try to find a matching index for any of the filter expressions
 		auto expr = filter.expressions[0].get();
-		auto comparison_type = expr->type;
 		auto low_comparison_type = expr->type;
 		auto high_comparison_type = expr->type;
 		for (size_t i = 0; i < filter.expressions.size(); i++) {
@@ -138,7 +137,6 @@ static unique_ptr<PhysicalOperator> CreateIndexScan(LogicalFilter &filter, Logic
 			matcher.policy = SetMatcher::Policy::UNORDERED;
 
 			vector<Expression *> bindings;
-
 			if (matcher.Match(expr, bindings)) {
 				// range or equality comparison with constant value
 				// we can use our index here
@@ -151,6 +149,7 @@ static unique_ptr<PhysicalOperator> CreateIndexScan(LogicalFilter &filter, Logic
 				assert(bindings[2]->type == ExpressionType::VALUE_CONSTANT);
 
 				auto constant_value = ((ConstantExpression *)bindings[2])->value;
+				auto comparison_type = comparison->type;
 				if (comparison->right.get() == bindings[1]) {
 					// the expression is on the right side, we flip them around
 					comparison_type = ComparisonExpression::FlipComparisionExpression(comparison_type);
