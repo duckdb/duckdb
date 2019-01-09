@@ -150,19 +150,18 @@ static unique_ptr<LogicalOperator> CreateJoinCondition(unique_ptr<LogicalOperato
                                                        unique_ptr<Expression> expr,
                                                        unordered_set<size_t> &left_bindings,
                                                        unordered_set<size_t> &right_bindings) {
-	if (expr->type >= ExpressionType::COMPARE_EQUAL && expr->type <= ExpressionType::COMPARE_NOTLIKE) {
+	auto total_side = GetJoinSide(*expr, left_bindings, right_bindings);
+	if (total_side != JoinSide::BOTH) {
+		// join condition does not reference both sides, add it as filter under the join
+		int push_side = total_side == JoinSide::LEFT ? 0 : 1;
+		join.children[push_side] = PushFilter(move(join.children[push_side]), move(expr));
+		return op;
+	} else if (expr->type >= ExpressionType::COMPARE_EQUAL && expr->type <= ExpressionType::COMPARE_NOTLIKE) {
 		// comparison
 		auto &comparison = (ComparisonExpression &)*expr;
 		auto left_side = GetJoinSide(*comparison.left, left_bindings, right_bindings);
 		auto right_side = GetJoinSide(*comparison.right, left_bindings, right_bindings);
-		auto total_side = CombineJoinSide(left_side, right_side);
-		// check if we can use this condition as a join condition
-		if (total_side != JoinSide::BOTH) {
-			// join condition does not reference both sides, add it as filter under the join
-			int push_side = total_side == JoinSide::LEFT ? 0 : 1;
-			join.children[push_side] = PushFilter(move(join.children[push_side]), move(expr));
-			return op;
-		} else if (left_side != JoinSide::BOTH && right_side != JoinSide::BOTH) {
+		if (left_side != JoinSide::BOTH && right_side != JoinSide::BOTH) {
 			// join condition can be divided in a left/right side
 			JoinCondition condition;
 			condition.comparison = expr->type;
@@ -198,7 +197,8 @@ static unique_ptr<LogicalOperator> CreateJoinCondition(unique_ptr<LogicalOperato
 			return CreateJoinCondition(move(op), join, move(op_expr.children[0]), left_bindings, right_bindings);
 		}
 	}
-	// unrecognized type for join condition
+	// filter is on both sides of the join
+	// but the type was not recognized
 	// push as filter under the join
 	op = PushFilter(move(op), move(expr));
 	return op;

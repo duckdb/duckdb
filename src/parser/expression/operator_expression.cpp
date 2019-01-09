@@ -93,7 +93,7 @@ string OperatorExpression::ToString() const {
 	auto result = ExpressionTypeToString(type) + "(";
 	for (size_t i = 0; i < children.size(); i++) {
 		result += children[i]->ToString();
-		if (i + 1 == children.size()) {
+		if (i + 1 < children.size()) {
 			result += ", ";
 		} else {
 			result += ")";
