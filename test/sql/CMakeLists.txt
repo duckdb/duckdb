@@ -1,3 +1,4 @@
+add_subdirectory(aggregate)
 add_subdirectory(catalog)
 add_subdirectory(create)
 add_subdirectory(capi)

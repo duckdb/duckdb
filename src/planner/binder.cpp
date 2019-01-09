@@ -25,15 +25,24 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 	return nullptr;
 }
 
-static unique_ptr<Expression> replace_columns_with_group_refs(unique_ptr<Expression> expr,
-                                                              unordered_map<Expression *, size_t> &groups) {
+static unique_ptr<Expression> replace_columns_with_group_refs(
+    unique_ptr<Expression> expr,
+    unordered_map<Expression *, size_t, ExpressionHashFunction, ExpressionEquality> &groups) {
 	if (expr->GetExpressionClass() == ExpressionClass::AGGREGATE) {
 		// already an aggregate, move it back
 		return expr;
 	}
+	// check if the expression is a GroupBy expression
+	auto entry = groups.find(expr.get());
+	if (entry != groups.end()) {
+		auto group = entry->first;
+		// group reference! turn expression into a reference to the group
+		auto group_ref = make_unique<ColumnRefExpression>(group->return_type, entry->second);
+		group_ref->alias = expr->alias.empty() ? group->GetName() : expr->alias;
+		return move(group_ref);
+	}
 	if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
-		// a column reference that is not contained inside an aggrgate
-		// check if it points to a GROUP BY column
+		// a column reference that is not contained inside an aggregate:
 		auto select_column = (ColumnRefExpression *)expr.get();
 		if (select_column->index != (size_t)-1) {
 			// index already assigned, references a GROUP BY column
@@ -41,27 +50,12 @@ static unique_ptr<Expression> replace_columns_with_group_refs(unique_ptr<Express
 		}
 		// check if the column references a group
 		if (select_column->reference) {
-			// there is already an existing reference
 			auto entry = groups.find(select_column->reference);
 			if (entry != groups.end()) {
 				// group reference!
-				auto group_ref = make_unique<ColumnRefExpression>(expr->return_type, entry->second);
+				auto group_ref = make_unique<ColumnRefExpression>(entry->first->return_type, entry->second);
 				group_ref->alias = string(select_column->column_name);
 				return group_ref;
-			}
-		} else {
-			// no existing reference
-			// check if the column matches any of the grouping columns
-			for (auto &entry : groups) {
-				if (entry.first->type == ExpressionType::COLUMN_REF) {
-					auto group_column = (ColumnRefExpression *)entry.first;
-					if (group_column->binding == select_column->binding) {
-						auto group_ref = make_unique<ColumnRefExpression>(entry.first->return_type, entry.second);
-						group_ref->alias =
-						    select_column->alias.empty() ? select_column->column_name : select_column->alias;
-						return group_ref;
-					}
-				}
 			}
 		}
 		// not a GROUP BY column and not part of an aggregate
@@ -184,27 +178,26 @@ void Binder::Visit(SelectNode &statement) {
 		// bind group columns
 		for (auto &group : statement.groupby.groups) {
 			AcceptChild(&group);
+			group->ResolveType();
 		}
 
 		// handle aliases in the GROUP BY columns
-		unordered_map<Expression *, size_t> groups;
+		unordered_map<Expression *, size_t, ExpressionHashFunction, ExpressionEquality> groups;
 		for (size_t i = 0; i < statement.groupby.groups.size(); i++) {
-			auto &group = statement.groupby.groups[i];
-			if (group->type != ExpressionType::COLUMN_REF) {
-				throw BinderException("GROUP BY clause needs to be a column or alias reference.");
+			if (statement.groupby.groups[i]->type == ExpressionType::COLUMN_REF) {
+				auto group_column = reinterpret_cast<ColumnRefExpression *>(statement.groupby.groups[i].get());
+				if (group_column->reference) {
+					// alias reference
+					// move the computation here from the SELECT clause
+					size_t select_index = group_column->index;
+					auto group_ref = make_unique<ColumnRefExpression>(statement.groupby.groups[i]->return_type, i);
+					statement.groupby.groups[i] = move(statement.select_list[select_index]);
+					group_ref->alias = statement.groupby.groups[i]->GetName();
+					// and add a GROUP REF expression to the SELECT clause
+					statement.select_list[select_index] = move(group_ref);
+				}
 			}
-			groups[group.get()] = i;
-			auto group_column = reinterpret_cast<ColumnRefExpression *>(group.get());
-			if (group_column->reference) {
-				// alias reference
-				// move the computation here from the SELECT clause
-				size_t select_index = group_column->index;
-				auto group_ref = make_unique<ColumnRefExpression>(statement.groupby.groups[i]->return_type, i);
-				group_ref->alias = string(group_column->column_name);
-				statement.groupby.groups[i] = move(statement.select_list[select_index]);
-				// and add a GROUP REF expression to the SELECT clause
-				statement.select_list[select_index] = move(group_ref);
-			}
+			groups[statement.groupby.groups[i].get()] = i;
 		}
 
 		// handle column references in the SELECT clause that are not part of aggregates
