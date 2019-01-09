@@ -67,4 +67,13 @@ TEST_CASE("Test out of range/incorrect date formats", "[date]") {
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO dates VALUES ('1992-02-29')"));
 	// day in range because of leapyear
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO dates VALUES ('2000-02-29')"));
+
+	// test incorrect date formats
+	// dd-mm-YYYY
+	REQUIRE_FAIL(con.Query("INSERT INTO dates VALUES ('02-02-1992')"));
+	// different separators are not supported
+	REQUIRE_FAIL(con.Query("INSERT INTO dates VALUES ('1900/01/01')"));
+	REQUIRE_FAIL(con.Query("INSERT INTO dates VALUES ('1900a01a01')"));
+	// this should work though
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO dates VALUES ('1900-1-1')"));
 }

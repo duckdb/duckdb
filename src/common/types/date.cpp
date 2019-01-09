@@ -4,7 +4,6 @@
 
 #include <iomanip>
 #include <iostream>
-#include <locale>
 #include <sstream>
 
 using namespace duckdb;
@@ -100,34 +99,27 @@ static inline int32_t date_to_number(int32_t year, int32_t month, int32_t day) {
 }
 
 int32_t Date::FromString(string str) {
-	tm t = {};
+	int32_t year, month, day;
+	char sep, sep2;
 	istringstream ss(str);
-	ss >> get_time(&t, "%Y-%m-%d");
+	ss >> year;
+	ss >> sep;
+	ss >> month;
+	ss >> sep2;
+	ss >> day;
 
-	int32_t year = 1900 + t.tm_year;
-	int32_t month = 1 + t.tm_mon;
-	int32_t day = t.tm_mday;
-	if (ss.fail() || !IsValidDay(year, month, day)) {
-		throw Exception(StringUtil::Format("date/time field value out of range: \"%s\", "
-		                                   "expected format is (YYYY-MM-DD)",
-		                                   str.c_str()));
+	if (ss.fail() || !IsValidDay(year, month, day) || sep != sep2 || sep != '-') {
+		throw ConversionException("date/time field value out of range: \"%s\", "
+		                          "expected format is (YYYY-MM-DD)",
+		                          str.c_str());
 	}
 	return Date::FromDate(year, month, day);
 }
 
 string Date::ToString(int32_t date) {
-	tm t = {};
-
 	int32_t year, month, day;
 	number_to_date(date, year, month, day);
-
-	t.tm_year = year - 1900;
-	t.tm_mon = month - 1;
-	t.tm_mday = day;
-
-	stringstream ss;
-	ss << put_time(&t, "%Y-%m-%d");
-	return ss.str();
+	return StringUtil::Format("%04d-%02d-%02d", year, month, day);
 }
 
 string Date::Format(int32_t year, int32_t month, int32_t day) {

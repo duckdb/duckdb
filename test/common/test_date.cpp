@@ -24,6 +24,10 @@ TEST_CASE("Date parsing works", "[date]") {
 	REQUIRE(!Date::IsLeapYear(2100));
 	REQUIRE(!Date::IsLeapYear(1993));
 
+	REQUIRE(Date::Format(30, 1, 1) == "0030-01-01");
+	REQUIRE(Date::Format(30000, 1, 1) == "30000-01-01");
+	REQUIRE(Date::Format(-1000, 1, 1) == "-1000-01-01");
+
 	REQUIRE(!Date::IsValidDay(1, 2, 29));
 
 	for (int year = 50; year < 4000; year += 50) {
