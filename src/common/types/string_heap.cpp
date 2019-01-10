@@ -1,5 +1,7 @@
 #include "common/types/string_heap.hpp"
 
+#include "common/exception.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -9,6 +11,11 @@ StringHeap::StringHeap() : tail(nullptr) {
 }
 
 const char *StringHeap::AddString(const char *data, size_t len) {
+#ifdef DEBUG
+	if (!Value::IsUTF8String(data)) {
+		throw Exception("String value is not valid UTF8");
+	}
+#endif
 	if (!chunk || chunk->current_position + len >= chunk->maximum_size) {
 		// have to make a new entry
 		auto new_chunk = make_unique<StringChunk>(std::max(len + 1, (size_t)MINIMUM_HEAP_SIZE));

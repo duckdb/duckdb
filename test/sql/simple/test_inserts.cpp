@@ -150,3 +150,13 @@ TEST_CASE("Test insert from constant query", "[simpleinserts]") {
 	result = con.Query("SELECT * FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {42, Value()}));
 }
+
+TEST_CASE("Test insert with invalid UTF8", "[simpleinserts]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(i STRING)"));
+	REQUIRE_FAIL(con.Query("INSERT INTO strings VALUES ('\xe2\x82\x28')"));
+	REQUIRE_FAIL(con.Query("SELECT * FROM strings WHERE i = '\xe2\x82\x28'"));
+}
