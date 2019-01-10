@@ -68,14 +68,18 @@ public:
 			if (node.count > 1) {
 				// this expression occurs more than once! replace it with a CSE
 				// check if it has already been replaced with a CSE before
+				unique_ptr<CommonSubExpression> cse;
+				string alias = expr->alias.empty() ? expr->GetName() : expr->alias;
 				if (node.expr) {
 					// it has! replace it with a CSE that just refers to this child
-					return make_unique<CommonSubExpression>(node.expr);
+					cse = make_unique<CommonSubExpression>(node.expr);
 				} else {
 					// it has not! create the CSE with the ownership of this node
 					node.expr = expr.get();
-					return make_unique<CommonSubExpression>(move(expr));
+					cse = make_unique<CommonSubExpression>(move(expr));
 				}
+				cse->alias = alias;
+				return cse;
 			}
 			// this expression only occurs once, we can't perform CSE elimination
 			// look into the children to see if it is possible
