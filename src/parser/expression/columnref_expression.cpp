@@ -55,7 +55,11 @@ bool ColumnRefExpression::Equals(const Expression *other_) const {
 		return false;
 	}
 	auto other = (ColumnRefExpression *)other_;
-	return column_name == other->column_name && table_name == other->table_name;
+	if (index != (size_t) -1) {
+		return index == other->index;
+	} else {
+		return column_name == other->column_name && table_name == other->table_name;
+	}
 }
 
 uint64_t ColumnRefExpression::Hash() const {
