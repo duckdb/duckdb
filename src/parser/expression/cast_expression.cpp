@@ -32,11 +32,17 @@ bool CastExpression::Equals(const Expression *other_) const {
 	return true;
 }
 
-void CastExpression::EnumerateChildren(
-    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
-	child = callback(move(child));
+size_t CastExpression::ChildCount() const {
+	return 1;
 }
 
-void CastExpression::EnumerateChildren(std::function<void(Expression *expression)> callback) const {
-	callback(child.get());
+Expression *CastExpression::GetChild(size_t index) const {
+	assert(index == 0);
+	return child.get();
+}
+
+void CastExpression::ReplaceChild(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
+                                  size_t index) {
+	assert(index == 0);
+	child = callback(move(child));
 }

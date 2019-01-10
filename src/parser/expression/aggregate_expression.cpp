@@ -149,15 +149,17 @@ string AggregateExpression::GetName() const {
 	}
 }
 
-void AggregateExpression::EnumerateChildren(
-    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
-	if (child) {
-		child = callback(move(child));
-	}
+size_t AggregateExpression::ChildCount() const {
+	return child ? 1 : 0;
 }
 
-void AggregateExpression::EnumerateChildren(std::function<void(Expression *expression)> callback) const {
-	if (child) {
-		callback(child.get());
-	}
+Expression *AggregateExpression::GetChild(size_t index) const {
+	assert(index == 0);
+	return child.get();
+}
+
+void AggregateExpression::ReplaceChild(
+    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, size_t index) {
+	assert(index == 0);
+	child = callback(move(child));
 }

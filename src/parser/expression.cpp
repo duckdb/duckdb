@@ -46,6 +46,19 @@ bool Expression::HasSubquery() {
 	return has_subquery;
 }
 
+size_t Expression::ChildCount() const {
+	return 0;
+}
+
+Expression *Expression::GetChild(size_t index) const {
+	throw OutOfRangeException("Expression child index out of range!");
+}
+
+void Expression::ReplaceChild(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
+                              size_t index) {
+	throw OutOfRangeException("Expression child index out of range!");
+}
+
 bool Expression::Equals(const Expression *other) const {
 	if (!other) {
 		return false;
@@ -53,7 +66,17 @@ bool Expression::Equals(const Expression *other) const {
 	if (this->type != other->type) {
 		return false;
 	}
+	if (this->return_type != other->return_type) {
+		return false;
+	}
 	return true;
+}
+
+uint64_t Expression::Hash() const {
+	uint64_t hash = duckdb::Hash<uint32_t>((uint32_t)type);
+	hash = duckdb::CombineHash(hash, duckdb::Hash<uint32_t>((uint32_t)return_type));
+	EnumerateChildren([&](Expression *child) { hash = CombineHash(child->Hash(), hash); });
+	return hash;
 }
 
 void Expression::Serialize(Serializer &serializer) {
@@ -115,10 +138,4 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &source) {
 	result->return_type = return_type;
 	result->alias = alias;
 	return result;
-}
-
-uint64_t Expression::Hash() const {
-	uint64_t hash = duckdb::Hash<uint32_t>((uint32_t)type);
-	EnumerateChildren([&](Expression *child) { hash = CombineHash(child->Hash(), hash); });
-	return hash;
 }

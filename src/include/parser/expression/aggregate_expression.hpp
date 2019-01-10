@@ -47,8 +47,10 @@ public:
 
 	bool Equals(const Expression *other) const override;
 
-	void EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) override;
-	void EnumerateChildren(std::function<void(Expression *expression)> callback) const override;
+	size_t ChildCount() const override;
+	Expression *GetChild(size_t index) const override;
+	void ReplaceChild(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
+	                  size_t index) override;
 
 	size_t index;
 	//! The child of the aggregate expression

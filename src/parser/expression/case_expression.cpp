@@ -53,15 +53,34 @@ bool CaseExpression::Equals(const Expression *other_) const {
 	return true;
 }
 
-void CaseExpression::EnumerateChildren(
-    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
-	check = callback(move(check));
-	result_if_true = callback(move(result_if_true));
-	result_if_false = callback(move(result_if_false));
+size_t CaseExpression::ChildCount() const {
+	return 3;
 }
 
-void CaseExpression::EnumerateChildren(std::function<void(Expression *expression)> callback) const {
-	callback(check.get());
-	callback(result_if_true.get());
-	callback(result_if_false.get());
+Expression *CaseExpression::GetChild(size_t index) const {
+	switch (index) {
+	case 0:
+		return check.get();
+	case 1:
+		return result_if_true.get();
+	default:
+		assert(index == 2);
+		return result_if_false.get();
+	}
+}
+
+void CaseExpression::ReplaceChild(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
+                                  size_t index) {
+	switch (index) {
+	case 0:
+		check = callback(move(check));
+		break;
+	case 1:
+		result_if_true = callback(move(result_if_true));
+		break;
+	default:
+		assert(index == 2);
+		result_if_false = callback(move(result_if_false));
+		break;
+	}
 }

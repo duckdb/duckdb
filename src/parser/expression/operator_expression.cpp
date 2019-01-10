@@ -102,15 +102,17 @@ string OperatorExpression::ToString() const {
 	return result;
 }
 
-void OperatorExpression::EnumerateChildren(
-    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
-	for (size_t i = 0; i < children.size(); i++) {
-		children[i] = callback(move(children[i]));
-	}
+size_t OperatorExpression::ChildCount() const {
+	return children.size();
 }
 
-void OperatorExpression::EnumerateChildren(std::function<void(Expression *expression)> callback) const {
-	for (size_t i = 0; i < children.size(); i++) {
-		callback(children[i].get());
-	}
+Expression *OperatorExpression::GetChild(size_t index) const {
+	assert(index < children.size());
+	return children[index].get();
+}
+
+void OperatorExpression::ReplaceChild(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
+                                      size_t index) {
+	assert(index < children.size());
+	children[index] = callback(move(children[index]));
 }

@@ -98,11 +98,29 @@ public:
 	static unique_ptr<Expression> Deserialize(Deserializer &source);
 
 	//! Enumerate over all children of this node, invoking the callback for each child. This method allows replacing the
-	//! children using the return value.
-	virtual void
-	EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) = 0;
+	//! children using the return value. [NOTE: inside the callback, the current Expression can be corrupted as the
+	//! children are moved away leaving the expression with NULL children where non-NULL children are expected!]
+	void EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
+		for (size_t i = 0, child_count = ChildCount(); i < child_count; i++) {
+			ReplaceChild(callback, i);
+		}
+	}
 	//! Enumerate over all children of this node, invoking the callback for each child.
-	virtual void EnumerateChildren(std::function<void(Expression *expression)> callback) const = 0;
+	void EnumerateChildren(std::function<void(Expression *expression)> callback) const {
+		for (size_t i = 0, child_count = ChildCount(); i < child_count; i++) {
+			callback(GetChild(i));
+		}
+	}
+	//! Returns the amount of children of a node
+	virtual size_t ChildCount() const;
+	//! Returns the i'th child of the expression, or throws an exception if it is out of range
+	virtual Expression *GetChild(size_t index) const;
+	//! Replaces the i'th child of this expression. This calls the callback() function with as input the i'th child, and
+	//! the return value will be the new child of the expression. [NOTE: inside the callback, the current Expression can
+	//! be corrupted as the children are moved away leaving the expression with NULL children where non-NULL children
+	//! are expected!]
+	virtual void ReplaceChild(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
+	                          size_t index);
 
 	//! Clears the statistics of this expression and all child expressions
 	void ClearStatistics() {
@@ -122,13 +140,6 @@ public:
 		}
 		// otherwise we use the normal equality
 		return left->Equals(right);
-	}
-
-	//! Returns true if the expression has children, and false otherwise
-	bool HasChildren() const {
-		bool has_children = false;
-		EnumerateChildren([&](Expression *op) { has_children = true; });
-		return has_children;
 	}
 
 	//! Type of the expression

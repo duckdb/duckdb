@@ -39,13 +39,25 @@ bool ConjunctionExpression::Equals(const Expression *other_) const {
 	return false;
 }
 
-void ConjunctionExpression::EnumerateChildren(
-    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
-	left = callback(move(left));
-	right = callback(move(right));
+size_t ConjunctionExpression::ChildCount() const {
+	return 2;
 }
 
-void ConjunctionExpression::EnumerateChildren(std::function<void(Expression *expression)> callback) const {
-	callback(left.get());
-	callback(right.get());
+Expression *ConjunctionExpression::GetChild(size_t index) const {
+	if (index == 0) {
+		return left.get();
+	} else {
+		assert(index == 1);
+		return right.get();
+	}
+}
+
+void ConjunctionExpression::ReplaceChild(
+    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, size_t index) {
+	if (index == 0) {
+		left = callback(move(left));
+	} else {
+		assert(index == 1);
+		right = callback(move(right));
+	}
 }

@@ -45,7 +45,7 @@ public:
 	};
 	typedef unordered_map<Expression *, CSENode, ExpressionHashFunction, ExpressionEquality> expression_map_t;
 	void CountExpressions(Expression *expr, expression_map_t &expression_count) {
-		if (expr->HasChildren()) {
+		if (expr->ChildCount() > 0) {
 			// we only consider expressions with children for CSE elimination
 			auto node = expression_count.find(expr);
 			if (node == expression_count.end()) {
@@ -60,34 +60,49 @@ public:
 		}
 	}
 
-	unique_ptr<Expression> PerformCSEElimination(unique_ptr<Expression> expr, expression_map_t &expression_count) {
-		if (expr->HasChildren()) {
+	Expression *PerformCSEReplacement(Expression *expr, expression_map_t &expression_count) {
+		if (expr->ChildCount() > 0) {
 			// check if this child is eligible for CSE elimination
-			assert(expression_count.find(expr.get()) != expression_count.end());
-			auto &node = expression_count[expr.get()];
+			assert(expression_count.find(expr) != expression_count.end());
+			auto &node = expression_count[expr];
 			if (node.count > 1) {
 				// this expression occurs more than once! replace it with a CSE
 				// check if it has already been replaced with a CSE before
-				unique_ptr<CommonSubExpression> cse;
-				string alias = expr->alias.empty() ? expr->GetName() : expr->alias;
-				if (node.expr) {
-					// it has! replace it with a CSE that just refers to this child
-					cse = make_unique<CommonSubExpression>(node.expr);
-				} else {
+				if (!node.expr) {
 					// it has not! create the CSE with the ownership of this node
-					node.expr = expr.get();
-					cse = make_unique<CommonSubExpression>(move(expr));
+					node.expr = expr;
 				}
-				cse->alias = alias;
-				return cse;
+				return node.expr;
 			}
 			// this expression only occurs once, we can't perform CSE elimination
-			// look into the children to see if it is possible
-			expr->EnumerateChildren([&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
-				return PerformCSEElimination(move(child), expression_count);
-			});
+			// look into the children to see if we can replace them
+			for (size_t i = 0, child_count = expr->ChildCount(); i < child_count; i++) {
+				auto child = expr->GetChild(i);
+				auto cse_replacement = PerformCSEReplacement(child, expression_count);
+				if (cse_replacement) {
+					// we can replace the child with a Common SubExpression
+					auto alias = child->alias.empty() ? child->GetName() : child->alias;
+					if (cse_replacement == child) {
+						// we have to move the expression into the CSE because it is the first CSE created for this
+						// expression
+						expr->ReplaceChild(
+						    [&](unique_ptr<Expression> expr) -> unique_ptr<Expression> {
+							    return make_unique<CommonSubExpression>(move(expr), alias);
+						    },
+						    i);
+					} else {
+						// there already exists a CSE node for this expression
+						expr->ReplaceChild(
+						    [&](unique_ptr<Expression> expr) -> unique_ptr<Expression> {
+							    return make_unique<CommonSubExpression>(cse_replacement, alias);
+						    },
+						    i);
+					}
+				}
+			}
 		}
-		return expr;
+		return nullptr;
+		;
 	}
 
 	//! Main method to extract common subexpressions
@@ -99,7 +114,16 @@ public:
 		}
 		// now we iterate over all the expressions and perform the actual CSE elimination
 		for (size_t i = 0; i < op.expressions.size(); i++) {
-			op.expressions[i] = PerformCSEElimination(move(op.expressions[i]), expression_count);
+			auto child = op.expressions[i].get();
+			auto cse_replacement = PerformCSEReplacement(child, expression_count);
+			if (cse_replacement) {
+				auto alias = child->alias.empty() ? child->GetName() : child->alias;
+				if (cse_replacement == child) {
+					op.expressions[i] = make_unique<CommonSubExpression>(move(op.expressions[i]), alias);
+				} else {
+					op.expressions[i] = make_unique<CommonSubExpression>(cse_replacement, alias);
+				}
+			}
 		}
 	}
 

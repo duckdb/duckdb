@@ -46,17 +46,19 @@ uint64_t FunctionExpression::Hash() const {
 	return result;
 }
 
-void FunctionExpression::EnumerateChildren(
-    function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) {
-	for (size_t i = 0; i < children.size(); i++) {
-		children[i] = callback(move(children[i]));
-	}
+size_t FunctionExpression::ChildCount() const {
+	return children.size();
 }
 
-void FunctionExpression::EnumerateChildren(function<void(Expression *expression)> callback) const {
-	for (size_t i = 0; i < children.size(); i++) {
-		callback(children[i].get());
-	}
+Expression *FunctionExpression::GetChild(size_t index) const {
+	assert(index < children.size());
+	return children[index].get();
+}
+
+void FunctionExpression::ReplaceChild(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
+                                      size_t index) {
+	assert(index < children.size());
+	children[index] = callback(move(children[index]));
 }
 
 void FunctionExpression::Serialize(Serializer &serializer) {

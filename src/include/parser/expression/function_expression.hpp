@@ -36,8 +36,10 @@ public:
 	uint64_t Hash() const override;
 	bool Equals(const Expression *other) const override;
 
-	void EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) override;
-	void EnumerateChildren(std::function<void(Expression *expression)> callback) const override;
+	size_t ChildCount() const override;
+	Expression *GetChild(size_t index) const override;
+	void ReplaceChild(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
+	                  size_t index) override;
 
 	//! Serializes a FunctionExpression to a stand-alone binary blob
 	void Serialize(Serializer &serializer) override;

@@ -16,14 +16,18 @@ namespace duckdb {
 //! or copied.
 class CommonSubExpression : public Expression {
 public:
-	CommonSubExpression(unique_ptr<Expression> child)
+	CommonSubExpression(unique_ptr<Expression> child, string alias)
 	    : Expression(ExpressionType::COMMON_SUBEXPRESSION, child->return_type) {
 		this->child = child.get();
 		this->owned_child = move(child);
+		this->alias = alias;
+		return_type = this->child->return_type;
 		assert(this->child);
 	}
-	CommonSubExpression(Expression *child)
+	CommonSubExpression(Expression *child, string alias)
 	    : Expression(ExpressionType::COMMON_SUBEXPRESSION, child->return_type), child(child) {
+		this->alias = alias;
+		return_type = this->child->return_type;
 		assert(child);
 	}
 
@@ -34,8 +38,10 @@ public:
 
 	unique_ptr<Expression> Copy() override;
 
-	void EnumerateChildren(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback) override;
-	void EnumerateChildren(std::function<void(Expression *expression)> callback) const override;
+	size_t ChildCount() const override;
+	Expression *GetChild(size_t index) const override;
+	void ReplaceChild(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
+	                  size_t index) override;
 
 	void Serialize(Serializer &serializer) override;
 
