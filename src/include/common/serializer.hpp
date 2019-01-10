@@ -51,7 +51,7 @@ public:
 	}
 
 	void WriteString(const string &val) {
-		Write<uint32_t>(val.size());
+		Write<uint32_t>((uint32_t)val.size());
 		if (val.size() > 0) {
 			PotentialResize(val.size());
 
