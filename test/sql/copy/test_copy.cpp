@@ -60,10 +60,18 @@ TEST_CASE("Test Copy statement", "[copystatement]") {
 	result = con.Query("COPY test FROM 'null.csv' DELIMITER '|';");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
+	// test invalid UTF8
+	ofstream from_csv_file_utf("invalid_utf.csv");
+	for (int i = 0; i < 1; i++)
+		from_csv_file_utf << i << "42|42|\xe2\x82\x28" << endl;
+	from_csv_file_utf.close();
+	REQUIRE_FAIL(con.Query("COPY test FROM 'invalid_utf.csv' DELIMITER '|';"));
+
 	remove("test.csv");
 	remove("test2.csv");
 	remove("test3.csv");
 	remove("test4.csv");
 	remove("test_pipe.csv");
 	remove("null.csv");
+	remove("invalid_utf.csv");
 }

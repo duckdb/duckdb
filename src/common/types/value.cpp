@@ -442,3 +442,31 @@ Value Value::Deserialize(Deserializer &source) {
 	}
 	return new_value;
 }
+
+// adapted from MonetDB's str.c
+bool Value::IsUTF8String(const char *s) {
+	int c;
+
+	if (s == NULL)
+		return true;
+	if (*s == '\200' && s[1] == '\0')
+		return true; /* str_nil */
+	while ((c = *s++) != '\0') {
+		if ((c & 0x80) == 0)
+			continue;
+		if ((*s++ & 0xC0) != 0x80)
+			return false;
+		if ((c & 0xE0) == 0xC0)
+			continue;
+		if ((*s++ & 0xC0) != 0x80)
+			return false;
+		if ((c & 0xF0) == 0xE0)
+			continue;
+		if ((*s++ & 0xC0) != 0x80)
+			return false;
+		if ((c & 0xF8) == 0xF0)
+			continue;
+		return false;
+	}
+	return true;
+}

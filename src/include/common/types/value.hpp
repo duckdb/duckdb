@@ -9,6 +9,7 @@
 #pragma once
 
 #include "common/common.hpp"
+#include "common/exception.hpp"
 #include "common/printable.hpp"
 #include "common/types/date.hpp"
 
@@ -37,7 +38,12 @@ public:
 	Value(const char *val) : Value(val ? string(val) : string()) {
 	}
 	//! Create a VARCHAR value
-	Value(string val) : type(TypeId::VARCHAR), is_null(false), str_value(val) {
+	Value(string val) : type(TypeId::VARCHAR), is_null(false) {
+		if (IsUTF8String(val.c_str())) {
+			str_value = val;
+		} else {
+			throw Exception("String value is not valid UTF8");
+		}
 	}
 	Value(const Value &other);
 
@@ -127,6 +133,8 @@ public:
 	bool operator>(const int64_t &rhs) const;
 	bool operator<=(const int64_t &rhs) const;
 	bool operator>=(const int64_t &rhs) const;
+
+	static bool IsUTF8String(const char *s);
 
 private:
 	//! Templated helper function for casting
