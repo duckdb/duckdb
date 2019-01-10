@@ -1,8 +1,6 @@
 #include "catch.hpp"
 #include "common/types/vector.hpp"
 
-#include <vector>
-
 using namespace duckdb;
 using namespace std;
 
