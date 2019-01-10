@@ -30,6 +30,10 @@ unique_ptr<Expression> SQLNodeVisitor::Visit(CastExpression &expr) {
 	expr.AcceptChildren(this);
 	return nullptr;
 }
+unique_ptr<Expression> SQLNodeVisitor::Visit(CommonSubExpression &expr) {
+	expr.AcceptChildren(this);
+	return nullptr;
+}
 unique_ptr<Expression> SQLNodeVisitor::Visit(ColumnRefExpression &expr) {
 	expr.AcceptChildren(this);
 	return nullptr;

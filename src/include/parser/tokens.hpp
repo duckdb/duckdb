@@ -44,6 +44,7 @@ class Expression;
 class AggregateExpression;
 class CaseExpression;
 class CastExpression;
+class CommonSubExpression;
 class ColumnRefExpression;
 class ComparisonExpression;
 class ConjunctionExpression;

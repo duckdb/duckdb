@@ -72,6 +72,7 @@ public:
 	virtual unique_ptr<Expression> Visit(AggregateExpression &expr);
 	virtual unique_ptr<Expression> Visit(CaseExpression &expr);
 	virtual unique_ptr<Expression> Visit(CastExpression &expr);
+	virtual unique_ptr<Expression> Visit(CommonSubExpression &expr);
 	virtual unique_ptr<Expression> Visit(ColumnRefExpression &expr);
 	virtual unique_ptr<Expression> Visit(ComparisonExpression &expr);
 	virtual unique_ptr<Expression> Visit(ConjunctionExpression &expr);

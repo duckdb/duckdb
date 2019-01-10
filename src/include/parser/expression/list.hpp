@@ -2,6 +2,7 @@
 #include "parser/expression/case_expression.hpp"
 #include "parser/expression/cast_expression.hpp"
 #include "parser/expression/columnref_expression.hpp"
+#include "parser/expression/common_subexpression.hpp"
 #include "parser/expression/comparison_expression.hpp"
 #include "parser/expression/conjunction_expression.hpp"
 #include "parser/expression/constant_expression.hpp"

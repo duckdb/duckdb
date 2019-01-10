@@ -191,7 +191,8 @@ enum class ExpressionType : uint8_t {
 	// -----------------------------
 	// Miscellaneous
 	// -----------------------------
-	CAST = 225
+	CAST = 225,
+	COMMON_SUBEXPRESSION = 226
 };
 
 //===--------------------------------------------------------------------===//
@@ -212,7 +213,8 @@ enum class ExpressionClass : uint8_t {
 	OPERATOR = 12,
 	STAR = 13,
 	SUBQUERY = 14,
-	WINDOW = 15
+	WINDOW = 15,
+	COMMON_SUBEXPRESSION = 16
 };
 
 //===--------------------------------------------------------------------===//

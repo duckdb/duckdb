@@ -61,6 +61,7 @@ public:
 	unique_ptr<Expression> Visit(CaseExpression &expr);
 	unique_ptr<Expression> Visit(CastExpression &expr);
 	unique_ptr<Expression> Visit(ColumnRefExpression &expr);
+	unique_ptr<Expression> Visit(CommonSubExpression &expr);
 	unique_ptr<Expression> Visit(ComparisonExpression &expr);
 	unique_ptr<Expression> Visit(ConjunctionExpression &expr);
 	unique_ptr<Expression> Visit(ConstantExpression &expr);
@@ -74,6 +75,8 @@ public:
 private:
 	ClientContext &context;
 
+	//! The cached result of already-computed Common Subexpression results
+	unordered_map<Expression *, unique_ptr<Vector>> cached_cse;
 	//! Whether or not the ExpressionExecutor is a scalar executor (i.e. output
 	//! size = input size), this is true for e.g. expressions in the SELECT
 	//! clause without aggregations

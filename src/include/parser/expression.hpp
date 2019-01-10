@@ -124,6 +124,13 @@ public:
 		return left->Equals(right);
 	}
 
+	//! Returns true if the expression has children, and false otherwise
+	bool HasChildren() const {
+		bool has_children = false;
+		EnumerateChildren([&](Expression *op) { has_children = true; });
+		return has_children;
+	}
+
 	//! Type of the expression
 	ExpressionType type;
 	//! Return type of the expression. This must be known in the execution

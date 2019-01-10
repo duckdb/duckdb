@@ -15,6 +15,7 @@ bool IsNullValue(uint8_t *ptr, TypeId type) {
 //! Writes NullValue<T> value of a specific type to a memory address
 void SetNullValue(uint8_t *ptr, TypeId type) {
 	switch (type) {
+	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
 		*((int8_t *)ptr) = NullValue<int8_t>();
 		break;
@@ -40,7 +41,7 @@ void SetNullValue(uint8_t *ptr, TypeId type) {
 		*((const char **)ptr) = NullValue<const char *>();
 		break;
 	default:
-		throw InvalidTypeException(type, "Non-integer type in HT initialization!");
+		throw InvalidTypeException(type, "Unsupported type for SetNullValue!");
 	}
 }
 
