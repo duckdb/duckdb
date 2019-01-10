@@ -7,14 +7,14 @@ using namespace std;
 
 unique_ptr<Expression> ExpressionExecutor::Visit(CommonSubExpression &expr) {
 	// check if the CSE has already been executed
-	auto entry = cached_cse.find(expr.child);
-	if (entry != cached_cse.end()) {
+	auto entry = state->cached_cse.find(expr.child);
+	if (entry != state->cached_cse.end()) {
 		// already existed, just reference the stored vector!
 		vector.Reference(*(entry->second));
 	} else {
 		// else execute it
 		expr.child->Accept(this);
-		auto it = cached_cse.insert(make_pair(expr.child, make_unique<Vector>()));
+		auto it = state->cached_cse.insert(make_pair(expr.child, make_unique<Vector>()));
 		auto &inserted_vector = *(it.first->second);
 		// move the result data to the vector cached in the CSE map
 		vector.Move(inserted_vector);

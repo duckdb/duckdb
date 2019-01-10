@@ -331,6 +331,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "COMPARE_NOT_BETWEEN";
 	case ExpressionType::VALUE_DEFAULT:
 		return "VALUE_DEFAULT";
+	case ExpressionType::COMMON_SUBEXPRESSION:
+		return "COMMON_SUBEXPRESSION";
 	case ExpressionType::INVALID:
 		break;
 	}

@@ -38,6 +38,8 @@ public:
 	DataChunk child_chunk;
 	//! State of the child of this operator
 	unique_ptr<PhysicalOperatorState> child_state;
+	//! The cached result of already-computed Common Subexpression results
+	unordered_map<Expression *, unique_ptr<Vector>> cached_cse;
 
 	ExpressionExecutor *parent;
 };

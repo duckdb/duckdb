@@ -30,6 +30,9 @@ public:
 	ExpressionExecutor(PhysicalOperatorState *state, ClientContext &context, bool scalar_executor = true)
 	    : context(context), scalar_executor(scalar_executor), chunk(state ? &state->child_chunk : nullptr),
 	      parent(state ? state->parent : nullptr), state(state) {
+		if (state) {
+			state->cached_cse.clear();
+		}
 	}
 
 	ExpressionExecutor(DataChunk &child_chunk, ClientContext &context, ExpressionExecutor *parent = nullptr)
@@ -75,8 +78,6 @@ public:
 private:
 	ClientContext &context;
 
-	//! The cached result of already-computed Common Subexpression results
-	unordered_map<Expression *, unique_ptr<Vector>> cached_cse;
 	//! Whether or not the ExpressionExecutor is a scalar executor (i.e. output
 	//! size = input size), this is true for e.g. expressions in the SELECT
 	//! clause without aggregations
