@@ -30,29 +30,33 @@ public:
 	    : bind_context(make_unique<BindContext>()), context(context), parent(parent) {
 	}
 
-	void Visit(SelectStatement &statement);
-	void Visit(InsertStatement &stmt);
-	void Visit(CopyStatement &stmt);
-	void Visit(DeleteStatement &stmt);
-	void Visit(UpdateStatement &stmt);
-	void Visit(AlterTableStatement &stmt);
-	void Visit(CreateTableStatement &stmt);
-	void Visit(CreateIndexStatement &stmt);
+	void Bind(SQLStatement &statement);
+protected:
+	void Bind(SelectStatement &statement);
+	void Bind(InsertStatement &stmt);
+	void Bind(CopyStatement &stmt);
+	void Bind(DeleteStatement &stmt);
+	void Bind(UpdateStatement &stmt);
+	void Bind(AlterTableStatement &stmt);
+	void Bind(CreateTableStatement &stmt);
+	void Bind(CreateIndexStatement &stmt);
 
-	void Visit(SelectNode &node);
-	void Visit(SetOperationNode &node);
+	void Bind(QueryNode& node);
+	void Bind(SelectNode &node);
+	void Bind(SetOperationNode &node);
 
-	void Visit(CheckConstraint &constraint);
+	void Visit(ColumnRefExpression &expr) override;
+	void Visit(FunctionExpression &expr) override;
+	void Visit(SubqueryExpression &expr) override;
+public:
+	void Visit(CheckConstraint &constraint) override;
 
-	void Visit(ColumnRefExpression &expr);
-	void Visit(FunctionExpression &expr);
-	void Visit(SubqueryExpression &expr);
 
-	unique_ptr<TableRef> Visit(BaseTableRef &expr);
-	unique_ptr<TableRef> Visit(CrossProductRef &expr);
-	unique_ptr<TableRef> Visit(JoinRef &expr);
-	unique_ptr<TableRef> Visit(SubqueryRef &expr);
-	unique_ptr<TableRef> Visit(TableFunction &expr);
+	unique_ptr<TableRef> Visit(BaseTableRef &expr) override;
+	unique_ptr<TableRef> Visit(CrossProductRef &expr) override;
+	unique_ptr<TableRef> Visit(JoinRef &expr) override;
+	unique_ptr<TableRef> Visit(SubqueryRef &expr) override;
+	unique_ptr<TableRef> Visit(TableFunction &expr) override;
 
 	void AddCTE(const string &name, QueryNode *cte);
 	unique_ptr<QueryNode> FindCTE(const string &name);

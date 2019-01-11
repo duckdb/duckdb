@@ -23,10 +23,7 @@ public:
 	string ToString() const override {
 		return "CREATE INDEX";
 	}
-	void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
-	}
-
+	
 	//! The table to create the index on
 	unique_ptr<BaseTableRef> table;
 	//! Set of expressions to index by

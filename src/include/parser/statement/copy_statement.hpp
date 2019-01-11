@@ -22,10 +22,7 @@ public:
 	CopyStatement() : SQLStatement(StatementType::COPY){};
 
 	string ToString() const override;
-	void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
-	}
-
+	
 	bool Equals(const SQLStatement *other_) const override {
 		if (!SQLStatement::Equals(other_)) {
 			return false;

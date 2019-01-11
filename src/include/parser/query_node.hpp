@@ -50,8 +50,6 @@ public:
 	virtual ~QueryNode() {
 	}
 
-	virtual void Accept(SQLNodeVisitor *) = 0;
-
 	virtual bool Equals(const QueryNode *other) const;
 
 	//! Create a copy of this QueryNode

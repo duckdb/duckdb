@@ -67,39 +67,6 @@ protected:
 	virtual unique_ptr<Expression> VisitReplace(WindowExpression &expr);
 
 public:
-	virtual void Visit(CopyStatement &) {
-	}
-	virtual void Visit(AlterTableStatement &) {
-	}
-	virtual void Visit(CreateIndexStatement &) {
-	}
-	virtual void Visit(CreateSchemaStatement &) {
-	}
-	virtual void Visit(CreateTableStatement &) {
-	}
-	virtual void Visit(DeleteStatement &) {
-	}
-	virtual void Visit(DropSchemaStatement &) {
-	}
-	virtual void Visit(DropTableStatement &) {
-	}
-	virtual void Visit(DropIndexStatement &) {
-	}
-	virtual void Visit(InsertStatement &) {
-	}
-	virtual void Visit(SelectStatement &) {
-	}
-	virtual void Visit(TransactionStatement &) {
-	}
-	virtual void Visit(UpdateStatement &) {
-	}
-
-	virtual void Visit(SelectNode &node) {
-	}
-	virtual void Visit(SetOperationNode &node) {
-	}
-
-
 	virtual void Visit(NotNullConstraint &expr) {
 	}
 	virtual void Visit(CheckConstraint &expr);

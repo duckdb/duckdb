@@ -13,7 +13,47 @@
 using namespace duckdb;
 using namespace std;
 
-void LogicalPlanGenerator::Visit(CreateTableStatement &statement) {
+
+void LogicalPlanGenerator::CreatePlan(SQLStatement &statement) {
+	switch(statement.type) {
+	case StatementType::SELECT:
+		CreatePlan((SelectStatement&) statement);
+		break;
+	case StatementType::INSERT:
+		CreatePlan((InsertStatement&) statement);
+		break;
+	case StatementType::COPY:
+		CreatePlan((CopyStatement&) statement);
+		break;
+	case StatementType::DELETE:
+		CreatePlan((DeleteStatement&) statement);
+		break;
+	case StatementType::UPDATE:
+		CreatePlan((UpdateStatement&) statement);
+		break;
+	case StatementType::ALTER:
+		CreatePlan((AlterTableStatement&) statement);
+		break;
+	case StatementType::CREATE_TABLE:
+		CreatePlan((CreateTableStatement&) statement);
+		break;
+	default:
+		assert(statement.type == StatementType::CREATE_INDEX);
+		CreatePlan((CreateIndexStatement&) statement);
+		break;
+	}
+}
+
+void LogicalPlanGenerator::CreatePlan(QueryNode &node) {
+	if (node.type == QueryNodeType::SELECT_NODE) {
+		CreatePlan((SelectNode&) node);
+	} else {
+		assert(node.type == QueryNodeType::SET_OPERATION_NODE);
+		CreatePlan((SetOperationNode&) node);
+	}
+}
+
+void LogicalPlanGenerator::CreatePlan(CreateTableStatement &statement) {
 	if (root) {
 		throw Exception("CREATE TABLE from SELECT not supported yet!");
 	}
@@ -23,7 +63,7 @@ void LogicalPlanGenerator::Visit(CreateTableStatement &statement) {
 	root = make_unique<LogicalCreate>(schema, move(statement.info));
 }
 
-void LogicalPlanGenerator::Visit(CreateIndexStatement &statement) {
+void LogicalPlanGenerator::CreatePlan(CreateIndexStatement &statement) {
 	// first we visit the base table
 	statement.table->Accept(this);
 	// this gives us a logical table scan
@@ -39,7 +79,7 @@ void LogicalPlanGenerator::Visit(CreateIndexStatement &statement) {
 	root = make_unique<LogicalCreateIndex>(*table, column_ids, move(statement.expressions), move(statement.info));
 }
 
-void LogicalPlanGenerator::Visit(UpdateStatement &statement) {
+void LogicalPlanGenerator::CreatePlan(UpdateStatement &statement) {
 	// we require row ids for the deletion
 	require_row_id = true;
 	// create the table scan
@@ -101,7 +141,7 @@ void LogicalPlanGenerator::Visit(UpdateStatement &statement) {
 	root = move(update);
 }
 
-void LogicalPlanGenerator::Visit(DeleteStatement &statement) {
+void LogicalPlanGenerator::CreatePlan(DeleteStatement &statement) {
 	// we require row ids for the deletion
 	require_row_id = true;
 	// create the table scan
@@ -123,9 +163,9 @@ void LogicalPlanGenerator::Visit(DeleteStatement &statement) {
 	root = move(del);
 }
 
-void LogicalPlanGenerator::Visit(SelectStatement &statement) {
+void LogicalPlanGenerator::CreatePlan(SelectStatement &statement) {
 	auto expected_column_count = statement.node->GetSelectCount();
-	statement.node->Accept(this);
+	CreatePlan(*statement.node);
 	// prune the root node
 	assert(root);
 	auto prune = make_unique<LogicalPruneColumns>(expected_column_count);
@@ -205,7 +245,7 @@ static unique_ptr<Expression> extract_windows(unique_ptr<Expression> expr, vecto
 	return expr;
 }
 
-void LogicalPlanGenerator::Visit(SelectNode &statement) {
+void LogicalPlanGenerator::CreatePlan(SelectNode &statement) {
 	for (auto &expr : statement.select_list) {
 		VisitExpression(&expr);
 	}
@@ -276,6 +316,8 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 	auto proj = make_unique<LogicalProjection>(move(statement.select_list));
 	proj->AddChild(move(root));
 	root = move(proj);
+
+	// finish the plan by handling the elements of the QueryNode
 	VisitQueryNode(statement);
 }
 
@@ -330,7 +372,7 @@ static unique_ptr<LogicalOperator> CastSetOpToTypes(vector<TypeId> &types, uniqu
 	}
 }
 
-void LogicalPlanGenerator::Visit(SetOperationNode &statement) {
+void LogicalPlanGenerator::CreatePlan(SetOperationNode &statement) {
 	// Generate the logical plan for the left and right sides of the set operation
 	LogicalPlanGenerator generator_left(context, *statement.setop_left_binder);
 	LogicalPlanGenerator generator_right(context, *statement.setop_right_binder);
@@ -362,10 +404,10 @@ void LogicalPlanGenerator::Visit(SetOperationNode &statement) {
 	}
 
 	// now visit the expressions to generate the plans
-	statement.left->Accept(&generator_left);
+	generator_left.CreatePlan(*statement.left);
 	auto left_node = move(generator_left.root);
 
-	statement.right->Accept(&generator_right);
+	generator_right.CreatePlan(*statement.right);
 	auto right_node = move(generator_right.root);
 
 	assert(left_node);
@@ -470,7 +512,7 @@ void LogicalPlanGenerator::Visit(OperatorExpression &expr) {
 
 void LogicalPlanGenerator::Visit(SubqueryExpression &expr) {
 	LogicalPlanGenerator generator(context, *expr.context);
-	expr.subquery->Accept(&generator);
+	generator.CreatePlan(*expr.subquery);
 	if (!generator.root) {
 		throw Exception("Can't plan subquery");
 	}
@@ -561,7 +603,7 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(SubqueryRef &expr) {
 	LogicalPlanGenerator generator(context, *expr.context);
 
 	size_t column_count = expr.subquery->GetSelectList().size();
-	expr.subquery->Accept(&generator);
+	generator.CreatePlan(*expr.subquery);
 
 	auto index = bind_context.GetBindingIndex(expr.alias);
 
@@ -587,7 +629,7 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(TableFunction &expr) {
 	return nullptr;
 }
 
-void LogicalPlanGenerator::Visit(InsertStatement &statement) {
+void LogicalPlanGenerator::CreatePlan(InsertStatement &statement) {
 	auto table = context.db.catalog.GetTable(context.ActiveTransaction(), statement.schema, statement.table);
 	auto insert = make_unique<LogicalInsert>(table);
 
@@ -615,7 +657,7 @@ void LogicalPlanGenerator::Visit(InsertStatement &statement) {
 	if (statement.select_statement) {
 		// insert from select statement
 		// parse select statement and add to logical plan
-		statement.select_statement->Accept(this);
+		CreatePlan(*statement.select_statement);
 		assert(root);
 		insert->AddChild(move(root));
 		root = move(insert);
@@ -644,7 +686,7 @@ void LogicalPlanGenerator::Visit(InsertStatement &statement) {
 	}
 }
 
-void LogicalPlanGenerator::Visit(CopyStatement &statement) {
+void LogicalPlanGenerator::CreatePlan(CopyStatement &statement) {
 	if (!statement.table.empty()) {
 		auto table = context.db.catalog.GetTable(context.ActiveTransaction(), statement.schema, statement.table);
 		auto copy = make_unique<LogicalCopy>(table, move(statement.file_path), move(statement.is_from),
@@ -654,7 +696,7 @@ void LogicalPlanGenerator::Visit(CopyStatement &statement) {
 	} else {
 		auto copy = make_unique<LogicalCopy>(move(statement.file_path), move(statement.is_from),
 		                                     move(statement.delimiter), move(statement.quote), move(statement.escape));
-		statement.select_statement->Accept(this);
+		CreatePlan(*statement.select_statement);
 		assert(root);
 		copy->AddChild(move(root));
 		root = move(copy);

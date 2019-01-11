@@ -20,9 +20,6 @@ class SetOperationNode : public QueryNode {
 public:
 	SetOperationNode() : QueryNode(QueryNodeType::SET_OPERATION_NODE) {
 	}
-	void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
-	}
 
 	//! The type of set operation
 	SetOperationType setop_type = SetOperationType::NONE;

@@ -11,7 +11,46 @@
 using namespace duckdb;
 using namespace std;
 
-void Binder::Visit(SelectStatement &statement) {
+void Binder::Bind(SQLStatement &statement) {
+	switch(statement.type) {
+	case StatementType::SELECT:
+		Bind((SelectStatement&) statement);
+		break;
+	case StatementType::INSERT:
+		Bind((InsertStatement&) statement);
+		break;
+	case StatementType::COPY:
+		Bind((CopyStatement&) statement);
+		break;
+	case StatementType::DELETE:
+		Bind((DeleteStatement&) statement);
+		break;
+	case StatementType::UPDATE:
+		Bind((UpdateStatement&) statement);
+		break;
+	case StatementType::ALTER:
+		Bind((AlterTableStatement&) statement);
+		break;
+	case StatementType::CREATE_TABLE:
+		Bind((CreateTableStatement&) statement);
+		break;
+	default:
+		assert(statement.type == StatementType::CREATE_INDEX);
+		Bind((CreateIndexStatement&) statement);
+		break;
+	}
+}
+
+void Binder::Bind(QueryNode& node) {
+	if (node.type == QueryNodeType::SELECT_NODE) {
+		Bind((SelectNode&) node);
+	} else {
+		assert(node.type == QueryNodeType::SET_OPERATION_NODE);
+		Bind((SetOperationNode&) node);
+	}
+}
+
+void Binder::Bind(SelectStatement &statement) {
 	// first we visit the FROM statement
 	// here we determine from where we can retrieve our columns (from which
 	// tables/subqueries)
@@ -21,7 +60,7 @@ void Binder::Visit(SelectStatement &statement) {
 		AddCTE(cte_it.first, cte_it.second.get());
 	}
 	// now visit the root node of the select statement
-	statement.node->Accept(this);
+	Bind(*statement.node);
 }
 
 static unique_ptr<Expression> replace_columns_with_group_refs(
@@ -73,7 +112,7 @@ static unique_ptr<Expression> replace_columns_with_group_refs(
 	return expr;
 }
 
-void Binder::Visit(SelectNode &statement) {
+void Binder::Bind(SelectNode &statement) {
 	if (statement.from_table) {
 		AcceptChild(&statement.from_table);
 	}
@@ -212,7 +251,7 @@ void Binder::Visit(SelectNode &statement) {
 	}
 }
 
-void Binder::Visit(SetOperationNode &statement) {
+void Binder::Bind(SetOperationNode &statement) {
 	// first recursively visit the set operations
 	// both the left and right sides have an independent BindContext and Binder
 	assert(statement.left);
@@ -221,10 +260,10 @@ void Binder::Visit(SetOperationNode &statement) {
 	Binder binder_left(context, this);
 	Binder binder_right(context, this);
 
-	statement.left->Accept(&binder_left);
+	binder_left.Bind(*statement.left);
 	statement.setop_left_binder = move(binder_left.bind_context);
 
-	statement.right->Accept(&binder_right);
+	binder_right.Bind(*statement.right);
 	statement.setop_right_binder = move(binder_right.bind_context);
 
 	// now handle the ORDER BY
@@ -251,9 +290,9 @@ void Binder::Visit(SetOperationNode &statement) {
 	}
 }
 
-void Binder::Visit(InsertStatement &statement) {
+void Binder::Bind(InsertStatement &statement) {
 	if (statement.select_statement) {
-		statement.select_statement->Accept(this);
+		Bind(*statement.select_statement);
 	}
 	// visit the expressions
 	for (auto &expression_list : statement.values) {
@@ -264,13 +303,13 @@ void Binder::Visit(InsertStatement &statement) {
 	}
 }
 
-void Binder::Visit(CopyStatement &stmt) {
+void Binder::Bind(CopyStatement &stmt) {
 	if (stmt.select_statement) {
-		stmt.select_statement->Accept(this);
+		Bind(*stmt.select_statement);
 	}
 }
 
-void Binder::Visit(CreateIndexStatement &stmt) {
+void Binder::Bind(CreateIndexStatement &stmt) {
 	// visit the table reference
 	AcceptChild(&stmt.table);
 	// visit the expressions
@@ -284,7 +323,7 @@ void Binder::Visit(CreateIndexStatement &stmt) {
 	}
 }
 
-void Binder::Visit(DeleteStatement &stmt) {
+void Binder::Bind(DeleteStatement &stmt) {
 	// visit the table reference
 	AcceptChild(&stmt.table);
 	// project any additional columns required for the condition
@@ -293,12 +332,12 @@ void Binder::Visit(DeleteStatement &stmt) {
 	}
 }
 
-void Binder::Visit(AlterTableStatement &stmt) {
+void Binder::Bind(AlterTableStatement &stmt) {
 	// visit the table reference
 	AcceptChild(&stmt.table);
 }
 
-void Binder::Visit(UpdateStatement &stmt) {
+void Binder::Bind(UpdateStatement &stmt) {
 	// visit the table reference
 	AcceptChild(&stmt.table);
 	// project any additional columns required for the condition/expressions
@@ -320,7 +359,7 @@ void Binder::Visit(UpdateStatement &stmt) {
 	}
 }
 
-void Binder::Visit(CreateTableStatement &stmt) {
+void Binder::Bind(CreateTableStatement &stmt) {
 	// bind any constraints
 	// first create a fake table
 	bind_context->AddDummyTable(stmt.info->table, stmt.info->columns);
@@ -331,7 +370,6 @@ void Binder::Visit(CreateTableStatement &stmt) {
 
 void Binder::Visit(CheckConstraint &constraint) {
 	SQLNodeVisitor::Visit(constraint);
-
 	constraint.expression->ResolveType();
 	if (constraint.expression->return_type == TypeId::INVALID) {
 		throw BinderException("Could not resolve type of constraint!");
@@ -369,7 +407,7 @@ void Binder::Visit(SubqueryExpression &expr) {
 	// the subquery may refer to CTEs from the parent query
 	binder.CTE_bindings = CTE_bindings;
 
-	expr.subquery->Accept(&binder);
+	binder.Bind(*expr.subquery);
 	auto &select_list = expr.subquery->GetSelectList();
 	if (select_list.size() < 1) {
 		throw BinderException("Subquery has no projections");
@@ -417,7 +455,7 @@ unique_ptr<TableRef> Binder::Visit(JoinRef &expr) {
 
 unique_ptr<TableRef> Binder::Visit(SubqueryRef &expr) {
 	Binder binder(context, this);
-	expr.subquery->Accept(&binder);
+	binder.Bind(*expr.subquery);
 	expr.context = move(binder.bind_context);
 
 	bind_context->AddSubquery(expr.alias, expr);

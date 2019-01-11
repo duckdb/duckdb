@@ -24,9 +24,7 @@ public:
 	string ToString() const override {
 		return "Explain";
 	}
-	void Accept(SQLNodeVisitor *v) override {
-	}
-
+	
 	bool Equals(const SQLStatement *other_) const override {
 		if (!SQLStatement::Equals(other_)) {
 			return false;

@@ -24,9 +24,6 @@ public:
 	}
 
 	string ToString() const override;
-	void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
-	}
 
 	bool Equals(const SQLStatement *other) const override;
 

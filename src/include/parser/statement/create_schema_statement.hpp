@@ -22,9 +22,6 @@ public:
 	string ToString() const override {
 		return "CREATE SCHEMA";
 	}
-	void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
-	}
 
 	bool Equals(const SQLStatement *other_) const override {
 		if (!SQLStatement::Equals(other_)) {

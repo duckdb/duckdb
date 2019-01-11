@@ -29,11 +29,7 @@ class SelectNode : public QueryNode {
 public:
 	SelectNode() : QueryNode(QueryNodeType::SELECT_NODE) {
 	}
-
-	void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
-	}
-
+	
 	//! The projection list
 	vector<unique_ptr<Expression>> select_list;
 	//! The FROM clause

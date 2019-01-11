@@ -25,30 +25,35 @@ public:
 	    : require_row_id(false), context(context), bind_context(bind_context) {
 	}
 
-	void Visit(SelectStatement &statement);
-	void Visit(InsertStatement &statement);
-	void Visit(CopyStatement &statement);
-	void Visit(DeleteStatement &statement);
-	void Visit(UpdateStatement &statement);
-	void Visit(CreateTableStatement &statement);
-	void Visit(CreateIndexStatement &statement);
+	void CreatePlan(SQLStatement &statement);
+protected:
+	void CreatePlan(SelectStatement &statement);
+	void CreatePlan(InsertStatement &statement);
+	void CreatePlan(CopyStatement &statement);
+	void CreatePlan(DeleteStatement &statement);
+	void CreatePlan(UpdateStatement &statement);
+	void CreatePlan(CreateTableStatement &statement);
+	void CreatePlan(CreateIndexStatement &statement);
 
+	void CreatePlan(QueryNode &statement);
+	void CreatePlan(SelectNode &statement);
+	void CreatePlan(SetOperationNode &statement);
+	
 	void VisitQueryNode(QueryNode &statement);
-	void Visit(SelectNode &statement);
-	void Visit(SetOperationNode &statement);
 
-	void Visit(AggregateExpression &expr);
-	void Visit(ComparisonExpression &expr);
-	void Visit(CaseExpression &expr);
-	void Visit(ConjunctionExpression &expr);
-	void Visit(OperatorExpression &expr);
-	void Visit(SubqueryExpression &expr);
+	void Visit(AggregateExpression &expr) override;
+	void Visit(ComparisonExpression &expr) override;
+	void Visit(CaseExpression &expr) override;
+	void Visit(ConjunctionExpression &expr) override;
+	void Visit(OperatorExpression &expr) override;
+	void Visit(SubqueryExpression &expr) override;
 
-	unique_ptr<TableRef> Visit(BaseTableRef &expr);
-	unique_ptr<TableRef> Visit(CrossProductRef &expr);
-	unique_ptr<TableRef> Visit(JoinRef &expr);
-	unique_ptr<TableRef> Visit(SubqueryRef &expr);
-	unique_ptr<TableRef> Visit(TableFunction &expr);
+public:
+	unique_ptr<TableRef> Visit(BaseTableRef &expr) override;
+	unique_ptr<TableRef> Visit(CrossProductRef &expr) override;
+	unique_ptr<TableRef> Visit(JoinRef &expr) override;
+	unique_ptr<TableRef> Visit(SubqueryRef &expr) override;
+	unique_ptr<TableRef> Visit(TableFunction &expr) override;
 
 	void Print() {
 		root->Print();
