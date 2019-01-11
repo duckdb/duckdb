@@ -6,7 +6,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> ExpressionExecutor::Visit(OperatorExpression &expr) {
+void ExpressionExecutor::Visit(OperatorExpression &expr) {
 	// special handling for special snowflake 'IN'
 	// IN has n children
 	if (expr.type == ExpressionType::COMPARE_IN || expr.type == ExpressionType::COMPARE_NOT_IN) {
@@ -126,9 +126,7 @@ unique_ptr<Expression> ExpressionExecutor::Visit(OperatorExpression &expr) {
 			result.Move(vector);
 		}
 		expr.stats.Verify(vector);
-		return nullptr;
-	}
-	if (expr.children.size() == 1) {
+	} else if (expr.children.size() == 1) {
 		expr.children[0]->Accept(this);
 		switch (expr.type) {
 		case ExpressionType::OPERATOR_EXISTS:
@@ -193,5 +191,4 @@ unique_ptr<Expression> ExpressionExecutor::Visit(OperatorExpression &expr) {
 		throw NotImplementedException("operator");
 	}
 	Verify(expr);
-	return nullptr;
 }

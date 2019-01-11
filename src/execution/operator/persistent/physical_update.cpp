@@ -3,8 +3,8 @@
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
 #include "main/client_context.hpp"
-#include "storage/data_table.hpp"
 #include "parser/expression/columnref_expression.hpp"
+#include "storage/data_table.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -26,7 +26,7 @@ void PhysicalUpdate::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 		// update data in the base table
 		// the row ids are given to us as the last column of the child chunk
 		auto &row_ids = state->child_chunk.data[state->child_chunk.column_count - 1];
-		for(size_t i = 0; i < expressions.size(); i++) {
+		for (size_t i = 0; i < expressions.size(); i++) {
 			if (expressions[i]->type == ExpressionType::VALUE_DEFAULT) {
 				// default expression, set to the default value of the column
 				auto &column = tableref.columns[columns[i]];
@@ -36,7 +36,7 @@ void PhysicalUpdate::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 			} else {
 				assert(expressions[i]->type == ExpressionType::COLUMN_REF);
 				// index into child chunk
-				auto &colref = (ColumnRefExpression&) *expressions[i];
+				auto &colref = (ColumnRefExpression &)*expressions[i];
 				update_chunk.data[i].Reference(state->child_chunk.data[colref.index]);
 			}
 		}

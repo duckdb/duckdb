@@ -5,8 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> ExpressionExecutor::Visit(ConstantExpression &expr) {
+void ExpressionExecutor::Visit(ConstantExpression &expr) {
 	vector.Reference(expr.value);
 	Verify(expr);
-	return nullptr;
 }

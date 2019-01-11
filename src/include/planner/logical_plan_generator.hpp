@@ -25,24 +25,24 @@ public:
 	    : require_row_id(false), context(context), bind_context(bind_context) {
 	}
 
-	unique_ptr<SQLStatement> Visit(SelectStatement &statement);
-	unique_ptr<SQLStatement> Visit(InsertStatement &statement);
-	unique_ptr<SQLStatement> Visit(CopyStatement &statement);
-	unique_ptr<SQLStatement> Visit(DeleteStatement &statement);
-	unique_ptr<SQLStatement> Visit(UpdateStatement &statement);
-	unique_ptr<SQLStatement> Visit(CreateTableStatement &statement);
-	unique_ptr<SQLStatement> Visit(CreateIndexStatement &statement);
+	void Visit(SelectStatement &statement);
+	void Visit(InsertStatement &statement);
+	void Visit(CopyStatement &statement);
+	void Visit(DeleteStatement &statement);
+	void Visit(UpdateStatement &statement);
+	void Visit(CreateTableStatement &statement);
+	void Visit(CreateIndexStatement &statement);
 
 	void VisitQueryNode(QueryNode &statement);
 	void Visit(SelectNode &statement);
 	void Visit(SetOperationNode &statement);
 
-	unique_ptr<Expression> Visit(AggregateExpression &expr);
-	unique_ptr<Expression> Visit(ComparisonExpression &expr);
-	unique_ptr<Expression> Visit(CaseExpression &expr);
-	unique_ptr<Expression> Visit(ConjunctionExpression &expr);
-	unique_ptr<Expression> Visit(OperatorExpression &expr);
-	unique_ptr<Expression> Visit(SubqueryExpression &expr);
+	void Visit(AggregateExpression &expr);
+	void Visit(ComparisonExpression &expr);
+	void Visit(CaseExpression &expr);
+	void Visit(ConjunctionExpression &expr);
+	void Visit(OperatorExpression &expr);
+	void Visit(SubqueryExpression &expr);
 
 	unique_ptr<TableRef> Visit(BaseTableRef &expr);
 	unique_ptr<TableRef> Visit(CrossProductRef &expr);

@@ -24,73 +24,59 @@ class SQLNodeVisitor {
 public:
 	virtual ~SQLNodeVisitor(){};
 
-	virtual unique_ptr<SQLStatement> Visit(CopyStatement &) {
-		return nullptr;
-	};
-	virtual unique_ptr<SQLStatement> Visit(AlterTableStatement &) {
-		return nullptr;
-	};
-	virtual unique_ptr<SQLStatement> Visit(CreateIndexStatement &) {
-		return nullptr;
-	};
-	virtual unique_ptr<SQLStatement> Visit(CreateSchemaStatement &) {
-		return nullptr;
-	};
-	virtual unique_ptr<SQLStatement> Visit(CreateTableStatement &) {
-		return nullptr;
-	};
-	virtual unique_ptr<SQLStatement> Visit(DeleteStatement &) {
-		return nullptr;
-	};
-	virtual unique_ptr<SQLStatement> Visit(DropSchemaStatement &) {
-		return nullptr;
-	};
-	virtual unique_ptr<SQLStatement> Visit(DropTableStatement &) {
-		return nullptr;
-	};
-	virtual unique_ptr<SQLStatement> Visit(DropIndexStatement &) {
-		return nullptr;
-	};
-	virtual unique_ptr<SQLStatement> Visit(InsertStatement &) {
-		return nullptr;
-	};
-	virtual unique_ptr<SQLStatement> Visit(SelectStatement &) {
-		return nullptr;
-	};
-	virtual unique_ptr<SQLStatement> Visit(TransactionStatement &) {
-		return nullptr;
-	};
-	virtual unique_ptr<SQLStatement> Visit(UpdateStatement &) {
-		return nullptr;
-	};
+	virtual void Visit(CopyStatement &) {
+	}
+	virtual void Visit(AlterTableStatement &) {
+	}
+	virtual void Visit(CreateIndexStatement &) {
+	}
+	virtual void Visit(CreateSchemaStatement &) {
+	}
+	virtual void Visit(CreateTableStatement &) {
+	}
+	virtual void Visit(DeleteStatement &) {
+	}
+	virtual void Visit(DropSchemaStatement &) {
+	}
+	virtual void Visit(DropTableStatement &) {
+	}
+	virtual void Visit(DropIndexStatement &) {
+	}
+	virtual void Visit(InsertStatement &) {
+	}
+	virtual void Visit(SelectStatement &) {
+	}
+	virtual void Visit(TransactionStatement &) {
+	}
+	virtual void Visit(UpdateStatement &) {
+	}
 
 	virtual void Visit(SelectNode &node) {
 	}
 	virtual void Visit(SetOperationNode &node) {
 	}
 
-	virtual unique_ptr<Expression> Visit(AggregateExpression &expr);
-	virtual unique_ptr<Expression> Visit(CaseExpression &expr);
-	virtual unique_ptr<Expression> Visit(CastExpression &expr);
-	virtual unique_ptr<Expression> Visit(CommonSubExpression &expr);
-	virtual unique_ptr<Expression> Visit(ColumnRefExpression &expr);
-	virtual unique_ptr<Expression> Visit(ComparisonExpression &expr);
-	virtual unique_ptr<Expression> Visit(ConjunctionExpression &expr);
-	virtual unique_ptr<Expression> Visit(ConstantExpression &expr);
-	virtual unique_ptr<Expression> Visit(DefaultExpression &expr);
-	virtual unique_ptr<Expression> Visit(FunctionExpression &expr);
-	virtual unique_ptr<Expression> Visit(OperatorExpression &expr);
-	virtual unique_ptr<Expression> Visit(StarExpression &expr);
-	virtual unique_ptr<Expression> Visit(SubqueryExpression &expr);
-	virtual unique_ptr<Expression> Visit(WindowExpression &expr);
+	virtual void Visit(AggregateExpression &expr);
+	virtual void Visit(BoundExpression &expr);
+	virtual void Visit(CaseExpression &expr);
+	virtual void Visit(CastExpression &expr);
+	virtual void Visit(CommonSubExpression &expr);
+	virtual void Visit(ColumnRefExpression &expr);
+	virtual void Visit(ComparisonExpression &expr);
+	virtual void Visit(ConjunctionExpression &expr);
+	virtual void Visit(ConstantExpression &expr);
+	virtual void Visit(DefaultExpression &expr);
+	virtual void Visit(FunctionExpression &expr);
+	virtual void Visit(OperatorExpression &expr);
+	virtual void Visit(StarExpression &expr);
+	virtual void Visit(SubqueryExpression &expr);
+	virtual void Visit(WindowExpression &expr);
 
-	virtual unique_ptr<Constraint> Visit(NotNullConstraint &expr) {
-		return nullptr;
-	};
-	virtual unique_ptr<Constraint> Visit(CheckConstraint &expr);
-	virtual unique_ptr<Constraint> Visit(ParsedConstraint &expr) {
-		return nullptr;
-	};
+	virtual void Visit(NotNullConstraint &expr) {
+	}
+	virtual void Visit(CheckConstraint &expr);
+	virtual void Visit(ParsedConstraint &expr) {
+	}
 
 	virtual unique_ptr<TableRef> Visit(BaseTableRef &expr) {
 		return nullptr;

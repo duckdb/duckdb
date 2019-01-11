@@ -1,4 +1,5 @@
 #include "optimizer/cse_optimizer.hpp"
+
 #include "planner/operator/logical_filter.hpp"
 #include "planner/operator/logical_projection.hpp"
 
@@ -49,17 +50,17 @@ Expression *CommonSubExpressionOptimizer::PerformCSEReplacement(Expression *expr
 					// we have to move the expression into the CSE because it is the first CSE created for this
 					// expression
 					expr->ReplaceChild(
-						[&](unique_ptr<Expression> expr) -> unique_ptr<Expression> {
-							return make_unique<CommonSubExpression>(move(expr), alias);
-						},
-						i);
+					    [&](unique_ptr<Expression> expr) -> unique_ptr<Expression> {
+						    return make_unique<CommonSubExpression>(move(expr), alias);
+					    },
+					    i);
 				} else {
 					// there already exists a CSE node for this expression
 					expr->ReplaceChild(
-						[&](unique_ptr<Expression> expr) -> unique_ptr<Expression> {
-							return make_unique<CommonSubExpression>(cse_replacement, alias);
-						},
-						i);
+					    [&](unique_ptr<Expression> expr) -> unique_ptr<Expression> {
+						    return make_unique<CommonSubExpression>(cse_replacement, alias);
+					    },
+					    i);
 				}
 			}
 		}

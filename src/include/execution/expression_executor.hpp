@@ -58,22 +58,22 @@ public:
 	//! Verify that the output of a step in the ExpressionExecutor is correct
 	void Verify(Expression &expr);
 
-	unique_ptr<Expression> Visit(AggregateExpression &expr) {
+	void Visit(AggregateExpression &expr) {
 		throw NotImplementedException("Cannot execute AGGREGATE expression in ExpressionExecutor");
 	}
-	unique_ptr<Expression> Visit(CaseExpression &expr);
-	unique_ptr<Expression> Visit(CastExpression &expr);
-	unique_ptr<Expression> Visit(ColumnRefExpression &expr);
-	unique_ptr<Expression> Visit(CommonSubExpression &expr);
-	unique_ptr<Expression> Visit(ComparisonExpression &expr);
-	unique_ptr<Expression> Visit(ConjunctionExpression &expr);
-	unique_ptr<Expression> Visit(ConstantExpression &expr);
-	unique_ptr<Expression> Visit(DefaultExpression &expr) {
+	void Visit(CaseExpression &expr);
+	void Visit(CastExpression &expr);
+	void Visit(ColumnRefExpression &expr);
+	void Visit(CommonSubExpression &expr);
+	void Visit(ComparisonExpression &expr);
+	void Visit(ConjunctionExpression &expr);
+	void Visit(ConstantExpression &expr);
+	void Visit(DefaultExpression &expr) {
 		throw NotImplementedException("Cannot execute DEFAULT expression in ExpressionExecutor");
 	}
-	unique_ptr<Expression> Visit(FunctionExpression &expr);
-	unique_ptr<Expression> Visit(OperatorExpression &expr);
-	unique_ptr<Expression> Visit(SubqueryExpression &expr);
+	void Visit(FunctionExpression &expr);
+	void Visit(OperatorExpression &expr);
+	void Visit(SubqueryExpression &expr);
 
 private:
 	ClientContext &context;

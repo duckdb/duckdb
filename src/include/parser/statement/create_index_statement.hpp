@@ -19,14 +19,12 @@ namespace duckdb {
 class CreateIndexStatement : public SQLStatement {
 public:
 	CreateIndexStatement() : SQLStatement(StatementType::CREATE_INDEX), info(make_unique<CreateIndexInformation>()){};
-	virtual ~CreateIndexStatement() {
-	}
 
-	virtual string ToString() const {
+	string ToString() const override {
 		return "CREATE INDEX";
 	}
-	virtual unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
-		return v->Visit(*this);
+	void Accept(SQLNodeVisitor *v) override {
+		v->Visit(*this);
 	}
 
 	//! The table to create the index on

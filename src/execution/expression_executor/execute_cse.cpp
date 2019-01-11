@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> ExpressionExecutor::Visit(CommonSubExpression &expr) {
+void ExpressionExecutor::Visit(CommonSubExpression &expr) {
 	// check if the CSE has already been executed
 	auto entry = state->cached_cse.find(expr.child);
 	if (entry != state->cached_cse.end()) {
@@ -21,5 +21,4 @@ unique_ptr<Expression> ExpressionExecutor::Visit(CommonSubExpression &expr) {
 		// now reference that vector in the result
 		vector.Reference(inserted_vector);
 	}
-	return nullptr;
 }

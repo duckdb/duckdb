@@ -17,17 +17,15 @@ namespace duckdb {
 class DropSchemaStatement : public SQLStatement {
 public:
 	DropSchemaStatement() : SQLStatement(StatementType::DROP_SCHEMA), info(make_unique<DropSchemaInformation>()){};
-	virtual ~DropSchemaStatement() {
-	}
 
-	virtual string ToString() const {
+	string ToString() const override {
 		return "DROP SCHEMA";
 	}
-	virtual unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
-		return v->Visit(*this);
+	void Accept(SQLNodeVisitor *v) override {
+		v->Visit(*this);
 	}
 
-	virtual bool Equals(const SQLStatement *other_) const {
+	bool Equals(const SQLStatement *other_) const override {
 		if (!SQLStatement::Equals(other_)) {
 			return false;
 		}

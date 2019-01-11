@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> ExpressionExecutor::Visit(FunctionExpression &expr) {
+void ExpressionExecutor::Visit(FunctionExpression &expr) {
 	assert(expr.bound_function);
 
 	auto arguments = unique_ptr<Vector[]>(new Vector[expr.children.size()]);
@@ -21,5 +21,4 @@ unique_ptr<Expression> ExpressionExecutor::Visit(FunctionExpression &expr) {
 		                            "but the function returned the latter");
 	}
 	Verify(expr);
-	return nullptr;
 }

@@ -53,7 +53,7 @@ public:
 	virtual void Visit(LogicalPruneColumns &expr);
 	virtual void Visit(LogicalWindow &expr);
 
-	virtual unique_ptr<Expression> Visit(SubqueryExpression &expr);
+	virtual void Visit(SubqueryExpression &expr);
 
 	void Print() {
 		plan->Print();

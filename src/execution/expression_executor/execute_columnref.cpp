@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> ExpressionExecutor::Visit(ColumnRefExpression &expr) {
+void ExpressionExecutor::Visit(ColumnRefExpression &expr) {
 	size_t cur_depth = expr.depth;
 	ExpressionExecutor *cur_exec = this;
 	while (cur_depth > 0) {
@@ -24,5 +24,4 @@ unique_ptr<Expression> ExpressionExecutor::Visit(ColumnRefExpression &expr) {
 	}
 	vector.Reference(cur_exec->chunk->data[expr.index]);
 	Verify(expr);
-	return nullptr;
 }

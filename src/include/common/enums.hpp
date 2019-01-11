@@ -192,7 +192,8 @@ enum class ExpressionType : uint8_t {
 	// Miscellaneous
 	// -----------------------------
 	CAST = 225,
-	COMMON_SUBEXPRESSION = 226
+	COMMON_SUBEXPRESSION = 226,
+	BOUND_REF = 227
 };
 
 //===--------------------------------------------------------------------===//
@@ -214,7 +215,8 @@ enum class ExpressionClass : uint8_t {
 	STAR = 13,
 	SUBQUERY = 14,
 	WINDOW = 15,
-	COMMON_SUBEXPRESSION = 16
+	COMMON_SUBEXPRESSION = 16,
+	BOUND_REF = 17
 };
 
 //===--------------------------------------------------------------------===//

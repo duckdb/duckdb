@@ -17,17 +17,15 @@ namespace duckdb {
 class DropTableStatement : public SQLStatement {
 public:
 	DropTableStatement() : SQLStatement(StatementType::DROP_TABLE), info(make_unique<DropTableInformation>()){};
-	virtual ~DropTableStatement() {
-	}
 
-	virtual string ToString() const {
+	string ToString() const override {
 		return "DROP TABLE";
 	}
-	virtual unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
-		return v->Visit(*this);
+	void Accept(SQLNodeVisitor *v) override {
+		v->Visit(*this);
 	}
 
-	virtual bool Equals(const SQLStatement *other_) const {
+	bool Equals(const SQLStatement *other_) const override {
 		if (!SQLStatement::Equals(other_)) {
 			return false;
 		}

@@ -58,8 +58,8 @@ public:
 		return table_name;
 	}
 
-	unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
-		return v->Visit(*this);
+	void Accept(SQLNodeVisitor *v) override {
+		v->Visit(*this);
 	}
 
 	string GetName() const override {

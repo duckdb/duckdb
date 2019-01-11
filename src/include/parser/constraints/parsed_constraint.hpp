@@ -28,16 +28,16 @@ public:
 	virtual ~ParsedConstraint() {
 	}
 
-	virtual unique_ptr<Constraint> Accept(SQLNodeVisitor *v) {
-		return v->Visit(*this);
+	void Accept(SQLNodeVisitor *v) override {
+		v->Visit(*this);
 	}
 
-	virtual string ToString() const {
+	string ToString() const override {
 		return "Dummy Constraint";
 	}
 
 	//! Serialize to a stand-alone binary blob
-	virtual void Serialize(Serializer &serializer);
+	void Serialize(Serializer &serializer) override;
 	//! Deserializes a ParsedConstraint
 	static unique_ptr<Constraint> Deserialize(Deserializer &source);
 

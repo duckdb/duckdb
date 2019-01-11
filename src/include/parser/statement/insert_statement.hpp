@@ -19,15 +19,13 @@ namespace duckdb {
 class InsertStatement : public SQLStatement {
 public:
 	InsertStatement() : SQLStatement(StatementType::INSERT), schema(DEFAULT_SCHEMA){};
-	virtual ~InsertStatement() {
+
+	string ToString() const override;
+	void Accept(SQLNodeVisitor *v) override {
+		v->Visit(*this);
 	}
 
-	virtual string ToString() const;
-	virtual unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
-		return v->Visit(*this);
-	}
-
-	virtual bool Equals(const SQLStatement *other_) const {
+	bool Equals(const SQLStatement *other_) const override {
 		if (!SQLStatement::Equals(other_)) {
 			return false;
 		}

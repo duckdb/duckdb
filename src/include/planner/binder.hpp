@@ -30,23 +30,23 @@ public:
 	    : bind_context(make_unique<BindContext>()), context(context), parent(parent) {
 	}
 
-	unique_ptr<SQLStatement> Visit(SelectStatement &statement);
-	unique_ptr<SQLStatement> Visit(InsertStatement &stmt);
-	unique_ptr<SQLStatement> Visit(CopyStatement &stmt);
-	unique_ptr<SQLStatement> Visit(DeleteStatement &stmt);
-	unique_ptr<SQLStatement> Visit(UpdateStatement &stmt);
-	unique_ptr<SQLStatement> Visit(AlterTableStatement &stmt);
-	unique_ptr<SQLStatement> Visit(CreateTableStatement &stmt);
-	unique_ptr<SQLStatement> Visit(CreateIndexStatement &stmt);
+	void Visit(SelectStatement &statement);
+	void Visit(InsertStatement &stmt);
+	void Visit(CopyStatement &stmt);
+	void Visit(DeleteStatement &stmt);
+	void Visit(UpdateStatement &stmt);
+	void Visit(AlterTableStatement &stmt);
+	void Visit(CreateTableStatement &stmt);
+	void Visit(CreateIndexStatement &stmt);
 
 	void Visit(SelectNode &node);
 	void Visit(SetOperationNode &node);
 
-	unique_ptr<Constraint> Visit(CheckConstraint &constraint);
+	void Visit(CheckConstraint &constraint);
 
-	unique_ptr<Expression> Visit(ColumnRefExpression &expr);
-	unique_ptr<Expression> Visit(FunctionExpression &expr);
-	unique_ptr<Expression> Visit(SubqueryExpression &expr);
+	void Visit(ColumnRefExpression &expr);
+	void Visit(FunctionExpression &expr);
+	void Visit(SubqueryExpression &expr);
 
 	unique_ptr<TableRef> Visit(BaseTableRef &expr);
 	unique_ptr<TableRef> Visit(CrossProductRef &expr);

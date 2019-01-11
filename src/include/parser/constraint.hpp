@@ -21,7 +21,7 @@ public:
 	virtual ~Constraint() {
 	}
 
-	virtual unique_ptr<Constraint> Accept(SQLNodeVisitor *) = 0;
+	virtual void Accept(SQLNodeVisitor *) = 0;
 
 	ConstraintType type;
 

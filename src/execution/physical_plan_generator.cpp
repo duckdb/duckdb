@@ -445,9 +445,8 @@ void PhysicalPlanGenerator::Visit(LogicalWindow &op) {
 	this->plan = move(window);
 }
 
-unique_ptr<Expression> PhysicalPlanGenerator::Visit(SubqueryExpression &expr) {
+void PhysicalPlanGenerator::Visit(SubqueryExpression &expr) {
 	PhysicalPlanGenerator generator(context, this);
 	generator.CreatePlan(move(expr.op));
 	expr.plan = move(generator.plan);
-	return nullptr;
 }

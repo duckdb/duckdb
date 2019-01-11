@@ -20,17 +20,15 @@ class DeleteStatement : public SQLStatement {
 public:
 	DeleteStatement() : SQLStatement(StatementType::DELETE) {
 	}
-	virtual ~DeleteStatement() {
-	}
 
-	virtual string ToString() const {
+	string ToString() const override {
 		return "Delete";
 	}
-	virtual unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
-		return v->Visit(*this);
+	void Accept(SQLNodeVisitor *v) override {
+		v->Visit(*this);
 	}
 
-	virtual bool Equals(const SQLStatement *other_) const {
+	bool Equals(const SQLStatement *other_) const override {
 		if (!SQLStatement::Equals(other_)) {
 			return false;
 		}

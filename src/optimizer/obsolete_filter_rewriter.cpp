@@ -8,11 +8,10 @@ using namespace std;
 class RewriteSubqueries : public SQLNodeVisitor {
 public:
 	using SQLNodeVisitor::Visit;
-	unique_ptr<Expression> Visit(SubqueryExpression &subquery) override {
+	void Visit(SubqueryExpression &subquery) override {
 		// we perform join reordering within the subquery expression
 		ObsoleteFilterRewriter rewriter;
 		subquery.op = rewriter.Rewrite(move(subquery.op));
-		return nullptr;
 	}
 };
 

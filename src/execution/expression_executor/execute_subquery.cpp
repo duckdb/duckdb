@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> ExpressionExecutor::Visit(SubqueryExpression &expr) {
+void ExpressionExecutor::Visit(SubqueryExpression &expr) {
 	auto &plan = expr.plan;
 	if (!plan) {
 		throw Exception("Failed to generate query plan for subquery");
@@ -55,5 +55,4 @@ unique_ptr<Expression> ExpressionExecutor::Visit(SubqueryExpression &expr) {
 	}
 	chunk = old_chunk;
 	Verify(expr);
-	return nullptr;
 }

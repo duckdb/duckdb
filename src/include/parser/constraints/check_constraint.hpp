@@ -24,16 +24,16 @@ public:
 	virtual ~CheckConstraint() {
 	}
 
-	virtual unique_ptr<Constraint> Accept(SQLNodeVisitor *v) {
-		return v->Visit(*this);
+	void Accept(SQLNodeVisitor *v) override {
+		v->Visit(*this);
 	}
 
-	virtual string ToString() const {
+	string ToString() const override {
 		return StringUtil::Format("CHECK(%s)", expression->ToString().c_str());
 	}
 
 	//! Serialize to a stand-alone binary blob
-	virtual void Serialize(Serializer &serializer);
+	void Serialize(Serializer &serializer) override;
 	//! Deserializes a CheckConstraint
 	static unique_ptr<Constraint> Deserialize(Deserializer &source);
 

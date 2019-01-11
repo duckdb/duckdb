@@ -20,17 +20,14 @@ class UpdateStatement : public SQLStatement {
 public:
 	UpdateStatement() : SQLStatement(StatementType::UPDATE) {
 	}
-	virtual ~UpdateStatement() {
-	}
-
-	virtual string ToString() const {
+	string ToString() const override {
 		return "Update";
 	}
-	virtual unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
-		return v->Visit(*this);
+	void Accept(SQLNodeVisitor *v) override {
+		v->Visit(*this);
 	}
 
-	virtual bool Equals(const SQLStatement *other_) const {
+	bool Equals(const SQLStatement *other_) const override {
 		if (!SQLStatement::Equals(other_)) {
 			return false;
 		}

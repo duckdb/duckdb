@@ -20,24 +20,21 @@ namespace duckdb {
 class ExplainStatement : public SQLStatement {
 public:
 	ExplainStatement(unique_ptr<SQLStatement> stmt) : SQLStatement(StatementType::EXPLAIN), stmt(move(stmt)){};
-	unique_ptr<SQLStatement> stmt;
 
-	virtual ~ExplainStatement() {
-	}
-
-	virtual string ToString() const {
+	string ToString() const override {
 		return "Explain";
 	}
-	virtual unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
-		return nullptr;
+	void Accept(SQLNodeVisitor *v) override {
 	}
 
-	virtual bool Equals(const SQLStatement *other_) const {
+	bool Equals(const SQLStatement *other_) const override {
 		if (!SQLStatement::Equals(other_)) {
 			return false;
 		}
 		throw NotImplementedException("Equality not implemented!");
 	}
+
+	unique_ptr<SQLStatement> stmt;
 };
 
 } // namespace duckdb

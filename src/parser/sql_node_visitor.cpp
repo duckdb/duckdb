@@ -7,73 +7,53 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> SQLNodeVisitor::Visit(AggregateExpression &expr) {
+void SQLNodeVisitor::Visit(AggregateExpression &expr) {
 	expr.AcceptChildren(this);
-	return nullptr;
 }
-unique_ptr<Expression> SQLNodeVisitor::Visit(WindowExpression &expr) {
-	// FIXME is this enough?
+void SQLNodeVisitor::Visit(WindowExpression &expr) {
 	expr.AcceptChildren(this);
-	for (size_t expr_idx = 0; expr_idx < expr.partitions.size(); expr_idx++) {
-		AcceptChild(&expr.partitions[expr_idx]);
-	}
-	for (size_t expr_idx = 0; expr_idx < expr.ordering.orders.size(); expr_idx++) {
-		AcceptChild(&expr.ordering.orders[expr_idx].expression);
-	}
-	return nullptr;
 }
-unique_ptr<Expression> SQLNodeVisitor::Visit(CaseExpression &expr) {
-	expr.AcceptChildren(this);
-	return nullptr;
+void SQLNodeVisitor::Visit(BoundExpression &expr) {
 }
-unique_ptr<Expression> SQLNodeVisitor::Visit(CastExpression &expr) {
+void SQLNodeVisitor::Visit(CaseExpression &expr) {
 	expr.AcceptChildren(this);
-	return nullptr;
 }
-unique_ptr<Expression> SQLNodeVisitor::Visit(CommonSubExpression &expr) {
+void SQLNodeVisitor::Visit(CastExpression &expr) {
 	expr.AcceptChildren(this);
-	return nullptr;
 }
-unique_ptr<Expression> SQLNodeVisitor::Visit(ColumnRefExpression &expr) {
+void SQLNodeVisitor::Visit(CommonSubExpression &expr) {
 	expr.AcceptChildren(this);
-	return nullptr;
 }
-unique_ptr<Expression> SQLNodeVisitor::Visit(ComparisonExpression &expr) {
+void SQLNodeVisitor::Visit(ColumnRefExpression &expr) {
 	expr.AcceptChildren(this);
-	return nullptr;
 }
-unique_ptr<Expression> SQLNodeVisitor::Visit(ConjunctionExpression &expr) {
+void SQLNodeVisitor::Visit(ComparisonExpression &expr) {
 	expr.AcceptChildren(this);
-	return nullptr;
 }
-unique_ptr<Expression> SQLNodeVisitor::Visit(ConstantExpression &expr) {
+void SQLNodeVisitor::Visit(ConjunctionExpression &expr) {
 	expr.AcceptChildren(this);
-	return nullptr;
 }
-unique_ptr<Expression> SQLNodeVisitor::Visit(DefaultExpression &expr) {
+void SQLNodeVisitor::Visit(ConstantExpression &expr) {
 	expr.AcceptChildren(this);
-	return nullptr;
 }
-unique_ptr<Expression> SQLNodeVisitor::Visit(FunctionExpression &expr) {
+void SQLNodeVisitor::Visit(DefaultExpression &expr) {
 	expr.AcceptChildren(this);
-	return nullptr;
 }
-unique_ptr<Expression> SQLNodeVisitor::Visit(OperatorExpression &expr) {
+void SQLNodeVisitor::Visit(FunctionExpression &expr) {
 	expr.AcceptChildren(this);
-	return nullptr;
 }
-unique_ptr<Expression> SQLNodeVisitor::Visit(SubqueryExpression &expr) {
+void SQLNodeVisitor::Visit(OperatorExpression &expr) {
 	expr.AcceptChildren(this);
-	return nullptr;
 }
-unique_ptr<Expression> SQLNodeVisitor::Visit(StarExpression &expr) {
+void SQLNodeVisitor::Visit(SubqueryExpression &expr) {
 	expr.AcceptChildren(this);
-	return nullptr;
+}
+void SQLNodeVisitor::Visit(StarExpression &expr) {
+	expr.AcceptChildren(this);
 }
 
-unique_ptr<Constraint> SQLNodeVisitor::Visit(CheckConstraint &con) {
+void SQLNodeVisitor::Visit(CheckConstraint &con) {
 	con.expression->Accept(this);
-	return nullptr;
 }
 
 unique_ptr<TableRef> SQLNodeVisitor::Visit(CrossProductRef &expr) {

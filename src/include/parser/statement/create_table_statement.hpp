@@ -18,17 +18,15 @@ namespace duckdb {
 class CreateTableStatement : public SQLStatement {
 public:
 	CreateTableStatement() : SQLStatement(StatementType::CREATE_TABLE), info(make_unique<CreateTableInformation>()){};
-	virtual ~CreateTableStatement() {
-	}
 
-	virtual string ToString() const {
+	string ToString() const override {
 		return "CREATE TABLE";
 	}
-	virtual unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
-		return v->Visit(*this);
+	void Accept(SQLNodeVisitor *v) override {
+		v->Visit(*this);
 	}
 
-	virtual bool Equals(const SQLStatement *other_) const {
+	bool Equals(const SQLStatement *other_) const override {
 		if (!SQLStatement::Equals(other_)) {
 			return false;
 		}

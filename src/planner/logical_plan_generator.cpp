@@ -13,7 +13,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(CreateTableStatement &statement) {
+void LogicalPlanGenerator::Visit(CreateTableStatement &statement) {
 	if (root) {
 		throw Exception("CREATE TABLE from SELECT not supported yet!");
 	}
@@ -21,10 +21,9 @@ unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(CreateTableStatement &state
 	auto schema = context.db.catalog.GetSchema(context.ActiveTransaction(), statement.info->schema);
 	// create the logical operator
 	root = make_unique<LogicalCreate>(schema, move(statement.info));
-	return nullptr;
 }
 
-unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(CreateIndexStatement &statement) {
+void LogicalPlanGenerator::Visit(CreateIndexStatement &statement) {
 	// first we visit the base table
 	statement.table->Accept(this);
 	// this gives us a logical table scan
@@ -38,10 +37,9 @@ unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(CreateIndexStatement &state
 	                                         statement.table->table_name);
 	// create the logical operator
 	root = make_unique<LogicalCreateIndex>(*table, column_ids, move(statement.expressions), move(statement.info));
-	return nullptr;
 }
 
-unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(UpdateStatement &statement) {
+void LogicalPlanGenerator::Visit(UpdateStatement &statement) {
 	// we require row ids for the deletion
 	require_row_id = true;
 	// create the table scan
@@ -52,7 +50,7 @@ unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(UpdateStatement &statement)
 	auto get = (LogicalGet *)root.get();
 	// create the filter (if any)
 	if (statement.condition) {
-		AcceptChild(&statement.condition);
+		statement.condition->Accept(this);
 		auto filter = make_unique<LogicalFilter>(move(statement.condition));
 		filter->AddChild(move(root));
 		root = move(filter);
@@ -83,7 +81,8 @@ unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(UpdateStatement &statement)
 				// differing types, create a cast
 				expression = make_unique<CastExpression>(column.type, move(expression));
 			}
-			statement.expressions[i] = make_unique<ColumnRefExpression>(expression->return_type, projection_expressions.size());
+			statement.expressions[i] =
+			    make_unique<ColumnRefExpression>(expression->return_type, projection_expressions.size());
 			projection_expressions.push_back(move(expression));
 		}
 	}
@@ -100,10 +99,9 @@ unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(UpdateStatement &statement)
 	auto update = make_unique<LogicalUpdate>(table, column_ids, move(statement.expressions));
 	update->AddChild(move(root));
 	root = move(update);
-	return nullptr;
 }
 
-unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(DeleteStatement &statement) {
+void LogicalPlanGenerator::Visit(DeleteStatement &statement) {
 	// we require row ids for the deletion
 	require_row_id = true;
 	// create the table scan
@@ -114,7 +112,7 @@ unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(DeleteStatement &statement)
 	auto get = (LogicalGet *)root.get();
 	// create the filter (if any)
 	if (statement.condition) {
-		AcceptChild(&statement.condition);
+		statement.condition->Accept(this);
 		auto filter = make_unique<LogicalFilter>(move(statement.condition));
 		filter->AddChild(move(root));
 		root = move(filter);
@@ -123,10 +121,9 @@ unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(DeleteStatement &statement)
 	auto del = make_unique<LogicalDelete>(get->table);
 	del->AddChild(move(root));
 	root = move(del);
-	return nullptr;
 }
 
-unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(SelectStatement &statement) {
+void LogicalPlanGenerator::Visit(SelectStatement &statement) {
 	auto expected_column_count = statement.node->GetSelectCount();
 	statement.node->Accept(this);
 	// prune the root node
@@ -134,7 +131,6 @@ unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(SelectStatement &statement)
 	auto prune = make_unique<LogicalPruneColumns>(expected_column_count);
 	prune->AddChild(move(root));
 	root = move(prune);
-	return nullptr;
 }
 
 void LogicalPlanGenerator::VisitQueryNode(QueryNode &statement) {
@@ -211,7 +207,7 @@ static unique_ptr<Expression> extract_windows(unique_ptr<Expression> expr, vecto
 
 void LogicalPlanGenerator::Visit(SelectNode &statement) {
 	for (auto &expr : statement.select_list) {
-		AcceptChild(&expr);
+		expr->Accept(this);
 	}
 
 	if (statement.from_table) {
@@ -223,7 +219,7 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 	}
 
 	if (statement.where_clause) {
-		AcceptChild(&statement.where_clause);
+		statement.where_clause->Accept(this);
 
 		auto filter = make_unique<LogicalFilter>(move(statement.where_clause));
 		filter->AddChild(move(root));
@@ -240,7 +236,7 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 		}
 
 		if (statement.HasHaving()) {
-			AcceptChild(&statement.groupby.having);
+			statement.groupby.having->Accept(this);
 			// the HAVING child cannot contain aggregates itself
 			// turn them into Column References
 			statement.groupby.having =
@@ -422,14 +418,13 @@ static unique_ptr<Expression> AddCastToType(TypeId type, unique_ptr<Expression> 
 	return expr;
 }
 
-unique_ptr<Expression> LogicalPlanGenerator::Visit(AggregateExpression &expr) {
+void LogicalPlanGenerator::Visit(AggregateExpression &expr) {
 	SQLNodeVisitor::Visit(expr);
 	// add cast to child of aggregate if types don't match
 	expr.child = AddCastToType(expr.return_type, move(expr.child));
-	return nullptr;
 }
 
-unique_ptr<Expression> LogicalPlanGenerator::Visit(CaseExpression &expr) {
+void LogicalPlanGenerator::Visit(CaseExpression &expr) {
 	SQLNodeVisitor::Visit(expr);
 	// check needs to be bool
 	expr.check = AddCastToType(TypeId::BOOLEAN, move(expr.check));
@@ -439,10 +434,9 @@ unique_ptr<Expression> LogicalPlanGenerator::Visit(CaseExpression &expr) {
 	expr.result_if_true = AddCastToType(result_type, move(expr.result_if_true));
 	expr.result_if_false = AddCastToType(result_type, move(expr.result_if_false));
 	assert(result_type == expr.return_type);
-	return nullptr;
 }
 
-unique_ptr<Expression> LogicalPlanGenerator::Visit(ComparisonExpression &expr) {
+void LogicalPlanGenerator::Visit(ComparisonExpression &expr) {
 	SQLNodeVisitor::Visit(expr);
 	if (expr.left->return_type != expr.right->return_type) {
 		// add a cast if the types don't match
@@ -450,17 +444,15 @@ unique_ptr<Expression> LogicalPlanGenerator::Visit(ComparisonExpression &expr) {
 		expr.left = AddCastToType(result_type, move(expr.left));
 		expr.right = AddCastToType(result_type, move(expr.right));
 	}
-	return nullptr;
 }
 
-unique_ptr<Expression> LogicalPlanGenerator::Visit(ConjunctionExpression &expr) {
+void LogicalPlanGenerator::Visit(ConjunctionExpression &expr) {
 	SQLNodeVisitor::Visit(expr);
 	expr.left = AddCastToType(TypeId::BOOLEAN, move(expr.left));
 	expr.right = AddCastToType(TypeId::BOOLEAN, move(expr.right));
-	return nullptr;
 }
 
-unique_ptr<Expression> LogicalPlanGenerator::Visit(OperatorExpression &expr) {
+void LogicalPlanGenerator::Visit(OperatorExpression &expr) {
 	SQLNodeVisitor::Visit(expr);
 	if (expr.type == ExpressionType::OPERATOR_NOT && expr.children[0]->return_type != TypeId::BOOLEAN) {
 		expr.children[0] = AddCastToType(TypeId::BOOLEAN, move(expr.children[0]));
@@ -474,10 +466,9 @@ unique_ptr<Expression> LogicalPlanGenerator::Visit(OperatorExpression &expr) {
 			expr.children[i] = AddCastToType(result_type, move(expr.children[i]));
 		}
 	}
-	return nullptr;
 }
 
-unique_ptr<Expression> LogicalPlanGenerator::Visit(SubqueryExpression &expr) {
+void LogicalPlanGenerator::Visit(SubqueryExpression &expr) {
 	LogicalPlanGenerator generator(context, *expr.context);
 	expr.subquery->Accept(&generator);
 	if (!generator.root) {
@@ -486,7 +477,6 @@ unique_ptr<Expression> LogicalPlanGenerator::Visit(SubqueryExpression &expr) {
 	expr.op = move(generator.root);
 	expr.subquery = nullptr;
 	assert(expr.op);
-	return nullptr;
 }
 
 unique_ptr<TableRef> LogicalPlanGenerator::Visit(BaseTableRef &expr) {
@@ -538,7 +528,7 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(CrossProductRef &expr) {
 }
 
 unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
-	AcceptChild(&expr.condition);
+	expr.condition->Accept(this);
 	auto join = make_unique<LogicalJoin>(expr.type);
 
 	if (root) {
@@ -597,7 +587,7 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(TableFunction &expr) {
 	return nullptr;
 }
 
-unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(InsertStatement &statement) {
+void LogicalPlanGenerator::Visit(InsertStatement &statement) {
 	auto table = context.db.catalog.GetTable(context.ActiveTransaction(), statement.schema, statement.table);
 	auto insert = make_unique<LogicalInsert>(table);
 
@@ -625,7 +615,7 @@ unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(InsertStatement &statement)
 	if (statement.select_statement) {
 		// insert from select statement
 		// parse select statement and add to logical plan
-		AcceptChild(&statement.select_statement);
+		statement.select_statement->Accept(this);
 		assert(root);
 		insert->AddChild(move(root));
 		root = move(insert);
@@ -633,7 +623,7 @@ unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(InsertStatement &statement)
 		// first visit the expressions
 		for (auto &expression_list : statement.values) {
 			for (auto &expression : expression_list) {
-				AcceptChild(&expression);
+				expression->Accept(this);
 			}
 		}
 		// insert from constants
@@ -652,10 +642,9 @@ unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(InsertStatement &statement)
 		insert->insert_values = move(statement.values);
 		root = move(insert);
 	}
-	return nullptr;
 }
 
-unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(CopyStatement &statement) {
+void LogicalPlanGenerator::Visit(CopyStatement &statement) {
 	if (!statement.table.empty()) {
 		auto table = context.db.catalog.GetTable(context.ActiveTransaction(), statement.schema, statement.table);
 		auto copy = make_unique<LogicalCopy>(table, move(statement.file_path), move(statement.is_from),
@@ -670,5 +659,4 @@ unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(CopyStatement &statement) {
 		copy->AddChild(move(root));
 		root = move(copy);
 	}
-	return nullptr;
 }

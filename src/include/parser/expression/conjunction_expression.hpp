@@ -21,8 +21,8 @@ public:
 		this->right = move(right);
 	}
 
-	unique_ptr<Expression> Accept(SQLNodeVisitor *v) override {
-		return v->Visit(*this);
+	void Accept(SQLNodeVisitor *v) override {
+		v->Visit(*this);
 	}
 	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::CONJUNCTION;

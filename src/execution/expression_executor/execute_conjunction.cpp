@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> ExpressionExecutor::Visit(ConjunctionExpression &expr) {
+void ExpressionExecutor::Visit(ConjunctionExpression &expr) {
 	Vector l, r, result;
 	expr.left->Accept(this);
 	vector.Move(l);
@@ -23,5 +23,4 @@ unique_ptr<Expression> ExpressionExecutor::Visit(ConjunctionExpression &expr) {
 		throw NotImplementedException("Unknown conjunction type!");
 	}
 	Verify(expr);
-	return nullptr;
 }

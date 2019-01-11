@@ -38,8 +38,8 @@ public:
 	void Visit(LogicalSubquery &op);
 	void Visit(LogicalTableFunction &op);
 
-	unique_ptr<Expression> Visit(ColumnRefExpression &expr);
-	unique_ptr<Expression> Visit(SubqueryExpression &expr);
+	void Visit(ColumnRefExpression &expr);
+	void Visit(SubqueryExpression &expr);
 
 	vector<BoundTable> bound_tables;
 	size_t current_depth;

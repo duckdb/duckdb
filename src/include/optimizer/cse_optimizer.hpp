@@ -12,7 +12,8 @@
 #include "planner/logical_operator_visitor.hpp"
 
 namespace duckdb {
-//! The CommonSubExpression optimizer traverses the expressions of a LogicalOperator to look for duplicate expressions, and moves duplicate expressions into a shared CommonSubExpression.
+//! The CommonSubExpression optimizer traverses the expressions of a LogicalOperator to look for duplicate expressions,
+//! and moves duplicate expressions into a shared CommonSubExpression.
 class CommonSubExpressionOptimizer : public LogicalOperatorVisitor {
 private:
 	struct CSENode {
@@ -31,9 +32,10 @@ private:
 
 	//! Main method to extract common subexpressions
 	void ExtractCommonSubExpresions(LogicalOperator &op);
+
 public:
 	using LogicalOperatorVisitor::Visit;
 	void Visit(LogicalFilter &op) override;
 	void Visit(LogicalProjection &op) override;
 };
-}
+} // namespace duckdb

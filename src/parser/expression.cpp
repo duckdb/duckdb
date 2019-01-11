@@ -8,14 +8,7 @@ using namespace duckdb;
 using namespace std;
 
 void Expression::AcceptChildren(SQLNodeVisitor *v) {
-	EnumerateChildren([v](unique_ptr<Expression> child) -> unique_ptr<Expression> {
-		auto accept_res = child->Accept(v);
-		if (accept_res) {
-			return accept_res;
-		} else {
-			return child;
-		}
-	});
+	EnumerateChildren([v](Expression *child) { child->Accept(v); });
 }
 
 bool Expression::IsAggregate() {

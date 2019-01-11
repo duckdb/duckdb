@@ -23,7 +23,7 @@ public:
 	virtual ~SQLStatement() {
 	}
 
-	virtual unique_ptr<SQLStatement> Accept(SQLNodeVisitor *) = 0;
+	virtual void Accept(SQLNodeVisitor *) = 0;
 	virtual bool Equals(const SQLStatement *other) const {
 		return other && type == other->type;
 	}

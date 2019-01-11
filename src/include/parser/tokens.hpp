@@ -42,6 +42,7 @@ class SetOperationNode;
 class Expression;
 
 class AggregateExpression;
+class BoundExpression;
 class CaseExpression;
 class CastExpression;
 class CommonSubExpression;

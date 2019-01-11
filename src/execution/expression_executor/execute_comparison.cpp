@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> ExpressionExecutor::Visit(ComparisonExpression &expr) {
+void ExpressionExecutor::Visit(ComparisonExpression &expr) {
 	Vector l, r;
 	expr.left->Accept(this);
 	vector.Move(l);
@@ -44,5 +44,4 @@ unique_ptr<Expression> ExpressionExecutor::Visit(ComparisonExpression &expr) {
 		throw NotImplementedException("Unknown comparison type!");
 	}
 	Verify(expr);
-	return nullptr;
 }

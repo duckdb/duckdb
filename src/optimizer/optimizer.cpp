@@ -1,10 +1,10 @@
 #include "optimizer/optimizer.hpp"
 
+#include "optimizer/cse_optimizer.hpp"
 #include "optimizer/join_order_optimizer.hpp"
 #include "optimizer/obsolete_filter_rewriter.hpp"
 #include "optimizer/rule/list.hpp"
 #include "optimizer/subquery_rewriter.hpp"
-#include "optimizer/cse_optimizer.hpp"
 #include "parser/expression/common_subexpression.hpp"
 #include "planner/operator/list.hpp"
 
@@ -27,11 +27,10 @@ Optimizer::Optimizer(ClientContext &client_context, BindContext &context) : cont
 class OptimizeSubqueries : public LogicalOperatorVisitor {
 public:
 	using LogicalOperatorVisitor::Visit;
-	unique_ptr<Expression> Visit(SubqueryExpression &subquery) override {
+	void Visit(SubqueryExpression &subquery) override {
 		// we perform join reordering within the subquery expression
 		JoinOrderOptimizer optimizer;
 		subquery.op = optimizer.Optimize(move(subquery.op));
-		return nullptr;
 	}
 };
 

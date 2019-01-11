@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> ExpressionExecutor::Visit(CaseExpression &expr) {
+void ExpressionExecutor::Visit(CaseExpression &expr) {
 	Vector check, res_true, res_false;
 	expr.check->Accept(this);
 	vector.Move(check);
@@ -17,5 +17,4 @@ unique_ptr<Expression> ExpressionExecutor::Visit(CaseExpression &expr) {
 	vector.Initialize(res_true.type);
 	VectorOperations::Case(check, res_true, res_false, vector);
 	Verify(expr);
-	return nullptr;
 }

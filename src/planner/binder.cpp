@@ -11,7 +11,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
+void Binder::Visit(SelectStatement &statement) {
 	// first we visit the FROM statement
 	// here we determine from where we can retrieve our columns (from which
 	// tables/subqueries)
@@ -22,7 +22,6 @@ unique_ptr<SQLStatement> Binder::Visit(SelectStatement &statement) {
 	}
 	// now visit the root node of the select statement
 	statement.node->Accept(this);
-	return nullptr;
 }
 
 static unique_ptr<Expression> replace_columns_with_group_refs(
@@ -105,7 +104,7 @@ void Binder::Visit(SelectNode &statement) {
 
 	for (size_t i = 0; i < new_select_list.size(); i++) {
 		auto &select_element = new_select_list[i];
-		AcceptChild(&select_element);
+		select_element->Accept(this);
 		select_element->ResolveType();
 		if (select_element->return_type == TypeId::INVALID) {
 			throw BinderException("Could not resolve type of projection element!");
@@ -120,7 +119,7 @@ void Binder::Visit(SelectNode &statement) {
 	}
 
 	for (auto &order : statement.orderby.orders) {
-		AcceptChild(&order.expression);
+		order.expression->Accept(this);
 		if (order.expression->type == ExpressionType::COLUMN_REF) {
 			auto selection_ref = reinterpret_cast<ColumnRefExpression *>(order.expression.get());
 			if (selection_ref->column_name.empty()) {
@@ -170,14 +169,14 @@ void Binder::Visit(SelectNode &statement) {
 	statement.select_list = move(new_select_list);
 
 	if (statement.where_clause) {
-		AcceptChild(&statement.where_clause);
+		statement.where_clause->Accept(this);
 		statement.where_clause->ResolveType();
 	}
 
 	if (statement.HasGroup()) {
 		// bind group columns
 		for (auto &group : statement.groupby.groups) {
-			AcceptChild(&group);
+			group->Accept(this);
 			group->ResolveType();
 		}
 
@@ -208,7 +207,7 @@ void Binder::Visit(SelectNode &statement) {
 	}
 
 	if (statement.groupby.having) {
-		AcceptChild(&statement.groupby.having);
+		statement.groupby.having->Accept(this);
 		statement.groupby.having->ResolveType();
 	}
 }
@@ -232,7 +231,7 @@ void Binder::Visit(SetOperationNode &statement) {
 	// get the selection list from one of the children, since a SetOp does not have its own selection list
 	auto &select_list = statement.GetSelectList();
 	for (auto &order : statement.orderby.orders) {
-		AcceptChild(&order.expression);
+		order.expression->Accept(this);
 		if (order.expression->type == ExpressionType::COLUMN_REF) {
 			auto selection_ref = (ColumnRefExpression *)order.expression.get();
 			if (selection_ref->column_name.empty()) {
@@ -252,69 +251,62 @@ void Binder::Visit(SetOperationNode &statement) {
 	}
 }
 
-unique_ptr<SQLStatement> Binder::Visit(InsertStatement &statement) {
+void Binder::Visit(InsertStatement &statement) {
 	if (statement.select_statement) {
-		AcceptChild(&statement.select_statement);
+		statement.select_statement->Accept(this);
 	}
 	// visit the expressions
 	for (auto &expression_list : statement.values) {
 		for (auto &expression : expression_list) {
-			AcceptChild(&expression);
-		}
-		for (auto &expression : expression_list) {
+			expression->Accept(this);
 			expression->ResolveType();
 		}
 	}
-	return nullptr;
 }
 
-unique_ptr<SQLStatement> Binder::Visit(CopyStatement &stmt) {
+void Binder::Visit(CopyStatement &stmt) {
 	if (stmt.select_statement) {
 		stmt.select_statement->Accept(this);
 	}
-	return nullptr;
 }
 
-unique_ptr<SQLStatement> Binder::Visit(CreateIndexStatement &stmt) {
+void Binder::Visit(CreateIndexStatement &stmt) {
 	// visit the table reference
 	AcceptChild(&stmt.table);
 	// visit the expressions
 	for (auto &expr : stmt.expressions) {
-		AcceptChild(&expr);
+		expr->Accept(this);
 		expr->ResolveType();
 		if (expr->return_type == TypeId::INVALID) {
 			throw BinderException("Could not resolve type of projection element!");
 		}
 		expr->ClearStatistics();
 	}
-	return nullptr;
 }
 
-unique_ptr<SQLStatement> Binder::Visit(DeleteStatement &stmt) {
+void Binder::Visit(DeleteStatement &stmt) {
 	// visit the table reference
 	AcceptChild(&stmt.table);
 	// project any additional columns required for the condition
 	if (stmt.condition) {
-		AcceptChild(&stmt.condition);
+		stmt.condition->Accept(this);
 	}
-	return nullptr;
 }
 
-unique_ptr<SQLStatement> Binder::Visit(AlterTableStatement &stmt) {
+void Binder::Visit(AlterTableStatement &stmt) {
 	// visit the table reference
 	AcceptChild(&stmt.table);
-	return nullptr;
 }
 
-unique_ptr<SQLStatement> Binder::Visit(UpdateStatement &stmt) {
+void Binder::Visit(UpdateStatement &stmt) {
 	// visit the table reference
 	AcceptChild(&stmt.table);
 	// project any additional columns required for the condition/expressions
 	if (stmt.condition) {
-		AcceptChild(&stmt.condition);
+		stmt.condition->Accept(this);
 	}
 	for (auto &expression : stmt.expressions) {
-		AcceptChild(&expression);
+		expression->Accept(this);
 		if (expression->type == ExpressionType::VALUE_DEFAULT) {
 			// we resolve the type of the DEFAULT expression in the
 			// LogicalPlanGenerator because that is where we resolve the
@@ -326,20 +318,18 @@ unique_ptr<SQLStatement> Binder::Visit(UpdateStatement &stmt) {
 			throw BinderException("Could not resolve type of projection element!");
 		}
 	}
-	return nullptr;
 }
 
-unique_ptr<SQLStatement> Binder::Visit(CreateTableStatement &stmt) {
+void Binder::Visit(CreateTableStatement &stmt) {
 	// bind any constraints
 	// first create a fake table
 	bind_context->AddDummyTable(stmt.info->table, stmt.info->columns);
-	for (auto &it : stmt.info->constraints) {
-		AcceptChild(&it);
+	for (auto &cond : stmt.info->constraints) {
+		cond->Accept(this);
 	}
-	return nullptr;
 }
 
-unique_ptr<Constraint> Binder::Visit(CheckConstraint &constraint) {
+void Binder::Visit(CheckConstraint &constraint) {
 	SQLNodeVisitor::Visit(constraint);
 
 	constraint.expression->ResolveType();
@@ -350,13 +340,12 @@ unique_ptr<Constraint> Binder::Visit(CheckConstraint &constraint) {
 	if (constraint.expression->return_type != TypeId::INTEGER) {
 		constraint.expression = make_unique<CastExpression>(TypeId::INTEGER, move(constraint.expression));
 	}
-	return nullptr;
 }
 
-unique_ptr<Expression> Binder::Visit(ColumnRefExpression &expr) {
+void Binder::Visit(ColumnRefExpression &expr) {
 	if (expr.column_name.empty()) {
 		// column expression should have been bound already
-		return nullptr;
+		return;
 	}
 	// individual column reference
 	// resolve to either a base table or a subquery expression
@@ -365,17 +354,15 @@ unique_ptr<Expression> Binder::Visit(ColumnRefExpression &expr) {
 		expr.table_name = bind_context->GetMatchingBinding(expr.column_name);
 	}
 	bind_context->BindColumn(expr);
-	return nullptr;
 }
 
-unique_ptr<Expression> Binder::Visit(FunctionExpression &expr) {
+void Binder::Visit(FunctionExpression &expr) {
 	SQLNodeVisitor::Visit(expr);
 	expr.bound_function =
 	    context.db.catalog.GetScalarFunction(context.ActiveTransaction(), expr.schema, expr.function_name);
-	return nullptr;
 }
 
-unique_ptr<Expression> Binder::Visit(SubqueryExpression &expr) {
+void Binder::Visit(SubqueryExpression &expr) {
 	assert(bind_context);
 
 	Binder binder(context, this);
@@ -398,7 +385,6 @@ unique_ptr<Expression> Binder::Visit(SubqueryExpression &expr) {
 	expr.return_type = expr.subquery_type == SubqueryType::EXISTS ? TypeId::BOOLEAN : select_list[0]->return_type;
 	expr.context = move(binder.bind_context);
 	expr.is_correlated = expr.context->GetMaxDepth() > 0;
-	return nullptr;
 }
 
 // CTEs are also referred to using BaseTableRefs, hence need to distinguish
@@ -425,7 +411,7 @@ unique_ptr<TableRef> Binder::Visit(CrossProductRef &expr) {
 unique_ptr<TableRef> Binder::Visit(JoinRef &expr) {
 	AcceptChild(&expr.left);
 	AcceptChild(&expr.right);
-	AcceptChild(&expr.condition);
+	expr.condition->Accept(this);
 	expr.condition->ResolveType();
 	return nullptr;
 }

@@ -18,17 +18,15 @@ class CreateSchemaStatement : public SQLStatement {
 public:
 	CreateSchemaStatement()
 	    : SQLStatement(StatementType::CREATE_SCHEMA), info(make_unique<CreateSchemaInformation>()){};
-	virtual ~CreateSchemaStatement() {
-	}
 
-	virtual string ToString() const {
+	string ToString() const override {
 		return "CREATE SCHEMA";
 	}
-	virtual unique_ptr<SQLStatement> Accept(SQLNodeVisitor *v) {
-		return v->Visit(*this);
+	void Accept(SQLNodeVisitor *v) override {
+		v->Visit(*this);
 	}
 
-	virtual bool Equals(const SQLStatement *other_) const {
+	bool Equals(const SQLStatement *other_) const override {
 		if (!SQLStatement::Equals(other_)) {
 			return false;
 		}
