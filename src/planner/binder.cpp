@@ -261,6 +261,9 @@ unique_ptr<SQLStatement> Binder::Visit(InsertStatement &statement) {
 		for (auto &expression : expression_list) {
 			AcceptChild(&expression);
 		}
+		for (auto &expression : expression_list) {
+			expression->ResolveType();
+		}
 	}
 	return nullptr;
 }
