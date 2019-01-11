@@ -60,6 +60,7 @@ unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(UpdateStatement &statement)
 	// scan the table for the referenced columns in the update clause
 	auto &table = get->table;
 	vector<column_t> column_ids;
+	vector<unique_ptr<Expression>> projection_expressions;
 	for (size_t i = 0; i < statement.columns.size(); i++) {
 		auto &colname = statement.columns[i];
 
@@ -68,16 +69,32 @@ unique_ptr<SQLStatement> LogicalPlanGenerator::Visit(UpdateStatement &statement)
 		}
 		auto &column = table->GetColumn(colname);
 		column_ids.push_back(column.oid);
+		// now resolve the expression
 		if (statement.expressions[i]->type == ExpressionType::VALUE_DEFAULT) {
 			// resolve the type of the DEFAULT expression
 			statement.expressions[i]->return_type = column.type;
 		} else {
-			// check if we have to create a cast
-			if (statement.expressions[i]->return_type != column.type) {
+			// visit this child and resolve its type
+			statement.expressions[i]->Accept(this);
+			statement.expressions[i]->ResolveType();
+			// now check if we have to create a cast
+			auto expression = move(statement.expressions[i]);
+			if (expression->return_type != column.type) {
 				// differing types, create a cast
-				statement.expressions[i] = make_unique<CastExpression>(column.type, move(statement.expressions[i]));
+				expression = make_unique<CastExpression>(column.type, move(expression));
 			}
+			statement.expressions[i] = make_unique<ColumnRefExpression>(expression->return_type, projection_expressions.size());
+			projection_expressions.push_back(move(expression));
 		}
+	}
+	if (projection_expressions.size() > 0) {
+		// have to create a projection first
+		// add the row id column to the projection list
+		projection_expressions.push_back(make_unique<ColumnRefExpression>(TypeId::POINTER, get->column_ids.size() - 1));
+		// now create the projection
+		auto proj = make_unique<LogicalProjection>(move(projection_expressions));
+		proj->AddChild(move(root));
+		root = move(proj);
 	}
 	// create the update node
 	auto update = make_unique<LogicalUpdate>(table, column_ids, move(statement.expressions));
