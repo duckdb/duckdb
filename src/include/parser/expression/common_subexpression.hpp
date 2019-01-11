@@ -51,9 +51,6 @@ public:
 		return child->ToString();
 	}
 
-	void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
-	}
 	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::COMMON_SUBEXPRESSION;
 	}

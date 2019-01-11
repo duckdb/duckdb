@@ -101,7 +101,7 @@ void ColumnBindingResolver::Visit(LogicalJoin &op) {
 	// resolve the column indices of the left side
 	op.children[0]->Accept(this);
 	for (auto &cond : op.conditions) {
-		cond.left->Accept(this);
+		VisitExpression(&cond.left);
 	}
 	// store the added tables
 	auto left_tables = bound_tables;
@@ -110,7 +110,7 @@ void ColumnBindingResolver::Visit(LogicalJoin &op) {
 	// now resolve the column indices of the right side
 	op.children[1]->Accept(this);
 	for (auto &cond : op.conditions) {
-		cond.right->Accept(this);
+		VisitExpression(&cond.right);
 	}
 	auto right_tables = bound_tables;
 

@@ -7,11 +7,14 @@ using namespace std;
 
 void ExpressionExecutor::Visit(CaseExpression &expr) {
 	Vector check, res_true, res_false;
-	expr.check->Accept(this);
+
+	Execute(expr.check);
 	vector.Move(check);
-	expr.result_if_true->Accept(this);
+
+	Execute(expr.result_if_true);
 	vector.Move(res_true);
-	expr.result_if_false->Accept(this);
+
+	Execute(expr.result_if_false);
 	vector.Move(res_false);
 
 	vector.Initialize(res_true.type);

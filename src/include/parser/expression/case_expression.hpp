@@ -20,9 +20,6 @@ public:
 	CaseExpression() : Expression(ExpressionType::OPERATOR_CASE_EXPR) {
 	}
 
-	void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
-	}
 	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::CASE;
 	}

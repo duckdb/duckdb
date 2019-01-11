@@ -7,9 +7,9 @@ using namespace std;
 
 void ExpressionExecutor::Visit(ConjunctionExpression &expr) {
 	Vector l, r, result;
-	expr.left->Accept(this);
+	Execute(expr.left);
 	vector.Move(l);
-	expr.right->Accept(this);
+	Execute(expr.right);
 	vector.Move(r);
 	vector.Initialize(TypeId::BOOLEAN);
 	switch (expr.type) {

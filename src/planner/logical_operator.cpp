@@ -72,15 +72,11 @@ size_t LogicalOperator::ExpressionCount() {
 }
 
 Expression *LogicalOperator::GetExpression(size_t index) {
-	if (index >= ExpressionCount()) {
-		throw OutOfRangeException("GetExpression(): Expression index out of range!");
-	}
+	assert(index < expressions.size());
 	return expressions[index].get();
 }
 
-void LogicalOperator::SetExpression(size_t index, unique_ptr<Expression> expr) {
-	if (index >= ExpressionCount()) {
-		throw OutOfRangeException("SetExpression(): Expression index out of range!");
-	}
-	expressions[index] = std::move(expr);
+void LogicalOperator::ReplaceExpression(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, size_t index) {
+	assert(index < expressions.size());
+	expressions[index] = callback(move(expressions[index]));
 }

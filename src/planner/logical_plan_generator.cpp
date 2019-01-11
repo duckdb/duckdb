@@ -50,7 +50,7 @@ void LogicalPlanGenerator::Visit(UpdateStatement &statement) {
 	auto get = (LogicalGet *)root.get();
 	// create the filter (if any)
 	if (statement.condition) {
-		statement.condition->Accept(this);
+		VisitExpression(&statement.condition);
 		auto filter = make_unique<LogicalFilter>(move(statement.condition));
 		filter->AddChild(move(root));
 		root = move(filter);
@@ -73,7 +73,7 @@ void LogicalPlanGenerator::Visit(UpdateStatement &statement) {
 			statement.expressions[i]->return_type = column.type;
 		} else {
 			// visit this child and resolve its type
-			statement.expressions[i]->Accept(this);
+			VisitExpression(&statement.expressions[i]);
 			statement.expressions[i]->ResolveType();
 			// now check if we have to create a cast
 			auto expression = move(statement.expressions[i]);
@@ -112,7 +112,7 @@ void LogicalPlanGenerator::Visit(DeleteStatement &statement) {
 	auto get = (LogicalGet *)root.get();
 	// create the filter (if any)
 	if (statement.condition) {
-		statement.condition->Accept(this);
+		VisitExpression(&statement.condition);
 		auto filter = make_unique<LogicalFilter>(move(statement.condition));
 		filter->AddChild(move(root));
 		root = move(filter);
@@ -207,7 +207,7 @@ static unique_ptr<Expression> extract_windows(unique_ptr<Expression> expr, vecto
 
 void LogicalPlanGenerator::Visit(SelectNode &statement) {
 	for (auto &expr : statement.select_list) {
-		expr->Accept(this);
+		VisitExpression(&expr);
 	}
 
 	if (statement.from_table) {
@@ -219,7 +219,7 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 	}
 
 	if (statement.where_clause) {
-		statement.where_clause->Accept(this);
+		VisitExpression(&statement.where_clause);
 
 		auto filter = make_unique<LogicalFilter>(move(statement.where_clause));
 		filter->AddChild(move(root));
@@ -236,7 +236,7 @@ void LogicalPlanGenerator::Visit(SelectNode &statement) {
 		}
 
 		if (statement.HasHaving()) {
-			statement.groupby.having->Accept(this);
+			VisitExpression(&statement.groupby.having);
 			// the HAVING child cannot contain aggregates itself
 			// turn them into Column References
 			statement.groupby.having =
@@ -528,7 +528,7 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(CrossProductRef &expr) {
 }
 
 unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
-	expr.condition->Accept(this);
+	VisitExpression(&expr.condition);
 	auto join = make_unique<LogicalJoin>(expr.type);
 
 	if (root) {
@@ -623,7 +623,7 @@ void LogicalPlanGenerator::Visit(InsertStatement &statement) {
 		// first visit the expressions
 		for (auto &expression_list : statement.values) {
 			for (auto &expression : expression_list) {
-				expression->Accept(this);
+				VisitExpression(&expression);
 			}
 		}
 		// insert from constants

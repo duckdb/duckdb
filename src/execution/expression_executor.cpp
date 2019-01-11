@@ -38,8 +38,7 @@ void ExpressionExecutor::Merge(std::vector<std::unique_ptr<Expression>> &express
 
 void ExpressionExecutor::ExecuteExpression(Expression *expr, Vector &result) {
 	vector.Destroy();
-	expr->Accept(this);
-
+	VisitExpression(expr);
 	if (chunk && scalar_executor) {
 		if (vector.count == 1 && (chunk->size() > 1 || vector.sel_vector != chunk->sel_vector)) {
 			// have to duplicate the constant value to match the rows in the
@@ -67,8 +66,7 @@ void ExpressionExecutor::MergeExpression(Expression *expr, Vector &result) {
 	if (result.type != TypeId::BOOLEAN) {
 		throw NotImplementedException("Expected a boolean!");
 	}
-	expr->Accept(this);
-
+	VisitExpression(expr);
 	if (vector.type != TypeId::BOOLEAN) {
 		throw NotImplementedException("Expected a boolean!");
 	}

@@ -8,7 +8,7 @@ using namespace std;
 void ExpressionExecutor::Visit(CastExpression &expr) {
 	// resolve the child
 	Vector l;
-	expr.child->Accept(this);
+	Execute(expr.child);
 	if (vector.type == expr.return_type) {
 		// NOP cast
 		return;

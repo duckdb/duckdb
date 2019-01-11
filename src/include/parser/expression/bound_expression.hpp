@@ -20,10 +20,6 @@ public:
 	    : Expression(ExpressionType::BOUND_REF, type), index(index), depth(depth) {
 	}
 
-	void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
-	}
-
 	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::BOUND_REF;
 	}

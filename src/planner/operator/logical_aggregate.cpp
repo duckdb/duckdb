@@ -28,25 +28,24 @@ size_t LogicalAggregate::ExpressionCount() {
 	return expressions.size() + groups.size();
 }
 
-Expression *LogicalAggregate::GetExpression(size_t index) {
-	if (index >= ExpressionCount()) {
-		throw OutOfRangeException("GetExpression(): Expression index out of range!");
-	}
-	if (index >= expressions.size()) {
-		return groups[index - expressions.size()].get();
-	}
-	return expressions[index].get();
-}
-
-void LogicalAggregate::SetExpression(size_t index, unique_ptr<Expression> expr) {
-	if (index >= ExpressionCount()) {
-		throw OutOfRangeException("SetExpression(): Expression index out of range!");
-	}
-	if (index >= expressions.size()) {
-		groups[index - expressions.size()] = move(expr);
+ Expression *LogicalAggregate::GetExpression(size_t index) {
+	if (index < expressions.size()) {
+		return LogicalOperator::GetExpression(index);
 	} else {
-		expressions[index] = move(expr);
-	}
+		index -= expressions.size();
+		assert(index < groups.size());
+		return groups[index].get();
+ 	}
+ }
+ 
+void LogicalAggregate::ReplaceExpression(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, size_t index) {
+	if (index < expressions.size()) {
+		LogicalOperator::ReplaceExpression(callback, index);
+ 	} else {
+		index -= expressions.size();
+		assert(index < groups.size());
+		groups[index] = callback(move(groups[index]));
+ 	}
 }
 
 string LogicalAggregate::ParamsToString() const {

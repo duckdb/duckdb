@@ -18,9 +18,6 @@ public:
 	DefaultExpression() : Expression(ExpressionType::VALUE_DEFAULT) {
 	}
 
-	void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
-	}
 	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::DEFAULT;
 	}

@@ -17,7 +17,8 @@ public:
 	LogicalCreateIndex(TableCatalogEntry &table, vector<column_t> column_ids,
 	                   vector<unique_ptr<Expression>> expressions, unique_ptr<CreateIndexInformation> info)
 	    : LogicalOperator(LogicalOperatorType::CREATE_INDEX), table(table), column_ids(column_ids),
-	      expressions(std::move(expressions)), info(std::move(info)) {
+	      info(std::move(info)) {
+		this->expressions = move(expressions);
 	}
 
 	void Accept(LogicalOperatorVisitor *v) override {
@@ -31,8 +32,6 @@ public:
 	TableCatalogEntry &table;
 	//! Column IDs needed for index creation
 	vector<column_t> column_ids;
-	//! Set of expressions to index by
-	vector<unique_ptr<Expression>> expressions;
 	// Info for index creation
 	unique_ptr<CreateIndexInformation> info;
 

@@ -31,7 +31,7 @@ public:
 
 	size_t ExpressionCount() override;
 	Expression *GetExpression(size_t index) override;
-	void SetExpression(size_t index, unique_ptr<Expression> expr) override;
+	void ReplaceExpression(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, size_t index) override;
 
 	string ParamsToString() const override;
 

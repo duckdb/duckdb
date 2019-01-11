@@ -22,9 +22,6 @@ public:
 		this->right = move(right);
 	}
 
-	void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
-	}
 	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::COMPARISON;
 	}

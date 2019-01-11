@@ -58,10 +58,6 @@ public:
 		return table_name;
 	}
 
-	void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
-	}
-
 	string GetName() const override {
 		return !alias.empty() ? alias : column_name;
 	}

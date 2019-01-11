@@ -80,7 +80,7 @@ public:
 
 	virtual size_t ExpressionCount();
 	virtual Expression *GetExpression(size_t index);
-	virtual void SetExpression(size_t index, unique_ptr<Expression> expr);
+	virtual void ReplaceExpression(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, size_t index);
 
 protected:
 	//! Resolve types for this specific operator

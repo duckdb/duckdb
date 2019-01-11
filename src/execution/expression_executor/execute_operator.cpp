@@ -15,7 +15,7 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 		}
 		Vector l;
 		// eval left side
-		expr.children[0]->Accept(this);
+		Execute(expr.children[0]);
 		vector.Move(l);
 
 		// init result to false
@@ -103,7 +103,7 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 			// to get the overall result.
 			for (size_t child = 1; child < expr.children.size(); child++) {
 				Vector comp_res(TypeId::BOOLEAN, true, false);
-				expr.children[child]->Accept(this);
+				Execute(expr.children[child]);
 				VectorOperations::Equals(l, vector, comp_res);
 				vector.Destroy();
 				if (child == 1) {
@@ -127,7 +127,7 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 		}
 		expr.stats.Verify(vector);
 	} else if (expr.children.size() == 1) {
-		expr.children[0]->Accept(this);
+		Execute(expr.children[0]);
 		switch (expr.type) {
 		case ExpressionType::OPERATOR_EXISTS:
 			// the subquery in the only child will already create the correct
@@ -161,9 +161,10 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 		}
 	} else if (expr.children.size() == 2) {
 		Vector l, r;
-		expr.children[0]->Accept(this);
+		Execute(expr.children[0]);
 		vector.Move(l);
-		expr.children[1]->Accept(this);
+		
+		Execute(expr.children[1]);
 		vector.Move(r);
 
 		vector.Initialize(l.type);

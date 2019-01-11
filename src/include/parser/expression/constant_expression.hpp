@@ -21,9 +21,6 @@ public:
 	ConstantExpression(Value val) : Expression(ExpressionType::VALUE_CONSTANT, val.type), value(val) {
 	}
 
-	void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
-	}
 	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::CONSTANT;
 	}

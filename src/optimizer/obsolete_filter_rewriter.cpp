@@ -6,7 +6,7 @@ using namespace duckdb;
 using namespace std;
 
 class RewriteSubqueries : public SQLNodeVisitor {
-public:
+protected:
 	using SQLNodeVisitor::Visit;
 	void Visit(SubqueryExpression &subquery) override {
 		// we perform join reordering within the subquery expression
@@ -260,7 +260,7 @@ unique_ptr<LogicalOperator> ObsoleteFilterRewriter::Rewrite(unique_ptr<LogicalOp
 	}
 	RewriteSubqueries subquery_rewriter;
 	for (auto &it : node->expressions) {
-		it->Accept(&subquery_rewriter);
+		subquery_rewriter.VisitExpression(&it);
 	}
 	for (size_t i = 0; i < node->children.size(); i++) {
 		node->children[i] = Rewrite(move(node->children[i]));

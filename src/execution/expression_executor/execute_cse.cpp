@@ -13,7 +13,7 @@ void ExpressionExecutor::Visit(CommonSubExpression &expr) {
 		vector.Reference(*(entry->second));
 	} else {
 		// else execute it
-		expr.child->Accept(this);
+		Execute(expr.child);
 		auto it = state->cached_cse.insert(make_pair(expr.child, make_unique<Vector>()));
 		auto &inserted_vector = *(it.first->second);
 		// move the result data to the vector cached in the CSE map

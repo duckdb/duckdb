@@ -19,9 +19,6 @@ public:
 	StarExpression() : Expression(ExpressionType::STAR) {
 	}
 
-	void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
-	}
 	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::STAR;
 	}

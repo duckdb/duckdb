@@ -42,10 +42,6 @@ public:
 		return true;
 	}
 
-	void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
-	}
-
 	unique_ptr<Expression> Copy() override;
 
 	size_t ChildCount() const override;

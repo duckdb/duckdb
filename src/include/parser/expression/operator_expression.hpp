@@ -30,9 +30,6 @@ public:
 
 	void ResolveType() override;
 
-	void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
-	}
 	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::OPERATOR;
 	}

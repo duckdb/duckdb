@@ -57,23 +57,32 @@ public:
 	void MergeExpression(Expression *expr, Vector &result);
 	//! Verify that the output of a step in the ExpressionExecutor is correct
 	void Verify(Expression &expr);
+protected:
+	void Execute(unique_ptr<Expression> &expr) {
+		VisitExpression(expr.get());
+	}
+	void Execute(Expression* expr) {
+		VisitExpression(expr);
+	}
 
-	void Visit(AggregateExpression &expr) {
+	// We don't want to automatically visit children in the ExpressionExecutor, so we replace this method with the empty method
+	void VisitExpressionChildren(Expression &expression) override {}
+	void Visit(AggregateExpression &expr) override {
 		throw NotImplementedException("Cannot execute AGGREGATE expression in ExpressionExecutor");
 	}
-	void Visit(CaseExpression &expr);
-	void Visit(CastExpression &expr);
-	void Visit(ColumnRefExpression &expr);
-	void Visit(CommonSubExpression &expr);
-	void Visit(ComparisonExpression &expr);
-	void Visit(ConjunctionExpression &expr);
-	void Visit(ConstantExpression &expr);
-	void Visit(DefaultExpression &expr) {
+	void Visit(CaseExpression &expr) override;
+	void Visit(CastExpression &expr) override;
+	void Visit(ColumnRefExpression &expr) override;
+	void Visit(CommonSubExpression &expr) override;
+	void Visit(ComparisonExpression &expr) override;
+	void Visit(ConjunctionExpression &expr) override;
+	void Visit(ConstantExpression &expr) override;
+	void Visit(DefaultExpression &expr) override {
 		throw NotImplementedException("Cannot execute DEFAULT expression in ExpressionExecutor");
 	}
-	void Visit(FunctionExpression &expr);
-	void Visit(OperatorExpression &expr);
-	void Visit(SubqueryExpression &expr);
+	void Visit(FunctionExpression &expr) override;
+	void Visit(OperatorExpression &expr) override;
+	void Visit(SubqueryExpression &expr) override;
 
 private:
 	ClientContext &context;

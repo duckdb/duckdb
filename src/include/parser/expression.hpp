@@ -41,9 +41,6 @@ public:
 	Expression(ExpressionType type, TypeId return_type) : type(type), return_type(return_type), stats(*this) {
 	}
 
-	virtual void Accept(SQLNodeVisitor *) = 0;
-	virtual void AcceptChildren(SQLNodeVisitor *v);
-
 	//! Resolves the type for this expression based on its children
 	virtual void ResolveType() {
 		EnumerateChildren([](Expression *child) { child->ResolveType(); });

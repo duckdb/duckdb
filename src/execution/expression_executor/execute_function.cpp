@@ -10,7 +10,7 @@ void ExpressionExecutor::Visit(FunctionExpression &expr) {
 
 	auto arguments = unique_ptr<Vector[]>(new Vector[expr.children.size()]);
 	for (size_t i = 0; i < expr.children.size(); i++) {
-		expr.children[i]->Accept(this);
+		Execute(expr.children[i]);
 		vector.Move(arguments[i]);
 	}
 	vector.Destroy();

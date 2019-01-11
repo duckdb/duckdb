@@ -266,8 +266,8 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 	bool has_equality = false;
 	bool has_inequality = false;
 	for (auto &cond : op.conditions) {
-		cond.left->Accept(this);
-		cond.right->Accept(this);
+		VisitExpression(&cond.left);
+		VisitExpression(&cond.right);
 		if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
 			has_equality = true;
 		}

@@ -7,16 +7,16 @@ using namespace std;
 
 void LogicalOperatorVisitor::VisitOperator(LogicalOperator &op) {
 	op.AcceptChildren(this);
+	for(size_t i = 0, child_count = op.ExpressionCount(); i < child_count; i++) {
+		op.ReplaceExpression([&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
+			VisitExpression(&child);
+			return child;
+		}, i);
+	}
 }
 
 void LogicalOperatorVisitor::Visit(LogicalAggregate &op) {
 	VisitOperator(op);
-	for (auto &exp : op.groups) {
-		exp->Accept(this);
-	}
-	for (auto &exp : op.expressions) {
-		exp->Accept(this);
-	}
 }
 
 void LogicalOperatorVisitor::Visit(LogicalCrossProduct &op) {
@@ -37,16 +37,10 @@ void LogicalOperatorVisitor::Visit(LogicalPruneColumns &op) {
 
 void LogicalOperatorVisitor::Visit(LogicalDelete &op) {
 	VisitOperator(op);
-	for (auto &exp : op.expressions) {
-		exp->Accept(this);
-	}
 }
 
 void LogicalOperatorVisitor::Visit(LogicalUpdate &op) {
 	VisitOperator(op);
-	for (auto &exp : op.expressions) {
-		exp->Accept(this);
-	}
 }
 
 void LogicalOperatorVisitor::Visit(LogicalUnion &op) {
@@ -63,9 +57,6 @@ void LogicalOperatorVisitor::Visit(LogicalIntersect &op) {
 
 void LogicalOperatorVisitor::Visit(LogicalFilter &op) {
 	VisitOperator(op);
-	for (auto &exp : op.expressions) {
-		exp->Accept(this);
-	}
 }
 
 void LogicalOperatorVisitor::Visit(LogicalGet &op) {
@@ -73,10 +64,6 @@ void LogicalOperatorVisitor::Visit(LogicalGet &op) {
 }
 
 void LogicalOperatorVisitor::Visit(LogicalJoin &op) {
-	for (auto &cond : op.conditions) {
-		cond.left->Accept(this);
-		cond.right->Accept(this);
-	}
 	VisitOperator(op);
 }
 
@@ -86,26 +73,14 @@ void LogicalOperatorVisitor::Visit(LogicalLimit &op) {
 
 void LogicalOperatorVisitor::Visit(LogicalOrder &op) {
 	VisitOperator(op);
-	for (auto &exp : op.description.orders) {
-		exp.expression->Accept(this);
-	}
 }
 
 void LogicalOperatorVisitor::Visit(LogicalProjection &op) {
 	VisitOperator(op);
-	for (auto &exp : op.expressions) {
-		exp->Accept(this);
-	}
 }
 
 void LogicalOperatorVisitor::Visit(LogicalInsert &op) {
 	VisitOperator(op);
-
-	for (auto &list : op.insert_values) {
-		for (auto &exp : list) {
-			exp->Accept(this);
-		}
-	}
 }
 
 void LogicalOperatorVisitor::Visit(LogicalCreate &op) {
@@ -115,10 +90,6 @@ void LogicalOperatorVisitor::Visit(LogicalCreate &op) {
 
 void LogicalOperatorVisitor::Visit(LogicalCreateIndex &op) {
 	VisitOperator(op);
-
-	for (auto &exp : op.expressions) {
-		exp->Accept(this);
-	}
 }
 
 void LogicalOperatorVisitor::Visit(LogicalCopy &op) {
@@ -131,7 +102,4 @@ void LogicalOperatorVisitor::Visit(LogicalExplain &op) {
 
 void LogicalOperatorVisitor::Visit(LogicalWindow &op) {
 	VisitOperator(op);
-	for (auto &exp : op.expressions) {
-		exp->Accept(this);
-	}
 }

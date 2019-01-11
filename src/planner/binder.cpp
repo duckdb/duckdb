@@ -104,7 +104,7 @@ void Binder::Visit(SelectNode &statement) {
 
 	for (size_t i = 0; i < new_select_list.size(); i++) {
 		auto &select_element = new_select_list[i];
-		select_element->Accept(this);
+		VisitExpression(&select_element);
 		select_element->ResolveType();
 		if (select_element->return_type == TypeId::INVALID) {
 			throw BinderException("Could not resolve type of projection element!");
@@ -119,7 +119,7 @@ void Binder::Visit(SelectNode &statement) {
 	}
 
 	for (auto &order : statement.orderby.orders) {
-		order.expression->Accept(this);
+		VisitExpression(&order.expression);
 		if (order.expression->type == ExpressionType::COLUMN_REF) {
 			auto selection_ref = reinterpret_cast<ColumnRefExpression *>(order.expression.get());
 			if (selection_ref->column_name.empty()) {
@@ -169,14 +169,14 @@ void Binder::Visit(SelectNode &statement) {
 	statement.select_list = move(new_select_list);
 
 	if (statement.where_clause) {
-		statement.where_clause->Accept(this);
+		VisitExpression(&statement.where_clause);
 		statement.where_clause->ResolveType();
 	}
 
 	if (statement.HasGroup()) {
 		// bind group columns
 		for (auto &group : statement.groupby.groups) {
-			group->Accept(this);
+			VisitExpression(&group);
 			group->ResolveType();
 		}
 
@@ -207,7 +207,7 @@ void Binder::Visit(SelectNode &statement) {
 	}
 
 	if (statement.groupby.having) {
-		statement.groupby.having->Accept(this);
+		VisitExpression(&statement.groupby.having);
 		statement.groupby.having->ResolveType();
 	}
 }
@@ -231,7 +231,7 @@ void Binder::Visit(SetOperationNode &statement) {
 	// get the selection list from one of the children, since a SetOp does not have its own selection list
 	auto &select_list = statement.GetSelectList();
 	for (auto &order : statement.orderby.orders) {
-		order.expression->Accept(this);
+		VisitExpression(&order.expression);
 		if (order.expression->type == ExpressionType::COLUMN_REF) {
 			auto selection_ref = (ColumnRefExpression *)order.expression.get();
 			if (selection_ref->column_name.empty()) {
@@ -258,7 +258,7 @@ void Binder::Visit(InsertStatement &statement) {
 	// visit the expressions
 	for (auto &expression_list : statement.values) {
 		for (auto &expression : expression_list) {
-			expression->Accept(this);
+			VisitExpression(&expression);
 			expression->ResolveType();
 		}
 	}
@@ -275,7 +275,7 @@ void Binder::Visit(CreateIndexStatement &stmt) {
 	AcceptChild(&stmt.table);
 	// visit the expressions
 	for (auto &expr : stmt.expressions) {
-		expr->Accept(this);
+		VisitExpression(&expr);
 		expr->ResolveType();
 		if (expr->return_type == TypeId::INVALID) {
 			throw BinderException("Could not resolve type of projection element!");
@@ -289,7 +289,7 @@ void Binder::Visit(DeleteStatement &stmt) {
 	AcceptChild(&stmt.table);
 	// project any additional columns required for the condition
 	if (stmt.condition) {
-		stmt.condition->Accept(this);
+		VisitExpression(&stmt.condition);
 	}
 }
 
@@ -303,10 +303,10 @@ void Binder::Visit(UpdateStatement &stmt) {
 	AcceptChild(&stmt.table);
 	// project any additional columns required for the condition/expressions
 	if (stmt.condition) {
-		stmt.condition->Accept(this);
+		VisitExpression(&stmt.condition);
 	}
 	for (auto &expression : stmt.expressions) {
-		expression->Accept(this);
+		VisitExpression(&expression);
 		if (expression->type == ExpressionType::VALUE_DEFAULT) {
 			// we resolve the type of the DEFAULT expression in the
 			// LogicalPlanGenerator because that is where we resolve the
@@ -357,7 +357,6 @@ void Binder::Visit(ColumnRefExpression &expr) {
 }
 
 void Binder::Visit(FunctionExpression &expr) {
-	SQLNodeVisitor::Visit(expr);
 	expr.bound_function =
 	    context.db.catalog.GetScalarFunction(context.ActiveTransaction(), expr.schema, expr.function_name);
 }
@@ -411,7 +410,7 @@ unique_ptr<TableRef> Binder::Visit(CrossProductRef &expr) {
 unique_ptr<TableRef> Binder::Visit(JoinRef &expr) {
 	AcceptChild(&expr.left);
 	AcceptChild(&expr.right);
-	expr.condition->Accept(this);
+	VisitExpression(&expr.condition);
 	expr.condition->ResolveType();
 	return nullptr;
 }
