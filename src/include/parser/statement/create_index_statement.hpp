@@ -23,7 +23,7 @@ public:
 	string ToString() const override {
 		return "CREATE INDEX";
 	}
-	
+
 	//! The table to create the index on
 	unique_ptr<BaseTableRef> table;
 	//! Set of expressions to index by

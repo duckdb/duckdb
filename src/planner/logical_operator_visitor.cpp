@@ -7,11 +7,13 @@ using namespace std;
 
 void LogicalOperatorVisitor::VisitOperator(LogicalOperator &op) {
 	op.AcceptChildren(this);
-	for(size_t i = 0, child_count = op.ExpressionCount(); i < child_count; i++) {
-		op.ReplaceExpression([&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
-			VisitExpression(&child);
-			return child;
-		}, i);
+	for (size_t i = 0, child_count = op.ExpressionCount(); i < child_count; i++) {
+		op.ReplaceExpression(
+		    [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
+			    VisitExpression(&child);
+			    return child;
+		    },
+		    i);
 	}
 }
 

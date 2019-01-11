@@ -28,24 +28,25 @@ size_t LogicalAggregate::ExpressionCount() {
 	return expressions.size() + groups.size();
 }
 
- Expression *LogicalAggregate::GetExpression(size_t index) {
+Expression *LogicalAggregate::GetExpression(size_t index) {
 	if (index < expressions.size()) {
 		return LogicalOperator::GetExpression(index);
 	} else {
 		index -= expressions.size();
 		assert(index < groups.size());
 		return groups[index].get();
- 	}
- }
- 
-void LogicalAggregate::ReplaceExpression(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, size_t index) {
+	}
+}
+
+void LogicalAggregate::ReplaceExpression(
+    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, size_t index) {
 	if (index < expressions.size()) {
 		LogicalOperator::ReplaceExpression(callback, index);
- 	} else {
+	} else {
 		index -= expressions.size();
 		assert(index < groups.size());
 		groups[index] = callback(move(groups[index]));
- 	}
+	}
 }
 
 string LogicalAggregate::ParamsToString() const {

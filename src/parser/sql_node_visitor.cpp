@@ -7,58 +7,57 @@
 using namespace duckdb;
 using namespace std;
 
-
 void SQLNodeVisitor::VisitExpression(Expression *expr_ptr) {
 	auto &expr = *expr_ptr;
 	auto expr_class = expr.GetExpressionClass();
-	switch(expr_class) {
+	switch (expr_class) {
 	case ExpressionClass::AGGREGATE:
-		Visit((AggregateExpression&) expr);
+		Visit((AggregateExpression &)expr);
 		break;
 	case ExpressionClass::ALIAS_REF:
 		assert(0);
 		break;
 	case ExpressionClass::CASE:
-		Visit((CaseExpression&) expr);
+		Visit((CaseExpression &)expr);
 		break;
 	case ExpressionClass::CAST:
-		Visit((CastExpression&) expr);
+		Visit((CastExpression &)expr);
 		break;
 	case ExpressionClass::COLUMN_REF:
-		Visit((ColumnRefExpression&) expr);
+		Visit((ColumnRefExpression &)expr);
 		break;
 	case ExpressionClass::COMPARISON:
-		Visit((ComparisonExpression&) expr);
+		Visit((ComparisonExpression &)expr);
 		break;
 	case ExpressionClass::CONJUNCTION:
-		Visit((ConjunctionExpression&) expr);
+		Visit((ConjunctionExpression &)expr);
 		break;
 	case ExpressionClass::CONSTANT:
-		Visit((ConstantExpression&) expr);
+		Visit((ConstantExpression &)expr);
 		break;
 	case ExpressionClass::DEFAULT:
-		Visit((DefaultExpression&) expr);
+		Visit((DefaultExpression &)expr);
 		break;
 	case ExpressionClass::FUNCTION:
-		Visit((FunctionExpression&) expr);
+		Visit((FunctionExpression &)expr);
 		break;
 	case ExpressionClass::OPERATOR:
-		Visit((OperatorExpression&) expr);
+		Visit((OperatorExpression &)expr);
 		break;
 	case ExpressionClass::STAR:
-		Visit((StarExpression&) expr);
+		Visit((StarExpression &)expr);
 		break;
 	case ExpressionClass::SUBQUERY:
-		Visit((SubqueryExpression&) expr);
+		Visit((SubqueryExpression &)expr);
 		break;
 	case ExpressionClass::WINDOW:
-		Visit((WindowExpression&) expr);
+		Visit((WindowExpression &)expr);
 		break;
 	case ExpressionClass::COMMON_SUBEXPRESSION:
-		Visit((CommonSubExpression&) expr);
+		Visit((CommonSubExpression &)expr);
 		break;
 	case ExpressionClass::BOUND_REF:
-		Visit((BoundExpression&) expr);
+		Visit((BoundExpression &)expr);
 		break;
 	default:
 		assert(0);
@@ -68,60 +67,59 @@ void SQLNodeVisitor::VisitExpression(Expression *expr_ptr) {
 	VisitExpressionChildren(expr);
 }
 
-
 void SQLNodeVisitor::VisitExpression(unique_ptr<Expression> *expr_ptr) {
 	auto &expr = **expr_ptr;
 	auto expr_class = expr.GetExpressionClass();
 	unique_ptr<Expression> retval;
-	switch(expr_class) {
+	switch (expr_class) {
 	case ExpressionClass::AGGREGATE:
-		retval = VisitReplace((AggregateExpression&) expr);
+		retval = VisitReplace((AggregateExpression &)expr);
 		break;
 	case ExpressionClass::ALIAS_REF:
 		assert(0);
 		break;
 	case ExpressionClass::CASE:
-		retval = VisitReplace((CaseExpression&) expr);
+		retval = VisitReplace((CaseExpression &)expr);
 		break;
 	case ExpressionClass::CAST:
-		retval = VisitReplace((CastExpression&) expr);
+		retval = VisitReplace((CastExpression &)expr);
 		break;
 	case ExpressionClass::COLUMN_REF:
-		retval = VisitReplace((ColumnRefExpression&) expr);
+		retval = VisitReplace((ColumnRefExpression &)expr);
 		break;
 	case ExpressionClass::COMPARISON:
-		retval = VisitReplace((ComparisonExpression&) expr);
+		retval = VisitReplace((ComparisonExpression &)expr);
 		break;
 	case ExpressionClass::CONJUNCTION:
-		retval = VisitReplace((ConjunctionExpression&) expr);
+		retval = VisitReplace((ConjunctionExpression &)expr);
 		break;
 	case ExpressionClass::CONSTANT:
-		retval = VisitReplace((ConstantExpression&) expr);
+		retval = VisitReplace((ConstantExpression &)expr);
 		break;
 	case ExpressionClass::DEFAULT:
-		retval = VisitReplace((DefaultExpression&) expr);
+		retval = VisitReplace((DefaultExpression &)expr);
 		break;
 	case ExpressionClass::FUNCTION:
-		retval = VisitReplace((FunctionExpression&) expr);
+		retval = VisitReplace((FunctionExpression &)expr);
 		break;
 	case ExpressionClass::OPERATOR:
-		retval = VisitReplace((OperatorExpression&) expr);
+		retval = VisitReplace((OperatorExpression &)expr);
 		break;
 	case ExpressionClass::STAR:
-		retval = VisitReplace((StarExpression&) expr);
+		retval = VisitReplace((StarExpression &)expr);
 		break;
 	case ExpressionClass::SUBQUERY:
-		retval = VisitReplace((SubqueryExpression&) expr);
+		retval = VisitReplace((SubqueryExpression &)expr);
 		break;
 	case ExpressionClass::WINDOW:
-		retval = VisitReplace((WindowExpression&) expr);
+		retval = VisitReplace((WindowExpression &)expr);
 		break;
 	case ExpressionClass::COMMON_SUBEXPRESSION:
-		retval = VisitReplace((CommonSubExpression&) expr);
+		retval = VisitReplace((CommonSubExpression &)expr);
 		break;
 	case ExpressionClass::BOUND_REF:
 		assert(expr_class == ExpressionClass::BOUND_REF);
-		retval = VisitReplace((BoundExpression&) expr);
+		retval = VisitReplace((BoundExpression &)expr);
 		break;
 	default:
 		assert(0);

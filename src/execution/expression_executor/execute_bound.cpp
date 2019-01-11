@@ -13,7 +13,7 @@ void ExpressionExecutor::Visit(BoundExpression &expr) {
 		assert(cur_exec);
 		cur_depth--;
 	}
-	assert(expr.index != (size_t) -1);
+	assert(expr.index != (size_t)-1);
 	assert(expr.index < cur_exec->chunk->column_count);
 
 	vector.Reference(cur_exec->chunk->data[expr.index]);

@@ -31,6 +31,7 @@ public:
 	}
 
 	void Bind(SQLStatement &statement);
+
 protected:
 	void Bind(SelectStatement &statement);
 	void Bind(InsertStatement &stmt);
@@ -41,16 +42,16 @@ protected:
 	void Bind(CreateTableStatement &stmt);
 	void Bind(CreateIndexStatement &stmt);
 
-	void Bind(QueryNode& node);
+	void Bind(QueryNode &node);
 	void Bind(SelectNode &node);
 	void Bind(SetOperationNode &node);
 
 	void Visit(ColumnRefExpression &expr) override;
 	void Visit(FunctionExpression &expr) override;
 	void Visit(SubqueryExpression &expr) override;
+
 public:
 	void Visit(CheckConstraint &constraint) override;
-
 
 	unique_ptr<TableRef> Visit(BaseTableRef &expr) override;
 	unique_ptr<TableRef> Visit(CrossProductRef &expr) override;

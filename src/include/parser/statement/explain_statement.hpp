@@ -24,7 +24,7 @@ public:
 	string ToString() const override {
 		return "Explain";
 	}
-	
+
 	bool Equals(const SQLStatement *other_) const override {
 		if (!SQLStatement::Equals(other_)) {
 			return false;

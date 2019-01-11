@@ -57,16 +57,19 @@ public:
 	void MergeExpression(Expression *expr, Vector &result);
 	//! Verify that the output of a step in the ExpressionExecutor is correct
 	void Verify(Expression &expr);
+
 protected:
 	void Execute(unique_ptr<Expression> &expr) {
 		VisitExpression(expr.get());
 	}
-	void Execute(Expression* expr) {
+	void Execute(Expression *expr) {
 		VisitExpression(expr);
 	}
 
-	// We don't want to automatically visit children in the ExpressionExecutor, so we replace this method with the empty method
-	void VisitExpressionChildren(Expression &expression) override {}
+	// We don't want to automatically visit children in the ExpressionExecutor, so we replace this method with the empty
+	// method
+	void VisitExpressionChildren(Expression &expression) override {
+	}
 	void Visit(AggregateExpression &expr) override {
 		throw NotImplementedException("Cannot execute AGGREGATE expression in ExpressionExecutor");
 	}

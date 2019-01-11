@@ -12,7 +12,7 @@ void ExpressionExecutor::Visit(ComparisonExpression &expr) {
 
 	Execute(expr.right);
 	vector.Move(r);
-	
+
 	vector.Initialize(TypeId::BOOLEAN);
 
 	switch (expr.type) {

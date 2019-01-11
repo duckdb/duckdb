@@ -26,6 +26,7 @@ public:
 	}
 
 	void CreatePlan(SQLStatement &statement);
+
 protected:
 	void CreatePlan(SelectStatement &statement);
 	void CreatePlan(InsertStatement &statement);
@@ -38,7 +39,7 @@ protected:
 	void CreatePlan(QueryNode &statement);
 	void CreatePlan(SelectNode &statement);
 	void CreatePlan(SetOperationNode &statement);
-	
+
 	void VisitQueryNode(QueryNode &statement);
 
 	void Visit(AggregateExpression &expr) override;

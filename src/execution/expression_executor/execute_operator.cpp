@@ -163,7 +163,7 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 		Vector l, r;
 		Execute(expr.children[0]);
 		vector.Move(l);
-		
+
 		Execute(expr.children[1]);
 		vector.Move(r);
 

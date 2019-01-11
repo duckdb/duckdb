@@ -24,32 +24,54 @@ class SQLNodeVisitor {
 public:
 	virtual ~SQLNodeVisitor(){};
 
-	//! Visits a generic expression and calls the specialized Visit method for the expression type, then visits its children recursively using the VisitExpressionChildren method. Be careful when calling this method as it will not call the VisitReplace method.
+	//! Visits a generic expression and calls the specialized Visit method for the expression type, then visits its
+	//! children recursively using the VisitExpressionChildren method. Be careful when calling this method as it will
+	//! not call the VisitReplace method.
 	void VisitExpression(Expression *expr_ptr);
-	//! Visits a generic expression and calls the specialized VisitReplace and Visit methods for the expression type, then visits its children recursively using the VisitExpressionChildren method
+	//! Visits a generic expression and calls the specialized VisitReplace and Visit methods for the expression type,
+	//! then visits its children recursively using the VisitExpressionChildren method
 	void VisitExpression(unique_ptr<Expression> *expression);
+
 protected:
-	// The VisitExpressionChildren method is called at the end of every call to VisitExpression to recursively visit all expressions in an expression tree. It can be overloaded to prevent automatically visiting the entire tree.
+	// The VisitExpressionChildren method is called at the end of every call to VisitExpression to recursively visit all
+	// expressions in an expression tree. It can be overloaded to prevent automatically visiting the entire tree.
 	virtual void VisitExpressionChildren(Expression &expression);
 
-	// The Visit methods can be overloaded if the inheritee of this class wishes to only Visit expressions without replacing them
-	virtual void Visit(AggregateExpression &expr) {}
-	virtual void Visit(BoundExpression &expr) {}
-	virtual void Visit(CaseExpression &expr) {}
-	virtual void Visit(CastExpression &expr) {}
-	virtual void Visit(CommonSubExpression &expr) {}
-	virtual void Visit(ColumnRefExpression &expr) {}
-	virtual void Visit(ComparisonExpression &expr) {}
-	virtual void Visit(ConjunctionExpression &expr) {}
-	virtual void Visit(ConstantExpression &expr) {}
-	virtual void Visit(DefaultExpression &expr) {}
-	virtual void Visit(FunctionExpression &expr) {}
-	virtual void Visit(OperatorExpression &expr) {}
-	virtual void Visit(StarExpression &expr) {}
-	virtual void Visit(SubqueryExpression &expr) {}
-	virtual void Visit(WindowExpression &expr) {}
+	// The Visit methods can be overloaded if the inheritee of this class wishes to only Visit expressions without
+	// replacing them
+	virtual void Visit(AggregateExpression &expr) {
+	}
+	virtual void Visit(BoundExpression &expr) {
+	}
+	virtual void Visit(CaseExpression &expr) {
+	}
+	virtual void Visit(CastExpression &expr) {
+	}
+	virtual void Visit(CommonSubExpression &expr) {
+	}
+	virtual void Visit(ColumnRefExpression &expr) {
+	}
+	virtual void Visit(ComparisonExpression &expr) {
+	}
+	virtual void Visit(ConjunctionExpression &expr) {
+	}
+	virtual void Visit(ConstantExpression &expr) {
+	}
+	virtual void Visit(DefaultExpression &expr) {
+	}
+	virtual void Visit(FunctionExpression &expr) {
+	}
+	virtual void Visit(OperatorExpression &expr) {
+	}
+	virtual void Visit(StarExpression &expr) {
+	}
+	virtual void Visit(SubqueryExpression &expr) {
+	}
+	virtual void Visit(WindowExpression &expr) {
+	}
 
-	// The VisitReplace method can be overloaded if the inheritee of this class wishes to replace expressions while visiting them
+	// The VisitReplace method can be overloaded if the inheritee of this class wishes to replace expressions while
+	// visiting them
 	virtual unique_ptr<Expression> VisitReplace(AggregateExpression &expr);
 	virtual unique_ptr<Expression> VisitReplace(BoundExpression &expr);
 	virtual unique_ptr<Expression> VisitReplace(CaseExpression &expr);

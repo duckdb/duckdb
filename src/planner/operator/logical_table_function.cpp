@@ -27,7 +27,8 @@ Expression *LogicalTableFunction::GetExpression(size_t index) {
 	return function_call.get();
 }
 
-void LogicalTableFunction::ReplaceExpression(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, size_t index) {
+void LogicalTableFunction::ReplaceExpression(
+    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, size_t index) {
 	assert(index == 0);
 	function_call = callback(move(function_call));
 }

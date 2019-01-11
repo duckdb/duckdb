@@ -1,4 +1,6 @@
 
+add_subdirectory(binder)
+add_subdirectory(logical_plan)
 add_subdirectory(operator)
 
 add_library(duckdb_planner OBJECT logical_operator.cpp logical_plan_generator.cpp binder.cpp bindcontext.cpp planner.cpp logical_operator_visitor.cpp)

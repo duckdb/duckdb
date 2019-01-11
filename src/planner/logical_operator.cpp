@@ -76,7 +76,8 @@ Expression *LogicalOperator::GetExpression(size_t index) {
 	return expressions[index].get();
 }
 
-void LogicalOperator::ReplaceExpression(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, size_t index) {
+void LogicalOperator::ReplaceExpression(
+    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, size_t index) {
 	assert(index < expressions.size());
 	expressions[index] = callback(move(expressions[index]));
 }

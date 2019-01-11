@@ -29,7 +29,7 @@ class SelectNode : public QueryNode {
 public:
 	SelectNode() : QueryNode(QueryNodeType::SELECT_NODE) {
 	}
-	
+
 	//! The projection list
 	vector<unique_ptr<Expression>> select_list;
 	//! The FROM clause

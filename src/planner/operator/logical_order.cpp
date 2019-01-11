@@ -21,7 +21,8 @@ Expression *LogicalOrder::GetExpression(size_t index) {
 	return description.orders[index].expression.get();
 }
 
-void LogicalOrder::ReplaceExpression(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, size_t index) {
+void LogicalOrder::ReplaceExpression(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
+                                     size_t index) {
 	assert(index < description.orders.size());
 	description.orders[index].expression = callback(move(description.orders[index].expression));
 }
