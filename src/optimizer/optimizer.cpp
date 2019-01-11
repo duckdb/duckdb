@@ -63,7 +63,9 @@ public:
 	Expression *PerformCSEReplacement(Expression *expr, expression_map_t &expression_count) {
 		if (expr->ChildCount() > 0) {
 			// check if this child is eligible for CSE elimination
-			assert(expression_count.find(expr) != expression_count.end());
+			if (expression_count.find(expr) == expression_count.end()) {
+				return nullptr;
+			}
 			auto &node = expression_count[expr];
 			if (node.count > 1) {
 				// this expression occurs more than once! replace it with a CSE

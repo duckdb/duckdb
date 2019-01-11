@@ -7,6 +7,9 @@ bool SetOperationNode::Equals(const QueryNode *other_) const {
 	if (!QueryNode::Equals(other_)) {
 		return false;
 	}
+	if (this == other_) {
+		return true;
+	}
 	auto other = (SetOperationNode *)other_;
 	if (setop_type != other->setop_type) {
 		return false;

@@ -10,6 +10,9 @@ bool QueryNode::Equals(const QueryNode *other) const {
 	if (!other) {
 		return false;
 	}
+	if (this == other) {
+		return true;
+	}
 	if (select_distinct != other->select_distinct) {
 		return false;
 	}

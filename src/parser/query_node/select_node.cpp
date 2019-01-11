@@ -30,6 +30,9 @@ bool SelectNode::Equals(const QueryNode *other_) const {
 	if (!QueryNode::Equals(other_)) {
 		return false;
 	}
+	if (this == other_) {
+		return true;
+	}
 	auto other = (SelectNode *)other_;
 
 	// first check counts of all lists and such

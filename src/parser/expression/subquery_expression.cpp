@@ -41,5 +41,8 @@ bool SubqueryExpression::Equals(const Expression *other_) const {
 	if (!other) {
 		return false;
 	}
+	if (!subquery || !other->subquery) {
+		return false;
+	}
 	return subquery_type == other->subquery_type && subquery->Equals(other->subquery.get());
 }

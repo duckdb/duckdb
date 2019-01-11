@@ -467,6 +467,7 @@ unique_ptr<Expression> LogicalPlanGenerator::Visit(SubqueryExpression &expr) {
 		throw Exception("Can't plan subquery");
 	}
 	expr.op = move(generator.root);
+	expr.subquery = nullptr;
 	assert(expr.op);
 	return nullptr;
 }
