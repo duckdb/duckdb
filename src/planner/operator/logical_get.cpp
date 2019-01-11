@@ -16,7 +16,11 @@ vector<string> LogicalGet::GetNames() {
 }
 
 void LogicalGet::ResolveTypes() {
-	types = table->GetTypes(column_ids);
+	if (column_ids.size() == 0) {
+		types = {TypeId::INTEGER};
+	} else {
+		types = table->GetTypes(column_ids);
+	}
 }
 
 size_t LogicalGet::EstimateCardinality() {

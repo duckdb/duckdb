@@ -76,6 +76,10 @@ TEST_CASE("Test subqueries with (NOT) IN clause", "[subqueries]") {
 	DuckDBConnection con(db);
 	con.EnableQueryVerification();
 
+	// scalar subquery
+	result = con.Query("SELECT 1 AS one WHERE 1 IN (SELECT 1);");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (id INTEGER, b INTEGER);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1, 22)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (2, 21)"));
