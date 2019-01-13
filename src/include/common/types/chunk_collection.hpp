@@ -61,6 +61,8 @@ public:
 	//! Reorders the rows in the collection according to the given indices. NB: order is changed!
 	void Reorder(uint64_t order[]);
 
+	void MaterializeSortedChunk(DataChunk &target, uint64_t order[], size_t start_offset);
+
 private:
 	//! Locates the chunk that belongs to the specific index
 	size_t LocateChunk(size_t index) {

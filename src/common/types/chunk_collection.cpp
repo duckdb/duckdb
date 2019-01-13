@@ -241,6 +241,69 @@ void ChunkCollection::Reorder(uint64_t order_org[]) {
 	}
 }
 
+template <class TYPE>
+static void templated_set_values(ChunkCollection *src_coll, Vector &tgt_vec, uint64_t order[], size_t col_idx,
+                                 size_t start_offset, size_t remaining_data) {
+	assert(src_coll);
+
+	for (size_t row_idx = 0; row_idx < remaining_data; row_idx++) {
+		size_t chunk_idx_src = order[start_offset + row_idx] / STANDARD_VECTOR_SIZE;
+		size_t vector_idx_src = order[start_offset + row_idx] % STANDARD_VECTOR_SIZE;
+
+		auto &src_chunk = src_coll->chunks[chunk_idx_src];
+		Vector &src_vec = src_chunk->data[col_idx];
+
+		tgt_vec.nullmask[row_idx] = src_vec.nullmask[vector_idx_src];
+		if (tgt_vec.nullmask[row_idx]) {
+			continue;
+		}
+		if (!TypeIsConstantSize(tgt_vec.type)) {
+			assert(tgt_vec.type == TypeId::VARCHAR);
+			((char **)tgt_vec.data)[row_idx] =
+			    (char *)tgt_vec.string_heap.AddString(((char **)src_vec.data)[vector_idx_src]);
+		} else {
+			((TYPE *)tgt_vec.data)[row_idx] = ((TYPE *)src_vec.data)[vector_idx_src];
+		}
+	}
+}
+
+// TODO: reorder functionality is similar, perhaps merge
+void ChunkCollection::MaterializeSortedChunk(DataChunk &target, uint64_t order[], size_t start_offset) {
+	size_t remaining_data = min((size_t)STANDARD_VECTOR_SIZE, count - start_offset);
+	assert(target.GetTypes() == types);
+
+	for (size_t col_idx = 0; col_idx < column_count(); col_idx++) {
+		target.data[col_idx].count = remaining_data;
+
+		switch (types[col_idx]) {
+		case TypeId::BOOLEAN:
+		case TypeId::TINYINT:
+			templated_set_values<int8_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			break;
+		case TypeId::SMALLINT:
+			templated_set_values<int16_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			break;
+		case TypeId::DATE:
+		case TypeId::INTEGER:
+			templated_set_values<int32_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			break;
+		case TypeId::TIMESTAMP:
+		case TypeId::BIGINT:
+			templated_set_values<int64_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			break;
+		case TypeId::DECIMAL:
+			templated_set_values<double>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			break;
+		case TypeId::VARCHAR:
+			templated_set_values<char *>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			break;
+		default:
+			throw NotImplementedException("Type for setting");
+		}
+	}
+	target.Verify();
+}
+
 Value ChunkCollection::GetValue(size_t column, size_t index) {
 	return chunks[LocateChunk(index)]->data[column].GetValue(index % STANDARD_VECTOR_SIZE);
 }
