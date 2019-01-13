@@ -80,36 +80,34 @@ static int8_t templated_compare_value(Vector &left_vec, Vector &right_vec, size_
 }
 
 static int8_t compare_value(Vector &left_vec, Vector &right_vec, size_t vector_idx_left, size_t vector_idx_right) {
-	if (left_vec.nullmask[vector_idx_left] && right_vec.nullmask[vector_idx_right]) {
-		return true;
-	}
-	if (left_vec.nullmask[vector_idx_left] != right_vec.nullmask[vector_idx_right]) {
-		return false;
+
+	auto left_null = left_vec.nullmask[vector_idx_left];
+	auto right_null = right_vec.nullmask[vector_idx_right];
+
+	if (left_null && right_null) {
+		return 0;
+	} else if (right_null) {
+		return 1;
+	} else if (left_null) {
+		return -1;
 	}
 
 	switch (left_vec.type) {
 	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
 		return templated_compare_value<int8_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
-		break;
 	case TypeId::SMALLINT:
 		return templated_compare_value<int16_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
-		break;
 	case TypeId::DATE:
 	case TypeId::INTEGER:
 		return templated_compare_value<int32_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
-		break;
 	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		return templated_compare_value<int64_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
-		break;
 	case TypeId::DECIMAL:
 		return templated_compare_value<double>(left_vec, right_vec, vector_idx_left, vector_idx_right);
-		break;
 	case TypeId::VARCHAR:
-		return strcmp(&((char *)left_vec.data)[vector_idx_left], &((char *)right_vec.data)[vector_idx_right]);
-		break;
-
+		return strcmp(((char **)left_vec.data)[vector_idx_left], ((char **)right_vec.data)[vector_idx_right]);
 	default:
 		throw NotImplementedException("Type for comparison");
 	}
@@ -142,9 +140,8 @@ static int compare_tuple(ChunkCollection *sort_by, OrderByDescription &desc, siz
 		if (comp_res == 0) {
 			continue;
 		}
-
-		return comp_res == -1 ? (order_type == OrderType::ASCENDING ? -1 : 1)
-		                      : (order_type == OrderType::ASCENDING ? 1 : -1);
+		return comp_res < 0 ? (order_type == OrderType::ASCENDING ? -1 : 1)
+		                    : (order_type == OrderType::ASCENDING ? 1 : -1);
 	}
 	return 0;
 }
