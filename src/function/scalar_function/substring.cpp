@@ -26,10 +26,14 @@ void substring_function(Vector inputs[], size_t input_count, FunctionExpression 
 	auto offset_data = (int *)offset.data;
 	auto length_data = (int *)length.data;
 
-	size_t max_str_len = expr.children[0]->stats.maximum_string_length;
-
-	auto output_uptr = unique_ptr<char[]>{new char[max_str_len + 1]};
-	char *output = output_uptr.get();
+	bool has_stats = expr.children[0]->stats.has_stats;
+	size_t current_len = 0;
+	unique_ptr<char[]> output;
+	if (has_stats) {
+		// stats available, pre-allocate the result chunk
+		current_len = expr.children[0]->stats.maximum_string_length + 1;
+		output = unique_ptr<char[]>{new char[current_len]};
+	}
 
 	VectorOperations::TernaryExec(
 	    input, offset, length, result,
@@ -38,14 +42,18 @@ void substring_function(Vector inputs[], size_t input_count, FunctionExpression 
 		    auto offset = offset_data[offset_index] - 1; // minus one because SQL starts counting at 1
 		    auto length = length_data[length_index];
 
-		    assert(strlen(input_string) <= max_str_len);
-
 		    if (input.nullmask[input_index]) {
 			    return;
 		    }
 
 		    if (offset < 0 || length < 0) {
 			    throw Exception("SUBSTRING cannot handle negative offsets");
+		    }
+
+		    size_t required_len = strlen(input_string) + 1;
+		    if (required_len > current_len) {
+			    current_len = required_len;
+			    output = unique_ptr<char[]>{new char[required_len]};
 		    }
 
 		    // UTF8 chars can use more than one byte
@@ -65,7 +73,7 @@ void substring_function(Vector inputs[], size_t input_count, FunctionExpression 
 		    }
 		    // terminate output
 		    output[output_byte_offset] = '\0';
-		    result_data[result_index] = result.string_heap.AddString(output);
+		    result_data[result_index] = result.string_heap.AddString(output.get());
 	    });
 }
 
