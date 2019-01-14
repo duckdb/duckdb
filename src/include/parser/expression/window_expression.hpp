@@ -12,7 +12,6 @@
 #include "parser/expression.hpp"
 #include "parser/expression/aggregate_expression.hpp"
 #include "parser/query_node.hpp"
-#include "parser/sql_node_visitor.hpp"
 
 namespace duckdb {
 //! The WindowExpression represents a window function in the query. They are a special case of aggregates which is why

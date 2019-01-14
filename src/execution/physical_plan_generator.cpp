@@ -10,10 +10,11 @@
 using namespace duckdb;
 using namespace std;
 
-
 class PlanSubqueries : public LogicalOperatorVisitor {
 public:
-	PlanSubqueries(ClientContext &context) : context(context) { }
+	PlanSubqueries(ClientContext &context) : context(context) {
+	}
+
 protected:
 	using SQLNodeVisitor::Visit;
 	void Visit(SubqueryExpression &expr) override {
@@ -22,6 +23,7 @@ protected:
 		generator.CreatePlan(move(expr.op));
 		expr.plan = move(generator.plan);
 	}
+
 private:
 	ClientContext &context;
 };
@@ -41,69 +43,69 @@ void PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> op) {
 }
 
 void PhysicalPlanGenerator::VisitOperator(LogicalOperator &op) {
-	switch(op.type) {
+	switch (op.type) {
 	case LogicalOperatorType::GET:
-		Visit((LogicalGet&) op);
+		Visit((LogicalGet &)op);
 		break;
 	case LogicalOperatorType::PROJECTION:
-		Visit((LogicalProjection&) op);
+		Visit((LogicalProjection &)op);
 		break;
 	case LogicalOperatorType::FILTER:
-		Visit((LogicalFilter&) op);
+		Visit((LogicalFilter &)op);
 		break;
 	case LogicalOperatorType::AGGREGATE_AND_GROUP_BY:
-		Visit((LogicalAggregate&) op);
+		Visit((LogicalAggregate &)op);
 		break;
 	case LogicalOperatorType::WINDOW:
-		Visit((LogicalWindow&) op);
+		Visit((LogicalWindow &)op);
 		break;
 	case LogicalOperatorType::LIMIT:
-		Visit((LogicalLimit&) op);
+		Visit((LogicalLimit &)op);
 		break;
 	case LogicalOperatorType::ORDER_BY:
-		Visit((LogicalOrder&) op);
+		Visit((LogicalOrder &)op);
 		break;
 	case LogicalOperatorType::COPY:
-		Visit((LogicalCopy&) op);
+		Visit((LogicalCopy &)op);
 		break;
 	case LogicalOperatorType::TABLE_FUNCTION:
-		Visit((LogicalTableFunction&) op);
+		Visit((LogicalTableFunction &)op);
 		break;
 	case LogicalOperatorType::JOIN:
-		Visit((LogicalJoin&) op);
+		Visit((LogicalJoin &)op);
 		break;
 	case LogicalOperatorType::CROSS_PRODUCT:
-		Visit((LogicalCrossProduct&) op);
+		Visit((LogicalCrossProduct &)op);
 		break;
 	case LogicalOperatorType::UNION:
-		Visit((LogicalUnion&) op);
+		Visit((LogicalUnion &)op);
 		break;
 	case LogicalOperatorType::EXCEPT:
-		Visit((LogicalExcept&) op);
+		Visit((LogicalExcept &)op);
 		break;
 	case LogicalOperatorType::INTERSECT:
-		Visit((LogicalIntersect&) op);
+		Visit((LogicalIntersect &)op);
 		break;
 	case LogicalOperatorType::INSERT:
-		Visit((LogicalInsert&) op);
+		Visit((LogicalInsert &)op);
 		break;
 	case LogicalOperatorType::DELETE:
-		Visit((LogicalDelete&) op);
+		Visit((LogicalDelete &)op);
 		break;
 	case LogicalOperatorType::UPDATE:
-		Visit((LogicalUpdate&) op);
+		Visit((LogicalUpdate &)op);
 		break;
 	case LogicalOperatorType::CREATE:
-		Visit((LogicalCreate&) op);
+		Visit((LogicalCreate &)op);
 		break;
 	case LogicalOperatorType::CREATE_INDEX:
-		Visit((LogicalCreateIndex&) op);
+		Visit((LogicalCreateIndex &)op);
 		break;
 	case LogicalOperatorType::EXPLAIN:
-		Visit((LogicalExplain&) op);
+		Visit((LogicalExplain &)op);
 		break;
 	case LogicalOperatorType::PRUNE_COLUMNS:
-		Visit((LogicalPruneColumns&) op);
+		Visit((LogicalPruneColumns &)op);
 		break;
 	default:
 		LogicalOperatorVisitor::VisitOperator(op);

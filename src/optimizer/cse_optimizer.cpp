@@ -6,15 +6,14 @@
 using namespace duckdb;
 using namespace std;
 
-
 void CommonSubExpressionOptimizer::VisitOperator(LogicalOperator &op) {
-	switch(op.type) {
-		case LogicalOperatorType::FILTER:
-		case LogicalOperatorType::PROJECTION:
-			ExtractCommonSubExpresions(op);
-			break;
-		default:
-			break;
+	switch (op.type) {
+	case LogicalOperatorType::FILTER:
+	case LogicalOperatorType::PROJECTION:
+		ExtractCommonSubExpresions(op);
+		break;
+	default:
+		break;
 	}
 	LogicalOperatorVisitor::VisitOperator(op);
 }

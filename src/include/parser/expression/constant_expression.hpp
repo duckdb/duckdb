@@ -10,7 +10,6 @@
 
 #include "common/types/value.hpp"
 #include "parser/expression.hpp"
-#include "parser/sql_node_visitor.hpp"
 
 namespace duckdb {
 //! Represents a constant value in the query

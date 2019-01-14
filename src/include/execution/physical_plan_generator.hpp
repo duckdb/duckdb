@@ -24,13 +24,13 @@ class ClientContext;
 //! logical query plan
 class PhysicalPlanGenerator : public LogicalOperatorVisitor {
 public:
-	PhysicalPlanGenerator(ClientContext &context)
-	    : context(context) {
+	PhysicalPlanGenerator(ClientContext &context) : context(context) {
 	}
 
 	void CreatePlan(unique_ptr<LogicalOperator> logical);
 
 	void VisitOperator(LogicalOperator &op) override;
+
 protected:
 	void Visit(LogicalAggregate &op);
 	void Visit(LogicalCreate &op);
@@ -55,12 +55,14 @@ protected:
 	void Visit(LogicalWindow &expr);
 
 	using SQLNodeVisitor::Visit;
+
 public:
 	void Print() {
 		plan->Print();
 	}
 
 	unique_ptr<PhysicalOperator> plan;
+
 private:
 	ClientContext &context;
 

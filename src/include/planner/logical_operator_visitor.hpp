@@ -45,10 +45,13 @@ public:
 	virtual ~LogicalOperatorVisitor(){};
 
 	virtual void VisitOperator(LogicalOperator &op);
+
 protected:
-	//! Automatically calls the Visit method for LogicalOperator children of the current operator. Can be overloaded to change this behavior.
+	//! Automatically calls the Visit method for LogicalOperator children of the current operator. Can be overloaded to
+	//! change this behavior.
 	void VisitOperatorChildren(LogicalOperator &op);
-	//! Automatically calls the Visit method for Expression children of the current operator. Can be overloaded to change this behavior.
+	//! Automatically calls the Visit method for Expression children of the current operator. Can be overloaded to
+	//! change this behavior.
 	void VisitOperatorExpressions(LogicalOperator &op);
 };
 } // namespace duckdb

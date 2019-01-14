@@ -10,7 +10,6 @@
 
 #include "common/exception.hpp"
 #include "parser/expression.hpp"
-#include "parser/sql_node_visitor.hpp"
 
 namespace duckdb {
 //! The AggregateExpression represents an aggregate in the query

@@ -9,7 +9,6 @@
 #pragma once
 
 #include "parser/expression.hpp"
-#include "parser/sql_node_visitor.hpp"
 
 namespace duckdb {
 //! Represents a boolean comparison (e.g. =, >=, <>). Always returns a boolean

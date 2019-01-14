@@ -15,33 +15,33 @@ void ColumnBindingResolver::AppendTables(vector<BoundTable> &right_tables) {
 }
 
 void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
-	switch(op.type) {
+	switch (op.type) {
 	case LogicalOperatorType::GET:
-		Visit((LogicalGet&) op);
+		Visit((LogicalGet &)op);
 		break;
 	case LogicalOperatorType::SUBQUERY:
-		Visit((LogicalSubquery&) op);
+		Visit((LogicalSubquery &)op);
 		break;
 	case LogicalOperatorType::TABLE_FUNCTION:
-		Visit((LogicalTableFunction&) op);
+		Visit((LogicalTableFunction &)op);
 		break;
 	case LogicalOperatorType::JOIN:
-		Visit((LogicalJoin&) op);
+		Visit((LogicalJoin &)op);
 		break;
 	case LogicalOperatorType::CROSS_PRODUCT:
-		Visit((LogicalCrossProduct&) op);
+		Visit((LogicalCrossProduct &)op);
 		break;
 	case LogicalOperatorType::UNION:
-		Visit((LogicalUnion&) op);
+		Visit((LogicalUnion &)op);
 		break;
 	case LogicalOperatorType::EXCEPT:
-		Visit((LogicalExcept&) op);
+		Visit((LogicalExcept &)op);
 		break;
 	case LogicalOperatorType::INTERSECT:
-		Visit((LogicalIntersect&) op);
+		Visit((LogicalIntersect &)op);
 		break;
 	case LogicalOperatorType::CREATE_INDEX:
-		Visit((LogicalCreateIndex&) op);
+		Visit((LogicalCreateIndex &)op);
 		break;
 	default:
 		// for the operators we do not handle explicitly, we just visit the children
@@ -124,6 +124,8 @@ void ColumnBindingResolver::Visit(LogicalSubquery &op) {
 }
 
 void ColumnBindingResolver::Visit(LogicalTableFunction &op) {
+	LogicalOperatorVisitor::VisitOperatorExpressions(op);
+
 	BoundTable binding;
 	binding.table_index = op.table_index;
 	binding.column_count = op.function->return_values.size();
