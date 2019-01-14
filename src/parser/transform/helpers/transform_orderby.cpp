@@ -1,4 +1,4 @@
-#include "parser/expression/columnref_expression.hpp"
+#include "parser/expression/bound_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
 #include "parser/statement/select_statement.hpp"
 #include "parser/transformer.hpp"
@@ -26,16 +26,6 @@ bool Transformer::TransformOrderBy(List *order, OrderByDescription &result) {
 				throw NotImplementedException("Unimplemented order by type");
 			}
 			ordernode.expression = TransformExpression(target);
-			if (ordernode.expression->type == ExpressionType::VALUE_CONSTANT) {
-				auto constant = reinterpret_cast<ConstantExpression *>(ordernode.expression.get());
-				if (TypeIsIntegral(constant->value.type)) {
-					ordernode.expression =
-					    make_unique<ColumnRefExpression>(TypeId::INVALID, constant->value.GetNumericValue());
-				} else {
-					// order by non-integral constant, continue
-					continue;
-				}
-			}
 			result.orders.push_back(OrderByNode(ordernode.type, move(ordernode.expression)));
 		} else {
 			throw NotImplementedException("ORDER BY list member type %d\n", temp->type);

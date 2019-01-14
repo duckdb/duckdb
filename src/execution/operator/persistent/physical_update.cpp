@@ -3,7 +3,7 @@
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
 #include "main/client_context.hpp"
-#include "parser/expression/columnref_expression.hpp"
+#include "parser/expression/bound_expression.hpp"
 #include "storage/data_table.hpp"
 
 using namespace duckdb;
@@ -34,10 +34,10 @@ void PhysicalUpdate::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 				update_chunk.data[i].sel_vector = state->child_chunk.sel_vector;
 				VectorOperations::Set(update_chunk.data[i], column.default_value);
 			} else {
-				assert(expressions[i]->type == ExpressionType::COLUMN_REF);
+				assert(expressions[i]->type == ExpressionType::BOUND_REF);
 				// index into child chunk
-				auto &colref = (ColumnRefExpression &)*expressions[i];
-				update_chunk.data[i].Reference(state->child_chunk.data[colref.index]);
+				auto &binding = (BoundExpression &)*expressions[i];
+				update_chunk.data[i].Reference(state->child_chunk.data[binding.index]);
 			}
 		}
 		update_chunk.sel_vector = state->child_chunk.sel_vector;

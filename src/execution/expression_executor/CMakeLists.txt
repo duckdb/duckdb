@@ -1,2 +1,2 @@
-add_library(duckdb_expression_executor OBJECT execute_case.cpp execute_cast.cpp execute_cse.cpp execute_columnref.cpp execute_comparison.cpp execute_conjunction.cpp execute_constant.cpp execute_function.cpp execute_operator.cpp execute_subquery.cpp)
+add_library(duckdb_expression_executor OBJECT execute_case.cpp execute_cast.cpp execute_cse.cpp execute_bound.cpp execute_comparison.cpp execute_conjunction.cpp execute_constant.cpp execute_function.cpp execute_operator.cpp execute_subquery.cpp)
 set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_expression_executor> PARENT_SCOPE)

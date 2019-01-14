@@ -22,23 +22,23 @@ template <class T> static bool Disjoint(unordered_set<T> &a, unordered_set<T> &b
 
 //! Extract the set of relations referred to inside an expression
 bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<size_t> &bindings) {
-	if (expression.type == ExpressionType::COLUMN_REF) {
-		auto &colref = (ColumnRefExpression &)expression;
+	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
+		auto &colref = (BoundColumnRefExpression &)expression;
 		if (colref.depth > 0) {
 			// correlated column reference, we don't allow this to be reshuffled inside the subquery
 			// we clear any currently made bindings
 			bindings.clear();
 			return false;
 		}
-		if (colref.index != (size_t)-1) {
-			// column reference has already been bound, don't use it for reordering
-			bindings.clear();
-			return false;
-		}
-		assert(colref.binding.table_index != (size_t)-1);
+		assert(colref.binding.table_index != (uint32_t)-1);
 		// map the base table index to the relation index used by the JoinOrderOptimizer
 		assert(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
 		bindings.insert(relation_mapping[colref.binding.table_index]);
+	}
+	if (expression.type == ExpressionType::BOUND_REF) {
+		// bound expression, don't use it for reordering
+		bindings.clear();
+		return false;
 	}
 	if (expression.type == ExpressionType::SELECT_SUBQUERY) {
 		auto &subquery = (SubqueryExpression &)expression;
@@ -115,15 +115,11 @@ static JoinSide CombineJoinSide(JoinSide left, JoinSide right) {
 
 static JoinSide GetJoinSide(Expression &expression, unordered_set<size_t> &left_bindings,
                             unordered_set<size_t> &right_bindings) {
-	if (expression.type == ExpressionType::COLUMN_REF) {
-		auto &colref = (ColumnRefExpression &)expression;
+	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
+		auto &colref = (BoundColumnRefExpression &)expression;
 		if (colref.depth > 0) {
 			// correlated column reference, we can't join on this
 			return JoinSide::BOTH;
-		}
-		if (colref.index != (size_t)-1) {
-			// column reference has already been bound, don't use it for reordering
-			return JoinSide::NONE;
 		}
 		if (left_bindings.find(colref.binding.table_index) != left_bindings.end()) {
 			// column references table on left side
@@ -134,6 +130,10 @@ static JoinSide GetJoinSide(Expression &expression, unordered_set<size_t> &left_
 			assert(right_bindings.find(colref.binding.table_index) != right_bindings.end());
 			return JoinSide::RIGHT;
 		}
+	}
+	if (expression.type == ExpressionType::BOUND_REF) {
+		// column reference has already been bound, don't use it for reordering
+		return JoinSide::NONE;
 	}
 	if (expression.type == ExpressionType::SELECT_SUBQUERY) {
 		return JoinSide::BOTH;

@@ -161,22 +161,23 @@ void ColumnBindingResolver::Visit(LogicalJoin &op) {
 	}
 }
 
-void ColumnBindingResolver::Visit(ColumnRefExpression &expr) {
-	if (expr.index != (size_t)-1 || expr.reference || expr.depth != current_depth) {
-		// not a base table reference OR should not be resolved by the current
-		// resolver
-		return;
+unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpression &expr) {
+	if (expr.depth != current_depth) {
+		// should not be resolved by the current resolver
+		return nullptr;
 	}
+	uint32_t index = (uint32_t) -1;
 	for (auto &binding : bound_tables) {
 		if (binding.table_index == expr.binding.table_index) {
-			expr.index = binding.column_offset + expr.binding.column_index;
+			index = binding.column_offset + expr.binding.column_index;
 			assert(expr.binding.column_index < binding.column_count);
 			break;
 		}
 	}
-	if (expr.index == (size_t)-1) {
+	if (index == (uint32_t)-1) {
 		throw Exception("Failed to bind column ref");
 	}
+	return make_unique<BoundExpression>(expr.return_type, index, expr.depth);
 }
 
 void ColumnBindingResolver::Visit(SubqueryExpression &expr) {

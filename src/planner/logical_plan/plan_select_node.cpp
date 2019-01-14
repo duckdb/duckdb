@@ -1,4 +1,4 @@
-#include "parser/expression/columnref_expression.hpp"
+#include "parser/expression/bound_expression.hpp"
 #include "parser/query_node/select_node.hpp"
 #include "planner/logical_plan_generator.hpp"
 #include "planner/operator/list.hpp"
@@ -9,7 +9,7 @@ using namespace std;
 static unique_ptr<Expression> extract_aggregates(unique_ptr<Expression> expr, vector<unique_ptr<Expression>> &result,
                                                  size_t ngroups) {
 	if (expr->GetExpressionClass() == ExpressionClass::AGGREGATE) {
-		auto colref_expr = make_unique<ColumnRefExpression>(expr->return_type, ngroups + result.size());
+		auto colref_expr = make_unique<BoundExpression>(expr->return_type, ngroups + result.size());
 		result.push_back(move(expr));
 		return colref_expr;
 	}
@@ -22,7 +22,7 @@ static unique_ptr<Expression> extract_aggregates(unique_ptr<Expression> expr, ve
 static unique_ptr<Expression> extract_windows(unique_ptr<Expression> expr, vector<unique_ptr<Expression>> &result,
                                               size_t ngroups) {
 	if (expr->GetExpressionClass() == ExpressionClass::WINDOW) {
-		auto colref_expr = make_unique<ColumnRefExpression>(expr->return_type, ngroups + result.size());
+		auto colref_expr = make_unique<BoundExpression>(expr->return_type, ngroups + result.size());
 		result.push_back(move(expr));
 		return colref_expr;
 	}

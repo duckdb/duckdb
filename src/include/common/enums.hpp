@@ -193,7 +193,8 @@ enum class ExpressionType : uint8_t {
 	// -----------------------------
 	CAST = 225,
 	COMMON_SUBEXPRESSION = 226,
-	BOUND_REF = 227
+	BOUND_REF = 227,
+	BOUND_COLUMN_REF = 228
 };
 
 //===--------------------------------------------------------------------===//
@@ -202,7 +203,6 @@ enum class ExpressionType : uint8_t {
 enum class ExpressionClass : uint8_t {
 	INVALID = 0,
 	AGGREGATE = 1,
-	ALIAS_REF = 2,
 	CASE = 3,
 	CAST = 4,
 	COLUMN_REF = 5,
@@ -216,7 +216,8 @@ enum class ExpressionClass : uint8_t {
 	SUBQUERY = 14,
 	WINDOW = 15,
 	COMMON_SUBEXPRESSION = 16,
-	BOUND_REF = 17
+	BOUND_REF = 17,
+	BOUND_COLUMN_REF = 18
 };
 
 //===--------------------------------------------------------------------===//

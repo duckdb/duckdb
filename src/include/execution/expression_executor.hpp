@@ -73,9 +73,15 @@ protected:
 	void Visit(AggregateExpression &expr) override {
 		throw NotImplementedException("Cannot execute AGGREGATE expression in ExpressionExecutor");
 	}
+	void Visit(BoundExpression &expr) override;
 	void Visit(CaseExpression &expr) override;
 	void Visit(CastExpression &expr) override;
-	void Visit(ColumnRefExpression &expr) override;
+	void Visit(ColumnRefExpression &expr) override {
+		throw NotImplementedException("Cannot execute COLUMNREF expression in ExpressionExecutor");
+	}
+	void Visit(BoundColumnRefExpression &expr) override {
+		throw NotImplementedException("Cannot execute BOUND COLUMN REF expression in ExpressionExecutor");
+	}
 	void Visit(CommonSubExpression &expr) override;
 	void Visit(ComparisonExpression &expr) override;
 	void Visit(ConjunctionExpression &expr) override;

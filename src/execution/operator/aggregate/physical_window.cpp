@@ -5,7 +5,7 @@
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
 #include "parser/expression/aggregate_expression.hpp"
-#include "parser/expression/columnref_expression.hpp"
+#include "parser/expression/bound_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
 #include "parser/expression/window_expression.hpp"
 
@@ -80,7 +80,7 @@ static void SortCollectionForWindow(ClientContext &context, WindowExpression *we
 		auto &pexpr = wexpr->partitions[prt_idx];
 		sort_types.push_back(pexpr->return_type);
 		exprs.push_back(pexpr.get());
-		odesc.orders.push_back(OrderByNode(OrderType::ASCENDING, make_unique_base<Expression, ColumnRefExpression>(
+		odesc.orders.push_back(OrderByNode(OrderType::ASCENDING, make_unique<BoundExpression>(
 		                                                             pexpr->return_type, exprs.size() - 1)));
 	}
 
@@ -90,7 +90,7 @@ static void SortCollectionForWindow(ClientContext &context, WindowExpression *we
 		exprs.push_back(oexpr.get());
 		odesc.orders.push_back(
 		    OrderByNode(wexpr->ordering.orders[ord_idx].type,
-		                make_unique_base<Expression, ColumnRefExpression>(oexpr->return_type, exprs.size() - 1)));
+		                make_unique<BoundExpression>(oexpr->return_type, exprs.size() - 1)));
 	}
 
 	assert(sort_types.size() > 0);

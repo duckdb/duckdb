@@ -17,6 +17,7 @@
 
 namespace duckdb {
 class ClientContext;
+struct OrderByDescription;
 
 //! Bind the parsed query tree to the actual columns present in the catalog.
 /*!
@@ -47,7 +48,9 @@ protected:
 	void Bind(SelectNode &node);
 	void Bind(SetOperationNode &node);
 
-	void Visit(ColumnRefExpression &expr) override;
+	void BindOrderBy(OrderByDescription &orders, vector<unique_ptr<Expression>>& select_list, size_t max_index);
+
+	unique_ptr<Expression> VisitReplace(ColumnRefExpression &expr) override;
 	void Visit(FunctionExpression &expr) override;
 	void Visit(SubqueryExpression &expr) override;
 
