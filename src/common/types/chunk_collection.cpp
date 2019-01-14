@@ -3,6 +3,8 @@
 #include "common/exception.hpp"
 #include "common/value_operations/value_operations.hpp"
 
+#include <cstring>
+
 using namespace duckdb;
 using namespace std;
 
@@ -58,16 +60,88 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 	}
 }
 
+// returns an int similar to a C comparator:
+// -1 if left < right
+// 0 if left == right
+// 1 if left > right
+
+template <class TYPE>
+static int8_t templated_compare_value(Vector &left_vec, Vector &right_vec, size_t left_idx, size_t right_idx) {
+	assert(left_vec.type == right_vec.type);
+	TYPE left_val = ((TYPE *)left_vec.data)[left_idx];
+	TYPE right_val = ((TYPE *)right_vec.data)[right_idx];
+	if (left_val == right_val) {
+		return 0;
+	}
+	if (left_val < right_val) {
+		return -1;
+	}
+	return 1;
+}
+
+static int8_t compare_value(Vector &left_vec, Vector &right_vec, size_t vector_idx_left, size_t vector_idx_right) {
+
+	auto left_null = left_vec.nullmask[vector_idx_left];
+	auto right_null = right_vec.nullmask[vector_idx_right];
+
+	if (left_null && right_null) {
+		return 0;
+	} else if (right_null) {
+		return 1;
+	} else if (left_null) {
+		return -1;
+	}
+
+	switch (left_vec.type) {
+	case TypeId::BOOLEAN:
+	case TypeId::TINYINT:
+		return templated_compare_value<int8_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
+	case TypeId::SMALLINT:
+		return templated_compare_value<int16_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
+	case TypeId::DATE:
+	case TypeId::INTEGER:
+		return templated_compare_value<int32_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
+	case TypeId::TIMESTAMP:
+	case TypeId::BIGINT:
+		return templated_compare_value<int64_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
+	case TypeId::DECIMAL:
+		return templated_compare_value<double>(left_vec, right_vec, vector_idx_left, vector_idx_right);
+	case TypeId::VARCHAR:
+		return strcmp(((char **)left_vec.data)[vector_idx_left], ((char **)right_vec.data)[vector_idx_right]);
+	default:
+		throw NotImplementedException("Type for comparison");
+	}
+	return false;
+}
+
 static int compare_tuple(ChunkCollection *sort_by, OrderByDescription &desc, size_t left, size_t right) {
-	for (size_t i = 0; i < desc.orders.size(); i++) {
-		Value left_value = sort_by->GetValue(i, left);
-		Value right_value = sort_by->GetValue(i, right);
-		if (ValueOperations::Equals(left_value, right_value)) {
+	assert(sort_by);
+
+	size_t chunk_idx_left = left / STANDARD_VECTOR_SIZE;
+	size_t chunk_idx_right = right / STANDARD_VECTOR_SIZE;
+	size_t vector_idx_left = left % STANDARD_VECTOR_SIZE;
+	size_t vector_idx_right = right % STANDARD_VECTOR_SIZE;
+
+	auto &left_chunk = sort_by->chunks[chunk_idx_left];
+	auto &right_chunk = sort_by->chunks[chunk_idx_right];
+
+	for (size_t col_idx = 0; col_idx < desc.orders.size(); col_idx++) {
+		auto order_type = desc.orders[col_idx].type;
+
+		Vector &left_vec = left_chunk->data[col_idx];
+		Vector &right_vec = right_chunk->data[col_idx];
+
+		assert(!left_vec.sel_vector);
+		assert(!right_vec.sel_vector);
+		assert(left_vec.type == right_vec.type);
+
+		auto comp_res = compare_value(left_vec, right_vec, vector_idx_left, vector_idx_right);
+
+		if (comp_res == 0) {
 			continue;
 		}
-		auto order_type = desc.orders[i].type;
-		return ValueOperations::LessThan(left_value, right_value) ? (order_type == OrderType::ASCENDING ? -1 : 1)
-		                                                          : (order_type == OrderType::ASCENDING ? 1 : -1);
+		return comp_res < 0 ? (order_type == OrderType::ASCENDING ? -1 : 1)
+		                    : (order_type == OrderType::ASCENDING ? 1 : -1);
 	}
 	return 0;
 }
@@ -165,6 +239,69 @@ void ChunkCollection::Reorder(uint64_t order_org[]) {
 			SetValue(col_idx, j, val_buf[col_idx]);
 		}
 	}
+}
+
+template <class TYPE>
+static void templated_set_values(ChunkCollection *src_coll, Vector &tgt_vec, uint64_t order[], size_t col_idx,
+                                 size_t start_offset, size_t remaining_data) {
+	assert(src_coll);
+
+	for (size_t row_idx = 0; row_idx < remaining_data; row_idx++) {
+		size_t chunk_idx_src = order[start_offset + row_idx] / STANDARD_VECTOR_SIZE;
+		size_t vector_idx_src = order[start_offset + row_idx] % STANDARD_VECTOR_SIZE;
+
+		auto &src_chunk = src_coll->chunks[chunk_idx_src];
+		Vector &src_vec = src_chunk->data[col_idx];
+
+		tgt_vec.nullmask[row_idx] = src_vec.nullmask[vector_idx_src];
+		if (tgt_vec.nullmask[row_idx]) {
+			continue;
+		}
+		if (!TypeIsConstantSize(tgt_vec.type)) {
+			assert(tgt_vec.type == TypeId::VARCHAR);
+			((char **)tgt_vec.data)[row_idx] =
+			    (char *)tgt_vec.string_heap.AddString(((char **)src_vec.data)[vector_idx_src]);
+		} else {
+			((TYPE *)tgt_vec.data)[row_idx] = ((TYPE *)src_vec.data)[vector_idx_src];
+		}
+	}
+}
+
+// TODO: reorder functionality is similar, perhaps merge
+void ChunkCollection::MaterializeSortedChunk(DataChunk &target, uint64_t order[], size_t start_offset) {
+	size_t remaining_data = min((size_t)STANDARD_VECTOR_SIZE, count - start_offset);
+	assert(target.GetTypes() == types);
+
+	for (size_t col_idx = 0; col_idx < column_count(); col_idx++) {
+		target.data[col_idx].count = remaining_data;
+
+		switch (types[col_idx]) {
+		case TypeId::BOOLEAN:
+		case TypeId::TINYINT:
+			templated_set_values<int8_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			break;
+		case TypeId::SMALLINT:
+			templated_set_values<int16_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			break;
+		case TypeId::DATE:
+		case TypeId::INTEGER:
+			templated_set_values<int32_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			break;
+		case TypeId::TIMESTAMP:
+		case TypeId::BIGINT:
+			templated_set_values<int64_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			break;
+		case TypeId::DECIMAL:
+			templated_set_values<double>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			break;
+		case TypeId::VARCHAR:
+			templated_set_values<char *>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			break;
+		default:
+			throw NotImplementedException("Type for setting");
+		}
+	}
+	target.Verify();
 }
 
 Value ChunkCollection::GetValue(size_t column, size_t index) {

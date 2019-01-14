@@ -38,11 +38,11 @@ TEST_CASE("Test queries involving Common SubExpressions and Strings and NULL val
 	REQUIRE_NO_FAIL(con.Query("insert into test values ('hello'), ('world'), (NULL);"));
 
 	// single CSE in projection
-	result = con.Query("SELECT substring(a, 0, 3)=substring(a, 0, 3) FROM test ORDER BY 1");
+	result = con.Query("SELECT substring(a, 1, 3)=substring(a, 1, 3) FROM test ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), true, true}));
 
 	// now with GROUP BY clause
-	result = con.Query("SELECT substring(a, 0, 3)=substring(a, 0, 3) AS b FROM test GROUP BY b ORDER BY b");
+	result = con.Query("SELECT substring(a, 1, 3)=substring(a, 1, 3) AS b FROM test GROUP BY b ORDER BY b");
 	// result->Print();
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), true}));
 }

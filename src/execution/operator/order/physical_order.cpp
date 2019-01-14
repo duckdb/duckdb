@@ -49,13 +49,7 @@ void PhysicalOrder::_GetChunk(ClientContext &context, DataChunk &chunk, Physical
 		return;
 	}
 
-	size_t remaining_data = min((size_t)STANDARD_VECTOR_SIZE, big_data.count - state->position);
-	for (size_t i = 0; i < big_data.column_count(); i++) {
-		chunk.data[i].count = remaining_data;
-		for (size_t j = 0; j < remaining_data; j++) {
-			chunk.data[i].SetValue(j, big_data.GetValue(i, state->sorted_vector[state->position + j]));
-		}
-	}
+	big_data.MaterializeSortedChunk(chunk, state->sorted_vector.get(), state->position);
 	state->position += STANDARD_VECTOR_SIZE;
 }
 

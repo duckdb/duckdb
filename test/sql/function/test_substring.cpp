@@ -36,3 +36,37 @@ TEST_CASE("Substring test", "[function]") {
 	result = con.Query("SELECT substring('hello' from off for length) FROM strings");
 	REQUIRE(CHECK_COLUMN(result, 0, {"he", "ell", "h", "el"}));
 }
+
+TEST_CASE("Substring test with UTF8", "[function]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(s VARCHAR);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('two"
+	                          "\xc3\xb1"
+	                          "three"
+	                          "\xE2\x82\xA1"
+	                          "four"
+	                          "\xF0\x9F\xA6\x86"
+	                          "end')"));
+
+	result = con.Query("SELECT substring(s from 1 for 7) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0,
+	                     {"two"
+	                      "\xc3\xb1"
+	                      "thr"}));
+
+	result = con.Query("SELECT substring(s from 10 for 7) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0,
+	                     {"\xE2\x82\xA1"
+	                      "four"
+	                      "\xF0\x9F\xA6\x86"
+	                      "e"}));
+
+	result = con.Query("SELECT substring(s from 15 for 7) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0,
+	                     {"\xF0\x9F\xA6\x86"
+	                      "end"}));
+}

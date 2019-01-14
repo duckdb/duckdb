@@ -13,7 +13,10 @@ void substring_function(Vector inputs[], size_t input_count, FunctionExpression 
 	auto &input = inputs[0];
 	auto &offset = inputs[1];
 	auto &length = inputs[2];
+
 	assert(input.type == TypeId::VARCHAR);
+	assert(offset.type == TypeId::INTEGER);
+	assert(length.type == TypeId::INTEGER);
 
 	result.Initialize(TypeId::VARCHAR);
 	result.nullmask = input.nullmask;
@@ -23,41 +26,54 @@ void substring_function(Vector inputs[], size_t input_count, FunctionExpression 
 	auto offset_data = (int *)offset.data;
 	auto length_data = (int *)length.data;
 
-	size_t max_str_len = expr.children[2]->stats.max.GetNumericValue();
-
-	auto output_uptr = unique_ptr<char[]>{new char[max_str_len + 1]};
-	char *output = output_uptr.get();
+	bool has_stats = expr.children[0]->stats.has_stats;
+	size_t current_len = 0;
+	unique_ptr<char[]> output;
+	if (has_stats) {
+		// stats available, pre-allocate the result chunk
+		current_len = expr.children[0]->stats.maximum_string_length + 1;
+		output = unique_ptr<char[]>{new char[current_len]};
+	}
 
 	VectorOperations::TernaryExec(
 	    input, offset, length, result,
 	    [&](size_t input_index, size_t offset_index, size_t length_index, size_t result_index) {
 		    auto input_string = input_data[input_index];
-		    auto offset = offset_data[offset_index] - 1;
+		    auto offset = offset_data[offset_index] - 1; // minus one because SQL starts counting at 1
 		    auto length = length_data[length_index];
-		    assert(length <= max_str_len);
 
 		    if (input.nullmask[input_index]) {
 			    return;
 		    }
 
-		    int input_offset = 0;
-		    while (input_string[input_offset] && input_offset < offset) {
-			    input_offset++;
-		    }
-		    if (!input_string[input_offset]) {
-			    // out of range, return empty string
-			    output[0] = '\0';
-		    } else {
-			    // now limit the string
-			    size_t write_offset = 0;
-			    while (input_string[input_offset + write_offset] && write_offset < length) {
-				    output[write_offset] = input_string[input_offset + write_offset];
-				    write_offset++;
-			    }
-			    output[write_offset] = '\0';
+		    if (offset < 0 || length < 0) {
+			    throw Exception("SUBSTRING cannot handle negative offsets");
 		    }
 
-		    result_data[result_index] = result.string_heap.AddString(output);
+		    size_t required_len = strlen(input_string) + 1;
+		    if (required_len > current_len) {
+			    current_len = required_len;
+			    output = unique_ptr<char[]>{new char[required_len]};
+		    }
+
+		    // UTF8 chars can use more than one byte
+		    size_t input_char_offset = 0;
+		    size_t input_byte_offset = 0;
+		    size_t output_byte_offset = 0;
+
+		    while (input_string[input_byte_offset]) {
+			    char b = input_string[input_byte_offset++];
+			    input_char_offset += (b & 0xC0) != 0x80;
+			    if (input_char_offset > offset + length) {
+				    break;
+			    }
+			    if (input_char_offset > offset) {
+				    output[output_byte_offset++] = b;
+			    }
+		    }
+		    // terminate output
+		    output[output_byte_offset] = '\0';
+		    result_data[result_index] = result.string_heap.AddString(output.get());
 	    });
 }
 
