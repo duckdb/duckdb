@@ -257,13 +257,7 @@ static void templated_set_values(ChunkCollection *src_coll, Vector &tgt_vec, uin
 		if (tgt_vec.nullmask[row_idx]) {
 			continue;
 		}
-		if (!TypeIsConstantSize(tgt_vec.type)) {
-			assert(tgt_vec.type == TypeId::VARCHAR);
-			((char **)tgt_vec.data)[row_idx] =
-			    (char *)tgt_vec.string_heap.AddString(((char **)src_vec.data)[vector_idx_src]);
-		} else {
-			((TYPE *)tgt_vec.data)[row_idx] = ((TYPE *)src_vec.data)[vector_idx_src];
-		}
+		((TYPE *)tgt_vec.data)[row_idx] = ((TYPE *)src_vec.data)[vector_idx_src];
 	}
 }
 

@@ -187,10 +187,28 @@ TEST_CASE("Wiscosin-derived window test cases", "[window]") {
 	REQUIRE(result->column_count() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 10, 0, 0, 6, 10, 0, 0, 10}));
 
-	//	// cume_dist
-	//	result = con.Query("SELECT cast(cume_dist() OVER (PARTITION BY four ORDER BY ten)*10 as integer) FROM tenk1
-	// WHERE " 	                   "unique2 < 10 order by four, ten"); 	REQUIRE(result->column_count() == 1);
-	// REQUIRE(CHECK_COLUMN(result, 0, {6, 6, 10, 5, 5, 7, 10, 10, 5, 10}));
+	// cume_dist
+	result = con.Query("SELECT cast(cume_dist() OVER (PARTITION BY four ORDER BY ten)*10 as integer) FROM tenk1 WHERE  "
+	                   "unique2 < 10 order by four, ten");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {6, 6, 10, 5, 5, 7, 10, 10, 5, 10}));
+
+	// ntile
+	result = con.Query("SELECT ntile(2) OVER (ORDER BY ten, four) nn FROM tenk1 ORDER BY ten, four, nn");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 1, 1, 2, 2, 2, 2, 2}));
+
+	result = con.Query("SELECT ntile(3) OVER (ORDER BY ten, four) nn FROM tenk1 ORDER BY ten, four, nn");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 1, 2, 2, 2, 3, 3, 3}));
+
+	result = con.Query("SELECT ntile(4) OVER (ORDER BY ten, four) nn FROM tenk1 ORDER BY ten, four, nn");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 2, 2, 2, 3, 3, 4, 4}));
+
+	result = con.Query("SELECT ntile(5) OVER (ORDER BY ten, four) nn FROM tenk1 ORDER BY ten, four, nn");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 2, 2, 3, 3, 4, 4, 5, 5}));
 
 	// lead/lag
 	result = con.Query("SELECT lag(ten) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt");

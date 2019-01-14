@@ -129,7 +129,7 @@ struct WindowBoundariesState {
 
 static bool WindowNeedsRank(WindowExpression *wexpr) {
 	return wexpr->type == ExpressionType::WINDOW_PERCENT_RANK || wexpr->type == ExpressionType::WINDOW_RANK ||
-	       wexpr->type == ExpressionType::WINDOW_RANK_DENSE;
+	       wexpr->type == ExpressionType::WINDOW_RANK_DENSE || wexpr->type == ExpressionType::WINDOW_CUME_DIST;
 }
 
 static void UpdateWindowBoundaries(WindowExpression *wexpr, ChunkCollection &input, size_t row_idx,
@@ -358,15 +358,43 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 			break;
 		}
 		case ExpressionType::WINDOW_PERCENT_RANK: {
-			ssize_t denom = (ssize_t)bounds.partition_end - bounds.partition_start - 1;
+			int64_t denom = (ssize_t)bounds.partition_end - bounds.partition_start - 1;
 			double percent_rank = denom > 0 ? ((double)rank - 1) / denom : 0;
 			res = Value(percent_rank);
+			break;
+		}
+		case ExpressionType::WINDOW_CUME_DIST: {
+			int64_t denom = (ssize_t)bounds.partition_end - bounds.partition_start;
+			double cume_dist = denom > 0 ? ((double)(bounds.peer_end - bounds.partition_start)) / denom : 0;
+			res = Value(cume_dist);
+			break;
+		}
+		case ExpressionType::WINDOW_NTILE: {
+			if (payload_collection.column_count() != 1) {
+				throw Exception("NTILE needs a parameter");
+			}
+			auto n_param = payload_collection.GetValue(0, row_idx).GetNumericValue();
+			// With thanks from SQLite's ntileValueFunc()
+			int64_t n_total = bounds.partition_end - bounds.partition_start;
+			int64_t n_size = (n_total / n_param);
+			if (n_size > 0) {
+				int64_t n_large = n_total - n_param * n_size;
+				int64_t i_small = n_large * (n_size + 1);
+
+				assert((n_large * (n_size + 1) + (n_param - n_large) * n_size) == n_total);
+
+				if (row_idx < i_small) {
+					res = Value::Numeric(wexpr->return_type, 1 + row_idx / (n_size + 1));
+				} else {
+					res = Value::Numeric(wexpr->return_type, 1 + n_large + (row_idx - i_small) / n_size);
+				}
+			}
 			break;
 		}
 		case ExpressionType::WINDOW_LEAD:
 		case ExpressionType::WINDOW_LAG: {
 			Value def_val = Value(wexpr->return_type);
-			size_t offset = 1;
+			uint64_t offset = 1;
 			if (wexpr->offset_expr) {
 				offset = leadlag_offset_collection.GetValue(0, wexpr->offset_expr->IsScalar() ? 0 : row_idx)
 				             .GetNumericValue();
