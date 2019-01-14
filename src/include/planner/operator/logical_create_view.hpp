@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/operator/logical_create.hpp
+// planner/operator/logical_create_view.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,20 +12,20 @@
 
 namespace duckdb {
 
-class LogicalCreate : public LogicalOperator {
+class LogicalCreateView : public LogicalOperator {
 public:
-	LogicalCreate(SchemaCatalogEntry *schema, unique_ptr<CreateTableInformation> info)
-	    : LogicalOperator(LogicalOperatorType::CREATE), schema(schema), info(move(info)) {
+	LogicalCreateView(SchemaCatalogEntry *schema, unique_ptr<CreateViewInformation> info)
+	    : LogicalOperator(LogicalOperatorType::CREATE_VIEW), schema(schema), info(move(info)) {
 	}
 
 	vector<string> GetNames() override {
-		return {"Count"};
+		return {"Whatever"};
 	}
 
 	//! Schema to insert to
 	SchemaCatalogEntry *schema;
 	//! Create Table information
-	unique_ptr<CreateTableInformation> info;
+	unique_ptr<CreateViewInformation> info;
 
 protected:
 	void ResolveTypes() override {

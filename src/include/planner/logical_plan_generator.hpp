@@ -35,6 +35,7 @@ protected:
 	void CreatePlan(UpdateStatement &statement);
 	void CreatePlan(CreateTableStatement &statement);
 	void CreatePlan(CreateIndexStatement &statement);
+	void CreatePlan(CreateViewStatement &statement);
 
 	void CreatePlan(QueryNode &statement);
 	void CreatePlan(SelectNode &statement);

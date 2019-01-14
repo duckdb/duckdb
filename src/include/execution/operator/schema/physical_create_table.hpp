@@ -10,14 +10,12 @@
 
 #include "execution/physical_operator.hpp"
 
-#include <fstream>
-
 namespace duckdb {
 
 //! Physically CREATE TABLE statement
-class PhysicalCreate : public PhysicalOperator {
+class PhysicalCreateTable : public PhysicalOperator {
 public:
-	PhysicalCreate(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<CreateTableInformation> info)
+	PhysicalCreateTable(LogicalOperator &op, SchemaCatalogEntry *schema, unique_ptr<CreateTableInformation> info)
 	    : PhysicalOperator(PhysicalOperatorType::CREATE, op.types), schema(schema), info(move(info)) {
 	}
 

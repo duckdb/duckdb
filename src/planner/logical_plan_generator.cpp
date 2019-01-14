@@ -36,9 +36,14 @@ void LogicalPlanGenerator::CreatePlan(SQLStatement &statement) {
 	case StatementType::CREATE_TABLE:
 		CreatePlan((CreateTableStatement &)statement);
 		break;
-	default:
-		assert(statement.type == StatementType::CREATE_INDEX);
+	case StatementType::CREATE_VIEW:
+		CreatePlan((CreateViewStatement &)statement);
+		break;
+	case StatementType::CREATE_INDEX:
 		CreatePlan((CreateIndexStatement &)statement);
+		break;
+	default:
+		throw NotImplementedException("Statement type");
 		break;
 	}
 }

@@ -45,6 +45,8 @@ private:
 	//! Transform a Postgres T_CreateSchemaStmt node into a
 	//! CreateSchemaStatement
 	unique_ptr<CreateSchemaStatement> TransformCreateSchema(postgres::Node *node);
+	//! Transform a Postgres T_ViewStmt node into a CreateViewStatement
+	unique_ptr<CreateViewStatement> TransformCreateView(postgres::Node *node);
 	//! Transform a Postgres T_DropStmt node into a Drop[Table,Schema]Statement
 	unique_ptr<SQLStatement> TransformDrop(postgres::Node *node);
 	//! Transform a Postgres T_InsertStmt node into a InsertStatement

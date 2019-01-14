@@ -27,6 +27,8 @@ unique_ptr<SQLStatement> Transformer::TransformStatement(Node *stmt) {
 		return TransformCreateTable(stmt);
 	case T_CreateSchemaStmt:
 		return TransformCreateSchema(stmt);
+	case T_ViewStmt:
+		return TransformCreateView(stmt);
 	case T_DropStmt:
 		return TransformDrop(stmt);
 	case T_InsertStmt:

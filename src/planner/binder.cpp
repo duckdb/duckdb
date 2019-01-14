@@ -34,6 +34,9 @@ void Binder::Bind(SQLStatement &statement) {
 	case StatementType::CREATE_TABLE:
 		Bind((CreateTableStatement &)statement);
 		break;
+	case StatementType::CREATE_VIEW:
+		Bind((CreateViewStatement &)statement);
+		break;
 	default:
 		assert(statement.type == StatementType::CREATE_INDEX);
 		Bind((CreateIndexStatement &)statement);

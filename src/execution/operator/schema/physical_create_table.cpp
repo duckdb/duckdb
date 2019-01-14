@@ -1,4 +1,4 @@
-#include "execution/operator/schema/physical_create.hpp"
+#include "execution/operator/schema/physical_create_table.hpp"
 
 #include "catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "execution/expression_executor.hpp"
@@ -7,7 +7,7 @@
 using namespace duckdb;
 using namespace std;
 
-void PhysicalCreate::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalCreateTable::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	int64_t inserted_count = 0;
 	if (children.size() > 0) {
 		// children[0]->GetChunk(context, state->child_chunk,

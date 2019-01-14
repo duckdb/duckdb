@@ -277,6 +277,7 @@ enum class StatementType : uint8_t {
 	CREATE_TABLE,  // create table statement type
 	CREATE_SCHEMA, // create schema statement type
 	CREATE_INDEX,  // create index statement type
+	CREATE_VIEW,   // create view statement type
 
 	// -----------------------------
 	// Drop Types
@@ -366,8 +367,9 @@ enum class LogicalOperatorType : uint8_t {
 	DELETE,
 	UPDATE,
 	EXPORT_EXTERNAL_FILE,
-	CREATE,
+	CREATE_TABLE,
 	CREATE_INDEX,
+	CREATE_VIEW,
 	ALTER,
 
 	// -----------------------------

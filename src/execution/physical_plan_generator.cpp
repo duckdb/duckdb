@@ -95,11 +95,14 @@ void PhysicalPlanGenerator::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::UPDATE:
 		Visit((LogicalUpdate &)op);
 		break;
-	case LogicalOperatorType::CREATE:
-		Visit((LogicalCreate &)op);
+	case LogicalOperatorType::CREATE_TABLE:
+		Visit((LogicalCreateTable &)op);
 		break;
 	case LogicalOperatorType::CREATE_INDEX:
 		Visit((LogicalCreateIndex &)op);
+		break;
+	case LogicalOperatorType::CREATE_VIEW:
+		Visit((LogicalCreateView &)op);
 		break;
 	case LogicalOperatorType::EXPLAIN:
 		Visit((LogicalExplain &)op);
@@ -172,11 +175,11 @@ void PhysicalPlanGenerator::Visit(LogicalUpdate &op) {
 	this->plan = move(update);
 }
 
-void PhysicalPlanGenerator::Visit(LogicalCreate &op) {
+void PhysicalPlanGenerator::Visit(LogicalCreateTable &op) {
 	LogicalOperatorVisitor::VisitOperatorChildren(op);
 	assert(!plan); // CREATE node must be first node of the plan!
 
-	this->plan = make_unique<PhysicalCreate>(op, op.schema, move(op.info));
+	this->plan = make_unique<PhysicalCreateTable>(op, op.schema, move(op.info));
 }
 
 void PhysicalPlanGenerator::Visit(LogicalCreateIndex &op) {
@@ -184,6 +187,13 @@ void PhysicalPlanGenerator::Visit(LogicalCreateIndex &op) {
 	assert(!plan); // CREATE INDEX node must be first node of the plan!
 
 	this->plan = make_unique<PhysicalCreateIndex>(op, op.table, op.column_ids, move(op.expressions), move(op.info));
+}
+
+void PhysicalPlanGenerator::Visit(LogicalCreateView &op) {
+	LogicalOperatorVisitor::VisitOperatorChildren(op);
+	assert(!plan); // CREATE INDEX node must be first node of the plan!
+
+	this->plan = make_unique<PhysicalCreateView>(op, op.schema, move(op.info));
 }
 
 #include "optimizer/matcher/expression_matcher.hpp"

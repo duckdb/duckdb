@@ -34,6 +34,7 @@ void Planner::CreatePlan(ClientContext &context, unique_ptr<SQLStatement> statem
 	case StatementType::UPDATE:
 	case StatementType::CREATE_INDEX:
 	case StatementType::CREATE_TABLE:
+	case StatementType::CREATE_VIEW:
 		CreatePlan(context, *statement);
 		break;
 	case StatementType::CREATE_SCHEMA: {
