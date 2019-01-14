@@ -187,10 +187,28 @@ TEST_CASE("Wiscosin-derived window test cases", "[window]") {
 	REQUIRE(result->column_count() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 10, 0, 0, 6, 10, 0, 0, 10}));
 
-	//	// cume_dist
-	//	result = con.Query("SELECT cast(cume_dist() OVER (PARTITION BY four ORDER BY ten)*10 as integer) FROM tenk1
-	// WHERE " 	                   "unique2 < 10 order by four, ten"); 	REQUIRE(result->column_count() == 1);
-	// REQUIRE(CHECK_COLUMN(result, 0, {6, 6, 10, 5, 5, 7, 10, 10, 5, 10}));
+	// cume_dist
+	result = con.Query("SELECT cast(cume_dist() OVER (PARTITION BY four ORDER BY ten)*10 as integer) FROM tenk1 WHERE  "
+	                   "unique2 < 10 order by four, ten");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {6, 6, 10, 5, 5, 7, 10, 10, 5, 10}));
+
+	// ntile
+	result = con.Query("SELECT ntile(2) OVER (ORDER BY ten, four) nn FROM tenk1 ORDER BY ten, four, nn");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 1, 1, 2, 2, 2, 2, 2}));
+
+	result = con.Query("SELECT ntile(3) OVER (ORDER BY ten, four) nn FROM tenk1 ORDER BY ten, four, nn");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 1, 2, 2, 2, 3, 3, 3}));
+
+	result = con.Query("SELECT ntile(4) OVER (ORDER BY ten, four) nn FROM tenk1 ORDER BY ten, four, nn");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 2, 2, 2, 3, 3, 4, 4}));
+
+	result = con.Query("SELECT ntile(5) OVER (ORDER BY ten, four) nn FROM tenk1 ORDER BY ten, four, nn");
+	REQUIRE(result->column_count() == 1);
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 2, 2, 3, 3, 4, 4, 5, 5}));
 
 	// lead/lag
 	result = con.Query("SELECT lag(ten) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt");
@@ -224,6 +242,31 @@ TEST_CASE("Wiscosin-derived window test cases", "[window]") {
 	    "SELECT lead(ten * 2, 1, -1) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt");
 	REQUIRE(result->column_count() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 8, -1, 2, 14, 18, -1, -1, 6, -1}));
+
+	// empty OVER clause
+	result =
+	    con.Query("SELECT COUNT(*) OVER w c, SUM(four) OVER w s, cast(AVG(ten) OVER w * 10 as integer) a, RANK() over "
+	              "w r, DENSE_RANK() over w dr, ROW_NUMBER() OVER w rn FROM tenk1 WINDOW w AS () ORDER BY rn");
+	REQUIRE(result->column_count() == 6);
+	REQUIRE(CHECK_COLUMN(result, 0, {10, 10, 10, 10, 10, 10, 10, 10, 10, 10}));
+	REQUIRE(CHECK_COLUMN(result, 1, {12, 12, 12, 12, 12, 12, 12, 12, 12, 12}));
+	REQUIRE(CHECK_COLUMN(result, 2, {26, 26, 26, 26, 26, 26, 26, 26, 26, 26}));
+	REQUIRE(CHECK_COLUMN(result, 3, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
+	REQUIRE(CHECK_COLUMN(result, 4, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
+	REQUIRE(CHECK_COLUMN(result, 5, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}));
+
+	// no ordering but still a frame spec (somewhat underdefined)
+	result =
+	    con.Query("SELECT COUNT(*) OVER w c, SUM(four) OVER w s, cast(AVG(ten) OVER w * 10 as integer) a, RANK() over "
+	              "w r, DENSE_RANK() over w dr, ROW_NUMBER() OVER w rn FROM tenk1 WINDOW w AS (rows between 1 "
+	              "preceding and 1 following) ORDER BY rn");
+	REQUIRE(result->column_count() == 6);
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 3, 3, 3, 3, 3, 3, 3, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3, 3, 5, 2, 3, 2, 3, 3, 5, 4}));
+	REQUIRE(CHECK_COLUMN(result, 2, {5, 3, 3, 13, 43, 66, 56, 30, 16, 20}));
+	REQUIRE(CHECK_COLUMN(result, 3, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
+	REQUIRE(CHECK_COLUMN(result, 4, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
+	REQUIRE(CHECK_COLUMN(result, 5, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}));
 }
 
 TEST_CASE("Non-default window specs", "[window]") {

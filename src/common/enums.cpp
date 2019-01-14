@@ -333,6 +333,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "VALUE_DEFAULT";
 	case ExpressionType::COMMON_SUBEXPRESSION:
 		return "COMMON_SUBEXPRESSION";
+	case ExpressionType::BOUND_REF:
+		return "BOUND_REF";
 	case ExpressionType::INVALID:
 		break;
 	}
