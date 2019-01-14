@@ -21,9 +21,9 @@ ViewCatalogEntry::ViewCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
 }
 
 void ViewCatalogEntry::Serialize(Serializer &serializer) {
-	throw NotImplementedException("");
+	query->Serialize(serializer);
 }
 
 unique_ptr<CreateViewInformation> ViewCatalogEntry::Deserialize(Deserializer &source) {
-	throw NotImplementedException("");
+	// query->Deserialize(source);
 }

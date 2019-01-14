@@ -66,6 +66,17 @@ struct DropTableInformation {
 	}
 };
 
+struct DropViewInformation {
+	//! Schema name to drop from
+	string schema;
+	//! Table name to drop
+	string view_name;
+	//! Ignore if the entry does not exist instead of failing
+	bool if_exists = false;
+	DropViewInformation() : schema(DEFAULT_SCHEMA), if_exists(false) {
+	}
+};
+
 enum class AlterType : uint8_t { INVALID = 0, ALTER_TABLE = 1 };
 
 struct AlterInformation {

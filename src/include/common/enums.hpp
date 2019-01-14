@@ -285,7 +285,8 @@ enum class StatementType : uint8_t {
 	// -----------------------------
 	DROP_TABLE,  // drop table statement type
 	DROP_SCHEMA, // drop table statement type
-	DROP_INDEX   // create index statement type
+	DROP_INDEX,  // drop index statement type
+	DROP_VIEW    // drop view statement type
 };
 
 //===--------------------------------------------------------------------===//

@@ -32,6 +32,15 @@ void SchemaCatalogEntry::CreateView(Transaction &transaction, CreateViewInformat
 	}
 }
 
+void SchemaCatalogEntry::DropView(Transaction &transaction, DropViewInformation *info) {
+	// TODO make sure this is a view
+	if (!tables.DropEntry(transaction, info->view_name, false)) {
+		if (!info->if_exists) {
+			throw CatalogException("View with name \"%s\" does not exist!", info->view_name.c_str());
+		}
+	}
+}
+
 bool SchemaCatalogEntry::CreateIndex(Transaction &transaction, CreateIndexInformation *info) {
 	auto index = make_unique_base<CatalogEntry, IndexCatalogEntry>(catalog, this, info);
 	if (!indexes.CreateEntry(transaction, info->index_name, move(index))) {
@@ -52,6 +61,7 @@ void SchemaCatalogEntry::DropIndex(Transaction &transaction, DropIndexInformatio
 }
 
 void SchemaCatalogEntry::DropTable(Transaction &transaction, DropTableInformation *info) {
+	// TODO make sure this is a table
 	if (!tables.DropEntry(transaction, info->table, info->cascade)) {
 		if (!info->if_exists) {
 			throw CatalogException("Table with name \"%s\" does not exist!", info->table.c_str());

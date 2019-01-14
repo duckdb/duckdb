@@ -29,6 +29,8 @@ public:
 	void CreateTable(Transaction &transaction, CreateTableInformation *info);
 	//! Creates a table in the catalog.
 	void CreateView(Transaction &transaction, CreateViewInformation *info);
+	//! Drops a view in the catalog.
+	void DropView(Transaction &transaction, DropViewInformation *info);
 	//! Drops a table from the catalog.
 	void DropTable(Transaction &transaction, DropTableInformation *info);
 	//! Alter an existing table in the catalog.

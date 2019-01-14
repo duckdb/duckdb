@@ -45,6 +45,11 @@ void Catalog::CreateView(Transaction &transaction, CreateViewInformation *info) 
 	schema->CreateView(transaction, info);
 }
 
+void Catalog::DropView(Transaction &transaction, DropViewInformation *info) {
+	auto schema = GetSchema(transaction, info->schema);
+	schema->DropView(transaction, info);
+}
+
 void Catalog::DropTable(Transaction &transaction, DropTableInformation *info) {
 	auto schema = GetSchema(transaction, info->schema);
 	schema->DropTable(transaction, info);

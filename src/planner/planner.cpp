@@ -51,6 +51,11 @@ void Planner::CreatePlan(ClientContext &context, unique_ptr<SQLStatement> statem
 		context.db.catalog.DropSchema(context.ActiveTransaction(), stmt.info.get());
 		break;
 	}
+	case StatementType::DROP_VIEW: {
+		auto &stmt = *((DropViewStatement *)statement.get());
+		context.db.catalog.DropView(context.ActiveTransaction(), stmt.info.get());
+		break;
+	}
 	case StatementType::DROP_TABLE: {
 		auto &stmt = *((DropTableStatement *)statement.get());
 		// TODO: create actual plan
