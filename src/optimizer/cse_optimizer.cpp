@@ -6,6 +6,19 @@
 using namespace duckdb;
 using namespace std;
 
+
+void CommonSubExpressionOptimizer::VisitOperator(LogicalOperator &op) {
+	switch(op.type) {
+		case LogicalOperatorType::FILTER:
+		case LogicalOperatorType::PROJECTION:
+			ExtractCommonSubExpresions(op);
+			break;
+		default:
+			break;
+	}
+	LogicalOperatorVisitor::VisitOperator(op);
+}
+
 void CommonSubExpressionOptimizer::CountExpressions(Expression *expr, expression_map_t &expression_count) {
 	if (expr->ChildCount() > 0) {
 		// we only consider expressions with children for CSE elimination
@@ -88,12 +101,4 @@ void CommonSubExpressionOptimizer::ExtractCommonSubExpresions(LogicalOperator &o
 			}
 		}
 	}
-}
-
-void CommonSubExpressionOptimizer::Visit(LogicalFilter &op) {
-	ExtractCommonSubExpresions(op);
-}
-
-void CommonSubExpressionOptimizer::Visit(LogicalProjection &op) {
-	ExtractCommonSubExpresions(op);
 }

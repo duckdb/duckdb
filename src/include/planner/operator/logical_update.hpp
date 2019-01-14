@@ -18,9 +18,6 @@ public:
 	    : LogicalOperator(LogicalOperatorType::UPDATE, std::move(expressions)), table(table), columns(columns) {
 	}
 
-	void Accept(LogicalOperatorVisitor *v) override {
-		v->Visit(*this);
-	}
 	vector<string> GetNames() override {
 		return {"Count"};
 	}

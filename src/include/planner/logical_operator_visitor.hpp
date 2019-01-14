@@ -40,32 +40,15 @@ class LogicalWindow;
 //! Visitor pattern on LogicalOperator.
 class LogicalOperatorVisitor : public SQLNodeVisitor {
 public:
+	using SQLNodeVisitor::Visit;
+
 	virtual ~LogicalOperatorVisitor(){};
 
 	virtual void VisitOperator(LogicalOperator &op);
-	using SQLNodeVisitor::Visit;
-
-	virtual void Visit(LogicalAggregate &op);
-	virtual void Visit(LogicalCreate &op);
-	virtual void Visit(LogicalCreateIndex &op);
-	virtual void Visit(LogicalCrossProduct &op);
-	virtual void Visit(LogicalDelete &op);
-	virtual void Visit(LogicalFilter &op);
-	virtual void Visit(LogicalGet &op);
-	virtual void Visit(LogicalJoin &op);
-	virtual void Visit(LogicalLimit &op);
-	virtual void Visit(LogicalOrder &op);
-	virtual void Visit(LogicalProjection &op);
-	virtual void Visit(LogicalInsert &op);
-	virtual void Visit(LogicalIntersect &op);
-	virtual void Visit(LogicalCopy &op);
-	virtual void Visit(LogicalPruneColumns &op);
-	virtual void Visit(LogicalSubquery &op);
-	virtual void Visit(LogicalExplain &op);
-	virtual void Visit(LogicalUnion &op);
-	virtual void Visit(LogicalExcept &op);
-	virtual void Visit(LogicalUpdate &op);
-	virtual void Visit(LogicalTableFunction &op);
-	virtual void Visit(LogicalWindow &op);
+protected:
+	//! Automatically calls the Visit method for LogicalOperator children of the current operator. Can be overloaded to change this behavior.
+	void VisitOperatorChildren(LogicalOperator &op);
+	//! Automatically calls the Visit method for Expression children of the current operator. Can be overloaded to change this behavior.
+	void VisitOperatorExpressions(LogicalOperator &op);
 };
 } // namespace duckdb

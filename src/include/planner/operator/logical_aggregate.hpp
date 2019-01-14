@@ -20,10 +20,6 @@ public:
 	    : LogicalOperator(LogicalOperatorType::AGGREGATE_AND_GROUP_BY, std::move(select_list)) {
 	}
 
-	void Accept(LogicalOperatorVisitor *v) override {
-		v->Visit(*this);
-	}
-
 	vector<string> GetNames() override;
 
 	//! The set of groups (optional).

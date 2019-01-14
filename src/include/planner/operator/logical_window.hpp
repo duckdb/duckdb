@@ -19,9 +19,6 @@ public:
 	LogicalWindow() : LogicalOperator(LogicalOperatorType::WINDOW) {
 	}
 
-	void Accept(LogicalOperatorVisitor *v) override {
-		v->Visit(*this);
-	}
 	vector<string> GetNames() override;
 
 protected:

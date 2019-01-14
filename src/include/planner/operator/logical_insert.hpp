@@ -21,9 +21,6 @@ public:
 	vector<vector<unique_ptr<Expression>>> insert_values;
 	vector<int> column_index_map;
 
-	void Accept(LogicalOperatorVisitor *v) override {
-		v->Visit(*this);
-	}
 	vector<string> GetNames() override {
 		return {"Count"};
 	}

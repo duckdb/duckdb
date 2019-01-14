@@ -17,9 +17,6 @@ public:
 	LogicalDelete(TableCatalogEntry *table) : LogicalOperator(LogicalOperatorType::DELETE), table(table) {
 	}
 
-	void Accept(LogicalOperatorVisitor *v) override {
-		v->Visit(*this);
-	}
 	vector<string> GetNames() override {
 		return {"Count"};
 	}

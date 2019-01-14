@@ -23,10 +23,6 @@ public:
 	string logical_plan_unopt;
 	string logical_plan_opt;
 
-	void Accept(LogicalOperatorVisitor *v) override {
-		v->Visit(*this);
-	}
-
 	vector<string> GetNames() override {
 		return {"explain_key", "explain_value"};
 	}

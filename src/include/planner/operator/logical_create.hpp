@@ -18,9 +18,6 @@ public:
 	    : LogicalOperator(LogicalOperatorType::CREATE), schema(schema), info(move(info)) {
 	}
 
-	void Accept(LogicalOperatorVisitor *v) override {
-		v->Visit(*this);
-	}
 	vector<string> GetNames() override {
 		return {"Count"};
 	}

@@ -49,13 +49,6 @@ public:
 	virtual string ParamsToString() const;
 	string ToString() const override;
 
-	virtual void Accept(LogicalOperatorVisitor *) = 0;
-	virtual void AcceptChildren(LogicalOperatorVisitor *v) {
-		for (auto &child : children) {
-			child->Accept(v);
-		}
-	}
-
 	void AddChild(unique_ptr<LogicalOperator> child) {
 		children.push_back(move(child));
 	}

@@ -19,9 +19,6 @@ public:
 	    : LogicalOperator(LogicalOperatorType::PROJECTION, std::move(select_list)) {
 	}
 
-	void Accept(LogicalOperatorVisitor *v) override {
-		v->Visit(*this);
-	}
 	vector<string> GetNames() override;
 
 protected:

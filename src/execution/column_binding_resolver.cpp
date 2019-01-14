@@ -14,6 +14,42 @@ void ColumnBindingResolver::AppendTables(vector<BoundTable> &right_tables) {
 	}
 }
 
+void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
+	switch(op.type) {
+	case LogicalOperatorType::GET:
+		Visit((LogicalGet&) op);
+		break;
+	case LogicalOperatorType::SUBQUERY:
+		Visit((LogicalSubquery&) op);
+		break;
+	case LogicalOperatorType::TABLE_FUNCTION:
+		Visit((LogicalTableFunction&) op);
+		break;
+	case LogicalOperatorType::JOIN:
+		Visit((LogicalJoin&) op);
+		break;
+	case LogicalOperatorType::CROSS_PRODUCT:
+		Visit((LogicalCrossProduct&) op);
+		break;
+	case LogicalOperatorType::UNION:
+		Visit((LogicalUnion&) op);
+		break;
+	case LogicalOperatorType::EXCEPT:
+		Visit((LogicalExcept&) op);
+		break;
+	case LogicalOperatorType::INTERSECT:
+		Visit((LogicalIntersect&) op);
+		break;
+	case LogicalOperatorType::CREATE_INDEX:
+		Visit((LogicalCreateIndex&) op);
+		break;
+	default:
+		// for the operators we do not handle explicitly, we just visit the children
+		LogicalOperatorVisitor::VisitOperator(op);
+		break;
+	}
+}
+
 void ColumnBindingResolver::Visit(LogicalCreateIndex &op) {
 	// add the table to the column binding resolver
 	// since we only have one table in the CREATE INDEX statement there is no
@@ -23,47 +59,46 @@ void ColumnBindingResolver::Visit(LogicalCreateIndex &op) {
 	binding.column_count = op.table.columns.size();
 	binding.column_offset = 0;
 	bound_tables.push_back(binding);
-	LogicalOperatorVisitor::Visit(op);
+
+	LogicalOperatorVisitor::VisitOperatorExpressions(op);
 }
 
-static void BindTablesBinaryOp(LogicalOperator &op, ColumnBindingResolver *res, bool append_right) {
-	assert(res);
-
+void ColumnBindingResolver::BindTablesBinaryOp(LogicalOperator &op, bool append_right) {
+	assert(op.children.size() == 2);
 	// resolve the column indices of the left side
-	op.children[0]->Accept(res);
+	VisitOperator(*op.children[0]);
 	// store the added tables
-	auto left_tables = res->bound_tables;
-	res->bound_tables.clear();
+	auto left_tables = bound_tables;
+	bound_tables.clear();
 
 	// now resolve the column indices of the right side
-	op.children[1]->Accept(res);
-	auto right_tables = res->bound_tables;
+	VisitOperator(*op.children[1]);
+	auto right_tables = bound_tables;
 
 	// now merge the two together
-	res->bound_tables = left_tables;
+	bound_tables = left_tables;
 	if (append_right) {
-		res->AppendTables(right_tables);
+		AppendTables(right_tables);
 	}
 }
 
 void ColumnBindingResolver::Visit(LogicalCrossProduct &op) {
-	BindTablesBinaryOp(op, this, true);
+	BindTablesBinaryOp(op, true);
 }
 
 void ColumnBindingResolver::Visit(LogicalUnion &op) {
-	BindTablesBinaryOp(op, this, false);
+	BindTablesBinaryOp(op, false);
 }
 
 void ColumnBindingResolver::Visit(LogicalExcept &op) {
-	BindTablesBinaryOp(op, this, false);
+	BindTablesBinaryOp(op, false);
 }
 
 void ColumnBindingResolver::Visit(LogicalIntersect &op) {
-	BindTablesBinaryOp(op, this, false);
+	BindTablesBinaryOp(op, false);
 }
 
 void ColumnBindingResolver::Visit(LogicalGet &op) {
-	LogicalOperatorVisitor::Visit(op);
 	if (!op.table) {
 		return;
 	}
@@ -78,7 +113,7 @@ void ColumnBindingResolver::Visit(LogicalGet &op) {
 void ColumnBindingResolver::Visit(LogicalSubquery &op) {
 	// we resolve the subquery separately
 	ColumnBindingResolver resolver;
-	op.AcceptChildren(&resolver);
+	resolver.VisitOperator(*op.children[0]);
 
 	BoundTable binding;
 	binding.table_index = op.table_index;
@@ -99,7 +134,7 @@ void ColumnBindingResolver::Visit(LogicalTableFunction &op) {
 
 void ColumnBindingResolver::Visit(LogicalJoin &op) {
 	// resolve the column indices of the left side
-	op.children[0]->Accept(this);
+	VisitOperator(*op.children[0]);
 	for (auto &cond : op.conditions) {
 		VisitExpression(&cond.left);
 	}
@@ -108,7 +143,7 @@ void ColumnBindingResolver::Visit(LogicalJoin &op) {
 	bound_tables.clear();
 
 	// now resolve the column indices of the right side
-	op.children[1]->Accept(this);
+	VisitOperator(*op.children[1]);
 	for (auto &cond : op.conditions) {
 		VisitExpression(&cond.right);
 	}
@@ -143,8 +178,9 @@ void ColumnBindingResolver::Visit(ColumnRefExpression &expr) {
 }
 
 void ColumnBindingResolver::Visit(SubqueryExpression &expr) {
+	assert(expr.op);
 	// resolve the column ref indices of subqueries
 	current_depth++;
-	expr.op->Accept(this);
+	VisitOperator(*expr.op);
 	current_depth--;
 }

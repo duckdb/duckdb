@@ -26,9 +26,6 @@ public:
 	LogicalJoin(JoinType type) : LogicalOperator(LogicalOperatorType::JOIN), type(type) {
 	}
 
-	void Accept(LogicalOperatorVisitor *v) override {
-		v->Visit(*this);
-	}
 	vector<string> GetNames() override;
 
 	vector<JoinCondition> conditions;

@@ -20,9 +20,6 @@ public:
 	    : LogicalOperator(LogicalOperatorType::ORDER_BY), description(std::move(description)) {
 	}
 
-	void Accept(LogicalOperatorVisitor *v) override {
-		v->Visit(*this);
-	}
 	vector<string> GetNames() override {
 		return children[0]->GetNames();
 	}

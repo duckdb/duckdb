@@ -34,8 +34,6 @@ private:
 	void ExtractCommonSubExpresions(LogicalOperator &op);
 
 public:
-	using LogicalOperatorVisitor::Visit;
-	void Visit(LogicalFilter &op) override;
-	void Visit(LogicalProjection &op) override;
+	void VisitOperator(LogicalOperator &op) override;
 };
 } // namespace duckdb

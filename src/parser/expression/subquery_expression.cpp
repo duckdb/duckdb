@@ -18,6 +18,9 @@ unique_ptr<Expression> SubqueryExpression::Copy() {
 }
 
 void SubqueryExpression::Serialize(Serializer &serializer) {
+	assert(!op);
+	assert(!context);
+	assert(!plan);
 	Expression::Serialize(serializer);
 	serializer.Write<SubqueryType>(subquery_type);
 	subquery->Serialize(serializer);

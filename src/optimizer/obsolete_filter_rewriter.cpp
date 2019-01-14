@@ -12,6 +12,7 @@ protected:
 		// we perform join reordering within the subquery expression
 		ObsoleteFilterRewriter rewriter;
 		subquery.op = rewriter.Rewrite(move(subquery.op));
+		assert(subquery.op);
 	}
 };
 

@@ -24,46 +24,46 @@ class ClientContext;
 //! logical query plan
 class PhysicalPlanGenerator : public LogicalOperatorVisitor {
 public:
-	PhysicalPlanGenerator(ClientContext &context, PhysicalPlanGenerator *parent = nullptr)
-	    : parent(parent), context(context) {
+	PhysicalPlanGenerator(ClientContext &context)
+	    : context(context) {
 	}
-	using LogicalOperatorVisitor::Visit;
 
 	void CreatePlan(unique_ptr<LogicalOperator> logical);
 
-	virtual void Visit(LogicalAggregate &op);
-	virtual void Visit(LogicalCreate &op);
-	virtual void Visit(LogicalCreateIndex &op);
-	virtual void Visit(LogicalCrossProduct &op);
-	virtual void Visit(LogicalDelete &op);
-	virtual void Visit(LogicalFilter &op);
-	virtual void Visit(LogicalGet &op);
-	virtual void Visit(LogicalJoin &op);
-	virtual void Visit(LogicalLimit &op);
-	virtual void Visit(LogicalOrder &op);
-	virtual void Visit(LogicalProjection &op);
-	virtual void Visit(LogicalInsert &op);
-	virtual void Visit(LogicalCopy &op);
-	virtual void Visit(LogicalExplain &op);
-	virtual void Visit(LogicalUnion &op);
-	virtual void Visit(LogicalExcept &op);
-	virtual void Visit(LogicalIntersect &op);
-	virtual void Visit(LogicalUpdate &op);
-	virtual void Visit(LogicalTableFunction &expr);
-	virtual void Visit(LogicalPruneColumns &expr);
-	virtual void Visit(LogicalWindow &expr);
+	void VisitOperator(LogicalOperator &op) override;
+protected:
+	void Visit(LogicalAggregate &op);
+	void Visit(LogicalCreate &op);
+	void Visit(LogicalCreateIndex &op);
+	void Visit(LogicalCrossProduct &op);
+	void Visit(LogicalDelete &op);
+	void Visit(LogicalFilter &op);
+	void Visit(LogicalGet &op);
+	void Visit(LogicalJoin &op);
+	void Visit(LogicalLimit &op);
+	void Visit(LogicalOrder &op);
+	void Visit(LogicalProjection &op);
+	void Visit(LogicalInsert &op);
+	void Visit(LogicalCopy &op);
+	void Visit(LogicalExplain &op);
+	void Visit(LogicalUnion &op);
+	void Visit(LogicalExcept &op);
+	void Visit(LogicalIntersect &op);
+	void Visit(LogicalUpdate &op);
+	void Visit(LogicalTableFunction &expr);
+	void Visit(LogicalPruneColumns &expr);
+	void Visit(LogicalWindow &expr);
 
-	virtual void Visit(SubqueryExpression &expr);
-
+	using SQLNodeVisitor::Visit;
+public:
 	void Print() {
 		plan->Print();
 	}
 
 	unique_ptr<PhysicalOperator> plan;
-
-	PhysicalPlanGenerator *parent;
-
 private:
 	ClientContext &context;
+
+	void GenerateExceptIntersect(LogicalOperator &op, JoinType join_type);
 };
 } // namespace duckdb

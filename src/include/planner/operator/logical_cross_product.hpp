@@ -18,10 +18,6 @@ public:
 	LogicalCrossProduct() : LogicalOperator(LogicalOperatorType::CROSS_PRODUCT) {
 	}
 
-	void Accept(LogicalOperatorVisitor *v) override {
-		v->Visit(*this);
-	}
-
 	vector<string> GetNames() override;
 
 protected:

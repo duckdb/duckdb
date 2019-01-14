@@ -27,9 +27,6 @@ public:
 	//! The table index of the table-producing function
 	size_t table_index;
 
-	void Accept(LogicalOperatorVisitor *v) override {
-		v->Visit(*this);
-	}
 	vector<string> GetNames() override;
 
 	size_t ExpressionCount() override;

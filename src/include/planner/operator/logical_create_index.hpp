@@ -21,9 +21,6 @@ public:
 		this->expressions = move(expressions);
 	}
 
-	void Accept(LogicalOperatorVisitor *v) override {
-		v->Visit(*this);
-	}
 	vector<string> GetNames() override {
 		return {"Count"};
 	}

@@ -19,9 +19,6 @@ public:
 	    : LogicalOperator(LogicalOperatorType::LIMIT), limit(limit), offset(offset) {
 	}
 
-	void Accept(LogicalOperatorVisitor *v) override {
-		v->Visit(*this);
-	}
 	vector<string> GetNames() override {
 		return children[0]->GetNames();
 	}

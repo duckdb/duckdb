@@ -31,6 +31,7 @@ public:
 		// we perform join reordering within the subquery expression
 		JoinOrderOptimizer optimizer;
 		subquery.op = optimizer.Optimize(move(subquery.op));
+		assert(subquery.op);
 	}
 };
 
@@ -47,12 +48,12 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	plan = optimizer.Optimize(move(plan));
 	// perform join order optimization in subqueries as well
 	OptimizeSubqueries opt;
-	plan->Accept(&opt);
+	opt.VisitOperator(*plan);
 	// now we rewrite subqueries
 	SubqueryRewriter subquery_rewriter(context);
 	plan = subquery_rewriter.Rewrite(move(plan));
 	// then we extract common subexpressions inside the different operators
 	CommonSubExpressionOptimizer cse_optimizer;
-	plan->Accept(&cse_optimizer);
+	cse_optimizer.VisitOperator(*plan);
 	return plan;
 }
