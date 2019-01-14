@@ -135,6 +135,7 @@ static bool WindowNeedsRank(WindowExpression *wexpr) {
 static void UpdateWindowBoundaries(WindowExpression *wexpr, ChunkCollection &input, size_t row_idx,
                                    ChunkCollection &boundary_start_collection, ChunkCollection &boundary_end_collection,
                                    WindowBoundariesState &bounds) {
+
 	vector<Value> row_cur = input.GetRow(row_idx);
 	size_t sort_col_count = wexpr->partitions.size() + wexpr->ordering.orders.size();
 
@@ -243,7 +244,6 @@ static void UpdateWindowBoundaries(WindowExpression *wexpr, ChunkCollection &inp
 static void ComputeWindowExpression(ClientContext &context, WindowExpression *wexpr, ChunkCollection &input,
                                     ChunkCollection &output, size_t output_idx) {
 
-	// TODO: if we have no sort nor order by we don't have to sort and the window is everything
 	ChunkCollection sort_collection;
 	size_t sort_col_count = wexpr->partitions.size() + wexpr->ordering.orders.size();
 	if (sort_col_count > 0) {
@@ -284,8 +284,6 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 		                      wexpr->end_expr->IsScalar());
 	}
 
-	WindowBoundariesState bounds;
-
 	// build a segment tree for frame-adhering aggregates
 	// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
 	unique_ptr<WindowSegmentTree> segment_tree = nullptr;
@@ -303,25 +301,43 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 	}
 
 	size_t dense_rank, rank_equal, rank;
+
+	WindowBoundariesState bounds;
+
 	bounds.row_prev = sort_collection.GetRow(0);
+
+	// special case, OVER (), aggregate over everything
+	if (sort_col_count == 0) {
+		bounds.is_peer = true;
+		bounds.is_same_partition = true;
+		bounds.partition_start = 0;
+		bounds.partition_end = input.count;
+		bounds.window_start = bounds.partition_start;
+		bounds.window_end = bounds.partition_end;
+		bounds.peer_start = bounds.partition_start;
+		bounds.peer_end = bounds.partition_end;
+
+		dense_rank = 1;
+		rank = 1;
+	}
 
 	// this is the main loop, go through all sorted rows and compute window function result
 	for (size_t row_idx = 0; row_idx < input.count; row_idx++) {
-
-		UpdateWindowBoundaries(wexpr, sort_collection, row_idx, boundary_start_collection, boundary_end_collection,
-		                       bounds);
-
-		if (WindowNeedsRank(wexpr)) {
-			if (!bounds.is_same_partition || row_idx == 0) { // special case for first row, need to init
-				dense_rank = 1;
-				rank = 1;
-				rank_equal = 0;
-			} else if (!bounds.is_peer) {
-				dense_rank++;
-				rank += rank_equal;
-				rank_equal = 0;
+		if (sort_col_count > 0) {
+			UpdateWindowBoundaries(wexpr, sort_collection, row_idx, boundary_start_collection, boundary_end_collection,
+			                       bounds);
+			if (WindowNeedsRank(wexpr)) {
+				if (!bounds.is_same_partition || row_idx == 0) { // special case for first row, need to init
+					dense_rank = 1;
+					rank = 1;
+					rank_equal = 0;
+				} else if (!bounds.is_peer) {
+					dense_rank++;
+					rank += rank_equal;
+					rank_equal = 0;
+				}
+				rank_equal++;
 			}
-			rank_equal++;
 		}
 
 		auto res = Value();

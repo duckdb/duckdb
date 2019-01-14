@@ -242,6 +242,18 @@ TEST_CASE("Wiscosin-derived window test cases", "[window]") {
 	    "SELECT lead(ten * 2, 1, -1) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt");
 	REQUIRE(result->column_count() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 8, -1, 2, 14, 18, -1, -1, 6, -1}));
+
+	// empty OVER clause
+	result =
+	    con.Query("SELECT COUNT(*) OVER w c, SUM(four) OVER w s, cast(AVG(ten) OVER w * 10 as integer) a, RANK() over "
+	              "w r, DENSE_RANK() over w dr, ROW_NUMBER() OVER w rn FROM tenk1 WINDOW w AS () ORDER BY rn");
+	REQUIRE(result->column_count() == 6);
+	REQUIRE(CHECK_COLUMN(result, 0, {10, 10, 10, 10, 10, 10, 10, 10, 10, 10}));
+	REQUIRE(CHECK_COLUMN(result, 1, {12, 12, 12, 12, 12, 12, 12, 12, 12, 12}));
+	REQUIRE(CHECK_COLUMN(result, 2, {26, 26, 26, 26, 26, 26, 26, 26, 26, 26}));
+	REQUIRE(CHECK_COLUMN(result, 3, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
+	REQUIRE(CHECK_COLUMN(result, 4, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
+	REQUIRE(CHECK_COLUMN(result, 5, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}));
 }
 
 TEST_CASE("Non-default window specs", "[window]") {
