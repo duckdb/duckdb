@@ -254,6 +254,19 @@ TEST_CASE("Wiscosin-derived window test cases", "[window]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
 	REQUIRE(CHECK_COLUMN(result, 4, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
 	REQUIRE(CHECK_COLUMN(result, 5, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}));
+
+	// no ordering but still a frame spec (somewhat underdefined)
+	result =
+	    con.Query("SELECT COUNT(*) OVER w c, SUM(four) OVER w s, cast(AVG(ten) OVER w * 10 as integer) a, RANK() over "
+	              "w r, DENSE_RANK() over w dr, ROW_NUMBER() OVER w rn FROM tenk1 WINDOW w AS (rows between 1 "
+	              "preceding and 1 following) ORDER BY rn");
+	REQUIRE(result->column_count() == 6);
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 3, 3, 3, 3, 3, 3, 3, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3, 3, 5, 2, 3, 2, 3, 3, 5, 4}));
+	REQUIRE(CHECK_COLUMN(result, 2, {5, 3, 3, 13, 43, 66, 56, 30, 16, 20}));
+	REQUIRE(CHECK_COLUMN(result, 3, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
+	REQUIRE(CHECK_COLUMN(result, 4, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
+	REQUIRE(CHECK_COLUMN(result, 5, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}));
 }
 
 TEST_CASE("Non-default window specs", "[window]") {

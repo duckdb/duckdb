@@ -132,34 +132,42 @@ static bool WindowNeedsRank(WindowExpression *wexpr) {
 	       wexpr->type == ExpressionType::WINDOW_RANK_DENSE || wexpr->type == ExpressionType::WINDOW_CUME_DIST;
 }
 
-static void UpdateWindowBoundaries(WindowExpression *wexpr, ChunkCollection &input, size_t row_idx,
+static void UpdateWindowBoundaries(WindowExpression *wexpr, ChunkCollection &input, size_t input_size, size_t row_idx,
                                    ChunkCollection &boundary_start_collection, ChunkCollection &boundary_end_collection,
                                    WindowBoundariesState &bounds) {
 
-	vector<Value> row_cur = input.GetRow(row_idx);
-	size_t sort_col_count = wexpr->partitions.size() + wexpr->ordering.orders.size();
+	if (input.column_count() > 0) {
+		vector<Value> row_cur = input.GetRow(row_idx);
+		size_t sort_col_count = wexpr->partitions.size() + wexpr->ordering.orders.size();
 
-	// determine partition and peer group boundaries to ultimately figure out window size
-	bounds.is_same_partition = EqualsSubset(bounds.row_prev, row_cur, 0, wexpr->partitions.size());
-	bounds.is_peer =
-	    bounds.is_same_partition && EqualsSubset(bounds.row_prev, row_cur, wexpr->partitions.size(), sort_col_count);
-	bounds.row_prev = row_cur;
+		// determine partition and peer group boundaries to ultimately figure out window size
+		bounds.is_same_partition = EqualsSubset(bounds.row_prev, row_cur, 0, wexpr->partitions.size());
+		bounds.is_peer = bounds.is_same_partition &&
+		                 EqualsSubset(bounds.row_prev, row_cur, wexpr->partitions.size(), sort_col_count);
+		bounds.row_prev = row_cur;
 
-	// when the partition changes, recompute the boundaries
-	if (!bounds.is_same_partition || row_idx == 0) { // special case for first row, need to init
-		bounds.partition_start = row_idx;
-		bounds.peer_start = row_idx;
+		// when the partition changes, recompute the boundaries
+		if (!bounds.is_same_partition || row_idx == 0) { // special case for first row, need to init
+			bounds.partition_start = row_idx;
+			bounds.peer_start = row_idx;
 
-		// find end of partition
-		bounds.partition_end =
-		    BinarySearchRightmost(input, row_cur, bounds.partition_start, input.count, wexpr->partitions.size()) + 1;
+			// find end of partition
+			bounds.partition_end =
+			    BinarySearchRightmost(input, row_cur, bounds.partition_start, input.count, wexpr->partitions.size()) +
+			    1;
 
-	} else if (!bounds.is_peer) {
-		bounds.peer_start = row_idx;
-	}
+		} else if (!bounds.is_peer) {
+			bounds.peer_start = row_idx;
+		}
 
-	if (wexpr->end == WindowBoundary::CURRENT_ROW_RANGE || wexpr->type == ExpressionType::WINDOW_CUME_DIST) {
-		bounds.peer_end = BinarySearchRightmost(input, row_cur, row_idx, bounds.partition_end, sort_col_count) + 1;
+		if (wexpr->end == WindowBoundary::CURRENT_ROW_RANGE || wexpr->type == ExpressionType::WINDOW_CUME_DIST) {
+			bounds.peer_end = BinarySearchRightmost(input, row_cur, row_idx, bounds.partition_end, sort_col_count) + 1;
+		}
+	} else {
+		bounds.is_same_partition = 0;
+		bounds.is_peer = true;
+		bounds.partition_end = input_size;
+		bounds.peer_end = bounds.partition_end;
 	}
 
 	// determine window boundaries depending on the type of expression
@@ -241,23 +249,12 @@ static void UpdateWindowBoundaries(WindowExpression *wexpr, ChunkCollection &inp
 	}
 }
 
-static void InitializeWindowBoundaries(WindowBoundariesState& bounds, size_t input_count) {
-	bounds.is_peer = true;
-	bounds.is_same_partition = true;
-	bounds.partition_start = 0;
-	bounds.partition_end = input_count;
-	bounds.window_start = bounds.partition_start;
-	bounds.window_end = bounds.partition_end;
-	bounds.peer_start = bounds.partition_start;
-	bounds.peer_end = bounds.partition_end;
-}
-
 static void ComputeWindowExpression(ClientContext &context, WindowExpression *wexpr, ChunkCollection &input,
                                     ChunkCollection &output, size_t output_idx) {
 
 	ChunkCollection sort_collection;
-	size_t sort_col_count = wexpr->partitions.size() + wexpr->ordering.orders.size();
-	if (sort_col_count > 0) {
+	bool needs_sorting = wexpr->partitions.size() + wexpr->ordering.orders.size() > 0;
+	if (needs_sorting) {
 		SortCollectionForWindow(context, wexpr, input, sort_collection);
 	}
 
@@ -312,31 +309,28 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 	}
 
 	WindowBoundariesState bounds;
-	InitializeWindowBoundaries(bounds, input.count);
 	size_t dense_rank = 1, rank_equal = 0, rank = 1;
 
-	if (sort_col_count > 0) {
+	if (needs_sorting) {
 		bounds.row_prev = sort_collection.GetRow(0);
 	}
 
 	// this is the main loop, go through all sorted rows and compute window function result
 	for (size_t row_idx = 0; row_idx < input.count; row_idx++) {
-		if (sort_col_count > 0) {
-			// special case, OVER (), aggregate over everything
-			UpdateWindowBoundaries(wexpr, sort_collection, row_idx, boundary_start_collection, boundary_end_collection,
-			                       bounds);
-			if (WindowNeedsRank(wexpr)) {
-				if (!bounds.is_same_partition || row_idx == 0) { // special case for first row, need to init
-					dense_rank = 1;
-					rank = 1;
-					rank_equal = 0;
-				} else if (!bounds.is_peer) {
-					dense_rank++;
-					rank += rank_equal;
-					rank_equal = 0;
-				}
-				rank_equal++;
+		// special case, OVER (), aggregate over everything
+		UpdateWindowBoundaries(wexpr, sort_collection, input.count, row_idx, boundary_start_collection,
+		                       boundary_end_collection, bounds);
+		if (WindowNeedsRank(wexpr)) {
+			if (!bounds.is_same_partition || row_idx == 0) { // special case for first row, need to init
+				dense_rank = 1;
+				rank = 1;
+				rank_equal = 0;
+			} else if (!bounds.is_peer) {
+				dense_rank++;
+				rank += rank_equal;
+				rank_equal = 0;
 			}
+			rank_equal++;
 		}
 
 		auto res = Value();
@@ -361,7 +355,7 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 			break;
 		}
 		case ExpressionType::WINDOW_ROW_NUMBER: {
-			res = Value::Numeric(wexpr->return_type, row_idx - bounds.window_start + 1);
+			res = Value::Numeric(wexpr->return_type, row_idx - bounds.partition_start + 1);
 			break;
 		}
 		case ExpressionType::WINDOW_RANK_DENSE: {
