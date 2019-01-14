@@ -40,6 +40,11 @@ void Catalog::CreateTable(Transaction &transaction, CreateTableInformation *info
 	schema->CreateTable(transaction, info);
 }
 
+void Catalog::CreateView(Transaction &transaction, CreateViewInformation *info) {
+	auto schema = GetSchema(transaction, info->schema);
+	schema->CreateView(transaction, info);
+}
+
 void Catalog::DropTable(Transaction &transaction, DropTableInformation *info) {
 	auto schema = GetSchema(transaction, info->schema);
 	schema->DropTable(transaction, info);
@@ -51,8 +56,16 @@ void Catalog::AlterTable(Transaction &transaction, AlterTableInformation *info) 
 }
 
 TableCatalogEntry *Catalog::GetTable(Transaction &transaction, const string &schema_name, const string &table_name) {
+	auto table = GetTableOrView(transaction, schema_name, table_name);
+	if (table->type != CatalogType::TABLE) {
+		throw CatalogException("%s is not a table", table_name.c_str());
+	}
+	return (TableCatalogEntry *)table;
+}
+
+CatalogEntry *Catalog::GetTableOrView(Transaction &transaction, const string &schema_name, const string &table_name) {
 	auto schema = GetSchema(transaction, schema_name);
-	return schema->GetTable(transaction, table_name);
+	return schema->GetTableOrView(transaction, table_name);
 }
 
 void Catalog::CreateTableFunction(Transaction &transaction, CreateTableFunctionInformation *info) {

@@ -23,7 +23,6 @@
 #include "execution/operator/scan/physical_index_scan.hpp"
 #include "execution/operator/scan/physical_table_function.hpp"
 #include "execution/operator/scan/physical_table_scan.hpp"
-#include "execution/operator/schema/physical_create_table.hpp"
 #include "execution/operator/schema/physical_create_index.hpp"
-#include "execution/operator/schema/physical_create_view.hpp"
+#include "execution/operator/schema/physical_create_table.hpp"
 #include "execution/operator/set/physical_union.hpp"

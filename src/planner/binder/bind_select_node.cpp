@@ -153,7 +153,7 @@ void Binder::Bind(SelectNode &statement) {
 			if (statement.groupby.groups[i]->type == ExpressionType::BOUND_REF) {
 				// alias reference
 				// move the computation here from the SELECT clause
-				auto &bound_expr = (BoundExpression&) *statement.groupby.groups[i];
+				auto &bound_expr = (BoundExpression &)*statement.groupby.groups[i];
 				auto select_index = bound_expr.index;
 				auto group_ref = make_unique<BoundExpression>(statement.groupby.groups[i]->return_type, i);
 				statement.groupby.groups[i] = move(statement.select_list[select_index]);

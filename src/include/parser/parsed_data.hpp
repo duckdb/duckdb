@@ -43,7 +43,7 @@ struct CreateViewInformation {
 	//! Ignore if the entry already exists, instead of failing
 	bool replace = false;
 
-	unique_ptr<SelectStatement> query;
+	unique_ptr<QueryNode> query;
 
 	CreateViewInformation() : schema(DEFAULT_SCHEMA), replace(false) {
 	}

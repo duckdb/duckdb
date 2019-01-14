@@ -34,9 +34,13 @@ void Planner::CreatePlan(ClientContext &context, unique_ptr<SQLStatement> statem
 	case StatementType::UPDATE:
 	case StatementType::CREATE_INDEX:
 	case StatementType::CREATE_TABLE:
-	case StatementType::CREATE_VIEW:
 		CreatePlan(context, *statement);
 		break;
+	case StatementType::CREATE_VIEW: {
+		auto &stmt = *((CreateViewStatement *)statement.get());
+		context.db.catalog.CreateView(context.ActiveTransaction(), stmt.info.get());
+		break;
+	}
 	case StatementType::CREATE_SCHEMA: {
 		auto &stmt = *((CreateSchemaStatement *)statement.get());
 		context.db.catalog.CreateSchema(context.ActiveTransaction(), stmt.info.get());

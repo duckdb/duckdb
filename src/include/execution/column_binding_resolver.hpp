@@ -44,7 +44,8 @@ protected:
 
 	using SQLNodeVisitor::Visit;
 	void Visit(ColumnRefExpression &expr) override {
-		throw Exception("ColumnRefExpression is not legal here, should have been converted to BoundColumnRefExpression already!");
+		throw Exception(
+		    "ColumnRefExpression is not legal here, should have been converted to BoundColumnRefExpression already!");
 	}
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr) override;
 	void Visit(SubqueryExpression &expr) override;

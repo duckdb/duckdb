@@ -36,9 +36,6 @@ void LogicalPlanGenerator::CreatePlan(SQLStatement &statement) {
 	case StatementType::CREATE_TABLE:
 		CreatePlan((CreateTableStatement &)statement);
 		break;
-	case StatementType::CREATE_VIEW:
-		CreatePlan((CreateViewStatement &)statement);
-		break;
 	case StatementType::CREATE_INDEX:
 		CreatePlan((CreateIndexStatement &)statement);
 		break;

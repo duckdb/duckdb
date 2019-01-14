@@ -101,9 +101,6 @@ void PhysicalPlanGenerator::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::CREATE_INDEX:
 		Visit((LogicalCreateIndex &)op);
 		break;
-	case LogicalOperatorType::CREATE_VIEW:
-		Visit((LogicalCreateView &)op);
-		break;
 	case LogicalOperatorType::EXPLAIN:
 		Visit((LogicalExplain &)op);
 		break;
@@ -187,13 +184,6 @@ void PhysicalPlanGenerator::Visit(LogicalCreateIndex &op) {
 	assert(!plan); // CREATE INDEX node must be first node of the plan!
 
 	this->plan = make_unique<PhysicalCreateIndex>(op, op.table, op.column_ids, move(op.expressions), move(op.info));
-}
-
-void PhysicalPlanGenerator::Visit(LogicalCreateView &op) {
-	LogicalOperatorVisitor::VisitOperatorChildren(op);
-	assert(!plan); // CREATE INDEX node must be first node of the plan!
-
-	this->plan = make_unique<PhysicalCreateView>(op, op.schema, move(op.info));
 }
 
 #include "optimizer/matcher/expression_matcher.hpp"

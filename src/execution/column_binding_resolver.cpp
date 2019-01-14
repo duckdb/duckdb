@@ -166,7 +166,7 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 		// should not be resolved by the current resolver
 		return nullptr;
 	}
-	uint32_t index = (uint32_t) -1;
+	uint32_t index = (uint32_t)-1;
 	for (auto &binding : bound_tables) {
 		if (binding.table_index == expr.binding.table_index) {
 			index = binding.column_offset + expr.binding.column_index;

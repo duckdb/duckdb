@@ -40,7 +40,7 @@ virtual std::string VerifyResult(DuckDBResult *result) {
 	if (result->column_count() != 1) {
 		return "Incorrect amount of columns";
 	}
-	if (result->GetValue<int>(0, 0) != SUM_RESULT) {
+	if (result->GetValue<int64_t>(0, 0) != SUM_RESULT) {
 		return "Incorrect result returned, expected " + to_string(result->GetValue<int>(0, 0));
 	}
 	return std::string();
@@ -81,7 +81,7 @@ virtual std::string VerifyResult(DuckDBResult *result) {
 	if (result->column_count() != 1) {
 		return "Incorrect amount of columns";
 	}
-	if (result->GetValue<int>(0, 0) != SUM_RESULT) {
+	if (result->GetValue<int64_t>(0, 0) != SUM_RESULT) {
 		return "Incorrect result returned, expected " + to_string(RANGE_QUERY_ENTRY_LOW + 2);
 	}
 	return std::string();

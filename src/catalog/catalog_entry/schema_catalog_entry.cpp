@@ -18,8 +18,17 @@ void SchemaCatalogEntry::CreateTable(Transaction &transaction, CreateTableInform
 	auto table = make_unique_base<CatalogEntry, TableCatalogEntry>(catalog, this, info);
 	if (!tables.CreateEntry(transaction, info->table, move(table))) {
 		if (!info->if_not_exists) {
-			throw CatalogException("Table with name \"%s\" already exists!", info->table.c_str());
+			throw CatalogException("Table or view with name \"%s\" already exists!", info->table.c_str());
 		}
+	}
+}
+
+void SchemaCatalogEntry::CreateView(Transaction &transaction, CreateViewInformation *info) {
+	auto view = make_unique_base<CatalogEntry, ViewCatalogEntry>(catalog, this, info);
+	if (!tables.CreateEntry(transaction, info->table, move(view))) {
+		//		if (!info->if_not_exists) {
+		throw CatalogException("T with name \"%s\" already exists!", info->table.c_str());
+		//		}
 	}
 }
 
@@ -57,11 +66,19 @@ void SchemaCatalogEntry::AlterTable(Transaction &transaction, AlterTableInformat
 }
 
 TableCatalogEntry *SchemaCatalogEntry::GetTable(Transaction &transaction, const string &table_name) {
+	auto table_or_view = GetTableOrView(transaction, table_name);
+	if (table_or_view->type != CatalogType::TABLE) {
+		throw CatalogException("%s is not a table", table_name.c_str());
+	}
+	return (TableCatalogEntry *)table_or_view;
+}
+
+CatalogEntry *SchemaCatalogEntry::GetTableOrView(Transaction &transaction, const string &table_name) {
 	auto entry = tables.GetEntry(transaction, table_name);
 	if (!entry) {
-		throw CatalogException("Table with name %s does not exist!", table_name.c_str());
+		throw CatalogException("Table or view with name %s does not exist!", table_name.c_str());
 	}
-	return (TableCatalogEntry *)entry;
+	return entry;
 }
 
 TableFunctionCatalogEntry *SchemaCatalogEntry::GetTableFunction(Transaction &transaction,

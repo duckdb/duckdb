@@ -35,7 +35,6 @@ protected:
 	void Visit(LogicalAggregate &op);
 	void Visit(LogicalCreateTable &op);
 	void Visit(LogicalCreateIndex &op);
-	void Visit(LogicalCreateView &op);
 	void Visit(LogicalCrossProduct &op);
 	void Visit(LogicalDelete &op);
 	void Visit(LogicalFilter &op);

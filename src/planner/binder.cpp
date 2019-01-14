@@ -106,7 +106,7 @@ void Binder::Visit(SubqueryExpression &expr) {
 	expr.is_correlated = expr.context->GetMaxDepth() > 0;
 }
 
-// CTEs are also referred to using BaseTableRefs, hence need to distinguish
+// CTEs and views are also referred to using BaseTableRefs, hence need to distinguish here
 unique_ptr<TableRef> Binder::Visit(BaseTableRef &expr) {
 	auto cte = FindCTE(expr.table_name);
 	if (cte) {
@@ -116,8 +116,24 @@ unique_ptr<TableRef> Binder::Visit(BaseTableRef &expr) {
 		return move(subquery);
 	}
 
-	auto table = context.db.catalog.GetTable(context.ActiveTransaction(), expr.schema_name, expr.table_name);
-	bind_context->AddBaseTable(expr.alias.empty() ? expr.table_name : expr.alias, table);
+	auto table_or_view =
+	    context.db.catalog.GetTableOrView(context.ActiveTransaction(), expr.schema_name, expr.table_name);
+	switch (table_or_view->type) {
+	case CatalogType::TABLE:
+		bind_context->AddBaseTable(expr.alias.empty() ? expr.table_name : expr.alias,
+		                           (TableCatalogEntry *)table_or_view);
+		break;
+	case CatalogType::VIEW: {
+		auto view_catalog_entry = (ViewCatalogEntry *)table_or_view;
+		auto subquery = make_unique<SubqueryRef>(view_catalog_entry->query->Copy());
+		subquery->alias = expr.alias.empty() ? expr.table_name : expr.alias;
+		AcceptChild(&subquery);
+		return move(subquery);
+		break;
+	}
+	default:
+		throw NotImplementedException("Catalog entry type");
+	}
 	return nullptr;
 }
 

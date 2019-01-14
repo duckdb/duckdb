@@ -39,7 +39,7 @@ unique_ptr<CreateViewStatement> Transformer::TransformCreateView(Node *node) {
 	info.table = stmt->view->relname;
 	info.replace = stmt->replace;
 
-	info.query = TransformSelect(stmt->query);
+	info.query = TransformSelectNode((SelectStmt *)stmt->query);
 
 	// todo aliases
 	// todo options

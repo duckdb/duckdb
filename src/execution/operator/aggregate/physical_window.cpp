@@ -80,17 +80,16 @@ static void SortCollectionForWindow(ClientContext &context, WindowExpression *we
 		auto &pexpr = wexpr->partitions[prt_idx];
 		sort_types.push_back(pexpr->return_type);
 		exprs.push_back(pexpr.get());
-		odesc.orders.push_back(OrderByNode(OrderType::ASCENDING, make_unique<BoundExpression>(
-		                                                             pexpr->return_type, exprs.size() - 1)));
+		odesc.orders.push_back(
+		    OrderByNode(OrderType::ASCENDING, make_unique<BoundExpression>(pexpr->return_type, exprs.size() - 1)));
 	}
 
 	for (size_t ord_idx = 0; ord_idx < wexpr->ordering.orders.size(); ord_idx++) {
 		auto &oexpr = wexpr->ordering.orders[ord_idx].expression;
 		sort_types.push_back(oexpr->return_type);
 		exprs.push_back(oexpr.get());
-		odesc.orders.push_back(
-		    OrderByNode(wexpr->ordering.orders[ord_idx].type,
-		                make_unique<BoundExpression>(oexpr->return_type, exprs.size() - 1)));
+		odesc.orders.push_back(OrderByNode(wexpr->ordering.orders[ord_idx].type,
+		                                   make_unique<BoundExpression>(oexpr->return_type, exprs.size() - 1)));
 	}
 
 	assert(sort_types.size() > 0);
