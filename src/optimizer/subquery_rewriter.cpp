@@ -124,7 +124,7 @@ bool SubqueryRewriter::RewriteInClause(LogicalFilter &filter, OperatorExpression
 	// and the first column of the subquery
 	assert(node->expressions.size() > 0);
 	condition.right =
-	    make_unique<ColumnRefExpression>(node->expressions[0]->return_type, ColumnBinding(subquery_table_index, 0));
+	    make_unique<BoundColumnRefExpression>(*node->expressions[0], node->expressions[0]->return_type, ColumnBinding(subquery_table_index, 0));
 	condition.comparison = ExpressionType::COMPARE_EQUAL;
 
 	// now convert the subquery expression into a proper subquery
@@ -221,8 +221,8 @@ bool SubqueryRewriter::RewriteExistsClause(LogicalFilter &filter, OperatorExpres
 }
 
 static void AddColumnIndex(Expression *expr, size_t old_groups, size_t aggr_groups_size) {
-	if (expr->type == ExpressionType::COLUMN_REF) {
-		auto colref = (ColumnRefExpression *)expr;
+	if (expr->type == ExpressionType::BOUND_REF) {
+		auto colref = (BoundExpression *)expr;
 		if (colref->index >= old_groups) {
 			colref->index += aggr_groups_size - old_groups;
 		}
@@ -267,10 +267,10 @@ bool SubqueryRewriter::RewriteSubqueryComparison(LogicalFilter &filter, Comparis
 	for (size_t i = 0; i < join_conditions.size(); i++) {
 		auto type = aggr->groups[old_groups + i]->return_type;
 		// create the grouping column
-		proj->expressions.push_back(make_unique<ColumnRefExpression>(type, old_groups + i));
+		proj->expressions.push_back(make_unique<BoundExpression>(type, old_groups + i));
 		// now make the join condition reference this column
 		join_conditions[i].right =
-		    make_unique<ColumnRefExpression>(type, ColumnBinding(subquery_table_index, proj->expressions.size() - 1));
+		    make_unique<BoundColumnRefExpression>(*aggr->groups[old_groups + i], type, ColumnBinding(subquery_table_index, proj->expressions.size() - 1));
 	}
 
 	// create the join condition based on the equality expression
@@ -279,7 +279,7 @@ bool SubqueryRewriter::RewriteSubqueryComparison(LogicalFilter &filter, Comparis
 	condition.left = subquery == comparison->left.get() ? move(comparison->right) : move(comparison->left);
 	// the right condition is the aggregate of the subquery
 	condition.right =
-	    make_unique<ColumnRefExpression>(proj->expressions[0]->return_type, ColumnBinding(subquery_table_index, 0));
+	    make_unique<BoundColumnRefExpression>(*proj->expressions[0], proj->expressions[0]->return_type, ColumnBinding(subquery_table_index, 0));
 	condition.comparison = comparison->type;
 
 	// now we add join between the filter and the subquery
@@ -302,8 +302,8 @@ bool SubqueryRewriter::RewriteSubqueryComparison(LogicalFilter &filter, Comparis
 }
 
 bool ContainsCorrelatedExpressions(Expression &expr) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &colref = (ColumnRefExpression &)expr;
+	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+		auto &colref = (BoundColumnRefExpression &)expr;
 		if (colref.depth > 0) {
 			return true;
 		}
@@ -335,13 +335,13 @@ bool ExtractCorrelatedExpressions(LogicalOperator *op, LogicalOperator *current_
 				continue;
 			}
 			auto sq_comp = (ComparisonExpression *)expr.get();
-			if (sq_comp->left->type != ExpressionType::COLUMN_REF ||
-			    sq_comp->right->type != ExpressionType::COLUMN_REF) {
+			if (sq_comp->left->type != ExpressionType::BOUND_COLUMN_REF ||
+			    sq_comp->right->type != ExpressionType::BOUND_COLUMN_REF) {
 				// not a comparison between column refs, skip it
 				continue;
 			}
-			auto sq_colref_left = (ColumnRefExpression *)sq_comp->left.get();
-			auto sq_colref_right = (ColumnRefExpression *)sq_comp->right.get();
+			auto sq_colref_left = (BoundColumnRefExpression *)sq_comp->left.get();
+			auto sq_colref_right = (BoundColumnRefExpression *)sq_comp->right.get();
 			if (sq_colref_left->depth == 0 && sq_colref_right->depth == 0) {
 				// not a correlated comparison
 				continue;
@@ -351,7 +351,7 @@ bool ExtractCorrelatedExpressions(LogicalOperator *op, LogicalOperator *current_
 				continue;
 			}
 			bool is_inverted = false;
-			ColumnRefExpression *sq_colref_inner, *sq_colref_outer;
+			BoundColumnRefExpression *sq_colref_inner, *sq_colref_outer;
 			if (sq_colref_left->depth == 1) {
 				sq_colref_inner = sq_colref_right;
 				sq_colref_outer = sq_colref_left;
@@ -366,8 +366,8 @@ bool ExtractCorrelatedExpressions(LogicalOperator *op, LogicalOperator *current_
 
 			auto comparison_type = sq_comp->type;
 
-			auto comp_left = make_unique<ColumnRefExpression>(sq_colref_inner->return_type, sq_colref_inner->binding);
-			auto comp_right = make_unique<ColumnRefExpression>(sq_colref_outer->return_type, sq_colref_outer->binding);
+			auto comp_left = make_unique<BoundColumnRefExpression>(*sq_colref_inner, sq_colref_inner->return_type, sq_colref_inner->binding);
+			auto comp_right = make_unique<BoundColumnRefExpression>(*sq_colref_outer, sq_colref_outer->return_type, sq_colref_outer->binding);
 
 			// uncorrelated expression (depth = 0)
 			auto uncorrelated_expression = !is_inverted ? move(sq_comp->left) : move(sq_comp->right);
@@ -394,7 +394,7 @@ bool ExtractCorrelatedExpressions(LogicalOperator *op, LogicalOperator *current_
 			// on the left side is the original correlated expression
 			// however, since there is no longer a subquery, its depth has changed
 			// to 0
-			((ColumnRefExpression *)correlated_expression.get())->depth = 0;
+			((BoundColumnRefExpression *)correlated_expression.get())->depth = 0;
 			condition.left = move(correlated_expression);
 			// on the right side is the newly added group in the original subquery
 			if (op->type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY) {
@@ -403,7 +403,7 @@ bool ExtractCorrelatedExpressions(LogicalOperator *op, LogicalOperator *current_
 				condition.right = nullptr;
 			} else {
 				condition.right =
-				    make_unique<ColumnRefExpression>(op->expressions.back()->return_type,
+				    make_unique<BoundColumnRefExpression>(*op->expressions.back(), op->expressions.back()->return_type,
 				                                     ColumnBinding(subquery_table_index, op->expressions.size() - 1));
 				assert(condition.left->return_type == condition.right->return_type);
 			}

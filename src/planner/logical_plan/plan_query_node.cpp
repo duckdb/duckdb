@@ -1,4 +1,4 @@
-#include "parser/expression/columnref_expression.hpp"
+#include "parser/expression/bound_expression.hpp"
 #include "parser/query_node.hpp"
 #include "planner/logical_plan_generator.hpp"
 #include "planner/operator/list.hpp"
@@ -21,8 +21,8 @@ void LogicalPlanGenerator::VisitQueryNode(QueryNode &statement) {
 		for (size_t i = 0; i < node->expressions.size(); i++) {
 			Expression *proj_ele = node->expressions[i].get();
 
-			groups.push_back(make_unique_base<Expression, ColumnRefExpression>(proj_ele->return_type, i));
-			auto colref = make_unique_base<Expression, ColumnRefExpression>(proj_ele->return_type, i);
+			groups.push_back(make_unique<BoundExpression>(proj_ele->return_type, i));
+			auto colref = make_unique<BoundExpression>(proj_ele->return_type, i);
 			colref->alias = proj_ele->alias;
 			projections.push_back(move(colref));
 		}

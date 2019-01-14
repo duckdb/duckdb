@@ -1,5 +1,5 @@
 #include "parser/expression/cast_expression.hpp"
-#include "parser/expression/columnref_expression.hpp"
+#include "parser/expression/bound_expression.hpp"
 #include "parser/statement/update_statement.hpp"
 #include "planner/logical_plan_generator.hpp"
 #include "planner/operator/list.hpp"
@@ -50,14 +50,14 @@ void LogicalPlanGenerator::CreatePlan(UpdateStatement &statement) {
 				expression = make_unique<CastExpression>(column.type, move(expression));
 			}
 			statement.expressions[i] =
-			    make_unique<ColumnRefExpression>(expression->return_type, projection_expressions.size());
+			    make_unique<BoundExpression>(expression->return_type, projection_expressions.size());
 			projection_expressions.push_back(move(expression));
 		}
 	}
 	if (projection_expressions.size() > 0) {
 		// have to create a projection first
 		// add the row id column to the projection list
-		projection_expressions.push_back(make_unique<ColumnRefExpression>(TypeId::POINTER, get->column_ids.size() - 1));
+		projection_expressions.push_back(make_unique<BoundExpression>(TypeId::POINTER, get->column_ids.size() - 1));
 		// now create the projection
 		auto proj = make_unique<LogicalProjection>(move(projection_expressions));
 		proj->AddChild(move(root));

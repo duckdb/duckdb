@@ -85,6 +85,9 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &source) {
 	case ExpressionClass::AGGREGATE:
 		result = AggregateExpression::Deserialize(type, return_type, source);
 		break;
+	case ExpressionClass::BOUND_REF:
+		result = BoundExpression::Deserialize(type, return_type, source);
+		break;
 	case ExpressionClass::CASE:
 		result = CaseExpression::Deserialize(type, return_type, source);
 		break;

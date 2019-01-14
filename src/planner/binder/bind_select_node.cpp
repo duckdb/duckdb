@@ -1,4 +1,5 @@
 #include "parser/expression/aggregate_expression.hpp"
+#include "parser/expression/bound_expression.hpp"
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/query_node/select_node.hpp"
 #include "planner/binder.hpp"
@@ -13,32 +14,35 @@ static unique_ptr<Expression> replace_columns_with_group_refs(
 		// already an aggregate, move it back
 		return expr;
 	}
+	bool wrap_in_first_aggregate = false;
 	// check if the expression is a GroupBy expression
 	auto entry = groups.find(expr.get());
 	if (entry != groups.end()) {
 		auto group = entry->first;
 		// group reference! turn expression into a reference to the group
-		auto group_ref = make_unique<ColumnRefExpression>(group->return_type, entry->second);
+		auto group_ref = make_unique<BoundExpression>(group->return_type, entry->second);
 		group_ref->alias = expr->alias.empty() ? group->GetName() : expr->alias;
-		return move(group_ref);
+		return group_ref;
 	}
-	if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
-		// a column reference that is not contained inside an aggregate:
-		auto select_column = (ColumnRefExpression *)expr.get();
-		if (select_column->index != (size_t)-1) {
-			// index already assigned, references a GROUP BY column
-			return expr;
-		}
-		// check if the column references a group
-		if (select_column->reference) {
-			auto entry = groups.find(select_column->reference);
-			if (entry != groups.end()) {
-				// group reference!
-				auto group_ref = make_unique<ColumnRefExpression>(entry->first->return_type, entry->second);
-				group_ref->alias = string(select_column->column_name);
-				return group_ref;
-			}
-		}
+	// if (expr->GetExpressionClass() == ExpressionClass::ALIAS_REF) {
+	// 	// an alias reference, check if it points to a GROUP BY column
+	// 	auto &alias_ref = (AliasRefExpression &)*expr;
+	// 	auto entry = groups.find(alias_ref.reference);
+	// 	if (entry != groups.end()) {
+	// 		// it points to a group! replace with a bound expression
+	// 		auto group_ref = make_unique<BoundExpression>(entry->first->return_type, entry->second);
+	// 		group_ref->alias = string(alias_ref.GetName());
+	// 		return group_ref;
+	// 	}
+	// 	wrap_in_first_aggregate = true;
+	// }
+	if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		// a column reference that does not refer to a GROUP column
+		wrap_in_first_aggregate = true;
+	}
+	// all column references should have already been bound here
+	assert(expr->GetExpressionClass() != ExpressionClass::COLUMN_REF);
+	if (wrap_in_first_aggregate) {
 		// not a GROUP BY column and not part of an aggregate
 		// create a FIRST aggregate around this aggregate
 		string stmt_alias = expr->alias;
@@ -99,41 +103,22 @@ void Binder::Bind(SelectNode &statement) {
 			bind_context->AddExpression(new_select_list[i]->alias, new_select_list[i].get(), i);
 		}
 	}
-
-	for (auto &order : statement.orderby.orders) {
-		VisitExpression(&order.expression);
-		if (order.expression->type == ExpressionType::COLUMN_REF) {
-			auto selection_ref = reinterpret_cast<ColumnRefExpression *>(order.expression.get());
-			if (selection_ref->column_name.empty()) {
-				// this ORDER BY expression refers to a column in the select
-				// clause by index e.g. ORDER BY 1 assign the type of the SELECT
-				// clause
-				if (selection_ref->index < 1 || selection_ref->index > statement.result_column_count) {
-					throw BinderException("ORDER term out of range - should be between 1 and %d",
-					                      (int)new_select_list.size());
-				}
-				selection_ref->return_type = new_select_list[selection_ref->index - 1]->return_type;
-				selection_ref->reference = new_select_list[selection_ref->index - 1].get();
-			}
-		}
-		order.expression->ResolveType();
-	}
+	BindOrderBy(statement.orderby, new_select_list, statement.result_column_count);
 	// for the ORDER BY statement, we have to project all the columns
 	// in the projection phase as well
 	// for each expression in the ORDER BY check if it is projected already
+	// FIXME: should use hash map for equality comparisons
 	for (size_t i = 0; i < statement.orderby.orders.size(); i++) {
 		size_t j = 0;
 		TypeId type = TypeId::INVALID;
+		if (statement.orderby.orders[i].expression->type == ExpressionType::BOUND_REF) {
+			// expression was already bound
+			continue;
+		}
 		for (; j < new_select_list.size(); j++) {
 			// check if the expression matches exactly
 			if (statement.orderby.orders[i].expression->Equals(new_select_list[j].get())) {
 				// in this case, we can just create a reference in the ORDER BY
-				break;
-			}
-			// if the ORDER BY is an alias reference, check if the alias matches
-			if (statement.orderby.orders[i].expression->type == ExpressionType::COLUMN_REF &&
-			    reinterpret_cast<ColumnRefExpression *>(statement.orderby.orders[i].expression.get())->reference ==
-			        new_select_list[j].get()) {
 				break;
 			}
 		}
@@ -146,7 +131,7 @@ void Binder::Bind(SelectNode &statement) {
 		if (type == TypeId::INVALID) {
 			throw Exception("Could not deduce return type of ORDER BY expression");
 		}
-		statement.orderby.orders[i].expression = make_unique<ColumnRefExpression>(type, j);
+		statement.orderby.orders[i].expression = make_unique<BoundExpression>(type, j);
 	}
 	statement.select_list = move(new_select_list);
 
@@ -165,18 +150,16 @@ void Binder::Bind(SelectNode &statement) {
 		// handle aliases in the GROUP BY columns
 		unordered_map<Expression *, size_t, ExpressionHashFunction, ExpressionEquality> groups;
 		for (size_t i = 0; i < statement.groupby.groups.size(); i++) {
-			if (statement.groupby.groups[i]->type == ExpressionType::COLUMN_REF) {
-				auto group_column = reinterpret_cast<ColumnRefExpression *>(statement.groupby.groups[i].get());
-				if (group_column->reference) {
-					// alias reference
-					// move the computation here from the SELECT clause
-					size_t select_index = group_column->index;
-					auto group_ref = make_unique<ColumnRefExpression>(statement.groupby.groups[i]->return_type, i);
-					statement.groupby.groups[i] = move(statement.select_list[select_index]);
-					group_ref->alias = statement.groupby.groups[i]->GetName();
-					// and add a GROUP REF expression to the SELECT clause
-					statement.select_list[select_index] = move(group_ref);
-				}
+			if (statement.groupby.groups[i]->type == ExpressionType::BOUND_REF) {
+				// alias reference
+				// move the computation here from the SELECT clause
+				auto &bound_expr = (BoundExpression&) *statement.groupby.groups[i];
+				auto select_index = bound_expr.index;
+				auto group_ref = make_unique<BoundExpression>(statement.groupby.groups[i]->return_type, i);
+				statement.groupby.groups[i] = move(statement.select_list[select_index]);
+				group_ref->alias = statement.groupby.groups[i]->GetName();
+				// and add a GROUP REF expression to the SELECT clause
+				statement.select_list[select_index] = move(group_ref);
 			}
 			groups[statement.groupby.groups[i].get()] = i;
 		}

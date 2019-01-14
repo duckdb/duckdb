@@ -62,18 +62,15 @@ void Binder::Visit(CheckConstraint &constraint) {
 	}
 }
 
-void Binder::Visit(ColumnRefExpression &expr) {
-	if (expr.column_name.empty()) {
-		// column expression should have been bound already
-		return;
-	}
+unique_ptr<Expression> Binder::VisitReplace(ColumnRefExpression &expr) {
+	assert(!expr.column_name.empty());
 	// individual column reference
 	// resolve to either a base table or a subquery expression
 	if (expr.table_name.empty()) {
 		// no table name: find a binding that contains this
 		expr.table_name = bind_context->GetMatchingBinding(expr.column_name);
 	}
-	bind_context->BindColumn(expr);
+	return bind_context->BindColumn(expr);
 }
 
 void Binder::Visit(FunctionExpression &expr) {

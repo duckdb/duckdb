@@ -43,6 +43,8 @@ protected:
 	}
 	virtual void Visit(BoundExpression &expr) {
 	}
+	virtual void Visit(BoundColumnRefExpression &expr) {
+	}
 	virtual void Visit(CaseExpression &expr) {
 	}
 	virtual void Visit(CastExpression &expr) {
@@ -74,6 +76,7 @@ protected:
 	// visiting them
 	virtual unique_ptr<Expression> VisitReplace(AggregateExpression &expr);
 	virtual unique_ptr<Expression> VisitReplace(BoundExpression &expr);
+	virtual unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr);
 	virtual unique_ptr<Expression> VisitReplace(CaseExpression &expr);
 	virtual unique_ptr<Expression> VisitReplace(CastExpression &expr);
 	virtual unique_ptr<Expression> VisitReplace(CommonSubExpression &expr);

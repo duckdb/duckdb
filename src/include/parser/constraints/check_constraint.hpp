@@ -29,7 +29,7 @@ public:
 	}
 
 	string ToString() const override {
-		return StringUtil::Format("CHECK(%s)", expression->ToString().c_str());
+		return "CHECK(" + expression->ToString() + ")";
 	}
 
 	//! Serialize to a stand-alone binary blob

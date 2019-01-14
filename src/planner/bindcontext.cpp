@@ -1,5 +1,7 @@
 #include "planner/bindcontext.hpp"
 
+#include "parser/expression/bound_expression.hpp"
+#include "parser/expression/bound_columnref_expression.hpp"
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/tableref/subqueryref.hpp"
 #include "storage/column_statistics.hpp"
@@ -88,17 +90,14 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 	return result;
 }
 
-void BindContext::BindColumn(ColumnRefExpression &expr, size_t depth) {
+unique_ptr<Expression> BindContext::BindColumn(ColumnRefExpression &expr, size_t depth) {
 	if (expr.table_name.empty()) {
-		// empty table name, bind
+		// empty table name, bind to expression alias
 		auto entry = expression_alias_map.find(expr.column_name);
 		if (entry == expression_alias_map.end()) {
 			throw BinderException("Could not bind alias \"%s\"!", expr.column_name.c_str());
 		}
-		expr.index = entry->second.first;
-		expr.reference = entry->second.second;
-		expr.return_type = entry->second.second->return_type;
-		return;
+		return make_unique<BoundExpression>(expr.GetName(), entry->second.second->return_type, entry->second.first);
 	}
 
 	auto match = bindings.find(expr.table_name);
@@ -106,9 +105,16 @@ void BindContext::BindColumn(ColumnRefExpression &expr, size_t depth) {
 		// alias not found in this BindContext
 		// if there is a parent BindContext look there
 		if (parent) {
-			parent->BindColumn(expr, ++depth);
-			max_depth = max(expr.depth, max_depth);
-			return;
+			auto expression = parent->BindColumn(expr, ++depth);
+			size_t expr_depth = 0;
+			if (expression->type == ExpressionType::BOUND_COLUMN_REF) {
+				expr_depth = ((BoundColumnRefExpression&) *expression).depth;
+			} else {
+				assert(expression->type == ExpressionType::BOUND_REF);
+				expr_depth = ((BoundExpression&) *expression).depth;
+			}
+			max_depth = max(expr_depth, max_depth);
+			return expression;
 		}
 		throw BinderException("Referenced table \"%s\" not found!", expr.table_name.c_str());
 	}
@@ -120,9 +126,7 @@ void BindContext::BindColumn(ColumnRefExpression &expr, size_t depth) {
 		if (entry == dummy->bound_columns.end()) {
 			throw BinderException("Referenced column \"%s\" not found table!", expr.column_name.c_str());
 		}
-		expr.index = entry->second->oid;
-		expr.return_type = entry->second->type;
-		break;
+		return make_unique<BoundExpression>(expr.GetName(), entry->second->type, entry->second->oid);
 	}
 	case BindingType::TABLE: {
 		// base table
@@ -133,32 +137,31 @@ void BindContext::BindColumn(ColumnRefExpression &expr, size_t depth) {
 		}
 		auto table_index = table.index;
 		auto entry = &table.table->GetColumn(expr.column_name);
-		// assign the base table statistics
-		auto &table_stats = table.table->GetStatistics(entry->oid);
-		table_stats.Initialize(expr.stats);
-		if (bindings.size() > 1) {
-			// OUTER JOINS can introduce NULLs in the column
-			expr.stats.can_have_null = true;
-		}
-
 		auto &column_list = bound_columns[expr.table_name];
 		// check if the entry already exists in the column list for the table
-		expr.binding.column_index = column_list.size();
+		ColumnBinding binding;
+		binding.column_index = column_list.size();
 		for (size_t i = 0; i < column_list.size(); i++) {
 			auto &column = column_list[i];
 			if (column == expr.column_name) {
-				expr.binding.column_index = i;
+				binding.column_index = i;
 				break;
 			}
 		}
-		if (expr.binding.column_index == column_list.size()) {
+		if (binding.column_index == column_list.size()) {
 			// column binding not found: add it to the list of bindings
 			column_list.push_back(expr.column_name);
 		}
-		expr.binding.table_index = table_index;
-		expr.depth = depth;
-		expr.return_type = entry->type;
-		break;
+		binding.table_index = table_index;
+		auto result = make_unique<BoundColumnRefExpression>(expr, entry->type, binding, depth);
+		// assign the base table statistics
+		auto &table_stats = table.table->GetStatistics(entry->oid);
+		table_stats.Initialize(result->stats);
+		if (bindings.size() > 1) {
+			// OUTER JOINS can introduce NULLs in the column
+			result->stats.can_have_null = true;
+		}
+		return result;
 	}
 	case BindingType::SUBQUERY: {
 		// subquery
@@ -168,14 +171,13 @@ void BindContext::BindColumn(ColumnRefExpression &expr, size_t depth) {
 			throw BinderException("Subquery \"%s\" does not have a column named \"%s\"", match->first.c_str(),
 			                      expr.column_name.c_str());
 		}
-
-		expr.binding.table_index = subquery.index;
-		expr.binding.column_index = column_entry->second;
-		expr.depth = depth;
+		ColumnBinding binding;
+		binding.table_index = subquery.index;
+		binding.column_index = column_entry->second;
 		auto &select_list = subquery.subquery->GetSelectList();
 		assert(column_entry->second < select_list.size());
-		expr.return_type = select_list[column_entry->second]->return_type;
-		break;
+		TypeId return_type = select_list[column_entry->second]->return_type;
+		return make_unique<BoundColumnRefExpression>(expr, return_type, binding, depth);
 	}
 	case BindingType::TABLE_FUNCTION: {
 		auto &table_function = *((TableFunctionBinding *)binding);
@@ -184,12 +186,11 @@ void BindContext::BindColumn(ColumnRefExpression &expr, size_t depth) {
 			throw BinderException("Table Function \"%s\" does not have a column named \"%s\"", match->first.c_str(),
 			                      expr.column_name.c_str());
 		}
-
-		expr.binding.table_index = table_function.index;
-		expr.binding.column_index = column_entry->second;
-		expr.depth = depth;
-		expr.return_type = table_function.function->return_values[column_entry->second].type;
-		break;
+		ColumnBinding binding;
+		binding.table_index = table_function.index;
+		binding.column_index = column_entry->second;
+		TypeId return_type = table_function.function->return_values[column_entry->second].type;
+		return make_unique<BoundColumnRefExpression>(expr, return_type, binding, depth);
 	}
 	}
 }
@@ -287,14 +288,4 @@ size_t BindContext::GenerateTableIndex() {
 		return parent->GenerateTableIndex();
 	}
 	return bound_tables++;
-}
-
-string BindContext::GenerateAlias() {
-	size_t index = 1;
-	string alias = "dummy_alias";
-	while (bindings.find(alias) != bindings.end()) {
-		alias = "dummy_alias" + to_string(index);
-		index++;
-	}
-	return alias;
 }

@@ -1,5 +1,5 @@
 #include "parser/expression/cast_expression.hpp"
-#include "parser/expression/columnref_expression.hpp"
+#include "parser/expression/bound_expression.hpp"
 #include "parser/query_node/set_operation_node.hpp"
 #include "planner/logical_plan_generator.hpp"
 #include "planner/operator/list.hpp"
@@ -45,7 +45,7 @@ static unique_ptr<LogicalOperator> CastSetOpToTypes(vector<TypeId> &types, uniqu
 		vector<unique_ptr<Expression>> select_list;
 		select_list.reserve(types.size());
 		for (size_t i = 0; i < types.size(); i++) {
-			unique_ptr<Expression> result = make_unique<ColumnRefExpression>(node->types[i], i);
+			unique_ptr<Expression> result = make_unique<BoundExpression>(node->types[i], i);
 			if (node->types[i] != types[i]) {
 				result = make_unique<CastExpression>(types[i], move(result));
 			}

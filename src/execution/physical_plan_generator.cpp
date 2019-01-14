@@ -508,8 +508,8 @@ void PhysicalPlanGenerator::GenerateExceptIntersect(LogicalOperator &op, JoinTyp
 	for (size_t i = 0; i < top_types.size(); i++) {
 		JoinCondition cond;
 		cond.comparison = ExpressionType::COMPARE_EQUAL;
-		cond.left = make_unique_base<Expression, ColumnRefExpression>(top_types[i], i);
-		cond.right = make_unique_base<Expression, ColumnRefExpression>(top_types[i], i);
+		cond.left = make_unique<BoundExpression>(top_types[i], i);
+		cond.right = make_unique<BoundExpression>(top_types[i], i);
 		conditions.push_back(move(cond));
 	}
 	plan = make_unique<PhysicalHashJoin>(op, move(top), move(bottom), move(conditions), join_type);

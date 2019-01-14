@@ -89,9 +89,9 @@ public:
 	//! Given a column name, find the matching table it belongs to. Throws an
 	//! exception if no table has a column of the given name.
 	string GetMatchingBinding(const string &column_name);
-	//! Binds a column expression to the base table. Returns the column catalog
-	//! entry or throws an exception if the column could not be bound.
-	void BindColumn(ColumnRefExpression &expr, size_t depth = 0);
+	//! Binds a column expression to the base table. Returns the bound expression
+	//! or throws an exception if the column could not be bound.
+	unique_ptr<Expression> BindColumn(ColumnRefExpression &expr, size_t depth = 0);
 
 	//! Generate column expressions for all columns that are present in the
 	//! referenced tables. This is used to resolve the * expression in a
@@ -125,8 +125,6 @@ public:
 
 	BindContext *parent = nullptr;
 
-	//! Generates an unused alias
-	string GenerateAlias();
 	//! Generates an unused index for a table
 	size_t GenerateTableIndex();
 
