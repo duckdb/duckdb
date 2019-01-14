@@ -241,6 +241,17 @@ static void UpdateWindowBoundaries(WindowExpression *wexpr, ChunkCollection &inp
 	}
 }
 
+static void InitializeWindowBoundaries(WindowBoundariesState& bounds, size_t input_count) {
+	bounds.is_peer = true;
+	bounds.is_same_partition = true;
+	bounds.partition_start = 0;
+	bounds.partition_end = input_count;
+	bounds.window_start = bounds.partition_start;
+	bounds.window_end = bounds.partition_end;
+	bounds.peer_start = bounds.partition_start;
+	bounds.peer_end = bounds.partition_end;
+}
+
 static void ComputeWindowExpression(ClientContext &context, WindowExpression *wexpr, ChunkCollection &input,
                                     ChunkCollection &output, size_t output_idx) {
 
@@ -300,30 +311,18 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
 		// nothing
 	}
 
-	size_t dense_rank, rank_equal, rank;
-
 	WindowBoundariesState bounds;
+	InitializeWindowBoundaries(bounds, input.count);
+	size_t dense_rank = 1, rank_equal = 0, rank = 1;
 
-	bounds.row_prev = sort_collection.GetRow(0);
-
-	// special case, OVER (), aggregate over everything
-	if (sort_col_count == 0) {
-		bounds.is_peer = true;
-		bounds.is_same_partition = true;
-		bounds.partition_start = 0;
-		bounds.partition_end = input.count;
-		bounds.window_start = bounds.partition_start;
-		bounds.window_end = bounds.partition_end;
-		bounds.peer_start = bounds.partition_start;
-		bounds.peer_end = bounds.partition_end;
-
-		dense_rank = 1;
-		rank = 1;
+	if (sort_col_count > 0) {
+		bounds.row_prev = sort_collection.GetRow(0);
 	}
 
 	// this is the main loop, go through all sorted rows and compute window function result
 	for (size_t row_idx = 0; row_idx < input.count; row_idx++) {
 		if (sort_col_count > 0) {
+			// special case, OVER (), aggregate over everything
 			UpdateWindowBoundaries(wexpr, sort_collection, row_idx, boundary_start_collection, boundary_end_collection,
 			                       bounds);
 			if (WindowNeedsRank(wexpr)) {
