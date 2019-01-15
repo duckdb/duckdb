@@ -40,10 +40,15 @@ void Planner::CreatePlan(ClientContext &context, unique_ptr<SQLStatement> statem
 		auto &stmt = *((CreateViewStatement *)statement.get());
 
 		// plan the view as if it were a query so we can catch errors
-		Binder dummy_binder(context);
 		SelectStatement dummy_statement;
 		dummy_statement.node = stmt.info->query->Copy();
-		dummy_binder.Bind((SQLStatement &)dummy_statement);
+		CreatePlan(context, (SQLStatement &)dummy_statement);
+		if (!plan) {
+			throw Exception("Query in view definition contains errors");
+		}
+		if (stmt.info->aliases.size() > 0) {
+			throw NotImplementedException("VIEW aliases");
+		}
 
 		context.db.catalog.CreateView(context.ActiveTransaction(), stmt.info.get());
 		break;

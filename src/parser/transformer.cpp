@@ -503,8 +503,6 @@ unique_ptr<SQLStatement> Transformer::TransformStatement(Node *stmt) {
 		// 	break;
 		// case T_UnlistenStmt:
 		// 	break;
-		// case T_ViewStmt:
-		// 	break;
 		// case T_LoadStmt:
 		// 	break;
 		// case T_CreateDomainStmt:

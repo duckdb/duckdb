@@ -43,6 +43,8 @@ struct CreateViewInformation {
 	//! Ignore if the entry already exists, instead of failing
 	bool replace = false;
 
+	vector<string> aliases;
+
 	unique_ptr<QueryNode> query;
 
 	CreateViewInformation() : schema(DEFAULT_SCHEMA), replace(false) {
