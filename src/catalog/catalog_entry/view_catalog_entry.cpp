@@ -16,7 +16,7 @@ void ViewCatalogEntry::Initialize(CreateViewInformation *info) {
 }
 
 ViewCatalogEntry::ViewCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateViewInformation *info)
-    : CatalogEntry(CatalogType::VIEW, catalog, info->table), schema(schema) {
+    : CatalogEntry(CatalogType::VIEW, catalog, info->view_name), schema(schema) {
 	Initialize(info);
 }
 
@@ -25,5 +25,7 @@ void ViewCatalogEntry::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<CreateViewInformation> ViewCatalogEntry::Deserialize(Deserializer &source) {
+	auto info = make_unique<CreateViewInformation>();
+	// info->query =
 	// query->Deserialize(source);
 }

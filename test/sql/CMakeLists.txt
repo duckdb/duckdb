@@ -16,6 +16,7 @@ add_subdirectory(schema)
 add_subdirectory(simple)
 add_subdirectory(subquery)
 add_subdirectory(transactions)
+add_subdirectory(views)
 
 IF (NOT WIN32)
   add_subdirectory(storage)

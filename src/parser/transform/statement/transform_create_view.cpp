@@ -24,19 +24,20 @@ using namespace std;
 //} ViewStmt;
 
 unique_ptr<CreateViewStatement> Transformer::TransformCreateView(Node *node) {
+	assert(node);
 	assert(node->type == T_ViewStmt);
+
 	auto stmt = reinterpret_cast<ViewStmt *>(node);
 	assert(stmt);
-	auto result = make_unique<CreateViewStatement>();
-
-	auto &info = *result->info.get();
-
 	assert(stmt->view);
+
+	auto result = make_unique<CreateViewStatement>();
+	auto &info = *result->info.get();
 
 	if (stmt->view->schemaname) {
 		info.schema = stmt->view->schemaname;
 	}
-	info.table = stmt->view->relname;
+	info.view_name = stmt->view->relname;
 	info.replace = stmt->replace;
 
 	info.query = TransformSelectNode((SelectStmt *)stmt->query);

@@ -39,7 +39,7 @@ struct CreateViewInformation {
 	//! Schema name to insert to
 	string schema;
 	//! Table name to insert to
-	string table;
+	string view_name;
 	//! Ignore if the entry already exists, instead of failing
 	bool replace = false;
 
@@ -47,7 +47,7 @@ struct CreateViewInformation {
 
 	CreateViewInformation() : schema(DEFAULT_SCHEMA), replace(false) {
 	}
-	CreateViewInformation(string schema, string table) : schema(schema), table(table), replace(false) {
+	CreateViewInformation(string schema, string view_name) : schema(schema), view_name(view_name), replace(false) {
 	}
 };
 
