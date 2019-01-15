@@ -39,6 +39,7 @@ public:
 	static unique_ptr<CreateViewInformation> Deserialize(Deserializer &source);
 
 	unique_ptr<QueryNode> query;
+	vector<string> aliases;
 
 private:
 	void Initialize(CreateViewInformation *info);

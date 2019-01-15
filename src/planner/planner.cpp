@@ -46,8 +46,9 @@ void Planner::CreatePlan(ClientContext &context, unique_ptr<SQLStatement> statem
 		if (!plan) {
 			throw Exception("Query in view definition contains errors");
 		}
-		if (stmt.info->aliases.size() > 0) {
-			throw NotImplementedException("VIEW aliases");
+
+		if (stmt.info->aliases.size() > plan->GetNames().size()) {
+			throw Exception("More VIEW aliases than columns in query result");
 		}
 
 		context.db.catalog.CreateView(context.ActiveTransaction(), stmt.info.get());

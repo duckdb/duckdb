@@ -13,6 +13,7 @@ using namespace std;
 
 void ViewCatalogEntry::Initialize(CreateViewInformation *info) {
 	query = move(info->query);
+	aliases = info->aliases;
 }
 
 ViewCatalogEntry::ViewCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateViewInformation *info)
@@ -22,10 +23,18 @@ ViewCatalogEntry::ViewCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
 
 void ViewCatalogEntry::Serialize(Serializer &serializer) {
 	query->Serialize(serializer);
+	serializer.Write<uint32_t>(aliases.size());
+	for (auto s : aliases) {
+		serializer.WriteString(s);
+	}
 }
 
 unique_ptr<CreateViewInformation> ViewCatalogEntry::Deserialize(Deserializer &source) {
 	auto info = make_unique<CreateViewInformation>();
-	// info->query =
-	// query->Deserialize(source);
+	info->query = QueryNode::Deserialize(source);
+	auto alias_count = source.Read<uint32_t>();
+	for (size_t i = 0; i < alias_count; i++) {
+		info->aliases.push_back(source.Read<string>());
+	}
+	return info;
 }
