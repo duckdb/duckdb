@@ -8,7 +8,7 @@
 using namespace duckdb;
 using namespace std;
 
-bool ExtractCorrelatedExpressions(LogicalOperator *op, LogicalOperator *current_op, SubqueryExpression *subquery,
+bool ExtractCorrelatedExpressions(LogicalOperator *op, LogicalOperator *current_op, BoundSubqueryExpression *subquery,
                                   size_t subquery_table_index, vector<JoinCondition> &join_conditions);
 
 unique_ptr<LogicalOperator> SubqueryRewriter::Rewrite(unique_ptr<LogicalOperator> plan) {
@@ -31,7 +31,7 @@ unique_ptr<LogicalOperator> SubqueryRewriter::Rewrite(unique_ptr<LogicalOperator
 				if (op_expr.children[1]->type == ExpressionType::SELECT_SUBQUERY) {
 					// IN (SUBQUERY), rewrite
 					if (RewriteInClause(filter, (OperatorExpression *)filter.expressions[i].get(),
-					                    (SubqueryExpression *)op_expr.children[1].get())) {
+					                    (BoundSubqueryExpression *)op_expr.children[1].get())) {
 						// successful rewrite, remove the expression from the set of filter expressions
 						filter.expressions.erase(filter.expressions.begin() + i);
 						i--;
@@ -47,7 +47,7 @@ unique_ptr<LogicalOperator> SubqueryRewriter::Rewrite(unique_ptr<LogicalOperator
 				if (op_expr.children[0]->type == ExpressionType::SELECT_SUBQUERY) {
 					// EXISTS (SUBQUERY), rewrite
 					if (RewriteExistsClause(filter, (OperatorExpression *)filter.expressions[i].get(),
-					                        (SubqueryExpression *)op_expr.children[0].get())) {
+					                        (BoundSubqueryExpression *)op_expr.children[0].get())) {
 						// successful rewrite, remove the expression from the set of filter expressions
 						filter.expressions.erase(filter.expressions.begin() + i);
 						i--;
@@ -67,7 +67,7 @@ unique_ptr<LogicalOperator> SubqueryRewriter::Rewrite(unique_ptr<LogicalOperator
 				    comp_expr.right->type == ExpressionType::SELECT_SUBQUERY) {
 					int subquery_index = comp_expr.left->type == ExpressionType::SELECT_SUBQUERY ? 0 : 1;
 					auto subquery =
-					    (SubqueryExpression *)(subquery_index == 0 ? comp_expr.left.get() : comp_expr.right.get());
+					    (BoundSubqueryExpression *)(subquery_index == 0 ? comp_expr.left.get() : comp_expr.right.get());
 					// Comparison with subquery, rewrite
 					if (RewriteSubqueryComparison(filter, (ComparisonExpression *)filter.expressions[i].get(),
 					                              subquery)) {
@@ -95,7 +95,7 @@ unique_ptr<LogicalOperator> SubqueryRewriter::Rewrite(unique_ptr<LogicalOperator
 }
 
 bool SubqueryRewriter::RewriteInClause(LogicalFilter &filter, OperatorExpression *operator_expression,
-                                       SubqueryExpression *subquery) {
+                                       BoundSubqueryExpression *subquery) {
 	// we found a COMPARE_IN/COMPARE_NOT_IN with a subquery
 	if (subquery->is_correlated) {
 		// correlated subqueries not handled yet for in clause rewrite
@@ -143,7 +143,7 @@ bool SubqueryRewriter::RewriteInClause(LogicalFilter &filter, OperatorExpression
 }
 
 bool SubqueryRewriter::RewriteExistsClause(LogicalFilter &filter, OperatorExpression *exists,
-                                           SubqueryExpression *subquery) {
+                                           BoundSubqueryExpression *subquery) {
 	// Only rewrite correlated exists
 	// Non-correlated exists should be rewritten in a different way
 	// Because either (1) the whole result is empty, or (2) it's a NOP operation
@@ -231,7 +231,7 @@ static void AddColumnIndex(Expression *expr, size_t old_groups, size_t aggr_grou
 }
 
 bool SubqueryRewriter::RewriteSubqueryComparison(LogicalFilter &filter, ComparisonExpression *comparison,
-                                                 SubqueryExpression *subquery) {
+                                                 BoundSubqueryExpression *subquery) {
 	// rewrite a comparison with a subquery (e.g. A == (SUBQUERY))
 	// step 1: check that subquery is a projection
 	auto node = GetProjection(subquery->op.get());
@@ -318,7 +318,7 @@ bool ContainsCorrelatedExpressions(Expression &expr) {
 	return contains_correlated_expressions;
 }
 
-bool ExtractCorrelatedExpressions(LogicalOperator *op, LogicalOperator *current_op, SubqueryExpression *subquery,
+bool ExtractCorrelatedExpressions(LogicalOperator *op, LogicalOperator *current_op, BoundSubqueryExpression *subquery,
                                   size_t subquery_table_index, vector<JoinCondition> &join_conditions) {
 	// we look through the subquery to find the matching correlation expression
 	// using the Column Depth a correlating expression will have a column ref

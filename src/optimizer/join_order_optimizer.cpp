@@ -41,7 +41,7 @@ bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<s
 		return false;
 	}
 	if (expression.type == ExpressionType::SELECT_SUBQUERY) {
-		auto &subquery = (SubqueryExpression &)expression;
+		auto &subquery = (BoundSubqueryExpression &)expression;
 		if (subquery.is_correlated) {
 			// we don't allow correlated subqueries to be reordered
 			// FIXME: we could extract all the correlated table_indexes referenced inside the subquery here

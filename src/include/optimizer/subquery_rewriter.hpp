@@ -28,11 +28,11 @@ private:
 	BindContext &context;
 
 	//! Rewrite a (NOT) IN [SUBQUERY] clause
-	bool RewriteInClause(LogicalFilter &filter, OperatorExpression *expression, SubqueryExpression *subquery);
+	bool RewriteInClause(LogicalFilter &filter, OperatorExpression *expression, BoundSubqueryExpression *subquery);
 	//! Rewrite a (NOT) EXISTS [SUBQUERY] clause
-	bool RewriteExistsClause(LogicalFilter &filter, OperatorExpression *expression, SubqueryExpression *subquery);
+	bool RewriteExistsClause(LogicalFilter &filter, OperatorExpression *expression, BoundSubqueryExpression *subquery);
 	//! Rewrite a comparison with a subquery (e.g. A == [SUBQUERY])
-	bool RewriteSubqueryComparison(LogicalFilter &filter, ComparisonExpression *exists, SubqueryExpression *subquery);
+	bool RewriteSubqueryComparison(LogicalFilter &filter, ComparisonExpression *exists, BoundSubqueryExpression *subquery);
 };
 
 } // namespace duckdb

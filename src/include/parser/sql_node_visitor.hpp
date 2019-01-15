@@ -47,6 +47,8 @@ protected:
 	}
 	virtual void Visit(BoundFunctionExpression &expr) {
 	}
+	virtual void Visit(BoundSubqueryExpression &expr) {
+	}
 	virtual void Visit(CaseExpression &expr) {
 	}
 	virtual void Visit(CastExpression &expr) {
@@ -80,6 +82,7 @@ protected:
 	virtual unique_ptr<Expression> VisitReplace(BoundExpression &expr, unique_ptr<Expression> *expr_ptr);
 	virtual unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr);
 	virtual unique_ptr<Expression> VisitReplace(BoundFunctionExpression &expr, unique_ptr<Expression> *expr_ptr);
+	virtual unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr);
 	virtual unique_ptr<Expression> VisitReplace(CaseExpression &expr, unique_ptr<Expression> *expr_ptr);
 	virtual unique_ptr<Expression> VisitReplace(CastExpression &expr, unique_ptr<Expression> *expr_ptr);
 	virtual unique_ptr<Expression> VisitReplace(CommonSubExpression &expr, unique_ptr<Expression> *expr_ptr);

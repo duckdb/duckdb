@@ -219,7 +219,8 @@ enum class ExpressionClass : uint8_t {
 	COMMON_SUBEXPRESSION = 16,
 	BOUND_REF = 17,
 	BOUND_COLUMN_REF = 18,
-	BOUND_FUNCTION = 19
+	BOUND_FUNCTION = 19,
+	BOUND_SUBQUERY = 20
 };
 
 //===--------------------------------------------------------------------===//

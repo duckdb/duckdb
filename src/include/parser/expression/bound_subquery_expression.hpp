@@ -1,42 +1,51 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/expression/subquery_expression.hpp
+// parser/expression/bound_subquery_expression.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "parser/statement/select_statement.hpp"
-#include "parser/tableref.hpp"
+#include "parser/expression.hpp"
+#include "execution/physical_operator.hpp"
+#include "planner/bindcontext.hpp"
+#include "planner/logical_operator.hpp"
 
 namespace duckdb {
 
 //! Represents a subquery
-class SubqueryExpression : public Expression {
+class BoundSubqueryExpression : public Expression {
 public:
-	SubqueryExpression() : Expression(ExpressionType::SELECT_SUBQUERY), subquery_type(SubqueryType::DEFAULT) {
+	BoundSubqueryExpression() : Expression(ExpressionType::SELECT_SUBQUERY), subquery_type(SubqueryType::DEFAULT) {
 	}
 
 	ExpressionClass GetExpressionClass() override {
-		return ExpressionClass::SUBQUERY;
+		return ExpressionClass::BOUND_SUBQUERY;
 	}
 
 	unique_ptr<Expression> Copy() override;
 
 	//! Serializes an Expression to a stand-alone binary blob
 	void Serialize(Serializer &serializer) override;
-	//! Deserializes a blob back into an ConstantExpression
-	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
 
 	bool Equals(const Expression *other) const override;
 
 	unique_ptr<QueryNode> subquery;
+	unique_ptr<LogicalOperator> op;
+	unique_ptr<BindContext> context;
+	unique_ptr<PhysicalOperator> plan;
+	
 	SubqueryType subquery_type;
+	bool is_correlated = false;
 
 	string ToString() const override {
-		return "SUBQUERY";
+		string result = ExpressionTypeToString(type);
+		if (op) {
+			result += "(" + op->ToString() + ")";
+		}
+		return result;
 	}
 
 	bool HasSubquery() override {

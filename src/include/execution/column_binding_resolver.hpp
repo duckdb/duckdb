@@ -48,7 +48,7 @@ protected:
 		    "ColumnRefExpression is not legal here, should have been converted to BoundColumnRefExpression already!");
 	}
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
-	void Visit(SubqueryExpression &expr) override;
+	void Visit(BoundSubqueryExpression &expr) override;
 
 	vector<BoundTable> bound_tables;
 	size_t current_depth;

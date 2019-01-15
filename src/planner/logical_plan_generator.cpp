@@ -121,7 +121,7 @@ void LogicalPlanGenerator::Visit(OperatorExpression &expr) {
 	}
 }
 
-void LogicalPlanGenerator::Visit(SubqueryExpression &expr) {
+void LogicalPlanGenerator::Visit(BoundSubqueryExpression &expr) {
 	LogicalPlanGenerator generator(context, *expr.context);
 	generator.CreatePlan(*expr.subquery);
 	if (!generator.root) {

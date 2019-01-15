@@ -45,6 +45,7 @@ class AggregateExpression;
 class BoundColumnRefExpression;
 class BoundFunctionExpression;
 class BoundExpression;
+class BoundSubqueryExpression;
 class CaseExpression;
 class CastExpression;
 class CommonSubExpression;

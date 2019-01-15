@@ -1,11 +1,11 @@
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
-#include "parser/expression/subquery_expression.hpp"
+#include "parser/expression/bound_subquery_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-void ExpressionExecutor::Visit(SubqueryExpression &expr) {
+void ExpressionExecutor::Visit(BoundSubqueryExpression &expr) {
 	auto &plan = expr.plan;
 	if (!plan) {
 		throw Exception("Failed to generate query plan for subquery");

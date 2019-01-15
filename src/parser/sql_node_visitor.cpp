@@ -23,6 +23,9 @@ void SQLNodeVisitor::VisitExpression(Expression *expr_ptr) {
 	case ExpressionClass::BOUND_COLUMN_REF:
 		Visit((BoundColumnRefExpression &)expr);
 		break;
+	case ExpressionClass::BOUND_SUBQUERY:
+		Visit((BoundSubqueryExpression &)expr);
+		break;
 	case ExpressionClass::CASE:
 		Visit((CaseExpression &)expr);
 		break;
@@ -83,6 +86,9 @@ void SQLNodeVisitor::VisitExpression(unique_ptr<Expression> *expr_ptr) {
 		break;
 	case ExpressionClass::BOUND_COLUMN_REF:
 		retval = VisitReplace((BoundColumnRefExpression &)**expr_ptr, expr_ptr);
+		break;
+	case ExpressionClass::BOUND_SUBQUERY:
+		retval = VisitReplace((BoundSubqueryExpression &)**expr_ptr, expr_ptr);
 		break;
 	case ExpressionClass::CASE:
 		retval = VisitReplace((CaseExpression &)**expr_ptr, expr_ptr);
@@ -155,6 +161,11 @@ unique_ptr<Expression> SQLNodeVisitor::VisitReplace(BoundColumnRefExpression &ex
 }
 
 unique_ptr<Expression> SQLNodeVisitor::VisitReplace(BoundFunctionExpression &expr, unique_ptr<Expression> *expr_ptr) {
+	Visit(expr);
+	return nullptr;
+}
+
+unique_ptr<Expression> SQLNodeVisitor::VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	Visit(expr);
 	return nullptr;
 }

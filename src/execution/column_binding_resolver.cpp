@@ -181,7 +181,7 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	return make_unique<BoundExpression>(expr.return_type, index, expr.depth);
 }
 
-void ColumnBindingResolver::Visit(SubqueryExpression &expr) {
+void ColumnBindingResolver::Visit(BoundSubqueryExpression &expr) {
 	assert(expr.op);
 	// resolve the column ref indices of subqueries
 	current_depth++;

@@ -1,7 +1,7 @@
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
 #include "parser/expression/operator_expression.hpp"
-#include "parser/expression/subquery_expression.hpp"
+#include "parser/expression/bound_subquery_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -29,8 +29,8 @@ void ExpressionExecutor::Visit(OperatorExpression &expr) {
 		// could/should be merged
 		if (expr.children[1]->type == ExpressionType::SELECT_SUBQUERY) {
 			assert(expr.children.size() == 2);
-
-			auto subquery = reinterpret_cast<SubqueryExpression *>(expr.children[1].get());
+			assert(expr.children[1]->GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY);
+			auto subquery = reinterpret_cast<BoundSubqueryExpression *>(expr.children[1].get());
 			assert(subquery->subquery_type == SubqueryType::IN);
 
 			DataChunk *old_chunk = chunk;

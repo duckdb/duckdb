@@ -51,7 +51,7 @@ protected:
 
 	unique_ptr<Expression> VisitReplace(ColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 	unique_ptr<Expression> VisitReplace(FunctionExpression &expr, unique_ptr<Expression> *expr_ptr) override;
-	void Visit(SubqueryExpression &expr) override;
+	unique_ptr<Expression> VisitReplace(SubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
 public:
 	void Visit(CheckConstraint &constraint) override;

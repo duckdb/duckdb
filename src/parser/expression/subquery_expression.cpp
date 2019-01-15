@@ -7,9 +7,6 @@ using namespace duckdb;
 using namespace std;
 
 unique_ptr<Expression> SubqueryExpression::Copy() {
-	assert(!op);
-	assert(!context);
-	assert(!plan);
 	auto copy = make_unique<SubqueryExpression>();
 	copy->CopyProperties(*this);
 	copy->subquery = subquery->Copy();
@@ -18,9 +15,6 @@ unique_ptr<Expression> SubqueryExpression::Copy() {
 }
 
 void SubqueryExpression::Serialize(Serializer &serializer) {
-	assert(!op);
-	assert(!context);
-	assert(!plan);
 	Expression::Serialize(serializer);
 	serializer.Write<SubqueryType>(subquery_type);
 	subquery->Serialize(serializer);

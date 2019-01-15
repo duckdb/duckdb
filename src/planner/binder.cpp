@@ -81,7 +81,7 @@ unique_ptr<Expression> Binder::VisitReplace(FunctionExpression &expr, unique_ptr
 	return make_unique<BoundFunctionExpression>(move(func_expr), func);
 }
 
-void Binder::Visit(SubqueryExpression &expr) {
+unique_ptr<Expression> Binder::VisitReplace(SubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	assert(bind_context);
 
 	Binder binder(context, this);
@@ -100,10 +100,14 @@ void Binder::Visit(SubqueryExpression &expr) {
 	if (expr.subquery_type == SubqueryType::IN && select_list.size() != 1) {
 		throw BinderException("Subquery returns %zu columns - expected 1", select_list.size());
 	}
-
-	expr.return_type = expr.subquery_type == SubqueryType::EXISTS ? TypeId::BOOLEAN : select_list[0]->return_type;
-	expr.context = move(binder.bind_context);
-	expr.is_correlated = expr.context->GetMaxDepth() > 0;
+	auto result = make_unique<BoundSubqueryExpression>();
+	result->return_type = expr.subquery_type == SubqueryType::EXISTS ? TypeId::BOOLEAN : select_list[0]->return_type;
+	result->context = move(binder.bind_context);
+	result->is_correlated = result->context->GetMaxDepth() > 0;
+	result->subquery = move(expr.subquery);
+	result->subquery_type = expr.subquery_type;
+	result->alias = expr.alias;
+	return result;
 }
 
 // CTEs are also referred to using BaseTableRefs, hence need to distinguish

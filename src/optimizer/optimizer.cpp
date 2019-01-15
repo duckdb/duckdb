@@ -27,7 +27,7 @@ Optimizer::Optimizer(ClientContext &client_context, BindContext &context) : cont
 class OptimizeSubqueries : public LogicalOperatorVisitor {
 public:
 	using LogicalOperatorVisitor::Visit;
-	void Visit(SubqueryExpression &subquery) override {
+	void Visit(BoundSubqueryExpression &subquery) override {
 		// we perform join reordering within the subquery expression
 		JoinOrderOptimizer optimizer;
 		subquery.op = optimizer.Optimize(move(subquery.op));

@@ -17,7 +17,7 @@ public:
 
 protected:
 	using SQLNodeVisitor::Visit;
-	void Visit(SubqueryExpression &expr) override {
+	void Visit(BoundSubqueryExpression &expr) override {
 		assert(expr.op);
 		PhysicalPlanGenerator generator(context);
 		generator.CreatePlan(move(expr.op));
