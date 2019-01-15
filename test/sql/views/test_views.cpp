@@ -35,8 +35,10 @@ TEST_CASE("Test view creation", "[views]") {
 	REQUIRE_FAIL(con.Query("DROP VIEW v1"));
 	REQUIRE_NO_FAIL(con.Query("DROP VIEW IF EXISTS v1"));
 
+	REQUIRE_FAIL(con.Query("CREATE VIEW v2 AS SELECT * FROM dontexist"));
+
 	// TODO named columns
 	// TODO errors on other options
-	// TODO error checking query on create
+
 	// TODO de-serialization
 }
