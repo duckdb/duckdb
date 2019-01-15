@@ -36,6 +36,24 @@ void Planner::CreatePlan(ClientContext &context, unique_ptr<SQLStatement> statem
 	case StatementType::CREATE_TABLE:
 		CreatePlan(context, *statement);
 		break;
+	case StatementType::CREATE_VIEW: {
+		auto &stmt = *((CreateViewStatement *)statement.get());
+
+		// plan the view as if it were a query so we can catch errors
+		SelectStatement dummy_statement;
+		dummy_statement.node = stmt.info->query->Copy();
+		CreatePlan(context, (SQLStatement &)dummy_statement);
+		if (!plan) {
+			throw Exception("Query in view definition contains errors");
+		}
+
+		if (stmt.info->aliases.size() > plan->GetNames().size()) {
+			throw Exception("More VIEW aliases than columns in query result");
+		}
+
+		context.db.catalog.CreateView(context.ActiveTransaction(), stmt.info.get());
+		break;
+	}
 	case StatementType::CREATE_SCHEMA: {
 		auto &stmt = *((CreateSchemaStatement *)statement.get());
 		context.db.catalog.CreateSchema(context.ActiveTransaction(), stmt.info.get());
@@ -44,6 +62,11 @@ void Planner::CreatePlan(ClientContext &context, unique_ptr<SQLStatement> statem
 	case StatementType::DROP_SCHEMA: {
 		auto &stmt = *((DropSchemaStatement *)statement.get());
 		context.db.catalog.DropSchema(context.ActiveTransaction(), stmt.info.get());
+		break;
+	}
+	case StatementType::DROP_VIEW: {
+		auto &stmt = *((DropViewStatement *)statement.get());
+		context.db.catalog.DropView(context.ActiveTransaction(), stmt.info.get());
 		break;
 	}
 	case StatementType::DROP_TABLE: {

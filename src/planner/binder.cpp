@@ -34,6 +34,9 @@ void Binder::Bind(SQLStatement &statement) {
 	case StatementType::CREATE_TABLE:
 		Bind((CreateTableStatement &)statement);
 		break;
+	case StatementType::CREATE_VIEW:
+		Bind((CreateViewStatement &)statement);
+		break;
 	default:
 		assert(statement.type == StatementType::CREATE_INDEX);
 		Bind((CreateIndexStatement &)statement);
@@ -110,7 +113,7 @@ unique_ptr<Expression> Binder::VisitReplace(SubqueryExpression &expr, unique_ptr
 	return result;
 }
 
-// CTEs are also referred to using BaseTableRefs, hence need to distinguish
+// CTEs and views are also referred to using BaseTableRefs, hence need to distinguish here
 unique_ptr<TableRef> Binder::Visit(BaseTableRef &expr) {
 	auto cte = FindCTE(expr.table_name);
 	if (cte) {
@@ -120,8 +123,40 @@ unique_ptr<TableRef> Binder::Visit(BaseTableRef &expr) {
 		return move(subquery);
 	}
 
-	auto table = context.db.catalog.GetTable(context.ActiveTransaction(), expr.schema_name, expr.table_name);
-	bind_context->AddBaseTable(expr.alias.empty() ? expr.table_name : expr.alias, table);
+	auto table_or_view =
+	    context.db.catalog.GetTableOrView(context.ActiveTransaction(), expr.schema_name, expr.table_name);
+	switch (table_or_view->type) {
+	case CatalogType::TABLE:
+		bind_context->AddBaseTable(expr.alias.empty() ? expr.table_name : expr.alias,
+		                           (TableCatalogEntry *)table_or_view);
+		break;
+	case CatalogType::VIEW: {
+		auto view_catalog_entry = (ViewCatalogEntry *)table_or_view;
+		auto subquery = make_unique<SubqueryRef>(view_catalog_entry->query->Copy());
+
+		subquery->alias = expr.alias.empty() ? expr.table_name : expr.alias;
+
+		// if we have subquery aliases we need to set them for the subquery. However, there may be non-aliased result
+		// cols from the subquery. Those are returned as well, but are not renamed.
+		auto &select_list = subquery->subquery->GetSelectList();
+		if (view_catalog_entry->aliases.size() > 0) {
+			subquery->column_name_alias.resize(select_list.size());
+			for (size_t col_idx = 0; col_idx < select_list.size(); col_idx++) {
+				if (col_idx < view_catalog_entry->aliases.size()) {
+					subquery->column_name_alias[col_idx] = view_catalog_entry->aliases[col_idx];
+				} else {
+					subquery->column_name_alias[col_idx] = select_list[col_idx]->GetName();
+				}
+			}
+		}
+		AcceptChild(&subquery);
+
+		return move(subquery);
+		break;
+	}
+	default:
+		throw NotImplementedException("Catalog entry type");
+	}
 	return nullptr;
 }
 

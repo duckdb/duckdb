@@ -27,6 +27,10 @@ public:
 	void DropSchema(Transaction &transaction, DropSchemaInformation *info);
 	//! Creates a table in the catalog.
 	void CreateTable(Transaction &transaction, CreateTableInformation *info);
+	//! Creates a table in the catalog.
+	void CreateView(Transaction &transaction, CreateViewInformation *info);
+	//! Drops a view in the catalog.
+	void DropView(Transaction &transaction, DropViewInformation *info);
 	//! Drops a table from the catalog.
 	void DropTable(Transaction &transaction, DropTableInformation *info);
 	//! Alter an existing table in the catalog.
@@ -42,6 +46,9 @@ public:
 	//! Returns a pointer to the table in the specified schema. Throws an
 	//! exception if the schema or the table does not exist.
 	TableCatalogEntry *GetTable(Transaction &transaction, const string &schema, const string &table);
+
+	CatalogEntry *GetTableOrView(Transaction &transaction, const string &schema, const string &table);
+
 	//! Returns a pointer to the table function if it exists, or throws an
 	//! exception otherwise
 	TableFunctionCatalogEntry *GetTableFunction(Transaction &transaction, FunctionExpression *expression);

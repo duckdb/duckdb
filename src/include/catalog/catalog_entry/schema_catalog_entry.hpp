@@ -31,9 +31,15 @@ public:
 	//! Returns a pointer to a table of the given name. Throws an exception if
 	//! the table does not exist.
 	TableCatalogEntry *GetTable(Transaction &transaction, const string &table);
+	CatalogEntry *GetTableOrView(Transaction &transaction, const string &table);
 
 	//! Creates a table with the given name in the schema
 	void CreateTable(Transaction &transaction, CreateTableInformation *info);
+
+	//! Creates a view with the given name in the schema
+	void CreateView(Transaction &transaction, CreateViewInformation *info);
+	//! Creates a view with the given name in the schema
+	void DropView(Transaction &transaction, DropViewInformation *info);
 
 	//! Creates an index with the given name in the schema
 	bool CreateIndex(Transaction &transaction, CreateIndexInformation *info);

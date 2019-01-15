@@ -12,6 +12,7 @@
 #include "function/function.hpp"
 #include "parser/column_definition.hpp"
 #include "parser/constraint.hpp"
+#include "parser/statement/select_statement.hpp"
 
 namespace duckdb {
 
@@ -34,6 +35,24 @@ struct CreateTableInformation {
 	}
 };
 
+struct CreateViewInformation {
+	//! Schema name to insert to
+	string schema;
+	//! Table name to insert to
+	string view_name;
+	//! Ignore if the entry already exists, instead of failing
+	bool replace = false;
+
+	vector<string> aliases;
+
+	unique_ptr<QueryNode> query;
+
+	CreateViewInformation() : schema(DEFAULT_SCHEMA), replace(false) {
+	}
+	CreateViewInformation(string schema, string view_name) : schema(schema), view_name(view_name), replace(false) {
+	}
+};
+
 struct DropTableInformation {
 	//! Schema name to drop from
 	string schema;
@@ -46,6 +65,17 @@ struct DropTableInformation {
 	bool cascade = false;
 
 	DropTableInformation() : schema(DEFAULT_SCHEMA), if_exists(false), cascade(false) {
+	}
+};
+
+struct DropViewInformation {
+	//! Schema name to drop from
+	string schema;
+	//! Table name to drop
+	string view_name;
+	//! Ignore if the entry does not exist instead of failing
+	bool if_exists = false;
+	DropViewInformation() : schema(DEFAULT_SCHEMA), if_exists(false) {
 	}
 };
 

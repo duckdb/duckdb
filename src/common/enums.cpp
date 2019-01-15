@@ -101,8 +101,10 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "TABLE_FUNCTION";
 	case LogicalOperatorType::CREATE_INDEX:
 		return "CREATE_INDEX";
-	case LogicalOperatorType::CREATE:
-		return "CREATE";
+	case LogicalOperatorType::CREATE_TABLE:
+		return "CREATE_TABLE";
+	case LogicalOperatorType::CREATE_VIEW:
+		return "CREATE_VIEW";
 	case LogicalOperatorType::EXPLAIN:
 		return "EXPLAIN";
 	case LogicalOperatorType::ALTER:

@@ -95,8 +95,8 @@ void PhysicalPlanGenerator::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::UPDATE:
 		Visit((LogicalUpdate &)op);
 		break;
-	case LogicalOperatorType::CREATE:
-		Visit((LogicalCreate &)op);
+	case LogicalOperatorType::CREATE_TABLE:
+		Visit((LogicalCreateTable &)op);
 		break;
 	case LogicalOperatorType::CREATE_INDEX:
 		Visit((LogicalCreateIndex &)op);
@@ -172,11 +172,11 @@ void PhysicalPlanGenerator::Visit(LogicalUpdate &op) {
 	this->plan = move(update);
 }
 
-void PhysicalPlanGenerator::Visit(LogicalCreate &op) {
+void PhysicalPlanGenerator::Visit(LogicalCreateTable &op) {
 	LogicalOperatorVisitor::VisitOperatorChildren(op);
 	assert(!plan); // CREATE node must be first node of the plan!
 
-	this->plan = make_unique<PhysicalCreate>(op, op.schema, move(op.info));
+	this->plan = make_unique<PhysicalCreateTable>(op, op.schema, move(op.info));
 }
 
 void PhysicalPlanGenerator::Visit(LogicalCreateIndex &op) {

@@ -14,5 +14,5 @@ void LogicalPlanGenerator::CreatePlan(CreateTableStatement &statement) {
 	// bind the schema
 	auto schema = context.db.catalog.GetSchema(context.ActiveTransaction(), statement.info->schema);
 	// create the logical operator
-	root = make_unique<LogicalCreate>(schema, move(statement.info));
+	root = make_unique<LogicalCreateTable>(schema, move(statement.info));
 }

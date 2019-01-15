@@ -33,7 +33,7 @@ public:
 
 protected:
 	void Visit(LogicalAggregate &op);
-	void Visit(LogicalCreate &op);
+	void Visit(LogicalCreateTable &op);
 	void Visit(LogicalCreateIndex &op);
 	void Visit(LogicalCrossProduct &op);
 	void Visit(LogicalDelete &op);

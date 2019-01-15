@@ -34,7 +34,7 @@ public:
 	void Bind(SQLStatement &statement);
 
 protected:
-	void Bind(SelectStatement &statement);
+	void Bind(SelectStatement &stmt);
 	void Bind(InsertStatement &stmt);
 	void Bind(CopyStatement &stmt);
 	void Bind(DeleteStatement &stmt);
@@ -42,6 +42,7 @@ protected:
 	void Bind(AlterTableStatement &stmt);
 	void Bind(CreateTableStatement &stmt);
 	void Bind(CreateIndexStatement &stmt);
+	void Bind(CreateViewStatement &stmt);
 
 	void Bind(QueryNode &node);
 	void Bind(SelectNode &node);
