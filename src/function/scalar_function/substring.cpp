@@ -8,7 +8,7 @@ using namespace std;
 namespace duckdb {
 namespace function {
 
-void substring_function(Vector inputs[], size_t input_count, FunctionExpression &expr, Vector &result) {
+void substring_function(Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result) {
 	assert(input_count == 3);
 	auto &input = inputs[0];
 	auto &offset = inputs[1];
@@ -26,12 +26,12 @@ void substring_function(Vector inputs[], size_t input_count, FunctionExpression 
 	auto offset_data = (int *)offset.data;
 	auto length_data = (int *)length.data;
 
-	bool has_stats = expr.children[0]->stats.has_stats;
+	bool has_stats = expr.function->children[0]->stats.has_stats;
 	size_t current_len = 0;
 	unique_ptr<char[]> output;
 	if (has_stats) {
 		// stats available, pre-allocate the result chunk
-		current_len = expr.children[0]->stats.maximum_string_length + 1;
+		current_len = expr.function->children[0]->stats.maximum_string_length + 1;
 		output = unique_ptr<char[]>{new char[current_len]};
 	}
 

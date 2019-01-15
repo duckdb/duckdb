@@ -30,7 +30,7 @@ static void strtolower(const char *input, char *output) {
 }
 
 template <str_function CASE_FUNCTION>
-static void caseconvert_function(Vector inputs[], FunctionExpression &expr, Vector &result) {
+static void caseconvert_function(Vector inputs[], BoundFunctionExpression &expr, Vector &result) {
 	auto &input = inputs[0];
 	assert(input.type == TypeId::VARCHAR);
 
@@ -42,12 +42,12 @@ static void caseconvert_function(Vector inputs[], FunctionExpression &expr, Vect
 	auto result_data = (const char **)result.data;
 	auto input_data = (const char **)input.data;
 
-	bool has_stats = expr.children[0]->stats.has_stats;
+	bool has_stats = expr.function->children[0]->stats.has_stats;
 	size_t current_len = 0;
 	unique_ptr<char[]> output;
 	if (has_stats) {
 		// stats available, pre-allocate the result chunk
-		current_len = expr.children[0]->stats.maximum_string_length + 1;
+		current_len = expr.function->children[0]->stats.maximum_string_length + 1;
 		output = unique_ptr<char[]>{new char[current_len]};
 	}
 
@@ -70,12 +70,12 @@ static void caseconvert_function(Vector inputs[], FunctionExpression &expr, Vect
 	});
 }
 
-void caseconvert_upper_function(Vector inputs[], size_t input_count, FunctionExpression &expr, Vector &result) {
+void caseconvert_upper_function(Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result) {
 	assert(input_count == 1);
 	caseconvert_function<strtoupper>(inputs, expr, result);
 }
 
-void caseconvert_lower_function(Vector inputs[], size_t input_count, FunctionExpression &expr, Vector &result) {
+void caseconvert_lower_function(Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result) {
 	assert(input_count == 1);
 	caseconvert_function<strtolower>(inputs, expr, result);
 }

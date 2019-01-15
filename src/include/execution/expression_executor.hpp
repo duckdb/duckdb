@@ -89,7 +89,10 @@ protected:
 	void Visit(DefaultExpression &expr) override {
 		throw NotImplementedException("Cannot execute DEFAULT expression in ExpressionExecutor");
 	}
-	void Visit(FunctionExpression &expr) override;
+	void Visit(BoundFunctionExpression &expr) override;
+	void Visit(FunctionExpression &expr) override {
+		throw NotImplementedException("Cannot execute FUNCTION expression in ExpressionExecutor");
+	}
 	void Visit(OperatorExpression &expr) override;
 	void Visit(SubqueryExpression &expr) override;
 

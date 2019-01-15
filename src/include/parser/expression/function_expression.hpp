@@ -11,8 +11,6 @@
 #include "parser/expression.hpp"
 
 namespace duckdb {
-class ScalarFunctionCatalogEntry;
-
 //! Represents a function call
 class FunctionExpression : public Expression {
 public:
@@ -50,8 +48,5 @@ public:
 	string function_name;
 	//! List of arguments to the function
 	vector<unique_ptr<Expression>> children;
-
-	// FIXME: remove this
-	ScalarFunctionCatalogEntry *bound_function;
 };
 } // namespace duckdb

@@ -165,6 +165,7 @@ enum class ExpressionType : uint8_t {
 	// Functions
 	// -----------------------------
 	FUNCTION = 140,
+	BOUND_FUNCTION = 141,
 
 	// -----------------------------
 	// Operators
@@ -217,7 +218,8 @@ enum class ExpressionClass : uint8_t {
 	WINDOW = 15,
 	COMMON_SUBEXPRESSION = 16,
 	BOUND_REF = 17,
-	BOUND_COLUMN_REF = 18
+	BOUND_COLUMN_REF = 18,
+	BOUND_FUNCTION = 19
 };
 
 //===--------------------------------------------------------------------===//

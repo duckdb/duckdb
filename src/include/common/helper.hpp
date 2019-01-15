@@ -34,4 +34,9 @@ template <class T> inline bool in_bounds(int64_t value) {
 	return value >= std::numeric_limits<T>::min() && value <= std::numeric_limits<T>::max();
 }
 
+template <typename T, typename S> unique_ptr<S> unique_ptr_cast(unique_ptr<T> src) {
+	return unique_ptr<S>(static_cast<S *>(src.release()));
+	;
+}
+
 } // namespace duckdb

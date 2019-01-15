@@ -123,8 +123,8 @@ bool SubqueryRewriter::RewriteInClause(LogicalFilter &filter, OperatorExpression
 	condition.left = move(operator_expression->children[0]);
 	// and the first column of the subquery
 	assert(node->expressions.size() > 0);
-	condition.right =
-	    make_unique<BoundColumnRefExpression>(*node->expressions[0], node->expressions[0]->return_type, ColumnBinding(subquery_table_index, 0));
+	condition.right = make_unique<BoundColumnRefExpression>(*node->expressions[0], node->expressions[0]->return_type,
+	                                                        ColumnBinding(subquery_table_index, 0));
 	condition.comparison = ExpressionType::COMPARE_EQUAL;
 
 	// now convert the subquery expression into a proper subquery
@@ -269,8 +269,8 @@ bool SubqueryRewriter::RewriteSubqueryComparison(LogicalFilter &filter, Comparis
 		// create the grouping column
 		proj->expressions.push_back(make_unique<BoundExpression>(type, old_groups + i));
 		// now make the join condition reference this column
-		join_conditions[i].right =
-		    make_unique<BoundColumnRefExpression>(*aggr->groups[old_groups + i], type, ColumnBinding(subquery_table_index, proj->expressions.size() - 1));
+		join_conditions[i].right = make_unique<BoundColumnRefExpression>(
+		    *aggr->groups[old_groups + i], type, ColumnBinding(subquery_table_index, proj->expressions.size() - 1));
 	}
 
 	// create the join condition based on the equality expression
@@ -278,8 +278,8 @@ bool SubqueryRewriter::RewriteSubqueryComparison(LogicalFilter &filter, Comparis
 	JoinCondition condition;
 	condition.left = subquery == comparison->left.get() ? move(comparison->right) : move(comparison->left);
 	// the right condition is the aggregate of the subquery
-	condition.right =
-	    make_unique<BoundColumnRefExpression>(*proj->expressions[0], proj->expressions[0]->return_type, ColumnBinding(subquery_table_index, 0));
+	condition.right = make_unique<BoundColumnRefExpression>(*proj->expressions[0], proj->expressions[0]->return_type,
+	                                                        ColumnBinding(subquery_table_index, 0));
 	condition.comparison = comparison->type;
 
 	// now we add join between the filter and the subquery
@@ -366,8 +366,10 @@ bool ExtractCorrelatedExpressions(LogicalOperator *op, LogicalOperator *current_
 
 			auto comparison_type = sq_comp->type;
 
-			auto comp_left = make_unique<BoundColumnRefExpression>(*sq_colref_inner, sq_colref_inner->return_type, sq_colref_inner->binding);
-			auto comp_right = make_unique<BoundColumnRefExpression>(*sq_colref_outer, sq_colref_outer->return_type, sq_colref_outer->binding);
+			auto comp_left = make_unique<BoundColumnRefExpression>(*sq_colref_inner, sq_colref_inner->return_type,
+			                                                       sq_colref_inner->binding);
+			auto comp_right = make_unique<BoundColumnRefExpression>(*sq_colref_outer, sq_colref_outer->return_type,
+			                                                        sq_colref_outer->binding);
 
 			// uncorrelated expression (depth = 0)
 			auto uncorrelated_expression = !is_inverted ? move(sq_comp->left) : move(sq_comp->right);
@@ -402,9 +404,9 @@ bool ExtractCorrelatedExpressions(LogicalOperator *op, LogicalOperator *current_
 				// reference an expression in the PROJECTION above the AGGREGATE
 				condition.right = nullptr;
 			} else {
-				condition.right =
-				    make_unique<BoundColumnRefExpression>(*op->expressions.back(), op->expressions.back()->return_type,
-				                                     ColumnBinding(subquery_table_index, op->expressions.size() - 1));
+				condition.right = make_unique<BoundColumnRefExpression>(
+				    *op->expressions.back(), op->expressions.back()->return_type,
+				    ColumnBinding(subquery_table_index, op->expressions.size() - 1));
 				assert(condition.left->return_type == condition.right->return_type);
 			}
 			condition.comparison = comparison_type;

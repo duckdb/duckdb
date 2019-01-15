@@ -47,10 +47,10 @@ protected:
 	void Bind(SelectNode &node);
 	void Bind(SetOperationNode &node);
 
-	void BindOrderBy(OrderByDescription &orders, vector<unique_ptr<Expression>>& select_list, size_t max_index);
+	void BindOrderBy(OrderByDescription &orders, vector<unique_ptr<Expression>> &select_list, size_t max_index);
 
-	unique_ptr<Expression> VisitReplace(ColumnRefExpression &expr) override;
-	void Visit(FunctionExpression &expr) override;
+	unique_ptr<Expression> VisitReplace(ColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
+	unique_ptr<Expression> VisitReplace(FunctionExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 	void Visit(SubqueryExpression &expr) override;
 
 public:

@@ -335,6 +335,10 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "COMMON_SUBEXPRESSION";
 	case ExpressionType::BOUND_REF:
 		return "BOUND_REF";
+	case ExpressionType::BOUND_COLUMN_REF:
+		return "BOUND_COLUMN_REF";
+	case ExpressionType::BOUND_FUNCTION:
+		return "BOUND_FUNCTION";
 	case ExpressionType::INVALID:
 		break;
 	}

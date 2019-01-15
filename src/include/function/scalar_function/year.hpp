@@ -14,7 +14,7 @@
 namespace duckdb {
 namespace function {
 
-void year_function(Vector inputs[], size_t input_count, FunctionExpression &expr, Vector &result);
+void year_function(Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result);
 bool year_matches_arguments(vector<TypeId> &arguments);
 TypeId year_get_return_type(vector<TypeId> &arguments);
 

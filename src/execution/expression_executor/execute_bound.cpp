@@ -15,7 +15,7 @@ void ExpressionExecutor::Visit(BoundExpression &expr) {
 		}
 		cur_depth--;
 	}
-	assert(expr.index != (uint32_t) -1);
+	assert(expr.index != (uint32_t)-1);
 	assert(expr.index < cur_exec->chunk->column_count);
 	vector.Reference(cur_exec->chunk->data[expr.index]);
 	Verify(expr);

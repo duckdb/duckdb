@@ -62,7 +62,7 @@ void Binder::Visit(CheckConstraint &constraint) {
 	}
 }
 
-unique_ptr<Expression> Binder::VisitReplace(ColumnRefExpression &expr) {
+unique_ptr<Expression> Binder::VisitReplace(ColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	assert(!expr.column_name.empty());
 	// individual column reference
 	// resolve to either a base table or a subquery expression
@@ -73,9 +73,12 @@ unique_ptr<Expression> Binder::VisitReplace(ColumnRefExpression &expr) {
 	return bind_context->BindColumn(expr);
 }
 
-void Binder::Visit(FunctionExpression &expr) {
-	expr.bound_function =
-	    context.db.catalog.GetScalarFunction(context.ActiveTransaction(), expr.schema, expr.function_name);
+unique_ptr<Expression> Binder::VisitReplace(FunctionExpression &expr, unique_ptr<Expression> *expr_ptr) {
+	// lookup the function in the catalog
+	auto func = context.db.catalog.GetScalarFunction(context.ActiveTransaction(), expr.schema, expr.function_name);
+	// if found, construct the BoundFunctionExpression
+	auto func_expr = unique_ptr_cast<Expression, FunctionExpression>(move(*expr_ptr));
+	return make_unique<BoundFunctionExpression>(move(func_expr), func);
 }
 
 void Binder::Visit(SubqueryExpression &expr) {

@@ -17,6 +17,9 @@ void SQLNodeVisitor::VisitExpression(Expression *expr_ptr) {
 	case ExpressionClass::BOUND_REF:
 		Visit((BoundExpression &)expr);
 		break;
+	case ExpressionClass::BOUND_FUNCTION:
+		Visit((BoundFunctionExpression &)expr);
+		break;
 	case ExpressionClass::BOUND_COLUMN_REF:
 		Visit((BoundColumnRefExpression &)expr);
 		break;
@@ -56,11 +59,9 @@ void SQLNodeVisitor::VisitExpression(Expression *expr_ptr) {
 	case ExpressionClass::WINDOW:
 		Visit((WindowExpression &)expr);
 		break;
-	case ExpressionClass::COMMON_SUBEXPRESSION:
-		Visit((CommonSubExpression &)expr);
-		break;
 	default:
-		assert(0);
+		assert(expr_class == ExpressionClass::COMMON_SUBEXPRESSION);
+		Visit((CommonSubExpression &)expr);
 		break;
 	}
 	// visit the children of this node
@@ -68,60 +69,60 @@ void SQLNodeVisitor::VisitExpression(Expression *expr_ptr) {
 }
 
 void SQLNodeVisitor::VisitExpression(unique_ptr<Expression> *expr_ptr) {
-	auto &expr = **expr_ptr;
-	auto expr_class = expr.GetExpressionClass();
+	auto expr_class = (*expr_ptr)->GetExpressionClass();
 	unique_ptr<Expression> retval;
 	switch (expr_class) {
 	case ExpressionClass::AGGREGATE:
-		retval = VisitReplace((AggregateExpression &)expr);
+		retval = VisitReplace((AggregateExpression &)**expr_ptr, expr_ptr);
 		break;
 	case ExpressionClass::BOUND_REF:
-		retval = VisitReplace((BoundExpression &)expr);
+		retval = VisitReplace((BoundExpression &)**expr_ptr, expr_ptr);
+		break;
+	case ExpressionClass::BOUND_FUNCTION:
+		retval = VisitReplace((BoundFunctionExpression &)**expr_ptr, expr_ptr);
 		break;
 	case ExpressionClass::BOUND_COLUMN_REF:
-		retval = VisitReplace((BoundColumnRefExpression &)expr);
+		retval = VisitReplace((BoundColumnRefExpression &)**expr_ptr, expr_ptr);
 		break;
 	case ExpressionClass::CASE:
-		retval = VisitReplace((CaseExpression &)expr);
+		retval = VisitReplace((CaseExpression &)**expr_ptr, expr_ptr);
 		break;
 	case ExpressionClass::CAST:
-		retval = VisitReplace((CastExpression &)expr);
+		retval = VisitReplace((CastExpression &)**expr_ptr, expr_ptr);
 		break;
 	case ExpressionClass::COLUMN_REF:
-		retval = VisitReplace((ColumnRefExpression &)expr);
+		retval = VisitReplace((ColumnRefExpression &)**expr_ptr, expr_ptr);
 		break;
 	case ExpressionClass::COMPARISON:
-		retval = VisitReplace((ComparisonExpression &)expr);
+		retval = VisitReplace((ComparisonExpression &)**expr_ptr, expr_ptr);
 		break;
 	case ExpressionClass::CONJUNCTION:
-		retval = VisitReplace((ConjunctionExpression &)expr);
+		retval = VisitReplace((ConjunctionExpression &)**expr_ptr, expr_ptr);
 		break;
 	case ExpressionClass::CONSTANT:
-		retval = VisitReplace((ConstantExpression &)expr);
+		retval = VisitReplace((ConstantExpression &)**expr_ptr, expr_ptr);
 		break;
 	case ExpressionClass::DEFAULT:
-		retval = VisitReplace((DefaultExpression &)expr);
+		retval = VisitReplace((DefaultExpression &)**expr_ptr, expr_ptr);
 		break;
 	case ExpressionClass::FUNCTION:
-		retval = VisitReplace((FunctionExpression &)expr);
+		retval = VisitReplace((FunctionExpression &)**expr_ptr, expr_ptr);
 		break;
 	case ExpressionClass::OPERATOR:
-		retval = VisitReplace((OperatorExpression &)expr);
+		retval = VisitReplace((OperatorExpression &)**expr_ptr, expr_ptr);
 		break;
 	case ExpressionClass::STAR:
-		retval = VisitReplace((StarExpression &)expr);
+		retval = VisitReplace((StarExpression &)**expr_ptr, expr_ptr);
 		break;
 	case ExpressionClass::SUBQUERY:
-		retval = VisitReplace((SubqueryExpression &)expr);
+		retval = VisitReplace((SubqueryExpression &)**expr_ptr, expr_ptr);
 		break;
 	case ExpressionClass::WINDOW:
-		retval = VisitReplace((WindowExpression &)expr);
-		break;
-	case ExpressionClass::COMMON_SUBEXPRESSION:
-		retval = VisitReplace((CommonSubExpression &)expr);
+		retval = VisitReplace((WindowExpression &)**expr_ptr, expr_ptr);
 		break;
 	default:
-		assert(0);
+		assert(expr_class == ExpressionClass::COMMON_SUBEXPRESSION);
+		retval = VisitReplace((CommonSubExpression &)**expr_ptr, expr_ptr);
 		break;
 	}
 	if (retval) {
@@ -138,82 +139,87 @@ void SQLNodeVisitor::VisitExpressionChildren(Expression &expr) {
 	});
 }
 
-unique_ptr<Expression> SQLNodeVisitor::VisitReplace(AggregateExpression &expr) {
+unique_ptr<Expression> SQLNodeVisitor::VisitReplace(AggregateExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	Visit(expr);
 	return nullptr;
 }
 
-unique_ptr<Expression> SQLNodeVisitor::VisitReplace(BoundExpression &expr) {
+unique_ptr<Expression> SQLNodeVisitor::VisitReplace(BoundExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	Visit(expr);
 	return nullptr;
 }
 
-unique_ptr<Expression> SQLNodeVisitor::VisitReplace(BoundColumnRefExpression &expr) {
+unique_ptr<Expression> SQLNodeVisitor::VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	Visit(expr);
 	return nullptr;
 }
 
-unique_ptr<Expression> SQLNodeVisitor::VisitReplace(CaseExpression &expr) {
+unique_ptr<Expression> SQLNodeVisitor::VisitReplace(BoundFunctionExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	Visit(expr);
 	return nullptr;
 }
 
-unique_ptr<Expression> SQLNodeVisitor::VisitReplace(CastExpression &expr) {
+unique_ptr<Expression> SQLNodeVisitor::VisitReplace(CaseExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	Visit(expr);
 	return nullptr;
 }
 
-unique_ptr<Expression> SQLNodeVisitor::VisitReplace(CommonSubExpression &expr) {
+unique_ptr<Expression> SQLNodeVisitor::VisitReplace(CastExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	Visit(expr);
 	return nullptr;
 }
 
-unique_ptr<Expression> SQLNodeVisitor::VisitReplace(ColumnRefExpression &expr) {
+unique_ptr<Expression> SQLNodeVisitor::VisitReplace(CommonSubExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	Visit(expr);
 	return nullptr;
 }
 
-unique_ptr<Expression> SQLNodeVisitor::VisitReplace(ComparisonExpression &expr) {
+unique_ptr<Expression> SQLNodeVisitor::VisitReplace(ColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	Visit(expr);
 	return nullptr;
 }
 
-unique_ptr<Expression> SQLNodeVisitor::VisitReplace(ConjunctionExpression &expr) {
+unique_ptr<Expression> SQLNodeVisitor::VisitReplace(ComparisonExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	Visit(expr);
 	return nullptr;
 }
 
-unique_ptr<Expression> SQLNodeVisitor::VisitReplace(ConstantExpression &expr) {
+unique_ptr<Expression> SQLNodeVisitor::VisitReplace(ConjunctionExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	Visit(expr);
 	return nullptr;
 }
 
-unique_ptr<Expression> SQLNodeVisitor::VisitReplace(DefaultExpression &expr) {
+unique_ptr<Expression> SQLNodeVisitor::VisitReplace(ConstantExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	Visit(expr);
 	return nullptr;
 }
 
-unique_ptr<Expression> SQLNodeVisitor::VisitReplace(FunctionExpression &expr) {
+unique_ptr<Expression> SQLNodeVisitor::VisitReplace(DefaultExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	Visit(expr);
 	return nullptr;
 }
 
-unique_ptr<Expression> SQLNodeVisitor::VisitReplace(OperatorExpression &expr) {
+unique_ptr<Expression> SQLNodeVisitor::VisitReplace(FunctionExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	Visit(expr);
 	return nullptr;
 }
 
-unique_ptr<Expression> SQLNodeVisitor::VisitReplace(StarExpression &expr) {
+unique_ptr<Expression> SQLNodeVisitor::VisitReplace(OperatorExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	Visit(expr);
 	return nullptr;
 }
 
-unique_ptr<Expression> SQLNodeVisitor::VisitReplace(SubqueryExpression &expr) {
+unique_ptr<Expression> SQLNodeVisitor::VisitReplace(StarExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	Visit(expr);
 	return nullptr;
 }
 
-unique_ptr<Expression> SQLNodeVisitor::VisitReplace(WindowExpression &expr) {
+unique_ptr<Expression> SQLNodeVisitor::VisitReplace(SubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) {
+	Visit(expr);
+	return nullptr;
+}
+
+unique_ptr<Expression> SQLNodeVisitor::VisitReplace(WindowExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	Visit(expr);
 	return nullptr;
 }

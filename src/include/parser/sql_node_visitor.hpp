@@ -45,6 +45,8 @@ protected:
 	}
 	virtual void Visit(BoundColumnRefExpression &expr) {
 	}
+	virtual void Visit(BoundFunctionExpression &expr) {
+	}
 	virtual void Visit(CaseExpression &expr) {
 	}
 	virtual void Visit(CastExpression &expr) {
@@ -74,22 +76,23 @@ protected:
 
 	// The VisitReplace method can be overloaded if the inheritee of this class wishes to replace expressions while
 	// visiting them
-	virtual unique_ptr<Expression> VisitReplace(AggregateExpression &expr);
-	virtual unique_ptr<Expression> VisitReplace(BoundExpression &expr);
-	virtual unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr);
-	virtual unique_ptr<Expression> VisitReplace(CaseExpression &expr);
-	virtual unique_ptr<Expression> VisitReplace(CastExpression &expr);
-	virtual unique_ptr<Expression> VisitReplace(CommonSubExpression &expr);
-	virtual unique_ptr<Expression> VisitReplace(ColumnRefExpression &expr);
-	virtual unique_ptr<Expression> VisitReplace(ComparisonExpression &expr);
-	virtual unique_ptr<Expression> VisitReplace(ConjunctionExpression &expr);
-	virtual unique_ptr<Expression> VisitReplace(ConstantExpression &expr);
-	virtual unique_ptr<Expression> VisitReplace(DefaultExpression &expr);
-	virtual unique_ptr<Expression> VisitReplace(FunctionExpression &expr);
-	virtual unique_ptr<Expression> VisitReplace(OperatorExpression &expr);
-	virtual unique_ptr<Expression> VisitReplace(StarExpression &expr);
-	virtual unique_ptr<Expression> VisitReplace(SubqueryExpression &expr);
-	virtual unique_ptr<Expression> VisitReplace(WindowExpression &expr);
+	virtual unique_ptr<Expression> VisitReplace(AggregateExpression &expr, unique_ptr<Expression> *expr_ptr);
+	virtual unique_ptr<Expression> VisitReplace(BoundExpression &expr, unique_ptr<Expression> *expr_ptr);
+	virtual unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr);
+	virtual unique_ptr<Expression> VisitReplace(BoundFunctionExpression &expr, unique_ptr<Expression> *expr_ptr);
+	virtual unique_ptr<Expression> VisitReplace(CaseExpression &expr, unique_ptr<Expression> *expr_ptr);
+	virtual unique_ptr<Expression> VisitReplace(CastExpression &expr, unique_ptr<Expression> *expr_ptr);
+	virtual unique_ptr<Expression> VisitReplace(CommonSubExpression &expr, unique_ptr<Expression> *expr_ptr);
+	virtual unique_ptr<Expression> VisitReplace(ColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr);
+	virtual unique_ptr<Expression> VisitReplace(ComparisonExpression &expr, unique_ptr<Expression> *expr_ptr);
+	virtual unique_ptr<Expression> VisitReplace(ConjunctionExpression &expr, unique_ptr<Expression> *expr_ptr);
+	virtual unique_ptr<Expression> VisitReplace(ConstantExpression &expr, unique_ptr<Expression> *expr_ptr);
+	virtual unique_ptr<Expression> VisitReplace(DefaultExpression &expr, unique_ptr<Expression> *expr_ptr);
+	virtual unique_ptr<Expression> VisitReplace(FunctionExpression &expr, unique_ptr<Expression> *expr_ptr);
+	virtual unique_ptr<Expression> VisitReplace(OperatorExpression &expr, unique_ptr<Expression> *expr_ptr);
+	virtual unique_ptr<Expression> VisitReplace(StarExpression &expr, unique_ptr<Expression> *expr_ptr);
+	virtual unique_ptr<Expression> VisitReplace(SubqueryExpression &expr, unique_ptr<Expression> *expr_ptr);
+	virtual unique_ptr<Expression> VisitReplace(WindowExpression &expr, unique_ptr<Expression> *expr_ptr);
 
 public:
 	virtual void Visit(NotNullConstraint &expr) {

@@ -1,8 +1,8 @@
 #include "parser/expression/bound_expression.hpp"
 
 #include "common/exception.hpp"
-#include "common/types/hash.hpp"
 #include "common/serializer.hpp"
+#include "common/types/hash.hpp"
 
 using namespace duckdb;
 using namespace std;

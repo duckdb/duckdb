@@ -1,6 +1,5 @@
 #include "parser/expression/function_expression.hpp"
 
-#include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "common/exception.hpp"
 #include "common/serializer.hpp"
 #include "common/types/hash.hpp"
@@ -9,23 +8,14 @@ using namespace duckdb;
 using namespace std;
 
 FunctionExpression::FunctionExpression(string schema, string function_name, vector<unique_ptr<Expression>> &children)
-    : Expression(ExpressionType::FUNCTION), schema(schema), function_name(StringUtil::Lower(function_name)),
-      bound_function(nullptr) {
+    : Expression(ExpressionType::FUNCTION), schema(schema), function_name(StringUtil::Lower(function_name)) {
 	for (auto &child : children) {
 		this->children.push_back(move(child));
 	}
 }
 
 void FunctionExpression::ResolveType() {
-	Expression::ResolveType();
-	vector<TypeId> child_types;
-	for (auto &child : children) {
-		child_types.push_back(child->return_type);
-	}
-	if (!bound_function->matches(child_types)) {
-		throw CatalogException("Incorrect set of arguments for function \"%s\"", function_name.c_str());
-	}
-	return_type = bound_function->return_type(child_types);
+	throw Exception("Cannot resolve type of FunctionExpression! Function has to be bound first.");
 }
 
 unique_ptr<Expression> FunctionExpression::Copy() {

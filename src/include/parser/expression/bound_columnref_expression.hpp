@@ -40,7 +40,6 @@ public:
 		this->alias = alias;
 	}
 
-
 	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::BOUND_COLUMN_REF;
 	}

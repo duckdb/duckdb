@@ -43,6 +43,7 @@ class Expression;
 
 class AggregateExpression;
 class BoundColumnRefExpression;
+class BoundFunctionExpression;
 class BoundExpression;
 class CaseExpression;
 class CastExpression;

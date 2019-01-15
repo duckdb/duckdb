@@ -1,6 +1,8 @@
 #include "parser/expression/aggregate_expression.hpp"
 #include "parser/expression/bound_columnref_expression.hpp"
 #include "parser/expression/bound_expression.hpp"
+#include "parser/expression/bound_function_expression.hpp"
+#include "parser/expression/bound_subquery_expression.hpp"
 #include "parser/expression/case_expression.hpp"
 #include "parser/expression/cast_expression.hpp"
 #include "parser/expression/columnref_expression.hpp"

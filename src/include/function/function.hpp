@@ -10,7 +10,7 @@
 
 #include "common/types/data_chunk.hpp"
 #include "parser/column_definition.hpp"
-#include "parser/expression/function_expression.hpp"
+#include "parser/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 class Catalog;
@@ -30,7 +30,7 @@ typedef void (*table_function_t)(ClientContext &, DataChunk &input, DataChunk &o
 typedef void (*table_function_final_t)(ClientContext &, TableFunctionData *dataptr);
 
 //! The type used for scalar functions
-typedef void (*scalar_function_t)(Vector inputs[], size_t input_count, FunctionExpression &expr, Vector &result);
+typedef void (*scalar_function_t)(Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result);
 //! Type used for checking if a function matches the input arguments
 typedef bool (*matches_argument_function_t)(vector<TypeId> &arguments);
 //! Gets the return type of the function given the types of the input argument

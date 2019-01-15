@@ -11,7 +11,7 @@ using namespace std;
 namespace duckdb {
 namespace function {
 
-void concat_function(Vector inputs[], size_t input_count, FunctionExpression &expr, Vector &result) {
+void concat_function(Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result) {
 	assert(input_count == 2);
 	auto &input1 = inputs[0];
 	auto &input2 = inputs[1];
@@ -25,12 +25,13 @@ void concat_function(Vector inputs[], size_t input_count, FunctionExpression &ex
 	auto input1_data = (const char **)input1.data;
 	auto input2_data = (const char **)input2.data;
 
-	bool has_stats = expr.children[0]->stats.has_stats && expr.children[1]->stats.has_stats;
+	bool has_stats = expr.function->children[0]->stats.has_stats && expr.function->children[1]->stats.has_stats;
 	size_t current_len = 0;
 	unique_ptr<char[]> output;
 	if (has_stats) {
 		// stats available, pre-allocate the result chunk
-		current_len = expr.children[0]->stats.maximum_string_length + expr.children[1]->stats.maximum_string_length + 1;
+		current_len = expr.function->children[0]->stats.maximum_string_length +
+		              expr.function->children[1]->stats.maximum_string_length + 1;
 		output = unique_ptr<char[]>{new char[current_len]};
 	}
 

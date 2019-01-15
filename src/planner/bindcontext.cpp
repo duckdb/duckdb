@@ -1,7 +1,7 @@
 #include "planner/bindcontext.hpp"
 
-#include "parser/expression/bound_expression.hpp"
 #include "parser/expression/bound_columnref_expression.hpp"
+#include "parser/expression/bound_expression.hpp"
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/tableref/subqueryref.hpp"
 #include "storage/column_statistics.hpp"
@@ -108,10 +108,10 @@ unique_ptr<Expression> BindContext::BindColumn(ColumnRefExpression &expr, size_t
 			auto expression = parent->BindColumn(expr, ++depth);
 			size_t expr_depth = 0;
 			if (expression->type == ExpressionType::BOUND_COLUMN_REF) {
-				expr_depth = ((BoundColumnRefExpression&) *expression).depth;
+				expr_depth = ((BoundColumnRefExpression &)*expression).depth;
 			} else {
 				assert(expression->type == ExpressionType::BOUND_REF);
-				expr_depth = ((BoundExpression&) *expression).depth;
+				expr_depth = ((BoundExpression &)*expression).depth;
 			}
 			max_depth = max(expr_depth, max_depth);
 			return expression;
@@ -179,7 +179,8 @@ unique_ptr<Expression> BindContext::BindColumn(ColumnRefExpression &expr, size_t
 		TypeId return_type = select_list[column_entry->second]->return_type;
 		return make_unique<BoundColumnRefExpression>(expr, return_type, binding, depth);
 	}
-	case BindingType::TABLE_FUNCTION: {
+	default: {
+		assert(binding->type == BindingType::TABLE_FUNCTION);
 		auto &table_function = *((TableFunctionBinding *)binding);
 		auto column_entry = table_function.function->name_map.find(expr.column_name);
 		if (column_entry == table_function.function->name_map.end()) {
