@@ -189,6 +189,8 @@ Value Vector::GetValue(size_t index) const {
 		return Value(((double *)data)[entry]);
 	case TypeId::DATE:
 		return Value::DATE(((date_t *)data)[entry]);
+	case TypeId::TIMESTAMP:
+		return Value::TIMESTAMP(((timestamp_t *)data)[entry]);
 	case TypeId::VARCHAR: {
 		char *str = ((char **)data)[entry];
 		assert(str);
