@@ -15,22 +15,6 @@
 
 namespace duckdb {
 
-#define DUCKDB_BENCHMARK(NAME, GROUP)                                                                                  \
-	class NAME##Benchmark : public DuckDBBenchmark {                                                                   \
-		NAME##Benchmark() : DuckDBBenchmark("" #NAME, GROUP) {                                                         \
-		}                                                                                                              \
-                                                                                                                       \
-	public:                                                                                                            \
-		static NAME##Benchmark *GetInstance() {                                                                        \
-			static NAME##Benchmark singleton;                                                                          \
-			return &singleton;                                                                                         \
-		}
-
-#define FINISH_BENCHMARK(NAME)                                                                                         \
-	}                                                                                                                  \
-	;                                                                                                                  \
-	auto global_instance_##NAME = NAME##Benchmark::GetInstance();
-
 //! Base class for any state that has to be kept by a Benchmark
 struct DuckDBBenchmarkState : public BenchmarkState {
 	DuckDB db;
@@ -48,7 +32,9 @@ struct DuckDBBenchmarkState : public BenchmarkState {
 //! new benchmarks
 class DuckDBBenchmark : public Benchmark {
 public:
-	DuckDBBenchmark(string name, string group) : Benchmark(name, group) {
+	DuckDBBenchmark(bool register_benchmark, string name, string group) : Benchmark(register_benchmark, name, group) {
+	}
+	virtual ~DuckDBBenchmark() {
 	}
 
 	//! Load data into DuckDB

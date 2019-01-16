@@ -1,7 +1,7 @@
 #include "benchmark_runner.hpp"
 #include "compare_result.hpp"
 #include "dbgen.hpp"
-#include "duckdb_benchmark.hpp"
+#include "duckdb_benchmark_macro.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -42,6 +42,8 @@ public:
 
 	//! Extract the epoch from the date (seconds since 1970-01-01)
 	static int64_t Epoch(date_t date);
+	//! Convert the epoch (seconds since 1970-01-01) to a date_t
+	static date_t EpochToDate(int64_t epoch);
 	//! Extract year of a date entry
 	static int32_t ExtractYear(date_t date);
 	//! Extract month of a date entry

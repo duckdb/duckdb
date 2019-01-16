@@ -32,13 +32,15 @@ class Benchmark {
 	constexpr static size_t DEFAULT_NRUNS = 5;
 	constexpr static size_t DEFAULT_TIMEOUT = 30;
 
+	Benchmark(Benchmark &) = delete;
+
 public:
 	//! The name of the benchmark
 	string name;
 	//! The benchmark group this benchmark belongs to
 	string group;
 
-	Benchmark(string name, string group);
+	Benchmark(bool register_benchmark, string name, string group);
 
 	//! Initialize the benchmark state
 	virtual unique_ptr<BenchmarkState> Initialize() {

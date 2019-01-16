@@ -12,8 +12,10 @@ void BenchmarkRunner::RegisterBenchmark(Benchmark *benchmark) {
 	GetInstance().benchmarks.push_back(benchmark);
 }
 
-Benchmark::Benchmark(string name, string group) : name(name), group(group) {
-	BenchmarkRunner::RegisterBenchmark(this);
+Benchmark::Benchmark(bool register_benchmark, string name, string group) : name(name), group(group) {
+	if (register_benchmark) {
+		BenchmarkRunner::RegisterBenchmark(this);
+	}
 }
 
 volatile bool is_active = false;
@@ -138,6 +140,9 @@ int main(int argc, char **argv) {
 		if (arg == "--list") {
 			// list names of all benchmarks
 			for (auto &benchmark : benchmarks) {
+				if (StringUtil::StartsWith(benchmark->name, "sqlite_")) {
+					continue;
+				}
 				fprintf(stdout, "%s\n", benchmark->name.c_str());
 			}
 			exit(0);

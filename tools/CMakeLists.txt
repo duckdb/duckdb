@@ -1,3 +1,6 @@
 
+IF (NOT WIN32)
+	add_subdirectory(dbtransfer)
+ENDIF()
 add_subdirectory(shell)
 add_subdirectory(sqlite3_api_wrapper)

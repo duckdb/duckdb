@@ -149,6 +149,10 @@ bool Date::IsValidDay(int32_t year, int32_t month, int32_t day) {
 	return IsLeapYear(year) ? day <= LEAPDAYS[month] : day <= NORMALDAYS[month];
 }
 
+date_t Date::EpochToDate(int64_t epoch) {
+	return (epoch / SECONDS_PER_DAY) + EPOCH_DATE;
+}
+
 int64_t Date::Epoch(date_t date) {
 	return (date - EPOCH_DATE) * SECONDS_PER_DAY;
 }

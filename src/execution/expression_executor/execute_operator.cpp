@@ -1,7 +1,7 @@
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
-#include "parser/expression/operator_expression.hpp"
 #include "parser/expression/bound_subquery_expression.hpp"
+#include "parser/expression/operator_expression.hpp"
 
 using namespace duckdb;
 using namespace std;

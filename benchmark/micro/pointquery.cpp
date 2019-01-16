@@ -1,5 +1,5 @@
 #include "benchmark_runner.hpp"
-#include "duckdb_benchmark.hpp"
+#include "duckdb_benchmark_macro.hpp"
 #include "main/appender.hpp"
 
 #include <random>

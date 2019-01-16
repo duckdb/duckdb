@@ -1,6 +1,5 @@
 #include "catch.hpp"
 #include "dbgen.hpp"
-#include "sqlite_helpers.hpp"
 #include "test_helpers.hpp"
 
 #include <chrono>
