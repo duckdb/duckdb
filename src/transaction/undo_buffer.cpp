@@ -84,11 +84,16 @@ static void WriteCatalogEntry(WriteAheadLog *log, CatalogEntry *entry) {
 		}
 		log->WriteCreateSchema((SchemaCatalogEntry *)parent);
 		break;
+	case CatalogType::VIEW:
+		log->WriteCreateView((ViewCatalogEntry *)parent);
+		break;
 	case CatalogType::DELETED_ENTRY:
 		if (entry->type == CatalogType::TABLE) {
 			log->WriteDropTable((TableCatalogEntry *)entry);
 		} else if (entry->type == CatalogType::SCHEMA) {
 			log->WriteDropSchema((SchemaCatalogEntry *)entry);
+		} else if (entry->type == CatalogType::VIEW) {
+			log->WriteDropView((ViewCatalogEntry *)entry);
 		} else {
 			throw NotImplementedException("Don't know how to drop this type!");
 		}

@@ -32,7 +32,8 @@ private:
 	//! Rewrite a (NOT) EXISTS [SUBQUERY] clause
 	bool RewriteExistsClause(LogicalFilter &filter, OperatorExpression *expression, BoundSubqueryExpression *subquery);
 	//! Rewrite a comparison with a subquery (e.g. A == [SUBQUERY])
-	bool RewriteSubqueryComparison(LogicalFilter &filter, ComparisonExpression *exists, BoundSubqueryExpression *subquery);
+	bool RewriteSubqueryComparison(LogicalFilter &filter, ComparisonExpression *exists,
+	                               BoundSubqueryExpression *subquery);
 };
 
 } // namespace duckdb

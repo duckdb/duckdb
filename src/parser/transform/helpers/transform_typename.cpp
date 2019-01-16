@@ -15,7 +15,7 @@ TypeId Transformer::TransformStringToTypeId(char *str) {
 		return TypeId::BIGINT;
 	} else if (lower_str == "int2") {
 		return TypeId::SMALLINT;
-	} else if (lower_str == "timestamp") {
+	} else if (lower_str == "timestamp" || lower_str == "datetime") {
 		return TypeId::TIMESTAMP;
 	} else if (lower_str == "bool") {
 		return TypeId::BOOLEAN;

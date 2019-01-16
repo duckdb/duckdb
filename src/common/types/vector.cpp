@@ -61,6 +61,9 @@ void Vector::Reference(Value &value) {
 	case TypeId::DATE:
 		data = (char *)&value.value_.date;
 		break;
+	case TypeId::TIMESTAMP:
+		data = (char *)&value.value_.timestamp;
+		break;
 	case TypeId::POINTER:
 		data = (char *)&value.value_.pointer;
 		break;
@@ -132,6 +135,9 @@ void Vector::SetValue(size_t index_, Value val) {
 		break;
 	case TypeId::DATE:
 		((date_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.date;
+		break;
+	case TypeId::TIMESTAMP:
+		((timestamp_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.timestamp;
 		break;
 	case TypeId::VARCHAR: {
 		if (newVal.is_null) {

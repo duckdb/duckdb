@@ -219,6 +219,35 @@ bool ReplayCreateSchema(Transaction &transaction, Catalog &catalog, Deserializer
 }
 
 //===--------------------------------------------------------------------===//
+// VIEWS
+//===--------------------------------------------------------------------===//
+void WriteAheadLog::WriteCreateView(ViewCatalogEntry *entry) {
+	Serializer serializer;
+	serializer.WriteString(entry->name);
+
+	WriteEntry(WALEntry::CREATE_VIEW, serializer);
+}
+
+bool ReplayCreateView(Transaction &transaction, Catalog &catalog, Deserializer &source) {
+	CreateViewInformation info;
+	info.schema = source.Read<string>();
+
+	// try {
+	catalog.CreateView(transaction, &info);
+	// } catch (...) {
+	// 	return false;
+	// }
+	return true;
+}
+
+void WriteAheadLog::WriteDropView(ViewCatalogEntry *entry) {
+	Serializer serializer;
+	serializer.WriteString(entry->name);
+
+	WriteEntry(WALEntry::DROP_VIEW, serializer);
+}
+
+//===--------------------------------------------------------------------===//
 // DROP SCHEMA
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteDropSchema(SchemaCatalogEntry *entry) {

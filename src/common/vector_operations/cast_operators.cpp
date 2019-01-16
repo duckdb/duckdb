@@ -52,6 +52,12 @@ template <class SRC, class OP, bool IGNORE_NULL> static void result_cast_switch(
 	case TypeId::POINTER:
 		templated_cast_loop<SRC, uint64_t, OP, IGNORE_NULL>(source, result);
 		break;
+	case TypeId::DATE:
+		templated_cast_loop<SRC, date_t, operators::CastToDate, true>(source, result);
+		break;
+	case TypeId::TIMESTAMP:
+		templated_cast_loop<SRC, timestamp_t, operators::CastToTimestamp, true>(source, result);
+		break;
 	case TypeId::VARCHAR: {
 		// result is VARCHAR
 		// we have to place the resulting strings in the string heap
@@ -69,9 +75,6 @@ template <class SRC, class OP, bool IGNORE_NULL> static void result_cast_switch(
 		result.count = source.count;
 		break;
 	}
-	case TypeId::DATE:
-		templated_cast_loop<SRC, date_t, operators::CastToDate, true>(source, result);
-		break;
 	default:
 		throw NotImplementedException("Unimplemented type for cast");
 	}
@@ -105,18 +108,14 @@ void VectorOperations::Cast(Vector &source, Vector &result) {
 	case TypeId::POINTER:
 		result_cast_switch<uint64_t, operators::Cast, true>(source, result);
 		break;
-	case TypeId::VARCHAR:
-		result_cast_switch<const char *, operators::Cast, true>(source, result);
-		break;
 	case TypeId::DATE:
 		result_cast_switch<date_t, operators::CastFromDate, true>(source, result);
 		break;
 	case TypeId::TIMESTAMP:
-		if (result.type == TypeId::VARCHAR) {
-			throw NotImplementedException("Cannot cast type from timestamp!");
-		} else {
-			throw NotImplementedException("Cannot cast type from timestamp!");
-		}
+		result_cast_switch<timestamp_t, operators::CastFromTimestamp, true>(source, result);
+		break;
+	case TypeId::VARCHAR:
+		result_cast_switch<const char *, operators::Cast, true>(source, result);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for cast");

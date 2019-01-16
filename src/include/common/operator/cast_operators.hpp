@@ -94,4 +94,21 @@ template <> duckdb::date_t CastToDate::Operation(const char *left);
 template <> duckdb::date_t CastToDate::Operation(int32_t left);
 template <> duckdb::date_t CastToDate::Operation(int64_t left);
 
+struct CastToTimestamp {
+	template <class SRC, class DST> static inline DST Operation(SRC left) {
+		throw duckdb::NotImplementedException("Cast to timestamp could not be performed!");
+	}
+};
+
+struct CastFromTimestamp {
+	template <class SRC, class DST> static inline DST Operation(SRC left) {
+		throw duckdb::NotImplementedException("Cast to timestamp could not be performed!");
+	}
+};
+
+template <> int64_t CastFromTimestamp::Operation(duckdb::timestamp_t left);
+template <> duckdb::string CastFromTimestamp::Operation(duckdb::date_t left);
+template <> duckdb::timestamp_t CastToTimestamp::Operation(const char *left);
+template <> duckdb::timestamp_t CastToTimestamp::Operation(int64_t left);
+
 } // namespace operators

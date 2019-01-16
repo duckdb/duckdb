@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "parser/expression.hpp"
 #include "execution/physical_operator.hpp"
+#include "parser/expression.hpp"
 #include "planner/bindcontext.hpp"
 #include "planner/logical_operator.hpp"
 
@@ -36,7 +36,7 @@ public:
 	unique_ptr<LogicalOperator> op;
 	unique_ptr<BindContext> context;
 	unique_ptr<PhysicalOperator> plan;
-	
+
 	SubqueryType subquery_type;
 	bool is_correlated = false;
 

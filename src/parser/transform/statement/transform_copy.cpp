@@ -62,7 +62,18 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 			// Check delimiter
 			if (def_elem->defname == kDelimiterTok) {
 				auto *delimiter_val = reinterpret_cast<value *>(def_elem->arg);
-				result->delimiter = *delimiter_val->val.str;
+				size_t delim_len = strlen(delimiter_val->val.str);
+				result->delimiter = '\0';
+				char *delim_cstr = delimiter_val->val.str;
+				if (delim_len == 1) {
+					result->delimiter = delim_cstr[0];
+				}
+				if (delim_len == 2 && delim_cstr[0] == '\\' && delim_cstr[1] == 't') {
+					result->delimiter = '\t';
+				}
+				if (result->delimiter == '\0') {
+					throw Exception("Could not interpret DELIMITER option");
+				}
 			}
 
 			// Check format
