@@ -1,5 +1,6 @@
 #include "execution/operator/persistent/physical_copy.hpp"
 
+#include "common/file_system.hpp"
 #include "main/client_context.hpp"
 #include "storage/data_table.hpp"
 
@@ -55,6 +56,9 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalO
 		string value;
 		std::ifstream from_csv;
 		from_csv.open(file_path);
+		if (!FileExists(file_path)) {
+			throw Exception("File not found");
+		}
 		while (getline(from_csv, value)) {
 			if (count_line == STANDARD_VECTOR_SIZE) {
 				table->storage->Append(*table, context, insert_chunk);

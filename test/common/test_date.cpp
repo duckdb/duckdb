@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "common/types/date.hpp"
+#include "common/types/time.hpp"
 
 #include <vector>
 
@@ -36,6 +37,21 @@ TEST_CASE("Date parsing works", "[date]") {
 				if (Date::IsValidDay(year, month, day)) {
 					REQUIRE(Date::ToString(Date::FromString(Date::Format(year, month, day))) ==
 					        Date::Format(year, month, day));
+				}
+			}
+		}
+	}
+}
+
+TEST_CASE("Time parsing works", "[date]") {
+	REQUIRE(Time::ToString(Time::FromString("14:42:04")) == "14:42:04");
+
+	for (int hour = 0; hour < 24; hour++) {
+		for (int minute = 0; minute < 60; minute++) {
+			for (int second = 0; second < 60; second++) {
+				if (Time::IsValidTime(hour, minute, second)) {
+					REQUIRE(Time::ToString(Time::FromString(Time::Format(hour, minute, second))) ==
+					        Time::Format(hour, minute, second));
 				}
 			}
 		}

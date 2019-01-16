@@ -33,7 +33,10 @@ unique_ptr<CreateTableStatement> Transformer::TransformCreateTable(Node *node) {
 
 			if (cdef->constraints) {
 				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {
-					info.constraints.push_back(TransformConstraint(constr, centry, info.columns.size()));
+					auto constraint = TransformConstraint(constr, centry, info.columns.size());
+					if (constraint) {
+						info.constraints.push_back(move(constraint));
+					}
 				}
 			}
 			info.columns.push_back(centry);

@@ -12,6 +12,7 @@
 #include "common/exception.hpp"
 #include "common/printable.hpp"
 #include "common/types/date.hpp"
+#include "common/types/timestamp.hpp"
 
 #include <memory.h>
 
@@ -68,6 +69,8 @@ public:
 	static Value POINTER(uint64_t value);
 	//! Create a Date Value from a specified value
 	static Value DATE(date_t value);
+	//! Create a Timestamp Value from a specified value
+	static Value TIMESTAMP(timestamp_t value);
 
 	int64_t GetNumericValue();
 

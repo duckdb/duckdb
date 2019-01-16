@@ -128,6 +128,8 @@ static Value _duckdb_c_get_value(duckdb_column column, size_t index) {
 		return Value::POINTER(get_value<uint64_t>(column, index));
 	case DUCKDB_TYPE_DATE:
 		return Value::DATE(get_value<date_t>(column, index));
+	case DUCKDB_TYPE_TIMESTAMP:
+		return Value::TIMESTAMP(get_value<timestamp_t>(column, index));
 	case DUCKDB_TYPE_VARCHAR:
 		return Value(string(get_value<char *>(column, index)));
 	default:

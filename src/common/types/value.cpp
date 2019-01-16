@@ -129,6 +129,12 @@ Value Value::DATE(date_t value) {
 	result.is_null = false;
 	return result;
 }
+Value Value::TIMESTAMP(timestamp_t value) {
+	Value result(TypeId::TIMESTAMP);
+	result.value_.timestamp = value;
+	result.is_null = false;
+	return result;
+}
 
 Value Value::Numeric(TypeId type, int64_t value) {
 	assert(!TypeIsIntegral(type) || (value >= duckdb::MinimumValue(type) && value <= duckdb::MaximumValue(type)));
@@ -200,6 +206,8 @@ string Value::ToString() const {
 		return to_string(value_.pointer);
 	case TypeId::DATE:
 		return Date::ToString(value_.date);
+	case TypeId::TIMESTAMP:
+		return Timestamp::ToString(value_.timestamp);
 	case TypeId::VARCHAR:
 		return str_value;
 	default:
@@ -303,7 +311,7 @@ template <class DST, class OP> DST Value::_cast(const Value &v) {
 	case TypeId::DATE:
 		return operators::CastFromDate::Operation<date_t, DST>(v.value_.date);
 	case TypeId::TIMESTAMP:
-		return OP::template Operation<timestamp_t, DST>(v.value_.timestamp);
+		return operators::CastFromTimestamp::Operation<timestamp_t, DST>(v.value_.timestamp);
 	default:
 		throw NotImplementedException("Unimplemented type for casting");
 	}
@@ -347,10 +355,12 @@ Value Value::CastAs(TypeId new_type) const {
 	case TypeId::DATE:
 		new_value.value_.date = _cast<date_t, operators::CastToDate>(*this);
 		break;
-	case TypeId::VARCHAR: {
+	case TypeId::TIMESTAMP:
+		new_value.value_.timestamp = _cast<timestamp_t, operators::CastToTimestamp>(*this);
+		break;
+	case TypeId::VARCHAR:
 		new_value.str_value = _cast<string, operators::Cast>(*this);
 		break;
-	}
 	default:
 		throw NotImplementedException("Unimplemented type for casting");
 	}

@@ -45,6 +45,8 @@ struct BinaryData {
 
 //! Type used to represent dates
 typedef int32_t date_t;
+//! Type used to represent time
+typedef int32_t dtime_t;
 //! Type used to represent timestamps
 typedef int64_t timestamp_t;
 //! Type used for the selection vector

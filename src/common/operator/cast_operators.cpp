@@ -3,6 +3,7 @@
 #include "common/exception.hpp"
 #include "common/limits.hpp"
 #include "common/types/date.hpp"
+#include "common/types/timestamp.hpp"
 
 #include <cstdlib>
 
@@ -202,7 +203,7 @@ template <> string Cast::Operation(double left) {
 //===--------------------------------------------------------------------===//
 // Cast From Date
 //===--------------------------------------------------------------------===//
-template <> string CastFromDate::Operation(duckdb::date_t left) {
+template <> string CastFromDate::Operation(date_t left) {
 	return Date::ToString(left);
 }
 
@@ -227,6 +228,29 @@ template <> date_t CastToDate::Operation(int32_t left) {
 
 template <> date_t CastToDate::Operation(int64_t left) {
 	return (date_t)left;
+}
+
+//===--------------------------------------------------------------------===//
+// Cast From Timestamps
+//===--------------------------------------------------------------------===//
+
+template <> string CastFromTimestamp::Operation(timestamp_t left) {
+	return Timestamp::ToString(left);
+}
+
+template <> int64_t CastFromTimestamp::Operation(timestamp_t left) {
+	return (int64_t)left;
+}
+
+//===--------------------------------------------------------------------===//
+// Cast To Timestamp
+//===--------------------------------------------------------------------===//
+template <> timestamp_t CastToTimestamp::Operation(const char *left) {
+	return Timestamp::FromString(left);
+}
+
+template <> timestamp_t CastToTimestamp::Operation(int64_t left) {
+	return (timestamp_t)left;
 }
 
 } // namespace operators
