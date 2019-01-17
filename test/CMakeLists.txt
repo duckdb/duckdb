@@ -9,6 +9,7 @@ add_subdirectory(common)
 add_subdirectory(helpers)
 add_subdirectory(monetdb)
 add_subdirectory(sql)
+add_subdirectory(sqlserver)
 add_subdirectory(optimizer)
 
 IF (NOT WIN32)
