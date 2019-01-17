@@ -57,6 +57,7 @@ template class std::unique_ptr<LogicalFilter>;
 template class std::unique_ptr<LogicalJoin>;
 template class std::unique_ptr<SubqueryRef>;
 template class std::unique_ptr<WindowExpression>;
+template class std::unique_ptr<CreateViewInformation>;
 template class std::unique_ptr<FilterInfo>;
 template class std::unique_ptr<JoinOrderOptimizer::JoinNode>;
 template class std::unique_ptr<Relation>;
