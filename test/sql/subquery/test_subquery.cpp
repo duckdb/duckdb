@@ -6,6 +6,56 @@
 using namespace duckdb;
 using namespace std;
 
+TEST_CASE("Test simple uncorrelated subqueries", "[subquery]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
+
+	result = con.Query("SELECT * FROM integers WHERE i=(SELECT 1)");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	result = con.Query("SELECT * FROM integers WHERE i=(SELECT SUM(1))");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	result = con.Query("SELECT * FROM integers WHERE i=(SELECT MIN(i) FROM integers)");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	result = con.Query("SELECT * FROM integers WHERE i=(SELECT MAX(i) FROM integers)");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+
+	// controversial, in postgres this gives an error (and "officially" it should)
+	// but SQLite accepts it and just uses the first value
+	// we choose to agree with SQLite here
+	result = con.Query("SELECT * FROM integers WHERE i=(SELECT i FROM integers WHERE i IS NOT NULL ORDER BY i)");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	// i.e. the above query is equivalent to this query
+	result = con.Query("SELECT * FROM integers WHERE i=(SELECT i FROM integers WHERE i IS NOT NULL ORDER BY i LIMIT 1)");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	// FIXME:
+	// returning multiple columns should fail though
+	// REQUIRE_FAIL(con.Query("SELECT * FROM integers WHERE i=(SELECT 1, 2)"));
+	// REQUIRE_FAIL(con.Query("SELECT * FROM integers WHERE i=(SELECT i, i + 2 FROM integers)"));
+
+	// uncorrelated EXISTS
+	result = con.Query("SELECT * FROM integers WHERE EXISTS(SELECT 1) ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	result = con.Query("SELECT * FROM integers WHERE EXISTS(SELECT * FROM integers) ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	result = con.Query("SELECT * FROM integers WHERE EXISTS(SELECT NULL) ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+
+	// uncorrelated IN
+	result = con.Query("SELECT * FROM integers WHERE 1 IN (SELECT 1) ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	result = con.Query("SELECT * FROM integers WHERE 1 IN (SELECT * FROM integers) ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	result = con.Query("SELECT * FROM integers WHERE 1 IN (SELECT NULL) ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+}
+
 TEST_CASE("Test subqueries from the paper 'Unnesting Arbitrary Subqueries'", "[subquery]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);

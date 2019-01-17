@@ -19,9 +19,6 @@ TEST_CASE("Test TPC-H SF0.1", "[tpch][.]") {
 
 	con.EnableProfiling();
 
-	// con.Query("PRAGMA enable_profiling");
-	// result = con.Query(tpch::get_query(11));
-	// COMPARE_CSV(result, tpch::get_answer(sf, 11), true);
 
 	// check if all the counts are correct
 	result = con.Query("SELECT COUNT(*) FROM orders");
@@ -80,6 +77,7 @@ TEST_CASE("Test TPC-H SF0.1", "[tpch][.]") {
 	                   "o_orderstatus='X' AND l_tax > 50");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 
+	// test all the basic queries
 	result = con.Query(tpch::get_query(1));
 	COMPARE_CSV(result, tpch::get_answer(sf, 1), true);
 
