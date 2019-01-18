@@ -16,7 +16,7 @@ namespace duckdb {
 //! Represents a subquery
 class SubqueryExpression : public Expression {
 public:
-	SubqueryExpression() : Expression(ExpressionType::SELECT_SUBQUERY), subquery_type(SubqueryType::DEFAULT) {
+	SubqueryExpression() : Expression(ExpressionType::SUBQUERY), subquery_type(SubqueryType::INVALID), comparison_type(ExpressionType::INVALID) {
 	}
 
 	ExpressionClass GetExpressionClass() override {
@@ -32,8 +32,20 @@ public:
 
 	bool Equals(const Expression *other) const override;
 
+	//! The actual subquery
 	unique_ptr<QueryNode> subquery;
+	//! The subquery type
 	SubqueryType subquery_type;
+	//! the child expression to compare with (in case of IN, ANY, ALL operators, empy for EXISTS queries and scalar subquery)
+	unique_ptr<Expression> child;
+	//! The comparison type of the child expression with the subquery (in case of ANY, ALL operators), empty otherwise
+	ExpressionType comparison_type;
+
+
+	size_t ChildCount() const override;
+	Expression *GetChild(size_t index) const override;
+	void ReplaceChild(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
+	                  size_t index) override;
 
 	string ToString() const override {
 		return "SUBQUERY";

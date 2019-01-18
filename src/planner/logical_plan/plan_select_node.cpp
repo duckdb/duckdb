@@ -34,10 +34,6 @@ static unique_ptr<Expression> extract_windows(unique_ptr<Expression> expr, vecto
 }
 
 void LogicalPlanGenerator::CreatePlan(SelectNode &statement) {
-	for (auto &expr : statement.select_list) {
-		VisitExpression(&expr);
-	}
-
 	if (statement.from_table) {
 		// SELECT with FROM
 		AcceptChild(&statement.from_table);
@@ -48,7 +44,6 @@ void LogicalPlanGenerator::CreatePlan(SelectNode &statement) {
 
 	if (statement.where_clause) {
 		VisitExpression(&statement.where_clause);
-
 		auto filter = make_unique<LogicalFilter>(move(statement.where_clause));
 		filter->AddChild(move(root));
 		root = move(filter);
@@ -81,6 +76,7 @@ void LogicalPlanGenerator::CreatePlan(SelectNode &statement) {
 		root = move(aggregate);
 
 		if (statement.HasHaving()) {
+			VisitExpression(&statement.groupby.having);
 			auto having = make_unique<LogicalFilter>(move(statement.groupby.having));
 
 			having->AddChild(move(root));
@@ -101,6 +97,9 @@ void LogicalPlanGenerator::CreatePlan(SelectNode &statement) {
 		root = move(win);
 	}
 
+	for (auto &expr : statement.select_list) {
+		VisitExpression(&expr);
+	}
 	auto proj = make_unique<LogicalProjection>(move(statement.select_list));
 	proj->AddChild(move(root));
 	root = move(proj);

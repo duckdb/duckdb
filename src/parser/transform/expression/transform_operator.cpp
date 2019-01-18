@@ -9,7 +9,7 @@ using namespace duckdb;
 using namespace postgres;
 using namespace std;
 
-static ExpressionType OperatorToExpressionType(string &op) {
+ExpressionType Transformer::OperatorToExpressionType(string &op) {
 	if (op == "+") {
 		return ExpressionType::OPERATOR_ADD;
 	} else if (op == "-") {

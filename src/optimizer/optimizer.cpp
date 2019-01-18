@@ -4,7 +4,6 @@
 #include "optimizer/join_order_optimizer.hpp"
 #include "optimizer/obsolete_filter_rewriter.hpp"
 #include "optimizer/rule/list.hpp"
-#include "optimizer/subquery_rewriter.hpp"
 #include "parser/expression/common_subexpression.hpp"
 #include "planner/operator/list.hpp"
 
@@ -24,16 +23,16 @@ Optimizer::Optimizer(ClientContext &client_context, BindContext &context) : cont
 #endif
 }
 
-class OptimizeSubqueries : public LogicalOperatorVisitor {
-public:
-	using LogicalOperatorVisitor::Visit;
-	void Visit(BoundSubqueryExpression &subquery) override {
-		// we perform join reordering within the subquery expression
-		JoinOrderOptimizer optimizer;
-		subquery.op = optimizer.Optimize(move(subquery.op));
-		assert(subquery.op);
-	}
-};
+// class OptimizeSubqueries : public LogicalOperatorVisitor {
+// public:
+// 	using LogicalOperatorVisitor::Visit;
+// 	void Visit(BoundSubqueryExpression &subquery) override {
+// 		// we perform join reordering within the subquery expression
+// 		JoinOrderOptimizer optimizer;
+// 		subquery.op = optimizer.Optimize(move(subquery.op));
+// 		assert(subquery.op);
+// 	}
+// };
 
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan) {
 	// first we perform expression rewrites using the ExpressionRewriter
@@ -46,12 +45,6 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	// this also rewrites cross products + filters into joins and performs filter pushdowns
 	JoinOrderOptimizer optimizer;
 	plan = optimizer.Optimize(move(plan));
-	// perform join order optimization in subqueries as well
-	OptimizeSubqueries opt;
-	opt.VisitOperator(*plan);
-	// now we rewrite subqueries
-	SubqueryRewriter subquery_rewriter(context);
-	plan = subquery_rewriter.Rewrite(move(plan));
 	// then we extract common subexpressions inside the different operators
 	CommonSubExpressionOptimizer cse_optimizer;
 	cse_optimizer.VisitOperator(*plan);

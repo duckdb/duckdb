@@ -209,8 +209,6 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "IS_NULL";
 	case ExpressionType::OPERATOR_IS_NOT_NULL:
 		return "IS_NOT_NULL";
-	case ExpressionType::OPERATOR_EXISTS:
-		return "EXISTS";
 	case ExpressionType::COMPARE_EQUAL:
 		return "EQUAL";
 	case ExpressionType::COMPARE_NOTEQUAL:
@@ -307,9 +305,7 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "NULLIF";
 	case ExpressionType::OPERATOR_COALESCE:
 		return "COALESCE";
-	case ExpressionType::ROW_SUBQUERY:
-		return "SUBQUERY";
-	case ExpressionType::SELECT_SUBQUERY:
+	case ExpressionType::SUBQUERY:
 		return "SUBQUERY";
 	case ExpressionType::STAR:
 		return "STAR";
@@ -323,8 +319,6 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "TABLE_REF";
 	case ExpressionType::CAST:
 		return "CAST";
-	case ExpressionType::OPERATOR_NOT_EXISTS:
-		return "OPERATOR_NOT_EXISTS";
 	case ExpressionType::COMPARE_NOT_IN:
 		return "COMPARE_NOT_IN";
 	case ExpressionType::COMPARE_BETWEEN:

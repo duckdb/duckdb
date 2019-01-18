@@ -117,6 +117,8 @@ private:
 	//===--------------------------------------------------------------------===//
 	string TransformAlias(postgres::Alias *root);
 	void TransformCTE(postgres::WithClause *de_with_clause, SelectStatement &select);
+	// Operator String to ExpressionType (e.g. + => OPERATOR_ADD)
+	ExpressionType OperatorToExpressionType(string &op);
 	//===--------------------------------------------------------------------===//
 	// TableRef transform
 	//===--------------------------------------------------------------------===//

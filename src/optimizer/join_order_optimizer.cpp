@@ -40,7 +40,7 @@ bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<s
 		bindings.clear();
 		return false;
 	}
-	if (expression.type == ExpressionType::SELECT_SUBQUERY) {
+	if (expression.type == ExpressionType::SUBQUERY) {
 		auto &subquery = (BoundSubqueryExpression &)expression;
 		if (subquery.is_correlated) {
 			// we don't allow correlated subqueries to be reordered
@@ -135,7 +135,7 @@ static JoinSide GetJoinSide(Expression &expression, unordered_set<size_t> &left_
 		// column reference has already been bound, don't use it for reordering
 		return JoinSide::NONE;
 	}
-	if (expression.type == ExpressionType::SELECT_SUBQUERY) {
+	if (expression.type == ExpressionType::SUBQUERY) {
 		return JoinSide::BOTH;
 	}
 	JoinSide join_side = JoinSide::NONE;

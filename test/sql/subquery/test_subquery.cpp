@@ -12,6 +12,7 @@ TEST_CASE("Test simple uncorrelated subqueries", "[subquery]") {
 	DuckDBConnection con(db);
 
 	con.EnableQueryVerification();
+	con.EnableProfiling();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
@@ -34,26 +35,79 @@ TEST_CASE("Test simple uncorrelated subqueries", "[subquery]") {
 	result = con.Query("SELECT * FROM integers WHERE i=(SELECT i FROM integers WHERE i IS NOT NULL ORDER BY i LIMIT 1)");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
-	// FIXME:
 	// returning multiple columns should fail though
-	// REQUIRE_FAIL(con.Query("SELECT * FROM integers WHERE i=(SELECT 1, 2)"));
-	// REQUIRE_FAIL(con.Query("SELECT * FROM integers WHERE i=(SELECT i, i + 2 FROM integers)"));
+	REQUIRE_FAIL(con.Query("SELECT * FROM integers WHERE i=(SELECT 1, 2)"));
+	REQUIRE_FAIL(con.Query("SELECT * FROM integers WHERE i=(SELECT i, i + 2 FROM integers)"));
+	// but not for EXISTS queries!
+	REQUIRE_NO_FAIL(con.Query("SELECT * FROM integers WHERE EXISTS (SELECT 1, 2)"));
+	REQUIRE_NO_FAIL(con.Query("SELECT * FROM integers WHERE EXISTS (SELECT i, i + 2 FROM integers)"));
+
 
 	// uncorrelated EXISTS
 	result = con.Query("SELECT * FROM integers WHERE EXISTS(SELECT 1) ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	result = con.Query("SELECT * FROM integers WHERE EXISTS(SELECT * FROM integers) ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	result = con.Query("SELECT * FROM integers WHERE NOT EXISTS(SELECT * FROM integers) ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
 	result = con.Query("SELECT * FROM integers WHERE EXISTS(SELECT NULL) ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 
-	// uncorrelated IN
-	result = con.Query("SELECT * FROM integers WHERE 1 IN (SELECT 1) ORDER BY i");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
-	result = con.Query("SELECT * FROM integers WHERE 1 IN (SELECT * FROM integers) ORDER BY i");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
-	result = con.Query("SELECT * FROM integers WHERE 1 IN (SELECT NULL) ORDER BY i");
+	// exists in SELECT clause
+	result = con.Query("SELECT EXISTS(SELECT * FROM integers)");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+	result = con.Query("SELECT EXISTS(SELECT * FROM integers WHERE i>10)");
+	REQUIRE(CHECK_COLUMN(result, 0, {false}));
+
+	// multiple exists
+	result = con.Query("SELECT EXISTS(SELECT * FROM integers), EXISTS(SELECT * FROM integers)");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+	REQUIRE(CHECK_COLUMN(result, 1, {true}));
+
+	// exists used in operations
+	result = con.Query("SELECT EXISTS(SELECT * FROM integers) AND EXISTS(SELECT * FROM integers)");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+
+	// nested EXISTS
+	result = con.Query("SELECT EXISTS(SELECT EXISTS(SELECT * FROM integers))");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+
+	// scalar uncorrelated subqueries
+	result = con.Query("SELECT (SELECT i FROM integers WHERE i=1)");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	result = con.Query("SELECT * FROM integers WHERE i > (SELECT i FROM integers WHERE i=1)");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 3}));
+
+	// uncorrelated ALL
+	result = con.Query("SELECT i FROM integers WHERE i >= ALL(SELECT i FROM integers)");
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT i FROM integers WHERE i >= ALL(SELECT i FROM integers WHERE i IS NOT NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	result = con.Query("SELECT i FROM integers WHERE i > ALL(SELECT MIN(i) FROM integers)");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 3}));
+	result = con.Query("SELECT i FROM integers WHERE i < ALL(SELECT MAX(i) FROM integers)");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	result = con.Query("SELECT i FROM integers WHERE i <= ALL(SELECT i FROM integers)");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT i FROM integers WHERE i <= ALL(SELECT i FROM integers WHERE i IS NOT NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	result = con.Query("SELECT i FROM integers WHERE i = ALL(SELECT i FROM integers WHERE i=1)");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	result = con.Query("SELECT i FROM integers WHERE i <> ALL(SELECT i FROM integers WHERE i=1)");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 3}));
+	result = con.Query("SELECT i FROM integers WHERE i = ALL(SELECT i FROM integers WHERE i IS NOT NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT i FROM integers WHERE i <> ALL(SELECT i FROM integers WHERE i IS NOT NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+
+
+	// uncorrelated IN
+	// result = con.Query("SELECT * FROM integers WHERE 1 IN (SELECT 1) ORDER BY i");
+	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	// result = con.Query("SELECT * FROM integers WHERE 1 IN (SELECT * FROM integers) ORDER BY i");
+	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	// result = con.Query("SELECT * FROM integers WHERE 1 IN (SELECT NULL::INTEGER) ORDER BY i");
+	// REQUIRE(CHECK_COLUMN(result, 0, {}));
 }
 
 TEST_CASE("Test subqueries from the paper 'Unnesting Arbitrary Subqueries'", "[subquery]") {

@@ -73,10 +73,6 @@ enum class ExpressionType : uint8_t {
 	OPERATOR_IS_NULL = 9,
 	// is not null operator
 	OPERATOR_IS_NOT_NULL = 10,
-	// exists test.
-	OPERATOR_EXISTS = 11,
-	// not exists test
-	OPERATOR_NOT_EXISTS = 12,
 
 	// -----------------------------
 	// Comparison Operators
@@ -177,8 +173,7 @@ enum class ExpressionType : uint8_t {
 	// -----------------------------
 	// Subquery IN/EXISTS
 	// -----------------------------
-	ROW_SUBQUERY = 175,
-	SELECT_SUBQUERY = 176,
+	SUBQUERY = 175,
 
 	// -----------------------------
 	// Parser
@@ -254,7 +249,14 @@ enum class CatalogType : uint8_t {
 //===--------------------------------------------------------------------===//
 // Subquery Types
 //===--------------------------------------------------------------------===//
-enum class SubqueryType : uint8_t { INVALID = 0, DEFAULT = 1, EXISTS = 2, IN = 3 };
+enum class SubqueryType : uint8_t {
+	INVALID = 0,
+	SCALAR = 1,      // Regular scalar subquery
+	EXISTS = 2,      // EXISTS (SELECT...)
+	NOT_EXISTS = 3,  // NOT EXISTS(SELECT...)
+	ANY = 4,         // x = ANY(SELECT...) OR x IN (SELECT...)
+	ALL = 5          // x = ALL(SELECT...)
+};
 
 //===--------------------------------------------------------------------===//
 // Statement Types

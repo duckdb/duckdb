@@ -26,7 +26,7 @@ static size_t templated_nested_loop_join(Vector &left, Vector &right, size_t &lp
 	size_t result_count = 0;
 
 	// FIXME: this only needs to be done once per vector instead of once per
-	// call create a selection vector that disqualifies any entries with NULL
+	// call. Create a selection vector that disqualifies any entries with NULL
 	// from qualifying because NULL never matches anything
 	sel_t left_null_vector[STANDARD_VECTOR_SIZE], right_null_vector[STANDARD_VECTOR_SIZE];
 	size_t left_count = 0, right_count = 0;

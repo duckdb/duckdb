@@ -35,7 +35,7 @@ public:
 	    : BoundColumnRefExpression(expr.GetName(), type, binding, depth) {
 	}
 
-	BoundColumnRefExpression(string alias, TypeId type, ColumnBinding binding, uint32_t depth)
+	BoundColumnRefExpression(string alias, TypeId type, ColumnBinding binding, uint32_t depth = 0)
 	    : Expression(ExpressionType::BOUND_COLUMN_REF, type), binding(binding), depth(depth) {
 		this->alias = alias;
 	}

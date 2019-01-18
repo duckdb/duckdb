@@ -19,16 +19,38 @@ unique_ptr<Expression> Transformer::TransformSubquery(SubLink *root) {
 	switch (root->subLinkType) {
 	case EXISTS_SUBLINK: {
 		subquery_expr->subquery_type = SubqueryType::EXISTS;
-		return make_unique<OperatorExpression>(ExpressionType::OPERATOR_EXISTS, TypeId::BOOLEAN, move(subquery_expr));
+		subquery_expr->return_type = TypeId::BOOLEAN;
+		break;
 	}
-	case ANY_SUBLINK: {
-		subquery_expr->subquery_type = SubqueryType::IN;
-		return make_unique<OperatorExpression>(ExpressionType::COMPARE_IN, TypeId::BOOLEAN,
-		                                       TransformExpression(root->testexpr), move(subquery_expr));
+	case ANY_SUBLINK: 
+	case ALL_SUBLINK: {
+		// comparison with ANY() or ALL()
+		subquery_expr->subquery_type = root->subLinkType == ANY_SUBLINK ? SubqueryType::ANY : SubqueryType::ALL;
+		subquery_expr->child = TransformExpression(root->testexpr);
+		subquery_expr->return_type = TypeId::BOOLEAN;
+		// get the operator name
+		if (!root->operName) {
+			// simple IN 
+			subquery_expr->comparison_type = ExpressionType::COMPARE_EQUAL;
+		} else {
+			auto operator_name = string((reinterpret_cast<value *>(root->operName->head->data.ptr_value))->val.str);
+			subquery_expr->comparison_type = OperatorToExpressionType(operator_name);
+		}
+		assert(subquery_expr->comparison_type == ExpressionType::COMPARE_EQUAL ||
+			   subquery_expr->comparison_type == ExpressionType::COMPARE_NOTEQUAL ||
+			   subquery_expr->comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
+			   subquery_expr->comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
+			   subquery_expr->comparison_type == ExpressionType::COMPARE_LESSTHAN ||
+			   subquery_expr->comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO);
+		break;
 	}
 	case EXPR_SUBLINK: {
-		return subquery_expr;
+		// return a single scalar value from the subquery
+		// no child expression to compare to
+		subquery_expr->subquery_type = SubqueryType::SCALAR;
+		break;
 	}
 	default: { throw NotImplementedException("Subquery of type %d not implemented\n", (int)root->subLinkType); }
 	}
+	return subquery_expr;
 }

@@ -10,33 +10,12 @@
 using namespace duckdb;
 using namespace std;
 
-class PlanSubqueries : public LogicalOperatorVisitor {
-public:
-	PlanSubqueries(ClientContext &context) : context(context) {
-	}
-
-protected:
-	using SQLNodeVisitor::Visit;
-	void Visit(BoundSubqueryExpression &expr) override {
-		assert(expr.op);
-		PhysicalPlanGenerator generator(context);
-		generator.CreatePlan(move(expr.op));
-		expr.plan = move(generator.plan);
-	}
-
-private:
-	ClientContext &context;
-};
-
 void PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> op) {
 	// first resolve column references
 	ColumnBindingResolver resolver;
 	resolver.VisitOperator(*op);
 	// now resolve types of all the operators
 	op->ResolveOperatorTypes();
-	// create the physical plan of any subqueries
-	PlanSubqueries planner(context);
-	planner.VisitOperator(*op);
 	// then create the main physical plan
 	VisitOperator(*op);
 	assert(plan); // Unknown error in physical plan generation"

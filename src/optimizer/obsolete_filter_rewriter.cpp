@@ -5,16 +5,16 @@
 using namespace duckdb;
 using namespace std;
 
-class RewriteSubqueries : public SQLNodeVisitor {
-protected:
-	using SQLNodeVisitor::Visit;
-	void Visit(BoundSubqueryExpression &subquery) override {
-		// we perform join reordering within the subquery expression
-		ObsoleteFilterRewriter rewriter;
-		subquery.op = rewriter.Rewrite(move(subquery.op));
-		assert(subquery.op);
-	}
-};
+// class RewriteSubqueries : public SQLNodeVisitor {
+// protected:
+// 	using SQLNodeVisitor::Visit;
+// 	void Visit(BoundSubqueryExpression &subquery) override {
+// 		// we perform join reordering within the subquery expression
+// 		ObsoleteFilterRewriter rewriter;
+// 		subquery.op = rewriter.Rewrite(move(subquery.op));
+// 		assert(subquery.op);
+// 	}
+// };
 
 struct ExpressionValueInformation {
 	size_t expression_index;
@@ -259,10 +259,10 @@ unique_ptr<LogicalOperator> ObsoleteFilterRewriter::Rewrite(unique_ptr<LogicalOp
 			}
 		}
 	}
-	RewriteSubqueries subquery_rewriter;
-	for (auto &it : node->expressions) {
-		subquery_rewriter.VisitExpression(&it);
-	}
+	// RewriteSubqueries subquery_rewriter;
+	// for (auto &it : node->expressions) {
+	// 	subquery_rewriter.VisitExpression(&it);
+	// }
 	for (size_t i = 0; i < node->children.size(); i++) {
 		node->children[i] = Rewrite(move(node->children[i]));
 	}

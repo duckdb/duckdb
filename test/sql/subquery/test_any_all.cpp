@@ -12,7 +12,7 @@ TEST_CASE("Test scalar ANY/ALL queries", "[subquery]") {
 	DuckDBConnection con(db);
 	con.EnableQueryVerification();
 
-	// scalar ANY 
+	// scalar ANY
 	result = con.Query("SELECT 1 = ANY(SELECT 1)");
 	REQUIRE(CHECK_COLUMN(result, 0, {true}));
 	result = con.Query("SELECT 1 = ANY(SELECT NULL)");
@@ -48,7 +48,6 @@ TEST_CASE("Test ANY/ALL queries", "[subquery]") {
 	result = con.Query("SELECT 1 > ANY(SELECT * FROM integers)");
 	REQUIRE(CHECK_COLUMN(result, 0, {false}));
 
-	// ALL is a generalization of IN
 	result = con.Query("SELECT 4 > ALL(SELECT * FROM integers)");
 	REQUIRE(CHECK_COLUMN(result, 0, {true}));
 	result = con.Query("SELECT 1 > ALL(SELECT * FROM integers)");

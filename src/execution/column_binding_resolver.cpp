@@ -163,10 +163,6 @@ void ColumnBindingResolver::Visit(LogicalJoin &op) {
 
 unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpression &expr,
                                                            unique_ptr<Expression> *expr_ptr) {
-	if (expr.depth != current_depth) {
-		// should not be resolved by the current resolver
-		return nullptr;
-	}
 	uint32_t index = (uint32_t)-1;
 	for (auto &binding : bound_tables) {
 		if (binding.table_index == expr.binding.table_index) {
@@ -181,10 +177,10 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	return make_unique<BoundExpression>(expr.return_type, index, expr.depth);
 }
 
-void ColumnBindingResolver::Visit(BoundSubqueryExpression &expr) {
-	assert(expr.op);
-	// resolve the column ref indices of subqueries
-	current_depth++;
-	VisitOperator(*expr.op);
-	current_depth--;
-}
+// void ColumnBindingResolver::Visit(BoundSubqueryExpression &expr) {
+// 	assert(expr.op);
+// 	// resolve the column ref indices of subqueries
+// 	current_depth++;
+// 	VisitOperator(*expr.op);
+// 	current_depth--;
+// }

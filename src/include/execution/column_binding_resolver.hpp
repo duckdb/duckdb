@@ -25,7 +25,7 @@ struct BoundTable {
 //! are used within the execution engine
 class ColumnBindingResolver : public LogicalOperatorVisitor {
 public:
-	ColumnBindingResolver() : current_depth(0) {
+	ColumnBindingResolver() {
 	}
 
 	//! We overide the VisitOperator method because we don't want to automatically visit children of all operators
@@ -48,11 +48,9 @@ protected:
 		    "ColumnRefExpression is not legal here, should have been converted to BoundColumnRefExpression already!");
 	}
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
-	void Visit(BoundSubqueryExpression &expr) override;
+	// void Visit(BoundSubqueryExpression &expr) override;
 
 	vector<BoundTable> bound_tables;
-	size_t current_depth;
-
 private:
 	void BindTablesBinaryOp(LogicalOperator &op, bool append_right);
 	//! Append a list of tables to the current set of bound tables

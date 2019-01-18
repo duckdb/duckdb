@@ -26,7 +26,6 @@ void PhysicalCrossProduct::_GetChunk(ClientContext &context, DataChunk &chunk, P
 			if (new_chunk.size() == 0) {
 				break;
 			}
-			// resolve the join expression of the right side
 			state->right_data.Append(new_chunk);
 		} while (new_chunk.size() > 0);
 

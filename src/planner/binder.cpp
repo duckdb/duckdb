@@ -85,8 +85,12 @@ unique_ptr<Expression> Binder::VisitReplace(FunctionExpression &expr, unique_ptr
 }
 
 unique_ptr<Expression> Binder::VisitReplace(SubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) {
+	// first visit the children of the Subquery expression, if any
+	VisitExpressionChildren(expr);
+
 	assert(bind_context);
 
+	// now bind columns in the subquery
 	Binder binder(context, this);
 	binder.bind_context->parent = bind_context.get();
 	// the subquery may refer to CTEs from the parent query
@@ -97,18 +101,15 @@ unique_ptr<Expression> Binder::VisitReplace(SubqueryExpression &expr, unique_ptr
 	if (select_list.size() < 1) {
 		throw BinderException("Subquery has no projections");
 	}
-	if (select_list[0]->return_type == TypeId::INVALID) {
-		throw BinderException("Subquery has no type");
-	}
-	if (expr.subquery_type == SubqueryType::IN && select_list.size() != 1) {
+	if (expr.subquery_type != SubqueryType::EXISTS && select_list.size() != 1) {
 		throw BinderException("Subquery returns %zu columns - expected 1", select_list.size());
 	}
+	assert(select_list[0]->return_type != TypeId::INVALID); // "Subquery has no type"
 	auto result = make_unique<BoundSubqueryExpression>();
-	result->return_type = expr.subquery_type == SubqueryType::EXISTS ? TypeId::BOOLEAN : select_list[0]->return_type;
+	result->return_type = expr.subquery_type == SubqueryType::SCALAR ? select_list[0]->return_type : expr.return_type;
 	result->context = move(binder.bind_context);
 	result->is_correlated = result->context->GetMaxDepth() > 0;
-	result->subquery = move(expr.subquery);
-	result->subquery_type = expr.subquery_type;
+	result->subquery = move(*expr_ptr);
 	result->alias = expr.alias;
 	return result;
 }
