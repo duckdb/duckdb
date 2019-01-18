@@ -194,8 +194,9 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, uniq
 
 static void OrderVector(Vector &vector, PhysicalPiecewiseMergeJoin::MergeOrder &order) {
 	// first remove any NULL values; they can never match anyway
+	sel_t not_null_order[STANDARD_VECTOR_SIZE];
 	sel_t *result_vector;
-	order.count = Vector::NotNullSelVector(vector, order.order, result_vector);
+	order.count = Vector::NotNullSelVector(vector, not_null_order, result_vector);
 	// sort by the join key
 	VectorOperations::Sort(vector, result_vector, order.count, order.order);
 }
