@@ -95,6 +95,8 @@ void WriteAheadLog::Initialize(string &path) {
 //===--------------------------------------------------------------------===//
 bool ReplayDropTable(Transaction &transaction, Catalog &catalog, Deserializer &source);
 bool ReplayCreateTable(Transaction &transaction, Catalog &catalog, Deserializer &source);
+bool ReplayCreateView(Transaction &transaction, Catalog &catalog, Deserializer &source);
+bool ReplayDropView(Transaction &transaction, Catalog &catalog, Deserializer &source);
 bool ReplayDropSchema(Transaction &transaction, Catalog &catalog, Deserializer &source);
 bool ReplayCreateSchema(Transaction &transaction, Catalog &catalog, Deserializer &source);
 bool ReplayInsert(ClientContext &context, Catalog &catalog, Deserializer &source);
@@ -106,6 +108,10 @@ bool ReplayEntry(ClientContext &context, DuckDB &database, WALEntry entry, Deser
 		return ReplayDropTable(context.ActiveTransaction(), database.catalog, source);
 	case WALEntry::CREATE_TABLE:
 		return ReplayCreateTable(context.ActiveTransaction(), database.catalog, source);
+	case WALEntry::CREATE_VIEW:
+		return ReplayCreateView(context.ActiveTransaction(), database.catalog, source);
+	case WALEntry::DROP_VIEW:
+		return ReplayDropView(context.ActiveTransaction(), database.catalog, source);
 	case WALEntry::DROP_SCHEMA:
 		return ReplayDropSchema(context.ActiveTransaction(), database.catalog, source);
 	case WALEntry::CREATE_SCHEMA:
@@ -223,17 +229,14 @@ bool ReplayCreateSchema(Transaction &transaction, Catalog &catalog, Deserializer
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateView(ViewCatalogEntry *entry) {
 	Serializer serializer;
-	serializer.WriteString(entry->name);
-
+	entry->Serialize(serializer);
 	WriteEntry(WALEntry::CREATE_VIEW, serializer);
 }
 
 bool ReplayCreateView(Transaction &transaction, Catalog &catalog, Deserializer &source) {
-	CreateViewInformation info;
-	info.schema = source.Read<string>();
-
+	auto entry = ViewCatalogEntry::Deserialize(source);
 	// try {
-	catalog.CreateView(transaction, &info);
+	catalog.CreateView(transaction, entry.get());
 	// } catch (...) {
 	// 	return false;
 	// }
@@ -242,9 +245,18 @@ bool ReplayCreateView(Transaction &transaction, Catalog &catalog, Deserializer &
 
 void WriteAheadLog::WriteDropView(ViewCatalogEntry *entry) {
 	Serializer serializer;
+	serializer.WriteString(entry->schema->name);
 	serializer.WriteString(entry->name);
 
 	WriteEntry(WALEntry::DROP_VIEW, serializer);
+}
+
+bool ReplayDropView(Transaction &transaction, Catalog &catalog, Deserializer &source) {
+	DropViewInformation info;
+	info.schema = source.Read<string>();
+	info.view_name = source.Read<string>();
+	catalog.DropView(transaction, &info);
+	return true;
 }
 
 //===--------------------------------------------------------------------===//

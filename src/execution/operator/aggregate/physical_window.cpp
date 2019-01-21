@@ -470,6 +470,7 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 			window_chunk.Initialize(window_types);
 			for (size_t col_idx = 0; col_idx < window_chunk.column_count; col_idx++) {
 				window_chunk.data[col_idx].count = big_data.chunks[i]->size();
+				VectorOperations::Set(window_chunk.data[col_idx], Value());
 			}
 			window_chunk.Verify();
 			window_results.Append(window_chunk);

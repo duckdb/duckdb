@@ -21,7 +21,11 @@ class Timestamp {
 public:
 	//! Convert a string in the format "YYYY-MM-DD hh:mm:ss" to a timestamp object
 	static timestamp_t FromString(string str);
-	//! Convert a date object to a string in the format "YYYY-MM-DD hh:mm:ss"
-	static string ToString(timestamp_t date);
+	//! Convert a date object to a string in the format "YYYY-MM-DDThh:mm:ssZ"
+	static string ToString(timestamp_t timestamp);
+
+	static date_t GetDate(timestamp_t timestamp);
+
+	static dtime_t GetTime(timestamp_t timestamp);
 };
 } // namespace duckdb
