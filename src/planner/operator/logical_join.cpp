@@ -7,21 +7,35 @@ using namespace duckdb;
 using namespace std;
 
 vector<string> LogicalJoin::GetNames() {
-	auto left = children[0]->GetNames();
-	if (type != JoinType::SEMI && type != JoinType::ANTI) {
-		// for normal joins we project both sides
-		auto right = children[1]->GetNames();
-		left.insert(left.end(), right.begin(), right.end());
+	auto names = children[0]->GetNames();
+	if (type == JoinType::SEMI || type == JoinType::ANTI) {
+		// for SEMI and ANTI join we only project the left hand side
+		return names;
 	}
-	return left;
+	if (type == JoinType::MARK) {
+		// for SEMI and ANTI join we only project the left hand side
+		names.push_back("MARK");
+		return names;
+	}
+	// for other joins we project both sides
+	auto right_names = children[1]->GetNames();
+	names.insert(names.end(), right_names.begin(), right_names.end());
+	return names;
 }
 
 void LogicalJoin::ResolveTypes() {
 	types.insert(types.end(), children[0]->types.begin(), children[0]->types.end());
-	if (type != JoinType::SEMI && type != JoinType::ANTI) {
-		// for normal joins we project both sides
-		types.insert(types.end(), children[1]->types.begin(), children[1]->types.end());
+	if (type == JoinType::SEMI || type == JoinType::ANTI) {
+		// for SEMI and ANTI join we only project the left hand side
+		return;
 	}
+	if (type == JoinType::MARK) {
+		// for MARK join we project the left hand side, plus a BOOLEAN column indicating the MARK
+		types.push_back(TypeId::BOOLEAN);
+		return;
+	}
+	// for any other join we project both sides
+	types.insert(types.end(), children[1]->types.begin(), children[1]->types.end());
 }
 
 string LogicalJoin::ParamsToString() const {

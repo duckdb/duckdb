@@ -42,10 +42,12 @@ void PhysicalHashJoin::_GetChunk(ClientContext &context, DataChunk &chunk, Physi
 			hash_table->Build(state->join_keys, right_chunk);
 		}
 
-		if (hash_table->size() == 0 && hash_table->join_type != JoinType::ANTI) {
+		if (hash_table->size() == 0 &&
+			hash_table->join_type != JoinType::ANTI &&
+			hash_table->join_type != JoinType::MARK) {
 			// empty hash table means empty result set
 			// except for ANTI-join, in which case it means NOP join
-			// FIXME: NOP join should not involve HT at all
+			// AND except for mark-join, in which case the result is all FALSE
 			return;
 		}
 
@@ -70,6 +72,40 @@ void PhysicalHashJoin::_GetChunk(ClientContext &context, DataChunk &chunk, Physi
 		}
 		// remove any selection vectors
 		state->child_chunk.Flatten();
+		if (hash_table->size() == 0) {
+			// empty hash table, special case
+			if (hash_table->join_type == JoinType::ANTI) {
+				// anti join with empty hash table, NOP join
+				// return the input
+				assert(chunk.column_count == state->child_chunk.column_count);
+				for(size_t i = 0; i < chunk.column_count; i++) {
+					chunk.data[i].Reference(state->child_chunk.data[i]);
+				}
+				return;
+			}
+			// MARK join with empty hash table
+			assert(hash_table->join_type == JoinType::MARK);
+			assert(chunk.column_count == state->child_chunk.column_count + 1);
+			auto &result_vector = chunk.data[state->child_chunk.column_count];
+			assert(result_vector.type == TypeId::BOOLEAN);
+			result_vector.count = state->child_chunk.size();
+			// for every data vector, we just reference the child chunk
+			for(size_t i = 0; i < state->child_chunk.column_count; i++) {
+				chunk.data[i].Reference(state->child_chunk.data[i]);
+			}
+			// for the MARK vector:
+			// if the HT has no NULL values (i.e. empty result set), return a vector that has false for every input entry
+			// if the HT has NULL values (i.e. result set had values, but all were NULL), return a vector that has NULL for every input entry
+			if (!hash_table->has_null) {
+				auto bool_result = (bool*) result_vector.data;
+				for(size_t i = 0; i < result_vector.count; i++) {
+					bool_result[i] = false;
+				}
+			} else {
+				result_vector.nullmask.set();
+			}
+			return;
+		}
 		// resolve the join keys for the left chunk
 		state->join_keys.Reset();
 		ExpressionExecutor executor(state->child_chunk, context);

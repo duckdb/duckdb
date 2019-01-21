@@ -315,8 +315,9 @@ enum class JoinType : uint8_t {
 	RIGHT = 2,   // right
 	INNER = 3,   // inner
 	OUTER = 4,   // outer
-	SEMI = 5,    // IN+Subquery is SEMI
-	ANTI = 6     // Opposite of SEMI JOIN
+	SEMI = 5,    // SEMI join returns left side row ONLY if it has a join partner, no duplicates
+	ANTI = 6,    // ANTI join returns left side row ONLY if it has NO join partner, no duplicates
+	MARK = 7     // MARK join returns marker indicating whether or not there is a join partner (true), there is no join partner (false)
 };
 
 //===--------------------------------------------------------------------===//

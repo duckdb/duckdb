@@ -151,14 +151,26 @@ void ColumnBindingResolver::Visit(LogicalJoin &op) {
 	}
 	auto right_tables = bound_tables;
 
-	if (op.type != JoinType::ANTI && op.type != JoinType::SEMI) {
-		// for normal joins the two results are combined
-		bound_tables = left_tables;
-		AppendTables(right_tables);
-	} else {
+	bound_tables = left_tables;
+	if (op.type == JoinType::ANTI || op.type == JoinType::SEMI) {
 		// for semi/anti joins the result is just the left side
-		bound_tables = left_tables;
+		return;
 	}
+	if (op.type == JoinType::MARK) {
+		// for MARK join the result is the LEFT side, plus a table that has a single column (the MARK column)
+		assert(op.children[1]->type == LogicalOperatorType::SUBQUERY);
+		// the immediate RIGHT side should be a SUBQUERY
+		auto &subquery = (LogicalSubquery&) *op.children[1];
+		BoundTable binding;
+		binding.table_index = subquery.table_index;
+		binding.column_count = 1;
+		binding.column_offset = bound_tables.back().column_offset + bound_tables.back().column_count;
+		bound_tables.push_back(binding);
+		return;
+	}
+
+	// for other joins the two results are combined
+	AppendTables(right_tables);
 }
 
 unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpression &expr,

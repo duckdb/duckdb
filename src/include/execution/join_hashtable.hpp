@@ -60,7 +60,11 @@ public:
 		void NextAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 		//! Next operator for the left outer join
 		void NextLeftJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
+		//! Next operator for the mark join
+		void NextMarkJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 
+		//! Scan the hashtable for matches of the specified keys, setting the found_match[] array to true or false for every tuple
+		void ScanKeyMatches(DataChunk &keys);
 		template <bool MATCH> void NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 
 		void ResolvePredicates(DataChunk &keys, Vector &comparison_result);
@@ -134,6 +138,8 @@ public:
 	size_t tuple_size;
 	//! The join type of the HT
 	JoinType join_type;
+	//! Whether or not any of the key elements contain NULL
+	bool has_null;
 
 private:
 	//! Insert the given set of locations into the HT with the given set of
