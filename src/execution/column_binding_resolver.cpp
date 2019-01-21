@@ -116,6 +116,14 @@ void ColumnBindingResolver::Visit(LogicalIntersect &op) {
 
 void ColumnBindingResolver::Visit(LogicalGet &op) {
 	if (!op.table) {
+		// DUMMY get
+		// create a dummy table with a single column
+		BoundTable binding;
+		binding.table_index = (size_t) -1;
+		binding.column_count = 1;
+		binding.column_offset =
+			bound_tables.size() == 0 ? 0 : bound_tables.back().column_offset + bound_tables.back().column_count;
+		bound_tables.push_back(binding);
 		return;
 	}
 	BoundTable binding;

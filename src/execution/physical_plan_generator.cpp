@@ -304,8 +304,7 @@ void PhysicalPlanGenerator::Visit(LogicalGet &op) {
 	LogicalOperatorVisitor::VisitOperatorChildren(op);
 
 	if (!op.table) {
-		vector<TypeId> types = {TypeId::BIGINT};
-		this->plan = make_unique<PhysicalDummyScan>(types);
+		this->plan = make_unique<PhysicalDummyScan>(op.types);
 		return;
 	}
 	auto scan = make_unique<PhysicalTableScan>(op, *op.table, *op.table->storage, op.column_ids);
