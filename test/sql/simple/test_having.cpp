@@ -38,7 +38,7 @@ TEST_CASE("Test HAVING clause", "[having]") {
 	REQUIRE(result->column_count() == 2);
 
 	// uncorrelated subquery in having
-	result = con.Query("SELECT b, SUM(a) FROM test GROUP BY b HAVING SUM(a)>(SELECT SUM(a)*0.5 FROM test t);");
+	result = con.Query("SELECT b, SUM(a) FROM test GROUP BY b HAVING SUM(a)>(SELECT SUM(t.a)*0.5 FROM test t);");
 	REQUIRE(CHECK_COLUMN(result, 0, {22}));
 	REQUIRE(CHECK_COLUMN(result, 1, {24}));
 	REQUIRE(result->column_count() == 2);

@@ -32,6 +32,7 @@ public:
 	void VisitOperator(LogicalOperator &op) override;
 
 protected:
+	void Visit(LogicalAggregate &op);
 	void Visit(LogicalCreateIndex &op);
 	void Visit(LogicalUnion &op);
 	void Visit(LogicalExcept &op);

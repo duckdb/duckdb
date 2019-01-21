@@ -16,6 +16,9 @@ void ColumnBindingResolver::AppendTables(vector<BoundTable> &right_tables) {
 
 void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
+	case LogicalOperatorType::AGGREGATE_AND_GROUP_BY:
+		Visit((LogicalAggregate &)op);
+		break;
 	case LogicalOperatorType::GET:
 		Visit((LogicalGet &)op);
 		break;
@@ -80,6 +83,19 @@ void ColumnBindingResolver::BindTablesBinaryOp(LogicalOperator &op, bool append_
 	if (append_right) {
 		AppendTables(right_tables);
 	}
+}
+
+void ColumnBindingResolver::Visit(LogicalAggregate &op) {
+	LogicalOperatorVisitor::VisitOperator(op);
+
+	// after an aggregate, we cannot access tables before it directly anymore
+	bound_tables.clear();
+	// the amount of projected columns here are the groups + aggregates
+	BoundTable binding;
+	binding.table_index = (size_t) -1;
+	binding.column_count = op.groups.size() + op.expressions.size();
+	binding.column_offset = 0;
+	bound_tables.push_back(binding);
 }
 
 void ColumnBindingResolver::Visit(LogicalCrossProduct &op) {

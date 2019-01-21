@@ -56,18 +56,15 @@ void LogicalPlanGenerator::CreatePlan(SelectNode &statement) {
 			statement.select_list[expr_idx] =
 			    extract_aggregates(move(statement.select_list[expr_idx]), aggregates, statement.groupby.groups.size());
 		}
-
-		for (auto &expr : aggregates) {
-			VisitExpression(&expr);
-		}
 		if (statement.HasHaving()) {
-			VisitExpression(&statement.groupby.having);
 			// the HAVING child cannot contain aggregates itself
 			// turn them into Column References
 			statement.groupby.having =
 			    extract_aggregates(move(statement.groupby.having), aggregates, statement.groupby.groups.size());
 		}
-
+		for (auto &expr : aggregates) {
+			VisitExpression(&expr);
+		}
 		auto aggregate = make_unique<LogicalAggregate>(move(aggregates));
 		if (statement.HasGroup()) {
 			// have to add group by columns

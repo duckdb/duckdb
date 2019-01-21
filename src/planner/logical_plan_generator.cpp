@@ -179,8 +179,8 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 			// FIXME: should use something else besides cross product
 			if (root) {
 				auto cross_product = make_unique<LogicalCrossProduct>();
-				cross_product->AddChild(move(plan));
 				cross_product->AddChild(move(root));
+				cross_product->AddChild(move(plan));
 				root = move(cross_product);
 			} else {
 				root = move(plan);
@@ -206,8 +206,8 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 			// FIXME: should use something else besides cross product
 			if (root) {
 				auto cross_product = make_unique<LogicalCrossProduct>();
-				cross_product->AddChild(move(plan));
 				cross_product->AddChild(move(root));
+				cross_product->AddChild(move(plan));
 				root = move(cross_product);
 			} else {
 				root = move(plan);
