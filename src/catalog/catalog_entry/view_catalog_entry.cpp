@@ -22,6 +22,8 @@ ViewCatalogEntry::ViewCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
 }
 
 void ViewCatalogEntry::Serialize(Serializer &serializer) {
+	serializer.WriteString(schema->name);
+	serializer.WriteString(name);
 	query->Serialize(serializer);
 	serializer.Write<uint32_t>(aliases.size());
 	for (auto s : aliases) {
@@ -31,6 +33,8 @@ void ViewCatalogEntry::Serialize(Serializer &serializer) {
 
 unique_ptr<CreateViewInformation> ViewCatalogEntry::Deserialize(Deserializer &source) {
 	auto info = make_unique<CreateViewInformation>();
+	info->schema = source.Read<string>();
+	info->view_name = source.Read<string>();
 	info->query = QueryNode::Deserialize(source);
 	auto alias_count = source.Read<uint32_t>();
 	for (size_t i = 0; i < alias_count; i++) {

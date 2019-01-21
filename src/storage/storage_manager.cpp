@@ -17,6 +17,7 @@ constexpr const char *STORAGE_FILES[] = {"data-a", "data-b"};
 constexpr const char *WAL_FILES[] = {"duckdb-a.wal", "duckdb-b.wal"};
 constexpr const char *SCHEMA_FILE = "schemas.csv";
 constexpr const char *TABLE_LIST_FILE = "tables.csv";
+constexpr const char *VIEW_LIST_FILE = "views.csv";
 constexpr const char *TABLE_FILE = "tableinfo.duck";
 
 using namespace duckdb;
@@ -113,7 +114,7 @@ int StorageManager::LoadFromStorage() {
 		auto schema_directory_path = JoinPath(storage_path_base, schema_name);
 		auto table_list_path = JoinPath(schema_directory_path, TABLE_LIST_FILE);
 
-		// read the list of schemas
+		// read the list of tables
 		auto table_list_file = FstreamUtil::OpenFile(table_list_path, ios_base::in);
 		string table_name;
 		while (getline(table_list_file, table_name)) {
@@ -155,6 +156,21 @@ int StorageManager::LoadFromStorage() {
 				table->storage->Append(*table, context, insert_chunk);
 				chunk_count++;
 			}
+		}
+
+		auto view_list_path = JoinPath(schema_directory_path, VIEW_LIST_FILE);
+		auto view_list_file = FstreamUtil::OpenFile(view_list_path, ios_base::in);
+		string view_name;
+		while (getline(view_list_file, view_name)) {
+			auto view_file_path = JoinPath(schema_directory_path, view_name + ".view");
+			auto view_file = FstreamUtil::OpenFile(view_file_path, ios_base::binary | ios_base::in);
+			auto result = FstreamUtil::ReadBinary(view_file);
+			// deserialize the CreateViewInformation
+			auto view_file_size = FstreamUtil::GetFileSize(view_file);
+			Deserializer source((uint8_t *)result.get(), view_file_size);
+			auto info = ViewCatalogEntry::Deserialize(source);
+			// create the table inside the catalog
+			database.catalog.CreateView(context.ActiveTransaction(), info.get());
 		}
 	}
 	context.transaction.Commit();
@@ -198,13 +214,29 @@ void StorageManager::CreateCheckpoint(int iteration) {
 		auto table_list_path = JoinPath(schema_directory_path, TABLE_LIST_FILE);
 		auto table_list_file = FstreamUtil::OpenFile(table_list_path, ios_base::out);
 
+		auto view_list_path = JoinPath(schema_directory_path, VIEW_LIST_FILE);
+		auto view_list_file = FstreamUtil::OpenFile(view_list_path, ios_base::out);
+
 		// create the list of tables for the schema
 		vector<TableCatalogEntry *> tables;
+		vector<ViewCatalogEntry *> views;
+
 		schema->tables.Scan(*transaction, [&](CatalogEntry *entry) {
-			table_list_file << entry->name << '\n';
-			tables.push_back((TableCatalogEntry *)entry);
+			switch (entry->type) {
+			case CatalogType::TABLE:
+				table_list_file << entry->name << '\n';
+				tables.push_back((TableCatalogEntry *)entry);
+				break;
+			case CatalogType::VIEW:
+				view_list_file << entry->name << '\n';
+				views.push_back((ViewCatalogEntry *)entry);
+				break;
+			default:
+				break;
+			}
 		});
 		FstreamUtil::CloseFile(table_list_file);
+		FstreamUtil::CloseFile(view_list_file);
 
 		// now for each table, write the column meta information and the actual data
 		for (auto &table : tables) {
@@ -256,6 +288,20 @@ void StorageManager::CreateCheckpoint(int iteration) {
 
 				chunk_count++;
 			}
+		}
+
+		// now for each view, write the query node and aliases to a file
+		for (auto &view : views) {
+			auto view_file_path = JoinPath(schema_directory_path, view->name + ".view");
+			assert(!FileExists(view_file_path));
+			auto view_file = FstreamUtil::OpenFile(view_file_path, ios_base::binary | ios_base::out);
+
+			// serialize the view information to a file
+			Serializer serializer;
+			view->Serialize(serializer);
+			auto data = serializer.GetData();
+			view_file.write((char *)data.data.get(), data.size);
+			FstreamUtil::CloseFile(view_file);
 		}
 	}
 	// all the writes have been flushed and the entire database has been written

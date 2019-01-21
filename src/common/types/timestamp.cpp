@@ -35,5 +35,13 @@ string Timestamp::ToString(timestamp_t timestamp) {
 	assert(sizeof(date_t) == 4);
 	assert(sizeof(dtime_t) == 4);
 
-	return Date::ToString((date_t)(((int64_t)timestamp) >> 32)) + "T" + Time::ToString((int32_t)timestamp) + "Z";
+	return Date::ToString(GetDate(timestamp)) + "T" + Time::ToString(GetTime(timestamp)) + "Z";
+}
+
+date_t Timestamp::GetDate(timestamp_t timestamp) {
+	return (date_t)(((int64_t)timestamp) >> 32);
+}
+
+dtime_t Timestamp::GetTime(timestamp_t timestamp) {
+	return (dtime_t)timestamp;
 }
