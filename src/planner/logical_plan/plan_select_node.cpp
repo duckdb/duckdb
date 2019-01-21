@@ -52,12 +52,14 @@ void LogicalPlanGenerator::CreatePlan(SelectNode &statement) {
 	if (statement.HasAggregation()) {
 		vector<unique_ptr<Expression>> aggregates;
 
-		// TODO: what about the aggregates in window partition/order/boundaries? use a visitor here?
 		for (size_t expr_idx = 0; expr_idx < statement.select_list.size(); expr_idx++) {
 			statement.select_list[expr_idx] =
 			    extract_aggregates(move(statement.select_list[expr_idx]), aggregates, statement.groupby.groups.size());
 		}
 
+		for (auto &expr : aggregates) {
+			VisitExpression(&expr);
+		}
 		if (statement.HasHaving()) {
 			VisitExpression(&statement.groupby.having);
 			// the HAVING child cannot contain aggregates itself
@@ -91,6 +93,9 @@ void LogicalPlanGenerator::CreatePlan(SelectNode &statement) {
 			root->ResolveOperatorTypes();
 			statement.select_list[expr_idx] =
 			    extract_windows(move(statement.select_list[expr_idx]), win->expressions, root->types.size());
+		}
+		for (auto &expr : win->expressions) {
+			VisitExpression(&expr);
 		}
 		assert(win->expressions.size() > 0);
 		win->AddChild(move(root));
