@@ -14,6 +14,7 @@
 #include "common/types/date.hpp"
 #include "common/types/timestamp.hpp"
 
+#include <iostream>
 #include <memory.h>
 
 namespace duckdb {
@@ -138,6 +139,11 @@ public:
 	bool operator>=(const int64_t &rhs) const;
 
 	static bool IsUTF8String(const char *s);
+
+	friend std::ostream &operator<<(std::ostream &out, const Value &val) {
+		out << val.ToString();
+		return out;
+	}
 
 private:
 	//! Templated helper function for casting
