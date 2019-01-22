@@ -213,13 +213,10 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 				root = move(plan);
 			}
 
-			// we replace the original subquery with a ColumnRefExpression refering to the scalar result of the subquery
+			// we replace the original subquery with a BoundColumnRefExpression refering to the scalar result of the subquery
 			return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(subquery_index, 0));
 		}
 		case SubqueryType::ANY: {
-			if (subquery.comparison_type != ExpressionType::COMPARE_EQUAL) {
-				throw NotImplementedException("ANY without = not supported yet!");
-			}
 			// comparison with equals
 			// we generate a MARK join that results in either (TRUE, FALSE or NULL)
 			// subquery has NULL values -> result is (TRUE or NULL)
@@ -238,11 +235,11 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 			JoinCondition cond;
 			cond.left = move(subquery.child);
 			cond.right = make_unique<BoundExpression>(cond.left->return_type, 0);
-			cond.comparison = ExpressionType::COMPARE_EQUAL;
+			cond.comparison = subquery.comparison_type;
 			join->conditions.push_back(move(cond));
 			root = move(join);
 
-			// we replace the original subquery with a ColumnRefExpression refering to the scalar result of the subquery
+			// we replace the original subquery with a BoundColumnRefExpression refering to the mark column
 			return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(subquery_index, 0));
 		}
 		case SubqueryType::ALL: {
