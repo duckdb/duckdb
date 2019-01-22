@@ -105,28 +105,34 @@ void PhysicalPiecewiseMergeJoin::_GetChunk(ClientContext &context, DataChunk &ch
 		               state->left_position);
 		MergeInfo right(right_condition_chunk.data[0], right_orders.count, right_orders.order, state->right_position);
 		// perform the merge join
-		size_t result_count = MergeJoin(left, right, conditions[0].comparison, type);
-		if (result_count == 0) {
-			// exhausted this chunk on the right side
-			// move to the next
-			state->right_chunk_index++;
-			state->left_position = 0;
-			state->right_position = 0;
-		} else {
-			for (size_t i = 0; i < state->child_chunk.column_count; i++) {
-				chunk.data[i].Reference(state->child_chunk.data[i]);
-				chunk.data[i].count = result_count;
-				chunk.data[i].sel_vector = left.result;
-				chunk.data[i].Flatten();
+		switch(type) {
+		case JoinType::INNER: {
+			size_t result_count = MergeJoinInner::Perform(left, right, conditions[0].comparison);
+			if (result_count == 0) {
+				// exhausted this chunk on the right side
+				// move to the next
+				state->right_chunk_index++;
+				state->left_position = 0;
+				state->right_position = 0;
+			} else {
+				for (size_t i = 0; i < state->child_chunk.column_count; i++) {
+					chunk.data[i].Reference(state->child_chunk.data[i]);
+					chunk.data[i].count = result_count;
+					chunk.data[i].sel_vector = left.result;
+					chunk.data[i].Flatten();
+				}
+				// now create a reference to the chunk on the right side
+				for (size_t i = 0; i < right_chunk.column_count; i++) {
+					size_t chunk_entry = state->child_chunk.column_count + i;
+					chunk.data[chunk_entry].Reference(right_chunk.data[i]);
+					chunk.data[chunk_entry].count = result_count;
+					chunk.data[chunk_entry].sel_vector = right.result;
+					chunk.data[chunk_entry].Flatten();
+				}
 			}
-			// now create a reference to the chunk on the right side
-			for (size_t i = 0; i < right_chunk.column_count; i++) {
-				size_t chunk_entry = state->child_chunk.column_count + i;
-				chunk.data[chunk_entry].Reference(right_chunk.data[i]);
-				chunk.data[chunk_entry].count = result_count;
-				chunk.data[chunk_entry].sel_vector = right.result;
-				chunk.data[chunk_entry].Flatten();
-			}
+		}
+		default:
+			throw NotImplementedException("Unimplemented join type for merge join");
 		}
 	} while (chunk.size() == 0);
 }

@@ -50,9 +50,10 @@ struct MergeJoinInner {
 			return LessThanEquals::Operation<T>(r, l);
 		}
 	};
+
+	static size_t Perform(MergeInfo &l, MergeInfo &r, ExpressionType comparison_type);
 };
 
-size_t MergeJoin(MergeInfo &l, MergeInfo &r, ExpressionType comparison_type, JoinType type);
 
 #define INSTANTIATE_MERGEJOIN_TEMPLATES(MJCLASS, OPNAME)                             \
 template size_t MJCLASS::OPNAME::Operation<int8_t>(MergeInfo &l, MergeInfo &r);      \

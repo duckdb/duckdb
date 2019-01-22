@@ -71,6 +71,7 @@ public:
 
 	string ToString() const override;
 	string ToJSON() const;
+	void WriteJSONToFile(const char* path) const;
 
 	bool automatic_printing;
 

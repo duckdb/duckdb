@@ -24,31 +24,23 @@ template <class T> static bool Disjoint(unordered_set<T> &a, unordered_set<T> &b
 bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<size_t> &bindings) {
 	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = (BoundColumnRefExpression &)expression;
-		if (colref.depth > 0) {
-			// correlated column reference, we don't allow this to be reshuffled inside the subquery
-			// we clear any currently made bindings
-			bindings.clear();
-			return false;
-		}
+		assert(colref.depth == 0);
 		assert(colref.binding.table_index != (uint32_t)-1);
 		// map the base table index to the relation index used by the JoinOrderOptimizer
 		assert(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
 		bindings.insert(relation_mapping[colref.binding.table_index]);
 	}
 	if (expression.type == ExpressionType::BOUND_REF) {
-		// bound expression, don't use it for reordering
+		// bound expression
+		// figure out where it comes from by analyzing the join graph
+		auto &bound = (BoundExpression&) expression;
+		size_t index = bound.index;
+		assert(bound.depth == 0);
+		
 		bindings.clear();
 		return false;
 	}
-	if (expression.type == ExpressionType::SUBQUERY) {
-		auto &subquery = (BoundSubqueryExpression &)expression;
-		if (subquery.is_correlated) {
-			// we don't allow correlated subqueries to be reordered
-			// FIXME: we could extract all the correlated table_indexes referenced inside the subquery here
-			bindings.clear();
-			return false;
-		}
-	}
+	assert(expression.type != ExpressionType::SUBQUERY);
 	bool can_reorder = true;
 	expression.EnumerateChildren([&](Expression *expr) {
 		if (!ExtractBindings(*expr, bindings)) {
@@ -243,56 +235,54 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		}
 		op = op->children[0].get();
 	}
+	bool non_reorderable_operation = false;
 	if (op->type == LogicalOperatorType::UNION || op->type == LogicalOperatorType::EXCEPT ||
 	    op->type == LogicalOperatorType::INTERSECT) {
 		// set operation, optimize separately in children
-		for (size_t i = 0; i < op->children.size(); i++) {
-			JoinOrderOptimizer optimizer;
-			op->children[i] = optimizer.Optimize(move(op->children[i]));
-		}
-		return false;
+		non_reorderable_operation = true;
 	}
 
 	if (op->type == LogicalOperatorType::JOIN) {
 		LogicalJoin *join = (LogicalJoin *)op;
-		if (join->type != JoinType::INNER) {
-			// non-inner join
-			// we do not reorder non-inner joins yet, however we do want to expand the potential join graph around them
-			// non-inner joins are also tricky because we can't freely make conditions through them
-			// e.g. suppose we have (left LEFT OUTER JOIN right WHERE right IS NOT NULL), the join can generate
-			// new NULL values in the right side, so pushing this condition through the join leads to incorrect results
-			// for this reason, we just start a new JoinOptimizer pass in each of the children of the join
-			JoinOrderOptimizer optimizer_left, optimizer_right;
-			join->children[0] = optimizer_left.Optimize(move(join->children[0]));
-			join->children[1] = optimizer_right.Optimize(move(join->children[1]));
-			// after this we want to treat this node as one  "end node" (like e.g. a base relation)
-			// however the join refers to multiple base relations
-			// enumerate all base relations obtained from this join and add them to the relation mapping
-			// also, we have to resolve the join conditions for the joins here
-			// get the left and right bindings
-			unordered_set<size_t> bindings;
-			GetTableReferences(join, bindings);
-			// now create the relation that refers to all these bindings
-			auto relation = make_unique<Relation>(&input_op, parent);
-			for (size_t it : bindings) {
-				relation_mapping[it] = relations.size();
-			}
-			relations.push_back(move(relation));
-			return true;
-		} else {
+		if (join->type == JoinType::INNER) {
 			// extract join conditions from inner join
 			filter_operators.push_back(op);
+		} else {
+			// non-inner join, not reordarable yet
+			non_reorderable_operation = true;
 		}
+	}
+	if (non_reorderable_operation) {
+		// we encountered a non-reordable operation (setop or non-inner join)
+		// we do not reorder non-inner joins yet, however we do want to expand the potential join graph around them
+		// non-inner joins are also tricky because we can't freely make conditions through them
+		// e.g. suppose we have (left LEFT OUTER JOIN right WHERE right IS NOT NULL), the join can generate
+		// new NULL values in the right side, so pushing this condition through the join leads to incorrect results
+		// for this reason, we just start a new JoinOptimizer pass in each of the children of the join
+		for (size_t i = 0; i < op->children.size(); i++) {
+			JoinOrderOptimizer optimizer;
+			op->children[i] = optimizer.Optimize(move(op->children[i]));
+		}
+		// after this we want to treat this node as one  "end node" (like e.g. a base relation)
+		// however the join refers to multiple base relations
+		// enumerate all base relations obtained from this join and add them to the relation mapping
+		// also, we have to resolve the join conditions for the joins here
+		// get the left and right bindings
+		unordered_set<size_t> bindings;
+		GetTableReferences(op, bindings);
+		// now create the relation that refers to all these bindings
+		auto relation = make_unique<Relation>(&input_op, parent);
+		for (size_t it : bindings) {
+			relation_mapping[it] = relations.size();
+		}
+		relations.push_back(move(relation));
+		return true;
 	}
 	if (op->type == LogicalOperatorType::JOIN || op->type == LogicalOperatorType::CROSS_PRODUCT) {
 		// inner join or cross product
-		if (!ExtractJoinRelations(*op->children[0], filter_operators, op)) {
-			return false;
-		}
-		if (!ExtractJoinRelations(*op->children[1], filter_operators, op)) {
-			return false;
-		}
-		return true;
+		bool can_reorder_left = ExtractJoinRelations(*op->children[0], filter_operators, op);
+		bool can_reorder_right = ExtractJoinRelations(*op->children[1], filter_operators, op);
+		return can_reorder_left && can_reorder_right;
 	} else if (op->type == LogicalOperatorType::GET) {
 		// base table scan, add to set of relations
 		auto get = (LogicalGet *)op;

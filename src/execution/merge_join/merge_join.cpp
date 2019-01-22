@@ -29,7 +29,7 @@ template <class MJ> static size_t merge_join(MergeInfo &l, MergeInfo &r) {
 	}
 }
 
-static size_t merge_join_inner(MergeInfo &l, MergeInfo &r, ExpressionType comparison_type) {
+size_t MergeJoinInner::Perform(MergeInfo &l, MergeInfo &r, ExpressionType comparison_type) {
 	if (comparison_type == ExpressionType::COMPARE_EQUAL) {
 		return merge_join<MergeJoinInner::Equality>(l, r);
 	} else if (comparison_type == ExpressionType::COMPARE_LESSTHAN) {
@@ -43,17 +43,4 @@ static size_t merge_join_inner(MergeInfo &l, MergeInfo &r, ExpressionType compar
 	} else {
 		throw Exception("Unimplemented comparison type for merge join!");
 	}
-}
-
-namespace duckdb {
-
-size_t MergeJoin(MergeInfo &l, MergeInfo &r, ExpressionType comparison_type, JoinType type) {
-	switch(type) {
-		case JoinType::INNER:
-			return merge_join_inner(l, r, comparison_type);
-		default:
-			throw Exception("Unimplemented join type for merge join");
-	}
-}
-
 }

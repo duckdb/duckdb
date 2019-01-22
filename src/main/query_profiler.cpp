@@ -2,6 +2,8 @@
 
 #include "execution/physical_operator.hpp"
 
+#include <iostream>
+
 using namespace duckdb;
 using namespace std;
 
@@ -129,6 +131,14 @@ string QueryProfiler::ToJSON() const {
 	string result = "{ \"result\": " + to_string(main_query.Elapsed()) + ",\n\"tree\": ";
 	result += ToJSONRecursive(*root);
 	return result + "}";
+}
+
+
+void QueryProfiler::WriteJSONToFile(const char* path) const {
+	auto json = ToJSON();
+	std::ofstream out(path);
+    out << json;
+    out.close();
 }
 
 static bool is_non_split_char(char l) {
