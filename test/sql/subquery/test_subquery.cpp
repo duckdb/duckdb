@@ -129,6 +129,12 @@ TEST_CASE("Test simple uncorrelated subqueries", "[subquery]") {
 	result = con.Query("SELECT i, i = ANY(SELECT i FROM integers WHERE i>2 OR i IS NULL) FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value(), true}));
+	result = con.Query("SELECT i, i <> ANY(SELECT i FROM integers WHERE i>2) FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), true, true, false}));
+	result = con.Query("SELECT i, i <> ANY(SELECT i FROM integers WHERE i>2 OR i IS NULL) FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), true, true, Value()}));
 	// use a bunch of cross products to make bigger data sets (> STANDARD_VECTOR_SIZE)
 	result = con.Query("SELECT i, i = ANY(SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4, integers i5, integers i6 WHERE i1.i IS NOT NULL) FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));

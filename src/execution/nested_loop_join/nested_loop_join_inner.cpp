@@ -1,7 +1,6 @@
 #include "execution/nested_loop_join.hpp"
 #include "common/operator/comparison_operators.hpp"
 
-
 using namespace duckdb;
 using namespace std;
 

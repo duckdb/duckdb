@@ -34,7 +34,7 @@ class PhysicalNestedLoopJoinOperatorState : public PhysicalOperatorState {
 public:
 	PhysicalNestedLoopJoinOperatorState(PhysicalOperator *left, PhysicalOperator *right,
 	                                         ExpressionExecutor *parent_executor)
-	    : PhysicalOperatorState(left, parent_executor), right_chunk(0), left_tuple(0), right_tuple(0) {
+	    : PhysicalOperatorState(left, parent_executor), right_chunk(0), has_null(false), left_tuple(0), right_tuple(0) {
 		assert(left && right);
 	}
 
@@ -42,6 +42,8 @@ public:
 	DataChunk left_join_condition;
 	ChunkCollection right_data;
 	ChunkCollection right_chunks;
+	//! Whether or not the RHS of the nested loop join has NULL values
+	bool has_null;
 
 	size_t left_tuple;
 	size_t right_tuple;

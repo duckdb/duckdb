@@ -261,7 +261,7 @@ TEST_CASE("Test range joins", "[joins]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {1}));
 	REQUIRE(CHECK_COLUMN(result, 2, {1}));
 	REQUIRE(CHECK_COLUMN(result, 3, {10}));
-	
+
 	// on the RHS as well
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (1, NULL), (NULL, 10)"));
 	// join result should be unchanged
@@ -270,6 +270,22 @@ TEST_CASE("Test range joins", "[joins]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {1}));
 	REQUIRE(CHECK_COLUMN(result, 2, {1}));
 	REQUIRE(CHECK_COLUMN(result, 3, {10}));
+}
 
+TEST_CASE("Test inequality joins", "[joins]") {
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+	unique_ptr<DuckDBResult> result;
+	con.EnableQueryVerification();
 
+	// create tables
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 1), (12, 2), (13, 3)"));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test2 (b INTEGER, c INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (1, 10), (1, 20), (2, 30)"));
+
+	result = con.Query("SELECT test.b, test2.b FROM test, test2 WHERE test.b <> test2.b ORDER BY test.b, test2.b");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 2, 3, 3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2, 1, 1, 1, 1, 2}));
 }

@@ -19,7 +19,8 @@ PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(LogicalOperator &op, unique_ptr<P
 	children.push_back(move(right));
 }
 
-static void RemoveNullValues(DataChunk &chunk) {
+//! Remove NULL values from a chunk; returns true if the chunk had NULL values
+static bool RemoveNullValues(DataChunk &chunk) {
 	// OR all nullmasks together
 	nullmask_t nullmask = chunk.data[0].nullmask;
 	for(size_t i = 1; i < chunk.column_count; i++) {
@@ -43,8 +44,11 @@ static void RemoveNullValues(DataChunk &chunk) {
 			chunk.data[i].sel_vector = chunk.sel_vector;
 			chunk.data[i].count = not_null_entries;
 		}
+		chunk.Verify();
+		return true;
+	} else {
+		return false;
 	}
-	chunk.Verify();
 }
 
 void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
@@ -72,7 +76,7 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 			// resolve the join expression of the right side
 			ExpressionExecutor executor(new_chunk, context);
 			executor.Execute(right_condition, [&](size_t i) { return conditions[i].right.get(); }, conditions.size());
-
+			
 			state->right_data.Append(new_chunk);
 			state->right_chunks.Append(right_condition);
 		} while (new_chunk.size() > 0);
@@ -82,7 +86,7 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 		}
 		// disqualify tuples from the RHS that have NULL values
 		for(size_t i = 0; i < state->right_chunks.chunks.size(); i++) {
-			RemoveNullValues(*state->right_chunks.chunks[i]);
+			state->has_null = state->has_null || RemoveNullValues(*state->right_chunks.chunks[i]);
 		}
 		// initialize the chunks for the join conditions
 		state->left_join_condition.Initialize(condition_types);
@@ -108,19 +112,38 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 				if (state->child_chunk.size() == 0) {
 					return;
 				}
-				state->right_chunk = 0;
+				state->child_chunk.Flatten();
 
 				// resolve the left join condition for the current chunk
 				state->left_join_condition.Reset();
 				ExpressionExecutor executor(state->child_chunk, context);
 				executor.Execute(state->left_join_condition, [&](size_t i) { return conditions[i].left.get(); },
 				                 conditions.size());
-				// immediately disqualify any tuples from the left side that have NULL values
-				RemoveNullValues(state->left_join_condition);
+				if (type != JoinType::MARK) {
+					// immediately disqualify any tuples from the left side that have NULL values
+					// we don't do this for the MARK join on the LHS, because the tuple will still be output, just with a NULL marker!
+					RemoveNullValues(state->left_join_condition);
+				}
+				state->right_chunk = 0;
 			}
 			// move to the start of this chunk
 			state->left_tuple = 0;
 			state->right_tuple = 0;
+		}
+
+		switch(type) {
+			case JoinType::MARK: {
+				// MARK, SEMI and ANTI joins are handled separately because they scan the whole RHS in one go
+				bool found_match[STANDARD_VECTOR_SIZE];
+				NestedLoopJoinMark::Perform(state->left_join_condition, state->right_chunks, found_match, conditions);
+				// now construct the mark join result from the found matches
+				ConstructMarkJoinResult(state->left_join_condition, state->child_chunk, chunk, found_match, state->has_null);
+				// move to the next LHS chunk in the next iteration
+				state->right_chunk = state->right_chunks.chunks.size();
+				return;
+			}
+			default:
+				break;
 		}
 
 		auto &left_chunk = state->child_chunk;
@@ -132,40 +155,39 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 		right_chunk.Verify();
 		right_data.Verify();
 
-		size_t match_count = 0;
-		sel_t lvector[STANDARD_VECTOR_SIZE], rvector[STANDARD_VECTOR_SIZE];
 		// now perform the join
 		switch(type) {
 			case JoinType::INNER: {
-				match_count = NestedLoopJoinInner::Perform(state->left_tuple, state->right_tuple, state->left_join_condition, right_chunk, lvector, rvector, conditions);
+				sel_t lvector[STANDARD_VECTOR_SIZE], rvector[STANDARD_VECTOR_SIZE];
+				size_t match_count = NestedLoopJoinInner::Perform(state->left_tuple, state->right_tuple, state->left_join_condition, right_chunk, lvector, rvector, conditions);
+				// we have finished resolving the join conditions
+				if (match_count == 0) {
+					// if there are no results, move on
+					continue;
+				}
+				// we have matching tuples!
+				// construct the result
+				// create a reference to the chunk on the left side using the lvector
+				for (size_t i = 0; i < state->child_chunk.column_count; i++) {
+					chunk.data[i].Reference(state->child_chunk.data[i]);
+					chunk.data[i].count = match_count;
+					chunk.data[i].sel_vector = lvector;
+					chunk.data[i].Flatten();
+				}
+				// now create a reference to the chunk on the right side using the rvector
+				for (size_t i = 0; i < right_data.column_count; i++) {
+					size_t chunk_entry = state->child_chunk.column_count + i;
+					chunk.data[chunk_entry].Reference(right_data.data[i]);
+					chunk.data[chunk_entry].count = match_count;
+					chunk.data[chunk_entry].sel_vector = rvector;
+					chunk.data[chunk_entry].Flatten();
+				}
+				chunk.sel_vector = nullptr;
 				break;
 			}
 			default:
 				throw NotImplementedException("Unimplemented type for nested loop join!");
 		}
-		// we have finished resolving the join conditions
-		if (match_count == 0) {
-			// if there are no results, move on
-			continue;
-		}
-		// we have matching tuples!
-		// construct the result
-		// create a reference to the chunk on the left side using the lvector
-		for (size_t i = 0; i < state->child_chunk.column_count; i++) {
-			chunk.data[i].Reference(state->child_chunk.data[i]);
-			chunk.data[i].count = match_count;
-			chunk.data[i].sel_vector = lvector;
-			chunk.data[i].Flatten();
-		}
-		// now create a reference to the chunk on the right side using the rvector
-		for (size_t i = 0; i < right_data.column_count; i++) {
-			size_t chunk_entry = state->child_chunk.column_count + i;
-			chunk.data[chunk_entry].Reference(right_data.data[i]);
-			chunk.data[chunk_entry].count = match_count;
-			chunk.data[chunk_entry].sel_vector = rvector;
-			chunk.data[chunk_entry].Flatten();
-		}
-		chunk.sel_vector = nullptr;
 	} while (chunk.size() == 0);
 }
 
