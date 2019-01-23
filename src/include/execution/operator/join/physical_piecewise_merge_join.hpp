@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "common/types/chunk_collection.hpp"
 #include "execution/operator/join/physical_join.hpp"
+#include "execution/merge_join.hpp"
 
 namespace duckdb {
 
@@ -17,11 +17,6 @@ namespace duckdb {
 //! two tables
 class PhysicalPiecewiseMergeJoin : public PhysicalJoin {
 public:
-	struct MergeOrder {
-		sel_t order[STANDARD_VECTOR_SIZE];
-		size_t count;
-	};
-
 	PhysicalPiecewiseMergeJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
 	                           unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type);
 
@@ -37,7 +32,7 @@ public:
 	PhysicalPiecewiseMergeJoinOperatorState(PhysicalOperator *left, PhysicalOperator *right,
 	                                        ExpressionExecutor *parent_executor)
 	    : PhysicalOperatorState(left, parent_executor), initialized(false), left_position(0), right_position(0),
-	      right_chunk_index(0) {
+	      right_chunk_index(0), has_null(false) {
 		assert(left && right);
 	}
 
@@ -47,9 +42,10 @@ public:
 	size_t right_chunk_index;
 	DataChunk left_chunk;
 	DataChunk join_keys;
-	PhysicalPiecewiseMergeJoin::MergeOrder left_orders;
+	MergeOrder left_orders;
 	ChunkCollection right_chunks;
 	ChunkCollection right_conditions;
-	vector<PhysicalPiecewiseMergeJoin::MergeOrder> right_orders;
+	vector<MergeOrder> right_orders;
+	bool has_null;
 };
 } // namespace duckdb

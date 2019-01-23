@@ -348,7 +348,7 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 		// equality join: use hash join
 		plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.type);
 	} else {
-		if (op.conditions.size() == 1 && op.type == JoinType::INNER && !has_inequality) {
+		if (op.conditions.size() == 1 && (op.type == JoinType::MARK || op.type == JoinType::INNER) && !has_inequality) {
 			// range join: use piecewise merge join
 			plan = make_unique<PhysicalPiecewiseMergeJoin>(op, move(left), move(right), move(op.conditions), op.type);
 		} else {

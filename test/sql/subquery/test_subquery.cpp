@@ -101,13 +101,22 @@ TEST_CASE("Test simple uncorrelated subqueries", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
 
 	// uncorrelated ANY
-	result = con.Query("SELECT i FROM integers WHERE i >= ANY(SELECT i FROM integers)");
+	result = con.Query("SELECT i FROM integers WHERE i <= ANY(SELECT i FROM integers)");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	result = con.Query("SELECT i FROM integers WHERE i > ANY(SELECT i FROM integers)");
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3}));
 	result = con.Query("SELECT i, i > ANY(SELECT i FROM integers) FROM integers ORDER BY i");
-	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, Value()}));
-	REQUIRE(CHECK_COLUMN(result, 1, {Value(), true, true, Value()}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), true, true}));
+	result = con.Query("SELECT i, i > ANY(SELECT i FROM integers WHERE i IS NOT NULL) FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), false, true, true}));
+	result = con.Query("SELECT i, NULL > ANY(SELECT i FROM integers) FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value(), Value()}));
+	result = con.Query("SELECT i, NULL > ANY(SELECT i FROM integers WHERE i IS NOT NULL) FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value(), Value()}));
 	result = con.Query("SELECT i FROM integers WHERE i = ANY(SELECT i FROM integers)");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	result = con.Query("SELECT i, i = ANY(SELECT i FROM integers WHERE i>2) FROM integers ORDER BY i");
@@ -116,6 +125,19 @@ TEST_CASE("Test simple uncorrelated subqueries", "[subquery]") {
 	result = con.Query("SELECT i, i = ANY(SELECT i FROM integers WHERE i>2 OR i IS NULL) FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value(), true}));
+	// use a bunch of cross products to make bigger data sets (> STANDARD_VECTOR_SIZE)
+	result = con.Query("SELECT i, i = ANY(SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4, integers i5, integers i6 WHERE i1.i IS NOT NULL) FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), true, true, true}));
+	result = con.Query("SELECT i, i = ANY(SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4, integers i5, integers i6 WHERE i1.i IS NOT NULL AND i1.i <> 2) FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), true, false, true}));
+	result = con.Query("SELECT i, i >= ANY(SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4, integers i5, integers i6 WHERE i1.i IS NOT NULL) FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), true, true, true}));
+	result = con.Query("SELECT i, i >= ANY(SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4, integers i5, integers i6 WHERE i1.i IS NOT NULL AND i1.i <> 1) FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), false, true, true}));
 
 	return;
 	// uncorrelated ALL

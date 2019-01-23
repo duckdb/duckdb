@@ -7,7 +7,7 @@ using namespace duckdb;
 using namespace std;
 
 template <class T>
-size_t MergeJoinInner::Equality::Operation(MergeInfo &l, MergeInfo &r) {
+size_t MergeJoinInner::Equality::Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
 	if (l.pos >= l.count) {
 		return 0;
 	}
@@ -50,7 +50,7 @@ size_t MergeJoinInner::Equality::Operation(MergeInfo &l, MergeInfo &r) {
 }
 
 template <class T>
-size_t MergeJoinInner::LessThan::Operation(MergeInfo &l, MergeInfo &r) {
+size_t MergeJoinInner::LessThan::Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
 	if (r.pos >= r.count) {
 		return 0;
 	}
@@ -84,7 +84,7 @@ size_t MergeJoinInner::LessThan::Operation(MergeInfo &l, MergeInfo &r) {
 }
 
 template <class T>
-size_t MergeJoinInner::LessThanEquals::Operation(MergeInfo &l, MergeInfo &r) {
+size_t MergeJoinInner::LessThanEquals::Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
 	if (r.pos >= r.count) {
 		return 0;
 	}
@@ -117,6 +117,6 @@ size_t MergeJoinInner::LessThanEquals::Operation(MergeInfo &l, MergeInfo &r) {
 	return result_count;
 }
 
-INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinInner, Equality);
-INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinInner, LessThan);
-INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinInner, LessThanEquals);
+INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinInner, Equality, ScalarMergeInfo, ScalarMergeInfo);
+INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinInner, LessThan, ScalarMergeInfo, ScalarMergeInfo);
+INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinInner, LessThanEquals, ScalarMergeInfo, ScalarMergeInfo);

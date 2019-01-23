@@ -533,6 +533,37 @@ void ScanStructure::NextAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 	finished = true;
 }
 
+namespace duckdb {
+void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &child, DataChunk &result, bool found_match[], bool right_has_null) {
+	// for the initial set of columns we just reference the left side
+	for(size_t i = 0; i < child.column_count; i++) {
+		result.data[i].Reference(child.data[i]);
+	}
+	// create the result matching vector
+	auto &result_vector = result.data[child.column_count];
+	result_vector.count = child.size();
+	// first we set the NULL values from the join keys
+	// if there is any NULL in the keys, the result is NULL
+	result_vector.nullmask = join_keys.data[0].nullmask;
+	for(size_t i = 1; i < join_keys.column_count; i++) {
+		result_vector.nullmask |= join_keys.data[i].nullmask;
+	}
+	// now set the remaining entries to either true or false based on whether a match was found
+	auto bool_result = (bool*) result_vector.data;
+	for(size_t i = 0; i < result_vector.count; i++) {
+		bool_result[i] = found_match[i];
+	}
+	// if the right side contains NULL values, the result of any FALSE becomes NULL
+	if (right_has_null) {
+		for(size_t i = 0; i < result_vector.count; i++) {
+			if (!bool_result[i]) {
+				result_vector.nullmask[i] = true;
+			}
+		}
+	}
+}
+}
+
 void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	assert(result.column_count == left.column_count + 1);
 	assert(result.data[left.column_count].type == TypeId::BOOLEAN);
@@ -541,32 +572,7 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 	assert(ht.count > 0);
 
 	ScanKeyMatches(keys);
-	// for the initial set of columns we just reference the left side
-	for(size_t i = 0; i < left.column_count; i++) {
-		result.data[i].Reference(left.data[i]);
-	}
-	// create the result matching vector
-	auto &result_vector = result.data[left.column_count];
-	result_vector.count = left.size();
-	// first we set the NULL values from the probed keys
-	// if there is any NULL in the keys, the result is NULL
-	result_vector.nullmask = keys.data[0].nullmask;
-	for(size_t i = 1; i < keys.column_count; i++) {
-		result_vector.nullmask |= keys.data[i].nullmask;
-	}
-	// now set the remaining entries to either true or false based on whether a match was found
-	auto bool_result = (bool*) result_vector.data;
-	for(size_t i = 0; i < result_vector.count; i++) {
-		bool_result[i] = found_match[i];
-	}
-	// IF the HT contains NULL values, the result of any FALSE becomes NULL
-	if (ht.has_null) {
-		for(size_t i = 0; i < result_vector.count; i++) {
-			if (!bool_result[i]) {
-				result_vector.nullmask[i] = true;
-			}
-		}
-	}
+	ConstructMarkJoinResult(keys, left, result, found_match, ht.has_null);
 	finished = true;
 }
 
