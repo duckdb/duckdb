@@ -245,4 +245,31 @@ TEST_CASE("Test range joins", "[joins]") {
 	                   "<= test2.b ORDER BY 1,2");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1, 1, 2, 2}));
+
+	// range join on multiple predicates
+	result = con.Query("SELECT test.a, test.b, test2.b, test2.c FROM test, test2 WHERE test.a>test2.c AND test.b <= test2.b");
+	REQUIRE(CHECK_COLUMN(result, 0, {11}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1}));
+	REQUIRE(CHECK_COLUMN(result, 3, {10}));
+
+	// introduce some NULL values
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, NULL), (NULL, 1)"));
+	// join result should be unchanged
+	result = con.Query("SELECT test.a, test.b, test2.b, test2.c FROM test, test2 WHERE test.a>test2.c AND test.b <= test2.b");
+	REQUIRE(CHECK_COLUMN(result, 0, {11}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1}));
+	REQUIRE(CHECK_COLUMN(result, 3, {10}));
+	
+	// on the RHS as well
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (1, NULL), (NULL, 10)"));
+	// join result should be unchanged
+	result = con.Query("SELECT test.a, test.b, test2.b, test2.c FROM test, test2 WHERE test.a>test2.c AND test.b <= test2.b");
+	REQUIRE(CHECK_COLUMN(result, 0, {11}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1}));
+	REQUIRE(CHECK_COLUMN(result, 3, {10}));
+
+
 }

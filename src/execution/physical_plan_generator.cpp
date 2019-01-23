@@ -352,16 +352,8 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 			// range join: use piecewise merge join
 			plan = make_unique<PhysicalPiecewiseMergeJoin>(op, move(left), move(right), move(op.conditions), op.type);
 		} else {
-			// non-equality join: use nested loop
-			if (op.type == JoinType::INNER) {
-				plan =
-				    make_unique<PhysicalNestedLoopJoinInner>(op, move(left), move(right), move(op.conditions), op.type);
-			} else if (op.type == JoinType::ANTI || op.type == JoinType::SEMI) {
-				plan =
-				    make_unique<PhysicalNestedLoopJoinSemi>(op, move(left), move(right), move(op.conditions), op.type);
-			} else {
-				throw NotImplementedException("Unimplemented nested loop join type!");
-			}
+			// inequality join: use nested loop
+			plan = make_unique<PhysicalNestedLoopJoin>(op, move(left), move(right), move(op.conditions), op.type);
 		}
 	}
 }

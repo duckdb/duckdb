@@ -17,6 +17,7 @@ TEST_CASE("Test simple uncorrelated subqueries", "[subquery]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
 
+	// scalar subqueries
 	result = con.Query("SELECT * FROM integers WHERE i=(SELECT 1)");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	result = con.Query("SELECT * FROM integers WHERE i=(SELECT SUM(1))");
@@ -25,6 +26,9 @@ TEST_CASE("Test simple uncorrelated subqueries", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	result = con.Query("SELECT * FROM integers WHERE i=(SELECT MAX(i) FROM integers)");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	result = con.Query("SELECT *, (SELECT MAX(i) FROM integers) FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3, 3, 3, 3}));
 
 	// return more than one row in a scalar subquery
 	// controversial: in postgres this gives an error
