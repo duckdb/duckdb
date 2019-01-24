@@ -102,5 +102,7 @@ matrix:
       env:
         - MATRIX_EVAL="export CC=clang-5.0"
 
+    os: windows
+
 before_install:
     - eval "${MATRIX_EVAL}"
