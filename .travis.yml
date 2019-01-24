@@ -2,6 +2,10 @@ language: c
 script: make unit
 dist: trusty
 
+env:
+  global:
+    - TRAVIS_BUILD=1
+
 matrix:
   include:
     - os: osx

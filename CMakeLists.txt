@@ -10,7 +10,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_MACOSX_RPATH 1)
 
 set(CMAKE_CXX_FLAGS_DEFAULT "-O0 -g")
-IF(NOT MSVC)
+IF(NOT MSVC AND NOT $ENV{TRAVIS_BUILD})
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -fsanitize=address -DDEBUG -Wall -Wunused-variable -Wunused-const-variable")
 ENDIF()
 
