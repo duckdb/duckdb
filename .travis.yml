@@ -1,4 +1,4 @@
-language: c
+language: cpp
 script: make unit
 dist: trusty
 
@@ -34,7 +34,7 @@ matrix:
           packages:
             - g++-4.9
       env:
-         - MATRIX_EVAL="export CC=gcc-4.9"
+         - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
 
     - os: linux
       addons:
@@ -44,7 +44,7 @@ matrix:
           packages:
             - g++-5
       env:
-         - MATRIX_EVAL="export CC=gcc-5"
+         - MATRIX_EVAL="CC=gcc-5 && CXX=g++-5"
 
     - os: linux
       addons:
@@ -54,7 +54,7 @@ matrix:
           packages:
             - g++-6
       env:
-        - MATRIX_EVAL="export CC=gcc-6"
+        - MATRIX_EVAL="CC=gcc-6 && CXX=g++-6"
 
     - os: linux
       addons:
@@ -64,7 +64,7 @@ matrix:
           packages:
             - g++-7
       env:
-        - MATRIX_EVAL="export CC=gcc-7"
+        - MATRIX_EVAL="CC=gcc-7 && CXX=g++-7"
 
     - os: linux
       addons:
@@ -74,7 +74,7 @@ matrix:
           packages:
             - g++-8
       env:
-        - MATRIX_EVAL="export CC=gcc-8"
+        - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
  
     - os: linux
       addons:
@@ -84,7 +84,7 @@ matrix:
           packages:
             - clang-3.9
       env:
-        - MATRIX_EVAL="export CC=clang-3.9"
+        - MATRIX_EVAL="CC=clang-3.9 && CXX=clang++-3.9"
 
     - os: linux
       addons:
@@ -94,7 +94,7 @@ matrix:
           packages:
             - clang-4.0
       env:
-        - MATRIX_EVAL="export CC=clang-4.0"
+        - MATRIX_EVAL="CC=clang-4.0 && CXX=clang++-4.0"
 
     - os: linux
       addons:
@@ -104,7 +104,7 @@ matrix:
           packages:
             - clang-5.0
       env:
-        - MATRIX_EVAL="export CC=clang-5.0"
+        - MATRIX_EVAL="CC=clang-5.0 && CXX=clang++-5.0"
 
     - os: windows
 
