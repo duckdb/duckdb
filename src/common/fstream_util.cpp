@@ -3,14 +3,11 @@
 using namespace std;
 using namespace duckdb;
 
-fstream FstreamUtil::OpenFile(const string &file_path, ios_base::openmode mode) {
-	fstream new_file;
+void FstreamUtil::OpenFile(const string &file_path, fstream& new_file, ios_base::openmode mode) {
 	new_file.open(file_path, mode);
 	if (!new_file.good()) {
 		throw IOException("Could not open File!" + file_path);
 	}
-
-	return new_file;
 }
 
 void FstreamUtil::CloseFile(fstream &file) {

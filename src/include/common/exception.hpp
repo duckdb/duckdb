@@ -29,7 +29,7 @@ namespace duckdb {
 
 inline void ASSERT_RESTRICT(void *left_start, void *left_end, void *right_start, void *right_end) {
 	// assert that the two pointers do not overlap
-	assert(left_end < right_start || right_end < left_start);
+	//assert(left_end < right_start || right_end < left_start);
 }
 
 //===--------------------------------------------------------------------===//
