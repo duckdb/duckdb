@@ -1,5 +1,6 @@
 #include "parser/expression/operator_expression.hpp"
 #include "parser/expression/subquery_expression.hpp"
+#include "parser/expression/comparison_expression.hpp"
 #include "parser/transformer.hpp"
 
 using namespace duckdb;
@@ -25,7 +26,7 @@ unique_ptr<Expression> Transformer::TransformSubquery(SubLink *root) {
 	case ANY_SUBLINK: 
 	case ALL_SUBLINK: {
 		// comparison with ANY() or ALL()
-		subquery_expr->subquery_type = root->subLinkType == ANY_SUBLINK ? SubqueryType::ANY : SubqueryType::ALL;
+		subquery_expr->subquery_type = SubqueryType::ANY;
 		subquery_expr->child = TransformExpression(root->testexpr);
 		subquery_expr->return_type = TypeId::BOOLEAN;
 		// get the operator name
@@ -42,6 +43,13 @@ unique_ptr<Expression> Transformer::TransformSubquery(SubLink *root) {
 			   subquery_expr->comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
 			   subquery_expr->comparison_type == ExpressionType::COMPARE_LESSTHAN ||
 			   subquery_expr->comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO);
+		if (root->subLinkType == ALL_SUBLINK) {
+			// ALL sublink is equivalent to NOT(ANY) with inverted comparison
+			// e.g. [= ALL()] is equivalent to [NOT(<> ANY())]
+			// first invert the comparison type
+			subquery_expr->comparison_type = ComparisonExpression::NegateComparisionExpression(subquery_expr->comparison_type);
+			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, TypeId::BOOLEAN, move(subquery_expr), nullptr);
+		}
 		break;
 	}
 	case EXPR_SUBLINK: {

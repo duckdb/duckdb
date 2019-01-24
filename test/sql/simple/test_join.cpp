@@ -285,7 +285,24 @@ TEST_CASE("Test inequality joins", "[joins]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test2 (b INTEGER, c INTEGER);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (1, 10), (1, 20), (2, 30)"));
 
+	// inequality join
 	result = con.Query("SELECT test.b, test2.b FROM test, test2 WHERE test.b <> test2.b ORDER BY test.b, test2.b");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 2, 3, 3, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {2, 1, 1, 1, 1, 2}));
+	// inequality join with filter
+	result = con.Query("SELECT test.b, test2.b FROM test, test2 WHERE test.b <> test2.b AND test.b <> 1 AND test2.b <> 2 ORDER BY test.b, test2.b");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 2, 3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 1, 1, 1}));
+
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (NULL, NULL)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (NULL, NULL)"));
+	// inequality join with NULL values
+	result = con.Query("SELECT test.b, test2.b FROM test, test2 WHERE test.b <> test2.b ORDER BY test.b, test2.b");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 2, 3, 3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2, 1, 1, 1, 1, 2}));
+
+	// inequality join with filter and NULL values
+	result = con.Query("SELECT test.b, test2.b FROM test, test2 WHERE test.b <> test2.b AND test.b <> 1 AND test2.b <> 2 ORDER BY test.b, test2.b");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 2, 3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 1, 1, 1}));
 }

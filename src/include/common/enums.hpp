@@ -255,7 +255,6 @@ enum class SubqueryType : uint8_t {
 	EXISTS = 2,      // EXISTS (SELECT...)
 	NOT_EXISTS = 3,  // NOT EXISTS(SELECT...)
 	ANY = 4,         // x = ANY(SELECT...) OR x IN (SELECT...)
-	ALL = 5          // x = ALL(SELECT...)
 };
 
 //===--------------------------------------------------------------------===//

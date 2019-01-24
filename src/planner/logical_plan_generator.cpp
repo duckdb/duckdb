@@ -217,7 +217,6 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 			return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(subquery_index, 0));
 		}
 		case SubqueryType::ANY: {
-			// comparison with equals
 			// we generate a MARK join that results in either (TRUE, FALSE or NULL)
 			// subquery has NULL values -> result is (TRUE or NULL)
 			// subquery has no NULL values -> result is (TRUE, FALSE or NULL [if input is NULL])
@@ -241,10 +240,6 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 
 			// we replace the original subquery with a BoundColumnRefExpression refering to the mark column
 			return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(subquery_index, 0));
-		}
-		case SubqueryType::ALL: {
-			throw NotImplementedException("ALL operator not supported yet!");
-			break;
 		}
 		default:
 			assert(0);

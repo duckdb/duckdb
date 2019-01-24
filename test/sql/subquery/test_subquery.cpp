@@ -149,10 +149,18 @@ TEST_CASE("Test simple uncorrelated subqueries", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), false, true, true}));
 
-	return;
 	// uncorrelated ALL
 	result = con.Query("SELECT i FROM integers WHERE i >= ALL(SELECT i FROM integers)");
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT i, i >= ALL(SELECT i FROM integers) FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), false, false, Value()}));
+	result = con.Query("SELECT i FROM integers WHERE i >= ALL(SELECT i FROM integers WHERE i IS NOT NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	result = con.Query("SELECT i, i >= ALL(SELECT i FROM integers WHERE i IS NOT NULL) FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), false, false, true}));
+	
 	result = con.Query("SELECT i FROM integers WHERE i >= ALL(SELECT i FROM integers WHERE i IS NOT NULL)");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 	result = con.Query("SELECT i FROM integers WHERE i > ALL(SELECT MIN(i) FROM integers)");
@@ -171,7 +179,6 @@ TEST_CASE("Test simple uncorrelated subqueries", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 	result = con.Query("SELECT i FROM integers WHERE i <> ALL(SELECT i FROM integers WHERE i IS NOT NULL)");
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
-
 }
 
 TEST_CASE("Test subqueries from the paper 'Unnesting Arbitrary Subqueries'", "[subquery]") {
