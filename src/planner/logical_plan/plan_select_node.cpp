@@ -67,6 +67,9 @@ void LogicalPlanGenerator::CreatePlan(SelectNode &statement) {
 		}
 		auto aggregate = make_unique<LogicalAggregate>(move(aggregates));
 		if (statement.HasGroup()) {
+			for(auto &group : statement.groupby.groups) {
+				VisitExpression(&group);
+			}
 			// have to add group by columns
 			aggregate->groups = move(statement.groupby.groups);
 		}

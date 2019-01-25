@@ -136,127 +136,128 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 		throw Exception("Can't plan subquery");
 	}
 	auto plan = move(generator.root);
-	if (expr.is_correlated) {
-		throw Exception("Correlated subqueries not handled yet!");
-	} else {
-		switch(subquery.subquery_type) {
-		case SubqueryType::EXISTS: {
-			// uncorrelated EXISTS
-			// we only care about existence, hence we push a LIMIT 1 operator
-			auto limit = make_unique<LogicalLimit>(1, 0);
-			limit->AddChild(move(plan));
-			plan = move(limit);
-
-			// now we push a COUNT(*) aggregate onto the limit, this will be either 0 or 1 (EXISTS or NOT EXISTS)
-			auto count_star = make_unique<AggregateExpression>(ExpressionType::AGGREGATE_COUNT_STAR, nullptr);
-			count_star->ResolveType();
-			auto count_type = count_star->return_type;
-			vector<unique_ptr<Expression>> aggregate_list;
-			aggregate_list.push_back(move(count_star));
-			auto aggregate = make_unique<LogicalAggregate>(move(aggregate_list));
-			aggregate->AddChild(move(plan));
-			plan = move(aggregate);
-
-			// now we push a projection with a comparison to 1
-			auto left_child = make_unique<BoundExpression>(count_type, 0);
-			auto right_child = make_unique<ConstantExpression>(Value::Numeric(count_type, 1));
-			auto comparison = make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(left_child), move(right_child));
-
-			vector<unique_ptr<Expression>> projection_list;
-			projection_list.push_back(move(comparison));
-			auto projection = make_unique<LogicalProjection>(move(projection_list));
-			projection->AddChild(move(plan));
-			plan = move(projection);
-
-			// the projection gives us as only column the result of the EXISTS clause
-			// now we push a LogicalSubquery node to give the projection a table index
-			auto subquery_index = bind_context.GenerateTableIndex();
-			auto subquery = make_unique<LogicalSubquery>(subquery_index, 1);
-			subquery->AddChild(move(plan));
-			plan = move(subquery);
-
-			// we add it to the main query by adding a cross product
-			// FIXME: should use something else besides cross product
-			if (root) {
-				auto cross_product = make_unique<LogicalCrossProduct>();
-				cross_product->AddChild(move(root));
-				cross_product->AddChild(move(plan));
-				root = move(cross_product);
-			} else {
-				root = move(plan);
-			}
-
-			// we replace the original subquery with a ColumnRefExpression refering to the result of the subquery (either TRUE or FALSE)
-			return make_unique<BoundColumnRefExpression>(expr, TypeId::BOOLEAN, ColumnBinding(subquery_index, 0));
+	switch(subquery.subquery_type) {
+	case SubqueryType::EXISTS: {
+		if (expr.is_correlated) {
+			throw Exception("Correlated exists not handled yet!");
 		}
-		case SubqueryType::SCALAR: {
-			// uncorrelated scalar is similar to uncorrelated EXISTS
-			// however, in this case we are only interested in the first result of the query
-			// hence we can simply push a LIMIT 1 to get the first row of the subquery
-			auto limit = make_unique<LogicalLimit>(1, 0);
-			limit->AddChild(move(plan));
-			plan = move(limit);
+		// uncorrelated EXISTS
+		// we only care about existence, hence we push a LIMIT 1 operator
+		auto limit = make_unique<LogicalLimit>(1, 0);
+		limit->AddChild(move(plan));
+		plan = move(limit);
 
-			auto subquery_index = bind_context.GenerateTableIndex();
-			auto logical_subquery = make_unique<LogicalSubquery>(subquery_index, 1);
-			logical_subquery->AddChild(move(plan));
-			plan = move(logical_subquery);
+		// now we push a COUNT(*) aggregate onto the limit, this will be either 0 or 1 (EXISTS or NOT EXISTS)
+		auto count_star = make_unique<AggregateExpression>(ExpressionType::AGGREGATE_COUNT_STAR, nullptr);
+		count_star->ResolveType();
+		auto count_type = count_star->return_type;
+		vector<unique_ptr<Expression>> aggregate_list;
+		aggregate_list.push_back(move(count_star));
+		auto aggregate = make_unique<LogicalAggregate>(move(aggregate_list));
+		aggregate->AddChild(move(plan));
+		plan = move(aggregate);
 
-			// we add it to the main query by adding a cross product
-			// FIXME: should use something else besides cross product
-			if (root) {
-				auto cross_product = make_unique<LogicalCrossProduct>();
-				cross_product->AddChild(move(root));
-				cross_product->AddChild(move(plan));
-				root = move(cross_product);
-			} else {
-				root = move(plan);
-			}
+		// now we push a projection with a comparison to 1
+		auto left_child = make_unique<BoundExpression>(count_type, 0);
+		auto right_child = make_unique<ConstantExpression>(Value::Numeric(count_type, 1));
+		auto comparison = make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(left_child), move(right_child));
 
-			// we replace the original subquery with a BoundColumnRefExpression refering to the scalar result of the subquery
-			return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(subquery_index, 0));
+		vector<unique_ptr<Expression>> projection_list;
+		projection_list.push_back(move(comparison));
+		auto projection = make_unique<LogicalProjection>(move(projection_list));
+		projection->AddChild(move(plan));
+		plan = move(projection);
+
+		// the projection gives us as only column the result of the EXISTS clause
+		// now we push a LogicalSubquery node to give the projection a table index
+		auto subquery_index = bind_context.GenerateTableIndex();
+		auto subquery = make_unique<LogicalSubquery>(subquery_index, 1);
+		subquery->AddChild(move(plan));
+		plan = move(subquery);
+
+		// we add it to the main query by adding a cross product
+		// FIXME: should use something else besides cross product as we always add only one scalar constant
+		if (root) {
+			auto cross_product = make_unique<LogicalCrossProduct>();
+			cross_product->AddChild(move(root));
+			cross_product->AddChild(move(plan));
+			root = move(cross_product);
+		} else {
+			root = move(plan);
 		}
-		case SubqueryType::ANY: {
-			// we generate a MARK join that results in either (TRUE, FALSE or NULL)
-			// subquery has NULL values -> result is (TRUE or NULL)
-			// subquery has no NULL values -> result is (TRUE, FALSE or NULL [if input is NULL])
-			// first we push a subquery to the right hand side
-			auto subquery_index = bind_context.GenerateTableIndex();
-			auto logical_subquery = make_unique<LogicalSubquery>(subquery_index, 1);
-			logical_subquery->AddChild(move(plan));
-			plan = move(logical_subquery);
 
-			// then we generate the MARK join with the subquery
-			auto join = make_unique<LogicalJoin>(JoinType::MARK);
-			join->AddChild(move(root));
-			join->AddChild(move(plan));
-			// create the JOIN condition
-			JoinCondition cond;
-			cond.left = move(subquery.child);
-			cond.right = make_unique<BoundExpression>(cond.left->return_type, 0);
-			cond.comparison = subquery.comparison_type;
-			join->conditions.push_back(move(cond));
-			root = move(join);
-
-			// we replace the original subquery with a BoundColumnRefExpression refering to the mark column
-			return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(subquery_index, 0));
-		}
-		default:
-			assert(0);
-			throw Exception("Unhandled subquery type!");
-
-		}
+		// we replace the original subquery with a ColumnRefExpression refering to the result of the subquery (either TRUE or FALSE)
+		return make_unique<BoundColumnRefExpression>(expr, TypeId::BOOLEAN, ColumnBinding(subquery_index, 0));
 	}
+	case SubqueryType::SCALAR: {
+		if (expr.is_correlated) {
+			throw Exception("Correlated SCALAR not handled yet!");
+		}
+		if (!expr.is_correlated) {
+			// in the uncorrelated case we are only interested in the first result of the query
+			// hence we simply push a LIMIT 1 to get the first row of the subquery
+			auto limit = make_unique<LogicalLimit>(1, 0);
+			limit->AddChild(move(plan));
+			plan = move(limit);
+		}
 
-	// LogicalPlanGenerator generator(context, *expr.context);
-	// generator.CreatePlan(*expr.subquery);
-	// if (!generator.root) {
-	// 	throw Exception("Can't plan subquery");
-	// }
-	// expr.op = move(generator.root);
-	// expr.subquery = nullptr;
-	// assert(expr.op);
-	// return nullptr;
+		// now push a subquery op to get a table index to reference
+		auto subquery_index = bind_context.GenerateTableIndex();
+		auto logical_subquery = make_unique<LogicalSubquery>(subquery_index, 1);
+		logical_subquery->AddChild(move(plan));
+		plan = move(logical_subquery);
+
+		if (!expr.is_correlated) {
+			// in the uncorrelated case, we add the value to the main query through a cross product
+			// FIXME: should use something else besides cross product as we always add only one scalar constant and cross product is not optimized for this. 
+			assert(root);
+			auto cross_product = make_unique<LogicalCrossProduct>();
+			cross_product->AddChild(move(root));
+			cross_product->AddChild(move(plan));
+			root = move(cross_product);
+		} else {
+			// in the correlated case, we push a dependent join
+			auto dependent_join = make_unique<LogicalJoin>(JoinType::DEPENDENT);
+			dependent_join->AddChild(move(root));
+			dependent_join->AddChild(move(plan));
+			root = move(dependent_join);
+		}
+		// we replace the original subquery with a BoundColumnRefExpression refering to the scalar result of the subquery
+		return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(subquery_index, 0));
+	}
+	case SubqueryType::ANY: {
+		if (expr.is_correlated) {
+			throw Exception("Correlated ANY not handled yet!");
+		}
+		// we generate a MARK join that results in either (TRUE, FALSE or NULL)
+		// subquery has NULL values -> result is (TRUE or NULL)
+		// subquery has no NULL values -> result is (TRUE, FALSE or NULL [if input is NULL])
+		// first we push a subquery to the right hand side
+		auto subquery_index = bind_context.GenerateTableIndex();
+		auto logical_subquery = make_unique<LogicalSubquery>(subquery_index, 1);
+		logical_subquery->AddChild(move(plan));
+		plan = move(logical_subquery);
+
+		// then we generate the MARK join with the subquery
+		auto join = make_unique<LogicalJoin>(JoinType::MARK);
+		join->AddChild(move(root));
+		join->AddChild(move(plan));
+		// create the JOIN condition
+		JoinCondition cond;
+		cond.left = move(subquery.child);
+		cond.right = make_unique<BoundExpression>(cond.left->return_type, 0);
+		cond.comparison = subquery.comparison_type;
+		join->conditions.push_back(move(cond));
+		root = move(join);
+
+		// we replace the original subquery with a BoundColumnRefExpression refering to the mark column
+		return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(subquery_index, 0));
+	}
+	default:
+		assert(0);
+		throw Exception("Unhandled subquery type!");
+
+	}
 	return nullptr;
 }
 

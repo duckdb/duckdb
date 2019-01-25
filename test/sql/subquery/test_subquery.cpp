@@ -29,6 +29,14 @@ TEST_CASE("Test simple uncorrelated subqueries", "[subquery]") {
 	result = con.Query("SELECT *, (SELECT MAX(i) FROM integers) FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {3, 3, 3, 3}));
+	// group by on subquery
+	result = con.Query("SELECT (SELECT 42) AS k, MAX(i) FROM integers GROUP BY k");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3}));
+	// subquery as parameter to aggregate
+	result = con.Query("SELECT i, MAX((SELECT 42)) FROM integers GROUP BY i ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {42, 42, 42, 42}));
 
 	// return more than one row in a scalar subquery
 	// controversial: in postgres this gives an error
