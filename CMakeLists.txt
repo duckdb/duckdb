@@ -5,9 +5,13 @@ find_package(Threads REQUIRED)
 
 
 SET(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 SET(CMAKE_VERBOSE_MAKEFILE OFF)
 SET(CMAKE_POSITION_INDEPENDENT_CODE ON)
 SET(CMAKE_MACOSX_RPATH 1)
+
 
 IF(NOT MSVC)
 	SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -DDEBUG -Wall")
@@ -24,13 +28,18 @@ IF(NOT MSVC)
 ENDIF()
 
 
+
+
+# todo use CHECK_CXX_COMPILER_FLAG(-fsanitize=address SUPPORTS_SANITIZER) etc.
+
+
 SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -g -O3")
 
 SET(CMAKE_C_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
 SET(CMAKE_C_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 
 IF (NOT CMAKE_BUILD_TYPE)
-    message(FATAL_ERROR "Choose the type of build by setting -DCMAKE_BUILD_TYPE=<type>, options are: Debug Release RelWithDebInfo MinSizeRel.")
+    message(FATAL_ERROR "Choose the type of build by setting -DCMAKE_BUILD_TYPE=<type>, options are: Debug Release")
 ENDIF()
 
 include_directories(src/include)

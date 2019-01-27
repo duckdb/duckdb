@@ -10,7 +10,7 @@ unique_ptr<TableRef> CrossProductRef::Copy() {
 	copy->left = left->Copy();
 	copy->right = right->Copy();
 	copy->alias = alias;
-	return copy;
+	return move(copy);
 }
 
 void CrossProductRef::Serialize(Serializer &serializer) {
@@ -30,5 +30,5 @@ unique_ptr<TableRef> CrossProductRef::Deserialize(Deserializer &source) {
 		return nullptr;
 	}
 
-	return result;
+	return move(result);
 }

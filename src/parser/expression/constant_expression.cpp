@@ -10,7 +10,7 @@ using namespace std;
 unique_ptr<Expression> ConstantExpression::Copy() {
 	auto copy = make_unique<ConstantExpression>(value);
 	copy->CopyProperties(*this);
-	return copy;
+	return move(copy);
 }
 
 void ConstantExpression::Serialize(Serializer &serializer) {

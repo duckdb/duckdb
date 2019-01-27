@@ -96,7 +96,7 @@ unique_ptr<Expression> AggregateExpression::Copy() {
 	auto new_aggregate = make_unique<AggregateExpression>(type, move(new_child));
 	new_aggregate->index = index;
 	new_aggregate->CopyProperties(*this);
-	return new_aggregate;
+	return move(new_aggregate);
 }
 
 void AggregateExpression::Serialize(Serializer &serializer) {

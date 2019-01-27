@@ -8,7 +8,7 @@ using namespace std;
 unique_ptr<Expression> CastExpression::Copy() {
 	auto copy = make_unique<CastExpression>(return_type, child->Copy());
 	copy->CopyProperties(*this);
-	return copy;
+	return move(copy);
 }
 
 void CastExpression::Serialize(Serializer &serializer) {

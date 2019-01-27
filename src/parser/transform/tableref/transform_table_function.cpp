@@ -31,5 +31,5 @@ unique_ptr<TableRef> Transformer::TransformRangeFunction(RangeFunction *root) {
 	auto result = make_unique<TableFunction>();
 	result->function = TransformFuncCall((FuncCall *)call_tree);
 	result->alias = TransformAlias(root->alias);
-	return result;
+	return move(result);
 }

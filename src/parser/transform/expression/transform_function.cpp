@@ -175,7 +175,7 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 		}
 		TransformWindowDef(window_spec, expr.get());
 
-		return expr;
+		return move(expr);
 	}
 
 	auto agg_fun_type = AggregateToExpressionType(lowercase_name);

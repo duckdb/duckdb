@@ -26,7 +26,7 @@ unique_ptr<Expression> FunctionExpression::Copy() {
 	auto copy = make_unique<FunctionExpression>(function_name, copy_children);
 	copy->schema = schema;
 	copy->CopyProperties(*this);
-	return copy;
+	return move(copy);
 }
 
 uint64_t FunctionExpression::Hash() const {
@@ -66,7 +66,7 @@ unique_ptr<Expression> FunctionExpression::Deserialize(ExpressionType type, Type
 
 	auto function = make_unique<FunctionExpression>(function_name, children);
 	function->schema = schema;
-	return function;
+	return move(function);
 }
 
 bool FunctionExpression::Equals(const Expression *other_) const {

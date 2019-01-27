@@ -10,7 +10,7 @@ using namespace std;
 unique_ptr<Expression> ColumnRefExpression::Copy() {
 	auto copy = make_unique<ColumnRefExpression>(column_name, table_name);
 	copy->CopyProperties(*this);
-	return copy;
+	return move(copy);
 }
 
 void ColumnRefExpression::Serialize(Serializer &serializer) {
@@ -23,7 +23,7 @@ unique_ptr<Expression> ColumnRefExpression::Deserialize(ExpressionType type, Typ
 	auto table_name = source.Read<string>();
 	auto column_name = source.Read<string>();
 	auto expression = make_unique<ColumnRefExpression>(column_name, table_name);
-	return expression;
+	return move(expression);
 }
 
 void ColumnRefExpression::ResolveType() {

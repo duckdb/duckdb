@@ -22,7 +22,7 @@ static unique_ptr<Expression> replace_columns_with_group_refs(
 		// group reference! turn expression into a reference to the group
 		auto group_ref = make_unique<BoundExpression>(group->return_type, entry->second);
 		group_ref->alias = expr->alias.empty() ? group->GetName() : expr->alias;
-		return group_ref;
+		return move(group_ref);
 	}
 	// if (expr->GetExpressionClass() == ExpressionClass::ALIAS_REF) {
 	// 	// an alias reference, check if it points to a GROUP BY column
@@ -49,7 +49,7 @@ static unique_ptr<Expression> replace_columns_with_group_refs(
 		auto first_aggregate = make_unique<AggregateExpression>(ExpressionType::AGGREGATE_FIRST, move(expr));
 		first_aggregate->alias = stmt_alias;
 		first_aggregate->ResolveType();
-		return first_aggregate;
+		return move(first_aggregate);
 	}
 	// not an aggregate and not a column reference
 	// iterate over the children

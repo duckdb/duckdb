@@ -35,5 +35,5 @@ unique_ptr<Expression> Transformer::TransformCoalesce(A_Expr *root) {
 			cur_root = case_ptr;
 		}
 	}
-	return exp_root;
+	return move(exp_root);
 }

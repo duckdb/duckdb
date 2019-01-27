@@ -4,8 +4,6 @@ dist: trusty
 
 matrix:
   include:
-    - os: osx
-      osx_image: xcode6.4
 
     - os: osx
       osx_image: xcode7.3
@@ -28,7 +26,7 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
           packages:
-            - g++-4.9
+            - g++-4.9 binutils-2.26
       env:
          - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
 
@@ -38,7 +36,7 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
           packages:
-            - g++-5
+            - g++-5 binutils-2.26
       env:
          - MATRIX_EVAL="CC=gcc-5 && CXX=g++-5"
 
@@ -48,7 +46,7 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
           packages:
-            - g++-6
+            - g++-6 binutils-2.26
       env:
         - MATRIX_EVAL="CC=gcc-6 && CXX=g++-6"
 
@@ -58,7 +56,7 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
           packages:
-            - g++-7
+            - g++-7 binutils-2.26
       env:
         - MATRIX_EVAL="CC=gcc-7 && CXX=g++-7"
 
@@ -68,7 +66,7 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
           packages:
-            - g++-8
+            - g++-8 binutils-2.26
       env:
         - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
  
@@ -78,7 +76,7 @@ matrix:
           sources:
             - llvm-toolchain-trusty-3.9
           packages:
-            - clang-3.9
+            - clang-3.9 binutils-2.26
       env:
         - MATRIX_EVAL="CC=clang-3.9 && CXX=clang++-3.9"
 
@@ -88,7 +86,8 @@ matrix:
           sources:
             - llvm-toolchain-trusty-4.0
           packages:
-            - clang-4.0
+            - clang-4.0 binutils-2.26
+
       env:
         - MATRIX_EVAL="CC=clang-4.0 && CXX=clang++-4.0"
 
@@ -98,7 +97,7 @@ matrix:
           sources:
             - llvm-toolchain-trusty-5.0
           packages:
-            - clang-5.0
+            - clang-5.0 binutils-2.26
       env:
         - MATRIX_EVAL="CC=clang-5.0 && CXX=clang++-5.0"
 

@@ -8,7 +8,7 @@ using namespace std;
 unique_ptr<Expression> ConjunctionExpression::Copy() {
 	auto copy = make_unique<ConjunctionExpression>(type, left->Copy(), right->Copy());
 	copy->CopyProperties(*this);
-	return copy;
+	return move(copy);
 }
 
 void ConjunctionExpression::Serialize(Serializer &serializer) {
