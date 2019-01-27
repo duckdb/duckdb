@@ -11,7 +11,7 @@ static unique_ptr<Expression> extract_aggregates(unique_ptr<Expression> expr, ve
 	if (expr->GetExpressionClass() == ExpressionClass::AGGREGATE) {
 		auto colref_expr = make_unique<BoundExpression>(expr->return_type, ngroups + result.size());
 		result.push_back(move(expr));
-		return colref_expr;
+		return move(colref_expr);
 	}
 	expr->EnumerateChildren([&](unique_ptr<Expression> expr) -> unique_ptr<Expression> {
 		return extract_aggregates(move(expr), result, ngroups);
@@ -24,7 +24,7 @@ static unique_ptr<Expression> extract_windows(unique_ptr<Expression> expr, vecto
 	if (expr->GetExpressionClass() == ExpressionClass::WINDOW) {
 		auto colref_expr = make_unique<BoundExpression>(expr->return_type, ngroups + result.size());
 		result.push_back(move(expr));
-		return colref_expr;
+		return move(colref_expr);
 	}
 
 	expr->EnumerateChildren([&](unique_ptr<Expression> expr) -> unique_ptr<Expression> {

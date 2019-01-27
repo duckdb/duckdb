@@ -15,7 +15,7 @@ unique_ptr<TableRef> TableFunction::Deserialize(Deserializer &source) {
 
 	result->function = Expression::Deserialize(source);
 
-	return result;
+	return move(result);
 }
 
 unique_ptr<TableRef> TableFunction::Copy() {
@@ -24,5 +24,5 @@ unique_ptr<TableRef> TableFunction::Copy() {
 	copy->function = function->Copy();
 	copy->alias = alias;
 
-	return copy;
+	return move(copy);
 }

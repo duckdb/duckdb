@@ -26,9 +26,10 @@ public:
 		SOME,
 	};
 
+	/* The double {{}} in the intializer for excluded_entries is intentional, workaround for bug in gcc-4.9 */
 	template <class T, class MATCHER>
 	static bool MatchRecursive(vector<unique_ptr<MATCHER>> &matchers, vector<T *> &entries, vector<T *> &bindings,
-	                           std::unordered_set<size_t> excluded_entries = {}, size_t m_idx = 0) {
+	                           std::unordered_set<size_t> excluded_entries = {{}}, size_t m_idx = 0) {
 		if (m_idx == matchers.size()) {
 			// matched all matchers!
 			return true;

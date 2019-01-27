@@ -8,7 +8,7 @@ using namespace std;
 unique_ptr<Expression> StarExpression::Copy() {
 	auto copy = make_unique<StarExpression>();
 	copy->CopyProperties(*this);
-	return copy;
+	return move(copy);
 }
 
 unique_ptr<Expression> StarExpression::Deserialize(ExpressionType type, TypeId return_type, Deserializer &source) {

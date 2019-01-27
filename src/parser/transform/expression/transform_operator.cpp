@@ -79,7 +79,7 @@ unique_ptr<Expression> Transformer::TransformAExpr(A_Expr *root) {
 		case_expr->result_if_true = make_unique<ConstantExpression>(Value());
 		// else A
 		case_expr->result_if_false = move(value);
-		return case_expr;
+		return move(case_expr);
 	} break;
 	// rewrite (NOT) X BETWEEN A AND B into (NOT) AND(GREATERTHANOREQUALTO(X,
 	// A), LESSTHANOREQUALTO(X, B))

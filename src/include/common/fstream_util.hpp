@@ -20,7 +20,7 @@ public:
 	/**
 	 * Opens a file for the given name and returns it (default mode : ios_base::in | ios_base::out)
 	 */
-	static fstream OpenFile(const string &, ios_base::openmode mode = ios_base::in | ios_base::out);
+	static void OpenFile(const string &, fstream&, ios_base::openmode mode = ios_base::in | ios_base::out);
 
 	/**
 	 * Closes the given file or throws an exception otherwise

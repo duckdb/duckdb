@@ -110,7 +110,7 @@ unique_ptr<Expression> Binder::VisitReplace(SubqueryExpression &expr, unique_ptr
 	result->subquery = move(expr.subquery);
 	result->subquery_type = expr.subquery_type;
 	result->alias = expr.alias;
-	return result;
+	return move(result);
 }
 
 // CTEs and views are also referred to using BaseTableRefs, hence need to distinguish here
