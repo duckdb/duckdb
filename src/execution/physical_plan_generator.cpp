@@ -317,6 +317,7 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 
 	// now visit the children
 	assert(op.children.size() == 2);
+	assert(op.type != JoinType::DEPENDENT);
 
 	VisitOperator(*op.children[0]);
 	auto left = move(plan);

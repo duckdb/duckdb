@@ -190,15 +190,21 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 		return make_unique<BoundColumnRefExpression>(expr, TypeId::BOOLEAN, ColumnBinding(subquery_index, 0));
 	}
 	case SubqueryType::SCALAR: {
-		if (expr.is_correlated) {
-			throw Exception("Correlated SCALAR not handled yet!");
-		}
 		if (!expr.is_correlated) {
 			// in the uncorrelated case we are only interested in the first result of the query
 			// hence we simply push a LIMIT 1 to get the first row of the subquery
 			auto limit = make_unique<LogicalLimit>(1, 0);
 			limit->AddChild(move(plan));
 			plan = move(limit);
+			// we push an aggregate that returns the FIRST element
+			vector<unique_ptr<Expression>> expressions;
+			auto bound = make_unique<BoundExpression>(expr.return_type, 0);
+			auto first_agg = make_unique<AggregateExpression>(ExpressionType::AGGREGATE_FIRST, move(bound));
+			first_agg->ResolveType();
+			expressions.push_back(move(first_agg));
+			auto aggr = make_unique<LogicalAggregate>(move(expressions));
+			aggr->AddChild(move(plan));
+			plan = move(aggr);
 		}
 
 		// now push a subquery op to get a table index to reference

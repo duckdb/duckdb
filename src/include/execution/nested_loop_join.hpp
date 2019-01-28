@@ -23,5 +23,4 @@ struct NestedLoopJoinMark {
 	static void Perform(DataChunk &left, ChunkCollection &right, bool found_match[], vector<JoinCondition>& conditions);
 };
 
-
 }
