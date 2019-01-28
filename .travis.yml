@@ -114,6 +114,17 @@ matrix:
       env:
         - MATRIX_EVAL="CC=clang-6.0 && CXX=clang++-6.0"
 
+    - os: windows
+      language: c
+      env:
+        - MSBUILD_PATH="c:\Program Files (x86)\Microsoft Visual Studio\2017\BuildTools\MSBuild\15.0\Bin"
+
+      script:
+        - export PATH=$MSBUILD_PATH:$PATH
+        - cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_GENERATOR_PLATFORM=x64
+        - MSBuild.exe DuckDB.sln -target:unittest
+        - test/Debug/unittest.exe
+
  #   - os: windows
 
 before_install:
