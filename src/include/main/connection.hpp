@@ -9,6 +9,7 @@
 #pragma once
 
 #include "main/client_context.hpp"
+#include "main/prepared_statement.hpp"
 #include "main/result.hpp"
 
 namespace duckdb {
@@ -47,6 +48,8 @@ public:
 	}
 
 	static unique_ptr<DuckDBResult> GetQueryResult(ClientContext &context, string query);
+
+	unique_ptr<DuckDBPreparedStatement> PrepareStatement(string query);
 
 	//! Queries the database using the transaction context of this connection
 	unique_ptr<DuckDBResult> Query(string query);

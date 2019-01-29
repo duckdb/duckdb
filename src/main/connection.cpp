@@ -166,6 +166,42 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(string query) {
 	return GetQueryResult(context, query);
 }
 
+unique_ptr<DuckDBPreparedStatement> DuckDBConnection::PrepareStatement(string query) {
+	// parse and plan the q
+	// TODO: we can't execute stuff in the planner any more
+
+	Parser parser(context);
+	parser.ParseQuery(query.c_str());
+	if (parser.statements.size() == 0) {
+		throw Exception("Need a query to prepare");
+	}
+
+	if (parser.statements.size() > 1) {
+		throw Exception("More than one statement per query not supported yet!");
+	}
+
+	auto &statement = parser.statements.back();
+	if (statement->type != StatementType::SELECT && statement->type != StatementType::INSERT &&
+	    statement->type != StatementType::UPDATE && statement->type != StatementType::DELETE) {
+		throw Exception("Only select/insert/update/delete queries supported for preparation");
+	}
+
+	Planner planner;
+	planner.CreatePlan(context, move(statement));
+	if (!planner.plan) {
+		throw Exception("Failed to prepare statement");
+	}
+
+	auto plan = move(planner.plan);
+	Optimizer optimizer(context, *planner.context);
+	plan = optimizer.Optimize(move(plan));
+	if (!plan) {
+		throw Exception("Failed to optimize statement");
+	}
+
+	return make_unique<DuckDBPreparedStatement>(move(plan));
+}
+
 unique_ptr<DuckDBResult> DuckDBConnection::Query(string query) {
 	if (context.transaction.IsAutoCommit()) {
 		context.transaction.BeginTransaction();
