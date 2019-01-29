@@ -37,6 +37,7 @@ def generate(input_file, output_file):
 		"PROJECTION": 5,
 		"LIMIT": 0,
 		"PIECEWISE_MERGE_JOIN": 1,
+		"DISTINCT": 11
 	}
 	# remaining (unknown) operators just fetch tones in order
 	remaining_tones = []

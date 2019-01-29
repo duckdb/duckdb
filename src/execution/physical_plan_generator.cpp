@@ -140,7 +140,7 @@ void PhysicalPlanGenerator::Visit(LogicalDistinct &op) {
 	for(size_t i = 0; i < types.size(); i++) {
 		groups.push_back(make_unique<BoundExpression>(types[i], i));
 	}
-	auto groupby = make_unique<PhysicalHashAggregate>(op, move(expressions), move(groups));
+	auto groupby = make_unique<PhysicalHashAggregate>(op, move(expressions), move(groups), PhysicalOperatorType::DISTINCT);
 	groupby->children.push_back(move(plan));
 	this->plan = move(groupby);
 }

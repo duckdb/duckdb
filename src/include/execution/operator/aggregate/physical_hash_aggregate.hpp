@@ -18,9 +18,9 @@ namespace duckdb {
 //! a hash table to perform the grouping
 class PhysicalHashAggregate : public PhysicalAggregate {
 public:
-	PhysicalHashAggregate(LogicalOperator &op, vector<unique_ptr<Expression>> expressions);
+	PhysicalHashAggregate(LogicalOperator &op, vector<unique_ptr<Expression>> expressions, PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
 	PhysicalHashAggregate(LogicalOperator &op, vector<unique_ptr<Expression>> expressions,
-	                      vector<unique_ptr<Expression>> groups);
+	                      vector<unique_ptr<Expression>> groups, PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
 
 	void Initialize();
 

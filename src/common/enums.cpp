@@ -127,6 +127,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "AGGREGATE";
 	case PhysicalOperatorType::WINDOW:
 		return "WINDOW";
+	case PhysicalOperatorType::DISTINCT:
+		return "DISTINCT";
 	case PhysicalOperatorType::HASH_GROUP_BY:
 		return "HASH_GROUP_BY";
 	case PhysicalOperatorType::SORT_GROUP_BY:
