@@ -106,14 +106,10 @@ unique_ptr<Expression> BindContext::BindColumn(ColumnRefExpression &expr, size_t
 		// if there is a parent BindContext look there
 		if (parent) {
 			auto expression = parent->BindColumn(expr, ++depth);
-			size_t expr_depth = 0;
-			if (expression->type == ExpressionType::BOUND_COLUMN_REF) {
-				expr_depth = ((BoundColumnRefExpression &)*expression).depth;
-			} else {
-				assert(expression->type == ExpressionType::BOUND_REF);
-				expr_depth = ((BoundExpression &)*expression).depth;
-			}
-			max_depth = max(expr_depth, max_depth);
+			assert(expression->type == ExpressionType::BOUND_COLUMN_REF);
+			auto &bound_colref = (BoundColumnRefExpression &)*expression;
+			correlated_bindings.push_back(CorrelatedColumnInfo(bound_colref));
+			max_depth = max(bound_colref.depth, max_depth);
 			return expression;
 		}
 		throw BinderException("Referenced table \"%s\" not found!", expr.table_name.c_str());

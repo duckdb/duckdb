@@ -19,6 +19,9 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::AGGREGATE_AND_GROUP_BY:
 		Visit((LogicalAggregate &)op);
 		break;
+	case LogicalOperatorType::PROJECTION:
+		Visit((LogicalProjection &)op);
+		break;
 	case LogicalOperatorType::GET:
 		Visit((LogicalGet &)op);
 		break;
@@ -94,6 +97,19 @@ void ColumnBindingResolver::Visit(LogicalAggregate &op) {
 	BoundTable binding;
 	binding.table_index = (size_t) -1;
 	binding.column_count = op.groups.size() + op.expressions.size();
+	binding.column_offset = 0;
+	bound_tables.push_back(binding);
+}
+
+void ColumnBindingResolver::Visit(LogicalProjection &op) {
+	LogicalOperatorVisitor::VisitOperator(op);
+
+	// after a projection, we cannot access tables before it directly anymore
+	bound_tables.clear();
+	// the amount of projected columns here is the projection list
+	BoundTable binding;
+	binding.table_index = (size_t) -1;
+	binding.column_count = op.expressions.size();
 	binding.column_offset = 0;
 	bound_tables.push_back(binding);
 }
@@ -212,11 +228,3 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	}
 	return make_unique<BoundExpression>(expr.return_type, index, expr.depth);
 }
-
-// void ColumnBindingResolver::Visit(BoundSubqueryExpression &expr) {
-// 	assert(expr.op);
-// 	// resolve the column ref indices of subqueries
-// 	current_depth++;
-// 	VisitOperator(*expr.op);
-// 	current_depth--;
-// }

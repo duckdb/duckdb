@@ -14,6 +14,7 @@
 #include "parser/column_definition.hpp"
 #include "parser/expression.hpp"
 #include "parser/sql_statement.hpp"
+#include "parser/expression/bound_columnref_expression.hpp"
 
 #include <string>
 #include <unordered_map>
@@ -79,6 +80,18 @@ struct TableFunctionBinding : public Binding {
 	}
 };
 
+struct CorrelatedColumnInfo {
+	ColumnBinding binding;
+	TypeId type;
+	string name;
+
+	CorrelatedColumnInfo(BoundColumnRefExpression& expr) {
+		binding = expr.binding;
+		type = expr.return_type;
+		name = expr.GetName();
+	}
+};
+
 //! The BindContext object keeps track of all the tables and columns that are
 //! encountered during the binding process.
 class BindContext {
@@ -119,6 +132,10 @@ public:
 	size_t GetMaxDepth() {
 		return max_depth;
 	}
+	const vector<CorrelatedColumnInfo>& GetCorrelatedColumns() {
+		return correlated_bindings;
+	}
+
 
 	//! The set of columns that are bound for each table/subquery alias
 	std::unordered_map<string, vector<string>> bound_columns;
@@ -132,7 +149,8 @@ private:
 	void AddBinding(const string &alias, unique_ptr<Binding> binding);
 
 	size_t bound_tables;
-	size_t max_depth;
+	uint32_t max_depth;
+	vector<CorrelatedColumnInfo> correlated_bindings;
 
 	//! The set of expression aliases
 	std::unordered_map<string, std::pair<size_t, Expression *>> expression_alias_map;

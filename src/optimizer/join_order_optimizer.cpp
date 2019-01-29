@@ -32,11 +32,6 @@ bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<s
 	}
 	if (expression.type == ExpressionType::BOUND_REF) {
 		// bound expression
-		// figure out where it comes from by analyzing the join graph
-		auto &bound = (BoundExpression&) expression;
-		size_t index = bound.index;
-		assert(bound.depth == 0);
-		
 		bindings.clear();
 		return false;
 	}
@@ -68,6 +63,9 @@ static void GetTableReferences(LogicalOperator *op, unordered_set<size_t> &bindi
 	} else if (op->type == LogicalOperatorType::TABLE_FUNCTION) {
 		auto table_function = (LogicalTableFunction *)op;
 		bindings.insert(table_function->table_index);
+	}else if (op->type == LogicalOperatorType::DELIM_GET) {
+		auto delim = (LogicalDelimGet *)op;
+		bindings.insert(delim->table_index);
 	} else {
 		// iterate over the children
 		for (auto &child : op->children) {

@@ -4,6 +4,7 @@
 #include "planner/operator/logical_create_table.hpp"
 #include "planner/operator/logical_cross_product.hpp"
 #include "planner/operator/logical_delete.hpp"
+#include "planner/operator/logical_delim_get.hpp"
 #include "planner/operator/logical_except.hpp"
 #include "planner/operator/logical_explain.hpp"
 #include "planner/operator/logical_filter.hpp"

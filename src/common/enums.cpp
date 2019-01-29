@@ -59,6 +59,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "EXTERNAL_FILE_GET";
 	case LogicalOperatorType::QUERY_DERIVED_GET:
 		return "QUERY_DERIVED_GET";
+	case LogicalOperatorType::DELIM_GET:
+		return "DELIM_GET";
 	case LogicalOperatorType::PROJECTION:
 		return "PROJECTION";
 	case LogicalOperatorType::FILTER:
@@ -396,6 +398,8 @@ string JoinTypeToString(JoinType type) {
 		return "ANTI";
 	case JoinType::MARK:
 		return "MARK";
+	case JoinType::DEPENDENT:
+		return "DEPENDENT";
 	case JoinType::INVALID:
 		break;
 	}

@@ -123,6 +123,25 @@ void LogicalPlanGenerator::Visit(OperatorExpression &expr) {
 	}
 }
 
+unique_ptr<LogicalOperator> FlattenDependentJoin(unique_ptr<LogicalDelimGet> delim_scan, unique_ptr<LogicalOperator> plan, unordered_map<ColumnBinding, ColumnBinding>& correlated_map) {
+	switch(plan->type) {
+		// case LogicalOperatorType::PROJECTION: {
+		// 	// a projection: we add to the projection all 
+		// 	break;
+		// }
+		case LogicalOperatorType::GET: {
+			// we reached a root node, we can eliminate the dependent join now and create a simple cross product
+			auto cross_product = make_unique<LogicalCrossProduct>();
+			cross_product->children.push_back(move(delim_scan));
+			cross_product->children.push_back(move(plan));
+			return move(cross_product);
+		}
+		default:
+			throw NotImplementedException("Logical operator type for dependent join");
+	}
+}
+
+
 unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	// first visit the children of the Subquery expression, if any
 	VisitExpressionChildren(expr);
@@ -222,16 +241,48 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 			cross_product->AddChild(move(plan));
 			root = move(cross_product);
 		} else {
-			// in the correlated case, we push a dependent join
-			auto dependent_join = make_unique<LogicalJoin>(JoinType::DEPENDENT);
-			dependent_join->AddChild(move(root));
-			dependent_join->AddChild(move(plan));
-			root = move(dependent_join);
+			throw NotImplementedException("Correlation not implemented yet!");
+			// // in the correlated case, we push first a DUPLICATE ELIMINATED join
+			// auto delim_join = make_unique<LogicalJoin>(JoinType::INNER);
+			// // the left side is the original plan
+			// delim_join->AddChild(move(root));
+			// delim_join->is_duplicate_eliminated = true;
+			// // the right side is a DEPENDENT join between the duplicate eliminated scan and the subquery
+			// // first create the duplicate eliminated scan corresponding to the join
+			// // first get the set of correlated columns in the subquery
+			// // these are the columns returned by the duplicate eliminated scan
+			// auto &correlated_columns = expr.context->GetCorrelatedColumns();
+			// vector<TypeId> delim_scan_types;
+			// for(auto &col : correlated_columns) {
+			// 	delim_scan_types.push_back(col.type);
+			// }
+			// auto delim_index = bind_context.GenerateTableIndex();
+			// auto delim_scan = make_unique<LogicalDelimGet>(delim_join.get(), delim_index, delim_scan_types);
+			// // for each of the correlated columns we have an equality join between the original table and the duplicate eliminated scan
+			// // we create a mapping of [correlated column in subquery] -> [uncorrelated column from delim scan]
+			// unordered_map<ColumnBinding, ColumnBinding> correlated_map;
+			// for(size_t i = 0; i < correlated_columns.size(); i++) {
+			// 	auto &col = correlated_columns[i];
+			// 	JoinCondition cond;
+			// 	ColumnBinding delim_binding(delim_index, i);
+			// 	cond.left = make_unique<BoundColumnRefExpression>(col.name, col.type, col.binding);
+			// 	cond.right = make_unique<BoundColumnRefExpression>(col.name, col.type, delim_binding);
+			// 	correlated_map[col.binding] = delim_binding;
+			// 	cond.comparison = ExpressionType::COMPARE_EQUAL;
+			// 	delim_join->conditions.push_back(move(cond));
+			// }
+			// // now we have a dependent join between "delim_scan" and the subquery plan
+			// // however, we do not explicitly create it
+			// // instead, we eliminate the dependent join by pushing it down into the right side of the plan
+			// auto dependent_join = FlattenDependentJoin(move(delim_scan), move(plan), correlated_map);
+			// delim_join->AddChild(move(dependent_join));
+			// root = move(delim_join);
 		}
 		// we replace the original subquery with a BoundColumnRefExpression refering to the scalar result of the subquery
 		return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(subquery_index, 0));
 	}
-	case SubqueryType::ANY: {
+	default: {
+		assert(subquery.subquery_type == SubqueryType::ANY);
 		if (expr.is_correlated) {
 			throw Exception("Correlated ANY not handled yet!");
 		}
@@ -259,10 +310,6 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 		// we replace the original subquery with a BoundColumnRefExpression refering to the mark column
 		return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(subquery_index, 0));
 	}
-	default:
-		assert(0);
-		throw Exception("Unhandled subquery type!");
-
 	}
 	return nullptr;
 }

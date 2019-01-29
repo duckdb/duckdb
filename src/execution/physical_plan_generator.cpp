@@ -71,6 +71,9 @@ void PhysicalPlanGenerator::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::DELETE:
 		Visit((LogicalDelete &)op);
 		break;
+	case LogicalOperatorType::DELIM_GET:
+		Visit((LogicalDelimGet &)op);
+		break;
 	case LogicalOperatorType::UPDATE:
 		Visit((LogicalUpdate &)op);
 		break;
@@ -300,6 +303,11 @@ void PhysicalPlanGenerator::Visit(LogicalFilter &op) {
 	}
 }
 
+void PhysicalPlanGenerator::Visit(LogicalDelimGet &op) {
+	LogicalOperatorVisitor::VisitOperatorChildren(op);
+	throw NotImplementedException("Transform LogicalDelimGet not implemented");
+}
+
 void PhysicalPlanGenerator::Visit(LogicalGet &op) {
 	LogicalOperatorVisitor::VisitOperatorChildren(op);
 
@@ -318,6 +326,7 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 	// now visit the children
 	assert(op.children.size() == 2);
 	assert(op.type != JoinType::DEPENDENT);
+	assert(!op.is_duplicate_eliminated);
 
 	VisitOperator(*op.children[0]);
 	auto left = move(plan);
