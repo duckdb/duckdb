@@ -17,6 +17,7 @@ template <class OP> static void generic_scatter_loop(Vector &source, Vector &des
 		throw InvalidTypeException(dest.type, "Cannot scatter to non-pointer type!");
 	}
 	switch (source.type) {
+	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
 		scatter_templated_loop<int8_t, OP>(source, dest);
 		break;

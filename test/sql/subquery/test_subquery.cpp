@@ -66,10 +66,6 @@ TEST_CASE("Test simple uncorrelated subqueries", "[subquery]") {
 	result = con.Query("SELECT * FROM integers WHERE i > (SELECT i FROM integers WHERE i=1)");
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3}));
 
-	// nested uncorrelated subqueries
-	result = con.Query("SELECT (SELECT (SELECT (SELECT 42)))");
-	REQUIRE(CHECK_COLUMN(result, 0, {42}));
-
 	// uncorrelated EXISTS
 	result = con.Query("SELECT * FROM integers WHERE EXISTS(SELECT 1) ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
@@ -192,6 +188,12 @@ TEST_CASE("Test simple uncorrelated subqueries", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 	result = con.Query("SELECT i FROM integers WHERE i <> ALL(SELECT i FROM integers WHERE i IS NOT NULL)");
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
+
+	// nested uncorrelated subqueries
+	result = con.Query("SELECT (SELECT (SELECT (SELECT 42)))");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	result = con.Query("SELECT (SELECT EXISTS(SELECT * FROM integers WHERE i>2)) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {true, true, true, true}));
 }
 
 TEST_CASE("Test simple correlated subqueries", "[subquery]") {
