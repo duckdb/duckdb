@@ -65,6 +65,8 @@ public:
 	// parameter
 	virtual bool IsScalar();
 
+	virtual bool HasParameter();
+
 	//! Returns the type of the expression
 	ExpressionType GetExpressionType() {
 		return type;

@@ -94,6 +94,7 @@ protected:
 		throw NotImplementedException("Cannot execute FUNCTION expression in ExpressionExecutor");
 	}
 	void Visit(OperatorExpression &expr) override;
+	void Visit(ParameterExpression &expr) override;
 	void Visit(BoundSubqueryExpression &expr) override;
 	void Visit(SubqueryExpression &expr) override {
 		throw NotImplementedException("Cannot execute SUBQUERY expression in ExpressionExecutor");

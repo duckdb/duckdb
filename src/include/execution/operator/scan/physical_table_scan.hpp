@@ -33,6 +33,8 @@ public:
 	string ExtraRenderInformation() override;
 
 	unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent_executor) override;
+
+	void AcceptExpressions(SQLNodeVisitor *v) override{};
 };
 
 class PhysicalTableScanOperatorState : public PhysicalOperatorState {

@@ -48,6 +48,7 @@ protected:
 	void Visit(ConjunctionExpression &expr) override;
 	void Visit(OperatorExpression &expr) override;
 	void Visit(BoundSubqueryExpression &expr) override;
+	void Visit(CastExpression &expr) override;
 
 public:
 	unique_ptr<TableRef> Visit(BaseTableRef &expr) override;

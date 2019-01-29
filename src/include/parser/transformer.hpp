@@ -103,6 +103,7 @@ private:
 
 	unique_ptr<Expression> TransformResTarget(postgres::ResTarget *root);
 	unique_ptr<Expression> TransformNullTest(postgres::NullTest *root);
+	unique_ptr<Expression> TransformParamRef(postgres::ParamRef *node);
 
 	unique_ptr<Expression> TransformSubquery(postgres::SubLink *root);
 	//===--------------------------------------------------------------------===//

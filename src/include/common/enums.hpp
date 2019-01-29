@@ -220,7 +220,8 @@ enum class ExpressionClass : uint8_t {
 	BOUND_REF = 17,
 	BOUND_COLUMN_REF = 18,
 	BOUND_FUNCTION = 19,
-	BOUND_SUBQUERY = 20
+	BOUND_SUBQUERY = 20,
+	PARAMETER = 21
 };
 
 //===--------------------------------------------------------------------===//

@@ -41,7 +41,7 @@ static void ExecuteStatement(ClientContext &context, unique_ptr<SQLStatement> st
 
 	// finally execute the plan and return the result
 	Executor executor;
-	result.collection = executor.Execute(context, move(physical_planner.plan));
+	result.collection = executor.Execute(context, physical_planner.plan.get());
 	result.success = true;
 }
 
@@ -164,6 +164,52 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(ClientContext &context
 
 unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(string query) {
 	return GetQueryResult(context, query);
+}
+
+unique_ptr<DuckDBPreparedStatement> DuckDBConnection::PrepareStatement(string query) {
+
+	if (context.transaction.IsAutoCommit()) {
+		context.transaction.BeginTransaction();
+	}
+
+	Parser parser(context);
+	parser.ParseQuery(query.c_str());
+	if (parser.statements.size() == 0) {
+		throw Exception("Need a query to prepare");
+	}
+
+	if (parser.statements.size() > 1) {
+		throw Exception("More than one statement per query not supported yet!");
+	}
+
+	auto &statement = parser.statements.back();
+	if (statement->type != StatementType::SELECT && statement->type != StatementType::INSERT &&
+	    statement->type != StatementType::UPDATE && statement->type != StatementType::DELETE) {
+		throw Exception("Only select/insert/update/delete supported for prepared statements");
+	}
+
+	Planner planner;
+	planner.CreatePlan(context, move(statement));
+	if (!planner.plan) {
+		throw Exception("Failed to prepare statement");
+	}
+
+	auto plan = move(planner.plan);
+	Optimizer optimizer(context, *planner.context);
+	plan = optimizer.Optimize(move(plan));
+	if (!plan) {
+		throw Exception("Failed to optimize statement");
+	}
+
+	// extract the result column names from the plan
+	auto names = plan->GetNames();
+
+	// now convert logical query plan into a physical query plan
+	PhysicalPlanGenerator physical_planner(context);
+	physical_planner.CreatePlan(move(plan));
+	auto res = make_unique<DuckDBPreparedStatement>(move(physical_planner.plan), names);
+
+	return res;
 }
 
 unique_ptr<DuckDBResult> DuckDBConnection::Query(string query) {
