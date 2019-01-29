@@ -86,12 +86,19 @@ void PhysicalPlanGenerator::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::EXPLAIN:
 		Visit((LogicalExplain &)op);
 		break;
+	case LogicalOperatorType::DISTINCT:
+		Visit((LogicalDistinct &)op);
+		break;
 	case LogicalOperatorType::PRUNE_COLUMNS:
 		Visit((LogicalPruneColumns &)op);
 		break;
-	default:
-		LogicalOperatorVisitor::VisitOperator(op);
+	case LogicalOperatorType::SUBQUERY:
+		 LogicalOperatorVisitor::VisitOperator(op);
+		 break;
+	case LogicalOperatorType::INVALID:
+		assert(0);
 		break;
+
 	}
 }
 
@@ -121,6 +128,21 @@ void PhysicalPlanGenerator::Visit(LogicalAggregate &op) {
 		groupby->children.push_back(move(plan));
 		this->plan = move(groupby);
 	}
+}
+
+
+void PhysicalPlanGenerator::Visit(LogicalDistinct &op) {
+	LogicalOperatorVisitor::VisitOperatorChildren(op);
+	assert(plan);
+	// create a PhysicalHashAggregate that groups by the 
+	auto &types = plan->GetTypes();
+	vector<unique_ptr<Expression>> groups, expressions;
+	for(size_t i = 0; i < types.size(); i++) {
+		groups.push_back(make_unique<BoundExpression>(types[i], i));
+	}
+	auto groupby = make_unique<PhysicalHashAggregate>(op, move(expressions), move(groups));
+	groupby->children.push_back(move(plan));
+	this->plan = move(groupby);
 }
 
 void PhysicalPlanGenerator::Visit(LogicalCrossProduct &op) {

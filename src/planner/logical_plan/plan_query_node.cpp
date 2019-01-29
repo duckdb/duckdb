@@ -14,28 +14,9 @@ void LogicalPlanGenerator::VisitQueryNode(QueryNode &statement) {
 			throw Exception("DISTINCT can only apply to projection, union or group");
 		}
 
-		vector<unique_ptr<Expression>> expressions;
-		vector<unique_ptr<Expression>> projections;
-		vector<unique_ptr<Expression>> groups;
-
-		for (size_t i = 0; i < node->expressions.size(); i++) {
-			Expression *proj_ele = node->expressions[i].get();
-
-			groups.push_back(make_unique<BoundExpression>(proj_ele->return_type, i));
-			auto colref = make_unique<BoundExpression>(proj_ele->return_type, i);
-			colref->alias = proj_ele->alias;
-			projections.push_back(move(colref));
-		}
-		// this aggregate is superflous if all grouping columns are in aggr
-		// below
-		auto aggregate = make_unique<LogicalAggregate>(move(expressions));
-		aggregate->groups = move(groups);
-		aggregate->AddChild(move(root));
-		root = move(aggregate);
-
-		auto proj = make_unique<LogicalProjection>(move(projections));
-		proj->AddChild(move(root));
-		root = move(proj);
+		auto distinct = make_unique<LogicalDistinct>();
+		distinct->AddChild(move(root));
+		root = move(distinct);
 	}
 
 	if (statement.HasOrder()) {

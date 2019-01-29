@@ -342,10 +342,7 @@ enum class SetOperationType : uint8_t { NONE = 0, UNION = 1, EXCEPT = 2, INTERSE
 //===--------------------------------------------------------------------===//
 enum class LogicalOperatorType : uint8_t {
 	INVALID,
-	LEAF,
 	GET,
-	EXTERNAL_FILE_GET,
-	QUERY_DERIVED_GET,
 	DELIM_GET,
 	PROJECTION,
 	FILTER,
@@ -356,6 +353,7 @@ enum class LogicalOperatorType : uint8_t {
 	COPY,
 	SUBQUERY,
 	TABLE_FUNCTION,
+	DISTINCT,
 	// -----------------------------
 	// Joins
 	// -----------------------------
@@ -372,14 +370,10 @@ enum class LogicalOperatorType : uint8_t {
 	// Updates
 	// -----------------------------
 	INSERT,
-	INSERT_SELECT,
 	DELETE,
 	UPDATE,
-	EXPORT_EXTERNAL_FILE,
 	CREATE_TABLE,
 	CREATE_INDEX,
-	CREATE_VIEW,
-	ALTER,
 
 	// -----------------------------
 	// Explain

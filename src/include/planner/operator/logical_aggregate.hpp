@@ -16,12 +16,14 @@ namespace duckdb {
 //! operator.
 class LogicalAggregate : public LogicalOperator {
 public:
-	LogicalAggregate(vector<unique_ptr<Expression>> select_list)
-	    : LogicalOperator(LogicalOperatorType::AGGREGATE_AND_GROUP_BY, std::move(select_list)) {
+	LogicalAggregate(size_t table_index, vector<unique_ptr<Expression>> select_list)
+	    : LogicalOperator(LogicalOperatorType::AGGREGATE_AND_GROUP_BY, std::move(select_list)), table_index(table_index) {
 	}
 
 	vector<string> GetNames() override;
 
+	//! The table index for the LogicalAggregate
+	size_t table_index;
 	//! The set of groups (optional).
 	vector<unique_ptr<Expression>> groups;
 

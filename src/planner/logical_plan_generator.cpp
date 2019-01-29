@@ -170,14 +170,15 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 		auto count_star = make_unique<AggregateExpression>(ExpressionType::AGGREGATE_COUNT_STAR, nullptr);
 		count_star->ResolveType();
 		auto count_type = count_star->return_type;
+		auto aggregate_index = expr.context->GenerateTableIndex();
 		vector<unique_ptr<Expression>> aggregate_list;
 		aggregate_list.push_back(move(count_star));
-		auto aggregate = make_unique<LogicalAggregate>(move(aggregate_list));
+		auto aggregate = make_unique<LogicalAggregate>(aggregate_index, move(aggregate_list));
 		aggregate->AddChild(move(plan));
 		plan = move(aggregate);
 
 		// now we push a projection with a comparison to 1
-		auto left_child = make_unique<BoundExpression>(count_type, 0);
+		auto left_child = make_unique<BoundColumnRefExpression>("", count_type, ColumnBinding(aggregate_index, 0));
 		auto right_child = make_unique<ConstantExpression>(Value::Numeric(count_type, 1));
 		auto comparison = make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(left_child), move(right_child));
 
@@ -209,6 +210,7 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 		return make_unique<BoundColumnRefExpression>(expr, TypeId::BOOLEAN, ColumnBinding(subquery_index, 0));
 	}
 	case SubqueryType::SCALAR: {
+		auto subquery_index = bind_context.GenerateTableIndex();
 		if (!expr.is_correlated) {
 			// in the uncorrelated case we are only interested in the first result of the query
 			// hence we simply push a LIMIT 1 to get the first row of the subquery
@@ -221,16 +223,11 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 			auto first_agg = make_unique<AggregateExpression>(ExpressionType::AGGREGATE_FIRST, move(bound));
 			first_agg->ResolveType();
 			expressions.push_back(move(first_agg));
-			auto aggr = make_unique<LogicalAggregate>(move(expressions));
+			auto aggr = make_unique<LogicalAggregate>(subquery_index, move(expressions));
 			aggr->AddChild(move(plan));
 			plan = move(aggr);
 		}
 
-		// now push a subquery op to get a table index to reference
-		auto subquery_index = bind_context.GenerateTableIndex();
-		auto logical_subquery = make_unique<LogicalSubquery>(subquery_index, 1);
-		logical_subquery->AddChild(move(plan));
-		plan = move(logical_subquery);
 
 		if (!expr.is_correlated) {
 			// in the uncorrelated case, we add the value to the main query through a cross product

@@ -19,9 +19,9 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::AGGREGATE_AND_GROUP_BY:
 		Visit((LogicalAggregate &)op);
 		break;
-	case LogicalOperatorType::PROJECTION:
-		Visit((LogicalProjection &)op);
-		break;
+	// case LogicalOperatorType::PROJECTION:
+	// 	Visit((LogicalProjection &)op);
+	// 	break;
 	case LogicalOperatorType::GET:
 		Visit((LogicalGet &)op);
 		break;
@@ -88,31 +88,42 @@ void ColumnBindingResolver::BindTablesBinaryOp(LogicalOperator &op, bool append_
 	}
 }
 
+void ColumnBindingResolver::ResolveSubquery(LogicalOperator &op, size_t table_index, size_t column_count) {
+	assert(op.children.size() == 1);
+	// we clear the bound tables prior to visiting this operator
+	auto old_tables = bound_tables;
+	bound_tables.clear();
+	LogicalOperatorVisitor::VisitOperator(op);
+	bound_tables = old_tables;
+
+	BoundTable binding;
+	binding.table_index = table_index;
+	binding.column_count = column_count;
+	binding.column_offset =
+	    bound_tables.size() == 0 ? 0 : bound_tables.back().column_offset + bound_tables.back().column_count;
+	bound_tables.push_back(binding);
+}
+
 void ColumnBindingResolver::Visit(LogicalAggregate &op) {
-	LogicalOperatorVisitor::VisitOperator(op);
-
-	// after an aggregate, we cannot access tables before it directly anymore
-	bound_tables.clear();
-	// the amount of projected columns here are the groups + aggregates
-	BoundTable binding;
-	binding.table_index = (size_t) -1;
-	binding.column_count = op.groups.size() + op.expressions.size();
-	binding.column_offset = 0;
-	bound_tables.push_back(binding);
+	ResolveSubquery(op, op.table_index, op.groups.size() + op.expressions.size());
 }
 
-void ColumnBindingResolver::Visit(LogicalProjection &op) {
-	LogicalOperatorVisitor::VisitOperator(op);
-
-	// after a projection, we cannot access tables before it directly anymore
-	bound_tables.clear();
-	// the amount of projected columns here is the projection list
-	BoundTable binding;
-	binding.table_index = (size_t) -1;
-	binding.column_count = op.expressions.size();
-	binding.column_offset = 0;
-	bound_tables.push_back(binding);
+void ColumnBindingResolver::Visit(LogicalSubquery &op) {
+	ResolveSubquery(op, op.table_index, op.column_count);
 }
+
+// void ColumnBindingResolver::Visit(LogicalProjection &op) {
+// 	LogicalOperatorVisitor::VisitOperator(op);
+
+// 	// after a projection, we cannot access tables before it directly anymore
+// 	bound_tables.clear();
+// 	// the amount of projected columns here is the projection list
+// 	BoundTable binding;
+// 	binding.table_index = (size_t) -1;
+// 	binding.column_count = op.expressions.size();
+// 	binding.column_offset = 0;
+// 	bound_tables.push_back(binding);
+// }
 
 void ColumnBindingResolver::Visit(LogicalCrossProduct &op) {
 	BindTablesBinaryOp(op, true);
@@ -145,19 +156,6 @@ void ColumnBindingResolver::Visit(LogicalGet &op) {
 	BoundTable binding;
 	binding.table_index = op.table_index;
 	binding.column_count = op.column_ids.size();
-	binding.column_offset =
-	    bound_tables.size() == 0 ? 0 : bound_tables.back().column_offset + bound_tables.back().column_count;
-	bound_tables.push_back(binding);
-}
-
-void ColumnBindingResolver::Visit(LogicalSubquery &op) {
-	// we resolve the subquery separately
-	ColumnBindingResolver resolver;
-	resolver.VisitOperator(*op.children[0]);
-
-	BoundTable binding;
-	binding.table_index = op.table_index;
-	binding.column_count = op.column_count;
 	binding.column_offset =
 	    bound_tables.size() == 0 ? 0 : bound_tables.back().column_offset + bound_tables.back().column_count;
 	bound_tables.push_back(binding);

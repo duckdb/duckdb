@@ -40,7 +40,7 @@ protected:
 	void Visit(LogicalCrossProduct &op);
 	void Visit(LogicalGet &op);
 	void Visit(LogicalJoin &op);
-	void Visit(LogicalProjection &op);
+	// void Visit(LogicalProjection &op);
 	void Visit(LogicalSubquery &op);
 	void Visit(LogicalTableFunction &op);
 
@@ -57,5 +57,7 @@ private:
 	void BindTablesBinaryOp(LogicalOperator &op, bool append_right);
 	//! Append a list of tables to the current set of bound tables
 	void AppendTables(vector<BoundTable> &right_tables);
+
+	void ResolveSubquery(LogicalOperator &op, size_t table_index, size_t column_count);
 };
 } // namespace duckdb

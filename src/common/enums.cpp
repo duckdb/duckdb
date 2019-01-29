@@ -51,14 +51,8 @@ string TypeIdToString(TypeId type) {
 
 string LogicalOperatorToString(LogicalOperatorType type) {
 	switch (type) {
-	case LogicalOperatorType::LEAF:
-		return "LEAF";
 	case LogicalOperatorType::GET:
 		return "GET";
-	case LogicalOperatorType::EXTERNAL_FILE_GET:
-		return "EXTERNAL_FILE_GET";
-	case LogicalOperatorType::QUERY_DERIVED_GET:
-		return "QUERY_DERIVED_GET";
 	case LogicalOperatorType::DELIM_GET:
 		return "DELIM_GET";
 	case LogicalOperatorType::PROJECTION:
@@ -89,28 +83,22 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "INTERSECT";
 	case LogicalOperatorType::INSERT:
 		return "INSERT";
-	case LogicalOperatorType::INSERT_SELECT:
-		return "INSERT_SELECT";
+	case LogicalOperatorType::DISTINCT:
+		return "DISTINCT";
 	case LogicalOperatorType::DELETE:
 		return "DELETE";
 	case LogicalOperatorType::UPDATE:
 		return "UPDATE";
 	case LogicalOperatorType::PRUNE_COLUMNS:
 		return "PRUNE";
-	case LogicalOperatorType::EXPORT_EXTERNAL_FILE:
-		return "EXPORT_EXTERNAL_FILE";
 	case LogicalOperatorType::TABLE_FUNCTION:
 		return "TABLE_FUNCTION";
 	case LogicalOperatorType::CREATE_INDEX:
 		return "CREATE_INDEX";
 	case LogicalOperatorType::CREATE_TABLE:
 		return "CREATE_TABLE";
-	case LogicalOperatorType::CREATE_VIEW:
-		return "CREATE_VIEW";
 	case LogicalOperatorType::EXPLAIN:
 		return "EXPLAIN";
-	case LogicalOperatorType::ALTER:
-		return "ALTER";
 	case LogicalOperatorType::INVALID:
 		break;
 	}
