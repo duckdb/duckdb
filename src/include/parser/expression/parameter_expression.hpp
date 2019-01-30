@@ -14,7 +14,8 @@
 namespace duckdb {
 class ParameterExpression : public Expression {
 public:
-	ParameterExpression() : Expression(ExpressionType::VALUE_PARAMETER, TypeId::INVALID) {
+	ParameterExpression()
+	    : Expression(ExpressionType::VALUE_PARAMETER, TypeId::INVALID), parameter_nr(0), value(Value()) {
 	}
 
 	ExpressionClass GetExpressionClass() override {
@@ -34,13 +35,19 @@ public:
 	uint64_t Hash() const override;
 
 	virtual bool IsScalar() override {
-		return false;
+		return true;
 	}
 
+	virtual bool HasParameter() override {
+		return true;
+	}
 
 	bool Equals(const Expression *other_) const override;
 	string ToString() const override {
 		return "?";
 	}
+
+	size_t parameter_nr;
+	Value value;
 };
 } // namespace duckdb

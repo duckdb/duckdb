@@ -29,6 +29,12 @@ bool Expression::IsScalar() {
 	return is_scalar;
 }
 
+bool Expression::HasParameter() {
+	bool has_parameter = false;
+	EnumerateChildren([&](Expression *child) { has_parameter |= child->HasParameter(); });
+	return has_parameter;
+}
+
 bool Expression::HasSubquery() {
 	bool has_subquery = false;
 	EnumerateChildren([&](Expression *child) { has_subquery |= child->HasSubquery(); });

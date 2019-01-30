@@ -86,6 +86,17 @@ public:
 		return make_unique<PhysicalOperatorState>(children.size() == 0 ? nullptr : children[0].get(), parent);
 	}
 
+	//! will pass the visitor to all expressions in the operator
+	virtual void AcceptExpressions(SQLNodeVisitor *v) = 0;
+
+	void Accept(SQLNodeVisitor *v) {
+		assert(v);
+		AcceptExpressions(v);
+		for (auto &&child : children) {
+			child->Accept(v);
+		}
+	}
+
 	virtual string ExtraRenderInformation() {
 		return "";
 	}

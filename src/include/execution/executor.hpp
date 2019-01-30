@@ -18,6 +18,6 @@ namespace duckdb {
 class Executor {
 public:
 	//! Execute the specified physical operator plan
-	ChunkCollection Execute(ClientContext &context, unique_ptr<PhysicalOperator> op);
+	ChunkCollection Execute(ClientContext &context, PhysicalOperator *op);
 };
 } // namespace duckdb

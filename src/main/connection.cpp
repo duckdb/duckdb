@@ -41,7 +41,7 @@ static void ExecuteStatement(ClientContext &context, unique_ptr<SQLStatement> st
 
 	// finally execute the plan and return the result
 	Executor executor;
-	result.collection = executor.Execute(context, move(physical_planner.plan));
+	result.collection = executor.Execute(context, physical_planner.plan.get());
 	result.success = true;
 }
 
@@ -167,8 +167,10 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(string query) {
 }
 
 unique_ptr<DuckDBPreparedStatement> DuckDBConnection::PrepareStatement(string query) {
-	// parse and plan the q
-	// TODO: we can't execute stuff in the planner any more
+
+	if (context.transaction.IsAutoCommit()) {
+		context.transaction.BeginTransaction();
+	}
 
 	Parser parser(context);
 	parser.ParseQuery(query.c_str());
@@ -183,7 +185,7 @@ unique_ptr<DuckDBPreparedStatement> DuckDBConnection::PrepareStatement(string qu
 	auto &statement = parser.statements.back();
 	if (statement->type != StatementType::SELECT && statement->type != StatementType::INSERT &&
 	    statement->type != StatementType::UPDATE && statement->type != StatementType::DELETE) {
-		throw Exception("Only select/insert/update/delete queries supported for preparation");
+		throw Exception("Only select/insert/update/delete supported for prepared statements");
 	}
 
 	Planner planner;
@@ -199,7 +201,15 @@ unique_ptr<DuckDBPreparedStatement> DuckDBConnection::PrepareStatement(string qu
 		throw Exception("Failed to optimize statement");
 	}
 
-	return make_unique<DuckDBPreparedStatement>(move(plan));
+	// extract the result column names from the plan
+	auto names = plan->GetNames();
+
+	// now convert logical query plan into a physical query plan
+	PhysicalPlanGenerator physical_planner(context);
+	physical_planner.CreatePlan(move(plan));
+	auto res = make_unique<DuckDBPreparedStatement>(move(physical_planner.plan), names);
+
+	return res;
 }
 
 unique_ptr<DuckDBResult> DuckDBConnection::Query(string query) {
