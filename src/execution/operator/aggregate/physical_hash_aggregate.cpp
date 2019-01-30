@@ -7,14 +7,14 @@
 using namespace duckdb;
 using namespace std;
 
-PhysicalHashAggregate::PhysicalHashAggregate(LogicalOperator &op, vector<unique_ptr<Expression>> expressions, PhysicalOperatorType type)
-    : PhysicalAggregate(op, move(expressions), type) {
+PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions, PhysicalOperatorType type)
+    : PhysicalAggregate(types, move(expressions), type) {
 	Initialize();
 }
 
-PhysicalHashAggregate::PhysicalHashAggregate(LogicalOperator &op, vector<unique_ptr<Expression>> expressions,
+PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions,
                                              vector<unique_ptr<Expression>> groups, PhysicalOperatorType type)
-    : PhysicalAggregate(op, move(expressions), move(groups), type) {
+    : PhysicalAggregate(types, move(expressions), move(groups), type) {
 	Initialize();
 }
 

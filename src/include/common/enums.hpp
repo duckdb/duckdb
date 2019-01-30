@@ -316,8 +316,7 @@ enum class JoinType : uint8_t {
 	OUTER = 4,    // outer
 	SEMI = 5,     // SEMI join returns left side row ONLY if it has a join partner, no duplicates
 	ANTI = 6,     // ANTI join returns left side row ONLY if it has NO join partner, no duplicates
-	MARK = 7,     // MARK join returns marker indicating whether or not there is a join partner (true), there is no join partner (false)
-	DEPENDENT = 8 // DEPENDENT join requires the right side to be executed once for every tuple in the left side. Cannot be executed, and should always be optimized away
+	MARK = 7      // MARK join returns marker indicating whether or not there is a join partner (true), there is no join partner (false)
 };
 
 //===--------------------------------------------------------------------===//
@@ -343,7 +342,7 @@ enum class SetOperationType : uint8_t { NONE = 0, UNION = 1, EXCEPT = 2, INTERSE
 enum class LogicalOperatorType : uint8_t {
 	INVALID,
 	GET,
-	DELIM_GET,
+	CHUNK_GET,
 	PROJECTION,
 	FILTER,
 	AGGREGATE_AND_GROUP_BY,
@@ -392,11 +391,6 @@ enum class LogicalOperatorType : uint8_t {
 enum class PhysicalOperatorType : uint8_t {
 	INVALID,
 	LEAF,
-	DUMMY_SCAN,
-	SEQ_SCAN,
-	INDEX_SCAN,
-	EXTERNAL_FILE_SCAN,
-	QUERY_DERIVED_SCAN,
 	ORDER_BY,
 	LIMIT,
 	AGGREGATE,
@@ -410,12 +404,22 @@ enum class PhysicalOperatorType : uint8_t {
 	COPY,
 	TABLE_FUNCTION,
 	// -----------------------------
+	// Scans
+	// -----------------------------
+	DUMMY_SCAN,
+	SEQ_SCAN,
+	INDEX_SCAN,
+	CHUNK_SCAN,
+	EXTERNAL_FILE_SCAN,
+	QUERY_DERIVED_SCAN,
+	// -----------------------------
 	// Joins
 	// -----------------------------
 	NESTED_LOOP_JOIN,
 	HASH_JOIN,
 	CROSS_PRODUCT,
 	PIECEWISE_MERGE_JOIN,
+	DELIM_JOIN,
 
 	// -----------------------------
 	// SetOps

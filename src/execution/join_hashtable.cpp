@@ -184,6 +184,9 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 			payload.data[i].sel_vector = keys.data[0].sel_vector;
 		}
 	}
+	if (not_null_count == 0) {
+		return;
+	}
 	// resize at 50% capacity, also need to fit the entire vector
 	if (parallel) {
 		parallel_lock.lock();

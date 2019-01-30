@@ -137,8 +137,7 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 unique_ptr<LogicalOperator> ObsoleteFilterRewriter::Rewrite(unique_ptr<LogicalOperator> node) {
 	if (node->type == LogicalOperatorType::FILTER) {
 		auto &filter = (LogicalFilter &)*node;
-		unordered_map<Expression *, vector<ExpressionValueInformation>, ExpressionHashFunction, ExpressionEquality>
-		    equivalence_sets;
+		expression_map_t<vector<ExpressionValueInformation>> equivalence_sets;
 		// filter node, here we perform the actual obsolete filter removal
 		// first we remove any obsolete filter expressions
 		for (size_t i = 0; i < node->expressions.size(); i++) {

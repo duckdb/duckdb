@@ -63,9 +63,9 @@ static void GetTableReferences(LogicalOperator *op, unordered_set<size_t> &bindi
 	} else if (op->type == LogicalOperatorType::TABLE_FUNCTION) {
 		auto table_function = (LogicalTableFunction *)op;
 		bindings.insert(table_function->table_index);
-	} else if (op->type == LogicalOperatorType::DELIM_GET) {
-		auto delim = (LogicalDelimGet *)op;
-		bindings.insert(delim->table_index);
+	} else if (op->type == LogicalOperatorType::CHUNK_GET) {
+		auto chunk = (LogicalChunkGet *)op;
+		bindings.insert(chunk->table_index);
 	} else {
 		// iterate over the children
 		for (auto &child : op->children) {
@@ -242,7 +242,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 
 	if (op->type == LogicalOperatorType::JOIN) {
 		LogicalJoin *join = (LogicalJoin *)op;
-		if (join->type == JoinType::INNER) {
+		if (join->type == JoinType::INNER && !join->is_duplicate_eliminated) {
 			// extract join conditions from inner join
 			filter_operators.push_back(op);
 		} else {

@@ -16,9 +16,9 @@ namespace duckdb {
 //! it is an abstract class, its implementation is not defined here.
 class PhysicalAggregate : public PhysicalOperator {
 public:
-	PhysicalAggregate(LogicalOperator &op, vector<unique_ptr<Expression>> select_list,
+	PhysicalAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> select_list,
 	                  PhysicalOperatorType type = PhysicalOperatorType::BASE_GROUP_BY);
-	PhysicalAggregate(LogicalOperator &op, vector<unique_ptr<Expression>> select_list,
+	PhysicalAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> select_list,
 	                  vector<unique_ptr<Expression>> groups,
 	                  PhysicalOperatorType type = PhysicalOperatorType::BASE_GROUP_BY);
 

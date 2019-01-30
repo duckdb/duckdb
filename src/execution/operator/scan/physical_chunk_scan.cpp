@@ -1,0 +1,25 @@
+#include "execution/operator/scan/physical_chunk_scan.hpp"
+
+using namespace duckdb;
+using namespace std;
+
+void PhysicalChunkScan::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+	auto state = (PhysicalChunkScanState*) state_;
+	assert(collection);
+	if (collection->count == 0) {
+		return;
+	}
+	assert(chunk.GetTypes() == collection->types);
+	if (state->chunk_index >= collection->chunks.size()) {
+		return;
+	}
+	auto &collection_chunk = *collection->chunks[state->chunk_index];
+	for(size_t i = 0; i < chunk.column_count; i++) {
+		chunk.data[i].Reference(collection_chunk.data[i]);
+	}
+	state->chunk_index++;
+}
+
+unique_ptr<PhysicalOperatorState> PhysicalChunkScan::GetOperatorState(ExpressionExecutor *parent_executor) {
+	return make_unique<PhysicalChunkScanState>(parent_executor);
+}

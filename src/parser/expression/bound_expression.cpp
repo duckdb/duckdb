@@ -14,13 +14,11 @@ unique_ptr<Expression> BoundExpression::Copy() {
 void BoundExpression::Serialize(Serializer &serializer) {
 	Expression::Serialize(serializer);
 	serializer.Write<uint32_t>(index);
-	serializer.Write<uint32_t>(depth);
 }
 
 unique_ptr<Expression> BoundExpression::Deserialize(ExpressionType type, TypeId return_type, Deserializer &source) {
 	auto index = source.Read<uint32_t>();
-	auto depth = source.Read<uint32_t>();
-	auto expression = make_unique<BoundExpression>(return_type, index, depth);
+	auto expression = make_unique<BoundExpression>(return_type, index);
 	return expression;
 }
 

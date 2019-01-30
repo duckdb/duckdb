@@ -53,8 +53,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 	switch (type) {
 	case LogicalOperatorType::GET:
 		return "GET";
-	case LogicalOperatorType::DELIM_GET:
-		return "DELIM_GET";
+	case LogicalOperatorType::CHUNK_GET:
+		return "CHUNK_GET";
 	case LogicalOperatorType::PROJECTION:
 		return "PROJECTION";
 	case LogicalOperatorType::FILTER:
@@ -115,6 +115,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "SEQ_SCAN";
 	case PhysicalOperatorType::INDEX_SCAN:
 		return "INDEX_SCAN";
+	case PhysicalOperatorType::CHUNK_SCAN:
+		return "CHUNK_SCAN";
 	case PhysicalOperatorType::EXTERNAL_FILE_SCAN:
 		return "EXTERNAL_FILE_SCAN";
 	case PhysicalOperatorType::QUERY_DERIVED_SCAN:
@@ -141,6 +143,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "BASE_GROUP_BY";
 	case PhysicalOperatorType::COPY:
 		return "COPY";
+	case PhysicalOperatorType::DELIM_JOIN:
+		return "DELIM_JOIN";
 	case PhysicalOperatorType::NESTED_LOOP_JOIN:
 		return "NESTED_LOOP_JOIN";
 	case PhysicalOperatorType::HASH_JOIN:
@@ -388,8 +392,6 @@ string JoinTypeToString(JoinType type) {
 		return "ANTI";
 	case JoinType::MARK:
 		return "MARK";
-	case JoinType::DEPENDENT:
-		return "DEPENDENT";
 	case JoinType::INVALID:
 		break;
 	}

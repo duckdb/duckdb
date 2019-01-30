@@ -71,8 +71,8 @@ void PhysicalPlanGenerator::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::DELETE:
 		Visit((LogicalDelete &)op);
 		break;
-	case LogicalOperatorType::DELIM_GET:
-		Visit((LogicalDelimGet &)op);
+	case LogicalOperatorType::CHUNK_GET:
+		Visit((LogicalChunkGet &)op);
 		break;
 	case LogicalOperatorType::UPDATE:
 		Visit((LogicalUpdate &)op);
@@ -109,12 +109,12 @@ void PhysicalPlanGenerator::Visit(LogicalAggregate &op) {
 		// no groups
 		if (!plan) {
 			// and no FROM clause, use a dummy aggregate
-			auto groupby = make_unique<PhysicalHashAggregate>(op, move(op.expressions));
+			auto groupby = make_unique<PhysicalHashAggregate>(op.types, move(op.expressions));
 			this->plan = move(groupby);
 		} else {
 			// but there is a FROM clause
 			// special case: aggregate entire columns together
-			auto groupby = make_unique<PhysicalHashAggregate>(op, move(op.expressions));
+			auto groupby = make_unique<PhysicalHashAggregate>(op.types, move(op.expressions));
 			groupby->children.push_back(move(plan));
 			this->plan = move(groupby);
 		}
@@ -124,25 +124,39 @@ void PhysicalPlanGenerator::Visit(LogicalAggregate &op) {
 			throw Exception("Cannot have GROUP BY without FROM clause!");
 		}
 
-		auto groupby = make_unique<PhysicalHashAggregate>(op, move(op.expressions), move(op.groups));
+		auto groupby = make_unique<PhysicalHashAggregate>(op.types, move(op.expressions), move(op.groups));
 		groupby->children.push_back(move(plan));
 		this->plan = move(groupby);
 	}
+}
+
+void PhysicalPlanGenerator::Visit(LogicalChunkGet &op) {
+	LogicalOperatorVisitor::VisitOperatorChildren(op);
+
+	// create a PhysicalChunkScan
+	// the actual collection from which to scan will be added later
+	assert(!plan);
+	this->plan = make_unique<PhysicalChunkScan>(op.types);
+}
+
+static unique_ptr<PhysicalOperator> CreateDistinct(unique_ptr<PhysicalOperator> child) {
+	assert(child);
+	// create a PhysicalHashAggregate that groups by the input columns
+	auto &types = child->GetTypes();
+	vector<unique_ptr<Expression>> groups, expressions;
+	for(size_t i = 0; i < types.size(); i++) {
+		groups.push_back(make_unique<BoundExpression>(types[i], i));
+	}
+	auto groupby = make_unique<PhysicalHashAggregate>(types, move(expressions), move(groups), PhysicalOperatorType::DISTINCT);
+	groupby->children.push_back(move(child));
+	return move(groupby);
 }
 
 
 void PhysicalPlanGenerator::Visit(LogicalDistinct &op) {
 	LogicalOperatorVisitor::VisitOperatorChildren(op);
 	assert(plan);
-	// create a PhysicalHashAggregate that groups by the 
-	auto &types = plan->GetTypes();
-	vector<unique_ptr<Expression>> groups, expressions;
-	for(size_t i = 0; i < types.size(); i++) {
-		groups.push_back(make_unique<BoundExpression>(types[i], i));
-	}
-	auto groupby = make_unique<PhysicalHashAggregate>(op, move(expressions), move(groups), PhysicalOperatorType::DISTINCT);
-	groupby->children.push_back(move(plan));
-	this->plan = move(groupby);
+	this->plan = CreateDistinct(move(plan));
 }
 
 void PhysicalPlanGenerator::Visit(LogicalCrossProduct &op) {
@@ -325,11 +339,6 @@ void PhysicalPlanGenerator::Visit(LogicalFilter &op) {
 	}
 }
 
-void PhysicalPlanGenerator::Visit(LogicalDelimGet &op) {
-	LogicalOperatorVisitor::VisitOperatorChildren(op);
-	throw NotImplementedException("Transform LogicalDelimGet not implemented");
-}
-
 void PhysicalPlanGenerator::Visit(LogicalGet &op) {
 	LogicalOperatorVisitor::VisitOperatorChildren(op);
 
@@ -342,13 +351,22 @@ void PhysicalPlanGenerator::Visit(LogicalGet &op) {
 	this->plan = move(scan);
 }
 
+static void GatherDelimScans(PhysicalOperator* op, vector<PhysicalOperator*>& delim_scans) {
+	assert(op);
+	if (op->type == PhysicalOperatorType::CHUNK_SCAN) {
+		delim_scans.push_back(op);
+	} else {
+		for(auto &child : op->children) {
+			GatherDelimScans(child.get(), delim_scans);
+		}
+	}
+}
+
 void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 	assert(!plan); // Cross product should be the first node of a plan!
 
 	// now visit the children
 	assert(op.children.size() == 2);
-	assert(op.type != JoinType::DEPENDENT);
-	assert(!op.is_duplicate_eliminated);
 
 	VisitOperator(*op.children[0]);
 	auto left = move(plan);
@@ -356,10 +374,11 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 	auto right = move(plan);
 
 	if (op.conditions.size() == 0) {
+		// no conditions: insert a cross product
+		assert(!op.is_duplicate_eliminated);
 		plan = make_unique<PhysicalCrossProduct>(op, move(left), move(right));
 		return;
 	}
-	assert(op.conditions.size() > 0);
 
 	bool has_equality = false;
 	bool has_inequality = false;
@@ -387,6 +406,23 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 			// inequality join: use nested loop
 			plan = make_unique<PhysicalNestedLoopJoin>(op, move(left), move(right), move(op.conditions), op.type);
 		}
+	}
+	if (op.is_duplicate_eliminated) {
+		// duplicate eliminated join
+		// first gather the scans on the duplicate eliminated data set from the RHS
+		vector<PhysicalOperator*> delim_scans;
+		GatherDelimScans(plan->children[1].get(), delim_scans);
+		assert(delim_scans.size() > 0);
+		// now create the duplicate eliminated join
+		auto delim_join = make_unique<PhysicalDelimJoin>(op, move(plan), delim_scans);
+		// we still have to create the DISTINCT clause that is used to generate the duplicate eliminated chunk
+		// we create a ChunkCollectionScan that pulls from the delim_join LHS
+		auto chunk_scan = make_unique<PhysicalChunkScan>(delim_join->children[0]->GetTypes());
+		chunk_scan->collection = &delim_join->lhs_data;
+		// FIXME: now we need to create a projection that projects only the duplicate eliminated columns
+		// finally create the distinct clause on top of the projection
+		delim_join->distinct = CreateDistinct(move(chunk_scan));
+		plan = move(delim_join);
 	}
 }
 

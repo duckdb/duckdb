@@ -15,11 +15,11 @@ namespace duckdb {
 //! A BoundExpression represents a physical index into a DataChunk
 class BoundExpression : public Expression {
 public:
-	BoundExpression(string alias, TypeId type, uint32_t index, uint32_t depth = 0)
-	    : Expression(ExpressionType::BOUND_REF, type), index(index), depth(depth) {
+	BoundExpression(string alias, TypeId type, uint32_t index)
+	    : Expression(ExpressionType::BOUND_REF, type), index(index) {
 		this->alias = alias;
 	}
-	BoundExpression(TypeId type, uint32_t index, uint32_t depth = 0) : BoundExpression(string(), type, index, depth) {
+	BoundExpression(TypeId type, uint32_t index) : BoundExpression(string(), type, index) {
 	}
 
 	ExpressionClass GetExpressionClass() override {
@@ -44,7 +44,5 @@ public:
 
 	//! Index used to access data in the chunks
 	uint32_t index;
-	//! The subquery depth, used for execution
-	uint32_t depth;
 };
 } // namespace duckdb

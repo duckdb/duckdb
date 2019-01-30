@@ -18,7 +18,7 @@ void CommonSubExpressionOptimizer::VisitOperator(LogicalOperator &op) {
 	LogicalOperatorVisitor::VisitOperator(op);
 }
 
-void CommonSubExpressionOptimizer::CountExpressions(Expression *expr, expression_map_t &expression_count) {
+void CommonSubExpressionOptimizer::CountExpressions(Expression *expr, expression_map_t<CSENode> &expression_count) {
 	if (expr->ChildCount() > 0) {
 		// we only consider expressions with children for CSE elimination
 		auto node = expression_count.find(expr);
@@ -34,7 +34,7 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression *expr, expression
 	}
 }
 
-Expression *CommonSubExpressionOptimizer::PerformCSEReplacement(Expression *expr, expression_map_t &expression_count) {
+Expression *CommonSubExpressionOptimizer::PerformCSEReplacement(Expression *expr, expression_map_t<CSENode> &expression_count) {
 	if (expr->ChildCount() > 0) {
 		// check if this child is eligible for CSE elimination
 		if (expression_count.find(expr) == expression_count.end()) {
@@ -83,7 +83,7 @@ Expression *CommonSubExpressionOptimizer::PerformCSEReplacement(Expression *expr
 
 void CommonSubExpressionOptimizer::ExtractCommonSubExpresions(LogicalOperator &op) {
 	// first we count for each expression with children how many types it occurs
-	expression_map_t expression_count;
+	expression_map_t<CSENode> expression_count;
 	for (auto &expr : op.expressions) {
 		CountExpressions(expr.get(), expression_count);
 	}

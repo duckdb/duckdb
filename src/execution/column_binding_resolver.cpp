@@ -22,6 +22,9 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	// case LogicalOperatorType::PROJECTION:
 	// 	Visit((LogicalProjection &)op);
 	// 	break;
+	case LogicalOperatorType::CHUNK_GET:
+		Visit((LogicalChunkGet &)op);
+		break;
 	case LogicalOperatorType::GET:
 		Visit((LogicalGet &)op);
 		break;
@@ -141,23 +144,27 @@ void ColumnBindingResolver::Visit(LogicalIntersect &op) {
 	BindTablesBinaryOp(op, false);
 }
 
+void ColumnBindingResolver::Visit(LogicalChunkGet &op) {
+	BoundTable binding;
+	binding.table_index = op.table_index;
+	binding.column_count = op.chunk_types.size();
+	binding.column_offset =
+		bound_tables.size() == 0 ? 0 : bound_tables.back().column_offset + bound_tables.back().column_count;
+	bound_tables.push_back(binding);
+}
+
 void ColumnBindingResolver::Visit(LogicalGet &op) {
+	BoundTable binding;
 	if (!op.table) {
 		// DUMMY get
 		// create a dummy table with a single column
-		BoundTable binding;
 		binding.table_index = (size_t) -1;
 		binding.column_count = 1;
-		binding.column_offset =
-			bound_tables.size() == 0 ? 0 : bound_tables.back().column_offset + bound_tables.back().column_count;
-		bound_tables.push_back(binding);
-		return;
+	} else {
+		binding.table_index = op.table_index;
+		binding.column_count = op.column_ids.size();
 	}
-	BoundTable binding;
-	binding.table_index = op.table_index;
-	binding.column_count = op.column_ids.size();
-	binding.column_offset =
-	    bound_tables.size() == 0 ? 0 : bound_tables.back().column_offset + bound_tables.back().column_count;
+	binding.column_offset = bound_tables.size() == 0 ? 0 : bound_tables.back().column_offset + bound_tables.back().column_count;
 	bound_tables.push_back(binding);
 }
 
@@ -213,6 +220,7 @@ void ColumnBindingResolver::Visit(LogicalJoin &op) {
 
 unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpression &expr,
                                                            unique_ptr<Expression> *expr_ptr) {
+	assert(expr.depth == 0);
 	uint32_t index = (uint32_t)-1;
 	for (auto &binding : bound_tables) {
 		if (binding.table_index == expr.binding.table_index) {
@@ -224,5 +232,5 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	if (index == (uint32_t)-1) {
 		throw Exception("Failed to bind column ref");
 	}
-	return make_unique<BoundExpression>(expr.return_type, index, expr.depth);
+	return make_unique<BoundExpression>(expr.return_type, index);
 }

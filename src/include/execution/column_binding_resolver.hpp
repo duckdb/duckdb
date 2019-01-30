@@ -38,6 +38,7 @@ protected:
 	void Visit(LogicalExcept &op);
 	void Visit(LogicalIntersect &op);
 	void Visit(LogicalCrossProduct &op);
+	void Visit(LogicalChunkGet &op);
 	void Visit(LogicalGet &op);
 	void Visit(LogicalJoin &op);
 	// void Visit(LogicalProjection &op);

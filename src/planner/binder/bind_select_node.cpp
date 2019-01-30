@@ -8,8 +8,7 @@ using namespace duckdb;
 using namespace std;
 
 static unique_ptr<Expression> replace_columns_with_group_refs(
-    unique_ptr<Expression> expr,
-    unordered_map<Expression *, size_t, ExpressionHashFunction, ExpressionEquality> &groups) {
+    unique_ptr<Expression> expr, expression_map_t<size_t> &groups) {
 	if (expr->GetExpressionClass() == ExpressionClass::AGGREGATE) {
 		// already an aggregate, move it back
 		return expr;
@@ -129,7 +128,7 @@ void Binder::Bind(SelectNode &statement) {
 	}
 
 	if (statement.HasAggregation()) {
-		unordered_map<Expression *, size_t, ExpressionHashFunction, ExpressionEquality> groups;
+		expression_map_t<size_t> groups;
 		if (statement.HasGroup()) {
 			// bind group columns
 			for (auto &group : statement.groupby.groups) {
