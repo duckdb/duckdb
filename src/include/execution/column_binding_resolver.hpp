@@ -55,10 +55,11 @@ protected:
 
 	vector<BoundTable> bound_tables;
 private:
+	void PushBinding(BoundTable binding);
 	void BindTablesBinaryOp(LogicalOperator &op, bool append_right);
 	//! Append a list of tables to the current set of bound tables
 	void AppendTables(vector<BoundTable> &right_tables);
 
-	void ResolveSubquery(LogicalOperator &op, size_t table_index, size_t column_count);
+	void ResolveSubquery(LogicalOperator &op);
 };
 } // namespace duckdb

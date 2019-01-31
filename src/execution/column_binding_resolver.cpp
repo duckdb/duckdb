@@ -6,6 +6,12 @@
 using namespace duckdb;
 using namespace std;
 
+void ColumnBindingResolver::PushBinding(BoundTable binding) {
+	binding.column_offset =
+	    bound_tables.size() == 0 ? 0 : bound_tables.back().column_offset + bound_tables.back().column_count;
+	bound_tables.push_back(binding);
+}
+
 void ColumnBindingResolver::AppendTables(vector<BoundTable> &right_tables) {
 	size_t offset = bound_tables.size() == 0 ? 0 : bound_tables.back().column_offset + bound_tables.back().column_count;
 	for (auto table : right_tables) {
@@ -91,32 +97,45 @@ void ColumnBindingResolver::BindTablesBinaryOp(LogicalOperator &op, bool append_
 	}
 }
 
-void ColumnBindingResolver::ResolveSubquery(LogicalOperator &op, size_t table_index, size_t column_count) {
+void ColumnBindingResolver::ResolveSubquery(LogicalOperator &op) {
 	assert(op.children.size() == 1);
 	// we clear the bound tables prior to visiting this operator
 	auto old_tables = bound_tables;
 	bound_tables.clear();
 	LogicalOperatorVisitor::VisitOperator(op);
 	bound_tables = old_tables;
-
-	BoundTable binding;
-	binding.table_index = table_index;
-	binding.column_count = column_count;
-	binding.column_offset =
-	    bound_tables.size() == 0 ? 0 : bound_tables.back().column_offset + bound_tables.back().column_count;
-	bound_tables.push_back(binding);
 }
 
 void ColumnBindingResolver::Visit(LogicalAggregate &op) {
-	ResolveSubquery(op, op.table_index, op.groups.size() + op.expressions.size());
+	ResolveSubquery(op);
+	
+	BoundTable group_binding;
+	group_binding.table_index = op.group_index;
+	group_binding.column_count = op.groups.size();
+	PushBinding(group_binding);
+
+	BoundTable aggregate_binding;
+	aggregate_binding.table_index = op.aggregate_index;
+	aggregate_binding.column_count = op.expressions.size();
+	PushBinding(aggregate_binding);
 }
 
 void ColumnBindingResolver::Visit(LogicalSubquery &op) {
-	ResolveSubquery(op, op.table_index, op.column_count);
+	ResolveSubquery(op);
+
+	BoundTable binding;
+	binding.table_index = op.table_index;
+	binding.column_count = op.column_count;
+	PushBinding(binding);
 }
 
 void ColumnBindingResolver::Visit(LogicalProjection &op) {
-	ResolveSubquery(op, op.table_index, op.expressions.size());
+	ResolveSubquery(op);
+
+	BoundTable binding;
+	binding.table_index = op.table_index;
+	binding.column_count = op.expressions.size();
+	PushBinding(binding);
 }
 
 void ColumnBindingResolver::Visit(LogicalCrossProduct &op) {
@@ -139,9 +158,7 @@ void ColumnBindingResolver::Visit(LogicalChunkGet &op) {
 	BoundTable binding;
 	binding.table_index = op.table_index;
 	binding.column_count = op.chunk_types.size();
-	binding.column_offset =
-		bound_tables.size() == 0 ? 0 : bound_tables.back().column_offset + bound_tables.back().column_count;
-	bound_tables.push_back(binding);
+	PushBinding(binding);
 }
 
 void ColumnBindingResolver::Visit(LogicalGet &op) {
@@ -155,8 +172,7 @@ void ColumnBindingResolver::Visit(LogicalGet &op) {
 		binding.table_index = op.table_index;
 		binding.column_count = op.column_ids.size();
 	}
-	binding.column_offset = bound_tables.size() == 0 ? 0 : bound_tables.back().column_offset + bound_tables.back().column_count;
-	bound_tables.push_back(binding);
+	PushBinding(binding);
 }
 
 void ColumnBindingResolver::Visit(LogicalTableFunction &op) {
@@ -165,9 +181,7 @@ void ColumnBindingResolver::Visit(LogicalTableFunction &op) {
 	BoundTable binding;
 	binding.table_index = op.table_index;
 	binding.column_count = op.function->return_values.size();
-	binding.column_offset =
-	    bound_tables.size() == 0 ? 0 : bound_tables.back().column_offset + bound_tables.back().column_count;
-	bound_tables.push_back(binding);
+	PushBinding(binding);
 }
 
 void ColumnBindingResolver::Visit(LogicalJoin &op) {
@@ -200,8 +214,7 @@ void ColumnBindingResolver::Visit(LogicalJoin &op) {
 		BoundTable binding;
 		binding.table_index = subquery.table_index;
 		binding.column_count = 1;
-		binding.column_offset = bound_tables.back().column_offset + bound_tables.back().column_count;
-		bound_tables.push_back(binding);
+		PushBinding(binding);
 		return;
 	}
 

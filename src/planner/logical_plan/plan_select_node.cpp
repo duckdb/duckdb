@@ -7,14 +7,14 @@ using namespace duckdb;
 using namespace std;
 
 static unique_ptr<Expression> extract_aggregates(unique_ptr<Expression> expr, vector<unique_ptr<Expression>> &result,
-                                                 size_t aggregate_index, size_t ngroups) {
+                                                 size_t aggregate_index) {
 	if (expr->GetExpressionClass() == ExpressionClass::AGGREGATE) {
-		auto colref_expr = make_unique<BoundColumnRefExpression>(*expr, expr->return_type, ColumnBinding(aggregate_index, ngroups + result.size()));
+		auto colref_expr = make_unique<BoundColumnRefExpression>(*expr, expr->return_type, ColumnBinding(aggregate_index, result.size()));
 		result.push_back(move(expr));
 		return colref_expr;
 	}
 	expr->EnumerateChildren([&](unique_ptr<Expression> expr) -> unique_ptr<Expression> {
-		return extract_aggregates(move(expr), result, aggregate_index, ngroups);
+		return extract_aggregates(move(expr), result, aggregate_index);
 	});
 	return expr;
 }
@@ -51,21 +51,22 @@ void LogicalPlanGenerator::CreatePlan(SelectNode &statement) {
 
 	if (statement.HasAggregation()) {
 		vector<unique_ptr<Expression>> aggregates;
+		auto group_index = bind_context.GenerateTableIndex();
 		auto aggregate_index = bind_context.GenerateTableIndex();
 		for (size_t expr_idx = 0; expr_idx < statement.select_list.size(); expr_idx++) {
 			statement.select_list[expr_idx] =
-			    extract_aggregates(move(statement.select_list[expr_idx]), aggregates, aggregate_index, statement.groupby.groups.size());
+			    extract_aggregates(move(statement.select_list[expr_idx]), aggregates, aggregate_index);
 		}
 		if (statement.HasHaving()) {
 			// the HAVING child cannot contain aggregates itself
 			// turn them into Column References
 			statement.groupby.having =
-			    extract_aggregates(move(statement.groupby.having), aggregates, aggregate_index, statement.groupby.groups.size());
+			    extract_aggregates(move(statement.groupby.having), aggregates, aggregate_index);
 		}
 		for (auto &expr : aggregates) {
 			VisitExpression(&expr);
 		}
-		auto aggregate = make_unique<LogicalAggregate>(aggregate_index, move(aggregates));
+		auto aggregate = make_unique<LogicalAggregate>(group_index, aggregate_index, move(aggregates));
 		if (statement.HasGroup()) {
 			for(auto &group : statement.groupby.groups) {
 				VisitExpression(&group);

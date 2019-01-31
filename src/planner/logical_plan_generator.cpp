@@ -252,7 +252,7 @@ struct FlattenDependentJoins {
 					aggr->groups.push_back(move(colref));
 				}
 				// now we update the delim_index
-				base_binding.table_index = aggr->table_index;
+				base_binding.table_index = aggr->group_index;
 				this->delim_offset = base_binding.column_index = aggr->groups.size() - correlated_columns.size();
 				this->data_offset = aggr->groups.size();
 				return plan;
@@ -303,10 +303,10 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 		auto count_star = make_unique<AggregateExpression>(ExpressionType::AGGREGATE_COUNT_STAR, nullptr);
 		count_star->ResolveType();
 		auto count_type = count_star->return_type;
-		auto aggregate_index = expr.context->GenerateTableIndex();
 		vector<unique_ptr<Expression>> aggregate_list;
 		aggregate_list.push_back(move(count_star));
-		auto aggregate = make_unique<LogicalAggregate>(aggregate_index, move(aggregate_list));
+		auto aggregate_index = expr.context->GenerateTableIndex();
+		auto aggregate = make_unique<LogicalAggregate>(expr.context->GenerateTableIndex(), aggregate_index, move(aggregate_list));
 		aggregate->AddChild(move(plan));
 		plan = move(aggregate);
 
@@ -351,7 +351,7 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 			first_agg->ResolveType();
 			expressions.push_back(move(first_agg));
 			auto aggr_index = bind_context.GenerateTableIndex();
-			auto aggr = make_unique<LogicalAggregate>(aggr_index, move(expressions));
+			auto aggr = make_unique<LogicalAggregate>(bind_context.GenerateTableIndex(), aggr_index, move(expressions));
 			aggr->AddChild(move(plan));
 			plan = move(aggr);
 

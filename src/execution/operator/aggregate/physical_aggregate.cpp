@@ -13,9 +13,9 @@ PhysicalAggregate::PhysicalAggregate(vector<TypeId> types, vector<unique_ptr<Exp
     : PhysicalOperator(type, types), groups(move(groups)) {
 	// get a list of all aggregates to be computed
 	// fake a single group with a constant value for aggregation without groups
-	if (groups.size() == 0) {
+	if (this->groups.size() == 0) {
 		unique_ptr<Expression> ce = make_unique<ConstantExpression>(Value::TINYINT(42));
-		groups.push_back(move(ce));
+		this->groups.push_back(move(ce));
 		is_implicit_aggr = true;
 	} else {
 		is_implicit_aggr = false;
