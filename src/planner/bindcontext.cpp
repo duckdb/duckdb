@@ -6,6 +6,8 @@
 #include "parser/tableref/subqueryref.hpp"
 #include "storage/column_statistics.hpp"
 
+#include <algorithm>
+
 using namespace duckdb;
 using namespace std;
 
@@ -108,7 +110,11 @@ unique_ptr<Expression> BindContext::BindColumn(ColumnRefExpression &expr, size_t
 			auto expression = parent->BindColumn(expr, ++depth);
 			assert(expression->type == ExpressionType::BOUND_COLUMN_REF);
 			auto &bound_colref = (BoundColumnRefExpression &)*expression;
-			correlated_bindings.push_back(CorrelatedColumnInfo(bound_colref));
+			// add the bound_colref to the correlated_bindings if it doesn't exist yet
+			auto info = CorrelatedColumnInfo(bound_colref);
+			if (std::find(correlated_bindings.begin(), correlated_bindings.end(), info) == correlated_bindings.end()) {
+				correlated_bindings.push_back(info);
+			}
 			max_depth = max(bound_colref.depth, max_depth);
 			return expression;
 		}

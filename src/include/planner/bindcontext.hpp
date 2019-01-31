@@ -90,6 +90,10 @@ struct CorrelatedColumnInfo {
 		type = expr.return_type;
 		name = expr.GetName();
 	}
+
+	bool operator==(const CorrelatedColumnInfo &rhs) const {
+		return binding == rhs.binding;
+	}
 };
 
 //! The BindContext object keeps track of all the tables and columns that are
