@@ -26,6 +26,14 @@ TEST_CASE("Test UNION/EXCEPT/INTERSECT", "[setop]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"a", "b", "c", "d"}));
 
+	// UNION/EXCEPT/INTERSECT with NULL values
+	result = con.Query("SELECT NULL UNION SELECT NULL");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	result = con.Query("SELECT NULL EXCEPT SELECT NULL");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT NULL INTERSECT SELECT NULL");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+
 	// create tables
 	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
 	result = con.Query("INSERT INTO test VALUES (11, 1), (12, 1), (13, 2)");

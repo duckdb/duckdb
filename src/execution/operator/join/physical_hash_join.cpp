@@ -7,9 +7,9 @@ using namespace duckdb;
 using namespace std;
 
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
-                                   unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type)
+                                   unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type, bool null_values_are_equal)
     : PhysicalJoin(op, PhysicalOperatorType::HASH_JOIN, move(cond), join_type) {
-	hash_table = make_unique<JoinHashTable>(conditions, right->GetTypes(), join_type);
+	hash_table = make_unique<JoinHashTable>(conditions, right->GetTypes(), join_type, null_values_are_equal);
 
 	children.push_back(move(left));
 	children.push_back(move(right));
@@ -43,11 +43,9 @@ void PhysicalHashJoin::_GetChunk(ClientContext &context, DataChunk &chunk, Physi
 		}
 
 		if (hash_table->size() == 0 &&
-			hash_table->join_type != JoinType::ANTI &&
-			hash_table->join_type != JoinType::MARK) {
-			// empty hash table means empty result set
-			// except for ANTI-join, in which case it means NOP join
-			// AND except for mark-join, in which case the result is all FALSE
+			(hash_table->join_type == JoinType::INNER ||
+			hash_table->join_type == JoinType::SEMI)) {
+			// empty hash table with INNER or SEMI join means empty result set
 			return;
 		}
 
@@ -82,29 +80,30 @@ void PhysicalHashJoin::_GetChunk(ClientContext &context, DataChunk &chunk, Physi
 					chunk.data[i].Reference(state->child_chunk.data[i]);
 				}
 				return;
-			}
-			// MARK join with empty hash table
-			assert(hash_table->join_type == JoinType::MARK);
-			assert(chunk.column_count == state->child_chunk.column_count + 1);
-			auto &result_vector = chunk.data[state->child_chunk.column_count];
-			assert(result_vector.type == TypeId::BOOLEAN);
-			result_vector.count = state->child_chunk.size();
-			// for every data vector, we just reference the child chunk
-			for(size_t i = 0; i < state->child_chunk.column_count; i++) {
-				chunk.data[i].Reference(state->child_chunk.data[i]);
-			}
-			// for the MARK vector:
-			// if the HT has no NULL values (i.e. empty result set), return a vector that has false for every input entry
-			// if the HT has NULL values (i.e. result set had values, but all were NULL), return a vector that has NULL for every input entry
-			if (!hash_table->has_null) {
-				auto bool_result = (bool*) result_vector.data;
-				for(size_t i = 0; i < result_vector.count; i++) {
-					bool_result[i] = false;
+			} else if (hash_table->join_type == JoinType::MARK) {
+				// MARK join with empty hash table
+				assert(hash_table->join_type == JoinType::MARK);
+				assert(chunk.column_count == state->child_chunk.column_count + 1);
+				auto &result_vector = chunk.data[state->child_chunk.column_count];
+				assert(result_vector.type == TypeId::BOOLEAN);
+				result_vector.count = state->child_chunk.size();
+				// for every data vector, we just reference the child chunk
+				for(size_t i = 0; i < state->child_chunk.column_count; i++) {
+					chunk.data[i].Reference(state->child_chunk.data[i]);
 				}
-			} else {
-				result_vector.nullmask.set();
+				// for the MARK vector:
+				// if the HT has no NULL values (i.e. empty result set), return a vector that has false for every input entry
+				// if the HT has NULL values (i.e. result set had values, but all were NULL), return a vector that has NULL for every input entry
+				if (!hash_table->has_null) {
+					auto bool_result = (bool*) result_vector.data;
+					for(size_t i = 0; i < result_vector.count; i++) {
+						bool_result[i] = false;
+					}
+				} else {
+					result_vector.nullmask.set();
+				}
+				return;
 			}
-			return;
 		}
 		// resolve the join keys for the left chunk
 		state->join_keys.Reset();

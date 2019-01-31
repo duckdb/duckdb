@@ -24,7 +24,8 @@ enum JoinSide { NONE, LEFT, RIGHT, BOTH };
 class LogicalJoin : public LogicalOperator {
 public:
 	LogicalJoin(JoinType type) :
-		LogicalOperator(LogicalOperatorType::JOIN), type(type) {
+		LogicalOperator(LogicalOperatorType::JOIN), type(type),
+		is_duplicate_eliminated(false), null_values_are_equal(false) {
 	}
 
 	vector<string> GetNames() override;
@@ -35,6 +36,8 @@ public:
 	JoinType type;
 	//! Whether or not the join is a special "duplicate eliminated" join. This join type is only used for subquery flattening, and involves performing duplicate elimination on the LEFT side which is then pushed into the RIGHT side. 
 	bool is_duplicate_eliminated;
+	//! Whether or not the join should consider NULL values to be identical to one another (i.e. NULL values CAN have join partners)
+	bool null_values_are_equal;
 
 	string ParamsToString() const override;
 

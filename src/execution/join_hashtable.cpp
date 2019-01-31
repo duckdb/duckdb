@@ -3,6 +3,7 @@
 #include "common/exception.hpp"
 #include "common/types/static_vector.hpp"
 #include "common/vector_operations/vector_operations.hpp"
+#include "common/types/null_value.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -10,9 +11,9 @@ using namespace std;
 using ScanStructure = JoinHashTable::ScanStructure;
 
 JoinHashTable::JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> build_types, JoinType type,
-                             size_t initial_capacity, bool parallel)
+                             bool null_values_are_equal, size_t initial_capacity, bool parallel)
     : build_serializer(build_types), build_types(build_types), equality_size(0), condition_size(0), build_size(0),
-      entry_size(0), tuple_size(0), join_type(type), has_null(false), capacity(0), count(0), parallel(parallel) {
+      entry_size(0), tuple_size(0), join_type(type), has_null(false), capacity(0), count(0), parallel(parallel), null_values_are_equal(null_values_are_equal) {
 	for (auto &condition : conditions) {
 		assert(condition.left->return_type == condition.right->return_type);
 		auto type = condition.left->return_type;
@@ -165,27 +166,78 @@ static size_t CreateNotNullSelVector(DataChunk &keys, sel_t *not_null_sel_vector
 	return result_count;
 }
 
+template<class T>
+void FillNullMask(Vector &v) {
+	auto data = (T*) v.data;
+	VectorOperations::Exec(v, [&](size_t i, size_t k) {
+		if (v.nullmask[i]) {
+			data[i] = NullValue<T>();
+		}
+	});
+	v.nullmask.reset();
+}
+
+static void FillNullMask(Vector& v) {
+	if (!v.nullmask.any()) {
+		// no NULL values, skip
+		return;
+	}
+	switch(v.type) {
+	case TypeId::BOOLEAN:
+	case TypeId::TINYINT:
+		FillNullMask<int8_t>(v);
+		break;
+	case TypeId::SMALLINT:
+		FillNullMask<int16_t>(v);
+		break;
+	case TypeId::DATE:
+	case TypeId::INTEGER:
+		FillNullMask<int32_t>(v);
+		break;
+	case TypeId::TIMESTAMP:
+	case TypeId::BIGINT:
+		FillNullMask<int64_t>(v);
+		break;
+	case TypeId::DECIMAL:
+		FillNullMask<double>(v);
+		break;
+	case TypeId::VARCHAR:
+		FillNullMask<const char*>(v);
+		break;
+	default:
+		throw NotImplementedException("Type not implemented for HT null mask");
+	}
+}
+
 void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	assert(keys.size() == payload.size());
-	// first create a selection vector of the non-null values in the keys
-	// because in a join, any NULL value can never find a matching tuple
-	sel_t not_null_sel_vector[STANDARD_VECTOR_SIZE];
-	size_t initial_keys_size = keys.size();
-	size_t not_null_count;
-	not_null_count = CreateNotNullSelVector(keys, not_null_sel_vector);
-	if (not_null_count != initial_keys_size) {
-		// the hashtable contains null values in the keys!
-		// set the property in the HT to true
-		// this is required for the mark join
-		has_null = true;
-		// now assign the new count and sel_vector to the payload as well
-		for(size_t i = 0; i < payload.column_count; i++) {
-			payload.data[i].count = not_null_count;
-			payload.data[i].sel_vector = keys.data[0].sel_vector;
+	if (!null_values_are_equal) {
+		// first create a selection vector of the non-null values in the keys
+		// because in a join, any NULL value can never find a matching tuple
+		sel_t not_null_sel_vector[STANDARD_VECTOR_SIZE];
+		size_t initial_keys_size = keys.size();
+		size_t not_null_count;
+		not_null_count = CreateNotNullSelVector(keys, not_null_sel_vector);
+		if (not_null_count != initial_keys_size) {
+			// the hashtable contains null values in the keys!
+			// set the property in the HT to true
+			// this is required for the mark join
+			has_null = true;
+			// now assign the new count and sel_vector to the payload as well
+			for(size_t i = 0; i < payload.column_count; i++) {
+				payload.data[i].count = not_null_count;
+				payload.data[i].sel_vector = keys.data[0].sel_vector;
+			}
 		}
-	}
-	if (not_null_count == 0) {
-		return;
+		if (not_null_count == 0) {
+			return;
+		}
+	} else {
+		// in this join, NULL values are equivalent!
+		// we replace NULLs in the mask with NullValue<T> inside the vector
+		for(size_t i = 0; i < keys.column_count; i++) {
+			FillNullMask(keys.data[i]);
+		}
 	}
 	// resize at 50% capacity, also need to fit the entire vector
 	if (parallel) {
@@ -244,6 +296,14 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 
 unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	assert(!keys.sel_vector); // should be flattened before
+
+	if (null_values_are_equal) {
+		// NULL values are equal, fill NULL values with NullValue<T> in the keys
+		for(size_t i = 0; i < keys.column_count; i++) {
+			FillNullMask(keys.data[i]);
+		}
+	}
+
 	// scan structure
 	auto ss = make_unique<ScanStructure>(*this);
 	// first hash all the keys to do the lookup
@@ -335,8 +395,10 @@ void ScanStructure::ResolvePredicates(DataChunk &keys, Vector &final_result) {
 		Vector ht_data(keys.data[i].type, true, false);
 		ht_data.sel_vector = current_pointers.sel_vector;
 		ht_data.count = current_pointers.count;
-
-		VectorOperations::Gather::Set(current_pointers, ht_data);
+		// we don't check for NULL values in the keys because either
+		// (1) NULL values will have been filtered out before (null_values_are_equal = false) or
+		// (2) we want NULL=NULL to be true (null_values_are_equal = true)
+		VectorOperations::Gather::Set(current_pointers, ht_data, false);
 
 		// set the selection vector
 		size_t old_count = keys.data[i].count;

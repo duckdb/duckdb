@@ -20,7 +20,7 @@ namespace duckdb {
 class PhysicalHashJoin : public PhysicalJoin {
 public:
 	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
-	                 vector<JoinCondition> cond, JoinType join_type);
+	                 vector<JoinCondition> cond, JoinType join_type, bool null_values_are_equal);
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 

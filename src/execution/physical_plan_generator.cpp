@@ -393,12 +393,20 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 		}
 	}
 
+	if (op.null_values_are_equal) {
+		// NULL values are equal is ONLY support for joins that have only equality predicates
+		for (auto &cond : op.conditions) {
+			assert(cond.comparison == ExpressionType::COMPARE_EQUAL);
+		}
+	}
+
 	assert(left);
 	assert(right);
 	if (has_equality) {
 		// equality join: use hash join
-		plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.type);
+		plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.type, op.null_values_are_equal);
 	} else {
+		assert(!op.null_values_are_equal); // don't support this for anything but hash joins for now
 		if (op.conditions.size() == 1 && (op.type == JoinType::MARK || op.type == JoinType::INNER) && !has_inequality) {
 			// range join: use piecewise merge join
 			plan = make_unique<PhysicalPiecewiseMergeJoin>(op, move(left), move(right), move(op.conditions), op.type);
@@ -550,7 +558,7 @@ void PhysicalPlanGenerator::GenerateExceptIntersect(LogicalOperator &op, JoinTyp
 		cond.right = make_unique<BoundExpression>(top_types[i], i);
 		conditions.push_back(move(cond));
 	}
-	plan = make_unique<PhysicalHashJoin>(op, move(top), move(bottom), move(conditions), join_type);
+	plan = make_unique<PhysicalHashJoin>(op, move(top), move(bottom), move(conditions), join_type, true);
 }
 
 void PhysicalPlanGenerator::Visit(LogicalExcept &op) {

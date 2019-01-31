@@ -288,6 +288,7 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 			// the left side is the original plan
 			delim_join->AddChild(move(root));
 			delim_join->is_duplicate_eliminated = true;
+			delim_join->null_values_are_equal = true;
 			// the right side is a DEPENDENT join between the duplicate eliminated scan and the subquery
 			// first get the set of correlated columns in the subquery
 			// these are the columns returned by the duplicate eliminated scan
