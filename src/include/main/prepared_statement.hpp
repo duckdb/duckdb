@@ -24,7 +24,7 @@ public:
 
 	std::unique_ptr<DuckDBResult> Execute(DuckDBConnection &conn);
 
-	void Bind(size_t param_idx, Value val);
+	DuckDBPreparedStatement *Bind(size_t param_idx, Value val);
 	// TODO: bind primitive types?
 	// TODO: variadic Execute(Value...) method?
 	std::unordered_map<size_t, ParameterExpression *> parameter_expression_map;

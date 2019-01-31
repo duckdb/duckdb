@@ -92,7 +92,7 @@ public:
 	void Accept(SQLNodeVisitor *v) {
 		assert(v);
 		AcceptExpressions(v);
-		for (auto &&child : children) {
+		for (auto &child : children) {
 			child->Accept(v);
 		}
 	}
