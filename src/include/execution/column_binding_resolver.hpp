@@ -41,7 +41,7 @@ protected:
 	void Visit(LogicalChunkGet &op);
 	void Visit(LogicalGet &op);
 	void Visit(LogicalJoin &op);
-	// void Visit(LogicalProjection &op);
+	void Visit(LogicalProjection &op);
 	void Visit(LogicalSubquery &op);
 	void Visit(LogicalTableFunction &op);
 

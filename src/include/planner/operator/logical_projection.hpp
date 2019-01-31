@@ -15,11 +15,13 @@ namespace duckdb {
 //! LogicalProjection represents the projection list in a SELECT clause
 class LogicalProjection : public LogicalOperator {
 public:
-	LogicalProjection(vector<unique_ptr<Expression>> select_list)
-	    : LogicalOperator(LogicalOperatorType::PROJECTION, std::move(select_list)) {
+	LogicalProjection(size_t table_index, vector<unique_ptr<Expression>> select_list)
+	    : LogicalOperator(LogicalOperatorType::PROJECTION, std::move(select_list)), table_index(table_index) {
 	}
 
 	vector<string> GetNames() override;
+
+	size_t table_index;
 
 protected:
 	void ResolveTypes() override;

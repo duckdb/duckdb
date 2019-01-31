@@ -36,8 +36,8 @@ JoinHashTable::JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> b
 	equality_serializer.Initialize(equality_types);
 	condition_serializer.Initialize(condition_types);
 
-	if (type == JoinType::ANTI || type == JoinType::SEMI) {
-		// for ANTI and SEMI join, we only need to store the keys
+	if (type == JoinType::ANTI || type == JoinType::SEMI || type == JoinType::MARK) {
+		// for ANTI, SEMI and MARK join, we only need to store the keys
 		build_size = 0;
 	} else {
 		// otherwise we need to store the entire build side for reconstruction
@@ -210,11 +210,14 @@ static void FillNullMask(Vector& v) {
 }
 
 void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
+	if (keys.size() == 0) {
+		return;
+	}
 	assert(keys.size() == payload.size());
+	sel_t not_null_sel_vector[STANDARD_VECTOR_SIZE];
 	if (!null_values_are_equal) {
 		// first create a selection vector of the non-null values in the keys
 		// because in a join, any NULL value can never find a matching tuple
-		sel_t not_null_sel_vector[STANDARD_VECTOR_SIZE];
 		size_t initial_keys_size = keys.size();
 		size_t not_null_count;
 		not_null_count = CreateNotNullSelVector(keys, not_null_sel_vector);
@@ -228,11 +231,13 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 				payload.data[i].count = not_null_count;
 				payload.data[i].sel_vector = keys.data[0].sel_vector;
 			}
+			payload.sel_vector = keys.data[0].sel_vector;
 		}
 		if (not_null_count == 0) {
 			return;
 		}
 	} else {
+		assert(join_type != JoinType::MARK);
 		// in this join, NULL values are equivalent!
 		// we replace NULLs in the mask with NullValue<T> inside the vector
 		for(size_t i = 0; i < keys.column_count; i++) {
@@ -247,14 +252,14 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		Resize(capacity * 2);
 	}
 	count += keys.size();
-	if (parallel) {
-		parallel_lock.unlock();
-	}
-
 	// move strings to the string heap
 	keys.MoveStringsToHeap(string_heap);
 	payload.MoveStringsToHeap(string_heap);
 
+	if (parallel) {
+		parallel_lock.unlock();
+	}
+	
 	// get the locations of where to serialize the keys and payload columns
 	uint8_t *key_locations[STANDARD_VECTOR_SIZE];
 	uint8_t *tuple_locations[STANDARD_VECTOR_SIZE];
@@ -298,6 +303,7 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	assert(!keys.sel_vector); // should be flattened before
 
 	if (null_values_are_equal) {
+		assert(join_type != JoinType::MARK);
 		// NULL values are equal, fill NULL values with NullValue<T> in the keys
 		for(size_t i = 0; i < keys.column_count; i++) {
 			FillNullMask(keys.data[i]);

@@ -313,18 +313,13 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 		auto right_child = make_unique<ConstantExpression>(Value::Numeric(count_type, 1));
 		auto comparison = make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(left_child), move(right_child));
 
+
 		vector<unique_ptr<Expression>> projection_list;
 		projection_list.push_back(move(comparison));
-		auto projection = make_unique<LogicalProjection>(move(projection_list));
+		auto projection_index = bind_context.GenerateTableIndex();
+		auto projection = make_unique<LogicalProjection>(projection_index, move(projection_list));
 		projection->AddChild(move(plan));
 		plan = move(projection);
-
-		// the projection gives us as only column the result of the EXISTS clause
-		// now we push a LogicalSubquery node to give the projection a table index
-		auto subquery_index = bind_context.GenerateTableIndex();
-		auto subquery = make_unique<LogicalSubquery>(subquery_index, 1);
-		subquery->AddChild(move(plan));
-		plan = move(subquery);
 
 		// we add it to the main query by adding a cross product
 		// FIXME: should use something else besides cross product as we always add only one scalar constant
@@ -337,8 +332,8 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 			root = move(plan);
 		}
 
-		// we replace the original subquery with a ColumnRefExpression refering to the result of the subquery (either TRUE or FALSE)
-		return make_unique<BoundColumnRefExpression>(expr, TypeId::BOOLEAN, ColumnBinding(subquery_index, 0));
+		// we replace the original subquery with a ColumnRefExpression refering to the result of the projection (either TRUE or FALSE)
+		return make_unique<BoundColumnRefExpression>(expr, TypeId::BOOLEAN, ColumnBinding(projection_index, 0));
 	}
 	case SubqueryType::SCALAR: {
 		if (!expr.is_correlated) {
@@ -369,6 +364,7 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 			// we replace the original subquery with a BoundColumnRefExpression refering to the first result of the aggregation
 			return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(aggr_index, 0));
 		} else {
+			throw NotImplementedException("Correlated scalar query");
 			// in the correlated case, we push first a DUPLICATE ELIMINATED left outer join (as entries WITHOUT a join partner result in NULL)
 			auto delim_join = make_unique<LogicalJoin>(JoinType::LEFT);
 			// the left side is the original plan

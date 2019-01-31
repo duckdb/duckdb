@@ -70,5 +70,7 @@ private:
 	ClientContext &context;
 	//! A reference to the current bind context
 	BindContext &bind_context;
+private:
+	unique_ptr<LogicalOperator> CastSetOpToTypes(vector<TypeId> &types, unique_ptr<LogicalOperator> op);
 };
 } // namespace duckdb

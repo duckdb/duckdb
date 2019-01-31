@@ -105,7 +105,8 @@ void LogicalPlanGenerator::CreatePlan(SelectNode &statement) {
 	for (auto &expr : statement.select_list) {
 		VisitExpression(&expr);
 	}
-	auto proj = make_unique<LogicalProjection>(move(statement.select_list));
+	auto proj_index = bind_context.GenerateTableIndex();
+	auto proj = make_unique<LogicalProjection>(proj_index, move(statement.select_list));
 	proj->AddChild(move(root));
 	root = move(proj);
 

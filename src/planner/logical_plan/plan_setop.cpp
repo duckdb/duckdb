@@ -7,7 +7,7 @@
 using namespace duckdb;
 using namespace std;
 
-static unique_ptr<LogicalOperator> CastSetOpToTypes(vector<TypeId> &types, unique_ptr<LogicalOperator> op) {
+unique_ptr<LogicalOperator> LogicalPlanGenerator::CastSetOpToTypes(vector<TypeId> &types, unique_ptr<LogicalOperator> op) {
 	auto node = op.get();
 	while (!IsProjection(node->type) && node->children.size() == 1) {
 		node = node->children[0].get();
@@ -51,7 +51,8 @@ static unique_ptr<LogicalOperator> CastSetOpToTypes(vector<TypeId> &types, uniqu
 			}
 			select_list.push_back(move(result));
 		}
-		auto projection = make_unique<LogicalProjection>(move(select_list));
+		auto proj_index = bind_context.GenerateTableIndex();
+		auto projection = make_unique<LogicalProjection>(proj_index, move(select_list));
 		projection->children.push_back(move(op));
 		projection->ResolveOperatorTypes();
 		return move(projection);

@@ -19,9 +19,9 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::AGGREGATE_AND_GROUP_BY:
 		Visit((LogicalAggregate &)op);
 		break;
-	// case LogicalOperatorType::PROJECTION:
-	// 	Visit((LogicalProjection &)op);
-	// 	break;
+	case LogicalOperatorType::PROJECTION:
+		Visit((LogicalProjection &)op);
+		break;
 	case LogicalOperatorType::CHUNK_GET:
 		Visit((LogicalChunkGet &)op);
 		break;
@@ -115,18 +115,9 @@ void ColumnBindingResolver::Visit(LogicalSubquery &op) {
 	ResolveSubquery(op, op.table_index, op.column_count);
 }
 
-// void ColumnBindingResolver::Visit(LogicalProjection &op) {
-// 	LogicalOperatorVisitor::VisitOperator(op);
-
-// 	// after a projection, we cannot access tables before it directly anymore
-// 	bound_tables.clear();
-// 	// the amount of projected columns here is the projection list
-// 	BoundTable binding;
-// 	binding.table_index = (size_t) -1;
-// 	binding.column_count = op.expressions.size();
-// 	binding.column_offset = 0;
-// 	bound_tables.push_back(binding);
-// }
+void ColumnBindingResolver::Visit(LogicalProjection &op) {
+	ResolveSubquery(op, op.table_index, op.expressions.size());
+}
 
 void ColumnBindingResolver::Visit(LogicalCrossProduct &op) {
 	BindTablesBinaryOp(op, true);
