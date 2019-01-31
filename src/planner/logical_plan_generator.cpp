@@ -123,10 +123,30 @@ void LogicalPlanGenerator::Visit(OperatorExpression &expr) {
 	}
 }
 
+class HasCorrelatedExpressions : public LogicalOperatorVisitor {
+public:
+	HasCorrelatedExpressions() : 
+		has_correlated_expressions(false) {}
+
+	void VisitOperator(LogicalOperator &op) override {
+		VisitOperatorExpressions(op);
+	}
+	void Visit(BoundColumnRefExpression &expr) override {
+		if (expr.depth == 0) {
+			return;
+		}
+		// correlated column reference
+		assert(expr.depth == 1);
+		has_correlated_expressions = true;
+	}
+
+	bool has_correlated_expressions;
+};
+
 class RewriteCorrelatedExpressions : public LogicalOperatorVisitor {
 public:
-	RewriteCorrelatedExpressions(size_t delim_index, column_binding_map_t<size_t>& correlated_map) : 
-		delim_index(delim_index), correlated_map(correlated_map) {}
+	RewriteCorrelatedExpressions(ColumnBinding base_binding, column_binding_map_t<size_t>& correlated_map) : 
+		base_binding(base_binding), correlated_map(correlated_map) {}
 
 	void VisitOperator(LogicalOperator &op) override {
 		VisitOperatorExpressions(op);
@@ -140,51 +160,117 @@ public:
 		assert(expr.depth == 1);
 		auto entry = correlated_map.find(expr.binding);
 		assert(entry != correlated_map.end());
-		expr.binding = ColumnBinding(delim_index, entry->second);
+		expr.binding = ColumnBinding(base_binding.table_index, base_binding.column_index + entry->second);
 		expr.depth = 0;
 	}
 private:
-	size_t delim_index;
+	ColumnBinding base_binding;
 	column_binding_map_t<size_t>& correlated_map;
 };
 
-static unique_ptr<LogicalOperator> FlattenDependentJoin(BindContext& context, size_t delim_index, const vector<TypeId> &delim_scan_types, unique_ptr<LogicalOperator> plan, column_binding_map_t<size_t>& correlated_map) {
-	switch(plan->type) {
-		case LogicalOperatorType::GET: {
-			// we reached a root node, we can eliminate the dependent join now and create a simple cross product
+struct FlattenDependentJoins {
+	FlattenDependentJoins(BindContext& context, const vector<CorrelatedColumnInfo>& correlated_columns) : 
+		context(context), correlated_columns(correlated_columns) {}
+
+
+	//! Detects which Logical Operators have correlated expressions that they are dependent upon, filling the has_correlated_expressions map.
+	bool DetectCorrelatedExpressions(LogicalOperator *op) {
+		assert(op);
+		// check if this entry has correlated expressions
+		HasCorrelatedExpressions visitor;
+		visitor.VisitOperator(*op);
+		bool has_correlation = visitor.has_correlated_expressions;
+		// now visit the children of this entry and check if they have correlated expressions
+		for(auto &child : op->children) {
+			// we OR the property with its children such that has_correlation is true if either
+			// (1) this node has a correlated expression or
+			// (2) one of its children has a correlated expression
+			if (DetectCorrelatedExpressions(child.get())) {
+				has_correlation = true;
+			}
+		}
+		// set the entry in the map
+		has_correlated_expressions[op] = has_correlation;
+		return has_correlation;
+	}
+
+	unique_ptr<LogicalOperator> PushDownDependentJoin(unique_ptr<LogicalOperator> plan) {
+		// first check if the logical operator has correlated expressions
+		auto entry = has_correlated_expressions.find(plan.get());
+		assert(entry != has_correlated_expressions.end());
+		if (!entry->second) {
+			// we reached a node without correlated expressions
+			// we can eliminate the dependent join now and create a simple cross product
 			auto cross_product = make_unique<LogicalCrossProduct>();
-			auto delim_scan = make_unique<LogicalChunkGet>(delim_index, delim_scan_types);
+			// now create the duplicate eliminated scan for this node
+			auto delim_index = context.GenerateTableIndex();
+			this->base_binding = ColumnBinding(delim_index, 0);
+			auto delim_scan = make_unique<LogicalChunkGet>(delim_index, delim_types);
 			cross_product->children.push_back(move(delim_scan));
 			cross_product->children.push_back(move(plan));
 			return move(cross_product);
 		}
-		case LogicalOperatorType::FILTER: {
-			// filter
-			// we replace any correlated expressions with the corresponding entry in the correlated_map
-			RewriteCorrelatedExpressions rewriter(delim_index, correlated_map);
-			rewriter.VisitOperator(*plan);
-			// continue flattening the dependent join in the child of the filter
-			plan->children[0] = FlattenDependentJoin(context, delim_index, delim_scan_types, move(plan->children[0]), correlated_map);
-			return plan;
-		}
-		case LogicalOperatorType::PROJECTION: {
-			// projection
-			// first we replace any correlated expressions with the corresponding entry in the correlated_map
-			RewriteCorrelatedExpressions rewriter(delim_index, correlated_map);
-			rewriter.VisitOperator(*plan);
-			// now we add all the columns of the delim_scan to the projection list
-			for(size_t i = 0; i < delim_scan_types.size(); i++) {
-				auto colref = make_unique<BoundColumnRefExpression>("", delim_scan_types[i], ColumnBinding(delim_index, i));
-				plan->expressions.push_back(move(colref));
+		switch(plan->type) {
+			case LogicalOperatorType::FILTER: {
+				// filter
+				// first we flatten the dependent join in the child of the filter
+				plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+				// then we replace any correlated expressions with the corresponding entry in the correlated_map
+				RewriteCorrelatedExpressions rewriter(base_binding, correlated_map);
+				rewriter.VisitOperator(*plan);
+				return plan;
 			}
-			// continue flattening the dependent join in the child of the projection
-			plan->children[0] = FlattenDependentJoin(context, delim_index, delim_scan_types, move(plan->children[0]), correlated_map);
-			return plan;
+			case LogicalOperatorType::PROJECTION: {
+				// projection
+				// first we flatten the dependent join in the child of the projection
+				plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+				// then we replace any correlated expressions with the corresponding entry in the correlated_map
+				RewriteCorrelatedExpressions rewriter(base_binding, correlated_map);
+				rewriter.VisitOperator(*plan);
+				// now we add all the columns of the delim_scan to the projection list
+				for(size_t i = 0; i < correlated_columns.size(); i++) {
+					auto colref = make_unique<BoundColumnRefExpression>("", correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+					plan->expressions.push_back(move(colref));
+				}
+				this->data_offset = 0;
+				this->delim_offset = plan->expressions.size() - correlated_columns.size();
+				return plan;
+			}
+			case LogicalOperatorType::AGGREGATE_AND_GROUP_BY: {
+				// aggregate and group by
+				// first we flatten the dependent join in the child of the projection
+				plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+				// then we replace any correlated expressions with the corresponding entry in the correlated_map
+				RewriteCorrelatedExpressions rewriter(base_binding, correlated_map);
+				rewriter.VisitOperator(*plan);
+				// now we add all the columns of the delim_scan to the grouping operators AND the projection list
+				auto aggr = (LogicalAggregate*) plan.get();
+				for(size_t i = 0; i < correlated_columns.size(); i++) {
+					auto colref = make_unique<BoundColumnRefExpression>("", correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+					aggr->groups.push_back(move(colref));
+				}
+				// now we update the delim_index
+				base_binding.table_index = aggr->table_index;
+				this->delim_offset = base_binding.column_index = aggr->groups.size() - correlated_columns.size();
+				this->data_offset = aggr->groups.size();
+				return plan;
+			}
+			default:
+				throw NotImplementedException("Logical operator type for dependent join");
 		}
-		default:
-			throw NotImplementedException("Logical operator type for dependent join");
 	}
-}
+
+	BindContext& context;
+	ColumnBinding base_binding;
+	size_t delim_offset;
+	size_t data_offset;
+	unordered_map<LogicalOperator*, bool> has_correlated_expressions;
+	column_binding_map_t<size_t> correlated_map;
+	const vector<CorrelatedColumnInfo>& correlated_columns;
+	vector<TypeId> delim_types;
+	
+
+};
 
 
 unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) {
@@ -255,7 +341,6 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 		return make_unique<BoundColumnRefExpression>(expr, TypeId::BOOLEAN, ColumnBinding(subquery_index, 0));
 	}
 	case SubqueryType::SCALAR: {
-		auto subquery_index = bind_context.GenerateTableIndex();
 		if (!expr.is_correlated) {
 			// in the uncorrelated case we are only interested in the first result of the query
 			// hence we simply push a LIMIT 1 to get the first row of the subquery
@@ -268,13 +353,11 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 			auto first_agg = make_unique<AggregateExpression>(ExpressionType::AGGREGATE_FIRST, move(bound));
 			first_agg->ResolveType();
 			expressions.push_back(move(first_agg));
-			auto aggr = make_unique<LogicalAggregate>(subquery_index, move(expressions));
+			auto aggr_index = bind_context.GenerateTableIndex();
+			auto aggr = make_unique<LogicalAggregate>(aggr_index, move(expressions));
 			aggr->AddChild(move(plan));
 			plan = move(aggr);
-		}
 
-
-		if (!expr.is_correlated) {
 			// in the uncorrelated case, we add the value to the main query through a cross product
 			// FIXME: should use something else besides cross product as we always add only one scalar constant and cross product is not optimized for this. 
 			assert(root);
@@ -282,6 +365,9 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 			cross_product->AddChild(move(root));
 			cross_product->AddChild(move(plan));
 			root = move(cross_product);
+				
+			// we replace the original subquery with a BoundColumnRefExpression refering to the first result of the aggregation
+			return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(aggr_index, 0));
 		} else {
 			// in the correlated case, we push first a DUPLICATE ELIMINATED left outer join (as entries WITHOUT a join partner result in NULL)
 			auto delim_join = make_unique<LogicalJoin>(JoinType::LEFT);
@@ -293,23 +379,23 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 			// first get the set of correlated columns in the subquery
 			// these are the columns returned by the duplicate eliminated scan
 			auto &correlated_columns = expr.context->GetCorrelatedColumns();
-			vector<TypeId> delim_scan_types;
-			for(auto &col : correlated_columns) {
-				delim_scan_types.push_back(col.type);
-			}
-			assert(delim_scan_types.size() > 0);
-			auto delim_index = expr.context->GenerateTableIndex();
-			// we create a mapping of [correlated column in subquery] -> [uncorrelated column from delim scan]
-			column_binding_map_t<size_t> correlated_map;
+			FlattenDependentJoins flatten(*expr.context, correlated_columns);
 			for(size_t i = 0; i < correlated_columns.size(); i++) {
 				auto &col = correlated_columns[i];
-				correlated_map[col.binding] = i;
+				flatten.correlated_map[col.binding] = i;
+				flatten.delim_types.push_back(col.type);
 			}
+
 			// now we have a dependent join between "delim_scan" and the subquery plan
 			// however, we do not explicitly create it
 			// instead, we eliminate the dependent join by pushing it down into the right side of the plan
-			auto dependent_join = FlattenDependentJoin(*expr.context, delim_index, delim_scan_types, move(plan), correlated_map);
+			// first we check which operators have correlated expressions in the first place
+			flatten.DetectCorrelatedExpressions(plan.get());
+
+			// now we push the dependent join down
+			auto dependent_join = flatten.PushDownDependentJoin(move(plan));
 			// push a subquery node under the duplicate eliminated join
+			auto subquery_index = bind_context.GenerateTableIndex();
 			auto subquery = make_unique<LogicalSubquery>(subquery_index, correlated_columns.size() + 1);
 			subquery->AddChild(move(dependent_join));
 			// now we create the join conditions between the dependent join and the original table
@@ -317,16 +403,16 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 				auto &col = correlated_columns[i];
 				JoinCondition cond;
 				cond.left = make_unique<BoundColumnRefExpression>(col.name, col.type, col.binding);
-				cond.right = make_unique<BoundColumnRefExpression>(col.name, col.type, ColumnBinding(subquery_index, i + 1));
+				cond.right = make_unique<BoundColumnRefExpression>(col.name, col.type, ColumnBinding(subquery_index, flatten.delim_offset + i));
 				cond.comparison = ExpressionType::COMPARE_EQUAL;
 				delim_join->conditions.push_back(move(cond));
 			}
 
 			delim_join->AddChild(move(subquery));
 			root = move(delim_join);
+			// finally push the BoundColumnRefExpression referring to the data element
+			return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(subquery_index, flatten.data_offset));
 		}
-		// we replace the original subquery with a BoundColumnRefExpression refering to the scalar result of the subquery
-		return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(subquery_index, 0));
 	}
 	default: {
 		assert(subquery.subquery_type == SubqueryType::ANY);
