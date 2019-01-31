@@ -51,7 +51,6 @@ TEST_CASE("Test prepared statements", "[prepared]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {42}));
 	}
 
-	// TODO WAL pushing of prepared statements
 	{
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE a (i TINYINT)"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO a VALUES (42)"));
@@ -66,4 +65,20 @@ TEST_CASE("Test prepared statements", "[prepared]") {
 		result = prep->Execute(con);
 		REQUIRE(CHECK_COLUMN(result, 0, {}));
 	}
+
+	{
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE b (i TINYINT)"));
+		auto prep = con.PrepareStatement("INSERT INTO b VALUES (cast($1 as tinyint)), ($2 + 1), ($3)");
+		REQUIRE_NOTHROW(prep->Bind(1, Value::INTEGER(42)));
+		REQUIRE_NOTHROW(prep->Bind(2, Value::INTEGER(41)));
+		REQUIRE_NOTHROW(prep->Bind(3, Value::INTEGER(42)));
+
+		result = prep->Execute(con);
+
+		result = con.Query("SELECT * FROM b");
+		REQUIRE(CHECK_COLUMN(result, 0, {42, 42, 42}));
+	}
+
+	// TODO insert/update/delete
+	// TODO WAL pushing of prepared statements
 }

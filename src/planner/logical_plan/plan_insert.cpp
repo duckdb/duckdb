@@ -1,5 +1,6 @@
 #include "main/client_context.hpp"
 #include "main/database.hpp"
+#include "parser/expression/cast_expression.hpp"
 #include "parser/statement/insert_statement.hpp"
 #include "planner/logical_plan_generator.hpp"
 #include "planner/operator/list.hpp"
@@ -42,8 +43,19 @@ void LogicalPlanGenerator::CreatePlan(InsertStatement &statement) {
 	} else {
 		// first visit the expressions
 		for (auto &expression_list : statement.values) {
-			for (auto &expression : expression_list) {
-				VisitExpression(&expression);
+			for (size_t col_idx = 0; col_idx < expression_list.size(); col_idx++) {
+				auto &expression = expression_list[col_idx];
+				if (expression->GetExpressionType() == ExpressionType::VALUE_PARAMETER) {
+					size_t table_col_idx = col_idx;
+					if (statement.columns.size() > 0) { //  named cols
+						table_col_idx = insert->column_index_map[col_idx];
+					}
+					auto cast = make_unique_base<Expression, CastExpression>(table->columns[table_col_idx].type,
+					                                                         move(expression));
+					expression_list[col_idx] = move(cast);
+				}
+
+				VisitExpression(&expression_list[col_idx]);
 			}
 		}
 		// insert from constants

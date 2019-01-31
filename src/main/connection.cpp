@@ -185,7 +185,7 @@ unique_ptr<DuckDBPreparedStatement> DuckDBConnection::PrepareStatement(string qu
 	auto &statement = parser.statements.back();
 	if (statement->type != StatementType::SELECT && statement->type != StatementType::INSERT &&
 	    statement->type != StatementType::UPDATE && statement->type != StatementType::DELETE) {
-		throw Exception("Only select/insert/update/delete supported for prepared statements");
+		throw Exception("Only SELECT/INSERT/UPDATE/DELETE supported for prepared statements");
 	}
 
 	Planner planner;
