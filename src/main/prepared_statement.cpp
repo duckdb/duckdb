@@ -37,7 +37,7 @@ DuckDBPreparedStatement::DuckDBPreparedStatement(unique_ptr<PhysicalOperator> pp
 	plan->Accept(&v);
 }
 
-void DuckDBPreparedStatement::Bind(size_t param_idx, Value val) {
+DuckDBPreparedStatement *DuckDBPreparedStatement::Bind(size_t param_idx, Value val) {
 	auto it = parameter_expression_map.find(param_idx);
 	if (it == parameter_expression_map.end() || it->second == nullptr) {
 		throw Exception("Could not find parameter with this index");
@@ -47,6 +47,7 @@ void DuckDBPreparedStatement::Bind(size_t param_idx, Value val) {
 		val = val.CastAs(expr->return_type);
 	}
 	expr->value = val;
+	return this;
 }
 
 unique_ptr<DuckDBResult> DuckDBPreparedStatement::Execute(DuckDBConnection &conn) {
