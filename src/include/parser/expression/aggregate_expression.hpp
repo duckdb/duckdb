@@ -48,7 +48,6 @@ public:
 	void ReplaceChild(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
 	                  size_t index) override;
 
-	size_t index;
 	//! The child of the aggregate expression
 	unique_ptr<Expression> child;
 };

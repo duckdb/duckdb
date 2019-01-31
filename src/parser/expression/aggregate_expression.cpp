@@ -6,7 +6,7 @@ using namespace duckdb;
 using namespace std;
 
 AggregateExpression::AggregateExpression(ExpressionType type, unique_ptr<Expression> child)
-    : Expression(type), index(0) {
+    : Expression(type) {
 
 	// translate COUNT(*) into AGGREGATE_COUNT_STAR
 	if (type == ExpressionType::AGGREGATE_COUNT) {
@@ -94,7 +94,6 @@ void AggregateExpression::ResolveType() {
 unique_ptr<Expression> AggregateExpression::Copy() {
 	auto new_child = child ? child->Copy() : nullptr;
 	auto new_aggregate = make_unique<AggregateExpression>(type, move(new_child));
-	new_aggregate->index = index;
 	new_aggregate->CopyProperties(*this);
 	return new_aggregate;
 }

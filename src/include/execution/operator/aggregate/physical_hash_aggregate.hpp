@@ -22,8 +22,6 @@ public:
 	PhysicalHashAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions,
 	                      vector<unique_ptr<Expression>> groups, PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
 
-	void Initialize();
-
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
 	unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent) override;
@@ -43,7 +41,5 @@ public:
 	unique_ptr<SuperLargeHashTable> ht;
 	//! The payload chunk, only used while filling the HT
 	DataChunk payload_chunk;
-
-	vector<Expression *> payload_expressions;
 };
 } // namespace duckdb

@@ -22,15 +22,10 @@ public:
 	                  vector<unique_ptr<Expression>> groups,
 	                  PhysicalOperatorType type = PhysicalOperatorType::BASE_GROUP_BY);
 
-	void Initialize();
-
-	//! The projection list of the SELECT statement (that contains aggregates)
-	vector<unique_ptr<Expression>> select_list;
 	//! The groups
 	vector<unique_ptr<Expression>> groups;
-	//! The actual aggregates that have to be computed (i.e. the deepest
-	//! aggregates in the expression)
-	vector<AggregateExpression *> aggregates;
+	//! The aggregates that have to be computed
+	vector<unique_ptr<Expression>> aggregates;
 	bool is_implicit_aggr;
 };
 

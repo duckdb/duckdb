@@ -228,12 +228,14 @@ struct FlattenDependentJoins {
 				RewriteCorrelatedExpressions rewriter(base_binding, correlated_map);
 				rewriter.VisitOperator(*plan);
 				// now we add all the columns of the delim_scan to the projection list
+				auto proj = (LogicalProjection*) plan.get();
 				for(size_t i = 0; i < correlated_columns.size(); i++) {
 					auto colref = make_unique<BoundColumnRefExpression>("", correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 					plan->expressions.push_back(move(colref));
 				}
+				base_binding.table_index = proj->table_index;
+				this->delim_offset = base_binding.column_index = plan->expressions.size() - correlated_columns.size();
 				this->data_offset = 0;
-				this->delim_offset = plan->expressions.size() - correlated_columns.size();
 				return plan;
 			}
 			case LogicalOperatorType::AGGREGATE_AND_GROUP_BY: {
@@ -364,7 +366,6 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 			// we replace the original subquery with a BoundColumnRefExpression refering to the first result of the aggregation
 			return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(aggr_index, 0));
 		} else {
-			throw NotImplementedException("Correlated scalar query");
 			// in the correlated case, we push first a DUPLICATE ELIMINATED left outer join (as entries WITHOUT a join partner result in NULL)
 			auto delim_join = make_unique<LogicalJoin>(JoinType::LEFT);
 			// the left side is the original plan

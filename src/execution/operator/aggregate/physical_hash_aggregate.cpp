@@ -9,16 +9,11 @@ using namespace std;
 
 PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions, PhysicalOperatorType type)
     : PhysicalAggregate(types, move(expressions), type) {
-	Initialize();
 }
 
 PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions,
                                              vector<unique_ptr<Expression>> groups, PhysicalOperatorType type)
     : PhysicalAggregate(types, move(expressions), move(groups), type) {
-	Initialize();
-}
-
-void PhysicalHashAggregate::Initialize() {
 }
 
 void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
@@ -39,13 +34,14 @@ void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk, 
 		executor.Execute(groups, group_chunk);
 		executor.Execute(payload_chunk,
 		                 [&](size_t i) {
-			                 if (!state->payload_expressions[i]) {
+							 auto &aggr = (AggregateExpression&) *aggregates[i];
+			                 if (!aggr.child) {
 				                 state->payload_chunk.data[i].count = group_chunk.size();
 				                 state->payload_chunk.data[i].sel_vector = group_chunk.sel_vector;
 			                 }
-			                 return state->payload_expressions[i];
+			                 return aggr.child.get();
 		                 },
-		                 state->payload_expressions.size());
+		                 aggregates.size());
 
 		group_chunk.Verify();
 		payload_chunk.Verify();
@@ -114,14 +110,14 @@ unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState(Expres
 		group_types.push_back(expr->return_type);
 	}
 	for (auto &expr : aggregates) {
+		assert(expr->GetExpressionClass() == ExpressionClass::AGGREGATE);
+		auto &aggr = (AggregateExpression&) *expr;
 		aggregate_kind.push_back(expr->type);
-		if (expr->child) {
-			payload_types.push_back(expr->child->return_type);
-			state->payload_expressions.push_back(expr->child.get());
+		if (aggr.child) {
+			payload_types.push_back(aggr.child->return_type);
 		} else {
 			// COUNT(*)
 			payload_types.push_back(TypeId::BIGINT);
-			state->payload_expressions.push_back(nullptr);
 		}
 	}
 	state->payload_chunk.Initialize(payload_types);

@@ -7,19 +7,10 @@
 using namespace duckdb;
 using namespace std;
 
-PhysicalAggregate::PhysicalAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> select_list,
-                                     PhysicalOperatorType type)
-    : PhysicalOperator(type, types), select_list(std::move(select_list)) {
-	Initialize();
-}
 
 PhysicalAggregate::PhysicalAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> select_list,
                                      vector<unique_ptr<Expression>> groups, PhysicalOperatorType type)
-    : PhysicalOperator(type, types), select_list(std::move(select_list)), groups(std::move(groups)) {
-	Initialize();
-}
-
-void PhysicalAggregate::Initialize() {
+    : PhysicalOperator(type, types), groups(move(groups)) {
 	// get a list of all aggregates to be computed
 	// fake a single group with a constant value for aggregation without groups
 	if (groups.size() == 0) {
@@ -31,11 +22,13 @@ void PhysicalAggregate::Initialize() {
 	}
 	for (auto &expr : select_list) {
 		assert(expr->GetExpressionClass() == ExpressionClass::AGGREGATE);
-		aggregates.push_back((AggregateExpression *)expr.get());
+		aggregates.push_back(move(expr));
 	}
-	for (size_t i = 0; i < aggregates.size(); i++) {
-		aggregates[i]->index = i;
-	}
+}
+
+PhysicalAggregate::PhysicalAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> aggregates,
+                                     PhysicalOperatorType type)
+    : PhysicalAggregate(types, move(aggregates), {}, type) {
 }
 
 PhysicalAggregateOperatorState::PhysicalAggregateOperatorState(PhysicalAggregate *parent, PhysicalOperator *child,
