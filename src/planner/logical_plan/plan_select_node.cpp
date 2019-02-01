@@ -43,6 +43,9 @@ void LogicalPlanGenerator::CreatePlan(SelectNode &statement) {
 	}
 
 	if (statement.where_clause) {
+		if (statement.where_clause->IsAggregate()) {
+			throw ParserException("WHERE clause cannot contain aggregates!");
+		}
 		VisitExpression(&statement.where_clause);
 		auto filter = make_unique<LogicalFilter>(move(statement.where_clause));
 		filter->AddChild(move(root));
