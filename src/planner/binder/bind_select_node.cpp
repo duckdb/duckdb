@@ -7,45 +7,6 @@
 using namespace duckdb;
 using namespace std;
 
-static unique_ptr<Expression> replace_columns_with_group_refs(
-    unique_ptr<Expression> expr, expression_map_t<size_t> &groups) {
-	if (expr->GetExpressionClass() == ExpressionClass::AGGREGATE) {
-		// already an aggregate, move it back
-		return expr;
-	}
-	bool wrap_in_first_aggregate = false;
-	// check if the expression is a GroupBy expression
-	auto entry = groups.find(expr.get());
-	if (entry != groups.end()) {
-		auto group = entry->first;
-		// group reference! turn expression into a reference to the group
-		auto group_ref = make_unique<BoundExpression>(group->return_type, entry->second);
-		group_ref->alias = expr->alias.empty() ? group->GetName() : expr->alias;
-		return group_ref;
-	}
-	if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-		// a column reference that does not refer to a GROUP column
-		wrap_in_first_aggregate = true;
-	}
-	// all column references should have already been bound here
-	assert(expr->GetExpressionClass() != ExpressionClass::COLUMN_REF);
-	if (wrap_in_first_aggregate) {
-		// not a GROUP BY column and not part of an aggregate
-		// create a FIRST aggregate around this aggregate
-		string stmt_alias = expr->alias;
-		auto first_aggregate = make_unique<AggregateExpression>(ExpressionType::AGGREGATE_FIRST, move(expr));
-		first_aggregate->alias = stmt_alias;
-		first_aggregate->ResolveType();
-		return first_aggregate;
-	}
-	// not an aggregate and not a column reference
-	// iterate over the children
-	expr->EnumerateChildren([&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
-		return replace_columns_with_group_refs(move(child), groups);
-	});
-	return expr;
-}
-
 void Binder::Bind(SelectNode &statement) {
 	if (statement.from_table) {
 		AcceptChild(&statement.from_table);
@@ -128,7 +89,6 @@ void Binder::Bind(SelectNode &statement) {
 	}
 
 	if (statement.HasAggregation()) {
-		expression_map_t<size_t> groups;
 		if (statement.HasGroup()) {
 			// bind group columns
 			for (auto &group : statement.groupby.groups) {
@@ -149,14 +109,7 @@ void Binder::Bind(SelectNode &statement) {
 					// and add a GROUP REF expression to the SELECT clause
 					statement.select_list[select_index] = move(group_ref);
 				}
-				groups[statement.groupby.groups[i].get()] = i;
 			}
-		}
-
-		// handle column references in the SELECT clause that are not part of aggregates
-		// we either replace with GROUP REFERENCES, or add an implicit FIRST() aggregation over them
-		for (size_t i = 0; i < statement.select_list.size(); i++) {
-			statement.select_list[i] = replace_columns_with_group_refs(move(statement.select_list[i]), groups);
 		}
 	}
 

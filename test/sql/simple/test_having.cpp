@@ -11,7 +11,13 @@ TEST_CASE("Test HAVING clause", "[having]") {
 	con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
 	con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)");
 
-	// simple HAVING clause
+	// having with condition on group
+	result = con.Query("SELECT b, SUM(a) AS sum FROM test GROUP BY b HAVING "
+	                   "b=21 ORDER BY b;");
+	REQUIRE(CHECK_COLUMN(result, 0, {21}));
+	REQUIRE(CHECK_COLUMN(result, 1, {12}));
+
+	// having with condition on sum
 	result = con.Query("SELECT b, SUM(a) AS sum FROM test GROUP BY b HAVING "
 	                   "sum < 20 ORDER BY b;");
 	REQUIRE(CHECK_COLUMN(result, 0, {21}));
@@ -49,4 +55,27 @@ TEST_CASE("Test HAVING clause", "[having]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {21, 22}));
 	REQUIRE(CHECK_COLUMN(result, 1, {12, 24}));
 	REQUIRE(result->column_count() == 2);
+}
+
+TEST_CASE("Test HAVING clause without aggregation", "[having]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	// scalar HAVING queries
+	result = con.Query("SELECT 42 HAVING 42 > 20");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+
+	result = con.Query("SELECT 42 HAVING 42 > 80");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+
+	// HAVING with column references
+	con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
+	con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)");
+
+	result = con.Query("SELECT a FROM test WHERE a=13 HAVING a > 11");
+	REQUIRE(CHECK_COLUMN(result, 0, {13}));
+
+	result = con.Query("SELECT a FROM test WHERE a=13 HAVING a = 11");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
 }

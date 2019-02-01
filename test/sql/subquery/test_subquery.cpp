@@ -208,58 +208,58 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
 
 	// scalar select with correlation
-	result = con.Query("SELECT i, (SELECT 42+i1.i) AS j FROM integers i1 ORDER BY i;");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
-	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 43, 44, 45}));
-	// correlated filter without FROM clause
-	result = con.Query("SELECT i, (SELECT 42 WHERE i1.i>2) AS j FROM integers i1 ORDER BY i;");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
-	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value(), 42}));
-	// correlated filter with matching entry on NULL
-	result = con.Query("SELECT i, (SELECT 42 WHERE i1.i IS NULL) AS j FROM integers i1 ORDER BY i;");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
-	REQUIRE(CHECK_COLUMN(result, 1, {42, Value(), Value(), Value()}));
-	// scalar select with correlation in projection
-	result = con.Query("SELECT i, (SELECT i+i1.i FROM integers WHERE i=1) AS j FROM integers i1 ORDER BY i;");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
-	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 2, 3, 4}));
-	// scalar select with correlation in filter
-	result = con.Query("SELECT i, (SELECT i FROM integers WHERE i=i1.i) AS j FROM integers i1 ORDER BY i;");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
-	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3}));
-	// scalar select with operation in projection
-	result = con.Query("SELECT i, (SELECT i+1 FROM integers WHERE i=i1.i) AS j FROM integers i1 ORDER BY i;");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
-	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 2, 3, 4}));
-	// correlated scalar select with constant in projection
-	result = con.Query("SELECT i, (SELECT 42 FROM integers WHERE i=i1.i) AS j FROM integers i1 ORDER BY i;");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
-	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 42, 42, 42}));
-	// aggregate with correlation in final projection
-	result = con.Query("SELECT i, (SELECT MIN(i)+i1.i FROM integers) FROM integers i1 ORDER BY i;");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
-	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 2, 3, 4}));
-	//aggregate with correlation inside aggregation
-	result = con.Query("SELECT i, (SELECT MIN(i+2*i1.i) FROM integers) FROM integers i1 ORDER BY i;");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
-	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 3, 5, 7}));
-	// aggregate with correlation in filter
-	result = con.Query("SELECT i, (SELECT MIN(i) FROM integers WHERE i>i1.i) FROM integers i1 ORDER BY i;");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
-	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 2, 3, Value()}));
-	// aggregate with correlation in both filter and projection
-	result = con.Query("SELECT i, (SELECT MIN(i)+i1.i FROM integers WHERE i>i1.i) FROM integers i1 ORDER BY i;");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
-	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 3, 5, Value()}));
-	return;
-	// aggregate with correlation in GROUP BY
-	result = con.Query("SELECT i, (SELECT MIN(i) FROM integers GROUP BY i1.i) AS j FROM integers i1 ORDER BY i;");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
-	REQUIRE(CHECK_COLUMN(result, 1, {1, 1, 1, 1}));
+	// result = con.Query("SELECT i, (SELECT 42+i1.i) AS j FROM integers i1 ORDER BY i;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {Value(), 43, 44, 45}));
+	// // correlated filter without FROM clause
+	// result = con.Query("SELECT i, (SELECT 42 WHERE i1.i>2) AS j FROM integers i1 ORDER BY i;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value(), 42}));
+	// // correlated filter with matching entry on NULL
+	// result = con.Query("SELECT i, (SELECT 42 WHERE i1.i IS NULL) AS j FROM integers i1 ORDER BY i;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {42, Value(), Value(), Value()}));
+	// // scalar select with correlation in projection
+	// result = con.Query("SELECT i, (SELECT i+i1.i FROM integers WHERE i=1) AS j FROM integers i1 ORDER BY i;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {Value(), 2, 3, 4}));
+	// // scalar select with correlation in filter
+	// result = con.Query("SELECT i, (SELECT i FROM integers WHERE i=i1.i) AS j FROM integers i1 ORDER BY i;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3}));
+	// // scalar select with operation in projection
+	// result = con.Query("SELECT i, (SELECT i+1 FROM integers WHERE i=i1.i) AS j FROM integers i1 ORDER BY i;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {Value(), 2, 3, 4}));
+	// // correlated scalar select with constant in projection
+	// result = con.Query("SELECT i, (SELECT 42 FROM integers WHERE i=i1.i) AS j FROM integers i1 ORDER BY i;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {Value(), 42, 42, 42}));
+	// // aggregate with correlation in final projection
+	// result = con.Query("SELECT i, (SELECT MIN(i)+i1.i FROM integers) FROM integers i1 ORDER BY i;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {Value(), 2, 3, 4}));
+	// //aggregate with correlation inside aggregation
+	// result = con.Query("SELECT i, (SELECT MIN(i+2*i1.i) FROM integers) FROM integers i1 ORDER BY i;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {Value(), 3, 5, 7}));
+	// // aggregate with correlation in filter
+	// result = con.Query("SELECT i, (SELECT MIN(i) FROM integers WHERE i>i1.i) FROM integers i1 ORDER BY i;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {Value(), 2, 3, Value()}));
+	// // aggregate with correlation in both filter and projection
+	// result = con.Query("SELECT i, (SELECT MIN(i)+i1.i FROM integers WHERE i>i1.i) FROM integers i1 ORDER BY i;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {Value(), 3, 5, Value()}));
+	// // aggregate with correlation in GROUP BY
+	// result = con.Query("SELECT i, (SELECT MIN(i) FROM integers GROUP BY i1.i) AS j FROM integers i1 ORDER BY i;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {1, 1, 1, 1}));
 	// aggregate with correlation in HAVING clause
 	result = con.Query("SELECT i, (SELECT i FROM integers GROUP BY i HAVING i=i1.i) AS j FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3}));
+	return;
 	// aggregate that uses correlated column in aggregation
 	// this one is a bit strange, in PostgreSQL this only works with a GROUP BY on the OUTER query (possibly the MIN(i1.i) is pulled into the main query)
 	// TODO: have to figure out what to do here
