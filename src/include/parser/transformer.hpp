@@ -70,6 +70,10 @@ private:
 	//! Transform a Postgres T_UpdateStmt node into a UpdateStatement
 	unique_ptr<UpdateStatement> TransformUpdate(postgres::Node *node);
 
+	unique_ptr<PrepareStatement> TransformPrepare(postgres::Node *node);
+	// unique_ptr<ExecuteStatement> TransformExecute(postgres::Node *node);
+	// unique_ptr<DeallocateStatement> TransformDeallocate(postgres::Node *node);
+
 	//===--------------------------------------------------------------------===//
 	// Query Node Transform
 	//===--------------------------------------------------------------------===//

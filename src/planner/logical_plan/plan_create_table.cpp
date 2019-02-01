@@ -11,6 +11,9 @@ void LogicalPlanGenerator::CreatePlan(CreateTableStatement &statement) {
 	if (root) {
 		throw Exception("CREATE TABLE from SELECT not supported yet!");
 	}
+	if (statement.info->temporary) {
+		throw NotImplementedException("TEMPORARY tables are not yet supported");
+	}
 	// bind the schema
 	auto schema = context.db.catalog.GetSchema(context.ActiveTransaction(), statement.info->schema);
 	// create the logical operator

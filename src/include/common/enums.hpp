@@ -249,7 +249,8 @@ enum class CatalogType : uint8_t {
 	VIEW = 5,
 	INDEX = 6,
 	UPDATED_ENTRY = 10,
-	DELETED_ENTRY = 11
+	DELETED_ENTRY = 11,
+	PREPARED_STATEMENT = 12
 };
 
 //===--------------------------------------------------------------------===//

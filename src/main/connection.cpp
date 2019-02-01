@@ -11,9 +11,11 @@ using namespace duckdb;
 using namespace std;
 
 DuckDBConnection::DuckDBConnection(DuckDB &database) : db(database), context(database) {
+	db.connections.push_back(this);
 }
 
 DuckDBConnection::~DuckDBConnection() {
+	db.connections.erase(std::remove(db.connections.begin(), db.connections.end(), this), db.connections.end());
 }
 
 static void ExecuteStatement(ClientContext &context, unique_ptr<SQLStatement> statement, DuckDBResult &result) {

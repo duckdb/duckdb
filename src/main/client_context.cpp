@@ -5,5 +5,6 @@
 using namespace duckdb;
 using namespace std;
 
-ClientContext::ClientContext(DuckDB &database) : db(database), transaction(database.transaction_manager) {
+ClientContext::ClientContext(DuckDB &database)
+    : db(database), transaction(database.transaction_manager), prepared_statements(make_unique<CatalogSet>()) {
 }

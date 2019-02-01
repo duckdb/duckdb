@@ -4,6 +4,15 @@
 using namespace duckdb;
 using namespace std;
 
+TEST_CASE("Inline PREPARE", "[prepared]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+
+	DuckDBConnection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("PREPARE s1 AS SELECT 42"));
+}
+
 TEST_CASE("Test prepared statements for SELECT", "[prepared]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);

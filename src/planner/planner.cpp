@@ -140,6 +140,12 @@ void Planner::CreatePlan(ClientContext &context, unique_ptr<SQLStatement> statem
 		plan = move(explain);
 		break;
 	}
+	case StatementType::PREPARE: {
+		auto &stmt = *reinterpret_cast<PrepareStatement *>(statement.get());
+		context.prepared_statements->CreateEntry(context.ActiveTransaction(), stmt.name,
+		                                         make_unique<PreparedStatementCatalogEntry>(stmt.name));
+		break;
+	}
 	default:
 		throw NotImplementedException("Statement of type %d not implemented in planner!", statement->type);
 	}
