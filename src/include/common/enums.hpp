@@ -249,7 +249,8 @@ enum class CatalogType : uint8_t {
 	VIEW = 5,
 	INDEX = 6,
 	UPDATED_ENTRY = 10,
-	DELETED_ENTRY = 11
+	DELETED_ENTRY = 11,
+	PREPARED_STATEMENT = 12
 };
 
 //===--------------------------------------------------------------------===//
@@ -266,6 +267,7 @@ enum class StatementType : uint8_t {
 	INSERT,       // insert statement type
 	UPDATE,       // update statement type
 	DELETE,       // delete statement type
+	DEALLOCATE,   // de-allocate statement type
 	PREPARE,      // prepare statement type
 	EXECUTE,      // execute statement type
 	ALTER,        // alter statement type
@@ -386,7 +388,9 @@ enum class LogicalOperatorType : uint8_t {
 	// -----------------------------
 	// Helpers
 	// -----------------------------
-	PRUNE_COLUMNS
+	PRUNE_COLUMNS,
+	PREPARE,
+	EXECUTE
 };
 
 //===--------------------------------------------------------------------===//
@@ -439,7 +443,8 @@ enum class PhysicalOperatorType : uint8_t {
 	// -----------------------------
 	PRUNE_COLUMNS,
 	EXPLAIN,
-	EMPTY_RESULT
+	EMPTY_RESULT,
+	EXECUTE
 };
 
 //===--------------------------------------------------------------------===//

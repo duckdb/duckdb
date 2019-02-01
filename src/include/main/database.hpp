@@ -16,6 +16,7 @@ namespace duckdb {
 
 //! The database object. This object holds the catalog and all the
 //! database-specific meta information.
+class DuckDBConnection;
 class DuckDB {
 public:
 	DuckDB(const char *path = nullptr);
@@ -25,6 +26,8 @@ public:
 	StorageManager storage;
 	Catalog catalog;
 	TransactionManager transaction_manager;
+	// TODO this might get slow
+	vector<DuckDBConnection *> connections;
 };
 
 } // namespace duckdb

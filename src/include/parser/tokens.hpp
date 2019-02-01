@@ -30,6 +30,9 @@ class InsertStatement;
 class SelectStatement;
 class TransactionStatement;
 class UpdateStatement;
+class PrepareStatement;
+class ExecuteStatement;
+class DeallocateStatement;
 
 //===--------------------------------------------------------------------===//
 // Query Node

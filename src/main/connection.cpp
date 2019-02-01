@@ -11,12 +11,14 @@ using namespace duckdb;
 using namespace std;
 
 DuckDBConnection::DuckDBConnection(DuckDB &database) : db(database), context(database) {
+	db.connections.push_back(this);
 }
 
 DuckDBConnection::~DuckDBConnection() {
+	db.connections.erase(std::remove(db.connections.begin(), db.connections.end(), this), db.connections.end());
 }
 
-static void ExecuteStatement(ClientContext &context, unique_ptr<SQLStatement> statement, DuckDBResult &result) {
+static void ExecuteStatement_(ClientContext &context, unique_ptr<SQLStatement> statement, DuckDBResult &result) {
 	Planner planner;
 	planner.CreatePlan(context, move(statement));
 	if (!planner.plan) {
@@ -117,7 +119,7 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(ClientContext &context
 
 			// execute the original statement
 			try {
-				ExecuteStatement(context, move(statement), *result);
+				ExecuteStatement_(context, move(statement), *result);
 			} catch (Exception &ex) {
 				result->error = ex.GetMessage();
 			}
@@ -127,13 +129,13 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(ClientContext &context
 			}
 			// now execute the copied statement
 			try {
-				ExecuteStatement(context, move(copied_stmt), copied_result);
+				ExecuteStatement_(context, move(copied_stmt), copied_result);
 			} catch (Exception &ex) {
 				copied_result.error = ex.GetMessage();
 			}
 			// now execute the copied statement
 			try {
-				ExecuteStatement(context, move(deserialized_stmt), deserialized_result);
+				ExecuteStatement_(context, move(deserialized_stmt), deserialized_result);
 			} catch (Exception &ex) {
 				deserialized_result.error = ex.GetMessage();
 			}
@@ -147,7 +149,7 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(ClientContext &context
 			assert(copied_result.Equals(&deserialized_result));
 		} else
 #endif
-			ExecuteStatement(context, move(statement), *result);
+			ExecuteStatement_(context, move(statement), *result);
 	} catch (Exception &ex) {
 		result->error = ex.GetMessage();
 	} catch (...) {
@@ -167,49 +169,8 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(string query) {
 }
 
 unique_ptr<DuckDBPreparedStatement> DuckDBConnection::PrepareStatement(string query) {
-
-	if (context.transaction.IsAutoCommit()) {
-		context.transaction.BeginTransaction();
-	}
-
-	Parser parser(context);
-	parser.ParseQuery(query.c_str());
-	if (parser.statements.size() == 0) {
-		throw Exception("Need a query to prepare");
-	}
-
-	if (parser.statements.size() > 1) {
-		throw Exception("More than one statement per query not supported yet!");
-	}
-
-	auto &statement = parser.statements.back();
-	if (statement->type != StatementType::SELECT && statement->type != StatementType::INSERT &&
-	    statement->type != StatementType::UPDATE && statement->type != StatementType::DELETE) {
-		throw Exception("Only SELECT/INSERT/UPDATE/DELETE supported for prepared statements");
-	}
-
-	Planner planner;
-	planner.CreatePlan(context, move(statement));
-	if (!planner.plan) {
-		throw Exception("Failed to prepare statement");
-	}
-
-	auto plan = move(planner.plan);
-	Optimizer optimizer(context, *planner.context);
-	plan = optimizer.Optimize(move(plan));
-	if (!plan) {
-		throw Exception("Failed to optimize statement");
-	}
-
-	// extract the result column names from the plan
-	auto names = plan->GetNames();
-
-	// now convert logical query plan into a physical query plan
-	PhysicalPlanGenerator physical_planner(context);
-	physical_planner.CreatePlan(move(plan));
-	auto res = make_unique<DuckDBPreparedStatement>(move(physical_planner.plan), names);
-
-	return res;
+	// TODO remove
+	throw NotImplementedException("Use in-band PREPARE/EXECUTE/DEALLOCATE");
 }
 
 unique_ptr<DuckDBResult> DuckDBConnection::Query(string query) {

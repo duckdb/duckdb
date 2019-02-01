@@ -35,6 +35,7 @@ struct VersionInformation {
 
 //! The transaction object holds information about a currently running or past
 //! transaction
+
 class Transaction {
 public:
 	Transaction(transaction_t start_time, transaction_t transaction_id)
