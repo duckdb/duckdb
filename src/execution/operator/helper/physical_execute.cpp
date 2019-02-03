@@ -7,3 +7,7 @@ void PhysicalExecute::_GetChunk(ClientContext &context, DataChunk &chunk, Physic
 	assert(plan);
 	plan->GetChunk(context, chunk, state_);
 }
+
+unique_ptr<PhysicalOperatorState> PhysicalExecute::GetOperatorState(ExpressionExecutor *parent_executor) {
+	return make_unique<PhysicalOperatorState>(plan->children[0].get(), parent_executor);
+}
