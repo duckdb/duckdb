@@ -45,7 +45,8 @@ unique_ptr<DeallocateStatement> Transformer::TransformDeallocate(Node *node) {
 	DeallocateStmt *stmt = reinterpret_cast<DeallocateStmt *>(node);
 	assert(stmt);
 
-	auto result = make_unique<DeallocateStatement>();
+	// TODO empty name means all are removed
+	auto result = make_unique<DeallocateStatement>(string(stmt->name));
 
 	return result;
 }

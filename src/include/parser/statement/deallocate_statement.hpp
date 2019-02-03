@@ -17,7 +17,7 @@ namespace duckdb {
 
 class DeallocateStatement : public SQLStatement {
 public:
-	DeallocateStatement() : SQLStatement(StatementType::DEALLOCATE){};
+	DeallocateStatement(string name) : SQLStatement(StatementType::DEALLOCATE), name(name){};
 	string ToString() const override {
 		return "Deallocate";
 	}
@@ -28,6 +28,8 @@ public:
 		}
 		throw NotImplementedException("Equality not implemented!");
 	}
+
+	string name;
 
 	// TODO
 };

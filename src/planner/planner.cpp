@@ -152,6 +152,13 @@ void Planner::CreatePlan(ClientContext &context, unique_ptr<SQLStatement> statem
 		plan = move(prepare);
 		break;
 	}
+	case StatementType::DEALLOCATE: {
+		auto &stmt = *reinterpret_cast<DeallocateStatement *>(statement.get());
+		if (!context.prepared_statements->DropEntry(context.ActiveTransaction(), stmt.name, false)) {
+			// silently ignore
+		}
+		break;
+	}
 	default:
 		throw NotImplementedException("Statement of type %d not implemented in planner!", statement->type);
 	}

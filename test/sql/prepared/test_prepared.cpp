@@ -4,68 +4,58 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Inline PREPARE", "[prepared]") {
+TEST_CASE("Inline PREPARE for SELECT", "[prepared]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 
 	DuckDBConnection con(db);
 
-	REQUIRE_NO_FAIL(con.Query("PREPARE s1 AS SELECT CAST($1 AS INTEGER)"));
-	result = con.Query("EXECUTE s1(42)");
+	REQUIRE_NO_FAIL(con.Query("PREPARE s1 AS SELECT CAST($1 AS INTEGER), CAST($2 AS STRING)"));
+	result = con.Query("EXECUTE s1(42, 'dpfkg')");
 	REQUIRE(result->GetSuccess());
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"dpfkg"}));
+
+	result = con.Query("EXECUTE s1(43, 'asdf')");
+	REQUIRE(result->GetSuccess());
+	REQUIRE(CHECK_COLUMN(result, 0, {43}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"asdf"}));
+
+	// not enough params
+	REQUIRE_FAIL(con.Query("EXECUTE s1(43)"));
+	// too many
+	REQUIRE_FAIL(con.Query("EXECUTE s1(43, 'asdf', 42)"));
+	// wrong non-castable types
+	REQUIRE_FAIL(con.Query("EXECUTE s1('asdf', 'asdf')"));
+
+	REQUIRE_NO_FAIL(con.Query("DEALLOCATE s1"));
+
+	// we can deallocate non-existing statements
+	REQUIRE_NO_FAIL(con.Query("DEALLOCATE s2"));
+
+	// now its gone
+	REQUIRE_FAIL(con.Query("EXECUTE s1(42, 'dpfkg')"));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a (i TINYINT)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO a VALUES (42)"));
+	REQUIRE_NO_FAIL(con.Query("PREPARE s3 AS SELECT * FROM a WHERE i=$1"));
+
+	REQUIRE_FAIL(con.Query("EXECUTE s3(10000)"));
+
+	result = con.Query("EXECUTE s3(42)");
+	REQUIRE(result->GetSuccess());
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+
+	result = con.Query("EXECUTE s3(84)");
+	REQUIRE(result->GetSuccess());
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+
+	REQUIRE_NO_FAIL(con.Query("DEALLOCATE s3"));
 }
 
 // TODO NULL
 // TODO not-set param throws err
-
 /*
-TEST_CASE("Test prepared statements for SELECT", "[prepared]") {
-    unique_ptr<DuckDBResult> result;
-    DuckDB db(nullptr);
-
-    DuckDBConnection con(db);
-
-    auto prep0 = con.PrepareStatement("SELECT cast(42 as integer)");
-    result = prep0->Execute(con);
-    REQUIRE(CHECK_COLUMN(result, 0, {42}));
-    {
-        auto prep = con.PrepareStatement("SELECT cast($1 as integer)");
-        prep->Bind(1, Value::INTEGER(42));
-        result = prep->Execute(con);
-        REQUIRE(CHECK_COLUMN(result, 0, {42}));
-
-        prep->Bind(1, Value::INTEGER(84));
-        result = prep->Execute(con);
-        REQUIRE(CHECK_COLUMN(result, 0, {84}));
-    }
-    {
-        auto prep = con.PrepareStatement("SELECT cast($1 as integer), cast($2 as string)");
-        prep->Bind(1, Value::INTEGER(42));
-        prep->Bind(2, Value("DPFKG"));
-
-        result = prep->Execute(con);
-        REQUIRE(CHECK_COLUMN(result, 0, {42}));
-        REQUIRE(CHECK_COLUMN(result, 1, {"DPFKG"}));
-    }
-    {
-        auto prep = con.PrepareStatement("SELECT cast($42 as integer)");
-
-        REQUIRE_THROWS(prep->Bind(0, Value::INTEGER(42)));
-        REQUIRE_THROWS(prep->Bind(1, Value::INTEGER(42)));
-
-        prep->Bind(42, Value::INTEGER(42));
-
-        result = prep->Execute(con);
-        REQUIRE(CHECK_COLUMN(result, 0, {42}));
-    }
-    {
-        auto prep = con.PrepareStatement("SELECT cast($1 as tinyint)");
-        REQUIRE_THROWS(prep->Bind(1, Value::INTEGER(10000)));
-        REQUIRE_NOTHROW(prep->Bind(1, Value::INTEGER(42)));
-        result = prep->Execute(con);
-        REQUIRE(CHECK_COLUMN(result, 0, {42}));
-    }
 
     {
         REQUIRE_NO_FAIL(con.Query("CREATE TABLE a (i TINYINT)"));

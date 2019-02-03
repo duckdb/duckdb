@@ -12,7 +12,7 @@ using namespace std;
 void LogicalPlanGenerator::CreatePlan(ExecuteStatement &statement) {
 	auto *prep = (PreparedStatementCatalogEntry *)context.prepared_statements->GetEntry(context.ActiveTransaction(),
 	                                                                                    statement.name);
-	if (!prep) {
+	if (!prep || prep->deleted) {
 		throw Exception("Could not find prepared statement with that name");
 	}
 	// set parameters
