@@ -469,6 +469,8 @@ void PhysicalPlanGenerator::Visit(LogicalPrepare &op) {
 	assert(op.children.size() == 1);
 	// create the physical plan for the prepare statement.
 
+	auto names = op.children[0]->GetNames();
+
 	// find parameters and add to info
 	VisitOperator(*op.children[0]);
 	assert(plan);
@@ -478,6 +480,7 @@ void PhysicalPlanGenerator::Visit(LogicalPrepare &op) {
 	auto entry = make_unique<PreparedStatementCatalogEntry>(op.name, move(plan));
 	entry->parameter_expression_map = v.parameter_expression_map;
 	entry->types = types;
+	entry->names = names;
 	// now store plan in context
 	if (!context.prepared_statements->CreateEntry(context.ActiveTransaction(), op.name, move(entry))) {
 		throw Exception("Failed to prepare statement");
