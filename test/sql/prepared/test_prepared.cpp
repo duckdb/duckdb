@@ -77,12 +77,19 @@ TEST_CASE("PREPARE for INSERT", "[prepared]") {
 		REQUIRE_NO_FAIL(con.Query("EXECUTE s2(" + to_string(i) + ")"));
 	}
 
-	REQUIRE_NO_FAIL(con.Query("DEALLOCATE s2"));
-
 	result = con.Query("SELECT COUNT(*), MIN(i), MAX(i) FROM c");
 	REQUIRE(CHECK_COLUMN(result, 0, {1000}));
 	REQUIRE(CHECK_COLUMN(result, 1, {0}));
 	REQUIRE(CHECK_COLUMN(result, 2, {999}));
+
+	// can't drop table because we still have a prepared statement on it
+	REQUIRE_FAIL(con.Query("DROP TABLE c"));
+
+	// TODO also try this in different connections and transaction contexts
+	REQUIRE_NO_FAIL(con.Query("DEALLOCATE s2"));
+
+	// now we can
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE c"));
 }
 
 // TODO NULL

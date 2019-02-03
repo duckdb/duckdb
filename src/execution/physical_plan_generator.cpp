@@ -446,9 +446,9 @@ void PhysicalPlanGenerator::Visit(LogicalPruneColumns &op) {
 }
 
 // we use this to find parameters in the prepared statement
-class FindParameters : public SQLNodeVisitor {
+class PrepareParameterVisitor : public SQLNodeVisitor {
 public:
-	std::unordered_map<size_t, ParameterExpression *> parameter_expression_map;
+	unordered_map<size_t, ParameterExpression *> parameter_expression_map;
 
 protected:
 	using SQLNodeVisitor::Visit;
@@ -464,21 +464,61 @@ protected:
 	}
 };
 
+class PrepareTableVisitor : public LogicalOperatorVisitor {
+public:
+	vector<TableCatalogEntry *> table_list;
+
+	void VisitOperator(LogicalOperator &op) {
+		switch (op.type) {
+		case LogicalOperatorType::GET:
+			Visit((LogicalGet &)op);
+			break;
+		case LogicalOperatorType::INSERT:
+			Visit((LogicalInsert &)op);
+			break;
+		default:
+			// for the operators we do not handle explicitly, we just visit the children
+			LogicalOperatorVisitor::VisitOperator(op);
+			break;
+		}
+	}
+
+protected:
+	using SQLNodeVisitor::Visit;
+	void Visit(LogicalGet &op) {
+		if (op.table) {
+			table_list.push_back(op.table);
+		}
+	}
+
+	void Visit(LogicalInsert &op) {
+		if (op.table) {
+			table_list.push_back(op.table);
+		}
+	}
+};
+
 void PhysicalPlanGenerator::Visit(LogicalPrepare &op) {
 	assert(!plan); // prepare has to be top node
 	assert(op.children.size() == 1);
 	// create the physical plan for the prepare statement.
+	// TODO this is quite a mess, clean up
 
 	auto names = op.children[0]->GetNames();
 
-	// find parameters and add to info
+	PrepareTableVisitor ptv;
+	ptv.VisitOperator(*op.children[0].get());
+
 	VisitOperator(*op.children[0]);
 	assert(plan);
-	FindParameters v;
-	plan->Accept(&v);
+
+	// find parameters and add to info
+	PrepareParameterVisitor ppv;
+	plan->Accept(&ppv);
 	auto types = plan->types;
 	auto entry = make_unique<PreparedStatementCatalogEntry>(op.name, move(plan));
-	entry->parameter_expression_map = v.parameter_expression_map;
+	entry->parameter_expression_map = ppv.parameter_expression_map;
+	entry->tables = ptv.table_list;
 	entry->types = types;
 	entry->names = names;
 	// now store plan in context

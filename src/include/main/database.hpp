@@ -27,6 +27,7 @@ public:
 	Catalog catalog;
 	TransactionManager transaction_manager;
 	// TODO this might get slow
+	// TODO we need locks for this
 	vector<DuckDBConnection *> connections;
 };
 

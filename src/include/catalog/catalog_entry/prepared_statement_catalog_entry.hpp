@@ -9,6 +9,7 @@
 #pragma once
 
 #include "catalog/catalog_entry.hpp"
+#include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "common/types/statistics.hpp"
 #include "execution/physical_operator.hpp" // FIXME uuugly, the catalog should not refer to the execution
 #include "parser/column_definition.hpp"
@@ -30,9 +31,10 @@ public:
 	}
 
 	unique_ptr<PhysicalOperator> plan;
-	std::unordered_map<size_t, ParameterExpression *> parameter_expression_map;
+	unordered_map<size_t, ParameterExpression *> parameter_expression_map;
+	vector<TableCatalogEntry *> tables;
+
 	vector<string> names;
 	vector<TypeId> types;
-
 };
 } // namespace duckdb

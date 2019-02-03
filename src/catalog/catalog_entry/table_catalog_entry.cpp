@@ -5,6 +5,9 @@
 #include "common/serializer.hpp"
 #include "parser/constraints/list.hpp"
 #include "storage/storage_manager.hpp"
+// TODO this pulls in all that stuff. Do we want that?
+#include "main/connection.hpp"
+#include "main/database.hpp"
 
 #include <algorithm>
 
@@ -190,13 +193,31 @@ unique_ptr<CreateTableInformation> TableCatalogEntry::Deserialize(Deserializer &
 	return info;
 }
 
-
 bool TableCatalogEntry::HasDependents(Transaction &transaction) {
 	// get all connections from database
+	// TODO use a scan method on connections, too
+	// TODO this is quite ugly
+	bool found_table = false;
+
+	for (auto &conn : catalog->storage.GetDatabase().connections) {
+		auto &prep_catalog = conn->context.prepared_statements;
+		prep_catalog->Scan(transaction, [&](CatalogEntry *entry) {
+			assert(entry->type == CatalogType::PREPARED_STATEMENT);
+			auto prep_stmt = (PreparedStatementCatalogEntry *)entry;
+			// TODO add HasTable() call to prep_stmt or so
+			for (auto &tbl : prep_stmt->tables) {
+				if (tbl == this) {
+					found_table = true;
+				}
+			}
+		});
+		if (found_table) {
+			return true;
+		}
+	}
 	return false;
 }
 
 void TableCatalogEntry::DropDependents(Transaction &transaction) {
-// TODO
+	// TODO
 }
-

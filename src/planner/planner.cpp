@@ -7,7 +7,6 @@
 #include "planner/binder.hpp"
 #include "planner/logical_plan_generator.hpp"
 #include "planner/operator/logical_explain.hpp"
-
 #include "planner/operator/logical_prepare.hpp"
 
 using namespace duckdb;

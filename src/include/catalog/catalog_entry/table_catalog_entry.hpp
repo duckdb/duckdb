@@ -67,8 +67,6 @@ public:
 	//! Function that drops all dependents (used for Cascade)
 	virtual void DropDependents(Transaction &transaction);
 
-
-
 private:
 	void Initialize(CreateTableInformation *info);
 };
