@@ -62,6 +62,13 @@ public:
 	//! Deserializes to a CreateTableInfo
 	static unique_ptr<CreateTableInformation> Deserialize(Deserializer &source);
 
+	//! Returns true if other objects depend on this object
+	virtual bool HasDependents(Transaction &transaction);
+	//! Function that drops all dependents (used for Cascade)
+	virtual void DropDependents(Transaction &transaction);
+
+
+
 private:
 	void Initialize(CreateTableInformation *info);
 };

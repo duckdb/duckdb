@@ -10,7 +10,7 @@
 
 #include "catalog/catalog_entry.hpp"
 #include "common/types/statistics.hpp"
-#include "execution/physical_operator.hpp" // FIXME uuugly, perhaps move this header elsewhere
+#include "execution/physical_operator.hpp" // FIXME uuugly, the catalog should not refer to the execution
 #include "parser/column_definition.hpp"
 #include "parser/constraint.hpp"
 #include "parser/parsed_data.hpp"
@@ -29,11 +29,10 @@ public:
 	    : CatalogEntry(CatalogType::PREPARED_STATEMENT, nullptr, name), plan(move(plan)) {
 	}
 
-	// TODO use PrepareStatementInformation to hold this stuff
-
 	unique_ptr<PhysicalOperator> plan;
 	std::unordered_map<size_t, ParameterExpression *> parameter_expression_map;
 	vector<string> names;
 	vector<TypeId> types;
+
 };
 } // namespace duckdb

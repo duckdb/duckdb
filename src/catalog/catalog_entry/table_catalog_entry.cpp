@@ -189,3 +189,14 @@ unique_ptr<CreateTableInformation> TableCatalogEntry::Deserialize(Deserializer &
 	}
 	return info;
 }
+
+
+bool TableCatalogEntry::HasDependents(Transaction &transaction) {
+	// get all connections from database
+	return false;
+}
+
+void TableCatalogEntry::DropDependents(Transaction &transaction) {
+// TODO
+}
+
