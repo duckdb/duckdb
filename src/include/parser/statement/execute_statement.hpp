@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/statement/prepare_statement.hpp
+// parser/statement/execute_statement.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -15,12 +15,11 @@
 
 namespace duckdb {
 
-class PrepareStatement : public SQLStatement {
+class ExecuteStatement : public SQLStatement {
 public:
-	PrepareStatement() : SQLStatement(StatementType::PREPARE), statement(nullptr), name("") {
-	}
+	ExecuteStatement() : SQLStatement(StatementType::EXECUTE){};
 	string ToString() const override {
-		return "Prepare";
+		return "Execute";
 	}
 
 	bool Equals(const SQLStatement *other_) const override {
@@ -30,7 +29,9 @@ public:
 		throw NotImplementedException("Equality not implemented!");
 	}
 
-	unique_ptr<SQLStatement> statement;
 	string name;
+	vector<unique_ptr<Expression>> values;
+
+	// TODO
 };
 } // namespace duckdb

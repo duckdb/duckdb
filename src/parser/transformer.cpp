@@ -49,10 +49,10 @@ unique_ptr<SQLStatement> Transformer::TransformStatement(Node *stmt) {
 		return TransformRename(stmt);
 	case T_PrepareStmt:
 		return TransformPrepare(stmt);
-		//	case T_ExecuteStmt:
-		//		return TransformExecute(stmt);
-		//	case T_DeallocateStmt:
-		//		return TransformDeallocate(stmt);
+	case T_ExecuteStmt:
+		return TransformExecute(stmt);
+	case T_DeallocateStmt:
+		return TransformDeallocate(stmt);
 	case T_ExplainStmt: {
 		ExplainStmt *explain_stmt = reinterpret_cast<ExplainStmt *>(stmt);
 		return make_unique<ExplainStatement>(TransformStatement(explain_stmt->query));

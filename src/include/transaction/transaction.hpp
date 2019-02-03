@@ -35,7 +35,6 @@ struct VersionInformation {
 
 //! The transaction object holds information about a currently running or past
 //! transaction
-class ClientContext;
 
 class Transaction {
 public:
@@ -75,8 +74,6 @@ public:
 	//! The current active query for the transaction. Set to MAXIMUM_QUERY_ID if
 	//! no query is active.
 	transaction_t active_query;
-
-	ClientContext *context;
 
 private:
 	uint8_t *PushTuple(UndoFlags flag, size_t data_size);

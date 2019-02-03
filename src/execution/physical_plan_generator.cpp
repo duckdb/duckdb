@@ -107,6 +107,12 @@ void PhysicalPlanGenerator::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::PRUNE_COLUMNS:
 		Visit((LogicalPruneColumns &)op);
 		break;
+	case LogicalOperatorType::PREPARE:
+		Visit((LogicalPrepare &)op);
+		break;
+	case LogicalOperatorType::EXECUTE:
+		Visit((LogicalExecute &)op);
+		break;
 	default:
 		LogicalOperatorVisitor::VisitOperator(op);
 		break;
@@ -439,11 +445,57 @@ void PhysicalPlanGenerator::Visit(LogicalPruneColumns &op) {
 	}
 }
 
+// we use this to find parameters in the prepared statement
+class FindParameters : public SQLNodeVisitor {
+public:
+	std::unordered_map<size_t, ParameterExpression *> parameter_expression_map;
+
+protected:
+	using SQLNodeVisitor::Visit;
+	void Visit(ParameterExpression &expr) override {
+		if (expr.return_type == TypeId::INVALID) {
+			throw Exception("Could not determine type for prepared statement parameter. Consider using a CAST on it.");
+		}
+		auto it = parameter_expression_map.find(expr.parameter_nr);
+		if (it != parameter_expression_map.end()) {
+			throw Exception("Duplicate parameter index. Use $1, $2 etc. to differentiate.");
+		}
+		parameter_expression_map[expr.parameter_nr] = &expr;
+	}
+};
+
+void PhysicalPlanGenerator::Visit(LogicalPrepare &op) {
+	assert(!plan); // prepare has to be top node
+	assert(op.children.size() == 1);
+	// create the physical plan for the prepare statement.
+
+	// find parameters and add to info
+	VisitOperator(*op.children[0]);
+	assert(plan);
+	FindParameters v;
+	plan->Accept(&v);
+	auto types = plan->types;
+	auto entry = make_unique<PreparedStatementCatalogEntry>(op.name, move(plan));
+	entry->parameter_expression_map = v.parameter_expression_map;
+	entry->types = types;
+	// now store plan in context
+	if (!context.prepared_statements->CreateEntry(context.ActiveTransaction(), op.name, move(entry))) {
+		throw Exception("Failed to prepare statement");
+	}
+	vector<TypeId> prep_return_types = {TypeId::BOOLEAN};
+	plan = make_unique<PhysicalDummyScan>(prep_return_types);
+}
+
+void PhysicalPlanGenerator::Visit(LogicalExecute &op) {
+	assert(!plan); // execute has to be top node
+	plan = make_unique<PhysicalExecute>(op.prep->plan.get());
+}
+
 void PhysicalPlanGenerator::Visit(LogicalTableFunction &op) {
 	LogicalOperatorVisitor::VisitOperatorChildren(op);
 
 	assert(!plan); // Table function has to be first node of the plan!
-	this->plan = make_unique<PhysicalTableFunction>(op, op.function, move(op.function_call));
+	plan = make_unique<PhysicalTableFunction>(op, op.function, move(op.function_call));
 }
 
 void PhysicalPlanGenerator::Visit(LogicalCopy &op) {
@@ -453,11 +505,11 @@ void PhysicalPlanGenerator::Visit(LogicalCopy &op) {
 		auto copy = make_unique<PhysicalCopy>(op, move(op.file_path), move(op.is_from), move(op.delimiter),
 		                                      move(op.quote), move(op.escape));
 		copy->children.push_back(move(plan));
-		this->plan = move(copy);
+		plan = move(copy);
 	} else {
 		auto copy = make_unique<PhysicalCopy>(op, op.table, move(op.file_path), move(op.is_from), move(op.delimiter),
 		                                      move(op.quote), move(op.escape), move(op.select_list));
-		this->plan = move(copy);
+		plan = move(copy);
 	}
 }
 
