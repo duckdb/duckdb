@@ -9,5 +9,6 @@ void PhysicalExecute::_GetChunk(ClientContext &context, DataChunk &chunk, Physic
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalExecute::GetOperatorState(ExpressionExecutor *parent_executor) {
-	return make_unique<PhysicalOperatorState>(plan->children[0].get(), parent_executor);
+	return make_unique<PhysicalOperatorState>(plan->children.size() > 0 ? plan->children[0].get() : nullptr,
+	                                          parent_executor);
 }
