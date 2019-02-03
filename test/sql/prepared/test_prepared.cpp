@@ -68,7 +68,6 @@ TEST_CASE("PREPARE for INSERT", "[prepared]") {
 	result = con.Query("SELECT * FROM b");
 	REQUIRE(CHECK_COLUMN(result, 0, {42, 42, 42}));
 	REQUIRE_FAIL(con.Query("EXECUTE s1 (42, 41, 10000)"));
-	REQUIRE_NO_FAIL(con.Query("DEALLOCATE s1"));
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE c (i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("PREPARE s2 AS INSERT INTO c VALUES ($1)"));
@@ -83,12 +82,16 @@ TEST_CASE("PREPARE for INSERT", "[prepared]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {999}));
 
 	// can't drop table because we still have a prepared statement on it
+	REQUIRE_FAIL(con.Query("DROP TABLE b"));
 	REQUIRE_FAIL(con.Query("DROP TABLE c"));
 
 	// TODO also try this in different connections and transaction contexts
 	REQUIRE_NO_FAIL(con.Query("DEALLOCATE s2"));
+	REQUIRE_NO_FAIL(con.Query("DEALLOCATE s1"));
+
 
 	// now we can
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE b"));
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE c"));
 }
 

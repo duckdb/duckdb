@@ -41,7 +41,7 @@ public:
 	//! Whether or not the query is interrupted
 	bool interrupted;
 
-	unique_ptr<CatalogSet> temporary_tables;
+//	unique_ptr<CatalogSet> temporary_tables;
 	unique_ptr<CatalogSet> prepared_statements;
 
 #ifdef DEBUG
