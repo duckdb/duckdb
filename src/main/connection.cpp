@@ -168,11 +168,6 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(string query) {
 	return GetQueryResult(context, query);
 }
 
-unique_ptr<DuckDBPreparedStatement> DuckDBConnection::PrepareStatement(string query) {
-	// TODO remove
-	throw NotImplementedException("Use in-band PREPARE/EXECUTE/DEALLOCATE");
-}
-
 unique_ptr<DuckDBResult> DuckDBConnection::Query(string query) {
 	if (context.transaction.IsAutoCommit()) {
 		context.transaction.BeginTransaction();

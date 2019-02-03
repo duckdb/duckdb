@@ -8,7 +8,6 @@
 #include "planner/logical_plan_generator.hpp"
 #include "planner/operator/logical_explain.hpp"
 
-// FIXME remove again
 #include "planner/operator/logical_prepare.hpp"
 
 using namespace duckdb;
@@ -144,7 +143,6 @@ void Planner::CreatePlan(ClientContext &context, unique_ptr<SQLStatement> statem
 		plan = move(explain);
 		break;
 	}
-	// TODO move to own planner function
 	case StatementType::PREPARE: {
 		auto &stmt = *reinterpret_cast<PrepareStatement *>(statement.get());
 		CreatePlan(context, move(stmt.statement));
