@@ -5,6 +5,9 @@
 #include "common/serializer.hpp"
 #include "parser/constraints/list.hpp"
 #include "storage/storage_manager.hpp"
+// TODO this pulls in all that stuff. Do we want that?
+#include "main/connection.hpp"
+#include "main/database.hpp"
 
 #include <algorithm>
 
@@ -188,4 +191,29 @@ unique_ptr<CreateTableInformation> TableCatalogEntry::Deserialize(Deserializer &
 		info->constraints.push_back(move(constraint));
 	}
 	return info;
+}
+
+bool TableCatalogEntry::HasDependents(Transaction &transaction) {
+	bool found_table = false;
+
+	catalog->storage.GetDatabase().connection_manager.Scan([&](DuckDBConnection *conn) {
+		auto &prep_catalog = conn->context.prepared_statements;
+		prep_catalog->Scan(transaction, [&](CatalogEntry *entry) {
+			assert(entry->type == CatalogType::PREPARED_STATEMENT);
+			auto prep_stmt = (PreparedStatementCatalogEntry *)entry;
+			// TODO add HasTable() call to prep_stmt or so
+			if (prep_stmt->tables.find(this) != prep_stmt->tables.end()) {
+				found_table = true;
+			}
+		});
+	});
+
+	if (found_table) {
+		return true;
+	}
+	return false;
+}
+
+void TableCatalogEntry::DropDependents(Transaction &transaction) {
+	// TODO
 }

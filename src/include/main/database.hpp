@@ -9,8 +9,11 @@
 #pragma once
 
 #include "catalog/catalog.hpp"
+#include "main/connection_manager.hpp"
 #include "storage/storage_manager.hpp"
 #include "transaction/transaction_manager.hpp"
+
+#include <unordered_set>
 
 namespace duckdb {
 
@@ -26,8 +29,7 @@ public:
 	StorageManager storage;
 	Catalog catalog;
 	TransactionManager transaction_manager;
-	// TODO this might get slow
-	vector<DuckDBConnection *> connections;
+	ConnectionManager connection_manager;
 };
 
 } // namespace duckdb

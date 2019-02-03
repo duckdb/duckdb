@@ -7,6 +7,8 @@
 #include "storage/order_index.hpp"
 #include "storage/storage_manager.hpp"
 
+#include <unordered_set>
+
 using namespace duckdb;
 using namespace std;
 
@@ -446,9 +448,11 @@ void PhysicalPlanGenerator::Visit(LogicalPruneColumns &op) {
 }
 
 // we use this to find parameters in the prepared statement
-class FindParameters : public SQLNodeVisitor {
+class PrepareParameterVisitor : public SQLNodeVisitor {
 public:
-	std::unordered_map<size_t, ParameterExpression *> parameter_expression_map;
+	PrepareParameterVisitor(unordered_map<size_t, ParameterExpression *> &parameter_expression_map)
+	    : parameter_expression_map(parameter_expression_map) {
+	}
 
 protected:
 	using SQLNodeVisitor::Visit;
@@ -462,6 +466,9 @@ protected:
 		}
 		parameter_expression_map[expr.parameter_nr] = &expr;
 	}
+
+private:
+	unordered_map<size_t, ParameterExpression *> &parameter_expression_map;
 };
 
 void PhysicalPlanGenerator::Visit(LogicalPrepare &op) {
@@ -469,18 +476,23 @@ void PhysicalPlanGenerator::Visit(LogicalPrepare &op) {
 	assert(op.children.size() == 1);
 	// create the physical plan for the prepare statement.
 
-	auto names = op.children[0]->GetNames();
+	auto entry = make_unique<PreparedStatementCatalogEntry>(op.name);
+	entry->names = op.children[0]->GetNames();
 
-	// find parameters and add to info
+	// find tables
+
+	op.GetTableBindings(entry->tables);
+
 	VisitOperator(*op.children[0]);
 	assert(plan);
-	FindParameters v;
-	plan->Accept(&v);
-	auto types = plan->types;
-	auto entry = make_unique<PreparedStatementCatalogEntry>(op.name, move(plan));
-	entry->parameter_expression_map = v.parameter_expression_map;
-	entry->types = types;
-	entry->names = names;
+
+	// find parameters and add to info
+	PrepareParameterVisitor ppv(entry->parameter_expression_map);
+	plan->Accept(&ppv);
+
+	entry->types = plan->types;
+	entry->plan = move(plan);
+
 	// now store plan in context
 	if (!context.prepared_statements->CreateEntry(context.ActiveTransaction(), op.name, move(entry))) {
 		throw Exception("Failed to prepare statement");

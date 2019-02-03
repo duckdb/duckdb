@@ -32,6 +32,10 @@ public:
 		return wal.IsInitialized() ? &wal : nullptr;
 	}
 
+	DuckDB &GetDatabase() {
+		return database;
+	}
+
 private:
 	//! Load the database from a directory
 	void LoadDatabase();
