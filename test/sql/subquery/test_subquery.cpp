@@ -202,9 +202,8 @@ TEST_CASE("Test simple uncorrelated subqueries", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), false, true}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 3, 3}));
 
-	result = con.Query("SELECT SUM(i) FROM integers GROUP BY (i >= ALL(SELECT i FROM integers WHERE i IS NOT NULL));");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), false, true}));
-	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 3, 3}));
+	result = con.Query("SELECT SUM(i) FROM integers GROUP BY (i >= ALL(SELECT i FROM integers WHERE i IS NOT NULL)) ORDER BY 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 3, 3}));
 
 	result = con.Query("SELECT i >= ALL(SELECT MIN(i) FROM integers WHERE i IS NOT NULL) AS k, SUM(i) FROM integers GROUP BY k ORDER BY k;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), true}));
@@ -213,10 +212,10 @@ TEST_CASE("Test simple uncorrelated subqueries", "[subquery]") {
 	// subquery in CASE statement
 	result = con.Query("SELECT i, SUM(CASE WHEN (i >= ALL(SELECT i FROM integers WHERE i=2)) THEN 1 ELSE 0 END) FROM integers GROUP BY i ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
-	REQUIRE(CHECK_COLUMN(result, 1, {0, 1, 1, 0}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0, 0, 1, 1}));
 
 	// subquery in HAVING
-	result = con.Query("SELECT i % 2 AS k, SUM(i) AS sum FROM integers GROUP BY k HAVING sum > (SELECT MAX(i) FROM integers)");
+	result = con.Query("SELECT i % 2 AS k, SUM(i) FROM integers GROUP BY k HAVING SUM(i) > (SELECT MAX(i) FROM integers)");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {4}));
 }
