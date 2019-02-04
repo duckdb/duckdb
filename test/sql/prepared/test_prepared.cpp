@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include "common/file_system.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
@@ -118,5 +119,87 @@ TEST_CASE("PREPARE and DROPping tables", "[prepared]") {
 	REQUIRE_NO_FAIL(con1.Query("DROP TABLE a"));
 }
 
+TEST_CASE("PREPARE and WAL", "[prepared]") {
+	unique_ptr<DuckDBResult> result;
+	auto prepare_database = JoinPath(TESTING_DIRECTORY_NAME, "prepare_test");
+
+	// make sure the database does not exist
+	if (DirectoryExists(prepare_database)) {
+		RemoveDirectory(prepare_database);
+	}
+	{
+		// create a database and insert values
+		DuckDB db(prepare_database);
+		DuckDBConnection con(db);
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t (a INTEGER)"));
+		REQUIRE_NO_FAIL(con.Query("PREPARE p1 AS INSERT INTO t VALUES ($1)"));
+		REQUIRE_NO_FAIL(con.Query("EXECUTE p1(42)"));
+		REQUIRE_NO_FAIL(con.Query("EXECUTE p1(43)"));
+		REQUIRE_NO_FAIL(con.Query("DEALLOCATE p1")); // TODO test where the deallocate is implicit
+
+		result = con.Query("SELECT a FROM t");
+		REQUIRE(CHECK_COLUMN(result, 0, {42, 43}));
+	}
+	{
+		DuckDB db(prepare_database);
+		DuckDBConnection con(db);
+
+		result = con.Query("SELECT a FROM t");
+		REQUIRE(CHECK_COLUMN(result, 0, {42, 43}));
+
+		// unhelpfully use the same statement name again, it should be available, but do nothing with it
+		REQUIRE_NO_FAIL(con.Query("PREPARE p1 AS DELETE FROM t WHERE a=$1"));
+	}
+	// reload the database from disk
+	{
+		DuckDB db(prepare_database);
+		DuckDBConnection con(db);
+		REQUIRE_NO_FAIL(con.Query("PREPARE p1 AS DELETE FROM t WHERE a=$1"));
+		REQUIRE_NO_FAIL(con.Query("EXECUTE p1(43)"));
+
+		result = con.Query("SELECT a FROM t");
+		REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	}
+	// reload again
+
+	{
+		DuckDB db(prepare_database);
+		DuckDBConnection con(db);
+
+		result = con.Query("SELECT a FROM t");
+		REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	}
+
+	{
+		DuckDB db(prepare_database);
+		DuckDBConnection con(db);
+
+		result = con.Query("SELECT a FROM t");
+		REQUIRE(CHECK_COLUMN(result, 0, {42}));
+
+		REQUIRE_NO_FAIL(con.Query("PREPARE p1 AS UPDATE t SET a = CAST($1 AS INTEGER)"));
+		REQUIRE_NO_FAIL(con.Query("EXECUTE p1(43)"));
+
+		result = con.Query("SELECT a FROM t");
+		REQUIRE(CHECK_COLUMN(result, 0, {43}));
+	}
+	{
+		DuckDB db(prepare_database);
+		DuckDBConnection con(db);
+
+		result = con.Query("SELECT a FROM t");
+		REQUIRE(CHECK_COLUMN(result, 0, {43}));
+	}
+	{
+		DuckDB db(prepare_database);
+		DuckDBConnection con(db);
+
+		result = con.Query("SELECT a FROM t");
+		REQUIRE(CHECK_COLUMN(result, 0, {43}));
+	}
+	RemoveDirectory(prepare_database);
+}
+
 // TODO NULL
 // TODO not-set param throws err
+// TODO: add cast for SET in update

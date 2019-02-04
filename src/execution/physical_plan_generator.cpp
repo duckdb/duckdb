@@ -476,13 +476,13 @@ void PhysicalPlanGenerator::Visit(LogicalPrepare &op) {
 	assert(op.children.size() == 1);
 	// create the physical plan for the prepare statement.
 
-	auto entry = make_unique<PreparedStatementCatalogEntry>(op.name);
+	auto entry = make_unique<PreparedStatementCatalogEntry>(op.name, op.statement_type);
 	entry->names = op.children[0]->GetNames();
 
 	// find tables
-
 	op.GetTableBindings(entry->tables);
 
+	// generate physical plan
 	VisitOperator(*op.children[0]);
 	assert(plan);
 

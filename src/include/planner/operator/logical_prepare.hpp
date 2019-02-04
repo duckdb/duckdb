@@ -18,12 +18,13 @@ class TableCatalogEntry;
 
 class LogicalPrepare : public LogicalOperator {
 public:
-	LogicalPrepare(string name, unique_ptr<LogicalOperator> logical_plan)
-	    : LogicalOperator(LogicalOperatorType::PREPARE), name(name) {
+	LogicalPrepare(string name, StatementType statement_type, unique_ptr<LogicalOperator> logical_plan)
+	    : LogicalOperator(LogicalOperatorType::PREPARE), name(name), statement_type(statement_type) {
 		children.push_back(move(logical_plan));
 	}
 
 	string name;
+	StatementType statement_type;
 
 	vector<string> GetNames() override {
 		return {"Success"};

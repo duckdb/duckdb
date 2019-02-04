@@ -24,7 +24,8 @@ class TableCatalogEntry;
 class PreparedStatementCatalogEntry : public CatalogEntry {
 public:
 	//! Create a real TableCatalogEntry and initialize storage for it
-	PreparedStatementCatalogEntry(string name) : CatalogEntry(CatalogType::PREPARED_STATEMENT, nullptr, name) {
+	PreparedStatementCatalogEntry(string name, StatementType statement_type)
+	    : CatalogEntry(CatalogType::PREPARED_STATEMENT, nullptr, name), statement_type(statement_type) {
 	}
 
 	unique_ptr<PhysicalOperator> plan;
@@ -33,5 +34,6 @@ public:
 
 	vector<string> names;
 	vector<TypeId> types;
+	StatementType statement_type;
 };
 } // namespace duckdb
