@@ -58,8 +58,11 @@ protected:
 
 	unique_ptr<Expression> ExtractAggregatesAndGroups(unique_ptr<Expression> expr, SelectNode &node, expression_map_t<uint32_t>& groups);
 	unique_ptr<Expression> ExtractAggregates(unique_ptr<Expression> expr, vector<unique_ptr<Expression>> &result, size_t aggregate_index);
+	unique_ptr<Expression> ExtractWindowFunctions(unique_ptr<Expression> expr, vector<unique_ptr<Expression>> &result, size_t window_index);
 	unique_ptr<Expression> ExtractGroupReferences(unique_ptr<Expression> expr, size_t group_index, expression_map_t<uint32_t> &groups);
 	unique_ptr<Expression> WrapInFirstAggregate(unique_ptr<Expression> expr, vector<unique_ptr<Expression>> &result, size_t aggregate_index);
+
+	unique_ptr<Expression> ExtractExpressionClass(unique_ptr<Expression> expr, vector<unique_ptr<Expression>> &result, size_t bind_index, ExpressionClass expr_class);
 public:
 	void Visit(CheckConstraint &constraint) override;
 

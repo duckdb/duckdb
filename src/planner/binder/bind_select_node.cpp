@@ -184,11 +184,22 @@ void Binder::Bind(SelectNode &statement) {
 		}
 		if (statement.HasHaving()) {
 			// also extract aggregates and grouping columns from the HAVING clause
-			statement.groupby.having  = ExtractAggregatesAndGroups(move(statement.groupby.having ), statement, groups);
+			if (statement.groupby.having->IsWindow()) {
+				throw ParserException("WINDOW FUNCTIONS are not allowed in HAVING clause");
+			}
+			statement.groupby.having = ExtractAggregatesAndGroups(move(statement.groupby.having), statement, groups);
 			VisitAndResolveType(&statement.groupby.having);
 		}
 	} else if (statement.HasHaving()) {
 		throw ParserException("a GROUP BY clause is required before HAVING");
+	}
+
+	if (statement.HasWindow()) {
+		// extract window functions from the select list
+		binding.window_index = bind_context->GenerateTableIndex();
+		for (size_t i = 0; i < statement.select_list.size(); i++) {
+			statement.select_list[i] = ExtractWindowFunctions(move(statement.select_list[i]), binding.windows, binding.window_index);
+		}
 	}
 
 	// visit the expressions in the select list and bind them
@@ -224,20 +235,28 @@ unique_ptr<Expression> Binder::ExtractAggregatesAndGroups(unique_ptr<Expression>
 	return expr;
 }
 
-unique_ptr<Expression> Binder::ExtractAggregates(unique_ptr<Expression> expr, vector<unique_ptr<Expression>> &result,
-                                                 size_t aggregate_index) {
-	if (expr->GetExpressionClass() == ExpressionClass::AGGREGATE) {
-		// first we visit the aggregate and resolve its type
+unique_ptr<Expression> Binder::ExtractExpressionClass(unique_ptr<Expression> expr, vector<unique_ptr<Expression>> &result,
+                                                 size_t bind_index, ExpressionClass expr_class) {
+	if (expr->GetExpressionClass() == expr_class) {
+		// first we visit the node and resolve its type
 		VisitAndResolveType(&expr);
-		// now we create a BoundColumnRef that references the aggregate
-		auto colref_expr = make_unique<BoundColumnRefExpression>(*expr, expr->return_type, ColumnBinding(aggregate_index, result.size()));
+		// now we create a BoundColumnRef that references the entry
+		auto colref_expr = make_unique<BoundColumnRefExpression>(*expr, expr->return_type, ColumnBinding(bind_index, result.size()));
 		result.push_back(move(expr));
 		return colref_expr;
 	}
 	expr->EnumerateChildren([&](unique_ptr<Expression> expr) -> unique_ptr<Expression> {
-		return ExtractAggregates(move(expr), result, aggregate_index);
+		return ExtractExpressionClass(move(expr), result, bind_index, expr_class);
 	});
 	return expr;
+}
+
+unique_ptr<Expression> Binder::ExtractAggregates(unique_ptr<Expression> expr, vector<unique_ptr<Expression>> &result, size_t aggregate_index) {
+	return ExtractExpressionClass(move(expr), result, aggregate_index, ExpressionClass::AGGREGATE);
+}
+
+unique_ptr<Expression> Binder::ExtractWindowFunctions(unique_ptr<Expression> expr, vector<unique_ptr<Expression>> &result, size_t window_index) {
+	return ExtractExpressionClass(move(expr), result, window_index, ExpressionClass::WINDOW);
 }
 
 unique_ptr<Expression> Binder::ExtractGroupReferences(unique_ptr<Expression> expr, size_t group_index, expression_map_t<uint32_t> &groups) {
@@ -257,7 +276,6 @@ unique_ptr<Expression> Binder::ExtractGroupReferences(unique_ptr<Expression> exp
 	});
 	return expr;
 }
-
 
 unique_ptr<Expression> Binder::WrapInFirstAggregate(unique_ptr<Expression> expr, vector<unique_ptr<Expression>> &result,
                                                  size_t aggregate_index) {

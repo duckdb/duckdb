@@ -52,7 +52,8 @@ void LogicalPlanGenerator::CreatePlan(SelectNode &statement) {
 	}
 
 	if (statement.HasWindow()) {
-		auto win = make_unique<LogicalWindow>();
+		auto win = make_unique<LogicalWindow>(statement.binding.window_index);
+		win->expressions = move(statement.binding.windows);
 		// visit the window expressions
 		for (auto &expr : win->expressions) {
 			VisitExpression(&expr);

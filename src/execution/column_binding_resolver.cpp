@@ -25,6 +25,9 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::AGGREGATE_AND_GROUP_BY:
 		Visit((LogicalAggregate &)op);
 		break;
+	case LogicalOperatorType::WINDOW:
+		Visit((LogicalWindow &)op);
+		break;
 	case LogicalOperatorType::PROJECTION:
 		Visit((LogicalProjection &)op);
 		break;
@@ -134,6 +137,17 @@ void ColumnBindingResolver::Visit(LogicalProjection &op) {
 
 	BoundTable binding;
 	binding.table_index = op.table_index;
+	binding.column_count = op.expressions.size();
+	PushBinding(binding);
+}
+
+void ColumnBindingResolver::Visit(LogicalWindow &op) {
+	// the LogicalWindow pushes all underlying expressions through
+	// hence we can visit it normally
+	LogicalOperatorVisitor::VisitOperator(op);
+
+	BoundTable binding;
+	binding.table_index = op.window_index;
 	binding.column_count = op.expressions.size();
 	PushBinding(binding);
 }

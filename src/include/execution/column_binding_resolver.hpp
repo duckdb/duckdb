@@ -44,6 +44,7 @@ protected:
 	void Visit(LogicalProjection &op);
 	void Visit(LogicalSubquery &op);
 	void Visit(LogicalTableFunction &op);
+	void Visit(LogicalWindow &op);
 
 	using SQLNodeVisitor::Visit;
 	void Visit(ColumnRefExpression &expr) override {
