@@ -366,6 +366,7 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 			// we replace the original subquery with a BoundColumnRefExpression refering to the first result of the aggregation
 			return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(aggr_index, 0));
 		} else {
+			throw NotImplementedException("Correlated queries not handled yet!");
 			// in the correlated case, we push first a DUPLICATE ELIMINATED left outer join (as entries WITHOUT a join partner result in NULL)
 			auto delim_join = make_unique<LogicalJoin>(JoinType::LEFT);
 			// the left side is the original plan

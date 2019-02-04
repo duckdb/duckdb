@@ -61,7 +61,7 @@ void DataTable::VerifyConstraints(TableCatalogEntry &table, ClientContext &conte
 		}
 		case ConstraintType::CHECK: {
 			auto &check = *reinterpret_cast<CheckConstraint *>(constraint.get());
-			ExpressionExecutor executor(chunk, context);
+			ExpressionExecutor executor(chunk);
 
 			Vector result(TypeId::INTEGER, true, false);
 			try {

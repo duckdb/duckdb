@@ -57,7 +57,7 @@ void PhysicalCreateIndex::_GetChunk(ClientContext &context, DataChunk &chunk, Ph
 			break;
 		}
 		// resolve the expressions for this chunk
-		ExpressionExecutor executor(intermediate, context);
+		ExpressionExecutor executor(intermediate);
 		executor.Execute(order_index->expressions, result);
 
 		order_index->Insert(result, intermediate.data[intermediate.column_count - 1]);

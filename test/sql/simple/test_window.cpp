@@ -81,6 +81,24 @@ TEST_CASE("Most basic window function", "[window]") {
 	    {4200.0, 5020.0, 4350.0, 4633.33333333333, 4775.0, 3700.0, 3500.0, 4866.66666666667, 4800.0, 4800.0}));
 }
 
+TEST_CASE("Illegal window function", "[window]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE empsalary (depname varchar, empno bigint, salary int, enroll_date date)"));
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO empsalary VALUES ('develop', 10, 5200, '2007-08-01'), ('sales', 1, 5000, '2006-10-01'), "
+	              "('personnel', 5, 3500, '2007-12-10'), ('sales', 4, 4800, '2007-08-08'), ('personnel', 2, 3900, "
+	              "'2006-12-23'), ('develop', 7, 4200, '2008-01-01'), ('develop', 9, 4500, '2008-01-01'), ('sales', 3, "
+	              "4800, '2007-08-01'), ('develop', 8, 6000, '2006-10-01'), ('develop', 11, 5200, '2007-08-15')"));
+
+
+	// GROUP BY window function is not allowed
+	REQUIRE_FAIL(con.Query("SELECT depname, min(salary) OVER (PARTITION BY depname ORDER BY salary, empno) m1 FROM empsalary GROUP BY m1 ORDER BY depname, empno"));
+}
+
 TEST_CASE("More evil cases", "[window]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);

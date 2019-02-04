@@ -75,7 +75,7 @@ void PhysicalInsert::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 
 		insert_chunk.Initialize(types);
 		temp_chunk.Initialize(types);
-		ExpressionExecutor executor(children.size() == 0 ? nullptr : state, context);
+		ExpressionExecutor executor(children.size() == 0 ? nullptr : state);
 
 		// loop over all the constants
 		for (auto &list : insert_values) {

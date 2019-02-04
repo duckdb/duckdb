@@ -27,7 +27,7 @@ void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk, 
 			}
 		}
 
-		ExpressionExecutor executor(state, context);
+		ExpressionExecutor executor(state);
 		// aggregation with groups
 		DataChunk &group_chunk = state->group_chunk;
 		DataChunk &payload_chunk = state->payload_chunk;

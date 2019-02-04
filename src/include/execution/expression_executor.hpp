@@ -16,8 +16,6 @@
 
 namespace duckdb {
 
-class ClientContext;
-
 //! ExpressionExecutor is responsible for executing an arbitrary
 //! Expression and returning a Vector
 /*!
@@ -27,16 +25,16 @@ class ClientContext;
 */
 class ExpressionExecutor : public SQLNodeVisitor {
 public:
-	ExpressionExecutor(PhysicalOperatorState *state, ClientContext &context, bool scalar_executor = true)
-	    : context(context), scalar_executor(scalar_executor), chunk(state ? &state->child_chunk : nullptr),
+	ExpressionExecutor(PhysicalOperatorState *state, bool scalar_executor = true)
+	    : scalar_executor(scalar_executor), chunk(state ? &state->child_chunk : nullptr),
 	      parent(state ? state->parent : nullptr), state(state) {
 		if (state) {
 			state->cached_cse.clear();
 		}
 	}
 
-	ExpressionExecutor(DataChunk &child_chunk, ClientContext &context, ExpressionExecutor *parent = nullptr)
-	    : context(context), scalar_executor(true), chunk(&child_chunk), parent(parent), state(nullptr) {
+	ExpressionExecutor(DataChunk &child_chunk, ExpressionExecutor *parent = nullptr)
+	    : scalar_executor(true), chunk(&child_chunk), parent(parent), state(nullptr) {
 	}
 
 	void Reset();
@@ -102,8 +100,6 @@ protected:
 	}
 
 private:
-	ClientContext &context;
-
 	//! Whether or not the ExpressionExecutor is a scalar executor (i.e. output
 	//! size = input size), this is true for e.g. expressions in the SELECT
 	//! clause without aggregations

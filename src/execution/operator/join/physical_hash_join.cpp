@@ -34,7 +34,7 @@ void PhysicalHashJoin::_GetChunk(ClientContext &context, DataChunk &chunk, Physi
 			}
 			// resolve the join keys for the right chunk
 			state->join_keys.Reset();
-			ExpressionExecutor executor(right_chunk, context);
+			ExpressionExecutor executor(right_chunk);
 			for (size_t i = 0; i < conditions.size(); i++) {
 				executor.ExecuteExpression(conditions[i].right.get(), state->join_keys.data[i]);
 			}
@@ -107,7 +107,7 @@ void PhysicalHashJoin::_GetChunk(ClientContext &context, DataChunk &chunk, Physi
 		}
 		// resolve the join keys for the left chunk
 		state->join_keys.Reset();
-		ExpressionExecutor executor(state->child_chunk, context);
+		ExpressionExecutor executor(state->child_chunk);
 		for (size_t i = 0; i < conditions.size(); i++) {
 			executor.ExecuteExpression(conditions[i].left.get(), state->join_keys.data[i]);
 		}

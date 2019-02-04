@@ -32,7 +32,7 @@ void PhysicalOrder::_GetChunk(ClientContext &context, DataChunk &chunk, Physical
 			DataChunk sort_chunk;
 			sort_chunk.Initialize(sort_types);
 
-			ExpressionExecutor executor(*big_data.chunks[i], context);
+			ExpressionExecutor executor(*big_data.chunks[i]);
 			executor.Execute(sort_chunk, [&](size_t i) { return description.orders[i].expression.get(); },
 			                 description.orders.size());
 			sort_collection.Append(sort_chunk);

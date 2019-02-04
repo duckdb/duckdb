@@ -7,6 +7,7 @@ using namespace duckdb;
 using namespace postgres;
 using namespace std;
 
+
 unique_ptr<QueryNode> Transformer::TransformSelectNode(postgres::SelectStmt *stmt) {
 	unique_ptr<QueryNode> node;
 	switch (stmt->op) {
@@ -69,14 +70,39 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(postgres::SelectStmt *stm
 	// both the set operations and the regular select can have an ORDER BY/LIMIT attached to them
 	TransformOrderBy(stmt->sortClause, node->orderby);
 	if (stmt->limitCount) {
-		node->limit.limit = ((A_Const *)stmt->limitCount)->val.val.ival;
+		node->limit.limit = ConstantFromExpression(stmt->limitCount);
 		node->limit.offset = 0;
 	}
 	if (stmt->limitOffset) {
-		node->limit.offset = ((A_Const *)stmt->limitOffset)->val.val.ival;
+		node->limit.offset = ConstantFromExpression(stmt->limitOffset);
 		if (!stmt->limitCount) {
 			node->limit.limit = std::numeric_limits<int64_t>::max();
 		}
 	}
 	return node;
+}
+
+#include "execution/expression_executor.hpp"
+int64_t Transformer::ConstantFromExpression(Node *node) {
+	auto expr = TransformExpression(node);
+	if (expr->IsAggregate()) {
+		throw ParserException("Aggregate functions are not allowed in LIMIT");
+	}
+	if (expr->IsWindow()) {
+		throw ParserException("Window functions are not allowed in LIMIT");
+	}
+	if (expr->HasSubquery()) {
+		throw ParserException("Subqueries are not allowed in LIMIT");
+	}
+	if (!expr->IsScalar()) {
+		throw ParserException("Argument of LIMIT must not contain variables");
+	}
+
+	// use an ExpressionExecutor to execute the expression
+	ExpressionExecutor executor(nullptr);
+	Vector result(expr->return_type, true, false);
+	executor.ExecuteExpression(expr.get(), result);
+	assert(result.count == 1);
+	auto result_value = result.GetValue(0).CastAs(TypeId::BIGINT);
+	return result_value.GetNumericValue();
 }

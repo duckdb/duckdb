@@ -36,11 +36,32 @@ public:
 	unique_ptr<TableRef> from_table;
 	//! The WHERE clause
 	unique_ptr<Expression> where_clause;
-	//! The amount of columns in the result
-	size_t result_column_count;
-
 	//! Group By Description
 	GroupByDescription groupby;
+
+	//! The following information is only gathered after binding the SelectNode
+	struct {
+		//! Whether or not the statement has an aggregation
+		bool has_aggregation;
+		//! Whether or not the statement has a WINDOW function
+		bool has_window;
+		//! The amount of columns in the final result
+		size_t column_count;
+		//! Index used by the LogicalProjection
+		size_t projection_index;
+
+		//! Group index used by the LogicalAggregate (only used if HasAggregation is true)
+		size_t group_index;
+		//! Aggregate index used by the LogicalAggregate (only used if HasAggregation is true)
+		size_t aggregate_index;
+		//! Aggregate functions to compute (only used if HasAggregation is true)
+		vector<unique_ptr<Expression>> aggregates;
+
+		//! Window index used by the LogicalWindow (only used if HasWindow is true)
+		size_t window_index;
+		//! Window functions to compute (only used if HasWindow is true)
+		vector<unique_ptr<Expression>> windows;
+	} binding;
 
 	//! Whether or not the query has a GROUP BY clause
 	bool HasGroup() {
@@ -56,12 +77,13 @@ public:
 	//! Whether or not the query has a window function
 	bool HasWindow();
 
+
 	vector<unique_ptr<Expression>> &GetSelectList() override {
 		return select_list;
 	}
 
 	size_t GetSelectCount() override {
-		return result_column_count;
+		return binding.column_count;
 	}
 
 	bool Equals(const QueryNode *other) const override;

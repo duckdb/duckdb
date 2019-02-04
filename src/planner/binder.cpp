@@ -72,6 +72,9 @@ unique_ptr<Expression> Binder::VisitReplace(ColumnRefExpression &expr, unique_pt
 	if (expr.table_name.empty()) {
 		// no table name: find a binding that contains this
 		expr.table_name = bind_context->GetMatchingBinding(expr.column_name);
+		if (expr.table_name.empty()) {
+			throw BinderException("Referenced column \"%s\" not found in FROM clause!", expr.column_name.c_str());
+		}
 	}
 	return bind_context->BindColumn(expr);
 }

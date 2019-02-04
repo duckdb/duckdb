@@ -16,7 +16,7 @@ void PhysicalFilter::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 		assert(expressions.size() > 0);
 
 		Vector result(TypeId::BOOLEAN, true, false);
-		ExpressionExecutor executor(state, context);
+		ExpressionExecutor executor(state);
 		executor.Merge(expressions, result);
 
 		// now generate the selection vector

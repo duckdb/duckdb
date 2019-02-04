@@ -74,7 +74,7 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 				break;
 			}
 			// resolve the join expression of the right side
-			ExpressionExecutor executor(new_chunk, context);
+			ExpressionExecutor executor(new_chunk);
 			executor.Execute(right_condition, [&](size_t i) { return conditions[i].right.get(); }, conditions.size());
 			
 			state->right_data.Append(new_chunk);
@@ -116,7 +116,7 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 
 				// resolve the left join condition for the current chunk
 				state->left_join_condition.Reset();
-				ExpressionExecutor executor(state->child_chunk, context);
+				ExpressionExecutor executor(state->child_chunk);
 				executor.Execute(state->left_join_condition, [&](size_t i) { return conditions[i].left.get(); },
 				                 conditions.size());
 				if (type != JoinType::MARK) {

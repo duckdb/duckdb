@@ -57,7 +57,7 @@ static void MaterializeExpression(ClientContext &context, Expression *expr, Chun
 	for (size_t i = 0; i < input.chunks.size(); i++) {
 		DataChunk chunk;
 		chunk.Initialize(types);
-		ExpressionExecutor executor(*input.chunks[i], context);
+		ExpressionExecutor executor(*input.chunks[i]);
 		executor.ExecuteExpression(expr, chunk.data[0]);
 
 		chunk.Verify();
@@ -99,7 +99,7 @@ static void SortCollectionForWindow(ClientContext &context, WindowExpression *we
 		DataChunk sort_chunk;
 		sort_chunk.Initialize(sort_types);
 
-		ExpressionExecutor executor(*input.chunks[i], context);
+		ExpressionExecutor executor(*input.chunks[i]);
 		executor.Execute(sort_chunk, [&](size_t i) { return exprs[i]; }, exprs.size());
 		sort_chunk.Verify();
 		output.Append(sort_chunk);

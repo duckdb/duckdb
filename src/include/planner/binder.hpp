@@ -50,10 +50,16 @@ protected:
 
 	void BindOrderBy(OrderByDescription &orders, vector<unique_ptr<Expression>> &select_list, size_t max_index);
 
+	void VisitAndResolveType(unique_ptr<Expression>* expr);
+
 	unique_ptr<Expression> VisitReplace(ColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 	unique_ptr<Expression> VisitReplace(FunctionExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 	unique_ptr<Expression> VisitReplace(SubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
+	unique_ptr<Expression> ExtractAggregatesAndGroups(unique_ptr<Expression> expr, SelectNode &node, expression_map_t<uint32_t>& groups);
+	unique_ptr<Expression> ExtractAggregates(unique_ptr<Expression> expr, vector<unique_ptr<Expression>> &result, size_t aggregate_index);
+	unique_ptr<Expression> ExtractGroupReferences(unique_ptr<Expression> expr, size_t group_index, expression_map_t<uint32_t> &groups);
+	unique_ptr<Expression> WrapInFirstAggregate(unique_ptr<Expression> expr, vector<unique_ptr<Expression>> &result, size_t aggregate_index);
 public:
 	void Visit(CheckConstraint &constraint) override;
 

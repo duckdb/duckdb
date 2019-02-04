@@ -6,24 +6,27 @@ using namespace duckdb;
 using namespace std;
 
 bool SelectNode::HasAggregation() {
-	if (HasGroup()) {
-		return true;
-	}
-	for (auto &expr : select_list) {
-		if (expr->IsAggregate()) {
-			return true;
-		}
-	}
-	return false;
+       if (binding.aggregates.size() > 0 || HasGroup()) {
+               return true;
+       }
+       for (auto &expr : select_list) {
+               if (expr->IsAggregate()) {
+                       return true;
+               }
+       }
+       return false;
 }
 
 bool SelectNode::HasWindow() {
-	for (auto &expr : select_list) {
-		if (expr->IsWindow()) {
-			return true;
-		}
+	if (binding.windows.size() > 0) {
+		return true;
 	}
-	return false;
+       for (auto &expr : select_list) {
+               if (expr->IsWindow()) {
+                       return true;
+               }
+       }
+       return false;
 }
 
 bool SelectNode::Equals(const QueryNode *other_) const {

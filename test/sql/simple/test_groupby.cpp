@@ -20,6 +20,7 @@ TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
 	// aggregates cannot be nested
 	REQUIRE_FAIL(con.Query("SELECT SUM(SUM(41)), COUNT(*);"));
 
+	// simple aggregates without group by
 	result = con.Query("SELECT SUM(a), COUNT(*), AVG(a) FROM test;");
 	REQUIRE(CHECK_COLUMN(result, 0, {36}));
 	REQUIRE(CHECK_COLUMN(result, 1, {3}));
@@ -47,6 +48,16 @@ TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {12, 24}));
 	REQUIRE(CHECK_COLUMN(result, 2, {14, 28}));
 	REQUIRE(CHECK_COLUMN(result, 3, {12, 12}));
+
+	// ORDER BY aggregation that does not occur in SELECT clause
+	result = con.Query("SELECT b, SUM(a) FROM test GROUP BY b ORDER BY COUNT(a);");
+	REQUIRE(CHECK_COLUMN(result, 0, {21, 22}));
+	REQUIRE(CHECK_COLUMN(result, 1, {12, 24}));
+
+	result = con.Query("SELECT b, SUM(a) FROM test GROUP BY b ORDER BY COUNT(a) DESC;");
+	REQUIRE(CHECK_COLUMN(result, 0, {22, 21}));
+	REQUIRE(CHECK_COLUMN(result, 1, {24, 12}));
+
 
 	result = con.Query("SELECT b, SUM(a), COUNT(*), SUM(a+2) FROM test GROUP "
 	                   "BY b ORDER BY b;");
@@ -98,6 +109,93 @@ TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {4, 8}));
 	REQUIRE(CHECK_COLUMN(result, 2, {4, 4}));
+
+	// group by constant alias
+	result = con.Query("SELECT 1 AS k, SUM(i) FROM integers GROUP BY k ORDER BY 2;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {8}));
+
+	// use an alias that is identical to a column name (should prioritize column name)
+	result = con.Query("SELECT 1 AS i, SUM(i) FROM integers GROUP BY i ORDER BY 2;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2, 6}));
+
+	// refer to the same alias twice
+	result = con.Query("SELECT i % 2 AS k, SUM(i) FROM integers GROUP BY k, k ORDER BY 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2, 6}));
+
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers;"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL);"));
+
+	// column reference should have preference over alias reference in grouping
+	result = con.Query("SELECT i, i % 2 AS i, SUM(i) FROM integers GROUP BY i ORDER BY 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 0, 1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value(), 1, 2, 3}));
+
+	// aliases can only be referenced in the GROUP BY as the root column: operations not allowed
+	// CONTROVERSIAL: this query DOES work in SQLite
+	REQUIRE_FAIL(con.Query("SELECT 1 AS k, SUM(i) FROM integers GROUP BY k+1 ORDER BY 2;"));
+}
+
+TEST_CASE("Test aliases in group by/aggregation", "[aggregations]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
+
+	// use alias in HAVING clause
+	// CONTROVERSIAL: this query DOES NOT work in PostgreSQL
+	REQUIRE_FAIL(con.Query("SELECT i % 2 AS k, SUM(i) FROM integers WHERE i IS NOT NULL GROUP BY k HAVING k>0;"));
+	// result = con.Query("SELECT i % 2 AS k, SUM(i) FROM integers WHERE i IS NOT NULL GROUP BY k HAVING k>0;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {4}));
+
+	// this is identical to this query
+	// CONTROVERSIAL: this query does not work in MonetDB
+	result = con.Query("SELECT i % 2 AS k, SUM(i) FROM integers WHERE i IS NOT NULL GROUP BY k HAVING i%2>0;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {4}));
+
+	// entry in GROUP BY should refer to base column
+	// ...BUT the alias in ORDER BY should refer to the alias from the select list
+	// note that both Postgres and MonetDB reject this query because of ambiguity. SQLite accepts it though so we do too.
+	result = con.Query("SELECT i, i % 2 AS i, SUM(i) FROM integers GROUP BY i ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 2, 1, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 0, 1, 1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value(), 2, 1, 3}));
+
+	// changing the name of the alias makes it more explicit what should happen
+	result = con.Query("SELECT i, i % 2 AS k, SUM(i) FROM integers GROUP BY i ORDER BY k;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 2, 1, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 0, 1, 1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value(), 2, 1, 3}));
+
+	// this now orders by the actual grouping column
+	result = con.Query("SELECT i, i % 2 AS k, SUM(i) FROM integers GROUP BY i ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 0, 1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value(), 1, 2, 3}));
+
+	// cannot use GROUP BY column in an aggregation...
+	REQUIRE_FAIL(con.Query("SELECT i % 2 AS k, SUM(k) FROM integers GROUP BY k"));
+
+	// ...unless it is one of the base columns
+	result = con.Query("SELECT i, SUM(i) FROM integers GROUP BY i ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3}));
+
+	// ORDER on a non-grouping column
+	// this query is refused by Postgres and MonetDB
+	// but SQLite resolves it by first pushing a "FIRST(i)" aggregate into the projection, and then ordering by that aggregate
+	result = con.Query("SELECT (10-i) AS k, SUM(i) FROM integers GROUP BY k ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 9, 8, 7}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3}));
 }
 
 TEST_CASE("GROUP BY large strings", "[aggregations]") {

@@ -62,7 +62,7 @@ void PhysicalPiecewiseMergeJoin::_GetChunk(ClientContext &context, DataChunk &ch
 			// create a new selection vector
 			// resolve the join keys for the right chunk
 			state->join_keys.Reset();
-			ExpressionExecutor executor(chunk_to_order, context);
+			ExpressionExecutor executor(chunk_to_order);
 			for (size_t k = 0; k < conditions.size(); k++) {
 				// resolve the join key
 				executor.ExecuteExpression(conditions[k].right.get(), state->join_keys.data[k]);
@@ -92,7 +92,7 @@ void PhysicalPiecewiseMergeJoin::_GetChunk(ClientContext &context, DataChunk &ch
 
 			// resolve the join keys for the left chunk
 			state->join_keys.Reset();
-			ExpressionExecutor executor(state->child_chunk, context);
+			ExpressionExecutor executor(state->child_chunk);
 			for (size_t k = 0; k < conditions.size(); k++) {
 				executor.ExecuteExpression(conditions[k].left.get(), state->join_keys.data[k]);
 				// sort by join key

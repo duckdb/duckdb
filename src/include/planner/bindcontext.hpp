@@ -124,8 +124,6 @@ public:
 
 	//! Adds a table function with a given alias to the BindContext
 	size_t AddTableFunction(const string &alias, TableFunctionCatalogEntry *function_entry);
-	//! Adds an expression that has an alias to the BindContext
-	void AddExpression(const string &alias, Expression *expression, size_t i);
 
 	//! Returns true if the table/subquery alias exists, false otherwise.
 	bool HasAlias(const string &alias);
@@ -156,8 +154,6 @@ private:
 	uint32_t max_depth;
 	vector<CorrelatedColumnInfo> correlated_bindings;
 
-	//! The set of expression aliases
-	std::unordered_map<string, std::pair<size_t, Expression *>> expression_alias_map;
 	//! The set of bindings
 	std::unordered_map<string, unique_ptr<Binding>> bindings;
 	//! The list of bindings in insertion order

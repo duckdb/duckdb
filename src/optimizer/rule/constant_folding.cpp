@@ -43,7 +43,7 @@ unique_ptr<Expression> ConstantFoldingRule::Apply(LogicalOperator &op, vector<Ex
 	assert(root->IsScalar() && root->type != ExpressionType::VALUE_CONSTANT);
 
 	// use an ExpressionExecutor to execute the expression
-	ExpressionExecutor executor(nullptr, rewriter.context);
+	ExpressionExecutor executor(nullptr);
 	Vector result(root->return_type, true, false);
 	executor.ExecuteExpression(root, result);
 	assert(result.count == 1);

@@ -10,8 +10,8 @@ TEST_CASE("Test ORDER BY keyword", "[order]") {
 	DuckDBConnection con(db);
 	con.EnableQueryVerification();
 
-	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
-	result = con.Query("INSERT INTO test VALUES (11, 22), (12, 21), (13, 22)");
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (12, 21), (13, 22);"));
 
 	// simple ORDER BY
 	result = con.Query("SELECT b FROM test ORDER BY a DESC;");
@@ -93,6 +93,26 @@ TEST_CASE("Test ORDER BY keyword", "[order]") {
 	result = con.Query("SELECT b % 2 AS f, SUM(a) FROM test GROUP BY f ORDER BY 1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {24, 12}));
+
+	// ORDER BY after union
+	result = con.Query("SELECT a-10 AS k FROM test UNION SELECT a-10 AS l FROM test ORDER BY k;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	
+	// ORDER BY on alias in right-most query
+	// NOTE: SQLite allows both "k" and "l" to be referenced here, Postgres and MonetDB give an error. 
+	result = con.Query("SELECT a-10 AS k FROM test UNION SELECT a-10 AS l FROM test ORDER BY l;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+
+	// computations with aliases are not allowed though
+	REQUIRE_FAIL(con.Query("SELECT a-10 AS k FROM test UNION SELECT a-10 AS l FROM test ORDER BY 1-k;"));
+
+	// but ordering on computation elements should work
+	result = con.Query("SELECT a-10 AS k FROM test UNION SELECT a-10 AS l FROM test ORDER BY a-10;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+
+	result = con.Query("SELECT a-10 AS k FROM test UNION SELECT a-11 AS l FROM test ORDER BY a-11;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2, 3}));
+
 }
 
 TEST_CASE("Test ORDER BY with large table", "[order]") {

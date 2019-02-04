@@ -3,14 +3,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<string> LogicalOrder::GetNames() {
-	return children[0]->GetNames();
-}
-
-void LogicalOrder::ResolveTypes() {
-	types = children[0]->types;
-}
-
 size_t LogicalOrder::ExpressionCount() {
 	assert(expressions.size() == 0);
 	return description.orders.size();

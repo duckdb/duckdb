@@ -393,7 +393,7 @@ void OrderIndex::Append(ClientContext &context, DataChunk &appended_data, size_t
 	lock_guard<mutex> l(lock);
 
 	// first resolve the expressions
-	ExpressionExecutor executor(appended_data, context);
+	ExpressionExecutor executor(appended_data);
 	executor.Execute(expressions, expression_result);
 
 	// create the row identifiers
@@ -450,7 +450,7 @@ void OrderIndex::Update(ClientContext &context, vector<column_t> &update_columns
 	}
 
 	// now resolve the expressions on the temp_chunk
-	ExpressionExecutor executor(temp_chunk, context);
+	ExpressionExecutor executor(temp_chunk);
 	executor.Execute(expressions, expression_result);
 
 	// insert the expression result

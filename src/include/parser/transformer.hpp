@@ -119,6 +119,8 @@ private:
 	void TransformCTE(postgres::WithClause *de_with_clause, SelectStatement &select);
 	// Operator String to ExpressionType (e.g. + => OPERATOR_ADD)
 	ExpressionType OperatorToExpressionType(string &op);
+	//! Convert a expression node to a constant integer. Throws an exception if the expression is non-scalar.
+	int64_t ConstantFromExpression(postgres::Node *node);
 	//===--------------------------------------------------------------------===//
 	// TableRef transform
 	//===--------------------------------------------------------------------===//

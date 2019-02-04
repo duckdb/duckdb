@@ -79,27 +79,17 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 		}
 	}
 
-	if (result.empty() && expression_alias_map.find(column_name) != expression_alias_map.end()) {
-		return result; // empty result, will be bound to alias
-	}
-
 	if (result.empty()) {
 		if (parent) {
 			return parent->GetMatchingBinding(column_name);
 		}
-		throw BinderException("Referenced column \"%s\" not found in FROM clause!", column_name.c_str());
 	}
 	return result;
 }
 
 unique_ptr<Expression> BindContext::BindColumn(ColumnRefExpression &expr, size_t depth) {
 	if (expr.table_name.empty()) {
-		// empty table name, bind to expression alias
-		auto entry = expression_alias_map.find(expr.column_name);
-		if (entry == expression_alias_map.end()) {
-			throw BinderException("Could not bind alias \"%s\"!", expr.column_name.c_str());
-		}
-		return make_unique<BoundExpression>(expr.GetName(), entry->second.second->return_type, entry->second.first);
+		throw BinderException("Could not bind alias \"%s\"!", expr.column_name.c_str());
 	}
 
 	auto match = bindings.find(expr.table_name);
@@ -268,10 +258,6 @@ size_t BindContext::AddTableFunction(const string &alias, TableFunctionCatalogEn
 	size_t index = GenerateTableIndex();
 	AddBinding(alias, make_unique<TableFunctionBinding>(function_entry, index));
 	return index;
-}
-
-void BindContext::AddExpression(const string &alias, Expression *expression, size_t i) {
-	expression_alias_map[alias] = make_pair(i, expression);
 }
 
 bool BindContext::HasAlias(const string &alias) {
