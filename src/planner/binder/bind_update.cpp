@@ -20,7 +20,7 @@ void Binder::Bind(UpdateStatement &stmt) {
 			continue;
 		}
 		expression->ResolveType();
-		if (expression->return_type == TypeId::INVALID) {
+		if (expression->return_type == TypeId::INVALID && !expression->HasParameter()) {
 			throw BinderException("Could not resolve type of projection element!");
 		}
 	}

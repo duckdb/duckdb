@@ -5,6 +5,7 @@
 #include "main/database.hpp"
 #include "optimizer/optimizer.hpp"
 #include "parser/parser.hpp"
+#include "parser/statement/execute_statement.hpp"
 #include "planner/planner.hpp"
 
 using namespace duckdb;
@@ -47,6 +48,31 @@ static void ExecuteStatement_(ClientContext &context, unique_ptr<SQLStatement> s
 	result.success = true;
 }
 
+static bool LogQueryString(ClientContext &context, SQLStatement *statement) {
+	assert(statement);
+
+	if (statement->type == StatementType::UPDATE || statement->type == StatementType::DELETE ||
+	    statement->type == StatementType::ALTER || statement->type == StatementType::CREATE_INDEX ||
+	    statement->type == StatementType::PREPARE || statement->type == StatementType::DEALLOCATE)
+		return true;
+
+	if (statement->type == StatementType::EXECUTE) {
+		// FIXME UUUUGLY, this whole thing should be happening later IMHO. Pass query string through?
+		ExecuteStatement *exec_stmt = (ExecuteStatement *)statement;
+		auto stmt_entry = (PreparedStatementCatalogEntry *)context.prepared_statements->GetEntry(
+		    context.ActiveTransaction(), exec_stmt->name);
+		if (!stmt_entry) {
+			return false; // does not exists
+		}
+		if (stmt_entry->statement_type == StatementType::UPDATE ||
+		    stmt_entry->statement_type == StatementType::DELETE) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(ClientContext &context, string query) {
 	auto result = make_unique<DuckDBResult>();
 	result->success = false;
@@ -67,8 +93,9 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(ClientContext &context
 		}
 
 		auto &statement = parser.statements.back();
-		if (statement->type == StatementType::UPDATE || statement->type == StatementType::DELETE ||
-		    statement->type == StatementType::ALTER || statement->type == StatementType::CREATE_INDEX) {
+
+		// TODO this check is uuugly
+		if (LogQueryString(context, statement.get())) {
 			// log query in UNDO buffer so it can be saved in the WAL on commit
 			auto &transaction = context.transaction.ActiveTransaction();
 			transaction.PushQuery(query);

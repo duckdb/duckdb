@@ -144,8 +144,9 @@ void Planner::CreatePlan(ClientContext &context, unique_ptr<SQLStatement> statem
 	}
 	case StatementType::PREPARE: {
 		auto &stmt = *reinterpret_cast<PrepareStatement *>(statement.get());
+		auto statement_type = stmt.statement->type;
 		CreatePlan(context, move(stmt.statement));
-		auto prepare = make_unique<LogicalPrepare>(stmt.name, move(plan));
+		auto prepare = make_unique<LogicalPrepare>(stmt.name, statement_type, move(plan));
 		plan = move(prepare);
 		break;
 	}

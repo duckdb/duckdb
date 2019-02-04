@@ -215,5 +215,4 @@ bool TableCatalogEntry::HasDependents(Transaction &transaction) {
 }
 
 void TableCatalogEntry::DropDependents(Transaction &transaction) {
-	// TODO
 }
