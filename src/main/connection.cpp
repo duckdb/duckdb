@@ -61,6 +61,9 @@ static bool LogQueryString(ClientContext &context, SQLStatement *statement) {
 		ExecuteStatement *exec_stmt = (ExecuteStatement *)statement;
 		auto stmt_entry = (PreparedStatementCatalogEntry *)context.prepared_statements->GetEntry(
 		    context.ActiveTransaction(), exec_stmt->name);
+		if (!stmt_entry) {
+			return false; // does not exists
+		}
 		if (stmt_entry->statement_type == StatementType::UPDATE ||
 		    stmt_entry->statement_type == StatementType::DELETE) {
 			return true;

@@ -200,6 +200,27 @@ TEST_CASE("PREPARE and WAL", "[prepared]") {
 	RemoveDirectory(prepare_database);
 }
 
-// TODO NULL
-// TODO not-set param throws err
-// TODO: add cast for SET in update
+TEST_CASE("PREPARE with NULL", "[prepared]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE b (i TINYINT)"));
+	REQUIRE_NO_FAIL(con.Query("PREPARE s1 AS INSERT INTO b VALUES ($1)"));
+	REQUIRE_NO_FAIL(con.Query("EXECUTE s1 (NULL)"));
+
+	result = con.Query("SELECT i FROM b");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+
+	REQUIRE_NO_FAIL(con.Query("PREPARE s2 AS UPDATE b SET i=$1"));
+	REQUIRE_NO_FAIL(con.Query("EXECUTE s2 (NULL)"));
+
+	result = con.Query("SELECT i FROM b");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+
+	REQUIRE_NO_FAIL(con.Query("PREPARE s3 AS DELETE FROM b WHERE i=$1"));
+	REQUIRE_NO_FAIL(con.Query("EXECUTE s3 (NULL)"));
+
+	result = con.Query("SELECT i FROM b");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+}
