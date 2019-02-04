@@ -89,12 +89,34 @@ TEST_CASE("PREPARE for INSERT", "[prepared]") {
 	REQUIRE_NO_FAIL(con.Query("DEALLOCATE s2"));
 	REQUIRE_NO_FAIL(con.Query("DEALLOCATE s1"));
 
-
 	// now we can
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE b"));
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE c"));
 }
 
+TEST_CASE("PREPARE and DROPping tables", "[prepared]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con1(db);
+	DuckDBConnection con2(db);
+
+	REQUIRE_NO_FAIL(con1.Query("CREATE TABLE a (i TINYINT)"));
+	REQUIRE_NO_FAIL(con2.Query("PREPARE p1 AS SELECT * FROM a"));
+
+	REQUIRE_NO_FAIL(con2.Query("EXECUTE p1"));
+
+	// only the conn which did the prepare can execute
+	REQUIRE_FAIL(con1.Query("EXECUTE p1"));
+
+	// but someone else cannot drop the table
+	REQUIRE_FAIL(con1.Query("DROP TABLE a"));
+
+	// but when we take the statement away
+	REQUIRE_NO_FAIL(con2.Query("DEALLOCATE p1"));
+
+	// we can drop
+	REQUIRE_NO_FAIL(con1.Query("DROP TABLE a"));
+}
+
 // TODO NULL
 // TODO not-set param throws err
-// TODO drop table with active statements

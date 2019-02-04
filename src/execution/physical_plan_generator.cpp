@@ -7,6 +7,8 @@
 #include "storage/order_index.hpp"
 #include "storage/storage_manager.hpp"
 
+#include <unordered_set>
+
 using namespace duckdb;
 using namespace std;
 
@@ -448,7 +450,9 @@ void PhysicalPlanGenerator::Visit(LogicalPruneColumns &op) {
 // we use this to find parameters in the prepared statement
 class PrepareParameterVisitor : public SQLNodeVisitor {
 public:
-	unordered_map<size_t, ParameterExpression *> parameter_expression_map;
+	PrepareParameterVisitor(unordered_map<size_t, ParameterExpression *> &parameter_expression_map)
+	    : parameter_expression_map(parameter_expression_map) {
+	}
 
 protected:
 	using SQLNodeVisitor::Visit;
@@ -462,65 +466,33 @@ protected:
 		}
 		parameter_expression_map[expr.parameter_nr] = &expr;
 	}
-};
 
-class PrepareTableVisitor : public LogicalOperatorVisitor {
-public:
-	vector<TableCatalogEntry *> table_list;
-
-	void VisitOperator(LogicalOperator &op) {
-		switch (op.type) {
-		case LogicalOperatorType::GET:
-			Visit((LogicalGet &)op);
-			break;
-		case LogicalOperatorType::INSERT:
-			Visit((LogicalInsert &)op);
-			break;
-		default:
-			// for the operators we do not handle explicitly, we just visit the children
-			LogicalOperatorVisitor::VisitOperator(op);
-			break;
-		}
-	}
-
-protected:
-	using SQLNodeVisitor::Visit;
-	void Visit(LogicalGet &op) {
-		if (op.table) {
-			table_list.push_back(op.table);
-		}
-	}
-
-	void Visit(LogicalInsert &op) {
-		if (op.table) {
-			table_list.push_back(op.table);
-		}
-	}
+private:
+	unordered_map<size_t, ParameterExpression *> &parameter_expression_map;
 };
 
 void PhysicalPlanGenerator::Visit(LogicalPrepare &op) {
 	assert(!plan); // prepare has to be top node
 	assert(op.children.size() == 1);
 	// create the physical plan for the prepare statement.
-	// TODO this is quite a mess, clean up
 
-	auto names = op.children[0]->GetNames();
+	auto entry = make_unique<PreparedStatementCatalogEntry>(op.name);
+	entry->names = op.children[0]->GetNames();
 
-	PrepareTableVisitor ptv;
-	ptv.VisitOperator(*op.children[0].get());
+	// find tables
+
+	op.GetTableBindings(entry->tables);
 
 	VisitOperator(*op.children[0]);
 	assert(plan);
 
 	// find parameters and add to info
-	PrepareParameterVisitor ppv;
+	PrepareParameterVisitor ppv(entry->parameter_expression_map);
 	plan->Accept(&ppv);
-	auto types = plan->types;
-	auto entry = make_unique<PreparedStatementCatalogEntry>(op.name, move(plan));
-	entry->parameter_expression_map = ppv.parameter_expression_map;
-	entry->tables = ptv.table_list;
-	entry->types = types;
-	entry->names = names;
+
+	entry->types = plan->types;
+	entry->plan = move(plan);
+
 	// now store plan in context
 	if (!context.prepared_statements->CreateEntry(context.ActiveTransaction(), op.name, move(entry))) {
 		throw Exception("Failed to prepare statement");

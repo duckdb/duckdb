@@ -10,7 +10,11 @@
 
 #include "planner/logical_operator.hpp"
 
+#include <unordered_set>
+
 namespace duckdb {
+
+class TableCatalogEntry;
 
 class LogicalPrepare : public LogicalOperator {
 public:
@@ -24,6 +28,8 @@ public:
 	vector<string> GetNames() override {
 		return {"Success"};
 	}
+
+	void GetTableBindings(std::unordered_set<TableCatalogEntry *> &result_list);
 
 protected:
 	void ResolveTypes() override {

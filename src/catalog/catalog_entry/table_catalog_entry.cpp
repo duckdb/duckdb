@@ -194,26 +194,22 @@ unique_ptr<CreateTableInformation> TableCatalogEntry::Deserialize(Deserializer &
 }
 
 bool TableCatalogEntry::HasDependents(Transaction &transaction) {
-	// get all connections from database
-	// TODO use a scan method on connections, too
-	// TODO this is quite ugly
 	bool found_table = false;
 
-	for (auto &conn : catalog->storage.GetDatabase().connections) {
+	catalog->storage.GetDatabase().connection_manager.Scan([&](DuckDBConnection *conn) {
 		auto &prep_catalog = conn->context.prepared_statements;
 		prep_catalog->Scan(transaction, [&](CatalogEntry *entry) {
 			assert(entry->type == CatalogType::PREPARED_STATEMENT);
 			auto prep_stmt = (PreparedStatementCatalogEntry *)entry;
 			// TODO add HasTable() call to prep_stmt or so
-			for (auto &tbl : prep_stmt->tables) {
-				if (tbl == this) {
-					found_table = true;
-				}
+			if (prep_stmt->tables.find(this) != prep_stmt->tables.end()) {
+				found_table = true;
 			}
 		});
-		if (found_table) {
-			return true;
-		}
+	});
+
+	if (found_table) {
+		return true;
 	}
 	return false;
 }
