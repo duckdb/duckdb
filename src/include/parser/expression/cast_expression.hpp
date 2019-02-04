@@ -50,5 +50,13 @@ public:
 	}
 	//! The child of the cast expression
 	unique_ptr<Expression> child;
+
+	//! Add an optional cast to a set of types
+	static unique_ptr<Expression> AddCastToType(TypeId type, unique_ptr<Expression> expr) {
+		if (expr && expr->return_type != type) {
+			return make_unique<CastExpression>(type, move(expr));
+		}
+		return expr;
+	}
 };
 } // namespace duckdb

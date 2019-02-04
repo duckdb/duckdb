@@ -9,11 +9,10 @@ using namespace std;
 void LogicalPlanGenerator::VisitQueryNode(QueryNode &statement) {
 	assert(root);
 	if (statement.select_distinct) {
-		auto node = GetProjection(root.get());
-		if (!IsProjection(node->type)) {
-			throw Exception("DISTINCT can only apply to projection, union or group");
-		}
-
+		// auto node = GetProjection(root.get());
+		// if (!IsProjection(node->type)) {
+		// 	throw Exception("DISTINCT can only apply to projection, union or group");
+		// }
 		auto distinct = make_unique<LogicalDistinct>();
 		distinct->AddChild(move(root));
 		root = move(distinct);
@@ -24,6 +23,7 @@ void LogicalPlanGenerator::VisitQueryNode(QueryNode &statement) {
 		order->AddChild(move(root));
 		root = move(order);
 	}
+
 	if (statement.HasLimit()) {
 		auto limit = make_unique<LogicalLimit>(statement.limit.limit, statement.limit.offset);
 		limit->AddChild(move(root));

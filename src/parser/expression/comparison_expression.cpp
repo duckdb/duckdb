@@ -1,4 +1,5 @@
 #include "parser/expression/comparison_expression.hpp"
+#include "parser/expression/cast_expression.hpp"
 
 #include "common/exception.hpp"
 #include "common/serializer.hpp"
@@ -10,6 +11,16 @@ unique_ptr<Expression> ComparisonExpression::Copy() {
 	auto copy = make_unique<ComparisonExpression>(type, left->Copy(), right->Copy());
 	copy->CopyProperties(*this);
 	return copy;
+}
+
+void ComparisonExpression::ResolveType() {
+	Expression::ResolveType();
+	// comparisons return a BOOLEAN
+	this->return_type = TypeId::BOOLEAN;
+	// cast the input types to the same type
+	auto result_type = std::max(left->return_type, right->return_type);
+	left = CastExpression::AddCastToType(result_type, move(left));
+	right = CastExpression::AddCastToType(result_type, move(right));
 }
 
 void ComparisonExpression::Serialize(Serializer &serializer) {

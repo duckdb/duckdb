@@ -144,5 +144,5 @@ TEST_CASE("Test UNION type casting", "[setop]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
 	result = con.Query("SELECT 1 UNION (SELECT '1' UNION SELECT '1' UNION SELECT '1') UNION SELECT 1;");
-	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 0, {"1"}));
 }

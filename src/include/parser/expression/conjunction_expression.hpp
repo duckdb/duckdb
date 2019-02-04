@@ -38,6 +38,8 @@ public:
 
 	bool Equals(const Expression *other) const override;
 
+	void ResolveType() override;
+
 	string ToString() const override {
 		return left->ToString() + " " + ExpressionTypeToOperator(type) + " " + right->ToString();
 	}

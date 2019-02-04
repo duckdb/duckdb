@@ -1,4 +1,5 @@
 #include "parser/expression/case_expression.hpp"
+#include "parser/expression/cast_expression.hpp"
 
 #include "common/exception.hpp"
 
@@ -8,7 +9,13 @@ using namespace std;
 void CaseExpression::ResolveType() {
 	Expression::ResolveType();
 	ExpressionStatistics::Case(result_if_true->stats, result_if_false->stats, stats);
-	return_type = std::max(result_if_true->return_type, result_if_false->return_type);
+	// CHECK should be a boolean type
+	check = CastExpression::AddCastToType(TypeId::BOOLEAN, move(check));
+	// use the highest type as the result type of the CASE
+	this->return_type = std::max(result_if_true->return_type, result_if_false->return_type);
+	// res_if_true and res_if_false need the same type
+	result_if_true = CastExpression::AddCastToType(return_type, move(result_if_true));
+	result_if_false = CastExpression::AddCastToType(return_type, move(result_if_false));
 }
 
 unique_ptr<Expression> CaseExpression::Copy() {

@@ -1,4 +1,5 @@
 #include "parser/expression/operator_expression.hpp"
+#include "parser/expression/cast_expression.hpp"
 
 #include "common/exception.hpp"
 #include "common/serializer.hpp"
@@ -8,13 +9,21 @@ using namespace std;
 
 void OperatorExpression::ResolveType() {
 	Expression::ResolveType();
+	if (type == ExpressionType::OPERATOR_NOT) {
+		// NOT expression, cast child to BOOLEAN
+		assert(children.size() == 1);
+		children[0] = CastExpression::AddCastToType(TypeId::BOOLEAN, move(children[0]));
+		return_type = TypeId::BOOLEAN;
+		return;
+	}
 	// logical operators return a bool
-	if (type == ExpressionType::OPERATOR_NOT || type == ExpressionType::OPERATOR_IS_NULL ||
+	if (type == ExpressionType::OPERATOR_IS_NULL ||
 	    type == ExpressionType::OPERATOR_IS_NOT_NULL || type == ExpressionType::COMPARE_IN ||
 	    type == ExpressionType::COMPARE_NOT_IN) {
 		return_type = TypeId::BOOLEAN;
 		return;
 	}
+	assert(children.size() == 2);
 	return_type = std::max(children[0]->return_type, children[1]->return_type);
 	switch (type) {
 	case ExpressionType::OPERATOR_ADD:
@@ -39,6 +48,10 @@ void OperatorExpression::ResolveType() {
 	// avoid overflow
 	if (!stats.FitsInType(return_type)) {
 		return_type = stats.MinimalType();
+	}
+	// cast the children to this return type
+	for (size_t i = 0; i < children.size(); i++) {
+		children[i] = CastExpression::AddCastToType(return_type, move(children[i]));
 	}
 }
 

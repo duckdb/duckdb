@@ -99,7 +99,7 @@ TEST_CASE("Test ORDER BY keyword", "[order]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	
 	// ORDER BY on alias in right-most query
-	// NOTE: SQLite allows both "k" and "l" to be referenced here, Postgres and MonetDB give an error. 
+	// CONTROVERSIAL: SQLite allows both "k" and "l" to be referenced here, Postgres and MonetDB give an error. 
 	result = con.Query("SELECT a-10 AS k FROM test UNION SELECT a-10 AS l FROM test ORDER BY l;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 
@@ -112,7 +112,46 @@ TEST_CASE("Test ORDER BY keyword", "[order]") {
 
 	result = con.Query("SELECT a-10 AS k FROM test UNION SELECT a-11 AS l FROM test ORDER BY a-11;");
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2, 3}));
+}
 
+TEST_CASE("Test ORDER BY exceptions", "[order]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (12, 21), (13, 22);"));
+
+	// ORDER BY index out of range
+	REQUIRE_FAIL(con.Query("SELECT a FROM test ORDER BY 2"));
+	
+	// ORDER BY constant works, but does nothing
+	result = con.Query("SELECT a FROM test ORDER BY 'hello', a");
+	REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
+
+	// ambiguous reference in union alias
+	REQUIRE_FAIL(con.Query("SELECT a AS k, b FROM test UNION SELECT a, b AS k FROM test ORDER BY k"));
+
+	// but works if not ambiguous
+	result = con.Query("SELECT a AS k, b FROM test UNION SELECT a AS k, b FROM test ORDER BY k");
+	REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
+	REQUIRE(CHECK_COLUMN(result, 1, {22, 21, 22}));
+
+	// ambiguous reference in union parameter
+	REQUIRE_FAIL(con.Query("SELECT a % 2, b FROM test UNION SELECT b, a % 2 AS k ORDER BY a % 2"));
+	
+	// but works if not ambiguous
+	result = con.Query("SELECT a % 2, b FROM test UNION SELECT a % 2 AS k, b FROM test ORDER BY a % 2");
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {21, 22}));
+
+	// out of range order also happens for unions
+	REQUIRE_FAIL(con.Query("SELECT a % 2, b FROM test UNION SELECT a % 2 AS k, b FROM test ORDER BY 3"));
+	REQUIRE_FAIL(con.Query("SELECT a % 2, b FROM test UNION SELECT a % 2 AS k, b FROM test ORDER BY -1"));
+
+	// and union itself fails if amount of entries is wrong
+	REQUIRE_FAIL(con.Query("SELECT a % 2, b FROM test UNION SELECT a % 2 AS k FROM test ORDER BY -1"));
 }
 
 TEST_CASE("Test ORDER BY with large table", "[order]") {

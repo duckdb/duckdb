@@ -28,10 +28,13 @@ public:
 	//! The right side of the set operation
 	unique_ptr<QueryNode> right = nullptr;
 
-	//! The bind context used by the left side of the set operation
-	unique_ptr<BindContext> setop_left_binder;
-	//! The bind context used by the right side of the set operation
-	unique_ptr<BindContext> setop_right_binder;
+	//! The following information is only gathered after binding the SetOperationNode
+	struct {
+		//! The bind context used by the left side of the set operation
+		unique_ptr<BindContext> left_context;
+		//! The bind context used by the right side of the set operation
+		unique_ptr<BindContext> right_context;
+	} binding;
 
 	vector<unique_ptr<Expression>> &GetSelectList() override {
 		return left->GetSelectList();

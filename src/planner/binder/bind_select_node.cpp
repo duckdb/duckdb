@@ -206,6 +206,8 @@ void Binder::Bind(SelectNode &statement) {
 	for (size_t i = 0; i < statement.select_list.size(); i++) {
 		auto &select_element = statement.select_list[i];
 		VisitAndResolveType(&select_element);
+		// add the output element of the SELECT list to the set of types
+		statement.types.push_back(select_element->return_type);
 	}
 
 	// now we push expressions into the ORDER BY referencing the projection list

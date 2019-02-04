@@ -73,6 +73,9 @@ public:
 	//! Limit Description
 	LimitDescription limit;
 
+	//! The types returned by this QueryNode. NOTE: this is set only by the binder.
+	vector<TypeId> types;
+
 	//! Whether or not the query has a LIMIT clause
 	bool HasLimit() {
 		return limit.limit >= 0 || limit.offset >= 0;

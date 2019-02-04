@@ -42,11 +42,6 @@ protected:
 
 	void VisitQueryNode(QueryNode &statement);
 
-	void Visit(AggregateExpression &expr) override;
-	void Visit(ComparisonExpression &expr) override;
-	void Visit(CaseExpression &expr) override;
-	void Visit(ConjunctionExpression &expr) override;
-	void Visit(OperatorExpression &expr) override;
 	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
 public:
@@ -71,6 +66,6 @@ private:
 	//! A reference to the current bind context
 	BindContext &bind_context;
 private:
-	unique_ptr<LogicalOperator> CastSetOpToTypes(vector<TypeId> &types, unique_ptr<LogicalOperator> op);
+	unique_ptr<LogicalOperator> CastSetOpToTypes(vector<TypeId> &source_types, vector<TypeId> &target_types, unique_ptr<LogicalOperator> op);
 };
 } // namespace duckdb

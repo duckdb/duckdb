@@ -1,4 +1,5 @@
 #include "parser/expression/conjunction_expression.hpp"
+#include "parser/expression/cast_expression.hpp"
 
 #include "common/exception.hpp"
 
@@ -9,6 +10,15 @@ unique_ptr<Expression> ConjunctionExpression::Copy() {
 	auto copy = make_unique<ConjunctionExpression>(type, left->Copy(), right->Copy());
 	copy->CopyProperties(*this);
 	return copy;
+}
+
+void ConjunctionExpression::ResolveType() {
+	Expression::ResolveType();
+	// conjunctions return a BOOLEAN
+	this->return_type = TypeId::BOOLEAN;
+	// cast the input types to BOOLEAN
+	left = CastExpression::AddCastToType(TypeId::BOOLEAN, move(left));
+	right = CastExpression::AddCastToType(TypeId::BOOLEAN, move(right));
 }
 
 void ConjunctionExpression::Serialize(Serializer &serializer) {

@@ -1,5 +1,5 @@
 #include "parser/expression/aggregate_expression.hpp"
-
+#include "parser/expression/cast_expression.hpp"
 #include "common/serializer.hpp"
 
 using namespace duckdb;
@@ -78,7 +78,6 @@ void AggregateExpression::ResolveType() {
 			ExpressionStatistics::Sum(child->stats, stats);
 			return_type = max(child->return_type, stats.MinimalType());
 		}
-
 		break;
 	case ExpressionType::AGGREGATE_FIRST:
 		return_type = child->return_type;
@@ -89,6 +88,8 @@ void AggregateExpression::ResolveType() {
 	default:
 		throw NotImplementedException("Unsupported aggregate type!");
 	}
+	// cast the child to have the same return type as the aggregate node
+	child = CastExpression::AddCastToType(return_type, move(child));
 }
 
 unique_ptr<Expression> AggregateExpression::Copy() {
