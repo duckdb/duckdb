@@ -44,7 +44,7 @@ public:
 
 	bool Equals(const Expression *other_) const override;
 	string ToString() const override {
-		return "?";
+		return "$" + std::to_string(parameter_nr);
 	}
 
 	size_t parameter_nr;

@@ -57,7 +57,7 @@ static bool LogQueryString(ClientContext &context, SQLStatement *statement) {
 		return true;
 
 	if (statement->type == StatementType::EXECUTE) {
-		// FIXME UUUUGLY
+		// FIXME UUUUGLY, this whole thing should be happening later IMHO. Pass query string through?
 		ExecuteStatement *exec_stmt = (ExecuteStatement *)statement;
 		auto stmt_entry = (PreparedStatementCatalogEntry *)context.prepared_statements->GetEntry(
 		    context.ActiveTransaction(), exec_stmt->name);

@@ -177,7 +177,7 @@ TEST_CASE("PREPARE and WAL", "[prepared]") {
 		result = con.Query("SELECT a FROM t");
 		REQUIRE(CHECK_COLUMN(result, 0, {42}));
 
-		REQUIRE_NO_FAIL(con.Query("PREPARE p1 AS UPDATE t SET a = CAST($1 AS INTEGER)"));
+		REQUIRE_NO_FAIL(con.Query("PREPARE p1 AS UPDATE t SET a = $1"));
 		REQUIRE_NO_FAIL(con.Query("EXECUTE p1(43)"));
 
 		result = con.Query("SELECT a FROM t");
