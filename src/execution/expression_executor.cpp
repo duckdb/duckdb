@@ -81,3 +81,14 @@ void ExpressionExecutor::Verify(Expression &expr) {
 	assert(expr.return_type == vector.type);
 	vector.Verify();
 }
+
+Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
+	assert(expr.IsScalar());
+	// use an ExpressionExecutor to execute the expression
+	expr.ResolveType();
+	ExpressionExecutor executor(nullptr);
+	Vector result(expr.return_type, true, false);
+	executor.ExecuteExpression(&expr, result);
+	assert(result.count == 1);
+	return result.GetValue(0);
+}

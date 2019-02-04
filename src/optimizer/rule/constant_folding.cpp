@@ -43,11 +43,7 @@ unique_ptr<Expression> ConstantFoldingRule::Apply(LogicalOperator &op, vector<Ex
 	assert(root->IsScalar() && root->type != ExpressionType::VALUE_CONSTANT);
 
 	// use an ExpressionExecutor to execute the expression
-	ExpressionExecutor executor(nullptr);
-	Vector result(root->return_type, true, false);
-	executor.ExecuteExpression(root, result);
-	assert(result.count == 1);
-	auto result_value = result.GetValue(0).CastAs(root->return_type);
+	auto result_value = ExpressionExecutor::EvaluateScalar(*root);
 	// now get the value from the result vector and insert it back into the plan as a constant expression
-	return make_unique<ConstantExpression>(result_value);
+	return make_unique<ConstantExpression>(result_value.CastAs(root->return_type));
 }

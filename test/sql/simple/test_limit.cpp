@@ -29,4 +29,11 @@ TEST_CASE("Test LIMIT keyword", "[limit]") {
 	REQUIRE_FAIL(con.Query("SELECT a FROM test LIMIT a"));
 	// LIMIT with non-scalar operation should also fail
 	REQUIRE_FAIL(con.Query("SELECT a FROM test LIMIT a+1"));
+
+	// aggregate in limit
+	REQUIRE_FAIL(con.Query("SELECT a FROM test LIMIT SUM(42)"));
+	// window function in limit
+	REQUIRE_FAIL(con.Query("SELECT a FROM test LIMIT row_number() OVER ()"));
+	// subquery in limit
+	REQUIRE_FAIL(con.Query("SELECT a FROM test LIMIT (SELECT MIN(a) FROM test)"));
 }

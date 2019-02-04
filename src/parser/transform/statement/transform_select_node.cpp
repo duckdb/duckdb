@@ -97,12 +97,6 @@ int64_t Transformer::ConstantFromExpression(Node *node) {
 	if (!expr->IsScalar()) {
 		throw ParserException("Argument of LIMIT must not contain variables");
 	}
-
-	// use an ExpressionExecutor to execute the expression
-	ExpressionExecutor executor(nullptr);
-	Vector result(expr->return_type, true, false);
-	executor.ExecuteExpression(expr.get(), result);
-	assert(result.count == 1);
-	auto result_value = result.GetValue(0).CastAs(TypeId::BIGINT);
+	auto result_value = ExpressionExecutor::EvaluateScalar(*expr).CastAs(TypeId::BIGINT);
 	return result_value.GetNumericValue();
 }

@@ -56,6 +56,8 @@ public:
 	//! Verify that the output of a step in the ExpressionExecutor is correct
 	void Verify(Expression &expr);
 
+	//! Evaluate a scalar expression and fold it into a single value
+	static Value EvaluateScalar(Expression &expr);
 protected:
 	void Execute(unique_ptr<Expression> &expr) {
 		VisitExpression(expr.get());
@@ -98,7 +100,6 @@ protected:
 	void Visit(SubqueryExpression &expr) override {
 		throw NotImplementedException("Cannot execute SUBQUERY expression in ExpressionExecutor");
 	}
-
 private:
 	//! Whether or not the ExpressionExecutor is a scalar executor (i.e. output
 	//! size = input size), this is true for e.g. expressions in the SELECT
