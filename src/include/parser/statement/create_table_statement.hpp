@@ -31,6 +31,8 @@ public:
 	}
 
 	unique_ptr<CreateTableInformation> info;
+	//! CREATE TABLE from QUERY
+    unique_ptr<SelectStatement> query;
 };
 
 } // namespace duckdb

@@ -174,9 +174,12 @@ void PhysicalPlanGenerator::Visit(LogicalUpdate &op) {
 
 void PhysicalPlanGenerator::Visit(LogicalCreateTable &op) {
 	LogicalOperatorVisitor::VisitOperatorChildren(op);
-	assert(!plan); // CREATE node must be first node of the plan!
 
-	this->plan = make_unique<PhysicalCreateTable>(op, op.schema, move(op.info));
+	auto create = make_unique<PhysicalCreateTable>(op, op.schema, move(op.info));
+	if (plan) {
+		create->children.push_back(move(plan));
+	}
+	this->plan = move(create);
 }
 
 void PhysicalPlanGenerator::Visit(LogicalCreateIndex &op) {

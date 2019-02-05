@@ -47,6 +47,8 @@ unique_ptr<SQLStatement> Transformer::TransformStatement(Node *stmt) {
 		return TransformAlter(stmt);
 	case T_RenameStmt:
 		return TransformRename(stmt);
+	case T_CreateTableAsStmt:
+		return TransformCreateTableAs(stmt);
 	case T_ExplainStmt: {
 		ExplainStmt *explain_stmt = reinterpret_cast<ExplainStmt *>(stmt);
 		return make_unique<ExplainStatement>(TransformStatement(explain_stmt->query));
