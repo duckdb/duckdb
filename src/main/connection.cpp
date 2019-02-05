@@ -5,7 +5,6 @@
 #include "main/database.hpp"
 #include "optimizer/optimizer.hpp"
 #include "parser/parser.hpp"
-#include "parser/statement/execute_statement.hpp"
 #include "planner/operator/logical_execute.hpp"
 #include "planner/planner.hpp"
 
