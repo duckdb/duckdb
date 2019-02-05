@@ -24,6 +24,15 @@ public:
 
 	void Initialize();
 
+	void AcceptExpressions(SQLNodeVisitor *v) override {
+		for (auto &e : select_list) {
+			v->VisitExpression(&e);
+		}
+		for (auto &e : groups) {
+			v->VisitExpression(&e);
+		}
+	}
+
 	//! The projection list of the SELECT statement (that contains aggregates)
 	vector<unique_ptr<Expression>> select_list;
 	//! The groups

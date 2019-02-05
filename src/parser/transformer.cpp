@@ -47,6 +47,12 @@ unique_ptr<SQLStatement> Transformer::TransformStatement(Node *stmt) {
 		return TransformAlter(stmt);
 	case T_RenameStmt:
 		return TransformRename(stmt);
+	case T_PrepareStmt:
+		return TransformPrepare(stmt);
+	case T_ExecuteStmt:
+		return TransformExecute(stmt);
+	case T_DeallocateStmt:
+		return TransformDeallocate(stmt);
 	case T_CreateTableAsStmt:
 		return TransformCreateTableAs(stmt);
 	case T_ExplainStmt: {
@@ -560,12 +566,6 @@ unique_ptr<SQLStatement> Transformer::TransformStatement(Node *stmt) {
 		// case T_CreateOpFamilyStmt:
 		// 	break;
 		// case T_AlterOpFamilyStmt:
-		// 	break;
-		// case T_PrepareStmt:
-		// 	break;
-		// case T_ExecuteStmt:
-		// 	break;
-		// case T_DeallocateStmt:
 		// 	break;
 		// case T_DeclareCursorStmt:
 		// 	break;

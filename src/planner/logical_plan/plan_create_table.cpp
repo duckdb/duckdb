@@ -19,6 +19,9 @@ void LogicalPlanGenerator::CreatePlan(CreateTableStatement &statement) {
 			statement.info->columns.push_back(ColumnDefinition(names[i], types[i]));
 		}
 	}
+	if (statement.info->temporary) {
+		throw NotImplementedException("TEMPORARY tables are not yet supported");
+	}
 	// bind the schema
 	auto schema = context.db.catalog.GetSchema(context.ActiveTransaction(), statement.info->schema);
 	// create the logical operator

@@ -20,6 +20,13 @@ public:
 
 	string ExtraRenderInformation() override;
 
+	void AcceptExpressions(SQLNodeVisitor *v) override {
+		for (auto &cond : conditions) {
+			v->VisitExpression(&cond.left);
+			v->VisitExpression(&cond.right);
+		}
+	}
+
 	vector<JoinCondition> conditions;
 	JoinType type;
 };

@@ -94,9 +94,15 @@ static void WriteCatalogEntry(WriteAheadLog *log, CatalogEntry *entry) {
 			log->WriteDropSchema((SchemaCatalogEntry *)entry);
 		} else if (entry->type == CatalogType::VIEW) {
 			log->WriteDropView((ViewCatalogEntry *)entry);
+		} else if (entry->type == CatalogType::PREPARED_STATEMENT) {
+			// do nothing, we log the query to drop this
 		} else {
 			throw NotImplementedException("Don't know how to drop this type!");
 		}
+		break;
+
+	case CatalogType::PREPARED_STATEMENT:
+		// do nothing, we log the query to recreate this
 		break;
 	default:
 		throw NotImplementedException("UndoBuffer - don't know how to write this entry to the WAL");

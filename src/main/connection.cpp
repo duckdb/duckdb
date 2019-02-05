@@ -5,22 +5,48 @@
 #include "main/database.hpp"
 #include "optimizer/optimizer.hpp"
 #include "parser/parser.hpp"
+#include "planner/operator/logical_execute.hpp"
 #include "planner/planner.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 DuckDBConnection::DuckDBConnection(DuckDB &database) : db(database), context(database) {
+	db.connection_manager.AddConnection(this);
 }
 
 DuckDBConnection::~DuckDBConnection() {
+	db.connection_manager.RemoveConnection(this);
 }
 
-static void ExecuteStatement(ClientContext &context, unique_ptr<SQLStatement> statement, DuckDBResult &result) {
+static void ExecuteStatement_(ClientContext &context, string query, unique_ptr<SQLStatement> statement,
+                              DuckDBResult &result) {
 	Planner planner;
+
+	// for many statements, we log the literal query string in the WAL
+	// also note the exception for EXECUTE below
+	bool log_query_string = false;
+	switch (statement->type) {
+	case StatementType::UPDATE:
+	case StatementType::DELETE:
+	case StatementType::ALTER:
+	case StatementType::CREATE_INDEX:
+	case StatementType::PREPARE:
+	case StatementType::DEALLOCATE:
+		log_query_string = true;
+		break;
+	default:
+		break;
+	}
+
 	planner.CreatePlan(context, move(statement));
 	if (!planner.plan) {
 		result.success = true;
+		// we have to log here because some queries are executed in the planner
+		if (log_query_string) {
+			context.ActiveTransaction().PushQuery(query);
+		}
+
 		return;
 	}
 
@@ -29,7 +55,17 @@ static void ExecuteStatement(ClientContext &context, unique_ptr<SQLStatement> st
 	plan = optimizer.Optimize(move(plan));
 	if (!plan) {
 		result.success = true;
+
 		return;
+	}
+
+	// special case with logging EXECUTE with prepared statements that do not scan the table
+	if (plan->type == LogicalOperatorType::EXECUTE) {
+		auto exec = (LogicalExecute *)plan.get();
+		if (exec->prep->statement_type == StatementType::UPDATE ||
+		    exec->prep->statement_type == StatementType::DELETE) {
+			log_query_string = true;
+		}
 	}
 
 	// extract the result column names from the plan
@@ -41,7 +77,12 @@ static void ExecuteStatement(ClientContext &context, unique_ptr<SQLStatement> st
 
 	// finally execute the plan and return the result
 	Executor executor;
-	result.collection = executor.Execute(context, move(physical_planner.plan));
+	result.collection = executor.Execute(context, physical_planner.plan.get());
+
+	if (log_query_string) {
+		context.ActiveTransaction().PushQuery(query);
+	}
+
 	result.success = true;
 }
 
@@ -65,12 +106,7 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(ClientContext &context
 		}
 
 		auto &statement = parser.statements.back();
-		if (statement->type == StatementType::UPDATE || statement->type == StatementType::DELETE ||
-		    statement->type == StatementType::ALTER || statement->type == StatementType::CREATE_INDEX) {
-			// log query in UNDO buffer so it can be saved in the WAL on commit
-			auto &transaction = context.transaction.ActiveTransaction();
-			transaction.PushQuery(query);
-		}
+
 #ifdef DEBUG
 		if (statement->type == StatementType::SELECT && context.query_verification_enabled) {
 			// aggressive query verification
@@ -117,7 +153,7 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(ClientContext &context
 
 			// execute the original statement
 			try {
-				ExecuteStatement(context, move(statement), *result);
+				ExecuteStatement_(context, query, move(statement), *result);
 			} catch (Exception &ex) {
 				result->error = ex.GetMessage();
 			}
@@ -127,13 +163,13 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(ClientContext &context
 			}
 			// now execute the copied statement
 			try {
-				ExecuteStatement(context, move(copied_stmt), copied_result);
+				ExecuteStatement_(context, query, move(copied_stmt), copied_result);
 			} catch (Exception &ex) {
 				copied_result.error = ex.GetMessage();
 			}
 			// now execute the copied statement
 			try {
-				ExecuteStatement(context, move(deserialized_stmt), deserialized_result);
+				ExecuteStatement_(context, query, move(deserialized_stmt), deserialized_result);
 			} catch (Exception &ex) {
 				deserialized_result.error = ex.GetMessage();
 			}
@@ -147,7 +183,7 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(ClientContext &context
 			assert(copied_result.Equals(&deserialized_result));
 		} else
 #endif
-			ExecuteStatement(context, move(statement), *result);
+			ExecuteStatement_(context, query, move(statement), *result);
 	} catch (Exception &ex) {
 		result->error = ex.GetMessage();
 	} catch (...) {

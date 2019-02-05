@@ -30,6 +30,8 @@ public:
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
+	void AcceptExpressions(SQLNodeVisitor *v) override{};
+
 	TableCatalogEntry *table;
 	string file_path;
 	bool is_from;

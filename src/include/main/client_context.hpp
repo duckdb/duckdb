@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "catalog/catalog_set.hpp"
 #include "common/allocator.hpp"
 #include "main/query_profiler.hpp"
 #include "transaction/transaction_context.hpp"
@@ -39,6 +40,10 @@ public:
 	TransactionContext transaction;
 	//! Whether or not the query is interrupted
 	bool interrupted;
+
+	//	unique_ptr<CatalogSet> temporary_tables;
+	unique_ptr<CatalogSet> prepared_statements;
+
 #ifdef DEBUG
 	// Whether or not aggressive query verification is enabled
 	bool query_verification_enabled = false;

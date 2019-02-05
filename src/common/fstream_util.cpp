@@ -3,7 +3,7 @@
 using namespace std;
 using namespace duckdb;
 
-void FstreamUtil::OpenFile(const string &file_path, fstream& new_file, ios_base::openmode mode) {
+void FstreamUtil::OpenFile(const string &file_path, fstream &new_file, ios_base::openmode mode) {
 	new_file.open(file_path, mode);
 	if (!new_file.good()) {
 		throw IOException("Could not open File!" + file_path);

@@ -69,6 +69,8 @@ protected:
 	}
 	virtual void Visit(OperatorExpression &expr) {
 	}
+	virtual void Visit(ParameterExpression &expr) {
+	}
 	virtual void Visit(StarExpression &expr) {
 	}
 	virtual void Visit(SubqueryExpression &expr) {
@@ -93,6 +95,7 @@ protected:
 	virtual unique_ptr<Expression> VisitReplace(DefaultExpression &expr, unique_ptr<Expression> *expr_ptr);
 	virtual unique_ptr<Expression> VisitReplace(FunctionExpression &expr, unique_ptr<Expression> *expr_ptr);
 	virtual unique_ptr<Expression> VisitReplace(OperatorExpression &expr, unique_ptr<Expression> *expr_ptr);
+	virtual unique_ptr<Expression> VisitReplace(ParameterExpression &expr, unique_ptr<Expression> *expr_ptr);
 	virtual unique_ptr<Expression> VisitReplace(StarExpression &expr, unique_ptr<Expression> *expr_ptr);
 	virtual unique_ptr<Expression> VisitReplace(SubqueryExpression &expr, unique_ptr<Expression> *expr_ptr);
 	virtual unique_ptr<Expression> VisitReplace(WindowExpression &expr, unique_ptr<Expression> *expr_ptr);

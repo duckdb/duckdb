@@ -731,6 +731,12 @@ typedef struct PrepareStmt {
 	Node *query;    /* The query itself (as a raw parsetree) */
 } PrepareStmt;
 
+typedef struct DeallocateStmt {
+	NodeTag type;
+	char *name; /* The name of the plan to remove */
+	            /* NULL means DEALLOCATE ALL */
+} DeallocateStmt;
+
 typedef enum DefElemAction {
 	DEFELEM_UNSPEC, /* no action given */
 	DEFELEM_SET,

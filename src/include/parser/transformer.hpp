@@ -72,6 +72,10 @@ private:
 	//! Transform a Postgres T_UpdateStmt node into a UpdateStatement
 	unique_ptr<UpdateStatement> TransformUpdate(postgres::Node *node);
 
+	unique_ptr<PrepareStatement> TransformPrepare(postgres::Node *node);
+	unique_ptr<ExecuteStatement> TransformExecute(postgres::Node *node);
+	unique_ptr<DeallocateStatement> TransformDeallocate(postgres::Node *node);
+
 	//===--------------------------------------------------------------------===//
 	// Query Node Transform
 	//===--------------------------------------------------------------------===//
@@ -105,6 +109,7 @@ private:
 
 	unique_ptr<Expression> TransformResTarget(postgres::ResTarget *root);
 	unique_ptr<Expression> TransformNullTest(postgres::NullTest *root);
+	unique_ptr<Expression> TransformParamRef(postgres::ParamRef *node);
 
 	unique_ptr<Expression> TransformSubquery(postgres::SubLink *root);
 	//===--------------------------------------------------------------------===//

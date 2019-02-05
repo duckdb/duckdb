@@ -33,5 +33,11 @@ public:
 	vector<unique_ptr<Expression>> expressions;
 	// Info for index creation
 	unique_ptr<CreateIndexInformation> info;
+
+	void AcceptExpressions(SQLNodeVisitor *v) override {
+		for (auto &e : expressions) {
+			v->VisitExpression(&e);
+		}
+	}
 };
 } // namespace duckdb
