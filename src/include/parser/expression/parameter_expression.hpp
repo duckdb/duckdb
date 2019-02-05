@@ -34,11 +34,11 @@ public:
 
 	uint64_t Hash() const override;
 
-	virtual bool IsScalar() override {
+	bool IsScalar() override {
 		return true;
 	}
 
-	virtual bool HasParameter() override {
+	bool HasParameter() override {
 		return true;
 	}
 

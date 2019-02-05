@@ -41,7 +41,6 @@ void LogicalPlanGenerator::CreatePlan(InsertStatement &statement) {
 		insert->AddChild(move(root));
 		root = move(insert);
 	} else {
-
 		if (statement.columns.size() == 0) {
 			if (statement.values[0].size() != table->columns.size()) {
 				throw SyntaxException("table %s has %d columns but %d values were supplied", table->name.c_str(),
