@@ -42,6 +42,8 @@ private:
 	unique_ptr<AlterTableStatement> TransformRename(postgres::Node *node);
 	//! Transform a Postgres T_CreateStmt node into a CreateTableStatement
 	unique_ptr<CreateTableStatement> TransformCreateTable(postgres::Node *node);
+	//! Transform a Postgres T_CreateStmt node into a CreateTableStatement
+	unique_ptr<CreateTableStatement> TransformCreateTableAs(postgres::Node *node);
 	//! Transform a Postgres T_CreateSchemaStmt node into a
 	//! CreateSchemaStatement
 	unique_ptr<CreateSchemaStatement> TransformCreateSchema(postgres::Node *node);
