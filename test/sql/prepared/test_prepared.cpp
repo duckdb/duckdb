@@ -119,7 +119,7 @@ TEST_CASE("PREPARE and DROPping tables", "[prepared]") {
 	REQUIRE_NO_FAIL(con1.Query("DROP TABLE a"));
 }
 
-TEST_CASE("PREPARE and WAL", "[prepared]") {
+TEST_CASE("PREPARE and WAL", "[prepared][.]") {
 	unique_ptr<DuckDBResult> result;
 	auto prepare_database = JoinPath(TESTING_DIRECTORY_NAME, "prepare_test");
 
@@ -135,8 +135,7 @@ TEST_CASE("PREPARE and WAL", "[prepared]") {
 		REQUIRE_NO_FAIL(con.Query("PREPARE p1 AS INSERT INTO t VALUES ($1)"));
 		REQUIRE_NO_FAIL(con.Query("EXECUTE p1(42)"));
 		REQUIRE_NO_FAIL(con.Query("EXECUTE p1(43)"));
-		REQUIRE_NO_FAIL(con.Query("DEALLOCATE p1")); // TODO test where the deallocate is implicit
-
+		REQUIRE_NO_FAIL(con.Query("DEALLOCATE p1"));
 		result = con.Query("SELECT a FROM t");
 		REQUIRE(CHECK_COLUMN(result, 0, {42, 43}));
 	}
