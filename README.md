@@ -1,5 +1,5 @@
 # DuckDB, the SQLite for Analytics
-[![Build Status](http://jenkins.u0d.de/buildStatus/icon?job=duckdb)](http://jenkins.u0d.de/job/duckdb) [![Coverage](http://www.duckdb.org/coverage/badge.svg)](http://www.duckdb.org/coverage/) 
+[![Travis](https://api.travis-ci.org/cwida/duckdb.svg?branch=master)](https://travis-ci.org/cwida/duckdb)
 [![CodeFactor](https://www.codefactor.io/repository/github/cwida/duckdb/badge)](https://www.codefactor.io/repository/github/cwida/duckdb)
 
 # Requirements
