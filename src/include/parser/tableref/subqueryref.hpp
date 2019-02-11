@@ -11,7 +11,7 @@
 #include "parser/query_node.hpp"
 #include "parser/sql_node_visitor.hpp"
 #include "parser/tableref.hpp"
-#include "planner/bindcontext.hpp"
+#include "planner/binder.hpp"
 
 namespace duckdb {
 //! Represents a subquery
@@ -41,7 +41,12 @@ public:
 	unique_ptr<QueryNode> subquery;
 	//! Alises for the column names
 	vector<string> column_name_alias;
-	// Bindcontext, FIXME
-	unique_ptr<BindContext> context;
+
+	//! The binder used to bind the subquery
+	// FIXME: should not be in parser subdirectory
+	unique_ptr<Binder> binder;
+
+
+
 };
 } // namespace duckdb

@@ -1,0 +1,3 @@
+
+add_library(duckdb_expression_binders OBJECT group_binder.cpp having_binder.cpp order_binder.cpp select_binder.cpp where_binder.cpp)
+set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_expression_binders> PARENT_SCOPE)

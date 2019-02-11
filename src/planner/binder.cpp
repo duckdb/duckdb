@@ -11,6 +11,10 @@
 using namespace duckdb;
 using namespace std;
 
+Binder::Binder(ClientContext &context, Binder *parent)
+	: active_binder(nullptr), context(context),
+	  parent(parent), bound_tables(0) {
+}
 void Binder::Bind(SQLStatement &statement) {
 	switch (statement.type) {
 	case StatementType::SELECT:
@@ -65,58 +69,6 @@ void Binder::Visit(CheckConstraint &constraint) {
 	}
 }
 
-unique_ptr<Expression> Binder::VisitReplace(ColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) {
-	assert(!expr.column_name.empty());
-	// individual column reference
-	// resolve to either a base table or a subquery expression
-	if (expr.table_name.empty()) {
-		// no table name: find a binding that contains this
-		expr.table_name = bind_context->GetMatchingBinding(expr.column_name);
-		if (expr.table_name.empty()) {
-			throw BinderException("Referenced column \"%s\" not found in FROM clause!", expr.column_name.c_str());
-		}
-	}
-	return bind_context->BindColumn(expr);
-}
-
-unique_ptr<Expression> Binder::VisitReplace(FunctionExpression &expr, unique_ptr<Expression> *expr_ptr) {
-	// lookup the function in the catalog
-	auto func = context.db.catalog.GetScalarFunction(context.ActiveTransaction(), expr.schema, expr.function_name);
-	// if found, construct the BoundFunctionExpression
-	auto func_expr = unique_ptr_cast<Expression, FunctionExpression>(move(*expr_ptr));
-	return make_unique<BoundFunctionExpression>(move(func_expr), func);
-}
-
-unique_ptr<Expression> Binder::VisitReplace(SubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) {
-	// first visit the children of the Subquery expression, if any
-	VisitExpressionChildren(expr);
-
-	assert(bind_context);
-
-	// now bind columns in the subquery
-	Binder binder(context, this);
-	binder.bind_context->parent = bind_context.get();
-	// the subquery may refer to CTEs from the parent query
-	binder.CTE_bindings = CTE_bindings;
-
-	binder.Bind(*expr.subquery);
-	auto &select_list = expr.subquery->GetSelectList();
-	if (select_list.size() < 1) {
-		throw BinderException("Subquery has no projections");
-	}
-	if (expr.subquery_type != SubqueryType::EXISTS && select_list.size() != 1) {
-		throw BinderException("Subquery returns %zu columns - expected 1", select_list.size());
-	}
-	assert(select_list[0]->return_type != TypeId::INVALID); // "Subquery has no type"
-	auto result = make_unique<BoundSubqueryExpression>();
-	result->return_type = expr.subquery_type == SubqueryType::SCALAR ? select_list[0]->return_type : expr.return_type;
-	result->context = move(binder.bind_context);
-	result->is_correlated = result->context->GetMaxDepth() > 0;
-	result->subquery = move(*expr_ptr);
-	result->alias = expr.alias;
-	return result;
-}
-
 // CTEs and views are also referred to using BaseTableRefs, hence need to distinguish here
 unique_ptr<TableRef> Binder::Visit(BaseTableRef &expr) {
 	auto cte = FindCTE(expr.table_name);
@@ -131,7 +83,7 @@ unique_ptr<TableRef> Binder::Visit(BaseTableRef &expr) {
 	    context.db.catalog.GetTableOrView(context.ActiveTransaction(), expr.schema_name, expr.table_name);
 	switch (table_or_view->type) {
 	case CatalogType::TABLE:
-		bind_context->AddBaseTable(expr.alias.empty() ? expr.table_name : expr.alias,
+		bind_context.AddBaseTable(GenerateTableIndex(), expr.alias.empty() ? expr.table_name : expr.alias,
 		                           (TableCatalogEntry *)table_or_view);
 		break;
 	case CatalogType::VIEW: {
@@ -179,18 +131,16 @@ unique_ptr<TableRef> Binder::Visit(JoinRef &expr) {
 }
 
 unique_ptr<TableRef> Binder::Visit(SubqueryRef &expr) {
-	Binder binder(context, this);
-	binder.Bind(*expr.subquery);
-	expr.context = move(binder.bind_context);
-
-	bind_context->AddSubquery(expr.alias, expr);
+	expr.binder = make_unique<Binder>(context, this);
+	expr.binder->Bind(*expr.subquery);
+	bind_context.AddSubquery(GenerateTableIndex(), expr.alias, expr);
 	return nullptr;
 }
 
 unique_ptr<TableRef> Binder::Visit(TableFunction &expr) {
 	auto function_definition = (FunctionExpression *)expr.function.get();
 	auto function = context.db.catalog.GetTableFunction(context.ActiveTransaction(), function_definition);
-	bind_context->AddTableFunction(expr.alias.empty() ? function_definition->function_name : expr.alias, function);
+	bind_context.AddTableFunction(GenerateTableIndex(), expr.alias.empty() ? function_definition->function_name : expr.alias, function);
 	return nullptr;
 }
 
@@ -213,4 +163,11 @@ unique_ptr<QueryNode> Binder::FindCTE(const string &name) {
 		return nullptr;
 	}
 	return entry->second->Copy();
+}
+
+size_t Binder::GenerateTableIndex() {
+	if (parent) {
+		return parent->GenerateTableIndex();
+	}
+	return bound_tables++;
 }

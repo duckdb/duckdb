@@ -113,14 +113,11 @@ void Binder::Bind(SetOperationNode &statement) {
 		}
 	}
 
-	Binder binder_left(context, this);
-	Binder binder_right(context, this);
+	statement.binding.left_binder = make_unique<Binder>(context, this);
+	statement.binding.left_binder->Bind(*statement.left);
 
-	binder_left.Bind(*statement.left);
-	statement.binding.left_context = move(binder_left.bind_context);
-
-	binder_right.Bind(*statement.right);
-	statement.binding.right_context = move(binder_right.bind_context);
+	statement.binding.right_binder = make_unique<Binder>(context, this);
+	statement.binding.right_binder->Bind(*statement.right);
 
 	// now both sides have been bound we can resolve types
 	if (statement.left->types.size() != statement.right->types.size()) {

@@ -25,7 +25,7 @@ static void ExecuteStatement(ClientContext &context, unique_ptr<SQLStatement> st
 	}
 
 	auto plan = move(planner.plan);
-	Optimizer optimizer(context, *planner.context);
+	Optimizer optimizer(context);
 	plan = optimizer.Optimize(move(plan));
 	if (!plan) {
 		result.success = true;

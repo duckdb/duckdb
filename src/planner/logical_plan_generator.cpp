@@ -7,6 +7,7 @@
 #include "parser/statement/list.hpp"
 #include "parser/tableref/list.hpp"
 #include "planner/operator/list.hpp"
+#include "planner/binder.hpp"
 
 #include <map>
 
@@ -100,8 +101,8 @@ private:
 };
 
 struct FlattenDependentJoins {
-	FlattenDependentJoins(BindContext& context, const vector<CorrelatedColumnInfo>& correlated_columns) : 
-		context(context), correlated_columns(correlated_columns) {}
+	FlattenDependentJoins(Binder& binder, const vector<CorrelatedColumnInfo>& correlated_columns) : 
+		binder(binder), correlated_columns(correlated_columns) {}
 
 
 	//! Detects which Logical Operators have correlated expressions that they are dependent upon, filling the has_correlated_expressions map.
@@ -134,7 +135,7 @@ struct FlattenDependentJoins {
 			// we can eliminate the dependent join now and create a simple cross product
 			auto cross_product = make_unique<LogicalCrossProduct>();
 			// now create the duplicate eliminated scan for this node
-			auto delim_index = context.GenerateTableIndex();
+			auto delim_index = binder.GenerateTableIndex();
 			this->base_binding = ColumnBinding(delim_index, 0);
 			auto delim_scan = make_unique<LogicalChunkGet>(delim_index, delim_types);
 			cross_product->children.push_back(move(delim_scan));
@@ -193,7 +194,7 @@ struct FlattenDependentJoins {
 		}
 	}
 
-	BindContext& context;
+	Binder& binder;
 	ColumnBinding base_binding;
 	size_t delim_offset;
 	size_t data_offset;
@@ -201,8 +202,6 @@ struct FlattenDependentJoins {
 	column_binding_map_t<size_t> correlated_map;
 	const vector<CorrelatedColumnInfo>& correlated_columns;
 	vector<TypeId> delim_types;
-	
-
 };
 
 
@@ -213,7 +212,7 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 	// check if the subquery is correlated
 	auto &subquery = (SubqueryExpression&) *expr.subquery;
 	// first we translate the QueryNode of the subquery into a logical plan
-	LogicalPlanGenerator generator(context, *expr.context);
+	LogicalPlanGenerator generator(expr.binder, context);
 	generator.CreatePlan(*subquery.subquery);
 	if (!generator.root) {
 		throw Exception("Can't plan subquery");
@@ -221,7 +220,7 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 	auto plan = move(generator.root);
 	switch(subquery.subquery_type) {
 	case SubqueryType::EXISTS: {
-		if (expr.is_correlated) {
+		if (expr.IsCorrelated()) {
 			throw Exception("Correlated exists not handled yet!");
 		}
 		// uncorrelated EXISTS
@@ -236,8 +235,8 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 		auto count_type = count_star->return_type;
 		vector<unique_ptr<Expression>> aggregate_list;
 		aggregate_list.push_back(move(count_star));
-		auto aggregate_index = expr.context->GenerateTableIndex();
-		auto aggregate = make_unique<LogicalAggregate>(expr.context->GenerateTableIndex(), aggregate_index, move(aggregate_list));
+		auto aggregate_index = binder.GenerateTableIndex();
+		auto aggregate = make_unique<LogicalAggregate>(binder.GenerateTableIndex(), aggregate_index, move(aggregate_list));
 		aggregate->AddChild(move(plan));
 		plan = move(aggregate);
 
@@ -249,7 +248,7 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 
 		vector<unique_ptr<Expression>> projection_list;
 		projection_list.push_back(move(comparison));
-		auto projection_index = bind_context.GenerateTableIndex();
+		auto projection_index = binder.GenerateTableIndex();
 		auto projection = make_unique<LogicalProjection>(projection_index, move(projection_list));
 		projection->AddChild(move(plan));
 		plan = move(projection);
@@ -269,7 +268,7 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 		return make_unique<BoundColumnRefExpression>(expr, TypeId::BOOLEAN, ColumnBinding(projection_index, 0));
 	}
 	case SubqueryType::SCALAR: {
-		if (!expr.is_correlated) {
+		if (!expr.IsCorrelated()) {
 			// in the uncorrelated case we are only interested in the first result of the query
 			// hence we simply push a LIMIT 1 to get the first row of the subquery
 			auto limit = make_unique<LogicalLimit>(1, 0);
@@ -281,8 +280,8 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 			auto first_agg = make_unique<AggregateExpression>(ExpressionType::AGGREGATE_FIRST, move(bound));
 			first_agg->ResolveType();
 			expressions.push_back(move(first_agg));
-			auto aggr_index = bind_context.GenerateTableIndex();
-			auto aggr = make_unique<LogicalAggregate>(bind_context.GenerateTableIndex(), aggr_index, move(expressions));
+			auto aggr_index = binder.GenerateTableIndex();
+			auto aggr = make_unique<LogicalAggregate>(binder.GenerateTableIndex(), aggr_index, move(expressions));
 			aggr->AddChild(move(plan));
 			plan = move(aggr);
 
@@ -297,7 +296,6 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 			// we replace the original subquery with a BoundColumnRefExpression refering to the first result of the aggregation
 			return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(aggr_index, 0));
 		} else {
-			throw NotImplementedException("Correlated queries not handled yet!");
 			// in the correlated case, we push first a DUPLICATE ELIMINATED left outer join (as entries WITHOUT a join partner result in NULL)
 			auto delim_join = make_unique<LogicalJoin>(JoinType::LEFT);
 			// the left side is the original plan
@@ -307,8 +305,8 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 			// the right side is a DEPENDENT join between the duplicate eliminated scan and the subquery
 			// first get the set of correlated columns in the subquery
 			// these are the columns returned by the duplicate eliminated scan
-			auto &correlated_columns = expr.context->GetCorrelatedColumns();
-			FlattenDependentJoins flatten(*expr.context, correlated_columns);
+			auto &correlated_columns = expr.correlated_columns;
+			FlattenDependentJoins flatten(binder, correlated_columns);
 			for(size_t i = 0; i < correlated_columns.size(); i++) {
 				auto &col = correlated_columns[i];
 				flatten.correlated_map[col.binding] = i;
@@ -324,7 +322,7 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 			// now we push the dependent join down
 			auto dependent_join = flatten.PushDownDependentJoin(move(plan));
 			// push a subquery node under the duplicate eliminated join
-			auto subquery_index = bind_context.GenerateTableIndex();
+			auto subquery_index = binder.GenerateTableIndex();
 			auto subquery = make_unique<LogicalSubquery>(subquery_index, correlated_columns.size() + 1);
 			subquery->AddChild(move(dependent_join));
 			// now we create the join conditions between the dependent join and the original table
@@ -345,14 +343,14 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 	}
 	default: {
 		assert(subquery.subquery_type == SubqueryType::ANY);
-		if (expr.is_correlated) {
+		if (expr.IsCorrelated()) {
 			throw Exception("Correlated ANY not handled yet!");
 		}
 		// we generate a MARK join that results in either (TRUE, FALSE or NULL)
 		// subquery has NULL values -> result is (TRUE or NULL)
 		// subquery has no NULL values -> result is (TRUE, FALSE or NULL [if input is NULL])
 		// first we push a subquery to the right hand side
-		auto subquery_index = bind_context.GenerateTableIndex();
+		auto subquery_index = binder.GenerateTableIndex();
 		auto logical_subquery = make_unique<LogicalSubquery>(subquery_index, 1);
 		logical_subquery->AddChild(move(plan));
 		plan = move(logical_subquery);
@@ -381,11 +379,11 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(BaseTableRef &expr) {
 	auto table = context.db.catalog.GetTable(context.ActiveTransaction(), expr.schema_name, expr.table_name);
 	auto alias = expr.alias.empty() ? expr.table_name : expr.alias;
 
-	auto index = bind_context.GetBindingIndex(alias);
+	auto index = binder.bind_context.GetBindingIndex(alias);
 
 	vector<column_t> column_ids;
 	// look in the context for this table which columns are required
-	for (auto &bound_column : bind_context.bound_columns[alias]) {
+	for (auto &bound_column : binder.bind_context.bound_columns[alias]) {
 		column_ids.push_back(table->name_map[bound_column]);
 	}
 	if (require_row_id || column_ids.size() == 0) {
@@ -455,12 +453,13 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
 unique_ptr<TableRef> LogicalPlanGenerator::Visit(SubqueryRef &expr) {
 	// generate the logical plan for the subquery
 	// this happens separately from the current LogicalPlan generation
-	LogicalPlanGenerator generator(context, *expr.context);
+	Binder subquery_binder(context);
+	LogicalPlanGenerator generator(subquery_binder, context);
 
 	size_t column_count = expr.subquery->GetSelectList().size();
 	generator.CreatePlan(*expr.subquery);
 
-	auto index = bind_context.GetBindingIndex(expr.alias);
+	auto index = binder.bind_context.GetBindingIndex(expr.alias);
 
 	if (root) {
 		throw Exception("Subquery cannot have children");
@@ -475,7 +474,7 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(TableFunction &expr) {
 	auto function_definition = (FunctionExpression *)expr.function.get();
 	auto function = context.db.catalog.GetTableFunction(context.ActiveTransaction(), function_definition);
 
-	auto index = bind_context.GetBindingIndex(expr.alias.empty() ? function_definition->function_name : expr.alias);
+	auto index = binder.bind_context.GetBindingIndex(expr.alias.empty() ? function_definition->function_name : expr.alias);
 
 	if (root) {
 		throw Exception("Table function cannot have children");

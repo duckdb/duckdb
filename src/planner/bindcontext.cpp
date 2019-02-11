@@ -64,6 +64,10 @@ static bool HasMatchingBinding(Binding *binding, const string &column_name) {
 	return false;
 }
 
+
+BindContext::BindContext() { 
+}
+
 string BindContext::GetMatchingBinding(const string &column_name) {
 	string result;
 	for (auto &kv : bindings) {
@@ -78,74 +82,60 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 			result = kv.first;
 		}
 	}
-
-	if (result.empty()) {
-		if (parent) {
-			return parent->GetMatchingBinding(column_name);
-		}
-	}
 	return result;
 }
 
-unique_ptr<Expression> BindContext::BindColumn(ColumnRefExpression &expr, size_t depth) {
-	if (expr.table_name.empty()) {
-		throw BinderException("Could not bind alias \"%s\"!", expr.column_name.c_str());
+
+
+BindResult BindContext::BindColumn(unique_ptr<Expression> expr) {
+	assert(expr->GetExpressionClass() == ExpressionClass::COLUMN_REF);
+	auto &colref = (ColumnRefExpression&) *expr;
+
+	if (colref.table_name.empty()) {
+		return BindResult(move(expr), StringUtil::Format("Could not bind alias \"%s\"!", colref.column_name.c_str()));
 	}
 
-	auto match = bindings.find(expr.table_name);
+	auto match = bindings.find(colref.table_name);
 	if (match == bindings.end()) {
 		// alias not found in this BindContext
-		// if there is a parent BindContext look there
-		if (parent) {
-			auto expression = parent->BindColumn(expr, ++depth);
-			assert(expression->type == ExpressionType::BOUND_COLUMN_REF);
-			auto &bound_colref = (BoundColumnRefExpression &)*expression;
-			// add the bound_colref to the correlated_bindings if it doesn't exist yet
-			auto info = CorrelatedColumnInfo(bound_colref);
-			if (std::find(correlated_bindings.begin(), correlated_bindings.end(), info) == correlated_bindings.end()) {
-				correlated_bindings.push_back(info);
-			}
-			max_depth = max(bound_colref.depth, max_depth);
-			return expression;
-		}
-		throw BinderException("Referenced table \"%s\" not found!", expr.table_name.c_str());
+		return BindResult(move(expr), StringUtil::Format("Referenced table \"%s\" not found!", colref.table_name.c_str()));
 	}
 	auto binding = match->second.get();
 	switch (binding->type) {
 	case BindingType::DUMMY: {
 		auto dummy = (DummyTableBinding *)binding;
-		auto entry = dummy->bound_columns.find(expr.column_name);
+		auto entry = dummy->bound_columns.find(colref.column_name);
 		if (entry == dummy->bound_columns.end()) {
-			throw BinderException("Referenced column \"%s\" not found table!", expr.column_name.c_str());
+			return BindResult(move(expr), StringUtil::Format("Referenced column \"%s\" not found table!", colref.column_name.c_str()));
 		}
-		return make_unique<BoundExpression>(expr.GetName(), entry->second->type, entry->second->oid);
+		return BindResult(make_unique<BoundExpression>(colref.GetName(), entry->second->type, entry->second->oid));
 	}
 	case BindingType::TABLE: {
 		// base table
 		auto &table = *((TableBinding *)binding);
-		if (!table.table->ColumnExists(expr.column_name)) {
-			throw BinderException("Table \"%s\" does not have a column named \"%s\"", expr.table_name.c_str(),
-			                      expr.column_name.c_str());
+		if (!table.table->ColumnExists(colref.column_name)) {
+			return BindResult(move(expr), StringUtil::Format("Table \"%s\" does not have a column named \"%s\"", colref.table_name.c_str(),
+			                      colref.column_name.c_str()));
 		}
 		auto table_index = table.index;
-		auto entry = &table.table->GetColumn(expr.column_name);
-		auto &column_list = bound_columns[expr.table_name];
+		auto entry = &table.table->GetColumn(colref.column_name);
+		auto &column_list = bound_columns[colref.table_name];
 		// check if the entry already exists in the column list for the table
 		ColumnBinding binding;
 		binding.column_index = column_list.size();
 		for (size_t i = 0; i < column_list.size(); i++) {
 			auto &column = column_list[i];
-			if (column == expr.column_name) {
+			if (column == colref.column_name) {
 				binding.column_index = i;
 				break;
 			}
 		}
 		if (binding.column_index == column_list.size()) {
 			// column binding not found: add it to the list of bindings
-			column_list.push_back(expr.column_name);
+			column_list.push_back(colref.column_name);
 		}
 		binding.table_index = table_index;
-		auto result = make_unique<BoundColumnRefExpression>(expr, entry->type, binding, depth);
+		auto result = make_unique<BoundColumnRefExpression>(colref, entry->type, binding);
 		// assign the base table statistics
 		auto &table_stats = table.table->GetStatistics(entry->oid);
 		table_stats.Initialize(result->stats);
@@ -153,15 +143,15 @@ unique_ptr<Expression> BindContext::BindColumn(ColumnRefExpression &expr, size_t
 			// OUTER JOINS can introduce NULLs in the column
 			result->stats.can_have_null = true;
 		}
-		return result;
+		return BindResult(move(result));
 	}
 	case BindingType::SUBQUERY: {
 		// subquery
 		auto &subquery = *((SubqueryBinding *)binding);
-		auto column_entry = subquery.name_map.find(expr.column_name);
+		auto column_entry = subquery.name_map.find(colref.column_name);
 		if (column_entry == subquery.name_map.end()) {
-			throw BinderException("Subquery \"%s\" does not have a column named \"%s\"", match->first.c_str(),
-			                      expr.column_name.c_str());
+			return BindResult(move(expr), StringUtil::Format("Subquery \"%s\" does not have a column named \"%s\"", match->first.c_str(),
+			                      colref.column_name.c_str()));
 		}
 		ColumnBinding binding;
 		binding.table_index = subquery.index;
@@ -169,21 +159,21 @@ unique_ptr<Expression> BindContext::BindColumn(ColumnRefExpression &expr, size_t
 		auto &select_list = subquery.subquery->GetSelectList();
 		assert(column_entry->second < select_list.size());
 		TypeId return_type = select_list[column_entry->second]->return_type;
-		return make_unique<BoundColumnRefExpression>(expr, return_type, binding, depth);
+		return BindResult(make_unique<BoundColumnRefExpression>(colref, return_type, binding));
 	}
 	default: {
 		assert(binding->type == BindingType::TABLE_FUNCTION);
 		auto &table_function = *((TableFunctionBinding *)binding);
-		auto column_entry = table_function.function->name_map.find(expr.column_name);
+		auto column_entry = table_function.function->name_map.find(colref.column_name);
 		if (column_entry == table_function.function->name_map.end()) {
-			throw BinderException("Table Function \"%s\" does not have a column named \"%s\"", match->first.c_str(),
-			                      expr.column_name.c_str());
+			return BindResult(move(expr), StringUtil::Format("Table Function \"%s\" does not have a column named \"%s\"", match->first.c_str(),
+			                      colref.column_name.c_str()));
 		}
 		ColumnBinding binding;
 		binding.table_index = table_function.index;
 		binding.column_index = column_entry->second;
 		TypeId return_type = table_function.function->return_values[column_entry->second].type;
-		return make_unique<BoundColumnRefExpression>(expr, return_type, binding, depth);
+		return BindResult(make_unique<BoundColumnRefExpression>(colref, return_type, binding));
 	}
 	}
 }
@@ -233,10 +223,17 @@ void BindContext::AddBinding(const string &alias, unique_ptr<Binding> binding) {
 	bindings_list.push_back(make_pair(alias, binding.get()));
 	bindings[alias] = move(binding);
 }
-size_t BindContext::AddBaseTable(const string &alias, TableCatalogEntry *table_entry) {
-	size_t index = GenerateTableIndex();
+
+void BindContext::AddBaseTable(size_t index, const string &alias, TableCatalogEntry *table_entry) {
 	AddBinding(alias, make_unique<TableBinding>(table_entry, index));
-	return index;
+}
+
+void BindContext::AddSubquery(size_t index, const string &alias, SubqueryRef &subquery) {
+	AddBinding(alias, make_unique<SubqueryBinding>(subquery, index));
+}
+
+void BindContext::AddTableFunction(size_t index, const string &alias, TableFunctionCatalogEntry *function_entry) {
+	AddBinding(alias, make_unique<TableFunctionBinding>(function_entry, index));
 }
 
 void BindContext::AddDummyTable(const string &alias, vector<ColumnDefinition> &columns) {
@@ -246,18 +243,6 @@ void BindContext::AddDummyTable(const string &alias, vector<ColumnDefinition> &c
 		columns[i].oid = i;
 	}
 	AddBinding(alias, make_unique<DummyTableBinding>(columns));
-}
-
-size_t BindContext::AddSubquery(const string &alias, SubqueryRef &subquery) {
-	size_t index = GenerateTableIndex();
-	AddBinding(alias, make_unique<SubqueryBinding>(subquery, index));
-	return index;
-}
-
-size_t BindContext::AddTableFunction(const string &alias, TableFunctionCatalogEntry *function_entry) {
-	size_t index = GenerateTableIndex();
-	AddBinding(alias, make_unique<TableFunctionBinding>(function_entry, index));
-	return index;
 }
 
 bool BindContext::HasAlias(const string &alias) {
@@ -270,11 +255,4 @@ size_t BindContext::GetBindingIndex(const string &alias) {
 		throw BinderException("Could not find alias!");
 	}
 	return entry->second->index;
-}
-
-size_t BindContext::GenerateTableIndex() {
-	if (parent) {
-		return parent->GenerateTableIndex();
-	}
-	return bound_tables++;
 }

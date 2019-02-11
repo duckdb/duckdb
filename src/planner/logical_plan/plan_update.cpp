@@ -3,6 +3,7 @@
 #include "parser/statement/update_statement.hpp"
 #include "planner/logical_plan_generator.hpp"
 #include "planner/operator/list.hpp"
+#include "planner/binder.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -59,7 +60,7 @@ void LogicalPlanGenerator::CreatePlan(UpdateStatement &statement) {
 		// add the row id column to the projection list
 		projection_expressions.push_back(make_unique<BoundExpression>(TypeId::POINTER, get->column_ids.size() - 1));
 		// now create the projection
-		auto proj_index = bind_context.GenerateTableIndex();
+		auto proj_index = binder.GenerateTableIndex();
 		auto proj = make_unique<LogicalProjection>(proj_index, move(projection_expressions));
 		proj->AddChild(move(root));
 		root = move(proj);

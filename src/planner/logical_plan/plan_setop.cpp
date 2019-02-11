@@ -42,7 +42,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CastSetOpToTypes(vector<TypeId
 			}
 			select_list.push_back(move(result));
 		}
-		auto projection = make_unique<LogicalProjection>(bind_context.GenerateTableIndex(), move(select_list));
+		auto projection = make_unique<LogicalProjection>(binder.GenerateTableIndex(), move(select_list));
 		projection->children.push_back(move(op));
 		return move(projection);
 	}
@@ -50,8 +50,8 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CastSetOpToTypes(vector<TypeId
 
 void LogicalPlanGenerator::CreatePlan(SetOperationNode &statement) {
 	// Generate the logical plan for the left and right sides of the set operation
-	LogicalPlanGenerator generator_left(context, *statement.binding.left_context);
-	LogicalPlanGenerator generator_right(context, *statement.binding.right_context);
+	LogicalPlanGenerator generator_left(*statement.binding.left_binder, context);
+	LogicalPlanGenerator generator_right(*statement.binding.right_binder, context);
 
 	generator_left.CreatePlan(*statement.left);
 	auto left_node = move(generator_left.root);

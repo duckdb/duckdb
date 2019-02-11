@@ -12,7 +12,8 @@
 #include "parser/query_node.hpp"
 #include "parser/sql_node_visitor.hpp"
 #include "parser/sql_statement.hpp"
-#include "planner/bindcontext.hpp"
+
+#include "planner/binder.hpp"
 
 namespace duckdb {
 
@@ -30,10 +31,10 @@ public:
 
 	//! The following information is only gathered after binding the SetOperationNode
 	struct {
-		//! The bind context used by the left side of the set operation
-		unique_ptr<BindContext> left_context;
-		//! The bind context used by the right side of the set operation
-		unique_ptr<BindContext> right_context;
+		//! The binder used by the left side of the set operation
+		unique_ptr<Binder> left_binder;
+		//! The binder used by the right side of the set operation
+		unique_ptr<Binder> right_binder;
 	} binding;
 
 	vector<unique_ptr<Expression>> &GetSelectList() override {

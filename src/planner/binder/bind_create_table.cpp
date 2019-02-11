@@ -7,7 +7,7 @@ using namespace std;
 void Binder::Bind(CreateTableStatement &stmt) {
 	// bind any constraints
 	// first create a fake table
-	bind_context->AddDummyTable(stmt.info->table, stmt.info->columns);
+	bind_context.AddDummyTable(stmt.info->table, stmt.info->columns);
 	for (auto &cond : stmt.info->constraints) {
 		cond->Accept(this);
 	}

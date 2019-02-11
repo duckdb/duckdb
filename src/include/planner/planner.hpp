@@ -24,7 +24,6 @@ class Planner {
 public:
 	void CreatePlan(ClientContext &catalog, unique_ptr<SQLStatement> statement);
 
-	unique_ptr<BindContext> context;
 	unique_ptr<LogicalOperator> plan;
 
 private:

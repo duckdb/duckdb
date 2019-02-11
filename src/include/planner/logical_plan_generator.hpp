@@ -21,8 +21,8 @@ class ClientContext;
 //! statement
 class LogicalPlanGenerator : public SQLNodeVisitor {
 public:
-	LogicalPlanGenerator(ClientContext &context, BindContext &bind_context)
-	    : require_row_id(false), context(context), bind_context(bind_context) {
+	LogicalPlanGenerator(Binder &binder, ClientContext &context)
+	    : binder(binder), require_row_id(false), context(context) {
 	}
 
 	void CreatePlan(SQLStatement &statement);
@@ -59,12 +59,12 @@ public:
 	unique_ptr<LogicalOperator> root;
 
 private:
+	//! A reference to the current binder
+	Binder &binder;
 	//! Whether or not we require row ids to be projected
 	bool require_row_id = false;
 	//! A reference to the catalog
 	ClientContext &context;
-	//! A reference to the current bind context
-	BindContext &bind_context;
 private:
 	unique_ptr<LogicalOperator> CastSetOpToTypes(vector<TypeId> &source_types, vector<TypeId> &target_types, unique_ptr<LogicalOperator> op);
 };

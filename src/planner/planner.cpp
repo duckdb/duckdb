@@ -17,11 +17,11 @@ void Planner::CreatePlan(ClientContext &context, SQLStatement &statement) {
 	binder.Bind(statement);
 
 	// now create a logical query plan from the query
-	LogicalPlanGenerator logical_planner(context, *binder.bind_context);
+	LogicalPlanGenerator logical_planner(binder, context);
 	logical_planner.CreatePlan(statement);
 
 	this->plan = move(logical_planner.root);
-	this->context = move(binder.bind_context);
+	// this->context = move(binder.bind_context);
 }
 
 void Planner::CreatePlan(ClientContext &context, unique_ptr<SQLStatement> statement) {

@@ -17,12 +17,11 @@ namespace duckdb {
 
 class Optimizer {
 public:
-	Optimizer(ClientContext &client_context, BindContext &context);
+	Optimizer(ClientContext &client_context);
 
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
 
 private:
-	BindContext &context;
 	ExpressionRewriter rewriter;
 };
 

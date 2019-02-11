@@ -10,7 +10,7 @@
 using namespace duckdb;
 using namespace std;
 
-Optimizer::Optimizer(ClientContext &client_context, BindContext &context) : context(context), rewriter(client_context) {
+Optimizer::Optimizer(ClientContext &client_context) : rewriter(client_context) {
 	rewriter.rules.push_back(make_unique<ConstantFoldingRule>(rewriter));
 	rewriter.rules.push_back(make_unique<DistributivityRule>(rewriter));
 	rewriter.rules.push_back(make_unique<ArithmeticSimplificationRule>(rewriter));
