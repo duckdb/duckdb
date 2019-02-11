@@ -12,8 +12,7 @@ using namespace duckdb;
 using namespace std;
 
 Binder::Binder(ClientContext &context, Binder *parent)
-	: active_binder(nullptr), context(context),
-	  parent(parent), bound_tables(0) {
+	: context(context), parent(parent), bound_tables(0) {
 }
 void Binder::Bind(SQLStatement &statement) {
 	switch (statement.type) {
@@ -170,4 +169,20 @@ size_t Binder::GenerateTableIndex() {
 		return parent->GenerateTableIndex();
 	}
 	return bound_tables++;
+}
+
+void Binder::PushExpressionBinder(ExpressionBinder *binder) {
+	active_binders.push_back(binder);
+}
+
+void Binder::PopExpressionBinder() {
+	assert(active_binders.size() > 0);
+	active_binders.pop_back();
+}
+
+vector<ExpressionBinder*>& Binder::GetActiveBinders() {
+	if (parent) {
+		return parent->GetActiveBinders();
+	}
+	return active_binders;
 }

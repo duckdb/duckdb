@@ -84,7 +84,7 @@ public:
 	string GetMatchingBinding(const string &column_name);
 	//! Binds a column expression to the base table. Returns the bound expression
 	//! or throws an exception if the column could not be bound.
-	BindResult BindColumn(unique_ptr<Expression> expr);
+	BindResult BindColumn(unique_ptr<Expression> expr, uint32_t depth);
 
 	//! Generate column expressions for all columns that are present in the
 	//! referenced tables. This is used to resolve the * expression in a

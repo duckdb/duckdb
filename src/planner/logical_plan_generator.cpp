@@ -212,7 +212,7 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 	// check if the subquery is correlated
 	auto &subquery = (SubqueryExpression&) *expr.subquery;
 	// first we translate the QueryNode of the subquery into a logical plan
-	LogicalPlanGenerator generator(expr.binder, context);
+	LogicalPlanGenerator generator(*expr.binder, context);
 	generator.CreatePlan(*subquery.subquery);
 	if (!generator.root) {
 		throw Exception("Can't plan subquery");
@@ -305,7 +305,7 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 			// the right side is a DEPENDENT join between the duplicate eliminated scan and the subquery
 			// first get the set of correlated columns in the subquery
 			// these are the columns returned by the duplicate eliminated scan
-			auto &correlated_columns = expr.correlated_columns;
+			auto &correlated_columns = expr.binder->correlated_columns;
 			FlattenDependentJoins flatten(binder, correlated_columns);
 			for(size_t i = 0; i < correlated_columns.size(); i++) {
 				auto &col = correlated_columns[i];

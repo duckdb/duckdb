@@ -17,7 +17,7 @@ class HavingBinder : public ExpressionBinder {
 public:
 	HavingBinder(Binder &binder, ClientContext &context, SelectNode& node, expression_map_t<uint32_t>& group_map);
 
-	BindResult BindExpression(unique_ptr<Expression> expr) override;
+	BindResult BindExpression(unique_ptr<Expression> expr, uint32_t depth) override;
 private:
 	expression_map_t<uint32_t>& group_map;
 };

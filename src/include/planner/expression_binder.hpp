@@ -36,15 +36,16 @@ class ExpressionBinder {
 public:
 	ExpressionBinder(Binder &binder, ClientContext &context, SelectNode& node);
 
-	virtual BindResult BindExpression(unique_ptr<Expression> expr) = 0;
+	virtual BindResult BindExpression(unique_ptr<Expression> expr, uint32_t depth) = 0;
 
-	BindResult BindColumnRefExpression(unique_ptr<Expression> expr);
-	BindResult BindFunctionExpression(unique_ptr<Expression> expr);
-	BindResult BindSubqueryExpression(unique_ptr<Expression> expr);
+	BindResult BindColumnRefExpression(unique_ptr<Expression> expr, uint32_t depth);
+	BindResult BindFunctionExpression(unique_ptr<Expression> expr, uint32_t depth);
+	BindResult BindSubqueryExpression(unique_ptr<Expression> expr, uint32_t depth);
 
-	BindResult BindChildren(unique_ptr<Expression> expr);
+	BindResult BindChildren(unique_ptr<Expression> expr, uint32_t depth);
 
 	void BindAndResolveType(unique_ptr<Expression>* expr);
+	BindResult TryBindAndResolveType(unique_ptr<Expression> expr);
 
 protected:
 	Binder &binder;

@@ -18,7 +18,7 @@ public:
 	SelectBinder(Binder &binder, ClientContext &context, SelectNode& node, expression_map_t<uint32_t>& group_map, bool has_aggregation);
 	SelectBinder(Binder &binder, ClientContext &context, SelectNode& node, expression_map_t<uint32_t>& group_map);
 
-	BindResult BindExpression(unique_ptr<Expression> expr) override;
+	BindResult BindExpression(unique_ptr<Expression> expr, uint32_t depth) override;
 
 	bool inside_aggregation;
 	bool inside_window;

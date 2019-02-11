@@ -77,7 +77,7 @@ void Binder::Bind(SelectNode &statement) {
 	// we bind the ORDER BY before we bind any aggregations or window functions
 	for(size_t i = 0; i < statement.orderby.orders.size(); i++) {
 		OrderBinder order_binder(*this, context, statement, alias_map, projection_map);
-		auto result = order_binder.BindExpression(move(statement.orderby.orders[i].expression));
+		auto result = order_binder.BindExpression(move(statement.orderby.orders[i].expression), 0);
 		if (result.HasError()) {
 			throw BinderException(result.error);
 		}
@@ -99,7 +99,7 @@ void Binder::Bind(SelectNode &statement) {
 			unbound_groups[i] = statement.groupby.groups[i]->Copy();
 
 			// first try to bind using the GroupBinder
-			auto result = group_binder.BindExpression(move(statement.groupby.groups[i]));
+			auto result = group_binder.TryBindAndResolveType(move(statement.groupby.groups[i]));
 			if (result.HasError()) {
 				// failed to bind, check if it is an alias reference
 				if (result.expression->type != ExpressionType::COLUMN_REF) {
@@ -127,22 +127,16 @@ void Binder::Bind(SelectNode &statement) {
 				} else {
 					unbound_groups[i] = statement.select_list[entry->second]->Copy();
 					// in this case we have to move the computation of the GROUP BY column into this expression
-					// bind the expression using the group binder
-					auto sub_result = group_binder.BindExpression(move(statement.select_list[entry->second]));
-					if (sub_result.HasError()) {
-						throw BinderException(sub_result.error);
-					}
-					// move the expression into the group column
-					statement.groupby.groups[i] = move(sub_result.expression);
-					statement.groupby.groups[i]->ResolveType();
-					// and replace the original expression in the select list with a reference to this group
-					statement.select_list[entry->second] = make_unique<BoundColumnRefExpression>(*statement.groupby.groups[i], statement.groupby.groups[i]->return_type, ColumnBinding(binding.group_index, i));
+					// move the expression into the group column and bind it
+					statement.groupby.groups[i] = move(statement.select_list[entry->second]);
+					group_binder.BindAndResolveType(&statement.groupby.groups[i]);
+					// now replace the original expression in the select list with a reference to this group
+					statement.select_list[entry->second] = make_unique<BoundColumnRefExpression>(*statement.groupby.groups[i], statement.groupby.groups[i]->return_type, ColumnBinding(binding.group_index, i), 0);
 					// insert into the set of used aliases
 					used_aliases.insert(colref.column_name);
 				}
 			} else {
 				statement.groupby.groups[i] = move(result.expression);
-				statement.groupby.groups[i]->ResolveType();
 			}
 			assert(statement.groupby.groups[i]->return_type != TypeId::INVALID);
 			group_map[unbound_groups[i].get()] = i;

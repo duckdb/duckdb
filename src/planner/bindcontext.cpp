@@ -87,7 +87,7 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 
 
 
-BindResult BindContext::BindColumn(unique_ptr<Expression> expr) {
+BindResult BindContext::BindColumn(unique_ptr<Expression> expr, uint32_t depth) {
 	assert(expr->GetExpressionClass() == ExpressionClass::COLUMN_REF);
 	auto &colref = (ColumnRefExpression&) *expr;
 
@@ -135,7 +135,7 @@ BindResult BindContext::BindColumn(unique_ptr<Expression> expr) {
 			column_list.push_back(colref.column_name);
 		}
 		binding.table_index = table_index;
-		auto result = make_unique<BoundColumnRefExpression>(colref, entry->type, binding);
+		auto result = make_unique<BoundColumnRefExpression>(colref, entry->type, binding, depth);
 		// assign the base table statistics
 		auto &table_stats = table.table->GetStatistics(entry->oid);
 		table_stats.Initialize(result->stats);
@@ -159,7 +159,7 @@ BindResult BindContext::BindColumn(unique_ptr<Expression> expr) {
 		auto &select_list = subquery.subquery->GetSelectList();
 		assert(column_entry->second < select_list.size());
 		TypeId return_type = select_list[column_entry->second]->return_type;
-		return BindResult(make_unique<BoundColumnRefExpression>(colref, return_type, binding));
+		return BindResult(make_unique<BoundColumnRefExpression>(colref, return_type, binding, depth));
 	}
 	default: {
 		assert(binding->type == BindingType::TABLE_FUNCTION);
@@ -173,7 +173,7 @@ BindResult BindContext::BindColumn(unique_ptr<Expression> expr) {
 		binding.table_index = table_function.index;
 		binding.column_index = column_entry->second;
 		TypeId return_type = table_function.function->return_values[column_entry->second].type;
-		return BindResult(make_unique<BoundColumnRefExpression>(colref, return_type, binding));
+		return BindResult(make_unique<BoundColumnRefExpression>(colref, return_type, binding, depth));
 	}
 	}
 }

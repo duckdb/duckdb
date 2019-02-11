@@ -17,7 +17,7 @@ class WhereBinder : public ExpressionBinder {
 public:
 	WhereBinder(Binder &binder, ClientContext &context, SelectNode& node);
 
-	BindResult BindExpression(unique_ptr<Expression> expr) override;
+	BindResult BindExpression(unique_ptr<Expression> expr, uint32_t depth) override;
 };
 
 }

@@ -20,6 +20,22 @@ namespace duckdb {
 class ClientContext;
 struct OrderByDescription;
 
+struct CorrelatedColumnInfo {
+	ColumnBinding binding;
+	TypeId type;
+	string name;
+
+	CorrelatedColumnInfo(BoundColumnRefExpression& expr) {
+		binding = expr.binding;
+		type = expr.return_type;
+		name = expr.GetName();
+	}
+
+	bool operator==(const CorrelatedColumnInfo &rhs) const {
+		return binding == rhs.binding;
+	}
+};
+
 //! Bind the parsed query tree to the actual columns present in the catalog.
 /*!
   The binder is responsible for binding tables and columns to actual physical
@@ -32,7 +48,6 @@ public:
 
 	void Bind(SQLStatement &statement);
 
-protected:
 	void Bind(SelectStatement &stmt);
 	void Bind(InsertStatement &stmt);
 	void Bind(CopyStatement &stmt);
@@ -64,10 +79,18 @@ public:
 	size_t GenerateTableIndex();
 
 	BindContext bind_context;
-	ExpressionBinder *active_binder;
+
+	void PushExpressionBinder(ExpressionBinder *binder);
+	void PopExpressionBinder();
+
+	vector<ExpressionBinder*>& GetActiveBinders();
+	
+	vector<CorrelatedColumnInfo> correlated_columns;
 private:
 	ClientContext &context;
 	Binder *parent;
+
+	vector<ExpressionBinder*> active_binders;
 
 	size_t bound_tables;
 #ifdef DEBUG

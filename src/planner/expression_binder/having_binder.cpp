@@ -14,12 +14,12 @@ HavingBinder::HavingBinder(Binder &binder, ClientContext &context, SelectNode& n
 
 }
 
-BindResult HavingBinder::BindExpression(unique_ptr<Expression> expr) {
+BindResult HavingBinder::BindExpression(unique_ptr<Expression> expr, uint32_t depth) {
 	// check if the expression points to one of the groups
 	auto entry = group_map.find(expr.get());
 	if (entry != group_map.end()) {
 		// it does! create a binding to that entry in the group list
-		return BindResult(make_unique<BoundColumnRefExpression>(*expr, node.groupby.groups[entry->second]->return_type, ColumnBinding(node.binding.group_index, entry->second)));
+		return BindResult(make_unique<BoundColumnRefExpression>(*expr, node.groupby.groups[entry->second]->return_type, ColumnBinding(node.binding.group_index, entry->second), depth));
 	}
 	switch(expr->GetExpressionClass()) {
 		case ExpressionClass::WINDOW:
@@ -30,14 +30,17 @@ BindResult HavingBinder::BindExpression(unique_ptr<Expression> expr) {
 			// create a new binder to bind the children of the aggregation
 			SelectBinder aggregate_binder(binder, context, node, group_map, true);
 			aggregate_binder.inside_aggregation = true;
-			auto bind_result = aggregate_binder.BindChildren(move(expr));
+
+			binder.GetActiveBinders().back() = &aggregate_binder;
+			auto bind_result = aggregate_binder.BindChildren(move(expr), depth);
+			binder.GetActiveBinders().back() = this;
 			if (bind_result.HasError()) {
 				// failed to bind children of aggregation
 				return bind_result;
 			}
 			bind_result.expression->ResolveType();
 			// create a BoundColumnRef that references this entry
-			auto colref = make_unique<BoundColumnRefExpression>(*bind_result.expression, bind_result.expression->return_type, ColumnBinding(node.binding.aggregate_index, node.binding.aggregates.size()));
+			auto colref = make_unique<BoundColumnRefExpression>(*bind_result.expression, bind_result.expression->return_type, ColumnBinding(node.binding.aggregate_index, node.binding.aggregates.size()), depth);
 			// move the aggregate expression into the set of bound aggregates
 			node.binding.aggregates.push_back(move(bind_result.expression));
 			return BindResult(move(colref));
@@ -47,13 +50,13 @@ BindResult HavingBinder::BindExpression(unique_ptr<Expression> expr) {
 			// wrap the column inside a FIRST aggregate
 			auto first_aggregate = make_unique<AggregateExpression>(ExpressionType::AGGREGATE_FIRST, move(expr));
 			// now bind the FIRST aggregate expression
-			return BindExpression(move(first_aggregate));
+			return BindExpression(move(first_aggregate), depth);
 		}
 		case ExpressionClass::FUNCTION:
-			return BindFunctionExpression(move(expr));
+			return BindFunctionExpression(move(expr), depth);
 		case ExpressionClass::SUBQUERY:
-			return BindSubqueryExpression(move(expr));
+			return BindSubqueryExpression(move(expr), depth);
 		default:
-			return BindChildren(move(expr));
+			return BindChildren(move(expr), depth);
 	}
 }
