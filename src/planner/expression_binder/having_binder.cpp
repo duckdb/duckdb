@@ -47,20 +47,22 @@ BindResult HavingBinder::BindExpression(unique_ptr<Expression> expr, uint32_t de
 			node.binding.aggregates.push_back(move(bind_result.expression));
 			return BindResult(move(colref));
 		}
-		case ExpressionClass::COLUMN_REF:{
-			// FIXME: duplocate of equivalent code in SelectBinder::
-			// there is an aggregation and we are NOT inside the aggregation
-			// CONTROVERSIAL: in PostgreSQL this would be an error, but SQLite accepts it
-			// we try to bind the expression by first wrapping the column inside a FIRST aggregate
-			auto first_aggregate = make_unique<AggregateExpression>(ExpressionType::AGGREGATE_FIRST, expr->Copy());
-			// now bind the FIRST aggregate expression
-			auto result = BindExpression(move(first_aggregate), depth);
-			if (!result.HasError()) {
-				// succeeded, return the result
-				return result;
-			}
-			// otherwise we move the original expression back
-			return BindResult(move(expr), result.error);
+		case ExpressionClass::COLUMN_REF: {
+			string error = StringUtil::Format("column %s must appear in the GROUP BY clause or be used in an aggregate function", expr->ToString().c_str());
+			return BindResult(move(expr), error);
+			// // FIXME: duplicate of equivalent code in SelectBinder::
+			// // there is an aggregation and we are NOT inside the aggregation
+			// // CONTROVERSIAL: in PostgreSQL this would be an error, but SQLite accepts it
+			// // we try to bind the expression by first wrapping the column inside a FIRST aggregate
+			// auto first_aggregate = make_unique<AggregateExpression>(ExpressionType::AGGREGATE_FIRST, expr->Copy());
+			// // now bind the FIRST aggregate expression
+			// auto result = BindExpression(move(first_aggregate), depth);
+			// if (!result.HasError()) {
+			// 	// succeeded, return the result
+			// 	return result;
+			// }
+			// // otherwise we move the original expression back
+			// return BindResult(move(expr), result.error);
 		}
 		default:
 			return BindChildren(move(expr), depth);

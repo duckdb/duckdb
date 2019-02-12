@@ -149,7 +149,11 @@ void Binder::Bind(SelectNode &statement) {
 		select_binder.BindAndResolveType(&statement.select_list[i]);
 		statement.types.push_back(statement.select_list[i]->return_type);
 	}
-	
+
+	if (statement.HasHaving() && !statement.HasAggregation()) {
+		throw ParserException("a GROUP BY clause is required before HAVING");
+	}
+
 	// finally resolve the types of the ORDER BY clause
 	for(size_t i = 0; i < statement.orderby.orders.size(); i++) {
 		assert(statement.orderby.orders[i].expression->type == ExpressionType::BOUND_COLUMN_REF);
