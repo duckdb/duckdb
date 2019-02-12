@@ -8,7 +8,7 @@ using namespace duckdb;
 using namespace std;
 
 OrderBinder::OrderBinder(Binder &binder, ClientContext &context, SelectNode& node, unordered_map<string, uint32_t>& alias_map, expression_map_t<uint32_t>& projection_map) : 
-	ExpressionBinder(binder, context, node), alias_map(alias_map), projection_map(projection_map) {
+	SelectNodeBinder(binder, context, node), alias_map(alias_map), projection_map(projection_map) {
 	
 }
 

@@ -1,7 +1,6 @@
 #include "planner/expression_binder.hpp"
 #include "main/client_context.hpp"
 #include "main/database.hpp"
-#include "parser/query_node/select_node.hpp"
 #include "parser/expression/bound_subquery_expression.hpp"
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/expression/subquery_expression.hpp"
@@ -10,8 +9,8 @@
 using namespace duckdb;
 using namespace std;
 
-ExpressionBinder::ExpressionBinder(Binder &binder, ClientContext &context, SelectNode& node) :
-	binder(binder), context(context), node(node) {
+ExpressionBinder::ExpressionBinder(Binder &binder, ClientContext &context) :
+	binder(binder), context(context) {
 	
 }
 

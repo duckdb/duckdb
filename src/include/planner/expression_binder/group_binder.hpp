@@ -13,7 +13,7 @@
 namespace duckdb {
 	
 //! The GROUP binder is responsible for binding expressions in the GROUP BY clause
-class GroupBinder : public ExpressionBinder {
+class GroupBinder : public SelectNodeBinder {
 public:
 	GroupBinder(Binder &binder, ClientContext &context, SelectNode& node);
 

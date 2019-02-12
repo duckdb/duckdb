@@ -13,7 +13,7 @@
 namespace duckdb {
 	
 //! The SELECT binder is responsible for binding an expression within the SELECT clause of a SQL statement
-class SelectBinder : public ExpressionBinder {
+class SelectBinder : public SelectNodeBinder {
 public:
 	SelectBinder(Binder &binder, ClientContext &context, SelectNode& node, expression_map_t<uint32_t>& group_map, bool has_aggregation);
 	SelectBinder(Binder &binder, ClientContext &context, SelectNode& node, expression_map_t<uint32_t>& group_map);

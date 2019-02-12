@@ -5,7 +5,7 @@ using namespace std;
 
 
 GroupBinder::GroupBinder(Binder &binder, ClientContext &context, SelectNode& node) : 
-	ExpressionBinder(binder, context, node) {
+	SelectNodeBinder(binder, context, node) {
 	
 }
 

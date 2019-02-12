@@ -10,7 +10,7 @@ using namespace duckdb;
 using namespace std;
 
 HavingBinder::HavingBinder(Binder &binder, ClientContext &context, SelectNode& node, expression_map_t<uint32_t>& group_map) : 
-	ExpressionBinder(binder, context, node), group_map(group_map) {
+	SelectNodeBinder(binder, context, node), group_map(group_map) {
 
 }
 

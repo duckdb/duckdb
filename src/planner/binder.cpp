@@ -56,18 +56,6 @@ void Binder::Bind(QueryNode &node) {
 	}
 }
 
-void Binder::Visit(CheckConstraint &constraint) {
-	SQLNodeVisitor::Visit(constraint);
-	constraint.expression->ResolveType();
-	if (constraint.expression->return_type == TypeId::INVALID) {
-		throw BinderException("Could not resolve type of constraint!");
-	}
-	// the CHECK constraint should always return an INTEGER value
-	if (constraint.expression->return_type != TypeId::INTEGER) {
-		constraint.expression = make_unique<CastExpression>(TypeId::INTEGER, move(constraint.expression));
-	}
-}
-
 // CTEs and views are also referred to using BaseTableRefs, hence need to distinguish here
 unique_ptr<TableRef> Binder::Visit(BaseTableRef &expr) {
 	auto cte = FindCTE(expr.table_name);

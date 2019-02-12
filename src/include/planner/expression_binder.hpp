@@ -34,7 +34,7 @@ struct BindResult {
 
 class ExpressionBinder {
 public:
-	ExpressionBinder(Binder &binder, ClientContext &context, SelectNode& node);
+	ExpressionBinder(Binder &binder, ClientContext &context);
 
 	virtual BindResult BindExpression(unique_ptr<Expression> expr, uint32_t depth) = 0;
 
@@ -49,11 +49,19 @@ public:
 protected:
 	Binder &binder;
 	ClientContext &context;
-	SelectNode &node;
 private:
 	BindResult BindSubqueries(unique_ptr<Expression> expr, uint32_t depth);
 
 	BindResult BindSubqueryExpression(unique_ptr<Expression> expr, uint32_t depth);
 };
+
+class SelectNodeBinder : public ExpressionBinder {
+public:
+	SelectNodeBinder(Binder &binder, ClientContext &context, SelectNode &node) : 
+		ExpressionBinder(binder, context), node(node) { }
+protected:
+	SelectNode &node;
+};
+
 
 }

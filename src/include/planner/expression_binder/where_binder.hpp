@@ -13,7 +13,7 @@
 namespace duckdb {
 	
 //! The WHERE binder is responsible for binding an expression within the WHERE clause of a SQL statement
-class WhereBinder : public ExpressionBinder {
+class WhereBinder : public SelectNodeBinder {
 public:
 	WhereBinder(Binder &binder, ClientContext &context, SelectNode& node);
 

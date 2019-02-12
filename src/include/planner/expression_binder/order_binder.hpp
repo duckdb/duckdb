@@ -13,7 +13,7 @@
 namespace duckdb {
 	
 //! The ORDER binder is responsible for binding an expression within the ORDER BY clause of a SQL statement
-class OrderBinder : public ExpressionBinder {
+class OrderBinder : public SelectNodeBinder {
 public:
 	OrderBinder(Binder &binder, ClientContext &context, SelectNode& node, unordered_map<string, uint32_t>& alias_map, expression_map_t<uint32_t>& projection_map);
 

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/expression_binder/having_binder.hpp
+// planner/expression_binder/check_binder.hpp
 //
 //	
 //===----------------------------------------------------------------------===//
@@ -12,14 +12,12 @@
 
 namespace duckdb {
 	
-//! The HAVING binder is responsible for binding an expression within the HAVING clause of a SQL statement
-class HavingBinder : public SelectNodeBinder {
+//! The CHECK binder is responsible for binding an expression within a CHECK constraint
+class CheckBinder : public ExpressionBinder {
 public:
-	HavingBinder(Binder &binder, ClientContext &context, SelectNode& node, expression_map_t<uint32_t>& group_map);
+	CheckBinder(Binder &binder, ClientContext &context);
 
 	BindResult BindExpression(unique_ptr<Expression> expr, uint32_t depth) override;
-private:
-	expression_map_t<uint32_t>& group_map;
 };
 
 }

@@ -9,7 +9,7 @@ using namespace duckdb;
 using namespace std;
 
 SelectBinder::SelectBinder(Binder &binder, ClientContext &context, SelectNode& node, expression_map_t<uint32_t>& group_map, bool has_aggregation) : 
-	ExpressionBinder(binder, context, node), inside_aggregation(false), inside_window(false), has_aggregation(has_aggregation), group_map(group_map) {
+	SelectNodeBinder(binder, context, node), inside_aggregation(false), inside_window(false), has_aggregation(has_aggregation), group_map(group_map) {
 	
 }
 
