@@ -232,7 +232,7 @@ void DataChunk::MoveStringsToHeap(StringHeap &heap) {
 			// move strings of this chunk to the specified heap
 			auto source_strings = (const char **)data[c].data;
 			if (!data[c].owned_data) {
-				data[c].owned_data = unique_ptr<char[]>(new char[STANDARD_VECTOR_SIZE]);
+				data[c].owned_data = unique_ptr<char[]>(new char[STANDARD_VECTOR_SIZE * sizeof(char*)]);
 				data[c].data = data[c].owned_data.get();
 			}
 			auto target_strings = (const char**) data[c].data;
