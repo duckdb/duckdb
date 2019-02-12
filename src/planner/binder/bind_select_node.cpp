@@ -147,6 +147,7 @@ void Binder::Bind(SelectNode &statement) {
 	SelectBinder select_binder(*this, context, statement, group_map);
 	for(size_t i = 0; i < statement.select_list.size(); i++) {
 		select_binder.BindAndResolveType(&statement.select_list[i]);
+		statement.types.push_back(statement.select_list[i]->return_type);
 	}
 	
 	// finally resolve the types of the ORDER BY clause
