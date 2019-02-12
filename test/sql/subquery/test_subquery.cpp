@@ -364,6 +364,7 @@ TEST_CASE("Test subqueries from the paper 'Unnesting Arbitrary Subqueries'", "[s
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 	con.EnableQueryVerification();
+	con.EnableProfiling();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE students(id INTEGER, name VARCHAR, major VARCHAR, year INTEGER)"));
 	REQUIRE_NO_FAIL(

@@ -230,10 +230,15 @@ void DataChunk::MoveStringsToHeap(StringHeap &heap) {
 	for (size_t c = 0; c < column_count; c++) {
 		if (data[c].type == TypeId::VARCHAR) {
 			// move strings of this chunk to the specified heap
-			auto strings = (const char **)data[c].data;
+			auto source_strings = (const char **)data[c].data;
+			if (!data[c].owned_data) {
+				data[c].owned_data = unique_ptr<char[]>(new char[STANDARD_VECTOR_SIZE]);
+				data[c].data = data[c].owned_data.get();
+			}
+			auto target_strings = (const char**) data[c].data;
 			VectorOperations::ExecType<const char *>(data[c], [&](const char *str, size_t i, size_t k) {
 				if (!data[c].nullmask[i]) {
-					strings[i] = heap.AddString(strings[i]);
+					target_strings[i] = heap.AddString(source_strings[i]);
 				}
 			});
 		}
