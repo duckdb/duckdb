@@ -127,6 +127,7 @@ TEST_CASE("Test ORDER BY exceptions", "[order]") {
 	REQUIRE_FAIL(con.Query("SELECT a FROM test ORDER BY 2"));
 	
 	// ORDER BY constant works, but does nothing
+	// CONTROVERSIAL: works in SQLite but not in Postgres
 	result = con.Query("SELECT a FROM test ORDER BY 'hello', a");
 	REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
 

@@ -75,6 +75,13 @@ void Binder::Bind(SelectNode &statement) {
 		if (result.HasError()) {
 			throw BinderException(result.error);
 		}
+		if (!result.expression) {
+			// ORDER BY non-integer constant
+			// remove the expression from the ORDER BY list
+			statement.orderby.orders.erase(statement.orderby.orders.begin() + i);
+			i--;
+			continue;
+		}
 		assert(result.expression->type == ExpressionType::BOUND_COLUMN_REF);
 		statement.orderby.orders[i].expression = move(result.expression);
 	}

@@ -32,7 +32,7 @@ BindResult OrderBinder::BindExpression(unique_ptr<Expression> expr, uint32_t dep
 			// non-integral expression, we just leave the constant here.
 			// ORDER BY <constant> has no effect
 			// CONTROVERSIAL: maybe we should throw an error
-			return BindResult(move(expr));
+			return BindResult(nullptr);
 		}
 		// INTEGER constant: we use the integer as an index into the select list (e.g. ORDER BY 1)
 		auto index = constant.value.GetNumericValue();
