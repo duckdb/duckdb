@@ -189,6 +189,22 @@ struct FlattenDependentJoins {
 				this->data_offset = aggr->groups.size();
 				return plan;
 			}
+			case LogicalOperatorType::LIMIT: {
+				auto &limit = (LogicalLimit&) *plan;
+				if (limit.offset > 0) {
+					throw ParserException("OFFSET not supported in correlated subquery");
+				}
+				plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+				if (limit.limit == 0) {
+					// limit = 0 means we return zero columns here
+					return plan;
+				} else {
+					// limit > 0 does nothing
+					return move(plan->children[0]);
+				}
+			}
+			case LogicalOperatorType::ORDER_BY:
+				throw ParserException("ORDER BY not supported in correlated subquery");
 			default:
 				throw NotImplementedException("Logical operator type for dependent join");
 		}
