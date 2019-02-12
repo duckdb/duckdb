@@ -109,7 +109,7 @@ TEST_CASE("Test HAVING clause without GROUP BY", "[having]") {
 	result = con.Query("SELECT SUM(a) FROM test HAVING COUNT(*)>1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {36}));
 
-	result = con.Query("SELECT SUM(a) FROM test HAVING SUM(a)<10;");
+	result = con.Query("SELECT SUM(a) FROM test HAVING COUNT(*)>10;");
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 
 }
