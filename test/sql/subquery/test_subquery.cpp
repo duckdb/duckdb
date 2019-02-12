@@ -238,6 +238,15 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 	result = con.Query("SELECT i, (SELECT 42+i1.i) AS j FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 43, 44, 45}));
+	result = con.Query("SELECT i, (SELECT 42+i1.i FROM integers) AS j FROM integers i1 ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 43, 44, 45}));
+	// result = con.Query("SELECT i, (SELECT 42+i1.i FROM integers LIMIT 1) AS j FROM integers i1 ORDER BY i;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {Value(), 43, 44, 45}));
+	// result = con.Query("SELECT i, (SELECT 42+i1.i FROM integers LIMIT 0) AS j FROM integers i1 ORDER BY i;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value(), Value()}));
 	// nested correlated queries
 	// result = con.Query("SELECT i, (SELECT (SELECT 42+i1.i)+42+i1.i) AS j FROM integers i1 ORDER BY i;");
 	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));

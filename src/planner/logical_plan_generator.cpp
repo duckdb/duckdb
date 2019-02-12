@@ -297,7 +297,7 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 			return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(aggr_index, 0));
 		} else {
 			// in the correlated case, we push first a DUPLICATE ELIMINATED left outer join (as entries WITHOUT a join partner result in NULL)
-			auto delim_join = make_unique<LogicalJoin>(JoinType::LEFT);
+			auto delim_join = make_unique<LogicalJoin>(JoinType::SINGLE);
 			// the left side is the original plan
 			delim_join->AddChild(move(root));
 			delim_join->is_duplicate_eliminated = true;

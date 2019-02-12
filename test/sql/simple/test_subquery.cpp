@@ -42,21 +42,24 @@ TEST_CASE("Test subqueries", "[subqueries]") {
 	result = con.Query("SELECT CASE WHEN c>(SELECT sum(c)/count(*) FROM t1) "
 	                   "THEN a*2 ELSE b*10 END FROM t1");
 	REQUIRE(CHECK_COLUMN(result, 0, {1000, 214}));
+
 	// correlated subqueries
 	result = con.Query("SELECT a, (SELECT SUM(b) FROM test tsub WHERE "
 	                   "test.a=tsub.a) FROM test");
 	REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
 	REQUIRE(CHECK_COLUMN(result, 1, {22, 21, 22}));
 
-	result = con.Query("SELECT a, (SELECT CASE WHEN test.a=11 THEN 22 ELSE "
-	                   "NULL END) FROM test");
+	result = con.Query("SELECT a, (SELECT CASE WHEN test.a=11 THEN 22 ELSE NULL END) FROM test ORDER BY a");
 	REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
 	REQUIRE(CHECK_COLUMN(result, 1, {22, Value(), Value()}));
 
-	result = con.Query("SELECT a, (SELECT CASE WHEN test.a=11 THEN b ELSE NULL "
-	                   "END FROM test tsub) FROM test");
+	result = con.Query("SELECT a, (SELECT CASE WHEN test.a=11 THEN b ELSE NULL END FROM test tsub) FROM test ORDER BY a");
 	REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
 	REQUIRE(CHECK_COLUMN(result, 1, {22, Value(), Value()}));
+
+	// result = con.Query("SELECT a, (SELECT CASE WHEN test.a=11 THEN b ELSE NULL END FROM test tsub LIMIT 1) FROM test ORDER BY a");
+	// REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {22, Value(), Value()}));
 
 	result = con.Query("SELECT * from test where a=(SELECT MIN(a) FROM test t "
 	                   "WHERE t.b=test.b)");

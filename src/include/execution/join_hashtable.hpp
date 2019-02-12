@@ -62,10 +62,14 @@ public:
 		void NextLeftJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 		//! Next operator for the mark join
 		void NextMarkJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
+		//! Next operator for the single join
+		void NextSingleJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 
 		//! Scan the hashtable for matches of the specified keys, setting the found_match[] array to true or false for every tuple
 		void ScanKeyMatches(DataChunk &keys);
 		template <bool MATCH> void NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
+
+		size_t ScanInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 
 		void ResolvePredicates(DataChunk &keys, Vector &comparison_result);
 	};

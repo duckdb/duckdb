@@ -332,6 +332,7 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	case JoinType::SEMI:
 	case JoinType::ANTI:
 	case JoinType::LEFT:
+	case JoinType::SINGLE:
 	case JoinType::MARK:
 		// initialize all tuples with found_match to false
 		memset(ss->found_match, 0, sizeof(ss->found_match));
@@ -381,6 +382,9 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 		break;
 	case JoinType::LEFT:
 		NextLeftJoin(keys, left, result);
+		break;
+	case JoinType::SINGLE:
+		NextSingleJoin(keys, left, result);
 		break;
 	default:
 		throw Exception("Unhandled join type in JoinHashTable");
@@ -458,15 +462,8 @@ void ScanStructure::ResolvePredicates(DataChunk &keys, Vector &final_result) {
 	final_result.count = old_count;
 }
 
-void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
-	assert(result.column_count == left.column_count + ht.build_types.size());
-	if (pointers.count == 0) {
-		// no pointers left to chase
-		return;
-	}
-
+size_t ScanStructure::ScanInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	StaticVector<bool> comparison_result;
-
 	size_t result_count = 0;
 	do {
 		auto build_pointers = (uint8_t **)build_pointer_vector.data;
@@ -475,8 +472,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 		ResolvePredicates(keys, comparison_result);
 
 		auto ptrs = (uint8_t **)pointers.data;
-		// after doing all the comparisons we loop to find all the actual
-		// matches
+		// after doing all the comparisons we loop to find all the actual matches
 		result_count = 0;
 		VectorOperations::ExecType<bool>(comparison_result, [&](bool match, size_t index, size_t k) {
 			if (match) {
@@ -500,7 +496,17 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 		});
 		pointers.count = new_count;
 	} while (pointers.count > 0 && result_count == 0);
+	return result_count;
+}
 
+void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
+	assert(result.column_count == left.column_count + ht.build_types.size());
+	if (pointers.count == 0) {
+		// no pointers left to chase
+		return;
+	}
+
+	size_t result_count = ScanInnerJoin(keys, left, result);
 	if (result_count > 0) {
 		// matches were found
 		// construct the result
@@ -681,4 +687,71 @@ void ScanStructure::NextLeftJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 		}
 		finished = true;
 	}
+}
+
+void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
+	// single join
+	// this join is similar to the semi join except that
+	// (1) we actually return data from the RHS and
+	// (2) we return NULL for that data if there is no match
+	StaticVector<bool> comparison_result;
+
+	auto build_pointers = (uint8_t **)build_pointer_vector.data;
+	size_t result_count = 0;
+	sel_t result_sel_vector[STANDARD_VECTOR_SIZE];
+	while(pointers.count > 0) {
+		// resolve the predicates for all the pointers
+		ResolvePredicates(keys, comparison_result);
+		
+		auto ptrs = (uint8_t **)pointers.data;
+		// after doing all the comparisons we loop to find all the actual matches
+		VectorOperations::ExecType<bool>(comparison_result, [&](bool match, size_t index, size_t k) {
+			if (match) {
+				// found a match for this index
+				// set the build_pointers to this position
+				found_match[index] = true;
+				build_pointers[result_count] = ptrs[index];
+				result_sel_vector[result_count] = index;
+				result_count++;
+			}
+		});
+
+		// finally we chase the pointers for the next iteration
+		size_t new_count = 0;
+		VectorOperations::Exec(pointers, [&](size_t index, size_t k) {
+			auto prev_pointer = (uint8_t **)(ptrs[index] + ht.build_size);
+			ptrs[index] = *prev_pointer;
+			if (ptrs[index] && !found_match[index]) {
+				// if there is a next pointer, and we have not found a match yet, we keep this entry
+				pointers.sel_vector[new_count++] = index;
+			}
+		});
+		pointers.count = new_count;
+	}
+
+	// now we construct the final result
+	build_pointer_vector.count = result_count;
+	// reference the columns of the left side from the result
+	assert(left.column_count > 0);
+	for (size_t i = 0; i < left.column_count; i++) {
+		result.data[i].Reference(left.data[i]);
+	}
+	// now fetch the data from the RHS
+	for (size_t i = 0; i < ht.build_types.size(); i++) {
+		auto &vector = result.data[left.column_count + i];
+		// set NULL entries for every entry that was not found
+		vector.nullmask.set();
+		for(size_t j = 0; j < result_count; j++) {
+			vector.nullmask[result_sel_vector[j]] = false;
+		}
+		// fetch the data from the HT for tuples that found a match
+		vector.sel_vector = result_sel_vector;
+		vector.count = result_count;
+		ht.build_serializer.DeserializeColumn(build_pointer_vector, i, vector);
+		// now we fill in NULL values in the remaining entries 
+		vector.count = result.size();
+		vector.sel_vector = result.sel_vector;
+	}
+	// like the SEMI, ANTI and MARK join types, the SINGLE join only ever does one pass over the HT per input chunk
+	finished = true;
 }
