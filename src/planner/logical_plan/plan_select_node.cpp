@@ -44,6 +44,9 @@ void LogicalPlanGenerator::CreatePlan(SelectNode &statement) {
 	}
 
 	if (statement.HasHaving()) {
+		if (!statement.HasAggregation()) {
+			throw ParserException("a GROUP BY clause is required before HAVING");
+		}
 		VisitExpression(&statement.groupby.having);
 		auto having = make_unique<LogicalFilter>(move(statement.groupby.having));
 

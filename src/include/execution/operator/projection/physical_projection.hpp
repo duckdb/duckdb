@@ -14,8 +14,11 @@ namespace duckdb {
 
 class PhysicalProjection : public PhysicalOperator {
 public:
-	PhysicalProjection(LogicalOperator &op, vector<unique_ptr<Expression>> select_list)
-	    : PhysicalOperator(PhysicalOperatorType::PROJECTION, op.types), select_list(move(select_list)) {
+	PhysicalProjection(vector<TypeId> &types, vector<unique_ptr<Expression>> select_list)
+	    : PhysicalOperator(PhysicalOperatorType::PROJECTION, types), select_list(move(select_list)) {
+	}
+	PhysicalProjection(LogicalOperator &op, vector<unique_ptr<Expression>> select_list) : 
+		PhysicalProjection(op.types, move(select_list)) {
 	}
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;

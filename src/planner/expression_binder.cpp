@@ -32,6 +32,21 @@ BindResult ExpressionBinder::BindColumnRefExpression(unique_ptr<Expression> expr
 	return binder.bind_context.BindColumn(move(expr), depth);
 }
 
+BindResult ExpressionBinder::BindSubqueries(unique_ptr<Expression> expr, uint32_t depth) {
+	string error;
+	expr->EnumerateChildren([&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
+		auto result = BindSubqueries(move(child), depth);
+		if (result.HasError()) {
+			error = result.error;
+		}
+		return move(result.expression);
+	});
+	if (expr->GetExpressionClass() == ExpressionClass::SUBQUERY) {
+		return BindSubqueryExpression(move(expr), depth);
+	}
+	return BindResult(move(expr), error);
+}
+
 BindResult ExpressionBinder::BindFunctionExpression(unique_ptr<Expression> expr, uint32_t depth) {
 	assert(expr->GetExpressionClass() == ExpressionClass::FUNCTION);
 	// bind the children of the function expression
@@ -50,11 +65,7 @@ BindResult ExpressionBinder::BindFunctionExpression(unique_ptr<Expression> expr,
 BindResult ExpressionBinder::BindSubqueryExpression(unique_ptr<Expression> expr, uint32_t depth) {
 	assert(expr->GetExpressionClass() == ExpressionClass::SUBQUERY);
 	// first bind the children of the subquery, if any
-	auto bind_result = BindChildren(move(expr), depth);
-	if (bind_result.HasError()) {
-		return bind_result;
-	}
-	auto &subquery = (SubqueryExpression&) *bind_result.expression;
+	auto &subquery = (SubqueryExpression&) *expr;
 	// bind columns in the subquery
 	auto subquery_binder = make_unique<Binder>(context, &binder);
 	// the subquery may refer to CTEs from the parent query
@@ -71,7 +82,7 @@ BindResult ExpressionBinder::BindSubqueryExpression(unique_ptr<Expression> expr,
 	auto result = make_unique<BoundSubqueryExpression>();
 	result->return_type = subquery.subquery_type == SubqueryType::SCALAR ? select_list[0]->return_type : subquery.return_type;
 	result->binder = move(subquery_binder);
-	result->subquery = move(bind_result.expression);
+	result->subquery = move(expr);
 	result->alias = subquery.alias;
 	return BindResult(move(result));
 }
@@ -108,9 +119,14 @@ static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr) {
 	});
 }
 
+
 BindResult ExpressionBinder::TryBindAndResolveType(unique_ptr<Expression> expr) {
 	binder.PushExpressionBinder(this);
-	auto result = BindExpression(move(expr), 0);
+	auto result = BindSubqueries(move(expr), 0);
+	if (result.HasError()) {
+		return result;
+	}
+	result = BindExpression(move(result.expression), 0);
 	binder.PopExpressionBinder();
 	if (result.HasError()) {
 		// try to bind in one of the outer queries, if the binding error occurred in a subquery

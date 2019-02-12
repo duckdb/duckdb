@@ -38,13 +38,15 @@ bool ColumnRefExpression::Equals(const Expression *other_) const {
 		return false;
 	}
 	auto other = (ColumnRefExpression *)other_;
+	if (table_name.empty() || other->table_name.empty()) {
+		return column_name == other->column_name;
+	}
 	return column_name == other->column_name && table_name == other->table_name;
 }
 
 uint64_t ColumnRefExpression::Hash() const {
 	uint64_t result = Expression::Hash();
 	result = CombineHash(result, duckdb::Hash<const char *>(column_name.c_str()));
-	result = CombineHash(result, duckdb::Hash<const char *>(table_name.c_str()));
 	return result;
 }
 

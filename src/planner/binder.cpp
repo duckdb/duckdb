@@ -172,12 +172,12 @@ size_t Binder::GenerateTableIndex() {
 }
 
 void Binder::PushExpressionBinder(ExpressionBinder *binder) {
-	active_binders.push_back(binder);
+	GetActiveBinders().push_back(binder);
 }
 
 void Binder::PopExpressionBinder() {
-	assert(active_binders.size() > 0);
-	active_binders.pop_back();
+	assert(GetActiveBinders().size() > 0);
+	GetActiveBinders().pop_back();
 }
 
 vector<ExpressionBinder*>& Binder::GetActiveBinders() {

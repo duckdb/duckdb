@@ -204,6 +204,10 @@ void ColumnBindingResolver::Visit(LogicalJoin &op) {
 	for (auto &cond : op.conditions) {
 		VisitExpression(&cond.left);
 	}
+	// visit the duplicate eliminated columns on the LHS, if any
+	for (auto &op : op.duplicate_eliminated_columns) {
+		VisitExpression(&op);
+	}
 	// store the added tables
 	auto left_tables = bound_tables;
 	bound_tables.clear();

@@ -311,6 +311,7 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 				auto &col = correlated_columns[i];
 				flatten.correlated_map[col.binding] = i;
 				flatten.delim_types.push_back(col.type);
+				delim_join->duplicate_eliminated_columns.push_back(make_unique<BoundColumnRefExpression>("", col.type, col.binding));
 			}
 
 			// now we have a dependent join between "delim_scan" and the subquery plan

@@ -58,6 +58,27 @@ TEST_CASE("Test HAVING clause", "[having]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {21, 22}));
 	REQUIRE(CHECK_COLUMN(result, 1, {12, 24}));
 	REQUIRE(result->column_count() == 2);
+
+	// use outer aggregation in inner subquery
+	result = con.Query(
+	    "SELECT b, SUM(a) FROM test GROUP BY b HAVING SUM(a)*2=(SELECT SUM(a)+SUM(t.a) FROM test t WHERE test.b=t.b) ORDER BY b");
+	REQUIRE(CHECK_COLUMN(result, 0, {21, 22}));
+	REQUIRE(CHECK_COLUMN(result, 1, {12, 24}));
+	REQUIRE(result->column_count() == 2);
+
+	// use outer aggregation that hasn't been used yet in subquery
+	result = con.Query(
+	    "SELECT b, SUM(a) FROM test GROUP BY b HAVING SUM(a)*2+2=(SELECT SUM(a)+SUM(t.a)+COUNT(t.a) FROM test t WHERE test.b=t.b) ORDER BY b");
+	REQUIRE(CHECK_COLUMN(result, 0, {22}));
+	REQUIRE(CHECK_COLUMN(result, 1, {24}));
+	REQUIRE(result->column_count() == 2);
+
+	// ORDER BY subquery
+	result = con.Query(
+	    "SELECT b, SUM(a) FROM test GROUP BY b ORDER BY (SELECT SUM(a) FROM test t WHERE test.b=t.b) DESC;");
+	REQUIRE(CHECK_COLUMN(result, 0, {22, 21}));
+	REQUIRE(CHECK_COLUMN(result, 1, {24, 12}));
+	REQUIRE(result->column_count() == 2);
 }
 
 TEST_CASE("Test HAVING clause without GROUP BY", "[having]") {

@@ -17,10 +17,6 @@ BindResult GroupBinder::BindExpression(unique_ptr<Expression> expr, uint32_t dep
 			return BindResult(move(expr), "GROUP clause cannot contain window functions!");
 		case ExpressionClass::COLUMN_REF:
 			return BindColumnRefExpression(move(expr), depth);
-		case ExpressionClass::FUNCTION:
-			return BindFunctionExpression(move(expr), depth);
-		case ExpressionClass::SUBQUERY:
-			return BindSubqueryExpression(move(expr), depth);
 		default:
 			return BindChildren(move(expr), depth);
 	}

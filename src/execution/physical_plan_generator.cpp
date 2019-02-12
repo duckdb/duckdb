@@ -427,9 +427,16 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 		// we create a ChunkCollectionScan that pulls from the delim_join LHS
 		auto chunk_scan = make_unique<PhysicalChunkScan>(delim_join->children[0]->GetTypes());
 		chunk_scan->collection = &delim_join->lhs_data;
-		// FIXME: now we need to create a projection that projects only the duplicate eliminated columns
+		// now we need to create a projection that projects only the duplicate eliminated columns
+		vector<TypeId> delim_types;
+		for(auto &delim_expr : op.duplicate_eliminated_columns) {
+			delim_types.push_back(delim_expr->return_type);
+		}
+		assert(op.duplicate_eliminated_columns.size() > 0);
+		auto projection = make_unique<PhysicalProjection>(delim_types, move(op.duplicate_eliminated_columns));
+		projection->children.push_back(move(chunk_scan));
 		// finally create the distinct clause on top of the projection
-		delim_join->distinct = CreateDistinct(move(chunk_scan));
+		delim_join->distinct = CreateDistinct(move(projection));
 		plan = move(delim_join);
 	}
 }

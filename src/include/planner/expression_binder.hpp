@@ -40,7 +40,6 @@ public:
 
 	BindResult BindColumnRefExpression(unique_ptr<Expression> expr, uint32_t depth);
 	BindResult BindFunctionExpression(unique_ptr<Expression> expr, uint32_t depth);
-	BindResult BindSubqueryExpression(unique_ptr<Expression> expr, uint32_t depth);
 
 	BindResult BindChildren(unique_ptr<Expression> expr, uint32_t depth);
 
@@ -51,6 +50,10 @@ protected:
 	Binder &binder;
 	ClientContext &context;
 	SelectNode &node;
+private:
+	BindResult BindSubqueries(unique_ptr<Expression> expr, uint32_t depth);
+
+	BindResult BindSubqueryExpression(unique_ptr<Expression> expr, uint32_t depth);
 };
 
 }

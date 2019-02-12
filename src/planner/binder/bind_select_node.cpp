@@ -23,10 +23,6 @@ void Binder::Bind(SelectNode &statement) {
 	assert(!encountered_select_node);
 	encountered_select_node = true;
 #endif
-	if (statement.HasHaving() && !statement.HasAggregation()) {
-		throw ParserException("a GROUP BY clause is required before HAVING");
-	}
-
 	// first visit the FROM table statement
 	if (statement.from_table) {
 		AcceptChild(&statement.from_table);
@@ -48,10 +44,8 @@ void Binder::Bind(SelectNode &statement) {
 	auto &binding = statement.binding;
 	binding.column_count = statement.select_list.size();
 	binding.projection_index = GenerateTableIndex();
-	if (statement.HasAggregation()) {
-		binding.group_index = GenerateTableIndex();
-		binding.aggregate_index = GenerateTableIndex();
-	}
+	binding.group_index = GenerateTableIndex();
+	binding.aggregate_index = GenerateTableIndex();
 	if (statement.HasWindow()) {
 		binding.window_index = GenerateTableIndex();
 	}

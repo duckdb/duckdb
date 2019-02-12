@@ -19,8 +19,6 @@ BindResult WhereBinder::BindExpression(unique_ptr<Expression> expr, uint32_t dep
 			return BindColumnRefExpression(move(expr), depth);
 		case ExpressionClass::FUNCTION:
 			return BindFunctionExpression(move(expr), depth);
-		case ExpressionClass::SUBQUERY:
-			return BindSubqueryExpression(move(expr), depth);
 		default:
 			return BindChildren(move(expr), depth);
 	}

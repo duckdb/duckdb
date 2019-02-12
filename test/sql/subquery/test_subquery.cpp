@@ -218,6 +218,9 @@ TEST_CASE("Test simple uncorrelated subqueries", "[subquery]") {
 	result = con.Query("SELECT i % 2 AS k, SUM(i) FROM integers GROUP BY k HAVING SUM(i) > (SELECT MAX(i) FROM integers)");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {4}));
+
+	result = con.Query("SELECT i FROM integers WHERE NOT(i IN (SELECT i FROM integers WHERE i>1));");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
 
 TEST_CASE("Test simple correlated subqueries", "[subquery]") {
@@ -235,6 +238,10 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 	result = con.Query("SELECT i, (SELECT 42+i1.i) AS j FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 43, 44, 45}));
+	// nested correlated queries
+	// result = con.Query("SELECT i, (SELECT (SELECT 42+i1.i)+42+i1.i) AS j FROM integers i1 ORDER BY i;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {Value(), 86, 88, 90}));
 	// correlated filter without FROM clause
 	result = con.Query("SELECT i, (SELECT 42 WHERE i1.i>2) AS j FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
@@ -288,13 +295,41 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {4}));
 
-	return;
+	// aggregation of both entries inside subquery
+	result = con.Query("SELECT (SELECT SUM(i1.i*i) FROM integers) FROM integers i1 ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 6, 12, 18}));
+	result = con.Query("SELECT i, (SELECT SUM(i1.i)) AS k, (SELECT SUM(i1.i)) AS l FROM integers i1 GROUP BY i ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value(), 1, 2, 3}));
+	// refer aggregation inside subquery
+	result = con.Query("SELECT i, (SELECT SUM(i1.i)*SUM(i) FROM integers) AS k FROM integers i1 GROUP BY i ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 6, 12, 18}));
+	// refer to GROUP BY inside subquery
+	result = con.Query("SELECT i, (SELECT i1.i*SUM(i) FROM integers) AS k FROM integers i1 GROUP BY i ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 6, 12, 18}));
+	// perform SUM on subquery
+	result = con.Query("SELECT i, SUM((SELECT SUM(i)*i1.i FROM integers)) AS k FROM integers i1 GROUP BY i ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 6, 12, 18}));
+	// aggregate subqueries cannot be nested
+	REQUIRE_FAIL(con.Query("SELECT i, SUM((SELECT SUM(i)*SUM(i1.i) FROM integers)) AS k FROM integers i1 GROUP BY i ORDER BY i;"));
+
+	// aggregation but ONLY inside subquery results in implicit aggregation
+	result = con.Query("SELECT (SELECT SUM(i1.i)) FROM integers i1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {6}));
+	result = con.Query("SELECT i, (SELECT SUM(i1.i)) FROM integers i1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {6}));
+	
 	// aggregate that uses correlated column in aggregation
-	// this one is a bit strange, in PostgreSQL this only works with a GROUP BY on the OUTER query (possibly the MIN(i1.i) is pulled into the main query)
-	// TODO: have to figure out what to do here
 	result = con.Query("SELECT i, (SELECT MIN(i1.i) FROM integers GROUP BY i HAVING i=i1.i) AS j FROM integers i1 GROUP BY i ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3}));
+
+	return;
 	// join with a correlated expression in the join condition
 	result = con.Query("SELECT i, (SELECT s1.i FROM integers s1 INNER JOIN integers s2 ON s1.i=s2.i AND s1.i=4-i1.i) AS j FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
@@ -311,6 +346,17 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 	result = con.Query("SELECT i, (SELECT i FROM integers WHERE i IS NOT NULL EXCEPT SELECT i FROM integers WHERE i<>i1.i) AS j FROM integers i1 WHERE i IS NOT NULL ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 3}));
+
+	// use scalar subquery as argument to ALL/ANY
+	result = con.Query("SELECT i, (SELECT MIN(i) FROM integers WHERE i=i1.i) >= ALL(SELECT i FROM integers WHERE i IS NOT NULL) FROM integers i1 ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), false, false, true}));
+	result = con.Query("SELECT i, (SELECT MIN(i) FROM integers WHERE i<>i1.i) > ANY(SELECT i FROM integers WHERE i IS NOT NULL) FROM integers i1 ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), true, false, false}));
+	result = con.Query("SELECT i, NOT((SELECT MIN(i) FROM integers WHERE i<>i1.i) > ANY(SELECT i FROM integers WHERE i IS NOT NULL)) FROM integers i1 ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), false, true, true}));
 }
 
 TEST_CASE("Test subqueries from the paper 'Unnesting Arbitrary Subqueries'", "[subquery]") {

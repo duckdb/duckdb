@@ -22,6 +22,8 @@ BindResult HavingBinder::BindExpression(unique_ptr<Expression> expr, uint32_t de
 		return BindResult(make_unique<BoundColumnRefExpression>(*expr, node.groupby.groups[entry->second]->return_type, ColumnBinding(node.binding.group_index, entry->second), depth));
 	}
 	switch(expr->GetExpressionClass()) {
+		case ExpressionClass::FUNCTION:
+			return BindFunctionExpression(move(expr), depth);
 		case ExpressionClass::WINDOW:
 			return BindResult(move(expr), "HAVING clause cannot contain window functions!");
 		case ExpressionClass::AGGREGATE: {
@@ -46,16 +48,20 @@ BindResult HavingBinder::BindExpression(unique_ptr<Expression> expr, uint32_t de
 			return BindResult(move(colref));
 		}
 		case ExpressionClass::COLUMN_REF:{
-			// column reference that is not part of a group
-			// wrap the column inside a FIRST aggregate
-			auto first_aggregate = make_unique<AggregateExpression>(ExpressionType::AGGREGATE_FIRST, move(expr));
+			// FIXME: duplocate of equivalent code in SelectBinder::
+			// there is an aggregation and we are NOT inside the aggregation
+			// CONTROVERSIAL: in PostgreSQL this would be an error, but SQLite accepts it
+			// we try to bind the expression by first wrapping the column inside a FIRST aggregate
+			auto first_aggregate = make_unique<AggregateExpression>(ExpressionType::AGGREGATE_FIRST, expr->Copy());
 			// now bind the FIRST aggregate expression
-			return BindExpression(move(first_aggregate), depth);
+			auto result = BindExpression(move(first_aggregate), depth);
+			if (!result.HasError()) {
+				// succeeded, return the result
+				return result;
+			}
+			// otherwise we move the original expression back
+			return BindResult(move(expr), result.error);
 		}
-		case ExpressionClass::FUNCTION:
-			return BindFunctionExpression(move(expr), depth);
-		case ExpressionClass::SUBQUERY:
-			return BindSubqueryExpression(move(expr), depth);
 		default:
 			return BindChildren(move(expr), depth);
 	}
