@@ -4,8 +4,8 @@ using namespace duckdb;
 using namespace std;
 
 
-WhereBinder::WhereBinder(Binder &binder, ClientContext &context, SelectNode& node) : 
-	SelectNodeBinder(binder, context, node) {
+WhereBinder::WhereBinder(Binder &binder, ClientContext &context) : 
+	ExpressionBinder(binder, context) {
 	
 }
 

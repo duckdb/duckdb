@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/expression_binder/where_binder.hpp
+// planner/expression_binder/update_binder.hpp
 //
 //	
 //===----------------------------------------------------------------------===//
@@ -12,10 +12,10 @@
 
 namespace duckdb {
 	
-//! The WHERE binder is responsible for binding an expression within the WHERE clause of a SQL statement
-class WhereBinder : public ExpressionBinder {
+//! The UPDATE binder is responsible for binding an expression within an UPDATE statement
+class UpdateBinder : public ExpressionBinder {
 public:
-	WhereBinder(Binder &binder, ClientContext &context);
+	UpdateBinder(Binder &binder, ClientContext &context);
 
 	BindResult BindExpression(unique_ptr<Expression> expr, uint32_t depth) override;
 };

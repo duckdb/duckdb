@@ -53,7 +53,7 @@ void Binder::Bind(SelectNode &statement) {
 	// first visit the WHERE clause
 	// the WHERE clause happens before the GROUP BY, PROJECTION or HAVING clauses
 	if (statement.where_clause) {
-		WhereBinder where_binder(*this, context, statement);
+		WhereBinder where_binder(*this, context);
 		where_binder.BindAndResolveType(&statement.where_clause);
 	}
 

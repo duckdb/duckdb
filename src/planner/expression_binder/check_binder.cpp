@@ -19,6 +19,8 @@ BindResult CheckBinder::BindExpression(unique_ptr<Expression> expr, uint32_t dep
 			return BindResult(move(expr), "cannot use subquery in check constraint");
 		case ExpressionClass::COLUMN_REF:
 			return BindColumnRefExpression(move(expr), depth);
+		case ExpressionClass::FUNCTION:
+			return BindFunctionExpression(move(expr), depth);
 		default:
 			return BindChildren(move(expr), depth);
 	}
