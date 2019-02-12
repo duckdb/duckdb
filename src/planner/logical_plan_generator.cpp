@@ -454,8 +454,7 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
 unique_ptr<TableRef> LogicalPlanGenerator::Visit(SubqueryRef &expr) {
 	// generate the logical plan for the subquery
 	// this happens separately from the current LogicalPlan generation
-	Binder subquery_binder(context);
-	LogicalPlanGenerator generator(subquery_binder, context);
+	LogicalPlanGenerator generator(*expr.binder, context);
 
 	size_t column_count = expr.subquery->GetSelectList().size();
 	generator.CreatePlan(*expr.subquery);

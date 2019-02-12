@@ -8,6 +8,8 @@
 #include "parser/statement/list.hpp"
 #include "parser/tableref/list.hpp"
 
+#include "planner/expression_binder/where_binder.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -112,8 +114,8 @@ unique_ptr<TableRef> Binder::Visit(CrossProductRef &expr) {
 unique_ptr<TableRef> Binder::Visit(JoinRef &expr) {
 	AcceptChild(&expr.left);
 	AcceptChild(&expr.right);
-	VisitExpression(&expr.condition);
-	expr.condition->ResolveType();
+	WhereBinder binder(*this, context);
+	binder.BindAndResolveType(&expr.condition);
 	return nullptr;
 }
 
