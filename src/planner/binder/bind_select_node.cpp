@@ -90,6 +90,7 @@ void Binder::Bind(SelectNode &statement) {
 	
 	vector<unique_ptr<Expression>> unbound_groups;
 	expression_map_t<uint32_t> group_map;
+	unordered_map<string, uint32_t> group_alias_map;
 	if (statement.HasGroup()) {
 		unordered_set<string> used_aliases;
 		// the statement has a GROUP BY clause
@@ -137,6 +138,7 @@ void Binder::Bind(SelectNode &statement) {
 					statement.select_list[entry->second] = make_unique<BoundColumnRefExpression>(*statement.groupby.groups[i], statement.groupby.groups[i]->return_type, ColumnBinding(binding.group_index, i), 0);
 					// insert into the set of used aliases
 					used_aliases.insert(colref.column_name);
+					group_alias_map[colref.column_name] = i;
 				}
 			} else {
 				statement.groupby.groups[i] = move(result.expression);
@@ -148,12 +150,12 @@ void Binder::Bind(SelectNode &statement) {
 
 	// bind the HAVING clause, if any
 	if (statement.HasHaving()) {
-		HavingBinder having_binder(*this, context, statement, group_map);
+		HavingBinder having_binder(*this, context, statement, group_map, group_alias_map);
 		having_binder.BindAndResolveType(&statement.groupby.having);
 	}
 
 	// after that, we bind to the SELECT list
-	SelectBinder select_binder(*this, context, statement, group_map);
+	SelectBinder select_binder(*this, context, statement, group_map, group_alias_map);
 	for(size_t i = 0; i < statement.select_list.size(); i++) {
 		select_binder.BindAndResolveType(&statement.select_list[i]);
 		statement.types.push_back(statement.select_list[i]->return_type);

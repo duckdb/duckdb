@@ -9,8 +9,8 @@
 using namespace duckdb;
 using namespace std;
 
-SelectBinder::SelectBinder(Binder &binder, ClientContext &context, SelectNode& node, expression_map_t<uint32_t>& group_map) : 
-	SelectNodeBinder(binder, context, node), inside_window(false), group_map(group_map), bound_columns(false) {
+SelectBinder::SelectBinder(Binder &binder, ClientContext &context, SelectNode& node, expression_map_t<uint32_t>& group_map, unordered_map<string, uint32_t>& group_alias_map) : 
+	SelectNodeBinder(binder, context, node), inside_window(false), group_map(group_map), group_alias_map(group_alias_map) {
 
 }
 
@@ -79,12 +79,32 @@ BindResult SelectBinder::BindAggregate(unique_ptr<Expression> expr, uint32_t dep
 
 
 unique_ptr<Expression> SelectBinder::TryBindGroup(Expression* expr, uint32_t depth) {
-	auto entry = group_map.find(expr);
-	if (entry == group_map.end()) {
-		// it does not, return nullptr
+	uint32_t group_entry = (uint32_t) -1;
+	bool found_group = false;
+	// first check the group alias map, if expr is a ColumnRefExpression
+	if (expr->type == ExpressionType::COLUMN_REF) {
+		auto &colref = (ColumnRefExpression&) *expr;
+		if (colref.table_name.empty()) {
+			auto alias_entry = group_alias_map.find(colref.column_name);
+			if (alias_entry != group_alias_map.end()) {
+				// found entry!
+				group_entry = alias_entry->second;
+				found_group = true;
+			}
+		}
+	}
+	// now check the list of group columns for a match
+	if (!found_group) {
+		auto entry = group_map.find(expr);
+		if (entry != group_map.end()) {
+			group_entry = entry->second;
+			found_group = true;
+		}
+	}
+	if (!found_group) {
 		return nullptr;
 	}
-	return make_unique<BoundColumnRefExpression>(*expr, node.groupby.groups[entry->second]->return_type, ColumnBinding(node.binding.group_index, entry->second), depth);
+	return make_unique<BoundColumnRefExpression>(*expr, node.groupby.groups[group_entry]->return_type, ColumnBinding(node.binding.group_index, group_entry), depth);
 }
 
 BindResult SelectBinder::BindExpression(unique_ptr<Expression> expr, uint32_t depth) {
