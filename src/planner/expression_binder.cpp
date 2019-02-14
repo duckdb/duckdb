@@ -64,7 +64,11 @@ BindResult ExpressionBinder::BindFunctionExpression(unique_ptr<Expression> expr,
 BindResult ExpressionBinder::BindSubqueryExpression(unique_ptr<Expression> expr, uint32_t depth) {
 	assert(expr->GetExpressionClass() == ExpressionClass::SUBQUERY);
 	// first bind the children of the subquery, if any
-	auto &subquery = (SubqueryExpression&) *expr;
+	auto bind_result = BindChildren(move(expr), depth);
+	if (bind_result.HasError()) {
+		return bind_result;
+	}
+	auto &subquery = (SubqueryExpression&) *bind_result.expression;
 	// bind columns in the subquery
 	auto subquery_binder = make_unique<Binder>(context, &binder);
 	// the subquery may refer to CTEs from the parent query
@@ -81,7 +85,7 @@ BindResult ExpressionBinder::BindSubqueryExpression(unique_ptr<Expression> expr,
 	auto result = make_unique<BoundSubqueryExpression>();
 	result->return_type = subquery.subquery_type == SubqueryType::SCALAR ? select_list[0]->return_type : subquery.return_type;
 	result->binder = move(subquery_binder);
-	result->subquery = move(expr);
+	result->subquery = move(bind_result.expression);
 	result->alias = subquery.alias;
 	return BindResult(move(result));
 }

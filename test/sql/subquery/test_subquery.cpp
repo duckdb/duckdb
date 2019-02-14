@@ -108,7 +108,7 @@ TEST_CASE("Test simple uncorrelated subqueries", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value(), Value()}));
 	
 	// add aggregations after the subquery
-	result = con.Query("SELECT SUM(i) FROM integers WHERE 1 IN (SELECT * FROM integers) ORDER BY i");
+	result = con.Query("SELECT SUM(i) FROM integers WHERE 1 IN (SELECT * FROM integers)");
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
 
 	// uncorrelated ANY
@@ -396,6 +396,23 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 	result = con.Query("SELECT i AS j, (SELECT MIN(i1.i) FROM integers GROUP BY i HAVING i=j) FROM integers i1 GROUP BY j ORDER BY j;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3}));
+
+	// ORDER BY correlated subquery
+	result = con.Query("SELECT i, SUM(i1.i) FROM integers i1 GROUP BY i ORDER BY (SELECT SUM(i1.i) FROM integers);");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3}));
+
+	// GROUP BY correlated subquery
+	result = con.Query("SELECT (SELECT i+i1.i FROM integers WHERE i=1) AS k, SUM(i) AS j FROM integers i1 GROUP BY k ORDER BY 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 2, 3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3}));
+
+	// correlated subquery in WHERE
+	result = con.Query("SELECT SUM(i) FROM integers i1 WHERE i>(SELECT (i+i1.i)/2 FROM integers WHERE i=1);");
+	REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	// correlated aggregate in WHERE
+	result = con.Query("SELECT SUM(i) FROM integers i1 WHERE i>(SELECT (SUM(i)+i1.i)/2 FROM integers WHERE i=1);");
+	REQUIRE(CHECK_COLUMN(result, 0, {5}));
 
 	return;
 	// join with a correlated expression in the join condition
