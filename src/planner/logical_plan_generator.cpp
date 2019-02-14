@@ -205,6 +205,8 @@ struct FlattenDependentJoins {
 			}
 			case LogicalOperatorType::ORDER_BY:
 				throw ParserException("ORDER BY not supported in correlated subquery");
+			case LogicalOperatorType::WINDOW:
+				throw ParserException("WINDOW not supported in correlated subquery");
 			default:
 				throw NotImplementedException("Logical operator type for dependent join");
 		}

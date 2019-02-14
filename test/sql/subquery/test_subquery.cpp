@@ -414,6 +414,11 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 	result = con.Query("SELECT SUM(i) FROM integers i1 WHERE i>(SELECT (SUM(i)+i1.i)/2 FROM integers WHERE i=1);");
 	REQUIRE(CHECK_COLUMN(result, 0, {5}));
 
+	// correlated columns in window functions not supported
+	REQUIRE_FAIL(con.Query("SELECT i, (SELECT row_number() OVER (ORDER BY i)) FROM integers;"));
+	// window function in correlated subquery not supported either
+	REQUIRE_FAIL(con.Query("SELECT i, (SELECT row_number() OVER (ORDER BY i) FROM integers WHERE i>i1.i LIMIT 1) FROM integers i1 ORDER BY i;"));
+
 	return;
 	// join with a correlated expression in the join condition
 	result = con.Query("SELECT i, (SELECT s1.i FROM integers s1 INNER JOIN integers s2 ON s1.i=s2.i AND s1.i=4-i1.i) AS j FROM integers i1 ORDER BY i;");
