@@ -28,6 +28,10 @@ void Binder::Bind(SelectNode &statement) {
 		AcceptChild(&statement.from_table);
 	}
 
+	if (statement.HasHaving() && !statement.HasGroup()) {
+		throw ParserException("a GROUP BY clause is required before HAVING");
+	}
+
 	// visit the select list and expand any "*" statements
 	vector<unique_ptr<Expression>> new_select_list;
 	for (auto &select_element : statement.select_list) {
@@ -46,9 +50,7 @@ void Binder::Bind(SelectNode &statement) {
 	binding.projection_index = GenerateTableIndex();
 	binding.group_index = GenerateTableIndex();
 	binding.aggregate_index = GenerateTableIndex();
-	if (statement.HasWindow()) {
-		binding.window_index = GenerateTableIndex();
-	}
+	binding.window_index = GenerateTableIndex();
 
 	// first visit the WHERE clause
 	// the WHERE clause happens before the GROUP BY, PROJECTION or HAVING clauses
@@ -156,9 +158,21 @@ void Binder::Bind(SelectNode &statement) {
 		select_binder.BindAndResolveType(&statement.select_list[i]);
 		statement.types.push_back(statement.select_list[i]->return_type);
 	}
-
-	if (statement.HasHaving() && !statement.HasAggregation()) {
-		throw ParserException("a GROUP BY clause is required before HAVING");
+	// in the normal select binder, we bind columns as if there is no aggregation
+	// i.e. in the query [SELECT i, SUM(i) FROM integers;] the "i" will be bound as a normal column
+	// since we have an aggregation, we need to either (1) throw an error, or (2) wrap the column in a FIRST() aggregate
+	// we choose the latter one [CONTROVERSIAL: this is the SQLite behavior]
+	if (statement.HasAggregation()) {
+		for(size_t i = 0; i < select_binder.bound_columns.size(); i++) {
+			// wrap in a FIRST aggregate
+			auto bound_column = select_binder.bound_columns[i];
+			auto first_aggregate = make_unique<AggregateExpression>(ExpressionType::AGGREGATE_FIRST, bound_column->Copy());
+			first_aggregate->ResolveType();
+			// change the binding of the original bound column to point to the aggregate
+			bound_column->binding = ColumnBinding(binding.aggregate_index, binding.aggregates.size());
+			// add the FIRST aggregate to the set of aggregates
+			binding.aggregates.push_back(move(first_aggregate));
+		}	
 	}
 
 	// finally resolve the types of the ORDER BY clause

@@ -41,10 +41,6 @@ public:
 
 	//! The following information is only gathered after binding the SelectNode
 	struct {
-		//! Whether or not the statement has an aggregation
-		bool has_aggregation;
-		//! Whether or not the statement has a WINDOW function
-		bool has_window;
 		//! The amount of columns in the final result
 		size_t column_count;
 		//! Index used by the LogicalProjection

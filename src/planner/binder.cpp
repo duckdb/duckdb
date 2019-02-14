@@ -166,8 +166,20 @@ void Binder::PushExpressionBinder(ExpressionBinder *binder) {
 }
 
 void Binder::PopExpressionBinder() {
-	assert(GetActiveBinders().size() > 0);
+	assert(HasActiveBinder());
 	GetActiveBinders().pop_back();
+}
+
+void Binder::SetActiveBinder(ExpressionBinder *binder) {
+	GetActiveBinders().back() = binder;
+}
+
+ExpressionBinder *Binder::GetActiveBinder() {
+	return GetActiveBinders().back();
+}
+
+bool Binder::HasActiveBinder() {
+	return GetActiveBinders().size() > 0;
 }
 
 vector<ExpressionBinder*>& Binder::GetActiveBinders() {

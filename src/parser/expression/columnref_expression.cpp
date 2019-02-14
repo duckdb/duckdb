@@ -38,9 +38,6 @@ bool ColumnRefExpression::Equals(const Expression *other_) const {
 		return false;
 	}
 	auto other = (ColumnRefExpression *)other_;
-	if (table_name.empty() || other->table_name.empty()) {
-		return column_name == other->column_name;
-	}
 	return column_name == other->column_name && table_name == other->table_name;
 }
 

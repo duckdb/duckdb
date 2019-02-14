@@ -9,9 +9,22 @@
 using namespace duckdb;
 using namespace std;
 
-ExpressionBinder::ExpressionBinder(Binder &binder, ClientContext &context) :
-	binder(binder), context(context) {
-	
+ExpressionBinder::ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder) :
+	binder(binder), context(context), stored_binder(nullptr) {
+	if (replace_binder) {
+		stored_binder = binder.GetActiveBinder();
+		binder.SetActiveBinder(this);
+	} else {
+		binder.PushExpressionBinder(this);
+	}
+}
+
+ExpressionBinder::~ExpressionBinder() {
+	if (stored_binder) {
+		binder.SetActiveBinder(stored_binder);
+	} else {
+		binder.PopExpressionBinder();
+	}
 }
 
 BindResult ExpressionBinder::BindColumnRefExpression(unique_ptr<Expression> expr, uint32_t depth) {
@@ -29,21 +42,6 @@ BindResult ExpressionBinder::BindColumnRefExpression(unique_ptr<Expression> expr
 		}
 	}
 	return binder.bind_context.BindColumn(move(expr), depth);
-}
-
-BindResult ExpressionBinder::BindSubqueries(unique_ptr<Expression> expr, uint32_t depth) {
-	string error;
-	expr->EnumerateChildren([&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
-		auto result = BindSubqueries(move(child), depth);
-		if (result.HasError()) {
-			error = result.error;
-		}
-		return move(result.expression);
-	});
-	if (expr->GetExpressionClass() == ExpressionClass::SUBQUERY) {
-		return BindSubqueryExpression(move(expr), depth);
-	}
-	return BindResult(move(expr), error);
 }
 
 BindResult ExpressionBinder::BindFunctionExpression(unique_ptr<Expression> expr, uint32_t depth) {
@@ -98,15 +96,32 @@ BindResult ExpressionBinder::BindChildren(unique_ptr<Expression> expr, uint32_t 
 	return BindResult(move(expr), error);
 }
 
-void ExpressionBinder::BindAndResolveType(unique_ptr<Expression>* expr) {
-	auto result = TryBindAndResolveType(move(*expr));
-	if (result.HasError()) {
-		throw BinderException(result.error);
+BindResult ExpressionBinder::BindCorrelatedColumns(BindResult result, bool bind_only_children) {
+	if (!result.HasError()) {
+		return result;
 	}
-	*expr = move(result.expression);
+	// try to bind in one of the outer queries, if the binding error occurred in a subquery
+	auto &active_binders = binder.GetActiveBinders();
+	auto binders = active_binders;
+	active_binders.pop_back();
+	size_t depth = 1;
+	while(active_binders.size() > 0) {
+		if (bind_only_children) {
+			result = active_binders.back()->BindChildren(move(result.expression), depth);
+		} else {
+			result = active_binders.back()->BindExpression(move(result.expression), depth);
+		}
+		if (!result.HasError()) {
+			break;
+		}
+		depth++;
+		active_binders.pop_back();
+	}
+	active_binders = binders;
+	return result;
 }
 
-static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr) {
+void ExpressionBinder::ExtractCorrelatedExpressions(Binder &binder, Expression &expr) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_colref = (BoundColumnRefExpression&) expr;
 		if (bound_colref.depth > 0) {
@@ -118,28 +133,24 @@ static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr) {
 	});
 }
 
-
 BindResult ExpressionBinder::TryBindAndResolveType(unique_ptr<Expression> expr) {
-	binder.PushExpressionBinder(this);
-	auto result = BindSubqueries(move(expr), 0);
+	// bind the main expression
+	auto result = BindExpression(move(expr), 0);
+	// try to bind correlated columns in the expression (if any)
+	result = BindCorrelatedColumns(move(result));
 	if (result.HasError()) {
 		return result;
 	}
-	result = BindExpression(move(result.expression), 0);
-	binder.PopExpressionBinder();
-	if (result.HasError()) {
-		// try to bind in one of the outer queries, if the binding error occurred in a subquery
-		auto &active_binders = binder.GetActiveBinders();
-		for(size_t i = active_binders.size(); i > 0; i--) {
-			result = active_binders[i - 1]->BindExpression(move(result.expression), active_binders.size() - i + 1);
-		}
-		if (result.HasError()) {
-			return result;
-		}
-		// extract correlated expressions and place in this binder
-		ExtractCorrelatedExpressions(binder, *result.expression);
-	}
+	ExtractCorrelatedExpressions(binder, *result.expression);
 	result.expression->ResolveType();
 	assert(result.expression->return_type != TypeId::INVALID);
 	return BindResult(move(result.expression));
+}
+
+void ExpressionBinder::BindAndResolveType(unique_ptr<Expression>* expr) {
+	auto result = TryBindAndResolveType(move(*expr));
+	if (result.HasError()) {
+		throw BinderException(result.error);
+	}
+	*expr = move(result.expression);
 }
