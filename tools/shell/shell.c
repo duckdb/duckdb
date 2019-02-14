@@ -361,6 +361,31 @@ struct ShellText {
 	int nAlloc;
 };
 
+/* All SQLite keywords, in alphabetical order */
+const char *azKeywords[] = {
+        "ABORT",      "ACTION",    "ADD",         "AFTER",        "ALL",          "ALTER",
+        "ANALYZE",    "AND",       "AS",          "ASC",          "ATTACH",       "AUTOINCREMENT",
+        "BEFORE",     "BEGIN",     "BETWEEN",     "BY",           "CASCADE",      "CASE",
+        "CAST",       "CHECK",     "COLLATE",     "COLUMN",       "COMMIT",       "CONFLICT",
+        "CONSTRAINT", "CREATE",    "CROSS",       "CURRENT_DATE", "CURRENT_TIME", "CURRENT_TIMESTAMP",
+        "DATABASE",   "DEFAULT",   "DEFERRABLE",  "DEFERRED",     "DELETE",       "DESC",
+        "DETACH",     "DISTINCT",  "DROP",        "EACH",         "ELSE",         "END",
+        "ESCAPE",     "EXCEPT",    "EXCLUSIVE",   "EXISTS",       "EXPLAIN",      "FAIL",
+        "FOR",        "FOREIGN",   "FROM",        "FULL",         "GLOB",         "GROUP",
+        "HAVING",     "IF",        "IGNORE",      "IMMEDIATE",    "IN",           "INDEX",
+        "INDEXED",    "INITIALLY", "INNER",       "INSERT",       "INSTEAD",      "INTERSECT",
+        "INTO",       "IS",        "ISNULL",      "JOIN",         "KEY",          "LEFT",
+        "LIKE",       "LIMIT",     "MATCH",       "NATURAL",      "NO",           "NOT",
+        "NOTNULL",    "NULL",      "OF",          "OFFSET",       "ON",           "OR",
+        "ORDER",      "OUTER",     "PLAN",        "PRAGMA",       "PRIMARY",      "QUERY",
+        "RAISE",      "RECURSIVE", "REFERENCES",  "REGEXP",       "REINDEX",      "RELEASE",
+        "RENAME",     "REPLACE",   "RESTRICT",    "RIGHT",        "ROLLBACK",     "ROW",
+        "SAVEPOINT",  "SELECT",    "SET",         "TABLE",        "TEMP",         "TEMPORARY",
+        "THEN",       "TO",        "TRANSACTION", "TRIGGER",      "UNION",        "UNIQUE",
+        "UPDATE",     "USING",     "VACUUM",      "VALUES",       "VIEW",         "VIRTUAL",
+        "WHEN",       "WHERE",     "WITH",        "WITHOUT",
+};
+
 /*
 ** Attempt to determine if identifier zName needs to be quoted, either
 ** because it contains non-alphanumeric characters, or because it is an
@@ -369,31 +394,8 @@ struct ShellText {
 **
 ** Return '"' if quoting is required.  Return 0 if no quoting is required.
 */
+
 static char quoteChar(const char *zName) {
-	/* All SQLite keywords, in alphabetical order */
-	static const char *azKeywords[] = {
-	    "ABORT",      "ACTION",    "ADD",         "AFTER",        "ALL",          "ALTER",
-	    "ANALYZE",    "AND",       "AS",          "ASC",          "ATTACH",       "AUTOINCREMENT",
-	    "BEFORE",     "BEGIN",     "BETWEEN",     "BY",           "CASCADE",      "CASE",
-	    "CAST",       "CHECK",     "COLLATE",     "COLUMN",       "COMMIT",       "CONFLICT",
-	    "CONSTRAINT", "CREATE",    "CROSS",       "CURRENT_DATE", "CURRENT_TIME", "CURRENT_TIMESTAMP",
-	    "DATABASE",   "DEFAULT",   "DEFERRABLE",  "DEFERRED",     "DELETE",       "DESC",
-	    "DETACH",     "DISTINCT",  "DROP",        "EACH",         "ELSE",         "END",
-	    "ESCAPE",     "EXCEPT",    "EXCLUSIVE",   "EXISTS",       "EXPLAIN",      "FAIL",
-	    "FOR",        "FOREIGN",   "FROM",        "FULL",         "GLOB",         "GROUP",
-	    "HAVING",     "IF",        "IGNORE",      "IMMEDIATE",    "IN",           "INDEX",
-	    "INDEXED",    "INITIALLY", "INNER",       "INSERT",       "INSTEAD",      "INTERSECT",
-	    "INTO",       "IS",        "ISNULL",      "JOIN",         "KEY",          "LEFT",
-	    "LIKE",       "LIMIT",     "MATCH",       "NATURAL",      "NO",           "NOT",
-	    "NOTNULL",    "NULL",      "OF",          "OFFSET",       "ON",           "OR",
-	    "ORDER",      "OUTER",     "PLAN",        "PRAGMA",       "PRIMARY",      "QUERY",
-	    "RAISE",      "RECURSIVE", "REFERENCES",  "REGEXP",       "REINDEX",      "RELEASE",
-	    "RENAME",     "REPLACE",   "RESTRICT",    "RIGHT",        "ROLLBACK",     "ROW",
-	    "SAVEPOINT",  "SELECT",    "SET",         "TABLE",        "TEMP",         "TEMPORARY",
-	    "THEN",       "TO",        "TRANSACTION", "TRIGGER",      "UNION",        "UNIQUE",
-	    "UPDATE",     "USING",     "VACUUM",      "VALUES",       "VIEW",         "VIRTUAL",
-	    "WHEN",       "WHERE",     "WITH",        "WITHOUT",
-	};
 	int i, lwr, upr, mid, c;
 	if (!isalpha((unsigned char)zName[0]) && zName[0] != '_')
 		return '"';
@@ -1185,27 +1187,27 @@ static void open_db(ShellState *p, int keepAlive) {
 /*
 ** Readline completion callbacks
 */
+
 static char *readline_completion_generator(const char *text, int state) {
-	static sqlite3_stmt *pStmt = 0;
-	char *zRet;
-	if (state == 0) {
-		char *zSql;
-		sqlite3_finalize(pStmt);
-		zSql = sqlite3_mprintf("SELECT DISTINCT candidate COLLATE nocase"
-		                       "  FROM completion(%Q) ORDER BY 1",
-		                       text);
-		sqlite3_prepare_v2(globalDb, zSql, -1, &pStmt, 0);
-		sqlite3_free(zSql);
-	}
-	if (sqlite3_step(pStmt) == SQLITE_ROW) {
-		zRet = strdup((const char *)sqlite3_column_text(pStmt, 0));
-	} else {
-		sqlite3_finalize(pStmt);
-		pStmt = 0;
-		zRet = 0;
-	}
-	return zRet;
+    static int current_keyword_index, text_len;
+    const size_t n_keywords = sizeof(azKeywords)/sizeof(azKeywords[0]);
+    const char *name;
+
+    if (!state) {
+        current_keyword_index = 0;
+        text_len = (int)strlen(text);
+    }
+
+    while (current_keyword_index < n_keywords) {
+        name = azKeywords[current_keyword_index++];
+        if (sqlite3_strnicmp(name, text, text_len) == 0) {
+            return strdup(name);
+        }
+    }
+
+    return NULL;
 }
+
 static char **readline_completion(const char *zText, int iStart, int iEnd) {
 	rl_attempted_completion_over = 1;
 	return rl_completion_matches(zText, readline_completion_generator);
