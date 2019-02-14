@@ -163,18 +163,11 @@ void Binder::Bind(SelectNode &statement) {
 	// in the normal select binder, we bind columns as if there is no aggregation
 	// i.e. in the query [SELECT i, SUM(i) FROM integers;] the "i" will be bound as a normal column
 	// since we have an aggregation, we need to either (1) throw an error, or (2) wrap the column in a FIRST() aggregate
-	// we choose the latter one [CONTROVERSIAL: this is the SQLite behavior]
+	// we choose the former one [CONTROVERSIAL: this is the PostgreSQL behavior]
 	if (statement.HasAggregation()) {
-		for(size_t i = 0; i < select_binder.bound_columns.size(); i++) {
-			// wrap in a FIRST aggregate
-			auto bound_column = select_binder.bound_columns[i];
-			auto first_aggregate = make_unique<AggregateExpression>(ExpressionType::AGGREGATE_FIRST, bound_column->Copy());
-			first_aggregate->ResolveType();
-			// change the binding of the original bound column to point to the aggregate
-			bound_column->binding = ColumnBinding(binding.aggregate_index, binding.aggregates.size());
-			// add the FIRST aggregate to the set of aggregates
-			binding.aggregates.push_back(move(first_aggregate));
-		}	
+		if (select_binder.bound_columns.size() > 0) {
+			throw BinderException("column %s must appear in the GROUP BY clause or be used in an aggregate function", select_binder.bound_columns[0].c_str());
+		}
 	}
 
 	// finally resolve the types of the ORDER BY clause

@@ -42,12 +42,13 @@ BindResult SelectBinder::BindWindow(unique_ptr<Expression> expr, uint32_t depth)
 BindResult SelectBinder::BindColumnRef(unique_ptr<Expression> expr, uint32_t depth) {
 	assert(expr && expr->GetExpressionClass() == ExpressionClass::COLUMN_REF);
 	// bind the column using the normal binder
+	auto colname = expr->GetName();
 	auto result = BindColumnRefExpression(move(expr), depth);
 	if (!result.HasError()) {
 		// successfully bound the column to the base tables
-		// add to the list of columns
+		// add to the list of bound columns
 		assert(result.expression->type == ExpressionType::BOUND_COLUMN_REF);
-		bound_columns.push_back((BoundColumnRefExpression*) result.expression.get());
+		bound_columns.push_back(colname);
 	}
 	return result;
 }

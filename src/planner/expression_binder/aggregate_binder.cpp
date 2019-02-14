@@ -4,12 +4,8 @@
 using namespace duckdb;
 using namespace std;
 
-
 AggregateBinder::AggregateBinder(Binder &binder, ClientContext &context, SelectNode& node) : 
 	SelectNodeBinder(binder, context, node, true), bound_columns(false) {
-}
-
-AggregateBinder::~AggregateBinder() {
 }
 
 BindResult AggregateBinder::BindExpression(unique_ptr<Expression> expr, uint32_t depth) {

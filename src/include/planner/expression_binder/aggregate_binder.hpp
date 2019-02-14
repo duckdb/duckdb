@@ -16,7 +16,6 @@ namespace duckdb {
 class AggregateBinder : public SelectNodeBinder {
 public:
 	AggregateBinder(Binder &binder, ClientContext &context, SelectNode& node);
-	~AggregateBinder() override;
 
 	BindResult BindExpression(unique_ptr<Expression> expr, uint32_t depth) override;
 

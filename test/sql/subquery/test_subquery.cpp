@@ -298,7 +298,6 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 2, {6, 7, 7, 7}));
 
-
 	//aggregate with correlation inside aggregation
 	result = con.Query("SELECT i, (SELECT MIN(i+2*i1.i) FROM integers) FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
@@ -307,9 +306,11 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 	result = con.Query("SELECT (SELECT SUM(i1.i)) FROM integers i1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
 	// aggregate ONLY inside subquery, with column reference outside of subquery
-	result = con.Query("SELECT i, (SELECT SUM(i1.i)) FROM integers i1;");
+	result = con.Query("SELECT FIRST(i), (SELECT SUM(i1.i)) FROM integers i1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {6}));
+	// this will fail, because "i" is not an aggregate but the SUM(i1.i) turns this query into an aggregate
+	REQUIRE_FAIL(con.Query("SELECT i, (SELECT SUM(i1.i)) FROM integers i1;"));
 
 	// subquery inside aggregation
 	result = con.Query("SELECT SUM(i), SUM((SELECT i FROM integers WHERE i=i1.i)) FROM integers i1;");
@@ -344,9 +345,9 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {7}));
 
 	// aggregate query with non-aggregate subquery with group by
-	result = con.Query("SELECT i, (SELECT i+SUM(i1.i) FROM integers LIMIT 1) FROM integers i1 GROUP BY i ORDER BY i;");
+	result = con.Query("SELECT i, (SELECT i+SUM(i1.i) FROM integers WHERE i=1) FROM integers i1 GROUP BY i ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 2, 3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 2, 3, 4}));
 
 	// subquery inside aggregate
 	result = con.Query("SELECT SUM((SELECT i+i1.i FROM integers WHERE i=1)) FROM integers i1;");
@@ -357,9 +358,9 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 2, {Value(), 1, 2, 3}));
 
-
 	// aggregation of both entries inside subquery
-	result = con.Query("SELECT i, (SELECT SUM(i1.i+i) FROM integers) AS k FROM integers i1 GROUP BY i ORDER BY i;");
+	// aggregate on group inside subquery
+	result = con.Query("SELECT i1.i AS j, (SELECT SUM(j+i) FROM integers) AS k FROM integers i1 GROUP BY j ORDER BY j;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 9, 12, 15}));
 	result = con.Query("SELECT (SELECT SUM(i1.i*i) FROM integers) FROM integers i1 ORDER BY i;");
@@ -373,25 +374,26 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 6, 12, 18}));
 	// refer to GROUP BY inside subquery
-	result = con.Query("SELECT i, (SELECT i1.i*SUM(i) FROM integers) AS k FROM integers i1 GROUP BY i ORDER BY i;");
+	result = con.Query("SELECT i AS j, (SELECT j*SUM(i) FROM integers) AS k FROM integers i1 GROUP BY j ORDER BY j;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 6, 12, 18}));
 	// perform SUM on subquery
 	result = con.Query("SELECT i, SUM((SELECT SUM(i)*i1.i FROM integers)) AS k FROM integers i1 GROUP BY i ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 6, 12, 18}));
+
 	// aggregate subqueries cannot be nested
 	REQUIRE_FAIL(con.Query("SELECT i, SUM((SELECT SUM(i)*SUM(i1.i) FROM integers)) AS k FROM integers i1 GROUP BY i ORDER BY i;"));
-
+	
 	// aggregation but ONLY inside subquery results in implicit aggregation
 	result = con.Query("SELECT (SELECT SUM(i1.i)) FROM integers i1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
-	result = con.Query("SELECT i, (SELECT SUM(i1.i)) FROM integers i1;");
+	result = con.Query("SELECT FIRST(i), (SELECT SUM(i1.i)) FROM integers i1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {6}));
 	
 	// aggregate that uses correlated column in aggregation
-	result = con.Query("SELECT i, (SELECT MIN(i1.i) FROM integers GROUP BY i HAVING i=i1.i) AS j FROM integers i1 GROUP BY i ORDER BY i;");
+	result = con.Query("SELECT i AS j, (SELECT MIN(i1.i) FROM integers GROUP BY i HAVING i=j) FROM integers i1 GROUP BY j ORDER BY j;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3}));
 
@@ -423,7 +425,6 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 	result = con.Query("SELECT i, NOT((SELECT MIN(i) FROM integers WHERE i<>i1.i) > ANY(SELECT i FROM integers WHERE i IS NOT NULL)) FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), false, true, true}));
-
 
 	// nested aggregate queries
 	result = con.Query("SELECT i, SUM(i), (SELECT (SELECT SUM(i)+SUM(i1.i)+SUM(i2.i) FROM integers) FROM integers i2) FROM integers i1 GROUP BY i ORDER BY i;");

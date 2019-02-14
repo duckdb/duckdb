@@ -20,10 +20,12 @@ ExpressionBinder::ExpressionBinder(Binder &binder, ClientContext &context, bool 
 }
 
 ExpressionBinder::~ExpressionBinder() {
-	if (stored_binder) {
-		binder.SetActiveBinder(stored_binder);
-	} else {
-		binder.PopExpressionBinder();
+	if (binder.HasActiveBinder()) {
+		if (stored_binder) {
+			binder.SetActiveBinder(stored_binder);
+		} else {
+			binder.PopExpressionBinder();
+		}
 	}
 }
 

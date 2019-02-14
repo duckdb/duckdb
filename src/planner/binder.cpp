@@ -171,6 +171,7 @@ void Binder::PopExpressionBinder() {
 }
 
 void Binder::SetActiveBinder(ExpressionBinder *binder) {
+	assert(HasActiveBinder());
 	GetActiveBinders().back() = binder;
 }
 

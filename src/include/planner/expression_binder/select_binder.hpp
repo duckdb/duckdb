@@ -24,7 +24,7 @@ public:
 
 	expression_map_t<uint32_t>& group_map;
 	unordered_map<string, uint32_t>& group_alias_map;
-	vector<BoundColumnRefExpression*> bound_columns;
+	vector<string> bound_columns;
 protected:
 	BindResult BindWindow(unique_ptr<Expression> expr, uint32_t depth);
 	BindResult BindColumnRef(unique_ptr<Expression> expr, uint32_t depth);
