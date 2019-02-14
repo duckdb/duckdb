@@ -103,9 +103,10 @@ TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {12, 13}));
 
-	// using non-group column and non-aggregate should translate to the FIRST()
-	// aggregate
-	result = con.Query("SELECT i, SUM(j), j FROM integers GROUP BY i ORDER BY i");
+	// using non-group column and non-aggregate should throw an error
+	REQUIRE_FAIL(con.Query("SELECT i, SUM(j), j FROM integers GROUP BY i ORDER BY i"));
+	// but it works if we wrap it in FIRST()
+	result = con.Query("SELECT i, SUM(j), FIRST(j) FROM integers GROUP BY i ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {4, 8}));
 	REQUIRE(CHECK_COLUMN(result, 2, {4, 4}));
@@ -151,10 +152,9 @@ TEST_CASE("Test aliases in group by/aggregation", "[aggregations]") {
 
 	// use alias in HAVING clause
 	// CONTROVERSIAL: this query DOES NOT work in PostgreSQL
-	REQUIRE_FAIL(con.Query("SELECT i % 2 AS k, SUM(i) FROM integers WHERE i IS NOT NULL GROUP BY k HAVING k>0;"));
-	// result = con.Query("SELECT i % 2 AS k, SUM(i) FROM integers WHERE i IS NOT NULL GROUP BY k HAVING k>0;");
-	// REQUIRE(CHECK_COLUMN(result, 0, {1}));
-	// REQUIRE(CHECK_COLUMN(result, 1, {4}));
+	result = con.Query("SELECT i % 2 AS k, SUM(i) FROM integers WHERE i IS NOT NULL GROUP BY k HAVING k>0;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {4}));
 
 	// this is identical to this query
 	// CONTROVERSIAL: this query does not work in MonetDB
@@ -193,7 +193,9 @@ TEST_CASE("Test aliases in group by/aggregation", "[aggregations]") {
 	// ORDER on a non-grouping column
 	// this query is refused by Postgres and MonetDB
 	// but SQLite resolves it by first pushing a "FIRST(i)" aggregate into the projection, and then ordering by that aggregate
-	result = con.Query("SELECT (10-i) AS k, SUM(i) FROM integers GROUP BY k ORDER BY i;");
+	REQUIRE_FAIL(con.Query("SELECT (10-i) AS k, SUM(i) FROM integers GROUP BY k ORDER BY i;"));
+
+	result = con.Query("SELECT (10-i) AS k, SUM(i) FROM integers GROUP BY k ORDER BY FIRST(i);");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 9, 8, 7}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3}));
 }
