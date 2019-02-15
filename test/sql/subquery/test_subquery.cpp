@@ -11,10 +11,32 @@ TEST_CASE("Test simple uncorrelated subqueries", "[subquery]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 
+	con.EnableProfiling();
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
+
+	// zero results always results in FALSE for ANY
+	result = con.Query("SELECT i, i > ANY(SELECT i FROM integers WHERE i>10) FROM integers ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {false, false, false, false}));
+	result = con.Query("SELECT i, i = ANY(SELECT i FROM integers WHERE i>10) FROM integers ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {false, false, false, false}));
+	result = con.Query("SELECT i, i >= ANY(SELECT i FROM integers WHERE i>10) FROM integers ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {false, false, false, false}));
+	result = con.Query("SELECT i, i <= ANY(SELECT i FROM integers WHERE i>10) FROM integers ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {false, false, false, false}));
+	result = con.Query("SELECT i, i < ANY(SELECT i FROM integers WHERE i>10) FROM integers ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {false, false, false, false}));
+	result = con.Query("SELECT i, i <> ANY(SELECT i FROM integers WHERE i>10) FROM integers ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {false, false, false, false}));
+
 
 	// scalar subqueries
 	result = con.Query("SELECT * FROM integers WHERE i=(SELECT 1)");
@@ -192,11 +214,6 @@ TEST_CASE("Test simple uncorrelated subqueries", "[subquery]") {
 	result = con.Query("SELECT i, i <> ALL(SELECT i FROM integers WHERE i>10) FROM integers ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {true, true, true, true}));
-	// zero results always results in FALSE for ANY
-	// FIXME:
-	// result = con.Query("SELECT i, i <> ANY(SELECT i FROM integers WHERE i>10) FROM integers ORDER BY i;");
-	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
-	// REQUIRE(CHECK_COLUMN(result, 1, {false, false, false, false}));
 
 	// nested uncorrelated subqueries
 	result = con.Query("SELECT (SELECT (SELECT (SELECT 42)))");
@@ -245,52 +262,28 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
 
-	// correlated EXISTS
-	result = con.Query("SELECT i, EXISTS(SELECT i FROM integers WHERE i1.i>2) FROM integers i1 ORDER BY i;");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
-	REQUIRE(CHECK_COLUMN(result, 1, {false, false, false, true}));
-	result = con.Query("SELECT i, EXISTS(SELECT i FROM integers WHERE i=i1.i) FROM integers i1 ORDER BY i;");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
-	REQUIRE(CHECK_COLUMN(result, 1, {false, true, true, true}));
-	result = con.Query("SELECT i FROM integers i1 WHERE EXISTS(SELECT i FROM integers WHERE i=i1.i) ORDER BY i;");
-	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
-	// correlated EXISTS with aggregations
-	result = con.Query("SELECT EXISTS(SELECT i FROM integers WHERE i>MIN(i1.i)) FROM integers i1;");
-	REQUIRE(CHECK_COLUMN(result, 0, {true}));
-	result = con.Query("SELECT i, SUM(i) FROM integers i1 GROUP BY i HAVING EXISTS(SELECT i FROM integers WHERE i>MIN(i1.i)) ORDER BY i;");
-	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
-	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
-	result = con.Query("SELECT EXISTS(SELECT i+MIN(i1.i) FROM integers WHERE i=3) FROM integers i1;");
-	REQUIRE(CHECK_COLUMN(result, 0, {true}));
-	result = con.Query("SELECT EXISTS(SELECT i+MIN(i1.i) FROM integers WHERE i=5) FROM integers i1;");
-	REQUIRE(CHECK_COLUMN(result, 0, {false}));
-	// GROUP BY correlated exists
-	result = con.Query("SELECT EXISTS(SELECT i FROM integers WHERE i=i1.i) AS g, COUNT(*) FROM integers i1 GROUP BY g ORDER BY g;");
-	REQUIRE(CHECK_COLUMN(result, 0, {false, true}));
-	REQUIRE(CHECK_COLUMN(result, 1, {1, 3}));
-	// SUM on exists
-	result = con.Query("SELECT SUM(CASE WHEN EXISTS(SELECT i FROM integers WHERE i=i1.i) THEN 1 ELSE 0 END) FROM integers i1;");
-	REQUIRE(CHECK_COLUMN(result, 0, {3}));
-
-	// correlated ANY/ALL
+	// // correlated ANY/ALL
 	// result = con.Query("SELECT i=ALL(SELECT i FROM integers WHERE i=i1.i) FROM integers i1 ORDER BY i;");
-	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), true, true, true}));
+	// REQUIRE(CHECK_COLUMN(result, 0, {true, true, true, true}));
 	// result = con.Query("SELECT i=ANY(SELECT i FROM integers WHERE i=i1.i) FROM integers i1 ORDER BY i;");
-	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), true, true, true}));
+	// REQUIRE(CHECK_COLUMN(result, 0, {false, true, true, true}));
 	// result = con.Query("SELECT i<>ALL(SELECT i FROM integers WHERE i=i1.i) FROM integers i1 ORDER BY i;");
-	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), false, false, false}));
+	// REQUIRE(CHECK_COLUMN(result, 0, {true, false, false, false}));
 	// result = con.Query("SELECT i<>ANY(SELECT i FROM integers WHERE i=i1.i) FROM integers i1 ORDER BY i;");
-	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), false, false, false}));
+	// REQUIRE(CHECK_COLUMN(result, 0, {false, false, false, false}));
 	// result = con.Query("SELECT i=ALL(SELECT i FROM integers WHERE i<>i1.i) FROM integers i1 ORDER BY i;");
-	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), false, false, false}));
+	// REQUIRE(CHECK_COLUMN(result, 0, {true, false, false, false}));
 	// result = con.Query("SELECT i=ANY(SELECT i FROM integers WHERE i<>i1.i) FROM integers i1 ORDER BY i;");
-	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), false, false, false}));
+	// REQUIRE(CHECK_COLUMN(result, 0, {false, false, false, false}));
 	// result = con.Query("SELECT i>ANY(SELECT i FROM integers WHERE i<>i1.i) FROM integers i1 ORDER BY i;");
-	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), false, true, true}));
+	// REQUIRE(CHECK_COLUMN(result, 0, {false, false, true, true}));
 	// result = con.Query("SELECT i>ALL(SELECT (i+i1.i-1)/2 FROM integers) FROM integers i1 ORDER BY i;");
 	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), false, false, Value()}));
-	
-	// correlated ANY/ALL with aggregations
+	// result = con.Query("SELECT i=ANY(SELECT i FROM integers WHERE i=i1.i OR i IS NULL) FROM integers i1 ORDER BY i;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), true, true, true}));
+	// result = con.Query("SELECT i=ALL(SELECT i FROM integers WHERE i=i1.i OR i IS NULL) FROM integers i1 ORDER BY i;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value(), Value()}));
+	// // correlated ANY/ALL with aggregations
 	// result = con.Query("SELECT MIN(i)>ANY(SELECT i FROM integers WHERE i>MIN(i1.i)) FROM integers i1;");
 	// REQUIRE(CHECK_COLUMN(result, 0, {false}));
 	// result = con.Query("SELECT SUM(i)>ANY(SELECT i FROM integers WHERE i>MIN(i1.i)) FROM integers i1;");
@@ -491,6 +484,33 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 	result = con.Query("SELECT i, NOT((SELECT MIN(i) FROM integers WHERE i<>i1.i) > ANY(SELECT i FROM integers WHERE i IS NOT NULL)) FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), false, true, true}));
+
+	// correlated EXISTS
+	result = con.Query("SELECT i, EXISTS(SELECT i FROM integers WHERE i1.i>2) FROM integers i1 ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {false, false, false, true}));
+	result = con.Query("SELECT i, EXISTS(SELECT i FROM integers WHERE i=i1.i) FROM integers i1 ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {false, true, true, true}));
+	result = con.Query("SELECT i FROM integers i1 WHERE EXISTS(SELECT i FROM integers WHERE i=i1.i) ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	// correlated EXISTS with aggregations
+	result = con.Query("SELECT EXISTS(SELECT i FROM integers WHERE i>MIN(i1.i)) FROM integers i1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+	result = con.Query("SELECT i, SUM(i) FROM integers i1 GROUP BY i HAVING EXISTS(SELECT i FROM integers WHERE i>MIN(i1.i)) ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+	result = con.Query("SELECT EXISTS(SELECT i+MIN(i1.i) FROM integers WHERE i=3) FROM integers i1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+	result = con.Query("SELECT EXISTS(SELECT i+MIN(i1.i) FROM integers WHERE i=5) FROM integers i1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {false}));
+	// GROUP BY correlated exists
+	result = con.Query("SELECT EXISTS(SELECT i FROM integers WHERE i=i1.i) AS g, COUNT(*) FROM integers i1 GROUP BY g ORDER BY g;");
+	REQUIRE(CHECK_COLUMN(result, 0, {false, true}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 3}));
+	// SUM on exists
+	result = con.Query("SELECT SUM(CASE WHEN EXISTS(SELECT i FROM integers WHERE i=i1.i) THEN 1 ELSE 0 END) FROM integers i1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 
 	return;
 	// join with a correlated expression in the join condition

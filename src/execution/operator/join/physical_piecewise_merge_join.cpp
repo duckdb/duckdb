@@ -52,7 +52,10 @@ void PhysicalPiecewiseMergeJoin::_GetChunk(ClientContext &context, DataChunk &ch
 			}
 			state->right_chunks.Append(right_chunk);
 		}
-		if (state->right_chunks.count == 0) {
+		if (state->right_chunks.count == 0 &&
+			(type == JoinType::INNER ||
+			type == JoinType::SEMI)) {
+			// empty RHS with INNER or SEMI join means empty result set
 			return;
 		}
 		// now order all the chunks
@@ -112,13 +115,21 @@ void PhysicalPiecewiseMergeJoin::_GetChunk(ClientContext &context, DataChunk &ch
 		switch(type) {
 			case JoinType::MARK: {
 				// MARK join
-				ChunkMergeInfo right_info(state->right_conditions, state->right_orders);
-				// first perform the MARK join
-				// this method uses the LHS to loop over the entire RHS looking for matches
-				MergeJoinMark::Perform(left_info, right_info, conditions[0].comparison);
-				// now construct the mark join result from the found matches
-				ConstructMarkJoinResult(state->join_keys, state->child_chunk, chunk, right_info.found_match, state->has_null);
-				// move to the next LHS chunk in the next iteration
+				if (state->right_chunks.count > 0) {
+					ChunkMergeInfo right_info(state->right_conditions, state->right_orders);
+					// first perform the MARK join
+					// this method uses the LHS to loop over the entire RHS looking for matches
+					MergeJoinMark::Perform(left_info, right_info, conditions[0].comparison);
+					// now construct the mark join result from the found matches
+					ConstructMarkJoinResult(state->join_keys, state->child_chunk, chunk, right_info.found_match, state->has_null);
+					// move to the next LHS chunk in the next iteration
+				} else {
+					// RHS empty: just set found_match to false
+					bool found_match[STANDARD_VECTOR_SIZE] = {false};
+					ConstructMarkJoinResult(state->join_keys, state->child_chunk, chunk, found_match, state->has_null);
+					// RHS empty: result is not NULL but just false
+					chunk.data[chunk.column_count - 1].nullmask.reset();
+				}
 				state->right_chunk_index = state->right_orders.size();
 				return;
 			}

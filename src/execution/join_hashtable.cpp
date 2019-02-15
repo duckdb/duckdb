@@ -621,9 +621,11 @@ void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &child, DataChunk &
 	result_vector.count = child.size();
 	// first we set the NULL values from the join keys
 	// if there is any NULL in the keys, the result is NULL
-	result_vector.nullmask = join_keys.data[0].nullmask;
-	for(size_t i = 1; i < join_keys.column_count; i++) {
-		result_vector.nullmask |= join_keys.data[i].nullmask;
+	if (join_keys.column_count > 0) {
+		result_vector.nullmask = join_keys.data[0].nullmask;
+		for(size_t i = 1; i < join_keys.column_count; i++) {
+			result_vector.nullmask |= join_keys.data[i].nullmask;
+		}
 	}
 	// now set the remaining entries to either true or false based on whether a match was found
 	auto bool_result = (bool*) result_vector.data;

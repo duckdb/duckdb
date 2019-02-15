@@ -82,16 +82,40 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 		} while (new_chunk.size() > 0);
 
 		if (state->right_chunks.count == 0) {
-			return;
+			if ((type == JoinType::INNER ||
+				type == JoinType::SEMI)) {
+				// empty RHS with INNER or SEMI join means empty result set
+				return;
+			}
+		} else {
+			// disqualify tuples from the RHS that have NULL values
+			for(size_t i = 0; i < state->right_chunks.chunks.size(); i++) {
+				state->has_null = state->has_null || RemoveNullValues(*state->right_chunks.chunks[i]);
+			}
+			// initialize the chunks for the join conditions
+			state->left_join_condition.Initialize(condition_types);
+			state->right_chunk = state->right_chunks.chunks.size() - 1;
+			state->right_tuple = state->right_chunks.chunks[state->right_chunk]->size();
 		}
-		// disqualify tuples from the RHS that have NULL values
-		for(size_t i = 0; i < state->right_chunks.chunks.size(); i++) {
-			state->has_null = state->has_null || RemoveNullValues(*state->right_chunks.chunks[i]);
+	}
+
+	if (state->right_chunks.count == 0) {
+		// empty join, switch on type
+		if (type == JoinType::MARK) {
+			// pull a chunk from the LHS
+			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+			if (state->child_chunk.size() == 0) {
+				return;
+			}
+			// RHS empty: just set found_match to false
+			bool found_match[STANDARD_VECTOR_SIZE] = {false};
+			ConstructMarkJoinResult(state->left_join_condition, state->child_chunk, chunk, found_match, state->has_null);
+			// // RHS empty: result is not NULL but just false
+			// chunk.data[chunk.column_count - 1].nullmask.reset();
+		} else {
+			throw Exception("Unhandled type for empty NL join");
 		}
-		// initialize the chunks for the join conditions
-		state->left_join_condition.Initialize(condition_types);
-		state->right_chunk = state->right_chunks.chunks.size() - 1;
-		state->right_tuple = state->right_chunks.chunks[state->right_chunk]->size();
+		return;
 	}
 
 	if (state->right_chunk >= state->right_chunks.chunks.size()) {
