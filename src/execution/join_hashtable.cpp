@@ -645,7 +645,7 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 	assert(result.column_count == left.column_count + 1);
 	assert(result.data[left.column_count].type == TypeId::BOOLEAN);
 	assert(!left.sel_vector);
-	// this method should only be called for an empty HT
+	// this method should only be called for a non-empty HT
 	assert(ht.count > 0);
 
 	ScanKeyMatches(keys);

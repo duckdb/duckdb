@@ -226,6 +226,19 @@ TEST_CASE("Aggregate only COUNT STAR", "[aggregations]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
 }
 
+TEST_CASE("GROUP BY NULL value", "[aggregations]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (3, 4), (NULL, 4), (2, 4);"));
+
+	result = con.Query("SELECT i, SUM(j) FROM integers GROUP BY i ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {4, 4, 4}));
+}
+
 TEST_CASE("Aggregating from empty table", "[aggregations]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);

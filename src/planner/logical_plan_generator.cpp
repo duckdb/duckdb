@@ -238,52 +238,115 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 	auto plan = move(generator.root);
 	switch(subquery.subquery_type) {
 	case SubqueryType::EXISTS: {
-		if (expr.IsCorrelated()) {
-			throw Exception("Correlated exists not handled yet!");
-		}
-		// uncorrelated EXISTS
-		// we only care about existence, hence we push a LIMIT 1 operator
-		auto limit = make_unique<LogicalLimit>(1, 0);
-		limit->AddChild(move(plan));
-		plan = move(limit);
+		if (!expr.IsCorrelated()) {
+			// uncorrelated EXISTS
+			// we only care about existence, hence we push a LIMIT 1 operator
+			auto limit = make_unique<LogicalLimit>(1, 0);
+			limit->AddChild(move(plan));
+			plan = move(limit);
 
-		// now we push a COUNT(*) aggregate onto the limit, this will be either 0 or 1 (EXISTS or NOT EXISTS)
-		auto count_star = make_unique<AggregateExpression>(ExpressionType::AGGREGATE_COUNT_STAR, nullptr);
-		count_star->ResolveType();
-		auto count_type = count_star->return_type;
-		vector<unique_ptr<Expression>> aggregate_list;
-		aggregate_list.push_back(move(count_star));
-		auto aggregate_index = binder.GenerateTableIndex();
-		auto aggregate = make_unique<LogicalAggregate>(binder.GenerateTableIndex(), aggregate_index, move(aggregate_list));
-		aggregate->AddChild(move(plan));
-		plan = move(aggregate);
+			// now we push a COUNT(*) aggregate onto the limit, this will be either 0 or 1 (EXISTS or NOT EXISTS)
+			auto count_star = make_unique<AggregateExpression>(ExpressionType::AGGREGATE_COUNT_STAR, nullptr);
+			count_star->ResolveType();
+			auto count_type = count_star->return_type;
+			vector<unique_ptr<Expression>> aggregate_list;
+			aggregate_list.push_back(move(count_star));
+			auto aggregate_index = binder.GenerateTableIndex();
+			auto aggregate = make_unique<LogicalAggregate>(binder.GenerateTableIndex(), aggregate_index, move(aggregate_list));
+			aggregate->AddChild(move(plan));
+			plan = move(aggregate);
 
-		// now we push a projection with a comparison to 1
-		auto left_child = make_unique<BoundColumnRefExpression>("", count_type, ColumnBinding(aggregate_index, 0));
-		auto right_child = make_unique<ConstantExpression>(Value::Numeric(count_type, 1));
-		auto comparison = make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(left_child), move(right_child));
+			// now we push a projection with a comparison to 1
+			auto left_child = make_unique<BoundColumnRefExpression>("", count_type, ColumnBinding(aggregate_index, 0));
+			auto right_child = make_unique<ConstantExpression>(Value::Numeric(count_type, 1));
+			auto comparison = make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(left_child), move(right_child));
 
 
-		vector<unique_ptr<Expression>> projection_list;
-		projection_list.push_back(move(comparison));
-		auto projection_index = binder.GenerateTableIndex();
-		auto projection = make_unique<LogicalProjection>(projection_index, move(projection_list));
-		projection->AddChild(move(plan));
-		plan = move(projection);
+			vector<unique_ptr<Expression>> projection_list;
+			projection_list.push_back(move(comparison));
+			auto projection_index = binder.GenerateTableIndex();
+			auto projection = make_unique<LogicalProjection>(projection_index, move(projection_list));
+			projection->AddChild(move(plan));
+			plan = move(projection);
 
-		// we add it to the main query by adding a cross product
-		// FIXME: should use something else besides cross product as we always add only one scalar constant
-		if (root) {
-			auto cross_product = make_unique<LogicalCrossProduct>();
-			cross_product->AddChild(move(root));
-			cross_product->AddChild(move(plan));
-			root = move(cross_product);
+			// we add it to the main query by adding a cross product
+			// FIXME: should use something else besides cross product as we always add only one scalar constant
+			if (root) {
+				auto cross_product = make_unique<LogicalCrossProduct>();
+				cross_product->AddChild(move(root));
+				cross_product->AddChild(move(plan));
+				root = move(cross_product);
+			} else {
+				root = move(plan);
+			}
+
+			// we replace the original subquery with a ColumnRefExpression refering to the result of the projection (either TRUE or FALSE)
+			return make_unique<BoundColumnRefExpression>(expr, TypeId::BOOLEAN, ColumnBinding(projection_index, 0));
 		} else {
-			root = move(plan);
-		}
+			// FIXME: mostly duplicated code from scalar query
+			// in the correlated case, we push first a DUPLICATE ELIMINATED left outer join (as entries WITHOUT a join partner result in NULL)
+			auto delim_join = make_unique<LogicalJoin>(JoinType::SINGLE);
+			// the left side is the original plan
+			delim_join->AddChild(move(root));
+			delim_join->is_duplicate_eliminated = true;
+			delim_join->null_values_are_equal = true;
+			// the right side is a DEPENDENT join between the duplicate eliminated scan and the subquery
+			// first get the set of correlated columns in the subquery
+			// these are the columns returned by the duplicate eliminated scan
+			auto &correlated_columns = expr.binder->correlated_columns;
+			FlattenDependentJoins flatten(binder, correlated_columns);
+			for(size_t i = 0; i < correlated_columns.size(); i++) {
+				auto &col = correlated_columns[i];
+				flatten.correlated_map[col.binding] = i;
+				flatten.delim_types.push_back(col.type);
+				delim_join->duplicate_eliminated_columns.push_back(make_unique<BoundColumnRefExpression>("", col.type, col.binding));
+			}
 
-		// we replace the original subquery with a ColumnRefExpression refering to the result of the projection (either TRUE or FALSE)
-		return make_unique<BoundColumnRefExpression>(expr, TypeId::BOOLEAN, ColumnBinding(projection_index, 0));
+			// now we have a dependent join between "delim_scan" and the subquery plan
+			// however, we do not explicitly create it
+			// instead, we eliminate the dependent join by pushing it down into the right side of the plan
+			// first we check which operators have correlated expressions in the first place
+			flatten.DetectCorrelatedExpressions(plan.get());
+
+			// now we push the dependent join down
+			auto dependent_join = flatten.PushDownDependentJoin(move(plan));
+
+			// push a subquery node under the duplicate eliminated join
+			auto subquery_index = binder.GenerateTableIndex();
+			auto subquery = make_unique<LogicalSubquery>(subquery_index, correlated_columns.size() + 1);
+			subquery->AddChild(move(dependent_join));
+
+			// we push a COUNT(*) aggregation that groups by the correlated columns
+			auto group_index = binder.GenerateTableIndex();
+			auto aggr_index = binder.GenerateTableIndex();
+			auto count_star = make_unique<AggregateExpression>(ExpressionType::AGGREGATE_COUNT_STAR, nullptr);
+			count_star->ResolveType();
+			auto count_star_type = count_star->return_type;
+			vector<unique_ptr<Expression>> aggregates;
+			aggregates.push_back(move(count_star));
+			auto count_aggregate = make_unique<LogicalAggregate>(group_index, aggr_index, move(aggregates));
+			// create the grouping columns
+			for(size_t i = 0; i < correlated_columns.size(); i++) {
+				auto &col = correlated_columns[i];
+				count_aggregate->groups.push_back(make_unique<BoundColumnRefExpression>(col.name, col.type, ColumnBinding(subquery_index, flatten.delim_offset + i)));
+			}
+			count_aggregate->AddChild(move(subquery));
+
+			// now we create the join conditions between the dependent join and the grouping columns
+			for(size_t i = 0; i < correlated_columns.size(); i++) {
+				auto &col = correlated_columns[i];
+				JoinCondition cond;
+				cond.left = make_unique<BoundColumnRefExpression>(col.name, col.type, col.binding);
+				cond.right = make_unique<BoundColumnRefExpression>(col.name, col.type, ColumnBinding(group_index, i));
+				cond.comparison = ExpressionType::COMPARE_EQUAL;
+				delim_join->conditions.push_back(move(cond));
+			}
+			delim_join->AddChild(move(count_aggregate));
+			root = move(delim_join);
+			// finally we push the expression (COUNT(*) IS NOT NULL)
+			auto bound_count = make_unique<BoundColumnRefExpression>("", count_star_type, ColumnBinding(aggr_index, 0));
+			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, TypeId::BOOLEAN, move(bound_count));
+		}
 	}
 	case SubqueryType::SCALAR: {
 		if (!expr.IsCorrelated()) {
@@ -362,32 +425,83 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 	}
 	default: {
 		assert(subquery.subquery_type == SubqueryType::ANY);
-		if (expr.IsCorrelated()) {
-			throw Exception("Correlated ANY not handled yet!");
+		if (!expr.IsCorrelated()) {
+			// we generate a MARK join that results in either (TRUE, FALSE or NULL)
+			// subquery has NULL values -> result is (TRUE or NULL)
+			// subquery has no NULL values -> result is (TRUE, FALSE or NULL [if input is NULL])
+			// first we push a subquery to the right hand side
+			auto subquery_index = binder.GenerateTableIndex();
+			auto logical_subquery = make_unique<LogicalSubquery>(subquery_index, 1);
+			logical_subquery->AddChild(move(plan));
+			plan = move(logical_subquery);
+
+			// then we generate the MARK join with the subquery
+			auto join = make_unique<LogicalJoin>(JoinType::MARK);
+			join->AddChild(move(root));
+			join->AddChild(move(plan));
+			// create the JOIN condition
+			JoinCondition cond;
+			cond.left = move(subquery.child);
+			cond.right = make_unique<BoundExpression>(cond.left->return_type, 0);
+			cond.comparison = subquery.comparison_type;
+			join->conditions.push_back(move(cond));
+			root = move(join);
+
+			// we replace the original subquery with a BoundColumnRefExpression refering to the mark column
+			return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(subquery_index, 0));
+		} else {
+			throw ParserException("Correlated ANY/ALL not supported yet");
+			// FIXME: mostly duplicated code from SCALAR
+			// in the correlated case, we push first a DUPLICATE ELIMINATED left outer join (as entries WITHOUT a join partner result in NULL)
+			auto delim_join = make_unique<LogicalJoin>(JoinType::MARK);
+			// the left side is the original plan
+			delim_join->AddChild(move(root));
+			delim_join->is_duplicate_eliminated = true;
+			// the right side is a DEPENDENT join between the duplicate eliminated scan and the subquery
+			// first get the set of correlated columns in the subquery
+			// these are the columns returned by the duplicate eliminated scan
+			auto &correlated_columns = expr.binder->correlated_columns;
+			FlattenDependentJoins flatten(binder, correlated_columns);
+			for(size_t i = 0; i < correlated_columns.size(); i++) {
+				auto &col = correlated_columns[i];
+				flatten.correlated_map[col.binding] = i;
+				flatten.delim_types.push_back(col.type);
+				delim_join->duplicate_eliminated_columns.push_back(make_unique<BoundColumnRefExpression>("", col.type, col.binding));
+			}
+
+			// now we have a dependent join between "delim_scan" and the subquery plan
+			// however, we do not explicitly create it
+			// instead, we eliminate the dependent join by pushing it down into the right side of the plan
+			// first we check which operators have correlated expressions in the first place
+			flatten.DetectCorrelatedExpressions(plan.get());
+
+			// now we push the dependent join down
+			auto dependent_join = flatten.PushDownDependentJoin(move(plan));
+			// push a subquery node under the duplicate eliminated join
+			auto subquery_index = binder.GenerateTableIndex();
+			auto subquery_node = make_unique<LogicalSubquery>(subquery_index, correlated_columns.size() + 1);
+			subquery_node->AddChild(move(dependent_join));
+			// now we create the join conditions between the dependent join and the original table
+			for(size_t i = 0; i < correlated_columns.size(); i++) {
+				auto &col = correlated_columns[i];
+				JoinCondition cond;
+				cond.left = make_unique<BoundColumnRefExpression>(col.name, col.type, col.binding);
+				cond.right = make_unique<BoundColumnRefExpression>(col.name, col.type, ColumnBinding(subquery_index, flatten.delim_offset + i));
+				cond.comparison = ExpressionType::COMPARE_EQUAL;
+				delim_join->conditions.push_back(move(cond));
+			}
+			// add the actual condition based on the ANY/ALL predicate
+			JoinCondition compare_cond;
+			compare_cond.left = move(subquery.child);
+			compare_cond.right = make_unique<BoundExpression>(compare_cond.left->return_type, 0);
+			compare_cond.comparison = subquery.comparison_type;
+			delim_join->conditions.push_back(move(compare_cond));
+
+			delim_join->AddChild(move(subquery_node));
+			root = move(delim_join);
+			// finally push the BoundColumnRefExpression referring to the data element
+			return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(subquery_index, flatten.data_offset));
 		}
-		// we generate a MARK join that results in either (TRUE, FALSE or NULL)
-		// subquery has NULL values -> result is (TRUE or NULL)
-		// subquery has no NULL values -> result is (TRUE, FALSE or NULL [if input is NULL])
-		// first we push a subquery to the right hand side
-		auto subquery_index = binder.GenerateTableIndex();
-		auto logical_subquery = make_unique<LogicalSubquery>(subquery_index, 1);
-		logical_subquery->AddChild(move(plan));
-		plan = move(logical_subquery);
-
-		// then we generate the MARK join with the subquery
-		auto join = make_unique<LogicalJoin>(JoinType::MARK);
-		join->AddChild(move(root));
-		join->AddChild(move(plan));
-		// create the JOIN condition
-		JoinCondition cond;
-		cond.left = move(subquery.child);
-		cond.right = make_unique<BoundExpression>(cond.left->return_type, 0);
-		cond.comparison = subquery.comparison_type;
-		join->conditions.push_back(move(cond));
-		root = move(join);
-
-		// we replace the original subquery with a BoundColumnRefExpression refering to the mark column
-		return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(subquery_index, 0));
 	}
 	}
 	return nullptr;
