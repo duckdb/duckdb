@@ -66,7 +66,7 @@ void OperatorExpression::ResolveType() {
 	}
 }
 
-unique_ptr<Expression> OperatorExpression::Copy() {
+unique_ptr<Expression> OperatorExpression::Copy() const {
 	auto copy = make_unique<OperatorExpression>(type, return_type);
 	copy->CopyProperties(*this);
 	for (auto &it : children) {

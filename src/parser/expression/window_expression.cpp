@@ -32,7 +32,7 @@ WindowExpression::WindowExpression(ExpressionType type, unique_ptr<Expression> c
 	}
 }
 
-unique_ptr<Expression> WindowExpression::Copy() {
+unique_ptr<Expression> WindowExpression::Copy() const {
 	auto child_copy = child ? child->Copy() : nullptr;
 	auto new_window = make_unique<WindowExpression>(type, move(child_copy));
 	new_window->CopyProperties(*this);

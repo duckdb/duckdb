@@ -7,7 +7,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> BoundExpression::Copy() {
+unique_ptr<Expression> BoundExpression::Copy() const {
 	return make_unique<BoundExpression>(return_type, index);
 }
 

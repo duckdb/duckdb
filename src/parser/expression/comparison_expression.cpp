@@ -7,7 +7,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> ComparisonExpression::Copy() {
+unique_ptr<Expression> ComparisonExpression::Copy() const {
 	auto copy = make_unique<ComparisonExpression>(type, left->Copy(), right->Copy());
 	copy->CopyProperties(*this);
 	return move(copy);
