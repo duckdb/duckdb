@@ -21,7 +21,6 @@ using namespace std;
 namespace duckdb {
 
 class CommonAggregateOptimizer : public LogicalOperatorVisitor {
-
 public:
     void VisitOperator(LogicalOperator &op) override;
 

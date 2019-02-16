@@ -21,7 +21,6 @@ void CommonAggregateOptimizer::VisitOperator(LogicalOperator &op) {
 
 LogicalAggregate* CommonAggregateOptimizer::find_logical_aggregate(const vector<unique_ptr<LogicalOperator>>& child_operators) {
 		for (auto& child_operator: child_operators) {
-
 			if (child_operator->type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY)
 				return static_cast<LogicalAggregate*>(child_operator.get()); 
 		}
@@ -30,7 +29,6 @@ LogicalAggregate* CommonAggregateOptimizer::find_logical_aggregate(const vector<
 }
 
 void CommonAggregateOptimizer::ExtractCommonAggregateExpressions(LogicalOperator &projection) {
-
 	auto aggregate = find_logical_aggregate(projection.children);
 
 	// TODO: should I assert that size of projection.expressions and aggregate.groups + aggregate.expressions are equal?
