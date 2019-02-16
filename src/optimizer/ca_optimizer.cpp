@@ -37,20 +37,34 @@ void CommonAggregateOptimizer::ExtractCommonAggregateExpressions(LogicalOperator
 		return;
 	}
 
-	// TODO: Make this work in the case of the presence of groups.
-	// auto nr_of_groups = aggregate->groups.size();
+	vector<unique_ptr<Expression>> new_aggregate_expressions;
+	vector<unique_ptr<Expression>> new_projection_expressions(projection.expressions.size());
+
+	auto nr_of_groups = aggregate->groups.size();
 
 	aggregate_to_projection_map_t aggregate_to_projection_map;
 
 	for (size_t i = 0; i < projection.expressions.size(); i++) {
-		auto& positions = aggregate_to_projection_map[aggregate->expressions[i].get()];
-		positions.insert(positions.end(), i);
+		auto& column_expression = projection.expressions[i];
+
+		// TODO: Do we need to assert that the column_expression is a BoundExpression?
+		auto column_index = static_cast<BoundExpression&>(*column_expression).index;
+
+		if (column_index < nr_of_groups) {
+			/* this column_expression represents a group.
+			** Just copy it into new_projection_expressions at its proper position. */
+			new_projection_expressions[i] = column_expression->Copy();
+
+		}
+		else {
+			// this column_expression represents an aggregate. Start doing some bookkeeping.
+			auto& positions = aggregate_to_projection_map[aggregate->expressions[column_index - nr_of_groups].get()];
+			positions.insert(positions.end(), i);
+		}
 	}
 
-	vector<unique_ptr<Expression>> new_group_by_expressions;
-	vector<unique_ptr<Expression>> new_projection_expressions(projection.expressions.size());
-
-	size_t projection_index = 0;
+	// indices to aggregates start after indices to groups.
+	size_t projection_index = nr_of_groups;
 
 	for (auto& aggregate_to_projections : aggregate_to_projection_map) {
 		auto& positions = aggregate_to_projections.second;
@@ -70,11 +84,11 @@ void CommonAggregateOptimizer::ExtractCommonAggregateExpressions(LogicalOperator
 
 		Expression* aggregate_expression = aggregate_to_projections.first;
 
-		new_group_by_expressions.push_back(aggregate_expression->Copy());
+		new_aggregate_expressions.push_back(aggregate_expression->Copy());
 		
 		projection_index++;
 	}
 
 	projection.expressions.swap(new_projection_expressions);
-	aggregate->expressions.swap(new_group_by_expressions);
+	aggregate->expressions.swap(new_aggregate_expressions);
 }
