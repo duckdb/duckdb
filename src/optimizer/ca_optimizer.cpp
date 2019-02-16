@@ -1,6 +1,6 @@
 #include "optimizer/ca_optimizer.hpp"
 
-#include "parser/expression/bound_columnref_expression.hpp"
+#include "parser/expression/bound_expression.hpp"
 
 #include "planner/operator/logical_filter.hpp"
 #include "planner/operator/logical_projection.hpp"
@@ -59,9 +59,9 @@ void CommonAggregateOptimizer::ExtractCommonAggregateExpressions(LogicalOperator
 
 		unique_ptr<Expression> bce = projection.expressions[*it]->Copy();
 
-		// TODO: do we need to assert that bce is a BoundColumnRefExpression?
+		// TODO: do we need to assert that bce is a BoundExpression?
 
-		static_cast<BoundColumnRefExpression&>(*bce).binding.column_index = projection_index;
+		static_cast<BoundExpression&>(*bce).index = projection_index;
 
 		while (it != positions.end()) {
 			new_projection_expressions[*it] = bce->Copy();
