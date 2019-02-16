@@ -390,6 +390,8 @@ string JoinTypeToString(JoinType type) {
 		return "SEMI";
 	case JoinType::ANTI:
 		return "ANTI";
+	case JoinType::SINGLE:
+		return "SINGLE";
 	case JoinType::MARK:
 		return "MARK";
 	case JoinType::INVALID:

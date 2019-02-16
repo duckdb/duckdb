@@ -310,6 +310,36 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	}
 }
 
+void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) {
+	groups.Verify();
+	assert(groups.column_count == group_types.size());
+	for(size_t i = 0; i < result.column_count; i++) {
+		result.data[i].count = groups.size();
+		result.data[i].sel_vector = groups.data[0].sel_vector;
+		assert(result.data[i].type == payload_types[i]);
+	}
+	result.sel_vector = groups.sel_vector;
+	if (groups.size() == 0) {
+		return;
+	}
+	// find the groups associated with the addresses
+	// FIXME: this should not use the FindOrCreateGroups, creating them is unnecessary
+	StaticVector<uint64_t> addresses;
+	StaticVector<bool> new_group_dummy;
+	FindOrCreateGroups(groups, addresses, new_group_dummy);
+	// now fetch the aggregates
+	for (size_t aggr_idx = 0; aggr_idx < aggregate_types.size(); aggr_idx++) {
+		assert(result.column_count > aggr_idx);
+		assert(aggregate_types[aggr_idx] == ExpressionType::AGGREGATE_COUNT_STAR || aggregate_types[aggr_idx] == ExpressionType::AGGREGATE_COUNT);
+		assert(payload_types[aggr_idx] == TypeId::BIGINT);
+
+		VectorOperations::Gather::Set(addresses, result.data[aggr_idx]);
+		VectorOperations::AddInPlace(addresses,
+		                             GetAggrPayloadSize(aggregate_types[aggr_idx], result.data[aggr_idx].type));
+
+	}
+}
+
 // this is to support distinct aggregations where we need to record whether we
 // have already seen a value for a group
 void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresses, Vector &new_group) {

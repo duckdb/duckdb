@@ -261,7 +261,6 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 			auto right_child = make_unique<ConstantExpression>(Value::Numeric(count_type, 1));
 			auto comparison = make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(left_child), move(right_child));
 
-
 			vector<unique_ptr<Expression>> projection_list;
 			projection_list.push_back(move(comparison));
 			auto projection_index = binder.GenerateTableIndex();
@@ -377,7 +376,7 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 			// we replace the original subquery with a BoundColumnRefExpression refering to the first result of the aggregation
 			return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(aggr_index, 0));
 		} else {
-			// in the correlated case, we push first a DUPLICATE ELIMINATED left outer join (as entries WITHOUT a join partner result in NULL)
+			// in the correlated case, we push first a DUPLICATE ELIMINATED single join (as entries WITHOUT a join partner result in NULL)
 			auto delim_join = make_unique<LogicalJoin>(JoinType::SINGLE);
 			// the left side is the original plan
 			delim_join->AddChild(move(root));
@@ -450,7 +449,6 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 			// we replace the original subquery with a BoundColumnRefExpression refering to the mark column
 			return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(subquery_index, 0));
 		} else {
-			throw ParserException("Correlated ANY/ALL not supported yet");
 			// FIXME: mostly duplicated code from SCALAR
 			// in the correlated case, we push first a DUPLICATE ELIMINATED left outer join (as entries WITHOUT a join partner result in NULL)
 			auto delim_join = make_unique<LogicalJoin>(JoinType::MARK);

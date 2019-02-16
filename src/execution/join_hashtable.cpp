@@ -215,6 +215,25 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	}
 	assert(keys.size() == payload.size());
 	sel_t not_null_sel_vector[STANDARD_VECTOR_SIZE];
+	if (join_type == JoinType::MARK && correlated_mark_join_info.correlated_types.size() > 0) {
+		auto &info = correlated_mark_join_info;
+		// Correlated MARK join
+		// first push the values into the correlated_counts
+		assert(info.correlated_counts);
+		for(size_t i = 0; i < info.correlated_types.size(); i++) {
+			info.group_chunk.data[i].Reference(keys.data[i]);
+		}
+		info.payload_chunk.data[0].Reference(keys.data[info.correlated_types.size()]);
+		info.payload_chunk.data[1].Reference(keys.data[info.correlated_types.size()]);
+		info.payload_chunk.data[0].type = info.payload_chunk.data[1].type = TypeId::BIGINT;
+		info.payload_chunk.sel_vector = info.group_chunk.sel_vector = info.group_chunk.data[0].sel_vector;
+		info.correlated_counts->AddChunk(info.group_chunk, info.payload_chunk);
+		// the correlated columns have equivalent NULL values
+		// then fill in the NULL mask of the duplicate eliminated columns
+		for(size_t i = 0; i < info.correlated_types.size(); i++) {
+			FillNullMask(keys.data[i]);
+		}
+	}
 	if (!null_values_are_equal) {
 		// first create a selection vector of the non-null values in the keys
 		// because in a join, any NULL value can never find a matching tuple
@@ -236,8 +255,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		if (not_null_count == 0) {
 			return;
 		}
-	} else {
-		assert(join_type != JoinType::MARK);
+	} else if (join_type != JoinType::MARK) {
 		// in this join, NULL values are equivalent!
 		// we replace NULLs in the mask with NullValue<T> inside the vector
 		for(size_t i = 0; i < keys.column_count; i++) {
@@ -302,8 +320,14 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	assert(!keys.sel_vector); // should be flattened before
 
-	if (null_values_are_equal) {
-		assert(join_type != JoinType::MARK);
+	if (join_type == JoinType::MARK && correlated_mark_join_info.correlated_types.size() > 0) {
+		auto &info = correlated_mark_join_info;
+		// MARK join: the correlated columns have equivalent NULL values
+		assert(info.correlated_types.size() + 1 == keys.column_count);
+		for(size_t i = 0; i < info.correlated_types.size(); i++) {
+			FillNullMask(keys.data[i]);
+		}
+	} else if (null_values_are_equal) {
 		// NULL values are equal, fill NULL values with NullValue<T> in the keys
 		for(size_t i = 0; i < keys.column_count; i++) {
 			FillNullMask(keys.data[i]);
@@ -651,7 +675,49 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 	assert(ht.count > 0);
 
 	ScanKeyMatches(keys);
-	ConstructMarkJoinResult(keys, left, result, found_match, ht.has_null);
+	if (ht.correlated_mark_join_info.correlated_types.size() == 0) {
+		ConstructMarkJoinResult(keys, left, result, found_match, ht.has_null);
+	} else {
+		auto &info = ht.correlated_mark_join_info;
+		// there are correlated columns
+		// first we fetch the counts from the aggregate hashtable corresponding to these entries
+		assert(keys.column_count == info.group_chunk.column_count + 1);
+		for(size_t i = 0; i < info.group_chunk.column_count; i++) {
+			info.group_chunk.data[i].Reference(keys.data[i]);
+		}
+		info.group_chunk.sel_vector = keys.sel_vector;
+		info.correlated_counts->FetchAggregates(info.group_chunk, info.result_chunk);
+		assert(!info.result_chunk.sel_vector);
+
+		// for the initial set of columns we just reference the left side
+		for(size_t i = 0; i < left.column_count; i++) {
+			result.data[i].Reference(left.data[i]);
+		}
+		// create the result matching vector
+		auto &result_vector = result.data[left.column_count];
+		result_vector.count = result.data[0].count;
+		// first set the nullmask based on whether or not there were NULL values in the join key
+		result_vector.nullmask = keys.data[keys.column_count - 1].nullmask;
+		
+		auto bool_result = (bool*) result_vector.data;
+		auto count_star = (int64_t*) info.result_chunk.data[0].data;
+		auto count = (int64_t*) info.result_chunk.data[1].data;
+		// set the entries to either true or false based on whether a match was found
+		for(size_t i = 0; i < result_vector.count; i++) {
+			assert(count_star[i] >= count[i]);
+			bool_result[i] = found_match[i];
+			if (!bool_result[i] && count_star[i] > count[i]) {
+				// RHS has NULL value and result is false:, set to null
+				result_vector.nullmask[i] = true;
+			}
+			if (count_star[i] == 0) {
+				// count == 0, set nullmask to false (we know the result is false now)
+				result_vector.nullmask[i] = false;
+			}
+		}
+
+
+	}
 	finished = true;
 }
 

@@ -110,8 +110,6 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 			// RHS empty: just set found_match to false
 			bool found_match[STANDARD_VECTOR_SIZE] = {false};
 			ConstructMarkJoinResult(state->left_join_condition, state->child_chunk, chunk, found_match, state->has_null);
-			// // RHS empty: result is not NULL but just false
-			// chunk.data[chunk.column_count - 1].nullmask.reset();
 		} else {
 			throw Exception("Unhandled type for empty NL join");
 		}

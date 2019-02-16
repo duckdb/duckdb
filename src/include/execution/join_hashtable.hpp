@@ -13,6 +13,7 @@
 #include "common/types/tuple.hpp"
 #include "common/types/vector.hpp"
 #include "planner/operator/logical_join.hpp"
+#include "execution/aggregate_hashtable.hpp"
 
 #include <mutex>
 
@@ -145,6 +146,18 @@ public:
 	//! Whether or not any of the key elements contain NULL
 	bool has_null;
 
+	struct {
+		//! The types of the duplicate eliminated columns, only used in correlated MARK JOIN for flattening ANY()/ALL() expressions
+		vector<TypeId> correlated_types;
+		//! The HT that holds the group counts for every correlated column
+		unique_ptr<SuperLargeHashTable> correlated_counts;
+		//! Group chunk used for aggregating into correlated_counts
+		DataChunk group_chunk;
+		//! Payload chunk used for aggregating into correlated_counts
+		DataChunk payload_chunk;
+		//! Result chunk used for aggregating into correlated_counts
+		DataChunk result_chunk;
+	} correlated_mark_join_info;
 private:
 	//! Insert the given set of locations into the HT with the given set of
 	//! hashes. Caller should hold lock in parallel HT.

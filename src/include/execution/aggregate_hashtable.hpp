@@ -41,6 +41,9 @@ public:
 	//! Returns the amount of elements found.
 	size_t Scan(size_t &scan_position, DataChunk &group, DataChunk &result);
 
+	//! Fetch the aggregates for specific groups from the HT and place them in the result
+	void FetchAggregates(DataChunk &groups, DataChunk &result);
+
 	void FindOrCreateGroups(DataChunk &groups, Vector &addresses, Vector &new_group);
 
 	//! The stringheap of the AggregateHashTable

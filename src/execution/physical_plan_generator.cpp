@@ -416,6 +416,32 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 		}
 	}
 	if (op.is_duplicate_eliminated) {
+		vector<TypeId> delim_types;
+		for(auto &delim_expr : op.duplicate_eliminated_columns) {
+			delim_types.push_back(delim_expr->return_type);
+		}
+		if (op.type == JoinType::MARK) {
+			auto &hash_join = (PhysicalHashJoin&) *plan;
+			// correlated eliminated MARK join
+			// a correlated MARK join should always have exactly one non-correlated column
+			// (namely the actual predicate of the ANY() expression)
+			assert(delim_types.size() + 1 == hash_join.conditions.size());
+			// push duplicate eliminated columns into the hash table:
+			// - these columns will be considered as equal for NULL values AND
+			// - the has_null and has_result flags will be grouped by these columns
+			assert(plan->type == PhysicalOperatorType::HASH_JOIN);
+			auto &info = hash_join.hash_table->correlated_mark_join_info;
+
+			vector<TypeId> payload_types = {TypeId::BIGINT, TypeId::BIGINT}; // COUNT types
+			vector<ExpressionType> aggregate_types = {ExpressionType::AGGREGATE_COUNT_STAR, ExpressionType::AGGREGATE_COUNT};
+
+			info.correlated_counts = make_unique<SuperLargeHashTable>(1024, delim_types, payload_types, aggregate_types);
+			info.correlated_types = delim_types;
+			// FIXME: these can be initialized "empty" (without allocating empty vectors)
+			info.group_chunk.Initialize(delim_types);
+			info.payload_chunk.Initialize(payload_types);
+			info.result_chunk.Initialize(payload_types);
+		}
 		// duplicate eliminated join
 		// first gather the scans on the duplicate eliminated data set from the RHS
 		vector<PhysicalOperator*> delim_scans;
@@ -428,10 +454,6 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 		auto chunk_scan = make_unique<PhysicalChunkScan>(delim_join->children[0]->GetTypes());
 		chunk_scan->collection = &delim_join->lhs_data;
 		// now we need to create a projection that projects only the duplicate eliminated columns
-		vector<TypeId> delim_types;
-		for(auto &delim_expr : op.duplicate_eliminated_columns) {
-			delim_types.push_back(delim_expr->return_type);
-		}
 		assert(op.duplicate_eliminated_columns.size() > 0);
 		auto projection = make_unique<PhysicalProjection>(delim_types, move(op.duplicate_eliminated_columns));
 		projection->children.push_back(move(chunk_scan));
