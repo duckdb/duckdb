@@ -72,7 +72,7 @@ void CommonAggregateOptimizer::ExtractCommonAggregateExpressions(LogicalOperator
 
 		unique_ptr<Expression> bce = projection.expressions[*it]->Copy();
 
-		// TODO: do we need to assert that bce is a BoundExpression?
+		// TODO: We need to generalize this for BoundExpression, Cast_expression, perhaps alias like expression and arithmetic expressions as well.
 
 		static_cast<BoundExpression&>(*bce).index = projection_index;
 
