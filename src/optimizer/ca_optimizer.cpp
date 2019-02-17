@@ -10,6 +10,37 @@ using namespace std;
 
 #include <iostream>
 
+/* boss case
+SELECT i, SUM(i), SUM(i), COUNT(*), AVG(i), j
+	FROM foo
+	GROUP BY i, j
+	HAVING AVG(i) > 10 AND AVG(i) < 40;
+
+PROJECTION[#0, #2, #3, #4, CAST[DECIMAL](#5) / CAST[DECIMAL](#6), #1](
+    FILTER[CAST[DECIMAL](#9) / CAST[DECIMAL](#10)<40.000000, CAST[DECIMAL](#7) / CAST[DECIMAL](#8)>10.000000](
+        AGGREGATE_AND_GROUP_BY
+			[
+            SUM(0.0),
+            SUM(0.0),
+            COUNT(*),
+            SUM(0.0),
+            COUNT(CAST[BIGINT](0.0)),
+            SUM(0.0),
+            COUNT(CAST[BIGINT](0.0)),
+            SUM(0.0),
+            COUNT(CAST[BIGINT](0.0))
+			]
+            [
+				0.0,
+				0.1
+			] (GET(foo)
+        )
+    )
+)
+*/
+
+// TODO: Check behavior of aliases and perhaps create a bug report for the having clause containing a alias of cast typed.
+
 void CommonAggregateOptimizer::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::PROJECTION:
@@ -30,11 +61,28 @@ LogicalAggregate* CommonAggregateOptimizer::find_logical_aggregate(const vector<
 		return nullptr;
 }
 
+void CommonAggregateOptimizer::find_bound_references(Expression& expression, const LogicalAggregate& aggregate, aggregate_to_bound_ref_map_t& aggregate_to_projection_map, size_t& nr_of_groups) {
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_REF) {
+
+		auto column_index = &(static_cast<BoundExpression&>(expression).index);
+
+		if (*column_index >= nr_of_groups) {
+			// this column_expression represents an aggregate. Start doing some bookkeeping.
+			auto& positions = aggregate_to_projection_map[aggregate.expressions[*column_index - nr_of_groups].get()];
+			positions.push_back(column_index);
+		}
+	}
+
+	expression.EnumerateChildren(
+		[this, &aggregate, &aggregate_to_projection_map, &nr_of_groups]
+		(Expression *expression) {find_bound_references(*expression, aggregate, aggregate_to_projection_map, nr_of_groups);});
+}
+
 void CommonAggregateOptimizer::ExtractCommonAggregateExpressions(LogicalOperator &projection) {
 	std::cout << "BEFORE OPTIMIZING:" << std::endl;
 	std::cout << projection.ToString() << std::endl;
 
-
+	// TODO: make this thing handle filters and other operators between in the projection and the actual aggregate.
 	auto aggregate = find_logical_aggregate(projection.children);
 
 	// TODO: should I assert that size of projection.expressions and aggregate.groups + aggregate.expressions are equal?
@@ -44,57 +92,32 @@ void CommonAggregateOptimizer::ExtractCommonAggregateExpressions(LogicalOperator
 	}
 
 	vector<unique_ptr<Expression>> new_aggregate_expressions;
-	vector<unique_ptr<Expression>> new_projection_expressions(projection.expressions.size());
 
 	auto nr_of_groups = aggregate->groups.size();
 
-	aggregate_to_projection_map_t aggregate_to_projection_map;
+	aggregate_to_bound_ref_map_t aggregate_to_projection_map;
 
-	for (size_t i = 0; i < projection.expressions.size(); i++) {
-		auto& column_expression = projection.expressions[i];
-
-		// TODO: Do we need to assert that the column_expression is a BoundExpression?
-		auto column_index = static_cast<BoundExpression&>(*column_expression).index;
-
-		if (column_index < nr_of_groups) {
-			/* this column_expression represents a group.
-			** Just copy it into new_projection_expressions at its proper position. */
-			new_projection_expressions[i] = column_expression->Copy();
-		}
-		else {
-			// this column_expression represents an aggregate. Start doing some bookkeeping.
-			auto& positions = aggregate_to_projection_map[aggregate->expressions[column_index - nr_of_groups].get()];
-			positions.insert(positions.end(), i);
-		}
+	for (auto& column_expression : projection.expressions) {
+		find_bound_references(*column_expression, *aggregate, aggregate_to_projection_map, nr_of_groups);
 	}
 
 	// indices to aggregates start after indices to groups.
-	size_t projection_index = nr_of_groups;
+	size_t aggregate_index = nr_of_groups;
 
 	for (auto& aggregate_to_projections : aggregate_to_projection_map) {
 		auto& positions = aggregate_to_projections.second;
 
-		auto it = positions.begin();
-
-		unique_ptr<Expression> bce = projection.expressions[*it]->Copy();
-
-		// TODO: We need to generalize this for BoundExpression, Cast_expression, perhaps alias like expression and arithmetic expressions as well.
-
-		static_cast<BoundExpression&>(*bce).index = projection_index;
-
-		while (it != positions.end()) {
-			new_projection_expressions[*it] = bce->Copy();
-			it++;
+		for (auto index_ptr : positions) {
+			*index_ptr = aggregate_index;
 		}
 
 		Expression* aggregate_expression = aggregate_to_projections.first;
 
 		new_aggregate_expressions.push_back(aggregate_expression->Copy());
 		
-		projection_index++;
+		aggregate_index++;
 	}
 
-	projection.expressions.swap(new_projection_expressions);
 	aggregate->expressions.swap(new_aggregate_expressions);
 	std::cout << "AFTER OPTIMIZING:" << std::endl;
 	std::cout << projection.ToString() << std::endl;
