@@ -8,6 +8,8 @@
 using namespace duckdb;
 using namespace std;
 
+#include <iostream>
+
 void CommonAggregateOptimizer::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::PROJECTION:
@@ -29,6 +31,10 @@ LogicalAggregate* CommonAggregateOptimizer::find_logical_aggregate(const vector<
 }
 
 void CommonAggregateOptimizer::ExtractCommonAggregateExpressions(LogicalOperator &projection) {
+	std::cout << "BEFORE OPTIMIZING:" << std::endl;
+	std::cout << projection.ToString() << std::endl;
+
+
 	auto aggregate = find_logical_aggregate(projection.children);
 
 	// TODO: should I assert that size of projection.expressions and aggregate.groups + aggregate.expressions are equal?
@@ -90,4 +96,6 @@ void CommonAggregateOptimizer::ExtractCommonAggregateExpressions(LogicalOperator
 
 	projection.expressions.swap(new_projection_expressions);
 	aggregate->expressions.swap(new_aggregate_expressions);
+	std::cout << "AFTER OPTIMIZING:" << std::endl;
+	std::cout << projection.ToString() << std::endl;
 }
