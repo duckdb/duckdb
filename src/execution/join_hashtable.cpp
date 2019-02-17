@@ -715,8 +715,6 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 				result_vector.nullmask[i] = false;
 			}
 		}
-
-
 	}
 	finished = true;
 }

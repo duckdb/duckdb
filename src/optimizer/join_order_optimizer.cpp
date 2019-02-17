@@ -53,27 +53,6 @@ static void ExtractFilters(LogicalOperator *op, vector<unique_ptr<Expression>> &
 	op->expressions.clear();
 }
 
-static void GetTableReferences(LogicalOperator *op, unordered_set<size_t> &bindings) {
-	if (op->type == LogicalOperatorType::GET) {
-		auto get = (LogicalGet *)op;
-		bindings.insert(get->table_index);
-	} else if (op->type == LogicalOperatorType::SUBQUERY) {
-		auto subquery = (LogicalSubquery *)op;
-		bindings.insert(subquery->table_index);
-	} else if (op->type == LogicalOperatorType::TABLE_FUNCTION) {
-		auto table_function = (LogicalTableFunction *)op;
-		bindings.insert(table_function->table_index);
-	} else if (op->type == LogicalOperatorType::CHUNK_GET) {
-		auto chunk = (LogicalChunkGet *)op;
-		bindings.insert(chunk->table_index);
-	} else {
-		// iterate over the children
-		for (auto &child : op->children) {
-			GetTableReferences(child.get(), bindings);
-		}
-	}
-}
-
 static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, unique_ptr<Expression> expr) {
 	// push an expression into a filter
 	// first check if we have any filter to push it into
@@ -90,132 +69,6 @@ static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, 
 	return node;
 }
 
-static JoinSide CombineJoinSide(JoinSide left, JoinSide right) {
-	if (left == JoinSide::NONE) {
-		return right;
-	}
-	if (right == JoinSide::NONE) {
-		return left;
-	}
-	if (left != right) {
-		return JoinSide::BOTH;
-	}
-	return left;
-}
-
-static JoinSide GetJoinSide(Expression &expression, unordered_set<size_t> &left_bindings,
-                            unordered_set<size_t> &right_bindings) {
-	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = (BoundColumnRefExpression &)expression;
-		if (colref.depth > 0) {
-			// correlated column reference, we can't join on this
-			return JoinSide::BOTH;
-		}
-		if (left_bindings.find(colref.binding.table_index) != left_bindings.end()) {
-			// column references table on left side
-			assert(right_bindings.find(colref.binding.table_index) == right_bindings.end());
-			return JoinSide::LEFT;
-		} else {
-			// column references table on right side
-			assert(right_bindings.find(colref.binding.table_index) != right_bindings.end());
-			return JoinSide::RIGHT;
-		}
-	}
-	if (expression.type == ExpressionType::BOUND_REF) {
-		// column reference has already been bound, don't use it for reordering
-		return JoinSide::NONE;
-	}
-	if (expression.type == ExpressionType::SUBQUERY) {
-		return JoinSide::BOTH;
-	}
-	JoinSide join_side = JoinSide::NONE;
-	expression.EnumerateChildren([&](Expression *child) {
-		auto child_side = GetJoinSide(*child, left_bindings, right_bindings);
-		join_side = CombineJoinSide(child_side, join_side);
-	});
-	return join_side;
-}
-
-static unique_ptr<LogicalOperator> CreateJoinCondition(unique_ptr<LogicalOperator> op, LogicalJoin &join,
-                                                       unique_ptr<Expression> expr,
-                                                       unordered_set<size_t> &left_bindings,
-                                                       unordered_set<size_t> &right_bindings) {
-	auto total_side = GetJoinSide(*expr, left_bindings, right_bindings);
-	if (total_side != JoinSide::BOTH) {
-		// join condition does not reference both sides, add it as filter under the join
-		int push_side = total_side == JoinSide::LEFT ? 0 : 1;
-		join.children[push_side] = PushFilter(move(join.children[push_side]), move(expr));
-		return op;
-	} else if (expr->type >= ExpressionType::COMPARE_EQUAL && expr->type <= ExpressionType::COMPARE_NOTLIKE) {
-		// comparison
-		auto &comparison = (ComparisonExpression &)*expr;
-		auto left_side = GetJoinSide(*comparison.left, left_bindings, right_bindings);
-		auto right_side = GetJoinSide(*comparison.right, left_bindings, right_bindings);
-		if (left_side != JoinSide::BOTH && right_side != JoinSide::BOTH) {
-			// join condition can be divided in a left/right side
-			JoinCondition condition;
-			condition.comparison = expr->type;
-			auto left = move(comparison.left);
-			auto right = move(comparison.right);
-			if (left_side == JoinSide::RIGHT) {
-				// left = right, right = left, flip the comparison symbol and reverse sides
-				swap(left, right);
-				condition.comparison = ComparisonExpression::FlipComparisionExpression(expr->type);
-			}
-			condition.left = move(left);
-			condition.right = move(right);
-			join.conditions.push_back(move(condition));
-			return op;
-		}
-	} else if (expr->type == ExpressionType::OPERATOR_NOT) {
-		auto &op_expr = (OperatorExpression &)*expr;
-		assert(op_expr.children.size() == 1);
-		ExpressionType child_type = op_expr.children[0]->GetExpressionType();
-
-		// the condition is ON NOT (EXPRESSION)
-		// we can transform this to remove the NOT if the child is a Comparison
-		// e.g.:
-		// ON NOT (X = 3) can be turned into ON (X <> 3)
-		// ON NOT (X > 3) can be turned into ON (X <= 3)
-		// for non-comparison operators here we just push the filter
-		if (child_type >= ExpressionType::COMPARE_EQUAL && child_type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
-			// switcheroo the child condition
-			// our join needs to compare explicit left and right sides. So we
-			// invert the condition to express NOT, this way we can still use
-			// equi-joins
-			op_expr.children[0]->type = ComparisonExpression::NegateComparisionExpression(child_type);
-			return CreateJoinCondition(move(op), join, move(op_expr.children[0]), left_bindings, right_bindings);
-		}
-	}
-	// filter is on both sides of the join
-	// but the type was not recognized
-	// push as filter under the join
-	op = PushFilter(move(op), move(expr));
-	return op;
-}
-
-//! Resolve join conditions for non-inner joins
-unique_ptr<LogicalOperator> JoinOrderOptimizer::ResolveJoinConditions(unique_ptr<LogicalOperator> op) {
-	// first resolve the join conditions of any children
-	for (size_t i = 0; i < op->children.size(); i++) {
-		op->children[i] = ResolveJoinConditions(move(op->children[i]));
-	}
-	if (op->type == LogicalOperatorType::JOIN) {
-		LogicalJoin &join = (LogicalJoin &)*op;
-		if (join.expressions.size() > 0) {
-			// turn any remaining expressions into proper join conditions
-			unordered_set<size_t> left_bindings, right_bindings;
-			GetTableReferences(join.children[0].get(), left_bindings);
-			GetTableReferences(join.children[1].get(), right_bindings);
-			// now for each expression turn it into a proper JoinCondition
-			for (size_t i = 0; i < join.expressions.size(); i++) {
-				op = CreateJoinCondition(move(op), join, move(join.expressions[i]), left_bindings, right_bindings);
-			}
-			join.expressions.clear();
-		}
-	}
-	return op;
-}
 
 bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<LogicalOperator *> &filter_operators,
                                               LogicalOperator *parent) {
@@ -267,7 +120,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		// also, we have to resolve the join conditions for the joins here
 		// get the left and right bindings
 		unordered_set<size_t> bindings;
-		GetTableReferences(op, bindings);
+		LogicalJoin::GetTableReferences(*op, bindings);
 		// now create the relation that refers to all these bindings
 		auto relation = make_unique<Relation>(&input_op, parent);
 		for (size_t it : bindings) {
@@ -742,7 +595,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 	}
 	// have to replace at this node
 	parent->children[0] = move(join_tree.second);
-	return ResolveJoinConditions(move(plan));
+	return plan;
 }
 
 // the join ordering is pretty much a straight implementation of the paper "Dynamic Programming Strikes Back" by Guido
@@ -760,11 +613,11 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	vector<LogicalOperator *> filter_operators;
 	if (!ExtractJoinRelations(*op, filter_operators)) {
 		// do not support reordering this type of plan
-		return ResolveJoinConditions(move(plan));
+		return plan;
 	}
 	if (relations.size() <= 1) {
 		// at most one relation, nothing to reorder
-		return ResolveJoinConditions(move(plan));
+		return plan;
 	}
 	// now that we know we are going to perform join ordering we actually extract the filters
 	for (auto &op : filter_operators) {

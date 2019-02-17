@@ -189,6 +189,42 @@ struct FlattenDependentJoins {
 				this->data_offset = aggr->groups.size();
 				return plan;
 			}
+			case LogicalOperatorType::JOIN: {
+				// FIXME: consider different join types
+				auto &join = (LogicalJoin&) *plan;
+				if (join.type != JoinType::INNER) {
+					throw Exception("Unsupported join type in subquery");
+				}
+				assert(plan->children.size() == 2);
+				// check the correlated expressions in the children of the join
+				bool left_has_correlation  = has_correlated_expressions.find(plan->children[0].get()) != has_correlated_expressions.end();
+				bool right_has_correlation = has_correlated_expressions.find(plan->children[1].get()) != has_correlated_expressions.end();
+				if (!right_has_correlation) {
+					// only left has correlation: push into left
+					plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+				} else if (!left_has_correlation) {
+					// only right has correlation: push into right
+					plan->children[1] = PushDownDependentJoin(move(plan->children[1]));
+				} else {
+					// both sides have correlation
+					// push into both sides
+					plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+					auto left_binding = this->base_binding;
+					plan->children[1] = PushDownDependentJoin(move(plan->children[1]));
+					// add the correlated columns to the join conditions
+					for(size_t i = 0; i < correlated_columns.size(); i++) {
+						JoinCondition cond;
+						cond.left = make_unique<BoundColumnRefExpression>("", correlated_columns[i].type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
+						cond.right = make_unique<BoundColumnRefExpression>("", correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+						cond.comparison = ExpressionType::COMPARE_EQUAL;
+						join.conditions.push_back(move(cond));
+					}
+				}
+				// then we replace any correlated expressions with the corresponding entry in the correlated_map
+				RewriteCorrelatedExpressions rewriter(base_binding, correlated_map);
+				rewriter.VisitOperator(*plan);
+				return plan;
+			}
 			case LogicalOperatorType::LIMIT: {
 				auto &limit = (LogicalLimit&) *plan;
 				if (limit.offset > 0) {
@@ -542,42 +578,170 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(CrossProductRef &expr) {
 	AcceptChild(&expr.left);
 	assert(root);
 	cross_product->AddChild(move(root));
-	root = nullptr;
 
 	AcceptChild(&expr.right);
 	assert(root);
 	cross_product->AddChild(move(root));
-	root = nullptr;
 
 	root = move(cross_product);
 	return nullptr;
 }
 
-unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
-	VisitExpression(&expr.condition);
-	auto join = make_unique<LogicalJoin>(expr.type);
+static JoinSide CombineJoinSide(JoinSide left, JoinSide right) {
+	if (left == JoinSide::NONE) {
+		return right;
+	}
+	if (right == JoinSide::NONE) {
+		return left;
+	}
+	if (left != right) {
+		return JoinSide::BOTH;
+	}
+	return left;
+}
 
+static JoinSide GetJoinSide(Expression &expression, unordered_set<size_t> &left_bindings,
+                            unordered_set<size_t> &right_bindings) {
+	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
+		auto &colref = (BoundColumnRefExpression &)expression;
+		assert(colref.depth == 0);
+		if (left_bindings.find(colref.binding.table_index) != left_bindings.end()) {
+			// column references table on left side
+			assert(right_bindings.find(colref.binding.table_index) == right_bindings.end());
+			return JoinSide::LEFT;
+		} else {
+			// column references table on right side
+			assert(right_bindings.find(colref.binding.table_index) != right_bindings.end());
+			return JoinSide::RIGHT;
+		}
+	}
+	if (expression.type == ExpressionType::BOUND_REF) {
+		// column reference has already been bound, don't use it for reordering
+		return JoinSide::NONE;
+	}
+	if (expression.type == ExpressionType::SUBQUERY) {
+		return JoinSide::BOTH;
+	}
+	JoinSide join_side = JoinSide::NONE;
+	expression.EnumerateChildren([&](Expression *child) {
+		auto child_side = GetJoinSide(*child, left_bindings, right_bindings);
+		join_side = CombineJoinSide(child_side, join_side);
+	});
+	return join_side;
+}
+
+static void CreateJoinCondition(LogicalJoin &join,
+                                                       unique_ptr<Expression> expr,
+                                                       unordered_set<size_t> &left_bindings,
+                                                       unordered_set<size_t> &right_bindings) {
+	auto total_side = GetJoinSide(*expr, left_bindings, right_bindings);
+	if (total_side != JoinSide::BOTH) {
+		// join condition does not reference both sides, add it as filter under the join
+		if (join.type == JoinType::LEFT && total_side == JoinSide::LEFT) {
+			// filter is on LHS and the join is a LEFT OUTER join, we can push it in the left child
+			if (join.children[0]->type != LogicalOperatorType::FILTER) {
+				// not a filter yet, push a new empty filter
+				auto filter = make_unique<LogicalFilter>();
+				filter->AddChild(move(join.children[0]));
+				join.children[0] = move(filter);
+			}
+			// push the expression into the filter
+			auto &filter = (LogicalFilter&) *join.children[0];
+			filter.expressions.push_back(move(expr));
+		}
+		// cannot push expression as filter
+		throw Exception("Join condition for non-inner join that does not refer to both sides of the join not supported");
+	} else if (expr->type >= ExpressionType::COMPARE_EQUAL && expr->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
+		// comparison
+		auto &comparison = (ComparisonExpression &)*expr;
+		auto left_side = GetJoinSide(*comparison.left, left_bindings, right_bindings);
+		auto right_side = GetJoinSide(*comparison.right, left_bindings, right_bindings);
+		if (left_side != JoinSide::BOTH && right_side != JoinSide::BOTH) {
+			// join condition can be divided in a left/right side
+			JoinCondition condition;
+			condition.comparison = expr->type;
+			auto left = move(comparison.left);
+			auto right = move(comparison.right);
+			if (left_side == JoinSide::RIGHT) {
+				// left = right, right = left, flip the comparison symbol and reverse sides
+				swap(left, right);
+				condition.comparison = ComparisonExpression::FlipComparisionExpression(expr->type);
+			}
+			condition.left = move(left);
+			condition.right = move(right);
+			join.conditions.push_back(move(condition));
+			return;
+		}
+		throw Exception("Join condition for non-inner join could not be divided in left/right comparison");
+	} else if (expr->type == ExpressionType::OPERATOR_NOT) {
+		auto &op_expr = (OperatorExpression &)*expr;
+		assert(op_expr.children.size() == 1);
+		ExpressionType child_type = op_expr.children[0]->GetExpressionType();
+		// the condition is ON NOT (EXPRESSION)
+		// we can transform this to remove the NOT if the child is a Comparison
+		// e.g.:
+		// ON NOT (X = 3) can be turned into ON (X <> 3)
+		// ON NOT (X > 3) can be turned into ON (X <= 3)
+		// for non-comparison operators here we just push the filter
+		if (child_type >= ExpressionType::COMPARE_EQUAL && child_type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
+			// switcheroo the child condition
+			// our join needs to compare explicit left and right sides. So we
+			// invert the condition to express NOT, this way we can still use
+			// equi-joins
+			op_expr.children[0]->type = ComparisonExpression::NegateComparisionExpression(child_type);
+			return CreateJoinCondition(join, move(op_expr.children[0]), left_bindings, right_bindings);
+		}
+	}
+	throw Exception("Unsupported join condition type for non-inner join");
+}
+
+unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
 	if (root) {
-		throw Exception("Joins product cannot have children!");
+		throw Exception("Joins need to be the root");
 	}
 
-	// we do not generate joins here
+	VisitExpression(&expr.condition);
+	if (expr.type == JoinType::INNER) {
+		// inner join, generate a cross product + filter
+		// this will be later turned into a proper join by the join order optimizer
+		auto cross_product = make_unique<LogicalCrossProduct>();
+
+		AcceptChild(&expr.left);
+		cross_product->AddChild(move(root));
+
+		AcceptChild(&expr.right);
+		cross_product->AddChild(move(root));
+
+		auto filter = make_unique<LogicalFilter>(move(expr.condition));
+		filter->AddChild(move(cross_product));
+		root = move(filter);
+		return nullptr;
+	}
+
+	// non inner-join
+	// create the the actual join
+	auto join = make_unique<LogicalJoin>(expr.type);
 
 	AcceptChild(&expr.left);
-	assert(root);
 	join->AddChild(move(root));
-	root = nullptr;
 
 	AcceptChild(&expr.right);
-	assert(root);
 	join->AddChild(move(root));
-	root = nullptr;
 
-	join->expressions.push_back(move(expr.condition));
-	LogicalFilter::SplitPredicates(join->expressions);
+	// now split the expressions by the AND clause
+	vector<unique_ptr<Expression>> expressions;
+	expressions.push_back(move(expr.condition));
+	LogicalFilter::SplitPredicates(expressions);
 
+	// find the table bindings on the LHS and RHS of the join
+	unordered_set<size_t> left_bindings, right_bindings;
+	LogicalJoin::GetTableReferences(*join->children[0], left_bindings);
+	LogicalJoin::GetTableReferences(*join->children[1], right_bindings);
+	// for each expression turn it into a proper JoinCondition
+	for(size_t i = 0; i < expressions.size(); i++) {
+		CreateJoinCondition(*join, move(expressions[i]), left_bindings, right_bindings);
+	}
 	root = move(join);
-
 	return nullptr;
 }
 

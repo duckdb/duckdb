@@ -9,6 +9,7 @@
 #pragma once
 
 #include "planner/logical_operator.hpp"
+#include <unordered_set>
 
 namespace duckdb {
 
@@ -29,6 +30,9 @@ public:
 	}
 
 	vector<string> GetNames() override;
+
+	// Gets the set of table references that are reachable from this node
+	static void GetTableReferences(LogicalOperator &op, std::unordered_set<size_t> &bindings);
 
 	//! The conditions of the join
 	vector<JoinCondition> conditions;
@@ -51,4 +55,5 @@ public:
 protected:
 	void ResolveTypes() override;
 };
+
 } // namespace duckdb
