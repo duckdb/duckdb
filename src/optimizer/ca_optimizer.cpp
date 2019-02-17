@@ -54,7 +54,6 @@ void CommonAggregateOptimizer::ExtractCommonAggregateExpressions(LogicalOperator
 			/* this column_expression represents a group.
 			** Just copy it into new_projection_expressions at its proper position. */
 			new_projection_expressions[i] = column_expression->Copy();
-
 		}
 		else {
 			// this column_expression represents an aggregate. Start doing some bookkeeping.
