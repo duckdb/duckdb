@@ -36,6 +36,10 @@ public:
 	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
 
 	string ToString() const override {
+		if (type ==  ExpressionType::AGGREGATE_COUNT_STAR) {
+			return GetName() + "(*)";
+		}
+
 		return GetName() + "(" + child->ToString() + ")";
 	}
 
