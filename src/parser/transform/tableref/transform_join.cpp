@@ -10,33 +10,34 @@ unique_ptr<TableRef> Transformer::TransformJoin(JoinExpr *root) {
 	auto result = make_unique<JoinRef>();
 	switch (root->jointype) {
 	case JOIN_INNER: {
-		result->type = duckdb::JoinType::INNER;
+		result->type = JoinType::INNER;
 		break;
 	}
 	case JOIN_LEFT: {
-		result->type = duckdb::JoinType::LEFT;
+		result->type = JoinType::LEFT;
 		break;
 	}
 	case JOIN_FULL: {
-		result->type = duckdb::JoinType::OUTER;
+		result->type = JoinType::OUTER;
 		break;
 	}
 	case JOIN_RIGHT: {
-		result->type = duckdb::JoinType::RIGHT;
+		result->type = JoinType::RIGHT;
 		break;
 	}
 	case JOIN_SEMI: {
-		result->type = duckdb::JoinType::SEMI;
+		result->type = JoinType::SEMI;
 		break;
 	}
-	default: { throw NotImplementedException("Join type %d not supported yet...\n", root->jointype); }
+	default: {
+		throw NotImplementedException("Join type %d not supported yet...\n", root->jointype); }
 	}
 
 	// Check the type of left arg and right arg before transform
 	result->left = TransformTableRefNode(root->larg);
 	result->right = TransformTableRefNode(root->rarg);
 
-	if (!root->quals) { // CROSS JOIN
+	if (!root->quals) { // CROSS PRODUCT
 		auto cross = make_unique<CrossProductRef>();
 		cross->left = move(result->left);
 		cross->right = move(result->right);

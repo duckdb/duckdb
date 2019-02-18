@@ -621,7 +621,17 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	}
 	// now that we know we are going to perform join ordering we actually extract the filters
 	for (auto &op : filter_operators) {
-		ExtractFilters(op, filters);
+		if (op->type == LogicalOperatorType::JOIN) {
+			auto& join = (LogicalJoin&) *op;
+			assert(join.type == JoinType::INNER);
+			assert(join.expressions.size() == 0);
+			for(auto &cond : join.conditions) {
+				filters.push_back(make_unique<ComparisonExpression>(cond.comparison, move(cond.left), move(cond.right)));
+			}
+			join.conditions.clear();
+		} else {
+			ExtractFilters(op, filters);
+		}
 	}
 	// create potential edges from the comparisons
 	for (size_t i = 0; i < filters.size(); i++) {

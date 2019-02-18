@@ -189,6 +189,40 @@ struct FlattenDependentJoins {
 				this->data_offset = aggr->groups.size();
 				return plan;
 			}
+			case LogicalOperatorType::CROSS_PRODUCT: {
+				// cross product
+				// push into both sides of the plan
+				bool left_has_correlation  = has_correlated_expressions.find(plan->children[0].get())->second;
+				bool right_has_correlation = has_correlated_expressions.find(plan->children[1].get())->second;
+				if (!right_has_correlation) {
+					// only left has correlation: push into left
+					plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+					return plan;
+				}
+				if (!left_has_correlation) {
+					// only right has correlation: push into right
+					plan->children[1] = PushDownDependentJoin(move(plan->children[1]));
+					return plan;
+				}
+				// both sides have correlation
+				// turn into an inner join
+				auto join = make_unique<LogicalJoin>(JoinType::INNER);
+				join->null_values_are_equal = true;
+				plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+				auto left_binding = this->base_binding;
+				plan->children[1] = PushDownDependentJoin(move(plan->children[1]));
+				// add the correlated columns to the join conditions
+				for(size_t i = 0; i < correlated_columns.size(); i++) {
+					JoinCondition cond;
+					cond.left = make_unique<BoundColumnRefExpression>("", correlated_columns[i].type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
+					cond.right = make_unique<BoundColumnRefExpression>("", correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+					cond.comparison = ExpressionType::COMPARE_EQUAL;
+					join->conditions.push_back(move(cond));
+				}
+				join->children.push_back(move(plan->children[0]));
+				join->children.push_back(move(plan->children[1]));
+				return join;
+			}
 			case LogicalOperatorType::JOIN: {
 				// FIXME: consider different join types
 				auto &join = (LogicalJoin&) *plan;
@@ -197,28 +231,30 @@ struct FlattenDependentJoins {
 				}
 				assert(plan->children.size() == 2);
 				// check the correlated expressions in the children of the join
-				bool left_has_correlation  = has_correlated_expressions.find(plan->children[0].get()) != has_correlated_expressions.end();
-				bool right_has_correlation = has_correlated_expressions.find(plan->children[1].get()) != has_correlated_expressions.end();
+				bool left_has_correlation  = has_correlated_expressions.find(plan->children[0].get())->second;
+				bool right_has_correlation = has_correlated_expressions.find(plan->children[1].get())->second;
 				if (!right_has_correlation) {
 					// only left has correlation: push into left
 					plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
-				} else if (!left_has_correlation) {
+					return plan;
+				}
+				if (!left_has_correlation) {
 					// only right has correlation: push into right
 					plan->children[1] = PushDownDependentJoin(move(plan->children[1]));
-				} else {
-					// both sides have correlation
-					// push into both sides
-					plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
-					auto left_binding = this->base_binding;
-					plan->children[1] = PushDownDependentJoin(move(plan->children[1]));
-					// add the correlated columns to the join conditions
-					for(size_t i = 0; i < correlated_columns.size(); i++) {
-						JoinCondition cond;
-						cond.left = make_unique<BoundColumnRefExpression>("", correlated_columns[i].type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
-						cond.right = make_unique<BoundColumnRefExpression>("", correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
-						cond.comparison = ExpressionType::COMPARE_EQUAL;
-						join.conditions.push_back(move(cond));
-					}
+					return plan;
+				}
+				// both sides have correlation
+				// push into both sides
+				plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+				auto left_binding = this->base_binding;
+				plan->children[1] = PushDownDependentJoin(move(plan->children[1]));
+				// add the correlated columns to the join conditions
+				for(size_t i = 0; i < correlated_columns.size(); i++) {
+					JoinCondition cond;
+					cond.left = make_unique<BoundColumnRefExpression>("", correlated_columns[i].type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
+					cond.right = make_unique<BoundColumnRefExpression>("", correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+					cond.comparison = ExpressionType::COMPARE_EQUAL;
+					join.conditions.push_back(move(cond));
 				}
 				// then we replace any correlated expressions with the corresponding entry in the correlated_map
 				RewriteCorrelatedExpressions rewriter(base_binding, correlated_map);
@@ -239,10 +275,33 @@ struct FlattenDependentJoins {
 					return move(plan->children[0]);
 				}
 			}
+			case LogicalOperatorType::SUBQUERY: {
+				auto &subquery = (LogicalSubquery&) *plan;
+				// subquery node: push into children
+				plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+				// to get the correlated columns we have to refer to the subquery now
+				base_binding.table_index = subquery.table_index;
+				base_binding.column_index = subquery.column_count;
+				// we have to add the correlated columns to the projection set of the subquery
+				subquery.column_count += correlated_columns.size();
+				return plan;
+			}
+			case LogicalOperatorType::WINDOW: {
+				auto &window = (LogicalWindow&) *plan;
+				// push into children
+				plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+				// add the correlated columns to the PARTITION BY clauses in the Window
+				for(auto &expr : window.expressions) {
+					assert(expr->GetExpressionClass() == ExpressionClass::WINDOW);
+					auto &w = (WindowExpression&) *expr;
+					for(size_t i = 0; i < correlated_columns.size(); i++) {
+						w.partitions.push_back(make_unique<BoundColumnRefExpression>("", correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i)));
+					}
+				}
+				return plan;
+			}
 			case LogicalOperatorType::ORDER_BY:
 				throw ParserException("ORDER BY not supported in correlated subquery");
-			case LogicalOperatorType::WINDOW:
-				throw ParserException("WINDOW not supported in correlated subquery");
 			default:
 				throw NotImplementedException("Logical operator type for dependent join");
 		}

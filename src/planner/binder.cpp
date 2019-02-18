@@ -123,6 +123,10 @@ unique_ptr<TableRef> Binder::Visit(SubqueryRef &expr) {
 	expr.binder = make_unique<Binder>(context, this);
 	expr.binder->Bind(*expr.subquery);
 	bind_context.AddSubquery(GenerateTableIndex(), expr.alias, expr);
+
+	correlated_columns.insert(correlated_columns.end(), expr.binder->correlated_columns.begin(), expr.binder->correlated_columns.end());
+	expr.binder->correlated_columns.clear();
+
 	return nullptr;
 }
 

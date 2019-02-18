@@ -354,6 +354,8 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 	result = con.Query("SELECT SUM(i), (SELECT SUM(i) FROM integers WHERE i>SUM(i1.i)) FROM integers i1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+	// subquery with aggregation inside aggregation should fail
+	REQUIRE_FAIL(con.Query("SELECT SUM((SELECT SUM(i))) FROM integers"));
 	// aggregate with correlation in filter
 	result = con.Query("SELECT i, (SELECT MIN(i) FROM integers WHERE i>i1.i) FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
@@ -457,11 +459,6 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 	result = con.Query("SELECT SUM(i) FROM integers i1 WHERE i>(SELECT (SUM(i)+i1.i)/2 FROM integers WHERE i=1);");
 	REQUIRE(CHECK_COLUMN(result, 0, {5}));
 
-	// correlated columns in window functions not supported
-	REQUIRE_FAIL(con.Query("SELECT i, (SELECT row_number() OVER (ORDER BY i)) FROM integers;"));
-	// window function in correlated subquery not supported either
-	REQUIRE_FAIL(con.Query("SELECT i, (SELECT row_number() OVER (ORDER BY i) FROM integers WHERE i>i1.i LIMIT 1) FROM integers i1 ORDER BY i;"));
-
 	// use scalar subquery as argument to ALL/ANY
 	result = con.Query("SELECT i, (SELECT MIN(i) FROM integers WHERE i=i1.i) >= ALL(SELECT i FROM integers WHERE i IS NOT NULL) FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
@@ -561,6 +558,11 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test2 (a INTEGER, c INTEGER, str2 VARCHAR);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (11, 1, 'a'), (12, 1, 'b'), (13, 4, 'b')"));
 
+	result = con.Query("SELECT a, SUM(a), (SELECT SUM(a)+SUM(t1.b) FROM test) FROM test t1 GROUP BY a ORDER BY a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
+	REQUIRE(CHECK_COLUMN(result, 1, {11, 12, 13}));
+	REQUIRE(CHECK_COLUMN(result, 2, {37, 38, 39}));
+
 	// scalar query with multiple correlated columns
 	result = con.Query("SELECT (SELECT test.a+test.b+SUM(test2.a) FROM test2 WHERE str=str2) FROM test ORDER BY 1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 23, 39}));
@@ -585,10 +587,17 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {"a", "b", "c"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {false, true, false}));
 
+
 	// correlated expression in subquery
-	// result = con.Query("SELECT i, (SELECT s1.i FROM (SELECT * FROM integers WHERE i=i1.i) s1) AS j FROM integers i1 ORDER BY i;");
-	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
-	// REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3}));
+	result = con.Query("SELECT i, (SELECT s1.i FROM (SELECT * FROM integers WHERE i=i1.i) s1) AS j FROM integers i1 ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3}));
+	// join on two subqueries that both have a correlated expression in them
+	result = con.Query("SELECT i, (SELECT s1.i FROM (SELECT i FROM integers WHERE i=i1.i) s1 INNER JOIN (SELECT i FROM integers WHERE i=4-i1.i) s2 ON s1.i>s2.i) AS j FROM integers i1 ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value(), 3}));
+
+
 	// implicit join with correlated expression in filter
 	result = con.Query("SELECT i, (SELECT s1.i FROM integers s1, integers s2 WHERE s1.i=s2.i AND s1.i=4-i1.i) AS j FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
@@ -613,17 +622,35 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 2, Value(), Value()}));
 
-	// join on two subqueries that both have a correlated expression in them
-	// result = con.Query("SELECT i, (SELECT s1.i FROM (SELECT i FROM integers WHERE i=i1.i) s1 INNER JOIN (SELECT i FROM integers WHERE i=4-i1.i) s2 ON s1.i>s2.i) AS j FROM integers i1 ORDER BY i;");
-	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
-	// REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value(), 3}));
 	// left outer join in correlated expression
 	REQUIRE_FAIL(con.Query("SELECT i, (SELECT SUM(s1.i) FROM integers s1 LEFT OUTER JOIN integers s2 ON s1.i=s2.i OR s1.i=i1.i-1) AS j FROM integers i1 ORDER BY i;"));
 	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	// REQUIRE(CHECK_COLUMN(result, 1, {Value(), 6, 9, 12}));
-	// full outer join: postgres actually cannot run this one
+	// full outer join: both sqlite and postgres actually cannot run this one
 	REQUIRE_FAIL(con.Query("SELECT i, (SELECT SUM(s1.i) FROM integers s1 FULL OUTER JOIN integers s2 ON s1.i=s2.i OR s1.i=i1.i-1) AS j FROM integers i1 ORDER BY i;"));
+	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {6, 6, 9, 12}));
 	
+	// window functions in correlated subquery
+	result = con.Query("SELECT i, (SELECT row_number() OVER (ORDER BY i) FROM integers WHERE i1.i=i) FROM integers i1 ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 1, 1}));
+	result = con.Query("SELECT i1.i, (SELECT rank() OVER (ORDER BY i) FROM integers WHERE i1.i=i) FROM integers i1, integers i2 ORDER BY i1.i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value(), Value(), 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value(), Value(), 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
+	result = con.Query("SELECT i1.i, (SELECT row_number() OVER (ORDER BY i) FROM integers WHERE i1.i=i) FROM integers i1, integers i2 ORDER BY i1.i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value(), Value(), 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value(), Value(), 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
+	result = con.Query("SELECT i, (SELECT SUM(i) OVER (ORDER BY i) FROM integers WHERE i1.i=i) FROM integers i1 ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3}));
+	result = con.Query("SELECT i, (SELECT SUM(s1.i) OVER (ORDER BY s1.i) FROM integers s1, integers s2 WHERE i1.i=s1.i LIMIT 1) FROM integers i1 ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 4, 8, 12}));
+
+	// correlated expression inside window function not supported
+	REQUIRE_FAIL(con.Query("SELECT i, (SELECT row_number() OVER (ORDER BY i)) FROM integers i1 ORDER BY i;"));
+
 	return;
 	// union with correlated expression
 	result = con.Query("SELECT i, (SELECT i FROM integers WHERE i=i1.i UNION SELECT i FROM integers WHERE i=i1.i) AS j FROM integers i1 ORDER BY i;");
