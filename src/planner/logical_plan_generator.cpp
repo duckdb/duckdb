@@ -271,6 +271,9 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 	if (!generator.root) {
 		throw Exception("Can't plan subquery");
 	}
+	if (!root) {
+		throw Exception("Subquery cannot be root of a plan");
+	}
 	auto plan = move(generator.root);
 	switch(subquery.subquery_type) {
 	case SubqueryType::EXISTS: {
@@ -306,14 +309,10 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 
 			// we add it to the main query by adding a cross product
 			// FIXME: should use something else besides cross product as we always add only one scalar constant
-			if (root) {
-				auto cross_product = make_unique<LogicalCrossProduct>();
-				cross_product->AddChild(move(root));
-				cross_product->AddChild(move(plan));
-				root = move(cross_product);
-			} else {
-				root = move(plan);
-			}
+			auto cross_product = make_unique<LogicalCrossProduct>();
+			cross_product->AddChild(move(root));
+			cross_product->AddChild(move(plan));
+			root = move(cross_product);
 
 			// we replace the original subquery with a ColumnRefExpression refering to the result of the projection (either TRUE or FALSE)
 			return make_unique<BoundColumnRefExpression>(expr, TypeId::BOOLEAN, ColumnBinding(projection_index, 0));
@@ -595,27 +594,40 @@ static JoinSide CombineJoinSide(JoinSide left, JoinSide right) {
 	return left;
 }
 
+static JoinSide GetJoinSide(size_t table_binding, unordered_set<size_t> &left_bindings, unordered_set<size_t> &right_bindings) {
+	if (left_bindings.find(table_binding) != left_bindings.end()) {
+		// column references table on left side
+		assert(right_bindings.find(table_binding) == right_bindings.end());
+		return JoinSide::LEFT;
+	} else {
+		// column references table on right side
+		assert(right_bindings.find(table_binding) != right_bindings.end());
+		return JoinSide::RIGHT;
+	}
+}
+
 static JoinSide GetJoinSide(Expression &expression, unordered_set<size_t> &left_bindings,
                             unordered_set<size_t> &right_bindings) {
 	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = (BoundColumnRefExpression &)expression;
-		assert(colref.depth == 0);
-		if (left_bindings.find(colref.binding.table_index) != left_bindings.end()) {
-			// column references table on left side
-			assert(right_bindings.find(colref.binding.table_index) == right_bindings.end());
-			return JoinSide::LEFT;
-		} else {
-			// column references table on right side
-			assert(right_bindings.find(colref.binding.table_index) != right_bindings.end());
-			return JoinSide::RIGHT;
+		if (colref.depth > 0) {
+			throw Exception("Non-inner join on correlated columns not supported");
 		}
+		return GetJoinSide(colref.binding.table_index, left_bindings, right_bindings);
 	}
-	if (expression.type == ExpressionType::BOUND_REF) {
-		// column reference has already been bound, don't use it for reordering
-		return JoinSide::NONE;
-	}
+	assert(expression.type != ExpressionType::BOUND_REF);
 	if (expression.type == ExpressionType::SUBQUERY) {
-		return JoinSide::BOTH;
+		assert(expression.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY);
+		auto &subquery = (BoundSubqueryExpression&) expression;
+		// correlated subquery, check the side of each of correlated columns in the subquery
+		JoinSide side = JoinSide::NONE;
+		for(size_t i = 0; i < subquery.binder->correlated_columns.size(); i++) {
+			auto binding = subquery.binder->correlated_columns[i].binding;
+			auto correlated_side = GetJoinSide(binding.table_index, left_bindings, right_bindings);
+			side = CombineJoinSide(side, correlated_side);
+		}
+		return side;
+
 	}
 	JoinSide join_side = JoinSide::NONE;
 	expression.EnumerateChildren([&](Expression *child) {
@@ -695,7 +707,6 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
 		throw Exception("Joins need to be the root");
 	}
 
-	VisitExpression(&expr.condition);
 	if (expr.type == JoinType::INNER) {
 		// inner join, generate a cross product + filter
 		// this will be later turned into a proper join by the join order optimizer
@@ -706,10 +717,16 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
 
 		AcceptChild(&expr.right);
 		cross_product->AddChild(move(root));
+		root = move(cross_product);
 
 		auto filter = make_unique<LogicalFilter>(move(expr.condition));
-		filter->AddChild(move(cross_product));
+		// visit the expressions in the filter
+		for(size_t i = 0; i < filter->expressions.size(); i++) {
+			VisitExpression(&filter->expressions[i]);
+		}
+		filter->AddChild(move(root));
 		root = move(filter);
+
 		return nullptr;
 	}
 
@@ -736,6 +753,18 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
 	for(size_t i = 0; i < expressions.size(); i++) {
 		CreateJoinCondition(*join, move(expressions[i]), left_bindings, right_bindings);
 	}
+	// first visit the left conditions
+	root = move(join->children[0]);
+	for(size_t i = 0; i < join->conditions.size(); i++) {
+		VisitExpression(&join->conditions[i].left);
+	}
+	join->children[0] = move(root);
+	// now visit the right conditions
+	root = move(join->children[1]);
+	for(size_t i = 0; i < join->conditions.size(); i++) {
+		VisitExpression(&join->conditions[i].right);
+	}
+	join->children[1] = move(root);
 	root = move(join);
 	return nullptr;
 }

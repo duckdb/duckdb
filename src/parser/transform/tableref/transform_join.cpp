@@ -43,15 +43,6 @@ unique_ptr<TableRef> Transformer::TransformJoin(JoinExpr *root) {
 		return move(cross);
 	}
 
-	switch (root->quals->type) {
-	case T_A_Expr:
-	case T_BoolExpr:
-	case T_NullTest:
-		result->condition = TransformExpression(root->quals);
-		break;
-
-	default:
-		throw NotImplementedException("Join quals type %d not supported yet...\n", root->larg->type);
-	}
+	result->condition = TransformExpression(root->quals);
 	return move(result);
 }
