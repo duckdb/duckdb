@@ -300,10 +300,22 @@ struct FlattenDependentJoins {
 				}
 				return plan;
 			}
+			case LogicalOperatorType::EXCEPT:
+			case LogicalOperatorType::INTERSECT: 
+			case LogicalOperatorType::UNION: {
+				// set operator, push into both children
+				plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+				plan->children[1] = PushDownDependentJoin(move(plan->children[1]));
+				return plan;
+			}
+			case LogicalOperatorType::PRUNE_COLUMNS:
+			case LogicalOperatorType::DISTINCT:
+				plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+				return plan;
 			case LogicalOperatorType::ORDER_BY:
 				throw ParserException("ORDER BY not supported in correlated subquery");
 			default:
-				throw NotImplementedException("Logical operator type for dependent join");
+				throw NotImplementedException("Logical operator type \"%s\" for dependent join", LogicalOperatorToString(plan->type).c_str());
 		}
 	}
 

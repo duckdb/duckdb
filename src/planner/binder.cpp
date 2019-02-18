@@ -124,9 +124,7 @@ unique_ptr<TableRef> Binder::Visit(SubqueryRef &expr) {
 	expr.binder->Bind(*expr.subquery);
 	bind_context.AddSubquery(GenerateTableIndex(), expr.alias, expr);
 
-	correlated_columns.insert(correlated_columns.end(), expr.binder->correlated_columns.begin(), expr.binder->correlated_columns.end());
-	expr.binder->correlated_columns.clear();
-
+	MoveCorrelatedExpressions(*expr.binder);
 	return nullptr;
 }
 
@@ -192,4 +190,9 @@ vector<ExpressionBinder*>& Binder::GetActiveBinders() {
 		return parent->GetActiveBinders();
 	}
 	return active_binders;
+}
+
+void Binder::MoveCorrelatedExpressions(Binder &other) {
+	correlated_columns.insert(correlated_columns.end(), other.correlated_columns.begin(), other.correlated_columns.end());
+	other.correlated_columns.clear();
 }

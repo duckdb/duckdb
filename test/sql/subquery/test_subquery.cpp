@@ -651,7 +651,6 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 	// correlated expression inside window function not supported
 	REQUIRE_FAIL(con.Query("SELECT i, (SELECT row_number() OVER (ORDER BY i)) FROM integers i1 ORDER BY i;"));
 
-	return;
 	// union with correlated expression
 	result = con.Query("SELECT i, (SELECT i FROM integers WHERE i=i1.i UNION SELECT i FROM integers WHERE i=i1.i) AS j FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
@@ -660,6 +659,16 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 	result = con.Query("SELECT i, (SELECT i FROM integers WHERE i IS NOT NULL EXCEPT SELECT i FROM integers WHERE i<>i1.i) AS j FROM integers i1 WHERE i IS NOT NULL ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 3}));
+	// intersect with correlated expression
+	result = con.Query("SELECT i, (SELECT i FROM integers WHERE i=i1.i INTERSECT SELECT i FROM integers WHERE i=i1.i) AS j FROM integers i1 ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3}));
+	// multiple setops
+	result = con.Query("SELECT i, (SELECT i FROM integers WHERE i=i1.i UNION SELECT i FROM integers WHERE i<>i1.i EXCEPT SELECT i FROM integers WHERE i<>i1.i) AS j FROM integers i1 ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3}));
+
+	return;
 
 	// nested aggregate queries
 	result = con.Query("SELECT i, SUM(i), (SELECT (SELECT SUM(i)+SUM(i1.i)+SUM(i2.i) FROM integers) FROM integers i2  ORDER BY 1 LIMIT 1) FROM integers i1 GROUP BY i ORDER BY i;");

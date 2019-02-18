@@ -90,6 +90,9 @@ public:
 	
 	vector<CorrelatedColumnInfo> correlated_columns;
 private:
+	//! Move correlated expressions from the child binder to this binder
+	void MoveCorrelatedExpressions(Binder &other);
+
 	ClientContext &context;
 	Binder *parent;
 

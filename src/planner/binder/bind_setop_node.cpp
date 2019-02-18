@@ -119,6 +119,10 @@ void Binder::Bind(SetOperationNode &statement) {
 	statement.binding.right_binder = make_unique<Binder>(context, this);
 	statement.binding.right_binder->Bind(*statement.right);
 
+	// move the correlated expressions from the child binders to this binder
+	MoveCorrelatedExpressions(*statement.binding.left_binder);
+	MoveCorrelatedExpressions(*statement.binding.right_binder);
+
 	// now both sides have been bound we can resolve types
 	if (statement.left->types.size() != statement.right->types.size()) {
 		throw Exception("Set operations can only apply to expressions with the "
