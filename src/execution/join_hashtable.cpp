@@ -210,10 +210,26 @@ static void FillNullMask(Vector& v) {
 }
 
 void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
+	assert(keys.size() == payload.size());
 	if (keys.size() == 0) {
 		return;
 	}
-	assert(keys.size() == payload.size());
+	// resize at 50% capacity, also need to fit the entire vector
+	if (parallel) {
+		parallel_lock.lock();
+	}
+	if (count + keys.size() > capacity / 2) {
+		Resize(capacity * 2);
+	}
+	count += keys.size();
+	// move strings to the string heap
+	keys.MoveStringsToHeap(string_heap);
+	payload.MoveStringsToHeap(string_heap);
+
+	if (parallel) {
+		parallel_lock.unlock();
+	}
+	
 	sel_t not_null_sel_vector[STANDARD_VECTOR_SIZE];
 	if (join_type == JoinType::MARK && correlated_mark_join_info.correlated_types.size() > 0) {
 		auto &info = correlated_mark_join_info;
@@ -261,21 +277,6 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		for(size_t i = 0; i < keys.column_count; i++) {
 			FillNullMask(keys.data[i]);
 		}
-	}
-	// resize at 50% capacity, also need to fit the entire vector
-	if (parallel) {
-		parallel_lock.lock();
-	}
-	if (count + keys.size() > capacity / 2) {
-		Resize(capacity * 2);
-	}
-	count += keys.size();
-	// move strings to the string heap
-	keys.MoveStringsToHeap(string_heap);
-	payload.MoveStringsToHeap(string_heap);
-
-	if (parallel) {
-		parallel_lock.unlock();
 	}
 	
 	// get the locations of where to serialize the keys and payload columns

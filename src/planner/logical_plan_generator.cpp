@@ -346,11 +346,6 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 			// now we push the dependent join down
 			auto dependent_join = flatten.PushDownDependentJoin(move(plan));
 
-			// push a subquery node under the duplicate eliminated join
-			auto subquery_index = binder.GenerateTableIndex();
-			auto subquery = make_unique<LogicalSubquery>(subquery_index, correlated_columns.size() + 1);
-			subquery->AddChild(move(dependent_join));
-
 			// we push a COUNT(*) aggregation that groups by the correlated columns
 			auto group_index = binder.GenerateTableIndex();
 			auto aggr_index = binder.GenerateTableIndex();
@@ -363,9 +358,9 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 			// create the grouping columns
 			for(size_t i = 0; i < correlated_columns.size(); i++) {
 				auto &col = correlated_columns[i];
-				count_aggregate->groups.push_back(make_unique<BoundColumnRefExpression>(col.name, col.type, ColumnBinding(subquery_index, flatten.delim_offset + i)));
+				count_aggregate->groups.push_back(make_unique<BoundColumnRefExpression>(col.name, col.type, ColumnBinding(flatten.base_binding.table_index, flatten.base_binding.column_index + i)));
 			}
-			count_aggregate->AddChild(move(subquery));
+			count_aggregate->AddChild(move(dependent_join));
 
 			// now we create the join conditions between the dependent join and the grouping columns
 			for(size_t i = 0; i < correlated_columns.size(); i++) {

@@ -554,6 +554,37 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 	result = con.Query("SELECT i=ANY(SELECT i FROM integers WHERE i=i1.i AND i>10) FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {false, false, false, false}));
 	
+	// multiple correlated columns and strings
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER, str VARCHAR);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 1, 'a'), (12, 2, 'b'), (13, 3, 'c')"));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test2 (a INTEGER, c INTEGER, str2 VARCHAR);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (11, 1, 'a'), (12, 1, 'b'), (13, 4, 'b')"));
+
+	// scalar query with multiple correlated columns
+	result = con.Query("SELECT (SELECT test.a+test.b+SUM(test2.a) FROM test2 WHERE str=str2) FROM test ORDER BY 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 23, 39}));
+
+	// exists with multiple correlated columns
+	result = con.Query("SELECT * FROM test WHERE EXISTS(SELECT * FROM test2 "
+	                   "WHERE test.a=test2.a AND test.b<>test2.c);");
+	REQUIRE(CHECK_COLUMN(result, 0, {12, 13}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"b", "c"}));
+
+	// ANY with multiple correlated columns
+	result = con.Query("SELECT a, a>=ANY(SELECT test2.a+c-b FROM test2 WHERE c>=b AND str=str2) FROM test ORDER BY 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
+	REQUIRE(CHECK_COLUMN(result, 1, {true, false, false}));
+
+	// string comparison
+	result = con.Query("SELECT str, str=ANY(SELECT str2 FROM test2) FROM test");
+	REQUIRE(CHECK_COLUMN(result, 0, {"a", "b", "c"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {true, true, false}));
+	result = con.Query("SELECT str, str=ANY(SELECT str2 FROM test2 WHERE test.a<>test2.a) FROM test");
+	REQUIRE(CHECK_COLUMN(result, 0, {"a", "b", "c"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {false, true, false}));
+
 	// correlated expression in subquery
 	// result = con.Query("SELECT i, (SELECT s1.i FROM (SELECT * FROM integers WHERE i=i1.i) s1) AS j FROM integers i1 ORDER BY i;");
 	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
