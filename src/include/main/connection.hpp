@@ -61,12 +61,6 @@ public:
 
 	DuckDB &db;
 	ClientContext context;
-
-private:
-	DuckDBResult internal_result;
-	unique_ptr<PhysicalOperator> physical_plan;
-	unique_ptr<PhysicalOperatorState> physical_state;
-	unique_ptr<DataChunk> first_chunk;
 };
 
 } // namespace duckdb

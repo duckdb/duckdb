@@ -203,15 +203,15 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(ClientContext &context
 unique_ptr<DuckDBResult> DuckDBConnection::Query(string query) {
 	auto result = make_unique<DuckDBResult>();
 	result->success = SendQuery(query);
-	result->error = internal_result.error;
+	result->error = context.execution_context.internal_result.error;
 	if (!result->success) {
 		return result;
 	}
-	result->names = internal_result.names;
+	result->names = context.execution_context.internal_result.names;
 	unique_ptr<DataChunk> chunk;
 	// FIXME UUGLY
-	if (physical_plan) {
-		result->collection.types = physical_plan->types;
+	if (context.execution_context.physical_plan) {
+		result->collection.types = context.execution_context.physical_plan->types;
 	}
 	do {
 		chunk = FetchResultChunk();
@@ -219,7 +219,7 @@ unique_ptr<DuckDBResult> DuckDBConnection::Query(string query) {
 	} while (chunk->size() > 0);
 
 	result->success = CloseResult();
-	result->error = internal_result.error;
+	result->error = context.execution_context.internal_result.error;
 
 	return result;
 }
@@ -234,7 +234,7 @@ bool DuckDBConnection::SendQuery(string query) {
 
 	context.ActiveTransaction().active_query = context.db.transaction_manager.GetQueryNumber();
 
-	internal_result.success = false;
+	context.execution_context.internal_result.success = false;
 
 	context.profiler.StartQuery(query);
 	context.interrupted = false;
@@ -273,7 +273,7 @@ bool DuckDBConnection::SendQuery(string query) {
 
 		planner.CreatePlan(context, move(statement));
 		if (!planner.plan) {
-			internal_result.success = true;
+			context.execution_context.internal_result.success = true;
 			// we have to log here because some queries are executed in the planner
 			if (log_query_string) {
 				context.ActiveTransaction().PushQuery(query);
@@ -286,7 +286,7 @@ bool DuckDBConnection::SendQuery(string query) {
 		Optimizer optimizer(context, *planner.context);
 		plan = optimizer.Optimize(move(plan));
 		if (!plan) {
-			internal_result.success = true;
+			context.execution_context.internal_result.success = true;
 
 			return true;
 		}
@@ -301,7 +301,7 @@ bool DuckDBConnection::SendQuery(string query) {
 		}
 
 		// extract the result column names from the plan
-		internal_result.names = plan->GetNames();
+		context.execution_context.internal_result.names = plan->GetNames();
 
 		// now convert logical query plan into a physical query plan
 		PhysicalPlanGenerator physical_planner(context);
@@ -309,26 +309,26 @@ bool DuckDBConnection::SendQuery(string query) {
 
 		// finally execute the plan and return the result
 
-		physical_plan = move(physical_planner.plan);
+		context.execution_context.physical_plan = move(physical_planner.plan);
 
-		assert(physical_plan);
+		assert(context.execution_context.physical_plan);
 		// the chunk and state are used to iterate over the input plan
-		physical_state = physical_plan->GetOperatorState(nullptr);
+		context.execution_context.physical_state = context.execution_context.physical_plan->GetOperatorState(nullptr);
 
-		first_chunk = nullptr;
+		context.execution_context.first_chunk = nullptr;
 		// read the first chunk
-		first_chunk = FetchResultChunk();
+		context.execution_context.first_chunk = FetchResultChunk();
 
 		if (log_query_string) {
 			context.ActiveTransaction().PushQuery(query);
 		}
 
-		internal_result.success = true;
+		context.execution_context.internal_result.success = true;
 
 	} catch (Exception &ex) {
-		internal_result.error = ex.GetMessage();
+		context.execution_context.internal_result.error = ex.GetMessage();
 	} catch (...) {
-		internal_result.error = "UNHANDLED EXCEPTION TYPE THROWN!";
+		context.execution_context.internal_result.error = "UNHANDLED EXCEPTION TYPE THROWN!";
 	}
 	context.profiler.EndQuery();
 	if (context.profiler.IsEnabled() && context.profiler.automatic_printing) {
@@ -336,45 +336,46 @@ bool DuckDBConnection::SendQuery(string query) {
 	}
 	// destroy any data held in the query allocator
 	context.allocator.Destroy();
-	return internal_result.success;
+	return context.execution_context.internal_result.success;
 }
 string DuckDBConnection::GetQueryError() {
-	return internal_result.error;
+	return context.execution_context.internal_result.error;
 }
 unique_ptr<DataChunk> DuckDBConnection::FetchResultChunk() {
 	auto chunk = make_unique<DataChunk>();
 
 	// FIXME UUGLY
-	if (internal_result.success && !physical_plan) {
+	if (context.execution_context.internal_result.success && !context.execution_context.physical_plan) {
 		return chunk;
 	}
-	if (first_chunk) {
-		return move(first_chunk);
+	if (context.execution_context.first_chunk) {
+		return move(context.execution_context.first_chunk);
 	}
-	physical_plan->InitializeChunk(*chunk.get());
-	physical_plan->GetChunk(context, *chunk.get(), physical_state.get());
+	context.execution_context.physical_plan->InitializeChunk(*chunk.get());
+	context.execution_context.physical_plan->GetChunk(context, *chunk.get(),
+	                                                  context.execution_context.physical_state.get());
 	return chunk;
 }
 
 bool DuckDBConnection::CloseResult() {
-	physical_plan = nullptr;
+	context.execution_context.physical_plan = nullptr;
 
 	if (context.transaction.HasActiveTransaction()) {
 		context.ActiveTransaction().active_query = MAXIMUM_QUERY_ID;
 		try {
 			if (context.transaction.IsAutoCommit()) {
-				if (internal_result.GetSuccess()) {
+				if (context.execution_context.internal_result.GetSuccess()) {
 					context.transaction.Commit();
 				} else {
 					context.transaction.Rollback();
 				}
 			}
 		} catch (Exception &ex) {
-			internal_result.success = false;
+			context.execution_context.internal_result.success = false;
 		} catch (...) {
-			internal_result.success = false;
-			internal_result.error = "UNHANDLED EXCEPTION TYPE THROWN IN TRANSACTION COMMIT!";
+			context.execution_context.internal_result.success = false;
+			context.execution_context.internal_result.error = "UNHANDLED EXCEPTION TYPE THROWN IN TRANSACTION COMMIT!";
 		}
 	}
-	return internal_result.success;
+	return context.execution_context.internal_result.success;
 }
