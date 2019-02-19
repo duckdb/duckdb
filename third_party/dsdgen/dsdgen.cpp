@@ -25,19 +25,19 @@ typedef int64_t ds_key_t;
 
 void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	DuckDBConnection con(db);
-	con.context.transaction.BeginTransaction();
-	auto &transaction = con.context.ActiveTransaction();
 
+	con.Query("BEGIN TRANSACTION");
 	// FIXME: No restart support yet, suspect only fix is init_rand
 	// FIXME: no schema/suffix support yet
 
 	for (int t = 0; t < TPCDS_TABLE_COUNT; t++) {
-		con.GetQueryResult(con.context, TPCDS_TABLE_DDL_NOKEYS[t]);
+		con.Query(TPCDS_TABLE_DDL_NOKEYS[t]);
 	}
+
+	con.Query("COMMIT");
 
 	if (flt_scale == 0) {
 		// schema only
-		con.context.transaction.Commit();
 		return;
 	}
 
@@ -56,9 +56,7 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 
 		append_info[table_id].table_def = table_def;
 		append_info[table_id].row = 0;
-		append_info[table_id].chunk.Reset();
-		append_info[table_id].context = &con.context;
-		append_info[table_id].table = db.catalog.GetTable(transaction, DEFAULT_SCHEMA, table_def->name);
+		append_info[table_id].appender = make_unique<Appender>(db, schema, table_def->name);
 	}
 
 	// actually generate tables using modified data generator functions
@@ -92,16 +90,8 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 
 	// flush any incomplete chunks
 	for (int table_id = tmin; table_id < tmax; table_id++) {
-		if (append_info[table_id].table) {
-			if (append_info[table_id].chunk.size() > 0) {
-				append_info[table_id].chunk.Verify();
-				append_info[table_id].table->storage->Append(
-				    *append_info[table_id].table, *append_info[table_id].context, append_info[table_id].chunk);
-			}
-		}
+		append_info[table_id].appender->Commit();
 	}
-
-	con.context.transaction.Commit();
 }
 
 string get_query(int query) {

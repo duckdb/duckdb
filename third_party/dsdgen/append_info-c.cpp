@@ -18,60 +18,27 @@ append_info *append_info_get(void *info_list, int table_id) {
 
 void append_row_start(append_info *info) {
 	auto append_info = (tpcds_append_information *)info;
-	append_info->col = 0;
-
-	auto &chunk = append_info->chunk;
-	auto &table = append_info->table;
-	if (chunk.column_count == 0) {
-		// initalize the chunk
-		auto types = table->GetTypes();
-		chunk.Initialize(types);
-	} else if (chunk.size() >= STANDARD_VECTOR_SIZE) {
-		// flush the chunk
-		chunk.Verify();
-		table->storage->Append(*table, *append_info->context, chunk);
-		// have to reset the chunk
-		chunk.Reset();
-		append_info->row = 0;
-	}
-	for (size_t i = 0; i < chunk.column_count; i++) {
-		chunk.data[i].count++;
-	}
+	append_info->appender->BeginRow();
 }
 
 void append_row_end(append_info *info) {
 	auto append_info = (tpcds_append_information *)info;
-	if (append_info->col != append_info->chunk.column_count) {
-		throw duckdb::Exception("Not all columns were appended to");
-	}
-	append_info->row++;
+	append_info->appender->EndRow();
 }
 
 void append_varchar(append_info *info, const char *value) {
 	auto append_info = (tpcds_append_information *)info;
-	if (append_info->col > append_info->chunk.column_count - 1) {
-		throw duckdb::Exception("Out-of-bounds column update");
-	}
 	if (!nullCheck(append_info->col)) {
-		append_info->chunk.data[append_info->col].SetStringValue(append_info->row, value);
+		append_info->appender->AppendString(value);
 	} else {
-		append_info->chunk.data[append_info->col].SetNull(append_info->row, true);
+		append_info->appender->AppendValue(duckdb::Value());
 	}
-	append_info->col++;
 }
 
 // TODO: use direct array manipulation for speed, but not now
 static void append_value(append_info *info, duckdb::Value v) {
 	auto append_info = (tpcds_append_information *)info;
-	if (append_info->col > append_info->chunk.column_count - 1) {
-		throw duckdb::Exception("Out-of-bounds column update");
-	}
-	if (!nullCheck(append_info->col)) {
-		append_info->chunk.data[append_info->col].SetValue(append_info->row, v);
-	} else {
-		append_info->chunk.data[append_info->col].SetNull(append_info->row, true);
-	}
-	append_info->col++;
+	append_info->appender->AppendValue(v);
 }
 
 void append_key(append_info *info, int64_t value) {
