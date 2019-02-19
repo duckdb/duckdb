@@ -10,6 +10,10 @@
 
 #include "main/client_context.hpp"
 #include "main/result.hpp"
+// FIXME uuugly
+#include "execution/physical_operator.hpp"
+
+
 
 namespace duckdb {
 
@@ -51,11 +55,23 @@ public:
 	//! Queries the database using the transaction context of this connection
 	unique_ptr<DuckDBResult> Query(string query);
 
+	// alternative streaming API
+	bool SendQuery(string query);
+	string GetQueryError();
+	unique_ptr<DataChunk>  FetchResultChunk();
+	bool CloseResult();
+
 	DuckDB &db;
 	ClientContext context;
 
 private:
-	unique_ptr<DuckDBResult> GetQueryResult(string query);
+	bool query_success;
+	bool result_open;
+	DuckDBResult internal_result;
+	unique_ptr<PhysicalOperator> physical_plan;
+	unique_ptr<PhysicalOperatorState> physical_state;
+	unique_ptr<DataChunk> first_chunk;
+
 };
 
 } // namespace duckdb

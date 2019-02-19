@@ -16,6 +16,7 @@ DuckDBConnection::DuckDBConnection(DuckDB &database) : db(database), context(dat
 }
 
 DuckDBConnection::~DuckDBConnection() {
+//	CloseResult();
 	db.connection_manager.RemoveConnection(this);
 }
 
@@ -106,84 +107,85 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(ClientContext &context
 		}
 
 		auto &statement = parser.statements.back();
+		/*
+		#ifdef DEBUG
+		        if (statement->type == StatementType::SELECT && context.query_verification_enabled) {
+		            // aggressive query verification
+		            // copy the statement
+		            auto select_stmt = (SelectStatement *)statement.get();
+		            auto copied_stmt = select_stmt->Copy();
+		            Serializer serializer;
+		            select_stmt->Serialize(serializer);
+		            Deserializer source(serializer);
+		            auto deserialized_stmt = SelectStatement::Deserialize(source);
+		            // all the statements should be equal
+		            assert(copied_stmt->Equals(statement.get()));
+		            assert(deserialized_stmt->Equals(statement.get()));
+		            assert(copied_stmt->Equals(deserialized_stmt.get()));
+		            DuckDBResult copied_result, deserialized_result;
+		            copied_result.success = false;
+		            deserialized_result.success = false;
 
-#ifdef DEBUG
-		if (statement->type == StatementType::SELECT && context.query_verification_enabled) {
-			// aggressive query verification
-			// copy the statement
-			auto select_stmt = (SelectStatement *)statement.get();
-			auto copied_stmt = select_stmt->Copy();
-			Serializer serializer;
-			select_stmt->Serialize(serializer);
-			Deserializer source(serializer);
-			auto deserialized_stmt = SelectStatement::Deserialize(source);
-			// all the statements should be equal
-			assert(copied_stmt->Equals(statement.get()));
-			assert(deserialized_stmt->Equals(statement.get()));
-			assert(copied_stmt->Equals(deserialized_stmt.get()));
-			DuckDBResult copied_result, deserialized_result;
-			copied_result.success = false;
-			deserialized_result.success = false;
+		            // now perform checking on the expressions
+		            auto &orig_expr_list = select_stmt->node->GetSelectList();
+		            auto &de_expr_list = ((SelectStatement *)deserialized_stmt.get())->node->GetSelectList();
+		            auto &cp_expr_list = ((SelectStatement *)copied_stmt.get())->node->GetSelectList();
+		            assert(orig_expr_list.size() == de_expr_list.size() && cp_expr_list.size() == de_expr_list.size());
+		            for (size_t i = 0; i < orig_expr_list.size(); i++) {
+		                // check that the expressions are equivalent
+		                assert(orig_expr_list[i]->Equals(de_expr_list[i].get()));
+		                assert(orig_expr_list[i]->Equals(cp_expr_list[i].get()));
+		                assert(de_expr_list[i]->Equals(cp_expr_list[i].get()));
+		                // check that the hashes are equivalent too
+		                assert(orig_expr_list[i]->Hash() == de_expr_list[i]->Hash());
+		                assert(orig_expr_list[i]->Hash() == cp_expr_list[i]->Hash());
+		            }
+		            // now perform additional checking within the expressions
+		            for (size_t outer_idx = 0; outer_idx < orig_expr_list.size(); outer_idx++) {
+		                auto hash = orig_expr_list[outer_idx]->Hash();
+		                for (size_t inner_idx = 0; inner_idx < orig_expr_list.size(); inner_idx++) {
+		                    auto hash2 = orig_expr_list[inner_idx]->Hash();
+		                    if (hash != hash2) {
+		                        // if the hashes are not equivalent, the expressions should not be equivalent
+		                        assert(!orig_expr_list[outer_idx]->Equals(orig_expr_list[inner_idx].get()));
+		                    }
+		                }
+		            }
 
-			// now perform checking on the expressions
-			auto &orig_expr_list = select_stmt->node->GetSelectList();
-			auto &de_expr_list = ((SelectStatement *)deserialized_stmt.get())->node->GetSelectList();
-			auto &cp_expr_list = ((SelectStatement *)copied_stmt.get())->node->GetSelectList();
-			assert(orig_expr_list.size() == de_expr_list.size() && cp_expr_list.size() == de_expr_list.size());
-			for (size_t i = 0; i < orig_expr_list.size(); i++) {
-				// check that the expressions are equivalent
-				assert(orig_expr_list[i]->Equals(de_expr_list[i].get()));
-				assert(orig_expr_list[i]->Equals(cp_expr_list[i].get()));
-				assert(de_expr_list[i]->Equals(cp_expr_list[i].get()));
-				// check that the hashes are equivalent too
-				assert(orig_expr_list[i]->Hash() == de_expr_list[i]->Hash());
-				assert(orig_expr_list[i]->Hash() == cp_expr_list[i]->Hash());
-			}
-			// now perform additional checking within the expressions
-			for (size_t outer_idx = 0; outer_idx < orig_expr_list.size(); outer_idx++) {
-				auto hash = orig_expr_list[outer_idx]->Hash();
-				for (size_t inner_idx = 0; inner_idx < orig_expr_list.size(); inner_idx++) {
-					auto hash2 = orig_expr_list[inner_idx]->Hash();
-					if (hash != hash2) {
-						// if the hashes are not equivalent, the expressions should not be equivalent
-						assert(!orig_expr_list[outer_idx]->Equals(orig_expr_list[inner_idx].get()));
-					}
-				}
-			}
-
-			// execute the original statement
-			try {
-				ExecuteStatement_(context, query, move(statement), *result);
-			} catch (Exception &ex) {
-				result->error = ex.GetMessage();
-			}
-			bool profiling = context.profiler.IsEnabled();
-			if (profiling) {
-				context.profiler.Disable();
-			}
-			// now execute the copied statement
-			try {
-				ExecuteStatement_(context, query, move(copied_stmt), copied_result);
-			} catch (Exception &ex) {
-				copied_result.error = ex.GetMessage();
-			}
-			// now execute the copied statement
-			try {
-				ExecuteStatement_(context, query, move(deserialized_stmt), deserialized_result);
-			} catch (Exception &ex) {
-				deserialized_result.error = ex.GetMessage();
-			}
-			if (profiling) {
-				context.profiler.Enable();
-			}
-			// now compare the results
-			// the results of all three expressions should be identical
-			assert(result->Equals(&copied_result));
-			assert(result->Equals(&deserialized_result));
-			assert(copied_result.Equals(&deserialized_result));
-		} else
-#endif
-			ExecuteStatement_(context, query, move(statement), *result);
+		            // execute the original statement
+		            try {
+		                ExecuteStatement_(context, query, move(statement), *result);
+		            } catch (Exception &ex) {
+		                result->error = ex.GetMessage();
+		            }
+		            bool profiling = context.profiler.IsEnabled();
+		            if (profiling) {
+		                context.profiler.Disable();
+		            }
+		            // now execute the copied statement
+		            try {
+		                ExecuteStatement_(context, query, move(copied_stmt), copied_result);
+		            } catch (Exception &ex) {
+		                copied_result.error = ex.GetMessage();
+		            }
+		            // now execute the copied statement
+		            try {
+		                ExecuteStatement_(context, query, move(deserialized_stmt), deserialized_result);
+		            } catch (Exception &ex) {
+		                deserialized_result.error = ex.GetMessage();
+		            }
+		            if (profiling) {
+		                context.profiler.Enable();
+		            }
+		            // now compare the results
+		            // the results of all three expressions should be identical
+		            assert(result->Equals(&copied_result));
+		            assert(result->Equals(&deserialized_result));
+		            assert(copied_result.Equals(&deserialized_result));
+		        } else
+		#endif
+		*/
+		ExecuteStatement_(context, query, move(statement), *result);
 	} catch (Exception &ex) {
 		result->error = ex.GetMessage();
 	} catch (...) {
@@ -198,17 +200,13 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(ClientContext &context
 	return result;
 }
 
-unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(string query) {
-	return GetQueryResult(context, query);
-}
-
 unique_ptr<DuckDBResult> DuckDBConnection::Query(string query) {
 	if (context.transaction.IsAutoCommit()) {
 		context.transaction.BeginTransaction();
 	}
 
 	context.ActiveTransaction().active_query = context.db.transaction_manager.GetQueryNumber();
-	auto result = GetQueryResult(query);
+	auto result = GetQueryResult(context, query);
 
 	if (context.transaction.HasActiveTransaction()) {
 		context.ActiveTransaction().active_query = MAXIMUM_QUERY_ID;
@@ -230,3 +228,164 @@ unique_ptr<DuckDBResult> DuckDBConnection::Query(string query) {
 	}
 	return result;
 }
+
+
+// alternative streaming API
+bool DuckDBConnection::SendQuery(string query) {
+
+	// TODO: clean up query result if open
+	CloseResult();
+
+	if (context.transaction.IsAutoCommit()) {
+			context.transaction.BeginTransaction();
+		}
+
+	context.ActiveTransaction().active_query = context.db.transaction_manager.GetQueryNumber();
+
+	internal_result.success = false;
+
+	context.profiler.StartQuery(query);
+	context.interrupted = false;
+	try {
+		// parse the query and transform it into a set of statements
+		Parser parser(context);
+		parser.ParseQuery(query.c_str());
+		if (parser.statements.size() == 0) {
+			// empty query
+			return true;
+		}
+
+		if (parser.statements.size() > 1) {
+			throw Exception("More than one statement per query not supported yet!");
+		}
+
+		auto &statement = parser.statements.back();
+
+
+
+		Planner planner;
+
+		// for many statements, we log the literal query string in the WAL
+		// also note the exception for EXECUTE below
+		bool log_query_string = false;
+		switch (statement->type) {
+		case StatementType::UPDATE:
+		case StatementType::DELETE:
+		case StatementType::ALTER:
+		case StatementType::CREATE_INDEX:
+		case StatementType::PREPARE:
+		case StatementType::DEALLOCATE:
+			log_query_string = true;
+			break;
+		default:
+			break;
+		}
+
+		planner.CreatePlan(context, move(statement));
+		if (!planner.plan) {
+			internal_result.success = true;
+			// we have to log here because some queries are executed in the planner
+			if (log_query_string) {
+				context.ActiveTransaction().PushQuery(query);
+			}
+
+			return true;
+		}
+
+		auto plan = move(planner.plan);
+		Optimizer optimizer(context, *planner.context);
+		plan = optimizer.Optimize(move(plan));
+		if (!plan) {
+			internal_result.success = true;
+
+			return true;
+		}
+
+		// special case with logging EXECUTE with prepared statements that do not scan the table
+		if (plan->type == LogicalOperatorType::EXECUTE) {
+			auto exec = (LogicalExecute *)plan.get();
+			if (exec->prep->statement_type == StatementType::UPDATE ||
+				exec->prep->statement_type == StatementType::DELETE) {
+				log_query_string = true;
+			}
+		}
+
+		// extract the result column names from the plan
+		internal_result.names = plan->GetNames();
+
+		// now convert logical query plan into a physical query plan
+		PhysicalPlanGenerator physical_planner(context);
+		physical_planner.CreatePlan(move(plan));
+
+		// finally execute the plan and return the result
+
+		physical_plan = move(physical_planner.plan);
+
+			assert(physical_plan);
+			// the chunk and state are used to iterate over the input plan
+			physical_state = physical_plan->GetOperatorState(nullptr);
+
+			first_chunk = nullptr;
+			// read the first chunk
+			first_chunk = FetchResultChunk();
+
+
+		if (log_query_string) {
+			context.ActiveTransaction().PushQuery(query);
+		}
+
+		internal_result.success = true;
+
+
+
+
+	} catch (Exception &ex) {
+		internal_result.error = ex.GetMessage();
+		} catch (...) {
+			internal_result.error = "UNHANDLED EXCEPTION TYPE THROWN!";
+		}
+		context.profiler.EndQuery();
+		if (context.profiler.IsEnabled() && context.profiler.automatic_printing) {
+			cout << context.profiler.ToString() << "\n";
+		}
+	// destroy any data held in the query allocator
+	context.allocator.Destroy();
+	return internal_result.success;
+
+}
+string DuckDBConnection::GetQueryError() {
+	return internal_result.error;
+}
+unique_ptr<DataChunk> DuckDBConnection::FetchResultChunk() {
+	if (first_chunk) {
+		return move(first_chunk);
+	}
+	auto chunk = make_unique<DataChunk>();
+	physical_plan->InitializeChunk(*chunk.get());
+	physical_plan->GetChunk(context, *chunk.get(), physical_state.get());
+	return chunk;
+}
+
+bool DuckDBConnection::CloseResult() {
+	if (context.transaction.HasActiveTransaction()) {
+			context.ActiveTransaction().active_query = MAXIMUM_QUERY_ID;
+			try {
+				if (context.transaction.IsAutoCommit()) {
+					if (internal_result.GetSuccess()) {
+						context.transaction.Commit();
+					} else {
+						context.transaction.Rollback();
+					}
+				}
+			} catch (Exception &ex) {
+				internal_result.success = false;
+			} catch (...) {
+				internal_result.success = false;
+				internal_result.error = "UNHANDLED EXCEPTION TYPE THROWN IN TRANSACTION COMMIT!";
+			}
+		}
+		return internal_result.success;
+}
+
+
+
