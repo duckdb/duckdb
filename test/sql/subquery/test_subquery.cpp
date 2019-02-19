@@ -247,6 +247,11 @@ TEST_CASE("Test simple uncorrelated subqueries", "[subquery]") {
 
 	result = con.Query("SELECT i FROM integers WHERE NOT(i IN (SELECT i FROM integers WHERE i>1));");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	// multiple subqueries in select without FROM
+	result = con.Query("SELECT (SELECT SUM(i) FROM integers), (SELECT 42)");
+	REQUIRE(CHECK_COLUMN(result, 0, {6}));
+	REQUIRE(CHECK_COLUMN(result, 1, {42}));
 }
 
 TEST_CASE("Test simple correlated subqueries", "[subquery]") {
@@ -259,6 +264,11 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
+	
+	// nested correlated queries
+	// result = con.Query("SELECT i, (SELECT (SELECT 42+i1.i)+42+i1.i) AS j FROM integers i1 ORDER BY i;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {Value(), 86, 88, 90}));
 	
 	// scalar select with correlation
 	result = con.Query("SELECT i, (SELECT 42+i1.i) AS j FROM integers i1 ORDER BY i;");
@@ -587,7 +597,6 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {"a", "b", "c"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {false, true, false}));
 
-
 	// correlated expression in subquery
 	result = con.Query("SELECT i, (SELECT s1.i FROM (SELECT * FROM integers WHERE i=i1.i) s1) AS j FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
@@ -596,7 +605,6 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 	result = con.Query("SELECT i, (SELECT s1.i FROM (SELECT i FROM integers WHERE i=i1.i) s1 INNER JOIN (SELECT i FROM integers WHERE i=4-i1.i) s2 ON s1.i>s2.i) AS j FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value(), 3}));
-
 
 	// implicit join with correlated expression in filter
 	result = con.Query("SELECT i, (SELECT s1.i FROM integers s1, integers s2 WHERE s1.i=s2.i AND s1.i=4-i1.i) AS j FROM integers i1 ORDER BY i;");
@@ -667,6 +675,12 @@ TEST_CASE("Test simple correlated subqueries", "[subquery]") {
 	result = con.Query("SELECT i, (SELECT i FROM integers WHERE i=i1.i UNION SELECT i FROM integers WHERE i<>i1.i EXCEPT SELECT i FROM integers WHERE i<>i1.i) AS j FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3}));
+
+	// nested correlated queries
+	// result = con.Query("SELECT i, (SELECT (SELECT 42+i1.i)+42+i1.i) AS j FROM integers i1 ORDER BY i;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {Value(), 86, 88, 90}));
+
 
 	return;
 
