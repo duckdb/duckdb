@@ -13,7 +13,7 @@ void PhysicalCreateTable::_GetChunk(ClientContext &context, DataChunk &chunk, Ph
 	schema->CreateTable(context.ActiveTransaction(), info.get());
 	if (children.size() > 0) {
 		auto table = schema->GetTable(context.ActiveTransaction(), info->table);
-		while(true) {
+		while (true) {
 			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 			if (state->child_chunk.size() == 0) {
 				break;

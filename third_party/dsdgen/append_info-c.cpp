@@ -42,11 +42,13 @@ static void append_value(append_info *info, duckdb::Value v) {
 }
 
 void append_key(append_info *info, int64_t value) {
-	append_value(info, duckdb::Value::BIGINT(value));
+	auto append_info = (tpcds_append_information *)info;
+	append_info->appender->AppendBigInt(value);
 }
 
 void append_integer(append_info *info, int32_t value) {
-	append_value(info, duckdb::Value::INTEGER(value));
+	auto append_info = (tpcds_append_information *)info;
+	append_info->appender->AppendInteger(value);
 }
 
 void append_boolean(append_info *info, int32_t value) {

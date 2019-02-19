@@ -13,8 +13,6 @@
 // FIXME uuugly
 #include "execution/physical_operator.hpp"
 
-
-
 namespace duckdb {
 
 class DuckDB;
@@ -58,20 +56,17 @@ public:
 	// alternative streaming API
 	bool SendQuery(string query);
 	string GetQueryError();
-	unique_ptr<DataChunk>  FetchResultChunk();
+	unique_ptr<DataChunk> FetchResultChunk();
 	bool CloseResult();
 
 	DuckDB &db;
 	ClientContext context;
 
 private:
-	bool query_success;
-	bool result_open;
 	DuckDBResult internal_result;
 	unique_ptr<PhysicalOperator> physical_plan;
 	unique_ptr<PhysicalOperatorState> physical_state;
 	unique_ptr<DataChunk> first_chunk;
-
 };
 
 } // namespace duckdb

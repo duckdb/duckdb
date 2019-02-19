@@ -16,7 +16,7 @@ DuckDBConnection::DuckDBConnection(DuckDB &database) : db(database), context(dat
 }
 
 DuckDBConnection::~DuckDBConnection() {
-//	CloseResult();
+	CloseResult();
 	db.connection_manager.RemoveConnection(this);
 }
 
@@ -201,44 +201,36 @@ unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(ClientContext &context
 }
 
 unique_ptr<DuckDBResult> DuckDBConnection::Query(string query) {
-	if (context.transaction.IsAutoCommit()) {
-		context.transaction.BeginTransaction();
+	auto result = make_unique<DuckDBResult>();
+	result->success = SendQuery(query);
+	result->error = internal_result.error;
+	if (!result->success) {
+		return result;
 	}
-
-	context.ActiveTransaction().active_query = context.db.transaction_manager.GetQueryNumber();
-	auto result = GetQueryResult(context, query);
-
-	if (context.transaction.HasActiveTransaction()) {
-		context.ActiveTransaction().active_query = MAXIMUM_QUERY_ID;
-		try {
-			if (context.transaction.IsAutoCommit()) {
-				if (result->GetSuccess()) {
-					context.transaction.Commit();
-				} else {
-					context.transaction.Rollback();
-				}
-			}
-		} catch (Exception &ex) {
-			result->success = false;
-			result->error = ex.GetMessage();
-		} catch (...) {
-			result->success = false;
-			result->error = "UNHANDLED EXCEPTION TYPE THROWN IN TRANSACTION COMMIT!";
-		}
+	result->names = internal_result.names;
+	unique_ptr<DataChunk> chunk;
+	// FIXME UUGLY
+	if (physical_plan) {
+		result->collection.types = physical_plan->types;
 	}
+	do {
+		chunk = FetchResultChunk();
+		result->collection.Append(*chunk.get());
+	} while (chunk->size() > 0);
+
+	result->success = CloseResult();
+	result->error = internal_result.error;
+
 	return result;
 }
 
-
 // alternative streaming API
 bool DuckDBConnection::SendQuery(string query) {
-
-	// TODO: clean up query result if open
 	CloseResult();
 
 	if (context.transaction.IsAutoCommit()) {
-			context.transaction.BeginTransaction();
-		}
+		context.transaction.BeginTransaction();
+	}
 
 	context.ActiveTransaction().active_query = context.db.transaction_manager.GetQueryNumber();
 
@@ -260,8 +252,6 @@ bool DuckDBConnection::SendQuery(string query) {
 		}
 
 		auto &statement = parser.statements.back();
-
-
 
 		Planner planner;
 
@@ -305,7 +295,7 @@ bool DuckDBConnection::SendQuery(string query) {
 		if (plan->type == LogicalOperatorType::EXECUTE) {
 			auto exec = (LogicalExecute *)plan.get();
 			if (exec->prep->statement_type == StatementType::UPDATE ||
-				exec->prep->statement_type == StatementType::DELETE) {
+			    exec->prep->statement_type == StatementType::DELETE) {
 				log_query_string = true;
 			}
 		}
@@ -321,14 +311,13 @@ bool DuckDBConnection::SendQuery(string query) {
 
 		physical_plan = move(physical_planner.plan);
 
-			assert(physical_plan);
-			// the chunk and state are used to iterate over the input plan
-			physical_state = physical_plan->GetOperatorState(nullptr);
+		assert(physical_plan);
+		// the chunk and state are used to iterate over the input plan
+		physical_state = physical_plan->GetOperatorState(nullptr);
 
-			first_chunk = nullptr;
-			// read the first chunk
-			first_chunk = FetchResultChunk();
-
+		first_chunk = nullptr;
+		// read the first chunk
+		first_chunk = FetchResultChunk();
 
 		if (log_query_string) {
 			context.ActiveTransaction().PushQuery(query);
@@ -336,56 +325,56 @@ bool DuckDBConnection::SendQuery(string query) {
 
 		internal_result.success = true;
 
-
-
-
 	} catch (Exception &ex) {
 		internal_result.error = ex.GetMessage();
-		} catch (...) {
-			internal_result.error = "UNHANDLED EXCEPTION TYPE THROWN!";
-		}
-		context.profiler.EndQuery();
-		if (context.profiler.IsEnabled() && context.profiler.automatic_printing) {
-			cout << context.profiler.ToString() << "\n";
-		}
+	} catch (...) {
+		internal_result.error = "UNHANDLED EXCEPTION TYPE THROWN!";
+	}
+	context.profiler.EndQuery();
+	if (context.profiler.IsEnabled() && context.profiler.automatic_printing) {
+		cout << context.profiler.ToString() << "\n";
+	}
 	// destroy any data held in the query allocator
 	context.allocator.Destroy();
 	return internal_result.success;
-
 }
 string DuckDBConnection::GetQueryError() {
 	return internal_result.error;
 }
 unique_ptr<DataChunk> DuckDBConnection::FetchResultChunk() {
+	auto chunk = make_unique<DataChunk>();
+
+	// FIXME UUGLY
+	if (internal_result.success && !physical_plan) {
+		return chunk;
+	}
 	if (first_chunk) {
 		return move(first_chunk);
 	}
-	auto chunk = make_unique<DataChunk>();
 	physical_plan->InitializeChunk(*chunk.get());
 	physical_plan->GetChunk(context, *chunk.get(), physical_state.get());
 	return chunk;
 }
 
 bool DuckDBConnection::CloseResult() {
+	physical_plan = nullptr;
+
 	if (context.transaction.HasActiveTransaction()) {
-			context.ActiveTransaction().active_query = MAXIMUM_QUERY_ID;
-			try {
-				if (context.transaction.IsAutoCommit()) {
-					if (internal_result.GetSuccess()) {
-						context.transaction.Commit();
-					} else {
-						context.transaction.Rollback();
-					}
+		context.ActiveTransaction().active_query = MAXIMUM_QUERY_ID;
+		try {
+			if (context.transaction.IsAutoCommit()) {
+				if (internal_result.GetSuccess()) {
+					context.transaction.Commit();
+				} else {
+					context.transaction.Rollback();
 				}
-			} catch (Exception &ex) {
-				internal_result.success = false;
-			} catch (...) {
-				internal_result.success = false;
-				internal_result.error = "UNHANDLED EXCEPTION TYPE THROWN IN TRANSACTION COMMIT!";
 			}
+		} catch (Exception &ex) {
+			internal_result.success = false;
+		} catch (...) {
+			internal_result.success = false;
+			internal_result.error = "UNHANDLED EXCEPTION TYPE THROWN IN TRANSACTION COMMIT!";
 		}
-		return internal_result.success;
+	}
+	return internal_result.success;
 }
-
-
-

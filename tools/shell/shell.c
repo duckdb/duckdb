@@ -363,27 +363,27 @@ struct ShellText {
 
 /* All SQLite keywords, in alphabetical order */
 const char *azKeywords[] = {
-        "ABORT",      "ACTION",    "ADD",         "AFTER",        "ALL",          "ALTER",
-        "ANALYZE",    "AND",       "AS",          "ASC",          "ATTACH",       "AUTOINCREMENT",
-        "BEFORE",     "BEGIN",     "BETWEEN",     "BY",           "CASCADE",      "CASE",
-        "CAST",       "CHECK",     "COLLATE",     "COLUMN",       "COMMIT",       "CONFLICT",
-        "CONSTRAINT", "CREATE",    "CROSS",       "CURRENT_DATE", "CURRENT_TIME", "CURRENT_TIMESTAMP",
-        "DATABASE",   "DEFAULT",   "DEFERRABLE",  "DEFERRED",     "DELETE",       "DESC",
-        "DETACH",     "DISTINCT",  "DROP",        "EACH",         "ELSE",         "END",
-        "ESCAPE",     "EXCEPT",    "EXCLUSIVE",   "EXISTS",       "EXPLAIN",      "FAIL",
-        "FOR",        "FOREIGN",   "FROM",        "FULL",         "GLOB",         "GROUP",
-        "HAVING",     "IF",        "IGNORE",      "IMMEDIATE",    "IN",           "INDEX",
-        "INDEXED",    "INITIALLY", "INNER",       "INSERT",       "INSTEAD",      "INTERSECT",
-        "INTO",       "IS",        "ISNULL",      "JOIN",         "KEY",          "LEFT",
-        "LIKE",       "LIMIT",     "MATCH",       "NATURAL",      "NO",           "NOT",
-        "NOTNULL",    "NULL",      "OF",          "OFFSET",       "ON",           "OR",
-        "ORDER",      "OUTER",     "PLAN",        "PRAGMA",       "PRIMARY",      "QUERY",
-        "RAISE",      "RECURSIVE", "REFERENCES",  "REGEXP",       "REINDEX",      "RELEASE",
-        "RENAME",     "REPLACE",   "RESTRICT",    "RIGHT",        "ROLLBACK",     "ROW",
-        "SAVEPOINT",  "SELECT",    "SET",         "TABLE",        "TEMP",         "TEMPORARY",
-        "THEN",       "TO",        "TRANSACTION", "TRIGGER",      "UNION",        "UNIQUE",
-        "UPDATE",     "USING",     "VACUUM",      "VALUES",       "VIEW",         "VIRTUAL",
-        "WHEN",       "WHERE",     "WITH",        "WITHOUT",
+    "ABORT",      "ACTION",    "ADD",         "AFTER",        "ALL",          "ALTER",
+    "ANALYZE",    "AND",       "AS",          "ASC",          "ATTACH",       "AUTOINCREMENT",
+    "BEFORE",     "BEGIN",     "BETWEEN",     "BY",           "CASCADE",      "CASE",
+    "CAST",       "CHECK",     "COLLATE",     "COLUMN",       "COMMIT",       "CONFLICT",
+    "CONSTRAINT", "CREATE",    "CROSS",       "CURRENT_DATE", "CURRENT_TIME", "CURRENT_TIMESTAMP",
+    "DATABASE",   "DEFAULT",   "DEFERRABLE",  "DEFERRED",     "DELETE",       "DESC",
+    "DETACH",     "DISTINCT",  "DROP",        "EACH",         "ELSE",         "END",
+    "ESCAPE",     "EXCEPT",    "EXCLUSIVE",   "EXISTS",       "EXPLAIN",      "FAIL",
+    "FOR",        "FOREIGN",   "FROM",        "FULL",         "GLOB",         "GROUP",
+    "HAVING",     "IF",        "IGNORE",      "IMMEDIATE",    "IN",           "INDEX",
+    "INDEXED",    "INITIALLY", "INNER",       "INSERT",       "INSTEAD",      "INTERSECT",
+    "INTO",       "IS",        "ISNULL",      "JOIN",         "KEY",          "LEFT",
+    "LIKE",       "LIMIT",     "MATCH",       "NATURAL",      "NO",           "NOT",
+    "NOTNULL",    "NULL",      "OF",          "OFFSET",       "ON",           "OR",
+    "ORDER",      "OUTER",     "PLAN",        "PRAGMA",       "PRIMARY",      "QUERY",
+    "RAISE",      "RECURSIVE", "REFERENCES",  "REGEXP",       "REINDEX",      "RELEASE",
+    "RENAME",     "REPLACE",   "RESTRICT",    "RIGHT",        "ROLLBACK",     "ROW",
+    "SAVEPOINT",  "SELECT",    "SET",         "TABLE",        "TEMP",         "TEMPORARY",
+    "THEN",       "TO",        "TRANSACTION", "TRIGGER",      "UNION",        "UNIQUE",
+    "UPDATE",     "USING",     "VACUUM",      "VALUES",       "VIEW",         "VIRTUAL",
+    "WHEN",       "WHERE",     "WITH",        "WITHOUT",
 };
 
 /*
@@ -1189,23 +1189,23 @@ static void open_db(ShellState *p, int keepAlive) {
 */
 
 static char *readline_completion_generator(const char *text, int state) {
-    static int current_keyword_index, text_len;
-    const size_t n_keywords = sizeof(azKeywords)/sizeof(azKeywords[0]);
-    const char *name;
+	static int current_keyword_index, text_len;
+	const size_t n_keywords = sizeof(azKeywords) / sizeof(azKeywords[0]);
+	const char *name;
 
-    if (!state) {
-        current_keyword_index = 0;
-        text_len = (int)strlen(text);
-    }
+	if (!state) {
+		current_keyword_index = 0;
+		text_len = (int)strlen(text);
+	}
 
-    while (current_keyword_index < n_keywords) {
-        name = azKeywords[current_keyword_index++];
-        if (sqlite3_strnicmp(name, text, text_len) == 0) {
-            return strdup(name);
-        }
-    }
+	while (current_keyword_index < n_keywords) {
+		name = azKeywords[current_keyword_index++];
+		if (sqlite3_strnicmp(name, text, text_len) == 0) {
+			return strdup(name);
+		}
+	}
 
-    return NULL;
+	return NULL;
 }
 
 static char **readline_completion(const char *zText, int iStart, int iEnd) {

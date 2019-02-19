@@ -14,6 +14,10 @@ TEST_CASE("Test fetch API", "[api][.]") {
 	REQUIRE(result);
 	result = con.CloseResult();
 	REQUIRE(result);
+
+	auto mat_res0 = con.Query("select a from test where 1 <> 1");
+	REQUIRE(CHECK_COLUMN(mat_res0, 0, {}));
+
 	result = con.SendQuery("INSERT INTO test VALUES (42)");
 	REQUIRE(result);
 	result = con.CloseResult();
@@ -27,6 +31,4 @@ TEST_CASE("Test fetch API", "[api][.]") {
 
 	auto mat_res = con.Query("select a from test");
 	REQUIRE(mat_res->GetValue(0, 0) == Value::INTEGER(42));
-
-
 }
