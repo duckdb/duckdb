@@ -119,8 +119,11 @@ void CommonAggregateOptimizer::find_bound_references(Expression& expression, con
 }
 
 void CommonAggregateOptimizer::ExtractCommonAggregateExpressions(LogicalOperator& projection) {
+	/* REMOVE CODE AFTER DEBUGGING
 	std::cout << "BEFORE OPTIMIZING:" << std::endl;
 	std::cout << projection.ToString() << std::endl;
+	** REMOVE CODE AFTER DEBUGGING
+	*/
 
 	vector<Expression*> operator_chain_expressions;
 
@@ -156,8 +159,10 @@ void CommonAggregateOptimizer::ExtractCommonAggregateExpressions(LogicalOperator
 		
 		aggregate_index++;
 	}
-
+	/* REMOVE CODE AFTER DEBUGGING
 	aggregate->expressions.swap(new_aggregate_expressions);
 	std::cout << "AFTER OPTIMIZING:" << std::endl;
 	std::cout << projection.ToString() << std::endl;
+	** REMOVE CODE AFTER DEBUGGING
+	*/
 }
