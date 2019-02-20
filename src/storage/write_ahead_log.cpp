@@ -38,6 +38,7 @@ void WriteAheadLog::Replay(string &path) {
 		throw IOException("WAL could not be opened for reading");
 	}
 	ClientContext context(database);
+	context.transaction.SetAutoCommit(false);
 
 	vector<WALEntryData> stored_entries;
 	WALEntry entry;

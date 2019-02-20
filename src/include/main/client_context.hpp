@@ -31,6 +31,9 @@ public:
 		interrupted = true;
 	}
 
+	bool CleanupLazyResult();
+	unique_ptr<DataChunk> FetchChunk();
+
 	//! The allocator that holds any allocations made in the Query Context
 	Allocator allocator;
 	//! Query profiler

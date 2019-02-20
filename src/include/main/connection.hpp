@@ -10,8 +10,6 @@
 
 #include "main/client_context.hpp"
 #include "main/result.hpp"
-// FIXME uuugly
-#include "execution/physical_operator.hpp"
 
 namespace duckdb {
 
@@ -52,6 +50,9 @@ public:
 
 	//! Queries the database using the transaction context of this connection
 	unique_ptr<DuckDBResult> Query(string query);
+	static unique_ptr<DuckDBResult> Query(ClientContext &context, string query);
+
+	static bool SendQuery(ClientContext &context, string query);
 
 	// alternative streaming API
 	bool SendQuery(string query);
