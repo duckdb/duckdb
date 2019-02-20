@@ -67,7 +67,7 @@ void CommonAggregateOptimizer::find_bound_references(Expression& expression, con
 		auto column_index = &(static_cast<BoundExpression&>(expression).index);
 
 		if (*column_index >= nr_of_groups) {
-			// this column_expression represents an aggregate. Start doing some bookkeeping.
+			// this column_expression represents an aggregate: start doing some bookkeeping.
 			auto& positions = aggregate_to_projection_map[aggregate.expressions[*column_index - nr_of_groups].get()];
 			positions.push_back(column_index);
 		}
