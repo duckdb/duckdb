@@ -54,9 +54,13 @@ static JoinSide GetJoinSide(Expression &expression, unordered_set<size_t> &left_
 		auto &subquery = (BoundSubqueryExpression&) expression;
 		// correlated subquery, check the side of each of correlated columns in the subquery
 		JoinSide side = JoinSide::NONE;
-		for(size_t i = 0; i < subquery.binder->correlated_columns.size(); i++) {
-			auto binding = subquery.binder->correlated_columns[i].binding;
-			auto correlated_side = GetJoinSide(binding.table_index, left_bindings, right_bindings);
+		for(auto &corr : subquery.binder->correlated_columns) {
+			if (corr.depth > 1) {
+				// correlated column has depth > 1
+				// it does not refer to any table in the current set of bindings
+				return JoinSide::BOTH;
+			}
+			auto correlated_side = GetJoinSide(corr.binding.table_index, left_bindings, right_bindings);
 			side = CombineJoinSide(side, correlated_side);
 		}
 		return side;

@@ -2,6 +2,7 @@
 
 #include "common/vector_operations/vector_operations.hpp"
 #include "main/client_context.hpp"
+#include "common/types/static_vector.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -30,7 +31,9 @@ void ExpressionExecutor::Merge(std::vector<std::unique_ptr<Expression>> &express
 		return;
 	}
 
-	ExecuteExpression(expressions[0].get(), result);
+	StaticVector<bool> initial_result;
+	ExecuteExpression(expressions[0].get(), initial_result);
+	initial_result.Copy(result);
 	for (size_t i = 1; i < expressions.size(); i++) {
 		MergeExpression(expressions[i].get(), result);
 	}

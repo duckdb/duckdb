@@ -262,24 +262,33 @@ struct FlattenDependentJoins {
 				return join;
 			}
 			case LogicalOperatorType::JOIN: {
-				// FIXME: consider different join types
 				auto &join = (LogicalJoin&) *plan;
-				if (join.type != JoinType::INNER) {
-					throw Exception("Unsupported join type in subquery");
-				}
 				assert(plan->children.size() == 2);
 				// check the correlated expressions in the children of the join
 				bool left_has_correlation  = has_correlated_expressions.find(plan->children[0].get())->second;
 				bool right_has_correlation = has_correlated_expressions.find(plan->children[1].get())->second;
-				if (!right_has_correlation) {
-					// only left has correlation: push into left
-					plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
-					return plan;
-				}
-				if (!left_has_correlation) {
-					// only right has correlation: push into right
-					plan->children[1] = PushDownDependentJoin(move(plan->children[1]));
-					return plan;
+
+				if (join.type == JoinType::INNER) {
+					// inner join
+					if (!right_has_correlation) {
+						// only left has correlation: push into left
+						plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+						return plan;
+					}
+					if (!left_has_correlation) {
+						// only right has correlation: push into right
+						plan->children[1] = PushDownDependentJoin(move(plan->children[1]));
+						return plan;
+					}
+				} else if (join.type == JoinType::LEFT) {
+					// left outer join
+					if (!left_has_correlation) {
+						// only right has correlation: push into right
+						plan->children[1] = PushDownDependentJoin(move(plan->children[1]));
+						return plan;
+					}
+				} else {
+					throw Exception("Unsupported join type for flattening correlated subquery");
 				}
 				// both sides have correlation
 				// push into both sides
@@ -677,32 +686,5 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 		has_unplanned_subqueries = true;
 		return nullptr;
 	}
-
 	return PlanSubquery(binder, context, expr, root);
-	// auto &subquery = (SubqueryExpression&) *expr.subquery;
-	// // first we translate the QueryNode of the subquery into a logical plan
-	// // note that we do not plan nested subqueries yet
-	// LogicalPlanGenerator generator(*expr.binder, context);
-	// generator.plan_subquery = false;
-	// generator.CreatePlan(*subquery.subquery);
-	// if (!generator.root) {
-	// 	throw Exception("Can't plan subquery");
-	// }
-	// if (!root) {
-	// 	throw Exception("Subquery cannot be root of a plan");
-	// }
-	// // now we actually flatten the subquery
-	// auto plan = move(generator.root);
-	// unique_ptr<Expression> result_expression;
-	// if (!expr.IsCorrelated()) {
-	// 	result_expression = PlanUncorrelatedSubquery(binder, expr, subquery, root, move(plan));
-	// } else {
-	// 	result_expression = PlanCorrelatedSubquery(binder, expr, subquery, root, move(plan));
-	// }
-	// // finally, we recursively plan the nested subqueries (if there are any)
-	// if (generator.has_unplanned_subqueries) {
-	// 	PlanSubqueries plan(binder, context);
-	// 	plan.VisitOperator(*root);
-	// }
-	// return result_expression;
 }
