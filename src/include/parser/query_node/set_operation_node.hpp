@@ -45,6 +45,12 @@ public:
 		return left->GetSelectCount();
 	}
 
+	void EnumerateChildren(std::function<void(Expression *expression)> callback) const override {
+		QueryNode::EnumerateChildren(callback);
+		left->EnumerateChildren(callback);
+		right->EnumerateChildren(callback);
+	}
+
 	bool Equals(const QueryNode *other) const override;
 	//! Create a copy of this SelectNode
 	unique_ptr<QueryNode> Copy() override;

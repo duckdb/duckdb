@@ -24,11 +24,13 @@ struct CorrelatedColumnInfo {
 	ColumnBinding binding;
 	TypeId type;
 	string name;
+	size_t depth;
 
 	CorrelatedColumnInfo(BoundColumnRefExpression& expr) {
 		binding = expr.binding;
 		type = expr.return_type;
 		name = expr.GetName();
+		depth = expr.depth;
 	}
 
 	bool operator==(const CorrelatedColumnInfo &rhs) const {
@@ -88,6 +90,9 @@ public:
 
 	vector<ExpressionBinder*>& GetActiveBinders();
 	
+	void MergeCorrelatedColumns(vector<CorrelatedColumnInfo> &other);
+	void AddCorrelatedColumn(CorrelatedColumnInfo info);
+
 	vector<CorrelatedColumnInfo> correlated_columns;
 private:
 	//! Move correlated expressions from the child binder to this binder

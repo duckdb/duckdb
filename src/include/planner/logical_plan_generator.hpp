@@ -21,13 +21,10 @@ class ClientContext;
 //! statement
 class LogicalPlanGenerator : public SQLNodeVisitor {
 public:
-	LogicalPlanGenerator(Binder &binder, ClientContext &context)
-	    : binder(binder), require_row_id(false), context(context) {
-	}
+	LogicalPlanGenerator(Binder &binder, ClientContext &context);
 
 	void CreatePlan(SQLStatement &statement);
 
-protected:
 	void CreatePlan(SelectStatement &statement);
 	void CreatePlan(InsertStatement &statement);
 	void CreatePlan(CopyStatement &statement);
@@ -40,6 +37,7 @@ protected:
 	void CreatePlan(SelectNode &statement);
 	void CreatePlan(SetOperationNode &statement);
 
+protected:
 	void VisitQueryNode(QueryNode &statement);
 
 	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override;
@@ -58,6 +56,9 @@ public:
 	//! The resulting plan
 	unique_ptr<LogicalOperator> root;
 
+	//! Whether or not subqueries should be planned already
+	bool plan_subquery = true;
+	bool has_unplanned_subqueries = false;
 private:
 	//! A reference to the current binder
 	Binder &binder;

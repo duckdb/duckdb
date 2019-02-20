@@ -9,6 +9,7 @@
 #include "planner/operator/list.hpp"
 #include "planner/binder.hpp"
 
+#include <algorithm>
 #include <map>
 
 using namespace duckdb;
@@ -16,8 +17,8 @@ using namespace std;
 
 class HasCorrelatedExpressions : public LogicalOperatorVisitor {
 public:
-	HasCorrelatedExpressions() : 
-		has_correlated_expressions(false) {}
+	HasCorrelatedExpressions(const vector<CorrelatedColumnInfo>& correlated) : 
+		has_correlated_expressions(false), correlated_columns(correlated) {}
 
 	void VisitOperator(LogicalOperator &op) override {
 		VisitOperatorExpressions(op);
@@ -31,10 +32,20 @@ public:
 		has_correlated_expressions = true;
 	}
 	void Visit(BoundSubqueryExpression &expr) override {
-		throw Exception("Unsupported: nested subqueries");
+		if (!expr.IsCorrelated()) {
+			return;
+		}
+		// check if the subquery contains any of the correlated expressions that we are concerned about in this node
+		for(size_t i = 0; i < correlated_columns.size(); i++) {
+			if (std::find(expr.binder->correlated_columns.begin(), expr.binder->correlated_columns.end(), correlated_columns[i]) != expr.binder->correlated_columns.end()) {
+				has_correlated_expressions = true;
+				break;
+			}
+		}
 	}
 
 	bool has_correlated_expressions;
+	const vector<CorrelatedColumnInfo>& correlated_columns;
 };
 
 class RewriteCorrelatedExpressions : public LogicalOperatorVisitor {
@@ -57,8 +68,64 @@ public:
 		expr.binding = ColumnBinding(base_binding.table_index, base_binding.column_index + entry->second);
 		expr.depth = 0;
 	}
+	
+	class RewriteCorrelatedRecursive {
+	public:
+		RewriteCorrelatedRecursive(BoundSubqueryExpression &parent, ColumnBinding base_binding, column_binding_map_t<size_t>& correlated_map) : 
+			parent(parent), base_binding(base_binding), correlated_map(correlated_map) { }
+
+		void RewriteCorrelatedSubquery(BoundSubqueryExpression& expr) {
+			// rewrite the binding in the correlated list of the subquery)
+			for(auto &corr : expr.binder->correlated_columns) {
+				auto entry = correlated_map.find(corr.binding);
+				if (entry != correlated_map.end()) {
+					corr.binding = ColumnBinding(base_binding.table_index, base_binding.column_index + entry->second);
+				}
+			}
+			// now rewrite any correlated BoundColumnRef expressions inside the subquery
+			auto &subquery = (SubqueryExpression&) *expr.subquery;
+			subquery.subquery->EnumerateChildren([&](Expression *child) {
+				RewriteCorrelatedExpressions(child);
+			});
+		}
+
+		void RewriteCorrelatedExpressions(Expression *child) {
+			if (child->type == ExpressionType::BOUND_COLUMN_REF) {
+				// bound column reference
+				auto &bound_colref = (BoundColumnRefExpression&) *child;
+				if (bound_colref.depth == 0) {
+					// not a correlated column, ignore
+					return;
+				}
+				// correlated column
+				// check the correlated map
+				auto entry = correlated_map.find(bound_colref.binding);
+				if (entry != correlated_map.end()) {
+					// we found the column in the correlated map!
+					// update the binding and reduce the depth by 1
+					bound_colref.binding = ColumnBinding(base_binding.table_index, base_binding.column_index + entry->second);
+					bound_colref.depth--;
+				}
+			} else if (child->type == ExpressionType::SUBQUERY) {
+				// we encountered another subquery: rewrite recursively
+				assert(child->GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY);
+				auto &bound_subquery = (BoundSubqueryExpression&) *child;
+				RewriteCorrelatedRecursive rewrite(bound_subquery, base_binding, correlated_map);
+				rewrite.RewriteCorrelatedSubquery(bound_subquery);
+			}
+		}
+
+		BoundSubqueryExpression &parent;
+		ColumnBinding base_binding;
+		column_binding_map_t<size_t>& correlated_map;
+	};
+
 	void Visit(BoundSubqueryExpression &expr) override {
-		throw Exception("Unsupported: nested subqueries");
+		if (!expr.IsCorrelated()) {
+			return;
+		}
+		RewriteCorrelatedRecursive rewrite(expr, base_binding, correlated_map);
+		rewrite.RewriteCorrelatedSubquery(expr);
 	}
 private:
 	ColumnBinding base_binding;
@@ -80,7 +147,7 @@ struct FlattenDependentJoins {
 	bool DetectCorrelatedExpressions(LogicalOperator *op) {
 		assert(op);
 		// check if this entry has correlated expressions
-		HasCorrelatedExpressions visitor;
+		HasCorrelatedExpressions visitor(correlated_columns);
 		visitor.VisitOperator(*op);
 		bool has_correlation = visitor.has_correlated_expressions;
 		// now visit the children of this entry and check if they have correlated expressions
@@ -546,14 +613,39 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 	}
 }
 
-unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) {
-	// first visit the children of the Subquery expression, if any
-	VisitExpressionChildren(expr);
+static unique_ptr<Expression> PlanSubquery(Binder &binder, ClientContext &context, BoundSubqueryExpression &expr, unique_ptr<LogicalOperator>& root) ;
 
-	// check if the subquery is correlated
+class PlanSubqueries : public LogicalOperatorVisitor {
+public:
+	PlanSubqueries(Binder &binder, ClientContext &context) : binder(binder), context(context) {
+
+	}
+	void VisitOperator(LogicalOperator &op) override {
+		if (op.children.size() > 0) {
+			root = move(op.children[0]);
+			VisitOperatorExpressions(op);
+			op.children[0] = move(root);
+			for(size_t i = 0; i < op.children.size(); i++) {
+				VisitOperator(*op.children[i]);
+			}
+		}
+	}
+
+	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override {
+		return PlanSubquery(binder, context, expr, root);
+	}
+private:
+	unique_ptr<LogicalOperator> root;
+	Binder &binder;
+	ClientContext &context;
+};
+
+static unique_ptr<Expression> PlanSubquery(Binder &binder, ClientContext &context, BoundSubqueryExpression &expr, unique_ptr<LogicalOperator>& root) {
 	auto &subquery = (SubqueryExpression&) *expr.subquery;
 	// first we translate the QueryNode of the subquery into a logical plan
+	// note that we do not plan nested subqueries yet
 	LogicalPlanGenerator generator(*expr.binder, context);
+	generator.plan_subquery = false;
 	generator.CreatePlan(*subquery.subquery);
 	if (!generator.root) {
 		throw Exception("Can't plan subquery");
@@ -563,9 +655,54 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 	}
 	// now we actually flatten the subquery
 	auto plan = move(generator.root);
+	unique_ptr<Expression> result_expression;
 	if (!expr.IsCorrelated()) {
-		return PlanUncorrelatedSubquery(binder, expr, subquery, root, move(plan));
+		result_expression = PlanUncorrelatedSubquery(binder, expr, subquery, root, move(plan));
 	} else {
-		return PlanCorrelatedSubquery(binder, expr, subquery, root, move(plan));
+		result_expression = PlanCorrelatedSubquery(binder, expr, subquery, root, move(plan));
 	}
+	// finally, we recursively plan the nested subqueries (if there are any)
+	if (generator.has_unplanned_subqueries) {
+		PlanSubqueries plan(binder, context);
+		plan.VisitOperator(*root);
+	}
+	return result_expression;
+}
+
+unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) {
+	// first visit the children of the Subquery expression, if any
+	VisitExpressionChildren(expr);
+	if (expr.IsCorrelated() && !plan_subquery) {
+		// we don't plan correlated subqueries yet in this LogicalPlanGenerator
+		has_unplanned_subqueries = true;
+		return nullptr;
+	}
+
+	return PlanSubquery(binder, context, expr, root);
+	// auto &subquery = (SubqueryExpression&) *expr.subquery;
+	// // first we translate the QueryNode of the subquery into a logical plan
+	// // note that we do not plan nested subqueries yet
+	// LogicalPlanGenerator generator(*expr.binder, context);
+	// generator.plan_subquery = false;
+	// generator.CreatePlan(*subquery.subquery);
+	// if (!generator.root) {
+	// 	throw Exception("Can't plan subquery");
+	// }
+	// if (!root) {
+	// 	throw Exception("Subquery cannot be root of a plan");
+	// }
+	// // now we actually flatten the subquery
+	// auto plan = move(generator.root);
+	// unique_ptr<Expression> result_expression;
+	// if (!expr.IsCorrelated()) {
+	// 	result_expression = PlanUncorrelatedSubquery(binder, expr, subquery, root, move(plan));
+	// } else {
+	// 	result_expression = PlanCorrelatedSubquery(binder, expr, subquery, root, move(plan));
+	// }
+	// // finally, we recursively plan the nested subqueries (if there are any)
+	// if (generator.has_unplanned_subqueries) {
+	// 	PlanSubqueries plan(binder, context);
+	// 	plan.VisitOperator(*root);
+	// }
+	// return result_expression;
 }

@@ -193,6 +193,19 @@ vector<ExpressionBinder*>& Binder::GetActiveBinders() {
 }
 
 void Binder::MoveCorrelatedExpressions(Binder &other) {
-	correlated_columns.insert(correlated_columns.end(), other.correlated_columns.begin(), other.correlated_columns.end());
+	MergeCorrelatedColumns(other.correlated_columns);
 	other.correlated_columns.clear();
+}
+
+void Binder::MergeCorrelatedColumns(vector<CorrelatedColumnInfo> &other) {
+	for(size_t i = 0; i < other.size(); i++) {
+		AddCorrelatedColumn(other[i]);
+	}
+}
+
+void Binder::AddCorrelatedColumn(CorrelatedColumnInfo info) {
+	// we only add correlated columns to the list if they are not already there
+	if (std::find(correlated_columns.begin(), correlated_columns.end(), info) == correlated_columns.end()) {
+		correlated_columns.push_back(info);
+	}
 }

@@ -12,6 +12,7 @@
 #include "planner/binder.hpp"
 
 namespace duckdb {
+class LogicalOperator;
 
 //! Represents a subquery
 class BoundSubqueryExpression : public Expression {
@@ -32,6 +33,7 @@ public:
 
 	unique_ptr<Binder> binder;
 	unique_ptr<Expression> subquery;
+
 
 	bool IsCorrelated() {
 		return binder->correlated_columns.size() > 0;

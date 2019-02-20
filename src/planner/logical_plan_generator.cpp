@@ -14,6 +14,11 @@
 using namespace duckdb;
 using namespace std;
 
+
+LogicalPlanGenerator::LogicalPlanGenerator(Binder &binder, ClientContext &context)
+	: binder(binder), plan_subquery(true), has_unplanned_subqueries(false), require_row_id(false), context(context) {
+}
+
 void LogicalPlanGenerator::CreatePlan(SQLStatement &statement) {
 	switch (statement.type) {
 	case StatementType::SELECT:

@@ -81,7 +81,18 @@ BindResult ExpressionBinder::BindSubqueryExpression(unique_ptr<Expression> expr,
 	if (subquery.subquery_type != SubqueryType::EXISTS && select_list.size() != 1) {
 		throw BinderException("Subquery returns %zu columns - expected 1", select_list.size());
 	}
+	// check the correlated columns of the subquery for correlated columns with depth > 1
+	for(size_t i = 0; i < subquery_binder->correlated_columns.size(); i++) {
+		CorrelatedColumnInfo corr = subquery_binder->correlated_columns[i];
+		if (corr.depth > 1) {
+			// depth > 1, the column references the query ABOVE the current one
+			// add to the set of correlated columns for THIS query
+			corr.depth -= 1;
+			binder.AddCorrelatedColumn(corr);
+		}
+	}
 	assert(select_list[0]->return_type != TypeId::INVALID); // "Subquery has no type"
+	// create the bound subquery
 	auto result = make_unique<BoundSubqueryExpression>();
 	result->return_type = subquery.subquery_type == SubqueryType::SCALAR ? select_list[0]->return_type : subquery.return_type;
 	result->binder = move(subquery_binder);
@@ -131,7 +142,7 @@ void ExpressionBinder::ExtractCorrelatedExpressions(Binder &binder, Expression &
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_colref = (BoundColumnRefExpression&) expr;
 		if (bound_colref.depth > 0) {
-			binder.correlated_columns.push_back(CorrelatedColumnInfo(bound_colref));
+			binder.AddCorrelatedColumn(CorrelatedColumnInfo(bound_colref));
 		}
 	}
 	expr.EnumerateChildren([&](Expression *child) {

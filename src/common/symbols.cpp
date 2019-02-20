@@ -65,6 +65,7 @@ template class std::unique_ptr<AggregateExpression>;
 template class std::unique_ptr<CaseExpression>;
 template class std::unique_ptr<CastExpression>;
 template class std::unique_ptr<ColumnRefExpression>;
+template class std::unique_ptr<Binder>;
 
 #define INSTANTIATE_VECTOR(VECTOR_DEFINITION)                                                                          \
 	template VECTOR_DEFINITION::size_type VECTOR_DEFINITION::size() const;                                             \
