@@ -29,7 +29,7 @@ private:
 
     void find_bound_references(Expression& expression, const LogicalAggregate& aggregate, aggregate_to_bound_ref_map_t& aggregate_to_projection_map, size_t& nr_of_groups);
 
-    LogicalAggregate* find_logical_aggregate(const vector<unique_ptr<LogicalOperator>>& child_operators);
+    LogicalAggregate* find_logical_aggregate(vector<Expression*>& expressions, LogicalOperator& projection);
     void ExtractCommonAggregateExpressions(LogicalOperator &projection);
 };
 

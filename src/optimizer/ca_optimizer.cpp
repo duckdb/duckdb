@@ -52,13 +52,53 @@ void CommonAggregateOptimizer::VisitOperator(LogicalOperator &op) {
 	LogicalOperatorVisitor::VisitOperator(op);
 }
 
-LogicalAggregate* CommonAggregateOptimizer::find_logical_aggregate(const vector<unique_ptr<LogicalOperator>>& child_operators) {
-		for (auto& child_operator: child_operators) {
-			if (child_operator->type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY)
-				return static_cast<LogicalAggregate*>(child_operator.get()); 
-		}
 
-		return nullptr;
+
+/*
+P := PROJECTION
+W := WINDOW
+F := FILTER
+A := AGGREGATE_AND_GROUP_BY
+
+POSSIBLE AGGREGATION OPERATOR PIPELINES:
+P A
+P W F A
+P W A
+P F A
+*/
+LogicalAggregate* CommonAggregateOptimizer::find_logical_aggregate(vector<Expression*>& expressions, LogicalOperator& projection) {
+
+	LogicalOperator* node = &projection;
+
+	for (auto& expression : projection.expressions)	{
+		expressions.push_back(expression.get());
+	}
+
+	for (auto& child_operator: node->children) {
+		if (child_operator->type == LogicalOperatorType::WINDOW) {
+			node = child_operator.get();
+			for (auto& expression : node->expressions) {
+				expressions.push_back(expression.get());
+			}
+		}
+	}
+
+	for (auto& child_operator: node->children) {
+		if (child_operator->type == LogicalOperatorType::FILTER) {
+			node = child_operator.get();
+			for (auto& expression : node->expressions) {
+				expressions.push_back(expression.get());
+			}
+		}
+	}
+
+	for (auto& child_operator: node->children) {
+		if (child_operator->type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY) {
+			return static_cast<LogicalAggregate*>(child_operator.get());
+		}
+	}
+
+	return nullptr;
 }
 
 void CommonAggregateOptimizer::find_bound_references(Expression& expression, const LogicalAggregate& aggregate, aggregate_to_bound_ref_map_t& aggregate_to_projection_map, size_t& nr_of_groups) {
@@ -82,10 +122,9 @@ void CommonAggregateOptimizer::ExtractCommonAggregateExpressions(LogicalOperator
 	std::cout << "BEFORE OPTIMIZING:" << std::endl;
 	std::cout << projection.ToString() << std::endl;
 
-	// TODO: make this thing handle filters and other operators between the projection and the actual aggregate.
-	auto aggregate = find_logical_aggregate(projection.children);
+	vector<Expression*> operator_chain_expressions;
 
-	// TODO: should I assert that size of projection.expressions and aggregate.groups + aggregate.expressions are equal?
+	auto aggregate = find_logical_aggregate(operator_chain_expressions, projection);
 
 	if (!aggregate) {
 		return;
@@ -97,7 +136,7 @@ void CommonAggregateOptimizer::ExtractCommonAggregateExpressions(LogicalOperator
 
 	aggregate_to_bound_ref_map_t aggregate_to_projection_map;
 
-	for (auto& column_expression : projection.expressions) {
+	for (auto& column_expression : operator_chain_expressions) {
 		find_bound_references(*column_expression, *aggregate, aggregate_to_projection_map, nr_of_groups);
 	}
 
