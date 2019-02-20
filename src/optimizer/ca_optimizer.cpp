@@ -82,7 +82,7 @@ void CommonAggregateOptimizer::ExtractCommonAggregateExpressions(LogicalOperator
 	std::cout << "BEFORE OPTIMIZING:" << std::endl;
 	std::cout << projection.ToString() << std::endl;
 
-	// TODO: make this thing handle filters and other operators between in the projection and the actual aggregate.
+	// TODO: make this thing handle filters and other operators between the projection and the actual aggregate.
 	auto aggregate = find_logical_aggregate(projection.children);
 
 	// TODO: should I assert that size of projection.expressions and aggregate.groups + aggregate.expressions are equal?
