@@ -16,43 +16,13 @@ DuckDBConnection::DuckDBConnection(DuckDB &database) : db(database), context(dat
 }
 
 DuckDBConnection::~DuckDBConnection() {
-	CloseResult();
+	context.CleanupStreamingResult();
 	db.connection_manager.RemoveConnection(this);
 }
 
-unique_ptr<DuckDBResult> DuckDBConnection::GetQueryResult(ClientContext &context, string query) {
-	return Query(context, query);
-}
-
-unique_ptr<DuckDBResult> DuckDBConnection::Query(ClientContext &context, string query) {
-	auto result = make_unique<DuckDBResult>();
-	result->success = SendQuery(context, query);
-	result->error = context.execution_context.internal_result.error;
-	if (!result->success) {
-		return result;
-	}
-	result->names = context.execution_context.internal_result.names;
-	unique_ptr<DataChunk> chunk;
-	if (context.execution_context.physical_plan) {
-		result->collection.types = context.execution_context.physical_plan->types;
-	}
-	do {
-		chunk = context.FetchChunk();
-		result->collection.Append(*chunk.get());
-	} while (chunk->size() > 0);
-
-	result->success = context.CleanupLazyResult();
-	result->error = context.execution_context.internal_result.error;
-
-	return result;
-}
-
-unique_ptr<DuckDBResult> DuckDBConnection::Query(string query) {
-	return Query(context, query);
-}
-
-bool DuckDBConnection::SendQuery(ClientContext &context, string query) {
-	context.CleanupLazyResult();
+// TODO move this to context perhaps?
+unique_ptr<DuckDBStreamingResult> DuckDBConnection::SendQuery(ClientContext &context, string query) {
+	context.CleanupStreamingResult();
 
 	if (context.transaction.IsAutoCommit()) {
 		context.transaction.BeginTransaction();
@@ -70,7 +40,9 @@ bool DuckDBConnection::SendQuery(ClientContext &context, string query) {
 		parser.ParseQuery(query.c_str());
 		if (parser.statements.size() == 0) {
 			// empty query
-			return true;
+			// TODO move this success flag into streaming result
+			context.execution_context.internal_result.success = true;
+			return make_unique<DuckDBStreamingResult>(context);
 		}
 
 		if (parser.statements.size() > 1) {
@@ -105,7 +77,7 @@ bool DuckDBConnection::SendQuery(ClientContext &context, string query) {
 				context.ActiveTransaction().PushQuery(query);
 			}
 
-			return true;
+			return make_unique<DuckDBStreamingResult>(context);
 		}
 
 		auto plan = move(planner.plan);
@@ -114,7 +86,7 @@ bool DuckDBConnection::SendQuery(ClientContext &context, string query) {
 		if (!plan) {
 			context.execution_context.internal_result.success = true;
 
-			return true;
+			return make_unique<DuckDBStreamingResult>(context);
 		}
 
 		// special case with logging EXECUTE with prepared statements that do not scan the table
@@ -162,20 +134,20 @@ bool DuckDBConnection::SendQuery(ClientContext &context, string query) {
 	}
 	// destroy any data held in the query allocator
 	context.allocator.Destroy();
-	return context.execution_context.internal_result.success;
+
+	return make_unique<DuckDBStreamingResult>(context);
 }
 
-// alternative streaming API
-bool DuckDBConnection::SendQuery(string query) {
+// variuos shortcuts for backwards-compatibility (ha!)
+
+unique_ptr<DuckDBStreamingResult> DuckDBConnection::SendQuery(string query) {
 	return SendQuery(context, query);
 }
-string DuckDBConnection::GetQueryError() {
-	return context.execution_context.internal_result.error;
-}
-unique_ptr<DataChunk> DuckDBConnection::FetchResultChunk() {
-	return context.FetchChunk();
+
+unique_ptr<DuckDBResult> DuckDBConnection::Query(ClientContext &context, string query) {
+	return SendQuery(context, query)->Materialize();
 }
 
-bool DuckDBConnection::CloseResult() {
-	return context.CleanupLazyResult();
+unique_ptr<DuckDBResult> DuckDBConnection::Query(string query) {
+	return Query(context, query);
 }

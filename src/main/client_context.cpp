@@ -6,18 +6,19 @@ using namespace duckdb;
 using namespace std;
 
 ClientContext::ClientContext(DuckDB &database)
-    : db(database), transaction(database.transaction_manager), prepared_statements(make_unique<CatalogSet>()) {
+    : db(database), transaction(database.transaction_manager), interrupted(false),
+      prepared_statements(make_unique<CatalogSet>()) {
 }
 
 // TODO should we put this into execution context?
-bool ClientContext::CleanupLazyResult() {
+bool ClientContext::CleanupStreamingResult() {
 	execution_context.physical_plan = nullptr;
 
 	if (transaction.HasActiveTransaction()) {
 		ActiveTransaction().active_query = MAXIMUM_QUERY_ID;
 		try {
 			if (transaction.IsAutoCommit()) {
-				if (execution_context.internal_result.GetSuccess()) {
+				if (execution_context.internal_result.success) {
 					transaction.Commit();
 				} else {
 					transaction.Rollback();

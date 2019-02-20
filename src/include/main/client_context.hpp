@@ -31,7 +31,7 @@ public:
 		interrupted = true;
 	}
 
-	bool CleanupLazyResult();
+	bool CleanupStreamingResult();
 	unique_ptr<DataChunk> FetchChunk();
 
 	//! The allocator that holds any allocations made in the Query Context

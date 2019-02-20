@@ -8,27 +8,24 @@ TEST_CASE("Test fetch API", "[api][.]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 	// con.EnableQueryVerification();
+	unique_ptr<DuckDBResult> result;
+	unique_ptr<DuckDBStreamingResult> streaming_result;
 
-	bool result;
-	result = con.SendQuery("CREATE TABLE test (a INTEGER);");
-	REQUIRE(result);
-	result = con.CloseResult();
-	REQUIRE(result);
+	streaming_result = con.SendQuery("CREATE TABLE test (a INTEGER);");
+	// omit Close() here
 
-	auto mat_res0 = con.Query("select a from test where 1 <> 1");
-	REQUIRE(CHECK_COLUMN(mat_res0, 0, {}));
+	result = con.Query("select a from test where 1 <> 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
 
-	result = con.SendQuery("INSERT INTO test VALUES (42)");
-	REQUIRE(result);
-	result = con.CloseResult();
-	REQUIRE(result);
-	result = con.SendQuery("SELECT a from test");
+	streaming_result = con.SendQuery("INSERT INTO test VALUES (42)");
+	REQUIRE(streaming_result->Close());
+
+	streaming_result = con.SendQuery("SELECT a from test");
 	REQUIRE(result);
 
-	REQUIRE(con.FetchResultChunk()->GetVector(0).GetValue(0) == Value::INTEGER(42));
-	result = con.CloseResult();
-	REQUIRE(result);
+	REQUIRE(streaming_result->Fetch()->GetVector(0).GetValue(0) == Value::INTEGER(42));
+	REQUIRE(streaming_result->Close());
 
-	auto mat_res = con.Query("select a from test");
-	REQUIRE(mat_res->GetValue(0, 0) == Value::INTEGER(42));
+	result = con.Query("select a from test");
+	REQUIRE(result->GetValue(0, 0) == Value::INTEGER(42));
 }

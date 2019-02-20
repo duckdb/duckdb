@@ -46,19 +46,13 @@ public:
 #endif
 	}
 
-	static unique_ptr<DuckDBResult> GetQueryResult(ClientContext &context, string query);
-
-	//! Queries the database using the transaction context of this connection
+	//! Queries the database, materializes the result immediately
 	unique_ptr<DuckDBResult> Query(string query);
 	static unique_ptr<DuckDBResult> Query(ClientContext &context, string query);
 
-	static bool SendQuery(ClientContext &context, string query);
-
-	// alternative streaming API
-	bool SendQuery(string query);
-	string GetQueryError();
-	unique_ptr<DataChunk> FetchResultChunk();
-	bool CloseResult();
+	//! Queries the database, allows streaming access to result
+	unique_ptr<DuckDBStreamingResult> SendQuery(string query);
+	static unique_ptr<DuckDBStreamingResult> SendQuery(ClientContext &context, string query);
 
 	DuckDB &db;
 	ClientContext context;
