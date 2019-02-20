@@ -17,6 +17,10 @@ struct JoinCondition {
 	unique_ptr<Expression> left;
 	unique_ptr<Expression> right;
 	ExpressionType comparison;
+	//! NULL values are equal for just THIS JoinCondition (instead of the entire join), only support by HashJoin and can only be used in equality comparisons
+	bool null_values_are_equal = false;
+
+	JoinCondition() : null_values_are_equal(false) {}
 };
 
 enum JoinSide { NONE, LEFT, RIGHT, BOTH };
@@ -24,10 +28,7 @@ enum JoinSide { NONE, LEFT, RIGHT, BOTH };
 //! LogicalJoin represents a join between two relations
 class LogicalJoin : public LogicalOperator {
 public:
-	LogicalJoin(JoinType type) :
-		LogicalOperator(LogicalOperatorType::JOIN), type(type),
-		is_duplicate_eliminated(false), null_values_are_equal(false) {
-	}
+	LogicalJoin(JoinType type);
 
 	vector<string> GetNames() override;
 
@@ -42,8 +43,6 @@ public:
 	bool is_duplicate_eliminated;
 	//! The set of columns that will be duplicate eliminated from the LHS and pushed into the RHS
 	vector<unique_ptr<Expression>> duplicate_eliminated_columns;
-	//! Whether or not the join should consider NULL values to be identical to one another (i.e. NULL values CAN have join partners)
-	bool null_values_are_equal;
 
 	string ParamsToString() const override;
 

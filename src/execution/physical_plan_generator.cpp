@@ -382,6 +382,7 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 
 	bool has_equality = false;
 	bool has_inequality = false;
+	bool has_null_equal_conditions = false;
 	for (auto &cond : op.conditions) {
 		VisitExpression(&cond.left);
 		VisitExpression(&cond.right);
@@ -391,11 +392,8 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 		if (cond.comparison == ExpressionType::COMPARE_NOTEQUAL) {
 			has_inequality = true;
 		}
-	}
-
-	if (op.null_values_are_equal) {
-		// NULL values are equal is ONLY support for joins that have only equality predicates
-		for (auto &cond : op.conditions) {
+		if (cond.null_values_are_equal) {
+			has_null_equal_conditions = true;
 			assert(cond.comparison == ExpressionType::COMPARE_EQUAL);
 		}
 	}
@@ -404,9 +402,9 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 	assert(right);
 	if (has_equality) {
 		// equality join: use hash join
-		plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.type, op.null_values_are_equal);
+		plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.type);
 	} else {
-		assert(!op.null_values_are_equal); // don't support this for anything but hash joins for now
+		assert(!has_null_equal_conditions); // don't support this for anything but hash joins for now
 		if (op.conditions.size() == 1 && (op.type == JoinType::MARK || op.type == JoinType::INNER) && !has_inequality) {
 			// range join: use piecewise merge join
 			plan = make_unique<PhysicalPiecewiseMergeJoin>(op, move(left), move(right), move(op.conditions), op.type);
@@ -421,6 +419,7 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 			delim_types.push_back(delim_expr->return_type);
 		}
 		if (op.type == JoinType::MARK) {
+			assert(plan->type == PhysicalOperatorType::HASH_JOIN);
 			auto &hash_join = (PhysicalHashJoin&) *plan;
 			// correlated eliminated MARK join
 			// a correlated MARK join should always have exactly one non-correlated column
@@ -429,7 +428,6 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 			// push duplicate eliminated columns into the hash table:
 			// - these columns will be considered as equal for NULL values AND
 			// - the has_null and has_result flags will be grouped by these columns
-			assert(plan->type == PhysicalOperatorType::HASH_JOIN);
 			auto &info = hash_join.hash_table->correlated_mark_join_info;
 
 			vector<TypeId> payload_types = {TypeId::BIGINT, TypeId::BIGINT}; // COUNT types
@@ -585,9 +583,10 @@ void PhysicalPlanGenerator::GenerateExceptIntersect(LogicalOperator &op, JoinTyp
 		cond.comparison = ExpressionType::COMPARE_EQUAL;
 		cond.left = make_unique<BoundExpression>(top_types[i], i);
 		cond.right = make_unique<BoundExpression>(top_types[i], i);
+		cond.null_values_are_equal = true;
 		conditions.push_back(move(cond));
 	}
-	plan = make_unique<PhysicalHashJoin>(op, move(top), move(bottom), move(conditions), join_type, true);
+	plan = make_unique<PhysicalHashJoin>(op, move(top), move(bottom), move(conditions), join_type);
 }
 
 void PhysicalPlanGenerator::Visit(LogicalExcept &op) {

@@ -100,7 +100,7 @@ private:
 	void Hash(DataChunk &keys, Vector &hashes);
 
 public:
-	JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> build_types, JoinType type, bool null_values_are_equal,
+	JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> build_types, JoinType type,
 	              size_t initial_capacity = 32768, bool parallel = false);
 	//! Resize the HT to the specified size. Must be larger than the current
 	//! size.
@@ -175,8 +175,8 @@ private:
 	bool parallel = false;
 	//! Mutex used for parallelism
 	std::mutex parallel_lock;
-	//! Whether or not NULL values are considered equal in equality comparisons
-	bool null_values_are_equal;
+	//! Whether or not NULL values are considered equal in each of the comparisons
+	vector<bool> null_values_are_equal;
 
 	//! Copying not allowed
 	JoinHashTable(const JoinHashTable &) = delete;

@@ -245,7 +245,6 @@ struct FlattenDependentJoins {
 				// both sides have correlation
 				// turn into an inner join
 				auto join = make_unique<LogicalJoin>(JoinType::INNER);
-				join->null_values_are_equal = true;
 				plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
 				auto left_binding = this->base_binding;
 				plan->children[1] = PushDownDependentJoin(move(plan->children[1]));
@@ -255,6 +254,7 @@ struct FlattenDependentJoins {
 					cond.left = make_unique<BoundColumnRefExpression>("", correlated_columns[i].type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
 					cond.right = make_unique<BoundColumnRefExpression>("", correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 					cond.comparison = ExpressionType::COMPARE_EQUAL;
+					cond.null_values_are_equal = true;
 					join->conditions.push_back(move(cond));
 				}
 				join->children.push_back(move(plan->children[0]));
@@ -281,10 +281,10 @@ struct FlattenDependentJoins {
 						return plan;
 					}
 				} else if (join.type == JoinType::LEFT) {
-					// left outer join
-					if (!left_has_correlation) {
-						// only right has correlation: push into right
-						plan->children[1] = PushDownDependentJoin(move(plan->children[1]));
+					// // left outer join
+					if (!right_has_correlation) {
+						// only left has correlation: push into left
+						plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
 						return plan;
 					}
 				} else {
@@ -292,19 +292,27 @@ struct FlattenDependentJoins {
 				}
 				// both sides have correlation
 				// push into both sides
+				// NOTE: for OUTER JOINS it matters what the BASE BINDING is after the join
+				// for the LEFT OUTER JOIN, we want the LEFT side to be the base binding after we push
+				// because the RIGHT binding might contain NULL values
 				plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
 				auto left_binding = this->base_binding;
 				plan->children[1] = PushDownDependentJoin(move(plan->children[1]));
+				auto right_binding = this->base_binding;
+				if (join.type == JoinType::LEFT) {
+					this->base_binding = left_binding;
+				}
 				// add the correlated columns to the join conditions
 				for(size_t i = 0; i < correlated_columns.size(); i++) {
 					JoinCondition cond;
 					cond.left = make_unique<BoundColumnRefExpression>("", correlated_columns[i].type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
-					cond.right = make_unique<BoundColumnRefExpression>("", correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+					cond.right = make_unique<BoundColumnRefExpression>("", correlated_columns[i].type, ColumnBinding(right_binding.table_index, right_binding.column_index + i));
 					cond.comparison = ExpressionType::COMPARE_EQUAL;
+					cond.null_values_are_equal = true;
 					join.conditions.push_back(move(cond));
 				}
 				// then we replace any correlated expressions with the corresponding entry in the correlated_map
-				RewriteCorrelatedExpressions rewriter(base_binding, correlated_map);
+				RewriteCorrelatedExpressions rewriter(right_binding, correlated_map);
 				rewriter.VisitOperator(*plan);
 				return plan;
 			}
@@ -476,10 +484,9 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 	}
 }
 
-static unique_ptr<LogicalJoin> CreateDuplicateEliminatedJoin(vector<CorrelatedColumnInfo>& correlated_columns, JoinType join_type, bool null_values_are_equal) {
+static unique_ptr<LogicalJoin> CreateDuplicateEliminatedJoin(vector<CorrelatedColumnInfo>& correlated_columns, JoinType join_type) {
 	auto delim_join = make_unique<LogicalJoin>(join_type);
 	delim_join->is_duplicate_eliminated = true;
-	delim_join->null_values_are_equal = null_values_are_equal;
 	for(size_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];
 		delim_join->duplicate_eliminated_columns.push_back(make_unique<BoundColumnRefExpression>("", col.type, col.binding));
@@ -494,6 +501,7 @@ static void CreateDelimJoinConditions(LogicalJoin &delim_join, vector<Correlated
 		cond.left = make_unique<BoundColumnRefExpression>(col.name, col.type, col.binding);
 		cond.right = make_unique<BoundColumnRefExpression>(col.name, col.type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 		cond.comparison = ExpressionType::COMPARE_EQUAL;
+		cond.null_values_are_equal = true;
 		delim_join.conditions.push_back(move(cond));
 	}
 }
@@ -516,7 +524,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		// NULL values are equal in this join because we join on the correlated columns ONLY
 		// and e.g. in the query: SELECT (SELECT 42 FROM integers WHERE i1.i IS NULL LIMIT 1) FROM integers i1;
 		// the input value NULL will generate the value 42, and we need to join NULL on the LHS with NULL on the RHS
-		auto delim_join = CreateDuplicateEliminatedJoin(correlated_columns, JoinType::SINGLE, true);
+		auto delim_join = CreateDuplicateEliminatedJoin(correlated_columns, JoinType::SINGLE);
 
 		// the left side is the original plan
 		// this is the side that will be duplicate eliminated and pushed into the RHS
@@ -547,7 +555,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 	case SubqueryType::EXISTS: {
 		// correlated EXISTS query
 		// this query is similar to the correlated SCALAR query
-		auto delim_join = CreateDuplicateEliminatedJoin(correlated_columns, JoinType::SINGLE, true);
+		auto delim_join = CreateDuplicateEliminatedJoin(correlated_columns, JoinType::SINGLE);
 		// LHS
 		delim_join->AddChild(move(root));
 		// RHS
@@ -593,7 +601,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		// note that in this join null values are NOT equal for ALL columns, but ONLY for the correlated columns
 		// the correlated mark join handles this case by itself
 		// as the MARK join has one extra join condition (the original condition, of the ANY expression, e.g. [i=ANY(...)])
-		auto delim_join = CreateDuplicateEliminatedJoin(correlated_columns, JoinType::MARK, false);
+		auto delim_join = CreateDuplicateEliminatedJoin(correlated_columns, JoinType::MARK);
 		// LHS
 		delim_join->AddChild(move(root));
 		// RHS

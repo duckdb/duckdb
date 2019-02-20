@@ -7,9 +7,9 @@ using namespace duckdb;
 using namespace std;
 
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
-                                   unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type, bool null_values_are_equal)
+                                   unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type)
     : PhysicalJoin(op, PhysicalOperatorType::HASH_JOIN, move(cond), join_type) {
-	hash_table = make_unique<JoinHashTable>(conditions, right->GetTypes(), join_type, null_values_are_equal);
+	hash_table = make_unique<JoinHashTable>(conditions, right->GetTypes(), join_type);
 
 	children.push_back(move(left));
 	children.push_back(move(right));

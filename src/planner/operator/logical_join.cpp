@@ -6,6 +6,12 @@
 using namespace duckdb;
 using namespace std;
 
+
+LogicalJoin::LogicalJoin(JoinType type) :
+	LogicalOperator(LogicalOperatorType::JOIN), type(type),
+	is_duplicate_eliminated(false) {
+}
+
 vector<string> LogicalJoin::GetNames() {
 	auto names = children[0]->GetNames();
 	if (type == JoinType::SEMI || type == JoinType::ANTI) {

@@ -10,10 +10,9 @@ using namespace std;
 
 using ScanStructure = JoinHashTable::ScanStructure;
 
-JoinHashTable::JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> build_types, JoinType type,
-                             bool null_values_are_equal, size_t initial_capacity, bool parallel)
+JoinHashTable::JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> build_types, JoinType type, size_t initial_capacity, bool parallel)
     : build_serializer(build_types), build_types(build_types), equality_size(0), condition_size(0), build_size(0),
-      entry_size(0), tuple_size(0), join_type(type), has_null(false), capacity(0), count(0), parallel(parallel), null_values_are_equal(null_values_are_equal) {
+      entry_size(0), tuple_size(0), join_type(type), has_null(false), capacity(0), count(0), parallel(parallel) {
 	for (auto &condition : conditions) {
 		assert(condition.left->return_type == condition.right->return_type);
 		auto type = condition.left->return_type;
@@ -27,6 +26,8 @@ JoinHashTable::JoinHashTable(vector<JoinCondition> &conditions, vector<TypeId> b
 			equality_size += type_size;
 		}
 		predicates.push_back(condition.comparison);
+		null_values_are_equal.push_back(condition.null_values_are_equal);
+		assert(!condition.null_values_are_equal || (condition.null_values_are_equal && condition.comparison == ExpressionType::COMPARE_EQUAL));
 
 		condition_types.push_back(type);
 		condition_size += type_size;
@@ -230,11 +231,22 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		parallel_lock.unlock();
 	}
 	
-	sel_t not_null_sel_vector[STANDARD_VECTOR_SIZE];
+	// for any columns for which null values are equal, fill the NullMask
+	assert(keys.column_count == null_values_are_equal.size());
+	bool null_values_equal_for_all = true;
+	for(size_t i = 0; i < keys.column_count; i++) {
+		if (null_values_are_equal[i]) {
+			FillNullMask(keys.data[i]);
+		} else {
+			null_values_equal_for_all = false;
+		}
+	}
+	// special case: correlated mark join
 	if (join_type == JoinType::MARK && correlated_mark_join_info.correlated_types.size() > 0) {
 		auto &info = correlated_mark_join_info;
 		// Correlated MARK join
-		// first push the values into the correlated_counts
+		// for the correlated mark join we need to keep track of COUNT(*) and COUNT(COLUMN) for each of the correlated columns
+		// push into the aggregate hash table
 		assert(info.correlated_counts);
 		for(size_t i = 0; i < info.correlated_types.size(); i++) {
 			info.group_chunk.data[i].Reference(keys.data[i]);
@@ -244,13 +256,10 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		info.payload_chunk.data[0].type = info.payload_chunk.data[1].type = TypeId::BIGINT;
 		info.payload_chunk.sel_vector = info.group_chunk.sel_vector = info.group_chunk.data[0].sel_vector;
 		info.correlated_counts->AddChunk(info.group_chunk, info.payload_chunk);
-		// the correlated columns have equivalent NULL values
-		// then fill in the NULL mask of the duplicate eliminated columns
-		for(size_t i = 0; i < info.correlated_types.size(); i++) {
-			FillNullMask(keys.data[i]);
-		}
 	}
-	if (!null_values_are_equal) {
+	sel_t not_null_sel_vector[STANDARD_VECTOR_SIZE];
+	if (!null_values_equal_for_all) {
+		// if any columns are <<not>> supposed to have NULL values are equal:
 		// first create a selection vector of the non-null values in the keys
 		// because in a join, any NULL value can never find a matching tuple
 		size_t initial_keys_size = keys.size();
@@ -270,12 +279,6 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		}
 		if (not_null_count == 0) {
 			return;
-		}
-	} else if (join_type != JoinType::MARK) {
-		// in this join, NULL values are equivalent!
-		// we replace NULLs in the mask with NullValue<T> inside the vector
-		for(size_t i = 0; i < keys.column_count; i++) {
-			FillNullMask(keys.data[i]);
 		}
 	}
 	
@@ -321,16 +324,8 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	assert(!keys.sel_vector); // should be flattened before
 
-	if (join_type == JoinType::MARK && correlated_mark_join_info.correlated_types.size() > 0) {
-		auto &info = correlated_mark_join_info;
-		// MARK join: the correlated columns have equivalent NULL values
-		assert(info.correlated_types.size() + 1 == keys.column_count);
-		for(size_t i = 0; i < info.correlated_types.size(); i++) {
-			FillNullMask(keys.data[i]);
-		}
-	} else if (null_values_are_equal) {
-		// NULL values are equal, fill NULL values with NullValue<T> in the keys
-		for(size_t i = 0; i < keys.column_count; i++) {
+	for(size_t i = 0; i < keys.column_count; i++) {
+		if (null_values_are_equal[i]) {
 			FillNullMask(keys.data[i]);
 		}
 	}
