@@ -118,7 +118,7 @@ void CommonAggregateOptimizer::find_bound_references(Expression& expression, con
 		(Expression *expression) {find_bound_references(*expression, aggregate, aggregate_to_projection_map, nr_of_groups);});
 }
 
-void CommonAggregateOptimizer::ExtractCommonAggregateExpressions(LogicalOperator &projection) {
+void CommonAggregateOptimizer::ExtractCommonAggregateExpressions(LogicalOperator& projection) {
 	std::cout << "BEFORE OPTIMIZING:" << std::endl;
 	std::cout << projection.ToString() << std::endl;
 
