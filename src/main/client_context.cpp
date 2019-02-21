@@ -16,7 +16,6 @@ ClientContext::ClientContext(DuckDB &database)
 }
 
 bool ClientContext::Cleanup() {
-
 	profiler.EndQuery();
 	if (profiler.IsEnabled() && profiler.automatic_printing) {
 		cout << profiler.ToString() << "\n";
@@ -235,11 +234,9 @@ unique_ptr<DuckDBStreamingResult> ClientContext::Query(string query) {
 
 			// we need to run the query again to make it fetch-able by callers
 			ExecuteStatement_(*this, query, move(copied_stmt2));
-
 		} else
 #endif
 			ExecuteStatement_(*this, query, move(statement));
-
 	} catch (Exception &ex) {
 		execution_context.success = false;
 		execution_context.error = ex.GetMessage();
