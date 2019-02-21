@@ -1016,12 +1016,11 @@ typedef struct FunctionParameter {
 	Node *defexpr;              /* raw default expr, or NULL if not given */
 } FunctionParameter;
 
-typedef struct CreateTableAsStmt
-{
-	NodeTag		type;
-	Node	   *query;			/* the query (see comments above) */
-	IntoClause *into;			/* destination table */
-	ObjectType	relkind;		/* OBJECT_TABLE or OBJECT_MATVIEW */
-	bool		is_select_into; /* it was written as SELECT INTO */
-	bool		if_not_exists;	/* just do nothing if it already exists? */
+typedef struct CreateTableAsStmt {
+	NodeTag type;
+	Node *query;         /* the query (see comments above) */
+	IntoClause *into;    /* destination table */
+	ObjectType relkind;  /* OBJECT_TABLE or OBJECT_MATVIEW */
+	bool is_select_into; /* it was written as SELECT INTO */
+	bool if_not_exists;  /* just do nothing if it already exists? */
 } CreateTableAsStmt;

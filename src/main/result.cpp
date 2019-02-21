@@ -1,5 +1,7 @@
 #include "main/result.hpp"
 
+#include "main/client_context.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -78,4 +80,50 @@ bool DuckDBResult::Equals(DuckDBResult *other) {
 		}
 	}
 	return true;
+}
+
+size_t DuckDBStreamingResult::column_count() {
+	return context.execution_context.physical_plan->types.size();
+}
+
+bool DuckDBStreamingResult::Close() {
+	return context.Cleanup();
+}
+
+unique_ptr<DataChunk> DuckDBStreamingResult::Fetch() {
+	return context.Fetch();
+}
+
+vector<TypeId> &DuckDBStreamingResult::types() {
+	return context.execution_context.physical_plan->types;
+}
+const string &DuckDBStreamingResult::GetErrorMessage() {
+	return context.execution_context.error;
+}
+bool DuckDBStreamingResult::GetSuccess() {
+	return context.execution_context.success;
+}
+
+unique_ptr<DuckDBResult> DuckDBStreamingResult::Materialize(bool close) {
+	auto result = make_unique<DuckDBResult>();
+	result->success = GetSuccess();
+	result->error = GetErrorMessage();
+	if (!result->success) {
+		return result;
+	}
+	result->names = context.execution_context.names;
+	unique_ptr<DataChunk> chunk;
+	if (context.execution_context.physical_plan) {
+		result->collection.types = types();
+	}
+	do {
+		chunk = Fetch();
+		result->collection.Append(*chunk.get());
+	} while (chunk->size() > 0);
+
+	if (close) {
+		result->success = Close();
+		result->error = GetErrorMessage();
+	}
+	return result;
 }

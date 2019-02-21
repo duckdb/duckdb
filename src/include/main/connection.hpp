@@ -46,16 +46,24 @@ public:
 #endif
 	}
 
-	static unique_ptr<DuckDBResult> GetQueryResult(ClientContext &context, string query);
+	static unique_ptr<DuckDBStreamingResult> SendQuery(ClientContext &context, string query) {
+		return context.Query(query);
+	}
 
-	//! Queries the database using the transaction context of this connection
-	unique_ptr<DuckDBResult> Query(string query);
+	unique_ptr<DuckDBStreamingResult> SendQuery(string query) {
+		return SendQuery(context, query);
+	}
+
+	static unique_ptr<DuckDBResult> Query(ClientContext &context, string query) {
+		return SendQuery(context, query)->Materialize();
+	}
+
+	unique_ptr<DuckDBResult> Query(string query) {
+		return Query(context, query);
+	}
 
 	DuckDB &db;
 	ClientContext context;
-
-private:
-	unique_ptr<DuckDBResult> GetQueryResult(string query);
 };
 
 } // namespace duckdb
