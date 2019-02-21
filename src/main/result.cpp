@@ -87,33 +87,31 @@ size_t DuckDBStreamingResult::column_count() {
 }
 
 bool DuckDBStreamingResult::Close() {
-	return context.CleanupStreamingResult();
+	return context.Cleanup();
 }
 
 unique_ptr<DataChunk> DuckDBStreamingResult::Fetch() {
-	return context.FetchChunk();
+	return context.Fetch();
 }
 
 vector<TypeId> &DuckDBStreamingResult::types() {
 	return context.execution_context.physical_plan->types;
 }
 const string &DuckDBStreamingResult::GetErrorMessage() {
-	return context.execution_context.internal_result.error;
+	return context.execution_context.error;
 }
 bool DuckDBStreamingResult::GetSuccess() {
-	return context.execution_context.internal_result.success;
+	return context.execution_context.success;
 }
 
-// FIXME this ain't got no alibi, remove internal_result
-unique_ptr<DuckDBResult> DuckDBStreamingResult::Materialize() {
+unique_ptr<DuckDBResult> DuckDBStreamingResult::Materialize(bool close) {
 	auto result = make_unique<DuckDBResult>();
-	result->success = context.execution_context.internal_result.success;
-	;
+	result->success = GetSuccess();
 	result->error = GetErrorMessage();
 	if (!result->success) {
 		return result;
 	}
-	result->names = context.execution_context.internal_result.names;
+	result->names = context.execution_context.names;
 	unique_ptr<DataChunk> chunk;
 	if (context.execution_context.physical_plan) {
 		result->collection.types = types();
@@ -123,8 +121,9 @@ unique_ptr<DuckDBResult> DuckDBStreamingResult::Materialize() {
 		result->collection.Append(*chunk.get());
 	} while (chunk->size() > 0);
 
-	result->success = Close();
-	result->error = context.execution_context.internal_result.error;
-
+	if (close) {
+		result->success = Close();
+		result->error = GetErrorMessage();
+	}
 	return result;
 }

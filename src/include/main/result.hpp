@@ -101,7 +101,7 @@ public:
 
 	bool GetSuccess() override;
 
-	unique_ptr<DuckDBResult> Materialize();
+	unique_ptr<DuckDBResult> Materialize(bool close = true);
 	bool Close();
 	unique_ptr<DataChunk> Fetch();
 

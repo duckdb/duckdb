@@ -17,9 +17,11 @@ class DuckDB;
 
 class ExecutionContext {
 public:
-	DuckDBResult internal_result;
 	unique_ptr<PhysicalOperator> physical_plan;
 	unique_ptr<PhysicalOperatorState> physical_state;
 	unique_ptr<DataChunk> first_chunk;
+	vector<string> names;
+	bool success;
+	string error;
 };
 } // namespace duckdb

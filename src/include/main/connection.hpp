@@ -46,13 +46,21 @@ public:
 #endif
 	}
 
-	//! Queries the database, materializes the result immediately
-	unique_ptr<DuckDBResult> Query(string query);
-	static unique_ptr<DuckDBResult> Query(ClientContext &context, string query);
+	static unique_ptr<DuckDBStreamingResult> SendQuery(ClientContext &context, string query) {
+		return context.Query(query);
+	}
 
-	//! Queries the database, allows streaming access to result
-	unique_ptr<DuckDBStreamingResult> SendQuery(string query);
-	static unique_ptr<DuckDBStreamingResult> SendQuery(ClientContext &context, string query);
+	unique_ptr<DuckDBStreamingResult> SendQuery(string query) {
+		return SendQuery(context, query);
+	}
+
+	static unique_ptr<DuckDBResult> Query(ClientContext &context, string query) {
+		return SendQuery(context, query)->Materialize();
+	}
+
+	unique_ptr<DuckDBResult> Query(string query) {
+		return Query(context, query);
+	}
 
 	DuckDB &db;
 	ClientContext context;

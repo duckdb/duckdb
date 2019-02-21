@@ -31,8 +31,9 @@ public:
 		interrupted = true;
 	}
 
-	bool CleanupStreamingResult();
-	unique_ptr<DataChunk> FetchChunk();
+	unique_ptr<DuckDBStreamingResult> Query(string query);
+	unique_ptr<DataChunk> Fetch();
+	bool Cleanup();
 
 	//! The allocator that holds any allocations made in the Query Context
 	Allocator allocator;
