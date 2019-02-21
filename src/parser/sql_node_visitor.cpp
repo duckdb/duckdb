@@ -133,9 +133,10 @@ void SQLNodeVisitor::VisitExpression(unique_ptr<Expression> *expr_ptr) {
 	}
 	if (retval) {
 		*expr_ptr = move(retval);
+	} else {
+		// visit the children of this node
+		VisitExpressionChildren(**expr_ptr);
 	}
-	// visit the children of this node
-	VisitExpressionChildren(**expr_ptr);
 }
 
 void SQLNodeVisitor::VisitExpressionChildren(Expression &expr) {

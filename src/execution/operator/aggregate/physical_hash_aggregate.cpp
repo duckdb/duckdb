@@ -85,7 +85,6 @@ void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk, 
 	}
 	// we finished the child chunk
 	// actually compute the final projection list now
-
 	size_t chunk_index = 0;
 	if (state->group_chunk.column_count + state->aggregate_chunk.column_count == chunk.column_count) {
 		for (size_t col_idx = 0; col_idx < state->group_chunk.column_count; col_idx++) {

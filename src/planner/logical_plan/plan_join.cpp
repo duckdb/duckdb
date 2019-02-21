@@ -74,10 +74,7 @@ static JoinSide GetJoinSide(Expression &expression, unordered_set<size_t> &left_
 	return join_side;
 }
 
-static void CreateJoinCondition(LogicalJoin &join,
-                                                       unique_ptr<Expression> expr,
-                                                       unordered_set<size_t> &left_bindings,
-                                                       unordered_set<size_t> &right_bindings) {
+static void CreateJoinCondition(LogicalJoin &join, unique_ptr<Expression> expr, unordered_set<size_t> &left_bindings, unordered_set<size_t> &right_bindings) {
 	auto total_side = GetJoinSide(*expr, left_bindings, right_bindings);
 	if (total_side != JoinSide::BOTH) {
 		// join condition does not reference both sides, add it as filter under the join

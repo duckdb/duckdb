@@ -132,6 +132,32 @@ private:
 	column_binding_map_t<size_t>& correlated_map;
 };
 
+class RewriteCountAggregates : public LogicalOperatorVisitor {
+public:
+	RewriteCountAggregates(column_binding_map_t<size_t> &replacement_map) : 
+		replacement_map(replacement_map) {
+	}
+
+
+	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override {
+		auto entry = replacement_map.find(expr.binding);
+		if (entry != replacement_map.end()) {
+			// reference to a COUNT(*) aggregate
+			// replace this with CASE WHEN COUNT(*) IS NULL THEN 0 ELSE COUNT(*) END
+			auto case_expr = make_unique<CaseExpression>();
+			auto is_null = make_unique<OperatorExpression>(ExpressionType::OPERATOR_IS_NULL, TypeId::BOOLEAN, expr.Copy());
+			case_expr->check = move(is_null);
+			case_expr->result_if_true = make_unique<ConstantExpression>(Value::Numeric(expr.return_type, 0));
+			case_expr->result_if_false = move(*expr_ptr);
+			case_expr->return_type = expr.return_type;
+			return move(case_expr);
+		}
+		return nullptr;
+	}
+
+	column_binding_map_t<size_t> &replacement_map;
+};
+
 struct FlattenDependentJoins {
 	FlattenDependentJoins(Binder& binder, const vector<CorrelatedColumnInfo>& correlated) : 
 		binder(binder), correlated_columns(correlated) {
@@ -164,7 +190,28 @@ struct FlattenDependentJoins {
 		return has_correlation;
 	}
 
+
 	unique_ptr<LogicalOperator> PushDownDependentJoin(unique_ptr<LogicalOperator> plan) {
+		auto result = PushDownDependentJoinInternal(move(plan));
+		if (replacement_map.size() > 0) {
+			RewriteCountAggregates aggr(replacement_map);
+			aggr.VisitOperator(*result);
+		}
+		return result;
+	}
+
+	Binder& binder;
+	ColumnBinding base_binding;
+	size_t delim_offset;
+	size_t data_offset;
+	unordered_map<LogicalOperator*, bool> has_correlated_expressions;
+	column_binding_map_t<size_t> correlated_map;
+	column_binding_map_t<size_t> replacement_map;
+	const vector<CorrelatedColumnInfo>& correlated_columns;
+	vector<TypeId> delim_types;
+
+private:
+	unique_ptr<LogicalOperator> PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan) {
 		// first check if the logical operator has correlated expressions
 		auto entry = has_correlated_expressions.find(plan.get());
 		assert(entry != has_correlated_expressions.end());
@@ -184,7 +231,7 @@ struct FlattenDependentJoins {
 			case LogicalOperatorType::FILTER: {
 				// filter
 				// first we flatten the dependent join in the child of the filter
-				plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+				plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
 				// then we replace any correlated expressions with the corresponding entry in the correlated_map
 				RewriteCorrelatedExpressions rewriter(base_binding, correlated_map);
 				rewriter.VisitOperator(*plan);
@@ -193,7 +240,7 @@ struct FlattenDependentJoins {
 			case LogicalOperatorType::PROJECTION: {
 				// projection
 				// first we flatten the dependent join in the child of the projection
-				plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+				plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
 				// then we replace any correlated expressions with the corresponding entry in the correlated_map
 				RewriteCorrelatedExpressions rewriter(base_binding, correlated_map);
 				rewriter.VisitOperator(*plan);
@@ -209,23 +256,56 @@ struct FlattenDependentJoins {
 				return plan;
 			}
 			case LogicalOperatorType::AGGREGATE_AND_GROUP_BY: {
+				auto &aggr = (LogicalAggregate&) *plan;
 				// aggregate and group by
 				// first we flatten the dependent join in the child of the projection
-				plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+				plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
 				// then we replace any correlated expressions with the corresponding entry in the correlated_map
 				RewriteCorrelatedExpressions rewriter(base_binding, correlated_map);
 				rewriter.VisitOperator(*plan);
 				// now we add all the columns of the delim_scan to the grouping operators AND the projection list
-				auto aggr = (LogicalAggregate*) plan.get();
 				for(size_t i = 0; i < correlated_columns.size(); i++) {
 					auto colref = make_unique<BoundColumnRefExpression>("", correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
-					aggr->groups.push_back(move(colref));
+					aggr.groups.push_back(move(colref));
 				}
-				// now we update the delim_index
-				base_binding.table_index = aggr->group_index;
-				this->delim_offset = base_binding.column_index = aggr->groups.size() - correlated_columns.size();
-				this->data_offset = aggr->groups.size();
-				return plan;
+				if (aggr.groups.size() == correlated_columns.size()) {
+					// we have to perform a LEFT OUTER JOIN between the result of this aggregate and the delim scan
+					auto left_outer_join = make_unique<LogicalJoin>(JoinType::LEFT);
+					auto left_index = binder.GenerateTableIndex();
+					auto delim_scan = make_unique<LogicalChunkGet>(left_index, delim_types);
+					left_outer_join->children.push_back(move(delim_scan));
+					left_outer_join->children.push_back(move(plan));
+					for(size_t i = 0; i < correlated_columns.size(); i++) {
+						JoinCondition cond;
+						cond.left = make_unique<BoundColumnRefExpression>("", correlated_columns[i].type, ColumnBinding(left_index, i));
+						cond.right = make_unique<BoundColumnRefExpression>("", correlated_columns[i].type, ColumnBinding(aggr.group_index, (aggr.groups.size() - correlated_columns.size()) + i));
+						cond.comparison = ExpressionType::COMPARE_EQUAL;
+						cond.null_values_are_equal = true;
+						left_outer_join->conditions.push_back(move(cond));
+					}
+					// for any COUNT aggregate we replace references to the column with: CASE WHEN COUNT(*) IS NULL THEN 0 ELSE COUNT(*) END
+					for(size_t i = 0; i < aggr.expressions.size(); i++) {
+						assert(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::AGGREGATE);
+						if (aggr.expressions[i]->type == ExpressionType::AGGREGATE_COUNT || 
+							aggr.expressions[i]->type == ExpressionType::AGGREGATE_COUNT_STAR ||
+							aggr.expressions[i]->type == ExpressionType::AGGREGATE_COUNT_DISTINCT) {
+								// have to replace this ColumnBinding with the CASE expression
+								replacement_map[ColumnBinding(aggr.aggregate_index, i)] = i;
+						}
+					}
+					// now we update the delim_index
+					base_binding.table_index = left_index;
+					this->delim_offset = base_binding.column_index = 0;
+					this->data_offset = 0;
+					return left_outer_join;
+				} else {
+					// update the delim_index
+					base_binding.table_index = aggr.group_index;
+					this->delim_offset = base_binding.column_index = aggr.groups.size() - correlated_columns.size();
+					this->data_offset = aggr.groups.size();
+					return plan;
+
+				}
 			}
 			case LogicalOperatorType::CROSS_PRODUCT: {
 				// cross product
@@ -234,20 +314,20 @@ struct FlattenDependentJoins {
 				bool right_has_correlation = has_correlated_expressions.find(plan->children[1].get())->second;
 				if (!right_has_correlation) {
 					// only left has correlation: push into left
-					plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+					plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
 					return plan;
 				}
 				if (!left_has_correlation) {
 					// only right has correlation: push into right
-					plan->children[1] = PushDownDependentJoin(move(plan->children[1]));
+					plan->children[1] = PushDownDependentJoinInternal(move(plan->children[1]));
 					return plan;
 				}
 				// both sides have correlation
 				// turn into an inner join
 				auto join = make_unique<LogicalJoin>(JoinType::INNER);
-				plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+				plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
 				auto left_binding = this->base_binding;
-				plan->children[1] = PushDownDependentJoin(move(plan->children[1]));
+				plan->children[1] = PushDownDependentJoinInternal(move(plan->children[1]));
 				// add the correlated columns to the join conditions
 				for(size_t i = 0; i < correlated_columns.size(); i++) {
 					JoinCondition cond;
@@ -272,19 +352,19 @@ struct FlattenDependentJoins {
 					// inner join
 					if (!right_has_correlation) {
 						// only left has correlation: push into left
-						plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+						plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
 						return plan;
 					}
 					if (!left_has_correlation) {
 						// only right has correlation: push into right
-						plan->children[1] = PushDownDependentJoin(move(plan->children[1]));
+						plan->children[1] = PushDownDependentJoinInternal(move(plan->children[1]));
 						return plan;
 					}
 				} else if (join.type == JoinType::LEFT) {
 					// // left outer join
 					if (!right_has_correlation) {
 						// only left has correlation: push into left
-						plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+						plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
 						return plan;
 					}
 				} else {
@@ -295,9 +375,9 @@ struct FlattenDependentJoins {
 				// NOTE: for OUTER JOINS it matters what the BASE BINDING is after the join
 				// for the LEFT OUTER JOIN, we want the LEFT side to be the base binding after we push
 				// because the RIGHT binding might contain NULL values
-				plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+				plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
 				auto left_binding = this->base_binding;
-				plan->children[1] = PushDownDependentJoin(move(plan->children[1]));
+				plan->children[1] = PushDownDependentJoinInternal(move(plan->children[1]));
 				auto right_binding = this->base_binding;
 				if (join.type == JoinType::LEFT) {
 					this->base_binding = left_binding;
@@ -321,7 +401,7 @@ struct FlattenDependentJoins {
 				if (limit.offset > 0) {
 					throw ParserException("OFFSET not supported in correlated subquery");
 				}
-				plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+				plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
 				if (limit.limit == 0) {
 					// limit = 0 means we return zero columns here
 					return plan;
@@ -333,7 +413,7 @@ struct FlattenDependentJoins {
 			case LogicalOperatorType::SUBQUERY: {
 				auto &subquery = (LogicalSubquery&) *plan;
 				// subquery node: push into children
-				plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+				plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
 				// to get the correlated columns we have to refer to the subquery now
 				base_binding.table_index = subquery.table_index;
 				base_binding.column_index = subquery.column_count;
@@ -344,7 +424,7 @@ struct FlattenDependentJoins {
 			case LogicalOperatorType::WINDOW: {
 				auto &window = (LogicalWindow&) *plan;
 				// push into children
-				plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+				plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
 				// add the correlated columns to the PARTITION BY clauses in the Window
 				for(auto &expr : window.expressions) {
 					assert(expr->GetExpressionClass() == ExpressionClass::WINDOW);
@@ -373,15 +453,6 @@ struct FlattenDependentJoins {
 				throw NotImplementedException("Logical operator type \"%s\" for dependent join", LogicalOperatorToString(plan->type).c_str());
 		}
 	}
-
-	Binder& binder;
-	ColumnBinding base_binding;
-	size_t delim_offset;
-	size_t data_offset;
-	unordered_map<LogicalOperator*, bool> has_correlated_expressions;
-	column_binding_map_t<size_t> correlated_map;
-	const vector<CorrelatedColumnInfo>& correlated_columns;
-	vector<TypeId> delim_types;
 };
 
 static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubqueryExpression &expr, SubqueryExpression &subquery, unique_ptr<LogicalOperator>& root, unique_ptr<LogicalOperator> plan) {

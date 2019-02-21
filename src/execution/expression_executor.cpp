@@ -31,9 +31,7 @@ void ExpressionExecutor::Merge(std::vector<std::unique_ptr<Expression>> &express
 		return;
 	}
 
-	StaticVector<bool> initial_result;
-	ExecuteExpression(expressions[0].get(), initial_result);
-	initial_result.Copy(result);
+	ExecuteExpression(expressions[0].get(), result);
 	for (size_t i = 1; i < expressions.size(); i++) {
 		MergeExpression(expressions[i].get(), result);
 	}
@@ -73,7 +71,9 @@ void ExpressionExecutor::MergeExpression(Expression *expr, Vector &result) {
 	if (vector.type != TypeId::BOOLEAN) {
 		throw NotImplementedException("Expected a boolean!");
 	}
-	VectorOperations::And(vector, result, result);
+	StaticVector<bool> and_result;
+	VectorOperations::And(vector, result, and_result);
+	and_result.Move(result);
 }
 
 void ExpressionExecutor::Verify(Expression &expr) {

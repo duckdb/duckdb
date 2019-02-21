@@ -527,32 +527,8 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 			if (info->set->count > 0 && RelationSet::IsSubset(result_relation, info->set)) {
 				auto filter = move(filters[info->filter_index]);
 				// if it is, we can push the filter
-				// there are two cases here
-				// (1) the filter is a ComparisonExpression, in which case we can push it into a join (if it exists)
-				// (2) the filter is anything else, in which case we push it into a filter
-				// first check the class
-				if (filter->GetExpressionClass() == ExpressionClass::COMPARISON) {
-					// comparison, check if there is a join
-					if (result_operator->type == LogicalOperatorType::JOIN) {
-						// join, push it into the expression list
-						result_operator->expressions.push_back(move(filter));
-					} else if (result_operator->type == LogicalOperatorType::FILTER) {
-						// filter, check if the underlying type is a join
-						if (result_operator->children[0]->type == LogicalOperatorType::JOIN) {
-							// join, push it there
-							result_operator->children[0]->expressions.push_back(move(filter));
-						} else {
-							// not a join, push it to the filter
-							result_operator->expressions.push_back(move(filter));
-						}
-					} else {
-						// not a filter or a join, push a filter
-						result_operator = PushFilter(move(result_operator), move(filter));
-					}
-				} else {
-					// not a comparison, just push it into a filter
-					result_operator = PushFilter(move(result_operator), move(filter));
-				}
+				// FIXME: we can also push it in an underlying join (if possible) here
+				result_operator = PushFilter(move(result_operator), move(filter));
 			}
 		}
 	}
