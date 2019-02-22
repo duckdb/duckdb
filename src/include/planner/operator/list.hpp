@@ -1,6 +1,6 @@
 #include "planner/operator/logical_aggregate.hpp"
-#include "planner/operator/logical_copy.hpp"
 #include "planner/operator/logical_chunk_get.hpp"
+#include "planner/operator/logical_copy.hpp"
 #include "planner/operator/logical_create_index.hpp"
 #include "planner/operator/logical_create_table.hpp"
 #include "planner/operator/logical_cross_product.hpp"

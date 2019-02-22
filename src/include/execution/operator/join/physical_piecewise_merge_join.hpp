@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "execution/operator/join/physical_join.hpp"
 #include "execution/merge_join.hpp"
+#include "execution/operator/join/physical_join.hpp"
 
 namespace duckdb {
 

@@ -7,14 +7,12 @@
 #include "parser/query_node/list.hpp"
 #include "parser/statement/list.hpp"
 #include "parser/tableref/list.hpp"
-
 #include "planner/expression_binder/where_binder.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-Binder::Binder(ClientContext &context, Binder *parent)
-	: context(context), parent(parent), bound_tables(0) {
+Binder::Binder(ClientContext &context, Binder *parent) : context(context), parent(parent), bound_tables(0) {
 }
 void Binder::Bind(SQLStatement &statement) {
 	switch (statement.type) {
@@ -73,7 +71,7 @@ unique_ptr<TableRef> Binder::Visit(BaseTableRef &expr) {
 	switch (table_or_view->type) {
 	case CatalogType::TABLE:
 		bind_context.AddBaseTable(GenerateTableIndex(), expr.alias.empty() ? expr.table_name : expr.alias,
-		                           (TableCatalogEntry *)table_or_view);
+		                          (TableCatalogEntry *)table_or_view);
 		break;
 	case CatalogType::VIEW: {
 		auto view_catalog_entry = (ViewCatalogEntry *)table_or_view;
@@ -131,7 +129,8 @@ unique_ptr<TableRef> Binder::Visit(SubqueryRef &expr) {
 unique_ptr<TableRef> Binder::Visit(TableFunction &expr) {
 	auto function_definition = (FunctionExpression *)expr.function.get();
 	auto function = context.db.catalog.GetTableFunction(context.ActiveTransaction(), function_definition);
-	bind_context.AddTableFunction(GenerateTableIndex(), expr.alias.empty() ? function_definition->function_name : expr.alias, function);
+	bind_context.AddTableFunction(GenerateTableIndex(),
+	                              expr.alias.empty() ? function_definition->function_name : expr.alias, function);
 	return nullptr;
 }
 
@@ -185,7 +184,7 @@ bool Binder::HasActiveBinder() {
 	return GetActiveBinders().size() > 0;
 }
 
-vector<ExpressionBinder*>& Binder::GetActiveBinders() {
+vector<ExpressionBinder *> &Binder::GetActiveBinders() {
 	if (parent) {
 		return parent->GetActiveBinders();
 	}
@@ -198,7 +197,7 @@ void Binder::MoveCorrelatedExpressions(Binder &other) {
 }
 
 void Binder::MergeCorrelatedColumns(vector<CorrelatedColumnInfo> &other) {
-	for(size_t i = 0; i < other.size(); i++) {
+	for (size_t i = 0; i < other.size(); i++) {
 		AddCorrelatedColumn(other[i]);
 	}
 }

@@ -50,7 +50,6 @@ bool SubqueryExpression::Equals(const Expression *other_) const {
 	return subquery_type == other->subquery_type && subquery->Equals(other->subquery.get());
 }
 
-
 size_t SubqueryExpression::ChildCount() const {
 	return child ? 1 : 0;
 }
@@ -60,7 +59,8 @@ Expression *SubqueryExpression::GetChild(size_t index) const {
 	return child.get();
 }
 
-void SubqueryExpression::ReplaceChild(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, size_t index) {
+void SubqueryExpression::ReplaceChild(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
+                                      size_t index) {
 	assert(index == 0 && child);
 	child = callback(move(child));
 }

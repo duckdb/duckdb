@@ -93,12 +93,11 @@ void PhysicalPlanGenerator::VisitOperator(LogicalOperator &op) {
 		Visit((LogicalPruneColumns &)op);
 		break;
 	case LogicalOperatorType::SUBQUERY:
-		 LogicalOperatorVisitor::VisitOperator(op);
-		 break;
+		LogicalOperatorVisitor::VisitOperator(op);
+		break;
 	case LogicalOperatorType::INVALID:
 		assert(0);
 		break;
-
 	}
 }
 
@@ -144,14 +143,14 @@ static unique_ptr<PhysicalOperator> CreateDistinct(unique_ptr<PhysicalOperator> 
 	// create a PhysicalHashAggregate that groups by the input columns
 	auto &types = child->GetTypes();
 	vector<unique_ptr<Expression>> groups, expressions;
-	for(size_t i = 0; i < types.size(); i++) {
+	for (size_t i = 0; i < types.size(); i++) {
 		groups.push_back(make_unique<BoundExpression>(types[i], i));
 	}
-	auto groupby = make_unique<PhysicalHashAggregate>(types, move(expressions), move(groups), PhysicalOperatorType::DISTINCT);
+	auto groupby =
+	    make_unique<PhysicalHashAggregate>(types, move(expressions), move(groups), PhysicalOperatorType::DISTINCT);
 	groupby->children.push_back(move(child));
 	return move(groupby);
 }
-
 
 void PhysicalPlanGenerator::Visit(LogicalDistinct &op) {
 	LogicalOperatorVisitor::VisitOperatorChildren(op);
@@ -351,12 +350,12 @@ void PhysicalPlanGenerator::Visit(LogicalGet &op) {
 	this->plan = move(scan);
 }
 
-static void GatherDelimScans(PhysicalOperator* op, vector<PhysicalOperator*>& delim_scans) {
+static void GatherDelimScans(PhysicalOperator *op, vector<PhysicalOperator *> &delim_scans) {
 	assert(op);
 	if (op->type == PhysicalOperatorType::CHUNK_SCAN) {
 		delim_scans.push_back(op);
 	} else {
-		for(auto &child : op->children) {
+		for (auto &child : op->children) {
 			GatherDelimScans(child.get(), delim_scans);
 		}
 	}
@@ -415,12 +414,12 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 	}
 	if (op.is_duplicate_eliminated) {
 		vector<TypeId> delim_types;
-		for(auto &delim_expr : op.duplicate_eliminated_columns) {
+		for (auto &delim_expr : op.duplicate_eliminated_columns) {
 			delim_types.push_back(delim_expr->return_type);
 		}
 		if (op.type == JoinType::MARK) {
 			assert(plan->type == PhysicalOperatorType::HASH_JOIN);
-			auto &hash_join = (PhysicalHashJoin&) *plan;
+			auto &hash_join = (PhysicalHashJoin &)*plan;
 			// correlated eliminated MARK join
 			// a correlated MARK join should always have exactly one non-correlated column
 			// (namely the actual predicate of the ANY() expression)
@@ -431,9 +430,11 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 			auto &info = hash_join.hash_table->correlated_mark_join_info;
 
 			vector<TypeId> payload_types = {TypeId::BIGINT, TypeId::BIGINT}; // COUNT types
-			vector<ExpressionType> aggregate_types = {ExpressionType::AGGREGATE_COUNT_STAR, ExpressionType::AGGREGATE_COUNT};
+			vector<ExpressionType> aggregate_types = {ExpressionType::AGGREGATE_COUNT_STAR,
+			                                          ExpressionType::AGGREGATE_COUNT};
 
-			info.correlated_counts = make_unique<SuperLargeHashTable>(1024, delim_types, payload_types, aggregate_types);
+			info.correlated_counts =
+			    make_unique<SuperLargeHashTable>(1024, delim_types, payload_types, aggregate_types);
 			info.correlated_types = delim_types;
 			// FIXME: these can be initialized "empty" (without allocating empty vectors)
 			info.group_chunk.Initialize(delim_types);
@@ -442,7 +443,7 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 		}
 		// duplicate eliminated join
 		// first gather the scans on the duplicate eliminated data set from the RHS
-		vector<PhysicalOperator*> delim_scans;
+		vector<PhysicalOperator *> delim_scans;
 		GatherDelimScans(plan->children[1].get(), delim_scans);
 		assert(delim_scans.size() > 0);
 		// now create the duplicate eliminated join

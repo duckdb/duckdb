@@ -6,17 +6,16 @@
 #include "parser/query_node/list.hpp"
 #include "parser/statement/list.hpp"
 #include "parser/tableref/list.hpp"
-#include "planner/operator/list.hpp"
 #include "planner/binder.hpp"
+#include "planner/operator/list.hpp"
 
 #include <map>
 
 using namespace duckdb;
 using namespace std;
 
-
 LogicalPlanGenerator::LogicalPlanGenerator(Binder &binder, ClientContext &context)
-	: binder(binder), plan_subquery(true), has_unplanned_subqueries(false), require_row_id(false), context(context) {
+    : binder(binder), plan_subquery(true), has_unplanned_subqueries(false), require_row_id(false), context(context) {
 }
 
 void LogicalPlanGenerator::CreatePlan(SQLStatement &statement) {
@@ -129,7 +128,8 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(TableFunction &expr) {
 	auto function_definition = (FunctionExpression *)expr.function.get();
 	auto function = context.db.catalog.GetTableFunction(context.ActiveTransaction(), function_definition);
 
-	auto index = binder.bind_context.GetBindingIndex(expr.alias.empty() ? function_definition->function_name : expr.alias);
+	auto index =
+	    binder.bind_context.GetBindingIndex(expr.alias.empty() ? function_definition->function_name : expr.alias);
 
 	if (root) {
 		throw Exception("Table function cannot have children");

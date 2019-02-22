@@ -111,7 +111,7 @@ void ColumnBindingResolver::ResolveSubquery(LogicalOperator &op) {
 
 void ColumnBindingResolver::Visit(LogicalAggregate &op) {
 	ResolveSubquery(op);
-	
+
 	BoundTable group_binding;
 	group_binding.table_index = op.group_index;
 	group_binding.column_count = op.groups.size();
@@ -180,7 +180,7 @@ void ColumnBindingResolver::Visit(LogicalGet &op) {
 	if (!op.table) {
 		// DUMMY get
 		// create a dummy table with a single column
-		binding.table_index = (size_t) -1;
+		binding.table_index = (size_t)-1;
 		binding.column_count = 1;
 	} else {
 		binding.table_index = op.table_index;
@@ -228,7 +228,7 @@ void ColumnBindingResolver::Visit(LogicalJoin &op) {
 		// for MARK join the result is the LEFT side, plus a table that has a single column (the MARK column)
 		assert(op.children[1]->type == LogicalOperatorType::SUBQUERY);
 		// the immediate RIGHT side should be a SUBQUERY
-		auto &subquery = (LogicalSubquery&) *op.children[1];
+		auto &subquery = (LogicalSubquery &)*op.children[1];
 		BoundTable binding;
 		binding.table_index = subquery.table_index;
 		binding.column_count = 1;

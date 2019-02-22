@@ -15,13 +15,13 @@ namespace duckdb {
 //! LogicalDistinct filters duplicate entries from its child operator
 class LogicalDistinct : public LogicalOperator {
 public:
-	LogicalDistinct()
-	    : LogicalOperator(LogicalOperatorType::DISTINCT) {
+	LogicalDistinct() : LogicalOperator(LogicalOperatorType::DISTINCT) {
 	}
 
 	vector<string> GetNames() override {
 		return children[0]->GetNames();
 	}
+
 protected:
 	void ResolveTypes() override {
 		types = children[0]->types;

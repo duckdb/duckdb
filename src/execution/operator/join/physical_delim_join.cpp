@@ -1,18 +1,20 @@
 #include "execution/operator/join/physical_delim_join.hpp"
-#include "execution/operator/scan/physical_chunk_scan.hpp"
+
 #include "common/vector_operations/vector_operations.hpp"
+#include "execution/operator/scan/physical_chunk_scan.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-PhysicalDelimJoin::PhysicalDelimJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> original_join, vector<PhysicalOperator*> delim_scans)
+PhysicalDelimJoin::PhysicalDelimJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> original_join,
+                                     vector<PhysicalOperator *> delim_scans)
     : PhysicalOperator(PhysicalOperatorType::DELIM_JOIN, op.types), join(move(original_join)) {
 	assert(delim_scans.size() > 0);
 	assert(join->children.size() == 2);
 	// for any duplicate eliminated scans in the RHS, point them to the duplicate eliminated chunk that we create here
-	for(auto op : delim_scans) {
+	for (auto op : delim_scans) {
 		assert(op->type == PhysicalOperatorType::CHUNK_SCAN);
-		auto scan = (PhysicalChunkScan*) op;
+		auto scan = (PhysicalChunkScan *)op;
 		scan->collection = &delim_data;
 	}
 	// now for the original join
@@ -42,7 +44,7 @@ void PhysicalDelimJoin::_GetChunk(ClientContext &context, DataChunk &chunk, Phys
 			delim_chunk.Reset();
 			distinct->_GetChunk(context, delim_chunk, distinct_state.get());
 			delim_data.Append(delim_chunk);
-		} while(delim_chunk.size() != 0);
+		} while (delim_chunk.size() != 0);
 		// create the state of the underlying join
 		state->join_state = join->GetOperatorState(nullptr);
 	}

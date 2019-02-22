@@ -133,12 +133,11 @@ string QueryProfiler::ToJSON() const {
 	return result + "}";
 }
 
-
-void QueryProfiler::WriteJSONToFile(const char* path) const {
+void QueryProfiler::WriteJSONToFile(const char *path) const {
 	auto json = ToJSON();
 	std::ofstream out(path);
-    out << json;
-    out.close();
+	out << json;
+	out.close();
 }
 
 static bool is_non_split_char(char l) {

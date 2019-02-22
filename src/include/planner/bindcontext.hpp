@@ -13,8 +13,8 @@
 #include "catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "parser/column_definition.hpp"
 #include "parser/expression.hpp"
-#include "parser/sql_statement.hpp"
 #include "parser/expression/bound_columnref_expression.hpp"
+#include "parser/sql_statement.hpp"
 #include "planner/expression_binder.hpp"
 
 namespace duckdb {
@@ -78,7 +78,7 @@ struct TableFunctionBinding : public Binding {
 class BindContext {
 public:
 	BindContext();
-	
+
 	//! Given a column name, find the matching table it belongs to. Throws an
 	//! exception if no table has a column of the given name.
 	string GetMatchingBinding(const string &column_name);
@@ -109,6 +109,7 @@ public:
 
 	//! The set of columns that are bound for each table/subquery alias
 	std::unordered_map<string, vector<string>> bound_columns;
+
 private:
 	void AddBinding(const string &alias, unique_ptr<Binding> binding);
 

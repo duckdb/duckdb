@@ -1,12 +1,12 @@
 #include "parser/expression/aggregate_expression.hpp"
-#include "parser/expression/cast_expression.hpp"
+
 #include "common/serializer.hpp"
+#include "parser/expression/cast_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-AggregateExpression::AggregateExpression(ExpressionType type, unique_ptr<Expression> child)
-    : Expression(type) {
+AggregateExpression::AggregateExpression(ExpressionType type, unique_ptr<Expression> child) : Expression(type) {
 
 	// translate COUNT(*) into AGGREGATE_COUNT_STAR
 	if (type == ExpressionType::AGGREGATE_COUNT) {

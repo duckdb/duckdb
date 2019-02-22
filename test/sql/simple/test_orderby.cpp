@@ -97,9 +97,9 @@ TEST_CASE("Test ORDER BY keyword", "[order]") {
 	// ORDER BY after union
 	result = con.Query("SELECT a-10 AS k FROM test UNION SELECT a-10 AS l FROM test ORDER BY k;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
-	
+
 	// ORDER BY on alias in right-most query
-	// CONTROVERSIAL: SQLite allows both "k" and "l" to be referenced here, Postgres and MonetDB give an error. 
+	// CONTROVERSIAL: SQLite allows both "k" and "l" to be referenced here, Postgres and MonetDB give an error.
 	result = con.Query("SELECT a-10 AS k FROM test UNION SELECT a-10 AS l FROM test ORDER BY l;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 
@@ -125,7 +125,7 @@ TEST_CASE("Test ORDER BY exceptions", "[order]") {
 
 	// ORDER BY index out of range
 	REQUIRE_FAIL(con.Query("SELECT a FROM test ORDER BY 2"));
-	
+
 	// ORDER BY constant works, but does nothing
 	// CONTROVERSIAL: works in SQLite but not in Postgres
 	result = con.Query("SELECT a FROM test ORDER BY 'hello', a");
@@ -141,7 +141,7 @@ TEST_CASE("Test ORDER BY exceptions", "[order]") {
 
 	// ambiguous reference in union parameter
 	REQUIRE_FAIL(con.Query("SELECT a % 2, b FROM test UNION SELECT b, a % 2 AS k ORDER BY a % 2"));
-	
+
 	// but works if not ambiguous
 	result = con.Query("SELECT a % 2, b FROM test UNION SELECT a % 2 AS k, b FROM test ORDER BY a % 2");
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1}));

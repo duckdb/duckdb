@@ -12,7 +12,6 @@
 #include "parser/query_node.hpp"
 #include "parser/sql_node_visitor.hpp"
 #include "parser/sql_statement.hpp"
-
 #include "planner/binder.hpp"
 
 namespace duckdb {

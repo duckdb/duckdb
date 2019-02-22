@@ -313,7 +313,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) {
 	groups.Verify();
 	assert(groups.column_count == group_types.size());
-	for(size_t i = 0; i < result.column_count; i++) {
+	for (size_t i = 0; i < result.column_count; i++) {
 		result.data[i].count = groups.size();
 		result.data[i].sel_vector = groups.data[0].sel_vector;
 		assert(result.data[i].type == payload_types[i]);
@@ -330,13 +330,13 @@ void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) 
 	// now fetch the aggregates
 	for (size_t aggr_idx = 0; aggr_idx < aggregate_types.size(); aggr_idx++) {
 		assert(result.column_count > aggr_idx);
-		assert(aggregate_types[aggr_idx] == ExpressionType::AGGREGATE_COUNT_STAR || aggregate_types[aggr_idx] == ExpressionType::AGGREGATE_COUNT);
+		assert(aggregate_types[aggr_idx] == ExpressionType::AGGREGATE_COUNT_STAR ||
+		       aggregate_types[aggr_idx] == ExpressionType::AGGREGATE_COUNT);
 		assert(payload_types[aggr_idx] == TypeId::BIGINT);
 
 		VectorOperations::Gather::Set(addresses, result.data[aggr_idx]);
 		VectorOperations::AddInPlace(addresses,
 		                             GetAggrPayloadSize(aggregate_types[aggr_idx], result.data[aggr_idx].type));
-
 	}
 }
 

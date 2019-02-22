@@ -1,8 +1,8 @@
 #include "parser/expression/comparison_expression.hpp"
-#include "parser/expression/cast_expression.hpp"
 
 #include "common/exception.hpp"
 #include "common/serializer.hpp"
+#include "parser/expression/cast_expression.hpp"
 
 using namespace duckdb;
 using namespace std;

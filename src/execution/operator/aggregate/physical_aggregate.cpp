@@ -7,7 +7,6 @@
 using namespace duckdb;
 using namespace std;
 
-
 PhysicalAggregate::PhysicalAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> select_list,
                                      vector<unique_ptr<Expression>> groups, PhysicalOperatorType type)
     : PhysicalOperator(type, types), groups(move(groups)) {

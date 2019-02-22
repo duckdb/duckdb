@@ -26,7 +26,7 @@ struct CorrelatedColumnInfo {
 	string name;
 	size_t depth;
 
-	CorrelatedColumnInfo(BoundColumnRefExpression& expr) {
+	CorrelatedColumnInfo(BoundColumnRefExpression &expr) {
 		binding = expr.binding;
 		type = expr.return_type;
 		name = expr.GetName();
@@ -63,6 +63,7 @@ public:
 	void Bind(QueryNode &node);
 	void Bind(SelectNode &node);
 	void Bind(SetOperationNode &node);
+
 public:
 	void Visit(CheckConstraint &constraint) override;
 
@@ -88,12 +89,13 @@ public:
 	ExpressionBinder *GetActiveBinder();
 	bool HasActiveBinder();
 
-	vector<ExpressionBinder*>& GetActiveBinders();
-	
+	vector<ExpressionBinder *> &GetActiveBinders();
+
 	void MergeCorrelatedColumns(vector<CorrelatedColumnInfo> &other);
 	void AddCorrelatedColumn(CorrelatedColumnInfo info);
 
 	vector<CorrelatedColumnInfo> correlated_columns;
+
 private:
 	//! Move correlated expressions from the child binder to this binder
 	void MoveCorrelatedExpressions(Binder &other);
@@ -101,7 +103,7 @@ private:
 	ClientContext &context;
 	Binder *parent;
 
-	vector<ExpressionBinder*> active_binders;
+	vector<ExpressionBinder *> active_binders;
 
 	size_t bound_tables;
 #ifdef DEBUG

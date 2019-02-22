@@ -9,8 +9,8 @@
 #pragma once
 
 #include "common/common.hpp"
-#include "common/types/vector.hpp"
 #include "common/types/chunk_collection.hpp"
+#include "common/types/vector.hpp"
 
 namespace duckdb {
 
@@ -19,13 +19,11 @@ struct MergeOrder {
 	size_t count;
 };
 
-enum MergeInfoType : uint8_t {
-	SCALAR_MERGE_INFO = 1,
-	CHUNK_MERGE_INFO = 2
-};
+enum MergeInfoType : uint8_t { SCALAR_MERGE_INFO = 1, CHUNK_MERGE_INFO = 2 };
 
 struct MergeInfo {
-	MergeInfo(MergeInfoType info_type, TypeId type) : info_type(info_type), type(type) {}
+	MergeInfo(MergeInfoType info_type, TypeId type) : info_type(info_type), type(type) {
+	}
 	MergeInfoType info_type;
 	TypeId type;
 };
@@ -44,37 +42,33 @@ struct ScalarMergeInfo : public MergeInfo {
 
 struct ChunkMergeInfo : public MergeInfo {
 	ChunkCollection &data_chunks;
-	vector<MergeOrder>& order_info;
+	vector<MergeOrder> &order_info;
 	bool found_match[STANDARD_VECTOR_SIZE];
 
-	ChunkMergeInfo(ChunkCollection &data_chunks, vector<MergeOrder>& order_info)
-	    :  MergeInfo(MergeInfoType::CHUNK_MERGE_INFO, data_chunks.types[0]), data_chunks(data_chunks), order_info(order_info) {
+	ChunkMergeInfo(ChunkCollection &data_chunks, vector<MergeOrder> &order_info)
+	    : MergeInfo(MergeInfoType::CHUNK_MERGE_INFO, data_chunks.types[0]), data_chunks(data_chunks),
+	      order_info(order_info) {
 		memset(found_match, 0, sizeof(found_match));
 	}
 };
 
 struct MergeJoinInner {
 	struct Equality {
-		template <class T>
-		static size_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r);
+		template <class T> static size_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r);
 	};
 	struct LessThan {
-		template <class T>
-		static size_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r);
+		template <class T> static size_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r);
 	};
 	struct LessThanEquals {
-		template <class T>
-		static size_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r);
+		template <class T> static size_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r);
 	};
 	struct GreaterThan {
-		template <class T>
-		static size_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
+		template <class T> static size_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
 			return LessThan::Operation<T>(r, l);
 		}
 	};
 	struct GreaterThanEquals {
-		template <class T>
-		static size_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
+		template <class T> static size_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
 			return LessThanEquals::Operation<T>(r, l);
 		}
 	};
@@ -84,35 +78,30 @@ struct MergeJoinInner {
 
 struct MergeJoinMark {
 	struct Equality {
-		template <class T>
-		static size_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
+		template <class T> static size_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
 	};
 	struct LessThan {
-		template <class T>
-		static size_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
+		template <class T> static size_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
 	};
 	struct LessThanEquals {
-		template <class T>
-		static size_t Operation(ScalarMergeInfo &l,  ChunkMergeInfo &r);
+		template <class T> static size_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
 	};
 	struct GreaterThan {
-		template <class T>
-		static size_t Operation(ScalarMergeInfo &l,  ChunkMergeInfo &r);
+		template <class T> static size_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
 	};
 	struct GreaterThanEquals {
-		template <class T>
-		static size_t Operation(ScalarMergeInfo &l,  ChunkMergeInfo &r);
+		template <class T> static size_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
 	};
 
 	static size_t Perform(MergeInfo &l, MergeInfo &r, ExpressionType comparison);
 };
 
-#define INSTANTIATE_MERGEJOIN_TEMPLATES(MJCLASS, OPNAME, L, R)       \
-template size_t MJCLASS::OPNAME::Operation<int8_t>(L &l, R &r);      \
-template size_t MJCLASS::OPNAME::Operation<int16_t>(L &l, R &r);     \
-template size_t MJCLASS::OPNAME::Operation<int32_t>(L &l, R &r);     \
-template size_t MJCLASS::OPNAME::Operation<int64_t>(L &l, R &r);     \
-template size_t MJCLASS::OPNAME::Operation<double>(L &l, R &r);      \
-template size_t MJCLASS::OPNAME::Operation<const char*>(L &l, R &r);
+#define INSTANTIATE_MERGEJOIN_TEMPLATES(MJCLASS, OPNAME, L, R)                                                         \
+	template size_t MJCLASS::OPNAME::Operation<int8_t>(L & l, R & r);                                                  \
+	template size_t MJCLASS::OPNAME::Operation<int16_t>(L & l, R & r);                                                 \
+	template size_t MJCLASS::OPNAME::Operation<int32_t>(L & l, R & r);                                                 \
+	template size_t MJCLASS::OPNAME::Operation<int64_t>(L & l, R & r);                                                 \
+	template size_t MJCLASS::OPNAME::Operation<double>(L & l, R & r);                                                  \
+	template size_t MJCLASS::OPNAME::Operation<const char *>(L & l, R & r);
 
-}
+} // namespace duckdb

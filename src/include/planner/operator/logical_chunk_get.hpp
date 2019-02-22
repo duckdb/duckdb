@@ -15,15 +15,15 @@ namespace duckdb {
 //! LogicalGet represents a scan operation from a data source
 class LogicalChunkGet : public LogicalOperator {
 public:
-	LogicalChunkGet(size_t table_index, vector<TypeId> types) :
-		LogicalOperator(LogicalOperatorType::CHUNK_GET), table_index(table_index) {
+	LogicalChunkGet(size_t table_index, vector<TypeId> types)
+	    : LogicalOperator(LogicalOperatorType::CHUNK_GET), table_index(table_index) {
 		assert(types.size() > 0);
 		chunk_types = types;
 	}
 
 	vector<string> GetNames() override {
 		vector<string> names;
-		for(size_t i = 0; i < chunk_types.size(); i++) {
+		for (size_t i = 0; i < chunk_types.size(); i++) {
 			names.push_back(std::to_string(i));
 		}
 		return names;

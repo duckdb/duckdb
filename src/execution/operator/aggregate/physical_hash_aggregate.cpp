@@ -7,7 +7,8 @@
 using namespace duckdb;
 using namespace std;
 
-PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions, PhysicalOperatorType type)
+PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions,
+                                             PhysicalOperatorType type)
     : PhysicalAggregate(types, move(expressions), type) {
 }
 
@@ -34,7 +35,7 @@ void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk, 
 		executor.Execute(groups, group_chunk);
 		executor.Execute(payload_chunk,
 		                 [&](size_t i) {
-							 auto &aggr = (AggregateExpression&) *aggregates[i];
+			                 auto &aggr = (AggregateExpression &)*aggregates[i];
 			                 if (!aggr.child) {
 				                 state->payload_chunk.data[i].count = group_chunk.size();
 				                 state->payload_chunk.data[i].sel_vector = group_chunk.sel_vector;
@@ -110,7 +111,7 @@ unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState(Expres
 	}
 	for (auto &expr : aggregates) {
 		assert(expr->GetExpressionClass() == ExpressionClass::AGGREGATE);
-		auto &aggr = (AggregateExpression&) *expr;
+		auto &aggr = (AggregateExpression &)*expr;
 		aggregate_kind.push_back(expr->type);
 		if (aggr.child) {
 			payload_types.push_back(aggr.child->return_type);

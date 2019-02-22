@@ -1,24 +1,25 @@
 #include "parser/expression/bound_expression.hpp"
-#include "parser/expression/constant_expression.hpp"
 #include "parser/expression/columnref_expression.hpp"
+#include "parser/expression/constant_expression.hpp"
 #include "parser/query_node/set_operation_node.hpp"
 #include "planner/binder.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-static void GatherAliases(QueryNode& node, unordered_map<string, uint32_t>& aliases, expression_map_t<uint32_t>& expressions) {
+static void GatherAliases(QueryNode &node, unordered_map<string, uint32_t> &aliases,
+                          expression_map_t<uint32_t> &expressions) {
 	if (node.type == QueryNodeType::SET_OPERATION_NODE) {
 		// setop, recurse
-		auto &setop = (SetOperationNode&) node;
+		auto &setop = (SetOperationNode &)node;
 		GatherAliases(*setop.left, aliases, expressions);
 		GatherAliases(*setop.right, aliases, expressions);
 	} else {
 		// query node
 		assert(node.type == QueryNodeType::SELECT_NODE);
-		auto &select = (SelectNode&) node;
+		auto &select = (SelectNode &)node;
 		// fill the alias lists
-		for(size_t i = 0; i < select.select_list.size(); i++) {
+		for (size_t i = 0; i < select.select_list.size(); i++) {
 			auto &expr = select.select_list[i];
 			if (!expr->alias.empty()) {
 				// the entry has an alias
@@ -31,7 +32,7 @@ static void GatherAliases(QueryNode& node, unordered_map<string, uint32_t>& alia
 						// there is a conflict
 						// we place "-1" in the aliases map at this location
 						// "-1" signifies that there is an ambiguous reference
-						aliases[expr->alias] = (uint32_t) -1;
+						aliases[expr->alias] = (uint32_t)-1;
 					}
 				} else {
 					// the alias is not in there yet, just assign it
@@ -44,7 +45,7 @@ static void GatherAliases(QueryNode& node, unordered_map<string, uint32_t>& alia
 				// the node is in there
 				// repeat the same as with the alias: if there is an ambiguity we insert "-1"
 				if (expr_entry->second != i) {
-					expressions[expr.get()] = (uint32_t) -1;
+					expressions[expr.get()] = (uint32_t)-1;
 				}
 			} else {
 				// not in there yet, just place it in there
@@ -65,14 +66,16 @@ void Binder::Bind(SetOperationNode &statement) {
 		// handle the ORDER BY
 		// NOTE: we handle the ORDER BY in SET OPERATIONS before binding the children
 		// we do so we can perform expression comparisons BEFORE type resolution
-		// e.g. if the ordering is ORDER BY a + 10, the return type of all expressions will be "TypeId::INVALID" which will allow for equality comparisons
+		// e.g. if the ordering is ORDER BY a + 10, the return type of all expressions will be "TypeId::INVALID" which
+		// will allow for equality comparisons
 
-		// we recursively visit the children of this node to extract aliases and expressions that can be referenced in the ORDER BY
+		// we recursively visit the children of this node to extract aliases and expressions that can be referenced in
+		// the ORDER BY
 		unordered_map<string, uint32_t> alias_map;
 		expression_map_t<uint32_t> expression_map;
 		GatherAliases(statement, alias_map, expression_map);
 		// now we perform the actual resolution of the ORDER BY expressions
-		for(size_t i = 0; i < statement.orderby.orders.size(); i++) {
+		for (size_t i = 0; i < statement.orderby.orders.size(); i++) {
 			auto &order = statement.orderby.orders[i].expression;
 			if (order->type == ExpressionType::VALUE_CONSTANT) {
 				// ORDER BY a constant
@@ -90,7 +93,7 @@ void Binder::Bind(SetOperationNode &statement) {
 					auto entry = alias_map.find(colref.column_name);
 					if (entry != alias_map.end()) {
 						// found a matching entry
-						if (entry->second == (uint32_t) -1) {
+						if (entry->second == (uint32_t)-1) {
 							// ambiguous reference
 							throw BinderException("Ambiguous alias reference \"%s\"", colref.column_name.c_str());
 						} else {
@@ -104,9 +107,10 @@ void Binder::Bind(SetOperationNode &statement) {
 			auto expr_ref = expression_map.find(order.get());
 			if (expr_ref == expression_map.end()) {
 				// not found
-				throw BinderException("Could not ORDER BY column: add the expression/function to every SELECT, or move the UNION into a FROM clause.");
+				throw BinderException("Could not ORDER BY column: add the expression/function to every SELECT, or move "
+				                      "the UNION into a FROM clause.");
 			}
-			if (expr_ref->second == (uint32_t) -1) {
+			if (expr_ref->second == (uint32_t)-1) {
 				throw BinderException("Ambiguous reference to column");
 			}
 			order_references.push_back(expr_ref->second);
@@ -136,11 +140,10 @@ void Binder::Bind(SetOperationNode &statement) {
 	}
 	// now if there are ORDER BY entries we create the BoundExpressions
 	assert(order_references.size() == statement.orderby.orders.size());
-	for(size_t i = 0; i < statement.orderby.orders.size(); i++) {
+	for (size_t i = 0; i < statement.orderby.orders.size(); i++) {
 		auto entry = order_references[i];
 		if (entry >= statement.types.size()) {
-			throw BinderException("ORDER term out of range - should be between 1 and %d",
-								(int)statement.types.size());
+			throw BinderException("ORDER term out of range - should be between 1 and %d", (int)statement.types.size());
 		}
 		statement.orderby.orders[i].expression = make_unique<BoundExpression>(statement.types[entry], entry);
 	}

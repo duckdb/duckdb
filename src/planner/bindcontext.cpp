@@ -64,8 +64,7 @@ static bool HasMatchingBinding(Binding *binding, const string &column_name) {
 	return false;
 }
 
-
-BindContext::BindContext() { 
+BindContext::BindContext() {
 }
 
 string BindContext::GetMatchingBinding(const string &column_name) {
@@ -85,11 +84,9 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 	return result;
 }
 
-
-
 BindResult BindContext::BindColumn(unique_ptr<Expression> expr, uint32_t depth) {
 	assert(expr->GetExpressionClass() == ExpressionClass::COLUMN_REF);
-	auto &colref = (ColumnRefExpression&) *expr;
+	auto &colref = (ColumnRefExpression &)*expr;
 
 	if (colref.table_name.empty()) {
 		return BindResult(move(expr), StringUtil::Format("Could not bind alias \"%s\"!", colref.column_name.c_str()));
@@ -98,7 +95,8 @@ BindResult BindContext::BindColumn(unique_ptr<Expression> expr, uint32_t depth) 
 	auto match = bindings.find(colref.table_name);
 	if (match == bindings.end()) {
 		// alias not found in this BindContext
-		return BindResult(move(expr), StringUtil::Format("Referenced table \"%s\" not found!", colref.table_name.c_str()));
+		return BindResult(move(expr),
+		                  StringUtil::Format("Referenced table \"%s\" not found!", colref.table_name.c_str()));
 	}
 	auto binding = match->second.get();
 	switch (binding->type) {
@@ -106,7 +104,8 @@ BindResult BindContext::BindColumn(unique_ptr<Expression> expr, uint32_t depth) 
 		auto dummy = (DummyTableBinding *)binding;
 		auto entry = dummy->bound_columns.find(colref.column_name);
 		if (entry == dummy->bound_columns.end()) {
-			return BindResult(move(expr), StringUtil::Format("Referenced column \"%s\" not found table!", colref.column_name.c_str()));
+			return BindResult(move(expr), StringUtil::Format("Referenced column \"%s\" not found table!",
+			                                                 colref.column_name.c_str()));
 		}
 		return BindResult(make_unique<BoundExpression>(colref.GetName(), entry->second->type, entry->second->oid));
 	}
@@ -114,8 +113,8 @@ BindResult BindContext::BindColumn(unique_ptr<Expression> expr, uint32_t depth) 
 		// base table
 		auto &table = *((TableBinding *)binding);
 		if (!table.table->ColumnExists(colref.column_name)) {
-			return BindResult(move(expr), StringUtil::Format("Table \"%s\" does not have a column named \"%s\"", colref.table_name.c_str(),
-			                      colref.column_name.c_str()));
+			return BindResult(move(expr), StringUtil::Format("Table \"%s\" does not have a column named \"%s\"",
+			                                                 colref.table_name.c_str(), colref.column_name.c_str()));
 		}
 		auto table_index = table.index;
 		auto entry = &table.table->GetColumn(colref.column_name);
@@ -150,8 +149,8 @@ BindResult BindContext::BindColumn(unique_ptr<Expression> expr, uint32_t depth) 
 		auto &subquery = *((SubqueryBinding *)binding);
 		auto column_entry = subquery.name_map.find(colref.column_name);
 		if (column_entry == subquery.name_map.end()) {
-			return BindResult(move(expr), StringUtil::Format("Subquery \"%s\" does not have a column named \"%s\"", match->first.c_str(),
-			                      colref.column_name.c_str()));
+			return BindResult(move(expr), StringUtil::Format("Subquery \"%s\" does not have a column named \"%s\"",
+			                                                 match->first.c_str(), colref.column_name.c_str()));
 		}
 		ColumnBinding binding;
 		binding.table_index = subquery.index;
@@ -166,8 +165,9 @@ BindResult BindContext::BindColumn(unique_ptr<Expression> expr, uint32_t depth) 
 		auto &table_function = *((TableFunctionBinding *)binding);
 		auto column_entry = table_function.function->name_map.find(colref.column_name);
 		if (column_entry == table_function.function->name_map.end()) {
-			return BindResult(move(expr), StringUtil::Format("Table Function \"%s\" does not have a column named \"%s\"", match->first.c_str(),
-			                      colref.column_name.c_str()));
+			return BindResult(move(expr),
+			                  StringUtil::Format("Table Function \"%s\" does not have a column named \"%s\"",
+			                                     match->first.c_str(), colref.column_name.c_str()));
 		}
 		ColumnBinding binding;
 		binding.table_index = table_function.index;

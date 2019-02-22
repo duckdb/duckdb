@@ -34,7 +34,6 @@ public:
 	unique_ptr<Binder> binder;
 	unique_ptr<Expression> subquery;
 
-
 	bool IsCorrelated() {
 		return binder->correlated_columns.size() > 0;
 	}

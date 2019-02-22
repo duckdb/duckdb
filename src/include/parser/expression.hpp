@@ -175,8 +175,7 @@ struct ExpressionEquality {
 	}
 };
 
-
-template<typename T>
-using expression_map_t = unordered_map<Expression*, T, ExpressionHashFunction, ExpressionEquality>;
+template <typename T>
+using expression_map_t = unordered_map<Expression *, T, ExpressionHashFunction, ExpressionEquality>;
 
 } // namespace duckdb

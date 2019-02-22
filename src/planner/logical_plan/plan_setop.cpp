@@ -7,7 +7,9 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<LogicalOperator> LogicalPlanGenerator::CastSetOpToTypes(vector<TypeId> &source_types, vector<TypeId> &target_types, unique_ptr<LogicalOperator> op) {
+unique_ptr<LogicalOperator> LogicalPlanGenerator::CastSetOpToTypes(vector<TypeId> &source_types,
+                                                                   vector<TypeId> &target_types,
+                                                                   unique_ptr<LogicalOperator> op) {
 	assert(op);
 	// first check if we even need to cast
 	assert(source_types.size() == target_types.size());

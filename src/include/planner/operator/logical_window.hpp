@@ -22,6 +22,7 @@ public:
 	vector<string> GetNames() override;
 
 	size_t window_index;
+
 protected:
 	void ResolveTypes() override;
 };

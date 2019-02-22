@@ -1,13 +1,12 @@
-#include "planner/logical_plan_generator.hpp"
-
 #include "main/client_context.hpp"
 #include "main/database.hpp"
 #include "parser/expression/list.hpp"
 #include "parser/query_node/list.hpp"
 #include "parser/statement/list.hpp"
 #include "parser/tableref/list.hpp"
-#include "planner/operator/list.hpp"
 #include "planner/binder.hpp"
+#include "planner/logical_plan_generator.hpp"
+#include "planner/operator/list.hpp"
 
 #include <map>
 
@@ -27,7 +26,8 @@ static JoinSide CombineJoinSide(JoinSide left, JoinSide right) {
 	return left;
 }
 
-static JoinSide GetJoinSide(size_t table_binding, unordered_set<size_t> &left_bindings, unordered_set<size_t> &right_bindings) {
+static JoinSide GetJoinSide(size_t table_binding, unordered_set<size_t> &left_bindings,
+                            unordered_set<size_t> &right_bindings) {
 	if (left_bindings.find(table_binding) != left_bindings.end()) {
 		// column references table on left side
 		assert(right_bindings.find(table_binding) == right_bindings.end());
@@ -51,10 +51,10 @@ static JoinSide GetJoinSide(Expression &expression, unordered_set<size_t> &left_
 	assert(expression.type != ExpressionType::BOUND_REF);
 	if (expression.type == ExpressionType::SUBQUERY) {
 		assert(expression.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY);
-		auto &subquery = (BoundSubqueryExpression&) expression;
+		auto &subquery = (BoundSubqueryExpression &)expression;
 		// correlated subquery, check the side of each of correlated columns in the subquery
 		JoinSide side = JoinSide::NONE;
-		for(auto &corr : subquery.binder->correlated_columns) {
+		for (auto &corr : subquery.binder->correlated_columns) {
 			if (corr.depth > 1) {
 				// correlated column has depth > 1
 				// it does not refer to any table in the current set of bindings
@@ -64,7 +64,6 @@ static JoinSide GetJoinSide(Expression &expression, unordered_set<size_t> &left_
 			side = CombineJoinSide(side, correlated_side);
 		}
 		return side;
-
 	}
 	JoinSide join_side = JoinSide::NONE;
 	expression.EnumerateChildren([&](Expression *child) {
@@ -74,7 +73,8 @@ static JoinSide GetJoinSide(Expression &expression, unordered_set<size_t> &left_
 	return join_side;
 }
 
-static void CreateJoinCondition(LogicalJoin &join, unique_ptr<Expression> expr, unordered_set<size_t> &left_bindings, unordered_set<size_t> &right_bindings) {
+static void CreateJoinCondition(LogicalJoin &join, unique_ptr<Expression> expr, unordered_set<size_t> &left_bindings,
+                                unordered_set<size_t> &right_bindings) {
 	auto total_side = GetJoinSide(*expr, left_bindings, right_bindings);
 	if (total_side != JoinSide::BOTH) {
 		// join condition does not reference both sides, add it as filter under the join
@@ -87,12 +87,14 @@ static void CreateJoinCondition(LogicalJoin &join, unique_ptr<Expression> expr, 
 				join.children[0] = move(filter);
 			}
 			// push the expression into the filter
-			auto &filter = (LogicalFilter&) *join.children[0];
+			auto &filter = (LogicalFilter &)*join.children[0];
 			filter.expressions.push_back(move(expr));
 		}
 		// cannot push expression as filter
-		throw Exception("Join condition for non-inner join that does not refer to both sides of the join not supported");
-	} else if (expr->type >= ExpressionType::COMPARE_EQUAL && expr->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
+		throw Exception(
+		    "Join condition for non-inner join that does not refer to both sides of the join not supported");
+	} else if (expr->type >= ExpressionType::COMPARE_EQUAL &&
+	           expr->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
 		// comparison
 		auto &comparison = (ComparisonExpression &)*expr;
 		auto left_side = GetJoinSide(*comparison.left, left_bindings, right_bindings);
@@ -155,7 +157,7 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
 
 		auto filter = make_unique<LogicalFilter>(move(expr.condition));
 		// visit the expressions in the filter
-		for(size_t i = 0; i < filter->expressions.size(); i++) {
+		for (size_t i = 0; i < filter->expressions.size(); i++) {
 			VisitExpression(&filter->expressions[i]);
 		}
 		filter->AddChild(move(root));
@@ -184,18 +186,18 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
 	LogicalJoin::GetTableReferences(*join->children[0], left_bindings);
 	LogicalJoin::GetTableReferences(*join->children[1], right_bindings);
 	// for each expression turn it into a proper JoinCondition
-	for(size_t i = 0; i < expressions.size(); i++) {
+	for (size_t i = 0; i < expressions.size(); i++) {
 		CreateJoinCondition(*join, move(expressions[i]), left_bindings, right_bindings);
 	}
 	// first visit the left conditions
 	root = move(join->children[0]);
-	for(size_t i = 0; i < join->conditions.size(); i++) {
+	for (size_t i = 0; i < join->conditions.size(); i++) {
 		VisitExpression(&join->conditions[i].left);
 	}
 	join->children[0] = move(root);
 	// now visit the right conditions
 	root = move(join->children[1]);
-	for(size_t i = 0; i < join->conditions.size(); i++) {
+	for (size_t i = 0; i < join->conditions.size(); i++) {
 		VisitExpression(&join->conditions[i].right);
 	}
 	join->children[1] = move(root);

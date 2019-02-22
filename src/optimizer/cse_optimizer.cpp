@@ -34,7 +34,8 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression *expr, expression
 	}
 }
 
-Expression *CommonSubExpressionOptimizer::PerformCSEReplacement(Expression *expr, expression_map_t<CSENode> &expression_count) {
+Expression *CommonSubExpressionOptimizer::PerformCSEReplacement(Expression *expr,
+                                                                expression_map_t<CSENode> &expression_count) {
 	if (expr->ChildCount() > 0) {
 		// check if this child is eligible for CSE elimination
 		if (expression_count.find(expr) == expression_count.end()) {

@@ -73,7 +73,6 @@ public:
 	//! Whether or not the query has a window function
 	bool HasWindow();
 
-
 	vector<unique_ptr<Expression>> &GetSelectList() override {
 		return select_list;
 	}
@@ -84,18 +83,18 @@ public:
 
 	void EnumerateChildren(std::function<void(Expression *expression)> callback) const override {
 		QueryNode::EnumerateChildren(callback);
-		for(size_t i = 0; i < select_list.size(); i++) {
+		for (size_t i = 0; i < select_list.size(); i++) {
 			VisitChild(select_list[i].get(), callback);
 		}
 		VisitChild(where_clause.get(), callback);
-		for(size_t i = 0; i < groupby.groups.size(); i++) {
+		for (size_t i = 0; i < groupby.groups.size(); i++) {
 			VisitChild(groupby.groups[i].get(), callback);
 		}
 		VisitChild(groupby.having.get(), callback);
-		for(size_t i = 0; i < binding.aggregates.size(); i++) {
+		for (size_t i = 0; i < binding.aggregates.size(); i++) {
 			VisitChild(binding.aggregates[i].get(), callback);
 		}
-		for(size_t i = 0; i < binding.windows.size(); i++) {
+		for (size_t i = 0; i < binding.windows.size(); i++) {
 			VisitChild(binding.windows[i].get(), callback);
 		}
 	}

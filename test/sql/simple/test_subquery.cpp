@@ -53,11 +53,13 @@ TEST_CASE("Test subqueries", "[subqueries]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
 	REQUIRE(CHECK_COLUMN(result, 1, {22, Value(), Value()}));
 
-	result = con.Query("SELECT a, (SELECT CASE WHEN test.a=11 THEN b ELSE NULL END FROM test tsub) FROM test ORDER BY a");
+	result =
+	    con.Query("SELECT a, (SELECT CASE WHEN test.a=11 THEN b ELSE NULL END FROM test tsub) FROM test ORDER BY a");
 	REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
 	REQUIRE(CHECK_COLUMN(result, 1, {22, Value(), Value()}));
 
-	result = con.Query("SELECT a, (SELECT CASE WHEN test.a=11 THEN b ELSE NULL END FROM test tsub LIMIT 1) FROM test ORDER BY a");
+	result = con.Query(
+	    "SELECT a, (SELECT CASE WHEN test.a=11 THEN b ELSE NULL END FROM test tsub LIMIT 1) FROM test ORDER BY a");
 	REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
 	REQUIRE(CHECK_COLUMN(result, 1, {22, Value(), Value()}));
 

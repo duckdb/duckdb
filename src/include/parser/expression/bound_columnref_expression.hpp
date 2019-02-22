@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "parser/expression.hpp"
 #include "common/types/hash.hpp"
+#include "parser/expression.hpp"
 
 namespace duckdb {
 
@@ -39,7 +39,7 @@ struct ColumnBindingEquality {
 	}
 };
 
-template<typename T>
+template <typename T>
 using column_binding_map_t = unordered_map<ColumnBinding, T, ColumnBindingHashFunction, ColumnBindingEquality>;
 
 //! A BoundColumnRef expression represents a ColumnRef expression that was bound to an actual table and column index. It

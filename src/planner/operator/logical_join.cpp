@@ -6,10 +6,8 @@
 using namespace duckdb;
 using namespace std;
 
-
-LogicalJoin::LogicalJoin(JoinType type) :
-	LogicalOperator(LogicalOperatorType::JOIN), type(type),
-	is_duplicate_eliminated(false) {
+LogicalJoin::LogicalJoin(JoinType type)
+    : LogicalOperator(LogicalOperatorType::JOIN), type(type), is_duplicate_eliminated(false) {
 }
 
 vector<string> LogicalJoin::GetNames() {
@@ -92,10 +90,10 @@ void LogicalJoin::ReplaceExpression(std::function<unique_ptr<Expression>(unique_
 
 void LogicalJoin::GetTableReferences(LogicalOperator &op, unordered_set<size_t> &bindings) {
 	if (op.type == LogicalOperatorType::GET) {
-		auto& get = (LogicalGet &)op;
+		auto &get = (LogicalGet &)op;
 		bindings.insert(get.table_index);
 	} else if (op.type == LogicalOperatorType::SUBQUERY) {
-		auto& subquery = (LogicalSubquery &)op;
+		auto &subquery = (LogicalSubquery &)op;
 		bindings.insert(subquery.table_index);
 	} else if (op.type == LogicalOperatorType::TABLE_FUNCTION) {
 		auto &table_function = (LogicalTableFunction &)op;
@@ -104,18 +102,18 @@ void LogicalJoin::GetTableReferences(LogicalOperator &op, unordered_set<size_t> 
 		auto &chunk = (LogicalChunkGet &)op;
 		bindings.insert(chunk.table_index);
 	} else if (op.type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY) {
-		auto &aggr = (LogicalAggregate&) op;
+		auto &aggr = (LogicalAggregate &)op;
 		bindings.insert(aggr.aggregate_index);
 		bindings.insert(aggr.group_index);
 	} else if (op.type == LogicalOperatorType::WINDOW) {
-		auto &window = (LogicalWindow&) op;
+		auto &window = (LogicalWindow &)op;
 		bindings.insert(window.window_index);
 		// window functions pass through bindings from their children
 		for (auto &child : op.children) {
 			GetTableReferences(*child, bindings);
 		}
 	} else if (op.type == LogicalOperatorType::PROJECTION) {
-		auto &proj = (LogicalProjection&) op;
+		auto &proj = (LogicalProjection &)op;
 		bindings.insert(proj.table_index);
 	} else {
 		// iterate over the children

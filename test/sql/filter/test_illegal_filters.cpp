@@ -12,6 +12,6 @@ TEST_CASE("Test aggregation in WHERE", "[filter]") {
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(a INTEGER, b INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (2, 12)"));
-	
+
 	REQUIRE_FAIL(con.Query("SELECT * FROM integers WHERE SUM(a)>10"));
 }

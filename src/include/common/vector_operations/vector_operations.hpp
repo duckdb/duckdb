@@ -165,7 +165,8 @@ struct VectorOperations {
 	};
 	// make sure dest.count is set for gather methods!
 	struct Gather {
-		//! dest.data[i] = ptr[i]. If set_null is true, NullValue<T> is checked for and converted to the nullmask in dest. If set_null is false, NullValue<T> is ignored.
+		//! dest.data[i] = ptr[i]. If set_null is true, NullValue<T> is checked for and converted to the nullmask in
+		//! dest. If set_null is false, NullValue<T> is ignored.
 		static void Set(Vector &source, Vector &dest, bool set_null = true);
 	};
 

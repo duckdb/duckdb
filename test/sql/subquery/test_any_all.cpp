@@ -41,7 +41,7 @@ TEST_CASE("Test ANY/ALL queries", "[subquery]") {
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3)"));
-	
+
 	// ANY is like EXISTS without NULL values
 	result = con.Query("SELECT 2 > ANY(SELECT * FROM integers)");
 	REQUIRE(CHECK_COLUMN(result, 0, {true}));
@@ -58,7 +58,7 @@ TEST_CASE("Test ANY/ALL queries", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 	result = con.Query("SELECT NULL > ALL(SELECT * FROM integers)");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
-	
+
 	// now with a NULL value in the input
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (NULL)"));
 

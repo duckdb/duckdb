@@ -1,13 +1,11 @@
-#include "execution/nested_loop_join.hpp"
 #include "common/operator/comparison_operators.hpp"
 #include "common/vector_operations/vector_operations.hpp"
+#include "execution/nested_loop_join.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-
-template <class T, class OP>
-static void mark_join_templated(Vector &left, Vector &right, bool found_match[]) {
+template <class T, class OP> static void mark_join_templated(Vector &left, Vector &right, bool found_match[]) {
 	auto ldata = (T *)left.data;
 	auto rdata = (T *)right.data;
 	VectorOperations::Exec(left, [&](size_t left_position, size_t k) {
@@ -19,8 +17,7 @@ static void mark_join_templated(Vector &left, Vector &right, bool found_match[])
 	});
 }
 
-template <class OP>
-static void mark_join_operator(Vector &left, Vector &right, bool found_match[]) {
+template <class OP> static void mark_join_operator(Vector &left, Vector &right, bool found_match[]) {
 	switch (left.type) {
 	case TypeId::BOOLEAN:
 	case TypeId::TINYINT:
@@ -64,13 +61,13 @@ static void mark_join(Vector &left, Vector &right, bool found_match[], Expressio
 	}
 }
 
-void NestedLoopJoinMark::Perform(DataChunk &left, ChunkCollection &right,
-	bool found_match[], vector<JoinCondition>& conditions) {
+void NestedLoopJoinMark::Perform(DataChunk &left, ChunkCollection &right, bool found_match[],
+                                 vector<JoinCondition> &conditions) {
 	// initialize a new temporary selection vector for the left chunk
 	// loop over all chunks in the RHS
-	for(size_t chunk_idx = 0; chunk_idx < right.chunks.size(); chunk_idx++) {
+	for (size_t chunk_idx = 0; chunk_idx < right.chunks.size(); chunk_idx++) {
 		DataChunk &right_chunk = *right.chunks[chunk_idx];
-		for(size_t i = 0; i < conditions.size(); i++) {
+		for (size_t i = 0; i < conditions.size(); i++) {
 			mark_join(left.data[i], right_chunk.data[i], found_match, conditions[i].comparison);
 		}
 	}

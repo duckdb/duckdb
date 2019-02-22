@@ -13,7 +13,9 @@ TEST_CASE("MonetDB Test: leftjoin.Bug-3981.sql", "[monetdb]") {
 	con.EnableQueryVerification();
 
 	// LEFT OUTER JOIN on arbitrary expression (not simple LEFT-RIGHT comparison) not supported currently
-	REQUIRE_FAIL(con.Query("SELECT * FROM ( SELECT 'apple' as fruit UNION ALL SELECT 'banana' ) a JOIN ( SELECT 'apple' as fruit UNION ALL SELECT 'banana' ) b ON a.fruit=b.fruit LEFT JOIN ( SELECT 1 as isyellow ) c ON b.fruit='banana';"));
+	REQUIRE_FAIL(con.Query(
+	    "SELECT * FROM ( SELECT 'apple' as fruit UNION ALL SELECT 'banana' ) a JOIN ( SELECT 'apple' as fruit UNION "
+	    "ALL SELECT 'banana' ) b ON a.fruit=b.fruit LEFT JOIN ( SELECT 1 as isyellow ) c ON b.fruit='banana';"));
 	// REQUIRE(CHECK_COLUMN(result, 0, {"apple", "banana"}));
 	// REQUIRE(CHECK_COLUMN(result, 1, {"apple", "banana"}));
 	// REQUIRE(CHECK_COLUMN(result, 2, {Value(), 1}));

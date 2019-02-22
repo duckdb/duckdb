@@ -1,8 +1,8 @@
 #include "execution/expression_executor.hpp"
 
+#include "common/types/static_vector.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 #include "main/client_context.hpp"
-#include "common/types/static_vector.hpp"
 
 using namespace duckdb;
 using namespace std;

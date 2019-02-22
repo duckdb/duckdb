@@ -94,9 +94,9 @@ TEST_CASE("Illegal window function", "[window]") {
 	              "'2006-12-23'), ('develop', 7, 4200, '2008-01-01'), ('develop', 9, 4500, '2008-01-01'), ('sales', 3, "
 	              "4800, '2007-08-01'), ('develop', 8, 6000, '2006-10-01'), ('develop', 11, 5200, '2007-08-15')"));
 
-
 	// GROUP BY window function is not allowed
-	REQUIRE_FAIL(con.Query("SELECT depname, min(salary) OVER (PARTITION BY depname ORDER BY salary, empno) m1 FROM empsalary GROUP BY m1 ORDER BY depname, empno"));
+	REQUIRE_FAIL(con.Query("SELECT depname, min(salary) OVER (PARTITION BY depname ORDER BY salary, empno) m1 FROM "
+	                       "empsalary GROUP BY m1 ORDER BY depname, empno"));
 }
 
 TEST_CASE("More evil cases", "[window]") {

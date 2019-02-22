@@ -4,7 +4,7 @@ using namespace duckdb;
 using namespace std;
 
 void PhysicalChunkScan::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto state = (PhysicalChunkScanState*) state_;
+	auto state = (PhysicalChunkScanState *)state_;
 	assert(collection);
 	if (collection->count == 0) {
 		return;
@@ -14,7 +14,7 @@ void PhysicalChunkScan::_GetChunk(ClientContext &context, DataChunk &chunk, Phys
 		return;
 	}
 	auto &collection_chunk = *collection->chunks[state->chunk_index];
-	for(size_t i = 0; i < chunk.column_count; i++) {
+	for (size_t i = 0; i < chunk.column_count; i++) {
 		chunk.data[i].Reference(collection_chunk.data[i]);
 	}
 	state->chunk_index++;

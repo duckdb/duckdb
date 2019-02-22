@@ -17,7 +17,8 @@ namespace duckdb {
 class LogicalAggregate : public LogicalOperator {
 public:
 	LogicalAggregate(size_t group_index, size_t aggregate_index, vector<unique_ptr<Expression>> select_list)
-	    : LogicalOperator(LogicalOperatorType::AGGREGATE_AND_GROUP_BY, std::move(select_list)), group_index(group_index), aggregate_index(aggregate_index) {
+	    : LogicalOperator(LogicalOperatorType::AGGREGATE_AND_GROUP_BY, std::move(select_list)),
+	      group_index(group_index), aggregate_index(aggregate_index) {
 	}
 
 	vector<string> GetNames() override;

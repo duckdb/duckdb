@@ -55,6 +55,7 @@ protected:
 	// void Visit(BoundSubqueryExpression &expr) override;
 
 	vector<BoundTable> bound_tables;
+
 private:
 	void PushBinding(BoundTable binding);
 	void BindTablesBinaryOp(LogicalOperator &op, bool append_right);

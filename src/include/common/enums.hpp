@@ -251,10 +251,10 @@ enum class CatalogType : uint8_t {
 //===--------------------------------------------------------------------===//
 enum class SubqueryType : uint8_t {
 	INVALID = 0,
-	SCALAR = 1,      // Regular scalar subquery
-	EXISTS = 2,      // EXISTS (SELECT...)
-	NOT_EXISTS = 3,  // NOT EXISTS(SELECT...)
-	ANY = 4,         // x = ANY(SELECT...) OR x IN (SELECT...)
+	SCALAR = 1,     // Regular scalar subquery
+	EXISTS = 2,     // EXISTS (SELECT...)
+	NOT_EXISTS = 3, // NOT EXISTS(SELECT...)
+	ANY = 4,        // x = ANY(SELECT...) OR x IN (SELECT...)
 };
 
 //===--------------------------------------------------------------------===//
@@ -309,15 +309,17 @@ enum class TableReferenceType : uint8_t {
 // Join Types
 //===--------------------------------------------------------------------===//
 enum class JoinType : uint8_t {
-	INVALID = 0,  // invalid join type
-	LEFT = 1,     // left
-	RIGHT = 2,    // right
-	INNER = 3,    // inner
-	OUTER = 4,    // outer
-	SEMI = 5,     // SEMI join returns left side row ONLY if it has a join partner, no duplicates
-	ANTI = 6,     // ANTI join returns left side row ONLY if it has NO join partner, no duplicates
-	MARK = 7,     // MARK join returns marker indicating whether or not there is a join partner (true), there is no join partner (false)
-	SINGLE = 8    // SINGLE join is like LEFT OUTER JOIN, BUT returns at most one join partner per entry on the LEFT side (and NULL if no partner is found)
+	INVALID = 0, // invalid join type
+	LEFT = 1,    // left
+	RIGHT = 2,   // right
+	INNER = 3,   // inner
+	OUTER = 4,   // outer
+	SEMI = 5,    // SEMI join returns left side row ONLY if it has a join partner, no duplicates
+	ANTI = 6,    // ANTI join returns left side row ONLY if it has NO join partner, no duplicates
+	MARK = 7,    // MARK join returns marker indicating whether or not there is a join partner (true), there is no join
+	             // partner (false)
+	SINGLE = 8   // SINGLE join is like LEFT OUTER JOIN, BUT returns at most one join partner per entry on the LEFT side
+	             // (and NULL if no partner is found)
 };
 
 //===--------------------------------------------------------------------===//

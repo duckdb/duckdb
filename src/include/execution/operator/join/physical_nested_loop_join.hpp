@@ -22,8 +22,8 @@ size_t nested_loop_comparison(ExpressionType op, Vector &left, Vector &right, se
 //! tables
 class PhysicalNestedLoopJoin : public PhysicalJoin {
 public:
-	PhysicalNestedLoopJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
-	                            unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type);
+	PhysicalNestedLoopJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
+	                       vector<JoinCondition> cond, JoinType join_type);
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
@@ -33,7 +33,7 @@ public:
 class PhysicalNestedLoopJoinOperatorState : public PhysicalOperatorState {
 public:
 	PhysicalNestedLoopJoinOperatorState(PhysicalOperator *left, PhysicalOperator *right,
-	                                         ExpressionExecutor *parent_executor)
+	                                    ExpressionExecutor *parent_executor)
 	    : PhysicalOperatorState(left, parent_executor), right_chunk(0), has_null(false), left_tuple(0), right_tuple(0) {
 		assert(left && right);
 	}

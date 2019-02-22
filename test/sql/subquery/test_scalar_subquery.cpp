@@ -36,7 +36,7 @@ TEST_CASE("Test scalar EXISTS query", "[subquery]") {
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
-	
+
 	result = con.Query("SELECT EXISTS(SELECT 1) FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {true, true, true, true}));
 
@@ -67,7 +67,7 @@ TEST_CASE("Test scalar IN query", "[subquery]") {
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3)"));
-	
+
 	result = con.Query("SELECT 4 IN (SELECT * FROM integers)");
 	REQUIRE(CHECK_COLUMN(result, 0, {false}));
 

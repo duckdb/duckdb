@@ -1,10 +1,9 @@
 #include "parser/expression/aggregate_expression.hpp"
 #include "parser/expression/bound_expression.hpp"
-#include "parser/expression/constant_expression.hpp"
 #include "parser/expression/columnref_expression.hpp"
+#include "parser/expression/constant_expression.hpp"
 #include "parser/query_node/select_node.hpp"
 #include "planner/binder.hpp"
-
 #include "planner/expression_binder/group_binder.hpp"
 #include "planner/expression_binder/having_binder.hpp"
 #include "planner/expression_binder/order_binder.hpp"
@@ -15,7 +14,6 @@
 
 using namespace duckdb;
 using namespace std;
-
 
 void Binder::Bind(SelectNode &statement) {
 #ifdef DEBUG
@@ -62,7 +60,7 @@ void Binder::Bind(SelectNode &statement) {
 	// create a mapping of (alias -> index) and a mapping of (Expression -> index) for the SELECT list
 	unordered_map<string, uint32_t> alias_map;
 	expression_map_t<uint32_t> projection_map;
-	for(size_t i = 0; i < statement.select_list.size(); i++) {
+	for (size_t i = 0; i < statement.select_list.size(); i++) {
 		auto &expr = statement.select_list[i];
 		if (!expr->alias.empty()) {
 			alias_map[expr->alias] = i;
@@ -71,7 +69,7 @@ void Binder::Bind(SelectNode &statement) {
 	}
 
 	// we bind the ORDER BY before we bind any aggregations or window functions
-	for(size_t i = 0; i < statement.orderby.orders.size(); i++) {
+	for (size_t i = 0; i < statement.orderby.orders.size(); i++) {
 		OrderBinder order_binder(*this, context, statement, alias_map, projection_map);
 		auto result = order_binder.BindExpression(move(statement.orderby.orders[i].expression), 0);
 		if (result.HasError()) {
@@ -87,7 +85,7 @@ void Binder::Bind(SelectNode &statement) {
 		assert(result.expression->type == ExpressionType::BOUND_COLUMN_REF);
 		statement.orderby.orders[i].expression = move(result.expression);
 	}
-	
+
 	vector<unique_ptr<Expression>> unbound_groups;
 	expression_map_t<uint32_t> group_map;
 	unordered_map<string, uint32_t> group_alias_map;
@@ -99,7 +97,7 @@ void Binder::Bind(SelectNode &statement) {
 		// THEN if no match is found refer to aliases in the SELECT list
 		unbound_groups.resize(statement.groupby.groups.size());
 		GroupBinder group_binder(*this, context, statement);
-		for(size_t i = 0; i < statement.groupby.groups.size(); i++) {
+		for (size_t i = 0; i < statement.groupby.groups.size(); i++) {
 			unbound_groups[i] = statement.groupby.groups[i]->Copy();
 
 			// first try to bind using the GroupBinder
@@ -110,7 +108,7 @@ void Binder::Bind(SelectNode &statement) {
 					// not an alias reference
 					throw BinderException(result.error);
 				}
-				auto &colref = (ColumnRefExpression&) *result.expression;
+				auto &colref = (ColumnRefExpression &)*result.expression;
 				if (!colref.table_name.empty()) {
 					// explicit table name: not an alias reference
 					throw BinderException(result.error);
@@ -124,7 +122,8 @@ void Binder::Bind(SelectNode &statement) {
 				if (used_aliases.find(colref.column_name) != used_aliases.end()) {
 					//  the alias has already been bound to before!
 					// this only happens if we group on the same alias twice (e.g. GROUP BY k, k)
-					// in this case, we can just remove the entry as grouping on the same entry twice has no additional effect
+					// in this case, we can just remove the entry as grouping on the same entry twice has no additional
+					// effect
 					statement.groupby.groups.erase(statement.groupby.groups.begin() + i);
 					i--;
 					continue;
@@ -135,7 +134,9 @@ void Binder::Bind(SelectNode &statement) {
 					statement.groupby.groups[i] = move(statement.select_list[entry->second]);
 					group_binder.BindAndResolveType(&statement.groupby.groups[i]);
 					// now replace the original expression in the select list with a reference to this group
-					statement.select_list[entry->second] = make_unique<BoundColumnRefExpression>(*statement.groupby.groups[i], statement.groupby.groups[i]->return_type, ColumnBinding(binding.group_index, i), 0);
+					statement.select_list[entry->second] = make_unique<BoundColumnRefExpression>(
+					    *statement.groupby.groups[i], statement.groupby.groups[i]->return_type,
+					    ColumnBinding(binding.group_index, i), 0);
 					// insert into the set of used aliases
 					used_aliases.insert(colref.column_name);
 					group_alias_map[colref.column_name] = i;
@@ -156,7 +157,7 @@ void Binder::Bind(SelectNode &statement) {
 
 	// after that, we bind to the SELECT list
 	SelectBinder select_binder(*this, context, statement, group_map, group_alias_map);
-	for(size_t i = 0; i < statement.select_list.size(); i++) {
+	for (size_t i = 0; i < statement.select_list.size(); i++) {
 		select_binder.BindAndResolveType(&statement.select_list[i]);
 		statement.types.push_back(statement.select_list[i]->return_type);
 	}
@@ -166,17 +167,17 @@ void Binder::Bind(SelectNode &statement) {
 	// we choose the former one [CONTROVERSIAL: this is the PostgreSQL behavior]
 	if (statement.HasAggregation()) {
 		if (select_binder.bound_columns.size() > 0) {
-			throw BinderException("column %s must appear in the GROUP BY clause or be used in an aggregate function", select_binder.bound_columns[0].c_str());
+			throw BinderException("column %s must appear in the GROUP BY clause or be used in an aggregate function",
+			                      select_binder.bound_columns[0].c_str());
 		}
 	}
 
 	// finally resolve the types of the ORDER BY clause
-	for(size_t i = 0; i < statement.orderby.orders.size(); i++) {
+	for (size_t i = 0; i < statement.orderby.orders.size(); i++) {
 		assert(statement.orderby.orders[i].expression->type == ExpressionType::BOUND_COLUMN_REF);
-		auto &order = (BoundColumnRefExpression&) *statement.orderby.orders[i].expression;
+		auto &order = (BoundColumnRefExpression &)*statement.orderby.orders[i].expression;
 		assert(order.binding.column_index < statement.select_list.size());
 		order.return_type = statement.select_list[order.binding.column_index]->return_type;
 		assert(order.return_type != TypeId::INVALID);
 	}
-
 }

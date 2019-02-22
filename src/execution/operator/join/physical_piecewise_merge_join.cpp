@@ -52,9 +52,7 @@ void PhysicalPiecewiseMergeJoin::_GetChunk(ClientContext &context, DataChunk &ch
 			}
 			state->right_chunks.Append(right_chunk);
 		}
-		if (state->right_chunks.count == 0 &&
-			(type == JoinType::INNER ||
-			type == JoinType::SEMI)) {
+		if (state->right_chunks.count == 0 && (type == JoinType::INNER || type == JoinType::SEMI)) {
 			// empty RHS with INNER or SEMI join means empty result set
 			return;
 		}
@@ -75,7 +73,7 @@ void PhysicalPiecewiseMergeJoin::_GetChunk(ClientContext &context, DataChunk &ch
 					// this only happens if there are NULL values in the right-hand side
 					// hence we set the has_null to true (this is required for the MARK join)
 					state->has_null = true;
-				} 
+				}
 			}
 			state->right_conditions.Append(state->join_keys);
 		}
@@ -107,45 +105,47 @@ void PhysicalPiecewiseMergeJoin::_GetChunk(ClientContext &context, DataChunk &ch
 		}
 
 		ScalarMergeInfo left_info(state->join_keys.data[0], state->left_orders.count, state->left_orders.order,
-		               state->left_position);
+		                          state->left_position);
 
 		// first check if the join type is MARK, SEMI or ANTI
 		// in this case we loop over the entire right collection immediately
 		// because we can never return more than STANDARD_VECTOR_SIZE rows from a join
-		switch(type) {
-			case JoinType::MARK: {
-				// MARK join
-				if (state->right_chunks.count > 0) {
-					ChunkMergeInfo right_info(state->right_conditions, state->right_orders);
-					// first perform the MARK join
-					// this method uses the LHS to loop over the entire RHS looking for matches
-					MergeJoinMark::Perform(left_info, right_info, conditions[0].comparison);
-					// now construct the mark join result from the found matches
-					ConstructMarkJoinResult(state->join_keys, state->child_chunk, chunk, right_info.found_match, state->has_null);
-					// move to the next LHS chunk in the next iteration
-				} else {
-					// RHS empty: just set found_match to false
-					bool found_match[STANDARD_VECTOR_SIZE] = {false};
-					ConstructMarkJoinResult(state->join_keys, state->child_chunk, chunk, found_match, state->has_null);
-					// RHS empty: result is not NULL but just false
-					chunk.data[chunk.column_count - 1].nullmask.reset();
-				}
-				state->right_chunk_index = state->right_orders.size();
-				return;
+		switch (type) {
+		case JoinType::MARK: {
+			// MARK join
+			if (state->right_chunks.count > 0) {
+				ChunkMergeInfo right_info(state->right_conditions, state->right_orders);
+				// first perform the MARK join
+				// this method uses the LHS to loop over the entire RHS looking for matches
+				MergeJoinMark::Perform(left_info, right_info, conditions[0].comparison);
+				// now construct the mark join result from the found matches
+				ConstructMarkJoinResult(state->join_keys, state->child_chunk, chunk, right_info.found_match,
+				                        state->has_null);
+				// move to the next LHS chunk in the next iteration
+			} else {
+				// RHS empty: just set found_match to false
+				bool found_match[STANDARD_VECTOR_SIZE] = {false};
+				ConstructMarkJoinResult(state->join_keys, state->child_chunk, chunk, found_match, state->has_null);
+				// RHS empty: result is not NULL but just false
+				chunk.data[chunk.column_count - 1].nullmask.reset();
 			}
-			default:
-				// INNER, LEFT OUTER, etc... join that can return >STANDARD_VECTOR_SIZE entries
-				break;
+			state->right_chunk_index = state->right_orders.size();
+			return;
 		}
-		
+		default:
+			// INNER, LEFT OUTER, etc... join that can return >STANDARD_VECTOR_SIZE entries
+			break;
+		}
+
 		// perform the actual merge join
 		auto &right_chunk = *state->right_chunks.chunks[state->right_chunk_index];
 		auto &right_condition_chunk = *state->right_conditions.chunks[state->right_chunk_index];
 		auto &right_orders = state->right_orders[state->right_chunk_index];
 
-		ScalarMergeInfo right(right_condition_chunk.data[0], right_orders.count, right_orders.order, state->right_position);
+		ScalarMergeInfo right(right_condition_chunk.data[0], right_orders.count, right_orders.order,
+		                      state->right_position);
 		// perform the merge join
-		switch(type) {
+		switch (type) {
 		case JoinType::INNER: {
 			size_t result_count = MergeJoinInner::Perform(left_info, right, conditions[0].comparison);
 			if (result_count == 0) {

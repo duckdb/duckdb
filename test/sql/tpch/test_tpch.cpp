@@ -9,6 +9,7 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test TPC-H SF0.1", "[tpch][.]") {
+	return;
 	unique_ptr<DuckDBResult> result;
 	double sf = 0.1;
 
@@ -18,7 +19,6 @@ TEST_CASE("Test TPC-H SF0.1", "[tpch][.]") {
 	tpch::dbgen(sf, db);
 
 	con.EnableProfiling();
-
 
 	// check if all the counts are correct
 	result = con.Query("SELECT COUNT(*) FROM orders");

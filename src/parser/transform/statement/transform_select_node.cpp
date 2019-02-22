@@ -7,7 +7,6 @@ using namespace duckdb;
 using namespace postgres;
 using namespace std;
 
-
 unique_ptr<QueryNode> Transformer::TransformSelectNode(postgres::SelectStmt *stmt) {
 	unique_ptr<QueryNode> node;
 	switch (stmt->op) {

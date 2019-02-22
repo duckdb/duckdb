@@ -58,7 +58,6 @@ TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {22, 21}));
 	REQUIRE(CHECK_COLUMN(result, 1, {24, 12}));
 
-
 	result = con.Query("SELECT b, SUM(a), COUNT(*), SUM(a+2) FROM test GROUP "
 	                   "BY b ORDER BY b;");
 	REQUIRE(CHECK_COLUMN(result, 0, {21, 22}));
@@ -164,7 +163,8 @@ TEST_CASE("Test aliases in group by/aggregation", "[aggregations]") {
 
 	// entry in GROUP BY should refer to base column
 	// ...BUT the alias in ORDER BY should refer to the alias from the select list
-	// note that both Postgres and MonetDB reject this query because of ambiguity. SQLite accepts it though so we do too.
+	// note that both Postgres and MonetDB reject this query because of ambiguity. SQLite accepts it though so we do
+	// too.
 	result = con.Query("SELECT i, i % 2 AS i, SUM(i) FROM integers GROUP BY i ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 2, 1, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 0, 1, 1}));
@@ -192,7 +192,8 @@ TEST_CASE("Test aliases in group by/aggregation", "[aggregations]") {
 
 	// ORDER on a non-grouping column
 	// this query is refused by Postgres and MonetDB
-	// but SQLite resolves it by first pushing a "FIRST(i)" aggregate into the projection, and then ordering by that aggregate
+	// but SQLite resolves it by first pushing a "FIRST(i)" aggregate into the projection, and then ordering by that
+	// aggregate
 	REQUIRE_FAIL(con.Query("SELECT (10-i) AS k, SUM(i) FROM integers GROUP BY k ORDER BY i;"));
 
 	result = con.Query("SELECT (10-i) AS k, SUM(i) FROM integers GROUP BY k ORDER BY FIRST(i);");

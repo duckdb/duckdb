@@ -17,5 +17,4 @@ TEST_CASE("Test filter on alias", "[filter]") {
 	// for now, we have this fail as well because it simplifies our life
 	// the filter occurs before the projection, hence "j" is not computed until AFTER the filter normally
 	REQUIRE_FAIL(con.Query("SELECT i % 2 AS j FROM integers WHERE j<>0;"));
-
 }

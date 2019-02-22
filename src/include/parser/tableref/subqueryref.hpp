@@ -45,8 +45,5 @@ public:
 	//! The binder used to bind the subquery
 	// FIXME: should not be in parser subdirectory
 	unique_ptr<Binder> binder;
-
-
-
 };
 } // namespace duckdb

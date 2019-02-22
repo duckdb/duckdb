@@ -9,6 +9,7 @@
 #pragma once
 
 #include "planner/logical_operator.hpp"
+
 #include <unordered_set>
 
 namespace duckdb {
@@ -17,10 +18,12 @@ struct JoinCondition {
 	unique_ptr<Expression> left;
 	unique_ptr<Expression> right;
 	ExpressionType comparison;
-	//! NULL values are equal for just THIS JoinCondition (instead of the entire join), only support by HashJoin and can only be used in equality comparisons
+	//! NULL values are equal for just THIS JoinCondition (instead of the entire join), only support by HashJoin and can
+	//! only be used in equality comparisons
 	bool null_values_are_equal = false;
 
-	JoinCondition() : null_values_are_equal(false) {}
+	JoinCondition() : null_values_are_equal(false) {
+	}
 };
 
 enum JoinSide { NONE, LEFT, RIGHT, BOTH };
@@ -39,7 +42,9 @@ public:
 	vector<JoinCondition> conditions;
 	//! The type of the join (INNER, OUTER, etc...)
 	JoinType type;
-	//! Whether or not the join is a special "duplicate eliminated" join. This join type is only used for subquery flattening, and involves performing duplicate elimination on the LEFT side which is then pushed into the RIGHT side. 
+	//! Whether or not the join is a special "duplicate eliminated" join. This join type is only used for subquery
+	//! flattening, and involves performing duplicate elimination on the LEFT side which is then pushed into the RIGHT
+	//! side.
 	bool is_duplicate_eliminated;
 	//! The set of columns that will be duplicate eliminated from the LHS and pushed into the RHS
 	vector<unique_ptr<Expression>> duplicate_eliminated_columns;

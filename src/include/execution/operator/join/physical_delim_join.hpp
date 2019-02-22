@@ -12,10 +12,12 @@
 #include "execution/physical_operator.hpp"
 
 namespace duckdb {
-//! PhysicalDelimJoin represents a join where the LHS will be duplicate eliminated and pushed into a PhysicalChunkCollectionScan in the RHS.
+//! PhysicalDelimJoin represents a join where the LHS will be duplicate eliminated and pushed into a
+//! PhysicalChunkCollectionScan in the RHS.
 class PhysicalDelimJoin : public PhysicalOperator {
 public:
-	PhysicalDelimJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> original_join, vector<PhysicalOperator*> delim_scans);
+	PhysicalDelimJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> original_join,
+	                  vector<PhysicalOperator *> delim_scans);
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent_executor) override;

@@ -12,8 +12,8 @@
 #include "common/types/data_chunk.hpp"
 #include "common/types/tuple.hpp"
 #include "common/types/vector.hpp"
-#include "planner/operator/logical_join.hpp"
 #include "execution/aggregate_hashtable.hpp"
+#include "planner/operator/logical_join.hpp"
 
 #include <mutex>
 
@@ -66,7 +66,8 @@ public:
 		//! Next operator for the single join
 		void NextSingleJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 
-		//! Scan the hashtable for matches of the specified keys, setting the found_match[] array to true or false for every tuple
+		//! Scan the hashtable for matches of the specified keys, setting the found_match[] array to true or false for
+		//! every tuple
 		void ScanKeyMatches(DataChunk &keys);
 		template <bool MATCH> void NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 
@@ -147,7 +148,8 @@ public:
 	bool has_null;
 
 	struct {
-		//! The types of the duplicate eliminated columns, only used in correlated MARK JOIN for flattening ANY()/ALL() expressions
+		//! The types of the duplicate eliminated columns, only used in correlated MARK JOIN for flattening ANY()/ALL()
+		//! expressions
 		vector<TypeId> correlated_types;
 		//! The HT that holds the group counts for every correlated column
 		unique_ptr<SuperLargeHashTable> correlated_counts;
@@ -158,6 +160,7 @@ public:
 		//! Result chunk used for aggregating into correlated_counts
 		DataChunk result_chunk;
 	} correlated_mark_join_info;
+
 private:
 	//! Insert the given set of locations into the HT with the given set of
 	//! hashes. Caller should hold lock in parallel HT.

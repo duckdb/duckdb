@@ -26,7 +26,7 @@ void LogicalPlanGenerator::CreatePlan(SelectNode &statement) {
 	if (statement.HasAggregation()) {
 		if (statement.HasGroup()) {
 			// visit the groups
-			for(size_t i = 0; i < statement.groupby.groups.size(); i++) {
+			for (size_t i = 0; i < statement.groupby.groups.size(); i++) {
 				auto &group = statement.groupby.groups[i];
 				VisitExpression(&group);
 			}
@@ -36,7 +36,8 @@ void LogicalPlanGenerator::CreatePlan(SelectNode &statement) {
 			VisitExpression(&expr);
 		}
 		// finally create the aggregate node with the group_index and aggregate_index as obtained from the binder
-		auto aggregate = make_unique<LogicalAggregate>(statement.binding.group_index, statement.binding.aggregate_index, move(statement.binding.aggregates));
+		auto aggregate = make_unique<LogicalAggregate>(statement.binding.group_index, statement.binding.aggregate_index,
+		                                               move(statement.binding.aggregates));
 		aggregate->groups = move(statement.groupby.groups);
 
 		aggregate->AddChild(move(root));

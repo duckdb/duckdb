@@ -53,22 +53,22 @@ TEST_CASE("Test HAVING clause", "[having]") {
 	REQUIRE(result->column_count() == 2);
 
 	// correlated subquery in having
-	result = con.Query(
-	    "SELECT test.b, SUM(a) FROM test GROUP BY test.b HAVING SUM(a)=(SELECT SUM(a) FROM test t WHERE test.b=t.b) ORDER BY test.b;");
+	result = con.Query("SELECT test.b, SUM(a) FROM test GROUP BY test.b HAVING SUM(a)=(SELECT SUM(a) FROM test t WHERE "
+	                   "test.b=t.b) ORDER BY test.b;");
 	REQUIRE(CHECK_COLUMN(result, 0, {21, 22}));
 	REQUIRE(CHECK_COLUMN(result, 1, {12, 24}));
 	REQUIRE(result->column_count() == 2);
 
 	// use outer aggregation in inner subquery
-	result = con.Query(
-	    "SELECT test.b, SUM(a) FROM test GROUP BY test.b HAVING SUM(a)*2=(SELECT SUM(a)+SUM(t.a) FROM test t WHERE test.b=t.b) ORDER BY test.b");
+	result = con.Query("SELECT test.b, SUM(a) FROM test GROUP BY test.b HAVING SUM(a)*2=(SELECT SUM(a)+SUM(t.a) FROM "
+	                   "test t WHERE test.b=t.b) ORDER BY test.b");
 	REQUIRE(CHECK_COLUMN(result, 0, {21, 22}));
 	REQUIRE(CHECK_COLUMN(result, 1, {12, 24}));
 	REQUIRE(result->column_count() == 2);
 
 	// use outer aggregation that hasn't been used yet in subquery
-	result = con.Query(
-	    "SELECT test.b, SUM(a) FROM test GROUP BY test.b HAVING SUM(a)*2+2=(SELECT SUM(a)+SUM(t.a)+COUNT(t.a) FROM test t WHERE test.b=t.b) ORDER BY test.b");
+	result = con.Query("SELECT test.b, SUM(a) FROM test GROUP BY test.b HAVING SUM(a)*2+2=(SELECT "
+	                   "SUM(a)+SUM(t.a)+COUNT(t.a) FROM test t WHERE test.b=t.b) ORDER BY test.b");
 	REQUIRE(CHECK_COLUMN(result, 0, {22}));
 	REQUIRE(CHECK_COLUMN(result, 1, {24}));
 	REQUIRE(result->column_count() == 2);

@@ -18,9 +18,11 @@ namespace duckdb {
 //! a hash table to perform the grouping
 class PhysicalHashAggregate : public PhysicalAggregate {
 public:
-	PhysicalHashAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions, PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
 	PhysicalHashAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions,
-	                      vector<unique_ptr<Expression>> groups, PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
+	                      PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
+	PhysicalHashAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions,
+	                      vector<unique_ptr<Expression>> groups,
+	                      PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 

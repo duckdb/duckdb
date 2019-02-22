@@ -49,7 +49,8 @@ TEST_CASE("Test uncorrelated subqueries", "[subquery]") {
 	result = con.Query("SELECT * FROM integers WHERE i=(SELECT i FROM integers WHERE i IS NOT NULL ORDER BY i)");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	// i.e. the above query is equivalent to this query
-	result = con.Query("SELECT * FROM integers WHERE i=(SELECT i FROM integers WHERE i IS NOT NULL ORDER BY i LIMIT 1)");
+	result =
+	    con.Query("SELECT * FROM integers WHERE i=(SELECT i FROM integers WHERE i IS NOT NULL ORDER BY i LIMIT 1)");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
 	// returning multiple columns should fail though
@@ -107,7 +108,7 @@ TEST_CASE("Test uncorrelated subqueries", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value(), Value()}));
 	result = con.Query("SELECT NULL IN (SELECT * FROM integers) FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value(), Value()}));
-	
+
 	// add aggregations after the subquery
 	result = con.Query("SELECT SUM(i) FROM integers WHERE 1 IN (SELECT * FROM integers)");
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
@@ -144,16 +145,21 @@ TEST_CASE("Test uncorrelated subqueries", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), true, true, Value()}));
 	// use a bunch of cross products to make bigger data sets (> STANDARD_VECTOR_SIZE)
-	result = con.Query("SELECT i, i = ANY(SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4, integers i5, integers i6 WHERE i1.i IS NOT NULL) FROM integers ORDER BY i");
+	result = con.Query("SELECT i, i = ANY(SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4, "
+	                   "integers i5, integers i6 WHERE i1.i IS NOT NULL) FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), true, true, true}));
-	result = con.Query("SELECT i, i = ANY(SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4, integers i5, integers i6 WHERE i1.i IS NOT NULL AND i1.i <> 2) FROM integers ORDER BY i");
+	result = con.Query("SELECT i, i = ANY(SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4, "
+	                   "integers i5, integers i6 WHERE i1.i IS NOT NULL AND i1.i <> 2) FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), true, false, true}));
-	result = con.Query("SELECT i, i >= ANY(SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4, integers i5, integers i6 WHERE i1.i IS NOT NULL) FROM integers ORDER BY i");
+	result = con.Query("SELECT i, i >= ANY(SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4, "
+	                   "integers i5, integers i6 WHERE i1.i IS NOT NULL) FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), true, true, true}));
-	result = con.Query("SELECT i, i >= ANY(SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4, integers i5, integers i6 WHERE i1.i IS NOT NULL AND i1.i <> 1 LIMIT 1) FROM integers ORDER BY i");
+	result =
+	    con.Query("SELECT i, i >= ANY(SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4, integers "
+	              "i5, integers i6 WHERE i1.i IS NOT NULL AND i1.i <> 1 LIMIT 1) FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), false, true, true}));
 
@@ -168,7 +174,7 @@ TEST_CASE("Test uncorrelated subqueries", "[subquery]") {
 	result = con.Query("SELECT i, i >= ALL(SELECT i FROM integers WHERE i IS NOT NULL) FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), false, false, true}));
-	
+
 	result = con.Query("SELECT i FROM integers WHERE i >= ALL(SELECT i FROM integers WHERE i IS NOT NULL)");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 	result = con.Query("SELECT i FROM integers WHERE i > ALL(SELECT MIN(i) FROM integers)");
@@ -224,24 +230,29 @@ TEST_CASE("Test uncorrelated subqueries", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {6}));
 
 	// subqueries in GROUP BY clause
-	result = con.Query("SELECT i >= ALL(SELECT i FROM integers WHERE i IS NOT NULL) AS k, SUM(i) FROM integers GROUP BY k ORDER BY k;");
+	result = con.Query("SELECT i >= ALL(SELECT i FROM integers WHERE i IS NOT NULL) AS k, SUM(i) FROM integers GROUP "
+	                   "BY k ORDER BY k;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), false, true}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 3, 3}));
 
-	result = con.Query("SELECT SUM(i) FROM integers GROUP BY (i >= ALL(SELECT i FROM integers WHERE i IS NOT NULL)) ORDER BY 1;");
+	result = con.Query(
+	    "SELECT SUM(i) FROM integers GROUP BY (i >= ALL(SELECT i FROM integers WHERE i IS NOT NULL)) ORDER BY 1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 3, 3}));
 
-	result = con.Query("SELECT i >= ALL(SELECT MIN(i) FROM integers WHERE i IS NOT NULL) AS k, SUM(i) FROM integers GROUP BY k ORDER BY k;");
+	result = con.Query("SELECT i >= ALL(SELECT MIN(i) FROM integers WHERE i IS NOT NULL) AS k, SUM(i) FROM integers "
+	                   "GROUP BY k ORDER BY k;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), true}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 6}));
 
 	// subquery in CASE statement
-	result = con.Query("SELECT i, SUM(CASE WHEN (i >= ALL(SELECT i FROM integers WHERE i=2)) THEN 1 ELSE 0 END) FROM integers GROUP BY i ORDER BY i;");
+	result = con.Query("SELECT i, SUM(CASE WHEN (i >= ALL(SELECT i FROM integers WHERE i=2)) THEN 1 ELSE 0 END) FROM "
+	                   "integers GROUP BY i ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {0, 0, 1, 1}));
 
 	// subquery in HAVING
-	result = con.Query("SELECT i % 2 AS k, SUM(i) FROM integers GROUP BY k HAVING SUM(i) > (SELECT MAX(i) FROM integers)");
+	result =
+	    con.Query("SELECT i % 2 AS k, SUM(i) FROM integers GROUP BY k HAVING SUM(i) > (SELECT MAX(i) FROM integers)");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {4}));
 

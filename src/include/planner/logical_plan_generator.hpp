@@ -59,6 +59,7 @@ public:
 	//! Whether or not subqueries should be planned already
 	bool plan_subquery = true;
 	bool has_unplanned_subqueries = false;
+
 private:
 	//! A reference to the current binder
 	Binder &binder;
@@ -66,7 +67,9 @@ private:
 	bool require_row_id = false;
 	//! A reference to the catalog
 	ClientContext &context;
+
 private:
-	unique_ptr<LogicalOperator> CastSetOpToTypes(vector<TypeId> &source_types, vector<TypeId> &target_types, unique_ptr<LogicalOperator> op);
+	unique_ptr<LogicalOperator> CastSetOpToTypes(vector<TypeId> &source_types, vector<TypeId> &target_types,
+	                                             unique_ptr<LogicalOperator> op);
 };
 } // namespace duckdb

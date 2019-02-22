@@ -12,8 +12,7 @@ using namespace duckdb;
 using namespace std;
 
 struct GatherLoopSetNull {
-	template <class T, class OP>
-	static void Operation(Vector &src, Vector &result) {
+	template <class T, class OP> static void Operation(Vector &src, Vector &result) {
 		auto source = (T **)src.data;
 		auto ldata = (T *)result.data;
 		if (result.sel_vector) {
@@ -37,18 +36,14 @@ struct GatherLoopSetNull {
 };
 
 struct GatherLoopIgnoreNull {
-	template <class T, class OP>
-	static void Operation(Vector &src, Vector &result) {
+	template <class T, class OP> static void Operation(Vector &src, Vector &result) {
 		auto source = (T **)src.data;
 		auto ldata = (T *)result.data;
 		if (result.sel_vector) {
-			VectorOperations::Exec(src, [&](size_t i, size_t k) {
-				ldata[result.sel_vector[k]] = OP::Operation(source[i][0], ldata[i]);
-			});
+			VectorOperations::Exec(
+			    src, [&](size_t i, size_t k) { ldata[result.sel_vector[k]] = OP::Operation(source[i][0], ldata[i]); });
 		} else {
-			VectorOperations::Exec(src, [&](size_t i, size_t k) {
-				ldata[k] = OP::Operation(source[i][0], ldata[i]);
-			});
+			VectorOperations::Exec(src, [&](size_t i, size_t k) { ldata[k] = OP::Operation(source[i][0], ldata[i]); });
 		}
 	}
 };

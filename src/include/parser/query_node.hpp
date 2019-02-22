@@ -90,17 +90,16 @@ public:
 			return;
 		}
 		callback(expr);
-		expr->EnumerateChildren([&](Expression *child) {
-			VisitChild(child, callback);
-		});
+		expr->EnumerateChildren([&](Expression *child) { VisitChild(child, callback); });
 	}
-	
+
 	//! Enumerate over all children of this node, invoking the callback for each child.
 	virtual void EnumerateChildren(std::function<void(Expression *expression)> callback) const {
-		for(size_t i = 0; i < orderby.orders.size(); i++) {
+		for (size_t i = 0; i < orderby.orders.size(); i++) {
 			VisitChild(orderby.orders[i].expression.get(), callback);
 		}
 	}
+
 protected:
 	void CopyProperties(QueryNode &other);
 };

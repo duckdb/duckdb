@@ -1,13 +1,12 @@
-#include "execution/merge_join.hpp"
-#include "parser/expression/comparison_expression.hpp"
 #include "common/operator/comparison_operators.hpp"
 #include "common/vector_operations/vector_operations.hpp"
+#include "execution/merge_join.hpp"
+#include "parser/expression/comparison_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-template <class T>
-size_t MergeJoinInner::Equality::Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
+template <class T> size_t MergeJoinInner::Equality::Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
 	if (l.pos >= l.count) {
 		return 0;
 	}
@@ -16,7 +15,8 @@ size_t MergeJoinInner::Equality::Operation(ScalarMergeInfo &l, ScalarMergeInfo &
 	auto rdata = (T *)r.v.data;
 	size_t result_count = 0;
 	while (true) {
-		if (r.pos == r.count || operators::LessThan::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos]])) {
+		if (r.pos == r.count ||
+		    operators::LessThan::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos]])) {
 			// left side smaller: move left pointer forward
 			l.pos++;
 			if (l.pos >= l.count) {
@@ -26,7 +26,8 @@ size_t MergeJoinInner::Equality::Operation(ScalarMergeInfo &l, ScalarMergeInfo &
 			// we might need to go back on the right-side after going
 			// forward on the left side because the new tuple might have
 			// matches with the right side
-			while (r.pos > 0 && operators::Equals::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos - 1]])) {
+			while (r.pos > 0 &&
+			       operators::Equals::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos - 1]])) {
 				r.pos--;
 			}
 		} else if (operators::GreaterThan::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos]])) {
@@ -49,8 +50,7 @@ size_t MergeJoinInner::Equality::Operation(ScalarMergeInfo &l, ScalarMergeInfo &
 	return result_count;
 }
 
-template <class T>
-size_t MergeJoinInner::LessThan::Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
+template <class T> size_t MergeJoinInner::LessThan::Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
 	if (r.pos >= r.count) {
 		return 0;
 	}
@@ -83,8 +83,7 @@ size_t MergeJoinInner::LessThan::Operation(ScalarMergeInfo &l, ScalarMergeInfo &
 	return result_count;
 }
 
-template <class T>
-size_t MergeJoinInner::LessThanEquals::Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
+template <class T> size_t MergeJoinInner::LessThanEquals::Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
 	if (r.pos >= r.count) {
 		return 0;
 	}
@@ -93,7 +92,8 @@ size_t MergeJoinInner::LessThanEquals::Operation(ScalarMergeInfo &l, ScalarMerge
 	auto rdata = (T *)r.v.data;
 	size_t result_count = 0;
 	while (true) {
-		if (l.pos < l.count && operators::LessThanEquals::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos]])) {
+		if (l.pos < l.count &&
+		    operators::LessThanEquals::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos]])) {
 			// left side smaller: found match
 			l.result[result_count] = l.sel_vector[l.pos];
 			r.result[result_count] = r.sel_vector[r.pos];
