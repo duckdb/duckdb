@@ -45,6 +45,9 @@ public:
 	void BindAndResolveType(unique_ptr<Expression> *expr);
 	BindResult TryBindAndResolveType(unique_ptr<Expression> expr);
 
+	// Bind table names to ColumnRefExpressions
+	void BindTableNames(Expression &expr);
+
 protected:
 	void ExtractCorrelatedExpressions(Binder &binder, Expression &expr);
 

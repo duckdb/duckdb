@@ -173,3 +173,30 @@ void ExpressionBinder::BindAndResolveType(unique_ptr<Expression> *expr) {
 	}
 	*expr = move(result.expression);
 }
+
+void ExpressionBinder::BindTableNames(Expression &expr) {
+	if (expr.type == ExpressionType::COLUMN_REF) {
+		auto &colref = (ColumnRefExpression&) expr;
+		if (colref.table_name.empty()) {
+			// no table name: find a binding that contains this
+			colref.table_name = binder.bind_context.GetMatchingBinding(colref.column_name);
+			if (colref.table_name.empty()) {
+				// try to bind in one of the outer queries, if the table name was not found
+				auto &active_binders = binder.GetActiveBinders();
+				auto binders = active_binders;
+				active_binders.pop_back();
+				while (active_binders.size() > 0) {
+					colref.table_name = binder.bind_context.GetMatchingBinding(colref.column_name);
+					if (!colref.table_name.empty()) {
+						break;
+					}
+					active_binders.pop_back();
+				}
+				active_binders = binders;
+			}
+		}
+	}
+	expr.EnumerateChildren([&](Expression *child) {
+		BindTableNames(*child);
+	});
+}

@@ -98,6 +98,7 @@ void Binder::Bind(SelectNode &statement) {
 		unbound_groups.resize(statement.groupby.groups.size());
 		GroupBinder group_binder(*this, context, statement);
 		for (size_t i = 0; i < statement.groupby.groups.size(); i++) {
+			// make a copy of the unbound expression
 			unbound_groups[i] = statement.groupby.groups[i]->Copy();
 
 			// first try to bind using the GroupBinder
@@ -145,6 +146,9 @@ void Binder::Bind(SelectNode &statement) {
 				statement.groupby.groups[i] = move(result.expression);
 			}
 			assert(statement.groupby.groups[i]->return_type != TypeId::INVALID);
+			// we bind the table names of any ColumnRefs in the unbound_groups
+			// we do this to make sure that "table.a" and "a" are treated the same
+			group_binder.BindTableNames(*unbound_groups[i]);
 			group_map[unbound_groups[i].get()] = i;
 		}
 	}
@@ -152,12 +156,14 @@ void Binder::Bind(SelectNode &statement) {
 	// bind the HAVING clause, if any
 	if (statement.HasHaving()) {
 		HavingBinder having_binder(*this, context, statement, group_map, group_alias_map);
+		having_binder.BindTableNames(*statement.groupby.having);
 		having_binder.BindAndResolveType(&statement.groupby.having);
 	}
 
 	// after that, we bind to the SELECT list
 	SelectBinder select_binder(*this, context, statement, group_map, group_alias_map);
 	for (size_t i = 0; i < statement.select_list.size(); i++) {
+		select_binder.BindTableNames(*statement.select_list[i]);
 		select_binder.BindAndResolveType(&statement.select_list[i]);
 		statement.types.push_back(statement.select_list[i]->return_type);
 	}

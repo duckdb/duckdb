@@ -196,6 +196,10 @@ TEST_CASE("Test correlated subqueries", "[subquery]") {
 	result = con.Query("SELECT i AS j, (SELECT j*SUM(i) FROM integers) AS k FROM integers i1 GROUP BY j ORDER BY j;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 6, 12, 18}));
+	// refer to GROUP BY without alias but with full name
+	result = con.Query("SELECT i AS j, (SELECT i1.i*SUM(i) FROM integers) AS k FROM integers i1 GROUP BY j ORDER BY j;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 6, 12, 18}));
 	// perform SUM on subquery
 	result =
 	    con.Query("SELECT i, SUM((SELECT SUM(i)*i1.i FROM integers)) AS k FROM integers i1 GROUP BY i ORDER BY i;");

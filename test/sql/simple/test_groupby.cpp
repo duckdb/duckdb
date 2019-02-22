@@ -138,6 +138,11 @@ TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
 	// aliases can only be referenced in the GROUP BY as the root column: operations not allowed
 	// CONTROVERSIAL: this query DOES work in SQLite
 	REQUIRE_FAIL(con.Query("SELECT 1 AS k, SUM(i) FROM integers GROUP BY k+1 ORDER BY 2;"));
+
+	// group by column refs should be recognized, even if one uses an explicit table specifier and the other does not
+	result = con.Query("SELECT test.b, SUM(a) FROM test GROUP BY b ORDER BY COUNT(a) DESC;");
+	REQUIRE(CHECK_COLUMN(result, 0, {21, 22}));
+	REQUIRE(CHECK_COLUMN(result, 1, {48, 24}));
 }
 
 TEST_CASE("Test aliases in group by/aggregation", "[aggregations]") {
