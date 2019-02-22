@@ -1,8 +1,8 @@
 #include "parser/expression/operator_expression.hpp"
-#include "parser/expression/cast_expression.hpp"
 
 #include "common/exception.hpp"
 #include "common/serializer.hpp"
+#include "parser/expression/cast_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -17,10 +17,21 @@ void OperatorExpression::ResolveType() {
 		return;
 	}
 	// logical operators return a bool
-	if (type == ExpressionType::OPERATOR_IS_NULL ||
-	    type == ExpressionType::OPERATOR_IS_NOT_NULL || type == ExpressionType::COMPARE_IN ||
-	    type == ExpressionType::COMPARE_NOT_IN) {
+	if (type == ExpressionType::OPERATOR_IS_NULL || type == ExpressionType::OPERATOR_IS_NOT_NULL) {
 		return_type = TypeId::BOOLEAN;
+		return;
+	}
+	if (type == ExpressionType::COMPARE_IN || type == ExpressionType::COMPARE_NOT_IN) {
+		return_type = TypeId::BOOLEAN;
+		// get the maximum type from the children
+		// cast all children to the same type
+		auto max_type = children[0]->return_type;
+		for(size_t i = 1; i < children.size(); i++) {
+			max_type = std::max(max_type, children[i]->return_type);
+		}
+		for(size_t i = 0; i < children.size(); i++) {
+			children[i] = CastExpression::AddCastToType(max_type, move(children[i]));
+		}
 		return;
 	}
 	assert(children.size() == 2);
