@@ -133,10 +133,19 @@ TEST_CASE("Complex Expressions", "[sql]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {41}));
 	REQUIRE(CHECK_COLUMN(result, 2, {44}));
 
+	result = con.Query("SELECT * FROM intest WHERE NULL IN ('a', 'b')");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	REQUIRE(CHECK_COLUMN(result, 1, {}));
+	REQUIRE(CHECK_COLUMN(result, 2, {}));
+
+	result = con.Query("SELECT * FROM intest WHERE NULL NOT IN ('a', 'b')");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	REQUIRE(CHECK_COLUMN(result, 1, {}));
+	REQUIRE(CHECK_COLUMN(result, 2, {}));
+
 	con.Query("CREATE TABLE strtest (a INTEGER, b VARCHAR)");
 	con.Query("INSERT INTO strtest VALUES (1, 'a'), (2, 'h'), (3, 'd')");
-	// FIXME: this leads to leaking, presumably because NULL entries get cast
-	// but then ignored
+
 	con.Query("INSERT INTO strtest VALUES (4, NULL)");
 
 	result = con.Query("SELECT a FROM strtest WHERE b = 'a'");

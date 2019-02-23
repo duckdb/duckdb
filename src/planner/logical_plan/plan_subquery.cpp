@@ -559,6 +559,11 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		// subquery has NULL values -> result is (TRUE or NULL)
 		// subquery has no NULL values -> result is (TRUE, FALSE or NULL [if input is NULL])
 		// first we push a subquery to the right hand side
+		plan->ResolveOperatorTypes();
+		assert(plan->types.size() == 1);
+		auto right_type = plan->types[0];
+		auto return_type = max(subquery.child->return_type, right_type);
+
 		auto subquery_index = binder.GenerateTableIndex();
 		auto logical_subquery = make_unique<LogicalSubquery>(subquery_index, 1);
 		logical_subquery->AddChild(move(plan));
@@ -570,8 +575,8 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		join->AddChild(move(plan));
 		// create the JOIN condition
 		JoinCondition cond;
-		cond.left = move(subquery.child);
-		cond.right = make_unique<BoundExpression>(cond.left->return_type, 0);
+		cond.left = CastExpression::AddCastToType(return_type, move(subquery.child));
+		cond.right = CastExpression::AddCastToType(return_type, make_unique<BoundColumnRefExpression>("", right_type, ColumnBinding(subquery_index, 0)));
 		cond.comparison = subquery.comparison_type;
 		join->conditions.push_back(move(cond));
 		root = move(join);

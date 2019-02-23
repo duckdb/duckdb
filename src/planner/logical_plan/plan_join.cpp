@@ -76,7 +76,9 @@ static JoinSide GetJoinSide(Expression &expression, unordered_set<size_t> &left_
 static void CreateJoinCondition(LogicalJoin &join, unique_ptr<Expression> expr, unordered_set<size_t> &left_bindings,
                                 unordered_set<size_t> &right_bindings) {
 	auto total_side = GetJoinSide(*expr, left_bindings, right_bindings);
-	if (total_side != JoinSide::BOTH) {
+	if (total_side == JoinSide::NONE) {
+		// join is on a constant
+	} else if (total_side != JoinSide::BOTH) {
 		// join condition does not reference both sides, add it as filter under the join
 		if (join.type == JoinType::LEFT && total_side == JoinSide::LEFT) {
 			// filter is on LHS and the join is a LEFT OUTER join, we can push it in the left child

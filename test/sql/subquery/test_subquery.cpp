@@ -263,6 +263,18 @@ TEST_CASE("Test uncorrelated subqueries", "[subquery]") {
 	result = con.Query("SELECT (SELECT SUM(i) FROM integers), (SELECT 42)");
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
 	REQUIRE(CHECK_COLUMN(result, 1, {42}));
+
+	// varchar tests
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(v VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('hello'), ('world'), (NULL)"));
+	result = con.Query("SELECT NULL IN (SELECT * FROM strings)");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	result = con.Query("SELECT 'hello' IN (SELECT * FROM strings)");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+	result = con.Query("SELECT 'bla' IN (SELECT * FROM strings)");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	result = con.Query("SELECT 'bla' IN (SELECT * FROM strings WHERE v IS NOT NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {false}));
 }
 
 TEST_CASE("Test subqueries from the paper 'Unnesting Arbitrary Subqueries'", "[subquery]") {
