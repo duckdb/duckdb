@@ -176,7 +176,7 @@ void ExpressionBinder::BindAndResolveType(unique_ptr<Expression> *expr) {
 
 void ExpressionBinder::BindTableNames(Expression &expr) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &colref = (ColumnRefExpression&) expr;
+		auto &colref = (ColumnRefExpression &)expr;
 		if (colref.table_name.empty()) {
 			// no table name: find a binding that contains this
 			colref.table_name = binder.bind_context.GetMatchingBinding(colref.column_name);
@@ -196,7 +196,5 @@ void ExpressionBinder::BindTableNames(Expression &expr) {
 			}
 		}
 	}
-	expr.EnumerateChildren([&](Expression *child) {
-		BindTableNames(*child);
-	});
+	expr.EnumerateChildren([&](Expression *child) { BindTableNames(*child); });
 }

@@ -26,10 +26,10 @@ void OperatorExpression::ResolveType() {
 		// get the maximum type from the children
 		// cast all children to the same type
 		auto max_type = children[0]->return_type;
-		for(size_t i = 1; i < children.size(); i++) {
+		for (size_t i = 1; i < children.size(); i++) {
 			max_type = std::max(max_type, children[i]->return_type);
 		}
-		for(size_t i = 0; i < children.size(); i++) {
+		for (size_t i = 0; i < children.size(); i++) {
 			children[i] = CastExpression::AddCastToType(max_type, move(children[i]));
 		}
 		return;

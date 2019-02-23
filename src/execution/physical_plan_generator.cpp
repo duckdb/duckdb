@@ -413,6 +413,16 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 		}
 	}
 	if (op.is_duplicate_eliminated) {
+		// duplicate eliminated join
+		// first gather the scans on the duplicate eliminated data set from the RHS
+		vector<PhysicalOperator *> delim_scans;
+		GatherDelimScans(plan->children[1].get(), delim_scans);
+		if (delim_scans.size() == 0) {
+			// no duplicate eliminated scans in the RHS!
+			// in this case we don't need tocreate a delim join
+			// just push the normal join
+			return;
+		}
 		vector<TypeId> delim_types;
 		for (auto &delim_expr : op.duplicate_eliminated_columns) {
 			delim_types.push_back(delim_expr->return_type);
@@ -441,11 +451,6 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 			info.payload_chunk.Initialize(payload_types);
 			info.result_chunk.Initialize(payload_types);
 		}
-		// duplicate eliminated join
-		// first gather the scans on the duplicate eliminated data set from the RHS
-		vector<PhysicalOperator *> delim_scans;
-		GatherDelimScans(plan->children[1].get(), delim_scans);
-		assert(delim_scans.size() > 0);
 		// now create the duplicate eliminated join
 		auto delim_join = make_unique<PhysicalDelimJoin>(op, move(plan), delim_scans);
 		// we still have to create the DISTINCT clause that is used to generate the duplicate eliminated chunk
