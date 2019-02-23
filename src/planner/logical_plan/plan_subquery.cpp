@@ -110,7 +110,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		plan = move(logical_subquery);
 
 		// then we generate the MARK join with the subquery
-		auto join = make_unique<LogicalJoin>(JoinType::MARK);
+		auto join = make_unique<LogicalComparisonJoin>(JoinType::MARK);
 		join->AddChild(move(root));
 		join->AddChild(move(plan));
 		// create the JOIN condition
@@ -127,7 +127,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 	}
 }
 
-static unique_ptr<LogicalJoin> CreateDuplicateEliminatedJoin(vector<CorrelatedColumnInfo> &correlated_columns,
+static unique_ptr<LogicalDelimJoin> CreateDuplicateEliminatedJoin(vector<CorrelatedColumnInfo> &correlated_columns,
                                                              JoinType join_type) {
 	auto delim_join = make_unique<LogicalDelimJoin>(join_type);
 	for (size_t i = 0; i < correlated_columns.size(); i++) {
@@ -138,7 +138,7 @@ static unique_ptr<LogicalJoin> CreateDuplicateEliminatedJoin(vector<CorrelatedCo
 	return delim_join;
 }
 
-static void CreateDelimJoinConditions(LogicalJoin &delim_join, vector<CorrelatedColumnInfo> &correlated_columns,
+static void CreateDelimJoinConditions(LogicalDelimJoin &delim_join, vector<CorrelatedColumnInfo> &correlated_columns,
                                       ColumnBinding base_binding) {
 	for (size_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];

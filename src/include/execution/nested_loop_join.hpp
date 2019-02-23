@@ -11,7 +11,7 @@
 #include "common/common.hpp"
 #include "common/types/chunk_collection.hpp"
 #include "common/types/vector.hpp"
-#include "planner/operator/logical_join.hpp"
+#include "planner/operator/logical_comparison_join.hpp"
 
 namespace duckdb {
 

@@ -44,8 +44,8 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		Visit((LogicalTableFunction &)op);
 		break;
 	case LogicalOperatorType::DELIM_JOIN:
-	case LogicalOperatorType::JOIN:
-		Visit((LogicalJoin &)op);
+	case LogicalOperatorType::COMPARISON_JOIN:
+		Visit((LogicalComparisonJoin &)op);
 		break;
 	case LogicalOperatorType::CROSS_PRODUCT:
 		Visit((LogicalCrossProduct &)op);
@@ -199,7 +199,7 @@ void ColumnBindingResolver::Visit(LogicalTableFunction &op) {
 	PushBinding(binding);
 }
 
-void ColumnBindingResolver::Visit(LogicalJoin &op) {
+void ColumnBindingResolver::Visit(LogicalComparisonJoin &op) {
 	// resolve the column indices of the left side
 	VisitOperator(*op.children[0]);
 	for (auto &cond : op.conditions) {

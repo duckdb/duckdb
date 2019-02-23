@@ -55,6 +55,7 @@ template class std::unique_ptr<uint8_t *[]>;
 template class std::unique_ptr<Rule>;
 template class std::unique_ptr<LogicalFilter>;
 template class std::unique_ptr<LogicalJoin>;
+template class std::unique_ptr<LogicalComparisonJoin>;
 template class std::unique_ptr<SubqueryRef>;
 template class std::unique_ptr<WindowExpression>;
 template class std::unique_ptr<CreateViewInformation>;

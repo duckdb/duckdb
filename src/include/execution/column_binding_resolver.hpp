@@ -33,6 +33,7 @@ public:
 
 protected:
 	void Visit(LogicalAggregate &op);
+	void Visit(LogicalComparisonJoin &op);
 	void Visit(LogicalCreateIndex &op);
 	void Visit(LogicalUnion &op);
 	void Visit(LogicalExcept &op);
@@ -40,7 +41,6 @@ protected:
 	void Visit(LogicalCrossProduct &op);
 	void Visit(LogicalChunkGet &op);
 	void Visit(LogicalGet &op);
-	void Visit(LogicalJoin &op);
 	void Visit(LogicalProjection &op);
 	void Visit(LogicalSubquery &op);
 	void Visit(LogicalTableFunction &op);

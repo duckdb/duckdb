@@ -92,7 +92,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		non_reorderable_operation = true;
 	}
 
-	if (op->type == LogicalOperatorType::JOIN) {
+	if (op->type == LogicalOperatorType::COMPARISON_JOIN) {
 		LogicalJoin *join = (LogicalJoin *)op;
 		if (join->type == JoinType::INNER) {
 			// extract join conditions from inner join
@@ -476,7 +476,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 			result_operator = move(join);
 		} else {
 			// we have filters, create a join node
-			auto join = make_unique<LogicalJoin>(JoinType::INNER);
+			auto join = make_unique<LogicalComparisonJoin>(JoinType::INNER);
 			join->children.push_back(move(left.second));
 			join->children.push_back(move(right.second));
 			// set the join conditions from the join node
@@ -596,8 +596,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	}
 	// now that we know we are going to perform join ordering we actually extract the filters
 	for (auto &op : filter_operators) {
-		if (op->type == LogicalOperatorType::JOIN) {
-			auto &join = (LogicalJoin &)*op;
+		if (op->type == LogicalOperatorType::COMPARISON_JOIN) {
+			auto &join = (LogicalComparisonJoin &)*op;
 			assert(join.type == JoinType::INNER);
 			assert(join.expressions.size() == 0);
 			for (auto &cond : join.conditions) {

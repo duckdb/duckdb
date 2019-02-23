@@ -113,7 +113,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		}
 		if (aggr.groups.size() == correlated_columns.size()) {
 			// we have to perform a LEFT OUTER JOIN between the result of this aggregate and the delim scan
-			auto left_outer_join = make_unique<LogicalJoin>(JoinType::LEFT);
+			auto left_outer_join = make_unique<LogicalComparisonJoin>(JoinType::LEFT);
 			auto left_index = binder.GenerateTableIndex();
 			auto delim_scan = make_unique<LogicalChunkGet>(left_index, delim_types);
 			left_outer_join->children.push_back(move(delim_scan));
@@ -170,7 +170,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		}
 		// both sides have correlation
 		// turn into an inner join
-		auto join = make_unique<LogicalJoin>(JoinType::INNER);
+		auto join = make_unique<LogicalComparisonJoin>(JoinType::INNER);
 		plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
 		auto left_binding = this->base_binding;
 		plan->children[1] = PushDownDependentJoinInternal(move(plan->children[1]));
@@ -191,8 +191,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		join->children.push_back(move(plan->children[1]));
 		return join;
 	}
-	case LogicalOperatorType::JOIN: {
-		auto &join = (LogicalJoin &)*plan;
+	case LogicalOperatorType::COMPARISON_JOIN: {
+		auto &join = (LogicalComparisonJoin &)*plan;
 		assert(plan->children.size() == 2);
 		// check the correlated expressions in the children of the join
 		bool left_has_correlation = has_correlated_expressions.find(plan->children[0].get())->second;

@@ -13,7 +13,7 @@
 #include "common/types/tuple.hpp"
 #include "common/types/vector.hpp"
 #include "execution/aggregate_hashtable.hpp"
-#include "planner/operator/logical_join.hpp"
+#include "planner/operator/logical_comparison_join.hpp"
 
 #include <mutex>
 

@@ -9,7 +9,7 @@
 #pragma once
 
 #include "execution/physical_operator.hpp"
-#include "planner/operator/logical_join.hpp"
+#include "planner/operator/logical_comparison_join.hpp"
 
 namespace duckdb {
 

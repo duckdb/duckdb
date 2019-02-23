@@ -53,8 +53,8 @@ void PhysicalPlanGenerator::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::DELIM_JOIN:
 		Visit((LogicalDelimJoin &)op);
 		break;
-	case LogicalOperatorType::JOIN:
-		Visit((LogicalJoin &)op);
+	case LogicalOperatorType::COMPARISON_JOIN:
+		Visit((LogicalComparisonJoin &)op);
 		break;
 	case LogicalOperatorType::CROSS_PRODUCT:
 		Visit((LogicalCrossProduct &)op);
@@ -366,7 +366,7 @@ static void GatherDelimScans(PhysicalOperator *op, vector<PhysicalOperator *> &d
 
 void PhysicalPlanGenerator::Visit(LogicalDelimJoin &op) {
 	// first create the underlying join
-	Visit((LogicalJoin&) op);
+	Visit((LogicalComparisonJoin&) op);
 	// this should create a join, not a cross product
 	assert(plan && plan->type != PhysicalOperatorType::CROSS_PRODUCT);
 	// duplicate eliminated join
@@ -422,7 +422,7 @@ void PhysicalPlanGenerator::Visit(LogicalDelimJoin &op) {
 	plan = move(delim_join);
 }
 
-void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
+void PhysicalPlanGenerator::Visit(LogicalComparisonJoin &op) {
 	assert(!plan); // Cross product should be the first node of a plan!
 
 	// now visit the children

@@ -42,52 +42,6 @@ void LogicalJoin::ResolveTypes() {
 	types.insert(types.end(), children[1]->types.begin(), children[1]->types.end());
 }
 
-string LogicalJoin::ParamsToString() const {
-	string result = "";
-	if (conditions.size() > 0) {
-		result += "[";
-		for (size_t i = 0; i < conditions.size(); i++) {
-			auto &cond = conditions[i];
-			result += ExpressionTypeToString(cond.comparison) + "(" + cond.left->ToString() + ", " +
-			          cond.right->ToString() + ")";
-			if (i < conditions.size() - 1) {
-				result += ", ";
-			}
-		}
-		result += "]";
-	}
-
-	return result;
-}
-
-size_t LogicalJoin::ExpressionCount() {
-	assert(expressions.size() == 0);
-	return conditions.size() * 2;
-}
-
-Expression *LogicalJoin::GetExpression(size_t index) {
-	assert(expressions.size() == 0);
-	assert(index < conditions.size() * 2);
-	size_t condition = index / 2;
-	bool left = index % 2 == 0 ? true : false;
-	assert(condition < conditions.size());
-	return left ? conditions[condition].left.get() : conditions[condition].right.get();
-}
-
-void LogicalJoin::ReplaceExpression(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
-                                    size_t index) {
-	assert(expressions.size() == 0);
-	assert(index < conditions.size() * 2);
-	size_t condition = index / 2;
-	bool left = index % 2 == 0 ? true : false;
-	assert(condition < conditions.size());
-	if (left) {
-		conditions[condition].left = callback(move(conditions[condition].left));
-	} else {
-		conditions[condition].right = callback(move(conditions[condition].right));
-	}
-}
-
 void LogicalJoin::GetTableReferences(LogicalOperator &op, unordered_set<size_t> &bindings) {
 	if (op.type == LogicalOperatorType::GET) {
 		auto &get = (LogicalGet &)op;

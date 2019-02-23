@@ -34,6 +34,7 @@ public:
 protected:
 	void Visit(LogicalAggregate &op);
 	void Visit(LogicalChunkGet &op);
+	void Visit(LogicalComparisonJoin &op);
 	void Visit(LogicalCreateTable &op);
 	void Visit(LogicalCreateIndex &op);
 	void Visit(LogicalCrossProduct &op);
@@ -42,7 +43,6 @@ protected:
 	void Visit(LogicalDistinct &op);
 	void Visit(LogicalFilter &op);
 	void Visit(LogicalGet &op);
-	void Visit(LogicalJoin &op);
 	void Visit(LogicalLimit &op);
 	void Visit(LogicalOrder &op);
 	void Visit(LogicalProjection &op);

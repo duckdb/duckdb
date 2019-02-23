@@ -8,15 +8,15 @@
 
 #pragma once
 
-#include "planner/operator/logical_join.hpp"
+#include "planner/operator/logical_comparison_join.hpp"
 
 namespace duckdb {
 
 //! LogicalDelimJoin represents a special "duplicate eliminated" join. This join type is only used for subquery flattening, and involves performing duplicate elimination on the LEFT side which is then pushed into the RIGHT side.
-class LogicalDelimJoin : public LogicalJoin {
+class LogicalDelimJoin : public LogicalComparisonJoin {
 public:
 	LogicalDelimJoin(JoinType type)
-		: LogicalJoin(type, LogicalOperatorType::DELIM_JOIN) {
+		: LogicalComparisonJoin(type, LogicalOperatorType::DELIM_JOIN) {
 	}
 
 	//! The set of columns that will be duplicate eliminated from the LHS and pushed into the RHS

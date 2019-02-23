@@ -73,7 +73,7 @@ static JoinSide GetJoinSide(Expression &expression, unordered_set<size_t> &left_
 	return join_side;
 }
 
-static void CreateJoinCondition(LogicalJoin &join, unique_ptr<Expression> expr, unordered_set<size_t> &left_bindings,
+static void CreateJoinCondition(LogicalComparisonJoin &join, unique_ptr<Expression> expr, unordered_set<size_t> &left_bindings,
                                 unordered_set<size_t> &right_bindings) {
 	auto total_side = GetJoinSide(*expr, left_bindings, right_bindings);
 	if (total_side != JoinSide::BOTH) {
@@ -173,7 +173,7 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
 
 	// non inner-join
 	// create the the actual join
-	auto join = make_unique<LogicalJoin>(expr.type);
+	auto join = make_unique<LogicalComparisonJoin>(expr.type);
 
 	AcceptChild(&expr.left);
 	join->AddChild(move(root));
