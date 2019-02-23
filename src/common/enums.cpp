@@ -55,6 +55,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "GET";
 	case LogicalOperatorType::CHUNK_GET:
 		return "CHUNK_GET";
+	case LogicalOperatorType::DELIM_JOIN:
+		return "DELIM_JOIN";
 	case LogicalOperatorType::PROJECTION:
 		return "PROJECTION";
 	case LogicalOperatorType::FILTER:

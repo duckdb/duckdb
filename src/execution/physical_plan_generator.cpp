@@ -50,6 +50,9 @@ void PhysicalPlanGenerator::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::TABLE_FUNCTION:
 		Visit((LogicalTableFunction &)op);
 		break;
+	case LogicalOperatorType::DELIM_JOIN:
+		Visit((LogicalDelimJoin &)op);
+		break;
 	case LogicalOperatorType::JOIN:
 		Visit((LogicalJoin &)op);
 		break;
@@ -361,6 +364,64 @@ static void GatherDelimScans(PhysicalOperator *op, vector<PhysicalOperator *> &d
 	}
 }
 
+void PhysicalPlanGenerator::Visit(LogicalDelimJoin &op) {
+	// first create the underlying join
+	Visit((LogicalJoin&) op);
+	// this should create a join, not a cross product
+	assert(plan && plan->type != PhysicalOperatorType::CROSS_PRODUCT);
+	// duplicate eliminated join
+	// first gather the scans on the duplicate eliminated data set from the RHS
+	vector<PhysicalOperator *> delim_scans;
+	GatherDelimScans(plan->children[1].get(), delim_scans);
+	if (delim_scans.size() == 0) {
+		// no duplicate eliminated scans in the RHS!
+		// in this case we don't need tocreate a delim join
+		// just push the normal join
+		return;
+	}
+	vector<TypeId> delim_types;
+	for (auto &delim_expr : op.duplicate_eliminated_columns) {
+		delim_types.push_back(delim_expr->return_type);
+	}
+	if (op.type == JoinType::MARK) {
+		assert(plan->type == PhysicalOperatorType::HASH_JOIN);
+		auto &hash_join = (PhysicalHashJoin &)*plan;
+		// correlated eliminated MARK join
+		// a correlated MARK join should always have exactly one non-correlated column
+		// (namely the actual predicate of the ANY() expression)
+		assert(delim_types.size() + 1 == hash_join.conditions.size());
+		// push duplicate eliminated columns into the hash table:
+		// - these columns will be considered as equal for NULL values AND
+		// - the has_null and has_result flags will be grouped by these columns
+		auto &info = hash_join.hash_table->correlated_mark_join_info;
+
+		vector<TypeId> payload_types = {TypeId::BIGINT, TypeId::BIGINT}; // COUNT types
+		vector<ExpressionType> aggregate_types = {ExpressionType::AGGREGATE_COUNT_STAR,
+													ExpressionType::AGGREGATE_COUNT};
+
+		info.correlated_counts =
+			make_unique<SuperLargeHashTable>(1024, delim_types, payload_types, aggregate_types);
+		info.correlated_types = delim_types;
+		// FIXME: these can be initialized "empty" (without allocating empty vectors)
+		info.group_chunk.Initialize(delim_types);
+		info.payload_chunk.Initialize(payload_types);
+		info.result_chunk.Initialize(payload_types);
+	}
+	// now create the duplicate eliminated join
+	auto delim_join = make_unique<PhysicalDelimJoin>(op, move(plan), delim_scans);
+	// we still have to create the DISTINCT clause that is used to generate the duplicate eliminated chunk
+	// we create a ChunkCollectionScan that pulls from the delim_join LHS
+	auto chunk_scan = make_unique<PhysicalChunkScan>(delim_join->children[0]->GetTypes());
+	chunk_scan->collection = &delim_join->lhs_data;
+	// now we need to create a projection that projects only the duplicate eliminated columns
+	assert(op.duplicate_eliminated_columns.size() > 0);
+	auto projection = make_unique<PhysicalProjection>(delim_types, move(op.duplicate_eliminated_columns));
+	projection->children.push_back(move(chunk_scan));
+	// finally create the distinct clause on top of the projection
+	delim_join->distinct = CreateDistinct(move(projection));
+	plan = move(delim_join);
+}
+
 void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 	assert(!plan); // Cross product should be the first node of a plan!
 
@@ -374,7 +435,6 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 
 	if (op.conditions.size() == 0) {
 		// no conditions: insert a cross product
-		assert(!op.is_duplicate_eliminated);
 		plan = make_unique<PhysicalCrossProduct>(op, move(left), move(right));
 		return;
 	}
@@ -383,7 +443,6 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 	bool has_inequality = false;
 	bool has_null_equal_conditions = false;
 	for (auto &cond : op.conditions) {
-		VisitExpression(&cond.left);
 		VisitExpression(&cond.right);
 		if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
 			has_equality = true;
@@ -411,59 +470,6 @@ void PhysicalPlanGenerator::Visit(LogicalJoin &op) {
 			// inequality join: use nested loop
 			plan = make_unique<PhysicalNestedLoopJoin>(op, move(left), move(right), move(op.conditions), op.type);
 		}
-	}
-	if (op.is_duplicate_eliminated) {
-		// duplicate eliminated join
-		// first gather the scans on the duplicate eliminated data set from the RHS
-		vector<PhysicalOperator *> delim_scans;
-		GatherDelimScans(plan->children[1].get(), delim_scans);
-		if (delim_scans.size() == 0) {
-			// no duplicate eliminated scans in the RHS!
-			// in this case we don't need tocreate a delim join
-			// just push the normal join
-			return;
-		}
-		vector<TypeId> delim_types;
-		for (auto &delim_expr : op.duplicate_eliminated_columns) {
-			delim_types.push_back(delim_expr->return_type);
-		}
-		if (op.type == JoinType::MARK) {
-			assert(plan->type == PhysicalOperatorType::HASH_JOIN);
-			auto &hash_join = (PhysicalHashJoin &)*plan;
-			// correlated eliminated MARK join
-			// a correlated MARK join should always have exactly one non-correlated column
-			// (namely the actual predicate of the ANY() expression)
-			assert(delim_types.size() + 1 == hash_join.conditions.size());
-			// push duplicate eliminated columns into the hash table:
-			// - these columns will be considered as equal for NULL values AND
-			// - the has_null and has_result flags will be grouped by these columns
-			auto &info = hash_join.hash_table->correlated_mark_join_info;
-
-			vector<TypeId> payload_types = {TypeId::BIGINT, TypeId::BIGINT}; // COUNT types
-			vector<ExpressionType> aggregate_types = {ExpressionType::AGGREGATE_COUNT_STAR,
-			                                          ExpressionType::AGGREGATE_COUNT};
-
-			info.correlated_counts =
-			    make_unique<SuperLargeHashTable>(1024, delim_types, payload_types, aggregate_types);
-			info.correlated_types = delim_types;
-			// FIXME: these can be initialized "empty" (without allocating empty vectors)
-			info.group_chunk.Initialize(delim_types);
-			info.payload_chunk.Initialize(payload_types);
-			info.result_chunk.Initialize(payload_types);
-		}
-		// now create the duplicate eliminated join
-		auto delim_join = make_unique<PhysicalDelimJoin>(op, move(plan), delim_scans);
-		// we still have to create the DISTINCT clause that is used to generate the duplicate eliminated chunk
-		// we create a ChunkCollectionScan that pulls from the delim_join LHS
-		auto chunk_scan = make_unique<PhysicalChunkScan>(delim_join->children[0]->GetTypes());
-		chunk_scan->collection = &delim_join->lhs_data;
-		// now we need to create a projection that projects only the duplicate eliminated columns
-		assert(op.duplicate_eliminated_columns.size() > 0);
-		auto projection = make_unique<PhysicalProjection>(delim_types, move(op.duplicate_eliminated_columns));
-		projection->children.push_back(move(chunk_scan));
-		// finally create the distinct clause on top of the projection
-		delim_join->distinct = CreateDistinct(move(projection));
-		plan = move(delim_join);
 	}
 }
 

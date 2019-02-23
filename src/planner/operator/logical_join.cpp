@@ -6,8 +6,8 @@
 using namespace duckdb;
 using namespace std;
 
-LogicalJoin::LogicalJoin(JoinType type)
-    : LogicalOperator(LogicalOperatorType::JOIN), type(type), is_duplicate_eliminated(false) {
+LogicalJoin::LogicalJoin(JoinType type, LogicalOperatorType logical_type)
+    : LogicalOperator(logical_type), type(type) {
 }
 
 vector<string> LogicalJoin::GetNames() {

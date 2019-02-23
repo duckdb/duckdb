@@ -5,6 +5,7 @@
 #include "planner/operator/logical_create_table.hpp"
 #include "planner/operator/logical_cross_product.hpp"
 #include "planner/operator/logical_delete.hpp"
+#include "planner/operator/logical_delim_join.hpp"
 #include "planner/operator/logical_distinct.hpp"
 #include "planner/operator/logical_except.hpp"
 #include "planner/operator/logical_explain.hpp"

@@ -18,8 +18,7 @@ size_t nested_loop_join(ExpressionType op, Vector &left, Vector &right, size_t &
 size_t nested_loop_comparison(ExpressionType op, Vector &left, Vector &right, sel_t lvector[], sel_t rvector[],
                               size_t count);
 
-//! PhysicalNestedLoopJoinInner represents an inner nested loop join between two
-//! tables
+//! PhysicalNestedLoopJoin represents a nested loop join between two tables
 class PhysicalNestedLoopJoin : public PhysicalJoin {
 public:
 	PhysicalNestedLoopJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,

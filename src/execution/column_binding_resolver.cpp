@@ -43,6 +43,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::TABLE_FUNCTION:
 		Visit((LogicalTableFunction &)op);
 		break;
+	case LogicalOperatorType::DELIM_JOIN:
 	case LogicalOperatorType::JOIN:
 		Visit((LogicalJoin &)op);
 		break;
@@ -204,9 +205,12 @@ void ColumnBindingResolver::Visit(LogicalJoin &op) {
 	for (auto &cond : op.conditions) {
 		VisitExpression(&cond.left);
 	}
-	// visit the duplicate eliminated columns on the LHS, if any
-	for (auto &op : op.duplicate_eliminated_columns) {
-		VisitExpression(&op);
+	if (op.GetOperatorType() == LogicalOperatorType::DELIM_JOIN) {
+		// visit the duplicate eliminated columns on the LHS, if any
+		auto &delim_join = (LogicalDelimJoin&) op;
+		for (auto &expr : delim_join.duplicate_eliminated_columns) {
+			VisitExpression(&expr);
+		}
 	}
 	// store the added tables
 	auto left_tables = bound_tables;

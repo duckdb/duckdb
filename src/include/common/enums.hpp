@@ -360,6 +360,7 @@ enum class LogicalOperatorType : uint8_t {
 	// Joins
 	// -----------------------------
 	JOIN,
+	DELIM_JOIN,
 	CROSS_PRODUCT,
 	// -----------------------------
 	// SetOps

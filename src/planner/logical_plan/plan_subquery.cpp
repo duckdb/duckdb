@@ -589,8 +589,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 static unique_ptr<LogicalJoin> CreateDuplicateEliminatedJoin(vector<CorrelatedColumnInfo> &correlated_columns,
                                                              JoinType join_type) {
-	auto delim_join = make_unique<LogicalJoin>(join_type);
-	delim_join->is_duplicate_eliminated = true;
+	auto delim_join = make_unique<LogicalDelimJoin>(join_type);
 	for (size_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];
 		delim_join->duplicate_eliminated_columns.push_back(

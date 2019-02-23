@@ -31,7 +31,7 @@ enum JoinSide { NONE, LEFT, RIGHT, BOTH };
 //! LogicalJoin represents a join between two relations
 class LogicalJoin : public LogicalOperator {
 public:
-	LogicalJoin(JoinType type);
+	LogicalJoin(JoinType type, LogicalOperatorType logical_type = LogicalOperatorType::JOIN);
 
 	vector<string> GetNames() override;
 
@@ -42,13 +42,7 @@ public:
 	vector<JoinCondition> conditions;
 	//! The type of the join (INNER, OUTER, etc...)
 	JoinType type;
-	//! Whether or not the join is a special "duplicate eliminated" join. This join type is only used for subquery
-	//! flattening, and involves performing duplicate elimination on the LEFT side which is then pushed into the RIGHT
-	//! side.
-	bool is_duplicate_eliminated;
-	//! The set of columns that will be duplicate eliminated from the LHS and pushed into the RHS
-	vector<unique_ptr<Expression>> duplicate_eliminated_columns;
-
+	
 	string ParamsToString() const override;
 
 	size_t ExpressionCount() override;

@@ -76,25 +76,23 @@ static JoinSide GetJoinSide(Expression &expression, unordered_set<size_t> &left_
 static void CreateJoinCondition(LogicalJoin &join, unique_ptr<Expression> expr, unordered_set<size_t> &left_bindings,
                                 unordered_set<size_t> &right_bindings) {
 	auto total_side = GetJoinSide(*expr, left_bindings, right_bindings);
-	if (total_side == JoinSide::NONE) {
-		// join is on a constant
-	} else if (total_side != JoinSide::BOTH) {
+	if (total_side != JoinSide::BOTH) {
 		// join condition does not reference both sides, add it as filter under the join
-		if (join.type == JoinType::LEFT && total_side == JoinSide::LEFT) {
-			// filter is on LHS and the join is a LEFT OUTER join, we can push it in the left child
-			if (join.children[0]->type != LogicalOperatorType::FILTER) {
+		if (join.type == JoinType::LEFT && total_side == JoinSide::RIGHT) {
+			// filter is on RHS and the join is a LEFT OUTER join, we can push it in the right child
+			if (join.children[1]->type != LogicalOperatorType::FILTER) {
 				// not a filter yet, push a new empty filter
 				auto filter = make_unique<LogicalFilter>();
-				filter->AddChild(move(join.children[0]));
-				join.children[0] = move(filter);
+				filter->AddChild(move(join.children[1]));
+				join.children[1] = move(filter);
 			}
 			// push the expression into the filter
-			auto &filter = (LogicalFilter &)*join.children[0];
+			auto &filter = (LogicalFilter &)*join.children[1];
 			filter.expressions.push_back(move(expr));
+			return;
 		}
 		// cannot push expression as filter
-		throw Exception(
-		    "Join condition for non-inner join that does not refer to both sides of the join not supported");
+		// push it as an arbitrary expression
 	} else if (expr->type >= ExpressionType::COMPARE_EQUAL &&
 	           expr->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
 		// comparison
@@ -117,7 +115,6 @@ static void CreateJoinCondition(LogicalJoin &join, unique_ptr<Expression> expr, 
 			join.conditions.push_back(move(condition));
 			return;
 		}
-		throw Exception("Join condition for non-inner join could not be divided in left/right comparison");
 	} else if (expr->type == ExpressionType::OPERATOR_NOT) {
 		auto &op_expr = (OperatorExpression &)*expr;
 		assert(op_expr.children.size() == 1);
@@ -137,7 +134,13 @@ static void CreateJoinCondition(LogicalJoin &join, unique_ptr<Expression> expr, 
 			return CreateJoinCondition(join, move(op_expr.children[0]), left_bindings, right_bindings);
 		}
 	}
-	throw Exception("Unsupported join condition type for non-inner join");
+	// cannot create a proper join condition
+	// push an arbitrary expression join
+	throw NotImplementedException("FIXME: arbitrary expression join!");
+	JoinCondition cond;
+	cond.left = move(expr);
+	cond.comparison = ExpressionType::INVALID;
+	join.conditions.push_back(move(cond));
 }
 
 unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {

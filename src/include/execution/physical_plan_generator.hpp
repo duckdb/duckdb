@@ -38,6 +38,7 @@ protected:
 	void Visit(LogicalCreateIndex &op);
 	void Visit(LogicalCrossProduct &op);
 	void Visit(LogicalDelete &op);
+	void Visit(LogicalDelimJoin &op);
 	void Visit(LogicalDistinct &op);
 	void Visit(LogicalFilter &op);
 	void Visit(LogicalGet &op);

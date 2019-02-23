@@ -87,14 +87,14 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 	}
 	bool non_reorderable_operation = false;
 	if (op->type == LogicalOperatorType::UNION || op->type == LogicalOperatorType::EXCEPT ||
-	    op->type == LogicalOperatorType::INTERSECT) {
+	    op->type == LogicalOperatorType::INTERSECT || op->type == LogicalOperatorType::DELIM_JOIN) {
 		// set operation, optimize separately in children
 		non_reorderable_operation = true;
 	}
 
 	if (op->type == LogicalOperatorType::JOIN) {
 		LogicalJoin *join = (LogicalJoin *)op;
-		if (join->type == JoinType::INNER && !join->is_duplicate_eliminated) {
+		if (join->type == JoinType::INNER) {
 			// extract join conditions from inner join
 			filter_operators.push_back(op);
 		} else {
