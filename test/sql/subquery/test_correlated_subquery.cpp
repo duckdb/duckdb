@@ -700,6 +700,35 @@ TEST_CASE("Test correlated subqueries", "[subquery]") {
 	    "integers WHERE i=s1.i)) ss2 ON ss1.i=ss2.i) AS j FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), 4, 6}));
+
+	// varchar tests
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(v VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('hello'), ('world'), (NULL)"));
+	// ANY
+	result = con.Query("SELECT NULL IN (SELECT * FROM strings WHERE v=s1.v) FROM strings s1 ORDER BY v");
+	REQUIRE(CHECK_COLUMN(result, 0, {false, Value(), Value()}));
+	result = con.Query("SELECT 3 IN (SELECT * FROM strings WHERE v=s1.v) FROM strings s1 ORDER BY v");
+	REQUIRE(CHECK_COLUMN(result, 0, {false, false, false}));
+	result = con.Query("SELECT 'hello' IN (SELECT * FROM strings WHERE v=s1.v) FROM strings s1 ORDER BY v");
+	REQUIRE(CHECK_COLUMN(result, 0, {false, true, false}));
+	result = con.Query("SELECT 'bla' IN (SELECT * FROM strings WHERE v=s1.v) FROM strings s1 ORDER BY v");
+	REQUIRE(CHECK_COLUMN(result, 0, {false, false, false}));
+	result = con.Query("SELECT 'hello' IN (SELECT * FROM strings WHERE v=s1.v or v IS NULL) FROM strings s1 ORDER BY v");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), true, Value()}));
+	result = con.Query("SELECT 'bla' IN (SELECT * FROM strings WHERE v=s1.v or v IS NULL) FROM strings s1 ORDER BY v");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value()}));
+	// EXISTS
+	result = con.Query("SELECT * FROM strings WHERE EXISTS(SELECT NULL, v) ORDER BY v");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "hello", "world"}));
+	result = con.Query("SELECT * FROM strings s1 WHERE EXISTS(SELECT v FROM strings WHERE v=s1.v OR v IS NULL) ORDER BY v");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "hello", "world"}));
+	result = con.Query("SELECT * FROM strings s1 WHERE EXISTS(SELECT v FROM strings WHERE v=s1.v) ORDER BY v");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello", "world"}));
+	// // scalar query
+	result = con.Query("SELECT (SELECT v FROM strings WHERE v=s1.v) FROM strings s1 ORDER BY v");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "hello", "world"}));
+	result = con.Query("SELECT (SELECT v FROM strings WHERE v=s1.v OR (v='hello' AND s1.v IS NULL)) FROM strings s1 ORDER BY v");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello", "hello", "world"}));
 }
 
 TEST_CASE("Test correlated subqueries based on TPC-DS", "[subquery]") {

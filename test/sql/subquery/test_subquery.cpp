@@ -267,6 +267,7 @@ TEST_CASE("Test uncorrelated subqueries", "[subquery]") {
 	// varchar tests
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(v VARCHAR)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('hello'), ('world'), (NULL)"));
+	// ANY
 	result = con.Query("SELECT NULL IN (SELECT * FROM strings)");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 	result = con.Query("SELECT 'hello' IN (SELECT * FROM strings)");
@@ -275,6 +276,16 @@ TEST_CASE("Test uncorrelated subqueries", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 	result = con.Query("SELECT 'bla' IN (SELECT * FROM strings WHERE v IS NOT NULL)");
 	REQUIRE(CHECK_COLUMN(result, 0, {false}));
+	// EXISTS
+	result = con.Query("SELECT * FROM strings WHERE EXISTS(SELECT NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello", "world", Value()}));
+	result = con.Query("SELECT * FROM strings WHERE EXISTS(SELECT v FROM strings WHERE v='bla')");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	// scalar query
+	result = con.Query("SELECT (SELECT v FROM strings WHERE v='hello') FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello", "hello", "hello"}));
+	result = con.Query("SELECT (SELECT v FROM strings WHERE v='bla') FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value()}));
 }
 
 TEST_CASE("Test subqueries from the paper 'Unnesting Arbitrary Subqueries'", "[subquery]") {

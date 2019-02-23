@@ -715,6 +715,11 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		// the correlated mark join handles this case by itself
 		// as the MARK join has one extra join condition (the original condition, of the ANY expression, e.g.
 		// [i=ANY(...)])
+		plan->ResolveOperatorTypes();
+		assert(plan->types.size() == 1);
+		auto right_type = plan->types[0];
+		auto return_type = max(subquery.child->return_type, right_type);
+
 		auto delim_join = CreateDuplicateEliminatedJoin(correlated_columns, JoinType::MARK);
 		// LHS
 		delim_join->AddChild(move(root));
@@ -731,8 +736,8 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		CreateDelimJoinConditions(*delim_join, correlated_columns, ColumnBinding(subquery_index, flatten.delim_offset));
 		// add the actual condition based on the ANY/ALL predicate
 		JoinCondition compare_cond;
-		compare_cond.left = move(subquery.child);
-		compare_cond.right = make_unique<BoundExpression>(compare_cond.left->return_type, 0);
+		compare_cond.left = CastExpression::AddCastToType(return_type, move(subquery.child));
+		compare_cond.right = CastExpression::AddCastToType(return_type, make_unique<BoundColumnRefExpression>("", right_type, ColumnBinding(subquery_index, 0)));
 		compare_cond.comparison = subquery.comparison_type;
 		delim_join->conditions.push_back(move(compare_cond));
 
