@@ -713,21 +713,24 @@ TEST_CASE("Test correlated subqueries", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {false, true, false}));
 	result = con.Query("SELECT 'bla' IN (SELECT * FROM strings WHERE v=s1.v) FROM strings s1 ORDER BY v");
 	REQUIRE(CHECK_COLUMN(result, 0, {false, false, false}));
-	result = con.Query("SELECT 'hello' IN (SELECT * FROM strings WHERE v=s1.v or v IS NULL) FROM strings s1 ORDER BY v");
+	result =
+	    con.Query("SELECT 'hello' IN (SELECT * FROM strings WHERE v=s1.v or v IS NULL) FROM strings s1 ORDER BY v");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), true, Value()}));
 	result = con.Query("SELECT 'bla' IN (SELECT * FROM strings WHERE v=s1.v or v IS NULL) FROM strings s1 ORDER BY v");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value()}));
 	// EXISTS
 	result = con.Query("SELECT * FROM strings WHERE EXISTS(SELECT NULL, v) ORDER BY v");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "hello", "world"}));
-	result = con.Query("SELECT * FROM strings s1 WHERE EXISTS(SELECT v FROM strings WHERE v=s1.v OR v IS NULL) ORDER BY v");
+	result =
+	    con.Query("SELECT * FROM strings s1 WHERE EXISTS(SELECT v FROM strings WHERE v=s1.v OR v IS NULL) ORDER BY v");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "hello", "world"}));
 	result = con.Query("SELECT * FROM strings s1 WHERE EXISTS(SELECT v FROM strings WHERE v=s1.v) ORDER BY v");
 	REQUIRE(CHECK_COLUMN(result, 0, {"hello", "world"}));
 	// // scalar query
 	result = con.Query("SELECT (SELECT v FROM strings WHERE v=s1.v) FROM strings s1 ORDER BY v");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "hello", "world"}));
-	result = con.Query("SELECT (SELECT v FROM strings WHERE v=s1.v OR (v='hello' AND s1.v IS NULL)) FROM strings s1 ORDER BY v");
+	result = con.Query(
+	    "SELECT (SELECT v FROM strings WHERE v=s1.v OR (v='hello' AND s1.v IS NULL)) FROM strings s1 ORDER BY v");
 	REQUIRE(CHECK_COLUMN(result, 0, {"hello", "hello", "world"}));
 }
 
