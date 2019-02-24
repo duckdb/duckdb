@@ -34,6 +34,7 @@ static void test_runner() {
 
 struct RegisterSQLSmithTests {
 	RegisterSQLSmithTests() {
+		return;
 		// register a separate SQL Smith test for each file in the QUERY_DIRECTORY
 		ListFiles(QUERY_DIRECTORY, [&](const string &path) { REGISTER_TEST_CASE(test_runner, path, "[sqlsmith][.]"); });
 	}

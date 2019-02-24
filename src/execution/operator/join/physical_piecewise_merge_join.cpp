@@ -10,7 +10,7 @@ using namespace std;
 PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                                        unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond,
                                                        JoinType join_type)
-    : PhysicalJoin(op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, move(cond), join_type) {
+    : PhysicalComparisonJoin(op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, move(cond), join_type) {
 	// for now we only support one condition!
 	assert(conditions.size() == 1);
 	for (auto &cond : conditions) {

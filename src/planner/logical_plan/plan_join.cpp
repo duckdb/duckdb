@@ -7,6 +7,7 @@
 #include "planner/binder.hpp"
 #include "planner/logical_plan_generator.hpp"
 #include "planner/operator/list.hpp"
+#include "planner/operator/logical_any_join.hpp"
 
 #include <map>
 
@@ -73,74 +74,114 @@ static JoinSide GetJoinSide(Expression &expression, unordered_set<size_t> &left_
 	return join_side;
 }
 
-static void CreateJoinCondition(LogicalComparisonJoin &join, unique_ptr<Expression> expr, unordered_set<size_t> &left_bindings,
-                                unordered_set<size_t> &right_bindings) {
-	auto total_side = GetJoinSide(*expr, left_bindings, right_bindings);
-	if (total_side != JoinSide::BOTH) {
-		// join condition does not reference both sides, add it as filter under the join
-		if (join.type == JoinType::LEFT && total_side == JoinSide::RIGHT) {
-			// filter is on RHS and the join is a LEFT OUTER join, we can push it in the right child
-			if (join.children[1]->type != LogicalOperatorType::FILTER) {
-				// not a filter yet, push a new empty filter
-				auto filter = make_unique<LogicalFilter>();
-				filter->AddChild(move(join.children[1]));
-				join.children[1] = move(filter);
-			}
-			// push the expression into the filter
-			auto &filter = (LogicalFilter &)*join.children[1];
-			filter.expressions.push_back(move(expr));
-			return;
+//! Create a JoinCondition from a comparison
+static bool CreateJoinCondition(Expression &expr, unordered_set<size_t> &left_bindings, unordered_set<size_t> &right_bindings, vector<JoinCondition> &conditions) {
+	// comparison
+	auto &comparison = (ComparisonExpression &)expr;
+	auto left_side = GetJoinSide(*comparison.left, left_bindings, right_bindings);
+	auto right_side = GetJoinSide(*comparison.right, left_bindings, right_bindings);
+	if (left_side != JoinSide::BOTH && right_side != JoinSide::BOTH) {
+		// join condition can be divided in a left/right side
+		JoinCondition condition;
+		condition.comparison = expr.type;
+		auto left = move(comparison.left);
+		auto right = move(comparison.right);
+		if (left_side == JoinSide::RIGHT) {
+			// left = right, right = left, flip the comparison symbol and reverse sides
+			swap(left, right);
+			condition.comparison = ComparisonExpression::FlipComparisionExpression(expr.type);
 		}
-		// cannot push expression as filter
-		// push it as an arbitrary expression
-	} else if (expr->type >= ExpressionType::COMPARE_EQUAL &&
-	           expr->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
-		// comparison
-		auto &comparison = (ComparisonExpression &)*expr;
-		auto left_side = GetJoinSide(*comparison.left, left_bindings, right_bindings);
-		auto right_side = GetJoinSide(*comparison.right, left_bindings, right_bindings);
-		if (left_side != JoinSide::BOTH && right_side != JoinSide::BOTH) {
-			// join condition can be divided in a left/right side
-			JoinCondition condition;
-			condition.comparison = expr->type;
-			auto left = move(comparison.left);
-			auto right = move(comparison.right);
-			if (left_side == JoinSide::RIGHT) {
-				// left = right, right = left, flip the comparison symbol and reverse sides
-				swap(left, right);
-				condition.comparison = ComparisonExpression::FlipComparisionExpression(expr->type);
-			}
-			condition.left = move(left);
-			condition.right = move(right);
-			join.conditions.push_back(move(condition));
-			return;
-		}
-	} else if (expr->type == ExpressionType::OPERATOR_NOT) {
-		auto &op_expr = (OperatorExpression &)*expr;
-		assert(op_expr.children.size() == 1);
-		ExpressionType child_type = op_expr.children[0]->GetExpressionType();
-		// the condition is ON NOT (EXPRESSION)
-		// we can transform this to remove the NOT if the child is a Comparison
-		// e.g.:
-		// ON NOT (X = 3) can be turned into ON (X <> 3)
-		// ON NOT (X > 3) can be turned into ON (X <= 3)
-		// for non-comparison operators here we just push the filter
-		if (child_type >= ExpressionType::COMPARE_EQUAL && child_type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
-			// switcheroo the child condition
-			// our join needs to compare explicit left and right sides. So we
-			// invert the condition to express NOT, this way we can still use
-			// equi-joins
-			op_expr.children[0]->type = ComparisonExpression::NegateComparisionExpression(child_type);
-			return CreateJoinCondition(join, move(op_expr.children[0]), left_bindings, right_bindings);
-		}
+		condition.left = move(left);
+		condition.right = move(right);
+		conditions.push_back(move(condition));
+		return true;
 	}
-	// cannot create a proper join condition
-	// push an arbitrary expression join
-	throw NotImplementedException("FIXME: arbitrary expression join!");
-	JoinCondition cond;
-	cond.left = move(expr);
-	cond.comparison = ExpressionType::INVALID;
-	join.conditions.push_back(move(cond));
+	return false;
+}
+
+static unique_ptr<LogicalOperator> CreateJoin(
+								JoinType type,
+								unique_ptr<LogicalOperator> left_child,
+								unique_ptr<LogicalOperator> right_child,
+								unordered_set<size_t> &left_bindings,
+                                unordered_set<size_t> &right_bindings,
+								vector<unique_ptr<Expression>> &expressions) {
+	vector<JoinCondition> conditions;
+	// first check if we can create 
+	for(size_t i = 0; i < expressions.size(); i++) {
+		auto &expr = expressions[i];
+		auto total_side = GetJoinSide(*expr, left_bindings, right_bindings);
+		if (total_side != JoinSide::BOTH) {
+			// join condition does not reference both sides, add it as filter under the join
+			if (type == JoinType::LEFT && total_side == JoinSide::RIGHT) {
+				// filter is on RHS and the join is a LEFT OUTER join, we can push it in the right child
+				if (right_child->type != LogicalOperatorType::FILTER) {
+					// not a filter yet, push a new empty filter
+					auto filter = make_unique<LogicalFilter>();
+					filter->AddChild(move(right_child));
+					right_child = move(filter);
+				}
+				// push the expression into the filter
+				auto &filter = (LogicalFilter &)*right_child;
+				filter.expressions.push_back(move(expr));
+				continue;
+			}
+		} else if (expr->type >= ExpressionType::COMPARE_EQUAL &&
+				expr->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
+			// comparison, check if we can create a comparison JoinCondition
+			if (CreateJoinCondition(*expr, left_bindings, right_bindings, conditions)) {
+				// successfully created the join condition
+				continue;
+			}
+		} else if (expr->type == ExpressionType::OPERATOR_NOT) {
+			auto &not_expr = (OperatorExpression &)*expr;
+			assert(not_expr.children.size() == 1);
+			ExpressionType child_type = not_expr.children[0]->GetExpressionType();
+			// the condition is ON NOT (EXPRESSION)
+			// we can transform this to remove the NOT if the child is a Comparison
+			// e.g.:
+			// ON NOT (X = 3) can be turned into ON (X <> 3)
+			// ON NOT (X > 3) can be turned into ON (X <= 3)
+			// for non-comparison operators here we just push the filter
+			if (child_type >= ExpressionType::COMPARE_EQUAL && child_type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
+				// switcheroo the child condition
+				// our join needs to compare explicit left and right sides. So we
+				// invert the condition to express NOT, this way we can still use
+				// equi-joins
+				not_expr.children[0]->type = ComparisonExpression::NegateComparisionExpression(child_type);
+				if (CreateJoinCondition(*not_expr.children[0], left_bindings, right_bindings, conditions)) {
+					// successfully created the join condition
+					continue;
+				}
+			}
+		}
+		// if we get here we could not create a comparison JoinCondition
+		// turn this into an arbitrary expression join
+		auto any_join = make_unique<LogicalAnyJoin>(type);
+		// create the condition
+		any_join->condition = move(expr);
+		any_join->children.push_back(move(left_child));
+		any_join->children.push_back(move(right_child));
+		// merge any conditions we created back
+		for(size_t cond_idx = 0; cond_idx < conditions.size(); cond_idx++) {
+			// create the comparison
+			auto comparison = make_unique<ComparisonExpression>(conditions[cond_idx].comparison, move(conditions[cond_idx].left), move(conditions[cond_idx].right));
+			// AND together with the other condition
+			any_join->condition = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(any_join->condition), move(comparison));
+		}
+		// do the same with any remaining conditions
+		for(size_t expr_idx = i + 1; expr_idx < expressions.size(); expr_idx++) {
+			any_join->condition = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(any_join->condition), move(expressions[expr_idx]));
+		}
+		return any_join;
+	}
+	// if we get here we successfully converted all expressions to JoinConditions
+	// create a LogicalComparisonJoin
+	auto comp_join = make_unique<LogicalComparisonJoin>(type);
+	comp_join->conditions = move(conditions);
+	comp_join->children.push_back(move(left_child));
+	comp_join->children.push_back(move(right_child));
+	return comp_join;
 }
 
 unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
@@ -171,41 +212,54 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
 		return nullptr;
 	}
 
-	// non inner-join
-	// create the the actual join
-	auto join = make_unique<LogicalComparisonJoin>(expr.type);
-
+	// non inner-join, create the the actual join
 	AcceptChild(&expr.left);
-	join->AddChild(move(root));
-
+	auto left_child = move(root);
 	AcceptChild(&expr.right);
-	join->AddChild(move(root));
+	auto right_child = move(root);
 
-	// now split the expressions by the AND clause
+	// split the expressions by the AND clause
 	vector<unique_ptr<Expression>> expressions;
 	expressions.push_back(move(expr.condition));
 	LogicalFilter::SplitPredicates(expressions);
 
 	// find the table bindings on the LHS and RHS of the join
 	unordered_set<size_t> left_bindings, right_bindings;
-	LogicalJoin::GetTableReferences(*join->children[0], left_bindings);
-	LogicalJoin::GetTableReferences(*join->children[1], right_bindings);
-	// for each expression turn it into a proper JoinCondition
-	for (size_t i = 0; i < expressions.size(); i++) {
-		CreateJoinCondition(*join, move(expressions[i]), left_bindings, right_bindings);
+	LogicalJoin::GetTableReferences(*left_child, left_bindings);
+	LogicalJoin::GetTableReferences(*right_child, right_bindings);
+	// now create the join operator from the set of join conditions
+	auto join = CreateJoin(expr.type, move(left_child), move(right_child), left_bindings, right_bindings, expressions);
+
+	// now we visit the expressions depending on the type of join
+	if (join->type == LogicalOperatorType::COMPARISON_JOIN) {
+		// comparison join
+		// in this join we visit the expressions on the LHS with the LHS as root node
+		// and the expressions on the RHS with the RHS as root node
+		auto &comp_join = (LogicalComparisonJoin&) *join;
+
+		// first visit the left conditions
+		root = move(comp_join.children[0]);
+		for (size_t i = 0; i < comp_join.conditions.size(); i++) {
+			VisitExpression(&comp_join.conditions[i].left);
+		}
+		comp_join.children[0] = move(root);
+		// now visit the right conditions
+		root = move(comp_join.children[1]);
+		for (size_t i = 0; i < comp_join.conditions.size(); i++) {
+			VisitExpression(&comp_join.conditions[i].right);
+		}
+		comp_join.children[1] = move(root);
+		// move the join as the root node
+		root = move(join);
+	} else {
+		assert(join->type == LogicalOperatorType::ANY_JOIN);
+		auto &any_join = (LogicalAnyJoin&) *join;
+		// for the any join we just visit the condition
+		root = move(join);
+		if (any_join.condition->HasSubquery()) {
+			throw NotImplementedException("Cannot perform non-inner join on subquery!");
+		}
+		VisitExpression(&any_join.condition);
 	}
-	// first visit the left conditions
-	root = move(join->children[0]);
-	for (size_t i = 0; i < join->conditions.size(); i++) {
-		VisitExpression(&join->conditions[i].left);
-	}
-	join->children[0] = move(root);
-	// now visit the right conditions
-	root = move(join->children[1]);
-	for (size_t i = 0; i < join->conditions.size(); i++) {
-		VisitExpression(&join->conditions[i].right);
-	}
-	join->children[1] = move(root);
-	root = move(join);
 	return nullptr;
 }

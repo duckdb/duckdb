@@ -33,6 +33,7 @@ public:
 
 protected:
 	void Visit(LogicalAggregate &op);
+	void Visit(LogicalAnyJoin &op);
 	void Visit(LogicalChunkGet &op);
 	void Visit(LogicalComparisonJoin &op);
 	void Visit(LogicalCreateTable &op);

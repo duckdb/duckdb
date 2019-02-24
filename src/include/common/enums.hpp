@@ -362,7 +362,7 @@ enum class LogicalOperatorType : uint8_t {
 	JOIN,
 	DELIM_JOIN,
 	COMPARISON_JOIN,
-	ARBITRARY_JOIN,
+	ANY_JOIN,
 	CROSS_PRODUCT,
 	// -----------------------------
 	// SetOps
@@ -421,6 +421,7 @@ enum class PhysicalOperatorType : uint8_t {
 	// -----------------------------
 	// Joins
 	// -----------------------------
+	BLOCKWISE_NL_JOIN,
 	NESTED_LOOP_JOIN,
 	HASH_JOIN,
 	CROSS_PRODUCT,

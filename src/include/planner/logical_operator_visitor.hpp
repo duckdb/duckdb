@@ -13,6 +13,7 @@
 namespace duckdb {
 
 class LogicalAggregate;
+class LogicalAnyJoin;
 class LogicalChunkGet;
 class LogicalComparisonJoin;
 class LogicalCreateTable;

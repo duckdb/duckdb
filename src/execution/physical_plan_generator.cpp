@@ -1,4 +1,5 @@
 #include "execution/physical_plan_generator.hpp"
+#include "execution/operator/join/physical_blockwise_nl_join.hpp"
 
 #include "execution/column_binding_resolver.hpp"
 #include "execution/operator/list.hpp"
@@ -50,6 +51,9 @@ void PhysicalPlanGenerator::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::TABLE_FUNCTION:
 		Visit((LogicalTableFunction &)op);
 		break;
+	case LogicalOperatorType::ANY_JOIN:
+		Visit((LogicalAnyJoin &)op);
+		break;
 	case LogicalOperatorType::DELIM_JOIN:
 		Visit((LogicalDelimJoin &)op);
 		break;
@@ -98,6 +102,7 @@ void PhysicalPlanGenerator::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::SUBQUERY:
 		LogicalOperatorVisitor::VisitOperator(op);
 		break;
+	case LogicalOperatorType::JOIN:
 	case LogicalOperatorType::INVALID:
 		assert(0);
 		break;
@@ -422,8 +427,23 @@ void PhysicalPlanGenerator::Visit(LogicalDelimJoin &op) {
 	plan = move(delim_join);
 }
 
+void PhysicalPlanGenerator::Visit(LogicalAnyJoin &op) {
+	assert(!plan); // join should be the first node of a plan!
+
+	// first visit the child nodes
+	assert(op.children.size() == 2);
+	VisitOperator(*op.children[0]);
+	auto left = move(plan);
+	VisitOperator(*op.children[1]);
+	auto right = move(plan);
+
+	assert(op.condition);
+	// create the blockwise NL join
+	plan = make_unique<PhysicalBlockwiseNLJoin>(op, move(left), move(right), move(op.condition), op.type);
+}
+
 void PhysicalPlanGenerator::Visit(LogicalComparisonJoin &op) {
-	assert(!plan); // Cross product should be the first node of a plan!
+	assert(!plan); // join should be the first node of a plan!
 
 	// now visit the children
 	assert(op.children.size() == 2);

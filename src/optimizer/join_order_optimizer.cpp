@@ -87,7 +87,8 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 	}
 	bool non_reorderable_operation = false;
 	if (op->type == LogicalOperatorType::UNION || op->type == LogicalOperatorType::EXCEPT ||
-	    op->type == LogicalOperatorType::INTERSECT || op->type == LogicalOperatorType::DELIM_JOIN) {
+	    op->type == LogicalOperatorType::INTERSECT || op->type == LogicalOperatorType::DELIM_JOIN ||
+		op->type == LogicalOperatorType::ANY_JOIN) {
 		// set operation, optimize separately in children
 		non_reorderable_operation = true;
 	}

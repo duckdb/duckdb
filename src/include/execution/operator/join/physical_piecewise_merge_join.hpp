@@ -9,13 +9,13 @@
 #pragma once
 
 #include "execution/merge_join.hpp"
-#include "execution/operator/join/physical_join.hpp"
+#include "execution/operator/join/physical_comparison_join.hpp"
 
 namespace duckdb {
 
 //! PhysicalPiecewiseMergeJoin represents a piecewise merge loop join between
 //! two tables
-class PhysicalPiecewiseMergeJoin : public PhysicalJoin {
+class PhysicalPiecewiseMergeJoin : public PhysicalComparisonJoin {
 public:
 	PhysicalPiecewiseMergeJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
 	                           unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type);

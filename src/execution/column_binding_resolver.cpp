@@ -43,6 +43,9 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::TABLE_FUNCTION:
 		Visit((LogicalTableFunction &)op);
 		break;
+	case LogicalOperatorType::ANY_JOIN:
+		Visit((LogicalAnyJoin &)op);
+		break;
 	case LogicalOperatorType::DELIM_JOIN:
 	case LogicalOperatorType::COMPARISON_JOIN:
 		Visit((LogicalComparisonJoin &)op);
@@ -197,6 +200,29 @@ void ColumnBindingResolver::Visit(LogicalTableFunction &op) {
 	binding.table_index = op.table_index;
 	binding.column_count = op.function->return_values.size();
 	PushBinding(binding);
+}
+
+void ColumnBindingResolver::Visit(LogicalAnyJoin &op) {
+	// visit the LHS
+	VisitOperator(*op.children[0]);
+	// store the added tables
+	auto left_tables = bound_tables;
+	bound_tables.clear();
+
+	// visit the RHS
+	VisitOperator(*op.children[1]);
+	auto right_tables = bound_tables;
+	// concatenate the tables
+	bound_tables = left_tables;
+	AppendTables(right_tables);
+	// now visit the join condition
+	VisitExpression(&op.condition);
+	if (op.type == JoinType::ANTI || op.type == JoinType::SEMI) {
+		// (not supported yet for arbitrary expressions)
+		assert(0);
+		// for semi/anti joins the result is just the left side
+		bound_tables = left_tables;
+	}
 }
 
 void ColumnBindingResolver::Visit(LogicalComparisonJoin &op) {
