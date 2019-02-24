@@ -33,8 +33,10 @@ protected:
 	void CreatePlan(CopyStatement &statement);
 	void CreatePlan(DeleteStatement &statement);
 	void CreatePlan(UpdateStatement &statement);
+	void CreatePlan(CreateTableAsStatement &statement);
 	void CreatePlan(CreateTableStatement &statement);
 	void CreatePlan(CreateIndexStatement &statement);
+	void CreatePlan(ExecuteStatement &statement);
 
 	void CreatePlan(QueryNode &statement);
 	void CreatePlan(SelectNode &statement);
@@ -48,6 +50,7 @@ protected:
 	void Visit(ConjunctionExpression &expr) override;
 	void Visit(OperatorExpression &expr) override;
 	void Visit(BoundSubqueryExpression &expr) override;
+	void Visit(CastExpression &expr) override;
 
 public:
 	unique_ptr<TableRef> Visit(BaseTableRef &expr) override;

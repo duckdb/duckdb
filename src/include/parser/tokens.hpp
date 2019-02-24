@@ -20,6 +20,7 @@ class CopyStatement;
 class CreateIndexStatement;
 class CreateSchemaStatement;
 class CreateTableStatement;
+class CreateTableAsStatement;
 class CreateViewStatement;
 class DeleteStatement;
 class DropSchemaStatement;
@@ -30,6 +31,9 @@ class InsertStatement;
 class SelectStatement;
 class TransactionStatement;
 class UpdateStatement;
+class PrepareStatement;
+class ExecuteStatement;
+class DeallocateStatement;
 
 //===--------------------------------------------------------------------===//
 // Query Node
@@ -58,6 +62,7 @@ class ConstantExpression;
 class DefaultExpression;
 class FunctionExpression;
 class OperatorExpression;
+class ParameterExpression;
 class StarExpression;
 class SubqueryExpression;
 class WindowExpression;

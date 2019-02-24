@@ -7,6 +7,7 @@
 #include "planner/binder.hpp"
 #include "planner/logical_plan_generator.hpp"
 #include "planner/operator/logical_explain.hpp"
+#include "planner/operator/logical_prepare.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -34,6 +35,7 @@ void Planner::CreatePlan(ClientContext &context, unique_ptr<SQLStatement> statem
 	case StatementType::UPDATE:
 	case StatementType::CREATE_INDEX:
 	case StatementType::CREATE_TABLE:
+	case StatementType::EXECUTE:
 		CreatePlan(context, *statement);
 		break;
 	case StatementType::CREATE_VIEW: {
@@ -138,6 +140,21 @@ void Planner::CreatePlan(ClientContext &context, unique_ptr<SQLStatement> statem
 		explain->parse_tree = parse_tree;
 		explain->logical_plan_unopt = logical_plan_unopt;
 		plan = move(explain);
+		break;
+	}
+	case StatementType::PREPARE: {
+		auto &stmt = *reinterpret_cast<PrepareStatement *>(statement.get());
+		auto statement_type = stmt.statement->type;
+		CreatePlan(context, move(stmt.statement));
+		auto prepare = make_unique<LogicalPrepare>(stmt.name, statement_type, move(plan));
+		plan = move(prepare);
+		break;
+	}
+	case StatementType::DEALLOCATE: {
+		auto &stmt = *reinterpret_cast<DeallocateStatement *>(statement.get());
+		if (!context.prepared_statements->DropEntry(context.ActiveTransaction(), stmt.name, false)) {
+			// silently ignore
+		}
 		break;
 	}
 	default:

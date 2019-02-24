@@ -18,7 +18,7 @@ unique_ptr<TableRef> BaseTableRef::Deserialize(Deserializer &source) {
 	result->schema_name = source.Read<string>();
 	result->table_name = source.Read<string>();
 
-	return result;
+	return move(result);
 }
 
 unique_ptr<TableRef> BaseTableRef::Copy() {
@@ -28,5 +28,5 @@ unique_ptr<TableRef> BaseTableRef::Copy() {
 	copy->table_name = table_name;
 	copy->alias = alias;
 
-	return copy;
+	return move(copy);
 }

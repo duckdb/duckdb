@@ -43,6 +43,7 @@ protected:
 	void Bind(CreateTableStatement &stmt);
 	void Bind(CreateIndexStatement &stmt);
 	void Bind(CreateViewStatement &stmt);
+	void Bind(CreateTableAsStatement &stmt);
 
 	void Bind(QueryNode &node);
 	void Bind(SelectNode &node);

@@ -39,6 +39,10 @@ void LogicalPlanGenerator::CreatePlan(SQLStatement &statement) {
 	case StatementType::CREATE_INDEX:
 		CreatePlan((CreateIndexStatement &)statement);
 		break;
+	case StatementType::EXECUTE:
+		CreatePlan((ExecuteStatement &)statement);
+		break;
+
 	default:
 		throw NotImplementedException("Statement type");
 		break;
@@ -65,8 +69,18 @@ static TypeId GetMaxType(vector<TypeId> types) {
 	return result_type;
 }
 
+void LogicalPlanGenerator::Visit(CastExpression &expr) {
+	if (expr.child->GetExpressionClass() == ExpressionClass::PARAMETER) {
+		expr.child->return_type = expr.return_type;
+	}
+	SQLNodeVisitor::Visit(expr);
+}
+
 //! Add an optional cast to a set of types
 static unique_ptr<Expression> AddCastToType(TypeId type, unique_ptr<Expression> expr) {
+	if (expr && expr->GetExpressionClass() == ExpressionClass::PARAMETER) {
+		expr->return_type = type;
+	}
 	if (expr && expr->return_type != type) {
 		return make_unique<CastExpression>(type, move(expr));
 	}

@@ -93,6 +93,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "DELETE";
 	case LogicalOperatorType::UPDATE:
 		return "UPDATE";
+	case LogicalOperatorType::PREPARE:
+		return "PREPARE";
 	case LogicalOperatorType::PRUNE_COLUMNS:
 		return "PRUNE";
 	case LogicalOperatorType::EXPORT_EXTERNAL_FILE:
@@ -109,6 +111,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "EXPLAIN";
 	case LogicalOperatorType::ALTER:
 		return "ALTER";
+	case LogicalOperatorType::EXECUTE:
+		return "EXECUTE";
 	case LogicalOperatorType::INVALID:
 		break;
 	}
@@ -181,6 +185,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "CREATE_INDEX";
 	case PhysicalOperatorType::EXPLAIN:
 		return "EXPLAIN";
+	case PhysicalOperatorType::EXECUTE:
+		return "EXECUTE";
 	case PhysicalOperatorType::INVALID:
 		break;
 	}

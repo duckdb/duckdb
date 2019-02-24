@@ -55,5 +55,5 @@ unique_ptr<Expression> Transformer::TransformCase(CaseExpr *root) {
 		}
 	}
 
-	return exp_root;
+	return move(exp_root);
 }

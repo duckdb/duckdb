@@ -37,6 +37,9 @@ void Binder::Bind(SQLStatement &statement) {
 	case StatementType::CREATE_VIEW:
 		Bind((CreateViewStatement &)statement);
 		break;
+	case StatementType::EXECUTE:
+		// do nothing
+		break;
 	default:
 		assert(statement.type == StatementType::CREATE_INDEX);
 		Bind((CreateIndexStatement &)statement);
@@ -110,7 +113,7 @@ unique_ptr<Expression> Binder::VisitReplace(SubqueryExpression &expr, unique_ptr
 	result->subquery = move(expr.subquery);
 	result->subquery_type = expr.subquery_type;
 	result->alias = expr.alias;
-	return result;
+	return move(result);
 }
 
 // CTEs and views are also referred to using BaseTableRefs, hence need to distinguish here

@@ -35,6 +35,7 @@ struct VersionInformation {
 
 //! The transaction object holds information about a currently running or past
 //! transaction
+
 class Transaction {
 public:
 	Transaction(transaction_t start_time, transaction_t transaction_id)
@@ -49,6 +50,7 @@ public:
 	void PushTuple(UndoFlags flag, size_t offset, StorageChunk *storage);
 	//! Push a query into the undo buffer, this will be written to the WAL for
 	//! redo purposes
+
 	void PushQuery(string query);
 
 	//! Commit the current transaction with the given commit identifier

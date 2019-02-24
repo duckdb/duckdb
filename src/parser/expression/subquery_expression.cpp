@@ -11,7 +11,7 @@ unique_ptr<Expression> SubqueryExpression::Copy() {
 	copy->CopyProperties(*this);
 	copy->subquery = subquery->Copy();
 	copy->subquery_type = subquery_type;
-	return copy;
+	return move(copy);
 }
 
 void SubqueryExpression::Serialize(Serializer &serializer) {
@@ -27,7 +27,7 @@ unique_ptr<Expression> SubqueryExpression::Deserialize(ExpressionType type, Type
 	auto expression = make_unique<SubqueryExpression>();
 	expression->subquery_type = subquery_type;
 	expression->subquery = move(subquery);
-	return expression;
+	return move(expression);
 }
 
 bool SubqueryExpression::Equals(const Expression *other_) const {

@@ -14,7 +14,7 @@ unique_ptr<TableRef> SubqueryRef::Copy() {
 
 	auto copy = make_unique<SubqueryRef>(subquery->Copy());
 	copy->alias = alias;
-	return copy;
+	return move(copy);
 }
 
 void SubqueryRef::Serialize(Serializer &serializer) {
@@ -38,5 +38,5 @@ unique_ptr<TableRef> SubqueryRef::Deserialize(Deserializer &source) {
 	for (size_t i = 0; i < column_count; i++) {
 		result->column_name_alias.push_back(source.Read<string>());
 	}
-	return result;
+	return move(result);
 }

@@ -42,6 +42,8 @@ private:
 	unique_ptr<AlterTableStatement> TransformRename(postgres::Node *node);
 	//! Transform a Postgres T_CreateStmt node into a CreateTableStatement
 	unique_ptr<CreateTableStatement> TransformCreateTable(postgres::Node *node);
+	//! Transform a Postgres T_CreateStmt node into a CreateTableStatement
+	unique_ptr<CreateTableStatement> TransformCreateTableAs(postgres::Node *node);
 	//! Transform a Postgres T_CreateSchemaStmt node into a
 	//! CreateSchemaStatement
 	unique_ptr<CreateSchemaStatement> TransformCreateSchema(postgres::Node *node);
@@ -69,6 +71,10 @@ private:
 	unique_ptr<DeleteStatement> TransformDelete(postgres::Node *node);
 	//! Transform a Postgres T_UpdateStmt node into a UpdateStatement
 	unique_ptr<UpdateStatement> TransformUpdate(postgres::Node *node);
+
+	unique_ptr<PrepareStatement> TransformPrepare(postgres::Node *node);
+	unique_ptr<ExecuteStatement> TransformExecute(postgres::Node *node);
+	unique_ptr<DeallocateStatement> TransformDeallocate(postgres::Node *node);
 
 	//===--------------------------------------------------------------------===//
 	// Query Node Transform
@@ -103,6 +109,7 @@ private:
 
 	unique_ptr<Expression> TransformResTarget(postgres::ResTarget *root);
 	unique_ptr<Expression> TransformNullTest(postgres::NullTest *root);
+	unique_ptr<Expression> TransformParamRef(postgres::ParamRef *node);
 
 	unique_ptr<Expression> TransformSubquery(postgres::SubLink *root);
 	//===--------------------------------------------------------------------===//

@@ -17,7 +17,7 @@ unique_ptr<Expression> CaseExpression::Copy() {
 	copy->check = check->Copy();
 	copy->result_if_true = result_if_true->Copy();
 	copy->result_if_false = result_if_false->Copy();
-	return copy;
+	return move(copy);
 }
 
 void CaseExpression::Serialize(Serializer &serializer) {
@@ -33,7 +33,7 @@ unique_ptr<Expression> CaseExpression::Deserialize(ExpressionType type, TypeId r
 	expression->check = Expression::Deserialize(source);
 	expression->result_if_true = Expression::Deserialize(source);
 	expression->result_if_false = Expression::Deserialize(source);
-	return expression;
+	return move(expression);
 }
 
 bool CaseExpression::Equals(const Expression *other_) const {

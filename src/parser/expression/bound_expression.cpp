@@ -21,7 +21,7 @@ unique_ptr<Expression> BoundExpression::Deserialize(ExpressionType type, TypeId 
 	auto index = source.Read<uint32_t>();
 	auto depth = source.Read<uint32_t>();
 	auto expression = make_unique<BoundExpression>(return_type, index, depth);
-	return expression;
+	return move(expression);
 }
 
 uint64_t BoundExpression::Hash() const {

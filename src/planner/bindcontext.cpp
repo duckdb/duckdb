@@ -161,7 +161,7 @@ unique_ptr<Expression> BindContext::BindColumn(ColumnRefExpression &expr, size_t
 			// OUTER JOINS can introduce NULLs in the column
 			result->stats.can_have_null = true;
 		}
-		return result;
+		return move(result);
 	}
 	case BindingType::SUBQUERY: {
 		// subquery
