@@ -50,6 +50,7 @@ void LogicalPlanGenerator::CreatePlan(UpdateStatement &statement) {
 				// differing types, create a cast
 				expression = make_unique<CastExpression>(column.type, move(expression));
 				VisitExpression(&expression);
+				expression->ResolveType();
 			}
 			statement.expressions[i] =
 			    make_unique<BoundExpression>(expression->return_type, projection_expressions.size());

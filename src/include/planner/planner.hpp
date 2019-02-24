@@ -27,6 +27,6 @@ public:
 	unique_ptr<LogicalOperator> plan;
 
 private:
-	void CreatePlan(ClientContext &, SQLStatement &statement);
+	void CreatePlan(ClientContext &, SQLStatement &statement, bool allow_parameter = false);
 };
 } // namespace duckdb

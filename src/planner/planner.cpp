@@ -12,13 +12,13 @@
 using namespace duckdb;
 using namespace std;
 
-void Planner::CreatePlan(ClientContext &context, SQLStatement &statement) {
+void Planner::CreatePlan(ClientContext &context, SQLStatement &statement, bool allow_parameter) {
 	// first bind the tables and columns to the catalog
 	Binder binder(context);
 	binder.Bind(statement);
 
 	// now create a logical query plan from the query
-	LogicalPlanGenerator logical_planner(binder, context);
+	LogicalPlanGenerator logical_planner(binder, context, allow_parameter);
 	logical_planner.CreatePlan(statement);
 
 	this->plan = move(logical_planner.root);
@@ -145,7 +145,7 @@ void Planner::CreatePlan(ClientContext &context, unique_ptr<SQLStatement> statem
 	case StatementType::PREPARE: {
 		auto &stmt = *reinterpret_cast<PrepareStatement *>(statement.get());
 		auto statement_type = stmt.statement->type;
-		CreatePlan(context, move(stmt.statement));
+		CreatePlan(context, *stmt.statement, true);
 		auto prepare = make_unique<LogicalPrepare>(stmt.name, statement_type, move(plan));
 		plan = move(prepare);
 		break;

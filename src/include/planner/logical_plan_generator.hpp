@@ -21,7 +21,7 @@ class ClientContext;
 //! statement
 class LogicalPlanGenerator : public SQLNodeVisitor {
 public:
-	LogicalPlanGenerator(Binder &binder, ClientContext &context);
+	LogicalPlanGenerator(Binder &binder, ClientContext &context, bool allow_parameter = false);
 
 	void CreatePlan(SQLStatement &statement);
 
@@ -42,8 +42,12 @@ public:
 protected:
 	void VisitQueryNode(QueryNode &statement);
 
+	void Visit(ParameterExpression &expr) override {
+		if (!allow_parameter) {
+			throw BinderException("Parameter Expression without PREPARE!");
+		}
+	}
 	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override;
-
 public:
 	unique_ptr<TableRef> Visit(BaseTableRef &expr) override;
 	unique_ptr<TableRef> Visit(CrossProductRef &expr) override;
@@ -61,6 +65,7 @@ public:
 	//! Whether or not subqueries should be planned already
 	bool plan_subquery = true;
 	bool has_unplanned_subqueries = false;
+	bool allow_parameter = false;
 
 private:
 	//! A reference to the current binder

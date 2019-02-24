@@ -8,6 +8,9 @@
 using namespace duckdb;
 using namespace std;
 
+void ParameterExpression::ResolveType() {
+}
+
 unique_ptr<Expression> ParameterExpression::Copy() {
 	auto copy = make_unique<ParameterExpression>();
 	copy->CopyProperties(*this);
@@ -26,9 +29,6 @@ unique_ptr<Expression> ParameterExpression::Deserialize(ExpressionType type, Typ
 	expression->parameter_nr = source.Read<uint64_t>();
 	expression->value = Value::Deserialize(source);
 	return move(expression);
-}
-
-void ParameterExpression::ResolveType() {
 }
 
 bool ParameterExpression::Equals(const Expression *other_) const {

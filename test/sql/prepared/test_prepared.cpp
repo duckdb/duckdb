@@ -55,6 +55,8 @@ TEST_CASE("PREPARE for SELECT", "[prepared]") {
 
 	// can't run a query with a param without PREPARE
 	REQUIRE_FAIL(con.Query("SELECT * FROM a WHERE i=$1"));
+	// also can't run a query with a param when casting
+	REQUIRE_FAIL(con.Query("SELECT * FROM a WHERE i=CAST($1 AS VARCHAR)"));
 }
 
 TEST_CASE("PREPARE for INSERT", "[prepared]") {

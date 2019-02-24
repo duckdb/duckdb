@@ -71,6 +71,7 @@ void LogicalPlanGenerator::CreatePlan(InsertStatement &statement) {
 				}
 
 				VisitExpression(&expression_list[col_idx]);
+				expression_list[col_idx]->ResolveType();
 			}
 		}
 		// insert from constants
