@@ -55,7 +55,7 @@ unique_ptr<Expression> WindowExpression::Copy() {
 	new_window->offset_expr = offset_expr ? offset_expr->Copy() : nullptr;
 	new_window->default_expr = default_expr ? default_expr->Copy() : nullptr;
 
-	return new_window;
+	return move(new_window);
 }
 
 size_t WindowExpression::ChildCount() const {
@@ -168,7 +168,7 @@ unique_ptr<Expression> WindowExpression::Deserialize(ExpressionType type, TypeId
 	expr->end_expr = source.ReadOptional<Expression>();
 	expr->offset_expr = source.ReadOptional<Expression>();
 	expr->default_expr = source.ReadOptional<Expression>();
-	return expr;
+	return move(expr);
 }
 
 bool WindowExpression::Equals(const Expression *other_) const {

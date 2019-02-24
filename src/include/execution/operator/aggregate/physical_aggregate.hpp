@@ -22,6 +22,15 @@ public:
 	                  vector<unique_ptr<Expression>> groups,
 	                  PhysicalOperatorType type = PhysicalOperatorType::BASE_GROUP_BY);
 
+	void AcceptExpressions(SQLNodeVisitor *v) override {
+		for (auto &expr : aggregates) {
+			v->VisitExpression(&expr);
+		}
+		for (auto &expr : groups) {
+			v->VisitExpression(&expr);
+		}
+	}
+
 	//! The groups
 	vector<unique_ptr<Expression>> groups;
 	//! The aggregates that have to be computed

@@ -22,12 +22,13 @@ public:
 
 	void Visit(BoundColumnRefExpression &expr) override;
 	void Visit(BoundSubqueryExpression &expr) override;
+
 private:
 	//! Helper class used to recursively rewrite correlated expressions within nested subqueries.
 	class RewriteCorrelatedRecursive {
 	public:
 		RewriteCorrelatedRecursive(BoundSubqueryExpression &parent, ColumnBinding base_binding,
-									column_binding_map_t<size_t> &correlated_map);
+		                           column_binding_map_t<size_t> &correlated_map);
 
 		void RewriteCorrelatedSubquery(BoundSubqueryExpression &expr);
 		void RewriteCorrelatedExpressions(Expression *child);
@@ -36,6 +37,7 @@ private:
 		ColumnBinding base_binding;
 		column_binding_map_t<size_t> &correlated_map;
 	};
+
 private:
 	ColumnBinding base_binding;
 	column_binding_map_t<size_t> &correlated_map;

@@ -70,7 +70,7 @@ bool CHECK_DECIMAL_COLUMN(duckdb_result result, size_t column, vector<double> va
 		return false;
 	}
 	for (size_t i = 0; i < values.size(); i++) {
-		if (isnan(values[i])) {
+		if (::isnan(values[i])) {
 			if (!duckdb_value_is_null(col, i)) {
 				return false;
 			}

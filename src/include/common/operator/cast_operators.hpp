@@ -107,7 +107,7 @@ struct CastFromTimestamp {
 };
 
 template <> int64_t CastFromTimestamp::Operation(duckdb::timestamp_t left);
-template <> duckdb::string CastFromTimestamp::Operation(duckdb::date_t left);
+template <> duckdb::string CastFromTimestamp::Operation(duckdb::timestamp_t left);
 template <> duckdb::timestamp_t CastToTimestamp::Operation(const char *left);
 template <> duckdb::timestamp_t CastToTimestamp::Operation(int64_t left);
 

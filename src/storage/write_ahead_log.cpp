@@ -38,6 +38,7 @@ void WriteAheadLog::Replay(string &path) {
 		throw IOException("WAL could not be opened for reading");
 	}
 	ClientContext context(database);
+	context.transaction.SetAutoCommit(false);
 
 	vector<WALEntryData> stored_entries;
 	WALEntry entry;
@@ -336,7 +337,7 @@ bool ReplayQuery(ClientContext &context, Deserializer &source) {
 	// read the query
 	auto query = source.Read<string>();
 
-	auto result = DuckDBConnection::GetQueryResult(context, query);
+	auto result = DuckDBConnection::Query(context, query);
 	return result->GetSuccess();
 }
 

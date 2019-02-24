@@ -47,9 +47,10 @@ unique_ptr<Expression> Transformer::TransformExpression(Node *node) {
 		return TransformNullTest(reinterpret_cast<NullTest *>(node));
 	case T_ResTarget:
 		return TransformResTarget(reinterpret_cast<ResTarget *>(node));
+	case T_ParamRef:
+		return TransformParamRef(reinterpret_cast<ParamRef *>(node));
 	case T_SetToDefault:
 		return make_unique<DefaultExpression>();
-	case T_ParamRef:
 
 	default:
 		throw NotImplementedException("Expr of type %d not implemented\n", (int)node->type);

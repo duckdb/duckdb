@@ -8,7 +8,9 @@
 
 #pragma once
 
+#include "catalog/catalog_set.hpp"
 #include "common/allocator.hpp"
+#include "execution/execution_context.hpp"
 #include "main/query_profiler.hpp"
 #include "transaction/transaction_context.hpp"
 
@@ -29,6 +31,10 @@ public:
 		interrupted = true;
 	}
 
+	unique_ptr<DuckDBStreamingResult> Query(string query);
+	unique_ptr<DataChunk> Fetch();
+	bool Cleanup();
+
 	//! The allocator that holds any allocations made in the Query Context
 	Allocator allocator;
 	//! Query profiler
@@ -39,6 +45,12 @@ public:
 	TransactionContext transaction;
 	//! Whether or not the query is interrupted
 	bool interrupted;
+
+	ExecutionContext execution_context;
+
+	//	unique_ptr<CatalogSet> temporary_tables;
+	unique_ptr<CatalogSet> prepared_statements;
+
 #ifdef DEBUG
 	// Whether or not aggressive query verification is enabled
 	bool query_verification_enabled = false;

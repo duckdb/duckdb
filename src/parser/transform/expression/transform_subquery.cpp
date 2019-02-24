@@ -62,5 +62,5 @@ unique_ptr<Expression> Transformer::TransformSubquery(SubLink *root) {
 	}
 	default: { throw NotImplementedException("Subquery of type %d not implemented\n", (int)root->subLinkType); }
 	}
-	return subquery_expr;
+	return move(subquery_expr);
 }

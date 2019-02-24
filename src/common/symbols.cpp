@@ -64,6 +64,8 @@ template class std::unique_ptr<JoinOrderOptimizer::JoinNode>;
 template class std::unique_ptr<Relation>;
 template class std::unique_ptr<AggregateExpression>;
 template class std::unique_ptr<CaseExpression>;
+template class std::unique_ptr<CatalogSet>;
+template class std::unique_ptr<PreparedStatementCatalogEntry>;
 template class std::unique_ptr<CastExpression>;
 template class std::unique_ptr<ColumnRefExpression>;
 template class std::unique_ptr<Binder>;

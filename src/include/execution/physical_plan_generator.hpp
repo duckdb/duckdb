@@ -56,7 +56,9 @@ protected:
 	void Visit(LogicalUpdate &op);
 	void Visit(LogicalTableFunction &expr);
 	void Visit(LogicalPruneColumns &expr);
+	void Visit(LogicalPrepare &expr);
 	void Visit(LogicalWindow &expr);
+	void Visit(LogicalExecute &op);
 
 	using SQLNodeVisitor::Visit;
 

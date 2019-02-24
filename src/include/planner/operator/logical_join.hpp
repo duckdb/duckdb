@@ -26,6 +26,7 @@ public:
 
 	//! The type of the join (INNER, OUTER, etc...)
 	JoinType type;
+
 protected:
 	void ResolveTypes() override;
 };

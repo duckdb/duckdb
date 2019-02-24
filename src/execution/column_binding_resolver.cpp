@@ -233,7 +233,7 @@ void ColumnBindingResolver::Visit(LogicalComparisonJoin &op) {
 	}
 	if (op.GetOperatorType() == LogicalOperatorType::DELIM_JOIN) {
 		// visit the duplicate eliminated columns on the LHS, if any
-		auto &delim_join = (LogicalDelimJoin&) op;
+		auto &delim_join = (LogicalDelimJoin &)op;
 		for (auto &expr : delim_join.duplicate_eliminated_columns) {
 			VisitExpression(&expr);
 		}

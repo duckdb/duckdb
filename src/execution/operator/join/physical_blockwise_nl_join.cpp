@@ -1,14 +1,15 @@
 #include "execution/operator/join/physical_blockwise_nl_join.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+
 #include "common/types/static_vector.hpp"
+#include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 PhysicalBlockwiseNLJoin::PhysicalBlockwiseNLJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
-                                               unique_ptr<PhysicalOperator> right, unique_ptr<Expression> condition,
-                                               JoinType join_type)
+                                                 unique_ptr<PhysicalOperator> right, unique_ptr<Expression> condition,
+                                                 JoinType join_type)
     : PhysicalJoin(op, PhysicalOperatorType::BLOCKWISE_NL_JOIN, join_type), condition(move(condition)) {
 	children.push_back(move(left));
 	children.push_back(move(right));
@@ -29,7 +30,7 @@ void PhysicalBlockwiseNLJoin::_GetChunk(ClientContext &context, DataChunk &chunk
 
 		DataChunk right_chunk;
 		right_chunk.Initialize(right_types);
-		while(true) {
+		while (true) {
 			children[1]->GetChunk(context, right_chunk, right_state.get());
 			if (right_chunk.size() == 0) {
 				break;
@@ -51,7 +52,6 @@ void PhysicalBlockwiseNLJoin::_GetChunk(ClientContext &context, DataChunk &chunk
 			state->rhs_found_match = unique_ptr<bool[]>(new bool[state->right_chunks.count]);
 			memset(state->rhs_found_match.get(), 0, sizeof(bool) * state->right_chunks.count);
 		}
-
 	}
 
 	if (state->right_chunks.count == 0) {
@@ -63,14 +63,14 @@ void PhysicalBlockwiseNLJoin::_GetChunk(ClientContext &context, DataChunk &chunk
 			return;
 		}
 		// fill in the data from the chunk
-		for(size_t i = 0; i < state->child_chunk.column_count; i++) {
+		for (size_t i = 0; i < state->child_chunk.column_count; i++) {
 			chunk.data[i].Reference(state->child_chunk.data[i]);
 		}
 		if (type == JoinType::LEFT || type == JoinType::OUTER) {
 			// LEFT OUTER or FULL OUTER join with empty RHS
 			// fill any columns from the RHS with NULLs
 			chunk.sel_vector = chunk.data[0].sel_vector;
-			for(size_t i = state->child_chunk.column_count; i < chunk.column_count; i++) {
+			for (size_t i = state->child_chunk.column_count; i < chunk.column_count; i++) {
 				chunk.data[i].count = chunk.size();
 				chunk.data[i].sel_vector = chunk.sel_vector;
 				VectorOperations::Set(chunk.data[i], Value());
@@ -93,8 +93,9 @@ void PhysicalBlockwiseNLJoin::_GetChunk(ClientContext &context, DataChunk &chunk
 		if (state->left_position >= state->child_chunk.size()) {
 			// exhausted LHS, have to pull new LHS chunk
 			if (!state->checked_found_match) {
-				// LEFT OUTER JOIN or FULL OUTER JOIN, first check if we need to create extra results because of non-matching tuples
-				for(size_t i = 0; i < state->child_chunk.size(); i++) {
+				// LEFT OUTER JOIN or FULL OUTER JOIN, first check if we need to create extra results because of
+				// non-matching tuples
+				for (size_t i = 0; i < state->child_chunk.size(); i++) {
 					if (!state->lhs_found_match[i]) {
 						chunk.owned_sel_vector[result_count++] = i;
 					}
@@ -103,13 +104,13 @@ void PhysicalBlockwiseNLJoin::_GetChunk(ClientContext &context, DataChunk &chunk
 					// have to create the chunk, set the selection vector and count
 					chunk.sel_vector = chunk.owned_sel_vector;
 					// for the LHS, reference the child_chunk and set the sel_vector and count
-					for(size_t i = 0; i < state->child_chunk.column_count; i++) {
+					for (size_t i = 0; i < state->child_chunk.column_count; i++) {
 						chunk.data[i].Reference(state->child_chunk.data[i]);
 						chunk.data[i].sel_vector = chunk.sel_vector;
 						chunk.data[i].count = result_count;
 					}
 					// for the RHS, set the mask to NULL and set the sel_vector and count
-					for(size_t i = state->child_chunk.column_count; i < chunk.column_count; i++) {
+					for (size_t i = state->child_chunk.column_count; i < chunk.column_count; i++) {
 						chunk.data[i].nullmask.set();
 						chunk.data[i].sel_vector = chunk.sel_vector;
 						chunk.data[i].count = result_count;
@@ -138,17 +139,17 @@ void PhysicalBlockwiseNLJoin::_GetChunk(ClientContext &context, DataChunk &chunk
 		}
 		auto &lchunk = state->child_chunk;
 		auto &rchunk = *state->right_chunks.chunks[state->right_position];
-		for(size_t i = 0; i < chunk.column_count; i++) {
+		for (size_t i = 0; i < chunk.column_count; i++) {
 			assert(!chunk.data[i].sel_vector);
 			chunk.data[i].count = rchunk.size();
 		}
 		// fill in the current element of the LHS into the chunk
 		assert(chunk.column_count == lchunk.column_count + rchunk.column_count);
-		for(size_t i = 0; i < lchunk.column_count; i++) {
+		for (size_t i = 0; i < lchunk.column_count; i++) {
 			VectorOperations::Set(chunk.data[i], lchunk.data[i].GetValue(state->left_position));
 		}
 		// for the RHS we just reference the entire vector
-		for(size_t i = 0; i < rchunk.column_count; i++) {
+		for (size_t i = 0; i < rchunk.column_count; i++) {
 			chunk.data[lchunk.column_count + i].Reference(rchunk.data[i]);
 		}
 		// now perform the computation
@@ -173,7 +174,7 @@ void PhysicalBlockwiseNLJoin::_GetChunk(ClientContext &context, DataChunk &chunk
 		if (result_count > 0) {
 			// had a result! set the selection vector of the child elements
 			chunk.sel_vector = chunk.owned_sel_vector;
-			for(size_t i = 0; i < chunk.column_count; i++) {
+			for (size_t i = 0; i < chunk.column_count; i++) {
 				chunk.data[i].sel_vector = chunk.sel_vector;
 				chunk.data[i].count = result_count;
 			}
@@ -191,10 +192,9 @@ void PhysicalBlockwiseNLJoin::_GetChunk(ClientContext &context, DataChunk &chunk
 				state->left_position = 0;
 			}
 		}
-	} while(result_count == 0);
+	} while (result_count == 0);
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalBlockwiseNLJoin::GetOperatorState(ExpressionExecutor *parent_executor) {
 	return make_unique<PhysicalBlockwiseNLJoinState>(children[0].get(), children[1].get(), parent_executor);
 }
-

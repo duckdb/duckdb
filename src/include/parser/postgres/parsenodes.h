@@ -731,6 +731,12 @@ typedef struct PrepareStmt {
 	Node *query;    /* The query itself (as a raw parsetree) */
 } PrepareStmt;
 
+typedef struct DeallocateStmt {
+	NodeTag type;
+	char *name; /* The name of the plan to remove */
+	            /* NULL means DEALLOCATE ALL */
+} DeallocateStmt;
+
 typedef enum DefElemAction {
 	DEFELEM_UNSPEC, /* no action given */
 	DEFELEM_SET,
@@ -1009,3 +1015,12 @@ typedef struct FunctionParameter {
 	FunctionParameterMode mode; /* IN/OUT/etc */
 	Node *defexpr;              /* raw default expr, or NULL if not given */
 } FunctionParameter;
+
+typedef struct CreateTableAsStmt {
+	NodeTag type;
+	Node *query;         /* the query (see comments above) */
+	IntoClause *into;    /* destination table */
+	ObjectType relkind;  /* OBJECT_TABLE or OBJECT_MATVIEW */
+	bool is_select_into; /* it was written as SELECT INTO */
+	bool if_not_exists;  /* just do nothing if it already exists? */
+} CreateTableAsStmt;

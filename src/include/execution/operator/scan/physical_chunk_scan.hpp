@@ -22,6 +22,8 @@ public:
 
 	ChunkCollection *collection;
 
+	void AcceptExpressions(SQLNodeVisitor *v) override{};
+	
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent_executor) override;
 };

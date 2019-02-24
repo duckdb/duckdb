@@ -46,9 +46,10 @@ void LogicalPlanGenerator::CreatePlan(UpdateStatement &statement) {
 			statement.expressions[i]->ResolveType();
 			// now check if we have to create a cast
 			auto expression = move(statement.expressions[i]);
-			if (expression->return_type != column.type) {
+			if (expression->return_type != column.type || expression->HasParameter()) {
 				// differing types, create a cast
 				expression = make_unique<CastExpression>(column.type, move(expression));
+				VisitExpression(&expression);
 			}
 			statement.expressions[i] =
 			    make_unique<BoundExpression>(expression->return_type, projection_expressions.size());

@@ -26,6 +26,10 @@ public:
 		if (expr->type == ExpressionType::VALUE_CONSTANT) {
 			return false;
 		}
+		// also, if an expression contains a parameter for a prepared statement anywhere, we do not match
+		if (expr->HasParameter()) {
+			return false;
+		}
 		bindings.push_back(expr);
 		return true;
 	}

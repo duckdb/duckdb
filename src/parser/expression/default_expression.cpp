@@ -8,7 +8,7 @@ using namespace std;
 unique_ptr<Expression> DefaultExpression::Copy() {
 	auto copy = make_unique<DefaultExpression>();
 	copy->CopyProperties(*this);
-	return copy;
+	return move(copy);
 }
 
 unique_ptr<Expression> DefaultExpression::Deserialize(ExpressionType type, TypeId return_type, Deserializer &source) {

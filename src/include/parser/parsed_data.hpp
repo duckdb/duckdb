@@ -27,11 +27,12 @@ struct CreateTableInformation {
 	vector<unique_ptr<Constraint>> constraints;
 	//! Ignore if the entry already exists, instead of failing
 	bool if_not_exists = false;
+	bool temporary = false;
 
-	CreateTableInformation() : schema(DEFAULT_SCHEMA), if_not_exists(false) {
+	CreateTableInformation() : schema(DEFAULT_SCHEMA), if_not_exists(false), temporary(false) {
 	}
 	CreateTableInformation(string schema, string table, vector<ColumnDefinition> columns)
-	    : schema(schema), table(table), columns(columns), if_not_exists(false) {
+	    : schema(schema), table(table), columns(columns), if_not_exists(false), temporary(false) {
 	}
 };
 

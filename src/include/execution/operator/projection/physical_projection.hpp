@@ -23,6 +23,12 @@ public:
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
+	void AcceptExpressions(SQLNodeVisitor *v) override {
+		for (auto &e : select_list) {
+			v->VisitExpression(&e);
+		}
+	}
+
 	vector<unique_ptr<Expression>> select_list;
 };
 

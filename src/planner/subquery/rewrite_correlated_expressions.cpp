@@ -1,4 +1,5 @@
 #include "planner/subquery/rewrite_correlated_expressions.hpp"
+
 #include "parser/expression/bound_columnref_expression.hpp"
 #include "parser/expression/bound_subquery_expression.hpp"
 #include "parser/expression/case_expression.hpp"
@@ -8,8 +9,9 @@
 using namespace duckdb;
 using namespace std;
 
-RewriteCorrelatedExpressions::RewriteCorrelatedExpressions(ColumnBinding base_binding, column_binding_map_t<size_t> &correlated_map)
-	: base_binding(base_binding), correlated_map(correlated_map) {
+RewriteCorrelatedExpressions::RewriteCorrelatedExpressions(ColumnBinding base_binding,
+                                                           column_binding_map_t<size_t> &correlated_map)
+    : base_binding(base_binding), correlated_map(correlated_map) {
 }
 
 void RewriteCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
@@ -38,12 +40,13 @@ void RewriteCorrelatedExpressions::Visit(BoundSubqueryExpression &expr) {
 	rewrite.RewriteCorrelatedSubquery(expr);
 }
 
-RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelatedRecursive(BoundSubqueryExpression &parent, ColumnBinding base_binding,
-							column_binding_map_t<size_t> &correlated_map)
-	: parent(parent), base_binding(base_binding), correlated_map(correlated_map) {
+RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelatedRecursive(
+    BoundSubqueryExpression &parent, ColumnBinding base_binding, column_binding_map_t<size_t> &correlated_map)
+    : parent(parent), base_binding(base_binding), correlated_map(correlated_map) {
 }
 
-void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelatedSubquery(BoundSubqueryExpression &expr) {
+void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelatedSubquery(
+    BoundSubqueryExpression &expr) {
 	// rewrite the binding in the correlated list of the subquery)
 	for (auto &corr : expr.binder->correlated_columns) {
 		auto entry = correlated_map.find(corr.binding);
@@ -70,8 +73,7 @@ void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelated
 		if (entry != correlated_map.end()) {
 			// we found the column in the correlated map!
 			// update the binding and reduce the depth by 1
-			bound_colref.binding =
-				ColumnBinding(base_binding.table_index, base_binding.column_index + entry->second);
+			bound_colref.binding = ColumnBinding(base_binding.table_index, base_binding.column_index + entry->second);
 			bound_colref.depth--;
 		}
 	} else if (child->type == ExpressionType::SUBQUERY) {
@@ -83,17 +85,18 @@ void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelated
 	}
 }
 
-RewriteCountAggregates::RewriteCountAggregates(column_binding_map_t<size_t> &replacement_map) : replacement_map(replacement_map) {
+RewriteCountAggregates::RewriteCountAggregates(column_binding_map_t<size_t> &replacement_map)
+    : replacement_map(replacement_map) {
 }
 
-unique_ptr<Expression> RewriteCountAggregates::VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> RewriteCountAggregates::VisitReplace(BoundColumnRefExpression &expr,
+                                                            unique_ptr<Expression> *expr_ptr) {
 	auto entry = replacement_map.find(expr.binding);
 	if (entry != replacement_map.end()) {
 		// reference to a COUNT(*) aggregate
 		// replace this with CASE WHEN COUNT(*) IS NULL THEN 0 ELSE COUNT(*) END
 		auto case_expr = make_unique<CaseExpression>();
-		auto is_null =
-			make_unique<OperatorExpression>(ExpressionType::OPERATOR_IS_NULL, TypeId::BOOLEAN, expr.Copy());
+		auto is_null = make_unique<OperatorExpression>(ExpressionType::OPERATOR_IS_NULL, TypeId::BOOLEAN, expr.Copy());
 		case_expr->check = move(is_null);
 		case_expr->result_if_true = make_unique<ConstantExpression>(Value::Numeric(expr.return_type, 0));
 		case_expr->result_if_false = move(*expr_ptr);

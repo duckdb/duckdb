@@ -3,8 +3,8 @@
 using namespace duckdb;
 using namespace std;
 
-PhysicalComparisonJoin::PhysicalComparisonJoin(LogicalOperator &op, PhysicalOperatorType type, vector<JoinCondition> conditions_,
-                           JoinType join_type)
+PhysicalComparisonJoin::PhysicalComparisonJoin(LogicalOperator &op, PhysicalOperatorType type,
+                                               vector<JoinCondition> conditions_, JoinType join_type)
     : PhysicalJoin(op, type, join_type) {
 	conditions.resize(conditions_.size());
 	// we reorder conditions so the ones with COMPARE_EQUAL occur first

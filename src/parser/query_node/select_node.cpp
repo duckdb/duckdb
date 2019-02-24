@@ -84,7 +84,7 @@ unique_ptr<QueryNode> SelectNode::Copy() {
 	}
 	result->groupby.having = groupby.having ? groupby.having->Copy() : nullptr;
 	this->CopyProperties(*result);
-	return result;
+	return move(result);
 }
 
 void SelectNode::Serialize(Serializer &serializer) {
@@ -136,5 +136,5 @@ unique_ptr<QueryNode> SelectNode::Deserialize(Deserializer &source) {
 	// limit
 	result->limit.limit = source.Read<int64_t>();
 	result->limit.offset = source.Read<int64_t>();
-	return result;
+	return move(result);
 }

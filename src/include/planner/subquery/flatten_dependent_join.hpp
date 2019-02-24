@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// planner/subqueryflatten_dependent_join.hpp
+// planner/subquery/flatten_dependent_join.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,7 +13,8 @@
 
 namespace duckdb {
 
-//! The FlattenDependentJoins class is responsible for pushing the dependent join down into the plan to create a flattened subquery
+//! The FlattenDependentJoins class is responsible for pushing the dependent join down into the plan to create a
+//! flattened subquery
 struct FlattenDependentJoins {
 	FlattenDependentJoins(Binder &binder, const vector<CorrelatedColumnInfo> &correlated);
 

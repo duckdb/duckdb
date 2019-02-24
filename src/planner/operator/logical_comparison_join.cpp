@@ -39,8 +39,8 @@ Expression *LogicalComparisonJoin::GetExpression(size_t index) {
 	return left ? conditions[condition].left.get() : conditions[condition].right.get();
 }
 
-void LogicalComparisonJoin::ReplaceExpression(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
-                                    size_t index) {
+void LogicalComparisonJoin::ReplaceExpression(
+    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, size_t index) {
 	assert(expressions.size() == 0);
 	assert(index < conditions.size() * 2);
 	size_t condition = index / 2;

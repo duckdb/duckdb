@@ -40,6 +40,9 @@ void Binder::Bind(SQLStatement &statement) {
 	case StatementType::CREATE_VIEW:
 		Bind((CreateViewStatement &)statement);
 		break;
+	case StatementType::EXECUTE:
+		// do nothing
+		break;
 	default:
 		assert(statement.type == StatementType::CREATE_INDEX);
 		Bind((CreateIndexStatement &)statement);

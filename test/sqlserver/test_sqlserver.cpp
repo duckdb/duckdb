@@ -4,7 +4,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("SQL Server functions tests", "[sqlserver][.]") {
+TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
@@ -541,14 +541,13 @@ TEST_CASE("SQL Server functions tests", "[sqlserver][.]") {
 
 	result = con.Query(" SELECT TerritoryName, BusinessEntityID, SalesYTD, LAG (SalesYTD, 1, 0) OVER (PARTITION BY "
 	                   "TerritoryName ORDER BY SalesYTD DESC) AS PrevRepSales FROM Sales.vSalesPerson WHERE "
-	                   "TerritoryName IN (N'Northwest', N'Canada') ORDER BY TerritoryName;");
-	// TODO create view
-	//	REQUIRE(result->success);
-	//	REQUIRE(result->column_count() == 4);
-	//	REQUIRE(CHECK_COLUMN(result, 0, {"Canada", "Canada", "Northwest", "Northwest", "Northwest"}));
-	//	REQUIRE(CHECK_COLUMN(result, 1, {282, 278, 284, 283, 280}));
-	//	REQUIRE(CHECK_COLUMN(result, 2, {2604540.7172, 1453719.4653, 1576562.1966, 1573012.9383, 1352577.1325}));
-	//	REQUIRE(CHECK_COLUMN(result, 3, {0.00, 2604540.7172, 0.00, 1576562.1966, 1573012.9383}));
+	                   "TerritoryName IN (N'Northwest', N'Canada') ORDER BY TerritoryName, SalesYTD DESC;");
+	REQUIRE(result->success);
+	REQUIRE(result->column_count() == 4);
+	REQUIRE(CHECK_COLUMN(result, 0, {"Canada", "Canada", "Northwest", "Northwest", "Northwest"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {282, 278, 284, 283, 280}));
+	REQUIRE(CHECK_COLUMN(result, 2, {2604540.7172, 1453719.4653, 1576562.1966, 1573012.9383, 1352577.1325}));
+	REQUIRE(CHECK_COLUMN(result, 3, {0.00, 2604540.7172, 0.00, 1576562.1966, 1573012.9383}));
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE T (a int, b int, c int);"));
 	REQUIRE_NO_FAIL(

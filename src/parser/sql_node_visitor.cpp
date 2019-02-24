@@ -53,6 +53,9 @@ void SQLNodeVisitor::VisitExpression(Expression *expr_ptr) {
 	case ExpressionClass::OPERATOR:
 		Visit((OperatorExpression &)expr);
 		break;
+	case ExpressionClass::PARAMETER:
+		Visit((ParameterExpression &)expr);
+		break;
 	case ExpressionClass::STAR:
 		Visit((StarExpression &)expr);
 		break;
@@ -62,9 +65,11 @@ void SQLNodeVisitor::VisitExpression(Expression *expr_ptr) {
 	case ExpressionClass::WINDOW:
 		Visit((WindowExpression &)expr);
 		break;
-	default:
-		assert(expr_class == ExpressionClass::COMMON_SUBEXPRESSION);
+	case ExpressionClass::COMMON_SUBEXPRESSION:
 		Visit((CommonSubExpression &)expr);
+		break;
+	default:
+		throw Exception("Unsupported expression class");
 		break;
 	}
 	// visit the children of this node
@@ -117,6 +122,9 @@ void SQLNodeVisitor::VisitExpression(unique_ptr<Expression> *expr_ptr) {
 	case ExpressionClass::OPERATOR:
 		retval = VisitReplace((OperatorExpression &)**expr_ptr, expr_ptr);
 		break;
+	case ExpressionClass::PARAMETER:
+		retval = VisitReplace((ParameterExpression &)**expr_ptr, expr_ptr);
+		break;
 	case ExpressionClass::STAR:
 		retval = VisitReplace((StarExpression &)**expr_ptr, expr_ptr);
 		break;
@@ -126,10 +134,11 @@ void SQLNodeVisitor::VisitExpression(unique_ptr<Expression> *expr_ptr) {
 	case ExpressionClass::WINDOW:
 		retval = VisitReplace((WindowExpression &)**expr_ptr, expr_ptr);
 		break;
-	default:
-		assert(expr_class == ExpressionClass::COMMON_SUBEXPRESSION);
+	case ExpressionClass::COMMON_SUBEXPRESSION:
 		retval = VisitReplace((CommonSubExpression &)**expr_ptr, expr_ptr);
 		break;
+	default:
+		throw Exception("Unsupported expression class");
 	}
 	if (retval) {
 		*expr_ptr = move(retval);
@@ -217,6 +226,11 @@ unique_ptr<Expression> SQLNodeVisitor::VisitReplace(FunctionExpression &expr, un
 }
 
 unique_ptr<Expression> SQLNodeVisitor::VisitReplace(OperatorExpression &expr, unique_ptr<Expression> *expr_ptr) {
+	Visit(expr);
+	return nullptr;
+}
+
+unique_ptr<Expression> SQLNodeVisitor::VisitReplace(ParameterExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	Visit(expr);
 	return nullptr;
 }

@@ -72,7 +72,7 @@ unique_ptr<Expression> OperatorExpression::Copy() {
 	for (auto &it : children) {
 		copy->children.push_back(it->Copy());
 	}
-	return copy;
+	return move(copy);
 }
 
 void OperatorExpression::Serialize(Serializer &serializer) {
@@ -83,7 +83,7 @@ void OperatorExpression::Serialize(Serializer &serializer) {
 unique_ptr<Expression> OperatorExpression::Deserialize(ExpressionType type, TypeId return_type, Deserializer &source) {
 	auto expression = make_unique<OperatorExpression>(type, return_type);
 	source.ReadList<Expression>(expression->children);
-	return expression;
+	return move(expression);
 }
 
 bool OperatorExpression::Equals(const Expression *other_) const {

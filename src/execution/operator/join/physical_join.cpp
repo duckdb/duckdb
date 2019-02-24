@@ -3,7 +3,6 @@
 using namespace duckdb;
 using namespace std;
 
-PhysicalJoin::PhysicalJoin(LogicalOperator &op, PhysicalOperatorType type, JoinType join_type) :
-	PhysicalOperator(type, op.types), type(join_type) {
-
+PhysicalJoin::PhysicalJoin(LogicalOperator &op, PhysicalOperatorType type, JoinType join_type)
+    : PhysicalOperator(type, op.types), type(join_type) {
 }

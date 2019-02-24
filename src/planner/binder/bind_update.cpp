@@ -23,8 +23,5 @@ void Binder::Bind(UpdateStatement &stmt) {
 		}
 		UpdateBinder binder(*this, context);
 		binder.BindAndResolveType(&expression);
-		if (expression->return_type == TypeId::INVALID) {
-			throw BinderException("Could not resolve type of projection element!");
-		}
 	}
 }

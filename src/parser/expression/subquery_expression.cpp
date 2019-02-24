@@ -13,7 +13,7 @@ unique_ptr<Expression> SubqueryExpression::Copy() {
 	copy->subquery_type = subquery_type;
 	copy->child = child ? child->Copy() : nullptr;
 	copy->comparison_type = comparison_type;
-	return copy;
+	return move(copy);
 }
 
 void SubqueryExpression::Serialize(Serializer &serializer) {
@@ -33,7 +33,7 @@ unique_ptr<Expression> SubqueryExpression::Deserialize(ExpressionType type, Type
 	expression->subquery = move(subquery);
 	expression->child = source.ReadOptional<Expression>();
 	expression->comparison_type = source.Read<ExpressionType>();
-	return expression;
+	return move(expression);
 }
 
 bool SubqueryExpression::Equals(const Expression *other_) const {

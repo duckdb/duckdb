@@ -116,7 +116,8 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		// create the JOIN condition
 		JoinCondition cond;
 		cond.left = CastExpression::AddCastToType(return_type, move(subquery.child));
-		cond.right = CastExpression::AddCastToType(return_type, make_unique<BoundColumnRefExpression>("", right_type, ColumnBinding(subquery_index, 0)));
+		cond.right = CastExpression::AddCastToType(
+		    return_type, make_unique<BoundColumnRefExpression>("", right_type, ColumnBinding(subquery_index, 0)));
 		cond.comparison = subquery.comparison_type;
 		join->conditions.push_back(move(cond));
 		root = move(join);
@@ -128,7 +129,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 }
 
 static unique_ptr<LogicalDelimJoin> CreateDuplicateEliminatedJoin(vector<CorrelatedColumnInfo> &correlated_columns,
-                                                             JoinType join_type) {
+                                                                  JoinType join_type) {
 	auto delim_join = make_unique<LogicalDelimJoin>(join_type);
 	for (size_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];
@@ -276,7 +277,8 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		// add the actual condition based on the ANY/ALL predicate
 		JoinCondition compare_cond;
 		compare_cond.left = CastExpression::AddCastToType(return_type, move(subquery.child));
-		compare_cond.right = CastExpression::AddCastToType(return_type, make_unique<BoundColumnRefExpression>("", right_type, ColumnBinding(subquery_index, 0)));
+		compare_cond.right = CastExpression::AddCastToType(
+		    return_type, make_unique<BoundColumnRefExpression>("", right_type, ColumnBinding(subquery_index, 0)));
 		compare_cond.comparison = subquery.comparison_type;
 		delim_join->conditions.push_back(move(compare_cond));
 

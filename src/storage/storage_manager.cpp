@@ -88,7 +88,8 @@ int StorageManager::LoadFromStorage() {
 
 	context.transaction.BeginTransaction();
 	// first read the meta information
-	auto meta_info = FstreamUtil::OpenFile(meta_info_path, ios_base::in);
+	fstream meta_info;
+	FstreamUtil::OpenFile(meta_info_path, meta_info, ios_base::in);
 	int64_t storage_version;
 	int iteration;
 
@@ -100,7 +101,8 @@ int StorageManager::LoadFromStorage() {
 	auto schema_path = JoinPath(storage_path_base, SCHEMA_FILE);
 
 	// read the list of schemas
-	auto schema_file = FstreamUtil::OpenFile(schema_path, ios_base::in);
+	fstream schema_file;
+	FstreamUtil::OpenFile(schema_path, schema_file, ios_base::in);
 
 	string schema_name;
 	while (getline(schema_file, schema_name)) {
@@ -115,14 +117,16 @@ int StorageManager::LoadFromStorage() {
 		auto table_list_path = JoinPath(schema_directory_path, TABLE_LIST_FILE);
 
 		// read the list of tables
-		auto table_list_file = FstreamUtil::OpenFile(table_list_path, ios_base::in);
+		fstream table_list_file;
+		FstreamUtil::OpenFile(table_list_path, table_list_file, ios_base::in);
 		string table_name;
 		while (getline(table_list_file, table_name)) {
 			// get the information of the table
 			auto table_directory_path = JoinPath(schema_directory_path, table_name);
 			auto table_meta_name = JoinPath(table_directory_path, TABLE_FILE);
 
-			auto table_file = FstreamUtil::OpenFile(table_meta_name, ios_base::binary | ios_base::in);
+			fstream table_file;
+			FstreamUtil::OpenFile(table_meta_name, table_file, ios_base::binary | ios_base::in);
 			auto result = FstreamUtil::ReadBinary(table_file);
 
 			// deserialize the CreateTableInformation
@@ -145,7 +149,8 @@ int StorageManager::LoadFromStorage() {
 					break;
 				}
 
-				auto chunk_file = FstreamUtil::OpenFile(chunk_name, ios_base::binary | ios_base::in);
+				fstream chunk_file;
+				FstreamUtil::OpenFile(chunk_name, chunk_file, ios_base::binary | ios_base::in);
 				auto result = FstreamUtil::ReadBinary(chunk_file);
 				// deserialize the chunk
 				DataChunk insert_chunk;
@@ -159,11 +164,13 @@ int StorageManager::LoadFromStorage() {
 		}
 
 		auto view_list_path = JoinPath(schema_directory_path, VIEW_LIST_FILE);
-		auto view_list_file = FstreamUtil::OpenFile(view_list_path, ios_base::in);
+		fstream view_list_file;
+		FstreamUtil::OpenFile(view_list_path, view_list_file, ios_base::in);
 		string view_name;
 		while (getline(view_list_file, view_name)) {
 			auto view_file_path = JoinPath(schema_directory_path, view_name + ".view");
-			auto view_file = FstreamUtil::OpenFile(view_file_path, ios_base::binary | ios_base::in);
+			fstream view_file;
+			FstreamUtil::OpenFile(view_file_path, view_file, ios_base::binary | ios_base::in);
 			auto result = FstreamUtil::ReadBinary(view_file);
 			// deserialize the CreateViewInformation
 			auto view_file_size = FstreamUtil::GetFileSize(view_file);
@@ -193,7 +200,8 @@ void StorageManager::CreateCheckpoint(int iteration) {
 	// first we have to access the schemas
 	auto schema_path = JoinPath(storage_path_base, SCHEMA_FILE);
 
-	auto schema_file = FstreamUtil::OpenFile(schema_path, ios_base::out);
+	fstream schema_file;
+	FstreamUtil::OpenFile(schema_path, schema_file, ios_base::out);
 
 	vector<SchemaCatalogEntry *> schemas;
 	// scan the schemas and write them to the schemas.csv file
@@ -212,10 +220,12 @@ void StorageManager::CreateCheckpoint(int iteration) {
 		CreateDirectory(schema_directory_path);
 		// create the file holding the list of tables for the schema
 		auto table_list_path = JoinPath(schema_directory_path, TABLE_LIST_FILE);
-		auto table_list_file = FstreamUtil::OpenFile(table_list_path, ios_base::out);
+		fstream table_list_file;
+		FstreamUtil::OpenFile(table_list_path, table_list_file, ios_base::out);
 
 		auto view_list_path = JoinPath(schema_directory_path, VIEW_LIST_FILE);
-		auto view_list_file = FstreamUtil::OpenFile(view_list_path, ios_base::out);
+		fstream view_list_file;
+		FstreamUtil::OpenFile(view_list_path, view_list_file, ios_base::out);
 
 		// create the list of tables for the schema
 		vector<TableCatalogEntry *> tables;
@@ -248,7 +258,8 @@ void StorageManager::CreateCheckpoint(int iteration) {
 			CreateDirectory(table_directory_path);
 
 			auto table_meta_name = JoinPath(table_directory_path, TABLE_FILE);
-			auto table_file = FstreamUtil::OpenFile(table_meta_name, ios_base::binary | ios_base::out);
+			fstream table_file;
+			FstreamUtil::OpenFile(table_meta_name, table_file, ios_base::binary | ios_base::out);
 
 			// serialize the table information to a file
 			Serializer serializer;
@@ -278,7 +289,8 @@ void StorageManager::CreateCheckpoint(int iteration) {
 					break;
 				}
 				auto chunk_name = JoinPath(table_directory_path, "chunk-" + to_string(chunk_count) + ".bin");
-				auto chunk_file = FstreamUtil::OpenFile(chunk_name, ios_base::binary | ios_base::out);
+				fstream chunk_file;
+				FstreamUtil::OpenFile(chunk_name, chunk_file, ios_base::binary | ios_base::out);
 
 				Serializer serializer;
 				chunk.Serialize(serializer);
@@ -294,7 +306,8 @@ void StorageManager::CreateCheckpoint(int iteration) {
 		for (auto &view : views) {
 			auto view_file_path = JoinPath(schema_directory_path, view->name + ".view");
 			assert(!FileExists(view_file_path));
-			auto view_file = FstreamUtil::OpenFile(view_file_path, ios_base::binary | ios_base::out);
+			fstream view_file;
+			FstreamUtil::OpenFile(view_file_path, view_file, ios_base::binary | ios_base::out);
 
 			// serialize the view information to a file
 			Serializer serializer;
@@ -307,7 +320,8 @@ void StorageManager::CreateCheckpoint(int iteration) {
 	// all the writes have been flushed and the entire database has been written
 	// now we create the temporary meta information file
 	auto meta_path = JoinPath(path, DATABASE_TEMP_INFO_FILE);
-	auto meta_file = FstreamUtil::OpenFile(meta_path, ios_base::out);
+	fstream meta_file;
+	FstreamUtil::OpenFile(meta_path, meta_file, ios_base::out);
 
 	//! Write information to the meta file
 	meta_file << STORAGE_VERSION << '\n';

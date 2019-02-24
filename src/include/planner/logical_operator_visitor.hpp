@@ -38,8 +38,10 @@ class LogicalIntersect;
 class LogicalSubquery;
 class LogicalUpdate;
 class LogicalTableFunction;
+class LogicalPrepare;
 class LogicalPruneColumns;
 class LogicalWindow;
+class LogicalExecute;
 
 //! The LogicalOperatorVisitor is an abstract base class that implements the
 //! Visitor pattern on LogicalOperator.

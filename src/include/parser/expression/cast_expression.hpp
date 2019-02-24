@@ -19,13 +19,7 @@ public:
 		this->child = move(child);
 	}
 
-	void ResolveType() override {
-		Expression::ResolveType();
-		ExpressionStatistics::Cast(child->stats, stats);
-		if (!stats.FitsInType(return_type)) {
-			return_type = stats.MinimalType();
-		}
-	}
+	void ResolveType() override;
 
 	unique_ptr<Expression> Copy() override;
 
@@ -53,6 +47,9 @@ public:
 
 	//! Add an optional cast to a set of types
 	static unique_ptr<Expression> AddCastToType(TypeId type, unique_ptr<Expression> expr) {
+		if (expr && expr->GetExpressionClass() == ExpressionClass::PARAMETER) {
+			expr->return_type = type;
+		}
 		if (expr && expr->return_type != type) {
 			return make_unique<CastExpression>(type, move(expr));
 		}

@@ -39,6 +39,9 @@ void ExpressionExecutor::Merge(std::vector<std::unique_ptr<Expression>> &express
 
 void ExpressionExecutor::ExecuteExpression(Expression *expr, Vector &result) {
 	vector.Destroy();
+	if (expr->type == ExpressionType::VALUE_PARAMETER) {
+		throw Exception("Cannot execute a parameter expression");
+	}
 	VisitExpression(expr);
 	if (chunk && scalar_executor) {
 		if (vector.count == 1 && (chunk->size() > 1 || vector.sel_vector != chunk->sel_vector)) {

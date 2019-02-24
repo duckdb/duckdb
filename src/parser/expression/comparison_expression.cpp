@@ -10,7 +10,7 @@ using namespace std;
 unique_ptr<Expression> ComparisonExpression::Copy() {
 	auto copy = make_unique<ComparisonExpression>(type, left->Copy(), right->Copy());
 	copy->CopyProperties(*this);
-	return copy;
+	return move(copy);
 }
 
 void ComparisonExpression::ResolveType() {

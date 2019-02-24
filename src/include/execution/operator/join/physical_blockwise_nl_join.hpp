@@ -13,23 +13,28 @@
 
 namespace duckdb {
 
-//! PhysicalBlockwiseNLJoin represents a nested loop join between two tables on arbitrary expressions. This is different from the PhysicalNestedLoopJoin in that it does not require expressions to be comparisons between the LHS and the RHS.
+//! PhysicalBlockwiseNLJoin represents a nested loop join between two tables on arbitrary expressions. This is different
+//! from the PhysicalNestedLoopJoin in that it does not require expressions to be comparisons between the LHS and the
+//! RHS.
 class PhysicalBlockwiseNLJoin : public PhysicalJoin {
 public:
 	PhysicalBlockwiseNLJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
-	                       unique_ptr<Expression> condition, JoinType join_type);
+	                        unique_ptr<Expression> condition, JoinType join_type);
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
 	unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent_executor) override;
+
+	void AcceptExpressions(SQLNodeVisitor *v) override {
+		v->VisitExpression(&condition);
+	}
 
 	unique_ptr<Expression> condition;
 };
 
 class PhysicalBlockwiseNLJoinState : public PhysicalOperatorState {
 public:
-	PhysicalBlockwiseNLJoinState(PhysicalOperator *left, PhysicalOperator *right,
-	                                    ExpressionExecutor *parent_executor)
+	PhysicalBlockwiseNLJoinState(PhysicalOperator *left, PhysicalOperator *right, ExpressionExecutor *parent_executor)
 	    : PhysicalOperatorState(left, parent_executor), left_position(0), right_position(0), fill_in_rhs(false) {
 		assert(left && right);
 	}
@@ -43,6 +48,5 @@ public:
 	size_t right_position;
 	bool fill_in_rhs;
 	bool checked_found_match;
-	
 };
 } // namespace duckdb

@@ -12,7 +12,7 @@ unique_ptr<TableRef> JoinRef::Copy() {
 	copy->condition = condition->Copy();
 	copy->type = type;
 	copy->alias = alias;
-	return copy;
+	return move(copy);
 }
 
 void JoinRef::Serialize(Serializer &serializer) {
@@ -32,5 +32,5 @@ unique_ptr<TableRef> JoinRef::Deserialize(Deserializer &source) {
 	result->condition = Expression::Deserialize(source);
 	result->type = source.Read<JoinType>();
 
-	return result;
+	return move(result);
 }

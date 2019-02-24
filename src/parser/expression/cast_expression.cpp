@@ -5,10 +5,21 @@
 using namespace duckdb;
 using namespace std;
 
+void CastExpression::ResolveType() {
+	Expression::ResolveType();
+	if (child->GetExpressionClass() == ExpressionClass::PARAMETER) {
+		child->return_type = return_type;
+	}
+	ExpressionStatistics::Cast(child->stats, stats);
+	if (!stats.FitsInType(return_type)) {
+		return_type = stats.MinimalType();
+	}
+}
+
 unique_ptr<Expression> CastExpression::Copy() {
 	auto copy = make_unique<CastExpression>(return_type, child->Copy());
 	copy->CopyProperties(*this);
-	return copy;
+	return move(copy);
 }
 
 void CastExpression::Serialize(Serializer &serializer) {

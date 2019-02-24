@@ -22,6 +22,8 @@ public:
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
+	void AcceptExpressions(SQLNodeVisitor *v) override{};
+
 	vector<string> keys;
 	vector<string> values;
 };

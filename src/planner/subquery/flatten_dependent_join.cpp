@@ -1,17 +1,18 @@
+#include "planner/subquery/flatten_dependent_join.hpp"
+
+#include "parser/expression/list.hpp"
+#include "planner/binder.hpp"
+#include "planner/logical_operator_visitor.hpp"
 #include "planner/logical_plan_generator.hpp"
 #include "planner/operator/list.hpp"
-#include "planner/logical_operator_visitor.hpp"
-#include "planner/binder.hpp"
-#include "planner/subquery/flatten_dependent_join.hpp"
 #include "planner/subquery/has_correlated_expressions.hpp"
 #include "planner/subquery/rewrite_correlated_expressions.hpp"
-#include "parser/expression/list.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const vector<CorrelatedColumnInfo> &correlated)
-	: binder(binder), correlated_columns(correlated) {
+    : binder(binder), correlated_columns(correlated) {
 	for (size_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];
 		correlated_map[col.binding] = i;
@@ -42,13 +43,12 @@ bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator *op) {
 unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoin(unique_ptr<LogicalOperator> plan) {
 	auto result = PushDownDependentJoinInternal(move(plan));
 	if (replacement_map.size() > 0) {
-		// check if we have to replace any COUNT aggregates into "CASE WHEN X IS NULL THEN 0 ELSE COUNT END" 
+		// check if we have to replace any COUNT aggregates into "CASE WHEN X IS NULL THEN 0 ELSE COUNT END"
 		RewriteCountAggregates aggr(replacement_map);
 		aggr.VisitOperator(*result);
 	}
 	return result;
 }
-
 
 unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan) {
 	// first check if the logical operator has correlated expressions
@@ -87,8 +87,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		auto proj = (LogicalProjection *)plan.get();
 		for (size_t i = 0; i < correlated_columns.size(); i++) {
 			auto colref = make_unique<BoundColumnRefExpression>(
-				"", correlated_columns[i].type,
-				ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+			    "", correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 			plan->expressions.push_back(move(colref));
 		}
 		base_binding.table_index = proj->table_index;
@@ -107,8 +106,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// now we add all the columns of the delim_scan to the grouping operators AND the projection list
 		for (size_t i = 0; i < correlated_columns.size(); i++) {
 			auto colref = make_unique<BoundColumnRefExpression>(
-				"", correlated_columns[i].type,
-				ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+			    "", correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 			aggr.groups.push_back(move(colref));
 		}
 		if (aggr.groups.size() == correlated_columns.size()) {
@@ -120,11 +118,11 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			left_outer_join->children.push_back(move(plan));
 			for (size_t i = 0; i < correlated_columns.size(); i++) {
 				JoinCondition cond;
-				cond.left = make_unique<BoundColumnRefExpression>("", correlated_columns[i].type,
-																	ColumnBinding(left_index, i));
+				cond.left =
+				    make_unique<BoundColumnRefExpression>("", correlated_columns[i].type, ColumnBinding(left_index, i));
 				cond.right = make_unique<BoundColumnRefExpression>(
-					"", correlated_columns[i].type,
-					ColumnBinding(aggr.group_index, (aggr.groups.size() - correlated_columns.size()) + i));
+				    "", correlated_columns[i].type,
+				    ColumnBinding(aggr.group_index, (aggr.groups.size() - correlated_columns.size()) + i));
 				cond.comparison = ExpressionType::COMPARE_EQUAL;
 				cond.null_values_are_equal = true;
 				left_outer_join->conditions.push_back(move(cond));
@@ -134,8 +132,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			for (size_t i = 0; i < aggr.expressions.size(); i++) {
 				assert(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::AGGREGATE);
 				if (aggr.expressions[i]->type == ExpressionType::AGGREGATE_COUNT ||
-					aggr.expressions[i]->type == ExpressionType::AGGREGATE_COUNT_STAR ||
-					aggr.expressions[i]->type == ExpressionType::AGGREGATE_COUNT_DISTINCT) {
+				    aggr.expressions[i]->type == ExpressionType::AGGREGATE_COUNT_STAR ||
+				    aggr.expressions[i]->type == ExpressionType::AGGREGATE_COUNT_DISTINCT) {
 					// have to replace this ColumnBinding with the CASE expression
 					replacement_map[ColumnBinding(aggr.aggregate_index, i)] = i;
 				}
@@ -178,11 +176,9 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		for (size_t i = 0; i < correlated_columns.size(); i++) {
 			JoinCondition cond;
 			cond.left = make_unique<BoundColumnRefExpression>(
-				"", correlated_columns[i].type,
-				ColumnBinding(left_binding.table_index, left_binding.column_index + i));
+			    "", correlated_columns[i].type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
 			cond.right = make_unique<BoundColumnRefExpression>(
-				"", correlated_columns[i].type,
-				ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+			    "", correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 			cond.comparison = ExpressionType::COMPARE_EQUAL;
 			cond.null_values_are_equal = true;
 			join->conditions.push_back(move(cond));
@@ -236,11 +232,10 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		for (size_t i = 0; i < correlated_columns.size(); i++) {
 			JoinCondition cond;
 			cond.left = make_unique<BoundColumnRefExpression>(
-				"", correlated_columns[i].type,
-				ColumnBinding(left_binding.table_index, left_binding.column_index + i));
+			    "", correlated_columns[i].type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
 			cond.right = make_unique<BoundColumnRefExpression>(
-				"", correlated_columns[i].type,
-				ColumnBinding(right_binding.table_index, right_binding.column_index + i));
+			    "", correlated_columns[i].type,
+			    ColumnBinding(right_binding.table_index, right_binding.column_index + i));
 			cond.comparison = ExpressionType::COMPARE_EQUAL;
 			cond.null_values_are_equal = true;
 			join.conditions.push_back(move(cond));
@@ -285,8 +280,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			auto &w = (WindowExpression &)*expr;
 			for (size_t i = 0; i < correlated_columns.size(); i++) {
 				w.partitions.push_back(make_unique<BoundColumnRefExpression>(
-					"", correlated_columns[i].type,
-					ColumnBinding(base_binding.table_index, base_binding.column_index + i)));
+				    "", correlated_columns[i].type,
+				    ColumnBinding(base_binding.table_index, base_binding.column_index + i)));
 			}
 		}
 		return plan;
@@ -307,6 +302,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		throw ParserException("ORDER BY not supported in correlated subquery");
 	default:
 		throw NotImplementedException("Logical operator type \"%s\" for dependent join",
-										LogicalOperatorToString(plan->type).c_str());
+		                              LogicalOperatorToString(plan->type).c_str());
 	}
 }
