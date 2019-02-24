@@ -157,7 +157,7 @@ void PhysicalBlockwiseNLJoin::_GetChunk(ClientContext &context, DataChunk &chunk
 
 		// create the result
 		VectorOperations::ExecType<bool>(result, [&](bool match, size_t i, size_t k) {
-			if (match) {
+			if (match && !result.nullmask[i]) {
 				// found a match!
 				// set the match flags
 				if (state->lhs_found_match) {

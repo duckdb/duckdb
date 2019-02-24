@@ -56,8 +56,15 @@ TEST_CASE("Test LEFT OUTER JOIN", "[join]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {1, 2, 1, 2, 1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 3, {10, 20, 10, 20, 10, 20}));
 
-	// // left outer join on "false" gives the LHS with the RHS filled as NULL
+	// left outer join on "false" gives the LHS with the RHS filled as NULL
 	result = con.Query("SELECT * FROM integers LEFT OUTER JOIN integers2 ON 1=2 ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2, 3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value(), Value(), Value()}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value(), Value(), Value()}));
+
+	// left outer join on NULL constant gives the LHS with the RHS filled as null as well
+	result = con.Query("SELECT * FROM integers LEFT OUTER JOIN integers2 ON NULL<>NULL ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {2, 3, 4}));
 	REQUIRE(CHECK_COLUMN(result, 2, {Value(), Value(), Value()}));
