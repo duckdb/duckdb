@@ -162,7 +162,8 @@ BindResult ExpressionBinder::TryBindAndResolveType(unique_ptr<Expression> expr) 
 	}
 	ExtractCorrelatedExpressions(binder, *result.expression);
 	result.expression->ResolveType();
-	assert(result.expression->return_type != TypeId::INVALID || result.expression->type == ExpressionType::VALUE_PARAMETER);
+	assert(result.expression->return_type != TypeId::INVALID ||
+	       result.expression->type == ExpressionType::VALUE_PARAMETER);
 	return BindResult(move(result.expression));
 }
 

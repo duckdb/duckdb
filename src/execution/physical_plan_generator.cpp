@@ -191,7 +191,12 @@ void PhysicalPlanGenerator::Visit(LogicalDelete &op) {
 	LogicalOperatorVisitor::VisitOperatorChildren(op);
 	assert(plan); // Delete node cannot be the first node of a plan!
 
-	auto del = make_unique<PhysicalDelete>(op, *op.table, *op.table->storage);
+	// get the index of the row_id column
+	assert(op.expressions.size() == 1);
+	assert(op.expressions[0]->type == ExpressionType::BOUND_REF);
+	auto &bound_ref = (BoundExpression &)*op.expressions[0];
+
+	auto del = make_unique<PhysicalDelete>(op, *op.table, *op.table->storage, bound_ref.index);
 	del->children.push_back(move(plan));
 	this->plan = move(del);
 }

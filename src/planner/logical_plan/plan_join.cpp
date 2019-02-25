@@ -176,7 +176,7 @@ static unique_ptr<LogicalOperator> CreateJoin(JoinType type, unique_ptr<LogicalO
 			any_join->condition = make_unique<ConjunctionExpression>(
 			    ExpressionType::CONJUNCTION_AND, move(any_join->condition), move(expressions[expr_idx]));
 		}
-		return any_join;
+		return move(any_join);
 	}
 	// if we get here we successfully converted all expressions to JoinConditions
 	// create a LogicalComparisonJoin
@@ -184,7 +184,7 @@ static unique_ptr<LogicalOperator> CreateJoin(JoinType type, unique_ptr<LogicalO
 	comp_join->conditions = move(conditions);
 	comp_join->children.push_back(move(left_child));
 	comp_join->children.push_back(move(right_child));
-	return comp_join;
+	return move(comp_join);
 }
 
 unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {

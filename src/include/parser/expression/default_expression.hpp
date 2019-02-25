@@ -26,6 +26,10 @@ public:
 	//! Deserializes a blob back into an DefaultExpression
 	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
 
+	bool IsScalar() override {
+		return false;
+	}
+
 	string ToString() const override {
 		return "DEFAULT";
 	}

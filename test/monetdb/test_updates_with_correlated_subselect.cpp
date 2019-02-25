@@ -18,7 +18,7 @@ TEST_CASE("MonetDB Test: update_with_correlated_subselect.SF-1284791.sql", "[mon
 	REQUIRE_NO_FAIL(con.Query("insert into t1284791b values (1,'2')"));
 
 	REQUIRE_NO_FAIL(con.Query("update t1284791a set val1 = (select val2 from t1284791b where id1 = id2) where id1 in "
-	                       "(select id2 from t1284791b);"));
+	                          "(select id2 from t1284791b);"));
 
 	result = con.Query("select * from t1284791a");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));

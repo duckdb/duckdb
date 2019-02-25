@@ -15,7 +15,8 @@ using namespace duckdb;
 using namespace std;
 
 LogicalPlanGenerator::LogicalPlanGenerator(Binder &binder, ClientContext &context, bool allow_parameter)
-    : binder(binder), plan_subquery(true), has_unplanned_subqueries(false), allow_parameter(allow_parameter), require_row_id(false), context(context) {
+    : binder(binder), plan_subquery(true), has_unplanned_subqueries(false), allow_parameter(allow_parameter),
+      require_row_id(false), context(context) {
 }
 
 void LogicalPlanGenerator::CreatePlan(SQLStatement &statement) {

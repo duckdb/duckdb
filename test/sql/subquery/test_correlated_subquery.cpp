@@ -456,7 +456,6 @@ TEST_CASE("Test for COUNT(*) and SUM(i) IS NULL in subqueries", "[subquery]") {
 	result = con.Query("SELECT i, (SELECT COUNT(*) FROM integers i2 WHERE i2.i>i1.i) FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {0, 2, 1, 0}));
-
 }
 
 TEST_CASE("Test multiple correlated columns and strings", "[subquery]") {
@@ -502,7 +501,6 @@ TEST_CASE("Test multiple correlated columns and strings", "[subquery]") {
 	result = con.Query("SELECT str, str=ANY(SELECT str2 FROM test2 WHERE test.a<>test2.a) FROM test");
 	REQUIRE(CHECK_COLUMN(result, 0, {"a", "b", "c"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {false, true, false}));
-
 }
 
 TEST_CASE("Test complex correlated subqueries", "[subquery]") {
