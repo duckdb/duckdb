@@ -38,6 +38,6 @@ void PhysicalTableFunction::_GetChunk(ClientContext &context, DataChunk &chunk, 
 	}
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalTableFunction::GetOperatorState(ExpressionExecutor *parent_executor) {
-	return make_unique<PhysicalTableFunctionOperatorState>(parent_executor);
+unique_ptr<PhysicalOperatorState> PhysicalTableFunction::GetOperatorState() {
+	return make_unique<PhysicalTableFunctionOperatorState>();
 }

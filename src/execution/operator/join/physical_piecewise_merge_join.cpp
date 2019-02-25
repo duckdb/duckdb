@@ -38,7 +38,7 @@ void PhysicalPiecewiseMergeJoin::_GetChunk(ClientContext &context, DataChunk &ch
 	assert(conditions.size() == 1);
 	if (!state->initialized) {
 		// create the sorted pieces
-		auto right_state = children[1]->GetOperatorState(state->parent);
+		auto right_state = children[1]->GetOperatorState();
 		auto types = children[1]->GetTypes();
 
 		DataChunk right_chunk;
@@ -178,6 +178,6 @@ void PhysicalPiecewiseMergeJoin::_GetChunk(ClientContext &context, DataChunk &ch
 	} while (chunk.size() == 0);
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalPiecewiseMergeJoin::GetOperatorState(ExpressionExecutor *parent_executor) {
-	return make_unique<PhysicalPiecewiseMergeJoinOperatorState>(children[0].get(), children[1].get(), parent_executor);
+unique_ptr<PhysicalOperatorState> PhysicalPiecewiseMergeJoin::GetOperatorState() {
+	return make_unique<PhysicalPiecewiseMergeJoinOperatorState>(children[0].get(), children[1].get());
 }

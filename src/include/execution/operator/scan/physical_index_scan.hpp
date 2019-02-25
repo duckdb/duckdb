@@ -50,15 +50,15 @@ public:
 
 	string ExtraRenderInformation() override;
 
-	unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent_executor) override;
+	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 	void AcceptExpressions(SQLNodeVisitor *v) override{};
 };
 
 class PhysicalIndexScanOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalIndexScanOperatorState(ExpressionExecutor *parent_executor)
-	    : PhysicalOperatorState(nullptr, parent_executor), scan_state(nullptr) {
+	PhysicalIndexScanOperatorState()
+	    : PhysicalOperatorState(nullptr), scan_state(nullptr) {
 	}
 
 	unique_ptr<IndexScanState> scan_state;

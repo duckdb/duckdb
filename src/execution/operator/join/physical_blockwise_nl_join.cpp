@@ -24,7 +24,7 @@ void PhysicalBlockwiseNLJoin::_GetChunk(ClientContext &context, DataChunk &chunk
 
 	// first we fully materialize the right child, if we haven't done that yet
 	if (state->right_chunks.column_count() == 0) {
-		auto right_state = children[1]->GetOperatorState(state->parent);
+		auto right_state = children[1]->GetOperatorState();
 		auto left_types = children[0]->GetTypes();
 		auto right_types = children[1]->GetTypes();
 
@@ -195,6 +195,6 @@ void PhysicalBlockwiseNLJoin::_GetChunk(ClientContext &context, DataChunk &chunk
 	} while (result_count == 0);
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalBlockwiseNLJoin::GetOperatorState(ExpressionExecutor *parent_executor) {
-	return make_unique<PhysicalBlockwiseNLJoinState>(children[0].get(), children[1].get(), parent_executor);
+unique_ptr<PhysicalOperatorState> PhysicalBlockwiseNLJoin::GetOperatorState() {
+	return make_unique<PhysicalBlockwiseNLJoinState>(children[0].get(), children[1].get());
 }

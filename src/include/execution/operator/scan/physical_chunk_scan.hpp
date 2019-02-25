@@ -25,13 +25,13 @@ public:
 	void AcceptExpressions(SQLNodeVisitor *v) override{};
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
-	unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent_executor) override;
+	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 
 class PhysicalChunkScanState : public PhysicalOperatorState {
 public:
-	PhysicalChunkScanState(ExpressionExecutor *parent_executor)
-	    : PhysicalOperatorState(nullptr, parent_executor), chunk_index(0) {
+	PhysicalChunkScanState()
+	    : PhysicalOperatorState(nullptr), chunk_index(0) {
 	}
 
 	//! The current position in the scan

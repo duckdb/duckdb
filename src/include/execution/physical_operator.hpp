@@ -27,7 +27,7 @@ class PhysicalOperator;
 //! data source is exhausted.
 class PhysicalOperatorState {
 public:
-	PhysicalOperatorState(PhysicalOperator *child, ExpressionExecutor *parent);
+	PhysicalOperatorState(PhysicalOperator *child);
 	virtual ~PhysicalOperatorState() {
 	}
 
@@ -40,8 +40,6 @@ public:
 	unique_ptr<PhysicalOperatorState> child_state;
 	//! The cached result of already-computed Common Subexpression results
 	unordered_map<Expression *, unique_ptr<Vector>> cached_cse;
-
-	ExpressionExecutor *parent;
 };
 
 //! PhysicalOperator is the base class of the physical operators present in the
@@ -82,8 +80,8 @@ public:
 	void GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state);
 
 	//! Create a new empty instance of the operator state
-	virtual unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent) {
-		return make_unique<PhysicalOperatorState>(children.size() == 0 ? nullptr : children[0].get(), parent);
+	virtual unique_ptr<PhysicalOperatorState> GetOperatorState() {
+		return make_unique<PhysicalOperatorState>(children.size() == 0 ? nullptr : children[0].get());
 	}
 
 	//! will pass the visitor to all expressions in the operator

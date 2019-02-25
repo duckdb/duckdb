@@ -20,7 +20,7 @@ public:
 	                  vector<PhysicalOperator *> delim_scans);
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
-	unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent_executor) override;
+	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 	string ExtraRenderInformation() override;
 
 	void AcceptExpressions(SQLNodeVisitor *v) override{};
@@ -33,8 +33,8 @@ public:
 
 class PhysicalDelimJoinState : public PhysicalOperatorState {
 public:
-	PhysicalDelimJoinState(PhysicalOperator *left, ExpressionExecutor *parent_executor)
-	    : PhysicalOperatorState(left, parent_executor) {
+	PhysicalDelimJoinState(PhysicalOperator *left)
+	    : PhysicalOperatorState(left) {
 	}
 
 	unique_ptr<PhysicalOperatorState> join_state;

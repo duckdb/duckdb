@@ -23,7 +23,7 @@ public:
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
-	unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent_executor) override;
+	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 	void AcceptExpressions(SQLNodeVisitor *v) override {
 		v->VisitExpression(&condition);
@@ -34,8 +34,8 @@ public:
 
 class PhysicalBlockwiseNLJoinState : public PhysicalOperatorState {
 public:
-	PhysicalBlockwiseNLJoinState(PhysicalOperator *left, PhysicalOperator *right, ExpressionExecutor *parent_executor)
-	    : PhysicalOperatorState(left, parent_executor), left_position(0), right_position(0), fill_in_rhs(false) {
+	PhysicalBlockwiseNLJoinState(PhysicalOperator *left, PhysicalOperator *right)
+	    : PhysicalOperatorState(left), left_position(0), right_position(0), fill_in_rhs(false) {
 		assert(left && right);
 	}
 

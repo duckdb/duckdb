@@ -24,15 +24,15 @@ public:
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
-	unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent_executor) override;
+	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 	unique_ptr<JoinHashTable> hash_table;
 };
 
 class PhysicalHashJoinOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalHashJoinOperatorState(PhysicalOperator *left, PhysicalOperator *right, ExpressionExecutor *parent_executor)
-	    : PhysicalOperatorState(left, parent_executor), initialized(false) {
+	PhysicalHashJoinOperatorState(PhysicalOperator *left, PhysicalOperator *right)
+	    : PhysicalOperatorState(left), initialized(false) {
 		assert(left && right);
 	}
 

@@ -39,21 +39,21 @@ void PhysicalDelimJoin::_GetChunk(ClientContext &context, DataChunk &chunk, Phys
 		// now create the duplicate eliminated chunk by pulling from the DISTINCT aggregate
 		DataChunk delim_chunk;
 		distinct->InitializeChunk(delim_chunk);
-		auto distinct_state = distinct->GetOperatorState(nullptr);
+		auto distinct_state = distinct->GetOperatorState();
 		do {
 			delim_chunk.Reset();
 			distinct->_GetChunk(context, delim_chunk, distinct_state.get());
 			delim_data.Append(delim_chunk);
 		} while (delim_chunk.size() != 0);
 		// create the state of the underlying join
-		state->join_state = join->GetOperatorState(nullptr);
+		state->join_state = join->GetOperatorState();
 	}
 	// now pull from the RHS from the underlying join
 	join->GetChunk(context, chunk, state->join_state.get());
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalDelimJoin::GetOperatorState(ExpressionExecutor *parent_executor) {
-	return make_unique<PhysicalDelimJoinState>(children[0].get(), parent_executor);
+unique_ptr<PhysicalOperatorState> PhysicalDelimJoin::GetOperatorState() {
+	return make_unique<PhysicalDelimJoinState>(children[0].get());
 }
 
 string PhysicalDelimJoin::ExtraRenderInformation() {

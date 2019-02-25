@@ -22,16 +22,15 @@ public:
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
-	unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent_executor) override;
+	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 	vector<TypeId> join_key_types;
 };
 
 class PhysicalPiecewiseMergeJoinOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalPiecewiseMergeJoinOperatorState(PhysicalOperator *left, PhysicalOperator *right,
-	                                        ExpressionExecutor *parent_executor)
-	    : PhysicalOperatorState(left, parent_executor), initialized(false), left_position(0), right_position(0),
+	PhysicalPiecewiseMergeJoinOperatorState(PhysicalOperator *left, PhysicalOperator *right)
+	    : PhysicalOperatorState(left), initialized(false), left_position(0), right_position(0),
 	      right_chunk_index(0), has_null(false) {
 		assert(left && right);
 	}

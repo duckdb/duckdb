@@ -115,7 +115,7 @@ static void ExecuteStatement_(ClientContext &context, string query, unique_ptr<S
 	// store the physical plan in the context for calls to Fetch()
 	context.execution_context.physical_plan = move(physical_planner.plan);
 	assert(context.execution_context.physical_plan);
-	context.execution_context.physical_state = context.execution_context.physical_plan->GetOperatorState(nullptr);
+	context.execution_context.physical_state = context.execution_context.physical_plan->GetOperatorState();
 
 	// read the first chunk, important for INSERT etc.
 	context.execution_context.first_chunk = nullptr;

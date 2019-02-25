@@ -22,7 +22,7 @@ public:
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
-	unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent) override;
+	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 	void AcceptExpressions(SQLNodeVisitor *v) override {
 		for (auto &e : select_list) {
@@ -37,8 +37,8 @@ public:
 //! The operator state of the window
 class PhysicalWindowOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalWindowOperatorState(PhysicalOperator *child, ExpressionExecutor *parent_executor)
-	    : PhysicalOperatorState(child, parent_executor), position(0) {
+	PhysicalWindowOperatorState(PhysicalOperator *child)
+	    : PhysicalOperatorState(child), position(0) {
 	}
 
 	size_t position;

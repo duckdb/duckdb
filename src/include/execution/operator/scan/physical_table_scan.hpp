@@ -32,15 +32,15 @@ public:
 
 	string ExtraRenderInformation() override;
 
-	unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent_executor) override;
+	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 	void AcceptExpressions(SQLNodeVisitor *v) override{};
 };
 
 class PhysicalTableScanOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalTableScanOperatorState(DataTable &table, ExpressionExecutor *parent_executor)
-	    : PhysicalOperatorState(nullptr, parent_executor) {
+	PhysicalTableScanOperatorState(DataTable &table)
+	    : PhysicalOperatorState(nullptr) {
 		table.InitializeScan(scan_offset);
 	}
 

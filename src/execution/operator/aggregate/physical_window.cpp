@@ -505,8 +505,8 @@ void PhysicalWindow::_GetChunk(ClientContext &context, DataChunk &chunk, Physica
 	state->position += STANDARD_VECTOR_SIZE;
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalWindow::GetOperatorState(ExpressionExecutor *parent) {
-	return make_unique<PhysicalWindowOperatorState>(children[0].get(), parent);
+unique_ptr<PhysicalOperatorState> PhysicalWindow::GetOperatorState() {
+	return make_unique<PhysicalWindowOperatorState>(children[0].get());
 }
 
 void WindowSegmentTree::AggregateInit() {

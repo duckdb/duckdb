@@ -23,7 +23,7 @@ public:
 
 	void AcceptExpressions(SQLNodeVisitor *v) override{};
 
-	unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent_executor) override;
+	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 
 } // namespace duckdb

@@ -22,11 +22,11 @@ string PhysicalOperator::ToString() const {
 	return result;
 }
 
-PhysicalOperatorState::PhysicalOperatorState(PhysicalOperator *child, ExpressionExecutor *parent_executor)
-    : finished(false), parent(parent_executor) {
+PhysicalOperatorState::PhysicalOperatorState(PhysicalOperator *child)
+    : finished(false) {
 	if (child) {
 		child->InitializeChunk(child_chunk);
-		child_state = child->GetOperatorState(parent_executor);
+		child_state = child->GetOperatorState();
 	}
 }
 
