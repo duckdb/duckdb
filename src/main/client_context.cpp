@@ -118,7 +118,6 @@ static void ExecuteStatement_(ClientContext &context, string query, unique_ptr<S
 	context.execution_context.physical_state = context.execution_context.physical_plan->GetOperatorState(nullptr);
 
 	// read the first chunk, important for INSERT etc.
-	context.execution_context.first_chunk = nullptr;
 	context.execution_context.first_chunk = context.Fetch();
 
 	if (log_query_string) {
@@ -155,6 +154,10 @@ unique_ptr<DuckDBStreamingResult> ClientContext::Query(string query) {
 		auto &statement = parser.statements.back();
 #ifdef DEBUG
 		if (statement->type == StatementType::SELECT && query_verification_enabled) {
+			bool profiling_is_enabled = profiler.IsEnabled();
+			if (profiling_is_enabled) {
+				profiler.Disable();
+			}
 			// aggressive query verification
 			// copy the statement
 			auto select_stmt = (SelectStatement *)statement.get();
@@ -232,6 +235,9 @@ unique_ptr<DuckDBStreamingResult> ClientContext::Query(string query) {
 			assert(materialized_result->Equals(deserialized_result.get()));
 			assert(copied_result->Equals(deserialized_result.get()));
 
+			if (profiling_is_enabled) {
+				profiler.Enable();
+			}
 			// we need to run the query again to make it fetch-able by callers
 			ExecuteStatement_(*this, query, move(copied_stmt2));
 		} else
