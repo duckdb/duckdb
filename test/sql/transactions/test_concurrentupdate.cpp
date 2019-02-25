@@ -16,7 +16,6 @@ TEST_CASE("Single thread update", "[transactions]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
-	vector<unique_ptr<DuckDBConnection>> connections;
 
 	// initialize the database
 	con.Query("CREATE TABLE integers(i INTEGER);");
