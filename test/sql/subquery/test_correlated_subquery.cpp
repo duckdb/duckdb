@@ -11,7 +11,7 @@ TEST_CASE("Test correlated subqueries", "[subquery]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 
-	// con.EnableQueryVerification();
+	con.EnableQueryVerification();
 	con.EnableProfiling();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
@@ -80,6 +80,19 @@ TEST_CASE("Test correlated subqueries", "[subquery]") {
 	result = con.Query("SELECT i, (SELECT 42 FROM integers WHERE i=i1.i) AS j FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 42, 42, 42}));
+}
+
+TEST_CASE("Test correlated aggregate subqueries", "[subquery]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	con.EnableQueryVerification();
+	con.EnableProfiling();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
+
 	// aggregate with correlation in final projection
 	result = con.Query("SELECT i, (SELECT MIN(i)+i1.i FROM integers) FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
@@ -275,6 +288,18 @@ TEST_CASE("Test correlated subqueries", "[subquery]") {
 	                   "IS NOT NULL)) FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), false, true, true}));
+}
+
+TEST_CASE("Test correlated EXISTS subqueries", "[subquery]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	con.EnableQueryVerification();
+	con.EnableProfiling();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
 
 	// correlated EXISTS
 	result = con.Query("SELECT i, EXISTS(SELECT i FROM integers WHERE i1.i>2) FROM integers i1 ORDER BY i;");
@@ -305,6 +330,18 @@ TEST_CASE("Test correlated subqueries", "[subquery]") {
 	result = con.Query(
 	    "SELECT SUM(CASE WHEN EXISTS(SELECT i FROM integers WHERE i=i1.i) THEN 1 ELSE 0 END) FROM integers i1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+}
+
+TEST_CASE("Test correlated ANY/ALL subqueries", "[subquery]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	con.EnableQueryVerification();
+	con.EnableProfiling();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
 
 	// correlated ANY/ALL
 	result = con.Query("SELECT i=ANY(SELECT i FROM integers WHERE i=i1.i) FROM integers i1 ORDER BY i;");
@@ -364,6 +401,18 @@ TEST_CASE("Test correlated subqueries", "[subquery]") {
 	// zero results for all
 	result = con.Query("SELECT i=ANY(SELECT i FROM integers WHERE i=i1.i AND i>10) FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {false, false, false, false}));
+}
+
+TEST_CASE("Test for COUNT(*) and SUM(i) IS NULL in subqueries", "[subquery]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	con.EnableQueryVerification();
+	con.EnableProfiling();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
 
 	// COUNT(*) and SUM(i) IS NULL aggregates
 	result = con.Query("SELECT i, (SELECT i FROM integers i2 WHERE i=(SELECT SUM(i) FROM integers i2 WHERE i2.i>i1.i)) "
@@ -408,6 +457,16 @@ TEST_CASE("Test correlated subqueries", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {0, 2, 1, 0}));
 
+}
+
+TEST_CASE("Test multiple correlated columns and strings", "[subquery]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	con.EnableQueryVerification();
+	con.EnableProfiling();
+
 	// multiple correlated columns and strings
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER, str VARCHAR);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 1, 'a'), (12, 2, 'b'), (13, 3, 'c')"));
@@ -443,6 +502,19 @@ TEST_CASE("Test correlated subqueries", "[subquery]") {
 	result = con.Query("SELECT str, str=ANY(SELECT str2 FROM test2 WHERE test.a<>test2.a) FROM test");
 	REQUIRE(CHECK_COLUMN(result, 0, {"a", "b", "c"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {false, true, false}));
+
+}
+
+TEST_CASE("Test complex correlated subqueries", "[subquery]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	con.EnableQueryVerification();
+	con.EnableProfiling();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
 
 	// correlated expression in subquery
 	result = con.Query(
@@ -495,28 +567,6 @@ TEST_CASE("Test correlated subqueries", "[subquery]") {
 	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	// REQUIRE(CHECK_COLUMN(result, 1, {6, 6, 9, 12}));
 
-	// window functions in correlated subquery
-	result = con.Query(
-	    "SELECT i, (SELECT row_number() OVER (ORDER BY i) FROM integers WHERE i1.i=i) FROM integers i1 ORDER BY i;");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
-	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 1, 1}));
-	result = con.Query("SELECT i1.i, (SELECT rank() OVER (ORDER BY i) FROM integers WHERE i1.i=i) FROM integers i1, "
-	                   "integers i2 ORDER BY i1.i;");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value(), Value(), 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3}));
-	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value(), Value(), 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
-	result = con.Query("SELECT i1.i, (SELECT row_number() OVER (ORDER BY i) FROM integers WHERE i1.i=i) FROM integers "
-	                   "i1, integers i2 ORDER BY i1.i;");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value(), Value(), 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3}));
-	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value(), Value(), 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
-	result = con.Query(
-	    "SELECT i, (SELECT SUM(i) OVER (ORDER BY i) FROM integers WHERE i1.i=i) FROM integers i1 ORDER BY i;");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
-	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3}));
-	result = con.Query("SELECT i, (SELECT SUM(s1.i) OVER (ORDER BY s1.i) FROM integers s1, integers s2 WHERE i1.i=s1.i "
-	                   "LIMIT 1) FROM integers i1 ORDER BY i;");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
-	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 4, 8, 12}));
-
 	// correlated expression inside window function not supported
 	REQUIRE_FAIL(con.Query("SELECT i, (SELECT row_number() OVER (ORDER BY i)) FROM integers i1 ORDER BY i;"));
 
@@ -545,6 +595,52 @@ TEST_CASE("Test correlated subqueries", "[subquery]") {
 	result = con.Query("SELECT i, (SELECT (SELECT SUM(i) FROM integers)+42+i1.i) AS j FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 49, 50, 51}));
+}
+
+TEST_CASE("Test window functions in correlated subqueries", "[subquery]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	con.EnableQueryVerification();
+	con.EnableProfiling();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
+
+	// window functions in correlated subquery
+	result = con.Query(
+	    "SELECT i, (SELECT row_number() OVER (ORDER BY i) FROM integers WHERE i1.i=i) FROM integers i1 ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 1, 1}));
+	result = con.Query("SELECT i1.i, (SELECT rank() OVER (ORDER BY i) FROM integers WHERE i1.i=i) FROM integers i1, "
+	                   "integers i2 ORDER BY i1.i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value(), Value(), 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value(), Value(), 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
+	result = con.Query("SELECT i1.i, (SELECT row_number() OVER (ORDER BY i) FROM integers WHERE i1.i=i) FROM integers "
+	                   "i1, integers i2 ORDER BY i1.i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value(), Value(), 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value(), Value(), 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
+	result = con.Query(
+	    "SELECT i, (SELECT SUM(i) OVER (ORDER BY i) FROM integers WHERE i1.i=i) FROM integers i1 ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3}));
+	result = con.Query("SELECT i, (SELECT SUM(s1.i) OVER (ORDER BY s1.i) FROM integers s1, integers s2 WHERE i1.i=s1.i "
+	                   "LIMIT 1) FROM integers i1 ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 4, 8, 12}));
+}
+
+TEST_CASE("Test nested correlated subqueries", "[subquery]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	con.EnableQueryVerification();
+	con.EnableProfiling();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
 
 	// nested correlated queries
 	result = con.Query("SELECT i, (SELECT (SELECT 42+i1.i)+42+i1.i) AS j FROM integers i1 ORDER BY i;");
@@ -700,7 +796,15 @@ TEST_CASE("Test correlated subqueries", "[subquery]") {
 	    "integers WHERE i=s1.i)) ss2 ON ss1.i=ss2.i) AS j FROM integers i1 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), 4, 6}));
+}
 
+TEST_CASE("Test varchar correlated subqueries", "[subquery]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	con.EnableQueryVerification();
+	con.EnableProfiling();
 	// varchar tests
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(v VARCHAR)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('hello'), ('world'), (NULL)"));

@@ -65,6 +65,18 @@ TEST_CASE("Test uncorrelated subqueries", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	result = con.Query("SELECT * FROM integers WHERE i > (SELECT i FROM integers WHERE i=1)");
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3}));
+}
+
+TEST_CASE("Test uncorrelated exists subqueries", "[subquery]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	con.EnableProfiling();
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
 
 	// uncorrelated EXISTS
 	result = con.Query("SELECT * FROM integers WHERE EXISTS(SELECT 1) ORDER BY i");
@@ -112,6 +124,18 @@ TEST_CASE("Test uncorrelated subqueries", "[subquery]") {
 	// add aggregations after the subquery
 	result = con.Query("SELECT SUM(i) FROM integers WHERE 1 IN (SELECT * FROM integers)");
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
+}
+
+TEST_CASE("Test uncorrelated ANY subqueries", "[subquery]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	con.EnableProfiling();
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
 
 	// uncorrelated ANY
 	result = con.Query("SELECT i FROM integers WHERE i <= ANY(SELECT i FROM integers)");
@@ -162,6 +186,18 @@ TEST_CASE("Test uncorrelated subqueries", "[subquery]") {
 	              "i5, integers i6 WHERE i1.i IS NOT NULL AND i1.i <> 1 LIMIT 1) FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), false, true, true}));
+}
+
+TEST_CASE("Test uncorrelated ALL subqueries", "[subquery]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	con.EnableProfiling();
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
 
 	// uncorrelated ALL
 	result = con.Query("SELECT i FROM integers WHERE i >= ALL(SELECT i FROM integers)");
@@ -263,6 +299,18 @@ TEST_CASE("Test uncorrelated subqueries", "[subquery]") {
 	result = con.Query("SELECT (SELECT SUM(i) FROM integers), (SELECT 42)");
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
 	REQUIRE(CHECK_COLUMN(result, 1, {42}));
+}
+
+TEST_CASE("Test uncorrelated VARCHAR subqueries", "[subquery]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	con.EnableProfiling();
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
 
 	// varchar tests
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(v VARCHAR)"));
