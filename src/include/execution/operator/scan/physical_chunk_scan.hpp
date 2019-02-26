@@ -20,7 +20,10 @@ public:
 	    : PhysicalOperator(PhysicalOperatorType::CHUNK_SCAN, types), collection(nullptr) {
 	}
 
+	// the chunk collection to scan
 	ChunkCollection *collection;
+	//! Owned chunk collection, if any
+	unique_ptr<ChunkCollection> owned_collection;
 
 	void AcceptExpressions(SQLNodeVisitor *v) override{};
 
@@ -30,8 +33,7 @@ public:
 
 class PhysicalChunkScanState : public PhysicalOperatorState {
 public:
-	PhysicalChunkScanState()
-	    : PhysicalOperatorState(nullptr), chunk_index(0) {
+	PhysicalChunkScanState() : PhysicalOperatorState(nullptr), chunk_index(0) {
 	}
 
 	//! The current position in the scan

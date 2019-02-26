@@ -149,9 +149,14 @@ void PhysicalPlanGenerator::Visit(LogicalChunkGet &op) {
 	LogicalOperatorVisitor::VisitOperatorChildren(op);
 
 	// create a PhysicalChunkScan
-	// the actual collection from which to scan will be added later
 	assert(!plan);
-	this->plan = make_unique<PhysicalChunkScan>(op.types);
+	auto chunk_scan = make_unique<PhysicalChunkScan>(op.types);
+	if (op.collection) {
+		// if the LogicalChunkGet has a collection, we scan that
+		chunk_scan->owned_collection = move(op.collection);
+		chunk_scan->collection = chunk_scan->owned_collection.get();
+	}
+	plan = move(chunk_scan);
 }
 
 static unique_ptr<PhysicalOperator> CreateDistinct(unique_ptr<PhysicalOperator> child) {

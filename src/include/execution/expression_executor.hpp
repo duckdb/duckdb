@@ -32,8 +32,7 @@ public:
 		}
 	}
 
-	ExpressionExecutor(DataChunk &child_chunk)
-	    : scalar_executor(true), chunk(&child_chunk), state(nullptr) {
+	ExpressionExecutor(DataChunk &child_chunk) : scalar_executor(true), chunk(&child_chunk), state(nullptr) {
 	}
 
 	void Reset();

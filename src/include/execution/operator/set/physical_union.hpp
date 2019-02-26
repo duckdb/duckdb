@@ -22,8 +22,7 @@ public:
 
 class PhysicalUnionOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalUnionOperatorState()
-	    : PhysicalOperatorState(nullptr), top_done(false) {
+	PhysicalUnionOperatorState() : PhysicalOperatorState(nullptr), top_done(false) {
 	}
 	unique_ptr<PhysicalOperatorState> top_state;
 	unique_ptr<PhysicalOperatorState> bottom_state;

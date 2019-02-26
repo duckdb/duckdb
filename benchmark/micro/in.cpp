@@ -10,47 +10,47 @@ using namespace std;
 #define IN_LIST_ROW_COUNT 1000000
 #define STRING_LENGTH 4
 
-#define IN_QUERY_BODY(INCOUNT)                                                                                           \
-static constexpr const char *chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"; \
-string in_list; \
-static string GenerateString(std::uniform_int_distribution<>& distribution, std::mt19937& gen) { \
-	string result; \
-	for(size_t i = 0; i < STRING_LENGTH; i++) { \
-		result += string(chars[distribution(gen)], 1); \
-	} \
-	return result; \
-} \
-virtual void Load(DuckDBBenchmarkState *state) { \
-	std::uniform_int_distribution<> distribution(0, strlen(chars)); \
-	std::mt19937 gen; \
-	gen.seed(42); \
-	state->conn.Query("CREATE TABLE strings(s VARCHAR);"); \
-	Appender appender(state->db, DEFAULT_SCHEMA, "strings"); \
-	for (size_t i = 0; i < IN_LIST_ROW_COUNT; i++) { \
-		appender.BeginRow(); \
-		appender.AppendValue(Value(GenerateString(distribution, gen))); \
-		appender.EndRow(); \
-	} \
-	appender.Commit(); \
-	for(size_t i = 0; i < INCOUNT; i++) { \
-		in_list += "'" + GenerateString(distribution, gen) + "'"; \
-		if (i != INCOUNT - 1) { \
-			in_list += ", "; \
-		} \
-	} \
-} \
-virtual string GetQuery() { \
-	return "SELECT * FROM strings WHERE s IN (" + in_list + ")"; \
-} \
-virtual string VerifyResult(DuckDBResult *result) { \
-	if (!result->GetSuccess()) { \
-		return result->GetErrorMessage(); \
-	} \
-	return string(); \
-} \
-virtual string BenchmarkInfo() { \
-	return StringUtil::Format("Runs the following query: \"" + GetQuery() + "\""); \
-}
+#define IN_QUERY_BODY(INCOUNT)                                                                                         \
+	static constexpr const char *chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";                                                 \
+	string in_list;                                                                                                    \
+	static string GenerateString(std::uniform_int_distribution<> &distribution, std::mt19937 &gen) {                   \
+		string result;                                                                                                 \
+		for (size_t i = 0; i < STRING_LENGTH; i++) {                                                                   \
+			result += string(chars[distribution(gen)], 1);                                                             \
+		}                                                                                                              \
+		return result;                                                                                                 \
+	}                                                                                                                  \
+	virtual void Load(DuckDBBenchmarkState *state) {                                                                   \
+		std::uniform_int_distribution<> distribution(0, strlen(chars));                                                \
+		std::mt19937 gen;                                                                                              \
+		gen.seed(42);                                                                                                  \
+		state->conn.Query("CREATE TABLE strings(s VARCHAR);");                                                         \
+		Appender appender(state->db, DEFAULT_SCHEMA, "strings");                                                       \
+		for (size_t i = 0; i < IN_LIST_ROW_COUNT; i++) {                                                               \
+			appender.BeginRow();                                                                                       \
+			appender.AppendValue(Value(GenerateString(distribution, gen)));                                            \
+			appender.EndRow();                                                                                         \
+		}                                                                                                              \
+		appender.Commit();                                                                                             \
+		for (size_t i = 0; i < INCOUNT; i++) {                                                                         \
+			in_list += "'" + GenerateString(distribution, gen) + "'";                                                  \
+			if (i != INCOUNT - 1) {                                                                                    \
+				in_list += ", ";                                                                                       \
+			}                                                                                                          \
+		}                                                                                                              \
+	}                                                                                                                  \
+	virtual string GetQuery() {                                                                                        \
+		return "SELECT * FROM strings WHERE s IN (" + in_list + ")";                                                   \
+	}                                                                                                                  \
+	virtual string VerifyResult(DuckDBResult *result) {                                                                \
+		if (!result->GetSuccess()) {                                                                                   \
+			return result->GetErrorMessage();                                                                          \
+		}                                                                                                              \
+		return string();                                                                                               \
+	}                                                                                                                  \
+	virtual string BenchmarkInfo() {                                                                                   \
+		return StringUtil::Format("Runs the following query: \"" + GetQuery() + "\"");                                 \
+	}
 
 DUCKDB_BENCHMARK(InList0001Entry, "[in]")
 IN_QUERY_BODY(1)

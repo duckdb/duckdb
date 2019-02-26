@@ -39,8 +39,7 @@ public:
 
 class PhysicalTableScanOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalTableScanOperatorState(DataTable &table)
-	    : PhysicalOperatorState(nullptr) {
+	PhysicalTableScanOperatorState(DataTable &table) : PhysicalOperatorState(nullptr) {
 		table.InitializeScan(scan_offset);
 	}
 

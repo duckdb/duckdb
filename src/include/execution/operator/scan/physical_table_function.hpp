@@ -38,8 +38,7 @@ public:
 
 class PhysicalTableFunctionOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalTableFunctionOperatorState()
-	    : PhysicalOperatorState(nullptr), initialized(false) {
+	PhysicalTableFunctionOperatorState() : PhysicalOperatorState(nullptr), initialized(false) {
 	}
 
 	unique_ptr<TableFunctionData> function_data;

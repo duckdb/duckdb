@@ -30,8 +30,8 @@ public:
 class PhysicalPiecewiseMergeJoinOperatorState : public PhysicalOperatorState {
 public:
 	PhysicalPiecewiseMergeJoinOperatorState(PhysicalOperator *left, PhysicalOperator *right)
-	    : PhysicalOperatorState(left), initialized(false), left_position(0), right_position(0),
-	      right_chunk_index(0), has_null(false) {
+	    : PhysicalOperatorState(left), initialized(false), left_position(0), right_position(0), right_chunk_index(0),
+	      has_null(false) {
 		assert(left && right);
 	}
 

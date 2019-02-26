@@ -1,11 +1,10 @@
 #include "execution/window_segment_tree.hpp"
 
-#include "common/vector_operations/vector_operations.hpp"
 #include "common/types/constant_vector.hpp"
+#include "common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
-
 
 void WindowSegmentTree::AggregateInit() {
 	switch (window_type) {

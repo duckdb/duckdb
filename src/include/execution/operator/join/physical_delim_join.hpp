@@ -33,8 +33,7 @@ public:
 
 class PhysicalDelimJoinState : public PhysicalOperatorState {
 public:
-	PhysicalDelimJoinState(PhysicalOperator *left)
-	    : PhysicalOperatorState(left) {
+	PhysicalDelimJoinState(PhysicalOperator *left) : PhysicalOperatorState(left) {
 	}
 
 	unique_ptr<PhysicalOperatorState> join_state;

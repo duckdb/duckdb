@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "common/types/chunk_collection.hpp"
 #include "planner/logical_operator.hpp"
 
 namespace duckdb {
@@ -33,6 +34,8 @@ public:
 	size_t table_index;
 	//! The types of the chunk
 	vector<TypeId> chunk_types;
+	//! The chunk collection to scan
+	unique_ptr<ChunkCollection> collection;
 
 protected:
 	void ResolveTypes() override {

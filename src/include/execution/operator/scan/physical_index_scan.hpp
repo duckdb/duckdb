@@ -57,8 +57,7 @@ public:
 
 class PhysicalIndexScanOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalIndexScanOperatorState()
-	    : PhysicalOperatorState(nullptr), scan_state(nullptr) {
+	PhysicalIndexScanOperatorState() : PhysicalOperatorState(nullptr), scan_state(nullptr) {
 	}
 
 	unique_ptr<IndexScanState> scan_state;

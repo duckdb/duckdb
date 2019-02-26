@@ -4,12 +4,11 @@
 #include "common/types/constant_vector.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
+#include "execution/window_segment_tree.hpp"
 #include "parser/expression/aggregate_expression.hpp"
 #include "parser/expression/bound_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
 #include "parser/expression/window_expression.hpp"
-
-#include "execution/window_segment_tree.hpp"
 
 using namespace duckdb;
 using namespace std;

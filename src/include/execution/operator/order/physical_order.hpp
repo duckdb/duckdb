@@ -36,8 +36,7 @@ public:
 
 class PhysicalOrderOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalOrderOperatorState(PhysicalOperator *child)
-	    : PhysicalOperatorState(child), position(0) {
+	PhysicalOrderOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), position(0) {
 	}
 
 	size_t position;

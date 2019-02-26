@@ -40,4 +40,4 @@ private:
 	static constexpr size_t TREE_FANOUT = 64; // this should cleanly divide STANDARD_VECTOR_SIZE
 };
 
-}
+} // namespace duckdb
