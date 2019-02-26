@@ -99,6 +99,10 @@ public:
 	DuckDBStreamingResult(ClientContext &context) : context(context){};
 	//	DuckDBStreamingResult(string error);
 
+	~DuckDBStreamingResult() {
+		Close();
+	}
+
 	bool GetSuccess() override;
 
 	unique_ptr<DuckDBResult> Materialize(bool close = true);
@@ -110,6 +114,7 @@ public:
 	const string &GetErrorMessage() override;
 
 private:
+
 	ClientContext &context;
 };
 
