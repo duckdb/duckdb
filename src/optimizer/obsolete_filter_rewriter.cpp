@@ -5,17 +5,6 @@
 using namespace duckdb;
 using namespace std;
 
-// class RewriteSubqueries : public SQLNodeVisitor {
-// protected:
-// 	using SQLNodeVisitor::Visit;
-// 	void Visit(BoundSubqueryExpression &subquery) override {
-// 		// we perform join reordering within the subquery expression
-// 		ObsoleteFilterRewriter rewriter;
-// 		subquery.op = rewriter.Rewrite(move(subquery.op));
-// 		assert(subquery.op);
-// 	}
-// };
-
 struct ExpressionValueInformation {
 	size_t expression_index;
 	Value constant;

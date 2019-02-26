@@ -634,13 +634,14 @@ void PhysicalPlanGenerator::Visit(LogicalCopy &op) {
 	LogicalOperatorVisitor::VisitOperatorChildren(op);
 
 	if (plan) {
-		auto copy = make_unique<PhysicalCopy>(op, move(op.file_path), move(op.is_from), move(op.delimiter),
-		                                      move(op.quote), move(op.escape));
+		// COPY from select statement
+		assert(!op.table);
+		auto copy = make_unique<PhysicalCopy>(op, move(op.info));
 		copy->children.push_back(move(plan));
 		plan = move(copy);
 	} else {
-		auto copy = make_unique<PhysicalCopy>(op, op.table, move(op.file_path), move(op.is_from), move(op.delimiter),
-		                                      move(op.quote), move(op.escape), move(op.select_list));
+		// COPY from table
+		auto copy = make_unique<PhysicalCopy>(op, op.table, move(op.info));
 		plan = move(copy);
 	}
 }

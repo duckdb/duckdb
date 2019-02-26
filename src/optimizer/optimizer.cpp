@@ -23,17 +23,6 @@ Optimizer::Optimizer(ClientContext &client_context) : rewriter(client_context) {
 #endif
 }
 
-// class OptimizeSubqueries : public LogicalOperatorVisitor {
-// public:
-// 	using LogicalOperatorVisitor::Visit;
-// 	void Visit(BoundSubqueryExpression &subquery) override {
-// 		// we perform join reordering within the subquery expression
-// 		JoinOrderOptimizer optimizer;
-// 		subquery.op = optimizer.Optimize(move(subquery.op));
-// 		assert(subquery.op);
-// 	}
-// };
-
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan) {
 	// first we perform expression rewrites using the ExpressionRewriter
 	// this does not change the logical plan structure, but only simplifies the expression trees

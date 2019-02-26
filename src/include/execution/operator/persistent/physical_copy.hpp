@@ -9,23 +9,19 @@
 #pragma once
 
 #include "execution/physical_operator.hpp"
-
-#include <fstream>
+#include "parser/parsed_data.hpp"
 
 namespace duckdb {
 
 //! Physically copy file into a table
 class PhysicalCopy : public PhysicalOperator {
 public:
-	PhysicalCopy(LogicalOperator &op, TableCatalogEntry *table, string file_path, bool is_from, char delimiter,
-	             char quote, char escape, vector<string> select_list)
-	    : PhysicalOperator(PhysicalOperatorType::COPY, op.types), table(table), file_path(file_path), is_from(is_from),
-	      select_list(select_list), delimiter(delimiter), quote(quote), escape(escape) {
+	PhysicalCopy(LogicalOperator &op, TableCatalogEntry *table, unique_ptr<CopyInformation> info)
+	    : PhysicalOperator(PhysicalOperatorType::COPY, op.types), table(table), info(move(info)) {
 	}
 
-	PhysicalCopy(LogicalOperator &op, string file_path, bool is_from, char delimiter, char quote, char escape)
-	    : PhysicalOperator(PhysicalOperatorType::COPY, op.types), table(nullptr), file_path(file_path),
-	      is_from(is_from), delimiter(delimiter), quote(quote), escape(escape) {
+	PhysicalCopy(LogicalOperator &op, unique_ptr<CopyInformation> info)
+	    : PhysicalOperator(PhysicalOperatorType::COPY, op.types), table(nullptr), info(move(info)) {
 	}
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
@@ -33,12 +29,10 @@ public:
 	void AcceptExpressions(SQLNodeVisitor *v) override{};
 
 	TableCatalogEntry *table;
-	string file_path;
-	bool is_from;
-	vector<string> select_list;
+	unique_ptr<CopyInformation> info;
 
-	char delimiter = ',';
-	char quote = '"';
-	char escape = '"';
+private:
+	void Flush(ClientContext &context, DataChunk &chunk, int64_t &nr_elements, int64_t &total,
+	           vector<bool> &set_to_default);
 };
 } // namespace duckdb

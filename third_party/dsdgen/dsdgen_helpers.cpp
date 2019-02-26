@@ -30,7 +30,6 @@ void ResetCountCount() {
 	resetCountCount();
 }
 
-
 tpcds_table_def GetTDefByNumber(int table_id) {
 	auto tdef = getSimpleTdefsByNumber(table_id);
 	tpcds_table_def def;
@@ -45,4 +44,4 @@ tpcds_builder_func GetTDefFunctionByNumber(int table_id) {
 	return table_funcs->builder;
 }
 
-}
+} // namespace tpcds

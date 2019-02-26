@@ -9,6 +9,7 @@
 #pragma once
 
 #include "parser/expression.hpp"
+#include "parser/parsed_data.hpp"
 #include "parser/query_node.hpp"
 #include "parser/sql_node_visitor.hpp"
 #include "parser/sql_statement.hpp"
@@ -19,7 +20,7 @@ namespace duckdb {
 
 class CopyStatement : public SQLStatement {
 public:
-	CopyStatement() : SQLStatement(StatementType::COPY){};
+	CopyStatement() : SQLStatement(StatementType::COPY), info(make_unique<CopyInformation>()){};
 
 	string ToString() const override;
 
@@ -30,25 +31,8 @@ public:
 		throw NotImplementedException("Equality not implemented!");
 	}
 
-	string table;
-	string schema;
-
+	unique_ptr<CopyInformation> info;
 	// The SQL statement used instead of a table when copying data out to a file
 	unique_ptr<QueryNode> select_statement;
-
-	string file_path;
-
-	// List of Columns that will be copied from/to.
-	vector<string> select_list;
-
-	// File Format
-	ExternalFileFormat format = ExternalFileFormat::CSV;
-
-	// Copy: From CSV (True) To CSV (False)
-	bool is_from;
-
-	char delimiter = ',';
-	char quote = '"';
-	char escape = '"';
 };
 } // namespace duckdb
