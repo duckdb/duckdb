@@ -10,36 +10,6 @@
 using namespace duckdb;
 using namespace std;
 
-vector<string> split(const string &str, char delimiter, char quote) {
-	vector<string> res;
-	size_t i = 0;
-	if (str[i] == delimiter)
-		res.push_back("");
-	while (i != str.size()) {
-		if (str[i] == quote) {
-			i++;
-			size_t j = i;
-			while (j != str.size() && str[j] != quote)
-				j++;
-			if (i != j) {
-				res.push_back(str.substr(i, j - i));
-				i = j;
-			}
-		} else if (str[i] == delimiter)
-			i++;
-		size_t j = i;
-		while (j != str.size() && str[j] != delimiter)
-			j++;
-		if (i != j) {
-			res.push_back(str.substr(i, j - i));
-			i = j;
-		} else {
-			res.push_back("");
-		}
-	}
-	return res;
-}
-
 static bool end_of_field(string &line, size_t i, char delimiter) {
 	return i + 1 >= line.size() || line[i] == delimiter;
 }
@@ -100,7 +70,8 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalO
 		}
 		while (getline(from_csv, line)) {
 			bool in_quotes = false;
-			size_t start = 0, offset = 0;
+			size_t start = 0;
+			int64_t end = -1;
 			int64_t column = 0;
 			int64_t expected_column_count =
 			    info.select_list.size() > 0 ? info.select_list.size() : insert_chunk.column_count;
@@ -110,30 +81,37 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalO
 					if (!in_quotes) {
 						// start quotes can only occur at the start of a field
 						if (i != start) {
-							throw ParserException("Error on line %lld: unexpected quotes in the middle of a field",
-							                      linenr);
+							// quotes in the middle of a line are ignored
+							continue;
 						}
 						// offset start by one
 						in_quotes = true;
 						start++;
 						continue;
 					} else {
-						// end quotes can only occur at the end of a field
 						if (!end_of_field(line, i + 1, info.delimiter)) {
-							throw ParserException("Error on line %lld: unexpected quotes in the middle of a field",
-							                      linenr);
+							// quotes not at the end of a line are ignored
+							continue;
 						}
 						// offset end by one
 						in_quotes = false;
-						offset = 1;
+						end = i;
 						i++;
 					}
 				} else if (in_quotes) {
 					continue;
 				}
-				if (end_of_field(line, i, info.delimiter)) {
-					assert(i >= start + offset);
-					size_t length = i - start - offset;
+				if (end < 0) {
+					if (line[i] == info.delimiter) {
+						end = i;
+					}
+					if (i + 1 >= line.size()) {
+						end = i + 1;
+					}
+				}
+				if (end >= 0) {
+					assert(end >= start);
+					size_t length = end - start;
 					if (column == expected_column_count && length == 0) {
 						// skip a single trailing delimiter
 						column++;
@@ -157,8 +135,11 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalO
 					column++;
 
 					start = i + 1;
-					offset = 0;
+					end = -1;
 				}
+			}
+			if (in_quotes) {
+				throw ParserException("Error on line %lld: unterminated quotes", linenr);
 			}
 			if (column < expected_column_count) {
 				throw ParserException("Error on line %lld: expected %lld values but got %d", linenr,

@@ -1,89 +1,128 @@
 #include "catch.hpp"
+#include "test_csv_header.hpp"
 #include "test_helpers.hpp"
+#include "common/file_system.hpp"
 
 #include <fstream>
 
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test copy statement", "[copystatement]") {
+static string GetCSVPath() {
+	string csv_path = JoinPath(TESTING_DIRECTORY_NAME, "csv_files");
+	if (DirectoryExists(csv_path)) {
+		RemoveDirectory(csv_path);
+	}
+	CreateDirectory(csv_path);
+	return csv_path;
+}
+
+static void WriteCSV(string path, const char *csv) {
+	ofstream csv_writer(path);
+	csv_writer << csv;
+	csv_writer.close();
+}
+
+TEST_CASE("Test copy statement", "[copy]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 
+	auto csv_path = GetCSVPath();
+
 	// Generate CSV file With ; as delimiter and complex strings
-	ofstream from_csv_file("test.csv");
+	ofstream from_csv_file(JoinPath(csv_path, "test.csv"));
 	for (int i = 0; i < 5000; i++)
 		from_csv_file << i << "," << i << ", test" << endl;
 	from_csv_file.close();
 
 	// Loading CSV into a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER,c VARCHAR(10));"));
-	result = con.Query("COPY test FROM 'test.csv';");
+	result = con.Query("COPY test FROM '" + JoinPath(csv_path, "test.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 
 	result = con.Query("SELECT COUNT(a), SUM(a) FROM test;");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 	REQUIRE(CHECK_COLUMN(result, 1, {12497500}));
 
+	result = con.Query("SELECT * FROM test ORDER BY 1 LIMIT 3 ");
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0, 1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {" test", " test", " test"}));
+
 	//  Creating CSV from table
-	result = con.Query("COPY test to 'test2.csv';");
+	result = con.Query("COPY test to '" + JoinPath(csv_path, "test2.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
+	// load the same CSV back again
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test2(a INTEGER, b INTEGER, c VARCHAR(10));"));
+	result = con.Query("COPY test2 FROM '" + JoinPath(csv_path, "test2.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
+	result = con.Query("SELECT * FROM test2 ORDER BY 1 LIMIT 3 ");
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0, 1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {" test", " test", " test"}));
 
 	//  Creating CSV from Query
-	result = con.Query("COPY (select a,b from test where a < 4000) to 'test3.csv';");
+	result = con.Query("COPY (select a,b from test where a < 4000) to '" + JoinPath(csv_path, "test3.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {4000}));
+	// load the same CSV back again
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test3(a INTEGER, b INTEGER);"));
+	result = con.Query("COPY test3 FROM '" + JoinPath(csv_path, "test3.csv") + "';");
+	REQUIRE(CHECK_COLUMN(result, 0, {4000}));
+	result = con.Query("SELECT * FROM test3 ORDER BY 1 LIMIT 3 ");
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0, 1, 2}));
 
 	// Exporting selected columns from a table to a CSV.
-	result = con.Query("COPY test(a,c) to 'test4.csv';");
+	result = con.Query("COPY test(a,c) to '" + JoinPath(csv_path, "test4.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
 
 	// Importing CSV to Selected Columns
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test2 (a INTEGER, b INTEGER,c VARCHAR(10));"));
-	result = con.Query("COPY test2(a,c) from 'test4.csv';");
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test4 (a INTEGER, b INTEGER,c VARCHAR(10));"));
+	result = con.Query("COPY test4(a,c) from '" + JoinPath(csv_path, "test4.csv") + "';");
 	REQUIRE(CHECK_COLUMN(result, 0, {5000}));
+	result = con.Query("SELECT * FROM test4 ORDER BY 1 LIMIT 3 ");
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value()}));
+	REQUIRE(CHECK_COLUMN(result, 2, {" test", " test", " test"}));
 
 	// use a different delimiter
-	ofstream from_csv_file_pipe("test_pipe.csv");
+	auto pipe_csv = JoinPath(csv_path, "test_pipe.csv");
+	ofstream from_csv_file_pipe(pipe_csv);
 	for (int i = 0; i < 10; i++)
 		from_csv_file_pipe << i << "|" << i << "|test" << endl;
 	from_csv_file_pipe.close();
 
 	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER,c VARCHAR(10));");
-	result = con.Query("COPY test FROM 'test_pipe.csv' DELIMITER '|';");
+	result = con.Query("COPY test FROM '" + pipe_csv + "' DELIMITER '|';");
 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
 
 	// test null
-	ofstream from_csv_file_null("null.csv");
+	auto null_csv = JoinPath(csv_path, "null.csv");
+	ofstream from_csv_file_null(null_csv);
 	for (int i = 0; i < 1; i++)
 		from_csv_file_null << i << "||test" << endl;
 	from_csv_file_null.close();
-	result = con.Query("COPY test FROM 'null.csv' DELIMITER '|';");
+	result = con.Query("COPY test FROM '" + null_csv + "' DELIMITER '|';");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
 	// test invalid UTF8
-	ofstream from_csv_file_utf("invalid_utf.csv");
+	auto invalid_utf_csv = JoinPath(csv_path, "invalid_utf.csv");
+	ofstream from_csv_file_utf(invalid_utf_csv);
 	for (int i = 0; i < 1; i++)
 		from_csv_file_utf << i << "42|42|\xe2\x82\x28" << endl;
 	from_csv_file_utf.close();
-	REQUIRE_FAIL(con.Query("COPY test FROM 'invalid_utf.csv' DELIMITER '|';"));
-
-	remove("test.csv");
-	remove("test2.csv");
-	remove("test3.csv");
-	remove("test4.csv");
-	remove("test_pipe.csv");
-	remove("null.csv");
-	remove("invalid_utf.csv");
+	REQUIRE_FAIL(con.Query("COPY test FROM '" + invalid_utf_csv + "' DELIMITER '|';"));
 }
 
-TEST_CASE("Test copy into from on-time dataset", "[copystatement]") {
+TEST_CASE("Test copy into from on-time dataset", "[copy]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 
-	string fname =
-	    StringUtil::Replace(StringUtil::Replace(string(__FILE__), "test_copy.cpp", "ontime-sample.csv"), "'", "\\'");
+	auto csv_path = GetCSVPath();
+	auto ontime_csv = JoinPath(csv_path, "ontime.csv");
+	WriteCSV(ontime_csv, ontime_sample);
 
 	REQUIRE_NO_FAIL(con.Query(
 	    "CREATE TABLE ontime(year SMALLINT, quarter SMALLINT, month SMALLINT, dayofmonth SMALLINT, dayofweek SMALLINT, "
@@ -114,7 +153,7 @@ TEST_CASE("Test copy into from on-time dataset", "[copystatement]") {
 	    "div5airportseqid INTEGER, div5wheelson VARCHAR(10), div5totalgtime VARCHAR(10), div5longestgtime VARCHAR(10), "
 	    "div5wheelsoff VARCHAR(10), div5tailnum VARCHAR(10));"));
 
-	result = con.Query("COPY ontime FROM '" + fname + "' DELIMITER ',' HEADER");
+	result = con.Query("COPY ontime FROM '" + ontime_csv + "' DELIMITER ',' HEADER");
 	REQUIRE(CHECK_COLUMN(result, 0, {9}));
 
 	result = con.Query("SELECT year, uniquecarrier, origin, origincityname FROM ontime");
@@ -124,4 +163,22 @@ TEST_CASE("Test copy into from on-time dataset", "[copystatement]") {
 	REQUIRE(CHECK_COLUMN(result, 3,
 	                     {"New York, NY", "New York, NY", "New York, NY", "New York, NY", "New York, NY",
 	                      "New York, NY", "New York, NY", "New York, NY", "New York, NY"}));
+}
+
+TEST_CASE("Test copy from lineitem csv", "[copy]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	auto csv_path = GetCSVPath();
+	auto lineitem_csv = JoinPath(csv_path, "lineitem.csv");
+	WriteCSV(lineitem_csv, lineitem_sample);
+
+	REQUIRE_NO_FAIL(con.Query(" CREATE TABLE lineitem(l_orderkey INT NOT NULL, l_partkey INT NOT NULL, l_suppkey INT NOT NULL, l_linenumber INT NOT NULL, l_quantity INTEGER NOT NULL, l_extendedprice DECIMAL(15,2) NOT NULL, l_discount DECIMAL(15,2) NOT NULL, l_tax DECIMAL(15,2) NOT NULL, l_returnflag VARCHAR(1) NOT NULL, l_linestatus VARCHAR(1) NOT NULL, l_shipdate DATE NOT NULL, l_commitdate DATE NOT NULL, l_receiptdate DATE NOT NULL, l_shipinstruct VARCHAR(25) NOT NULL, l_shipmode VARCHAR(10) NOT NULL, l_comment VARCHAR(44) NOT NULL);"));
+	result = con.Query("COPY lineitem FROM '" + lineitem_csv + "' DELIMITER '|'");
+	REQUIRE(CHECK_COLUMN(result, 0, {10}));
+
+	result = con.Query("SELECT l_partkey, l_comment FROM lineitem WHERE l_orderkey=1 ORDER BY l_linenumber");
+	REQUIRE(CHECK_COLUMN(result, 0, {15519, 6731, 6370, 214, 2403, 1564}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"egular courts above the", "ly final dependencies: slyly bold ", "riously. regular, express dep", "lites. fluffily even de", " pending foxes. slyly re", "arefully slyly ex"}));
 }
