@@ -28,6 +28,7 @@ void LogicalPlanGenerator::CreatePlan(UpdateStatement &statement) {
 	auto &table = get->table;
 	vector<column_t> column_ids;
 	vector<unique_ptr<Expression>> projection_expressions;
+	auto proj_index = binder.GenerateTableIndex();
 	for (size_t i = 0; i < statement.columns.size(); i++) {
 		auto &colname = statement.columns[i];
 
@@ -52,21 +53,20 @@ void LogicalPlanGenerator::CreatePlan(UpdateStatement &statement) {
 				VisitExpression(&expression);
 				expression->ResolveType();
 			}
-			statement.expressions[i] =
-			    make_unique<BoundExpression>(expression->return_type, projection_expressions.size());
+			statement.expressions[i] = make_unique<BoundColumnRefExpression>(
+			    "", expression->return_type, ColumnBinding(proj_index, projection_expressions.size()));
 			projection_expressions.push_back(move(expression));
 		}
 	}
-	if (projection_expressions.size() > 0) {
-		// have to create a projection first
-		// add the row id column to the projection list
-		projection_expressions.push_back(make_unique<BoundExpression>(TypeId::POINTER, get->column_ids.size() - 1));
-		// now create the projection
-		auto proj_index = binder.GenerateTableIndex();
-		auto proj = make_unique<LogicalProjection>(proj_index, move(projection_expressions));
-		proj->AddChild(move(root));
-		root = move(proj);
-	}
+	// have to create a projection first
+	// add the row id column to the projection list
+	projection_expressions.push_back(make_unique<BoundColumnRefExpression>(
+	    "", TypeId::POINTER, ColumnBinding(get->table_index, get->column_ids.size() - 1)));
+	// now create the projection
+	auto proj = make_unique<LogicalProjection>(proj_index, move(projection_expressions));
+	proj->AddChild(move(root));
+	root = move(proj);
+
 	// create the update node
 	auto update = make_unique<LogicalUpdate>(table, column_ids, move(statement.expressions));
 	update->AddChild(move(root));

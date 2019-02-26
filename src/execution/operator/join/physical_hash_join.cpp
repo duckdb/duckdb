@@ -19,7 +19,7 @@ void PhysicalHashJoin::_GetChunk(ClientContext &context, DataChunk &chunk, Physi
 	auto state = reinterpret_cast<PhysicalHashJoinOperatorState *>(state_);
 	if (!state->initialized) {
 		// build the HT
-		auto right_state = children[1]->GetOperatorState(state->parent);
+		auto right_state = children[1]->GetOperatorState();
 		auto types = children[1]->GetTypes();
 
 		DataChunk right_chunk;
@@ -117,6 +117,6 @@ void PhysicalHashJoin::_GetChunk(ClientContext &context, DataChunk &chunk, Physi
 	} while (chunk.size() == 0);
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalHashJoin::GetOperatorState(ExpressionExecutor *parent_executor) {
-	return make_unique<PhysicalHashJoinOperatorState>(children[0].get(), children[1].get(), parent_executor);
+unique_ptr<PhysicalOperatorState> PhysicalHashJoin::GetOperatorState() {
+	return make_unique<PhysicalHashJoinOperatorState>(children[0].get(), children[1].get());
 }

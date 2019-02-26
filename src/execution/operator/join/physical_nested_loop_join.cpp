@@ -62,7 +62,7 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 			condition_types.push_back(cond.left->return_type);
 		}
 
-		auto right_state = children[1]->GetOperatorState(state->parent);
+		auto right_state = children[1]->GetOperatorState();
 		auto types = children[1]->GetTypes();
 
 		DataChunk new_chunk, right_condition;
@@ -217,8 +217,8 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 	} while (chunk.size() == 0);
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalNestedLoopJoin::GetOperatorState(ExpressionExecutor *parent_executor) {
-	return make_unique<PhysicalNestedLoopJoinOperatorState>(children[0].get(), children[1].get(), parent_executor);
+unique_ptr<PhysicalOperatorState> PhysicalNestedLoopJoin::GetOperatorState() {
+	return make_unique<PhysicalNestedLoopJoinOperatorState>(children[0].get(), children[1].get());
 }
 
 } // namespace duckdb

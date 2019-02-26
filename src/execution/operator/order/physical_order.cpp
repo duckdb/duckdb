@@ -53,6 +53,6 @@ void PhysicalOrder::_GetChunk(ClientContext &context, DataChunk &chunk, Physical
 	state->position += STANDARD_VECTOR_SIZE;
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalOrder::GetOperatorState(ExpressionExecutor *parent_executor) {
-	return make_unique<PhysicalOrderOperatorState>(children[0].get(), parent_executor);
+unique_ptr<PhysicalOperatorState> PhysicalOrder::GetOperatorState() {
+	return make_unique<PhysicalOrderOperatorState>(children[0].get());
 }

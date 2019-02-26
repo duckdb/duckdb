@@ -33,13 +33,12 @@ public:
 		v->VisitExpression(&function_call);
 	}
 
-	unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent_executor) override;
+	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 
 class PhysicalTableFunctionOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalTableFunctionOperatorState(ExpressionExecutor *parent_executor)
-	    : PhysicalOperatorState(nullptr, parent_executor), initialized(false) {
+	PhysicalTableFunctionOperatorState() : PhysicalOperatorState(nullptr), initialized(false) {
 	}
 
 	unique_ptr<TableFunctionData> function_data;

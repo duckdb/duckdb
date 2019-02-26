@@ -16,7 +16,7 @@ void PhysicalCrossProduct::_GetChunk(ClientContext &context, DataChunk &chunk, P
 	auto state = reinterpret_cast<PhysicalCrossProductOperatorState *>(state_);
 	// first we fully materialize the right child, if we haven't done that yet
 	if (state->right_data.column_count() == 0) {
-		auto right_state = children[1]->GetOperatorState(state->parent);
+		auto right_state = children[1]->GetOperatorState();
 		auto types = children[1]->GetTypes();
 
 		DataChunk new_chunk;
@@ -70,6 +70,6 @@ void PhysicalCrossProduct::_GetChunk(ClientContext &context, DataChunk &chunk, P
 	}
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalCrossProduct::GetOperatorState(ExpressionExecutor *parent_executor) {
-	return make_unique<PhysicalCrossProductOperatorState>(children[0].get(), children[1].get(), parent_executor);
+unique_ptr<PhysicalOperatorState> PhysicalCrossProduct::GetOperatorState() {
+	return make_unique<PhysicalCrossProductOperatorState>(children[0].get(), children[1].get());
 }

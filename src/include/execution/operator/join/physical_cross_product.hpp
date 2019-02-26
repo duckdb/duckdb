@@ -19,16 +19,15 @@ public:
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
-	unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent_executor) override;
+	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 	void AcceptExpressions(SQLNodeVisitor *v) override{};
 };
 
 class PhysicalCrossProductOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalCrossProductOperatorState(PhysicalOperator *left, PhysicalOperator *right,
-	                                  ExpressionExecutor *parent_executor)
-	    : PhysicalOperatorState(left, parent_executor), left_position(0) {
+	PhysicalCrossProductOperatorState(PhysicalOperator *left, PhysicalOperator *right)
+	    : PhysicalOperatorState(left), left_position(0) {
 		assert(left && right);
 	}
 

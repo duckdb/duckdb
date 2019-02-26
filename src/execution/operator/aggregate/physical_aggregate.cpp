@@ -30,9 +30,8 @@ PhysicalAggregate::PhysicalAggregate(vector<TypeId> types, vector<unique_ptr<Exp
     : PhysicalAggregate(types, move(aggregates), {}, type) {
 }
 
-PhysicalAggregateOperatorState::PhysicalAggregateOperatorState(PhysicalAggregate *parent, PhysicalOperator *child,
-                                                               ExpressionExecutor *parent_executor)
-    : PhysicalOperatorState(child, parent_executor) {
+PhysicalAggregateOperatorState::PhysicalAggregateOperatorState(PhysicalAggregate *parent, PhysicalOperator *child)
+    : PhysicalOperatorState(child) {
 	vector<TypeId> group_types, aggregate_types;
 	for (auto &expr : parent->groups) {
 		group_types.push_back(expr->return_type);

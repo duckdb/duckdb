@@ -55,6 +55,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "GET";
 	case LogicalOperatorType::CHUNK_GET:
 		return "CHUNK_GET";
+	case LogicalOperatorType::ANY_JOIN:
+		return "ANY_JOIN";
 	case LogicalOperatorType::COMPARISON_JOIN:
 		return "COMPARISON_JOIN";
 	case LogicalOperatorType::DELIM_JOIN:
@@ -153,6 +155,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "COPY";
 	case PhysicalOperatorType::DELIM_JOIN:
 		return "DELIM_JOIN";
+	case PhysicalOperatorType::BLOCKWISE_NL_JOIN:
+		return "BLOCKWISE_NL_JOIN";
 	case PhysicalOperatorType::NESTED_LOOP_JOIN:
 		return "NESTED_LOOP_JOIN";
 	case PhysicalOperatorType::HASH_JOIN:

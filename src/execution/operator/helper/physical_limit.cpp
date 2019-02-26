@@ -52,6 +52,6 @@ void PhysicalLimit::_GetChunk(ClientContext &context, DataChunk &chunk, Physical
 	state->current_offset += state->child_chunk.size();
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalLimit::GetOperatorState(ExpressionExecutor *parent_executor) {
-	return make_unique<PhysicalLimitOperatorState>(children[0].get(), 0, parent_executor);
+unique_ptr<PhysicalOperatorState> PhysicalLimit::GetOperatorState() {
+	return make_unique<PhysicalLimitOperatorState>(children[0].get(), 0);
 }

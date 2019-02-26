@@ -41,8 +41,7 @@ public:
 //! The operator state of the aggregate
 class PhysicalAggregateOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalAggregateOperatorState(PhysicalAggregate *parent, PhysicalOperator *child = nullptr,
-	                               ExpressionExecutor *parent_executor = nullptr);
+	PhysicalAggregateOperatorState(PhysicalAggregate *parent, PhysicalOperator *child = nullptr);
 
 	//! Aggregate values, used only for aggregates without GROUP BY
 	vector<Value> aggregates;

@@ -28,7 +28,7 @@ class Appender {
 	//! Internal chunk used for appends
 	DataChunk chunk;
 	//! The current column to append to
-	size_t column = 0;
+	uint32_t column = 0;
 
 public:
 	Appender(DuckDB &db, string schema_name, string table_name);

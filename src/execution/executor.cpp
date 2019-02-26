@@ -7,7 +7,7 @@ ChunkCollection Executor::Execute(ClientContext &context, PhysicalOperator *plan
 	assert(plan);
 	ChunkCollection result;
 	// the chunk and state are used to iterate over the input plan
-	auto state = plan->GetOperatorState(nullptr);
+	auto state = plan->GetOperatorState();
 
 	result.types = plan->GetTypes();
 

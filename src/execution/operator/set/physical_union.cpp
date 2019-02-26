@@ -28,9 +28,9 @@ void PhysicalUnion::_GetChunk(ClientContext &context, DataChunk &chunk, Physical
 	}
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalUnion::GetOperatorState(ExpressionExecutor *parent_executor) {
-	auto state = make_unique<PhysicalUnionOperatorState>(parent_executor);
-	state->top_state = children[0]->GetOperatorState(parent_executor);
-	state->bottom_state = children[1]->GetOperatorState(parent_executor);
+unique_ptr<PhysicalOperatorState> PhysicalUnion::GetOperatorState() {
+	auto state = make_unique<PhysicalUnionOperatorState>();
+	state->top_state = children[0]->GetOperatorState();
+	state->bottom_state = children[1]->GetOperatorState();
 	return (move(state));
 }

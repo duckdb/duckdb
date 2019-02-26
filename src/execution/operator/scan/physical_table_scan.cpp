@@ -13,8 +13,8 @@ void PhysicalTableScan::_GetChunk(ClientContext &context, DataChunk &chunk, Phys
 	table.Scan(context.ActiveTransaction(), chunk, column_ids, state->scan_offset);
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalTableScan::GetOperatorState(ExpressionExecutor *parent_executor) {
-	return make_unique<PhysicalTableScanOperatorState>(table, parent_executor);
+unique_ptr<PhysicalOperatorState> PhysicalTableScan::GetOperatorState() {
+	return make_unique<PhysicalTableScanOperatorState>(table);
 }
 
 string PhysicalTableScan::ExtraRenderInformation() {

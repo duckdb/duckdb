@@ -40,6 +40,6 @@ string PhysicalIndexScan::ExtraRenderInformation() {
 	return tableref.name + "[" + low_value.ToString() + "]";
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalIndexScan::GetOperatorState(ExpressionExecutor *parent_executor) {
-	return make_unique<PhysicalIndexScanOperatorState>(parent_executor);
+unique_ptr<PhysicalOperatorState> PhysicalIndexScan::GetOperatorState() {
+	return make_unique<PhysicalIndexScanOperatorState>();
 }

@@ -20,6 +20,6 @@ void PhysicalChunkScan::_GetChunk(ClientContext &context, DataChunk &chunk, Phys
 	state->chunk_index++;
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalChunkScan::GetOperatorState(ExpressionExecutor *parent_executor) {
-	return make_unique<PhysicalChunkScanState>(parent_executor);
+unique_ptr<PhysicalOperatorState> PhysicalChunkScan::GetOperatorState() {
+	return make_unique<PhysicalChunkScanState>();
 }

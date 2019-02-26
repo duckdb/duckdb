@@ -24,16 +24,15 @@ public:
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
-	unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent_executor) override;
+	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 	void AcceptExpressions(SQLNodeVisitor *v) override{};
 };
 
 class PhysicalLimitOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalLimitOperatorState(PhysicalOperator *child, size_t current_offset = 0,
-	                           ExpressionExecutor *parent_executor = nullptr)
-	    : PhysicalOperatorState(child, parent_executor), current_offset(current_offset) {
+	PhysicalLimitOperatorState(PhysicalOperator *child, size_t current_offset = 0)
+	    : PhysicalOperatorState(child), current_offset(current_offset) {
 	}
 
 	size_t current_offset;

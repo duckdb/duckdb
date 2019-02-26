@@ -10,7 +10,7 @@ using namespace duckdb;
 using namespace std;
 
 Appender::Appender(DuckDB &database, string schema_name, string table_name)
-    : db(database), context(database), column(0) {
+    : db(database), context(database), table_entry(nullptr), column(0) {
 	// begin the transaction
 	context.transaction.BeginTransaction();
 

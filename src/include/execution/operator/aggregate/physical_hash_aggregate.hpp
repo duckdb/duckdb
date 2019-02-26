@@ -26,14 +26,13 @@ public:
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
-	unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent) override;
+	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 
 class PhysicalHashAggregateOperatorState : public PhysicalAggregateOperatorState {
 public:
-	PhysicalHashAggregateOperatorState(PhysicalAggregate *parent, PhysicalOperator *child,
-	                                   ExpressionExecutor *parent_executor)
-	    : PhysicalAggregateOperatorState(parent, child, parent_executor), ht_scan_position(0), tuples_scanned(0) {
+	PhysicalHashAggregateOperatorState(PhysicalAggregate *parent, PhysicalOperator *child)
+	    : PhysicalAggregateOperatorState(parent, child), ht_scan_position(0), tuples_scanned(0) {
 	}
 
 	//! The current position to scan the HT for output tuples

@@ -142,7 +142,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			base_binding.table_index = left_index;
 			this->delim_offset = base_binding.column_index = 0;
 			this->data_offset = 0;
-			return left_outer_join;
+			return move(left_outer_join);
 		} else {
 			// update the delim_index
 			base_binding.table_index = aggr.group_index;
@@ -185,7 +185,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		}
 		join->children.push_back(move(plan->children[0]));
 		join->children.push_back(move(plan->children[1]));
-		return join;
+		return move(join);
 	}
 	case LogicalOperatorType::COMPARISON_JOIN: {
 		auto &join = (LogicalComparisonJoin &)*plan;

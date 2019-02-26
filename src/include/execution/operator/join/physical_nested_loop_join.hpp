@@ -26,14 +26,13 @@ public:
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
-	unique_ptr<PhysicalOperatorState> GetOperatorState(ExpressionExecutor *parent_executor) override;
+	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 
 class PhysicalNestedLoopJoinOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalNestedLoopJoinOperatorState(PhysicalOperator *left, PhysicalOperator *right,
-	                                    ExpressionExecutor *parent_executor)
-	    : PhysicalOperatorState(left, parent_executor), right_chunk(0), has_null(false), left_tuple(0), right_tuple(0) {
+	PhysicalNestedLoopJoinOperatorState(PhysicalOperator *left, PhysicalOperator *right)
+	    : PhysicalOperatorState(left), right_chunk(0), has_null(false), left_tuple(0), right_tuple(0) {
 		assert(left && right);
 	}
 

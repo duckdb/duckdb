@@ -149,9 +149,14 @@ void PhysicalPlanGenerator::Visit(LogicalChunkGet &op) {
 	LogicalOperatorVisitor::VisitOperatorChildren(op);
 
 	// create a PhysicalChunkScan
-	// the actual collection from which to scan will be added later
 	assert(!plan);
-	this->plan = make_unique<PhysicalChunkScan>(op.types);
+	auto chunk_scan = make_unique<PhysicalChunkScan>(op.types);
+	if (op.collection) {
+		// if the LogicalChunkGet has a collection, we scan that
+		chunk_scan->owned_collection = move(op.collection);
+		chunk_scan->collection = chunk_scan->owned_collection.get();
+	}
+	plan = move(chunk_scan);
 }
 
 static unique_ptr<PhysicalOperator> CreateDistinct(unique_ptr<PhysicalOperator> child) {
@@ -191,7 +196,12 @@ void PhysicalPlanGenerator::Visit(LogicalDelete &op) {
 	LogicalOperatorVisitor::VisitOperatorChildren(op);
 	assert(plan); // Delete node cannot be the first node of a plan!
 
-	auto del = make_unique<PhysicalDelete>(op, *op.table, *op.table->storage);
+	// get the index of the row_id column
+	assert(op.expressions.size() == 1);
+	assert(op.expressions[0]->type == ExpressionType::BOUND_REF);
+	auto &bound_ref = (BoundExpression &)*op.expressions[0];
+
+	auto del = make_unique<PhysicalDelete>(op, *op.table, *op.table->storage, bound_ref.index);
 	del->children.push_back(move(plan));
 	this->plan = move(del);
 }

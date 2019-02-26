@@ -100,9 +100,9 @@ void PhysicalHashAggregate::_GetChunk(ClientContext &context, DataChunk &chunk, 
 	}
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState(ExpressionExecutor *parent) {
-	auto state = make_unique<PhysicalHashAggregateOperatorState>(
-	    this, children.size() == 0 ? nullptr : children[0].get(), parent);
+unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
+	auto state =
+	    make_unique<PhysicalHashAggregateOperatorState>(this, children.size() == 0 ? nullptr : children[0].get());
 	state->tuples_scanned = 0;
 	vector<TypeId> group_types, payload_types;
 	vector<ExpressionType> aggregate_kind;

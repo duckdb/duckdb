@@ -25,9 +25,11 @@
 			return &singleton;                                                                                         \
 		}
 
+#define REGISTER_BENCHMARK(NAME) auto global_instance_##NAME = NAME##Benchmark::GetInstance()
+
 #define FINISH_BENCHMARK(NAME)                                                                                         \
 	}                                                                                                                  \
 	;                                                                                                                  \
-	auto global_instance_##NAME = NAME##Benchmark::GetInstance();
+	REGISTER_BENCHMARK(NAME);
 
 namespace duckdb {}
