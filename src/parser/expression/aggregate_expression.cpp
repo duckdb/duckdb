@@ -88,8 +88,18 @@ void AggregateExpression::ResolveType() {
 	default:
 		throw NotImplementedException("Unsupported aggregate type!");
 	}
-	// cast the child to have the same return type as the aggregate node
-	child = CastExpression::AddCastToType(return_type, move(child));
+	switch (type) {
+	case ExpressionType::AGGREGATE_COUNT_STAR:
+	case ExpressionType::AGGREGATE_COUNT:
+	case ExpressionType::AGGREGATE_COUNT_DISTINCT:
+		// for the COUNT() operators we don't have to cast the child
+		// as the result depends only on the nullmask
+		// hence we return here
+		return;
+	default:
+		// for the other aggregates we have to cast the child
+		child = CastExpression::AddCastToType(return_type, move(child));
+	}
 }
 
 unique_ptr<Expression> AggregateExpression::Copy() {

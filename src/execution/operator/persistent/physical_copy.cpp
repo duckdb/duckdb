@@ -184,7 +184,8 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalO
 					if (col != 0) {
 						to_csv << info.delimiter;
 					}
-					WriteQuotedString(to_csv, state->child_chunk.data[col].GetValue(i).ToString(), info.delimiter, info.quote);
+					WriteQuotedString(to_csv, state->child_chunk.data[col].GetValue(i).ToString(), info.delimiter,
+					                  info.quote);
 				}
 				to_csv << endl;
 				nr_elements++;

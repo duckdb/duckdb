@@ -12,6 +12,11 @@ using namespace std;
 
 static size_t GetAggrPayloadSize(ExpressionType expr_type, TypeId return_type) {
 	switch (expr_type) {
+	case ExpressionType::AGGREGATE_COUNT:
+	case ExpressionType::AGGREGATE_COUNT_DISTINCT:
+	case ExpressionType::AGGREGATE_COUNT_STAR:
+		// COUNT aggregates always use TypeId::BIGINT
+		return GetTypeIdSize(TypeId::BIGINT);
 	case ExpressionType::AGGREGATE_STDDEV_SAMP:
 		// count running_mean running_dsquared
 		return sizeof(uint64_t) + sizeof(double) + sizeof(double);
@@ -256,7 +261,6 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			} else {
 				VectorOperations::Scatter::Add(distinct_payload, distinct_addresses);
 			}
-
 			break;
 		}
 		case ExpressionType::AGGREGATE_STDDEV_SAMP: {
