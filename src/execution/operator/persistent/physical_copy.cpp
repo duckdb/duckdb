@@ -14,8 +14,8 @@ static bool end_of_field(string &line, size_t i, char delimiter) {
 	return i + 1 >= line.size() || line[i] == delimiter;
 }
 
-static void WriteQuotedString(ofstream &to_csv, string str, char quote) {
-	if (str.find(quote) == string::npos) {
+static void WriteQuotedString(ofstream &to_csv, string str, char delimiter, char quote) {
+	if (str.find(delimiter) == string::npos) {
 		to_csv << str;
 	} else {
 		to_csv << quote << str << quote;
@@ -127,7 +127,7 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalO
 					}
 					if (column >= expected_column_count) {
 						throw ParserException("Error on line %lld: expected %lld values but got %d", linenr,
-						                      expected_column_count, column);
+						                      expected_column_count, column + 1);
 					}
 					// delimiter, get the value
 					Value result;
@@ -170,7 +170,7 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalO
 				if (i != 0) {
 					to_csv << info.delimiter;
 				}
-				WriteQuotedString(to_csv, names[i], info.quote);
+				WriteQuotedString(to_csv, names[i], info.delimiter, info.quote);
 			}
 			to_csv << endl;
 		}
@@ -184,7 +184,7 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalO
 					if (col != 0) {
 						to_csv << info.delimiter;
 					}
-					WriteQuotedString(to_csv, state->child_chunk.data[col].GetValue(i).ToString(), info.quote);
+					WriteQuotedString(to_csv, state->child_chunk.data[col].GetValue(i).ToString(), info.delimiter, info.quote);
 				}
 				to_csv << endl;
 				nr_elements++;

@@ -191,7 +191,7 @@ TEST_CASE("Test copy from lineitem csv", "[copy]") {
 	                  "lites. fluffily even de", " pending foxes. slyly re", "arefully slyly ex"}));
 
 	// test COPY TO with HEADER
-	result = con.Query("COPY lineitem TO '" + lineitem_csv + "' DELIMITER '|' HEADER");
+	result = con.Query("COPY lineitem TO '" + lineitem_csv + "' DELIMITER ' ' HEADER");
 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
 
 	// clear out the table
@@ -200,7 +200,7 @@ TEST_CASE("Test copy from lineitem csv", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 
 	// now copy back into the table
-	result = con.Query("COPY lineitem FROM '" + lineitem_csv + "' DELIMITER '|' HEADER");
+	result = con.Query("COPY lineitem FROM '" + lineitem_csv + "' DELIMITER ' ' HEADER");
 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
 
 	result = con.Query("SELECT l_partkey, l_comment FROM lineitem WHERE l_orderkey=1 ORDER BY l_linenumber");
