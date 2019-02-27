@@ -637,6 +637,7 @@ void PhysicalPlanGenerator::Visit(LogicalCopy &op) {
 		// COPY from select statement
 		assert(!op.table);
 		auto copy = make_unique<PhysicalCopy>(op, move(op.info));
+		copy->names = op.names;
 		copy->children.push_back(move(plan));
 		plan = move(copy);
 	} else {

@@ -14,6 +14,14 @@ static bool end_of_field(string &line, size_t i, char delimiter) {
 	return i + 1 >= line.size() || line[i] == delimiter;
 }
 
+static void WriteQuotedString(ofstream &to_csv, string str, char quote) {
+	if (str.find(quote) == string::npos) {
+		to_csv << str;
+	} else {
+		to_csv << quote << str << quote;
+	}
+}
+
 void PhysicalCopy::Flush(ClientContext &context, DataChunk &chunk, int64_t &nr_elements, int64_t &total,
                          vector<bool> &set_to_default) {
 	if (nr_elements == 0) {
@@ -156,28 +164,32 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalO
 	} else {
 		ofstream to_csv;
 		to_csv.open(info.file_path);
-		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 		if (info.header) {
-			throw NotImplementedException("FIXME: write header to file");
+			// write the header line
+			for (size_t i = 0; i < names.size(); i++) {
+				if (i != 0) {
+					to_csv << info.delimiter;
+				}
+				WriteQuotedString(to_csv, names[i], info.quote);
+			}
+			to_csv << endl;
 		}
-		while (state->child_chunk.size() != 0) {
+		while (true) {
+			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+			if (state->child_chunk.size() == 0) {
+				break;
+			}
 			for (size_t i = 0; i < state->child_chunk.size(); i++) {
 				for (size_t col = 0; col < state->child_chunk.column_count; col++) {
 					if (col != 0) {
 						to_csv << info.delimiter;
 					}
-					if (state->child_chunk.data[col].type == TypeId::VARCHAR)
-						to_csv << info.quote;
-					to_csv << state->child_chunk.data[col].GetValue(i).ToString();
-					if (state->child_chunk.data[col].type == TypeId::VARCHAR)
-						to_csv << info.quote;
+					WriteQuotedString(to_csv, state->child_chunk.data[col].GetValue(i).ToString(), info.quote);
 				}
 				to_csv << endl;
 				nr_elements++;
 			}
-			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 		}
-
 		to_csv.close();
 	}
 	chunk.data[0].count = 1;

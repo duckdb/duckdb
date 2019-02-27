@@ -13,6 +13,7 @@ void LogicalPlanGenerator::CreatePlan(CopyStatement &statement) {
 		CreatePlan(*statement.select_statement);
 		assert(root);
 		auto copy = make_unique<LogicalCopy>(nullptr, move(statement.info));
+		copy->names = root->GetNames();
 		copy->AddChild(move(root));
 		root = move(copy);
 	} else {

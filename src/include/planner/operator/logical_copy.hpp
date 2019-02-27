@@ -25,6 +25,7 @@ public:
 
 	TableCatalogEntry *table;
 	unique_ptr<CopyInformation> info;
+	vector<string> names;
 
 protected:
 	void ResolveTypes() override {

@@ -28,8 +28,12 @@ public:
 
 	void AcceptExpressions(SQLNodeVisitor *v) override{};
 
+	//! The table to copy into (only for COPY FROM)
 	TableCatalogEntry *table;
+	//! Settings for the COPY statement
 	unique_ptr<CopyInformation> info;
+	//! The names of the child expression (only for COPY TO)
+	vector<string> names;
 
 private:
 	void Flush(ClientContext &context, DataChunk &chunk, int64_t &nr_elements, int64_t &total,

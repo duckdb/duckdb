@@ -1,7 +1,7 @@
 #include "catch.hpp"
+#include "common/file_system.hpp"
 #include "test_csv_header.hpp"
 #include "test_helpers.hpp"
-#include "common/file_system.hpp"
 
 #include <fstream>
 
@@ -174,11 +174,39 @@ TEST_CASE("Test copy from lineitem csv", "[copy]") {
 	auto lineitem_csv = JoinPath(csv_path, "lineitem.csv");
 	WriteCSV(lineitem_csv, lineitem_sample);
 
-	REQUIRE_NO_FAIL(con.Query(" CREATE TABLE lineitem(l_orderkey INT NOT NULL, l_partkey INT NOT NULL, l_suppkey INT NOT NULL, l_linenumber INT NOT NULL, l_quantity INTEGER NOT NULL, l_extendedprice DECIMAL(15,2) NOT NULL, l_discount DECIMAL(15,2) NOT NULL, l_tax DECIMAL(15,2) NOT NULL, l_returnflag VARCHAR(1) NOT NULL, l_linestatus VARCHAR(1) NOT NULL, l_shipdate DATE NOT NULL, l_commitdate DATE NOT NULL, l_receiptdate DATE NOT NULL, l_shipinstruct VARCHAR(25) NOT NULL, l_shipmode VARCHAR(10) NOT NULL, l_comment VARCHAR(44) NOT NULL);"));
+	REQUIRE_NO_FAIL(con.Query(
+	    "CREATE TABLE lineitem(l_orderkey INT NOT NULL, l_partkey INT NOT NULL, l_suppkey INT NOT NULL, l_linenumber "
+	    "INT NOT NULL, l_quantity INTEGER NOT NULL, l_extendedprice DECIMAL(15,2) NOT NULL, l_discount DECIMAL(15,2) "
+	    "NOT NULL, l_tax DECIMAL(15,2) NOT NULL, l_returnflag VARCHAR(1) NOT NULL, l_linestatus VARCHAR(1) NOT NULL, "
+	    "l_shipdate DATE NOT NULL, l_commitdate DATE NOT NULL, l_receiptdate DATE NOT NULL, l_shipinstruct VARCHAR(25) "
+	    "NOT NULL, l_shipmode VARCHAR(10) NOT NULL, l_comment VARCHAR(44) NOT NULL);"));
 	result = con.Query("COPY lineitem FROM '" + lineitem_csv + "' DELIMITER '|'");
 	REQUIRE(CHECK_COLUMN(result, 0, {10}));
 
 	result = con.Query("SELECT l_partkey, l_comment FROM lineitem WHERE l_orderkey=1 ORDER BY l_linenumber");
 	REQUIRE(CHECK_COLUMN(result, 0, {15519, 6731, 6370, 214, 2403, 1564}));
-	REQUIRE(CHECK_COLUMN(result, 1, {"egular courts above the", "ly final dependencies: slyly bold ", "riously. regular, express dep", "lites. fluffily even de", " pending foxes. slyly re", "arefully slyly ex"}));
+	REQUIRE(
+	    CHECK_COLUMN(result, 1,
+	                 {"egular courts above the", "ly final dependencies: slyly bold ", "riously. regular, express dep",
+	                  "lites. fluffily even de", " pending foxes. slyly re", "arefully slyly ex"}));
+
+	// test COPY TO with HEADER
+	result = con.Query("COPY lineitem TO '" + lineitem_csv + "' DELIMITER '|' HEADER");
+	REQUIRE(CHECK_COLUMN(result, 0, {10}));
+
+	// clear out the table
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM lineitem"));
+	result = con.Query("SELECT * FROM lineitem");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+
+	// now copy back into the table
+	result = con.Query("COPY lineitem FROM '" + lineitem_csv + "' DELIMITER '|' HEADER");
+	REQUIRE(CHECK_COLUMN(result, 0, {10}));
+
+	result = con.Query("SELECT l_partkey, l_comment FROM lineitem WHERE l_orderkey=1 ORDER BY l_linenumber");
+	REQUIRE(CHECK_COLUMN(result, 0, {15519, 6731, 6370, 214, 2403, 1564}));
+	REQUIRE(
+	    CHECK_COLUMN(result, 1,
+	                 {"egular courts above the", "ly final dependencies: slyly bold ", "riously. regular, express dep",
+	                  "lites. fluffily even de", " pending foxes. slyly re", "arefully slyly ex"}));
 }
