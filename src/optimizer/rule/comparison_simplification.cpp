@@ -1,4 +1,5 @@
 #include "optimizer/rule/comparison_simplification.hpp"
+
 #include "execution/expression_executor.hpp"
 
 using namespace duckdb;

@@ -177,7 +177,8 @@ public:
 	}
 };
 
-//! The FoldableConstant matcher matches any expression that is foldable into a constant by the ExpressionExecutor (i.e. scalar but not aggregate/window/parameter)
+//! The FoldableConstant matcher matches any expression that is foldable into a constant by the ExpressionExecutor (i.e.
+//! scalar but not aggregate/window/parameter)
 class FoldableConstantMatcher : public ExpressionMatcher {
 public:
 	FoldableConstantMatcher() : ExpressionMatcher(ExpressionClass::INVALID) {

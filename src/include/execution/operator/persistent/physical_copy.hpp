@@ -36,6 +36,10 @@ public:
 	vector<string> names;
 
 private:
+	vector<size_t> select_list_oid;
+	vector<bool> set_to_default;
+
+	void PushValue(string &line, DataChunk &insert_chunk, int64_t start, int64_t end, int64_t &column, int64_t linenr);
 	void Flush(ClientContext &context, DataChunk &chunk, int64_t &nr_elements, int64_t &total,
 	           vector<bool> &set_to_default);
 };

@@ -78,12 +78,10 @@ TEST_CASE("Test conjunction statements", "[conjunction]") {
 	result = con.Query("SELECT NULL OR i>3 FROM a ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), true, true}));
 	result = con.Query("SELECT i>3 OR NULL FROM a ORDER BY i");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), true, true	}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), true, true}));
 
 	result = con.Query("SELECT NULL AND i>3 FROM a ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {false, Value(), Value()}));
 	result = con.Query("SELECT i>3 AND NULL FROM a ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {false, Value(), Value()}));
-
-
 }
