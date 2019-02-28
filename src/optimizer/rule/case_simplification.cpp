@@ -4,33 +4,10 @@
 using namespace duckdb;
 using namespace std;
 
-class CaseConstantExpressionMatcher : public ExpressionMatcher {
-public:
-	CaseConstantExpressionMatcher() : ExpressionMatcher(ExpressionClass::INVALID) {
-	}
-
-	bool Match(Expression *expr, vector<Expression *> &bindings) override {
-		// we match on ANY expression that is a scalar expression
-		if (!expr->IsScalar()) {
-			return false;
-		}
-		// ...except if it is an Aggregate or Window function
-		if (expr->IsAggregate() || expr->IsWindow()) {
-			return false;
-		}
-		// also, if an expression contains a parameter for a prepared statement anywhere, we do not match
-		if (expr->HasParameter()) {
-			return false;
-		}
-		bindings.push_back(expr);
-		return true;
-	}
-};
-
 CaseSimplificationRule::CaseSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on a CaseExpression that has a ConstantExpression as a check
 	auto op = make_unique<CaseExpressionMatcher>();
-	op->check = make_unique<CaseConstantExpressionMatcher>();
+	op->check = make_unique<FoldableConstantMatcher>();
 	root = move(op);
 }
 

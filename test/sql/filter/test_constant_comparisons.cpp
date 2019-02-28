@@ -50,6 +50,12 @@ TEST_CASE("Test expressions with constant comparisons", "[filter]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {12}));
 	result = con.Query("SELECT * FROM integers WHERE 2<=1");
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
+
+	// Test comparisons with NULL
+	result = con.Query("SELECT a=NULL FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	result = con.Query("SELECT NULL=a FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 }
 
 TEST_CASE("More complex constant expressions", "[filter]") {

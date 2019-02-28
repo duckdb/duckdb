@@ -14,6 +14,9 @@ Optimizer::Optimizer(ClientContext &client_context) : rewriter(client_context) {
 	rewriter.rules.push_back(make_unique<ConstantFoldingRule>(rewriter));
 	rewriter.rules.push_back(make_unique<DistributivityRule>(rewriter));
 	rewriter.rules.push_back(make_unique<ArithmeticSimplificationRule>(rewriter));
+	rewriter.rules.push_back(make_unique<CaseSimplificationRule>(rewriter));
+	rewriter.rules.push_back(make_unique<ConjunctionSimplificationRule>(rewriter));
+	rewriter.rules.push_back(make_unique<ComparisonSimplificationRule>(rewriter));
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {

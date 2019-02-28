@@ -140,6 +140,25 @@ public:
 	}
 };
 
+class ConjunctionExpressionMatcher : public ExpressionMatcher {
+public:
+	ConjunctionExpressionMatcher() : ExpressionMatcher(ExpressionClass::CONJUNCTION) {
+	}
+	//! The matchers for the child expressions
+	vector<unique_ptr<ExpressionMatcher>> matchers;
+	//! The set matcher matching policy to use
+	SetMatcher::Policy policy;
+
+	bool Match(Expression *expr_, vector<Expression *> &bindings) override {
+		if (!ExpressionMatcher::Match(expr_, bindings)) {
+			return false;
+		}
+		auto expr = (ConjunctionExpression *)expr_;
+		vector<Expression *> expressions = {expr->left.get(), expr->right.get()};
+		return SetMatcher::Match(matchers, expressions, bindings, policy);
+	}
+};
+
 class OperatorExpressionMatcher : public ExpressionMatcher {
 public:
 	OperatorExpressionMatcher() : ExpressionMatcher(ExpressionClass::OPERATOR) {
@@ -155,6 +174,30 @@ public:
 		}
 		auto expr = (OperatorExpression *)expr_;
 		return SetMatcher::Match(matchers, expr->children, bindings, policy);
+	}
+};
+
+//! The FoldableConstant matcher matches any expression that is foldable into a constant by the ExpressionExecutor (i.e. scalar but not aggregate/window/parameter)
+class FoldableConstantMatcher : public ExpressionMatcher {
+public:
+	FoldableConstantMatcher() : ExpressionMatcher(ExpressionClass::INVALID) {
+	}
+
+	bool Match(Expression *expr, vector<Expression *> &bindings) override {
+		// we match on ANY expression that is a scalar expression
+		if (!expr->IsScalar()) {
+			return false;
+		}
+		// ...except if it is an Aggregate or Window function
+		if (expr->IsAggregate() || expr->IsWindow()) {
+			return false;
+		}
+		// also, if an expression contains a parameter for a prepared statement anywhere, we do not match
+		if (expr->HasParameter()) {
+			return false;
+		}
+		bindings.push_back(expr);
+		return true;
 	}
 };
 

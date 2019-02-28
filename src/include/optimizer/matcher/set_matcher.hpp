@@ -29,7 +29,7 @@ public:
 	/* The double {{}} in the intializer for excluded_entries is intentional, workaround for bug in gcc-4.9 */
 	template <class T, class MATCHER>
 	static bool MatchRecursive(vector<unique_ptr<MATCHER>> &matchers, vector<T *> &entries, vector<T *> &bindings,
-	                           std::unordered_set<size_t> excluded_entries = {{}}, size_t m_idx = 0) {
+	                           std::unordered_set<size_t> excluded_entries, size_t m_idx = 0) {
 		if (m_idx == matchers.size()) {
 			// matched all matchers!
 			return true;
@@ -90,7 +90,8 @@ public:
 			// now perform the actual matching
 			// every matcher has to match a UNIQUE entry
 			// we perform this matching in a recursive way
-			if (!MatchRecursive(matchers, entries, bindings)) {
+			std::unordered_set<size_t> excluded_entries;
+			if (!MatchRecursive(matchers, entries, bindings, excluded_entries)) {
 				return false;
 			}
 			return true;
