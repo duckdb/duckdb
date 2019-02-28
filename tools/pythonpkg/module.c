@@ -74,6 +74,8 @@ PyMODINIT_FUNC PyInit_duckdb(void)
         return NULL;
     }
 
+
+
     Py_INCREF(&duckdb_ConnectionType);
     PyModule_AddObject(module, "Connection", (PyObject*) &duckdb_ConnectionType);
     Py_INCREF(&duckdb_CursorType);

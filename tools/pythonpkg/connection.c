@@ -62,6 +62,8 @@ int duckdb_connection_init(duckdb_Connection* self, PyObject* args, PyObject* kw
         NULL
     };
 
+
+
     char* database;
     PyObject* database_obj;
 
@@ -69,11 +71,20 @@ int duckdb_connection_init(duckdb_Connection* self, PyObject* args, PyObject* kw
     double timeout = 5.0;
     int rc;
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O", kwlist,
+
+
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O&|", kwlist,
                                      PyUnicode_FSConverter, &database_obj))
     {
         return -1;
     }
+
+
+
+
+
+
 
     database = PyBytes_AsString(database_obj);
 
@@ -84,9 +95,8 @@ int duckdb_connection_init(duckdb_Connection* self, PyObject* args, PyObject* kw
     Py_CLEAR(self->statements);
     Py_CLEAR(self->cursors);
 
-
     Py_BEGIN_ALLOW_THREADS
-	rc = duckdb_open ((const char*) database, self->db);
+	rc = duckdb_open ((const char*) database, &self->db);
 	Py_END_ALLOW_THREADS
 
     Py_DECREF(database_obj);
@@ -94,6 +104,7 @@ int duckdb_connection_init(duckdb_Connection* self, PyObject* args, PyObject* kw
     if (rc != DuckDBSuccess) {
         return -1;
     }
+
 
 
     self->created_statements = 0;
@@ -127,6 +138,8 @@ int duckdb_connection_init(duckdb_Connection* self, PyObject* args, PyObject* kw
     self->InternalError         = duckdb_InternalError;
     self->ProgrammingError      = duckdb_ProgrammingError;
     self->NotSupportedError     = duckdb_NotSupportedError;
+
+
 
     return 0;
 }
@@ -198,10 +211,10 @@ PyObject* duckdb_connection_cursor(duckdb_Connection* self, PyObject* args, PyOb
 
     _duckdb_drop_unused_cursor_references(self);
 
-    if (cursor && self->row_factory != Py_None) {
-        Py_INCREF(self->row_factory);
-        Py_XSETREF(((duckdb_Cursor *)cursor)->row_factory, self->row_factory);
-    }
+//    if (cursor && self->row_factory != Py_None) {
+//        Py_INCREF(self->row_factory);
+//        Py_XSETREF(((duckdb_Cursor *)cursor)->row_factory, self->row_factory);
+//    }
 
     return cursor;
 }
@@ -441,16 +454,16 @@ static void _duckdb_drop_unused_cursor_references(duckdb_Connection* self)
 
 int duckdb_check_thread(duckdb_Connection* self)
 {
-    if (self->check_same_thread) {
-        if (PyThread_get_thread_ident() != self->thread_ident) {
-            PyErr_Format(duckdb_ProgrammingError,
-                        "SQLite objects created in a thread can only be used in that same thread. "
-                        "The object was created in thread id %lu and this is thread id %lu.",
-                        self->thread_ident, PyThread_get_thread_ident());
-            return 0;
-        }
-
-    }
+//    if (self->check_same_thread) {
+//        if (PyThread_get_thread_ident() != self->thread_ident) {
+//            PyErr_Format(duckdb_ProgrammingError,
+//                        "SQLite objects created in a thread can only be used in that same thread. "
+//                        "The object was created in thread id %lu and this is thread id %lu.",
+//                        self->thread_ident, PyThread_get_thread_ident());
+//            return 0;
+//        }
+//
+//    }
     return 1;
 }
 //
