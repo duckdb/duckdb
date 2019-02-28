@@ -58,7 +58,7 @@ static struct PyModuleDef _duckdbmodule = {
         NULL
 };
 
-PyMODINIT_FUNC PyInit__duckdb(void)
+PyMODINIT_FUNC PyInit_duckdb(void)
 {
     PyObject *module, *dict;
 
