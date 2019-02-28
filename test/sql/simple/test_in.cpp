@@ -57,7 +57,8 @@ TEST_CASE("Test large IN statement with varchar", "[sql][.]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(s VARCHAR)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('HXR'), ('NUT'), ('ZZZ'), (NULL);"));
 
-	string in_list = "'QOY', 'AAZ', 'AOR', 'VJR', 'ROL', 'KOS', 'JBC', 'EMZ', 'LQT', 'HYX', "
+	string in_list =
+	    "'QOY', 'AAZ', 'AOR', 'VJR', 'ROL', 'KOS', 'JBC', 'EMZ', 'LQT', 'HYX', "
 	    "'IYA', 'YAA', 'XMR', 'HGJ', 'LDR', 'MVT', 'XEQ', 'NPX', 'ZKV', 'HET', 'GZI', 'PLI', 'ABK', 'LOJ', 'KYB', "
 	    "'UKG', 'PNY', 'SBV', 'VSJ', 'FAR', 'AXH', 'XWO', 'NKA', 'CPE', 'GSC', 'TWK', 'SXK', 'SUU', 'KPX', 'NXU', "
 	    "'ZMR', 'BZG', 'CBO', 'SQA', 'VNE', 'NUT', 'LKF', 'IWL', 'CQE', 'UED', 'BHQ', 'RQR', 'FVG', 'EZZ', 'SRJ', "

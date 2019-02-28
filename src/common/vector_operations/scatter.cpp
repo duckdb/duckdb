@@ -73,5 +73,11 @@ void VectorOperations::Scatter::Min(Vector &source, Vector &dest) {
 }
 
 void VectorOperations::Scatter::AddOne(Vector &source, Vector &dest) {
-	generic_scatter_loop<operators::AddOne>(source, dest);
+	assert(dest.type == TypeId::POINTER);
+	auto destinations = (int64_t **)dest.data;
+	VectorOperations::Exec(source, [&](size_t i, size_t k) {
+		if (!source.nullmask[i]) {
+			(*destinations[i])++;
+		}
+	});
 }

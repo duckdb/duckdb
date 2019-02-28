@@ -25,6 +25,10 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 	auto constant = (ConstantExpression *)bindings[1];
 	int constant_child = root->children[0].get() == constant ? 0 : 1;
 	assert(root->children.size() == 2);
+	// any arithmetic operator involving NULL is always NULL
+	if (constant->value.is_null) {
+		return make_unique<ConstantExpression>(Value(root->return_type));
+	}
 	switch (root->type) {
 	case ExpressionType::OPERATOR_ADD:
 		if (constant->value == 0) {

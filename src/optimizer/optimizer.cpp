@@ -14,6 +14,9 @@ Optimizer::Optimizer(ClientContext &client_context) : rewriter(client_context) {
 	rewriter.rules.push_back(make_unique<ConstantFoldingRule>(rewriter));
 	rewriter.rules.push_back(make_unique<DistributivityRule>(rewriter));
 	rewriter.rules.push_back(make_unique<ArithmeticSimplificationRule>(rewriter));
+	rewriter.rules.push_back(make_unique<CaseSimplificationRule>(rewriter));
+	rewriter.rules.push_back(make_unique<ConjunctionSimplificationRule>(rewriter));
+	rewriter.rules.push_back(make_unique<ComparisonSimplificationRule>(rewriter));
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {
@@ -22,17 +25,6 @@ Optimizer::Optimizer(ClientContext &client_context) : rewriter(client_context) {
 	}
 #endif
 }
-
-// class OptimizeSubqueries : public LogicalOperatorVisitor {
-// public:
-// 	using LogicalOperatorVisitor::Visit;
-// 	void Visit(BoundSubqueryExpression &subquery) override {
-// 		// we perform join reordering within the subquery expression
-// 		JoinOrderOptimizer optimizer;
-// 		subquery.op = optimizer.Optimize(move(subquery.op));
-// 		assert(subquery.op);
-// 	}
-// };
 
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan) {
 	// first we perform expression rewrites using the ExpressionRewriter

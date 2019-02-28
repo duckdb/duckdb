@@ -8,30 +8,14 @@ using namespace duckdb;
 using namespace std;
 
 //! The ScalarExpressionMatcher matches on any scalar expression (i.e. Expression::IsScalar is true)
-class ConstantFoldingExpressionMatcher : public ExpressionMatcher {
+class ConstantFoldingExpressionMatcher : public FoldableConstantMatcher {
 public:
-	ConstantFoldingExpressionMatcher() : ExpressionMatcher(ExpressionClass::INVALID) {
-	}
-
 	bool Match(Expression *expr, vector<Expression *> &bindings) override {
-		// we match on ANY expression that is a scalar expression
-		if (!expr->IsScalar()) {
-			return false;
-		}
-		// ...except if it is an Aggregate or Window function
-		if (expr->IsAggregate() || expr->IsWindow()) {
-			return false;
-		}
 		// we also do not match on ConstantExpressions, because we cannot fold those any further
 		if (expr->type == ExpressionType::VALUE_CONSTANT) {
 			return false;
 		}
-		// also, if an expression contains a parameter for a prepared statement anywhere, we do not match
-		if (expr->HasParameter()) {
-			return false;
-		}
-		bindings.push_back(expr);
-		return true;
+		return FoldableConstantMatcher::Match(expr, bindings);
 	}
 };
 

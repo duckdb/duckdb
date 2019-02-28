@@ -13,9 +13,11 @@ TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
 	con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
 	con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)");
 
-	result = con.Query("SELECT SUM(41), COUNT(*);");
+	result = con.Query("SELECT SUM(41), COUNT(*), SUM(NULL), COUNT(NULL);");
 	REQUIRE(CHECK_COLUMN(result, 0, {41}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 3, {0}));
 
 	// aggregates cannot be nested
 	REQUIRE_FAIL(con.Query("SELECT SUM(SUM(41)), COUNT(*);"));
@@ -323,4 +325,49 @@ TEST_CASE("STDDEV_SAMP aggregations", "[aggregations]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {85, 1042}));
 	REQUIRE(CHECK_COLUMN(result, 2, {0.7, 677.4}));
 	REQUIRE(CHECK_COLUMN(result, 3, {42, 42}));
+}
+
+TEST_CASE("Test aggregations on strings", "[aggregations]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, s VARCHAR);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 'hello'), (12, 'world'), (11, NULL)"));
+
+	// scalar aggregation on string
+	result = con.Query("SELECT COUNT(*), COUNT(s) FROM test;");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2}));
+
+	// grouped aggregation on string
+	result = con.Query("SELECT a, COUNT(*), COUNT(s) FROM test GROUP BY a ORDER BY a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {11, 12}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2, 1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1, 1}));
+
+	// distinct aggregations ons tring
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 'hello'), (12, 'world')"));
+
+	// scalar distinct
+	result = con.Query("SELECT COUNT(*), COUNT(s), COUNT(DISTINCT s) FROM test;");
+	REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	REQUIRE(CHECK_COLUMN(result, 1, {4}));
+	REQUIRE(CHECK_COLUMN(result, 2, {2}));
+
+	// grouped distinct
+	result = con.Query("SELECT a, COUNT(*), COUNT(s), COUNT(DISTINCT s) FROM test GROUP BY a ORDER BY a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {11, 12}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3, 2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {2, 2}));
+	REQUIRE(CHECK_COLUMN(result, 3, {1, 1}));
+
+	// now with WHERE clause
+	result = con.Query(
+	    "SELECT a, COUNT(*), COUNT(s), COUNT(DISTINCT s) FROM test WHERE s IS NOT NULL GROUP BY a ORDER BY a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {11, 12}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2, 2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {2, 2}));
+	REQUIRE(CHECK_COLUMN(result, 3, {1, 1}));
 }

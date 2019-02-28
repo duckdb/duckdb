@@ -8,18 +8,20 @@ using namespace duckdb;
 using namespace std;
 
 void LogicalPlanGenerator::CreatePlan(CopyStatement &statement) {
-	if (!statement.table.empty()) {
-		auto table = context.db.catalog.GetTable(context.ActiveTransaction(), statement.schema, statement.table);
-		auto copy = make_unique<LogicalCopy>(table, move(statement.file_path), move(statement.is_from),
-		                                     move(statement.delimiter), move(statement.quote), move(statement.escape),
-		                                     move(statement.select_list));
-		root = move(copy);
-	} else {
-		auto copy = make_unique<LogicalCopy>(move(statement.file_path), move(statement.is_from),
-		                                     move(statement.delimiter), move(statement.quote), move(statement.escape));
+	if (statement.select_statement) {
+		// COPY from a query
 		CreatePlan(*statement.select_statement);
 		assert(root);
+		auto copy = make_unique<LogicalCopy>(nullptr, move(statement.info));
+		copy->names = root->GetNames();
 		copy->AddChild(move(root));
+		root = move(copy);
+	} else {
+		assert(!statement.info->table.empty());
+		// COPY from a table
+		auto table =
+		    context.db.catalog.GetTable(context.ActiveTransaction(), statement.info->schema, statement.info->table);
+		auto copy = make_unique<LogicalCopy>(table, move(statement.info));
 		root = move(copy);
 	}
 }

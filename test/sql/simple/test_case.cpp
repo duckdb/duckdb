@@ -14,6 +14,36 @@ TEST_CASE("Test case statement", "[case]") {
 
 	result = con.Query("SELECT CASE WHEN test.a=11 THEN b ELSE NULL END FROM test");
 	REQUIRE(CHECK_COLUMN(result, 0, {22, Value(), Value()}));
+	// constant case statements
+	// all constant
+	result = con.Query("SELECT CASE WHEN 1=1 THEN 1 ELSE NULL END FROM test ORDER BY b");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1}));
+	// check + res_if_false constant
+	result = con.Query("SELECT CASE WHEN 1=1 THEN b ELSE NULL END FROM test ORDER BY b");
+	REQUIRE(CHECK_COLUMN(result, 0, {21, 22, 22}));
+	// check + res_if_true constant
+	result = con.Query("SELECT CASE WHEN 3>2 THEN NULL ELSE b+1 END FROM test ORDER BY b");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value()}));
+	// check constant
+	result = con.Query("SELECT CASE WHEN 1=0 THEN b ELSE b+1 END FROM test ORDER BY b");
+	REQUIRE(CHECK_COLUMN(result, 0, {22, 23, 23}));
+	// res_if_true and res_if_false constant
+	result = con.Query("SELECT CASE WHEN b=22 THEN NULL ELSE 1 END FROM test ORDER BY b");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, Value(), Value()}));
+	// res_if_false constant
+	result = con.Query("SELECT CASE WHEN b=22 THEN b+1 ELSE 1 END FROM test ORDER BY b");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 23, 23}));
+	// res_if_true constant
+	result = con.Query("SELECT CASE WHEN b=22 THEN NULL ELSE b+1 END FROM test ORDER BY b");
+	REQUIRE(CHECK_COLUMN(result, 0, {22, Value(), Value()}));
+
+	// fail case on types that can't be cast to boolean
+	REQUIRE_FAIL(con.Query("SELECT CASE WHEN 'hello' THEN b ELSE a END FROM test"));
+	// but only when cast cannot be performed
+	result = con.Query("SELECT CASE WHEN 'true' THEN NULL ELSE b+1 END FROM test ORDER BY b");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value()}));
+	result = con.Query("SELECT CASE WHEN 'false' THEN NULL ELSE b+1 END FROM test ORDER BY b");
+	REQUIRE(CHECK_COLUMN(result, 0, {22, 23, 23}));
 }
 
 TEST_CASE("Test NULL IF statement", "[case]") {
