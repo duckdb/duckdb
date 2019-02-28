@@ -13,9 +13,11 @@ TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
 	con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
 	con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)");
 
-	result = con.Query("SELECT SUM(41), COUNT(*);");
+	result = con.Query("SELECT SUM(41), COUNT(*), SUM(NULL), COUNT(NULL);");
 	REQUIRE(CHECK_COLUMN(result, 0, {41}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 3, {0}));
 
 	// aggregates cannot be nested
 	REQUIRE_FAIL(con.Query("SELECT SUM(SUM(41)), COUNT(*);"));

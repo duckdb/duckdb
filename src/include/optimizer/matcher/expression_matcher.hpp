@@ -73,6 +73,35 @@ public:
 	}
 };
 
+class CaseExpressionMatcher : public ExpressionMatcher {
+public:
+	CaseExpressionMatcher() : ExpressionMatcher(ExpressionClass::CASE) {
+	}
+	//! The check expression to match (if any)
+	unique_ptr<ExpressionMatcher> check;
+	//! The result_if_true expression to match (if any)
+	unique_ptr<ExpressionMatcher> result_if_true;
+	//! The result_if_false expression to match (if any)
+	unique_ptr<ExpressionMatcher> result_if_false;
+
+	bool Match(Expression *expr_, vector<Expression *> &bindings) override {
+		if (!ExpressionMatcher::Match(expr_, bindings)) {
+			return false;
+		}
+		auto expr = (CaseExpression *)expr_;
+		if (check && !check->Match(expr->check.get(), bindings)) {
+			return false;
+		}
+		if (result_if_true && !result_if_true->Match(expr->result_if_true.get(), bindings)) {
+			return false;
+		}
+		if (result_if_false && !result_if_false->Match(expr->result_if_false.get(), bindings)) {
+			return false;
+		}
+		return true;
+	}
+};
+
 class CastExpressionMatcher : public ExpressionMatcher {
 public:
 	CastExpressionMatcher() : ExpressionMatcher(ExpressionClass::CAST) {

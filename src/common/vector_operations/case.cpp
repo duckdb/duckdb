@@ -82,5 +82,4 @@ void VectorOperations::Case(Vector &check, Vector &res_true, Vector &res_false, 
 	default:
 		throw NotImplementedException("Unimplemented type for case expression");
 	}
-	result.count = check.count;
 }

@@ -21,6 +21,7 @@
 #include "planner/operator/list.hpp"
 #include "planner/operator/logical_join.hpp"
 #include "storage/data_table.hpp"
+#include "optimizer/rule.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -99,6 +100,7 @@ template class std::vector<TypeId>;
 template class std::vector<Value>;
 template class std::vector<int>;
 INSTANTIATE_VECTOR(std::vector<WALEntryData>);
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Rule>>);
 template class std::vector<std::vector<Expression *>>;
 
 template struct std::atomic<size_t>;
