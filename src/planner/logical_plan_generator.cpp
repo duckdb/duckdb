@@ -186,8 +186,7 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(OperatorExpression &ex
 	}
 	// now generate a ChunkGet that scans this collection
 	auto chunk_index = binder.GenerateTableIndex();
-	auto chunk_scan = make_unique<LogicalChunkGet>(chunk_index, types);
-	chunk_scan->collection = move(collection);
+	auto chunk_scan = make_unique<LogicalChunkGet>(chunk_index, types, move(collection));
 
 	auto subquery_index = binder.GenerateTableIndex();
 	auto logical_subquery = make_unique<LogicalSubquery>(subquery_index, 1);

@@ -20,6 +20,7 @@ class LogicalCreateTable;
 class LogicalCreateIndex;
 class LogicalCrossProduct;
 class LogicalDelete;
+class LogicalDelimGet;
 class LogicalDelimJoin;
 class LogicalDistinct;
 class LogicalEmptyResult;

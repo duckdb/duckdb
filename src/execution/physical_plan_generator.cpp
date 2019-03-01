@@ -86,6 +86,9 @@ void PhysicalPlanGenerator::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::CHUNK_GET:
 		Visit((LogicalChunkGet &)op);
 		break;
+	case LogicalOperatorType::DELIM_GET:
+		Visit((LogicalDelimGet &)op);
+		break;
 	case LogicalOperatorType::UPDATE:
 		Visit((LogicalUpdate &)op);
 		break;
@@ -151,14 +154,21 @@ void PhysicalPlanGenerator::Visit(LogicalAggregate &op) {
 void PhysicalPlanGenerator::Visit(LogicalChunkGet &op) {
 	LogicalOperatorVisitor::VisitOperatorChildren(op);
 
-	// create a PhysicalChunkScan
+	// create a PhysicalChunkScan pointing towards the owned collection
 	assert(!plan);
-	auto chunk_scan = make_unique<PhysicalChunkScan>(op.types);
-	if (op.collection) {
-		// if the LogicalChunkGet has a collection, we scan that
-		chunk_scan->owned_collection = move(op.collection);
-		chunk_scan->collection = chunk_scan->owned_collection.get();
-	}
+	assert(op.collection);
+	auto chunk_scan = make_unique<PhysicalChunkScan>(op.types, PhysicalOperatorType::CHUNK_SCAN);
+	chunk_scan->owned_collection = move(op.collection);
+	chunk_scan->collection = chunk_scan->owned_collection.get();
+	plan = move(chunk_scan);
+}
+
+void PhysicalPlanGenerator::Visit(LogicalDelimGet &op) {
+	LogicalOperatorVisitor::VisitOperatorChildren(op);
+
+	// create a PhysicalChunkScan without an owned_collection, the collection will be added later
+	assert(!plan);
+	auto chunk_scan = make_unique<PhysicalChunkScan>(op.types, PhysicalOperatorType::DELIM_SCAN);
 	plan = move(chunk_scan);
 }
 
@@ -382,12 +392,11 @@ void PhysicalPlanGenerator::Visit(LogicalGet &op) {
 
 static void GatherDelimScans(PhysicalOperator *op, vector<PhysicalOperator *> &delim_scans) {
 	assert(op);
-	if (op->type == PhysicalOperatorType::CHUNK_SCAN) {
+	if (op->type == PhysicalOperatorType::DELIM_SCAN) {
 		delim_scans.push_back(op);
-	} else {
-		for (auto &child : op->children) {
-			GatherDelimScans(child.get(), delim_scans);
-		}
+	}
+	for (auto &child : op->children) {
+		GatherDelimScans(child.get(), delim_scans);
 	}
 }
 
@@ -402,7 +411,7 @@ void PhysicalPlanGenerator::Visit(LogicalDelimJoin &op) {
 	GatherDelimScans(plan->children[1].get(), delim_scans);
 	if (delim_scans.size() == 0) {
 		// no duplicate eliminated scans in the RHS!
-		// in this case we don't need tocreate a delim join
+		// in this case we don't need to create a delim join
 		// just push the normal join
 		return;
 	}
@@ -437,7 +446,7 @@ void PhysicalPlanGenerator::Visit(LogicalDelimJoin &op) {
 	auto delim_join = make_unique<PhysicalDelimJoin>(op, move(plan), delim_scans);
 	// we still have to create the DISTINCT clause that is used to generate the duplicate eliminated chunk
 	// we create a ChunkCollectionScan that pulls from the delim_join LHS
-	auto chunk_scan = make_unique<PhysicalChunkScan>(delim_join->children[0]->GetTypes());
+	auto chunk_scan = make_unique<PhysicalChunkScan>(delim_join->children[0]->GetTypes(), PhysicalOperatorType::CHUNK_SCAN);
 	chunk_scan->collection = &delim_join->lhs_data;
 	// now we need to create a projection that projects only the duplicate eliminated columns
 	assert(op.duplicate_eliminated_columns.size() > 0);

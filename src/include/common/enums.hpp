@@ -347,8 +347,6 @@ enum class SetOperationType : uint8_t { NONE = 0, UNION = 1, EXCEPT = 2, INTERSE
 //===--------------------------------------------------------------------===//
 enum class LogicalOperatorType : uint8_t {
 	INVALID,
-	GET,
-	CHUNK_GET,
 	PROJECTION,
 	FILTER,
 	AGGREGATE_AND_GROUP_BY,
@@ -356,9 +354,15 @@ enum class LogicalOperatorType : uint8_t {
 	LIMIT,
 	ORDER_BY,
 	COPY,
-	SUBQUERY,
-	TABLE_FUNCTION,
 	DISTINCT,
+	// -----------------------------
+	// Data sources
+	// -----------------------------
+	GET,
+	CHUNK_GET,
+	DELIM_GET,
+	TABLE_FUNCTION,
+	SUBQUERY,
 	EMPTY_RESULT,
 	// -----------------------------
 	// Joins
@@ -422,6 +426,7 @@ enum class PhysicalOperatorType : uint8_t {
 	SEQ_SCAN,
 	INDEX_SCAN,
 	CHUNK_SCAN,
+	DELIM_SCAN,
 	EXTERNAL_FILE_SCAN,
 	QUERY_DERIVED_SCAN,
 	// -----------------------------

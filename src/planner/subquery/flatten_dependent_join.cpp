@@ -61,7 +61,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// now create the duplicate eliminated scan for this node
 		auto delim_index = binder.GenerateTableIndex();
 		this->base_binding = ColumnBinding(delim_index, 0);
-		auto delim_scan = make_unique<LogicalChunkGet>(delim_index, delim_types);
+		auto delim_scan = make_unique<LogicalDelimGet>(delim_index, delim_types);
 		cross_product->children.push_back(move(delim_scan));
 		cross_product->children.push_back(move(plan));
 		return move(cross_product);
@@ -113,7 +113,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			// we have to perform a LEFT OUTER JOIN between the result of this aggregate and the delim scan
 			auto left_outer_join = make_unique<LogicalComparisonJoin>(JoinType::LEFT);
 			auto left_index = binder.GenerateTableIndex();
-			auto delim_scan = make_unique<LogicalChunkGet>(left_index, delim_types);
+			auto delim_scan = make_unique<LogicalDelimGet>(left_index, delim_types);
 			left_outer_join->children.push_back(move(delim_scan));
 			left_outer_join->children.push_back(move(plan));
 			for (size_t i = 0; i < correlated_columns.size(); i++) {

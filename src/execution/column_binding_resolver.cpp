@@ -37,6 +37,9 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::CHUNK_GET:
 		Visit((LogicalChunkGet &)op);
 		break;
+	case LogicalOperatorType::DELIM_GET:
+		Visit((LogicalDelimGet &)op);
+		break;
 	case LogicalOperatorType::GET:
 		Visit((LogicalGet &)op);
 		break;
@@ -181,6 +184,13 @@ void ColumnBindingResolver::Visit(LogicalIntersect &op) {
 }
 
 void ColumnBindingResolver::Visit(LogicalChunkGet &op) {
+	BoundTable binding;
+	binding.table_index = op.table_index;
+	binding.column_count = op.chunk_types.size();
+	PushBinding(binding);
+}
+
+void ColumnBindingResolver::Visit(LogicalDelimGet &op) {
 	BoundTable binding;
 	binding.table_index = op.table_index;
 	binding.column_count = op.chunk_types.size();

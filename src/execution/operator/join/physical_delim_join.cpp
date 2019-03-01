@@ -13,7 +13,7 @@ PhysicalDelimJoin::PhysicalDelimJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
 	assert(join->children.size() == 2);
 	// for any duplicate eliminated scans in the RHS, point them to the duplicate eliminated chunk that we create here
 	for (auto op : delim_scans) {
-		assert(op->type == PhysicalOperatorType::CHUNK_SCAN);
+		assert(op->type == PhysicalOperatorType::DELIM_SCAN);
 		auto scan = (PhysicalChunkScan *)op;
 		scan->collection = &delim_data;
 	}
@@ -21,7 +21,7 @@ PhysicalDelimJoin::PhysicalDelimJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
 	// we take its left child, this is the side that we will duplicate eliminate
 	children.push_back(move(join->children[0]));
 	// we replace it with a PhysicalChunkCollectionScan, that scans the ChunkCollection that we keep cached
-	auto cached_chunk_scan = make_unique<PhysicalChunkScan>(children[0]->GetTypes());
+	auto cached_chunk_scan = make_unique<PhysicalChunkScan>(children[0]->GetTypes(), PhysicalOperatorType::CHUNK_SCAN);
 	cached_chunk_scan->collection = &lhs_data;
 	join->children[0] = move(cached_chunk_scan);
 }

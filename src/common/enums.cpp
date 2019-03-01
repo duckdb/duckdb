@@ -55,6 +55,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "GET";
 	case LogicalOperatorType::CHUNK_GET:
 		return "CHUNK_GET";
+	case LogicalOperatorType::DELIM_GET:
+		return "DELIM_GET";
 	case LogicalOperatorType::EMPTY_RESULT:
 		return "EMPTY_RESULT";
 	case LogicalOperatorType::ANY_JOIN:
@@ -129,6 +131,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "INDEX_SCAN";
 	case PhysicalOperatorType::CHUNK_SCAN:
 		return "CHUNK_SCAN";
+	case PhysicalOperatorType::DELIM_SCAN:
+		return "DELIM_SCAN";
 	case PhysicalOperatorType::EXTERNAL_FILE_SCAN:
 		return "EXTERNAL_FILE_SCAN";
 	case PhysicalOperatorType::QUERY_DERIVED_SCAN:

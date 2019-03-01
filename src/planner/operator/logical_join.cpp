@@ -59,6 +59,9 @@ void LogicalJoin::GetTableReferences(LogicalOperator &op, unordered_set<size_t> 
 	} else if (op.type == LogicalOperatorType::CHUNK_GET) {
 		auto &chunk = (LogicalChunkGet &)op;
 		bindings.insert(chunk.table_index);
+	} else if (op.type == LogicalOperatorType::DELIM_GET) {
+		auto &chunk = (LogicalDelimGet &)op;
+		bindings.insert(chunk.table_index);
 	} else if (op.type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY) {
 		auto &aggr = (LogicalAggregate &)op;
 		bindings.insert(aggr.aggregate_index);

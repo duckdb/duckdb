@@ -32,6 +32,7 @@ protected:
 	void Visit(LogicalAnyJoin &op);
 	void Visit(LogicalComparisonJoin &op);
 	void Visit(LogicalCreateIndex &op);
+	void Visit(LogicalDelimGet &op);
 	void Visit(LogicalEmptyResult &op);
 	void Visit(LogicalUnion &op);
 	void Visit(LogicalExcept &op);
