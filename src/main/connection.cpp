@@ -7,6 +7,9 @@ using namespace std;
 
 DuckDBConnection::DuckDBConnection(DuckDB &database) : db(database), context(database) {
 	db.connection_manager.AddConnection(this);
+#ifdef DEBUG
+	EnableProfiling();
+#endif
 }
 
 DuckDBConnection::~DuckDBConnection() {

@@ -1,6 +1,7 @@
 #include "optimizer/optimizer.hpp"
 
 #include "optimizer/cse_optimizer.hpp"
+#include "optimizer/filter_pushdown.hpp"
 #include "optimizer/join_order_optimizer.hpp"
 #include "optimizer/obsolete_filter_rewriter.hpp"
 #include "optimizer/rule/list.hpp"
@@ -30,7 +31,10 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	// first we perform expression rewrites using the ExpressionRewriter
 	// this does not change the logical plan structure, but only simplifies the expression trees
 	rewriter.Apply(*plan);
-	// now perform obsolete filter removal
+	// perform filter pushdown
+	FilterPushdown filter_pushdown;
+	plan = filter_pushdown.Rewrite(move(plan));
+	// perform obsolete filter removal
 	ObsoleteFilterRewriter obsolete_filter;
 	plan = obsolete_filter.Rewrite(move(plan));
 	// then we perform the join ordering optimization

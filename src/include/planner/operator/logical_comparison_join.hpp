@@ -36,6 +36,17 @@ public:
 	//! The conditions of the join
 	vector<JoinCondition> conditions;
 
+	static unique_ptr<Expression> CreateExpressionFromCondition(JoinCondition cond);
+	static JoinSide CombineJoinSide(JoinSide left, JoinSide right);
+	static JoinSide GetJoinSide(size_t table_binding, std::unordered_set<size_t> &left_bindings,
+	                            std::unordered_set<size_t> &right_bindings);
+	static JoinSide GetJoinSide(Expression &expression, std::unordered_set<size_t> &left_bindings,
+	                            std::unordered_set<size_t> &right_bindings);
+	static unique_ptr<LogicalOperator> CreateJoin(JoinType type, unique_ptr<LogicalOperator> left_child,
+	                                              unique_ptr<LogicalOperator> right_child,
+	                                              std::unordered_set<size_t> &left_bindings,
+	                                              std::unordered_set<size_t> &right_bindings,
+	                                              vector<unique_ptr<Expression>> &expressions);
 	size_t ExpressionCount() override;
 	Expression *GetExpression(size_t index) override;
 	void ReplaceExpression(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,

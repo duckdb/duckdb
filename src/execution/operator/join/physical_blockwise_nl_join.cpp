@@ -92,7 +92,7 @@ void PhysicalBlockwiseNLJoin::_GetChunk(ClientContext &context, DataChunk &chunk
 		}
 		if (state->left_position >= state->child_chunk.size()) {
 			// exhausted LHS, have to pull new LHS chunk
-			if (!state->checked_found_match) {
+			if (!state->checked_found_match && state->lhs_found_match) {
 				// LEFT OUTER JOIN or FULL OUTER JOIN, first check if we need to create extra results because of
 				// non-matching tuples
 				for (size_t i = 0; i < state->child_chunk.size(); i++) {
@@ -197,4 +197,10 @@ void PhysicalBlockwiseNLJoin::_GetChunk(ClientContext &context, DataChunk &chunk
 
 unique_ptr<PhysicalOperatorState> PhysicalBlockwiseNLJoin::GetOperatorState() {
 	return make_unique<PhysicalBlockwiseNLJoinState>(children[0].get(), children[1].get());
+}
+
+string PhysicalBlockwiseNLJoin::ExtraRenderInformation() {
+	string extra_info = JoinTypeToString(type) + "\n";
+	extra_info += condition->ToString();
+	return extra_info;
 }

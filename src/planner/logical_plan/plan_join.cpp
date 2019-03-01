@@ -14,7 +14,7 @@
 using namespace duckdb;
 using namespace std;
 
-static JoinSide CombineJoinSide(JoinSide left, JoinSide right) {
+JoinSide LogicalComparisonJoin::CombineJoinSide(JoinSide left, JoinSide right) {
 	if (left == JoinSide::NONE) {
 		return right;
 	}
@@ -27,8 +27,8 @@ static JoinSide CombineJoinSide(JoinSide left, JoinSide right) {
 	return left;
 }
 
-static JoinSide GetJoinSide(size_t table_binding, unordered_set<size_t> &left_bindings,
-                            unordered_set<size_t> &right_bindings) {
+JoinSide LogicalComparisonJoin::GetJoinSide(size_t table_binding, unordered_set<size_t> &left_bindings,
+                                            unordered_set<size_t> &right_bindings) {
 	if (left_bindings.find(table_binding) != left_bindings.end()) {
 		// column references table on left side
 		assert(right_bindings.find(table_binding) == right_bindings.end());
@@ -40,8 +40,8 @@ static JoinSide GetJoinSide(size_t table_binding, unordered_set<size_t> &left_bi
 	}
 }
 
-static JoinSide GetJoinSide(Expression &expression, unordered_set<size_t> &left_bindings,
-                            unordered_set<size_t> &right_bindings) {
+JoinSide LogicalComparisonJoin::GetJoinSide(Expression &expression, unordered_set<size_t> &left_bindings,
+                                            unordered_set<size_t> &right_bindings) {
 	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = (BoundColumnRefExpression &)expression;
 		if (colref.depth > 0) {
@@ -79,8 +79,8 @@ static bool CreateJoinCondition(Expression &expr, unordered_set<size_t> &left_bi
                                 unordered_set<size_t> &right_bindings, vector<JoinCondition> &conditions) {
 	// comparison
 	auto &comparison = (ComparisonExpression &)expr;
-	auto left_side = GetJoinSide(*comparison.left, left_bindings, right_bindings);
-	auto right_side = GetJoinSide(*comparison.right, left_bindings, right_bindings);
+	auto left_side = LogicalComparisonJoin::GetJoinSide(*comparison.left, left_bindings, right_bindings);
+	auto right_side = LogicalComparisonJoin::GetJoinSide(*comparison.right, left_bindings, right_bindings);
 	if (left_side != JoinSide::BOTH && right_side != JoinSide::BOTH) {
 		// join condition can be divided in a left/right side
 		JoinCondition condition;
@@ -100,11 +100,15 @@ static bool CreateJoinCondition(Expression &expr, unordered_set<size_t> &left_bi
 	return false;
 }
 
-static unique_ptr<LogicalOperator> CreateJoin(JoinType type, unique_ptr<LogicalOperator> left_child,
-                                              unique_ptr<LogicalOperator> right_child,
-                                              unordered_set<size_t> &left_bindings,
-                                              unordered_set<size_t> &right_bindings,
-                                              vector<unique_ptr<Expression>> &expressions) {
+unique_ptr<Expression> LogicalComparisonJoin::CreateExpressionFromCondition(JoinCondition cond) {
+	return make_unique<ComparisonExpression>(cond.comparison, move(cond.left), move(cond.right));
+}
+
+unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, unique_ptr<LogicalOperator> left_child,
+                                                              unique_ptr<LogicalOperator> right_child,
+                                                              unordered_set<size_t> &left_bindings,
+                                                              unordered_set<size_t> &right_bindings,
+                                                              vector<unique_ptr<Expression>> &expressions) {
 	vector<JoinCondition> conditions;
 	// first check if we can create
 	for (size_t i = 0; i < expressions.size(); i++) {
@@ -165,8 +169,7 @@ static unique_ptr<LogicalOperator> CreateJoin(JoinType type, unique_ptr<LogicalO
 		// merge any conditions we created back
 		for (size_t cond_idx = 0; cond_idx < conditions.size(); cond_idx++) {
 			// create the comparison
-			auto comparison = make_unique<ComparisonExpression>(
-			    conditions[cond_idx].comparison, move(conditions[cond_idx].left), move(conditions[cond_idx].right));
+			auto comparison = CreateExpressionFromCondition(move(conditions[cond_idx]));
 			// AND together with the other condition
 			any_join->condition = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
 			                                                         move(any_join->condition), move(comparison));
@@ -231,7 +234,8 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
 	LogicalJoin::GetTableReferences(*left_child, left_bindings);
 	LogicalJoin::GetTableReferences(*right_child, right_bindings);
 	// now create the join operator from the set of join conditions
-	auto join = CreateJoin(expr.type, move(left_child), move(right_child), left_bindings, right_bindings, expressions);
+	auto join = LogicalComparisonJoin::CreateJoin(expr.type, move(left_child), move(right_child), left_bindings,
+	                                              right_bindings, expressions);
 
 	// now we visit the expressions depending on the type of join
 	if (join->type == LogicalOperatorType::COMPARISON_JOIN) {
