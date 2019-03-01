@@ -180,7 +180,6 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 				i--;
 				continue;
 			}
-
 		}
 	}
 	op->children[0] = left_pushdown.Rewrite(move(op->children[0]));

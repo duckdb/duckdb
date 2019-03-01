@@ -207,12 +207,22 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				return plan;
 			}
 		} else if (join.type == JoinType::LEFT) {
-			// // left outer join
+			// left outer join
 			if (!right_has_correlation) {
 				// only left has correlation: push into left
 				plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
 				return plan;
 			}
+		} else if (join.type == JoinType::MARK) {
+			if (right_has_correlation) {
+				throw Exception("MARK join with correlation in RHS not supported");
+			}
+			// push the child into the LHS
+			plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
+			// rewrite expressions in the join conditions
+			RewriteCorrelatedExpressions rewriter(base_binding, correlated_map);
+			rewriter.VisitOperator(*plan);
+			return plan;
 		} else {
 			throw Exception("Unsupported join type for flattening correlated subquery");
 		}
