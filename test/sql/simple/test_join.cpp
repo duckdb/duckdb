@@ -149,7 +149,7 @@ TEST_CASE("Equality + inequality anti and semi joins", "[joins]") {
 	DuckDBConnection con(db);
 	unique_ptr<DuckDBResult> result;
 	con.EnableQueryVerification();
-
+	
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER, str VARCHAR);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 1, 'a'), (12, 2, 'b'), (13, 3, 'c')"));
 

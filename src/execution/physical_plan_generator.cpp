@@ -422,25 +422,29 @@ void PhysicalPlanGenerator::Visit(LogicalDelimJoin &op) {
 	if (op.type == JoinType::MARK) {
 		assert(plan->type == PhysicalOperatorType::HASH_JOIN);
 		auto &hash_join = (PhysicalHashJoin &)*plan;
-		// correlated eliminated MARK join
-		// a correlated MARK join should always have exactly one non-correlated column
-		// (namely the actual predicate of the ANY() expression)
-		assert(delim_types.size() + 1 == hash_join.conditions.size());
-		// push duplicate eliminated columns into the hash table:
-		// - these columns will be considered as equal for NULL values AND
-		// - the has_null and has_result flags will be grouped by these columns
-		auto &info = hash_join.hash_table->correlated_mark_join_info;
+		// correlated MARK join
+		if (delim_types.size() + 1 == hash_join.conditions.size()) {
+			// the correlated MARK join has one more condition than the amount of correlated columns
+			// this is the case in a correlated ANY() expression
+			// in this case we need to keep track of additional entries, namely:
+			// - (1) the total amount of elements per group
+			// - (2) the amount of non-null elements per group
+			// we need these to correctly deal with the cases of either:
+			// - (1) the group being empty [in which case the result is always false, even if the comparison is NULL]
+			// - (2) the group containing a NULL value [in which case FALSE becomes NULL]
+			auto &info = hash_join.hash_table->correlated_mark_join_info;
 
-		vector<TypeId> payload_types = {TypeId::BIGINT, TypeId::BIGINT}; // COUNT types
-		vector<ExpressionType> aggregate_types = {ExpressionType::AGGREGATE_COUNT_STAR,
-		                                          ExpressionType::AGGREGATE_COUNT};
+			vector<TypeId> payload_types = {TypeId::BIGINT, TypeId::BIGINT}; // COUNT types
+			vector<ExpressionType> aggregate_types = {ExpressionType::AGGREGATE_COUNT_STAR,
+													ExpressionType::AGGREGATE_COUNT};
 
-		info.correlated_counts = make_unique<SuperLargeHashTable>(1024, delim_types, payload_types, aggregate_types);
-		info.correlated_types = delim_types;
-		// FIXME: these can be initialized "empty" (without allocating empty vectors)
-		info.group_chunk.Initialize(delim_types);
-		info.payload_chunk.Initialize(payload_types);
-		info.result_chunk.Initialize(payload_types);
+			info.correlated_counts = make_unique<SuperLargeHashTable>(1024, delim_types, payload_types, aggregate_types);
+			info.correlated_types = delim_types;
+			// FIXME: these can be initialized "empty" (without allocating empty vectors)
+			info.group_chunk.Initialize(delim_types);
+			info.payload_chunk.Initialize(payload_types);
+			info.result_chunk.Initialize(payload_types);
+		}
 	}
 	// now create the duplicate eliminated join
 	auto delim_join = make_unique<PhysicalDelimJoin>(op, move(plan), delim_scans);

@@ -46,7 +46,7 @@ TEST_CASE("Test filter pushdown", "[filterpushdown]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 	REQUIRE(CHECK_COLUMN(result, 1, {}));
 	// more complicated conditions on RHS that eliminates NULL values
-	result = con.Query("SELECT * FROM integers i1 LEFT OUTER JOIN integers i2 ON 1=0 WHERE i2.i>10 ORDER BY 2");
+	result = con.Query("SELECT * FROM integers i1 LEFT OUTER JOIN integers i2 ON 1=0 WHERE i2.i>1 ORDER BY 2");
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 	REQUIRE(CHECK_COLUMN(result, 1, {}));
 	result = con.Query("SELECT * FROM integers i1 LEFT OUTER JOIN integers i2 ON 1=0 WHERE CASE WHEN i2.i IS NULL THEN "
@@ -77,13 +77,17 @@ TEST_CASE("Test filter pushdown", "[filterpushdown]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 3}));
 	// DELIM join
+	// correlated exists: turn into semi join
+	result = con.Query("SELECT * FROM integers i1 WHERE EXISTS(SELECT i FROM integers WHERE i=i1.i) ORDER BY i1.i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	// cout << con.GetProfilingInformation();
+	return;
 	// push condition down
 	result = con.Query("SELECT * FROM integers i1, integers i2 WHERE i1.i=(SELECT i FROM integers WHERE i1.i=i) AND "
 	                   "i1.i=i2.i ORDER BY i1.i");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	cout << con.GetProfilingInformation();
-	return;
 	// test filter pushdown into subquery
 	result =
 	    con.Query("SELECT * FROM (SELECT i1.i AS a, i2.i AS b FROM integers i1, integers i2) a1 WHERE a=b ORDER BY 1");

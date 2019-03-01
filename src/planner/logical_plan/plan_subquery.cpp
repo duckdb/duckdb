@@ -204,8 +204,8 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 	}
 	case SubqueryType::EXISTS: {
 		// correlated EXISTS query
-		// this query is similar to the correlated SCALAR query
-		auto delim_join = CreateDuplicateEliminatedJoin(correlated_columns, JoinType::SINGLE);
+		// this query is similar to the correlated SCALAR query, except we use a MARK join here
+		auto delim_join = CreateDuplicateEliminatedJoin(correlated_columns, JoinType::MARK);
 		// LHS
 		delim_join->AddChild(move(root));
 		// RHS
@@ -213,38 +213,18 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		flatten.DetectCorrelatedExpressions(plan.get());
 		auto dependent_join = flatten.PushDownDependentJoin(move(plan));
 
-		// in the correlated EXISTS case we push a COUNT(*) aggregation that groups by the correlated columns
-		// this gives us either (1) a count of how many entries occurred or (2) a NULL value if no entries occurred
-		// COUNT(*)
-		auto count_star = make_unique<AggregateExpression>(ExpressionType::AGGREGATE_COUNT_STAR, nullptr);
-		count_star->ResolveType();
-		auto count_star_type = count_star->return_type;
-		vector<unique_ptr<Expression>> aggregates;
-		aggregates.push_back(move(count_star));
-		// create the aggregate
-		auto group_index = binder.GenerateTableIndex();
-		auto aggr_index = binder.GenerateTableIndex();
-		auto count_aggregate = make_unique<LogicalAggregate>(group_index, aggr_index, move(aggregates));
-		// push the grouping columns
-		for (size_t i = 0; i < correlated_columns.size(); i++) {
-			auto &col = correlated_columns[i];
-			count_aggregate->groups.push_back(make_unique<BoundColumnRefExpression>(
-			    col.name, col.type,
-			    ColumnBinding(flatten.base_binding.table_index, flatten.base_binding.column_index + i)));
-		}
-		count_aggregate->AddChild(move(dependent_join));
+		// first push a subquery node
+		auto subquery_index = binder.GenerateTableIndex();
+		auto subquery_node = make_unique<LogicalSubquery>(subquery_index, dependent_join->GetNames().size());
+		subquery_node->AddChild(move(dependent_join));
 
-		// now we create the join conditions between the dependent join and the grouping columns
-		CreateDelimJoinConditions(*delim_join, correlated_columns, ColumnBinding(group_index, 0));
-		delim_join->AddChild(move(count_aggregate));
+		// now we create the join conditions between the dependent join and the original table
+		CreateDelimJoinConditions(*delim_join, correlated_columns, ColumnBinding(subquery_index, flatten.delim_offset));
+		delim_join->AddChild(move(subquery_node));
 		root = move(delim_join);
-		// finally we push the expression
-		// EXISTS is TRUE if COUNT(*) IS NOT NULL
-		// because the hash table will contain the value NULL if no values for the group are found
-		// hence we push "COUNT(*) IS NOT NULL" instead of the original subquery expression
-		auto bound_count = make_unique<BoundColumnRefExpression>("", count_star_type, ColumnBinding(aggr_index, 0));
-		return make_unique<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, TypeId::BOOLEAN,
-		                                       move(bound_count));
+		// finally push the BoundColumnRefExpression referring to the marker
+		return make_unique<BoundColumnRefExpression>(expr, expr.return_type,
+		                                             ColumnBinding(subquery_index, 0));
 	}
 	default: {
 		assert(subquery.subquery_type == SubqueryType::ANY);
@@ -284,7 +264,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 
 		delim_join->AddChild(move(subquery_node));
 		root = move(delim_join);
-		// finally push the BoundColumnRefExpression referring to the data element
+		// finally push the BoundColumnRefExpression referring to the marker
 		return make_unique<BoundColumnRefExpression>(expr, expr.return_type,
 		                                             ColumnBinding(subquery_index, flatten.data_offset));
 	}
