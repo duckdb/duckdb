@@ -5,9 +5,22 @@ import os
 import numpy
 import sys
 from setuptools import setup, Extension
+from setuptools.command.install import install
+import subprocess
 
 basedir = os.path.dirname(os.path.realpath(__file__))
 
+# sort of hacky wrapper that builds the main duckdb library first
+class CustomInstallCommand(install):
+    def run(self):
+        wd = os.getcwd()
+        os.chdir("../../")
+        process = subprocess.Popen(['make', 'opt'])
+        process.wait()
+        os.chdir(wd)
+        if process.returncode != 0 or not os.path.isfile('../../build/release/src/libduckdb_static.a'):
+            raise Exception('Library build failed. :/') 
+        install.run(self)
 
 # sources = []
 # includes = [numpy.get_include()]
@@ -30,7 +43,6 @@ setup(
     # author_email = 'hannes@cwi.nl',
     keywords = 'DuckDB Database SQL OLAP',
 #    packages = ['duckdb'],
-    # package_dir = {'': 'lib'},
     url="https://github.com/cwida/duckdb",
     long_description = '',
     # install_requires=[
@@ -39,10 +51,12 @@ setup(
     # ],
     setup_requires=['pytest-runner'],
     tests_require=['pytest'],
-    # zip_safe = False,
     classifiers = [
     # ...
         'Development Status :: 3 - Alpha'
     ],
+    cmdclass={
+        'install': CustomInstallCommand,
+    },
     ext_modules = [libduckdb]
 )

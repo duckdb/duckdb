@@ -91,6 +91,17 @@ error:
 	}
 }
 
+PyObject *duckdb_cursor_fetchone(duckdb_Cursor *self, PyObject *args) {
+	PyObject *row;
+
+	row = duckdb_cursor_iternext(self);
+	if (!row && !PyErr_Occurred()) {
+		Py_RETURN_NONE;
+	}
+
+	return row;
+}
+
 PyObject *duckdb_cursor_iternext(duckdb_Cursor *self) {
 
 	if (!check_cursor(self)) {
@@ -172,23 +183,20 @@ PyObject *duckdb_cursor_close(duckdb_Cursor *self, PyObject *args) {
 
 static PyMethodDef cursor_methods[] = {
     {"execute", (PyCFunction)duckdb_cursor_execute, METH_VARARGS, PyDoc_STR("Executes a SQL statement.")},
-    //  {"fetchone", (PyCFunction)duckdb_cursor_fetchone, METH_NOARGS, PyDoc_STR("Fetches one row from the
-    //  resultset.")},
-    //  {"fetchall", (PyCFunction)duckdb_cursor_fetchall, METH_NOARGS, PyDoc_STR("Fetches all rows from the
-    //  resultset.")},
+    {"fetchone", (PyCFunction)duckdb_cursor_fetchone, METH_NOARGS, PyDoc_STR("Fetches one row from the  resultset.")},
     {"close", (PyCFunction)duckdb_cursor_close, METH_NOARGS, PyDoc_STR("Closes the cursor.")},
     {NULL, NULL}};
 
+//      {"fetchall", (PyCFunction)duckdb_cursor_fetchall, METH_NOARGS, PyDoc_STR("Fetches all rows from the
+//      resultset.")},
+
 static struct PyMemberDef cursor_members[] = {
-    //    {"connection", T_OBJECT, offsetof(pysqlite_Cursor, connection), READONLY},
-    //    {"description", T_OBJECT, offsetof(pysqlite_Cursor, description), READONLY},
-    //    {"arraysize", T_INT, offsetof(pysqlite_Cursor, arraysize), 0},
+    {"connection", T_OBJECT, offsetof(duckdb_Cursor, connection), READONLY},
     //    {"lastrowid", T_OBJECT, offsetof(pysqlite_Cursor, lastrowid), READONLY},
     {"rowcount", T_LONG, offsetof(duckdb_Cursor, rowcount), READONLY},
-    //    {"row_factory", T_OBJECT, offsetof(pysqlite_Cursor, row_factory), 0},
     {NULL}};
 
-static const char cursor_doc[] = PyDoc_STR("SQLite database cursor class.");
+static const char cursor_doc[] = PyDoc_STR("DuckDB database cursor class.");
 
 PyTypeObject duckdb_CursorType = {
     PyVarObject_HEAD_INIT(NULL, 0) MODULE_NAME ".Cursor", /* tp_name */
