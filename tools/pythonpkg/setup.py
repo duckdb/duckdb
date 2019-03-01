@@ -20,7 +20,7 @@ basedir = os.path.dirname(os.path.realpath(__file__))
 
 # sources = []
 # includes = [numpy.get_include()]
-sources = ['connection.c', 'cursor.c', 'module.c', 'row.c', 'statement.c']
+sources = ['connection.c', 'cursor.c', 'module.c']
 includes = ['../../src/include', '.']
 excludes = []
 
