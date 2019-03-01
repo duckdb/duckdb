@@ -1,6 +1,7 @@
 #include "optimizer/obsolete_filter_rewriter.hpp"
 
 #include "planner/operator/logical_filter.hpp"
+#include "planner/operator/logical_empty_result.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -125,7 +126,6 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 
 unique_ptr<LogicalOperator> ObsoleteFilterRewriter::Rewrite(unique_ptr<LogicalOperator> node) {
 	if (node->type == LogicalOperatorType::FILTER) {
-		auto &filter = (LogicalFilter &)*node;
 		expression_map_t<vector<ExpressionValueInformation>> equivalence_sets;
 		// filter node, here we perform the actual obsolete filter removal
 		// first we remove any obsolete filter expressions
@@ -165,7 +165,6 @@ unique_ptr<LogicalOperator> ObsoleteFilterRewriter::Rewrite(unique_ptr<LogicalOp
 			    left_is_constant ? ComparisonExpression::FlipComparisionExpression(comparison.type) : comparison.type;
 			equivalence_sets[non_constant_expression].push_back(info);
 		}
-		bool prune_filter = false;
 		vector<size_t> prune_set;
 		// now iterate over the expression equality information
 		for (auto &entry : equivalence_sets) {
@@ -203,12 +202,9 @@ unique_ptr<LogicalOperator> ObsoleteFilterRewriter::Rewrite(unique_ptr<LogicalOp
 							outer.expression_index = (size_t)-1;
 							continue;
 						} else if (result == ValueComparisonResult::UNSATISFIABLE_CONDITION) {
-							prune_filter = true;
-							break;
+							// the filter is unsatisfiable, prune the entire subtree
+							return make_unique<LogicalEmptyResult>(move(node->children[0]));
 						}
-					}
-					if (prune_filter) {
-						break;
 					}
 				}
 			}
@@ -222,19 +218,14 @@ unique_ptr<LogicalOperator> ObsoleteFilterRewriter::Rewrite(unique_ptr<LogicalOp
 				auto constant_value = constant.value.CastAs(TypeId::BOOLEAN);
 				if (constant_value.is_null || !constant_value.value_.boolean) {
 					// FALSE or NULL, we can prune entire filter
-					prune_filter = true;
-					break;
+					return make_unique<LogicalEmptyResult>(move(node->children[0]));
 				} else {
 					// TRUE, we can prune this node from the filter
 					prune_set.push_back(expr_idx);
 				}
 			}
 		}
-		if (prune_filter) {
-			// the filter is guaranteed to produce an empty result
-			// set this flag in the filter
-			filter.empty_result = true;
-		} else if (prune_set.size() > 0) {
+		if (prune_set.size() > 0) {
 			// prune any removed expressions
 			for (auto index : prune_set) {
 				node->expressions[index] = nullptr;

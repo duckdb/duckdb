@@ -359,6 +359,7 @@ enum class LogicalOperatorType : uint8_t {
 	SUBQUERY,
 	TABLE_FUNCTION,
 	DISTINCT,
+	EMPTY_RESULT,
 	// -----------------------------
 	// Joins
 	// -----------------------------

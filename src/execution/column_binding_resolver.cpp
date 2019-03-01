@@ -28,6 +28,9 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::WINDOW:
 		Visit((LogicalWindow &)op);
 		break;
+	case LogicalOperatorType::EMPTY_RESULT:
+		Visit((LogicalEmptyResult &)op);
+		break;
 	case LogicalOperatorType::PROJECTION:
 		Visit((LogicalProjection &)op);
 		break;
@@ -70,6 +73,11 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		LogicalOperatorVisitor::VisitOperator(op);
 		break;
 	}
+}
+
+void ColumnBindingResolver::Visit(LogicalEmptyResult &op) {
+	// empty result; bind the tables that would be bound here if the subtree was not pruned
+	bound_tables = op.bound_tables;
 }
 
 void ColumnBindingResolver::Visit(LogicalCreateIndex &op) {
@@ -281,6 +289,7 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 			break;
 		}
 	}
+	assert(index != (uint32_t) -1);
 	if (index == (uint32_t)-1) {
 		throw Exception("Failed to bind column ref");
 	}

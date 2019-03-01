@@ -45,6 +45,11 @@ void LogicalJoin::GetTableReferences(LogicalOperator &op, unordered_set<size_t> 
 	if (op.type == LogicalOperatorType::GET) {
 		auto &get = (LogicalGet &)op;
 		bindings.insert(get.table_index);
+	} else if (op.type == LogicalOperatorType::EMPTY_RESULT) {
+		auto &empty = (LogicalEmptyResult &)op;
+		for(auto &table : empty.bound_tables) {
+			bindings.insert(table.table_index);
+		}
 	} else if (op.type == LogicalOperatorType::SUBQUERY) {
 		auto &subquery = (LogicalSubquery &)op;
 		bindings.insert(subquery.table_index);

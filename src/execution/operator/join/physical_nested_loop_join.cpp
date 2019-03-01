@@ -51,6 +51,33 @@ static bool RemoveNullValues(DataChunk &chunk) {
 	}
 }
 
+template <bool MATCH>
+static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]) {
+	assert(left.column_count == result.column_count);
+	// create the selection vector from the matches that were found
+	size_t result_count = 0;
+	for (size_t i = 0; i < left.size(); i++) {
+		if (found_match[i] == MATCH) {
+			// part of the result
+			result.owned_sel_vector[result_count++] = i;
+		}
+	}
+	// construct the final result
+	if (result_count > 0) {
+		// we only return the columns on the left side
+		// project them using the result selection vector
+		result.sel_vector = result.owned_sel_vector;
+		// reference the columns of the left side from the result
+		for (size_t i = 0; i < left.column_count; i++) {
+			result.data[i].Reference(left.data[i]);
+			result.data[i].sel_vector = result.sel_vector;
+			result.data[i].count = result_count;
+		}
+	} else {
+		assert(result.size() == 0);
+	}
+}
+
 void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalNestedLoopJoinOperatorState *>(state_);
 
@@ -155,13 +182,22 @@ void PhysicalNestedLoopJoin::_GetChunk(ClientContext &context, DataChunk &chunk,
 		}
 
 		switch (type) {
+		case JoinType::SEMI: 
+		case JoinType::ANTI: 
 		case JoinType::MARK: {
 			// MARK, SEMI and ANTI joins are handled separately because they scan the whole RHS in one go
 			bool found_match[STANDARD_VECTOR_SIZE] = {false};
 			NestedLoopJoinMark::Perform(state->left_join_condition, state->right_chunks, found_match, conditions);
-			// now construct the mark join result from the found matches
-			ConstructMarkJoinResult(state->left_join_condition, state->child_chunk, chunk, found_match,
-			                        state->has_null);
+			if (type == JoinType::MARK) {
+				// now construct the mark join result from the found matches
+				ConstructMarkJoinResult(state->left_join_condition, state->child_chunk, chunk, found_match,
+										state->has_null);
+			} else if (type == JoinType::SEMI) {
+				// construct the semi join result from the found matches
+				ConstructSemiOrAntiJoinResult<true>(state->child_chunk, chunk, found_match);
+			} else if (type == JoinType::ANTI) {
+				ConstructSemiOrAntiJoinResult<false>(state->child_chunk, chunk, found_match);
+			}
 			// move to the next LHS chunk in the next iteration
 			state->right_chunk = state->right_chunks.chunks.size();
 			return;

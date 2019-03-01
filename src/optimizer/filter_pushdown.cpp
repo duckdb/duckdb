@@ -180,17 +180,6 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 				i--;
 				continue;
 			}
-			// or turn it into an ANTI join if the filter is on NOT(marker)
-			if (filters[i]->filter->type == ExpressionType::OPERATOR_NOT) {
-				auto &op = (OperatorExpression&) *filters[i]->filter;
-				if (op.children[0]->type == ExpressionType::BOUND_COLUMN_REF) {
-					// filter is just NOT(marker): turn into anti join
-					join.type = JoinType::ANTI;
-					filters.erase(filters.begin() + i);
-					i--;
-					continue;
-				}
-			}
 
 		}
 	}
@@ -269,7 +258,18 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 				// bindings match both: turn into join condition
 				join_conditions.push_back(move(f->filter));
 			} else {
-				throw Exception("Not handled yet");
+				assert(side == JoinSide::NONE);
+				assert(f->bindings.size() == 0);
+				// scalar condition, evaluate it
+				auto result = ExpressionExecutor::EvaluateScalar(*f->filter).CastAs(TypeId::BOOLEAN);
+				// check if the filter passes
+				if (result.is_null || !result.value_.boolean) {
+					// the filter does not pass the scalar test, create an empty result
+					return make_unique<LogicalEmptyResult>(move(op));
+				} else {
+					// the filter passes the scalar test, just remove the condition
+					continue;
+				}
 			}
 		}
 	}
@@ -293,8 +293,19 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownFilter(unique_ptr<LogicalOpe
 	for (size_t i = 0; i < filter.expressions.size(); i++) {
 		auto f = make_unique<Filter>();
 		GetExpressionBindings(*filter.expressions[i], f->bindings);
-		assert(f->bindings.size() > 0);
 		f->filter = move(filter.expressions[i]);
+		if (f->bindings.size() == 0) {
+			// scalar condition, evaluate it
+			auto result = ExpressionExecutor::EvaluateScalar(*f->filter).CastAs(TypeId::BOOLEAN);
+			// check if the filter passes
+			if (result.is_null || !result.value_.boolean) {
+				// the filter does not pass the scalar test, create an empty result
+				return make_unique<LogicalEmptyResult>(move(op->children[0]));
+			} else {
+				// the filter passes the scalar test, just remove the condition
+				continue;
+			}
+		}
 		filters.push_back(move(f));
 	}
 	return Rewrite(move(filter.children[0]));

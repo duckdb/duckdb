@@ -32,6 +32,9 @@ void PhysicalPlanGenerator::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::PROJECTION:
 		Visit((LogicalProjection &)op);
 		break;
+	case LogicalOperatorType::EMPTY_RESULT:
+		Visit((LogicalEmptyResult &)op);
+		break;
 	case LogicalOperatorType::FILTER:
 		Visit((LogicalFilter &)op);
 		break;
@@ -334,13 +337,11 @@ static unique_ptr<PhysicalOperator> CreateIndexScan(LogicalFilter &filter, Logic
 	return nullptr;
 }
 
+void PhysicalPlanGenerator::Visit(LogicalEmptyResult &op) {
+	plan = make_unique<PhysicalEmptyResult>(op.types);
+}
+
 void PhysicalPlanGenerator::Visit(LogicalFilter &op) {
-	if (op.empty_result) {
-		// the filter is guaranteed to produce an empty result
-		// create a node that returns an empty result instead of generating the rest of the plan
-		this->plan = make_unique<PhysicalEmptyResult>(op.types);
-		return;
-	}
 	if (op.children[0]->type == LogicalOperatorType::GET) {
 		// filter + get
 		// check if we can transform this into an index scan

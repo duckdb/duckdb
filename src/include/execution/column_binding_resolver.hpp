@@ -11,14 +11,9 @@
 #include "duckdb.hpp"
 #include "planner/logical_operator.hpp"
 #include "planner/logical_operator_visitor.hpp"
+#include "parser/expression/bound_columnref_expression.hpp"
 
 namespace duckdb {
-
-struct BoundTable {
-	size_t table_index;
-	size_t column_count;
-	size_t column_offset;
-};
 
 //! The ColumnBindingResolver resolves ColumnBindings into base tables
 //! (table_index, column_index) into physical indices into the DataChunks that
@@ -31,11 +26,13 @@ public:
 	//! We overide the VisitOperator method because we don't want to automatically visit children of all operators
 	void VisitOperator(LogicalOperator &op) override;
 
+	vector<BoundTable> GetBoundTables() { return bound_tables; }
 protected:
 	void Visit(LogicalAggregate &op);
 	void Visit(LogicalAnyJoin &op);
 	void Visit(LogicalComparisonJoin &op);
 	void Visit(LogicalCreateIndex &op);
+	void Visit(LogicalEmptyResult &op);
 	void Visit(LogicalUnion &op);
 	void Visit(LogicalExcept &op);
 	void Visit(LogicalIntersect &op);
@@ -56,7 +53,6 @@ protected:
 	// void Visit(BoundSubqueryExpression &expr) override;
 
 	vector<BoundTable> bound_tables;
-
 private:
 	void PushBinding(BoundTable binding);
 	void BindTablesBinaryOp(LogicalOperator &op, bool append_right);

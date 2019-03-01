@@ -22,6 +22,7 @@ class LogicalCrossProduct;
 class LogicalDelete;
 class LogicalDelimJoin;
 class LogicalDistinct;
+class LogicalEmptyResult;
 class LogicalFilter;
 class LogicalGet;
 class LogicalJoin;
