@@ -77,7 +77,7 @@ private:
 	expression_map_t<vector<FilterInfo *>> equivalence_sets;
 
 	//! Extract the bindings referred to by an Expression
-	bool ExtractBindings(Expression &expression, std::unordered_set<size_t> &bindings);
+	bool ExtractBindings(Expression &expression, unordered_set<size_t> &bindings);
 	//! Traverse the query tree to find (1) base relations, (2) existing join conditions and (3) filters that can be
 	//! rewritten into joins. Returns true if there are joins in the tree that can be reordered, false otherwise.
 	bool ExtractJoinRelations(LogicalOperator &input_op, vector<LogicalOperator *> &filter_operators,
@@ -89,11 +89,11 @@ private:
 	//! cancelling the dynamic programming step.
 	bool TryEmitPair(RelationSet *left, RelationSet *right, NeighborInfo *info);
 
-	bool EnumerateCmpRecursive(RelationSet *left, RelationSet *right, std::unordered_set<size_t> exclusion_set);
+	bool EnumerateCmpRecursive(RelationSet *left, RelationSet *right, unordered_set<size_t> exclusion_set);
 	//! Emit a relation set node
 	bool EmitCSG(RelationSet *node);
 	//! Enumerate the possible connected subgraphs that can be joined together in the join graph
-	bool EnumerateCSGRecursive(RelationSet *node, std::unordered_set<size_t> &exclusion_set);
+	bool EnumerateCSGRecursive(RelationSet *node, unordered_set<size_t> &exclusion_set);
 	//! Rewrite a logical query plan given the join plan
 	unique_ptr<LogicalOperator> RewritePlan(unique_ptr<LogicalOperator> plan, JoinNode *node);
 	//! Generate cross product edges inside the side

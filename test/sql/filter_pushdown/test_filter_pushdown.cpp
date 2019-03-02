@@ -80,14 +80,15 @@ TEST_CASE("Test filter pushdown", "[filterpushdown]") {
 	// correlated exists: turn into semi join
 	result = con.Query("SELECT * FROM integers i1 WHERE EXISTS(SELECT i FROM integers WHERE i=i1.i) ORDER BY i1.i");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
-	// cout << con.GetProfilingInformation();
-	return;
-	// push condition down
+	// correlated not exists: turn into anti join
+	result = con.Query("SELECT * FROM integers i1 WHERE NOT EXISTS(SELECT i FROM integers WHERE i=i1.i) ORDER BY i1.i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	// push condition down delim join
 	result = con.Query("SELECT * FROM integers i1, integers i2 WHERE i1.i=(SELECT i FROM integers WHERE i1.i=i) AND "
 	                   "i1.i=i2.i ORDER BY i1.i");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
-	cout << con.GetProfilingInformation();
+	return;
 	// test filter pushdown into subquery
 	result =
 	    con.Query("SELECT * FROM (SELECT i1.i AS a, i2.i AS b FROM integers i1, integers i2) a1 WHERE a=b ORDER BY 1");

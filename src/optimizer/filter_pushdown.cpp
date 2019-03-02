@@ -25,6 +25,7 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 		return PushdownCrossProduct(move(op));
 	case LogicalOperatorType::COMPARISON_JOIN:
 	case LogicalOperatorType::ANY_JOIN:
+	case LogicalOperatorType::DELIM_JOIN:
 		return PushdownJoin(move(op));
 	default:
 		return FinishPushdown(move(op));
@@ -59,6 +60,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
                                                              unordered_set<size_t> &right_bindings) {
  	auto &join = (LogicalJoin &)*op;
 	assert(join.type == JoinType::INNER);
+	assert(op->type != LogicalOperatorType::DELIM_JOIN);
 	// inner join: gather all the conditions of the inner join and add to the filter list
 	if (op->type == LogicalOperatorType::ANY_JOIN) {
 	 	auto &any_join = (LogicalAnyJoin &) join;
@@ -79,7 +81,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
 			filters.push_back(move(f));
 		}
 	}
-	// now turn the inner join into a cross product
+	// turn the inner join into a cross product
 	auto cross_product = make_unique<LogicalCrossProduct>();
 	cross_product->children.push_back(move(op->children[0]));
 	cross_product->children.push_back(move(op->children[1]));
@@ -118,6 +120,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
                                                              unordered_set<size_t> &right_bindings) {
  	auto &join = (LogicalJoin &)*op;
 	assert(join.type == JoinType::LEFT);
+	assert(op->type != LogicalOperatorType::DELIM_JOIN);
 	FilterPushdown left_pushdown, right_pushdown;
 	// now check the set of filters
 	for (size_t i = 0; i < filters.size(); i++) {
@@ -154,9 +157,11 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
                                                              unordered_set<size_t> &left_bindings,
                                                              unordered_set<size_t> &right_bindings) {
  	auto &join = (LogicalJoin &)*op;
+	auto &comp_join = (LogicalComparisonJoin &)*op;
 	assert(join.type == JoinType::MARK);
+	assert(op->type == LogicalOperatorType::COMPARISON_JOIN || op->type == LogicalOperatorType::DELIM_JOIN);
+
 	FilterPushdown left_pushdown, right_pushdown;
-	
 	bool found_mark_reference = false;
 	// now check the set of filters
 	for (size_t i = 0; i < filters.size(); i++) {
@@ -179,6 +184,29 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 				filters.erase(filters.begin() + i);
 				i--;
 				continue;
+			}
+			// if the filter is on NOT(marker) AND the join conditions are all set to "null_values_are_equal" we can turn this into an ANTI join
+			// if all join conditions have null_values_are_equal=true, then the result of the MARK join is always TRUE or FALSE, and never NULL
+			// this happens in the case of a correlated EXISTS clause
+			if (filters[i]->filter->type == ExpressionType::OPERATOR_NOT) {
+				auto &op_expr = (OperatorExpression&) *filters[i]->filter;
+				if (op_expr.children[0]->type == ExpressionType::BOUND_COLUMN_REF) {
+					// the filter is NOT(marker), check the join conditions
+					bool all_null_values_are_equal = true;
+					for(auto &cond : comp_join.conditions) {
+						if (!cond.null_values_are_equal) {
+							all_null_values_are_equal = false;
+							break;
+						}
+					}
+					if (all_null_values_are_equal) {
+						// all null values are equal, convert to ANTI join
+						join.type = JoinType::ANTI;
+						filters.erase(filters.begin() + i);
+						i--;
+						continue;
+					}
+				}
 			}
 		}
 	}
@@ -210,7 +238,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSingleJoin(unique_ptr<Logica
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOperator> op) {
-	assert(op->type == LogicalOperatorType::COMPARISON_JOIN || op->type == LogicalOperatorType::ANY_JOIN);
+	assert(op->type == LogicalOperatorType::COMPARISON_JOIN || op->type == LogicalOperatorType::ANY_JOIN || op->type == LogicalOperatorType::DELIM_JOIN);
 	auto &join = (LogicalJoin &)*op;
 	unordered_set<size_t> left_bindings, right_bindings;
 	LogicalJoin::GetTableReferences(*op->children[0], left_bindings);

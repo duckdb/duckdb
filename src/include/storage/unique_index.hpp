@@ -12,8 +12,6 @@
 #include "common/types/tuple.hpp"
 
 #include <mutex>
-#include <unordered_set>
-#include <vector>
 
 namespace duckdb {
 
@@ -77,9 +75,9 @@ public:
 
 private:
 	void AddEntries(Transaction &transaction, UniqueIndexAddedEntries &nodes, Tuple tuples[], bool has_null[],
-	                Vector &row_identifiers, std::unordered_set<size_t> &ignored_identifiers);
+	                Vector &row_identifiers, unordered_set<size_t> &ignored_identifiers);
 	UniqueIndexNode *AddEntry(Transaction &transaction, Tuple tuple, size_t row_identifier,
-	                          std::unordered_set<size_t> &ignored_identifiers);
+	                          unordered_set<size_t> &ignored_identifiers);
 	void RemoveEntry(UniqueIndexNode *entry);
 
 	//! The tuple serializer

@@ -30,7 +30,7 @@ public:
 		return {"Success"};
 	}
 
-	void GetTableBindings(std::unordered_set<TableCatalogEntry *> &result_list);
+	void GetTableBindings(unordered_set<TableCatalogEntry *> &result_list);
 
 protected:
 	void ResolveTypes() override {

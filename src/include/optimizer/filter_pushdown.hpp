@@ -20,7 +20,7 @@ public:
 	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> node);
 
 	struct Filter {
-		std::unordered_set<size_t> bindings;
+		unordered_set<size_t> bindings;
 		unique_ptr<Expression> filter;
 
 		Filter(){}
@@ -37,17 +37,17 @@ private:
 
 
 	unique_ptr<LogicalOperator> PushdownInnerJoin(unique_ptr<LogicalOperator> op,
-                                                             std::unordered_set<size_t> &left_bindings,
-                                                             std::unordered_set<size_t> &right_bindings);
+                                                             unordered_set<size_t> &left_bindings,
+                                                             unordered_set<size_t> &right_bindings);
 	unique_ptr<LogicalOperator> PushdownLeftJoin(unique_ptr<LogicalOperator> op,
-	                                             std::unordered_set<size_t> &left_bindings,
-	                                             std::unordered_set<size_t> &right_bindings);
+	                                             unordered_set<size_t> &left_bindings,
+	                                             unordered_set<size_t> &right_bindings);
 	unique_ptr<LogicalOperator> PushdownMarkJoin(unique_ptr<LogicalOperator> op,
-                                                             std::unordered_set<size_t> &left_bindings,
-                                                             std::unordered_set<size_t> &right_bindings);
+                                                             unordered_set<size_t> &left_bindings,
+                                                             unordered_set<size_t> &right_bindings);
 	unique_ptr<LogicalOperator> PushdownSingleJoin(unique_ptr<LogicalOperator> op,
-                                                             std::unordered_set<size_t> &left_bindings,
-                                                             std::unordered_set<size_t> &right_bindings);
+                                                             unordered_set<size_t> &left_bindings,
+                                                             unordered_set<size_t> &right_bindings);
 
 	unique_ptr<LogicalOperator> FinishPushdown(unique_ptr<LogicalOperator> op);
 };

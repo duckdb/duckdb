@@ -8,7 +8,7 @@ using namespace std;
 
 class PrepareTableVisitor : public LogicalOperatorVisitor {
 public:
-	PrepareTableVisitor(std::unordered_set<TableCatalogEntry *> &table_list) : table_list(table_list) {
+	PrepareTableVisitor(unordered_set<TableCatalogEntry *> &table_list) : table_list(table_list) {
 	}
 
 	void VisitOperator(LogicalOperator &op) {
@@ -41,10 +41,10 @@ protected:
 	}
 
 private:
-	std::unordered_set<TableCatalogEntry *> &table_list;
+	unordered_set<TableCatalogEntry *> &table_list;
 };
 
-void LogicalPrepare::GetTableBindings(std::unordered_set<TableCatalogEntry *> &result_list) {
+void LogicalPrepare::GetTableBindings(unordered_set<TableCatalogEntry *> &result_list) {
 	PrepareTableVisitor ptv(result_list);
 	ptv.VisitOperator(*children[0].get());
 }

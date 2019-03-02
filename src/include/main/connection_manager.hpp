@@ -37,7 +37,7 @@ public:
 
 private:
 	std::mutex connections_lock;
-	std::unordered_set<DuckDBConnection *> connections;
+	unordered_set<DuckDBConnection *> connections;
 };
 
 } // namespace duckdb

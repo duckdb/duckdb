@@ -30,7 +30,7 @@ public:
 
 	unique_ptr<PhysicalOperator> plan;
 	unordered_map<size_t, ParameterExpression *> parameter_expression_map;
-	std::unordered_set<TableCatalogEntry *> tables;
+	unordered_set<TableCatalogEntry *> tables;
 
 	vector<string> names;
 	vector<TypeId> types;

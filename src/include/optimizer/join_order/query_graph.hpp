@@ -54,7 +54,7 @@ public:
 	NeighborInfo *GetConnection(RelationSet *node, RelationSet *other);
 	//! Enumerate the neighbors of a specific node that do not belong to any of the exclusion_set. Note that if a
 	//! neighbor has multiple nodes, this function will return the lowest entry in that set.
-	vector<size_t> GetNeighbors(RelationSet *node, std::unordered_set<size_t> &exclusion_set);
+	vector<size_t> GetNeighbors(RelationSet *node, unordered_set<size_t> &exclusion_set);
 	//! Enumerate all neighbors of a given RelationSet node
 	void EnumerateNeighbors(RelationSet *node, std::function<bool(NeighborInfo *)> callback);
 

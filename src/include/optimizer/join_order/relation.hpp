@@ -53,7 +53,7 @@ public:
 	//! Create or get a RelationSet from a single node with the given index
 	RelationSet *GetRelation(size_t index);
 	//! Create or get a RelationSet from a set of relation bindings
-	RelationSet *GetRelation(std::unordered_set<size_t> &bindings);
+	RelationSet *GetRelation(unordered_set<size_t> &bindings);
 	//! Create or get a RelationSet from a (sorted, duplicate-free!) list of relations
 	RelationSet *GetRelation(unique_ptr<size_t[]> relations, size_t count);
 	//! Union two sets of relations together and create a new relation set
