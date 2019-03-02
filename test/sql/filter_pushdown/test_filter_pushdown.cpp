@@ -93,16 +93,14 @@ TEST_CASE("Test filter pushdown", "[filterpushdown]") {
 	    con.Query("SELECT * FROM (SELECT i1.i AS a, i2.i AS b FROM integers i1, integers i2) a1 WHERE a=b ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 3}));
-	cout << con.GetProfilingInformation();
+	// filter pushdown on subquery with more complicated expression
+	result = con.Query("SELECT * FROM (SELECT i1.i=i2.i AS cond FROM integers i1, integers i2) a1 WHERE cond ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {true, true, true}));
 	return;
 	// filter pushdown into union in subquery
 	result = con.Query("SELECT * FROM (SELECT * FROM integers i1 UNION SELECT * FROM integers i2) a WHERE i=3;");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 	cout << con.GetProfilingInformation();
-	// filter pushdown on subquery with more complicated expression
-	result = con.Query(
-	    "SELECT * FROM (SELECT i1.i=i2.i AS cond FROM integers i1, integers i2) a1 WHERE NOT cond ORDER BY 1");
-	REQUIRE(CHECK_COLUMN(result, 0, {false, false, false, false, false, false}));
 	// filter pushdown on subquery with window function (cannot be done because it will mess up the ordering)
 	result = con.Query("SELECT * FROM (SELECT i1.i AS a, i2.i AS b, row_number() OVER (ORDER BY i1.i, i2.i) FROM "
 	                   "integers i1, integers i2 WHERE i1.i IS NOT NULL AND i2.i IS NOT NULL) a1 WHERE a=b ORDER BY 1");

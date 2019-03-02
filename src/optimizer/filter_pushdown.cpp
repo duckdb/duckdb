@@ -29,6 +29,8 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 		return PushdownJoin(move(op));
 	case LogicalOperatorType::SUBQUERY:
 		return PushdownSubquery(move(op));
+	case LogicalOperatorType::PROJECTION:
+		return PushdownProjection(move(op));
 	default:
 		return FinishPushdown(move(op));
 	}
@@ -359,7 +361,83 @@ unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOpe
 	return move(filter);
 }
 
+
+static void RewriteSubqueryExpressionBindings(Filter &filter, Expression &expr, LogicalSubquery &subquery) {
+	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+		auto &colref = (BoundColumnRefExpression &)expr;
+		assert(colref.binding.table_index == subquery.table_index);
+		assert(colref.depth == 0);
+
+		// rewrite the binding by looking into the bound_tables list of the subquery
+		size_t column_index = colref.binding.column_index;
+		for(size_t i = 0; i < subquery.bound_tables.size(); i++) {
+			auto &table = subquery.bound_tables[i];
+			if (column_index < table.column_count) {
+				// the binding belongs to this table, update the column binding
+				colref.binding.table_index = table.table_index;
+				colref.binding.column_index = column_index;
+				filter.bindings.insert(table.table_index);
+				return;
+			}
+			column_index -= table.column_count;
+		}
+		// table could not be found!
+		assert(0);
+	}
+	expr.EnumerateChildren([&](Expression *child) {
+		RewriteSubqueryExpressionBindings(filter, *child, subquery);
+	});
+}
+
 unique_ptr<LogicalOperator> FilterPushdown::PushdownSubquery(unique_ptr<LogicalOperator> op) {
 	assert(op->type == LogicalOperatorType::SUBQUERY);
-	return FinishPushdown(move(op));
+	auto &subquery = (LogicalSubquery&) *op;
+	// push filter through logical subquery
+	// all the BoundColumnRefExpressions in the filter should refer to the LogicalSubquery
+	// we need to rewrite them to refer to the underlying bound tables instead
+	for(size_t i = 0; i < filters.size(); i++) {
+		auto &f = *filters[i];
+		assert(f.bindings.size() <= 1);
+		f.bindings.clear();
+		// rewrite the bindings within this subquery
+		RewriteSubqueryExpressionBindings(f, *f.filter, subquery);
+	}
+	// now continue the pushdown into the child
+	subquery.children[0] = Rewrite(move(subquery.children[0]));
+	return op;
+}
+
+static unique_ptr<Expression> ReplaceProjectionBindings(LogicalProjection &proj, unique_ptr<Expression> expr) {
+	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
+		auto &colref = (BoundColumnRefExpression &)*expr;
+		assert(colref.binding.table_index == proj.table_index);
+		assert(colref.binding.column_index < proj.expressions.size());
+		assert(colref.depth == 0);
+		// replace the binding with a copy to the expression at the referenced index
+		return proj.expressions[colref.binding.column_index]->Copy();
+	}
+	expr->EnumerateChildren([&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
+		return ReplaceProjectionBindings(proj, move(child));
+	});
+	return expr;
+}
+
+unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<LogicalOperator> op) {
+	assert(op->type == LogicalOperatorType::PROJECTION);
+	auto &proj = (LogicalProjection&) *op;
+	// push filter through logical projection
+	// all the BoundColumnRefExpressions in the filter should refer to the LogicalProjection
+	// we can rewrite them by replacing those references with the expression of the LogicalProjection node
+	for(size_t i = 0; i < filters.size(); i++) {
+		auto &f = *filters[i];
+		assert(f.bindings.size() <= 1);
+		f.bindings.clear();
+		// rewrite the bindings within this subquery
+		f.filter = ReplaceProjectionBindings(proj, move(f.filter));
+		// extract the bindings again
+		GetExpressionBindings(*f.filter, f.bindings);
+	}
+	// now push into children
+	proj.children[0] = Rewrite(move(proj.children[0]));
+	return op;
 }

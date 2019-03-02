@@ -77,8 +77,8 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 			// extract join conditions from filter
 			filter_operators.push_back(op);
 		}
-		if (op->type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY) {
-			// don't push filters through aggregate and group by
+		if (op->type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY || op->type == LogicalOperatorType::PROJECTION) {
+			// don't push filters through projection or aggregate and group by
 			JoinOrderOptimizer optimizer;
 			op->children[0] = optimizer.Optimize(move(op->children[0]));
 			return false;
