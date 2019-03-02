@@ -27,12 +27,6 @@ struct ColumnBinding {
 	}
 };
 
-struct BoundTable {
-	size_t table_index;
-	size_t column_count;
-	size_t column_offset;
-};
-
 struct ColumnBindingHashFunction {
 	size_t operator()(const ColumnBinding &a) const {
 		return CombineHash(Hash<uint32_t>(a.table_index), Hash<uint32_t>(a.column_index));

@@ -1,0 +1,65 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// planner/table_binding_resolver.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+#pragma once
+
+#include "planner/logical_operator.hpp"
+#include "planner/logical_operator_visitor.hpp"
+
+namespace duckdb {
+
+struct BoundTable {
+	size_t table_index;
+	size_t column_count;
+	size_t column_offset;
+};
+
+//! The TableBindingResolver scans a logical tree and constructs TableBindings
+class TableBindingResolver : public LogicalOperatorVisitor {
+public:
+	//! If recurse_into_subqueries is true, we clear the list of tables and recurse when we encounter "blocking node"
+	//! A "blocking node" is a node that clears the bound tables (e.g. a LogicalSubquery, LogicalProjection or LogicalAggregate)
+	//! The reason this is a "blocking node" is that tables BELOW the blocking node cannot be referenced ABOVE the blocking node
+	//! i.e. if we have PROJECTION(AGGREGATE(GET())) the AGGREGATE() blocks the PROJECTION() from accessing the table in GET()
+	TableBindingResolver(bool recurse_into_subqueries = false);
+
+	void VisitOperator(LogicalOperator &op) override;
+
+	//! The set of BoundTables found by the resolver
+	vector<BoundTable> bound_tables;
+protected:
+	void Visit(LogicalAggregate &op);
+	void Visit(LogicalAnyJoin &op);
+	void Visit(LogicalComparisonJoin &op);
+	void Visit(LogicalCreateIndex &op);
+	void Visit(LogicalDelimGet &op);
+	void Visit(LogicalEmptyResult &op);
+	void Visit(LogicalUnion &op);
+	void Visit(LogicalExcept &op);
+	void Visit(LogicalIntersect &op);
+	void Visit(LogicalCrossProduct &op);
+	void Visit(LogicalChunkGet &op);
+	void Visit(LogicalGet &op);
+	void Visit(LogicalProjection &op);
+	void Visit(LogicalSubquery &op);
+	void Visit(LogicalTableFunction &op);
+	void Visit(LogicalWindow &op);
+
+	using SQLNodeVisitor::Visit;
+
+	//! Whether or not we should recursei nto subqueries
+	bool recurse_into_subqueries;
+private:
+	void PushBinding(BoundTable binding);
+	void BindTablesBinaryOp(LogicalOperator &op, bool append_right);
+	//! Append a list of tables to the current set of bound tables
+	void AppendTables(vector<BoundTable> &right_tables);
+	//! Recurse into a subquery
+	void RecurseIntoSubquery(LogicalOperator &op);
+};
+} // namespace duckdb

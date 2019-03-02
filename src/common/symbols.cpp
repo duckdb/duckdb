@@ -21,6 +21,7 @@
 #include "planner/operator/list.hpp"
 #include "planner/operator/logical_join.hpp"
 #include "storage/data_table.hpp"
+#include "storage/write_ahead_log.hpp"
 
 using namespace duckdb;
 using namespace std;

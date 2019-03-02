@@ -7,6 +7,7 @@
 #include "planner/operator/list.hpp"
 #include "storage/order_index.hpp"
 #include "storage/storage_manager.hpp"
+#include "main/client_context.hpp"
 
 #include <unordered_set>
 

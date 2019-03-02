@@ -9,6 +9,7 @@
 #pragma once
 
 #include "planner/logical_operator.hpp"
+#include "planner/table_binding_resolver.hpp"
 
 namespace duckdb {
 
@@ -18,12 +19,14 @@ namespace duckdb {
 //! into the actual subquery).
 class LogicalSubquery : public LogicalOperator {
 public:
-	LogicalSubquery(size_t table_index, size_t column_count)
-	    : LogicalOperator(LogicalOperatorType::SUBQUERY), table_index(table_index), column_count(column_count) {
-	}
+	LogicalSubquery(unique_ptr<LogicalOperator> child, size_t table_index);
 
+	//! The table index of the subquery
 	size_t table_index;
+	//! The total amount of columns of the subquery
 	size_t column_count;
+	//! The tables that are bound underneath the subquery
+	vector<BoundTable> bound_tables;
 
 	vector<string> GetNames() override {
 		return children[0]->GetNames();

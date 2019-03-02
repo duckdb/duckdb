@@ -41,7 +41,7 @@ BindResult GroupBinder::BindSelectRef(uint32_t entry) {
 		return BindResult(make_unique<ConstantExpression>(42));
 	}
 	if (entry >= node.select_list.size()) {
-		throw BinderException("GROUP term out of range - should be between 1 and %d", (int)node.select_list.size());
+		throw BinderException("GROUP BY term out of range - should be between 1 and %d", (int)node.select_list.size());
 	}
 	// we replace the root expression, also replace the unbound expression
 	unbound_expression = node.select_list[entry]->Copy();
@@ -63,8 +63,6 @@ BindResult GroupBinder::BindConstant(unique_ptr<Expression> expr, uint32_t depth
 		auto &constant = (ConstantExpression&) *expr;
 		if (!TypeIsIntegral(constant.value.type)) {
 			// non-integral expression, we just leave the constant here.
-			// GROUP BY BY <constant> has no effect
-			// CONTROVERSIAL: maybe we should throw an error
 			return BindResult(move(expr));
 		}
 		// INTEGER constant: we use the integer as an index into the select list (e.g. GROUP BY 1)

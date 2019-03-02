@@ -9,7 +9,7 @@
 #pragma once
 
 #include "planner/logical_operator.hpp"
-#include "parser/expression/bound_columnref_expression.hpp"
+#include "planner/table_binding_resolver.hpp"
 
 namespace duckdb {
 

@@ -42,44 +42,9 @@ void LogicalJoin::ResolveTypes() {
 }
 
 void LogicalJoin::GetTableReferences(LogicalOperator &op, unordered_set<size_t> &bindings) {
-	if (op.type == LogicalOperatorType::GET) {
-		auto &get = (LogicalGet &)op;
-		bindings.insert(get.table_index);
-	} else if (op.type == LogicalOperatorType::EMPTY_RESULT) {
-		auto &empty = (LogicalEmptyResult &)op;
-		for(auto &table : empty.bound_tables) {
-			bindings.insert(table.table_index);
-		}
-	} else if (op.type == LogicalOperatorType::SUBQUERY) {
-		auto &subquery = (LogicalSubquery &)op;
-		bindings.insert(subquery.table_index);
-	} else if (op.type == LogicalOperatorType::TABLE_FUNCTION) {
-		auto &table_function = (LogicalTableFunction &)op;
-		bindings.insert(table_function.table_index);
-	} else if (op.type == LogicalOperatorType::CHUNK_GET) {
-		auto &chunk = (LogicalChunkGet &)op;
-		bindings.insert(chunk.table_index);
-	} else if (op.type == LogicalOperatorType::DELIM_GET) {
-		auto &chunk = (LogicalDelimGet &)op;
-		bindings.insert(chunk.table_index);
-	} else if (op.type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY) {
-		auto &aggr = (LogicalAggregate &)op;
-		bindings.insert(aggr.aggregate_index);
-		bindings.insert(aggr.group_index);
-	} else if (op.type == LogicalOperatorType::WINDOW) {
-		auto &window = (LogicalWindow &)op;
-		bindings.insert(window.window_index);
-		// window functions pass through bindings from their children
-		for (auto &child : op.children) {
-			GetTableReferences(*child, bindings);
-		}
-	} else if (op.type == LogicalOperatorType::PROJECTION) {
-		auto &proj = (LogicalProjection &)op;
-		bindings.insert(proj.table_index);
-	} else {
-		// iterate over the children
-		for (auto &child : op.children) {
-			GetTableReferences(*child, bindings);
-		}
+	TableBindingResolver resolver;
+	resolver.VisitOperator(op);
+	for(auto &table : resolver.bound_tables) {
+		bindings.insert(table.table_index);
 	}
 }

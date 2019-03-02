@@ -105,8 +105,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		auto return_type = max(subquery.child->return_type, right_type);
 
 		auto subquery_index = binder.GenerateTableIndex();
-		auto logical_subquery = make_unique<LogicalSubquery>(subquery_index, 1);
-		logical_subquery->AddChild(move(plan));
+		auto logical_subquery = make_unique<LogicalSubquery>(move(plan), subquery_index);
 		plan = move(logical_subquery);
 
 		// then we generate the MARK join with the subquery
@@ -192,8 +191,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		// we only need to create the join conditions between the LHS and the RHS
 		// first push a subquery node
 		auto subquery_index = binder.GenerateTableIndex();
-		auto subquery = make_unique<LogicalSubquery>(subquery_index, correlated_columns.size() + 1);
-		subquery->AddChild(move(dependent_join));
+		auto subquery = make_unique<LogicalSubquery>(move(dependent_join), subquery_index);
 		// now create the join conditions
 		CreateDelimJoinConditions(*delim_join, correlated_columns, ColumnBinding(subquery_index, flatten.delim_offset));
 		delim_join->AddChild(move(subquery));
@@ -215,8 +213,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 
 		// first push a subquery node
 		auto subquery_index = binder.GenerateTableIndex();
-		auto subquery_node = make_unique<LogicalSubquery>(subquery_index, dependent_join->GetNames().size());
-		subquery_node->AddChild(move(dependent_join));
+		auto subquery_node = make_unique<LogicalSubquery>(move(dependent_join), subquery_index);
 
 		// now we create the join conditions between the dependent join and the original table
 		CreateDelimJoinConditions(*delim_join, correlated_columns, ColumnBinding(subquery_index, flatten.delim_offset));
@@ -250,8 +247,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 
 		// push a subquery node under the duplicate eliminated join
 		auto subquery_index = binder.GenerateTableIndex();
-		auto subquery_node = make_unique<LogicalSubquery>(subquery_index, correlated_columns.size() + 1);
-		subquery_node->AddChild(move(dependent_join));
+		auto subquery_node = make_unique<LogicalSubquery>(move(dependent_join), subquery_index);
 		// now we create the join conditions between the dependent join and the original table
 		CreateDelimJoinConditions(*delim_join, correlated_columns, ColumnBinding(subquery_index, flatten.delim_offset));
 		// add the actual condition based on the ANY/ALL predicate

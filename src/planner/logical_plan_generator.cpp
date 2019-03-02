@@ -115,16 +115,12 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(SubqueryRef &expr) {
 	// this happens separately from the current LogicalPlan generation
 	LogicalPlanGenerator generator(*expr.binder, context);
 
-	size_t column_count = expr.subquery->GetSelectList().size();
 	generator.CreatePlan(*expr.subquery);
-
 	auto index = binder.bind_context.GetBindingIndex(expr.alias);
-
 	if (root) {
 		throw Exception("Subquery cannot have children");
 	}
-	root = make_unique<LogicalSubquery>(index, column_count);
-	root->children.push_back(move(generator.root));
+	root = make_unique<LogicalSubquery>(move(generator.root), index);
 	return nullptr;
 }
 
@@ -189,8 +185,7 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(OperatorExpression &ex
 	auto chunk_scan = make_unique<LogicalChunkGet>(chunk_index, types, move(collection));
 
 	auto subquery_index = binder.GenerateTableIndex();
-	auto logical_subquery = make_unique<LogicalSubquery>(subquery_index, 1);
-	logical_subquery->AddChild(move(chunk_scan));
+	auto logical_subquery = make_unique<LogicalSubquery>(move(chunk_scan), subquery_index);
 
 	// then we generate the MARK join with the chunk scan on the RHS
 	auto join = make_unique<LogicalComparisonJoin>(JoinType::MARK);
