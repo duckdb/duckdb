@@ -17,9 +17,7 @@ namespace duckdb {
 //! are used within the execution engine
 class ColumnBindingResolver : public TableBindingResolver {
 public:
-	ColumnBindingResolver() : 
-		TableBindingResolver(true) {
-	}
+	ColumnBindingResolver();
 protected:
 	using SQLNodeVisitor::Visit;
 	void Visit(ColumnRefExpression &expr) override {

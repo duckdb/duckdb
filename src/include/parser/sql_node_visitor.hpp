@@ -27,10 +27,10 @@ public:
 	//! Visits a generic expression and calls the specialized Visit method for the expression type, then visits its
 	//! children recursively using the VisitExpressionChildren method. Be careful when calling this method as it will
 	//! not call the VisitReplace method.
-	void VisitExpression(Expression *expr_ptr);
+	virtual void VisitExpression(Expression *expr_ptr);
 	//! Visits a generic expression and calls the specialized VisitReplace and Visit methods for the expression type,
 	//! then visits its children recursively using the VisitExpressionChildren method
-	void VisitExpression(unique_ptr<Expression> *expression);
+	virtual void VisitExpression(unique_ptr<Expression> *expression);
 
 protected:
 	// The VisitExpressionChildren method is called at the end of every call to VisitExpression to recursively visit all

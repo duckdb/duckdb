@@ -26,9 +26,11 @@ public:
 	//! A "blocking node" is a node that clears the bound tables (e.g. a LogicalSubquery, LogicalProjection or LogicalAggregate)
 	//! The reason this is a "blocking node" is that tables BELOW the blocking node cannot be referenced ABOVE the blocking node
 	//! i.e. if we have PROJECTION(AGGREGATE(GET())) the AGGREGATE() blocks the PROJECTION() from accessing the table in GET()
-	TableBindingResolver(bool recurse_into_subqueries = false);
+	TableBindingResolver(bool recurse_into_subqueries = false, bool visit_expressions = false);
 
 	void VisitOperator(LogicalOperator &op) override;
+	void VisitExpression(Expression *expr_ptr) override;
+	void VisitExpression(unique_ptr<Expression> *expression) override;
 
 	//! The set of BoundTables found by the resolver
 	vector<BoundTable> bound_tables;
@@ -52,8 +54,10 @@ protected:
 
 	using SQLNodeVisitor::Visit;
 
-	//! Whether or not we should recursei nto subqueries
+	//! Whether or not we should recurse into subqueries
 	bool recurse_into_subqueries;
+	//! Whether or not we should visit expressions
+	bool visit_expressions;
 private:
 	void PushBinding(BoundTable binding);
 	void BindTablesBinaryOp(LogicalOperator &op, bool append_right);

@@ -6,6 +6,10 @@
 using namespace duckdb;
 using namespace std;
 
+ColumnBindingResolver::ColumnBindingResolver() : 
+	TableBindingResolver(true, true) {
+}
+
 unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpression &expr,
                                                            unique_ptr<Expression> *expr_ptr) {
 	assert(expr.depth == 0);

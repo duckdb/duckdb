@@ -110,6 +110,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
                                                               unordered_set<size_t> &right_bindings,
                                                               vector<unique_ptr<Expression>> &expressions) {
 	vector<JoinCondition> conditions;
+	vector<unique_ptr<Expression>> arbitrary_expressions;
 	// first check if we can create
 	for (size_t i = 0; i < expressions.size(); i++) {
 		auto &expr = expressions[i];
@@ -159,35 +160,44 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 				}
 			}
 		}
-		// if we get here we could not create a comparison JoinCondition
+		arbitrary_expressions.push_back(move(expr));
+	}
+	if (conditions.size() > 0) {
+		// we successfully convertedexpressions into JoinConditions
+		// create a LogicalComparisonJoin
+		auto comp_join = make_unique<LogicalComparisonJoin>(type);
+		comp_join->conditions = move(conditions);
+		comp_join->children.push_back(move(left_child));
+		comp_join->children.push_back(move(right_child));
+		if (arbitrary_expressions.size() > 0) {
+			// we have some arbitrary expressions as well
+			// add them to a filter
+			auto filter = make_unique<LogicalFilter>();
+			for(auto &expr : arbitrary_expressions) {
+				filter->expressions.push_back(move(expr));
+			}
+			LogicalFilter::SplitPredicates(filter->expressions);
+			filter->children.push_back(move(comp_join));
+			return move(filter);
+		}
+		return move(comp_join);
+	} else {
+		assert(arbitrary_expressions.size() > 0);
+		// if we get here we could not create any JoinConditions
 		// turn this into an arbitrary expression join
 		auto any_join = make_unique<LogicalAnyJoin>(type);
 		// create the condition
-		any_join->condition = move(expr);
 		any_join->children.push_back(move(left_child));
 		any_join->children.push_back(move(right_child));
-		// merge any conditions we created back
-		for (size_t cond_idx = 0; cond_idx < conditions.size(); cond_idx++) {
-			// create the comparison
-			auto comparison = CreateExpressionFromCondition(move(conditions[cond_idx]));
-			// AND together with the other condition
-			any_join->condition = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
-			                                                         move(any_join->condition), move(comparison));
-		}
+		// AND all the arbitrary expressions together
 		// do the same with any remaining conditions
-		for (size_t expr_idx = i + 1; expr_idx < expressions.size(); expr_idx++) {
-			any_join->condition = make_unique<ConjunctionExpression>(
-			    ExpressionType::CONJUNCTION_AND, move(any_join->condition), move(expressions[expr_idx]));
+		any_join->condition = move(arbitrary_expressions[0]);
+		for (size_t i = 1; i < arbitrary_expressions.size(); i++) {
+			any_join->condition = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(any_join->condition), move(arbitrary_expressions[i]));
 		}
 		return move(any_join);
+
 	}
-	// if we get here we successfully converted all expressions to JoinConditions
-	// create a LogicalComparisonJoin
-	auto comp_join = make_unique<LogicalComparisonJoin>(type);
-	comp_join->conditions = move(conditions);
-	comp_join->children.push_back(move(left_child));
-	comp_join->children.push_back(move(right_child));
-	return move(comp_join);
 }
 
 unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
@@ -234,10 +244,16 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
 	LogicalJoin::GetTableReferences(*left_child, left_bindings);
 	LogicalJoin::GetTableReferences(*right_child, right_bindings);
 	// now create the join operator from the set of join conditions
-	auto join = LogicalComparisonJoin::CreateJoin(expr.type, move(left_child), move(right_child), left_bindings,
+	auto result = LogicalComparisonJoin::CreateJoin(expr.type, move(left_child), move(right_child), left_bindings,
 	                                              right_bindings, expressions);
-
-	// now we visit the expressions depending on the type of join
+	LogicalOperator *join;
+	if (result->type == LogicalOperatorType::FILTER) {
+		join = result->children[0].get();
+	} else {
+		join = result.get();
+	}
+	
+	// we visit the expressions depending on the type of join
 	if (join->type == LogicalOperatorType::COMPARISON_JOIN) {
 		// comparison join
 		// in this join we visit the expressions on the LHS with the LHS as root node
@@ -257,12 +273,12 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
 		}
 		comp_join.children[1] = move(root);
 		// move the join as the root node
-		root = move(join);
+		root = move(result);
 	} else {
 		assert(join->type == LogicalOperatorType::ANY_JOIN);
 		auto &any_join = (LogicalAnyJoin &)*join;
 		// for the any join we just visit the condition
-		root = move(join);
+		root = move(result);
 		if (any_join.condition->HasSubquery()) {
 			throw NotImplementedException("Cannot perform non-inner join on subquery!");
 		}

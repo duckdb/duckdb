@@ -56,6 +56,9 @@ private:
                                                              unordered_set<size_t> &right_bindings);
 
 	unique_ptr<LogicalOperator> FinishPushdown(unique_ptr<LogicalOperator> op);
+
+	//! Adds a filter to the set of filters. Returns true if the filter statically evaluates to false and the entire tree should be stripped.
+	bool AddFilter(unique_ptr<Expression> expr);
 };
 
 } // namespace duckdb

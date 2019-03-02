@@ -59,6 +59,31 @@ static JoinSide GetExpressionSide(unordered_set<size_t> bindings, unordered_set<
 	return side;
 }
 
+bool FilterPushdown::AddFilter(unique_ptr<Expression> expr) {
+	vector<unique_ptr<Expression>> expressions;
+	expressions.push_back(move(expr));
+	LogicalFilter::SplitPredicates(expressions);
+	for(auto &expr : expressions) {
+		auto f = make_unique<Filter>();
+		f->filter = move(expr);
+		GetExpressionBindings(*f->filter, f->bindings);
+		if (f->bindings.size() == 0) {
+			// scalar condition, evaluate it
+			auto result = ExpressionExecutor::EvaluateScalar(*f->filter).CastAs(TypeId::BOOLEAN);
+			// check if the filter passes
+			if (result.is_null || !result.value_.boolean) {
+				// the filter does not pass the scalar test, create an empty result
+				return true;
+			} else {
+				// the filter passes the scalar test, just remove the condition
+				continue;
+			}
+		}
+		filters.push_back(move(f));
+	}
+	return false;
+}
+
 unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<LogicalOperator> op,
                                                              unordered_set<size_t> &left_bindings,
                                                              unordered_set<size_t> &right_bindings) {
@@ -69,20 +94,21 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
 	if (op->type == LogicalOperatorType::ANY_JOIN) {
 	 	auto &any_join = (LogicalAnyJoin &) join;
 		// any join: only one filter to add
-		auto f = make_unique<Filter>();
-		f->filter = move(any_join.condition);
-		GetExpressionBindings(*f->filter, f->bindings);
-		filters.push_back(move(f));
+		if (AddFilter(move(any_join.condition))) {
+			// filter statically evaluates to false, strip tree
+			return make_unique<LogicalEmptyResult>(move(op));
+		}
 	} else {
 		// comparison join
 		assert(op->type == LogicalOperatorType::COMPARISON_JOIN);
 		auto &comp_join = (LogicalComparisonJoin&) join;
 		// turn the conditions into filters
 		for(size_t i = 0; i < comp_join.conditions.size(); i++) {
-			auto f = make_unique<Filter>();
-			f->filter = LogicalComparisonJoin::CreateExpressionFromCondition(move(comp_join.conditions[i]));
-			GetExpressionBindings(*f->filter, f->bindings);
-			filters.push_back(move(f));
+			auto condition = LogicalComparisonJoin::CreateExpressionFromCondition(move(comp_join.conditions[i]));
+			if (AddFilter(move(condition))) {
+				// filter statically evaluates to false, strip tree
+				return make_unique<LogicalEmptyResult>(move(op));
+			}
 		}
 	}
 	// turn the inner join into a cross product
@@ -285,22 +311,10 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 			} else if (side == JoinSide::RIGHT) {
 				// bindings match right side: push into right
 				right_pushdown.filters.push_back(move(f));
-			} else if (side == JoinSide::BOTH) {
+			} else {
+				assert(side == JoinSide::BOTH);
 				// bindings match both: turn into join condition
 				join_conditions.push_back(move(f->filter));
-			} else {
-				assert(side == JoinSide::NONE);
-				assert(f->bindings.size() == 0);
-				// scalar condition, evaluate it
-				auto result = ExpressionExecutor::EvaluateScalar(*f->filter).CastAs(TypeId::BOOLEAN);
-				// check if the filter passes
-				if (result.is_null || !result.value_.boolean) {
-					// the filter does not pass the scalar test, create an empty result
-					return make_unique<LogicalEmptyResult>(move(op));
-				} else {
-					// the filter passes the scalar test, just remove the condition
-					continue;
-				}
 			}
 		}
 	}
@@ -322,22 +336,10 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownFilter(unique_ptr<LogicalOpe
 	auto &filter = (LogicalFilter &)*op;
 	// filter: gather the filters and remove the filter from the set of operations
 	for (size_t i = 0; i < filter.expressions.size(); i++) {
-		auto f = make_unique<Filter>();
-		GetExpressionBindings(*filter.expressions[i], f->bindings);
-		f->filter = move(filter.expressions[i]);
-		if (f->bindings.size() == 0) {
-			// scalar condition, evaluate it
-			auto result = ExpressionExecutor::EvaluateScalar(*f->filter).CastAs(TypeId::BOOLEAN);
-			// check if the filter passes
-			if (result.is_null || !result.value_.boolean) {
-				// the filter does not pass the scalar test, create an empty result
-				return make_unique<LogicalEmptyResult>(move(op->children[0]));
-			} else {
-				// the filter passes the scalar test, just remove the condition
-				continue;
-			}
+		if (AddFilter(move(filter.expressions[i]))) {
+			// filter statically evaluates to false, strip tree
+			return make_unique<LogicalEmptyResult>(move(op));
 		}
-		filters.push_back(move(f));
 	}
 	return Rewrite(move(filter.children[0]));
 }

@@ -21,8 +21,6 @@ TEST_CASE("Test TPC-H SF0", "[tpch]") {
 }
 
 TEST_CASE("Test TPC-H SF0.1", "[tpch][.]") {
-	return;
-	
 	unique_ptr<DuckDBResult> result;
 	double sf = 0.1;
 

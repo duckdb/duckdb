@@ -4,8 +4,8 @@
 using namespace duckdb;
 using namespace std;
 
-TableBindingResolver::TableBindingResolver(bool recurse_into_subqueries) : 
-	recurse_into_subqueries(recurse_into_subqueries) {
+TableBindingResolver::TableBindingResolver(bool recurse_into_subqueries, bool visit_expressions) : 
+	recurse_into_subqueries(recurse_into_subqueries), visit_expressions(visit_expressions) {
 }
 
 void TableBindingResolver::PushBinding(BoundTable binding) {
@@ -78,6 +78,20 @@ void TableBindingResolver::VisitOperator(LogicalOperator &op) {
 		LogicalOperatorVisitor::VisitOperator(op);
 		break;
 	}
+}
+
+void TableBindingResolver::VisitExpression(Expression *expression) {
+	if (!visit_expressions) {
+		return;
+	}
+	SQLNodeVisitor::VisitExpression(expression);
+}
+
+void TableBindingResolver::VisitExpression(unique_ptr<Expression> *expression) {
+	if (!visit_expressions) {
+		return;
+	}
+	SQLNodeVisitor::VisitExpression(expression);
 }
 
 void TableBindingResolver::Visit(LogicalEmptyResult &op) {
