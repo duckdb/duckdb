@@ -8,8 +8,21 @@
 using namespace duckdb;
 using namespace std;
 
+TEST_CASE("Test TPC-H SF0", "[tpch]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+
+	tpch::dbgen(0, db);
+
+	for(size_t i = 1; i <= 22; i++) {
+		REQUIRE_NO_FAIL(con.Query(tpch::get_query(i)));
+	}
+}
+
 TEST_CASE("Test TPC-H SF0.1", "[tpch][.]") {
 	return;
+	
 	unique_ptr<DuckDBResult> result;
 	double sf = 0.1;
 

@@ -17,7 +17,7 @@ class IndexBinder : public ExpressionBinder {
 public:
 	IndexBinder(Binder &binder, ClientContext &context);
 
-	BindResult BindExpression(unique_ptr<Expression> expr, uint32_t depth) override;
+	BindResult BindExpression(unique_ptr<Expression> expr, uint32_t depth, bool root_expression = false) override;
 };
 
 } // namespace duckdb

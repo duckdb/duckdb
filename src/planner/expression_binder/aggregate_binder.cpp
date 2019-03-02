@@ -9,7 +9,7 @@ AggregateBinder::AggregateBinder(Binder &binder, ClientContext &context, SelectN
     : SelectNodeBinder(binder, context, node, true), bound_columns(false) {
 }
 
-BindResult AggregateBinder::BindExpression(unique_ptr<Expression> expr, uint32_t depth) {
+BindResult AggregateBinder::BindExpression(unique_ptr<Expression> expr, uint32_t depth, bool root_expression) {
 	switch (expr->GetExpressionClass()) {
 	case ExpressionClass::AGGREGATE:
 		throw ParserException("aggregate function calls cannot be nested");

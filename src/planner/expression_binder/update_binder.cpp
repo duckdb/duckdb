@@ -6,7 +6,7 @@ using namespace std;
 UpdateBinder::UpdateBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
 }
 
-BindResult UpdateBinder::BindExpression(unique_ptr<Expression> expr, uint32_t depth) {
+BindResult UpdateBinder::BindExpression(unique_ptr<Expression> expr, uint32_t depth, bool root_expression) {
 	switch (expr->GetExpressionClass()) {
 	case ExpressionClass::AGGREGATE:
 		return BindResult(move(expr), "aggregate functions are not allowed in UPDATE");

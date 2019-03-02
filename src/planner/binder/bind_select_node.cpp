@@ -90,64 +90,26 @@ void Binder::Bind(SelectNode &statement) {
 	expression_map_t<uint32_t> group_map;
 	unordered_map<string, uint32_t> group_alias_map;
 	if (statement.HasGroup()) {
-		unordered_set<string> used_aliases;
-		// the statement has a GROUP BY clause
-		// columns in GROUP BY clauses:
-		// FIRST refer to the original tables, and
-		// THEN if no match is found refer to aliases in the SELECT list
+		// the statement has a GROUP BY clause, bind it
 		unbound_groups.resize(statement.groupby.groups.size());
-		GroupBinder group_binder(*this, context, statement);
+		GroupBinder group_binder(*this, context, statement, alias_map, group_alias_map);
 		for (size_t i = 0; i < statement.groupby.groups.size(); i++) {
-			// make a copy of the unbound expression
-			unbound_groups[i] = statement.groupby.groups[i]->Copy();
+			// we keep a copy of the unbound expression;
+			// we keep the unbound copy around to check for group references in the SELECT and HAVING clause
+			// the reason we want the unbound copy is because we want to figure out whether an expression
+			// is a group reference BEFORE binding in the SELECT/HAVING binder
+			group_binder.unbound_expression = statement.groupby.groups[i]->Copy();
 
-			// first try to bind using the GroupBinder
-			auto result = group_binder.TryBindAndResolveType(move(statement.groupby.groups[i]));
-			if (result.HasError()) {
-				// failed to bind, check if it is an alias reference
-				if (result.expression->type != ExpressionType::COLUMN_REF) {
-					// not an alias reference
-					throw BinderException(result.error);
-				}
-				auto &colref = (ColumnRefExpression &)*result.expression;
-				if (!colref.table_name.empty()) {
-					// explicit table name: not an alias reference
-					throw BinderException(result.error);
-				}
-				auto entry = alias_map.find(colref.column_name);
-				if (entry == alias_map.end()) {
-					// no matching alias found
-					throw BinderException(result.error);
-				}
-				// the group points towards an alias, check if the alias has been used already
-				if (used_aliases.find(colref.column_name) != used_aliases.end()) {
-					//  the alias has already been bound to before!
-					// this only happens if we group on the same alias twice (e.g. GROUP BY k, k)
-					// in this case, we can just remove the entry as grouping on the same entry twice has no additional
-					// effect
-					statement.groupby.groups.erase(statement.groupby.groups.begin() + i);
-					i--;
-					continue;
-				} else {
-					unbound_groups[i] = statement.select_list[entry->second]->Copy();
-					// in this case we have to move the computation of the GROUP BY column into this expression
-					// move the expression into the group column and bind it
-					statement.groupby.groups[i] = move(statement.select_list[entry->second]);
-					group_binder.BindAndResolveType(&statement.groupby.groups[i]);
-					// now replace the original expression in the select list with a reference to this group
-					statement.select_list[entry->second] = make_unique<BoundColumnRefExpression>(
-					    *statement.groupby.groups[i], statement.groupby.groups[i]->return_type,
-					    ColumnBinding(binding.group_index, i), 0);
-					// insert into the set of used aliases
-					used_aliases.insert(colref.column_name);
-					group_alias_map[colref.column_name] = i;
-				}
-			} else {
-				statement.groupby.groups[i] = move(result.expression);
-			}
+			// bind the groups
+			group_binder.bind_index = i;
+			group_binder.BindAndResolveType(&statement.groupby.groups[i]);
 			assert(statement.groupby.groups[i]->return_type != TypeId::INVALID);
-			// we bind the table names of any ColumnRefs in the unbound_groups
+
+			// in the unbound expression we DO bind the table names of any ColumnRefs
 			// we do this to make sure that "table.a" and "a" are treated the same
+			// if we wouldn't do this then (SELECT test.a FROM test GROUP BY a) would not work because "test.a" <> "a"
+			// hence we convert "a" -> "test.a" in the unbound expression
+			unbound_groups[i] = move(group_binder.unbound_expression);
 			group_binder.BindTableNames(*unbound_groups[i]);
 			group_map[unbound_groups[i].get()] = i;
 		}

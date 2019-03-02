@@ -27,6 +27,8 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 	case LogicalOperatorType::ANY_JOIN:
 	case LogicalOperatorType::DELIM_JOIN:
 		return PushdownJoin(move(op));
+	case LogicalOperatorType::SUBQUERY:
+		return PushdownSubquery(move(op));
 	default:
 		return FinishPushdown(move(op));
 	}
@@ -355,4 +357,9 @@ unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOpe
 	}
 	filter->children.push_back(move(op));
 	return move(filter);
+}
+
+unique_ptr<LogicalOperator> FilterPushdown::PushdownSubquery(unique_ptr<LogicalOperator> op) {
+	assert(op->type == LogicalOperatorType::SUBQUERY);
+	return FinishPushdown(move(op));
 }

@@ -18,7 +18,7 @@ public:
 	OrderBinder(Binder &binder, ClientContext &context, SelectNode &node, unordered_map<string, uint32_t> &alias_map,
 	            expression_map_t<uint32_t> &projection_map);
 
-	BindResult BindExpression(unique_ptr<Expression> expr, uint32_t depth) override;
+	BindResult BindExpression(unique_ptr<Expression> expr, uint32_t depth, bool root_expression = false) override;
 
 private:
 	BindResult CreateProjectionReference(Expression &expr, size_t index);

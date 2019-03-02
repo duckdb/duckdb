@@ -6,7 +6,7 @@ using namespace std;
 CheckBinder::CheckBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
 }
 
-BindResult CheckBinder::BindExpression(unique_ptr<Expression> expr, uint32_t depth) {
+BindResult CheckBinder::BindExpression(unique_ptr<Expression> expr, uint32_t depth, bool root_expression) {
 	switch (expr->GetExpressionClass()) {
 	case ExpressionClass::AGGREGATE:
 		return BindResult(move(expr), "aggregate functions are not allowed in check constraints");

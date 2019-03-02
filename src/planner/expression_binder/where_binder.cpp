@@ -6,7 +6,7 @@ using namespace std;
 WhereBinder::WhereBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
 }
 
-BindResult WhereBinder::BindExpression(unique_ptr<Expression> expr, uint32_t depth) {
+BindResult WhereBinder::BindExpression(unique_ptr<Expression> expr, uint32_t depth, bool root_expression) {
 	switch (expr->GetExpressionClass()) {
 	case ExpressionClass::AGGREGATE:
 		return BindResult(move(expr), "WHERE clause cannot contain aggregates!");

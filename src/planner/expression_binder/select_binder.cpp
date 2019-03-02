@@ -16,6 +16,28 @@ SelectBinder::SelectBinder(Binder &binder, ClientContext &context, SelectNode &n
       group_alias_map(group_alias_map) {
 }
 
+BindResult SelectBinder::BindExpression(unique_ptr<Expression> expr, uint32_t depth, bool root_expression) {
+	// check if the expression binds to one of the groups
+	auto group_binding = TryBindGroup(expr.get(), depth);
+	if (group_binding) {
+		return BindResult(move(group_binding));
+	}
+	switch (expr->GetExpressionClass()) {
+	case ExpressionClass::SUBQUERY:
+		return BindSubqueryExpression(move(expr), depth);
+	case ExpressionClass::AGGREGATE:
+		return BindAggregate(move(expr), depth);
+	case ExpressionClass::WINDOW:
+		return BindWindow(move(expr), depth);
+	case ExpressionClass::COLUMN_REF:
+		return BindColumnRef(move(expr), depth);
+	case ExpressionClass::FUNCTION:
+		return BindFunctionExpression(move(expr), depth);
+	default:
+		return BindChildren(move(expr), depth);
+	}
+}
+
 BindResult SelectBinder::BindWindow(unique_ptr<Expression> expr, uint32_t depth) {
 	assert(expr && expr->GetExpressionClass() == ExpressionClass::WINDOW);
 	if (inside_window) {
@@ -112,26 +134,4 @@ unique_ptr<Expression> SelectBinder::TryBindGroup(Expression *expr, uint32_t dep
 	}
 	return make_unique<BoundColumnRefExpression>(*expr, node.groupby.groups[group_entry]->return_type,
 	                                             ColumnBinding(node.binding.group_index, group_entry), depth);
-}
-
-BindResult SelectBinder::BindExpression(unique_ptr<Expression> expr, uint32_t depth) {
-	// check if the expression binds to one of the groups
-	auto group_binding = TryBindGroup(expr.get(), depth);
-	if (group_binding) {
-		return BindResult(move(group_binding));
-	}
-	switch (expr->GetExpressionClass()) {
-	case ExpressionClass::SUBQUERY:
-		return BindSubqueryExpression(move(expr), depth);
-	case ExpressionClass::AGGREGATE:
-		return BindAggregate(move(expr), depth);
-	case ExpressionClass::WINDOW:
-		return BindWindow(move(expr), depth);
-	case ExpressionClass::COLUMN_REF:
-		return BindColumnRef(move(expr), depth);
-	case ExpressionClass::FUNCTION:
-		return BindFunctionExpression(move(expr), depth);
-	default:
-		return BindChildren(move(expr), depth);
-	}
 }

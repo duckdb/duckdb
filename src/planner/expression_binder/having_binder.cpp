@@ -15,7 +15,7 @@ HavingBinder::HavingBinder(Binder &binder, ClientContext &context, SelectNode &n
     : SelectBinder(binder, context, node, group_map, group_alias_map) {
 }
 
-BindResult HavingBinder::BindExpression(unique_ptr<Expression> expr, uint32_t depth) {
+BindResult HavingBinder::BindExpression(unique_ptr<Expression> expr, uint32_t depth, bool root_expression) {
 	// check if the expression binds to one of the groups
 	auto group_binding = TryBindGroup(expr.get(), depth);
 	if (group_binding) {

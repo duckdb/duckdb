@@ -152,26 +152,18 @@ void ExpressionBinder::ExtractCorrelatedExpressions(Binder &binder, Expression &
 	expr.EnumerateChildren([&](Expression *child) { ExtractCorrelatedExpressions(binder, *child); });
 }
 
-BindResult ExpressionBinder::TryBindAndResolveType(unique_ptr<Expression> expr) {
+void ExpressionBinder::BindAndResolveType(unique_ptr<Expression> *expr) {
 	// bind the main expression
-	auto result = BindExpression(move(expr), 0);
+	auto result = BindExpression(move(*expr), 0, true);
 	// try to bind correlated columns in the expression (if any)
 	result = BindCorrelatedColumns(move(result));
 	if (result.HasError()) {
-		return result;
+		throw BinderException(result.error);
 	}
 	ExtractCorrelatedExpressions(binder, *result.expression);
 	result.expression->ResolveType();
 	assert(result.expression->return_type != TypeId::INVALID ||
 	       result.expression->type == ExpressionType::VALUE_PARAMETER);
-	return BindResult(move(result.expression));
-}
-
-void ExpressionBinder::BindAndResolveType(unique_ptr<Expression> *expr) {
-	auto result = TryBindAndResolveType(move(*expr));
-	if (result.HasError()) {
-		throw BinderException(result.error);
-	}
 	*expr = move(result.expression);
 }
 

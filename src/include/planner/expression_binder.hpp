@@ -35,7 +35,7 @@ public:
 	ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder = false);
 	virtual ~ExpressionBinder();
 
-	virtual BindResult BindExpression(unique_ptr<Expression> expr, uint32_t depth) = 0;
+	virtual BindResult BindExpression(unique_ptr<Expression> expr, uint32_t depth, bool root_expression = false) = 0;
 
 	BindResult BindColumnRefExpression(unique_ptr<Expression> expr, uint32_t depth);
 	BindResult BindFunctionExpression(unique_ptr<Expression> expr, uint32_t depth);
@@ -43,7 +43,6 @@ public:
 	BindResult BindChildren(unique_ptr<Expression> expr, uint32_t depth);
 
 	void BindAndResolveType(unique_ptr<Expression> *expr);
-	BindResult TryBindAndResolveType(unique_ptr<Expression> expr);
 
 	// Bind table names to ColumnRefExpressions
 	void BindTableNames(Expression &expr);

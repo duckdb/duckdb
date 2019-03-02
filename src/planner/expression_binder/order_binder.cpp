@@ -18,7 +18,7 @@ BindResult OrderBinder::CreateProjectionReference(Expression &expr, size_t index
 	                                                        ColumnBinding(node.binding.projection_index, index), 0));
 }
 
-BindResult OrderBinder::BindExpression(unique_ptr<Expression> expr, uint32_t depth) {
+BindResult OrderBinder::BindExpression(unique_ptr<Expression> expr, uint32_t depth, bool root_expression) {
 	// in the ORDER BY clause we do not bind children
 	// we bind ONLY to the select list
 	// if there is no matching entry in the SELECT list already, we add the expression to the SELECT list and refer the

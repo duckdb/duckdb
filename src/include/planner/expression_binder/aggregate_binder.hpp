@@ -18,7 +18,7 @@ class AggregateBinder : public SelectNodeBinder {
 public:
 	AggregateBinder(Binder &binder, ClientContext &context, SelectNode &node);
 
-	BindResult BindExpression(unique_ptr<Expression> expr, uint32_t depth) override;
+	BindResult BindExpression(unique_ptr<Expression> expr, uint32_t depth, bool root_expression = false) override;
 
 	bool BoundColumns() {
 		return bound_columns;
