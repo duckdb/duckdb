@@ -26,6 +26,7 @@ public:
 protected:
 	BindResult BindSelectRef(uint32_t entry);
 	BindResult BindColumnRef(unique_ptr<Expression> expr, uint32_t depth, bool root_expression);
+	BindResult BindConstant(unique_ptr<Expression> expr, uint32_t depth, bool root_expression);
 
 	unordered_map<string, uint32_t> &alias_map;
 	unordered_map<string, uint32_t>& group_alias_map;

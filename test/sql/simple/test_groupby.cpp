@@ -168,6 +168,14 @@ TEST_CASE("Test aliases in group by/aggregation", "[aggregations]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {4}));
 
+	// select groups by constant (similar to order by constant)
+	result = con.Query("SELECT i % 2 AS k, SUM(i) FROM integers WHERE i IS NOT NULL GROUP BY 1 HAVING i%2>0;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {4}));
+
+	// constant out of range
+	REQUIRE_FAIL(con.Query("SELECT i % 2 AS k, SUM(i) FROM integers WHERE i IS NOT NULL GROUP BY 42 HAVING i%2>0;"));
+
 	// entry in GROUP BY should refer to base column
 	// ...BUT the alias in ORDER BY should refer to the alias from the select list
 	// note that both Postgres and MonetDB reject this query because of ambiguity. SQLite accepts it though so we do
@@ -196,6 +204,7 @@ TEST_CASE("Test aliases in group by/aggregation", "[aggregations]") {
 	result = con.Query("SELECT i, SUM(i) FROM integers GROUP BY i ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3}));
+	
 
 	// ORDER on a non-grouping column
 	// this query is refused by Postgres and MonetDB
@@ -203,6 +212,7 @@ TEST_CASE("Test aliases in group by/aggregation", "[aggregations]") {
 	// aggregate
 	REQUIRE_FAIL(con.Query("SELECT (10-i) AS k, SUM(i) FROM integers GROUP BY k ORDER BY i;"));
 
+	// we can manually get this behavior by pushing FIRST
 	result = con.Query("SELECT (10-i) AS k, SUM(i) FROM integers GROUP BY k ORDER BY FIRST(i);");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 9, 8, 7}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3}));

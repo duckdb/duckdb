@@ -42,7 +42,7 @@ public:
 	BindResult BindSubqueryExpression(unique_ptr<Expression> expr, uint32_t depth);
 	BindResult BindChildren(unique_ptr<Expression> expr, uint32_t depth);
 
-	void BindAndResolveType(unique_ptr<Expression> *expr);
+	void BindAndResolveType(unique_ptr<Expression> *expr, bool root_expression = true);
 
 	// Bind table names to ColumnRefExpressions
 	void BindTableNames(Expression &expr);

@@ -24,8 +24,8 @@ BindResult GroupBinder::BindExpression(unique_ptr<Expression> expr, uint32_t dep
 		return BindFunctionExpression(move(expr), depth);
 	case ExpressionClass::COLUMN_REF:
 		return BindColumnRef(move(expr), depth, root_expression);
-	// case ExpressionClass::CONSTANT:
-	// 	return BindConstant(move(expr), depth, root_expression);
+	case ExpressionClass::CONSTANT:
+		return BindConstant(move(expr), depth, root_expression);
 	default:
 		return BindChildren(move(expr), depth);
 	}
@@ -47,7 +47,7 @@ BindResult GroupBinder::BindSelectRef(uint32_t entry) {
 	unbound_expression = node.select_list[entry]->Copy();
 	// move the expression that this refers to here and bind it
 	auto result = move(node.select_list[entry]);
-	BindAndResolveType(&result);
+	BindAndResolveType(&result, false);
 	// now replace the original expression in the select list with a reference to this group
 	node.select_list[entry] = make_unique<BoundColumnRefExpression>(
 		*result, result->return_type, ColumnBinding(node.binding.group_index, bind_index), 0);
@@ -56,7 +56,26 @@ BindResult GroupBinder::BindSelectRef(uint32_t entry) {
 	return BindResult(move(result));
 }
 
-BindResult GroupBinder::BindColumnRef(unique_ptr<Expression> expr, uint32_t depth, bool root_expression)  {
+BindResult GroupBinder::BindConstant(unique_ptr<Expression> expr, uint32_t depth, bool root_expression) {
+	assert(expr->type == ExpressionType::VALUE_CONSTANT);
+	if (root_expression && depth == 0) {
+		// constant as root expression
+		auto &constant = (ConstantExpression&) *expr;
+		if (!TypeIsIntegral(constant.value.type)) {
+			// non-integral expression, we just leave the constant here.
+			// GROUP BY BY <constant> has no effect
+			// CONTROVERSIAL: maybe we should throw an error
+			return BindResult(move(expr));
+		}
+		// INTEGER constant: we use the integer as an index into the select list (e.g. GROUP BY 1)
+		auto index = constant.value.GetNumericValue();
+		return BindSelectRef(index - 1);
+	}
+	return BindResult(move(expr));
+}
+
+BindResult GroupBinder::BindColumnRef(unique_ptr<Expression> expr, uint32_t depth, bool root_expression) {
+	assert(expr->type == ExpressionType::COLUMN_REF);
 	// columns in GROUP BY clauses:
 	// FIRST refer to the original tables, and
 	// THEN if no match is found refer to aliases in the SELECT list

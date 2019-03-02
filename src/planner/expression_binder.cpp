@@ -152,9 +152,9 @@ void ExpressionBinder::ExtractCorrelatedExpressions(Binder &binder, Expression &
 	expr.EnumerateChildren([&](Expression *child) { ExtractCorrelatedExpressions(binder, *child); });
 }
 
-void ExpressionBinder::BindAndResolveType(unique_ptr<Expression> *expr) {
+void ExpressionBinder::BindAndResolveType(unique_ptr<Expression> *expr, bool root_expression) {
 	// bind the main expression
-	auto result = BindExpression(move(*expr), 0, true);
+	auto result = BindExpression(move(*expr), 0, root_expression);
 	// try to bind correlated columns in the expression (if any)
 	result = BindCorrelatedColumns(move(result));
 	if (result.HasError()) {
