@@ -67,7 +67,6 @@ P W A
 P F A
 */
 LogicalAggregate* CommonAggregateOptimizer::find_logical_aggregate(vector<Expression*>& expressions, LogicalOperator& projection) {
-
 	LogicalOperator* node = &projection;
 
 	for (auto& expression : projection.expressions)	{
@@ -103,7 +102,6 @@ LogicalAggregate* CommonAggregateOptimizer::find_logical_aggregate(vector<Expres
 
 void CommonAggregateOptimizer::find_bound_references(Expression& expression, const LogicalAggregate& aggregate, aggregate_to_bound_ref_map_t& aggregate_to_projection_map, size_t& nr_of_groups) {
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_REF) {
-
 		auto column_index = &(static_cast<BoundExpression&>(expression).index);
 
 		if (*column_index >= nr_of_groups) {
