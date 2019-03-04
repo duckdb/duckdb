@@ -1,6 +1,7 @@
 #include "cursor.h"
 
 #include "module.h"
+#include "pandas.h"
 
 PyObject *duckdb_cursor_iternext(duckdb_Cursor *self);
 
@@ -102,6 +103,47 @@ PyObject *duckdb_cursor_fetchone(duckdb_Cursor *self, PyObject *args) {
 	return row;
 }
 
+static PyObject *fromdict_ref = NULL;
+
+PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
+	// TODO make sure there is an active result set
+
+	if (!fromdict_ref) {
+		// FIXME: do this at package load?
+		PyObject *pandas = PyImport_Import(PyUnicode_FromString("pandas"));
+		if (!pandas) {
+			return NULL;
+		}
+		PyObject *dataframe = PyObject_GetAttrString(pandas, "DataFrame");
+		if (!dataframe) {
+			return NULL;
+		}
+		fromdict_ref = PyObject_GetAttrString(dataframe, "from_dict");
+		if (!fromdict_ref) {
+			return NULL;
+		}
+	}
+
+	PyObject *col_dict = PyDict_New();
+	for (size_t col_idx = 0; col_idx < self->result.column_count; col_idx++) {
+		duckdb_column col = self->result.columns[col_idx];
+		char *return_message = "";
+		PyObject *arr = (PyObject *)PyArrayObject_FromCol(&col, 0, col.count, &return_message, 1);
+		if (!arr) {
+			PyErr_SetString(duckdb_DatabaseError, return_message);
+			return NULL;
+		}
+		PyDict_SetItem(col_dict, PyUnicode_FromString(col.name), arr);
+	}
+
+	PyObject *res = PyObject_CallFunctionObjArgs(fromdict_ref, col_dict, NULL);
+	if (!res) {
+		return NULL;
+	}
+	Py_INCREF(res);
+	return res;
+}
+
 PyObject *duckdb_cursor_iternext(duckdb_Cursor *self) {
 
 	if (!check_cursor(self)) {
@@ -122,10 +164,13 @@ PyObject *duckdb_cursor_iternext(duckdb_Cursor *self) {
 	//	DUCKDB_TYPE_TIMESTAMP,
 	//	DUCKDB_TYPE_DATE,
 	//	DUCKDB_TYPE_VARCHAR,
-
 	for (size_t col_idx = 0; col_idx < self->result.column_count; col_idx++) {
 		PyObject *val = NULL;
 		duckdb_column col = self->result.columns[col_idx];
+		if (duckdb_value_is_null(col, self->offset)) {
+			PyList_SetItem(row, col_idx, Py_None);
+			continue;
+		}
 		switch (col.type) {
 		case DUCKDB_TYPE_BOOLEAN:
 		case DUCKDB_TYPE_TINYINT:
@@ -184,6 +229,8 @@ PyObject *duckdb_cursor_close(duckdb_Cursor *self, PyObject *args) {
 static PyMethodDef cursor_methods[] = {
     {"execute", (PyCFunction)duckdb_cursor_execute, METH_VARARGS, PyDoc_STR("Executes a SQL statement.")},
     {"fetchone", (PyCFunction)duckdb_cursor_fetchone, METH_NOARGS, PyDoc_STR("Fetches one row from the  resultset.")},
+    {"fetchnumpy", (PyCFunction)duckdb_cursor_fetchnumpy, METH_NOARGS,
+     PyDoc_STR("Fetches all rows from the  resultset.")},
     {"close", (PyCFunction)duckdb_cursor_close, METH_NOARGS, PyDoc_STR("Closes the cursor.")},
     {NULL, NULL}};
 
@@ -239,7 +286,15 @@ PyTypeObject duckdb_CursorType = {
     0                                     /* tp_free */
 };
 
+static void * duckdb_pandas_init() {
+	if (PyArray_API == NULL) {
+		import_array();
+	}
+	return NULL;
+}
+
 extern int duckdb_cursor_setup_types(void) {
+	duckdb_pandas_init();
 	duckdb_CursorType.tp_new = PyType_GenericNew;
 	return PyType_Ready(&duckdb_CursorType);
 }

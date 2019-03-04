@@ -22,6 +22,8 @@ PyObject *duckdb_cursor_execute(duckdb_Cursor *self, PyObject *args);
 PyObject *duckdb_cursor_getiter(duckdb_Cursor *self);
 PyObject *duckdb_cursor_iternext(duckdb_Cursor *self);
 PyObject *duckdb_cursor_fetchone(duckdb_Cursor *self, PyObject *args);
+PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self);
+
 // PyObject *duckdb_cursor_fetchall(duckdb_Cursor *self, PyObject *args);
 PyObject *duckdb_cursor_close(duckdb_Cursor *self, PyObject *args);
 

@@ -24,7 +24,6 @@
 #ifndef DUCKDB_CONNECTION_H
 #define DUCKDB_CONNECTION_H
 #include "Python.h"
-#include "cache.h"
 #include "duckdb.h"
 #include "module.h"
 #include "pythread.h"

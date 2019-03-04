@@ -1,6 +1,5 @@
 add_subdirectory(hyperloglog)
 add_subdirectory(libpg_query)
-add_subdirectory(arrow)
 
 IF (NOT WIN32)
   add_subdirectory(dbgen)

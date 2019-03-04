@@ -11,8 +11,7 @@ static PyObject *module_connect(PyObject *self, PyObject *args, PyObject *kwargs
 	return PyObject_Call((PyObject *)&duckdb_ConnectionType, args, kwargs);
 }
 
-PyDoc_STRVAR(module_connect_doc, "connect(database[, timeout, detect_types, isolation_level,\n\
-        check_same_thread, factory, cached_statements, uri])\n\
+PyDoc_STRVAR(module_connect_doc, "connect(database)\n\
 \n\
 Opens a connection to the DuckDB database file *database*. You can use\n\
 \":memory:\" to open a database connection to a database that resides in\n\

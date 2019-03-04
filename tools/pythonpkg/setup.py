@@ -22,16 +22,13 @@ class CustomInstallCommand(install):
             raise Exception('Library build failed. :/') 
         install.run(self)
 
-# sources = []
-# includes = [numpy.get_include()]
-sources = ['connection.c', 'cursor.c', 'module.c']
-includes = ['../../src/include', '.']
-excludes = []
+includes = [numpy.get_include(), '../../src/include', '.']
+sources = ['connection.c', 'cursor.c', 'module.c', 'pandas.c']
 
 libduckdb = Extension('duckdb', define_macros=[('MODULE_NAME',  '"duckdb"')],
     include_dirs=includes,
     sources=sources,
-    extra_compile_args=['-std=c99', '-Wall'],
+    extra_compile_args=['-std=c99', '-Wall', '-O0'],
     language='c',
     extra_objects=['../../build/release/src/libduckdb_static.a', '../../build/release/third_party/libpg_query/libpg_query.a'])
 
@@ -39,16 +36,15 @@ setup(
     name = "duckdb",
     version = '0.0.1',
     description = 'DuckDB embedded database',
-    # author = 'Hannes Mühleisen',
-    # author_email = 'hannes@cwi.nl',
+    author = 'Hannes Mühleisen',
+    author_email = 'hannes@cwi.nl',
     keywords = 'DuckDB Database SQL OLAP',
-#    packages = ['duckdb'],
     url="https://github.com/cwida/duckdb",
     long_description = '',
-    # install_requires=[
-    #     'numpy>=1.7',
-    #     'pandas>=0.20'
-    # ],
+    install_requires=[
+         'numpy>=1.16',
+         'pandas>=0.24'
+    ],
     setup_requires=['pytest-runner'],
     tests_require=['pytest'],
     classifiers = [
@@ -56,7 +52,7 @@ setup(
         'Development Status :: 3 - Alpha'
     ],
     cmdclass={
-        'install': CustomInstallCommand,
+       # 'install': CustomInstallCommand,
     },
     ext_modules = [libduckdb]
 )
