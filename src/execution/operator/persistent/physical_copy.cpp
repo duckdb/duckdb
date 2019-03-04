@@ -42,6 +42,34 @@ void PhysicalCopy::Flush(ClientContext &context, DataChunk &chunk, int64_t &nr_e
 	nr_elements = 0;
 }
 
+void PhysicalCopy::PushValue(string &line, DataChunk &insert_chunk, int64_t start, int64_t end, int64_t &column, int64_t linenr) {
+	assert(end >= start);
+	int64_t expected_column_count = info->select_list.size() > 0 ?
+		info->select_list.size() : insert_chunk.column_count;
+	size_t length = end - start;
+	if (column == expected_column_count && length == 0) {
+		// skip a single trailing delimiter
+		column++;
+		return;
+	}
+	if (column >= expected_column_count) {
+		throw ParserException("Error on line %lld: expected %lld values but got %d", linenr,
+								expected_column_count, column + 1);
+	}
+	// delimiter, get the value
+	Value result;
+	if (length > 0) {
+		// non-empty: create the value
+		result = Value(line.substr(start, length));
+	}
+	// insert the value into the column
+	size_t column_entry = info->select_list.size() > 0 ? select_list_oid[column] : column;
+	size_t entry = insert_chunk.data[column_entry].count++;
+	insert_chunk.data[column_entry].SetValue(entry, result);
+	// move to the next column
+	column++;
+}
+
 void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	int64_t nr_elements = 0;
 	int64_t total = 0;
@@ -54,8 +82,6 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalO
 		auto types = table->GetTypes();
 		insert_chunk.Initialize(types);
 		// handle the select list (if any)
-		vector<size_t> select_list_oid;
-		vector<bool> set_to_default;
 		if (info.select_list.size() > 0) {
 			set_to_default.resize(types.size(), true);
 			for (size_t i = 0; i < info.select_list.size(); i++) {
@@ -78,8 +104,7 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalO
 		}
 		while (getline(from_csv, line)) {
 			bool in_quotes = false;
-			size_t start = 0;
-			int64_t end = -1;
+			int64_t start = 0;
 			int64_t column = 0;
 			int64_t expected_column_count =
 			    info.select_list.size() > 0 ? info.select_list.size() : insert_chunk.column_count;
@@ -103,47 +128,21 @@ void PhysicalCopy::_GetChunk(ClientContext &context, DataChunk &chunk, PhysicalO
 						}
 						// offset end by one
 						in_quotes = false;
-						end = i;
+						PushValue(line, insert_chunk, start, i, column, linenr);
+						start = i + 2;
 						i++;
+						continue;
 					}
 				} else if (in_quotes) {
 					continue;
 				}
-				if (end < 0) {
-					if (line[i] == info.delimiter) {
-						end = i;
-					}
-					if (i + 1 >= line.size()) {
-						end = i + 1;
-					}
-				}
-				if (end >= 0) {
-					assert(end >= start);
-					size_t length = end - start;
-					if (column == expected_column_count && length == 0) {
-						// skip a single trailing delimiter
-						column++;
-						continue;
-					}
-					if (column >= expected_column_count) {
-						throw ParserException("Error on line %lld: expected %lld values but got %d", linenr,
-						                      expected_column_count, column + 1);
-					}
-					// delimiter, get the value
-					Value result;
-					if (length > 0) {
-						// non-empty: create the value
-						result = Value(line.substr(start, length));
-					}
-					// insert the value into the column
-					size_t column_entry = info.select_list.size() > 0 ? select_list_oid[column] : column;
-					size_t entry = insert_chunk.data[column_entry].count++;
-					insert_chunk.data[column_entry].SetValue(entry, result);
-					// move to the next column
-					column++;
-
+				if (line[i] == info.delimiter) {
+					PushValue(line, insert_chunk, start, i, column, linenr);
 					start = i + 1;
-					end = -1;
+				}
+				if (i + 1 >= line.size()) {
+					PushValue(line, insert_chunk, start, i + 1, column, linenr);
+					break;
 				}
 			}
 			if (in_quotes) {

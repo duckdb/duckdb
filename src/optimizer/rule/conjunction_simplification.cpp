@@ -1,4 +1,5 @@
 #include "optimizer/rule/conjunction_simplification.hpp"
+
 #include "execution/expression_executor.hpp"
 
 using namespace duckdb;
@@ -13,8 +14,8 @@ ConjunctionSimplificationRule::ConjunctionSimplificationRule(ExpressionRewriter 
 }
 
 unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
-                                                           bool &changes_made) {
-	auto conjunction = (ConjunctionExpression*) bindings[0];
+                                                            bool &changes_made) {
+	auto conjunction = (ConjunctionExpression *)bindings[0];
 	auto constant_expr = bindings[1];
 	// the constant_expr is a scalar expression that we have to fold
 	// use an ExpressionExecutor to execute the expression
