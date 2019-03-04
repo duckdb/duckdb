@@ -87,12 +87,26 @@ PyObject *PyArrayObject_FromCol(duckdb_column *col, size_t t_start, size_t t_end
 	duckdb_pandas_init();
 
 	switch (col->type) {
-	case DUCKDB_TYPE_DECIMAL:
-		BAT_TO_NP(b, double, NPY_FLOAT64);
+
+	case DUCKDB_TYPE_BOOLEAN:
+	case DUCKDB_TYPE_TINYINT:
+		BAT_TO_NP(b, int8_t, NPY_INT8);
+		break;
+
+	case DUCKDB_TYPE_SMALLINT:
+		BAT_TO_NP(b, int16_t, NPY_INT16);
 		break;
 
 	case DUCKDB_TYPE_INTEGER:
 		BAT_TO_NP(b, int32_t, NPY_INT32);
+		break;
+
+	case DUCKDB_TYPE_BIGINT:
+		BAT_TO_NP(b, int64_t, NPY_INT64);
+		break;
+
+	case DUCKDB_TYPE_DECIMAL:
+		BAT_TO_NP(b, double, NPY_FLOAT64);
 		break;
 
 	case DUCKDB_TYPE_VARCHAR: {
