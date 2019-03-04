@@ -190,8 +190,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 			return move(filter);
 		}
 		return move(comp_join);
-	} else {
-		assert(arbitrary_expressions.size() > 0);
+	} else if (arbitrary_expressions.size() > 0) {
 		// if we get here we could not create any JoinConditions
 		// turn this into an arbitrary expression join
 		auto any_join = make_unique<LogicalAnyJoin>(type);
@@ -205,7 +204,12 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 			any_join->condition = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(any_join->condition), move(arbitrary_expressions[i]));
 		}
 		return move(any_join);
-
+	} else {
+		// all conditions were pushed down, transform into cross product
+		auto cross_product = make_unique<LogicalCrossProduct>();
+		cross_product->children.push_back(move(left_child));
+		cross_product->children.push_back(move(right_child));
+		return cross_product;
 	}
 }
 
@@ -283,8 +287,7 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
 		comp_join.children[1] = move(root);
 		// move the join as the root node
 		root = move(result);
-	} else {
-		assert(join->type == LogicalOperatorType::ANY_JOIN);
+	} else if (join->type == LogicalOperatorType::ANY_JOIN) {
 		auto &any_join = (LogicalAnyJoin &)*join;
 		// for the any join we just visit the condition
 		root = move(result);
@@ -292,6 +295,10 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
 			throw NotImplementedException("Cannot perform non-inner join on subquery!");
 		}
 		VisitExpression(&any_join.condition);
+	} else {
+		// no conditions left: must be a cross product
+		assert(join->type == LogicalOperatorType::CROSS_PRODUCT);
+		root = move(result);
 	}
 	return nullptr;
 }
