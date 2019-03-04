@@ -130,7 +130,9 @@ matrix:
       dist: xenial
       language: python
 
-      before_script: cd tools/pythonpkg
+      before_script:
+        - pip3 install "numpy>=1.16" && pip install "pandas>=0.24"
+        - cd tools/pythonpkg
 
       script:
         - python3 setup.py install
