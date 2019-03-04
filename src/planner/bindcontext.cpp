@@ -31,7 +31,6 @@ SubqueryBinding::SubqueryBinding(SubqueryRef &subquery_, size_t index)
 
 SubqueryBinding::SubqueryBinding(QueryNode *select_, size_t index)
     : Binding(BindingType::SUBQUERY, index), subquery(select_) {
-	// FIXME: double-check this
 	auto &select_list = subquery->GetSelectList();
 	for (auto &entry : select_list) {
 		auto name = entry->GetName();

@@ -67,10 +67,23 @@ void LogicalPlanGenerator::CreatePlan(SelectNode &statement) {
 	for (auto &expr : statement.select_list) {
 		VisitExpression(&expr);
 	}
+
+	// check if we need to prune extra columns that were introduced into the select list (by e.g. the ORDER BY or HAVING clauses)
+	bool prune_columns = statement.select_list.size() > statement.binding.column_count;
+
+	// create the projection
 	auto proj = make_unique<LogicalProjection>(statement.binding.projection_index, move(statement.select_list));
 	proj->AddChild(move(root));
 	root = move(proj);
 
 	// finish the plan by handling the elements of the QueryNode
 	VisitQueryNode(statement);
+
+	// add a prune node if necessary
+	if (prune_columns) {
+		assert(root);
+		auto prune = make_unique<LogicalPruneColumns>(statement.binding.column_count);
+		prune->AddChild(move(root));
+		root = move(prune);
+	}
 }

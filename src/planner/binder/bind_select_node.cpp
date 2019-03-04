@@ -127,7 +127,9 @@ void Binder::Bind(SelectNode &statement) {
 	for (size_t i = 0; i < statement.select_list.size(); i++) {
 		select_binder.BindTableNames(*statement.select_list[i]);
 		select_binder.BindAndResolveType(&statement.select_list[i]);
-		statement.types.push_back(statement.select_list[i]->return_type);
+		if (i < binding.column_count) {
+			statement.types.push_back(statement.select_list[i]->return_type);
+		}
 	}
 	// in the normal select binder, we bind columns as if there is no aggregation
 	// i.e. in the query [SELECT i, SUM(i) FROM integers;] the "i" will be bound as a normal column

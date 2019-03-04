@@ -21,23 +21,21 @@ static void GatherAliases(QueryNode &node, unordered_map<string, uint32_t> &alia
 		// fill the alias lists
 		for (size_t i = 0; i < select.select_list.size(); i++) {
 			auto &expr = select.select_list[i];
-			if (!expr->alias.empty()) {
-				// the entry has an alias
-				// first check if the alias is already in there
-				auto entry = aliases.find(expr->alias);
-				if (entry != aliases.end()) {
-					// the alias already exists
-					// check if there is a conflict
-					if (entry->second != i) {
-						// there is a conflict
-						// we place "-1" in the aliases map at this location
-						// "-1" signifies that there is an ambiguous reference
-						aliases[expr->alias] = (uint32_t)-1;
-					}
-				} else {
-					// the alias is not in there yet, just assign it
-					aliases[expr->alias] = i;
+			auto name = expr->GetName();
+			// first check if the alias is already in there
+			auto entry = aliases.find(name);
+			if (entry != aliases.end()) {
+				// the alias already exists
+				// check if there is a conflict
+				if (entry->second != i) {
+					// there is a conflict
+					// we place "-1" in the aliases map at this location
+					// "-1" signifies that there is an ambiguous reference
+					aliases[name] = (uint32_t)-1;
 				}
+			} else {
+				// the alias is not in there yet, just assign it
+				aliases[name] = i;
 			}
 			// now check if the node is already in the set of expressions
 			auto expr_entry = expressions.find(expr.get());

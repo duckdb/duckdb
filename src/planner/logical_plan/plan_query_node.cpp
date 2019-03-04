@@ -9,10 +9,6 @@ using namespace std;
 void LogicalPlanGenerator::VisitQueryNode(QueryNode &statement) {
 	assert(root);
 	if (statement.select_distinct) {
-		// auto node = GetProjection(root.get());
-		// if (!IsProjection(node->type)) {
-		// 	throw Exception("DISTINCT can only apply to projection, union or group");
-		// }
 		auto distinct = make_unique<LogicalDistinct>();
 		distinct->AddChild(move(root));
 		root = move(distinct);
