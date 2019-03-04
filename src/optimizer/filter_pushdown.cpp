@@ -22,6 +22,8 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 		return PushdownSubquery(move(op));
 	case LogicalOperatorType::PROJECTION:
 		return PushdownProjection(move(op));
+	case LogicalOperatorType::DISTINCT:
+		return PushdownDistinct(move(op));
 	default:
 		return FinishPushdown(move(op));
 	}
@@ -33,9 +35,6 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 	LogicalJoin::GetTableReferences(*op->children[0], left_bindings);
 	LogicalJoin::GetTableReferences(*op->children[1], right_bindings);
 
-	// inner join should not occur here
-	// because explicit inner joins are turned into cross product + filters and then transformed into inner joins in the
-	// filter pushdown phase
 	switch (join.type) {
 	case JoinType::INNER:
 		return PushdownInnerJoin(move(op), left_bindings, right_bindings);

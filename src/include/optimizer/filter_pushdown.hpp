@@ -40,6 +40,8 @@ private:
 	unique_ptr<LogicalOperator> PushdownSubquery(unique_ptr<LogicalOperator> op);
 	//! Push down a LogicalProjection op
 	unique_ptr<LogicalOperator> PushdownProjection(unique_ptr<LogicalOperator> op);
+	//! Push down a LogicalDistinct op
+	unique_ptr<LogicalOperator> PushdownDistinct(unique_ptr<LogicalOperator> op);
 
 
 	unique_ptr<LogicalOperator> PushdownInnerJoin(unique_ptr<LogicalOperator> op,
