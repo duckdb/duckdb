@@ -56,8 +56,8 @@ unique_ptr<Planner> ParseLogicalPlan(DuckDBConnection &con, string query) {
 	Parser parser(context);
 	parser.ParseQuery(query);
 
-	auto planner = make_unique<Planner>();
-	planner->CreatePlan(con.context, move(parser.statements.back()));
+	auto planner = make_unique<Planner>(con.context);
+	planner->CreatePlan(move(parser.statements.back()));
 	if (!planner->plan) {
 		throw Exception("No plan?");
 	}

@@ -1,4 +1,5 @@
 #include "optimizer/filter_pushdown.hpp"
+#include "optimizer/optimizer.hpp"
 
 #include "planner/operator/logical_set_operation.hpp"
 #include "planner/operator/logical_subquery.hpp"
@@ -27,12 +28,18 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 	auto &setop = (LogicalSetOperation&) *op;
 
 	assert(op->children.size() == 2);
+	// create subqueries to wrap the children, if necessary
+	for(size_t i = 0; i < 2; i++) {
+		if (op->children[i]->type != LogicalOperatorType::SUBQUERY) {
+			op->children[i] = make_unique<LogicalSubquery>(move(op->children[i]), optimizer.binder.GenerateTableIndex());
+		}
+	}
 	assert(op->children[0]->type == LogicalOperatorType::SUBQUERY && op->children[1]->type == LogicalOperatorType::SUBQUERY);
 	size_t left_index = ((LogicalSubquery&) *op->children[0]).table_index;
 	size_t right_index = ((LogicalSubquery&) *op->children[1]).table_index;
 
 	// pushdown into set operation, we can duplicate the condition and pushdown the expressions into both sides
-	FilterPushdown left_pushdown(rewriter), right_pushdown(rewriter);
+	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
 	for(size_t i = 0; i < filters.size(); i++) {
 		// first create a copy of the filter
 		auto right_filter = make_unique<Filter>();

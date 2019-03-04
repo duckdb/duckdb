@@ -9,11 +9,8 @@
 #pragma once
 
 #include "parser/sql_statement.hpp"
-#include "planner/bindcontext.hpp"
+#include "planner/binder.hpp"
 #include "planner/logical_operator.hpp"
-
-#include <string>
-#include <vector>
 
 namespace duckdb {
 class ClientContext;
@@ -22,11 +19,15 @@ class ClientContext;
 //! using the Binder and LogicalPlanGenerator.
 class Planner {
 public:
-	void CreatePlan(ClientContext &catalog, unique_ptr<SQLStatement> statement);
+	Planner(ClientContext &context);
+
+	void CreatePlan(unique_ptr<SQLStatement> statement);
 
 	unique_ptr<LogicalOperator> plan;
 
+	Binder binder;
+	ClientContext &context;
 private:
-	void CreatePlan(ClientContext &, SQLStatement &statement, bool allow_parameter = false);
+	void CreatePlan(SQLStatement &statement, bool allow_parameter = false);
 };
 } // namespace duckdb

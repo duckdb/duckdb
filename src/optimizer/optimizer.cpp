@@ -7,10 +7,13 @@
 #include "optimizer/rule/list.hpp"
 #include "parser/expression/common_subexpression.hpp"
 
+#include "planner/binder.hpp"
+
+
 using namespace duckdb;
 using namespace std;
 
-Optimizer::Optimizer(ClientContext &client_context) : rewriter(client_context) {
+Optimizer::Optimizer(Binder &binder, ClientContext &client_context) : binder(binder), rewriter(client_context) {
 	rewriter.rules.push_back(make_unique<ConstantFoldingRule>(rewriter));
 	rewriter.rules.push_back(make_unique<DistributivityRule>(rewriter));
 	rewriter.rules.push_back(make_unique<ArithmeticSimplificationRule>(rewriter));
@@ -31,7 +34,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	// this does not change the logical plan structure, but only simplifies the expression trees
 	rewriter.Apply(*plan);
 	// perform filter pushdown
-	FilterPushdown filter_pushdown(rewriter);
+	FilterPushdown filter_pushdown(*this);
 	plan = filter_pushdown.Rewrite(move(plan));
 	// perform obsolete filter removal
 	ObsoleteFilterRewriter obsolete_filter;

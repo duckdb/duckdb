@@ -8,6 +8,8 @@
 
 #include "execution/expression_executor.hpp"
 
+#include "optimizer/optimizer.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -60,7 +62,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
  	auto &join = (LogicalJoin &)*op;
 	assert(join.type == JoinType::LEFT);
 	assert(op->type != LogicalOperatorType::DELIM_JOIN);
-	FilterPushdown left_pushdown(rewriter), right_pushdown(rewriter);
+	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
 	// now check the set of filters
 	for (size_t i = 0; i < filters.size(); i++) {
 		auto side = LogicalComparisonJoin::GetJoinSide(filters[i]->bindings, left_bindings, right_bindings);
@@ -74,7 +76,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 			// bindings match right side or both sides: we cannot directly push it into the right
 			// however, if the filter removes rows with null values from the RHS we can turn the left outer join
 			// in an inner join, and then push down as we would push down an inner join
-			if (FilterRemovesNull(rewriter, filters[i]->filter.get(), right_bindings)) {
+			if (FilterRemovesNull(optimizer.rewriter, filters[i]->filter.get(), right_bindings)) {
 				// the filter removes NULL values, turn it into an inner join
 				join.type = JoinType::INNER;
 				// now we can do more pushdown

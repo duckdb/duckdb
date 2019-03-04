@@ -92,7 +92,7 @@ bool FilterPushdown::AddFilter(unique_ptr<Expression> expr) {
 unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOperator> op) {
 	// unhandled type, first perform filter pushdown in its children
 	for (size_t i = 0; i < op->children.size(); i++) {
-		FilterPushdown pushdown(rewriter);
+		FilterPushdown pushdown(optimizer);
 		op->children[i] = pushdown.Rewrite(move(op->children[i]));
 	}
 	// now push any existing filters

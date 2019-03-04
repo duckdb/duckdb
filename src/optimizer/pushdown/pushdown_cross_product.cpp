@@ -10,7 +10,7 @@ using Filter = FilterPushdown::Filter;
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<LogicalOperator> op) {
 	assert(op->type == LogicalOperatorType::CROSS_PRODUCT);
-	FilterPushdown left_pushdown(rewriter), right_pushdown(rewriter);
+	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
 	vector<unique_ptr<Expression>> join_conditions;
 	unordered_set<size_t> left_bindings, right_bindings;
 	if (filters.size() > 0) {

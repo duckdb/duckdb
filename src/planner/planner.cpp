@@ -12,9 +12,12 @@
 using namespace duckdb;
 using namespace std;
 
-void Planner::CreatePlan(ClientContext &context, SQLStatement &statement, bool allow_parameter) {
+Planner::Planner(ClientContext &context) : 
+	binder(context), context(context) {
+}
+
+void Planner::CreatePlan(SQLStatement &statement, bool allow_parameter) {
 	// first bind the tables and columns to the catalog
-	Binder binder(context);
 	binder.Bind(statement);
 
 	// now create a logical query plan from the query
@@ -25,7 +28,7 @@ void Planner::CreatePlan(ClientContext &context, SQLStatement &statement, bool a
 	// this->context = move(binder.bind_context);
 }
 
-void Planner::CreatePlan(ClientContext &context, unique_ptr<SQLStatement> statement) {
+void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	assert(statement);
 	switch (statement->type) {
 	case StatementType::SELECT:
@@ -36,7 +39,7 @@ void Planner::CreatePlan(ClientContext &context, unique_ptr<SQLStatement> statem
 	case StatementType::CREATE_INDEX:
 	case StatementType::CREATE_TABLE:
 	case StatementType::EXECUTE:
-		CreatePlan(context, *statement);
+		CreatePlan(*statement);
 		break;
 	case StatementType::CREATE_VIEW: {
 		auto &stmt = *((CreateViewStatement *)statement.get());
@@ -44,7 +47,7 @@ void Planner::CreatePlan(ClientContext &context, unique_ptr<SQLStatement> statem
 		// plan the view as if it were a query so we can catch errors
 		SelectStatement dummy_statement;
 		dummy_statement.node = stmt.info->query->Copy();
-		CreatePlan(context, (SQLStatement &)dummy_statement);
+		CreatePlan((SQLStatement &)dummy_statement);
 		if (!plan) {
 			throw Exception("Query in view definition contains errors");
 		}
@@ -134,7 +137,7 @@ void Planner::CreatePlan(ClientContext &context, unique_ptr<SQLStatement> statem
 	case StatementType::EXPLAIN: {
 		auto &stmt = *reinterpret_cast<ExplainStatement *>(statement.get());
 		auto parse_tree = stmt.stmt->ToString();
-		CreatePlan(context, move(stmt.stmt));
+		CreatePlan(move(stmt.stmt));
 		auto logical_plan_unopt = plan->ToString();
 		auto explain = make_unique<LogicalExplain>(move(plan));
 		explain->parse_tree = parse_tree;
@@ -145,7 +148,7 @@ void Planner::CreatePlan(ClientContext &context, unique_ptr<SQLStatement> statem
 	case StatementType::PREPARE: {
 		auto &stmt = *reinterpret_cast<PrepareStatement *>(statement.get());
 		auto statement_type = stmt.statement->type;
-		CreatePlan(context, *stmt.statement, true);
+		CreatePlan(*stmt.statement, true);
 		auto prepare = make_unique<LogicalPrepare>(stmt.name, statement_type, move(plan));
 		plan = move(prepare);
 		break;

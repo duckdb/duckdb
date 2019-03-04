@@ -62,7 +62,6 @@ unique_ptr<DataChunk> ClientContext::Fetch() {
 }
 
 static void ExecuteStatement_(ClientContext &context, string query, unique_ptr<SQLStatement> statement) {
-	Planner planner;
 
 	// for many statements, we log the literal query string in the WAL
 	// also note the exception for EXECUTE below
@@ -80,7 +79,8 @@ static void ExecuteStatement_(ClientContext &context, string query, unique_ptr<S
 		break;
 	}
 
-	planner.CreatePlan(context, move(statement));
+	Planner planner(context);
+	planner.CreatePlan(move(statement));
 	if (!planner.plan) {
 		// we have to log here because some queries are executed in the planner
 		if (log_query_string) {
@@ -90,7 +90,7 @@ static void ExecuteStatement_(ClientContext &context, string query, unique_ptr<S
 	}
 
 	auto plan = move(planner.plan);
-	Optimizer optimizer(context);
+	Optimizer optimizer(planner.binder, context);
 	plan = optimizer.Optimize(move(plan));
 	if (!plan) {
 		return;

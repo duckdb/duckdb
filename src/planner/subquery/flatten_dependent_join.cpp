@@ -301,9 +301,12 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	case LogicalOperatorType::UNION: {
 		auto &setop = (LogicalSetOperation&) *plan;
 		// set operator, push into both children
-		setop.column_count += correlated_columns.size();
 		plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
 		plan->children[1] = PushDownDependentJoin(move(plan->children[1]));
+		// we have to refer to the setop index now
+		base_binding.table_index = setop.table_index;
+		base_binding.column_index = setop.column_count;
+		setop.column_count += correlated_columns.size();
 		return plan;
 	}
 	case LogicalOperatorType::PRUNE_COLUMNS:

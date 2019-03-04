@@ -8,17 +8,18 @@
 
 #pragma once
 
-#include "optimizer/expression_rewriter.hpp"
 #include "optimizer/rule.hpp"
 
 #include <unordered_set>
 
 namespace duckdb {
 
+class Optimizer;
+
 class FilterPushdown {
 public:
-	FilterPushdown(ExpressionRewriter& rewriter) : 
-		rewriter(rewriter) {}
+	FilterPushdown(Optimizer& optimizer) : 
+		optimizer(optimizer) {}
 	//! Perform filter pushdown
 	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> node);
 
@@ -34,7 +35,7 @@ public:
 
 private:
 	vector<unique_ptr<Filter>> filters;
-	ExpressionRewriter& rewriter;
+	Optimizer& optimizer;
 
 	//! Push down a LogicalAggregate op
 	unique_ptr<LogicalOperator> PushdownAggregate(unique_ptr<LogicalOperator> op);
