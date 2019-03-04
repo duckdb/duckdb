@@ -34,10 +34,16 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CastSetOpToTypes(vector<TypeId
 		// found a non-projection operator
 		// push a new projection containing the casts
 
-		// first generate the expression list
+		// first push a logical subquery
+		auto subquery_index = binder.GenerateTableIndex();
+		auto subquery = make_unique<LogicalSubquery>(move(op), subquery_index);
+
+		assert(subquery->column_count == source_types.size());
+
+		// now generate the expression list
 		vector<unique_ptr<Expression>> select_list;
 		for (size_t i = 0; i < target_types.size(); i++) {
-			unique_ptr<Expression> result = make_unique<BoundExpression>(source_types[i], i);
+			unique_ptr<Expression> result = make_unique<BoundColumnRefExpression>("", source_types[i], ColumnBinding(subquery_index, i));
 			if (source_types[i] != target_types[i]) {
 				// add a cast only if the source and target types are not equivalent
 				result = make_unique<CastExpression>(target_types[i], move(result));
@@ -45,15 +51,17 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CastSetOpToTypes(vector<TypeId
 			select_list.push_back(move(result));
 		}
 		auto projection = make_unique<LogicalProjection>(binder.GenerateTableIndex(), move(select_list));
-		projection->children.push_back(move(op));
+		projection->children.push_back(move(subquery));
 		return move(projection);
 	}
 }
 
 void LogicalPlanGenerator::CreatePlan(SetOperationNode &statement) {
+	auto &binding = statement.binding;
+
 	// Generate the logical plan for the left and right sides of the set operation
-	LogicalPlanGenerator generator_left(*statement.binding.left_binder, context);
-	LogicalPlanGenerator generator_right(*statement.binding.right_binder, context);
+	LogicalPlanGenerator generator_left(*binding.left_binder, context);
+	LogicalPlanGenerator generator_right(*binding.right_binder, context);
 
 	generator_left.CreatePlan(*statement.left);
 	auto left_node = move(generator_left.root);
@@ -66,25 +74,20 @@ void LogicalPlanGenerator::CreatePlan(SetOperationNode &statement) {
 	right_node = CastSetOpToTypes(statement.right->types, statement.types, move(right_node));
 
 	// create actual logical ops for setops
+	LogicalOperatorType logical_type;
 	switch (statement.setop_type) {
-	case SetOperationType::UNION: {
-		auto union_op = make_unique<LogicalUnion>(move(left_node), move(right_node));
-		root = move(union_op);
+	case SetOperationType::UNION:
+		logical_type = LogicalOperatorType::UNION;
 		break;
-	}
-	case SetOperationType::EXCEPT: {
-		auto except_op = make_unique<LogicalExcept>(move(left_node), move(right_node));
-		root = move(except_op);
+	case SetOperationType::EXCEPT:
+		logical_type = LogicalOperatorType::EXCEPT;
 		break;
-	}
-	case SetOperationType::INTERSECT: {
-		auto intersect_op = make_unique<LogicalIntersect>(move(left_node), move(right_node));
-		root = move(intersect_op);
-		break;
-	}
 	default:
-		throw NotImplementedException("Set Operation type");
+		assert(statement.setop_type == SetOperationType::INTERSECT);
+		logical_type = LogicalOperatorType::INTERSECT;
+		break;
 	}
+	root = make_unique<LogicalSetOperation>(binding.setop_index, statement.types.size(), move(left_node), move(right_node), logical_type);
 
 	VisitQueryNode(statement);
 }

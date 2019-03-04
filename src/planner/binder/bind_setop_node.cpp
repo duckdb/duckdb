@@ -59,6 +59,9 @@ void Binder::Bind(SetOperationNode &statement) {
 	assert(statement.left);
 	assert(statement.right);
 
+	auto &binding = statement.binding;
+	binding.setop_index = GenerateTableIndex();
+
 	vector<size_t> order_references;
 	if (statement.HasOrder()) {
 		// handle the ORDER BY
@@ -115,15 +118,17 @@ void Binder::Bind(SetOperationNode &statement) {
 		}
 	}
 
-	statement.binding.left_binder = make_unique<Binder>(context, this);
-	statement.binding.left_binder->Bind(*statement.left);
 
-	statement.binding.right_binder = make_unique<Binder>(context, this);
-	statement.binding.right_binder->Bind(*statement.right);
+
+	binding.left_binder = make_unique<Binder>(context, this);
+	binding.left_binder->Bind(*statement.left);
+
+	binding.right_binder = make_unique<Binder>(context, this);
+	binding.right_binder->Bind(*statement.right);
 
 	// move the correlated expressions from the child binders to this binder
-	MoveCorrelatedExpressions(*statement.binding.left_binder);
-	MoveCorrelatedExpressions(*statement.binding.right_binder);
+	MoveCorrelatedExpressions(*binding.left_binder);
+	MoveCorrelatedExpressions(*binding.right_binder);
 
 	// now both sides have been bound we can resolve types
 	if (statement.left->types.size() != statement.right->types.size()) {
@@ -136,13 +141,14 @@ void Binder::Bind(SetOperationNode &statement) {
 		auto result_type = std::max(statement.left->types[i], statement.right->types[i]);
 		statement.types.push_back(result_type);
 	}
-	// now if there are ORDER BY entries we create the BoundExpressions
+
+	// if there are ORDER BY entries we create the BoundExpressions
 	assert(order_references.size() == statement.orderby.orders.size());
 	for (size_t i = 0; i < statement.orderby.orders.size(); i++) {
 		auto entry = order_references[i];
 		if (entry >= statement.types.size()) {
 			throw BinderException("ORDER term out of range - should be between 1 and %d", (int)statement.types.size());
 		}
-		statement.orderby.orders[i].expression = make_unique<BoundExpression>(statement.types[entry], entry);
+		statement.orderby.orders[i].expression = make_unique<BoundColumnRefExpression>("", statement.types[entry], ColumnBinding(binding.setop_index, entry));
 	}
 }

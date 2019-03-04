@@ -61,14 +61,10 @@ void TableBindingResolver::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::CROSS_PRODUCT:
 		Visit((LogicalCrossProduct &)op);
 		break;
-	case LogicalOperatorType::UNION:
-		Visit((LogicalUnion &)op);
-		break;
 	case LogicalOperatorType::EXCEPT:
-		Visit((LogicalExcept &)op);
-		break;
 	case LogicalOperatorType::INTERSECT:
-		Visit((LogicalIntersect &)op);
+	case LogicalOperatorType::UNION:
+		Visit((LogicalSetOperation &)op);
 		break;
 	case LogicalOperatorType::CREATE_INDEX:
 		Visit((LogicalCreateIndex &)op);
@@ -190,16 +186,22 @@ void TableBindingResolver::Visit(LogicalCrossProduct &op) {
 	BindTablesBinaryOp(op, true);
 }
 
-void TableBindingResolver::Visit(LogicalUnion &op) {
-	BindTablesBinaryOp(op, false);
-}
-
-void TableBindingResolver::Visit(LogicalExcept &op) {
-	BindTablesBinaryOp(op, false);
-}
-
-void TableBindingResolver::Visit(LogicalIntersect &op) {
-	BindTablesBinaryOp(op, false);
+void TableBindingResolver::Visit(LogicalSetOperation &op) {
+	assert(op.children.size() == 2);
+	if (recurse_into_subqueries) {
+		// have to visit the children of the set operator
+		auto old_tables = bound_tables;
+		bound_tables.clear();
+		LogicalOperatorVisitor::VisitOperator(*op.children[0]);
+		bound_tables.clear();
+		LogicalOperatorVisitor::VisitOperator(*op.children[1]);
+		bound_tables = old_tables;
+	}
+	// push the binding referring to this setop
+	BoundTable binding;
+	binding.table_index = op.table_index;
+	binding.column_count = op.column_count;
+	PushBinding(binding);
 }
 
 void TableBindingResolver::Visit(LogicalChunkGet &op) {

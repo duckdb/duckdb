@@ -23,11 +23,17 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 	case LogicalOperatorType::PROJECTION:
 		return PushdownProjection(move(op));
 	case LogicalOperatorType::DISTINCT:
-		return PushdownDistinct(move(op));
+	case LogicalOperatorType::ORDER_BY:
+	case LogicalOperatorType::PRUNE_COLUMNS: {
+		// we can just push directly through these operations without any rewriting
+		op->children[0] = Rewrite(move(op->children[0]));
+		return op;
+	}
 	default:
 		return FinishPushdown(move(op));
 	}
 }
+
 unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOperator> op) {
 	assert(op->type == LogicalOperatorType::COMPARISON_JOIN || op->type == LogicalOperatorType::ANY_JOIN || op->type == LogicalOperatorType::DELIM_JOIN);
 	auto &join = (LogicalJoin &)*op;

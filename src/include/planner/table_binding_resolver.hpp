@@ -41,13 +41,11 @@ protected:
 	void Visit(LogicalCreateIndex &op);
 	void Visit(LogicalDelimGet &op);
 	void Visit(LogicalEmptyResult &op);
-	void Visit(LogicalUnion &op);
-	void Visit(LogicalExcept &op);
-	void Visit(LogicalIntersect &op);
 	void Visit(LogicalCrossProduct &op);
 	void Visit(LogicalChunkGet &op);
 	void Visit(LogicalGet &op);
 	void Visit(LogicalProjection &op);
+	void Visit(LogicalSetOperation &op);
 	void Visit(LogicalSubquery &op);
 	void Visit(LogicalTableFunction &op);
 	void Visit(LogicalWindow &op);

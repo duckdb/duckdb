@@ -52,9 +52,7 @@ protected:
 	void Visit(LogicalInsert &op);
 	void Visit(LogicalCopy &op);
 	void Visit(LogicalExplain &op);
-	void Visit(LogicalUnion &op);
-	void Visit(LogicalExcept &op);
-	void Visit(LogicalIntersect &op);
+	void Visit(LogicalSetOperation &op);
 	void Visit(LogicalUpdate &op);
 	void Visit(LogicalTableFunction &expr);
 	void Visit(LogicalPruneColumns &expr);
@@ -73,7 +71,5 @@ public:
 
 private:
 	ClientContext &context;
-
-	void GenerateExceptIntersect(LogicalOperator &op, JoinType join_type);
 };
 } // namespace duckdb

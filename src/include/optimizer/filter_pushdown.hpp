@@ -40,25 +40,26 @@ private:
 	unique_ptr<LogicalOperator> PushdownSubquery(unique_ptr<LogicalOperator> op);
 	//! Push down a LogicalProjection op
 	unique_ptr<LogicalOperator> PushdownProjection(unique_ptr<LogicalOperator> op);
-	//! Push down a LogicalDistinct op
-	unique_ptr<LogicalOperator> PushdownDistinct(unique_ptr<LogicalOperator> op);
 
-
+	// Pushdown an inner join
 	unique_ptr<LogicalOperator> PushdownInnerJoin(unique_ptr<LogicalOperator> op,
                                                              unordered_set<size_t> &left_bindings,
                                                              unordered_set<size_t> &right_bindings);
+	// Pushdown a left join
 	unique_ptr<LogicalOperator> PushdownLeftJoin(unique_ptr<LogicalOperator> op,
 	                                             unordered_set<size_t> &left_bindings,
 	                                             unordered_set<size_t> &right_bindings);
+	// Pushdown a mark join
 	unique_ptr<LogicalOperator> PushdownMarkJoin(unique_ptr<LogicalOperator> op,
                                                              unordered_set<size_t> &left_bindings,
                                                              unordered_set<size_t> &right_bindings);
+	// Pushdown a single join
 	unique_ptr<LogicalOperator> PushdownSingleJoin(unique_ptr<LogicalOperator> op,
                                                              unordered_set<size_t> &left_bindings,
                                                              unordered_set<size_t> &right_bindings);
 
+	// Finish pushing down at this operator, creating a LogicalFilter to store any of the stored filters and recursively pushing down into its children (if any)
 	unique_ptr<LogicalOperator> FinishPushdown(unique_ptr<LogicalOperator> op);
-
 	//! Adds a filter to the set of filters. Returns true if the filter statically evaluates to false and the entire tree should be stripped.
 	bool AddFilter(unique_ptr<Expression> expr);
 };

@@ -70,13 +70,9 @@ void PhysicalPlanGenerator::VisitOperator(LogicalOperator &op) {
 		Visit((LogicalCrossProduct &)op);
 		break;
 	case LogicalOperatorType::UNION:
-		Visit((LogicalUnion &)op);
-		break;
 	case LogicalOperatorType::EXCEPT:
-		Visit((LogicalExcept &)op);
-		break;
 	case LogicalOperatorType::INTERSECT:
-		Visit((LogicalIntersect &)op);
+		Visit((LogicalSetOperation &)op);
 		break;
 	case LogicalOperatorType::INSERT:
 		Visit((LogicalInsert &)op);
@@ -676,7 +672,7 @@ void PhysicalPlanGenerator::Visit(LogicalExplain &op) {
 	this->plan = make_unique<PhysicalExplain>(op, keys, values);
 }
 
-void PhysicalPlanGenerator::Visit(LogicalUnion &op) {
+void PhysicalPlanGenerator::Visit(LogicalSetOperation &op) {
 	assert(op.children.size() == 2);
 
 	VisitOperator(*op.children[0]);
@@ -685,44 +681,34 @@ void PhysicalPlanGenerator::Visit(LogicalUnion &op) {
 	auto right = move(plan);
 
 	if (left->GetTypes() != right->GetTypes()) {
-		throw Exception("Type mismatch for UNION");
-	}
-	plan = make_unique<PhysicalUnion>(op, move(left), move(right));
-}
-
-void PhysicalPlanGenerator::GenerateExceptIntersect(LogicalOperator &op, JoinType join_type) {
-	assert(op.children.size() == 2);
-
-	VisitOperator(*op.children[0]);
-	auto top = move(plan);
-	VisitOperator(*op.children[1]);
-	auto bottom = move(plan);
-
-	auto top_types = top->GetTypes();
-	if (top_types != bottom->GetTypes()) {
-		throw Exception("Type mismatch for EXCEPT");
+		throw Exception("Type mismatch for SET OPERATION");
 	}
 
-	vector<JoinCondition> conditions;
-
-	// create equality condition for all columns
-	for (size_t i = 0; i < top_types.size(); i++) {
-		JoinCondition cond;
-		cond.comparison = ExpressionType::COMPARE_EQUAL;
-		cond.left = make_unique<BoundExpression>(top_types[i], i);
-		cond.right = make_unique<BoundExpression>(top_types[i], i);
-		cond.null_values_are_equal = true;
-		conditions.push_back(move(cond));
+	switch(op.type) {
+		case LogicalOperatorType::UNION:
+			// UNION
+			plan = make_unique<PhysicalUnion>(op, move(left), move(right));
+			break;
+		default: {
+			// EXCEPT/INTERSECT
+			assert(op.type == LogicalOperatorType::EXCEPT || op.type == LogicalOperatorType::INTERSECT);
+			auto &types = left->GetTypes();
+			vector<JoinCondition> conditions;
+			// create equality condition for all columns
+			for (size_t i = 0; i < types.size(); i++) {
+				JoinCondition cond;
+				cond.comparison = ExpressionType::COMPARE_EQUAL;
+				cond.left = make_unique<BoundExpression>(types[i], i);
+				cond.right = make_unique<BoundExpression>(types[i], i);
+				cond.null_values_are_equal = true;
+				conditions.push_back(move(cond));
+			}
+			// EXCEPT is ANTI join
+			// INTERSECT is SEMI join
+			JoinType join_type = op.type == LogicalOperatorType::EXCEPT ? JoinType::ANTI : JoinType::SEMI;
+			plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(conditions), join_type);
+		}
 	}
-	plan = make_unique<PhysicalHashJoin>(op, move(top), move(bottom), move(conditions), join_type);
-}
-
-void PhysicalPlanGenerator::Visit(LogicalExcept &op) {
-	GenerateExceptIntersect(op, JoinType::ANTI);
-}
-
-void PhysicalPlanGenerator::Visit(LogicalIntersect &op) {
-	GenerateExceptIntersect(op, JoinType::SEMI);
 }
 
 void PhysicalPlanGenerator::Visit(LogicalWindow &op) {
