@@ -1,6 +1,7 @@
 #include "optimizer/filter_pushdown.hpp"
 
 #include "planner/operator/logical_aggregate.hpp"
+#include "planner/operator/logical_empty_result.hpp"
 #include "planner/operator/logical_join.hpp"
 
 using namespace duckdb;
@@ -37,11 +38,12 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 			// no aggregate! we can push this down
 			// rewrite any group bindings within the filter
 			f.filter = ReplaceGroupBindings(aggr, move(f.filter));
-			// extract the bindings again
-			f.bindings.clear();
-			LogicalJoin::GetExpressionBindings(*f.filter, f.bindings);
-			// add the new filter to the child and erase the filter from here
-			child_pushdown.filters.push_back(move(filters[i]));
+			// add the filter to the child node
+			if (child_pushdown.AddFilter(move(f.filter))) {
+				// filter statically evaluates to false, strip tree
+				return make_unique<LogicalEmptyResult>(move(op));
+			}
+			// erase the filter from here
 			filters.erase(filters.begin() + i);
 			i--;
 		}

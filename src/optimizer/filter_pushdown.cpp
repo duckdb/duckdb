@@ -73,6 +73,7 @@ bool FilterPushdown::AddFilter(unique_ptr<Expression> expr) {
 		f->filter = move(expr);
 		LogicalJoin::GetExpressionBindings(*f->filter, f->bindings);
 		if (f->bindings.size() == 0) {
+			assert(f->filter->IsScalar());
 			// scalar condition, evaluate it
 			auto result = ExpressionExecutor::EvaluateScalar(*f->filter).CastAs(TypeId::BOOLEAN);
 			// check if the filter passes

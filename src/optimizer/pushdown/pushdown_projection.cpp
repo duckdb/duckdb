@@ -1,5 +1,6 @@
 #include "optimizer/filter_pushdown.hpp"
 
+#include "planner/operator/logical_empty_result.hpp"
 #include "planner/operator/logical_projection.hpp"
 
 using namespace duckdb;
@@ -26,16 +27,19 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<Logica
 	// push filter through logical projection
 	// all the BoundColumnRefExpressions in the filter should refer to the LogicalProjection
 	// we can rewrite them by replacing those references with the expression of the LogicalProjection node
+	FilterPushdown child_pushdown(optimizer);
 	for(size_t i = 0; i < filters.size(); i++) {
 		auto &f = *filters[i];
 		assert(f.bindings.size() <= 1);
-		f.bindings.clear();
 		// rewrite the bindings within this subquery
 		f.filter = ReplaceProjectionBindings(proj, move(f.filter));
-		// extract the bindings again
-		f.ExtractBindings();
+		// add the filter to the child pushdown
+		if (child_pushdown.AddFilter(move(f.filter))) {
+			// filter statically evaluates to false, strip tree
+			return make_unique<LogicalEmptyResult>(move(op));
+		}
 	}
 	// now push into children
-	proj.children[0] = Rewrite(move(proj.children[0]));
+	op->children[0] = child_pushdown.Rewrite(move(op->children[0]));
 	return op;
 }
