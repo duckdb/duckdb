@@ -129,6 +129,7 @@ matrix:
     - os: linux
       dist: xenial
       language: python
+      python: 3.7
 
       before_script:
         - pip3 install "numpy>=1.16" && pip install "pandas>=0.24"
