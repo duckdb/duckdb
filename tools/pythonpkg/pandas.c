@@ -1,6 +1,6 @@
 #include "pandas.h"
 
-static void * duckdb_pandas_init() {
+static void *duckdb_pandas_init() {
 	if (PyArray_API == NULL) {
 		import_array();
 	}
@@ -29,12 +29,12 @@ PyObject *PyNullMask_FromCol(duckdb_column *col, size_t t_start, size_t t_end) {
 	return (PyObject *)nullmask;
 }
 
-PyObject *PyMaskedArray_FromCol(duckdb_column *col, size_t t_start, size_t t_end, char **return_message, bool copy) {
+PyObject *PyMaskedArray_FromCol(duckdb_column *col, size_t t_start, size_t t_end, char **return_message) {
 	char *msg = NULL;
 	PyObject *vararray;
 	duckdb_pandas_init();
 
-	vararray = PyArrayObject_FromCol(col, t_start, t_end, return_message, copy);
+	vararray = PyArrayObject_FromCol(col, t_start, t_end, return_message);
 	if (vararray == NULL) {
 		return NULL;
 	}
@@ -74,19 +74,15 @@ wrapup:
 }
 
 #define BAT_TO_NP(bat, mtpe, nptpe)                                                                                    \
-	if (copy) {                                                                                                        \
+	{                                                                                                                  \
 		vararray = PyArray_EMPTY(1, elements, nptpe, 0);                                                               \
-		/*memcpy(PyArray_DATA((PyArrayObject *)vararray), Tloc(bat, 0), sizeof(mtpe) * (t_end - t_start));      */     \
-	} else {                                                                                                           \
-		/*vararray = PyArray_New(&PyArray_Type, 1, elements, nptpe, NULL, &((mtpe *)Tloc(bat, 0))[t_start], 0,         \
-		                       NPY_ARRAY_CARRAY || !NPY_ARRAY_WRITEABLE, NULL);           */                           \
+		memcpy(PyArray_DATA((PyArrayObject *)vararray), col->data, sizeof(mtpe) * (t_end - t_start));                  \
 	}
 
-PyObject *PyArrayObject_FromCol(duckdb_column *col, size_t t_start, size_t t_end, char **return_message, bool copy) {
+PyObject *PyArrayObject_FromCol(duckdb_column *col, size_t t_start, size_t t_end, char **return_message) {
 	// This variable will hold the converted Python object
 	PyObject *vararray = NULL;
 	char *msg = NULL;
-	size_t j = 0;
 	npy_intp elements[1] = {t_end - t_start};
 	duckdb_pandas_init();
 
@@ -107,7 +103,6 @@ PyObject *PyArrayObject_FromCol(duckdb_column *col, size_t t_start, size_t t_end
 		{
 			PyObject **data = ((PyObject **)PyArray_DATA((PyArrayObject *)vararray));
 			PyObject *obj;
-			j = 0;
 			for (size_t row_idx = 0; row_idx < col->count; row_idx++) {
 				char *t = ((char **)col->data)[row_idx];
 				if (duckdb_value_is_null(*col, row_idx)) {
@@ -120,7 +115,7 @@ PyObject *PyArrayObject_FromCol(duckdb_column *col, size_t t_start, size_t t_end
 					// TODO COMPLAIN
 					goto wrapup;
 				}
-				data[j++] = obj;
+				data[row_idx] = obj;
 			}
 		}
 

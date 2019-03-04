@@ -7,5 +7,5 @@
 #include <numpy/npy_common.h>
 
 PyObject *PyNullMask_FromCol(duckdb_column *col, size_t t_start, size_t t_end);
-PyObject *PyMaskedArray_FromCol(duckdb_column *col, size_t t_start, size_t t_end, char **return_message, bool copy);
-PyObject *PyArrayObject_FromCol(duckdb_column *col, size_t t_start, size_t t_end, char **return_message, bool copy);
+PyObject *PyMaskedArray_FromCol(duckdb_column *col, size_t t_start, size_t t_end, char **return_message);
+PyObject *PyArrayObject_FromCol(duckdb_column *col, size_t t_start, size_t t_end, char **return_message);

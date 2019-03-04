@@ -92,7 +92,7 @@ error:
 	}
 }
 
-PyObject *duckdb_cursor_fetchone(duckdb_Cursor *self, PyObject *args) {
+PyObject *duckdb_cursor_fetchone(duckdb_Cursor *self) {
 	PyObject *row;
 
 	row = duckdb_cursor_iternext(self);
@@ -103,40 +103,56 @@ PyObject *duckdb_cursor_fetchone(duckdb_Cursor *self, PyObject *args) {
 	return row;
 }
 
+PyObject *duckdb_cursor_fetchall(duckdb_Cursor *self) {
+	PyObject *row;
+	PyObject *list;
+
+	list = PyList_New(0);
+	if (!list) {
+		return NULL;
+	}
+
+	/* just make sure we enter the loop */
+	row = (PyObject *)Py_None;
+	while (row) {
+		row = duckdb_cursor_iternext(self);
+		if (row) {
+			PyList_Append(list, row);
+			Py_DECREF(row);
+		}
+	}
+
+	if (PyErr_Occurred()) {
+		Py_DECREF(list);
+		return NULL;
+	} else {
+		return list;
+	}
+}
+
 static PyObject *fromdict_ref = NULL;
 
 PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 	// TODO make sure there is an active result set
 
-	if (!fromdict_ref) {
-		// FIXME: do this at package load?
-		PyObject *pandas = PyImport_Import(PyUnicode_FromString("pandas"));
-		if (!pandas) {
-			return NULL;
-		}
-		PyObject *dataframe = PyObject_GetAttrString(pandas, "DataFrame");
-		if (!dataframe) {
-			return NULL;
-		}
-		fromdict_ref = PyObject_GetAttrString(dataframe, "from_dict");
-		if (!fromdict_ref) {
-			return NULL;
-		}
-	}
-
 	PyObject *col_dict = PyDict_New();
 	for (size_t col_idx = 0; col_idx < self->result.column_count; col_idx++) {
 		duckdb_column col = self->result.columns[col_idx];
 		char *return_message = "";
-		PyObject *arr = (PyObject *)PyArrayObject_FromCol(&col, 0, col.count, &return_message, 1);
+		PyObject *arr = (PyObject *)PyMaskedArray_FromCol(&col, 0, col.count, &return_message);
 		if (!arr) {
 			PyErr_SetString(duckdb_DatabaseError, return_message);
 			return NULL;
 		}
 		PyDict_SetItem(col_dict, PyUnicode_FromString(col.name), arr);
 	}
+	Py_INCREF(col_dict);
+	return col_dict;
+}
 
-	PyObject *res = PyObject_CallFunctionObjArgs(fromdict_ref, col_dict, NULL);
+PyObject *duckdb_cursor_fetchdf(duckdb_Cursor *self) {
+
+	PyObject *res = PyObject_CallFunctionObjArgs(fromdict_ref, duckdb_cursor_fetchnumpy(self), NULL);
 	if (!res) {
 		return NULL;
 	}
@@ -160,10 +176,9 @@ PyObject *duckdb_cursor_iternext(duckdb_Cursor *self) {
 
 	PyObject *row = PyList_New(self->result.column_count);
 
-	// TODO
 	//	DUCKDB_TYPE_TIMESTAMP,
 	//	DUCKDB_TYPE_DATE,
-	//	DUCKDB_TYPE_VARCHAR,
+
 	for (size_t col_idx = 0; col_idx < self->result.column_count; col_idx++) {
 		PyObject *val = NULL;
 		duckdb_column col = self->result.columns[col_idx];
@@ -228,9 +243,12 @@ PyObject *duckdb_cursor_close(duckdb_Cursor *self, PyObject *args) {
 
 static PyMethodDef cursor_methods[] = {
     {"execute", (PyCFunction)duckdb_cursor_execute, METH_VARARGS, PyDoc_STR("Executes a SQL statement.")},
-    {"fetchone", (PyCFunction)duckdb_cursor_fetchone, METH_NOARGS, PyDoc_STR("Fetches one row from the  resultset.")},
+    {"fetchone", (PyCFunction)duckdb_cursor_fetchone, METH_NOARGS, PyDoc_STR("Fetches one row from the resultset.")},
+    {"fetchall", (PyCFunction)duckdb_cursor_fetchall, METH_NOARGS, PyDoc_STR("Fetches all rows from the resultset.")},
     {"fetchnumpy", (PyCFunction)duckdb_cursor_fetchnumpy, METH_NOARGS,
-     PyDoc_STR("Fetches all rows from the  resultset.")},
+     PyDoc_STR("Fetches all rows from the  resultset as a dict of numpy arrays.")},
+    {"fetchdf", (PyCFunction)duckdb_cursor_fetchdf, METH_NOARGS,
+     PyDoc_STR("Fetches all rows from the result set as a pandas DataFrame.")},
     {"close", (PyCFunction)duckdb_cursor_close, METH_NOARGS, PyDoc_STR("Closes the cursor.")},
     {NULL, NULL}};
 
@@ -286,7 +304,7 @@ PyTypeObject duckdb_CursorType = {
     0                                     /* tp_free */
 };
 
-static void * duckdb_pandas_init() {
+static void *duckdb_pandas_init() {
 	if (PyArray_API == NULL) {
 		import_array();
 	}
@@ -295,6 +313,20 @@ static void * duckdb_pandas_init() {
 
 extern int duckdb_cursor_setup_types(void) {
 	duckdb_pandas_init();
+
+	PyObject *pandas = PyImport_Import(PyUnicode_FromString("pandas"));
+	if (!pandas) {
+		return -1;
+	}
+	PyObject *dataframe = PyObject_GetAttrString(pandas, "DataFrame");
+	if (!dataframe) {
+		return -1;
+	}
+	fromdict_ref = PyObject_GetAttrString(dataframe, "from_dict");
+	if (!fromdict_ref) {
+		return -1;
+	}
+
 	duckdb_CursorType.tp_new = PyType_GenericNew;
 	return PyType_Ready(&duckdb_CursorType);
 }
