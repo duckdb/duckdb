@@ -12,7 +12,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSingleJoin(unique_ptr<Logica
                                                              unordered_set<size_t> &right_bindings) {
  	auto &join = (LogicalJoin &)*op;
 	assert(join.type == JoinType::SINGLE);
-	FilterPushdown left_pushdown, right_pushdown;
+	FilterPushdown left_pushdown(rewriter), right_pushdown(rewriter);
 	// now check the set of filters
 	for (size_t i = 0; i < filters.size(); i++) {
 		auto side = LogicalComparisonJoin::GetJoinSide(filters[i]->bindings, left_bindings, right_bindings);

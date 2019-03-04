@@ -15,7 +15,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 	assert(join.type == JoinType::MARK);
 	assert(op->type == LogicalOperatorType::COMPARISON_JOIN || op->type == LogicalOperatorType::DELIM_JOIN);
 
-	FilterPushdown left_pushdown, right_pushdown;
+	FilterPushdown left_pushdown(rewriter), right_pushdown(rewriter);
 	bool found_mark_reference = false;
 	// now check the set of filters
 	for (size_t i = 0; i < filters.size(); i++) {

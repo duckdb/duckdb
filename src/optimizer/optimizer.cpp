@@ -6,7 +6,6 @@
 #include "optimizer/obsolete_filter_rewriter.hpp"
 #include "optimizer/rule/list.hpp"
 #include "parser/expression/common_subexpression.hpp"
-#include "planner/operator/list.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -32,7 +31,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	// this does not change the logical plan structure, but only simplifies the expression trees
 	rewriter.Apply(*plan);
 	// perform filter pushdown
-	FilterPushdown filter_pushdown;
+	FilterPushdown filter_pushdown(rewriter);
 	plan = filter_pushdown.Rewrite(move(plan));
 	// perform obsolete filter removal
 	ObsoleteFilterRewriter obsolete_filter;

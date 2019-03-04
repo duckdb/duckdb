@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "optimizer/expression_rewriter.hpp"
 #include "optimizer/rule.hpp"
 
 #include <unordered_set>
@@ -16,6 +17,8 @@ namespace duckdb {
 
 class FilterPushdown {
 public:
+	FilterPushdown(ExpressionRewriter& rewriter) : 
+		rewriter(rewriter) {}
 	//! Perform filter pushdown
 	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> node);
 
@@ -29,7 +32,10 @@ public:
 
 private:
 	vector<unique_ptr<Filter>> filters;
+	ExpressionRewriter& rewriter;
 
+	//! Push down a LogicalAggregate op
+	unique_ptr<LogicalOperator> PushdownAggregate(unique_ptr<LogicalOperator> op);
 	//! Push down a LogicalFilter op
 	unique_ptr<LogicalOperator> PushdownFilter(unique_ptr<LogicalOperator> op);
 	//! Push down a LogicalCrossProduct op
@@ -40,6 +46,9 @@ private:
 	unique_ptr<LogicalOperator> PushdownSubquery(unique_ptr<LogicalOperator> op);
 	//! Push down a LogicalProjection op
 	unique_ptr<LogicalOperator> PushdownProjection(unique_ptr<LogicalOperator> op);
+	// //! Push down a LogicalSetOperation op
+	// unique_ptr<LogicalOperator> PushdownSetOperation(unique_ptr<LogicalOperator> op);
+	
 
 	// Pushdown an inner join
 	unique_ptr<LogicalOperator> PushdownInnerJoin(unique_ptr<LogicalOperator> op,

@@ -21,7 +21,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CastSetOpToTypes(vector<TypeId
 	auto node = op.get();
 	if (node->type == LogicalOperatorType::PROJECTION) {
 		// "node" is a projection; we can just do the casts in there
-		assert(node->expressions.size() == target_types.size());
+		assert(node->expressions.size() == source_types.size());
 		// add the casts to the selection list
 		for (size_t i = 0; i < target_types.size(); i++) {
 			if (node->expressions[i]->return_type != target_types[i]) {

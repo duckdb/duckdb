@@ -10,6 +10,8 @@ using Filter = FilterPushdown::Filter;
 
 unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> op) {
 	switch (op->type) {
+	case LogicalOperatorType::AGGREGATE_AND_GROUP_BY:
+		return PushdownAggregate(move(op));
 	case LogicalOperatorType::FILTER:
 		return PushdownFilter(move(op));
 	case LogicalOperatorType::CROSS_PRODUCT:
@@ -29,6 +31,10 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 		op->children[0] = Rewrite(move(op->children[0]));
 		return op;
 	}
+	// case LogicalOperatorType::INTERSECT:
+	// case LogicalOperatorType::EXCEPT:
+	// case LogicalOperatorType::UNION:
+	// 	return PushdownSetOperation(move(op));
 	default:
 		return FinishPushdown(move(op));
 	}
@@ -84,7 +90,7 @@ bool FilterPushdown::AddFilter(unique_ptr<Expression> expr) {
 unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOperator> op) {
 	// unhandled type, first perform filter pushdown in its children
 	for (size_t i = 0; i < op->children.size(); i++) {
-		FilterPushdown pushdown;
+		FilterPushdown pushdown(rewriter);
 		op->children[i] = pushdown.Rewrite(move(op->children[i]));
 	}
 	// now push any existing filters
