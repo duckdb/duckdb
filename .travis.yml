@@ -125,7 +125,16 @@ matrix:
         - MSBuild.exe DuckDB.sln -target:unittest
         - test/Debug/unittest.exe
 
- #   - os: windows
+
+    - os: linux
+      dist: xenial
+      language: python
+
+      before_script: cd tools/pythonpkg
+
+      script:
+        - python3 setup.py install
+        - python3 -m pytest tests
 
 before_install:
     - eval "${MATRIX_EVAL}"
