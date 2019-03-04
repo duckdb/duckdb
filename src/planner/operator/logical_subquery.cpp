@@ -6,6 +6,8 @@ using namespace std;
 
 LogicalSubquery::LogicalSubquery(unique_ptr<LogicalOperator> child, size_t table_index)
 	: LogicalOperator(LogicalOperatorType::SUBQUERY), table_index(table_index) {
+	assert(child);
+	
 	TableBindingResolver resolver;
 	resolver.VisitOperator(*child);
 

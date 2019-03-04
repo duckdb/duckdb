@@ -1,6 +1,5 @@
 #include "optimizer/filter_pushdown.hpp"
 
-#include "planner/operator/logical_join.hpp"
 #include "planner/operator/logical_projection.hpp"
 
 using namespace duckdb;
@@ -34,7 +33,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<Logica
 		// rewrite the bindings within this subquery
 		f.filter = ReplaceProjectionBindings(proj, move(f.filter));
 		// extract the bindings again
-		LogicalJoin::GetExpressionBindings(*f.filter, f.bindings);
+		f.ExtractBindings();
 	}
 	// now push into children
 	proj.children[0] = Rewrite(move(proj.children[0]));

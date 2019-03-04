@@ -28,6 +28,8 @@ public:
 
 		Filter(){}
 		Filter(unique_ptr<Expression> filter) : filter(move(filter)) { }
+
+		void ExtractBindings();
 	};
 
 private:
@@ -46,8 +48,8 @@ private:
 	unique_ptr<LogicalOperator> PushdownSubquery(unique_ptr<LogicalOperator> op);
 	//! Push down a LogicalProjection op
 	unique_ptr<LogicalOperator> PushdownProjection(unique_ptr<LogicalOperator> op);
-	// //! Push down a LogicalSetOperation op
-	// unique_ptr<LogicalOperator> PushdownSetOperation(unique_ptr<LogicalOperator> op);
+	//! Push down a LogicalSetOperation op
+	unique_ptr<LogicalOperator> PushdownSetOperation(unique_ptr<LogicalOperator> op);
 	
 
 	// Pushdown an inner join

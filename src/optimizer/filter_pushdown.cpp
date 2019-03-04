@@ -1,7 +1,9 @@
 #include "optimizer/filter_pushdown.hpp"
 
-#include "planner/operator/list.hpp"
 #include "execution/expression_executor.hpp"
+
+#include "planner/operator/logical_filter.hpp"
+#include "planner/operator/logical_join.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -24,6 +26,10 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 		return PushdownSubquery(move(op));
 	case LogicalOperatorType::PROJECTION:
 		return PushdownProjection(move(op));
+	case LogicalOperatorType::INTERSECT:
+	case LogicalOperatorType::EXCEPT:
+	case LogicalOperatorType::UNION:
+		return PushdownSetOperation(move(op));
 	case LogicalOperatorType::DISTINCT:
 	case LogicalOperatorType::ORDER_BY:
 	case LogicalOperatorType::PRUNE_COLUMNS: {
@@ -31,10 +37,6 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 		op->children[0] = Rewrite(move(op->children[0]));
 		return op;
 	}
-	// case LogicalOperatorType::INTERSECT:
-	// case LogicalOperatorType::EXCEPT:
-	// case LogicalOperatorType::UNION:
-	// 	return PushdownSetOperation(move(op));
 	default:
 		return FinishPushdown(move(op));
 	}
@@ -104,4 +106,9 @@ unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOpe
 	}
 	filter->children.push_back(move(op));
 	return move(filter);
+}
+
+void FilterPushdown::Filter::ExtractBindings() {
+	bindings.clear();
+	LogicalJoin::GetExpressionBindings(*filter, bindings);
 }

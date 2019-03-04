@@ -73,6 +73,10 @@ void LogicalPlanGenerator::CreatePlan(SetOperationNode &statement) {
 	left_node = CastSetOpToTypes(statement.left->types, statement.types, move(left_node));
 	right_node = CastSetOpToTypes(statement.right->types, statement.types, move(right_node));
 
+	// create a subquery to wrap the left and right children
+	left_node = make_unique<LogicalSubquery>(move(left_node), binder.GenerateTableIndex());
+	right_node = make_unique<LogicalSubquery>(move(right_node), binder.GenerateTableIndex());
+	
 	// create actual logical ops for setops
 	LogicalOperatorType logical_type;
 	switch (statement.setop_type) {
