@@ -209,7 +209,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 		auto cross_product = make_unique<LogicalCrossProduct>();
 		cross_product->children.push_back(move(left_child));
 		cross_product->children.push_back(move(right_child));
-		return cross_product;
+		return move(cross_product);
 	}
 }
 
