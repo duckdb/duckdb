@@ -23,7 +23,8 @@ public:
 
 	// Gets the set of table references that are reachable from this node
 	static void GetTableReferences(LogicalOperator &op, unordered_set<size_t> &bindings);
-
+	static void GetExpressionBindings(Expression &expr, unordered_set<size_t> &bindings);
+	
 	//! The type of the join (INNER, OUTER, etc...)
 	JoinType type;
 
