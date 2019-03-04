@@ -34,9 +34,9 @@ TEST_CASE("Test binding parameters with union expressions", "[setops]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
 	REQUIRE(result->column_count() == 1);
 	// we can give explicit subquery aliases
-	// result = con.Query("SELECT col1 FROM (SELECT * FROM test2 UNION SELECT * FROM test) res(col1) ORDER BY 1;");
-	// REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
-	// REQUIRE(result->column_count() == 1);
+	result = con.Query("SELECT col1 FROM (SELECT * FROM test2 UNION SELECT * FROM test) res(col1) ORDER BY 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
+	REQUIRE(result->column_count() == 1);
 
 	// we can ORDER BY names from both sides
 	result = con.Query("SELECT a FROM test UNION SELECT b FROM test2 ORDER BY a;");

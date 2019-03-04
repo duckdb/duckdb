@@ -14,6 +14,7 @@ unique_ptr<TableRef> SubqueryRef::Copy() {
 
 	auto copy = make_unique<SubqueryRef>(subquery->Copy());
 	copy->alias = alias;
+	copy->column_name_alias = column_name_alias;
 	return move(copy);
 }
 
