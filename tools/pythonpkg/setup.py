@@ -29,7 +29,7 @@ libduckdb = Extension('duckdb', define_macros=[('MODULE_NAME',  '"duckdb"')],
     include_dirs=includes,
     sources=sources,
     extra_compile_args=['-std=c99', '-Wall'],
-    language='c',
+    language='c++', # for linking c++ stdlib
     extra_objects=['../../build/release/src/libduckdb_static.a', '../../build/release/third_party/libpg_query/libpg_query.a'])
 
 setup(
