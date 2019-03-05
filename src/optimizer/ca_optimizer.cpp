@@ -10,6 +10,23 @@ using namespace std;
 
 #include <iostream>
 
+/*
+test data
+create table foo (i int, j int);
+
+insert into foo values
+(10, 1),
+(10, 1),
+(20, 2),
+(20, 2),
+(40, 4),
+(40, 4),
+(20, 1),
+(20, 1),
+(10, 2),
+(10, 2);
+*/
+
 /* boss case
 SELECT i, SUM(i), SUM(i), COUNT(*), AVG(i), j
 	FROM foo
