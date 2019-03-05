@@ -12,7 +12,7 @@
 #include "planner/operator/logical_projection.hpp"
 #include "planner/operator/logical_aggregate.hpp"
 
-#include "parser/expression/bound_expression.hpp"
+#include "parser/expression/bound_columnref_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -25,9 +25,9 @@ public:
     void VisitOperator(LogicalOperator &op) override;
 
 private:
-    typedef unordered_map<Expression*, vector<decltype(std::declval<BoundExpression>().index)*> , ExpressionHashFunction, ExpressionEquality> aggregate_to_bound_ref_map_t;
+    typedef unordered_map<Expression*, vector<decltype(std::declval<BoundColumnRefExpression>().binding.column_index)*> , ExpressionHashFunction, ExpressionEquality> aggregate_to_bound_ref_map_t;
 
-    void find_bound_references(Expression& expression, const LogicalAggregate& aggregate, aggregate_to_bound_ref_map_t& aggregate_to_projection_map, size_t& nr_of_groups);
+    void find_bound_references(Expression& expression, const LogicalAggregate& aggregate, aggregate_to_bound_ref_map_t& aggregate_to_projection_map);
 
     LogicalAggregate* find_logical_aggregate(vector<Expression*>& expressions, LogicalOperator& projection);
     void ExtractCommonAggregateExpressions(LogicalOperator& projection);

@@ -1,7 +1,5 @@
 #include "optimizer/ca_optimizer.hpp"
 
-#include "parser/expression/bound_expression.hpp"
-
 #include "planner/operator/logical_filter.hpp"
 #include "planner/operator/logical_projection.hpp"
 
@@ -117,20 +115,20 @@ LogicalAggregate* CommonAggregateOptimizer::find_logical_aggregate(vector<Expres
 	return nullptr;
 }
 
-void CommonAggregateOptimizer::find_bound_references(Expression& expression, const LogicalAggregate& aggregate, aggregate_to_bound_ref_map_t& aggregate_to_projection_map, size_t& nr_of_groups) {
-	if (expression.GetExpressionClass() == ExpressionClass::BOUND_REF) {
-		auto column_index = &(static_cast<BoundExpression&>(expression).index);
+void CommonAggregateOptimizer::find_bound_references(Expression& expression, const LogicalAggregate& aggregate, aggregate_to_bound_ref_map_t& aggregate_to_projection_map) {
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		auto& binding = static_cast<BoundColumnRefExpression&>(expression).binding;
 
-		if (*column_index >= nr_of_groups) {
+		if (binding.table_index == aggregate.aggregate_index) {
 			// this column_expression represents an aggregate: start doing some bookkeeping.
-			auto& positions = aggregate_to_projection_map[aggregate.expressions[*column_index - nr_of_groups].get()];
-			positions.push_back(column_index);
+			auto& positions = aggregate_to_projection_map[aggregate.expressions[binding.column_index].get()];
+			positions.push_back(&binding.column_index);
 		}
 	}
 
 	expression.EnumerateChildren(
-		[this, &aggregate, &aggregate_to_projection_map, &nr_of_groups]
-		(Expression *expression) {find_bound_references(*expression, aggregate, aggregate_to_projection_map, nr_of_groups);});
+		[this, &aggregate, &aggregate_to_projection_map]
+		(Expression *expression) {find_bound_references(*expression, aggregate, aggregate_to_projection_map);});
 }
 
 void CommonAggregateOptimizer::ExtractCommonAggregateExpressions(LogicalOperator& projection) {
@@ -150,16 +148,14 @@ void CommonAggregateOptimizer::ExtractCommonAggregateExpressions(LogicalOperator
 
 	vector<unique_ptr<Expression>> new_aggregate_expressions;
 
-	auto nr_of_groups = aggregate->groups.size();
-
 	aggregate_to_bound_ref_map_t aggregate_to_projection_map;
 
 	for (auto& column_expression : operator_chain_expressions) {
-		find_bound_references(*column_expression, *aggregate, aggregate_to_projection_map, nr_of_groups);
+		find_bound_references(*column_expression, *aggregate, aggregate_to_projection_map);
 	}
 
 	// indices to aggregates start after indices to groups.
-	size_t aggregate_index = nr_of_groups;
+	size_t aggregate_index = 0;
 
 	for (auto& aggregate_to_projections : aggregate_to_projection_map) {
 		auto& positions = aggregate_to_projections.second;
