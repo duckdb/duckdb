@@ -3,7 +3,6 @@
 #include "execution/operator/aggregate/physical_window.hpp"
 #include "execution/operator/filter/physical_filter.hpp"
 #include "execution/operator/helper/physical_execute.hpp"
-#include "execution/operator/helper/physical_explain.hpp"
 #include "execution/operator/helper/physical_limit.hpp"
 #include "execution/operator/helper/physical_prune_columns.hpp"
 #include "execution/operator/join/physical_blockwise_nl_join.hpp"
