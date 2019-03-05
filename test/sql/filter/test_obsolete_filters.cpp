@@ -63,6 +63,22 @@ TEST_CASE("Test expressions with obsolete filters", "[filter]") {
 	result = con.Query("SELECT * FROM integers WHERE a<=2 AND a<2");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {10}));
+	// involving inequality expression
+	result = con.Query("SELECT * FROM integers WHERE a<2 AND a<>3");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10}));
+	result = con.Query("SELECT * FROM integers WHERE a<=1 AND a<>3");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10}));
+	result = con.Query("SELECT * FROM integers WHERE a>4 AND a<>2");
+	REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+	result = con.Query("SELECT * FROM integers WHERE a>=5 AND a<>2");
+	REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+	result = con.Query("SELECT * FROM integers WHERE a>=4 AND a<>4 AND a<>4");
+	REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
 
 	// many conditions
 	result = con.Query("SELECT * FROM integers WHERE a<3 AND a<4 AND a<5 AND a<10 AND a<2 AND a<20");
@@ -97,9 +113,65 @@ TEST_CASE("Test expressions with obsolete filters", "[filter]") {
 	// less than and greater than
 	result = con.Query("SELECT * FROM integers WHERE a<2 AND a>4");
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	// inequality
+	result = con.Query("SELECT * FROM integers WHERE a=2 AND a<>2");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT * FROM integers WHERE a<>2 AND a=2");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
 	// WHERE clause with explicit FALSE
 	result = con.Query("SELECT * FROM integers WHERE 0");
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 	result = con.Query("SELECT * FROM integers WHERE a<2 AND 0");
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
+}
+
+
+TEST_CASE("Test string expressions with obsolete filters", "[filter]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+	con.EnableQueryVerification();
+	con.EnableProfiling();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(s VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('hello'), ('world'), (NULL)"));
+
+	// equality
+	result = con.Query("SELECT * FROM strings WHERE s='hello' AND s='hello'");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello"}));
+	result = con.Query("SELECT * FROM strings WHERE s='hello' AND s='world'");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	// inequality
+	result = con.Query("SELECT * FROM strings WHERE s='hello' AND s<>'hello'");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT * FROM strings WHERE s='hello' AND s<>'world'");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello"}));
+	// range queries
+	result = con.Query("SELECT * FROM strings WHERE s='hello' AND s>'a'");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello"}));
+	result = con.Query("SELECT * FROM strings WHERE s='hello' AND s>='hello'");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello"}));
+	result = con.Query("SELECT * FROM strings WHERE s='hello' AND s<='hello'");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello"}));
+	result = con.Query("SELECT * FROM strings WHERE s='hello' AND s<'z'");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello"}));
+	// range queries with ezro results
+	result = con.Query("SELECT * FROM strings WHERE s='hello' AND s<='a'");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT * FROM strings WHERE s='hello' AND s<'hello'");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT * FROM strings WHERE s='hello' AND s>'hello'");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT * FROM strings WHERE s='hello' AND s>='z'");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	// range queries with inequality
+	result = con.Query("SELECT * FROM strings WHERE s<>'hello' AND s<='a'");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT * FROM strings WHERE s<>'hello' AND s<'hello'");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT * FROM strings WHERE s<>'hello' AND s>'hello'");
+	REQUIRE(CHECK_COLUMN(result, 0, {"world"}));
+	result = con.Query("SELECT * FROM strings WHERE s<>'world' AND s>='hello'");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello"}));
+
 }

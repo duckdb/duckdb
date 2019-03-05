@@ -3,7 +3,6 @@
 #include "optimizer/cse_optimizer.hpp"
 #include "optimizer/filter_pushdown.hpp"
 #include "optimizer/join_order_optimizer.hpp"
-#include "optimizer/obsolete_filter_rewriter.hpp"
 #include "optimizer/rule/list.hpp"
 #include "parser/expression/common_subexpression.hpp"
 #include "planner/binder.hpp"
@@ -34,9 +33,6 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	// perform filter pushdown
 	FilterPushdown filter_pushdown(*this);
 	plan = filter_pushdown.Rewrite(move(plan));
-	// perform obsolete filter removal
-	ObsoleteFilterRewriter obsolete_filter;
-	plan = obsolete_filter.Rewrite(move(plan));
 	// then we perform the join ordering optimization
 	// this also rewrites cross products + filters into joins and performs filter pushdowns
 	JoinOrderOptimizer optimizer;

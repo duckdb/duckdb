@@ -67,6 +67,11 @@ public:
 
 	virtual bool HasParameter();
 
+	//! Returns whether or not the expression is foldable into a constant
+	bool IsFoldable() {
+		return IsScalar() && !IsAggregate() && !IsWindow() && !HasParameter();
+	}
+
 	//! Returns the type of the expression
 	ExpressionType GetExpressionType() {
 		return type;

@@ -9,8 +9,7 @@
 #pragma once
 
 #include "optimizer/rule.hpp"
-
-#include <unordered_set>
+#include "optimizer/filter_combiner.hpp"
 
 namespace duckdb {
 
@@ -34,7 +33,6 @@ public:
 
 		void ExtractBindings();
 	};
-
 private:
 	vector<unique_ptr<Filter>> filters;
 	Optimizer &optimizer;
@@ -70,9 +68,12 @@ private:
 	// Finish pushing down at this operator, creating a LogicalFilter to store any of the stored filters and recursively
 	// pushing down into its children (if any)
 	unique_ptr<LogicalOperator> FinishPushdown(unique_ptr<LogicalOperator> op);
-	//! Adds a filter to the set of filters. Returns true if the filter statically evaluates to false and the entire
-	//! tree should be stripped.
-	bool AddFilter(unique_ptr<Expression> expr);
+	//! Adds a filter to the set of filters. Returns FilterResult::UNSATISFIABLE if the subtree should be stripped, or FilterResult::SUCCESS otherwise
+	FilterResult AddFilter(unique_ptr<Expression> expr);
+	//! Generate filters from the current set of filters stored in the FilterCombiner
+	void GenerateFilters();
+
+	FilterCombiner combiner;
 };
 
 } // namespace duckdb

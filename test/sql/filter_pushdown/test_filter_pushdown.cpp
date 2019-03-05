@@ -212,6 +212,39 @@ TEST_CASE("Test filter pushdown with more data", "[filterpushdown][.]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 	result = con.Query("SELECT * FROM (SELECT 1 AS a FROM vals1, vals2 GROUP BY a) a1 WHERE a=0 ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
+
+	// duplicate filters across equivalency sets and pushdown cross product
+	result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i=tbl1.k AND tbl1.i=tbl2.k AND tbl1.i=tbl2.i AND tbl1.i=5000;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	// also push other comparisons
+	result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i=tbl1.k AND tbl1.i=tbl2.k AND tbl1.i=tbl2.i AND tbl1.i>4999 AND tbl1.i<5001;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	// empty result
+	result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i=5000 AND tbl1.i<>5000;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	// also if we have a transitive condition
+	result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i=5000 AND tbl1.i=tbl2.i AND tbl2.i<>5000;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	// useless inequality checks should be pruned
+	result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i=5000 AND tbl1.i=tbl2.i AND tbl1.i=tbl2.k AND tbl1.i=tbl1.k AND tbl2.i<>5001;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	// add many useless predicates
+	result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl2.i>10 AND tbl1.k>=500 AND tbl2.k<7000 AND tbl2.k<=6000 AND tbl2.k<>8000 AND tbl1.i<>4000 AND tbl1.i=tbl2.i AND tbl1.i=tbl2.k AND tbl1.i=tbl1.k AND tbl1.i=5000;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	
+	// these more advanced cases we don't support yet
+	// // filter equivalence with expressions
+	// result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl2.k+1=5001 AND tbl2.k<>5000;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	// // IN list
+	// result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl2.k IN (5000, 5001, 5002) AND tbl2.k<5000;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	// // CASE expression
+	// result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl2.k<5000 AND CASE WHEN (tbl2.k>5000) THEN (tbl2.k=5001) ELSE (tbl2.k=5000) END;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	// // OR expression
+	// result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl2.k<5000 AND (tbl2.k=5000 OR tbl2.k>5000);");
+	// REQUIRE(CHECK_COLUMN(result, 0, {0}));
 }
 
 TEST_CASE("Test moving/duplicating conditions", "[filterpushdown][.]") {
@@ -283,6 +316,22 @@ TEST_CASE("Test moving/duplicating conditions", "[filterpushdown][.]") {
 	REQUIRE(CHECK_COLUMN(result, 5, {5001}));
 	REQUIRE(CHECK_COLUMN(result, 6, {1}));
 	REQUIRE(CHECK_COLUMN(result, 7, {1}));
+	// only RHS has conditions
+	result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2 WHERE i=3 AND k=5) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k WHERE tbl2.i<5000;");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3}));
+	REQUIRE(CHECK_COLUMN(result, 2, {5}));
+	REQUIRE(CHECK_COLUMN(result, 3, {5}));
+	REQUIRE(CHECK_COLUMN(result, 4, {3}));
+	REQUIRE(CHECK_COLUMN(result, 5, {3}));
+	REQUIRE(CHECK_COLUMN(result, 6, {5}));
+	REQUIRE(CHECK_COLUMN(result, 7, {5}));
+	// only RHS has conditions
+	result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM (SELECT * FROM vals1, vals2) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2 WHERE i=3 AND k=5) tbl2 ON tbl1.i=tbl2.i WHERE tbl1.k<10 AND tbl2.k IS NOT NULL) tbl3;");
+	REQUIRE(CHECK_COLUMN(result, 0, {10}));
+	// only LHS has conditions
+	result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2 WHERE i=3 AND k=5) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	// side channel EXCEPT/INTERSECT
 	result =
 	    con.Query("SELECT * FROM vals1, vals2 WHERE i>5000 INTERSECT SELECT * FROM vals1, vals2 WHERE i<5002 AND k=1;");

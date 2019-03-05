@@ -33,11 +33,12 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<Logica
 		// rewrite the bindings within this subquery
 		f.filter = ReplaceProjectionBindings(proj, move(f.filter));
 		// add the filter to the child pushdown
-		if (child_pushdown.AddFilter(move(f.filter))) {
+		if (child_pushdown.AddFilter(move(f.filter)) == FilterResult::UNSATISFIABLE) {
 			// filter statically evaluates to false, strip tree
 			return make_unique<LogicalEmptyResult>(move(op));
 		}
 	}
+	child_pushdown.GenerateFilters();
 	// now push into children
 	op->children[0] = child_pushdown.Rewrite(move(op->children[0]));
 	return op;

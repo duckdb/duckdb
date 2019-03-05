@@ -31,7 +31,7 @@ TEST_CASE("Table subquery", "[subquery]") {
 
 	// check that * is in the correct order
 	result = con.Query("SELECT * FROM (SELECT i, j FROM test) AS a, (SELECT "
-	                   "i+1 AS r,j FROM test) AS b, test WHERE a.i=b.r AND test.j=a.i;");
+	                   "i+1 AS r,j FROM test) AS b, test WHERE a.i=b.r AND test.j=a.i ORDER BY 1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {4, 5}));
 	REQUIRE(CHECK_COLUMN(result, 1, {5, 6}));
 	REQUIRE(CHECK_COLUMN(result, 2, {4, 5}));
@@ -59,7 +59,7 @@ TEST_CASE("Nested table subquery", "[subquery]") {
 
 	result = con.Query("SELECT * FROM (SELECT i, j FROM (SELECT j AS i, i AS j FROM (SELECT j "
 	                   "AS i, i AS j FROM test) AS a) AS a) AS a, (SELECT i+1 AS r,j FROM "
-	                   "test) AS b, test WHERE a.i=b.r AND test.j=a.i;");
+	                   "test) AS b, test WHERE a.i=b.r AND test.j=a.i ORDER BY 1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {4, 5}));
 	REQUIRE(CHECK_COLUMN(result, 1, {5, 6}));
 	REQUIRE(CHECK_COLUMN(result, 2, {4, 5}));

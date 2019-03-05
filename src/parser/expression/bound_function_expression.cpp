@@ -28,7 +28,10 @@ void BoundFunctionExpression::ResolveType() {
 }
 
 unique_ptr<Expression> BoundFunctionExpression::Copy() {
-	throw SerializationException("Cannot serialize Bound Function");
+	auto copy = make_unique<BoundFunctionExpression>(unique_ptr_cast<Expression, FunctionExpression>(function->Copy()), bound_function);
+	copy->return_type = return_type;
+	copy->alias = alias;
+	return move(copy);
 }
 
 void BoundFunctionExpression::Serialize(Serializer &serializer) {

@@ -1,8 +1,8 @@
 #include "optimizer/filter_pushdown.hpp"
 
-#include "execution/expression_executor.hpp"
 #include "planner/operator/logical_filter.hpp"
 #include "planner/operator/logical_join.hpp"
+#include "optimizer/filter_combiner.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -10,6 +10,7 @@ using namespace std;
 using Filter = FilterPushdown::Filter;
 
 unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> op) {
+	assert(!combiner.HasFilters());
 	switch (op->type) {
 	case LogicalOperatorType::AGGREGATE_AND_GROUP_BY:
 		return PushdownAggregate(move(op));
@@ -64,30 +65,37 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 	}
 }
 
-bool FilterPushdown::AddFilter(unique_ptr<Expression> expr) {
+FilterResult FilterPushdown::AddFilter(unique_ptr<Expression> expr) {
+	// if there are filters in this FilterPushdown node, push them into the combiner
+	for(auto &f : filters) {
+		auto result = combiner.AddFilter(move(f->filter));
+		assert(result == FilterResult::SUCCESS);
+	}
+	filters.clear();
+	// split up the filters by AND predicate
 	vector<unique_ptr<Expression>> expressions;
 	expressions.push_back(move(expr));
 	LogicalFilter::SplitPredicates(expressions);
+	// push the filters into the combiner
 	for (auto &expr : expressions) {
-		auto f = make_unique<Filter>();
-		f->filter = move(expr);
-		LogicalJoin::GetExpressionBindings(*f->filter, f->bindings);
-		if (f->bindings.size() == 0) {
-			assert(f->filter->IsScalar());
-			// scalar condition, evaluate it
-			auto result = ExpressionExecutor::EvaluateScalar(*f->filter).CastAs(TypeId::BOOLEAN);
-			// check if the filter passes
-			if (result.is_null || !result.value_.boolean) {
-				// the filter does not pass the scalar test, create an empty result
-				return true;
-			} else {
-				// the filter passes the scalar test, just remove the condition
-				continue;
-			}
+		if (combiner.AddFilter(move(expr)) == FilterResult::UNSATISFIABLE) {
+			return FilterResult::UNSATISFIABLE;
 		}
-		filters.push_back(move(f));
 	}
-	return false;
+	return FilterResult::SUCCESS;
+}
+
+void FilterPushdown::GenerateFilters() {
+	if (filters.size() > 0) {
+		assert(!combiner.HasFilters());
+		return;
+	}
+	combiner.GenerateFilters([&](unique_ptr<Expression> filter) {
+		auto f = make_unique<Filter>();
+		f->filter = move(filter);
+		f->ExtractBindings();
+		filters.push_back(move(f));
+	});	
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOperator> op) {

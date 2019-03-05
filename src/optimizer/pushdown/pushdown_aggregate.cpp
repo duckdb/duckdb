@@ -38,7 +38,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 			// rewrite any group bindings within the filter
 			f.filter = ReplaceGroupBindings(aggr, move(f.filter));
 			// add the filter to the child node
-			if (child_pushdown.AddFilter(move(f.filter))) {
+			if (child_pushdown.AddFilter(move(f.filter)) == FilterResult::UNSATISFIABLE) {
 				// filter statically evaluates to false, strip tree
 				return make_unique<LogicalEmptyResult>(move(op));
 			}
@@ -47,6 +47,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 			i--;
 		}
 	}
+	child_pushdown.GenerateFilters();
 
 	op->children[0] = child_pushdown.Rewrite(move(op->children[0]));
 	return FinishPushdown(move(op));

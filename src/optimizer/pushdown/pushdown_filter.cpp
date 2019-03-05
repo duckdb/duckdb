@@ -12,10 +12,11 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownFilter(unique_ptr<LogicalOpe
 	auto &filter = (LogicalFilter &)*op;
 	// filter: gather the filters and remove the filter from the set of operations
 	for (size_t i = 0; i < filter.expressions.size(); i++) {
-		if (AddFilter(move(filter.expressions[i]))) {
+		if (AddFilter(move(filter.expressions[i])) == FilterResult::UNSATISFIABLE) {
 			// filter statically evaluates to false, strip tree
 			return make_unique<LogicalEmptyResult>(move(op));
 		}
 	}
+	GenerateFilters();
 	return Rewrite(move(filter.children[0]));
 }
