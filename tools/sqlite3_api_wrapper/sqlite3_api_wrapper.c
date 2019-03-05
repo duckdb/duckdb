@@ -258,9 +258,8 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 	return 0;
 }
 
-// TODO: add actual names
 const char *sqlite3_column_name(sqlite3_stmt *pStmt, int N) {
-	return sqlite3_mprintf("col%d", N);
+	return pStmt->result.columns[N].name;
 }
 
 const unsigned char *sqlite3_column_text(sqlite3_stmt *pStmt, int iCol) {

@@ -1,0 +1,5 @@
+dist
+duckdb.egg-info
+build
+.eggs
+.pytest_cache

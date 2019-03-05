@@ -205,7 +205,7 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 
 		column.type = _convert_type_cpp_to_c(type);
 		column.count = result->size();
-		column.name = NULL; // FIXME: don't support names yet
+		column.name = (char *)strdup(result->names[i].c_str());
 		column.data = (char *)malloc(type_size * result->size());
 		column.nullmask = (bool *)malloc(sizeof(bool) * result->size());
 		if (!column.data || !column.nullmask)
@@ -280,6 +280,9 @@ void duckdb_destroy_result(duckdb_result result) {
 			}
 			if (column.nullmask) {
 				free(column.nullmask);
+			}
+			if (column.name) {
+				free(column.name);
 			}
 		}
 
