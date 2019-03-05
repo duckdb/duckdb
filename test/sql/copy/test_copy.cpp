@@ -1,8 +1,8 @@
 #include "catch.hpp"
 #include "common/file_system.hpp"
+#include "common/types/date.hpp"
 #include "test_csv_header.hpp"
 #include "test_helpers.hpp"
-#include "common/types/date.hpp"
 
 #include <fstream>
 
@@ -221,7 +221,11 @@ TEST_CASE("Test copy from web_page csv", "[copy]") {
 	auto webpage_csv = JoinPath(csv_path, "web_page.csv");
 	WriteCSV(webpage_csv, web_page);
 
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE web_page(wp_web_page_sk integer not null, wp_web_page_id char(16) not null, wp_rec_start_date date, wp_rec_end_date date, wp_creation_date_sk integer, wp_access_date_sk integer, wp_autogen_flag char(1), wp_customer_sk integer, wp_url varchar(100), wp_type char(50), wp_char_count integer, wp_link_count integer, wp_image_count integer, wp_max_ad_count integer, primary key (wp_web_page_sk))"));
+	REQUIRE_NO_FAIL(con.Query(
+	    "CREATE TABLE web_page(wp_web_page_sk integer not null, wp_web_page_id char(16) not null, wp_rec_start_date "
+	    "date, wp_rec_end_date date, wp_creation_date_sk integer, wp_access_date_sk integer, wp_autogen_flag char(1), "
+	    "wp_customer_sk integer, wp_url varchar(100), wp_type char(50), wp_char_count integer, wp_link_count integer, "
+	    "wp_image_count integer, wp_max_ad_count integer, primary key (wp_web_page_sk))"));
 
 	result = con.Query("COPY web_page FROM '" + webpage_csv + "' DELIMITER '|'");
 	REQUIRE(CHECK_COLUMN(result, 0, {60}));
@@ -229,7 +233,9 @@ TEST_CASE("Test copy from web_page csv", "[copy]") {
 	result = con.Query("SELECT * FROM web_page ORDER BY wp_web_page_sk LIMIT 3");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"AAAAAAAABAAAAAAA", "AAAAAAAACAAAAAAA", "AAAAAAAACAAAAAAA"}));
-	REQUIRE(CHECK_COLUMN(result, 2, {Value("1997-09-03").CastAs(TypeId::DATE), Value("1997-09-03").CastAs(TypeId::DATE), Value("2000-09-03").CastAs(TypeId::DATE)}));
+	REQUIRE(CHECK_COLUMN(result, 2,
+	                     {Value("1997-09-03").CastAs(TypeId::DATE), Value("1997-09-03").CastAs(TypeId::DATE),
+	                      Value("2000-09-03").CastAs(TypeId::DATE)}));
 	REQUIRE(CHECK_COLUMN(result, 3, {Value(), Value("2000-09-02").CastAs(TypeId::DATE), Value()}));
 	REQUIRE(CHECK_COLUMN(result, 4, {2450810, 2450814, 2450814}));
 	REQUIRE(CHECK_COLUMN(result, 5, {2452620, 2452580, 2452611}));
@@ -242,4 +248,3 @@ TEST_CASE("Test copy from web_page csv", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 12, {3, 3, 3}));
 	REQUIRE(CHECK_COLUMN(result, 13, {4, 1, 4}));
 }
-

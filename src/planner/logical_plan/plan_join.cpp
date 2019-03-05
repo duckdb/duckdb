@@ -75,7 +75,7 @@ JoinSide LogicalComparisonJoin::GetJoinSide(Expression &expression, unordered_se
 }
 
 JoinSide LogicalComparisonJoin::GetJoinSide(unordered_set<size_t> bindings, unordered_set<size_t> &left_bindings,
-								unordered_set<size_t> &right_bindings) {
+                                            unordered_set<size_t> &right_bindings) {
 	JoinSide side = JoinSide::NONE;
 	for (auto binding : bindings) {
 		side = CombineJoinSide(side, GetJoinSide(binding, left_bindings, right_bindings));
@@ -182,7 +182,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 			// we have some arbitrary expressions as well
 			// add them to a filter
 			auto filter = make_unique<LogicalFilter>();
-			for(auto &expr : arbitrary_expressions) {
+			for (auto &expr : arbitrary_expressions) {
 				filter->expressions.push_back(move(expr));
 			}
 			LogicalFilter::SplitPredicates(filter->expressions);
@@ -201,7 +201,8 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 		// do the same with any remaining conditions
 		any_join->condition = move(arbitrary_expressions[0]);
 		for (size_t i = 1; i < arbitrary_expressions.size(); i++) {
-			any_join->condition = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(any_join->condition), move(arbitrary_expressions[i]));
+			any_join->condition = make_unique<ConjunctionExpression>(
+			    ExpressionType::CONJUNCTION_AND, move(any_join->condition), move(arbitrary_expressions[i]));
 		}
 		return move(any_join);
 	} else {
@@ -258,14 +259,14 @@ unique_ptr<TableRef> LogicalPlanGenerator::Visit(JoinRef &expr) {
 	LogicalJoin::GetTableReferences(*right_child, right_bindings);
 	// now create the join operator from the set of join conditions
 	auto result = LogicalComparisonJoin::CreateJoin(expr.type, move(left_child), move(right_child), left_bindings,
-	                                              right_bindings, expressions);
+	                                                right_bindings, expressions);
 	LogicalOperator *join;
 	if (result->type == LogicalOperatorType::FILTER) {
 		join = result->children[0].get();
 	} else {
 		join = result.get();
 	}
-	
+
 	// we visit the expressions depending on the type of join
 	if (join->type == LogicalOperatorType::COMPARISON_JOIN) {
 		// comparison join

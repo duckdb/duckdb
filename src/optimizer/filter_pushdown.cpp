@@ -1,7 +1,6 @@
 #include "optimizer/filter_pushdown.hpp"
 
 #include "execution/expression_executor.hpp"
-
 #include "planner/operator/logical_filter.hpp"
 #include "planner/operator/logical_join.hpp"
 
@@ -43,7 +42,8 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOperator> op) {
-	assert(op->type == LogicalOperatorType::COMPARISON_JOIN || op->type == LogicalOperatorType::ANY_JOIN || op->type == LogicalOperatorType::DELIM_JOIN);
+	assert(op->type == LogicalOperatorType::COMPARISON_JOIN || op->type == LogicalOperatorType::ANY_JOIN ||
+	       op->type == LogicalOperatorType::DELIM_JOIN);
 	auto &join = (LogicalJoin &)*op;
 	unordered_set<size_t> left_bindings, right_bindings;
 	LogicalJoin::GetTableReferences(*op->children[0], left_bindings);
@@ -68,7 +68,7 @@ bool FilterPushdown::AddFilter(unique_ptr<Expression> expr) {
 	vector<unique_ptr<Expression>> expressions;
 	expressions.push_back(move(expr));
 	LogicalFilter::SplitPredicates(expressions);
-	for(auto &expr : expressions) {
+	for (auto &expr : expressions) {
 		auto f = make_unique<Filter>();
 		f->filter = move(expr);
 		LogicalJoin::GetExpressionBindings(*f->filter, f->bindings);

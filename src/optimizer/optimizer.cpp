@@ -6,9 +6,7 @@
 #include "optimizer/obsolete_filter_rewriter.hpp"
 #include "optimizer/rule/list.hpp"
 #include "parser/expression/common_subexpression.hpp"
-
 #include "planner/binder.hpp"
-
 
 using namespace duckdb;
 using namespace std;

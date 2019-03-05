@@ -18,7 +18,7 @@ TEST_CASE("Test binding parameters with union expressions", "[setops]") {
 	result = con.Query("(SELECT a FROM test ORDER BY a+1) UNION SELECT b FROM test2 ORDER BY 1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
 	REQUIRE(result->column_count() == 1);
-	
+
 	// union returns only one column
 	result = con.Query("SELECT * FROM (SELECT * FROM test UNION SELECT * FROM test2) res ORDER BY 1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));

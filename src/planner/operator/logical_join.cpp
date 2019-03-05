@@ -1,7 +1,7 @@
 #include "planner/operator/logical_join.hpp"
-#include "planner/table_binding_resolver.hpp"
 
 #include "parser/expression/bound_columnref_expression.hpp"
+#include "planner/table_binding_resolver.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -44,7 +44,7 @@ void LogicalJoin::ResolveTypes() {
 void LogicalJoin::GetTableReferences(LogicalOperator &op, unordered_set<size_t> &bindings) {
 	TableBindingResolver resolver;
 	resolver.VisitOperator(op);
-	for(auto &table : resolver.bound_tables) {
+	for (auto &table : resolver.bound_tables) {
 		bindings.insert(table.table_index);
 	}
 }

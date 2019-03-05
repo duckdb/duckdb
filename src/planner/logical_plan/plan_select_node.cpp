@@ -68,7 +68,8 @@ void LogicalPlanGenerator::CreatePlan(SelectNode &statement) {
 		VisitExpression(&expr);
 	}
 
-	// check if we need to prune extra columns that were introduced into the select list (by e.g. the ORDER BY or HAVING clauses)
+	// check if we need to prune extra columns that were introduced into the select list (by e.g. the ORDER BY or HAVING
+	// clauses)
 	bool prune_columns = statement.select_list.size() > statement.binding.column_count;
 
 	// create the projection

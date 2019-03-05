@@ -43,7 +43,8 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CastSetOpToTypes(vector<TypeId
 		// now generate the expression list
 		vector<unique_ptr<Expression>> select_list;
 		for (size_t i = 0; i < target_types.size(); i++) {
-			unique_ptr<Expression> result = make_unique<BoundColumnRefExpression>("", source_types[i], ColumnBinding(subquery_index, i));
+			unique_ptr<Expression> result =
+			    make_unique<BoundColumnRefExpression>("", source_types[i], ColumnBinding(subquery_index, i));
 			if (source_types[i] != target_types[i]) {
 				// add a cast only if the source and target types are not equivalent
 				result = make_unique<CastExpression>(target_types[i], move(result));
@@ -72,7 +73,7 @@ void LogicalPlanGenerator::CreatePlan(SetOperationNode &statement) {
 	// for both the left and right sides, cast them to the same types
 	left_node = CastSetOpToTypes(statement.left->types, statement.types, move(left_node));
 	right_node = CastSetOpToTypes(statement.right->types, statement.types, move(right_node));
-	
+
 	// create actual logical ops for setops
 	LogicalOperatorType logical_type;
 	switch (statement.setop_type) {
@@ -87,7 +88,8 @@ void LogicalPlanGenerator::CreatePlan(SetOperationNode &statement) {
 		logical_type = LogicalOperatorType::INTERSECT;
 		break;
 	}
-	root = make_unique<LogicalSetOperation>(binding.setop_index, statement.types.size(), move(left_node), move(right_node), logical_type);
+	root = make_unique<LogicalSetOperation>(binding.setop_index, statement.types.size(), move(left_node),
+	                                        move(right_node), logical_type);
 
 	VisitQueryNode(statement);
 }

@@ -12,8 +12,7 @@
 using namespace duckdb;
 using namespace std;
 
-Planner::Planner(ClientContext &context) : 
-	binder(context), context(context) {
+Planner::Planner(ClientContext &context) : binder(context), context(context) {
 }
 
 void Planner::CreatePlan(SQLStatement &statement, bool allow_parameter) {

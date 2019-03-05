@@ -42,10 +42,10 @@ void PhysicalCopy::Flush(ClientContext &context, DataChunk &chunk, int64_t &nr_e
 	nr_elements = 0;
 }
 
-void PhysicalCopy::PushValue(string &line, DataChunk &insert_chunk, int64_t start, int64_t end, int64_t &column, int64_t linenr) {
+void PhysicalCopy::PushValue(string &line, DataChunk &insert_chunk, int64_t start, int64_t end, int64_t &column,
+                             int64_t linenr) {
 	assert(end >= start);
-	int64_t expected_column_count = info->select_list.size() > 0 ?
-		info->select_list.size() : insert_chunk.column_count;
+	int64_t expected_column_count = info->select_list.size() > 0 ? info->select_list.size() : insert_chunk.column_count;
 	size_t length = end - start;
 	if (column == expected_column_count && length == 0) {
 		// skip a single trailing delimiter
@@ -53,8 +53,8 @@ void PhysicalCopy::PushValue(string &line, DataChunk &insert_chunk, int64_t star
 		return;
 	}
 	if (column >= expected_column_count) {
-		throw ParserException("Error on line %lld: expected %lld values but got %d", linenr,
-								expected_column_count, column + 1);
+		throw ParserException("Error on line %lld: expected %lld values but got %d", linenr, expected_column_count,
+		                      column + 1);
 	}
 	// delimiter, get the value
 	Value result;

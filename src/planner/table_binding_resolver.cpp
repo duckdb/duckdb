@@ -1,11 +1,12 @@
 #include "planner/table_binding_resolver.hpp"
+
 #include "planner/operator/list.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-TableBindingResolver::TableBindingResolver(bool recurse_into_subqueries, bool visit_expressions) : 
-	recurse_into_subqueries(recurse_into_subqueries), visit_expressions(visit_expressions) {
+TableBindingResolver::TableBindingResolver(bool recurse_into_subqueries, bool visit_expressions)
+    : recurse_into_subqueries(recurse_into_subqueries), visit_expressions(visit_expressions) {
 }
 
 void TableBindingResolver::PushBinding(BoundTable binding) {

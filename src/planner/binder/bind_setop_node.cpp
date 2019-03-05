@@ -118,8 +118,6 @@ void Binder::Bind(SetOperationNode &statement) {
 		}
 	}
 
-
-
 	binding.left_binder = make_unique<Binder>(context, this);
 	binding.left_binder->Bind(*statement.left);
 
@@ -149,6 +147,7 @@ void Binder::Bind(SetOperationNode &statement) {
 		if (entry >= statement.types.size()) {
 			throw BinderException("ORDER term out of range - should be between 1 and %d", (int)statement.types.size());
 		}
-		statement.orderby.orders[i].expression = make_unique<BoundColumnRefExpression>("", statement.types[entry], ColumnBinding(binding.setop_index, entry));
+		statement.orderby.orders[i].expression = make_unique<BoundColumnRefExpression>(
+		    "", statement.types[entry], ColumnBinding(binding.setop_index, entry));
 	}
 }

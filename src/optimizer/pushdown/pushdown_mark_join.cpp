@@ -1,5 +1,4 @@
 #include "optimizer/filter_pushdown.hpp"
-
 #include "planner/operator/logical_comparison_join.hpp"
 
 using namespace duckdb;
@@ -10,7 +9,7 @@ using Filter = FilterPushdown::Filter;
 unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalOperator> op,
                                                              unordered_set<size_t> &left_bindings,
                                                              unordered_set<size_t> &right_bindings) {
- 	auto &join = (LogicalJoin &)*op;
+	auto &join = (LogicalJoin &)*op;
 	auto &comp_join = (LogicalComparisonJoin &)*op;
 	assert(join.type == JoinType::MARK);
 	assert(op->type == LogicalOperatorType::COMPARISON_JOIN || op->type == LogicalOperatorType::DELIM_JOIN);
@@ -39,15 +38,16 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 				i--;
 				continue;
 			}
-			// if the filter is on NOT(marker) AND the join conditions are all set to "null_values_are_equal" we can turn this into an ANTI join
-			// if all join conditions have null_values_are_equal=true, then the result of the MARK join is always TRUE or FALSE, and never NULL
-			// this happens in the case of a correlated EXISTS clause
+			// if the filter is on NOT(marker) AND the join conditions are all set to "null_values_are_equal" we can
+			// turn this into an ANTI join if all join conditions have null_values_are_equal=true, then the result of
+			// the MARK join is always TRUE or FALSE, and never NULL this happens in the case of a correlated EXISTS
+			// clause
 			if (filters[i]->filter->type == ExpressionType::OPERATOR_NOT) {
-				auto &op_expr = (OperatorExpression&) *filters[i]->filter;
+				auto &op_expr = (OperatorExpression &)*filters[i]->filter;
 				if (op_expr.children[0]->type == ExpressionType::BOUND_COLUMN_REF) {
 					// the filter is NOT(marker), check the join conditions
 					bool all_null_values_are_equal = true;
-					for(auto &cond : comp_join.conditions) {
+					for (auto &cond : comp_join.conditions) {
 						if (!cond.null_values_are_equal) {
 							all_null_values_are_equal = false;
 							break;

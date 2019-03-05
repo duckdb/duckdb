@@ -6,8 +6,7 @@
 using namespace duckdb;
 using namespace std;
 
-ColumnBindingResolver::ColumnBindingResolver() : 
-	TableBindingResolver(true, true) {
+ColumnBindingResolver::ColumnBindingResolver() : TableBindingResolver(true, true) {
 }
 
 unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpression &expr,
@@ -21,7 +20,7 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 			break;
 		}
 	}
-	assert(index != (uint32_t) -1);
+	assert(index != (uint32_t)-1);
 	if (index == (uint32_t)-1) {
 		throw Exception("Failed to bind column ref");
 	}

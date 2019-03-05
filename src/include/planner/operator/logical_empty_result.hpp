@@ -13,7 +13,8 @@
 
 namespace duckdb {
 
-//! LogicalEmptyResult returns an empty result. This is created by the optimizer if it can reason that ceratin parts of the tree will always return an empty result.
+//! LogicalEmptyResult returns an empty result. This is created by the optimizer if it can reason that ceratin parts of
+//! the tree will always return an empty result.
 class LogicalEmptyResult : public LogicalOperator {
 public:
 	LogicalEmptyResult(unique_ptr<LogicalOperator> op);

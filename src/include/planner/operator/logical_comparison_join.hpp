@@ -8,9 +8,9 @@
 
 #pragma once
 
+#include "common/constants.hpp"
 #include "parser/expression.hpp"
 #include "planner/operator/logical_join.hpp"
-#include "common/constants.hpp"
 
 namespace duckdb {
 
@@ -44,7 +44,7 @@ public:
 	static JoinSide GetJoinSide(Expression &expression, unordered_set<size_t> &left_bindings,
 	                            unordered_set<size_t> &right_bindings);
 	static JoinSide GetJoinSide(unordered_set<size_t> bindings, unordered_set<size_t> &left_bindings,
-									unordered_set<size_t> &right_bindings);
+	                            unordered_set<size_t> &right_bindings);
 	static unique_ptr<LogicalOperator> CreateJoin(JoinType type, unique_ptr<LogicalOperator> left_child,
 	                                              unique_ptr<LogicalOperator> right_child,
 	                                              unordered_set<size_t> &left_bindings,

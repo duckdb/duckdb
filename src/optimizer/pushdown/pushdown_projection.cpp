@@ -1,5 +1,4 @@
 #include "optimizer/filter_pushdown.hpp"
-
 #include "planner/operator/logical_empty_result.hpp"
 #include "planner/operator/logical_projection.hpp"
 
@@ -23,12 +22,12 @@ static unique_ptr<Expression> ReplaceProjectionBindings(LogicalProjection &proj,
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<LogicalOperator> op) {
 	assert(op->type == LogicalOperatorType::PROJECTION);
-	auto &proj = (LogicalProjection&) *op;
+	auto &proj = (LogicalProjection &)*op;
 	// push filter through logical projection
 	// all the BoundColumnRefExpressions in the filter should refer to the LogicalProjection
 	// we can rewrite them by replacing those references with the expression of the LogicalProjection node
 	FilterPushdown child_pushdown(optimizer);
-	for(size_t i = 0; i < filters.size(); i++) {
+	for (size_t i = 0; i < filters.size(); i++) {
 		auto &f = *filters[i];
 		assert(f.bindings.size() <= 1);
 		// rewrite the bindings within this subquery

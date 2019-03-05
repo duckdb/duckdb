@@ -204,7 +204,6 @@ TEST_CASE("Test aliases in group by/aggregation", "[aggregations]") {
 	result = con.Query("SELECT i, SUM(i) FROM integers GROUP BY i ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3}));
-	
 
 	// ORDER on a non-grouping column
 	// this query is refused by Postgres and MonetDB

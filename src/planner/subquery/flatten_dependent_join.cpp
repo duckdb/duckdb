@@ -299,7 +299,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	case LogicalOperatorType::EXCEPT:
 	case LogicalOperatorType::INTERSECT:
 	case LogicalOperatorType::UNION: {
-		auto &setop = (LogicalSetOperation&) *plan;
+		auto &setop = (LogicalSetOperation &)*plan;
 		// set operator, push into both children
 		plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
 		plan->children[1] = PushDownDependentJoin(move(plan->children[1]));

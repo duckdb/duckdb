@@ -1,5 +1,4 @@
 #include "optimizer/filter_pushdown.hpp"
-
 #include "planner/operator/logical_aggregate.hpp"
 #include "planner/operator/logical_empty_result.hpp"
 #include "planner/operator/logical_join.hpp"
@@ -26,12 +25,12 @@ static unique_ptr<Expression> ReplaceGroupBindings(LogicalAggregate &proj, uniqu
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<LogicalOperator> op) {
 	assert(op->type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY);
-	auto &aggr = (LogicalAggregate&) *op;
+	auto &aggr = (LogicalAggregate &)*op;
 
 	// pushdown into AGGREGATE and GROUP BY
 	// we cannot push expressions that refer to the aggregate
 	FilterPushdown child_pushdown(optimizer);
-	for(size_t i = 0; i < filters.size(); i++) {
+	for (size_t i = 0; i < filters.size(); i++) {
 		auto &f = *filters[i];
 		// check if the aggregate is in the set
 		if (f.bindings.find(aggr.aggregate_index) == f.bindings.end()) {
@@ -48,7 +47,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 			i--;
 		}
 	}
-	
+
 	op->children[0] = child_pushdown.Rewrite(move(op->children[0]));
 	return FinishPushdown(move(op));
 }

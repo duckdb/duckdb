@@ -1,7 +1,7 @@
 #include "optimizer/obsolete_filter_rewriter.hpp"
 
-#include "planner/operator/logical_filter.hpp"
 #include "planner/operator/logical_empty_result.hpp"
+#include "planner/operator/logical_filter.hpp"
 
 using namespace duckdb;
 using namespace std;

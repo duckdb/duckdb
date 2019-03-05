@@ -27,6 +27,7 @@ public:
 
 	Binder binder;
 	ClientContext &context;
+
 private:
 	void CreatePlan(SQLStatement &statement, bool allow_parameter = false);
 };

@@ -220,8 +220,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		delim_join->AddChild(move(subquery_node));
 		root = move(delim_join);
 		// finally push the BoundColumnRefExpression referring to the marker
-		return make_unique<BoundColumnRefExpression>(expr, expr.return_type,
-		                                             ColumnBinding(subquery_index, 0));
+		return make_unique<BoundColumnRefExpression>(expr, expr.return_type, ColumnBinding(subquery_index, 0));
 	}
 	default: {
 		assert(subquery.subquery_type == SubqueryType::ANY);

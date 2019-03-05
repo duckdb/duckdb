@@ -1,8 +1,6 @@
 #include "optimizer/filter_pushdown.hpp"
-
-#include "planner/operator/logical_subquery.hpp"
-
 #include "parser/expression/bound_columnref_expression.hpp"
+#include "planner/operator/logical_subquery.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -17,7 +15,7 @@ static void RewriteSubqueryExpressionBindings(Filter &filter, Expression &expr, 
 
 		// rewrite the binding by looking into the bound_tables list of the subquery
 		size_t column_index = colref.binding.column_index;
-		for(size_t i = 0; i < subquery.bound_tables.size(); i++) {
+		for (size_t i = 0; i < subquery.bound_tables.size(); i++) {
 			auto &table = subquery.bound_tables[i];
 			if (column_index < table.column_count) {
 				// the binding belongs to this table, update the column binding
@@ -31,18 +29,16 @@ static void RewriteSubqueryExpressionBindings(Filter &filter, Expression &expr, 
 		// table could not be found!
 		assert(0);
 	}
-	expr.EnumerateChildren([&](Expression *child) {
-		RewriteSubqueryExpressionBindings(filter, *child, subquery);
-	});
+	expr.EnumerateChildren([&](Expression *child) { RewriteSubqueryExpressionBindings(filter, *child, subquery); });
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownSubquery(unique_ptr<LogicalOperator> op) {
 	assert(op->type == LogicalOperatorType::SUBQUERY);
-	auto &subquery = (LogicalSubquery&) *op;
+	auto &subquery = (LogicalSubquery &)*op;
 	// push filter through logical subquery
 	// all the BoundColumnRefExpressions in the filter should refer to the LogicalSubquery
 	// we need to rewrite them to refer to the underlying bound tables instead
-	for(size_t i = 0; i < filters.size(); i++) {
+	for (size_t i = 0; i < filters.size(); i++) {
 		auto &f = *filters[i];
 		assert(f.bindings.size() <= 1);
 		f.bindings.clear();

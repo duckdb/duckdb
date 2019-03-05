@@ -3,11 +3,11 @@
 #include "execution/column_binding_resolver.hpp"
 #include "execution/operator/join/physical_blockwise_nl_join.hpp"
 #include "execution/operator/list.hpp"
+#include "main/client_context.hpp"
 #include "parser/expression/list.hpp"
 #include "planner/operator/list.hpp"
 #include "storage/order_index.hpp"
 #include "storage/storage_manager.hpp"
-#include "main/client_context.hpp"
 
 #include <unordered_set>
 
@@ -433,9 +433,10 @@ void PhysicalPlanGenerator::Visit(LogicalDelimJoin &op) {
 
 			vector<TypeId> payload_types = {TypeId::BIGINT, TypeId::BIGINT}; // COUNT types
 			vector<ExpressionType> aggregate_types = {ExpressionType::AGGREGATE_COUNT_STAR,
-													ExpressionType::AGGREGATE_COUNT};
+			                                          ExpressionType::AGGREGATE_COUNT};
 
-			info.correlated_counts = make_unique<SuperLargeHashTable>(1024, delim_types, payload_types, aggregate_types);
+			info.correlated_counts =
+			    make_unique<SuperLargeHashTable>(1024, delim_types, payload_types, aggregate_types);
 			info.correlated_types = delim_types;
 			// FIXME: these can be initialized "empty" (without allocating empty vectors)
 			info.group_chunk.Initialize(delim_types);
@@ -447,7 +448,8 @@ void PhysicalPlanGenerator::Visit(LogicalDelimJoin &op) {
 	auto delim_join = make_unique<PhysicalDelimJoin>(op, move(plan), delim_scans);
 	// we still have to create the DISTINCT clause that is used to generate the duplicate eliminated chunk
 	// we create a ChunkCollectionScan that pulls from the delim_join LHS
-	auto chunk_scan = make_unique<PhysicalChunkScan>(delim_join->children[0]->GetTypes(), PhysicalOperatorType::CHUNK_SCAN);
+	auto chunk_scan =
+	    make_unique<PhysicalChunkScan>(delim_join->children[0]->GetTypes(), PhysicalOperatorType::CHUNK_SCAN);
 	chunk_scan->collection = &delim_join->lhs_data;
 	// now we need to create a projection that projects only the duplicate eliminated columns
 	assert(op.duplicate_eliminated_columns.size() > 0);
@@ -674,7 +676,7 @@ void PhysicalPlanGenerator::Visit(LogicalExplain &op) {
 	DataChunk chunk;
 	chunk.Initialize(op.types);
 	chunk.data[0].count = chunk.data[1].count = keys.size();
-	for(size_t i = 0; i < keys.size(); i++) {
+	for (size_t i = 0; i < keys.size(); i++) {
 		chunk.data[0].SetValue(i, Value(keys[i]));
 		chunk.data[1].SetValue(i, Value(values[i]));
 	}
@@ -699,30 +701,30 @@ void PhysicalPlanGenerator::Visit(LogicalSetOperation &op) {
 		throw Exception("Type mismatch for SET OPERATION");
 	}
 
-	switch(op.type) {
-		case LogicalOperatorType::UNION:
-			// UNION
-			plan = make_unique<PhysicalUnion>(op, move(left), move(right));
-			break;
-		default: {
-			// EXCEPT/INTERSECT
-			assert(op.type == LogicalOperatorType::EXCEPT || op.type == LogicalOperatorType::INTERSECT);
-			auto &types = left->GetTypes();
-			vector<JoinCondition> conditions;
-			// create equality condition for all columns
-			for (size_t i = 0; i < types.size(); i++) {
-				JoinCondition cond;
-				cond.comparison = ExpressionType::COMPARE_EQUAL;
-				cond.left = make_unique<BoundExpression>(types[i], i);
-				cond.right = make_unique<BoundExpression>(types[i], i);
-				cond.null_values_are_equal = true;
-				conditions.push_back(move(cond));
-			}
-			// EXCEPT is ANTI join
-			// INTERSECT is SEMI join
-			JoinType join_type = op.type == LogicalOperatorType::EXCEPT ? JoinType::ANTI : JoinType::SEMI;
-			plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(conditions), join_type);
+	switch (op.type) {
+	case LogicalOperatorType::UNION:
+		// UNION
+		plan = make_unique<PhysicalUnion>(op, move(left), move(right));
+		break;
+	default: {
+		// EXCEPT/INTERSECT
+		assert(op.type == LogicalOperatorType::EXCEPT || op.type == LogicalOperatorType::INTERSECT);
+		auto &types = left->GetTypes();
+		vector<JoinCondition> conditions;
+		// create equality condition for all columns
+		for (size_t i = 0; i < types.size(); i++) {
+			JoinCondition cond;
+			cond.comparison = ExpressionType::COMPARE_EQUAL;
+			cond.left = make_unique<BoundExpression>(types[i], i);
+			cond.right = make_unique<BoundExpression>(types[i], i);
+			cond.null_values_are_equal = true;
+			conditions.push_back(move(cond));
 		}
+		// EXCEPT is ANTI join
+		// INTERSECT is SEMI join
+		JoinType join_type = op.type == LogicalOperatorType::EXCEPT ? JoinType::ANTI : JoinType::SEMI;
+		plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(conditions), join_type);
+	}
 	}
 }
 

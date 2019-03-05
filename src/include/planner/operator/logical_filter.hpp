@@ -25,6 +25,7 @@ public:
 	//! Splits up the predicates of the LogicalFilter into a set of predicates
 	//! separated by AND Returns whether or not any splits were made
 	static bool SplitPredicates(vector<unique_ptr<Expression>> &expressions);
+
 protected:
 	void ResolveTypes() override;
 };
