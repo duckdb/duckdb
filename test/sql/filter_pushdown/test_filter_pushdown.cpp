@@ -94,11 +94,13 @@ TEST_CASE("Test filter pushdown", "[filterpushdown]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 3}));
 	// filter pushdown on subquery with more complicated expression
-	result = con.Query("SELECT * FROM (SELECT i1.i=i2.i AS cond FROM integers i1, integers i2) a1 WHERE cond ORDER BY 1");
+	result =
+	    con.Query("SELECT * FROM (SELECT i1.i=i2.i AS cond FROM integers i1, integers i2) a1 WHERE cond ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {true, true, true}));
-	
+
 	// filter pushdown into distinct in subquery
-	result = con.Query("SELECT * FROM (SELECT DISTINCT i1.i AS a, i2.i AS b FROM integers i1, integers i2) res WHERE a=1 AND b=3;");
+	result = con.Query(
+	    "SELECT * FROM (SELECT DISTINCT i1.i AS a, i2.i AS b FROM integers i1, integers i2) res WHERE a=1 AND b=3;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {3}));
 	// filter pushdown into union in subquery
@@ -114,7 +116,8 @@ TEST_CASE("Test filter pushdown", "[filterpushdown]") {
 	result = con.Query("SELECT * FROM (SELECT 0=1 AS cond FROM integers i1, integers i2) a1 WHERE cond ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 	// condition on scalar grouping
-	result = con.Query("SELECT * FROM (SELECT 0=1 AS cond FROM integers i1, integers i2 GROUP BY 1) a1 WHERE cond ORDER BY 1");
+	result = con.Query(
+	    "SELECT * FROM (SELECT 0=1 AS cond FROM integers i1, integers i2 GROUP BY 1) a1 WHERE cond ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 }
 
@@ -125,15 +128,15 @@ TEST_CASE("Test filter pushdown with more data", "[filterpushdown][.]") {
 	con.EnableQueryVerification();
 	con.EnableProfiling();
 
-	// in this test we run queries that will take a long time without filter pushdown, but are almost instant with proper filter pushdown
-	// we create two tables with 10K elements each
-	// in most tests we cross product them together in some way to create a "big table" (100M entries)
-	// but the filter can be pushed past the cross product in all cases
+	// in this test we run queries that will take a long time without filter pushdown, but are almost instant with
+	// proper filter pushdown we create two tables with 10K elements each in most tests we cross product them together
+	// in some way to create a "big table" (100M entries) but the filter can be pushed past the cross product in all
+	// cases
 
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE vals1(i INTEGER, j INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("PREPARE s1 AS INSERT INTO vals1 VALUES ($1, $2);"));
-	for(size_t i = 0; i < 10000; i++) {
+	for (size_t i = 0; i < 10000; i++) {
 		REQUIRE_NO_FAIL(con.Query("EXECUTE s1(" + to_string(i) + ", " + to_string(i) + ");"));
 	}
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE vals2(k INTEGER, l INTEGER)"));
@@ -154,7 +157,8 @@ TEST_CASE("Test filter pushdown with more data", "[filterpushdown][.]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {0, 1, 2, 3, 4}));
 	REQUIRE(CHECK_COLUMN(result, 2, {0, 1, 2, 3, 4}));
 	// also inside subqueries
-	result = con.Query("SELECT i, k, SUM(j) FROM (SELECT * FROM vals1, vals2) tbl1 GROUP BY i, k HAVING i=k AND i<5 ORDER BY i");
+	result = con.Query(
+	    "SELECT i, k, SUM(j) FROM (SELECT * FROM vals1, vals2) tbl1 GROUP BY i, k HAVING i=k AND i<5 ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2, 3, 4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {0, 1, 2, 3, 4}));
 	REQUIRE(CHECK_COLUMN(result, 2, {0, 1, 2, 3, 4}));
@@ -171,24 +175,28 @@ TEST_CASE("Test filter pushdown with more data", "[filterpushdown][.]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {0, 1, 2, 3, 4}));
 	REQUIRE(CHECK_COLUMN(result, 3, {0, 1, 2, 3, 4}));
 	// pushdown union
-	result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2 UNION SELECT * FROM vals1, vals2) tbl1 WHERE i=3 AND k=5");
+	result =
+	    con.Query("SELECT * FROM (SELECT * FROM vals1, vals2 UNION SELECT * FROM vals1, vals2) tbl1 WHERE i=3 AND k=5");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {3}));
 	REQUIRE(CHECK_COLUMN(result, 2, {5}));
 	REQUIRE(CHECK_COLUMN(result, 3, {5}));
 	// pushdown into except
-	result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2 EXCEPT SELECT * FROM vals1, vals2) tbl1 WHERE i=3 AND k=5");
+	result = con.Query(
+	    "SELECT * FROM (SELECT * FROM vals1, vals2 EXCEPT SELECT * FROM vals1, vals2) tbl1 WHERE i=3 AND k=5");
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 	REQUIRE(CHECK_COLUMN(result, 1, {}));
 	REQUIRE(CHECK_COLUMN(result, 2, {}));
 	REQUIRE(CHECK_COLUMN(result, 3, {}));
-	result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2 EXCEPT SELECT * FROM vals1, vals2 WHERE i<>1) tbl1 WHERE i<5 AND k<5 ORDER BY 1, 2, 3, 4;");
+	result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2 EXCEPT SELECT * FROM vals1, vals2 WHERE i<>1) tbl1 "
+	                   "WHERE i<5 AND k<5 ORDER BY 1, 2, 3, 4;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 1, 1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1, 1, 1, 1, 1}));
 	REQUIRE(CHECK_COLUMN(result, 2, {0, 1, 2, 3, 4}));
 	REQUIRE(CHECK_COLUMN(result, 3, {0, 1, 2, 3, 4}));
 	// pushdown intersect
-	result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2 INTERSECT SELECT * FROM vals1, vals2) tbl1 WHERE i=3 AND k=5");
+	result = con.Query(
+	    "SELECT * FROM (SELECT * FROM vals1, vals2 INTERSECT SELECT * FROM vals1, vals2) tbl1 WHERE i=3 AND k=5");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {3}));
 	REQUIRE(CHECK_COLUMN(result, 2, {5}));
@@ -204,4 +212,126 @@ TEST_CASE("Test filter pushdown with more data", "[filterpushdown][.]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 	result = con.Query("SELECT * FROM (SELECT 1 AS a FROM vals1, vals2 GROUP BY a) a1 WHERE a=0 ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
+}
+
+TEST_CASE("Test moving/duplicating conditions", "[filterpushdown][.]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+	con.EnableQueryVerification();
+	con.EnableProfiling();
+
+	// in this test we run queries that will take a long time without filter pushdown, but are almost instant with
+	// proper filter pushdown we create two tables with 10K elements each in most tests we cross product them together
+	// in some way to create a "big table" (100M entries) but the filter can be pushed past the cross product in all
+	// cases
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE vals1(i INTEGER, j INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("PREPARE s1 AS INSERT INTO vals1 VALUES ($1, $2);"));
+	for (size_t i = 0; i < 10000; i++) {
+		REQUIRE_NO_FAIL(con.Query("EXECUTE s1(" + to_string(i) + ", " + to_string(i) + ");"));
+	}
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE vals2(k INTEGER, l INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO vals2 SELECT * FROM vals1"));
+	REQUIRE_NO_FAIL(con.Query("COMMIT;"));
+
+	// result = con.Query("explain SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i=3 AND k=5) tbl1 INNER JOIN (SELECT * "
+	//                    "FROM vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k;");
+	// result->Print();
+
+	return;
+
+	// move conditions between joins
+	result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i=3 AND k=5) tbl1 INNER JOIN (SELECT * FROM "
+	                   "vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k;");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3}));
+	REQUIRE(CHECK_COLUMN(result, 2, {5}));
+	REQUIRE(CHECK_COLUMN(result, 3, {5}));
+	REQUIRE(CHECK_COLUMN(result, 4, {3}));
+	REQUIRE(CHECK_COLUMN(result, 5, {3}));
+	REQUIRE(CHECK_COLUMN(result, 6, {5}));
+	REQUIRE(CHECK_COLUMN(result, 7, {5}));
+	result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i>5000) tbl1 INNER JOIN (SELECT * FROM vals1, "
+	                   "vals2 WHERE i<5000) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k;");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	REQUIRE(CHECK_COLUMN(result, 1, {}));
+	REQUIRE(CHECK_COLUMN(result, 2, {}));
+	REQUIRE(CHECK_COLUMN(result, 3, {}));
+	REQUIRE(CHECK_COLUMN(result, 4, {}));
+	REQUIRE(CHECK_COLUMN(result, 5, {}));
+	REQUIRE(CHECK_COLUMN(result, 6, {}));
+	REQUIRE(CHECK_COLUMN(result, 7, {}));
+	result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i>5000) tbl1 INNER JOIN (SELECT * FROM vals1, "
+	                   "vals2 WHERE i<5002 AND k=1) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k;");
+	REQUIRE(CHECK_COLUMN(result, 0, {5001}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5001}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1}));
+	REQUIRE(CHECK_COLUMN(result, 3, {1}));
+	REQUIRE(CHECK_COLUMN(result, 4, {5001}));
+	REQUIRE(CHECK_COLUMN(result, 5, {5001}));
+	REQUIRE(CHECK_COLUMN(result, 6, {1}));
+	REQUIRE(CHECK_COLUMN(result, 7, {1}));
+	// left outer join conditions
+	result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i>5000) tbl1 LEFT OUTER JOIN (SELECT * FROM "
+	                   "vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k WHERE tbl1.i<5002 AND tbl1.k=1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {5001}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5001}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1}));
+	REQUIRE(CHECK_COLUMN(result, 3, {1}));
+	REQUIRE(CHECK_COLUMN(result, 4, {5001}));
+	REQUIRE(CHECK_COLUMN(result, 5, {5001}));
+	REQUIRE(CHECK_COLUMN(result, 6, {1}));
+	REQUIRE(CHECK_COLUMN(result, 7, {1}));
+	// side channel EXCEPT/INTERSECT
+	result =
+	    con.Query("SELECT * FROM vals1, vals2 WHERE i>5000 INTERSECT SELECT * FROM vals1, vals2 WHERE i<5002 AND k=1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {5001}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5001}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1}));
+	REQUIRE(CHECK_COLUMN(result, 3, {1}));
+	result = con.Query("SELECT * FROM vals1, vals2 WHERE i>5000 AND i<5002 AND k=1 EXCEPT SELECT * FROM vals1, vals2;");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	REQUIRE(CHECK_COLUMN(result, 1, {}));
+	REQUIRE(CHECK_COLUMN(result, 2, {}));
+	REQUIRE(CHECK_COLUMN(result, 3, {}));
+	// side channel GROUP conditions
+	result = con.Query("SELECT * FROM (SELECT i, k, MIN(j) FROM vals1, vals2 WHERE i=1 AND k=3 GROUP BY i, k) tbl1 "
+	                   "INNER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1}));
+	REQUIRE(CHECK_COLUMN(result, 3, {1}));
+	REQUIRE(CHECK_COLUMN(result, 4, {1}));
+	REQUIRE(CHECK_COLUMN(result, 5, {1}));
+	REQUIRE(CHECK_COLUMN(result, 6, {3}));
+	REQUIRE(CHECK_COLUMN(result, 7, {3}));
+	// conditions in subqueries
+	// uncorrelated subqueries
+	result = con.Query("SELECT * FROM vals1 WHERE i IN (SELECT i FROM vals1, vals2) AND i=3;");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3}));
+	result = con.Query("SELECT * FROM vals1 WHERE EXISTS(SELECT i FROM vals1, vals2) AND i=3;");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3}));
+	// correlated subqueries
+	result =
+	    con.Query("SELECT * FROM vals1 v1 WHERE i IN (SELECT i FROM vals1, vals2 WHERE i=v1.i AND k=v1.i) AND i=3;");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3}));
+	result = con.Query(
+	    "SELECT * FROM vals1 v1 WHERE i IN (SELECT i FROM vals1, vals2 WHERE i=v1.i AND k=v1.i AND k=4) AND i=3;");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	REQUIRE(CHECK_COLUMN(result, 1, {}));
+	result = con.Query("SELECT * FROM vals1 v1 WHERE i IN (SELECT i FROM vals1, vals2 WHERE i=v1.i AND k=v1.i AND "
+	                   "k>5000) AND i<5002;");
+	REQUIRE(CHECK_COLUMN(result, 0, {5001}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5001}));
+	result = con.Query("SELECT * FROM vals1 v1 WHERE i=(SELECT i FROM vals1, vals2 WHERE i=v1.i AND k=v1.i) AND i=3;");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3}));
+	result =
+	    con.Query("SELECT * FROM vals1 v1 WHERE i=(SELECT MIN(i) FROM vals1, vals2 WHERE i=v1.i AND k=v1.i) AND i=3;");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3}));
 }
