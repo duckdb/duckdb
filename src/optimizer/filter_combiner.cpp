@@ -159,15 +159,14 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 		auto node = GetNode(left_is_scalar ? comparison.right.get() : comparison.left.get());
 		size_t equivalence_set = GetEquivalenceSet(node);
 		auto scalar = left_is_scalar ? comparison.left.get() : comparison.right.get();
-		assert(scalar->type == ExpressionType::VALUE_CONSTANT);
-		auto &constant = (ConstantExpression&) *scalar;
+		auto constant_value = ExpressionExecutor::EvaluateScalar(*scalar);
 
 		// create the ExpressionValueInformation
 		ExpressionValueInformation info;
 		info.comparison_type = left_is_scalar ?
 		                ComparisonExpression::FlipComparisionExpression(comparison.type) :
 						comparison.type;
-		info.constant = constant.value;
+		info.constant = constant_value;
 
 		// get the current bucket of constant values
 		assert(constant_values.find(equivalence_set) != constant_values.end());
