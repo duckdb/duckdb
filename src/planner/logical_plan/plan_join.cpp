@@ -190,7 +190,11 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 			return move(filter);
 		}
 		return move(comp_join);
-	} else if (arbitrary_expressions.size() > 0) {
+	} else {
+		if (arbitrary_expressions.size() == 0) {
+			// all conditions were pushed down, add TRUE predicate
+			arbitrary_expressions.push_back(make_unique<ConstantExpression>(Value::BOOLEAN(true)));
+		}
 		// if we get here we could not create any JoinConditions
 		// turn this into an arbitrary expression join
 		auto any_join = make_unique<LogicalAnyJoin>(type);
@@ -205,12 +209,6 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 			    ExpressionType::CONJUNCTION_AND, move(any_join->condition), move(arbitrary_expressions[i]));
 		}
 		return move(any_join);
-	} else {
-		// all conditions were pushed down, transform into cross product
-		auto cross_product = make_unique<LogicalCrossProduct>();
-		cross_product->children.push_back(move(left_child));
-		cross_product->children.push_back(move(right_child));
-		return move(cross_product);
 	}
 }
 

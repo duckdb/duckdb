@@ -1,6 +1,5 @@
 #include "catch.hpp"
 #include "common/file_system.hpp"
-#include "dbgen.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
@@ -125,7 +124,7 @@ TEST_CASE("Test filter pushdown with more data", "[filterpushdown][.]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
-	con.EnableQueryVerification();
+	//con.EnableQueryVerification();
 	con.EnableProfiling();
 
 	// in this test we run queries that will take a long time without filter pushdown, but are almost instant with
@@ -142,6 +141,37 @@ TEST_CASE("Test filter pushdown with more data", "[filterpushdown][.]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE vals2(k INTEGER, l INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO vals2 SELECT * FROM vals1"));
 	REQUIRE_NO_FAIL(con.Query("COMMIT;"));
+
+	// conditions in the ON clause can be pushed down into the RHS
+	result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i=5 AND k=5) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl2.i=5 AND tbl2.k=5");
+	REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5}));
+	REQUIRE(CHECK_COLUMN(result, 2, {5}));
+	REQUIRE(CHECK_COLUMN(result, 3, {5}));
+	REQUIRE(CHECK_COLUMN(result, 4, {5}));
+	REQUIRE(CHECK_COLUMN(result, 5, {5}));
+	REQUIRE(CHECK_COLUMN(result, 6, {5}));
+	REQUIRE(CHECK_COLUMN(result, 7, {5}));
+	// also works if condition filters everything
+	result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i=5 AND k=5) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl2.i>10000 AND tbl2.k=5");
+	REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5}));
+	REQUIRE(CHECK_COLUMN(result, 2, {5}));
+	REQUIRE(CHECK_COLUMN(result, 3, {5}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 5, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 6, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 7, {Value()}));
+	// we can replicate conditions on the left join predicates on the RHS
+	// result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k WHERE tbl1.i=5 AND tbl1.k=10");
+	// REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {5}));
+	// REQUIRE(CHECK_COLUMN(result, 2, {10}));
+	// REQUIRE(CHECK_COLUMN(result, 3, {10}));
+	// REQUIRE(CHECK_COLUMN(result, 4, {5}));
+	// REQUIRE(CHECK_COLUMN(result, 5, {5}));
+	// REQUIRE(CHECK_COLUMN(result, 6, {10}));
+	// REQUIRE(CHECK_COLUMN(result, 7, {10}));
 
 	// pushdown filters into subqueries
 	result = con.Query("SELECT i, k FROM (SELECT i, k FROM vals1, vals2) tbl1 WHERE i=k AND i<5 ORDER BY i");
@@ -162,7 +192,14 @@ TEST_CASE("Test filter pushdown with more data", "[filterpushdown][.]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2, 3, 4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {0, 1, 2, 3, 4}));
 	REQUIRE(CHECK_COLUMN(result, 2, {0, 1, 2, 3, 4}));
-	// pushdown filters in LEFT OUTER JOIN
+	// and also like this
+	result = con.Query(
+	    "SELECT i, k, sum FROM (SELECT i, k, SUM(j) AS sum FROM vals1, vals2 GROUP BY i, k) tbl1 WHERE i=k AND i<5 ORDER BY i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2, 3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0, 1, 2, 3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 2, {0, 1, 2, 3, 4}));
+
+	// LEFT OUTER JOIN on constant "true" can be turned into cross product, and after filters can be pushed
 	result = con.Query("SELECT * FROM vals1 LEFT OUTER JOIN vals2 ON 1=1 WHERE i=k AND k=5");
 	REQUIRE(CHECK_COLUMN(result, 0, {5}));
 	REQUIRE(CHECK_COLUMN(result, 1, {5}));
@@ -174,6 +211,46 @@ TEST_CASE("Test filter pushdown with more data", "[filterpushdown][.]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {0, 1, 2, 3, 4}));
 	REQUIRE(CHECK_COLUMN(result, 2, {0, 1, 2, 3, 4}));
 	REQUIRE(CHECK_COLUMN(result, 3, {0, 1, 2, 3, 4}));
+	// left outer join can be turned into inner join after which elements can be pushed down into RHS
+	result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2 WHERE j=5 AND l=5) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k WHERE tbl2.j=5 AND tbl2.l=5;");
+	REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5}));
+	REQUIRE(CHECK_COLUMN(result, 2, {5}));
+	REQUIRE(CHECK_COLUMN(result, 3, {5}));
+	REQUIRE(CHECK_COLUMN(result, 4, {5}));
+	REQUIRE(CHECK_COLUMN(result, 5, {5}));
+	REQUIRE(CHECK_COLUMN(result, 6, {5}));
+	REQUIRE(CHECK_COLUMN(result, 7, {5}));
+	// filters can be pushed in the LHS of the LEFT OUTER JOIN
+	result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2 WHERE i=5 AND k=10) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k WHERE tbl1.i=5 AND tbl1.k=10");
+	REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5}));
+	REQUIRE(CHECK_COLUMN(result, 2, {10}));
+	REQUIRE(CHECK_COLUMN(result, 3, {10}));
+	REQUIRE(CHECK_COLUMN(result, 4, {5}));
+	REQUIRE(CHECK_COLUMN(result, 5, {5}));
+	REQUIRE(CHECK_COLUMN(result, 6, {10}));
+	REQUIRE(CHECK_COLUMN(result, 7, {10}));
+	// we can replicate conditions on the left join predicates on the RHS
+	// result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k WHERE tbl1.i=5 AND tbl1.k=10");
+	// REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {5}));
+	// REQUIRE(CHECK_COLUMN(result, 2, {10}));
+	// REQUIRE(CHECK_COLUMN(result, 3, {10}));
+	// REQUIRE(CHECK_COLUMN(result, 4, {5}));
+	// REQUIRE(CHECK_COLUMN(result, 5, {5}));
+	// REQUIRE(CHECK_COLUMN(result, 6, {10}));
+	// REQUIRE(CHECK_COLUMN(result, 7, {10}));
+	// again replicate, but this time RHS has no matching tuples because of filter
+	// result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2 WHERE i>5) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k WHERE tbl1.i=5 AND tbl1.k=10");
+	// REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {5}));
+	// REQUIRE(CHECK_COLUMN(result, 2, {10}));
+	// REQUIRE(CHECK_COLUMN(result, 3, {10}));
+	// REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
+	// REQUIRE(CHECK_COLUMN(result, 5, {Value()}));
+	// REQUIRE(CHECK_COLUMN(result, 6, {Value()}));
+	// REQUIRE(CHECK_COLUMN(result, 7, {Value()}));
 	// pushdown union
 	result =
 	    con.Query("SELECT * FROM (SELECT * FROM vals1, vals2 UNION SELECT * FROM vals1, vals2) tbl1 WHERE i=3 AND k=5");
@@ -231,7 +308,25 @@ TEST_CASE("Test filter pushdown with more data", "[filterpushdown][.]") {
 	// add many useless predicates
 	result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl2.i>10 AND tbl1.k>=500 AND tbl2.k<7000 AND tbl2.k<=6000 AND tbl2.k<>8000 AND tbl1.i<>4000 AND tbl1.i=tbl2.i AND tbl1.i=tbl2.k AND tbl1.i=tbl1.k AND tbl1.i=5000;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	return;
 	
+	// greater than/less than should also be transitive
+	result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i>9997 AND tbl1.k>tbl1.i AND tbl2.i>tbl1.i AND tbl2.k>tbl1.i;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	cout << con.GetProfilingInformation();
+	// equality with constant and then GT
+	result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i=9998 AND tbl1.k=9998 AND tbl2.i>tbl1.i AND tbl2.k>tbl1.k;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	cout << con.GetProfilingInformation();
+	// equality with constant and then LT
+	result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i=1 AND tbl1.k=1 AND tbl2.i<tbl1.i AND tbl2.k<tbl1.k;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	cout << con.GetProfilingInformation();
+	// transitive GT/LT
+	result = con.Query("SELECT COUNT(*) FROM vals1, vals2 WHERE i>4999 AND j<=l AND k>=i AND l<5001");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	cout << con.GetProfilingInformation();
+
 	// these more advanced cases we don't support yet
 	// // filter equivalence with expressions
 	// result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl2.k+1=5001 AND tbl2.k<>5000;");
@@ -267,10 +362,6 @@ TEST_CASE("Test moving/duplicating conditions", "[filterpushdown][.]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE vals2(k INTEGER, l INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO vals2 SELECT * FROM vals1"));
 	REQUIRE_NO_FAIL(con.Query("COMMIT;"));
-
-	// result = con.Query("explain SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i=3 AND k=5) tbl1 INNER JOIN (SELECT * "
-	//                    "FROM vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k;");
-	// result->Print();
 
 	return;
 
