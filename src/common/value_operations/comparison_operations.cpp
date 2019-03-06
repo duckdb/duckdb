@@ -10,14 +10,22 @@ using namespace std;
 //===--------------------------------------------------------------------===//
 template <class OP> static bool templated_boolean_operation(const Value &left, const Value &right) {
 	if (left.type != right.type) {
+		TypeId left_cast = TypeId::INVALID, right_cast = TypeId::INVALID;
 		if (TypeIsNumeric(left.type) && TypeIsNumeric(right.type)) {
 			if (left.type < right.type) {
-				Value left_cast = left.CastAs(right.type);
-				return templated_boolean_operation<OP>(left_cast, right);
+				left_cast = right.type;
 			} else {
-				Value right_cast = right.CastAs(left.type);
-				return templated_boolean_operation<OP>(left, right_cast);
+				right_cast = left.type;
 			}
+		} else if (left.type == TypeId::BOOLEAN) {
+			right_cast = TypeId::BOOLEAN;
+		} else if (right.type == TypeId::BOOLEAN) {
+			left_cast = TypeId::BOOLEAN;
+		}
+		if (left_cast != TypeId::INVALID) {
+			return templated_boolean_operation<OP>(left.CastAs(left_cast), right);
+		} else if (right_cast != TypeId::INVALID) {
+			return templated_boolean_operation<OP>(left, right.CastAs(right_cast));
 		}
 		throw TypeMismatchException(left.type, right.type, "Cannot perform boolean operation on these two types");
 	}
