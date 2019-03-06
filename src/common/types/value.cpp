@@ -87,7 +87,7 @@ Value Value::MaximumValue(TypeId type) {
 }
 
 Value Value::BOOLEAN(int8_t value) {
-	Value result(TypeId::TINYINT);
+	Value result(TypeId::BOOLEAN);
 	result.value_.boolean = value ? true : false;
 	result.is_null = false;
 	return result;

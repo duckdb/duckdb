@@ -25,12 +25,18 @@ unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
 		if (!constant_value.is_null && !constant_value.value_.boolean) {
 			// non-null FALSE in AND, result of expression is false
 			return make_unique<ConstantExpression>(Value::BOOLEAN(false));
+		} else {
+			// TRUE in AND, result of expression is the RHS
+			return constant_expr == conjunction->left.get() ? move(conjunction->right) : move(conjunction->left);
 		}
-	} else if (conjunction->type == ExpressionType::CONJUNCTION_OR) {
+	} else {
+		assert(conjunction->type == ExpressionType::CONJUNCTION_OR);
 		if (!constant_value.is_null && constant_value.value_.boolean) {
 			// non-null TRUE in OR, result of expression is true
 			return make_unique<ConstantExpression>(Value::BOOLEAN(true));
+		} else {
+			// FALSE in OR, result of expression is the other expression
+			return constant_expr == conjunction->left.get() ? move(conjunction->right) : move(conjunction->left);
 		}
 	}
-	return nullptr;
 }
