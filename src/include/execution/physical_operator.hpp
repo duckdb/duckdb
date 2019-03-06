@@ -61,7 +61,7 @@ public:
 		return type;
 	}
 
-	string ToString() const;
+	string ToString(size_t depth = 0) const;
 	void Print() {
 		Printer::Print(ToString());
 	}

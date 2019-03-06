@@ -5,20 +5,16 @@
 using namespace duckdb;
 using namespace std;
 
-string PhysicalOperator::ToString() const {
+string PhysicalOperator::ToString(size_t depth) const {
 	string result = PhysicalOperatorToString(type);
 	if (children.size() > 0) {
-		result += "(";
 		for (size_t i = 0; i < children.size(); i++) {
+			result += "\n" + string(depth * 4, ' ');
 			auto &child = children[i];
-			result += child->ToString();
-			if (i < children.size() - 1) {
-				result += ", ";
-			}
+			result += child->ToString(depth + 1);
 		}
-		result += ")";
+		result += "";
 	}
-
 	return result;
 }
 

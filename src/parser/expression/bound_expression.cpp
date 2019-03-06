@@ -35,5 +35,5 @@ bool BoundExpression::Equals(const Expression *other_) const {
 }
 
 string BoundExpression::ToString() const {
-	return "#" + std::to_string(index);
+	return !alias.empty() ? alias : "#" + std::to_string(index);
 }

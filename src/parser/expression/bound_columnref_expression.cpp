@@ -30,5 +30,5 @@ bool BoundColumnRefExpression::Equals(const Expression *other_) const {
 }
 
 string BoundColumnRefExpression::ToString() const {
-	return "#[" + to_string(binding.table_index) + "." + to_string(binding.column_index) + "]";
+	return !alias.empty() ? alias : "#[" + to_string(binding.table_index) + "." + to_string(binding.column_index) + "]";
 }
