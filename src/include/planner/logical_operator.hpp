@@ -10,7 +10,7 @@
 
 #include "catalog/catalog.hpp"
 #include "common/common.hpp"
-#include "common/printable.hpp"
+#include "common/printer.hpp"
 #include "parser/expression.hpp"
 #include "parser/statement/select_statement.hpp"
 #include "planner/logical_operator_visitor.hpp"
@@ -27,14 +27,14 @@ LogicalOperator *GetProjection(LogicalOperator *);
 
 //! LogicalOperator is the base class of the logical operators present in the
 //! logical query tree
-class LogicalOperator : public Printable {
+class LogicalOperator {
 public:
 	LogicalOperator(LogicalOperatorType type) : type(type) {
 	}
-
 	LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions)
 	    : type(type), expressions(std::move(expressions)) {
 	}
+	virtual ~LogicalOperator(){}
 
 	LogicalOperatorType GetOperatorType() {
 		return type;
@@ -47,7 +47,10 @@ public:
 	void ResolveOperatorTypes();
 
 	virtual string ParamsToString() const;
-	string ToString() const override;
+	virtual string ToString(size_t depth = 0) const;
+	void Print() {
+		Printer::Print(ToString());
+	}
 
 	void AddChild(unique_ptr<LogicalOperator> child) {
 		children.push_back(move(child));

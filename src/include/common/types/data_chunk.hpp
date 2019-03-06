@@ -9,7 +9,7 @@
 #pragma once
 
 #include "common/common.hpp"
-#include "common/printable.hpp"
+#include "common/printer.hpp"
 #include "common/types/vector.hpp"
 
 #include <vector>
@@ -34,7 +34,7 @@ namespace duckdb {
     In addition to holding the data of the vectors, the DataChunk also owns the
    selection vector that underlying vectors can point to.
 */
-class DataChunk : public Printable {
+class DataChunk {
 public:
 	//! The amount of vectors that are part of this DataChunk.
 	size_t column_count;
@@ -116,6 +116,9 @@ public:
 
 	//! Converts this DataChunk to a printable string representation
 	string ToString() const;
+	void Print() {
+		Printer::Print(ToString());
+	}
 
 	Vector &GetVector(size_t index) {
 		return data[index];

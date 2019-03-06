@@ -10,7 +10,7 @@
 
 #include "common/common.hpp"
 #include "common/exception.hpp"
-#include "common/printable.hpp"
+#include "common/printer.hpp"
 
 namespace duckdb {
 

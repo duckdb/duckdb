@@ -39,7 +39,7 @@ namespace duckdb {
 
   (2) Ordering data
 */
-class Vector : public Printable {
+class Vector {
 	friend class DataChunk;
 
 public:
@@ -123,6 +123,9 @@ public:
 
 	//! Converts this Vector to a printable string representation
 	string ToString() const;
+	void Print() {
+		Printer::Print(ToString());
+	}
 
 	//! Returns true the vector holds only a single constant value and does not
 	//! have a selection vector

@@ -9,7 +9,7 @@
 #pragma once
 
 #include "common/common.hpp"
-#include "common/printable.hpp"
+#include "common/printer.hpp"
 #include "optimizer/join_order/relation.hpp"
 
 #include <functional>
@@ -37,7 +37,7 @@ struct NeighborInfo {
 };
 
 //! The QueryGraph contains edges between relations and allows edges to be created/queried
-class QueryGraph : public Printable {
+class QueryGraph {
 public:
 	//! Contains a node with info about neighboring relations and child edge infos
 	struct QueryEdge {
@@ -46,7 +46,10 @@ public:
 	};
 
 public:
-	string ToString() const override;
+	string ToString() const;
+	void Print() {
+		Printer::Print(ToString());
+	}
 
 	//! Create an edge in the edge_set
 	void CreateEdge(RelationSet *left, RelationSet *right, FilterInfo *info);

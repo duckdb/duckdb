@@ -9,7 +9,7 @@
 #pragma once
 
 #include "common/common.hpp"
-#include "common/printable.hpp"
+#include "common/printer.hpp"
 #include "common/types/statistics.hpp"
 
 #include <functional>
@@ -32,7 +32,7 @@ class AggregateExpression;
  of the type specified by return_type. It can take an arbitrary amount of
  Vectors as input (but in most cases the amount of input vectors is 0-2).
  */
-class Expression : public Printable {
+class Expression {
 public:
 	//! Create an Expression
 	Expression(ExpressionType type) : type(type), stats(*this) {
@@ -40,6 +40,7 @@ public:
 	//! Create an Expression with the specified return type
 	Expression(ExpressionType type, TypeId return_type) : type(type), return_type(return_type), stats(*this) {
 	}
+	virtual ~Expression(){}
 
 	//! Resolves the type for this expression based on its children
 	virtual void ResolveType() {
@@ -158,6 +159,11 @@ public:
 	//! The alias of the expression, used in the SELECT clause (e.g. SELECT x +
 	//! 1 AS f)
 	string alias;
+
+	virtual string ToString() const = 0;
+	void Print() {
+		Printer::Print(ToString());
+	}
 
 protected:
 	//! Copy base Expression properties from another expression to this one,

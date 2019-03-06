@@ -21,7 +21,7 @@ namespace duckdb {
    iterator. It is also possible to iterate directly over the chunks for more
    direct access.
 */
-class ChunkCollection : public Printable {
+class ChunkCollection  {
 public:
 	ChunkCollection() : count(0) {
 	}
@@ -51,6 +51,9 @@ public:
 	string ToString() const {
 		return chunks.size() == 0 ? "ChunkCollection [ 0 ]"
 		                          : "ChunkCollection [ " + std::to_string(count) + " ]: \n" + chunks[0]->ToString();
+	}
+	void Print() {
+		Printer::Print(ToString());
 	}
 	//! Gets a reference to the chunk at the given index
 	DataChunk &GetChunk(size_t index) {

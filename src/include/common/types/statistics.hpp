@@ -18,7 +18,7 @@ class Vector;
 
 //! The ExpressionStatistics object holds statistics relating to a specific
 //! Expression, and can be propagated throughout a chain of expressions
-class ExpressionStatistics : public Printable {
+class ExpressionStatistics {
 public:
 	ExpressionStatistics(Expression &expression) : expression(expression) {
 		Reset();
@@ -56,6 +56,9 @@ public:
 #endif
 
 	virtual string ToString() const;
+	void Print() {
+		Printer::Print(ToString());
+	}
 
 	//! Update the statistics with a new vector that is appended to the dataset
 	void Update(Vector &vector);

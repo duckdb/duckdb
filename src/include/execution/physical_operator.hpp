@@ -10,7 +10,7 @@
 
 #include "catalog/catalog.hpp"
 #include "common/common.hpp"
-#include "common/printable.hpp"
+#include "common/printer.hpp"
 #include "common/types/data_chunk.hpp"
 #include "parser/expression.hpp"
 #include "parser/statement/select_statement.hpp"
@@ -51,16 +51,20 @@ public:
    state that is updated as GetChunk is called: PhysicalOperatorState (different
    operators subclass this state and add different properties).
 */
-class PhysicalOperator : public Printable {
+class PhysicalOperator {
 public:
 	PhysicalOperator(PhysicalOperatorType type, vector<TypeId> types) : type(type), types(types) {
 	}
+	virtual ~PhysicalOperator(){}
 
 	PhysicalOperatorType GetOperatorType() {
 		return type;
 	}
 
-	string ToString() const override;
+	string ToString() const;
+	void Print() {
+		Printer::Print(ToString());
+	}
 
 	//! Return a vector of the types that will be returned by this operator
 	vector<TypeId> &GetTypes() {

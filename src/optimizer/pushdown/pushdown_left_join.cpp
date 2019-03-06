@@ -64,7 +64,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 	for (size_t i = 0; i < filters.size(); i++) {
 		auto side = LogicalComparisonJoin::GetJoinSide(filters[i]->bindings, left_bindings, right_bindings);
 		if (side == JoinSide::LEFT) {
-			// bindings match left side: push into left
+			// bindings match left side
+			// we can push the filter into the left side
+			// we MIGHT be able to push it down the RHS as well, but only if it is a comparison that matches the join predicates
 			left_pushdown.filters.push_back(move(filters[i]));
 			// erase the filter from the list of filters
 			filters.erase(filters.begin() + i);

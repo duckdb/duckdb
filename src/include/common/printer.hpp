@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// common/printable.hpp
+// common/printer.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -15,16 +15,10 @@ namespace duckdb {
 class Deserializer;
 class Serializer;
 
-//! Printable is an abstract class that represents an object that can be
-//! converted to a string for logging and debugging purposes.
-class Printable {
+//! Printer is a static class that allows printing to logs or stdout/stderr
+class Printer {
 public:
-	virtual ~Printable(){};
-
-	//! Convert the object to a string
-	virtual string ToString() const = 0;
-
 	//! Print the object to stderr
-	void Print();
+	static void Print(string str);
 };
 } // namespace duckdb

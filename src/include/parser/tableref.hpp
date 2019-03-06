@@ -9,15 +9,16 @@
 #pragma once
 
 #include "common/common.hpp"
-#include "common/printable.hpp"
+#include "common/printer.hpp"
 
 namespace duckdb {
 class SQLNodeVisitor;
 //! Represents a generic expression that returns a table.
-class TableRef : public Printable {
+class TableRef {
 public:
 	TableRef(TableReferenceType type) : type(type) {
 	}
+	virtual ~TableRef(){}
 
 	virtual unique_ptr<TableRef> Accept(SQLNodeVisitor *v) = 0;
 	virtual bool Equals(const TableRef *other) const {
@@ -34,6 +35,9 @@ public:
 	//! Convert the object to a string
 	virtual string ToString() const {
 		return string();
+	}
+	void Print() {
+		Printer::Print(ToString());
 	}
 
 	TableReferenceType type;

@@ -9,7 +9,7 @@
 #pragma once
 
 #include "common/common.hpp"
-#include "common/printable.hpp"
+#include "common/printer.hpp"
 #include "parser/sql_node_visitor.hpp"
 #include "planner/bindcontext.hpp"
 #include "planner/logical_operator.hpp"

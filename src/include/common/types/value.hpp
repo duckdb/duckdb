@@ -10,7 +10,7 @@
 
 #include "common/common.hpp"
 #include "common/exception.hpp"
-#include "common/printable.hpp"
+#include "common/printer.hpp"
 #include "common/types/date.hpp"
 #include "common/types/timestamp.hpp"
 
@@ -19,9 +19,12 @@
 
 namespace duckdb {
 
+class Deserializer;
+class Serializer;
+
 //! The Value object holds a single arbitrary value of any type that can be
 //! stored in the database.
-class Value : public Printable {
+class Value {
 	friend class Vector;
 
 public:
@@ -81,7 +84,7 @@ public:
 	}
 
 	//! Convert this value to a string
-	virtual string ToString() const;
+	string ToString() const;
 
 	//! Cast this value to another type
 	Value CastAs(TypeId new_type) const;
@@ -143,6 +146,9 @@ public:
 	friend std::ostream &operator<<(std::ostream &out, const Value &val) {
 		out << val.ToString();
 		return out;
+	}
+	void Print() {
+		Printer::Print(ToString());
 	}
 
 private:

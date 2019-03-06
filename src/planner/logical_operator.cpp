@@ -50,19 +50,19 @@ void LogicalOperator::ResolveOperatorTypes() {
 	ResolveTypes();
 }
 
-string LogicalOperator::ToString() const {
+string LogicalOperator::ToString(size_t depth) const {
 	string result = LogicalOperatorToString(type);
 	result += ParamsToString();
 	if (children.size() > 0) {
-		result += "(";
+		result += "\n" + string(depth * 4, ' ');
 		for (size_t i = 0; i < children.size(); i++) {
 			auto &child = children[i];
-			result += child->ToString();
+			result += child->ToString(depth + 1);
 			if (i < children.size() - 1) {
 				result += ", ";
 			}
 		}
-		result += ")";
+		result += "";
 	}
 	return result;
 }

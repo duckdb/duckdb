@@ -9,7 +9,7 @@
 #pragma once
 
 #include "common/common.hpp"
-#include "common/printable.hpp"
+#include "common/printer.hpp"
 #include "common/profiler.hpp"
 #include "common/string_util.hpp"
 #include "common/types/data_chunk.hpp"
@@ -21,7 +21,7 @@ namespace duckdb {
 class PhysicalOperator;
 
 //! The QueryProfiler can be used to measure timings of queries
-class QueryProfiler : public Printable {
+class QueryProfiler {
 public:
 	struct TimingInformation {
 		double time = 0;
@@ -69,7 +69,11 @@ public:
 	void StartOperator(PhysicalOperator *phys_op);
 	void EndOperator(DataChunk &chunk);
 
-	string ToString() const override;
+	string ToString() const;
+	void Print() {
+		Printer::Print(ToString());
+	}
+
 	string ToJSON() const;
 	void WriteJSONToFile(const char *path) const;
 

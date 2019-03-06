@@ -9,13 +9,13 @@
 #pragma once
 
 #include "common/common.hpp"
-#include "common/printable.hpp"
+#include "common/printer.hpp"
 
 namespace duckdb {
 
 class SQLNodeVisitor;
 //! Constraint is the base class of any type of table constraint.
-class Constraint : public Printable {
+class Constraint {
 public:
 	Constraint(ConstraintType type) : type(type){};
 	virtual ~Constraint() {
@@ -23,6 +23,11 @@ public:
 
 	virtual void Accept(SQLNodeVisitor *) = 0;
 
+	virtual string ToString() const = 0;
+	void Print() {
+		Printer::Print(ToString());
+	}
+	
 	ConstraintType type;
 
 	unique_ptr<Constraint> Copy();
