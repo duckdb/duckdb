@@ -142,47 +142,6 @@ TEST_CASE("Test filter pushdown with more data", "[filterpushdown][.]") {
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO vals2 SELECT * FROM vals1"));
 	REQUIRE_NO_FAIL(con.Query("COMMIT;"));
 
-	// conditions in the ON clause can be pushed down into the RHS
-	result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i=5 AND k=5) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl2.i=5 AND tbl2.k=5");
-	REQUIRE(CHECK_COLUMN(result, 0, {5}));
-	REQUIRE(CHECK_COLUMN(result, 1, {5}));
-	REQUIRE(CHECK_COLUMN(result, 2, {5}));
-	REQUIRE(CHECK_COLUMN(result, 3, {5}));
-	REQUIRE(CHECK_COLUMN(result, 4, {5}));
-	REQUIRE(CHECK_COLUMN(result, 5, {5}));
-	REQUIRE(CHECK_COLUMN(result, 6, {5}));
-	REQUIRE(CHECK_COLUMN(result, 7, {5}));
-	// also works if condition filters everything
-	result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i=5 AND k=5) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl2.i>10000 AND tbl2.k=5");
-	REQUIRE(CHECK_COLUMN(result, 0, {5}));
-	REQUIRE(CHECK_COLUMN(result, 1, {5}));
-	REQUIRE(CHECK_COLUMN(result, 2, {5}));
-	REQUIRE(CHECK_COLUMN(result, 3, {5}));
-	REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
-	REQUIRE(CHECK_COLUMN(result, 5, {Value()}));
-	REQUIRE(CHECK_COLUMN(result, 6, {Value()}));
-	REQUIRE(CHECK_COLUMN(result, 7, {Value()}));
-	// we can replicate conditions on the left join predicates on the RHS
-	result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k WHERE tbl1.i=5 AND tbl1.k=10");
-	REQUIRE(CHECK_COLUMN(result, 0, {5}));
-	REQUIRE(CHECK_COLUMN(result, 1, {5}));
-	REQUIRE(CHECK_COLUMN(result, 2, {10}));
-	REQUIRE(CHECK_COLUMN(result, 3, {10}));
-	REQUIRE(CHECK_COLUMN(result, 4, {5}));
-	REQUIRE(CHECK_COLUMN(result, 5, {5}));
-	REQUIRE(CHECK_COLUMN(result, 6, {10}));
-	REQUIRE(CHECK_COLUMN(result, 7, {10}));
-	// also multiple conditions
-	result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k WHERE tbl1.i>4 AND tbl1.i<6 AND tbl1.k=10");
-	REQUIRE(CHECK_COLUMN(result, 0, {5}));
-	REQUIRE(CHECK_COLUMN(result, 1, {5}));
-	REQUIRE(CHECK_COLUMN(result, 2, {10}));
-	REQUIRE(CHECK_COLUMN(result, 3, {10}));
-	REQUIRE(CHECK_COLUMN(result, 4, {5}));
-	REQUIRE(CHECK_COLUMN(result, 5, {5}));
-	REQUIRE(CHECK_COLUMN(result, 6, {10}));
-	REQUIRE(CHECK_COLUMN(result, 7, {10}));
-
 	// pushdown filters into subqueries
 	result = con.Query("SELECT i, k FROM (SELECT i, k FROM vals1, vals2) tbl1 WHERE i=k AND i<5 ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2, 3, 4}));
@@ -241,26 +200,47 @@ TEST_CASE("Test filter pushdown with more data", "[filterpushdown][.]") {
 	REQUIRE(CHECK_COLUMN(result, 5, {5}));
 	REQUIRE(CHECK_COLUMN(result, 6, {10}));
 	REQUIRE(CHECK_COLUMN(result, 7, {10}));
+
+	// conditions in the ON clause can be pushed down into the RHS
+	result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i=5 AND k=5) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl2.i=5 AND tbl2.k=5");
+	REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5}));
+	REQUIRE(CHECK_COLUMN(result, 2, {5}));
+	REQUIRE(CHECK_COLUMN(result, 3, {5}));
+	REQUIRE(CHECK_COLUMN(result, 4, {5}));
+	REQUIRE(CHECK_COLUMN(result, 5, {5}));
+	REQUIRE(CHECK_COLUMN(result, 6, {5}));
+	REQUIRE(CHECK_COLUMN(result, 7, {5}));
+	// also works if condition filters everything
+	result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i=5 AND k=5) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl2.i>10000 AND tbl2.k=5");
+	REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5}));
+	REQUIRE(CHECK_COLUMN(result, 2, {5}));
+	REQUIRE(CHECK_COLUMN(result, 3, {5}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 5, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 6, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 7, {Value()}));
 	// we can replicate conditions on the left join predicates on the RHS
-	// result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k WHERE tbl1.i=5 AND tbl1.k=10");
-	// REQUIRE(CHECK_COLUMN(result, 0, {5}));
-	// REQUIRE(CHECK_COLUMN(result, 1, {5}));
-	// REQUIRE(CHECK_COLUMN(result, 2, {10}));
-	// REQUIRE(CHECK_COLUMN(result, 3, {10}));
-	// REQUIRE(CHECK_COLUMN(result, 4, {5}));
-	// REQUIRE(CHECK_COLUMN(result, 5, {5}));
-	// REQUIRE(CHECK_COLUMN(result, 6, {10}));
-	// REQUIRE(CHECK_COLUMN(result, 7, {10}));
-	// again replicate, but this time RHS has no matching tuples because of filter
-	// result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2 WHERE i>5) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k WHERE tbl1.i=5 AND tbl1.k=10");
-	// REQUIRE(CHECK_COLUMN(result, 0, {5}));
-	// REQUIRE(CHECK_COLUMN(result, 1, {5}));
-	// REQUIRE(CHECK_COLUMN(result, 2, {10}));
-	// REQUIRE(CHECK_COLUMN(result, 3, {10}));
-	// REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
-	// REQUIRE(CHECK_COLUMN(result, 5, {Value()}));
-	// REQUIRE(CHECK_COLUMN(result, 6, {Value()}));
-	// REQUIRE(CHECK_COLUMN(result, 7, {Value()}));
+	result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k WHERE tbl1.i=5 AND tbl1.k=10");
+	REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5}));
+	REQUIRE(CHECK_COLUMN(result, 2, {10}));
+	REQUIRE(CHECK_COLUMN(result, 3, {10}));
+	REQUIRE(CHECK_COLUMN(result, 4, {5}));
+	REQUIRE(CHECK_COLUMN(result, 5, {5}));
+	REQUIRE(CHECK_COLUMN(result, 6, {10}));
+	REQUIRE(CHECK_COLUMN(result, 7, {10}));
+	// also multiple conditions
+	result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k WHERE tbl1.i>4 AND tbl1.i<6 AND tbl1.k=10");
+	REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5}));
+	REQUIRE(CHECK_COLUMN(result, 2, {10}));
+	REQUIRE(CHECK_COLUMN(result, 3, {10}));
+	REQUIRE(CHECK_COLUMN(result, 4, {5}));
+	REQUIRE(CHECK_COLUMN(result, 5, {5}));
+	REQUIRE(CHECK_COLUMN(result, 6, {10}));
+	REQUIRE(CHECK_COLUMN(result, 7, {10}));
 	// pushdown union
 	result =
 	    con.Query("SELECT * FROM (SELECT * FROM vals1, vals2 UNION SELECT * FROM vals1, vals2) tbl1 WHERE i=3 AND k=5");

@@ -48,7 +48,6 @@ protected:
 		}
 	}
 	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override;
-	unique_ptr<Expression> VisitReplace(OperatorExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
 public:
 	unique_ptr<TableRef> Visit(BaseTableRef &expr) override;
