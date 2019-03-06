@@ -50,6 +50,10 @@ public:
 	string ToString() const override {
 		return child->ToString();
 	}
+	
+	bool IsScalar() override {
+		return false;
+	}
 
 	ExpressionClass GetExpressionClass() override {
 		return ExpressionClass::COMMON_SUBEXPRESSION;
