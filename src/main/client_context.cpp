@@ -90,11 +90,20 @@ static void ExecuteStatement_(ClientContext &context, string query, unique_ptr<S
 	}
 
 	auto plan = move(planner.plan);
+	// extract the result column names from the plan
+	auto names = plan->GetNames();
+#ifdef DEBUG
+	if (context.enable_optimizer) {
+#endif
 	Optimizer optimizer(planner.binder, context);
 	plan = optimizer.Optimize(move(plan));
 	if (!plan) {
 		return;
 	}
+
+#ifdef DEBUG
+	}
+#endif
 
 	// special case with logging EXECUTE with prepared statements that do not scan the table
 	if (plan->type == LogicalOperatorType::EXECUTE) {
@@ -106,7 +115,7 @@ static void ExecuteStatement_(ClientContext &context, string query, unique_ptr<S
 	}
 
 	// extract the result column names from the plan
-	context.execution_context.names = plan->GetNames();
+	context.execution_context.names = names;
 
 	// now convert logical query plan into a physical query plan
 	PhysicalPlanGenerator physical_planner(context);
@@ -161,6 +170,7 @@ unique_ptr<DuckDBStreamingResult> ClientContext::Query(string query) {
 			// Serialize()/Deserialize() of expressions
 			// Hash() of expressions
 			// Equality() of statements and expressions
+			// Correctness of plans both with and without optimizers
 			bool profiling_is_enabled = profiler.IsEnabled();
 			if (profiling_is_enabled) {
 				profiler.Disable();
@@ -169,6 +179,7 @@ unique_ptr<DuckDBStreamingResult> ClientContext::Query(string query) {
 			auto select_stmt = (SelectStatement *)statement.get();
 			auto copied_stmt = select_stmt->Copy();
 			auto copied_stmt2 = select_stmt->Copy();
+			auto copied_stmt3 = select_stmt->Copy();
 
 			Serializer serializer;
 			select_stmt->Serialize(serializer);
@@ -206,7 +217,8 @@ unique_ptr<DuckDBStreamingResult> ClientContext::Query(string query) {
 			}
 			unique_ptr<DuckDBResult> materialized_result = make_unique<DuckDBResult>(),
 			                         copied_result = make_unique<DuckDBResult>(),
-			                         deserialized_result = make_unique<DuckDBResult>();
+			                         deserialized_result = make_unique<DuckDBResult>(),
+			                         unoptimized_result = make_unique<DuckDBResult>();
 			// execute the original statement
 			try {
 				ExecuteStatement_(*this, query, move(statement));
@@ -235,11 +247,23 @@ unique_ptr<DuckDBStreamingResult> ClientContext::Query(string query) {
 			if (profiling) {
 				profiler.Enable();
 			}
+			// now execute the unoptimized statement
+			enable_optimizer = false;
+			try {
+				ExecuteStatement_(*this, query, move(copied_stmt3));
+				unoptimized_result = result->Materialize(false);
+			} catch (Exception &ex) {
+				unoptimized_result->error = ex.GetMessage();
+			}
+			enable_optimizer = true;
+
 			// now compare the results
 			// the results of all three expressions should be identical
 			assert(materialized_result->Equals(copied_result.get()));
 			assert(materialized_result->Equals(deserialized_result.get()));
 			assert(copied_result->Equals(deserialized_result.get()));
+			assert(copied_result->Equals(unoptimized_result.get()));
+
 
 			if (profiling_is_enabled) {
 				profiler.Enable();

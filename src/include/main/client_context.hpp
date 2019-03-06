@@ -54,6 +54,8 @@ public:
 #ifdef DEBUG
 	// Whether or not aggressive query verification is enabled
 	bool query_verification_enabled = false;
+	//! Enable the running of optimizers
+	bool enable_optimizer = true;
 #endif
 };
 } // namespace duckdb
