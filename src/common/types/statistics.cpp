@@ -2,6 +2,7 @@
 
 #include "common/exception.hpp"
 #include "common/limits.hpp"
+#include "common/printer.hpp"
 #include "common/types/vector.hpp"
 #include "common/value_operations/value_operations.hpp"
 #include "common/vector_operations/vector_operations.hpp"
@@ -87,4 +88,8 @@ TypeId ExpressionStatistics::MinimalType() {
 	}
 	assert(TypeIsIntegral(min.type) && TypeIsIntegral(max.type));
 	return std::max(duckdb::MinimalType(min.GetNumericValue()), duckdb::MinimalType(max.GetNumericValue()));
+}
+
+void ExpressionStatistics::Print() {
+	Printer::Print(ToString());
 }

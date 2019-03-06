@@ -1,5 +1,6 @@
 #include "main/query_profiler.hpp"
 
+#include "common/printer.hpp"
 #include "execution/physical_operator.hpp"
 
 #include <iostream>
@@ -295,4 +296,8 @@ string QueryProfiler::RenderTree(QueryProfiler::TreeNode &node) {
 		text += str + "\n";
 	}
 	return text;
+}
+
+void QueryProfiler::Print() {
+	Printer::Print(ToString());
 }

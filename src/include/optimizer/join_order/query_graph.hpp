@@ -9,7 +9,6 @@
 #pragma once
 
 #include "common/common.hpp"
-#include "common/printer.hpp"
 #include "optimizer/join_order/relation.hpp"
 
 #include <functional>
@@ -47,9 +46,7 @@ public:
 
 public:
 	string ToString() const;
-	void Print() {
-		Printer::Print(ToString());
-	}
+	void Print();
 
 	//! Create an edge in the edge_set
 	void CreateEdge(RelationSet *left, RelationSet *right, FilterInfo *info);

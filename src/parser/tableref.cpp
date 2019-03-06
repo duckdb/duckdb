@@ -1,5 +1,6 @@
 #include "parser/tableref.hpp"
 
+#include "common/printer.hpp"
 #include "common/serializer.hpp"
 #include "parser/tableref/list.hpp"
 
@@ -37,4 +38,8 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &source) {
 	}
 	result->alias = alias;
 	return result;
+}
+
+void TableRef::Print() {
+	Printer::Print(ToString());
 }

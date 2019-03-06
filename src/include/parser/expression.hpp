@@ -9,7 +9,6 @@
 #pragma once
 
 #include "common/common.hpp"
-#include "common/printer.hpp"
 #include "common/types/statistics.hpp"
 
 #include <functional>
@@ -161,9 +160,7 @@ public:
 	string alias;
 
 	virtual string ToString() const = 0;
-	void Print() {
-		Printer::Print(ToString());
-	}
+	void Print();
 
 protected:
 	//! Copy base Expression properties from another expression to this one,

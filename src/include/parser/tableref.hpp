@@ -9,10 +9,12 @@
 #pragma once
 
 #include "common/common.hpp"
-#include "common/printer.hpp"
 
 namespace duckdb {
+class Deserializer;
+class Serializer;
 class SQLNodeVisitor;
+
 //! Represents a generic expression that returns a table.
 class TableRef {
 public:
@@ -36,9 +38,7 @@ public:
 	virtual string ToString() const {
 		return string();
 	}
-	void Print() {
-		Printer::Print(ToString());
-	}
+	void Print();
 
 	TableReferenceType type;
 	string alias;

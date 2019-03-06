@@ -1,5 +1,6 @@
 #include "parser/expression.hpp"
 
+#include "common/printer.hpp"
 #include "common/serializer.hpp"
 #include "common/types/hash.hpp"
 #include "parser/expression/list.hpp"
@@ -136,4 +137,8 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &source) {
 	result->return_type = return_type;
 	result->alias = alias;
 	return result;
+}
+
+void Expression::Print() {
+	Printer::Print(ToString());
 }

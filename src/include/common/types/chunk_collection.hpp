@@ -52,9 +52,8 @@ public:
 		return chunks.size() == 0 ? "ChunkCollection [ 0 ]"
 		                          : "ChunkCollection [ " + std::to_string(count) + " ]: \n" + chunks[0]->ToString();
 	}
-	void Print() {
-		Printer::Print(ToString());
-	}
+	void Print();
+	
 	//! Gets a reference to the chunk at the given index
 	DataChunk &GetChunk(size_t index) {
 		return *chunks[LocateChunk(index)];

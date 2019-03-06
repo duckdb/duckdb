@@ -5,6 +5,7 @@
 #include "common/serializer.hpp"
 #include "common/types/null_value.hpp"
 #include "common/vector_operations/vector_operations.hpp"
+#include "common/printer.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -267,3 +268,7 @@ void DataChunk::Verify() {
 	}
 }
 #endif
+
+void DataChunk::Print() {
+	Printer::Print(ToString());
+}

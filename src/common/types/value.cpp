@@ -8,6 +8,7 @@
 #include "common/operator/numeric_binary_operators.hpp"
 #include "common/serializer.hpp"
 #include "common/value_operations/value_operations.hpp"
+#include "common/printer.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -479,4 +480,8 @@ bool Value::IsUTF8String(const char *s) {
 		return false;
 	}
 	return true;
+}
+
+void Value::Print() {
+	Printer::Print(ToString());
 }

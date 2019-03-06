@@ -56,9 +56,7 @@ public:
 #endif
 
 	virtual string ToString() const;
-	void Print() {
-		Printer::Print(ToString());
-	}
+	void Print();
 
 	//! Update the statistics with a new vector that is appended to the dataset
 	void Update(Vector &vector);

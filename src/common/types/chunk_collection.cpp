@@ -2,6 +2,7 @@
 
 #include "common/exception.hpp"
 #include "common/value_operations/value_operations.hpp"
+#include "common/printer.hpp"
 
 #include <cstring>
 
@@ -314,4 +315,8 @@ vector<Value> ChunkCollection::GetRow(size_t index) {
 
 void ChunkCollection::SetValue(size_t column, size_t index, Value value) {
 	chunks[LocateChunk(index)]->data[column].SetValue(index % STANDARD_VECTOR_SIZE, value);
+}
+
+void ChunkCollection::Print() {
+	Printer::Print(ToString());
 }

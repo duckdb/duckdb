@@ -41,3 +41,7 @@ void PhysicalOperator::GetChunk(ClientContext &context, DataChunk &chunk, Physic
 
 	chunk.Verify();
 }
+
+void PhysicalOperator::Print() {
+	Printer::Print(ToString());
+}

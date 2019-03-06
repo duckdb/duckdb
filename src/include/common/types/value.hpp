@@ -10,7 +10,6 @@
 
 #include "common/common.hpp"
 #include "common/exception.hpp"
-#include "common/printer.hpp"
 #include "common/types/date.hpp"
 #include "common/types/timestamp.hpp"
 
@@ -147,9 +146,7 @@ public:
 		out << val.ToString();
 		return out;
 	}
-	void Print() {
-		Printer::Print(ToString());
-	}
+	void Print();
 
 private:
 	//! Templated helper function for casting

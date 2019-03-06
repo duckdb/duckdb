@@ -12,9 +12,6 @@
 
 namespace duckdb {
 
-class Deserializer;
-class Serializer;
-
 //! Printer is a static class that allows printing to logs or stdout/stderr
 class Printer {
 public:

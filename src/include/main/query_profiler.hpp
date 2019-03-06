@@ -9,7 +9,6 @@
 #pragma once
 
 #include "common/common.hpp"
-#include "common/printer.hpp"
 #include "common/profiler.hpp"
 #include "common/string_util.hpp"
 #include "common/types/data_chunk.hpp"
@@ -70,9 +69,7 @@ public:
 	void EndOperator(DataChunk &chunk);
 
 	string ToString() const;
-	void Print() {
-		Printer::Print(ToString());
-	}
+	void Print();
 
 	string ToJSON() const;
 	void WriteJSONToFile(const char *path) const;

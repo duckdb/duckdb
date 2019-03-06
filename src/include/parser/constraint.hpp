@@ -9,9 +9,11 @@
 #pragma once
 
 #include "common/common.hpp"
-#include "common/printer.hpp"
 
 namespace duckdb {
+
+class Serializer;
+class Deserializer;
 
 class SQLNodeVisitor;
 //! Constraint is the base class of any type of table constraint.
@@ -24,9 +26,7 @@ public:
 	virtual void Accept(SQLNodeVisitor *) = 0;
 
 	virtual string ToString() const = 0;
-	void Print() {
-		Printer::Print(ToString());
-	}
+	void Print();
 	
 	ConstraintType type;
 

@@ -1,5 +1,6 @@
 #include "optimizer/join_order/query_graph.hpp"
 
+#include "common/printer.hpp"
 #include "common/string_util.hpp"
 
 using namespace duckdb;
@@ -118,4 +119,8 @@ NeighborInfo *QueryGraph::GetConnection(RelationSet *node, RelationSet *other) {
 		return false;
 	});
 	return connection;
+}
+
+void QueryGraph::Print() {
+	Printer::Print(ToString());
 }

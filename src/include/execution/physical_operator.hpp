@@ -10,7 +10,6 @@
 
 #include "catalog/catalog.hpp"
 #include "common/common.hpp"
-#include "common/printer.hpp"
 #include "common/types/data_chunk.hpp"
 #include "parser/expression.hpp"
 #include "parser/statement/select_statement.hpp"
@@ -62,9 +61,7 @@ public:
 	}
 
 	string ToString(size_t depth = 0) const;
-	void Print() {
-		Printer::Print(ToString());
-	}
+	void Print();
 
 	//! Return a vector of the types that will be returned by this operator
 	vector<TypeId> &GetTypes() {

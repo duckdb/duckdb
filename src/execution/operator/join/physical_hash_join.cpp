@@ -50,7 +50,7 @@ void PhysicalHashJoin::_GetChunk(ClientContext &context, DataChunk &chunk, Physi
 
 		state->initialized = true;
 	}
-	if (state->scan_structure) {
+	if (state->child_chunk.size() > 0 && state->scan_structure) {
 		// still have elements remaining from the previous probe (i.e. we got
 		// >1024 elements in the previous probe)
 		state->scan_structure->Next(state->join_keys, state->child_chunk, chunk);

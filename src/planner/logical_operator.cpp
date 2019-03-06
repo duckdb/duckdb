@@ -78,3 +78,7 @@ void LogicalOperator::ReplaceExpression(
 	assert(index < expressions.size());
 	expressions[index] = callback(move(expressions[index]));
 }
+
+void LogicalOperator::Print() {
+	Printer::Print(ToString());
+}

@@ -9,7 +9,6 @@
 #pragma once
 
 #include "common/common.hpp"
-#include "common/printer.hpp"
 #include "common/types/vector.hpp"
 
 #include <vector>
@@ -116,9 +115,7 @@ public:
 
 	//! Converts this DataChunk to a printable string representation
 	string ToString() const;
-	void Print() {
-		Printer::Print(ToString());
-	}
+	void Print();
 
 	Vector &GetVector(size_t index) {
 		return data[index];

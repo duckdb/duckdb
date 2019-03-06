@@ -2,6 +2,7 @@
 
 #include "common/assert.hpp"
 #include "common/exception.hpp"
+#include "common/printer.hpp"
 #include "common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
@@ -335,8 +336,11 @@ string Vector::ToString() const {
 	return retval;
 }
 
-#ifdef DEBUG
+void Vector::Print() {
+	Printer::Print(ToString());
+}
 
+#ifdef DEBUG
 void Vector::Verify() {
 	if (type == TypeId::VARCHAR) {
 		// we just touch all the strings and let the sanitizer figure out if any

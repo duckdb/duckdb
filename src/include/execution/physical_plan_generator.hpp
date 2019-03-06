@@ -9,7 +9,6 @@
 #pragma once
 
 #include "common/common.hpp"
-#include "common/printer.hpp"
 #include "execution/physical_operator.hpp"
 #include "planner/bindcontext.hpp"
 #include "planner/logical_operator.hpp"

@@ -10,7 +10,6 @@
 
 #include "catalog/catalog.hpp"
 #include "common/common.hpp"
-#include "common/printer.hpp"
 #include "parser/expression.hpp"
 #include "parser/statement/select_statement.hpp"
 #include "planner/logical_operator_visitor.hpp"
@@ -48,9 +47,7 @@ public:
 
 	virtual string ParamsToString() const;
 	virtual string ToString(size_t depth = 0) const;
-	void Print() {
-		Printer::Print(ToString());
-	}
+	void Print();
 
 	void AddChild(unique_ptr<LogicalOperator> child) {
 		children.push_back(move(child));

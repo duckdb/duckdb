@@ -9,9 +9,6 @@
 #pragma once
 
 #include "common/common.hpp"
-#include "common/printer.hpp"
-
-#include <string>
 
 namespace duckdb {
 

@@ -33,3 +33,7 @@ unique_ptr<Constraint> Constraint::Deserialize(Deserializer &source) {
 		return nullptr;
 	}
 }
+
+void Constraint::Print() {
+	Printer::Print(ToString());
+}
