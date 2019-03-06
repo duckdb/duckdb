@@ -27,7 +27,7 @@ public:
 
 	virtual string ToString() const = 0;
 	void Print();
-	
+
 	ConstraintType type;
 
 	unique_ptr<Constraint> Copy();

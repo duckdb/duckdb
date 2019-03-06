@@ -1,12 +1,10 @@
 #include "optimizer/filter_combiner.hpp"
 
 #include "execution/expression_executor.hpp"
-
-#include "planner/operator/logical_empty_result.hpp"
-#include "planner/operator/logical_filter.hpp"
-
 #include "parser/expression/comparison_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
+#include "planner/operator/logical_empty_result.hpp"
+#include "planner/operator/logical_filter.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -15,7 +13,7 @@ using ExpressionValueInformation = FilterCombiner::ExpressionValueInformation;
 
 ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, ExpressionValueInformation &right);
 
-Expression* FilterCombiner::GetNode(Expression *expr) {
+Expression *FilterCombiner::GetNode(Expression *expr) {
 	auto entry = stored_expressions.find(expr);
 	if (entry != stored_expressions.end()) {
 		// expression already exists: return a reference to the stored expression
@@ -44,24 +42,25 @@ size_t FilterCombiner::GetEquivalenceSet(Expression *expr) {
 	}
 }
 
-FilterResult FilterCombiner::AddConstantComparison(vector<ExpressionValueInformation>& info_list, ExpressionValueInformation info) {
-	for(size_t i = 0; i < info_list.size(); i++) {
+FilterResult FilterCombiner::AddConstantComparison(vector<ExpressionValueInformation> &info_list,
+                                                   ExpressionValueInformation info) {
+	for (size_t i = 0; i < info_list.size(); i++) {
 		auto comparison = CompareValueInformation(info_list[i], info);
-		switch(comparison) {
-			case ValueComparisonResult::PRUNE_LEFT:
-				// prune the entry from the info list
-				info_list.erase(info_list.begin() + i);
-				i--;
-				break;
-			case ValueComparisonResult::PRUNE_RIGHT:
-				// prune the current info
-				return FilterResult::SUCCESS;
-			case ValueComparisonResult::UNSATISFIABLE_CONDITION:
-				// combination of filters is unsatisfiable: prune the entire branch
-				return FilterResult::UNSATISFIABLE;
-			default:
-				// prune nothing, move to the next condition
-				break;
+		switch (comparison) {
+		case ValueComparisonResult::PRUNE_LEFT:
+			// prune the entry from the info list
+			info_list.erase(info_list.begin() + i);
+			i--;
+			break;
+		case ValueComparisonResult::PRUNE_RIGHT:
+			// prune the current info
+			return FilterResult::SUCCESS;
+		case ValueComparisonResult::UNSATISFIABLE_CONDITION:
+			// combination of filters is unsatisfiable: prune the entire branch
+			return FilterResult::UNSATISFIABLE;
+		default:
+			// prune nothing, move to the next condition
+			break;
 		}
 	}
 	// finally add the entry to the list
@@ -82,26 +81,28 @@ FilterResult FilterCombiner::AddFilter(unique_ptr<Expression> expr) {
 
 void FilterCombiner::GenerateFilters(std::function<void(unique_ptr<Expression> filter)> callback) {
 	// first loop over the remaining filters
-	for(auto &filter : remaining_filters) {
+	for (auto &filter : remaining_filters) {
 		callback(move(filter));
 	}
 	remaining_filters.clear();
 	// now loop over the equivalence sets
-	for(auto &entry : equivalence_map) {
+	for (auto &entry : equivalence_map) {
 		auto equivalence_set = entry.first;
 		auto &entries = entry.second;
 		auto &constant_list = constant_values.find(equivalence_set)->second;
 		// for each entry generate an equality expression comparing to each other
-		for(size_t i = 0; i < entries.size(); i++) {
-			for(size_t k = i + 1; k < entries.size(); k++) {
-				auto comparison = make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, entries[i]->Copy(), entries[k]->Copy());
+		for (size_t i = 0; i < entries.size(); i++) {
+			for (size_t k = i + 1; k < entries.size(); k++) {
+				auto comparison = make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, entries[i]->Copy(),
+				                                                    entries[k]->Copy());
 				callback(move(comparison));
 			}
 			// for each entry also create a comparison with each constant
-			for(size_t k = 0; k < constant_list.size(); k++) {
+			for (size_t k = 0; k < constant_list.size(); k++) {
 				auto info = constant_list[k];
 				auto constant = make_unique<ConstantExpression>(info.constant);
-				auto comparison = make_unique<ComparisonExpression>(info.comparison_type, entries[i]->Copy(), move(constant));
+				auto comparison =
+				    make_unique<ComparisonExpression>(info.comparison_type, entries[i]->Copy(), move(constant));
 				callback(move(comparison));
 			}
 		}
@@ -114,9 +115,7 @@ void FilterCombiner::GenerateFilters(std::function<void(unique_ptr<Expression> f
 
 bool FilterCombiner::HasFilters() {
 	bool has_filters = false;
-	GenerateFilters([&](unique_ptr<Expression> child) {
-		has_filters = true;
-	});
+	GenerateFilters([&](unique_ptr<Expression> child) { has_filters = true; });
 	return has_filters;
 }
 
@@ -141,18 +140,17 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 		// only comparisons supported for now
 		return FilterResult::UNSUPPORTED;
 	}
-	auto &comparison = (ComparisonExpression&)*expr;
+	auto &comparison = (ComparisonExpression &)*expr;
 	if (comparison.type != ExpressionType::COMPARE_LESSTHAN &&
-		comparison.type != ExpressionType::COMPARE_LESSTHANOREQUALTO &&
-		comparison.type != ExpressionType::COMPARE_GREATERTHAN &&
-		comparison.type != ExpressionType::COMPARE_GREATERTHANOREQUALTO &&
-		comparison.type != ExpressionType::COMPARE_EQUAL &&
-		comparison.type != ExpressionType::COMPARE_NOTEQUAL) {
+	    comparison.type != ExpressionType::COMPARE_LESSTHANOREQUALTO &&
+	    comparison.type != ExpressionType::COMPARE_GREATERTHAN &&
+	    comparison.type != ExpressionType::COMPARE_GREATERTHANOREQUALTO &&
+	    comparison.type != ExpressionType::COMPARE_EQUAL && comparison.type != ExpressionType::COMPARE_NOTEQUAL) {
 		// only support [>, >=, <, <=, ==] expressions
 		return FilterResult::UNSUPPORTED;
 	}
 	// check if one of the sides is a scalar value
-	bool left_is_scalar  = comparison.left->IsFoldable();
+	bool left_is_scalar = comparison.left->IsFoldable();
 	bool right_is_scalar = comparison.right->IsFoldable();
 	if (left_is_scalar || right_is_scalar) {
 		// comparison with scalar
@@ -163,9 +161,8 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 
 		// create the ExpressionValueInformation
 		ExpressionValueInformation info;
-		info.comparison_type = left_is_scalar ?
-		                ComparisonExpression::FlipComparisionExpression(comparison.type) :
-						comparison.type;
+		info.comparison_type =
+		    left_is_scalar ? ComparisonExpression::FlipComparisionExpression(comparison.type) : comparison.type;
 		info.constant = constant_value;
 
 		// get the current bucket of constant values
@@ -195,7 +192,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 
 		auto &left_bucket = equivalence_map.find(left_equivalence_set)->second;
 		auto &right_bucket = equivalence_map.find(right_equivalence_set)->second;
-		for(size_t i = 0; i < right_bucket.size(); i++) {
+		for (size_t i = 0; i < right_bucket.size(); i++) {
 			// rewrite the equivalence set mapping for this node
 			equivalence_set_map[right_bucket[i]] = left_equivalence_set;
 			// add the node to the left bucket
@@ -206,7 +203,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 		assert(constant_values.find(right_equivalence_set) != constant_values.end());
 		auto &left_constant_bucket = constant_values.find(left_equivalence_set)->second;
 		auto &right_constant_bucket = constant_values.find(right_equivalence_set)->second;
-		for(size_t i = 0; i < right_constant_bucket.size(); i++) {
+		for (size_t i = 0; i < right_constant_bucket.size(); i++) {
 			if (AddConstantComparison(left_constant_bucket, right_constant_bucket[i]) == FilterResult::UNSATISFIABLE) {
 				return FilterResult::UNSATISFIABLE;
 			}

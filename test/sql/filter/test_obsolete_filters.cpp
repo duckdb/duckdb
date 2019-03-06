@@ -125,7 +125,6 @@ TEST_CASE("Test expressions with obsolete filters", "[filter]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 }
 
-
 TEST_CASE("Test string expressions with obsolete filters", "[filter]") {
 	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
@@ -173,5 +172,4 @@ TEST_CASE("Test string expressions with obsolete filters", "[filter]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {"world"}));
 	result = con.Query("SELECT * FROM strings WHERE s<>'world' AND s>='hello'");
 	REQUIRE(CHECK_COLUMN(result, 0, {"hello"}));
-
 }

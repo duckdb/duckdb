@@ -1,8 +1,8 @@
 #include "optimizer/filter_pushdown.hpp"
 
+#include "optimizer/filter_combiner.hpp"
 #include "planner/operator/logical_filter.hpp"
 #include "planner/operator/logical_join.hpp"
-#include "optimizer/filter_combiner.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -67,7 +67,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 
 FilterResult FilterPushdown::AddFilter(unique_ptr<Expression> expr) {
 	// if there are filters in this FilterPushdown node, push them into the combiner
-	for(auto &f : filters) {
+	for (auto &f : filters) {
 		auto result = combiner.AddFilter(move(f->filter));
 		assert(result == FilterResult::SUCCESS);
 	}
@@ -95,7 +95,7 @@ void FilterPushdown::GenerateFilters() {
 		f->filter = move(filter);
 		f->ExtractBindings();
 		filters.push_back(move(f));
-	});	
+	});
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOperator> op) {

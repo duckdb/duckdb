@@ -2,10 +2,10 @@
 
 #include "common/exception.hpp"
 #include "common/helper.hpp"
+#include "common/printer.hpp"
 #include "common/serializer.hpp"
 #include "common/types/null_value.hpp"
 #include "common/vector_operations/vector_operations.hpp"
-#include "common/printer.hpp"
 
 using namespace duckdb;
 using namespace std;

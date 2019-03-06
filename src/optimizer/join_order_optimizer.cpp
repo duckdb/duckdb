@@ -72,13 +72,13 @@ static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, 
 bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<LogicalOperator *> &filter_operators,
                                               LogicalOperator *parent) {
 	LogicalOperator *op = &input_op;
-	while (op->children.size() == 1 && op->type != LogicalOperatorType::SUBQUERY && op->type != LogicalOperatorType::PROJECTION) {
+	while (op->children.size() == 1 && op->type != LogicalOperatorType::SUBQUERY &&
+	       op->type != LogicalOperatorType::PROJECTION) {
 		if (op->type == LogicalOperatorType::FILTER) {
 			// extract join conditions from filter
 			filter_operators.push_back(op);
 		}
-		if (op->type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY ||
-		    op->type == LogicalOperatorType::WINDOW) {
+		if (op->type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY || op->type == LogicalOperatorType::WINDOW) {
 			// don't push filters through projection or aggregate and group by
 			JoinOrderOptimizer optimizer;
 			op->children[0] = optimizer.Optimize(move(op->children[0]));
@@ -226,7 +226,7 @@ JoinNode *JoinOrderOptimizer::EmitPair(RelationSet *left, RelationSet *right, Ne
 
 bool JoinOrderOptimizer::TryEmitPair(RelationSet *left, RelationSet *right, NeighborInfo *info) {
 	pairs++;
-	if (pairs >= 10000) {
+	if (pairs >= 2000) {
 		// when the amount of pairs gets too large we exit the dynamic programming and resort to a greedy algorithm
 		// FIXME: simple heuristic currently
 		// at 10K pairs stop searching exactly and switch to heuristic

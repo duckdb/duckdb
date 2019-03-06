@@ -60,13 +60,15 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 	assert(join.type == JoinType::LEFT);
 	assert(op->type != LogicalOperatorType::DELIM_JOIN);
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
-	// for a comparison join we create a FilterCombiner that checks if we can push conditions on LHS join conditions into the RHS of the join
+	// for a comparison join we create a FilterCombiner that checks if we can push conditions on LHS join conditions
+	// into the RHS of the join
 	FilterCombiner filter_combiner;
 	if (op->type == LogicalOperatorType::COMPARISON_JOIN) {
 		// add all comparison conditions
-		auto &comparison_join = (LogicalComparisonJoin&) *op;
-		for(auto &cond : comparison_join.conditions) {
-			filter_combiner.AddFilter(make_unique<ComparisonExpression>(cond.comparison, cond.left->Copy(), cond.right->Copy()));
+		auto &comparison_join = (LogicalComparisonJoin &)*op;
+		for (auto &cond : comparison_join.conditions) {
+			filter_combiner.AddFilter(
+			    make_unique<ComparisonExpression>(cond.comparison, cond.left->Copy(), cond.right->Copy()));
 		}
 	}
 	// now check the set of filters
@@ -76,9 +78,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 			// bindings match left side
 			// we can push the filter into the left side
 			if (op->type == LogicalOperatorType::COMPARISON_JOIN) {
-				// we MIGHT be able to push it down the RHS as well, but only if it is a comparison that matches the join predicates
-				// we use the FilterCombiner to figure this out
-				// add the expression to the FilterCombiner
+				// we MIGHT be able to push it down the RHS as well, but only if it is a comparison that matches the
+				// join predicates we use the FilterCombiner to figure this out add the expression to the FilterCombiner
 				filter_combiner.AddFilter(filters[i]->filter->Copy());
 			}
 			left_pushdown.filters.push_back(move(filters[i]));
@@ -106,7 +107,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 	// we only added (1) predicates that have JoinSide::BOTH from the conditions, and
 	// (2) predicates that have JoinSide::LEFT from the filters
 	// we check now if this combination generated any new filters that are only on JoinSide::RIGHT
-	// this happens if, e.g. a join condition is (i=a) and there is a filter (i=500), we can then push the filter (a=500) into the RHS
+	// this happens if, e.g. a join condition is (i=a) and there is a filter (i=500), we can then push the filter
+	// (a=500) into the RHS
 	filter_combiner.GenerateFilters([&](unique_ptr<Expression> filter) {
 		if (LogicalComparisonJoin::GetJoinSide(*filter, left_bindings, right_bindings) == JoinSide::RIGHT) {
 			right_pushdown.AddFilter(move(filter));

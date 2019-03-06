@@ -95,11 +95,11 @@ static void ExecuteStatement_(ClientContext &context, string query, unique_ptr<S
 #ifdef DEBUG
 	if (context.enable_optimizer) {
 #endif
-	Optimizer optimizer(planner.binder, context);
-	plan = optimizer.Optimize(move(plan));
-	if (!plan) {
-		return;
-	}
+		Optimizer optimizer(planner.binder, context);
+		plan = optimizer.Optimize(move(plan));
+		if (!plan) {
+			return;
+		}
 
 #ifdef DEBUG
 	}
@@ -263,7 +263,6 @@ unique_ptr<DuckDBStreamingResult> ClientContext::Query(string query) {
 			assert(materialized_result->Equals(deserialized_result.get()));
 			assert(copied_result->Equals(deserialized_result.get()));
 			assert(copied_result->Equals(unoptimized_result.get()));
-
 
 			if (profiling_is_enabled) {
 				profiler.Enable();

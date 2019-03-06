@@ -6,9 +6,9 @@
 #include "common/operator/cast_operators.hpp"
 #include "common/operator/comparison_operators.hpp"
 #include "common/operator/numeric_binary_operators.hpp"
+#include "common/printer.hpp"
 #include "common/serializer.hpp"
 #include "common/value_operations/value_operations.hpp"
-#include "common/printer.hpp"
 
 using namespace duckdb;
 using namespace std;

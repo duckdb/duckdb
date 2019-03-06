@@ -36,7 +36,7 @@ unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
 		if (!constant_value.is_null) {
 			if (!constant_value.value_.boolean) {
 				// FALSE in OR, result of expression is the other expression
-			return constant_expr == conjunction->left.get() ? move(conjunction->right) : move(conjunction->left);
+				return constant_expr == conjunction->left.get() ? move(conjunction->right) : move(conjunction->left);
 			} else {
 				// TRUE in OR, result of expression is true
 				return make_unique<ConstantExpression>(Value::BOOLEAN(true));

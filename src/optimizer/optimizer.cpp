@@ -1,14 +1,13 @@
 #include "optimizer/optimizer.hpp"
 
+#include "execution/expression_executor.hpp"
 #include "optimizer/cse_optimizer.hpp"
 #include "optimizer/filter_pushdown.hpp"
 #include "optimizer/join_order_optimizer.hpp"
 #include "optimizer/rule/list.hpp"
 #include "parser/expression/common_subexpression.hpp"
 #include "planner/binder.hpp"
-
 #include "planner/operator/list.hpp"
-#include "execution/expression_executor.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -31,7 +30,8 @@ Optimizer::Optimizer(Binder &binder, ClientContext &client_context) : binder(bin
 
 class InClauseRewriter : public LogicalOperatorVisitor {
 public:
-	InClauseRewriter(Optimizer &optimizer) : optimizer(optimizer) {}
+	InClauseRewriter(Optimizer &optimizer) : optimizer(optimizer) {
+	}
 
 	Optimizer &optimizer;
 	unique_ptr<LogicalOperator> root;
@@ -43,7 +43,7 @@ public:
 			op->children[0] = move(root);
 		}
 
-		for(auto &child : op->children) {
+		for (auto &child : op->children) {
 			child = Rewrite(move(child));
 		}
 		return op;

@@ -17,14 +17,17 @@ TEST_CASE("Unicode schema", "[catalog]") {
 	// insert data
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO 👤 VALUES (1, 'Jeff', '2019-01-01'), (2, 'Annie', '2019-01-01');"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO ✍ VALUES (1, 'Herman Melville'), (2, 'Lewis Carroll');"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO 📕 VALUES (1, 'Alice in Wonderland', '🔮', 2), (2, 'Moby Dick', '📖', 1), (3, 'Through the Looking-Glass', '🔮', 2);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO 📕 VALUES (1, 'Alice in Wonderland', '🔮', 2), (2, 'Moby Dick', '📖', 1), (3, "
+	                          "'Through the Looking-Glass', '🔮', 2);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO 👤🏠📕 VALUES (1, 1, '😍'), (1, 2, '🤢'), (2, 2, '🙂');"));
 
-	result = con.Query("SELECT 👤.🗣 AS 👤, 📕.💬 AS 📕 FROM 👤 JOIN 👤🏠📕 ON 👤.🔑 = 👤🏠📕.👤 JOIN 📕 ON 📕.🔑 = 👤🏠📕.📕 ORDER BY 👤, 📕;");
+	result = con.Query("SELECT 👤.🗣 AS 👤, 📕.💬 AS 📕 FROM 👤 JOIN 👤🏠📕 ON 👤.🔑 = 👤🏠📕.👤 JOIN 📕 ON 📕.🔑 = 👤🏠📕.📕 ORDER BY 👤, "
+	                   "📕;");
 	REQUIRE(CHECK_COLUMN(result, 0, {"Annie", "Jeff", "Jeff"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"Moby Dick", "Alice in Wonderland", "Moby Dick"}));
 
-	result = con.Query("SELECT 👤.🗣, 👤🏠📕.⭐ FROM 👤🏠📕 JOIN 📕 ON 👤🏠📕.📕 = 📕.🔑 JOIN 👤 ON 👤🏠📕.👤=👤.🔑 WHERE 📕.💬 = 'Moby Dick' ORDER BY 👤.🗣;");
+	result = con.Query("SELECT 👤.🗣, 👤🏠📕.⭐ FROM 👤🏠📕 JOIN 📕 ON 👤🏠📕.📕 = 📕.🔑 JOIN 👤 ON 👤🏠📕.👤=👤.🔑 WHERE 📕.💬 = 'Moby "
+	                   "Dick' ORDER BY 👤.🗣;");
 	REQUIRE(CHECK_COLUMN(result, 0, {"Annie", "Jeff"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"🙂", "🤢"}));
 

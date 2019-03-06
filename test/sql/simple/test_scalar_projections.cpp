@@ -42,6 +42,9 @@ TEST_CASE("Test scalar queries from SQLLogicTests", "[scalarquery]") {
 	DuckDBConnection con(db);
 	con.EnableQueryVerification();
 
-	result = con.Query("SELECT + CASE WHEN NOT + 84 NOT BETWEEN - 78 + 98 * 51 AND - ( ( - 28 ) ) * COUNT ( * ) + + - 65 THEN NULL ELSE 16 / + 34 + + - 98 END / + 70 - ( - - CASE - COALESCE ( + 73, + - 66 * - 89 * - 72 ) WHEN COUNT ( * ) / + 4 * CAST ( - - 18 AS INTEGER ) + + + COUNT ( * ) - - 88 THEN NULL WHEN 92 THEN NULL ELSE COUNT ( * ) END ) AS col0");
+	result = con.Query("SELECT + CASE WHEN NOT + 84 NOT BETWEEN - 78 + 98 * 51 AND - ( ( - 28 ) ) * COUNT ( * ) + + - "
+	                   "65 THEN NULL ELSE 16 / + 34 + + - 98 END / + 70 - ( - - CASE - COALESCE ( + 73, + - 66 * - 89 "
+	                   "* - 72 ) WHEN COUNT ( * ) / + 4 * CAST ( - - 18 AS INTEGER ) + + + COUNT ( * ) - - 88 THEN "
+	                   "NULL WHEN 92 THEN NULL ELSE COUNT ( * ) END ) AS col0");
 	REQUIRE(CHECK_COLUMN(result, 0, {-2}));
 }

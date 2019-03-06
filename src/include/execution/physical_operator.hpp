@@ -54,7 +54,8 @@ class PhysicalOperator {
 public:
 	PhysicalOperator(PhysicalOperatorType type, vector<TypeId> types) : type(type), types(types) {
 	}
-	virtual ~PhysicalOperator(){}
+	virtual ~PhysicalOperator() {
+	}
 
 	PhysicalOperatorType GetOperatorType() {
 		return type;

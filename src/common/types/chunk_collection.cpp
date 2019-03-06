@@ -1,8 +1,8 @@
 #include "common/types/chunk_collection.hpp"
 
 #include "common/exception.hpp"
-#include "common/value_operations/value_operations.hpp"
 #include "common/printer.hpp"
+#include "common/value_operations/value_operations.hpp"
 
 #include <cstring>
 

@@ -28,7 +28,8 @@ void BoundFunctionExpression::ResolveType() {
 }
 
 unique_ptr<Expression> BoundFunctionExpression::Copy() {
-	auto copy = make_unique<BoundFunctionExpression>(unique_ptr_cast<Expression, FunctionExpression>(function->Copy()), bound_function);
+	auto copy = make_unique<BoundFunctionExpression>(unique_ptr_cast<Expression, FunctionExpression>(function->Copy()),
+	                                                 bound_function);
 	copy->return_type = return_type;
 	copy->alias = alias;
 	return move(copy);

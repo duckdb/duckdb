@@ -39,7 +39,8 @@ public:
 	//! Create an Expression with the specified return type
 	Expression(ExpressionType type, TypeId return_type) : type(type), return_type(return_type), stats(*this) {
 	}
-	virtual ~Expression(){}
+	virtual ~Expression() {
+	}
 
 	//! Resolves the type for this expression based on its children
 	virtual void ResolveType() {

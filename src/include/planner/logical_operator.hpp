@@ -33,7 +33,8 @@ public:
 	LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions)
 	    : type(type), expressions(std::move(expressions)) {
 	}
-	virtual ~LogicalOperator(){}
+	virtual ~LogicalOperator() {
+	}
 
 	LogicalOperatorType GetOperatorType() {
 		return type;

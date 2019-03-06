@@ -20,7 +20,8 @@ class TableRef {
 public:
 	TableRef(TableReferenceType type) : type(type) {
 	}
-	virtual ~TableRef(){}
+	virtual ~TableRef() {
+	}
 
 	virtual unique_ptr<TableRef> Accept(SQLNodeVisitor *v) = 0;
 	virtual bool Equals(const TableRef *other) const {
