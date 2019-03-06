@@ -22,21 +22,26 @@ unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
 	assert(constant_expr->IsScalar());
 	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr).CastAs(TypeId::BOOLEAN);
 	if (conjunction->type == ExpressionType::CONJUNCTION_AND) {
-		if (!constant_value.is_null && !constant_value.value_.boolean) {
-			// non-null FALSE in AND, result of expression is false
-			return make_unique<ConstantExpression>(Value::BOOLEAN(false));
-		} else {
-			// TRUE in AND, result of expression is the RHS
-			return constant_expr == conjunction->left.get() ? move(conjunction->right) : move(conjunction->left);
+		if (!constant_value.is_null) {
+			if (!constant_value.value_.boolean) {
+				// FALSE in AND, result of expression is false
+				return make_unique<ConstantExpression>(Value::BOOLEAN(false));
+			} else {
+				// TRUE in AND, result of expression is the RHS
+				return constant_expr == conjunction->left.get() ? move(conjunction->right) : move(conjunction->left);
+			}
 		}
 	} else {
 		assert(conjunction->type == ExpressionType::CONJUNCTION_OR);
-		if (!constant_value.is_null && constant_value.value_.boolean) {
-			// non-null TRUE in OR, result of expression is true
-			return make_unique<ConstantExpression>(Value::BOOLEAN(true));
-		} else {
-			// FALSE in OR, result of expression is the other expression
+		if (!constant_value.is_null) {
+			if (!constant_value.value_.boolean) {
+				// FALSE in OR, result of expression is the other expression
 			return constant_expr == conjunction->left.get() ? move(conjunction->right) : move(conjunction->left);
+			} else {
+				// TRUE in OR, result of expression is true
+				return make_unique<ConstantExpression>(Value::BOOLEAN(true));
+			}
 		}
 	}
+	return nullptr;
 }
