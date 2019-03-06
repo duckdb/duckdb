@@ -72,12 +72,12 @@ static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, 
 bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<LogicalOperator *> &filter_operators,
                                               LogicalOperator *parent) {
 	LogicalOperator *op = &input_op;
-	while (op->children.size() == 1 && op->type != LogicalOperatorType::SUBQUERY) {
+	while (op->children.size() == 1 && op->type != LogicalOperatorType::SUBQUERY && op->type != LogicalOperatorType::PROJECTION) {
 		if (op->type == LogicalOperatorType::FILTER) {
 			// extract join conditions from filter
 			filter_operators.push_back(op);
 		}
-		if (op->type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY || op->type == LogicalOperatorType::PROJECTION ||
+		if (op->type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY ||
 		    op->type == LogicalOperatorType::WINDOW) {
 			// don't push filters through projection or aggregate and group by
 			JoinOrderOptimizer optimizer;
@@ -130,7 +130,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		relations.push_back(move(relation));
 		return true;
 	}
-	if (op->type == LogicalOperatorType::JOIN || op->type == LogicalOperatorType::CROSS_PRODUCT) {
+	if (op->type == LogicalOperatorType::COMPARISON_JOIN || op->type == LogicalOperatorType::CROSS_PRODUCT) {
 		// inner join or cross product
 		bool can_reorder_left = ExtractJoinRelations(*op->children[0], filter_operators, op);
 		bool can_reorder_right = ExtractJoinRelations(*op->children[1], filter_operators, op);
@@ -158,6 +158,16 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		auto table_function = (LogicalTableFunction *)op;
 		auto relation = make_unique<Relation>(&input_op, parent);
 		relation_mapping[table_function->table_index] = relations.size();
+		relations.push_back(move(relation));
+		return true;
+	} else if (op->type == LogicalOperatorType::PROJECTION) {
+		auto proj = (LogicalProjection *)op;
+		// we run the join order optimizer witin the subquery as well
+		JoinOrderOptimizer optimizer;
+		op->children[0] = optimizer.Optimize(move(op->children[0]));
+		// projection, add to the set of relations
+		auto relation = make_unique<Relation>(&input_op, parent);
+		relation_mapping[proj->table_index] = relations.size();
 		relations.push_back(move(relation));
 		return true;
 	}
