@@ -32,6 +32,10 @@ unique_ptr<TableRef> Transformer::TransformJoin(JoinExpr *root) {
 	default: { throw NotImplementedException("Join type %d not supported yet...\n", root->jointype); }
 	}
 
+	if (root->usingClause) {
+		throw NotImplementedException("USING CLAUSE not implemented yet");
+	}
+
 	// Check the type of left arg and right arg before transform
 	result->left = TransformTableRefNode(root->larg);
 	result->right = TransformTableRefNode(root->rarg);

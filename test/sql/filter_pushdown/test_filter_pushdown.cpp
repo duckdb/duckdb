@@ -163,15 +163,25 @@ TEST_CASE("Test filter pushdown with more data", "[filterpushdown][.]") {
 	REQUIRE(CHECK_COLUMN(result, 6, {Value()}));
 	REQUIRE(CHECK_COLUMN(result, 7, {Value()}));
 	// we can replicate conditions on the left join predicates on the RHS
-	// result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k WHERE tbl1.i=5 AND tbl1.k=10");
-	// REQUIRE(CHECK_COLUMN(result, 0, {5}));
-	// REQUIRE(CHECK_COLUMN(result, 1, {5}));
-	// REQUIRE(CHECK_COLUMN(result, 2, {10}));
-	// REQUIRE(CHECK_COLUMN(result, 3, {10}));
-	// REQUIRE(CHECK_COLUMN(result, 4, {5}));
-	// REQUIRE(CHECK_COLUMN(result, 5, {5}));
-	// REQUIRE(CHECK_COLUMN(result, 6, {10}));
-	// REQUIRE(CHECK_COLUMN(result, 7, {10}));
+	result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k WHERE tbl1.i=5 AND tbl1.k=10");
+	REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5}));
+	REQUIRE(CHECK_COLUMN(result, 2, {10}));
+	REQUIRE(CHECK_COLUMN(result, 3, {10}));
+	REQUIRE(CHECK_COLUMN(result, 4, {5}));
+	REQUIRE(CHECK_COLUMN(result, 5, {5}));
+	REQUIRE(CHECK_COLUMN(result, 6, {10}));
+	REQUIRE(CHECK_COLUMN(result, 7, {10}));
+	// also multiple conditions
+	result = con.Query("SELECT * FROM (SELECT * FROM vals1, vals2) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k WHERE tbl1.i>4 AND tbl1.i<6 AND tbl1.k=10");
+	REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5}));
+	REQUIRE(CHECK_COLUMN(result, 2, {10}));
+	REQUIRE(CHECK_COLUMN(result, 3, {10}));
+	REQUIRE(CHECK_COLUMN(result, 4, {5}));
+	REQUIRE(CHECK_COLUMN(result, 5, {5}));
+	REQUIRE(CHECK_COLUMN(result, 6, {10}));
+	REQUIRE(CHECK_COLUMN(result, 7, {10}));
 
 	// pushdown filters into subqueries
 	result = con.Query("SELECT i, k FROM (SELECT i, k FROM vals1, vals2) tbl1 WHERE i=k AND i<5 ORDER BY i");
@@ -309,7 +319,7 @@ TEST_CASE("Test filter pushdown with more data", "[filterpushdown][.]") {
 	result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl2.i>10 AND tbl1.k>=500 AND tbl2.k<7000 AND tbl2.k<=6000 AND tbl2.k<>8000 AND tbl1.i<>4000 AND tbl1.i=tbl2.i AND tbl1.i=tbl2.k AND tbl1.i=tbl1.k AND tbl1.i=5000;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	return;
-	
+
 	// greater than/less than should also be transitive
 	result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i>9997 AND tbl1.k>tbl1.i AND tbl2.i>tbl1.i AND tbl2.k>tbl1.i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
