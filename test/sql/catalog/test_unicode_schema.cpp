@@ -28,7 +28,7 @@ TEST_CASE("Unicode schema", "[catalog]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {"Annie", "Jeff"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"🙂", "🤢"}));
 
-	result = con.Query("SELECT type, name FROM sqlite_master() ORDER BY name;");
-	REQUIRE(CHECK_COLUMN(result, 0, {"table", "table", "table", "table"}));
-	REQUIRE(CHECK_COLUMN(result, 1, {"✍", "👤", "👤🏠📕", "📕"}));
+	result = con.Query("SELECT type, name FROM sqlite_master() WHERE name='👤' ORDER BY name;");
+	REQUIRE(CHECK_COLUMN(result, 0, {"table"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"👤"}));
 }

@@ -575,7 +575,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 	// have to move up through the relations
 	auto op = plan.get();
 	auto parent = plan.get();
-	while (op->type != LogicalOperatorType::CROSS_PRODUCT && op->type != LogicalOperatorType::JOIN) {
+	while (op->type != LogicalOperatorType::CROSS_PRODUCT && op->type != LogicalOperatorType::COMPARISON_JOIN) {
 		assert(op->children.size() == 1);
 		parent = op;
 		op = op->children[0].get();
