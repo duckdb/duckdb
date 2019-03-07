@@ -33,3 +33,21 @@ TEST_CASE("Test DISTINCT keyword", "[distinct]") {
 	result = con.Query("SELECT DISTINCT CASE WHEN a > 11 THEN 11 ELSE a END FROM test");
 	REQUIRE(CHECK_COLUMN(result, 0, {11}));
 }
+
+TEST_CASE("Test DISTINCT and ORDER BY", "[distinct]") {
+	unique_ptr<DuckDBResult> result;
+	DuckDB db(nullptr);
+	DuckDBConnection con(db);
+	con.EnableQueryVerification();
+
+	con.Query("CREATE TABLE integers(i INTEGER);");
+	con.Query("INSERT INTO integers VALUES (1), (2), (3)");
+
+	result = con.Query("SELECT DISTINCT i%2 FROM integers ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1}));
+
+	// controversial: Postgres fails here with the error "with SELECT DISTINCT columns from ORDER BY must appear in the SELECT clause"
+	// but SQLite succeeds
+	// for now we fail because it gives unintuitive results
+	REQUIRE_FAIL(con.Query("SELECT DISTINCT i%2 FROM integers ORDER BY i"));
+}

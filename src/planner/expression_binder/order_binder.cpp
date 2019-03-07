@@ -69,6 +69,9 @@ BindResult OrderBinder::BindExpression(unique_ptr<Expression> expr, uint32_t dep
 		// just point to that entry
 		return CreateProjectionReference(*expr, entry->second);
 	}
+	if (node.select_distinct) {
+		throw BinderException("for SELECT DISTINCT, ORDER BY expressions must appear in select list!");
+	}
 	// otherwise we need to push the ORDER BY entry into the select list
 	auto result = CreateProjectionReference(*expr, node.select_list.size());
 	node.select_list.push_back(move(expr));
