@@ -16,7 +16,7 @@ TEST_CASE("Test TPC-DS SF0 Query Compilation", "[tpcds]") {
 
 	// this is to make sure we do not get regressions in query compilation
 	unordered_set<size_t> missing_queries = {55, 101};
-	for (size_t q = 0; q < 104; q++) {
+	for (size_t q = 1; q < 104; q++) {
 		if (missing_queries.count(q) != 0) {
 			continue;
 		}
@@ -33,7 +33,7 @@ TEST_CASE("Test TPC-DS SF0.1 Query Execution", "[tpcds][.]") {
 	con.EnableProfiling();
 
 	unordered_set<size_t> missing_queries = {14, 40, 51, 55, 68, 76, 86, 89, 101};
-	for (size_t q = 0; q < 104; q++) {
+	for (size_t q = 1; q < 104; q++) {
 		if (missing_queries.count(q) != 0) {
 			continue;
 		}
