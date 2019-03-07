@@ -37,6 +37,7 @@ public:
 	//! The conditions of the join
 	vector<JoinCondition> conditions;
 
+	static bool CreateJoinCondition(Expression &expr, unordered_set<size_t> &left_bindings, unordered_set<size_t> &right_bindings, vector<JoinCondition> &conditions);
 	static unique_ptr<Expression> CreateExpressionFromCondition(JoinCondition cond);
 	static JoinSide CombineJoinSide(JoinSide left, JoinSide right);
 	static JoinSide GetJoinSide(size_t table_binding, unordered_set<size_t> &left_bindings,

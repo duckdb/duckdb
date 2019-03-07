@@ -473,6 +473,7 @@ static unique_ptr<LogicalOperator> ExtractRelation(Relation &rel) {
 
 pair<RelationSet *, unique_ptr<LogicalOperator>>
 JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode *node) {
+	RelationSet *left_node = nullptr, *right_node = nullptr;
 	RelationSet *result_relation;
 	unique_ptr<LogicalOperator> result_operator;
 	if (node->left && node->right) {
@@ -518,7 +519,9 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 			assert(join->conditions.size() > 0);
 			result_operator = move(join);
 		}
-		result_relation = set_manager.Union(left.first, right.first);
+		left_node = left.first;
+		right_node = right.first;
+		result_relation = set_manager.Union(left_node, right_node);
 	} else {
 		// base node, get the entry from the list of extracted relations
 		assert(node->set->count == 1);
@@ -538,8 +541,50 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 			if (info->set->count > 0 && RelationSet::IsSubset(result_relation, info->set)) {
 				auto filter = move(filters[info->filter_index]);
 				// if it is, we can push the filter
-				// FIXME: we can also push it in an underlying join (if possible) here
-				result_operator = PushFilter(move(result_operator), move(filter));
+				// we can push it either into a join or as a filter
+				// check if we are in a join or in a base table
+				if (!left_node || !info->left_set) {
+					// base table or non-comparison expression, push it as a filter
+					result_operator = PushFilter(move(result_operator), move(filter));
+					continue;
+				}
+				// the node below us is a join or cross product and the expression is a comparison
+				// check if the nodes can be split up into left/right
+				bool found_subset = false;
+				bool invert = false;
+				if (RelationSet::IsSubset(left_node, info->left_set) &&
+					RelationSet::IsSubset(right_node, info->right_set)) {
+					found_subset = true;
+				} else if (RelationSet::IsSubset(right_node, info->left_set) &&
+					RelationSet::IsSubset(left_node, info->right_set)) {
+					invert = true;
+					found_subset = true;
+				}
+				if (!found_subset) {
+					// could not be split up into left/right
+					result_operator = PushFilter(move(result_operator), move(filter));
+					continue;
+				}
+				// create the join condition
+				JoinCondition cond;
+				assert(filter->GetExpressionClass() == ExpressionClass::COMPARISON);
+				auto &comparison = (ComparisonExpression &)*filter;
+				// we need to figure out which side is which by looking at the relations available to us
+				cond.left = !invert ? move(comparison.left) : move(comparison.right);
+				cond.right = !invert ? move(comparison.right) : move(comparison.left);
+				cond.comparison = comparison.type;
+				if (invert) {
+					// reverse comparison expression if we reverse the order of the children
+					cond.comparison = ComparisonExpression::FlipComparisionExpression(comparison.type);
+				}
+				// now find the join to push it into
+				auto node = result_operator.get();
+				if (node->type == LogicalOperatorType::FILTER) {
+					node = node->children[0].get();
+				}
+				assert(node->type == LogicalOperatorType::COMPARISON_JOIN);
+				auto &comp_join = (LogicalComparisonJoin&) *node;
+				comp_join.conditions.push_back(move(cond));
 			}
 		}
 	}
