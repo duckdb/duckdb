@@ -32,8 +32,8 @@ public:
 	}
 
 	unique_ptr<DuckDBStreamingResult> Query(string query);
-	unique_ptr<DataChunk> Fetch();
-	bool Cleanup();
+	unique_ptr<DataChunk> Fetch(int64_t query_number);
+	bool Cleanup(int64_t query_number = -1);
 
 	//! The allocator that holds any allocations made in the Query Context
 	Allocator allocator;

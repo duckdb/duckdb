@@ -4,7 +4,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test fetch API", "[api][.]") {
+TEST_CASE("Test fetch API", "[api]") {
 	DuckDB db(nullptr);
 	DuckDBConnection con(db);
 	// con.EnableQueryVerification();
@@ -17,9 +17,7 @@ TEST_CASE("Test fetch API", "[api][.]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 
 	streaming_result = con.SendQuery("INSERT INTO test VALUES (42)");
-
 	streaming_result = con.SendQuery("SELECT a from test");
-	REQUIRE(result);
 
 	REQUIRE(streaming_result->Fetch()->GetVector(0).GetValue(0) == Value::INTEGER(42));
 

@@ -15,7 +15,11 @@ ClientContext::ClientContext(DuckDB &database)
       prepared_statements(make_unique<CatalogSet>()) {
 }
 
-bool ClientContext::Cleanup() {
+bool ClientContext::Cleanup(int64_t query_number) {
+	if (query_number >= 0 && query_number < execution_context.query_number) {
+		// result for this query number has already been cleaned up
+		return true;
+	}
 	profiler.EndQuery();
 	if (profiler.IsEnabled() && profiler.automatic_printing) {
 		cout << profiler.ToString() << "\n";
@@ -23,6 +27,7 @@ bool ClientContext::Cleanup() {
 	// destroy any data held in the query allocator
 	allocator.Destroy();
 
+	execution_context.query_number++;
 	execution_context.physical_plan = nullptr;
 
 	if (transaction.HasActiveTransaction()) {
@@ -45,8 +50,12 @@ bool ClientContext::Cleanup() {
 	return execution_context.success;
 }
 
-unique_ptr<DataChunk> ClientContext::Fetch() {
+unique_ptr<DataChunk> ClientContext::Fetch(int64_t query_number) {
 	auto chunk = make_unique<DataChunk>();
+	if (query_number < execution_context.query_number) {
+		// result for this query has already been cleaned up, cannot fetch anymore
+		return chunk;
+	}
 	// empty chunk on no-plan queries
 	if (execution_context.success && !execution_context.physical_plan) {
 		return chunk;
@@ -128,7 +137,7 @@ static void ExecuteStatement_(ClientContext &context, string query, unique_ptr<S
 
 	// read the first chunk, important for INSERT etc.
 	context.execution_context.first_chunk = nullptr;
-	context.execution_context.first_chunk = context.Fetch();
+	context.execution_context.first_chunk = context.Fetch(context.execution_context.query_number);
 
 	if (log_query_string) {
 		context.ActiveTransaction().PushQuery(query);
@@ -137,6 +146,7 @@ static void ExecuteStatement_(ClientContext &context, string query, unique_ptr<S
 
 unique_ptr<DuckDBStreamingResult> ClientContext::Query(string query) {
 	Cleanup();
+	int64_t query_number = execution_context.query_number;
 
 	if (transaction.IsAutoCommit()) {
 		transaction.BeginTransaction();
@@ -145,7 +155,7 @@ unique_ptr<DuckDBStreamingResult> ClientContext::Query(string query) {
 	ActiveTransaction().active_query = db.transaction_manager.GetQueryNumber();
 
 	execution_context.success = true;
-	auto result = make_unique<DuckDBStreamingResult>(*this);
+	auto result = make_unique<DuckDBStreamingResult>(*this, query_number);
 
 	profiler.StartQuery(query);
 	interrupted = false;

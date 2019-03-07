@@ -23,5 +23,6 @@ public:
 	vector<string> names;
 	bool success;
 	string error;
+	int64_t query_number = 0;
 };
 } // namespace duckdb

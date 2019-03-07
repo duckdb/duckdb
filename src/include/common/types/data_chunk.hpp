@@ -118,6 +118,7 @@ public:
 	void Print();
 
 	Vector &GetVector(size_t index) {
+		assert(index < column_count);
 		return data[index];
 	}
 

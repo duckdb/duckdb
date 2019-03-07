@@ -96,7 +96,7 @@ class ClientContext;
 
 class DuckDBStreamingResult : public AbstractResult {
 public:
-	DuckDBStreamingResult(ClientContext &context) : context(context){};
+	DuckDBStreamingResult(ClientContext &context, int64_t query_number) : context(context), query_number(query_number) {};
 	//	DuckDBStreamingResult(string error);
 
 	~DuckDBStreamingResult() {
@@ -114,8 +114,8 @@ public:
 	const string &GetErrorMessage() override;
 
 private:
-
 	ClientContext &context;
+	int64_t query_number;
 };
 
 } // namespace duckdb

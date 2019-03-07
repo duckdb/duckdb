@@ -87,11 +87,11 @@ size_t DuckDBStreamingResult::column_count() {
 }
 
 bool DuckDBStreamingResult::Close() {
-	return context.Cleanup();
+	return context.Cleanup(query_number);
 }
 
 unique_ptr<DataChunk> DuckDBStreamingResult::Fetch() {
-	return context.Fetch();
+	return context.Fetch(query_number);
 }
 
 vector<TypeId> &DuckDBStreamingResult::types() {
