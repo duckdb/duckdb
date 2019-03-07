@@ -49,8 +49,7 @@ TEST_CASE("Test DISTINCT and ORDER BY", "[distinct]") {
 	result = con.Query("SELECT DISTINCT i%2 FROM integers ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1}));
 
-	// controversial: Postgres fails here with the error "with SELECT DISTINCT columns from ORDER BY must appear in the SELECT clause"
-	// but SQLite succeeds
-	// for now we fail because it gives unintuitive results
+	// controversial: Postgres fails here with the error "with SELECT DISTINCT columns from ORDER BY must appear in the
+	// SELECT clause" but SQLite succeeds for now we fail because it gives unintuitive results
 	REQUIRE_FAIL(con.Query("SELECT DISTINCT i%2 FROM integers ORDER BY i"));
 }

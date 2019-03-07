@@ -86,7 +86,6 @@ void duckdb_print_result(duckdb_result result /* The result to print */
 void duckdb_destroy_result(duckdb_result result /* The result to destroy */
 );
 
-
 #ifdef __cplusplus
 };
 #endif

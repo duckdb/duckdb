@@ -85,7 +85,8 @@ JoinSide LogicalComparisonJoin::GetJoinSide(unordered_set<size_t> bindings, unor
 
 //! Create a JoinCondition from a comparison
 bool LogicalComparisonJoin::CreateJoinCondition(Expression &expr, unordered_set<size_t> &left_bindings,
-                                unordered_set<size_t> &right_bindings, vector<JoinCondition> &conditions) {
+                                                unordered_set<size_t> &right_bindings,
+                                                vector<JoinCondition> &conditions) {
 	// comparison
 	auto &comparison = (ComparisonExpression &)expr;
 	auto left_side = LogicalComparisonJoin::GetJoinSide(*comparison.left, left_bindings, right_bindings);

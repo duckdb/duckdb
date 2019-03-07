@@ -96,7 +96,8 @@ class ClientContext;
 
 class DuckDBStreamingResult : public AbstractResult {
 public:
-	DuckDBStreamingResult(ClientContext &context, int64_t query_number) : context(context), query_number(query_number) {};
+	DuckDBStreamingResult(ClientContext &context, int64_t query_number)
+	    : context(context), query_number(query_number){};
 	//	DuckDBStreamingResult(string error);
 
 	~DuckDBStreamingResult() {
