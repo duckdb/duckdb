@@ -67,6 +67,7 @@ public:
 	//! Rollback any changes made by the appender The appender cannot be used after this point.
 	void Rollback();
 
+	uint32_t CurrentColumn() { return column; } 
 private:
 	void CheckAppend(TypeId type = TypeId::INVALID);
 	//! Flushes all appends to the base table.

@@ -29,7 +29,7 @@ TEST_CASE("Test TPC-DS SF0.1 Query Execution", "[tpcds][.]") {
 	Connection con(db);
 	unique_ptr<QueryResult> result;
 
-	tpcds::dbgen(0.1, db);
+	tpcds::dbgen(0.01, db);
 	con.EnableProfiling();
 
 	unordered_set<size_t> missing_queries = {14, 40, 51, 55, 68, 76, 86, 89, 101};

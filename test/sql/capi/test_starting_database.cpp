@@ -1,7 +1,5 @@
-#include "capi_helpers.hpp"
 #include "catch.hpp"
-
-#include <vector>
+#include "duckdb.h"
 
 using namespace std;
 
@@ -12,8 +10,8 @@ TEST_CASE("Simple In-Memory DB Start Up and Shutdown", "[simplestartup]") {
 	// open and close a database in in-memory mode
 	REQUIRE(duckdb_open(NULL, &database) == DuckDBSuccess);
 	REQUIRE(duckdb_connect(database, &connection) == DuckDBSuccess);
-	REQUIRE(duckdb_disconnect(connection) == DuckDBSuccess);
-	REQUIRE(duckdb_close(database) == DuckDBSuccess);
+	duckdb_disconnect(&connection);
+	duckdb_close(&database);
 }
 
 TEST_CASE("Multiple In-Memory DB Start Up and Shutdown", "[multiplestartup]") {
@@ -30,8 +28,8 @@ TEST_CASE("Multiple In-Memory DB Start Up and Shutdown", "[multiplestartup]") {
 	}
 	for (size_t i = 0; i < 10; i++) {
 		for (size_t j = 0; j < 10; j++) {
-			REQUIRE(duckdb_disconnect(connection[i * 10 + j]) == DuckDBSuccess);
+			duckdb_disconnect(&connection[i * 10 + j]);
 		}
-		REQUIRE(duckdb_close(database[i]) == DuckDBSuccess);
+		duckdb_close(&database[i]);
 	}
 }

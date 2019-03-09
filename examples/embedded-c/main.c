@@ -26,9 +26,9 @@ int main() {
 		fprintf(stderr, "Failed to query database\n");
 		goto cleanup;
 	}
-	duckdb_print_result(result);
+	//duckdb_print_result(result);
 cleanup:
-	duckdb_destroy_result(result);
-	duckdb_disconnect(con);
-	duckdb_close(db);
+	duckdb_destroy_result(&result);
+	duckdb_disconnect(&con);
+	duckdb_close(&db);
 }

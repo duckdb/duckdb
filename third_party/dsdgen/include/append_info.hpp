@@ -21,8 +21,6 @@ struct tpcds_append_information {
 
 	duckdb::Appender appender;
 	tpcds_table_def table_def;
-	size_t col;
-	size_t row;
 };
 
 } // namespace tpcds
