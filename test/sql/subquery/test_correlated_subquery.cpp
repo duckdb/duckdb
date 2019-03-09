@@ -7,9 +7,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test correlated subqueries", "[subquery]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	con.EnableQueryVerification();
 	con.EnableProfiling();
@@ -83,9 +83,9 @@ TEST_CASE("Test correlated subqueries", "[subquery]") {
 }
 
 TEST_CASE("Test correlated aggregate subqueries", "[subquery]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	con.EnableQueryVerification();
 	con.EnableProfiling();
@@ -291,9 +291,9 @@ TEST_CASE("Test correlated aggregate subqueries", "[subquery]") {
 }
 
 TEST_CASE("Test correlated EXISTS subqueries", "[subquery]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	con.EnableQueryVerification();
 	con.EnableProfiling();
@@ -341,9 +341,9 @@ TEST_CASE("Test correlated EXISTS subqueries", "[subquery]") {
 }
 
 TEST_CASE("Test correlated ANY/ALL subqueries", "[subquery]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	con.EnableQueryVerification();
 	con.EnableProfiling();
@@ -412,9 +412,9 @@ TEST_CASE("Test correlated ANY/ALL subqueries", "[subquery]") {
 }
 
 TEST_CASE("Test for COUNT(*) and SUM(i) IS NULL in subqueries", "[subquery]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	con.EnableQueryVerification();
 	con.EnableProfiling();
@@ -467,9 +467,9 @@ TEST_CASE("Test for COUNT(*) and SUM(i) IS NULL in subqueries", "[subquery]") {
 }
 
 TEST_CASE("Test multiple correlated columns and strings", "[subquery]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	con.EnableQueryVerification();
 	con.EnableProfiling();
@@ -512,9 +512,9 @@ TEST_CASE("Test multiple correlated columns and strings", "[subquery]") {
 }
 
 TEST_CASE("Test complex correlated subqueries", "[subquery]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	con.EnableQueryVerification();
 	con.EnableProfiling();
@@ -604,9 +604,9 @@ TEST_CASE("Test complex correlated subqueries", "[subquery]") {
 }
 
 TEST_CASE("Test window functions in correlated subqueries", "[subquery]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	con.EnableQueryVerification();
 	con.EnableProfiling();
@@ -638,9 +638,9 @@ TEST_CASE("Test window functions in correlated subqueries", "[subquery]") {
 }
 
 TEST_CASE("Test nested correlated subqueries", "[subquery]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	con.EnableQueryVerification();
 	con.EnableProfiling();
@@ -810,9 +810,9 @@ TEST_CASE("Test nested correlated subqueries", "[subquery]") {
 }
 
 TEST_CASE("Test varchar correlated subqueries", "[subquery]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	con.EnableQueryVerification();
 	con.EnableProfiling();
@@ -850,9 +850,9 @@ TEST_CASE("Test varchar correlated subqueries", "[subquery]") {
 }
 
 TEST_CASE("Test correlated subqueries based on TPC-DS", "[subquery]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE item(i_manufact INTEGER)"));

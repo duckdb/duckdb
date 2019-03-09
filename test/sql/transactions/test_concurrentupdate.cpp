@@ -13,9 +13,9 @@ using namespace std;
 #define MONEY_PER_ACCOUNT 10
 
 TEST_CASE("Single thread update", "[transactions]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// initialize the database
 	con.Query("CREATE TABLE integers(i INTEGER);");
@@ -43,7 +43,7 @@ TEST_CASE("Single thread update", "[transactions]") {
 static volatile bool finished_updating = false;
 static void read_total_balance(DuckDB *db) {
 	REQUIRE(db);
-	DuckDBConnection con(*db);
+	Connection con(*db);
 	while (!finished_updating) {
 		// the total balance should remain constant regardless of updates
 		auto result = con.Query("SELECT SUM(money) FROM accounts");
@@ -52,9 +52,9 @@ static void read_total_balance(DuckDB *db) {
 }
 
 TEST_CASE("Concurrent update", "[updates][.]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// fixed seed random numbers
 	mt19937 generator;
@@ -118,7 +118,7 @@ static std::atomic<size_t> finished_threads;
 
 static void write_random_numbers_to_account(DuckDB *db, size_t nr) {
 	REQUIRE(db);
-	DuckDBConnection con(*db);
+	Connection con(*db);
 	for (size_t i = 0; i < TRANSACTION_UPDATE_COUNT; i++) {
 		// just make some changes to the total
 		// the total amount of money after the commit is the same
@@ -143,9 +143,9 @@ static void write_random_numbers_to_account(DuckDB *db, size_t nr) {
 }
 
 TEST_CASE("Multiple concurrent updaters", "[updates][.]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	finished_updating = false;
 	finished_threads = 0;

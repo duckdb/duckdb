@@ -7,9 +7,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("MonetDB Test: boolean_not.Bug-3505.sql", "[monetdb]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE BOOLTBL1 (f1 bool);"));

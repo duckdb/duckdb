@@ -17,7 +17,7 @@ namespace duckdb {
 
 struct SQLiteBenchmarkState : public BenchmarkState {
 	//! The result object of the query
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	//! The SQLite Database Object
 	sqlite3 *db = nullptr;
 	//! Flag used to interrupt query execution. Set to 1 to interrupt query.

@@ -13,7 +13,7 @@ using namespace std;
 namespace tpcds {
 
 void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	con.Query("BEGIN TRANSACTION");
 	// FIXME: No restart support yet, suspect only fix is init_rand

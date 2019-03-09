@@ -83,7 +83,7 @@ void QueryProfiler::EndOperator(DataChunk &chunk) {
 string QueryProfiler::ToString() const {
 	if (!enabled) {
 		return "Query profiling is disabled. Call "
-		       "DuckDBConnection::EnableProfiling() to enable profiling!";
+		       "Connection::EnableProfiling() to enable profiling!";
 	}
 
 	if (query.empty()) {

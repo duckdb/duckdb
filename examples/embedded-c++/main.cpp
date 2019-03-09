@@ -4,7 +4,7 @@ using namespace duckdb;
 
 int main() {
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	con.Query("CREATE TABLE integers(i INTEGER)");
 	con.Query("INSERT INTO integers VALUES (3)");

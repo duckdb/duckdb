@@ -16,16 +16,10 @@ class DuckDB;
 
 class ConnectionManager {
 public:
-	void AddConnection(DuckDBConnection *conn) {
-		assert(conn);
-		std::lock_guard<std::mutex> lock(connections_lock);
-		connections.insert(conn);
-	}
-	void RemoveConnection(DuckDBConnection *conn) {
-		assert(conn);
-		std::lock_guard<std::mutex> lock(connections_lock);
-		connections.erase(conn);
-	}
+	~ConnectionManager();
+
+	void AddConnection(Connection *conn);
+	void RemoveConnection(Connection *conn);
 
 	template <class T> void Scan(T &&callback) {
 		// lock the catalog set
@@ -37,7 +31,7 @@ public:
 
 private:
 	std::mutex connections_lock;
-	unordered_set<DuckDBConnection *> connections;
+	unordered_set<Connection *> connections;
 };
 
 } // namespace duckdb

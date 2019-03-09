@@ -7,9 +7,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test uncorrelated subqueries", "[subquery]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	con.EnableProfiling();
 	con.EnableQueryVerification();
@@ -68,9 +68,9 @@ TEST_CASE("Test uncorrelated subqueries", "[subquery]") {
 }
 
 TEST_CASE("Test uncorrelated exists subqueries", "[subquery]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	con.EnableProfiling();
 	con.EnableQueryVerification();
@@ -127,9 +127,9 @@ TEST_CASE("Test uncorrelated exists subqueries", "[subquery]") {
 }
 
 TEST_CASE("Test uncorrelated ANY subqueries", "[subquery]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	con.EnableProfiling();
 	con.EnableQueryVerification();
@@ -189,9 +189,9 @@ TEST_CASE("Test uncorrelated ANY subqueries", "[subquery]") {
 }
 
 TEST_CASE("Test uncorrelated ALL subqueries", "[subquery]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	con.EnableProfiling();
 	con.EnableQueryVerification();
@@ -302,9 +302,9 @@ TEST_CASE("Test uncorrelated ALL subqueries", "[subquery]") {
 }
 
 TEST_CASE("Test uncorrelated VARCHAR subqueries", "[subquery]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	con.EnableProfiling();
 	con.EnableQueryVerification();
@@ -337,9 +337,9 @@ TEST_CASE("Test uncorrelated VARCHAR subqueries", "[subquery]") {
 }
 
 TEST_CASE("Test subqueries from the paper 'Unnesting Arbitrary Subqueries'", "[subquery]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 	con.EnableProfiling();
 

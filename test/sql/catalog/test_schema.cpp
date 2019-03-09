@@ -5,9 +5,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Schema creation/deletion", "[catalog]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// create and drop an empty schema
 	REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA test;"));
@@ -46,9 +46,9 @@ TEST_CASE("Schema creation/deletion", "[catalog]") {
 }
 
 TEST_CASE("Schema creation/deletion with transactions", "[catalog]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// create a schema with a table
 	REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA test;"));
@@ -61,7 +61,7 @@ TEST_CASE("Schema creation/deletion with transactions", "[catalog]") {
 	REQUIRE_NO_FAIL(con.Query("COMMIT;"));
 
 	// now work with multiple connections
-	DuckDBConnection con2(db);
+	Connection con2(db);
 
 	// create the same schema
 	REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA test;"));
@@ -87,9 +87,9 @@ TEST_CASE("Schema creation/deletion with transactions", "[catalog]") {
 }
 
 TEST_CASE("Catalog conflicts", "[catalog]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db), con2(db);
+	Connection con(db), con2(db);
 
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
 	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION;"));

@@ -5,9 +5,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Check if column names are correctly set in the result", "[sql]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	con.Query("CREATE TABLE test (a INTEGER, b INTEGER)");

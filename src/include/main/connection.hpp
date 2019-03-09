@@ -9,7 +9,9 @@
 #pragma once
 
 #include "main/client_context.hpp"
-#include "main/result.hpp"
+#include "main/materialized_query_result.hpp"
+#include "main/query_result.hpp"
+#include "main/stream_query_result.hpp"
 
 namespace duckdb {
 
@@ -17,50 +19,33 @@ class DuckDB;
 
 //! A connection to a database. This represents a (client) connection that can
 //! be used to query the database.
-class DuckDBConnection {
+class Connection {
 public:
-	DuckDBConnection(DuckDB &database);
-	~DuckDBConnection();
+	Connection(DuckDB &database);
+	~Connection();
 
-	string GetProfilingInformation() {
-		return context.profiler.ToString();
-	}
+	//! Returns query profiling information for the current query
+	string GetProfilingInformation();
 
 	//! Interrupt execution of the current query
-	void Interrupt() {
-		context.Interrupt();
-	}
+	void Interrupt();
 
-	void EnableProfiling() {
-		context.profiler.Enable();
-	}
-
-	void DisableProfiling() {
-		context.profiler.Disable();
-	}
+	//! Enable query profiling
+	void EnableProfiling();
+	//! Disable query profiling
+	void DisableProfiling();
 
 	//! Enable aggressive verification/testing of queries, should only be used in testing
-	void EnableQueryVerification() {
-#ifdef DEBUG
-		context.query_verification_enabled = true;
-#endif
-	}
+	void EnableQueryVerification();
 
-	static unique_ptr<DuckDBStreamingResult> SendQuery(ClientContext &context, string query) {
-		return context.Query(query);
-	}
-
-	unique_ptr<DuckDBStreamingResult> SendQuery(string query) {
-		return SendQuery(context, query);
-	}
-
-	static unique_ptr<DuckDBResult> Query(ClientContext &context, string query) {
-		return SendQuery(context, query)->Materialize();
-	}
-
-	unique_ptr<DuckDBResult> Query(string query) {
-		return Query(context, query);
-	}
+	//! Issues a query to the database and returns a QueryResult. This result can be either a StreamQueryResult or a
+	//! MaterializedQueryResult. The result can be stepped through with calls to Fetch(). Note that there can only be
+	//! one active StreamQueryResult per Connection object. Calling SendQuery() will invalidate any previously existing
+	//! StreamQueryResult.
+	unique_ptr<QueryResult> SendQuery(string query);
+	//! Issues a query to the database and materializes the result (if necessary). Always returns a
+	//! MaterializedQueryResult.
+	unique_ptr<MaterializedQueryResult> Query(string query);
 
 	DuckDB &db;
 	ClientContext context;

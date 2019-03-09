@@ -5,9 +5,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Unicode schema", "[catalog]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// create schema
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE 👤(🔑 INTEGER PRIMARY KEY, 🗣 varchar(64), 🗓 DATE);"));
@@ -21,13 +21,15 @@ TEST_CASE("Unicode schema", "[catalog]") {
 	                          "'Through the Looking-Glass', '🔮', 2);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO 👤🏠📕 VALUES (1, 1, '😍'), (1, 2, '🤢'), (2, 2, '🙂');"));
 
-	result = con.Query("SELECT 👤.🗣 AS 👤, 📕.💬 AS 📕 FROM 👤 JOIN 👤🏠📕 ON 👤.🔑 = 👤🏠📕.👤 JOIN 📕 ON 📕.🔑 = 👤🏠📕.📕 ORDER BY "
+	result = con.Query("SELECT 👤.🗣 AS 👤, 📕.💬 AS 📕 FROM 👤 JOIN 👤🏠📕 ON 👤.🔑 = 👤🏠📕.👤 JOIN 📕 ON 📕.🔑 = 👤🏠📕.📕 ORDER "
+	                   "BY "
 	                   "👤, "
 	                   "📕;");
 	REQUIRE(CHECK_COLUMN(result, 0, {"Annie", "Jeff", "Jeff"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"Moby Dick", "Alice in Wonderland", "Moby Dick"}));
 
-	result = con.Query("SELECT 👤.🗣, 👤🏠📕.⭐ FROM 👤🏠📕 JOIN 📕 ON 👤🏠📕.📕 = 📕.🔑 JOIN 👤 ON 👤🏠📕.👤=👤.🔑 WHERE 📕.💬 = "
+	result = con.Query("SELECT 👤.🗣, 👤🏠📕.⭐ FROM 👤🏠📕 JOIN 📕 ON 👤🏠📕.📕 = 📕.🔑 JOIN 👤 ON 👤🏠📕.👤=👤.🔑 WHERE 📕.💬 "
+	                   "= "
 	                   "'Moby "
 	                   "Dick' ORDER BY 👤.🗣;");
 	REQUIRE(CHECK_COLUMN(result, 0, {"Annie", "Jeff"}));

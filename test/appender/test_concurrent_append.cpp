@@ -15,7 +15,7 @@ atomic<int> finished_threads;
 
 static void append_to_integers(DuckDB *db, size_t threadnr) {
 	REQUIRE(db);
-	DuckDBConnection con(*db);
+	Connection con(*db);
 
 	Appender appender(*db, DEFAULT_SCHEMA, "integers");
 	for (size_t i = 0; i < INSERT_ELEMENTS; i++) {
@@ -30,9 +30,9 @@ static void append_to_integers(DuckDB *db, size_t threadnr) {
 }
 
 TEST_CASE("Test concurrent appends", "[appender][.]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// create a single table to append to
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));

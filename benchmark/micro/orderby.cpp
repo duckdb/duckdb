@@ -32,11 +32,12 @@ virtual string GetQuery() {
 	return "SELECT * FROM integers ORDER BY i";
 }
 
-virtual string VerifyResult(DuckDBResult *result) {
-	if (!result->GetSuccess()) {
-		return result->GetErrorMessage();
+virtual string VerifyResult(QueryResult *result) {
+	if (!result->success) {
+		return result->error;
 	}
-	if (result->size() != ORDER_BY_ROW_COUNT) {
+	auto &materialized = (MaterializedQueryResult&) *result;
+	if (materialized.collection.count != ORDER_BY_ROW_COUNT) {
 		return "Incorrect amount of rows in result";
 	}
 	return string();

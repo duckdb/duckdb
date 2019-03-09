@@ -5,9 +5,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Substring test", "[function]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(s VARCHAR, off INTEGER, length INTEGER);"));
@@ -38,9 +38,9 @@ TEST_CASE("Substring test", "[function]") {
 }
 
 TEST_CASE("Substring test with UTF8", "[function]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(s VARCHAR);"));

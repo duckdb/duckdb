@@ -30,18 +30,19 @@ virtual std::string GetQuery() {
 	       to_string(RANGE_QUERY_ENTRY_HIGH);
 }
 
-virtual std::string VerifyResult(DuckDBResult *result) {
-	if (!result->GetSuccess()) {
-		return result->GetErrorMessage();
+virtual std::string VerifyResult(QueryResult *result) {
+	if (!result->success) {
+		return result->error;
 	}
-	if (result->size() != 1) {
+	auto &materialized = (MaterializedQueryResult&) *result;
+	if (materialized.collection.count != 1) {
 		return "Incorrect amount of rows in result";
 	}
-	if (result->column_count() != 1) {
+	if (result->names.size() != 1) {
 		return "Incorrect amount of columns";
 	}
-	if (result->GetValue<int64_t>(0, 0) != SUM_RESULT) {
-		return "Incorrect result returned, expected " + to_string(result->GetValue<int>(0, 0));
+	if (materialized.GetValue<int64_t>(0, 0) != SUM_RESULT) {
+		return "Incorrect result returned, expected " + to_string(SUM_RESULT);
 	}
 	return std::string();
 }
@@ -71,18 +72,19 @@ virtual std::string GetQuery() {
 	       to_string(RANGE_QUERY_ENTRY_HIGH);
 }
 
-virtual std::string VerifyResult(DuckDBResult *result) {
-	if (!result->GetSuccess()) {
-		return result->GetErrorMessage();
+virtual std::string VerifyResult(QueryResult *result) {
+	if (!result->success) {
+		return result->error;
 	}
-	if (result->size() != 1) {
+	auto &materialized = (MaterializedQueryResult&) *result;
+	if (materialized.collection.count != 1) {
 		return "Incorrect amount of rows in result";
 	}
-	if (result->column_count() != 1) {
+	if (result->names.size() != 1) {
 		return "Incorrect amount of columns";
 	}
-	if (result->GetValue<int64_t>(0, 0) != SUM_RESULT) {
-		return "Incorrect result returned, expected " + to_string(RANGE_QUERY_ENTRY_LOW + 2);
+	if (materialized.GetValue<int64_t>(0, 0) != SUM_RESULT) {
+		return "Incorrect result returned, expected " + to_string(SUM_RESULT);
 	}
 	return std::string();
 }

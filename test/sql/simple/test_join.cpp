@@ -6,8 +6,8 @@ using namespace std;
 
 TEST_CASE("Test basic joins of tables", "[joins]") {
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
-	unique_ptr<DuckDBResult> result;
+	Connection con(db);
+	unique_ptr<QueryResult> result;
 	con.EnableQueryVerification();
 
 	// create tables
@@ -79,8 +79,8 @@ TEST_CASE("Test basic joins of tables", "[joins]") {
 
 TEST_CASE("Test join with > STANDARD_VECTOR_SIZE duplicates", "[joins]") {
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
-	unique_ptr<DuckDBResult> result;
+	Connection con(db);
+	unique_ptr<QueryResult> result;
 	con.EnableQueryVerification();
 
 	size_t element_count = STANDARD_VECTOR_SIZE * 10;
@@ -103,8 +103,8 @@ TEST_CASE("Test join with > STANDARD_VECTOR_SIZE duplicates", "[joins]") {
 
 TEST_CASE("Equality + inequality joins", "[joins]") {
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
-	unique_ptr<DuckDBResult> result;
+	Connection con(db);
+	unique_ptr<QueryResult> result;
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
@@ -146,8 +146,8 @@ TEST_CASE("Equality + inequality joins", "[joins]") {
 
 TEST_CASE("Equality + inequality anti and semi joins", "[joins]") {
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
-	unique_ptr<DuckDBResult> result;
+	Connection con(db);
+	unique_ptr<QueryResult> result;
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER, str VARCHAR);"));
@@ -191,8 +191,8 @@ TEST_CASE("Equality + inequality anti and semi joins", "[joins]") {
 
 TEST_CASE("Equality + inequality anti and semi joins with selection vector", "[joins]") {
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
-	unique_ptr<DuckDBResult> result;
+	Connection con(db);
+	unique_ptr<QueryResult> result;
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER, str VARCHAR);"));
@@ -226,8 +226,8 @@ TEST_CASE("Equality + inequality anti and semi joins with selection vector", "[j
 
 TEST_CASE("Test range joins", "[joins]") {
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
-	unique_ptr<DuckDBResult> result;
+	Connection con(db);
+	unique_ptr<QueryResult> result;
 	con.EnableQueryVerification();
 
 	// create tables
@@ -277,8 +277,8 @@ TEST_CASE("Test range joins", "[joins]") {
 
 TEST_CASE("Test inequality joins", "[joins]") {
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
-	unique_ptr<DuckDBResult> result;
+	Connection con(db);
+	unique_ptr<QueryResult> result;
 	con.EnableQueryVerification();
 
 	// create tables

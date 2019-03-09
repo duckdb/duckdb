@@ -40,50 +40,55 @@ static bool ValuesAreEqual(Value result_value, Value value) {
 	return true;
 }
 
-bool CHECK_COLUMN(unique_ptr<duckdb::DuckDBResult> &result, size_t column_number, vector<duckdb::Value> values) {
-	if (!result->GetSuccess()) {
-		fprintf(stderr, "Query failed with message: %s\n", result->GetErrorMessage().c_str());
-		// FAIL(result->GetErrorMessage().c_str());
+bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Value> values) {
+	unique_ptr<MaterializedQueryResult> materialized;
+	if (result_.type == QueryResultType::STREAM_RESULT) {
+		materialized = ((StreamQueryResult&)result_).Materialize();		
+	}
+	auto &result = materialized ? *materialized : (MaterializedQueryResult&) result_;
+	if (!result.success) {
+		fprintf(stderr, "Query failed with message: %s\n", result.error.c_str());
+		// FAIL(result->error.c_str());
 		return false;
 	}
-	if (!(result->names.size() == result->collection.types.size())) {
+	if (!(result.names.size() == result.types.size())) {
 		// column names do not match
-		result->Print();
+		result.Print();
 		return false;
 	}
 	if (values.size() == 0) {
-		if (result->size() != 0) {
-			result->Print();
+		if (result.collection.count != 0) {
+			result.Print();
 			// FAIL("Data size does not match value size!");
 			return false;
 		} else {
 			return true;
 		}
 	}
-	if (result->size() == 0) {
+	if (result.collection.count == 0) {
 		// FAIL("Data size does not match value size!");
-		result->Print();
+		result.Print();
 		return false;
 	}
-	if (column_number >= result->column_count()) {
+	if (column_number >= result.types.size()) {
 		// FAIL("Column number out of range of result!");
-		result->Print();
+		result.Print();
 		return false;
 	}
 	size_t chunk_index = 0;
 	for (size_t i = 0; i < values.size();) {
-		if (chunk_index >= result->collection.chunks.size()) {
+		if (chunk_index >= result.collection.chunks.size()) {
 			// ran out of chunks
-			result->Print();
+			result.Print();
 			return false;
 			// FAIL("Data size does not match value size!");
 		}
 		// check this vector
-		auto &vector = result->collection.chunks[chunk_index]->data[column_number];
+		auto &vector = result.collection.chunks[chunk_index]->data[column_number];
 		if (i + vector.count > values.size()) {
 			// too many values in this vector
 			// FAIL("Too many values in result!");
-			result->Print();
+			result.Print();
 			return false;
 		}
 		for (size_t j = 0; j < vector.count; j++) {
@@ -96,7 +101,7 @@ bool CHECK_COLUMN(unique_ptr<duckdb::DuckDBResult> &result, size_t column_number
 				// FAIL("Incorrect result! Got " + vector.GetValue(j).ToString()
 				// +
 				//      " but expected " + values[i + j].ToString());
-				result->Print();
+				result.Print();
 				return false;
 			}
 		}
@@ -106,13 +111,23 @@ bool CHECK_COLUMN(unique_ptr<duckdb::DuckDBResult> &result, size_t column_number
 	return true;
 }
 
-string compare_csv(duckdb::DuckDBResult &result, string csv, bool header) {
-	if (!result.GetSuccess()) {
-		fprintf(stderr, "Query failed with message: %s\n", result.GetErrorMessage().c_str());
-		return result.GetErrorMessage().c_str();
+bool CHECK_COLUMN(unique_ptr<duckdb::QueryResult> &result, size_t column_number, vector<duckdb::Value> values) {
+	return CHECK_COLUMN(*result, column_number, values);
+}
+
+bool CHECK_COLUMN(unique_ptr<duckdb::MaterializedQueryResult> &result, size_t column_number, vector<duckdb::Value> values) {
+	return CHECK_COLUMN((QueryResult&)*result, column_number, values);
+}
+
+string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
+	assert(result.type == QueryResultType::MATERIALIZED_RESULT);
+	auto &materialized = (MaterializedQueryResult&) result;
+	if (!materialized.success) {
+		fprintf(stderr, "Query failed with message: %s\n", materialized.error.c_str());
+		return materialized.error;
 	}
 	string error;
-	if (!compare_result(csv, result.collection, header, error)) {
+	if (!compare_result(csv, materialized.collection, header, error)) {
 		return error;
 	}
 	return "";

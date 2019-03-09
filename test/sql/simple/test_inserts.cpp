@@ -5,9 +5,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test insert into statements", "[simpleinserts]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// big insert
 	con.Query("CREATE TABLE integers(i INTEGER)");
@@ -119,9 +119,9 @@ TEST_CASE("Test insert into statements", "[simpleinserts]") {
 }
 
 TEST_CASE("Test insert into from wrong type", "[simpleinserts]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(a VARCHAR)"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
@@ -139,9 +139,9 @@ TEST_CASE("Test insert into from wrong type", "[simpleinserts]") {
 }
 
 TEST_CASE("Test insert from constant query", "[simpleinserts]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers SELECT 42"));
@@ -152,9 +152,9 @@ TEST_CASE("Test insert from constant query", "[simpleinserts]") {
 }
 
 TEST_CASE("Test insert with invalid UTF8", "[simpleinserts]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(i STRING)"));
 	REQUIRE_FAIL(con.Query("INSERT INTO strings VALUES ('\xe2\x82\x28')"));
@@ -162,9 +162,9 @@ TEST_CASE("Test insert with invalid UTF8", "[simpleinserts]") {
 }
 
 TEST_CASE("Test insert with too few or too many cols", "[simpleinserts]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a(i integer, j integer)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO a VALUES (1, 2)"));

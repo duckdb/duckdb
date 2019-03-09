@@ -16,9 +16,9 @@ static void test_runner() {
 	auto file_name = Catch::getResultCapture().getCurrentTestName();
 	auto fname = JoinPath(QUERY_DIRECTORY, file_name);
 
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	con.EnableProfiling();
 

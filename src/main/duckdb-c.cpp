@@ -22,14 +22,14 @@ duckdb_state duckdb_close(duckdb_database database) {
 
 duckdb_state duckdb_connect(duckdb_database database, duckdb_connection *out) {
 	DuckDB *db = (DuckDB *)database;
-	DuckDBConnection *connection = new DuckDBConnection(*db);
+	Connection *connection = new Connection(*db);
 	*out = (duckdb_connection)connection;
 	return DuckDBSuccess;
 }
 
 duckdb_state duckdb_disconnect(duckdb_connection connection) {
 	if (connection) {
-		DuckDBConnection *conn = (DuckDBConnection *)connection;
+		Connection *conn = (Connection *)connection;
 		delete conn;
 	}
 	return DuckDBSuccess;
@@ -171,95 +171,97 @@ void duckdb_print_result(duckdb_result result) {
 }
 
 duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckdb_result *out) {
-	if (out) {
-		memset(out, 0, sizeof(duckdb_result));
-	}
-	DuckDBConnection *conn = (DuckDBConnection *)connection;
-	auto result = conn->Query(query);
-	if (!result->GetSuccess()) {
-		if (out) {
-			auto error = result->GetErrorMessage();
-			out->error_message = (char *)malloc(error.size() + 1);
-			strcpy(out->error_message, error.c_str());
-		}
-		result->Print();
-		return DuckDBError;
-	}
-	// construct the C result from the C++ result
-	if (!out) {
-		return DuckDBSuccess;
-	}
-	out->row_count = result->size();
-	out->column_count = result->column_count();
-	out->columns = (duckdb_column *)malloc(out->column_count * sizeof(duckdb_column));
-	if (!out->columns)
-		goto mallocfail;
-	memset(out->columns, 0, out->column_count * sizeof(duckdb_column));
-
-	for (size_t i = 0; i < out->column_count; i++) {
-		auto &types = result->types();
-
-		auto type = types[i];
-		auto type_size = GetTypeIdSize(type);
-		auto &column = out->columns[i];
-
-		column.type = _convert_type_cpp_to_c(type);
-		column.count = result->size();
-		column.name = (char *)strdup(result->names[i].c_str());
-		column.data = (char *)malloc(type_size * result->size());
-		column.nullmask = (bool *)malloc(sizeof(bool) * result->size());
-		if (!column.data || !column.nullmask)
-			goto mallocfail;
-
-		// copy the data
-		if (TypeIsConstantSize(type)) {
-			char *ptr = column.data;
-			for (auto &chunk : result->collection.chunks) {
-				auto &vector = chunk->data[i];
-				VectorOperations::Copy(vector, ptr);
-				ptr += type_size * chunk->size();
-			}
-		} else {
-			// NULL initialize: we are going to do mallocs
-			memset(column.data, 0, type_size * result->size());
-
-			if (types[i] == TypeId::VARCHAR) {
-				char **dataptr = (char **)column.data;
-				for (auto &chunk : result->collection.chunks) {
-					auto &vector = chunk->data[i];
-					const char **str_data = (const char **)vector.data;
-					for (size_t j = 0; j < chunk->size(); j++) {
-						const char *strptr = str_data[j];
-						if (!str_data[j]) {
-							strptr = "NULL";
-						}
-						*dataptr = (char *)malloc(strlen(strptr) + 1);
-						if (!*dataptr)
-							goto mallocfail;
-						strcpy(*dataptr, strptr);
-						dataptr++;
-					}
-				}
-			} else {
-				// not supported yet
-				printf("Copy of non-string varlength values not supported yet!\n");
-				goto mallocfail;
-			}
-		}
-		size_t index = 0;
-		// set the nullmask
-		for (auto &chunk : result->collection.chunks) {
-			auto &vector = chunk->data[i];
-			for (size_t i = 0; i < vector.count; i++) {
-				column.nullmask[index + i] = vector.ValueIsNull(i);
-			}
-			index += vector.count;
-		}
-	}
-	return DuckDBSuccess;
-mallocfail:
-	duckdb_destroy_result(*out);
 	return DuckDBError;
+
+// 	if (out) {
+// 		memset(out, 0, sizeof(duckdb_result));
+// 	}
+// 	Connection *conn = (Connection *)connection;
+// 	auto result = conn->Query(query);
+// 	if (!result->success) {
+// 		if (out) {
+// 			auto error = result->error;
+// 			out->error_message = (char *)malloc(error.size() + 1);
+// 			strcpy(out->error_message, error.c_str());
+// 		}
+// 		result->Print();
+// 		return DuckDBError;
+// 	}
+// 	// construct the C result from the C++ result
+// 	if (!out) {
+// 		return DuckDBSuccess;
+// 	}
+// 	out->row_count = result->size();
+// 	out->column_count = result->types.size();
+// 	out->columns = (duckdb_column *)malloc(out->column_count * sizeof(duckdb_column));
+// 	if (!out->columns)
+// 		goto mallocfail;
+// 	memset(out->columns, 0, out->column_count * sizeof(duckdb_column));
+
+// 	for (size_t i = 0; i < out->column_count; i++) {
+// 		auto &types = result->types();
+
+// 		auto type = types[i];
+// 		auto type_size = GetTypeIdSize(type);
+// 		auto &column = out->columns[i];
+
+// 		column.type = _convert_type_cpp_to_c(type);
+// 		column.count = result->size();
+// 		column.name = (char *)strdup(result->names[i].c_str());
+// 		column.data = (char *)malloc(type_size * result->size());
+// 		column.nullmask = (bool *)malloc(sizeof(bool) * result->size());
+// 		if (!column.data || !column.nullmask)
+// 			goto mallocfail;
+
+// 		// copy the data
+// 		if (TypeIsConstantSize(type)) {
+// 			char *ptr = column.data;
+// 			for (auto &chunk : result->collection.chunks) {
+// 				auto &vector = chunk->data[i];
+// 				VectorOperations::Copy(vector, ptr);
+// 				ptr += type_size * chunk->size();
+// 			}
+// 		} else {
+// 			// NULL initialize: we are going to do mallocs
+// 			memset(column.data, 0, type_size * result->size());
+
+// 			if (types[i] == TypeId::VARCHAR) {
+// 				char **dataptr = (char **)column.data;
+// 				for (auto &chunk : result->collection.chunks) {
+// 					auto &vector = chunk->data[i];
+// 					const char **str_data = (const char **)vector.data;
+// 					for (size_t j = 0; j < chunk->size(); j++) {
+// 						const char *strptr = str_data[j];
+// 						if (!str_data[j]) {
+// 							strptr = "NULL";
+// 						}
+// 						*dataptr = (char *)malloc(strlen(strptr) + 1);
+// 						if (!*dataptr)
+// 							goto mallocfail;
+// 						strcpy(*dataptr, strptr);
+// 						dataptr++;
+// 					}
+// 				}
+// 			} else {
+// 				// not supported yet
+// 				printf("Copy of non-string varlength values not supported yet!\n");
+// 				goto mallocfail;
+// 			}
+// 		}
+// 		size_t index = 0;
+// 		// set the nullmask
+// 		for (auto &chunk : result->collection.chunks) {
+// 			auto &vector = chunk->data[i];
+// 			for (size_t i = 0; i < vector.count; i++) {
+// 				column.nullmask[index + i] = vector.ValueIsNull(i);
+// 			}
+// 			index += vector.count;
+// 		}
+// 	}
+// 	return DuckDBSuccess;
+// mallocfail:
+// 	duckdb_destroy_result(*out);
+// 	return DuckDBError;
 }
 
 void duckdb_destroy_result(duckdb_result result) {

@@ -11,6 +11,7 @@
 #include "main/database.hpp"
 #include "transaction/transaction_manager.hpp"
 
+constexpr const int64_t STORAGE_VERSION = 1;
 constexpr const char *DATABASE_INFO_FILE = "meta.info";
 constexpr const char *DATABASE_TEMP_INFO_FILE = "meta.info.tmp";
 constexpr const char *STORAGE_FILES[] = {"data-a", "data-b"};

@@ -32,9 +32,9 @@ virtual string GetQuery() {
 	return "SELECT * FROM integers a, integers b WHERE (a.i / 1000) > b.j;";
 }
 
-virtual string VerifyResult(DuckDBResult *result) {
-	if (!result->GetSuccess()) {
-		return result->GetErrorMessage();
+virtual string VerifyResult(QueryResult *result) {
+	if (!result->success) {
+		return result->error;
 	}
 	return string();
 }

@@ -337,8 +337,8 @@ bool ReplayQuery(ClientContext &context, Deserializer &source) {
 	// read the query
 	auto query = source.Read<string>();
 
-	auto result = DuckDBConnection::Query(context, query);
-	return result->GetSuccess();
+	auto result = context.Query(query, false);
+	return result->success;
 }
 
 //===--------------------------------------------------------------------===//

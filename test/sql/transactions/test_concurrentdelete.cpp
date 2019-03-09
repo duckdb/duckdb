@@ -12,10 +12,10 @@ using namespace std;
 #define INSERT_ELEMENTS 100
 
 TEST_CASE("Single thread delete", "[transactions]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
-	vector<unique_ptr<DuckDBConnection>> connections;
+	Connection con(db);
+	vector<unique_ptr<Connection>> connections;
 
 	// initialize the database
 	con.Query("CREATE TABLE integers(i INTEGER);");
@@ -41,10 +41,10 @@ TEST_CASE("Single thread delete", "[transactions]") {
 }
 
 TEST_CASE("Sequential delete", "[transactions]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
-	vector<unique_ptr<DuckDBConnection>> connections;
+	Connection con(db);
+	vector<unique_ptr<Connection>> connections;
 	Value count;
 
 	// initialize the database
@@ -59,7 +59,7 @@ TEST_CASE("Sequential delete", "[transactions]") {
 	}
 
 	for (size_t i = 0; i < THREAD_COUNT; i++) {
-		connections.push_back(make_unique<DuckDBConnection>(db));
+		connections.push_back(make_unique<Connection>(db));
 		connections[i]->Query("BEGIN TRANSACTION;");
 	}
 
@@ -92,10 +92,10 @@ TEST_CASE("Sequential delete", "[transactions]") {
 }
 
 TEST_CASE("Rollback delete", "[transactions]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
-	vector<unique_ptr<DuckDBConnection>> connections;
+	Connection con(db);
+	vector<unique_ptr<Connection>> connections;
 
 	// initialize the database
 	con.Query("CREATE TABLE integers(i INTEGER);");
@@ -134,7 +134,7 @@ static volatile std::atomic<int> finished_threads;
 
 static void _delete_elements(DuckDB *db, size_t threadnr) {
 	REQUIRE(db);
-	DuckDBConnection con(*db);
+	Connection con(*db);
 	// initial count
 	con.Query("BEGIN TRANSACTION;");
 	auto result = con.Query("SELECT COUNT(*) FROM integers");
@@ -157,12 +157,12 @@ static void _delete_elements(DuckDB *db, size_t threadnr) {
 }
 
 TEST_CASE("Concurrent delete", "[transactions][.]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// initialize the database
-	con.Query("CREATE TABLE integers(i INTEGER);");
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));
 	for (size_t i = 0; i < INSERT_ELEMENTS; i++) {
 		for (size_t j = 0; j < THREAD_COUNT; j++) {
 			auto element = INSERT_ELEMENTS * j + i;

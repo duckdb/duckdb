@@ -1,2 +1,2 @@
-add_library(duckdb_main OBJECT appender.cpp client_context.cpp connection.cpp database.cpp duckdb-c.cpp query_profiler.cpp result.cpp)
+add_library(duckdb_main OBJECT appender.cpp client_context.cpp connection.cpp connection_manager.cpp database.cpp duckdb-c.cpp materialized_query_result.cpp query_profiler.cpp query_result.cpp stream_query_result.cpp)
 set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main> PARENT_SCOPE)

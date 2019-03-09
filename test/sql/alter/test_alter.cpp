@@ -5,16 +5,16 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test ALTER TABLE RENAME COLUMN", "[alter][.]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// CREATE TABLE AND ALTER IT TO RENAME A COLUMN
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(i INTEGER, j INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("ALTER TABLE test RENAME COLUMN i TO k"));
 
 	result = con.Query("SELECT * FROM test");
-	REQUIRE(result->column_count() == 2);
+	REQUIRE(result->names.size() == 2);
 	REQUIRE(result->names[0] == "k");
 	REQUIRE(result->names[1] == "j");
 
@@ -23,10 +23,10 @@ TEST_CASE("Test ALTER TABLE RENAME COLUMN", "[alter][.]") {
 }
 
 TEST_CASE("Test ALTER TABLE RENAME COLUMN with transactions", "[alter]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
-	DuckDBConnection con2(db);
+	Connection con(db);
+	Connection con2(db);
 
 	// CREATE TABLE
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(i INTEGER, j INTEGER)"));
@@ -62,9 +62,9 @@ TEST_CASE("Test ALTER TABLE RENAME COLUMN with transactions", "[alter]") {
 }
 
 TEST_CASE("Test ALTER TABLE RENAME COLUMN with rollback", "[alter]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// CREATE TABLE
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(i INTEGER, j INTEGER)"));
@@ -88,9 +88,9 @@ TEST_CASE("Test ALTER TABLE RENAME COLUMN with rollback", "[alter]") {
 }
 
 TEST_CASE("Test failure conditions of ALTER TABLE", "[alter]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// CREATE TABLE AND ALTER IT TO RENAME A COLUMN
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(i INTEGER, j INTEGER)"));

@@ -5,9 +5,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test DISTINCT keyword", "[distinct]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
@@ -38,9 +38,9 @@ TEST_CASE("Test DISTINCT keyword", "[distinct]") {
 }
 
 TEST_CASE("Test DISTINCT and ORDER BY", "[distinct]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	con.Query("CREATE TABLE integers(i INTEGER);");

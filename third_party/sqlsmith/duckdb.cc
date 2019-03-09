@@ -18,13 +18,13 @@ static regex e_syntax("Query Error: syntax error at or near .*");
 duckdb_connection::duckdb_connection(string &conninfo) {
 	// in-memory database
 	database = make_unique<DuckDB>(nullptr);
-	connection = make_unique<DuckDBConnection>(*database);
+	connection = make_unique<Connection>(*database);
 }
 
 void duckdb_connection::q(const char *query) {
 	auto result = connection->Query(query);
-	if (!result->GetSuccess()) {
-		throw runtime_error(result->GetErrorMessage());
+	if (!result->success) {
+		throw runtime_error(result->error);
 	}
 }
 
@@ -34,10 +34,10 @@ schema_duckdb::schema_duckdb(std::string &conninfo, bool no_catalog) : duckdb_co
 
 	cerr << "Loading tables...";
 	auto result = connection->Query("SELECT * FROM sqlite_master() WHERE type IN ('table', 'view')");
-	if (!result->GetSuccess()) {
-		throw runtime_error(result->GetErrorMessage());
+	if (!result->success) {
+		throw runtime_error(result->error);
 	}
-	for (size_t i = 0; i < result->size(); i++) {
+	for (size_t i = 0; i < result->collection.count; i++) {
 		auto type = result->collection.GetValue(0, i).str_value;
 		auto name = result->collection.GetValue(2, i).str_value;
 		bool view = type == "view";
@@ -54,10 +54,10 @@ schema_duckdb::schema_duckdb(std::string &conninfo, bool no_catalog) : duckdb_co
 
 	for (auto t = tables.begin(); t != tables.end(); ++t) {
 		result = connection->Query("PRAGMA table_info('" + t->name + "')");
-		if (!result->GetSuccess()) {
-			throw runtime_error(result->GetErrorMessage());
+		if (!result->success) {
+			throw runtime_error(result->error);
 		}
-		for (size_t i = 0; i < result->size(); i++) {
+		for (size_t i = 0; i < result->collection.count; i++) {
 			auto name = result->collection.GetValue(1, i).str_value;
 			auto type = result->collection.GetValue(2, i).str_value;
 			column c(name, sqltype::get(type));
@@ -213,7 +213,7 @@ volatile bool is_active = false;
 // timeout is 10ms * TIMEOUT_TICKS
 #define TIMEOUT_TICKS 50
 
-void sleep_thread(DuckDBConnection *connection) {
+void sleep_thread(Connection *connection) {
 	for (size_t i = 0; i < TIMEOUT_TICKS && is_active; i++) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 	}
@@ -229,8 +229,8 @@ void dut_duckdb::test(const std::string &stmt) {
 	is_active = false;
 	interrupt_thread.join();
 
-	if (!result->GetSuccess()) {
-		auto error = result->GetErrorMessage().c_str();
+	if (!result->success) {
+		auto error = result->error.c_str();
 		try {
 			if (regex_match(error, e_syntax))
 				throw dut::syntax(error);

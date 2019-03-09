@@ -3,9 +3,11 @@
 
 namespace duckdb {
 
-bool CHECK_COLUMN(unique_ptr<duckdb::DuckDBResult> &result, size_t column_number, vector<duckdb::Value> values);
+bool CHECK_COLUMN(QueryResult &result, size_t column_number, vector<duckdb::Value> values);
+bool CHECK_COLUMN(unique_ptr<duckdb::QueryResult> &result, size_t column_number, vector<duckdb::Value> values);
+bool CHECK_COLUMN(unique_ptr<duckdb::MaterializedQueryResult> &result, size_t column_number, vector<duckdb::Value> values);
 
-string compare_csv(duckdb::DuckDBResult &result, string csv, bool header = false);
+string compare_csv(duckdb::QueryResult &result, string csv, bool header = false);
 
 bool parse_datachunk(string csv, DataChunk &result, bool has_header);
 

@@ -5,9 +5,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Most basic window function", "[window]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE empsalary (depname varchar, empno bigint, salary int, enroll_date date)"));
@@ -30,26 +30,26 @@ TEST_CASE("Most basic window function", "[window]") {
 	// sum
 	result = con.Query(
 	    "SELECT sum(salary) OVER (PARTITION BY depname ORDER BY salary) ss FROM empsalary ORDER BY depname, ss");
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {4200, 8700, 19100, 19100, 25100, 3500, 7400, 9600, 9600, 14600}));
 
 	// row_number
 	result = con.Query(
 	    "SELECT row_number() OVER (PARTITION BY depname ORDER BY salary) rn FROM empsalary ORDER BY depname, rn");
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, 5, 1, 2, 1, 2, 3}));
 
 	// first_value
 	result = con.Query("SELECT empno, first_value(empno) OVER (PARTITION BY depname ORDER BY empno) fv FROM empsalary "
 	                   "ORDER BY depname, fv");
-	REQUIRE(result->column_count() == 2);
+	REQUIRE(result->types.size() == 2);
 	REQUIRE(CHECK_COLUMN(result, 0, {11, 8, 7, 9, 10, 5, 2, 4, 3, 1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {7, 7, 7, 7, 7, 2, 2, 1, 1, 1}));
 
 	// rank_dense
 	result = con.Query("SELECT depname, salary, dense_rank() OVER (PARTITION BY depname ORDER BY salary) FROM "
 	                   "empsalary order by depname, salary");
-	REQUIRE(result->column_count() == 3);
+	REQUIRE(result->types.size() == 3);
 	REQUIRE(CHECK_COLUMN(
 	    result, 0,
 	    {"develop", "develop", "develop", "develop", "develop", "personnel", "personnel", "sales", "sales", "sales"}));
@@ -59,7 +59,7 @@ TEST_CASE("Most basic window function", "[window]") {
 	// rank
 	result = con.Query("SELECT depname, salary, rank() OVER (PARTITION BY depname ORDER BY salary) FROM "
 	                   "empsalary order by depname, salary");
-	REQUIRE(result->column_count() == 3);
+	REQUIRE(result->types.size() == 3);
 	REQUIRE(CHECK_COLUMN(
 	    result, 0,
 	    {"develop", "develop", "develop", "develop", "develop", "personnel", "personnel", "sales", "sales", "sales"}));
@@ -70,7 +70,7 @@ TEST_CASE("Most basic window function", "[window]") {
 	result = con.Query("SELECT depname, min(salary) OVER (PARTITION BY depname ORDER BY salary, empno) m1, max(salary) "
 	                   "OVER (PARTITION BY depname ORDER BY salary, empno) m2, AVG(salary) OVER (PARTITION BY depname "
 	                   "ORDER BY salary, empno) m3 FROM empsalary ORDER BY depname, empno");
-	REQUIRE(result->column_count() == 4);
+	REQUIRE(result->types.size() == 4);
 	REQUIRE(CHECK_COLUMN(
 	    result, 0,
 	    {"develop", "develop", "develop", "develop", "develop", "personnel", "personnel", "sales", "sales", "sales"}));
@@ -82,9 +82,9 @@ TEST_CASE("Most basic window function", "[window]") {
 }
 
 TEST_CASE("Illegal window function", "[window]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE empsalary (depname varchar, empno bigint, salary int, enroll_date date)"));
@@ -100,9 +100,9 @@ TEST_CASE("Illegal window function", "[window]") {
 }
 
 TEST_CASE("More evil cases", "[window]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE empsalary (depname varchar, empno bigint, salary int, enroll_date date)"));
@@ -115,7 +115,7 @@ TEST_CASE("More evil cases", "[window]") {
 	// aggr as input to window
 	result = con.Query("SELECT depname, sum(sum(salary)) over (partition by depname order by salary) FROM empsalary "
 	                   "group by depname, salary order by depname, salary");
-	REQUIRE(result->column_count() == 2);
+	REQUIRE(result->types.size() == 2);
 	REQUIRE(CHECK_COLUMN(result, 0,
 	                     {"develop", "develop", "develop", "develop", "personnel", "personnel", "sales", "sales"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {4200, 8700, 19100, 25100, 3500, 7400, 9600, 14600}));
@@ -123,14 +123,14 @@ TEST_CASE("More evil cases", "[window]") {
 	// expr in window
 	result = con.Query("SELECT empno, sum(salary*2) OVER (PARTITION BY depname ORDER BY empno) FROM "
 	                   "empsalary ORDER BY depname, empno");
-	REQUIRE(result->column_count() == 2);
+	REQUIRE(result->types.size() == 2);
 	REQUIRE(CHECK_COLUMN(result, 0, {7, 8, 9, 10, 11, 2, 5, 1, 3, 4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {8400, 20400, 29400, 39800, 50200, 7800, 14800, 10000, 19600, 29200}));
 
 	// expr ontop of window
 	result = con.Query("SELECT empno, 2*sum(salary) OVER (PARTITION BY depname ORDER BY empno) FROM "
 	                   "empsalary ORDER BY depname, empno");
-	REQUIRE(result->column_count() == 2);
+	REQUIRE(result->types.size() == 2);
 	REQUIRE(CHECK_COLUMN(result, 0, {7, 8, 9, 10, 11, 2, 5, 1, 3, 4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {8400, 20400, 29400, 39800, 50200, 7800, 14800, 10000, 19600, 29200}));
 
@@ -138,7 +138,7 @@ TEST_CASE("More evil cases", "[window]") {
 	result =
 	    con.Query("SELECT depname, sum(salary)*100.0000/sum(sum(salary)) OVER (PARTITION BY depname ORDER BY salary) "
 	              "AS revenueratio FROM empsalary GROUP BY depname, salary ORDER BY depname, revenueratio");
-	REQUIRE(result->column_count() == 2);
+	REQUIRE(result->types.size() == 2);
 	REQUIRE(CHECK_COLUMN(result, 0,
 	                     {"develop", "develop", "develop", "develop", "personnel", "personnel", "sales", "sales"}));
 	REQUIRE(CHECK_COLUMN(result, 1,
@@ -146,9 +146,9 @@ TEST_CASE("More evil cases", "[window]") {
 }
 
 TEST_CASE("Wiscosin-derived window test cases", "[window]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tenk1 (unique1 int4, unique2 int4, two int4, four int4, ten int4, twenty "
@@ -167,105 +167,105 @@ TEST_CASE("Wiscosin-derived window test cases", "[window]") {
 	              "(3043,9,1,3,3,3,43,43,1043,3043,3043,86,87,'BNAAAA','JAAAAA','HHHHxx')"));
 
 	result = con.Query("SELECT COUNT(*) OVER () FROM tenk1");
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	// FIXME	REQUIRE(CHECK_COLUMN(result, 0, {10, 10, 10, 10, 10, 10, 10, 10, 10, 10}));
 
 	result = con.Query("SELECT sum(four) OVER (PARTITION BY ten ORDER BY unique2) AS sum_1, ten, four FROM tenk1 WHERE "
 	                   "unique2 < 10 order by ten, unique2");
 
-	REQUIRE(result->column_count() == 3);
+	REQUIRE(result->types.size() == 3);
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 2, 3, 4, 5, 3, 0, 1, 1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {0, 0, 0, 1, 1, 1, 3, 4, 7, 9}));
 	REQUIRE(CHECK_COLUMN(result, 2, {0, 0, 2, 3, 1, 1, 3, 0, 1, 1}));
 
 	result = con.Query("SELECT row_number() OVER (ORDER BY unique2) rn FROM tenk1 WHERE unique2 < 10 ORDER BY rn");
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}));
 
 	result = con.Query("SELECT rank() OVER (PARTITION BY four ORDER BY ten) AS rank_1, ten, four FROM tenk1 WHERE "
 	                   "unique2 < 10 ORDER BY four, ten");
-	REQUIRE(result->column_count() == 3);
+	REQUIRE(result->types.size() == 3);
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 3, 1, 1, 3, 4, 1, 1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {0, 0, 4, 1, 1, 7, 9, 0, 1, 3}));
 	REQUIRE(CHECK_COLUMN(result, 2, {0, 0, 0, 1, 1, 1, 1, 2, 3, 3}));
 
 	result = con.Query("SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten) FROM tenk1 WHERE unique2 "
 	                   "< 10 ORDER BY four, ten");
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 2, 1, 1, 2, 3, 1, 1, 2}));
 
 	result = con.Query("SELECT first_value(ten) OVER (PARTITION BY four ORDER BY ten) FROM tenk1 WHERE unique2 < 10 "
 	                   "order by four, ten");
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 0, 1, 1, 1, 1, 0, 1, 1}));
 
 	// percent_rank
 	result = con.Query("SELECT cast(percent_rank() OVER (PARTITION BY four ORDER BY ten)*10 as INTEGER) FROM tenk1 "
 	                   "ORDER BY four, ten");
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 10, 0, 0, 6, 10, 0, 0, 10}));
 
 	// cume_dist
 	result = con.Query("SELECT cast(cume_dist() OVER (PARTITION BY four ORDER BY ten)*10 as integer) FROM tenk1 WHERE  "
 	                   "unique2 < 10 order by four, ten");
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {6, 6, 10, 5, 5, 7, 10, 10, 5, 10}));
 
 	// ntile
 	result = con.Query("SELECT ntile(2) OVER (ORDER BY ten, four) nn FROM tenk1 ORDER BY ten, four, nn");
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 1, 1, 2, 2, 2, 2, 2}));
 
 	result = con.Query("SELECT ntile(3) OVER (ORDER BY ten, four) nn FROM tenk1 ORDER BY ten, four, nn");
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 1, 2, 2, 2, 3, 3, 3}));
 
 	result = con.Query("SELECT ntile(4) OVER (ORDER BY ten, four) nn FROM tenk1 ORDER BY ten, four, nn");
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 2, 2, 2, 3, 3, 4, 4}));
 
 	result = con.Query("SELECT ntile(5) OVER (ORDER BY ten, four) nn FROM tenk1 ORDER BY ten, four, nn");
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 2, 2, 3, 3, 4, 4, 5, 5}));
 
 	// lead/lag
 	result = con.Query("SELECT lag(ten) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt");
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 0, 0, Value(), 1, 1, 7, Value(), Value(), 1}));
 
 	result = con.Query("SELECT lead(ten) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt");
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 4, Value(), 1, 7, 9, Value(), Value(), 3, Value()}));
 
 	result =
 	    con.Query("SELECT lag(ten, four) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt");
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 4, Value(), 1, 1, 7, Value(), Value(), Value()}));
 
 	result = con.Query(
 	    "SELECT lag(ten, four, 0) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt");
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 4, 0, 1, 1, 7, 0, 0, 0}));
 
 	result = con.Query("SELECT lead(ten) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt");
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 4, Value(), 1, 7, 9, Value(), Value(), 3, Value()}));
 
 	result =
 	    con.Query("SELECT lead(ten * 2, 1) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt");
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 8, Value(), 2, 14, 18, Value(), Value(), 6, Value()}));
 
 	result = con.Query(
 	    "SELECT lead(ten * 2, 1, -1) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt");
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 8, -1, 2, 14, 18, -1, -1, 6, -1}));
 
 	// empty OVER clause
 	result =
 	    con.Query("SELECT COUNT(*) OVER w c, SUM(four) OVER w s, cast(AVG(ten) OVER w * 10 as integer) a, RANK() over "
 	              "w r, DENSE_RANK() over w dr, ROW_NUMBER() OVER w rn FROM tenk1 WINDOW w AS () ORDER BY rn");
-	REQUIRE(result->column_count() == 6);
+	REQUIRE(result->types.size() == 6);
 	REQUIRE(CHECK_COLUMN(result, 0, {10, 10, 10, 10, 10, 10, 10, 10, 10, 10}));
 	REQUIRE(CHECK_COLUMN(result, 1, {12, 12, 12, 12, 12, 12, 12, 12, 12, 12}));
 	REQUIRE(CHECK_COLUMN(result, 2, {26, 26, 26, 26, 26, 26, 26, 26, 26, 26}));
@@ -278,7 +278,7 @@ TEST_CASE("Wiscosin-derived window test cases", "[window]") {
 	    con.Query("SELECT COUNT(*) OVER w c, SUM(four) OVER w s, cast(AVG(ten) OVER w * 10 as integer) a, RANK() over "
 	              "w r, DENSE_RANK() over w dr, ROW_NUMBER() OVER w rn FROM tenk1 WINDOW w AS (rows between 1 "
 	              "preceding and 1 following) ORDER BY rn");
-	REQUIRE(result->column_count() == 6);
+	REQUIRE(result->types.size() == 6);
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 3, 3, 3, 3, 3, 3, 3, 2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {3, 3, 5, 2, 3, 2, 3, 3, 5, 4}));
 	REQUIRE(CHECK_COLUMN(result, 2, {5, 3, 3, 13, 43, 66, 56, 30, 16, 20}));
@@ -288,9 +288,9 @@ TEST_CASE("Wiscosin-derived window test cases", "[window]") {
 }
 
 TEST_CASE("Non-default window specs", "[window]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("create table tenk1d(ten int4, four int4)"));
@@ -300,7 +300,7 @@ TEST_CASE("Non-default window specs", "[window]") {
 	// BASIC
 	result = con.Query("SELECT four, ten, sum(ten) over (partition by four order by ten) st, last_value(ten) over "
 	                   "(partition by four order by ten) lt FROM tenk1d ORDER BY four, ten");
-	REQUIRE(result->column_count() == 4);
+	REQUIRE(result->types.size() == 4);
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {0, 2, 4, 6, 8, 1, 3, 5, 7, 9, 0, 2, 4, 6, 8, 1, 3, 5, 7, 9}));
 	REQUIRE(CHECK_COLUMN(result, 2, {0, 2, 6, 12, 20, 1, 4, 9, 16, 25, 0, 2, 6, 12, 20, 1, 4, 9, 16, 25}));
@@ -310,7 +310,7 @@ TEST_CASE("Non-default window specs", "[window]") {
 	result = con.Query("SELECT four, ten, sum(ten) over (partition by four order by ten range between unbounded "
 	                   "preceding and current row) st, last_value(ten) over (partition by four order by ten range "
 	                   "between unbounded preceding and current row) lt FROM tenk1d order by four, ten");
-	REQUIRE(result->column_count() == 4);
+	REQUIRE(result->types.size() == 4);
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {0, 2, 4, 6, 8, 1, 3, 5, 7, 9, 0, 2, 4, 6, 8, 1, 3, 5, 7, 9}));
 	REQUIRE(CHECK_COLUMN(result, 2, {0, 2, 6, 12, 20, 1, 4, 9, 16, 25, 0, 2, 6, 12, 20, 1, 4, 9, 16, 25}));
@@ -320,7 +320,7 @@ TEST_CASE("Non-default window specs", "[window]") {
 	result = con.Query("SELECT four, ten, sum(ten) over (partition by four order by ten range between unbounded "
 	                   "preceding and unbounded following) st, last_value(ten) over (partition by four order by ten "
 	                   "range between unbounded preceding and unbounded following) lt FROM tenk1d order by four, ten");
-	REQUIRE(result->column_count() == 4);
+	REQUIRE(result->types.size() == 4);
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {0, 2, 4, 6, 8, 1, 3, 5, 7, 9, 0, 2, 4, 6, 8, 1, 3, 5, 7, 9}));
 	REQUIRE(CHECK_COLUMN(result, 2, {20, 20, 20, 20, 20, 25, 25, 25, 25, 25, 20, 20, 20, 20, 20, 25, 25, 25, 25, 25}));
@@ -330,7 +330,7 @@ TEST_CASE("Non-default window specs", "[window]") {
 	result = con.Query("SELECT four, ten/4 as two, 	sum(ten/4) over (partition by four order by ten/4 range between "
 	                   "unbounded preceding and current row) st, last_value(ten/4) over (partition by four order by "
 	                   "ten/4 range between unbounded preceding and current row) lt FROM tenk1d order by four, ten/4");
-	REQUIRE(result->column_count() == 4);
+	REQUIRE(result->types.size() == 4);
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {0, 0, 1, 1, 2, 0, 0, 1, 1, 2, 0, 0, 1, 1, 2, 0, 0, 1, 1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 2, {0, 0, 2, 2, 4, 0, 0, 2, 2, 4, 0, 0, 2, 2, 4, 0, 0, 2, 2, 4}));
@@ -340,7 +340,7 @@ TEST_CASE("Non-default window specs", "[window]") {
 	result = con.Query(
 	    "SELECT four, ten/4 as two, sum(ten/4) OVER w st, last_value(ten/4) OVER w lt FROM tenk1d WINDOW w AS "
 	    "(partition by four order by ten/4 range between unbounded preceding and current row) order by four, ten/4 ");
-	REQUIRE(result->column_count() == 4);
+	REQUIRE(result->types.size() == 4);
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {0, 0, 1, 1, 2, 0, 0, 1, 1, 2, 0, 0, 1, 1, 2, 0, 0, 1, 1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 2, {0, 0, 2, 2, 4, 0, 0, 2, 2, 4, 0, 0, 2, 2, 4, 0, 0, 2, 2, 4}));
@@ -348,9 +348,9 @@ TEST_CASE("Non-default window specs", "[window]") {
 }
 
 TEST_CASE("Expressions in boundaries", "[window]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tenk1 ( unique1 int4, unique2 int4, two int4, four int4, ten int4, twenty "
@@ -368,29 +368,29 @@ TEST_CASE("Expressions in boundaries", "[window]") {
 
 	result = con.Query("SELECT sum(unique1) over (order by unique1 rows between 2 preceding and 2 following) su FROM "
 	                   "tenk1 order by unique1");
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {3, 6, 10, 15, 20, 25, 30, 35, 30, 24}));
 
 	result = con.Query("SELECT sum(unique1) over (order by unique1 rows between 2 preceding and 1 preceding) su FROM "
 	                   "tenk1 order by unique1");
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 0, 1, 3, 5, 7, 9, 11, 13, 15}));
 
 	result = con.Query("SELECT sum(unique1) over (order by unique1 rows between 1 following and 3 following) su FROM "
 	                   "tenk1 order by unique1");
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {6, 9, 12, 15, 18, 21, 24, 17, 9, Value()}));
 
 	result = con.Query("SELECT sum(unique1) over (order by unique1 rows between unbounded preceding and 1 following) "
 	                   "su FROM tenk1 order by unique1");
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 3, 6, 10, 15, 21, 28, 36, 45, 45}));
 }
 
 TEST_CASE("TPC-DS inspired micro benchmarks", "[window]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));

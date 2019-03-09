@@ -7,9 +7,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("MonetDB Test: leftjoin.Bug-3981.sql", "[monetdb]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	result = con.Query(
@@ -21,9 +21,9 @@ TEST_CASE("MonetDB Test: leftjoin.Bug-3981.sql", "[monetdb]") {
 }
 
 TEST_CASE("MonetDB Test: null_matches_in_outer.Bug-6398.sql", "[monetdb]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("create table \"E\" (\"intCol\" bigint, \"stringCol\" varchar);"));
@@ -48,9 +48,9 @@ TEST_CASE("MonetDB Test: null_matches_in_outer.Bug-6398.sql", "[monetdb]") {
 }
 
 TEST_CASE("MonetDB Test: outerjoin_project.Bug-3725.sql", "[monetdb]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	return;

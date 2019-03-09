@@ -32,18 +32,19 @@ virtual void Cleanup(DuckDBBenchmarkState *state) {
 	state->conn.Query("DROP INDEX i_index;");
 }
 
-virtual string VerifyResult(DuckDBResult *result) {
-	if (!result->GetSuccess()) {
-		return result->GetErrorMessage();
+virtual string VerifyResult(QueryResult *result) {
+	if (!result->success) {
+		return result->error;
 	}
-	if (result->size() != 1) {
+	auto &materialized = (MaterializedQueryResult&) *result;
+	if (materialized.collection.count != 1) {
 		return "Incorrect amount of rows in result";
 	}
-	if (result->column_count() != 1) {
+	if (materialized.names.size() != 1) {
 		return "Incorrect amount of columns";
 	}
-	if (result->GetValue<int>(0, 0) != SUCCESS) {
-		return "Incorrect result returned, expected " + to_string(result->GetValue<int>(0, 0));
+	if (materialized.GetValue<int32_t>(0, 0) != SUCCESS) {
+		return "Incorrect result returned, expected " + to_string(SUCCESS);
 	}
 	return string();
 }

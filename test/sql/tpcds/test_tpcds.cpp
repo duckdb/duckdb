@@ -7,8 +7,8 @@ using namespace std;
 
 TEST_CASE("Test TPC-DS SF0 Query Compilation", "[tpcds]") {
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
-	unique_ptr<DuckDBResult> result;
+	Connection con(db);
+	unique_ptr<QueryResult> result;
 	con.EnableQueryVerification();
 
 	// create schema only
@@ -26,8 +26,8 @@ TEST_CASE("Test TPC-DS SF0 Query Compilation", "[tpcds]") {
 
 TEST_CASE("Test TPC-DS SF0.1 Query Execution", "[tpcds][.]") {
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
-	unique_ptr<DuckDBResult> result;
+	Connection con(db);
+	unique_ptr<QueryResult> result;
 
 	tpcds::dbgen(0.1, db);
 	con.EnableProfiling();
@@ -45,8 +45,8 @@ TEST_CASE("Test TPC-DS SF0.1 Query Execution", "[tpcds][.]") {
 TEST_CASE("Test TPC-DS SF1", "[tpcds][.]") {
 	return;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
-	unique_ptr<DuckDBResult> result;
+	Connection con(db);
+	unique_ptr<QueryResult> result;
 
 	// create and load data
 	tpcds::dbgen(1, db);

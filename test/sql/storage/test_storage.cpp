@@ -7,7 +7,7 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test simple storage", "[storage]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	auto storage_database = JoinPath(TESTING_DIRECTORY_NAME, "storage_test");
 
 	// make sure the database does not exist
@@ -17,14 +17,14 @@ TEST_CASE("Test simple storage", "[storage]") {
 	{
 		// create a database and insert values
 		DuckDB db(storage_database);
-		DuckDBConnection con(db);
+		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)"));
 	}
 	// reload the database from disk
 	{
 		DuckDB db(storage_database);
-		DuckDBConnection con(db);
+		Connection con(db);
 		result = con.Query("SELECT * FROM test ORDER BY a");
 		REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
 		REQUIRE(CHECK_COLUMN(result, 1, {22, 21, 22}));
@@ -33,7 +33,7 @@ TEST_CASE("Test simple storage", "[storage]") {
 	// different code path
 	{
 		DuckDB db(storage_database);
-		DuckDBConnection con(db);
+		Connection con(db);
 		result = con.Query("SELECT * FROM test ORDER BY a");
 		REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
 		REQUIRE(CHECK_COLUMN(result, 1, {22, 21, 22}));
@@ -42,7 +42,7 @@ TEST_CASE("Test simple storage", "[storage]") {
 }
 
 TEST_CASE("Test storing NULLs and strings", "[storage]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	auto storage_database = JoinPath(TESTING_DIRECTORY_NAME, "storage_test");
 
 	// make sure the database does not exist
@@ -52,7 +52,7 @@ TEST_CASE("Test storing NULLs and strings", "[storage]") {
 	{
 		// create a database and insert values
 		DuckDB db(storage_database);
-		DuckDBConnection con(db);
+		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b STRING);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (NULL, 'hello'), "
 		                          "(13, 'abcdefgh'), (12, NULL)"));
@@ -60,7 +60,7 @@ TEST_CASE("Test storing NULLs and strings", "[storage]") {
 	// reload the database from disk
 	{
 		DuckDB db(storage_database);
-		DuckDBConnection con(db);
+		Connection con(db);
 		result = con.Query("SELECT a, b FROM test ORDER BY a");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 12, 13}));
 		REQUIRE(CHECK_COLUMN(result, 1, {"hello", Value(), "abcdefgh"}));
@@ -69,7 +69,7 @@ TEST_CASE("Test storing NULLs and strings", "[storage]") {
 	// different code path
 	{
 		DuckDB db(storage_database);
-		DuckDBConnection con(db);
+		Connection con(db);
 		result = con.Query("SELECT a, b FROM test ORDER BY a");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 12, 13}));
 		REQUIRE(CHECK_COLUMN(result, 1, {"hello", Value(), "abcdefgh"}));
@@ -78,7 +78,7 @@ TEST_CASE("Test storing NULLs and strings", "[storage]") {
 }
 
 TEST_CASE("Test updates with storage", "[storage]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	auto storage_database = JoinPath(TESTING_DIRECTORY_NAME, "storage_test");
 
 	// make sure the database does not exist
@@ -88,7 +88,7 @@ TEST_CASE("Test updates with storage", "[storage]") {
 	{
 		// create a database and insert values
 		DuckDB db(storage_database);
-		DuckDBConnection con(db);
+		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)"));
@@ -101,7 +101,7 @@ TEST_CASE("Test updates with storage", "[storage]") {
 	// reload the database from disk
 	{
 		DuckDB db(storage_database);
-		DuckDBConnection con(db);
+		Connection con(db);
 		result = con.Query("SELECT a, b FROM test ORDER BY a");
 		REQUIRE(CHECK_COLUMN(result, 0, {11, 13}));
 		REQUIRE(CHECK_COLUMN(result, 1, {1022, 22}));
@@ -109,7 +109,7 @@ TEST_CASE("Test updates with storage", "[storage]") {
 	// reload the database from disk again
 	{
 		DuckDB db(storage_database);
-		DuckDBConnection con(db);
+		Connection con(db);
 		result = con.Query("SELECT a, b FROM test ORDER BY a");
 		REQUIRE(CHECK_COLUMN(result, 0, {11, 13}));
 		REQUIRE(CHECK_COLUMN(result, 1, {1022, 22}));
@@ -118,7 +118,7 @@ TEST_CASE("Test updates with storage", "[storage]") {
 }
 
 TEST_CASE("Test storing TPC-H", "[storage][.]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	double sf = 0.1;
 	auto storage_database = JoinPath(TESTING_DIRECTORY_NAME, "storage_tpch");
 
@@ -135,7 +135,7 @@ TEST_CASE("Test storing TPC-H", "[storage][.]") {
 	// reload the database from disk
 	{
 		DuckDB db(storage_database);
-		DuckDBConnection con(db);
+		Connection con(db);
 		// check if all the counts are correct
 		result = con.Query("SELECT COUNT(*) FROM orders");
 		REQUIRE(CHECK_COLUMN(result, 0, {150000}));
@@ -157,7 +157,7 @@ TEST_CASE("Test storing TPC-H", "[storage][.]") {
 	// reload the database from disk again
 	{
 		DuckDB db(storage_database);
-		DuckDBConnection con(db);
+		Connection con(db);
 		// check if all the counts are correct
 		result = con.Query("SELECT COUNT(*) FROM orders");
 		REQUIRE(CHECK_COLUMN(result, 0, {150000}));
@@ -179,7 +179,7 @@ TEST_CASE("Test storing TPC-H", "[storage][.]") {
 	// reload the database from disk again
 	{
 		DuckDB db(storage_database);
-		DuckDBConnection con(db);
+		Connection con(db);
 		// check if all the counts are correct
 		result = con.Query("SELECT COUNT(*) FROM orders");
 		REQUIRE(CHECK_COLUMN(result, 0, {150000}));

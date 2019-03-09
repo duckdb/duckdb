@@ -16,7 +16,7 @@ virtual void Load(DuckDBBenchmarkState *state) {
 	tpch::dbgen(SF, state->db, "tpch");
 	// create the CSV file
 	auto result = state->conn.Query("COPY tpch.lineitem TO 'lineitem.csv' DELIMITER '|' HEADER");
-	assert(result->GetSuccess());
+	assert(result->success);
 	count = result->collection.chunks[0]->data[0].GetValue(0).GetNumericValue();
 	// delete the database
 	state->conn.Query("DROP SCHEMA tpch CASCADE");
@@ -26,11 +26,12 @@ virtual void Load(DuckDBBenchmarkState *state) {
 virtual string GetQuery() {
 	return "COPY lineitem FROM 'lineitem.csv' DELIMITER '|' HEADER";
 }
-virtual string VerifyResult(DuckDBResult *result) {
-	if (!result->GetSuccess()) {
-		return result->GetErrorMessage();
+virtual string VerifyResult(QueryResult *result) {
+	if (!result->success) {
+		return result->error;
 	}
-	auto expected_count = result->collection.chunks[0]->data[0].GetValue(0).GetNumericValue();
+	auto &materialized = (MaterializedQueryResult&) *result;
+	auto expected_count = materialized.collection.chunks[0]->data[0].GetValue(0).GetNumericValue();
 	if (expected_count != count) {
 		return StringUtil::Format("Count mismatch, expected %lld elements but got %lld", count, expected_count);
 	}

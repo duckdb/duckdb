@@ -15,9 +15,9 @@ using namespace std;
 	virtual string GetQuery() {                                                                                        \
 		return tpcds::get_query(QNR);                                                                                  \
 	}                                                                                                                  \
-	virtual string VerifyResult(DuckDBResult *result) {                                                                \
-		if (!result->GetSuccess()) {                                                                                   \
-			return result->GetErrorMessage();                                                                          \
+	virtual string VerifyResult(QueryResult *result) {                                                                 \
+		if (!result->success) {                                                                                   \
+			return result->error;                                                                          \
 		}                                                                                                              \
 		return ""; /*return compare_csv(*result, tpch::get_answer(SF, QNR),                                            \
 		              true);  */                                                                                       \

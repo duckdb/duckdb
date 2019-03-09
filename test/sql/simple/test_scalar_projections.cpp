@@ -5,9 +5,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test scalar queries", "[scalarquery]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	result = con.Query("SELECT 42");
@@ -37,9 +37,9 @@ TEST_CASE("Test scalar queries", "[scalarquery]") {
 }
 
 TEST_CASE("Test scalar queries from SQLLogicTests", "[scalarquery]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	result = con.Query("SELECT + CASE WHEN NOT + 84 NOT BETWEEN - 78 + 98 * 51 AND - ( ( - 28 ) ) * COUNT ( * ) + + - "

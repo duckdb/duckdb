@@ -25,9 +25,9 @@ static void WriteCSV(string path, const char *csv) {
 }
 
 TEST_CASE("Test copy statement", "[copy]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	auto csv_path = GetCSVPath();
 
@@ -117,9 +117,9 @@ TEST_CASE("Test copy statement", "[copy]") {
 }
 
 TEST_CASE("Test copy into from on-time dataset", "[copy]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	auto csv_path = GetCSVPath();
 	auto ontime_csv = JoinPath(csv_path, "ontime.csv");
@@ -167,9 +167,9 @@ TEST_CASE("Test copy into from on-time dataset", "[copy]") {
 }
 
 TEST_CASE("Test copy from lineitem csv", "[copy]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	auto csv_path = GetCSVPath();
 	auto lineitem_csv = JoinPath(csv_path, "lineitem.csv");
@@ -213,9 +213,9 @@ TEST_CASE("Test copy from lineitem csv", "[copy]") {
 }
 
 TEST_CASE("Test copy from web_page csv", "[copy]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	auto csv_path = GetCSVPath();
 	auto webpage_csv = JoinPath(csv_path, "web_page.csv");

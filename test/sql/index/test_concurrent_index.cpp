@@ -15,7 +15,7 @@ atomic<bool> is_finished;
 
 static void read_from_integers(DuckDB *db, size_t threadnr) {
 	REQUIRE(db);
-	DuckDBConnection con(*db);
+	Connection con(*db);
 
 	while (!is_finished) {
 		auto result = con.Query("SELECT i FROM integers WHERE i = " + to_string(threadnr * 10000));
@@ -24,9 +24,9 @@ static void read_from_integers(DuckDB *db, size_t threadnr) {
 }
 
 TEST_CASE("Concurrent reads during index creation", "[index][.]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// create a single table to append to
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
@@ -61,7 +61,7 @@ TEST_CASE("Concurrent reads during index creation", "[index][.]") {
 
 static void append_to_integers(DuckDB *db, size_t threadnr) {
 	REQUIRE(db);
-	DuckDBConnection con(*db);
+	Connection con(*db);
 
 	Appender appender(*db, DEFAULT_SCHEMA, "integers");
 	for (size_t i = 0; i < INSERT_COUNT; i++) {
@@ -73,9 +73,9 @@ static void append_to_integers(DuckDB *db, size_t threadnr) {
 }
 
 TEST_CASE("Concurrent writes during index creation", "[index][.]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// create a single table to append to
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));

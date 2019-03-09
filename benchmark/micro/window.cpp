@@ -31,11 +31,12 @@ virtual string GetQuery() {
 	return "SELECT SUM(i) OVER(order by i rows between 1000 preceding and 1000 following) FROM integers";
 }
 
-virtual string VerifyResult(DuckDBResult *result) {
-	if (!result->GetSuccess()) {
-		return result->GetErrorMessage();
+virtual string VerifyResult(QueryResult *result) {
+	if (!result->success) {
+		return result->error;
 	}
-	if (result->size() != WINDOW_ROW_COUNT) {
+	auto &materialized = (MaterializedQueryResult&) *result;
+	if (materialized.collection.count != WINDOW_ROW_COUNT) {
 		return "Incorrect amount of rows in result";
 	}
 	return string();

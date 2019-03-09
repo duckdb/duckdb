@@ -6,9 +6,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test filter pushdown", "[filterpushdown]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 	con.EnableProfiling();
 
@@ -121,9 +121,9 @@ TEST_CASE("Test filter pushdown", "[filterpushdown]") {
 }
 
 TEST_CASE("Test filter pushdown with more data", "[filterpushdown][.]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableProfiling();
 
 	// in this test we run queries that will take a long time without filter pushdown, but are almost instant with
@@ -355,9 +355,9 @@ TEST_CASE("Test filter pushdown with more data", "[filterpushdown][.]") {
 }
 
 TEST_CASE("Test moving/duplicating conditions", "[filterpushdown][.]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableProfiling();
 
 	// in this test we run queries that will take a long time without filter pushdown, but are almost instant with

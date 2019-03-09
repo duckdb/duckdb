@@ -7,9 +7,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test scalar subqueries", "[subquery]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	result = con.Query("SELECT 1+(SELECT 1)");
@@ -26,9 +26,9 @@ TEST_CASE("Test scalar subqueries", "[subquery]") {
 }
 
 TEST_CASE("Test scalar EXISTS query", "[subquery]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	result = con.Query("SELECT EXISTS(SELECT 1)");
@@ -48,9 +48,9 @@ TEST_CASE("Test scalar EXISTS query", "[subquery]") {
 }
 
 TEST_CASE("Test scalar IN query", "[subquery]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	result = con.Query("SELECT 1 IN (SELECT 1)");

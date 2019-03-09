@@ -5,9 +5,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test queries involving Common SubExpressions", "[cse]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("create table test(a integer);"));
@@ -29,9 +29,9 @@ TEST_CASE("Test queries involving Common SubExpressions", "[cse]") {
 }
 
 TEST_CASE("Test queries involving Common SubExpressions and Strings and NULL values", "[cse]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("create table test(a VARCHAR);"));

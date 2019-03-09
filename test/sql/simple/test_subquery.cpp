@@ -5,9 +5,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test subqueries", "[subqueries]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	// scalar subquery
@@ -76,9 +76,9 @@ TEST_CASE("Test subqueries", "[subqueries]") {
 }
 
 TEST_CASE("Test subqueries with (NOT) IN clause", "[subqueries]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	// scalar subquery
@@ -102,9 +102,9 @@ TEST_CASE("Test subqueries with (NOT) IN clause", "[subqueries]") {
 }
 
 TEST_CASE("Test correlated subqueries in WHERE clause", "[subqueries]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (id INTEGER, b INTEGER);"));
@@ -127,9 +127,9 @@ TEST_CASE("Test correlated subqueries in WHERE clause", "[subqueries]") {
 }
 
 TEST_CASE("Joins in subqueries", "[subqueries]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (id INTEGER, test_value INTEGER);"));
@@ -151,9 +151,9 @@ TEST_CASE("Joins in subqueries", "[subqueries]") {
 }
 
 TEST_CASE("UNIONS of subqueries", "[subqueries]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	result = con.Query("select * from (select 42) sq1 union all select * from "
@@ -162,9 +162,9 @@ TEST_CASE("UNIONS of subqueries", "[subqueries]") {
 }
 
 TEST_CASE("Aliasing and aggregation in subqueries", "[subqueries]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("create table a(i integer)"));

@@ -12,7 +12,7 @@
 
 struct duckdb_connection {
 	std::unique_ptr<duckdb::DuckDB> database;
-	std::unique_ptr<duckdb::DuckDBConnection> connection;
+	std::unique_ptr<duckdb::Connection> connection;
 	char *zErrMsg = 0;
 	int rc;
 	void q(const char *query);

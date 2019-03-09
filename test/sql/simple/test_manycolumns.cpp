@@ -9,9 +9,9 @@ using namespace std;
 #include <fstream>
 
 TEST_CASE("Test many columns", "[create][.]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	ostringstream ss;
 	// many columns

@@ -14,8 +14,6 @@
 
 namespace duckdb {
 
-constexpr const int64_t STORAGE_VERSION = 1;
-
 class Catalog;
 class DuckDB;
 class TransactionManager;
