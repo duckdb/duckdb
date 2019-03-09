@@ -31,11 +31,11 @@ void Connection::Interrupt() {
 }
 
 void Connection::EnableProfiling() {
-	context.profiler.Enable();
+	context.EnableProfiling();
 }
 
 void Connection::DisableProfiling() {
-	context.profiler.Disable();
+	context.DisableProfiling();
 }
 
 void Connection::EnableQueryVerification() {

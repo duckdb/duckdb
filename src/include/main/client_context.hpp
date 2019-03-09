@@ -29,6 +29,10 @@ public:
 
 	//! Interrupt execution of a query
 	void Interrupt();
+	//! Enable query profiling
+	void EnableProfiling();
+	//! Disable query profiling
+	void DisableProfiling();
 	
 	//! Issue a query, returning a QueryResult. The QueryResult can be either a StreamQueryResult or a MaterializedQueryResult. The StreamQueryResult will only be returned in the case of a successful SELECT statement.
 	unique_ptr<QueryResult> Query(string query, bool allow_stream_result);

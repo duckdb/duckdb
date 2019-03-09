@@ -271,6 +271,16 @@ void ClientContext::Interrupt() {
 	interrupted = true;
 }
 
+void ClientContext::EnableProfiling() {
+	lock_guard<mutex> client_guard(context_lock);
+	profiler.Enable();
+}
+
+void ClientContext::DisableProfiling() {
+	lock_guard<mutex> client_guard(context_lock);
+	profiler.Disable();
+}
+
 void ClientContext::Invalidate() {
 	Interrupt();
 	lock_guard<mutex> client_guard(context_lock);

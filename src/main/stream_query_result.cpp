@@ -19,6 +19,7 @@ void StreamQueryResult::Print() {
 		for (auto &name : names) {
 			printf("%s\t", name.c_str());
 		}
+		printf("\n");
 		for (auto &type : types) {
 			printf("%s\t", TypeIdToString(type).c_str());
 		}
