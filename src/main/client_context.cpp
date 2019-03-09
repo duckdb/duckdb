@@ -227,6 +227,15 @@ unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_res
 			transaction.BeginTransaction();
 		}
 		ActiveTransaction().active_query = db.transaction_manager.GetQueryNumber();
+#ifdef DEBUG
+		if (statement->type == StatementType::SELECT && query_verification_enabled) {
+			// aggressive query verification is enabled: create a copy of the statement and verify the original
+			// statement
+			auto copied_statement = ((SelectStatement &)*statement).Copy();
+			VerifyQuery(query, move(statement));
+			statement = move(copied_statement);
+		}
+#endif
 		// start the profiler
 		profiler.StartQuery(query);
 		try {
@@ -283,11 +292,116 @@ void ClientContext::DisableProfiling() {
 }
 
 void ClientContext::Invalidate() {
+	// interrupt any running query before attempting to obtain the lock
+	// this way we don't have to wait for the entire query to finish
 	Interrupt();
+	// now obtain the context lock
 	lock_guard<mutex> client_guard(context_lock);
+	// invalidate this context and the TransactionManager
 	is_invalidated = true;
 	transaction.Invalidate();
+	// also close any open result
 	if (open_result) {
 		open_result->is_open = false;
 	}
+}
+
+void ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> statement) {
+	// aggressive query verification
+
+	// the purpose of this function is to test correctness of otherwise hard to test features:
+	// Copy() of statements and expressions
+	// Serialize()/Deserialize() of expressions
+	// Hash() of expressions
+	// Equality() of statements and expressions
+	// Correctness of plans both with and without optimizers
+
+	// copy the statement
+	auto select_stmt = (SelectStatement *)statement.get();
+	auto copied_stmt = select_stmt->Copy();
+	auto unoptimized_stmt = select_stmt->Copy();
+
+	Serializer serializer;
+	select_stmt->Serialize(serializer);
+	Deserializer source(serializer);
+	auto deserialized_stmt = SelectStatement::Deserialize(source);
+	// all the statements should be equal
+	assert(copied_stmt->Equals(statement.get()));
+	assert(deserialized_stmt->Equals(statement.get()));
+	assert(copied_stmt->Equals(deserialized_stmt.get()));
+
+	// now perform checking on the expressions
+	auto &orig_expr_list = select_stmt->node->GetSelectList();
+	auto &de_expr_list = ((SelectStatement *)deserialized_stmt.get())->node->GetSelectList();
+	auto &cp_expr_list = ((SelectStatement *)copied_stmt.get())->node->GetSelectList();
+	assert(orig_expr_list.size() == de_expr_list.size() && cp_expr_list.size() == de_expr_list.size());
+	for (size_t i = 0; i < orig_expr_list.size(); i++) {
+		// check that the expressions are equivalent
+		assert(orig_expr_list[i]->Equals(de_expr_list[i].get()));
+		assert(orig_expr_list[i]->Equals(cp_expr_list[i].get()));
+		assert(de_expr_list[i]->Equals(cp_expr_list[i].get()));
+		// check that the hashes are equivalent too
+		assert(orig_expr_list[i]->Hash() == de_expr_list[i]->Hash());
+		assert(orig_expr_list[i]->Hash() == cp_expr_list[i]->Hash());
+	}
+	// now perform additional checking within the expressions
+	for (size_t outer_idx = 0; outer_idx < orig_expr_list.size(); outer_idx++) {
+		auto hash = orig_expr_list[outer_idx]->Hash();
+		for (size_t inner_idx = 0; inner_idx < orig_expr_list.size(); inner_idx++) {
+			auto hash2 = orig_expr_list[inner_idx]->Hash();
+			if (hash != hash2) {
+				// if the hashes are not equivalent, the expressions should not be equivalent
+				assert(!orig_expr_list[outer_idx]->Equals(orig_expr_list[inner_idx].get()));
+			}
+		}
+	}
+
+	// disable profiling if it is enabled
+	bool profiling_is_enabled = profiler.IsEnabled();
+	if (profiling_is_enabled) {
+		profiler.Disable();
+	}
+
+	auto original_result = make_unique<MaterializedQueryResult>(),
+	     copied_result = make_unique<MaterializedQueryResult>(),
+	     deserialized_result = make_unique<MaterializedQueryResult>(),
+	     unoptimized_result = make_unique<MaterializedQueryResult>();
+	// execute the original statement
+	try {
+		auto result = ExecuteStatementInternal(query, move(statement), false);
+		original_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
+	} catch (Exception &ex) {
+		original_result->error = ex.GetMessage();
+	}
+	// now execute the copied statement
+	try {
+		auto result = ExecuteStatementInternal(query, move(copied_stmt), false);
+		copied_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
+	} catch (Exception &ex) {
+		copied_result->error = ex.GetMessage();
+	}
+	// now execute the deserialized statement
+	try {
+		auto result = ExecuteStatementInternal(query, move(deserialized_stmt), false);
+		deserialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
+	} catch (Exception &ex) {
+		deserialized_result->error = ex.GetMessage();
+	}
+	// now execute the unoptimized statement
+	enable_optimizer = false;
+	try {
+		auto result = ExecuteStatementInternal(query, move(unoptimized_stmt), false);
+		unoptimized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
+	} catch (Exception &ex) {
+		unoptimized_result->error = ex.GetMessage();
+	}
+	enable_optimizer = true;
+	if (profiling_is_enabled) {
+		profiler.Enable();
+	}
+
+	// now compare the results
+	// the results of all four runs should be identical
+	assert(original_result->Equals(*copied_result));
+	assert(deserialized_result->Equals(*unoptimized_result));
 }

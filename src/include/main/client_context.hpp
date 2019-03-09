@@ -68,7 +68,12 @@ public:
 	bool query_verification_enabled = false;
 	//! Enable the running of optimizers
 	bool enable_optimizer = true;
+
 private:
+	//! Perform aggressive query verification of a SELECT statement. Only called when query_verification_enabled is
+	//! true.
+	void VerifyQuery(string query, unique_ptr<SQLStatement> statement);
+
 	//! The currently opened StreamQueryResult (if any)
 	StreamQueryResult *open_result = nullptr;
 
