@@ -254,8 +254,8 @@ void DataChunk::Hash(Vector &result) {
 	}
 }
 
-#ifdef DEBUG
 void DataChunk::Verify() {
+#ifdef DEBUG
 	// verify that all vectors in this chunk have the chunk selection vector
 	sel_t *v = sel_vector;
 	for (size_t i = 0; i < column_count; i++) {
@@ -266,8 +266,8 @@ void DataChunk::Verify() {
 	for (size_t i = 0; i < column_count; i++) {
 		assert(size() == data[i].count);
 	}
-}
 #endif
+}
 
 void DataChunk::Print() {
 	Printer::Print(ToString());

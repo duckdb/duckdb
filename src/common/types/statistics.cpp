@@ -10,8 +10,8 @@
 using namespace duckdb;
 using namespace std;
 
-#ifdef DEBUG
 void ExpressionStatistics::Verify(Vector &vector) {
+#ifdef DEBUG
 	if (!has_stats || vector.count == 0)
 		return;
 
@@ -31,8 +31,8 @@ void ExpressionStatistics::Verify(Vector &vector) {
 		Value stats_max_strlen = Value::Numeric(actual_max_strlen.type, maximum_string_length);
 		assert(actual_max_strlen <= stats_max_strlen);
 	}
-}
 #endif
+}
 
 void ExpressionStatistics::SetFromValue(Value value) {
 	has_stats = true;

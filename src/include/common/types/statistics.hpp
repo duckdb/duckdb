@@ -46,14 +46,8 @@ public:
 	//! The maximum string length of a character column [VARCHAR only]
 	uint64_t maximum_string_length;
 
-#ifdef DEBUG
 	//! Verify that the statistics hold for a given vector. DEBUG FUNCTION ONLY!
 	void Verify(Vector &vector);
-#else
-	//! Verify that the statistics hold for a given vector. DEBUG FUNCTION ONLY!
-	void Verify(Vector &vector) {
-	}
-#endif
 
 	virtual string ToString() const;
 	void Print();

@@ -107,9 +107,7 @@ private:
 	vector<ExpressionBinder *> active_binders;
 
 	size_t bound_tables;
-#ifdef DEBUG
 	bool encountered_select_node = false;
-#endif
 };
 
 } // namespace duckdb

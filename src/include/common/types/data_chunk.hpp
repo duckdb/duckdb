@@ -45,16 +45,9 @@ public:
 
 	DataChunk();
 
-#ifdef DEBUG
 	//! Verify that the DataChunk is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
 	void Verify();
-#else
-	//! Verify that the DataChunk is in a consistent, not corrupt state. DEBUG
-	//! FUNCTION ONLY!
-	void Verify() {
-	}
-#endif
 
 	size_t size() {
 		if (column_count == 0) {

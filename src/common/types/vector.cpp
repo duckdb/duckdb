@@ -340,8 +340,8 @@ void Vector::Print() {
 	Printer::Print(ToString());
 }
 
-#ifdef DEBUG
 void Vector::Verify() {
+#ifdef DEBUG
 	if (type == TypeId::VARCHAR) {
 		// we just touch all the strings and let the sanitizer figure out if any
 		// of them are deallocated/corrupt
@@ -353,5 +353,5 @@ void Vector::Verify() {
 			}
 		});
 	}
-}
 #endif
+}

@@ -64,12 +64,10 @@ public:
 	//	unique_ptr<CatalogSet> temporary_tables;
 	unique_ptr<CatalogSet> prepared_statements;
 
-#ifdef DEBUG
 	// Whether or not aggressive query verification is enabled
 	bool query_verification_enabled = false;
 	//! Enable the running of optimizers
 	bool enable_optimizer = true;
-#endif
 private:
 	//! The currently opened StreamQueryResult (if any)
 	StreamQueryResult *open_result = nullptr;

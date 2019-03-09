@@ -7,5 +7,3 @@ add_subdirectory(dsdgen-c)
 
 set(CMAKE_BUILD_TYPE "Release")
 add_library(dsdgen STATIC dsdgen.cpp append_info-c.cpp dsdgen_helpers.cpp ${ALL_OBJECT_FILES})
-
-
