@@ -104,7 +104,8 @@ unique_ptr<DataChunk> ClientContext::FetchInternal() {
 	return chunk;
 }
 
-unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, unique_ptr<SQLStatement> statement, bool allow_stream_result) {
+unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, unique_ptr<SQLStatement> statement,
+                                                                bool allow_stream_result) {
 	bool create_stream_result = statement->type == StatementType::SELECT && allow_stream_result;
 	// for many statements, we log the literal query string in the WAL
 	// also note the exception for EXECUTE below
@@ -178,7 +179,7 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, un
 	}
 	// create a materialized result by continuously fetching
 	auto result = make_unique<MaterializedQueryResult>(types, names);
-	while(true) {
+	while (true) {
 		auto chunk = FetchInternal();
 		if (chunk->size() == 0) {
 			break;
@@ -218,7 +219,7 @@ unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_res
 	// iterate over them and execute them one by one
 	unique_ptr<QueryResult> result, current_result;
 	QueryResult *last_result = nullptr;
-	for(size_t i = 0; i < parser.statements.size(); i++) {
+	for (size_t i = 0; i < parser.statements.size(); i++) {
 		auto &statement = parser.statements[i];
 		bool is_last_statement = i + 1 == parser.statements.size();
 		// check if we are on AutoCommit. In this case we should start a transaction.
@@ -248,7 +249,7 @@ unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_res
 		// query succeeded, append to list of results
 		if (current_result->type == QueryResultType::STREAM_RESULT) {
 			// store as currently open result if it is a stream result
-			open_result = (StreamQueryResult*) current_result.get();
+			open_result = (StreamQueryResult *)current_result.get();
 		} else {
 			// finalize the query if it is not a stream result
 			FinalizeQuery(true);
@@ -257,7 +258,7 @@ unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_res
 		if (!last_result) {
 			// first result of the query
 			result = move(current_result);
-			last_result = result.get();			
+			last_result = result.get();
 		} else {
 			// later results; attach to the result chain
 			last_result->next = move(current_result);
@@ -285,6 +286,7 @@ void ClientContext::Invalidate() {
 	Interrupt();
 	lock_guard<mutex> client_guard(context_lock);
 	is_invalidated = true;
+	transaction.Invalidate();
 	if (open_result) {
 		open_result->is_open = false;
 	}

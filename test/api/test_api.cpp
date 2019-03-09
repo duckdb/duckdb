@@ -17,12 +17,24 @@ TEST_CASE("Test using connection after database is gone", "[api]") {
 	db.reset();
 	// try to use the connection
 	REQUIRE_FAIL(conn->Query("SELECT 42"));
+
+	// now try it with an open transaction
+	db = make_unique<DuckDB>(nullptr);
+	conn = make_unique<Connection>(*db);
+
+	REQUIRE_NO_FAIL(conn->Query("BEGIN TRANSACTION"));
+	result = conn->Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+
+	db.reset();
+
+	REQUIRE_FAIL(conn->Query("SELECT 42"));
 }
 
 static void long_running_query(Connection *conn) {
 	auto result = conn->Query("SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4, integers i5, "
 	                          "integers i6, integers i7, integers i8, integers i9, integers i10,"
-                              "integers i11, integers i12, integers i13");
+	                          "integers i11, integers i12, integers i13");
 	// the query should fail
 	REQUIRE_FAIL(result);
 }
@@ -167,7 +179,6 @@ TEST_CASE("Test fetch API", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
 }
 
-
 TEST_CASE("Test fetch API robustness", "[api]") {
 	auto db = make_unique<DuckDB>(nullptr);
 	auto conn = make_unique<Connection>(*db);
@@ -207,7 +218,7 @@ TEST_CASE("Test fetch API robustness", "[api]") {
 	// test materialize
 	result1 = conn->SendQuery("SELECT 42");
 	REQUIRE(result1->type == QueryResultType::STREAM_RESULT);
-	auto materialized = ((StreamQueryResult&) *result1).Materialize();
+	auto materialized = ((StreamQueryResult &)*result1).Materialize();
 	result2 = conn->SendQuery("SELECT 84");
 
 	// we can read materialized still, even after opening a new result
@@ -220,13 +231,13 @@ static void VerifyStreamResult(unique_ptr<QueryResult> result) {
 	size_t current_row = 0;
 	size_t current_expected_value = 0;
 	size_t expected_rows = 500 * 5;
-	while(true) {
+	while (true) {
 		auto chunk = result->Fetch();
 		if (chunk->size() == 0) {
 			break;
 		}
-		int *col1_data = (int*) chunk->data[0].data;
-		for(size_t k = 0; k < chunk->size(); k++) {
+		int *col1_data = (int *)chunk->data[0].data;
+		for (size_t k = 0; k < chunk->size(); k++) {
 			if (current_row % 500 == 0) {
 				current_expected_value++;
 			}
@@ -245,8 +256,9 @@ TEST_CASE("Test fetch API with big results", "[api][.]") {
 	// create table that consists of multiple chunks
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(a INTEGER)"));
-	for(size_t i = 0; i < 500; i++) {
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1); INSERT INTO test VALUES (2); INSERT INTO test VALUES (3); INSERT INTO test VALUES (4); INSERT INTO test VALUES (5);"));
+	for (size_t i = 0; i < 500; i++) {
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1); INSERT INTO test VALUES (2); INSERT INTO test VALUES "
+		                          "(3); INSERT INTO test VALUES (4); INSERT INTO test VALUES (5);"));
 	}
 	REQUIRE_NO_FAIL(con.Query("COMMIT"));
 
@@ -257,9 +269,10 @@ TEST_CASE("Test fetch API with big results", "[api][.]") {
 	auto materialized = con.Query("SELECT CAST(a AS INTEGER) FROM test ORDER BY a");
 	VerifyStreamResult(move(materialized));
 	// return multiple results using the stream API
-	result = con.SendQuery("SELECT CAST(a AS INTEGER) FROM test ORDER BY a; SELECT CAST(a AS INTEGER) FROM test ORDER BY a; SELECT CAST(a AS INTEGER) FROM test ORDER BY a;");
+	result = con.SendQuery("SELECT CAST(a AS INTEGER) FROM test ORDER BY a; SELECT CAST(a AS INTEGER) FROM test ORDER "
+	                       "BY a; SELECT CAST(a AS INTEGER) FROM test ORDER BY a;");
 	auto next = move(result->next);
-	while(next) {
+	while (next) {
 		auto nextnext = move(next->next);
 		VerifyStreamResult(move(nextnext));
 		next = move(nextnext);

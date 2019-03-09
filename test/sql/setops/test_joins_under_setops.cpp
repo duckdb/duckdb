@@ -14,7 +14,8 @@ TEST_CASE("Test joins under setops", "[setops][.]") {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (" + to_string(i) + ")"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (" + to_string(i) + ")"));
 	}
-	auto result = con.Query("(SELECT * FROM test, test2 WHERE a=b) UNION (SELECT * FROM test,test2 WHERE a=b) ORDER BY 1");
+	auto result =
+	    con.Query("(SELECT * FROM test, test2 WHERE a=b) UNION (SELECT * FROM test,test2 WHERE a=b) ORDER BY 1");
 	REQUIRE_NO_FAIL(result);
 	REQUIRE(result->collection.count == 1024);
 }

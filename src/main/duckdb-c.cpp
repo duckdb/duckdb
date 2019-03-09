@@ -25,27 +25,27 @@ duckdb_state duckdb_open(const char *path, duckdb_database *out) {
 	auto wrapper = new DatabaseData();
 	try {
 		wrapper->database = new DuckDB(path);
-	} catch(...) {
+	} catch (...) {
 		return DuckDBError;
 	}
-	*out = (duckdb_database) wrapper;
+	*out = (duckdb_database)wrapper;
 	return DuckDBSuccess;
 }
 
 void duckdb_close(duckdb_database *database) {
 	if (*database) {
-		auto wrapper = (DatabaseData*) *database;
+		auto wrapper = (DatabaseData *)*database;
 		delete wrapper;
 		*database = nullptr;
 	}
 }
 
 duckdb_state duckdb_connect(duckdb_database database, duckdb_connection *out) {
-	auto wrapper = (DatabaseData*) database;
+	auto wrapper = (DatabaseData *)database;
 	Connection *connection;
 	try {
 		connection = new Connection(*wrapper->database);
-	} catch(...) {
+	} catch (...) {
 		return DuckDBError;
 	}
 	*out = (duckdb_connection)connection;
@@ -60,13 +60,12 @@ void duckdb_disconnect(duckdb_connection *connection) {
 	}
 }
 
-template<class T>
-void WriteData(duckdb_result *out, ChunkCollection &source, size_t col) {
+template <class T> void WriteData(duckdb_result *out, ChunkCollection &source, size_t col) {
 	size_t row = 0;
-	T *target = (T*) out->columns[col].data;
-	for(auto &chunk : source.chunks) {
-		T *source = (T*) chunk->data[col].data;
-		for(size_t k = 0; k < chunk->data[col].count; k++) {
+	T *target = (T *)out->columns[col].data;
+	for (auto &chunk : source.chunks) {
+		T *source = (T *)chunk->data[col].data;
+		for (size_t k = 0; k < chunk->data[col].count; k++) {
 			target[row++] = source[k];
 		}
 	}
@@ -89,16 +88,16 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 	// first write the meta data
 	out->column_count = result->types.size();
 	out->row_count = result->collection.count;
-	out->columns = (duckdb_column*) malloc(sizeof(duckdb_column) * out->column_count);
+	out->columns = (duckdb_column *)malloc(sizeof(duckdb_column) * out->column_count);
 	if (!out->columns) {
 		return DuckDBError;
 	}
 	// zero initialize the columns (so we can cleanly delete it in case a malloc fails)
 	memset(out->columns, 0, sizeof(duckdb_column) * out->column_count);
-	for(size_t i = 0; i < out->column_count; i++) {
+	for (size_t i = 0; i < out->column_count; i++) {
 		out->columns[i].type = ConvertCPPTypeToC(result->types[i]);
 		out->columns[i].name = strdup(result->names[i].c_str());
-		out->columns[i].nullmask = (bool*) malloc(sizeof(bool) * out->row_count);
+		out->columns[i].nullmask = (bool *)malloc(sizeof(bool) * out->row_count);
 		out->columns[i].data = malloc(GetCTypeSize(out->columns[i].type) * out->row_count);
 		if (!out->columns[i].nullmask || !out->columns[i].name || !out->columns[i].data) {
 			// malloc failure
@@ -110,17 +109,17 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 		}
 	}
 	// now write the data
-	for(size_t col = 0; col < out->column_count; col++) {
+	for (size_t col = 0; col < out->column_count; col++) {
 		// first set the nullmask
 		size_t row = 0;
-		for(auto &chunk : result->collection.chunks) {
+		for (auto &chunk : result->collection.chunks) {
 			assert(!chunk->data[col].sel_vector);
-			for(size_t k = 0; k < chunk->data[col].count; k++) {
+			for (size_t k = 0; k < chunk->data[col].count; k++) {
 				out->columns[col].nullmask[row++] = chunk->data[col].nullmask[k];
 			}
 		}
 		// then write the data
-		switch(result->types[col]) {
+		switch (result->types[col]) {
 		case TypeId::BOOLEAN:
 			WriteData<bool>(out, result->collection, col);
 			break;
@@ -144,10 +143,10 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 			break;
 		case TypeId::VARCHAR: {
 			size_t row = 0;
-			const char **target = (const char**) out->columns[col].data;
-			for(auto &chunk : result->collection.chunks) {
-				const char **source = (const char**) chunk->data[col].data;
-				for(size_t k = 0; k < chunk->data[col].count; k++) {
+			const char **target = (const char **)out->columns[col].data;
+			for (auto &chunk : result->collection.chunks) {
+				const char **source = (const char **)chunk->data[col].data;
+				for (size_t k = 0; k < chunk->data[col].count; k++) {
 					if (!chunk->data[col].nullmask[k]) {
 						target[row++] = strdup(source[k]);
 					}
@@ -157,10 +156,10 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 		}
 		case TypeId::DATE: {
 			size_t row = 0;
-			duckdb_date *target = (duckdb_date*) out->columns[col].data;
-			for(auto &chunk : result->collection.chunks) {
-				date_t *source = (date_t*) chunk->data[col].data;
-				for(size_t k = 0; k < chunk->data[col].count; k++) {
+			duckdb_date *target = (duckdb_date *)out->columns[col].data;
+			for (auto &chunk : result->collection.chunks) {
+				date_t *source = (date_t *)chunk->data[col].data;
+				for (size_t k = 0; k < chunk->data[col].count; k++) {
 					if (chunk->data[col].nullmask[k]) {
 						int32_t year, month, day;
 						Date::Convert(source[k], year, month, day);
@@ -187,8 +186,8 @@ static void duckdb_destroy_column(duckdb_column column, size_t count) {
 	if (column.data) {
 		if (column.type == DUCKDB_TYPE_VARCHAR) {
 			// varchar, delete individual strings
-			auto data = (char**) column.data;
-			for(size_t i = 0; i < count; i++) {
+			auto data = (char **)column.data;
+			for (size_t i = 0; i < count; i++) {
 				if (data[i]) {
 					free(data[i]);
 				}
@@ -209,7 +208,7 @@ void duckdb_destroy_result(duckdb_result *result) {
 		free(result->error_message);
 	}
 	if (result->columns) {
-		for(size_t i = 0; i < result->column_count; i++) {
+		for (size_t i = 0; i < result->column_count; i++) {
 			duckdb_destroy_column(result->columns[i], result->row_count);
 		}
 		free(result->columns);
@@ -245,7 +244,7 @@ duckdb_type ConvertCPPTypeToC(TypeId type) {
 }
 
 size_t GetCTypeSize(duckdb_type type) {
-	switch(type) {
+	switch (type) {
 	case DUCKDB_TYPE_BOOLEAN:
 		return sizeof(bool);
 	case DUCKDB_TYPE_TINYINT:
@@ -263,18 +262,17 @@ size_t GetCTypeSize(duckdb_type type) {
 	case DUCKDB_TYPE_DATE:
 		return sizeof(duckdb_date);
 	case DUCKDB_TYPE_VARCHAR:
-		return sizeof(const char*);
+		return sizeof(const char *);
 	default:
 		// unsupported type
 		assert(0);
-		return sizeof(const char*);
+		return sizeof(const char *);
 	}
 }
 
-template<class T>
-T UnsafeFetch(duckdb_result *result, uint32_t col, uint64_t row) {
+template <class T> T UnsafeFetch(duckdb_result *result, uint32_t col, uint64_t row) {
 	assert(row < result->row_count);
-	return ((T*)result->columns[col].data)[row];
+	return ((T *)result->columns[col].data)[row];
 }
 
 static Value GetCValue(duckdb_result *result, uint32_t col, uint64_t row) {
@@ -307,7 +305,7 @@ static Value GetCValue(duckdb_result *result, uint32_t col, uint64_t row) {
 		return Value::DATE(Date::FromDate(date.year, date.month, date.day));
 	}
 	case DUCKDB_TYPE_VARCHAR:
-		return Value(string(UnsafeFetch<const char*>(result, col, row)));
+		return Value(string(UnsafeFetch<const char *>(result, col, row)));
 	case DUCKDB_TYPE_TIMESTAMP:
 	default:
 		// invalid type for C to C++ conversion
@@ -334,7 +332,7 @@ int64_t duckdb_value_int64(duckdb_result *result, uint32_t col, uint64_t row) {
 	}
 }
 
-const char* duckdb_value_varchar(duckdb_result *result, uint32_t col, uint64_t row) {
+const char *duckdb_value_varchar(duckdb_result *result, uint32_t col, uint64_t row) {
 	Value val = GetCValue(result, col, row);
 	if (val.is_null) {
 		return strdup("NULL");
@@ -355,8 +353,8 @@ int64_t duckdb_value_int64_unsafe(duckdb_result *result, uint32_t col, uint64_t 
 	return UnsafeFetch<int64_t>(result, col, row);
 }
 
-const char* duckdb_value_varchar_unsafe(duckdb_result *result, uint32_t col, uint64_t row) {
+const char *duckdb_value_varchar_unsafe(duckdb_result *result, uint32_t col, uint64_t row) {
 	assert(col < result->column_count);
 	assert(result->columns[col].type == DUCKDB_TYPE_VARCHAR);
-	return UnsafeFetch<const char*>(result, col, row);
+	return UnsafeFetch<const char *>(result, col, row);
 }

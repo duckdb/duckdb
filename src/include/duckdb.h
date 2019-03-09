@@ -77,7 +77,8 @@ typedef void *duckdb_connection;
 
 typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
 
-//! Opens a database file at the given path (nullptr for in-memory). Returns DuckDBSuccess on success, or DuckDBError on failure. [OUT: database]
+//! Opens a database file at the given path (nullptr for in-memory). Returns DuckDBSuccess on success, or DuckDBError on
+//! failure. [OUT: database]
 duckdb_state duckdb_open(const char *path, duckdb_database *out_database);
 //! Closes the database.
 void duckdb_close(duckdb_database *database);
@@ -89,18 +90,19 @@ void duckdb_disconnect(duckdb_connection *connection);
 
 //! Executes the specified SQL query in the specified connection handle. [OUT: result descriptor]
 duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckdb_result *out_result);
-//! Destroys the specified result 
+//! Destroys the specified result
 void duckdb_destroy_result(duckdb_result *result);
 
 // SAFE fetch functions
-// These functions will perform conversions if necessary. On failure (e.g. if conversion cannot be performed) a special value is returned.
+// These functions will perform conversions if necessary. On failure (e.g. if conversion cannot be performed) a special
+// value is returned.
 
 //! Converts the specified value to an int64_t. Returns 0 on failure or NULL.
 int32_t duckdb_value_int32(duckdb_result *result, uint32_t col, uint64_t row);
 //! Converts the specified value to an int64_t. Returns 0 on failure or NULL.
 int64_t duckdb_value_int64(duckdb_result *result, uint32_t col, uint64_t row);
 //! Converts the specified value to a string. Returns nullptr on failure or NULL. The result must be freed with free.
-const char* duckdb_value_varchar(duckdb_result *result, uint32_t col, uint64_t row);
+const char *duckdb_value_varchar(duckdb_result *result, uint32_t col, uint64_t row);
 
 // UNSAFE fetch functions
 // These functions fetch a value from specific row from a specific column WITHOUT CASTING.
@@ -108,15 +110,15 @@ const char* duckdb_value_varchar(duckdb_result *result, uint32_t col, uint64_t r
 // If col exceeds the amount of columns in result the behavior is UNDEFINED.
 // If row exceeds the amount of rows in the result the behavior is UNDEFINED.
 // Only use these functions if you know what you are doing
-// NOTE: If the value is NULL, the result could be any number (but behavior is not undefined), except for VARCHAR columns where the result will be nullptr
+// NOTE: If the value is NULL, the result could be any number (but behavior is not undefined), except for VARCHAR
+// columns where the result will be nullptr
 
 //! Fetch a value from a DUCKDB_TYPE_INTEGER column [UNSAFE!]
 int32_t duckdb_value_int32_unsafe(duckdb_result *result, uint32_t col, uint64_t row);
 //! Fetch a value from a DUCKDB_TYPE_BIGINT column [UNSAFE!]
 int64_t duckdb_value_int64_unsafe(duckdb_result *result, uint32_t col, uint64_t row);
 //! Fetch a value from a DUCKDB_TYPE_VARCHAR column. The string IS NOT malloc'd! Do not free the return value. [UNSAFE!]
-const char* duckdb_value_varchar_unsafe(duckdb_result *result, uint32_t col, uint64_t row);
-
+const char *duckdb_value_varchar_unsafe(duckdb_result *result, uint32_t col, uint64_t row);
 
 #ifdef __cplusplus
 };

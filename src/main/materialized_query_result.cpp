@@ -3,8 +3,7 @@
 using namespace duckdb;
 using namespace std;
 
-MaterializedQueryResult::MaterializedQueryResult()
-    : QueryResult(QueryResultType::MATERIALIZED_RESULT) {
+MaterializedQueryResult::MaterializedQueryResult() : QueryResult(QueryResultType::MATERIALIZED_RESULT) {
 }
 
 MaterializedQueryResult::MaterializedQueryResult(vector<TypeId> types, vector<string> names)

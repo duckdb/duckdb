@@ -5,7 +5,6 @@
 #include <err.h>
 #include <stdio.h>
 #include <string.h>
-
 #include <string>
 
 using namespace std;
@@ -52,7 +51,7 @@ int sqlite3_open(const char *filename, /* Database filename (UTF-8) */
 		exit(1);
 	}
 
-	sqlite3 *pDb = (sqlite3 *) malloc(sizeof(sqlite3));
+	sqlite3 *pDb = (sqlite3 *)malloc(sizeof(sqlite3));
 	if (!pDb)
 		err(1, NULL);
 
@@ -72,7 +71,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
                        sqlite3_stmt **ppStmt, /* OUT: Statement handle */
                        const char **pzTail    /* OUT: Pointer to unused portion of zSql */
 ) {
-	sqlite3_stmt *pStmt = (sqlite3_stmt*) malloc(sizeof(sqlite3_stmt));
+	sqlite3_stmt *pStmt = (sqlite3_stmt *)malloc(sizeof(sqlite3_stmt));
 	if (pStmt == NULL)
 		err(1, NULL);
 
@@ -86,7 +85,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		(*pzTail)++;
 	}
 
-	if ((pStmt->zSql = (char*) malloc(size)) == NULL)
+	if ((pStmt->zSql = (char *)malloc(size)) == NULL)
 		err(1, NULL);
 
 	/* Init sql statement */
@@ -162,7 +161,7 @@ int sqlite3_exec(sqlite3 *db,                /* The database on which the SQL ex
 			/* Invoke the callback function if required */
 			if (xCallback && (SQLITE_ROW == rc || (SQLITE_DONE == rc && !callbackIsInit))) {
 				if (!callbackIsInit) {
-					azCols = (char **) malloc((2 * nCol + 1) * sizeof(const char *));
+					azCols = (char **)malloc((2 * nCol + 1) * sizeof(const char *));
 					if (azCols == NULL) {
 						goto exec_out;
 					}
@@ -216,7 +215,7 @@ exec_out:
 	if (rc != SQLITE_OK && !*pzErrMsg) {
 		// error but no error message set
 		static const char *unknown_error = "Unknown error in DuckDB!";
-		*pzErrMsg = (char*) sqlite3_malloc64(strlen(unknown_error) + 1);
+		*pzErrMsg = (char *)sqlite3_malloc64(strlen(unknown_error) + 1);
 		strcpy(*pzErrMsg, unknown_error);
 	}
 
@@ -231,7 +230,7 @@ int sqlite3_close(sqlite3 *db) {
 
 /* Return the text of the SQL that was used to prepare the statement */
 const char *sqlite3_sql(sqlite3_stmt *pStmt) {
-	char *zSql = (char*) malloc(pStmt->lenSql + 1);
+	char *zSql = (char *)malloc(pStmt->lenSql + 1);
 	strncpy(zSql, pStmt->zSql, pStmt->lenSql + 1);
 	return zSql;
 }
@@ -367,7 +366,7 @@ void sqlite3_free(void *pVoid) {
 /* Printf into a newly allocated buffer */
 char *sqlite3_mprintf(const char *fmt, ...) {
 	size_t str_size = strlen(fmt) + 50;
-	char *res = (char*) malloc(str_size);
+	char *res = (char *)malloc(str_size);
 	if (res == NULL)
 		err(1, NULL);
 
@@ -377,7 +376,7 @@ char *sqlite3_mprintf(const char *fmt, ...) {
 	size_t str_len = (size_t)vsnprintf(res, str_size - 1, fmt, valist);
 	if (str_len >= str_size) {
 		str_size = str_len + 1;
-		res = (char*) realloc(res, str_size);
+		res = (char *)realloc(res, str_size);
 		va_start(valist, fmt);
 		vsnprintf(res, str_size - 1, fmt, valist);
 	}

@@ -5,8 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-QueryResult::QueryResult(QueryResultType type) :
-	type(type), success(true) {
+QueryResult::QueryResult(QueryResultType type) : type(type), success(true) {
 }
 
 QueryResult::QueryResult(QueryResultType type, vector<TypeId> types, vector<string> names)

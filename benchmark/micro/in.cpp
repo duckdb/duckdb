@@ -43,8 +43,8 @@ using namespace std;
 		return "SELECT * FROM strings WHERE s IN (" + in_list + ")";                                                   \
 	}                                                                                                                  \
 	virtual string VerifyResult(QueryResult *result) {                                                                 \
-		if (!result->success) {                                                                                   \
-			return result->error;                                                                          \
+		if (!result->success) {                                                                                        \
+			return result->error;                                                                                      \
 		}                                                                                                              \
 		return string();                                                                                               \
 	}                                                                                                                  \

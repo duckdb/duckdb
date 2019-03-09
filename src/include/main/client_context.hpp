@@ -33,8 +33,10 @@ public:
 	void EnableProfiling();
 	//! Disable query profiling
 	void DisableProfiling();
-	
-	//! Issue a query, returning a QueryResult. The QueryResult can be either a StreamQueryResult or a MaterializedQueryResult. The StreamQueryResult will only be returned in the case of a successful SELECT statement.
+
+	//! Issue a query, returning a QueryResult. The QueryResult can be either a StreamQueryResult or a
+	//! MaterializedQueryResult. The StreamQueryResult will only be returned in the case of a successful SELECT
+	//! statement.
 	unique_ptr<QueryResult> Query(string query, bool allow_stream_result);
 	//! Fetch a query from the current result set (if any)
 	unique_ptr<DataChunk> Fetch();
@@ -72,13 +74,13 @@ private:
 	//! The currently opened StreamQueryResult (if any)
 	StreamQueryResult *open_result = nullptr;
 
-
 	//! Internal clean up, does not lock. Caller must hold the context_lock.
 	void CleanupInternal();
 	string FinalizeQuery(bool success);
 	//! Internal fetch, does not lock. Caller must hold the context_lock.
 	unique_ptr<DataChunk> FetchInternal();
 	//! Internally execute a SQL statement. Caller must hold the context_lock.
-	unique_ptr<QueryResult> ExecuteStatementInternal(string query, unique_ptr<SQLStatement> statement, bool allow_stream_result);
+	unique_ptr<QueryResult> ExecuteStatementInternal(string query, unique_ptr<SQLStatement> statement,
+	                                                 bool allow_stream_result);
 };
 } // namespace duckdb

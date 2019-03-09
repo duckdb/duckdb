@@ -242,8 +242,9 @@ void CTradeOrderDBInterface::DoTradeOrderFrame4(const TTradeOrderFrame4Input *pI
 	//           "T_QTY, T_BID_PRICE, T_CA_ID, T_EXEC_NAME, T_TRADE_PRICE, T_CHRG, "
 	//           "T_COMM, T_TAX, T_LIFO) VALUES (NOW(), " +
 	//           string(pIn->status_id) + ", " + string(pIn->trade_type_id) + ", " + to_string(pIn->is_cash) + ", " +
-	//           string(pIn->symbol) + ", " + to_string(pIn->trade_qty) + ", " + to_string(pIn->requested_price) + ", " +
-	//           to_string(pIn->acct_id) + ", " + string(pIn->exec_name) + ", NULL, " + to_string(pIn->charge_amount) +
+	//           string(pIn->symbol) + ", " + to_string(pIn->trade_qty) + ", " + to_string(pIn->requested_price) + ", "
+	//           + to_string(pIn->acct_id) + ", " + string(pIn->exec_name) + ", NULL, " + to_string(pIn->charge_amount)
+	//           +
 	//           ", " + to_string(pIn->comm_amount) + ", 0, " + to_string(pIn->is_lifo) + ");");
 	// if (!pIn->type_is_market) {
 	// 	// con.Query("INSERT INTO TRADE_REQUEST (TR_T_ID, TR_TT_ID, TR_S_SYMB,

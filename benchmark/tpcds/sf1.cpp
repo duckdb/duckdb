@@ -16,8 +16,8 @@ using namespace std;
 		return tpcds::get_query(QNR);                                                                                  \
 	}                                                                                                                  \
 	virtual string VerifyResult(QueryResult *result) {                                                                 \
-		if (!result->success) {                                                                                   \
-			return result->error;                                                                          \
+		if (!result->success) {                                                                                        \
+			return result->error;                                                                                      \
 		}                                                                                                              \
 		return ""; /*return compare_csv(*result, tpch::get_answer(SF, QNR),                                            \
 		              true);  */                                                                                       \

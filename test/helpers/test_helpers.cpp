@@ -43,9 +43,9 @@ static bool ValuesAreEqual(Value result_value, Value value) {
 bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Value> values) {
 	unique_ptr<MaterializedQueryResult> materialized;
 	if (result_.type == QueryResultType::STREAM_RESULT) {
-		materialized = ((StreamQueryResult&)result_).Materialize();		
+		materialized = ((StreamQueryResult &)result_).Materialize();
 	}
-	auto &result = materialized ? *materialized : (MaterializedQueryResult&) result_;
+	auto &result = materialized ? *materialized : (MaterializedQueryResult &)result_;
 	if (!result.success) {
 		fprintf(stderr, "Query failed with message: %s\n", result.error.c_str());
 		// FAIL(result->error.c_str());
@@ -115,13 +115,14 @@ bool CHECK_COLUMN(unique_ptr<duckdb::QueryResult> &result, size_t column_number,
 	return CHECK_COLUMN(*result, column_number, values);
 }
 
-bool CHECK_COLUMN(unique_ptr<duckdb::MaterializedQueryResult> &result, size_t column_number, vector<duckdb::Value> values) {
-	return CHECK_COLUMN((QueryResult&)*result, column_number, values);
+bool CHECK_COLUMN(unique_ptr<duckdb::MaterializedQueryResult> &result, size_t column_number,
+                  vector<duckdb::Value> values) {
+	return CHECK_COLUMN((QueryResult &)*result, column_number, values);
 }
 
 string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
 	assert(result.type == QueryResultType::MATERIALIZED_RESULT);
-	auto &materialized = (MaterializedQueryResult&) result;
+	auto &materialized = (MaterializedQueryResult &)result;
 	if (!materialized.success) {
 		fprintf(stderr, "Query failed with message: %s\n", materialized.error.c_str());
 		return materialized.error;

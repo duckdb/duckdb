@@ -14,7 +14,7 @@ namespace tpcds {
 
 void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	Connection con(db);
-	
+
 	con.Query("BEGIN TRANSACTION");
 	// FIXME: No restart support yet, suspect only fix is init_rand
 	// FIXME: no schema/suffix support yet

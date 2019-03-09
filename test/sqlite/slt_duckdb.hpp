@@ -136,7 +136,7 @@ static int duckdbFreeResults(void *pConn,     /* Connection created by xConnect 
 
 static int duckdbDisconnect(void *pConn /* Connection created by xConnect */
 ) {
-	duckdb_connection con = (duckdb_connection) pConn;
+	duckdb_connection con = (duckdb_connection)pConn;
 	duckdb_disconnect(&con);
 	duckdb_close(&database);
 	return 0;

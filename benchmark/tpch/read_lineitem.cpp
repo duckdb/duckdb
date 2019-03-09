@@ -30,7 +30,7 @@ virtual string VerifyResult(QueryResult *result) {
 	if (!result->success) {
 		return result->error;
 	}
-	auto &materialized = (MaterializedQueryResult&) *result;
+	auto &materialized = (MaterializedQueryResult &)*result;
 	auto expected_count = materialized.collection.chunks[0]->data[0].GetValue(0).GetNumericValue();
 	if (expected_count != count) {
 		return StringUtil::Format("Count mismatch, expected %lld elements but got %lld", count, expected_count);

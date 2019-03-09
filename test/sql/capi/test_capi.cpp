@@ -33,7 +33,7 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	REQUIRE(result.row_count == 1);
 	auto value = duckdb_value_varchar(&result, 0, 0);
 	string strval = string(value);
-	free((void*)value);
+	free((void *)value);
 	REQUIRE(strval == "hello");
 	REQUIRE(!result.columns[0].nullmask[0]);
 	duckdb_destroy_result(&result);

@@ -31,9 +31,10 @@ public:
 
 	//! Closes the StreamQueryResult
 	void Close();
-	
+
 	//! Whether or not the StreamQueryResult is still open
 	bool is_open;
+
 private:
 	//! The client context this StreamQueryResult belongs to
 	ClientContext &context;

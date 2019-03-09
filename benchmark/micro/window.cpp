@@ -35,7 +35,7 @@ virtual string VerifyResult(QueryResult *result) {
 	if (!result->success) {
 		return result->error;
 	}
-	auto &materialized = (MaterializedQueryResult&) *result;
+	auto &materialized = (MaterializedQueryResult &)*result;
 	if (materialized.collection.count != WINDOW_ROW_COUNT) {
 		return "Incorrect amount of rows in result";
 	}
