@@ -5,22 +5,13 @@
 
 const char* progname = "pg_query";
 
-__thread sig_atomic_t pg_query_initialized = 0;
-
-void pg_query_init(void)
-{
-	if (pg_query_initialized != 0) return;
-	pg_query_initialized = 1;
-
-	MemoryContextInit();
-	SetDatabaseEncoding(PG_UTF8);
-}
-
 MemoryContext pg_query_enter_memory_context(const char* ctx_name)
 {
 	MemoryContext ctx = NULL;
 
-	pg_query_init();
+	// call MemoryContextInit to allocate the TopMemoryContext and ErrorContext
+	MemoryContextInit();
+	SetDatabaseEncoding(PG_UTF8);
 
 	ctx = AllocSetContextCreate(TopMemoryContext,
 								ctx_name,
@@ -34,23 +25,16 @@ MemoryContext pg_query_enter_memory_context(const char* ctx_name)
 
 void pg_query_exit_memory_context(MemoryContext ctx)
 {
-	// Return to previous PostgreSQL memory context
-	MemoryContextSwitchTo(TopMemoryContext);
-
+	// delete all memory contexts, including the TopMemoryContext and ErrorContext
 	MemoryContextDelete(ctx);
+	MemoryContextDelete(ErrorContext);
+	MemoryContextDelete(TopMemoryContext);
 
-    MemoryContext error_ctx = ErrorContext;
-    MemoryContext top_ctx = TopMemoryContext;
+	// reset all flags
+	TopMemoryContext = NULL;
+	ErrorContext = NULL;
 
-//    TopMemoryContext = NULL;
-//    ErrorContext = NULL;
-//
-//	if (error_ctx != NULL)
-//    	MemoryContextDelete(error_ctx);
-//    if (top_ctx != NULL)
-//		MemoryContextDelete(top_ctx);
-
-
+	MemoryContextSwitchTo(NULL);
 }
 
 void pg_query_free_error(PgQueryError *error)

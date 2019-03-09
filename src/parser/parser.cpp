@@ -23,7 +23,6 @@ Parser::Parser(ClientContext &context) : context(context) {
 }
 
 void Parser::ParseQuery(string query) {
-	PGParseContext parse_context;
 	// first try to parse any PRAGMA statements
 	if (ParsePragma(query)) {
 		// query parsed as pragma statement
@@ -31,6 +30,7 @@ void Parser::ParseQuery(string query) {
 		return;
 	}
 
+	PGParseContext parse_context;
 	// use the postgres parser to parse the query
 	parse_context.context = pg_query_parse_init();
 	parse_context.result = pg_query_parse(query.c_str());

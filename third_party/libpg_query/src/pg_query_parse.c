@@ -85,7 +85,7 @@ PgQueryInternalParsetreeAndError pg_query_raw_parse(const char* input)
 
 // This should be called before pg_query_parse
 void* pg_query_parse_init() {
-  return pg_query_enter_memory_context("pg_query_parse");
+	return pg_query_enter_memory_context("pg_query_parse");
 }
 
 PgQueryInternalParsetreeAndError pg_query_parse(const char* input)
@@ -102,13 +102,13 @@ void print_pg_parse_tree(List* tree) {
 
 // This should be called after pg_query_parse
 void pg_query_parse_finish(void* ctx) {
-  pg_query_exit_memory_context((MemoryContext)ctx);
+	pg_query_exit_memory_context((MemoryContext)ctx);
 }
 
 void pg_query_free_parse_result(PgQueryInternalParsetreeAndError result)
 {
-  if (result.error) {
+	if (result.error) {
 		pg_query_free_error(result.error);
-  }
-  free(result.stderr_buffer);
+	}
+	free(result.stderr_buffer);
 }
