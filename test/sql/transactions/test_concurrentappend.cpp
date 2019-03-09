@@ -49,8 +49,8 @@ TEST_CASE("Sequential append", "[transactions]") {
 
 static volatile std::atomic<int> finished_threads;
 
-static void insert_random_elements(DuckDB *db) {
-	REQUIRE(db);
+static void insert_random_elements(DuckDB *db, bool *correct, int threadnr) {
+	correct[threadnr] = true;
 	Connection con(*db);
 	// initial count
 	con.Query("BEGIN TRANSACTION;");
@@ -62,7 +62,9 @@ static void insert_random_elements(DuckDB *db) {
 		con.Query("INSERT INTO integers VALUES (3)");
 		result = con.Query("SELECT COUNT(*) FROM integers");
 		Value new_count = result->collection.chunks[0]->data[0].GetValue(0);
-		REQUIRE(new_count == start_count + i + 1);
+		if (new_count != start_count + i + 1) {
+			correct[threadnr] = false;
+		}
 		count = new_count;
 	}
 	finished_threads++;
@@ -81,12 +83,14 @@ TEST_CASE("Concurrent append", "[transactions][.]") {
 
 	finished_threads = 0;
 
+	bool correct[THREAD_COUNT];
 	thread threads[THREAD_COUNT];
 	for (size_t i = 0; i < THREAD_COUNT; i++) {
-		threads[i] = thread(insert_random_elements, &db);
+		threads[i] = thread(insert_random_elements, &db, correct, i);
 	}
 
 	for (size_t i = 0; i < THREAD_COUNT; i++) {
 		threads[i].join();
+		REQUIRE(correct[i]);
 	}
 }

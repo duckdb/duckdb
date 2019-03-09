@@ -31,12 +31,13 @@ TEST_CASE("Test using connection after database is gone", "[api]") {
 	REQUIRE_FAIL(conn->Query("SELECT 42"));
 }
 
-static void long_running_query(Connection *conn) {
+static void long_running_query(Connection *conn, bool *correct) {
+	*correct = true;
 	auto result = conn->Query("SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4, integers i5, "
 	                          "integers i6, integers i7, integers i8, integers i9, integers i10,"
 	                          "integers i11, integers i12, integers i13");
 	// the query should fail
-	REQUIRE_FAIL(result);
+	*correct = !result->success;
 }
 
 TEST_CASE("Test closing database during long running query", "[api]") {
@@ -47,13 +48,15 @@ TEST_CASE("Test closing database during long running query", "[api]") {
 	REQUIRE_NO_FAIL(conn->Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
 	conn->DisableProfiling();
 	// perform a long running query in the background (many cross products)
-	auto background_thread = thread(long_running_query, conn.get());
+	bool correct;
+	auto background_thread = thread(long_running_query, conn.get(), &correct);
 	// wait a little bit
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	// destroy the database
 	db.reset();
 	// wait for the thread
 	background_thread.join();
+	REQUIRE(correct);
 	// try to use the connection
 	REQUIRE_FAIL(conn->Query("SELECT 42"));
 }
@@ -80,11 +83,13 @@ TEST_CASE("Test closing result after database is gone", "[api]") {
 	streaming_result.reset();
 }
 
-static void parallel_query(Connection *conn, size_t threadnr) {
-	REQUIRE(conn);
+static void parallel_query(Connection *conn, bool *correct, size_t threadnr) {
+	correct[threadnr] = true;
 	for (size_t i = 0; i < 100; i++) {
 		auto result = conn->Query("SELECT * FROM integers ORDER BY i");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+		if (!CHECK_COLUMN(result, 0, {Value(), 1, 2, 3})) {
+			correct[threadnr] = false;
+		}
 	}
 }
 
@@ -95,21 +100,25 @@ TEST_CASE("Test parallel usage of single client", "[api]") {
 	REQUIRE_NO_FAIL(conn->Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(conn->Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
 
+	bool correct[20];
 	thread threads[20];
 	for (size_t i = 0; i < 20; i++) {
-		threads[i] = thread(parallel_query, conn.get(), i);
+		threads[i] = thread(parallel_query, conn.get(), correct, i);
 	}
 	for (size_t i = 0; i < 20; i++) {
+		REQUIRE(correct[i]);
 		threads[i].join();
 	}
 }
 
-static void parallel_query_with_new_connection(DuckDB *db, size_t threadnr) {
-	REQUIRE(db);
+static void parallel_query_with_new_connection(DuckDB *db, bool *correct, size_t threadnr) {
+	correct[threadnr] = true;
 	for (size_t i = 0; i < 100; i++) {
 		auto conn = make_unique<Connection>(*db);
 		auto result = conn->Query("SELECT * FROM integers ORDER BY i");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+		if (!CHECK_COLUMN(result, 0, {Value(), 1, 2, 3})) {
+			correct[threadnr] = false;
+		}
 	}
 }
 
@@ -120,13 +129,15 @@ TEST_CASE("Test making and dropping connections in parallel to a single database
 	REQUIRE_NO_FAIL(conn->Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(conn->Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
 
+	bool correct[20];
 	thread threads[20];
 	for (size_t i = 0; i < 20; i++) {
-		threads[i] = thread(parallel_query_with_new_connection, db.get(), i);
+		threads[i] = thread(parallel_query_with_new_connection, db.get(), correct, i);
 	}
 
 	for (size_t i = 0; i < 20; i++) {
 		threads[i].join();
+		REQUIRE(correct[i]);
 	}
 	auto result = conn->Query("SELECT * FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));

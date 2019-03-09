@@ -132,8 +132,8 @@ TEST_CASE("Rollback delete", "[transactions]") {
 
 static volatile std::atomic<int> finished_threads;
 
-static void _delete_elements(DuckDB *db, size_t threadnr) {
-	REQUIRE(db);
+static void delete_elements(DuckDB *db, bool *correct, size_t threadnr) {
+	correct[threadnr] = true;
 	Connection con(*db);
 	// initial count
 	con.Query("BEGIN TRANSACTION;");
@@ -144,11 +144,19 @@ static void _delete_elements(DuckDB *db, size_t threadnr) {
 	for (size_t i = 0; i < INSERT_ELEMENTS; i++) {
 		// count should decrease by one for every delete we do
 		auto element = INSERT_ELEMENTS * threadnr + i;
-		REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=" + to_string(element)));
-		REQUIRE_NO_FAIL(result = con.Query("SELECT COUNT(*) FROM integers"));
-		Value new_count = result->collection.chunks[0]->data[0].GetValue(0);
-		REQUIRE(new_count == start_count - (i + 1));
-		count = new_count;
+		if (!con.Query("DELETE FROM integers WHERE i=" + to_string(element))->success) {
+			correct[threadnr] = false;
+		}
+		result = con.Query("SELECT COUNT(*) FROM integers");
+		if (!result->success) {
+			correct[threadnr] = false;
+		} else {
+			Value new_count = result->collection.chunks[0]->data[0].GetValue(0);
+			if (new_count != start_count - (i + 1)) {
+				correct[threadnr] = false;
+			}
+			count = new_count;
+		}
 	}
 	finished_threads++;
 	while (finished_threads != THREAD_COUNT)
@@ -172,13 +180,15 @@ TEST_CASE("Concurrent delete", "[transactions][.]") {
 
 	finished_threads = 0;
 
+	bool correct[THREAD_COUNT];
 	thread threads[THREAD_COUNT];
 	for (size_t i = 0; i < THREAD_COUNT; i++) {
-		threads[i] = thread(_delete_elements, &db, i);
+		threads[i] = thread(delete_elements, &db, correct, i);
 	}
 
 	for (size_t i = 0; i < THREAD_COUNT; i++) {
 		threads[i].join();
+		REQUIRE(correct[i]);
 	}
 
 	// check that the count is 0 now
