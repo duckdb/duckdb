@@ -25,7 +25,7 @@ class CustomInstallCommand(install):
 includes = [numpy.get_include(), '../../src/include', '.']
 sources = ['connection.c', 'cursor.c', 'module.c', 'pandas.c']
 
-libduckdb = Extension('duckdb', define_macros=[('MODULE_NAME',  '"duckdb"')],
+libduckdb = Extension('duckdb',
     include_dirs=includes,
     sources=sources,
     extra_compile_args=['-std=c99', '-Wall'],

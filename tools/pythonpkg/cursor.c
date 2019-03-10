@@ -139,7 +139,7 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 	for (size_t col_idx = 0; col_idx < self->result.column_count; col_idx++) {
 		duckdb_column col = self->result.columns[col_idx];
 		char *return_message = "";
-		PyObject *arr = (PyObject *)PyMaskedArray_FromCol(&col, 0, col.count, &return_message);
+		PyObject *arr = (PyObject *)PyMaskedArray_FromCol(&self->result, col_idx, &return_message);
 		if (!arr) {
 			PyErr_SetString(duckdb_DatabaseError, return_message);
 			return NULL;
@@ -182,7 +182,7 @@ PyObject *duckdb_cursor_iternext(duckdb_Cursor *self) {
 	for (size_t col_idx = 0; col_idx < self->result.column_count; col_idx++) {
 		PyObject *val = NULL;
 		duckdb_column col = self->result.columns[col_idx];
-		if (duckdb_value_is_null(col, self->offset)) {
+		if (col.nullmask[self->offset]) {
 			PyList_SetItem(row, col_idx, Py_None);
 			continue;
 		}
@@ -204,7 +204,7 @@ PyObject *duckdb_cursor_iternext(duckdb_Cursor *self) {
 			val = Py_BuildValue("d", ((double *)col.data)[self->offset]);
 			break;
 		case DUCKDB_TYPE_VARCHAR:
-			val = Py_BuildValue("s", duckdb_get_value_str(col, self->offset));
+			val = Py_BuildValue("s", duckdb_value_varchar_unsafe(&self->result, col_idx, self->offset));
 			break;
 		default:
 			// TODO complain
@@ -232,7 +232,7 @@ PyObject *duckdb_cursor_close(duckdb_Cursor *self, PyObject *args) {
 		return NULL;
 	}
 
-	duckdb_destroy_result(self->result);
+	duckdb_destroy_result(&self->result);
 
 	self->closed = 1;
 	self->rowcount = 0;
@@ -264,7 +264,7 @@ static struct PyMemberDef cursor_members[] = {
 static const char cursor_doc[] = PyDoc_STR("DuckDB database cursor class.");
 
 PyTypeObject duckdb_CursorType = {
-    PyVarObject_HEAD_INIT(NULL, 0) MODULE_NAME ".Cursor", /* tp_name */
+    PyVarObject_HEAD_INIT(NULL, 0) "" MODULE_NAME ".Cursor", /* tp_name */
     sizeof(duckdb_Cursor),                                /* tp_basicsize */
     0,                                                    /* tp_itemsize */
     (destructor)duckdb_cursor_dealloc,                    /* tp_dealloc */

@@ -56,8 +56,8 @@ typedef struct {
 } duckdb_column;
 
 typedef struct {
-	int column_count;
-	int row_count;
+	uint32_t column_count;
+	uint64_t row_count;
 	duckdb_column *columns;
 	char *error_message;
 } duckdb_result;
