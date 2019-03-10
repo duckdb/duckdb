@@ -14,17 +14,31 @@ int main() {
 		fprintf(stderr, "Failed to open connection\n");
 		goto cleanup;
 	}
-	if (duckdb_query(con, "CREATE TABLE integers(i INTEGER)", NULL) == DuckDBError) {
+	if (duckdb_query(con, "CREATE TABLE integers(i INTEGER, j INTEGER);", NULL) == DuckDBError) {
 		fprintf(stderr, "Failed to query database\n");
 		goto cleanup;
 	}
-	if (duckdb_query(con, "INSERT INTO integers VALUES (3)", NULL) == DuckDBError) {
+	if (duckdb_query(con, "INSERT INTO integers VALUES (3, 4), (5, 6), (7, NULL);", NULL) == DuckDBError) {
 		fprintf(stderr, "Failed to query database\n");
 		goto cleanup;
 	}
 	if (duckdb_query(con, "SELECT * FROM integers", &result) == DuckDBError) {
 		fprintf(stderr, "Failed to query database\n");
 		goto cleanup;
+	}
+	// print the names of the result
+	for(size_t i = 0; i < result.column_count; i++) {
+		printf("%s ", result.columns[i].name);
+	}
+	printf("\n");
+	// print the data of the result
+	for(size_t row_idx = 0; row_idx < result.row_count; row_idx++) {
+		for(size_t col_idx = 0; col_idx < result.column_count; col_idx++) {
+			char *val = duckdb_value_varchar(&result, col_idx, row_idx);
+			printf("%s ", val);
+			free(val);
+		}
+		printf("\n");
 	}
 	//duckdb_print_result(result);
 cleanup:

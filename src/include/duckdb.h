@@ -103,7 +103,7 @@ int32_t duckdb_value_int32(duckdb_result *result, uint32_t col, uint64_t row);
 //! Converts the specified value to an int64_t. Returns 0 on failure or NULL.
 int64_t duckdb_value_int64(duckdb_result *result, uint32_t col, uint64_t row);
 //! Converts the specified value to a string. Returns nullptr on failure or NULL. The result must be freed with free.
-const char *duckdb_value_varchar(duckdb_result *result, uint32_t col, uint64_t row);
+char *duckdb_value_varchar(duckdb_result *result, uint32_t col, uint64_t row);
 
 // UNSAFE fetch functions
 // These functions fetch a value from specific row from a specific column WITHOUT CASTING.

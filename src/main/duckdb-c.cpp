@@ -332,7 +332,7 @@ int64_t duckdb_value_int64(duckdb_result *result, uint32_t col, uint64_t row) {
 	}
 }
 
-const char *duckdb_value_varchar(duckdb_result *result, uint32_t col, uint64_t row) {
+char *duckdb_value_varchar(duckdb_result *result, uint32_t col, uint64_t row) {
 	Value val = GetCValue(result, col, row);
 	if (val.is_null) {
 		return strdup("NULL");
