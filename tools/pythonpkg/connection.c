@@ -72,7 +72,6 @@ PyObject *duckdb_connection_close(duckdb_Connection *self, PyObject *args) {
 		self->db = NULL;
 		self->conn = NULL;
 	}
-
 	Py_RETURN_NONE;
 }
 

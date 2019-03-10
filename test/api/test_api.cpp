@@ -93,7 +93,7 @@ static void parallel_query(Connection *conn, bool *correct, size_t threadnr) {
 	}
 }
 
-TEST_CASE("Test parallel usage of single client", "[api]") {
+TEST_CASE("Test parallel usage of single client", "[api][.]") {
 	auto db = make_unique<DuckDB>(nullptr);
 	auto conn = make_unique<Connection>(*db);
 
@@ -122,7 +122,7 @@ static void parallel_query_with_new_connection(DuckDB *db, bool *correct, size_t
 	}
 }
 
-TEST_CASE("Test making and dropping connections in parallel to a single database", "[api]") {
+TEST_CASE("Test making and dropping connections in parallel to a single database", "[api][.]") {
 	auto db = make_unique<DuckDB>(nullptr);
 	auto conn = make_unique<Connection>(*db);
 
@@ -134,7 +134,10 @@ TEST_CASE("Test making and dropping connections in parallel to a single database
 	for (size_t i = 0; i < 20; i++) {
 		threads[i] = thread(parallel_query_with_new_connection, db.get(), correct, i);
 	}
-
+	for (size_t i = 0; i < 100; i++) {
+		auto result = conn->Query("SELECT * FROM integers ORDER BY i");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	}
 	for (size_t i = 0; i < 20; i++) {
 		threads[i].join();
 		REQUIRE(correct[i]);
