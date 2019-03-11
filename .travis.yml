@@ -152,6 +152,9 @@ matrix:
       install:
         - R CMD INSTALL .
 
+      before_script:
+        - cd tests
+
       script:
         - R -f testthat.R
 
