@@ -19,6 +19,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &client_context) : binder(bin
 	rewriter.rules.push_back(make_unique<CaseSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_unique<ConjunctionSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_unique<ComparisonSimplificationRule>(rewriter));
+	rewriter.rules.push_back(make_unique<MoveConstantsRule>(rewriter));
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {

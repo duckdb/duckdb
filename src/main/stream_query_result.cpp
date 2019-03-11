@@ -14,20 +14,15 @@ StreamQueryResult::~StreamQueryResult() {
 	Close();
 }
 
-void StreamQueryResult::Print() {
+string StreamQueryResult::ToString() {
+	string result;
 	if (success) {
-		for (auto &name : names) {
-			printf("%s\t", name.c_str());
-		}
-		printf("\n");
-		for (auto &type : types) {
-			printf("%s\t", TypeIdToString(type).c_str());
-		}
-		printf("\n");
-		printf("[[STREAM RESULT]]\n");
+		result = HeaderToString();
+		result += "[[STREAM RESULT]]";
 	} else {
-		fprintf(stderr, "Query Error: %s\n", error.c_str());
+		result = "Query Error: " + error + "\n";
 	}
+	return result;
 }
 
 unique_ptr<DataChunk> StreamQueryResult::Fetch() {

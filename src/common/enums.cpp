@@ -368,7 +368,7 @@ string ExpressionTypeToOperator(ExpressionType type) {
 	case ExpressionType::OPERATOR_DIVIDE:
 		return "/";
 	case ExpressionType::OPERATOR_CONCAT:
-		return "+";
+		return "||";
 	case ExpressionType::OPERATOR_MOD:
 		return "%";
 	case ExpressionType::OPERATOR_NOT:

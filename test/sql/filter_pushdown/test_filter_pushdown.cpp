@@ -340,8 +340,7 @@ TEST_CASE("Test filter pushdown with more data", "[filterpushdown][.]") {
 
 	// these more advanced cases we don't support yet
 	// filter equivalence with expressions
-	// result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2
-	// WHERE tbl2.k+1=5001 AND tbl2.k<>5000;"); REQUIRE(CHECK_COLUMN(result, 0, {0})); SELECT COUNT(*) FROM vals1 v1,
+	// SELECT COUNT(*) FROM vals1 v1,
 	// vals1 v2 WHERE v1.i+v2.i=10; IN list result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1,
 	// (SELECT * FROM vals1, vals2) tbl2 WHERE tbl2.k IN (5000, 5001, 5002) AND tbl2.k<5000;");
 	// REQUIRE(CHECK_COLUMN(result, 0, {0}));
@@ -352,6 +351,47 @@ TEST_CASE("Test filter pushdown with more data", "[filterpushdown][.]") {
 	// // OR expression
 	// result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2
 	// WHERE tbl2.k<5000 AND (tbl2.k=5000 OR tbl2.k>5000);"); REQUIRE(CHECK_COLUMN(result, 0, {0}));
+}
+
+TEST_CASE("Test filter pushdown with more advanced expressions", "[filterpushdown][.]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableProfiling();
+
+	// in this test we run queries that will take a long time without filter pushdown, but are almost instant with
+	// proper filter pushdown we create two tables with 10K elements each in most tests we cross product them together
+	// in some way to create a "big table" (100M entries) but the filter can be pushed past the cross product in all
+	// cases
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE vals1(i INTEGER, j INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("PREPARE s1 AS INSERT INTO vals1 VALUES ($1, $2);"));
+	for (size_t i = 0; i < 10000; i++) {
+		REQUIRE_NO_FAIL(con.Query("EXECUTE s1(" + to_string(i) + ", " + to_string(i) + ");"));
+	}
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE vals2(k INTEGER, l INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO vals2 SELECT * FROM vals1"));
+	REQUIRE_NO_FAIL(con.Query("COMMIT;"));
+
+	// x + 1 = 5001
+    result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i+1=5001 AND tbl1.i<>5000;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	// x - 1 = 4999
+    result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i-1=4999 AND tbl1.i<>5000;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	// x * 2 = 10000
+    result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i*2=10000 AND tbl1.i<>5000;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	// // x * 2 = 9999 should always return false (as 9999 % 2 != 0, it's not cleanly divisible)
+    // result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i*2=9999;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	// x / 2 = 2500
+    // result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i/2=2500 AND tbl1.i<>5000;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	return;
+	// x + (1 + 1) = 5002
+    result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i+(1+1)=5002 AND tbl1.i<>5000;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 }
 
 TEST_CASE("Test moving/duplicating conditions", "[filterpushdown][.]") {

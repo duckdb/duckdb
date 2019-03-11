@@ -65,6 +65,8 @@ public:
 
 	void MaterializeSortedChunk(DataChunk &target, uint64_t order[], size_t start_offset);
 
+	//! Returns true if the ChunkCollections are equivalent
+	bool Equals(ChunkCollection &other);
 private:
 	//! Locates the chunk that belongs to the specific index
 	size_t LocateChunk(size_t index) {

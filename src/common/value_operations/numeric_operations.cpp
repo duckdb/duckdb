@@ -99,7 +99,39 @@ Value ValueOperations::Multiply(const Value &left, const Value &right) {
 }
 
 Value ValueOperations::Modulo(const Value &left, const Value &right) {
-	throw NotImplementedException("Value modulo");
+	if (!TypeIsIntegral(left.type) || !TypeIsIntegral(right.type)) {
+		throw InvalidTypeException(left.type, "Arguments to modulo must be integral");
+	}
+	if (left.type != right.type) {
+		if (left.type < right.type) {
+			return Modulo(left.CastAs(right.type), right);
+		} else {
+			return Modulo(left, right.CastAs(left.type));
+		}
+	}
+	if (left.is_null || right.is_null) {
+		return Value(left.type);
+	}
+	Value result;
+	result.is_null = false;
+	result.type = left.type;
+	switch (left.type) {
+	case TypeId::TINYINT:
+		return Value::TINYINT(left.value_.tinyint % right.value_.tinyint);
+		break;
+	case TypeId::SMALLINT:
+		return Value::SMALLINT(left.value_.smallint % right.value_.smallint);
+		break;
+	case TypeId::INTEGER:
+		return Value::INTEGER(left.value_.integer % right.value_.integer);
+		break;
+	case TypeId::BIGINT:
+		result.value_.bigint = left.value_.bigint % right.value_.bigint;
+		break;
+	default:
+		throw NotImplementedException("Unimplemented type for modulo");
+	}
+	return result;
 }
 
 Value ValueOperations::Divide(const Value &left, const Value &right) {
