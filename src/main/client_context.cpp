@@ -227,15 +227,17 @@ unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_res
 			transaction.BeginTransaction();
 		}
 		ActiveTransaction().active_query = db.transaction_manager.GetQueryNumber();
-#ifdef DEBUG
 		if (statement->type == StatementType::SELECT && query_verification_enabled) {
-			// aggressive query verification is enabled: create a copy of the statement and verify the original
-			// statement
+			// query verification is enabled:
+			// create a copy of the statement and verify the original statement
 			auto copied_statement = ((SelectStatement &)*statement).Copy();
-			VerifyQuery(query, move(statement));
+			string error = VerifyQuery(query, move(statement));
+			if (!error.empty()) {
+				// error in verifying query
+				return make_unique<MaterializedQueryResult>(error);
+			}
 			statement = move(copied_statement);
 		}
-#endif
 		// start the profiler
 		profiler.StartQuery(query);
 		try {
@@ -306,7 +308,7 @@ void ClientContext::Invalidate() {
 	}
 }
 
-void ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> statement) {
+string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> statement) {
 	// aggressive query verification
 
 	// the purpose of this function is to test correctness of otherwise hard to test features:
@@ -402,6 +404,23 @@ void ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> statement
 
 	// now compare the results
 	// the results of all four runs should be identical
-	assert(original_result->Equals(*copied_result));
-	assert(deserialized_result->Equals(*unoptimized_result));
+	if (!original_result->collection.Equals(copied_result->collection)) {
+		string result = "Copied result differs from original result!\n";
+		result += "Original Result:\n" + original_result->ToString();
+		result += "Copied Result\n" + copied_result->ToString();
+		return result;
+	}
+	if (!original_result->collection.Equals(deserialized_result->collection)) {
+		string result = "Deserialized result differs from original result!\n";
+		result += "Original Result:\n" + original_result->ToString();
+		result += "Deserialized Result\n" + deserialized_result->ToString();
+		return result;
+	}
+	if (!original_result->collection.Equals(unoptimized_result->collection)) {
+		string result = "Unoptimized result differs from original result!\n";
+		result += "Original Result:\n" + original_result->ToString();
+		result += "Unoptimized Result\n" + unoptimized_result->ToString();
+		return result;
+	}
+	return "";
 }

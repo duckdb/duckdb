@@ -55,3 +55,20 @@ bool QueryResult::Equals(QueryResult &other) {
 		}
 	}
 }
+
+void QueryResult::Print() {
+	fprintf(stderr, "%s\n", ToString().c_str());
+}
+
+string QueryResult::HeaderToString() {
+	string result;
+	for (auto &name : names) {
+		result += name + "\t";
+	}
+	result += "\n";
+	for (auto &type : types) {
+		result += TypeIdToString(type) + "\t";
+	}
+	result += "\n";
+	return result;
+}

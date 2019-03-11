@@ -24,8 +24,8 @@ public:
 
 	//! Fetches a DataChunk from the query result. Returns an empty chunk if the result is empty, or nullptr on error.
 	unique_ptr<DataChunk> Fetch() override;
-	//! Prints the QueryResult to the console
-	void Print() override;
+	//! Converts the QueryResult to a string
+	string ToString() override;
 	//! Materializes the query result and turns it into a materialized query result
 	unique_ptr<MaterializedQueryResult> Materialize();
 

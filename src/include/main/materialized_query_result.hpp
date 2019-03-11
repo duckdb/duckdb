@@ -25,8 +25,8 @@ public:
 	//! Fetches a DataChunk from the query result. Returns an empty chunk if the result is empty, or nullptr on failure.
 	//! This will consume the result (i.e. the chunks are taken directly from the ChunkCollection).
 	unique_ptr<DataChunk> Fetch() override;
-	//! Prints the QueryResult to the console
-	void Print() override;
+	//! Converts the QueryResult to a string
+	string ToString() override;
 
 	//! Gets the (index) value of the (column index) column
 	Value GetValue(size_t column, size_t index);

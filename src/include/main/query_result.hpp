@@ -31,8 +31,10 @@ public:
 
 	//! Fetches a DataChunk from the query result. Returns an empty chunk if the result is empty, or nullptr on failure.
 	virtual unique_ptr<DataChunk> Fetch() = 0;
+	// Converts the QueryResult to a string
+	virtual string ToString() = 0;
 	//! Prints the QueryResult to the console
-	virtual void Print() = 0;
+	void Print();
 	//! Returns true if the two results are identical; false otherwise. Note that this method is destructive; it calls
 	//! Fetch() until both results are exhausted. The data in the results will be lost.
 	bool Equals(QueryResult &other);
@@ -50,7 +52,8 @@ public:
 
 	//! The next result (if any)
 	unique_ptr<QueryResult> next;
-
+protected:
+	string HeaderToString();
 private:
 	QueryResult(const QueryResult &) = delete;
 };

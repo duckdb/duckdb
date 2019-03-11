@@ -20,26 +20,22 @@ Value MaterializedQueryResult::GetValue(size_t column, size_t index) {
 	return data.GetValue(offset_in_chunk);
 }
 
-void MaterializedQueryResult::Print() {
+string MaterializedQueryResult::ToString() {
+	string result;
 	if (success) {
-		for (auto &name : names) {
-			printf("%s\t", name.c_str());
-		}
-		printf(" [ %zu ]\n", collection.count);
-		for (auto &type : types) {
-			printf("%s\t", TypeIdToString(type).c_str());
-		}
-		printf("\n");
+		result = HeaderToString();
+		result += "[ Rows: " + to_string(collection.count) + "]\n";
 		for (size_t j = 0; j < collection.count; j++) {
 			for (size_t i = 0; i < collection.column_count(); i++) {
-				printf("%s\t", collection.GetValue(i, j).ToString().c_str());
+				result += collection.GetValue(i, j).ToString() + "\t";
 			}
-			printf("\n");
+			result += "\n";
 		}
-		printf("\n");
+		result += "\n";
 	} else {
-		fprintf(stderr, "Query Error: %s\n", error.c_str());
+		result = "Query Error: " + error + "\n";
 	}
+	return result;
 }
 
 unique_ptr<DataChunk> MaterializedQueryResult::Fetch() {
