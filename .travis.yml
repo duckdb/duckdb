@@ -149,8 +149,10 @@ matrix:
         - R -e 'install.packages(c("DBI", "testthat", "DBItest"),repos=c("http://cran.rstudio.com/"))'
         - cd tools/rpkg
 
-      script:
+      install:
         - R CMD INSTALL .
+
+      script:
         - R -f testthat.R
 
 before_install:
