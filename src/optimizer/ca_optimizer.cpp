@@ -8,54 +8,6 @@ using namespace std;
 
 #include <iostream>
 
-/*
-test data
-create table foo (i int, j int);
-
-insert into foo values
-(10, 1),
-(10, 1),
-(20, 2),
-(20, 2),
-(40, 4),
-(40, 4),
-(20, 1),
-(20, 1),
-(10, 2),
-(10, 2);
-*/
-
-/* boss case
-SELECT i, SUM(i), SUM(i), COUNT(*), AVG(i), j
-	FROM foo
-	GROUP BY i, j
-	HAVING AVG(i) > 10 AND AVG(i) < 40;
-
-PROJECTION[#0, #2, #3, #4, CAST[DECIMAL](#5) / CAST[DECIMAL](#6), #1](
-    FILTER[CAST[DECIMAL](#9) / CAST[DECIMAL](#10)<40.000000, CAST[DECIMAL](#7) / CAST[DECIMAL](#8)>10.000000](
-        AGGREGATE_AND_GROUP_BY
-			[
-            SUM(0.0),
-            SUM(0.0),
-            COUNT(*),
-            SUM(0.0),
-            COUNT(CAST[BIGINT](0.0)),
-            SUM(0.0),
-            COUNT(CAST[BIGINT](0.0)),
-            SUM(0.0),
-            COUNT(CAST[BIGINT](0.0))
-			]
-            [
-				0.0,
-				0.1
-			] (GET(foo)
-        )
-    )
-)
-*/
-
-// TODO: Check behavior of aliases and perhaps create a bug report for the having clause containing a alias of cast typed.
-
 void CommonAggregateOptimizer::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::PROJECTION:
@@ -66,8 +18,6 @@ void CommonAggregateOptimizer::VisitOperator(LogicalOperator &op) {
 	}
 	LogicalOperatorVisitor::VisitOperator(op);
 }
-
-
 
 /*
 P := PROJECTION
@@ -132,12 +82,6 @@ void CommonAggregateOptimizer::find_bound_references(Expression& expression, con
 }
 
 void CommonAggregateOptimizer::ExtractCommonAggregateExpressions(LogicalOperator& projection) {
-	/* REMOVE CODE AFTER DEBUGGING
-	std::cout << "BEFORE OPTIMIZING:" << std::endl;
-	std::cout << projection.ToString() << std::endl;
-	** REMOVE CODE AFTER DEBUGGING
-	*/
-
 	vector<Expression*> operator_chain_expressions;
 
 	auto aggregate = find_logical_aggregate(operator_chain_expressions, projection);
@@ -170,10 +114,6 @@ void CommonAggregateOptimizer::ExtractCommonAggregateExpressions(LogicalOperator
 		
 		aggregate_index++;
 	}
-	/* REMOVE CODE AFTER DEBUGGING
+
 	aggregate->expressions.swap(new_aggregate_expressions);
-	std::cout << "AFTER OPTIMIZING:" << std::endl;
-	std::cout << projection.ToString() << std::endl;
-	** REMOVE CODE AFTER DEBUGGING
-	*/
 }
