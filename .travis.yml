@@ -145,7 +145,7 @@ matrix:
       language: r
       r: devel
 
-      before_script:
+      before_install:
         - R -e 'install.packages(c("DBI", "testthat", "DBItest"),repos=c("http://cran.rstudio.com/"))'
         - cd tools/rpkg
 
