@@ -139,5 +139,19 @@ matrix:
         - python3 setup.py install
         - python3 -m pytest tests
 
+
+    - os: linux
+      dist: xenial
+      language: r
+      r: devel
+
+      before_script:
+        - R -e 'install.packages(c("DBI", "testthat", "DBItest"),repos=c("http://cran.rstudio.com/"))'
+        - cd tools/rpkg
+
+      script:
+        - R CMD INSTALL .
+        - R -f testthat.R
+
 before_install:
     - eval "${MATRIX_EVAL}"

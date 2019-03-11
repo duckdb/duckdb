@@ -8,164 +8,206 @@
 #define RSTR(somestr) mkCharCE(somestr, CE_UTF8)
 
 SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
+	if (TYPEOF(querysexp) != STRSXP || LENGTH(querysexp) != 1) {
+		Rf_error("duckdb_query_R: Need single string parameter for query");
+	}
+	if (TYPEOF(connsexp) != EXTPTRSXP) {
+		Rf_error("duckdb_query_R: Need external pointer parameter for connections");
+	}
+
 	duckdb_result output;
 	//	long affected_rows = 0, prepare_id = 0;
 	duckdb_state res;
 
-	void *connptr = R_ExternalPtrAddr(connsexp);
-
-	res = duckdb_query(connptr, (char *)CHAR(STRING_ELT(querysexp, 0)), &output);
-	if (res != DuckDBSuccess) { // there was an error
-		Rf_error("Query error");
+	void *connaddr = R_ExternalPtrAddr(connsexp);
+	if (!connaddr) {
+		Rf_error("duckdb_query_R: invalid connection");
 	}
 
-	if (output.column_count > 0) {
-		int i = 0, ncols = output.column_count;
+	res = duckdb_query(connaddr, (char *)CHAR(STRING_ELT(querysexp, 0)), &output);
+	if (res != DuckDBSuccess) { // there was an error
+		Rf_error("duckdb_query_R: Error: %s", output.error_message);
+	}
+
+	uint32_t ncols = output.column_count;
+
+	if (ncols > 0) {
 		SEXP retlist = NULL, names = NULL;
 		PROTECT(retlist = NEW_LIST(ncols));
 		if (!retlist) {
 			UNPROTECT(1);
-			Rf_error("Memory allocation failed");
+			Rf_error("duckdb_query_R: Memory allocation failed");
 		}
 		PROTECT(names = NEW_STRING(ncols));
 		if (!names) {
 			UNPROTECT(2);
-			Rf_error("Memory allocation failed");
+			Rf_error("duckdb_query_R: Memory allocation failed");
 		}
 
-		for (size_t col_idx = 0; col_idx < output.column_count; col_idx++) {
+		for (size_t col_idx = 0; col_idx < ncols; col_idx++) {
 			duckdb_column col = output.columns[col_idx];
 			SEXP varvalue = NULL;
 			SEXP varname = PROTECT(RSTR(col.name));
 			if (!varname) {
-// TODO				UNPROTECT(col_idx * 2 + 3);
-				Rf_error("Memory allocation failed");
+				// TODO				UNPROTECT(col_idx * 2 + 3);
+				Rf_error("duckdb_query_R: Memory allocation failed");
 			}
 			switch (col.type) {
+			// TODO macro?
+			case DUCKDB_TYPE_BOOLEAN:
+			case DUCKDB_TYPE_TINYINT:
+				varvalue = PROTECT(NEW_INTEGER(output.row_count));
+				if (varvalue) {
+					for (size_t row_idx = 0; row_idx < output.row_count; row_idx++) {
+						if (col.nullmask[row_idx]) {
+							INTEGER_POINTER(varvalue)[row_idx] = NA_INTEGER;
+						} else {
+							INTEGER_POINTER(varvalue)[row_idx] = (uint32_t)((uint8_t *)col.data)[row_idx];
+						}
+					}
+				}
+				break;
+			case DUCKDB_TYPE_SMALLINT:
+				varvalue = PROTECT(NEW_INTEGER(output.row_count));
+				if (varvalue) {
+					for (size_t row_idx = 0; row_idx < output.row_count; row_idx++) {
+						if (col.nullmask[row_idx]) {
+							INTEGER_POINTER(varvalue)[row_idx] = NA_INTEGER;
+						} else {
+							INTEGER_POINTER(varvalue)[row_idx] = (uint32_t)((uint16_t *)col.data)[row_idx];
+						}
+					}
+				}
+				break;
+			case DUCKDB_TYPE_INTEGER:
+				varvalue = PROTECT(NEW_INTEGER(output.row_count));
+				if (varvalue) {
+					for (size_t row_idx = 0; row_idx < output.row_count; row_idx++) {
+						if (col.nullmask[row_idx]) {
+							INTEGER_POINTER(varvalue)[row_idx] = NA_INTEGER;
+						} else {
+							INTEGER_POINTER(varvalue)[row_idx] = (uint32_t)((uint32_t *)col.data)[row_idx];
+						}
+					}
+				}
+				break;
+			case DUCKDB_TYPE_BIGINT:
+				varvalue = PROTECT(NEW_NUMERIC(output.row_count));
+				if (varvalue) {
+					for (size_t row_idx = 0; row_idx < output.row_count; row_idx++) {
+						if (col.nullmask[row_idx]) {
+							NUMERIC_POINTER(varvalue)[row_idx] = NA_REAL;
+						} else {
+							NUMERIC_POINTER(varvalue)[row_idx] = (double)((uint64_t *)col.data)[row_idx];
+						}
+					}
+				}
+				break;
+			case DUCKDB_TYPE_DECIMAL:
+				varvalue = PROTECT(NEW_NUMERIC(output.row_count));
+				if (varvalue) {
+					for (size_t row_idx = 0; row_idx < output.row_count; row_idx++) {
+						if (col.nullmask[row_idx]) {
+							NUMERIC_POINTER(varvalue)[row_idx] = NA_REAL;
+						} else {
+							NUMERIC_POINTER(varvalue)[row_idx] = ((double *)col.data)[row_idx];
+						}
+					}
+				}
+				break;
 
+			case DUCKDB_TYPE_VARCHAR:
+				varvalue = PROTECT(NEW_STRING(output.row_count));
+				if (varvalue) {
+					for (size_t row_idx = 0; row_idx < output.row_count; row_idx++) {
+						if (col.nullmask[row_idx]) {
+							SET_STRING_ELT(varvalue, row_idx, NA_STRING);
+						} else {
+							SET_STRING_ELT(varvalue, row_idx, PROTECT(RSTR(((char **)col.data)[row_idx])));
+							UNPROTECT(1);
+						}
+					}
+				}
+				break;
 			default:
-				Rf_error("Unknown column type");
+				Rf_error("duckdb_query_R: Unknown column type");
 				break;
 			}
 
-//			if (duckdb_value_is_null(col, self->offset)) {
-//				PyList_SetItem(row, col_idx, Py_None);
-//				continue;
-//			}
-//			switch (col.type) {
-//			case DUCKDB_TYPE_BOOLEAN:
-//			case DUCKDB_TYPE_TINYINT:
-//				val = Py_BuildValue("b", ((int8_t *)col.data)[self->offset]);
-//				break;
-//			case DUCKDB_TYPE_SMALLINT:
-//				val = Py_BuildValue("h", ((int16_t *)col.data)[self->offset]);
-//				break;
-//			case DUCKDB_TYPE_INTEGER:
-//				val = Py_BuildValue("i", ((int32_t *)col.data)[self->offset]);
-//				break;
-//			case DUCKDB_TYPE_BIGINT:
-//				val = Py_BuildValue("L", ((int64_t *)col.data)[self->offset]);
-//				break;
-//			case DUCKDB_TYPE_DECIMAL:
-//				val = Py_BuildValue("d", ((double *)col.data)[self->offset]);
-//				break;
-//			case DUCKDB_TYPE_VARCHAR:
-//				val = Py_BuildValue("s", duckdb_get_value_str(col, self->offset));
-//				break;
-//			default:
-//				// TODO complain
-//				break;
-//			}
-//			if (val) {
-//				Py_INCREF(val);
-//				PyList_SetItem(row, col_idx, val);
-//				Py_DECREF(val);
-//			}
-
 			if (!varvalue) {
 				// TODO				UNPROTECT(col_idx * 2 + 3);
-				Rf_error("Conversion failed");
+				Rf_error("duckdb_query_R: Conversion failed");
 			}
 
-			SET_VECTOR_ELT(retlist, i, varvalue);
-			SET_STRING_ELT(names, i, varname);
+			SET_VECTOR_ELT(retlist, col_idx, varvalue);
+			SET_STRING_ELT(names, col_idx, varname);
 			UNPROTECT(2); /* varname, varvalue */
 		}
 
-
-
-		for (i = 0; i < ncols; i++) {
-
-
-
-			//			if (!(varvalue = bat_to_sexp(b, output->nrows, &(raw_col->type), &unfix, LOGICAL(int64sexp)[0])))
-			//{ 				UNPROTECT(i * 2 + 4); 				PutRNGstate(); 				return monetdb_error_R("Conversion error");
-			//			}
-			//			SET_VECTOR_ELT(retlist, i, varvalue);
-			//			SET_STRING_ELT(names, i, varname);
-			//
-			//
-			//			UNPROTECT(2); /* varname, varvalue */
-		}
-		//		SET_ATTR(retlist, install("__rows"), PROTECT(Rf_ScalarReal(nrows)));
-		UNPROTECT(1);
-		//		if (prepare_id > 0) {
-		//			SET_ATTR(retlist, install("__prepare"), PROTECT(Rf_ScalarReal(prepare_id)));
-		//			UNPROTECT(1);
-		//		}
-
-		duckdb_destroy_result(output);
+		duckdb_destroy_result(&output);
 		SET_NAMES(retlist, names);
 		UNPROTECT(2); /* names, retlist */
 		return retlist;
 	}
-	duckdb_destroy_result(output);
+	duckdb_destroy_result(&output);
 	return ScalarReal(0);
 }
 
 static SEXP duckdb_finalize_database_R(SEXP dbsexp) {
-	void *addr = R_ExternalPtrAddr(dbsexp);
-	if (addr) {
-		warning("Database is garbage-collected, use xxx to avoid this.");
+	if (TYPEOF(dbsexp) != EXTPTRSXP) {
+		Rf_error("duckdb_finalize_connection_R: Need external pointer parameter");
+	}
+	void *dbaddr = R_ExternalPtrAddr(dbsexp);
+	if (dbaddr) {
+		warning("duckdb_finalize_database_R: Database is garbage-collected, use xxx to avoid this.");
 		R_ClearExternalPtr(dbsexp);
-		duckdb_close(addr);
+		duckdb_close(dbaddr);
 	}
 	return R_NilValue;
 }
 
 SEXP duckdb_startup_R(SEXP dbdirsexp) {
+	if (TYPEOF(dbdirsexp) != STRSXP || LENGTH(dbdirsexp) != 1) {
+		Rf_error("duckdb_startup_R: Need single string parameter");
+	}
 	char *dbdir = (char *)CHAR(STRING_ELT(dbdirsexp, 0));
 	if (strcmp(dbdir, ":memory:") == 0) {
 		dbdir = NULL;
 	}
 
-	duckdb_database db;
-	duckdb_state res = duckdb_open(dbdir, &db);
+	duckdb_database dbaddr;
+	duckdb_state res = duckdb_open(dbdir, &dbaddr);
 
 	if (res != DuckDBSuccess) {
-		Rf_error("Failed to open database");
+		Rf_error("duckdb_startup_R: Failed to open database");
 	}
 
-	SEXP dbsexp = PROTECT(R_MakeExternalPtr(db, R_NilValue, R_NilValue));
+	SEXP dbsexp = PROTECT(R_MakeExternalPtr(dbaddr, R_NilValue, R_NilValue));
 	R_RegisterCFinalizer(dbsexp, (void (*)(SEXP))duckdb_finalize_database_R);
 	UNPROTECT(1);
 	return dbsexp;
 }
 
 SEXP duckdb_shutdown_R(SEXP dbsexp) {
-	void *addr = R_ExternalPtrAddr(dbsexp);
-	if (addr) {
+	if (TYPEOF(dbsexp) != EXTPTRSXP) {
+		Rf_error("duckdb_finalize_connection_R: Need external pointer parameter");
+	}
+	void *dbaddr = R_ExternalPtrAddr(dbsexp);
+	if (dbaddr) {
 		R_ClearExternalPtr(dbsexp);
-		duckdb_close(addr);
+		duckdb_close(dbaddr);
 	}
 
 	return R_NilValue;
 }
 
 static SEXP duckdb_finalize_connection_R(SEXP connsexp) {
+	if (TYPEOF(connsexp) != EXTPTRSXP) {
+		Rf_error("duckdb_finalize_connection_R: Need external pointer parameter");
+	}
 	void *addr = R_ExternalPtrAddr(connsexp);
 	if (addr) {
-		warning("Connection is garbage-collected, use dbDisconnect() to avoid this.");
+		warning("duckdb_finalize_connection_R: Connection is garbage-collected, use dbDisconnect() to avoid this.");
 		R_ClearExternalPtr(connsexp);
 		duckdb_disconnect(addr);
 	}
@@ -173,15 +215,18 @@ static SEXP duckdb_finalize_connection_R(SEXP connsexp) {
 }
 
 SEXP duckdb_connect_R(SEXP dbsexp) {
+	if (TYPEOF(dbsexp) != EXTPTRSXP) {
+		Rf_error("duckdb_connect_R: Need external pointer parameter");
+	}
 	void *dbaddr = R_ExternalPtrAddr(dbsexp);
 	if (!dbaddr) {
-		Rf_error("Invalid database reference");
+		Rf_error("duckdb_connect_R: Invalid database reference");
 	}
 
 	duckdb_connection connaddr;
 	duckdb_state res = duckdb_connect((duckdb_database)dbaddr, &connaddr);
 	if (res != DuckDBSuccess) {
-		Rf_error("Could not create connection.");
+		Rf_error("duckdb_connect_R: Could not create connection.");
 	}
 
 	SEXP conn = PROTECT(R_MakeExternalPtr(connaddr, R_NilValue, R_NilValue));
@@ -192,12 +237,13 @@ SEXP duckdb_connect_R(SEXP dbsexp) {
 }
 
 SEXP duckdb_disconnect_R(SEXP connsexp) {
-	void *addr = R_ExternalPtrAddr(connsexp);
-	if (addr) {
+	if (TYPEOF(connsexp) != EXTPTRSXP) {
+		Rf_error("duckdb_disconnect_R: Need external pointer parameter");
+	}
+	void *connaddr = R_ExternalPtrAddr(connsexp);
+	if (connaddr) {
 		R_ClearExternalPtr(connsexp);
-		duckdb_disconnect(addr);
-	} else {
-		warning("Connection was already disconnected.");
+		duckdb_disconnect(&connaddr);
 	}
 	return R_NilValue;
 }

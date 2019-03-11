@@ -3,7 +3,7 @@ NULL
 
 duckdb_connection <- function(duckdb_driver) {
   # TODO: Add arguments
-  new("duckdb_connection", conn_ref=.Call(duckdb_connect_R, duckdb_driver@database_ref))
+  new("duckdb_connection", conn_ref=.Call(duckdb_connect_R, duckdb_driver@database_ref), driver=duckdb_driver)
 }
 
 #' @rdname DBI
@@ -11,7 +11,7 @@ duckdb_connection <- function(duckdb_driver) {
 setClass(
   "duckdb_connection",
   contains = "DBIConnection",
-  slots = list(conn_ref="externalptr")
+  slots = list(conn_ref="externalptr", driver="duckdb_driver")
 )
 
 #' @rdname DBI
@@ -30,7 +30,12 @@ setMethod(
 setMethod(
   "dbIsValid", "duckdb_connection",
   function(dbObj, ...) {
-    testthat::skip("Not yet implemented: dbIsValid(Connection)")
+    valid <- FALSE
+  tryCatch ({
+    dbExecute(dbObj, "SELECT 1")
+    valid <- TRUE
+      }, error=function(c){})
+  return(valid)
   })
 
 #' @rdname DBI
@@ -42,9 +47,9 @@ setMethod(
     if (!dbIsValid(conn)) {
       warning("Connection already closed.", call. = FALSE)
     }
-   .Call(duckdb_disconnect_R, conn)
+   .Call(duckdb_disconnect_R, conn@conn_ref)
     # TODO: Free resources
-    TRUE
+    return(invisible(TRUE))
   })
 
 #' @rdname DBI
@@ -53,8 +58,11 @@ setMethod(
 setMethod(
   "dbSendQuery", c("duckdb_connection", "character"),
   function(conn, statement, ...) {
-    print(statement)
-    resultset <- .Call(duckdb_query_R, conn, statement)
+    resultset <- .Call(duckdb_query_R, conn@conn_ref, statement)
+
+    attr(resultset, "row.names") <- c(NA_integer_, as.integer(-1 * length(resultset[[1]])))
+    class(resultset) <- "data.frame"
+
     duckdb_result(connection = conn, statement = statement, resultset=resultset)
   })
 
@@ -64,8 +72,8 @@ setMethod(
 setMethod(
   "dbSendStatement", c("duckdb_connection", "character"),
   function(conn, statement, ...) {
-    resultset <- .Call(duckdb_query_R, conn, statement)
-    duckdb_result(connection = conn, statement = statement, resultset=resultset)
+    resultset <- .Call(duckdb_query_R, conn@conn_ref, statement)
+    duckdb_result(connection = conn, statement = statement, rows_affected=resultset[[1]][1])
   })
 
 #' @rdname DBI
@@ -172,7 +180,8 @@ setMethod(
 setMethod(
   "dbBegin", "duckdb_connection",
   function(conn, ...) {
-    testthat::skip("Not yet implemented: dbBegin(Connection)")
+   dbExecute(conn, "BEGIN TRANSACTION")
+   return(invisible(TRUE))
   })
 
 #' @rdname DBI
@@ -181,7 +190,8 @@ setMethod(
 setMethod(
   "dbCommit", "duckdb_connection",
   function(conn, ...) {
-    testthat::skip("Not yet implemented: dbCommit(Connection)")
+    dbExecute(conn, "COMMIT")
+    return(invisible(TRUE))
   })
 
 #' @rdname DBI
@@ -190,5 +200,6 @@ setMethod(
 setMethod(
   "dbRollback", "duckdb_connection",
   function(conn, ...) {
-    testthat::skip("Not yet implemented: dbRollback(Connection)")
+    dbExecute(conn, "ROLLBACK")
+    return(invisible(TRUE))
   })
