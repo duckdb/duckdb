@@ -2,6 +2,7 @@
 #include "parser/expression/comparison_expression.hpp"
 #include "parser/expression/conjunction_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
+#include "parser/expression/function_expression.hpp"
 #include "parser/expression/operator_expression.hpp"
 #include "parser/transformer.hpp"
 
@@ -129,6 +130,14 @@ unique_ptr<Expression> Transformer::TransformAExpr(A_Expr *root) {
 		default:
 			throw Exception("Unknown unary operator");
 		}
+	}
+
+	if (target_type == ExpressionType::OPERATOR_CONCAT) {
+		// concat operator, create function
+		vector<unique_ptr<Expression>> children;
+		children.push_back(move(left_expr));
+		children.push_back(move(right_expr));
+		return make_unique<FunctionExpression>("concat", children);
 	}
 
 	unique_ptr<Expression> result = nullptr;

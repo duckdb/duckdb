@@ -75,6 +75,11 @@ public:
 	static void Divide(ExpressionStatistics &left, ExpressionStatistics &right, ExpressionStatistics &result);
 	// A % B
 	static void Modulo(ExpressionStatistics &left, ExpressionStatistics &right, ExpressionStatistics &result);
+	//===--------------------------------------------------------------------===//
+	// String Operations
+	//===--------------------------------------------------------------------===//
+	// A || B
+	static void Concat(ExpressionStatistics &left, ExpressionStatistics &right, ExpressionStatistics &result);
 
 	//===--------------------------------------------------------------------===//
 	// Aggregates
