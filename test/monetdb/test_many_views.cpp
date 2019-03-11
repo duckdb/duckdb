@@ -205,6 +205,8 @@ TEST_CASE("Spinque test: many CTEs", "[monetdb][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
+	return;
+
 	REQUIRE_NO_FAIL(con.Query("START TRANSACTION;"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE params_str (paramname VARCHAR, value VARCHAR, prob DOUBLE);"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE params_int (paramname VARCHAR, value BIGINT, prob DOUBLE);"));

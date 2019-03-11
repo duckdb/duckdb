@@ -61,6 +61,10 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 		// order does not matter in multiplication:
 		// change right side to 10/2 (outer_constant / inner_constant)
 		// but ONLY if outer_constant is cleanly divisible by the inner_constant
+		if (inner_constant->value == 0) {
+			// x * 0, for now don't do anything
+			return nullptr;
+		}
 		if (ValueOperations::Modulo(outer_constant->value, inner_constant->value) != 0) {
 			// not cleanly divisible, the result will be either FALSE or NULL
 			// for now, we don't do anything
