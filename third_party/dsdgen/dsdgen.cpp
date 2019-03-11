@@ -13,7 +13,7 @@ using namespace std;
 namespace tpcds {
 
 void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	con.Query("BEGIN TRANSACTION");
 	// FIXME: No restart support yet, suspect only fix is init_rand
@@ -36,15 +36,13 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	vector<unique_ptr<tpcds_append_information>> append_info;
 	append_info.resize(DBGEN_VERSION);
 
-	int tmin = CALL_CENTER, tmax = DBGEN_VERSION; // because fuck dbgen_version
+	int tmin = CALL_CENTER, tmax = DBGEN_VERSION;
 
 	for (int table_id = tmin; table_id < tmax; table_id++) {
 		auto table_def = GetTDefByNumber(table_id);
-		assert(table_def);
 		assert(table_def.name);
 		auto append = make_unique<tpcds_append_information>(db, schema, table_def.name);
 		append->table_def = table_def;
-		append->row = 0;
 		append_info[table_id] = move(append);
 	}
 

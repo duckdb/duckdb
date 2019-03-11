@@ -32,11 +32,12 @@ virtual string GetQuery() {
 	return "SELECT (i * j) + (i * j) + (i * j) + (i * j) FROM integers";
 }
 
-virtual string VerifyResult(DuckDBResult *result) {
-	if (!result->GetSuccess()) {
-		return result->GetErrorMessage();
+virtual string VerifyResult(QueryResult *result) {
+	if (!result->success) {
+		return result->error;
 	}
-	if (result->size() != MULTIPLICATION_ROW_COUNT) {
+	auto &materialized = (MaterializedQueryResult &)*result;
+	if (materialized.collection.count != MULTIPLICATION_ROW_COUNT) {
 		return "Incorrect amount of rows in result";
 	}
 	return string();

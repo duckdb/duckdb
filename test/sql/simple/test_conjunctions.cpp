@@ -5,9 +5,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test conjunction statements", "[conjunction]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// create table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a (i integer, j integer);"));

@@ -7,10 +7,10 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test index creation statements with multiple connections", "[index]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
-	DuckDBConnection con2(db);
+	Connection con(db);
+	Connection con2(db);
 
 	// create a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER)"));
@@ -59,10 +59,10 @@ TEST_CASE("Test index creation statements with multiple connections", "[index]")
 }
 
 TEST_CASE("Index creation on an expression", "[index]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// create a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER)"));
@@ -81,10 +81,10 @@ TEST_CASE("Index creation on an expression", "[index]") {
 }
 
 TEST_CASE("Drop Index", "[drop]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// create a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
@@ -108,10 +108,10 @@ TEST_CASE("Drop Index", "[drop]") {
 }
 
 TEST_CASE("Open Range Queries", "[openrange]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 
-	DuckDBConnection con(db);
+	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	for (size_t i = 0; i < 10; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(i) + ")"));
@@ -144,10 +144,10 @@ TEST_CASE("Open Range Queries", "[openrange]") {
 }
 
 TEST_CASE("Closed Range Queries", "[closerange]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 
-	DuckDBConnection con(db);
+	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	for (size_t i = 0; i < 3000; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(i) + ")"));

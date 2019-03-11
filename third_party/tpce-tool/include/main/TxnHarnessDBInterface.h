@@ -55,7 +55,7 @@ using namespace std;
 namespace TPCE {
 
 class CTradeOrderDBInterface {
-	duckdb::DuckDBConnection con;
+	duckdb::Connection con;
 
 public:
 	void DoTradeOrderFrame1(const TTradeOrderFrame1Input *pIn, TTradeOrderFrame1Output *pOut);

@@ -5,9 +5,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Single PRIMARY KEY constraint", "[constraints]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY, j INTEGER)"));
 
@@ -38,7 +38,7 @@ TEST_CASE("Single PRIMARY KEY constraint", "[constraints]") {
 	REQUIRE_FAIL(con.Query("UPDATE integers SET i=NULL;"));
 
 	// insert the same value from multiple connections
-	DuckDBConnection con2(db);
+	Connection con2(db);
 
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
@@ -55,9 +55,9 @@ TEST_CASE("Single PRIMARY KEY constraint", "[constraints]") {
 }
 
 TEST_CASE("Multiple PRIMARY KEY constraint", "[constraints]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j VARCHAR, PRIMARY KEY(i, j))"));
 
@@ -80,9 +80,9 @@ TEST_CASE("Multiple PRIMARY KEY constraint", "[constraints]") {
 }
 
 TEST_CASE("PRIMARY KEY and transactions", "[constraints]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY)"));
 
@@ -98,9 +98,9 @@ TEST_CASE("PRIMARY KEY and transactions", "[constraints]") {
 }
 
 TEST_CASE("PRIMARY KEY and update/delete", "[constraints]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// create a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER PRIMARY KEY, b INTEGER);"));
@@ -138,9 +138,9 @@ TEST_CASE("PRIMARY KEY and update/delete", "[constraints]") {
 }
 
 TEST_CASE("PRIMARY KEY and update/delete on multiple columns", "[constraints]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// create a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR, PRIMARY KEY(a, b));"));
@@ -179,9 +179,9 @@ TEST_CASE("PRIMARY KEY and update/delete on multiple columns", "[constraints]") 
 }
 
 TEST_CASE("PRIMARY KEY and update/delete in the same transaction", "[constraints]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY)"));
 

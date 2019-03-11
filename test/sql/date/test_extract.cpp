@@ -5,9 +5,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Extract function", "[date]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	// create and insert into table
@@ -57,9 +57,9 @@ TEST_CASE("Extract function", "[date]") {
 }
 
 TEST_CASE("Extract function edge cases", "[date]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// century changes in the year 1
 	result = con.Query("SELECT EXTRACT(century FROM cast('2000-10-10' AS DATE));");

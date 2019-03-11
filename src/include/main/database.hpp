@@ -19,7 +19,7 @@ namespace duckdb {
 
 //! The database object. This object holds the catalog and all the
 //! database-specific meta information.
-class DuckDBConnection;
+class Connection;
 class DuckDB {
 public:
 	DuckDB(const char *path = nullptr);

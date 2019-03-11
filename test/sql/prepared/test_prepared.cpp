@@ -6,19 +6,19 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("PREPARE for SELECT", "[prepared]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("PREPARE s1 AS SELECT CAST($1 AS INTEGER), CAST($2 AS STRING)"));
 	result = con.Query("EXECUTE s1(42, 'dpfkg')");
-	REQUIRE(result->GetSuccess());
+	REQUIRE(result->success);
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"dpfkg"}));
 
 	result = con.Query("EXECUTE s1(43, 'asdf')");
-	REQUIRE(result->GetSuccess());
+	REQUIRE(result->success);
 	REQUIRE(CHECK_COLUMN(result, 0, {43}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"asdf"}));
 
@@ -44,11 +44,11 @@ TEST_CASE("PREPARE for SELECT", "[prepared]") {
 	REQUIRE_FAIL(con.Query("EXECUTE s3(10000)"));
 
 	result = con.Query("EXECUTE s3(42)");
-	REQUIRE(result->GetSuccess());
+	REQUIRE(result->success);
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
 
 	result = con.Query("EXECUTE s3(84)");
-	REQUIRE(result->GetSuccess());
+	REQUIRE(result->success);
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 
 	REQUIRE_NO_FAIL(con.Query("DEALLOCATE s3"));
@@ -60,9 +60,9 @@ TEST_CASE("PREPARE for SELECT", "[prepared]") {
 }
 
 TEST_CASE("PREPARE for INSERT", "[prepared]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE b (i TINYINT)"));
 	REQUIRE_NO_FAIL(con.Query("PREPARE s1 AS INSERT INTO b VALUES (cast($1 as tinyint)), ($2 + 1), ($3)"));
@@ -98,10 +98,10 @@ TEST_CASE("PREPARE for INSERT", "[prepared]") {
 }
 
 TEST_CASE("PREPARE and DROPping tables", "[prepared]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con1(db);
-	DuckDBConnection con2(db);
+	Connection con1(db);
+	Connection con2(db);
 
 	REQUIRE_NO_FAIL(con1.Query("CREATE TABLE a (i TINYINT)"));
 	REQUIRE_NO_FAIL(con2.Query("PREPARE p1 AS SELECT * FROM a"));
@@ -122,7 +122,7 @@ TEST_CASE("PREPARE and DROPping tables", "[prepared]") {
 }
 
 TEST_CASE("PREPARE and WAL", "[prepared][.]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	auto prepare_database = JoinPath(TESTING_DIRECTORY_NAME, "prepare_test");
 
 	// make sure the database does not exist
@@ -132,7 +132,7 @@ TEST_CASE("PREPARE and WAL", "[prepared][.]") {
 	{
 		// create a database and insert values
 		DuckDB db(prepare_database);
-		DuckDBConnection con(db);
+		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t (a INTEGER)"));
 		REQUIRE_NO_FAIL(con.Query("PREPARE p1 AS INSERT INTO t VALUES ($1)"));
 		REQUIRE_NO_FAIL(con.Query("EXECUTE p1(42)"));
@@ -143,7 +143,7 @@ TEST_CASE("PREPARE and WAL", "[prepared][.]") {
 	}
 	{
 		DuckDB db(prepare_database);
-		DuckDBConnection con(db);
+		Connection con(db);
 
 		result = con.Query("SELECT a FROM t");
 		REQUIRE(CHECK_COLUMN(result, 0, {42, 43}));
@@ -154,7 +154,7 @@ TEST_CASE("PREPARE and WAL", "[prepared][.]") {
 	// reload the database from disk
 	{
 		DuckDB db(prepare_database);
-		DuckDBConnection con(db);
+		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("PREPARE p1 AS DELETE FROM t WHERE a=$1"));
 		REQUIRE_NO_FAIL(con.Query("EXECUTE p1(43)"));
 
@@ -165,7 +165,7 @@ TEST_CASE("PREPARE and WAL", "[prepared][.]") {
 
 	{
 		DuckDB db(prepare_database);
-		DuckDBConnection con(db);
+		Connection con(db);
 
 		result = con.Query("SELECT a FROM t");
 		REQUIRE(CHECK_COLUMN(result, 0, {42}));
@@ -173,7 +173,7 @@ TEST_CASE("PREPARE and WAL", "[prepared][.]") {
 
 	{
 		DuckDB db(prepare_database);
-		DuckDBConnection con(db);
+		Connection con(db);
 
 		result = con.Query("SELECT a FROM t");
 		REQUIRE(CHECK_COLUMN(result, 0, {42}));
@@ -186,14 +186,14 @@ TEST_CASE("PREPARE and WAL", "[prepared][.]") {
 	}
 	{
 		DuckDB db(prepare_database);
-		DuckDBConnection con(db);
+		Connection con(db);
 
 		result = con.Query("SELECT a FROM t");
 		REQUIRE(CHECK_COLUMN(result, 0, {43}));
 	}
 	{
 		DuckDB db(prepare_database);
-		DuckDBConnection con(db);
+		Connection con(db);
 
 		result = con.Query("SELECT a FROM t");
 		REQUIRE(CHECK_COLUMN(result, 0, {43}));
@@ -202,9 +202,9 @@ TEST_CASE("PREPARE and WAL", "[prepared][.]") {
 }
 
 TEST_CASE("PREPARE with NULL", "[prepared]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE b (i TINYINT)"));
 	REQUIRE_NO_FAIL(con.Query("PREPARE s1 AS INSERT INTO b VALUES ($1)"));

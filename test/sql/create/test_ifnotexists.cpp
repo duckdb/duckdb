@@ -5,9 +5,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test IF NOT EXISTS", "[create]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// CREATE TABLE IF NOT EXISTS
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE IF NOT EXISTS integers(i INTEGER, j INTEGER)"));

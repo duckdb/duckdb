@@ -7,7 +7,7 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Shutdown with running transaction", "[storage]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	auto storage_database = JoinPath(TESTING_DIRECTORY_NAME, "storage_test");
 
 	// make sure the database does not exist
@@ -17,7 +17,7 @@ TEST_CASE("Shutdown with running transaction", "[storage]") {
 	{
 		// create a database and insert values
 		DuckDB db(storage_database);
-		DuckDBConnection con(db);
+		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22);"));
 
@@ -28,7 +28,7 @@ TEST_CASE("Shutdown with running transaction", "[storage]") {
 	// reload the database from disk
 	{
 		DuckDB db(storage_database);
-		DuckDBConnection con(db);
+		Connection con(db);
 		result = con.Query("SELECT * FROM test ORDER BY a");
 		REQUIRE(CHECK_COLUMN(result, 0, {11, 13}));
 		REQUIRE(CHECK_COLUMN(result, 1, {22, 22}));
@@ -37,7 +37,7 @@ TEST_CASE("Shutdown with running transaction", "[storage]") {
 }
 
 TEST_CASE("UNIQUE INDEX after shutdown", "[storage]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	auto storage_database = JoinPath(TESTING_DIRECTORY_NAME, "storage_test");
 
 	// make sure the database does not exist
@@ -47,14 +47,14 @@ TEST_CASE("UNIQUE INDEX after shutdown", "[storage]") {
 	{
 		// create a database and insert values
 		DuckDB db(storage_database);
-		DuckDBConnection con(db);
+		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER PRIMARY KEY, b INTEGER);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22);"));
 	}
 	// reload the database from disk
 	{
 		DuckDB db(storage_database);
-		DuckDBConnection con(db);
+		Connection con(db);
 
 		result = con.Query("SELECT * FROM test ORDER BY a");
 		REQUIRE(CHECK_COLUMN(result, 0, {11, 13}));

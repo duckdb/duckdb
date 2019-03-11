@@ -5,9 +5,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test view creation", "[views]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	// create a table
@@ -37,9 +37,9 @@ TEST_CASE("Test view creation", "[views]") {
 }
 
 TEST_CASE("Test view creation with alias", "[views]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	// create a table
@@ -51,21 +51,21 @@ TEST_CASE("Test view creation with alias", "[views]") {
 
 	REQUIRE_NO_FAIL(con.Query("CREATE VIEW v1 (j, \"j2\") AS SELECT i,i+1 FROM t1"));
 	result = con.Query("SELECT j, j2 FROM v1");
-	REQUIRE(result->column_count() == 2);
+	REQUIRE(result->types.size() == 2);
 	REQUIRE(CHECK_COLUMN(result, 0, {41, 42, 43}));
 	REQUIRE(CHECK_COLUMN(result, 1, {42, 43, 44}));
 	REQUIRE_NO_FAIL(con.Query("DROP VIEW v1"));
 
 	REQUIRE_NO_FAIL(con.Query("CREATE VIEW v1 (j, \"j2\") AS SELECT i,i+1, i+2 FROM t1"));
 	result = con.Query("SELECT j, j2 FROM v1");
-	REQUIRE(result->column_count() == 2);
+	REQUIRE(result->types.size() == 2);
 	REQUIRE(CHECK_COLUMN(result, 0, {41, 42, 43}));
 	REQUIRE(CHECK_COLUMN(result, 1, {42, 43, 44}));
 	REQUIRE_NO_FAIL(con.Query("DROP VIEW v1"));
 
 	REQUIRE_NO_FAIL(con.Query("CREATE VIEW v1 (j, \"j2\") AS SELECT i,i+1, i+2 as x FROM t1"));
 	result = con.Query("SELECT j, j2, x FROM v1");
-	REQUIRE(result->column_count() == 3);
+	REQUIRE(result->types.size() == 3);
 	REQUIRE(CHECK_COLUMN(result, 0, {41, 42, 43}));
 	REQUIRE(CHECK_COLUMN(result, 1, {42, 43, 44}));
 	REQUIRE(CHECK_COLUMN(result, 2, {43, 44, 45}));
@@ -74,9 +74,9 @@ TEST_CASE("Test view creation with alias", "[views]") {
 }
 
 TEST_CASE("Stacked views uh yeah", "[views]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	// create a table
@@ -90,6 +90,6 @@ TEST_CASE("Stacked views uh yeah", "[views]") {
 
 	result = con.Query("SELECT v3c2+1 FROM v3 WHERE v3c1 > 42");
 
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {90}));
 }

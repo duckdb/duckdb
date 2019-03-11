@@ -553,10 +553,10 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 				bool found_subset = false;
 				bool invert = false;
 				if (RelationSet::IsSubset(left_node, info->left_set) &&
-					RelationSet::IsSubset(right_node, info->right_set)) {
+				    RelationSet::IsSubset(right_node, info->right_set)) {
 					found_subset = true;
 				} else if (RelationSet::IsSubset(right_node, info->left_set) &&
-					RelationSet::IsSubset(left_node, info->right_set)) {
+				           RelationSet::IsSubset(left_node, info->right_set)) {
 					invert = true;
 					found_subset = true;
 				}
@@ -583,7 +583,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 					node = node->children[0].get();
 				}
 				assert(node->type == LogicalOperatorType::COMPARISON_JOIN);
-				auto &comp_join = (LogicalComparisonJoin&) *node;
+				auto &comp_join = (LogicalComparisonJoin &)*node;
 				comp_join.conditions.push_back(move(cond));
 			}
 		}

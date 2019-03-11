@@ -13,9 +13,9 @@ using namespace std;
 #define MONEY_PER_ACCOUNT 10
 
 TEST_CASE("Single thread update", "[transactions]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// initialize the database
 	con.Query("CREATE TABLE integers(i INTEGER);");
@@ -41,20 +41,22 @@ TEST_CASE("Single thread update", "[transactions]") {
 }
 
 static volatile bool finished_updating = false;
-static void read_total_balance(DuckDB *db) {
-	REQUIRE(db);
-	DuckDBConnection con(*db);
+static void read_total_balance(DuckDB *db, bool *read_correct) {
+	*read_correct = true;
+	Connection con(*db);
 	while (!finished_updating) {
 		// the total balance should remain constant regardless of updates
 		auto result = con.Query("SELECT SUM(money) FROM accounts");
-		REQUIRE(CHECK_COLUMN(result, 0, {TOTAL_ACCOUNTS * MONEY_PER_ACCOUNT}));
+		if (!CHECK_COLUMN(result, 0, {TOTAL_ACCOUNTS * MONEY_PER_ACCOUNT})) {
+			*read_correct = false;
+		}
 	}
 }
 
 TEST_CASE("Concurrent update", "[updates][.]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// fixed seed random numbers
 	mt19937 generator;
@@ -72,8 +74,9 @@ TEST_CASE("Concurrent update", "[updates][.]") {
 		con.Query("INSERT INTO accounts VALUES (" + to_string(i) + ", " + to_string(MONEY_PER_ACCOUNT) + ");");
 	}
 
+	bool read_correct;
 	// launch separate thread for reading aggregate
-	thread read_thread(read_total_balance, &db);
+	thread read_thread(read_total_balance, &db, &read_correct);
 
 	// start vigorously updating balances in this thread
 	for (size_t i = 0; i < TRANSACTION_UPDATE_COUNT; i++) {
@@ -112,29 +115,38 @@ TEST_CASE("Concurrent update", "[updates][.]") {
 	}
 	finished_updating = true;
 	read_thread.join();
+	REQUIRE(read_correct);
 }
 
 static std::atomic<size_t> finished_threads;
 
-static void write_random_numbers_to_account(DuckDB *db, size_t nr) {
-	REQUIRE(db);
-	DuckDBConnection con(*db);
+static void write_random_numbers_to_account(DuckDB *db, bool *correct, size_t nr) {
+	correct[nr] = true;
+	Connection con(*db);
 	for (size_t i = 0; i < TRANSACTION_UPDATE_COUNT; i++) {
 		// just make some changes to the total
 		// the total amount of money after the commit is the same
-		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-		REQUIRE_NO_FAIL(
-		    con.Query("UPDATE accounts SET money = money + " + to_string(i * 2) + " WHERE id = " + to_string(nr)));
-		REQUIRE_NO_FAIL(
-		    con.Query("UPDATE accounts SET money = money - " + to_string(i) + " WHERE id = " + to_string(nr)));
-		REQUIRE_NO_FAIL(
-		    con.Query("UPDATE accounts SET money = money - " + to_string(i * 2) + " WHERE id = " + to_string(nr)));
-		REQUIRE_NO_FAIL(
-		    con.Query("UPDATE accounts SET money = money + " + to_string(i) + " WHERE id = " + to_string(nr)));
+		if (!con.Query("BEGIN TRANSACTION")->success) {
+			correct[nr] = false;
+		}
+		if (!con.Query("UPDATE accounts SET money = money + " + to_string(i * 2) + " WHERE id = " + to_string(nr))->success) {
+			correct[nr] = false;
+		}
+		if (!con.Query("UPDATE accounts SET money = money - " + to_string(i) + " WHERE id = " + to_string(nr))->success) {
+			correct[nr] = false;
+		}
+		if (!con.Query("UPDATE accounts SET money = money - " + to_string(i * 2) + " WHERE id = " + to_string(nr))->success) {
+			correct[nr] = false;
+		}
+		if (!con.Query("UPDATE accounts SET money = money + " + to_string(i) + " WHERE id = " + to_string(nr))->success) {
+			correct[nr] = false;
+		}
 		// we test both commit and rollback
 		// the result of both should be the same since the updates have a
 		// net-zero effect
-		REQUIRE_NO_FAIL(con.Query(nr % 2 == 0 ? "COMMIT" : "ROLLBACK"));
+		if (!con.Query(nr % 2 == 0 ? "COMMIT" : "ROLLBACK")->success) {
+			correct[nr] = false;
+		}
 	}
 	finished_threads++;
 	if (finished_threads == TOTAL_ACCOUNTS) {
@@ -143,9 +155,9 @@ static void write_random_numbers_to_account(DuckDB *db, size_t nr) {
 }
 
 TEST_CASE("Multiple concurrent updaters", "[updates][.]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	finished_updating = false;
 	finished_threads = 0;
@@ -155,15 +167,18 @@ TEST_CASE("Multiple concurrent updaters", "[updates][.]") {
 		con.Query("INSERT INTO accounts VALUES (" + to_string(i) + ", " + to_string(MONEY_PER_ACCOUNT) + ");");
 	}
 
+	bool correct[TOTAL_ACCOUNTS];
+	bool read_correct;
 	std::thread write_threads[TOTAL_ACCOUNTS];
 	// launch a thread for reading the table
-	thread read_thread(read_total_balance, &db);
+	thread read_thread(read_total_balance, &db, &read_correct);
 	// launch several threads for updating the table
 	for (size_t i = 0; i < TOTAL_ACCOUNTS; i++) {
-		write_threads[i] = thread(write_random_numbers_to_account, &db, i);
+		write_threads[i] = thread(write_random_numbers_to_account, &db, correct, i);
 	}
 	read_thread.join();
 	for (size_t i = 0; i < TOTAL_ACCOUNTS; i++) {
 		write_threads[i].join();
+		REQUIRE(correct[i]);
 	}
 }

@@ -1,0 +1,57 @@
+#include "main/query_result.hpp"
+
+#include "main/client_context.hpp"
+
+using namespace duckdb;
+using namespace std;
+
+QueryResult::QueryResult(QueryResultType type) : type(type), success(true) {
+}
+
+QueryResult::QueryResult(QueryResultType type, vector<TypeId> types, vector<string> names)
+    : type(type), types(types), names(names), success(true) {
+	assert(types.size() == names.size());
+}
+
+QueryResult::QueryResult(QueryResultType type, string error) : type(type), success(false), error(error) {
+}
+
+bool QueryResult::Equals(QueryResult &other) {
+	// first compare the success state of the results
+	if (success != other.success) {
+		return false;
+	}
+	if (!success) {
+		return error == other.error;
+	}
+	// compare names
+	if (names != other.names) {
+		return false;
+	}
+	// compare types
+	if (types != other.types) {
+		return false;
+	}
+	// now compare the actual values
+	// fetch chunks
+	while (true) {
+		auto lchunk = Fetch();
+		auto rchunk = other.Fetch();
+		if (lchunk->size() == 0 && rchunk->size() == 0) {
+			return true;
+		}
+		if (lchunk->size() != rchunk->size()) {
+			return false;
+		}
+		assert(lchunk->column_count == rchunk->column_count);
+		for (size_t col = 0; col < rchunk->column_count; col++) {
+			for (size_t row = 0; row < rchunk->size(); row++) {
+				auto lvalue = lchunk->data[col].GetValue(row);
+				auto rvalue = rchunk->data[col].GetValue(row);
+				if (lvalue != rvalue) {
+					return false;
+				}
+			}
+		}
+	}
+}

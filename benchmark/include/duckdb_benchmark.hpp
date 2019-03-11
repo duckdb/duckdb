@@ -18,8 +18,8 @@ namespace duckdb {
 //! Base class for any state that has to be kept by a Benchmark
 struct DuckDBBenchmarkState : public BenchmarkState {
 	DuckDB db;
-	DuckDBConnection conn;
-	unique_ptr<DuckDBResult> result;
+	Connection conn;
+	unique_ptr<QueryResult> result;
 
 	DuckDBBenchmarkState() : db(nullptr), conn(db) {
 		conn.EnableProfiling();
@@ -44,7 +44,7 @@ public:
 	//! This function gets called after the GetQuery() method
 	virtual void Cleanup(DuckDBBenchmarkState *state){};
 	//! Verify a result
-	virtual string VerifyResult(DuckDBResult *result) = 0;
+	virtual string VerifyResult(QueryResult *result) = 0;
 
 	unique_ptr<BenchmarkState> Initialize() override {
 		auto state = make_unique<DuckDBBenchmarkState>();

@@ -26,7 +26,7 @@
 // // Rewrite subquery with correlated equality in WHERE to INNER JOIN
 // TEST_CASE("Subquery rewriting", "[subquery_rewrite]") {
 // 	DuckDB db(nullptr);
-// 	DuckDBConnection con(db);
+// 	Connection con(db);
 // 	con.Query("BEGIN TRANSACTION");
 // 	con.Query("CREATE TABLE t1 (a INTEGER, b INTEGER)");
 // 	con.Query("INSERT INTO t1 VALUES (1, 10), (2, 20), (3, 30), (3, 42)");
@@ -42,7 +42,7 @@
 // // Rewrite subquery with (NOT) IN clause to semi/anti join
 // TEST_CASE("(NOT) IN clause rewriting", "[subquery_rewrite]") {
 // 	DuckDB db(nullptr);
-// 	DuckDBConnection con(db);
+// 	Connection con(db);
 // 	con.Query("BEGIN TRANSACTION");
 // 	con.Query("CREATE TABLE t1 (a INTEGER, b INTEGER)");
 // 	con.Query("INSERT INTO t1 VALUES (1, 10), (2, 20), (3, 30), (3, 42)");

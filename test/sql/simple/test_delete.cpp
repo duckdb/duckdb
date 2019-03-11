@@ -5,9 +5,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test Deletions", "[delete]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a(i INTEGER);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO a VALUES (42);"));

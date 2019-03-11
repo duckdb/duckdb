@@ -264,10 +264,6 @@ void
 MemoryContextDelete(MemoryContext context)
 {
 	AssertArg(MemoryContextIsValid(context));
-	/* We had better not be deleting TopMemoryContext ... */
-	Assert(context != TopMemoryContext);
-	/* And not CurrentMemoryContext, either */
-	Assert(context != CurrentMemoryContext);
 
 	MemoryContextDeleteChildren(context);
 
@@ -288,7 +284,12 @@ MemoryContextDelete(MemoryContext context)
 
 	(*context->methods->delete_context) (context);
 	VALGRIND_DESTROY_MEMPOOL(context);
-	pfree(context);
+	if (context == TopMemoryContext) {
+		// deleting top memory context, use normal free method
+		free(context);
+	} else {
+		pfree(context);
+	}
 }
 
 /*

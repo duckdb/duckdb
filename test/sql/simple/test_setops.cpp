@@ -5,9 +5,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test UNION/EXCEPT/INTERSECT", "[setop]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	result = con.Query("SELECT 1 UNION ALL SELECT 2");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
@@ -81,9 +81,9 @@ TEST_CASE("Test UNION/EXCEPT/INTERSECT", "[setop]") {
 }
 
 TEST_CASE("Test UNION in subquery with aliases", "[setop]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO t VALUES (42)"));
@@ -96,9 +96,9 @@ TEST_CASE("Test UNION in subquery with aliases", "[setop]") {
 }
 
 TEST_CASE("Test EXCEPT / INTERSECT", "[setop]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO a VALUES (41), (42), (43)"));
@@ -114,9 +114,9 @@ TEST_CASE("Test EXCEPT / INTERSECT", "[setop]") {
 }
 
 TEST_CASE("Test nested EXCEPT", "[setop]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("create table a (i integer)"));
 	REQUIRE_NO_FAIL(con.Query("create table b(i integer)"));
@@ -131,9 +131,9 @@ TEST_CASE("Test nested EXCEPT", "[setop]") {
 }
 
 TEST_CASE("Test UNION type casting", "[setop]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// type casting in single union
 	result = con.Query("SELECT 1 UNION SELECT 1.0");

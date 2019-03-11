@@ -76,7 +76,7 @@ static int duckdbQuery(void *pConn,       /* Connection created by xConnect */
 			duckdb_column actual_column = result.columns[c];
 			char *buffer = (char *)malloc(BUFSIZ);
 
-			if (duckdb_value_is_null(actual_column, r)) {
+			if (actual_column.nullmask[r]) {
 				snprintf(buffer, BUFSIZ, "%s", "NULL");
 			} else {
 				switch (actual_column.type) {
@@ -111,7 +111,7 @@ static int duckdbQuery(void *pConn,       /* Connection created by xConnect */
 		}
 	}
 	*pnResult = result.column_count * result.row_count;
-	duckdb_destroy_result(result);
+	duckdb_destroy_result(&result);
 
 	return 0;
 }
@@ -136,8 +136,9 @@ static int duckdbFreeResults(void *pConn,     /* Connection created by xConnect 
 
 static int duckdbDisconnect(void *pConn /* Connection created by xConnect */
 ) {
-	duckdb_disconnect((duckdb_connection)pConn);
-	duckdb_close(database);
+	duckdb_connection con = (duckdb_connection)pConn;
+	duckdb_disconnect(&con);
+	duckdb_close(&database);
 	return 0;
 }
 

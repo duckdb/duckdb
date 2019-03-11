@@ -5,9 +5,8 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test joins under setops", "[setops][.]") {
-	unique_ptr<DuckDBResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(a INTEGER);"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test2(b INTEGER);"));
@@ -15,15 +14,16 @@ TEST_CASE("Test joins under setops", "[setops][.]") {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (" + to_string(i) + ")"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (" + to_string(i) + ")"));
 	}
-	result = con.Query("(SELECT * FROM test, test2 WHERE a=b) UNION (SELECT * FROM test,test2 WHERE a=b) ORDER BY 1");
+	auto result =
+	    con.Query("(SELECT * FROM test, test2 WHERE a=b) UNION (SELECT * FROM test,test2 WHERE a=b) ORDER BY 1");
 	REQUIRE_NO_FAIL(result);
-	REQUIRE(result->size() == 1024);
+	REQUIRE(result->collection.count == 1024);
 }
 
 TEST_CASE("Test joins under setops with CTEs", "[setops][.]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 	con.EnableProfiling();
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(a INTEGER);"));
@@ -38,9 +38,9 @@ TEST_CASE("Test joins under setops with CTEs", "[setops][.]") {
 }
 
 TEST_CASE("Test joins under setops with CTEs and aggregations", "[setops][.]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 	con.EnableProfiling();
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(a INTEGER);"));

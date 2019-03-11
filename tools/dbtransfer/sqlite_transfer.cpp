@@ -7,7 +7,7 @@ using namespace std;
 
 namespace sqlite {
 
-bool TransferDatabase(DuckDBConnection &con, sqlite3 *sqlite) {
+bool TransferDatabase(Connection &con, sqlite3 *sqlite) {
 	char *error;
 	// start the SQLite transaction
 	if (sqlite3_exec(sqlite, "BEGIN TRANSACTION", nullptr, nullptr, &error) != SQLITE_OK) {
@@ -17,12 +17,12 @@ bool TransferDatabase(DuckDBConnection &con, sqlite3 *sqlite) {
 	// query the list of tables
 	auto table_list = con.Query("SELECT name, sql FROM sqlite_master();");
 
-	for (size_t i = 0; i < table_list->size(); i++) {
-		auto name = string(table_list->GetValue<const char *>(0, i));
-		auto sql = table_list->GetValue<const char *>(1, i);
+	for (size_t i = 0; i < table_list->collection.count; i++) {
+		auto name = table_list->GetValue(0, i).ToString();
+		auto sql = table_list->GetValue(1, i).ToString();
 
 		// for each table, first create the table in sqlite
-		if (sqlite3_exec(sqlite, sql, nullptr, nullptr, &error) != SQLITE_OK) {
+		if (sqlite3_exec(sqlite, sql.c_str(), nullptr, nullptr, &error) != SQLITE_OK) {
 			return false;
 		}
 
@@ -32,16 +32,16 @@ bool TransferDatabase(DuckDBConnection &con, sqlite3 *sqlite) {
 		// create the prepared statement based on the result
 		stringstream prepared;
 		prepared << "INSERT INTO " << name << " (";
-		for (size_t j = 0; j < result->column_count(); j++) {
+		for (size_t j = 0; j < result->types.size(); j++) {
 			prepared << result->names[j];
-			if (j + 1 != result->column_count()) {
+			if (j + 1 != result->types.size()) {
 				prepared << ",";
 			}
 		}
 		prepared << ") VALUES (";
-		for (size_t j = 0; j < result->column_count(); j++) {
+		for (size_t j = 0; j < result->types.size(); j++) {
 			prepared << "?";
-			if (j + 1 != result->column_count()) {
+			if (j + 1 != result->types.size()) {
 				prepared << ",";
 			}
 		}
@@ -54,36 +54,30 @@ bool TransferDatabase(DuckDBConnection &con, sqlite3 *sqlite) {
 		}
 
 		auto &types = result->collection.types;
-		for (size_t k = 0; k < result->size(); k++) {
+		for (size_t k = 0; k < result->collection.count; k++) {
 			int rc = SQLITE_ERROR;
 			for (size_t j = 0; j < types.size(); j++) {
 				size_t bind_index = j + 1;
-				if (result->ValueIsNull(j, k)) {
+				auto value = result->GetValue(j, k);
+				if (value.is_null) {
 					rc = sqlite3_bind_null(stmt, bind_index);
 				} else {
 					// bind based on the type
 					switch (types[j]) {
 					case TypeId::BOOLEAN:
-						rc = sqlite3_bind_int(stmt, bind_index, (int)result->GetValue<bool>(j, k));
-						break;
 					case TypeId::TINYINT:
-						rc = sqlite3_bind_int(stmt, bind_index, (int)result->GetValue<int8_t>(j, k));
-						break;
 					case TypeId::SMALLINT:
-						rc = sqlite3_bind_int(stmt, bind_index, (int)result->GetValue<int16_t>(j, k));
-						break;
 					case TypeId::INTEGER:
-						rc = sqlite3_bind_int(stmt, bind_index, (int)result->GetValue<int32_t>(j, k));
+						rc = sqlite3_bind_int(stmt, bind_index, (int)value.GetNumericValue());
 						break;
 					case TypeId::BIGINT:
-						rc = sqlite3_bind_int64(stmt, bind_index, (sqlite3_int64)result->GetValue<int64_t>(j, k));
+						rc = sqlite3_bind_int64(stmt, bind_index, (sqlite3_int64)value.GetNumericValue());
 						break;
 					case TypeId::POINTER:
-						rc = sqlite3_bind_int64(stmt, bind_index, (sqlite3_int64)result->GetValue<uint64_t>(j, k));
+						rc = sqlite3_bind_int64(stmt, bind_index, (sqlite3_int64)value.GetNumericValue());
 						break;
 					case TypeId::DATE: {
-						auto date = result->GetValue<date_t>(j, k);
-						auto date_str = Date::ToString(date) + " 00:00:00";
+						auto date_str = value.ToString() + " 00:00:00";
 
 						rc = sqlite3_bind_text(stmt, bind_index, date_str.c_str(), -1, SQLITE_TRANSIENT);
 						break;
@@ -92,11 +86,10 @@ bool TransferDatabase(DuckDBConnection &con, sqlite3 *sqlite) {
 						// TODO
 						throw NotImplementedException("Transferring timestamps is not supported yet");
 					case TypeId::DECIMAL:
-						rc = sqlite3_bind_double(stmt, bind_index, result->GetValue<double>(j, k));
+						rc = sqlite3_bind_double(stmt, bind_index, value.value_.decimal);
 						break;
 					case TypeId::VARCHAR:
-						rc = sqlite3_bind_text(stmt, bind_index, result->GetValue<const char *>(j, k), -1,
-						                       SQLITE_TRANSIENT);
+						rc = sqlite3_bind_text(stmt, bind_index, value.ToString().c_str(), -1, SQLITE_TRANSIENT);
 						break;
 					default:
 						break;
@@ -123,15 +116,15 @@ bool TransferDatabase(DuckDBConnection &con, sqlite3 *sqlite) {
 	return true;
 }
 
-unique_ptr<DuckDBResult> QueryDatabase(vector<TypeId> result_types, sqlite3 *sqlite, std::string query,
-                                       volatile int &interrupt) {
+unique_ptr<QueryResult> QueryDatabase(vector<TypeId> result_types, sqlite3 *sqlite, std::string query,
+                                      volatile int &interrupt) {
 	// prepare the SQL statement
 	sqlite3_stmt *stmt;
 	if (sqlite3_prepare_v2(sqlite, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
 		return nullptr;
 	}
 	// construct the result
-	auto result = make_unique<DuckDBResult>();
+	auto result = make_unique<MaterializedQueryResult>();
 	// figure out the types of the columns
 	// construct the types of the result
 	int col_count = sqlite3_column_count(stmt);
@@ -209,7 +202,7 @@ unique_ptr<DuckDBResult> QueryDatabase(vector<TypeId> result_types, sqlite3 *sql
 		result_chunk.Reset();
 	}
 	sqlite3_finalize(stmt);
-	return result;
+	return move(result);
 }
 
 }; // namespace sqlite

@@ -8,9 +8,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Basic appender tests", "[appender]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// create a table to append to
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));

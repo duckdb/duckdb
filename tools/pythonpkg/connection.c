@@ -19,9 +19,11 @@ int duckdb_connection_init(duckdb_Connection *self, PyObject *args, PyObject *kw
 
 	database = PyBytes_AsString(database_obj);
 
-	Py_BEGIN_ALLOW_THREADS rc = duckdb_open((const char *)database, &self->db);
+	Py_BEGIN_ALLOW_THREADS;
+	rc = duckdb_open((const char *)database, &self->db);
+	Py_END_ALLOW_THREADS;
 
-	Py_END_ALLOW_THREADS Py_DECREF(database_obj);
+	Py_DECREF(database_obj);
 
 	if (rc != DuckDBSuccess) {
 		return -1;
@@ -63,15 +65,13 @@ PyObject *duckdb_connection_cursor(duckdb_Connection *self, PyObject *args, PyOb
 
 PyObject *duckdb_connection_close(duckdb_Connection *self, PyObject *args) {
 	if (self->db) {
-		int rc;
-		Py_BEGIN_ALLOW_THREADS rc = duckdb_disconnect(self->conn) + duckdb_close(self->db);
-		Py_END_ALLOW_THREADS if (rc != DuckDBSuccess) {
-			return NULL;
-		}
+		Py_BEGIN_ALLOW_THREADS;
+		duckdb_disconnect(&self->conn);
+		duckdb_close(&self->db);
+		Py_END_ALLOW_THREADS;
 		self->db = NULL;
 		self->conn = NULL;
 	}
-
 	Py_RETURN_NONE;
 }
 

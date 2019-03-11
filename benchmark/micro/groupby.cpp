@@ -33,11 +33,12 @@ virtual string GetQuery() {
 	return "SELECT i, SUM(j) FROM integers GROUP BY i";
 }
 
-virtual string VerifyResult(DuckDBResult *result) {
-	if (!result->GetSuccess()) {
-		return result->GetErrorMessage();
+virtual string VerifyResult(QueryResult *result) {
+	if (!result->success) {
+		return result->error;
 	}
-	if (result->size() != GROUP_COUNT) {
+	auto &materialized = (MaterializedQueryResult &)*result;
+	if (materialized.collection.count != GROUP_COUNT) {
 		return "Incorrect amount of rows in result";
 	}
 	return string();

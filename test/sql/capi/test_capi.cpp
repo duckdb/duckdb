@@ -1,7 +1,5 @@
-#include "capi_helpers.hpp"
 #include "catch.hpp"
-
-#include <vector>
+#include "duckdb.h"
 
 using namespace std;
 
@@ -14,15 +12,31 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	REQUIRE(duckdb_open(NULL, &database) == DuckDBSuccess);
 	REQUIRE(duckdb_connect(database, &connection) == DuckDBSuccess);
 
-	// select scalar NULL
-	REQUIRE(duckdb_query(connection, "SELECT 42", &result) == DuckDBSuccess);
-	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {42}));
-	duckdb_destroy_result(result);
+	// select scalar value
+	REQUIRE(duckdb_query(connection, "SELECT CAST(42 AS BIGINT)", &result) == DuckDBSuccess);
+	REQUIRE(result.column_count == 1);
+	REQUIRE(result.row_count == 1);
+	REQUIRE(duckdb_value_int64(&result, 0, 0) == 42);
+	REQUIRE(!result.columns[0].nullmask[0]);
+	duckdb_destroy_result(&result);
 
 	// select scalar NULL
 	REQUIRE(duckdb_query(connection, "SELECT NULL", &result) == DuckDBSuccess);
-	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {NULL_NUMERIC}));
-	duckdb_destroy_result(result);
+	REQUIRE(result.column_count == 1);
+	REQUIRE(result.row_count == 1);
+	REQUIRE(result.columns[0].nullmask[0]);
+	duckdb_destroy_result(&result);
+
+	// select scalar string
+	REQUIRE(duckdb_query(connection, "SELECT 'hello'", &result) == DuckDBSuccess);
+	REQUIRE(result.column_count == 1);
+	REQUIRE(result.row_count == 1);
+	auto value = duckdb_value_varchar(&result, 0, 0);
+	string strval = string(value);
+	free((void *)value);
+	REQUIRE(strval == "hello");
+	REQUIRE(!result.columns[0].nullmask[0]);
+	duckdb_destroy_result(&result);
 
 	// multiple insertions
 	REQUIRE(duckdb_query(connection, "CREATE TABLE test (a INTEGER, b INTEGER);", NULL) == DuckDBSuccess);
@@ -31,11 +45,18 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	REQUIRE(duckdb_query(connection, "INSERT INTO test VALUES (13, 22)", NULL) == DuckDBSuccess);
 
 	// NULL selection
-	REQUIRE(duckdb_query(connection, "SELECT a FROM test", &result) == DuckDBSuccess);
-	REQUIRE(CHECK_NUMERIC_COLUMN(result, 0, {11, NULL_NUMERIC, 13}));
-	duckdb_destroy_result(result);
+	REQUIRE(duckdb_query(connection, "SELECT a, b FROM test ORDER BY a", &result) == DuckDBSuccess);
+	// NULL, 11, 13
+	REQUIRE(result.columns[0].nullmask[0]);
+	REQUIRE(duckdb_value_int32(&result, 0, 1) == 11);
+	REQUIRE(duckdb_value_int32(&result, 0, 2) == 13);
+	// 21, 22, 22
+	REQUIRE(duckdb_value_int32(&result, 1, 0) == 21);
+	REQUIRE(duckdb_value_int32(&result, 1, 1) == 22);
+	REQUIRE(duckdb_value_int32(&result, 1, 2) == 22);
+	duckdb_destroy_result(&result);
 
 	// close database
-	REQUIRE(duckdb_disconnect(connection) == DuckDBSuccess);
-	REQUIRE(duckdb_close(database) == DuckDBSuccess);
+	duckdb_disconnect(&connection);
+	duckdb_close(&database);
 }

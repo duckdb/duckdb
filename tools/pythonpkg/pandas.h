@@ -6,6 +6,6 @@
 #include <numpy/arrayobject.h>
 #include <numpy/npy_common.h>
 
-PyObject *PyNullMask_FromCol(duckdb_column *col, size_t t_start, size_t t_end);
-PyObject *PyMaskedArray_FromCol(duckdb_column *col, size_t t_start, size_t t_end, char **return_message);
-PyObject *PyArrayObject_FromCol(duckdb_column *col, size_t t_start, size_t t_end, char **return_message);
+PyObject *PyNullMask_FromCol(duckdb_result *result, size_t col_idx);
+PyObject *PyMaskedArray_FromCol(duckdb_result *result, size_t col_idx, char **return_message);
+PyObject *PyArrayObject_FromCol(duckdb_result *result, size_t col_idx, char **return_message);

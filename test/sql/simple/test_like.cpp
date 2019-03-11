@@ -5,9 +5,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test scalar LIKE statement", "[like]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// scalar like
 	result = con.Query("SELECT 'aaa' LIKE 'bbb'");
@@ -51,9 +51,9 @@ TEST_CASE("Test scalar LIKE statement", "[like]") {
 }
 
 TEST_CASE("Test LIKE statement", "[like]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(s STRING, pat STRING);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('abab', 'ab%'), "

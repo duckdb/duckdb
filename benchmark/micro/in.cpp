@@ -42,9 +42,9 @@ using namespace std;
 	virtual string GetQuery() {                                                                                        \
 		return "SELECT * FROM strings WHERE s IN (" + in_list + ")";                                                   \
 	}                                                                                                                  \
-	virtual string VerifyResult(DuckDBResult *result) {                                                                \
-		if (!result->GetSuccess()) {                                                                                   \
-			return result->GetErrorMessage();                                                                          \
+	virtual string VerifyResult(QueryResult *result) {                                                                 \
+		if (!result->success) {                                                                                        \
+			return result->error;                                                                                      \
 		}                                                                                                              \
 		return string();                                                                                               \
 	}                                                                                                                  \

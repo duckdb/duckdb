@@ -5,9 +5,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test ORDER BY keyword", "[order]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
@@ -16,7 +16,7 @@ TEST_CASE("Test ORDER BY keyword", "[order]") {
 	// simple ORDER BY
 	result = con.Query("SELECT b FROM test ORDER BY a DESC;");
 	REQUIRE(CHECK_COLUMN(result, 0, {22, 21, 22}));
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 
 	result = con.Query("SELECT a, b FROM test ORDER BY a;");
 	REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
@@ -115,9 +115,9 @@ TEST_CASE("Test ORDER BY keyword", "[order]") {
 }
 
 TEST_CASE("Test ORDER BY exceptions", "[order]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
@@ -156,9 +156,9 @@ TEST_CASE("Test ORDER BY exceptions", "[order]") {
 }
 
 TEST_CASE("Test ORDER BY with large table", "[order]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER);"));
 	for (size_t i = 0; i < 10000; i++) {
@@ -166,6 +166,6 @@ TEST_CASE("Test ORDER BY with large table", "[order]") {
 	}
 	result = con.Query("SELECT * FROM test ORDER BY a");
 	for (size_t i = 0; i < 10000; i++) {
-		REQUIRE(result->GetValue<int>(0, i) == i + 1);
+		REQUIRE(result->GetValue<int32_t>(0, i) == i + 1);
 	}
 }

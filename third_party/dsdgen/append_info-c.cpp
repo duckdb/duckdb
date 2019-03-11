@@ -14,7 +14,6 @@ using namespace tpcds;
 
 append_info *append_info_get(void *info_list, int table_id) {
 	auto &append_vector = *((std::vector<std::unique_ptr<tpcds_append_information>> *)info_list);
-	auto arr = (tpcds_append_information *)info_list;
 	return (append_info *)append_vector[table_id].get();
 }
 
@@ -30,7 +29,7 @@ void append_row_end(append_info *info) {
 
 void append_varchar(append_info *info, const char *value) {
 	auto append_info = (tpcds_append_information *)info;
-	if (!nullCheck(append_info->col)) {
+	if (!nullCheck(append_info->appender.CurrentColumn())) {
 		append_info->appender.AppendString(value);
 	} else {
 		append_info->appender.AppendValue(duckdb::Value());

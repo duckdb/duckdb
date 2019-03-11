@@ -196,7 +196,7 @@ unique_ptr<CreateTableInformation> TableCatalogEntry::Deserialize(Deserializer &
 bool TableCatalogEntry::HasDependents(Transaction &transaction) {
 	bool found_table = false;
 
-	catalog->storage.GetDatabase().connection_manager.Scan([&](DuckDBConnection *conn) {
+	catalog->storage.GetDatabase().connection_manager.Scan([&](Connection *conn) {
 		auto &prep_catalog = conn->context.prepared_statements;
 		prep_catalog->Scan(transaction, [&](CatalogEntry *entry) {
 			assert(entry->type == CatalogType::PREPARED_STATEMENT);

@@ -5,9 +5,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test scalar NULL handling", "[nullhandling]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// scalar NULL
 	result = con.Query("SELECT NULL");
@@ -23,9 +23,9 @@ TEST_CASE("Test scalar NULL handling", "[nullhandling]") {
 }
 
 TEST_CASE("Test simple NULL handling", "[nullhandling]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// multiple insertions
 	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
@@ -53,9 +53,9 @@ TEST_CASE("Test simple NULL handling", "[nullhandling]") {
 }
 
 TEST_CASE("Test NULL handling in aggregations", "[nullhandling]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// multiple insertions
 	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");

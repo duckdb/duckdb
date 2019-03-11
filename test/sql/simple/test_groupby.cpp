@@ -5,9 +5,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
@@ -148,9 +148,9 @@ TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
 }
 
 TEST_CASE("Test aliases in group by/aggregation", "[aggregations]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
@@ -218,9 +218,9 @@ TEST_CASE("Test aliases in group by/aggregation", "[aggregations]") {
 }
 
 TEST_CASE("GROUP BY large strings", "[aggregations]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR, b INTEGER);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('helloworld', 22), "
 	                          "('thisisalongstring', 22), ('helloworld', 21)"));
@@ -231,9 +231,9 @@ TEST_CASE("GROUP BY large strings", "[aggregations]") {
 }
 
 TEST_CASE("Aggregate only COUNT STAR", "[aggregations]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (3, 4), (3, 4), (2, 4);"));
@@ -244,9 +244,9 @@ TEST_CASE("Aggregate only COUNT STAR", "[aggregations]") {
 }
 
 TEST_CASE("GROUP BY NULL value", "[aggregations]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (3, 4), (NULL, 4), (2, 4);"));
@@ -257,9 +257,9 @@ TEST_CASE("GROUP BY NULL value", "[aggregations]") {
 }
 
 TEST_CASE("Aggregating from empty table", "[aggregations]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE emptyaggr(i INTEGER);"));
 
@@ -281,9 +281,9 @@ TEST_CASE("Aggregating from empty table", "[aggregations]") {
 }
 
 TEST_CASE("DISTINCT aggregations", "[aggregations]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE distinctagg(i INTEGER, j INTEGER);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO distinctagg VALUES (1,1),(1,1),(2,2), (1,2)"));
@@ -306,9 +306,9 @@ TEST_CASE("DISTINCT aggregations", "[aggregations]") {
 }
 
 TEST_CASE("STDDEV_SAMP aggregations", "[aggregations]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("create table stddev_test(val integer, grp integer)"));
 	REQUIRE_NO_FAIL(con.Query("insert into stddev_test values (42, 1), (43, "
@@ -337,9 +337,9 @@ TEST_CASE("STDDEV_SAMP aggregations", "[aggregations]") {
 }
 
 TEST_CASE("Test aggregations on strings", "[aggregations]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, s VARCHAR);"));

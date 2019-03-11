@@ -13,20 +13,21 @@ atomic<bool> is_finished;
 #define THREAD_COUNT 20
 #define INSERT_COUNT 2000
 
-static void read_from_integers(DuckDB *db, size_t threadnr) {
-	REQUIRE(db);
-	DuckDBConnection con(*db);
-
+static void read_from_integers(DuckDB *db, bool *correct, size_t threadnr) {
+	Connection con(*db);
+	correct[threadnr] = true;
 	while (!is_finished) {
 		auto result = con.Query("SELECT i FROM integers WHERE i = " + to_string(threadnr * 10000));
-		REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(threadnr * 10000)}));
+		if (!CHECK_COLUMN(result, 0, {Value::INTEGER(threadnr * 10000)})) {
+			correct[threadnr] = false;
+		}
 	}
 }
 
 TEST_CASE("Concurrent reads during index creation", "[index][.]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// create a single table to append to
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
@@ -41,9 +42,10 @@ TEST_CASE("Concurrent reads during index creation", "[index][.]") {
 
 	is_finished = false;
 	// now launch a bunch of reading threads
+	bool correct[THREAD_COUNT];
 	thread threads[THREAD_COUNT];
 	for (size_t i = 0; i < THREAD_COUNT; i++) {
-		threads[i] = thread(read_from_integers, &db, i);
+		threads[i] = thread(read_from_integers, &db, correct, i);
 	}
 
 	// create the index
@@ -52,6 +54,7 @@ TEST_CASE("Concurrent reads during index creation", "[index][.]") {
 
 	for (size_t i = 0; i < THREAD_COUNT; i++) {
 		threads[i].join();
+		REQUIRE(correct[i]);
 	}
 
 	// now test that we can probe the index correctly
@@ -60,9 +63,7 @@ TEST_CASE("Concurrent reads during index creation", "[index][.]") {
 }
 
 static void append_to_integers(DuckDB *db, size_t threadnr) {
-	REQUIRE(db);
-	DuckDBConnection con(*db);
-
+	Connection con(*db);
 	Appender appender(*db, DEFAULT_SCHEMA, "integers");
 	for (size_t i = 0; i < INSERT_COUNT; i++) {
 		appender.BeginRow();
@@ -73,9 +74,9 @@ static void append_to_integers(DuckDB *db, size_t threadnr) {
 }
 
 TEST_CASE("Concurrent writes during index creation", "[index][.]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// create a single table to append to
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));

@@ -1,4 +1,4 @@
-SET(DUCKDB_TEST_HELPERS_UNITS expression_helper.cpp capi_helpers.cpp test_helpers.cpp)
+SET(DUCKDB_TEST_HELPERS_UNITS expression_helper.cpp test_helpers.cpp)
 
 add_library(test_helpers STATIC ${DUCKDB_TEST_HELPERS_UNITS})
 

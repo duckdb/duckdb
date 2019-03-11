@@ -5,9 +5,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("SQL Server functions tests", "[sqlserver]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA Sales;"));
@@ -166,14 +166,14 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	result = con.Query("SELECT AVG(VacationHours)AS a, SUM(SickLeaveHours) AS b "
 	                   " FROM HumanResources.Employee WHERE JobTitle LIKE 'Vice President%';");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 2);
+	REQUIRE(result->types.size() == 2);
 	REQUIRE(CHECK_COLUMN(result, 0, {25}));
 	REQUIRE(CHECK_COLUMN(result, 1, {97}));
 
 	result = con.Query("SELECT TerritoryID, AVG(Bonus)as a, SUM(SalesYTD) as b FROM "
 	                   "Sales.SalesPerson GROUP BY TerritoryID order by TerritoryID; ");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 3);
+	REQUIRE(result->types.size() == 3);
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}));
 	REQUIRE(CHECK_COLUMN(
 	    result, 1, {0.00, 4133.3333, 4100.00, 2500.00, 2775.00, 6700.00, 2750.00, 985.00, 75.00, 5650.00, 5150.00}));
@@ -183,13 +183,13 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 
 	result = con.Query("SELECT AVG(DISTINCT ListPrice) FROM Production.Product;");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	// FIXME mismatch, probably down to missing DECIMAL type
 	// REQUIRE(CHECK_COLUMN(result, 0, {437.4042}));
 
 	result = con.Query("SELECT AVG(ListPrice) FROM Production.Product;");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {438.6662}));
 
 	result =
@@ -199,7 +199,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	              "OVER (PARTITION BY TerritoryID ORDER BY YEAR(ModifiedDate) ) AS CumulativeTotal FROM "
 	              "Sales.SalesPerson WHERE TerritoryID IS NULL OR TerritoryID < 5 ORDER BY TerritoryID, SalesYear;");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 6);
+	REQUIRE(result->types.size() == 6);
 	// TODO needs double checking, probably using different adventureworks db
 	//	REQUIRE(CHECK_COLUMN(result, 0, {274, 287, 285, 283, 280, 284, 275, 277, 276, 281}));
 	//	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value(), 1, 1, 1, 2, 3, 4, 4}));
@@ -218,7 +218,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	                   ",SUM(SalesYTD) OVER (ORDER BY YEAR(ModifiedDate) ) AS CumulativeTotal FROM "
 	                   "Sales.SalesPerson WHERE TerritoryID IS NULL OR TerritoryID < 5 ORDER BY SalesYear;");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 6);
+	REQUIRE(result->types.size() == 6);
 	// TODO needs double checking, probably using different adventureworks db
 	//
 	//	REQUIRE(CHECK_COLUMN(result, 0, {274, 275, 276, 277, 280, 281, 283, 284, 287, 285}));
@@ -238,17 +238,17 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	// TODO casting issue
 	result = con.Query("SELECT COUNT(DISTINCT JobTitle) FROM HumanResources.Employee; ");
 	//	REQUIRE(result->success);
-	//	REQUIRE(result->column_count() == 1);
+	//	REQUIRE(result->types.size() == 1);
 	//	REQUIRE(CHECK_COLUMN(result, 0, {67}));
 
 	result = con.Query("SELECT COUNT(*) FROM HumanResources.Employee; ");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {290}));
 
 	result = con.Query("SELECT COUNT(*), AVG(Bonus) FROM Sales.SalesPerson WHERE SalesQuota > 25000; ");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 2);
+	REQUIRE(result->types.size() == 2);
 	REQUIRE(CHECK_COLUMN(result, 0, {14}));
 	REQUIRE(CHECK_COLUMN(result, 1, {3472.1428}));
 
@@ -260,7 +260,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	              "ON eph.BusinessEntityID = edh.BusinessEntityID JOIN HumanResources.Department AS d ON "
 	              "d.DepartmentID = edh.DepartmentID WHERE edh.EndDate IS NULL ORDER BY Name;");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 5);
+	REQUIRE(result->types.size() == 5);
 	REQUIRE(CHECK_COLUMN(result, 0,
 	                     {"Document Control", "Engineering", "Executive", "Facilities and Maintenance", "Finance",
 	                      "Human Resources", "Information Services", "Marketing", "Production", "Production Control",
@@ -282,7 +282,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 
 	result = con.Query("SELECT MAX(TaxRate) FROM Sales.SalesTaxRate; ");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {19.60}));
 
 	result =
@@ -293,7 +293,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	              "ON eph.BusinessEntityID = edh.BusinessEntityID JOIN HumanResources.Department AS d ON "
 	              "d.DepartmentID = edh.DepartmentID WHERE edh.EndDate IS NULL ORDER BY Name;");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 5);
+	REQUIRE(result->types.size() == 5);
 	REQUIRE(CHECK_COLUMN(result, 0,
 	                     {"Document Control", "Engineering", "Executive", "Facilities and Maintenance", "Finance",
 	                      "Human Resources", "Information Services", "Marketing", "Production", "Production Control",
@@ -315,7 +315,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 
 	result = con.Query("SELECT MIN(TaxRate) FROM Sales.SalesTaxRate; ");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 1);
+	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {5.00}));
 
 	result =
@@ -326,7 +326,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	              "ON eph.BusinessEntityID = edh.BusinessEntityID JOIN HumanResources.Department AS d ON "
 	              "d.DepartmentID = edh.DepartmentID WHERE edh.EndDate IS NULL ORDER BY Name;");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 5);
+	REQUIRE(result->types.size() == 5);
 	REQUIRE(CHECK_COLUMN(result, 0,
 	                     {"Document Control", "Engineering", "Executive", "Facilities and Maintenance", "Finance",
 	                      "Human Resources", "Information Services", "Marketing", "Production", "Production Control",
@@ -349,7 +349,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	// TODO unclear what the result is
 	//	result = con.Query("SELECT STDEV(Bonus) FROM Sales.SalesPerson; ");
 	//	REQUIRE(result->success);
-	//	REQUIRE(result->column_count() == 2);
+	//	REQUIRE(result->types.size() == 2);
 	//	REQUIRE(CHECK_COLUMN(result, 0, {398974.27}));
 	//	REQUIRE(CHECK_COLUMN(result, 1, {398450.57}));
 
@@ -358,7 +358,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	result = con.Query("SELECT Color, SUM(ListPrice), SUM(StandardCost) FROM Production.Product WHERE Color IS NOT "
 	                   "NULL AND ListPrice != 0.00 AND Name LIKE 'Mountain%' GROUP BY Color ORDER BY Color; ");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 3);
+	REQUIRE(result->types.size() == 3);
 	REQUIRE(CHECK_COLUMN(result, 0, {"Black", "Silver", "White"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {27404.84, 26462.84, 19.00}));
 	REQUIRE(CHECK_COLUMN(result, 2, {15214.9616, 14665.6792, 6.7926}));
@@ -371,7 +371,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	              "OVER (PARTITION BY TerritoryID ORDER BY YEAR(ModifiedDate) ) AS CumulativeTotal FROM "
 	              "Sales.SalesPerson WHERE TerritoryID IS NULL OR TerritoryID < 5 ORDER BY TerritoryID,SalesYear;");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 6);
+	REQUIRE(result->types.size() == 6);
 	// TODO needs double checking, probably using different adventureworks db
 	//
 	//	REQUIRE(CHECK_COLUMN(result, 0, {274, 287, 285, 283, 280, 284, 275, 277, 276, 281}));
@@ -390,7 +390,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	                   ",SUM(SalesYTD) OVER (ORDER BY YEAR(ModifiedDate) ) AS CumulativeTotal FROM "
 	                   "Sales.SalesPerson WHERE TerritoryID IS NULL OR TerritoryID < 5 ORDER BY SalesYear;");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 6);
+	REQUIRE(result->types.size() == 6);
 	// TODO needs double checking, probably using different adventureworks db
 	//
 	//	REQUIRE(CHECK_COLUMN(result, 0, {274, 275, 276, 277, 280, 281, 283, 284, 287, 285}));
@@ -408,7 +408,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	// TODO not supported
 	//	result = con.Query("SELECT VAR(Bonus) FROM Sales.SalesPerson; ");
 	//	REQUIRE(result->success);
-	//	REQUIRE(result->column_count() == 2);
+	//	REQUIRE(result->types.size() == 2);
 	//	REQUIRE(CHECK_COLUMN(result, 0, {159180469909.18}));
 	//	REQUIRE(CHECK_COLUMN(result, 1, {158762853821.10}));
 
@@ -420,7 +420,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	// FROM " 	                   "HumanResources.vEmployeeDepartmentHistory AS edh INNER JOIN
 	// HumanResources.EmployeePayHistory " "AS e ON e.BusinessEntityID = edh.BusinessEntityID WHERE Department IN
 	// (N'Information " "Services',N'Document Control')
-	// ORDER BY Department, Rate DESC;"); 	REQUIRE(result->success); 	REQUIRE(result->column_count() == 5); 	REQUIRE(
+	// ORDER BY Department, Rate DESC;"); 	REQUIRE(result->success); 	REQUIRE(result->types.size() == 5); 	REQUIRE(
 	//	    CHECK_COLUMN(result, 0,
 	//	                 {"Document Control", "Document Control", "Document Control", "Document Control",
 	//	                  "Document Control", "Information Services", "Information Services", "Information Services",
@@ -441,7 +441,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	result = con.Query(" SELECT Name, ListPrice, FIRST_VALUE(Name) OVER (ORDER BY ListPrice ASC) AS LeastExpensive "
 	                   "FROM Production.Product WHERE ProductSubcategoryID = 37 ORDER BY ListPrice, Name DESC;");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 3);
+	REQUIRE(result->types.size() == 3);
 	REQUIRE(CHECK_COLUMN(result, 0,
 	                     {"Patch Kit/8 Patches", "Road Tire Tube", "Touring Tire Tube", "Mountain Tire Tube",
 	                      "LL Road Tire", "ML Road Tire", "LL Mountain Tire", "Touring Tire", "ML Mountain Tire",
@@ -457,7 +457,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	//	    con.Query(" SELECT JobTitle, LastName, VacationHours, FIRST_VALUE(LastName) OVER (PARTITION BY JobTitle
 	// ORDER " 	              "BY VacationHours ASC ROWS UNBOUNDED PRECEDING ) AS FewestVacationHours FROM
 	// HumanResources.Employee " 	              "AS e INNER JOIN Person.Person AS p ON e.BusinessEntityID =
-	// p.BusinessEntityID ORDER BY JobTitle;"); 	REQUIRE(result->success); 	REQUIRE(result->column_count() == 4);
+	// p.BusinessEntityID ORDER BY JobTitle;"); 	REQUIRE(result->success); 	REQUIRE(result->types.size() == 4);
 	//	REQUIRE(CHECK_COLUMN(result, 0,
 	//	                     {"Accountant", "Accountant", "Accounts Manager", "Accounts Payable Specialist",
 	//	                      "Accounts Payable Specialist", "Accounts Receivable Specialist",
@@ -476,7 +476,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	                   "edh.BusinessEntityID INNER JOIN HumanResources.Employee AS e ON e.BusinessEntityID = "
 	                   "edh.BusinessEntityID WHERE Department IN (N'Information Services',N'Document Control');");
 	//	REQUIRE(result->success);
-	//	REQUIRE(result->column_count() == 5);
+	//	REQUIRE(result->types.size() == 5);
 	//	REQUIRE(
 	//	    CHECK_COLUMN(result, 0,
 	//	                 {"Document Control", "Document Control", "Document Control", "Document Control",
@@ -508,7 +508,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	    "YEAR(QuotaDate) > 2005 AND BusinessEntityID BETWEEN 274 AND 275 ORDER BY BusinessEntityID, SalesYear, "
 	    "Quarter;");
 	//	REQUIRE(result->success);
-	//	REQUIRE(result->column_count() == 6);
+	//	REQUIRE(result->types.size() == 6);
 	//	REQUIRE(CHECK_COLUMN(result, 0, {274, 274, 274, 274, 274, 274, 274, 274, 274, 274,
 	//	                                 275, 275, 275, 275, 275, 275, 275, 275, 275, 275}));
 	//	REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 1, 2, 3, 4, 1, 2, 3, 4, 1, 2}));
@@ -533,7 +533,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	              "1,0) OVER (ORDER BY YEAR(QuotaDate)) AS PreviousQuota FROM Sales.SalesPersonQuotaHistory WHERE "
 	              "BusinessEntityID = 275 and YEAR(QuotaDate) IN ('2005','2006');");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 4);
+	REQUIRE(result->types.size() == 4);
 	//	REQUIRE(CHECK_COLUMN(result, 0, {275, 275, 275, 275, 275, 275}));
 	//	REQUIRE(CHECK_COLUMN(result, 1, {2005, 2005, 2006, 2006, 2006, 2006}));
 	//	REQUIRE(CHECK_COLUMN(result, 2, {367000.00, 556000.00, 502000.00, 550000.00, 1429000.00, 1324000.00}));
@@ -543,7 +543,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	                   "TerritoryName ORDER BY SalesYTD DESC) AS PrevRepSales FROM Sales.vSalesPerson WHERE "
 	                   "TerritoryName IN (N'Northwest', N'Canada') ORDER BY TerritoryName, SalesYTD DESC;");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 4);
+	REQUIRE(result->types.size() == 4);
 	REQUIRE(CHECK_COLUMN(result, 0, {"Canada", "Canada", "Northwest", "Northwest", "Northwest"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {282, 278, 284, 283, 280}));
 	REQUIRE(CHECK_COLUMN(result, 2, {2604540.7172, 1453719.4653, 1576562.1966, 1573012.9383, 1352577.1325}));
@@ -556,7 +556,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	result = con.Query("SELECT b, c, LAG(2*c, b*(SELECT MIN(b) FROM T), "
 	                   "-c/2.0) OVER (ORDER BY a) AS i FROM T;");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 3);
+	REQUIRE(result->types.size() == 3);
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 1, 3, 2, 1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {-3, 4, Value(), 1, Value(), 5}));
 	REQUIRE(CHECK_COLUMN(result, 2, {1, -2, 8, -6, Value(), Value()}));
@@ -568,7 +568,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	              "Sales.SalesPersonQuotaHistory WHERE BusinessEntityID = 275 and YEAR(QuotaDate) IN ('2005','2006');");
 	REQUIRE(result->success);
 	// TODO wrong years
-	//	REQUIRE(result->column_count() == 4);
+	//	REQUIRE(result->types.size() == 4);
 	//	REQUIRE(CHECK_COLUMN(result, 0, {275, 275, 275, 275, 275, 275}));
 	//	REQUIRE(CHECK_COLUMN(result, 1, {2005, 2005, 2006, 2006, 2006, 2006}));
 	//	REQUIRE(CHECK_COLUMN(result, 2, {367000.00, 556000.00, 502000.00, 550000.00, 1429000.00, 1324000.00}));
@@ -578,7 +578,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	                   "TerritoryName ORDER BY SalesYTD DESC) AS NextRepSales FROM Sales.vSalesPerson WHERE "
 	                   "TerritoryName IN (N'Northwest', N'Canada') ORDER BY TerritoryName, BusinessEntityID DESC;");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 4);
+	REQUIRE(result->types.size() == 4);
 	REQUIRE(CHECK_COLUMN(result, 0, {"Canada", "Canada", "Northwest", "Northwest", "Northwest"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {282, 278, 284, 283, 280}));
 	REQUIRE(CHECK_COLUMN(result, 2, {2604540.7172, 1453719.4653, 1576562.1966, 1573012.9383, 1352577.1325}));
@@ -587,7 +587,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	result = con.Query("SELECT b, c, LEAD(2*c, b*(SELECT MIN(b) FROM T), "
 	                   "-c/2.0) OVER (ORDER BY a) AS i FROM T;");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 3);
+	REQUIRE(result->types.size() == 3);
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 1, 3, 2, 1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {-3, 4, Value(), 1, Value(), 5}));
 	// TODO unclear whats going on
@@ -603,7 +603,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	                   "AS e ON e.BusinessEntityID = edh.BusinessEntityID WHERE Department IN (N'Information "
 	                   "Services',N'Document Control') ORDER BY Department, Rate DESC;");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 5);
+	REQUIRE(result->types.size() == 5);
 	// TODO ORDER
 	//	REQUIRE(
 	//	    CHECK_COLUMN(result, 0,
@@ -628,7 +628,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	    "i.Quantity DESC) AS Rank FROM Production.ProductInventory AS i INNER JOIN Production.Product AS p ON "
 	    "i.ProductID = p.ProductID WHERE i.LocationID BETWEEN 3 AND 4 ORDER BY i.LocationID, Quantity DESC; ");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 5);
+	REQUIRE(result->types.size() == 5);
 	REQUIRE(CHECK_COLUMN(result, 0, {494, 495, 493, 496, 492, 495, 496, 493, 492, 494}));
 	REQUIRE(CHECK_COLUMN(result, 1,
 	                     {"Paint - Silver", "Paint - Blue", "Paint - Red", "Paint - Yellow", "Paint - Black",
@@ -640,7 +640,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	result = con.Query(" SELECT BusinessEntityID, Rate, DENSE_RANK() OVER (ORDER BY Rate DESC) AS RankBySalary "
 	                   "FROM HumanResources.EmployeePayHistory order by Rate DESC, BusinessEntityID DESC LIMIT 10;");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 3);
+	REQUIRE(result->types.size() == 3);
 	REQUIRE(
 	    CHECK_COLUMN(result, 0, {1, 25, 273, 2, 234, 263, 7, 234, 287, 285})); // fixed because ambiguity with rank 8
 	REQUIRE(CHECK_COLUMN(result, 1,
@@ -654,7 +654,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	    "Person.Person AS p ON s.BusinessEntityID = p.BusinessEntityID INNER JOIN Person.Address AS a ON a.AddressID = "
 	    "p.BusinessEntityID WHERE TerritoryID IS NOT NULL AND SalesYTD <> 0;");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 8);
+	REQUIRE(result->types.size() == 8);
 	// TODO order with postal code highly underspec
 
 	// FROM https://docs.microsoft.com/en-us/sql/t-sql/functions/ntile-transact-sql?view=sql-server-2017
@@ -665,7 +665,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	              "JOIN Person.Person AS p ON s.BusinessEntityID = p.BusinessEntityID INNER JOIN Person.Address AS a "
 	              "ON a.AddressID = p.BusinessEntityID WHERE TerritoryID IS NOT NULL AND SalesYTD <> 0; ");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 5);
+	REQUIRE(result->types.size() == 5);
 	REQUIRE(CHECK_COLUMN(result, 0,
 	                     {"Linda", "Jae", "Michael", "Jillian", "Ranjit", "José", "Shu", "Tsvi", "Rachel", "Tete",
 	                      "David", "Garrett", "Lynn", "Pamela"}));
@@ -686,7 +686,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	    "Person.Person AS p ON s.BusinessEntityID = p.BusinessEntityID INNER JOIN Person.Address AS a ON a.AddressID = "
 	    "p.BusinessEntityID WHERE TerritoryID IS NOT NULL AND SalesYTD <> 0; ");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 5);
+	REQUIRE(result->types.size() == 5);
 	REQUIRE(CHECK_COLUMN(result, 0,
 	                     {"Linda", "Michael", "Jillian", "Tsvi", "Garrett", "Pamela", "Jae", "Ranjit", "José", "Shu",
 	                      "Rachel", "Tete", "David", "Lynn"}));
@@ -710,7 +710,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	              "p ON i.ProductID = p.ProductID WHERE i.LocationID BETWEEN 3 AND 4 ORDER BY i.LocationID, i.Quantity "
 	              "DESC, i.ProductID; ");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 5);
+	REQUIRE(result->types.size() == 5);
 	REQUIRE(CHECK_COLUMN(result, 0, {494, 495, 493, 496, 492, 495, 496, 493, 492, 494}));
 	REQUIRE(CHECK_COLUMN(result, 1,
 	                     {"Paint - Silver", "Paint - Blue", "Paint - Red", "Paint - Yellow", "Paint - Black",
@@ -724,7 +724,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	                   "FROM HumanResources.EmployeePayHistory AS eph2 WHERE eph1.BusinessEntityID = "
 	                   "eph2.BusinessEntityID) ORDER BY BusinessEntityID LIMIT 10;");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 3);
+	REQUIRE(result->types.size() == 3);
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}));
 	REQUIRE(CHECK_COLUMN(result, 1,
 	                     {125.50, 63.4615, 43.2692, 29.8462, 32.6923, 32.6923, 50.4808, 40.8654, 40.8654, 42.4808}));
@@ -736,7 +736,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	result = con.Query(" SELECT ROW_NUMBER() OVER(ORDER BY SalesYTD DESC) AS Row, FirstName, LastName, SalesYTD FROM "
 	                   "Sales.vSalesPerson WHERE TerritoryName IS NOT NULL AND SalesYTD <> 0;");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 4);
+	REQUIRE(result->types.size() == 4);
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}));
 	REQUIRE(CHECK_COLUMN(result, 1,
 	                     {"Linda", "Jae", "Michael", "Jillian", "Ranjit", "José", "Shu", "Tsvi", "Rachel", "Tete",
@@ -752,7 +752,7 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	                   "OVER(PARTITION BY TerritoryName ORDER BY SalesYTD DESC) AS Row FROM Sales.vSalesPerson WHERE "
 	                   "TerritoryName IS NOT NULL AND SalesYTD <> 0 ORDER BY TerritoryName, SalesYTD DESC;");
 	REQUIRE(result->success);
-	REQUIRE(result->column_count() == 5);
+	REQUIRE(result->types.size() == 5);
 	REQUIRE(CHECK_COLUMN(result, 0,
 	                     {"Lynn", "José", "Garrett", "Jillian", "Ranjit", "Rachel", "Michael", "Tete", "David",
 	                      "Pamela", "Tsvi", "Linda", "Shu", "Jae"}));

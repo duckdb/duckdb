@@ -6,9 +6,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test filter pushdown", "[filterpushdown]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 	con.EnableProfiling();
 
@@ -121,9 +121,9 @@ TEST_CASE("Test filter pushdown", "[filterpushdown]") {
 }
 
 TEST_CASE("Test filter pushdown with more data", "[filterpushdown][.]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableProfiling();
 
 	// in this test we run queries that will take a long time without filter pushdown, but are almost instant with
@@ -310,6 +310,12 @@ TEST_CASE("Test filter pushdown with more data", "[filterpushdown][.]") {
 	                   "WHERE tbl2.i>10 AND tbl1.k>=500 AND tbl2.k<7000 AND tbl2.k<=6000 AND tbl2.k<>8000 AND "
 	                   "tbl1.i<>4000 AND tbl1.i=tbl2.i AND tbl1.i=tbl2.k AND tbl1.i=tbl1.k AND tbl1.i=5000;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	// // filter equivalence with expressions
+	// result = con.Query("SELECT COUNT(*) FROM vals1, vals2 WHERE i+1=5001 AND j=l AND k=i AND l+1=5001");
+	// REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	// result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2 WHERE i+1=5000 AND k+1=5000) tbl1, (SELECT *
+	// FROM vals1, vals2) tbl2 WHERE tbl1.i=tbl2.i AND tbl1.k=tbl2.k;"); REQUIRE(CHECK_COLUMN(result, 0, {0}));
 	return;
 
 	// greater than/less than should also be transitive
@@ -333,12 +339,12 @@ TEST_CASE("Test filter pushdown with more data", "[filterpushdown][.]") {
 	cout << con.GetProfilingInformation();
 
 	// these more advanced cases we don't support yet
-	// // filter equivalence with expressions
+	// filter equivalence with expressions
 	// result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2
-	// WHERE tbl2.k+1=5001 AND tbl2.k<>5000;"); REQUIRE(CHECK_COLUMN(result, 0, {0}));
-	// // IN list
-	// result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2
-	// WHERE tbl2.k IN (5000, 5001, 5002) AND tbl2.k<5000;"); REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	// WHERE tbl2.k+1=5001 AND tbl2.k<>5000;"); REQUIRE(CHECK_COLUMN(result, 0, {0})); SELECT COUNT(*) FROM vals1 v1,
+	// vals1 v2 WHERE v1.i+v2.i=10; IN list result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1,
+	// (SELECT * FROM vals1, vals2) tbl2 WHERE tbl2.k IN (5000, 5001, 5002) AND tbl2.k<5000;");
+	// REQUIRE(CHECK_COLUMN(result, 0, {0}));
 	// // CASE expression
 	// result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2
 	// WHERE tbl2.k<5000 AND CASE WHEN (tbl2.k>5000) THEN (tbl2.k=5001) ELSE (tbl2.k=5000) END;");
@@ -349,9 +355,9 @@ TEST_CASE("Test filter pushdown with more data", "[filterpushdown][.]") {
 }
 
 TEST_CASE("Test moving/duplicating conditions", "[filterpushdown][.]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableProfiling();
 
 	// in this test we run queries that will take a long time without filter pushdown, but are almost instant with

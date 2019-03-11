@@ -9,9 +9,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test TPC-H SF0", "[tpch]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	tpch::dbgen(0, db);
 
@@ -21,12 +21,12 @@ TEST_CASE("Test TPC-H SF0", "[tpch]") {
 }
 
 TEST_CASE("Test TPC-H SF0.1", "[tpch][.]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	double sf = 0.1;
 
 	// generate the TPC-H data for SF 0.1
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	tpch::dbgen(sf, db);
 
 	con.EnableProfiling();

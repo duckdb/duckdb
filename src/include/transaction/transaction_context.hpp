@@ -45,9 +45,14 @@ public:
 		return auto_commit;
 	}
 
+	void Invalidate() {
+		is_invalidated = true;
+	}
+
 private:
 	TransactionManager &transaction_manager;
 	bool auto_commit;
+	bool is_invalidated;
 
 	Transaction *current_transaction;
 

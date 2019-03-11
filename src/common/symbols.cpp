@@ -9,8 +9,10 @@
 #include "execution/column_binding_resolver.hpp"
 #include "execution/join_hashtable.hpp"
 #include "execution/physical_operator.hpp"
+#include "main/materialized_query_result.hpp"
 #include "main/query_profiler.hpp"
-#include "main/result.hpp"
+#include "main/query_result.hpp"
+#include "main/stream_query_result.hpp"
 #include "optimizer/join_order_optimizer.hpp"
 #include "optimizer/rule.hpp"
 #include "parser/constraint.hpp"
@@ -30,7 +32,9 @@ template class std::unique_ptr<CatalogEntry>;
 template class std::unique_ptr<Expression>;
 template class std::unique_ptr<BindContext>;
 template class std::unique_ptr<char[]>;
-template class std::unique_ptr<DuckDBResult>;
+template class std::unique_ptr<QueryResult>;
+template class std::unique_ptr<MaterializedQueryResult>;
+template class std::unique_ptr<StreamQueryResult>;
 template class std::unique_ptr<LogicalOperator>;
 template class std::unique_ptr<PhysicalOperator>;
 template class std::unique_ptr<PhysicalOperatorState>;

@@ -5,9 +5,9 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test basic DATE functionality", "[date]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 	con.EnableQueryVerification();
 
 	// create and insert into table
@@ -48,9 +48,9 @@ TEST_CASE("Test basic DATE functionality", "[date]") {
 }
 
 TEST_CASE("Test out of range/incorrect date formats", "[date]") {
-	unique_ptr<DuckDBResult> result;
+	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	DuckDBConnection con(db);
+	Connection con(db);
 
 	// create and insert into table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE dates(i DATE)"));

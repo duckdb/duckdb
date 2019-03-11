@@ -50,7 +50,7 @@ unique_ptr<Expression> ParseExpression(string expression) {
 // 	return move(ApplyLogicalRule(rewriter, move(op))->expressions[0]);
 // }
 
-unique_ptr<Planner> ParseLogicalPlan(DuckDBConnection &con, string query) {
+unique_ptr<Planner> ParseLogicalPlan(Connection &con, string query) {
 	DuckDB db;
 	ClientContext context(db);
 	Parser parser(context);
