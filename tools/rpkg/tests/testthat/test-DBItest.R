@@ -2,16 +2,15 @@ DBItest::make_context(duckdb(), list(), tweaks = DBItest::tweaks(), name = "duck
 DBItest::test_all(c(
 	"package_name", # wontfix
 	"constructor", # wontfix
-	
-	"send_query_only_one_result_set",
-	"send_statement_only_one_result_set",
-	"send_query_stale_warning",
-	"send_statement_stale_warning",
+	"send_query_only_one_result_set", # wontfix
+	"send_statement_only_one_result_set", # wontfix
+	"send_query_stale_warning", # wontfix
+	"send_statement_stale_warning", # wontfix
+
 	"fetch_no_return_value",
 	"get_query_n_bad",
 	"get_query_good_after_bad_n",
 	"data_character",
-	"data_numeric",
 	"has_completed_statement",
 	"row_count_query",
 	"row_count_statement",
@@ -28,7 +27,7 @@ DBItest::test_all(c(
   "data_date_current_typed",
   "data_timestamp_typed",
   "data_timestamp_current_typed",
-  "data_64_bit_numeric",
-  "data_64_bit_numeric_warning",
-  "data_64_bit_lossless"
+
+  "data_64_bit_numeric_warning",  # not now
+  "data_64_bit_lossless"  # not now
 ))

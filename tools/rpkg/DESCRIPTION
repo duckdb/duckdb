@@ -3,10 +3,10 @@ Title: DBI package for DuckDB
 Version: 0.1
 Authors@R: c(
     person("Hannes", "M\u00fchleisen", role = c("aut", "cre"), email = "hannes@cwi.nl", comment = c(ORCID = "0000-0001-8552-0029")),
-    person("Mark", "Raasveldt", role = "ctb"))
+    person("Mark", "Raasveldt", role = "aut"))
 Description: TODO
 Depends: 
-    R (>= 3.0.0)
+    R (>= 3.5.0)
 License: MPL
 LazyData: true
 Encoding: UTF-8

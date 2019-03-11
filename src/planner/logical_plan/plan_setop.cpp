@@ -26,7 +26,9 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CastSetOpToTypes(vector<TypeId
 		for (size_t i = 0; i < target_types.size(); i++) {
 			if (node->expressions[i]->return_type != target_types[i]) {
 				// differing types, have to add a cast
+				string alias = node->expressions[i]->alias;
 				node->expressions[i] = make_unique<CastExpression>(target_types[i], move(node->expressions[i]));
+				node->expressions[i]->alias = alias;
 			}
 		}
 		return op;
