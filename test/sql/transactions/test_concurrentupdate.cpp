@@ -129,16 +129,20 @@ static void write_random_numbers_to_account(DuckDB *db, bool *correct, size_t nr
 		if (!con.Query("BEGIN TRANSACTION")->success) {
 			correct[nr] = false;
 		}
-		if (!con.Query("UPDATE accounts SET money = money + " + to_string(i * 2) + " WHERE id = " + to_string(nr))->success) {
+		if (!con.Query("UPDATE accounts SET money = money + " + to_string(i * 2) + " WHERE id = " + to_string(nr))
+		         ->success) {
 			correct[nr] = false;
 		}
-		if (!con.Query("UPDATE accounts SET money = money - " + to_string(i) + " WHERE id = " + to_string(nr))->success) {
+		if (!con.Query("UPDATE accounts SET money = money - " + to_string(i) + " WHERE id = " + to_string(nr))
+		         ->success) {
 			correct[nr] = false;
 		}
-		if (!con.Query("UPDATE accounts SET money = money - " + to_string(i * 2) + " WHERE id = " + to_string(nr))->success) {
+		if (!con.Query("UPDATE accounts SET money = money - " + to_string(i * 2) + " WHERE id = " + to_string(nr))
+		         ->success) {
 			correct[nr] = false;
 		}
-		if (!con.Query("UPDATE accounts SET money = money + " + to_string(i) + " WHERE id = " + to_string(nr))->success) {
+		if (!con.Query("UPDATE accounts SET money = money + " + to_string(i) + " WHERE id = " + to_string(nr))
+		         ->success) {
 			correct[nr] = false;
 		}
 		// we test both commit and rollback

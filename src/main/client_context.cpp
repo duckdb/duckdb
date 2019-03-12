@@ -123,6 +123,7 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, un
 		break;
 	}
 
+	profiler.StartPhase("planner");
 	Planner planner(*this);
 	planner.CreatePlan(move(statement));
 	if (!planner.plan) {
@@ -133,6 +134,7 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, un
 		// return an empty result
 		return make_unique<MaterializedQueryResult>();
 	}
+	profiler.EndPhase();
 
 	auto plan = move(planner.plan);
 	// extract the result column names from the plan
@@ -140,9 +142,11 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, un
 #ifdef DEBUG
 	if (enable_optimizer) {
 #endif
+		profiler.StartPhase("optimizer");
 		Optimizer optimizer(planner.binder, *this);
 		plan = optimizer.Optimize(move(plan));
 		assert(plan);
+		profiler.EndPhase();
 #ifdef DEBUG
 	}
 #endif
@@ -156,10 +160,12 @@ unique_ptr<QueryResult> ClientContext::ExecuteStatementInternal(string query, un
 		}
 	}
 
+	profiler.StartPhase("physical_planner");
 	// now convert logical query plan into a physical query plan
 	PhysicalPlanGenerator physical_planner(*this);
 	physical_planner.CreatePlan(move(plan));
 	assert(physical_planner.plan);
+	profiler.EndPhase();
 
 	// store the physical plan in the context for calls to Fetch()
 	execution_context.physical_plan = move(physical_planner.plan);

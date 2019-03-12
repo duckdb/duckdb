@@ -374,23 +374,29 @@ TEST_CASE("Test filter pushdown with more advanced expressions", "[filterpushdow
 	REQUIRE_NO_FAIL(con.Query("COMMIT;"));
 
 	// x + 1 = 5001
-    result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i+1=5001 AND tbl1.i<>5000;");
+	result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 "
+	                   "WHERE tbl1.i+1=5001 AND tbl1.i<>5000;");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 	// x - 1 = 4999
-    result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i-1=4999 AND tbl1.i<>5000;");
+	result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 "
+	                   "WHERE tbl1.i-1=4999 AND tbl1.i<>5000;");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 	// x * 2 = 10000
-    result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i*2=10000 AND tbl1.i<>5000;");
+	result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 "
+	                   "WHERE tbl1.i*2=10000 AND tbl1.i<>5000;");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 	// // x * 2 = 9999 should always return false (as 9999 % 2 != 0, it's not cleanly divisible)
-    // result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i*2=9999;");
-	// REQUIRE(CHECK_COLUMN(result, 0, {0}));
-	// x / 2 = 2500
-    // result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i/2=2500 AND tbl1.i<>5000;");
-	// REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	// result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2
+	// WHERE tbl1.i*2=9999;"); REQUIRE(CHECK_COLUMN(result, 0, {0})); x / 2 = 2500 result = con.Query("SELECT COUNT(*)
+	// FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i/2=2500 AND
+	// tbl1.i<>5000;"); REQUIRE(CHECK_COLUMN(result, 0, {0})); -x=-5000
+	result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 "
+	                   "WHERE -tbl1.i=-5000 AND tbl1.i<>5000;");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 	return;
 	// x + (1 + 1) = 5002
-    result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i+(1+1)=5002 AND tbl1.i<>5000;");
+	result = con.Query("SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 "
+	                   "WHERE tbl1.i+(1+1)=5002 AND tbl1.i<>5000;");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 }
 

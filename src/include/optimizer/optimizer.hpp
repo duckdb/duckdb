@@ -17,10 +17,11 @@ class Binder;
 
 class Optimizer {
 public:
-	Optimizer(Binder &binder, ClientContext &client_context);
+	Optimizer(Binder &binder, ClientContext &context);
 
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
 
+	ClientContext &context;
 	Binder &binder;
 	ExpressionRewriter rewriter;
 };

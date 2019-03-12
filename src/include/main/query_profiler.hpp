@@ -65,6 +65,9 @@ public:
 	void StartQuery(string query);
 	void EndQuery();
 
+	void StartPhase(string phase);
+	void EndPhase();
+
 	void StartOperator(PhysicalOperator *phys_op);
 	void EndOperator(DataChunk &chunk);
 
@@ -86,5 +89,9 @@ private:
 	Profiler op;
 	std::unordered_map<PhysicalOperator *, TreeNode *> tree_map;
 	std::stack<PhysicalOperator *> execution_stack;
+
+	Profiler phase_profiler;
+	std::unordered_map<string, double> phase_timings;
+	std::vector<string> phase_stack;
 };
 } // namespace duckdb

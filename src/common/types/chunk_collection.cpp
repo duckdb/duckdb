@@ -332,8 +332,8 @@ bool ChunkCollection::Equals(ChunkCollection &other) {
 		return false;
 	}
 	// if count is equal amount of chunks should be equal
-	for(size_t row_idx = 0; row_idx < count; row_idx++) {
-		for(size_t col_idx = 0; col_idx < column_count(); col_idx++) {
+	for (size_t row_idx = 0; row_idx < count; row_idx++) {
+		for (size_t col_idx = 0; col_idx < column_count(); col_idx++) {
 			auto lvalue = GetValue(col_idx, row_idx);
 			auto rvalue = other.GetValue(col_idx, row_idx);
 			if (lvalue != rvalue) {
@@ -341,5 +341,5 @@ bool ChunkCollection::Equals(ChunkCollection &other) {
 			}
 		}
 	}
-	return true;	
+	return true;
 }

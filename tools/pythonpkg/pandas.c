@@ -77,7 +77,7 @@ wrapup:
 #define BAT_TO_NP(bat, mtpe, nptpe)                                                                                    \
 	{                                                                                                                  \
 		vararray = PyArray_EMPTY(1, elements, nptpe, 0);                                                               \
-		memcpy(PyArray_DATA((PyArrayObject *)vararray), col.data, sizeof(mtpe) * (result->row_count));                  \
+		memcpy(PyArray_DATA((PyArrayObject *)vararray), col.data, sizeof(mtpe) * (result->row_count));                 \
 	}
 
 PyObject *PyArrayObject_FromCol(duckdb_result *result, size_t col_idx, char **return_message) {

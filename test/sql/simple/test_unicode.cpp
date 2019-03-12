@@ -27,4 +27,3 @@ TEST_CASE("Test unicode strings", "[unicode]") {
 	result = con.Query("SELECT length(s) FROM emojis ORDER BY id");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 3}));
 }
-
