@@ -148,8 +148,9 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 				const char **source = (const char **)chunk->data[col].data;
 				for (size_t k = 0; k < chunk->data[col].count; k++) {
 					if (!chunk->data[col].nullmask[k]) {
-						target[row++] = strdup(source[k]);
+						target[row] = strdup(source[k]);
 					}
+					row++;
 				}
 			}
 			break;
@@ -160,14 +161,14 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 			for (auto &chunk : result->collection.chunks) {
 				date_t *source = (date_t *)chunk->data[col].data;
 				for (size_t k = 0; k < chunk->data[col].count; k++) {
-					if (chunk->data[col].nullmask[k]) {
+					if (!chunk->data[col].nullmask[k]) {
 						int32_t year, month, day;
 						Date::Convert(source[k], year, month, day);
 						target[row].year = year;
 						target[row].month = month;
 						target[row].day = day;
-						row++;
 					}
+					row++;
 				}
 			}
 			break;

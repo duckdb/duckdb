@@ -52,4 +52,11 @@ TEST_CASE("Test move constants", "[optimizer]") {
 	input = "X*3>3";
 	expected_output = "X>1";
 	REQUIRE(helper.VerifyRewrite(input, expected_output));
+	// multiplication by negative value
+	input = "-X=-5";
+	expected_output = "X=5";
+	REQUIRE(helper.VerifyRewrite(input, expected_output));
+	input = "-X<-5";
+	expected_output = "X>5";
+	REQUIRE(helper.VerifyRewrite(input, expected_output));
 }
