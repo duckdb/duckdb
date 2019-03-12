@@ -309,7 +309,8 @@ class TransactionException : public Exception {
 	TransactionException() = delete;
 
 public:
-	TransactionException(string msg) : Exception(ExceptionType::TRANSACTION, msg) {
+	TransactionException(string msg, ...) : Exception(ExceptionType::TRANSACTION, msg) {
+		FORMAT_CONSTRUCTOR(msg);
 	}
 };
 

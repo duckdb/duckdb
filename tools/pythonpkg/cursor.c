@@ -265,28 +265,28 @@ static const char cursor_doc[] = PyDoc_STR("DuckDB database cursor class.");
 
 PyTypeObject duckdb_CursorType = {
     PyVarObject_HEAD_INIT(NULL, 0) "" MODULE_NAME ".Cursor", /* tp_name */
-    sizeof(duckdb_Cursor),                                /* tp_basicsize */
-    0,                                                    /* tp_itemsize */
-    (destructor)duckdb_cursor_dealloc,                    /* tp_dealloc */
-    0,                                                    /* tp_print */
-    0,                                                    /* tp_getattr */
-    0,                                                    /* tp_setattr */
-    0,                                                    /* tp_reserved */
-    0,                                                    /* tp_repr */
-    0,                                                    /* tp_as_number */
-    0,                                                    /* tp_as_sequence */
-    0,                                                    /* tp_as_mapping */
-    0,                                                    /* tp_hash */
-    0,                                                    /* tp_call */
-    0,                                                    /* tp_str */
-    0,                                                    /* tp_getattro */
-    0,                                                    /* tp_setattro */
-    0,                                                    /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,             /* tp_flags */
-    cursor_doc,                                           /* tp_doc */
-    0,                                                    /* tp_traverse */
-    0,                                                    /* tp_clear */
-    0,                                                    /* tp_richcompare */
+    sizeof(duckdb_Cursor),                                   /* tp_basicsize */
+    0,                                                       /* tp_itemsize */
+    (destructor)duckdb_cursor_dealloc,                       /* tp_dealloc */
+    0,                                                       /* tp_print */
+    0,                                                       /* tp_getattr */
+    0,                                                       /* tp_setattr */
+    0,                                                       /* tp_reserved */
+    0,                                                       /* tp_repr */
+    0,                                                       /* tp_as_number */
+    0,                                                       /* tp_as_sequence */
+    0,                                                       /* tp_as_mapping */
+    0,                                                       /* tp_hash */
+    0,                                                       /* tp_call */
+    0,                                                       /* tp_str */
+    0,                                                       /* tp_getattro */
+    0,                                                       /* tp_setattro */
+    0,                                                       /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,                /* tp_flags */
+    cursor_doc,                                              /* tp_doc */
+    0,                                                       /* tp_traverse */
+    0,                                                       /* tp_clear */
+    0,                                                       /* tp_richcompare */
     0,                 // offsetof(duckdb_Cursor, in_weakreflist),              /* tp_weaklistoffset */
     PyObject_SelfIter, /* tp_iter */
     (iternextfunc)duckdb_cursor_iternext, /* tp_iternext */

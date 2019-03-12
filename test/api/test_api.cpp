@@ -31,6 +31,18 @@ TEST_CASE("Test using connection after database is gone", "[api]") {
 	REQUIRE_FAIL(conn->Query("SELECT 42"));
 }
 
+TEST_CASE("Test destroying connections with open transactions", "[api]") {
+	auto db = make_unique<DuckDB>(nullptr);
+	{
+		Connection con(*db);
+		con.Query("BEGIN TRANSACTION");
+		con.Query("CREATE TABLE test(i INTEGER);");
+	}
+
+	auto conn = make_unique<Connection>(*db);
+	REQUIRE_NO_FAIL(conn->Query("CREATE TABLE test(i INTEGER)"));
+}
+
 static void long_running_query(Connection *conn, bool *correct) {
 	*correct = true;
 	auto result = conn->Query("SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4, integers i5, "

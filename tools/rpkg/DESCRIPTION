@@ -1,0 +1,25 @@
+Package: duckdb
+Title: DBI package for DuckDB
+Version: 0.1
+Author: Hannes Muehleisen <hannes@cwi.nl>
+Maintainer: Hannes Muehleisen <hannes@cwi.nl>
+Description: TODO
+Depends: 
+    R (>= 3.5.0)
+License: MPL
+LazyData: true
+Encoding: UTF-8
+Imports: 
+    DBI,
+    testthat,
+    methods,
+    utils
+Suggests: 
+    DBItest
+GitHub: https://github.com/cwida/duckdb
+Collate: 
+    'duckdb.R'
+    'Driver.R'
+    'Connection.R'
+    'Result.R'
+RoxygenNote: 6.1.1
