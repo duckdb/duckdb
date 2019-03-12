@@ -1,4 +1,4 @@
-DBItest::make_context(duckdb(), list(), tweaks = DBItest::tweaks(), name = "duckdb")
+DBItest::make_context(duckdb(), list(), tweaks = DBItest::tweaks(omit_blob_tests=TRUE), name = "duckdb")
 DBItest::test_all(c(
 	"package_name", # wontfix
 	"constructor", # wontfix
@@ -11,8 +11,11 @@ DBItest::test_all(c(
 	"get_query_n_bad",
 	"get_query_good_after_bad_n",
 	"data_character",
+		"data_logical", # casting NULL issue
+
 	"has_completed_statement",
 	"row_count_statement",
+
 	"data_timestamp",
 	"data_time_current",
 	"data_time",

@@ -35,7 +35,7 @@ setMethod(
     dbExecute(dbObj, "SELECT 1")
     valid <- TRUE
       }, error=function(c){})
-  return(valid)
+  valid
   })
 
 #' @rdname DBI
@@ -49,7 +49,7 @@ setMethod(
     }
    .Call(duckdb_disconnect_R, conn@conn_ref)
     # TODO: Free resources
-    return(invisible(TRUE))
+    invisible(TRUE)
   })
 
 #' @rdname DBI
@@ -82,9 +82,21 @@ setMethod(
 setMethod(
   "dbDataType", "duckdb_connection",
   function(dbObj, obj, ...) {
-    tryCatch(
-      getMethod("dbDataType", "DBIObject", asNamespace("DBI"))(dbObj, obj, ...),
-      error = function(e) testthat::skip("Not yet implemented: dbDataType(Connection)"))
+
+  if (is.null(obj)) stop("NULL parameter")
+  if (is.data.frame(obj)) {
+    return (vapply(obj, function(x) dbDataType(dbObj, x), FUN.VALUE = "character"))
+  }
+#  else if (int64 && inherits(obj, "integer64")) "BIGINT"
+  else if (inherits(obj, "Date")) "DATE"
+  else if (inherits(obj, "difftime")) "TIME"
+  else if (is.logical(obj)) "BOOLEAN"
+  else if (is.integer(obj)) "INTEGER"
+  else if (is.numeric(obj)) "DOUBLE"
+  else if (inherits(obj, "POSIXt")) "TIMESTAMP"
+  else if (is.list(obj) && all(vapply(obj, typeof, FUN.VALUE = "character") == "raw" || is.na(obj))) "BLOB"
+  else "STRING"
+
   })
 
 #' @rdname DBI
@@ -126,7 +138,7 @@ setMethod(
 setMethod(
   "dbReadTable", c("duckdb_connection", "character"),
   function(conn, name, ...) {
-    getMethod("dbReadTable", "DBIConnection", asNamespace("DBI"))(conn, name, ...)
+    getMethod("dbReadTable", c("DBIConnection", "character"), asNamespace("DBI"))(conn, name, ...)
   })
 
 #' @rdname DBI
@@ -135,7 +147,7 @@ setMethod(
 setMethod(
   "dbListTables", "duckdb_connection",
   function(conn, ...) {
-    return(dbGetQuery(conn, "SELECT name FROM sqlite_master() WHERE type='table' ORDER BY name")[[1]])
+    dbGetQuery(conn, "SELECT name FROM sqlite_master() WHERE type='table' ORDER BY name")[[1]]
   })
 
 #' @rdname DBI
@@ -146,7 +158,7 @@ setMethod(
   function(conn, name, ...) {
     sql_name <- dbQuoteString(conn, x = name, ...)
     query <- sqlInterpolate(conn, "SELECT COUNT(*) = 1 FROM sqlite_master() WHERE type='table' AND name=?", sql_name)
-    return(dbGetQuery(conn, query)[[1]])
+    dbGetQuery(conn, query)[[1]]
   })
 
 #' @rdname DBI
@@ -157,7 +169,7 @@ setMethod(
   function(conn, name, ...) {
     sql_name <- dbQuoteString(conn, x = name, ...)
     query <- sqlInterpolate(conn, "SELECT name FROM pragma_table_info(?) ORDER BY cid", sql_name)
-    return(dbGetQuery(conn, query)[[1]])
+    dbGetQuery(conn, query)[[1]]
   })
 
 #' @rdname DBI
@@ -169,7 +181,7 @@ setMethod(
     sql_name <- dbQuoteIdentifier(conn, x = name, ...)
     query <- sqlInterpolate(conn, "DROP TABLE ?", sql_name)
     dbExecute(conn, query)
-    return(invisible(TRUE))
+    invisible(TRUE)
   })
 
 #' @rdname DBI
@@ -188,7 +200,7 @@ setMethod(
   "dbBegin", "duckdb_connection",
   function(conn, ...) {
    dbExecute(conn, "BEGIN TRANSACTION")
-   return(invisible(TRUE))
+   invisible(TRUE)
   })
 
 #' @rdname DBI
@@ -198,7 +210,7 @@ setMethod(
   "dbCommit", "duckdb_connection",
   function(conn, ...) {
     dbExecute(conn, "COMMIT")
-    return(invisible(TRUE))
+    invisible(TRUE)
   })
 
 #' @rdname DBI
@@ -208,5 +220,5 @@ setMethod(
   "dbRollback", "duckdb_connection",
   function(conn, ...) {
     dbExecute(conn, "ROLLBACK")
-    return(invisible(TRUE))
+    invisible(TRUE)
   })
