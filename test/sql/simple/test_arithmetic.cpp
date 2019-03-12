@@ -37,6 +37,9 @@ TEST_CASE("Test arithmetic statements", "[arithmetic]") {
 	// i*2=5 (this comparison is always FALSE, except if i is NULL in which case it is NULL)
 	result = con.Query("SELECT i*2=5 FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), false, false, false}));
+	// i*0=5
+	result = con.Query("SELECT i*0=5 FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), false, false, false}));
 	// subtraction is ordered
 	// i-2=1 => i=3
 	result = con.Query("SELECT i-2=1, 1=i-2 FROM integers ORDER BY i");
