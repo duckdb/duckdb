@@ -63,7 +63,6 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 		UNPROTECT(1); // names
 
 		for (size_t col_idx = 0; col_idx < ncols; col_idx++) {
-			SEXP varvalue = NULL;
 			SEXP varname = PROTECT(mkCharCE(result->names[col_idx].c_str(), CE_UTF8));
 			if (!varname) {
 				UNPROTECT(2); // varname, retlist
@@ -72,6 +71,7 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 			SET_STRING_ELT(names, col_idx, varname);
 			UNPROTECT(1); // varname
 
+			SEXP varvalue = NULL;
 			switch (result->types[col_idx]) {
 			case TypeId::BOOLEAN:
 				varvalue = PROTECT(NEW_LOGICAL(nrows));
