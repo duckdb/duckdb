@@ -52,8 +52,10 @@ public:
 
 	//! The next result (if any)
 	unique_ptr<QueryResult> next;
+
 protected:
 	string HeaderToString();
+
 private:
 	QueryResult(const QueryResult &) = delete;
 };

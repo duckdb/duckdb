@@ -1,7 +1,7 @@
 #include "optimizer/rule/move_constants.hpp"
 
-#include "common/value_operations/value_operations.hpp"
 #include "common/exception.hpp"
+#include "common/value_operations/value_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -28,12 +28,12 @@ MoveConstantsRule::MoveConstantsRule(ExpressionRewriter &rewriter) : Rule(rewrit
 }
 
 unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
-                                                           bool &changes_made) {
+                                                bool &changes_made) {
 	auto comparison = (ComparisonExpression *)bindings[0];
 	auto outer_constant = (ConstantExpression *)bindings[1];
 	auto arithmetic = (OperatorExpression *)bindings[2];
 	auto inner_constant = (ConstantExpression *)bindings[3];
-	
+
 	int arithmetic_child_index = arithmetic->children[0].get() == inner_constant ? 1 : 0;
 	if (arithmetic->type == ExpressionType::OPERATOR_ADD) {
 		// [x + 1 COMP 10] OR [1 + x COMP 10]
@@ -62,7 +62,10 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 		// change right side to 10/2 (outer_constant / inner_constant)
 		// but ONLY if outer_constant is cleanly divisible by the inner_constant
 		if (inner_constant->value == 0) {
-			// x * 0, for now don't do anything
+			// x * 0, the result is either 0 or NULL
+			// thus the final result will be either [TRUE, FALSE] or [NULL], depending
+			// on if 0 matches the comparison criteria with the RHS
+			// for now we don't fold, but we can fold to "ConstantOrNull"
 			return nullptr;
 		}
 		if (ValueOperations::Modulo(outer_constant->value, inner_constant->value) != 0) {

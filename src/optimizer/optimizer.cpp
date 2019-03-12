@@ -1,6 +1,7 @@
 #include "optimizer/optimizer.hpp"
 
 #include "execution/expression_executor.hpp"
+#include "main/client_context.hpp"
 #include "optimizer/cse_optimizer.hpp"
 #include "optimizer/filter_pushdown.hpp"
 #include "optimizer/join_order_optimizer.hpp"
@@ -12,7 +13,7 @@
 using namespace duckdb;
 using namespace std;
 
-Optimizer::Optimizer(Binder &binder, ClientContext &client_context) : binder(binder), rewriter(client_context) {
+Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context), binder(binder), rewriter(context) {
 	rewriter.rules.push_back(make_unique<ConstantFoldingRule>(rewriter));
 	rewriter.rules.push_back(make_unique<DistributivityRule>(rewriter));
 	rewriter.rules.push_back(make_unique<ArithmeticSimplificationRule>(rewriter));
@@ -56,20 +57,33 @@ public:
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan) {
 	// first we perform expression rewrites using the ExpressionRewriter
 	// this does not change the logical plan structure, but only simplifies the expression trees
+	context.profiler.StartPhase("expression_rewriter");
 	rewriter.Apply(*plan);
+	context.profiler.EndPhase();
+
 	// perform filter pushdown
+	context.profiler.StartPhase("filter_pushdown");
 	FilterPushdown filter_pushdown(*this);
 	plan = filter_pushdown.Rewrite(move(plan));
+	context.profiler.EndPhase();
+
 	// then we perform the join ordering optimization
 	// this also rewrites cross products + filters into joins and performs filter pushdowns
+	context.profiler.StartPhase("join_order");
 	JoinOrderOptimizer optimizer;
 	plan = optimizer.Optimize(move(plan));
+	context.profiler.EndPhase();
+
 	// then we extract common subexpressions inside the different operators
+	context.profiler.StartPhase("common_subexpressions");
 	CommonSubExpressionOptimizer cse_optimizer;
 	cse_optimizer.VisitOperator(*plan);
+	context.profiler.EndPhase();
 
+	context.profiler.StartPhase("in_clause");
 	InClauseRewriter rewriter(*this);
 	plan = rewriter.Rewrite(move(plan));
+	context.profiler.EndPhase();
 	return plan;
 }
 

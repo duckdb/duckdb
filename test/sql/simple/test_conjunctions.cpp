@@ -85,3 +85,32 @@ TEST_CASE("Test conjunction statements", "[conjunction]") {
 	result = con.Query("SELECT i>3 AND NULL FROM a ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {false, Value(), Value()}));
 }
+
+TEST_CASE("Test conjunction statements that can be simplified", "[conjunction]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// create table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
+
+	result = con.Query("SELECT (i=1 AND i>0) OR (i=1 AND i<3) FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), true, false, false}));
+
+	result = con.Query("SELECT (i=1) OR (i=1) FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), true, false, false}));
+
+	result = con.Query("SELECT (i=1) OR (i=1) OR (i=1) OR (i=1) OR (i=1) FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), true, false, false}));
+
+	result = con.Query("SELECT (i IS NULL AND i=1) OR (i IS NULL AND i<10) FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), false, false, false}));
+
+	result = con.Query("SELECT (i IS NOT NULL AND i>1) OR (i IS NOT NULL AND i<10) FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {false, true, true, true}));
+
+	result = con.Query("SELECT (i IS NULL AND (i+1) IS NULL) OR (i IS NULL AND (i+2) IS NULL) FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {true, false, false, false}));
+
+}

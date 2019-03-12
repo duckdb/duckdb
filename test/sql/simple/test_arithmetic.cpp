@@ -70,5 +70,4 @@ TEST_CASE("Test arithmetic statements", "[arithmetic]") {
 	result = con.Query("SELECT 2/i=1, 1=2/i FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), false, true, false}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), false, true, false}));
-
 }

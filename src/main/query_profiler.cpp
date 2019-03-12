@@ -20,6 +20,8 @@ void QueryProfiler::StartQuery(string query) {
 	tree_map.clear();
 	execution_stack = stack<PhysicalOperator *>();
 	root = nullptr;
+	phase_timings.clear();
+	phase_stack.clear();
 
 	main_query.Start();
 }
@@ -29,6 +31,64 @@ void QueryProfiler::EndQuery() {
 		return;
 
 	main_query.End();
+
+	// print the query after termination, if this is enabled
+	if (automatic_print_format != AutomaticPrintFormat::NONE) {
+		string query_info;
+		if (automatic_print_format == AutomaticPrintFormat::JSON) {
+			query_info = ToJSON();
+		} else if (automatic_print_format == AutomaticPrintFormat::QUERY_TREE) {
+			query_info = ToString();
+		}
+
+		if (save_location.empty()) {
+			cout << query_info << "\n";
+		} else {
+			WriteToFile(save_location.c_str(), query_info);
+		}
+	}
+}
+
+void QueryProfiler::StartPhase(string new_phase) {
+	if (!enabled)
+		return;
+
+	if (!phase_stack.empty()) {
+		// there are active phases
+		phase_profiler.End();
+		// add the timing to all phases prior to this one
+		string prefix = "";
+		for (auto &phase : phase_stack) {
+			phase_timings[phase] += phase_profiler.Elapsed();
+			prefix += phase + " > ";
+		}
+		// when there are previous phases, we prefix the current phase with those phases
+		new_phase = prefix + new_phase;
+	}
+
+	// start a new phase
+	phase_stack.push_back(new_phase);
+	// restart the timer
+	phase_profiler.Start();
+}
+
+void QueryProfiler::EndPhase() {
+	if (!enabled)
+		return;
+	assert(phase_stack.size() > 0);
+
+	// end the timer
+	phase_profiler.End();
+	// add the timing to all currently active phases
+	for (auto &phase : phase_stack) {
+		phase_timings[phase] += phase_profiler.Elapsed();
+	}
+	// now remove the last added phase
+	phase_stack.pop_back();
+
+	if (phase_stack.size() > 0) {
+		phase_profiler.Start();
+	}
 }
 
 void QueryProfiler::StartOperator(PhysicalOperator *phys_op) {
@@ -93,6 +153,19 @@ string QueryProfiler::ToString() const {
 	result += StringUtil::Replace(query, "\n", " ") + "\n";
 	result += "<<Timing>>\n";
 	result += "Total Time: " + to_string(main_query.Elapsed()) + "s\n";
+	// print phase timings
+	// first sort the phases alphabetically
+	vector<string> phases;
+	for (auto &entry : phase_timings) {
+		phases.push_back(entry.first);
+	}
+	std::sort(phases.begin(), phases.end());
+	for (auto &phase : phases) {
+		auto entry = phase_timings.find(phase);
+		assert(entry != phase_timings.end());
+		result += phase + ": " + to_string(entry->second) + "s\n";
+	}
+	// render the main operator tree
 	result += "<<Operator Tree>>\n";
 	if (!root) {
 		result += "<<ERROR RENDERING ROOT>";
@@ -108,7 +181,6 @@ static string ToJSONRecursive(QueryProfiler::TreeNode &node) {
 	result += "\"cardinality\":" + to_string(node.info.elements) + ",\n";
 	result += "\"extra_info\": \"" + StringUtil::Replace(node.extra_info, "\n", "\\n") + "\",\n";
 	result += "\"children\": [";
-
 	for (size_t i = 0; i < node.children.size(); i++) {
 		result += ToJSONRecursive(*node.children[i]);
 		if (i + 1 < node.children.size()) {
@@ -129,15 +201,28 @@ string QueryProfiler::ToJSON() const {
 	if (!root) {
 		return "{ \"result\": \"error\" }\n";
 	}
-	string result = "{ \"result\": " + to_string(main_query.Elapsed()) + ",\n\"tree\": ";
+	string result = "{ \"result\": " + to_string(main_query.Elapsed()) + ",\n";
+	// print the phase timings
+	result += "\"timings\": {\n";
+	bool needs_separator = false;
+	for (auto &entry : phase_timings) {
+		if (needs_separator) {
+			// not the first entry, add a separator
+			result += ",\n";
+		}
+		result += "\"" + entry.first + "\": " + to_string(entry.second);
+		needs_separator = true;
+	}
+	result += "},\n";
+	// recursively print the physical operator tree
+	result += "\"tree\": ";
 	result += ToJSONRecursive(*root);
 	return result + "}";
 }
 
-void QueryProfiler::WriteJSONToFile(const char *path) const {
-	auto json = ToJSON();
+void QueryProfiler::WriteToFile(const char *path, string& info) const {
 	std::ofstream out(path);
-	out << json;
+	out << info;
 	out.close();
 }
 

@@ -16,12 +16,20 @@ using namespace std;
 
 void PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> op) {
 	// first resolve column references
+	context.profiler.StartPhase("column_binding");
 	ColumnBindingResolver resolver;
 	resolver.VisitOperator(*op);
+	context.profiler.EndPhase();
+
 	// now resolve types of all the operators
+	context.profiler.StartPhase("resolve_types");
 	op->ResolveOperatorTypes();
+	context.profiler.EndPhase();
+
 	// then create the main physical plan
+	context.profiler.StartPhase("create_plan");
 	VisitOperator(*op);
+	context.profiler.EndPhase();
 	assert(plan); // Unknown error in physical plan generation"
 }
 

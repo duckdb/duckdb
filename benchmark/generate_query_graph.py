@@ -1,7 +1,9 @@
 import json
 
+MAX_NODES = 1000
+
 def generate(input_file, output_file):
-	global current_tone
+	global current_tone, execution_time, total_nodes
 	with open(input_file) as f:
 		text = f.read()
 		# we only render the first tree, extract it
@@ -37,7 +39,8 @@ def generate(input_file, output_file):
 		"PROJECTION": 5,
 		"LIMIT": 0,
 		"PIECEWISE_MERGE_JOIN": 1,
-		"DISTINCT": 11
+		"DISTINCT": 11,
+		"DELIM_SCAN": 9
 	}
 	# remaining (unknown) operators just fetch tones in order
 	remaining_tones = []
@@ -51,16 +54,83 @@ def generate(input_file, output_file):
 
 	# assign an impact factor to nodes
 	# this is used for rendering opacity
+	execution_time = 0
+	node_timings = {}
 	node_list = []
 	def gather_nodes(node):
-		node_list.append((float(node["timing"]), node))
+		global execution_time
+		node_timing = float(node["timing"])
+		if node['name'] not in node_timings:
+			node_timings[node['name']] = 0
+		node_timings[node['name']] += node_timing
+		execution_time += node_timing
+		node_list.append((node_timing, node))
 		children = node["children"]
 		for i in range(len(children)):
 			gather_nodes(children[i])
 
+	def timing_to_str(timing):
+		timing_str = "%.3f" % (timing,)
+		if timing_str == "0.000":
+			return "0.0"
+		# if "e-" in timing_str:
+		# 	timing_str = "0.0"
+		return timing_str
+
+	def to_percentage(total_time, time):
+		fraction = 100 * (time / total_time)
+		if fraction < 0.1:
+			return "0%"
+		else:
+			return "%.1f" % (fraction,) + "%"
+
 
 	# first gather all nodes
 	gather_nodes(parsed_json["tree"])
+
+	# get the timing of the different query phases
+	meta_info = ""
+	if "timings" in parsed_json:
+		keys = []
+		timings = {}
+		for entry in parsed_json["timings"]:
+			timings[entry] = parsed_json["timings"][entry]
+			keys.append(entry)
+		keys.sort()
+		meta_info = """<table class="meta-info">
+<tr class="phaseheader metainfo">
+<th style="font-weight:bold;">Phase</th>
+<th style="font-weight:bold;">Time</th>
+<th style="font-weight:bold;">Percentage</th>
+</tr>
+"""
+		# add the total time
+		meta_info += """<tr class="metainfo mainphase"><th style="font-weight:bold;">Total Time</th><th style="font-weight:bold;">${TOTAL_TIME}s</th><th></th></tr>""".replace("${TOTAL_TIME}", timing_to_str(total_time))
+		# add the execution phase
+		meta_info += """<tr class="metainfo mainphase"><th>Execution</th><th>${EXECUTION_TIME}s</th><th>${PERCENTAGE}</th></tr>""".replace("${EXECUTION_TIME}", str(execution_time)).replace("${PERCENTAGE}", to_percentage(total_time, execution_time))
+		execution_nodes = node_timings.keys()
+		execution_nodes = sorted(execution_nodes, key=lambda x: -node_timings[x])
+		for node in execution_nodes:
+			meta_info += '<tr class="metainfo subphase"><th>${NODE}</th><th>${NODE_TIME}s</th><th>${PERCENTAGE}</th></tr>'.replace("${NODE}", node).replace("${NODE_TIME}", timing_to_str(node_timings[node])).replace("${PERCENTAGE}", to_percentage(total_time, node_timings[node]))
+
+
+		# add the planning/optimizer phase to the table
+		for key in keys:
+			row_class = 'subphase' if ">" in key else 'mainphase'
+			meta_info += '<tr class="metainfo %s">' % (row_class)
+			meta_info += '<th>'
+			if ">" in key:
+				# subphase
+				meta_info += "> " + key.split(" > ")[-1].title().replace("_", " ")
+			else:
+				# primary phase
+				meta_info += key.title().replace("_", " ")
+			meta_info += "</th>"
+			meta_info += '<th>' + timing_to_str(timings[key]) + "s" + "</th>"
+			meta_info += "<th>" + to_percentage(total_time, timings[key]) + "</th>"
+			meta_info += "</tr>"
+		meta_info += '</table>'
+
 	# assign impacts based on % of execution spend in the node
 	# <0.1% = 0
 	# <1% = 1
@@ -85,7 +155,10 @@ def generate(input_file, output_file):
 		else:
 			return number
 
+	total_nodes = 0
 	def convert_json(node):
+		global total_nodes
+		total_nodes += 1
 		# format is { text { name, title, contact }, HTMLclass, children: [...] }
 		global current_tone
 		result = '{ "text": {'
@@ -115,6 +188,8 @@ def generate(input_file, output_file):
 		children = node["children"]
 		for i in range(len(children)):
 			result += convert_json(children[i])
+			if total_nodes > MAX_NODES:
+				break
 			if  i + 1 < len(children):
 				result += ","
 		result += "]}\n"
@@ -196,6 +271,25 @@ def generate(input_file, output_file):
 		font-size: 12px;
 	}
 
+	.metainfo {
+		font-family: Tahoma;
+		font-weight: bold;
+	}
+
+	.metainfo > th {
+		padding: 1px 5px;
+	}
+
+	.mainphase {
+		background-color: #668D3C;
+	}
+	.subphase {
+		background-color: #B99C6B;
+	}
+	.phaseheader {
+		background-color: #83929F;
+	}
+
 	.node-name {
 		font-weight: bold;
 		text-align: center;
@@ -238,10 +332,11 @@ def generate(input_file, output_file):
 		${CHART_SCRIPT}
 		</script>
 
+		<div id="meta-info">${META_INFO}</div>
 		<div class="chart" id="query-profile"></div>
 
 		<script>
-			// create a dummy chart to figure out how wide/high iti s
+			// create a dummy chart to figure out how wide/high it is
 			new Treant(chart_config );
 			max_height = 0
 			document.querySelectorAll('.tree-node').forEach(function(node) {
@@ -266,4 +361,4 @@ def generate(input_file, output_file):
 
 	</body>
 	</html>
-		""".replace("${TONES}", tone_text).replace("${CHART_SCRIPT}", chart_info))
+		""".replace("${TONES}", tone_text).replace("${CHART_SCRIPT}", chart_info).replace("${META_INFO}", meta_info))

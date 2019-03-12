@@ -12,7 +12,7 @@ TEST_CASE("Test concat function", "[function]") {
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(s VARCHAR)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('hello'), ('world'), (NULL)"));
-	
+
 	// normal concat
 	result = con.Query("SELECT s || ' ' || s FROM strings ORDER BY s");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "hello hello", "world world"}));

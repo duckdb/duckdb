@@ -8,8 +8,6 @@ using namespace std;
 namespace duckdb {
 namespace function {
 
-
-
 void length_function(Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result) {
 	assert(input_count == 1);
 	auto &input = inputs[0];
@@ -27,7 +25,7 @@ void length_function(Vector inputs[], size_t input_count, BoundFunctionExpressio
 			return;
 		}
 		int64_t length = 0;
-		for(size_t str_idx = 0; input_data[i][str_idx]; str_idx++) {
+		for (size_t str_idx = 0; input_data[i][str_idx]; str_idx++) {
 			length += (input_data[i][str_idx] & 0xC0) != 0x80;
 		}
 		result_data[i] = length;
