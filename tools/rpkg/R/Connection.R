@@ -32,7 +32,7 @@ setMethod(
   function(dbObj, ...) {
     valid <- FALSE
   tryCatch ({
-    dbExecute(dbObj, "SELECT 1")
+    dbExecute(dbObj, SQL("SELECT 1"))
     valid <- TRUE
       }, error=function(c){})
   valid
@@ -48,7 +48,7 @@ setMethod(
       warning("Connection already closed.", call. = FALSE)
     }
    .Call(duckdb_disconnect_R, conn@conn_ref)
-    # TODO: Free resources
+
     invisible(TRUE)
   })
 
@@ -59,7 +59,6 @@ setMethod(
   "dbSendQuery", c("duckdb_connection", "character"),
   function(conn, statement, ...) {
     resultset <- .Call(duckdb_query_R, conn@conn_ref, statement)
-
     attr(resultset, "row.names") <- c(NA_integer_, as.integer(-1 * length(resultset[[1]])))
     class(resultset) <- "data.frame"
 
@@ -147,7 +146,7 @@ setMethod(
 setMethod(
   "dbListTables", "duckdb_connection",
   function(conn, ...) {
-    dbGetQuery(conn, "SELECT name FROM sqlite_master() WHERE type='table' ORDER BY name")[[1]]
+    dbGetQuery(conn, SQL("SELECT name FROM sqlite_master() WHERE type='table' ORDER BY name"))[[1]]
   })
 
 #' @rdname DBI
@@ -199,7 +198,7 @@ setMethod(
 setMethod(
   "dbBegin", "duckdb_connection",
   function(conn, ...) {
-   dbExecute(conn, "BEGIN TRANSACTION")
+   dbExecute(conn, SQL("BEGIN TRANSACTION"))
    invisible(TRUE)
   })
 
@@ -209,7 +208,7 @@ setMethod(
 setMethod(
   "dbCommit", "duckdb_connection",
   function(conn, ...) {
-    dbExecute(conn, "COMMIT")
+    dbExecute(conn, SQL("COMMIT"))
     invisible(TRUE)
   })
 
@@ -219,6 +218,6 @@ setMethod(
 setMethod(
   "dbRollback", "duckdb_connection",
   function(conn, ...) {
-    dbExecute(conn, "ROLLBACK")
+    dbExecute(conn, SQL("ROLLBACK"))
     invisible(TRUE)
   })

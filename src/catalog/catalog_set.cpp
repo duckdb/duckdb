@@ -28,7 +28,7 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name, uniqu
 		if (current.timestamp >= TRANSACTION_ID_START && current.timestamp != transaction.transaction_id) {
 			// current version has been written to by a currently active
 			// transaction
-			throw TransactionException("Catalog write-write conflict!");
+			throw TransactionException("Catalog write-write conflict on create with \"%s\"", current.name.c_str());
 		}
 		// there is a current version that has been committed
 		// if it has not been deleted there is a conflict
@@ -63,7 +63,7 @@ bool CatalogSet::AlterEntry(Transaction &transaction, const string &name, AlterI
 	if (current.timestamp >= TRANSACTION_ID_START && current.timestamp != transaction.transaction_id) {
 		// current version has been written to by a currently active
 		// transaction
-		throw TransactionException("Catalog write-write conflict!");
+		throw TransactionException("Catalog write-write conflict on alter with \"%s\"", current.name.c_str());
 	}
 
 	// create a new entry and replace the currently stored one
@@ -86,7 +86,7 @@ bool CatalogSet::DropEntry(Transaction &transaction, CatalogEntry &current, bool
 	if (current.timestamp >= TRANSACTION_ID_START && current.timestamp != transaction.transaction_id) {
 		// current version has been written to by a currently active
 		// transaction
-		throw TransactionException("Catalog write-write conflict!");
+		throw TransactionException("Catalog write-write conflict on drop with \"%s\"", current.name.c_str());
 	}
 	// there is a current version that has been committed
 	if (current.deleted) {

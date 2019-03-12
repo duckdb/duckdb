@@ -23,8 +23,12 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 	if (!connaddr) {
 		Rf_error("duckdb_query_R: invalid connection");
 	}
+	char *query = (char *)CHAR(STRING_ELT(querysexp, 0));
+	if (!query) {
+		Rf_error("No query given");
+	}
 
-	res = duckdb_query(connaddr, (char *)CHAR(STRING_ELT(querysexp, 0)), &output);
+	res = duckdb_query(connaddr, query, &output);
 	if (res != DuckDBSuccess) { // there was an error
 		Rf_error("duckdb_query_R: Error: %s", output.error_message);
 	}
@@ -56,16 +60,16 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 			// TODO macro?
 			case DUCKDB_TYPE_BOOLEAN:
 				varvalue = PROTECT(NEW_LOGICAL(output.row_count));
-					if (varvalue) {
-						for (size_t row_idx = 0; row_idx < output.row_count; row_idx++) {
-							if (col.nullmask[row_idx]) {
-								LOGICAL_POINTER(varvalue)[row_idx] = NA_LOGICAL;
-							} else {
-								LOGICAL_POINTER(varvalue)[row_idx] = (uint32_t)((uint8_t *)col.data)[row_idx];
-							}
+				if (varvalue) {
+					for (size_t row_idx = 0; row_idx < output.row_count; row_idx++) {
+						if (col.nullmask[row_idx]) {
+							LOGICAL_POINTER(varvalue)[row_idx] = NA_LOGICAL;
+						} else {
+							LOGICAL_POINTER(varvalue)[row_idx] = (uint32_t)((uint8_t *)col.data)[row_idx];
 						}
 					}
-					break;
+				}
+				break;
 			case DUCKDB_TYPE_TINYINT:
 				varvalue = PROTECT(NEW_INTEGER(output.row_count));
 				if (varvalue) {
