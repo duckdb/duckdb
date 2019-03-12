@@ -1,13 +1,13 @@
 #' @include Connection.R
 NULL
 
-duckdb_result <- function(connection, statement, resultset=data.frame(), rows_affected=0) {
+duckdb_result <- function(connection, statement, has_resultset, resultset=data.frame(), rows_affected=0) {
 
   env <- new.env(parent=emptyenv())
   env$rows_fetched <- 0
   env$open <- TRUE
 
-  new("duckdb_result", connection = connection, statement = statement, resultset = resultset, rows_affected=rows_affected, env=env)
+  new("duckdb_result", connection = connection, statement = statement, has_resultset=has_resultset, resultset = resultset, rows_affected=rows_affected, env=env)
 }
 
 #' @rdname DBI
@@ -18,11 +18,14 @@ setClass(
   slots = list(
     connection = "duckdb_connection",
     statement = "character",
+    has_resultset = "logical",
     resultset = "data.frame",
     rows_affected = "numeric",
     env = "environment"
   )
 )
+
+
 
 #' @rdname DBI
 #' @inheritParams methods::show
@@ -31,7 +34,6 @@ setMethod(
   "show", "duckdb_result",
   function(object) {
     cat("<duckdb_result>\n")
-    # TODO: Print more details
   })
 
 #' @rdname DBI
@@ -77,7 +79,10 @@ setMethod(
     if (!is_wholenumber(n)) {
       stop("n needs to be not a whole number")
     }
-
+    if (!res@has_resultset) {
+      warning("Cannot fetch from statement result")
+      return(data.frame())
+    }
 
 # FIXME this is ugly
     if (n == 0) {
@@ -114,6 +119,9 @@ setMethod(
   function(res, ...) {
     if (!res@env$open) {
      stop("result has already been cleared")
+    }
+    if (!res@has_resultset) {
+      return(TRUE)
     }
     return(res@env$rows_fetched == nrow(res@resultset))
   })

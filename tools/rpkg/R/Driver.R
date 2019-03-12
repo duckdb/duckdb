@@ -33,7 +33,6 @@ setMethod(
   "show", "duckdb_driver",
   function(object) {
     cat("<duckdb_driver>\n")
-    # TODO: Print more details
   })
 
 #' @rdname DBI
@@ -52,20 +51,21 @@ setMethod(
 setMethod(
   "dbDataType", "duckdb_driver",
   function(dbObj, obj, ...) {
-    # Optional: Can remove this if all data types conform to SQL-92
-    tryCatch(
-      getMethod("dbDataType", "DBIObject", asNamespace("DBI"))(dbObj, obj, ...),
-      error = function(e) testthat::skip("Not yet implemented: dbDataType(Driver)"))
-  })
 
-#' @rdname DBI
-#' @inheritParams DBI::dbDataType
-#' @export
-setMethod(
-  "dbDataType", c("duckdb_driver", "list"),
-  function(dbObj, obj, ...) {
-    # rstats-db/DBI#70
-    testthat::skip("Not yet implemented: dbDataType(Driver, list)")
+  if (is.null(obj)) stop("NULL parameter")
+  if (is.data.frame(obj)) {
+    return (vapply(obj, function(x) dbDataType(dbObj, x), FUN.VALUE = "character"))
+  }
+#  else if (int64 && inherits(obj, "integer64")) "BIGINT"
+  else if (inherits(obj, "Date")) "DATE"
+  else if (inherits(obj, "difftime")) "TIME"
+  else if (is.logical(obj)) "BOOLEAN"
+  else if (is.integer(obj)) "INTEGER"
+  else if (is.numeric(obj)) "DOUBLE"
+  else if (inherits(obj, "POSIXt")) "TIMESTAMP"
+  else if (is.list(obj) && all(vapply(obj, typeof, FUN.VALUE = "character") == "raw" || is.na(obj))) "BLOB"
+  else "STRING"
+
   })
 
 #' @rdname DBI
@@ -74,7 +74,7 @@ setMethod(
 setMethod(
   "dbIsValid", "duckdb_driver",
   function(dbObj, ...) {
-    testthat::skip("Not yet implemented: dbIsValid(Driver)")
+    TRUE
   })
 
 #' @rdname DBI
@@ -83,5 +83,5 @@ setMethod(
 setMethod(
   "dbGetInfo", "duckdb_driver",
   function(dbObj, ...) {
-    testthat::skip("Not yet implemented: dbGetInfo(Driver)")
+    list(driver.version=NA, client.version=NA)
   })

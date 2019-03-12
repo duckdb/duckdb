@@ -7,16 +7,12 @@ DBItest::test_all(c(
 	"send_query_stale_warning", # wontfix
 	"send_statement_stale_warning", # wontfix
 
-	"get_query_n_bad",
-	"get_query_good_after_bad_n",
-
-	"fetch_no_return_value",
+	"get_query_n_bad", # broken test
+	"get_query_good_after_bad_n", # broken test
+	"has_completed_statement", # broken test
 
 	"data_character",
-		"data_logical", # casting NULL issue
-
-	"has_completed_statement", # query types
-	"row_count_statement", # query types
+	"data_logical", # casting NULL issue
 
 	"data_timestamp",
 	"data_time_current",
