@@ -40,6 +40,9 @@ TEST_CASE("Test arithmetic statements", "[arithmetic]") {
 	// i*0=5
 	result = con.Query("SELECT i*0=5 FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), false, false, false}));
+	// -i>-2 => i<2
+	result = con.Query("SELECT -i>-2 FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), true, false, false}));
 	// subtraction is ordered
 	// i-2=1 => i=3
 	result = con.Query("SELECT i-2=1, 1=i-2 FROM integers ORDER BY i");

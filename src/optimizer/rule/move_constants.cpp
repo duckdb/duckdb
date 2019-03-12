@@ -73,6 +73,10 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 			// for now, we don't do anything
 			return nullptr;
 		}
+		if (inner_constant->value < 0) {
+			// multiply by negative value, need to flip expression
+			comparison->type = ComparisonExpression::FlipComparisionExpression(comparison->type);
+		}
 		// else divide the RHS by the LHS
 		outer_constant->value = outer_constant->value / inner_constant->value;
 	}

@@ -342,6 +342,13 @@ TEST_CASE("Test aggregations on strings", "[aggregations]") {
 	Connection con(db);
 	con.EnableQueryVerification();
 
+	result = con.Query("SELECT NULL as a, NULL as b, NULL as c, NULL as d, 1 as id UNION SELECT 'Кирилл' as a, 'Müller' as b, '我是谁' as c, 'ASCII' as d, 2 as id ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "Кирилл"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), "Müller"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value(), "我是谁"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value(), "ASCII"}));
+	REQUIRE(CHECK_COLUMN(result, 4, {1, 2}));
+
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, s VARCHAR);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 'hello'), (12, 'world'), (11, NULL)"));
 
@@ -355,6 +362,11 @@ TEST_CASE("Test aggregations on strings", "[aggregations]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {11, 12}));
 	REQUIRE(CHECK_COLUMN(result, 1, {2, 1}));
 	REQUIRE(CHECK_COLUMN(result, 2, {1, 1}));
+
+	// group by the strings
+	result = con.Query("SELECT s, SUM(a) FROM test GROUP BY s ORDER BY s;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "hello", "world"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {11, 11, 12}));
 
 	// distinct aggregations ons tring
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 'hello'), (12, 'world')"));

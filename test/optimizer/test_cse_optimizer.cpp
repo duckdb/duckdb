@@ -55,7 +55,4 @@ TEST_CASE("Test CSE Optimizer", "[optimizer]") {
 	auto &rcomp = (ComparisonExpression&) *filter.expressions[1];
 	REQUIRE(lcomp.left->type == ExpressionType::COMMON_SUBEXPRESSION);
 	REQUIRE(rcomp.left->type == ExpressionType::COMMON_SUBEXPRESSION);
-	
-
-
 }

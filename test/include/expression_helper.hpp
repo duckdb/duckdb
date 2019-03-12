@@ -29,6 +29,4 @@ private:
 	ExpressionRewriter rewriter;
 };
 
-// unique_ptr<LogicalOperator> ApplyLogicalRule(Rewriter &rewriter, unique_ptr<LogicalOperator> op);
-
 } // namespace duckdb
