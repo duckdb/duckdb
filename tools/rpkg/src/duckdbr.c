@@ -55,6 +55,17 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 			switch (col.type) {
 			// TODO macro?
 			case DUCKDB_TYPE_BOOLEAN:
+				varvalue = PROTECT(NEW_LOGICAL(output.row_count));
+					if (varvalue) {
+						for (size_t row_idx = 0; row_idx < output.row_count; row_idx++) {
+							if (col.nullmask[row_idx]) {
+								LOGICAL_POINTER(varvalue)[row_idx] = NA_LOGICAL;
+							} else {
+								LOGICAL_POINTER(varvalue)[row_idx] = (uint32_t)((uint8_t *)col.data)[row_idx];
+							}
+						}
+					}
+					break;
 			case DUCKDB_TYPE_TINYINT:
 				varvalue = PROTECT(NEW_INTEGER(output.row_count));
 				if (varvalue) {

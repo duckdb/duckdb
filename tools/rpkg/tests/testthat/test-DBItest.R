@@ -12,11 +12,7 @@ DBItest::test_all(c(
 	"get_query_good_after_bad_n",
 	"data_character",
 	"has_completed_statement",
-	"row_count_query",
 	"row_count_statement",
-	"get_row_count_error",
-	"get_rows_affected_error",
-
 	"data_timestamp",
 	"data_time_current",
 	"data_time",

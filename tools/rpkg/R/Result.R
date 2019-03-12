@@ -143,7 +143,10 @@ setMethod(
 setMethod(
   "dbGetStatement", "duckdb_result",
   function(res, ...) {
-    testthat::skip("Not yet implemented: dbGetStatement(Result)")
+    if (!res@env$open) {
+      stop("result has already been cleared")
+    }
+    return(res@statement)
   })
 
 #' @rdname DBI
@@ -162,7 +165,10 @@ setMethod(
 setMethod(
   "dbGetRowCount", "duckdb_result",
   function(res, ...) {
-   return(nrow(res@resultset))
+     if (!res@env$open) {
+      stop("result has already been cleared")
+    }
+   return(res@env$rows_fetched)
   })
 
 #' @rdname DBI
@@ -171,6 +177,9 @@ setMethod(
 setMethod(
   "dbGetRowsAffected", "duckdb_result",
   function(res, ...) {
+     if (!res@env$open) {
+      stop("result has already been cleared")
+    }
     return(invisible(res@rows_affected))
   })
 

@@ -19,12 +19,12 @@ NULL
 #' duckdb::duckdb()
 #' }
 duckdb <- function(dbdir=":memory:") {
-  new("duckdb_driver", database_ref=.Call(duckdb_startup_R, dbdir))
+  new("duckdb_driver", dbdir=dbdir, database_ref=.Call(duckdb_startup_R, dbdir))
 }
 
 #' @rdname DBI
 #' @export
-setClass("duckdb_driver", contains = "DBIDriver", slots=list(database_ref="externalptr"))
+setClass("duckdb_driver", contains = "DBIDriver", slots=list(dbdir="character", database_ref="externalptr"))
 
 #' @rdname DBI
 #' @inheritParams methods::show

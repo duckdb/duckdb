@@ -126,7 +126,7 @@ setMethod(
 setMethod(
   "dbReadTable", c("duckdb_connection", "character"),
   function(conn, name, ...) {
-    testthat::skip("Not yet implemented: dbReadTable(Connection, character)")
+    getMethod("dbReadTable", "DBIConnection", asNamespace("DBI"))(conn, name, ...)
   })
 
 #' @rdname DBI
@@ -135,7 +135,7 @@ setMethod(
 setMethod(
   "dbListTables", "duckdb_connection",
   function(conn, ...) {
-    testthat::skip("Not yet implemented: dbListTables(Connection)")
+    return(dbGetQuery(conn, "SELECT name FROM sqlite_master() WHERE type='table' ORDER BY name")[[1]])
   })
 
 #' @rdname DBI
@@ -144,7 +144,9 @@ setMethod(
 setMethod(
   "dbExistsTable", c("duckdb_connection", "character"),
   function(conn, name, ...) {
-    testthat::skip("Not yet implemented: dbExistsTable(Connection)")
+    sql_name <- dbQuoteString(conn, x = name, ...)
+    query <- sqlInterpolate(conn, "SELECT COUNT(*) = 1 FROM sqlite_master() WHERE type='table' AND name=?", sql_name)
+    return(dbGetQuery(conn, query)[[1]])
   })
 
 #' @rdname DBI
@@ -153,7 +155,9 @@ setMethod(
 setMethod(
   "dbListFields", c("duckdb_connection", "character"),
   function(conn, name, ...) {
-    testthat::skip("Not yet implemented: dbListFields(Connection, character)")
+    sql_name <- dbQuoteString(conn, x = name, ...)
+    query <- sqlInterpolate(conn, "SELECT name FROM pragma_table_info(?) ORDER BY cid", sql_name)
+    return(dbGetQuery(conn, query)[[1]])
   })
 
 #' @rdname DBI
@@ -162,7 +166,10 @@ setMethod(
 setMethod(
   "dbRemoveTable", c("duckdb_connection", "character"),
   function(conn, name, ...) {
-    testthat::skip("Not yet implemented: dbRemoveTable(Connection, character)")
+    sql_name <- dbQuoteIdentifier(conn, x = name, ...)
+    query <- sqlInterpolate(conn, "DROP TABLE ?", sql_name)
+    dbExecute(conn, query)
+    return(invisible(TRUE))
   })
 
 #' @rdname DBI
@@ -171,7 +178,7 @@ setMethod(
 setMethod(
   "dbGetInfo", "duckdb_connection",
   function(dbObj, ...) {
-    testthat::skip("Not yet implemented: dbGetInfo(Connection)")
+    list(dbname=dbObj@driver@dbdir, db.version=NA, username=NA, host=NA, port=NA)
   })
 
 #' @rdname DBI
