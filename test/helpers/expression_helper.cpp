@@ -6,9 +6,8 @@
 #include "planner/operator/logical_projection.hpp"
 #include "planner/planner.hpp"
 
+using namespace duckdb;
 using namespace std;
-
-namespace duckdb {
 
 //! Set column ref types to a specific type (faking binding them)
 static void SetColumnRefTypes(Expression &op, TypeId colref_type = TypeId::INTEGER) {
@@ -18,11 +17,14 @@ static void SetColumnRefTypes(Expression &op, TypeId colref_type = TypeId::INTEG
 	op.EnumerateChildren([&](Expression *child) { SetColumnRefTypes(*child, colref_type); });
 }
 
-unique_ptr<Expression> ParseExpression(string expression) {
+ExpressionHelper::ExpressionHelper(ClientContext &context) : 
+	context(context), rewriter(context) {
+
+}
+
+unique_ptr<Expression> ExpressionHelper::ParseExpression(string expression) {
 	string query = "SELECT " + expression;
 
-	DuckDB db;
-	ClientContext context(db);
 	Parser parser(context);
 	parser.ParseQuery(query.c_str());
 	if (parser.statements.size() == 0 || parser.statements[0]->type != StatementType::SELECT) {
@@ -37,31 +39,25 @@ unique_ptr<Expression> ParseExpression(string expression) {
 	return move(select_list[0]);
 }
 
-// unique_ptr<LogicalOperator> ApplyLogicalRule(Rewriter &rewriter, unique_ptr<LogicalOperator> op) {
-// 	return rewriter.ApplyRules(move(op));
-// }
 
-// unique_ptr<Expression> ApplyExprRule(Rewriter &rewriter, unique_ptr<Expression> root) {
-// 	vector<unique_ptr<Expression>> exprs;
-// 	exprs.push_back(move(root));
-
-// 	auto op = make_unique<LogicalProjection>(move(exprs));
-
-// 	return move(ApplyLogicalRule(rewriter, move(op))->expressions[0]);
-// }
-
-unique_ptr<Planner> ParseLogicalPlan(Connection &con, string query) {
-	DuckDB db;
-	ClientContext context(db);
-	Parser parser(context);
-	parser.ParseQuery(query);
-
-	auto planner = make_unique<Planner>(con.context);
-	planner->CreatePlan(move(parser.statements.back()));
-	if (!planner->plan) {
-		throw Exception("No plan?");
-	}
-	return planner;
+unique_ptr<Expression> ExpressionHelper::ApplyExpressionRule(unique_ptr<Expression> root, LogicalOperatorType root_type) {
+	// make a logical projection
+	vector<unique_ptr<Expression>> expressions;
+	expressions.push_back(move(root));
+	auto proj = make_unique<LogicalProjection>(0, move(expressions));
+	proj->type = root_type;
+	rewriter.Apply(*proj);
+	return move(proj->expressions[0]);
 }
 
-} // namespace duckdb
+// unique_ptr<Planner> ExpressionHelper::ParseLogicalPlan(Connection &con, string query) {
+// 	Parser parser(context);
+// 	parser.ParseQuery(query);
+
+// 	auto planner = make_unique<Planner>(con.context);
+// 	planner->CreatePlan(move(parser.statements.back()));
+// 	if (!planner->plan) {
+// 		throw Exception("No plan?");
+// 	}
+// 	return planner;
+// }

@@ -101,9 +101,13 @@ TEST_CASE("Value serialization", "[serializer]") {
 }
 
 TEST_CASE("Expression serializer", "[serializer]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	ExpressionHelper helper(con.context);
 	{
 		// operator, columnref, constant
-		auto expression = ParseExpression("a + 2");
+		auto expression = helper.ParseExpression("a + 2");
 		REQUIRE(expression.get());
 
 		Serializer serializer;
@@ -119,7 +123,7 @@ TEST_CASE("Expression serializer", "[serializer]") {
 
 	{
 		// case, columnref, comparison, cast, conjunction
-		auto expression = ParseExpression("cast(a >= 2 as integer) OR CASE WHEN a >= b THEN "
+		auto expression = helper.ParseExpression("cast(a >= 2 as integer) OR CASE WHEN a >= b THEN "
 		                                  "a >= 5 ELSE a >= 7 END");
 		REQUIRE(expression.get());
 
@@ -136,7 +140,7 @@ TEST_CASE("Expression serializer", "[serializer]") {
 	}
 	{
 		// subquery, function, aggregate, case, negation
-		auto expression = ParseExpression("(SELECT 42) - COUNT(*) + + 33 - (CASE "
+		auto expression = helper.ParseExpression("(SELECT 42) - COUNT(*) + + 33 - (CASE "
 		                                  "WHEN NOT 0 THEN 33 ELSE 22 END)");
 		REQUIRE(expression.get());
 
@@ -153,9 +157,9 @@ TEST_CASE("Expression serializer", "[serializer]") {
 	}
 	{
 		// subtle differences should result in different results
-		auto expression = ParseExpression("(SELECT 42) - COUNT(*) + + 33 - (CASE "
+		auto expression = helper.ParseExpression("(SELECT 42) - COUNT(*) + + 33 - (CASE "
 		                                  "WHEN NOT 0 THEN 33 ELSE 22 END)");
-		auto expression2 = ParseExpression("(SELECT 43) - COUNT(*) + + 33 - (CASE "
+		auto expression2 = helper.ParseExpression("(SELECT 43) - COUNT(*) + + 33 - (CASE "
 		                                   "WHEN NOT 0 THEN 33 ELSE 22 END)");
 		REQUIRE(expression.get());
 		REQUIRE(expression2.get());
@@ -178,8 +182,8 @@ TEST_CASE("Expression serializer", "[serializer]") {
 	}
 	{
 		// conjunctions are commutative
-		auto expression = ParseExpression("(A = 42) AND (B = 43)");
-		auto expression2 = ParseExpression("(B = 43) AND (A = 42)");
+		auto expression = helper.ParseExpression("(A = 42) AND (B = 43)");
+		auto expression2 = helper.ParseExpression("(B = 43) AND (A = 42)");
 
 		REQUIRE(expression.get());
 		REQUIRE(expression2.get());
