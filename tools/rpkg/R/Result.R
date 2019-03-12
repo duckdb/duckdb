@@ -86,7 +86,7 @@ setMethod(
 
 # FIXME this is ugly
     if (n == 0) {
-      return(head(res@resultset, 0))
+      return(utils::head(res@resultset, 0))
     }
     if (res@env$rows_fetched < 0) {
       res@env$rows_fetched <- 0
