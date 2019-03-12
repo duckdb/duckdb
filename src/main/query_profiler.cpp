@@ -31,6 +31,22 @@ void QueryProfiler::EndQuery() {
 		return;
 
 	main_query.End();
+
+	// print the query after termination, if this is enabled
+	if (automatic_print_format != AutomaticPrintFormat::NONE) {
+		string query_info;
+		if (automatic_print_format == AutomaticPrintFormat::JSON) {
+			query_info = ToJSON();
+		} else if (automatic_print_format == AutomaticPrintFormat::QUERY_TREE) {
+			query_info = ToString();
+		}
+
+		if (save_location.empty()) {
+			cout << query_info << "\n";
+		} else {
+			WriteToFile(save_location.c_str(), query_info);
+		}
+	}
 }
 
 void QueryProfiler::StartPhase(string new_phase) {
@@ -204,10 +220,9 @@ string QueryProfiler::ToJSON() const {
 	return result + "}";
 }
 
-void QueryProfiler::WriteJSONToFile(const char *path) const {
-	auto json = ToJSON();
+void QueryProfiler::WriteToFile(const char *path, string& info) const {
 	std::ofstream out(path);
-	out << json;
+	out << info;
 	out.close();
 }
 

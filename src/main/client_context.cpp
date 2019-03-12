@@ -57,9 +57,6 @@ unique_ptr<DataChunk> ClientContext::Fetch() {
 
 string ClientContext::FinalizeQuery(bool success) {
 	profiler.EndQuery();
-	if (profiler.IsEnabled() && profiler.automatic_printing) {
-		cout << profiler.ToString() << "\n";
-	}
 
 	execution_context.physical_plan = nullptr;
 

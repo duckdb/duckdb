@@ -19,6 +19,8 @@
 namespace duckdb {
 class PhysicalOperator;
 
+enum class AutomaticPrintFormat : uint8_t { NONE, QUERY_TREE, JSON };
+
 //! The QueryProfiler can be used to measure timings of queries
 class QueryProfiler {
 public:
@@ -47,7 +49,7 @@ private:
 	static string RenderTree(TreeNode &node);
 
 public:
-	QueryProfiler() : automatic_printing(false), enabled(false) {
+	QueryProfiler() : automatic_print_format(AutomaticPrintFormat::NONE), enabled(false) {
 	}
 
 	void Enable() {
@@ -75,23 +77,36 @@ public:
 	void Print();
 
 	string ToJSON() const;
-	void WriteJSONToFile(const char *path) const;
+	void WriteToFile(const char *path, string& info) const;
 
-	bool automatic_printing;
+	//! The format to automatically print query profiling information in (default: disabled)
+	AutomaticPrintFormat automatic_print_format;
+	//! The file to save query profiling information to, instead of printing it to the console (empty = print to console)
+	string save_location;
 
 private:
+	//! Whether or not query profiling is enabled
 	bool enabled;
 
+	//! The root of the query tree
 	unique_ptr<TreeNode> root;
+	//! The query string 
 	string query;
 
+	//! The timer used to time the execution time of the entire query
 	Profiler main_query;
+	//! The timer used to time the execution time of the individual Physical Operators
 	Profiler op;
+	//! A map of a Physical Operator pointer to a tree node
 	std::unordered_map<PhysicalOperator *, TreeNode *> tree_map;
+	//! The stack of Physical Operators that are currently active
 	std::stack<PhysicalOperator *> execution_stack;
 
+	//! The timer used to time the individual phases of the planning process
 	Profiler phase_profiler;
+	//! A mapping of the phase names to the timings
 	std::unordered_map<string, double> phase_timings;
+	//! The stack of currently active phases
 	std::vector<string> phase_stack;
 };
 } // namespace duckdb
