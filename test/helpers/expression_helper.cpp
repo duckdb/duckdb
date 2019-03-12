@@ -17,9 +17,19 @@ static void SetColumnRefTypes(Expression &op, TypeId colref_type = TypeId::INTEG
 	op.EnumerateChildren([&](Expression *child) { SetColumnRefTypes(*child, colref_type); });
 }
 
-ExpressionHelper::ExpressionHelper(ClientContext &context) : 
-	context(context), rewriter(context) {
+ExpressionHelper::ExpressionHelper(ClientContext &context) : context(context), rewriter(context) {
+}
 
+bool ExpressionHelper::VerifyRewrite(string input, string expected_output) {
+	auto root = ParseExpression(input);
+	auto result = ApplyExpressionRule(move(root));
+	auto expected_result = ParseExpression(expected_output);
+	bool equals = result->Equals(expected_result.get());
+	if (!equals) {
+		result->Print();
+		expected_result->Print();
+	}
+	return equals;
 }
 
 unique_ptr<Expression> ExpressionHelper::ParseExpression(string expression) {
@@ -39,8 +49,8 @@ unique_ptr<Expression> ExpressionHelper::ParseExpression(string expression) {
 	return move(select_list[0]);
 }
 
-
-unique_ptr<Expression> ExpressionHelper::ApplyExpressionRule(unique_ptr<Expression> root, LogicalOperatorType root_type) {
+unique_ptr<Expression> ExpressionHelper::ApplyExpressionRule(unique_ptr<Expression> root,
+                                                             LogicalOperatorType root_type) {
 	// make a logical projection
 	vector<unique_ptr<Expression>> expressions;
 	expressions.push_back(move(root));

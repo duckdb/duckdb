@@ -77,11 +77,12 @@ public:
 	void Print();
 
 	string ToJSON() const;
-	void WriteToFile(const char *path, string& info) const;
+	void WriteToFile(const char *path, string &info) const;
 
 	//! The format to automatically print query profiling information in (default: disabled)
 	AutomaticPrintFormat automatic_print_format;
-	//! The file to save query profiling information to, instead of printing it to the console (empty = print to console)
+	//! The file to save query profiling information to, instead of printing it to the console (empty = print to
+	//! console)
 	string save_location;
 
 private:
@@ -90,7 +91,7 @@ private:
 
 	//! The root of the query tree
 	unique_ptr<TreeNode> root;
-	//! The query string 
+	//! The query string
 	string query;
 
 	//! The timer used to time the execution time of the entire query

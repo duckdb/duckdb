@@ -1,41 +1,37 @@
 #include "catch.hpp"
 #include "common/helper.hpp"
 #include "expression_helper.hpp"
-#include "optimizer/rule/arithmetic_simplification.hpp"
+#include "optimizer/rule/conjunction_simplification.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Arithmetic simplification test", "[optimizer]") {
+TEST_CASE("Conjunction simplification test", "[optimizer]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
 	ExpressionHelper helper(con.context);
-	helper.AddRule<ArithmeticSimplificationRule>();
+	helper.AddRule<ConjunctionSimplificationRule>();
 
 	string input, expected_output;
 
-	input = "X+0";
-	expected_output = "X";
+	input = "X AND FALSE";
+	expected_output = "FALSE";
 	REQUIRE(helper.VerifyRewrite(input, expected_output));
 
-	input = "0+X";
-	expected_output = "X";
+	input = "FALSE AND X";
+	expected_output = "FALSE";
 	REQUIRE(helper.VerifyRewrite(input, expected_output));
 
-	input = "X-0";
-	expected_output = "X";
+	input = "X AND TRUE";
+	expected_output = "X::BOOLEAN";
 	REQUIRE(helper.VerifyRewrite(input, expected_output));
 
-	input = "X*1";
-	expected_output = "X";
+	input = "X OR TRUE";
+	expected_output = "TRUE";
 	REQUIRE(helper.VerifyRewrite(input, expected_output));
 
-	input = "X/0";
-	expected_output = "NULL";
-	REQUIRE(helper.VerifyRewrite(input, expected_output));
-
-	input = "X/1";
-	expected_output = "X";
+	input = "X OR FALSE";
+	expected_output = "X::BOOLEAN";
 	REQUIRE(helper.VerifyRewrite(input, expected_output));
 }

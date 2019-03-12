@@ -220,7 +220,7 @@ string QueryProfiler::ToJSON() const {
 	return result + "}";
 }
 
-void QueryProfiler::WriteToFile(const char *path, string& info) const {
+void QueryProfiler::WriteToFile(const char *path, string &info) const {
 	std::ofstream out(path);
 	out << info;
 	out.close();

@@ -122,7 +122,8 @@ bool Parser::ParsePragma(string &query) {
 			} else if (assignment == "query_tree") {
 				context.profiler.automatic_print_format = AutomaticPrintFormat::QUERY_TREE;
 			} else {
-				throw ParserException("Unrecognized print format %s, supported formats: [json, query_tree]", assignment.c_str());
+				throw ParserException("Unrecognized print format %s, supported formats: [json, query_tree]",
+				                      assignment.c_str());
 			}
 		} else if (type == PragmaType::NOTHING) {
 			context.profiler.automatic_print_format = AutomaticPrintFormat::QUERY_TREE;
