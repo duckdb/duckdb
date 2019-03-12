@@ -1,0 +1,30 @@
+DBItest::make_context(duckdb(), list(), tweaks = DBItest::tweaks(omit_blob_tests=TRUE), name = "duckdb")
+DBItest::test_all(c(
+	"package_name", # wontfix
+	"constructor", # wontfix
+	"send_query_only_one_result_set", # wontfix
+	"send_statement_only_one_result_set", # wontfix
+	"send_query_stale_warning", # wontfix
+	"send_statement_stale_warning", # wontfix
+
+	"get_query_n_bad", # broken test
+	"get_query_good_after_bad_n", # broken test
+	"has_completed_statement", # broken test
+
+	"data_character",
+	"data_logical", # casting NULL issue
+
+	"data_timestamp",
+	"data_time_current",
+	"data_time",
+	"data_date_current",
+	"data_date",
+  "data_timestamp_current",
+  "data_date_typed",
+  "data_date_current_typed",
+  "data_timestamp_typed",
+  "data_timestamp_current_typed",
+
+  "data_64_bit_numeric_warning",  # not now
+  "data_64_bit_lossless"  # not now
+))

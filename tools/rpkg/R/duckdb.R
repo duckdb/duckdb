@@ -1,0 +1,2 @@
+#' @details TBD.
+"_PACKAGE"

@@ -20,6 +20,13 @@ void ClientContext::Cleanup() {
 	if (is_invalidated) {
 		return;
 	}
+	if (transaction.HasActiveTransaction()) {
+		ActiveTransaction().active_query = MAXIMUM_QUERY_ID;
+		if (!transaction.IsAutoCommit()) {
+			transaction.Rollback();
+		}
+	}
+
 	return CleanupInternal();
 }
 
