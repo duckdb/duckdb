@@ -16,6 +16,8 @@ public:
 	unique_ptr<Expression> ApplyExpressionRule(unique_ptr<Expression> root,
 	                                           LogicalOperatorType root_type = LogicalOperatorType::PROJECTION);
 
+	unique_ptr<LogicalOperator> ParseLogicalTree(string query);
+
 	template <class T> void AddRule() {
 		rewriter.rules.push_back(make_unique<T>(rewriter));
 	}

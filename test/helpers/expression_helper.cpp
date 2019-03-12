@@ -49,6 +49,17 @@ unique_ptr<Expression> ExpressionHelper::ParseExpression(string expression) {
 	return move(select_list[0]);
 }
 
+unique_ptr<LogicalOperator> ExpressionHelper::ParseLogicalTree(string query) {
+	Parser parser(context);
+	parser.ParseQuery(query.c_str());
+	if (parser.statements.size() == 0 || parser.statements[0]->type != StatementType::SELECT) {
+		return nullptr;
+	}
+	Planner planner(context);
+	planner.CreatePlan(move(parser.statements[0]));
+	return move(planner.plan);
+}
+
 unique_ptr<Expression> ExpressionHelper::ApplyExpressionRule(unique_ptr<Expression> root,
                                                              LogicalOperatorType root_type) {
 	// make a logical projection
