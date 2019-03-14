@@ -153,6 +153,7 @@ matrix:
             - g++-8 cmake
 
       before_install:
+        - export CC=gcc-8 CXX=g++-8
         - R -e 'install.packages(c("DBI", "testthat", "DBItest"),repos=c("http://cran.rstudio.com/"))'
         - cd tools/rpkg
 
