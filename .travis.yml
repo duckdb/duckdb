@@ -145,8 +145,12 @@ matrix:
       language: r
       r: devel
 
+      addons:
+        apt:
+          packages:
+            - g++-8 cmake
+
       before_install:
-        - export C=gcc CXX=g++
         - R -e 'install.packages(c("DBI", "testthat", "DBItest"),repos=c("http://cran.rstudio.com/"))'
         - cd tools/rpkg
 
