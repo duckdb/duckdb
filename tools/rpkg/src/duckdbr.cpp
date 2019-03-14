@@ -1,4 +1,5 @@
 #include "duckdb.hpp"
+#include "main/appender.hpp"
 
 #include <Rdefines.h>
 // motherfucker
@@ -251,12 +252,103 @@ SEXP duckdb_disconnect_R(SEXP connsexp) {
 	return R_NilValue;
 }
 
+SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
+	if (TYPEOF(connsexp) != EXTPTRSXP) {
+		Rf_error("duckdb_append_R: Need external pointer parameter for connection");
+	}
+
+	Connection *conn = (Connection *)R_ExternalPtrAddr(connsexp);
+	if (!conn) {
+		Rf_error("duckdb_append_R: Invalid connection");
+	}
+
+	if (TYPEOF(namesexp) != STRSXP || LENGTH(namesexp) != 1) {
+		Rf_error("duckdb_append_R: Need single string parameter for name");
+	}
+	auto name = string(CHAR(STRING_ELT(namesexp, 0)));
+
+	// FIXME crude way of stripping quotes, what about escaped quotes?
+	if (name.front() == '"') {
+		name.erase(0, 1);
+		name.erase(name.size() - 1);
+	}
+
+	if (TYPEOF(valuesexp) != VECSXP || LENGTH(valuesexp) < 1 ||
+	    strcmp("data.frame", CHAR(STRING_ELT(GET_CLASS(valuesexp), 0))) != 0) {
+		Rf_error("duckdb_append_R: Need at least one-column data frame parameter for value");
+	}
+
+	// TODO transaction :/
+	try {
+		Appender appender(conn->db, DEFAULT_SCHEMA, name);
+		auto nrows = LENGTH(VECTOR_ELT(valuesexp, 0));
+		for (uint64_t row_idx = 0; row_idx < nrows; row_idx++) {
+			appender.BeginRow();
+			for (uint32_t col_idx = 0; col_idx < LENGTH(valuesexp); col_idx++) {
+				SEXP coldata = VECTOR_ELT(valuesexp, col_idx);
+
+				// TODO date time etc. types, ...
+				if (isFactor(coldata) && TYPEOF(coldata) == INTSXP) {
+					int val = INTEGER_POINTER(coldata)[row_idx];
+					if (val == NA_INTEGER) {
+						appender.AppendValue(Value());
+					} else {
+						SEXP factor_levels = GET_LEVELS(coldata);
+						appender.AppendString(CHAR(STRING_ELT(factor_levels, val - 1)));
+					}
+				} else if (TYPEOF(coldata) == LGLSXP) {
+					int val = INTEGER_POINTER(coldata)[row_idx];
+					if (val == NA_INTEGER) {
+						appender.AppendValue(Value()); // TODO add AppendNull to appender
+					} else {
+						appender.AppendTinyInt(val);
+					}
+				} else if (TYPEOF(coldata) == INTSXP) {
+					int val = INTEGER_POINTER(coldata)[row_idx];
+					if (val == NA_INTEGER) {
+						appender.AppendValue(Value());
+					} else {
+						appender.AppendInteger(val);
+					}
+				} else if (TYPEOF(coldata) == REALSXP) {
+					double val = NUMERIC_POINTER(coldata)[row_idx];
+					if (val == NA_REAL) {
+						appender.AppendValue(Value());
+					} else {
+						appender.AppendDouble(val);
+					}
+				} else if (TYPEOF(coldata) == STRSXP) {
+					SEXP val = STRING_ELT(coldata, row_idx);
+					if (val == NA_STRING) {
+						appender.AppendValue(Value());
+					} else {
+						appender.AppendString(CHAR(val));
+					}
+				} else {
+					throw;
+				}
+			}
+			appender.EndRow();
+		}
+
+		appender.Commit();
+	} catch (...) {
+		Rf_error("duckdb_append_R: Failed to append data");
+	}
+
+	return R_NilValue;
+}
+
 // R native routine registration
 #define CALLDEF(name, n)                                                                                               \
 	{ #name, (DL_FUNC)&name, n }
-static const R_CallMethodDef R_CallDef[] = {CALLDEF(duckdb_startup_R, 1),  CALLDEF(duckdb_connect_R, 1),
-                                            CALLDEF(duckdb_query_R, 2),    CALLDEF(duckdb_disconnect_R, 1),
-                                            CALLDEF(duckdb_shutdown_R, 1), {NULL, NULL, 0}};
+static const R_CallMethodDef R_CallDef[] = {CALLDEF(duckdb_startup_R, 1),
+                                            CALLDEF(duckdb_connect_R, 1),
+                                            CALLDEF(duckdb_query_R, 2),
+                                            CALLDEF(duckdb_append_R, 3),
+                                            CALLDEF(duckdb_disconnect_R, 1),
+                                            CALLDEF(duckdb_shutdown_R, 1),
+                                            {NULL, NULL, 0}};
 
 void R_init_duckdb(DllInfo *dll) {
 	R_registerRoutines(dll, NULL, R_CallDef, NULL, NULL);

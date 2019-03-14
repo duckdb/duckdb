@@ -26,9 +26,9 @@ DuckDB is implemented in C++ 11, should compile with GCC and clang, uses CMake t
 * Date Math: We use the date math component from [MonetDB](https://www.monetdb.org).
 * SQL Window Functions: DuckDB's window functions implementation uses Segment Tree Aggregation as described in the paper "Efficient Processing of Window Functions in Analytical SQL Queries" by Viktor Leis, Kan Kundhikanjana, Alfons Kemper and Thomas Neumann.
 * Execution engine: The vectorized execution engine is inspired by the paper "MonetDB/X100: Hyper-Pipelining Query Execution" by Peter Boncz, Marcin Zukowski and Niels Nes.
-* Optimizer: DuckDB's optimzer draws inspiration from the papers "Dynamic programming strikes back" by Guido Moerkotte and Thomas Neumman as well as "Unnesting Arbitrary Queries" by Thomas Neumann and Alfons Kemper.
+* Optimizer: DuckDB's optimizer draws inspiration from the papers "Dynamic programming strikes back" by Guido Moerkotte and Thomas Neumman as well as "Unnesting Arbitrary Queries" by Thomas Neumann and Alfons Kemper.
 * Concurrency control: Our MVCC implementation is inspired by the paper "Fast Serializable Multi-Version Concurrency Control for Main-Memory Database Systems" by Thomas Neumann, Tobias Mühlbauer and Alfons Kemper.
 * Storage: DuckDB uses DataBlocks for persistent storage as described in the paper "Data Blocks: Hybrid OLTP and OLAP on Compressed Storage using both Vectorization and Compilation" by Harald Lang, Tobias Mühlbauer, Florian Funke, Peter Boncz, Thomas Neumann and Alfons Kemper
 
 ## Other pages
-* [Continous Benchmarking (CB™)](http://www.duckdb.org/benchmarking/), runs TPC-H, TPC-DS and some microbenchmarks on every commit
+* [Continuous Benchmarking (CB™)](http://www.duckdb.org/benchmarking/), runs TPC-H, TPC-DS and some microbenchmarks on every commit

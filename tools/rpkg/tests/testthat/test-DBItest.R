@@ -1,4 +1,5 @@
-DBItest::make_context(duckdb(), list(), tweaks = DBItest::tweaks(omit_blob_tests=TRUE), name = "duckdb")
+DBItest::make_context(duckdb(), list(), tweaks = DBItest::tweaks(omit_blob_tests=TRUE, temporary_tables=FALSE), name = "duckdb")
+
 DBItest::test_all(c(
 	"package_name", # wontfix
 	"constructor", # wontfix
@@ -11,7 +12,6 @@ DBItest::test_all(c(
 	"get_query_good_after_bad_n", # broken test
 	"has_completed_statement", # broken test
 
-	"data_character",
 	"data_logical", # casting NULL issue
 
 	"data_timestamp",
@@ -25,6 +25,13 @@ DBItest::test_all(c(
   "data_timestamp_typed",
   "data_timestamp_current_typed",
 
-  "data_64_bit_numeric_warning",  # not now
-  "data_64_bit_lossless"  # not now
-))
+
+  "roundtrip_timestamp",
+  "roundtrip_date",
+  "roundtrip_time",
+  "roundtrip_field_types", # strange
+    "data_64_bit_numeric_warning",  # not now
+  "data_64_bit_lossless",  # not now,
+  "roundtrip_64_bit_character",
+  "roundtrip_64_bit_numeric",
+  "roundtrip_numeric_special"))
