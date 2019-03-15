@@ -4,7 +4,141 @@ dist: trusty
 
 matrix:
   include:
-    
+    # these fail in mysterious ways
+
+    # - os: osx
+    #   osx_image: xcode7.3
+
+    # - os: osx
+    #   osx_image: xcode8.3
+
+    - os: osx
+      osx_image: xcode9.3
+
+    - os: osx
+      osx_image: xcode9.4
+
+    - os: osx
+      osx_image: xcode10
+
+    - os: linux
+      addons:
+         apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-4.9 binutils-2.26
+      env:
+         - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
+
+    - os: linux
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-5 binutils-2.26
+      env:
+         - MATRIX_EVAL="CC=gcc-5 && CXX=g++-5"
+
+    - os: linux
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-6 binutils-2.26
+      env:
+        - MATRIX_EVAL="CC=gcc-6 && CXX=g++-6"
+
+    - os: linux
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-7 binutils-2.26
+      env:
+        - MATRIX_EVAL="CC=gcc-7 && CXX=g++-7"
+
+    - os: linux
+      dist: xenial
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-8
+      env:
+        - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
+
+    - os: linux
+      addons:
+        apt:
+          sources:
+            - llvm-toolchain-trusty-3.9
+          packages:
+            - clang-3.9 binutils-2.26
+      env:
+        - MATRIX_EVAL="CC=clang-3.9 && CXX=clang++-3.9"
+
+    - os: linux
+      addons:
+        apt:
+          sources:
+            - llvm-toolchain-trusty-4.0
+          packages:
+            - clang-4.0 binutils-2.26
+
+      env:
+        - MATRIX_EVAL="CC=clang-4.0 && CXX=clang++-4.0"
+
+    - os: linux
+      addons:
+        apt:
+          sources:
+            - llvm-toolchain-trusty-5.0
+          packages:
+            - clang-5.0 binutils-2.26
+      env:
+        - MATRIX_EVAL="CC=clang-5.0 && CXX=clang++-5.0"
+
+    - os: linux
+      dist: xenial
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - clang-6.0
+      env:
+        - MATRIX_EVAL="CC=clang-6.0 && CXX=clang++-6.0"
+
+    - os: windows
+      language: c
+      env:
+        - MSBUILD_PATH="c:\Program Files (x86)\Microsoft Visual Studio\2017\BuildTools\MSBuild\15.0\Bin"
+
+      script:
+        - export PATH=$MSBUILD_PATH:$PATH
+        - cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_GENERATOR_PLATFORM=x64
+        - MSBuild.exe DuckDB.sln -target:unittest
+        - test/Debug/unittest.exe
+
+
+    - os: linux
+      dist: xenial
+      language: python
+      python: 3.7
+
+      before_script:
+        - pip3 install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3"
+        - cd tools/pythonpkg
+
+      script:
+        - python3 setup.py install
+        - python3 -m pytest tests
+
     - os: linux
       dist: xenial
       language: r
