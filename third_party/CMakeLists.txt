@@ -1,7 +1,7 @@
 add_subdirectory(hyperloglog)
 add_subdirectory(libpg_query)
 
-IF (NOT WIN32)
+IF (NOT WIN32 AND NOT LEAN)
   add_subdirectory(dbgen)
   add_subdirectory(dsdgen)
   add_subdirectory(sqlsmith)
