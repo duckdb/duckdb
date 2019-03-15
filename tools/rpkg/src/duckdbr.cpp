@@ -339,6 +339,22 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 	return R_NilValue;
 }
 
+SEXP duckdb_ptr_to_str(SEXP extptr) {
+	if (TYPEOF(extptr) != EXTPTRSXP) {
+		Rf_error("duckdb_ptr_to_str: Need external pointer parameter");
+	}
+	SEXP ret = PROTECT(NEW_STRING(1));
+	SET_STRING_ELT(ret, 0, NA_STRING);
+	void* ptr = R_ExternalPtrAddr(extptr);
+	if (ptr != NULL) {
+		char buf[100];
+		snprintf(buf, 100, "%p", ptr);
+		SET_STRING_ELT(ret, 0, mkChar(buf));
+	}
+	UNPROTECT(1);
+	return ret;
+}
+
 // R native routine registration
 #define CALLDEF(name, n)                                                                                               \
 	{ #name, (DL_FUNC)&name, n }
@@ -348,6 +364,8 @@ static const R_CallMethodDef R_CallDef[] = {CALLDEF(duckdb_startup_R, 1),
                                             CALLDEF(duckdb_append_R, 3),
                                             CALLDEF(duckdb_disconnect_R, 1),
                                             CALLDEF(duckdb_shutdown_R, 1),
+                                            CALLDEF(duckdb_ptr_to_str, 1),
+
                                             {NULL, NULL, 0}};
 
 void R_init_duckdb(DllInfo *dll) {

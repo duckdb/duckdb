@@ -26,13 +26,19 @@ duckdb <- function(dbdir=":memory:") {
 #' @export
 setClass("duckdb_driver", contains = "DBIDriver", slots=list(dbdir="character", database_ref="externalptr"))
 
+extptr_str <- function(e, n=5) {
+  x <- .Call(duckdb_ptr_to_str, e)
+  substr(x, nchar(x)-n+1, nchar(x))
+
+}
+
 #' @rdname DBI
 #' @inheritParams methods::show
 #' @export
 setMethod(
   "show", "duckdb_driver",
   function(object) {
-    cat("<duckdb_driver>\n")
+    cat(sprintf("<duckdb_driver %s dbdir='%s'>\n", extptr_str(object@database_ref), object@dbdir))
   })
 
 #' @rdname DBI
