@@ -139,25 +139,17 @@ matrix:
         - python3 setup.py install
         - python3 -m pytest tests
 
-
     - os: linux
       dist: xenial
       language: r
       r: devel
-
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-8 cmake
 
       before_install:
         - R -e 'install.packages(c("DBI", "testthat", "DBItest"),repos=c("http://cran.rstudio.com/"))'
         - cd tools/rpkg
 
       install:
-        - R CMD INSTALL .
+        -  R CMD INSTALL .
 
       before_script:
         - cd tests

@@ -14,12 +14,16 @@ basedir = os.path.dirname(os.path.realpath(__file__))
 class CustomInstallCommand(install):
     def run(self):
         wd = os.getcwd()
-        os.chdir("../../")
-        process = subprocess.Popen(['make', 'opt'])
-        process.wait()
+        os.chdir('../../')
+        os.makedirs('build/release_notest', exist_ok=True)
+        os.chdir('build/release_notest')
+
+        subprocess.Popen(['cmake', '-DCMAKE_BUILD_TYPE=RelWithDebInfo', '-DLEAN=1', '../..']).wait()
+        subprocess.Popen(['make']).wait()
+
         os.chdir(wd)
-        if process.returncode != 0 or not os.path.isfile('../../build/release/src/libduckdb_static.a'):
-            raise Exception('Library build failed. :/') 
+        if not os.path.isfile('../../build/release_notest/src/libduckdb_static.a'):
+            raise Exception('Library build failed :/') 
         install.run(self)
 
 includes = [numpy.get_include(), '../../src/include', '.']
@@ -30,7 +34,7 @@ libduckdb = Extension('duckdb',
     sources=sources,
     extra_compile_args=['-std=c99', '-Wall'],
     language='c++', # for linking c++ stdlib
-    extra_objects=['../../build/release/src/libduckdb_static.a', '../../build/release/third_party/libpg_query/libpg_query.a'])
+    extra_objects=['../../build/release_notest/src/libduckdb_static.a', '../../build/release_notest/third_party/libpg_query/libpg_query.a'])
 
 setup(
     name = "duckdb",

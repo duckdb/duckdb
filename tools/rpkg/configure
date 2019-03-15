@@ -1,0 +1,14 @@
+#!/bin/sh
+
+# run cmake to build duckdb library
+(
+	cd ../../
+	mkdir -p build/release_notest
+	cd build/release_notest && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLEAN=1 ../.. && make
+)
+rm -f src/*.*o
+if [ ! -f "../../build/release_notest/src/libduckdb_static.a" ] 
+then
+   echo "Build failed :/"
+   exit 1
+fi
