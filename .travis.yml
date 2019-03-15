@@ -5,9 +5,9 @@ dist: trusty
 matrix:
   include:
 
-    - os: osx
-      name: Xcode 7.3
-      osx_image: xcode7.3
+    # - os: osx
+    #   name: Xcode 7.3
+    #   osx_image: xcode7.3
 
     # - os: osx
     #   osx_image: xcode8.3
@@ -106,7 +106,7 @@ matrix:
         - build/coverage/test/unittest
 
       after_success:
-        - coveralls --exclude tools --exclude test --exclude build --gcov-options '\-lp'
+        - coveralls -b build/coverage --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --gcov-options '\-lp'
 
     - os: linux
       name: Clang 3.9
