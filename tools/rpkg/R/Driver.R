@@ -29,7 +29,6 @@ setClass("duckdb_driver", contains = "DBIDriver", slots=list(dbdir="character", 
 extptr_str <- function(e, n=5) {
   x <- .Call(duckdb_ptr_to_str, e)
   substr(x, nchar(x)-n+1, nchar(x))
-
 }
 
 #' @rdname DBI
@@ -80,7 +79,15 @@ setMethod(
 setMethod(
   "dbIsValid", "duckdb_driver",
   function(dbObj, ...) {
-    TRUE
+    valid <- FALSE
+    tryCatch ({
+      con <- dbConnect(dbObj)
+      dbExecute(con, SQL("SELECT 1"))
+      dbDisconnect(con)
+      valid <- TRUE
+    }, error = function(c) {
+    })
+    valid
   })
 
 #' @rdname DBI
@@ -91,3 +98,17 @@ setMethod(
   function(dbObj, ...) {
     list(driver.version=NA, client.version=NA)
   })
+
+
+#' @export
+duckdb_shutdown <- function(drv) {
+  if (!is(drv, "duckdb_driver")) {
+    stop("pass a duckdb_driver object")
+  }
+  if (!dbIsValid(drv)) {
+    warning("invalid driver object, already closed?")
+    invisible(FALSE)
+  }
+  .Call(duckdb_shutdown_R, drv@database_ref)
+  invisible(TRUE)
+}
