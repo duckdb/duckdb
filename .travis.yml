@@ -102,8 +102,7 @@ matrix:
 
       script: 
         - mkdir -p build/coverage
-        - cd build/coverage
-        - cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
+        - (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
         - build/debug/test/unittest
 
       after_success:
