@@ -1,0 +1,10 @@
+#!/bin/sh
+
+# run cmake to build duckdb library
+(cd ../../; make opt)
+
+if [ ! -f "../../build/release/src/libduckdb_static.a" ] 
+then
+   echo "Build failed :/"
+   exit 1
+fi
