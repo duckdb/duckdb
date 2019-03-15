@@ -31,7 +31,7 @@ unique_ptr<CreateViewStatement> Transformer::TransformCreateView(Node *node) {
 			auto node = reinterpret_cast<Node *>(c->data.ptr_value);
 			switch (node->type) {
 			case T_String: {
-				auto val = (value *)node;
+				auto val = (postgres::Value *)node;
 				info.aliases.push_back(string(val->val.str));
 				break;
 			}

@@ -30,7 +30,7 @@ unique_ptr<CreateTableStatement> Transformer::TransformCreateTable(Node *node) {
 		switch (node->type) {
 		case T_ColumnDef: {
 			auto cdef = (ColumnDef *)c->data.ptr_value;
-			char *name = (reinterpret_cast<value *>(cdef->typeName->names->tail->data.ptr_value)->val.str);
+			char *name = (reinterpret_cast<postgres::Value *>(cdef->typeName->names->tail->data.ptr_value)->val.str);
 			auto centry = ColumnDefinition(cdef->colname, TransformStringToTypeId(name));
 
 			if (cdef->constraints) {

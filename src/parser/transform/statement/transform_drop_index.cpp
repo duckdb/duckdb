@@ -11,7 +11,7 @@ unique_ptr<DropIndexStatement> Transformer::TransformDropIndex(DropStmt *stmt) {
 
 	auto index_list = reinterpret_cast<List *>(stmt->objects->head->data.ptr_value);
 
-	info.name = reinterpret_cast<value *>(index_list->head->data.ptr_value)->val.str;
+	info.name = reinterpret_cast<postgres::Value *>(index_list->head->data.ptr_value)->val.str;
 
 	info.if_exists = stmt->missing_ok;
 	return result;

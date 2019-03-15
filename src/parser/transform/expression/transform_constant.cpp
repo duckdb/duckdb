@@ -5,7 +5,7 @@ using namespace duckdb;
 using namespace postgres;
 using namespace std;
 
-unique_ptr<Expression> Transformer::TransformValue(value val) {
+unique_ptr<Expression> Transformer::TransformValue(postgres::Value val) {
 	switch (val.type) {
 	case T_Integer:
 		return make_unique<ConstantExpression>(Value::INTEGER(val.val.ival));

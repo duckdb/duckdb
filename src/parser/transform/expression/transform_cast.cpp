@@ -13,7 +13,7 @@ unique_ptr<Expression> Transformer::TransformTypeCast(TypeCast *root) {
 	}
 	// get the type to cast to
 	TypeName *type_name = root->typeName;
-	char *name = (reinterpret_cast<value *>(type_name->names->tail->data.ptr_value)->val.str);
+	char *name = (reinterpret_cast<postgres::Value *>(type_name->names->tail->data.ptr_value)->val.str);
 	TypeId target_type = TransformStringToTypeId(name);
 
 	if (root->arg->type == T_A_Const) {
