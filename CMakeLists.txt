@@ -28,10 +28,7 @@ IF(NOT MSVC)
 ENDIF()
 
 
-
-
 # todo use CHECK_CXX_COMPILER_FLAG(-fsanitize=address SUPPORTS_SANITIZER) etc.
-
 
 SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -g -O3")
 
@@ -47,6 +44,7 @@ include_directories(third_party/hyperloglog)
 
 add_subdirectory(src)
 add_subdirectory(third_party)
+
 IF (NOT LEAN)
 	add_subdirectory(test)
 	IF (NOT WIN32)

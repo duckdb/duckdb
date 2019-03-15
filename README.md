@@ -1,6 +1,7 @@
 # DuckDB, the SQLite for Analytics
 [![Travis](https://api.travis-ci.org/cwida/duckdb.svg?branch=master)](https://travis-ci.org/cwida/duckdb)
 [![CodeFactor](https://www.codefactor.io/repository/github/cwida/duckdb/badge)](https://www.codefactor.io/repository/github/cwida/duckdb)
+[![Coverage Status](https://coveralls.io/repos/github/cwida/duckdb/badge.svg?branch=master)](https://coveralls.io/github/cwida/duckdb?branch=master)
 
 # Requirements
 DuckDB requires [CMake](https://cmake.org) to be installed and a `C++11` compliant compiler. To run all tests, a `git` installation is also required.
