@@ -145,17 +145,7 @@ matrix:
       language: r
       r: devel
 
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-8 cmake
-
       before_install:
-        - mkdir ~/.R
-        - echo -e "CC=gcc-8\nCXX=g++-8" > ~/.R/Makevars
-        - cat ~/.R/Makevars
         - R -e 'install.packages(c("DBI", "testthat", "DBItest"),repos=c("http://cran.rstudio.com/"))'
         - cd tools/rpkg
 

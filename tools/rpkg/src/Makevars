@@ -1,5 +1,5 @@
-CXX_STD = CXX11
-USE_CXX11 = YES
+#CXX_STD = CXX11
+#USE_CXX11 = YES
 
 PKG_CXXFLAGS = -I../../../src/include
 OBJECTS=duckdbr.o ../../../build/release/src/libduckdb_static.a ../../../build/release/third_party/libpg_query/libpg_query.a
@@ -8,5 +8,3 @@ all: duckdb
 
 duckdb:
 	(cd ../../../; make opt)
-
-# TODO libstdc++ linking
