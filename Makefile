@@ -13,7 +13,7 @@ main:
 opt:
 	mkdir -p build
 	mkdir -p build/release
-	cd build/release && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && make
+	cd build/release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && make
 
 test: main
 	build/debug/test/test
