@@ -13,10 +13,10 @@
 #include "parser/tokens.hpp"
 
 namespace postgres {
-#include "parser/postgres/parsenodes.h"
-#include "parser/postgres/pg_list.h"
-#include "parser/postgres/pg_query.h"
-#include "parser/postgres/pg_trigger.h"
+#include "postgres.h"
+#include "pg_query.h"
+#include "nodes/parsenodes.h"
+#include "catalog/pg_trigger.h"
 } // namespace postgres
 
 namespace duckdb {
@@ -96,7 +96,7 @@ private:
 	//! Transform a Postgres column reference into an Expression
 	unique_ptr<Expression> TransformColumnRef(postgres::ColumnRef *root);
 	//! Transform a Postgres constant value into an Expression
-	unique_ptr<Expression> TransformValue(postgres::value val);
+	unique_ptr<Expression> TransformValue(postgres::Value val);
 	//! Transform a Postgres operator into an Expression
 	unique_ptr<Expression> TransformAExpr(postgres::A_Expr *root);
 	//! Transform a Postgres abstract expression into an Expression

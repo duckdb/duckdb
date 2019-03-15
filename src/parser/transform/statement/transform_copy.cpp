@@ -63,7 +63,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 
 			if (def_elem->defname == kDelimiterTok) {
 				// delimiter
-				auto *delimiter_val = reinterpret_cast<value *>(def_elem->arg);
+				auto *delimiter_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
 				size_t delim_len = strlen(delimiter_val->val.str);
 				info.delimiter = '\0';
 				char *delim_cstr = delimiter_val->val.str;
@@ -78,18 +78,18 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(Node *node) {
 				}
 			} else if (def_elem->defname == kFormatTok) {
 				// format
-				auto *format_val = reinterpret_cast<value *>(def_elem->arg);
+				auto *format_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
 				info.format = StringToExternalFileFormat(format_val->val.str);
 			} else if (def_elem->defname == kQuoteTok) {
 				// quote
-				auto *quote_val = reinterpret_cast<value *>(def_elem->arg);
+				auto *quote_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
 				info.quote = *quote_val->val.str;
 			} else if (def_elem->defname == kEscapeTok) {
 				// escape
-				auto *escape_val = reinterpret_cast<value *>(def_elem->arg);
+				auto *escape_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
 				info.escape = *escape_val->val.str;
 			} else if (def_elem->defname == kHeaderTok) {
-				auto *header_val = reinterpret_cast<value *>(def_elem->arg);
+				auto *header_val = reinterpret_cast<postgres::Value *>(def_elem->arg);
 				assert(header_val->type == T_Integer);
 				info.header = header_val->val.ival == 1 ? true : false;
 			} else {

@@ -48,7 +48,7 @@ unique_ptr<Expression> Transformer::TransformAExpr(A_Expr *root) {
 		return nullptr;
 	}
 	ExpressionType target_type;
-	auto name = string((reinterpret_cast<value *>(root->name->head->data.ptr_value))->val.str);
+	auto name = string((reinterpret_cast<postgres::Value *>(root->name->head->data.ptr_value))->val.str);
 
 	switch (root->kind) {
 	case AEXPR_DISTINCT:

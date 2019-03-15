@@ -39,7 +39,9 @@
 
 #include "nodes/nodes.h"
 
+#ifndef DUCKDB
 typedef char bool;
+#endif
 
 typedef unsigned int Oid;
 

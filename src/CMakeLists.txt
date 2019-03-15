@@ -1,3 +1,5 @@
+add_definitions(-DDUCKDB)
+
 add_subdirectory(catalog)
 add_subdirectory(common)
 add_subdirectory(execution)

@@ -14,7 +14,9 @@
 #ifndef NODES_H
 #define NODES_H
 
+#ifndef DUCKDB
 typedef char bool;
+#endif
 
 /*
  * The first field of every node is NodeTag. Each node created (with makeNode)

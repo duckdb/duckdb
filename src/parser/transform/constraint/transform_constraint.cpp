@@ -14,7 +14,7 @@ unique_ptr<Constraint> Transformer::TransformConstraint(postgres::ListCell *cell
 		    constraint->contype == postgres::CONSTR_PRIMARY ? ConstraintType::PRIMARY_KEY : ConstraintType::UNIQUE;
 		vector<string> columns;
 		for (auto kc = constraint->keys->head; kc; kc = kc->next) {
-			columns.push_back(string(reinterpret_cast<postgres::value *>(kc->data.ptr_value)->val.str));
+			columns.push_back(string(reinterpret_cast<postgres::Value *>(kc->data.ptr_value)->val.str));
 		}
 		return make_unique<ParsedConstraint>(type, columns);
 	}

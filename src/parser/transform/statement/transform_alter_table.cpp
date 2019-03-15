@@ -25,7 +25,7 @@ unique_ptr<AlterTableStatement> Transformer::TransformAlter(Node *node) {
 	// 	switch (command->subtype) {
 	// 		case AT_AddColumn: {
 	//                auto cdef = (ColumnDef *)command->def;
-	//                char *name = (reinterpret_cast<value *>(
+	//                char *name = (reinterpret_cast<postgres::Value *>(
 	//                        cdef->typeName->names->tail->data.ptr_value)
 	//                        ->val.str);
 	//                auto centry =

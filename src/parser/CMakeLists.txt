@@ -1,4 +1,7 @@
 
+include_directories(../../third_party/libpg_query/src/postgres/include)
+include_directories(../../third_party/libpg_query)
+
 add_subdirectory(constraints)
 add_subdirectory(expression)
 add_subdirectory(query_node)

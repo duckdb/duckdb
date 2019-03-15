@@ -125,12 +125,12 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 	string schema, function_name;
 	if (name->length == 2) {
 		// schema + name
-		schema = reinterpret_cast<value *>(name->head->data.ptr_value)->val.str;
-		function_name = reinterpret_cast<value *>(name->head->next->data.ptr_value)->val.str;
+		schema = reinterpret_cast<postgres::Value *>(name->head->data.ptr_value)->val.str;
+		function_name = reinterpret_cast<postgres::Value *>(name->head->next->data.ptr_value)->val.str;
 	} else {
 		// unqualified name
 		schema = DEFAULT_SCHEMA;
-		function_name = reinterpret_cast<value *>(name->head->data.ptr_value)->val.str;
+		function_name = reinterpret_cast<postgres::Value *>(name->head->data.ptr_value)->val.str;
 	}
 
 	auto lowercase_name = StringUtil::Lower(function_name);
