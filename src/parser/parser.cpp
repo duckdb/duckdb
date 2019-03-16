@@ -2,6 +2,10 @@
 
 #include "parser/transformer.hpp"
 
+namespace postgres {
+#include "pg_query.h"
+}
+
 using namespace postgres;
 
 using namespace duckdb;
