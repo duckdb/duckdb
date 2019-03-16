@@ -6,8 +6,6 @@
 using namespace duckdb;
 using namespace std;
 
-#include <iostream>
-
 void CommonAggregateOptimizer::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::PROJECTION:
