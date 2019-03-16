@@ -13,9 +13,10 @@
 #include "parser/tokens.hpp"
 
 namespace postgres {
-#include "postgres.h"
-#include "pg_query.h"
+typedef uintptr_t Datum;
+#include "c.h"
 #include "nodes/parsenodes.h"
+#include "pg_query.h"
 #include "catalog/pg_trigger.h"
 } // namespace postgres
 
