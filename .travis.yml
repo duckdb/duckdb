@@ -106,7 +106,7 @@ matrix:
         - build/coverage/test/unittest
 
       after_success:
-        - coveralls -b build/coverage --exclude tools --exclude build --exclude benchmark --exclude examples --exclude third_party --exclude test --gcov-options '\-lp'
+        - coveralls -b build/coverage --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --gcov-options '\-lp'
 
     - os: linux
       name: Clang 3.9
