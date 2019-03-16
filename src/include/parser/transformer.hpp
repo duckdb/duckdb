@@ -14,6 +14,7 @@
 
 namespace postgres {
 // FIXME defines evil
+#include <limits.h>
 #define PG_INT32_MAX INT_MAX
 #define PGDLLIMPORT
 
