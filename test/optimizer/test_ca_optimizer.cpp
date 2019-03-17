@@ -14,10 +14,17 @@ TEST_CASE("Test common aggregate optimizer", "[aggregations]") {
 	Connection con(db);
 
     con.Query("BEGIN TRANSACTION");
-	con.Query("CREATE TABLE integers(i INTEGER)");
+	con.Query("CREATE TABLE integers(i INTEGER, j INTEGER)");
 
     // now we expect duplicate aggregates to be reduced to a single occurence.
 	ExpressionHelper helper(con.context);
+    CommonAggregateOptimizer optimizer;
+
+	/* before optimization
+	PROJECTION[a, b] // a, b point to different aggregate expressions.
+	AGGREGATE_AND_GROUP_BY[a(i), b(i)]
+		GET(integers)
+	*/
     auto tree = helper.ParseLogicalTree("SELECT SUM(i) as a, SUM(i) as b FROM integers");
 
 	REQUIRE(tree->type == LogicalOperatorType::PROJECTION);
@@ -33,16 +40,8 @@ TEST_CASE("Test common aggregate optimizer", "[aggregations]") {
 
 	REQUIRE(a->binding.table_index == aggregate->aggregate_index);
 	REQUIRE(b->binding.table_index == aggregate->aggregate_index);
-
-	/* before optimization
-	PROJECTION[a, b] // a, b point to different aggregate expressions.
-	AGGREGATE_AND_GROUP_BY[a(i), b(i)]
-		GET(integers)
-	*/
 	REQUIRE(aggregate->expressions.size() == 2);
 	REQUIRE(a->binding.column_index != b->binding.column_index);
-
-    CommonAggregateOptimizer optimizer;
 	optimizer.VisitOperator(*tree);
 
 	/* after optimization
@@ -50,7 +49,38 @@ TEST_CASE("Test common aggregate optimizer", "[aggregations]") {
 	AGGREGATE_AND_GROUP_BY[a(i)]
     GET(integers)
 	*/
+
+	// There is only one aggregate expression.
 	REQUIRE(aggregate->expressions.size() == 1);
+
+	// bound column referencesses a and b point to the same aggregate expression.
 	REQUIRE(a->binding.column_index == 0);
 	REQUIRE(a->binding.column_index == b->binding.column_index);
+
+	/*
+	PROJECTION[SUM + 2 * SUM]
+	FILTER[SUM>0]
+		AGGREGATE_AND_GROUP_BY[SUM(i), SUM(i), SUM(i)][j]
+			GET(integers)
+	*/
+	tree = helper.ParseLogicalTree(
+		"SELECT (SUM(i) + 2 * SUM(i)) as b FROM integers GROUP BY j HAVING SUM(i) > 0");
+
+	auto filter	= static_cast<LogicalFilter*>(tree->children[0].get());
+
+	aggregate	= static_cast<LogicalAggregate*>(filter->children[0].get());
+
+	REQUIRE(aggregate->expressions.size() == 3);
+
+	optimizer.VisitOperator(*tree);
+
+	/*
+	PROJECTION[SUM + 2 * SUM]
+	FILTER[SUM>0]
+		AGGREGATE_AND_GROUP_BY[SUM(i)][j]
+			GET(integers)
+	*/
+	REQUIRE(aggregate->expressions.size() == 1);
+
+	//auto filter_expression = static_cast<BoundColumnRefExpression*>(filter->expressions[0].get());
 }
