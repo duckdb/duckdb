@@ -64,7 +64,7 @@ TEST_CASE("Test common aggregate optimizer", "[aggregations]") {
 			GET(integers)
 	*/
 	tree = helper.ParseLogicalTree(
-		"SELECT (SUM(i) + 2 * SUM(i)) as b FROM integers GROUP BY j HAVING SUM(i) > 0");
+		"SELECT (SUM(i) + SUM(i)) as b FROM integers GROUP BY j HAVING SUM(i) > 0");
 
 	auto filter	= static_cast<LogicalFilter*>(tree->children[0].get());
 
@@ -75,12 +75,22 @@ TEST_CASE("Test common aggregate optimizer", "[aggregations]") {
 	optimizer.VisitOperator(*tree);
 
 	/*
-	PROJECTION[SUM + 2 * SUM]
+	PROJECTION[SUM + SUM]
 	FILTER[SUM>0]
 		AGGREGATE_AND_GROUP_BY[SUM(i)][j]
 			GET(integers)
 	*/
 	REQUIRE(aggregate->expressions.size() == 1);
 
-	//auto filter_expression = static_cast<BoundColumnRefExpression*>(filter->expressions[0].get());
+	// Left SUM expression of addition operator expression.
+	auto sum_expression_l  = static_cast<BoundColumnRefExpression*>(tree->expressions[0]->GetChild(0));
+	// Right SUM expression of addition operator expression.
+	auto sum_expression_r  = static_cast<BoundColumnRefExpression*>(tree->expressions[0]->GetChild(1));
+	// Left SUM side of comparison expression.
+	auto filter_expression = static_cast<BoundColumnRefExpression*>(filter->expressions[0]->GetChild(0));
+
+	// sum_expressions all point to the same column index
+	REQUIRE(sum_expression_l-> binding.column_index == 0);
+	REQUIRE(sum_expression_r-> binding.column_index == 0);
+	REQUIRE(filter_expression->binding.column_index == 0);
 }
