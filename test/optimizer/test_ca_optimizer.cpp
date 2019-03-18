@@ -3,8 +3,7 @@
 #include "expression_helper.hpp"
 
 #include "optimizer/ca_optimizer.hpp"
-
-#include <iostream>
+#include "planner/operator/logical_window.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -12,6 +11,12 @@ using namespace std;
 TEST_CASE("Test common aggregate optimizer", "[aggregations]") {
 	DuckDB db(nullptr);
 	Connection con(db);
+
+	LogicalProjection*	projection;
+	LogicalFilter*		filter;
+	LogicalWindow*		window;
+	LogicalAggregate*	aggregate;
+
 
     con.Query("BEGIN TRANSACTION");
 	con.Query("CREATE TABLE integers(i INTEGER, j INTEGER)");
@@ -30,7 +35,7 @@ TEST_CASE("Test common aggregate optimizer", "[aggregations]") {
 	REQUIRE(tree->type == LogicalOperatorType::PROJECTION);
 	REQUIRE(tree->children[0]->type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY);
 
-	auto aggregate = static_cast<LogicalAggregate*>(tree->children[0].get());
+	aggregate = static_cast<LogicalAggregate*>(tree->children[0].get());
 
 	REQUIRE(tree->expressions[0]->type == ExpressionType::BOUND_COLUMN_REF);
 	REQUIRE(tree->expressions[1]->type == ExpressionType::BOUND_COLUMN_REF);
@@ -66,7 +71,7 @@ TEST_CASE("Test common aggregate optimizer", "[aggregations]") {
 	tree = helper.ParseLogicalTree(
 		"SELECT (SUM(i) + SUM(i)) as b FROM integers GROUP BY j HAVING SUM(i) > 0");
 
-	auto filter	= static_cast<LogicalFilter*>(tree->children[0].get());
+	filter	= static_cast<LogicalFilter*>(tree->children[0].get());
 
 	aggregate	= static_cast<LogicalAggregate*>(filter->children[0].get());
 
@@ -74,7 +79,7 @@ TEST_CASE("Test common aggregate optimizer", "[aggregations]") {
 
 	optimizer.VisitOperator(*tree);
 
-	/*
+	/* after optimization
 	PROJECTION[SUM + SUM]
 	FILTER[SUM>0]
 		AGGREGATE_AND_GROUP_BY[SUM(i)][j]
@@ -93,4 +98,37 @@ TEST_CASE("Test common aggregate optimizer", "[aggregations]") {
 	REQUIRE(sum_expression_l-> binding.column_index == 0);
 	REQUIRE(sum_expression_r-> binding.column_index == 0);
 	REQUIRE(filter_expression->binding.column_index == 0);
+
+	/*
+	ORDER_BY
+	PROJECTION[i, SUM, w]
+		WINDOW[WINDOW]
+			AGGREGATE_AND_GROUP_BY[SUM(j), SUM(j), SUM(j), SUM(j), SUM(j)][i]
+				GET(integers)
+	*/
+	tree = helper.ParseLogicalTree(
+		"SELECT i, SUM(j), AVG(SUM(j)+SUM(j))"
+		" OVER (PARTITION BY SUM(j) ORDER BY SUM(j)) as w"
+		" FROM integers GROUP BY i ORDER BY i;");
+
+	projection	= static_cast<LogicalProjection*>	(tree->children[0].get());
+	window		= static_cast<LogicalWindow*>		(projection->children[0].get());
+	aggregate	= static_cast<LogicalAggregate*>	(window->children[0].get());
+
+	REQUIRE(aggregate->expressions.size() == 5);
+
+	optimizer.VisitOperator(*tree);
+
+	/* after optimization
+	ORDER_BY
+	PROJECTION[i, SUM, w]
+		WINDOW[WINDOW]
+			AGGREGATE_AND_GROUP_BY[SUM(j)][i]
+				GET(integers)
+	*/
+	REQUIRE(aggregate->expressions.size() == 1);
+
+	// sum expression corresponding to the partition in the over clause.
+	auto sum_expression_part  = static_cast<BoundColumnRefExpression*>(window->expressions[0]->GetChild(0));
+	REQUIRE(sum_expression_part->binding.column_index == 0);
 }
