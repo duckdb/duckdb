@@ -11,7 +11,7 @@ void CheckConstraint::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<Constraint> CheckConstraint::Deserialize(Deserializer &source) {
-	auto expression = Expression::Deserialize(source);
+	auto expression = ParsedExpression::Deserialize(source);
 	if (!expression) {
 		return nullptr;
 	}

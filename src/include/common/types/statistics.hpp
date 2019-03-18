@@ -10,11 +10,12 @@
 
 #include "common/common.hpp"
 #include "common/types/value.hpp"
+#include "common/types/vector.hpp"
+#include "planner/expression.hpp"
 
 namespace duckdb {
 
-class Expression;
-class Vector;
+class ExpressionStatistics;
 
 //! The ExpressionStatistics object holds statistics relating to a specific
 //! Expression, and can be propagated throughout a chain of expressions

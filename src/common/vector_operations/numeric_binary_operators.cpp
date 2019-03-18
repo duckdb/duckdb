@@ -24,15 +24,16 @@ void VectorOperations::Add(Vector &left, Vector &right, Vector &result) {
 	case TypeId::SMALLINT:
 		templated_binary_loop<int16_t, int16_t, int16_t, operators::Add>(left, right, result);
 		break;
-	case TypeId::DATE:
 	case TypeId::INTEGER:
 		templated_binary_loop<int32_t, int32_t, int32_t, operators::Add>(left, right, result);
 		break;
-	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		templated_binary_loop<int64_t, int64_t, int64_t, operators::Add>(left, right, result);
 		break;
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		templated_binary_loop<float, float, float, operators::Add>(left, right, result);
+		break;
+	case TypeId::DOUBLE:
 		templated_binary_loop<double, double, double, operators::Add>(left, right, result);
 		break;
 	case TypeId::POINTER:
@@ -55,15 +56,16 @@ void VectorOperations::Subtract(Vector &left, Vector &right, Vector &result) {
 	case TypeId::SMALLINT:
 		templated_binary_loop<int16_t, int16_t, int16_t, operators::Subtract>(left, right, result);
 		break;
-	case TypeId::DATE:
 	case TypeId::INTEGER:
 		templated_binary_loop<int32_t, int32_t, int32_t, operators::Subtract>(left, right, result);
 		break;
-	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		templated_binary_loop<int64_t, int64_t, int64_t, operators::Subtract>(left, right, result);
 		break;
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		templated_binary_loop<float, float, float, operators::Subtract>(left, right, result);
+		break;
+	case TypeId::DOUBLE:
 		templated_binary_loop<double, double, double, operators::Subtract>(left, right, result);
 		break;
 	case TypeId::POINTER:
@@ -92,7 +94,10 @@ void VectorOperations::Multiply(Vector &left, Vector &right, Vector &result) {
 	case TypeId::BIGINT:
 		templated_binary_loop<int64_t, int64_t, int64_t, operators::Multiply>(left, right, result);
 		break;
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		templated_binary_loop<float, float, float, operators::Multiply>(left, right, result);
+		break;
+	case TypeId::DOUBLE:
 		templated_binary_loop<double, double, double, operators::Multiply>(left, right, result);
 		break;
 	case TypeId::POINTER:
@@ -179,7 +184,10 @@ void VectorOperations::Divide(Vector &left, Vector &right, Vector &result) {
 	case TypeId::BIGINT:
 		templated_division_loop<int64_t>(left, right, result);
 		break;
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		templated_division_loop<float>(left, right, result);
+		break;
+	case TypeId::DOUBLE:
 		templated_division_loop<double>(left, right, result);
 		break;
 	case TypeId::POINTER:

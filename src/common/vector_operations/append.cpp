@@ -45,15 +45,16 @@ void VectorOperations::AppendFromStorage(Vector &source, Vector &target) {
 	case TypeId::SMALLINT:
 		append_loop<int16_t>(source, target);
 		break;
-	case TypeId::DATE:
 	case TypeId::INTEGER:
 		append_loop<int32_t>(source, target);
 		break;
-	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		append_loop<int64_t>(source, target);
 		break;
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		append_loop<float>(source, target);
+		break;
+	case TypeId::DOUBLE:
 		append_loop<double>(source, target);
 		break;
 	case TypeId::POINTER:

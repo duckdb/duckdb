@@ -6,7 +6,7 @@ using namespace duckdb;
 using namespace postgres;
 using namespace std;
 
-unique_ptr<Expression> Transformer::TransformColumnRef(ColumnRef *root) {
+unique_ptr<ParsedExpression> Transformer::TransformColumnRef(ColumnRef *root) {
 	List *fields = root->fields;
 	switch ((reinterpret_cast<Node *>(fields->head->data.ptr_value))->type) {
 	case T_String: {

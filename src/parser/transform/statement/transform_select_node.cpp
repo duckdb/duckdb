@@ -1,5 +1,6 @@
 #include "common/exception.hpp"
-#include "parser/query_node/list.hpp"
+#include "parser/query_node/set_operation_node.hpp"
+#include "parser/query_node/select_node.hpp"
 #include "parser/statement/select_statement.hpp"
 #include "parser/transformer.hpp"
 
@@ -69,33 +70,10 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(postgres::SelectStmt *stm
 	// both the set operations and the regular select can have an ORDER BY/LIMIT attached to them
 	TransformOrderBy(stmt->sortClause, node->orderby);
 	if (stmt->limitCount) {
-		node->limit.limit = ConstantFromExpression(stmt->limitCount);
-		node->limit.offset = 0;
+		node->limit.limit = TransformExpression(stmt->limitCount);
 	}
 	if (stmt->limitOffset) {
-		node->limit.offset = ConstantFromExpression(stmt->limitOffset);
-		if (!stmt->limitCount) {
-			node->limit.limit = std::numeric_limits<int64_t>::max();
-		}
+		node->limit.offset = TransformExpression(stmt->limitOffset);
 	}
 	return node;
-}
-
-#include "execution/expression_executor.hpp"
-int64_t Transformer::ConstantFromExpression(Node *node) {
-	auto expr = TransformExpression(node);
-	if (expr->IsAggregate()) {
-		throw ParserException("Aggregate functions are not allowed in LIMIT");
-	}
-	if (expr->IsWindow()) {
-		throw ParserException("Window functions are not allowed in LIMIT");
-	}
-	if (expr->HasSubquery()) {
-		throw ParserException("Subqueries are not allowed in LIMIT");
-	}
-	if (!expr->IsScalar()) {
-		throw ParserException("Argument of LIMIT must not contain variables");
-	}
-	auto result_value = ExpressionExecutor::EvaluateScalar(*expr).CastAs(TypeId::BIGINT);
-	return result_value.GetNumericValue();
 }

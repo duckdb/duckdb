@@ -34,17 +34,14 @@ Value Value::MinimumValue(TypeId type) {
 	case TypeId::BIGINT:
 		result.value_.bigint = std::numeric_limits<int64_t>::min();
 		break;
-	case TypeId::DECIMAL:
-		result.value_.decimal = std::numeric_limits<double>::min();
+	case TypeId::FLOAT:
+		result.value_.real = std::numeric_limits<float>::min();
 		break;
-	case TypeId::DATE:
-		result.value_.date = std::numeric_limits<date_t>::min();
+	case TypeId::DOUBLE:
+		result.value_.decimal = std::numeric_limits<double>::min();
 		break;
 	case TypeId::POINTER:
 		result.value_.pointer = std::numeric_limits<uint64_t>::min();
-		break;
-	case TypeId::TIMESTAMP:
-		result.value_.timestamp = std::numeric_limits<timestamp_t>::min();
 		break;
 	default:
 		throw InvalidTypeException(type, "MinimumValue requires numeric type");
@@ -69,17 +66,14 @@ Value Value::MaximumValue(TypeId type) {
 	case TypeId::BIGINT:
 		result.value_.bigint = std::numeric_limits<int64_t>::max();
 		break;
-	case TypeId::DECIMAL:
-		result.value_.decimal = std::numeric_limits<double>::max();
+	case TypeId::FLOAT:
+		result.value_.real = std::numeric_limits<float>::max();
 		break;
-	case TypeId::DATE:
-		result.value_.date = std::numeric_limits<date_t>::max();
+	case TypeId::DOUBLE:
+		result.value_.decimal = std::numeric_limits<double>::max();
 		break;
 	case TypeId::POINTER:
 		result.value_.pointer = std::numeric_limits<uint64_t>::max();
-		break;
-	case TypeId::TIMESTAMP:
-		result.value_.timestamp = std::numeric_limits<timestamp_t>::min();
 		break;
 	default:
 		throw InvalidTypeException(type, "MaximumValue requires numeric type");
@@ -93,7 +87,6 @@ Value Value::BOOLEAN(int8_t value) {
 	result.is_null = false;
 	return result;
 }
-
 Value Value::TINYINT(int8_t value) {
 	Value result(TypeId::TINYINT);
 	result.value_.tinyint = value;
@@ -124,15 +117,9 @@ Value Value::POINTER(uint64_t value) {
 	result.is_null = false;
 	return result;
 }
-Value Value::DATE(date_t value) {
-	Value result(TypeId::DATE);
-	result.value_.date = value;
-	result.is_null = false;
-	return result;
-}
-Value Value::TIMESTAMP(timestamp_t value) {
-	Value result(TypeId::TIMESTAMP);
-	result.value_.timestamp = value;
+Value Value::REAL(float value) {
+	Value result(TypeId::POINTER);
+	result.value_.real = value;
 	result.is_null = false;
 	return result;
 }
@@ -150,10 +137,10 @@ Value Value::Numeric(TypeId type, int64_t value) {
 		return Value::INTEGER(value);
 	case TypeId::BIGINT:
 		return Value::BIGINT(value);
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		return Value::REAL((float)value);
+	case TypeId::DOUBLE:
 		return Value((double)value);
-	case TypeId::DATE:
-		return Value::DATE(value);
 	case TypeId::POINTER:
 		return Value::POINTER(value);
 	default:
@@ -175,10 +162,10 @@ int64_t Value::GetNumericValue() {
 		return value_.integer;
 	case TypeId::BIGINT:
 		return value_.bigint;
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		return value_.real;
+	case TypeId::DOUBLE:
 		return value_.decimal;
-	case TypeId::DATE:
-		return value_.date;
 	case TypeId::POINTER:
 		return value_.pointer;
 	default:
@@ -201,14 +188,12 @@ string Value::ToString() const {
 		return to_string(value_.integer);
 	case TypeId::BIGINT:
 		return to_string(value_.bigint);
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		return to_string(value_.real);
+	case TypeId::DOUBLE:
 		return to_string(value_.decimal);
 	case TypeId::POINTER:
 		return to_string(value_.pointer);
-	case TypeId::DATE:
-		return Date::ToString(value_.date);
-	case TypeId::TIMESTAMP:
-		return Timestamp::ToString(value_.timestamp);
 	case TypeId::VARCHAR:
 		return str_value;
 	default:
@@ -303,16 +288,14 @@ template <class DST, class OP> DST Value::_cast(const Value &v) {
 		return OP::template Operation<int32_t, DST>(v.value_.integer);
 	case TypeId::BIGINT:
 		return OP::template Operation<int64_t, DST>(v.value_.bigint);
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		return OP::template Operation<float, DST>(v.value_.decimal);
+	case TypeId::DOUBLE:
 		return OP::template Operation<double, DST>(v.value_.decimal);
 	case TypeId::POINTER:
 		return OP::template Operation<uint64_t, DST>(v.value_.pointer);
 	case TypeId::VARCHAR:
 		return OP::template Operation<const char *, DST>(v.str_value.c_str());
-	case TypeId::DATE:
-		return operators::CastFromDate::Operation<date_t, DST>(v.value_.date);
-	case TypeId::TIMESTAMP:
-		return operators::CastFromTimestamp::Operation<timestamp_t, DST>(v.value_.timestamp);
 	default:
 		throw NotImplementedException("Unimplemented type for casting");
 	}
@@ -347,17 +330,14 @@ Value Value::CastAs(TypeId new_type) const {
 	case TypeId::BIGINT:
 		new_value.value_.bigint = _cast<int64_t, operators::Cast>(*this);
 		break;
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		new_value.value_.real = _cast<float, operators::Cast>(*this);
+		break;
+	case TypeId::DOUBLE:
 		new_value.value_.decimal = _cast<double, operators::Cast>(*this);
 		break;
 	case TypeId::POINTER:
 		new_value.value_.pointer = _cast<uint64_t, operators::Cast>(*this);
-		break;
-	case TypeId::DATE:
-		new_value.value_.date = _cast<date_t, operators::CastToDate>(*this);
-		break;
-	case TypeId::TIMESTAMP:
-		new_value.value_.timestamp = _cast<timestamp_t, operators::CastToTimestamp>(*this);
 		break;
 	case TypeId::VARCHAR:
 		new_value.str_value = _cast<string, operators::Cast>(*this);
@@ -388,17 +368,14 @@ void Value::Serialize(Serializer &serializer) {
 		case TypeId::BIGINT:
 			serializer.Write<int64_t>(value_.bigint);
 			break;
-		case TypeId::DECIMAL:
+		case TypeId::FLOAT:
+			serializer.Write<float>(value_.real);
+			break;
+		case TypeId::DOUBLE:
 			serializer.Write<double>(value_.decimal);
 			break;
 		case TypeId::POINTER:
 			serializer.Write<uint64_t>(value_.pointer);
-			break;
-		case TypeId::DATE:
-			serializer.Write<date_t>(value_.date);
-			break;
-		case TypeId::TIMESTAMP:
-			serializer.Write<timestamp_t>(value_.timestamp);
 			break;
 		case TypeId::VARCHAR:
 			serializer.WriteString(str_value);
@@ -433,17 +410,14 @@ Value Value::Deserialize(Deserializer &source) {
 	case TypeId::BIGINT:
 		new_value.value_.bigint = source.Read<int64_t>();
 		break;
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		new_value.value_.real = source.Read<double>();
+		break;
+	case TypeId::DOUBLE:
 		new_value.value_.decimal = source.Read<double>();
 		break;
 	case TypeId::POINTER:
 		new_value.value_.pointer = source.Read<uint64_t>();
-		break;
-	case TypeId::DATE:
-		new_value.value_.date = source.Read<date_t>();
-		break;
-	case TypeId::TIMESTAMP:
-		new_value.value_.timestamp = source.Read<timestamp_t>();
 		break;
 	case TypeId::VARCHAR:
 		new_value.str_value = source.Read<string>();

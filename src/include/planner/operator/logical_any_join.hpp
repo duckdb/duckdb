@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "parser/expression.hpp"
+#include "parser/parsed_expression.hpp"
 #include "planner/operator/logical_join.hpp"
 
 namespace duckdb {

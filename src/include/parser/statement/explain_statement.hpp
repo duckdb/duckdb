@@ -8,12 +8,9 @@
 
 #pragma once
 
-#include "catalog/catalog.hpp"
-#include "parser/expression.hpp"
+#include "parser/parsed_expression.hpp"
 #include "parser/sql_node_visitor.hpp"
 #include "parser/sql_statement.hpp"
-
-#include <vector>
 
 namespace duckdb {
 

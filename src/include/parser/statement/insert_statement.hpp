@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "parser/expression.hpp"
+#include "parser/parsed_expression.hpp"
 #include "parser/sql_node_visitor.hpp"
 #include "parser/statement/select_statement.hpp"
 
@@ -33,7 +33,7 @@ public:
 	unique_ptr<SelectStatement> select_statement;
 
 	//! List of values to insert
-	vector<vector<unique_ptr<Expression>>> values;
+	vector<vector<unique_ptr<ParsedExpression>>> values;
 
 	//! Column names to insert into
 	vector<string> columns;

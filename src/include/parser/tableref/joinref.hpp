@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "parser/expression.hpp"
+#include "parser/parsed_expression.hpp"
 #include "parser/sql_node_visitor.hpp"
 #include "parser/tableref.hpp"
 
@@ -43,7 +43,7 @@ public:
 	//! The right hand side of the join
 	unique_ptr<TableRef> right;
 	//! The join condition
-	unique_ptr<Expression> condition;
+	unique_ptr<ParsedExpression> condition;
 	//! The join type
 	JoinType type;
 };

@@ -64,7 +64,10 @@ void VectorOperations::Case(Vector &check, Vector &res_true, Vector &res_false, 
 	case TypeId::BIGINT:
 		case_loop<int64_t, RegularCase>(check, res_true, res_false, result);
 		break;
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		case_loop<float, RegularCase>(check, res_true, res_false, result);
+		break;
+	case TypeId::DOUBLE:
 		case_loop<double, RegularCase>(check, res_true, res_false, result);
 		break;
 	case TypeId::POINTER:
@@ -72,12 +75,6 @@ void VectorOperations::Case(Vector &check, Vector &res_true, Vector &res_false, 
 		break;
 	case TypeId::VARCHAR:
 		case_loop<const char *, StringCase>(check, res_true, res_false, result);
-		break;
-	case TypeId::DATE:
-		case_loop<date_t, RegularCase>(check, res_true, res_false, result);
-		break;
-	case TypeId::TIMESTAMP:
-		case_loop<timestamp_t, RegularCase>(check, res_true, res_false, result);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for case expression");

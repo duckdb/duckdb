@@ -4,31 +4,38 @@ using namespace duckdb;
 using namespace postgres;
 using namespace std;
 
-TypeId Transformer::TransformStringToTypeId(char *str) {
+static SQLType TransformStringToSQLType(char *str) {
 	string lower_str = StringUtil::Lower(string(str));
 	// Transform column type
 	if (lower_str == "int" || lower_str == "int4" || lower_str == "signed") {
-		return TypeId::INTEGER;
+		return SQLType(SQLTypeId::INTEGER);
 	} else if (lower_str == "varchar" || lower_str == "bpchar" || lower_str == "text" || lower_str == "string") {
-		return TypeId::VARCHAR;
+		return SQLType(SQLTypeId::VARCHAR);
 	} else if (lower_str == "int8") {
-		return TypeId::BIGINT;
+		return SQLType(SQLTypeId::BIGINT);
 	} else if (lower_str == "int2") {
-		return TypeId::SMALLINT;
+		return SQLType(SQLTypeId::SMALLINT);
 	} else if (lower_str == "timestamp" || lower_str == "datetime") {
-		return TypeId::TIMESTAMP;
+		return SQLType(SQLTypeId::TIMESTAMP);
 	} else if (lower_str == "bool") {
-		return TypeId::BOOLEAN;
-	} else if (lower_str == "double" || lower_str == "float8" || lower_str == "real" || lower_str == "float4" ||
-	           lower_str == "numeric") {
-		return TypeId::DECIMAL;
+		return SQLType(SQLTypeId::BOOLEAN);
+	} else if (lower_str == "real" || lower_str == "float4") {
+		return SQLType(SQLTypeId::REAL);
+	} else if (lower_str == "double" || lower_str == "float8" || lower_str == "numeric") {
+		return SQLType(SQLTypeId::DOUBLE);
 	} else if (lower_str == "tinyint") {
-		return TypeId::TINYINT;
+		return SQLType(SQLTypeId::TINYINT);
 	} else if (lower_str == "varbinary") {
-		return TypeId::VARBINARY;
+		return SQLType(SQLTypeId::VARBINARY);
 	} else if (lower_str == "date") {
-		return TypeId::DATE;
+		return SQLType(SQLTypeId::DATE);
 	} else {
 		throw NotImplementedException("DataType %s not supported yet...\n", str);
 	}
+}
+
+SQLType Transformer::TransformTypeName(TypeName *type_name) {
+	char *name = (reinterpret_cast<postgres::Value *>(type_name->names->tail->data.ptr_value)->val.str);
+	// transform it to the SQL type
+	return TransformStringToSQLType(name);
 }

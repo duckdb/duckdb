@@ -23,14 +23,12 @@ uint64_t ValueOperations::Hash(const Value &op) {
 		return duckdb::Hash(op.value_.integer);
 	case TypeId::BIGINT:
 		return duckdb::Hash(op.value_.bigint);
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		return duckdb::Hash(op.value_.real);
+	case TypeId::DOUBLE:
 		return duckdb::Hash(op.value_.decimal);
 	case TypeId::POINTER:
 		return duckdb::Hash(op.value_.pointer);
-	case TypeId::DATE:
-		return duckdb::Hash(op.value_.date);
-	case TypeId::TIMESTAMP:
-		return duckdb::Hash(op.value_.timestamp);
 	case TypeId::VARCHAR:
 		return duckdb::Hash(op.str_value.c_str());
 	default:

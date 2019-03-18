@@ -7,70 +7,11 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> ComparisonExpression::Copy() {
-	auto copy = make_unique<ComparisonExpression>(type, left->Copy(), right->Copy());
-	copy->CopyProperties(*this);
-	return move(copy);
-}
 
-void ComparisonExpression::ResolveType() {
-	Expression::ResolveType();
-	// comparisons return a BOOLEAN
-	this->return_type = TypeId::BOOLEAN;
-	// cast the input types to the same type
-	auto result_type = std::max(left->return_type, right->return_type);
-	left = CastExpression::AddCastToType(result_type, move(left));
-	right = CastExpression::AddCastToType(result_type, move(right));
-}
-
-void ComparisonExpression::Serialize(Serializer &serializer) {
-	Expression::Serialize(serializer);
-	left->Serialize(serializer);
-	right->Serialize(serializer);
-}
-
-unique_ptr<Expression> ComparisonExpression::Deserialize(ExpressionType type, TypeId return_type,
-                                                         Deserializer &source) {
-	auto left_child = Expression::Deserialize(source);
-	auto right_child = Expression::Deserialize(source);
-	return make_unique<ComparisonExpression>(type, move(left_child), move(right_child));
-}
-
-bool ComparisonExpression::Equals(const Expression *other_) const {
-	if (!Expression::Equals(other_)) {
-		return false;
-	}
-	auto other = (ComparisonExpression *)other_;
-	if (!left->Equals(other->left.get())) {
-		return false;
-	}
-	if (!right->Equals(other->right.get())) {
-		return false;
-	}
-	return true;
-}
-
-size_t ComparisonExpression::ChildCount() const {
-	return 2;
-}
-
-Expression *ComparisonExpression::GetChild(size_t index) const {
-	if (index == 0) {
-		return left.get();
-	} else {
-		assert(index == 1);
-		return right.get();
-	}
-}
-
-void ComparisonExpression::ReplaceChild(
-    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, size_t index) {
-	if (index == 0) {
-		left = callback(move(left));
-	} else {
-		assert(index == 1);
-		right = callback(move(right));
-	}
+ComparisonExpression::ComparisonExpression(ExpressionType type, unique_ptr<ParsedExpression> left, unique_ptr<ParsedExpression> right)
+	: ParsedExpression(type, ExpressionClass::COMPARISON) {
+	this->left = move(left);
+	this->right = move(right);
 }
 
 ExpressionType ComparisonExpression::NegateComparisionExpression(ExpressionType type) {
@@ -125,4 +66,63 @@ ExpressionType ComparisonExpression::FlipComparisionExpression(ExpressionType ty
 		throw Exception("Unsupported join criteria in flip");
 	}
 	return flipped_type;
+}
+
+string ComparisonExpression::ToString() const {
+	return left->ToString() + ExpressionTypeToOperator(type) + right->ToString();
+}
+
+bool ComparisonExpression::Equals(const ParsedExpression *other_) const {
+	if (!ParsedExpression::Equals(other_)) {
+		return false;
+	}
+	auto other = (ComparisonExpression *)other_;
+	if (!left->Equals(other->left.get())) {
+		return false;
+	}
+	if (!right->Equals(other->right.get())) {
+		return false;
+	}
+	return true;
+}
+
+unique_ptr<ParsedExpression> ComparisonExpression::Copy() {
+	auto copy = make_unique<ComparisonExpression>(type, left->Copy(), right->Copy());
+	copy->CopyProperties(*this);
+	return move(copy);
+}
+
+void ComparisonExpression::Serialize(Serializer &serializer) {
+	ParsedExpression::Serialize(serializer);
+	left->Serialize(serializer);
+	right->Serialize(serializer);
+}
+
+unique_ptr<ParsedExpression> ComparisonExpression::Deserialize(ExpressionType type, Deserializer &source) {
+	auto left_child = ParsedExpression::Deserialize(source);
+	auto right_child = ParsedExpression::Deserialize(source);
+	return make_unique<ComparisonExpression>(type, move(left_child), move(right_child));
+}
+
+size_t ComparisonExpression::ChildCount() const {
+	return 2;
+}
+
+ParsedExpression *ComparisonExpression::GetChild(size_t index) const {
+	if (index == 0) {
+		return left.get();
+	} else {
+		assert(index == 1);
+		return right.get();
+	}
+}
+
+void ComparisonExpression::ReplaceChild(
+    std::function<unique_ptr<ParsedExpression>(unique_ptr<ParsedExpression> expression)> callback, size_t index) {
+	if (index == 0) {
+		left = callback(move(left));
+	} else {
+		assert(index == 1);
+		right = callback(move(right));
+	}
 }

@@ -11,7 +11,7 @@
 #include "catalog/catalog.hpp"
 #include "common/common.hpp"
 #include "common/types/data_chunk.hpp"
-#include "parser/expression.hpp"
+#include "parser/parsed_expression.hpp"
 #include "parser/statement/select_statement.hpp"
 #include "planner/logical_operator.hpp"
 

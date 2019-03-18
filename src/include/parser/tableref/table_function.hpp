@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "parser/expression.hpp"
+#include "parser/parsed_expression.hpp"
 #include "parser/sql_node_visitor.hpp"
 #include "parser/tableref.hpp"
 
@@ -41,6 +41,6 @@ public:
 		return function->ToString();
 	}
 
-	unique_ptr<Expression> function;
+	unique_ptr<ParsedExpression> function;
 };
 } // namespace duckdb

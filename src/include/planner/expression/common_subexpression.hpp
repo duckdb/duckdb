@@ -1,14 +1,14 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/expression/common_subexpression.hpp
+// planner/expression/common_subexpression.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "parser/expression.hpp"
+#include "planner/expression.hpp"
 #include "parser/sql_node_visitor.hpp"
 
 namespace duckdb {

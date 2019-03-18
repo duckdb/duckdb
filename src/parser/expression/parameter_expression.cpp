@@ -2,42 +2,39 @@
 
 #include "common/exception.hpp"
 #include "common/serializer.hpp"
-#include "common/types/hash.hpp"
-#include "common/value_operations/value_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-void ParameterExpression::ResolveType() {
+
+ParameterExpression::ParameterExpression()
+    : ParsedExpression(ExpressionType::VALUE_PARAMETER, ExpressionClass::PARAMETER), parameter_nr(0) {
 }
 
-unique_ptr<Expression> ParameterExpression::Copy() {
-	auto copy = make_unique<ParameterExpression>();
-	copy->CopyProperties(*this);
-	copy->value = value;
-	return move(copy);
+string ParameterExpression::ToString() const {
+	return "$" + std::to_string(parameter_nr);
 }
 
-void ParameterExpression::Serialize(Serializer &serializer) {
-	Expression::Serialize(serializer);
-	serializer.Write<uint64_t>(parameter_nr);
-	value.Serialize(serializer);
-}
-
-unique_ptr<Expression> ParameterExpression::Deserialize(ExpressionType type, TypeId return_type, Deserializer &source) {
-	auto expression = make_unique<ParameterExpression>();
-	expression->parameter_nr = source.Read<uint64_t>();
-	expression->value = Value::Deserialize(source);
-	return move(expression);
-}
-
-bool ParameterExpression::Equals(const Expression *other_) const {
-	if (!Expression::Equals(other_)) {
+bool ParameterExpression::Equals(const ParsedExpression *other_) const {
+	if (!ParsedExpression::Equals(other_)) {
 		return false;
 	}
 	return true;
 }
 
-uint64_t ParameterExpression::Hash() const {
-	return Expression::Hash();
+unique_ptr<ParsedExpression> ParameterExpression::Copy() {
+	auto copy = make_unique<ParameterExpression>();
+	copy->CopyProperties(*this);
+	return move(copy);
+}
+
+void ParameterExpression::Serialize(Serializer &serializer) {
+	ParsedExpression::Serialize(serializer);
+	serializer.Write<uint64_t>(parameter_nr);
+}
+
+unique_ptr<ParsedExpression> ParameterExpression::Deserialize(ExpressionType type, Deserializer &source) {
+	auto expression = make_unique<ParameterExpression>();
+	expression->parameter_nr = source.Read<uint64_t>();
+	return move(expression);
 }

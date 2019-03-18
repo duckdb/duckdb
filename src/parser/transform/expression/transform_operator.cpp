@@ -43,7 +43,7 @@ ExpressionType Transformer::OperatorToExpressionType(string &op) {
 	return ExpressionType::INVALID;
 }
 
-unique_ptr<Expression> Transformer::TransformAExpr(A_Expr *root) {
+unique_ptr<ParsedExpression> Transformer::TransformAExpr(A_Expr *root) {
 	if (!root) {
 		return nullptr;
 	}
@@ -65,7 +65,7 @@ unique_ptr<Expression> Transformer::TransformAExpr(A_Expr *root) {
 			// IN
 			operator_type = ExpressionType::COMPARE_IN;
 		}
-		auto result = make_unique<OperatorExpression>(operator_type, TypeId::BOOLEAN, move(left_expr));
+		auto result = make_unique<OperatorExpression>(operator_type, move(left_expr));
 		TransformExpressionList((List *)root->rexpr, result->children);
 		return move(result);
 	} break;
@@ -104,8 +104,7 @@ unique_ptr<Expression> Transformer::TransformAExpr(A_Expr *root) {
 		if (root->kind == AEXPR_BETWEEN) {
 			return move(compare_between);
 		} else {
-			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, TypeId::BOOLEAN, move(compare_between),
-			                                       nullptr);
+			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(compare_between));
 		}
 	} break;
 	default: {
@@ -134,18 +133,18 @@ unique_ptr<Expression> Transformer::TransformAExpr(A_Expr *root) {
 
 	if (target_type == ExpressionType::OPERATOR_CONCAT) {
 		// concat operator, create function
-		vector<unique_ptr<Expression>> children;
+		vector<unique_ptr<ParsedExpression>> children;
 		children.push_back(move(left_expr));
 		children.push_back(move(right_expr));
 		return make_unique<FunctionExpression>("concat", children);
 	}
 
-	unique_ptr<Expression> result = nullptr;
+	unique_ptr<ParsedExpression> result = nullptr;
 	int type_id = static_cast<int>(target_type);
 	if (type_id >= static_cast<int>(ExpressionType::BINOP_BOUNDARY_START) &&
 	    type_id <= static_cast<int>(ExpressionType::BINOP_BOUNDARY_END)) {
 		// binary operator
-		result = make_unique<OperatorExpression>(target_type, TypeId::INVALID, move(left_expr), move(right_expr));
+		result = make_unique<OperatorExpression>(target_type, move(left_expr), move(right_expr));
 	} else if (type_id >= static_cast<int>(ExpressionType::COMPARE_BOUNDARY_START) &&
 	           type_id <= static_cast<int>(ExpressionType::COMPARE_BOUNDARY_END)) {
 		result = make_unique<ComparisonExpression>(target_type, move(left_expr), move(right_expr));

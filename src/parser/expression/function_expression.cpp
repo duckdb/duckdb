@@ -7,70 +7,27 @@
 using namespace duckdb;
 using namespace std;
 
-FunctionExpression::FunctionExpression(string schema, string function_name, vector<unique_ptr<Expression>> &children)
-    : Expression(ExpressionType::FUNCTION), schema(schema), function_name(StringUtil::Lower(function_name)) {
+FunctionExpression::FunctionExpression(string schema, string function_name, vector<unique_ptr<ParsedExpression>> &children)
+    : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), schema(schema), function_name(StringUtil::Lower(function_name)) {
 	for (auto &child : children) {
 		this->children.push_back(move(child));
 	}
 }
 
-void FunctionExpression::ResolveType() {
-	throw Exception("Cannot resolve type of FunctionExpression! Function has to be bound first.");
+FunctionExpression::FunctionExpression(string function_name, vector<unique_ptr<ParsedExpression>> &children)
+	: FunctionExpression(DEFAULT_SCHEMA, function_name, children) {
 }
 
-unique_ptr<Expression> FunctionExpression::Copy() {
-	vector<unique_ptr<Expression>> copy_children;
-	for (auto &child : children) {
-		copy_children.push_back(child->Copy());
+string FunctionExpression::ToString() const {
+	string result = function_name + "(";
+	for (size_t i = 0; i < children.size(); i++) {
+		result += children[i]->ToString() + (i + 1 == children.size() ? ")" : ",");
 	}
-	auto copy = make_unique<FunctionExpression>(function_name, copy_children);
-	copy->schema = schema;
-	copy->CopyProperties(*this);
-	return move(copy);
-}
-
-uint64_t FunctionExpression::Hash() const {
-	uint64_t result = Expression::Hash();
-	result = CombineHash(result, duckdb::Hash<const char *>(schema.c_str()));
-	result = CombineHash(result, duckdb::Hash<const char *>(function_name.c_str()));
 	return result;
 }
 
-size_t FunctionExpression::ChildCount() const {
-	return children.size();
-}
-
-Expression *FunctionExpression::GetChild(size_t index) const {
-	assert(index < children.size());
-	return children[index].get();
-}
-
-void FunctionExpression::ReplaceChild(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
-                                      size_t index) {
-	assert(index < children.size());
-	children[index] = callback(move(children[index]));
-}
-
-void FunctionExpression::Serialize(Serializer &serializer) {
-	Expression::Serialize(serializer);
-	serializer.WriteString(function_name);
-	serializer.WriteString(schema);
-	serializer.WriteList(children);
-}
-
-unique_ptr<Expression> FunctionExpression::Deserialize(ExpressionType type, TypeId return_type, Deserializer &source) {
-	vector<unique_ptr<Expression>> children;
-	auto function_name = source.Read<string>();
-	auto schema = source.Read<string>();
-	source.ReadList<Expression>(children);
-
-	auto function = make_unique<FunctionExpression>(function_name, children);
-	function->schema = schema;
-	return move(function);
-}
-
-bool FunctionExpression::Equals(const Expression *other_) const {
-	if (!Expression::Equals(other_)) {
+bool FunctionExpression::Equals(const ParsedExpression *other_) const {
+	if (!ParsedExpression::Equals(other_)) {
 		return false;
 	}
 	auto other = (FunctionExpression *)other_;
@@ -88,10 +45,53 @@ bool FunctionExpression::Equals(const Expression *other_) const {
 	return true;
 }
 
-string FunctionExpression::ToString() const {
-	string result = function_name + "(";
-	for (size_t i = 0; i < children.size(); i++) {
-		result += children[i]->ToString() + (i + 1 == children.size() ? ")" : ",");
-	}
+uint64_t FunctionExpression::Hash() const {
+	uint64_t result = ParsedExpression::Hash();
+	result = CombineHash(result, duckdb::Hash<const char *>(schema.c_str()));
+	result = CombineHash(result, duckdb::Hash<const char *>(function_name.c_str()));
 	return result;
+}
+
+unique_ptr<ParsedExpression> FunctionExpression::Copy() {
+	vector<unique_ptr<ParsedExpression>> copy_children;
+	for (auto &child : children) {
+		copy_children.push_back(child->Copy());
+	}
+	auto copy = make_unique<FunctionExpression>(function_name, copy_children);
+	copy->schema = schema;
+	copy->CopyProperties(*this);
+	return move(copy);
+}
+
+void FunctionExpression::Serialize(Serializer &serializer) {
+	ParsedExpression::Serialize(serializer);
+	serializer.WriteString(function_name);
+	serializer.WriteString(schema);
+	serializer.WriteList(children);
+}
+
+unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type, Deserializer &source) {
+	vector<unique_ptr<ParsedExpression>> children;
+	auto function_name = source.Read<string>();
+	auto schema = source.Read<string>();
+	source.ReadList<ParsedExpression>(children);
+
+	auto function = make_unique<FunctionExpression>(function_name, children);
+	function->schema = schema;
+	return move(function);
+}
+
+size_t FunctionExpression::ChildCount() const {
+	return children.size();
+}
+
+ParsedExpression *FunctionExpression::GetChild(size_t index) const {
+	assert(index < children.size());
+	return children[index].get();
+}
+
+void FunctionExpression::ReplaceChild(std::function<unique_ptr<ParsedExpression>(unique_ptr<ParsedExpression> expression)> callback,
+                                      size_t index) {
+	assert(index < children.size());
+	children[index] = callback(move(children[index]));
 }

@@ -1,17 +1,7 @@
 #include "parser/query_node/select_node.hpp"
 
-#include "common/enums.hpp"
-
 using namespace duckdb;
 using namespace std;
-
-bool SelectNode::HasAggregation() {
-	return HasGroup() || binding.aggregates.size() > 0;
-}
-
-bool SelectNode::HasWindow() {
-	return binding.windows.size() > 0;
-}
 
 bool SelectNode::Equals(const QueryNode *other_) const {
 	if (!QueryNode::Equals(other_)) {
@@ -25,8 +15,7 @@ bool SelectNode::Equals(const QueryNode *other_) const {
 	// first check counts of all lists and such
 	if (select_list.size() != other->select_list.size() || select_distinct != other->select_distinct ||
 	    orderby.orders.size() != other->orderby.orders.size() ||
-	    groupby.groups.size() != other->groupby.groups.size() || limit.limit != other->limit.limit ||
-	    limit.offset != other->limit.offset) {
+	    groupby.groups.size() != other->groupby.groups.size()) {
 		return false;
 	}
 	// SELECT
@@ -47,7 +36,7 @@ bool SelectNode::Equals(const QueryNode *other_) const {
 		return false;
 	}
 	// WHERE
-	if (!Expression::Equals(where_clause.get(), other->where_clause.get())) {
+	if (!ParsedExpression::Equals(where_clause.get(), other->where_clause.get())) {
 		return false;
 	}
 	// GROUP BY
@@ -57,16 +46,8 @@ bool SelectNode::Equals(const QueryNode *other_) const {
 		}
 	}
 	// HAVING
-	if (!Expression::Equals(groupby.having.get(), other->groupby.having.get())) {
+	if (!ParsedExpression::Equals(groupby.having.get(), other->groupby.having.get())) {
 		return false;
-	}
-
-	// ORDERS
-	for (size_t i = 0; i < orderby.orders.size(); i++) {
-		if (orderby.orders[i].type != orderby.orders[i].type ||
-		    !orderby.orders[i].expression->Equals(other->orderby.orders[i].expression.get())) {
-			return false;
-		}
 	}
 	return true;
 }
@@ -95,46 +76,21 @@ void SelectNode::Serialize(Serializer &serializer) {
 	serializer.WriteOptional(from_table);
 	// where_clause
 	serializer.WriteOptional(where_clause);
-	// select_distinct
-	serializer.Write<bool>(select_distinct);
-	// group by
+	// group by / having
 	serializer.WriteList(groupby.groups);
-	// having
 	serializer.WriteOptional(groupby.having);
-	// order by
-	serializer.Write<uint32_t>(orderby.orders.size());
-	for (auto &order : orderby.orders) {
-		serializer.Write<OrderType>(order.type);
-		order.expression->Serialize(serializer);
-	}
-	// limit
-	serializer.Write<int64_t>(limit.limit);
-	serializer.Write<int64_t>(limit.offset);
 }
 
 unique_ptr<QueryNode> SelectNode::Deserialize(Deserializer &source) {
 	auto result = make_unique<SelectNode>();
 	// select_list
-	source.ReadList<Expression>(result->select_list);
+	source.ReadList<ParsedExpression>(result->select_list);
 	// from clause
 	result->from_table = source.ReadOptional<TableRef>();
 	// where_clause
-	result->where_clause = source.ReadOptional<Expression>();
-	// select_distinct
-	result->select_distinct = source.Read<bool>();
-	// group by
-	source.ReadList<Expression>(result->groupby.groups);
-	// having
-	result->groupby.having = source.ReadOptional<Expression>();
-	// order by
-	auto order_count = source.Read<uint32_t>();
-	for (size_t i = 0; i < order_count; i++) {
-		auto order_type = source.Read<OrderType>();
-		auto expression = Expression::Deserialize(source);
-		result->orderby.orders.push_back(OrderByNode(order_type, move(expression)));
-	}
-	// limit
-	result->limit.limit = source.Read<int64_t>();
-	result->limit.offset = source.Read<int64_t>();
+	result->where_clause = source.ReadOptional<ParsedExpression>();
+	// group by / having
+	source.ReadList<ParsedExpression>(result->groupby.groups);
+	result->groupby.having = source.ReadOptional<ParsedExpression>();
 	return move(result);
 }

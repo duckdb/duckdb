@@ -99,13 +99,13 @@ static int8_t compare_value(Vector &left_vec, Vector &right_vec, size_t vector_i
 		return templated_compare_value<int8_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
 	case TypeId::SMALLINT:
 		return templated_compare_value<int16_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
-	case TypeId::DATE:
 	case TypeId::INTEGER:
 		return templated_compare_value<int32_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
-	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		return templated_compare_value<int64_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		return templated_compare_value<float>(left_vec, right_vec, vector_idx_left, vector_idx_right);
+	case TypeId::DOUBLE:
 		return templated_compare_value<double>(left_vec, right_vec, vector_idx_left, vector_idx_right);
 	case TypeId::VARCHAR:
 		return strcmp(((char **)left_vec.data)[vector_idx_left], ((char **)right_vec.data)[vector_idx_right]);
@@ -278,15 +278,16 @@ void ChunkCollection::MaterializeSortedChunk(DataChunk &target, uint64_t order[]
 		case TypeId::SMALLINT:
 			templated_set_values<int16_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::DATE:
 		case TypeId::INTEGER:
 			templated_set_values<int32_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::TIMESTAMP:
 		case TypeId::BIGINT:
 			templated_set_values<int64_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::DECIMAL:
+		case TypeId::FLOAT:
+			templated_set_values<float>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			break;
+		case TypeId::DOUBLE:
 			templated_set_values<double>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		case TypeId::VARCHAR:

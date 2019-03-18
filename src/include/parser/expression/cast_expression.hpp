@@ -8,52 +8,32 @@
 
 #pragma once
 
-#include "parser/expression.hpp"
+#include "parser/parsed_expression.hpp"
 
 namespace duckdb {
-//! Represents a type cast from one type to another type
-class CastExpression : public Expression {
+
+//! CastExpression represents a type cast from one SQL type to another SQL type
+class CastExpression : public ParsedExpression {
 public:
-	CastExpression(TypeId target, unique_ptr<Expression> child) : Expression(ExpressionType::OPERATOR_CAST, target) {
-		assert(child);
-		this->child = move(child);
-	}
+	CastExpression(SQLType target, unique_ptr<ParsedExpression> child);
 
-	void ResolveType() override;
+	//! The child of the cast expression
+	unique_ptr<ParsedExpression> child;
+	//! The type to cast to
+	SQLType cast_type;
+public:
+	string ToString() const override;
+	
+	bool Equals(const ParsedExpression *other) const override;
 
-	unique_ptr<Expression> Copy() override;
+	unique_ptr<ParsedExpression> Copy() override;
+	
+	void Serialize(Serializer &serializer) override;
+	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, Deserializer &source);
 
 	size_t ChildCount() const override;
-	Expression *GetChild(size_t index) const override;
-	void ReplaceChild(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
+	ParsedExpression *GetChild(size_t index) const override;
+	void ReplaceChild(std::function<unique_ptr<ParsedExpression>(unique_ptr<ParsedExpression> expression)> callback,
 	                  size_t index) override;
-
-	//! Serializes a CastExpression to a stand-alone binary blob
-	void Serialize(Serializer &serializer) override;
-	//! Deserializes a blob back into an CastExpression
-	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
-
-	bool Equals(const Expression *other) const override;
-
-	string ToString() const override {
-		return "CAST[" + TypeIdToString(return_type) + "](" + child->ToString() + ")";
-	}
-
-	ExpressionClass GetExpressionClass() override {
-		return ExpressionClass::CAST;
-	}
-	//! The child of the cast expression
-	unique_ptr<Expression> child;
-
-	//! Add an optional cast to a set of types
-	static unique_ptr<Expression> AddCastToType(TypeId type, unique_ptr<Expression> expr) {
-		if (expr && expr->GetExpressionClass() == ExpressionClass::PARAMETER) {
-			expr->return_type = type;
-		}
-		if (expr && expr->return_type != type) {
-			return make_unique<CastExpression>(type, move(expr));
-		}
-		return expr;
-	}
 };
 } // namespace duckdb

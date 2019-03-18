@@ -1,4 +1,3 @@
-#include "parser/expression/bound_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
 #include "parser/statement/select_statement.hpp"
 #include "parser/transformer.hpp"

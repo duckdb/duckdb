@@ -60,15 +60,16 @@ template <class LOOP, class OP> static void generic_gather_loop(Vector &source, 
 	case TypeId::SMALLINT:
 		LOOP::template Operation<int16_t, OP>(source, dest);
 		break;
-	case TypeId::DATE:
 	case TypeId::INTEGER:
 		LOOP::template Operation<int32_t, OP>(source, dest);
 		break;
-	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		LOOP::template Operation<int64_t, OP>(source, dest);
 		break;
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		LOOP::template Operation<float, OP>(source, dest);
+		break;
+	case TypeId::DOUBLE:
 		LOOP::template Operation<double, OP>(source, dest);
 		break;
 	case TypeId::POINTER:

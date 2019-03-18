@@ -27,7 +27,7 @@ public:
 	//! The table to create the index on
 	unique_ptr<BaseTableRef> table;
 	//! Set of expressions to index by
-	vector<unique_ptr<Expression>> expressions;
+	vector<unique_ptr<ParsedExpression>> expressions;
 	// Info for index creation
 	unique_ptr<CreateIndexInformation> info;
 };

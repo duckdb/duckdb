@@ -1,50 +1,21 @@
 #include "parser/expression/case_expression.hpp"
 
 #include "common/exception.hpp"
-#include "parser/expression/cast_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-void CaseExpression::ResolveType() {
-	Expression::ResolveType();
-	ExpressionStatistics::Case(result_if_true->stats, result_if_false->stats, stats);
-	// CHECK should be a boolean type
-	check = CastExpression::AddCastToType(TypeId::BOOLEAN, move(check));
-	// use the highest type as the result type of the CASE
-	this->return_type = std::max(result_if_true->return_type, result_if_false->return_type);
-	// res_if_true and res_if_false need the same type
-	result_if_true = CastExpression::AddCastToType(return_type, move(result_if_true));
-	result_if_false = CastExpression::AddCastToType(return_type, move(result_if_false));
+CaseExpression::CaseExpression() :
+	ParsedExpression(ExpressionType::OPERATOR_CASE_EXPR, ExpressionClass::CASE) {
 }
 
-unique_ptr<Expression> CaseExpression::Copy() {
-	auto copy = make_unique<CaseExpression>();
-	copy->CopyProperties(*this);
-	copy->check = check->Copy();
-	copy->result_if_true = result_if_true->Copy();
-	copy->result_if_false = result_if_false->Copy();
-	return move(copy);
+string CaseExpression::ToString() const {
+	return "CASE WHEN (" + check->ToString() + ") THEN (" + result_if_true->ToString() + ") ELSE (" +
+			result_if_false->ToString() + ")";
 }
 
-void CaseExpression::Serialize(Serializer &serializer) {
-	Expression::Serialize(serializer);
-	check->Serialize(serializer);
-	result_if_true->Serialize(serializer);
-	result_if_false->Serialize(serializer);
-}
-
-unique_ptr<Expression> CaseExpression::Deserialize(ExpressionType type, TypeId return_type, Deserializer &source) {
-	auto expression = make_unique<CaseExpression>();
-	expression->return_type = return_type;
-	expression->check = Expression::Deserialize(source);
-	expression->result_if_true = Expression::Deserialize(source);
-	expression->result_if_false = Expression::Deserialize(source);
-	return move(expression);
-}
-
-bool CaseExpression::Equals(const Expression *other_) const {
-	if (!Expression::Equals(other_)) {
+bool CaseExpression::Equals(const ParsedExpression *other_) const {
+	if (!ParsedExpression::Equals(other_)) {
 		return false;
 	}
 	auto other = (CaseExpression *)other_;
@@ -60,11 +31,35 @@ bool CaseExpression::Equals(const Expression *other_) const {
 	return true;
 }
 
+unique_ptr<ParsedExpression> CaseExpression::Copy() {
+	auto copy = make_unique<CaseExpression>();
+	copy->CopyProperties(*this);
+	copy->check = check->Copy();
+	copy->result_if_true = result_if_true->Copy();
+	copy->result_if_false = result_if_false->Copy();
+	return move(copy);
+}
+
+void CaseExpression::Serialize(Serializer &serializer) {
+	ParsedExpression::Serialize(serializer);
+	check->Serialize(serializer);
+	result_if_true->Serialize(serializer);
+	result_if_false->Serialize(serializer);
+}
+
+unique_ptr<ParsedExpression> CaseExpression::Deserialize(ExpressionType type, Deserializer &source) {
+	auto expression = make_unique<CaseExpression>();
+	expression->check = ParsedExpression::Deserialize(source);
+	expression->result_if_true = ParsedExpression::Deserialize(source);
+	expression->result_if_false = ParsedExpression::Deserialize(source);
+	return move(expression);
+}
+
 size_t CaseExpression::ChildCount() const {
 	return 3;
 }
 
-Expression *CaseExpression::GetChild(size_t index) const {
+ParsedExpression *CaseExpression::GetChild(size_t index) const {
 	switch (index) {
 	case 0:
 		return check.get();
@@ -76,7 +71,7 @@ Expression *CaseExpression::GetChild(size_t index) const {
 	}
 }
 
-void CaseExpression::ReplaceChild(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
+void CaseExpression::ReplaceChild(std::function<unique_ptr<ParsedExpression>(unique_ptr<ParsedExpression> expression)> callback,
                                   size_t index) {
 	switch (index) {
 	case 0:

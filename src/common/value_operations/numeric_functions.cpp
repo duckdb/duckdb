@@ -27,7 +27,10 @@ Value ValueOperations::Abs(const Value &op) {
 	case TypeId::BIGINT:
 		result.value_.bigint = Abs::Operation(op.value_.bigint);
 		break;
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		result.value_.real = Abs::Operation(op.value_.real);
+		break;
+	case TypeId::DOUBLE:
 		result.value_.decimal = Abs::Operation(op.value_.decimal);
 		break;
 	default:

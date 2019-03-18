@@ -1,15 +1,16 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/expression/bound_function_expression.hpp
+// planner/expression/bound_function_expression.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "parser/expression.hpp"
+#include "planner/expression.hpp"
 #include "parser/expression/function_expression.hpp"
+
 namespace duckdb {
 class ScalarFunctionCatalogEntry;
 

@@ -1,7 +1,7 @@
 #include "common/exception.hpp"
 #include "common/types/statistics.hpp"
 #include "common/value_operations/value_operations.hpp"
-#include "parser/expression.hpp"
+#include "parser/parsed_expression.hpp"
 
 using namespace duckdb;
 using namespace std;

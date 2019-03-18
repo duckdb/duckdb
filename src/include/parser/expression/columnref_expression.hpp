@@ -8,58 +8,37 @@
 
 #pragma once
 
-#include "parser/expression.hpp"
+#include "parser/parsed_expression.hpp"
 
 namespace duckdb {
 
 //! Represents a reference to a column from either the FROM clause or from an
 //! alias
-class ColumnRefExpression : public Expression {
+class ColumnRefExpression : public ParsedExpression {
 public:
-	//! Only specify the column name, the table name will be derived later
-	ColumnRefExpression(string column_name) : Expression(ExpressionType::COLUMN_REF), column_name(column_name) {
-	}
-
 	//! Specify both the column and table name
-	ColumnRefExpression(string column_name, string table_name)
-	    : Expression(ExpressionType::COLUMN_REF), column_name(column_name), table_name(table_name) {
-	}
-
-	const string &GetColumnName() const {
-		return column_name;
-	}
-	const string &GetTableName() const {
-		return table_name;
-	}
-
-	string GetName() const override {
-		return !alias.empty() ? alias : column_name;
-	}
-	ExpressionClass GetExpressionClass() override {
-		return ExpressionClass::COLUMN_REF;
-	}
-
-	unique_ptr<Expression> Copy() override;
-
-	//! Serializes an Expression to a stand-alone binary blob
-	void Serialize(Serializer &serializer) override;
-	//! Deserializes a blob back into an ConstantExpression
-	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
-
-	void ResolveType() override;
-
-	uint64_t Hash() const override;
-	bool Equals(const Expression *other) const override;
+	ColumnRefExpression(string column_name, string table_name);
+	//! Only specify the column name, the table name will be derived later
+	ColumnRefExpression(string column_name);
 
 	//! Column name that is referenced
 	string column_name;
 	//! Table name of the column name that is referenced (optional)
 	string table_name;
-
-	string ToString() const override;
-
+public:
 	bool IsScalar() override {
 		return false;
 	}
+
+	string GetName() const override;
+	string ToString() const override;
+	
+	bool Equals(const ParsedExpression *other) const override;
+	uint64_t Hash() const override;
+
+	unique_ptr<ParsedExpression> Copy() override;
+	
+	void Serialize(Serializer &serializer) override;
+	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, Deserializer &source);
 };
 } // namespace duckdb

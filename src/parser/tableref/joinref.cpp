@@ -29,7 +29,7 @@ unique_ptr<TableRef> JoinRef::Deserialize(Deserializer &source) {
 
 	result->left = TableRef::Deserialize(source);
 	result->right = TableRef::Deserialize(source);
-	result->condition = Expression::Deserialize(source);
+	result->condition = ParsedExpression::Deserialize(source);
 	result->type = source.Read<JoinType>();
 
 	return move(result);

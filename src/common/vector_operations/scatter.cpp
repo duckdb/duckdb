@@ -24,18 +24,18 @@ template <class OP> static void generic_scatter_loop(Vector &source, Vector &des
 	case TypeId::SMALLINT:
 		scatter_templated_loop<int16_t, OP>(source, dest);
 		break;
-	case TypeId::DATE:
 	case TypeId::INTEGER:
 		scatter_templated_loop<int32_t, OP>(source, dest);
 		break;
-	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		scatter_templated_loop<int64_t, OP>(source, dest);
 		break;
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		scatter_templated_loop<float, OP>(source, dest);
+		break;
+	case TypeId::DOUBLE:
 		scatter_templated_loop<double, OP>(source, dest);
 		break;
-
 	case TypeId::POINTER:
 		scatter_templated_loop<uint64_t, OP>(source, dest);
 		break;

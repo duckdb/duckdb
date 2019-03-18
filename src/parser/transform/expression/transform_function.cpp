@@ -120,7 +120,7 @@ void Transformer::TransformWindowDef(WindowDef *window_spec, WindowExpression *e
 	}
 }
 
-unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
+unique_ptr<ParsedExpression> Transformer::TransformFuncCall(FuncCall *root) {
 	auto name = root->funcname;
 	string schema, function_name;
 	if (name->length == 2) {
@@ -145,7 +145,7 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 		auto expr = make_unique<WindowExpression>(win_fun_type, nullptr);
 
 		if (root->args) {
-			vector<unique_ptr<Expression>> function_list;
+			vector<unique_ptr<ParsedExpression>> function_list;
 			auto res = TransformExpressionList(root->args, function_list);
 			if (!res) {
 				throw Exception("Failed to transform window function children");
@@ -181,7 +181,7 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 	auto agg_fun_type = AggregateToExpressionType(lowercase_name);
 	if (agg_fun_type == ExpressionType::INVALID) {
 		// Normal functions (i.e. built-in functions or UDFs)
-		vector<unique_ptr<Expression>> children;
+		vector<unique_ptr<ParsedExpression>> children;
 		if (root->args != nullptr) {
 			for (auto node = root->args->head; node != nullptr; node = node->next) {
 				auto child_expr = TransformExpression((Node *)node->data.ptr_value);
@@ -226,11 +226,10 @@ unique_ptr<Expression> Transformer::TransformFuncCall(FuncCall *root) {
 					    root->agg_distinct ? ExpressionType::AGGREGATE_COUNT_DISTINCT : ExpressionType::AGGREGATE_COUNT,
 					    move(child));
 					// cast both to decimal
-					auto sum_cast = make_unique<CastExpression>(TypeId::DECIMAL, move(sum));
-					auto count_cast = make_unique<CastExpression>(TypeId::DECIMAL, move(count));
+					auto sum_cast = make_unique<CastExpression>(SQLType(SQLTypeId::DECIMAL), move(sum));
+					auto count_cast = make_unique<CastExpression>(SQLType(SQLTypeId::DECIMAL), move(count));
 					// create the divide operator
-					return make_unique<OperatorExpression>(ExpressionType::OPERATOR_DIVIDE, TypeId::DECIMAL,
-					                                       move(sum_cast), move(count_cast));
+					return make_unique<OperatorExpression>(ExpressionType::OPERATOR_DIVIDE, move(sum_cast), move(count_cast));
 				} else {
 					return make_unique<AggregateExpression>(agg_fun_type, move(child));
 				}

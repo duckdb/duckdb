@@ -10,7 +10,7 @@
 
 #include "common/common.hpp"
 #include "common/serializer.hpp"
-#include "parser/expression.hpp"
+#include "parser/parsed_expression.hpp"
 
 namespace duckdb {
 
@@ -21,11 +21,11 @@ struct OrderByNode {
 	//! Sort order, ASC or DESC
 	OrderType type;
 	//! Expression to order by
-	unique_ptr<Expression> expression;
+	unique_ptr<ParsedExpression> expression;
 
 	OrderByNode() {
 	}
-	OrderByNode(OrderType type, unique_ptr<Expression> expression) : type(type), expression(std::move(expression)) {
+	OrderByNode(OrderType type, unique_ptr<ParsedExpression> expression) : type(type), expression(std::move(expression)) {
 	}
 };
 
@@ -38,9 +38,9 @@ struct OrderByDescription {
 //! LIMIT description
 struct LimitDescription {
 	//! LIMIT count
-	int64_t limit = -1;
+	unique_ptr<ParsedExpression> limit;
 	//! OFFSET
-	int64_t offset = -1;
+	unique_ptr<ParsedExpression> offset;
 };
 
 class QueryNode {
@@ -60,10 +60,6 @@ public:
 	//! deserialization is not possible
 	static unique_ptr<QueryNode> Deserialize(Deserializer &source);
 
-	virtual vector<unique_ptr<Expression>> &GetSelectList() = 0;
-
-	virtual size_t GetSelectCount() = 0;
-
 	//! The type of the query node, either SetOperation or Select
 	QueryNodeType type;
 	//! DISTINCT or not
@@ -78,23 +74,23 @@ public:
 
 	//! Whether or not the query has a LIMIT clause
 	bool HasLimit() {
-		return limit.limit >= 0 || limit.offset >= 0;
+		return limit.limit || limit.offset;
 	}
 	//! Whether or not the query has an ORDER BY clause
 	bool HasOrder() {
 		return orderby.orders.size() > 0;
 	}
 
-	void VisitChild(Expression *expr, std::function<void(Expression *expression)> callback) const {
+	void VisitChild(ParsedExpression *expr, std::function<void(ParsedExpression *expression)> callback) const {
 		if (!expr) {
 			return;
 		}
 		callback(expr);
-		expr->EnumerateChildren([&](Expression *child) { VisitChild(child, callback); });
+		expr->EnumerateChildren([&](ParsedExpression *child) { VisitChild(child, callback); });
 	}
 
 	//! Enumerate over all children of this node, invoking the callback for each child.
-	virtual void EnumerateChildren(std::function<void(Expression *expression)> callback) const {
+	virtual void EnumerateChildren(std::function<void(ParsedExpression *expression)> callback) const {
 		for (size_t i = 0; i < orderby.orders.size(); i++) {
 			VisitChild(orderby.orders[i].expression.get(), callback);
 		}

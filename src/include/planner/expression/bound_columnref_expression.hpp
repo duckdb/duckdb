@@ -1,15 +1,14 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/expression/bound_columnref_expression.hpp
+// planner/expression/bound_columnref_expression.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "common/types/hash.hpp"
-#include "parser/expression.hpp"
+#include "planner/expression.hpp"
 
 namespace duckdb {
 

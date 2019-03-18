@@ -32,17 +32,14 @@ template <class OP> static void generic_fold_loop(Vector &input, Value &result) 
 	case TypeId::BIGINT:
 		templated_unary_fold<int64_t, int64_t, OP>(input, &result.value_.bigint);
 		break;
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		templated_unary_fold<float, float, OP>(input, &result.value_.real);
+		break;
+	case TypeId::DOUBLE:
 		templated_unary_fold<double, double, OP>(input, &result.value_.decimal);
 		break;
 	case TypeId::POINTER:
 		templated_unary_fold<uint64_t, uint64_t, OP>(input, &result.value_.pointer);
-		break;
-	case TypeId::DATE:
-		templated_unary_fold<date_t, date_t, OP>(input, &result.value_.date);
-		break;
-	case TypeId::TIMESTAMP:
-		templated_unary_fold<timestamp_t, timestamp_t, OP>(input, &result.value_.timestamp);
 		break;
 	default:
 		throw InvalidTypeException(input.type, "Invalid type for addition");

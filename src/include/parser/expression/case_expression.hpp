@@ -8,44 +8,33 @@
 
 #pragma once
 
-#include "parser/expression.hpp"
+#include "parser/parsed_expression.hpp"
 
 namespace duckdb {
 
-class CaseExpression : public Expression {
+//! The CaseExpression represents a CASE expression in the query
+class CaseExpression : public ParsedExpression {
 public:
 	// this expression has 3 children, (1) the check, (2) the result if the test is true, and (3) the result if the test
 	// is false
-	CaseExpression() : Expression(ExpressionType::OPERATOR_CASE_EXPR) {
-	}
+	CaseExpression();
 
-	ExpressionClass GetExpressionClass() override {
-		return ExpressionClass::CASE;
-	}
+	unique_ptr<ParsedExpression> check;
+	unique_ptr<ParsedExpression> result_if_true;
+	unique_ptr<ParsedExpression> result_if_false;
+public:
+	string ToString() const override;
 
-	unique_ptr<Expression> Copy() override;
+	bool Equals(const ParsedExpression *other) const override;
+
+	unique_ptr<ParsedExpression> Copy() override;
+	
+	void Serialize(Serializer &serializer) override;
+	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, Deserializer &source);
 
 	size_t ChildCount() const override;
-	Expression *GetChild(size_t index) const override;
-	void ReplaceChild(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
+	ParsedExpression *GetChild(size_t index) const override;
+	void ReplaceChild(std::function<unique_ptr<ParsedExpression>(unique_ptr<ParsedExpression> expression)> callback,
 	                  size_t index) override;
-
-	//! Serializes a CaseExpression to a stand-alone binary blob
-	void Serialize(Serializer &serializer) override;
-	//! Deserializes a blob back into an CaseExpression
-	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
-
-	bool Equals(const Expression *other) const override;
-
-	void ResolveType() override;
-
-	string ToString() const override {
-		return "CASE WHEN (" + check->ToString() + ") THEN (" + result_if_true->ToString() + ") ELSE (" +
-		       result_if_false->ToString() + ")";
-	}
-
-	unique_ptr<Expression> check;
-	unique_ptr<Expression> result_if_true;
-	unique_ptr<Expression> result_if_false;
 };
 } // namespace duckdb

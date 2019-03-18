@@ -10,7 +10,7 @@
 
 #include "catalog/catalog.hpp"
 #include "common/common.hpp"
-#include "parser/expression.hpp"
+#include "planner/expression.hpp"
 #include "parser/statement/select_statement.hpp"
 #include "planner/logical_operator_visitor.hpp"
 

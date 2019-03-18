@@ -27,15 +27,16 @@ void VectorOperations::AddInPlace(Vector &result, Vector &input) {
 	case TypeId::SMALLINT:
 		templated_inplace_loop<int16_t, int16_t, operators::AddInPlace>(input, result);
 		break;
-	case TypeId::DATE:
 	case TypeId::INTEGER:
 		templated_inplace_loop<int32_t, int32_t, operators::AddInPlace>(input, result);
 		break;
-	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		templated_inplace_loop<int64_t, int64_t, operators::AddInPlace>(input, result);
 		break;
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		templated_inplace_loop<float, float, operators::AddInPlace>(input, result);
+		break;
+	case TypeId::DOUBLE:
 		templated_inplace_loop<double, double, operators::AddInPlace>(input, result);
 		break;
 	case TypeId::POINTER:

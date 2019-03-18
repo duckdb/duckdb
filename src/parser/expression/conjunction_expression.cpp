@@ -6,36 +6,16 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> ConjunctionExpression::Copy() {
-	auto copy = make_unique<ConjunctionExpression>(type, left->Copy(), right->Copy());
-	copy->CopyProperties(*this);
-	return move(copy);
+ConjunctionExpression::ConjunctionExpression(ExpressionType type, unique_ptr<ParsedExpression> left, unique_ptr<ParsedExpression> right)
+    : ParsedExpression(type, ExpressionClass::CONJUNCTION), left(move(left)), right(move(right)) {
 }
 
-void ConjunctionExpression::ResolveType() {
-	Expression::ResolveType();
-	// conjunctions return a BOOLEAN
-	this->return_type = TypeId::BOOLEAN;
-	// cast the input types to BOOLEAN
-	left = CastExpression::AddCastToType(TypeId::BOOLEAN, move(left));
-	right = CastExpression::AddCastToType(TypeId::BOOLEAN, move(right));
+string ConjunctionExpression::ToString() const {
+	return left->ToString() + " " + ExpressionTypeToOperator(type) + " " + right->ToString();
 }
 
-void ConjunctionExpression::Serialize(Serializer &serializer) {
-	Expression::Serialize(serializer);
-	left->Serialize(serializer);
-	right->Serialize(serializer);
-}
-
-unique_ptr<Expression> ConjunctionExpression::Deserialize(ExpressionType type, TypeId return_type,
-                                                          Deserializer &source) {
-	auto left_child = Expression::Deserialize(source);
-	auto right_child = Expression::Deserialize(source);
-	return make_unique<ConjunctionExpression>(type, move(left_child), move(right_child));
-}
-
-bool ConjunctionExpression::Equals(const Expression *other_) const {
-	if (!Expression::Equals(other_)) {
+bool ConjunctionExpression::Equals(const ParsedExpression *other_) const {
+	if (!ParsedExpression::Equals(other_)) {
 		return false;
 	}
 	auto other = (ConjunctionExpression *)other_;
@@ -49,11 +29,29 @@ bool ConjunctionExpression::Equals(const Expression *other_) const {
 	return false;
 }
 
+unique_ptr<ParsedExpression> ConjunctionExpression::Copy() {
+	auto copy = make_unique<ConjunctionExpression>(type, left->Copy(), right->Copy());
+	copy->CopyProperties(*this);
+	return move(copy);
+}
+
+void ConjunctionExpression::Serialize(Serializer &serializer) {
+	ParsedExpression::Serialize(serializer);
+	left->Serialize(serializer);
+	right->Serialize(serializer);
+}
+
+unique_ptr<ParsedExpression> ConjunctionExpression::Deserialize(ExpressionType type, Deserializer &source) {
+	auto left_child = ParsedExpression::Deserialize(source);
+	auto right_child = ParsedExpression::Deserialize(source);
+	return make_unique<ConjunctionExpression>(type, move(left_child), move(right_child));
+}
+
 size_t ConjunctionExpression::ChildCount() const {
 	return 2;
 }
 
-Expression *ConjunctionExpression::GetChild(size_t index) const {
+ParsedExpression *ConjunctionExpression::GetChild(size_t index) const {
 	if (index == 0) {
 		return left.get();
 	} else {
@@ -63,7 +61,7 @@ Expression *ConjunctionExpression::GetChild(size_t index) const {
 }
 
 void ConjunctionExpression::ReplaceChild(
-    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, size_t index) {
+    std::function<unique_ptr<ParsedExpression>(unique_ptr<ParsedExpression> expression)> callback, size_t index) {
 	if (index == 0) {
 		left = callback(move(left));
 	} else {

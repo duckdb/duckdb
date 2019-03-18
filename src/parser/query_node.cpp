@@ -13,13 +13,16 @@ bool QueryNode::Equals(const QueryNode *other) const {
 	if (this == other) {
 		return true;
 	}
+	if (other->type != this->type) {
+		return false;
+	}
 	if (select_distinct != other->select_distinct) {
 		return false;
 	}
-	if (limit.limit != other->limit.limit || limit.offset != other->limit.offset) {
+	if (!ParsedExpression::Equals(limit.limit.get(), other->limit.limit.get())) {
 		return false;
 	}
-	if (limit.limit != other->limit.limit || limit.offset != other->limit.offset) {
+	if (!ParsedExpression::Equals(limit.offset.get(), other->limit.offset.get())) {
 		return false;
 	}
 	if (orderby.orders.size() != other->orderby.orders.size()) {
@@ -41,15 +44,15 @@ void QueryNode::CopyProperties(QueryNode &other) {
 		other.orderby.orders.push_back(OrderByNode(order.type, order.expression->Copy()));
 	}
 	// limit
-	other.limit.limit = limit.limit;
-	other.limit.offset = limit.offset;
+	other.limit.limit = limit.limit->Copy();
+	other.limit.offset = limit.offset->Copy();
 }
 
 void QueryNode::Serialize(Serializer &serializer) {
 	serializer.Write<QueryNodeType>(type);
 	serializer.Write<bool>(select_distinct);
-	serializer.Write<int64_t>(limit.limit);
-	serializer.Write<int64_t>(limit.offset);
+	serializer.WriteOptional(limit.limit);
+	serializer.WriteOptional(limit.offset);
 	serializer.Write<int64_t>(orderby.orders.size());
 	for (size_t i = 0; i < orderby.orders.size(); i++) {
 		serializer.Write<OrderType>(orderby.orders[i].type);
@@ -62,14 +65,14 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &source) {
 	auto type = source.Read<QueryNodeType>();
 	auto select_distinct = source.Read<bool>();
 	LimitDescription limit;
-	limit.limit = source.Read<int64_t>();
-	limit.offset = source.Read<int64_t>();
+	limit.limit = source.ReadOptional<ParsedExpression>();
+	limit.offset = source.ReadOptional<ParsedExpression>();
 	auto order_count = source.Read<int64_t>();
 	OrderByDescription orderby;
 	for (size_t i = 0; i < order_count; i++) {
 		OrderByNode node;
 		node.type = source.Read<OrderType>();
-		node.expression = Expression::Deserialize(source);
+		node.expression = ParsedExpression::Deserialize(source);
 		orderby.orders.push_back(move(node));
 	}
 	switch (type) {
@@ -83,7 +86,7 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &source) {
 		throw SerializationException("Could not deserialize Query Node: unknown type!");
 	}
 	result->select_distinct = select_distinct;
-	result->limit = limit;
+	result->limit = move(limit);
 	result->orderby = move(orderby);
 	return result;
 }

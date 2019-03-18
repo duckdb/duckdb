@@ -12,43 +12,6 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Value <--> String Utilities
 //===--------------------------------------------------------------------===//
-
-string TypeIdToString(TypeId type) {
-	switch (type) {
-	case TypeId::PARAMETER_OFFSET:
-		return "PARAMETER_OFFSET";
-	case TypeId::BOOLEAN:
-		return "BOOLEAN";
-	case TypeId::TINYINT:
-		return "TINYINT";
-	case TypeId::SMALLINT:
-		return "SMALLINT";
-	case TypeId::INTEGER:
-		return "INTEGER";
-	case TypeId::BIGINT:
-		return "BIGINT";
-	case TypeId::DECIMAL:
-		return "DECIMAL";
-	case TypeId::POINTER:
-		return "POINTER";
-	case TypeId::TIMESTAMP:
-		return "TIMESTAMP";
-	case TypeId::DATE:
-		return "DATE";
-	case TypeId::VARCHAR:
-		return "VARCHAR";
-	case TypeId::VARBINARY:
-		return "VARBINARY";
-	case TypeId::ARRAY:
-		return "ARRAY";
-	case TypeId::UDT:
-		return "UDT";
-	case TypeId::INVALID:
-		break;
-	}
-	return "INVALID";
-}
-
 string LogicalOperatorToString(LogicalOperatorType type) {
 	switch (type) {
 	case LogicalOperatorType::GET:

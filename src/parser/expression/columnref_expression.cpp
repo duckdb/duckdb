@@ -7,44 +7,17 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> ColumnRefExpression::Copy() {
-	auto copy = make_unique<ColumnRefExpression>(column_name, table_name);
-	copy->CopyProperties(*this);
-	return move(copy);
+//! Specify both the column and table name
+ColumnRefExpression::ColumnRefExpression(string column_name, string table_name)
+	: ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF), column_name(column_name), table_name(table_name) {
 }
 
-void ColumnRefExpression::Serialize(Serializer &serializer) {
-	Expression::Serialize(serializer);
-	serializer.WriteString(table_name);
-	serializer.WriteString(column_name);
+ColumnRefExpression::ColumnRefExpression(string column_name) :
+	ColumnRefExpression(column_name, string()) {
 }
 
-unique_ptr<Expression> ColumnRefExpression::Deserialize(ExpressionType type, TypeId return_type, Deserializer &source) {
-	auto table_name = source.Read<string>();
-	auto column_name = source.Read<string>();
-	auto expression = make_unique<ColumnRefExpression>(column_name, table_name);
-	return move(expression);
-}
-
-void ColumnRefExpression::ResolveType() {
-	Expression::ResolveType();
-	if (return_type == TypeId::INVALID) {
-		throw Exception("Type of ColumnRefExpression was not resolved!");
-	}
-}
-
-bool ColumnRefExpression::Equals(const Expression *other_) const {
-	if (!Expression::Equals(other_)) {
-		return false;
-	}
-	auto other = (ColumnRefExpression *)other_;
-	return column_name == other->column_name && table_name == other->table_name;
-}
-
-uint64_t ColumnRefExpression::Hash() const {
-	uint64_t result = Expression::Hash();
-	result = CombineHash(result, duckdb::Hash<const char *>(column_name.c_str()));
-	return result;
+string ColumnRefExpression::GetName() const {
+	return !alias.empty() ? alias : column_name;
 }
 
 string ColumnRefExpression::ToString() const {
@@ -53,4 +26,37 @@ string ColumnRefExpression::ToString() const {
 	} else {
 		return table_name + "." + column_name;
 	}
+}
+
+bool ColumnRefExpression::Equals(const ParsedExpression *other_) const {
+	if (!ParsedExpression::Equals(other_)) {
+		return false;
+	}
+	auto other = (ColumnRefExpression *)other_;
+	return column_name == other->column_name && table_name == other->table_name;
+}
+
+uint64_t ColumnRefExpression::Hash() const {
+	uint64_t result = ParsedExpression::Hash();
+	result = CombineHash(result, duckdb::Hash<const char *>(column_name.c_str()));
+	return result;
+}
+
+unique_ptr<ParsedExpression> ColumnRefExpression::Copy() {
+	auto copy = make_unique<ColumnRefExpression>(column_name, table_name);
+	copy->CopyProperties(*this);
+	return move(copy);
+}
+
+void ColumnRefExpression::Serialize(Serializer &serializer) {
+	ParsedExpression::Serialize(serializer);
+	serializer.WriteString(table_name);
+	serializer.WriteString(column_name);
+}
+
+unique_ptr<ParsedExpression> ColumnRefExpression::Deserialize(ExpressionType type, Deserializer &source) {
+	auto table_name = source.Read<string>();
+	auto column_name = source.Read<string>();
+	auto expression = make_unique<ColumnRefExpression>(column_name, table_name);
+	return move(expression);
 }

@@ -10,9 +10,9 @@
 
 #include "common/types/data_chunk.hpp"
 #include "parser/column_definition.hpp"
-#include "parser/expression/bound_function_expression.hpp"
 
 namespace duckdb {
+class BoundFunctionExpression;
 class Catalog;
 class ClientContext;
 class Transaction;

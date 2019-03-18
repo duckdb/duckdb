@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "main/client_context.hpp"
 #include "parser/sql_statement.hpp"
 
 namespace postgres {
@@ -17,6 +16,7 @@ struct List;
 } // namespace postgres
 
 namespace duckdb {
+class ClientContext;
 
 //! The parser is responsible for parsing the query and converting it into a set
 //! of parsed statements. The parsed statements can then be converted into a

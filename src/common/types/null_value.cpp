@@ -25,16 +25,13 @@ void SetNullValue(uint8_t *ptr, TypeId type) {
 	case TypeId::INTEGER:
 		*((int32_t *)ptr) = NullValue<int32_t>();
 		break;
-	case TypeId::DATE:
-		*((date_t *)ptr) = NullValue<date_t>();
-		break;
 	case TypeId::BIGINT:
 		*((int64_t *)ptr) = NullValue<int64_t>();
 		break;
-	case TypeId::TIMESTAMP:
-		*((timestamp_t *)ptr) = NullValue<timestamp_t>();
+	case TypeId::FLOAT:
+		*((float *)ptr) = NullValue<float>();
 		break;
-	case TypeId::DECIMAL:
+	case TypeId::DOUBLE:
 		*((double *)ptr) = NullValue<double>();
 		break;
 	case TypeId::VARCHAR:

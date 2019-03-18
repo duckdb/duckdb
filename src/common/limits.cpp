@@ -14,10 +14,8 @@ int64_t MinimumValue(TypeId type) {
 		return MinimumValue<int8_t>();
 	case TypeId::SMALLINT:
 		return MinimumValue<int16_t>();
-	case TypeId::DATE:
 	case TypeId::INTEGER:
 		return MinimumValue<int32_t>();
-	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		return MinimumValue<int64_t>();
 	case TypeId::POINTER:
@@ -33,10 +31,8 @@ int64_t MaximumValue(TypeId type) {
 		return MaximumValue<int8_t>();
 	case TypeId::SMALLINT:
 		return MaximumValue<int16_t>();
-	case TypeId::DATE:
 	case TypeId::INTEGER:
 		return MaximumValue<int32_t>();
-	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		return MaximumValue<int64_t>();
 	case TypeId::POINTER:

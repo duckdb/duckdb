@@ -8,27 +8,19 @@
 
 #pragma once
 
-#include "parser/expression.hpp"
+#include "parser/parsed_expression.hpp"
 
 namespace duckdb {
 
 //! Represents a * expression in the SELECT clause
-class StarExpression : public Expression {
+class StarExpression : public ParsedExpression {
 public:
-	StarExpression() : Expression(ExpressionType::STAR) {
-	}
+	StarExpression();
+public:
+	string ToString() const override;
+	
+	unique_ptr<ParsedExpression> Copy() override;
 
-	ExpressionClass GetExpressionClass() override {
-		return ExpressionClass::STAR;
-	}
-
-	unique_ptr<Expression> Copy() override;
-
-	//! Deserializes a blob back into a StarExpression
-	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
-
-	string ToString() const override {
-		return "*";
-	}
+	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, Deserializer &source);
 };
 } // namespace duckdb

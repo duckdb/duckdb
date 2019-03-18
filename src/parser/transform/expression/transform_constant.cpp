@@ -5,7 +5,7 @@ using namespace duckdb;
 using namespace postgres;
 using namespace std;
 
-unique_ptr<Expression> Transformer::TransformValue(postgres::Value val) {
+unique_ptr<ParsedExpression> Transformer::TransformValue(postgres::Value val) {
 	switch (val.type) {
 	case T_Integer:
 		return make_unique<ConstantExpression>(Value::INTEGER(val.val.ival));
@@ -15,12 +15,12 @@ unique_ptr<Expression> Transformer::TransformValue(postgres::Value val) {
 	case T_Float:
 		return make_unique<ConstantExpression>(Value(stod(string(val.val.str))));
 	case T_Null:
-		return make_unique<ConstantExpression>();
+		return make_unique<ConstantExpression>(Value());
 	default:
 		throw NotImplementedException("Value not implemented!");
 	}
 }
 
-unique_ptr<Expression> Transformer::TransformConstant(A_Const *c) {
+unique_ptr<ParsedExpression> Transformer::TransformConstant(A_Const *c) {
 	return TransformValue(c->val);
 }

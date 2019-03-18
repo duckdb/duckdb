@@ -35,7 +35,7 @@ public:
 		value_.integer = val;
 	}
 	//! Create a DOUBLE value
-	Value(double val) : type(TypeId::DECIMAL), is_null(false) {
+	Value(double val) : type(TypeId::DOUBLE), is_null(false) {
 		value_.decimal = val;
 	}
 	//! Create a VARCHAR value
@@ -70,11 +70,9 @@ public:
 	static Value BIGINT(int64_t value);
 	//! Create a pointer Value from a specified value
 	static Value POINTER(uint64_t value);
-	//! Create a Date Value from a specified value
-	static Value DATE(date_t value);
-	//! Create a Timestamp Value from a specified value
-	static Value TIMESTAMP(timestamp_t value);
-
+	//! Create a real Value from a specified value
+	static Value REAL(float value);
+	
 	int64_t GetNumericValue();
 
 	//! Return a copy of this value
@@ -100,13 +98,12 @@ public:
 		int16_t smallint;
 		int32_t integer;
 		int64_t bigint;
+		float real;
 		double decimal;
 		uint64_t pointer;
-		date_t date;
-		timestamp_t timestamp;
 	} value_;
 
-	//! The value of the object, if it is of a variable size Type
+	//! The value of the object, if it is of a variable size type
 	string str_value;
 
 	//! Serializes a Value to a stand-alone binary blob

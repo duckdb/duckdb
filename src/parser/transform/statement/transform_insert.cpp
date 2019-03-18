@@ -30,7 +30,7 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(Node *node) {
 		for (auto value_list = list->head; value_list != NULL; value_list = value_list->next) {
 			List *target = (List *)(value_list->data.ptr_value);
 
-			vector<unique_ptr<Expression>> insert_values;
+			vector<unique_ptr<ParsedExpression>> insert_values;
 			if (!TransformExpressionList(target, insert_values)) {
 				throw ParserException("Could not parse expression list!");
 			}

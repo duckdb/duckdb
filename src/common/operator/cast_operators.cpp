@@ -157,6 +157,14 @@ template <> uint64_t Cast::Operation(const char *left) {
 	}
 }
 
+template <> float Cast::Operation(const char *left) {
+	try {
+		return (float) stod(left, NULL);
+	} catch (...) {
+		throw ConversionException("Could not convert string '%s' to numeric", left);
+	}
+}
+
 template <> double Cast::Operation(const char *left) {
 	try {
 		return stod(left, NULL);
@@ -193,6 +201,10 @@ template <> string Cast::Operation(int64_t left) {
 }
 
 template <> string Cast::Operation(uint64_t left) {
+	return to_string(left);
+}
+
+template <> string Cast::Operation(float left) {
 	return to_string(left);
 }
 

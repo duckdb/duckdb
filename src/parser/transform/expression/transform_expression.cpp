@@ -5,7 +5,7 @@ using namespace duckdb;
 using namespace postgres;
 using namespace std;
 
-unique_ptr<Expression> Transformer::TransformResTarget(ResTarget *root) {
+unique_ptr<ParsedExpression> Transformer::TransformResTarget(ResTarget *root) {
 	if (!root) {
 		return nullptr;
 	}
@@ -19,7 +19,7 @@ unique_ptr<Expression> Transformer::TransformResTarget(ResTarget *root) {
 	return expr;
 }
 
-unique_ptr<Expression> Transformer::TransformExpression(Node *node) {
+unique_ptr<ParsedExpression> Transformer::TransformExpression(Node *node) {
 	if (!node) {
 		return nullptr;
 	}
@@ -57,7 +57,7 @@ unique_ptr<Expression> Transformer::TransformExpression(Node *node) {
 	}
 }
 
-bool Transformer::TransformExpressionList(List *list, vector<unique_ptr<Expression>> &result) {
+bool Transformer::TransformExpressionList(List *list, vector<unique_ptr<ParsedExpression>> &result) {
 	if (!list) {
 		return false;
 	}

@@ -8,11 +8,10 @@
 
 #pragma once
 
-#include "parser/expression.hpp"
+#include "parser/parsed_expression.hpp"
 #include "parser/query_node.hpp"
 #include "parser/sql_node_visitor.hpp"
 #include "parser/sql_statement.hpp"
-#include "planner/binder.hpp"
 
 namespace duckdb {
 
@@ -28,25 +27,7 @@ public:
 	//! The right side of the set operation
 	unique_ptr<QueryNode> right = nullptr;
 
-	//! The following information is only gathered after binding the SetOperationNode
-	struct {
-		//! Index used by the set operation
-		size_t setop_index;
-		//! The binder used by the left side of the set operation
-		unique_ptr<Binder> left_binder;
-		//! The binder used by the right side of the set operation
-		unique_ptr<Binder> right_binder;
-	} binding;
-
-	vector<unique_ptr<Expression>> &GetSelectList() override {
-		return left->GetSelectList();
-	}
-
-	size_t GetSelectCount() override {
-		return left->GetSelectCount();
-	}
-
-	void EnumerateChildren(std::function<void(Expression *expression)> callback) const override {
+	void EnumerateChildren(std::function<void(ParsedExpression *expression)> callback) const override {
 		QueryNode::EnumerateChildren(callback);
 		left->EnumerateChildren(callback);
 		right->EnumerateChildren(callback);
@@ -55,6 +36,7 @@ public:
 	bool Equals(const QueryNode *other) const override;
 	//! Create a copy of this SelectNode
 	unique_ptr<QueryNode> Copy() override;
+
 	//! Serializes a SelectNode to a stand-alone binary blob
 	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into a SelectNode

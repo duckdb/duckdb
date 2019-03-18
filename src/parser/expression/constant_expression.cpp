@@ -7,30 +7,16 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> ConstantExpression::Copy() {
-	auto copy = make_unique<ConstantExpression>(value);
-	copy->CopyProperties(*this);
-	return move(copy);
+ConstantExpression::ConstantExpression(Value val) :
+	ParsedExpression(ExpressionType::VALUE_CONSTANT, ExpressionClass::CONSTANT), value(val) {
 }
 
-void ConstantExpression::Serialize(Serializer &serializer) {
-	Expression::Serialize(serializer);
-	value.Serialize(serializer);
+string ConstantExpression::ToString() const {
+	return value.ToString();
 }
 
-unique_ptr<Expression> ConstantExpression::Deserialize(ExpressionType type, TypeId return_type, Deserializer &source) {
-	Value value = Value::Deserialize(source);
-	auto expression = make_unique_base<Expression, ConstantExpression>(value);
-	return expression;
-}
-
-void ConstantExpression::ResolveType() {
-	Expression::ResolveType();
-	stats.SetFromValue(value);
-}
-
-bool ConstantExpression::Equals(const Expression *other_) const {
-	if (!Expression::Equals(other_)) {
+bool ConstantExpression::Equals(const ParsedExpression *other_) const {
+	if (!ParsedExpression::Equals(other_)) {
 		return false;
 	}
 	auto other = (ConstantExpression *)other_;
@@ -38,6 +24,23 @@ bool ConstantExpression::Equals(const Expression *other_) const {
 }
 
 uint64_t ConstantExpression::Hash() const {
-	uint64_t result = Expression::Hash();
+	uint64_t result = ParsedExpression::Hash();
 	return CombineHash(ValueOperations::Hash(value), result);
+}
+
+unique_ptr<ParsedExpression> ConstantExpression::Copy() {
+	auto copy = make_unique<ConstantExpression>(value);
+	copy->CopyProperties(*this);
+	return move(copy);
+}
+
+void ConstantExpression::Serialize(Serializer &serializer) {
+	ParsedExpression::Serialize(serializer);
+	value.Serialize(serializer);
+}
+
+unique_ptr<ParsedExpression> ConstantExpression::Deserialize(ExpressionType type, Deserializer &source) {
+	Value value = Value::Deserialize(source);
+	auto expression = make_unique_base<ParsedExpression, ConstantExpression>(value);
+	return expression;
 }

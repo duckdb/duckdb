@@ -1,14 +1,14 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// parser/expression/bound_subquery_expression.hpp
+// planner/expression/bound_subquery_expression.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "parser/expression/subquery_expression.hpp"
+#include "planner/expression.hpp"
 #include "planner/binder.hpp"
 
 namespace duckdb {

@@ -13,7 +13,7 @@ void TableFunction::Serialize(Serializer &serializer) {
 unique_ptr<TableRef> TableFunction::Deserialize(Deserializer &source) {
 	auto result = make_unique<TableFunction>();
 
-	result->function = Expression::Deserialize(source);
+	result->function = ParsedExpression::Deserialize(source);
 
 	return move(result);
 }

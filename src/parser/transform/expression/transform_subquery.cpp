@@ -7,7 +7,7 @@ using namespace duckdb;
 using namespace postgres;
 using namespace std;
 
-unique_ptr<Expression> Transformer::TransformSubquery(SubLink *root) {
+unique_ptr<ParsedExpression> Transformer::TransformSubquery(SubLink *root) {
 	if (!root) {
 		return nullptr;
 	}
@@ -20,7 +20,6 @@ unique_ptr<Expression> Transformer::TransformSubquery(SubLink *root) {
 	switch (root->subLinkType) {
 	case EXISTS_SUBLINK: {
 		subquery_expr->subquery_type = SubqueryType::EXISTS;
-		subquery_expr->return_type = TypeId::BOOLEAN;
 		break;
 	}
 	case ANY_SUBLINK:
@@ -28,7 +27,6 @@ unique_ptr<Expression> Transformer::TransformSubquery(SubLink *root) {
 		// comparison with ANY() or ALL()
 		subquery_expr->subquery_type = SubqueryType::ANY;
 		subquery_expr->child = TransformExpression(root->testexpr);
-		subquery_expr->return_type = TypeId::BOOLEAN;
 		// get the operator name
 		if (!root->operName) {
 			// simple IN
@@ -49,8 +47,7 @@ unique_ptr<Expression> Transformer::TransformSubquery(SubLink *root) {
 			// first invert the comparison type
 			subquery_expr->comparison_type =
 			    ComparisonExpression::NegateComparisionExpression(subquery_expr->comparison_type);
-			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, TypeId::BOOLEAN, move(subquery_expr),
-			                                       nullptr);
+			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(subquery_expr));
 		}
 		break;
 	}
@@ -60,7 +57,8 @@ unique_ptr<Expression> Transformer::TransformSubquery(SubLink *root) {
 		subquery_expr->subquery_type = SubqueryType::SCALAR;
 		break;
 	}
-	default: { throw NotImplementedException("Subquery of type %d not implemented\n", (int)root->subLinkType); }
+	default:
+		throw NotImplementedException("Subquery of type %d not implemented\n", (int)root->subLinkType);
 	}
 	return move(subquery_expr);
 }

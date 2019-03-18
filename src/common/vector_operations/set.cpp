@@ -50,17 +50,14 @@ void VectorOperations::Set(Vector &result, Value value) {
 		case TypeId::BIGINT:
 			templated_set_loop<int64_t>(result, value.value_.bigint);
 			break;
-		case TypeId::DECIMAL:
+		case TypeId::FLOAT:
+			templated_set_loop<float>(result, value.value_.decimal);
+			break;
+		case TypeId::DOUBLE:
 			templated_set_loop<double>(result, value.value_.decimal);
 			break;
 		case TypeId::POINTER:
 			templated_set_loop<uint64_t>(result, value.value_.pointer);
-			break;
-		case TypeId::DATE:
-			templated_set_loop<date_t>(result, value.value_.date);
-			break;
-		case TypeId::TIMESTAMP:
-			templated_set_loop<timestamp_t>(result, value.value_.timestamp);
 			break;
 		case TypeId::VARCHAR: {
 			auto str = result.string_heap.AddString(value.str_value);

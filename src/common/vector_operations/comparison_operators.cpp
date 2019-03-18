@@ -36,18 +36,19 @@ template <class OP> static void templated_boolean_operation(Vector &left, Vector
 	case TypeId::SMALLINT:
 		templated_binary_loop<int16_t, int16_t, bool, OP>(left, right, result);
 		break;
-	case TypeId::DATE:
 	case TypeId::INTEGER:
 		templated_binary_loop<int32_t, int32_t, bool, OP>(left, right, result);
 		break;
-	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		templated_binary_loop<int64_t, int64_t, bool, OP>(left, right, result);
 		break;
 	case TypeId::POINTER:
 		templated_binary_loop<uint64_t, uint64_t, bool, OP>(left, right, result);
 		break;
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		templated_binary_loop<float, float, bool, OP>(left, right, result);
+		break;
+	case TypeId::DOUBLE:
 		templated_binary_loop<double, double, bool, OP>(left, right, result);
 		break;
 	case TypeId::VARCHAR:

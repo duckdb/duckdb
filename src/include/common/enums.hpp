@@ -16,27 +16,6 @@
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
-// Internal Types
-//===--------------------------------------------------------------------===//
-enum class TypeId : uint8_t {
-	INVALID = 0,
-	PARAMETER_OFFSET = 1,
-	BOOLEAN = 2,
-	TINYINT = 3,
-	SMALLINT = 4,
-	INTEGER = 5,
-	BIGINT = 6,
-	POINTER = 7,
-	DATE = 8,
-	TIMESTAMP = 9,
-	DECIMAL = 10,
-	VARCHAR = 11,
-	VARBINARY = 12,
-	ARRAY = 13,
-	UDT = 14
-};
-
-//===--------------------------------------------------------------------===//
 // Predicate Expression Operation Types
 //===--------------------------------------------------------------------===//
 enum class ExpressionType : uint8_t {
@@ -44,11 +23,7 @@ enum class ExpressionType : uint8_t {
 
 	// -----------------------------
 	// Arithmetic Operators
-	// Implicit Numeric Casting: Trying to implement SQL-92.
-	// Implicit Character Casting: Trying to implement SQL-92, but not easy...
-	// Anyway, use explicit OPERATOR_CAST if you could.
 	// -----------------------------
-
 	// left + right (both must be number. implicitly casted)
 	OPERATOR_ADD = 1,
 	// start of binary add
@@ -198,25 +173,41 @@ enum class ExpressionType : uint8_t {
 //===--------------------------------------------------------------------===//
 enum class ExpressionClass : uint8_t {
 	INVALID = 0,
+	//===--------------------------------------------------------------------===//
+	// Parsed Expressions
+	//===--------------------------------------------------------------------===//
 	AGGREGATE = 1,
-	CASE = 3,
-	CAST = 4,
-	COLUMN_REF = 5,
-	COMPARISON = 6,
-	CONJUNCTION = 7,
-	CONSTANT = 8,
-	DEFAULT = 9,
-	FUNCTION = 10,
-	OPERATOR = 12,
-	STAR = 13,
-	SUBQUERY = 14,
-	WINDOW = 15,
-	COMMON_SUBEXPRESSION = 16,
-	BOUND_REF = 17,
-	BOUND_COLUMN_REF = 18,
-	BOUND_FUNCTION = 19,
-	BOUND_SUBQUERY = 20,
-	PARAMETER = 21
+	CASE = 2,
+	CAST = 3,
+	COLUMN_REF = 4,
+	COMPARISON = 5,
+	CONJUNCTION = 6,
+	CONSTANT = 7,
+	DEFAULT = 8,
+	FUNCTION = 9,
+	OPERATOR = 10,
+	STAR = 11,
+	SUBQUERY = 12,
+	WINDOW = 13,
+	PARAMETER = 14,
+	//===--------------------------------------------------------------------===//
+	// Bound Expressions
+	//===--------------------------------------------------------------------===//
+	BOUND_AGGREGATE = 25,
+	BOUND_CASE = 26,
+	BOUND_CAST = 27,
+	BOUND_COLUMN_REF = 28,
+	BOUND_COMPARISON = 29,
+	BOUND_CONJUNCTION = 30,
+	BOUND_CONSTANT = 31,
+	BOUND_FUNCTION = 32,
+	BOUND_OPERATOR = 33,
+	BOUND_SUBQUERY = 34,
+	BOUND_WINDOW = 35,
+	//===--------------------------------------------------------------------===//
+	// Miscellaneous
+	//===--------------------------------------------------------------------===//
+	COMMON_SUBEXPRESSION = 50
 };
 
 //===--------------------------------------------------------------------===//
@@ -485,7 +476,6 @@ enum class TransactionType : uint8_t { INVALID, BEGIN_TRANSACTION, COMMIT, ROLLB
 //===--------------------------------------------------------------------===//
 // String <-> Enum conversion
 //===--------------------------------------------------------------------===//
-string TypeIdToString(TypeId type);
 string JoinTypeToString(JoinType type);
 IndexType StringToIndexType(const string &str);
 

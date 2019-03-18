@@ -7,7 +7,7 @@ using namespace duckdb;
 using namespace postgres;
 using namespace std;
 
-unique_ptr<Expression> Transformer::TransformCase(CaseExpr *root) {
+unique_ptr<ParsedExpression> Transformer::TransformCase(CaseExpr *root) {
 	if (!root) {
 		return nullptr;
 	}
@@ -15,7 +15,7 @@ unique_ptr<Expression> Transformer::TransformCase(CaseExpr *root) {
 	// but we rewrite to CASE WHEN expression = value THEN result ... to only
 	// have to handle one case downstream.
 
-	unique_ptr<Expression> def_res;
+	unique_ptr<ParsedExpression> def_res;
 	if (root->defresult) {
 		def_res = TransformExpression(reinterpret_cast<Node *>(root->defresult));
 	} else {
@@ -32,7 +32,7 @@ unique_ptr<Expression> Transformer::TransformCase(CaseExpr *root) {
 		CaseWhen *w = reinterpret_cast<CaseWhen *>(cell->data.ptr_value);
 
 		auto test_raw = TransformExpression(reinterpret_cast<Node *>(w->expr));
-		unique_ptr<Expression> test;
+		unique_ptr<ParsedExpression> test;
 		auto arg = TransformExpression(reinterpret_cast<Node *>(root->arg));
 		if (arg) {
 			test = make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(arg), move(test_raw));

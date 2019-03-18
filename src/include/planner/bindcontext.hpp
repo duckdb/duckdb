@@ -12,7 +12,7 @@
 #include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "parser/column_definition.hpp"
-#include "parser/expression.hpp"
+#include "parser/parsed_expression.hpp"
 #include "parser/expression/bound_columnref_expression.hpp"
 #include "parser/sql_statement.hpp"
 #include "planner/expression_binder.hpp"

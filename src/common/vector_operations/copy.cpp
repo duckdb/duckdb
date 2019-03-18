@@ -65,15 +65,16 @@ template <bool SET_NULL> void generic_copy_loop(Vector &source, void *target, si
 	case TypeId::SMALLINT:
 		copy_loop<int16_t, SET_NULL>(source, target, offset, element_count);
 		break;
-	case TypeId::DATE:
 	case TypeId::INTEGER:
 		copy_loop<int32_t, SET_NULL>(source, target, offset, element_count);
 		break;
-	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		copy_loop<int64_t, SET_NULL>(source, target, offset, element_count);
 		break;
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		copy_loop<float, SET_NULL>(source, target, offset, element_count);
+		break;
+	case TypeId::DOUBLE:
 		copy_loop<double, SET_NULL>(source, target, offset, element_count);
 		break;
 	case TypeId::POINTER:

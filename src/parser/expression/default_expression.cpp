@@ -5,12 +5,20 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> DefaultExpression::Copy() {
+DefaultExpression::DefaultExpression() :
+	ParsedExpression(ExpressionType::VALUE_DEFAULT, ExpressionClass::DEFAULT) {
+}
+
+string DefaultExpression::ToString() const {
+	return "DEFAULT";
+}
+
+unique_ptr<ParsedExpression> DefaultExpression::Copy() {
 	auto copy = make_unique<DefaultExpression>();
 	copy->CopyProperties(*this);
 	return move(copy);
 }
 
-unique_ptr<Expression> DefaultExpression::Deserialize(ExpressionType type, TypeId return_type, Deserializer &source) {
+unique_ptr<ParsedExpression> DefaultExpression::Deserialize(ExpressionType type, Deserializer &source) {
 	return make_unique<DefaultExpression>();
 }

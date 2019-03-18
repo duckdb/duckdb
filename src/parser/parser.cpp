@@ -1,5 +1,6 @@
 #include "parser/parser.hpp"
 
+#include "main/client_context.hpp"
 #include "parser/transformer.hpp"
 
 using namespace postgres;

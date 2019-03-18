@@ -14,25 +14,9 @@
 namespace duckdb {
 
 //! Represents a subquery
-class SubqueryExpression : public Expression {
+class SubqueryExpression : public ParsedExpression {
 public:
-	SubqueryExpression()
-	    : Expression(ExpressionType::SUBQUERY), subquery_type(SubqueryType::INVALID),
-	      comparison_type(ExpressionType::INVALID) {
-	}
-
-	ExpressionClass GetExpressionClass() override {
-		return ExpressionClass::SUBQUERY;
-	}
-
-	unique_ptr<Expression> Copy() override;
-
-	//! Serializes an Expression to a stand-alone binary blob
-	void Serialize(Serializer &serializer) override;
-	//! Deserializes a blob back into an ConstantExpression
-	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
-
-	bool Equals(const Expression *other) const override;
+	SubqueryExpression();
 
 	//! The actual subquery
 	unique_ptr<QueryNode> subquery;
@@ -40,25 +24,29 @@ public:
 	SubqueryType subquery_type;
 	//! the child expression to compare with (in case of IN, ANY, ALL operators, empy for EXISTS queries and scalar
 	//! subquery)
-	unique_ptr<Expression> child;
+	unique_ptr<ParsedExpression> child;
 	//! The comparison type of the child expression with the subquery (in case of ANY, ALL operators), empty otherwise
 	ExpressionType comparison_type;
-
-	size_t ChildCount() const override;
-	Expression *GetChild(size_t index) const override;
-	void ReplaceChild(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
-	                  size_t index) override;
-
-	string ToString() const override {
-		return "SUBQUERY";
-	}
-
+public:
 	bool HasSubquery() override {
 		return true;
 	}
-
 	bool IsScalar() override {
 		return false;
 	}
+
+	string ToString() const override;
+
+	bool Equals(const ParsedExpression *other) const override;
+
+	unique_ptr<ParsedExpression> Copy() override;
+
+	void Serialize(Serializer &serializer) override;
+	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, Deserializer &source);
+
+	size_t ChildCount() const override;
+	ParsedExpression *GetChild(size_t index) const override;
+	void ReplaceChild(std::function<unique_ptr<ParsedExpression>(unique_ptr<ParsedExpression> expression)> callback,
+	                  size_t index) override;
 };
 } // namespace duckdb

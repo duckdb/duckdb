@@ -2,7 +2,6 @@
 // cast_operators.cpp
 // Description: This file contains the implementation of the different casts
 //===--------------------------------------------------------------------===//
-
 #include "common/operator/cast_operators.hpp"
 
 #include "common/vector_operations/vector_operations.hpp"
@@ -46,17 +45,14 @@ template <class SRC, class OP, bool IGNORE_NULL> static void result_cast_switch(
 	case TypeId::BIGINT:
 		templated_cast_loop<SRC, int64_t, OP, IGNORE_NULL>(source, result);
 		break;
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		templated_cast_loop<SRC, float, OP, IGNORE_NULL>(source, result);
+		break;
+	case TypeId::DOUBLE:
 		templated_cast_loop<SRC, double, OP, IGNORE_NULL>(source, result);
 		break;
 	case TypeId::POINTER:
 		templated_cast_loop<SRC, uint64_t, OP, IGNORE_NULL>(source, result);
-		break;
-	case TypeId::DATE:
-		templated_cast_loop<SRC, date_t, operators::CastToDate, true>(source, result);
-		break;
-	case TypeId::TIMESTAMP:
-		templated_cast_loop<SRC, timestamp_t, operators::CastToTimestamp, true>(source, result);
 		break;
 	case TypeId::VARCHAR: {
 		// result is VARCHAR
@@ -102,17 +98,14 @@ void VectorOperations::Cast(Vector &source, Vector &result) {
 	case TypeId::BIGINT:
 		result_cast_switch<int64_t, operators::Cast, true>(source, result);
 		break;
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		result_cast_switch<float, operators::Cast, true>(source, result);
+		break;
+	case TypeId::DOUBLE:
 		result_cast_switch<double, operators::Cast, true>(source, result);
 		break;
 	case TypeId::POINTER:
 		result_cast_switch<uint64_t, operators::Cast, true>(source, result);
-		break;
-	case TypeId::DATE:
-		result_cast_switch<date_t, operators::CastFromDate, true>(source, result);
-		break;
-	case TypeId::TIMESTAMP:
-		result_cast_switch<timestamp_t, operators::CastFromTimestamp, true>(source, result);
 		break;
 	case TypeId::VARCHAR:
 		result_cast_switch<const char *, operators::Cast, true>(source, result);

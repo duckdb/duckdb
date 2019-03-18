@@ -105,15 +105,16 @@ void VectorOperations::Sort(Vector &vector, sel_t *sel_vector, size_t count, sel
 	case TypeId::SMALLINT:
 		templated_quicksort<int16_t>(vector, sel_vector, count, result);
 		break;
-	case TypeId::DATE:
 	case TypeId::INTEGER:
 		templated_quicksort<int32_t>(vector, sel_vector, count, result);
 		break;
-	case TypeId::TIMESTAMP:
 	case TypeId::BIGINT:
 		templated_quicksort<int64_t>(vector, sel_vector, count, result);
 		break;
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		templated_quicksort<float>(vector, sel_vector, count, result);
+		break;
+	case TypeId::DOUBLE:
 		templated_quicksort<double>(vector, sel_vector, count, result);
 		break;
 	case TypeId::VARCHAR:

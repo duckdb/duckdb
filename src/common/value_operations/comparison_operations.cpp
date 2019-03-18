@@ -40,14 +40,12 @@ template <class OP> static bool templated_boolean_operation(const Value &left, c
 		return OP::Operation(left.value_.integer, right.value_.integer);
 	case TypeId::BIGINT:
 		return OP::Operation(left.value_.bigint, right.value_.bigint);
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		return OP::Operation(left.value_.real, right.value_.real);
+	case TypeId::DOUBLE:
 		return OP::Operation(left.value_.decimal, right.value_.decimal);
 	case TypeId::POINTER:
 		return OP::Operation(left.value_.pointer, right.value_.pointer);
-	case TypeId::DATE:
-		return OP::Operation(left.value_.date, right.value_.date);
-	case TypeId::TIMESTAMP:
-		return OP::Operation(left.value_.timestamp, right.value_.timestamp);
 	case TypeId::VARCHAR:
 		return OP::Operation(left.str_value, right.str_value);
 	default:

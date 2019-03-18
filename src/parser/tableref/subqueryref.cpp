@@ -10,8 +10,6 @@ SubqueryRef::SubqueryRef(unique_ptr<QueryNode> subquery_)
 }
 
 unique_ptr<TableRef> SubqueryRef::Copy() {
-	assert(!binder);
-
 	auto copy = make_unique<SubqueryRef>(subquery->Copy());
 	copy->alias = alias;
 	copy->column_name_alias = column_name_alias;
@@ -19,8 +17,6 @@ unique_ptr<TableRef> SubqueryRef::Copy() {
 }
 
 void SubqueryRef::Serialize(Serializer &serializer) {
-	assert(!binder);
-
 	TableRef::Serialize(serializer);
 	subquery->Serialize(serializer);
 	serializer.Write<int>(column_name_alias.size());

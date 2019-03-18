@@ -16,9 +16,9 @@ namespace duckdb {
 //! A column of a table.
 class ColumnDefinition {
 public:
-	ColumnDefinition(string name, TypeId type) : name(name), type(type), has_default(false) {
+	ColumnDefinition(string name, SQLType type) : name(name), type(type), has_default(false) {
 	}
-	ColumnDefinition(string name, TypeId type, Value default_value)
+	ColumnDefinition(string name, SQLType type, Value default_value)
 	    : name(name), type(type), has_default(true), default_value(default_value) {
 	}
 
@@ -27,7 +27,7 @@ public:
 	//! The index of the column in the table
 	size_t oid;
 	//! The type of the column
-	TypeId type;
+	SQLType type;
 	//! Whether or not the column has a default value
 	bool has_default;
 	//! The default value of the column (if any)

@@ -8,43 +8,29 @@
 
 #pragma once
 
-#include "parser/expression.hpp"
+#include "parser/parsed_expression.hpp"
 
 namespace duckdb {
 //! Represents a conjunction (AND/OR)
-class ConjunctionExpression : public Expression {
+class ConjunctionExpression : public ParsedExpression {
 public:
-	ConjunctionExpression(ExpressionType type, unique_ptr<Expression> left, unique_ptr<Expression> right)
-	    : Expression(type, TypeId::BOOLEAN) {
-		this->left = move(left);
-		this->right = move(right);
-	}
+	ConjunctionExpression(ExpressionType type, unique_ptr<ParsedExpression> left, unique_ptr<ParsedExpression> right);
 
-	ExpressionClass GetExpressionClass() override {
-		return ExpressionClass::CONJUNCTION;
-	}
+	unique_ptr<ParsedExpression> left;
+	unique_ptr<ParsedExpression> right;
+public:
+	string ToString() const override;
+	
+	bool Equals(const ParsedExpression *other) const override;
 
-	unique_ptr<Expression> Copy() override;
+	unique_ptr<ParsedExpression> Copy() override;
+
+	void Serialize(Serializer &serializer) override;
+	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, Deserializer &source);
 
 	size_t ChildCount() const override;
-	Expression *GetChild(size_t index) const override;
-	void ReplaceChild(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
+	ParsedExpression *GetChild(size_t index) const override;
+	void ReplaceChild(std::function<unique_ptr<ParsedExpression>(unique_ptr<ParsedExpression> expression)> callback,
 	                  size_t index) override;
-
-	//! Serializes a ConjunctionExpression to a stand-alone binary blob
-	void Serialize(Serializer &serializer) override;
-	//! Deserializes a blob back into a ConjunctionExpression
-	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
-
-	bool Equals(const Expression *other) const override;
-
-	void ResolveType() override;
-
-	string ToString() const override {
-		return left->ToString() + " " + ExpressionTypeToOperator(type) + " " + right->ToString();
-	}
-
-	unique_ptr<Expression> left;
-	unique_ptr<Expression> right;
 };
 } // namespace duckdb

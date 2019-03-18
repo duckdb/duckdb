@@ -37,12 +37,12 @@ template <class OP, bool IGNORE_NULL> static Value templated_binary_operation(co
 		}
 		return result;
 	}
-	if (TypeIsIntegral(left.type) && right.type == TypeId::DECIMAL) {
-		Value left_cast = left.CastAs(TypeId::DECIMAL);
+	if (TypeIsIntegral(left.type) && TypeIsNumeric(right.type)) {
+		Value left_cast = left.CastAs(right.type);
 		return templated_binary_operation<OP, IGNORE_NULL>(left_cast, right);
 	}
-	if (left.type == TypeId::DECIMAL && TypeIsIntegral(right.type)) {
-		Value right_cast = right.CastAs(TypeId::DECIMAL);
+	if (TypeIsNumeric(left.type) && TypeIsIntegral(right.type)) {
+		Value right_cast = right.CastAs(left.type);
 		return templated_binary_operation<OP, IGNORE_NULL>(left, right_cast);
 	}
 	if (left.type != right.type) {
@@ -65,13 +65,10 @@ template <class OP, bool IGNORE_NULL> static Value templated_binary_operation(co
 	case TypeId::BIGINT:
 		result.value_.bigint = OP::Operation(left.value_.bigint, right.value_.bigint);
 		break;
-	case TypeId::DATE:
-		result.value_.date = OP::Operation(left.value_.date, right.value_.date);
+	case TypeId::FLOAT:
+		result.value_.real = OP::Operation(left.value_.real, right.value_.real);
 		break;
-	case TypeId::TIMESTAMP:
-		result.value_.timestamp = OP::Operation(left.value_.timestamp, right.value_.timestamp);
-		break;
-	case TypeId::DECIMAL:
+	case TypeId::DOUBLE:
 		result.value_.decimal = OP::Operation(left.value_.decimal, right.value_.decimal);
 		break;
 	case TypeId::POINTER:

@@ -6,8 +6,8 @@ using namespace duckdb;
 using namespace postgres;
 using namespace std;
 
-unique_ptr<Expression> Transformer::TransformBoolExpr(BoolExpr *root) {
-	unique_ptr<Expression> result;
+unique_ptr<ParsedExpression> Transformer::TransformBoolExpr(BoolExpr *root) {
+	unique_ptr<ParsedExpression> result;
 	for (auto node = root->args->head; node != nullptr; node = node->next) {
 		auto next = TransformExpression(reinterpret_cast<Node *>(node->data.ptr_value));
 
@@ -34,8 +34,7 @@ unique_ptr<Expression> Transformer::TransformBoolExpr(BoolExpr *root) {
 				next->type = ExpressionType::COMPARE_NOT_IN;
 				result = move(next);
 			} else {
-				result =
-				    make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, TypeId::BOOLEAN, move(next), nullptr);
+				result = make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(next));
 			}
 			break;
 		}

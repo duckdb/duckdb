@@ -56,14 +56,11 @@ void Vector::Reference(Value &value) {
 	case TypeId::BIGINT:
 		data = (char *)&value.value_.bigint;
 		break;
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		data = (char *)&value.value_.real;
+		break;
+	case TypeId::DOUBLE:
 		data = (char *)&value.value_.decimal;
-		break;
-	case TypeId::DATE:
-		data = (char *)&value.value_.date;
-		break;
-	case TypeId::TIMESTAMP:
-		data = (char *)&value.value_.timestamp;
 		break;
 	case TypeId::POINTER:
 		data = (char *)&value.value_.pointer;
@@ -128,17 +125,14 @@ void Vector::SetValue(size_t index_, Value val) {
 	case TypeId::BIGINT:
 		((int64_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.bigint;
 		break;
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		((float *)data)[index] = newVal.is_null ? 0 : newVal.value_.real;
+		break;
+	case TypeId::DOUBLE:
 		((double *)data)[index] = newVal.is_null ? 0 : newVal.value_.decimal;
 		break;
 	case TypeId::POINTER:
 		((uint64_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.pointer;
-		break;
-	case TypeId::DATE:
-		((date_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.date;
-		break;
-	case TypeId::TIMESTAMP:
-		((timestamp_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.timestamp;
 		break;
 	case TypeId::VARCHAR: {
 		if (newVal.is_null) {
@@ -186,12 +180,10 @@ Value Vector::GetValue(size_t index) const {
 		return Value::BIGINT(((int64_t *)data)[entry]);
 	case TypeId::POINTER:
 		return Value::POINTER(((uint64_t *)data)[entry]);
-	case TypeId::DECIMAL:
+	case TypeId::FLOAT:
+		return Value::REAL(((double *)data)[entry]);
+	case TypeId::DOUBLE:
 		return Value(((double *)data)[entry]);
-	case TypeId::DATE:
-		return Value::DATE(((date_t *)data)[entry]);
-	case TypeId::TIMESTAMP:
-		return Value::TIMESTAMP(((timestamp_t *)data)[entry]);
 	case TypeId::VARCHAR: {
 		char *str = ((char **)data)[entry];
 		assert(str);

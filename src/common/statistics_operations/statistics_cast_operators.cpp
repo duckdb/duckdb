@@ -1,7 +1,7 @@
 #include "common/exception.hpp"
 #include "common/types/statistics.hpp"
 #include "common/value_operations/value_operations.hpp"
-#include "parser/expression.hpp"
+#include "parser/parsed_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -42,12 +42,12 @@ void ExpressionStatistics::Cast(ExpressionStatistics &source, ExpressionStatisti
 				// 18446744073709552000
 				result.maximum_string_length = 20;
 				break;
-			case TypeId::DATE:
-				// we use days since 1900 as 32-bit integer, so the maximum year
-				// is 1900+2^31/365= the biggest string would therefore be e.g.
-				// 01-01-11768933 which has length 14
-				result.maximum_string_length = 14;
-				break;
+			// case TypeId::DATE:
+			// 	// we use days since 1900 as 32-bit integer, so the maximum year
+			// 	// is 1900+2^31/365= the biggest string would therefore be e.g.
+			// 	// 01-01-11768933 which has length 14
+			// 	result.maximum_string_length = 14;
+			// 	break;
 			default:
 				result.has_stats = false;
 				break;

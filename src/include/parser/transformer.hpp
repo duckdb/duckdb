@@ -44,8 +44,7 @@ private:
 	unique_ptr<CreateTableStatement> TransformCreateTable(postgres::Node *node);
 	//! Transform a Postgres T_CreateStmt node into a CreateTableStatement
 	unique_ptr<CreateTableStatement> TransformCreateTableAs(postgres::Node *node);
-	//! Transform a Postgres T_CreateSchemaStmt node into a
-	//! CreateSchemaStatement
+	//! Transform a Postgres node into a CreateSchemaStatement
 	unique_ptr<CreateSchemaStatement> TransformCreateSchema(postgres::Node *node);
 	//! Transform a Postgres T_ViewStmt node into a CreateViewStatement
 	unique_ptr<CreateViewStatement> TransformCreateView(postgres::Node *node);
@@ -86,32 +85,32 @@ private:
 	// Expression Transform
 	//===--------------------------------------------------------------------===//
 	//! Transform a Postgres boolean expression into an Expression
-	unique_ptr<Expression> TransformBoolExpr(postgres::BoolExpr *root);
+	unique_ptr<ParsedExpression> TransformBoolExpr(postgres::BoolExpr *root);
 	//! Transform a Postgres case expression into an Expression
-	unique_ptr<Expression> TransformCase(postgres::CaseExpr *root);
+	unique_ptr<ParsedExpression> TransformCase(postgres::CaseExpr *root);
 	//! Transform a Postgres type cast into an Expression
-	unique_ptr<Expression> TransformTypeCast(postgres::TypeCast *root);
+	unique_ptr<ParsedExpression> TransformTypeCast(postgres::TypeCast *root);
 	//! Transform a Postgres coalesce into an Expression
-	unique_ptr<Expression> TransformCoalesce(postgres::A_Expr *root);
+	unique_ptr<ParsedExpression> TransformCoalesce(postgres::A_Expr *root);
 	//! Transform a Postgres column reference into an Expression
-	unique_ptr<Expression> TransformColumnRef(postgres::ColumnRef *root);
+	unique_ptr<ParsedExpression> TransformColumnRef(postgres::ColumnRef *root);
 	//! Transform a Postgres constant value into an Expression
-	unique_ptr<Expression> TransformValue(postgres::Value val);
+	unique_ptr<ParsedExpression> TransformValue(postgres::Value val);
 	//! Transform a Postgres operator into an Expression
-	unique_ptr<Expression> TransformAExpr(postgres::A_Expr *root);
+	unique_ptr<ParsedExpression> TransformAExpr(postgres::A_Expr *root);
 	//! Transform a Postgres abstract expression into an Expression
-	unique_ptr<Expression> TransformExpression(postgres::Node *node);
+	unique_ptr<ParsedExpression> TransformExpression(postgres::Node *node);
 	//! Transform a Postgres function call into an Expression
-	unique_ptr<Expression> TransformFuncCall(postgres::FuncCall *root);
+	unique_ptr<ParsedExpression> TransformFuncCall(postgres::FuncCall *root);
 
 	//! Transform a Postgres constant value into an Expression
-	unique_ptr<Expression> TransformConstant(postgres::A_Const *c);
+	unique_ptr<ParsedExpression> TransformConstant(postgres::A_Const *c);
 
-	unique_ptr<Expression> TransformResTarget(postgres::ResTarget *root);
-	unique_ptr<Expression> TransformNullTest(postgres::NullTest *root);
-	unique_ptr<Expression> TransformParamRef(postgres::ParamRef *node);
+	unique_ptr<ParsedExpression> TransformResTarget(postgres::ResTarget *root);
+	unique_ptr<ParsedExpression> TransformNullTest(postgres::NullTest *root);
+	unique_ptr<ParsedExpression> TransformParamRef(postgres::ParamRef *node);
 
-	unique_ptr<Expression> TransformSubquery(postgres::SubLink *root);
+	unique_ptr<ParsedExpression> TransformSubquery(postgres::SubLink *root);
 	//===--------------------------------------------------------------------===//
 	// Constraints transform
 	//===--------------------------------------------------------------------===//
@@ -126,16 +125,14 @@ private:
 	void TransformCTE(postgres::WithClause *de_with_clause, SelectStatement &select);
 	// Operator String to ExpressionType (e.g. + => OPERATOR_ADD)
 	ExpressionType OperatorToExpressionType(string &op);
-	//! Convert a expression node to a constant integer. Throws an exception if the expression is non-scalar.
-	int64_t ConstantFromExpression(postgres::Node *node);
 	//===--------------------------------------------------------------------===//
 	// TableRef transform
 	//===--------------------------------------------------------------------===//
 	//! Transform a Postgres node into a TableRef
 	unique_ptr<TableRef> TransformTableRefNode(postgres::Node *node);
-	//! Transform a Postgres FROM clause into an Expression
+	//! Transform a Postgres FROM clause into a TableRef
 	unique_ptr<TableRef> TransformFrom(postgres::List *root);
-	//! Transform a Postgres table reference into an Expression
+	//! Transform a Postgres table reference into a TableRef
 	unique_ptr<TableRef> TransformRangeVar(postgres::RangeVar *root);
 	//! Transform a Postgres table-producing function into a TableRef
 	unique_ptr<TableRef> TransformRangeFunction(postgres::RangeFunction *root);
@@ -144,16 +141,16 @@ private:
 	//! Transform a table producing subquery into a TableRef
 	unique_ptr<TableRef> TransformRangeSubselect(postgres::RangeSubselect *root);
 
-	//! Transform a Postgres TypeName string into a TypeId
-	TypeId TransformStringToTypeId(char *str);
+	//! Transform a Postgres TypeName string into a SQLType
+	SQLType TransformTypeName(postgres::TypeName *name);
 
 	//! Transform a Postgres GROUP BY expression into a list of Expression
-	bool TransformGroupBy(postgres::List *group, vector<unique_ptr<Expression>> &result);
+	bool TransformGroupBy(postgres::List *group, vector<unique_ptr<ParsedExpression>> &result);
 	//! Transform a Postgres ORDER BY expression into an OrderByDescription
 	bool TransformOrderBy(postgres::List *order, OrderByDescription &result);
 
-	//! Transform a Postgres SELECT clause into a list of Expression
-	bool TransformExpressionList(postgres::List *list, vector<unique_ptr<Expression>> &result);
+	//! Transform a Postgres SELECT clause into a list of Expressions
+	bool TransformExpressionList(postgres::List *list, vector<unique_ptr<ParsedExpression>> &result);
 
 	void TransformWindowDef(postgres::WindowDef *window_spec, WindowExpression *expr);
 

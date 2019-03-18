@@ -8,30 +8,23 @@
 
 #pragma once
 
-#include "parser/expression.hpp"
+#include "parser/parsed_expression.hpp"
 
 namespace duckdb {
 //! Represents the default value of a column
-class DefaultExpression : public Expression {
+class DefaultExpression : public ParsedExpression {
 public:
-	DefaultExpression() : Expression(ExpressionType::VALUE_DEFAULT) {
-	}
-
-	ExpressionClass GetExpressionClass() override {
-		return ExpressionClass::DEFAULT;
-	}
-
-	unique_ptr<Expression> Copy() override;
-
-	//! Deserializes a blob back into an DefaultExpression
-	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
-
+	DefaultExpression();
+public:
 	bool IsScalar() override {
 		return false;
 	}
 
-	string ToString() const override {
-		return "DEFAULT";
-	}
+	string ToString() const override;
+
+	unique_ptr<ParsedExpression> Copy() override;
+	
+	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, Deserializer &source);
+
 };
 } // namespace duckdb

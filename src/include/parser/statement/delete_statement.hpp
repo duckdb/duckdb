@@ -8,11 +8,8 @@
 
 #pragma once
 
-#include "parser/expression.hpp"
 #include "parser/sql_node_visitor.hpp"
 #include "parser/sql_statement.hpp"
-
-#include <vector>
 
 namespace duckdb {
 
@@ -32,7 +29,7 @@ public:
 		throw NotImplementedException("Equality not implemented!");
 	}
 
-	unique_ptr<Expression> condition;
+	unique_ptr<ParsedExpression> condition;
 	unique_ptr<TableRef> table;
 };
 } // namespace duckdb
