@@ -33,7 +33,7 @@ setClass(
 setMethod(
   "show", "duckdb_result",
   function(object) {
-    cat("<duckdb_result>\n")
+    cat(sprintf("<duckdb_result connection=%s statement='%s'>\n", extptr_str(object@connection@conn_ref), object@statement))
   })
 
 #' @rdname DBI

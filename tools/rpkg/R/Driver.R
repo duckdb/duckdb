@@ -26,13 +26,18 @@ duckdb <- function(dbdir=":memory:") {
 #' @export
 setClass("duckdb_driver", contains = "DBIDriver", slots=list(dbdir="character", database_ref="externalptr"))
 
+extptr_str <- function(e, n=5) {
+  x <- .Call(duckdb_ptr_to_str, e)
+  substr(x, nchar(x)-n+1, nchar(x))
+}
+
 #' @rdname DBI
 #' @inheritParams methods::show
 #' @export
 setMethod(
   "show", "duckdb_driver",
   function(object) {
-    cat("<duckdb_driver>\n")
+    cat(sprintf("<duckdb_driver %s dbdir='%s'>\n", extptr_str(object@database_ref), object@dbdir))
   })
 
 #' @rdname DBI
@@ -74,7 +79,15 @@ setMethod(
 setMethod(
   "dbIsValid", "duckdb_driver",
   function(dbObj, ...) {
-    TRUE
+    valid <- FALSE
+    tryCatch ({
+      con <- dbConnect(dbObj)
+      dbExecute(con, SQL("SELECT 1"))
+      dbDisconnect(con)
+      valid <- TRUE
+    }, error = function(c) {
+    })
+    valid
   })
 
 #' @rdname DBI
@@ -85,3 +98,17 @@ setMethod(
   function(dbObj, ...) {
     list(driver.version=NA, client.version=NA)
   })
+
+
+#' @export
+duckdb_shutdown <- function(drv) {
+  if (!is(drv, "duckdb_driver")) {
+    stop("pass a duckdb_driver object")
+  }
+  if (!dbIsValid(drv)) {
+    warning("invalid driver object, already closed?")
+    invisible(FALSE)
+  }
+  .Call(duckdb_shutdown_R, drv@database_ref)
+  invisible(TRUE)
+}

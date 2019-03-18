@@ -32,7 +32,7 @@ typedef int32 signedbitmapword; /* must be the matching signed type */
 typedef struct Bitmapset
 {
 	int			nwords;			/* number of words in array */
-	bitmapword	words[FLEXIBLE_ARRAY_MEMBER];	/* really [nwords] */
+	bitmapword	words[];	/* really [nwords] */
 } Bitmapset;
 
 

@@ -3,6 +3,10 @@
 #include "main/client_context.hpp"
 #include "parser/transformer.hpp"
 
+namespace postgres {
+#include "pg_query.h"
+}
+
 using namespace postgres;
 
 using namespace duckdb;

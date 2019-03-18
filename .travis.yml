@@ -4,24 +4,30 @@ dist: trusty
 
 matrix:
   include:
-    # these fail in mysterious ways
 
     # - os: osx
+    #   name: Xcode 7.3
     #   osx_image: xcode7.3
 
     # - os: osx
     #   osx_image: xcode8.3
 
-    - os: osx
-      osx_image: xcode9.3
+    # - os: osx
+    #   name: Xcode 9.3
+    #   osx_image: xcode9.3
+
+
+    # - os: osx
+    #   osx_image: xcode9.4
+
 
     - os: osx
-      osx_image: xcode9.4
+      name: Xcode 10.1
+      osx_image: xcode10.1
 
-    - os: osx
-      osx_image: xcode10
 
     - os: linux
+      name: GCC 4.9
       addons:
          apt:
           sources:
@@ -31,27 +37,30 @@ matrix:
       env:
          - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
 
-    - os: linux
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-5 binutils-2.26
-      env:
-         - MATRIX_EVAL="CC=gcc-5 && CXX=g++-5"
+    # - os: linux
+    #   name: GCC 5
+    #   addons:
+    #     apt:
+    #       sources:
+    #         - ubuntu-toolchain-r-test
+    #       packages:
+    #         - g++-5 binutils-2.26
+    #   env:
+    #      - MATRIX_EVAL="CC=gcc-5 && CXX=g++-5"
+
+    # - os: linux
+    #   name: GCC 6
+    #   addons:
+    #     apt:
+    #       sources:
+    #         - ubuntu-toolchain-r-test
+    #       packages:
+    #         - g++-6 binutils-2.26
+    #   env:
+    #     - MATRIX_EVAL="CC=gcc-6 && CXX=g++-6"
 
     - os: linux
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-6 binutils-2.26
-      env:
-        - MATRIX_EVAL="CC=gcc-6 && CXX=g++-6"
-
-    - os: linux
+      name: GCC 7
       addons:
         apt:
           sources:
@@ -61,8 +70,11 @@ matrix:
       env:
         - MATRIX_EVAL="CC=gcc-7 && CXX=g++-7"
 
+
     - os: linux
       dist: xenial
+      name: GCC 8
+
       addons:
         apt:
           sources:
@@ -72,7 +84,32 @@ matrix:
       env:
         - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
 
+
     - os: linux
+      dist: xenial
+      name: GCC 8 with Coverage
+
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-8
+      env:
+        - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
+
+      before_install: pip install --user cpp-coveralls
+
+      script: 
+        - mkdir -p build/coverage
+        - (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
+        - build/coverage/test/unittest
+
+      after_success:
+        - coveralls -b build/coverage --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --gcov-options '\-lp'
+
+    - os: linux
+      name: Clang 3.9
       addons:
         apt:
           sources:
@@ -82,28 +119,29 @@ matrix:
       env:
         - MATRIX_EVAL="CC=clang-3.9 && CXX=clang++-3.9"
 
-    - os: linux
-      addons:
-        apt:
-          sources:
-            - llvm-toolchain-trusty-4.0
-          packages:
-            - clang-4.0 binutils-2.26
+    # - os: linux
+    #   addons:
+    #     apt:
+    #       sources:
+    #         - llvm-toolchain-trusty-4.0
+    #       packages:
+    #         - clang-4.0 binutils-2.26
 
-      env:
-        - MATRIX_EVAL="CC=clang-4.0 && CXX=clang++-4.0"
+    #   env:
+    #     - MATRIX_EVAL="CC=clang-4.0 && CXX=clang++-4.0"
+
+    # - os: linux
+    #   addons:
+    #     apt:
+    #       sources:
+    #         - llvm-toolchain-trusty-5.0
+    #       packages:
+    #         - clang-5.0 binutils-2.26
+    #   env:
+    #     - MATRIX_EVAL="CC=clang-5.0 && CXX=clang++-5.0"
 
     - os: linux
-      addons:
-        apt:
-          sources:
-            - llvm-toolchain-trusty-5.0
-          packages:
-            - clang-5.0 binutils-2.26
-      env:
-        - MATRIX_EVAL="CC=clang-5.0 && CXX=clang++-5.0"
-
-    - os: linux
+      name: Clang 6
       dist: xenial
       addons:
         apt:
@@ -115,6 +153,8 @@ matrix:
         - MATRIX_EVAL="CC=clang-6.0 && CXX=clang++-6.0"
 
     - os: windows
+      name: VS 2018
+
       language: c
       env:
         - MSBUILD_PATH="c:\Program Files (x86)\Microsoft Visual Studio\2017\BuildTools\MSBuild\15.0\Bin"
@@ -127,6 +167,8 @@ matrix:
 
 
     - os: linux
+      name: Python Package
+
       dist: xenial
       language: python
       python: 3.7
@@ -140,6 +182,8 @@ matrix:
         - python3 -m pytest tests
 
     - os: linux
+      name: R Package
+
       dist: xenial
       language: r
       r: devel
@@ -158,4 +202,4 @@ matrix:
         - R -f testthat.R
 
 before_install:
-    - eval "${MATRIX_EVAL}"
+  - eval "${MATRIX_EVAL}"

@@ -13,10 +13,22 @@
 #include "parser/tokens.hpp"
 
 namespace postgres {
-#include "postgres.h"
-#include "pg_query.h"
+// FIXME defines evil
+#include <limits.h>
+#define PG_INT32_MAX INT_MAX
+#define PGDLLIMPORT
+
+typedef int16_t int16;
+typedef int32_t int32;
+
+typedef uint32_t uint32;
+typedef uint32 Index;
+typedef uint32 bits32;
+typedef uint32 Oid;
+
+typedef uintptr_t Datum;
+
 #include "nodes/parsenodes.h"
-#include "catalog/pg_trigger.h"
 } // namespace postgres
 
 namespace duckdb {

@@ -24,7 +24,7 @@ setClass(
 #' @export
 setMethod("show", "duckdb_connection",
           function(object) {
-            cat("<duckdb_connection>\n")
+            cat(sprintf("<duckdb_connection %s driver=%s dbdir='%s' connection=%s>\n", extptr_str(object@conn_ref), extptr_str(object@driver@database_ref), object@driver@dbdir))
           })
 
 #' @rdname DBI
@@ -81,7 +81,7 @@ setMethod("dbSendStatement", c("duckdb_connection", "character"),
               connection = conn,
               statement = statement,
               has_resultset = FALSE,
-              rows_affected = resultset[[1]][1]
+              rows_affected = as.numeric(resultset[[1]][1])
             )
           })
 
@@ -94,7 +94,7 @@ setMethod("dbDataType", "duckdb_connection",
           })
 
 check_flag <- function(x) {
-  if (is.null(x)   || is.na(x) || !is.logical(x) || length(x) != 1) {
+  if (is.null(x) || is.na(x) || !is.logical(x) || length(x) != 1) {
     stop("flags need to be scalar logicals")
   }
 }

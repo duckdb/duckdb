@@ -94,7 +94,7 @@
 #endif
 
 #ifdef HAVE_PTHREAD_IS_THREADED_NP
-#include <pthread.h>
+//#include <pthread.h>
 #endif
 
 #include "access/transam.h"

@@ -19,7 +19,7 @@ bool StringUtil::Contains(const string &haystack, const string &needle) {
  * Remove trailing ' ', '\f', '\n', '\r', '\t', '\v'
  */
 void StringUtil::RTrim(string &str) {
-	str.erase(std::find_if(str.rbegin(), str.rend(), [](int ch) { return !std::isspace(ch); }).base(), str.end());
+	str.erase(std::find_if(str.rbegin(), str.rend(), [](int ch) { return ch > 0 && !std::isspace(ch); }).base(), str.end());
 }
 
 string StringUtil::Indent(int num_indent) {
