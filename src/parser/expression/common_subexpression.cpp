@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> CommonSubExpression::Copy() {
+unique_ptr<Expression> CommonSubExpression::Copy() const {
 	throw SerializationException("CSEs cannot be copied");
 }
 

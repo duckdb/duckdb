@@ -18,7 +18,7 @@ void CaseExpression::ResolveType() {
 	result_if_false = CastExpression::AddCastToType(return_type, move(result_if_false));
 }
 
-unique_ptr<Expression> CaseExpression::Copy() {
+unique_ptr<Expression> CaseExpression::Copy() const {
 	auto copy = make_unique<CaseExpression>();
 	copy->CopyProperties(*this);
 	copy->check = check->Copy();

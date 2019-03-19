@@ -16,7 +16,7 @@ void CastExpression::ResolveType() {
 	}
 }
 
-unique_ptr<Expression> CastExpression::Copy() {
+unique_ptr<Expression> CastExpression::Copy() const {
 	auto copy = make_unique<CastExpression>(return_type, child->Copy());
 	copy->CopyProperties(*this);
 	return move(copy);

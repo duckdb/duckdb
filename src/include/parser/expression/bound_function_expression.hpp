@@ -24,7 +24,7 @@ public:
 		return ExpressionClass::BOUND_FUNCTION;
 	}
 
-	unique_ptr<Expression> Copy() override;
+	unique_ptr<Expression> Copy() const override;
 
 	uint64_t Hash() const override;
 	bool Equals(const Expression *other) const override;
