@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "parser/parsed_expression.hpp"
+#include "planner/expression.hpp"
 
 namespace duckdb {
 
@@ -17,9 +17,11 @@ class ClientContext;
 class SelectNode;
 
 struct BindResult {
-	BindResult(unique_ptr<Expression> expr, string error) : expression(move(expr)), error(error) {
+	BindResult(unique_ptr<Expression> expr, string error) :
+		expression(move(expr)), error(error) {
 	}
-	BindResult(unique_ptr<Expression> expr) : expression(move(expr)) {
+	BindResult(unique_ptr<Expression> expr) :
+		expression(move(expr)) {
 	}
 
 	bool HasError() {

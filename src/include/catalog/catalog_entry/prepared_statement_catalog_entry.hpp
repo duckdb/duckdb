@@ -16,8 +16,8 @@
 
 namespace duckdb {
 
+class BoundParameterExpression;
 class PhysicalOperator;
-
 class TableCatalogEntry;
 
 //! A view catalog entry
@@ -29,7 +29,7 @@ public:
 	}
 
 	unique_ptr<PhysicalOperator> plan;
-	unordered_map<size_t, ParameterExpression *> parameter_expression_map;
+	unordered_map<size_t, BoundParameterExpression *> parameter_expression_map;
 	unordered_set<TableCatalogEntry *> tables;
 
 	vector<string> names;

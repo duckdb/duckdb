@@ -9,6 +9,14 @@ SubqueryRef::SubqueryRef(unique_ptr<QueryNode> subquery_)
     : TableRef(TableReferenceType::SUBQUERY), subquery(move(subquery_)) {
 }
 
+bool SubqueryRef::Equals(const TableRef *other_) const {
+	if (!TableRef::Equals(other_)) {
+		return false;
+	}
+	auto other = (SubqueryRef *)other_;
+	return subquery->Equals(other->subquery.get());
+}
+
 unique_ptr<TableRef> SubqueryRef::Copy() {
 	auto copy = make_unique<SubqueryRef>(subquery->Copy());
 	copy->alias = alias;

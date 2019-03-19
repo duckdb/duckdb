@@ -32,9 +32,9 @@ typedef void (*table_function_final_t)(ClientContext &, TableFunctionData *datap
 //! The type used for scalar functions
 typedef void (*scalar_function_t)(Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result);
 //! Type used for checking if a function matches the input arguments
-typedef bool (*matches_argument_function_t)(vector<TypeId> &arguments);
+typedef bool (*matches_argument_function_t)(vector<SQLType> &arguments);
 //! Gets the return type of the function given the types of the input argument
-typedef TypeId (*get_return_type_function_t)(vector<TypeId> &arguments);
+typedef SQLType (*get_return_type_function_t)(vector<SQLType> &arguments);
 
 class BuiltinFunctions {
 public:

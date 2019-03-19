@@ -34,37 +34,12 @@ AggregateExpression::AggregateExpression(ExpressionType type, unique_ptr<ParsedE
 	this->child = move(child);
 }
 
-string AggregateExpression::GetName() const {
-	if (!alias.empty()) {
-		return alias;
-	}
-	switch (type) {
-	case ExpressionType::AGGREGATE_COUNT:
-	case ExpressionType::AGGREGATE_COUNT_STAR:
-	case ExpressionType::AGGREGATE_COUNT_DISTINCT:
-		return "COUNT";
-	case ExpressionType::AGGREGATE_SUM:
-	case ExpressionType::AGGREGATE_SUM_DISTINCT:
-		return "SUM";
-	case ExpressionType::AGGREGATE_MIN:
-		return "MIN";
-	case ExpressionType::AGGREGATE_MAX:
-		return "MAX";
-	case ExpressionType::AGGREGATE_FIRST:
-		return "FIRST";
-	case ExpressionType::AGGREGATE_STDDEV_SAMP:
-		return "STDDEV_SAMP";
-	default:
-		return "UNKNOWN";
-	}
-}
-
 string AggregateExpression::ToString() const {
-	return GetName() + "(" + child->ToString() + ")";
+	return ExpressionTypeToString(type) + "(" + child->ToString() + ")";
 }
 
-bool AggregateExpression::Equals(const ParsedExpression *other_) const {
-	if (!ParsedExpression::Equals(other_)) {
+bool AggregateExpression::Equals(const BaseExpression *other_) const {
+	if (!BaseExpression::Equals(other_)) {
 		return false;
 	}
 	auto other = (AggregateExpression *)other_;
@@ -93,19 +68,4 @@ void AggregateExpression::Serialize(Serializer &serializer) {
 unique_ptr<ParsedExpression> AggregateExpression::Deserialize(ExpressionType type, Deserializer &source) {
 	auto child = source.ReadOptional<ParsedExpression>();
 	return make_unique<AggregateExpression>(type, move(child));
-}
-
-size_t AggregateExpression::ChildCount() const {
-	return child ? 1 : 0;
-}
-
-ParsedExpression *AggregateExpression::GetChild(size_t index) const {
-	assert(index == 0);
-	return child.get();
-}
-
-void AggregateExpression::ReplaceChild(
-    std::function<unique_ptr<ParsedExpression>(unique_ptr<ParsedExpression> expression)> callback, size_t index) {
-	assert(index == 0);
-	child = callback(move(child));
 }

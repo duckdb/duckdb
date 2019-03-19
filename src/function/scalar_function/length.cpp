@@ -32,12 +32,12 @@ void length_function(Vector inputs[], size_t input_count, BoundFunctionExpressio
 	});
 }
 
-bool length_matches_arguments(vector<TypeId> &arguments) {
-	return arguments.size() == 1 && arguments[0] == TypeId::VARCHAR;
+bool length_matches_arguments(vector<SQLType> &arguments) {
+	return arguments.size() == 1 && arguments[0].id == SQLTypeId::VARCHAR;
 }
 
-TypeId length_get_return_type(vector<TypeId> &arguments) {
-	return TypeId::BIGINT;
+SQLType length_get_return_type(vector<SQLType> &arguments) {
+	return SQLType(SQLTypeId::BIGINT);
 }
 
 } // namespace function

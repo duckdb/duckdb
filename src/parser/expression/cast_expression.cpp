@@ -15,8 +15,8 @@ string CastExpression::ToString() const {
 	return "CAST[" + SQLTypeToString(cast_type) + "](" + child->ToString() + ")";
 }
 
-bool CastExpression::Equals(const ParsedExpression *other_) const {
-	if (!ParsedExpression::Equals(other_)) {
+bool CastExpression::Equals(const BaseExpression *other_) const {
+	if (!BaseExpression::Equals(other_)) {
 		return false;
 	}
 	auto other = (CastExpression *)other_;
@@ -42,19 +42,4 @@ unique_ptr<ParsedExpression> CastExpression::Deserialize(ExpressionType type, De
 	auto child = ParsedExpression::Deserialize(source);
 	auto cast_type = SQLType::Deserialize(source);
 	return make_unique_base<ParsedExpression, CastExpression>(cast_type, move(child));
-}
-
-size_t CastExpression::ChildCount() const {
-	return 1;
-}
-
-ParsedExpression *CastExpression::GetChild(size_t index) const {
-	assert(index == 0);
-	return child.get();
-}
-
-void CastExpression::ReplaceChild(std::function<unique_ptr<ParsedExpression>(unique_ptr<ParsedExpression> expression)> callback,
-                                  size_t index) {
-	assert(index == 0);
-	child = callback(move(child));
 }

@@ -11,7 +11,6 @@
 #include "parser/parsed_expression.hpp"
 #include "parser/query_node.hpp"
 #include "parser/query_node/select_node.hpp"
-#include "parser/sql_node_visitor.hpp"
 #include "parser/sql_statement.hpp"
 #include "parser/tableref.hpp"
 
@@ -29,7 +28,6 @@ public:
 
 	//! CTEs
 	std::map<string, unique_ptr<QueryNode>> cte_map;
-
 	//! The main query node
 	unique_ptr<QueryNode> node;
 

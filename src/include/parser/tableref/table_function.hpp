@@ -9,7 +9,6 @@
 #pragma once
 
 #include "parser/parsed_expression.hpp"
-#include "parser/sql_node_visitor.hpp"
 #include "parser/tableref.hpp"
 
 namespace duckdb {
@@ -19,16 +18,13 @@ public:
 	TableFunction() : TableRef(TableReferenceType::TABLE_FUNCTION) {
 	}
 
-	unique_ptr<TableRef> Accept(SQLNodeVisitor *v) override {
-		return v->Visit(*this);
+	unique_ptr<ParsedExpression> function;
+public:
+	string ToString() const override {
+		return function->ToString();
 	}
-	bool Equals(const TableRef *other_) const override {
-		if (!TableRef::Equals(other_)) {
-			return false;
-		}
-		auto other = (TableFunction *)other_;
-		return function->Equals(other->function.get());
-	}
+
+	bool Equals(const TableRef *other_) const override;
 
 	unique_ptr<TableRef> Copy() override;
 
@@ -36,11 +32,5 @@ public:
 	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into a BaseTableRef
 	static unique_ptr<TableRef> Deserialize(Deserializer &source);
-
-	string ToString() const override {
-		return function->ToString();
-	}
-
-	unique_ptr<ParsedExpression> function;
 };
 } // namespace duckdb

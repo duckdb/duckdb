@@ -23,7 +23,6 @@ WindowExpression::WindowExpression(ExpressionType type, unique_ptr<ParsedExpress
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
 	case ExpressionType::WINDOW_NTILE:
-
 		break;
 	default:
 		throw NotImplementedException("Window aggregate type %s not supported", ExpressionTypeToString(type).c_str());
@@ -37,8 +36,8 @@ string WindowExpression::ToString() const {
 	return "WINDOW";
 }
 
-bool WindowExpression::Equals(const ParsedExpression *other_) const {
-	if (!ParsedExpression::Equals(other_)) {
+bool WindowExpression::Equals(const BaseExpression *other_) const {
+	if (!BaseExpression::Equals(other_)) {
 		return false;
 	}
 	auto other = (WindowExpression *)other_;
@@ -47,11 +46,11 @@ bool WindowExpression::Equals(const ParsedExpression *other_) const {
 		return false;
 	}
 	// check if the child expressions are equivalent
-	if (!ParsedExpression::Equals(child.get(), other->child.get()) ||
-	    !ParsedExpression::Equals(start_expr.get(), other->start_expr.get()) ||
-	    !ParsedExpression::Equals(end_expr.get(), other->end_expr.get()) ||
-	    !ParsedExpression::Equals(offset_expr.get(), other->offset_expr.get()) ||
-	    !ParsedExpression::Equals(default_expr.get(), other->default_expr.get())) {
+	if (!BaseExpression::Equals(child.get(), other->child.get()) ||
+	    !BaseExpression::Equals(start_expr.get(), other->start_expr.get()) ||
+	    !BaseExpression::Equals(end_expr.get(), other->end_expr.get()) ||
+	    !BaseExpression::Equals(offset_expr.get(), other->offset_expr.get()) ||
+	    !BaseExpression::Equals(default_expr.get(), other->default_expr.get())) {
 		return false;
 	}
 
@@ -115,8 +114,8 @@ void WindowExpression::Serialize(Serializer &serializer) {
 		serializer.Write<OrderType>(order.type);
 		order.expression->Serialize(serializer);
 	}
-	serializer.Write<uint8_t>(start);
-	serializer.Write<uint8_t>(end);
+	serializer.Write<WindowBoundary>(start);
+	serializer.Write<WindowBoundary>(end);
 
 	serializer.WriteOptional(start_expr);
 	serializer.WriteOptional(end_expr);
@@ -135,85 +134,12 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, 
 		auto expression = ParsedExpression::Deserialize(source);
 		expr->ordering.orders.push_back(OrderByNode(order_type, move(expression)));
 	}
-	expr->start = (WindowBoundary)source.Read<uint8_t>();
-	expr->end = (WindowBoundary)source.Read<uint8_t>();
+	expr->start = source.Read<WindowBoundary>();
+	expr->end = source.Read<WindowBoundary>();
 
 	expr->start_expr = source.ReadOptional<ParsedExpression>();
 	expr->end_expr = source.ReadOptional<ParsedExpression>();
 	expr->offset_expr = source.ReadOptional<ParsedExpression>();
 	expr->default_expr = source.ReadOptional<ParsedExpression>();
 	return move(expr);
-}
-
-size_t WindowExpression::ChildCount() const {
-	size_t count = partitions.size() + ordering.orders.size();
-	if (child) {
-		count++;
-	}
-	if (offset_expr) {
-		count++;
-	}
-	if (default_expr) {
-		count++;
-	}
-	return count;
-}
-
-ParsedExpression *WindowExpression::GetChild(size_t index) const {
-	if (index < partitions.size()) {
-		return partitions[index].get();
-	}
-	index -= partitions.size();
-	if (index < ordering.orders.size()) {
-		return ordering.orders[index].expression.get();
-	}
-	index -= ordering.orders.size();
-	if (child) {
-		if (index == 0) {
-			return child.get();
-		} else {
-			index--;
-		}
-	}
-	if (offset_expr) {
-		if (index == 0) {
-			return offset_expr.get();
-		} else {
-			index--;
-		}
-	}
-	assert(index == 0 && default_expr);
-	return default_expr.get();
-}
-
-void WindowExpression::ReplaceChild(std::function<unique_ptr<ParsedExpression>(unique_ptr<ParsedExpression> expression)> callback,
-                                    size_t index) {
-	if (index < partitions.size()) {
-		partitions[index] = callback(move(partitions[index]));
-		return;
-	}
-	index -= partitions.size();
-	if (index < ordering.orders.size()) {
-		ordering.orders[index].expression = callback(move(ordering.orders[index].expression));
-		return;
-	}
-	index -= ordering.orders.size();
-	if (child) {
-		if (index == 0) {
-			child = callback(move(child));
-			return;
-		} else {
-			index--;
-		}
-	}
-	if (offset_expr) {
-		if (index == 0) {
-			offset_expr = callback(move(offset_expr));
-			return;
-		} else {
-			index--;
-		}
-	}
-	assert(index == 0 && default_expr);
-	default_expr = callback(move(default_expr));
 }

@@ -9,5 +9,5 @@ add_subdirectory(statement)
 add_subdirectory(tableref)
 add_subdirectory(transform)
 
-add_library(duckdb_parser OBJECT constraint.cpp parsed_expression.cpp parser.cpp query_node.cpp sql_node_visitor.cpp tableref.cpp transformer.cpp)
+add_library(duckdb_parser OBJECT base_expression.cpp constraint.cpp parsed_expression.cpp parsed_expression_iterator.cpp parser.cpp query_node.cpp tableref.cpp transformer.cpp)
 set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_parser> PARENT_SCOPE)

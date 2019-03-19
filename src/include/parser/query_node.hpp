@@ -14,7 +14,10 @@
 
 namespace duckdb {
 
-enum QueryNodeType : uint8_t { SELECT_NODE = 1, SET_OPERATION_NODE = 2 };
+enum QueryNodeType : uint8_t {
+	SELECT_NODE = 1,
+	SET_OPERATION_NODE = 2
+};
 
 //! Single node in ORDER BY statement
 struct OrderByNode {
@@ -25,7 +28,7 @@ struct OrderByNode {
 
 	OrderByNode() {
 	}
-	OrderByNode(OrderType type, unique_ptr<ParsedExpression> expression) : type(type), expression(std::move(expression)) {
+	OrderByNode(OrderType type, unique_ptr<ParsedExpression> expression) : type(type), expression(move(expression)) {
 	}
 };
 
@@ -80,22 +83,6 @@ public:
 	bool HasOrder() {
 		return orderby.orders.size() > 0;
 	}
-
-	void VisitChild(ParsedExpression *expr, std::function<void(ParsedExpression *expression)> callback) const {
-		if (!expr) {
-			return;
-		}
-		callback(expr);
-		expr->EnumerateChildren([&](ParsedExpression *child) { VisitChild(child, callback); });
-	}
-
-	//! Enumerate over all children of this node, invoking the callback for each child.
-	virtual void EnumerateChildren(std::function<void(ParsedExpression *expression)> callback) const {
-		for (size_t i = 0; i < orderby.orders.size(); i++) {
-			VisitChild(orderby.orders[i].expression.get(), callback);
-		}
-	}
-
 protected:
 	void CopyProperties(QueryNode &other);
 };

@@ -10,7 +10,6 @@
 
 #include "parser/parsed_expression.hpp"
 #include "parser/query_node.hpp"
-#include "parser/sql_node_visitor.hpp"
 #include "parser/sql_statement.hpp"
 #include "parser/tableref.hpp"
 
@@ -50,18 +49,6 @@ public:
 	//! Whether or not the query has an AGGREGATION
 	bool HasAggregation() {
 		return HasGroup();
-	}
-
-	void EnumerateChildren(std::function<void(ParsedExpression *expression)> callback) const override {
-		QueryNode::EnumerateChildren(callback);
-		for (size_t i = 0; i < select_list.size(); i++) {
-			VisitChild(select_list[i].get(), callback);
-		}
-		VisitChild(where_clause.get(), callback);
-		for (size_t i = 0; i < groupby.groups.size(); i++) {
-			VisitChild(groupby.groups[i].get(), callback);
-		}
-		VisitChild(groupby.having.get(), callback);
 	}
 
 	bool Equals(const QueryNode *other) const override;

@@ -34,7 +34,7 @@ string GenerateQuery(CatalogEntry *entry) {
 
 		for (size_t i = 0; i < table->columns.size(); i++) {
 			auto &column = table->columns[i];
-			ss << column.name << " " << TypeIdToString(column.type);
+			ss << column.name << " " << SQLTypeToString(column.type);
 			if (i + 1 < table->columns.size()) {
 				ss << ", ";
 			}

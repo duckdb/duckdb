@@ -32,7 +32,7 @@ public:
 	//! A map of return-column name to column index
 	std::unordered_map<string, column_t> name_map;
 	//! Input arguments
-	vector<TypeId> arguments;
+	vector<SQLType> arguments;
 	//! Init function pointer
 	table_function_init_t init;
 	//! The function pointer

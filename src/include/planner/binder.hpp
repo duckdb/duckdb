@@ -8,13 +8,9 @@
 
 #pragma once
 
-#include "parser/sql_node_visitor.hpp"
 #include "parser/sql_statement.hpp"
 #include "planner/bindcontext.hpp"
 #include "planner/expression_binder.hpp"
-
-#include <string>
-#include <vector>
 
 namespace duckdb {
 class ClientContext;
@@ -44,7 +40,7 @@ struct CorrelatedColumnInfo {
   tables and columns in the catalog. In the process, it also resolves types of
   all expressions.
 */
-class Binder : public SQLNodeVisitor {
+class Binder {
 public:
 	Binder(ClientContext &context, Binder *parent = nullptr);
 
@@ -68,11 +64,11 @@ public:
 public:
 	void Visit(CheckConstraint &constraint) override;
 
-	unique_ptr<TableRef> Visit(BaseTableRef &expr) override;
-	unique_ptr<TableRef> Visit(CrossProductRef &expr) override;
-	unique_ptr<TableRef> Visit(JoinRef &expr) override;
-	unique_ptr<TableRef> Visit(SubqueryRef &expr) override;
-	unique_ptr<TableRef> Visit(TableFunction &expr) override;
+	unique_ptr<TableRef> Bind(BaseTableRef &expr) override;
+	unique_ptr<TableRef> Bind(CrossProductRef &expr) override;
+	unique_ptr<TableRef> Bind(JoinRef &expr) override;
+	unique_ptr<TableRef> Bind(SubqueryRef &expr) override;
+	unique_ptr<TableRef> Bind(TableFunction &expr) override;
 
 	void AddCTE(const string &name, QueryNode *cte);
 	unique_ptr<QueryNode> FindCTE(const string &name);

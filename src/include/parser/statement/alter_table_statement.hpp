@@ -10,7 +10,6 @@
 
 #include "parser/column_definition.hpp"
 #include "parser/parsed_data.hpp"
-#include "parser/sql_node_visitor.hpp"
 #include "parser/sql_statement.hpp"
 #include "parser/tableref.hpp"
 

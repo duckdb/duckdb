@@ -5,12 +5,22 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> CommonSubExpression::Copy() {
-	throw SerializationException("CSEs cannot be copied");
+CommonSubExpression::CommonSubExpression(unique_ptr<Expression> child, string alias)
+	: Expression(ExpressionType::COMMON_SUBEXPRESSION, ExpressionClass::COMMON_SUBEXPRESSION, child->return_type) {
+	this->child = child.get();
+	this->owned_child = move(child);
+	this->alias = alias;
+	assert(this->child);
 }
 
-void CommonSubExpression::Serialize(Serializer &serializer) {
-	throw SerializationException("CSEs cannot be serialized");
+CommonSubExpression::CommonSubExpression(Expression *child, string alias)
+	: Expression(ExpressionType::COMMON_SUBEXPRESSION, ExpressionClass::COMMON_SUBEXPRESSION, child->return_type), child(child) {
+	this->alias = alias;
+	assert(child);
+}
+
+string CommonSubExpression::ToString() const override {
+	return child->ToString();
 }
 
 bool CommonSubExpression::Equals(const Expression *other_) const {
@@ -21,17 +31,6 @@ bool CommonSubExpression::Equals(const Expression *other_) const {
 	return other->child == child;
 }
 
-size_t CommonSubExpression::ChildCount() const {
-	return owned_child ? 1 : 0;
-}
-
-Expression *CommonSubExpression::GetChild(size_t index) const {
-	assert(index == 0 && owned_child);
-	return owned_child.get();
-}
-
-void CommonSubExpression::ReplaceChild(
-    std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback, size_t index) {
-	assert(index == 0 && owned_child);
-	owned_child = callback(move(owned_child));
+unique_ptr<Expression> CommonSubExpression::Copy() {
+	throw SerializationException("CSEs cannot be copied");
 }

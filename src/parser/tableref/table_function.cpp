@@ -5,6 +5,14 @@
 using namespace duckdb;
 using namespace std;
 
+bool TableFunction::Equals(const TableRef *other_) const {
+	if (!TableRef::Equals(other_)) {
+		return false;
+	}
+	auto other = (TableFunction *)other_;
+	return function->Equals(other->function.get());
+}
+
 void TableFunction::Serialize(Serializer &serializer) {
 	TableRef::Serialize(serializer);
 	function->Serialize(serializer);

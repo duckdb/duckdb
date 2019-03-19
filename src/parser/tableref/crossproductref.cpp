@@ -5,6 +5,14 @@
 using namespace duckdb;
 using namespace std;
 
+bool CrossProductRef::Equals(const TableRef *other_) const {
+	if (!TableRef::Equals(other_)) {
+		return false;
+	}
+	auto other = (CrossProductRef *)other_;
+	return left->Equals(other->left.get()) && right->Equals(other->right.get());
+}
+
 unique_ptr<TableRef> CrossProductRef::Copy() {
 	auto copy = make_unique<CrossProductRef>();
 	copy->left = left->Copy();

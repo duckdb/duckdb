@@ -15,13 +15,6 @@ string ParameterExpression::ToString() const {
 	return "$" + std::to_string(parameter_nr);
 }
 
-bool ParameterExpression::Equals(const ParsedExpression *other_) const {
-	if (!ParsedExpression::Equals(other_)) {
-		return false;
-	}
-	return true;
-}
-
 unique_ptr<ParsedExpression> ParameterExpression::Copy() {
 	auto copy = make_unique<ParameterExpression>();
 	copy->CopyProperties(*this);

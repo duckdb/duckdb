@@ -11,67 +11,11 @@
 #include "catalog/catalog.hpp"
 #include "catalog/catalog_entry/table_catalog_entry.hpp"
 #include "catalog/catalog_entry/table_function_catalog_entry.hpp"
-#include "parser/column_definition.hpp"
-#include "parser/parsed_expression.hpp"
-#include "parser/expression/bound_columnref_expression.hpp"
-#include "parser/sql_statement.hpp"
 #include "planner/expression_binder.hpp"
+#include "planner/table_binding.hpp"
+#include "planner/expression.hpp"
 
 namespace duckdb {
-enum class BindingType : uint8_t { DUMMY = 0, TABLE = 1, SUBQUERY = 2, TABLE_FUNCTION = 3 };
-
-struct Binding {
-	Binding(BindingType type, size_t index) : type(type), index(index) {
-	}
-	virtual ~Binding() {
-	}
-
-	BindingType type;
-	size_t index;
-};
-
-struct DummyTableBinding : public Binding {
-	std::unordered_map<string, ColumnDefinition *> bound_columns;
-
-	DummyTableBinding(vector<ColumnDefinition> &columns) : Binding(BindingType::DUMMY, 0) {
-		for (auto &it : columns) {
-			bound_columns[it.name] = &it;
-		}
-	}
-	virtual ~DummyTableBinding() {
-	}
-};
-
-struct TableBinding : public Binding {
-	TableCatalogEntry *table;
-
-	TableBinding(TableCatalogEntry *table, size_t index) : Binding(BindingType::TABLE, index), table(table) {
-	}
-	virtual ~TableBinding() {
-	}
-};
-
-struct SubqueryBinding : public Binding {
-	QueryNode *subquery;
-	//! Column names of the subquery
-	vector<string> names;
-	//! Name -> index for the names
-	std::unordered_map<string, size_t> name_map;
-
-	SubqueryBinding(SubqueryRef &subquery_, size_t index);
-	SubqueryBinding(QueryNode *select_, size_t index);
-
-	virtual ~SubqueryBinding() {
-	}
-};
-
-struct TableFunctionBinding : public Binding {
-	TableFunctionCatalogEntry *function;
-
-	TableFunctionBinding(TableFunctionCatalogEntry *function, size_t index)
-	    : Binding(BindingType::TABLE_FUNCTION, index), function(function) {
-	}
-};
 
 //! The BindContext object keeps track of all the tables and columns that are
 //! encountered during the binding process.
@@ -109,7 +53,6 @@ public:
 
 	//! The set of columns that are bound for each table/subquery alias
 	std::unordered_map<string, vector<string>> bound_columns;
-
 private:
 	void AddBinding(const string &alias, unique_ptr<Binding> binding);
 

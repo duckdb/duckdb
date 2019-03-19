@@ -1,19 +1,23 @@
-#include "parser/expression/bound_subquery_expression.hpp"
+#include "planner/expression/bound_subquery_expression.hpp"
 
 #include "common/exception.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> BoundSubqueryExpression::Copy() {
-	throw SerializationException("Cannot copy BoundSubqueryExpression");
+BoundSubqueryExpression::BoundSubqueryExpression(TypeId return_type) :
+	Expression(ExpressionType::SUBQUERY, ExpressionClass::BOUND_SUBQUERY, return_type) {
 }
 
-void BoundSubqueryExpression::Serialize(Serializer &serializer) {
-	throw SerializationException("Cannot serialize BoundSubqueryExpression");
+string BoundSubqueryExpression::ToString() const {
+	return "SUBQUERY";
 }
 
-bool BoundSubqueryExpression::Equals(const Expression *other_) const {
+bool BoundSubqueryExpression::Equals(const BaseExpression *other_) const {
 	// equality between bound subqueries not implemented currently
 	return false;
+}
+
+unique_ptr<Expression> BoundSubqueryExpression::Copy() {
+	throw SerializationException("Cannot copy BoundSubqueryExpression");
 }

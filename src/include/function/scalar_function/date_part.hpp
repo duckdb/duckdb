@@ -15,8 +15,8 @@ namespace duckdb {
 namespace function {
 
 void date_part_function(Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result);
-bool date_part_matches_arguments(vector<TypeId> &arguments);
-TypeId date_part_get_return_type(vector<TypeId> &arguments);
+bool date_part_matches_arguments(vector<SQLType> &arguments);
+SQLType date_part_get_return_type(vector<SQLType> &arguments);
 
 class DatePartFunction {
 public:

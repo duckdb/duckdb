@@ -33,16 +33,16 @@ public:
 		return "pragma_table_info";
 	}
 
-	static void GetArguments(vector<TypeId> &arguments) {
-		arguments.push_back(TypeId::VARCHAR);
+	static void GetArguments(vector<SQLType> &arguments) {
+		arguments.push_back(SQLType(SQLTypeId::VARCHAR));
 	}
 	static void GetReturnValues(vector<ColumnDefinition> &returns) {
-		returns.push_back(ColumnDefinition("cid", TypeId::INTEGER));
-		returns.push_back(ColumnDefinition("name", TypeId::VARCHAR));
-		returns.push_back(ColumnDefinition("type", TypeId::VARCHAR));
-		returns.push_back(ColumnDefinition("notnull", TypeId::BOOLEAN));
-		returns.push_back(ColumnDefinition("dflt_value", TypeId::BOOLEAN));
-		returns.push_back(ColumnDefinition("pk", TypeId::BOOLEAN));
+		returns.push_back(ColumnDefinition("cid", SQLType(SQLTypeId::INTEGER)));
+		returns.push_back(ColumnDefinition("name", SQLType(SQLTypeId::VARCHAR)));
+		returns.push_back(ColumnDefinition("type", SQLType(SQLTypeId::VARCHAR)));
+		returns.push_back(ColumnDefinition("notnull", SQLType(SQLTypeId::BOOLEAN)));
+		returns.push_back(ColumnDefinition("dflt_value", SQLType(SQLTypeId::BOOLEAN)));
+		returns.push_back(ColumnDefinition("pk", SQLType(SQLTypeId::BOOLEAN)));
 	}
 };
 

@@ -17,16 +17,14 @@ public:
 
 	size_t parameter_nr;
 public:
-	bool IsScalar() override {
+	bool IsScalar() const override {
 		return true;
 	}
-	bool HasParameter() override {
+	bool HasParameter() const override {
 		return true;
 	}
 
 	string ToString() const override;
-
-	bool Equals(const ParsedExpression *other_) const override;
 
 	unique_ptr<ParsedExpression> Copy() override;
 

@@ -15,8 +15,8 @@ string ConstantExpression::ToString() const {
 	return value.ToString();
 }
 
-bool ConstantExpression::Equals(const ParsedExpression *other_) const {
-	if (!ParsedExpression::Equals(other_)) {
+bool ConstantExpression::Equals(const BaseExpression *other_) const {
+	if (!BaseExpression::Equals(other_)) {
 		return false;
 	}
 	auto other = (ConstantExpression *)other_;

@@ -1,56 +1,57 @@
-#include "parser/expression/bound_function_expression.hpp"
+#include "planner/expression/bound_function_expression.hpp"
+#include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 
-#include "catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "common/exception.hpp"
-#include "common/serializer.hpp"
 #include "common/types/hash.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-BoundFunctionExpression::BoundFunctionExpression(unique_ptr<FunctionExpression> function,
-                                                 ScalarFunctionCatalogEntry *bound_function)
-    : Expression(ExpressionType::BOUND_FUNCTION, function->return_type), function(move(function)),
-      bound_function(bound_function) {
-	this->alias = this->function->alias;
+BoundFunctionExpression::BoundFunctionExpression(TypeId return_type, ScalarFunctionCatalogEntry *bound_function) :
+	Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, return_type),
+	bound_function(bound_function) {
 }
 
-void BoundFunctionExpression::ResolveType() {
-	Expression::ResolveType();
-	vector<TypeId> child_types;
-	for (auto &child : function->children) {
-		child_types.push_back(child->return_type);
+string BoundFunctionExpression::ToString() const {
+	string str = bound_function->name + "(";
+	for(size_t i = 0; i < children.size(); i++) {
+		if (i > 0) {
+			str += ", ";
+		}
+		str += children[i]->ToString();
 	}
-	if (!bound_function->matches(child_types)) {
-		throw CatalogException("Incorrect set of arguments for function \"%s\"", bound_function->name.c_str());
-	}
-	return_type = bound_function->return_type(child_types);
-}
-
-unique_ptr<Expression> BoundFunctionExpression::Copy() {
-	auto copy = make_unique<BoundFunctionExpression>(unique_ptr_cast<Expression, FunctionExpression>(function->Copy()),
-	                                                 bound_function);
-	copy->return_type = return_type;
-	copy->alias = alias;
-	return move(copy);
-}
-
-void BoundFunctionExpression::Serialize(Serializer &serializer) {
-	throw SerializationException("Cannot serialize a BoundFunctionExpression");
+	str += ")";
+	return str;
 }
 
 uint64_t BoundFunctionExpression::Hash() const {
 	uint64_t result = Expression::Hash();
-	return CombineHash(result, function->Hash());
+	return CombineHash(result, duckdb::Hash(bound_function->name.c_str()));
 }
 
-bool BoundFunctionExpression::Equals(const Expression *other_) const {
-	if (!Expression::Equals(other_)) {
+bool BoundFunctionExpression::Equals(const BaseExpression *other_) const {
+	if (!BaseExpression::Equals(other_)) {
 		return false;
 	}
 	auto other = (BoundFunctionExpression *)other_;
 	if (other->bound_function != bound_function) {
 		return false;
 	}
-	return other->function->Equals(function.get());
+	if (children.size() != other->children.size()) {
+		return false;
+	}
+	for(size_t i = 0; i < children.size(); i++) {
+		if (!Expression::Equals(children[i].get(), other->children[i].get())) {
+			return false;
+		}
+	}
+	return true;
+}
+
+unique_ptr<Expression> BoundFunctionExpression::Copy() {
+	auto copy = make_unique<BoundFunctionExpression>(return_type, bound_function);
+	for(auto &child : children) {
+		copy->children.push_back(child->Copy());
+	}
+	copy->CopyProperties(*this);
+	return move(copy);
 }

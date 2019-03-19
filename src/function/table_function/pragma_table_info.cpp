@@ -60,7 +60,7 @@ void pragma_table_info(ClientContext &context, DataChunk &input, DataChunk &outp
 		// "name", TypeId::VARCHAR
 		output.data[1].SetValue(index, Value(column.name));
 		// "type", TypeId::VARCHAR
-		output.data[2].SetValue(index, Value(TypeIdToString(column.type)));
+		output.data[2].SetValue(index, Value(SQLTypeToString(column.type)));
 		// "notnull", TypeId::BOOLEAN
 		// FIXME: look at constraints
 		output.data[3].SetValue(index, Value::BOOLEAN(false));

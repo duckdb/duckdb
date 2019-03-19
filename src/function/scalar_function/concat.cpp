@@ -25,15 +25,9 @@ void concat_function(Vector inputs[], size_t input_count, BoundFunctionExpressio
 	auto input1_data = (const char **)input1.data;
 	auto input2_data = (const char **)input2.data;
 
-	bool has_stats = expr.function->children[0]->stats.has_stats && expr.function->children[1]->stats.has_stats;
+	// bool has_stats = expr.function->children[0]->stats.has_stats && expr.function->children[1]->stats.has_stats;
 	size_t current_len = 0;
 	unique_ptr<char[]> output;
-	if (has_stats) {
-		// stats available, pre-allocate the result chunk
-		current_len = expr.function->children[0]->stats.maximum_string_length +
-		              expr.function->children[1]->stats.maximum_string_length + 1;
-		output = unique_ptr<char[]>{new char[current_len]};
-	}
 
 	VectorOperations::BinaryExec(input1, input2, result,
 	                             [&](size_t input1_index, size_t input2_index, size_t result_index) {
@@ -56,12 +50,12 @@ void concat_function(Vector inputs[], size_t input_count, BoundFunctionExpressio
 }
 
 // TODO: extend to support arbitrary number of arguments, not only two
-bool concat_matches_arguments(vector<TypeId> &arguments) {
-	return arguments.size() == 2 && arguments[0] == TypeId::VARCHAR && arguments[1] == TypeId::VARCHAR;
+bool concat_matches_arguments(vector<SQLType> &arguments) {
+	return arguments.size() == 2 && arguments[0].id == SQLTypeId::VARCHAR && arguments[1].id == SQLTypeId::VARCHAR;
 }
 
-TypeId concat_get_return_type(vector<TypeId> &arguments) {
-	return TypeId::VARCHAR;
+SQLType concat_get_return_type(vector<SQLType> &arguments) {
+	return SQLType(SQLTypeId::VARCHAR);
 }
 
 } // namespace function

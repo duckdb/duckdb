@@ -8,20 +8,19 @@
 
 #pragma once
 
-#include "common/exception.hpp"
-#include "parser/expression/aggregate_expression.hpp"
+#include "parser/parsed_expression.hpp"
 #include "parser/query_node.hpp"
 
 namespace duckdb {
 
-enum WindowBoundary {
-	INVALID,
-	UNBOUNDED_PRECEDING,
-	UNBOUNDED_FOLLOWING,
-	CURRENT_ROW_RANGE,
-	CURRENT_ROW_ROWS,
-	EXPR_PRECEDING,
-	EXPR_FOLLOWING
+enum class WindowBoundary : uint8_t {
+	INVALID = 0,
+	UNBOUNDED_PRECEDING = 1,
+	UNBOUNDED_FOLLOWING = 2,
+	CURRENT_ROW_RANGE = 3,
+	CURRENT_ROW_ROWS = 4,
+	EXPR_PRECEDING = 5,
+	EXPR_FOLLOWING = 6
 };
 
 //! The WindowExpression represents a window function in the query. They are a special case of aggregates which is why
@@ -37,27 +36,26 @@ public:
 	//! The set of ordering clauses
 	OrderByDescription ordering;
 	//! The window boundaries
-	WindowBoundary start = WindowBoundary::INVALID, end = WindowBoundary::INVALID;
-	unique_ptr<ParsedExpression> start_expr = nullptr, end_expr = nullptr;
+	WindowBoundary start = WindowBoundary::INVALID;
+	WindowBoundary end = WindowBoundary::INVALID;
+
+	unique_ptr<ParsedExpression> start_expr;
+	unique_ptr<ParsedExpression> end_expr;
 	//! Offset and default expressions for WINDOW_LEAD and WINDOW_LAG functions
-	unique_ptr<ParsedExpression> offset_expr = nullptr, default_expr = nullptr;
+	unique_ptr<ParsedExpression> offset_expr;
+	unique_ptr<ParsedExpression> default_expr;
 public:
-	bool IsWindow() override {
+	bool IsWindow() const override {
 		return true;
 	}
 
 	string ToString() const override;
 
-	bool Equals(const ParsedExpression *other) const override;
+	bool Equals(const BaseExpression *other) const override;
 	
 	unique_ptr<ParsedExpression> Copy() override;
 
 	void Serialize(Serializer &serializer) override;
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, Deserializer &source);
-
-	size_t ChildCount() const override;
-	ParsedExpression *GetChild(size_t index) const override;
-	void ReplaceChild(std::function<unique_ptr<ParsedExpression>(unique_ptr<ParsedExpression> expression)> callback,
-	                  size_t index) override;
 };
 } // namespace duckdb

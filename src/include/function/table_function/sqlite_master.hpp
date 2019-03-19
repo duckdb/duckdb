@@ -33,17 +33,17 @@ public:
 		return "sqlite_master";
 	}
 
-	static void GetArguments(vector<TypeId> &arguments) {
+	static void GetArguments(vector<SQLType> &arguments) {
 		// no arguments
 		(void)arguments;
 	}
 
 	static void GetReturnValues(vector<ColumnDefinition> &returns) {
-		returns.push_back(ColumnDefinition("type", TypeId::VARCHAR));
-		returns.push_back(ColumnDefinition("name", TypeId::VARCHAR));
-		returns.push_back(ColumnDefinition("tbl_name", TypeId::VARCHAR));
-		returns.push_back(ColumnDefinition("rootpage", TypeId::INTEGER));
-		returns.push_back(ColumnDefinition("sql", TypeId::VARCHAR));
+		returns.push_back(ColumnDefinition("type", SQLType(SQLTypeId::VARCHAR)));
+		returns.push_back(ColumnDefinition("name", SQLType(SQLTypeId::VARCHAR)));
+		returns.push_back(ColumnDefinition("tbl_name", SQLType(SQLTypeId::VARCHAR)));
+		returns.push_back(ColumnDefinition("rootpage", SQLType(SQLTypeId::INTEGER)));
+		returns.push_back(ColumnDefinition("sql", SQLType(SQLTypeId::VARCHAR)));
 	}
 };
 

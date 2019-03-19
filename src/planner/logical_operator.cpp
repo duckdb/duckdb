@@ -3,22 +3,6 @@
 using namespace duckdb;
 using namespace std;
 
-namespace duckdb {
-bool IsProjection(LogicalOperatorType type) {
-	return type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY || type == LogicalOperatorType::PROJECTION;
-}
-
-LogicalOperator *GetProjection(LogicalOperator *node) {
-	while ((node->children.size() == 1 || node->type == LogicalOperatorType::UNION ||
-	        node->type == LogicalOperatorType::EXCEPT || node->type == LogicalOperatorType::INTERSECT) &&
-	       !IsProjection(node->type)) {
-		node = node->children[0].get();
-	}
-	return node;
-}
-
-} // namespace duckdb
-
 string LogicalOperator::ParamsToString() const {
 	string result = "";
 	if (expressions.size() > 0) {

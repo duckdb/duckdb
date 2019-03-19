@@ -9,9 +9,6 @@
 #pragma once
 
 #include "parser/constraint.hpp"
-#include "parser/sql_node_visitor.hpp"
-
-#include <vector>
 
 namespace duckdb {
 
@@ -28,10 +25,10 @@ public:
 	virtual ~ParsedConstraint() {
 	}
 
-	void Accept(SQLNodeVisitor *v) override {
-		v->Visit(*this);
-	}
-
+	ConstraintType ctype;
+	size_t index;
+	vector<string> columns;
+public:
 	string ToString() const override {
 		return "Dummy Constraint";
 	}
@@ -40,10 +37,6 @@ public:
 	void Serialize(Serializer &serializer) override;
 	//! Deserializes a ParsedConstraint
 	static unique_ptr<Constraint> Deserialize(Deserializer &source);
-
-	ConstraintType ctype;
-	size_t index;
-	vector<string> columns;
 };
 
 } // namespace duckdb

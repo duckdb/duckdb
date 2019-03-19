@@ -2,6 +2,7 @@
 
 #include "common/serializer.hpp"
 #include "parser/constraints/list.hpp"
+#include "common/printer.hpp"
 
 using namespace duckdb;
 using namespace std;

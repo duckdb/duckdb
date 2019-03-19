@@ -1,17 +1,19 @@
-#include "parser/expression/bound_columnref_expression.hpp"
-
-#include "common/exception.hpp"
-#include "common/types/hash.hpp"
+#include "planner/expression/bound_columnref_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> BoundColumnRefExpression::Copy() {
-	return make_unique<BoundColumnRefExpression>(alias, return_type, binding, depth);
+BoundColumnRefExpression::BoundColumnRefExpression(string alias, TypeId type, ColumnBinding binding, uint32_t depth)
+	: Expression(ExpressionType::BOUND_COLUMN_REF, ExpressionClass::BOUND_COLUMN_REF, type), binding(binding), depth(depth) {
+	this->alias = alias;
 }
 
-void BoundColumnRefExpression::Serialize(Serializer &serializer) {
-	throw SerializationException("Cannot serialize a BoundColumnRefExpression");
+BoundColumnRefExpression::BoundColumnRefExpression(TypeId type, ColumnBinding binding, uint32_t depth)
+	: BoundColumnRefExpression(string(), type, binding, depth) {
+}
+
+unique_ptr<Expression> BoundColumnRefExpression::Copy() {
+	return make_unique<BoundColumnRefExpression>(alias, return_type, binding, depth);
 }
 
 uint64_t BoundColumnRefExpression::Hash() const {
@@ -21,8 +23,8 @@ uint64_t BoundColumnRefExpression::Hash() const {
 	return CombineHash(result, duckdb::Hash<uint32_t>(depth));
 }
 
-bool BoundColumnRefExpression::Equals(const Expression *other_) const {
-	if (!Expression::Equals(other_)) {
+bool BoundColumnRefExpression::Equals(const BaseExpression *other_) const {
+	if (!BaseExpression::Equals(other_)) {
 		return false;
 	}
 	auto other = (BoundColumnRefExpression *)other_;
@@ -30,5 +32,5 @@ bool BoundColumnRefExpression::Equals(const Expression *other_) const {
 }
 
 string BoundColumnRefExpression::ToString() const {
-	return !alias.empty() ? alias : "#[" + to_string(binding.table_index) + "." + to_string(binding.column_index) + "]";
+	return "#[" + to_string(binding.table_index) + "." + to_string(binding.column_index) + "]";
 }

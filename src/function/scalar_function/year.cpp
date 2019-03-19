@@ -13,7 +13,7 @@ namespace function {
 void year_function(Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result) {
 	assert(input_count == 1);
 	auto &input = inputs[0];
-	assert(input.type == TypeId::DATE || input.type == TypeId::TIMESTAMP);
+	assert(input.type == TypeId::INTEGER || input.type == TypeId::BIGINT);
 
 	result.Initialize(TypeId::INTEGER);
 	result.nullmask = input.nullmask;
@@ -21,11 +21,11 @@ void year_function(Vector inputs[], size_t input_count, BoundFunctionExpression 
 	result.sel_vector = input.sel_vector;
 	auto result_data = (int *)result.data;
 	switch (input.type) {
-	case TypeId::DATE:
+	case TypeId::INTEGER:
 		VectorOperations::ExecType<date_t>(
 		    input, [&](date_t date, size_t i, size_t k) { result_data[i] = Date::ExtractYear(date); });
 		break;
-	case TypeId::TIMESTAMP:
+	case TypeId::BIGINT:
 		VectorOperations::ExecType<timestamp_t>(input, [&](timestamp_t timestamp, size_t i, size_t k) {
 			result_data[i] = Date::ExtractYear(Timestamp::GetDate(timestamp));
 		});
@@ -35,12 +35,12 @@ void year_function(Vector inputs[], size_t input_count, BoundFunctionExpression 
 	}
 }
 
-bool year_matches_arguments(vector<TypeId> &arguments) {
-	return arguments.size() == 1 && (arguments[0] == TypeId::DATE || arguments[0] == TypeId::TIMESTAMP);
+bool year_matches_arguments(vector<SQLType> &arguments) {
+	return arguments.size() == 1 && (arguments[0].id == SQLTypeId::DATE || arguments[0].id == SQLTypeId::TIMESTAMP);
 }
 
-TypeId year_get_return_type(vector<TypeId> &arguments) {
-	return TypeId::INTEGER;
+SQLType year_get_return_type(vector<SQLType> &arguments) {
+	return SQLType(SQLTypeId::INTEGER);
 }
 
 } // namespace function

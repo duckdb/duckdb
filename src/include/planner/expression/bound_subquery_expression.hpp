@@ -12,53 +12,37 @@
 #include "planner/binder.hpp"
 
 namespace duckdb {
-class LogicalOperator;
 
-//! Represents a subquery
 class BoundSubqueryExpression : public Expression {
 public:
-	BoundSubqueryExpression() : Expression(ExpressionType::SUBQUERY) {
-	}
-
-	ExpressionClass GetExpressionClass() override {
-		return ExpressionClass::BOUND_SUBQUERY;
-	}
-
-	unique_ptr<Expression> Copy() override;
-
-	//! Serializes an Expression to a stand-alone binary blob
-	void Serialize(Serializer &serializer) override;
-
-	bool Equals(const Expression *other) const override;
-
-	unique_ptr<Binder> binder;
-	unique_ptr<Expression> subquery;
+	BoundSubqueryExpression(TypeId return_type);
 
 	bool IsCorrelated() {
 		return binder->correlated_columns.size() > 0;
 	}
 
-	size_t ChildCount() const override {
-		return subquery->ChildCount();
-	}
-	Expression *GetChild(size_t index) const override {
-		return subquery->GetChild(index);
-	}
-	void ReplaceChild(std::function<unique_ptr<Expression>(unique_ptr<Expression> expression)> callback,
-	                  size_t index) override {
-		return subquery->ReplaceChild(callback, index);
-	}
-
-	string ToString() const override {
-		return subquery->ToString();
-	}
-
-	bool HasSubquery() override {
+	//! The binder used to bind the subquery node
+	unique_ptr<Binder> binder;
+	//! The bound subquery node
+	unique_ptr<QueryNode> subquery;
+	//! The subquery type
+	SubqueryType subquery_type;
+	//! the child expression to compare with (in case of IN, ANY, ALL operators)
+	unique_ptr<Expression> child;
+	//! The comparison type of the child expression with the subquery (in case of ANY, ALL operators)
+	ExpressionType comparison_type;
+public:
+	bool HasSubquery() const override {
 		return true;
 	}
-
-	bool IsScalar() override {
+	bool IsScalar() const override {
 		return false;
 	}
+
+	string ToString() const override;
+
+	bool Equals(const BaseExpression *other) const override;
+
+	unique_ptr<Expression> Copy() override;
 };
 } // namespace duckdb

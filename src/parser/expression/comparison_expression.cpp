@@ -72,8 +72,8 @@ string ComparisonExpression::ToString() const {
 	return left->ToString() + ExpressionTypeToOperator(type) + right->ToString();
 }
 
-bool ComparisonExpression::Equals(const ParsedExpression *other_) const {
-	if (!ParsedExpression::Equals(other_)) {
+bool ComparisonExpression::Equals(const BaseExpression *other_) const {
+	if (!BaseExpression::Equals(other_)) {
 		return false;
 	}
 	auto other = (ComparisonExpression *)other_;
@@ -102,27 +102,4 @@ unique_ptr<ParsedExpression> ComparisonExpression::Deserialize(ExpressionType ty
 	auto left_child = ParsedExpression::Deserialize(source);
 	auto right_child = ParsedExpression::Deserialize(source);
 	return make_unique<ComparisonExpression>(type, move(left_child), move(right_child));
-}
-
-size_t ComparisonExpression::ChildCount() const {
-	return 2;
-}
-
-ParsedExpression *ComparisonExpression::GetChild(size_t index) const {
-	if (index == 0) {
-		return left.get();
-	} else {
-		assert(index == 1);
-		return right.get();
-	}
-}
-
-void ComparisonExpression::ReplaceChild(
-    std::function<unique_ptr<ParsedExpression>(unique_ptr<ParsedExpression> expression)> callback, size_t index) {
-	if (index == 0) {
-		left = callback(move(left));
-	} else {
-		assert(index == 1);
-		right = callback(move(right));
-	}
 }

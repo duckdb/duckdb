@@ -11,18 +11,9 @@
 #include "catalog/catalog.hpp"
 #include "common/common.hpp"
 #include "planner/expression.hpp"
-#include "parser/statement/select_statement.hpp"
 #include "planner/logical_operator_visitor.hpp"
 
-#include <unordered_set>
-#include <vector>
-
 namespace duckdb {
-
-//! Returns true if the node is a projection
-bool IsProjection(LogicalOperatorType type);
-//! Returns the root projection or join node
-LogicalOperator *GetProjection(LogicalOperator *);
 
 //! LogicalOperator is the base class of the logical operators present in the
 //! logical query tree

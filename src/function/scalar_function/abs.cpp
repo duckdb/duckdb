@@ -13,11 +13,24 @@ void abs_function(Vector inputs[], size_t input_count, BoundFunctionExpression &
 	VectorOperations::Abs(inputs[0], result);
 }
 
-bool abs_matches_arguments(vector<TypeId> &arguments) {
-	return arguments.size() == 1 && TypeIsNumeric(arguments[0]);
+bool abs_matches_arguments(vector<SQLType> &arguments) {
+	if (arguments.size() != 1) {
+		return false;
+	}
+	switch(arguments[0].id) {
+	case SQLTypeId::TINYINT:
+	case SQLTypeId::SMALLINT:
+	case SQLTypeId::INTEGER:
+	case SQLTypeId::BIGINT:
+	case SQLTypeId::REAL:
+	case SQLTypeId::DOUBLE:
+		return true;
+	default:
+		return false;
+	}
 }
 
-TypeId abs_get_return_type(vector<TypeId> &arguments) {
+SQLType abs_get_return_type(vector<SQLType> &arguments) {
 	return arguments[0];
 }
 

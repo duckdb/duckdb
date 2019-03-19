@@ -42,27 +42,27 @@ static void caseconvert_function(Vector inputs[], BoundFunctionExpression &expr,
 	auto result_data = (const char **)result.data;
 	auto input_data = (const char **)input.data;
 
-	bool has_stats = expr.function->children[0]->stats.has_stats;
+	// bool has_stats = expr.function->children[0]->stats.has_stats;
 	size_t current_len = 0;
 	unique_ptr<char[]> output;
-	if (has_stats) {
-		// stats available, pre-allocate the result chunk
-		current_len = expr.function->children[0]->stats.maximum_string_length + 1;
-		output = unique_ptr<char[]>{new char[current_len]};
-	}
+	// if (has_stats) {
+	// 	// stats available, pre-allocate the result chunk
+	// 	current_len = expr.function->children[0]->stats.maximum_string_length + 1;
+	// 	output = unique_ptr<char[]>{new char[current_len]};
+	// }
 
 	VectorOperations::Exec(input, [&](size_t i, size_t k) {
 		if (input.nullmask[i]) {
 			return;
 		}
-		if (!has_stats) {
+		//if (!has_stats) {
 			// no stats available, might need to reallocate
 			size_t required_len = strlen(input_data[i]) + 1;
 			if (required_len > current_len) {
 				current_len = required_len + 1;
 				output = unique_ptr<char[]>{new char[current_len]};
 			}
-		}
+		//}
 		assert(strlen(input_data[i]) < current_len);
 		CASE_FUNCTION(input_data[i], output.get());
 
@@ -80,12 +80,12 @@ void caseconvert_lower_function(Vector inputs[], size_t input_count, BoundFuncti
 	caseconvert_function<strtolower>(inputs, expr, result);
 }
 
-bool caseconvert_matches_arguments(vector<TypeId> &arguments) {
-	return arguments.size() == 1 && arguments[0] == TypeId::VARCHAR;
+bool caseconvert_matches_arguments(vector<SQLType> &arguments) {
+	return arguments.size() == 1 && arguments[0].id == SQLTypeId::VARCHAR;
 }
 
-TypeId caseconvert_get_return_type(vector<TypeId> &arguments) {
-	return TypeId::VARCHAR;
+SQLType caseconvert_get_return_type(vector<SQLType> &arguments) {
+	return arguments[0];
 }
 
 } // namespace function

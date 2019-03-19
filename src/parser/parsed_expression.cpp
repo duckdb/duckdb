@@ -1,6 +1,6 @@
 #include "parser/parsed_expression.hpp"
+#include "parser/parsed_expression_iterator.hpp"
 
-#include "common/printer.hpp"
 #include "common/serializer.hpp"
 #include "common/types/hash.hpp"
 
@@ -9,71 +9,51 @@
 using namespace duckdb;
 using namespace std;
 
-bool ParsedExpression::IsAggregate() {
+bool ParsedExpression::IsAggregate() const {
 	bool is_aggregate = false;
-	EnumerateChildren([&](ParsedExpression *child) { is_aggregate |= child->IsAggregate(); });
+	ParsedExpressionIterator::EnumerateChildren(*this, [&](const ParsedExpression &child) {
+		is_aggregate |= child.IsAggregate();
+	});
 	return is_aggregate;
 }
 
-bool ParsedExpression::IsWindow() {
+bool ParsedExpression::IsWindow() const {
 	bool is_window = false;
-	EnumerateChildren([&](ParsedExpression *child) { is_window |= child->IsWindow(); });
+	ParsedExpressionIterator::EnumerateChildren(*this, [&](const ParsedExpression &child) {
+		is_window |= child.IsWindow();
+	});
 	return is_window;
 }
 
-bool ParsedExpression::IsScalar() {
+bool ParsedExpression::IsScalar() const {
 	bool is_scalar = true;
-	EnumerateChildren([&](ParsedExpression *child) {
-		if (!child->IsScalar()) {
-			is_scalar = false;
-		}
+	ParsedExpressionIterator::EnumerateChildren(*this, [&](const ParsedExpression &child) {
+		is_scalar |= child.IsScalar();
 	});
 	return is_scalar;
 }
 
-bool ParsedExpression::HasParameter() {
+bool ParsedExpression::HasParameter() const {
 	bool has_parameter = false;
-	EnumerateChildren([&](ParsedExpression *child) { has_parameter |= child->HasParameter(); });
+	ParsedExpressionIterator::EnumerateChildren(*this, [&](const ParsedExpression &child) {
+		has_parameter |= child.HasParameter();
+	});
 	return has_parameter;
 }
 
-bool ParsedExpression::HasSubquery() {
+bool ParsedExpression::HasSubquery() const {
 	bool has_subquery = false;
-	EnumerateChildren([&](ParsedExpression *child) { has_subquery |= child->HasSubquery(); });
+	ParsedExpressionIterator::EnumerateChildren(*this, [&](const ParsedExpression &child) {
+		has_subquery |= child.HasSubquery();
+	});
 	return has_subquery;
-}
-
-void ParsedExpression::Print() {
-	Printer::Print(ToString());
-}
-
-bool ParsedExpression::Equals(const ParsedExpression *other) const {
-	if (!other) {
-		return false;
-	}
-	if (this->type != other->type) {
-		return false;
-	}
-	return true;
-}
-
-bool ParsedExpression::Equals(ParsedExpression *left, ParsedExpression *right) {
-	if (left == right) {
-		// if pointers are equivalent, they are equivalent
-		return true;
-	}
-	if (!left || !right) {
-		// otherwise if one of them is nullptr, they are not equivalent
-		// because the other one cannot be nullptr then
-		return false;
-	}
-	// otherwise we use the normal equality
-	return left->Equals(right);
 }
 
 uint64_t ParsedExpression::Hash() const {
 	uint64_t hash = duckdb::Hash<uint32_t>((uint32_t)type);
-	EnumerateChildren([&](ParsedExpression *child) { hash = CombineHash(child->Hash(), hash); });
+	ParsedExpressionIterator::EnumerateChildren(*this, [&](const ParsedExpression &child) {
+		hash = CombineHash(child.Hash(), hash);
+	});
 	return hash;
 }
 
@@ -119,6 +99,9 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source)
 	case ExpressionClass::OPERATOR:
 		result = OperatorExpression::Deserialize(type, source);
 		break;
+	case ExpressionClass::PARAMETER:
+		result = ParameterExpression::Deserialize(type, source);
+		break;
 	case ExpressionClass::STAR:
 		result = StarExpression::Deserialize(type, source);
 		break;
@@ -133,17 +116,4 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source)
 	}
 	result->alias = alias;
 	return result;
-}
-
-size_t ParsedExpression::ChildCount() const {
-	return 0;
-}
-
-ParsedExpression *ParsedExpression::GetChild(size_t index) const {
-	throw OutOfRangeException("Expression child index out of range!");
-}
-
-void ParsedExpression::ReplaceChild(std::function<unique_ptr<ParsedExpression>(unique_ptr<ParsedExpression> expression)> callback,
-                              size_t index) {
-	throw OutOfRangeException("Expression child index out of range!");
 }

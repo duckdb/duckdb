@@ -10,7 +10,6 @@
 
 #include "parser/parsed_expression.hpp"
 #include "parser/query_node.hpp"
-#include "parser/sql_node_visitor.hpp"
 #include "parser/sql_statement.hpp"
 
 namespace duckdb {
@@ -26,12 +25,6 @@ public:
 	unique_ptr<QueryNode> left = nullptr;
 	//! The right side of the set operation
 	unique_ptr<QueryNode> right = nullptr;
-
-	void EnumerateChildren(std::function<void(ParsedExpression *expression)> callback) const override {
-		QueryNode::EnumerateChildren(callback);
-		left->EnumerateChildren(callback);
-		right->EnumerateChildren(callback);
-	}
 
 	bool Equals(const QueryNode *other) const override;
 	//! Create a copy of this SelectNode

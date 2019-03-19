@@ -15,8 +15,8 @@ namespace duckdb {
 namespace function {
 
 void abs_function(Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result);
-bool abs_matches_arguments(vector<TypeId> &arguments);
-TypeId abs_get_return_type(vector<TypeId> &arguments);
+bool abs_matches_arguments(vector<SQLType> &arguments);
+SQLType abs_get_return_type(vector<SQLType> &arguments);
 
 class AbsFunction {
 public:

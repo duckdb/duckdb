@@ -147,7 +147,7 @@ struct CreateTableFunctionInformation {
 	//! List of return columns
 	vector<ColumnDefinition> return_values;
 	//! Input arguments
-	vector<TypeId> arguments;
+	vector<SQLType> arguments;
 	//! Initialize function pointer
 	table_function_init_t init;
 	//! The function pointer

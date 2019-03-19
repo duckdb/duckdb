@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "parser/sql_node_visitor.hpp"
 #include "parser/tableref.hpp"
 
 namespace duckdb {
@@ -18,16 +17,12 @@ public:
 	CrossProductRef() : TableRef(TableReferenceType::CROSS_PRODUCT) {
 	}
 
-	unique_ptr<TableRef> Accept(SQLNodeVisitor *v) override {
-		return v->Visit(*this);
-	}
-	bool Equals(const TableRef *other_) const override {
-		if (!TableRef::Equals(other_)) {
-			return false;
-		}
-		auto other = (CrossProductRef *)other_;
-		return left->Equals(other->left.get()) && right->Equals(other->right.get());
-	}
+	//! The left hand side of the cross product
+	unique_ptr<TableRef> left;
+	//! The right hand side of the cross product
+	unique_ptr<TableRef> right;
+public:
+	bool Equals(const TableRef *other_) const override;
 
 	unique_ptr<TableRef> Copy() override;
 
@@ -35,10 +30,5 @@ public:
 	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into a CrossProductRef
 	static unique_ptr<TableRef> Deserialize(Deserializer &source);
-
-	//! The left hand side of the cross product
-	unique_ptr<TableRef> left;
-	//! The right hand side of the cross product
-	unique_ptr<TableRef> right;
 };
 } // namespace duckdb

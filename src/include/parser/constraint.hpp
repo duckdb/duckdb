@@ -15,7 +15,6 @@ namespace duckdb {
 class Serializer;
 class Deserializer;
 
-class SQLNodeVisitor;
 //! Constraint is the base class of any type of table constraint.
 class Constraint {
 public:
@@ -23,12 +22,11 @@ public:
 	virtual ~Constraint() {
 	}
 
-	virtual void Accept(SQLNodeVisitor *) = 0;
-
+	ConstraintType type;
+	
+public:
 	virtual string ToString() const = 0;
 	void Print();
-
-	ConstraintType type;
 
 	unique_ptr<Constraint> Copy();
 	//! Serializes a Constraint to a stand-alone binary blob

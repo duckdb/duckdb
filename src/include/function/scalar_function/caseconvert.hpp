@@ -16,8 +16,8 @@ namespace function {
 void caseconvert_upper_function(Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result);
 void caseconvert_lower_function(Vector inputs[], size_t input_count, BoundFunctionExpression &expr, Vector &result);
 
-bool caseconvert_matches_arguments(vector<TypeId> &arguments);
-TypeId caseconvert_get_return_type(vector<TypeId> &arguments);
+bool caseconvert_matches_arguments(vector<SQLType> &arguments);
+SQLType caseconvert_get_return_type(vector<SQLType> &arguments);
 
 class UpperFunction {
 public:

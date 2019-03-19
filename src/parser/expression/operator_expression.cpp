@@ -41,8 +41,8 @@ string OperatorExpression::ToString() const {
 	return result;
 }
 
-bool OperatorExpression::Equals(const ParsedExpression *other_) const {
-	if (!ParsedExpression::Equals(other_)) {
+bool OperatorExpression::Equals(const BaseExpression *other_) const {
+	if (!BaseExpression::Equals(other_)) {
 		return false;
 	}
 	auto other = (OperatorExpression *)other_;
@@ -75,19 +75,4 @@ unique_ptr<ParsedExpression> OperatorExpression::Deserialize(ExpressionType type
 	auto expression = make_unique<OperatorExpression>(type);
 	source.ReadList<ParsedExpression>(expression->children);
 	return move(expression);
-}
-
-size_t OperatorExpression::ChildCount() const {
-	return children.size();
-}
-
-ParsedExpression *OperatorExpression::GetChild(size_t index) const {
-	assert(index < children.size());
-	return children[index].get();
-}
-
-void OperatorExpression::ReplaceChild(std::function<unique_ptr<ParsedExpression>(unique_ptr<ParsedExpression> expression)> callback,
-                                      size_t index) {
-	assert(index < children.size());
-	children[index] = callback(move(children[index]));
 }

@@ -12,7 +12,6 @@
 #include "common/types/data_chunk.hpp"
 #include "execution/physical_operator.hpp"
 #include "parser/parsed_expression.hpp"
-#include "parser/sql_node_visitor.hpp"
 
 namespace duckdb {
 

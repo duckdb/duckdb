@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include "parser/sql_node_visitor.hpp"
 #include "parser/sql_statement.hpp"
+#include "parser/parsed_expression.hpp"
+#include "parser/tableref.hpp"
 
 namespace duckdb {
 

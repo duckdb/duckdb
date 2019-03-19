@@ -120,7 +120,7 @@ void date_part_function(Vector inputs[], size_t input_count, BoundFunctionExpres
 	result.nullmask = inputs[1].nullmask;
 	result.count = inputs[1].count;
 	result.sel_vector = inputs[1].sel_vector;
-	if (inputs[1].type != TypeId::DATE) {
+	if (inputs[1].type != TypeId::INTEGER) {
 		throw NotImplementedException("For now only DATE is implemented in Extract");
 	}
 
@@ -140,13 +140,13 @@ void date_part_function(Vector inputs[], size_t input_count, BoundFunctionExpres
 	}
 }
 
-bool date_part_matches_arguments(vector<TypeId> &arguments) {
-	return arguments.size() == 2 && arguments[0] == TypeId::VARCHAR &&
-	       (arguments[1] == TypeId::DATE || arguments[1] == TypeId::TIMESTAMP);
+bool date_part_matches_arguments(vector<SQLType> &arguments) {
+	return arguments.size() == 2 && arguments[0].id == SQLTypeId::VARCHAR &&
+	       (arguments[1].id == SQLTypeId::DATE || arguments[1].id == SQLTypeId::TIMESTAMP);
 }
 
-TypeId date_part_get_return_type(vector<TypeId> &arguments) {
-	return TypeId::BIGINT;
+SQLType date_part_get_return_type(vector<SQLType> &arguments) {
+	return SQLType(SQLTypeId::BIGINT);
 }
 
 } // namespace function

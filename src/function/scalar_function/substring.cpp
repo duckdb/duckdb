@@ -26,14 +26,14 @@ void substring_function(Vector inputs[], size_t input_count, BoundFunctionExpres
 	auto offset_data = (int *)offset.data;
 	auto length_data = (int *)length.data;
 
-	bool has_stats = expr.function->children[0]->stats.has_stats;
+	// bool has_stats = expr.function->children[0]->stats.has_stats;
 	size_t current_len = 0;
 	unique_ptr<char[]> output;
-	if (has_stats) {
-		// stats available, pre-allocate the result chunk
-		current_len = expr.function->children[0]->stats.maximum_string_length + 1;
-		output = unique_ptr<char[]>{new char[current_len]};
-	}
+	// if (has_stats) {
+	// 	// stats available, pre-allocate the result chunk
+	// 	current_len = expr.function->children[0]->stats.maximum_string_length + 1;
+	// 	output = unique_ptr<char[]>{new char[current_len]};
+	// }
 
 	VectorOperations::TernaryExec(
 	    input, offset, length, result,
@@ -77,13 +77,13 @@ void substring_function(Vector inputs[], size_t input_count, BoundFunctionExpres
 	    });
 }
 
-bool substring_matches_arguments(vector<TypeId> &arguments) {
-	return arguments.size() == 3 && arguments[0] == TypeId::VARCHAR && arguments[1] == TypeId::INTEGER &&
-	       arguments[2] == TypeId::INTEGER;
+bool substring_matches_arguments(vector<SQLType> &arguments) {
+	return arguments.size() == 3 && arguments[0].id == SQLTypeId::VARCHAR && arguments[1].id == SQLTypeId::INTEGER &&
+	       arguments[2].id == SQLTypeId::INTEGER;
 }
 
-TypeId substring_get_return_type(vector<TypeId> &arguments) {
-	return TypeId::VARCHAR;
+SQLType substring_get_return_type(vector<SQLType> &arguments) {
+	return SQLType(SQLTypeId::VARCHAR);
 }
 
 } // namespace function

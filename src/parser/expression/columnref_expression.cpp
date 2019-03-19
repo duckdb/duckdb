@@ -28,8 +28,8 @@ string ColumnRefExpression::ToString() const {
 	}
 }
 
-bool ColumnRefExpression::Equals(const ParsedExpression *other_) const {
-	if (!ParsedExpression::Equals(other_)) {
+bool ColumnRefExpression::Equals(const BaseExpression *other_) const {
+	if (!BaseExpression::Equals(other_)) {
 		return false;
 	}
 	auto other = (ColumnRefExpression *)other_;

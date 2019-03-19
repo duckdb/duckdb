@@ -26,8 +26,8 @@ string FunctionExpression::ToString() const {
 	return result;
 }
 
-bool FunctionExpression::Equals(const ParsedExpression *other_) const {
-	if (!ParsedExpression::Equals(other_)) {
+bool FunctionExpression::Equals(const BaseExpression *other_) const {
+	if (!BaseExpression::Equals(other_)) {
 		return false;
 	}
 	auto other = (FunctionExpression *)other_;
@@ -79,19 +79,4 @@ unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type
 	auto function = make_unique<FunctionExpression>(function_name, children);
 	function->schema = schema;
 	return move(function);
-}
-
-size_t FunctionExpression::ChildCount() const {
-	return children.size();
-}
-
-ParsedExpression *FunctionExpression::GetChild(size_t index) const {
-	assert(index < children.size());
-	return children[index].get();
-}
-
-void FunctionExpression::ReplaceChild(std::function<unique_ptr<ParsedExpression>(unique_ptr<ParsedExpression> expression)> callback,
-                                      size_t index) {
-	assert(index < children.size());
-	children[index] = callback(move(children[index]));
 }

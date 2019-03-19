@@ -42,7 +42,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 			vector<size_t> keys;
 			if (c->index != (size_t)-1) {
 				// column referenced by key is given by index
-				types.push_back(columns[c->index].type);
+				types.push_back(GetInternalType(columns[c->index].type));
 				keys.push_back(c->index);
 			} else {
 				// have to resolve names
@@ -56,7 +56,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 						                      "primary key constraint",
 						                      keyname.c_str());
 					}
-					types.push_back(columns[entry->second].type);
+					types.push_back(GetInternalType(columns[entry->second].type));
 					keys.push_back(entry->second);
 				}
 			}
@@ -141,7 +141,7 @@ ColumnStatistics &TableCatalogEntry::GetStatistics(column_t oid) {
 vector<TypeId> TableCatalogEntry::GetTypes() {
 	vector<TypeId> types;
 	for (auto &it : columns) {
-		types.push_back(it.type);
+		types.push_back(GetInternalType(it.type));
 	}
 	return types;
 }
@@ -152,7 +152,7 @@ vector<TypeId> TableCatalogEntry::GetTypes(const vector<column_t> &column_ids) {
 		if (index == COLUMN_IDENTIFIER_ROW_ID) {
 			result.push_back(TypeId::POINTER);
 		} else {
-			result.push_back(columns[index].type);
+			result.push_back(GetInternalType(columns[index].type));
 		}
 	}
 	return result;
@@ -164,7 +164,7 @@ void TableCatalogEntry::Serialize(Serializer &serializer) {
 	serializer.Write<uint32_t>(columns.size());
 	for (auto &column : columns) {
 		serializer.WriteString(column.name);
-		serializer.Write<int>((int)column.type);
+		column.type.Serialize(serializer);
 	}
 	serializer.Write<uint32_t>(constraints.size());
 	for (auto &constraint : constraints) {
@@ -181,7 +181,7 @@ unique_ptr<CreateTableInformation> TableCatalogEntry::Deserialize(Deserializer &
 
 	for (size_t i = 0; i < column_count; i++) {
 		auto column_name = source.Read<string>();
-		auto column_type = (TypeId)source.Read<int>();
+		auto column_type = SQLType::Deserialize(source);
 		info->columns.push_back(ColumnDefinition(column_name, column_type, false));
 	}
 	auto constraint_count = source.Read<uint32_t>();

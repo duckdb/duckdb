@@ -43,7 +43,7 @@ ColumnDefinition &TableFunctionCatalogEntry::GetColumn(const string &name) {
 vector<TypeId> TableFunctionCatalogEntry::GetTypes() {
 	vector<TypeId> types;
 	for (auto &it : return_values) {
-		types.push_back(it.type);
+		types.push_back(GetInternalType(it.type));
 	}
 	return types;
 }

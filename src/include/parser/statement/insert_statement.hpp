@@ -9,7 +9,6 @@
 #pragma once
 
 #include "parser/parsed_expression.hpp"
-#include "parser/sql_node_visitor.hpp"
 #include "parser/statement/select_statement.hpp"
 
 #include <vector>

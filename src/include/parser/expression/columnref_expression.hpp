@@ -26,14 +26,14 @@ public:
 	//! Table name of the column name that is referenced (optional)
 	string table_name;
 public:
-	bool IsScalar() override {
+	bool IsScalar() const override {
 		return false;
 	}
 
 	string GetName() const override;
 	string ToString() const override;
 	
-	bool Equals(const ParsedExpression *other) const override;
+	bool Equals(const BaseExpression *other) const override;
 	uint64_t Hash() const override;
 
 	unique_ptr<ParsedExpression> Copy() override;

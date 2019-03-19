@@ -14,8 +14,8 @@ string CaseExpression::ToString() const {
 			result_if_false->ToString() + ")";
 }
 
-bool CaseExpression::Equals(const ParsedExpression *other_) const {
-	if (!ParsedExpression::Equals(other_)) {
+bool CaseExpression::Equals(const BaseExpression *other_) const {
+	if (!BaseExpression::Equals(other_)) {
 		return false;
 	}
 	auto other = (CaseExpression *)other_;
@@ -53,36 +53,4 @@ unique_ptr<ParsedExpression> CaseExpression::Deserialize(ExpressionType type, De
 	expression->result_if_true = ParsedExpression::Deserialize(source);
 	expression->result_if_false = ParsedExpression::Deserialize(source);
 	return move(expression);
-}
-
-size_t CaseExpression::ChildCount() const {
-	return 3;
-}
-
-ParsedExpression *CaseExpression::GetChild(size_t index) const {
-	switch (index) {
-	case 0:
-		return check.get();
-	case 1:
-		return result_if_true.get();
-	default:
-		assert(index == 2);
-		return result_if_false.get();
-	}
-}
-
-void CaseExpression::ReplaceChild(std::function<unique_ptr<ParsedExpression>(unique_ptr<ParsedExpression> expression)> callback,
-                                  size_t index) {
-	switch (index) {
-	case 0:
-		check = callback(move(check));
-		break;
-	case 1:
-		result_if_true = callback(move(result_if_true));
-		break;
-	default:
-		assert(index == 2);
-		result_if_false = callback(move(result_if_false));
-		break;
-	}
 }

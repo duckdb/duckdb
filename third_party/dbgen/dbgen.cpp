@@ -358,85 +358,85 @@ string get_table_name(int num) {
 }
 
 static vector<ColumnDefinition> RegionColumns() {
-	return vector<ColumnDefinition>{ColumnDefinition("r_regionkey", TypeId::INTEGER, false),
-	                                ColumnDefinition("r_name", TypeId::VARCHAR, false),
-	                                ColumnDefinition("r_comment", TypeId::VARCHAR, false)};
+	return vector<ColumnDefinition>{ColumnDefinition("r_regionkey", SQLType(SQLTypeId::INTEGER), false),
+	                                ColumnDefinition("r_name", SQLType(SQLTypeId::VARCHAR), false),
+	                                ColumnDefinition("r_comment", SQLType(SQLTypeId::VARCHAR), false)};
 }
 
 static vector<ColumnDefinition> NationColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("n_nationkey", TypeId::INTEGER, false), ColumnDefinition("n_name", TypeId::VARCHAR, false),
-	    ColumnDefinition("n_regionkey", TypeId::INTEGER, false), ColumnDefinition("n_comment", TypeId::VARCHAR, false)};
+	    ColumnDefinition("n_nationkey", SQLType(SQLTypeId::INTEGER), false), ColumnDefinition("n_name", SQLType(SQLTypeId::VARCHAR), false),
+	    ColumnDefinition("n_regionkey", SQLType(SQLTypeId::INTEGER), false), ColumnDefinition("n_comment", SQLType(SQLTypeId::VARCHAR), false)};
 }
 
 static vector<ColumnDefinition> SupplierColumns() {
 	return vector<ColumnDefinition>{
-	    ColumnDefinition("s_suppkey", TypeId::INTEGER, false), ColumnDefinition("s_name", TypeId::VARCHAR, false),
-	    ColumnDefinition("s_address", TypeId::VARCHAR, false), ColumnDefinition("s_nationkey", TypeId::INTEGER, false),
-	    ColumnDefinition("s_phone", TypeId::VARCHAR, false),   ColumnDefinition("s_acctbal", TypeId::DECIMAL, false),
-	    ColumnDefinition("s_comment", TypeId::VARCHAR, false)};
+	    ColumnDefinition("s_suppkey", SQLType(SQLTypeId::INTEGER), false), ColumnDefinition("s_name", SQLType(SQLTypeId::VARCHAR), false),
+	    ColumnDefinition("s_address", SQLType(SQLTypeId::VARCHAR), false), ColumnDefinition("s_nationkey", SQLType(SQLTypeId::INTEGER), false),
+	    ColumnDefinition("s_phone", SQLType(SQLTypeId::VARCHAR), false),   ColumnDefinition("s_acctbal", SQLType(SQLTypeId::DECIMAL), false),
+	    ColumnDefinition("s_comment", SQLType(SQLTypeId::VARCHAR), false)};
 }
 
 static vector<ColumnDefinition> CustomerColumns() {
-	return vector<ColumnDefinition>{ColumnDefinition("c_custkey", TypeId::INTEGER, false),
-	                                ColumnDefinition("c_name", TypeId::VARCHAR, false),
-	                                ColumnDefinition("c_address", TypeId::VARCHAR, false),
-	                                ColumnDefinition("c_nationkey", TypeId::INTEGER, false),
-	                                ColumnDefinition("c_phone", TypeId::VARCHAR, false),
-	                                ColumnDefinition("c_acctbal", TypeId::DECIMAL, false),
-	                                ColumnDefinition("c_mktsegment", TypeId::VARCHAR, false),
-	                                ColumnDefinition("c_comment", TypeId::VARCHAR, false)};
+	return vector<ColumnDefinition>{ColumnDefinition("c_custkey", SQLType(SQLTypeId::INTEGER), false),
+	                                ColumnDefinition("c_name", SQLType(SQLTypeId::VARCHAR), false),
+	                                ColumnDefinition("c_address", SQLType(SQLTypeId::VARCHAR), false),
+	                                ColumnDefinition("c_nationkey", SQLType(SQLTypeId::INTEGER), false),
+	                                ColumnDefinition("c_phone", SQLType(SQLTypeId::VARCHAR), false),
+	                                ColumnDefinition("c_acctbal", SQLType(SQLTypeId::DECIMAL), false),
+	                                ColumnDefinition("c_mktsegment", SQLType(SQLTypeId::VARCHAR), false),
+	                                ColumnDefinition("c_comment", SQLType(SQLTypeId::VARCHAR), false)};
 }
 
 static vector<ColumnDefinition> PartColumns() {
-	return vector<ColumnDefinition>{ColumnDefinition("p_partkey", TypeId::INTEGER, false),
-	                                ColumnDefinition("p_name", TypeId::VARCHAR, false),
-	                                ColumnDefinition("p_mfgr", TypeId::VARCHAR, false),
-	                                ColumnDefinition("p_brand", TypeId::VARCHAR, false),
-	                                ColumnDefinition("p_type", TypeId::VARCHAR, false),
-	                                ColumnDefinition("p_size", TypeId::INTEGER, false),
-	                                ColumnDefinition("p_container", TypeId::VARCHAR, false),
-	                                ColumnDefinition("p_retailprice", TypeId::DECIMAL, false),
-	                                ColumnDefinition("p_comment", TypeId::VARCHAR, false)};
+	return vector<ColumnDefinition>{ColumnDefinition("p_partkey", SQLType(SQLTypeId::INTEGER), false),
+	                                ColumnDefinition("p_name", SQLType(SQLTypeId::VARCHAR), false),
+	                                ColumnDefinition("p_mfgr", SQLType(SQLTypeId::VARCHAR), false),
+	                                ColumnDefinition("p_brand", SQLType(SQLTypeId::VARCHAR), false),
+	                                ColumnDefinition("p_type", SQLType(SQLTypeId::VARCHAR), false),
+	                                ColumnDefinition("p_size", SQLType(SQLTypeId::INTEGER), false),
+	                                ColumnDefinition("p_container", SQLType(SQLTypeId::VARCHAR), false),
+	                                ColumnDefinition("p_retailprice", SQLType(SQLTypeId::DECIMAL), false),
+	                                ColumnDefinition("p_comment", SQLType(SQLTypeId::VARCHAR), false)};
 }
 
 static vector<ColumnDefinition> PartSuppColumns() {
-	return vector<ColumnDefinition>{ColumnDefinition("ps_partkey", TypeId::INTEGER, false),
-	                                ColumnDefinition("ps_suppkey", TypeId::INTEGER, false),
-	                                ColumnDefinition("ps_availqty", TypeId::INTEGER, false),
-	                                ColumnDefinition("ps_supplycost", TypeId::DECIMAL, false),
-	                                ColumnDefinition("ps_comment", TypeId::VARCHAR, false)};
+	return vector<ColumnDefinition>{ColumnDefinition("ps_partkey", SQLType(SQLTypeId::INTEGER), false),
+	                                ColumnDefinition("ps_suppkey", SQLType(SQLTypeId::INTEGER), false),
+	                                ColumnDefinition("ps_availqty", SQLType(SQLTypeId::INTEGER), false),
+	                                ColumnDefinition("ps_supplycost", SQLType(SQLTypeId::DECIMAL), false),
+	                                ColumnDefinition("ps_comment", SQLType(SQLTypeId::VARCHAR), false)};
 }
 
 static vector<ColumnDefinition> OrdersColumns() {
-	return vector<ColumnDefinition>{ColumnDefinition("o_orderkey", TypeId::INTEGER, false),
-	                                ColumnDefinition("o_custkey", TypeId::INTEGER, false),
-	                                ColumnDefinition("o_orderstatus", TypeId::VARCHAR, false),
-	                                ColumnDefinition("o_totalprice", TypeId::DECIMAL, false),
-	                                ColumnDefinition("o_orderdate", TypeId::DATE, false),
-	                                ColumnDefinition("o_orderpriority", TypeId::VARCHAR, false),
-	                                ColumnDefinition("o_clerk", TypeId::VARCHAR, false),
-	                                ColumnDefinition("o_shippriority", TypeId::INTEGER, false),
-	                                ColumnDefinition("o_comment", TypeId::VARCHAR, false)};
+	return vector<ColumnDefinition>{ColumnDefinition("o_orderkey", SQLType(SQLTypeId::INTEGER), false),
+	                                ColumnDefinition("o_custkey", SQLType(SQLTypeId::INTEGER), false),
+	                                ColumnDefinition("o_orderstatus", SQLType(SQLTypeId::VARCHAR), false),
+	                                ColumnDefinition("o_totalprice", SQLType(SQLTypeId::DECIMAL), false),
+	                                ColumnDefinition("o_orderdate", SQLType(SQLTypeId::DATE), false),
+	                                ColumnDefinition("o_orderpriority", SQLType(SQLTypeId::VARCHAR), false),
+	                                ColumnDefinition("o_clerk", SQLType(SQLTypeId::VARCHAR), false),
+	                                ColumnDefinition("o_shippriority", SQLType(SQLTypeId::INTEGER), false),
+	                                ColumnDefinition("o_comment", SQLType(SQLTypeId::VARCHAR), false)};
 }
 
 static vector<ColumnDefinition> LineitemColumns() {
-	return vector<ColumnDefinition>{ColumnDefinition("l_orderkey", TypeId::INTEGER, false),
-	                                ColumnDefinition("l_partkey", TypeId::INTEGER, false),
-	                                ColumnDefinition("l_suppkey", TypeId::INTEGER, false),
-	                                ColumnDefinition("l_linenumber", TypeId::INTEGER, false),
-	                                ColumnDefinition("l_quantity", TypeId::INTEGER, false),
-	                                ColumnDefinition("l_extendedprice", TypeId::DECIMAL, false),
-	                                ColumnDefinition("l_discount", TypeId::DECIMAL, false),
-	                                ColumnDefinition("l_tax", TypeId::DECIMAL, false),
-	                                ColumnDefinition("l_returnflag", TypeId::VARCHAR, false),
-	                                ColumnDefinition("l_linestatus", TypeId::VARCHAR, false),
-	                                ColumnDefinition("l_shipdate", TypeId::DATE, false),
-	                                ColumnDefinition("l_commitdate", TypeId::DATE, false),
-	                                ColumnDefinition("l_receiptdate", TypeId::DATE, false),
-	                                ColumnDefinition("l_shipinstruct", TypeId::VARCHAR, false),
-	                                ColumnDefinition("l_shipmode", TypeId::VARCHAR, false),
-	                                ColumnDefinition("l_comment", TypeId::VARCHAR, false)};
+	return vector<ColumnDefinition>{ColumnDefinition("l_orderkey", SQLType(SQLTypeId::INTEGER), false),
+	                                ColumnDefinition("l_partkey", SQLType(SQLTypeId::INTEGER), false),
+	                                ColumnDefinition("l_suppkey", SQLType(SQLTypeId::INTEGER), false),
+	                                ColumnDefinition("l_linenumber", SQLType(SQLTypeId::INTEGER), false),
+	                                ColumnDefinition("l_quantity", SQLType(SQLTypeId::INTEGER), false),
+	                                ColumnDefinition("l_extendedprice", SQLType(SQLTypeId::DECIMAL), false),
+	                                ColumnDefinition("l_discount", SQLType(SQLTypeId::DECIMAL), false),
+	                                ColumnDefinition("l_tax", SQLType(SQLTypeId::DECIMAL), false),
+	                                ColumnDefinition("l_returnflag", SQLType(SQLTypeId::VARCHAR), false),
+	                                ColumnDefinition("l_linestatus", SQLType(SQLTypeId::VARCHAR), false),
+	                                ColumnDefinition("l_shipdate", SQLType(SQLTypeId::DATE), false),
+	                                ColumnDefinition("l_commitdate", SQLType(SQLTypeId::DATE), false),
+	                                ColumnDefinition("l_receiptdate", SQLType(SQLTypeId::DATE), false),
+	                                ColumnDefinition("l_shipinstruct", SQLType(SQLTypeId::VARCHAR), false),
+	                                ColumnDefinition("l_shipmode", SQLType(SQLTypeId::VARCHAR), false),
+	                                ColumnDefinition("l_comment", SQLType(SQLTypeId::VARCHAR), false)};
 }
 
 void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {

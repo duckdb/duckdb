@@ -17,6 +17,7 @@ Binder::Binder(ClientContext &context, Binder *parent) :
 	parent(!parent ? nullptr : (parent->parent ? parent->parent : parent)),
 	bound_tables(0) {
 }
+
 void Binder::Bind(SQLStatement &statement) {
 	switch (statement.type) {
 	case StatementType::SELECT:

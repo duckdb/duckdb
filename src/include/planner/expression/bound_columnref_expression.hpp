@@ -9,6 +9,7 @@
 #pragma once
 
 #include "planner/expression.hpp"
+#include "common/types/hash.hpp"
 
 namespace duckdb {
 
@@ -46,37 +47,24 @@ using column_binding_map_t = unordered_map<ColumnBinding, T, ColumnBindingHashFu
 //! BoundExpressions, which refer to indexes into the physical chunks that pass through the executor.
 class BoundColumnRefExpression : public Expression {
 public:
-	BoundColumnRefExpression(Expression &expr, TypeId type, ColumnBinding binding, uint32_t depth = 0)
-	    : BoundColumnRefExpression(expr.GetName(), type, binding, depth) {
-	}
-
-	BoundColumnRefExpression(string alias, TypeId type, ColumnBinding binding, uint32_t depth = 0)
-	    : Expression(ExpressionType::BOUND_COLUMN_REF, type), binding(binding), depth(depth) {
-		this->alias = alias;
-	}
-
-	ExpressionClass GetExpressionClass() override {
-		return ExpressionClass::BOUND_COLUMN_REF;
-	}
-
-	unique_ptr<Expression> Copy() override;
-
-	//! Serializes an Expression to a stand-alone binary blob
-	void Serialize(Serializer &serializer) override;
-
-	uint64_t Hash() const override;
-	bool Equals(const Expression *other) const override;
-
-	string ToString() const override;
-
-	bool IsScalar() override {
-		return false;
-	}
+	BoundColumnRefExpression(TypeId type, ColumnBinding binding, uint32_t depth = 0);
+	BoundColumnRefExpression(string alias, TypeId type, ColumnBinding binding, uint32_t depth = 0);
 
 	//! Column index set by the binder, used to generate the final BoundExpression
 	ColumnBinding binding;
 	//! The subquery depth (i.e. depth 0 = current query, depth 1 = parent query, depth 2 = parent of parent, etc...).
 	//! This is only non-zero for correlated expressions inside subqueries.
 	uint32_t depth;
+public:
+	bool IsScalar() const override {
+		return false;
+	}
+
+	string ToString() const override;
+
+	bool Equals(const BaseExpression *other) const override;
+	uint64_t Hash() const override;
+
+	unique_ptr<Expression> Copy() override;
 };
 } // namespace duckdb

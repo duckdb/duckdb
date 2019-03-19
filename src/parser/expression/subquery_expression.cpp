@@ -15,8 +15,8 @@ string SubqueryExpression::ToString() const {
 	return "SUBQUERY";
 }
 
-bool SubqueryExpression::Equals(const ParsedExpression *other_) const {
-	if (!ParsedExpression::Equals(other_)) {
+bool SubqueryExpression::Equals(const BaseExpression *other_) const {
+	if (!BaseExpression::Equals(other_)) {
 		return false;
 	}
 	auto other = reinterpret_cast<const SubqueryExpression *>(other_);
@@ -57,19 +57,4 @@ unique_ptr<ParsedExpression> SubqueryExpression::Deserialize(ExpressionType type
 	expression->child = source.ReadOptional<ParsedExpression>();
 	expression->comparison_type = source.Read<ExpressionType>();
 	return move(expression);
-}
-
-size_t SubqueryExpression::ChildCount() const {
-	return child ? 1 : 0;
-}
-
-ParsedExpression *SubqueryExpression::GetChild(size_t index) const {
-	assert(index == 0 && child);
-	return child.get();
-}
-
-void SubqueryExpression::ReplaceChild(std::function<unique_ptr<ParsedExpression>(unique_ptr<ParsedExpression> expression)> callback,
-                                      size_t index) {
-	assert(index == 0 && child);
-	child = callback(move(child));
 }
