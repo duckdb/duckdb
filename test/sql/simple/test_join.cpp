@@ -311,3 +311,53 @@ TEST_CASE("Test inequality joins", "[joins]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 2, 3, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1, 1, 1, 1}));
 }
+
+TEST_CASE("Test USING joins", "[joins]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	unique_ptr<QueryResult> result;
+	con.EnableQueryVerification();
+
+	// create tables
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1 (a INTEGER, b INTEGER, c INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO t1 VALUES (1,2,3)"));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t2 (a INTEGER, b INTEGER, c INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO t2 VALUES (1,2,3), (2,2,4), (1,3,4)"));
+
+	// USING join
+	result = con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(a)");
+	REQUIRE(result->success);
+
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 2, {3, 4}));
+
+	result = con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(b)");
+	REQUIRE(result->success);
+
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2, 2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {3, 4}));
+
+	result = con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(a,b)");
+	REQUIRE(result->success);
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {3}));
+
+	result = con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(a,b,c)");
+	REQUIRE(result->success);
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {3}));
+
+	result = con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(a+b)");
+	REQUIRE(!result->success);
+
+	result = con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(\"\")");
+	REQUIRE(!result->success);
+
+	result = con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(d)");
+	REQUIRE(!result->success);
+}
