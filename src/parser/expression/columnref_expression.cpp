@@ -7,7 +7,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> ColumnRefExpression::Copy() {
+unique_ptr<Expression> ColumnRefExpression::Copy() const {
 	auto copy = make_unique<ColumnRefExpression>(column_name, table_name);
 	copy->CopyProperties(*this);
 	return move(copy);

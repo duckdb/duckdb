@@ -24,7 +24,7 @@ public:
 		return ExpressionClass::CONSTANT;
 	}
 
-	unique_ptr<Expression> Copy() override;
+	unique_ptr<Expression> Copy() const override;
 
 	//! Serializes a ConstantExpression to a stand-alone binary blob
 	void Serialize(Serializer &serializer) override;

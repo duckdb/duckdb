@@ -22,7 +22,7 @@ public:
 		return ExpressionClass::STAR;
 	}
 
-	unique_ptr<Expression> Copy() override;
+	unique_ptr<Expression> Copy() const override;
 
 	//! Deserializes a blob back into a StarExpression
 	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);

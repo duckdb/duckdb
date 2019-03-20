@@ -24,7 +24,7 @@ public:
 		return ExpressionClass::BOUND_SUBQUERY;
 	}
 
-	unique_ptr<Expression> Copy() override;
+	unique_ptr<Expression> Copy() const override;
 
 	//! Serializes an Expression to a stand-alone binary blob
 	void Serialize(Serializer &serializer) override;

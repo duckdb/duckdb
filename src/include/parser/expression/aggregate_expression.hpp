@@ -28,7 +28,7 @@ public:
 		return ExpressionClass::AGGREGATE;
 	}
 
-	unique_ptr<Expression> Copy() override;
+	unique_ptr<Expression> Copy() const override;
 
 	//! Serializes an Expression to a stand-alone binary blob
 	void Serialize(Serializer &serializer) override;
@@ -36,6 +36,10 @@ public:
 	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);
 
 	string ToString() const override {
+		if (type ==  ExpressionType::AGGREGATE_COUNT_STAR) {
+			return GetName() + "(*)";
+		}
+
 		return GetName() + "(" + child->ToString() + ")";
 	}
 

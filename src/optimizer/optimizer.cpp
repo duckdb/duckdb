@@ -2,6 +2,7 @@
 
 #include "execution/expression_executor.hpp"
 #include "main/client_context.hpp"
+#include "optimizer/ca_optimizer.hpp"
 #include "optimizer/cse_optimizer.hpp"
 #include "optimizer/filter_pushdown.hpp"
 #include "optimizer/join_order_optimizer.hpp"
@@ -72,6 +73,11 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	context.profiler.StartPhase("join_order");
 	JoinOrderOptimizer optimizer;
 	plan = optimizer.Optimize(move(plan));
+	context.profiler.EndPhase();
+	// next we make sure that multiple occurences of the same aggregation are only computed once
+	context.profiler.StartPhase("common_aggregate_expressions");
+	CommonAggregateOptimizer ca_optimizer;
+	ca_optimizer.VisitOperator(*plan);
 	context.profiler.EndPhase();
 
 	// then we extract common subexpressions inside the different operators

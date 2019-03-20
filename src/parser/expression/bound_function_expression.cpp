@@ -27,7 +27,7 @@ void BoundFunctionExpression::ResolveType() {
 	return_type = bound_function->return_type(child_types);
 }
 
-unique_ptr<Expression> BoundFunctionExpression::Copy() {
+unique_ptr<Expression> BoundFunctionExpression::Copy() const {
 	auto copy = make_unique<BoundFunctionExpression>(unique_ptr_cast<Expression, FunctionExpression>(function->Copy()),
 	                                                 bound_function);
 	copy->return_type = return_type;

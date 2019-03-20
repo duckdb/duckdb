@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> StarExpression::Copy() {
+unique_ptr<Expression> StarExpression::Copy() const {
 	auto copy = make_unique<StarExpression>();
 	copy->CopyProperties(*this);
 	return move(copy);

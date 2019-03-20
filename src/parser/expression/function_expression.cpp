@@ -18,7 +18,7 @@ void FunctionExpression::ResolveType() {
 	throw Exception("Cannot resolve type of FunctionExpression! Function has to be bound first.");
 }
 
-unique_ptr<Expression> FunctionExpression::Copy() {
+unique_ptr<Expression> FunctionExpression::Copy() const {
 	vector<unique_ptr<Expression>> copy_children;
 	for (auto &child : children) {
 		copy_children.push_back(child->Copy());

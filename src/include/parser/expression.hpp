@@ -94,7 +94,7 @@ public:
 	virtual ExpressionClass GetExpressionClass() = 0;
 
 	//! Create a copy of this expression
-	virtual unique_ptr<Expression> Copy() = 0;
+	virtual unique_ptr<Expression> Copy() const = 0;
 
 	//! Serializes an Expression to a stand-alone binary blob
 	virtual void Serialize(Serializer &serializer);
@@ -166,7 +166,7 @@ public:
 protected:
 	//! Copy base Expression properties from another expression to this one,
 	//! used in Copy method
-	void CopyProperties(Expression &other) {
+	void CopyProperties(const Expression &other) {
 		type = other.type;
 		return_type = other.return_type;
 		stats = other.stats;

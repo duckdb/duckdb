@@ -6,7 +6,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> ConjunctionExpression::Copy() {
+unique_ptr<Expression> ConjunctionExpression::Copy() const {
 	auto copy = make_unique<ConjunctionExpression>(type, left->Copy(), right->Copy());
 	copy->CopyProperties(*this);
 	return move(copy);
