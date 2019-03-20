@@ -6,7 +6,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> SubqueryExpression::Copy() {
+unique_ptr<Expression> SubqueryExpression::Copy() const {
 	auto copy = make_unique<SubqueryExpression>();
 	copy->CopyProperties(*this);
 	copy->subquery = subquery->Copy();

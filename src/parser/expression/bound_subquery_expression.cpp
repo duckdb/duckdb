@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> BoundSubqueryExpression::Copy() {
+unique_ptr<Expression> BoundSubqueryExpression::Copy() const {
 	throw SerializationException("Cannot copy BoundSubqueryExpression");
 }
 

@@ -36,7 +36,7 @@ public:
 		return_type = child->return_type;
 	}
 
-	unique_ptr<Expression> Copy() override;
+	unique_ptr<Expression> Copy() const override;
 
 	size_t ChildCount() const override;
 	Expression *GetChild(size_t index) const override;

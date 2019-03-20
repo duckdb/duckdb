@@ -4,7 +4,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test aggregation/group by by statements", "[aggregations]") {
+TEST_CASE("Test aggregation/group by statements", "[aggregations]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);

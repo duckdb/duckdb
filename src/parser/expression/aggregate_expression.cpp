@@ -102,7 +102,7 @@ void AggregateExpression::ResolveType() {
 	}
 }
 
-unique_ptr<Expression> AggregateExpression::Copy() {
+unique_ptr<Expression> AggregateExpression::Copy() const {
 	auto new_child = child ? child->Copy() : nullptr;
 	auto new_aggregate = make_unique<AggregateExpression>(type, move(new_child));
 	new_aggregate->CopyProperties(*this);

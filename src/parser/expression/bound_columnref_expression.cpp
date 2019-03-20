@@ -6,7 +6,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> BoundColumnRefExpression::Copy() {
+unique_ptr<Expression> BoundColumnRefExpression::Copy() const{
 	return make_unique<BoundColumnRefExpression>(alias, return_type, binding, depth);
 }
 

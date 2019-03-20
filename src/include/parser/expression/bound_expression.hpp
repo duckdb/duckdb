@@ -26,7 +26,7 @@ public:
 		return ExpressionClass::BOUND_REF;
 	}
 
-	unique_ptr<Expression> Copy() override;
+	unique_ptr<Expression> Copy() const override;
 
 	//! Serializes an BoundExpression to a stand-alone binary blob
 	void Serialize(Serializer &serializer) override;

@@ -21,7 +21,7 @@ public:
 		return ExpressionClass::DEFAULT;
 	}
 
-	unique_ptr<Expression> Copy() override;
+	unique_ptr<Expression> Copy() const override;
 
 	//! Deserializes a blob back into an DefaultExpression
 	static unique_ptr<Expression> Deserialize(ExpressionType type, TypeId return_type, Deserializer &source);

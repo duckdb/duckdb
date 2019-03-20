@@ -11,7 +11,7 @@ using namespace std;
 void ParameterExpression::ResolveType() {
 }
 
-unique_ptr<Expression> ParameterExpression::Copy() {
+unique_ptr<Expression> ParameterExpression::Copy() const {
 	auto copy = make_unique<ParameterExpression>();
 	copy->CopyProperties(*this);
 	copy->value = value;
