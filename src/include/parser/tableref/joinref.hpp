@@ -46,5 +46,7 @@ public:
 	unique_ptr<Expression> condition;
 	//! The join type
 	JoinType type;
+
+	vector<string> using_column_names;
 };
 } // namespace duckdb

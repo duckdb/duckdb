@@ -57,22 +57,21 @@ unique_ptr<TableRef> Transformer::TransformJoin(JoinExpr *root) {
 
 	if (root->usingClause && root->usingClause->length > 0) {
 		// usingClause is a list of strings
-		vector<string> column_name_list;
 
 		for (auto node = root->usingClause->head; node != nullptr; node = node->next) {
 			auto target = reinterpret_cast<Node *>(node->data.ptr_value);
 			assert(target->type == T_String);
 			auto column_name = string(reinterpret_cast<postgres::Value *>(target)->val.str);
-			column_name_list.push_back(column_name);
+			result->using_column_names.push_back(column_name);
 		}
-		assert(column_name_list.size() > 0);
+		assert(result->using_column_names.size() > 0);
 
 		unique_ptr<Expression> join_condition = nullptr;
-		for (size_t cn_idx = 0; cn_idx < column_name_list.size(); cn_idx++) {
+		for (size_t cn_idx = 0; cn_idx < result->using_column_names.size(); cn_idx++) {
 			auto left_expr =
-			    make_unique<ColumnRefExpression>(column_name_list[cn_idx], get_tablename_union(result->left.get()));
+			    make_unique<ColumnRefExpression>(result->using_column_names[cn_idx], get_tablename_union(result->left.get()));
 			auto right_expr =
-			    make_unique<ColumnRefExpression>(column_name_list[cn_idx], get_tablename_union(result->right.get()));
+			    make_unique<ColumnRefExpression>(result->using_column_names[cn_idx], get_tablename_union(result->right.get()));
 			auto comp_expr =
 			    make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(left_expr), move(right_expr));
 			if (!join_condition) {
