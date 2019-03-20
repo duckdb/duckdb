@@ -361,20 +361,17 @@ TEST_CASE("Test USING joins", "[joins]") {
 	result = con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(d)");
 	REQUIRE(!result->success);
 
-//	result = con.Query("SELECT * FROM t1 JOIN t2 USING(a,b)");
-//	REQUIRE(result->success);
-//
-//	result->Print();
-//	REQUIRE(result->names.size() == 4);
-//	REQUIRE(result->names[0] == "a");
-//	REQUIRE(result->names[0] == "b");
-//	REQUIRE(result->names[0] == "c");
-//	REQUIRE(result->names[0] == "c");
+	result = con.Query("SELECT * FROM t1 JOIN t2 USING(a,b)");
+	REQUIRE(result->success);
 
-//	REQUIRE(CHECK_COLUMN(result, 0, {1}));
-//	REQUIRE(CHECK_COLUMN(result, 1, {2}));
-//	REQUIRE(CHECK_COLUMN(result, 2, {3}));
-//	REQUIRE(CHECK_COLUMN(result, 3, {3}));
+	REQUIRE(result->names.size() == 4);
+	REQUIRE(result->names[0] == "a");
+	REQUIRE(result->names[1] == "b");
+	REQUIRE(result->names[2] == "c");
+	REQUIRE(result->names[3] == "c");
 
-
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {3}));
+	REQUIRE(CHECK_COLUMN(result, 3, {3}));
 }
