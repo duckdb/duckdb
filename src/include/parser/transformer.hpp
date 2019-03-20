@@ -159,7 +159,7 @@ private:
 	//! Transform a Postgres GROUP BY expression into a list of Expression
 	bool TransformGroupBy(postgres::List *group, vector<unique_ptr<ParsedExpression>> &result);
 	//! Transform a Postgres ORDER BY expression into an OrderByDescription
-	bool TransformOrderBy(postgres::List *order, OrderByDescription &result);
+	bool TransformOrderBy(postgres::List *order, vector<OrderByNode> &result);
 
 	//! Transform a Postgres SELECT clause into a list of Expressions
 	bool TransformExpressionList(postgres::List *list, vector<unique_ptr<ParsedExpression>> &result);

@@ -14,15 +14,15 @@ namespace duckdb {
 
 class BoundDefaultExpression : public Expression {
 public:
-	BoundDefaultExpression(TypeId type) : 
-		Expression(ExpressionType::VALUE_DEFAULT, ExpressionClass::BOUND_DEFAULT, type) {}
+	BoundDefaultExpression(TypeId type, SQLType sql_type) : 
+		Expression(ExpressionType::VALUE_DEFAULT, ExpressionClass::BOUND_DEFAULT, type, sql_type) {}
 public:
 	string ToString() const override {
 		return "DEFAULT";
 	}
 
 	unique_ptr<Expression> Copy() {
-		return make_unique<BoundDefaultExpression>(return_type);
+		return make_unique<BoundDefaultExpression>(return_type, sql_type);
 	}
 };
 } // namespace duckdb

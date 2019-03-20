@@ -10,7 +10,7 @@
 
 #include "common/common.hpp"
 #include "execution/physical_operator.hpp"
-#include "planner/bindcontext.hpp"
+#include "planner/bind_context.hpp"
 #include "planner/logical_operator.hpp"
 #include "planner/logical_operator_visitor.hpp"
 

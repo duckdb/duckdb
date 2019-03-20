@@ -14,8 +14,8 @@ bool SelectNode::Equals(const QueryNode *other_) const {
 
 	// first check counts of all lists and such
 	if (select_list.size() != other->select_list.size() || select_distinct != other->select_distinct ||
-	    orderby.orders.size() != other->orderby.orders.size() ||
-	    groupby.groups.size() != other->groupby.groups.size()) {
+	    orders.size() != other->orders.size() ||
+	    groups.size() != other->groups.size()) {
 		return false;
 	}
 	// SELECT
@@ -40,13 +40,13 @@ bool SelectNode::Equals(const QueryNode *other_) const {
 		return false;
 	}
 	// GROUP BY
-	for (size_t i = 0; i < groupby.groups.size(); i++) {
-		if (!groupby.groups[i]->Equals(other->groupby.groups[i].get())) {
+	for (size_t i = 0; i < groups.size(); i++) {
+		if (!groups[i]->Equals(other->groups[i].get())) {
 			return false;
 		}
 	}
 	// HAVING
-	if (!ParsedExpression::Equals(groupby.having.get(), other->groupby.having.get())) {
+	if (!ParsedExpression::Equals(having.get(), other->having.get())) {
 		return false;
 	}
 	return true;
@@ -60,10 +60,10 @@ unique_ptr<QueryNode> SelectNode::Copy() {
 	result->from_table = from_table ? from_table->Copy() : nullptr;
 	result->where_clause = where_clause ? where_clause->Copy() : nullptr;
 	// groups
-	for (auto &group : groupby.groups) {
-		result->groupby.groups.push_back(group->Copy());
+	for (auto &group : groups) {
+		result->groups.push_back(group->Copy());
 	}
-	result->groupby.having = groupby.having ? groupby.having->Copy() : nullptr;
+	result->having = having ? having->Copy() : nullptr;
 	this->CopyProperties(*result);
 	return move(result);
 }
@@ -77,8 +77,8 @@ void SelectNode::Serialize(Serializer &serializer) {
 	// where_clause
 	serializer.WriteOptional(where_clause);
 	// group by / having
-	serializer.WriteList(groupby.groups);
-	serializer.WriteOptional(groupby.having);
+	serializer.WriteList(groups);
+	serializer.WriteOptional(having);
 }
 
 unique_ptr<QueryNode> SelectNode::Deserialize(Deserializer &source) {
@@ -90,7 +90,7 @@ unique_ptr<QueryNode> SelectNode::Deserialize(Deserializer &source) {
 	// where_clause
 	result->where_clause = source.ReadOptional<ParsedExpression>();
 	// group by / having
-	source.ReadList<ParsedExpression>(result->groupby.groups);
-	result->groupby.having = source.ReadOptional<ParsedExpression>();
+	source.ReadList<ParsedExpression>(result->groups);
+	result->having = source.ReadOptional<ParsedExpression>();
 	return move(result);
 }

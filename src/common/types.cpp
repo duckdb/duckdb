@@ -121,6 +121,21 @@ string SQLTypeToString(SQLType type) {
 	return SQLTypeIdToString(type.id);
 }
 
+bool IsNumericType(SQLTypeId type) {
+	switch(type.id) {
+	case SQLTypeId::TINYINT:
+	case SQLTypeId::SMALLINT:
+	case SQLTypeId::INTEGER:
+	case SQLTypeId::BIGINT:
+	case SQLTypeId::REAL:
+	case SQLTypeId::DOUBLE:
+	case SQLTypeId::DECIMAL:
+		return true;
+	default:
+		return false;
+	}
+}
+
 TypeId GetInternalType(SQLType type) {
 	switch(type.id) {
 	case SQLTypeId::BOOLEAN:
@@ -148,6 +163,18 @@ TypeId GetInternalType(SQLType type) {
 	default:
 		assert(type.id == SQLTypeId::VARBINARY);
 		return TypeId::VARBINARY;
+	}
+}
+
+SQLType MaxSQLType(SQLType left, SQLType right) {
+	if (left.id < right.id) {
+		return right;
+	} else if (right.id < left.id) {
+		return left;
+	} else if (left.width > right.width) {
+		return left;
+	} else {
+		return right;
 	}
 }
 

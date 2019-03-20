@@ -3,8 +3,8 @@
 using namespace duckdb;
 using namespace std;
 
-BoundAggregateExpression::BoundAggregateExpression(TypeId return_type, ExpressionType type, unique_ptr<Expression> child) :
-	Expression(type, ExpressionClass::BOUND_AGGREGATE, return_type), child(move(child)) {
+BoundAggregateExpression::BoundAggregateExpression(TypeId return_type, SQLType sql_type, ExpressionType type, unique_ptr<Expression> child) :
+	Expression(type, ExpressionClass::BOUND_AGGREGATE, return_type, sql_type), child(move(child)) {
 }
 
 string BoundAggregateExpression::ToString() const {

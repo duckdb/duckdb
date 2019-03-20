@@ -10,6 +10,7 @@
 
 #include "planner/expression.hpp"
 #include "parser/expression/window_expression.hpp"
+#include "planner/bound_query_node.hpp"
 
 namespace duckdb {
 
@@ -22,7 +23,7 @@ public:
 	//! The set of expressions to partition by
 	vector<unique_ptr<Expression>> partitions;
 	//! The set of ordering clauses
-	OrderByDescription ordering;
+	vector<BoundOrderByNode> orders;
 	//! The window boundaries
 	WindowBoundary start = WindowBoundary::INVALID;
 	WindowBoundary end = WindowBoundary::INVALID;

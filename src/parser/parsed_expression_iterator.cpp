@@ -65,7 +65,7 @@ void ParsedExpressionIterator::EnumerateChildren(const ParsedExpression &expr,
 		for(auto &partition : window_expr.partitions) {
 			callback(*partition);
 		}
-		for(auto &order : window_expr.ordering.orders) {
+		for(auto &order : window_expr.orders) {
 			callback(*order.expression);
 		}
 		if (window_expr.child) {

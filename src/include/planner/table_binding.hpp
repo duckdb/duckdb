@@ -13,9 +13,11 @@
 
 
 namespace duckdb {
-class TableCatalogEntry;
+class BoundBaseTableRef;
 class QueryNode;
 class SubqueryRef;
+class TableCatalogEntry;
+class TableFunctionCatalogEntry;
 
 enum class BindingType : uint8_t {
 	DUMMY = 0,
@@ -37,9 +39,9 @@ struct Binding {
 
 //! Represents a binding to a base table
 struct TableBinding : public Binding {
-	TableBinding(TableCatalogEntry *table, size_t index);
+	TableBinding(BoundBaseTableRef *bound);
 
-	TableCatalogEntry *table;
+	BoundBaseTableRef *bound;
 };
 
 //! Represents a binding to a subquery

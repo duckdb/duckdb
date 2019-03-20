@@ -18,127 +18,56 @@ Binder::Binder(ClientContext &context, Binder *parent) :
 	bound_tables(0) {
 }
 
-void Binder::Bind(SQLStatement &statement) {
+unique_ptr<BoundSQLStatement> Binder::Bind(SQLStatement &statement) {
 	switch (statement.type) {
 	case StatementType::SELECT:
-		Bind((SelectStatement &)statement);
-		break;
+		return Bind((SelectStatement &)statement);
 	case StatementType::INSERT:
-		Bind((InsertStatement &)statement);
-		break;
+		return Bind((InsertStatement &)statement);
 	case StatementType::COPY:
-		Bind((CopyStatement &)statement);
-		break;
+		return Bind((CopyStatement &)statement);
 	case StatementType::DELETE:
-		Bind((DeleteStatement &)statement);
-		break;
+		return Bind((DeleteStatement &)statement);
 	case StatementType::UPDATE:
-		Bind((UpdateStatement &)statement);
-		break;
+		return Bind((UpdateStatement &)statement);
 	case StatementType::ALTER:
-		Bind((AlterTableStatement &)statement);
-		break;
+		return Bind((AlterTableStatement &)statement);
 	case StatementType::CREATE_TABLE:
-		Bind((CreateTableStatement &)statement);
-		break;
+		return Bind((CreateTableStatement &)statement);
 	case StatementType::CREATE_VIEW:
-		Bind((CreateViewStatement &)statement);
-		break;
+		return Bind((CreateViewStatement &)statement);
 	case StatementType::EXECUTE:
-		// do nothing
-		break;
+		return Bind((ExecuteStatement &)statement);
 	default:
 		assert(statement.type == StatementType::CREATE_INDEX);
-		Bind((CreateIndexStatement &)statement);
-		break;
+		return Bind((CreateIndexStatement &)statement);
 	}
 }
 
-void Binder::Bind(QueryNode &node) {
-	if (node.type == QueryNodeType::SELECT_NODE) {
-		Bind((SelectNode &)node);
-	} else {
-		assert(node.type == QueryNodeType::SET_OPERATION_NODE);
-		Bind((SetOperationNode &)node);
-	}
-}
-
-// CTEs and views are also referred to using BaseTableRefs, hence need to distinguish here
-unique_ptr<TableRef> Binder::Visit(BaseTableRef &expr) {
-	auto cte = FindCTE(expr.table_name);
-	if (cte) {
-		auto subquery = make_unique<SubqueryRef>(move(cte));
-		subquery->alias = expr.alias.empty() ? expr.table_name : expr.alias;
-		AcceptChild(&subquery);
-		return move(subquery);
-	}
-
-	auto table_or_view =
-	    context.db.catalog.GetTableOrView(context.ActiveTransaction(), expr.schema_name, expr.table_name);
-	switch (table_or_view->type) {
-	case CatalogType::TABLE:
-		bind_context.AddBaseTable(GenerateTableIndex(), expr.alias.empty() ? expr.table_name : expr.alias,
-		                          (TableCatalogEntry *)table_or_view);
-		break;
-	case CatalogType::VIEW: {
-		auto view_catalog_entry = (ViewCatalogEntry *)table_or_view;
-		auto subquery = make_unique<SubqueryRef>(view_catalog_entry->query->Copy());
-
-		subquery->alias = expr.alias.empty() ? expr.table_name : expr.alias;
-
-		// if we have subquery aliases we need to set them for the subquery. However, there may be non-aliased result
-		// cols from the subquery. Those are returned as well, but are not renamed.
-		auto &select_list = subquery->subquery->GetSelectList();
-		if (view_catalog_entry->aliases.size() > 0) {
-			subquery->column_name_alias.resize(select_list.size());
-			for (size_t col_idx = 0; col_idx < select_list.size(); col_idx++) {
-				if (col_idx < view_catalog_entry->aliases.size()) {
-					subquery->column_name_alias[col_idx] = view_catalog_entry->aliases[col_idx];
-				} else {
-					subquery->column_name_alias[col_idx] = select_list[col_idx]->GetName();
-				}
-			}
-		}
-		AcceptChild(&subquery);
-
-		return move(subquery);
-		break;
-	}
+unique_ptr<BoundQueryNode> Binder::Bind(QueryNode &node) {
+	switch(node.type) {
+	case QueryNodeType::SELECT_NODE:
+		return Bind((SelectNode &)node);
 	default:
-		throw NotImplementedException("Catalog entry type");
+		assert(node.type == QueryNodeType::SET_OPERATION_NODE);
+		return Bind((SetOperationNode &)node);
 	}
-	return nullptr;
 }
 
-unique_ptr<TableRef> Binder::Visit(CrossProductRef &expr) {
-	AcceptChild(&expr.left);
-	AcceptChild(&expr.right);
-	return nullptr;
-}
-
-unique_ptr<TableRef> Binder::Visit(JoinRef &expr) {
-	AcceptChild(&expr.left);
-	AcceptChild(&expr.right);
-	WhereBinder binder(*this, context);
-	binder.BindAndResolveType(&expr.condition);
-	return nullptr;
-}
-
-unique_ptr<TableRef> Binder::Visit(SubqueryRef &expr) {
-	expr.binder = make_unique<Binder>(context, this);
-	expr.binder->Bind(*expr.subquery);
-	bind_context.AddSubquery(GenerateTableIndex(), expr.alias, expr);
-
-	MoveCorrelatedExpressions(*expr.binder);
-	return nullptr;
-}
-
-unique_ptr<TableRef> Binder::Visit(TableFunction &expr) {
-	auto function_definition = (FunctionExpression *)expr.function.get();
-	auto function = context.db.catalog.GetTableFunction(context.ActiveTransaction(), function_definition);
-	bind_context.AddTableFunction(GenerateTableIndex(),
-	                              expr.alias.empty() ? function_definition->function_name : expr.alias, function);
-	return nullptr;
+unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
+	switch(ref.type) {
+	case TableReferenceType::BASE_TABLE:
+		return Bind((BaseTableRef &)ref);
+	case TableReferenceType::CROSS_PRODUCT:
+		return Bind((CrossProductRef &)ref);
+	case TableReferenceType::JOIN:
+		return Bind((JoinRef &)ref);
+	case TableReferenceType::SUBQUERY:
+		return Bind((SubqueryRef &)ref);
+	default:
+		assert(ref.type == TableReferenceType::TABLE_FUNCTION);
+		return Bind((TableFunction &)node);
+	}
 }
 
 void Binder::AddCTE(const string &name, QueryNode *cte) {

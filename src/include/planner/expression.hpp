@@ -14,10 +14,12 @@ namespace duckdb {
 //!  The Expression class represents a bound Expression with a return type
 class Expression : public BaseExpression {
 public:
-	Expression(ExpressionType type, ExpressionClass expression_class, TypeId return_type);
+	Expression(ExpressionType type, ExpressionClass expression_class, TypeId return_type, SQLType sql_type);
 
 	//! The return type of the expression
 	TypeId return_type;
+	//! The SQL type of the expression
+	SQLType sql_type;
 public:
 	bool IsAggregate() const override;
 	bool IsWindow() const override;

@@ -14,8 +14,8 @@ namespace duckdb {
 
 class BoundParameterExpression : public Expression {
 public:
-	BoundParameterExpression(TypeId type, size_t parameter_nr) : 
-		Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER, TypeId::INVALID),
+	BoundParameterExpression(size_t parameter_nr) : 
+		Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER, TypeId::INVALID, SQLType(SQLTypeId::INVALID)),
 		parameter_nr(parameter_nr) {}
 
 	size_t parameter_nr;

@@ -30,7 +30,5 @@ public:
 
 	string name;
 	vector<unique_ptr<ParsedExpression>> values;
-
-	// TODO
 };
 } // namespace duckdb

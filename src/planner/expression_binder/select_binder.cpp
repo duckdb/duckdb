@@ -132,6 +132,6 @@ unique_ptr<Expression> SelectBinder::TryBindGroup(Expression *expr, uint32_t dep
 	if (!found_group) {
 		return nullptr;
 	}
-	return make_unique<BoundColumnRefExpression>(*expr, node.groupby.groups[group_entry]->return_type,
+	return make_unique<BoundColumnRefExpression>(*expr, node.groups[group_entry]->return_type,
 	                                             ColumnBinding(node.binding.group_index, group_entry), depth);
 }

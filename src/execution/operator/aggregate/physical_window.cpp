@@ -85,11 +85,11 @@ static void SortCollectionForWindow(ClientContext &context, WindowExpression *we
 		    OrderByNode(OrderType::ASCENDING, make_unique<BoundExpression>(pexpr->return_type, exprs.size() - 1)));
 	}
 
-	for (size_t ord_idx = 0; ord_idx < wexpr->ordering.orders.size(); ord_idx++) {
-		auto &oexpr = wexpr->ordering.orders[ord_idx].expression;
+	for (size_t ord_idx = 0; ord_idx < wexpr->orders.size(); ord_idx++) {
+		auto &oexpr = wexpr->orders[ord_idx].expression;
 		sort_types.push_back(oexpr->return_type);
 		exprs.push_back(oexpr.get());
-		odesc.orders.push_back(OrderByNode(wexpr->ordering.orders[ord_idx].type,
+		odesc.orders.push_back(OrderByNode(wexpr->orders[ord_idx].type,
 		                                   make_unique<BoundExpression>(oexpr->return_type, exprs.size() - 1)));
 	}
 
@@ -138,7 +138,7 @@ static void UpdateWindowBoundaries(WindowExpression *wexpr, ChunkCollection &inp
 
 	if (input.column_count() > 0) {
 		vector<Value> row_cur = input.GetRow(row_idx);
-		size_t sort_col_count = wexpr->partitions.size() + wexpr->ordering.orders.size();
+		size_t sort_col_count = wexpr->partitions.size() + wexpr->orders.size();
 
 		// determine partition and peer group boundaries to ultimately figure out window size
 		bounds.is_same_partition = EqualsSubset(bounds.row_prev, row_cur, 0, wexpr->partitions.size());
@@ -253,7 +253,7 @@ static void ComputeWindowExpression(ClientContext &context, WindowExpression *we
                                     ChunkCollection &output, size_t output_idx) {
 
 	ChunkCollection sort_collection;
-	bool needs_sorting = wexpr->partitions.size() + wexpr->ordering.orders.size() > 0;
+	bool needs_sorting = wexpr->partitions.size() + wexpr->orders.size() > 0;
 	if (needs_sorting) {
 		SortCollectionForWindow(context, wexpr, input, sort_collection);
 	}

@@ -15,14 +15,6 @@
 
 namespace duckdb {
 
-//! GROUP BY description
-struct GroupByDescription {
-	//! List of groups
-	vector<unique_ptr<ParsedExpression>> groups;
-	//! HAVING clause
-	unique_ptr<ParsedExpression> having;
-};
-
 //! SelectNode represents a standard SELECT statement
 class SelectNode : public QueryNode {
 public:
@@ -35,21 +27,27 @@ public:
 	unique_ptr<TableRef> from_table;
 	//! The WHERE clause
 	unique_ptr<ParsedExpression> where_clause;
-	//! Group By Description
-	GroupByDescription groupby;
+	//! list of groups
+	vector<unique_ptr<ParsedExpression>> groups;
+	//! HAVING clause
+	unique_ptr<ParsedExpression> having;
 
-	//! Whether or not the query has a GROUP BY clause
-	bool HasGroup() {
-		return groupby.groups.size() > 0;
+	const vector<unique_ptr<ParsedExpression>>& GetSelectList() const override {
+		return select_list;
 	}
-	//! Whether or not the query has a HAVING clause
-	bool HasHaving() {
-		return groupby.having.get();
-	}
-	//! Whether or not the query has an AGGREGATION
-	bool HasAggregation() {
-		return HasGroup();
-	}
+public:
+	// //! Whether or not the query has a GROUP BY clause
+	// bool HasGroup() {
+	// 	return groups.size() > 0;
+	// }
+	// //! Whether or not the query has a HAVING clause
+	// bool HasHaving() {
+	// 	return having.get();
+	// }
+	// //! Whether or not the query has an AGGREGATION
+	// bool HasAggregation() {
+	// 	return HasGroup();
+	// }
 
 	bool Equals(const QueryNode *other) const override;
 	//! Create a copy of this SelectNode

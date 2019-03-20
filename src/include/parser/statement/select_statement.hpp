@@ -27,7 +27,7 @@ public:
 	bool Equals(const SQLStatement *other) const override;
 
 	//! CTEs
-	std::map<string, unique_ptr<QueryNode>> cte_map;
+	unordered_map<string, unique_ptr<QueryNode>> cte_map;
 	//! The main query node
 	unique_ptr<QueryNode> node;
 

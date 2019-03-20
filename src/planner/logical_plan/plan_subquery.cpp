@@ -337,3 +337,7 @@ unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpressio
 	}
 	return PlanSubquery(binder, context, expr, root);
 }
+
+void LogicalPlanGenerator::PlanSubqueries(unique_ptr<Expression> *expr, unique_ptr<LogicalOperator> *root) {
+	throw Exception("FIXME: visit expression recursively and call VisitReplace on BoundSubqueries");
+}

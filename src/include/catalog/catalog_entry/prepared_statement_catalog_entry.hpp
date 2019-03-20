@@ -23,7 +23,6 @@ class TableCatalogEntry;
 //! A view catalog entry
 class PreparedStatementCatalogEntry : public CatalogEntry {
 public:
-	//! Create a real TableCatalogEntry and initialize storage for it
 	PreparedStatementCatalogEntry(string name, StatementType statement_type)
 	    : CatalogEntry(CatalogType::PREPARED_STATEMENT, nullptr, name), statement_type(statement_type) {
 	}

@@ -257,11 +257,11 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	}
 	case LogicalOperatorType::LIMIT: {
 		auto &limit = (LogicalLimit &)*plan;
-		if (limit.offset > 0) {
+		if (offset > 0) {
 			throw ParserException("OFFSET not supported in correlated subquery");
 		}
 		plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
-		if (limit.limit == 0) {
+		if (limit == 0) {
 			// limit = 0 means we return zero columns here
 			return plan;
 		} else {

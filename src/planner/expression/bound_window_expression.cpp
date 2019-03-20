@@ -39,14 +39,14 @@ bool BoundWindowExpression::Equals(const BaseExpression *other_) const {
 		}
 	}
 	// check if the orderings are equivalent
-	if (ordering.orders.size() != other->ordering.orders.size()) {
+	if (orders.size() != other->orders.size()) {
 		return false;
 	}
-	for (size_t i = 0; i < ordering.orders.size(); i++) {
-		if (ordering.orders[i].type != other->ordering.orders[i].type) {
+	for (size_t i = 0; i < orders.size(); i++) {
+		if (orders[i].type != other->orders[i].type) {
 			return false;
 		}
-		if (!BaseExpression::Equals((BaseExpression*)ordering.orders[i].expression.get(), (BaseExpression*)other->ordering.orders[i].expression.get())) {
+		if (!BaseExpression::Equals((BaseExpression*)orders[i].expression.get(), (BaseExpression*)other->orders[i].expression.get())) {
 			return false;
 		}
 	}
@@ -62,11 +62,11 @@ unique_ptr<Expression> BoundWindowExpression::Copy() {
 		new_window->partitions.push_back(e->Copy());
 	}
 
-	for (auto &o : ordering.orders) {
-		OrderByNode node;
+	for (auto &o : orders) {
+		BoundOrderByNode node;
 		node.type = o.type;
-		node.expression = ((Expression&) *o.expression).Copy();
-		new_window->ordering.orders.push_back(move(node));
+		node.expression = o.expression->Copy();
+		new_window->orders.push_back(move(node));
 	}
 
 	new_window->start = start;

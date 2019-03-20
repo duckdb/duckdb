@@ -20,7 +20,6 @@ class CopyStatement;
 class CreateIndexStatement;
 class CreateSchemaStatement;
 class CreateTableStatement;
-class CreateTableAsStatement;
 class CreateViewStatement;
 class DeleteStatement;
 class DropSchemaStatement;

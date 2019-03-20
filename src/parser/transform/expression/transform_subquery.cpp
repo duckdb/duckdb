@@ -16,6 +16,13 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(SubLink *root) {
 	if (!subquery_expr->subquery) {
 		return nullptr;
 	}
+	auto &select_list = subquery_expr->subquery->GetSelectList();
+	if (select_list.size() < 1) {
+		throw ParserException("Subquery has no projections");
+	}
+	if (root->subLinkType != EXISTS_SUBLINK && select_list.size() != 1) {
+		throw ParserException("Subquery returns %zu columns - expected 1", select_list.size());
+	}
 
 	switch (root->subLinkType) {
 	case EXISTS_SUBLINK: {

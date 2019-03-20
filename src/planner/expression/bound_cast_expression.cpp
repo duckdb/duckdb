@@ -3,8 +3,8 @@
 using namespace duckdb;
 using namespace std;
 
-BoundCastExpression::BoundCastExpression(TypeId target, unique_ptr<Expression> child) : 
-	Expression(ExpressionType::OPERATOR_CAST, ExpressionClass::BOUND_CAST, target), child(move(child)) {
+BoundCastExpression::BoundCastExpression(TypeId target, SQLType sql_type, unique_ptr<Expression> child) : 
+	Expression(ExpressionType::OPERATOR_CAST, ExpressionClass::BOUND_CAST, target, sql_type), child(move(child)) {
 }
 
 string BoundCastExpression::ToString() const {

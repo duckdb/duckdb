@@ -1,0 +1,29 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// planner/statement/bound_copy_statement.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+#pragma once
+
+#include "planner/bound_sql_statement.hpp"
+
+namespace duckdb {
+class TableCatalogEntry;
+
+//! Bound equivalent to CopyStatement
+class BoundCopyStatement : public BoundSQLStatement {
+public:
+	BoundCopyStatement() : BoundSQLStatement(StatementType::COPY) {
+	}
+
+	//! The CopyInformation
+	unique_ptr<CopyInformation> info;
+	//! The destination table (only for COPY from file -> database)
+	TableCatalogEntry *table;
+	// The bound SQL statement (only for COPY from database -> file)
+	unique_ptr<BoundQueryNode> select_statement;
+};
+} // namespace duckdb

@@ -21,38 +21,34 @@ enum QueryNodeType : uint8_t {
 
 //! Single node in ORDER BY statement
 struct OrderByNode {
+	OrderByNode() {	}
+	OrderByNode(OrderType type, unique_ptr<ParsedExpression> expression) :
+		type(type), expression(move(expression)) {	}
+
 	//! Sort order, ASC or DESC
 	OrderType type;
 	//! Expression to order by
 	unique_ptr<ParsedExpression> expression;
-
-	OrderByNode() {
-	}
-	OrderByNode(OrderType type, unique_ptr<ParsedExpression> expression) : type(type), expression(move(expression)) {
-	}
-};
-
-//! ORDER BY description
-struct OrderByDescription {
-	//! List of order nodes
-	vector<OrderByNode> orders;
-};
-
-//! LIMIT description
-struct LimitDescription {
-	//! LIMIT count
-	unique_ptr<ParsedExpression> limit;
-	//! OFFSET
-	unique_ptr<ParsedExpression> offset;
 };
 
 class QueryNode {
 public:
-	QueryNode(QueryNodeType type) : type(type) {
-	}
-	virtual ~QueryNode() {
-	}
+	QueryNode(QueryNodeType type) : type(type) {}
+	virtual ~QueryNode() {}
 
+	//! The type of the query node, either SetOperation or Select
+	QueryNodeType type;
+	//! DISTINCT or not
+	bool select_distinct = false;
+	//! List of order nodes
+	vector<OrderByNode> orders;
+	//! LIMIT count
+	unique_ptr<ParsedExpression> limit;
+	//! OFFSET
+	unique_ptr<ParsedExpression> offset;
+
+	virtual const vector<unique_ptr<ParsedExpression>>& GetSelectList() const = 0;
+public:
 	virtual bool Equals(const QueryNode *other) const;
 
 	//! Create a copy of this QueryNode
@@ -63,26 +59,14 @@ public:
 	//! deserialization is not possible
 	static unique_ptr<QueryNode> Deserialize(Deserializer &source);
 
-	//! The type of the query node, either SetOperation or Select
-	QueryNodeType type;
-	//! DISTINCT or not
-	bool select_distinct = false;
-	//! Order By Description
-	OrderByDescription orderby;
-	//! Limit Description
-	LimitDescription limit;
-
-	//! The types returned by this QueryNode. NOTE: this is set only by the binder.
-	vector<TypeId> types;
-
-	//! Whether or not the query has a LIMIT clause
-	bool HasLimit() {
-		return limit.limit || limit.offset;
-	}
-	//! Whether or not the query has an ORDER BY clause
-	bool HasOrder() {
-		return orderby.orders.size() > 0;
-	}
+	// //! Whether or not the query has a LIMIT clause
+	// bool HasLimit() {
+	// 	return limit || offset;
+	// }
+	// //! Whether or not the query has an ORDER BY clause
+	// bool HasOrder() {
+	// 	return orders.size() > 0;
+	// }
 protected:
 	void CopyProperties(QueryNode &other);
 };

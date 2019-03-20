@@ -9,12 +9,15 @@
 #pragma once
 
 #include "parser/sql_statement.hpp"
-#include "planner/bindcontext.hpp"
-#include "planner/expression_binder.hpp"
+#include "planner/bind_context.hpp"
+#include "planner/bound_sql_statement.hpp"
+#include "planner/bound_query_node.hpp"
+#include "planner/bound_tableref.hpp"
+#include "parser/tokens.hpp"
 
 namespace duckdb {
 class ClientContext;
-struct OrderByDescription;
+class ExpressionBinder;
 
 struct CorrelatedColumnInfo {
 	ColumnBinding binding;
@@ -44,32 +47,28 @@ class Binder {
 public:
 	Binder(ClientContext &context, Binder *parent = nullptr);
 
-	void Bind(SQLStatement &statement);
+	unique_ptr<BoundSQLStatement> Bind(SQLStatement &statement);
+private:
+	unique_ptr<BoundSQLStatement> Bind(SelectStatement &stmt);
+	unique_ptr<BoundSQLStatement> Bind(InsertStatement &stmt);
+	unique_ptr<BoundSQLStatement> Bind(CopyStatement &stmt);
+	unique_ptr<BoundSQLStatement> Bind(DeleteStatement &stmt);
+	unique_ptr<BoundSQLStatement> Bind(UpdateStatement &stmt);
+	unique_ptr<BoundSQLStatement> Bind(CreateTableStatement &stmt);
+	unique_ptr<BoundSQLStatement> Bind(CreateIndexStatement &stmt);
+	unique_ptr<BoundSQLStatement> Bind(ExecuteStatement &stmt);
 
-	void Bind(SelectStatement &stmt);
-	void Bind(InsertStatement &stmt);
-	void Bind(CopyStatement &stmt);
-	void Bind(DeleteStatement &stmt);
-	void Bind(UpdateStatement &stmt);
-	void Bind(AlterTableStatement &stmt);
-	void Bind(CreateTableStatement &stmt);
-	void Bind(CreateIndexStatement &stmt);
-	void Bind(CreateViewStatement &stmt);
-	void Bind(CreateTableAsStatement &stmt);
+	unique_ptr<BoundQueryNode> Bind(QueryNode &node);
+	unique_ptr<BoundQueryNode> Bind(SelectNode &node);
+	unique_ptr<BoundQueryNode> Bind(SetOperationNode &node);
 
-	void Bind(QueryNode &node);
-	void Bind(SelectNode &node);
-	void Bind(SetOperationNode &node);
-
+	unique_ptr<BoundTableRef> Bind(TableRef &ref);
+	unique_ptr<BoundTableRef> Bind(BaseTableRef &ref);
+	unique_ptr<BoundTableRef> Bind(CrossProductRef &ref);
+	unique_ptr<BoundTableRef> Bind(JoinRef &ref);
+	unique_ptr<BoundTableRef> Bind(SubqueryRef &ref);
+	unique_ptr<BoundTableRef> Bind(TableFunction &ref);
 public:
-	void Visit(CheckConstraint &constraint) override;
-
-	unique_ptr<TableRef> Bind(BaseTableRef &expr) override;
-	unique_ptr<TableRef> Bind(CrossProductRef &expr) override;
-	unique_ptr<TableRef> Bind(JoinRef &expr) override;
-	unique_ptr<TableRef> Bind(SubqueryRef &expr) override;
-	unique_ptr<TableRef> Bind(TableFunction &expr) override;
-
 	void AddCTE(const string &name, QueryNode *cte);
 	unique_ptr<QueryNode> FindCTE(const string &name);
 
@@ -103,7 +102,6 @@ private:
 	vector<ExpressionBinder *> active_binders;
 
 	size_t bound_tables;
-	bool encountered_select_node = false;
 };
 
 } // namespace duckdb

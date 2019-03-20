@@ -19,18 +19,18 @@ bool QueryNode::Equals(const QueryNode *other) const {
 	if (select_distinct != other->select_distinct) {
 		return false;
 	}
-	if (!ParsedExpression::Equals(limit.limit.get(), other->limit.limit.get())) {
+	if (!ParsedExpression::Equals(limit.get(), other->limit.get())) {
 		return false;
 	}
-	if (!ParsedExpression::Equals(limit.offset.get(), other->limit.offset.get())) {
+	if (!ParsedExpression::Equals(offset.get(), other->offset.get())) {
 		return false;
 	}
-	if (orderby.orders.size() != other->orderby.orders.size()) {
+	if (orders.size() != other->orders.size()) {
 		return false;
 	}
-	for (size_t i = 0; i < orderby.orders.size(); i++) {
-		if (orderby.orders[i].type != other->orderby.orders[i].type ||
-		    !orderby.orders[i].expression->Equals(other->orderby.orders[i].expression.get())) {
+	for (size_t i = 0; i < orders.size(); i++) {
+		if (orders[i].type != other->orders[i].type ||
+		    !orders[i].expression->Equals(other->orders[i].expression.get())) {
 			return false;
 		}
 	}
@@ -40,23 +40,23 @@ bool QueryNode::Equals(const QueryNode *other) const {
 void QueryNode::CopyProperties(QueryNode &other) {
 	other.select_distinct = select_distinct;
 	// order
-	for (auto &order : orderby.orders) {
-		other.orderby.orders.push_back(OrderByNode(order.type, order.expression->Copy()));
+	for (auto &order : orders) {
+		other.orders.push_back(OrderByNode(order.type, order.expression->Copy()));
 	}
 	// limit
-	other.limit.limit = limit.limit->Copy();
-	other.limit.offset = limit.offset->Copy();
+	other.limit = limit->Copy();
+	other.offset = offset->Copy();
 }
 
 void QueryNode::Serialize(Serializer &serializer) {
 	serializer.Write<QueryNodeType>(type);
 	serializer.Write<bool>(select_distinct);
-	serializer.WriteOptional(limit.limit);
-	serializer.WriteOptional(limit.offset);
-	serializer.Write<int64_t>(orderby.orders.size());
-	for (size_t i = 0; i < orderby.orders.size(); i++) {
-		serializer.Write<OrderType>(orderby.orders[i].type);
-		orderby.orders[i].expression->Serialize(serializer);
+	serializer.WriteOptional(limit);
+	serializer.WriteOptional(offset);
+	serializer.Write<int64_t>(orders.size());
+	for (size_t i = 0; i < orders.size(); i++) {
+		serializer.Write<OrderType>(orders[i].type);
+		orders[i].expression->Serialize(serializer);
 	}
 }
 
@@ -64,16 +64,15 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &source) {
 	unique_ptr<QueryNode> result;
 	auto type = source.Read<QueryNodeType>();
 	auto select_distinct = source.Read<bool>();
-	LimitDescription limit;
-	limit.limit = source.ReadOptional<ParsedExpression>();
-	limit.offset = source.ReadOptional<ParsedExpression>();
+	auto limit = source.ReadOptional<ParsedExpression>();
+	auto offset = source.ReadOptional<ParsedExpression>();
 	auto order_count = source.Read<int64_t>();
-	OrderByDescription orderby;
+	vector<OrderByNode> orders;
 	for (size_t i = 0; i < order_count; i++) {
 		OrderByNode node;
 		node.type = source.Read<OrderType>();
 		node.expression = ParsedExpression::Deserialize(source);
-		orderby.orders.push_back(move(node));
+		orders.push_back(move(node));
 	}
 	switch (type) {
 	case QueryNodeType::SELECT_NODE:
@@ -87,6 +86,7 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &source) {
 	}
 	result->select_distinct = select_distinct;
 	result->limit = move(limit);
-	result->orderby = move(orderby);
+	result->offset = move(offset);
+	result->orders = move(orders);
 	return result;
 }

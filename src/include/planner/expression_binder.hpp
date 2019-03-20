@@ -8,7 +8,9 @@
 
 #pragma once
 
+#include "parser/tokens.hpp"
 #include "planner/expression.hpp"
+#include "parser/parsed_expression.hpp"
 
 namespace duckdb {
 
@@ -17,8 +19,8 @@ class ClientContext;
 class SelectNode;
 
 struct BindResult {
-	BindResult(unique_ptr<Expression> expr, string error) :
-		expression(move(expr)), error(error) {
+	BindResult(string error) :
+		error(error) {
 	}
 	BindResult(unique_ptr<Expression> expr) :
 		expression(move(expr)) {
@@ -37,38 +39,41 @@ public:
 	ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder = false);
 	virtual ~ExpressionBinder();
 
-	virtual BindResult BindExpression(unique_ptr<Expression> expr, uint32_t depth, bool root_expression = false) = 0;
+	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr);
+protected:
+	string Bind(unique_ptr<ParsedExpression> *expr, uint32_t depth, bool root_expression = false);
 
-	BindResult BindColumnRefExpression(unique_ptr<Expression> expr, uint32_t depth);
-	BindResult BindFunctionExpression(unique_ptr<Expression> expr, uint32_t depth);
-	BindResult BindSubqueryExpression(unique_ptr<Expression> expr, uint32_t depth);
-	BindResult BindChildren(unique_ptr<Expression> expr, uint32_t depth);
+	virtual BindResult BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression = false);
 
-	void BindAndResolveType(unique_ptr<Expression> *expr, bool root_expression = true);
+	BindResult BindExpression(CaseExpression &expr, uint32_t depth);
+	BindResult BindExpression(CastExpression &expr, uint32_t depth);
+	BindResult BindExpression(ColumnRefExpression &expr, uint32_t depth);
+	BindResult BindExpression(ComparisonExpression &expr, uint32_t depth);
+	BindResult BindExpression(ConjunctionExpression &expr, uint32_t depth);
+	BindResult BindExpression(ConstantExpression &expr, uint32_t depth);
+	BindResult BindExpression(FunctionExpression &expr, uint32_t depth);
+	BindResult BindExpression(OperatorExpression &expr, uint32_t depth);
+	BindResult BindExpression(ParameterExpression &expr, uint32_t depth);
+	BindResult BindExpression(StarExpression &expr, uint32_t depth);
+	BindResult BindExpression(SubqueryExpression &expr, uint32_t depth);
 
 	// Bind table names to ColumnRefExpressions
-	void BindTableNames(Expression &expr);
+	void BindTableNames(ParsedExpression &expr);
 
+	bool BoundColumns() {
+		return bound_columns;
+	}
 protected:
-	void ExtractCorrelatedExpressions(Binder &binder, Expression &expr);
-
-	BindResult BindCorrelatedColumns(BindResult result, bool bind_only_children = false);
+	BindResult BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr);
 
 	Binder &binder;
 	ClientContext &context;
 	ExpressionBinder *stored_binder;
-
+	bool bound_columns = false;
 private:
-};
-
-class SelectNodeBinder : public ExpressionBinder {
-public:
-	SelectNodeBinder(Binder &binder, ClientContext &context, SelectNode &node, bool replace_binder = false)
-	    : ExpressionBinder(binder, context, replace_binder), node(node) {
-	}
-
-protected:
-	SelectNode &node;
+	//! Retrieves an expression from a BoundExpression node
+	unique_ptr<Expression> GetExpression(ParsedExpression& expr);
+	unique_ptr<Expression> AddCastToType(unique_ptr<Expression> expr, SQLType target_type);
 };
 
 } // namespace duckdb

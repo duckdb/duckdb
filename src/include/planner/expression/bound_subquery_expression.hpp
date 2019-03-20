@@ -10,12 +10,13 @@
 
 #include "planner/expression.hpp"
 #include "planner/binder.hpp"
+#include "planner/bound_query_node.hpp"
 
 namespace duckdb {
 
 class BoundSubqueryExpression : public Expression {
 public:
-	BoundSubqueryExpression(TypeId return_type);
+	BoundSubqueryExpression(TypeId return_type, SQLType sql_type);
 
 	bool IsCorrelated() {
 		return binder->correlated_columns.size() > 0;
@@ -24,7 +25,7 @@ public:
 	//! The binder used to bind the subquery node
 	unique_ptr<Binder> binder;
 	//! The bound subquery node
-	unique_ptr<QueryNode> subquery;
+	unique_ptr<BoundQueryNode> subquery;
 	//! The subquery type
 	SubqueryType subquery_type;
 	//! the child expression to compare with (in case of IN, ANY, ALL operators)

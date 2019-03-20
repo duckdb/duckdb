@@ -64,14 +64,14 @@ bool WindowExpression::Equals(const BaseExpression *other_) const {
 		}
 	}
 	// check if the orderings are equivalent
-	if (ordering.orders.size() != other->ordering.orders.size()) {
+	if (orders.size() != other->orders.size()) {
 		return false;
 	}
-	for (size_t i = 0; i < ordering.orders.size(); i++) {
-		if (ordering.orders[i].type != other->ordering.orders[i].type) {
+	for (size_t i = 0; i < orders.size(); i++) {
+		if (orders[i].type != other->orders[i].type) {
 			return false;
 		}
-		if (!ordering.orders[i].expression->Equals(other->ordering.orders[i].expression.get())) {
+		if (!orders[i].expression->Equals(other->orders[i].expression.get())) {
 			return false;
 		}
 	}
@@ -87,11 +87,11 @@ unique_ptr<ParsedExpression> WindowExpression::Copy() {
 		new_window->partitions.push_back(e->Copy());
 	}
 
-	for (auto &o : ordering.orders) {
+	for (auto &o : orders) {
 		OrderByNode node;
 		node.type = o.type;
 		node.expression = o.expression->Copy();
-		new_window->ordering.orders.push_back(move(node));
+		new_window->orders.push_back(move(node));
 	}
 
 	new_window->start = start;
@@ -109,8 +109,8 @@ void WindowExpression::Serialize(Serializer &serializer) {
 	serializer.WriteOptional(child);
 	serializer.WriteList(partitions);
 	//	auto order_count = source.Read<uint32_t>();
-	serializer.Write<uint32_t>(ordering.orders.size());
-	for (auto &order : ordering.orders) {
+	serializer.Write<uint32_t>(orders.size());
+	for (auto &order : orders) {
 		serializer.Write<OrderType>(order.type);
 		order.expression->Serialize(serializer);
 	}
@@ -132,7 +132,7 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, 
 	for (size_t i = 0; i < order_count; i++) {
 		auto order_type = source.Read<OrderType>();
 		auto expression = ParsedExpression::Deserialize(source);
-		expr->ordering.orders.push_back(OrderByNode(order_type, move(expression)));
+		expr->orders.push_back(OrderByNode(order_type, move(expression)));
 	}
 	expr->start = source.Read<WindowBoundary>();
 	expr->end = source.Read<WindowBoundary>();

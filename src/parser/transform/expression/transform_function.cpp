@@ -71,7 +71,7 @@ void Transformer::TransformWindowDef(WindowDef *window_spec, WindowExpression *e
 
 	// next: partitioning/ordering expressions
 	TransformExpressionList(window_spec->partitionClause, expr->partitions);
-	TransformOrderBy(window_spec->orderClause, expr->ordering);
+	TransformOrderBy(window_spec->orderClause, expr->orders);
 
 	// finally: specifics of bounds
 	expr->start_expr = TransformExpression(window_spec->startOffset);

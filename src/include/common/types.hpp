@@ -46,19 +46,20 @@ enum class TypeId : uint8_t {
 //===--------------------------------------------------------------------===//
 enum class SQLTypeId : uint8_t {
 	INVALID = 0,
-	BOOLEAN = 1,
-	TINYINT = 2,
-	SMALLINT = 3,
-	INTEGER = 4,
-	BIGINT = 5,
-	DATE = 6,
-	TIMESTAMP = 7,
-	REAL = 8,
-	DOUBLE = 9,
-	DECIMAL = 10,
-	VARCHAR = 11,
+	SQLNULL = 1,
+	BOOLEAN = 2,
+	TINYINT = 3,
+	SMALLINT = 4,
+	INTEGER = 5,
+	BIGINT = 6,
+	DATE = 7,
+	TIMESTAMP = 8,
+	REAL = 9,
+	DOUBLE = 10,
+	DECIMAL = 11,
 	CHAR = 12,
-	VARBINARY = 13
+	VARCHAR = 13,
+	VARBINARY = 14
 };
 
 struct SQLType {
@@ -74,8 +75,12 @@ struct SQLType {
 	static SQLType Deserialize(Deserializer &source);
 };
 
+bool IsNumericType(SQLTypeId type);
+
 string SQLTypeIdToString(SQLTypeId type);
 string SQLTypeToString(SQLType type);
+
+SQLType MaxSQLType(SQLType left, SQLType right);
 
 TypeId GetInternalType(SQLType type);
 

@@ -5,6 +5,7 @@
 #include "parser/expression/bound_subquery_expression.hpp"
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/expression/subquery_expression.hpp"
+#include "planner/expression/bound_expression.hpp"
 #include "planner/binder.hpp"
 
 using namespace duckdb;
@@ -30,108 +31,71 @@ ExpressionBinder::~ExpressionBinder() {
 	}
 }
 
-BindResult ExpressionBinder::BindColumnRefExpression(unique_ptr<Expression> expr, uint32_t depth) {
-	assert(expr->GetExpressionClass() == ExpressionClass::COLUMN_REF);
-	auto &colref = (ColumnRefExpression &)*expr;
-
-	assert(!colref.column_name.empty());
-	// individual column reference
-	// resolve to either a base table or a subquery expression
-	if (colref.table_name.empty()) {
-		// no table name: find a binding that contains this
-		colref.table_name = binder.bind_context.GetMatchingBinding(colref.column_name);
-		if (colref.table_name.empty()) {
-			return BindResult(move(expr), StringUtil::Format("Referenced column \"%s\" not found in FROM clause!",
-			                                                 colref.column_name.c_str()));
-		}
-	}
-	return binder.bind_context.BindColumn(move(expr), depth);
+unique_ptr<Expression> ExpressionBinder::GetExpression(ParsedExpression& expr) {
+	assert(expr.GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
+	assert(((BoundExpression&)expr).expr);
+	return move(((BoundExpression&)expr).expr);
 }
 
-BindResult ExpressionBinder::BindFunctionExpression(unique_ptr<Expression> expr, uint32_t depth) {
-	assert(expr->GetExpressionClass() == ExpressionClass::FUNCTION);
-	// bind the children of the function expression
-	auto result = BindChildren(move(expr), depth);
+string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, uint32_t depth, bool root_expression = false) {
+	// bind the node, but only if it has not been bound yet
+	auto &expression = **expr;
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
+		// already bound, don't bind it again
+		return string();
+	}
+	// bind the expression
+	BindResult result = BindExpression(**expr, depth, root_expression);
 	if (result.HasError()) {
-		return result;
+		return result.error;
+	} else {
+		// successfully bound: replace the node with a BoundExpression
+		*expr = make_unique<BoundExpression>(move(result.expression));
 	}
-	auto &function = (FunctionExpression &)*result.expression;
-	// lookup the function in the catalog
-	auto func =
-	    context.db.catalog.GetScalarFunction(context.ActiveTransaction(), function.schema, function.function_name);
-	// if found, construct the BoundFunctionExpression
-	auto func_expr = unique_ptr_cast<Expression, FunctionExpression>(move(result.expression));
-	return BindResult(make_unique<BoundFunctionExpression>(move(func_expr), func));
 }
 
-BindResult ExpressionBinder::BindSubqueryExpression(unique_ptr<Expression> expr, uint32_t depth) {
-	assert(expr->GetExpressionClass() == ExpressionClass::SUBQUERY);
-	// first bind the children of the subquery, if any
-	auto bind_result = BindChildren(move(expr), depth);
-	if (bind_result.HasError()) {
-		return bind_result;
+BindResult ExpressionBinder::BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression = false) {
+	switch(expr.GetExpressionClass()) {
+		// case ExpressionClass::AGGREGATE:
+		// 	return BindExpression((AggregateExpression&) expr, depth);
+		case ExpressionClass::CASE:
+			return BindExpression((CaseExpression&) expr, depth);
+		case ExpressionClass::CAST:
+			return BindExpression((CastExpression&) expr, depth);
+		case ExpressionClass::COLUMN_REF:
+			return BindExpression((ColumnRefExpression&) expr, depth);
+		case ExpressionClass::COMPARISON:
+			return BindExpression((ComparisonExpression&) expr, depth);
+		case ExpressionClass::CONJUNCTION:
+			return BindExpression((ConjunctionExpression&) expr, depth);
+		case ExpressionClass::CONSTANT:
+			return BindExpression((ConstantExpression&) expr, depth);
+		// case ExpressionClass::DEFAULT:
+		// 	return BindExpression((DefaultExpression&) expr, depth);
+		case ExpressionClass::FUNCTION:
+			return BindExpression((FunctionExpression&) expr, depth);
+		case ExpressionClass::OPERATOR:
+			return BindExpression((OperatorExpression&) expr, depth);
+		case ExpressionClass::SUBQUERY:
+			return BindExpression((SubqueryExpression&) expr, depth);
+		// case ExpressionClass::WINDOW:
+		// 	return BindExpression((WindowExpression&) expr, depth);
+		default:
+			assert(expr.GetExpressionClass() == ExpressionClass::PARAMETER);
+			return BindExpression((ParameterExpression&) expr, depth);
 	}
-	auto &subquery = (SubqueryExpression &)*bind_result.expression;
-	// bind columns in the subquery
-	auto subquery_binder = make_unique<Binder>(context, &binder);
-	// the subquery may refer to CTEs from the parent query
-	subquery_binder->CTE_bindings = binder.CTE_bindings;
-	subquery_binder->Bind(*subquery.subquery);
-	auto &select_list = subquery.subquery->GetSelectList();
-	if (select_list.size() < 1) {
-		throw BinderException("Subquery has no projections");
-	}
-	if (subquery.subquery_type != SubqueryType::EXISTS && select_list.size() != 1) {
-		throw BinderException("Subquery returns %zu columns - expected 1", select_list.size());
-	}
-	// check the correlated columns of the subquery for correlated columns with depth > 1
-	for (size_t i = 0; i < subquery_binder->correlated_columns.size(); i++) {
-		CorrelatedColumnInfo corr = subquery_binder->correlated_columns[i];
-		if (corr.depth > 1) {
-			// depth > 1, the column references the query ABOVE the current one
-			// add to the set of correlated columns for THIS query
-			corr.depth -= 1;
-			binder.AddCorrelatedColumn(corr);
-		}
-	}
-	assert(select_list[0]->return_type != TypeId::INVALID); // "Subquery has no type"
-	// create the bound subquery
-	auto result = make_unique<BoundSubqueryExpression>();
-	result->return_type =
-	    subquery.subquery_type == SubqueryType::SCALAR ? select_list[0]->return_type : subquery.return_type;
-	result->binder = move(subquery_binder);
-	result->subquery = move(bind_result.expression);
-	result->alias = subquery.alias;
-	return BindResult(move(result));
 }
 
-BindResult ExpressionBinder::BindChildren(unique_ptr<Expression> expr, uint32_t depth) {
-	string error;
-	expr->EnumerateChildren([&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
-		auto result = BindExpression(move(child), depth);
-		if (result.HasError()) {
-			error = result.error;
-		}
-		return move(result.expression);
-	});
-	return BindResult(move(expr), error);
-}
-
-BindResult ExpressionBinder::BindCorrelatedColumns(BindResult result, bool bind_only_children) {
-	if (!result.HasError()) {
-		return result;
-	}
+BindResult ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr) {
 	// try to bind in one of the outer queries, if the binding error occurred in a subquery
 	auto &active_binders = binder.GetActiveBinders();
+	// make a copy of the set of binders, so we can restore it later
 	auto binders = active_binders;
 	active_binders.pop_back();
 	size_t depth = 1;
 	while (active_binders.size() > 0) {
-		if (bind_only_children) {
-			result = active_binders.back()->BindChildren(move(result.expression), depth);
-		} else {
-			result = active_binders.back()->BindExpression(move(result.expression), depth);
-		}
+		auto &next_binder = active_binders.back();
+		result = next_binder->BindExpression(*expr, depth);
 		if (!result.HasError()) {
 			break;
 		}
@@ -142,52 +106,25 @@ BindResult ExpressionBinder::BindCorrelatedColumns(BindResult result, bool bind_
 	return result;
 }
 
-void ExpressionBinder::ExtractCorrelatedExpressions(Binder &binder, Expression &expr) {
-	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_colref = (BoundColumnRefExpression &)expr;
-		if (bound_colref.depth > 0) {
-			binder.AddCorrelatedColumn(CorrelatedColumnInfo(bound_colref));
-		}
-	}
-	expr.EnumerateChildren([&](Expression *child) { ExtractCorrelatedExpressions(binder, *child); });
-}
 
-void ExpressionBinder::BindAndResolveType(unique_ptr<Expression> *expr, bool root_expression) {
+unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr); {
 	// bind the main expression
-	auto result = BindExpression(move(*expr), 0, root_expression);
-	// try to bind correlated columns in the expression (if any)
+	auto result = BindExpression(*expr, 0, true);
+	if (!result.HasError()) {
+		return move(result.expression);
+	}
+	// failed to bind: try to bind correlated columns in the expression (if any)
 	result = BindCorrelatedColumns(move(result));
 	if (result.HasError()) {
 		throw BinderException(result.error);
 	}
-	ExtractCorrelatedExpressions(binder, *result.expression);
-	result.expression->ResolveType();
-	assert(result.expression->return_type != TypeId::INVALID ||
-	       result.expression->type == ExpressionType::VALUE_PARAMETER);
-	*expr = move(result.expression);
+	return move(result.expression);
 }
 
-void ExpressionBinder::BindTableNames(Expression &expr) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &colref = (ColumnRefExpression &)expr;
-		if (colref.table_name.empty()) {
-			// no table name: find a binding that contains this
-			colref.table_name = binder.bind_context.GetMatchingBinding(colref.column_name);
-			if (colref.table_name.empty()) {
-				// try to bind in one of the outer queries, if the table name was not found
-				auto &active_binders = binder.GetActiveBinders();
-				auto binders = active_binders;
-				active_binders.pop_back();
-				while (active_binders.size() > 0) {
-					colref.table_name = binder.bind_context.GetMatchingBinding(colref.column_name);
-					if (!colref.table_name.empty()) {
-						break;
-					}
-					active_binders.pop_back();
-				}
-				active_binders = binders;
-			}
-		}
+unique_ptr<Expression> ExpressionBinder::AddCastToType(unique_ptr<Expression> expr, SQLType target_type) {
+	assert(expr);
+	if (expr->GetExpressionClass() == ExpressionClass::PARAMETER || expr->sql_type != target_type) {
+		return make_unique<BoundCastExpression>(GetInternalType(target_type), target_type, move(expr));
 	}
-	expr.EnumerateChildren([&](Expression *child) { BindTableNames(*child); });
+	return expr;
 }

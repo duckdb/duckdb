@@ -22,10 +22,14 @@ public:
 	//! The type of set operation
 	SetOperationType setop_type = SetOperationType::NONE;
 	//! The left side of the set operation
-	unique_ptr<QueryNode> left = nullptr;
+	unique_ptr<QueryNode> left;
 	//! The right side of the set operation
-	unique_ptr<QueryNode> right = nullptr;
+	unique_ptr<QueryNode> right;
 
+	const vector<unique_ptr<ParsedExpression>>& GetSelectList() const override {
+		return left->GetSelectList();
+	}
+public:
 	bool Equals(const QueryNode *other) const override;
 	//! Create a copy of this SelectNode
 	unique_ptr<QueryNode> Copy() override;

@@ -6,7 +6,7 @@ using namespace duckdb;
 using namespace postgres;
 using namespace std;
 
-bool Transformer::TransformOrderBy(List *order, OrderByDescription &result) {
+bool Transformer::TransformOrderBy(List *order, vector<OrderByNode> &result) {
 	if (!order) {
 		return false;
 	}
@@ -25,7 +25,7 @@ bool Transformer::TransformOrderBy(List *order, OrderByDescription &result) {
 				throw NotImplementedException("Unimplemented order by type");
 			}
 			ordernode.expression = TransformExpression(target);
-			result.orders.push_back(OrderByNode(ordernode.type, move(ordernode.expression)));
+			result.push_back(OrderByNode(ordernode.type, move(ordernode.expression)));
 		} else {
 			throw NotImplementedException("ORDER BY list member type %d\n", temp->type);
 		}

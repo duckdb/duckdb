@@ -19,8 +19,11 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(postgres::SelectStmt *stm
 		// from table
 		result->from_table = TransformFrom(stmt->fromClause);
 		// group by
-		TransformGroupBy(stmt->groupClause, result->groupby.groups);
-		result->groupby.having = TransformExpression(stmt->havingClause);
+		TransformGroupBy(stmt->groupClause, result->groups);
+		result->having = TransformExpression(stmt->havingClause);
+		if (result->groups.size() == 0 && result->having) {
+			throw ParserException("a GROUP BY clause is required before HAVING");
+		}
 		// where
 		result->where_clause = TransformExpression(stmt->whereClause);
 		// select list
@@ -68,12 +71,12 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(postgres::SelectStmt *stm
 	}
 	// transform the common properties
 	// both the set operations and the regular select can have an ORDER BY/LIMIT attached to them
-	TransformOrderBy(stmt->sortClause, node->orderby);
+	TransformOrderBy(stmt->sortClause, node->orders);
 	if (stmt->limitCount) {
-		node->limit.limit = TransformExpression(stmt->limitCount);
+		node->limit = TransformExpression(stmt->limitCount);
 	}
 	if (stmt->limitOffset) {
-		node->limit.offset = TransformExpression(stmt->limitOffset);
+		node->offset = TransformExpression(stmt->limitOffset);
 	}
 	return node;
 }

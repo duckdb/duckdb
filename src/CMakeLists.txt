@@ -1,10 +1,10 @@
 add_definitions(-DDUCKDB)
 
-# add_subdirectory(planner)
+add_subdirectory(planner)
+add_subdirectory(parser)
 add_subdirectory(function)
 add_subdirectory(catalog)
 add_subdirectory(common)
-add_subdirectory(parser)
 # add_subdirectory(execution)
 # add_subdirectory(main)
 # add_subdirectory(storage)

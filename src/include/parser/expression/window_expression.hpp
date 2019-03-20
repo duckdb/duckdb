@@ -34,7 +34,7 @@ public:
 	//! The set of expressions to partition by
 	vector<unique_ptr<ParsedExpression>> partitions;
 	//! The set of ordering clauses
-	OrderByDescription ordering;
+	vector<OrderByNode> orders;
 	//! The window boundaries
 	WindowBoundary start = WindowBoundary::INVALID;
 	WindowBoundary end = WindowBoundary::INVALID;

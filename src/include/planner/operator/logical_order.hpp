@@ -8,23 +8,23 @@
 
 #pragma once
 
-#include "parser/query_node/select_node.hpp"
 #include "planner/logical_operator.hpp"
+#include "planner/bound_query_node.hpp"
 
 namespace duckdb {
 
 //! LogicalOrder represents an ORDER BY clause, sorting the data
 class LogicalOrder : public LogicalOperator {
 public:
-	LogicalOrder(OrderByDescription description)
-	    : LogicalOperator(LogicalOperatorType::ORDER_BY), description(std::move(description)) {
+	LogicalOrder(vector<BoundOrderByNode> orders)
+	    : LogicalOperator(LogicalOperatorType::ORDER_BY), orders(move(orders)) {
 	}
 
 	vector<string> GetNames() override {
 		return children[0]->GetNames();
 	}
 
-	OrderByDescription description;
+	vector<BoundOrderByNode> orders;
 
 	size_t ExpressionCount() override;
 	Expression *GetExpression(size_t index) override;

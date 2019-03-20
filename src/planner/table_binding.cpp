@@ -1,8 +1,8 @@
 #include "planner/table_binding.hpp"
+#include "planner/tableref/bound_basetableref.hpp"
 
 using namespace duckdb;
 using namespace std;
-
 
 DummyTableBinding::DummyTableBinding(vector<ColumnDefinition> &columns) :
 	Binding(BindingType::DUMMY, 0) {
@@ -11,8 +11,8 @@ DummyTableBinding::DummyTableBinding(vector<ColumnDefinition> &columns) :
 	}
 }
 
-TableBinding::TableBinding(TableCatalogEntry *table, size_t index) :
-	Binding(BindingType::TABLE, index), table(table) {
+TableBinding::TableBinding(BoundBaseTableRef *bound) :
+	Binding(BindingType::TABLE, bound->bind_index), bound(bound) {
 }
 
 SubqueryBinding::SubqueryBinding(SubqueryRef &subquery_, size_t index)

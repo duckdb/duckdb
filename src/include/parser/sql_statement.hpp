@@ -13,9 +13,6 @@
 #include "common/printer.hpp"
 
 namespace duckdb {
-class SelectStatement;
-class SQLNodeVisitor;
-
 //! SQLStatement is the base class of any type of SQL statement.
 class SQLStatement {
 public:

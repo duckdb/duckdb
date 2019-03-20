@@ -7,8 +7,8 @@
 using namespace duckdb;
 using namespace std;
 
-ConstantExpression::ConstantExpression(Value val) :
-	ParsedExpression(ExpressionType::VALUE_CONSTANT, ExpressionClass::CONSTANT), value(val) {
+ConstantExpression::ConstantExpression(SQLType sql_type, Value val) :
+	ParsedExpression(ExpressionType::VALUE_CONSTANT, ExpressionClass::CONSTANT), value(val), sql_type(sql_type) {
 }
 
 string ConstantExpression::ToString() const {
@@ -29,7 +29,7 @@ uint64_t ConstantExpression::Hash() const {
 }
 
 unique_ptr<ParsedExpression> ConstantExpression::Copy() {
-	auto copy = make_unique<ConstantExpression>(value);
+	auto copy = make_unique<ConstantExpression>(sql_type, value);
 	copy->CopyProperties(*this);
 	return move(copy);
 }

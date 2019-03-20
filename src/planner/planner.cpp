@@ -18,16 +18,14 @@ Planner::Planner(ClientContext &context) : binder(context), context(context) {
 void Planner::CreatePlan(SQLStatement &statement, bool allow_parameter) {
 	// first bind the tables and columns to the catalog
 	context.profiler.StartPhase("binder");
-	binder.Bind(statement);
+	auto bound_statement = binder.Bind(statement);
 	context.profiler.EndPhase();
 
 	// now create a logical query plan from the query
 	context.profiler.StartPhase("logical_planner");
 	LogicalPlanGenerator logical_planner(binder, context, allow_parameter);
-	logical_planner.CreatePlan(statement);
+	this->plan = logical_planner.CreatePlan(*bound_statement);
 	context.profiler.EndPhase();
-
-	this->plan = move(logical_planner.root);
 }
 
 void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {

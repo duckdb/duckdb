@@ -1,0 +1,33 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// planner/statement/bound_insert_statement.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+#pragma once
+
+#include "planner/bound_sql_statement.hpp"
+#include "planner/statement/bound_select_statement.hpp"
+
+namespace duckdb {
+class TableCatalogEntry;
+
+//! Bound equivalent to InsertStatement
+class BoundInsertStatement : public BoundSQLStatement {
+public:
+	BoundInsertStatement() : BoundSQLStatement(StatementType::INSERT) {
+	}
+
+	//! The table entry to insert into
+	TableCatalogEntry *table;
+	//! The bound select statement (if any)
+	unique_ptr<BoundSelectStatement> select_statement;
+	//! The bound expressions to insert (if any)
+	vector<vector<unique_ptr<Expression>>> values;
+	//! The insertion map ([table_index -> index in result, or -1 if not specified])
+	vector<int> column_index_map;
+
+};
+} // namespace duckdb

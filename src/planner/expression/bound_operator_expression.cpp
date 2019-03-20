@@ -3,8 +3,8 @@
 using namespace duckdb;
 using namespace std;
 
-BoundOperatorExpression::BoundOperatorExpression(ExpressionType type, TypeId return_type) :
-	Expression(type, ExpressionClass::BOUND_OPERATOR, return_type) {
+BoundOperatorExpression::BoundOperatorExpression(ExpressionType type, TypeId return_type, SQLType sql_type) :
+	Expression(type, ExpressionClass::BOUND_OPERATOR, return_type, sql_type) {
 
 }
 
