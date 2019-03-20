@@ -12,6 +12,7 @@ unique_ptr<TableRef> JoinRef::Copy() {
 	copy->condition = condition->Copy();
 	copy->type = type;
 	copy->alias = alias;
+	copy->using_hidden_columns = using_hidden_columns;
 	return move(copy);
 }
 
@@ -22,6 +23,11 @@ void JoinRef::Serialize(Serializer &serializer) {
 	right->Serialize(serializer);
 	condition->Serialize(serializer);
 	serializer.Write<JoinType>(type);
+
+	serializer.Write<uint32_t>(using_hidden_columns.size());
+	for (auto child : using_hidden_columns) {
+		serializer.WriteString(child);
+	}
 }
 
 unique_ptr<TableRef> JoinRef::Deserialize(Deserializer &source) {
@@ -32,5 +38,9 @@ unique_ptr<TableRef> JoinRef::Deserialize(Deserializer &source) {
 	result->condition = Expression::Deserialize(source);
 	result->type = source.Read<JoinType>();
 
+	auto count = source.Read<uint32_t>();
+	for (size_t i = 0; i < count; i++) {
+		result->using_hidden_columns.insert(source.Read<string>());
+	}
 	return move(result);
 }

@@ -24,7 +24,7 @@ setClass(
 #' @export
 setMethod("show", "duckdb_connection",
           function(object) {
-            cat(sprintf("<duckdb_connection %s driver=%s dbdir='%s' connection=%s>\n", extptr_str(object@conn_ref), extptr_str(object@driver@database_ref), object@driver@dbdir))
+            cat(sprintf("<duckdb_connection %s driver=%s dbdir='%s'>\n", extptr_str(object@conn_ref), extptr_str(object@driver@database_ref), object@driver@dbdir))
           })
 
 #' @rdname DBI
