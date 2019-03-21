@@ -70,7 +70,7 @@ unique_ptr<TableRef> Transformer::TransformJoin(JoinExpr *root) {
 		for (auto column_name : using_column_names) {
 			auto left_expr = make_unique<ColumnRefExpression>(column_name, get_tablename_union(result->left.get()));
 			auto right_expr = make_unique<ColumnRefExpression>(column_name, get_tablename_union(result->right.get()));
-			result->using_hidden_columns.insert(right_expr->ToString());
+			result->using_hidden_columns.insert(right_expr->Copy());
 			auto comp_expr =
 			    make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(left_expr), move(right_expr));
 			if (!join_condition) {

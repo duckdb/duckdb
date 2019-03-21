@@ -44,7 +44,7 @@ void Binder::Bind(SelectNode &statement) {
 					auto bak_select_list = move(new_select_list);
 					new_select_list.clear();
 					for (auto &expr : bak_select_list) {
-						if (join_ref->using_hidden_columns.find(expr->ToString()) ==
+						if (join_ref->using_hidden_columns.find(expr) ==
 						    join_ref->using_hidden_columns.end()) {
 							new_select_list.push_back(move(expr));
 						}

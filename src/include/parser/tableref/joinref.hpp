@@ -49,6 +49,6 @@ public:
 	//! The join type
 	JoinType type;
 
-	std::unordered_set<string> using_hidden_columns;
+	expression_set_t using_hidden_columns;
 };
 } // namespace duckdb

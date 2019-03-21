@@ -15,6 +15,7 @@
 #include <memory>
 #include <stack>
 #include <vector>
+#include <unordered_set>
 
 namespace duckdb {
 class SQLNodeVisitor;
@@ -186,7 +187,22 @@ struct ExpressionEquality {
 	}
 };
 
+struct ExpressionHashFunctionUnique {
+	size_t operator()(const unique_ptr<Expression> &expr) const {
+		return (size_t)expr->Hash();
+	}
+};
+
+struct ExpressionEqualityUnique {
+	bool operator()(const unique_ptr<Expression> &a, const unique_ptr<Expression> &b) const {
+		return a->Equals(b.get());
+	}
+};
+
+
 template <typename T>
 using expression_map_t = unordered_map<Expression *, T, ExpressionHashFunction, ExpressionEquality>;
+
+using expression_set_t = unordered_set<unique_ptr<Expression>, ExpressionHashFunctionUnique, ExpressionEqualityUnique>;
 
 } // namespace duckdb
