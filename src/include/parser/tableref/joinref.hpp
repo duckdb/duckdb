@@ -12,6 +12,8 @@
 #include "parser/sql_node_visitor.hpp"
 #include "parser/tableref.hpp"
 
+#include <unordered_set>
+
 namespace duckdb {
 //! Represents a JOIN between two expressions
 class JoinRef : public TableRef {
@@ -46,5 +48,7 @@ public:
 	unique_ptr<Expression> condition;
 	//! The join type
 	JoinType type;
+
+	std::unordered_set<string> using_hidden_columns;
 };
 } // namespace duckdb
