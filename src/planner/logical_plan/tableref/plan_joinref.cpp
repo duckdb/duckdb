@@ -68,7 +68,7 @@ JoinSide LogicalComparisonJoin::GetJoinSide(Expression &expression, unordered_se
 		return side;
 	}
 	JoinSide join_side = JoinSide::NONE;
-	expression.EnumerateChildren([&](Expression *child) {
+	ExpressionIterator::EnumerateChildren(expression, [&](Expression *child) {
 		auto child_side = GetJoinSide(*child, left_bindings, right_bindings);
 		join_side = CombineJoinSide(child_side, join_side);
 	});

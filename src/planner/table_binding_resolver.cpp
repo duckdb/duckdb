@@ -77,18 +77,11 @@ void TableBindingResolver::VisitOperator(LogicalOperator &op) {
 	}
 }
 
-void TableBindingResolver::VisitExpression(Expression *expression) {
-	if (!visit_expressions) {
-		return;
-	}
-	SQLNodeVisitor::VisitExpression(expression);
-}
-
 void TableBindingResolver::VisitExpression(unique_ptr<Expression> *expression) {
 	if (!visit_expressions) {
 		return;
 	}
-	SQLNodeVisitor::VisitExpression(expression);
+	LogicalOperatorVisitor::VisitExpression(expression);
 }
 
 void TableBindingResolver::Visit(LogicalEmptyResult &op) {

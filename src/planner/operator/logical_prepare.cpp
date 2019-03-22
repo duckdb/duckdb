@@ -27,7 +27,6 @@ public:
 	}
 
 protected:
-	using SQLNodeVisitor::Visit;
 	void Visit(LogicalGet &op) {
 		if (op.table) {
 			table_list.insert(op.table);

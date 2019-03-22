@@ -6,7 +6,8 @@
 using namespace duckdb;
 using namespace std;
 
-ConjunctionExpression::ConjunctionExpression(ExpressionType type, unique_ptr<ParsedExpression> left, unique_ptr<ParsedExpression> right)
+ConjunctionExpression::ConjunctionExpression(ExpressionType type, unique_ptr<ParsedExpression> left,
+                                             unique_ptr<ParsedExpression> right)
     : ParsedExpression(type, ExpressionClass::CONJUNCTION), left(move(left)), right(move(right)) {
 }
 

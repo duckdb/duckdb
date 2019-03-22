@@ -8,7 +8,6 @@
 #include "planner/expression_binder/order_binder.hpp"
 #include "planner/expression_binder/select_binder.hpp"
 #include "planner/expression_binder/where_binder.hpp"
-
 #include "planner/query_node/bound_select_node.hpp"
 
 using namespace duckdb;
@@ -20,7 +19,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	if (statement.from_table) {
 		result->from_table = Bind(*statement.from_table);
 	}
-	
+
 	// visit the select list and expand any "*" statements
 	vector<unique_ptr<ParsedExpression>> new_select_list;
 	for (auto &select_element : statement.select_list) {

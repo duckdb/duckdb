@@ -1,6 +1,6 @@
-#include "planner/expression_binder.hpp"
-#include "planner/expression/bound_conjunction_expression.hpp"
 #include "parser/expression/conjunction_expression.hpp"
+#include "planner/expression/bound_conjunction_expression.hpp"
+#include "planner/expression_binder.hpp"
 
 using namespace duckdb;
 using namespace std;

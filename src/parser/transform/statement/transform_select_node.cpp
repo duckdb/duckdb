@@ -1,6 +1,6 @@
 #include "common/exception.hpp"
-#include "parser/query_node/set_operation_node.hpp"
 #include "parser/query_node/select_node.hpp"
+#include "parser/query_node/set_operation_node.hpp"
 #include "parser/statement/select_statement.hpp"
 #include "parser/transformer.hpp"
 

@@ -14,9 +14,11 @@ namespace duckdb {
 
 class BoundParameterExpression : public Expression {
 public:
-	BoundParameterExpression(size_t parameter_nr) : 
-		Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER, TypeId::INVALID, SQLType(SQLTypeId::INVALID)),
-		parameter_nr(parameter_nr) {}
+	BoundParameterExpression(size_t parameter_nr)
+	    : Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER, TypeId::INVALID,
+	                 SQLType(SQLTypeId::INVALID)),
+	      parameter_nr(parameter_nr) {
+	}
 
 	size_t parameter_nr;
 public:
@@ -28,11 +30,11 @@ public:
 	}
 
 	string ToString() const override {
-		return to_string(parameter_nr);
+		return std::to_string(parameter_nr);
 	}
 
 	unique_ptr<Expression> Copy() override {
-		return make_unique<BoundParameterExpression>(return_type, parameter_nr);
+		return make_unique<BoundParameterExpression>(parameter_nr);
 	}
 };
 } // namespace duckdb

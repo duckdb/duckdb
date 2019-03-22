@@ -159,7 +159,7 @@ template <> uint64_t Cast::Operation(const char *left) {
 
 template <> float Cast::Operation(const char *left) {
 	try {
-		return (float) stod(left, NULL);
+		return (float)stod(left, NULL);
 	} catch (...) {
 		throw ConversionException("Could not convert string '%s' to numeric", left);
 	}

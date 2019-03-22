@@ -25,6 +25,7 @@ public:
 	string column_name;
 	//! Table name of the column name that is referenced (optional)
 	string table_name;
+
 public:
 	bool IsScalar() const override {
 		return false;
@@ -32,12 +33,12 @@ public:
 
 	string GetName() const override;
 	string ToString() const override;
-	
+
 	bool Equals(const BaseExpression *other) const override;
 	uint64_t Hash() const override;
 
 	unique_ptr<ParsedExpression> Copy() override;
-	
+
 	void Serialize(Serializer &serializer) override;
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, Deserializer &source);
 };

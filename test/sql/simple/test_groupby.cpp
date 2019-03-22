@@ -342,7 +342,8 @@ TEST_CASE("Test aggregations on strings", "[aggregations]") {
 	Connection con(db);
 	con.EnableQueryVerification();
 
-	result = con.Query("SELECT NULL as a, NULL as b, NULL as c, NULL as d, 1 as id UNION SELECT 'Кирилл' as a, 'Müller' as b, '我是谁' as c, 'ASCII' as d, 2 as id ORDER BY 1");
+	result = con.Query("SELECT NULL as a, NULL as b, NULL as c, NULL as d, 1 as id UNION SELECT 'Кирилл' as a, "
+	                   "'Müller' as b, '我是谁' as c, 'ASCII' as d, 2 as id ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "Кирилл"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), "Müller"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {Value(), "我是谁"}));

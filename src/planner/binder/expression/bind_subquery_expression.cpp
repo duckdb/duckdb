@@ -1,6 +1,6 @@
-#include "planner/expression_binder.hpp"
 #include "parser/expression/subquery_expression.hpp"
 #include "planner/expression/bound_subquery_expression.hpp"
+#include "planner/expression_binder.hpp"
 
 using namespace duckdb;
 using namespace std;

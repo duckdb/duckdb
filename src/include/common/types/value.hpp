@@ -72,7 +72,7 @@ public:
 	static Value POINTER(uint64_t value);
 	//! Create a real Value from a specified value
 	static Value REAL(float value);
-	
+
 	int64_t GetNumericValue();
 
 	//! Return a copy of this value

@@ -17,7 +17,7 @@ bool abs_matches_arguments(vector<SQLType> &arguments) {
 	if (arguments.size() != 1) {
 		return false;
 	}
-	switch(arguments[0].id) {
+	switch (arguments[0].id) {
 	case SQLTypeId::TINYINT:
 	case SQLTypeId::SMALLINT:
 	case SQLTypeId::INTEGER:

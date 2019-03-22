@@ -1,7 +1,7 @@
 #include "planner/logical_plan_generator.hpp"
 
-#include "planner/bound_sql_statement.hpp"
 #include "planner/bound_query_node.hpp"
+#include "planner/bound_sql_statement.hpp"
 #include "planner/bound_tableref.hpp"
 
 using namespace duckdb;
@@ -35,7 +35,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundSQLStatement &
 }
 
 unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundQueryNode &node) {
-	switch(node.type) {
+	switch (node.type) {
 	case QueryNodeType::SELECT_NODE:
 		return CreatePlan((BoundSelectNode &)node);
 	default:
@@ -45,14 +45,14 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundQueryNode &nod
 }
 
 unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundTableRef &ref) {
-	switch(ref.type) {
-	case BASE_TABLE:
+	switch (ref.type) {
+	case TableReferenceType::BASE_TABLE:
 		return CreatePlan((BoundBaseTableRef &)ref);
-	case SUBQUERY:
+	case TableReferenceType::SUBQUERY:
 		return CreatePlan((BoundSubqueryRef &)ref);
-	case JOIN:
+	case TableReferenceType::JOIN:
 		return CreatePlan((BoundJoinRef &)ref);
-	case CROSS_PRODUCT:
+	case TableReferenceType::CROSS_PRODUCT:
 		return CreatePlan((BoundCrossProductRef &)ref);
 	default:
 		assert(ref.type == TableReferenceType::TABLE_FUNCTION);

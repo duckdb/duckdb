@@ -11,7 +11,7 @@ bool JoinRef::Equals(const TableRef *other_) const {
 	}
 	auto other = (JoinRef *)other_;
 	return left->Equals(other->left.get()) && right->Equals(other->right.get()) &&
-			condition->Equals(other->condition.get()) && type == other->type;
+	       condition->Equals(other->condition.get()) && type == other->type;
 }
 
 unique_ptr<TableRef> JoinRef::Copy() {

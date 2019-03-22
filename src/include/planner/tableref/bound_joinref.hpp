@@ -16,8 +16,7 @@ namespace duckdb {
 //! Represents a join
 class BoundJoinRef : public BoundTableRef {
 public:
-	BoundJoinRef() :
-		BoundTableRef(TableReferenceType::JOIN) {
+	BoundJoinRef() : BoundTableRef(TableReferenceType::JOIN) {
 	}
 
 	//! The left hand side of the join

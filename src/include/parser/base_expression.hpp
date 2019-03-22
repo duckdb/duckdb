@@ -17,8 +17,8 @@ namespace duckdb {
 class BaseExpression {
 public:
 	//! Create an Expression
-	BaseExpression(ExpressionType type, ExpressionClass expression_class) :
-		type(type), expression_class(expression_class) {
+	BaseExpression(ExpressionType type, ExpressionClass expression_class)
+	    : type(type), expression_class(expression_class) {
 	}
 	virtual ~BaseExpression() {
 	}
@@ -38,6 +38,7 @@ public:
 	ExpressionClass expression_class;
 	//! The alias of the expression,
 	string alias;
+
 public:
 	//! Returns true if this expression is an aggregate or not.
 	/*!

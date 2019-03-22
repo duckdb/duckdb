@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include "planner/bound_sql_statement.hpp"
-#include "planner/statement/bound_select_statement.hpp"
-#include "planner/bound_tableref.hpp"
 #include "parser/parsed_data.hpp"
+#include "planner/bound_sql_statement.hpp"
+#include "planner/bound_tableref.hpp"
+#include "planner/statement/bound_select_statement.hpp"
 
 namespace duckdb {
 

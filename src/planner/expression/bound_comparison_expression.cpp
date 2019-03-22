@@ -3,8 +3,10 @@
 using namespace duckdb;
 using namespace std;
 
-BoundComparisonExpression::BoundComparisonExpression(ExpressionType type, unique_ptr<Expression> left, unique_ptr<Expression> right) : 
-	Expression(type, ExpressionClass::BOUND_COMPARISON, TypeId::BOOLEAN, SQLType(SQLTypeId::BOOLEAN)), left(move(left)), right(move(right)) {
+BoundComparisonExpression::BoundComparisonExpression(ExpressionType type, unique_ptr<Expression> left,
+                                                     unique_ptr<Expression> right)
+    : Expression(type, ExpressionClass::BOUND_COMPARISON, TypeId::BOOLEAN, SQLType(SQLTypeId::BOOLEAN)),
+      left(move(left)), right(move(right)) {
 }
 
 string BoundComparisonExpression::ToString() const {

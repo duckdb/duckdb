@@ -26,6 +26,7 @@ public:
 	unique_ptr<ParsedExpression> condition;
 	//! The join type
 	JoinType type;
+
 public:
 	bool Equals(const TableRef *other_) const override;
 

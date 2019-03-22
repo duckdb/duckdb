@@ -14,16 +14,14 @@
 
 namespace duckdb {
 
-enum QueryNodeType : uint8_t {
-	SELECT_NODE = 1,
-	SET_OPERATION_NODE = 2
-};
+enum QueryNodeType : uint8_t { SELECT_NODE = 1, SET_OPERATION_NODE = 2 };
 
 //! Single node in ORDER BY statement
 struct OrderByNode {
-	OrderByNode() {	}
-	OrderByNode(OrderType type, unique_ptr<ParsedExpression> expression) :
-		type(type), expression(move(expression)) {	}
+	OrderByNode() {
+	}
+	OrderByNode(OrderType type, unique_ptr<ParsedExpression> expression) : type(type), expression(move(expression)) {
+	}
 
 	//! Sort order, ASC or DESC
 	OrderType type;
@@ -33,8 +31,10 @@ struct OrderByNode {
 
 class QueryNode {
 public:
-	QueryNode(QueryNodeType type) : type(type) {}
-	virtual ~QueryNode() {}
+	QueryNode(QueryNodeType type) : type(type) {
+	}
+	virtual ~QueryNode() {
+	}
 
 	//! The type of the query node, either SetOperation or Select
 	QueryNodeType type;
@@ -47,7 +47,8 @@ public:
 	//! OFFSET
 	unique_ptr<ParsedExpression> offset;
 
-	virtual const vector<unique_ptr<ParsedExpression>>& GetSelectList() const = 0;
+	virtual const vector<unique_ptr<ParsedExpression>> &GetSelectList() const = 0;
+
 public:
 	virtual bool Equals(const QueryNode *other) const;
 

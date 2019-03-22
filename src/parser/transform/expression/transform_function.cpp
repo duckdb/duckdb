@@ -229,7 +229,8 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(FuncCall *root) {
 					auto sum_cast = make_unique<CastExpression>(SQLType(SQLTypeId::DECIMAL), move(sum));
 					auto count_cast = make_unique<CastExpression>(SQLType(SQLTypeId::DECIMAL), move(count));
 					// create the divide operator
-					return make_unique<OperatorExpression>(ExpressionType::OPERATOR_DIVIDE, move(sum_cast), move(count_cast));
+					return make_unique<OperatorExpression>(ExpressionType::OPERATOR_DIVIDE, move(sum_cast),
+					                                       move(count_cast));
 				} else {
 					return make_unique<AggregateExpression>(agg_fun_type, move(child));
 				}

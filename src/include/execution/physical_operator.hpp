@@ -11,8 +11,8 @@
 #include "catalog/catalog.hpp"
 #include "common/common.hpp"
 #include "common/types/data_chunk.hpp"
-#include "parser/parsed_expression.hpp"
 #include "parser/statement/select_statement.hpp"
+#include "planner/expression.hpp"
 #include "planner/logical_operator.hpp"
 
 namespace duckdb {
@@ -84,17 +84,6 @@ public:
 	//! Create a new empty instance of the operator state
 	virtual unique_ptr<PhysicalOperatorState> GetOperatorState() {
 		return make_unique<PhysicalOperatorState>(children.size() == 0 ? nullptr : children[0].get());
-	}
-
-	//! will pass the visitor to all expressions in the operator
-	virtual void AcceptExpressions(SQLNodeVisitor *v) = 0;
-
-	void Accept(SQLNodeVisitor *v) {
-		assert(v);
-		AcceptExpressions(v);
-		for (auto &child : children) {
-			child->Accept(v);
-		}
 	}
 
 	virtual string ExtraRenderInformation() {

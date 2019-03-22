@@ -16,6 +16,7 @@ public:
 	ParameterExpression();
 
 	size_t parameter_nr;
+
 public:
 	bool IsScalar() const override {
 		return true;

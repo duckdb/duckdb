@@ -21,13 +21,14 @@ public:
 	unique_ptr<ParsedExpression> child;
 	//! The type to cast to
 	SQLType cast_type;
+
 public:
 	string ToString() const override;
-	
+
 	bool Equals(const BaseExpression *other) const override;
 
 	unique_ptr<ParsedExpression> Copy() override;
-	
+
 	void Serialize(Serializer &serializer) override;
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, Deserializer &source);
 };

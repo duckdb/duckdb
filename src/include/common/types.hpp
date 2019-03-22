@@ -29,16 +29,16 @@ struct blob_t {
 //===--------------------------------------------------------------------===//
 enum class TypeId : uint8_t {
 	INVALID = 0,
-	BOOLEAN = 1,    /* bool */
-	TINYINT = 2,    /* int8_t */
-	SMALLINT = 3,   /* int16_t */
-	INTEGER = 4,    /* int32_t */
-	BIGINT = 5,     /* int64_t */
-	POINTER = 6,    /* uint64_t */
-	FLOAT = 7,      /* float32_t */
-	DOUBLE = 8,     /* float64_t */
-	VARCHAR = 9,    /* char*, representing a null-terminated UTF-8 string */
-	VARBINARY = 10  /* blob_t, representing arbitrary bytes */
+	BOOLEAN = 1,   /* bool */
+	TINYINT = 2,   /* int8_t */
+	SMALLINT = 3,  /* int16_t */
+	INTEGER = 4,   /* int32_t */
+	BIGINT = 5,    /* int64_t */
+	POINTER = 6,   /* uint64_t */
+	FLOAT = 7,     /* float32_t */
+	DOUBLE = 8,    /* float64_t */
+	VARCHAR = 9,   /* char*, representing a null-terminated UTF-8 string */
+	VARBINARY = 10 /* blob_t, representing arbitrary bytes */
 };
 
 //===--------------------------------------------------------------------===//
@@ -67,7 +67,15 @@ struct SQLType {
 	uint16_t width;
 	uint8_t scale;
 
-	SQLType(SQLTypeId id, uint16_t width = 0, uint8_t scale = 0) : id(id), width(width), scale(scale) { }
+	SQLType(SQLTypeId id, uint16_t width = 0, uint8_t scale = 0) : id(id), width(width), scale(scale) {
+	}
+
+	bool operator==(const SQLType &rhs) const {
+		return id == rhs.id && width == rhs.width && scale == rhs.scale;
+	}
+	bool operator!=(const SQLType &rhs) const {
+		return !(*this == rhs);
+	}
 
 	//! Serializes a SQLType to a stand-alone binary blob
 	void Serialize(Serializer &serializer);

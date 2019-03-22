@@ -5,8 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-DefaultExpression::DefaultExpression() :
-	ParsedExpression(ExpressionType::VALUE_DEFAULT, ExpressionClass::DEFAULT) {
+DefaultExpression::DefaultExpression() : ParsedExpression(ExpressionType::VALUE_DEFAULT, ExpressionClass::DEFAULT) {
 }
 
 string DefaultExpression::ToString() const {

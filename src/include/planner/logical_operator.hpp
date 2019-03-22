@@ -22,11 +22,21 @@ public:
 	LogicalOperator(LogicalOperatorType type) : type(type) {
 	}
 	LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions)
-	    : type(type), expressions(std::move(expressions)) {
+	    : type(type), expressions(move(expressions)) {
 	}
 	virtual ~LogicalOperator() {
 	}
 
+	//! The type of the logical operator
+	LogicalOperatorType type;
+	//! The set of children of the operator
+	vector<unique_ptr<LogicalOperator>> children;
+	//! The set of expressions contained within the operator, if any
+	vector<unique_ptr<Expression>> expressions;
+	//! The types returned by this logical operator. Set by calling LogicalOperator::ResolveTypes.
+	vector<TypeId> types;
+
+public:
 	LogicalOperatorType GetOperatorType() {
 		return type;
 	}
@@ -44,15 +54,6 @@ public:
 	void AddChild(unique_ptr<LogicalOperator> child) {
 		children.push_back(move(child));
 	}
-
-	//! The type of the logical operator
-	LogicalOperatorType type;
-	//! The set of children of the operator
-	vector<unique_ptr<LogicalOperator>> children;
-	//! The set of expressions contained within the operator, if any
-	vector<unique_ptr<Expression>> expressions;
-	//! The types returned by this logical operator. Set by calling LogicalOperator::ResolveTypes.
-	vector<TypeId> types;
 
 	virtual size_t EstimateCardinality() {
 		// simple estimator, just take the max of the children

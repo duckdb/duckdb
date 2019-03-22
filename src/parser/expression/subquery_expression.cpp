@@ -7,8 +7,8 @@ using namespace duckdb;
 using namespace std;
 
 SubqueryExpression::SubqueryExpression()
-	: ParsedExpression(ExpressionType::SUBQUERY, ExpressionClass::SUBQUERY),
-	  subquery_type(SubqueryType::INVALID), comparison_type(ExpressionType::INVALID) {
+    : ParsedExpression(ExpressionType::SUBQUERY, ExpressionClass::SUBQUERY), subquery_type(SubqueryType::INVALID),
+      comparison_type(ExpressionType::INVALID) {
 }
 
 string SubqueryExpression::ToString() const {

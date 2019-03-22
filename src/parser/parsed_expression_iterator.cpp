@@ -6,66 +6,66 @@ using namespace duckdb;
 using namespace std;
 
 void ParsedExpressionIterator::EnumerateChildren(const ParsedExpression &expr,
-	function<void(const ParsedExpression &child)> callback) {
-	switch(expr.expression_class) {
+                                                 function<void(const ParsedExpression &child)> callback) {
+	switch (expr.expression_class) {
 	case ExpressionClass::AGGREGATE: {
-		auto &aggr_expr = (const AggregateExpression&) expr;
+		auto &aggr_expr = (const AggregateExpression &)expr;
 		if (aggr_expr.child) {
 			callback(*aggr_expr.child);
 		}
 		break;
 	}
 	case ExpressionClass::CASE: {
-		auto &case_expr = (const CaseExpression&) expr;
+		auto &case_expr = (const CaseExpression &)expr;
 		callback(*case_expr.check);
 		callback(*case_expr.result_if_true);
 		callback(*case_expr.result_if_false);
 		break;
 	}
 	case ExpressionClass::CAST: {
-		auto &cast_expr = (const CastExpression&) expr;
+		auto &cast_expr = (const CastExpression &)expr;
 		callback(*cast_expr.child);
 		break;
 	}
 	case ExpressionClass::COMPARISON: {
-		auto &comp_expr = (const ComparisonExpression&) expr;
+		auto &comp_expr = (const ComparisonExpression &)expr;
 		callback(*comp_expr.left);
 		callback(*comp_expr.right);
 		break;
 	}
 	case ExpressionClass::CONJUNCTION: {
-		auto &conj_expr = (const ConjunctionExpression&) expr;
+		auto &conj_expr = (const ConjunctionExpression &)expr;
 		callback(*conj_expr.left);
 		callback(*conj_expr.right);
 		break;
 	}
 	case ExpressionClass::FUNCTION: {
-		auto &func_expr = (const FunctionExpression&) expr;
-		for(auto &child : func_expr.children) {
+		auto &func_expr = (const FunctionExpression &)expr;
+		for (auto &child : func_expr.children) {
 			callback(*child);
 		}
 		break;
 	}
 	case ExpressionClass::OPERATOR: {
-		auto &op_expr = (const OperatorExpression&) expr;
-		for(auto &child : op_expr.children) {
+		auto &op_expr = (const OperatorExpression &)expr;
+		for (auto &child : op_expr.children) {
 			callback(*child);
 		}
 		break;
 	}
 	case ExpressionClass::SUBQUERY: {
-		auto &subquery_expr = (const SubqueryExpression&) expr;
+		auto &subquery_expr = (const SubqueryExpression &)expr;
 		if (subquery_expr.child) {
 			callback(*subquery_expr.child);
 		}
 		break;
 	}
 	case ExpressionClass::WINDOW: {
-		auto &window_expr = (const WindowExpression&) expr;
-		for(auto &partition : window_expr.partitions) {
+		auto &window_expr = (const WindowExpression &)expr;
+		for (auto &partition : window_expr.partitions) {
 			callback(*partition);
 		}
-		for(auto &order : window_expr.orders) {
+		for (auto &order : window_expr.orders) {
 			callback(*order.expression);
 		}
 		if (window_expr.child) {

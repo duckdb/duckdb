@@ -25,12 +25,6 @@ public:
 
 	string ExtraRenderInformation() override;
 
-	void AcceptExpressions(SQLNodeVisitor *v) override {
-		for (auto &e : expressions) {
-			v->VisitExpression(&e);
-		}
-	}
-
 	vector<unique_ptr<Expression>> expressions;
 };
 } // namespace duckdb

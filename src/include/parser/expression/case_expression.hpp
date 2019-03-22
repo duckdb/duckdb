@@ -22,13 +22,14 @@ public:
 	unique_ptr<ParsedExpression> check;
 	unique_ptr<ParsedExpression> result_if_true;
 	unique_ptr<ParsedExpression> result_if_false;
+
 public:
 	string ToString() const override;
 
 	bool Equals(const BaseExpression *other) const override;
 
 	unique_ptr<ParsedExpression> Copy() override;
-	
+
 	void Serialize(Serializer &serializer) override;
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, Deserializer &source);
 };

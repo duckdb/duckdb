@@ -2,8 +2,8 @@
 #include "parser/expression/columnref_expression.hpp"
 #include "parser/expression/constant_expression.hpp"
 #include "parser/query_node/set_operation_node.hpp"
-#include "planner/query_node/bound_set_operation_node.hpp"
 #include "planner/binder.hpp"
+#include "planner/query_node/bound_set_operation_node.hpp"
 
 using namespace duckdb;
 using namespace std;

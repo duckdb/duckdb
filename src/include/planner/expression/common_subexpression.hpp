@@ -22,6 +22,7 @@ public:
 	Expression *child;
 	//! The owned child of the CSE (if any)
 	unique_ptr<Expression> owned_child;
+
 public:
 	bool IsScalar() const override {
 		return false;
@@ -29,7 +30,7 @@ public:
 
 	string ToString() const override;
 
-	bool Equals(const Expression *other) const override;
+	bool Equals(const BaseExpression *other) const override;
 
 	unique_ptr<Expression> Copy() override;
 };

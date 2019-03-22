@@ -5,8 +5,8 @@
 using namespace duckdb;
 using namespace std;
 
-AggregateExpression::AggregateExpression(ExpressionType type, unique_ptr<ParsedExpression> child) :
-	ParsedExpression(type, ExpressionClass::AGGREGATE) {
+AggregateExpression::AggregateExpression(ExpressionType type, unique_ptr<ParsedExpression> child)
+    : ParsedExpression(type, ExpressionClass::AGGREGATE) {
 
 	// translate COUNT(*) into AGGREGATE_COUNT_STAR
 	if (type == ExpressionType::AGGREGATE_COUNT) {

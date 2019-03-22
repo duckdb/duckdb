@@ -22,6 +22,7 @@ public:
 	    : Constraint(ConstraintType::CHECK), expression(move(expression)){};
 
 	unique_ptr<ParsedExpression> expression;
+
 public:
 	string ToString() const override {
 		return "CHECK(" + expression->ToString() + ")";

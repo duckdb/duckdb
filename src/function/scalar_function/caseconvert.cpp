@@ -55,13 +55,13 @@ static void caseconvert_function(Vector inputs[], BoundFunctionExpression &expr,
 		if (input.nullmask[i]) {
 			return;
 		}
-		//if (!has_stats) {
-			// no stats available, might need to reallocate
-			size_t required_len = strlen(input_data[i]) + 1;
-			if (required_len > current_len) {
-				current_len = required_len + 1;
-				output = unique_ptr<char[]>{new char[current_len]};
-			}
+		// if (!has_stats) {
+		// no stats available, might need to reallocate
+		size_t required_len = strlen(input_data[i]) + 1;
+		if (required_len > current_len) {
+			current_len = required_len + 1;
+			output = unique_ptr<char[]>{new char[current_len]};
+		}
 		//}
 		assert(strlen(input_data[i]) < current_len);
 		CASE_FUNCTION(input_data[i], output.get());

@@ -18,7 +18,5 @@ public:
 	}
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
-
-	void AcceptExpressions(SQLNodeVisitor *v) override{};
 };
 } // namespace duckdb

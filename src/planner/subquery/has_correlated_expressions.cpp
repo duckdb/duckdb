@@ -1,7 +1,7 @@
 #include "planner/subquery/has_correlated_expressions.hpp"
 
-#include "parser/expression/bound_columnref_expression.hpp"
-#include "parser/expression/bound_subquery_expression.hpp"
+#include "planner/expression/bound_columnref_expression.hpp"
+#include "planner/expression/bound_subquery_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -15,18 +15,19 @@ void HasCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
 	VisitOperatorExpressions(op);
 }
 
-void HasCorrelatedExpressions::Visit(BoundColumnRefExpression &expr) {
+unique_ptr<Expression> HasCorrelatedExpressions::VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	if (expr.depth == 0) {
-		return;
+		return nullptr;
 	}
 	// correlated column reference
 	assert(expr.depth == 1);
 	has_correlated_expressions = true;
+	return nullptr;
 }
 
-void HasCorrelatedExpressions::Visit(BoundSubqueryExpression &expr) {
+unique_ptr<Expression> HasCorrelatedExpressions::VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	if (!expr.IsCorrelated()) {
-		return;
+		return nullptr;
 	}
 	// check if the subquery contains any of the correlated expressions that we are concerned about in this node
 	for (size_t i = 0; i < correlated_columns.size(); i++) {
@@ -36,4 +37,5 @@ void HasCorrelatedExpressions::Visit(BoundSubqueryExpression &expr) {
 			break;
 		}
 	}
+	return nullptr;
 }

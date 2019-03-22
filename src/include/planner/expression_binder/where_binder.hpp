@@ -16,8 +16,9 @@ namespace duckdb {
 class WhereBinder : public ExpressionBinder {
 public:
 	WhereBinder(Binder &binder, ClientContext &context);
+
 protected:
-	BindResult BindExpression(ParsedExpression& expr, uint32_t depth, bool root_expression = false) override;
+	BindResult BindExpression(ParsedExpression &expr, uint32_t depth, bool root_expression = false) override;
 };
 
 } // namespace duckdb

@@ -8,9 +8,9 @@
 
 #pragma once
 
+#include "parser/parsed_expression.hpp"
 #include "parser/tokens.hpp"
 #include "planner/expression.hpp"
-#include "parser/parsed_expression.hpp"
 
 namespace duckdb {
 
@@ -19,11 +19,9 @@ class ClientContext;
 class SelectNode;
 
 struct BindResult {
-	BindResult(string error) :
-		error(error) {
+	BindResult(string error) : error(error) {
 	}
-	BindResult(unique_ptr<Expression> expr) :
-		expression(move(expr)) {
+	BindResult(unique_ptr<Expression> expr) : expression(move(expr)) {
 	}
 
 	bool HasError() {
@@ -40,6 +38,7 @@ public:
 	virtual ~ExpressionBinder();
 
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr);
+
 protected:
 	string Bind(unique_ptr<ParsedExpression> *expr, uint32_t depth, bool root_expression = false);
 
@@ -63,16 +62,18 @@ protected:
 	bool BoundColumns() {
 		return bound_columns;
 	}
+
 protected:
-	BindResult BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr);
+	unique_ptr<Expression> BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr);
 
 	Binder &binder;
 	ClientContext &context;
 	ExpressionBinder *stored_binder;
 	bool bound_columns = false;
+
 private:
 	//! Retrieves an expression from a BoundExpression node
-	unique_ptr<Expression> GetExpression(ParsedExpression& expr);
+	unique_ptr<Expression> GetExpression(ParsedExpression &expr);
 	unique_ptr<Expression> AddCastToType(unique_ptr<Expression> expr, SQLType target_type);
 };
 

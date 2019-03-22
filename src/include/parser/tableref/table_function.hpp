@@ -19,6 +19,7 @@ public:
 	}
 
 	unique_ptr<ParsedExpression> function;
+
 public:
 	string ToString() const override {
 		return function->ToString();

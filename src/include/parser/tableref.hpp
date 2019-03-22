@@ -24,6 +24,7 @@ public:
 
 	TableReferenceType type;
 	string alias;
+
 public:
 	//! Convert the object to a string
 	virtual string ToString() const {
@@ -41,6 +42,5 @@ public:
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes a blob back into a TableRef
 	static unique_ptr<TableRef> Deserialize(Deserializer &source);
-
 };
 } // namespace duckdb

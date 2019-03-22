@@ -1,19 +1,20 @@
 #include "planner/expression/bound_function_expression.hpp"
-#include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 
+#include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "common/types/hash.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-BoundFunctionExpression::BoundFunctionExpression(TypeId return_type, SQLType sql_type, ScalarFunctionCatalogEntry *bound_function) :
-	Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, return_type, sql_type),
-	bound_function(bound_function) {
+BoundFunctionExpression::BoundFunctionExpression(TypeId return_type, SQLType sql_type,
+                                                 ScalarFunctionCatalogEntry *bound_function)
+    : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, return_type, sql_type),
+      bound_function(bound_function) {
 }
 
 string BoundFunctionExpression::ToString() const {
 	string str = bound_function->name + "(";
-	for(size_t i = 0; i < children.size(); i++) {
+	for (size_t i = 0; i < children.size(); i++) {
 		if (i > 0) {
 			str += ", ";
 		}
@@ -39,7 +40,7 @@ bool BoundFunctionExpression::Equals(const BaseExpression *other_) const {
 	if (children.size() != other->children.size()) {
 		return false;
 	}
-	for(size_t i = 0; i < children.size(); i++) {
+	for (size_t i = 0; i < children.size(); i++) {
 		if (!Expression::Equals(children[i].get(), other->children[i].get())) {
 			return false;
 		}
@@ -48,8 +49,8 @@ bool BoundFunctionExpression::Equals(const BaseExpression *other_) const {
 }
 
 unique_ptr<Expression> BoundFunctionExpression::Copy() {
-	auto copy = make_unique<BoundFunctionExpression>(return_type, bound_function);
-	for(auto &child : children) {
+	auto copy = make_unique<BoundFunctionExpression>(return_type, sql_type, bound_function);
+	for (auto &child : children) {
 		copy->children.push_back(child->Copy());
 	}
 	copy->CopyProperties(*this);

@@ -1,6 +1,6 @@
-#include "planner/expression_binder.hpp"
-#include "planner/expression/bound_function_expression.hpp"
 #include "parser/expression/function_expression.hpp"
+#include "planner/expression/bound_function_expression.hpp"
+#include "planner/expression_binder.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -8,7 +8,7 @@ using namespace std;
 BindResult ExpressionBinder::BindExpression(FunctionExpression &function, uint32_t depth) {
 	// bind the children of the function expression
 	string error;
-	for(size_t i = 0; i < function.children.size(); i++) {
+	for (size_t i = 0; i < function.children.size(); i++) {
 		string result = Bind(&function.children[i], depth);
 		if (!result.empty()) {
 			error = result;
@@ -17,13 +17,14 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, uint32
 	if (!error.empty()) {
 		return BindResult(error);
 	}
-	// all children bound successfully	
+	// all children bound successfully
 	// lookup the function in the catalog
-	auto func = context.db.catalog.GetScalarFunction(context.ActiveTransaction(), function.schema, function.function_name);
+	auto func =
+	    context.db.catalog.GetScalarFunction(context.ActiveTransaction(), function.schema, function.function_name);
 	// extract the children and types
 	vector<SQLType> types;
 	vector<unique_ptr<Expression>> children;
-	for(size_t i = 0; i < function.children.size(); i++) {
+	for (size_t i = 0; i < function.children.size(); i++) {
 		auto child = GetExpression(function.children[i]);
 		types.push_back(child->sql_type);
 		children.push_back(move(child));
@@ -32,7 +33,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, uint32
 	if (!func->matches(types)) {
 		// types do not match up, throw exception
 		string type_str;
-		for(size_t i = 0; i < types.size(); i++) {
+		for (size_t i = 0; i < types.size(); i++) {
 			if (i > 0) {
 				type_str += ", ";
 			}

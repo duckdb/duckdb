@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "planner/expression.hpp"
 #include "common/types/hash.hpp"
+#include "planner/expression.hpp"
 
 namespace duckdb {
 
@@ -47,14 +47,15 @@ using column_binding_map_t = unordered_map<ColumnBinding, T, ColumnBindingHashFu
 //! BoundExpressions, which refer to indexes into the physical chunks that pass through the executor.
 class BoundColumnRefExpression : public Expression {
 public:
-	BoundColumnRefExpression(TypeId type, ColumnBinding binding, uint32_t depth = 0);
-	BoundColumnRefExpression(string alias, TypeId type, ColumnBinding binding, uint32_t depth = 0);
+	BoundColumnRefExpression(TypeId type, SQLType sql_type, ColumnBinding binding, uint32_t depth = 0);
+	BoundColumnRefExpression(string alias, TypeId type, SQLType sql_type, ColumnBinding binding, uint32_t depth = 0);
 
 	//! Column index set by the binder, used to generate the final BoundExpression
 	ColumnBinding binding;
 	//! The subquery depth (i.e. depth 0 = current query, depth 1 = parent query, depth 2 = parent of parent, etc...).
 	//! This is only non-zero for correlated expressions inside subqueries.
 	uint32_t depth;
+
 public:
 	bool IsScalar() const override {
 		return false;

@@ -7,8 +7,8 @@
 using namespace duckdb;
 using namespace std;
 
-ConstantExpression::ConstantExpression(SQLType sql_type, Value val) :
-	ParsedExpression(ExpressionType::VALUE_CONSTANT, ExpressionClass::CONSTANT), value(val), sql_type(sql_type) {
+ConstantExpression::ConstantExpression(SQLType sql_type, Value val)
+    : ParsedExpression(ExpressionType::VALUE_CONSTANT, ExpressionClass::CONSTANT), value(val), sql_type(sql_type) {
 }
 
 string ConstantExpression::ToString() const {
@@ -37,10 +37,11 @@ unique_ptr<ParsedExpression> ConstantExpression::Copy() {
 void ConstantExpression::Serialize(Serializer &serializer) {
 	ParsedExpression::Serialize(serializer);
 	value.Serialize(serializer);
+	sql_type.Serialize(serializer);
 }
 
 unique_ptr<ParsedExpression> ConstantExpression::Deserialize(ExpressionType type, Deserializer &source) {
 	Value value = Value::Deserialize(source);
-	auto expression = make_unique_base<ParsedExpression, ConstantExpression>(value);
-	return expression;
+	auto sql_type = SQLType::Deserialize(source);
+	return make_unique<ConstantExpression>(sql_type, value);
 }

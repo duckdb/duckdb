@@ -14,11 +14,11 @@ namespace duckdb {
 //! Represents a built-in operator expression
 class OperatorExpression : public ParsedExpression {
 public:
-	OperatorExpression(ExpressionType type,
-	                   unique_ptr<ParsedExpression> left = nullptr,
+	OperatorExpression(ExpressionType type, unique_ptr<ParsedExpression> left = nullptr,
 	                   unique_ptr<ParsedExpression> right = nullptr);
 
 	vector<unique_ptr<ParsedExpression>> children;
+
 public:
 	string ToString() const override;
 

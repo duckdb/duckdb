@@ -6,7 +6,6 @@
 using namespace duckdb;
 using namespace std;
 
-
 ParameterExpression::ParameterExpression()
     : ParsedExpression(ExpressionType::VALUE_PARAMETER, ExpressionClass::PARAMETER), parameter_nr(0) {
 }

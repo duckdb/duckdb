@@ -1,5 +1,5 @@
-#include "planner/binder.hpp"
 #include "parser/tableref/crossproductref.hpp"
+#include "planner/binder.hpp"
 #include "planner/tableref/bound_crossproductref.hpp"
 
 using namespace duckdb;
@@ -11,4 +11,3 @@ unique_ptr<BoundTableRef> Binder::Bind(CrossProductRef &ref) {
 	result->right = Bind(*ref.right);
 	return move(result);
 }
-

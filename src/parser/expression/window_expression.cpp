@@ -5,8 +5,8 @@
 using namespace duckdb;
 using namespace std;
 
-WindowExpression::WindowExpression(ExpressionType type, unique_ptr<ParsedExpression> child) :
-	ParsedExpression(type, ExpressionClass::WINDOW) {
+WindowExpression::WindowExpression(ExpressionType type, unique_ptr<ParsedExpression> child)
+    : ParsedExpression(type, ExpressionClass::WINDOW) {
 	switch (type) {
 	case ExpressionType::WINDOW_SUM:
 	case ExpressionType::WINDOW_COUNT_STAR:

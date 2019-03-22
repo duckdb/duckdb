@@ -1,8 +1,9 @@
-#include "planner/binder.hpp"
+#include "main/client_context.hpp"
 #include "parser/tableref/basetableref.hpp"
 #include "parser/tableref/subqueryref.hpp"
+#include "planner/binder.hpp"
 #include "planner/tableref/bound_basetableref.hpp"
-#include "main/client_context.hpp"
+#include "main/database.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -19,16 +20,15 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &expr) {
 	}
 	// not a CTE
 	// extract a table or view from the catalog
-	auto table_or_view = context.db.catalog.GetTableOrView(context.ActiveTransaction(),
-		expr.schema_name, expr.table_name);
+	auto table_or_view =
+	    context.db.catalog.GetTableOrView(context.ActiveTransaction(), expr.schema_name, expr.table_name);
 	switch (table_or_view->type) {
 	case CatalogType::TABLE: {
 		// base table: create the BoundBaseTableRef node
-		auto table = (TableCatalogEntry*) table_or_view;
+		auto table = (TableCatalogEntry *)table_or_view;
 		size_t table_index = GenerateTableIndex();
 		auto result = make_unique<BoundBaseTableRef>(table, table_index);
-		bind_context.AddBaseTable(result.get(),
-		                          expr.alias.empty() ? expr.table_name : expr.alias);
+		bind_context.AddBaseTable(result.get(), expr.alias.empty() ? expr.table_name : expr.alias);
 		return move(result);
 	}
 	case CatalogType::VIEW: {

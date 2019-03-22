@@ -35,7 +35,7 @@ public:
 
 	//! Index used by the LogicalProjection
 	size_t projection_index;
-	
+
 	//! Group index used by the LogicalAggregate (only used if HasAggregation is true)
 	size_t group_index;
 	//! Aggregate index used by the LogicalAggregate (only used if HasAggregation is true)
@@ -47,5 +47,9 @@ public:
 	size_t window_index;
 	//! Window functions to compute (only used if HasWindow is true)
 	vector<unique_ptr<Expression>> windows;
+
+	const vector<unique_ptr<Expression>> &GetSelectList() const override {
+		return select_list;
+	}
 };
 }; // namespace duckdb

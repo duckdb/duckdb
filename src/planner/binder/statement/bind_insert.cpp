@@ -6,8 +6,8 @@ using namespace duckdb;
 using namespace std;
 
 unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
-	auto result = make_unique<BoundInsertStatement>()
-	result->table = context.db.catalog.GetTable(context.ActiveTransaction(), stmt.schema, stmt.table);
+	auto result = make_unique<BoundInsertStatement>() result->table =
+	    context.db.catalog.GetTable(context.ActiveTransaction(), stmt.schema, stmt.table);
 
 	if (stmt.columns.size() > 0) {
 		// insertion statement specifies column list
@@ -37,10 +37,11 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 		// visit the expressions
 		for (auto &expression_list : statement.values) {
 			if (expression_list.size() != expected_columns) {
-				string msg = StringUtil::Format(stmt.columns.size() == 0 ? 
-					"table %s has %d columns but %d values were supplied" : 
-					"Column name/value mismatch for insert on %s: expected %d columns but %d values were supplied",
-					result->table->name.c_str(), expected_columns, expression_list.size());
+				string msg =
+				    StringUtil::Format(stmt.columns.size() == 0 ? "table %s has %d columns but %d values were supplied"
+				                                                : "Column name/value mismatch for insert on %s: "
+				                                                  "expected %d columns but %d values were supplied",
+				                       result->table->name.c_str(), expected_columns, expression_list.size());
 				throw BinderException(msg);
 			}
 			vector<unique_ptr<Expression>> list;

@@ -1,10 +1,12 @@
 #include "planner/subquery/rewrite_correlated_expressions.hpp"
 
-#include "parser/expression/bound_columnref_expression.hpp"
-#include "parser/expression/bound_subquery_expression.hpp"
-#include "parser/expression/case_expression.hpp"
-#include "parser/expression/constant_expression.hpp"
-#include "parser/expression/operator_expression.hpp"
+#include "planner/expression/bound_columnref_expression.hpp"
+#include "planner/expression/bound_subquery_expression.hpp"
+#include "planner/expression/bound_case_expression.hpp"
+#include "planner/expression/bound_constant_expression.hpp"
+#include "planner/expression/bound_operator_expression.hpp"
+
+#include "planner/expression_iterator.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -17,9 +19,10 @@ RewriteCorrelatedExpressions::RewriteCorrelatedExpressions(ColumnBinding base_bi
 void RewriteCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
 	VisitOperatorExpressions(op);
 }
-void RewriteCorrelatedExpressions::Visit(BoundColumnRefExpression &expr) {
+
+unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	if (expr.depth == 0) {
-		return;
+		return nullptr;
 	}
 	// correlated column reference
 	// replace with the entry referring to the duplicate eliminated scan
@@ -28,16 +31,18 @@ void RewriteCorrelatedExpressions::Visit(BoundColumnRefExpression &expr) {
 	assert(entry != correlated_map.end());
 	expr.binding = ColumnBinding(base_binding.table_index, base_binding.column_index + entry->second);
 	expr.depth = 0;
+	return nullptr;
 }
 
-void RewriteCorrelatedExpressions::Visit(BoundSubqueryExpression &expr) {
+unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	if (!expr.IsCorrelated()) {
-		return;
+		return nullptr;
 	}
 	// subquery detected within this subquery
 	// recursively rewrite it using the RewriteCorrelatedRecursive class
 	RewriteCorrelatedRecursive rewrite(expr, base_binding, correlated_map);
 	rewrite.RewriteCorrelatedSubquery(expr);
+	return nullptr;
 }
 
 RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelatedRecursive(
@@ -55,14 +60,13 @@ void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelated
 		}
 	}
 	// now rewrite any correlated BoundColumnRef expressions inside the subquery
-	auto &subquery = (SubqueryExpression &)*expr.subquery;
-	subquery.subquery->EnumerateChildren([&](Expression *child) { RewriteCorrelatedExpressions(child); });
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { RewriteCorrelatedExpressions(child); });
 }
 
-void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelatedExpressions(Expression *child) {
-	if (child->type == ExpressionType::BOUND_COLUMN_REF) {
+void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelatedExpressions(Expression &child) {
+	if (child.type == ExpressionType::BOUND_COLUMN_REF) {
 		// bound column reference
-		auto &bound_colref = (BoundColumnRefExpression &)*child;
+		auto &bound_colref = (BoundColumnRefExpression &)child;
 		if (bound_colref.depth == 0) {
 			// not a correlated column, ignore
 			return;
@@ -76,10 +80,10 @@ void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelated
 			bound_colref.binding = ColumnBinding(base_binding.table_index, base_binding.column_index + entry->second);
 			bound_colref.depth--;
 		}
-	} else if (child->type == ExpressionType::SUBQUERY) {
+	} else if (child.type == ExpressionType::SUBQUERY) {
 		// we encountered another subquery: rewrite recursively
-		assert(child->GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY);
-		auto &bound_subquery = (BoundSubqueryExpression &)*child;
+		assert(child.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY);
+		auto &bound_subquery = (BoundSubqueryExpression &)child;
 		RewriteCorrelatedRecursive rewrite(bound_subquery, base_binding, correlated_map);
 		rewrite.RewriteCorrelatedSubquery(bound_subquery);
 	}
@@ -95,13 +99,12 @@ unique_ptr<Expression> RewriteCountAggregates::VisitReplace(BoundColumnRefExpres
 	if (entry != replacement_map.end()) {
 		// reference to a COUNT(*) aggregate
 		// replace this with CASE WHEN COUNT(*) IS NULL THEN 0 ELSE COUNT(*) END
-		auto case_expr = make_unique<CaseExpression>();
-		auto is_null = make_unique<OperatorExpression>(ExpressionType::OPERATOR_IS_NULL, TypeId::BOOLEAN, expr.Copy());
-		case_expr->check = move(is_null);
-		case_expr->result_if_true = make_unique<ConstantExpression>(Value::Numeric(expr.return_type, 0));
-		case_expr->result_if_false = move(*expr_ptr);
-		case_expr->return_type = expr.return_type;
-		return move(case_expr);
+		auto is_null = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, TypeId::BOOLEAN, SQLType(SQLTypeId::BOOLEAN));
+		is_null->children.push_back(expr.Copy());
+		auto check = move(is_null);
+		auto result_if_true = make_unique<BoundConstantExpression>(expr.sql_type, Value::Numeric(expr.return_type, 0));
+		auto result_if_false = move(*expr_ptr);
+		return make_unique<BoundCaseExpression>(move(check), move(result_if_true), move(result_if_false));
 	}
 	return nullptr;
 }

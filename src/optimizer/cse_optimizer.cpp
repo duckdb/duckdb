@@ -3,6 +3,8 @@
 #include "planner/operator/logical_filter.hpp"
 #include "planner/operator/logical_projection.hpp"
 
+#include "planner/expression_iterator.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -18,7 +20,7 @@ void CommonSubExpressionOptimizer::VisitOperator(LogicalOperator &op) {
 	LogicalOperatorVisitor::VisitOperator(op);
 }
 
-void CommonSubExpressionOptimizer::CountExpressions(Expression *expr, expression_map_t<CSENode> &expression_count) {
+void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, expression_map_t<CSENode> &expression_count) {
 	if (expr->ChildCount() > 0) {
 		// we only consider expressions with children for CSE elimination
 		auto node = expression_count.find(expr);
@@ -30,7 +32,9 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression *expr, expression
 			node->second.count++;
 		}
 		// recursively count the children
-		expr->EnumerateChildren([&](Expression *child) { CountExpressions(child, expression_count); });
+		ExpressionIterator::EnumerateChildren(*expr, [&](Expression &child) {
+			CountExpressions(child, expression_count);
+		});
 	}
 }
 
@@ -86,7 +90,7 @@ void CommonSubExpressionOptimizer::ExtractCommonSubExpresions(LogicalOperator &o
 	// first we count for each expression with children how many types it occurs
 	expression_map_t<CSENode> expression_count;
 	for (auto &expr : op.expressions) {
-		CountExpressions(expr.get(), expression_count);
+		CountExpressions(*expr, expression_count);
 	}
 	// now we iterate over all the expressions and perform the actual CSE elimination
 	for (size_t i = 0; i < op.expressions.size(); i++) {

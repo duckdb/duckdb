@@ -5,13 +5,12 @@
 using namespace duckdb;
 using namespace std;
 
-CaseExpression::CaseExpression() :
-	ParsedExpression(ExpressionType::OPERATOR_CASE_EXPR, ExpressionClass::CASE) {
+CaseExpression::CaseExpression() : ParsedExpression(ExpressionType::OPERATOR_CASE_EXPR, ExpressionClass::CASE) {
 }
 
 string CaseExpression::ToString() const {
 	return "CASE WHEN (" + check->ToString() + ") THEN (" + result_if_true->ToString() + ") ELSE (" +
-			result_if_false->ToString() + ")";
+	       result_if_false->ToString() + ")";
 }
 
 bool CaseExpression::Equals(const BaseExpression *other_) const {

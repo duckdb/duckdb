@@ -3,7 +3,7 @@
 #include "parser/expression/list.hpp"
 #include "planner/operator/list.hpp"
 
-#include <algorithm>
+#include "planner/expression_iterator.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -37,7 +37,7 @@ bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<s
 	}
 	assert(expression.type != ExpressionType::SUBQUERY);
 	bool can_reorder = true;
-	expression.EnumerateChildren([&](Expression *expr) {
+	ExpressionIterator::EnumerateChildren(expression, [&](Expression *expr) {
 		if (!ExtractBindings(*expr, bindings)) {
 			can_reorder = false;
 			return;

@@ -3,6 +3,8 @@
 #include "common/exception.hpp"
 #include "planner/operator/logical_filter.hpp"
 
+#include "planner/expression_iterator.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -28,7 +30,7 @@ unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const
 	}
 	// no changes could be made to this node
 	// recursively run on the children of this node
-	expr->EnumerateChildren([&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
+	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
 		return ExpressionRewriter::ApplyRules(op, rules, move(child));
 	});
 	return expr;

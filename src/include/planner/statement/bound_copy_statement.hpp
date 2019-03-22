@@ -9,6 +9,7 @@
 #pragma once
 
 #include "planner/bound_sql_statement.hpp"
+#include "planner/bound_query_node.hpp"
 
 namespace duckdb {
 class TableCatalogEntry;

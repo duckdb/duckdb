@@ -21,6 +21,7 @@ public:
 	unique_ptr<QueryNode> subquery;
 	//! Alises for the column names
 	vector<string> column_name_alias;
+
 public:
 	bool Equals(const TableRef *other_) const override;
 
@@ -30,6 +31,5 @@ public:
 	void Serialize(Serializer &serializer) override;
 	//! Deserializes a blob back into a SubqueryRef
 	static unique_ptr<TableRef> Deserialize(Deserializer &source);
-
 };
 } // namespace duckdb

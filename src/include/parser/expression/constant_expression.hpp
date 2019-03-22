@@ -21,6 +21,7 @@ public:
 	Value value;
 	//! The SQL Type of the value
 	SQLType sql_type;
+
 public:
 	string ToString() const override;
 

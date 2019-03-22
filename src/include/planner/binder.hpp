@@ -8,12 +8,14 @@
 
 #pragma once
 
-#include "parser/sql_statement.hpp"
-#include "planner/bind_context.hpp"
-#include "planner/bound_sql_statement.hpp"
-#include "planner/bound_query_node.hpp"
-#include "planner/bound_tableref.hpp"
+// #include "parser/sql_statement.hpp"
 #include "parser/tokens.hpp"
+#include "planner/bind_context.hpp"
+#include "planner/bound_tokens.hpp"
+// #include "planner/bound_sql_statement.hpp"
+// #include "planner/bound_query_node.hpp"
+// #include "planner/bound_tableref.hpp"
+#include "planner/expression/bound_columnref_expression.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -22,14 +24,12 @@ class ExpressionBinder;
 struct CorrelatedColumnInfo {
 	ColumnBinding binding;
 	TypeId type;
+	SQLType sql_type;
 	string name;
 	size_t depth;
 
-	CorrelatedColumnInfo(BoundColumnRefExpression &expr) {
-		binding = expr.binding;
-		type = expr.return_type;
-		name = expr.GetName();
-		depth = expr.depth;
+	CorrelatedColumnInfo(BoundColumnRefExpression &expr) : 
+		binding(expr.binding), type(expr.return_type), sql_type(expr.sql_type), name(expr.GetName()), depth(expr.depth) {
 	}
 
 	bool operator==(const CorrelatedColumnInfo &rhs) const {
@@ -48,6 +48,7 @@ public:
 	Binder(ClientContext &context, Binder *parent = nullptr);
 
 	unique_ptr<BoundSQLStatement> Bind(SQLStatement &statement);
+
 private:
 	unique_ptr<BoundSQLStatement> Bind(SelectStatement &stmt);
 	unique_ptr<BoundSQLStatement> Bind(InsertStatement &stmt);
@@ -68,6 +69,7 @@ private:
 	unique_ptr<BoundTableRef> Bind(JoinRef &ref);
 	unique_ptr<BoundTableRef> Bind(SubqueryRef &ref);
 	unique_ptr<BoundTableRef> Bind(TableFunction &ref);
+
 public:
 	void AddCTE(const string &name, QueryNode *cte);
 	unique_ptr<QueryNode> FindCTE(const string &name);

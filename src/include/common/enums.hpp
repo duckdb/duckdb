@@ -200,11 +200,13 @@ enum class ExpressionClass : uint8_t {
 	BOUND_COMPARISON = 29,
 	BOUND_CONJUNCTION = 30,
 	BOUND_CONSTANT = 31,
-	BOUND_FUNCTION = 32,
-	BOUND_OPERATOR = 33,
-	BOUND_REF = 34,
-	BOUND_SUBQUERY = 35,
-	BOUND_WINDOW = 36,
+	BOUND_DEFAULT = 32,
+	BOUND_FUNCTION = 33,
+	BOUND_OPERATOR = 34,
+	BOUND_PARAMETER = 35,
+	BOUND_REF = 36,
+	BOUND_SUBQUERY = 37,
+	BOUND_WINDOW = 38,
 	//===--------------------------------------------------------------------===//
 	// Miscellaneous
 	//===--------------------------------------------------------------------===//

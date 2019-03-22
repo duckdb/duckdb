@@ -20,6 +20,7 @@ public:
 
 	//! Column index this constraint pertains to
 	size_t index;
+
 public:
 	string ToString() const override {
 		return "NOT NULL Constraint";

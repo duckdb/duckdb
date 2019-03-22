@@ -18,6 +18,7 @@ public:
 
 	//! The child of the aggregate expression
 	unique_ptr<ParsedExpression> child;
+
 public:
 	bool IsAggregate() const override {
 		return true;
@@ -28,7 +29,7 @@ public:
 	bool Equals(const BaseExpression *other) const override;
 
 	unique_ptr<ParsedExpression> Copy() override;
-	
+
 	void Serialize(Serializer &serializer) override;
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, Deserializer &source);
 };

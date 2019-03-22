@@ -7,15 +7,17 @@
 using namespace duckdb;
 using namespace std;
 
-FunctionExpression::FunctionExpression(string schema, string function_name, vector<unique_ptr<ParsedExpression>> &children)
-    : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), schema(schema), function_name(StringUtil::Lower(function_name)) {
+FunctionExpression::FunctionExpression(string schema, string function_name,
+                                       vector<unique_ptr<ParsedExpression>> &children)
+    : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), schema(schema),
+      function_name(StringUtil::Lower(function_name)) {
 	for (auto &child : children) {
 		this->children.push_back(move(child));
 	}
 }
 
 FunctionExpression::FunctionExpression(string function_name, vector<unique_ptr<ParsedExpression>> &children)
-	: FunctionExpression(DEFAULT_SCHEMA, function_name, children) {
+    : FunctionExpression(DEFAULT_SCHEMA, function_name, children) {
 }
 
 string FunctionExpression::ToString() const {

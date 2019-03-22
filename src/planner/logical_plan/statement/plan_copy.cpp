@@ -1,7 +1,6 @@
 #include "planner/logical_plan_generator.hpp"
-#include "planner/statement/bound_copy_statement.hpp"
-
 #include "planner/operator/logical_copy.hpp"
+#include "planner/statement/bound_copy_statement.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -22,8 +22,6 @@ public:
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
-	void AcceptExpressions(SQLNodeVisitor *v) override{};
-
 	TableCatalogEntry &tableref;
 	DataTable &table;
 	size_t row_id_index;

@@ -8,15 +8,15 @@
 
 #pragma once
 
-#include "planner/expression.hpp"
 #include "parser/expression/window_expression.hpp"
 #include "planner/bound_query_node.hpp"
+#include "planner/expression.hpp"
 
 namespace duckdb {
 
 class BoundWindowExpression : public Expression {
 public:
-	BoundWindowExpression(ExpressionType type, TypeId return_type);
+	BoundWindowExpression(ExpressionType type, TypeId return_type, SQLType sql_type);
 
 	//! The child expression of the main window aggregate
 	unique_ptr<Expression> child;
@@ -33,11 +33,12 @@ public:
 	//! Offset and default expressions for WINDOW_LEAD and WINDOW_LAG functions
 	unique_ptr<Expression> offset_expr;
 	unique_ptr<Expression> default_expr;
+
 public:
 	bool IsWindow() const override {
 		return true;
 	}
-	
+
 	string ToString() const override;
 
 	bool Equals(const BaseExpression *other) const override;

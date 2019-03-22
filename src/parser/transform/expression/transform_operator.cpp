@@ -77,7 +77,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(A_Expr *root) {
 		case_expr->check = make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, value->Copy(),
 		                                                     TransformExpression(root->rexpr));
 		// if A = B, then constant NULL
-		case_expr->result_if_true = make_unique<ConstantExpression>(Value());
+		case_expr->result_if_true = make_unique<ConstantExpression>(SQLType(SQLTypeId::SQLNULL), Value());
 		// else A
 		case_expr->result_if_false = move(value);
 		return move(case_expr);
@@ -124,7 +124,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(A_Expr *root) {
 			return right_expr;
 		case ExpressionType::OPERATOR_SUBTRACT:
 			target_type = ExpressionType::OPERATOR_MULTIPLY;
-			left_expr = make_unique<ConstantExpression>(Value(-1));
+			left_expr = make_unique<ConstantExpression>(SQLType(SQLTypeId::TINYINT), Value(-1));
 			break;
 		default:
 			throw Exception("Unknown unary operator");

@@ -22,7 +22,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundUpdateStatemen
 	// scan the table for the referenced columns in the update clause
 	auto &table = get.table;
 	vector<unique_ptr<Expression>> projection_expressions;
-	for(size_t i = 0; i < stmt.expressions.size(); i++) {
+	for (size_t i = 0; i < stmt.expressions.size(); i++) {
 		if (stmt.expressions[i]->type != ExpressionType::VALUE_DEFAULT) {
 			// plan subqueries inside the expression
 			PlanSubqueries(&stmt.expressions[i], &root);
@@ -34,7 +34,8 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundUpdateStatemen
 		}
 	}
 	// add the row id column to the projection list
-	projection_expressions.push_back(make_unique<BoundColumnRefExpression>(TypeId::POINTER, ColumnBinding(get.table_index, get.column_ids.size() - 1)));
+	projection_expressions.push_back(make_unique<BoundColumnRefExpression>(
+	    TypeId::POINTER, ColumnBinding(get.table_index, get.column_ids.size() - 1)));
 	// now create the projection
 	auto proj = make_unique<LogicalProjection>(stmt.proj_index, move(projection_expressions));
 	proj->AddChild(move(root));

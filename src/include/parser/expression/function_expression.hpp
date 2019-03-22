@@ -23,6 +23,7 @@ public:
 	string function_name;
 	//! List of arguments to the function
 	vector<unique_ptr<ParsedExpression>> children;
+
 public:
 	string ToString() const override;
 

@@ -15,8 +15,7 @@ namespace duckdb {
 //! Represents a cross product
 class BoundCrossProductRef : public BoundTableRef {
 public:
-	BoundCrossProductRef() :
-		BoundTableRef(TableReferenceType::CROSS_PRODUCT) {
+	BoundCrossProductRef() : BoundTableRef(TableReferenceType::CROSS_PRODUCT) {
 	}
 
 	//! The left hand side of the cross product

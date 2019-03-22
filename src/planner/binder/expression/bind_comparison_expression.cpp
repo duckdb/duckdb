@@ -1,6 +1,6 @@
-#include "planner/expression_binder.hpp"
-#include "planner/expression/bound_comparison_expression.hpp"
 #include "parser/expression/comparison_expression.hpp"
+#include "planner/expression/bound_comparison_expression.hpp"
+#include "planner/expression_binder.hpp"
 
 using namespace duckdb;
 using namespace std;

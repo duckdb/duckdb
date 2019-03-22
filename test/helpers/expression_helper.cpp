@@ -6,6 +6,8 @@
 #include "planner/operator/logical_projection.hpp"
 #include "planner/planner.hpp"
 
+#include "planner/expression_iterator.hpp"
+
 using namespace duckdb;
 using namespace std;
 

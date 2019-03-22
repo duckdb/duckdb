@@ -86,7 +86,7 @@ SQLType SQLType::Deserialize(Deserializer &source) {
 }
 
 string SQLTypeIdToString(SQLTypeId id) {
-	switch(id) {
+	switch (id) {
 	case SQLTypeId::BOOLEAN:
 		return "BOOLEAN";
 	case SQLTypeId::TINYINT:
@@ -122,7 +122,7 @@ string SQLTypeToString(SQLType type) {
 }
 
 bool IsNumericType(SQLTypeId type) {
-	switch(type.id) {
+	switch (type) {
 	case SQLTypeId::TINYINT:
 	case SQLTypeId::SMALLINT:
 	case SQLTypeId::INTEGER:
@@ -137,7 +137,7 @@ bool IsNumericType(SQLTypeId type) {
 }
 
 TypeId GetInternalType(SQLType type) {
-	switch(type.id) {
+	switch (type.id) {
 	case SQLTypeId::BOOLEAN:
 		return TypeId::BOOLEAN;
 	case SQLTypeId::TINYINT:

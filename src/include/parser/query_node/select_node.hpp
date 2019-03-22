@@ -32,9 +32,10 @@ public:
 	//! HAVING clause
 	unique_ptr<ParsedExpression> having;
 
-	const vector<unique_ptr<ParsedExpression>>& GetSelectList() const override {
+	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override {
 		return select_list;
 	}
+
 public:
 	// //! Whether or not the query has a GROUP BY clause
 	// bool HasGroup() {

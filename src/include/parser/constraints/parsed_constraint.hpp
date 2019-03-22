@@ -28,6 +28,7 @@ public:
 	ConstraintType ctype;
 	size_t index;
 	vector<string> columns;
+
 public:
 	string ToString() const override {
 		return "Dummy Constraint";

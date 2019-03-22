@@ -25,7 +25,5 @@ public:
 	SchemaCatalogEntry *schema;
 	//! Table name to create
 	unique_ptr<CreateTableInformation> info;
-
-	void AcceptExpressions(SQLNodeVisitor *v) override{};
 };
 } // namespace duckdb

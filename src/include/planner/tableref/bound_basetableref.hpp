@@ -16,8 +16,8 @@ class TableCatalogEntry;
 //! Represents a TableReference to a base table in the schema
 class BoundBaseTableRef : public BoundTableRef {
 public:
-	BoundBaseTableRef(TableCatalogEntry *table, size_t bind_index) :
-		BoundTableRef(TableReferenceType::BASE_TABLE), table(table), bind_index(bind_index) {
+	BoundBaseTableRef(TableCatalogEntry *table, size_t bind_index)
+	    : BoundTableRef(TableReferenceType::BASE_TABLE), table(table), bind_index(bind_index) {
 	}
 
 	//! The referenced table

@@ -5,7 +5,6 @@
 using namespace duckdb;
 using namespace std;
 
-
 bool BaseTableRef::Equals(const TableRef *other_) const {
 	if (!TableRef::Equals(other_)) {
 		return false;

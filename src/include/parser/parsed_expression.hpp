@@ -19,14 +19,16 @@ class Deserializer;
 /*!
  The ParsedExpression class is a base class that can represent any expression
  part of a SQL statement. This is, for example, a column reference in a SELECT
- clause, but also operators, aggregates or filters. The Expression is emitted by the parser and does not contain any information about bindings to the catalog or to the types. ParsedExpressions are transformed into regular Expressions in the Binder.
+ clause, but also operators, aggregates or filters. The Expression is emitted by the parser and does not contain any
+ information about bindings to the catalog or to the types. ParsedExpressions are transformed into regular Expressions
+ in the Binder.
  */
 class ParsedExpression : public BaseExpression {
 public:
 	//! Create an Expression
-	ParsedExpression(ExpressionType type, ExpressionClass expression_class) :
-		BaseExpression(type, expression_class) {
+	ParsedExpression(ExpressionType type, ExpressionClass expression_class) : BaseExpression(type, expression_class) {
 	}
+
 public:
 	bool IsAggregate() const override;
 	bool IsWindow() const override;
@@ -44,6 +46,7 @@ public:
 	//! Deserializes a blob back into an Expression [CAN THROW:
 	//! SerializationException]
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &source);
+
 protected:
 	//! Copy base Expression properties from another expression to this one,
 	//! used in Copy method

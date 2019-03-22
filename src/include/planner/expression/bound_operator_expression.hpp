@@ -17,6 +17,7 @@ public:
 	BoundOperatorExpression(ExpressionType type, TypeId return_type, SQLType sql_type);
 
 	vector<unique_ptr<Expression>> children;
+
 public:
 	string ToString() const override;
 

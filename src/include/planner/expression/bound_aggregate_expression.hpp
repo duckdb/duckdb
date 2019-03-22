@@ -18,6 +18,7 @@ public:
 
 	//! The child of the aggregate expression
 	unique_ptr<Expression> child;
+
 public:
 	bool IsAggregate() const override {
 		return true;

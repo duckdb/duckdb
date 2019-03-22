@@ -20,6 +20,7 @@ public:
 	TypeId return_type;
 	//! The SQL type of the expression
 	SQLType sql_type;
+
 public:
 	bool IsAggregate() const override;
 	bool IsWindow() const override;
@@ -30,10 +31,11 @@ public:
 	uint64_t Hash() const override;
 
 	static bool Equals(Expression *left, Expression *right) {
-		return BaseExpression::Equals((BaseExpression*) left, (BaseExpression*) right);
+		return BaseExpression::Equals((BaseExpression *)left, (BaseExpression *)right);
 	}
 	//! Create a copy of this expression
 	virtual unique_ptr<Expression> Copy() = 0;
+
 protected:
 	//! Copy base Expression properties from another expression to this one,
 	//! used in Copy method

@@ -18,9 +18,10 @@ public:
 
 	unique_ptr<ParsedExpression> left;
 	unique_ptr<ParsedExpression> right;
+
 public:
 	string ToString() const override;
-	
+
 	bool Equals(const BaseExpression *other) const override;
 
 	unique_ptr<ParsedExpression> Copy() override;

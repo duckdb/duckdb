@@ -12,7 +12,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(UpdateStatement &stmt) {
 	// visit the table reference
 	result->table = Bind(*stmt.table);
 	assert(result->table->type == TableReferenceType::BASE_TABLE);
-	auto table = ((BoundBaseTableRef&) *result->table).table;
+	auto table = ((BoundBaseTableRef &)*result->table).table;
 	result->proj_index = GenerateTableIndex();
 	// project any additional columns required for the condition/expressions
 	if (stmt.condition) {
@@ -30,7 +30,8 @@ unique_ptr<BoundSQLStatement> Binder::Bind(UpdateStatement &stmt) {
 		result->column_ids.push_back(column.oid);
 
 		if (expr->type == ExpressionType::VALUE_DEFAULT) {
-			result->expression.push_back(make_unique<BoundDefaultExpression>(GetInternalType(column.type), column.type));
+			result->expression.push_back(
+			    make_unique<BoundDefaultExpression>(GetInternalType(column.type), column.type));
 		} else {
 			UpdateBinder binder(*this, context);
 			result->expressions.push_back(binder.Bind(expression));
@@ -44,7 +45,6 @@ unique_ptr<BoundSQLStatement> Binder::Bind(UpdateStatement &stmt) {
 			// 	expression->ResolveType();
 			// }
 		}
-
 	}
 	return move(result);
 }

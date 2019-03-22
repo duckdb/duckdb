@@ -29,10 +29,6 @@ public:
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
-	void AcceptExpressions(SQLNodeVisitor *v) override {
-		v->VisitExpression(&function_call);
-	}
-
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 

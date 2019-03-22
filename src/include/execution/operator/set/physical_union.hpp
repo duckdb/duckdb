@@ -17,7 +17,6 @@ public:
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
-	void AcceptExpressions(SQLNodeVisitor *v) override{};
 };
 
 class PhysicalUnionOperatorState : public PhysicalOperatorState {

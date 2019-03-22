@@ -26,9 +26,6 @@ public:
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 	string ExtraRenderInformation() override;
-	void AcceptExpressions(SQLNodeVisitor *v) override {
-		v->VisitExpression(&condition);
-	}
 
 	unique_ptr<Expression> condition;
 };

@@ -21,6 +21,7 @@ public:
 	string schema_name;
 	//! Table name
 	string table_name;
+
 public:
 	string ToString() const override {
 		return "GET(" + schema_name + "." + table_name + ")";

@@ -26,8 +26,6 @@ public:
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
-	void AcceptExpressions(SQLNodeVisitor *v) override{};
-
 	//! The table to copy into (only for COPY FROM)
 	TableCatalogEntry *table;
 	//! Settings for the COPY statement

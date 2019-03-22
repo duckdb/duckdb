@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "planner/bound_tableref.hpp"
 #include "common/types/value.hpp"
+#include "planner/bound_tableref.hpp"
 
 namespace duckdb {
 class TableFunctionCatalogEntry;
@@ -17,8 +17,8 @@ class TableFunctionCatalogEntry;
 //! Represents a reference to a table-producing function call
 class BoundTableFunction : public BoundTableRef {
 public:
-	BoundTableFunction(TableFunctionCatalogEntry *function, size_t bind_index) :
-		BoundTableRef(TableReferenceType::TABLE_FUNCTION), function(function), bind_index(bind_index) {
+	BoundTableFunction(TableFunctionCatalogEntry *function, size_t bind_index)
+	    : BoundTableRef(TableReferenceType::TABLE_FUNCTION), function(function), bind_index(bind_index) {
 	}
 
 	//! The function that is called

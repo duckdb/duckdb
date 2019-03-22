@@ -21,6 +21,7 @@ public:
 	unique_ptr<TableRef> left;
 	//! The right hand side of the cross product
 	unique_ptr<TableRef> right;
+
 public:
 	bool Equals(const TableRef *other_) const override;
 

@@ -345,7 +345,7 @@ SEXP duckdb_ptr_to_str(SEXP extptr) {
 	}
 	SEXP ret = PROTECT(NEW_STRING(1));
 	SET_STRING_ELT(ret, 0, NA_STRING);
-	void* ptr = R_ExternalPtrAddr(extptr);
+	void *ptr = R_ExternalPtrAddr(extptr);
 	if (ptr != NULL) {
 		char buf[100];
 		snprintf(buf, 100, "%p", ptr);

@@ -27,6 +27,7 @@ public:
 	unique_ptr<ParsedExpression> child;
 	//! The comparison type of the child expression with the subquery (in case of ANY, ALL operators), empty otherwise
 	ExpressionType comparison_type;
+
 public:
 	bool HasSubquery() const override {
 		return true;

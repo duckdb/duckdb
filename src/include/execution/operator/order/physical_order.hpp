@@ -25,12 +25,6 @@ public:
 
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
-	void AcceptExpressions(SQLNodeVisitor *v) override {
-		for (auto &odesc : description.orders) {
-			v->VisitExpression(&odesc.expression);
-		}
-	};
-
 	OrderByDescription description;
 };
 

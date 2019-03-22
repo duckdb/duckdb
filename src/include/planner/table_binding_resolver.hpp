@@ -30,7 +30,6 @@ public:
 	TableBindingResolver(bool recurse_into_subqueries = false, bool visit_expressions = false);
 
 	void VisitOperator(LogicalOperator &op) override;
-	void VisitExpression(Expression *expr_ptr) override;
 	void VisitExpression(unique_ptr<Expression> *expression) override;
 
 	//! The set of BoundTables found by the resolver
@@ -51,8 +50,6 @@ protected:
 	void Visit(LogicalSubquery &op);
 	void Visit(LogicalTableFunction &op);
 	void Visit(LogicalWindow &op);
-
-	using SQLNodeVisitor::Visit;
 
 	//! Whether or not we should recurse into subqueries
 	bool recurse_into_subqueries;

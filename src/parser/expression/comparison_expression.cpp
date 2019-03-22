@@ -7,9 +7,9 @@
 using namespace duckdb;
 using namespace std;
 
-
-ComparisonExpression::ComparisonExpression(ExpressionType type, unique_ptr<ParsedExpression> left, unique_ptr<ParsedExpression> right)
-	: ParsedExpression(type, ExpressionClass::COMPARISON) {
+ComparisonExpression::ComparisonExpression(ExpressionType type, unique_ptr<ParsedExpression> left,
+                                           unique_ptr<ParsedExpression> right)
+    : ParsedExpression(type, ExpressionClass::COMPARISON) {
 	this->left = move(left);
 	this->right = move(right);
 }

@@ -2,6 +2,8 @@
 
 #include "planner/operator/logical_filter.hpp"
 
+#include "planner/expression_iterator.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -14,7 +16,7 @@ DistributivityRule::DistributivityRule(ExpressionRewriter &rewriter) : Rule(rewr
 static void GatherAndExpressions(Expression *expression, vector<Expression *> &result) {
 	if (expression->type == ExpressionType::CONJUNCTION_AND) {
 		// gather expressions
-		expression->EnumerateChildren([&](Expression *child) { GatherAndExpressions(child, result); });
+		ExpressionIterator::EnumerateChildren(*expression, [&](Expression *child) { GatherAndExpressions(child, result); });
 	} else {
 		// just add the expression
 		result.push_back(expression);
@@ -24,7 +26,7 @@ static void GatherAndExpressions(Expression *expression, vector<Expression *> &r
 static void GatherOrExpressions(Expression *expression, vector<vector<Expression *>> &result) {
 	assert(expression->type == ExpressionType::CONJUNCTION_OR);
 	// traverse the children
-	expression->EnumerateChildren([&](Expression *child) {
+	ExpressionIterator::EnumerateChildren(*expression, [&](Expression *child) {
 		if (child->type == ExpressionType::CONJUNCTION_OR) {
 			GatherOrExpressions(child, result);
 		} else {

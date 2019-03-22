@@ -1,7 +1,7 @@
+#include "parser/expression/aggregate_expression.hpp"
+#include "planner/expression/bound_aggregate_expression.hpp"
 #include "planner/expression_binder/aggregate_binder.hpp"
 #include "planner/expression_binder/select_binder.hpp"
-#include "planner/expression/bound_aggregate_expression.hpp"
-#include "parser/expression/aggregate_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -55,7 +55,7 @@ static SQLType ResolveAggregateType(AggregateExpression &aggr, unique_ptr<Expres
 	assert(*child);
 	SQLType result_type;
 	SQLType child_type = (*child)->sql_type;
-	switch(aggr.type) {
+	switch (aggr.type) {
 	case ExpressionType::AGGREGATE_MAX:
 	case ExpressionType::AGGREGATE_MIN:
 	case ExpressionType::AGGREGATE_FIRST:
@@ -87,7 +87,8 @@ BindResult SelectBinder::BindExpression(AggregateExpression &aggr, uint32_t dept
 	// successfully bound child, determine result types
 	auto child = aggr.child ? GetExpression(*aggr.child) : nullptr;
 	SQLType result_type = ResolveAggregateType(aggr, &child);
-	return BindResult(make_unique<BoundAggregateExpression>(GetInternalType(result_type), result_type, aggr.type, move(child)));
+	return BindResult(
+	    make_unique<BoundAggregateExpression>(GetInternalType(result_type), result_type, aggr.type, move(child)));
 }
 
 // BindResult SelectBinder::BindAggregate(unique_ptr<Expression> expr, uint32_t depth) {

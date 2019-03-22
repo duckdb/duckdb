@@ -85,8 +85,8 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundSetOperationNo
 		logical_type = LogicalOperatorType::INTERSECT;
 		break;
 	}
-	root = make_unique<LogicalSetOperation>(binding.setop_index, node.types.size(), move(left_node),
-	                                        move(right_node), logical_type);
+	root = make_unique<LogicalSetOperation>(binding.setop_index, node.types.size(), move(left_node), move(right_node),
+	                                        logical_type);
 
 	return VisitQueryNode(node, move(root));
 }

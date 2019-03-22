@@ -22,6 +22,7 @@ public:
 	ScalarFunctionCatalogEntry *bound_function;
 	//! List of arguments to the function
 	vector<unique_ptr<Expression>> children;
+
 public:
 	string ToString() const override;
 

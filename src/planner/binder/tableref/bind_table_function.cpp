@@ -1,26 +1,26 @@
-#include "planner/binder.hpp"
-#include "parser/tableref/table_function.hpp"
-#include "planner/tableref/bound_table_functionref.hpp"
-#include "parser/expression/function_expression.hpp"
 #include "main/client_context.hpp"
+#include "parser/expression/function_expression.hpp"
+#include "parser/tableref/table_function.hpp"
+#include "planner/binder.hpp"
+#include "planner/tableref/bound_table_function.hpp"
+#include "main/database.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 unique_ptr<BoundTableRef> Binder::Bind(TableFunction &ref) {
-	auto result = make_unique<BoundTableFunction>();
-	result->bind_index = GenerateTableIndex();
+	size_t bind_index = GenerateTableIndex();
 
 	assert(ref.function->type == ExpressionType::FUNCTION);
-	auto &function_definition = (FunctionExpression &)*ref.function;
+	auto function_definition = (FunctionExpression *)ref.function.get();
 	// parse the parameters of the function
-	for(auto &child : function_definition->children) {
+	auto function = context.db.catalog.GetTableFunction(context.ActiveTransaction(), function_definition);
+	auto result = make_unique<BoundTableFunction>(function, bind_index);
+	for (auto &child : function_definition->children) {
 		LimitBinder binder(*this, context);
 		result->parameters.push_back(binder.BindAndResolveType(*child));
 	}
-	result->function = context.db.catalog.GetTableFunction(context.ActiveTransaction(), function_definition);
-	bind_context.AddTableFunction(result->table_index,
-	                              ref.alias.empty() ? function_definition->function_name : ref.alias,
-								  result->function);
+	bind_context.AddTableFunction(bind_index,
+	                              ref.alias.empty() ? function_definition->function_name : ref.alias, function);
 	return move(result);
 }

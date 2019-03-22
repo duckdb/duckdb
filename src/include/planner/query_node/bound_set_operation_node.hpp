@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "planner/bound_query_node.hpp"
 #include "planner/binder.hpp"
+#include "planner/bound_query_node.hpp"
 
 namespace duckdb {
 
@@ -32,6 +32,10 @@ public:
 	unique_ptr<Binder> left_binder;
 	//! The binder used by the right side of the set operation
 	unique_ptr<Binder> right_binder;
+
+	const vector<unique_ptr<Expression>> &GetSelectList() const override {
+		return left->GetSelectList();
+	}
 };
 
 }; // namespace duckdb

@@ -6,6 +6,8 @@
 #include "planner/operator/logical_comparison_join.hpp"
 #include "planner/operator/logical_filter.hpp"
 
+#include "planner/expression_iterator.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -22,7 +24,7 @@ static unique_ptr<Expression> ReplaceColRefWithNull(unique_ptr<Expression> expr,
 		}
 		return expr;
 	}
-	expr->EnumerateChildren([&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
+	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
 		return ReplaceColRefWithNull(move(child), right_bindings);
 	});
 	return expr;

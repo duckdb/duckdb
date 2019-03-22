@@ -1,6 +1,6 @@
 #include "planner/operator/logical_filter.hpp"
 
-#include "parser/expression/conjunction_expression.hpp"
+#include "planner/expression/bound_conjunction_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -28,7 +28,7 @@ bool LogicalFilter::SplitPredicates(vector<unique_ptr<Expression>> &expressions)
 	bool found_conjunction = false;
 	for (size_t i = 0; i < expressions.size(); i++) {
 		if (expressions[i]->type == ExpressionType::CONJUNCTION_AND) {
-			auto &conjunction = (ConjunctionExpression &)*expressions[i];
+			auto &conjunction = (BoundConjunctionExpression &)*expressions[i];
 			found_conjunction = true;
 			// AND expression, split into left and right child
 			expressions.push_back(move(conjunction.left));

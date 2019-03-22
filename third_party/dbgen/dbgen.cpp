@@ -364,17 +364,20 @@ static vector<ColumnDefinition> RegionColumns() {
 }
 
 static vector<ColumnDefinition> NationColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("n_nationkey", SQLType(SQLTypeId::INTEGER), false), ColumnDefinition("n_name", SQLType(SQLTypeId::VARCHAR), false),
-	    ColumnDefinition("n_regionkey", SQLType(SQLTypeId::INTEGER), false), ColumnDefinition("n_comment", SQLType(SQLTypeId::VARCHAR), false)};
+	return vector<ColumnDefinition>{ColumnDefinition("n_nationkey", SQLType(SQLTypeId::INTEGER), false),
+	                                ColumnDefinition("n_name", SQLType(SQLTypeId::VARCHAR), false),
+	                                ColumnDefinition("n_regionkey", SQLType(SQLTypeId::INTEGER), false),
+	                                ColumnDefinition("n_comment", SQLType(SQLTypeId::VARCHAR), false)};
 }
 
 static vector<ColumnDefinition> SupplierColumns() {
-	return vector<ColumnDefinition>{
-	    ColumnDefinition("s_suppkey", SQLType(SQLTypeId::INTEGER), false), ColumnDefinition("s_name", SQLType(SQLTypeId::VARCHAR), false),
-	    ColumnDefinition("s_address", SQLType(SQLTypeId::VARCHAR), false), ColumnDefinition("s_nationkey", SQLType(SQLTypeId::INTEGER), false),
-	    ColumnDefinition("s_phone", SQLType(SQLTypeId::VARCHAR), false),   ColumnDefinition("s_acctbal", SQLType(SQLTypeId::DECIMAL), false),
-	    ColumnDefinition("s_comment", SQLType(SQLTypeId::VARCHAR), false)};
+	return vector<ColumnDefinition>{ColumnDefinition("s_suppkey", SQLType(SQLTypeId::INTEGER), false),
+	                                ColumnDefinition("s_name", SQLType(SQLTypeId::VARCHAR), false),
+	                                ColumnDefinition("s_address", SQLType(SQLTypeId::VARCHAR), false),
+	                                ColumnDefinition("s_nationkey", SQLType(SQLTypeId::INTEGER), false),
+	                                ColumnDefinition("s_phone", SQLType(SQLTypeId::VARCHAR), false),
+	                                ColumnDefinition("s_acctbal", SQLType(SQLTypeId::DECIMAL), false),
+	                                ColumnDefinition("s_comment", SQLType(SQLTypeId::VARCHAR), false)};
 }
 
 static vector<ColumnDefinition> CustomerColumns() {

@@ -15,18 +15,19 @@ namespace duckdb {
 //! A BoundReferenceExpression represents a physical index into a DataChunk
 class BoundReferenceExpression : public Expression {
 public:
-	BoundReferenceExpression(string alias, TypeId type, uint32_t index);
-	BoundReferenceExpression(TypeId type, uint32_t index);
+	BoundReferenceExpression(string alias, TypeId type, SQLType sql_type, uint32_t index);
+	BoundReferenceExpression(TypeId type, SQLType sql_type, uint32_t index);
 
 	//! Index used to access data in the chunks
 	uint32_t index;
+
 public:
 	bool IsScalar() const override {
 		return false;
 	}
 
 	string ToString() const override;
-	
+
 	uint64_t Hash() const override;
 	bool Equals(const BaseExpression *other) const override;
 

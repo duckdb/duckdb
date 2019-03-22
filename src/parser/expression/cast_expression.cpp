@@ -5,8 +5,8 @@
 using namespace duckdb;
 using namespace std;
 
-CastExpression::CastExpression(SQLType target, unique_ptr<ParsedExpression> child) :
-	ParsedExpression(ExpressionType::OPERATOR_CAST, ExpressionClass::CAST), cast_type(target) {
+CastExpression::CastExpression(SQLType target, unique_ptr<ParsedExpression> child)
+    : ParsedExpression(ExpressionType::OPERATOR_CAST, ExpressionClass::CAST), cast_type(target) {
 	assert(child);
 	this->child = move(child);
 }

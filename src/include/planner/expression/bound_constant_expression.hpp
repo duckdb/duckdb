@@ -18,6 +18,7 @@ public:
 	BoundConstantExpression(SQLType sql_type, Value value);
 
 	Value value;
+
 public:
 	string ToString() const override;
 

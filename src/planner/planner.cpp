@@ -1,13 +1,16 @@
 #include "planner/planner.hpp"
 
+#include "main/database.hpp"
+
 #include "common/serializer.hpp"
 #include "main/client_context.hpp"
-#include "main/database.hpp"
 #include "parser/statement/list.hpp"
 #include "planner/binder.hpp"
 #include "planner/logical_plan_generator.hpp"
 #include "planner/operator/logical_explain.hpp"
 #include "planner/operator/logical_prepare.hpp"
+
+#include "planner/bound_sql_statement.hpp"
 
 using namespace duckdb;
 using namespace std;

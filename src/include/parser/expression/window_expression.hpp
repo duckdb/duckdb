@@ -44,6 +44,7 @@ public:
 	//! Offset and default expressions for WINDOW_LEAD and WINDOW_LAG functions
 	unique_ptr<ParsedExpression> offset_expr;
 	unique_ptr<ParsedExpression> default_expr;
+
 public:
 	bool IsWindow() const override {
 		return true;
@@ -52,7 +53,7 @@ public:
 	string ToString() const override;
 
 	bool Equals(const BaseExpression *other) const override;
-	
+
 	unique_ptr<ParsedExpression> Copy() override;
 
 	void Serialize(Serializer &serializer) override;

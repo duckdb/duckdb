@@ -20,11 +20,6 @@ public:
 	ColumnBindingResolver();
 
 protected:
-	using SQLNodeVisitor::Visit;
-	void Visit(ColumnRefExpression &expr) override {
-		throw Exception(
-		    "ColumnRefExpression is not allowed here, should have been converted to BoundColumnRefExpression already!");
-	}
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 };
 } // namespace duckdb

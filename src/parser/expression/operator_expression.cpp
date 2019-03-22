@@ -6,10 +6,9 @@
 using namespace duckdb;
 using namespace std;
 
-OperatorExpression::OperatorExpression(ExpressionType type,
-                    unique_ptr<ParsedExpression> left,
-                    unique_ptr<ParsedExpression> right)
-	: ParsedExpression(type, ExpressionClass::OPERATOR) {
+OperatorExpression::OperatorExpression(ExpressionType type, unique_ptr<ParsedExpression> left,
+                                       unique_ptr<ParsedExpression> right)
+    : ParsedExpression(type, ExpressionClass::OPERATOR) {
 	if (left) {
 		children.push_back(move(left));
 	}

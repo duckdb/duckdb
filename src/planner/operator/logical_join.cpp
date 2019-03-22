@@ -1,7 +1,9 @@
 #include "planner/operator/logical_join.hpp"
 
-#include "parser/expression/bound_columnref_expression.hpp"
+#include "planner/expression/bound_columnref_expression.hpp"
 #include "planner/table_binding_resolver.hpp"
+
+#include "planner/expression_iterator.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -55,5 +57,5 @@ void LogicalJoin::GetExpressionBindings(Expression &expr, unordered_set<size_t> 
 		assert(colref.depth == 0);
 		bindings.insert(colref.binding.table_index);
 	}
-	expr.EnumerateChildren([&](Expression *child) { GetExpressionBindings(*child, bindings); });
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { GetExpressionBindings(child, bindings); });
 }

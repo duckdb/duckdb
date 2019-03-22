@@ -2,6 +2,8 @@
 #include "parser/expression/bound_columnref_expression.hpp"
 #include "planner/operator/logical_subquery.hpp"
 
+#include "planner/expression_iterator.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -29,7 +31,7 @@ static void RewriteSubqueryExpressionBindings(Filter &filter, Expression &expr, 
 		// table could not be found!
 		assert(0);
 	}
-	expr.EnumerateChildren([&](Expression *child) { RewriteSubqueryExpressionBindings(filter, *child, subquery); });
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression *child) { RewriteSubqueryExpressionBindings(filter, *child, subquery); });
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownSubquery(unique_ptr<LogicalOperator> op) {

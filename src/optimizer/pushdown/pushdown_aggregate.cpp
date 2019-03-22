@@ -3,6 +3,8 @@
 #include "planner/operator/logical_empty_result.hpp"
 #include "planner/operator/logical_join.hpp"
 
+#include "planner/expression_iterator.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -17,7 +19,7 @@ static unique_ptr<Expression> ReplaceGroupBindings(LogicalAggregate &proj, uniqu
 		// replace the binding with a copy to the expression at the referenced index
 		return proj.groups[colref.binding.column_index]->Copy();
 	}
-	expr->EnumerateChildren([&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
+	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
 		return ReplaceGroupBindings(proj, move(child));
 	});
 	return expr;

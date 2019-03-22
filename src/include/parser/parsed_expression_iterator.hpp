@@ -16,7 +16,8 @@ namespace duckdb {
 
 class ParsedExpressionIterator {
 public:
-	static void EnumerateChildren(const ParsedExpression &expression, std::function<void(const ParsedExpression &child)> callback);
+	static void EnumerateChildren(const ParsedExpression &expression,
+	                              std::function<void(const ParsedExpression &child)> callback);
 };
 
 } // namespace duckdb

@@ -26,9 +26,10 @@ public:
 	//! The right side of the set operation
 	unique_ptr<QueryNode> right;
 
-	const vector<unique_ptr<ParsedExpression>>& GetSelectList() const override {
+	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override {
 		return left->GetSelectList();
 	}
+
 public:
 	bool Equals(const QueryNode *other) const override;
 	//! Create a copy of this SelectNode

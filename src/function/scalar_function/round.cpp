@@ -17,7 +17,7 @@ bool round_matches_arguments(vector<SQLType> &arguments) {
 	if (arguments.size() != 2) {
 		return false;
 	}
-	switch(arguments[0].id) {
+	switch (arguments[0].id) {
 	case SQLTypeId::TINYINT:
 	case SQLTypeId::SMALLINT:
 	case SQLTypeId::INTEGER:
@@ -28,7 +28,7 @@ bool round_matches_arguments(vector<SQLType> &arguments) {
 	default:
 		return false;
 	}
-	switch(arguments[1].id) {
+	switch (arguments[1].id) {
 	case SQLTypeId::TINYINT:
 	case SQLTypeId::SMALLINT:
 	case SQLTypeId::INTEGER:

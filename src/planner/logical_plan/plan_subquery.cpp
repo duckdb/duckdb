@@ -327,7 +327,9 @@ static unique_ptr<Expression> PlanSubquery(Binder &binder, ClientContext &contex
 unique_ptr<Expression> LogicalPlanGenerator::VisitReplace(BoundSubqueryExpression &expr,
                                                           unique_ptr<Expression> *expr_ptr) {
 	// first visit the children of the Subquery expression, if any
-	VisitExpressionChildren(expr);
+	if (expr.child) {
+		PlanSubqueries(&expr.child, root);
+	}
 	if (expr.IsCorrelated() && !plan_subquery) {
 		// detected a nested correlated subquery
 		// we don't plan it yet here, we are currently planning a subquery

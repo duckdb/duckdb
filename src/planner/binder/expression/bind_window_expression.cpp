@@ -1,6 +1,6 @@
-#include "planner/expression_binder.hpp"
 #include "parser/expression/window_expression.hpp"
 #include "planner/expression/bound_window_expression.hpp"
+#include "planner/expression_binder.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -29,9 +29,7 @@ BindResult ExpressionBinder::Bind(WindowExpression &window, uint32_t depth) {
 	// move the WINDOW expression into the set of bound windows
 	node.binding.windows.push_back(move(bind_result.expression));
 	return BindResult(move(colref));
-	
 }
-
 
 // BindResult SelectBinder::BindWindow(unique_ptr<Expression> expr, uint32_t depth) {
 // 	assert(expr && expr->GetExpressionClass() == ExpressionClass::WINDOW);

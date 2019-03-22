@@ -1,59 +1,52 @@
 #include "parser/parsed_expression.hpp"
-#include "parser/parsed_expression_iterator.hpp"
 
 #include "common/serializer.hpp"
 #include "common/types/hash.hpp"
-
 #include "parser/expression/list.hpp"
+#include "parser/parsed_expression_iterator.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 bool ParsedExpression::IsAggregate() const {
 	bool is_aggregate = false;
-	ParsedExpressionIterator::EnumerateChildren(*this, [&](const ParsedExpression &child) {
-		is_aggregate |= child.IsAggregate();
-	});
+	ParsedExpressionIterator::EnumerateChildren(
+	    *this, [&](const ParsedExpression &child) { is_aggregate |= child.IsAggregate(); });
 	return is_aggregate;
 }
 
 bool ParsedExpression::IsWindow() const {
 	bool is_window = false;
-	ParsedExpressionIterator::EnumerateChildren(*this, [&](const ParsedExpression &child) {
-		is_window |= child.IsWindow();
-	});
+	ParsedExpressionIterator::EnumerateChildren(*this,
+	                                            [&](const ParsedExpression &child) { is_window |= child.IsWindow(); });
 	return is_window;
 }
 
 bool ParsedExpression::IsScalar() const {
 	bool is_scalar = true;
-	ParsedExpressionIterator::EnumerateChildren(*this, [&](const ParsedExpression &child) {
-		is_scalar |= child.IsScalar();
-	});
+	ParsedExpressionIterator::EnumerateChildren(*this,
+	                                            [&](const ParsedExpression &child) { is_scalar |= child.IsScalar(); });
 	return is_scalar;
 }
 
 bool ParsedExpression::HasParameter() const {
 	bool has_parameter = false;
-	ParsedExpressionIterator::EnumerateChildren(*this, [&](const ParsedExpression &child) {
-		has_parameter |= child.HasParameter();
-	});
+	ParsedExpressionIterator::EnumerateChildren(
+	    *this, [&](const ParsedExpression &child) { has_parameter |= child.HasParameter(); });
 	return has_parameter;
 }
 
 bool ParsedExpression::HasSubquery() const {
 	bool has_subquery = false;
-	ParsedExpressionIterator::EnumerateChildren(*this, [&](const ParsedExpression &child) {
-		has_subquery |= child.HasSubquery();
-	});
+	ParsedExpressionIterator::EnumerateChildren(
+	    *this, [&](const ParsedExpression &child) { has_subquery |= child.HasSubquery(); });
 	return has_subquery;
 }
 
 uint64_t ParsedExpression::Hash() const {
 	uint64_t hash = duckdb::Hash<uint32_t>((uint32_t)type);
-	ParsedExpressionIterator::EnumerateChildren(*this, [&](const ParsedExpression &child) {
-		hash = CombineHash(child.Hash(), hash);
-	});
+	ParsedExpressionIterator::EnumerateChildren(
+	    *this, [&](const ParsedExpression &child) { hash = CombineHash(child.Hash(), hash); });
 	return hash;
 }
 

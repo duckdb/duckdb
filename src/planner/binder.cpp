@@ -1,21 +1,21 @@
 #include "planner/binder.hpp"
 
-#include "main/client_context.hpp"
-#include "main/database.hpp"
-#include "parser/constraints/list.hpp"
-#include "parser/expression/list.hpp"
-#include "parser/query_node/list.hpp"
 #include "parser/statement/list.hpp"
-#include "parser/tableref/list.hpp"
-#include "planner/expression_binder/where_binder.hpp"
+#include "planner/bound_query_node.hpp"
+#include "planner/bound_sql_statement.hpp"
+#include "planner/bound_tableref.hpp"
+#include "planner/expression.hpp"
+// #include "parser/tableref/table_function.hpp"
+
+// #include "parser/query_node.hpp"
+// #include "parser/tableref/list.hpp"
+// #include "planner/expression_binder/where_binder.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-Binder::Binder(ClientContext &context, Binder *parent) :
-	context(context),
-	parent(!parent ? nullptr : (parent->parent ? parent->parent : parent)),
-	bound_tables(0) {
+Binder::Binder(ClientContext &context, Binder *parent)
+    : context(context), parent(!parent ? nullptr : (parent->parent ? parent->parent : parent)), bound_tables(0) {
 }
 
 unique_ptr<BoundSQLStatement> Binder::Bind(SQLStatement &statement) {
@@ -45,7 +45,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(SQLStatement &statement) {
 }
 
 unique_ptr<BoundQueryNode> Binder::Bind(QueryNode &node) {
-	switch(node.type) {
+	switch (node.type) {
 	case QueryNodeType::SELECT_NODE:
 		return Bind((SelectNode &)node);
 	default:
@@ -55,7 +55,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(QueryNode &node) {
 }
 
 unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
-	switch(ref.type) {
+	switch (ref.type) {
 	case TableReferenceType::BASE_TABLE:
 		return Bind((BaseTableRef &)ref);
 	case TableReferenceType::CROSS_PRODUCT:
@@ -66,7 +66,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 		return Bind((SubqueryRef &)ref);
 	default:
 		assert(ref.type == TableReferenceType::TABLE_FUNCTION);
-		return Bind((TableFunction &)node);
+		return Bind((TableFunction &)ref);
 	}
 }
 

@@ -1,6 +1,6 @@
-#include "planner/expression_binder.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
 #include "parser/expression/columnref_expression.hpp"
+#include "planner/expression/bound_columnref_expression.hpp"
+#include "planner/expression_binder.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -17,7 +17,8 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref, uint32_
 			                                                 colref.column_name.c_str()));
 		}
 	}
-	BindResult result = binder.bind_context.BindColumn(move(expr), depth);;
+	BindResult result = binder.bind_context.BindColumn(move(expr), depth);
+	;
 	if (!result.HasError()) {
 		bound_columns = true;
 	}

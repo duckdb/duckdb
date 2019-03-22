@@ -23,8 +23,6 @@ public:
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 	string ExtraRenderInformation() override;
 
-	void AcceptExpressions(SQLNodeVisitor *v) override{};
-
 	unique_ptr<PhysicalOperator> join;
 	unique_ptr<PhysicalOperator> distinct;
 	ChunkCollection lhs_data;

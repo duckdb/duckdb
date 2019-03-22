@@ -19,7 +19,7 @@ unique_ptr<ParsedExpression> Transformer::TransformCase(CaseExpr *root) {
 	if (root->defresult) {
 		def_res = TransformExpression(reinterpret_cast<Node *>(root->defresult));
 	} else {
-		def_res = make_unique<ConstantExpression>(Value());
+		def_res = make_unique<ConstantExpression>(SQLType(SQLTypeId::SQLNULL), Value());
 	}
 	// def_res will be the else part of the innermost case expression
 

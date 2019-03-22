@@ -23,12 +23,6 @@ public:
 
 	void _GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
-	void AcceptExpressions(SQLNodeVisitor *v) override {
-		for (auto &e : expressions) {
-			v->VisitExpression(&e);
-		}
-	}
-
 	TableCatalogEntry &tableref;
 	DataTable &table;
 	vector<column_t> columns;

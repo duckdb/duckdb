@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "planner/expression.hpp"
 #include "planner/binder.hpp"
 #include "planner/bound_query_node.hpp"
+#include "planner/expression.hpp"
 
 namespace duckdb {
 
@@ -32,6 +32,7 @@ public:
 	unique_ptr<Expression> child;
 	//! The comparison type of the child expression with the subquery (in case of ANY, ALL operators)
 	ExpressionType comparison_type;
+
 public:
 	bool HasSubquery() const override {
 		return true;

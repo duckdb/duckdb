@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include "planner/logical_operator.hpp"
+#include "planner/binder.hpp"
 #include "planner/bound_tokens.hpp"
+#include "planner/logical_operator.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -21,6 +22,7 @@ public:
 	LogicalPlanGenerator(Binder &binder, ClientContext &context, bool allow_parameter = false);
 
 	unique_ptr<LogicalOperator> CreatePlan(BoundSQLStatement &statement);
+
 private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundSelectStatement &statement);
 	unique_ptr<LogicalOperator> CreatePlan(BoundInsertStatement &statement);
@@ -47,7 +49,7 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundTableFunction &ref);
 
 	void PlanSubqueries(unique_ptr<Expression> *expr, unique_ptr<LogicalOperator> *root);
-	
+
 	//! Whether or not subqueries should be planned already
 	bool plan_subquery = true;
 	bool has_unplanned_subqueries = false;

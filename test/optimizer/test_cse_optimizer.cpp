@@ -1,8 +1,8 @@
 #include "catch.hpp"
 #include "common/helper.hpp"
 #include "expression_helper.hpp"
-#include "parser/expression/common_subexpression.hpp"
 #include "optimizer/cse_optimizer.hpp"
+#include "parser/expression/common_subexpression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -16,7 +16,7 @@ TEST_CASE("Test CSE Optimizer", "[optimizer]") {
 
 	CommonSubExpressionOptimizer optimizer;
 	ExpressionHelper helper(con.context);
-	
+
 	// simple CSE
 	auto tree = helper.ParseLogicalTree("SELECT i+1, i+1 FROM integers");
 	optimizer.VisitOperator(*tree);
@@ -39,7 +39,7 @@ TEST_CASE("Test CSE Optimizer", "[optimizer]") {
 	REQUIRE(tree->expressions[2]->type == ExpressionType::COMMON_SUBEXPRESSION);
 	REQUIRE(tree->expressions[3]->type == ExpressionType::COMMON_SUBEXPRESSION);
 	REQUIRE(tree->expressions[4]->type == ExpressionType::OPERATOR_ADD);
-	auto &op = (OperatorExpression&) *tree->expressions[4];
+	auto &op = (OperatorExpression &)*tree->expressions[4];
 	REQUIRE(op.children[0]->type == ExpressionType::COMMON_SUBEXPRESSION);
 	REQUIRE(op.children[1]->type == ExpressionType::COMMON_SUBEXPRESSION);
 
@@ -51,8 +51,8 @@ TEST_CASE("Test CSE Optimizer", "[optimizer]") {
 	auto &filter = *tree->children[0];
 	REQUIRE(filter.expressions[0]->GetExpressionClass() == ExpressionClass::COMPARISON);
 	REQUIRE(filter.expressions[1]->GetExpressionClass() == ExpressionClass::COMPARISON);
-	auto &lcomp = (ComparisonExpression&) *filter.expressions[0];
-	auto &rcomp = (ComparisonExpression&) *filter.expressions[1];
+	auto &lcomp = (ComparisonExpression &)*filter.expressions[0];
+	auto &rcomp = (ComparisonExpression &)*filter.expressions[1];
 	REQUIRE(lcomp.left->type == ExpressionType::COMMON_SUBEXPRESSION);
 	REQUIRE(rcomp.left->type == ExpressionType::COMMON_SUBEXPRESSION);
 }

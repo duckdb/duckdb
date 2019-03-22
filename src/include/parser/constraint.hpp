@@ -23,7 +23,7 @@ public:
 	}
 
 	ConstraintType type;
-	
+
 public:
 	virtual string ToString() const = 0;
 	void Print();
