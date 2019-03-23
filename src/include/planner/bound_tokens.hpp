@@ -47,8 +47,10 @@ class BoundDefaultExpression;
 class BoundFunctionExpression;
 class BoundOperatorExpression;
 class BoundParameterExpression;
+class BoundReferenceExpression;
 class BoundSubqueryExpression;
 class BoundWindowExpression;
+class CommonSubExpression;
 
 //===--------------------------------------------------------------------===//
 // TableRefs

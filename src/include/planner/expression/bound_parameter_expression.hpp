@@ -21,6 +21,7 @@ public:
 	}
 
 	size_t parameter_nr;
+	Value value;
 public:
 	bool IsScalar() const override {
 		return true;

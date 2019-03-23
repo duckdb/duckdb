@@ -1,7 +1,7 @@
 
 add_subdirectory(expression)
 add_subdirectory(binder)
-# add_subdirectory(expression_binder)
+add_subdirectory(expression_binder)
 add_subdirectory(logical_plan)
 add_subdirectory(operator)
 add_subdirectory(subquery)

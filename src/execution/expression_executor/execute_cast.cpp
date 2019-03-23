@@ -1,21 +1,20 @@
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
-#include "parser/expression/cast_expression.hpp"
+#include "planner/expression/bound_cast_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-void ExpressionExecutor::Visit(CastExpression &expr) {
+void ExpressionExecutor::Execute(BoundCastExpression &expr, Vector &result) {
 	// resolve the child
-	Vector l;
-	Execute(expr.child);
-	if (vector.type == expr.return_type) {
+	Vector child;
+	Execute(*expr.child, child);
+	if (child.type == expr.return_type) {
 		// NOP cast
-		return;
+		child.Move(result);
+	} else {
+		// cast it to the type specified by the cast expression
+		result.Initialize(expr.return_type);
+		VectorOperations::Cast(child, result);
 	}
-	vector.Move(l);
-	// now cast it to the type specified by the cast expression
-	vector.Initialize(expr.return_type);
-	VectorOperations::Cast(l, vector);
-	Verify(expr);
 }

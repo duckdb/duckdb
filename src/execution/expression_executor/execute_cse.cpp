@@ -1,24 +1,24 @@
 #include "common/vector_operations/vector_operations.hpp"
 #include "execution/expression_executor.hpp"
-#include "parser/expression/common_subexpression.hpp"
+#include "planner/expression/common_subexpression.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-void ExpressionExecutor::Visit(CommonSubExpression &expr) {
+void ExpressionExecutor::Execute(CommonSubExpression &expr, Vector &result) {
 	// check if the CSE has already been executed
-	auto entry = state->cached_cse.find(expr.child);
-	if (entry != state->cached_cse.end()) {
+	auto entry = cached_cse.find(expr.child);
+	if (entry != cached_cse.end()) {
 		// already existed, just reference the stored vector!
-		vector.Reference(*(entry->second));
+		result.Reference(*(entry->second));
 	} else {
 		// else execute it
-		Execute(expr.child);
-		auto it = state->cached_cse.insert(make_pair(expr.child, make_unique<Vector>()));
+		Execute(*expr.child, result);
+		auto it = cached_cse.insert(make_pair(expr.child, make_unique<Vector>()));
 		auto &inserted_vector = *(it.first->second);
 		// move the result data to the vector cached in the CSE map
-		vector.Move(inserted_vector);
+		result.Move(inserted_vector);
 		// now reference that vector in the result
-		vector.Reference(inserted_vector);
+		result.Reference(inserted_vector);
 	}
 }
