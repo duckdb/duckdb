@@ -112,6 +112,8 @@ void CommonAggregateOptimizer::ExtractCommonAggregateExpressions(LogicalOperator
 		
 		aggregate_index++;
 	}
-
-	aggregate->expressions.swap(new_aggregate_expressions);
+	// TODO this fixes sqlite issues but is probably not the underlying issue
+	if (new_aggregate_expressions.size() > 0) {
+		aggregate->expressions.swap(new_aggregate_expressions);
+	}
 }

@@ -3,6 +3,7 @@
 #include "expression_helper.hpp"
 #include "parser/expression/common_subexpression.hpp"
 #include "optimizer/cse_optimizer.hpp"
+#include "test_helpers.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -55,4 +56,15 @@ TEST_CASE("Test CSE Optimizer", "[optimizer]") {
 	auto &rcomp = (ComparisonExpression&) *filter.expressions[1];
 	REQUIRE(lcomp.left->type == ExpressionType::COMMON_SUBEXPRESSION);
 	REQUIRE(rcomp.left->type == ExpressionType::COMMON_SUBEXPRESSION);
+}
+
+
+TEST_CASE("CSE NULL*MIN(42) defense", "[optimizer]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	auto result = con.Query("SELECT NULL * MIN(42);");
+	REQUIRE(result->success);
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 }

@@ -132,18 +132,15 @@ void PhysicalPlanGenerator::Visit(LogicalAggregate &op) {
 	LogicalOperatorVisitor::VisitOperatorChildren(op);
 
 	if (op.groups.size() == 0) {
-		// no groups
-		if (!plan) {
-			// and no FROM clause, use a dummy aggregate
-			auto groupby = make_unique<PhysicalHashAggregate>(op.types, move(op.expressions));
-			this->plan = move(groupby);
-		} else {
-			// but there is a FROM clause
-			// special case: aggregate entire columns together
-			auto groupby = make_unique<PhysicalHashAggregate>(op.types, move(op.expressions));
-			groupby->children.push_back(move(plan));
-			this->plan = move(groupby);
+		if (op.expressions.size() == 0) {
+			throw Exception("No groups and no expressions, not much of an aggregate left");
 		}
+		// no groups
+		auto groupby = make_unique<PhysicalHashAggregate>(op.types, move(op.expressions));
+		if (plan) {
+			groupby->children.push_back(move(plan));
+		}
+		this->plan = move(groupby);
 	} else {
 		// groups! create a GROUP BY aggregator
 		if (!plan) {
