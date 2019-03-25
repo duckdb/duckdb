@@ -186,6 +186,7 @@ matrix:
 
       before_script:
         - choco install python3 --pre
+        - ls -R "C:/Python38"
         - export PATH=C:\Python38:$PATH
         - python -m pip install --user "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
         - cd tools/pythonpkg
