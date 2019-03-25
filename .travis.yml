@@ -167,6 +167,7 @@ matrix:
       env:
         - MATRIX_EVAL="CC=clang-6.0 && CXX=clang++-6.0"
 
+
     - os: windows
       name: VS 2018
 
@@ -181,10 +182,10 @@ matrix:
     - os: windows
       name: Python Package
 
-      language: python
-      python: 3.7
+      language: c
 
       before_script:
+        - choco install python3
         - pip3 install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3"
         - cd tools/pythonpkg
 
@@ -206,6 +207,23 @@ matrix:
       script:
         - python3 setup.py install
         - python3 -m pytest tests
+
+
+    - os: osx
+      name: Python Package
+      osx_image: xcode10.1
+
+      language: python
+      python: 3.7
+
+      before_script:
+        - pip3 install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3"
+        - cd tools/pythonpkg
+
+      script:
+        - python3 setup.py install
+        - python3 -m pytest tests
+
 
     - os: linux
       name: R Package
@@ -226,6 +244,28 @@ matrix:
 
       script:
         - R -f testthat.R
+
+
+    - os: osx
+      osx_image: xcode10.1
+      name: R Package
+
+      language: r
+      r: devel
+
+      before_install:
+        - R -e 'install.packages(c("DBI", "testthat", "DBItest"),repos=c("http://cran.rstudio.com/"))'
+        - cd tools/rpkg
+
+      install:
+        -  R CMD INSTALL .
+
+      before_script:
+        - cd tests
+
+      script:
+        - R -f testthat.R
+
 
 before_install:
   - eval "${MATRIX_EVAL}"
