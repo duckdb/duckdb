@@ -182,16 +182,24 @@ matrix:
     - os: windows
       name: Python Package
 
-      language: c
+      language: cpp
+
+      env: PY=py
+      before_install: 
+        - choco install python
+
+      install:
+        - $PY --version
+        - $PY -m pip install --upgrade pip
+        - $PY -m pip --version
 
       before_script:
-        - choco install python3 --pre
-        - C:\Python38\python.exe -m pip install --user "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
+        - $PY -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
         - cd tools/pythonpkg
 
       script:
-        - C:\Python38\python.exe setup.py install
-        - C:\Python38\python.exe -m pytest tests
+        - $PY setup.py install
+        - $PY -m pytest tests
 
     - os: linux
       name: Python Package
