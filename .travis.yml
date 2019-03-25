@@ -86,7 +86,7 @@ matrix:
 
     - os: linux
       dist: xenial
-      name: GCC 8 All Unit Tests
+      name: All Unit Tests
 
       addons:
         apt:
@@ -102,7 +102,7 @@ matrix:
 
     - os: linux
       dist: xenial
-      name: GCC 8 with Coverage
+      name: Code Coverage
 
       addons:
         apt:
@@ -214,7 +214,6 @@ matrix:
       osx_image: xcode10.1
 
       language: python
-      python: 3.7
 
       before_script:
         - pip3 install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3"
