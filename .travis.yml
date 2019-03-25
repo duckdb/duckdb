@@ -171,15 +171,26 @@ matrix:
       name: VS 2018
 
       language: c
-      env:
-        - MSBUILD_PATH="c:\Program Files (x86)\Microsoft Visual Studio\2017\BuildTools\MSBuild\15.0\Bin"
 
       script:
-        - export PATH=$MSBUILD_PATH:$PATH
         - cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_GENERATOR_PLATFORM=x64
-        - MSBuild.exe DuckDB.sln -target:unittest
+        - cmake --build . --target unittest
         - test/Debug/unittest.exe
 
+
+    - os: windows
+      name: Python Package
+
+      language: python
+      python: 3.7
+
+      before_script:
+        - pip3 install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3"
+        - cd tools/pythonpkg
+
+      script:
+        - python3 setup.py install
+        - python3 -m pytest tests
 
     - os: linux
       name: Python Package

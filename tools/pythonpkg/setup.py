@@ -18,8 +18,8 @@ class CustomInstallCommand(install):
         os.makedirs('build/release_notest', exist_ok=True)
         os.chdir('build/release_notest')
 
-        subprocess.Popen(['cmake', '-DCMAKE_BUILD_TYPE=RelWithDebInfo', '-DLEAN=1', '../..']).wait()
-        subprocess.Popen(['make']).wait()
+        subprocess.Popen('cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLEAN=1 ../..'.split(' ')).wait()
+        subprocess.Popen('cmake --build . --target duckdb_static --config Release'.split(' ')).wait()
 
         os.chdir(wd)
         if not os.path.isfile('../../build/release_notest/src/libduckdb_static.a'):
