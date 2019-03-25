@@ -186,11 +186,11 @@ matrix:
 
       before_script:
         - choco install python3 --pre
-        - python -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
+        - pip install --user "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
         - cd tools/pythonpkg
 
       script:
-        - python setup.py install
+        - python setup.py install --user
         - python -m pytest tests
 
     - os: linux
@@ -217,11 +217,11 @@ matrix:
       #python: 3.7
 
       before_script:
-        - pip3 install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3"
+        - pip3 install --user "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
         - cd tools/pythonpkg
 
       script:
-        - python3 setup.py install
+        - python3 setup.py install --user
         - python3 -m pytest tests
 
 
