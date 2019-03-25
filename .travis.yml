@@ -186,14 +186,12 @@ matrix:
 
       before_script:
         - choco install python3 --pre
-        - ls -R "C:/Python38"
-        - export PATH=C:\Python38:$PATH
-        - python -m pip install --user "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
+        - C:\Python38\python.exe -m pip install --user "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
         - cd tools/pythonpkg
 
       script:
-        - python setup.py install
-        - python -m pytest tests
+        - C:\Python38\python.exe setup.py install
+        - C:\Python38\python.exe -m pytest tests
 
     - os: linux
       name: Python Package
