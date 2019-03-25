@@ -192,14 +192,13 @@ matrix:
         - $PY --version
         - $PY -m pip install --upgrade pip
         - $PY -m pip --version
-
-      before_script:
         - $PY -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
-        - cd tools/pythonpkg
 
       script:
+        - cd tools/pythonpkg
         - $PY setup.py install
         - $PY -m pytest tests
+
 
     - os: linux
       name: Python Package
@@ -259,7 +258,7 @@ matrix:
       name: R Package
 
       language: r
-      #r: devel
+      #gr: devel
 
       before_install:
         - R -e 'install.packages(c("DBI", "testthat", "DBItest"),repos=c("http://cran.rstudio.com/"))'
