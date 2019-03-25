@@ -186,12 +186,12 @@ matrix:
 
       before_script:
         - choco install python3
-        - pip3 install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3"
+        - python -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
         - cd tools/pythonpkg
 
       script:
-        - python3 setup.py install
-        - python3 -m pytest tests
+        - python setup.py install
+        - python -m pytest tests
 
     - os: linux
       name: Python Package
