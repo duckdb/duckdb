@@ -186,11 +186,11 @@ matrix:
 
       before_script:
         - choco install python3 --pre
-        - pip install --user "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
+        - python -m pip install --user "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
         - cd tools/pythonpkg
 
       script:
-        - python setup.py install --user
+        - python setup.py install
         - python -m pytest tests
 
     - os: linux
@@ -221,7 +221,7 @@ matrix:
         - cd tools/pythonpkg
 
       script:
-        - python3 setup.py install --user
+        - python3 setup.py install
         - python3 -m pytest tests
 
 
@@ -251,7 +251,7 @@ matrix:
       name: R Package
 
       language: r
-      r: devel
+      #r: devel
 
       before_install:
         - R -e 'install.packages(c("DBI", "testthat", "DBItest"),repos=c("http://cran.rstudio.com/"))'
