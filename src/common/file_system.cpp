@@ -125,18 +125,7 @@ void CreateDirectory(const string &directory) {
 }
 
 void RemoveDirectory(const string &directory) {
-	// SHFileOperation needs a double-NULL-terminated string as input
-	string path(directory);
-	path.resize(path.size() + 2);
-	path[path.size() - 1] = 0;
-	path[path.size() - 2] = 0;
-
-	SHFILEOPSTRUCT shfo = {NULL,  FO_DELETE, path.c_str(), NULL, FOF_SILENT | FOF_NOERRORUI | FOF_NOCONFIRMATION,
-	                       FALSE, NULL,      NULL};
-
-	if (!SHFileOperation(&shfo) == 0) {
-		throw IOException("Could not delete directory!");
-	}
+	throw NotImplementedException("Can't remove directory on Windows");
 }
 
 bool ListFiles(const string &directory, function<void(string)> callback) {
