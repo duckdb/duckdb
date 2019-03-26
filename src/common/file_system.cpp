@@ -124,9 +124,56 @@ void CreateDirectory(const string &directory) {
 	}
 }
 
-void RemoveDirectory(const string &directory) {
-	throw NotImplementedException("Can't remove directory on Windows");
+
+static void delete_dir_special_snowflake_windows(const char *dirname) {
+	if (strlen(dirname) + 3 > MAX_PATH) {
+		throw IOException("Pathname too long");
+	}
+	// create search pattern
+	TCHAR szDir[MAX_PATH];
+	snprintf(szDir, MAX_PATH, "%s\\*", dirname);
+
+	WIN32_FIND_DATA ffd;
+	HANDLE hFind = FindFirstFile(szDir, &ffd);
+	if (INVALID_HANDLE_VALUE == hFind) {
+		throw IOException("Could not find directory");
+	}
+
+	do {
+		if (strcmp(ffd.cFileName, ".") == 0 || strcmp(ffd.cFileName, "..") == 0) {
+			continue;
+		}
+		if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+			// recurse to zap directory contents
+			delete_dir_special_snowflake_windows(ffd.cFileName);
+		} else {
+			if (strlen(ffd.cFileName) + strlen(dirname) + 1 > MAX_PATH) {
+				throw IOException("Pathname too long");
+			}
+			// create search pattern
+			TCHAR del_path[MAX_PATH];
+			snprintf(del_path, MAX_PATH, "%s\\%s", dirname, ffd.cFileName);
+			if (!DeleteFileA(del_path)) {
+				throw IOException("Failed to delete directory entry");
+			}
+		}
+	} while (FindNextFile(hFind, &ffd) != 0);
+
+	DWORD dwError = GetLastError();
+	if (dwError != ERROR_NO_MORE_FILES) {
+		throw IOException("Something went wrong");
+	}
+	FindClose(hFind);
+
+	if (!RemoveDirectoryA(dirname)) {
+		throw IOException("Failed to delete directory");
+	}
 }
+
+void RemoveDirectory(const string &directory) {
+	delete_dir_special_snowflake_windows(directory.c_str());
+}
+
 
 bool ListFiles(const string &directory, function<void(string)> callback) {
 	string search_dir = JoinPath(directory, "*");
