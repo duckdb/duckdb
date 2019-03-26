@@ -48,8 +48,8 @@ void concat_function(Vector inputs[], size_t input_count, BoundFunctionExpressio
 			                             current_len = required_len;
 			                             output = unique_ptr<char[]>{new char[required_len]};
 		                             }
-		                             strcpy(output.get(), input1);
-		                             strcpy(output.get() + len1, input2);
+		                             strncpy(output.get(), input1, len1);
+		                             strncpy(output.get() + len1, input2, len2);
 		                             output[len1 + len2] = '\0';
 		                             result_data[result_index] = result.string_heap.AddString(output.get());
 	                             });

@@ -86,7 +86,7 @@ matrix:
 
     - os: linux
       dist: xenial
-      name: GCC 8 All Unit Tests
+      name: All Unit Tests
 
       addons:
         apt:
@@ -102,7 +102,7 @@ matrix:
 
     - os: linux
       dist: xenial
-      name: GCC 8 with Coverage
+      name: Code Coverage
 
       addons:
         apt:
@@ -167,18 +167,32 @@ matrix:
       env:
         - MATRIX_EVAL="CC=clang-6.0 && CXX=clang++-6.0"
 
+
     - os: windows
       name: VS 2018
 
       language: c
-      env:
-        - MSBUILD_PATH="c:\Program Files (x86)\Microsoft Visual Studio\2017\BuildTools\MSBuild\15.0\Bin"
 
       script:
-        - export PATH=$MSBUILD_PATH:$PATH
         - cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_GENERATOR_PLATFORM=x64
-        - MSBuild.exe DuckDB.sln -target:unittest
+        - cmake --build . --target unittest
         - test/Debug/unittest.exe
+
+
+    - os: windows
+      name: Python Package
+
+      language: cpp
+
+      before_install: 
+        - choco install python --version 3.7.3
+        - c:/python37/python.exe -m pip install --upgrade pip
+        - c:/python37/python.exe -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
+
+      script:
+        - cd tools/pythonpkg
+        - c:/python37/python.exe setup.py install
+        - c:/python37/python.exe -m pytest tests
 
 
     - os: linux
@@ -195,6 +209,23 @@ matrix:
       script:
         - python3 setup.py install
         - python3 -m pytest tests
+
+
+    - os: osx
+      name: Python Package
+      osx_image: xcode10.1
+
+      language: c
+      #python: 3.7
+
+      before_script:
+        - pip3 install --user "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
+        - cd tools/pythonpkg
+
+      script:
+        - python3 setup.py install
+        - python3 -m pytest tests
+
 
     - os: linux
       name: R Package
@@ -215,6 +246,28 @@ matrix:
 
       script:
         - R -f testthat.R
+
+
+    - os: osx
+      osx_image: xcode10.1
+      name: R Package
+
+      language: r
+      #gr: devel
+
+      before_install:
+        - R -e 'install.packages(c("DBI", "testthat", "DBItest"),repos=c("http://cran.rstudio.com/"))'
+        - cd tools/rpkg
+
+      install:
+        -  R CMD INSTALL .
+
+      before_script:
+        - cd tests
+
+      script:
+        - R -f testthat.R
+
 
 before_install:
   - eval "${MATRIX_EVAL}"
