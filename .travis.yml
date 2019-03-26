@@ -186,14 +186,14 @@ matrix:
 
       before_install: 
         - choco install python
-        - export PATH="/c/Python37:/c/Python37/Scripts:$PATH
-        - python -m pip install --upgrade pip wheel
-        - python -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
+        - py -m pip install --upgrade pip wheel
+        - py -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
 
       script:
         - cd tools/pythonpkg
-        - python setup.py install
-        - python -m pytest tests
+        - py setup.py install
+        - py -m pytest tests
+
 
     - os: linux
       name: Python Package
