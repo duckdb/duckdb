@@ -191,7 +191,7 @@ matrix:
 
       script:
         - cd tools/pythonpkg
-        - py setup.py install
+        - env PYTHONPATH="c:/python37/lib/site-packages" py setup.py install
         - py -m pytest tests
 
 
