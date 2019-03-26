@@ -184,21 +184,16 @@ matrix:
 
       language: cpp
 
-      env: PY=py
       before_install: 
         - choco install python
-
-      install:
-        - $PY --version
-        - $PY -m pip install --upgrade pip
-        - $PY -m pip --version
-        - $PY -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
+        - export PATH="/c/Python37:/c/Python37/Scripts:$PATH
+        - python -m pip install --upgrade pip wheel
+        - python -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3"
 
       script:
         - cd tools/pythonpkg
-        - $PY setup.py install
-        - $PY -m pytest tests
-
+        - python setup.py install
+        - python -m pytest tests
 
     - os: linux
       name: Python Package
