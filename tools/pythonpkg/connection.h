@@ -30,7 +30,7 @@
 #include "structmember.h"
 
 typedef struct {
-	PyObject_HEAD;
+	PyObject_HEAD
 	duckdb_database db;
 	duckdb_connection conn;
 

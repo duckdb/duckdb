@@ -7,8 +7,21 @@ import sys
 from setuptools import setup, Extension
 from setuptools.command.install import install
 import subprocess
+import platform
 
 basedir = os.path.dirname(os.path.realpath(__file__))
+
+if platform.architecture()[0] != '64bit':
+    raise Exception('DuckDB only supports 64 bit at this point')
+
+if sys.version_info < (3, 6):
+    raise Exception('DuckDB requires at least Python 3.6')
+
+archive_ext = 'a'
+lib_prefix = 'lib'
+if os.name == 'nt':
+    archive_ext = 'lib'
+    lib_prefix = 'RelWithDebInfo/'
 
 # wrapper that builds the main DuckDB library first
 class CustomInstallCommand(install):
@@ -18,11 +31,18 @@ class CustomInstallCommand(install):
         os.makedirs('build/release_notest', exist_ok=True)
         os.chdir('build/release_notest')
 
-        subprocess.Popen('cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLEAN=1 ../..'.split(' ')).wait()
-        subprocess.Popen('cmake --build . --target duckdb_static --config Release'.split(' ')).wait()
+        configcmd = 'cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLEAN=1 ../..'
+        buildcmd = 'cmake --build . --target duckdb_static'
+
+        if os.name == 'nt':
+            configcmd += ' -DCMAKE_GENERATOR_PLATFORM=x64'
+            buildcmd += ' --config RelWithDebInfo'
+
+        subprocess.Popen(configcmd.split(' ')).wait()
+        subprocess.Popen(buildcmd.split(' ')).wait()
 
         os.chdir(wd)
-        if not os.path.isfile('../../build/release_notest/src/libduckdb_static.a'):
+        if not os.path.isfile('../../build/release_notest/src/%sduckdb_static.%s' % (lib_prefix, archive_ext)):
             raise Exception('Library build failed :/') 
         install.run(self)
 
@@ -34,7 +54,7 @@ libduckdb = Extension('duckdb',
     sources=sources,
     extra_compile_args=['-std=c99', '-Wall'],
     language='c++', # for linking c++ stdlib
-    extra_objects=['../../build/release_notest/src/libduckdb_static.a', '../../build/release_notest/third_party/libpg_query/libpg_query.a'])
+    extra_objects=['../../build/release_notest/src/%sduckdb_static.%s' % (lib_prefix, archive_ext), '../../build/release_notest/third_party/libpg_query/%spg_query.%s' % (lib_prefix, archive_ext)])
 
 setup(
     name = "duckdb",
