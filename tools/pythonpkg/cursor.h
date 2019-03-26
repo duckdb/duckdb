@@ -5,7 +5,8 @@
 #include "module.h"
 
 typedef struct {
-	PyObject_HEAD duckdb_Connection *connection;
+	PyObject_HEAD
+	duckdb_Connection *connection;
 
 	uint64_t rowcount;
 	uint64_t offset;
